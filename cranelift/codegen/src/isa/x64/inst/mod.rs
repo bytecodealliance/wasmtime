@@ -2551,6 +2551,9 @@ pub struct EmitState {
     stack_map: Option<StackMap>,
     /// Current source location.
     cur_srcloc: RelSourceLoc,
+    /// Used for `CheckedSRemSeq*` to configure the trap emitted for its `div`
+    /// instruction.
+    div_trap_is_divide_by_zero: bool,
 }
 
 /// Constant state used during emissions of a sequence of instructions.
@@ -2593,6 +2596,7 @@ impl MachInstEmitState<Inst> for EmitState {
             nominal_sp_to_fp: abi.frame_size() as i64,
             stack_map: None,
             cur_srcloc: Default::default(),
+            div_trap_is_divide_by_zero: false,
         }
     }
 

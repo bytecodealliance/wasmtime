@@ -13,6 +13,8 @@ block0(v0: i8, v1: i8):
 ; block0:
 ;   movq    %rdi, %rax
 ;   cbw %al, %al
+;   testb   %sil, %sil
+;   jnz ; ud2 int_divz ;
 ;   idiv    %al, %sil, %al
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -25,7 +27,10 @@ block0(v0: i8, v1: i8):
 ; block1: ; offset 0x4
 ;   movq %rdi, %rax
 ;   cbtw
-;   idivb %sil ; trap: int_divz
+;   testb %sil, %sil
+;   jne 0x14
+;   ud2 ; trap: int_divz
+;   idivb %sil ; trap: int_ovf
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -40,6 +45,8 @@ block0(v0: i16, v1: i16):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
+;   testw   %si, %si
+;   jnz ; ud2 int_divz ;
 ;   movq    %rdi, %rax
 ;   cwd %ax, %dx
 ;   idiv    %ax, %dx, %si, %ax, %dx
@@ -52,9 +59,12 @@ block0(v0: i16, v1: i16):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
+;   testw %si, %si
+;   jne 0xf
+;   ud2 ; trap: int_divz
 ;   movq %rdi, %rax
 ;   cwtd
-;   idivw %si ; trap: int_divz
+;   idivw %si ; trap: int_ovf
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -69,6 +79,8 @@ block0(v0: i32, v1: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
+;   testl   %esi, %esi
+;   jnz ; ud2 int_divz ;
 ;   movq    %rdi, %rax
 ;   cdq %eax, %edx
 ;   idiv    %eax, %edx, %esi, %eax, %edx
@@ -81,9 +93,12 @@ block0(v0: i32, v1: i32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
+;   testl %esi, %esi
+;   jne 0xe
+;   ud2 ; trap: int_divz
 ;   movq %rdi, %rax
 ;   cltd
-;   idivl %esi ; trap: int_divz
+;   idivl %esi ; trap: int_ovf
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -98,6 +113,8 @@ block0(v0: i64, v1: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
+;   testq   %rsi, %rsi
+;   jnz ; ud2 int_divz ;
 ;   movq    %rdi, %rax
 ;   cqo %rax, %rdx
 ;   idiv    %rax, %rdx, %rsi, %rax, %rdx
@@ -110,9 +127,12 @@ block0(v0: i64, v1: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
+;   testq %rsi, %rsi
+;   jne 0xf
+;   ud2 ; trap: int_divz
 ;   movq %rdi, %rax
 ;   cqto
-;   idivq %rsi ; trap: int_divz
+;   idivq %rsi ; trap: int_ovf
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

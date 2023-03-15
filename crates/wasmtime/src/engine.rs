@@ -350,7 +350,7 @@ impl Engine {
     /// currently rely on the compiler informing us of all settings, including
     /// those disabled. Settings then fall in a few buckets:
     ///
-    /// * Some settings must be enabled, such as `avoid_div_traps`.
+    /// * Some settings must be enabled, such as `preserve_frame_pointers`.
     /// * Some settings must have a particular value, such as
     ///   `libcall_call_conv`.
     /// * Some settings do not matter as to their value, such as `opt_level`.
@@ -364,7 +364,6 @@ impl Engine {
             // These settings must all have be enabled, since their value
             // can affect the way the generated code performs or behaves at
             // runtime.
-            "avoid_div_traps" => *value == FlagValue::Bool(true),
             "libcall_call_conv" => *value == FlagValue::Enum("isa_default".into()),
             "preserve_frame_pointers" => *value == FlagValue::Bool(true),
             "enable_probestack" => *value == FlagValue::Bool(crate::config::probestack_supported(target.architecture)),
@@ -419,6 +418,7 @@ impl Engine {
             | "probestack_size_log2" // probestack above asserted disabled
             | "regalloc" // shouldn't change semantics
             | "enable_incremental_compilation_cache_checks" // shouldn't change semantics
+            | "avoid_div_traps" // doesn't change the CLIF semantics
             | "enable_atomics" => return Ok(()),
 
             // Everything else is unknown and needs to be added somewhere to

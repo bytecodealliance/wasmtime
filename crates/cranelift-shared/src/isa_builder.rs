@@ -23,12 +23,6 @@ impl<T> IsaBuilder<T> {
     pub fn new(lookup: fn(Triple) -> Result<Builder<T>>) -> Self {
         let mut flags = settings::builder();
 
-        // There are two possible traps for division, and this way
-        // we get the proper one if code traps.
-        flags
-            .enable("avoid_div_traps")
-            .expect("should be valid flag");
-
         // We don't use probestack as a stack limit mechanism
         flags
             .set("enable_probestack", "false")
