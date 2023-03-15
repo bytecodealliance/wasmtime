@@ -155,8 +155,7 @@ block0(v0: i64, v1: i64):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    0(%rdi), %r8
-;   movq    %r8, %r9
-;   addq    %r9, %rdi, %r9
+;   lea     0(%r8,%rdi,1), %r9
 ;   movq    %r9, 0(%rsi)
 ;   movq    0(%r8,%rdi,1), %rax
 ;   movq    %rbp, %rsp
@@ -169,8 +168,7 @@ block0(v0: i64, v1: i64):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   movq (%rdi), %r8 ; trap: heap_oob
-;   movq %r8, %r9
-;   addq %rdi, %r9
+;   leaq (%r8, %rdi), %r9
 ;   movq %r9, (%rsi) ; trap: heap_oob
 ;   movq (%r8, %rdi), %rax ; trap: heap_oob
 ;   movq %rbp, %rsp

@@ -648,6 +648,11 @@ macro_rules! isle_common_prelude_methods {
             offset as u32
         }
 
+        #[inline]
+        fn u32_to_offset32(&mut self, offset: u32) -> Offset32 {
+            Offset32::new(offset as i32)
+        }
+
         fn range(&mut self, start: usize, end: usize) -> Range {
             (start, end)
         }
