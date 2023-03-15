@@ -100,3 +100,19 @@ block0(v0: f64x2):
     return v4
 }
 ; run: %extractlane_f64x2_through_stack([0x1.0 0x2.0]) == 0x1.0
+
+
+function %unaligned_extractlane() -> f64 {
+    ss0 = explicit_slot 24
+
+block0:
+    v0 = iconst.i64 0
+    stack_store.i64 v0, ss0+0
+    stack_store.i64 v0, ss0+8
+    stack_store.i64 v0, ss0+16
+
+    v1 = stack_load.f64x2 ss0+1
+    v2 = extractlane v1, 1
+    return v2
+}
+; run: %unaligned_extractlane() == 0.0
