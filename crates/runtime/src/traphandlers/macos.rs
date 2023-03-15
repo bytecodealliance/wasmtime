@@ -244,7 +244,7 @@ unsafe fn handle_exception(request: &mut ExceptionRequest) -> bool {
     // First make sure that this exception is one that we actually expect to
     // get raised by wasm code. All other exceptions we safely ignore.
     match request.body.exception as u32 {
-        EXC_BAD_ACCESS | EXC_BAD_INSTRUCTION => {}
+        EXC_BAD_ACCESS | EXC_BAD_INSTRUCTION | EXC_ARITHMETIC => {}
         _ => return false,
     }
 
@@ -424,7 +424,7 @@ pub fn lazy_per_thread_init() {
         let this_thread = mach_thread_self();
         let kret = thread_set_exception_ports(
             this_thread,
-            EXC_MASK_BAD_ACCESS | EXC_MASK_BAD_INSTRUCTION,
+            EXC_MASK_BAD_ACCESS | EXC_MASK_BAD_INSTRUCTION | EXC_MASK_ARITHMETIC,
             WASMTIME_PORT,
             EXCEPTION_DEFAULT | MACH_EXCEPTION_CODES,
             mach_addons::THREAD_STATE_NONE,
