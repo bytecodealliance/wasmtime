@@ -223,6 +223,7 @@ impl Inst {
     pub(crate) fn div(
         size: OperandSize,
         sign: DivSignedness,
+        trap: TrapCode,
         divisor: RegMem,
         dividend_lo: Gpr,
         dividend_hi: Gpr,
@@ -233,6 +234,7 @@ impl Inst {
         Inst::Div {
             size,
             sign,
+            trap,
             divisor: GprMem::new(divisor).unwrap(),
             dividend_lo,
             dividend_hi,
@@ -243,6 +245,7 @@ impl Inst {
 
     pub(crate) fn div8(
         sign: DivSignedness,
+        trap: TrapCode,
         divisor: RegMem,
         dividend: Gpr,
         dst: WritableGpr,
@@ -250,6 +253,7 @@ impl Inst {
         divisor.assert_regclass_is(RegClass::Int);
         Inst::Div8 {
             sign,
+            trap,
             divisor: GprMem::new(divisor).unwrap(),
             dividend,
             dst,
@@ -764,6 +768,7 @@ impl PrettyPrint for Inst {
             Inst::Div {
                 size,
                 sign,
+                trap,
                 divisor,
                 dividend_lo,
                 dividend_hi,
@@ -778,7 +783,7 @@ impl PrettyPrint for Inst {
                 let dst_remainder =
                     pretty_print_reg(dst_remainder.to_reg().to_reg(), size.to_bytes(), allocs);
                 format!(
-                    "{} {}, {}, {}, {}, {}",
+                    "{} {}, {}, {}, {}, {} ; trap={trap}",
                     ljustify(match sign {
                         DivSignedness::Signed => "idiv".to_string(),
                         DivSignedness::Unsigned => "div".to_string(),
@@ -793,6 +798,7 @@ impl PrettyPrint for Inst {
 
             Inst::Div8 {
                 sign,
+                trap,
                 divisor,
                 dividend,
                 dst,
@@ -801,7 +807,7 @@ impl PrettyPrint for Inst {
                 let dividend = pretty_print_reg(dividend.to_reg(), 1, allocs);
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 1, allocs);
                 format!(
-                    "{} {dividend}, {divisor}, {dst}",
+                    "{} {dividend}, {divisor}, {dst} ; trap={trap}",
                     ljustify(match sign {
                         DivSignedness::Signed => "idiv".to_string(),
                         DivSignedness::Unsigned => "div".to_string(),
@@ -2509,9 +2515,6 @@ pub struct EmitState {
     stack_map: Option<StackMap>,
     /// Current source location.
     cur_srcloc: RelSourceLoc,
-    /// Used for `CheckedSRemSeq*` to configure the trap emitted for its `div`
-    /// instruction.
-    div_trap_is_divide_by_zero: bool,
 }
 
 /// Constant state used during emissions of a sequence of instructions.
@@ -2554,7 +2557,6 @@ impl MachInstEmitState<Inst> for EmitState {
             nominal_sp_to_fp: abi.frame_size() as i64,
             stack_map: None,
             cur_srcloc: Default::default(),
-            div_trap_is_divide_by_zero: false,
         }
     }
 

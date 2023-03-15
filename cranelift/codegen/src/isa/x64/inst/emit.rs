@@ -399,7 +399,18 @@ pub(crate) fn emit(
             emit_std_enc_enc(sink, prefix, opcode, 1, subopcode, enc_src, rex_flags)
         }
 
-        Inst::Div { sign, divisor, .. } | Inst::Div8 { sign, divisor, .. } => {
+        Inst::Div {
+            sign,
+            trap,
+            divisor,
+            ..
+        }
+        | Inst::Div8 {
+            sign,
+            trap,
+            divisor,
+            ..
+        } => {
             let divisor = divisor.clone().to_reg_mem().with_allocs(allocs);
             let size = match inst {
                 Inst::Div {
@@ -437,31 +448,7 @@ pub(crate) fn emit(
                 OperandSize::Size64 => (0xF7, LegacyPrefixes::None),
             };
 
-            // If div traps are avoided then no trap is registered here since
-            // the instruction should never trap due to lowering rules.
-            //
-            // Otherwise though this instruction is allowed to trap. There's
-            // one trapping condition for unsigned division, which is
-            // always divide-by-zero, so that's reported here. There are two
-            // conditions for signed division, though, either divide-by-zero
-            // or integer overflow with INT_MIN/-1. Lowering explicitly
-            // checks for 0 because it's easier and defers the overflow
-            // detection to happening via a trap.
-            //
-            // Note, though, that this instruction is also used as part of the
-            // `CheckedSRemSeq*` lowering which uses signed division but
-            // statically rules out the integer overflow case, in which case
-            // the listed trap here is divide-by-zero. This means that only the
-            // actual CLIF `sdiv` instruction ends up triggering the integer
-            // overflow case.
-            sink.add_trap(if state.div_trap_is_divide_by_zero {
-                TrapCode::IntegerDivisionByZero
-            } else {
-                match sign {
-                    DivSignedness::Signed => TrapCode::IntegerOverflow,
-                    DivSignedness::Unsigned => TrapCode::IntegerDivisionByZero,
-                }
-            });
+            sink.add_trap(*trap);
 
             let subopcode = match sign {
                 DivSignedness::Signed => 7,
@@ -636,6 +623,7 @@ pub(crate) fn emit(
             let inst = match size {
                 OperandSize::Size8 => Inst::div8(
                     DivSignedness::Signed,
+                    TrapCode::IntegerDivisionByZero,
                     RegMem::reg(divisor),
                     Gpr::new(regs::rax()).unwrap(),
                     Writable::from_reg(Gpr::new(regs::rax()).unwrap()),
@@ -643,6 +631,7 @@ pub(crate) fn emit(
                 _ => Inst::div(
                     size,
                     DivSignedness::Signed,
+                    TrapCode::IntegerDivisionByZero,
                     RegMem::reg(divisor),
                     Gpr::new(regs::rax()).unwrap(),
                     Gpr::new(regs::rdx()).unwrap(),
@@ -650,10 +639,7 @@ pub(crate) fn emit(
                     Writable::from_reg(Gpr::new(regs::rdx()).unwrap()),
                 ),
             };
-            assert!(!state.div_trap_is_divide_by_zero);
-            state.div_trap_is_divide_by_zero = true;
             inst.emit(&[], sink, info, state);
-            state.div_trap_is_divide_by_zero = false;
 
             sink.bind_label(done_label);
         }
