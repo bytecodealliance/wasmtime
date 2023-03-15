@@ -817,9 +817,13 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
             // else to come in and map something.
             slot.instantiate(initial_size as usize, image, &plan.style)?;
 
-            memories.push(Memory::new_static(plan, memory, slot, unsafe {
-                &mut *req.store.get().unwrap()
-            })?);
+            memories.push(Memory::new_static(
+                plan,
+                memory,
+                slot,
+                self.memories.memory_and_guard_size,
+                unsafe { &mut *req.store.get().unwrap() },
+            )?);
         }
 
         Ok(())

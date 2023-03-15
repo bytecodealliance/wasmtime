@@ -88,8 +88,26 @@ mod mach_addons {
         pub NDR: NDR_record_t,
         pub exception: exception_type_t,
         pub codeCnt: mach_msg_type_number_t,
-        pub code: [i64; 2],
+
+        // Note the usage of a newtype wrapper here which is intended to mirror
+        // how this seems to need to work with C where this structure should
+        // have an alignment of 4. Using `I64Align4` avoid increasing the
+        // alignment to 8 by using `i64` natively.
+        //
+        // Also note that this is a divergence from the C headers which use
+        // `integer_t` here for this field which is a `c_int`. That isn't
+        // actually reflecting reality apparently though because if `c_int` is
+        // used here then the structure is too small to receive a message.
+        //
+        // In the original Gecko sources this was copied from the structure here
+        // is `pragma(pack(4))` which should be the same as an unaligned i64
+        // here which doesn't increase the overall alignment of the structure.
+        pub code: [I64Align4; 2],
     }
+
+    #[repr(packed)]
+    #[derive(Copy, Clone, Debug)]
+    pub struct I64Align4(pub i64);
 
     #[repr(C)]
     #[allow(dead_code)]
@@ -172,6 +190,7 @@ pub unsafe fn platform_init() {
 // This is largely just copied from SpiderMonkey.
 #[repr(C)]
 #[allow(dead_code)]
+#[derive(Debug)]
 struct ExceptionRequest {
     body: __Request__exception_raise_t,
     trailer: mach_msg_trailer_t,
@@ -248,6 +267,16 @@ unsafe fn handle_exception(request: &mut ExceptionRequest) -> bool {
         _ => return false,
     }
 
+    // For `EXC_BAD_ACCESS` the faulting address is listed as the "subcode" in
+    // the second `code` field. If we're ever interested in it the first code
+    // field has a `kern_return_t` describing the kind of failure (e.g. SIGSEGV
+    // vs SIGBUS), but we're not interested in that right now.
+    let (fault1, fault2) = if request.body.exception as u32 == EXC_BAD_ACCESS {
+        (1, request.body.code[1].0 as usize)
+    } else {
+        (0, 0)
+    };
+
     // Depending on the current architecture various bits and pieces of this
     // will change. This is expected to get filled out for other macos
     // platforms as necessary.
@@ -279,7 +308,7 @@ unsafe fn handle_exception(request: &mut ExceptionRequest) -> bool {
                 state.__rbp as usize,
             );
 
-            let resume = |state: &mut ThreadState, pc: usize, fp: usize| {
+            let resume = |state: &mut ThreadState, pc: usize, fp: usize, fault1: usize, fault2: usize| {
                 // The x86_64 ABI requires a 16-byte stack alignment for
                 // functions, so typically we'll be 16-byte aligned. In this
                 // case we simulate a `call` instruction by decrementing the
@@ -306,6 +335,8 @@ unsafe fn handle_exception(request: &mut ExceptionRequest) -> bool {
                 state.__rip = unwind as u64;
                 state.__rdi = pc as u64;
                 state.__rsi = fp as u64;
+                state.__rdx = fault1 as u64;
+                state.__rcx = fault2 as u64;
             };
             let mut thread_state = ThreadState::new();
         } else if #[cfg(target_arch = "aarch64")] {
@@ -318,7 +349,7 @@ unsafe fn handle_exception(request: &mut ExceptionRequest) -> bool {
                 state.__fp as usize,
             );
 
-            let resume = |state: &mut ThreadState, pc: usize, fp: usize| {
+            let resume = |state: &mut ThreadState, pc: usize, fp: usize, fault1: usize, fault2: usize| {
                 // Clobber LR with the faulting PC, so unwinding resumes at the
                 // faulting instruction. The previous value of LR has been saved
                 // by the callee (in Cranelift generated code), so no need to
@@ -329,6 +360,8 @@ unsafe fn handle_exception(request: &mut ExceptionRequest) -> bool {
                 // it looks like a call to unwind.
                 state.__x[0] = pc as u64;
                 state.__x[1] = fp as u64;
+                state.__x[2] = fault1 as u64;
+                state.__x[3] = fault2 as u64;
                 state.__pc = unwind as u64;
             };
             let mut thread_state = mem::zeroed::<ThreadState>();
@@ -373,7 +406,7 @@ unsafe fn handle_exception(request: &mut ExceptionRequest) -> bool {
     // force the thread itself to trap. The thread's register state is
     // configured to resume in the `unwind` function below, we update the
     // thread's register state, and then we're off to the races.
-    resume(&mut thread_state, pc as usize, fp);
+    resume(&mut thread_state, pc as usize, fp, fault1, fault2);
     let kret = thread_set_state(
         origin_thread,
         thread_state_flavor,
@@ -390,10 +423,16 @@ unsafe fn handle_exception(request: &mut ExceptionRequest) -> bool {
 /// a native backtrace once we've switched back to the thread itself. After
 /// the backtrace is captured we can do the usual `longjmp` back to the source
 /// of the wasm code.
-unsafe extern "C" fn unwind(wasm_pc: *const u8, wasm_fp: usize) -> ! {
+unsafe extern "C" fn unwind(
+    wasm_pc: *const u8,
+    wasm_fp: usize,
+    has_fault: usize,
+    fault: usize,
+) -> ! {
     let jmp_buf = tls::with(|state| {
         let state = state.unwrap();
-        state.set_jit_trap(wasm_pc, wasm_fp);
+        let fault = if has_fault != 0 { Some(fault) } else { None };
+        state.set_jit_trap(wasm_pc, wasm_fp, fault);
         state.jmp_buf.get()
     });
     debug_assert!(!jmp_buf.is_null());
