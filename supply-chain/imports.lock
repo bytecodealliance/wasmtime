@@ -15,68 +15,19 @@ user-id = 696
 user-login = "fitzgen"
 user-name = "Nick Fitzgerald"
 
-[audits.chromeos.criteria.crypto-safe]
-description = """
-All crypto algorithms in this crate have been reviewed by a relevant expert.
-
-**Note**: If a crate does not implement crypto, use `does-not-implement-crypto`,
-which implies `crypto-safe`, but does not require expert review in order to
-audit for."""
-
-[audits.chromeos.criteria.does-not-implement-crypto]
-description = """
-Inspection reveals that the crate in question does not attempt to implement any
-cryptographic algorithms on its own.
-
-Note that certification of this does not require an expert on all forms of
-cryptography: it's expected for crates we import to be \"good enough\" citizens,
-so they'll at least be forthcoming if they try to implement something
-cryptographic. When in doubt, please ask an expert."""
-implies = "crypto-safe"
-
-[audits.chromeos.criteria.rule-of-two-safe-to-deploy]
-description = """
-This is a stronger requirement than the built-in safe-to-deploy criteria,
-motivated by Chromium's rule-of-two related requirements:
-https://chromium.googlesource.com/chromium/src/+/master/docs/security/rule-of-2.md#unsafe-code-in-safe-languages
-
-This crate will not introduce a serious security vulnerability to production
-software exposed to untrusted input.
-
-Auditors are not required to perform a full logic review of the entire crate.
-Rather, they must review enough to fully reason about the behavior of all unsafe
-blocks and usage of powerful imports. For any reasonable usage of the crate in
-real-world software, an attacker must not be able to manipulate the runtime
-behavior of these sections in an exploitable or surprising way.
-
-Ideally, ambient capabilities (e.g. filesystem access) are hardened against
-manipulation and consistent with the advertised behavior of the crate. However,
-some discretion is permitted. In such cases, the nature of the discretion should
-be recorded in the `notes` field of the audit record.
-
-Any unsafe code in this crate must, in general, be kept well-contained, and
-documentation must exist to describe how Rust's invariants are being upheld
-despite the unsafe block(s). Nontrivial uses of unsafe must be reviewed by an
-expert in Rust's unsafety guarantees/non-guarantees.
-
-For crates which generate deployed code (e.g. build dependencies or procedural
-macros), reasonable usage of the crate should output code which meets the above
-criteria."""
-implies = "safe-to-deploy"
-
 [[audits.chromeos.audits.libfuzzer-sys]]
 who = "ChromeOS"
-criteria = ["safe-to-run", "does-not-implement-crypto"]
+criteria = "safe-to-run"
 version = "0.4.4"
 
 [[audits.chromeos.audits.miniz_oxide]]
 who = "George Burgess IV <gbiv@google.com>"
-criteria = ["safe-to-run", "does-not-implement-crypto"]
+criteria = "safe-to-run"
 version = "0.6.2"
 
 [[audits.chromeos.audits.static_assertions]]
 who = "ChromeOS"
-criteria = ["safe-to-run", "does-not-implement-crypto"]
+criteria = "safe-to-run"
 version = "1.1.0"
 
 [[audits.embark-studios.audits.anyhow]]
