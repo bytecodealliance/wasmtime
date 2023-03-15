@@ -995,6 +995,41 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
             None
         }
     }
+
+    fn pblendw_imm(&mut self, imm: Immediate) -> Option<u8> {
+        // First make sure that the shuffle immediate is selecting 16-bit lanes.
+        let (a, b, c, d, e, f, g, h) = self.shuffle16_from_imm(imm)?;
+
+        // Next build up an 8-bit mask from each of the bits of the selected
+        // lanes above. This instruction can only be used when each lane
+        // selector chooses from the corresponding lane in either of the two
+        // operands, meaning the Nth lane selection must satisfy `lane % 8 ==
+        // N`.
+        //
+        // This helper closure is used to calculate the value of the
+        // corresponding bit.
+        let bit = |x: u8, c: u8| {
+            if x % 8 == c {
+                if x < 8 {
+                    Some(0)
+                } else {
+                    Some(1 << c)
+                }
+            } else {
+                None
+            }
+        };
+        Some(
+            bit(a, 0)?
+                | bit(b, 1)?
+                | bit(c, 2)?
+                | bit(d, 3)?
+                | bit(e, 4)?
+                | bit(f, 5)?
+                | bit(g, 6)?
+                | bit(h, 7)?,
+        )
+    }
 }
 
 impl IsleContext<'_, '_, MInst, X64Backend> {
