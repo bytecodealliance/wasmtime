@@ -103,29 +103,6 @@
                         (divisor Gpr)
                         (dst WritableGpr))
 
-       ;; Validates that the `divisor` can be safely divided into the
-       ;; `dividend`.
-       ;;
-       ;; This is a separate pseudo-instruction because it has some jumps in
-       ;; ways that can't be modeled otherwise with instructions right now. This
-       ;; will trap if the `divisor` is zero or if it's -1 and `dividend` is
-       ;; INT_MIN for the associated type.
-       ;;
-       ;; Note that 64-bit types must use `ValidateSdivDivisor64`.
-       (ValidateSdivDivisor (size OperandSize)
-                            (dividend Gpr)
-                            (divisor Gpr))
-
-       ;; Same as `ValidateSdivDivisor` but for 64-bit types.
-       ;;
-       ;; This is a distinct instruction because the emission in `emit.rs`
-       ;; requires a temporary register to load an immediate into, hence the
-       ;; `tmp` field in this instruction not present in the non-64-bit one.
-       (ValidateSdivDivisor64 (dividend Gpr)
-                              (divisor Gpr)
-                              (tmp WritableGpr))
-
-
        ;; Do a sign-extend based on the sign of the value in rax into rdx: (cwd
        ;; cdq cqo) or al into ah: (cbw)
        (SignExtendData (size OperandSize) ;; 1, 2, 4, or 8
@@ -4604,21 +4581,6 @@
       (let ((dst WritableGpr (temp_writable_gpr))
             (_ Unit (emit (MInst.SignExtendData size src dst))))
         dst))
-
-;; Helper for creating `ValidateSdivDivisor` instructions.
-(decl validate_sdiv_divisor (OperandSize Gpr Gpr) Gpr)
-(rule (validate_sdiv_divisor size dividend divisor)
-      (let ((_ Unit (emit (MInst.ValidateSdivDivisor size dividend divisor))))
-        divisor))
-
-;; Helper for creating `ValidateSdivDivisor64` instructions.
-(decl validate_sdiv_divisor64 (Gpr Gpr) Gpr)
-(rule (validate_sdiv_divisor64 dividend divisor)
-      (let (
-          (tmp WritableGpr (temp_writable_gpr))
-          (_ Unit (emit (MInst.ValidateSdivDivisor64 dividend divisor tmp)))
-        )
-        divisor))
 
 ;;;; Pinned Register ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

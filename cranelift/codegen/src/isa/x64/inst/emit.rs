@@ -658,55 +658,6 @@ pub(crate) fn emit(
             sink.bind_label(done_label);
         }
 
-        Inst::ValidateSdivDivisor {
-            dividend, divisor, ..
-        }
-        | Inst::ValidateSdivDivisor64 {
-            dividend, divisor, ..
-        } => {
-            let orig_inst = &inst;
-            let divisor = allocs.next(divisor.to_reg());
-            let dividend = allocs.next(dividend.to_reg());
-            let size = match inst {
-                Inst::ValidateSdivDivisor { size, .. } => *size,
-                _ => OperandSize::Size64,
-            };
-
-            // First trap if the divisor is zero
-            let inst = Inst::cmp_rmi_r(size, RegMemImm::imm(0), divisor);
-            inst.emit(&[], sink, info, state);
-            let inst = Inst::trap_if(CC::Z, TrapCode::IntegerDivisionByZero);
-            inst.emit(&[], sink, info, state);
-
-            // Now check if the divisor is -1. If it is then additionally
-            // check if the dividend is INT_MIN. If it isn't then jump to the
-            // end. If both conditions here are true then trap.
-            let inst = Inst::cmp_rmi_r(size, RegMemImm::imm(0xffffffff), divisor);
-            inst.emit(&[], sink, info, state);
-            let done = sink.get_label();
-            one_way_jmp(sink, CC::NZ, done);
-            let int_min = match orig_inst {
-                Inst::ValidateSdivDivisor64 { tmp, .. } => {
-                    let tmp = allocs.next(tmp.to_reg().to_reg());
-                    let inst = Inst::imm(size, i64::MIN as u64, Writable::from_reg(tmp));
-                    inst.emit(&[], sink, info, state);
-                    RegMemImm::reg(tmp)
-                }
-                _ => RegMemImm::imm(match size {
-                    OperandSize::Size8 => 0x80,
-                    OperandSize::Size16 => 0x8000,
-                    OperandSize::Size32 => 0x80000000,
-                    OperandSize::Size64 => unreachable!(),
-                }),
-            };
-            let inst = Inst::cmp_rmi_r(size, int_min, dividend);
-            inst.emit(&[], sink, info, state);
-            let inst = Inst::trap_if(CC::Z, TrapCode::IntegerOverflow);
-            inst.emit(&[], sink, info, state);
-
-            sink.bind_label(done);
-        }
-
         Inst::Imm {
             dst_size,
             simm64,

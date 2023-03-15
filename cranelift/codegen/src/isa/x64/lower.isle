@@ -3512,32 +3512,32 @@
 ;; Rules for `sdiv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule 2 (lower (sdiv a @ (value_type $I8) b))
-        (let (
-            (a Gpr (x64_sign_extend_data a (OperandSize.Size8)))
-          )
-          (x64_div8 a (safe_sdiv_divisor $I8 a b) (DivSignedness.Signed))))
+        (x64_div8 (x64_sign_extend_data a (OperandSize.Size8))
+                  (nonzero_sdiv_divisor $I8 b)
+                  (DivSignedness.Signed)))
 
 (rule 1 (lower (sdiv a @ (value_type (fits_in_64 ty)) b))
         (let (
             (a Gpr a)
             (size OperandSize (raw_operand_size_of_type ty))
-            (b Gpr (safe_sdiv_divisor ty a b))
           )
-          (x64_div_quotient a (x64_sign_extend_data a size) b size (DivSignedness.Signed))))
+        (x64_div_quotient a
+                          (x64_sign_extend_data a size)
+                          (nonzero_sdiv_divisor ty b)
+                          size
+                          (DivSignedness.Signed))))
 
-;; Similar to `nonzero_divisor` except this checks to make sure that the divisor
-;; provided as a `Value` is safe to divide into the dividend `Gpr` provided.
-(decl safe_sdiv_divisor (Type Gpr Value) Reg)
-
-;; If the divisor is a constant that isn't 0 or -1, then it's always safe so
-;; materialize it into a register.
-(rule 3 (safe_sdiv_divisor ty a (iconst imm))
+;; Checks to make sure that the input `Value` is a non-zero value for `sdiv`.
+;;
+;; This is required to differentiate the divide-by-zero trap from the
+;; integer-overflow trap, the two trapping conditions of signed division.
+(decl nonzero_sdiv_divisor (Type Value) Reg)
+(rule 1 (nonzero_sdiv_divisor ty (iconst imm))
         (if-let n (safe_divisor_from_imm64 ty imm))
         (imm ty n))
-
-(rule 2 (safe_sdiv_divisor ty a b)
+(rule 0 (nonzero_sdiv_divisor ty val)
       (let (
-          (val Reg b)
+          (val Reg val)
           (_ InstOutput (side_effect (with_flags_side_effect
             (x64_test (raw_operand_size_of_type ty) val val)
             (trap_if (CC.Z) (TrapCode.IntegerDivisionByZero)))))
@@ -3550,8 +3550,9 @@
 ;; by 8.
 (rule 2 (lower (urem a @ (value_type $I8) b))
         (let (
-            (a Gpr (extend_to_gpr a $I32 (ExtendKind.Zero)))
-            (result Gpr (x64_div8 a b (DivSignedness.Unsigned)))
+            (result Gpr (x64_div8 (extend_to_gpr a $I32 (ExtendKind.Zero))
+                                  b
+                                  (DivSignedness.Unsigned)))
           )
           (x64_shr $I64 result (Imm8Reg.Imm8 8))))
 

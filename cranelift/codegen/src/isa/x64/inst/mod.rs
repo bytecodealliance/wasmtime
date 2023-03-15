@@ -73,8 +73,6 @@ impl Inst {
             | Inst::CallUnknown { .. }
             | Inst::CheckedSRemSeq { .. }
             | Inst::CheckedSRemSeq8 { .. }
-            | Inst::ValidateSdivDivisor { .. }
-            | Inst::ValidateSdivDivisor64 { .. }
             | Inst::Cmove { .. }
             | Inst::CmpRmiR { .. }
             | Inst::CvtFloatToSintSeq { .. }
@@ -547,10 +545,6 @@ impl Inst {
         Inst::JmpUnknown { target }
     }
 
-    pub(crate) fn trap_if(cc: CC, trap_code: TrapCode) -> Inst {
-        Inst::TrapIf { cc, trap_code }
-    }
-
     /// Choose which instruction to use for loading a register value from memory. For loads smaller
     /// than 64 bits, this method expects a way to extend the value (i.e. [ExtKind::SignExtend],
     /// [ExtKind::ZeroExtend]); loads with no extension necessary will ignore this.
@@ -871,27 +865,6 @@ impl PrettyPrint for Inst {
                 let dividend = pretty_print_reg(dividend.to_reg(), 1, allocs);
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 1, allocs);
                 format!("checked_srem_seq {dividend}, {divisor}, {dst}")
-            }
-
-            Inst::ValidateSdivDivisor {
-                dividend,
-                divisor,
-                size,
-            } => {
-                let dividend = pretty_print_reg(dividend.to_reg(), size.to_bytes(), allocs);
-                let divisor = pretty_print_reg(divisor.to_reg(), size.to_bytes(), allocs);
-                format!("validate_sdiv_divisor {dividend}, {divisor}")
-            }
-
-            Inst::ValidateSdivDivisor64 {
-                dividend,
-                divisor,
-                tmp,
-            } => {
-                let dividend = pretty_print_reg(dividend.to_reg(), 8, allocs);
-                let divisor = pretty_print_reg(divisor.to_reg(), 8, allocs);
-                let tmp = pretty_print_reg(tmp.to_reg().to_reg(), 8, allocs);
-                format!("validate_sdiv_divisor {dividend}, {divisor} {tmp}")
             }
 
             Inst::SignExtendData { size, src, dst } => {
@@ -1915,21 +1888,6 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             collector.reg_fixed_def(dst_lo.to_writable_reg(), regs::rax());
             collector.reg_fixed_def(dst_hi.to_writable_reg(), regs::rdx());
             src2.get_operands(collector);
-        }
-        Inst::ValidateSdivDivisor {
-            dividend, divisor, ..
-        } => {
-            collector.reg_use(divisor.to_reg());
-            collector.reg_use(dividend.to_reg());
-        }
-        Inst::ValidateSdivDivisor64 {
-            dividend,
-            divisor,
-            tmp,
-        } => {
-            collector.reg_use(divisor.to_reg());
-            collector.reg_use(dividend.to_reg());
-            collector.reg_early_def(tmp.to_writable_reg());
         }
         Inst::SignExtendData { size, src, dst } => {
             match size {
