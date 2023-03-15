@@ -20,8 +20,7 @@ block0(v0: i64, v1: i64):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movabsq $-18765284782900, %r9
-;   movq    %rdi, %r11
-;   addq    %r11, %r9, %r11
+;   lea     0(%rdi,%r9,1), %r11
 ;   movq    %r11, 0(%rsi)
 ;   movq    %rdi, %r11
 ;   subq    %r11, const(0), %r11
@@ -41,21 +40,20 @@ block0(v0: i64, v1: i64):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   movabsq $18446725308424768716, %r9
-;   movq %rdi, %r11
-;   addq %r9, %r11
+;   leaq (%rdi, %r9), %r11
 ;   movq %r11, (%rsi) ; trap: heap_oob
 ;   movq %rdi, %r11
-;   subq 0x1f(%rip), %r11
+;   subq 0x20(%rip), %r11
 ;   movq %r11, (%rsi) ; trap: heap_oob
 ;   movq %rdi, %rax
-;   andq 0x12(%rip), %rax
+;   andq 0x13(%rip), %rax
 ;   movq %rax, (%rsi) ; trap: heap_oob
-;   orq 8(%rip), %rdi
+;   orq 9(%rip), %rdi
 ;   movq %rdi, (%rsi) ; trap: heap_oob
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
-;   int3
+;   addb %cl, %ah
 ;   int3
 ;   fstp %st(5)
 ;   outb %al, %dx

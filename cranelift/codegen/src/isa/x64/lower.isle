@@ -47,44 +47,14 @@
       (x64_add ty x y))
 
 ;; Base case for 32 and 64-bit types which might end up using the `lea`
-;; instruction to fold multiple operations into one. The actualy determination
-;; of whether to use `add` or `lea` is left up to the `add_or_lea` helper.
+;; instruction to fold multiple operations into one.
+;;
+;; Note that at this time this always generates a `lea` pseudo-instruction,
+;; but the actual instruction emitted might be an `add` if it's equivalent.
+;; For more details on this see the `emit.rs` logic to emit
+;; `LoadEffectiveAddress`.
 (rule -5 (lower (has_type (ty_32_or_64 ty) (iadd x y)))
-      (add_or_lea ty (to_amode_add (mem_flags_trusted) x y (zero_offset))))
-
-;; Small helper used as part of the lowering of `iadd` just above which chooses
-;; either `lea` or `add` for the `Amode` given. The x64 `lea` instruction in
-;; theory is a superior `add` alternative offering the means to have a 3-operand
-;; instruction (aka better regalloc) along with the ability to fold multiple
-;; pieces of functionality into one. In practice though it seems that it's not
-;; so cut-and-dry. The `meshoptimizer` benchmark's `vtx` measurement, for
-;; example, gets 10% slower if `lea` is unconditionally used here. The apparent
-;; reason for this is that x64 cores have dedicated units for computing
-;; addresses, but a finite number of them. It seems that forcing everything
-;; through these units can cause a slowdown vs also using the ALUs which are
-;; otherwise idle if there's a lot of add instructions.
-;;
-;; Given all that a rough heuristic is applied here. If the `Amode` is "simple"
-;; and basically looks like one add instruction then the `add` instruction is
-;; itself used. This covers cases like `a + $constant` or `a + b`. In these
-;; cases the theoretical downside to using `add` is that the 3-operand mode
-;; can't be used and this may require an extra `mov` relative to an `lea`
-;; instruction.
-;;
-;; Otherwise if the `Amode` is "complicated", or can fold more than one
-;; arithmetic instruction into it, then an `lea` is used. This means that
-;; expressions of the form `a + b * c` or `a + b + $const` generate a single
-;; `lea` instruction.
-;;
-;; Locally on the `meshoptimizer` benchmark this at least preserves the
-;; performance relative to "always use `add`".
-(decl add_or_lea (Type Amode) Reg)
-(rule 1 (add_or_lea ty (Amode.ImmReg imm reg _flags))
-      (x64_add ty reg (RegMemImm.Imm imm)))
-(rule 1 (add_or_lea ty (Amode.ImmRegRegShift 0 base index 0 _flags))
-      (x64_add ty base index))
-(rule (add_or_lea ty mode)
-      (x64_lea ty mode))
+      (x64_lea ty (to_amode_add (mem_flags_trusted) x y (zero_offset))))
 
 ;; Higher-priority cases than the previous two where a load can be sunk into
 ;; the add instruction itself. Note that both operands are tested for
