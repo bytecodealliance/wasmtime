@@ -1703,11 +1703,35 @@
 (decl extend_to_gpr (Value Type ExtendKind) Gpr)
 
 ;; If the value is already of the requested type, no extending is necessary.
+(rule 3 (extend_to_gpr val @ (value_type ty) ty _kind)
+      val)
+
+;; I32 -> I64 with op that produces a zero-extended value in a register.
 ;;
-;; Priority 1 because the equality constraint doesn't prove that this rule
-;; doesn't overlap with the one below.
-(rule 1 (extend_to_gpr (and val (value_type ty)) ty _kind)
-      (put_in_gpr val))
+;; As a particular x64 extra-pattern matching opportunity, all the ALU
+;; opcodes on 32-bits will zero-extend the upper 32-bits, so we can
+;; even not generate a zero-extended move in this case.
+(rule 2 (extend_to_gpr src @ (value_type $I32) $I64 (ExtendKind.Zero))
+        (if-let $true (value32_zeros_upper32 src))
+        src)
+
+;; The `extractlane` instruction, extended to `$I32`, means that either an
+;; i8x16 or an i16x8 is being extracted. These are implemented with
+;; the `pextr{b,w}` instruction which automatically zero the upper bits of the
+;; destination register so the `uextend` in these cases can be elided.
+;;
+;; TODO: the documentation for `pextr{b,w}` seems to indicate it zero extends
+;; to not only 32-bits but probably the whole 64-bit register. If that's the
+;; case then this should match a zero-extend to any size instead of just `$I32`.
+;;
+;; TODO: the interaction here between this rule and the "it's written far away"
+;; rule to lower `extractlane` isn't great. Ideally this rule (and the other
+;; special cases for `value32_zeros_upper32`) would live contextually closer or
+;; be connected to the extractlane rules. There's some discussion of this on
+;; #6022 but the gist is that there's not a lot of great options at this time,
+;; so this doc block is what's here for now.
+(rule 1 (extend_to_gpr src @ (extractlane _ _) $I32 (ExtendKind.Zero))
+        src)
 
 (rule (extend_to_gpr (and val (value_type from_ty))
                      to_ty
@@ -1731,6 +1755,21 @@
 ;; Sign extending uses `movsx`.
 (rule (extend (ExtendKind.Sign) ty mode src)
       (x64_movsx mode src))
+
+;; Tests whether the operation used to produce the input `Value`, which must
+;; be a 32-bit operation, will automatically zero the upper 32-bits of the
+;; destination register that `Value` is placed in.
+(decl pure value32_zeros_upper32 (Value) bool)
+(rule (value32_zeros_upper32 (iadd _ _)) $true)
+(rule (value32_zeros_upper32 (isub _ _)) $true)
+(rule (value32_zeros_upper32 (imul _ _)) $true)
+(rule (value32_zeros_upper32 (band _ _)) $true)
+(rule (value32_zeros_upper32 (bor _ _)) $true)
+(rule (value32_zeros_upper32 (bxor _ _)) $true)
+(rule (value32_zeros_upper32 (ishl _ _)) $true)
+(rule (value32_zeros_upper32 (ushr _ _)) $true)
+(rule (value32_zeros_upper32 (uload32 _ _ _)) $true)
+(rule -1 (value32_zeros_upper32 _) $false)
 
 ;;;; Helpers for Working SSE tidbits ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

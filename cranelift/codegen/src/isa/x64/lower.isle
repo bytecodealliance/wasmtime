@@ -2039,101 +2039,38 @@
 
 ;; Rules for `uextend` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; T -> T is a no-op.
-(rule 1 (lower (has_type ty (uextend src @ (value_type ty))))
-      src)
-
-;; I64 -> I128.
-(rule -1 (lower (has_type $I128 (uextend src @ (value_type $I64))))
-      (value_regs src (imm $I64 0)))
-
-;; I{8,16,32} -> I128.
-(rule (lower (has_type $I128 (uextend src @ (value_type (fits_in_32 src_ty)))))
+;; I{8,16,32,64} -> I128.
+(rule (lower (has_type $I128 (uextend src)))
       (value_regs (extend_to_gpr src $I64 (ExtendKind.Zero)) (imm $I64 0)))
 
 ;; I{8,16,32} -> I64.
-(rule -1 (lower (has_type $I64 (uextend src @ (value_type (fits_in_32 src_ty)))))
+(rule (lower (has_type $I64 (uextend src)))
       (extend_to_gpr src $I64 (ExtendKind.Zero)))
 
-;; I8 -> I{16,32}, I16 -> I32.
-(rule -2 (lower (has_type (fits_in_32 dst_ty) (uextend src @ (value_type (fits_in_32 src_ty)))))
-      (extend_to_gpr src $I32 (ExtendKind.Zero)))
-
-;; I32 -> I64 with op that produces a zero-extended value in a register.
-;;
-;; As a particular x64 extra-pattern matching opportunity, all the ALU
-;; opcodes on 32-bits will zero-extend the upper 32-bits, so we can
-;; even not generate a zero-extended move in this case.
-;;
-;; (Note that we unfortunately can't factor out the
-;; insts-that-zero-upper-32 pattern into a separate extractor until we
-;; can write internal extractors with multiple rules; and we'd rather
-;; keep these here than write an external extractor containing bits of
-;; the instruction pattern.s)
-(rule (lower (has_type $I64
-                       (uextend src @ (has_type $I32 (iadd _ _)))))
-      src)
-(rule (lower (has_type $I64
-                       (uextend src @ (has_type $I32 (isub _ _)))))
-      src)
-(rule (lower (has_type $I64
-                       (uextend src @ (has_type $I32 (imul _ _)))))
-      src)
-(rule (lower (has_type $I64
-                       (uextend src @ (has_type $I32 (band _ _)))))
-      src)
-(rule (lower (has_type $I64
-                       (uextend src @ (has_type $I32 (bor _ _)))))
-      src)
-(rule (lower (has_type $I64
-                       (uextend src @ (has_type $I32 (bxor _ _)))))
-      src)
-(rule (lower (has_type $I64
-                       (uextend src @ (has_type $I32 (ishl _ _)))))
-      src)
-(rule (lower (has_type $I64
-                       (uextend src @ (has_type $I32 (ushr _ _)))))
-      src)
-(rule (lower (has_type $I64
-                       (uextend src @ (has_type $I32 (uload32 _ _ _)))))
-      src)
+;; I{8,16} -> I32
+;; I8 -> I16
+(rule -1 (lower (has_type (fits_in_32 _) (uextend src)))
+         (extend_to_gpr src $I32 (ExtendKind.Zero)))
 
 ;; Rules for `sextend` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(decl generic_sextend (Value Type Type) InstOutput)
-
-;; T -> T is a no-op.
-(rule 4 (generic_sextend src ty ty)
-      src)
-
+;; I{8,16,32} -> I128.
+;;
 ;; Produce upper 64 bits sign-extended from lower 64: shift right by
 ;; 63 bits to spread the sign bit across the result.
-(decl spread_sign_bit (Gpr) Gpr)
-(rule (spread_sign_bit src)
-      (x64_sar $I64 src (Imm8Reg.Imm8 63)))
-
-;; I64 -> I128.
-(rule 3 (generic_sextend src $I64 $I128)
-      (value_regs src (spread_sign_bit src)))
-
-;; I{8,16,32} -> I128.
-(rule 2 (generic_sextend src (fits_in_32 src_ty) $I128)
+(rule (lower (has_type $I128 (sextend src)))
       (let ((lo Gpr (extend_to_gpr src $I64 (ExtendKind.Sign)))
-            (hi Gpr (spread_sign_bit lo)))
+            (hi Gpr (x64_sar $I64 lo (Imm8Reg.Imm8 63))))
       (value_regs lo hi)))
 
 ;; I{8,16,32} -> I64.
-(rule 1 (generic_sextend src (fits_in_32 src_ty) $I64)
+(rule (lower (has_type $I64 (sextend src)))
       (extend_to_gpr src $I64 (ExtendKind.Sign)))
 
-;; I8 -> I{16,32}, I16 -> I32.
-(rule 0 (generic_sextend src (fits_in_32 src_ty) (fits_in_32 dst_ty))
-      (extend_to_gpr src $I32 (ExtendKind.Sign)))
-
-(rule (lower
-       (has_type dst_ty
-                 (sextend src @ (value_type src_ty))))
-      (generic_sextend src src_ty dst_ty))
+;; I{8,16} -> I32
+;; I8 -> I16
+(rule -1 (lower (has_type (fits_in_32 _) (sextend src)))
+         (extend_to_gpr src $I32 (ExtendKind.Sign)))
 
 ;; Rules for `ireduce` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -3859,9 +3796,15 @@
       ;; 0xee == 0b11_10_11_10
       (x64_pshufd val 0xee))
 
+;; Note that the `pextrb` lowering here is relied upon by the `extend_to_gpr`
+;; helper because it will elide a `uextend` operation when `extractlane` is the
+;; inner node. The `pextrb` operation automatically zero-extends for us so the
+;; extra `uextend` doesn't have to codegen anything.
 (rule 0 (lower (extractlane val @ (value_type ty @ (multi_lane 8 16)) (u8_from_uimm8 lane)))
       (x64_pextrb val lane))
 
+;; See the note in the 8x16 case above for how this rule is connected to
+;; `extend_to_gpr`.
 (rule 0 (lower (extractlane val @ (value_type ty @ (multi_lane 16 8)) (u8_from_uimm8 lane)))
       (x64_pextrw val lane))
 

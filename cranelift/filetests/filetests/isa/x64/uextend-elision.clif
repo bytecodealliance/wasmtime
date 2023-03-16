@@ -27,3 +27,81 @@ block0(v0: i32, v1: i32):
 ;   popq %rbp
 ;   retq
 
+function %extractlane_i8x16_i16(i8x16) -> i16 {
+block0(v0: i8x16):
+    v1 = extractlane v0, 1
+    v2 = uextend.i16 v1
+    return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   pextrb  $1, %xmm0, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   pextrb $1, %xmm0, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %extractlane_i8x16_i32(i8x16) -> i32 {
+block0(v0: i8x16):
+    v1 = extractlane v0, 1
+    v2 = uextend.i32 v1
+    return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   pextrb  $1, %xmm0, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   pextrb $1, %xmm0, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %extractlane_i16x8_i32(i16x8) -> i32 {
+block0(v0: i16x8):
+    v1 = extractlane v0, 1
+    v2 = uextend.i32 v1
+    return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   pextrw  $1, %xmm0, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   pextrw $1, %xmm0, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
