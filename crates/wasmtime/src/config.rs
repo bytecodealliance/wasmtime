@@ -222,7 +222,6 @@ impl Config {
     #[cfg(compiler)]
     #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
     pub fn target(&mut self, target: &str) -> Result<&mut Self> {
-        use std::str::FromStr;
         self.compiler_config.target =
             Some(target_lexicon::Triple::from_str(target).map_err(|e| anyhow::anyhow!(e))?);
 
