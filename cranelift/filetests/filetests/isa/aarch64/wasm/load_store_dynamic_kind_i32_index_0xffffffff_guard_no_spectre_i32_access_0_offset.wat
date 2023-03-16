@@ -41,14 +41,13 @@
 
 ;; function u0:0:
 ;; block0:
-;;   mov w7, w0
-;;   ldr x8, [x2, #8]
-;;   sub x8, x8, #4
-;;   subs xzr, x7, x8
+;;   mov w6, w0
+;;   ldr x7, [x2, #8]
+;;   subs xzr, x6, x7
 ;;   b.hi label3 ; b label1
 ;; block1:
-;;   ldr x9, [x2]
-;;   str w1, [x9, w0, UXTW]
+;;   ldr x8, [x2]
+;;   str w1, [x8, w0, UXTW]
 ;;   b label2
 ;; block2:
 ;;   ret
@@ -57,14 +56,13 @@
 ;;
 ;; function u0:1:
 ;; block0:
-;;   mov w7, w0
-;;   ldr x8, [x1, #8]
-;;   sub x8, x8, #4
-;;   subs xzr, x7, x8
+;;   mov w6, w0
+;;   ldr x7, [x1, #8]
+;;   subs xzr, x6, x7
 ;;   b.hi label3 ; b label1
 ;; block1:
-;;   ldr x9, [x1]
-;;   ldr w0, [x9, w0, UXTW]
+;;   ldr x8, [x1]
+;;   ldr w0, [x8, w0, UXTW]
 ;;   b label2
 ;; block2:
 ;;   ret

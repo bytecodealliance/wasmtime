@@ -815,7 +815,7 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
             // the process to continue, because we never perform a
             // mmap that would leave an open space for someone
             // else to come in and map something.
-            slot.instantiate(initial_size as usize, image, &plan.style)?;
+            slot.instantiate(initial_size as usize, image, &plan)?;
 
             memories.push(Memory::new_static(plan, memory, slot, unsafe {
                 &mut *req.store.get().unwrap()
