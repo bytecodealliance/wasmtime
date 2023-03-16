@@ -199,45 +199,51 @@ where
         Ok(sum(imm, args)? as u64)
     };
 
+    // Interpret a unary instruction with the given `op`, assigning the resulting value to the
+    // instruction's results.
+    let unary = |op: fn(V) -> ValueResult<V>, arg: V| -> ValueResult<ControlFlow<V>> {
+        let ctrl_ty = inst_context.controlling_type().unwrap();
+        let res = unary_arith(arg, ctrl_ty, op, false)?;
+        Ok(assign(res))
+    };
+
     // Interpret a binary instruction with the given `op`, assigning the resulting value to the
     // instruction's results.
-    let binary = |op: fn(V, V) -> ValueResult<V>,
-                  left: V,
-                  right: V|
-     -> ValueResult<ControlFlow<V>> { Ok(assign(op(left, right)?)) };
+    let binary =
+        |op: fn(V, V) -> ValueResult<V>, left: V, right: V| -> ValueResult<ControlFlow<V>> {
+            let ctrl_ty = inst_context.controlling_type().unwrap();
+            let res = binary_arith(left, right, ctrl_ty, op, false)?;
+            Ok(assign(res))
+        };
 
     // Same as `binary_unsigned`, but converts the values to their unsigned form before the
     // operation and back to signed form afterwards. Since Cranelift types have no notion of
     // signedness, this enables operations that depend on sign.
     let binary_unsigned =
         |op: fn(V, V) -> ValueResult<V>, left: V, right: V| -> ValueResult<ControlFlow<V>> {
-            Ok(assign(
-                op(
-                    left.convert(ValueConversionKind::ToUnsigned)?,
-                    right.convert(ValueConversionKind::ToUnsigned)?,
-                )
-                .and_then(|v| v.convert(ValueConversionKind::ToSigned))?,
-            ))
+            let ctrl_ty = inst_context.controlling_type().unwrap();
+            let res = binary_arith(left, right, ctrl_ty, op, true)
+                .and_then(|v| v.convert(ValueConversionKind::ToSigned))?;
+            Ok(assign(res))
         };
 
     // Similar to `binary` but converts select `ValueError`'s into trap `ControlFlow`'s
-    let binary_can_trap = |op: fn(V, V) -> ValueResult<V>,
-                           left: V,
-                           right: V|
-     -> ValueResult<ControlFlow<V>> { assign_or_trap(op(left, right)) };
+    let binary_can_trap =
+        |op: fn(V, V) -> ValueResult<V>, left: V, right: V| -> ValueResult<ControlFlow<V>> {
+            let ctrl_ty = inst_context.controlling_type().unwrap();
+            let res = binary_arith(left, right, ctrl_ty, op, false);
+            assign_or_trap(res)
+        };
 
     // Same as `binary_can_trap`, but converts the values to their unsigned form before the
     // operation and back to signed form afterwards. Since Cranelift types have no notion of
     // signedness, this enables operations that depend on sign.
     let binary_unsigned_can_trap =
         |op: fn(V, V) -> ValueResult<V>, left: V, right: V| -> ValueResult<ControlFlow<V>> {
-            assign_or_trap(
-                op(
-                    left.convert(ValueConversionKind::ToUnsigned)?,
-                    right.convert(ValueConversionKind::ToUnsigned)?,
-                )
-                .and_then(|v| v.convert(ValueConversionKind::ToSigned)),
-            )
+            let ctrl_ty = inst_context.controlling_type().unwrap();
+            let res = binary_arith(left, right, ctrl_ty, op, true)
+                .and_then(|v| v.convert(ValueConversionKind::ToSigned));
+            assign_or_trap(res)
         };
 
     // Choose whether to assign `left` or `right` to the instruction's result based on a `condition`.
@@ -811,7 +817,7 @@ where
         Opcode::Band => binary(Value::and, arg(0)?, arg(1)?)?,
         Opcode::Bor => binary(Value::or, arg(0)?, arg(1)?)?,
         Opcode::Bxor => binary(Value::xor, arg(0)?, arg(1)?)?,
-        Opcode::Bnot => assign(Value::not(arg(0)?)?),
+        Opcode::Bnot => unary(Value::not, arg(0)?)?,
         Opcode::BandNot => binary(Value::and, arg(0)?, Value::not(arg(1)?)?)?,
         Opcode::BorNot => binary(Value::or, arg(0)?, Value::not(arg(1)?)?)?,
         Opcode::BxorNot => binary(Value::xor, arg(0)?, Value::not(arg(1)?)?)?,
@@ -828,9 +834,9 @@ where
         Opcode::IshlImm => binary(Value::shl, arg(0)?, imm_as_ctrl_ty()?)?,
         Opcode::UshrImm => binary_unsigned(Value::ushr, arg(0)?, imm_as_ctrl_ty()?)?,
         Opcode::SshrImm => binary(Value::ishr, arg(0)?, imm_as_ctrl_ty()?)?,
-        Opcode::Bitrev => assign(Value::reverse_bits(arg(0)?)?),
-        Opcode::Bswap => assign(Value::swap_bytes(arg(0)?)?),
-        Opcode::Clz => assign(arg(0)?.leading_zeros()?),
+        Opcode::Bitrev => unary(Value::reverse_bits, arg(0)?)?,
+        Opcode::Bswap => unary(Value::swap_bytes, arg(0)?)?,
+        Opcode::Clz => unary(Value::leading_zeros, arg(0)?)?,
         Opcode::Cls => {
             let count = if Value::lt(&arg(0)?, &Value::int(0, ctrl_ty)?)? {
                 arg(0)?.leading_ones()?
@@ -839,7 +845,7 @@ where
             };
             assign(Value::sub(count, Value::int(1, ctrl_ty)?)?)
         }
-        Opcode::Ctz => assign(arg(0)?.trailing_zeros()?),
+        Opcode::Ctz => unary(Value::trailing_zeros, arg(0)?)?,
         Opcode::Popcnt => {
             let count = if arg(0)?.ty().is_int() {
                 arg(0)?.count_ones()?
@@ -876,7 +882,7 @@ where
         Opcode::Fsub => binary(Value::sub, arg(0)?, arg(1)?)?,
         Opcode::Fmul => binary(Value::mul, arg(0)?, arg(1)?)?,
         Opcode::Fdiv => binary(Value::div, arg(0)?, arg(1)?)?,
-        Opcode::Sqrt => assign(Value::sqrt(arg(0)?)?),
+        Opcode::Sqrt => unary(Value::sqrt, arg(0)?)?,
         Opcode::Fma => {
             let arg0 = extractlanes(&arg(0)?, ctrl_ty)?;
             let arg1 = extractlanes(&arg(1)?, ctrl_ty)?;
@@ -892,21 +898,9 @@ where
                 ctrl_ty,
             )?)
         }
-        Opcode::Fneg => assign(Value::neg(arg(0)?)?),
-        Opcode::Fabs => assign(Value::abs(arg(0)?)?),
-        Opcode::Fcopysign => {
-            let arg0 = extractlanes(&arg(0)?, ctrl_ty)?;
-            let arg1 = extractlanes(&arg(1)?, ctrl_ty)?;
-
-            assign(vectorizelanes(
-                &arg0
-                    .into_iter()
-                    .zip(arg1.into_iter())
-                    .map(|(x, y)| V::copysign(x, y))
-                    .collect::<ValueResult<SimdVec<V>>>()?,
-                ctrl_ty,
-            )?)
-        }
+        Opcode::Fneg => unary(Value::neg, arg(0)?)?,
+        Opcode::Fabs => unary(Value::abs, arg(0)?)?,
+        Opcode::Fcopysign => binary(Value::copysign, arg(0)?, arg(1)?)?,
         Opcode::Fmin => assign(match (arg(0)?, arg(1)?) {
             (a, _) if a.is_nan()? => a,
             (_, b) if b.is_nan()? => b,
@@ -931,10 +925,10 @@ where
             (a, b) if a.is_zero()? && b.is_zero()? => a,
             (a, b) => a.max(b)?,
         }),
-        Opcode::Ceil => assign(Value::ceil(arg(0)?)?),
-        Opcode::Floor => assign(Value::floor(arg(0)?)?),
-        Opcode::Trunc => assign(Value::trunc(arg(0)?)?),
-        Opcode::Nearest => assign(Value::nearest(arg(0)?)?),
+        Opcode::Ceil => unary(Value::ceil, arg(0)?)?,
+        Opcode::Floor => unary(Value::floor, arg(0)?)?,
+        Opcode::Trunc => unary(Value::trunc, arg(0)?)?,
+        Opcode::Nearest => unary(Value::nearest, arg(0)?)?,
         Opcode::IsNull => unimplemented!("IsNull"),
         Opcode::IsInvalid => unimplemented!("IsInvalid"),
         Opcode::Bitcast | Opcode::ScalarToVector => {
@@ -1592,7 +1586,28 @@ where
     extractlanes(&v, ty)?.into_iter().try_fold(init, op)
 }
 
-/// Performs the supplied binary arithmetic `op` on two SIMD vectors.
+/// Performs the supplied unary arithmetic `op` on a Value, either Vector or Scalar.
+fn unary_arith<V, F>(x: V, vector_type: types::Type, op: F, unsigned: bool) -> ValueResult<V>
+where
+    V: Value,
+    F: Fn(V) -> ValueResult<V>,
+{
+    let arg = extractlanes(&x, vector_type)?;
+
+    let result = arg
+        .into_iter()
+        .map(|mut arg| {
+            if unsigned {
+                arg = arg.convert(ValueConversionKind::ToUnsigned)?;
+            }
+            Ok(op(arg)?)
+        })
+        .collect::<ValueResult<SimdVec<V>>>()?;
+
+    vectorizelanes(&result, vector_type)
+}
+
+/// Performs the supplied binary arithmetic `op` on two values, either vector or scalar.
 fn binary_arith<V, F>(x: V, y: V, vector_type: types::Type, op: F, unsigned: bool) -> ValueResult<V>
 where
     V: Value,
