@@ -6,6 +6,7 @@ use std::collections::{HashMap, HashSet};
 use std::fmt;
 #[cfg(feature = "cache")]
 use std::path::Path;
+use std::str::FromStr;
 use std::sync::Arc;
 use target_lexicon::Architecture;
 use wasmparser::WasmFeatures;
@@ -1742,6 +1743,20 @@ pub enum ProfilingStrategy {
 
     /// Collect profiling info using the "ittapi", used with `VTune` on Linux.
     VTune,
+}
+
+impl FromStr for ProfilingStrategy {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s {
+            "none" => Ok(Self::None),
+            "perfmap" => Ok(Self::PerfMap),
+            "jitdump" => Ok(Self::JitDump),
+            "vtune" => Ok(Self::VTune),
+            _ => anyhow::bail!("unknown value for profiling strategy"),
+        }
+    }
 }
 
 /// Select how wasm backtrace detailed information is handled.
