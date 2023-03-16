@@ -3796,9 +3796,15 @@
       ;; 0xee == 0b11_10_11_10
       (x64_pshufd val 0xee))
 
+;; Note that the `pextrb` lowering here is relied upon by the `extend_to_gpr`
+;; helper because it will elide a `uextend` operation when `extractlane` is the
+;; inner node. The `pextrb` operation automatically zero-extends for us so the
+;; extra `uextend` doesn't have to codegen anything.
 (rule 0 (lower (extractlane val @ (value_type ty @ (multi_lane 8 16)) (u8_from_uimm8 lane)))
       (x64_pextrb val lane))
 
+;; See the note in the 8x16 case above for how this rule is connected to
+;; `extend_to_gpr`.
 (rule 0 (lower (extractlane val @ (value_type ty @ (multi_lane 16 8)) (u8_from_uimm8 lane)))
       (x64_pextrw val lane))
 
