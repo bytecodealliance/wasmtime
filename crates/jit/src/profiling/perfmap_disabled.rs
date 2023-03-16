@@ -3,21 +3,17 @@ use anyhow::{bail, Result};
 
 /// Interface for driving the creation of jitdump files
 #[derive(Debug)]
-pub struct JitDumpAgent {
+pub struct PerfMapAgent {
     _private: (),
 }
 
-impl JitDumpAgent {
+impl PerfMapAgent {
     pub fn new() -> Result<Self> {
-        if cfg!(feature = "jitdump") {
-            bail!("jitdump is not supported on this platform");
-        } else {
-            bail!("jitdump support disabled at compile time");
-        }
+        bail!("perfmap support not supported on this platform");
     }
 }
 
-impl ProfilingAgent for JitDumpAgent {
+impl ProfilingAgent for PerfMapAgent {
     fn module_load(&self, _module: &CompiledModule, _dbg_image: Option<&[u8]>) {}
     fn load_single_trampoline(
         &self,

@@ -68,15 +68,21 @@ pub const SUPPORTED_WASI_MODULES: &[(&str, &str)] = &[
     ),
 ];
 
-fn pick_profiling_strategy(jitdump: bool, vtune: bool) -> Result<ProfilingStrategy> {
-    Ok(match (jitdump, vtune) {
-        (true, false) => ProfilingStrategy::JitDump,
-        (false, true) => ProfilingStrategy::VTune,
-        (true, true) => {
-            println!("Can't enable --jitdump and --vtune at the same time. Profiling not enabled.");
-            ProfilingStrategy::None
-        }
-        _ => ProfilingStrategy::None,
+fn pick_profiling_strategy(perfmap: bool, jitdump: bool, vtune: bool) -> Result<ProfilingStrategy> {
+    Ok(if (perfmap as u8) + (jitdump as u8) + (vtune as u8) > 1 {
+        println!(
+            "Can't enable two or more of --jitdump, --vtune and --perfmap at the same time.
+Profiling not enabled."
+        );
+        ProfilingStrategy::None
+    } else if perfmap {
+        ProfilingStrategy::PerfMap
+    } else if jitdump {
+        ProfilingStrategy::JitDump
+    } else if vtune {
+        ProfilingStrategy::VTune
+    } else {
+        ProfilingStrategy::None
     })
 }
 
@@ -143,11 +149,15 @@ pub struct CommonOptions {
     pub wasi_modules: Option<WasiModules>,
 
     /// Generate jitdump file (supported on --features=profiling build)
-    #[clap(long, conflicts_with = "vtune")]
+    #[clap(long, conflicts_with_all = &["vtune", "perfmap"])]
     pub jitdump: bool,
 
-    /// Generate vtune (supported on --features=vtune build)
-    #[clap(long, conflicts_with = "jitdump")]
+    /// Generate perf mapping file
+    #[clap(long, conflicts_with_all = &["vtune", "jitdump"])]
+    pub perfmap: bool,
+
+    /// Generate vtune runtime information (supported on --features=vtune build)
+    #[clap(long, conflicts_with_all = &["jitdump", "perfmap"])]
     pub vtune: bool,
 
     /// Run optimization passes on translated functions, on by default
@@ -283,7 +293,11 @@ impl CommonOptions {
             .cranelift_debug_verifier(self.enable_cranelift_debug_verifier)
             .debug_info(self.debug_info)
             .cranelift_opt_level(self.opt_level())
-            .profiler(pick_profiling_strategy(self.jitdump, self.vtune)?)
+            .profiler(pick_profiling_strategy(
+                self.perfmap,
+                self.jitdump,
+                self.vtune,
+            )?)
             .cranelift_nan_canonicalization(self.enable_cranelift_nan_canonicalization);
 
         self.enable_wasm_features(&mut config);

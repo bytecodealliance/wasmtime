@@ -12,7 +12,7 @@ use wasmparser::WasmFeatures;
 #[cfg(feature = "cache")]
 use wasmtime_cache::CacheConfig;
 use wasmtime_environ::Tunables;
-use wasmtime_jit::{JitDumpAgent, NullProfilerAgent, ProfilingAgent, VTuneAgent};
+use wasmtime_jit::{JitDumpAgent, NullProfilerAgent, PerfMapAgent, ProfilingAgent, VTuneAgent};
 use wasmtime_runtime::{InstanceAllocator, OnDemandInstanceAllocator, RuntimeMemoryCreator};
 
 pub use wasmtime_environ::CacheStore;
@@ -1536,6 +1536,7 @@ impl Config {
 
     pub(crate) fn build_profiler(&self) -> Result<Box<dyn ProfilingAgent>> {
         Ok(match self.profiling_strategy {
+            ProfilingStrategy::PerfMap => Box::new(PerfMapAgent::new()?) as Box<dyn ProfilingAgent>,
             ProfilingStrategy::JitDump => Box::new(JitDumpAgent::new()?) as Box<dyn ProfilingAgent>,
             ProfilingStrategy::VTune => Box::new(VTuneAgent::new()?) as Box<dyn ProfilingAgent>,
             ProfilingStrategy::None => Box::new(NullProfilerAgent),
@@ -1731,6 +1732,9 @@ pub enum OptLevel {
 pub enum ProfilingStrategy {
     /// No profiler support.
     None,
+
+    /// Collect function name information as the "perf map" file format, used with `perf` on Linux.
+    PerfMap,
 
     /// Collect profiling info for "jitdump" file format, used with `perf` on
     /// Linux.
