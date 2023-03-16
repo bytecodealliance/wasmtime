@@ -35,6 +35,9 @@
 ;; ineg(ineg(x)) == x.
 (rule (simplify (ineg ty (ineg ty x))) (subsume x))
 
+;; x-x == 0.
+(rule (simplify (isub ty x x)) (subsume (iconst ty (imm64 0))))
+
 ;; x*1 == 1*x == x.
 (rule (simplify (imul ty
                       x
