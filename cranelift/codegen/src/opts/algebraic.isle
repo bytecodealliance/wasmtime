@@ -32,6 +32,9 @@
                       x))
       (ineg ty x))
 
+;; ineg(ineg(x)) == x.
+(rule (simplify (ineg ty (ineg ty x))) (subsume x))
+
 ;; x*1 == 1*x == x.
 (rule (simplify (imul ty
                       x
