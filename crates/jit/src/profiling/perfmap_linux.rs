@@ -23,7 +23,7 @@ impl PerfMapAgent {
     }
 
     fn make_line(name: &str, addr: *const u8, len: usize) -> String {
-        format!("{:#x} {len} {name}\n", addr as usize)
+        format!("{:x} {len:x} {name}\n", addr as usize)
     }
 }
 
