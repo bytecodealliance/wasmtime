@@ -1917,19 +1917,14 @@
 
 ;; parameters are in_ty out_ty input is_signed  
 (decl clamp_fcvt_from_float (Type Type Reg bool) Reg)
-(rule 3 (clamp_fcvt_from_float _ $I32 r _)
-  r)
-(rule 2 (clamp_fcvt_from_float _ $I64 r _)
-  r)
-
-(rule 1 (clamp_fcvt_from_float in_ty ty r is_signed)
-   (let
-    ((min_value i32 (i8_i16_min_value ty is_signed))
-    (min_reg Reg (imm in_ty (i32_2_float_bits min_value in_ty)))
-    (tmp Reg (fmax_ in_ty min_reg r))
-    (max_value i32 (i8_i16_max_value ty is_signed))
-    (max_reg Reg (imm in_ty (i32_2_float_bits max_value in_ty))))
-    (fmin_ in_ty tmp max_reg)))
+(rule (clamp_fcvt_from_float _ _ r _) r)
+(rule 1 (clamp_fcvt_from_float in_ty (fits_in_16 ty) r is_signed)
+   (let ((min_value i32 (i8_i16_min_value ty is_signed))
+         (min_reg Reg (imm in_ty (i32_2_float_bits min_value in_ty)))
+         (tmp Reg (fmax_ in_ty min_reg r))
+         (max_value i32 (i8_i16_max_value ty is_signed))
+         (max_reg Reg (imm in_ty (i32_2_float_bits max_value in_ty))))
+     (fmin_ in_ty tmp max_reg)))
 
 (decl i8_i16_max_value (Type bool) i32)
 (extern constructor i8_i16_max_value i8_i16_max_value)
