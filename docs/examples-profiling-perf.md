@@ -25,7 +25,7 @@ your application. Enabling runtime support depends on how you're using Wasmtime:
 * **C API** - you'll want to call the `wasmtime_config_profiler_set` API with a
   `WASMTIME_PROFILING_STRATEGY_PERFMAP` value.
 
-* **Command Line** - you'll want to pass the `--perfmap` flag on the command
+* **Command Line** - you'll want to pass the `--profile=perfmap` flag on the command
   line.
 
 Once perfmap support is enabled, you'll use `perf record` like usual to record
@@ -34,7 +34,7 @@ your application's performance.
 For example if you're using the CLI, you'll execute:
 
 ```sh
-$ perf record -k mono wasmtime --perfmap foo.wasm
+$ perf record -k mono wasmtime --profile=perfmap foo.wasm
 ```
 
 This will create a `perf.data` file as per usual, but it will *also* create a
@@ -72,7 +72,7 @@ depends on how you're using Wasmtime:
 * **C API** - you'll want to call the `wasmtime_config_profiler_set` API with a
   `WASMTIME_PROFILING_STRATEGY_JITDUMP` value.
 
-* **Command Line** - you'll want to pass the `--jitdump` flag on the command
+* **Command Line** - you'll want to pass the `--profile=jitdump` flag on the command
   line.
 
 Once jitdump support is enabled, you'll use `perf record` like usual to record
@@ -82,7 +82,7 @@ your application's performance. You'll need to also be sure to pass the
 For example if you're using the CLI, you'll execute:
 
 ```sh
-$ perf record -k mono wasmtime --jitdump foo.wasm
+$ perf record -k mono wasmtime --profile=jitdump foo.wasm
 ```
 
 This will create a `perf.data` file as per usual, but it will *also* create a
@@ -163,7 +163,7 @@ To collect perf information for this wasm module we'll execute:
 
 ```sh
 $ rustc --target wasm32-wasi fib.rs -O
-$ perf record -k mono wasmtime --jitdump fib.wasm
+$ perf record -k mono wasmtime --profile=jitdump fib.wasm
 fib(42) = 267914296
 [ perf record: Woken up 1 times to write data ]
 [ perf record: Captured and wrote 0.147 MB perf.data (3435 samples) ]
