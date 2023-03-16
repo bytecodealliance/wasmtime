@@ -63,6 +63,7 @@
        ;; instruction.
        (Div (size OperandSize) ;; 2, 4, or 8
             (sign DivSignedness)
+            (trap TrapCode)
             (divisor GprMem)
             (dividend_lo Gpr)
             (dividend_hi Gpr)
@@ -71,6 +72,7 @@
 
        ;; Same as `Div`, but for 8-bits where the regalloc behavior is different
        (Div8 (sign DivSignedness)
+             (trap TrapCode)
              (divisor GprMem)
              (dividend Gpr)
              (dst WritableGpr))
@@ -102,29 +104,6 @@
        (CheckedSRemSeq8 (dividend Gpr)
                         (divisor Gpr)
                         (dst WritableGpr))
-
-       ;; Validates that the `divisor` can be safely divided into the
-       ;; `dividend`.
-       ;;
-       ;; This is a separate pseudo-instruction because it has some jumps in
-       ;; ways that can't be modeled otherwise with instructions right now. This
-       ;; will trap if the `divisor` is zero or if it's -1 and `dividend` is
-       ;; INT_MIN for the associated type.
-       ;;
-       ;; Note that 64-bit types must use `ValidateSdivDivisor64`.
-       (ValidateSdivDivisor (size OperandSize)
-                            (dividend Gpr)
-                            (divisor Gpr))
-
-       ;; Same as `ValidateSdivDivisor` but for 64-bit types.
-       ;;
-       ;; This is a distinct instruction because the emission in `emit.rs`
-       ;; requires a temporary register to load an immediate into, hence the
-       ;; `tmp` field in this instruction not present in the non-64-bit one.
-       (ValidateSdivDivisor64 (dividend Gpr)
-                              (divisor Gpr)
-                              (tmp WritableGpr))
-
 
        ;; Do a sign-extend based on the sign of the value in rax into rdx: (cwd
        ;; cdq cqo) or al into ah: (cbw)
@@ -4506,32 +4485,32 @@
         dst))
 
 ;; Helper for creating `Div8` instructions
-(decl x64_div8 (Gpr GprMem DivSignedness) Gpr)
-(rule (x64_div8 dividend divisor sign)
+(decl x64_div8 (Gpr GprMem DivSignedness TrapCode) Gpr)
+(rule (x64_div8 dividend divisor sign trap)
       (let ((dst WritableGpr (temp_writable_gpr))
-            (_ Unit (emit (MInst.Div8 sign divisor dividend dst))))
+            (_ Unit (emit (MInst.Div8 sign trap divisor dividend dst))))
         dst))
 
 ;; Helper for creating `Div` instructions
 ;;
 ;; Two registers are returned through `ValueRegs` where the first is the
 ;; quotient and the second is the remainder.
-(decl x64_div (Gpr Gpr GprMem OperandSize DivSignedness) ValueRegs)
-(rule (x64_div dividend_lo dividend_hi divisor size sign)
+(decl x64_div (Gpr Gpr GprMem OperandSize DivSignedness TrapCode) ValueRegs)
+(rule (x64_div dividend_lo dividend_hi divisor size sign trap)
       (let ((dst_quotient WritableGpr (temp_writable_gpr))
             (dst_remainder WritableGpr (temp_writable_gpr))
-            (_ Unit (emit (MInst.Div size sign divisor dividend_lo dividend_hi dst_quotient dst_remainder))))
+            (_ Unit (emit (MInst.Div size sign trap divisor dividend_lo dividend_hi dst_quotient dst_remainder))))
         (value_regs dst_quotient dst_remainder)))
 
 ;; Helper for `Div`, returning the quotient and discarding the remainder.
-(decl x64_div_quotient (Gpr Gpr GprMem OperandSize DivSignedness) ValueRegs)
-(rule (x64_div_quotient dividend_lo dividend_hi divisor size sign)
-      (value_regs_get (x64_div dividend_lo dividend_hi divisor size sign) 0))
+(decl x64_div_quotient (Gpr Gpr GprMem OperandSize DivSignedness TrapCode) ValueRegs)
+(rule (x64_div_quotient dividend_lo dividend_hi divisor size sign trap)
+      (value_regs_get (x64_div dividend_lo dividend_hi divisor size sign trap) 0))
 
 ;; Helper for `Div`, returning the remainder and discarding the quotient.
-(decl x64_div_remainder (Gpr Gpr GprMem OperandSize DivSignedness) ValueRegs)
-(rule (x64_div_remainder dividend_lo dividend_hi divisor size sign)
-      (value_regs_get (x64_div dividend_lo dividend_hi divisor size sign) 1))
+(decl x64_div_remainder (Gpr Gpr GprMem OperandSize DivSignedness TrapCode) ValueRegs)
+(rule (x64_div_remainder dividend_lo dividend_hi divisor size sign trap)
+      (value_regs_get (x64_div dividend_lo dividend_hi divisor size sign trap) 1))
 
 ;; Helper for creating `SignExtendData` instructions
 (decl x64_sign_extend_data (Gpr OperandSize) Gpr)
@@ -4539,21 +4518,6 @@
       (let ((dst WritableGpr (temp_writable_gpr))
             (_ Unit (emit (MInst.SignExtendData size src dst))))
         dst))
-
-;; Helper for creating `ValidateSdivDivisor` instructions.
-(decl validate_sdiv_divisor (OperandSize Gpr Gpr) Gpr)
-(rule (validate_sdiv_divisor size dividend divisor)
-      (let ((_ Unit (emit (MInst.ValidateSdivDivisor size dividend divisor))))
-        divisor))
-
-;; Helper for creating `ValidateSdivDivisor64` instructions.
-(decl validate_sdiv_divisor64 (Gpr Gpr) Gpr)
-(rule (validate_sdiv_divisor64 dividend divisor)
-      (let (
-          (tmp WritableGpr (temp_writable_gpr))
-          (_ Unit (emit (MInst.ValidateSdivDivisor64 dividend divisor tmp)))
-        )
-        divisor))
 
 ;;;; Pinned Register ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

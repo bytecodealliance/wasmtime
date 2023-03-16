@@ -14,11 +14,8 @@
 ;;    c:	 893424               	mov	dword ptr [rsp], esi
 ;;    f:	 8b0c24               	mov	ecx, dword ptr [rsp]
 ;;   12:	 8b442404             	mov	eax, dword ptr [rsp + 4]
-;;   16:	 83f900               	cmp	ecx, 0
-;;   19:	 0f8502000000         	jne	0x21
-;;   1f:	 0f0b                 	ud2	
-;;   21:	 31d2                 	xor	edx, edx
-;;   23:	 f7f1                 	div	ecx
-;;   25:	 4883c408             	add	rsp, 8
-;;   29:	 5d                   	pop	rbp
-;;   2a:	 c3                   	ret	
+;;   16:	 31d2                 	xor	edx, edx
+;;   18:	 f7f1                 	div	ecx
+;;   1a:	 4883c408             	add	rsp, 8
+;;   1e:	 5d                   	pop	rbp
+;;   1f:	 c3                   	ret	

@@ -11,10 +11,7 @@
 ;;    1:	 4889e5               	mov	rbp, rsp
 ;;    4:	 b900000000           	mov	ecx, 0
 ;;    9:	 b801000000           	mov	eax, 1
-;;    e:	 83f900               	cmp	ecx, 0
-;;   11:	 0f8502000000         	jne	0x19
-;;   17:	 0f0b                 	ud2	
-;;   19:	 31d2                 	xor	edx, edx
-;;   1b:	 f7f1                 	div	ecx
-;;   1d:	 5d                   	pop	rbp
-;;   1e:	 c3                   	ret	
+;;    e:	 31d2                 	xor	edx, edx
+;;   10:	 f7f1                 	div	ecx
+;;   12:	 5d                   	pop	rbp
+;;   13:	 c3                   	ret	

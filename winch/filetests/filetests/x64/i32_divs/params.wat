@@ -17,13 +17,8 @@
 ;;   16:	 83f900               	cmp	ecx, 0
 ;;   19:	 0f8502000000         	jne	0x21
 ;;   1f:	 0f0b                 	ud2	
-;;   21:	 83f9ff               	cmp	ecx, -1
-;;   24:	 0f850e000000         	jne	0x38
-;;   2a:	 81f800000080         	cmp	eax, 0x80000000
-;;   30:	 0f8502000000         	jne	0x38
-;;   36:	 0f0b                 	ud2	
-;;   38:	 99                   	cdq	
-;;   39:	 f7f9                 	idiv	ecx
-;;   3b:	 4883c408             	add	rsp, 8
-;;   3f:	 5d                   	pop	rbp
-;;   40:	 c3                   	ret	
+;;   21:	 99                   	cdq	
+;;   22:	 f7f9                 	idiv	ecx
+;;   24:	 4883c408             	add	rsp, 8
+;;   28:	 5d                   	pop	rbp
+;;   29:	 c3                   	ret	
