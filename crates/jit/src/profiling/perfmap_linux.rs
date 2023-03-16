@@ -1,6 +1,6 @@
 use crate::{CompiledModule, ProfilingAgent};
 use anyhow::Result;
-use std::io::Write as _;
+use std::io::{BufWriter, Write as _};
 use std::process;
 use std::{fs::File, sync::Mutex};
 use wasmtime_environ::EntityRef as _;
@@ -23,7 +23,10 @@ impl PerfMapAgent {
     }
 
     fn make_line(name: &str, addr: *const u8, len: usize) -> String {
-        format!("{:x} {len:x} {name}\n", addr as usize)
+        // Format is documented here: https://github.com/torvalds/linux/blob/master/tools/perf/Documentation/jit-interface.txt
+        // Try our best to sanitize the name, since wasm allows for any utf8 string in there.
+        let sanitized_name = name.replace('\n', "_").replace('\r', "_");
+        format!("{:x} {:x} {}\n", addr as usize, len, sanitized_name)
     }
 }
 
@@ -32,6 +35,7 @@ impl ProfilingAgent for PerfMapAgent {
     fn module_load(&self, module: &CompiledModule, _dbg_image: Option<&[u8]>) {
         let mut file = PERFMAP_FILE.lock().unwrap();
         let file = file.as_mut().unwrap();
+        let mut file = BufWriter::new(file);
 
         for (idx, func) in module.finished_functions() {
             let addr = func.as_ptr();
@@ -46,6 +50,8 @@ impl ProfilingAgent for PerfMapAgent {
             let name = format!("wasm::trampoline[{}]", idx.index());
             let _ = file.write_all(Self::make_line(&name, addr, len).as_bytes());
         }
+
+        let _ = file.flush();
     }
 
     fn load_single_trampoline(
