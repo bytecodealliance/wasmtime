@@ -524,6 +524,9 @@
 ;; with the `bitselect` instruction, but the pattern is a bit more complicated
 ;; due to most bitselects-over-floats having bitcasts.
 
+;; fneg(fneg(x)) == x.
+(rule (simplify (fneg ty (fneg ty x))) (subsume x))
+
 ;; If both of the multiplied arguments to an `fma` are negated then remove
 ;; both of them since they cancel out.
 (rule (simplify (fma ty (fneg ty x) (fneg ty y) z))

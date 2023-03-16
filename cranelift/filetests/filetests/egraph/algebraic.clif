@@ -484,6 +484,15 @@ block0(v1: i16):
 ; check: v4 = sextend.i64 v1
 ; check: return v4
 
+function %double_fneg(f32) -> f32 {
+block0(v1: f32):
+    v2 = fneg v1
+    v3 = fneg v2
+    return v3
+}
+
+; check: return v1
+
 function %fma_double_fneg(f32, f32, f32) -> f32 {
 block0(v1: f32, v2: f32, v3: f32):
     v4 = fneg v1
