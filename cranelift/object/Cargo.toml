@@ -12,6 +12,7 @@ edition.workspace = true
 [dependencies]
 cranelift-module = { workspace = true }
 cranelift-codegen = { workspace = true, features = ["std"] }
+cranelift-chaos = { workspace = true }
 object = { workspace = true, features = ["write"] }
 target-lexicon = { workspace = true }
 anyhow = { workspace = true }

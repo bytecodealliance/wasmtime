@@ -1,5 +1,6 @@
 #![no_main]
 
+use cranelift_chaos::ChaosEngine;
 use cranelift_codegen::{
     cursor::{Cursor, FuncCursor},
     incremental_cache as icache,
@@ -39,6 +40,8 @@ pub struct FunctionWithIsa {
 
     /// Function under test
     pub func: Function,
+
+    chaos_eng: ChaosEngine,
 }
 
 impl FunctionWithIsa {
@@ -48,11 +51,11 @@ impl FunctionWithIsa {
         // a supported one, so that the same fuzz input works across different build
         // configurations.
         let target = u.choose(isa::ALL_ARCHITECTURES)?;
-        let mut builder =
-            isa::lookup_by_name(target).map_err(|_| arbitrary::Error::IncorrectFormat)?;
+        let mut gen = FuzzGen::new(u)?;
+        let mut builder = isa::lookup_by_name(target, gen.chaos_eng.clone())
+            .map_err(|_| arbitrary::Error::IncorrectFormat)?;
         let architecture = builder.triple().architecture;
 
-        let mut gen = FuzzGen::new(u);
         let flags = gen
             .generate_flags(architecture)
             .map_err(|_| arbitrary::Error::IncorrectFormat)?;
@@ -84,7 +87,11 @@ impl FunctionWithIsa {
             )
             .map_err(|_| arbitrary::Error::IncorrectFormat)?;
 
-        Ok(FunctionWithIsa { isa, func })
+        Ok(FunctionWithIsa {
+            isa,
+            func,
+            chaos_eng: gen.chaos_eng,
+        })
     }
 }
 
@@ -103,11 +110,15 @@ impl<'a> Arbitrary<'a> for FunctionWithIsa {
 }
 
 fuzz_target!(|func: FunctionWithIsa| {
-    let FunctionWithIsa { mut func, isa } = func;
+    let FunctionWithIsa {
+        mut func,
+        isa,
+        chaos_eng,
+    } = func;
 
     let cache_key_hash = icache::compute_cache_key(&*isa, &func);
 
-    let mut context = Context::for_function(func.clone());
+    let mut context = Context::for_function(func.clone(), chaos_eng.clone());
     let prev_stencil = match context.compile_stencil(&*isa) {
         Ok(stencil) => stencil,
         Err(_) => return,
@@ -197,7 +208,7 @@ fuzz_target!(|func: FunctionWithIsa| {
         assert!(cache_key_hash != new_cache_key_hash);
     }
 
-    context = Context::for_function(func.clone());
+    context = Context::for_function(func.clone(), chaos_eng);
 
     let after_mutation_result = match context.compile(&*isa) {
         Ok(info) => info,

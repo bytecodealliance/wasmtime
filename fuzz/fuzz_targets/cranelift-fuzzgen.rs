@@ -173,14 +173,14 @@ impl<'a> Arbitrary<'a> for TestCase {
 
 impl TestCase {
     pub fn generate(u: &mut Unstructured) -> anyhow::Result<Self> {
-        let mut gen = FuzzGen::new(u);
+        let mut gen = FuzzGen::new(u)?;
 
         let compare_against_host = gen.u.arbitrary()?;
 
         // TestCase is meant to be consumed by a runner, so we make the assumption here that we're
         // generating a TargetIsa for the host.
-        let mut builder =
-            builder_with_options(true).expect("Unable to build a TargetIsa for the current host");
+        let mut builder = builder_with_options(true, gen.chaos_eng.clone())
+            .expect("Unable to build a TargetIsa for the current host");
         let flags = gen.generate_flags(builder.triple().architecture)?;
         gen.set_isa_flags(&mut builder, IsaFlagGen::Host)?;
         let isa = builder.finish(flags)?;

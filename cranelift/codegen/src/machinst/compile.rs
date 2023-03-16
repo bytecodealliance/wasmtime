@@ -7,6 +7,7 @@ use crate::machinst::*;
 use crate::timing;
 use crate::trace;
 
+use cranelift_chaos::ChaosEngine;
 use regalloc2::RegallocOptions;
 
 /// Compile the given function down to VCode with allocated registers, ready
@@ -18,6 +19,7 @@ pub fn compile<B: LowerBackend + TargetIsa>(
     abi: Callee<<<B as LowerBackend>::MInst as MachInst>::ABIMachineSpec>,
     emit_info: <B::MInst as MachInstEmit>::Info,
     sigs: SigSet,
+    chaos_eng: ChaosEngine,
 ) -> CodegenResult<(VCode<B::MInst>, regalloc2::Output)> {
     let machine_env = b.machine_env();
 
@@ -25,7 +27,8 @@ pub fn compile<B: LowerBackend + TargetIsa>(
     let block_order = BlockLoweringOrder::new(f, domtree);
 
     // Build the lowering context.
-    let lower = crate::machinst::Lower::new(f, machine_env, abi, emit_info, block_order, sigs)?;
+    let lower =
+        crate::machinst::Lower::new(f, machine_env, abi, emit_info, block_order, sigs, chaos_eng)?;
 
     // Lower the IR.
     let vcode = {

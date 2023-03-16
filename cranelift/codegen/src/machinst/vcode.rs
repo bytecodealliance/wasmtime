@@ -26,6 +26,7 @@ use crate::timing;
 use crate::trace;
 use crate::CodegenError;
 use crate::ValueLocRange;
+use cranelift_chaos::ChaosEngine;
 use regalloc2::{
     Edit, Function as RegallocFunction, InstOrEdit, InstRange, Operand, OperandKind, PRegSet,
     RegClass, VReg,
@@ -174,6 +175,10 @@ pub struct VCode<I: VCodeInst> {
     debug_value_labels: Vec<(VReg, InsnIndex, InsnIndex, u32)>,
 
     pub(crate) sigs: SigSet,
+
+    /// Only used during fuzz-testing. Otherwise, this is a zero-sized struct
+    /// and compiled away. See [cranelift_chaos].
+    chaos_eng: ChaosEngine,
 }
 
 /// The result of `VCode::emit`. Contains all information computed
@@ -284,8 +289,9 @@ impl<I: VCodeInst> VCodeBuilder<I> {
         block_order: BlockLoweringOrder,
         constants: VCodeConstants,
         direction: VCodeBuildDirection,
+        chaos_eng: ChaosEngine,
     ) -> VCodeBuilder<I> {
-        let vcode = VCode::new(sigs, abi, emit_info, block_order, constants);
+        let vcode = VCode::new(sigs, abi, emit_info, block_order, constants, chaos_eng);
 
         VCodeBuilder {
             vcode,
@@ -642,6 +648,7 @@ impl<I: VCodeInst> VCode<I> {
         emit_info: I::Info,
         block_order: BlockLoweringOrder,
         constants: VCodeConstants,
+        chaos_eng: ChaosEngine,
     ) -> VCode<I> {
         let n_blocks = block_order.lowered_order().len();
         VCode {
@@ -670,6 +677,7 @@ impl<I: VCodeInst> VCode<I> {
             constants,
             debug_value_labels: vec![],
             vreg_aliases: FxHashMap::with_capacity_and_hasher(10 * n_blocks, Default::default()),
+            chaos_eng,
         }
     }
 
@@ -771,7 +779,7 @@ impl<I: VCodeInst> VCode<I> {
         use core::fmt::Write;
 
         let _tt = timing::vcode_emit();
-        let mut buffer = MachBuffer::new();
+        let mut buffer = MachBuffer::new(self.chaos_eng.clone());
         let mut bb_starts: Vec<Option<CodeOffset>> = vec![];
 
         // The first M MachLabels are reserved for block indices, the next N MachLabels for

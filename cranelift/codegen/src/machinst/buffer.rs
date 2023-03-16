@@ -148,6 +148,7 @@ use crate::machinst::{
 };
 use crate::timing;
 use crate::trace;
+use cranelift_chaos::ChaosEngine;
 use cranelift_entity::{entity_impl, SecondaryMap};
 use smallvec::SmallVec;
 use std::convert::TryFrom;
@@ -263,6 +264,9 @@ pub struct MachBuffer<I: VCodeInst> {
     labels_at_tail_off: CodeOffset,
     /// Map used constants to their [MachLabel].
     constant_labels: SecondaryMap<VCodeConstant, MachLabel>,
+    /// Only used during fuzz-testing. Otherwise, this is a zero-sized struct
+    /// and compiled away. See [cranelift_chaos].
+    chaos_eng: ChaosEngine,
 }
 
 impl MachBufferFinalized<Stencil> {
@@ -360,7 +364,7 @@ pub enum StackMapExtent {
 impl<I: VCodeInst> MachBuffer<I> {
     /// Create a new section, known to start at `start_offset` and with a size limited to
     /// `length_limit`.
-    pub fn new() -> MachBuffer<I> {
+    pub fn new(chaos_eng: ChaosEngine) -> MachBuffer<I> {
         MachBuffer {
             data: SmallVec::new(),
             relocs: SmallVec::new(),
@@ -381,6 +385,7 @@ impl<I: VCodeInst> MachBuffer<I> {
             labels_at_tail: SmallVec::new(),
             labels_at_tail_off: 0,
             constant_labels: SecondaryMap::new(),
+            chaos_eng,
         }
     }
 
@@ -774,6 +779,11 @@ impl<I: VCodeInst> MachBuffer<I> {
     }
 
     fn optimize_branches(&mut self) {
+        #[cfg(feature = "chaos")]
+        if let Ok(true) = self.chaos_eng.get_arbitrary() {
+            return;
+        }
+
         self.lazily_clear_labels_at_tail();
         // Invariants valid at this point.
 
@@ -1702,7 +1712,7 @@ impl<I: VCodeInst> MachTextSectionBuilder<I> {
     /// Creates a new text section builder which will have `num_funcs` functions
     /// pushed into it.
     pub fn new(num_funcs: usize) -> MachTextSectionBuilder<I> {
-        let mut buf = MachBuffer::new();
+        let mut buf = MachBuffer::new(ChaosEngine::noop());
         buf.reserve_labels_for_blocks(num_funcs);
         MachTextSectionBuilder {
             buf,
@@ -1785,7 +1795,7 @@ mod test {
     #[test]
     fn test_elide_jump_to_next() {
         let info = EmitInfo::new(settings::Flags::new(settings::builder()));
-        let mut buf = MachBuffer::new();
+        let mut buf = MachBuffer::new(ChaosEngine::noop());
         let mut state = Default::default();
 
         buf.reserve_labels_for_blocks(2);
@@ -1800,7 +1810,7 @@ mod test {
     #[test]
     fn test_elide_trivial_jump_blocks() {
         let info = EmitInfo::new(settings::Flags::new(settings::builder()));
-        let mut buf = MachBuffer::new();
+        let mut buf = MachBuffer::new(ChaosEngine::noop());
         let mut state = Default::default();
 
         buf.reserve_labels_for_blocks(4);
@@ -1830,7 +1840,7 @@ mod test {
     #[test]
     fn test_flip_cond() {
         let info = EmitInfo::new(settings::Flags::new(settings::builder()));
-        let mut buf = MachBuffer::new();
+        let mut buf = MachBuffer::new(ChaosEngine::noop());
         let mut state = Default::default();
 
         buf.reserve_labels_for_blocks(4);
@@ -1857,7 +1867,7 @@ mod test {
 
         let buf = buf.finish();
 
-        let mut buf2 = MachBuffer::new();
+        let mut buf2 = MachBuffer::new(ChaosEngine::noop());
         let mut state = Default::default();
         let inst = Inst::TrapIf {
             kind: CondBrKind::NotZero(xreg(0)),
@@ -1875,7 +1885,7 @@ mod test {
     #[test]
     fn test_island() {
         let info = EmitInfo::new(settings::Flags::new(settings::builder()));
-        let mut buf = MachBuffer::new();
+        let mut buf = MachBuffer::new(ChaosEngine::noop());
         let mut state = Default::default();
 
         buf.reserve_labels_for_blocks(4);
@@ -1909,7 +1919,7 @@ mod test {
 
         assert_eq!(2000000 + 8, buf.total_size());
 
-        let mut buf2 = MachBuffer::new();
+        let mut buf2 = MachBuffer::new(ChaosEngine::noop());
         let mut state = Default::default();
         let inst = Inst::CondBr {
             kind: CondBrKind::NotZero(xreg(0)),
@@ -1942,7 +1952,7 @@ mod test {
     #[test]
     fn test_island_backward() {
         let info = EmitInfo::new(settings::Flags::new(settings::builder()));
-        let mut buf = MachBuffer::new();
+        let mut buf = MachBuffer::new(ChaosEngine::noop());
         let mut state = Default::default();
 
         buf.reserve_labels_for_blocks(4);
@@ -1973,7 +1983,7 @@ mod test {
 
         assert_eq!(2000000 + 12, buf.total_size());
 
-        let mut buf2 = MachBuffer::new();
+        let mut buf2 = MachBuffer::new(ChaosEngine::noop());
         let mut state = Default::default();
         let inst = Inst::CondBr {
             kind: CondBrKind::NotZero(xreg(0)),
@@ -2027,7 +2037,7 @@ mod test {
         //   ret
 
         let info = EmitInfo::new(settings::Flags::new(settings::builder()));
-        let mut buf = MachBuffer::new();
+        let mut buf = MachBuffer::new(ChaosEngine::noop());
         let mut state = Default::default();
 
         buf.reserve_labels_for_blocks(8);
@@ -2103,7 +2113,7 @@ mod test {
         // label0, label1, ..., label4:
         //   b label0
         let info = EmitInfo::new(settings::Flags::new(settings::builder()));
-        let mut buf = MachBuffer::new();
+        let mut buf = MachBuffer::new(ChaosEngine::noop());
         let mut state = Default::default();
 
         buf.reserve_labels_for_blocks(5);
@@ -2139,7 +2149,7 @@ mod test {
 
     #[test]
     fn metadata_records() {
-        let mut buf = MachBuffer::<Inst>::new();
+        let mut buf = MachBuffer::<Inst>::new(ChaosEngine::noop());
 
         buf.reserve_labels_for_blocks(1);
 

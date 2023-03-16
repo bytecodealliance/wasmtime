@@ -15,6 +15,7 @@ use crate::result::CodegenResult;
 use crate::settings as shared_settings;
 use alloc::{boxed::Box, vec::Vec};
 use core::fmt;
+use cranelift_chaos::ChaosEngine;
 use regalloc2::MachineEnv;
 use target_lexicon::{Architecture, Triple};
 
@@ -34,6 +35,9 @@ pub struct S390xBackend {
     flags: shared_settings::Flags,
     isa_flags: s390x_settings::Flags,
     machine_env: MachineEnv,
+    /// Only used during fuzz-testing. Otherwise, this is a zero-sized struct
+    /// and compiled away. See [cranelift_chaos].
+    chaos_eng: ChaosEngine,
 }
 
 impl S390xBackend {
@@ -42,6 +46,7 @@ impl S390xBackend {
         triple: Triple,
         flags: shared_settings::Flags,
         isa_flags: s390x_settings::Flags,
+        chaos_eng: ChaosEngine,
     ) -> S390xBackend {
         let machine_env = create_machine_env(&flags);
         S390xBackend {
@@ -49,6 +54,7 @@ impl S390xBackend {
             flags,
             isa_flags,
             machine_env,
+            chaos_eng,
         }
     }
 
@@ -62,7 +68,15 @@ impl S390xBackend {
         let emit_info = EmitInfo::new(self.isa_flags.clone());
         let sigs = SigSet::new::<abi::S390xMachineDeps>(func, &self.flags)?;
         let abi = abi::S390xCallee::new(func, self, &self.isa_flags, &sigs)?;
-        compile::compile::<S390xBackend>(func, domtree, self, abi, emit_info, sigs)
+        compile::compile::<S390xBackend>(
+            func,
+            domtree,
+            self,
+            abi,
+            emit_info,
+            sigs,
+            self.chaos_eng.clone(),
+        )
     }
 }
 
@@ -203,14 +217,15 @@ impl fmt::Display for S390xBackend {
 }
 
 /// Create a new `isa::Builder`.
-pub fn isa_builder(triple: Triple) -> IsaBuilder {
+pub fn isa_builder(triple: Triple, chaos_eng: ChaosEngine) -> IsaBuilder {
     assert!(triple.architecture == Architecture::S390x);
     IsaBuilder {
         triple,
+        chaos_eng,
         setup: s390x_settings::builder(),
-        constructor: |triple, shared_flags, builder| {
+        constructor: |triple, shared_flags, builder, chaos_eng| {
             let isa_flags = s390x_settings::Flags::new(&shared_flags, builder);
-            let backend = S390xBackend::new_with_flags(triple, shared_flags, isa_flags);
+            let backend = S390xBackend::new_with_flags(triple, shared_flags, isa_flags, chaos_eng);
             Ok(backend.wrapped())
         },
     }

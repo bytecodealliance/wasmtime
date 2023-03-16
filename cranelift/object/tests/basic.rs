@@ -1,3 +1,4 @@
+use cranelift_chaos::ChaosEngine;
 use cranelift_codegen::ir::*;
 use cranelift_codegen::isa::CallConv;
 use cranelift_codegen::settings;
@@ -10,7 +11,9 @@ use cranelift_object::*;
 #[test]
 fn error_on_incompatible_sig_in_declare_function() {
     let flag_builder = settings::builder();
-    let isa_builder = cranelift_codegen::isa::lookup_by_name("x86_64-unknown-linux-gnu").unwrap();
+    let isa_builder =
+        cranelift_codegen::isa::lookup_by_name("x86_64-unknown-linux-gnu", ChaosEngine::noop())
+            .unwrap();
     let isa = isa_builder
         .finish(settings::Flags::new(flag_builder))
         .unwrap();
@@ -42,7 +45,7 @@ fn define_simple_function(module: &mut ObjectModule) -> FuncId {
         .declare_function("abc", Linkage::Local, &sig)
         .unwrap();
 
-    let mut ctx = Context::new();
+    let mut ctx = Context::new(ChaosEngine::noop());
     ctx.func = Function::with_name_signature(UserFuncName::user(0, func_id.as_u32()), sig);
     let mut func_ctx = FunctionBuilderContext::new();
     {
@@ -61,7 +64,9 @@ fn define_simple_function(module: &mut ObjectModule) -> FuncId {
 #[should_panic(expected = "Result::unwrap()` on an `Err` value: DuplicateDefinition(\"abc\")")]
 fn panic_on_define_after_finalize() {
     let flag_builder = settings::builder();
-    let isa_builder = cranelift_codegen::isa::lookup_by_name("x86_64-unknown-linux-gnu").unwrap();
+    let isa_builder =
+        cranelift_codegen::isa::lookup_by_name("x86_64-unknown-linux-gnu", ChaosEngine::noop())
+            .unwrap();
     let isa = isa_builder
         .finish(settings::Flags::new(flag_builder))
         .unwrap();
@@ -147,7 +152,9 @@ fn switch_error() {
 #[test]
 fn libcall_function() {
     let flag_builder = settings::builder();
-    let isa_builder = cranelift_codegen::isa::lookup_by_name("x86_64-unknown-linux-gnu").unwrap();
+    let isa_builder =
+        cranelift_codegen::isa::lookup_by_name("x86_64-unknown-linux-gnu", ChaosEngine::noop())
+            .unwrap();
     let isa = isa_builder
         .finish(settings::Flags::new(flag_builder))
         .unwrap();
@@ -164,7 +171,7 @@ fn libcall_function() {
         .declare_function("function", Linkage::Local, &sig)
         .unwrap();
 
-    let mut ctx = Context::new();
+    let mut ctx = Context::new(ChaosEngine::noop());
     ctx.func = Function::with_name_signature(UserFuncName::user(0, func_id.as_u32()), sig);
     let mut func_ctx = FunctionBuilderContext::new();
     {
@@ -201,7 +208,9 @@ fn libcall_function() {
 #[should_panic(expected = "has a null byte, which is disallowed")]
 fn reject_nul_byte_symbol_for_func() {
     let flag_builder = settings::builder();
-    let isa_builder = cranelift_codegen::isa::lookup_by_name("x86_64-unknown-linux-gnu").unwrap();
+    let isa_builder =
+        cranelift_codegen::isa::lookup_by_name("x86_64-unknown-linux-gnu", ChaosEngine::noop())
+            .unwrap();
     let isa = isa_builder
         .finish(settings::Flags::new(flag_builder))
         .unwrap();
@@ -223,7 +232,9 @@ fn reject_nul_byte_symbol_for_func() {
 #[should_panic(expected = "has a null byte, which is disallowed")]
 fn reject_nul_byte_symbol_for_data() {
     let flag_builder = settings::builder();
-    let isa_builder = cranelift_codegen::isa::lookup_by_name("x86_64-unknown-linux-gnu").unwrap();
+    let isa_builder =
+        cranelift_codegen::isa::lookup_by_name("x86_64-unknown-linux-gnu", ChaosEngine::noop())
+            .unwrap();
     let isa = isa_builder
         .finish(settings::Flags::new(flag_builder))
         .unwrap();

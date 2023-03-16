@@ -1,6 +1,7 @@
 //! Provides functionality for compiling and running CLIF IR for `run` tests.
 use anyhow::{anyhow, Result};
 use core::mem;
+use cranelift_chaos::ChaosEngine;
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::{
     ExternalName, Function, InstBuilder, Signature, UserExternalName, UserFuncName,
@@ -101,8 +102,8 @@ impl TestFileCompiler {
 
     /// Build a [TestFileCompiler] using the host machine's ISA and the passed flags.
     pub fn with_host_isa(flags: settings::Flags) -> Result<Self> {
-        let builder =
-            builder_with_options(true).expect("Unable to build a TargetIsa for the current host");
+        let builder = builder_with_options(true, ChaosEngine::noop())
+            .expect("Unable to build a TargetIsa for the current host");
         let isa = builder.finish(flags)?;
         Ok(Self::new(isa))
     }

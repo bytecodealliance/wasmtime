@@ -14,6 +14,7 @@ cranelift-module = { workspace = true }
 cranelift-native = { workspace = true }
 cranelift-codegen = { workspace = true, features = ["std"] }
 cranelift-entity = { workspace = true }
+cranelift-chaos = { workspace = true }
 anyhow = { workspace = true }
 region = "2.2.0"
 libc = { version = "0.2.42" }

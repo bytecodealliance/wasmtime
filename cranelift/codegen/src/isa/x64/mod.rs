@@ -17,6 +17,7 @@ use crate::result::{CodegenError, CodegenResult};
 use crate::settings::{self as shared_settings, Flags};
 use alloc::{boxed::Box, vec::Vec};
 use core::fmt;
+use cranelift_chaos::ChaosEngine;
 use regalloc2::MachineEnv;
 use target_lexicon::Triple;
 
@@ -32,17 +33,26 @@ pub(crate) struct X64Backend {
     flags: Flags,
     x64_flags: x64_settings::Flags,
     reg_env: MachineEnv,
+    /// Only used during fuzz-testing. Otherwise, this is a zero-sized struct
+    /// and compiled away. See [cranelift_chaos].
+    chaos_eng: ChaosEngine,
 }
 
 impl X64Backend {
     /// Create a new X64 backend with the given (shared) flags.
-    fn new_with_flags(triple: Triple, flags: Flags, x64_flags: x64_settings::Flags) -> Self {
+    fn new_with_flags(
+        triple: Triple,
+        flags: Flags,
+        x64_flags: x64_settings::Flags,
+        chaos_eng: ChaosEngine,
+    ) -> Self {
         let reg_env = create_reg_env_systemv(&flags);
         Self {
             triple,
             flags,
             x64_flags,
             reg_env,
+            chaos_eng,
         }
     }
 
@@ -56,7 +66,15 @@ impl X64Backend {
         let emit_info = EmitInfo::new(self.flags.clone(), self.x64_flags.clone());
         let sigs = SigSet::new::<abi::X64ABIMachineSpec>(func, &self.flags)?;
         let abi = abi::X64Callee::new(func, self, &self.x64_flags, &sigs)?;
-        compile::compile::<Self>(func, domtree, self, abi, emit_info, sigs)
+        compile::compile::<Self>(
+            func,
+            domtree,
+            self,
+            abi,
+            emit_info,
+            sigs,
+            self.chaos_eng.clone(),
+        )
     }
 }
 
@@ -201,9 +219,10 @@ impl fmt::Display for X64Backend {
 }
 
 /// Create a new `isa::Builder`.
-pub(crate) fn isa_builder(triple: Triple) -> IsaBuilder {
+pub(crate) fn isa_builder(triple: Triple, chaos_eng: ChaosEngine) -> IsaBuilder {
     IsaBuilder {
         triple,
+        chaos_eng,
         setup: x64_settings::builder(),
         constructor: isa_constructor,
     }
@@ -213,6 +232,7 @@ fn isa_constructor(
     triple: Triple,
     shared_flags: Flags,
     builder: &shared_settings::Builder,
+    chaos_eng: ChaosEngine,
 ) -> CodegenResult<OwnedTargetIsa> {
     let isa_flags = x64_settings::Flags::new(&shared_flags, builder);
 
@@ -230,7 +250,7 @@ fn isa_constructor(
         }
     }
 
-    let backend = X64Backend::new_with_flags(triple, shared_flags, isa_flags);
+    let backend = X64Backend::new_with_flags(triple, shared_flags, isa_flags, chaos_eng);
     Ok(backend.wrapped())
 }
 
@@ -246,7 +266,7 @@ mod test {
         let mut shared_flags_builder = settings::builder();
         shared_flags_builder.set("enable_simd", "true").unwrap();
         let shared_flags = settings::Flags::new(shared_flags_builder);
-        let mut isa_builder = crate::isa::lookup_by_name("x86_64").unwrap();
+        let mut isa_builder = crate::isa::lookup_by_name("x86_64", ChaosEngine::noop()).unwrap();
         isa_builder.set("has_sse3", "false").unwrap();
         isa_builder.set("has_ssse3", "false").unwrap();
         isa_builder.set("has_sse41", "false").unwrap();

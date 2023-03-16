@@ -11,6 +11,7 @@ use cranelift::codegen::Context;
 use cranelift::prelude::settings::SettingKind;
 use cranelift::prelude::*;
 use cranelift_arbitrary::CraneliftArbitrary;
+use cranelift_chaos::ChaosEngine;
 use cranelift_native::builder_with_options;
 use target_lexicon::{Architecture, Triple};
 
@@ -39,17 +40,24 @@ where
 {
     pub u: &'r mut Unstructured<'data>,
     pub config: Config,
+    pub chaos_eng: ChaosEngine,
 }
 
 impl<'r, 'data> FuzzGen<'r, 'data>
 where
     'data: 'r,
 {
-    pub fn new(u: &'r mut Unstructured<'data>) -> Self {
-        Self {
+    pub fn new(u: &'r mut Unstructured<'data>) -> anyhow::Result<Self> {
+        #[cfg(feature = "chaos")]
+        let chaos_eng = u.arbitrary()?;
+        #[cfg(not(feature = "chaos"))]
+        let chaos_eng = cranelift_chaos::ChaosEngine::noop();
+
+        Ok(Self {
             u,
             config: Config::default(),
-        }
+            chaos_eng,
+        })
     }
 
     pub fn generate_signature(&mut self, architecture: Architecture) -> Result<Signature> {
@@ -106,7 +114,7 @@ where
         // This is something that we can enable via flags for the compiled version, however
         // the interpreter won't get that version, so call that pass manually here.
 
-        let mut ctx = Context::for_function(func);
+        let mut ctx = Context::for_function(func, self.chaos_eng.clone());
         // Assume that we are generating this function for the current ISA.
         // We disable the verifier here, since if it fails it prevents a test case from
         // being generated and formatted by `cargo fuzz fmt`.
@@ -117,7 +125,7 @@ where
             builder
         });
 
-        let isa = builder_with_options(false)
+        let isa = builder_with_options(false, self.chaos_eng.clone())
             .expect("Unable to build a TargetIsa for the current host")
             .finish(flags)
             .expect("Failed to build TargetISA");

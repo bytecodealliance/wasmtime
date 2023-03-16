@@ -8,6 +8,7 @@
 use super::HashMap;
 use crate::data_context::DataContext;
 use core::fmt::Display;
+use cranelift_chaos::ChaosEngine;
 use cranelift_codegen::binemit::{CodeOffset, Reloc};
 use cranelift_codegen::entity::{entity_impl, PrimaryMap};
 use cranelift_codegen::ir::Function;
@@ -550,7 +551,7 @@ pub trait Module {
     /// This ensures that the `Context` is initialized with the default calling
     /// convention for the `TargetIsa`.
     fn make_context(&self) -> Context {
-        let mut ctx = Context::new();
+        let mut ctx = Context::new(ChaosEngine::noop());
         ctx.func.signature.call_conv = self.isa().default_call_conv();
         ctx
     }

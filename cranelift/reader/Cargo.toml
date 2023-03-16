@@ -12,6 +12,7 @@ edition.workspace = true
 [dependencies]
 anyhow.workspace = true
 cranelift-codegen = { workspace = true }
+cranelift-chaos = { workspace = true }
 smallvec = { workspace = true }
 target-lexicon = { workspace = true }
 

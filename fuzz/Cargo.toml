@@ -17,6 +17,7 @@ cranelift-filetests = { workspace = true }
 cranelift-interpreter = { workspace = true }
 cranelift-fuzzgen = { workspace = true }
 cranelift-native = { workspace = true }
+cranelift-chaos = { workspace = true }
 libfuzzer-sys = { version = "0.4.0", features = ["arbitrary-derive"] }
 target-lexicon = { workspace = true }
 smallvec = { workspace = true }
@@ -36,6 +37,11 @@ component-fuzz-util = { workspace = true }
 [features]
 default = ['fuzz-spec-interpreter']
 fuzz-spec-interpreter = ['wasmtime-fuzzing/fuzz-spec-interpreter']
+chaos = [
+    "cranelift-chaos/chaos",
+    "cranelift-codegen/chaos",
+    "cranelift-fuzzgen/chaos",
+]
 
 [[bin]]
 name = "compile"

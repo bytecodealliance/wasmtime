@@ -5,6 +5,7 @@ use crate::{
     wasmtime_call_conv, CompiledFunction, FunctionAddressMap,
 };
 use anyhow::{Context as _, Result};
+use cranelift_chaos::ChaosEngine;
 use cranelift_codegen::ir::{
     self, ExternalName, Function, InstBuilder, MemFlags, UserExternalName, UserFuncName, Value,
 };
@@ -57,7 +58,7 @@ impl Default for CompilerContext {
     fn default() -> Self {
         Self {
             func_translator: FuncTranslator::new(),
-            codegen_context: Context::new(),
+            codegen_context: Context::new(ChaosEngine::noop()),
             incremental_cache_ctx: None,
             validator_allocations: Default::default(),
         }

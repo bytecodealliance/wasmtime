@@ -6,6 +6,7 @@ use crate::function_runner::{CompiledTestFile, TestFileCompiler};
 use crate::runone::FileUpdate;
 use crate::subtest::{Context, SubTest};
 use anyhow::Context as _;
+use cranelift_chaos::ChaosEngine;
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::Type;
 use cranelift_codegen::isa::{OwnedTargetIsa, TargetIsa};
@@ -35,8 +36,9 @@ fn build_host_isa(
     flags: settings::Flags,
     isa_flags: Vec<settings::Value>,
 ) -> OwnedTargetIsa {
-    let mut builder = cranelift_native::builder_with_options(infer_native_flags)
-        .expect("Unable to build a TargetIsa for the current host");
+    let mut builder =
+        cranelift_native::builder_with_options(infer_native_flags, ChaosEngine::noop())
+            .expect("Unable to build a TargetIsa for the current host");
 
     // Copy ISA Flags
     for value in isa_flags {
