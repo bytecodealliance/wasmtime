@@ -1,0 +1,19 @@
+[package]
+authors = ["The Cranelift Project Developers"]
+name = "cranelift-chaos"
+version = "0.95.0"
+description = "White-box fuzz testing framework"
+license = "Apache-2.0 WITH LLVM-exception"
+repository = "https://github.com/bytecodealliance/wasmtime"
+readme = "README.md"
+keywords = ["fuzz", "test"]
+edition.workspace = true
+
+[dependencies]
+arbitrary = { version = "1.1.0" }
+
+[features]
+
+# Actually turn on chaos mode.
+# Without this feature, a zero-sized dummy will be compiled.
+chaos = []
