@@ -2224,11 +2224,11 @@
 (rule (flt $F64 a b) (fpu_rrr (FpuOPRRR.FltD) $I64 a b))
 
 (decl fmin_ (Type Reg Reg) Reg)
-(rule (fmin_ $F32 a b) (fpu_rrr (FpuOPRRR.FminS) $F64 a b))
+(rule (fmin_ $F32 a b) (fpu_rrr (FpuOPRRR.FminS) $F32 a b))
 (rule (fmin_ $F64 a b) (fpu_rrr (FpuOPRRR.FminD) $F64 a b))
 
 (decl fmax_ (Type Reg Reg) Reg)
-(rule (fmax_ $F32 a b) (fpu_rrr (FpuOPRRR.FmaxS) $F64 a b))
+(rule (fmax_ $F32 a b) (fpu_rrr (FpuOPRRR.FmaxS) $F32 a b))
 (rule (fmax_ $F64 a b) (fpu_rrr (FpuOPRRR.FmaxD) $F64 a b))
 
 (decl fle (Type Reg Reg) Reg)
