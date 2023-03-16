@@ -270,7 +270,7 @@ unsafe fn handle_exception(request: &mut ExceptionRequest) -> bool {
     // field has a `kern_return_t` describing the kind of failure (e.g. SIGSEGV
     // vs SIGBUS), but we're not interested in that right now.
     let (fault1, fault2) = if request.body.exception as u32 == EXC_BAD_ACCESS {
-        (1, request.body.code[1].0 as usize)
+        (1, request.body.code[1] as usize)
     } else {
         (0, 0)
     };
