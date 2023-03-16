@@ -164,7 +164,7 @@ pub enum TrapReason {
         /// explicitly jump to a `ud2` instruction. This is only available for
         /// fault-based traps which are one of the main ways, but not the only
         /// way, to run wasm.
-        fault: Option<usize>,
+        faulting_addr: Option<usize>,
     },
 
     /// A trap raised from a wasm libcall
@@ -486,13 +486,13 @@ impl CallThreadState {
         self.jmp_buf.replace(ptr::null())
     }
 
-    fn set_jit_trap(&self, pc: *const u8, fp: usize, fault: Option<usize>) {
+    fn set_jit_trap(&self, pc: *const u8, fp: usize, faulting_addr: Option<usize>) {
         let backtrace = self.capture_backtrace(Some((pc as usize, fp)));
         unsafe {
             (*self.unwind.get()).as_mut_ptr().write((
                 UnwindReason::Trap(TrapReason::Jit {
                     pc: pc as usize,
-                    fault,
+                    faulting_addr,
                 }),
                 backtrace,
             ));

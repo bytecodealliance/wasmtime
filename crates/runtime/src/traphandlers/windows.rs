@@ -66,7 +66,7 @@ unsafe extern "system" fn exception_handler(exception_info: *mut EXCEPTION_POINT
         // an indicator as to whether the fault was a read/write. The second
         // element is the address of the inaccessible data causing this
         // violation.
-        let fault = if record.ExceptionCode == EXCEPTION_ACCESS_VIOLATION {
+        let faulting_addr = if record.ExceptionCode == EXCEPTION_ACCESS_VIOLATION {
             assert!(record.NumberParameters >= 2);
             Some(record.ExceptionInformation[1])
         } else {
@@ -78,7 +78,7 @@ unsafe extern "system" fn exception_handler(exception_info: *mut EXCEPTION_POINT
         } else if jmp_buf as usize == 1 {
             ExceptionContinueExecution
         } else {
-            info.set_jit_trap(ip, fp, fault);
+            info.set_jit_trap(ip, fp, faulting_addr);
             wasmtime_longjmp(jmp_buf)
         }
     })

@@ -75,7 +75,18 @@ mod mach_addons {
         pub static NDR_record: NDR_record_t;
     }
 
-    #[repr(C)]
+    // Note that this is copied from Gecko at
+    //
+    // https://searchfox.org/mozilla-central/rev/ed93119be4818da1509bbcb7b28e245853eeedd5/js/src/wasm/WasmSignalHandlers.cpp#583-601
+    //
+    // which distinctly diverges from the actual version of this in the header
+    // files provided by macOS, notably in the `code` field which uses `i64`
+    // instead of `i32`.
+    //
+    // Also note the `packed(4)` here which forcibly decreases alignment to 4 to
+    // additionally match what mach expects (apparently, I wish I had a better
+    // reference for this).
+    #[repr(C, packed(4))]
     #[allow(dead_code)]
     #[derive(Copy, Clone, Debug)]
     pub struct __Request__exception_raise_t {
@@ -89,25 +100,12 @@ mod mach_addons {
         pub exception: exception_type_t,
         pub codeCnt: mach_msg_type_number_t,
 
-        // Note the usage of a newtype wrapper here which is intended to mirror
-        // how this seems to need to work with C where this structure should
-        // have an alignment of 4. Using `I64Align4` avoid increasing the
-        // alignment to 8 by using `i64` natively.
-        //
-        // Also note that this is a divergence from the C headers which use
+        // Note that this is a divergence from the C headers which use
         // `integer_t` here for this field which is a `c_int`. That isn't
         // actually reflecting reality apparently though because if `c_int` is
         // used here then the structure is too small to receive a message.
-        //
-        // In the original Gecko sources this was copied from the structure here
-        // is `pragma(pack(4))` which should be the same as an unaligned i64
-        // here which doesn't increase the overall alignment of the structure.
-        pub code: [I64Align4; 2],
+        pub code: [i64; 2],
     }
-
-    #[repr(packed)]
-    #[derive(Copy, Clone, Debug)]
-    pub struct I64Align4(pub i64);
 
     #[repr(C)]
     #[allow(dead_code)]
@@ -426,13 +424,17 @@ unsafe fn handle_exception(request: &mut ExceptionRequest) -> bool {
 unsafe extern "C" fn unwind(
     wasm_pc: *const u8,
     wasm_fp: usize,
-    has_fault: usize,
-    fault: usize,
+    has_faulting_addr: usize,
+    faulting_addr: usize,
 ) -> ! {
     let jmp_buf = tls::with(|state| {
         let state = state.unwrap();
-        let fault = if has_fault != 0 { Some(fault) } else { None };
-        state.set_jit_trap(wasm_pc, wasm_fp, fault);
+        let faulting_addr = if has_faulting_addr != 0 {
+            Some(faulting_addr)
+        } else {
+            None
+        };
+        state.set_jit_trap(wasm_pc, wasm_fp, faulting_addr);
         state.jmp_buf.get()
     });
     debug_assert!(!jmp_buf.is_null());

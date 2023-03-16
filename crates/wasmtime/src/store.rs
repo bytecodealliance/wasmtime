@@ -1516,11 +1516,20 @@ impl StoreOpaque {
     /// doesn't have enough information to report the fault address.
     pub(crate) fn wasm_fault(&self, pc: usize, addr: usize) -> Option<WasmFault> {
         // Explicitly bounds-checked memories with spectre-guards enabled will
-        // case out-of-bounds accesses to get routed to address 0, so allow wasm
-        // instructions to fault on the null address.
+        // cause out-of-bounds accesses to get routed to address 0, so allow
+        // wasm instructions to fault on the null address.
         if addr == 0 {
             return None;
         }
+
+        // Search all known instances in this store for this address. Note that
+        // this is probably not the speediest way to do this. Traps, however,
+        // are generally not expected to be super fast and additionally stores
+        // probably don't have all that many instances or memories.
+        //
+        // If this loop becomes hot in the future, however, it should be
+        // possible to precompute maps about linear memories in a store and have
+        // a quicker lookup.
         let mut fault = None;
         for instance in self.instances.iter() {
             if let Some(f) = instance.handle.wasm_fault(addr) {
@@ -1547,7 +1556,9 @@ message.
 This is a possible security issue because WebAssembly has accessed something it
 shouldn't have been able to. Other accesses may have succeeded and this one just
 happened to be caught. The process will now be aborted to prevent this damage
-from going any futher and to alert what's going on.
+from going any further and to alert what's going on. If this is a security
+issue please reach out to the Wasmtime team via its security policy
+at https://bytecodealliance.org/security.
 "
         );
         std::process::abort();

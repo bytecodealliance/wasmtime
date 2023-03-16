@@ -906,8 +906,9 @@ impl Memory {
         }
     }
 
-    /// Tests whether `addr` is possible to reach from wasm code which uses
-    /// this linear memory.
+    /// Returns the range of bytes that WebAssembly should be able to address in
+    /// this linear memory. Note that this includes guard pages which wasm can
+    /// hit.
     pub fn wasm_accessible(&self) -> Range<usize> {
         self.0.wasm_accessible()
     }

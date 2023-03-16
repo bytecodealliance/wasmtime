@@ -242,7 +242,7 @@ pub enum WaitResult {
 /// Description about a fault that occurred in WebAssembly.
 #[derive(Debug)]
 pub struct WasmFault {
-    /// The byte size of memory at the time of the fault.
+    /// The size of memory, in bytes, at the time of the fault.
     pub memory_size: usize,
     /// The WebAssembly address at which the fault occurred.
     pub wasm_address: u64,
