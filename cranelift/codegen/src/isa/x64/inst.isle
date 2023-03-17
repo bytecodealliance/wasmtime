@@ -1818,10 +1818,7 @@
 (decl mov_rmi_to_xmm (RegMemImm) XmmMemImm)
 (rule (mov_rmi_to_xmm rmi @ (RegMemImm.Mem _)) (xmm_mem_imm_new rmi))
 (rule (mov_rmi_to_xmm rmi @ (RegMemImm.Imm _)) (xmm_mem_imm_new rmi))
-(rule (mov_rmi_to_xmm (RegMemImm.Reg r))
-      (gpr_to_xmm (SseOpcode.Movd)
-                  r
-                  (OperandSize.Size32)))
+(rule (mov_rmi_to_xmm (RegMemImm.Reg r)) (x64_movd_to_xmm r))
 
 ;;;; Helpers for Emitting Calls ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1941,9 +1938,25 @@
         (if-let $true (use_avx_simd))
         (xmm_movrm_vex (AvxOpcode.Vmovupd) addr data))
 
-(decl x64_movd (Xmm) Gpr)
-(rule (x64_movd from)
+;; Helper for creating `movd` instructions.
+(decl x64_movd_to_gpr (Xmm) Gpr)
+(rule (x64_movd_to_gpr from)
       (xmm_to_gpr (SseOpcode.Movd) from (OperandSize.Size32)))
+
+;; Helper for creating `movd` instructions.
+(decl x64_movd_to_xmm (GprMem) Xmm)
+(rule (x64_movd_to_xmm from)
+      (gpr_to_xmm (SseOpcode.Movd) from (OperandSize.Size32)))
+
+;; Helper for creating `movq` instructions.
+(decl x64_movq_to_xmm (GprMem) Xmm)
+(rule (x64_movq_to_xmm src)
+      (gpr_to_xmm (SseOpcode.Movq) src (OperandSize.Size64)))
+
+;; Helper for creating `movq` instructions.
+(decl x64_movq_to_gpr (Xmm) Gpr)
+(rule (x64_movq_to_gpr src)
+      (xmm_to_gpr (SseOpcode.Movq) src (OperandSize.Size64)))
 
 (decl x64_movdqu_load (XmmMem) Xmm)
 (rule (x64_movdqu_load from)
@@ -2186,15 +2199,11 @@
 
 ;; `f32` immediates.
 (rule 2 (imm $F32 (u64_nonzero bits))
-      (gpr_to_xmm (SseOpcode.Movd)
-                  (imm $I32 bits)
-                  (OperandSize.Size32)))
+        (x64_movd_to_xmm (imm $I32 bits)))
 
 ;; `f64` immediates.
 (rule 2 (imm $F64 (u64_nonzero bits))
-      (gpr_to_xmm (SseOpcode.Movq)
-                  (imm $I64 bits)
-                  (OperandSize.Size64)))
+        (x64_movq_to_xmm (imm $I64 bits)))
 
 ;; Special case for when a 64-bit immediate fits into 32-bits. We can use a
 ;; 32-bit move that zero-extends the value, which has a smaller encoding.
@@ -4486,15 +4495,15 @@
 
 (decl bitcast_xmm_to_gpr (Type Xmm) Gpr)
 (rule (bitcast_xmm_to_gpr $F32 src)
-      (xmm_to_gpr (SseOpcode.Movd) src (OperandSize.Size32)))
+      (x64_movd_to_gpr src))
 (rule (bitcast_xmm_to_gpr $F64 src)
-      (xmm_to_gpr (SseOpcode.Movq) src (OperandSize.Size64)))
+      (x64_movq_to_gpr src))
 
 (decl bitcast_gpr_to_xmm (Type Gpr) Xmm)
 (rule (bitcast_gpr_to_xmm $I32 src)
-      (gpr_to_xmm (SseOpcode.Movd) src (OperandSize.Size32)))
+      (x64_movd_to_xmm src))
 (rule (bitcast_gpr_to_xmm $I64 src)
-      (gpr_to_xmm (SseOpcode.Movq) src (OperandSize.Size64)))
+      (x64_movq_to_xmm src))
 
 ;;;; Stack Addresses ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
