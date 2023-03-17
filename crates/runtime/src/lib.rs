@@ -21,6 +21,7 @@
 )]
 
 use anyhow::Error;
+use std::fmt;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
 use wasmtime_environ::{DefinedFuncIndex, DefinedMemoryIndex, HostPtr, VMOffsets};
@@ -236,4 +237,23 @@ pub enum WaitResult {
     /// Indicates that `wait` completed with a timeout, meaning that the
     /// original value matched as expected but nothing ever called `notify`.
     TimedOut = 2,
+}
+
+/// Description about a fault that occurred in WebAssembly.
+#[derive(Debug)]
+pub struct WasmFault {
+    /// The size of memory, in bytes, at the time of the fault.
+    pub memory_size: usize,
+    /// The WebAssembly address at which the fault occurred.
+    pub wasm_address: u64,
+}
+
+impl fmt::Display for WasmFault {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "memory fault at wasm address 0x{:x} in linear memory of size 0x{:x}",
+            self.wasm_address, self.memory_size,
+        )
+    }
 }

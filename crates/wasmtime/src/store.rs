@@ -97,7 +97,7 @@ use wasmtime_runtime::{
     InstanceAllocationRequest, InstanceAllocator, InstanceHandle, ModuleInfo,
     OnDemandInstanceAllocator, SignalHandler, StorePtr, VMCallerCheckedFuncRef, VMContext,
     VMExternRef, VMExternRefActivationsTable, VMRuntimeLimits, VMSharedSignatureIndex,
-    VMTrampoline,
+    VMTrampoline, WasmFault,
 };
 
 mod context;
@@ -1500,6 +1500,68 @@ impl StoreOpaque {
 
     pub(crate) fn push_rooted_funcs(&mut self, funcs: Arc<[Definition]>) {
         self.rooted_host_funcs.push(funcs);
+    }
+
+    /// Translates a WebAssembly fault at the native `pc` and native `addr` to a
+    /// WebAssembly-relative fault.
+    ///
+    /// This function may abort the process if `addr` is not found to actually
+    /// reside in any linear memory. In such a situation it means that the
+    /// segfault was erroneously caught by Wasmtime and is possibly indicative
+    /// of a code generator bug.
+    ///
+    /// This function returns `None` for dynamically-bounds-checked-memories
+    /// with spectre mitigations enabled since the hardware fault address is
+    /// always zero in these situations which means that the trapping context
+    /// doesn't have enough information to report the fault address.
+    pub(crate) fn wasm_fault(&self, pc: usize, addr: usize) -> Option<WasmFault> {
+        // Explicitly bounds-checked memories with spectre-guards enabled will
+        // cause out-of-bounds accesses to get routed to address 0, so allow
+        // wasm instructions to fault on the null address.
+        if addr == 0 {
+            return None;
+        }
+
+        // Search all known instances in this store for this address. Note that
+        // this is probably not the speediest way to do this. Traps, however,
+        // are generally not expected to be super fast and additionally stores
+        // probably don't have all that many instances or memories.
+        //
+        // If this loop becomes hot in the future, however, it should be
+        // possible to precompute maps about linear memories in a store and have
+        // a quicker lookup.
+        let mut fault = None;
+        for instance in self.instances.iter() {
+            if let Some(f) = instance.handle.wasm_fault(addr) {
+                assert!(fault.is_none());
+                fault = Some(f);
+            }
+        }
+        if fault.is_some() {
+            return fault;
+        }
+
+        eprintln!(
+            "\
+Wasmtime caught a segfault for a wasm program because the faulting instruction
+is allowed to segfault due to how linear memories are implemented. The address
+that was accessed, however, is not known to any linear memory in use within this
+Store. This may be indicative of a critical bug in Wasmtime's code generation
+because all addresses which are known to be reachable from wasm won't reach this
+message.
+
+    pc:      0x{pc:x}
+    address: 0x{addr:x}
+
+This is a possible security issue because WebAssembly has accessed something it
+shouldn't have been able to. Other accesses may have succeeded and this one just
+happened to be caught. The process will now be aborted to prevent this damage
+from going any further and to alert what's going on. If this is a security
+issue please reach out to the Wasmtime team via its security policy
+at https://bytecodealliance.org/security.
+"
+        );
+        std::process::abort();
     }
 }
 

@@ -147,9 +147,25 @@ pub enum TrapReason {
         needs_backtrace: bool,
     },
 
-    /// A trap raised from Cranelift-generated code with the pc listed of where
-    /// the trap came from.
-    Jit(usize),
+    /// A trap raised from Cranelift-generated code.
+    Jit {
+        /// The program counter where this trap originated.
+        ///
+        /// This is later used with side tables from compilation to translate
+        /// the trapping address to a trap code.
+        pc: usize,
+
+        /// If the trap was a memory-related trap such as SIGSEGV then this
+        /// field will contain the address of the inaccessible data.
+        ///
+        /// Note that wasm loads/stores are not guaranteed to fill in this
+        /// information. Dynamically-bounds-checked memories, for example, will
+        /// not access an invalid address but may instead load from NULL or may
+        /// explicitly jump to a `ud2` instruction. This is only available for
+        /// fault-based traps which are one of the main ways, but not the only
+        /// way, to run wasm.
+        faulting_addr: Option<usize>,
+    },
 
     /// A trap raised from a wasm libcall
     Wasm(wasmtime_environ::Trap),
@@ -174,7 +190,7 @@ impl TrapReason {
 
     /// Is this a JIT trap?
     pub fn is_jit(&self) -> bool {
-        matches!(self, TrapReason::Jit(_))
+        matches!(self, TrapReason::Jit { .. })
     }
 }
 
@@ -470,12 +486,16 @@ impl CallThreadState {
         self.jmp_buf.replace(ptr::null())
     }
 
-    fn set_jit_trap(&self, pc: *const u8, fp: usize) {
+    fn set_jit_trap(&self, pc: *const u8, fp: usize, faulting_addr: Option<usize>) {
         let backtrace = self.capture_backtrace(Some((pc as usize, fp)));
         unsafe {
-            (*self.unwind.get())
-                .as_mut_ptr()
-                .write((UnwindReason::Trap(TrapReason::Jit(pc as usize)), backtrace));
+            (*self.unwind.get()).as_mut_ptr().write((
+                UnwindReason::Trap(TrapReason::Jit {
+                    pc: pc as usize,
+                    faulting_addr,
+                }),
+                backtrace,
+            ));
         }
     }
 

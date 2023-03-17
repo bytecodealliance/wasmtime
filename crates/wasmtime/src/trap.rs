@@ -103,12 +103,21 @@ pub(crate) fn from_runtime_box(
             );
             (error, None)
         }
-        wasmtime_runtime::TrapReason::Jit(pc) => {
+        wasmtime_runtime::TrapReason::Jit { pc, faulting_addr } => {
             let code = store
                 .modules()
                 .lookup_trap_code(pc)
                 .unwrap_or(Trap::StackOverflow);
-            (code.into(), Some(pc))
+            let mut err: Error = code.into();
+
+            // If a fault address was present, for example with segfaults,
+            // then simultaneously assert that it's within a known linear memory
+            // and additionally translate it to a wasm-local address to be added
+            // as context to the error.
+            if let Some(fault) = faulting_addr.and_then(|addr| store.wasm_fault(pc, addr)) {
+                err = err.context(fault);
+            }
+            (err, Some(pc))
         }
         wasmtime_runtime::TrapReason::Wasm(trap_code) => (trap_code.into(), None),
     };
