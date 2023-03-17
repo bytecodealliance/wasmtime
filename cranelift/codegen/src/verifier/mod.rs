@@ -884,7 +884,11 @@ impl<'a> Verifier<'a> {
         self.verify_value(loc_inst, v, errors)?;
 
         let dfg = &self.func.dfg;
-        let loc_block = self.func.layout.pp_block(loc_inst);
+        let loc_block = self
+            .func
+            .layout
+            .inst_block(loc_inst)
+            .expect("Instruction not in layout.");
         let is_reachable = self.expected_domtree.is_reachable(loc_block);
 
         // SSA form

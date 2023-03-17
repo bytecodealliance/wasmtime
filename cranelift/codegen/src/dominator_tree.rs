@@ -475,7 +475,9 @@ impl DominatorTreePreorder {
         // sibling lists are ordered according to the CFG reverse post-order.
         for &block in domtree.cfg_postorder() {
             if let Some(idom_inst) = domtree.idom(block) {
-                let idom = layout.pp_block(idom_inst);
+                let idom = layout
+                    .inst_block(idom_inst)
+                    .expect("Instruction not in layout.");
                 let sib = mem::replace(&mut self.nodes[idom].child, block.into());
                 self.nodes[block].sibling = sib;
             } else {
@@ -505,7 +507,9 @@ impl DominatorTreePreorder {
         // its dominator tree children.
         for &block in domtree.cfg_postorder() {
             if let Some(idom_inst) = domtree.idom(block) {
-                let idom = layout.pp_block(idom_inst);
+                let idom = layout
+                    .inst_block(idom_inst)
+                    .expect("Instruction not in layout.");
                 let pre_max = cmp::max(self.nodes[block].pre_max, self.nodes[idom].pre_max);
                 self.nodes[idom].pre_max = pre_max;
             }
