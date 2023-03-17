@@ -35,6 +35,14 @@
 ;; ineg(ineg(x)) == x.
 (rule (simplify (ineg ty (ineg ty x))) (subsume x))
 
+;; ineg(x) * ineg(y) == x*y.
+(rule (simplify (imul ty (ineg ty x) (ineg ty y)))
+      (subsume (imul ty x y)))
+
+;; iabs(x) * iabs(y) == x*y.
+(rule (simplify (imul ty (iabs ty x) (iabs ty y)))
+      (subsume (imul ty x y)))
+
 ;; x-x == 0.
 (rule (simplify (isub (fits_in_64 (ty_int ty)) x x)) (subsume (iconst ty (imm64 0))))
 
