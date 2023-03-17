@@ -2,7 +2,7 @@
 
 use crate::entity::SecondaryMap;
 use crate::flowgraph::{BlockPredecessor, ControlFlowGraph};
-use crate::ir::{Block, ExpandedProgramPoint, Function, Inst, Layout, Value};
+use crate::ir::{Block, Function, Inst, Layout, ProgramPoint, Value};
 use crate::packed_option::PackedOption;
 use crate::timing;
 use alloc::vec::Vec;
@@ -100,8 +100,8 @@ impl DominatorTree {
     /// If `a` and `b` belong to the same block, compare their relative position in the block.
     pub fn rpo_cmp<A, B>(&self, a: A, b: B, layout: &Layout) -> Ordering
     where
-        A: Into<ExpandedProgramPoint>,
-        B: Into<ExpandedProgramPoint>,
+        A: Into<ProgramPoint>,
+        B: Into<ProgramPoint>,
     {
         let a = a.into();
         let b = b.into();
@@ -120,16 +120,16 @@ impl DominatorTree {
     /// An instruction is considered to dominate itself.
     pub fn dominates<A, B>(&self, a: A, b: B, layout: &Layout) -> bool
     where
-        A: Into<ExpandedProgramPoint>,
-        B: Into<ExpandedProgramPoint>,
+        A: Into<ProgramPoint>,
+        B: Into<ProgramPoint>,
     {
         let a = a.into();
         let b = b.into();
         match a {
-            ExpandedProgramPoint::Block(block_a) => {
+            ProgramPoint::Block(block_a) => {
                 a == b || self.last_dominator(block_a, b, layout).is_some()
             }
-            ExpandedProgramPoint::Inst(inst_a) => {
+            ProgramPoint::Inst(inst_a) => {
                 let block_a = layout
                     .inst_block(inst_a)
                     .expect("Instruction not in layout.");
@@ -145,11 +145,11 @@ impl DominatorTree {
     /// If no instructions in `a` dominate `b`, return `None`.
     pub fn last_dominator<B>(&self, a: Block, b: B, layout: &Layout) -> Option<Inst>
     where
-        B: Into<ExpandedProgramPoint>,
+        B: Into<ProgramPoint>,
     {
         let (mut block_b, mut inst_b) = match b.into() {
-            ExpandedProgramPoint::Block(block) => (block, None),
-            ExpandedProgramPoint::Inst(inst) => (
+            ProgramPoint::Block(block) => (block, None),
+            ProgramPoint::Inst(inst) => (
                 layout.inst_block(inst).expect("Instruction not in layout."),
                 Some(inst),
             ),
@@ -572,8 +572,8 @@ impl DominatorTreePreorder {
     /// program points dominated by pp follow immediately and contiguously after pp in the order.
     pub fn pre_cmp<A, B>(&self, a: A, b: B, layout: &Layout) -> Ordering
     where
-        A: Into<ExpandedProgramPoint>,
-        B: Into<ExpandedProgramPoint>,
+        A: Into<ProgramPoint>,
+        B: Into<ProgramPoint>,
     {
         let a = a.into();
         let b = b.into();

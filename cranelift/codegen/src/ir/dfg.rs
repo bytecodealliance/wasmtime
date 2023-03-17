@@ -493,7 +493,7 @@ impl ValueDef {
     }
 
     /// Get the program point where the value was defined.
-    pub fn pp(self) -> ir::ExpandedProgramPoint {
+    pub fn pp(self) -> ir::ProgramPoint {
         self.into()
     }
 

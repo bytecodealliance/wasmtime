@@ -4,7 +4,7 @@
 //! determined by the `Layout` data structure defined in this module.
 
 use crate::entity::SecondaryMap;
-use crate::ir::progpoint::ExpandedProgramPoint;
+use crate::ir::progpoint::ProgramPoint;
 use crate::ir::{Block, Inst};
 use crate::packed_option::PackedOption;
 use crate::{timing, trace};
@@ -124,8 +124,8 @@ impl Layout {
     /// improved for those cases where the type of either argument is known statically.
     pub fn pp_cmp<A, B>(&self, a: A, b: B) -> cmp::Ordering
     where
-        A: Into<ExpandedProgramPoint>,
-        B: Into<ExpandedProgramPoint>,
+        A: Into<ProgramPoint>,
+        B: Into<ProgramPoint>,
     {
         let a_seq = self.seq(a);
         let b_seq = self.seq(b);
@@ -136,11 +136,11 @@ impl Layout {
 // Private methods for dealing with sequence numbers.
 impl Layout {
     /// Get the sequence number of a program point that must correspond to an entity in the layout.
-    fn seq<PP: Into<ExpandedProgramPoint>>(&self, pp: PP) -> SequenceNumber {
+    fn seq<PP: Into<ProgramPoint>>(&self, pp: PP) -> SequenceNumber {
         // When `PP = Inst` or `PP = Block`, we expect this dynamic type check to be optimized out.
         match pp.into() {
-            ExpandedProgramPoint::Block(block) => self.blocks[block].seq,
-            ExpandedProgramPoint::Inst(inst) => self.insts[inst].seq,
+            ProgramPoint::Block(block) => self.blocks[block].seq,
+            ProgramPoint::Inst(inst) => self.insts[inst].seq,
         }
     }
 
@@ -536,12 +536,10 @@ impl Layout {
     }
 
     /// Get the block containing the program point `pp`. Panic if `pp` is not in the layout.
-    pub fn pp_block(&self, pp: ExpandedProgramPoint) -> Block {
+    pub fn pp_block(&self, pp: ProgramPoint) -> Block {
         match pp {
-            ExpandedProgramPoint::Block(block) => block,
-            ExpandedProgramPoint::Inst(inst) => {
-                self.inst_block(inst).expect("Program point not in layout")
-            }
+            ProgramPoint::Block(block) => block,
+            ProgramPoint::Inst(inst) => self.inst_block(inst).expect("Program point not in layout"),
         }
     }
 
