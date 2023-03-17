@@ -17,6 +17,3 @@ cranelift-native = { workspace = true }
 anyhow = { workspace = true }
 arbitrary = "1.0.0"
 target-lexicon = { workspace = true, features = ["std"] }
-
-[[bin]]
-name = "check_opcode_signatures"
