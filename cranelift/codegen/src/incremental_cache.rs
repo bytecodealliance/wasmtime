@@ -164,7 +164,15 @@ impl<'a> CacheKey<'a> {
         // Make sure the blocks and instructions are sequenced the same way as we might
         // have serialized them earlier. This is the symmetric of what's done in
         // `try_load`.
-        f.stencil.layout.full_renumber();
+        let mut block = f.stencil.layout.entry_block().expect("Missing entry block");
+        loop {
+            f.stencil.layout.full_block_renumber(block);
+            if let Some(next_block) = f.stencil.layout.next_block(block) {
+                block = next_block;
+            } else {
+                break;
+            }
+        }
         CacheKey {
             stencil: &f.stencil,
             parameters: CompileParameters::from_isa(isa),

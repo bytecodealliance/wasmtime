@@ -106,7 +106,7 @@ impl DominatorTree {
         let a = a.into();
         let b = b.into();
         self.rpo_cmp_block(layout.pp_block(a), layout.pp_block(b))
-            .then(layout.pp_cmp(a, b))
+            .then_with(|| layout.pp_cmp(a, b))
     }
 
     /// Returns `true` if `a` dominates `b`.
@@ -578,7 +578,7 @@ impl DominatorTreePreorder {
         let a = a.into();
         let b = b.into();
         self.pre_cmp_block(layout.pp_block(a), layout.pp_block(b))
-            .then(layout.pp_cmp(a, b))
+            .then_with(|| layout.pp_cmp(a, b))
     }
 }
 
