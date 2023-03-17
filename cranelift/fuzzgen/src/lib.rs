@@ -18,7 +18,6 @@ mod function_generator;
 mod passes;
 mod print;
 
-pub use function_generator::OPCODE_SIGNATURES;
 pub use print::PrintableTestCase;
 
 pub type TestCaseInput = Vec<DataValue>;
