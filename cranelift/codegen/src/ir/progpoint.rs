@@ -1,6 +1,6 @@
 //! Program points.
 
-use crate::ir::{Block, Inst, ValueDef};
+use crate::ir::{Block, Inst};
 use core::fmt;
 
 /// A `ProgramPoint` represents a position in a function where the live range of an SSA value can
@@ -37,16 +37,6 @@ impl From<Inst> for ProgramPoint {
 impl From<Block> for ProgramPoint {
     fn from(block: Block) -> Self {
         Self::Block(block)
-    }
-}
-
-impl From<ValueDef> for ProgramPoint {
-    fn from(def: ValueDef) -> Self {
-        match def {
-            ValueDef::Result(inst, _) => inst.into(),
-            ValueDef::Param(block, _) => block.into(),
-            ValueDef::Union(_, _) => panic!("Union does not have a single program point"),
-        }
     }
 }
 

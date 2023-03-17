@@ -2,7 +2,7 @@
 
 use crate::entity::SecondaryMap;
 use crate::flowgraph::{BlockPredecessor, ControlFlowGraph};
-use crate::ir::{Block, Function, Inst, Layout, ProgramPoint, Value};
+use crate::ir::{Block, Function, Inst, Layout, ProgramPoint};
 use crate::packed_option::PackedOption;
 use crate::timing;
 use alloc::vec::Vec;
@@ -579,19 +579,6 @@ impl DominatorTreePreorder {
         let b = b.into();
         self.pre_cmp_block(layout.pp_block(a), layout.pp_block(b))
             .then(layout.pp_cmp(a, b))
-    }
-
-    /// Compare two value defs according to the dominator tree pre-order.
-    ///
-    /// Two values defined at the same program point are compared according to their parameter or
-    /// result order.
-    ///
-    /// This is a total ordering of the values in the function.
-    pub fn pre_cmp_def(&self, a: Value, b: Value, func: &Function) -> Ordering {
-        let da = func.dfg.value_def(a);
-        let db = func.dfg.value_def(b);
-        self.pre_cmp(da, db, &func.layout)
-            .then_with(|| da.num().cmp(&db.num()))
     }
 }
 
