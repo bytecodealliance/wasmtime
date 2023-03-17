@@ -58,6 +58,14 @@
                       _))
       (subsume zero))
 
+;; x*-1 == -1*x == ineg(x).
+(rule (simplify (imul ty x (iconst ty c)))
+      (if-let -1 (i64_sextend_imm64 ty c))
+      (ineg ty x))
+(rule (simplify (imul ty (iconst ty c) x))
+      (if-let -1 (i64_sextend_imm64 ty c))
+      (ineg ty x))
+
 ;; x/1 == x.
 (rule (simplify (sdiv ty
                       x
