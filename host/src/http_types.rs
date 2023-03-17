@@ -1,7 +1,7 @@
 use crate::{
-    wasi,
-    wasi::poll::Pollable,
-    wasi::types::{
+    proxy::wasi,
+    proxy::wasi::poll::Pollable,
+    proxy::wasi::types::{
         Error, Fields, FutureIncomingResponse, Headers, IncomingRequest, IncomingResponse,
         IncomingStream, Method, OutgoingRequest, OutgoingResponse, OutgoingStream,
         ResponseOutparam, Scheme, StatusCode, Trailers,

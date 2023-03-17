@@ -1,5 +1,5 @@
 use anyhow::Result;
-use host::{add_to_linker, WasiCtx};
+use host::{command::add_to_linker, WasiCtx};
 use wasi_cap_std_sync::WasiCtxBuilder;
 use wasmtime::{
     component::{Component, Linker},

@@ -1,6 +1,8 @@
 use crate::{
-    wasi,
-    wasi::types::{FutureIncomingResponse as Response, OutgoingRequest as Request, RequestOptions},
+    proxy::wasi,
+    proxy::wasi::types::{
+        FutureIncomingResponse as Response, OutgoingRequest as Request, RequestOptions,
+    },
     WasiCtx,
 };
 

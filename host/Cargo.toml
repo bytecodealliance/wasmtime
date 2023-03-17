@@ -14,6 +14,7 @@ tracing = { workspace = true }
 wasmtime = { git = "https://github.com/bytecodealliance/wasmtime", rev = "8d3a881b524d56498dfc71b65818b2abbeb1da44", features = ["component-model"] }
 wasi-common = { path = "../wasi-common" }
 wasi-cap-std-sync = { path = "../wasi-common/cap-std-sync" }
+clap = { version = "4.1.9", features = ["derive"] }
 
 [dev-dependencies]
 test-programs-macros = { path = "../test-programs/macros" }

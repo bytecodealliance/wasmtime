@@ -1,4 +1,4 @@
-use crate::wasi::exit;
+use crate::command::wasi::exit;
 use crate::WasiCtx;
 
 #[async_trait::async_trait]

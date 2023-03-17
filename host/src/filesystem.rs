@@ -1,7 +1,7 @@
 #![allow(unused_variables)]
 
-use crate::wasi;
-use crate::wasi::streams::{InputStream, OutputStream};
+use crate::command::wasi;
+use crate::command::wasi::streams::{InputStream, OutputStream};
 use crate::{HostResult, WasiCtx};
 use std::{
     io::{IoSlice, IoSliceMut},

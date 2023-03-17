@@ -1,12 +1,12 @@
 #![allow(unused_variables)]
 
 use crate::{
+    command::wasi::network::{Error, IpAddressFamily, Network},
+    command::wasi::poll::Pollable,
+    command::wasi::streams::{InputStream, OutputStream},
+    command::wasi::tcp::{self, IpSocketAddress, ShutdownType, TcpSocket},
+    command::wasi::tcp_create_socket,
     network::convert,
-    wasi::network::{Error, IpAddressFamily, Network},
-    wasi::poll::Pollable,
-    wasi::streams::{InputStream, OutputStream},
-    wasi::tcp::{self, IpSocketAddress, ShutdownType, TcpSocket},
-    wasi::tcp_create_socket,
     HostResult, WasiCtx,
 };
 use wasi_common::tcp_socket::TableTcpSocketExt;

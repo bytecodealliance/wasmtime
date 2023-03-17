@@ -1,20 +1,29 @@
-use anyhow::{Context, Result};
-use host::{add_to_linker, wasi::Command};
-use std::path::PathBuf;
+use anyhow::Result;
+use host::{command, command::wasi::Command, proxy, proxy::wasi::Proxy, WasiCtx};
 use wasi_cap_std_sync::WasiCtxBuilder;
 use wasmtime::{
     component::{Component, Linker},
     Config, Engine, Store,
 };
 
+use clap::Parser;
+
+/// Simple program to run components with host WASI support.
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    /// Filesystem path of a component
+    component: String,
+
+    /// Name of the world to load it in.
+    #[arg(long, default_value_t = String::from("command"))]
+    world: String,
+}
+
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<()> {
-    let input = PathBuf::from(
-        std::env::args()
-            .collect::<Vec<String>>()
-            .get(1)
-            .context("must provide an input file")?,
-    );
+    let args = Args::parse();
+    let input = args.component;
 
     let mut config = Config::new();
     config.wasm_backtrace_details(wasmtime::WasmBacktraceDetails::Enable);
@@ -24,19 +33,56 @@ async fn main() -> Result<()> {
     let engine = Engine::new(&config)?;
     let component = Component::from_file(&engine, &input)?;
     let mut linker = Linker::new(&engine);
-    add_to_linker(&mut linker, |x| x)?;
+
+    if args.world == "command" {
+        run_command(&mut linker, &engine, &component).await?;
+    } else if args.world == "proxy" {
+        run_proxy(&mut linker, &engine, &component).await?;
+    }
+
+    Ok(())
+}
+
+async fn run_command(
+    linker: &mut Linker<WasiCtx>,
+    engine: &Engine,
+    component: &Component,
+) -> anyhow::Result<()> {
+    command::add_to_linker(linker, |x| x)?;
 
     let mut store = Store::new(
-        &engine,
+        engine,
         WasiCtxBuilder::new()
             .inherit_stdin()
             .inherit_stdout()
             .build(),
     );
 
-    let (wasi, _instance) = Command::instantiate_async(&mut store, &component, &linker).await?;
+    let (wasi, _instance) = Command::instantiate_async(&mut store, component, linker).await?;
 
     let result: Result<(), ()> = wasi.call_main(&mut store, 0, 1, 2, &[], &[]).await?;
+
+    if result.is_err() {
+        anyhow::bail!("command returned with failing exit status");
+    }
+
+    Ok(())
+}
+
+async fn run_proxy(
+    linker: &mut Linker<WasiCtx>,
+    engine: &Engine,
+    component: &Component,
+) -> anyhow::Result<()> {
+    proxy::add_to_linker(linker, |x| x)?;
+
+    let mut store = Store::new(engine, WasiCtxBuilder::new().build());
+
+    let (wasi, _instance) = Proxy::instantiate_async(&mut store, component, linker).await?;
+
+    // TODO: do something
+    let _ = wasi;
+    let result: Result<(), ()> = Ok(());
 
     if result.is_err() {
         anyhow::bail!("command returned with failing exit status");

@@ -1,4 +1,4 @@
-use crate::wasi;
+use crate::command::wasi;
 use crate::WasiCtx;
 
 #[async_trait::async_trait]

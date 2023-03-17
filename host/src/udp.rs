@@ -1,10 +1,10 @@
 #![allow(unused_variables)]
 
 use crate::{
-    wasi::network::{Error, IpAddressFamily, Network},
-    wasi::poll::Pollable,
-    wasi::udp::{self, Datagram, IpSocketAddress, UdpSocket},
-    wasi::udp_create_socket,
+    command::wasi::network::{Error, IpAddressFamily, Network},
+    command::wasi::poll::Pollable,
+    command::wasi::udp::{self, Datagram, IpSocketAddress, UdpSocket},
+    command::wasi::udp_create_socket,
     HostResult, WasiCtx,
 };
 use wasi_common::udp_socket::TableUdpSocketExt;
