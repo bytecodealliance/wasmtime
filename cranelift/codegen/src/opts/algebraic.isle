@@ -373,95 +373,95 @@
 
 ;; ult(x, 0) == false.
 (rule (simplify
-       (icmp (fits_in_64 (ty_int ty)) (IntCC.UnsignedLessThan) x zero @ (iconst _ (u64_from_imm64 0))))
-      (subsume (iconst ty (imm64 0))))
+       (icmp (fits_in_64 (ty_int bty)) (IntCC.UnsignedLessThan) x zero @ (iconst _ (u64_from_imm64 0))))
+      (subsume (iconst bty (imm64 0))))
 
 ;; ule(x, 0) == eq(x, 0)
 (rule (simplify
-       (icmp (fits_in_64 (ty_int ty)) (IntCC.UnsignedLessThanOrEqual) x zero @ (iconst _ (u64_from_imm64 0))))
-      (icmp ty (IntCC.Equal) x zero))
+       (icmp (fits_in_64 (ty_int bty)) (IntCC.UnsignedLessThanOrEqual) x zero @ (iconst _ (u64_from_imm64 0))))
+      (icmp bty (IntCC.Equal) x zero))
 
 ;; ugt(x, 0) == ne(x, 0).
 (rule (simplify
-       (icmp (fits_in_64 (ty_int ty)) (IntCC.UnsignedGreaterThan) x zero @ (iconst _ (u64_from_imm64 0))))
-      (icmp ty (IntCC.NotEqual) x zero))
+       (icmp (fits_in_64 (ty_int bty)) (IntCC.UnsignedGreaterThan) x zero @ (iconst _ (u64_from_imm64 0))))
+      (icmp bty (IntCC.NotEqual) x zero))
 
 ;; uge(x, 0) == true.
 (rule (simplify
-       (icmp (fits_in_64 (ty_int ty)) (IntCC.UnsignedGreaterThanOrEqual) x zero @ (iconst _ (u64_from_imm64 0))))
-      (subsume (iconst ty (imm64 1))))
+       (icmp (fits_in_64 (ty_int bty)) (IntCC.UnsignedGreaterThanOrEqual) x zero @ (iconst _ (u64_from_imm64 0))))
+      (subsume (iconst bty (imm64 1))))
 
 ;; ult(x, UMAX) == ne(x, UMAX).
 (rule (simplify
-       (icmp (fits_in_64 (ty_int ty)) (IntCC.UnsignedLessThan) x umax @ (iconst _ (u64_from_imm64 y))))
-       (if-let $true (u64_eq y (ty_umax ty)))
-       (icmp ty (IntCC.NotEqual) x umax))
+       (icmp (fits_in_64 (ty_int bty)) (IntCC.UnsignedLessThan) x umax @ (iconst cty (u64_from_imm64 y))))
+       (if-let $true (u64_eq y (ty_umax cty)))
+       (icmp bty (IntCC.NotEqual) x umax))
 
 ;; ule(x, UMAX) == true.
 (rule (simplify
-       (icmp (fits_in_64 (ty_int ty)) (IntCC.UnsignedLessThanOrEqual) x umax @ (iconst _ (u64_from_imm64 y))))
-       (if-let $true (u64_eq y (ty_umax ty)))
-       (subsume (iconst ty (imm64 1))))
+       (icmp (fits_in_64 (ty_int bty)) (IntCC.UnsignedLessThanOrEqual) x umax @ (iconst cty (u64_from_imm64 y))))
+       (if-let $true (u64_eq y (ty_umax cty)))
+       (subsume (iconst bty (imm64 1))))
 
 ;; ugt(x, UMAX) == false.
 (rule (simplify
-       (icmp (fits_in_64 (ty_int ty)) (IntCC.UnsignedGreaterThan) x umax @ (iconst _ (u64_from_imm64 y))))
-       (if-let $true (u64_eq y (ty_umax ty)))
-       (subsume (iconst ty (imm64 0))))
+       (icmp (fits_in_64 (ty_int bty)) (IntCC.UnsignedGreaterThan) x umax @ (iconst cty (u64_from_imm64 y))))
+       (if-let $true (u64_eq y (ty_umax cty)))
+       (subsume (iconst bty (imm64 0))))
 
 ;; uge(x, UMAX) == eq(x, UMAX).
 (rule (simplify
-       (icmp (fits_in_64 (ty_int ty)) (IntCC.UnsignedGreaterThanOrEqual) x umax @ (iconst _ (u64_from_imm64 y))))
-       (if-let $true (u64_eq y (ty_umax ty)))
-       (icmp ty (IntCC.Equal) x umax))
+       (icmp (fits_in_64 (ty_int bty)) (IntCC.UnsignedGreaterThanOrEqual) x umax @ (iconst cty (u64_from_imm64 y))))
+       (if-let $true (u64_eq y (ty_umax cty)))
+       (icmp bty (IntCC.Equal) x umax))
 
 ;; slt(x, SMIN) == false.
 (rule (simplify
-       (icmp (fits_in_64 (ty_int ty)) (IntCC.SignedLessThan) x smin @ (iconst _ (u64_from_imm64 y))))
-       (if-let $true (u64_eq y (ty_smin ty)))
-       (subsume (iconst ty (imm64 0))))
+       (icmp (fits_in_64 (ty_int bty)) (IntCC.SignedLessThan) x smin @ (iconst cty (u64_from_imm64 y))))
+       (if-let $true (u64_eq y (ty_smin cty)))
+       (subsume (iconst bty (imm64 0))))
 
 ;; sle(x, SMIN) == eq(x, SMIN).
 (rule (simplify
-       (icmp (fits_in_64 (ty_int ty)) (IntCC.SignedLessThanOrEqual) x smin @ (iconst _ (u64_from_imm64 y))))
-       (if-let $true (u64_eq y (ty_smin ty)))
-       (icmp ty (IntCC.Equal) x smin))
+       (icmp (fits_in_64 (ty_int bty)) (IntCC.SignedLessThanOrEqual) x smin @ (iconst cty (u64_from_imm64 y))))
+       (if-let $true (u64_eq y (ty_smin cty)))
+       (icmp bty (IntCC.Equal) x smin))
 
 ;; sgt(x, SMIN) == ne(x, SMIN).
 (rule (simplify
-       (icmp (fits_in_64 (ty_int ty)) (IntCC.SignedGreaterThan) x smin @ (iconst _ (u64_from_imm64 y))))
-       (if-let $true (u64_eq y (ty_smin ty)))
-       (icmp ty (IntCC.NotEqual) x smin))
+       (icmp (fits_in_64 (ty_int bty)) (IntCC.SignedGreaterThan) x smin @ (iconst cty (u64_from_imm64 y))))
+       (if-let $true (u64_eq y (ty_smin cty)))
+       (icmp bty (IntCC.NotEqual) x smin))
 
 ;; sge(x, SMIN) == true.
 (rule (simplify
-       (icmp (fits_in_64 (ty_int ty)) (IntCC.SignedGreaterThanOrEqual) x smin @ (iconst _ (u64_from_imm64 y))))
-       (if-let $true (u64_eq y (ty_smin ty)))
-       (subsume (iconst ty (imm64 1))))
+       (icmp (fits_in_64 (ty_int bty)) (IntCC.SignedGreaterThanOrEqual) x smin @ (iconst cty (u64_from_imm64 y))))
+       (if-let $true (u64_eq y (ty_smin cty)))
+       (subsume (iconst bty (imm64 1))))
 
 ;; slt(x, SMAX) == ne(x, SMAX).
 (rule (simplify
-       (icmp (fits_in_64 (ty_int ty)) (IntCC.SignedLessThan) x smax @ (iconst _ (u64_from_imm64 y))))
-       (if-let $true (u64_eq y (ty_smax ty)))
-       (icmp ty (IntCC.NotEqual) x smax))
+       (icmp (fits_in_64 (ty_int bty)) (IntCC.SignedLessThan) x smax @ (iconst cty (u64_from_imm64 y))))
+       (if-let $true (u64_eq y (ty_smax cty)))
+       (icmp bty (IntCC.NotEqual) x smax))
 
 ;; sle(x, SMAX) == true.
 (rule (simplify
-       (icmp (fits_in_64 (ty_int ty)) (IntCC.SignedLessThanOrEqual) x smax @ (iconst _ (u64_from_imm64 y))))
-       (if-let $true (u64_eq y (ty_smax ty)))
-       (subsume (iconst ty (imm64 1))))
+       (icmp (fits_in_64 (ty_int bty)) (IntCC.SignedLessThanOrEqual) x smax @ (iconst cty (u64_from_imm64 y))))
+       (if-let $true (u64_eq y (ty_smax cty)))
+       (subsume (iconst bty (imm64 1))))
 
 ;; sgt(x, SMAX) == false.
 (rule (simplify
-       (icmp (fits_in_64 (ty_int ty)) (IntCC.SignedGreaterThan) x smax @ (iconst _ (u64_from_imm64 y))))
-       (if-let $true (u64_eq y (ty_smax ty)))
-       (subsume (iconst ty (imm64 0))))
+       (icmp (fits_in_64 (ty_int bty)) (IntCC.SignedGreaterThan) x smax @ (iconst cty (u64_from_imm64 y))))
+       (if-let $true (u64_eq y (ty_smax cty)))
+       (subsume (iconst bty (imm64 0))))
 
 ;; sge(x, SMAX) == eq(x, SMAX).
 (rule (simplify
-       (icmp (fits_in_64 (ty_int ty)) (IntCC.SignedGreaterThanOrEqual) x smax @ (iconst _ (u64_from_imm64 y))))
-       (if-let $true (u64_eq y (ty_smax ty)))
-       (icmp ty (IntCC.Equal) x smax))
+       (icmp (fits_in_64 (ty_int bty)) (IntCC.SignedGreaterThanOrEqual) x smax @ (iconst cty (u64_from_imm64 y))))
+       (if-let $true (u64_eq y (ty_smax cty)))
+       (icmp bty (IntCC.Equal) x smax))
 
 ;; 32-bit integers zero-extended to 64-bit integers are never negative
 (rule (simplify
