@@ -240,6 +240,24 @@ block0(v0: i32):
     ; check: return v2
 }
 
+function %urem_x_1(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 1
+    v2 = urem v0, v1
+    return v2
+    ; check: v1 = iconst.i32 1
+    ; check: v2 = urem v0, v1
+}
+
+function %urem_x_pow2(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 2
+    v2 = urem v0, v1
+    return v2
+    ; check: v1 = iconst.i32 2
+    ; check: v2 = urem v0, v1
+}
+
 function %or_and_y_with_not_y_i8(i8, i8) -> i8 {
 block0(v0: i8, v1: i8):
     v2 = band v0, v1

@@ -181,6 +181,9 @@
 (decl pure u64_is_odd (u64) bool)
 (extern constructor u64_is_odd u64_is_odd)
 
+(decl pure u64_is_power_of_two (u64) bool)
+(extern constructor u64_is_power_of_two u64_is_power_of_two)
+
 ;;;; `cranelift_codegen::ir::Type` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (extern const $I8 Type)

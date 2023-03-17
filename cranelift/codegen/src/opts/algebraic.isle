@@ -59,6 +59,7 @@
       (subsume zero))
 
 ;; x/1 == x.
+;; Currently not active: see issue #5908
 (rule (simplify (sdiv ty
                       x
                       (iconst ty (u64_from_imm64 1))))
@@ -67,6 +68,17 @@
                       x
                       (iconst ty (u64_from_imm64 1))))
       (subsume x))
+
+;; x%1 == 0.
+;; Currently not active: see issue #5908
+(rule (simplify (urem ty x (iconst ty (u64_from_imm64 1))))
+      (subsume (iconst ty (imm64 0))))
+
+;; x%c == x&(c-1) when c is a power of 2.
+;; Currently not active: see issue #5908
+(rule (simplify (urem ty x (iconst ty (u64_from_imm64 c))))
+      (if-let $true (u64_is_power_of_two c))
+      (band ty x (iconst ty (imm64 (u64_sub c 1)))))
 
 ;; x>>0 == x<<0 == x rotr 0 == x rotl 0 == x.
 (rule (simplify (ishl ty

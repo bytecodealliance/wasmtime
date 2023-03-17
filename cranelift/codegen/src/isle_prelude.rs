@@ -442,6 +442,11 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
+        fn u64_is_power_of_two(&mut self, x: u64) -> bool {
+            x.is_power_of_two()
+        }
+
+        #[inline]
         fn u64_from_bool(&mut self, b: bool) -> u64 {
             if b {
                 u64::MAX
