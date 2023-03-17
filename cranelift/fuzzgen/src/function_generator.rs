@@ -415,6 +415,7 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
         Architecture::X86_64 => {
             exceptions!(
                 (Opcode::IaddCout, &([I8, I8] | [I16, I16] | [I128, I128])),
+                (Opcode::Imul, &[I8X16, I8X16]),
                 // https://github.com/bytecodealliance/wasmtime/issues/5468
                 (Opcode::Smulhi | Opcode::Umulhi, &[I8, I8]),
                 // https://github.com/bytecodealliance/wasmtime/issues/4756
@@ -680,6 +681,10 @@ const OPCODE_SIGNATURES: &[OpcodeSignature] = &[
     (Opcode::Iadd, &[I32, I32], &[I32]),
     (Opcode::Iadd, &[I64, I64], &[I64]),
     (Opcode::Iadd, &[I128, I128], &[I128]),
+    (Opcode::Iadd, &[I8X16, I8X16], &[I8X16]),
+    (Opcode::Iadd, &[I16X8, I16X8], &[I16X8]),
+    (Opcode::Iadd, &[I32X4, I32X4], &[I32X4]),
+    (Opcode::Iadd, &[I64X2, I64X2], &[I64X2]),
     // IaddCout
     (Opcode::IaddCout, &[I8, I8], &[I8, I8]),
     (Opcode::IaddCout, &[I16, I16], &[I16, I8]),
@@ -702,6 +707,10 @@ const OPCODE_SIGNATURES: &[OpcodeSignature] = &[
     (Opcode::Isub, &[I32, I32], &[I32]),
     (Opcode::Isub, &[I64, I64], &[I64]),
     (Opcode::Isub, &[I128, I128], &[I128]),
+    (Opcode::Isub, &[I8X16, I8X16], &[I8X16]),
+    (Opcode::Isub, &[I16X8, I16X8], &[I16X8]),
+    (Opcode::Isub, &[I32X4, I32X4], &[I32X4]),
+    (Opcode::Isub, &[I64X2, I64X2], &[I64X2]),
     // UsubSat
     (Opcode::UsubSat, &[I8X16, I8X16], &[I8X16]),
     (Opcode::UsubSat, &[I16X8, I16X8], &[I16X8]),
@@ -718,6 +727,10 @@ const OPCODE_SIGNATURES: &[OpcodeSignature] = &[
     (Opcode::Imul, &[I32, I32], &[I32]),
     (Opcode::Imul, &[I64, I64], &[I64]),
     (Opcode::Imul, &[I128, I128], &[I128]),
+    (Opcode::Imul, &[I8X16, I8X16], &[I8X16]),
+    (Opcode::Imul, &[I16X8, I16X8], &[I16X8]),
+    (Opcode::Imul, &[I32X4, I32X4], &[I32X4]),
+    (Opcode::Imul, &[I64X2, I64X2], &[I64X2]),
     // Smulhi
     (Opcode::Smulhi, &[I8, I8], &[I8]),
     (Opcode::Smulhi, &[I16, I16], &[I16]),
@@ -991,6 +1004,12 @@ const OPCODE_SIGNATURES: &[OpcodeSignature] = &[
     (Opcode::Band, &[I128, I128], &[I128]),
     (Opcode::Band, &[F32, F32], &[F32]),
     (Opcode::Band, &[F64, F64], &[F64]),
+    (Opcode::Band, &[I8X16, I8X16], &[I8X16]),
+    (Opcode::Band, &[I16X8, I16X8], &[I16X8]),
+    (Opcode::Band, &[I32X4, I32X4], &[I32X4]),
+    (Opcode::Band, &[I64X2, I64X2], &[I64X2]),
+    (Opcode::Band, &[F32X4, F32X4], &[F32X4]),
+    (Opcode::Band, &[F64X2, F64X2], &[F64X2]),
     // Bor
     (Opcode::Bor, &[I8, I8], &[I8]),
     (Opcode::Bor, &[I16, I16], &[I16]),
@@ -999,6 +1018,12 @@ const OPCODE_SIGNATURES: &[OpcodeSignature] = &[
     (Opcode::Bor, &[I128, I128], &[I128]),
     (Opcode::Bor, &[F32, F32], &[F32]),
     (Opcode::Bor, &[F64, F64], &[F64]),
+    (Opcode::Bor, &[I8X16, I8X16], &[I8X16]),
+    (Opcode::Bor, &[I16X8, I16X8], &[I16X8]),
+    (Opcode::Bor, &[I32X4, I32X4], &[I32X4]),
+    (Opcode::Bor, &[I64X2, I64X2], &[I64X2]),
+    (Opcode::Bor, &[F32X4, F32X4], &[F32X4]),
+    (Opcode::Bor, &[F64X2, F64X2], &[F64X2]),
     // Bxor
     (Opcode::Bxor, &[I8, I8], &[I8]),
     (Opcode::Bxor, &[I16, I16], &[I16]),
@@ -1007,14 +1032,26 @@ const OPCODE_SIGNATURES: &[OpcodeSignature] = &[
     (Opcode::Bxor, &[I128, I128], &[I128]),
     (Opcode::Bxor, &[F32, F32], &[F32]),
     (Opcode::Bxor, &[F64, F64], &[F64]),
+    (Opcode::Bxor, &[I8X16, I8X16], &[I8X16]),
+    (Opcode::Bxor, &[I16X8, I16X8], &[I16X8]),
+    (Opcode::Bxor, &[I32X4, I32X4], &[I32X4]),
+    (Opcode::Bxor, &[I64X2, I64X2], &[I64X2]),
+    (Opcode::Bxor, &[F32X4, F32X4], &[F32X4]),
+    (Opcode::Bxor, &[F64X2, F64X2], &[F64X2]),
     // Bnot
-    (Opcode::Bnot, &[I8, I8], &[I8]),
-    (Opcode::Bnot, &[I16, I16], &[I16]),
-    (Opcode::Bnot, &[I32, I32], &[I32]),
-    (Opcode::Bnot, &[I64, I64], &[I64]),
-    (Opcode::Bnot, &[I128, I128], &[I128]),
-    (Opcode::Bnot, &[F32, F32], &[F32]),
-    (Opcode::Bnot, &[F64, F64], &[F64]),
+    (Opcode::Bnot, &[I8], &[I8]),
+    (Opcode::Bnot, &[I16], &[I16]),
+    (Opcode::Bnot, &[I32], &[I32]),
+    (Opcode::Bnot, &[I64], &[I64]),
+    (Opcode::Bnot, &[I128], &[I128]),
+    (Opcode::Bnot, &[F32], &[F32]),
+    (Opcode::Bnot, &[F64], &[F64]),
+    (Opcode::Bnot, &[I8X16], &[I8X16]),
+    (Opcode::Bnot, &[I16X8], &[I16X8]),
+    (Opcode::Bnot, &[I32X4], &[I32X4]),
+    (Opcode::Bnot, &[I64X2], &[I64X2]),
+    (Opcode::Bnot, &[F32X4], &[F32X4]),
+    (Opcode::Bnot, &[F64X2], &[F64X2]),
     // BandNot
     (Opcode::BandNot, &[I8, I8], &[I8]),
     (Opcode::BandNot, &[I16, I16], &[I16]),
@@ -1023,6 +1060,12 @@ const OPCODE_SIGNATURES: &[OpcodeSignature] = &[
     (Opcode::BandNot, &[I128, I128], &[I128]),
     (Opcode::BandNot, &[F32, F32], &[F32]),
     (Opcode::BandNot, &[F64, F64], &[F64]),
+    (Opcode::BandNot, &[I8X16, I8X16], &[I8X16]),
+    (Opcode::BandNot, &[I16X8, I16X8], &[I16X8]),
+    (Opcode::BandNot, &[I32X4, I32X4], &[I32X4]),
+    (Opcode::BandNot, &[I64X2, I64X2], &[I64X2]),
+    (Opcode::BandNot, &[F32X4, F32X4], &[F32X4]),
+    (Opcode::BandNot, &[F64X2, F64X2], &[F64X2]),
     // BorNot
     (Opcode::BorNot, &[I8, I8], &[I8]),
     (Opcode::BorNot, &[I16, I16], &[I16]),
@@ -1031,6 +1074,12 @@ const OPCODE_SIGNATURES: &[OpcodeSignature] = &[
     (Opcode::BorNot, &[I128, I128], &[I128]),
     (Opcode::BorNot, &[F32, F32], &[F32]),
     (Opcode::BorNot, &[F64, F64], &[F64]),
+    (Opcode::BorNot, &[I8X16, I8X16], &[I8X16]),
+    (Opcode::BorNot, &[I16X8, I16X8], &[I16X8]),
+    (Opcode::BorNot, &[I32X4, I32X4], &[I32X4]),
+    (Opcode::BorNot, &[I64X2, I64X2], &[I64X2]),
+    (Opcode::BorNot, &[F32X4, F32X4], &[F32X4]),
+    (Opcode::BorNot, &[F64X2, F64X2], &[F64X2]),
     // BxorNot
     (Opcode::BxorNot, &[I8, I8], &[I8]),
     (Opcode::BxorNot, &[I16, I16], &[I16]),
@@ -1039,6 +1088,12 @@ const OPCODE_SIGNATURES: &[OpcodeSignature] = &[
     (Opcode::BxorNot, &[I128, I128], &[I128]),
     (Opcode::BxorNot, &[F32, F32], &[F32]),
     (Opcode::BxorNot, &[F64, F64], &[F64]),
+    (Opcode::BxorNot, &[I8X16, I8X16], &[I8X16]),
+    (Opcode::BxorNot, &[I16X8, I16X8], &[I16X8]),
+    (Opcode::BxorNot, &[I32X4, I32X4], &[I32X4]),
+    (Opcode::BxorNot, &[I64X2, I64X2], &[I64X2]),
+    (Opcode::BxorNot, &[F32X4, F32X4], &[F32X4]),
+    (Opcode::BxorNot, &[F64X2, F64X2], &[F64X2]),
     // Bitrev
     (Opcode::Bitrev, &[I8], &[I8]),
     (Opcode::Bitrev, &[I16], &[I16]),
@@ -1114,6 +1169,10 @@ const OPCODE_SIGNATURES: &[OpcodeSignature] = &[
     (Opcode::Bitselect, &[I32, I32, I32], &[I32]),
     (Opcode::Bitselect, &[I64, I64, I64], &[I64]),
     (Opcode::Bitselect, &[I128, I128, I128], &[I128]),
+    (Opcode::Bitselect, &[I8X16, I8X16, I8X16], &[I8X16]),
+    (Opcode::Bitselect, &[I16X8, I16X8, I16X8], &[I16X8]),
+    (Opcode::Bitselect, &[I32X4, I32X4, I32X4], &[I32X4]),
+    (Opcode::Bitselect, &[I64X2, I64X2, I64X2], &[I64X2]),
     // Select
     (Opcode::Select, &[I8, I8, I8], &[I8]),
     (Opcode::Select, &[I8, I16, I16], &[I16]),
@@ -1169,15 +1228,23 @@ const OPCODE_SIGNATURES: &[OpcodeSignature] = &[
     // Fadd
     (Opcode::Fadd, &[F32, F32], &[F32]),
     (Opcode::Fadd, &[F64, F64], &[F64]),
+    (Opcode::Fadd, &[F32X4, F32X4], &[F32X4]),
+    (Opcode::Fadd, &[F64X2, F64X2], &[F64X2]),
     // Fmul
     (Opcode::Fmul, &[F32, F32], &[F32]),
     (Opcode::Fmul, &[F64, F64], &[F64]),
+    (Opcode::Fmul, &[F32X4, F32X4], &[F32X4]),
+    (Opcode::Fmul, &[F64X2, F64X2], &[F64X2]),
     // Fsub
     (Opcode::Fsub, &[F32, F32], &[F32]),
     (Opcode::Fsub, &[F64, F64], &[F64]),
+    (Opcode::Fsub, &[F32X4, F32X4], &[F32X4]),
+    (Opcode::Fsub, &[F64X2, F64X2], &[F64X2]),
     // Fdiv
     (Opcode::Fdiv, &[F32, F32], &[F32]),
     (Opcode::Fdiv, &[F64, F64], &[F64]),
+    (Opcode::Fdiv, &[F32X4, F32X4], &[F32X4]),
+    (Opcode::Fdiv, &[F64X2, F64X2], &[F64X2]),
     // Fmin
     (Opcode::Fmin, &[F32, F32], &[F32]),
     (Opcode::Fmin, &[F64, F64], &[F64]),
@@ -1198,27 +1265,43 @@ const OPCODE_SIGNATURES: &[OpcodeSignature] = &[
     // Fma
     (Opcode::Fma, &[F32, F32, F32], &[F32]),
     (Opcode::Fma, &[F64, F64, F64], &[F64]),
+    (Opcode::Fma, &[F32X4, F32X4, F32X4], &[F32X4]),
+    (Opcode::Fma, &[F64X2, F64X2, F64X4], &[F64X2]),
     // Fabs
     (Opcode::Fabs, &[F32], &[F32]),
     (Opcode::Fabs, &[F64], &[F64]),
+    (Opcode::Fabs, &[F32X4], &[F32X4]),
+    (Opcode::Fabs, &[F64X2], &[F64X2]),
     // Fneg
     (Opcode::Fneg, &[F32], &[F32]),
     (Opcode::Fneg, &[F64], &[F64]),
+    (Opcode::Fneg, &[F32X4], &[F32X4]),
+    (Opcode::Fneg, &[F64X2], &[F64X2]),
     // Sqrt
     (Opcode::Sqrt, &[F32], &[F32]),
     (Opcode::Sqrt, &[F64], &[F64]),
+    (Opcode::Sqrt, &[F32X4], &[F32X4]),
+    (Opcode::Sqrt, &[F64X2], &[F64X2]),
     // Ceil
     (Opcode::Ceil, &[F32], &[F32]),
     (Opcode::Ceil, &[F64], &[F64]),
+    (Opcode::Ceil, &[F32X4], &[F32X4]),
+    (Opcode::Ceil, &[F64X2], &[F64X2]),
     // Floor
     (Opcode::Floor, &[F32], &[F32]),
     (Opcode::Floor, &[F64], &[F64]),
+    (Opcode::Floor, &[F32X4], &[F32X4]),
+    (Opcode::Floor, &[F64X2], &[F64X2]),
     // Trunc
     (Opcode::Trunc, &[F32], &[F32]),
     (Opcode::Trunc, &[F64], &[F64]),
+    (Opcode::Trunc, &[F32X4], &[F32X4]),
+    (Opcode::Trunc, &[F64X2], &[F64X2]),
     // Nearest
     (Opcode::Nearest, &[F32], &[F32]),
     (Opcode::Nearest, &[F64], &[F64]),
+    (Opcode::Nearest, &[F32X4], &[F32X4]),
+    (Opcode::Nearest, &[F64X2], &[F64X2]),
     // Fpromote
     (Opcode::Fpromote, &[F32], &[F64]),
     // Fdemote
