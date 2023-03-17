@@ -661,6 +661,17 @@ fn gen_opcodes(all_inst: &AllInstructions, fmt: &mut Formatter) {
     });
     fmtln!(fmt, "];");
     fmt.empty_line();
+
+    // Generate an opcode list, for iterating over all known opcodes.
+    fmt.doc_comment("All cranelift opcodes");
+    fmt.line("pub const OPCODE_LIST: &[Opcode] = &[");
+    for inst in all_inst {
+        fmt.indent(|fmt| {
+            fmtln!(fmt, "Opcode::{},", inst.camel_name);
+        });
+    }
+    fmt.line("];");
+    fmt.empty_line();
 }
 
 /// Get the value type constraint for an SSA value operand, where
