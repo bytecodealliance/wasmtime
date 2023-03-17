@@ -46,12 +46,11 @@
 ;;
 ;;                                 block0(v0: i64, v1: i32, v2: i64):
 ;; @0040                               v3 = global_value.i64 gv1
-;; @0040                               v4 = iadd_imm v3, -4
-;; @0040                               v5 = icmp ugt v0, v4
-;; @0040                               trapnz v5, heap_oob
-;; @0040                               v6 = global_value.i64 gv2
-;; @0040                               v7 = iadd v6, v0
-;; @0040                               store little heap v1, v7
+;; @0040                               v4 = icmp ugt v0, v3
+;; @0040                               trapnz v4, heap_oob
+;; @0040                               v5 = global_value.i64 gv2
+;; @0040                               v6 = iadd v5, v0
+;; @0040                               store little heap v1, v6
 ;; @0043                               jump block1
 ;;
 ;;                                 block1:
@@ -65,13 +64,12 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64):
 ;; @0048                               v3 = global_value.i64 gv1
-;; @0048                               v4 = iadd_imm v3, -4
-;; @0048                               v5 = icmp ugt v0, v4
-;; @0048                               trapnz v5, heap_oob
-;; @0048                               v6 = global_value.i64 gv2
-;; @0048                               v7 = iadd v6, v0
-;; @0048                               v8 = load.i32 little heap v7
-;; @004b                               jump block1(v8)
+;; @0048                               v4 = icmp ugt v0, v3
+;; @0048                               trapnz v4, heap_oob
+;; @0048                               v5 = global_value.i64 gv2
+;; @0048                               v6 = iadd v5, v0
+;; @0048                               v7 = load.i32 little heap v6
+;; @004b                               jump block1(v7)
 ;;
 ;;                                 block1(v2: i32):
 ;; @004b                               return v2

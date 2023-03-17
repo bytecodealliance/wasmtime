@@ -7,6 +7,17 @@
 //! * a static access size,
 //!
 //! bounds check the memory access and translate it into a native memory access.
+//!
+//! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+//! !!!                                                                      !!!
+//! !!!    THIS CODE IS VERY SUBTLE, HAS MANY SPECIAL CASES, AND IS ALSO     !!!
+//! !!!   ABSOLUTELY CRITICAL FOR MAINTAINING THE SAFETY OF THE WASM HEAP    !!!
+//! !!!                             SANDBOX.                                 !!!
+//! !!!                                                                      !!!
+//! !!!    A good rule of thumb is to get two reviews on any substantive     !!!
+//! !!!                         changes in here.                             !!!
+//! !!!                                                                      !!!
+//! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 use super::Reachability;
 use crate::{FuncEnvironment, HeapData, HeapStyle};
@@ -108,7 +119,67 @@ where
             ))
         }
 
-        // 2. Second special case for when `offset + access_size <= min_size`.
+        // 2. Second special case for when we know that there are enough guard
+        //    pages to cover the offset and access size.
+        //
+        //    The precise should-we-trap condition is
+        //
+        //        index + offset + access_size > bound
+        //
+        //    However, if we instead check only the partial condition
+        //
+        //        index > bound
+        //
+        //    then the most out of bounds that the access can be, while that
+        //    partial check still succeeds, is `offset + access_size`.
+        //
+        //    However, when we have a guard region that is at least as large as
+        //    `offset + access_size`, we can rely on the virtual memory
+        //    subsystem handling these out-of-bounds errors at
+        //    runtime. Therefore, the partial `index > bound` check is
+        //    sufficient for this heap configuration.
+        //
+        //    Additionally, this has the advantage that a series of Wasm loads
+        //    that use the same dynamic index operand but different static
+        //    offset immediates -- which is a common code pattern when accessing
+        //    multiple fields in the same struct that is in linear memory --
+        //    will all emit the same `index > bound` check, which we can GVN.
+        //
+        //    2.a Dedupe bounds checks with Spectre mitigations.
+        HeapStyle::Dynamic { bound_gv }
+            if offset_and_size <= heap.offset_guard_size && spectre_mitigations_enabled =>
+        {
+            let bound = builder.ins().global_value(env.pointer_type(), bound_gv);
+            Reachable(compute_addr(
+                &mut builder.cursor(),
+                heap,
+                env.pointer_type(),
+                index,
+                offset,
+                Some(SpectreOobComparison {
+                    cc: IntCC::UnsignedGreaterThan,
+                    lhs: index,
+                    rhs: bound,
+                }),
+            ))
+        }
+
+        //   2.b. Emit explicit `index > bound` check.
+        HeapStyle::Dynamic { bound_gv } if offset_and_size <= heap.offset_guard_size => {
+            let bound = builder.ins().global_value(env.pointer_type(), bound_gv);
+            let oob = builder.ins().icmp(IntCC::UnsignedGreaterThan, index, bound);
+            builder.ins().trapnz(oob, ir::TrapCode::HeapOutOfBounds);
+            Reachable(compute_addr(
+                &mut builder.cursor(),
+                heap,
+                env.pointer_type(),
+                index,
+                offset,
+                None,
+            ))
+        }
+
+        // 3. Second special case for when `offset + access_size <= min_size`.
         //
         //    We know that `bound >= min_size`, so we can do the following
         //    comparison, without fear of the right-hand side wrapping around:
@@ -116,7 +187,7 @@ where
         //            index + offset + access_size > bound
         //        ==> index > bound - (offset + access_size)
         //
-        //    2.a. Dedupe bounds checks with Spectre mitigations.
+        //    3.a. Dedupe bounds checks with Spectre mitigations.
         HeapStyle::Dynamic { bound_gv }
             if offset_and_size <= heap.min_size.into() && spectre_mitigations_enabled =>
         {
@@ -135,7 +206,7 @@ where
                 }),
             ))
         }
-        //    2.b. Emit explicit `index > bound - (offset + access_size)` bounds
+        //    3.b. Emit explicit `index > bound - (offset + access_size)` bounds
         //         checks.
         HeapStyle::Dynamic { bound_gv } if offset_and_size <= heap.min_size.into() => {
             let bound = builder.ins().global_value(env.pointer_type(), bound_gv);
@@ -154,13 +225,13 @@ where
             ))
         }
 
-        // 3. General case for dynamic memories:
+        // 4. General case for dynamic memories:
         //
         //        index + offset + access_size > bound
         //
         //    And we have to handle the overflow case in the left-hand side.
         //
-        //    3.a. Dedupe bounds checks with Spectre mitigations.
+        //    4.a. Dedupe bounds checks with Spectre mitigations.
         HeapStyle::Dynamic { bound_gv } if spectre_mitigations_enabled => {
             let access_size_val = builder
                 .ins()
@@ -184,7 +255,7 @@ where
                 }),
             ))
         }
-        //    3.b. Emit an explicit `index + offset + access_size > bound`
+        //    4.b. Emit an explicit `index + offset + access_size > bound`
         //         check.
         HeapStyle::Dynamic { bound_gv } => {
             let access_size_val = builder
@@ -377,7 +448,7 @@ fn compute_addr(
     index: ir::Value,
     offset: u32,
     // If we are performing Spectre mitigation with conditional selects, the
-    // values to compare and the condition code that indicates an out-of bounds
+    // values to compare and the condition code that indicates an out-of-bounds
     // condition; on this condition, the conditional move will choose a
     // speculatively safe address (a zero / null pointer) instead.
     spectre_oob_comparison: Option<SpectreOobComparison>,
@@ -387,6 +458,23 @@ fn compute_addr(
     // Add the heap base address base
     let base = pos.ins().global_value(addr_ty, heap.base);
 
+    // NB: We don't need to worry about overflow here when computing `base +
+    // index + offset` because the callee handled this concern for us and
+    // either:
+    //
+    // * We already did an explicit bounds check and know that `index + offset`
+    //   is within the heap's bounds, and therefore `base + index + offset` will
+    //   not overflow.
+    //
+    // * Or we will do that bounds check in the `select_spectre_guard` below,
+    //   and won't use the resulting value until after that bounds check
+    //   succeeds (and therefore we know that `index + offset` is within the
+    //   heap's bouns and `base + index + offset` didn't overflow). In this
+    //   scenario, if the addition did overflow, it doesn't matter since we will
+    //   just trap and won't use the result.
+    //
+    // * Or we statically know that it can never overflow due to the given heap
+    //   configuration (e.g. 32-bit static memories on a 64-bit host).
     let final_base = pos.ins().iadd(base, index);
     let final_addr = if offset == 0 {
         final_base

@@ -248,7 +248,7 @@ impl MmapMemory {
                     minimum,
                     alloc_bytes + extra_to_reserve_on_growth,
                 );
-                slot.instantiate(minimum, Some(image), &plan.style)?;
+                slot.instantiate(minimum, Some(image), &plan)?;
                 // On drop, we will unmap our mmap'd range that this slot was
                 // mapped on top of, so there is no need for the slot to wipe
                 // it with an anonymous mapping first.
