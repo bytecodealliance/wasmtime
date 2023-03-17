@@ -124,13 +124,6 @@ impl ProgramOrder for Layout {
         let b_seq = self.seq(b);
         a_seq.cmp(&b_seq)
     }
-
-    fn is_block_gap(&self, inst: Inst, block: Block) -> bool {
-        let i = &self.insts[inst];
-        let e = &self.blocks[block];
-
-        i.next.is_none() && i.block == e.prev
-    }
 }
 
 // Private methods for dealing with sequence numbers.
@@ -1291,11 +1284,6 @@ mod tests {
         // Check `ProgramOrder`.
         assert_eq!(layout.cmp(e2, e2), Ordering::Equal);
         assert_eq!(layout.cmp(e2, i2), Ordering::Less);
-        assert_eq!(layout.cmp(i3, i2), Ordering::Greater);
-
-        assert_eq!(layout.is_block_gap(i1, e2), true);
-        assert_eq!(layout.is_block_gap(i3, e1), true);
-        assert_eq!(layout.is_block_gap(i1, e1), false);
-        assert_eq!(layout.is_block_gap(i2, e1), false);
+        assert_eq!(layout.cmp(i3, i2), Ordering::Greater)
     }
 }

@@ -138,11 +138,6 @@ pub trait ProgramOrder {
     where
         A: Into<ExpandedProgramPoint>,
         B: Into<ExpandedProgramPoint>;
-
-    /// Is the range from `inst` to `block` just the gap between consecutive blocks?
-    ///
-    /// This returns true if `inst` is the terminator in the block immediately before `block`.
-    fn is_block_gap(&self, inst: Inst, block: Block) -> bool;
 }
 
 #[cfg(test)]
