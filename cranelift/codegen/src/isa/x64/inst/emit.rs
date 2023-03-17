@@ -2542,8 +2542,8 @@ pub(crate) fn emit(
                 .prefix(prefix)
                 .map(map)
                 .opcode(opcode)
-                .rm(dst.to_real_reg().unwrap().hw_enc())
-                .reg(src.to_real_reg().unwrap().hw_enc())
+                .rm(src.to_real_reg().unwrap().hw_enc())
+                .reg(dst.to_real_reg().unwrap().hw_enc())
                 .encode(sink);
         }
 

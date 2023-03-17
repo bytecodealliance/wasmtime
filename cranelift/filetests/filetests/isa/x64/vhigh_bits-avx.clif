@@ -49,7 +49,7 @@ block0(v0: i16x8):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   vpacksswb %xmm0, %xmm0, %xmm2
-;   vpmovmskb %xmm0, %edx
+;   vpmovmskb %xmm2, %eax
 ;   shrq $8, %rax
 ;   movq %rbp, %rsp
 ;   popq %rbp
