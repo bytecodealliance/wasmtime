@@ -1038,6 +1038,10 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
                 | bit(h, 7)?,
         )
     }
+
+    fn xmi_imm(&mut self, imm: u32) -> XmmMemImm {
+        XmmMemImm::new(RegMemImm::imm(imm)).unwrap()
+    }
 }
 
 impl IsleContext<'_, '_, MInst, X64Backend> {

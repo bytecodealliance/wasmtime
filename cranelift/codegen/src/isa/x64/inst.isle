@@ -1539,6 +1539,10 @@
 (decl lo_gpr (Value) Gpr)
 (rule (lo_gpr regs) (gpr_new (lo_reg regs)))
 
+;; Construct a new `XmmMemImm` from a 32-bit immediate.
+(decl xmi_imm (u32) XmmMemImm)
+(extern constructor xmi_imm xmi_imm)
+
 ;;;; Helpers for Working With Integer Comparison Codes ;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 
@@ -4687,7 +4691,6 @@
 (convert Reg XmmMem reg_to_xmm_mem)
 (convert Reg RegMemImm reg_to_reg_mem_imm)
 (convert RegMem XmmMem reg_mem_to_xmm_mem)
-(convert RegMemImm XmmMemImm mov_rmi_to_xmm)
 (convert Xmm XmmMem xmm_to_xmm_mem)
 (convert Xmm XmmMemImm xmm_to_xmm_mem_imm)
 (convert Xmm XmmMemAligned xmm_to_xmm_mem_aligned)

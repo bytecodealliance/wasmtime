@@ -883,17 +883,17 @@
       (let ((a0 Xmm a)
             (b0 Xmm b)
             ;; a_hi = A >> 32
-            (a_hi Xmm (x64_psrlq a0 (RegMemImm.Imm 32)))
+            (a_hi Xmm (x64_psrlq a0 (xmi_imm 32)))
             ;; ah_bl = Ah * Bl
             (ah_bl Xmm (x64_pmuludq a_hi b0))
             ;; b_hi = B >> 32
-            (b_hi Xmm (x64_psrlq b0 (RegMemImm.Imm 32)))
+            (b_hi Xmm (x64_psrlq b0 (xmi_imm 32)))
             ;; al_bh = Al * Bh
             (al_bh Xmm (x64_pmuludq a0 b_hi))
             ;; aa_bb = ah_bl + al_bh
             (aa_bb Xmm (x64_paddq ah_bl al_bh))
             ;; aa_bb_shifted = aa_bb << 32
-            (aa_bb_shifted Xmm (x64_psllq aa_bb (RegMemImm.Imm 32)))
+            (aa_bb_shifted Xmm (x64_psllq aa_bb (xmi_imm 32)))
             ;; al_bl = Al * Bl
             (al_bl Xmm (x64_pmuludq a0 b0)))
         ;; al_bl + aa_bb_shifted
@@ -1087,14 +1087,12 @@
 ;; Special case for `f32x4.abs`.
 (rule (lower (has_type $F32X4 (fabs x)))
       (x64_andps x
-             (x64_psrld (vector_all_ones)
-                    (RegMemImm.Imm 1))))
+             (x64_psrld (vector_all_ones) (xmi_imm 1))))
 
 ;; Special case for `f64x2.abs`.
 (rule (lower (has_type $F64X2 (fabs x)))
       (x64_andpd x
-             (x64_psrlq (vector_all_ones)
-                    (RegMemImm.Imm 1))))
+             (x64_psrlq (vector_all_ones) (xmi_imm 1))))
 
 ;;;; Rules for `fneg` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1106,13 +1104,11 @@
 
 (rule (lower (has_type $F32X4 (fneg x)))
       (x64_xorps x
-             (x64_pslld (vector_all_ones)
-                    (RegMemImm.Imm 31))))
+             (x64_pslld (vector_all_ones) (xmi_imm 31))))
 
 (rule (lower (has_type $F64X2 (fneg x)))
       (x64_xorpd x
-             (x64_psllq (vector_all_ones)
-                    (RegMemImm.Imm 63))))
+             (x64_psllq (vector_all_ones) (xmi_imm 63))))
 
 ;;;; Rules for `bmask` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1918,7 +1914,7 @@
             ;; Note that this is a 16x8 shift, but that's OK; we mask
             ;; off anything that traverses from one byte to the next
             ;; with the low_mask below.
-            (shifted_src Xmm (x64_psrlw src (RegMemImm.Imm 4)))
+            (shifted_src Xmm (x64_psrlw src (xmi_imm 4)))
             (high_nibbles Xmm (sse_and $I8X16 shifted_src low_mask))
             (lookup Xmm (x64_xmm_load_const $I8X16 (popcount_4bit_table)))
             (bit_counts_low Xmm (x64_pshufb lookup low_nibbles))
@@ -2237,7 +2233,7 @@
             ;; All-ones for NaN, shifted down to leave 10 top bits (1
             ;; sign, 8 exponent, 1 QNaN bit that must remain set)
             ;; cleared.
-            (nan_fraction_mask Xmm (x64_psrld is_nan_mask (RegMemImm.Imm 10)))
+            (nan_fraction_mask Xmm (x64_psrld is_nan_mask (xmi_imm 10)))
             ;; Do a NAND, so that we retain every bit not set in
             ;; `nan_fraction_mask`. This mask will be all zeroes (so
             ;; we retain every bit) in non-NaN cases, and will have
@@ -2254,7 +2250,7 @@
             (min_or Xmm (x64_orpd min1 min2))
             (is_nan_mask Xmm (x64_cmppd min1 min2 (FcmpImm.Unordered)))
             (min_or_2 Xmm (x64_orpd min_or is_nan_mask))
-            (nan_fraction_mask Xmm (x64_psrlq is_nan_mask (RegMemImm.Imm 13)))
+            (nan_fraction_mask Xmm (x64_psrlq is_nan_mask (xmi_imm 13)))
             (final Xmm (x64_andnpd nan_fraction_mask min_or_2)))
         final))
 
@@ -2302,7 +2298,7 @@
             ;; All-ones for NaN, shifted down to leave 10 top bits (1
             ;; sign, 8 exponent, 1 QNaN bit that must remain set)
             ;; cleared.
-            (nan_fraction_mask Xmm (x64_psrld is_nan_mask (RegMemImm.Imm 10)))
+            (nan_fraction_mask Xmm (x64_psrld is_nan_mask (xmi_imm 10)))
             ;; Do a NAND, so that we retain every bit not set in
             ;; `nan_fraction_mask`. This mask will be all zeroes (so
             ;; we retain every bit) in non-NaN cases, and will have
@@ -2346,7 +2342,7 @@
             ;; All-ones for NaN, shifted down to leave 13 top bits (1
             ;; sign, 11 exponent, 1 QNaN bit that must remain set)
             ;; cleared.
-            (nan_fraction_mask Xmm (x64_psrlq is_nan_mask (RegMemImm.Imm 13)))
+            (nan_fraction_mask Xmm (x64_psrlq is_nan_mask (xmi_imm 13)))
             ;; Do a NAND, so that we retain every bit not set in
             ;; `nan_fraction_mask`. This mask will be all zeroes (so
             ;; we retain every bit) in non-NaN cases, and will have
@@ -3011,8 +3007,8 @@
       (let ((a Xmm val)
 
             ;;  get the low 16 bits
-            (a_lo Xmm (x64_pslld a (RegMemImm.Imm 16)))
-            (a_lo Xmm (x64_psrld a_lo (RegMemImm.Imm 16)))
+            (a_lo Xmm (x64_pslld a (xmi_imm 16)))
+            (a_lo Xmm (x64_psrld a_lo (xmi_imm 16)))
 
             ;; get the high 16 bits
             (a_hi Xmm (x64_psubd a a_lo))
@@ -3022,7 +3018,7 @@
 
             ;; shift the high bits by 1, convert, and double to get the correct
             ;; value
-            (a_hi Xmm (x64_psrld a_hi (RegMemImm.Imm 1)))
+            (a_hi Xmm (x64_psrld a_hi (xmi_imm 1)))
             (a_hi Xmm (x64_cvtdq2ps a_hi))
             (a_hi Xmm (x64_addps a_hi a_hi)))
 
@@ -3060,7 +3056,7 @@
 
             ;; Set top bit only if < 0
             (tmp Xmm (x64_pand dst tmp))
-            (tmp Xmm (x64_psrad tmp (RegMemImm.Imm 31))))
+            (tmp Xmm (x64_psrad tmp (xmi_imm 31))))
 
         ;; On overflow 0x80000000 is returned to a lane.
         ;; Below sets positive overflow lanes to 0x7FFFFFFF
@@ -3130,7 +3126,7 @@
             ;; integer that it can represent. In the case of INT_MAX, this value gets
             ;; represented as 0x4f000000 which is the integer value (INT_MAX+1).
             (tmp2 Xmm (x64_pcmpeqd tmp2 tmp2))
-            (tmp2 Xmm (x64_psrld tmp2 (RegMemImm.Imm 1)))
+            (tmp2 Xmm (x64_psrld tmp2 (xmi_imm 1)))
             (tmp2 Xmm (x64_cvtdq2ps tmp2))
 
             ;; Make a copy of these lanes and then do the first conversion.
