@@ -88,7 +88,7 @@ impl DominatorTree {
     }
 
     /// Compare two blocks relative to the reverse post-order.
-    fn rpo_cmp_block(&self, a: Block, b: Block) -> Ordering {
+    pub fn rpo_cmp_block(&self, a: Block, b: Block) -> Ordering {
         self.nodes[a].rpo_number.cmp(&self.nodes[b].rpo_number)
     }
 

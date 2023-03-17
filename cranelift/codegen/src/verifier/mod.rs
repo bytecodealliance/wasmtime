@@ -1105,17 +1105,13 @@ impl<'a> Verifier<'a> {
                 ));
             }
         }
-        // We verify rpo_cmp on pairs of adjacent blocks in the postorder
+        // We verify rpo_cmp_block on pairs of adjacent blocks in the postorder
         for (&prev_block, &next_block) in domtree.cfg_postorder().iter().adjacent_pairs() {
-            if self
-                .expected_domtree
-                .rpo_cmp(prev_block, next_block, &self.func.layout)
-                != Ordering::Greater
-            {
+            if self.expected_domtree.rpo_cmp_block(prev_block, next_block) != Ordering::Greater {
                 return errors.fatal((
                     next_block,
                     format!(
-                        "invalid domtree, rpo_cmp does not says {} is greater than {}",
+                        "invalid domtree, rpo_cmp_block does not says {} is greater than {}",
                         prev_block, next_block
                     ),
                 ));
