@@ -4,7 +4,7 @@
 //! determined by the `Layout` data structure defined in this module.
 
 use crate::entity::SecondaryMap;
-use crate::ir::progpoint::{ExpandedProgramPoint, ProgramOrder};
+use crate::ir::progpoint::ExpandedProgramPoint;
 use crate::ir::{Block, Inst};
 use crate::packed_option::PackedOption;
 use crate::{timing, trace};
@@ -114,8 +114,15 @@ fn test_midpoint() {
     assert_eq!(midpoint(3, 4), None);
 }
 
-impl ProgramOrder for Layout {
-    fn cmp<A, B>(&self, a: A, b: B) -> cmp::Ordering
+impl Layout {
+    /// Compare the program points `a` and `b` relative to this program order.
+    ///
+    /// Return `Less` if `a` appears in the program before `b`.
+    ///
+    /// This is declared as a generic such that it can be called with `Inst` and `Block` arguments
+    /// directly. Depending on the implementation, there is a good chance performance will be
+    /// improved for those cases where the type of either argument is known statically.
+    pub fn cmp<A, B>(&self, a: A, b: B) -> cmp::Ordering
     where
         A: Into<ExpandedProgramPoint>,
         B: Into<ExpandedProgramPoint>,
@@ -860,7 +867,7 @@ mod tests {
     use super::Layout;
     use crate::cursor::{Cursor, CursorPosition};
     use crate::entity::EntityRef;
-    use crate::ir::{Block, Inst, ProgramOrder, SourceLoc};
+    use crate::ir::{Block, Inst, SourceLoc};
     use alloc::vec::Vec;
     use core::cmp::Ordering;
 

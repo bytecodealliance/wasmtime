@@ -2,7 +2,7 @@
 
 use crate::entity::SecondaryMap;
 use crate::flowgraph::{BlockPredecessor, ControlFlowGraph};
-use crate::ir::{Block, ExpandedProgramPoint, Function, Inst, Layout, ProgramOrder, Value};
+use crate::ir::{Block, ExpandedProgramPoint, Function, Inst, Layout, Value};
 use crate::packed_option::PackedOption;
 use crate::timing;
 use alloc::vec::Vec;

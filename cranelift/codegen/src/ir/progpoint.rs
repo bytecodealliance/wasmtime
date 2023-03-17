@@ -2,7 +2,6 @@
 
 use crate::entity::EntityRef;
 use crate::ir::{Block, Inst, ValueDef};
-use core::cmp;
 use core::fmt;
 use core::u32;
 
@@ -120,24 +119,6 @@ impl fmt::Debug for ProgramPoint {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "ProgramPoint({})", self)
     }
-}
-
-/// Context for ordering program points.
-///
-/// `ProgramPoint` objects don't carry enough information to be ordered independently, they need a
-/// context providing the program order.
-pub trait ProgramOrder {
-    /// Compare the program points `a` and `b` relative to this program order.
-    ///
-    /// Return `Less` if `a` appears in the program before `b`.
-    ///
-    /// This is declared as a generic such that it can be called with `Inst` and `Block` arguments
-    /// directly. Depending on the implementation, there is a good chance performance will be
-    /// improved for those cases where the type of either argument is known statically.
-    fn cmp<A, B>(&self, a: A, b: B) -> cmp::Ordering
-    where
-        A: Into<ExpandedProgramPoint>,
-        B: Into<ExpandedProgramPoint>;
 }
 
 #[cfg(test)]
