@@ -50,12 +50,12 @@
 ;;
 ;;                                 block0(v0: i32, v1: i64):
 ;; @0057                               v5 = load.i64 notrap aligned v1+8
-;; @0057                               v6 = load.i64 notrap aligned v1
+;; @0057                               v7 = load.i64 notrap aligned v1
 ;; @0057                               v4 = uextend.i64 v0
-;; @0057                               v9 = icmp ugt v4, v5
-;; @0057                               v8 = iconst.i64 0
-;; @0057                               v7 = iadd v6, v4
-;; @0057                               v10 = select_spectre_guard v9, v8, v7  ; v8 = 0
+;; @0057                               v6 = icmp ugt v4, v5
+;; @0057                               v9 = iconst.i64 0
+;; @0057                               v8 = iadd v7, v4
+;; @0057                               v10 = select_spectre_guard v6, v9, v8  ; v9 = 0
 ;; @0057                               v11 = load.i32 little heap v10
 ;;                                     v2 -> v11
 ;; @005f                               jump block1
@@ -71,14 +71,14 @@
 ;;
 ;;                                 block0(v0: i32, v1: i64):
 ;; @0064                               v5 = load.i64 notrap aligned v1+8
-;; @0064                               v6 = load.i64 notrap aligned v1
+;; @0064                               v7 = load.i64 notrap aligned v1
 ;; @0064                               v4 = uextend.i64 v0
-;; @0064                               v10 = icmp ugt v4, v5
-;; @0064                               v9 = iconst.i64 0
-;; @0064                               v7 = iadd v6, v4
+;; @0064                               v6 = icmp ugt v4, v5
+;; @0064                               v10 = iconst.i64 0
+;; @0064                               v8 = iadd v7, v4
 ;;                                     v22 = iconst.i64 1234
-;; @0064                               v8 = iadd v7, v22  ; v22 = 1234
-;; @0064                               v11 = select_spectre_guard v10, v9, v8  ; v9 = 0
+;; @0064                               v9 = iadd v8, v22  ; v22 = 1234
+;; @0064                               v11 = select_spectre_guard v6, v10, v9  ; v10 = 0
 ;; @0064                               v12 = load.i32 little heap v11
 ;;                                     v2 -> v12
 ;; @006e                               jump block1

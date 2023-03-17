@@ -53,15 +53,15 @@
 ;;                                     v12 -> v4
 ;; @0057                               v5 = load.i64 notrap aligned v1+8
 ;;                                     v13 -> v5
-;; @0057                               v6 = load.i64 notrap aligned v1
+;; @0057                               v6 = icmp ugt v4, v5
 ;;                                     v14 -> v6
-;; @0057                               v7 = iadd v6, v4
+;; @0057                               v7 = load.i64 notrap aligned v1
 ;;                                     v15 -> v7
-;; @0057                               v8 = iconst.i64 0
+;; @0057                               v8 = iadd v7, v4
 ;;                                     v16 -> v8
-;; @0057                               v9 = icmp ugt v4, v5
+;; @0057                               v9 = iconst.i64 0
 ;;                                     v17 -> v9
-;; @0057                               v10 = select_spectre_guard v9, v8, v7  ; v8 = 0
+;; @0057                               v10 = select_spectre_guard v6, v9, v8  ; v9 = 0
 ;;                                     v18 -> v10
 ;; @0057                               v11 = load.i32 little heap v10
 ;;                                     v2 -> v11
@@ -83,19 +83,19 @@
 ;;                                     v13 -> v4
 ;; @0064                               v5 = load.i64 notrap aligned v1+8
 ;;                                     v14 -> v5
-;; @0064                               v6 = load.i64 notrap aligned v1
+;; @0064                               v6 = icmp ugt v4, v5
 ;;                                     v15 -> v6
-;; @0064                               v7 = iadd v6, v4
+;; @0064                               v7 = load.i64 notrap aligned v1
 ;;                                     v16 -> v7
+;; @0064                               v8 = iadd v7, v4
+;;                                     v17 -> v8
 ;;                                     v22 = iconst.i64 1234
 ;;                                     v23 -> v22
-;; @0064                               v8 = iadd v7, v22  ; v22 = 1234
-;;                                     v17 -> v8
-;; @0064                               v9 = iconst.i64 0
+;; @0064                               v9 = iadd v8, v22  ; v22 = 1234
 ;;                                     v18 -> v9
-;; @0064                               v10 = icmp ugt v4, v5
+;; @0064                               v10 = iconst.i64 0
 ;;                                     v19 -> v10
-;; @0064                               v11 = select_spectre_guard v10, v9, v8  ; v9 = 0
+;; @0064                               v11 = select_spectre_guard v6, v10, v9  ; v10 = 0
 ;;                                     v20 -> v11
 ;; @0064                               v12 = load.i32 little heap v11
 ;;                                     v2 -> v12

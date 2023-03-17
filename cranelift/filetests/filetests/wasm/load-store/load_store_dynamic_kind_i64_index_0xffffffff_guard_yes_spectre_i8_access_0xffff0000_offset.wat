@@ -46,12 +46,12 @@
 ;;
 ;;                                 block0(v0: i64, v1: i32, v2: i64):
 ;; @0040                               v3 = global_value.i64 gv1
-;; @0040                               v4 = global_value.i64 gv2
-;; @0040                               v5 = iadd v4, v0
-;; @0040                               v6 = iadd_imm v5, 0xffff_0000
-;; @0040                               v7 = iconst.i64 0
-;; @0040                               v8 = icmp ugt v0, v3
-;; @0040                               v9 = select_spectre_guard v8, v7, v6  ; v7 = 0
+;; @0040                               v4 = icmp ugt v0, v3
+;; @0040                               v5 = global_value.i64 gv2
+;; @0040                               v6 = iadd v5, v0
+;; @0040                               v7 = iadd_imm v6, 0xffff_0000
+;; @0040                               v8 = iconst.i64 0
+;; @0040                               v9 = select_spectre_guard v4, v8, v7  ; v8 = 0
 ;; @0040                               istore8 little heap v1, v9
 ;; @0047                               jump block1
 ;;
@@ -66,12 +66,12 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64):
 ;; @004c                               v3 = global_value.i64 gv1
-;; @004c                               v4 = global_value.i64 gv2
-;; @004c                               v5 = iadd v4, v0
-;; @004c                               v6 = iadd_imm v5, 0xffff_0000
-;; @004c                               v7 = iconst.i64 0
-;; @004c                               v8 = icmp ugt v0, v3
-;; @004c                               v9 = select_spectre_guard v8, v7, v6  ; v7 = 0
+;; @004c                               v4 = icmp ugt v0, v3
+;; @004c                               v5 = global_value.i64 gv2
+;; @004c                               v6 = iadd v5, v0
+;; @004c                               v7 = iadd_imm v6, 0xffff_0000
+;; @004c                               v8 = iconst.i64 0
+;; @004c                               v9 = select_spectre_guard v4, v8, v7  ; v8 = 0
 ;; @004c                               v10 = uload8.i32 little heap v9
 ;; @0053                               jump block1(v10)
 ;;
