@@ -299,7 +299,10 @@ fn expand_cond_trap(
     //
     //   new_block_resume:
     //     ..
-    let old_block = func.layout.pp_block(inst);
+    let old_block = func
+        .layout
+        .inst_block(inst)
+        .expect("Instruction not in layout.");
     let new_block_trap = func.dfg.make_block();
     let new_block_resume = func.dfg.make_block();
 

@@ -4,7 +4,7 @@
 //! determined by the `Layout` data structure defined in this module.
 
 use crate::entity::SecondaryMap;
-use crate::ir::progpoint::{ExpandedProgramPoint, ProgramOrder};
+use crate::ir::progpoint::ProgramPoint;
 use crate::ir::{Block, Inst};
 use crate::packed_option::PackedOption;
 use crate::{timing, trace};
@@ -114,33 +114,33 @@ fn test_midpoint() {
     assert_eq!(midpoint(3, 4), None);
 }
 
-impl ProgramOrder for Layout {
-    fn cmp<A, B>(&self, a: A, b: B) -> cmp::Ordering
+impl Layout {
+    /// Compare the program points `a` and `b` relative to this program order.
+    ///
+    /// Return `Less` if `a` appears in the program before `b`.
+    ///
+    /// This is declared as a generic such that it can be called with `Inst` and `Block` arguments
+    /// directly. Depending on the implementation, there is a good chance performance will be
+    /// improved for those cases where the type of either argument is known statically.
+    pub fn pp_cmp<A, B>(&self, a: A, b: B) -> cmp::Ordering
     where
-        A: Into<ExpandedProgramPoint>,
-        B: Into<ExpandedProgramPoint>,
+        A: Into<ProgramPoint>,
+        B: Into<ProgramPoint>,
     {
         let a_seq = self.seq(a);
         let b_seq = self.seq(b);
         a_seq.cmp(&b_seq)
-    }
-
-    fn is_block_gap(&self, inst: Inst, block: Block) -> bool {
-        let i = &self.insts[inst];
-        let e = &self.blocks[block];
-
-        i.next.is_none() && i.block == e.prev
     }
 }
 
 // Private methods for dealing with sequence numbers.
 impl Layout {
     /// Get the sequence number of a program point that must correspond to an entity in the layout.
-    fn seq<PP: Into<ExpandedProgramPoint>>(&self, pp: PP) -> SequenceNumber {
+    fn seq<PP: Into<ProgramPoint>>(&self, pp: PP) -> SequenceNumber {
         // When `PP = Inst` or `PP = Block`, we expect this dynamic type check to be optimized out.
         match pp.into() {
-            ExpandedProgramPoint::Block(block) => self.blocks[block].seq,
-            ExpandedProgramPoint::Inst(inst) => self.insts[inst].seq,
+            ProgramPoint::Block(block) => self.blocks[block].seq,
+            ProgramPoint::Inst(inst) => self.insts[inst].seq,
         }
     }
 
@@ -536,15 +536,10 @@ impl Layout {
     }
 
     /// Get the block containing the program point `pp`. Panic if `pp` is not in the layout.
-    pub fn pp_block<PP>(&self, pp: PP) -> Block
-    where
-        PP: Into<ExpandedProgramPoint>,
-    {
-        match pp.into() {
-            ExpandedProgramPoint::Block(block) => block,
-            ExpandedProgramPoint::Inst(inst) => {
-                self.inst_block(inst).expect("Program point not in layout")
-            }
+    pub fn pp_block(&self, pp: ProgramPoint) -> Block {
+        match pp {
+            ProgramPoint::Block(block) => block,
+            ProgramPoint::Inst(inst) => self.inst_block(inst).expect("Program point not in layout"),
         }
     }
 
@@ -867,7 +862,7 @@ mod tests {
     use super::Layout;
     use crate::cursor::{Cursor, CursorPosition};
     use crate::entity::EntityRef;
-    use crate::ir::{Block, Inst, ProgramOrder, SourceLoc};
+    use crate::ir::{Block, Inst, SourceLoc};
     use alloc::vec::Vec;
     use core::cmp::Ordering;
 
@@ -1289,13 +1284,8 @@ mod tests {
         }
 
         // Check `ProgramOrder`.
-        assert_eq!(layout.cmp(e2, e2), Ordering::Equal);
-        assert_eq!(layout.cmp(e2, i2), Ordering::Less);
-        assert_eq!(layout.cmp(i3, i2), Ordering::Greater);
-
-        assert_eq!(layout.is_block_gap(i1, e2), true);
-        assert_eq!(layout.is_block_gap(i3, e1), true);
-        assert_eq!(layout.is_block_gap(i1, e1), false);
-        assert_eq!(layout.is_block_gap(i2, e1), false);
+        assert_eq!(layout.pp_cmp(e2, e2), Ordering::Equal);
+        assert_eq!(layout.pp_cmp(e2, i2), Ordering::Less);
+        assert_eq!(layout.pp_cmp(i3, i2), Ordering::Greater)
     }
 }
