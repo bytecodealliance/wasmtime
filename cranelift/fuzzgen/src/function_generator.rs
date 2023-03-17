@@ -486,7 +486,6 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                 // https://github.com/bytecodealliance/wasmtime/issues/4900
                 (Opcode::FcvtFromSint, &[I128], &[F32 | F64]),
                 (Opcode::FcvtFromSint, &[I64X2], &[F64X2]),
-                (Opcode::Bmask, &[I8X16 | I16X8 | I32X4 | I64X2]),
                 (
                     Opcode::Umulhi | Opcode::Smulhi,
                     &([I8X16, I8X16] | [I16X8, I16X8] | [I32X4, I32X4] | [I64X2, I64X2])
@@ -568,7 +567,6 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                     &[I128],
                     &[F32 | F64]
                 ),
-                (Opcode::Bmask, &[I8X16 | I16X8 | I32X4 | I64X2]),
                 (
                     Opcode::Umulhi | Opcode::Smulhi,
                     &([I8X16, I8X16] | [I16X8, I16X8] | [I32X4, I32X4] | [I64X2, I64X2])
@@ -610,7 +608,6 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                     &[I128],
                     &[F32 | F64]
                 ),
-                (Opcode::Bmask, &[I8X16 | I16X8 | I32X4 | I64X2]),
                 (Opcode::SsubSat | Opcode::SaddSat, &[I64X2, I64X2]),
             )
         }
@@ -673,7 +670,7 @@ type OpcodeSignature = (
 
 // TODO: Derive this from the `cranelift-meta` generator.
 #[rustfmt::skip]
-const OPCODE_SIGNATURES: &[OpcodeSignature] = &[
+pub const OPCODE_SIGNATURES: &[OpcodeSignature] = &[
     (Opcode::Nop, &[], &[]),
     // Iadd
     (Opcode::Iadd, &[I8, I8], &[I8]),
@@ -774,21 +771,21 @@ const OPCODE_SIGNATURES: &[OpcodeSignature] = &[
     (Opcode::Srem, &[I64, I64], &[I64]),
     (Opcode::Srem, &[I128, I128], &[I128]),
     // Ineg
-    (Opcode::Ineg, &[I8, I8], &[I8]),
-    (Opcode::Ineg, &[I16, I16], &[I16]),
-    (Opcode::Ineg, &[I32, I32], &[I32]),
-    (Opcode::Ineg, &[I64, I64], &[I64]),
-    (Opcode::Ineg, &[I128, I128], &[I128]),
+    (Opcode::Ineg, &[I8], &[I8]),
+    (Opcode::Ineg, &[I16], &[I16]),
+    (Opcode::Ineg, &[I32], &[I32]),
+    (Opcode::Ineg, &[I64], &[I64]),
+    (Opcode::Ineg, &[I128], &[I128]),
     // Iabs
     (Opcode::Iabs, &[I8], &[I8]),
     (Opcode::Iabs, &[I16], &[I16]),
     (Opcode::Iabs, &[I32], &[I32]),
     (Opcode::Iabs, &[I64], &[I64]),
     (Opcode::Iabs, &[I128], &[I128]),
-    (Opcode::Iabs, &[I8X16, I8X16], &[I8X16]),
-    (Opcode::Iabs, &[I16X8, I16X8], &[I16X8]),
-    (Opcode::Iabs, &[I32X4, I32X4], &[I32X4]),
-    (Opcode::Iabs, &[I64X2, I64X2], &[I64X2]),
+    (Opcode::Iabs, &[I8X16], &[I8X16]),
+    (Opcode::Iabs, &[I16X8], &[I16X8]),
+    (Opcode::Iabs, &[I32X4], &[I32X4]),
+    (Opcode::Iabs, &[I64X2], &[I64X2]),
     // Smin
     (Opcode::Smin, &[I8, I8], &[I8]),
     (Opcode::Smin, &[I16, I16], &[I16]),
@@ -1154,10 +1151,6 @@ const OPCODE_SIGNATURES: &[OpcodeSignature] = &[
     (Opcode::Bmask, &[I32], &[I128]),
     (Opcode::Bmask, &[I64], &[I128]),
     (Opcode::Bmask, &[I128], &[I128]),
-    (Opcode::Bmask, &[I8X16], &[I8X16]),
-    (Opcode::Bmask, &[I16X8], &[I16X8]),
-    (Opcode::Bmask, &[I32X4], &[I32X4]),
-    (Opcode::Bmask, &[I64X2], &[I64X2]),
     // Bswap
     (Opcode::Bswap, &[I16], &[I16]),
     (Opcode::Bswap, &[I32], &[I32]),
@@ -1266,7 +1259,7 @@ const OPCODE_SIGNATURES: &[OpcodeSignature] = &[
     (Opcode::Fma, &[F32, F32, F32], &[F32]),
     (Opcode::Fma, &[F64, F64, F64], &[F64]),
     (Opcode::Fma, &[F32X4, F32X4, F32X4], &[F32X4]),
-    (Opcode::Fma, &[F64X2, F64X2, F64X4], &[F64X2]),
+    (Opcode::Fma, &[F64X2, F64X2, F64X2], &[F64X2]),
     // Fabs
     (Opcode::Fabs, &[F32], &[F32]),
     (Opcode::Fabs, &[F64], &[F64]),
@@ -1511,7 +1504,7 @@ const OPCODE_SIGNATURES: &[OpcodeSignature] = &[
     (Opcode::Bitcast, &[F64], &[I64]),
     (Opcode::Bitcast, &[I64], &[F64]),
     // Shuffle
-    (Opcode::Shuffle, &[I8X16, I8X16, I8X16], &[I8X16]),
+    (Opcode::Shuffle, &[I8X16, I8X16], &[I8X16]),
     // Swizzle
     (Opcode::Swizzle, &[I8X16, I8X16], &[I8X16]),
     // Splat
@@ -1553,10 +1546,10 @@ const OPCODE_SIGNATURES: &[OpcodeSignature] = &[
     (Opcode::VhighBits, &[I32X4], &[I8]),
     (Opcode::VhighBits, &[I64X2], &[I8]),
     // VanyTrue
-    (Opcode::VanyTrue, &[I8X16, I8X16, I8X16], &[I8]),
-    (Opcode::VanyTrue, &[I16X8, I16X8, I16X8], &[I8]),
-    (Opcode::VanyTrue, &[I32X4, I32X4, I32X4], &[I8]),
-    (Opcode::VanyTrue, &[I64X2, I64X2, I64X2], &[I8]),
+    (Opcode::VanyTrue, &[I8X16], &[I8]),
+    (Opcode::VanyTrue, &[I16X8], &[I8]),
+    (Opcode::VanyTrue, &[I32X4], &[I8]),
+    (Opcode::VanyTrue, &[I64X2], &[I8]),
     // SwidenLow
     (Opcode::SwidenLow, &[I8X16], &[I16X8]),
     (Opcode::SwidenLow, &[I16X8], &[I32X4]),
