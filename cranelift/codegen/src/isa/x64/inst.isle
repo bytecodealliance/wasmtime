@@ -1715,14 +1715,11 @@
         (if-let $true (value32_zeros_upper32 src))
         src)
 
-;; The `extractlane` instruction, extended to `$I32`, means that either an
-;; i8x16 or an i16x8 is being extracted. These are implemented with
-;; the `pextr{b,w}` instruction which automatically zero the upper bits of the
-;; destination register so the `uextend` in these cases can be elided.
-;;
-;; TODO: the documentation for `pextr{b,w}` seems to indicate it zero extends
-;; to not only 32-bits but probably the whole 64-bit register. If that's the
-;; case then this should match a zero-extend to any size instead of just `$I32`.
+;; The `extractlane` instruction, when paired with a zero-extension, means
+;; that one of `i{8x16,16x8,32x4}` is being extracted and extend. These
+;; extractions are implemented with the `pextr{b,w,d}` instructions which
+;; automatically zero the upper bits of the destination register so the
+;; `uextend` in these cases can be elided.
 ;;
 ;; TODO: the interaction here between this rule and the "it's written far away"
 ;; rule to lower `extractlane` isn't great. Ideally this rule (and the other
@@ -1730,7 +1727,7 @@
 ;; be connected to the extractlane rules. There's some discussion of this on
 ;; #6022 but the gist is that there's not a lot of great options at this time,
 ;; so this doc block is what's here for now.
-(rule 1 (extend_to_gpr src @ (extractlane _ _) $I32 (ExtendKind.Zero))
+(rule 1 (extend_to_gpr src @ (extractlane _ _) _ (ExtendKind.Zero))
         src)
 
 (rule (extend_to_gpr (and val (value_type from_ty))

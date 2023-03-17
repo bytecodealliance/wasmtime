@@ -3808,6 +3808,8 @@
 (rule 0 (lower (extractlane val @ (value_type ty @ (multi_lane 16 8)) (u8_from_uimm8 lane)))
       (x64_pextrw val lane))
 
+;; See the note in the 8x16 case above for how this rule is connected to
+;; `extend_to_gpr`.
 (rule 0 (lower (extractlane val @ (value_type ty @ (multi_lane 32 4)) (u8_from_uimm8 lane)))
       (x64_pextrd val lane))
 
