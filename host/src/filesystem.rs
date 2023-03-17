@@ -5,7 +5,7 @@ use crate::wasi::streams::{InputStream, OutputStream};
 use crate::{HostResult, WasiCtx};
 use std::{
     io::{IoSlice, IoSliceMut},
-    ops::{BitAnd, Deref},
+    ops::Deref,
     sync::Mutex,
     time::{Duration, SystemTime},
 };
@@ -14,11 +14,6 @@ use wasi_common::{
     file::{FdFlags, FileStream, TableFileExt},
     WasiDir, WasiFile,
 };
-
-/// TODO: Remove once wasmtime #5589 lands.
-fn contains<T: BitAnd<Output = T> + Eq + Copy>(flags: T, flag: T) -> bool {
-    (flags & flag) == flag
-}
 
 fn convert(error: wasi_common::Error) -> anyhow::Error {
     if let Some(errno) = error.downcast_ref() {
@@ -83,16 +78,16 @@ fn convert(error: wasi_common::Error) -> anyhow::Error {
 impl From<wasi::filesystem::OpenFlags> for wasi_common::file::OFlags {
     fn from(oflags: wasi::filesystem::OpenFlags) -> Self {
         let mut flags = wasi_common::file::OFlags::empty();
-        if contains(oflags, wasi::filesystem::OpenFlags::CREATE) {
+        if oflags.contains(wasi::filesystem::OpenFlags::CREATE) {
             flags |= wasi_common::file::OFlags::CREATE;
         }
-        if contains(oflags, wasi::filesystem::OpenFlags::DIRECTORY) {
+        if oflags.contains(wasi::filesystem::OpenFlags::DIRECTORY) {
             flags |= wasi_common::file::OFlags::DIRECTORY;
         }
-        if contains(oflags, wasi::filesystem::OpenFlags::EXCLUSIVE) {
+        if oflags.contains(wasi::filesystem::OpenFlags::EXCLUSIVE) {
             flags |= wasi_common::file::OFlags::EXCLUSIVE;
         }
-        if contains(oflags, wasi::filesystem::OpenFlags::TRUNCATE) {
+        if oflags.contains(wasi::filesystem::OpenFlags::TRUNCATE) {
             flags |= wasi_common::file::OFlags::TRUNCATE;
         }
         flags
@@ -102,16 +97,16 @@ impl From<wasi::filesystem::OpenFlags> for wasi_common::file::OFlags {
 impl From<FdFlags> for wasi::filesystem::DescriptorFlags {
     fn from(fdflags: FdFlags) -> Self {
         let mut flags = wasi::filesystem::DescriptorFlags::empty();
-        if contains(fdflags, FdFlags::DSYNC) {
+        if fdflags.contains(FdFlags::DSYNC) {
             flags |= wasi::filesystem::DescriptorFlags::DATA_INTEGRITY_SYNC;
         }
-        if contains(fdflags, FdFlags::NONBLOCK) {
+        if fdflags.contains(FdFlags::NONBLOCK) {
             flags |= wasi::filesystem::DescriptorFlags::NON_BLOCKING;
         }
-        if contains(fdflags, FdFlags::RSYNC) {
+        if fdflags.contains(FdFlags::RSYNC) {
             flags |= wasi::filesystem::DescriptorFlags::REQUESTED_WRITE_SYNC;
         }
-        if contains(fdflags, FdFlags::SYNC) {
+        if fdflags.contains(FdFlags::SYNC) {
             flags |= wasi::filesystem::DescriptorFlags::FILE_INTEGRITY_SYNC;
         }
         flags
@@ -121,25 +116,16 @@ impl From<FdFlags> for wasi::filesystem::DescriptorFlags {
 impl From<wasi::filesystem::DescriptorFlags> for FdFlags {
     fn from(flags: wasi::filesystem::DescriptorFlags) -> FdFlags {
         let mut fdflags = FdFlags::empty();
-        if contains(
-            flags,
-            wasi::filesystem::DescriptorFlags::DATA_INTEGRITY_SYNC,
-        ) {
+        if flags.contains(wasi::filesystem::DescriptorFlags::DATA_INTEGRITY_SYNC) {
             fdflags |= FdFlags::DSYNC;
         }
-        if contains(flags, wasi::filesystem::DescriptorFlags::NON_BLOCKING) {
+        if flags.contains(wasi::filesystem::DescriptorFlags::NON_BLOCKING) {
             fdflags |= FdFlags::NONBLOCK;
         }
-        if contains(
-            flags,
-            wasi::filesystem::DescriptorFlags::REQUESTED_WRITE_SYNC,
-        ) {
+        if flags.contains(wasi::filesystem::DescriptorFlags::REQUESTED_WRITE_SYNC) {
             fdflags |= FdFlags::RSYNC;
         }
-        if contains(
-            flags,
-            wasi::filesystem::DescriptorFlags::FILE_INTEGRITY_SYNC,
-        ) {
+        if flags.contains(wasi::filesystem::DescriptorFlags::FILE_INTEGRITY_SYNC) {
             fdflags |= FdFlags::SYNC;
         }
         fdflags
@@ -516,7 +502,7 @@ impl wasi::filesystem::Host for WasiCtx {
             .map_err(convert)?
             .get_path_filestat(
                 &path,
-                contains(at_flags, wasi::filesystem::PathFlags::SYMLINK_FOLLOW),
+                at_flags.contains(wasi::filesystem::PathFlags::SYMLINK_FOLLOW),
             )
             .await
             .map(wasi::filesystem::DescriptorStat::from)
@@ -539,7 +525,7 @@ impl wasi::filesystem::Host for WasiCtx {
                 &path,
                 system_time_spec_from_timestamp(atim),
                 system_time_spec_from_timestamp(mtim),
-                contains(at_flags, wasi::filesystem::PathFlags::SYMLINK_FOLLOW),
+                at_flags.contains(wasi::filesystem::PathFlags::SYMLINK_FOLLOW),
             )
             .await
             .map_err(convert)?))
@@ -557,7 +543,7 @@ impl wasi::filesystem::Host for WasiCtx {
         let table = self.table();
         let old_dir = table.get_dir(fd).map_err(convert)?;
         let new_dir = table.get_dir(new_descriptor).map_err(convert)?;
-        if contains(old_at_flags, wasi::filesystem::PathFlags::SYMLINK_FOLLOW) {
+        if old_at_flags.contains(wasi::filesystem::PathFlags::SYMLINK_FOLLOW) {
             return Ok(Err(wasi::filesystem::ErrorCode::Invalid));
         }
         old_dir
@@ -580,12 +566,12 @@ impl wasi::filesystem::Host for WasiCtx {
         let table = self.table_mut();
         let dir = table.get_dir(fd).map_err(convert)?;
 
-        let symlink_follow = contains(at_flags, wasi::filesystem::PathFlags::SYMLINK_FOLLOW);
+        let symlink_follow = at_flags.contains(wasi::filesystem::PathFlags::SYMLINK_FOLLOW);
 
-        if contains(oflags, wasi::filesystem::OpenFlags::DIRECTORY) {
-            if contains(oflags, wasi::filesystem::OpenFlags::CREATE)
-                || contains(oflags, wasi::filesystem::OpenFlags::EXCLUSIVE)
-                || contains(oflags, wasi::filesystem::OpenFlags::TRUNCATE)
+        if oflags.contains(wasi::filesystem::OpenFlags::DIRECTORY) {
+            if oflags.contains(wasi::filesystem::OpenFlags::CREATE)
+                || oflags.contains(wasi::filesystem::OpenFlags::EXCLUSIVE)
+                || oflags.contains(wasi::filesystem::OpenFlags::TRUNCATE)
             {
                 return Err(wasi::filesystem::ErrorCode::Invalid.into());
             }
@@ -601,8 +587,8 @@ impl wasi::filesystem::Host for WasiCtx {
                     symlink_follow,
                     &old_path,
                     oflags.into(),
-                    contains(flags, wasi::filesystem::DescriptorFlags::READ),
-                    contains(flags, wasi::filesystem::DescriptorFlags::WRITE),
+                    flags.contains(wasi::filesystem::DescriptorFlags::READ),
+                    flags.contains(wasi::filesystem::DescriptorFlags::WRITE),
                     flags.into(),
                 )
                 .await
