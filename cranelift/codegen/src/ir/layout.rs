@@ -536,11 +536,8 @@ impl Layout {
     }
 
     /// Get the block containing the program point `pp`. Panic if `pp` is not in the layout.
-    pub fn pp_block<PP>(&self, pp: PP) -> Block
-    where
-        PP: Into<ExpandedProgramPoint>,
-    {
-        match pp.into() {
+    pub fn pp_block(&self, pp: ExpandedProgramPoint) -> Block {
+        match pp {
             ExpandedProgramPoint::Block(block) => block,
             ExpandedProgramPoint::Inst(inst) => {
                 self.inst_block(inst).expect("Program point not in layout")
