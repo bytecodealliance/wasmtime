@@ -684,7 +684,7 @@ fn gen_opcodes(all_inst: &AllInstructions, fmt: &mut Formatter) {
 /// Each operand constraint is represented as a string, one of:
 /// - `Concrete(vt)`, where `vt` is a value type name.
 /// - `Free(idx)` where `idx` is an index into `type_sets`.
-/// - `Same`, `Lane`, `AsBool` for controlling typevar-derived constraints.
+/// - `Same`, `Lane`, `AsTruthy` for controlling typevar-derived constraints.
 fn get_constraint<'entries, 'table>(
     operand: &'entries Operand,
     ctrl_typevar: Option<&TypeVar>,
@@ -793,7 +793,7 @@ fn gen_type_constraints(all_inst: &AllInstructions, fmt: &mut Formatter) {
     // constraint is represented as a string, one of:
     // - `Concrete(vt)`, where `vt` is a value type name.
     // - `Free(idx)` where `idx` is an index into `type_sets`.
-    // - `Same`, `Lane`, `AsBool` for controlling typevar-derived constraints.
+    // - `Same`, `Lane`, `AsTruthy` for controlling typevar-derived constraints.
     let mut operand_seqs = UniqueSeqTable::new();
 
     // Preload table with constraints for typical binops.
