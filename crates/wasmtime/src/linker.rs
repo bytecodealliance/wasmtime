@@ -1125,13 +1125,6 @@ impl<T> Linker<T> {
     /// Returns an error which may be downcast to an [`UnknownImportError`] if
     /// the module has any unresolvable imports.
     ///
-    /// # Panics
-    ///
-    /// This method will panic if any item defined in this linker used by
-    /// `module` is not owned by `store`. Additionally this will panic if the
-    /// [`Engine`] that the `store` belongs to is different than this
-    /// [`Linker`].
-    ///
     /// # Examples
     ///
     /// ```
