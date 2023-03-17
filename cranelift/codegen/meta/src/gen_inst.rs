@@ -602,7 +602,22 @@ fn gen_opcodes(all_inst: &AllInstructions, fmt: &mut Formatter) {
             "side_effects_idempotent",
             "Despite having side effects, is this instruction okay to GVN?",
             fmt,
-        )
+        );
+
+        // Generate an opcode list, for iterating over all known opcodes.
+        fmt.doc_comment("All cranelift opcodes.");
+        fmt.line("pub fn all() -> &'static [Opcode] {");
+        fmt.indent(|fmt| {
+            fmt.line("return &[");
+            for inst in all_inst {
+                fmt.indent(|fmt| {
+                    fmtln!(fmt, "Opcode::{},", inst.camel_name);
+                });
+            }
+            fmt.line("];");
+        });
+        fmt.line("}");
+        fmt.empty_line();
     });
     fmt.line("}");
     fmt.empty_line();
