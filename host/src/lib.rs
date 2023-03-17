@@ -1,7 +1,10 @@
 mod clocks;
+mod default_outgoing_http;
 mod env;
 mod exit;
 mod filesystem;
+mod http;
+mod http_types;
 mod io;
 mod ip_name_lookup;
 mod network;
@@ -45,5 +48,8 @@ pub fn add_to_linker<T: Send>(
     wasi::exit::add_to_linker(l, f)?;
     wasi::environment::add_to_linker(l, f)?;
     wasi::environment_preopens::add_to_linker(l, f)?;
+    wasi::types::add_to_linker(l, f)?;
+    wasi::default_outgoing_http::add_to_linker(l, f)?;
+    wasi::http::add_to_linker(l, f)?;
     Ok(())
 }
