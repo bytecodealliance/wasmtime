@@ -44,7 +44,7 @@ fn main() {
     println!("cargo:rerun-if-changed=..");
     let mut cmd = Command::new("rustup");
     cmd.arg("run")
-        .arg("nightly")
+        .arg("nightly-2023-03-14")
         .arg("cargo")
         .arg("build")
         .arg("--target=wasm32-wasi")
