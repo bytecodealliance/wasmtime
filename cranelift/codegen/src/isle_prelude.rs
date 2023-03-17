@@ -217,6 +217,36 @@ macro_rules! isle_common_prelude_methods {
             u64::MAX >> shift
         }
 
+        #[inline]
+        fn ty_umin(&mut self, _ty: Type) -> u64 {
+            0
+        }
+
+        #[inline]
+        fn ty_umax(&mut self, ty: Type) -> u64 {
+            self.ty_mask(ty)
+        }
+
+        #[inline]
+        fn ty_smin(&mut self, ty: Type) -> u64 {
+            let ty_bits = ty.bits();
+            debug_assert_ne!(ty_bits, 0);
+            let shift = 64_u64
+                .checked_sub(ty_bits.into())
+                .expect("unimplemented for > 64 bits");
+            (i64::MIN as u64) >> shift
+        }
+
+        #[inline]
+        fn ty_smax(&mut self, ty: Type) -> u64 {
+            let ty_bits = ty.bits();
+            debug_assert_ne!(ty_bits, 0);
+            let shift = 64_u64
+                .checked_sub(ty_bits.into())
+                .expect("unimplemented for > 64 bits");
+            (i64::MAX as u64) >> shift
+        }
+
         fn fits_in_16(&mut self, ty: Type) -> Option<Type> {
             if ty.bits() <= 16 && !ty.is_dynamic_vector() {
                 Some(ty)

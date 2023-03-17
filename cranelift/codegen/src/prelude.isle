@@ -208,6 +208,23 @@
 
 (extern const $I32X4XN Type)
 
+;; Get the unsigned minimum value for a given type.
+;; This always zero, but is included for completeness.
+(decl pure ty_umin (Type) u64)
+(extern constructor ty_umin ty_umin)
+
+;; Get the unsigned maximum value for a given type.
+(decl pure ty_umax (Type) u64)
+(extern constructor ty_umax ty_umax)
+
+;; Get the signed minimum value for a given type.
+(decl pure ty_smin (Type) u64)
+(extern constructor ty_smin ty_smin)
+
+;; Get the signed maximum value for a given type.
+(decl pure ty_smax (Type) u64)
+(extern constructor ty_smax ty_smax)
+
 ;; Get the bit width of a given type.
 (decl pure ty_bits (Type) u8)
 (extern constructor ty_bits ty_bits)
