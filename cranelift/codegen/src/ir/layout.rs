@@ -115,7 +115,7 @@ fn test_midpoint() {
 }
 
 impl Layout {
-    /// Compare the program points `a` and `b` relative to this program order.
+    /// Compare the program points `a` and `b` in the same block relative to this program order.
     ///
     /// Return `Less` if `a` appears in the program before `b`.
     ///
@@ -127,6 +127,9 @@ impl Layout {
         A: Into<ProgramPoint>,
         B: Into<ProgramPoint>,
     {
+        let a = a.into();
+        let b = b.into();
+        debug_assert_eq!(self.pp_block(a), self.pp_block(b));
         let a_seq = self.seq(a);
         let b_seq = self.seq(b);
         a_seq.cmp(&b_seq)
@@ -136,9 +139,9 @@ impl Layout {
 // Private methods for dealing with sequence numbers.
 impl Layout {
     /// Get the sequence number of a program point that must correspond to an entity in the layout.
-    fn seq<PP: Into<ProgramPoint>>(&self, pp: PP) -> SequenceNumber {
-        // When `PP = Inst` or `PP = Block`, we expect this dynamic type check to be optimized out.
-        match pp.into() {
+    #[inline]
+    fn seq(&self, pp: ProgramPoint) -> SequenceNumber {
+        match pp {
             ProgramPoint::Block(block) => self.blocks[block].seq,
             ProgramPoint::Inst(inst) => self.insts[inst].seq,
         }
