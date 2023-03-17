@@ -2479,7 +2479,7 @@ mod test {
                     file: 0,
                     offset: 19,
                     line: 2,
-                    col: 0,
+                    col: 18,
                 },
             ),
             Type::Enum {
@@ -2520,7 +2520,7 @@ mod test {
                     file: 0,
                     offset: 58,
                     line: 3,
-                    col: 0,
+                    col: 18,
                 },
             },
         ];
