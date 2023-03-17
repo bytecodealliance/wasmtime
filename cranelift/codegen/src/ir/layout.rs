@@ -122,7 +122,7 @@ impl Layout {
     /// This is declared as a generic such that it can be called with `Inst` and `Block` arguments
     /// directly. Depending on the implementation, there is a good chance performance will be
     /// improved for those cases where the type of either argument is known statically.
-    pub fn cmp<A, B>(&self, a: A, b: B) -> cmp::Ordering
+    pub fn pp_cmp<A, B>(&self, a: A, b: B) -> cmp::Ordering
     where
         A: Into<ExpandedProgramPoint>,
         B: Into<ExpandedProgramPoint>,
@@ -1289,8 +1289,8 @@ mod tests {
         }
 
         // Check `ProgramOrder`.
-        assert_eq!(layout.cmp(e2, e2), Ordering::Equal);
-        assert_eq!(layout.cmp(e2, i2), Ordering::Less);
-        assert_eq!(layout.cmp(i3, i2), Ordering::Greater)
+        assert_eq!(layout.pp_cmp(e2, e2), Ordering::Equal);
+        assert_eq!(layout.pp_cmp(e2, i2), Ordering::Less);
+        assert_eq!(layout.pp_cmp(i3, i2), Ordering::Greater)
     }
 }

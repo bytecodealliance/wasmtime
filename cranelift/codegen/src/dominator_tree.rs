@@ -106,7 +106,7 @@ impl DominatorTree {
         let a = a.into();
         let b = b.into();
         self.rpo_cmp_block(layout.pp_block(a), layout.pp_block(b))
-            .then(layout.cmp(a, b))
+            .then(layout.pp_cmp(a, b))
     }
 
     /// Returns `true` if `a` dominates `b`.
@@ -134,7 +134,7 @@ impl DominatorTree {
                     .inst_block(inst_a)
                     .expect("Instruction not in layout.");
                 match self.last_dominator(block_a, b, layout) {
-                    Some(last) => layout.cmp(inst_a, last) != Ordering::Greater,
+                    Some(last) => layout.pp_cmp(inst_a, last) != Ordering::Greater,
                     None => false,
                 }
             }
@@ -210,7 +210,7 @@ impl DominatorTree {
         );
 
         // We're in the same block. The common dominator is the earlier instruction.
-        if layout.cmp(a.inst, b.inst) == Ordering::Less {
+        if layout.pp_cmp(a.inst, b.inst) == Ordering::Less {
             a
         } else {
             b
@@ -578,7 +578,7 @@ impl DominatorTreePreorder {
         let a = a.into();
         let b = b.into();
         self.pre_cmp_block(layout.pp_block(a), layout.pp_block(b))
-            .then(layout.cmp(a, b))
+            .then(layout.pp_cmp(a, b))
     }
 
     /// Compare two value defs according to the dominator tree pre-order.
