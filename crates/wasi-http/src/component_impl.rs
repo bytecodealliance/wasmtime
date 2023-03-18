@@ -2,6 +2,7 @@ use crate::default_outgoing_http::Host;
 pub use crate::r#struct::WasiHttp;
 use crate::streams::Host as StreamsHost;
 use crate::types::Host as TypesHost;
+use crate::types::RequestOptions;
 use crate::types::Scheme;
 use std::str;
 use std::vec::Vec;
@@ -113,16 +114,37 @@ pub fn add_component_to_linker<T>(
         "handle",
         move |mut caller: Caller<'_, T>,
               request: u32,
-              _b: i32,
-              _c: i32,
-              _d: i32,
-              _e: i32,
-              _f: i32,
-              _g: i32,
-              _h: i32|
+              has_options: i32,
+              has_timeout: i32,
+              timeout_ms: u32,
+              has_first_byte_timeout: i32,
+              first_byte_timeout_ms: u32,
+              has_between_bytes_timeout: i32,
+              between_bytes_timeout_ms: u32|
               -> u32 {
-            // TODO: use options here.
-            match get_cx(caller.data_mut()).handle(request, None) {
+            let options = if has_options == 1 {
+                Some(RequestOptions {
+                    connect_timeout_ms: if has_timeout == 1 {
+                        Some(timeout_ms)
+                    } else {
+                        None
+                    },
+                    first_byte_timeout_ms: if has_first_byte_timeout == 1 {
+                        Some(first_byte_timeout_ms)
+                    } else {
+                        None
+                    },
+                    between_bytes_timeout_ms: if has_between_bytes_timeout == 1 {
+                        Some(between_bytes_timeout_ms)
+                    } else {
+                        None
+                    },
+                })
+            } else {
+                None
+            };
+
+            match get_cx(caller.data_mut()).handle(request, options) {
                 Ok(v) => v,
                 Err(_) => 0,
             }

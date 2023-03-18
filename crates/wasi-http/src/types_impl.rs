@@ -6,6 +6,7 @@ use crate::types::{
     Scheme, StatusCode, Trailers,
 };
 use crate::WasiHttp;
+use anyhow::bail;
 use std::collections::HashMap;
 
 impl crate::types::Host for WasiHttp {
@@ -31,9 +32,9 @@ impl crate::types::Host for WasiHttp {
         let res = match self.fields.get(&fields) {
             Some(m) => match m.get(&name) {
                 Some(v) => v.clone(),
-                None => return Err(anyhow::anyhow!("key not found")),
+                None => bail!("key not found"),
             },
-            None => return Err(anyhow::anyhow!("fields not found")),
+            None => bail!("fields not found"),
         };
         Ok(res)
     }
@@ -48,7 +49,7 @@ impl crate::types::Host for WasiHttp {
                 m.insert(name, value.clone());
                 Ok(())
             }
-            None => Err(anyhow::anyhow!("fields not found")),
+            None => bail!("fields not found"),
         }
     }
     fn fields_delete(&mut self, fields: Fields, name: String) -> wasmtime::Result<()> {
@@ -76,13 +77,13 @@ impl crate::types::Host for WasiHttp {
                 };
                 Ok(())
             }
-            None => Err(anyhow::anyhow!("Unknown fields!")),
+            None => bail!("Unknown fields!"),
         }
     }
     fn fields_entries(&mut self, fields: Fields) -> wasmtime::Result<Vec<(String, String)>> {
         let field_map = match self.fields.get(&fields) {
             Some(m) => m,
-            None => return Err(anyhow::anyhow!("fields not found.")),
+            None => bail!("fields not found."),
         };
         let mut result = Vec::new();
         for (name, value) in field_map {
@@ -168,7 +169,7 @@ impl crate::types::Host for WasiHttp {
         req.method = method;
         req.headers = match self.fields.get(&headers) {
             Some(h) => h.clone(),
-            None => return Err(anyhow::anyhow!("headers not found.")),
+            None => bail!("headers not found."),
         };
         req.scheme = scheme;
         self.requests.insert(id, req);
@@ -202,7 +203,7 @@ impl crate::types::Host for WasiHttp {
     ) -> wasmtime::Result<StatusCode> {
         match self.responses.get(&response) {
             Some(r) => Ok(r.status),
-            None => Err(anyhow::anyhow!("response not found")),
+            None => bail!("response not found"),
         }
     }
     fn incoming_response_headers(
@@ -217,7 +218,7 @@ impl crate::types::Host for WasiHttp {
                 self.fields.insert(id, r.response_headers.clone());
                 Ok(id)
             }
-            None => Err(anyhow::anyhow!("response not found")),
+            None => bail!("response not found"),
         }
     }
     fn incoming_response_consume(

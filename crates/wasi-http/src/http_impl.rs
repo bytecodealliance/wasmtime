@@ -1,6 +1,7 @@
 use crate::r#struct::ActiveResponse;
 pub use crate::r#struct::WasiHttp;
 use crate::types::Scheme;
+use anyhow::bail;
 use bytes::{BufMut, Bytes, BytesMut};
 use futures::executor;
 use http_body_util::{BodyExt, Full};
@@ -49,11 +50,16 @@ impl WasiHttp {
     async fn handle_async(
         &mut self,
         request_id: crate::default_outgoing_http::OutgoingRequest,
-        _options: Option<crate::default_outgoing_http::RequestOptions>,
+        options: Option<crate::default_outgoing_http::RequestOptions>,
     ) -> wasmtime::Result<crate::default_outgoing_http::FutureIncomingResponse> {
+        if options.is_some() {
+            // Hyper 1.0.x does not appear to support timeouts, we probably have
+            // to implement them ourselves :(
+            bail!("Options are not supported (for now)")
+        }
         let request = match self.requests.get(&request_id) {
             Some(r) => r,
-            None => return Err(anyhow::anyhow!("not found!")),
+            None => bail!("not found!"),
         };
 
         let method = match request.method {
@@ -66,7 +72,7 @@ impl WasiHttp {
             crate::types::Method::Options => Method::OPTIONS,
             crate::types::Method::Trace => Method::TRACE,
             crate::types::Method::Patch => Method::PATCH,
-            _ => return Err(anyhow::anyhow!("unknown method!")),
+            _ => bail!("unknown method!"),
         };
 
         let scheme = match request.scheme.as_ref().unwrap_or(&Scheme::Https) {
@@ -83,10 +89,11 @@ impl WasiHttp {
         };
 
         let mut sender = if scheme == "https://" {
-            let stream = TcpStream::connect(authority).await?;
+            let stream = TcpStream::connect(authority.clone()).await?;
             let connector = tokio_native_tls::native_tls::TlsConnector::builder().build()?;
             let connector = tokio_native_tls::TlsConnector::from(connector);
-            let stream = connector.connect(&request.authority, stream).await?;
+            let host = authority.split(":").next().unwrap_or(&authority);
+            let stream = connector.connect(&host, stream).await?;
             let (s, conn) = hyper::client::conn::http1::handshake(stream).await?;
             tokio::task::spawn(async move {
                 if let Err(err) = conn.await {

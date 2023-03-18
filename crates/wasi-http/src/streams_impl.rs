@@ -1,6 +1,7 @@
 use crate::poll::Pollable;
 use crate::streams::{InputStream, OutputStream, StreamError};
 use crate::WasiHttp;
+use anyhow::bail;
 use std::vec::Vec;
 
 impl crate::streams::Host for WasiHttp {
@@ -11,7 +12,7 @@ impl crate::streams::Host for WasiHttp {
     ) -> wasmtime::Result<Result<(Vec<u8>, bool), StreamError>> {
         let response = match self.responses.get(&stream) {
             Some(r) => r,
-            None => return Err(anyhow::anyhow!("not found")),
+            None => bail!("not found"),
         };
         let bytes = response.body.clone();
         Ok(Ok((bytes.to_vec(), true)))
@@ -46,7 +47,7 @@ impl crate::streams::Host for WasiHttp {
             Some(r) => {
                 r.body = bytes::Bytes::from(buf.clone());
             }
-            None => return Err(anyhow::anyhow!("not found")),
+            None => bail!("not found"),
         };
         Ok(Ok(buf.len().try_into().unwrap()))
     }
