@@ -2452,18 +2452,29 @@ pub(crate) fn emit(
                 AvxOpcode::Vpshuflw => (LegacyPrefixes::_F2, OpcodeMap::_0F, 0x70),
                 AvxOpcode::Vpshufhw => (LegacyPrefixes::_F3, OpcodeMap::_0F, 0x70),
                 AvxOpcode::Vpshufd => (LegacyPrefixes::_66, OpcodeMap::_0F, 0x70),
+                AvxOpcode::Vroundss => (LegacyPrefixes::_66, OpcodeMap::_0F3A, 0x0A),
+                AvxOpcode::Vroundsd => (LegacyPrefixes::_66, OpcodeMap::_0F3A, 0x0B),
                 _ => panic!("unexpected rmr_imm_vex opcode {op:?}"),
             };
 
-            VexInstruction::new()
+            let vex = VexInstruction::new()
                 .length(VexVectorLength::V128)
                 .prefix(prefix)
                 .map(map)
                 .opcode(opcode)
                 .reg(dst.to_real_reg().unwrap().hw_enc())
                 .rm(src)
-                .imm(*imm)
-                .encode(sink);
+                .imm(*imm);
+
+            // See comments in similar block above in `XmmUnaryRmRVex` for what
+            // this is doing.
+            let vex = match op {
+                AvxOpcode::Vroundss | AvxOpcode::Vroundsd => {
+                    vex.vvvv(dst.to_real_reg().unwrap().hw_enc())
+                }
+                _ => vex,
+            };
+            vex.encode(sink);
         }
 
         Inst::XmmMovRMVex { op, src, dst } => {

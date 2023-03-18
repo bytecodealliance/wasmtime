@@ -1303,6 +1303,8 @@
             Vcvtsd2ss
             Vsqrtss
             Vsqrtsd
+            Vroundss
+            Vroundsd
           ))
 
 (type Avx512Opcode extern
@@ -3352,11 +3354,17 @@
 (decl x64_roundss (XmmMem RoundImm) Xmm)
 (rule (x64_roundss src1 round)
       (xmm_unary_rm_r_imm (SseOpcode.Roundss) src1 (encode_round_imm round)))
+(rule 1 (x64_roundss src1 round)
+        (if-let $true (use_avx_simd))
+        (xmm_unary_rm_r_imm_vex (AvxOpcode.Vroundss) src1 (encode_round_imm round)))
 
 ;; Helper for creating `roundsd` instructions.
 (decl x64_roundsd (XmmMem RoundImm) Xmm)
 (rule (x64_roundsd src1 round)
       (xmm_unary_rm_r_imm (SseOpcode.Roundsd) src1 (encode_round_imm round)))
+(rule 1 (x64_roundsd src1 round)
+        (if-let $true (use_avx_simd))
+        (xmm_unary_rm_r_imm_vex (AvxOpcode.Vroundsd) src1 (encode_round_imm round)))
 
 ;; Helper for creating `roundps` instructions.
 (decl x64_roundps (XmmMem RoundImm) Xmm)
