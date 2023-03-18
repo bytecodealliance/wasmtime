@@ -103,7 +103,7 @@ impl<'a> Arbitrary<'a> for FunctionWithIsa {
 fuzz_target!(|func: FunctionWithIsa| {
     let FunctionWithIsa { mut func, isa } = func;
 
-    let cache_key_hash = icache::compute_cache_key(&*isa, &mut func);
+    let cache_key_hash = icache::compute_cache_key(&*isa, &func);
 
     let mut context = Context::for_function(func.clone());
     let prev_stencil = match context.compile_stencil(&*isa) {
@@ -187,7 +187,7 @@ fuzz_target!(|func: FunctionWithIsa| {
         false
     };
 
-    let new_cache_key_hash = icache::compute_cache_key(&*isa, &mut func);
+    let new_cache_key_hash = icache::compute_cache_key(&*isa, &func);
 
     if expect_cache_hit {
         assert!(cache_key_hash == new_cache_key_hash);

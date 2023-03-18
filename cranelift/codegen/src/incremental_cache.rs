@@ -44,7 +44,7 @@ impl Context {
         let cache_key_hash = {
             let _tt = timing::try_incremental_cache();
 
-            let cache_key_hash = compute_cache_key(isa, &mut self.func);
+            let cache_key_hash = compute_cache_key(isa, &self.func);
 
             if let Some(blob) = cache_store.get(&cache_key_hash.0) {
                 match try_finish_recompile(&self.func, &blob) {
@@ -160,19 +160,7 @@ impl<'a> CacheKey<'a> {
     /// Creates a new cache store key for a function.
     ///
     /// This is a bit expensive to compute, so it should be cached and reused as much as possible.
-    fn new(isa: &dyn TargetIsa, f: &'a mut Function) -> Self {
-        // Make sure the blocks and instructions are sequenced the same way as we might
-        // have serialized them earlier. This is the symmetric of what's done in
-        // `try_load`.
-        let mut block = f.stencil.layout.entry_block().expect("Missing entry block");
-        loop {
-            f.stencil.layout.full_block_renumber(block);
-            if let Some(next_block) = f.stencil.layout.next_block(block) {
-                block = next_block;
-            } else {
-                break;
-            }
-        }
+    fn new(isa: &dyn TargetIsa, f: &'a Function) -> Self {
         CacheKey {
             stencil: &f.stencil,
             parameters: CompileParameters::from_isa(isa),
@@ -183,7 +171,7 @@ impl<'a> CacheKey<'a> {
 /// Compute a cache key, and hash it on your behalf.
 ///
 /// Since computing the `CacheKey` is a bit expensive, it should be done as least as possible.
-pub fn compute_cache_key(isa: &dyn TargetIsa, func: &mut Function) -> CacheKeyHash {
+pub fn compute_cache_key(isa: &dyn TargetIsa, func: &Function) -> CacheKeyHash {
     use core::hash::{Hash as _, Hasher};
     use sha2::Digest as _;
 
