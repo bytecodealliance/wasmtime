@@ -1724,7 +1724,9 @@ impl AvxOpcode {
             | AvxOpcode::Vcvtsi2ss
             | AvxOpcode::Vcvtsi2sd
             | AvxOpcode::Vcvtss2sd
-            | AvxOpcode::Vcvtsd2ss => {
+            | AvxOpcode::Vcvtsd2ss
+            | AvxOpcode::Vsqrtss
+            | AvxOpcode::Vsqrtsd => {
                 smallvec![InstructionSet::AVX]
             }
 

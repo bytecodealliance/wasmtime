@@ -2407,11 +2407,13 @@ pub(crate) fn emit(
 
                 AvxOpcode::Vcvtss2sd => (LegacyPrefixes::_F3, OpcodeMap::_0F, 0x5A),
                 AvxOpcode::Vcvtsd2ss => (LegacyPrefixes::_F2, OpcodeMap::_0F, 0x5A),
+                AvxOpcode::Vsqrtss => (LegacyPrefixes::_F3, OpcodeMap::_0F, 0x51),
+                AvxOpcode::Vsqrtsd => (LegacyPrefixes::_F2, OpcodeMap::_0F, 0x51),
 
                 _ => panic!("unexpected rmr_imm_vex opcode {op:?}"),
             };
 
-            let mut vex = VexInstruction::new()
+            let vex = VexInstruction::new()
                 .length(VexVectorLength::V128)
                 .prefix(prefix)
                 .map(map)
@@ -2425,9 +2427,13 @@ pub(crate) fn emit(
             // doesn't have this functionality. Instead just copy whatever
             // happens to already be in the destination, which at least is what
             // LLVM seems to do.
-            if let AvxOpcode::Vcvtss2sd | AvxOpcode::Vcvtsd2ss = op {
-                vex = vex.vvvv(dst.to_real_reg().unwrap().hw_enc());
-            }
+            let vex = match op {
+                AvxOpcode::Vcvtss2sd
+                | AvxOpcode::Vcvtsd2ss
+                | AvxOpcode::Vsqrtss
+                | AvxOpcode::Vsqrtsd => vex.vvvv(dst.to_real_reg().unwrap().hw_enc()),
+                _ => vex,
+            };
             vex.encode(sink);
         }
 

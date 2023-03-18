@@ -1301,6 +1301,8 @@
             Vcvtsi2sd
             Vcvtss2sd
             Vcvtsd2ss
+            Vsqrtss
+            Vsqrtsd
           ))
 
 (type Avx512Opcode extern
@@ -3987,10 +3989,16 @@
 ;; Helper for creating `sqrtss` instructions.
 (decl x64_sqrtss (XmmMem) Xmm)
 (rule (x64_sqrtss x) (xmm_unary_rm_r_unaligned (SseOpcode.Sqrtss) x))
+(rule 1 (x64_sqrtss x)
+        (if-let $true (use_avx_simd))
+        (xmm_unary_rm_r_vex (AvxOpcode.Vsqrtss) x))
 
 ;; Helper for creating `sqrtsd` instructions.
 (decl x64_sqrtsd (XmmMem) Xmm)
 (rule (x64_sqrtsd x) (xmm_unary_rm_r_unaligned (SseOpcode.Sqrtsd) x))
+(rule 1 (x64_sqrtsd x)
+        (if-let $true (use_avx_simd))
+        (xmm_unary_rm_r_vex (AvxOpcode.Vsqrtsd) x))
 
 ;; Helper for creating `sqrtps` instructions.
 (decl x64_sqrtps (XmmMem) Xmm)
