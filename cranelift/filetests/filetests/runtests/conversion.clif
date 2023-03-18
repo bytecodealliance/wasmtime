@@ -1,8 +1,10 @@
 test interpret
 test run
+set enable_simd
 target aarch64
 target s390x
 target x86_64
+target x86_64 has_avx
 target riscv64
 
 function %fcvt_to_sint(f32) -> i32 {
