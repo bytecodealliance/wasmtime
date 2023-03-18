@@ -170,13 +170,13 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     }
 
     #[inline]
-    fn has_avx(&mut self) -> bool {
-        self.backend.x64_flags.has_avx()
+    fn use_avx_simd(&mut self) -> bool {
+        self.backend.x64_flags.use_avx_simd()
     }
 
     #[inline]
-    fn has_avx2(&mut self) -> bool {
-        self.backend.x64_flags.has_avx2()
+    fn use_avx2_simd(&mut self) -> bool {
+        self.backend.x64_flags.use_avx2_simd()
     }
 
     #[inline]

@@ -3853,12 +3853,12 @@
 (rule 0 (lower (has_type $I8X16 (splat src)))
         (x64_pshufb (bitcast_gpr_to_xmm $I32 src) (xmm_zero $I8X16)))
 (rule 1 (lower (has_type $I8X16 (splat src)))
-        (if-let $true (has_avx2))
+        (if-let $true (use_avx2_simd))
         (x64_vpbroadcastb (bitcast_gpr_to_xmm $I32 src)))
 (rule 2 (lower (has_type $I8X16 (splat (sinkable_load_exact addr))))
         (x64_pshufb (x64_pinsrb (xmm_uninit_value) addr 0) (xmm_zero $I8X16)))
 (rule 3 (lower (has_type $I8X16 (splat (sinkable_load_exact addr))))
-        (if-let $true (has_avx2))
+        (if-let $true (use_avx2_simd))
         (x64_vpbroadcastb addr))
 
 ;; i16x8 splats: use `vpbroadcastw` on AVX2 and otherwise a 16-bit value is
@@ -3869,12 +3869,12 @@
 (rule 0 (lower (has_type $I16X8 (splat src)))
         (x64_pshufd (x64_pshuflw (bitcast_gpr_to_xmm $I32 src) 0) 0))
 (rule 1 (lower (has_type $I16X8 (splat src)))
-        (if-let $true (has_avx2))
+        (if-let $true (use_avx2_simd))
         (x64_vpbroadcastw (bitcast_gpr_to_xmm $I32 src)))
 (rule 2 (lower (has_type $I16X8 (splat (sinkable_load_exact addr))))
         (x64_pshufd (x64_pshuflw (x64_pinsrw (xmm_uninit_value) addr 0) 0) 0))
 (rule 3 (lower (has_type $I16X8 (splat (sinkable_load_exact addr))))
-        (if-let $true (has_avx2))
+        (if-let $true (use_avx2_simd))
         (x64_vpbroadcastw addr))
 
 ;; i32x4.splat - use `vpbroadcastd` on AVX2 and otherwise `pshufd` can be
@@ -3884,7 +3884,7 @@
 (rule 0 (lower (has_type $I32X4 (splat src)))
         (x64_pshufd (bitcast_gpr_to_xmm $I32 src) 0))
 (rule 1 (lower (has_type $I32X4 (splat src)))
-        (if-let $true (has_avx2))
+        (if-let $true (use_avx2_simd))
         (x64_vpbroadcastd (bitcast_gpr_to_xmm $I32 src)))
 
 ;; f32x4.splat - the source is already in an xmm register so `shufps` is all
@@ -3894,7 +3894,7 @@
         (let ((tmp Xmm src))
           (x64_shufps src src 0)))
 (rule 1 (lower (has_type $F32X4 (splat src)))
-        (if-let $true (has_avx2))
+        (if-let $true (use_avx2_simd))
         (x64_vbroadcastss src))
 
 ;; t32x4.splat of a load - use a `movss` to load into an xmm register and then
@@ -3905,12 +3905,12 @@
 ;; that the memory-operand encoding of `vbroadcastss` is usable with AVX, but
 ;; the register-based encoding is only available with AVX2. With the
 ;; `sinkable_load` extractor this should be guaranteed to use the memory-based
-;; encoding hence the `has_avx` test.
+;; encoding hence the `use_avx_simd` test.
 (rule 4 (lower (has_type (multi_lane 32 4) (splat (sinkable_load addr))))
         (let ((tmp Xmm (x64_movss_load addr)))
           (x64_shufps tmp tmp 0)))
 (rule 5 (lower (has_type (multi_lane 32 4) (splat (sinkable_load addr))))
-        (if-let $true (has_avx))
+        (if-let $true (use_avx_simd))
         (x64_vbroadcastss addr))
 
 ;; t64x2.splat - use `movddup` which is exactly what we want and there's a

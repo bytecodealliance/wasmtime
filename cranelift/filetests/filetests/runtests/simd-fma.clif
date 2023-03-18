@@ -1,5 +1,6 @@
 test interpret
 test run
+set enable_simd
 target x86_64 has_avx has_fma
 target x86_64 has_avx=false has_fma=false
 target aarch64
