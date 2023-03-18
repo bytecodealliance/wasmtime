@@ -367,6 +367,10 @@
                     (dst WritableGpr)
                     (dst_size OperandSize))
 
+       ;; Float comparisons/tests: cmp (b w l q) (reg addr imm) reg.
+       (XmmCmpRmRVex (op AvxOpcode)
+                     (src1 Xmm)
+                     (src2 XmmMem))
 
        ;; XMM (scalar or vector) binary op that relies on the EVEX
        ;; prefix. Takes two inputs.
@@ -1413,6 +1417,9 @@
             Vsqrtsd
             Vroundss
             Vroundsd
+            Vucomiss
+            Vucomisd
+            Vptest
           ))
 
 (type Avx512Opcode
@@ -2817,12 +2824,24 @@
       (ProducesFlags.ProducesFlagsSideEffect
        (MInst.XmmCmpRmR opcode src1 src2)))
 
+;; Helper for creating `MInst.XmmCmpRmRVex` instructions.
+(decl xmm_cmp_rm_r_vex (AvxOpcode Xmm XmmMem) ProducesFlags)
+(rule (xmm_cmp_rm_r_vex opcode src1 src2)
+      (ProducesFlags.ProducesFlagsSideEffect
+       (MInst.XmmCmpRmRVex opcode src1 src2)))
+
 ;; Helper for creating floating-point comparison instructions (`UCOMIS[S|D]`).
 (decl x64_ucomis (Type Xmm XmmMem) ProducesFlags)
 (rule (x64_ucomis $F32 src1 src2)
       (xmm_cmp_rm_r (SseOpcode.Ucomiss) src1 src2))
 (rule (x64_ucomis $F64 src1 src2)
       (xmm_cmp_rm_r (SseOpcode.Ucomisd) src1 src2))
+(rule 1 (x64_ucomis $F32 src1 src2)
+        (if-let $true (use_avx))
+        (xmm_cmp_rm_r_vex (AvxOpcode.Vucomiss) src1 src2))
+(rule 1 (x64_ucomis $F64 src1 src2)
+        (if-let $true (use_avx))
+        (xmm_cmp_rm_r_vex (AvxOpcode.Vucomisd) src1 src2))
 
 ;; Helper for creating `test` instructions.
 (decl x64_test (OperandSize GprMemImm Gpr) ProducesFlags)
@@ -2833,6 +2852,9 @@
 (decl x64_ptest (Xmm XmmMem) ProducesFlags)
 (rule (x64_ptest src1 src2)
       (xmm_cmp_rm_r (SseOpcode.Ptest) src1 src2))
+(rule 1 (x64_ptest src1 src2)
+        (if-let $true (use_avx))
+        (xmm_cmp_rm_r_vex (AvxOpcode.Vptest) src1 src2))
 
 ;; Helper for creating `cmove` instructions. Note that these instructions do not
 ;; always result in a single emitted x86 instruction; e.g., XmmCmove uses jumps

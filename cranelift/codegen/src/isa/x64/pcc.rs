@@ -813,6 +813,18 @@ pub(crate) fn check(
             ensure_no_fact(vcode, dst.to_reg())
         }
 
+        Inst::XmmCmpRmRVex {
+            ref src1, ref src2, ..
+        } => {
+            match <&RegMem>::from(src2) {
+                RegMem::Mem { ref addr } => {
+                    check_load(ctx, None, addr, vcode, F32, 32)?;
+                }
+                RegMem::Reg { .. } => {}
+            }
+            ensure_no_fact(vcode, src1.to_reg())
+        }
+
         Inst::CallKnown { .. }
         | Inst::ReturnCallKnown { .. }
         | Inst::JmpKnown { .. }

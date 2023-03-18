@@ -1,0 +1,105 @@
+test compile precise-output
+target x86_64 has_avx
+
+function %f3(f32, f32) -> i32 {
+block0(v0: f32, v1: f32):
+  v2 = fcmp eq v0, v1
+  brif v2, block1, block2
+
+block1:
+  v3 = iconst.i32 1
+  return v3
+
+block2:
+  v4 = iconst.i32 2
+  return v4
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   vucomiss %xmm0, %xmm1
+;   jp      label1
+;   jnz     label1; j label2
+; block1:
+;   movl    $2, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; block2:
+;   movl    $1, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   vucomiss %xmm1, %xmm0
+;   jp 0x14
+;   je 0x1e
+; block2: ; offset 0x14
+;   movl $2, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+; block3: ; offset 0x1e
+;   movl $1, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %f3(f64, f64) -> i32 {
+block0(v0: f64, v1: f64):
+  v2 = fcmp eq v0, v1
+  brif v2, block1, block2
+
+block1:
+  v3 = iconst.i32 1
+  return v3
+
+block2:
+  v4 = iconst.i32 2
+  return v4
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   vucomisd %xmm0, %xmm1
+;   jp      label1
+;   jnz     label1; j label2
+; block1:
+;   movl    $2, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; block2:
+;   movl    $1, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   vucomisd %xmm1, %xmm0
+;   jp 0x14
+;   je 0x1e
+; block2: ; offset 0x14
+;   movl $2, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+; block3: ; offset 0x1e
+;   movl $1, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
