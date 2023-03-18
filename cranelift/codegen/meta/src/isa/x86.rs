@@ -138,7 +138,10 @@ fn define_settings(shared: &SettingGroup) -> SettingGroup {
     );
 
     settings.add_predicate("use_avx_simd", predicate!(shared_enable_simd && has_avx));
-    settings.add_predicate("use_avx2_simd", predicate!(shared_enable_simd && has_avx2));
+    settings.add_predicate(
+        "use_avx2_simd",
+        predicate!(shared_enable_simd && has_avx && has_avx2),
+    );
     settings.add_predicate(
         "use_avx512bitalg_simd",
         predicate!(shared_enable_simd && has_avx512bitalg),
