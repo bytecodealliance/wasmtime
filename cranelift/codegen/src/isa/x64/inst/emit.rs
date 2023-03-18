@@ -2405,17 +2405,30 @@ pub(crate) fn emit(
                 AvxOpcode::Vbroadcastss => (LegacyPrefixes::_66, OpcodeMap::_0F38, 0x18),
                 AvxOpcode::Vmovddup => (LegacyPrefixes::_F2, OpcodeMap::_0F, 0x12),
 
+                AvxOpcode::Vcvtss2sd => (LegacyPrefixes::_F3, OpcodeMap::_0F, 0x5A),
+                AvxOpcode::Vcvtsd2ss => (LegacyPrefixes::_F2, OpcodeMap::_0F, 0x5A),
+
                 _ => panic!("unexpected rmr_imm_vex opcode {op:?}"),
             };
 
-            VexInstruction::new()
+            let mut vex = VexInstruction::new()
                 .length(VexVectorLength::V128)
                 .prefix(prefix)
                 .map(map)
                 .opcode(opcode)
                 .reg(dst.to_real_reg().unwrap().hw_enc())
-                .rm(src)
-                .encode(sink);
+                .rm(src);
+
+            // These opcodes take a second operand through `vvvv` which copies
+            // the upper bits into the destination register. That's not
+            // reflected in the CLIF instruction, however, since the SSE version
+            // doesn't have this functionality. Instead just copy whatever
+            // happens to already be in the destination, which at least is what
+            // LLVM seems to do.
+            if let AvxOpcode::Vcvtss2sd | AvxOpcode::Vcvtsd2ss = op {
+                vex = vex.vvvv(dst.to_real_reg().unwrap().hw_enc());
+            }
+            vex.encode(sink);
         }
 
         Inst::XmmUnaryRmRImmVex { op, src, dst, imm } => {
