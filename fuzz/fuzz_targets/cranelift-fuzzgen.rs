@@ -179,7 +179,7 @@ impl TestCase {
 
         // TestCase is meant to be consumed by a runner, so we make the assumption here that we're
         // generating a TargetIsa for the host.
-        let mut builder = builder_with_options(true, gen.chaos_eng.clone())
+        let mut builder = builder_with_options(true, gen.control_plane.clone())
             .expect("Unable to build a TargetIsa for the current host");
         let flags = gen.generate_flags(builder.triple().architecture)?;
         gen.set_isa_flags(&mut builder, IsaFlagGen::Host)?;

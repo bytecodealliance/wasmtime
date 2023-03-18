@@ -4,8 +4,8 @@
 #![cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ptr_alignment))]
 
 use crate::subtest::{run_filecheck, Context, SubTest};
-use cranelift_chaos::ChaosEngine;
 use cranelift_codegen::{self, ir, isa::unwind::UnwindInfo};
+use cranelift_control::ControlPlane;
 use cranelift_reader::TestCommand;
 use gimli::{
     write::{Address, EhFrame, EndianVec, FrameTable},
@@ -39,7 +39,7 @@ impl SubTest for TestUnwind {
     fn run(&self, func: Cow<ir::Function>, context: &Context) -> anyhow::Result<()> {
         let isa = context.isa.expect("unwind needs an ISA");
         let mut comp_ctx =
-            cranelift_codegen::Context::for_function(func.into_owned(), ChaosEngine::noop());
+            cranelift_codegen::Context::for_function(func.into_owned(), ControlPlane::noop());
 
         let code = comp_ctx.compile(isa).expect("failed to compile function");
 

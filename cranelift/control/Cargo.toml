@@ -1,6 +1,6 @@
 [package]
 authors = ["The Cranelift Project Developers"]
-name = "cranelift-chaos"
+name = "cranelift-control"
 version = "0.95.0"
 description = "White-box fuzz testing framework"
 license = "Apache-2.0 WITH LLVM-exception"
@@ -14,6 +14,7 @@ arbitrary = { version = "1.1.0" }
 
 [features]
 
-# Actually turn on chaos mode.
-# Without this feature, a zero-sized dummy will be compiled.
+# Turn on chaos mode.
+# Without this feature, a zero-sized dummy will be compiled
+# for the control plane.
 chaos = []

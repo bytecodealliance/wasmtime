@@ -15,7 +15,7 @@ use crate::result::CodegenResult;
 use crate::settings as shared_settings;
 use alloc::{boxed::Box, vec::Vec};
 use core::fmt;
-use cranelift_chaos::ChaosEngine;
+use cranelift_control::ControlPlane;
 use regalloc2::MachineEnv;
 use target_lexicon::{Architecture, Triple};
 
@@ -36,8 +36,8 @@ pub struct S390xBackend {
     isa_flags: s390x_settings::Flags,
     machine_env: MachineEnv,
     /// Only used during fuzz-testing. Otherwise, this is a zero-sized struct
-    /// and compiled away. See [cranelift_chaos].
-    chaos_eng: ChaosEngine,
+    /// and compiled away. See [cranelift_control].
+    control_plane: ControlPlane,
 }
 
 impl S390xBackend {
@@ -46,7 +46,7 @@ impl S390xBackend {
         triple: Triple,
         flags: shared_settings::Flags,
         isa_flags: s390x_settings::Flags,
-        chaos_eng: ChaosEngine,
+        control_plane: ControlPlane,
     ) -> S390xBackend {
         let machine_env = create_machine_env(&flags);
         S390xBackend {
@@ -54,7 +54,7 @@ impl S390xBackend {
             flags,
             isa_flags,
             machine_env,
-            chaos_eng,
+            control_plane,
         }
     }
 
@@ -75,7 +75,7 @@ impl S390xBackend {
             abi,
             emit_info,
             sigs,
-            self.chaos_eng.clone(),
+            self.control_plane.clone(),
         )
     }
 }
@@ -217,15 +217,16 @@ impl fmt::Display for S390xBackend {
 }
 
 /// Create a new `isa::Builder`.
-pub fn isa_builder(triple: Triple, chaos_eng: ChaosEngine) -> IsaBuilder {
+pub fn isa_builder(triple: Triple, control_plane: ControlPlane) -> IsaBuilder {
     assert!(triple.architecture == Architecture::S390x);
     IsaBuilder {
         triple,
-        chaos_eng,
+        control_plane,
         setup: s390x_settings::builder(),
-        constructor: |triple, shared_flags, builder, chaos_eng| {
+        constructor: |triple, shared_flags, builder, control_plane| {
             let isa_flags = s390x_settings::Flags::new(&shared_flags, builder);
-            let backend = S390xBackend::new_with_flags(triple, shared_flags, isa_flags, chaos_eng);
+            let backend =
+                S390xBackend::new_with_flags(triple, shared_flags, isa_flags, control_plane);
             Ok(backend.wrapped())
         },
     }

@@ -12,7 +12,7 @@ edition.workspace = true
 
 [dependencies]
 cranelift-codegen = { workspace = true }
-cranelift-chaos = { workspace = true }
+cranelift-control = { workspace = true }
 hashbrown = { workspace = true, optional = true }
 anyhow = { workspace = true }
 

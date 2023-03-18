@@ -7,7 +7,6 @@ use crate::run_command::{Comparison, Invocation, RunCommand};
 use crate::sourcemap::SourceMap;
 use crate::testcommand::TestCommand;
 use crate::testfile::{Comment, Details, Feature, TestFile};
-use cranelift_chaos::ChaosEngine;
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::entity::{EntityRef, PrimaryMap};
 use cranelift_codegen::ir::entities::{AnyEntity, DynamicType};
@@ -25,6 +24,7 @@ use cranelift_codegen::ir::{
 use cranelift_codegen::isa::{self, CallConv};
 use cranelift_codegen::packed_option::ReservedValue;
 use cranelift_codegen::{settings, settings::Configurable, timing};
+use cranelift_control::ControlPlane;
 use smallvec::SmallVec;
 use std::mem;
 use std::str::FromStr;
@@ -996,7 +996,7 @@ impl<'a> Parser<'a> {
                 Ok(triple) => triple,
                 Err(err) => return err!(loc, err),
             };
-            let isa_builder = match isa::lookup(triple, ChaosEngine::noop()) {
+            let isa_builder = match isa::lookup(triple, ControlPlane::noop()) {
                 Err(isa::LookupError::SupportDisabled) => {
                     return err!(loc, "support disabled target '{}'", targ);
                 }
@@ -1085,7 +1085,7 @@ impl<'a> Parser<'a> {
                         Ok(triple) => triple,
                         Err(err) => return err!(loc, err),
                     };
-                    let mut isa_builder = match isa::lookup(triple, ChaosEngine::noop()) {
+                    let mut isa_builder = match isa::lookup(triple, ControlPlane::noop()) {
                         Err(isa::LookupError::SupportDisabled) => {
                             continue;
                         }

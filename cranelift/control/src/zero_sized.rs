@@ -1,10 +1,10 @@
 #[derive(Debug, Clone)]
-pub struct ChaosEngine {
+pub struct ControlPlane {
     /// prevent direct instantiation (use `noop` or `todo` instead)
     _private: (),
 }
 
-impl ChaosEngine {
+impl ControlPlane {
     pub fn noop() -> Self {
         Self { _private: () }
     }

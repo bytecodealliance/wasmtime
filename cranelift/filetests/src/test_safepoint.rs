@@ -1,6 +1,6 @@
 use crate::subtest::{run_filecheck, Context, SubTest};
-use cranelift_chaos::ChaosEngine;
 use cranelift_codegen::ir::Function;
+use cranelift_control::ControlPlane;
 use cranelift_reader::TestCommand;
 use std::borrow::Cow;
 
@@ -21,7 +21,7 @@ impl SubTest for TestSafepoint {
 
     fn run(&self, func: Cow<Function>, context: &Context) -> anyhow::Result<()> {
         let mut comp_ctx =
-            cranelift_codegen::Context::for_function(func.into_owned(), ChaosEngine::noop());
+            cranelift_codegen::Context::for_function(func.into_owned(), ControlPlane::noop());
 
         let isa = context.isa.expect("register allocator needs an ISA");
         comp_ctx.compute_cfg();

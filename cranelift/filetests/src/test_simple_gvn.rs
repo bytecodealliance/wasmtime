@@ -6,9 +6,9 @@
 //! The resulting function is sent to `filecheck`.
 
 use crate::subtest::{run_filecheck, Context, SubTest};
-use cranelift_chaos::ChaosEngine;
 use cranelift_codegen;
 use cranelift_codegen::ir::Function;
+use cranelift_control::ControlPlane;
 use cranelift_reader::TestCommand;
 use std::borrow::Cow;
 
@@ -33,7 +33,7 @@ impl SubTest for TestSimpleGVN {
 
     fn run(&self, func: Cow<Function>, context: &Context) -> anyhow::Result<()> {
         let mut comp_ctx =
-            cranelift_codegen::Context::for_function(func.into_owned(), ChaosEngine::noop());
+            cranelift_codegen::Context::for_function(func.into_owned(), ControlPlane::noop());
 
         comp_ctx.flowgraph();
         comp_ctx

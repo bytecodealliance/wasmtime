@@ -33,7 +33,7 @@ use crate::{timing, CompileError};
 #[cfg(feature = "souper-harvest")]
 use alloc::string::String;
 use alloc::vec::Vec;
-use cranelift_chaos::ChaosEngine;
+use cranelift_control::ControlPlane;
 
 #[cfg(feature = "souper-harvest")]
 use crate::souper_harvest::do_souper_harvest;
@@ -59,8 +59,8 @@ pub struct Context {
     pub want_disasm: bool,
 
     /// Only used during fuzz-testing. Otherwise, this is a zero-sized struct
-    /// and compiled away. See [cranelift_chaos].
-    chaos_eng: ChaosEngine,
+    /// and compiled away. See [cranelift_control].
+    control_plane: ControlPlane,
 }
 
 impl Context {
@@ -68,15 +68,15 @@ impl Context {
     ///
     /// The returned instance should be reused for compiling multiple functions in order to avoid
     /// needless allocator thrashing.
-    pub fn new(chaos_eng: ChaosEngine) -> Self {
-        Self::for_function(Function::new(), chaos_eng)
+    pub fn new(control_plane: ControlPlane) -> Self {
+        Self::for_function(Function::new(), control_plane)
     }
 
     /// Allocate a new compilation context with an existing Function.
     ///
     /// The returned instance should be reused for compiling multiple functions in order to avoid
     /// needless allocator thrashing.
-    pub fn for_function(func: Function, chaos_eng: ChaosEngine) -> Self {
+    pub fn for_function(func: Function, control_plane: ControlPlane) -> Self {
         Self {
             func,
             cfg: ControlFlowGraph::new(),
@@ -84,7 +84,7 @@ impl Context {
             loop_analysis: LoopAnalysis::new(),
             compiled_code: None,
             want_disasm: false,
-            chaos_eng,
+            control_plane,
         }
     }
 

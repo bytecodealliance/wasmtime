@@ -5,7 +5,6 @@ use crate::{
     wasmtime_call_conv, CompiledFunction, FunctionAddressMap,
 };
 use anyhow::{Context as _, Result};
-use cranelift_chaos::ChaosEngine;
 use cranelift_codegen::ir::{
     self, ExternalName, Function, InstBuilder, MemFlags, UserExternalName, UserFuncName, Value,
 };
@@ -14,6 +13,7 @@ use cranelift_codegen::print_errors::pretty_error;
 use cranelift_codegen::Context;
 use cranelift_codegen::{CompiledCode, MachSrcLoc, MachStackMap};
 use cranelift_codegen::{MachReloc, MachTrap};
+use cranelift_control::ControlPlane;
 use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_frontend::FunctionBuilder;
 use cranelift_wasm::{
@@ -58,7 +58,7 @@ impl Default for CompilerContext {
     fn default() -> Self {
         Self {
             func_translator: FuncTranslator::new(),
-            codegen_context: Context::new(ChaosEngine::noop()),
+            codegen_context: Context::new(ControlPlane::noop()),
             incremental_cache_ctx: None,
             validator_allocations: Default::default(),
         }

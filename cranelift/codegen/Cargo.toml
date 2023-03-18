@@ -19,7 +19,7 @@ capstone = { workspace = true, optional = true }
 cranelift-codegen-shared = { path = "./shared", version = "0.95.0" }
 cranelift-entity = { workspace = true }
 cranelift-bforest = { workspace = true }
-cranelift-chaos = { workspace = true }
+cranelift-control = { workspace = true }
 hashbrown = { workspace = true, features = ["raw"] }
 target-lexicon = { workspace = true }
 log = { workspace = true }
@@ -114,7 +114,7 @@ isle-errors = ["cranelift-isle/fancy-errors"]
 # inspection, rather than inside of target/.
 isle-in-source-tree = []
 
-chaos = ["cranelift-chaos/chaos"]
+chaos = ["cranelift-control/chaos"]
 
 [badges]
 maintenance = { status = "experimental" }

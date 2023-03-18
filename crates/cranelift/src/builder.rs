@@ -4,11 +4,11 @@
 //! well as providing a function to return the default configuration to build.
 
 use anyhow::Result;
-use cranelift_chaos::ChaosEngine;
 use cranelift_codegen::{
     isa::{self, OwnedTargetIsa},
     CodegenResult,
 };
+use cranelift_control::ControlPlane;
 use std::fmt;
 use std::sync::Arc;
 use wasmtime_cranelift_shared::isa_builder::IsaBuilder;
@@ -36,7 +36,7 @@ pub struct LinkOptions {
 pub fn builder() -> Box<dyn CompilerBuilder> {
     Box::new(Builder {
         inner: IsaBuilder::new(|triple| {
-            isa::lookup(triple, ChaosEngine::noop()).map_err(|e| e.into())
+            isa::lookup(triple, ControlPlane::noop()).map_err(|e| e.into())
         }),
         linkopts: LinkOptions::default(),
         cache_store: None,

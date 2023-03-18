@@ -12,7 +12,7 @@ edition.workspace = true
 
 [dependencies]
 cranelift-codegen = { workspace = true }
-cranelift-chaos = { workspace = true }
+cranelift-control = { workspace = true }
 target-lexicon = { workspace = true }
 
 [target.'cfg(any(target_arch = "s390x", target_arch = "riscv64"))'.dependencies]
@@ -25,3 +25,4 @@ core = ["cranelift-codegen/core"]
 
 [badges]
 maintenance = { status = "experimental" }
+

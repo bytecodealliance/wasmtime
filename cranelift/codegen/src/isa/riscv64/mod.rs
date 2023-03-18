@@ -15,7 +15,7 @@ use crate::result::CodegenResult;
 use crate::settings as shared_settings;
 use alloc::{boxed::Box, vec::Vec};
 use core::fmt;
-use cranelift_chaos::ChaosEngine;
+use cranelift_control::ControlPlane;
 use regalloc2::MachineEnv;
 use target_lexicon::{Architecture, Triple};
 mod abi;
@@ -36,8 +36,8 @@ pub struct Riscv64Backend {
     isa_flags: riscv_settings::Flags,
     mach_env: MachineEnv,
     /// Only used during fuzz-testing. Otherwise, this is a zero-sized struct
-    /// and compiled away. See [cranelift_chaos].
-    chaos_eng: ChaosEngine,
+    /// and compiled away. See [cranelift_control].
+    control_plane: ControlPlane,
 }
 
 impl Riscv64Backend {
@@ -46,7 +46,7 @@ impl Riscv64Backend {
         triple: Triple,
         flags: shared_settings::Flags,
         isa_flags: riscv_settings::Flags,
-        chaos_eng: ChaosEngine,
+        control_plane: ControlPlane,
     ) -> Riscv64Backend {
         let mach_env = crate_reg_eviroment(&flags);
         Riscv64Backend {
@@ -54,7 +54,7 @@ impl Riscv64Backend {
             flags,
             isa_flags,
             mach_env,
-            chaos_eng,
+            control_plane,
         }
     }
 
@@ -75,7 +75,7 @@ impl Riscv64Backend {
             abi,
             emit_info,
             sigs,
-            self.chaos_eng.clone(),
+            self.control_plane.clone(),
         )
     }
 }
@@ -217,19 +217,19 @@ impl fmt::Display for Riscv64Backend {
 }
 
 /// Create a new `isa::Builder`.
-pub fn isa_builder(triple: Triple, chaos_eng: ChaosEngine) -> IsaBuilder {
+pub fn isa_builder(triple: Triple, control_plane: ControlPlane) -> IsaBuilder {
     match triple.architecture {
         Architecture::Riscv64(..) => {}
         _ => unreachable!(),
     }
     IsaBuilder {
         triple,
-        chaos_eng,
+        control_plane,
         setup: riscv_settings::builder(),
-        constructor: |triple, shared_flags, builder, chaos_eng| {
+        constructor: |triple, shared_flags, builder, control_plane| {
             let isa_flags = riscv_settings::Flags::new(&shared_flags, builder);
             let backend =
-                Riscv64Backend::new_with_flags(triple, shared_flags, isa_flags, chaos_eng);
+                Riscv64Backend::new_with_flags(triple, shared_flags, isa_flags, control_plane);
             Ok(backend.wrapped())
         },
     }

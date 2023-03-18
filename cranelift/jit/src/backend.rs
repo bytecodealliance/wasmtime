@@ -1,11 +1,11 @@
 //! Defines `JITModule`.
 
 use crate::{compiled_blob::CompiledBlob, memory::BranchProtection, memory::Memory};
-use cranelift_chaos::ChaosEngine;
 use cranelift_codegen::isa::{OwnedTargetIsa, TargetIsa};
 use cranelift_codegen::settings::Configurable;
 use cranelift_codegen::{self, ir, settings, MachReloc};
 use cranelift_codegen::{binemit::Reloc, CodegenError};
+use cranelift_control::ControlPlane;
 use cranelift_entity::SecondaryMap;
 use cranelift_module::{
     DataContext, DataDescription, DataId, FuncId, Init, Linkage, Module, ModuleCompiledFunction,
@@ -921,7 +921,7 @@ impl Module for JITModule {
     }
 
     fn make_context(&self) -> cranelift_codegen::Context {
-        let mut ctx = cranelift_codegen::Context::new(ChaosEngine::noop());
+        let mut ctx = cranelift_codegen::Context::new(ControlPlane::noop());
         ctx.func.signature.call_conv = self.isa().default_call_conv();
         ctx
     }

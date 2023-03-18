@@ -5,7 +5,7 @@ mod env;
 
 use anyhow::{bail, ensure, Context, Result};
 use config::TestConfig;
-use cranelift_chaos::ChaosEngine;
+use cranelift_control::ControlPlane;
 use env::ModuleEnv;
 use similar::TextDiff;
 use std::{fmt::Write, path::Path};
@@ -57,7 +57,7 @@ pub fn run(path: &Path, wat: &str) -> Result<()> {
     for (_index, func) in env.inner.info.function_bodies.iter() {
         if config.compile {
             let mut ctx =
-                cranelift_codegen::Context::for_function(func.clone(), ChaosEngine::noop());
+                cranelift_codegen::Context::for_function(func.clone(), ControlPlane::noop());
             ctx.set_disasm(true);
             let code = ctx
                 .compile(isa)
@@ -66,7 +66,7 @@ pub fn run(path: &Path, wat: &str) -> Result<()> {
             writeln!(&mut actual, "{}", code.vcode.as_ref().unwrap()).unwrap();
         } else if config.optimize {
             let mut ctx =
-                cranelift_codegen::Context::for_function(func.clone(), ChaosEngine::noop());
+                cranelift_codegen::Context::for_function(func.clone(), ControlPlane::noop());
             ctx.optimize(isa)
                 .map_err(|e| crate::pretty_anyhow_error(&ctx.func, e))?;
             writeln!(&mut actual, "{}", ctx.func.display()).unwrap();

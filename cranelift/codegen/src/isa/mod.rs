@@ -57,7 +57,7 @@ use crate::CodegenResult;
 use alloc::{boxed::Box, sync::Arc, vec::Vec};
 use core::fmt;
 use core::fmt::{Debug, Formatter};
-use cranelift_chaos::ChaosEngine;
+use cranelift_control::ControlPlane;
 use target_lexicon::{triple, Architecture, PointerWidth, Triple};
 
 // This module is made public here for benchmarking purposes. No guarantees are
@@ -81,10 +81,10 @@ mod call_conv;
 /// Returns a builder that can create a corresponding `TargetIsa`
 /// or `Err(LookupError::SupportDisabled)` if not enabled.
 macro_rules! isa_builder {
-    ($name: ident, $cfg_terms: tt, $triple: ident, $chaos_eng: ident) => {{
+    ($name: ident, $cfg_terms: tt, $triple: ident, $control_plane: ident) => {{
         #[cfg $cfg_terms]
         {
-            Ok($name::isa_builder($triple, $chaos_eng))
+            Ok($name::isa_builder($triple, $control_plane))
         }
         #[cfg(not $cfg_terms)]
         {
@@ -95,17 +95,19 @@ macro_rules! isa_builder {
 
 /// Look for an ISA for the given `triple`.
 /// Return a builder that can create a corresponding `TargetIsa`.
-pub fn lookup(triple: Triple, chaos_eng: ChaosEngine) -> Result<Builder, LookupError> {
+pub fn lookup(triple: Triple, control_plane: ControlPlane) -> Result<Builder, LookupError> {
     match triple.architecture {
         Architecture::X86_64 => {
-            isa_builder!(x64, (feature = "x86"), triple, chaos_eng)
+            isa_builder!(x64, (feature = "x86"), triple, control_plane)
         }
         Architecture::Aarch64 { .. } => {
-            isa_builder!(aarch64, (feature = "arm64"), triple, chaos_eng)
+            isa_builder!(aarch64, (feature = "arm64"), triple, control_plane)
         }
-        Architecture::S390x { .. } => isa_builder!(s390x, (feature = "s390x"), triple, chaos_eng),
+        Architecture::S390x { .. } => {
+            isa_builder!(s390x, (feature = "s390x"), triple, control_plane)
+        }
         Architecture::Riscv64 { .. } => {
-            isa_builder!(riscv64, (feature = "riscv64"), triple, chaos_eng)
+            isa_builder!(riscv64, (feature = "riscv64"), triple, control_plane)
         }
         _ => Err(LookupError::Unsupported),
     }
@@ -118,9 +120,9 @@ pub const ALL_ARCHITECTURES: &[&str] = &["x86_64", "aarch64", "s390x", "riscv64"
 
 /// Look for a supported ISA with the given `name`.
 /// Return a builder that can create a corresponding `TargetIsa`.
-pub fn lookup_by_name(name: &str, chaos_eng: ChaosEngine) -> Result<Builder, LookupError> {
+pub fn lookup_by_name(name: &str, control_plane: ControlPlane) -> Result<Builder, LookupError> {
     use alloc::str::FromStr;
-    lookup(triple!(name), chaos_eng)
+    lookup(triple!(name), control_plane)
 }
 
 /// Describes reason for target lookup failure
@@ -160,10 +162,10 @@ pub type Builder = IsaBuilder<CodegenResult<OwnedTargetIsa>>;
 pub struct IsaBuilder<T> {
     triple: Triple,
     /// Only used during fuzz-testing. Otherwise, this is a zero-sized struct
-    /// and compiled away. See [cranelift_chaos].
-    chaos_eng: ChaosEngine,
+    /// and compiled away. See [cranelift_control].
+    control_plane: ControlPlane,
     setup: settings::Builder,
-    constructor: fn(Triple, settings::Flags, &settings::Builder, ChaosEngine) -> T,
+    constructor: fn(Triple, settings::Flags, &settings::Builder, ControlPlane) -> T,
 }
 
 impl<T> IsaBuilder<T> {
@@ -172,13 +174,13 @@ impl<T> IsaBuilder<T> {
     /// function to generate the ISA from its components.
     pub fn new(
         triple: Triple,
-        chaos_eng: ChaosEngine,
+        control_plane: ControlPlane,
         setup: settings::Builder,
-        constructor: fn(Triple, settings::Flags, &settings::Builder, ChaosEngine) -> T,
+        constructor: fn(Triple, settings::Flags, &settings::Builder, ControlPlane) -> T,
     ) -> Self {
         IsaBuilder {
             triple,
-            chaos_eng,
+            control_plane,
             setup,
             constructor,
         }
@@ -205,7 +207,7 @@ impl<T> IsaBuilder<T> {
             self.triple.clone(),
             shared_flags,
             &self.setup,
-            self.chaos_eng.clone(),
+            self.control_plane.clone(),
         )
     }
 }

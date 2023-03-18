@@ -8,13 +8,13 @@
 use super::HashMap;
 use crate::data_context::DataContext;
 use core::fmt::Display;
-use cranelift_chaos::ChaosEngine;
 use cranelift_codegen::binemit::{CodeOffset, Reloc};
 use cranelift_codegen::entity::{entity_impl, PrimaryMap};
 use cranelift_codegen::ir::Function;
 use cranelift_codegen::settings::SetError;
 use cranelift_codegen::{binemit, MachReloc};
 use cranelift_codegen::{ir, isa, CodegenError, CompileError, Context};
+use cranelift_control::ControlPlane;
 use std::borrow::ToOwned;
 use std::string::String;
 
@@ -551,7 +551,7 @@ pub trait Module {
     /// This ensures that the `Context` is initialized with the default calling
     /// convention for the `TargetIsa`.
     fn make_context(&self) -> Context {
-        let mut ctx = Context::new(ChaosEngine::noop());
+        let mut ctx = Context::new(ControlPlane::noop());
         ctx.func.signature.call_conv = self.isa().default_call_conv();
         ctx
     }

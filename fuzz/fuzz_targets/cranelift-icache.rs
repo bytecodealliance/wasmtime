@@ -1,6 +1,5 @@
 #![no_main]
 
-use cranelift_chaos::ChaosEngine;
 use cranelift_codegen::{
     cursor::{Cursor, FuncCursor},
     incremental_cache as icache,
@@ -10,6 +9,7 @@ use cranelift_codegen::{
     },
     isa, Context,
 };
+use cranelift_control::ControlPlane;
 use libfuzzer_sys::{
     arbitrary::{self, Arbitrary, Unstructured},
     fuzz_target,
@@ -41,7 +41,7 @@ pub struct FunctionWithIsa {
     /// Function under test
     pub func: Function,
 
-    chaos_eng: ChaosEngine,
+    control_plane: ControlPlane,
 }
 
 impl FunctionWithIsa {
@@ -52,7 +52,7 @@ impl FunctionWithIsa {
         // configurations.
         let target = u.choose(isa::ALL_ARCHITECTURES)?;
         let mut gen = FuzzGen::new(u)?;
-        let mut builder = isa::lookup_by_name(target, gen.chaos_eng.clone())
+        let mut builder = isa::lookup_by_name(target, gen.control_plane.clone())
             .map_err(|_| arbitrary::Error::IncorrectFormat)?;
         let architecture = builder.triple().architecture;
 
@@ -90,7 +90,7 @@ impl FunctionWithIsa {
         Ok(FunctionWithIsa {
             isa,
             func,
-            chaos_eng: gen.chaos_eng,
+            control_plane: gen.control_plane,
         })
     }
 }
@@ -113,12 +113,12 @@ fuzz_target!(|func: FunctionWithIsa| {
     let FunctionWithIsa {
         mut func,
         isa,
-        chaos_eng,
+        control_plane,
     } = func;
 
     let cache_key_hash = icache::compute_cache_key(&*isa, &func);
 
-    let mut context = Context::for_function(func.clone(), chaos_eng.clone());
+    let mut context = Context::for_function(func.clone(), control_plane.clone());
     let prev_stencil = match context.compile_stencil(&*isa) {
         Ok(stencil) => stencil,
         Err(_) => return,
@@ -208,7 +208,7 @@ fuzz_target!(|func: FunctionWithIsa| {
         assert!(cache_key_hash != new_cache_key_hash);
     }
 
-    context = Context::for_function(func.clone(), chaos_eng);
+    context = Context::for_function(func.clone(), control_plane);
 
     let after_mutation_result = match context.compile(&*isa) {
         Ok(info) => info,

@@ -15,7 +15,7 @@ use crate::result::CodegenResult;
 use crate::settings as shared_settings;
 use alloc::{boxed::Box, vec::Vec};
 use core::fmt;
-use cranelift_chaos::ChaosEngine;
+use cranelift_control::ControlPlane;
 use regalloc2::MachineEnv;
 use target_lexicon::{Aarch64Architecture, Architecture, OperatingSystem, Triple};
 
@@ -36,8 +36,8 @@ pub struct AArch64Backend {
     isa_flags: aarch64_settings::Flags,
     machine_env: MachineEnv,
     /// Only used during fuzz-testing. Otherwise, this is a zero-sized struct
-    /// and compiled away. See [cranelift_chaos].
-    chaos_eng: ChaosEngine,
+    /// and compiled away. See [cranelift_control].
+    control_plane: ControlPlane,
 }
 
 impl AArch64Backend {
@@ -46,7 +46,7 @@ impl AArch64Backend {
         triple: Triple,
         flags: shared_settings::Flags,
         isa_flags: aarch64_settings::Flags,
-        chaos_eng: ChaosEngine,
+        control_plane: ControlPlane,
     ) -> AArch64Backend {
         let machine_env = create_reg_env(&flags);
         AArch64Backend {
@@ -54,7 +54,7 @@ impl AArch64Backend {
             flags,
             isa_flags,
             machine_env,
-            chaos_eng,
+            control_plane,
         }
     }
 
@@ -75,7 +75,7 @@ impl AArch64Backend {
             abi,
             emit_info,
             sigs,
-            self.chaos_eng.clone(),
+            self.control_plane.clone(),
         )
     }
 }
@@ -245,16 +245,16 @@ impl fmt::Display for AArch64Backend {
 }
 
 /// Create a new `isa::Builder`.
-pub fn isa_builder(triple: Triple, chaos_eng: ChaosEngine) -> IsaBuilder {
+pub fn isa_builder(triple: Triple, control_plane: ControlPlane) -> IsaBuilder {
     assert!(triple.architecture == Architecture::Aarch64(Aarch64Architecture::Aarch64));
     IsaBuilder {
         triple,
-        chaos_eng,
+        control_plane,
         setup: aarch64_settings::builder(),
-        constructor: |triple, shared_flags, builder, chaos_eng| {
+        constructor: |triple, shared_flags, builder, control_plane| {
             let isa_flags = aarch64_settings::Flags::new(&shared_flags, builder);
             let backend =
-                AArch64Backend::new_with_flags(triple, shared_flags, isa_flags, chaos_eng);
+                AArch64Backend::new_with_flags(triple, shared_flags, isa_flags, control_plane);
             Ok(backend.wrapped())
         },
     }

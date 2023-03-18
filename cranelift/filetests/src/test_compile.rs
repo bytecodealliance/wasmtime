@@ -4,8 +4,8 @@
 
 use crate::subtest::{check_precise_output, run_filecheck, Context, SubTest};
 use anyhow::Result;
-use cranelift_chaos::ChaosEngine;
 use cranelift_codegen::ir;
+use cranelift_control::ControlPlane;
 use cranelift_reader::{TestCommand, TestOption};
 use log::info;
 use std::borrow::Cow;
@@ -49,7 +49,7 @@ impl SubTest for TestCompile {
         let isa = context.isa.expect("compile needs an ISA");
         let params = func.params.clone();
         let mut comp_ctx =
-            cranelift_codegen::Context::for_function(func.into_owned(), ChaosEngine::noop());
+            cranelift_codegen::Context::for_function(func.into_owned(), ControlPlane::noop());
 
         // With `MachBackend`s, we need to explicitly request dissassembly results.
         comp_ctx.set_disasm(true);

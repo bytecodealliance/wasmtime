@@ -5,7 +5,7 @@ use std::{
 
 use arbitrary::{Arbitrary, Unstructured};
 
-struct ChaosEngineData {
+struct ControlPlaneData {
     /// # Safety
     ///
     /// This field must never be moved from, as it is referenced by
@@ -15,7 +15,7 @@ struct ChaosEngineData {
     /// https://morestina.net/blog/1868/self-referential-types-for-fun-and-profit)
     #[allow(dead_code)]
     data: Vec<u8>,
-    /// We use internal mutability such that a `ChaosEngine` can be passed
+    /// We use internal mutability such that a `ControlPlane` can be passed
     /// through the call stack without having to be declared as mutable.
     /// Besides the convenience, the mutation of the internal unstructured
     /// data should be opaque to users anyway.
@@ -26,16 +26,16 @@ struct ChaosEngineData {
     unstructured: Mutex<Unstructured<'static>>,
 }
 
-impl Debug for ChaosEngineData {
+impl Debug for ControlPlaneData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let data_len = self.data.len();
         let remaining_len = self
             .unstructured
             .lock()
-            .expect("poisoned ChaosEngineData mutex")
+            .expect("poisoned ControlPlaneData mutex")
             .len();
         let consumed_len = data_len - remaining_len;
-        f.debug_struct("ChaosEngineData")
+        f.debug_struct("ControlPlaneData")
             .field("data", &self.data)
             .field(
                 "unstructured",
@@ -51,20 +51,20 @@ impl Debug for ChaosEngineData {
 /// The control plane of chaos mode.
 /// Please see the [crate-level documentation](crate).
 ///
-/// **Clone liberally!** The chaos engine is reference counted.
+/// **Clone liberally!** The control plane is reference counted.
 #[derive(Debug, Clone)]
-pub struct ChaosEngine {
-    data: Arc<ChaosEngineData>,
+pub struct ControlPlane {
+    data: Arc<ControlPlaneData>,
     is_todo: bool,
 }
 
-impl ChaosEngine {
+impl ControlPlane {
     fn new(data: Vec<u8>, is_todo: bool) -> Self {
         let unstructured = Unstructured::new(&data);
         // safety: this is ok because we never move out of the vector
         let unstructured = Mutex::new(unsafe { std::mem::transmute(unstructured) });
         Self {
-            data: Arc::new(ChaosEngineData { data, unstructured }),
+            data: Arc::new(ControlPlaneData { data, unstructured }),
             is_todo,
         }
     }
@@ -76,27 +76,27 @@ impl ChaosEngine {
     ///
     /// This should not be used on code paths that may execute while the
     /// feature `chaos` is enabled. That would break the assumption that
-    /// [ChaosEngine] is a singleton, responsible for centrally managing
+    /// [ControlPlane] is a singleton, responsible for centrally managing
     /// the pseudo-randomness injected at runtimme.
     ///
-    /// Use [todo](ChaosEngine::todo) instead, for stubbing out code paths
+    /// Use [todo](ControlPlane::todo) instead, for stubbing out code paths
     /// you don't expect to be reached (yet) during chaos mode fuzzing.
     ///
-    /// # Pancis
+    /// # Panics
     ///
     /// Panics if it is called while the feature `chaos` is enabled.
     #[track_caller]
     pub fn noop() -> Self {
         panic!(
-            "attempted to create a NOOP chaos engine \
+            "attempted to create a NOOP control plane \
             (while chaos mode was enabled)"
         );
     }
 
-    /// This is the same as [noop](ChaosEngine::noop) when the the feature
+    /// This is the same as [noop](ControlPlane::noop) when the the feature
     /// `chaos` is *disabled*. When `chaos` is enabled, it returns a
-    /// chaos engine that returns [Error::Todo] when
-    /// [get_arbitrary](ChaosEngine::get_arbitrary) is called.
+    /// control plane that returns [Error::Todo] when
+    /// [get_arbitrary](ControlPlane::get_arbitrary) is called.
     ///
     /// This may be used during development, in places which are (supposed
     /// to be) unreachable during fuzzing. Use of this function should be
@@ -107,7 +107,7 @@ impl ChaosEngine {
     }
 }
 
-impl<'a> Arbitrary<'a> for ChaosEngine {
+impl<'a> Arbitrary<'a> for ControlPlane {
     fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
         Ok(Self::new(u.arbitrary()?, false))
     }
@@ -116,7 +116,7 @@ impl<'a> Arbitrary<'a> for ChaosEngine {
     }
 }
 
-/// An enumeration of chaos engine API errors, mostly propagating
+/// An enumeration of control plane API errors, mostly propagating
 /// [arbitrary::Error].
 #[derive(Debug, Clone, Copy)]
 pub enum Error {
@@ -127,7 +127,7 @@ pub enum Error {
     NotEnoughData,
     /// The input bytes were not of the right format.
     IncorrectFormat,
-    /// The chaos engine API was accessed on a [ChaosEngine::todo].
+    /// The control plane API was accessed on a [ControlPlane::todo].
     Todo,
 }
 
@@ -140,23 +140,23 @@ impl From<arbitrary::Error> for Error {
             arbitrary::Error::EmptyChoose => Error::EmptyChoose,
             arbitrary::Error::NotEnoughData => Error::NotEnoughData,
             arbitrary::Error::IncorrectFormat => Error::IncorrectFormat,
-            _ => unreachable!(),
+            _ => unreachable!("must propagate all error variants"),
         }
     }
 }
 
-impl ChaosEngine {
-    /// Request an arbitrary value from the chaos engine.
+impl ControlPlane {
+    /// Request an arbitrary value from the control plane.
     ///
     /// # Errors
     ///
     /// - Errors from an underlying call to [arbitrary] will be
     ///   propagated as-is.
-    /// - Calling this function on a chaos engine received from a call to
+    /// - Calling this function on a control plane received from a call to
     ///   [todo] will return an [Error::Todo].
     ///
     /// [arbitrary]: arbitrary::Arbitrary::arbitrary
-    /// [todo]: ChaosEngine::todo
+    /// [todo]: ControlPlane::todo
     pub fn get_arbitrary<T: Arbitrary<'static>>(&self) -> Result<T, Error> {
         if self.is_todo {
             return Err(Error::Todo);
@@ -164,7 +164,7 @@ impl ChaosEngine {
         self.data
             .unstructured
             .lock()
-            .expect("poisoned ChaosEngineData mutex")
+            .expect("poisoned ControlPlaneData mutex")
             .arbitrary()
             .map_err(Error::from)
     }
