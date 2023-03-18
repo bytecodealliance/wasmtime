@@ -2536,15 +2536,23 @@ pub(crate) fn emit(
                 OperandSize::Size64 => true,
                 _ => false,
             };
-            VexInstruction::new()
+            let mut vex = VexInstruction::new()
                 .length(VexVectorLength::V128)
                 .w(w)
                 .prefix(prefix)
                 .map(map)
-                .opcode(opcode)
-                .rm(src.to_real_reg().unwrap().hw_enc())
-                .reg(dst.to_real_reg().unwrap().hw_enc())
-                .encode(sink);
+                .opcode(opcode);
+            vex = match op {
+                // The `vmovq/vmovd` reverse the order of the destination/source
+                // relative ot other opcodes using this shape of instruction.
+                AvxOpcode::Vmovd | AvxOpcode::Vmovq => vex
+                    .rm(dst.to_real_reg().unwrap().hw_enc())
+                    .reg(src.to_real_reg().unwrap().hw_enc()),
+                _ => vex
+                    .rm(src.to_real_reg().unwrap().hw_enc())
+                    .reg(dst.to_real_reg().unwrap().hw_enc()),
+            };
+            vex.encode(sink);
         }
 
         Inst::GprToXmmVex {
