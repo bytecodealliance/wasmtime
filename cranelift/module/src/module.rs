@@ -12,7 +12,7 @@ use cranelift_codegen::binemit::{CodeOffset, Reloc};
 use cranelift_codegen::entity::{entity_impl, PrimaryMap};
 use cranelift_codegen::ir::Function;
 use cranelift_codegen::settings::SetError;
-use cranelift_codegen::{binemit, MachReloc};
+use cranelift_codegen::MachReloc;
 use cranelift_codegen::{ir, isa, CodegenError, CompileError, Context};
 use cranelift_control::ControlPlane;
 use std::borrow::ToOwned;
@@ -520,12 +520,6 @@ impl ModuleDeclarations {
     }
 }
 
-/// Information about the compiled function.
-pub struct ModuleCompiledFunction {
-    /// The size of the compiled function.
-    pub size: binemit::CodeOffset,
-}
-
 /// A `Module` is a utility for collecting functions and data objects, and linking them together.
 pub trait Module {
     /// Return the `TargetIsa` to compile for.
@@ -660,11 +654,7 @@ pub trait Module {
     /// Note: After calling this function the given `Context` will contain the compiled function.
     ///
     /// [`define_function_with_control_plane`]: Self::define_function_with_control_plane
-    fn define_function(
-        &mut self,
-        func: FuncId,
-        ctx: &mut Context,
-    ) -> ModuleResult<ModuleCompiledFunction> {
+    fn define_function(&mut self, func: FuncId, ctx: &mut Context) -> ModuleResult<()> {
         self.define_function_with_control_plane(func, ctx, &mut ControlPlane::default())
     }
 
@@ -678,7 +668,7 @@ pub trait Module {
         func: FuncId,
         ctx: &mut Context,
         ctrl_plane: &mut ControlPlane,
-    ) -> ModuleResult<ModuleCompiledFunction>;
+    ) -> ModuleResult<()>;
 
     /// Define a function, taking the function body from the given `bytes`.
     ///
@@ -694,7 +684,7 @@ pub trait Module {
         alignment: u64,
         bytes: &[u8],
         relocs: &[MachReloc],
-    ) -> ModuleResult<ModuleCompiledFunction>;
+    ) -> ModuleResult<()>;
 
     /// Define a data object, producing the data contents from the given `DataContext`.
     fn define_data(&mut self, data_id: DataId, data: &DataDescription) -> ModuleResult<()>;
@@ -776,11 +766,7 @@ impl<M: Module> Module for &mut M {
         (**self).declare_data_in_data(data_id, data)
     }
 
-    fn define_function(
-        &mut self,
-        func: FuncId,
-        ctx: &mut Context,
-    ) -> ModuleResult<ModuleCompiledFunction> {
+    fn define_function(&mut self, func: FuncId, ctx: &mut Context) -> ModuleResult<()> {
         (**self).define_function(func, ctx)
     }
 
@@ -789,7 +775,7 @@ impl<M: Module> Module for &mut M {
         func: FuncId,
         ctx: &mut Context,
         ctrl_plane: &mut ControlPlane,
-    ) -> ModuleResult<ModuleCompiledFunction> {
+    ) -> ModuleResult<()> {
         (**self).define_function_with_control_plane(func, ctx, ctrl_plane)
     }
 
@@ -800,7 +786,7 @@ impl<M: Module> Module for &mut M {
         alignment: u64,
         bytes: &[u8],
         relocs: &[MachReloc],
-    ) -> ModuleResult<ModuleCompiledFunction> {
+    ) -> ModuleResult<()> {
         (**self).define_function_bytes(func_id, func, alignment, bytes, relocs)
     }
 

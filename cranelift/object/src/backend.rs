@@ -1,17 +1,14 @@
 //! Defines `ObjectModule`.
 
 use anyhow::anyhow;
+use cranelift_codegen::binemit::{Addend, CodeOffset, Reloc};
 use cranelift_codegen::entity::SecondaryMap;
 use cranelift_codegen::isa::{OwnedTargetIsa, TargetIsa};
 use cranelift_codegen::{self, ir, MachReloc};
-use cranelift_codegen::{
-    binemit::{Addend, CodeOffset, Reloc},
-    CodegenError,
-};
 use cranelift_control::ControlPlane;
 use cranelift_module::{
-    DataDescription, DataId, FuncId, Init, Linkage, Module, ModuleCompiledFunction,
-    ModuleDeclarations, ModuleError, ModuleExtName, ModuleReloc, ModuleResult,
+    DataDescription, DataId, FuncId, Init, Linkage, Module, ModuleDeclarations, ModuleError,
+    ModuleExtName, ModuleReloc, ModuleResult,
 };
 use log::info;
 use object::write::{
@@ -21,7 +18,6 @@ use object::{
     RelocationEncoding, RelocationKind, SectionKind, SymbolFlags, SymbolKind, SymbolScope,
 };
 use std::collections::HashMap;
-use std::convert::TryInto;
 use std::mem;
 use target_lexicon::PointerWidth;
 
@@ -321,7 +317,7 @@ impl Module for ObjectModule {
         func_id: FuncId,
         ctx: &mut cranelift_codegen::Context,
         ctrl_plane: &mut ControlPlane,
-    ) -> ModuleResult<ModuleCompiledFunction> {
+    ) -> ModuleResult<()> {
         info!("defining function {}: {}", func_id, ctx.func.display());
         let mut code: Vec<u8> = Vec::new();
 
@@ -344,13 +340,8 @@ impl Module for ObjectModule {
         alignment: u64,
         bytes: &[u8],
         relocs: &[MachReloc],
-    ) -> ModuleResult<ModuleCompiledFunction> {
+    ) -> ModuleResult<()> {
         info!("defining function {} with bytes", func_id);
-        let total_size: u32 = match bytes.len().try_into() {
-            Ok(total_size) => total_size,
-            _ => Err(CodegenError::CodeTooLarge)?,
-        };
-
         let decl = self.declarations.get_function_decl(func_id);
         if !decl.linkage.is_definable() {
             return Err(ModuleError::InvalidImportDefinition(decl.name.clone()));
@@ -391,7 +382,7 @@ impl Module for ObjectModule {
             });
         }
 
-        Ok(ModuleCompiledFunction { size: total_size })
+        Ok(())
     }
 
     fn define_data(&mut self, data_id: DataId, data: &DataDescription) -> ModuleResult<()> {
