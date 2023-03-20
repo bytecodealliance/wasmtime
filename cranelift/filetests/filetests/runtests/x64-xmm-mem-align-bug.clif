@@ -1,6 +1,8 @@
 test run
 set enable_llvm_abi_extensions
+set enable_simd
 target x86_64
+target x86_64 has_avx
 
 ; Regression test for unaligned loads to xmm registers when relying on automatic
 ; conversion to XmmMem arguments in ISLE.
