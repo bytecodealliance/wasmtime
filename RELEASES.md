@@ -2,7 +2,7 @@
 
 ## 7.0.0
 
-Unreleased.
+Released 2023-03-20.
 
 ### Added
 
