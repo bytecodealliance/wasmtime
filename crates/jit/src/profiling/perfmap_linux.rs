@@ -1,6 +1,6 @@
 use crate::{CompiledModule, ProfilingAgent};
 use anyhow::Result;
-use std::io::{BufWriter, Write as _};
+use std::io::{self, BufWriter, Write};
 use std::process;
 use std::{fs::File, sync::Mutex};
 use wasmtime_environ::EntityRef as _;
@@ -22,11 +22,17 @@ impl PerfMapAgent {
         Ok(PerfMapAgent)
     }
 
-    fn make_line(name: &str, addr: *const u8, len: usize) -> String {
+    fn make_line(
+        writer: &mut dyn Write,
+        name: &str,
+        addr: *const u8,
+        len: usize,
+    ) -> io::Result<()> {
         // Format is documented here: https://github.com/torvalds/linux/blob/master/tools/perf/Documentation/jit-interface.txt
         // Try our best to sanitize the name, since wasm allows for any utf8 string in there.
         let sanitized_name = name.replace('\n', "_").replace('\r', "_");
-        format!("{:x} {:x} {}\n", addr as usize, len, sanitized_name)
+        write!(writer, "{:x} {:x} {}\n", addr as usize, len, sanitized_name)?;
+        Ok(())
     }
 }
 
@@ -41,17 +47,25 @@ impl ProfilingAgent for PerfMapAgent {
             let addr = func.as_ptr();
             let len = func.len();
             let name = super::debug_name(module, idx);
-            let _ = file.write_all(Self::make_line(&name, addr, len).as_bytes());
+            if let Err(err) = Self::make_line(&mut file, &name, addr, len) {
+                eprintln!("Error when writing function info to the perf map file: {err}");
+                return;
+            }
         }
 
         // Note: these are the trampolines into exported functions.
         for (idx, func, len) in module.trampolines() {
             let (addr, len) = (func as usize as *const u8, len);
             let name = format!("wasm::trampoline[{}]", idx.index());
-            let _ = file.write_all(Self::make_line(&name, addr, len).as_bytes());
+            if let Err(err) = Self::make_line(&mut file, &name, addr, len) {
+                eprintln!("Error when writing export trampoline info to the perf map file: {err}");
+                return;
+            }
         }
 
-        let _ = file.flush();
+        if let Err(err) = file.flush() {
+            eprintln!("Error when flushing the perf map file buffer: {err}");
+        }
     }
 
     fn load_single_trampoline(
@@ -64,6 +78,8 @@ impl ProfilingAgent for PerfMapAgent {
     ) {
         let mut file = PERFMAP_FILE.lock().unwrap();
         let file = file.as_mut().unwrap();
-        let _ = file.write_all(Self::make_line(name, addr, size).as_bytes());
+        if let Err(err) = Self::make_line(file, name, addr, size) {
+            eprintln!("Error when writing import trampoline info to the perf map file: {err}");
+        }
     }
 }
