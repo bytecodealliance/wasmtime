@@ -12,6 +12,16 @@ cfg_if::cfg_if! {
 }
 
 cfg_if::cfg_if! {
+    if #[cfg(target_os = "linux")] {
+        #[path = "profiling/perfmap_linux.rs"]
+        mod perfmap;
+    } else {
+        #[path = "profiling/perfmap_disabled.rs"]
+        mod perfmap;
+    }
+}
+
+cfg_if::cfg_if! {
     // Note: VTune support is disabled on windows mingw because the ittapi crate doesn't compile
     // there; see also https://github.com/bytecodealliance/wasmtime/pull/4003 for rationale.
     if #[cfg(all(feature = "vtune", target_arch = "x86_64", not(all(target_os = "windows", target_env = "gnu"))))] {
@@ -24,6 +34,7 @@ cfg_if::cfg_if! {
 }
 
 pub use jitdump::JitDumpAgent;
+pub use perfmap::PerfMapAgent;
 pub use vtune::VTuneAgent;
 
 /// Common interface for profiling tools.

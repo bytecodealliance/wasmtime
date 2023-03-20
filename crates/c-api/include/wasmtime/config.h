@@ -80,6 +80,10 @@ enum wasmtime_profiling_strategy_enum { // ProfilingStrategy
   ///
   /// Note that this isn't always enabled at build time.
   WASMTIME_PROFILING_STRATEGY_VTUNE,
+  /// Linux's simple "perfmap" support in `perf` is enabled and when Wasmtime is
+  /// run under `perf` necessary calls will be made to profile generated JIT
+  /// code.
+  WASMTIME_PROFILING_STRATEGY_PERFMAP,
 };
 
 #define WASMTIME_CONFIG_PROP(ret, name, ty) \

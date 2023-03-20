@@ -8,7 +8,7 @@ pub struct VTuneAgent {
 }
 
 impl VTuneAgent {
-    /// Intialize a VTuneAgent and write out the header
+    /// Intialize a dummy VTuneAgent that will fail upon instantiation.
     pub fn new() -> Result<Self> {
         if cfg!(feature = "vtune") {
             bail!("VTune is not supported on this platform.");
