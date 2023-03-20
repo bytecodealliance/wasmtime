@@ -336,7 +336,7 @@ jobs:
     # flags to rustc.
     - uses: ./.github/actions/install-rust
       with:
-        toolchain: nightly-2023-03-30
+        toolchain: nightly-2023-03-20
     - run: cargo install cargo-fuzz --vers "^0.11"
     # Install the OCaml packages necessary for fuzz targets that use the
     # `wasm-spec-interpreter`.
