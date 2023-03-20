@@ -1908,9 +1908,7 @@ impl MachInstEmit for Inst {
                 if let Some(s) = state.take_stack_map() {
                     sink.add_stack_map(StackMapExtent::UpcomingBytes(4), s);
                 }
-                // https://github.com/riscv/riscv-isa-manual/issues/850
-                // all zero will cause invalid opcode.
-                sink.put4(0);
+                sink.put_data(Inst::TRAP_OPCODE);
             }
             &Inst::SelectIf {
                 if_spectre_guard: _if_spectre_guard, // _if_spectre_guard not use because it is used to not be removed by optimization pass and some other staff.

@@ -47,7 +47,7 @@
 ;; block0:
 ;;   movq    %rdi, %r10
 ;;   addq    %r10, const(0), %r10
-;;   jnb ; ud2 heap_oob ;
+;;   jb #trap=heap_oob
 ;;   movq    8(%rdx), %r11
 ;;   cmpq    %r11, %r10
 ;;   jnbe    label3; j label1
@@ -71,7 +71,7 @@
 ;; block0:
 ;;   movq    %rdi, %r10
 ;;   addq    %r10, const(0), %r10
-;;   jnb ; ud2 heap_oob ;
+;;   jb #trap=heap_oob
 ;;   movq    8(%rsi), %r11
 ;;   cmpq    %r11, %r10
 ;;   jnbe    label3; j label1

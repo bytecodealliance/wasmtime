@@ -14,7 +14,7 @@ block0(v0: i8, v1: i8):
 ;   movq    %rdi, %rax
 ;   cbw %al, %al
 ;   testb   %sil, %sil
-;   jnz ; ud2 int_divz ;
+;   jz #trap=int_divz
 ;   idiv    %al, %sil, %al ; trap=int_ovf
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -28,12 +28,12 @@ block0(v0: i8, v1: i8):
 ;   movq %rdi, %rax
 ;   cbtw
 ;   testb %sil, %sil
-;   jne 0x14
-;   ud2 ; trap: int_divz
+;   je 0x1a
 ;   idivb %sil ; trap: int_ovf
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
+;   ud2 ; trap: int_divz
 
 function %f2(i16, i16) -> i16 {
 block0(v0: i16, v1: i16):
@@ -48,7 +48,7 @@ block0(v0: i16, v1: i16):
 ;   movq    %rdi, %rax
 ;   cwd %ax, %dx
 ;   testw   %si, %si
-;   jnz ; ud2 int_divz ;
+;   jz #trap=int_divz
 ;   idiv    %ax, %dx, %si, %ax, %dx ; trap=int_ovf
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -62,12 +62,12 @@ block0(v0: i16, v1: i16):
 ;   movq %rdi, %rax
 ;   cwtd
 ;   testw %si, %si
-;   jne 0x14
-;   ud2 ; trap: int_divz
+;   je 0x1a
 ;   idivw %si ; trap: int_ovf
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
+;   ud2 ; trap: int_divz
 
 function %f3(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
@@ -82,7 +82,7 @@ block0(v0: i32, v1: i32):
 ;   movq    %rdi, %rax
 ;   cdq %eax, %edx
 ;   testl   %esi, %esi
-;   jnz ; ud2 int_divz ;
+;   jz #trap=int_divz
 ;   idiv    %eax, %edx, %esi, %eax, %edx ; trap=int_ovf
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -96,12 +96,12 @@ block0(v0: i32, v1: i32):
 ;   movq %rdi, %rax
 ;   cltd
 ;   testl %esi, %esi
-;   jne 0x12
-;   ud2 ; trap: int_divz
+;   je 0x17
 ;   idivl %esi ; trap: int_ovf
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
+;   ud2 ; trap: int_divz
 
 function %f4(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -116,7 +116,7 @@ block0(v0: i64, v1: i64):
 ;   movq    %rdi, %rax
 ;   cqo %rax, %rdx
 ;   testq   %rsi, %rsi
-;   jnz ; ud2 int_divz ;
+;   jz #trap=int_divz
 ;   idiv    %rax, %rdx, %rsi, %rax, %rdx ; trap=int_ovf
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -130,10 +130,10 @@ block0(v0: i64, v1: i64):
 ;   movq %rdi, %rax
 ;   cqto
 ;   testq %rsi, %rsi
-;   jne 0x14
-;   ud2 ; trap: int_divz
+;   je 0x1a
 ;   idivq %rsi ; trap: int_ovf
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
+;   ud2 ; trap: int_divz
 

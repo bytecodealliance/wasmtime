@@ -642,6 +642,10 @@ impl MachInst for Inst {
     type LabelUse = LabelUse;
     type ABIMachineSpec = Riscv64MachineDeps;
 
+    // https://github.com/riscv/riscv-isa-manual/issues/850
+    // all zero will cause invalid opcode.
+    const TRAP_OPCODE: &'static [u8] = &[0; 4];
+
     fn gen_dummy_use(reg: Reg) -> Self {
         Inst::DummyUse { reg }
     }

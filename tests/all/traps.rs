@@ -641,10 +641,15 @@ fn assert_trap_code(wat: &str, code: wasmtime::Trap) {
     };
     let trap = err.downcast_ref::<Trap>().unwrap();
     assert_eq!(*trap, code);
+
+    let trace = err.downcast_ref::<WasmBacktrace>().unwrap().frames();
+    assert!(trace.len() > 0);
+    assert_eq!(trace[0].func_index(), 0);
+    assert!(trace[0].func_offset().is_some());
 }
 
 #[test]
-fn heap_out_of_bounds_trap() {
+fn trap_codes() {
     assert_trap_code(
         r#"
             (module
@@ -666,6 +671,46 @@ fn heap_out_of_bounds_trap() {
          "#,
         Trap::MemoryOutOfBounds,
     );
+
+    for (ty, min) in [("i32", i32::MIN as u32 as u64), ("i64", i64::MIN as u64)] {
+        for op in ["rem", "div"] {
+            for sign in ["u", "s"] {
+                println!("testing {ty}.{op}_{sign}");
+                assert_trap_code(
+                    &format!(
+                        r#"
+                           (module
+                             (func $div (param {ty} {ty}) (result {ty})
+                               local.get 0
+                               local.get 1
+                               {ty}.{op}_{sign})
+                             (func $start (drop (call $div ({ty}.const 1) ({ty}.const 0))))
+                             (start $start)
+                           )
+                        "#
+                    ),
+                    Trap::IntegerDivisionByZero,
+                );
+            }
+        }
+
+        println!("testing {ty}.div_s INT_MIN/-1");
+        assert_trap_code(
+            &format!(
+                r#"
+                    (module
+                     (func $div (param {ty} {ty}) (result {ty})
+                      local.get 0
+                      local.get 1
+                      {ty}.div_s)
+                     (func $start (drop (call $div ({ty}.const {min}) ({ty}.const -1))))
+                     (start $start)
+                    )
+                "#
+            ),
+            Trap::IntegerOverflow,
+        );
+    }
 }
 
 fn rustc(src: &str) -> Vec<u8> {

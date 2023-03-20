@@ -926,6 +926,10 @@ impl MachInst for Inst {
     type ABIMachineSpec = AArch64MachineDeps;
     type LabelUse = LabelUse;
 
+    // "CLIF" in hex, to make the trap recognizable during
+    // debugging.
+    const TRAP_OPCODE: &'static [u8] = &0xc11f_u32.to_le_bytes();
+
     fn get_operands<F: Fn(VReg) -> VReg>(&self, collector: &mut OperandCollector<'_, F>) {
         aarch64_get_operands(self, collector);
     }
@@ -2519,18 +2523,21 @@ impl Inst {
             }
             &Inst::Brk => "brk #0".to_string(),
             &Inst::Udf { .. } => "udf #0xc11f".to_string(),
-            &Inst::TrapIf { ref kind, .. } => match kind {
+            &Inst::TrapIf {
+                ref kind,
+                trap_code,
+            } => match kind {
                 &CondBrKind::Zero(reg) => {
                     let reg = pretty_print_reg(reg, allocs);
-                    format!("cbnz {}, 8 ; udf", reg)
+                    format!("cbz {reg}, #trap={trap_code}")
                 }
                 &CondBrKind::NotZero(reg) => {
                     let reg = pretty_print_reg(reg, allocs);
-                    format!("cbz {}, 8 ; udf", reg)
+                    format!("cbnz {reg}, #trap={trap_code}")
                 }
                 &CondBrKind::Cond(c) => {
-                    let c = c.invert().pretty_print(0, allocs);
-                    format!("b.{} 8 ; udf", c)
+                    let c = c.pretty_print(0, allocs);
+                    format!("b.{c} #trap={trap_code}")
                 }
             },
             &Inst::Adr { rd, off } => {

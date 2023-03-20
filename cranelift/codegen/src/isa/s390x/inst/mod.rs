@@ -998,6 +998,7 @@ fn s390x_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
 impl MachInst for Inst {
     type ABIMachineSpec = S390xMachineDeps;
     type LabelUse = LabelUse;
+    const TRAP_OPCODE: &'static [u8] = &[0, 0];
 
     fn get_operands<F: Fn(VReg) -> VReg>(&self, collector: &mut OperandCollector<'_, F>) {
         s390x_get_operands(self, collector);

@@ -15,10 +15,10 @@
 ;;   11:	 488b0c24             	mov	rcx, qword ptr [rsp]
 ;;   15:	 488b442408           	mov	rax, qword ptr [rsp + 8]
 ;;   1a:	 4883f900             	cmp	rcx, 0
-;;   1e:	 0f8502000000         	jne	0x26
-;;   24:	 0f0b                 	ud2	
-;;   26:	 4899                 	cqo	
-;;   28:	 48f7f9               	idiv	rcx
-;;   2b:	 4883c410             	add	rsp, 0x10
-;;   2f:	 5d                   	pop	rbp
-;;   30:	 c3                   	ret	
+;;   1e:	 0f840b000000         	je	0x2f
+;;   24:	 4899                 	cqo	
+;;   26:	 48f7f9               	idiv	rcx
+;;   29:	 4883c410             	add	rsp, 0x10
+;;   2d:	 5d                   	pop	rbp
+;;   2e:	 c3                   	ret	
+;;   2f:	 0f0b                 	ud2	

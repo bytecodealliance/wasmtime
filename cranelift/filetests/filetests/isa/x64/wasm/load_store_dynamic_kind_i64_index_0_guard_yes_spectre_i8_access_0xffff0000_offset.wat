@@ -47,7 +47,7 @@
 ;; block0:
 ;;   movq    %rdi, %r8
 ;;   addq    %r8, const(0), %r8
-;;   jnb ; ud2 heap_oob ;
+;;   jb #trap=heap_oob
 ;;   movq    8(%rdx), %rax
 ;;   movq    %rdi, %rcx
 ;;   addq    %rcx, 0(%rdx), %rcx
@@ -71,7 +71,7 @@
 ;; block0:
 ;;   movq    %rdi, %rdx
 ;;   addq    %rdx, const(0), %rdx
-;;   jnb ; ud2 heap_oob ;
+;;   jb #trap=heap_oob
 ;;   movq    8(%rsi), %rax
 ;;   movq    %rdi, %rcx
 ;;   addq    %rcx, 0(%rsi), %rcx

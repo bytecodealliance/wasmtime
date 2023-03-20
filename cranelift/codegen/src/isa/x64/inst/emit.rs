@@ -1681,16 +1681,8 @@ pub(crate) fn emit(
         }
 
         Inst::TrapIf { cc, trap_code } => {
-            let else_label = sink.get_label();
-
-            // Jump over if the invert of CC is set (i.e. CC is not set).
-            one_way_jmp(sink, cc.invert(), else_label);
-
-            // Trap!
-            let inst = Inst::trap(*trap_code);
-            inst.emit(&[], sink, info, state);
-
-            sink.bind_label(else_label);
+            let trap_label = sink.defer_trap(*trap_code, state.take_stack_map());
+            one_way_jmp(sink, *cc, trap_label);
         }
 
         Inst::TrapIfAnd {
@@ -1698,15 +1690,13 @@ pub(crate) fn emit(
             cc2,
             trap_code,
         } => {
+            let trap_label = sink.defer_trap(*trap_code, state.take_stack_map());
             let else_label = sink.get_label();
 
-            // Jump over if either condition code is not set.
+            // Jump to the end if the first condition isn't true, and then if
+            // the second condition is true go to the trap.
             one_way_jmp(sink, cc1.invert(), else_label);
-            one_way_jmp(sink, cc2.invert(), else_label);
-
-            // Trap!
-            let inst = Inst::trap(*trap_code);
-            inst.emit(&[], sink, info, state);
+            one_way_jmp(sink, *cc2, trap_label);
 
             sink.bind_label(else_label);
         }
@@ -1716,19 +1706,11 @@ pub(crate) fn emit(
             cc2,
             trap_code,
         } => {
-            let trap_label = sink.get_label();
-            let else_label = sink.get_label();
+            let trap_label = sink.defer_trap(*trap_code, state.take_stack_map());
 
-            // trap immediately if cc1 is set, otherwise jump over the trap if cc2 is not.
+            // Emit two jumps to the same trap if either condition code is true.
             one_way_jmp(sink, *cc1, trap_label);
-            one_way_jmp(sink, cc2.invert(), else_label);
-
-            // Trap!
-            sink.bind_label(trap_label);
-            let inst = Inst::trap(*trap_code);
-            inst.emit(&[], sink, info, state);
-
-            sink.bind_label(else_label);
+            one_way_jmp(sink, *cc2, trap_label);
         }
 
         Inst::XmmUnaryRmR { op, src, dst } => {
@@ -3056,7 +3038,6 @@ pub(crate) fn emit(
             };
 
             let done = sink.get_label();
-            let not_nan = sink.get_label();
 
             // The truncation.
             let inst = Inst::xmm_to_gpr(trunc_op, src, Writable::from_reg(dst), *dst_size);
@@ -3073,9 +3054,10 @@ pub(crate) fn emit(
             let inst = Inst::xmm_cmp_rm_r(cmp_op, RegMem::reg(src), src);
             inst.emit(&[], sink, info, state);
 
-            one_way_jmp(sink, CC::NP, not_nan); // go to not_nan if not a NaN
-
             if *is_saturating {
+                let not_nan = sink.get_label();
+                one_way_jmp(sink, CC::NP, not_nan); // go to not_nan if not a NaN
+
                 // For NaN, emit 0.
                 let inst = Inst::alu_rmi_r(
                     *dst_size,
@@ -3119,9 +3101,7 @@ pub(crate) fn emit(
                     inst.emit(&[], sink, info, state);
                 }
             } else {
-                let check_positive = sink.get_label();
-
-                let inst = Inst::trap(TrapCode::BadConversionToInteger);
+                let inst = Inst::trap_if(CC::P, TrapCode::BadConversionToInteger);
                 inst.emit(&[], sink, info, state);
 
                 // Check if INT_MIN was the correct result: determine the smallest floating point
@@ -3129,8 +3109,6 @@ pub(crate) fn emit(
                 // against the src register.
                 // If the src register is less (or in some cases, less-or-equal) than the threshold,
                 // trap!
-
-                sink.bind_label(not_nan);
 
                 let mut no_overflow_cc = CC::NB; // >=
                 let output_bits = dst_size.to_bits();
@@ -3168,15 +3146,11 @@ pub(crate) fn emit(
                 let inst = Inst::xmm_cmp_rm_r(cmp_op, RegMem::reg(tmp_xmm), src);
                 inst.emit(&[], sink, info, state);
 
-                // jump over trap if src >= or > threshold
-                one_way_jmp(sink, no_overflow_cc, check_positive);
-
-                let inst = Inst::trap(TrapCode::IntegerOverflow);
+                // no trap if src >= or > threshold
+                let inst = Inst::trap_if(no_overflow_cc.invert(), TrapCode::IntegerOverflow);
                 inst.emit(&[], sink, info, state);
 
                 // If positive, it was a real overflow.
-
-                sink.bind_label(check_positive);
 
                 // Zero out the tmp_xmm register.
                 let inst = Inst::xmm_rm_r(
@@ -3189,9 +3163,8 @@ pub(crate) fn emit(
                 let inst = Inst::xmm_cmp_rm_r(cmp_op, RegMem::reg(src), tmp_xmm);
                 inst.emit(&[], sink, info, state);
 
-                one_way_jmp(sink, CC::NB, done); // jump over trap if 0 >= src
-
-                let inst = Inst::trap(TrapCode::IntegerOverflow);
+                // no trap if 0 >= src
+                let inst = Inst::trap_if(CC::B, TrapCode::IntegerOverflow);
                 inst.emit(&[], sink, info, state);
             }
 
@@ -3291,11 +3264,10 @@ pub(crate) fn emit(
             let handle_large = sink.get_label();
             one_way_jmp(sink, CC::NB, handle_large); // jump to handle_large if src >= large_threshold
 
-            let not_nan = sink.get_label();
-            one_way_jmp(sink, CC::NP, not_nan); // jump over trap if not NaN
-
             if *is_saturating {
-                // Emit 0.
+                // If not NaN jump over this 0-return, otherwise return 0
+                let not_nan = sink.get_label();
+                one_way_jmp(sink, CC::NP, not_nan);
                 let inst = Inst::alu_rmi_r(
                     *dst_size,
                     AluRmiROpcode::Xor,
@@ -3306,13 +3278,12 @@ pub(crate) fn emit(
 
                 let inst = Inst::jmp_known(done);
                 inst.emit(&[], sink, info, state);
+                sink.bind_label(not_nan);
             } else {
                 // Trap.
-                let inst = Inst::trap(TrapCode::BadConversionToInteger);
+                let inst = Inst::trap_if(CC::P, TrapCode::BadConversionToInteger);
                 inst.emit(&[], sink, info, state);
             }
-
-            sink.bind_label(not_nan);
 
             // Actual truncation for small inputs: if the result is not positive, then we had an
             // overflow.
@@ -3360,10 +3331,10 @@ pub(crate) fn emit(
             let inst = Inst::cmp_rmi_r(*dst_size, RegMemImm::imm(0), dst);
             inst.emit(&[], sink, info, state);
 
-            let next_is_large = sink.get_label();
-            one_way_jmp(sink, CC::NL, next_is_large); // if dst >= 0, jump to next_is_large
-
             if *is_saturating {
+                let next_is_large = sink.get_label();
+                one_way_jmp(sink, CC::NL, next_is_large); // if dst >= 0, jump to next_is_large
+
                 // The input was "large" (>= 2**(width -1)), so the only way to get an integer
                 // overflow is because the input was too large: saturate to the max value.
                 let inst = Inst::imm(
@@ -3379,12 +3350,11 @@ pub(crate) fn emit(
 
                 let inst = Inst::jmp_known(done);
                 inst.emit(&[], sink, info, state);
+                sink.bind_label(next_is_large);
             } else {
-                let inst = Inst::trap(TrapCode::IntegerOverflow);
+                let inst = Inst::trap_if(CC::L, TrapCode::IntegerOverflow);
                 inst.emit(&[], sink, info, state);
             }
-
-            sink.bind_label(next_is_large);
 
             if *dst_size == OperandSize::Size64 {
                 let inst = Inst::imm(OperandSize::Size64, 1 << 63, Writable::from_reg(tmp_gpr));
@@ -3615,8 +3585,7 @@ pub(crate) fn emit(
             if let Some(s) = state.take_stack_map() {
                 sink.add_stack_map(StackMapExtent::UpcomingBytes(2), s);
             }
-            sink.put1(0x0f);
-            sink.put1(0x0b);
+            sink.put_data(Inst::TRAP_OPCODE);
         }
 
         Inst::VirtualSPOffsetAdj { offset } => {

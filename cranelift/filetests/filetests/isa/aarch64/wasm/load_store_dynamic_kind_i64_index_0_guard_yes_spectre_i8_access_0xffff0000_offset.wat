@@ -43,7 +43,7 @@
 ;; block0:
 ;;   movn w11, #65534
 ;;   adds x13, x0, x11
-;;   b.lo 8 ; udf
+;;   b.hs #trap=heap_oob
 ;;   ldr x14, [x2, #8]
 ;;   ldr x15, [x2]
 ;;   add x15, x15, x0
@@ -62,7 +62,7 @@
 ;; block0:
 ;;   movn w11, #65534
 ;;   adds x13, x0, x11
-;;   b.lo 8 ; udf
+;;   b.hs #trap=heap_oob
 ;;   ldr x14, [x1, #8]
 ;;   ldr x15, [x1]
 ;;   add x15, x15, x0
