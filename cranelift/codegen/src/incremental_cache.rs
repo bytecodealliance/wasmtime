@@ -116,8 +116,10 @@ impl std::fmt::Display for CacheKeyHash {
 
 #[derive(serde::Serialize, serde::Deserialize)]
 struct CachedFunc {
-    stencil: CompiledCodeStencil,
+    // Note: The version marker must be first to ensure deserialization stops in case of a version
+    // mismatch before attempting to deserialize the actual compiled code.
     version_marker: VersionMarker,
+    stencil: CompiledCodeStencil,
 }
 
 /// Key for caching a single function's compilation.
@@ -216,8 +218,8 @@ pub fn serialize_compiled(
     result: CompiledCodeStencil,
 ) -> (CompiledCodeStencil, Result<Vec<u8>, bincode::Error>) {
     let cached = CachedFunc {
-        stencil: result,
         version_marker: VersionMarker,
+        stencil: result,
     };
     let result = bincode::serialize(&cached);
     (cached.stencil, result)
