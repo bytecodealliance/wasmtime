@@ -41,7 +41,7 @@
 
 ;; iabs(ineg(x)) == iabs(x).
 (rule (simplify (iabs ty (ineg ty x)))
-      (subsume (iabs ty x)))
+      (iabs ty x))
 
 ;; iabs(iabs(x)) == iabs(x).
 (rule (simplify (iabs ty inner @ (iabs ty x)))
