@@ -8,6 +8,7 @@ pub struct PerfMapAgent {
 }
 
 impl PerfMapAgent {
+    /// Intialize a dummy PerfMapAgent that will fail upon instantiation.
     pub fn new() -> Result<Self> {
         bail!("perfmap support not supported on this platform");
     }
