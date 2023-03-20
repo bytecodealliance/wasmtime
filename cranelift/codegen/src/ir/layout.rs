@@ -209,7 +209,7 @@ impl Layout {
     ///
     /// This doesn't affect the position of anything, but it gives more room in the internal
     /// sequence numbers for inserting instructions later.
-    pub(crate) fn full_block_renumber(&mut self, block: Block) {
+    fn full_block_renumber(&mut self, block: Block) {
         let _tt = timing::layout_renumber();
         // Avoid 0 as this is reserved for the program point indicating the block itself
         let mut seq = MAJOR_STRIDE;
@@ -599,13 +599,31 @@ impl Layout {
     }
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Hash)]
+#[derive(Clone, Debug, Default)]
 struct InstNode {
     /// The Block containing this instruction, or `None` if the instruction is not yet inserted.
     block: PackedOption<Block>,
     prev: PackedOption<Inst>,
     next: PackedOption<Inst>,
     seq: SequenceNumber,
+}
+
+impl PartialEq for InstNode {
+    fn eq(&self, other: &Self) -> bool {
+        // Ignore the sequence number as it is an optimization used by pp_cmp and may be different
+        // even for equivalent layouts.
+        self.block == other.block && self.prev == other.prev && self.next == other.next
+    }
+}
+
+impl core::hash::Hash for InstNode {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+        // Ignore the sequence number as it is an optimization used by pp_cmp and may be different
+        // even for equivalent layouts.
+        self.block.hash(state);
+        self.prev.hash(state);
+        self.next.hash(state);
+    }
 }
 
 /// Iterate over instructions in a block in layout order. See `Layout::block_insts()`.
