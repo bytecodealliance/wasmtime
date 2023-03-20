@@ -170,6 +170,7 @@ pub trait ErrorExt {
     fn range() -> Self;
     fn seek_pipe() -> Self;
     fn perm() -> Self;
+    fn destination_address_required() -> Self;
 }
 
 impl ErrorExt for Error {
@@ -214,6 +215,9 @@ impl ErrorExt for Error {
     }
     fn perm() -> Self {
         Errno::Perm.into()
+    }
+    fn destination_address_required() -> Self {
+        Errno::Destaddrreq.into()
     }
 }
 

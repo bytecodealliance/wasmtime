@@ -39,7 +39,11 @@ async fn read(
         .get_input_stream_mut(stream)
         .map_err(convert)?;
 
-    let mut buffer = vec![0; len.try_into().unwrap()];
+    // Len could be any `u64` value, but we don't want to
+    // allocate too much up front, so make a wild guess
+    // of an upper bound for the buffer size.
+    let buffer_len = std::cmp::min(len, 0x400000) as _;
+    let mut buffer = vec![0; buffer_len];
 
     let (bytes_read, end) = s.read(&mut buffer).await.map_err(convert)?;
 

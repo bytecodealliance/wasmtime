@@ -1,5 +1,6 @@
 use crate::clocks::WasiMonotonicClock;
 use crate::stream::{InputStream, OutputStream};
+use crate::tcp_socket::WasiTcpSocket;
 use crate::Error;
 use bitflags::bitflags;
 
@@ -10,8 +11,10 @@ bitflags! {
 }
 
 pub enum RwStream<'a> {
+    // fixme: rename?
     Read(&'a dyn InputStream),
     Write(&'a dyn OutputStream),
+    TcpSocket(&'a dyn WasiTcpSocket),
 }
 
 pub struct RwSubscription<'a> {
@@ -29,6 +32,12 @@ impl<'a> RwSubscription<'a> {
     pub fn new_output(stream: &'a dyn OutputStream) -> Self {
         Self {
             stream: RwStream::Write(stream),
+            status: None,
+        }
+    }
+    pub fn new_tcp_socket(tcp_socket: &'a dyn WasiTcpSocket) -> Self {
+        Self {
+            stream: RwStream::TcpSocket(tcp_socket),
             status: None,
         }
     }

@@ -1,12 +1,15 @@
 use crate::clocks::WasiClocks;
 use crate::dir::WasiDir;
 use crate::file::WasiFile;
+use crate::network::{AddressFamily, WasiNetwork};
 use crate::sched::WasiSched;
 use crate::stream::{InputStream, OutputStream};
 use crate::table::Table;
 use crate::tcp_socket::WasiTcpSocket;
 use crate::Error;
 use cap_rand::RngCore;
+use cap_std::ambient_authority;
+use cap_std::net::Pool;
 
 pub struct WasiCtx {
     pub random: Box<dyn RngCore + Send + Sync>,
@@ -15,6 +18,10 @@ pub struct WasiCtx {
     pub table: Table,
     pub env: Vec<(String, String)>,
     pub preopens: Vec<(Box<dyn WasiDir>, String)>,
+    pub pool: Pool,
+    pub network_creator: Box<dyn Fn(Pool) -> Result<Box<dyn WasiNetwork>, Error> + Send + Sync>,
+    pub tcp_socket_creator:
+        Box<dyn Fn(AddressFamily) -> Result<Box<dyn WasiTcpSocket>, Error> + Send + Sync>,
 }
 
 impl WasiCtx {
@@ -23,6 +30,10 @@ impl WasiCtx {
         clocks: WasiClocks,
         sched: Box<dyn WasiSched>,
         table: Table,
+        network_creator: Box<dyn Fn(Pool) -> Result<Box<dyn WasiNetwork>, Error> + Send + Sync>,
+        tcp_socket_creator: Box<
+            dyn Fn(AddressFamily) -> Result<Box<dyn WasiTcpSocket>, Error> + Send + Sync,
+        >,
     ) -> Self {
         let mut s = WasiCtx {
             random,
@@ -31,6 +42,9 @@ impl WasiCtx {
             table,
             env: Vec::new(),
             preopens: Vec::new(),
+            pool: Pool::new(),
+            network_creator,
+            tcp_socket_creator,
         };
         s.set_stdin(Box::new(crate::pipe::ReadPipe::new(std::io::empty())));
         s.set_stdout(Box::new(crate::pipe::WritePipe::new(std::io::sink())));
@@ -64,6 +78,39 @@ impl WasiCtx {
 
     pub fn push_dir(&mut self, dir: Box<dyn WasiDir>) -> Result<u32, Error> {
         self.table_mut().push(Box::new(dir))
+    }
+
+    /// Add a range of network addresses, accepting any port, to the pool.
+    ///
+    /// Unlike `insert_ip_net`, this function grants access to any requested port.
+    pub fn insert_ip_net_port_any(&mut self, ip_net: ipnet::IpNet) {
+        self.pool
+            .insert_ip_net_port_any(ip_net, ambient_authority())
+    }
+
+    /// Add a range of network addresses, accepting a range of ports, to
+    /// per-instance networks.
+    ///
+    /// This grants access to the port range starting at `ports_start` and, if
+    /// `ports_end` is provided, ending before `ports_end`.
+    pub fn insert_ip_net_port_range(
+        &mut self,
+        ip_net: ipnet::IpNet,
+        ports_start: u16,
+        ports_end: Option<u16>,
+    ) {
+        self.pool
+            .insert_ip_net_port_range(ip_net, ports_start, ports_end, ambient_authority())
+    }
+
+    /// Add a range of network addresses with a specific port to the pool.
+    pub fn insert_ip_net(&mut self, ip_net: ipnet::IpNet, port: u16) {
+        self.pool.insert_ip_net(ip_net, port, ambient_authority())
+    }
+
+    /// Add a specific [`cap_std::net::SocketAddr`] to the pool.
+    pub fn insert_socket_addr(&mut self, addr: cap_std::net::SocketAddr) {
+        self.pool.insert_socket_addr(addr, ambient_authority());
     }
 
     pub fn table(&self) -> &Table {

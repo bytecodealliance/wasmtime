@@ -24,7 +24,9 @@ pub fn add_to_linker<T: Send>(
     wasi::streams::add_to_linker(l, f)?;
     wasi::random::add_to_linker(l, f)?;
     wasi::tcp::add_to_linker(l, f)?;
+    wasi::tcp_create_socket::add_to_linker(l, f)?;
     wasi::udp::add_to_linker(l, f)?;
+    wasi::udp_create_socket::add_to_linker(l, f)?;
     wasi::ip_name_lookup::add_to_linker(l, f)?;
     wasi::instance_network::add_to_linker(l, f)?;
     wasi::network::add_to_linker(l, f)?;

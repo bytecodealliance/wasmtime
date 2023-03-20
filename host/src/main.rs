@@ -15,6 +15,9 @@ struct Args {
     /// Filesystem path of a component
     component: String,
 
+    /// Command-line arguments
+    args: Vec<String>,
+
     /// Name of the world to load it in.
     #[arg(long, default_value_t = String::from("command"))]
     world: String,
@@ -35,9 +38,9 @@ async fn main() -> Result<()> {
     let mut linker = Linker::new(&engine);
 
     if args.world == "command" {
-        run_command(&mut linker, &engine, &component).await?;
+        run_command(&mut linker, &engine, &component, &args.args).await?;
     } else if args.world == "proxy" {
-        run_proxy(&mut linker, &engine, &component).await?;
+        run_proxy(&mut linker, &engine, &component, &args.args).await?;
     }
 
     Ok(())
@@ -47,20 +50,23 @@ async fn run_command(
     linker: &mut Linker<WasiCtx>,
     engine: &Engine,
     component: &Component,
+    args: &[String],
 ) -> anyhow::Result<()> {
     command::add_to_linker(linker, |x| x)?;
 
     let mut store = Store::new(
         engine,
         WasiCtxBuilder::new()
-            .inherit_stdin()
-            .inherit_stdout()
+            .inherit_stdio()
+            .inherit_network()
             .build(),
     );
 
     let (wasi, _instance) = Command::instantiate_async(&mut store, component, linker).await?;
 
-    let result: Result<(), ()> = wasi.call_main(&mut store, 0, 1, 2, &[], &[]).await?;
+    let mut main_args: Vec<&str> = vec!["wasm"];
+    main_args.extend(args.iter().map(String::as_str));
+    let result: Result<(), ()> = wasi.call_main(&mut store, 0, 1, 2, &main_args, &[]).await?;
 
     if result.is_err() {
         anyhow::bail!("command returned with failing exit status");
@@ -73,6 +79,7 @@ async fn run_proxy(
     linker: &mut Linker<WasiCtx>,
     engine: &Engine,
     component: &Component,
+    args: &[String],
 ) -> anyhow::Result<()> {
     proxy::add_to_linker(linker, |x| x)?;
 
@@ -82,6 +89,7 @@ async fn run_proxy(
 
     // TODO: do something
     let _ = wasi;
+    let _ = args;
     let result: Result<(), ()> = Ok(());
 
     if result.is_err() {

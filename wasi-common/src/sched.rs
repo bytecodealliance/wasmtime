@@ -1,5 +1,6 @@
 use crate::clocks::WasiMonotonicClock;
 use crate::stream::{InputStream, OutputStream};
+use crate::tcp_socket::WasiTcpSocket;
 use crate::Error;
 pub mod subscription;
 pub use cap_std::time::Duration;
@@ -66,6 +67,12 @@ impl<'a> Poll<'a> {
     pub fn subscribe_write(&mut self, stream: &'a dyn OutputStream, ud: Userdata) {
         self.subs.push((
             Subscription::ReadWrite(RwSubscription::new_output(stream)),
+            ud,
+        ));
+    }
+    pub fn subscribe_tcp_socket(&mut self, tcp_socket: &'a dyn WasiTcpSocket, ud: Userdata) {
+        self.subs.push((
+            Subscription::ReadWrite(RwSubscription::new_tcp_socket(tcp_socket)),
             ud,
         ));
     }

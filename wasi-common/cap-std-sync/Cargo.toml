@@ -25,6 +25,7 @@ tracing = { workspace = true }
 io-lifetimes = { workspace = true }
 is-terminal = "0.4.0"
 io-extras = "0.17.1"
+ipnet = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
 rustix = { workspace = true, features = ["fs"] }

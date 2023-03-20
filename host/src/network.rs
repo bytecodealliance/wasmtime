@@ -3,7 +3,8 @@ use crate::{
     command::wasi::network::{self, Network},
     WasiCtx,
 };
-use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6};
+use cap_std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6};
+use wasi_common::WasiNetwork;
 
 pub(crate) fn convert(_error: wasi_common::Error) -> anyhow::Error {
     todo!("convert wasi-common Error to wasi_network::Error")
@@ -11,15 +12,22 @@ pub(crate) fn convert(_error: wasi_common::Error) -> anyhow::Error {
 
 #[async_trait::async_trait]
 impl network::Host for WasiCtx {
-    async fn drop_network(&mut self, _network: Network) -> anyhow::Result<()> {
-        todo!()
+    async fn drop_network(&mut self, this: Network) -> anyhow::Result<()> {
+        let table = self.table_mut();
+        if !table.delete::<Box<dyn WasiNetwork>>(this).is_ok() {
+            anyhow::bail!("{this} is not a network");
+        }
+        Ok(())
     }
 }
 
 #[async_trait::async_trait]
 impl instance_network::Host for WasiCtx {
     async fn instance_network(&mut self) -> anyhow::Result<Network> {
-        todo!()
+        let network = (self.network_creator)(self.pool.clone())?;
+        let table = self.table_mut();
+        let network = table.push(Box::new(network)).map_err(convert)?;
+        Ok(network)
     }
 }
 
