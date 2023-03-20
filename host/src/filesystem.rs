@@ -2,7 +2,7 @@
 
 use crate::command::wasi;
 use crate::command::wasi::streams::{InputStream, OutputStream};
-use crate::{HostResult, WasiCtx};
+use crate::WasiCtx;
 use anyhow::anyhow;
 use std::{
     io::{IoSlice, IoSliceMut},
