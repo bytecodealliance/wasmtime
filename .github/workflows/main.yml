@@ -184,7 +184,7 @@ jobs:
         submodules: true
     - uses: ./.github/actions/install-rust
       with:
-        toolchain: nightly-2022-12-15
+        toolchain: nightly-2023-03-20
 
     # Build C API documentation
     - run: curl -L https://sourceforge.net/projects/doxygen/files/rel-1.9.3/doxygen-1.9.3.linux.bin.tar.gz/download | tar xzf -
@@ -336,7 +336,7 @@ jobs:
     # flags to rustc.
     - uses: ./.github/actions/install-rust
       with:
-        toolchain: nightly-2022-12-15
+        toolchain: nightly-2023-03-30
     - run: cargo install cargo-fuzz --vers "^0.11"
     # Install the OCaml packages necessary for fuzz targets that use the
     # `wasm-spec-interpreter`.
