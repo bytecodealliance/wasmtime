@@ -672,7 +672,7 @@ fn trap_codes() {
         Trap::MemoryOutOfBounds,
     );
 
-    for ty in ["i32", "i64"] {
+    for (ty, min) in [("i32", i32::MIN as u32 as u64), ("i64", i64::MIN as u64)] {
         for op in ["rem", "div"] {
             for sign in ["u", "s"] {
                 println!("testing {ty}.{op}_{sign}");
@@ -695,11 +695,6 @@ fn trap_codes() {
         }
 
         println!("testing {ty}.div_s INT_MIN/-1");
-        let min = if ty == "i32" {
-            0x80000000_u64
-        } else {
-            0x8000000000000000_u64
-        };
         assert_trap_code(
             &format!(
                 r#"
