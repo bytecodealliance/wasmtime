@@ -1728,7 +1728,7 @@ pub enum OptLevel {
 }
 
 /// Select which profiling technique to support.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ProfilingStrategy {
     /// No profiler support.
     None,
