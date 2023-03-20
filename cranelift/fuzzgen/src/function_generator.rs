@@ -1199,9 +1199,11 @@ static OPCODE_SIGNATURES: Lazy<Vec<OpcodeSignature>> = Lazy::new(|| {
                 | (Opcode::IsubBorrow, &[I32, I32, I8], &[I32, I8])
                 | (Opcode::IsubBorrow, &[I64, I64, I8], &[I64, I8])
                 | (Opcode::IsubBorrow, &[I128, I128, I8], &[I128, I8])
+                // https://github.com/bytecodealliance/wasmtime/issues/6073
                 | (Opcode::Iconcat, &[I32, I32], &[I64])
                 | (Opcode::Iconcat, &[I16, I16], &[I32])
                 | (Opcode::Iconcat, &[I8, I8], &[I16])
+                // https://github.com/bytecodealliance/wasmtime/issues/6073
                 | (Opcode::Isplit, &[I64], &[I32, I32])
                 | (Opcode::Isplit, &[I32], &[I16, I16])
                 | (Opcode::Isplit, &[I16], &[I8, I8])
