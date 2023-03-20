@@ -3591,8 +3591,8 @@ pub(crate) fn define(
 
     let WideInt = &TypeVar::new(
         "WideInt",
-        "An integer type with lanes from `i16` upwards",
-        TypeSetBuilder::new().ints(128..128).build(),
+        "An integer type of width `i16` upwards",
+        TypeSetBuilder::new().ints(16..128).build(),
     );
 
     ig.push(
@@ -3618,8 +3618,8 @@ pub(crate) fn define(
 
     let NarrowInt = &TypeVar::new(
         "NarrowInt",
-        "An integer type with lanes type to `i64`",
-        TypeSetBuilder::new().ints(64..64).build(),
+        "An integer type of width up to `i64`",
+        TypeSetBuilder::new().ints(8..64).build(),
     );
 
     ig.push(
