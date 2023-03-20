@@ -62,6 +62,11 @@ unsafe fn create_symlink_to_directory(dir_fd: wasi::Fd) {
         .expect("remove_directory on a directory should succeed");
 }
 
+unsafe fn create_symlink_to_root(dir_fd: wasi::Fd) {
+    // Create a symlink.
+    wasi::path_symlink("/", dir_fd, "symlink").expect_err("creating a symlink to an absolute path");
+}
+
 fn main() {
     let mut args = env::args();
     let prog = args.next().unwrap();
@@ -85,5 +90,6 @@ fn main() {
     unsafe {
         create_symlink_to_file(dir_fd);
         create_symlink_to_directory(dir_fd);
+        create_symlink_to_root(dir_fd);
     }
 }
