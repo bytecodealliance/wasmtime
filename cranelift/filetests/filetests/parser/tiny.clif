@@ -65,15 +65,13 @@ block0(v95: i32, v96: i32, v97: i8):
 ; nextln: }
 
 ; Lane indexes.
-function %lanes() {
-block0:
-    v0 = iconst.i32x4 2
+function %lanes(i32x4) {
+block0(v0: i32x4):
     v1 = extractlane v0, 3
     v2 = insertlane v0, v1, 1
 }
-; sameln: function %lanes() fast {
-; nextln: block0:
-; nextln:     v0 = iconst.i32x4 2
+; sameln: function %lanes(i32x4) fast {
+; nextln: block0(v0: i32x4):
 ; nextln:     v1 = extractlane v0, 3
 ; nextln:     v2 = insertlane v0, v1, 1
 ; nextln: }
