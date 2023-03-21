@@ -7,7 +7,7 @@ use crate::{
     abi::local::LocalSlot,
     codegen::CodeGenContext,
     isa::reg::Reg,
-    masm::{DivKind, MacroAssembler as Masm, OperandSize, RegImm, RemKind},
+    masm::{DivKind, MacroAssembler as Masm, OperandSize, RegImm, RemKind, CallKind},
 };
 use cranelift_codegen::{settings, Final, MachBufferFinalized};
 
@@ -136,7 +136,7 @@ impl Masm for MacroAssembler {
         self.asm.str(src, dst, size);
     }
 
-    fn call(&mut self, _callee: u32) {
+    fn call(&mut self, _callee: CallKind) {
         todo!()
     }
 

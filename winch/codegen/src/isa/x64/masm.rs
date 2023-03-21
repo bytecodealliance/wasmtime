@@ -3,7 +3,7 @@ use super::{
     asm::{Assembler, Operand},
     regs::{self, rbp, rsp},
 };
-use crate::isa::reg::Reg;
+use crate::{isa::reg::Reg, masm::CallKind};
 use crate::masm::{DivKind, MacroAssembler as Masm, OperandSize, RegImm, RemKind};
 use crate::{abi::LocalSlot, codegen::CodeGenContext, stack::Val};
 use cranelift_codegen::{isa::x64::settings as x64_settings, settings, Final, MachBufferFinalized};
@@ -114,7 +114,7 @@ impl Masm for MacroAssembler {
         self.decrement_sp(8);
     }
 
-    fn call(&mut self, callee: u32) {
+    fn call(&mut self, callee: CallKind) {
         self.asm.call(callee);
     }
 
