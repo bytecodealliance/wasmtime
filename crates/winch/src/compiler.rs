@@ -3,13 +3,44 @@ use cranelift_codegen::{Final, MachBufferFinalized};
 use object::write::{Object, SymbolId};
 use std::any::Any;
 use std::sync::Mutex;
-use wasmparser::FuncValidatorAllocations;
+use wasmparser::{FuncValidatorAllocations, types::Types};
 use wasmtime_cranelift_shared::obj::ModuleTextBuilder;
 use wasmtime_environ::{
     CompileError, DefinedFuncIndex, FilePos, FuncIndex, FunctionBodyData, FunctionLoc,
-    ModuleTranslation, ModuleTypes, PrimaryMap, Tunables, WasmFunctionInfo,
+    ModuleTranslation, ModuleTypes, PrimaryMap, Tunables, WasmFunctionInfo, Module,
 };
-use winch_codegen::TargetIsa;
+use winch_codegen::{TargetIsa, Callee};
+
+// Copied from winch/environ/src/lib.rs, REPLACE
+pub struct FuncEnv<'a> {
+    /// The translated WebAssembly module.
+    pub module: &'a Module,
+    /// Type information about a module, once it has been validated.
+    pub types: &'a Types,
+}
+
+impl<'a> winch_codegen::FuncEnv for FuncEnv<'a> {
+    fn callee_from_index(&self, index: u32) -> Callee {
+        let func = self
+            .types
+            .function_at(index)
+            .unwrap_or_else(|| panic!("function type at index: {}", index));
+
+        Callee {
+            ty: func.clone(),
+            import: self.module.is_imported_function(FuncIndex::from_u32(index)),
+            index,
+        }
+    }
+}
+
+impl<'a> FuncEnv<'a> {
+    /// Create a new function environment.
+    pub fn new(module: &'a Module, types: &'a Types) -> Self {
+        Self { module, types }
+    }
+}
+
 
 pub(crate) struct Compiler {
     isa: Box<dyn TargetIsa>,
@@ -58,9 +89,10 @@ impl wasmtime_environ::Compiler for Compiler {
                 .unwrap(),
         );
         let mut validator = validator.into_validator(self.take_allocations());
+        let env = FuncEnv::new(&translation.module, translation.get_types());
         let buffer = self
             .isa
-            .compile_function(&sig, &body, &mut validator)
+            .compile_function(&sig, &body, &env, &mut validator)
             .map_err(|e| CompileError::Codegen(format!("{e:?}")));
         self.save_allocations(validator.into_allocations());
         let buffer = buffer?;
@@ -83,7 +115,7 @@ impl wasmtime_environ::Compiler for Compiler {
     ) -> Result<Box<dyn Any + Send>, CompileError> {
         let buffer = self
             .isa
-            .compile_trampoline(ty)
+            .host_to_wasm_trampoline(&ty.clone().into())
             .map_err(|e| CompileError::Codegen(format!("{:?}", e)))?;
 
         Ok(Box::new(CompiledFunction(buffer)))
