@@ -44,48 +44,32 @@ mod bindings {
 
 #[no_mangle]
 #[cfg(feature = "command")]
-pub unsafe extern "C" fn main(
-    stdin: InputStream,
-    stdout: OutputStream,
-    stderr: OutputStream,
-    args_ptr: *const WasmStr,
-    args_len: usize,
-    preopens: PreopenList,
-) -> u32 {
-    set_stderr_stream(stderr);
+pub unsafe extern "C" fn main(args_ptr: *const WasmStr, args_len: usize) -> u32 {
     State::with_mut(|state| {
-        // Initialization of `State` automatically fills in some dummy
-        // structures for fds 0, 1, and 2. Overwrite the stdin/stdout slots of 0
-        // and 1 with actual files.
-        {
-            let descriptors = state.descriptors_mut();
-            if descriptors.len() < 3 {
-                unreachable!("insufficient memory for stdio descriptors");
-            }
-            descriptors[0] = Descriptor::Streams(Streams {
-                input: Cell::new(Some(stdin)),
-                output: Cell::new(None),
-                type_: StreamType::Unknown,
-            });
-            descriptors[1] = Descriptor::Streams(Streams {
-                input: Cell::new(None),
-                output: Cell::new(Some(stdout)),
-                type_: StreamType::Unknown,
-            });
-            descriptors[2] = Descriptor::Streams(Streams {
-                input: Cell::new(None),
-                output: Cell::new(Some(stderr)),
-                type_: StreamType::Unknown,
-            });
+        // Initialize the stdio descriptors
+        let stdio = crate::bindings::preopens::get_stdio();
+        unsafe { set_stderr_stream(stdio.stderr) };
+        let descriptors = state.descriptors_mut();
+        if descriptors.len() < 3 {
+            unreachable!("unsufficient memory for stdio descriptors");
         }
+        descriptors[0] = Descriptor::Streams(Streams {
+            input: Cell::new(Some(stdio.stdin)),
+            output: Cell::new(None),
+            type_: StreamType::Unknown,
+        });
+        descriptors[1] = Descriptor::Streams(Streams {
+            input: Cell::new(None),
+            output: Cell::new(Some(stdio.stdout)),
+            type_: StreamType::Unknown,
+        });
+        descriptors[2] = Descriptor::Streams(Streams {
+            input: Cell::new(None),
+            output: Cell::new(Some(stdio.stderr)),
+            type_: StreamType::Unknown,
+        });
+
         state.args = Some(slice::from_raw_parts(args_ptr, args_len));
-
-        // Initialize `arg_preopens`.
-        let preopens: &'static [Preopen] =
-            unsafe { std::slice::from_raw_parts(preopens.base, preopens.len) };
-        state.process_preopens(&preopens);
-        state.arg_preopens.set(Some(preopens));
-
         Ok(())
     });
 
@@ -548,19 +532,6 @@ pub unsafe extern "C" fn fd_fdstat_get(fd: Fd, stat: *mut Fdstat) -> Errno {
             });
             Ok(())
         }
-        Descriptor::Stderr => {
-            let fs_filetype = FILETYPE_UNKNOWN;
-            let fs_flags = 0;
-            let fs_rights_base = !RIGHTS_FD_READ;
-            let fs_rights_inheriting = fs_rights_base;
-            stat.write(Fdstat {
-                fs_filetype,
-                fs_flags,
-                fs_rights_base,
-                fs_rights_inheriting,
-            });
-            Ok(())
-        }
         Descriptor::Streams(Streams {
             input,
             output,
@@ -580,23 +551,6 @@ pub unsafe extern "C" fn fd_fdstat_get(fd: Fd, stat: *mut Fdstat) -> Errno {
             if output.get().is_some() {
                 fs_rights_base |= RIGHTS_FD_WRITE;
             }
-            let fs_rights_inheriting = fs_rights_base;
-            stat.write(Fdstat {
-                fs_filetype,
-                fs_flags,
-                fs_rights_base,
-                fs_rights_inheriting,
-            });
-            Ok(())
-        }
-        Descriptor::Streams(Streams {
-            input,
-            output,
-            type_: StreamType::EmptyStdin,
-        }) => {
-            let fs_filetype = FILETYPE_UNKNOWN;
-            let fs_flags = 0;
-            let fs_rights_base = RIGHTS_FD_READ;
             let fs_rights_inheriting = fs_rights_base;
             stat.write(Fdstat {
                 fs_filetype,
@@ -887,7 +841,7 @@ pub unsafe extern "C" fn fd_read(
                     Ok(())
                 }
             }
-            Descriptor::Stderr | Descriptor::Closed(_) => Err(ERRNO_BADF),
+            Descriptor::Closed(_) => Err(ERRNO_BADF),
         }
     })
 }
@@ -1250,11 +1204,6 @@ pub unsafe extern "C" fn fd_write(
                 }
 
                 *nwritten = bytes as usize;
-                Ok(())
-            }
-            Descriptor::Stderr => {
-                crate::macros::print(bytes);
-                *nwritten = len;
                 Ok(())
             }
             Descriptor::Closed(_) => Err(ERRNO_BADF),
@@ -1834,11 +1783,6 @@ pub unsafe extern "C" fn poll_oneoff(
                                                        }
                                                        */
                                     }
-                                    StreamType::EmptyStdin => {
-                                        error = ERRNO_SUCCESS;
-                                        nbytes = 0;
-                                        flags = EVENTRWFLAGS_FD_READWRITE_HANGUP;
-                                    }
                                     StreamType::Unknown => {
                                         error = ERRNO_SUCCESS;
                                         nbytes = 1;
@@ -1880,11 +1824,6 @@ pub unsafe extern "C" fn poll_oneoff(
                                                            }
                                                        }
                                                        */
-                                    }
-                                    StreamType::EmptyStdin => {
-                                        error = ERRNO_BADF;
-                                        nbytes = 0;
-                                        flags = 0;
                                     }
                                 },
                                 _ => unreachable!(),
@@ -2136,9 +2075,6 @@ enum Descriptor {
 
     /// Input and/or output wasi-streams, along with stream metadata.
     Streams(Streams),
-
-    /// Writes to `fd_write` will go to the `wasi-stderr` API.
-    Stderr,
 }
 
 /// Input and/or output wasi-streams, along with a stream type that
@@ -2200,9 +2136,6 @@ enum StreamType {
     /// It's a valid stream but we don't know where it comes from.
     Unknown,
 
-    /// A stdin source containing no bytes.
-    EmptyStdin,
-
     /// Streaming data with a file.
     File(File),
 
@@ -2223,10 +2156,9 @@ impl Drop for Descriptor {
                 match &stream.type_ {
                     StreamType::File(file) => filesystem::drop_descriptor(file.fd),
                     StreamType::Socket(_) => unreachable!(),
-                    StreamType::EmptyStdin | StreamType::Unknown => {}
+                    StreamType::Unknown => {}
                 }
             }
-            Descriptor::Stderr => {}
             Descriptor::Closed(_) => {}
         }
     }
@@ -2509,26 +2441,30 @@ impl State {
             }));
             &*ret
         };
-        ret.try_borrow_mut()
-            .unwrap_or_else(|_| unreachable!())
-            .init();
+        ret.borrow().init_empty_stdio();
         ret
     }
 
-    fn init(&mut self) {
-        // Set up a default stdin. This will be overridden when `main`
-        // is called.
+    fn init_empty_stdio(&self) {
+        // Initialize the stdio descriptors as empty
         self.push_desc(Descriptor::Streams(Streams {
             input: Cell::new(None),
             output: Cell::new(None),
             type_: StreamType::Unknown,
         }))
         .trapping_unwrap();
-        // Set up a default stdout, writing to the stderr device. This will
-        // be overridden when `main` is called.
-        self.push_desc(Descriptor::Stderr).trapping_unwrap();
-        // Set up a default stderr.
-        self.push_desc(Descriptor::Stderr).trapping_unwrap();
+        self.push_desc(Descriptor::Streams(Streams {
+            input: Cell::new(None),
+            output: Cell::new(None),
+            type_: StreamType::Unknown,
+        }))
+        .trapping_unwrap();
+        self.push_desc(Descriptor::Streams(Streams {
+            input: Cell::new(None),
+            output: Cell::new(None),
+            type_: StreamType::Unknown,
+        }))
+        .trapping_unwrap();
     }
 
     fn push_desc(&self, desc: Descriptor) -> Result<Fd, Errno> {
@@ -2579,7 +2515,6 @@ impl State {
         match self.get(fd)? {
             Descriptor::Streams(streams) => Ok(streams),
             Descriptor::Closed(_) => Err(ERRNO_BADF),
-            _ => Err(error),
         }
     }
 
@@ -2625,14 +2560,14 @@ impl State {
     fn get_read_stream(&self, fd: Fd) -> Result<InputStream, Errno> {
         match self.get(fd)? {
             Descriptor::Streams(streams) => streams.get_read_stream(),
-            Descriptor::Closed(_) | Descriptor::Stderr => Err(ERRNO_BADF),
+            Descriptor::Closed(_) => Err(ERRNO_BADF),
         }
     }
 
     fn get_write_stream(&self, fd: Fd) -> Result<OutputStream, Errno> {
         match self.get(fd)? {
             Descriptor::Streams(streams) => streams.get_write_stream(),
-            Descriptor::Closed(_) | Descriptor::Stderr => Err(ERRNO_BADF),
+            Descriptor::Closed(_) => Err(ERRNO_BADF),
         }
     }
 
@@ -2693,9 +2628,9 @@ impl State {
     fn get_preopens(&self) -> (Option<&[Preopen]>, &[Preopen]) {
         // Lazily initialize `env_preopens`.
         if self.env_preopens.get().is_none() {
-            #[link(wasm_import_module = "environment-preopens")]
+            #[link(wasm_import_module = "preopens")]
             extern "C" {
-                #[link_name = "preopens"]
+                #[link_name = "get-directories"]
                 fn get_preopens_import(rval: *mut PreopenList);
             }
             let mut list = PreopenList {
