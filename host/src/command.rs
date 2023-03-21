@@ -6,6 +6,7 @@ pub mod wasi {
         world: "command",
         tracing: true,
         async: true,
+        trappable_error_type: { "filesystem"::"error-code": Error }
     });
 }
 
