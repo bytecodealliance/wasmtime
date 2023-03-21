@@ -159,9 +159,6 @@ pub(crate) trait MacroAssembler {
     /// Finalize the assembly and return the result.
     fn finalize(self) -> MachBufferFinalized<Final>;
 
-    /// Call a function at a given address.
-    fn call(&mut self, addr: Reg);
-
     /// Zero a particular register.
     fn zero(&mut self, reg: Reg);
 

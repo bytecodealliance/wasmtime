@@ -1,16 +1,11 @@
-use std::mem;
-
-use anyhow::Result;
-
-use cranelift_codegen::{Final, MachBufferFinalized};
-use wasmparser::{FuncType, ValType};
-
 use crate::{
     abi::{align_to, ABIArg, ABIResult, ABI},
     codegen::call::calculate_frame_adjustment,
     masm::{CallKind, MacroAssembler, OperandSize, RegImm},
     reg::Reg,
 };
+use std::mem;
+use wasmparser::{FuncType, ValType};
 
 pub(crate) struct Trampoline<'a, A, M>
 where

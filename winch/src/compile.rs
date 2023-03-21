@@ -60,7 +60,7 @@ fn compile(env: &FuncEnv, f: (DefinedFuncIndex, FunctionBodyData<'_>)) -> Result
     let validator = validator.into_validator(Default::default());
     let buffer = env
         .isa
-        .compile_function(&sig, &body, env, validator)
+        .compile_function(&sig, &body, env, &mut validator)
         .expect("Couldn't compile function");
 
     println!("Disassembly for function: {}", index.as_u32());

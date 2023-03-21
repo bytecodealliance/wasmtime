@@ -1,19 +1,16 @@
-use std::mem;
-
-use self::{regs::{scratch, ALL_GPR}, address::Address};
+use self::regs::{scratch, ALL_GPR};
 use crate::{
-    abi::{ABI, ABIArg},
+    abi::ABI,
     codegen::{CodeGen, CodeGenContext},
-    frame::{Frame, DefinedLocals},
+    frame::{DefinedLocals, Frame},
     isa::{Builder, TargetIsa},
-    masm::{MacroAssembler, RegImm, OperandSize},
+    masm::MacroAssembler,
     regalloc::RegAlloc,
     regset::RegSet,
     stack::Stack,
-    FuncEnv,
+    FuncEnv, trampoline::Trampoline,
 };
 use anyhow::Result;
-use cranelift_wasm::WasmFuncType;
 use cranelift_codegen::settings::{self, Flags};
 use cranelift_codegen::{isa::aarch64::settings as aarch64_settings, Final, MachBufferFinalized};
 use cranelift_codegen::{MachTextSectionBuilder, TextSectionBuilder};
@@ -89,7 +86,7 @@ impl TargetIsa for Aarch64 {
         sig: &FuncType,
         body: &FunctionBody,
         env: &dyn FuncEnv,
-        mut validator: FuncValidator<ValidatorResources>,
+        validator: &mut FuncValidator<ValidatorResources>,
     ) -> Result<MachBufferFinalized<Final>> {
         let mut body = body.get_binary_reader();
         let mut masm = Aarch64Masm::new(self.shared_flags.clone());
@@ -97,7 +94,7 @@ impl TargetIsa for Aarch64 {
         let abi = abi::Aarch64ABI::default();
         let abi_sig = abi.sig(sig);
 
-        let defined_locals = DefinedLocals::new(&mut body, &mut validator)?;
+        let defined_locals = DefinedLocals::new(&mut body, validator)?;
         let frame = Frame::new(&abi_sig, &defined_locals, &abi)?;
         // TODO: Add floating point bitmask
         let regalloc = RegAlloc::new(RegSet::new(ALL_GPR, 0), scratch());
