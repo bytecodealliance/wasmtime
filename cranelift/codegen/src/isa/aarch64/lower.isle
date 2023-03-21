@@ -56,11 +56,13 @@
 
 ;; Same as the previous special cases, except we can switch the addition to a
 ;; subtraction if the negated immediate fits in 12 bits.
-(rule 2 (lower (has_type (fits_in_64 ty) (iadd x (imm12_from_negated_value y))))
-      (sub_imm ty x y))
+(rule 2 (lower (has_type (fits_in_64 ty) (iadd x y)))
+      (if-let imm12_neg (imm12_from_negated_value y))
+      (sub_imm ty x imm12_neg))
 
-(rule 3 (lower (has_type (fits_in_64 ty) (iadd (imm12_from_negated_value x) y)))
-      (sub_imm ty y x))
+(rule 3 (lower (has_type (fits_in_64 ty) (iadd x y)))
+      (if-let imm12_neg (imm12_from_negated_value x))
+      (sub_imm ty y imm12_neg))
 
 ;; Special cases for when we're adding an extended register where the extending
 ;; operation can get folded into the add itself.
@@ -650,8 +652,9 @@
 
 ;; Same as the previous special case, except we can switch the subtraction to an
 ;; addition if the negated immediate fits in 12 bits.
-(rule 2 (lower (has_type (fits_in_64 ty) (isub x (imm12_from_negated_value y))))
-      (add_imm ty x y))
+(rule 2 (lower (has_type (fits_in_64 ty) (isub x y)))
+      (if-let imm12_neg (imm12_from_negated_value y))
+      (add_imm ty x imm12_neg))
 
 ;; Special cases for when we're subtracting an extended register where the
 ;; extending operation can get folded into the sub itself.

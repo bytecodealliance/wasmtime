@@ -1704,9 +1704,6 @@
 (decl fpu_op_ri_sli (u8 u8) FPUOpRIMod)
 (extern constructor fpu_op_ri_sli fpu_op_ri_sli)
 
-(decl imm12_from_negated_u64 (Imm12) u64)
-(extern extractor imm12_from_negated_u64 imm12_from_negated_u64)
-
 (decl pure partial lshr_from_u64 (Type u64) ShiftOpAndAmt)
 (extern constructor lshr_from_u64 lshr_from_u64)
 
@@ -1734,11 +1731,13 @@
   (imm12_from_value n)
   (iconst (u64_from_imm64 (imm12_from_u64 n))))
 
-;; Same as `imm12_from_value`, but tries negating the constant value.
-(decl imm12_from_negated_value (Imm12) Value)
-(extractor
-  (imm12_from_negated_value n)
-  (iconst (u64_from_imm64 (imm12_from_negated_u64 n))))
+;; Conceptually the same as `imm12_from_value`, but tries negating the constant
+;; value (first sign-extending to handle narrow widths).
+(decl pure partial imm12_from_negated_value (Value) Imm12)
+(rule
+  (imm12_from_negated_value (has_type ty (iconst n)))
+  (if-let (imm12_from_u64 imm) (i64_as_u64 (i64_neg (i64_sextend_imm64 ty n))))
+  imm)
 
 ;; Helper type to represent a value and an extend operation fused together.
 (type ExtendedValue extern (enum))
