@@ -12,8 +12,8 @@ block0(v0: i8):
 ; VCode:
 ; block0:
 ;   sext.b t2,a0
-;   not a1,a0
-;   select_reg a3,a1,a0##condition=(t2 slt zero)
+;   not a1,t2
+;   select_reg a3,a1,t2##condition=(t2 slt zero)
 ;   andi a5,a3,255
 ;   clz a7,a5
 ;   addi t4,a7,-56
@@ -23,9 +23,9 @@ block0(v0: i8):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0x93, 0x13, 0x45, 0x60
-;   not a1, a0
+;   not a1, t2
 ;   bltz t2, 0xc
-;   ori a3, a0, 0
+;   ori a3, t2, 0
 ;   j 8
 ;   ori a3, a1, 0
 ;   andi a5, a3, 0xff
@@ -43,8 +43,8 @@ block0(v0: i16):
 ; VCode:
 ; block0:
 ;   sext.h t2,a0
-;   not a1,a0
-;   select_reg a3,a1,a0##condition=(t2 slt zero)
+;   not a1,t2
+;   select_reg a3,a1,t2##condition=(t2 slt zero)
 ;   zext.h a5,a3
 ;   clz a7,a5
 ;   addi t4,a7,-48
@@ -54,9 +54,9 @@ block0(v0: i16):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0x93, 0x13, 0x55, 0x60
-;   not a1, a0
+;   not a1, t2
 ;   bltz t2, 0xc
-;   ori a3, a0, 0
+;   ori a3, t2, 0
 ;   j 8
 ;   ori a3, a1, 0
 ;   .byte 0xbb, 0xc7, 0x06, 0x08
@@ -74,8 +74,8 @@ block0(v0: i32):
 ; VCode:
 ; block0:
 ;   sext.w t2,a0
-;   not a1,a0
-;   select_reg a3,a1,a0##condition=(t2 slt zero)
+;   not a1,t2
+;   select_reg a3,a1,t2##condition=(t2 slt zero)
 ;   clzw a5,a3
 ;   addi a0,a5,-1
 ;   ret
@@ -83,9 +83,9 @@ block0(v0: i32):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   sext.w t2, a0
-;   not a1, a0
+;   not a1, t2
 ;   bltz t2, 0xc
-;   ori a3, a0, 0
+;   ori a3, t2, 0
 ;   j 8
 ;   ori a3, a1, 0
 ;   .byte 0x9b, 0x97, 0x06, 0x60

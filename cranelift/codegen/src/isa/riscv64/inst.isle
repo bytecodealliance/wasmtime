@@ -1036,12 +1036,10 @@
     (zext result $I64 $I128)))
 
 
-
-;; TODO: LLVM lowers this as not+clz for i32/i64. We should do the same.
 (decl lower_cls (Type Reg) Reg)
 (rule (lower_cls ty r)
   (let ((tmp Reg (ext_int_if_need $true r ty))
-        (tmp2 Reg (gen_select_reg (IntCC.SignedLessThan) tmp (zero_reg) (gen_bit_not r) r))
+        (tmp2 Reg (gen_select_reg (IntCC.SignedLessThan) tmp (zero_reg) (gen_bit_not tmp) tmp))
         (tmp3 Reg (lower_clz ty tmp2)))
     (alu_rr_imm12 (AluOPRRI.Addi) tmp3 (imm12_const -1))))
 
