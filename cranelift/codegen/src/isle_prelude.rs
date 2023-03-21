@@ -40,7 +40,7 @@ macro_rules! isle_common_prelude_methods {
 
         #[inline]
         fn i64_neg(&mut self, x: i64) -> i64 {
-            - x
+            x.wrapping_neg()
         }
 
         #[inline]
