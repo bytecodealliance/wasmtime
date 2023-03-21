@@ -647,12 +647,8 @@ pub(crate) fn define(
 
     let NarrowInt = &TypeVar::new(
         "NarrowInt",
-        "An integer type with lanes type to `i64`",
-        TypeSetBuilder::new()
-            .ints(8..64)
-            .simd_lanes(Interval::All)
-            .dynamic_simd_lanes(Interval::All)
-            .build(),
+        "An integer type of width up to `i64`",
+        TypeSetBuilder::new().ints(8..64).build(),
     );
 
     let ScalarTruthy = &TypeVar::new(
@@ -3591,11 +3587,8 @@ pub(crate) fn define(
 
     let WideInt = &TypeVar::new(
         "WideInt",
-        "An integer type with lanes from `i16` upwards",
-        TypeSetBuilder::new()
-            .ints(16..128)
-            .simd_lanes(Interval::All)
-            .build(),
+        "An integer type of width `i16` upwards",
+        TypeSetBuilder::new().ints(16..128).build(),
     );
 
     ig.push(
