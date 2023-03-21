@@ -113,4 +113,8 @@ impl TargetIsa for X64 {
         // See `cranelift_codegen`'s value of this for more information.
         16
     }
+
+    fn host_to_wasm_trampoline(&self, ty: &FuncType) -> Result<MachBufferFinalized<Final>> {
+        todo!()
+    }
 }

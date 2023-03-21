@@ -119,6 +119,8 @@ pub trait TargetIsa: Send + Sync {
 
     /// See `cranelift_codegen::isa::TargetIsa::function_alignment`.
     fn function_alignment(&self) -> u32;
+
+    fn host_to_wasm_trampoline(&self, ty: &FuncType) -> Result<MachBufferFinalized<Final>>;
 }
 
 impl Debug for &dyn TargetIsa {

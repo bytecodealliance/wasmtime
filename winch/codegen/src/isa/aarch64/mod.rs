@@ -113,4 +113,8 @@ impl TargetIsa for Aarch64 {
         // See `cranelift_codegen::isa::TargetIsa::function_alignment`.
         32
     }
+
+    fn host_to_wasm_trampoline(&self, ty: &FuncType) -> Result<MachBufferFinalized<Final>> {
+        todo!()
+    }
 }
