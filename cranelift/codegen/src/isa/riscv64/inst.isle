@@ -985,14 +985,17 @@
   (if-let $true (has_zbb))
   (alu_rr_funct12 (AluOPRRI.Ctz) x))
 
-;; Count the bottom and the top half of the 128-bit value. 
-;; Only add the top half if the bottom half is 64 (i.e. all bits are 1).
+;; Count trailing zeros from a i128 bit value.
+;; We count both halves separately and conditionally add them if it makes sense.
 (decl lower_ctz_128 (ValueRegs) ValueRegs)
 (rule (lower_ctz_128 x)
-  (let ((low Reg (lower_ctz $I64 (value_regs_get x 0)))
-        (high Reg (lower_ctz $I64 (value_regs_get x 1)))
-        (const64 Reg (load_u64_constant 64))
-        (high Reg (gen_select_reg (IntCC.Equal) const64 low high (zero_reg)))
+  (let ((x_lo Reg (value_regs_get x 0))
+        (x_hi Reg (value_regs_get x 1))
+        ;; Count both halves
+        (high Reg (lower_ctz $I64 x_hi))
+        (low Reg (lower_ctz $I64 x_lo))
+        ;; Only add the top half if the bottom is zero
+        (high Reg (gen_select_reg (IntCC.Equal) x_lo (zero_reg) high (zero_reg)))
         (result Reg (alu_add low high)))
     (zext result $I64 $I128)))
 
