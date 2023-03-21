@@ -81,7 +81,7 @@ impl Frame {
     ) -> Result<Self> {
         let (mut locals, defined_locals_start) = Self::compute_arg_slots(sig, abi)?;
         locals.extend(defined_locals.defined_locals.iter().cloned());
-        let locals_size = align_to(defined_locals.stack_size, abi.stack_align().into());
+        let locals_size = align_to(defined_locals_start + defined_locals.stack_size, abi.stack_align().into());
 
         Ok(Self {
             locals,
@@ -148,31 +148,5 @@ impl Frame {
             // the stack; which is the frame pointer + return address.
             ABIArg::Stack { ty, offset } => LocalSlot::stack_arg(*ty, offset + arg_base_offset),
         }
-    }
-
-    fn compute_defined_slots(
-        reader: &mut BinaryReader<'_>,
-        validator: &mut FuncValidator<ValidatorResources>,
-        next_stack: u32,
-    ) -> Result<(Locals, u32)> {
-        let mut next_stack = next_stack;
-        let local_count = reader.read_var_u32()?;
-        let mut slots: Locals = Default::default();
-
-        for _ in 0..local_count {
-            let position = reader.original_position();
-            let count = reader.read_var_u32()?;
-            let ty = reader.read()?;
-            validator.define_locals(position, count, ty)?;
-
-            let ty: ValType = ty.try_into()?;
-            for _ in 0..count {
-                let ty_size = ty_size(&ty);
-                next_stack = align_to(next_stack, ty_size) + ty_size;
-                slots.push(LocalSlot::new(ty, next_stack));
-            }
-        }
-
-        Ok((slots, next_stack))
     }
 }

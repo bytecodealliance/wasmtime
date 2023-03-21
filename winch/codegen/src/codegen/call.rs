@@ -216,7 +216,7 @@ impl<'a> FnCall<'a> {
 
 /// Calculates the delta needed to adjust a function's frame plus some
 /// addend to a given alignment.
-fn calculate_frame_adjustment(frame_size: u32, addend: u32, alignment: u32) -> u32 {
+pub fn calculate_frame_adjustment(frame_size: u32, addend: u32, alignment: u32) -> u32 {
     let total = frame_size + addend;
     (alignment - (total % alignment)) % alignment
 }

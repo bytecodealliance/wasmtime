@@ -81,6 +81,10 @@ pub(crate) fn scratch() -> Reg {
     r11()
 }
 
+pub(crate) fn argv() -> Reg {
+    r12()
+}
+
 fn fpr(enc: u8) -> Reg {
     Reg::new(PReg::new(enc as usize, RegClass::Float))
 }

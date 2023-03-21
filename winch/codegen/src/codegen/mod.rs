@@ -10,7 +10,7 @@ mod context;
 pub(crate) use context::*;
 mod env;
 pub use env::*;
-mod call;
+pub mod call;
 
 /// The code generation abstraction.
 pub(crate) struct CodeGen<'a, A, M>

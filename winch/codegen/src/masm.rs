@@ -113,7 +113,7 @@ pub(crate) trait MacroAssembler {
     fn call(&mut self, callee: CallKind);
 
     /// Get stack pointer offset.
-    fn sp_offset(&mut self) -> u32;
+    fn sp_offset(&self) -> u32;
 
     /// Perform a stack store.
     fn store(&mut self, src: RegImm, dst: Self::Address, size: OperandSize);
