@@ -20,6 +20,43 @@ impl DefinedLocalsRange {
     }
 }
 
+#[derive(Default)]
+pub(crate) struct DefinedLocals {
+    pub defined_locals: Locals,
+    pub stack_size: u32,
+}
+
+impl DefinedLocals {
+    pub fn new(
+        reader: &mut BinaryReader<'_>,
+        validator: &mut FuncValidator<ValidatorResources>,
+    ) -> Result<Self> {
+        let mut next_stack = 0;
+        // The first 32 bits of a WASM binary function describe the number of locals
+        let local_count = reader.read_var_u32()?;
+        let mut slots: Locals = Default::default();
+
+        for _ in 0..local_count {
+            let position = reader.original_position();
+            let count = reader.read_var_u32()?;
+            let ty = reader.read()?;
+            validator.define_locals(position, count, ty)?;
+
+            let ty: ValType = ty.try_into()?;
+            for _ in 0..count {
+                let ty_size = ty_size(&ty);
+                next_stack = align_to(next_stack, ty_size) + ty_size;
+                slots.push(LocalSlot::new(ty, next_stack));
+            }
+        }
+
+        Ok(Self {
+            defined_locals: slots,
+            stack_size: next_stack,
+        })
+    }
+}
+
 /// Frame handler abstraction.
 pub(crate) struct Frame {
     /// The size of the entire local area; the arguments plus the function defined locals.
@@ -39,20 +76,17 @@ impl Frame {
     /// Allocate a new Frame.
     pub fn new<A: ABI>(
         sig: &ABISig,
-        body: &mut BinaryReader<'_>,
-        validator: &mut FuncValidator<ValidatorResources>,
+        defined_locals: &DefinedLocals,
         abi: &A,
     ) -> Result<Self> {
         let (mut locals, defined_locals_start) = Self::compute_arg_slots(sig, abi)?;
-        let (defined_slots, defined_locals_end) =
-            Self::compute_defined_slots(body, validator, defined_locals_start)?;
-        locals.extend(defined_slots);
-        let locals_size = align_to(defined_locals_end, abi.stack_align().into());
+        locals.extend(defined_locals.defined_locals.iter().cloned());
+        let locals_size = align_to(defined_locals.stack_size, abi.stack_align().into());
 
         Ok(Self {
             locals,
             locals_size,
-            defined_locals_range: DefinedLocalsRange(defined_locals_start..defined_locals_end),
+            defined_locals_range: DefinedLocalsRange(defined_locals_start..defined_locals.stack_size),
         })
     }
 

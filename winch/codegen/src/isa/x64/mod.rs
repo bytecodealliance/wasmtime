@@ -1,6 +1,6 @@
 use crate::abi::ABI;
 use crate::codegen::{CodeGen, CodeGenContext};
-use crate::frame::Frame;
+use crate::frame::{Frame, DefinedLocals};
 use crate::isa::x64::masm::MacroAssembler as X64Masm;
 use crate::masm::MacroAssembler;
 use crate::regalloc::RegAlloc;
@@ -94,7 +94,9 @@ impl TargetIsa for X64 {
         let stack = Stack::new();
         let abi = abi::X64ABI::default();
         let abi_sig = abi.sig(sig);
-        let frame = Frame::new(&abi_sig, &mut body, &mut validator, &abi)?;
+
+        let defined_locals = DefinedLocals::new(&mut body, &mut validator)?;
+        let frame = Frame::new(&abi_sig, &defined_locals, &abi)?;
         // TODO Add in floating point bitmask
         let regalloc = RegAlloc::new(RegSet::new(ALL_GPR, 0), regs::scratch());
         let codegen_context = CodeGenContext::new(regalloc, stack, &frame);
