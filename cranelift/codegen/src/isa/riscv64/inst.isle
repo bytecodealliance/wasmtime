@@ -814,17 +814,18 @@
 
 ;; bseti: Set a single bit in a register, indexed by a constant.
 (decl bseti (Reg u64) Reg)
-(rule 1 (bseti val bit)
+(rule (bseti val bit)
   (if-let $false (has_zbs))
+  (if-let $false (u64_le bit 12))
   (let ((const Reg (load_u64_constant (u64_shl 1 bit))))
     (alu_rrr (AluOPRRR.Or) val const)))
 
-(rule 2 (bseti val bit)
+(rule (bseti val bit)
   (if-let $false (has_zbs))
-  (if (u64_lteq bit 12))
+  (if-let $true (u64_le bit 12))
   (alu_rr_imm12 (AluOPRRI.Ori) val (imm12_const (u64_as_i32 (u64_shl 1 bit)))))
 
-(rule 3 (bseti val bit)
+(rule (bseti val bit)
   (if-let $true (has_zbs))
   (alu_rr_imm12 (AluOPRRI.Bseti) val (imm12_const (u64_as_i32 bit))))
 

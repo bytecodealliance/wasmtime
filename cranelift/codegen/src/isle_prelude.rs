@@ -616,15 +616,6 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
-        fn u64_lteq(&mut self, a: u64, b: u64) -> Option<()> {
-            if a <= b {
-                Some(())
-            } else {
-                None
-            }
-        }
-
-        #[inline]
         fn u32_lteq(&mut self, a: u32, b: u32) -> Option<()> {
             if a <= b {
                 Some(())
