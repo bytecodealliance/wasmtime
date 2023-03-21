@@ -102,6 +102,9 @@
 (decl u64_as_u32 (u32) u64)
 (extern extractor u64_as_u32 u64_as_u32)
 
+(decl pure u64_as_i32 (u64) i32)
+(extern constructor u64_as_i32 u64_as_i32)
+
 ;;;; Primitive Arithmetic ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (decl pure u8_and (u8 u8) u8)

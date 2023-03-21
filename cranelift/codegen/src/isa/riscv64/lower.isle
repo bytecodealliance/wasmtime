@@ -327,14 +327,14 @@
 
 
 ;;;; Rules for `ctz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule (lower (has_type ty (ctz x)))
+(rule (lower (has_type (fits_in_64 ty) (ctz x)))
   (lower_ctz ty x))
 
 (rule 1 (lower (has_type $I128 (ctz x)))
   (lower_ctz_128 x))
 
 ;;;; Rules for `clz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule (lower (has_type ty (clz x)))
+(rule (lower (has_type (fits_in_64 ty) (clz x)))
   (lower_clz ty x))
 
 (rule 1 (lower (has_type $I128 (clz x)))
@@ -342,7 +342,7 @@
   
 ;;;; Rules for `cls` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_64 ty) (cls x)))
-  (lower_cls x ty))
+  (lower_cls ty x))
 
 (rule 1 (lower (has_type $I128 (cls x)))
   (lower_cls_i128 x))
