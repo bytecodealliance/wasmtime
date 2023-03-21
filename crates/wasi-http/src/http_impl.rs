@@ -1,14 +1,16 @@
 use crate::r#struct::ActiveResponse;
 pub use crate::r#struct::WasiHttp;
-use crate::types::Scheme;
+use crate::types::{RequestOptions, Scheme};
 use anyhow::bail;
 use bytes::{BufMut, Bytes, BytesMut};
 use futures::executor;
 use http_body_util::{BodyExt, Full};
 use hyper::Method;
 use hyper::Request;
+use std::time::Duration;
 use tokio::net::TcpStream;
 use tokio::runtime::Runtime;
+use tokio::time::timeout;
 
 impl crate::default_outgoing_http::Host for WasiHttp {
     fn handle(
@@ -52,11 +54,22 @@ impl WasiHttp {
         request_id: crate::default_outgoing_http::OutgoingRequest,
         options: Option<crate::default_outgoing_http::RequestOptions>,
     ) -> wasmtime::Result<crate::default_outgoing_http::FutureIncomingResponse> {
-        if options.is_some() {
-            // Hyper 1.0.x does not appear to support timeouts, we probably have
-            // to implement them ourselves :(
-            bail!("Options are not supported (for now)")
-        }
+        let opts = match options {
+            Some(o) => o,
+            // TODO: Configurable defaults here?
+            None => RequestOptions {
+                connect_timeout_ms: Some(600 * 1000),
+                first_byte_timeout_ms: Some(600 * 1000),
+                between_bytes_timeout_ms: Some(600 * 1000),
+            },
+        };
+        let connect_timeout =
+            Duration::from_millis(opts.connect_timeout_ms.unwrap_or(600 * 1000).into());
+        let first_bytes_timeout =
+            Duration::from_millis(opts.first_byte_timeout_ms.unwrap_or(600 * 1000).into());
+        let between_bytes_timeout =
+            Duration::from_millis(opts.between_bytes_timeout_ms.unwrap_or(600 * 1000).into());
+
         let request = match self.requests.get(&request_id) {
             Some(r) => r,
             None => bail!("not found!"),
@@ -94,7 +107,12 @@ impl WasiHttp {
             let connector = tokio_native_tls::TlsConnector::from(connector);
             let host = authority.split(":").next().unwrap_or(&authority);
             let stream = connector.connect(&host, stream).await?;
-            let (s, conn) = hyper::client::conn::http1::handshake(stream).await?;
+            let t = timeout(
+                connect_timeout,
+                hyper::client::conn::http1::handshake(stream),
+            )
+            .await?;
+            let (s, conn) = t?;
             tokio::task::spawn(async move {
                 if let Err(err) = conn.await {
                     println!("Connection failed: {:?}", err);
@@ -103,7 +121,8 @@ impl WasiHttp {
             s
         } else {
             let tcp = TcpStream::connect(authority).await?;
-            let (s, conn) = hyper::client::conn::http1::handshake(tcp).await?;
+            let t = timeout(connect_timeout, hyper::client::conn::http1::handshake(tcp)).await?;
+            let (s, conn) = t?;
             tokio::task::spawn(async move {
                 if let Err(err) = conn.await {
                     println!("Connection failed: {:?}", err);
@@ -129,7 +148,8 @@ impl WasiHttp {
         self.response_id_base = self.response_id_base + 1;
         let mut response = ActiveResponse::new(response_id);
         let body = Full::<Bytes>::new(request.body.clone());
-        let mut res = sender.send_request(call.body(body)?).await?;
+        let t = timeout(first_bytes_timeout, sender.send_request(call.body(body)?)).await?;
+        let mut res = t?;
         response.status = res.status().try_into()?;
         for (key, value) in res.headers().iter() {
             let mut vec = std::vec::Vec::new();
@@ -139,7 +159,7 @@ impl WasiHttp {
                 .insert(key.as_str().to_string(), vec);
         }
         let mut buf = BytesMut::new();
-        while let Some(next) = res.frame().await {
+        while let Some(next) = timeout(between_bytes_timeout, res.frame()).await? {
             let frame = next?;
             if let Some(chunk) = frame.data_ref() {
                 buf.put(chunk.clone());
