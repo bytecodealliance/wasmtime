@@ -1028,6 +1028,24 @@ after the above declaration instead of the `extern`), the right-hand
 side expression of each rule that rewrites the term is also checked
 for purity.
 
+#### `partial` Expressions
+
+ISLE's `partial` keyword on a term indicates that the term's 
+constructors may fail to match, otherwise, the ISLE compiler assumes 
+the term's constructors are infallible.
+
+For example, the following term's constructor only matches if the value
+is zero:
+
+```
+;; Match any zero value.
+(decl pure partial is_zero_value (Value) Value)
+(extern constructor is_zero_value is_zero_value)
+```
+
+Internal constructors without the `partial` keyword can 
+only use other constructors that also do not have the `partial` keyword.
+
 #### `if` Shorthand
 
 It is a fairly common idiom that if-let clauses are used as predicates
@@ -1106,7 +1124,7 @@ Rust. The basic principles are:
    commit and start to invoke constructors to build the right-hand
    side.
    
-   Said another way, the principle is that left-hand sides are
+   Said another way, the principle is that left-hand sides can be
    fallible, and have no side-effects as they execute; right-hand
    sides, in contrast, are infallible. This simplifies the control
    flow and makes reasoning about side-effects (especially with
@@ -1162,13 +1180,12 @@ and returns a `U`.
 
 External constructors are infallible: that is, they must succeed, and
 always return their return type. In contrast, internal constructors
-are fallible because they are implemented by a list of rules whose
-patterns may not cover the entire domain. If fallible behavior is
-needed when invoking external Rust code, that behavior should occur in
-an extractor (see below) instead: only pattern left-hand sides are
-meant to be fallible. Note, incidentally, that fallibility in a
-constructor does not backtrack to try other rules; instead it just
-trickles the `None` failure all the way up.
+can be fallible because they are implemented by a list of rules whose
+patterns may not cover the entire domain (in which case, the term 
+should be marked `partial`). If fallible behavior is needed when 
+invoking external Rust code, that behavior should occur in an extractor 
+(see below) instead: only pattern left-hand sides are meant to be 
+fallible. 
 
 #### Extractors
 
