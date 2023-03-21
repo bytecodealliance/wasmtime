@@ -39,6 +39,11 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
+        fn i64_neg(&mut self, x: i64) -> i64 {
+            x.wrapping_neg()
+        }
+
+        #[inline]
         fn u64_add(&mut self, x: u64, y: u64) -> u64 {
             x.wrapping_add(y)
         }

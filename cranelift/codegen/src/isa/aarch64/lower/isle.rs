@@ -126,10 +126,6 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
         Imm12::maybe_from_u64(n)
     }
 
-    fn imm12_from_negated_u64(&mut self, n: u64) -> Option<Imm12> {
-        Imm12::maybe_from_u64((n as i64).wrapping_neg() as u64)
-    }
-
     fn imm_shift_from_u8(&mut self, n: u8) -> ImmShift {
         ImmShift::maybe_from_u64(n.into()).unwrap()
     }
