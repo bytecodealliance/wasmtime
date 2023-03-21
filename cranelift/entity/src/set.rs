@@ -253,17 +253,33 @@ mod tests {
     fn cardinality() {
         let mut m = EntitySet::new();
 
+        m.insert(E(1));
+        assert!(m.cardinality() == 1);
+
         m.insert(E(0));
-        m.insert(E(1));
         assert!(m.cardinality() == 2);
 
         m.insert(E(1));
         assert!(m.cardinality() == 2);
 
-        m.insert(E(42));
+        m.insert(E(BITS as u32 - 1));
         assert!(m.cardinality() == 3);
 
-        assert!(m.pop() == Some(E(42)));
+        m.insert(E(BITS as u32));
+        assert!(m.cardinality() == 4);
+
+        m.insert(E(BITS as u32 - 1));
+        assert!(m.cardinality() == 4);
+
+        assert!(m.pop() == Some(E(BITS as u32)));
+        assert!(m.cardinality() == 3);
+        assert!(m.pop() == Some(E(BITS as u32 - 1)));
+        assert!(m.cardinality() == 2);
+
+        m.insert(E(100));
+        assert!(m.cardinality() == 3);
+
+        assert!(m.pop() == Some(E(100)));
         assert!(m.cardinality() == 2);
 
         m.insert(E(100));
