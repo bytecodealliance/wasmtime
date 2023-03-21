@@ -82,23 +82,22 @@ block0(v0: i128):
 
 ; VCode:
 ; block0:
-;   clz a1,a1
-;   clz a2,a0
-;   li a4,64
-;   select_reg a6,a2,zero##condition=(a4 eq a1)
-;   add a0,a1,a6
+;   clz a2,a1
+;   clz a3,a0
+;   select_reg a4,a3,zero##condition=(a1 eq zero)
+;   add a0,a2,a4
 ;   li a1,0
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   .byte 0x93, 0x95, 0x05, 0x60
-;   .byte 0x13, 0x16, 0x05, 0x60
-;   addi a4, zero, 0x40
-;   beq a4, a1, 0xc
-;   ori a6, zero, 0
+;   .byte 0x13, 0x96, 0x05, 0x60
+;   .byte 0x93, 0x16, 0x05, 0x60
+;   beqz a1, 0xc
+;   ori a4, zero, 0
 ;   j 8
-;   ori a6, a2, 0
-;   add a0, a1, a6
+;   ori a4, a3, 0
+;   add a0, a2, a4
 ;   mv a1, zero
 ;   ret
+

@@ -131,11 +131,10 @@ block0(v0: i128):
 ;   select_reg a6,a4,a1##condition=(a1 slt zero)
 ;   clz t3,a6
 ;   clz t0,a2
-;   li t2,64
-;   select_reg a1,t0,zero##condition=(t2 eq t3)
-;   add a3,t3,a1
-;   li a5,0
-;   addi a0,a3,-1
+;   select_reg t2,t0,zero##condition=(a6 eq zero)
+;   add a1,t3,t2
+;   li a3,0
+;   addi a0,a1,-1
 ;   li a1,0
 ;   ret
 ; 
@@ -151,14 +150,13 @@ block0(v0: i128):
 ;   ori a6, a4, 0
 ;   .byte 0x13, 0x1e, 0x08, 0x60
 ;   .byte 0x93, 0x12, 0x06, 0x60
-;   addi t2, zero, 0x40
-;   beq t2, t3, 0xc
-;   ori a1, zero, 0
+;   beqz a6, 0xc
+;   ori t2, zero, 0
 ;   j 8
-;   ori a1, t0, 0
-;   add a3, t3, a1
-;   mv a5, zero
-;   addi a0, a3, -1
+;   ori t2, t0, 0
+;   add a1, t3, t2
+;   mv a3, zero
+;   addi a0, a1, -1
 ;   mv a1, zero
 ;   ret
 
