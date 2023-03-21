@@ -32,7 +32,7 @@ fn make_env<T>(engine: &Engine) -> Linker<T> {
 
 enum InterruptMode {
     Trap,
-    Callback(fn(&mut usize) -> Result<u64>),
+    Callback(fn(StoreContextMut<usize>) -> Result<u64>),
     Yield(u64),
 }
 
@@ -334,7 +334,8 @@ async fn epoch_callback_continue() {
                 (func $subfunc))
             ",
             1,
-            InterruptMode::Callback(|s| {
+            InterruptMode::Callback(|mut cx| {
+                let s = cx.data_mut();
                 *s += 1;
                 Ok(1)
             }),
