@@ -179,7 +179,14 @@ impl crate::types::Host for WasiHttp {
         &mut self,
         request: OutgoingRequest,
     ) -> wasmtime::Result<Result<OutgoingStream, ()>> {
-        Ok(Ok(request))
+        match self.requests.get_mut(&request) {
+            Some(req) => {
+                req.body = self.streams_id_base;
+                self.streams_id_base = self.streams_id_base + 1;
+                Ok(Ok(req.body))
+            },
+            None => bail!("unknown request!")
+        }
     }
     fn drop_response_outparam(&mut self, _response: ResponseOutparam) -> wasmtime::Result<()> {
         todo!()
@@ -223,9 +230,12 @@ impl crate::types::Host for WasiHttp {
     }
     fn incoming_response_consume(
         &mut self,
-        _response: IncomingResponse,
+        response: IncomingResponse,
     ) -> wasmtime::Result<Result<IncomingStream, ()>> {
-        todo!()
+        match self.responses.get(&response) {
+            Some(r) => Ok(Ok(r.body)),
+            None => bail!("response not found"),
+        }
     }
     fn new_outgoing_response(
         &mut self,

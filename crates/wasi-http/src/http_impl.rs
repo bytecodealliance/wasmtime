@@ -147,7 +147,7 @@ impl WasiHttp {
         let response_id = self.response_id_base;
         self.response_id_base = self.response_id_base + 1;
         let mut response = ActiveResponse::new(response_id);
-        let body = Full::<Bytes>::new(request.body.clone());
+        let body = Full::<Bytes>::new(self.streams.get(&request.body).unwrap_or(&Bytes::new()).clone());
         let t = timeout(first_bytes_timeout, sender.send_request(call.body(body)?)).await?;
         let mut res = t?;
         response.status = res.status().try_into()?;
@@ -165,7 +165,9 @@ impl WasiHttp {
                 buf.put(chunk.clone());
             }
         }
-        response.body = buf.freeze();
+        response.body = self.streams_id_base;
+        self.streams_id_base = self.streams_id_base + 1;
+        self.streams.insert(response.body, buf.freeze());
         self.responses.insert(response_id, response);
         Ok(response_id)
     }

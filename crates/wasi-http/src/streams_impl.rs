@@ -31,8 +31,8 @@ impl crate::streams::Host for WasiHttp {
     }
 
     fn drop_input_stream(&mut self, stream: InputStream) -> wasmtime::Result<()> {
-        match self.responses.get_mut(&stream) {
-            Some(r) => r.body.truncate(0),
+        match self.streams.get_mut(&stream) {
+            Some(r) => r.truncate(0),
             None => {}
         }
         Ok(())
@@ -43,12 +43,8 @@ impl crate::streams::Host for WasiHttp {
         this: OutputStream,
         buf: Vec<u8>,
     ) -> wasmtime::Result<Result<u64, StreamError>> {
-        match self.requests.get_mut(&this) {
-            Some(r) => {
-                r.body = bytes::Bytes::from(buf.clone());
-            }
-            None => bail!("not found"),
-        };
+        // TODO: Make this a real write not a replace.
+        self.streams.insert(this, bytes::Bytes::from(buf.clone()));
         Ok(Ok(buf.len().try_into().unwrap()))
     }
 

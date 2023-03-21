@@ -244,11 +244,17 @@ pub fn add_component_to_linker<T>(
         "types",
         "incoming-response-consume",
         move |mut caller: Caller<'_, T>, response: u32, ptr: i32| {
+            let ctx = get_cx(caller.data_mut());
+            let stream = match ctx.incoming_response_consume(response) {
+                Ok(s) => s.unwrap_or(0),
+                Err(_) => 0,
+            };
+
             let memory = memory_get(&mut caller).unwrap();
 
             // First == is_some
             // Second == stream_id
-            let result: [u32; 2] = [0, response];
+            let result: [u32; 2] = [0, stream];
             let raw = u32_array_to_u8(&result);
 
             memory
