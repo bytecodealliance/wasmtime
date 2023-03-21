@@ -69,20 +69,14 @@ where
         }
     }
 
-    /// Returns the cardinality of the set.  More precisely, it returns the number of calls to
+    /// Returns the cardinality of the set. More precisely, it returns the number of calls to
     /// `insert` with different key values, that have happened since the the set was most recently
     /// `clear`ed or created with `new`.
     pub fn cardinality(&self) -> usize {
-        let mut n: usize = 0;
-        for idx in 0..self.len / BITS {
-            n += self.elems[idx].count_ones() as usize;
-        }
-        for bit_ix in (self.len / BITS) * BITS..self.len {
-            if (self.elems[bit_ix / BITS] & (1 << (bit_ix % BITS))) != 0 {
-                n += 1;
-            }
-        }
-        n
+        self.elems[..(self.len + (BITS - 1)) / BITS]
+            .iter()
+            .map(|x| x.count_ones() as usize)
+            .sum()
     }
 
     /// Remove all entries from this set.
@@ -253,5 +247,44 @@ mod tests {
         }
 
         assert!(m.is_empty());
+    }
+
+    #[test]
+    fn cardinality() {
+        let mut m = EntitySet::new();
+
+        m.insert(E(1));
+        assert!(m.cardinality() == 1);
+
+        m.insert(E(0));
+        assert!(m.cardinality() == 2);
+
+        m.insert(E(1));
+        assert!(m.cardinality() == 2);
+
+        m.insert(E(BITS as u32 - 1));
+        assert!(m.cardinality() == 3);
+
+        m.insert(E(BITS as u32));
+        assert!(m.cardinality() == 4);
+
+        m.insert(E(BITS as u32 - 1));
+        assert!(m.cardinality() == 4);
+
+        assert!(m.pop() == Some(E(BITS as u32)));
+        assert!(m.cardinality() == 3);
+        assert!(m.pop() == Some(E(BITS as u32 - 1)));
+        assert!(m.cardinality() == 2);
+
+        m.insert(E(100));
+        assert!(m.cardinality() == 3);
+
+        assert!(m.pop() == Some(E(100)));
+        assert!(m.cardinality() == 2);
+
+        m.insert(E(100));
+        m.insert(E(101));
+        m.insert(E(102));
+        assert!(m.cardinality() == 5);
     }
 }
