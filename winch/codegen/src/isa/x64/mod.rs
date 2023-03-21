@@ -1,13 +1,14 @@
-use std::mem;
+use crate::{
+    abi::ABI,
+    codegen::{CodeGen, CodeGenContext},
+};
 
-use crate::abi::{ABIArg, ABI, align_to, ABIResult};
-use crate::codegen::call::calculate_frame_adjustment;
-use crate::codegen::{CodeGen, CodeGenContext};
 use crate::frame::{DefinedLocals, Frame};
 use crate::isa::x64::masm::MacroAssembler as X64Masm;
-use crate::masm::{MacroAssembler, RegImm, OperandSize, CallKind};
+use crate::masm::MacroAssembler;
 use crate::regalloc::RegAlloc;
 use crate::stack::Stack;
+use crate::trampoline::Trampoline;
 use crate::FuncEnv;
 use crate::{
     isa::{Builder, TargetIsa},
@@ -18,9 +19,8 @@ use cranelift_codegen::settings::{self, Flags};
 use cranelift_codegen::{isa::x64::settings as x64_settings, Final, MachBufferFinalized};
 use cranelift_codegen::{MachTextSectionBuilder, TextSectionBuilder};
 use target_lexicon::Triple;
-use wasmparser::{FuncType, FuncValidator, FunctionBody, ValType, ValidatorResources};
+use wasmparser::{FuncType, FuncValidator, FunctionBody, ValidatorResources};
 
-use self::address::Address;
 use self::regs::ALL_GPR;
 
 mod abi;
@@ -123,120 +123,10 @@ impl TargetIsa for X64 {
     fn host_to_wasm_trampoline(&self, ty: &FuncType) -> Result<MachBufferFinalized<Final>> {
         let abi = abi::X64ABI::default();
         let mut masm = X64Masm::new(self.shared_flags.clone(), self.isa_flags.clone());
-        let stack = Stack::new();
-        let regalloc = RegAlloc::new(RegSet::new(ALL_GPR, 0), regs::scratch());
 
-        let trampoline_ty = FuncType::new(
-            vec![ValType::I64, ValType::I64, ValType::I64, ValType::I64],
-            vec![],
-        );
-        let trampoline_sig = abi.sig(&trampoline_ty);
+        let mut trampoline = Trampoline::new(&mut masm, &abi, regs::scratch(), regs::argv());
 
-        let frame = Frame::new(&trampoline_sig, &DefinedLocals::default(), &abi)?;
-        let mut codegen_context = CodeGenContext::new(regalloc, stack, &frame);
-
-        let callee_sig = abi.sig(ty);
-
-        // This pointer needs to move onto the stack as well prior to assiging arguments to
-        // registers
-        let val_ptr = if let ABIArg::Reg { reg, ty: _ty } = &trampoline_sig.params[3] {
-            Ok(RegImm::reg(*reg))
-        } else {
-            Err(anyhow::anyhow!(""))
-        }
-        .unwrap();
-
-        let scratch = regs::scratch();
-
-        // The max size a value can be when reading from the params memory location
-        let value_size = mem::size_of::<u128>();
-
-        masm.prologue();
-
-        // Does this really make sense to do here? The value stack gets picked up by the FnCall
-        // It assumes that all arguments will be on the value stack, but for a trampoline that
-        // isn't true (but should it be?)
-        let mut offsets: [u32; 4] = [0; 4];
-
-        trampoline_sig
-            .params
-            .iter()
-            .enumerate()
-            .for_each(|(i, param)| {
-                if let ABIArg::Reg { reg, ty } = param {
-                    let offset = masm.push(*reg);
-                    offsets[i] = offset;
-                }
-            });
-
-        // How big of an operand do we need here? My stub signature has an I32 but is that right?
-        masm.mov(val_ptr, RegImm::reg(scratch), crate::masm::OperandSize::S64);
-
-        let delta = calculate_frame_adjustment(
-            masm.sp_offset(),
-            abi.arg_base_offset() as u32,
-            abi.call_stack_align() as u32,
-        );
-
-        let total_arg_stack_space = align_to(
-            callee_sig.stack_bytes + delta,
-            abi.call_stack_align() as u32,
-        );
-
-        // Keep a second scratch if we need to load a value from the stack
-        // It doesn't need to be saved and can be clobbered by the callee
-        let argv = regs::argv();
-
-        masm.reserve_stack(total_arg_stack_space);
-
-        callee_sig.params.iter().enumerate().for_each(|(i, param)| {
-            let value_offset = (i * value_size) as u32;
-
-            match param {
-                ABIArg::Reg { reg, ty } => {
-                    masm.load(Address::offset(scratch, value_offset), *reg, (*ty).into())
-                }
-                ABIArg::Stack { offset, ty } => {
-                    masm.load(Address::offset(scratch, value_offset), argv, (*ty).into());
-                    masm.store(
-                        RegImm::reg(argv),
-                        masm.address_from_sp(24 - *offset),
-                        (*ty).into(),
-                    );
-                }
-            }
-        });
-
-        // Move the function pointer from it's stack location into a scratch register
-        masm.load(
-            masm.address_from_sp(masm.sp_offset() - offsets[2]),
-            scratch,
-            OperandSize::S64,
-        );
-
-        // Call the function that was passed into the trampoline
-        masm.call(CallKind::Indirect(scratch));
-
-        masm.free_stack(total_arg_stack_space);
-
-        // Move the val ptr back into the scratch register so we can load the return values
-        masm.load(
-            masm.address_from_sp(frame.locals_size - offsets[3]),
-            scratch,
-            OperandSize::S64,
-        );
-
-        // Move the return values into the value ptr
-        // Only doing a single return value for now
-        if let ABIResult::Reg { reg, ty } = &callee_sig.result {
-            masm.store(
-                RegImm::reg(*reg),
-                Address::offset(scratch, 0),
-                (*ty).unwrap().into(),
-            );
-        }
-
-        masm.epilogue(frame.locals_size);
+        trampoline.emit_host_to_wasm(ty);
 
         Ok(masm.finalize())
     }

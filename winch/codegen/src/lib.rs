@@ -17,3 +17,4 @@ mod regalloc;
 mod regset;
 mod stack;
 mod visitor;
+mod trampoline;

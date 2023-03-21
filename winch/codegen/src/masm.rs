@@ -108,6 +108,7 @@ pub(crate) trait MacroAssembler {
     /// Constructs an address with an offset that is absolute to the
     /// current position of the stack pointer (e.g. [sp + offset].
     fn address_at_sp(&self, offset: u32) -> Self::Address;
+    fn address_from_reg(&self, reg: Reg, offset: u32) -> Self::Address;
 
     /// Emit a function call to a locally defined function.
     fn call(&mut self, callee: CallKind);

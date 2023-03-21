@@ -236,6 +236,10 @@ impl Masm for MacroAssembler {
     fn finalize(self) -> MachBufferFinalized<Final> {
         self.asm.finalize()
     }
+
+    fn address_from_reg(&self, reg: Reg, offset: u32) -> Self::Address {
+        Address::offset(reg, offset)
+    }
 }
 
 impl MacroAssembler {

@@ -80,7 +80,13 @@ impl Frame {
         abi: &A,
     ) -> Result<Self> {
         let (mut locals, defined_locals_start) = Self::compute_arg_slots(sig, abi)?;
-        locals.extend(defined_locals.defined_locals.iter().cloned());
+
+        // The defined locals have a zero-based offset by default
+        // so we need to add the defined locals start to the offset.
+        locals.extend(defined_locals.defined_locals.iter().map(|l| {
+            LocalSlot::new(l.ty, l.offset + defined_locals_start)
+        }));
+
         let locals_size = align_to(defined_locals_start + defined_locals.stack_size, abi.stack_align().into());
 
         Ok(Self {
