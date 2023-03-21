@@ -1,0 +1,4 @@
+proxy.c
+proxy.h
+proxy_component_type.o
+main.wasm
