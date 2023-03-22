@@ -902,6 +902,12 @@
 (rule (rv_addiw rs1 imm)
   (alu_rr_imm12 (AluOPRRI.Addiw) rs1 imm))
 
+;; Helper for emitting the `sext.w` ("Sign Extend Word") instruction.
+;; This instruction is a mnemonic for `addiw rd, rs, zero`.
+(decl rv_sextw (Reg) Reg)
+(rule (rv_sextw rs1)
+  (rv_addiw rs1 (imm12_const 0)))
+
 ;; Helper for emitting the `subw` ("Subtract Word") instruction.
 ;; rd ← sext32(rs1) - sext32(rs2)
 (decl rv_subw (Reg Reg) Reg)
@@ -1342,7 +1348,7 @@
 ;; `addiw val 0`. Also known as a `sext.w`
 (rule 1 (extend val (ExtendOp.Signed) $I32 $I64)
   (let ((val Reg (value_regs_get val 0)))
-    (rv_addiw val (imm12_const 0))))
+    (rv_sextw val)))
 
 
 ;; No point in trying to use `packh` here to zero extend 8 bit values
