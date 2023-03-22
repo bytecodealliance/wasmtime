@@ -710,13 +710,13 @@
 
 ;; Null references are represented by the constant value `0`.
 (rule (lower (is_null v))
-  (seqz v))
+  (rv_seqz v))
 
 ;;;;;  Rules for `is_invalid`;;;;;;;;;
 
 ;; Invalid references are represented by the constant value `-1`.
 (rule (lower (is_invalid v))
-  (seqz (rv_addi v (imm12_const 1))))
+  (rv_seqz (rv_addi v (imm12_const 1))))
 
 ;;;;;  Rules for `select`;;;;;;;;;
 (rule

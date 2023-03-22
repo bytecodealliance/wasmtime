@@ -868,7 +868,11 @@
 (rule (rv_sltiu rs1 imm)
   (alu_rr_imm12 (AluOPRRI.SltiU) rs1 imm))
 
-
+;; Helper for emitting the `seqz` instruction.
+;; This instruction is a mnemonic for `sltiu rd, rs, 1`.
+(decl rv_seqz (Reg) Reg)
+(rule (rv_seqz rs1)
+  (rv_sltiu rs1 (imm12_const 1)))
 
 
 
@@ -997,12 +1001,6 @@
 (decl select_addi (Type) AluOPRRI)
 (rule 1 (select_addi (fits_in_32 ty)) (AluOPRRI.Addiw))
 (rule (select_addi (fits_in_64 ty)) (AluOPRRI.Addi))
-
-
-;; Helper for emiting the `seqz` mnemonic
-(decl seqz (Reg) Reg)
-(rule (seqz r)
-  (rv_sltiu r (imm12_const 1)))
 
 
 (decl bnot_128 (ValueRegs) ValueRegs)
