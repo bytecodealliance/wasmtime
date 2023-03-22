@@ -1111,6 +1111,16 @@
   (rv_adduw rs1 (zero_reg)))
 
 
+;; `Zbb` Extension Instructions
+
+;; Helper for emitting the `andn` ("And Negated") instruction.
+;; rd ← rs1 ∧ ~(rs2)
+(decl rv_andn (Reg Reg) Reg)
+(rule (rv_andn rs1 rs2)
+  (alu_rrr (AluOPRRR.Andn) rs1 rs2))
+
+
+
 
 
 
@@ -2238,11 +2248,6 @@
 
 (decl load_ra () Reg)
 (extern constructor load_ra load_ra)
-
-;;;
-(decl gen_andn (Reg Reg) Reg)
-(rule 1 (gen_andn rs1 rs2)
-  (alu_rrr (AluOPRRR.Andn) rs1 rs2))
 
 ;;;
 (decl gen_orn (Reg Reg) Reg)
