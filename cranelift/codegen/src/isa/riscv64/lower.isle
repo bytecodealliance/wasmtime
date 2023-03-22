@@ -655,9 +655,8 @@
   (gen_move2 (value_regs_get x 0) ty ty))
 
 ;;;;;  Rules for `fpromote`;;;;;;;;;;;;;;;;;
-(rule
-  (lower (has_type ty (fpromote x)))
-  (fpu_rr (FpuOPRR.FcvtDS) ty x))
+(rule (lower (fpromote x))
+  (rv_fcvtds x))
 
 (rule
   (lower (has_type ty (fdemote x)))
