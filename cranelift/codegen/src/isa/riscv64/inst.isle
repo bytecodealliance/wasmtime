@@ -890,6 +890,21 @@
 (rule (rv_subw rs1 rs2)
   (alu_rrr (AluOPRRR.Subw) rs1 rs2))
 
+;; Helper for emitting the `sllw` ("Shift Left Logical Word") instruction.
+;; rd ← sext32(uext32(rs1) << rs2)
+(decl rv_sllw (Reg Reg) Reg)
+(rule (rv_sllw rs1 rs2)
+  (alu_rrr (AluOPRRR.Sllw) rs1 rs2))
+
+
+
+
+
+
+
+
+
+
 
 ;; for load immediate
 (decl imm (Type u64) Reg)
