@@ -499,13 +499,13 @@
 
 ;;;; Rules for `sshr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule 1 (lower (has_type $I8 (sshr x y)))
-  (alu_rrr (AluOPRRR.Sra) (ext_int_if_need $true x $I8) (alu_andi (value_regs_get y 0) 7))
+  (rv_sra (ext_int_if_need $true x $I8) (alu_andi (value_regs_get y 0) 7))
 )
 (rule 2 (lower (has_type $I8 (sshr x (imm12_from_value y))))
   (alu_rr_imm12 (AluOPRRI.Srai) (ext_int_if_need $true x $I8) (imm12_and y 7)))
 
 (rule 1 (lower (has_type $I16 (sshr x y)))
-  (alu_rrr (AluOPRRR.Sra) (ext_int_if_need $true x $I16) (alu_andi (value_regs_get y 0) 15))
+  (rv_sra (ext_int_if_need $true x $I16) (alu_andi (value_regs_get y 0) 15))
 )
 (rule 2 (lower (has_type $I16 (sshr x (imm12_from_value y))))
   (alu_rr_imm12 (AluOPRRI.Srai) (ext_int_if_need $true x $I16) (imm12_and y 15)))
@@ -515,7 +515,7 @@
 (rule 2 (lower (has_type $I32 (sshr x (imm12_from_value y))))
   (alu_rr_imm12 (AluOPRRI.Sraiw) x y))
 (rule 1 (lower (has_type $I64 (sshr x y)))
-  (alu_rrr (AluOPRRR.Sra) x (value_regs_get y 0)))
+  (rv_sra x (value_regs_get y 0)))
 (rule 2 (lower (has_type $I64 (sshr x (imm12_from_value y))))
   (alu_rr_imm12 (AluOPRRI.Srai) x y))
 (rule 0 (lower (has_type $I128 (sshr x y)))

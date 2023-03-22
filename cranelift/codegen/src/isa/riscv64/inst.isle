@@ -790,6 +790,12 @@
 (rule (rv_srl rs1 rs2)
   (alu_rrr (AluOPRRR.Srl) rs1 rs2))
 
+;; Helper for emitting the `sra` ("Shift Right Arithmetic") instruction.
+;; rd ← rs1 >> rs2
+(decl rv_sra (Reg Reg) Reg)
+(rule (rv_sra rs1 rs2)
+  (alu_rrr (AluOPRRR.Sra) rs1 rs2))
+
 
 
 
@@ -1480,7 +1486,7 @@
       ;;
       (const64 Reg (load_u64_constant 64))
       ;;
-      (high Reg (alu_rrr (AluOPRRR.Sra) (value_regs_get x 1) shamt))
+      (high Reg (rv_sra (value_regs_get x 1) shamt))
       ;;
       (const_neg_1 Reg (load_imm12 -1))
       ;;
