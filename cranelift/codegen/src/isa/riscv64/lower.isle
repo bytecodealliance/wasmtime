@@ -552,10 +552,8 @@
   (fpu_rrr (f_copysign_op ty) ty x y))
 
 ;;;; Rules for `fma` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule (lower (has_type $F32 (fma x y z)))
-  (fpu_rrrr (FpuOPRRRR.FmaddS) $F64 x y z))
-(rule (lower (has_type $F64 (fma x y z)))
-  (fpu_rrrr (FpuOPRRRR.FmaddD) $F64 x y z))
+(rule (lower (has_type ty (fma x y z)))
+  (rv_fmadd ty x y z))
 
 
 ;;;; Rules for `sqrt` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

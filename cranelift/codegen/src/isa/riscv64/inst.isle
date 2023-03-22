@@ -1060,6 +1060,11 @@
 (rule (rv_fsqrt $F32 rs1) (fpu_rr (FpuOPRR.FsqrtS) $F32 rs1))
 (rule (rv_fsqrt $F64 rs1) (fpu_rr (FpuOPRR.FsqrtD) $F64 rs1))
 
+;; Helper for emitting the `fmadd` instruction.
+(decl rv_fmadd (Type Reg Reg Reg) Reg)
+(rule (rv_fmadd $F32 rs1 rs2 rs3) (fpu_rrrr (FpuOPRRRR.FmaddS) $F32 rs1 rs2 rs3))
+(rule (rv_fmadd $F64 rs1 rs2 rs3) (fpu_rrrr (FpuOPRRRR.FmaddD) $F64 rs1 rs2 rs3))
+
 
 
 
