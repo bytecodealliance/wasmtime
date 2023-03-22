@@ -1125,6 +1125,11 @@
 (rule (rv_orn rs1 rs2)
   (alu_rrr (AluOPRRR.Orn) rs1 rs2))
 
+;; Helper for emitting the `clz` ("Count Leading Zero Bits") instruction.
+(decl rv_clz (Reg) Reg)
+(rule (rv_clz rs1)
+  (alu_rr_funct12 (AluOPRRI.Clz) rs1))
+
 
 
 
@@ -1336,7 +1341,7 @@
 (rule 1 (lower_clz (fits_in_16 ty) r)
   (if-let $true (has_zbb))
   (let ((tmp Reg (zext r ty $I64))
-        (count Reg (alu_rr_funct12 (AluOPRRI.Clz) tmp))
+        (count Reg (rv_clz tmp))
         ;; We always do the operation on the full 64-bit register, so subtract 64 from the result.
         (result Reg (rv_addi count (imm12_const_add (ty_bits ty) -64))))
     result))
@@ -1347,7 +1352,7 @@
 
 (rule 2 (lower_clz $I64 r)
   (if-let $true (has_zbb))
-  (alu_rr_funct12 (AluOPRRI.Clz) r))
+  (rv_clz r))
 
 
 ;; Count leading zeros from a i128 bit value.
