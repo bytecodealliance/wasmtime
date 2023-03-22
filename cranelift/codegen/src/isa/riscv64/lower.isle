@@ -90,7 +90,7 @@
 (rule 7 (lower (has_type $I128 (iadd x y)))
   (let ((low Reg (rv_add (value_regs_get x 0) (value_regs_get y 0)))
         ;; compute carry.
-        (carry Reg (alu_rrr (AluOPRRR.SltU) low (value_regs_get y 0)))
+        (carry Reg (rv_sltu low (value_regs_get y 0)))
         ;;
         (high_tmp Reg (rv_add (value_regs_get x 1) (value_regs_get y 1)))
         ;; add carry.

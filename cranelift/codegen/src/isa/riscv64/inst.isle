@@ -862,8 +862,14 @@
 (rule (rv_andi rs1 imm)
   (alu_rr_imm12 (AluOPRRI.Andi) rs1 imm))
 
+;; Helper for emitting the `sltu` ("Set Less Than Unsigned") instruction.
+;; rd ← rs1 < rs2
+(decl rv_sltu (Reg Reg) Reg)
+(rule (rv_sltu rs1 rs2)
+  (alu_rrr (AluOPRRR.SltU) rs1 rs2))
+
 ;; Helper for emiting the `sltiu` ("Set Less Than Immediate Unsigned") instruction.
-;; rd ← rs1 < ux(imm)
+;; rd ← rs1 < imm
 (decl rv_sltiu (Reg Imm12) Reg)
 (rule (rv_sltiu rs1 imm)
   (alu_rr_imm12 (AluOPRRI.SltiU) rs1 imm))
@@ -1976,7 +1982,7 @@
     (;; low part.
       (low Reg (rv_sub (value_regs_get x 0) (value_regs_get y 0)))
       ;; compute borrow.
-      (borrow Reg (alu_rrr (AluOPRRR.SltU) (value_regs_get x 0) low))
+      (borrow Reg (rv_sltu (value_regs_get x 0) low))
       ;;
       (high_tmp Reg (rv_sub (value_regs_get x 1) (value_regs_get y 1)))
       ;;
