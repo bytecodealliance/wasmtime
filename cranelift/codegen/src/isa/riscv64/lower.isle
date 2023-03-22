@@ -128,7 +128,7 @@
 (rule -2 (lower (has_type (fits_in_64 ty) (imul x y)))
   (rv_mul x y))
 (rule -1 (lower (has_type (fits_in_32 ty) (imul x y)))
-  (alu_rrr (AluOPRRR.Mulw) x y))
+  (rv_mulw x y))
 
 ;;;; Rules for `smulhi` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_64 ty) (smulhi x y)))

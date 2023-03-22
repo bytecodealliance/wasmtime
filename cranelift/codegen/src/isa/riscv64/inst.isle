@@ -979,6 +979,13 @@
 
 
 
+;; RV64M Extension
+
+;; Helper for emitting the `mulw` ("Multiply Word") instruction.
+;; rd ← uext32(rs1) × uext32(rs2)
+(decl rv_mulw (Reg Reg) Reg)
+(rule (rv_mulw rs1 rs2)
+  (alu_rrr (AluOPRRR.Mulw) rs1 rs2))
 
 
 
