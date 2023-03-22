@@ -2515,6 +2515,89 @@ pub(crate) fn emit(
                 .encode(sink);
         }
 
+        Inst::XmmToGprVex {
+            op,
+            src,
+            dst,
+            dst_size,
+        } => {
+            let src = allocs.next(src.to_reg());
+            let dst = allocs.next(dst.to_reg().to_reg());
+
+            let (prefix, map, opcode) = match op {
+                // vmovd/vmovq are differentiated by `w`
+                AvxOpcode::Vmovd | AvxOpcode::Vmovq => (LegacyPrefixes::_66, OpcodeMap::_0F, 0x7E),
+                AvxOpcode::Vmovmskps => (LegacyPrefixes::None, OpcodeMap::_0F, 0x50),
+                AvxOpcode::Vmovmskpd => (LegacyPrefixes::_66, OpcodeMap::_0F, 0x50),
+                AvxOpcode::Vpmovmskb => (LegacyPrefixes::_66, OpcodeMap::_0F, 0xD7),
+                _ => unimplemented!("Opcode {:?} not implemented", op),
+            };
+            let w = match dst_size {
+                OperandSize::Size64 => true,
+                _ => false,
+            };
+            let mut vex = VexInstruction::new()
+                .length(VexVectorLength::V128)
+                .w(w)
+                .prefix(prefix)
+                .map(map)
+                .opcode(opcode);
+            vex = match op {
+                // The `vmovq/vmovd` reverse the order of the destination/source
+                // relative to other opcodes using this shape of instruction.
+                AvxOpcode::Vmovd | AvxOpcode::Vmovq => vex
+                    .rm(dst.to_real_reg().unwrap().hw_enc())
+                    .reg(src.to_real_reg().unwrap().hw_enc()),
+                _ => vex
+                    .rm(src.to_real_reg().unwrap().hw_enc())
+                    .reg(dst.to_real_reg().unwrap().hw_enc()),
+            };
+            vex.encode(sink);
+        }
+
+        Inst::GprToXmmVex {
+            op,
+            src,
+            dst,
+            src_size,
+        } => {
+            let dst = allocs.next(dst.to_reg().to_reg());
+            let src = match src.clone().to_reg_mem().with_allocs(allocs) {
+                RegMem::Reg { reg } => {
+                    RegisterOrAmode::Register(reg.to_real_reg().unwrap().hw_enc().into())
+                }
+                RegMem::Mem { addr } => RegisterOrAmode::Amode(addr.finalize(state, sink)),
+            };
+
+            let (prefix, map, opcode) = match op {
+                // vmovd/vmovq are differentiated by `w`
+                AvxOpcode::Vmovd | AvxOpcode::Vmovq => (LegacyPrefixes::_66, OpcodeMap::_0F, 0x6E),
+                AvxOpcode::Vcvtsi2ss => (LegacyPrefixes::_F3, OpcodeMap::_0F, 0x2A),
+                AvxOpcode::Vcvtsi2sd => (LegacyPrefixes::_F2, OpcodeMap::_0F, 0x2A),
+                _ => unimplemented!("Opcode {:?} not implemented", op),
+            };
+            let w = match src_size {
+                OperandSize::Size64 => true,
+                _ => false,
+            };
+            let mut insn = VexInstruction::new()
+                .length(VexVectorLength::V128)
+                .w(w)
+                .prefix(prefix)
+                .map(map)
+                .opcode(opcode)
+                .rm(src)
+                .reg(dst.to_real_reg().unwrap().hw_enc());
+            // These opcodes technically take a second operand which is the
+            // upper bits to preserve during the float conversion. We don't
+            // actually use this in this backend right now so reuse the
+            // destination register. This at least matches what LLVM does.
+            if let AvxOpcode::Vcvtsi2ss | AvxOpcode::Vcvtsi2sd = op {
+                insn = insn.vvvv(dst.to_real_reg().unwrap().hw_enc());
+            }
+            insn.encode(sink);
+        }
+
         Inst::XmmRmREvex {
             op,
             src1,

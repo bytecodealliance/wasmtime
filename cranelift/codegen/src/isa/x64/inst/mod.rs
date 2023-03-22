@@ -158,7 +158,9 @@ impl Inst {
             | Inst::XmmUnaryRmRImmVex { op, .. }
             | Inst::XmmMovRMVex { op, .. }
             | Inst::XmmMovRMImmVex { op, .. }
-            | Inst::XmmToGprImmVex { op, .. } => op.available_from(),
+            | Inst::XmmToGprImmVex { op, .. }
+            | Inst::XmmToGprVex { op, .. }
+            | Inst::GprToXmmVex { op, .. } => op.available_from(),
         }
     }
 }
@@ -1202,6 +1204,18 @@ impl PrettyPrint for Inst {
                 format!("{} {}, {}", ljustify(op.to_string()), src, dst)
             }
 
+            Inst::XmmToGprVex {
+                op,
+                src,
+                dst,
+                dst_size,
+            } => {
+                let dst_size = dst_size.to_bytes();
+                let src = pretty_print_reg(src.to_reg(), 8, allocs);
+                let dst = pretty_print_reg(dst.to_reg().to_reg(), dst_size, allocs);
+                format!("{} {src}, {dst}", ljustify(op.to_string()))
+            }
+
             Inst::XmmToGprImm { op, src, dst, imm } => {
                 let src = pretty_print_reg(src.to_reg(), 8, allocs);
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
@@ -1223,6 +1237,17 @@ impl PrettyPrint for Inst {
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
                 let src = src.pretty_print(src_size.to_bytes(), allocs);
                 format!("{} {}, {}", ljustify(op.to_string()), src, dst)
+            }
+
+            Inst::GprToXmmVex {
+                op,
+                src,
+                src_size,
+                dst,
+            } => {
+                let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
+                let src = src.pretty_print(src_size.to_bytes(), allocs);
+                format!("{} {src}, {dst}", ljustify(op.to_string()))
             }
 
             Inst::XmmCmpRmR { op, src, dst } => {
@@ -2082,12 +2107,13 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             collector.reg_fixed_nonallocatable(*dst);
         }
         Inst::XmmToGpr { src, dst, .. }
+        | Inst::XmmToGprVex { src, dst, .. }
         | Inst::XmmToGprImm { src, dst, .. }
         | Inst::XmmToGprImmVex { src, dst, .. } => {
             collector.reg_use(src.to_reg());
             collector.reg_def(dst.to_writable_reg());
         }
-        Inst::GprToXmm { src, dst, .. } => {
+        Inst::GprToXmm { src, dst, .. } | Inst::GprToXmmVex { src, dst, .. } => {
             collector.reg_def(dst.to_writable_reg());
             src.get_operands(collector);
         }

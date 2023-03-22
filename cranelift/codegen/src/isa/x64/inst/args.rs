@@ -1715,7 +1715,14 @@ impl AvxOpcode {
             | AvxOpcode::Vpextrq
             | AvxOpcode::Vpblendw
             | AvxOpcode::Vmovddup
-            | AvxOpcode::Vbroadcastss => {
+            | AvxOpcode::Vbroadcastss
+            | AvxOpcode::Vmovd
+            | AvxOpcode::Vmovq
+            | AvxOpcode::Vmovmskps
+            | AvxOpcode::Vmovmskpd
+            | AvxOpcode::Vpmovmskb
+            | AvxOpcode::Vcvtsi2ss
+            | AvxOpcode::Vcvtsi2sd => {
                 smallvec![InstructionSet::AVX]
             }
 
