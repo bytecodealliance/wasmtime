@@ -844,6 +844,12 @@
 (rule (rv_xori rs1 imm)
   (alu_rr_imm12 (AluOPRRI.Xori) rs1 imm))
 
+;; Helper for emitting the `not` instruction.
+;; This instruction is a mnemonic for `xori rd, rs1, -1`.
+(decl rv_not (Reg) Reg)
+(rule (rv_not rs1)
+  (rv_xori rs1 (imm12_const -1)))
+
 ;; Helper for emitting the `and` instruction.
 ;; rd ← rs1 ∧ rs2
 (decl rv_and (Reg Reg) Reg)
@@ -855,6 +861,9 @@
 (decl rv_andi (Reg Imm12) Reg)
 (rule (rv_andi rs1 imm)
   (alu_rr_imm12 (AluOPRRI.Andi) rs1 imm))
+
+
+
 
 
 
@@ -1002,9 +1011,9 @@
   (bnot_128 val)
   (let
     (;; low part.
-      (low Reg (gen_bit_not (value_regs_get val 0)))
+      (low Reg (rv_not (value_regs_get val 0)))
       ;; high part.
-      (high Reg (gen_bit_not (value_regs_get val 1))))
+      (high Reg (rv_not (value_regs_get val 1))))
     (value_regs low high)))
 
 (decl lower_bit_reverse (Reg Type) Reg)
@@ -1106,7 +1115,7 @@
 (decl lower_cls (Type Reg) Reg)
 (rule (lower_cls ty r)
   (let ((tmp Reg (ext_int_if_need $true r ty))
-        (tmp2 Reg (gen_select_reg (IntCC.SignedLessThan) tmp (zero_reg) (gen_bit_not tmp) tmp))
+        (tmp2 Reg (gen_select_reg (IntCC.SignedLessThan) tmp (zero_reg) (rv_not tmp) tmp))
         (tmp3 Reg (lower_clz ty tmp2)))
     (rv_addi tmp3 (imm12_const -1))))
 
@@ -1117,8 +1126,8 @@
 (rule (lower_cls_i128 x)
   (let ((low Reg (value_regs_get x 0))
         (high Reg (value_regs_get x 1))
-        (low Reg (gen_select_reg (IntCC.SignedLessThan) high (zero_reg) (gen_bit_not low) low))
-        (high Reg (gen_select_reg (IntCC.SignedLessThan) high (zero_reg) (gen_bit_not high) high))
+        (low Reg (gen_select_reg (IntCC.SignedLessThan) high (zero_reg) (rv_not low) low))
+        (high Reg (gen_select_reg (IntCC.SignedLessThan) high (zero_reg) (rv_not high) high))
         (tmp ValueRegs (lower_clz_i128 (value_regs low high)))
         (count Reg (value_regs_get tmp 0))
         (result Reg (rv_addi count (imm12_const -1))))
@@ -1691,11 +1700,6 @@
   (side_effect (SideEffectNoResult.Inst (MInst.AtomicStore src ty p)))
 )
 
-;; helper function to inverse all bits.
-(decl gen_bit_not (Reg) Reg)
-(rule (gen_bit_not r)
-  (rv_xori r (imm12_const -1)))
-
 
 ;; float arithmatic op
 (decl f_arithmatic_op (Type Opcode) FpuOPRRR)
@@ -1802,7 +1806,7 @@
   (let
     ((tmp_x Reg (rv_and c x))
       ;;;inverse condition
-      (c_inverse Reg (gen_bit_not c))
+      (c_inverse Reg (rv_not c))
       ;;;get all y part.
       (tmp_y Reg (rv_and c_inverse y))
       ;;;get reuslt.
@@ -1897,7 +1901,7 @@
     (;; move to x register.
       (tmp Reg (move_f_to_x x ty))
       ;; inverse all bits.
-      (tmp2 Reg (gen_bit_not tmp)))
+      (tmp2 Reg (rv_not tmp)))
     ;; move back to float register.
     (move_x_to_f tmp2 ty)))
 
