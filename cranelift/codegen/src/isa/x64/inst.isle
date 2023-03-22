@@ -4298,9 +4298,18 @@
       (let ((size OperandSize (raw_operand_size_of_type ty)))
         (icmp_cond_result (x64_cmp size a b) (intcc_reverse cc))))
 
+;; Special case: use the test instruction for comparisons with 0.
+(rule 2 (emit_cmp cc a @ (value_type ty) (u64_from_iconst 0))
+      (let ((size OperandSize (raw_operand_size_of_type ty)))
+        (icmp_cond_result (x64_test size a a) cc)))
+
+(rule 3 (emit_cmp cc (u64_from_iconst 0) b @ (value_type ty))
+      (let ((size OperandSize (raw_operand_size_of_type ty)))
+        (icmp_cond_result (x64_test size b b) (intcc_reverse cc))))
+
 ;; For I128 values (held in two GPRs), the instruction sequences depend on what
 ;; kind of condition is tested.
-(rule 3 (emit_cmp (IntCC.Equal) a @ (value_type $I128) b)
+(rule 5 (emit_cmp (IntCC.Equal) a @ (value_type $I128) b)
       (let ((a_lo Gpr (value_regs_get_gpr a 0))
             (a_hi Gpr (value_regs_get_gpr a 1))
             (b_lo Gpr (value_regs_get_gpr b 0))
@@ -4321,7 +4330,7 @@
           (x64_test (OperandSize.Size64) (RegMemImm.Imm 1) cmp)
           (CC.NZ))))
 
-(rule 3 (emit_cmp (IntCC.NotEqual) a @ (value_type $I128) b)
+(rule 5 (emit_cmp (IntCC.NotEqual) a @ (value_type $I128) b)
       (let ((a_lo Gpr (value_regs_get_gpr a 0))
             (a_hi Gpr (value_regs_get_gpr a 1))
             (b_lo Gpr (value_regs_get_gpr b 0))
@@ -4336,7 +4345,7 @@
 
 ;; Result = (a_hi <> b_hi) ||
 ;;          (a_hi == b_hi && a_lo <> b_lo)
-(rule 2 (emit_cmp cc a @ (value_type $I128) b)
+(rule 4 (emit_cmp cc a @ (value_type $I128) b)
       (let ((a_lo Gpr (value_regs_get_gpr a 0))
             (a_hi Gpr (value_regs_get_gpr a 1))
             (b_lo Gpr (value_regs_get_gpr b 0))
