@@ -538,9 +538,8 @@
 
 
 ;;;; Rules for `fabs` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule
-  (lower (has_type ty (fabs x)))
-  (gen_fabs x ty))
+(rule (lower (has_type ty (fabs x)))
+  (rv_fsgnjx ty x x))
 
 ;;;; Rules for `fneg` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type ty (fneg x)))

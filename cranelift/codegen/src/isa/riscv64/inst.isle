@@ -1066,17 +1066,25 @@
 (rule (rv_fmadd $F64 rs1 rs2 rs3) (fpu_rrrr (FpuOPRRRR.FmaddD) $F64 rs1 rs2 rs3))
 
 ;; Helper for emitting the `fsgnj` ("Floating Point Sign Injection") instruction.
+;; The output of this instruction is `rs1` with the sign bit from `rs2`
 ;; This implements the `copysign` operation
 (decl rv_fsgnj (Type Reg Reg) Reg)
 (rule (rv_fsgnj $F32 rs1 rs2) (fpu_rrr (FpuOPRRR.FsgnjS) $F32 rs1 rs2))
 (rule (rv_fsgnj $F64 rs1 rs2) (fpu_rrr (FpuOPRRR.FsgnjD) $F64 rs1 rs2))
 
 ;; Helper for emitting the `fsgnjn` ("Floating Point Sign Injection Negated") instruction.
-;; This implements the `neg` operation
+;; The output of this instruction is `rs1` with the negated sign bit from `rs2`
+;; When `rs1 == rs2` this implements the `neg` operation
 (decl rv_fsgnjn (Type Reg Reg) Reg)
 (rule (rv_fsgnjn $F32 rs1 rs2) (fpu_rrr (FpuOPRRR.FsgnjnS) $F32 rs1 rs2))
 (rule (rv_fsgnjn $F64 rs1 rs2) (fpu_rrr (FpuOPRRR.FsgnjnD) $F64 rs1 rs2))
 
+;; Helper for emitting the `fsgnjx` ("Floating Point Sign Injection Exclusive") instruction.
+;; The output of this instruction is `rs1` with the XOR of the sign bits from `rs1` and `rs2`.
+;; When `rs1 == rs2` this implements `fabs`
+(decl rv_fsgnjx (Type Reg Reg) Reg)
+(rule (rv_fsgnjx $F32 rs1 rs2) (fpu_rrr (FpuOPRRR.FsgnjxS) $F32 rs1 rs2))
+(rule (rv_fsgnjx $F64 rs1 rs2) (fpu_rrr (FpuOPRRR.FsgnjxD) $F64 rs1 rs2))
 
 
 
@@ -1908,10 +1916,6 @@
 (decl move_x_to_f (Reg Type) Reg)
 (extern constructor move_x_to_f move_x_to_f)
 
-(decl fabs_copy_sign (Type) FpuOPRRR)
-(rule (fabs_copy_sign $F32) (FpuOPRRR.FsgnjxS))
-(rule (fabs_copy_sign $F64) (FpuOPRRR.FsgnjxD))
-
 (decl gen_stack_addr (StackSlot Offset32) Reg )
 (extern constructor gen_stack_addr gen_stack_addr)
 
@@ -2085,11 +2089,6 @@
       (high Reg (rv_sub high_tmp borrow)))
     (value_regs low high)))
 
-
-(decl gen_fabs (Reg Type) Reg)
-(rule
-  (gen_fabs x ty)
-  (fpu_rrr (fabs_copy_sign ty) ty x x))
 
 ;;; Returns the sum in the first register, and the overflow test in the second.
 (decl lower_uadd_overflow (Reg Reg Type) ValueRegs)
