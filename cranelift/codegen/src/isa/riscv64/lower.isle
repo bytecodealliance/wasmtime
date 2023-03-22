@@ -559,11 +559,8 @@
 
 
 ;;;; Rules for `sqrt` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule (lower (has_type $F32 (sqrt x)))
-  (fpu_rr (FpuOPRR.FsqrtS) $F64 x))
-
-(rule (lower (has_type $F64 (sqrt x)))
-  (fpu_rr (FpuOPRR.FsqrtD) $F64 x))
+(rule (lower (has_type ty (sqrt x)))
+  (rv_fsqrt ty x))
 
 
 ;;;; Rules for `AtomicRMW` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

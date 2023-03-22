@@ -1055,6 +1055,11 @@
 (rule (rv_fdiv $F32 rs1 rs2) (fpu_rrr (FpuOPRRR.FdivS) $F32 rs1 rs2))
 (rule (rv_fdiv $F64 rs1 rs2) (fpu_rrr (FpuOPRRR.FdivD) $F64 rs1 rs2))
 
+;; Helper for emitting the `fsqrt` instruction.
+(decl rv_fsqrt (Type Reg) Reg)
+(rule (rv_fsqrt $F32 rs1) (fpu_rr (FpuOPRR.FsqrtS) $F32 rs1))
+(rule (rv_fsqrt $F64 rs1) (fpu_rr (FpuOPRR.FsqrtD) $F64 rs1))
+
 
 
 
