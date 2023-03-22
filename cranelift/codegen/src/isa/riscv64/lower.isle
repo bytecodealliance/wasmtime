@@ -227,7 +227,7 @@
 (rule (lower (has_type $I64 (urem x y)))
   (let
     ((_ InstOutput (gen_div_by_zero y)))
-    (alu_rrr (AluOPRRR.RemU) x y)))
+    (rv_remu x y)))
 
 ;;;; Rules for `and` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule -1 (lower (has_type (fits_in_64 (ty_int ty)) (band x y)))
