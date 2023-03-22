@@ -112,7 +112,7 @@
   (rv_sub x y))
 
 (rule -1 (lower (has_type (fits_in_32 ty) (isub x y)))
-  (alu_rrr (AluOPRRR.Subw) x y))
+  (rv_subw x y))
 
 (rule (lower (has_type $I128 (isub x y)))
   (i128_sub x y))
@@ -405,7 +405,7 @@
   (rv_addw x y))
 
 (rule 1 (lower (has_type $I64 (sextend (has_type $I32 (isub x y)))))
-  (alu_rrr (AluOPRRR.Subw) x y))
+  (rv_subw x y))
 
 (rule 1 (lower (has_type $I64 (sextend (has_type $I32 (ishl x y)))))
   (alu_rrr (AluOPRRR.Sllw) x (value_regs_get y 0)))

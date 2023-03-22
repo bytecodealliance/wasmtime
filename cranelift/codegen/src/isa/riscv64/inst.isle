@@ -884,7 +884,11 @@
 (rule (rv_addw rs1 rs2)
   (alu_rrr (AluOPRRR.Addw) rs1 rs2))
 
-
+;; Helper for emitting the `subw` ("Subtract Word") instruction.
+;; rd ← sext32(rs1) - sext32(rs2)
+(decl rv_subw (Reg Reg) Reg)
+(rule (rv_subw rs1 rs2)
+  (alu_rrr (AluOPRRR.Subw) rs1 rs2))
 
 
 ;; for load immediate
