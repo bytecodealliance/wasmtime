@@ -282,10 +282,10 @@
 
 ;; Special cases for when one operand is an immediate that fits in 12 bits.
 (rule 2 (lower (has_type (fits_in_64 (ty_int ty)) (bor x (imm12_from_value y))))
-  (alu_rr_imm12 (AluOPRRI.Ori) x y))
+  (rv_ori x y))
 
 (rule 1 (lower (has_type (fits_in_64 (ty_int ty)) (bor (imm12_from_value x) y)))
-  (alu_rr_imm12 (AluOPRRI.Ori) y x))
+  (rv_ori y x))
 
 (rule (lower (has_type $I128 (bor x y)))
   (lower_b128_binary (AluOPRRR.Or) x y))
