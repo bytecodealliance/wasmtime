@@ -1103,6 +1103,18 @@
 (rule (rv_adduw rs1 rs2)
   (alu_rrr (AluOPRRR.Adduw) rs1 rs2))
 
+;; Helper for emitting the `zext.w` ("Zero Extend Word") instruction.
+;; This instruction is a mnemonic for `adduw rd, rs1, zero`.
+;; rd ← uext32(rs1)
+(decl rv_zextw (Reg) Reg)
+(rule (rv_zextw rs1)
+  (rv_adduw rs1 (zero_reg)))
+
+
+
+
+
+
 
 ;; for load immediate
 (decl imm (Type u64) Reg)
@@ -1461,7 +1473,7 @@
 (rule 2 (extend val (ExtendOp.Zero) $I32 $I64)
   (if-let $true (has_zba))
   (let ((val Reg (value_regs_get val 0)))
-    (rv_adduw val (zero_reg))))
+    (rv_zextw val)))
 
 ;;; Signed rules extending to I128
 ;; Extend the bottom part, and extract the sign bit from the bottom as the top
