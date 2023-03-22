@@ -424,7 +424,7 @@
   (alu_rr_imm12 (AluOPRRI.Addiw) y x))
 
 (rule 2 (lower (has_type $I64 (sextend (has_type $I32 (ishl x (imm12_from_value y))))))
-  (alu_rr_imm12 (AluOPRRI.Slliw) x y))
+  (rv_slliw x y))
 
 (rule 2 (lower (has_type $I64 (sextend (has_type $I32 (ushr x (imm12_from_value y))))))
   (alu_rr_imm12 (AluOPRRI.SrliW) x y))
@@ -443,18 +443,18 @@
   (rv_sllw x (rv_andi (value_regs_get y 0) (imm12_const 7))))
 
 (rule 2 (lower (has_type $I8 (ishl x (imm12_from_value y))))
-  (alu_rr_imm12 (AluOPRRI.Slliw) x (imm12_and y 7)))
+  (rv_slliw x (imm12_and y 7)))
 
 (rule 1 (lower (has_type $I16 (ishl x y)))
   (rv_sllw x (rv_andi (value_regs_get y 0) (imm12_const 15))))
 
 (rule 2 (lower (has_type $I16 (ishl x (imm12_from_value y))))
-  (alu_rr_imm12 (AluOPRRI.Slliw) x (imm12_and y 15)))
+  (rv_slliw x (imm12_and y 15)))
 
 (rule 1 (lower (has_type $I32 (ishl x y)))
   (rv_sllw x (value_regs_get y 0)))
 (rule 2 (lower (has_type $I32 (ishl x (imm12_from_value y))))
-  (alu_rr_imm12 (AluOPRRI.Slliw) x y))
+  (rv_slliw x y))
 
 (rule 2 (lower (has_type $I64 (ishl x (imm12_from_value y))))
   (rv_slli x y))
