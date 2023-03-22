@@ -767,14 +767,22 @@
 ;; RV32I Base Integer Instruction Set
 
 ;; Helper for emitting the `add` instruction.
+;; rd ← rs1 + rs2
 (decl rv_add (Reg Reg) Reg)
 (rule (rv_add rs1 rs2)
   (alu_rrr (AluOPRRR.Add) rs1 rs2))
 
 ;; Helper for emitting the `sub` instruction.
+;; rd ← rs1 - rs2
 (decl rv_sub (Reg Reg) Reg)
 (rule (rv_sub rs1 rs2)
   (alu_rrr (AluOPRRR.Sub) rs1 rs2))
+
+;; Helper for emitting the `sll` ("Shift Left Logical") instruction.
+;; rd ← rs1 << rs2
+(decl rv_sll (Reg Reg) Reg)
+(rule (rv_sll rs1 rs2)
+  (alu_rrr (AluOPRRR.Sll) rs1 rs2))
 
 
 
@@ -1257,7 +1265,7 @@
       (shamt Reg (value_regs_get x 0))
       (len_sub_shamt Reg (value_regs_get x 1))
       ;;
-      (part1 Reg (alu_rrr (AluOPRRR.Sll) rs shamt))
+      (part1 Reg (rv_sll rs shamt))
       ;;
       (part2 Reg (alu_rrr (AluOPRRR.Srl) rs len_sub_shamt))
       (part3 Reg (gen_select_reg (IntCC.Equal) shamt (zero_reg) (zero_reg) part2)))
@@ -1307,7 +1315,7 @@
       ;;
       (part1 Reg (alu_rrr (AluOPRRR.Srl) rs shamt))
       ;;
-      (part2 Reg (alu_rrr (AluOPRRR.Sll) rs len_sub_shamt))
+      (part2 Reg (rv_sll rs len_sub_shamt))
       ;;
       (part3 Reg (gen_select_reg (IntCC.Equal) shamt (zero_reg) (zero_reg) part2)))
     (alu_rrr (AluOPRRR.Or) part1 part3)))
@@ -1351,13 +1359,13 @@
       (shamt Reg (value_regs_get tmp 0))
       (len_sub_shamt Reg (value_regs_get tmp 1))
       ;;
-      (low_part1 Reg (alu_rrr (AluOPRRR.Sll) (value_regs_get x 0) shamt))
+      (low_part1 Reg (rv_sll (value_regs_get x 0) shamt))
       (low_part2 Reg (alu_rrr (AluOPRRR.Srl) (value_regs_get x 1) len_sub_shamt))
       ;;; if shamt == 0 low_part2 will overflow we should zero instead.
       (low_part3 Reg (gen_select_reg (IntCC.Equal) shamt (zero_reg) (zero_reg) low_part2))
       (low Reg (alu_rrr (AluOPRRR.Or) low_part1 low_part3))
       ;;
-      (high_part1 Reg (alu_rrr (AluOPRRR.Sll) (value_regs_get x 1) shamt))
+      (high_part1 Reg (rv_sll (value_regs_get x 1) shamt))
       (high_part2 Reg (alu_rrr (AluOPRRR.Srl) (value_regs_get x 0) len_sub_shamt))
       (high_part3 Reg (gen_select_reg (IntCC.Equal) shamt (zero_reg) (zero_reg) high_part2))
       (high Reg (alu_rrr (AluOPRRR.Or) high_part1 high_part3))
@@ -1381,13 +1389,13 @@
       (len_sub_shamt Reg (value_regs_get tmp 1))
       ;;
       (low_part1 Reg (alu_rrr (AluOPRRR.Srl) (value_regs_get x 0) shamt))
-      (low_part2 Reg (alu_rrr (AluOPRRR.Sll) (value_regs_get x 1) len_sub_shamt))
+      (low_part2 Reg (rv_sll (value_regs_get x 1) len_sub_shamt))
       ;;; if shamt == 0 low_part2 will overflow we should zero instead.
       (low_part3 Reg (gen_select_reg (IntCC.Equal) shamt (zero_reg) (zero_reg) low_part2))
       (low Reg (alu_rrr (AluOPRRR.Or) low_part1 low_part3))
       ;;
       (high_part1 Reg (alu_rrr (AluOPRRR.Srl) (value_regs_get x 1) shamt))
-      (high_part2 Reg (alu_rrr (AluOPRRR.Sll) (value_regs_get x 0) len_sub_shamt))
+      (high_part2 Reg (rv_sll (value_regs_get x 0) len_sub_shamt))
       (high_part3 Reg (gen_select_reg (IntCC.Equal) shamt (zero_reg) (zero_reg) high_part2))
       (high Reg (alu_rrr (AluOPRRR.Or) high_part1 high_part3))
 
@@ -1410,12 +1418,12 @@
       (shamt Reg (value_regs_get tmp 0))
       (len_sub_shamt Reg (value_regs_get tmp 1))
       ;;
-      (low Reg (alu_rrr (AluOPRRR.Sll) (value_regs_get x 0) shamt))
+      (low Reg (rv_sll (value_regs_get x 0) shamt))
       ;; high part.
       (high_part1 Reg (alu_rrr (AluOPRRR.Srl) (value_regs_get x 0) len_sub_shamt))
       (high_part2 Reg (gen_select_reg (IntCC.Equal) shamt (zero_reg) (zero_reg) high_part1))
       ;;
-      (high_part3 Reg (alu_rrr (AluOPRRR.Sll) (value_regs_get x 1) shamt))
+      (high_part3 Reg (rv_sll (value_regs_get x 1) shamt))
       (high Reg (alu_rrr (AluOPRRR.Or) high_part2 high_part3 ))
       ;;
       (const64 Reg (load_u64_constant 64))
@@ -1433,7 +1441,7 @@
       (len_sub_shamt Reg (value_regs_get tmp 1))
 
       ;; low part.
-      (low_part1 Reg (alu_rrr (AluOPRRR.Sll) (value_regs_get x 1) len_sub_shamt))
+      (low_part1 Reg (rv_sll (value_regs_get x 1) len_sub_shamt))
       (low_part2 Reg (gen_select_reg (IntCC.Equal) shamt (zero_reg) (zero_reg) low_part1))
       ;;
       (low_part3 Reg (alu_rrr (AluOPRRR.Srl) (value_regs_get x 0) shamt))
@@ -1458,7 +1466,7 @@
       (len_sub_shamt Reg (value_regs_get tmp 1))
 
       ;; low part.
-      (low_part1 Reg (alu_rrr (AluOPRRR.Sll) (value_regs_get x 1) len_sub_shamt))
+      (low_part1 Reg (rv_sll (value_regs_get x 1) len_sub_shamt))
       (low_part2 Reg (gen_select_reg (IntCC.Equal) shamt (zero_reg) (zero_reg) low_part1))
       ;;
       (low_part3 Reg (alu_rrr (AluOPRRR.Srl) (value_regs_get x 0) shamt))
