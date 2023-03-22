@@ -58,9 +58,8 @@ pub struct Context {
     /// Flag: do we want a disassembly with the CompiledCode?
     pub want_disasm: bool,
 
-    /// Only used during fuzz-testing. Otherwise, this is a zero-sized struct
-    /// and compiled away. See [cranelift_control].
-    control_plane: ControlPlane,
+    /// TODO chaos: is this the right location to hold ownership?
+    pub ctrl_plane: ControlPlane,
 }
 
 impl Context {
@@ -68,15 +67,20 @@ impl Context {
     ///
     /// The returned instance should be reused for compiling multiple functions in order to avoid
     /// needless allocator thrashing.
-    pub fn new(control_plane: ControlPlane) -> Self {
-        Self::for_function(Function::new(), control_plane)
+    pub fn new() -> Self {
+        Self::for_function(Function::new())
+    }
+
+    /// TODO:
+    pub fn new_with_ctrl_plane(ctrl_plane: ControlPlane) -> Self {
+        Self::for_function_with_ctrl_plane(Function::new(), ctrl_plane)
     }
 
     /// Allocate a new compilation context with an existing Function.
     ///
     /// The returned instance should be reused for compiling multiple functions in order to avoid
     /// needless allocator thrashing.
-    pub fn for_function(func: Function, control_plane: ControlPlane) -> Self {
+    pub fn for_function(func: Function) -> Self {
         Self {
             func,
             cfg: ControlFlowGraph::new(),
@@ -84,7 +88,20 @@ impl Context {
             loop_analysis: LoopAnalysis::new(),
             compiled_code: None,
             want_disasm: false,
-            control_plane,
+            ctrl_plane: ControlPlane::default(),
+        }
+    }
+
+    /// TODO:
+    pub fn for_function_with_ctrl_plane(func: Function, ctrl_plane: ControlPlane) -> Self {
+        Self {
+            func,
+            cfg: ControlFlowGraph::new(),
+            domtree: DominatorTree::new(),
+            loop_analysis: LoopAnalysis::new(),
+            compiled_code: None,
+            want_disasm: false,
+            ctrl_plane,
         }
     }
 
@@ -146,7 +163,12 @@ impl Context {
 
         self.optimize(isa)?;
 
-        isa.compile_function(&self.func, &self.domtree, self.want_disasm)
+        isa.compile_function(
+            &self.func,
+            &self.domtree,
+            self.want_disasm,
+            &mut self.ctrl_plane,
+        )
     }
 
     /// Optimize the function, performing all compilation steps up to

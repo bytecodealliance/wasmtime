@@ -11,7 +11,6 @@ use cranelift::codegen::Context;
 use cranelift::prelude::settings::SettingKind;
 use cranelift::prelude::*;
 use cranelift_arbitrary::CraneliftArbitrary;
-use cranelift_control::ControlPlane;
 use cranelift_native::builder_with_options;
 use target_lexicon::{Architecture, Triple};
 
@@ -40,7 +39,6 @@ where
 {
     pub u: &'r mut Unstructured<'data>,
     pub config: Config,
-    pub control_plane: ControlPlane,
 }
 
 impl<'r, 'data> FuzzGen<'r, 'data>
@@ -48,15 +46,9 @@ where
     'data: 'r,
 {
     pub fn new(u: &'r mut Unstructured<'data>) -> anyhow::Result<Self> {
-        #[cfg(feature = "chaos")]
-        let control_plane = u.arbitrary()?;
-        #[cfg(not(feature = "chaos"))]
-        let control_plane = cranelift_control::ControlPlane::noop();
-
         Ok(Self {
             u,
             config: Config::default(),
-            control_plane,
         })
     }
 
@@ -114,7 +106,7 @@ where
         // This is something that we can enable via flags for the compiled version, however
         // the interpreter won't get that version, so call that pass manually here.
 
-        let mut ctx = Context::for_function(func, self.control_plane.clone());
+        let mut ctx = Context::for_function_with_ctrl_plane(func, self.u.arbitrary()?);
         // Assume that we are generating this function for the current ISA.
         // We disable the verifier here, since if it fails it prevents a test case from
         // being generated and formatted by `cargo fuzz fmt`.
@@ -125,7 +117,7 @@ where
             builder
         });
 
-        let isa = builder_with_options(false, self.control_plane.clone())
+        let isa = builder_with_options(false)
             .expect("Unable to build a TargetIsa for the current host")
             .finish(flags)
             .expect("Failed to build TargetISA");

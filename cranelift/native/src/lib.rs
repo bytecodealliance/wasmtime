@@ -25,14 +25,13 @@
 
 use cranelift_codegen::isa;
 use cranelift_codegen::settings::Configurable;
-use cranelift_control::ControlPlane;
 use target_lexicon::Triple;
 
 /// Return an `isa` builder configured for the current host
 /// machine, or `Err(())` if the host machine is not supported
 /// in the current configuration.
 pub fn builder() -> Result<isa::Builder, &'static str> {
-    builder_with_options(true, ControlPlane::noop())
+    builder_with_options(true)
 }
 
 /// Return an `isa` builder configured for the current host
@@ -42,11 +41,8 @@ pub fn builder() -> Result<isa::Builder, &'static str> {
 /// Selects the given backend variant specifically; this is
 /// useful when more than oen backend exists for a given target
 /// (e.g., on x86-64).
-pub fn builder_with_options(
-    infer_native_flags: bool,
-    control_plane: ControlPlane,
-) -> Result<isa::Builder, &'static str> {
-    let mut isa_builder = isa::lookup(Triple::host(), control_plane).map_err(|err| match err {
+pub fn builder_with_options(infer_native_flags: bool) -> Result<isa::Builder, &'static str> {
+    let mut isa_builder = isa::lookup(Triple::host()).map_err(|err| match err {
         isa::LookupError::SupportDisabled => "support for architecture disabled at compile time",
         isa::LookupError::Unsupported => "unsupported architecture",
     })?;

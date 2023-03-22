@@ -3620,6 +3620,7 @@ version = "8.0.0"
 dependencies = [
  "anyhow",
  "cranelift-codegen",
+ "cranelift-control",
  "cranelift-native",
  "gimli",
  "object",

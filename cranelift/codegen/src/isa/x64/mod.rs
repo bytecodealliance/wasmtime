@@ -33,26 +33,17 @@ pub(crate) struct X64Backend {
     flags: Flags,
     x64_flags: x64_settings::Flags,
     reg_env: MachineEnv,
-    /// Only used during fuzz-testing. Otherwise, this is a zero-sized struct
-    /// and compiled away. See [cranelift_control].
-    control_plane: ControlPlane,
 }
 
 impl X64Backend {
     /// Create a new X64 backend with the given (shared) flags.
-    fn new_with_flags(
-        triple: Triple,
-        flags: Flags,
-        x64_flags: x64_settings::Flags,
-        control_plane: ControlPlane,
-    ) -> Self {
+    fn new_with_flags(triple: Triple, flags: Flags, x64_flags: x64_settings::Flags) -> Self {
         let reg_env = create_reg_env_systemv(&flags);
         Self {
             triple,
             flags,
             x64_flags,
             reg_env,
-            control_plane,
         }
     }
 
@@ -66,15 +57,7 @@ impl X64Backend {
         let emit_info = EmitInfo::new(self.flags.clone(), self.x64_flags.clone());
         let sigs = SigSet::new::<abi::X64ABIMachineSpec>(func, &self.flags)?;
         let abi = abi::X64Callee::new(func, self, &self.x64_flags, &sigs)?;
-        compile::compile::<Self>(
-            func,
-            domtree,
-            self,
-            abi,
-            emit_info,
-            sigs,
-            self.control_plane.clone(),
-        )
+        compile::compile::<Self>(func, domtree, self, abi, emit_info, sigs)
     }
 }
 
@@ -84,6 +67,7 @@ impl TargetIsa for X64Backend {
         func: &Function,
         domtree: &DominatorTree,
         want_disasm: bool,
+        ctrl_plane: &mut ControlPlane,
     ) -> CodegenResult<CompiledCodeStencil> {
         let (vcode, regalloc_result) = self.compile_vcode(func, domtree)?;
 
@@ -91,10 +75,11 @@ impl TargetIsa for X64Backend {
             &regalloc_result,
             want_disasm,
             self.flags.machine_code_cfg_info(),
+            ctrl_plane,
         );
         let frame_size = emit_result.frame_size;
         let value_labels_ranges = emit_result.value_labels_ranges;
-        let buffer = emit_result.buffer.finish();
+        let buffer = emit_result.buffer.finish(ctrl_plane);
         let sized_stackslot_offsets = emit_result.sized_stackslot_offsets;
         let dynamic_stackslot_offsets = emit_result.dynamic_stackslot_offsets;
 
@@ -219,10 +204,9 @@ impl fmt::Display for X64Backend {
 }
 
 /// Create a new `isa::Builder`.
-pub(crate) fn isa_builder(triple: Triple, control_plane: ControlPlane) -> IsaBuilder {
+pub(crate) fn isa_builder(triple: Triple) -> IsaBuilder {
     IsaBuilder {
         triple,
-        control_plane,
         setup: x64_settings::builder(),
         constructor: isa_constructor,
     }
@@ -232,7 +216,6 @@ fn isa_constructor(
     triple: Triple,
     shared_flags: Flags,
     builder: &shared_settings::Builder,
-    control_plane: ControlPlane,
 ) -> CodegenResult<OwnedTargetIsa> {
     let isa_flags = x64_settings::Flags::new(&shared_flags, builder);
 
@@ -250,7 +233,7 @@ fn isa_constructor(
         }
     }
 
-    let backend = X64Backend::new_with_flags(triple, shared_flags, isa_flags, control_plane);
+    let backend = X64Backend::new_with_flags(triple, shared_flags, isa_flags);
     Ok(backend.wrapped())
 }
 
@@ -266,7 +249,7 @@ mod test {
         let mut shared_flags_builder = settings::builder();
         shared_flags_builder.set("enable_simd", "true").unwrap();
         let shared_flags = settings::Flags::new(shared_flags_builder);
-        let mut isa_builder = crate::isa::lookup_by_name("x86_64", ControlPlane::noop()).unwrap();
+        let mut isa_builder = crate::isa::lookup_by_name("x86_64").unwrap();
         isa_builder.set("has_sse3", "false").unwrap();
         isa_builder.set("has_ssse3", "false").unwrap();
         isa_builder.set("has_sse41", "false").unwrap();

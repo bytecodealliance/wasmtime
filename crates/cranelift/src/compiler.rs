@@ -13,7 +13,6 @@ use cranelift_codegen::print_errors::pretty_error;
 use cranelift_codegen::Context;
 use cranelift_codegen::{CompiledCode, MachSrcLoc, MachStackMap};
 use cranelift_codegen::{MachReloc, MachTrap};
-use cranelift_control::ControlPlane;
 use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_frontend::FunctionBuilder;
 use cranelift_wasm::{
@@ -58,7 +57,7 @@ impl Default for CompilerContext {
     fn default() -> Self {
         Self {
             func_translator: FuncTranslator::new(),
-            codegen_context: Context::new(ControlPlane::noop()),
+            codegen_context: Context::new(),
             incremental_cache_ctx: None,
             validator_allocations: Default::default(),
         }
@@ -68,6 +67,7 @@ impl Default for CompilerContext {
 /// A compiler that compiles a WebAssembly module with Compiler, translating
 /// the Wasm to Compiler IR, optimizing it and then translating to assembly.
 pub(crate) struct Compiler {
+    // TODO: can a context be requested in different orders?
     contexts: Mutex<Vec<CompilerContext>>,
     isa: OwnedTargetIsa,
     linkopts: LinkOptions,
@@ -117,6 +117,7 @@ impl Compiler {
     }
 
     fn take_context(&self) -> CompilerContext {
+        // TODO: In chaos mode, we want to construct the ControlPlane ourself
         let candidate = self.contexts.lock().unwrap().pop();
         candidate
             .map(|mut ctx| {
@@ -137,6 +138,7 @@ impl Compiler {
     }
 
     fn save_context(&self, ctx: CompilerContext) {
+        // TODO: In chaos mode, we do not want to recycle contexts
         self.contexts.lock().unwrap().push(ctx);
     }
 

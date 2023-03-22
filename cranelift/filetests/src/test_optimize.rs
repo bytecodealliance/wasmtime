@@ -10,7 +10,6 @@
 use crate::subtest::{check_precise_output, run_filecheck, Context, SubTest};
 use anyhow::Result;
 use cranelift_codegen::ir;
-use cranelift_control::ControlPlane;
 use cranelift_reader::{TestCommand, TestOption};
 use std::borrow::Cow;
 
@@ -51,8 +50,7 @@ impl SubTest for TestOptimize {
 
     fn run(&self, func: Cow<ir::Function>, context: &Context) -> Result<()> {
         let isa = context.isa.expect("optimize needs an ISA");
-        let mut comp_ctx =
-            cranelift_codegen::Context::for_function(func.into_owned(), ControlPlane::noop());
+        let mut comp_ctx = cranelift_codegen::Context::for_function(func.into_owned());
 
         comp_ctx
             .optimize(isa)

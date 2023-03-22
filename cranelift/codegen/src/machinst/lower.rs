@@ -20,7 +20,6 @@ use crate::machinst::{
 };
 use crate::{trace, CodegenResult};
 use alloc::vec::Vec;
-use cranelift_control::ControlPlane;
 use regalloc2::{MachineEnv, PRegSet};
 use smallvec::{smallvec, SmallVec};
 use std::fmt::Debug;
@@ -334,7 +333,6 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         emit_info: I::Info,
         block_order: BlockLoweringOrder,
         sigs: SigSet,
-        control_plane: ControlPlane,
     ) -> CodegenResult<Self> {
         let constants = VCodeConstants::with_capacity(f.dfg.constants.len());
         let vcode = VCodeBuilder::new(
@@ -344,7 +342,6 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             block_order,
             constants,
             VCodeBuildDirection::Backward,
-            control_plane,
         );
 
         let mut vregs = VRegAllocator::new();

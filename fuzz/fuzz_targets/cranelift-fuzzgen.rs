@@ -5,6 +5,7 @@ use cranelift_codegen::ir::Signature;
 use cranelift_codegen::ir::UserExternalName;
 use cranelift_codegen::ir::UserFuncName;
 use cranelift_codegen::Context;
+use cranelift_control::ControlPlane;
 use libfuzzer_sys::arbitrary;
 use libfuzzer_sys::arbitrary::Arbitrary;
 use libfuzzer_sys::arbitrary::Unstructured;
@@ -179,8 +180,8 @@ impl TestCase {
 
         // TestCase is meant to be consumed by a runner, so we make the assumption here that we're
         // generating a TargetIsa for the host.
-        let mut builder = builder_with_options(true, gen.control_plane.clone())
-            .expect("Unable to build a TargetIsa for the current host");
+        let mut builder =
+            builder_with_options(true).expect("Unable to build a TargetIsa for the current host");
         let flags = gen.generate_flags(builder.triple().architecture)?;
         gen.set_isa_flags(&mut builder, IsaFlagGen::Host)?;
         let isa = builder.finish(flags)?;
@@ -346,7 +347,9 @@ fn run_test_inputs(testcase: &TestCase, run: impl Fn(&[DataValue]) -> RunResult)
     }
 }
 
-fuzz_target!(|testcase: TestCase| {
+fuzz_target!(|data: (TestCase, Vec<ControlPlane>)| {
+    let (testcase, ctrl_planes) = data;
+
     // This is the default, but we should ensure that it wasn't accidentally turned off anywhere.
     assert!(testcase.isa.flags().enable_verifier());
 
@@ -367,7 +370,7 @@ fuzz_target!(|testcase: TestCase| {
             run_in_interpreter(&mut interpreter, args)
         });
     } else {
-        let mut compiler = TestFileCompiler::new(testcase.isa.clone());
+        let mut compiler = TestFileCompiler::new(testcase.isa.clone(), ctrl_planes);
         compiler.add_functions(&testcase.functions[..]).unwrap();
         let compiled = compiler.compile().unwrap();
         let trampoline = compiled.get_trampoline(testcase.main()).unwrap();

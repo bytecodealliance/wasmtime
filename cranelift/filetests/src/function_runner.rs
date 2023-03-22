@@ -81,13 +81,15 @@ pub struct TestFileCompiler {
     ///
     /// The trampoline is defined in `defined_functions` as any other regular function.
     trampolines: HashMap<Signature, UserFuncName>,
+
+    ctrl_planes: Vec<ControlPlane>,
 }
 
 impl TestFileCompiler {
     /// Build a [TestFileCompiler] from a [TargetIsa]. For functions to be runnable on the
     /// host machine, this [TargetIsa] must match the host machine's ISA (see
     /// [TestFileCompiler::with_host_isa]).
-    pub fn new(isa: OwnedTargetIsa) -> Self {
+    pub fn new(isa: OwnedTargetIsa, ctrl_planes: Vec<ControlPlane>) -> Self {
         let builder = JITBuilder::with_isa(isa, cranelift_module::default_libcall_names());
         let module = JITModule::new(builder);
         let ctx = module.make_context();
@@ -97,22 +99,23 @@ impl TestFileCompiler {
             ctx,
             defined_functions: HashMap::new(),
             trampolines: HashMap::new(),
+            ctrl_planes,
         }
     }
 
     /// Build a [TestFileCompiler] using the host machine's ISA and the passed flags.
-    pub fn with_host_isa(flags: settings::Flags) -> Result<Self> {
-        let builder = builder_with_options(true, ControlPlane::noop())
-            .expect("Unable to build a TargetIsa for the current host");
+    pub fn with_host_isa(flags: settings::Flags, ctrl_planes: Vec<ControlPlane>) -> Result<Self> {
+        let builder =
+            builder_with_options(true).expect("Unable to build a TargetIsa for the current host");
         let isa = builder.finish(flags)?;
-        Ok(Self::new(isa))
+        Ok(Self::new(isa, ctrl_planes))
     }
 
     /// Build a [TestFileCompiler] using the host machine's ISA and the default flags for this
     /// ISA.
-    pub fn with_default_host_isa() -> Result<Self> {
+    pub fn with_default_host_isa(ctrl_planes: Vec<ControlPlane>) -> Result<Self> {
         let flags = settings::Flags::new(settings::builder());
-        Self::with_host_isa(flags)
+        Self::with_host_isa(flags, ctrl_planes)
     }
 
     /// Declares and compiles all functions in `functions`. Additionally creates a trampoline for
@@ -223,6 +226,11 @@ impl TestFileCompiler {
             .defined_functions
             .get(&func.name)
             .ok_or(anyhow!("Undeclared function {} found!", &func.name))?;
+
+        self.ctx.ctrl_plane = self
+            .ctrl_planes
+            .pop()
+            .unwrap_or_else(ControlPlane::no_chaos);
 
         self.ctx.func = self.apply_func_rename(func, defined_func)?;
         self.module
@@ -512,7 +520,7 @@ mod test {
         let function = test_file.functions[0].0.clone();
 
         // execute function
-        let mut compiler = TestFileCompiler::with_default_host_isa().unwrap();
+        let mut compiler = TestFileCompiler::with_default_host_isa(Vec::new()).unwrap();
         compiler.declare_function(&function).unwrap();
         compiler.define_function(function.clone()).unwrap();
         compiler.create_trampoline_for_function(&function).unwrap();
@@ -534,7 +542,7 @@ mod test {
             }",
         );
 
-        let compiler = TestFileCompiler::with_default_host_isa().unwrap();
+        let compiler = TestFileCompiler::with_default_host_isa(Vec::new()).unwrap();
         let trampoline = make_trampoline(
             UserFuncName::user(0, 0),
             &function.signature,

@@ -175,10 +175,6 @@ pub struct VCode<I: VCodeInst> {
     debug_value_labels: Vec<(VReg, InsnIndex, InsnIndex, u32)>,
 
     pub(crate) sigs: SigSet,
-
-    /// Only used during fuzz-testing. Otherwise, this is a zero-sized struct
-    /// and compiled away. See [cranelift_control].
-    control_plane: ControlPlane,
 }
 
 /// The result of `VCode::emit`. Contains all information computed
@@ -289,9 +285,8 @@ impl<I: VCodeInst> VCodeBuilder<I> {
         block_order: BlockLoweringOrder,
         constants: VCodeConstants,
         direction: VCodeBuildDirection,
-        control_plane: ControlPlane,
     ) -> VCodeBuilder<I> {
-        let vcode = VCode::new(sigs, abi, emit_info, block_order, constants, control_plane);
+        let vcode = VCode::new(sigs, abi, emit_info, block_order, constants);
 
         VCodeBuilder {
             vcode,
@@ -648,7 +643,6 @@ impl<I: VCodeInst> VCode<I> {
         emit_info: I::Info,
         block_order: BlockLoweringOrder,
         constants: VCodeConstants,
-        control_plane: ControlPlane,
     ) -> VCode<I> {
         let n_blocks = block_order.lowered_order().len();
         VCode {
@@ -677,7 +671,6 @@ impl<I: VCodeInst> VCode<I> {
             constants,
             debug_value_labels: vec![],
             vreg_aliases: FxHashMap::with_capacity_and_hasher(10 * n_blocks, Default::default()),
-            control_plane,
         }
     }
 
@@ -771,6 +764,7 @@ impl<I: VCodeInst> VCode<I> {
         regalloc: &regalloc2::Output,
         want_disasm: bool,
         want_metadata: bool,
+        ctrl_plane: &mut ControlPlane,
     ) -> EmitResult<I>
     where
         I: VCodeInst,
@@ -779,7 +773,7 @@ impl<I: VCodeInst> VCode<I> {
         use core::fmt::Write;
 
         let _tt = timing::vcode_emit();
-        let mut buffer = MachBuffer::new(self.control_plane.clone());
+        let mut buffer = MachBuffer::new();
         let mut bb_starts: Vec<Option<CodeOffset>> = vec![];
 
         // The first M MachLabels are reserved for block indices, the next N MachLabels for
@@ -853,7 +847,13 @@ impl<I: VCodeInst> VCode<I> {
             while new_offset > buffer.cur_offset() {
                 // Pad with NOPs up to the aligned block offset.
                 let nop = I::gen_nop((new_offset - buffer.cur_offset()) as usize);
-                nop.emit(&[], &mut buffer, &self.emit_info, &mut Default::default());
+                nop.emit(
+                    &[],
+                    &mut buffer,
+                    &self.emit_info,
+                    &mut Default::default(),
+                    ctrl_plane,
+                );
             }
             assert_eq!(buffer.cur_offset(), new_offset);
 
@@ -861,12 +861,13 @@ impl<I: VCodeInst> VCode<I> {
                            allocs: &[Allocation],
                            disasm: &mut String,
                            buffer: &mut MachBuffer<I>,
-                           state: &mut I::State| {
+                           state: &mut I::State,
+                           ctrl_plane: &mut ControlPlane| {
                 if want_disasm && !inst.is_args() {
                     let mut s = state.clone();
                     writeln!(disasm, "  {}", inst.pretty_print_inst(allocs, &mut s)).unwrap();
                 }
-                inst.emit(allocs, buffer, &self.emit_info, state);
+                inst.emit(allocs, buffer, &self.emit_info, state, ctrl_plane);
             };
 
             // Is this the first block? Emit the prologue directly if so.
@@ -875,14 +876,14 @@ impl<I: VCodeInst> VCode<I> {
                 buffer.start_srcloc(Default::default());
                 state.pre_sourceloc(Default::default());
                 for inst in &prologue_insts {
-                    do_emit(&inst, &[], &mut disasm, &mut buffer, &mut state);
+                    do_emit(&inst, &[], &mut disasm, &mut buffer, &mut state, ctrl_plane);
                 }
                 buffer.end_srcloc();
             }
 
             // Now emit the regular block body.
 
-            buffer.bind_label(MachLabel::from_block(block));
+            buffer.bind_label(MachLabel::from_block(block), ctrl_plane);
 
             if want_disasm {
                 writeln!(&mut disasm, "block{}:", block.index()).unwrap();
@@ -908,7 +909,14 @@ impl<I: VCodeInst> VCode<I> {
                 self.block_order.is_indirect_branch_target(block),
                 is_forward_edge_cfi_enabled,
             ) {
-                do_emit(&block_start, &[], &mut disasm, &mut buffer, &mut state);
+                do_emit(
+                    &block_start,
+                    &[],
+                    &mut disasm,
+                    &mut buffer,
+                    &mut state,
+                    ctrl_plane,
+                );
             }
 
             for inst_or_edit in regalloc.block_insts_and_edits(&self, block) {
@@ -996,7 +1004,14 @@ impl<I: VCodeInst> VCode<I> {
                         // epilogue will contain it).
                         if self.insts[iix.index()].is_term() == MachTerminator::Ret {
                             for inst in self.abi.gen_epilogue() {
-                                do_emit(&inst, &[], &mut disasm, &mut buffer, &mut state);
+                                do_emit(
+                                    &inst,
+                                    &[],
+                                    &mut disasm,
+                                    &mut buffer,
+                                    &mut state,
+                                    ctrl_plane,
+                                );
                             }
                         } else {
                             // Emit the instruction!
@@ -1006,6 +1021,7 @@ impl<I: VCodeInst> VCode<I> {
                                 &mut disasm,
                                 &mut buffer,
                                 &mut state,
+                                ctrl_plane,
                             );
                         }
                     }
@@ -1021,21 +1037,35 @@ impl<I: VCodeInst> VCode<I> {
                                 debug_assert_eq!(from.class(), to.class());
                                 let ty = I::canonical_type_for_rc(from.class());
                                 let mv = I::gen_move(to_rreg, from_rreg, ty);
-                                do_emit(&mv, &[], &mut disasm, &mut buffer, &mut state);
+                                do_emit(&mv, &[], &mut disasm, &mut buffer, &mut state, ctrl_plane);
                             }
                             (Some(from), None) => {
                                 // Spill from register to spillslot.
                                 let to = to.as_stack().unwrap();
                                 let from_rreg = RealReg::from(from);
                                 let spill = self.abi.gen_spill(to, from_rreg);
-                                do_emit(&spill, &[], &mut disasm, &mut buffer, &mut state);
+                                do_emit(
+                                    &spill,
+                                    &[],
+                                    &mut disasm,
+                                    &mut buffer,
+                                    &mut state,
+                                    ctrl_plane,
+                                );
                             }
                             (None, Some(to)) => {
                                 // Load from spillslot to register.
                                 let from = from.as_stack().unwrap();
                                 let to_rreg = Writable::from_reg(RealReg::from(to));
                                 let reload = self.abi.gen_reload(to_rreg, from);
-                                do_emit(&reload, &[], &mut disasm, &mut buffer, &mut state);
+                                do_emit(
+                                    &reload,
+                                    &[],
+                                    &mut disasm,
+                                    &mut buffer,
+                                    &mut state,
+                                    ctrl_plane,
+                                );
                             }
                             (None, None) => {
                                 panic!("regalloc2 should have eliminated stack-to-stack moves!");
@@ -1062,7 +1092,7 @@ impl<I: VCodeInst> VCode<I> {
                 let worst_case_next_bb =
                     I::worst_case_size() * (next_block_size + next_block_ra_insertions);
                 if buffer.island_needed(worst_case_next_bb) {
-                    buffer.emit_island(worst_case_next_bb);
+                    buffer.emit_island(worst_case_next_bb, ctrl_plane);
                 }
             }
         }

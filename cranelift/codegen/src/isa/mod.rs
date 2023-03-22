@@ -81,10 +81,10 @@ mod call_conv;
 /// Returns a builder that can create a corresponding `TargetIsa`
 /// or `Err(LookupError::SupportDisabled)` if not enabled.
 macro_rules! isa_builder {
-    ($name: ident, $cfg_terms: tt, $triple: ident, $control_plane: ident) => {{
+    ($name: ident, $cfg_terms: tt, $triple: ident) => {{
         #[cfg $cfg_terms]
         {
-            Ok($name::isa_builder($triple, $control_plane))
+            Ok($name::isa_builder($triple))
         }
         #[cfg(not $cfg_terms)]
         {
@@ -95,19 +95,19 @@ macro_rules! isa_builder {
 
 /// Look for an ISA for the given `triple`.
 /// Return a builder that can create a corresponding `TargetIsa`.
-pub fn lookup(triple: Triple, control_plane: ControlPlane) -> Result<Builder, LookupError> {
+pub fn lookup(triple: Triple) -> Result<Builder, LookupError> {
     match triple.architecture {
         Architecture::X86_64 => {
-            isa_builder!(x64, (feature = "x86"), triple, control_plane)
+            isa_builder!(x64, (feature = "x86"), triple)
         }
         Architecture::Aarch64 { .. } => {
-            isa_builder!(aarch64, (feature = "arm64"), triple, control_plane)
+            isa_builder!(aarch64, (feature = "arm64"), triple)
         }
         Architecture::S390x { .. } => {
-            isa_builder!(s390x, (feature = "s390x"), triple, control_plane)
+            isa_builder!(s390x, (feature = "s390x"), triple)
         }
         Architecture::Riscv64 { .. } => {
-            isa_builder!(riscv64, (feature = "riscv64"), triple, control_plane)
+            isa_builder!(riscv64, (feature = "riscv64"), triple)
         }
         _ => Err(LookupError::Unsupported),
     }
@@ -120,9 +120,9 @@ pub const ALL_ARCHITECTURES: &[&str] = &["x86_64", "aarch64", "s390x", "riscv64"
 
 /// Look for a supported ISA with the given `name`.
 /// Return a builder that can create a corresponding `TargetIsa`.
-pub fn lookup_by_name(name: &str, control_plane: ControlPlane) -> Result<Builder, LookupError> {
+pub fn lookup_by_name(name: &str) -> Result<Builder, LookupError> {
     use alloc::str::FromStr;
-    lookup(triple!(name), control_plane)
+    lookup(triple!(name))
 }
 
 /// Describes reason for target lookup failure
@@ -161,11 +161,8 @@ pub type Builder = IsaBuilder<CodegenResult<OwnedTargetIsa>>;
 #[derive(Clone)]
 pub struct IsaBuilder<T> {
     triple: Triple,
-    /// Only used during fuzz-testing. Otherwise, this is a zero-sized struct
-    /// and compiled away. See [cranelift_control].
-    control_plane: ControlPlane,
     setup: settings::Builder,
-    constructor: fn(Triple, settings::Flags, &settings::Builder, ControlPlane) -> T,
+    constructor: fn(Triple, settings::Flags, &settings::Builder) -> T,
 }
 
 impl<T> IsaBuilder<T> {
@@ -174,13 +171,11 @@ impl<T> IsaBuilder<T> {
     /// function to generate the ISA from its components.
     pub fn new(
         triple: Triple,
-        control_plane: ControlPlane,
         setup: settings::Builder,
-        constructor: fn(Triple, settings::Flags, &settings::Builder, ControlPlane) -> T,
+        constructor: fn(Triple, settings::Flags, &settings::Builder) -> T,
     ) -> Self {
         IsaBuilder {
             triple,
-            control_plane,
             setup,
             constructor,
         }
@@ -203,12 +198,7 @@ impl<T> IsaBuilder<T> {
     /// platform-independent features, like general SIMD support, may
     /// need certain ISA extensions to be enabled.
     pub fn finish(&self, shared_flags: settings::Flags) -> T {
-        (self.constructor)(
-            self.triple.clone(),
-            shared_flags,
-            &self.setup,
-            self.control_plane.clone(),
-        )
+        (self.constructor)(self.triple.clone(), shared_flags, &self.setup)
     }
 }
 
@@ -290,6 +280,7 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
         func: &Function,
         domtree: &DominatorTree,
         want_disasm: bool,
+        ctrl_plane: &mut ControlPlane,
     ) -> CodegenResult<CompiledCodeStencil>;
 
     #[cfg(feature = "unwind")]

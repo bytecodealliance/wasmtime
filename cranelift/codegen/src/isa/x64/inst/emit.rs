@@ -1,3 +1,5 @@
+use cranelift_control::ControlPlane;
+
 use crate::binemit::{Addend, Reloc};
 use crate::ir::immediates::{Ieee32, Ieee64};
 use crate::ir::TrapCode;
@@ -23,6 +25,7 @@ fn emit_signed_cvt(
     src: Reg,
     dst: Writable<Reg>,
     to_f64: bool,
+    ctrl_plane: &mut ControlPlane,
 ) {
     // Handle an unsigned int, which is the "easy" case: a signed conversion will do the
     // right thing.
@@ -32,7 +35,7 @@ fn emit_signed_cvt(
         SseOpcode::Cvtsi2ss
     };
     let inst = Inst::gpr_to_xmm(op, RegMem::reg(src), OperandSize::Size64, dst);
-    inst.emit(&[], sink, info, state);
+    inst.emit(&[], sink, info, state, ctrl_plane);
 }
 
 /// Emits a one way conditional jump if CC is set (true).
@@ -108,6 +111,7 @@ pub(crate) fn emit(
     sink: &mut MachBuffer<Inst>,
     info: &EmitInfo,
     state: &mut EmitState,
+    ctrl_plane: &mut ControlPlane,
 ) {
     let matches_isa_flags = |iset_requirement: &InstructionSet| -> bool {
         match iset_requirement {
@@ -262,6 +266,7 @@ pub(crate) fn emit(
                 sink,
                 info,
                 state,
+                ctrl_plane,
             );
         }
 
@@ -601,7 +606,7 @@ pub(crate) fn emit(
             // Check if the divisor is -1, and if it isn't then immediately
             // go to the `idiv`.
             let inst = Inst::cmp_rmi_r(size, RegMemImm::imm(0xffffffff), divisor);
-            inst.emit(&[], sink, info, state);
+            inst.emit(&[], sink, info, state, ctrl_plane);
             one_way_jmp(sink, CC::NZ, do_op);
 
             // ... otherwise the divisor is -1 and the result is always 0. This
@@ -614,13 +619,13 @@ pub(crate) fn emit(
             // output but for srem only the `dst_remainder` output is used for
             // now.
             let inst = Inst::imm(OperandSize::Size64, 0, Writable::from_reg(dst));
-            inst.emit(&[], sink, info, state);
+            inst.emit(&[], sink, info, state, ctrl_plane);
             let inst = Inst::jmp_known(done_label);
-            inst.emit(&[], sink, info, state);
+            inst.emit(&[], sink, info, state, ctrl_plane);
 
             // Here the `idiv` is executed, which is different depending on the
             // size
-            sink.bind_label(do_op);
+            sink.bind_label(do_op, ctrl_plane);
             let inst = match size {
                 OperandSize::Size8 => Inst::div8(
                     DivSignedness::Signed,
@@ -640,9 +645,9 @@ pub(crate) fn emit(
                     Writable::from_reg(Gpr::new(regs::rdx()).unwrap()),
                 ),
             };
-            inst.emit(&[], sink, info, state);
+            inst.emit(&[], sink, info, state, ctrl_plane);
 
-            sink.bind_label(done_label);
+            sink.bind_label(done_label, ctrl_plane);
         }
 
         Inst::Imm {
@@ -733,7 +738,7 @@ pub(crate) fn emit(
             let size = OperandSize::Size64;
             let dst = allocs.next(dst.to_reg().to_reg());
             let dst = WritableGpr::from_writable_reg(Writable::from_reg(dst)).unwrap();
-            Inst::MovRR { size, src, dst }.emit(&[], sink, info, state);
+            Inst::MovRR { size, src, dst }.emit(&[], sink, info, state, ctrl_plane);
         }
 
         Inst::MovToPReg { src, dst } => {
@@ -744,7 +749,7 @@ pub(crate) fn emit(
             debug_assert!([regs::rsp(), regs::rbp(), regs::pinned_reg()].contains(&dst));
             let dst = WritableGpr::from_writable_reg(Writable::from_reg(dst)).unwrap();
             let size = OperandSize::Size64;
-            Inst::MovRR { size, src, dst }.emit(&[], sink, info, state);
+            Inst::MovRR { size, src, dst }.emit(&[], sink, info, state, ctrl_plane);
         }
 
         Inst::MovzxRmR { ext_mode, src, dst } => {
@@ -870,7 +875,7 @@ pub(crate) fn emit(
                         RegMemImm::imm(simm32),
                         Writable::from_reg(dst),
                     );
-                    inst.emit(&[], sink, info, state);
+                    inst.emit(&[], sink, info, state, ctrl_plane);
                 }
                 // If the offset is 0 and the shift is 0 (meaning multiplication
                 // by 1) then:
@@ -897,7 +902,7 @@ pub(crate) fn emit(
                         RegMemImm::reg(operand.to_reg()),
                         Writable::from_reg(dst.to_reg()),
                     );
-                    inst.emit(&[], sink, info, state);
+                    inst.emit(&[], sink, info, state, ctrl_plane);
                 }
 
                 // If `lea`'s 3-operand mode is leveraged by regalloc, or if
@@ -1289,9 +1294,9 @@ pub(crate) fn emit(
                 }
             };
             let inst = Inst::xmm_unary_rm_r(op, consequent, Writable::from_reg(dst));
-            inst.emit(&[], sink, info, state);
+            inst.emit(&[], sink, info, state, ctrl_plane);
 
-            sink.bind_label(next);
+            sink.bind_label(next, ctrl_plane);
         }
 
         Inst::Push64 { src } => {
@@ -1382,7 +1387,7 @@ pub(crate) fn emit(
             // Create the guard bound register
             // mov  tmp_reg, rsp
             let inst = Inst::gen_move(tmp, regs::rsp(), types::I64);
-            inst.emit(&[], sink, info, state);
+            inst.emit(&[], sink, info, state, ctrl_plane);
 
             // sub  tmp_reg, GUARD_SIZE * probe_count
             let inst = Inst::alu_rmi_r(
@@ -1391,11 +1396,11 @@ pub(crate) fn emit(
                 RegMemImm::imm(guard_size * probe_count),
                 tmp,
             );
-            inst.emit(&[], sink, info, state);
+            inst.emit(&[], sink, info, state, ctrl_plane);
 
             // Emit the main loop!
             let loop_start = sink.get_label();
-            sink.bind_label(loop_start);
+            sink.bind_label(loop_start, ctrl_plane);
 
             // sub  rsp, GUARD_SIZE
             let inst = Inst::alu_rmi_r(
@@ -1404,7 +1409,7 @@ pub(crate) fn emit(
                 RegMemImm::imm(*guard_size),
                 Writable::from_reg(regs::rsp()),
             );
-            inst.emit(&[], sink, info, state);
+            inst.emit(&[], sink, info, state, ctrl_plane);
 
             // TODO: `mov [rsp], 0` would be better, but we don't have that instruction
             // Probe the stack! We don't use Inst::gen_store_stack here because we need a predictable
@@ -1415,7 +1420,7 @@ pub(crate) fn emit(
                 regs::rsp(),
                 SyntheticAmode::Real(Amode::imm_reg(0, regs::rsp())),
             );
-            inst.emit(&[], sink, info, state);
+            inst.emit(&[], sink, info, state, ctrl_plane);
 
             // Compare and jump if we are not done yet
             // cmp  rsp, tmp_reg
@@ -1424,7 +1429,7 @@ pub(crate) fn emit(
                 RegMemImm::reg(regs::rsp()),
                 tmp.to_reg(),
             );
-            inst.emit(&[], sink, info, state);
+            inst.emit(&[], sink, info, state, ctrl_plane);
 
             // jne  .loop_start
             // TODO: Encoding the JmpIf as a short jump saves us 4 bytes here.
@@ -1443,7 +1448,7 @@ pub(crate) fn emit(
                 RegMemImm::imm(guard_size * probe_count),
                 Writable::from_reg(regs::rsp()),
             );
-            inst.emit(&[], sink, info, state);
+            inst.emit(&[], sink, info, state, ctrl_plane);
         }
 
         Inst::CallKnown {
@@ -1636,7 +1641,7 @@ pub(crate) fn emit(
             // Load base address of jump table.
             let start_of_jumptable = sink.get_label();
             let inst = Inst::lea(Amode::rip_relative(start_of_jumptable), tmp1);
-            inst.emit(&[], sink, info, state);
+            inst.emit(&[], sink, info, state, ctrl_plane);
 
             // Load value out of the jump table. It's a relative offset to the target block, so it
             // might be negative; use a sign-extension.
@@ -1650,7 +1655,7 @@ pub(crate) fn emit(
                 )),
                 tmp2,
             );
-            inst.emit(&[], sink, info, state);
+            inst.emit(&[], sink, info, state, ctrl_plane);
 
             // Add base of jump table to jump-table-sourced block offset.
             let inst = Inst::alu_rmi_r(
@@ -1659,14 +1664,14 @@ pub(crate) fn emit(
                 RegMemImm::reg(tmp2.to_reg()),
                 tmp1,
             );
-            inst.emit(&[], sink, info, state);
+            inst.emit(&[], sink, info, state, ctrl_plane);
 
             // Branch to computed address.
             let inst = Inst::jmp_unknown(RegMem::reg(tmp1.to_reg()));
-            inst.emit(&[], sink, info, state);
+            inst.emit(&[], sink, info, state, ctrl_plane);
 
             // Emit jump table (table of 32-bit offsets).
-            sink.bind_label(start_of_jumptable);
+            sink.bind_label(start_of_jumptable, ctrl_plane);
             let jt_off = sink.cur_offset();
             for &target in targets.iter().chain(std::iter::once(default_target)) {
                 let word_off = sink.cur_offset();
@@ -1698,7 +1703,7 @@ pub(crate) fn emit(
             one_way_jmp(sink, cc1.invert(), else_label);
             one_way_jmp(sink, *cc2, trap_label);
 
-            sink.bind_label(else_label);
+            sink.bind_label(else_label, ctrl_plane);
         }
 
         Inst::TrapIfOr {
@@ -1724,6 +1729,7 @@ pub(crate) fn emit(
                 sink,
                 info,
                 state,
+                ctrl_plane,
             );
         }
 
@@ -1856,6 +1862,7 @@ pub(crate) fn emit(
             sink,
             info,
             state,
+            ctrl_plane,
         ),
 
         Inst::XmmRmRUnaligned {
@@ -2732,7 +2739,7 @@ pub(crate) fn emit(
             };
 
             let inst = Inst::xmm_cmp_rm_r(cmp_op, RegMem::reg(lhs), dst);
-            inst.emit(&[], sink, info, state);
+            inst.emit(&[], sink, info, state, ctrl_plane);
 
             one_way_jmp(sink, CC::NZ, do_min_max);
             one_way_jmp(sink, CC::P, propagate_nan);
@@ -2742,26 +2749,26 @@ pub(crate) fn emit(
             // case, and are no-ops otherwise.
             let op = if *is_min { or_op } else { and_op };
             let inst = Inst::xmm_rm_r(op, RegMem::reg(lhs), Writable::from_reg(dst));
-            inst.emit(&[], sink, info, state);
+            inst.emit(&[], sink, info, state, ctrl_plane);
 
             let inst = Inst::jmp_known(done);
-            inst.emit(&[], sink, info, state);
+            inst.emit(&[], sink, info, state, ctrl_plane);
 
             // x86's min/max are not symmetric; if either operand is a NaN, they return the
             // read-only operand: perform an addition between the two operands, which has the
             // desired NaN propagation effects.
-            sink.bind_label(propagate_nan);
+            sink.bind_label(propagate_nan, ctrl_plane);
             let inst = Inst::xmm_rm_r(add_op, RegMem::reg(lhs), Writable::from_reg(dst));
-            inst.emit(&[], sink, info, state);
+            inst.emit(&[], sink, info, state, ctrl_plane);
 
             one_way_jmp(sink, CC::P, done);
 
-            sink.bind_label(do_min_max);
+            sink.bind_label(do_min_max, ctrl_plane);
 
             let inst = Inst::xmm_rm_r(min_max_op, RegMem::reg(lhs), Writable::from_reg(dst));
-            inst.emit(&[], sink, info, state);
+            inst.emit(&[], sink, info, state, ctrl_plane);
 
-            sink.bind_label(done);
+            sink.bind_label(done, ctrl_plane);
         }
 
         Inst::XmmRmRImm {
@@ -3010,7 +3017,7 @@ pub(crate) fn emit(
             // thing.
             // TODO use tst src, src here.
             let inst = Inst::cmp_rmi_r(OperandSize::Size64, RegMemImm::imm(0), src);
-            inst.emit(&[], sink, info, state);
+            inst.emit(&[], sink, info, state, ctrl_plane);
 
             one_way_jmp(sink, CC::L, handle_negative);
 
@@ -3023,17 +3030,18 @@ pub(crate) fn emit(
                 src,
                 Writable::from_reg(dst),
                 *dst_size == OperandSize::Size64,
+                ctrl_plane,
             );
 
             let inst = Inst::jmp_known(done);
-            inst.emit(&[], sink, info, state);
+            inst.emit(&[], sink, info, state, ctrl_plane);
 
-            sink.bind_label(handle_negative);
+            sink.bind_label(handle_negative, ctrl_plane);
 
             // Divide x by two to get it in range for the signed conversion, keep the LSB, and
             // scale it back up on the FP side.
             let inst = Inst::gen_move(Writable::from_reg(tmp_gpr1), src, types::I64);
-            inst.emit(&[], sink, info, state);
+            inst.emit(&[], sink, info, state, ctrl_plane);
 
             // tmp_gpr1 := src >> 1
             let inst = Inst::shift_r(
@@ -3043,10 +3051,10 @@ pub(crate) fn emit(
                 tmp_gpr1,
                 Writable::from_reg(tmp_gpr1),
             );
-            inst.emit(&[], sink, info, state);
+            inst.emit(&[], sink, info, state, ctrl_plane);
 
             let inst = Inst::gen_move(Writable::from_reg(tmp_gpr2), src, types::I64);
-            inst.emit(&[], sink, info, state);
+            inst.emit(&[], sink, info, state, ctrl_plane);
 
             let inst = Inst::alu_rmi_r(
                 OperandSize::Size64,
@@ -3054,7 +3062,7 @@ pub(crate) fn emit(
                 RegMemImm::imm(1),
                 Writable::from_reg(tmp_gpr2),
             );
-            inst.emit(&[], sink, info, state);
+            inst.emit(&[], sink, info, state, ctrl_plane);
 
             let inst = Inst::alu_rmi_r(
                 OperandSize::Size64,
@@ -3062,7 +3070,7 @@ pub(crate) fn emit(
                 RegMemImm::reg(tmp_gpr1),
                 Writable::from_reg(tmp_gpr2),
             );
-            inst.emit(&[], sink, info, state);
+            inst.emit(&[], sink, info, state, ctrl_plane);
 
             emit_signed_cvt(
                 sink,
@@ -3071,6 +3079,7 @@ pub(crate) fn emit(
                 tmp_gpr2,
                 Writable::from_reg(dst),
                 *dst_size == OperandSize::Size64,
+                ctrl_plane,
             );
 
             let add_op = if *dst_size == OperandSize::Size64 {
@@ -3079,9 +3088,9 @@ pub(crate) fn emit(
                 SseOpcode::Addss
             };
             let inst = Inst::xmm_rm_r(add_op, RegMem::reg(dst), Writable::from_reg(dst));
-            inst.emit(&[], sink, info, state);
+            inst.emit(&[], sink, info, state, ctrl_plane);
 
-            sink.bind_label(done);
+            sink.bind_label(done, ctrl_plane);
         }
 
         Inst::CvtFloatToSintSeq {
@@ -3154,18 +3163,18 @@ pub(crate) fn emit(
 
             // The truncation.
             let inst = Inst::xmm_to_gpr(trunc_op, src, Writable::from_reg(dst), *dst_size);
-            inst.emit(&[], sink, info, state);
+            inst.emit(&[], sink, info, state, ctrl_plane);
 
             // Compare against 1, in case of overflow the dst operand was INT_MIN.
             let inst = Inst::cmp_rmi_r(*dst_size, RegMemImm::imm(1), dst);
-            inst.emit(&[], sink, info, state);
+            inst.emit(&[], sink, info, state, ctrl_plane);
 
             one_way_jmp(sink, CC::NO, done); // no overflow => done
 
             // Check for NaN.
 
             let inst = Inst::xmm_cmp_rm_r(cmp_op, RegMem::reg(src), src);
-            inst.emit(&[], sink, info, state);
+            inst.emit(&[], sink, info, state, ctrl_plane);
 
             if *is_saturating {
                 let not_nan = sink.get_label();
@@ -3178,12 +3187,12 @@ pub(crate) fn emit(
                     RegMemImm::reg(dst),
                     Writable::from_reg(dst),
                 );
-                inst.emit(&[], sink, info, state);
+                inst.emit(&[], sink, info, state, ctrl_plane);
 
                 let inst = Inst::jmp_known(done);
-                inst.emit(&[], sink, info, state);
+                inst.emit(&[], sink, info, state, ctrl_plane);
 
-                sink.bind_label(not_nan);
+                sink.bind_label(not_nan, ctrl_plane);
 
                 // If the input was positive, saturate to INT_MAX.
 
@@ -3193,10 +3202,10 @@ pub(crate) fn emit(
                     RegMem::reg(tmp_xmm),
                     Writable::from_reg(tmp_xmm),
                 );
-                inst.emit(&[], sink, info, state);
+                inst.emit(&[], sink, info, state, ctrl_plane);
 
                 let inst = Inst::xmm_cmp_rm_r(cmp_op, RegMem::reg(src), tmp_xmm);
-                inst.emit(&[], sink, info, state);
+                inst.emit(&[], sink, info, state, ctrl_plane);
 
                 // Jump if >= to done.
                 one_way_jmp(sink, CC::NB, done);
@@ -3208,10 +3217,10 @@ pub(crate) fn emit(
                         0x7fffffffffffffff,
                         Writable::from_reg(dst),
                     );
-                    inst.emit(&[], sink, info, state);
+                    inst.emit(&[], sink, info, state, ctrl_plane);
                 } else {
                     let inst = Inst::imm(OperandSize::Size32, 0x7fffffff, Writable::from_reg(dst));
-                    inst.emit(&[], sink, info, state);
+                    inst.emit(&[], sink, info, state, ctrl_plane);
                 }
             } else {
                 let inst = Inst::trap_if(CC::P, TrapCode::BadConversionToInteger);
@@ -3230,7 +3239,7 @@ pub(crate) fn emit(
                         let cst = Ieee32::pow2(output_bits - 1).neg().bits();
                         let inst =
                             Inst::imm(OperandSize::Size32, cst as u64, Writable::from_reg(tmp_gpr));
-                        inst.emit(&[], sink, info, state);
+                        inst.emit(&[], sink, info, state, ctrl_plane);
                     }
                     OperandSize::Size64 => {
                         // An f64 can represent `i32::min_value() - 1` exactly with precision to spare,
@@ -3243,7 +3252,7 @@ pub(crate) fn emit(
                         };
                         let inst =
                             Inst::imm(OperandSize::Size64, cst.bits(), Writable::from_reg(tmp_gpr));
-                        inst.emit(&[], sink, info, state);
+                        inst.emit(&[], sink, info, state, ctrl_plane);
                     }
                     _ => unreachable!(),
                 }
@@ -3254,10 +3263,10 @@ pub(crate) fn emit(
                     *src_size,
                     Writable::from_reg(tmp_xmm),
                 );
-                inst.emit(&[], sink, info, state);
+                inst.emit(&[], sink, info, state, ctrl_plane);
 
                 let inst = Inst::xmm_cmp_rm_r(cmp_op, RegMem::reg(tmp_xmm), src);
-                inst.emit(&[], sink, info, state);
+                inst.emit(&[], sink, info, state, ctrl_plane);
 
                 // no trap if src >= or > threshold
                 let inst = Inst::trap_if(no_overflow_cc.invert(), TrapCode::IntegerOverflow);
@@ -3271,17 +3280,17 @@ pub(crate) fn emit(
                     RegMem::reg(tmp_xmm),
                     Writable::from_reg(tmp_xmm),
                 );
-                inst.emit(&[], sink, info, state);
+                inst.emit(&[], sink, info, state, ctrl_plane);
 
                 let inst = Inst::xmm_cmp_rm_r(cmp_op, RegMem::reg(src), tmp_xmm);
-                inst.emit(&[], sink, info, state);
+                inst.emit(&[], sink, info, state, ctrl_plane);
 
                 // no trap if 0 >= src
                 let inst = Inst::trap_if(CC::B, TrapCode::IntegerOverflow);
                 inst.emit(&[], sink, info, state);
             }
 
-            sink.bind_label(done);
+            sink.bind_label(done, ctrl_plane);
         }
 
         Inst::CvtFloatToUintSeq {
@@ -3361,7 +3370,7 @@ pub(crate) fn emit(
             };
 
             let inst = Inst::imm(*src_size, cst, Writable::from_reg(tmp_gpr));
-            inst.emit(&[], sink, info, state);
+            inst.emit(&[], sink, info, state, ctrl_plane);
 
             let inst = Inst::gpr_to_xmm(
                 cast_op,
@@ -3369,10 +3378,10 @@ pub(crate) fn emit(
                 *src_size,
                 Writable::from_reg(tmp_xmm),
             );
-            inst.emit(&[], sink, info, state);
+            inst.emit(&[], sink, info, state, ctrl_plane);
 
             let inst = Inst::xmm_cmp_rm_r(cmp_op, RegMem::reg(tmp_xmm), src);
-            inst.emit(&[], sink, info, state);
+            inst.emit(&[], sink, info, state, ctrl_plane);
 
             let handle_large = sink.get_label();
             one_way_jmp(sink, CC::NB, handle_large); // jump to handle_large if src >= large_threshold
@@ -3387,11 +3396,11 @@ pub(crate) fn emit(
                     RegMemImm::reg(dst),
                     Writable::from_reg(dst),
                 );
-                inst.emit(&[], sink, info, state);
+                inst.emit(&[], sink, info, state, ctrl_plane);
 
                 let inst = Inst::jmp_known(done);
                 inst.emit(&[], sink, info, state);
-                sink.bind_label(not_nan);
+                sink.bind_label(not_nan, ctrl_plane);
             } else {
                 // Trap.
                 let inst = Inst::trap_if(CC::P, TrapCode::BadConversionToInteger);
@@ -3402,10 +3411,10 @@ pub(crate) fn emit(
             // overflow.
 
             let inst = Inst::xmm_to_gpr(trunc_op, src, Writable::from_reg(dst), *dst_size);
-            inst.emit(&[], sink, info, state);
+            inst.emit(&[], sink, info, state, ctrl_plane);
 
             let inst = Inst::cmp_rmi_r(*dst_size, RegMemImm::imm(0), dst);
-            inst.emit(&[], sink, info, state);
+            inst.emit(&[], sink, info, state, ctrl_plane);
 
             one_way_jmp(sink, CC::NL, done); // if dst >= 0, jump to done
 
@@ -3418,31 +3427,31 @@ pub(crate) fn emit(
                     RegMemImm::reg(dst),
                     Writable::from_reg(dst),
                 );
-                inst.emit(&[], sink, info, state);
+                inst.emit(&[], sink, info, state, ctrl_plane);
 
                 let inst = Inst::jmp_known(done);
-                inst.emit(&[], sink, info, state);
+                inst.emit(&[], sink, info, state, ctrl_plane);
             } else {
                 // Trap.
                 let inst = Inst::trap(TrapCode::IntegerOverflow);
-                inst.emit(&[], sink, info, state);
+                inst.emit(&[], sink, info, state, ctrl_plane);
             }
 
             // Now handle large inputs.
 
-            sink.bind_label(handle_large);
+            sink.bind_label(handle_large, ctrl_plane);
 
             let inst = Inst::gen_move(Writable::from_reg(tmp_xmm2), src, types::F64);
-            inst.emit(&[], sink, info, state);
+            inst.emit(&[], sink, info, state, ctrl_plane);
 
             let inst = Inst::xmm_rm_r(sub_op, RegMem::reg(tmp_xmm), Writable::from_reg(tmp_xmm2));
-            inst.emit(&[], sink, info, state);
+            inst.emit(&[], sink, info, state, ctrl_plane);
 
             let inst = Inst::xmm_to_gpr(trunc_op, tmp_xmm2, Writable::from_reg(dst), *dst_size);
-            inst.emit(&[], sink, info, state);
+            inst.emit(&[], sink, info, state, ctrl_plane);
 
             let inst = Inst::cmp_rmi_r(*dst_size, RegMemImm::imm(0), dst);
-            inst.emit(&[], sink, info, state);
+            inst.emit(&[], sink, info, state, ctrl_plane);
 
             if *is_saturating {
                 let next_is_large = sink.get_label();
@@ -3459,11 +3468,11 @@ pub(crate) fn emit(
                     },
                     Writable::from_reg(dst),
                 );
-                inst.emit(&[], sink, info, state);
+                inst.emit(&[], sink, info, state, ctrl_plane);
 
                 let inst = Inst::jmp_known(done);
                 inst.emit(&[], sink, info, state);
-                sink.bind_label(next_is_large);
+                sink.bind_label(next_is_large, ctrl_plane);
             } else {
                 let inst = Inst::trap_if(CC::L, TrapCode::IntegerOverflow);
                 inst.emit(&[], sink, info, state);
@@ -3471,7 +3480,7 @@ pub(crate) fn emit(
 
             if *dst_size == OperandSize::Size64 {
                 let inst = Inst::imm(OperandSize::Size64, 1 << 63, Writable::from_reg(tmp_gpr));
-                inst.emit(&[], sink, info, state);
+                inst.emit(&[], sink, info, state, ctrl_plane);
 
                 let inst = Inst::alu_rmi_r(
                     OperandSize::Size64,
@@ -3479,7 +3488,7 @@ pub(crate) fn emit(
                     RegMemImm::reg(tmp_gpr),
                     Writable::from_reg(dst),
                 );
-                inst.emit(&[], sink, info, state);
+                inst.emit(&[], sink, info, state, ctrl_plane);
             } else {
                 let inst = Inst::alu_rmi_r(
                     OperandSize::Size32,
@@ -3487,10 +3496,10 @@ pub(crate) fn emit(
                     RegMemImm::imm(1 << 31),
                     Writable::from_reg(dst),
                 );
-                inst.emit(&[], sink, info, state);
+                inst.emit(&[], sink, info, state, ctrl_plane);
             }
 
-            sink.bind_label(done);
+            sink.bind_label(done, ctrl_plane);
         }
 
         Inst::LoadExtName { dst, name, offset } => {
@@ -3597,14 +3606,14 @@ pub(crate) fn emit(
             // mov{zbq,zwq,zlq,q} (%r_address), %rax
             // No need to call `add_trap` here, since the `i1` emit will do that.
             let i1 = Inst::load(*ty, mem.clone(), dst_old, ExtKind::ZeroExtend);
-            i1.emit(&[], sink, info, state);
+            i1.emit(&[], sink, info, state, ctrl_plane);
 
             // again:
-            sink.bind_label(again_label);
+            sink.bind_label(again_label, ctrl_plane);
 
             // movq %rax, %r_temp
             let i2 = Inst::mov_r_r(OperandSize::Size64, dst_old.to_reg(), temp);
-            i2.emit(&[], sink, info, state);
+            i2.emit(&[], sink, info, state, ctrl_plane);
 
             let operand_rmi = RegMemImm::reg(operand);
             use inst_common::MachAtomicRmwOp as RmwOp;
@@ -3612,17 +3621,17 @@ pub(crate) fn emit(
                 RmwOp::Xchg => {
                     // movq %r_operand, %r_temp
                     let i3 = Inst::mov_r_r(OperandSize::Size64, operand, temp);
-                    i3.emit(&[], sink, info, state);
+                    i3.emit(&[], sink, info, state, ctrl_plane);
                 }
                 RmwOp::Nand => {
                     // andq %r_operand, %r_temp
                     let i3 =
                         Inst::alu_rmi_r(OperandSize::Size64, AluRmiROpcode::And, operand_rmi, temp);
-                    i3.emit(&[], sink, info, state);
+                    i3.emit(&[], sink, info, state, ctrl_plane);
 
                     // notq %r_temp
                     let i4 = Inst::not(OperandSize::Size64, temp);
-                    i4.emit(&[], sink, info, state);
+                    i4.emit(&[], sink, info, state, ctrl_plane);
                 }
                 RmwOp::Umin | RmwOp::Umax | RmwOp::Smin | RmwOp::Smax => {
                     // cmp %r_temp, %r_operand
@@ -3631,7 +3640,7 @@ pub(crate) fn emit(
                         RegMemImm::reg(temp.to_reg()),
                         operand,
                     );
-                    i3.emit(&[], sink, info, state);
+                    i3.emit(&[], sink, info, state, ctrl_plane);
 
                     // cmovcc %r_operand, %r_temp
                     let cc = match op {
@@ -3642,7 +3651,7 @@ pub(crate) fn emit(
                         _ => unreachable!(),
                     };
                     let i4 = Inst::cmove(OperandSize::Size64, cc, RegMem::reg(operand), temp);
-                    i4.emit(&[], sink, info, state);
+                    i4.emit(&[], sink, info, state, ctrl_plane);
                 }
                 _ => {
                     // opq %r_operand, %r_temp
@@ -3660,7 +3669,7 @@ pub(crate) fn emit(
                         | RmwOp::Smax => unreachable!(),
                     };
                     let i3 = Inst::alu_rmi_r(OperandSize::Size64, alu_op, operand_rmi, temp);
-                    i3.emit(&[], sink, info, state);
+                    i3.emit(&[], sink, info, state, ctrl_plane);
                 }
             }
 
@@ -3673,7 +3682,7 @@ pub(crate) fn emit(
                 mem: mem.into(),
                 dst_old,
             };
-            i4.emit(&[], sink, info, state);
+            i4.emit(&[], sink, info, state, ctrl_plane);
 
             // jnz again
             one_way_jmp(sink, CC::NZ, again_label);

@@ -11,7 +11,6 @@ use cranelift_codegen::ir::Type;
 use cranelift_codegen::isa::{OwnedTargetIsa, TargetIsa};
 use cranelift_codegen::settings::{Configurable, Flags};
 use cranelift_codegen::{ir, settings};
-use cranelift_control::ControlPlane;
 use cranelift_reader::TestCommand;
 use cranelift_reader::{parse_run_command, TestFile};
 use log::{info, trace};
@@ -36,9 +35,8 @@ fn build_host_isa(
     flags: settings::Flags,
     isa_flags: Vec<settings::Value>,
 ) -> OwnedTargetIsa {
-    let mut builder =
-        cranelift_native::builder_with_options(infer_native_flags, ControlPlane::noop())
-            .expect("Unable to build a TargetIsa for the current host");
+    let mut builder = cranelift_native::builder_with_options(infer_native_flags)
+        .expect("Unable to build a TargetIsa for the current host");
 
     // Copy ISA Flags
     for value in isa_flags {
@@ -108,7 +106,7 @@ fn compile_testfile(
     // Copy the requested ISA flags into the host ISA and use that.
     let isa = build_host_isa(false, flags.clone(), isa.isa_flags());
 
-    let mut tfc = TestFileCompiler::new(isa);
+    let mut tfc = TestFileCompiler::new(isa, panic!(""));
     tfc.add_testfile(testfile)?;
     Ok(tfc.compile()?)
 }

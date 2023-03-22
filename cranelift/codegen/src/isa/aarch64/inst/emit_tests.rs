@@ -6,6 +6,7 @@ use crate::settings;
 
 use alloc::boxed::Box;
 use alloc::vec::Vec;
+use cranelift_control::ControlPlane;
 
 #[cfg(test)]
 fn simm9_zero() -> SImm9 {
@@ -7809,9 +7810,16 @@ fn test_aarch64_binemit() {
             insn.print_with_state(&mut EmitState::default(), &mut AllocationConsumer::new(&[]));
         assert_eq!(expected_printing, actual_printing);
 
+        let ctrl_plane = &mut ControlPlane::default();
         let mut buffer = MachBuffer::new();
-        insn.emit(&[], &mut buffer, &emit_info, &mut Default::default());
-        let buffer = buffer.finish();
+        insn.emit(
+            &[],
+            &mut buffer,
+            &emit_info,
+            &mut Default::default(),
+            ctrl_plane,
+        );
+        let buffer = buffer.finish(ctrl_plane);
         let actual_encoding = &buffer.stringify_code_bytes();
         assert_eq!(expected_encoding, actual_encoding);
     }

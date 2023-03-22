@@ -3,6 +3,7 @@ use crate::ir::LibCall;
 use crate::isa::riscv64::inst::*;
 use crate::settings;
 use alloc::vec::Vec;
+use cranelift_control::ControlPlane;
 
 #[test]
 fn test_riscv64_binemit() {
@@ -2066,6 +2067,7 @@ fn test_riscv64_binemit() {
 
     let (flags, isa_flags) = make_test_flags();
     let emit_info = EmitInfo::new(flags, isa_flags);
+    let ctrl_plane = &mut ControlPlane::default();
 
     for unit in insns.iter() {
         println!("Riscv64: {:?}, {}", unit.inst, unit.assembly);
@@ -2075,9 +2077,14 @@ fn test_riscv64_binemit() {
             .print_with_state(&mut EmitState::default(), &mut AllocationConsumer::new(&[]));
         assert_eq!(unit.assembly, actual_printing);
         let mut buffer = MachBuffer::new();
-        unit.inst
-            .emit(&[], &mut buffer, &emit_info, &mut Default::default());
-        let buffer = buffer.finish();
+        unit.inst.emit(
+            &[],
+            &mut buffer,
+            &emit_info,
+            &mut Default::default(),
+            ctrl_plane,
+        );
+        let buffer = buffer.finish(ctrl_plane);
         if buffer.data() != unit.code.to_le_bytes() {
             {
                 let gnu = DebugRTypeInst::from_bs(&unit.code.to_le_bytes());
@@ -2300,11 +2307,19 @@ fn riscv64_worst_case_instruction_size() {
         ty: F64,
     });
 
+    let ctrl_plane = &mut ControlPlane::default();
+
     let mut max: (u32, MInst) = (0, Inst::Nop0);
     for i in candidates {
         let mut buffer = MachBuffer::new();
-        i.emit(&[], &mut buffer, &emit_info, &mut Default::default());
-        let buffer = buffer.finish();
+        i.emit(
+            &[],
+            &mut buffer,
+            &emit_info,
+            &mut Default::default(),
+            ctrl_plane,
+        );
+        let buffer = buffer.finish(ctrl_plane);
         let length = buffer.data().len() as u32;
         if length > max.0 {
             let length = buffer.data().len() as u32;

@@ -10,6 +10,7 @@ use crate::{machinst::*, trace};
 use crate::{settings, CodegenError, CodegenResult};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
+use cranelift_control::ControlPlane;
 use regalloc2::{Allocation, PRegSet, VReg};
 use smallvec::{smallvec, SmallVec};
 use std::fmt;
@@ -2572,9 +2573,10 @@ impl MachInstEmit for Inst {
         sink: &mut MachBuffer<Inst>,
         info: &Self::Info,
         state: &mut Self::State,
+        ctrl_plane: &mut ControlPlane,
     ) {
         let mut allocs = AllocationConsumer::new(allocs);
-        emit::emit(self, &mut allocs, sink, info, state);
+        emit::emit(self, &mut allocs, sink, info, state, ctrl_plane);
     }
 
     fn pretty_print_inst(&self, allocs: &[Allocation], _: &mut Self::State) -> String {

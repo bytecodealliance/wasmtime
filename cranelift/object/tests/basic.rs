@@ -11,9 +11,7 @@ use cranelift_object::*;
 #[test]
 fn error_on_incompatible_sig_in_declare_function() {
     let flag_builder = settings::builder();
-    let isa_builder =
-        cranelift_codegen::isa::lookup_by_name("x86_64-unknown-linux-gnu", ControlPlane::noop())
-            .unwrap();
+    let isa_builder = cranelift_codegen::isa::lookup_by_name("x86_64-unknown-linux-gnu").unwrap();
     let isa = isa_builder
         .finish(settings::Flags::new(flag_builder))
         .unwrap();
@@ -34,7 +32,7 @@ fn error_on_incompatible_sig_in_declare_function() {
         .unwrap(); // Make sure this is an error
 }
 
-fn define_simple_function(module: &mut ObjectModule) -> FuncId {
+fn define_simple_function(module: &mut ObjectModule, ctrl_plane: &mut ControlPlane) -> FuncId {
     let sig = Signature {
         params: vec![],
         returns: vec![],
@@ -42,10 +40,10 @@ fn define_simple_function(module: &mut ObjectModule) -> FuncId {
     };
 
     let func_id = module
-        .declare_function("abc", Linkage::Local, &sig)
+        .declare_function("abc", Linkage::Local, &sig, ctrl_plane)
         .unwrap();
 
-    let mut ctx = Context::new(ControlPlane::noop());
+    let mut ctx = Context::new();
     ctx.func = Function::with_name_signature(UserFuncName::user(0, func_id.as_u32()), sig);
     let mut func_ctx = FunctionBuilderContext::new();
     {
@@ -55,7 +53,9 @@ fn define_simple_function(module: &mut ObjectModule) -> FuncId {
         bcx.ins().return_(&[]);
     }
 
-    module.define_function(func_id, &mut ctx).unwrap();
+    module
+        .define_function(func_id, &mut ctx, ctrl_plane)
+        .unwrap();
 
     func_id
 }
@@ -63,18 +63,17 @@ fn define_simple_function(module: &mut ObjectModule) -> FuncId {
 #[test]
 #[should_panic(expected = "Result::unwrap()` on an `Err` value: DuplicateDefinition(\"abc\")")]
 fn panic_on_define_after_finalize() {
+    let ctrl_plane = &mut ControlPlane::default();
     let flag_builder = settings::builder();
-    let isa_builder =
-        cranelift_codegen::isa::lookup_by_name("x86_64-unknown-linux-gnu", ControlPlane::noop())
-            .unwrap();
+    let isa_builder = cranelift_codegen::isa::lookup_by_name("x86_64-unknown-linux-gnu").unwrap();
     let isa = isa_builder
         .finish(settings::Flags::new(flag_builder))
         .unwrap();
     let mut module =
         ObjectModule::new(ObjectBuilder::new(isa, "foo", default_libcall_names()).unwrap());
 
-    define_simple_function(&mut module);
-    define_simple_function(&mut module);
+    define_simple_function(&mut module, ctrl_plane);
+    define_simple_function(&mut module, ctrl_plane);
 }
 
 #[test]
@@ -151,10 +150,9 @@ fn switch_error() {
 
 #[test]
 fn libcall_function() {
+    let ctrl_plane = &mut ControlPlane::default();
     let flag_builder = settings::builder();
-    let isa_builder =
-        cranelift_codegen::isa::lookup_by_name("x86_64-unknown-linux-gnu", ControlPlane::noop())
-            .unwrap();
+    let isa_builder = cranelift_codegen::isa::lookup_by_name("x86_64-unknown-linux-gnu").unwrap();
     let isa = isa_builder
         .finish(settings::Flags::new(flag_builder))
         .unwrap();
@@ -168,10 +166,10 @@ fn libcall_function() {
     };
 
     let func_id = module
-        .declare_function("function", Linkage::Local, &sig)
+        .declare_function("function", Linkage::Local, &sig, ctrl_plane)
         .unwrap();
 
-    let mut ctx = Context::new(ControlPlane::noop());
+    let mut ctx = Context::new();
     ctx.func = Function::with_name_signature(UserFuncName::user(0, func_id.as_u32()), sig);
     let mut func_ctx = FunctionBuilderContext::new();
     {
@@ -187,7 +185,7 @@ fn libcall_function() {
         signature.params.push(AbiParam::new(int));
         signature.returns.push(AbiParam::new(int));
         let callee = module
-            .declare_function("malloc", Linkage::Import, &signature)
+            .declare_function("malloc", Linkage::Import, &signature, ctrl_plane)
             .expect("declare malloc function");
         let local_callee = module.declare_func_in_func(callee, &mut bcx.func);
         let argument_exprs = vec![size];
@@ -199,7 +197,9 @@ fn libcall_function() {
         bcx.ins().return_(&[]);
     }
 
-    module.define_function(func_id, &mut ctx).unwrap();
+    module
+        .define_function(func_id, &mut ctx, ctrl_plane)
+        .unwrap();
 
     module.finish();
 }
@@ -207,10 +207,9 @@ fn libcall_function() {
 #[test]
 #[should_panic(expected = "has a null byte, which is disallowed")]
 fn reject_nul_byte_symbol_for_func() {
+    let ctrl_plane = &mut ControlPlane::default();
     let flag_builder = settings::builder();
-    let isa_builder =
-        cranelift_codegen::isa::lookup_by_name("x86_64-unknown-linux-gnu", ControlPlane::noop())
-            .unwrap();
+    let isa_builder = cranelift_codegen::isa::lookup_by_name("x86_64-unknown-linux-gnu").unwrap();
     let isa = isa_builder
         .finish(settings::Flags::new(flag_builder))
         .unwrap();
@@ -224,17 +223,21 @@ fn reject_nul_byte_symbol_for_func() {
     };
 
     let _ = module
-        .declare_function("function\u{0}with\u{0}nul\u{0}bytes", Linkage::Local, &sig)
+        .declare_function(
+            "function\u{0}with\u{0}nul\u{0}bytes",
+            Linkage::Local,
+            &sig,
+            ctrl_plane,
+        )
         .unwrap();
 }
 
 #[test]
 #[should_panic(expected = "has a null byte, which is disallowed")]
 fn reject_nul_byte_symbol_for_data() {
+    let ctrl_plane = &mut ControlPlane::default();
     let flag_builder = settings::builder();
-    let isa_builder =
-        cranelift_codegen::isa::lookup_by_name("x86_64-unknown-linux-gnu", ControlPlane::noop())
-            .unwrap();
+    let isa_builder = cranelift_codegen::isa::lookup_by_name("x86_64-unknown-linux-gnu").unwrap();
     let isa = isa_builder
         .finish(settings::Flags::new(flag_builder))
         .unwrap();

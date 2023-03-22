@@ -52,6 +52,7 @@ use crate::settings::Flags;
 use crate::value_label::ValueLabelsRanges;
 use alloc::vec::Vec;
 use core::fmt::Debug;
+use cranelift_control::ControlPlane;
 use cranelift_entity::PrimaryMap;
 use regalloc2::{Allocation, VReg};
 use smallvec::{smallvec, SmallVec};
@@ -263,6 +264,7 @@ pub trait MachInstEmit: MachInst {
         code: &mut MachBuffer<Self>,
         info: &Self::Info,
         state: &mut Self::State,
+        ctrl_plane: &mut ControlPlane,
     );
     /// Pretty-print the instruction.
     fn pretty_print_inst(&self, allocs: &[Allocation], state: &mut Self::State) -> String;
@@ -474,7 +476,13 @@ pub trait TextSectionBuilder {
     ///
     /// This function returns the offset at which the data was placed in the
     /// text section.
-    fn append(&mut self, labeled: bool, data: &[u8], align: u32) -> u64;
+    fn append(
+        &mut self,
+        labeled: bool,
+        data: &[u8],
+        align: u32,
+        ctrl_plane: &mut ControlPlane,
+    ) -> u64;
 
     /// Attempts to resolve a relocation for this function.
     ///
@@ -497,7 +505,7 @@ pub trait TextSectionBuilder {
 
     /// Completes this text section, filling out any final details, and returns
     /// the bytes of the text section.
-    fn finish(&mut self) -> Vec<u8>;
+    fn finish(&mut self, ctrl_plane: &mut ControlPlane) -> Vec<u8>;
 }
 
 /// Expected unwind info type.

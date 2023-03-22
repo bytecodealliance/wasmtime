@@ -8,7 +8,6 @@
 use crate::subtest::{run_filecheck, Context, SubTest};
 use cranelift_codegen;
 use cranelift_codegen::ir::Function;
-use cranelift_control::ControlPlane;
 use cranelift_reader::TestCommand;
 use std::borrow::Cow;
 
@@ -37,8 +36,7 @@ impl SubTest for TestLICM {
 
     fn run(&self, func: Cow<Function>, context: &Context) -> anyhow::Result<()> {
         let isa = context.isa.expect("LICM needs an ISA");
-        let mut comp_ctx =
-            cranelift_codegen::Context::for_function(func.into_owned(), ControlPlane::noop());
+        let mut comp_ctx = cranelift_codegen::Context::for_function(func.into_owned());
 
         comp_ctx.flowgraph();
         comp_ctx.compute_loop_analysis();

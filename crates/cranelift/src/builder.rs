@@ -8,7 +8,6 @@ use cranelift_codegen::{
     isa::{self, OwnedTargetIsa},
     CodegenResult,
 };
-use cranelift_control::ControlPlane;
 use std::fmt;
 use std::sync::Arc;
 use wasmtime_cranelift_shared::isa_builder::IsaBuilder;
@@ -35,9 +34,7 @@ pub struct LinkOptions {
 
 pub fn builder() -> Box<dyn CompilerBuilder> {
     Box::new(Builder {
-        inner: IsaBuilder::new(|triple| {
-            isa::lookup(triple, ControlPlane::noop()).map_err(|e| e.into())
-        }),
+        inner: IsaBuilder::new(|triple| isa::lookup(triple).map_err(|e| e.into())),
         linkopts: LinkOptions::default(),
         cache_store: None,
     })

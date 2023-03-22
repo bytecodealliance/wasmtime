@@ -45,7 +45,6 @@ mod testfile;
 use anyhow::{Error, Result};
 use cranelift_codegen::isa::{self, OwnedTargetIsa};
 use cranelift_codegen::settings::{self, FlagsOrIsa};
-use cranelift_control::ControlPlane;
 use std::str::FromStr;
 use target_lexicon::Triple;
 
@@ -96,16 +95,15 @@ pub fn parse_sets_and_triple(flag_set: &[String], flag_triple: &str) -> Result<O
             Err(parse_error) => return Err(Error::from(parse_error)),
         };
 
-        let mut isa_builder =
-            isa::lookup(triple, ControlPlane::noop()).map_err(|err| match err {
-                isa::LookupError::SupportDisabled => {
-                    anyhow::anyhow!("support for triple '{}' is disabled", triple_name)
-                }
-                isa::LookupError::Unsupported => anyhow::anyhow!(
-                    "support for triple '{}' is not implemented yet",
-                    triple_name
-                ),
-            })?;
+        let mut isa_builder = isa::lookup(triple).map_err(|err| match err {
+            isa::LookupError::SupportDisabled => {
+                anyhow::anyhow!("support for triple '{}' is disabled", triple_name)
+            }
+            isa::LookupError::Unsupported => anyhow::anyhow!(
+                "support for triple '{}' is not implemented yet",
+                triple_name
+            ),
+        })?;
 
         // Try to parse system-wide unknown settings as target-specific settings.
         parse_options(

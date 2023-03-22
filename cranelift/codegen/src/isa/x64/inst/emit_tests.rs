@@ -5098,6 +5098,7 @@ fn test_x64_emit() {
 
     // ========================================================
     // Actually run the tests!
+    let ctrl_plane = &mut ControlPlane::default();
     let mut flag_builder = settings::builder();
     flag_builder.enable("is_pic").unwrap();
     let flags = settings::Flags::new(flag_builder);
@@ -5122,13 +5123,19 @@ fn test_x64_emit() {
         assert_eq!(expected_printing, actual_printing);
         let mut buffer = MachBuffer::new();
 
-        insn.emit(&[], &mut buffer, &emit_info, &mut Default::default());
+        insn.emit(
+            &[],
+            &mut buffer,
+            &emit_info,
+            &mut Default::default(),
+            ctrl_plane,
+        );
 
         // Allow one label just after the instruction (so the offset is 0).
         let label = buffer.get_label();
-        buffer.bind_label(label);
+        buffer.bind_label(label, ctrl_plane);
 
-        let buffer = buffer.finish();
+        let buffer = buffer.finish(ctrl_plane);
         let actual_encoding = &buffer.stringify_code_bytes();
         assert_eq!(expected_encoding, actual_encoding, "{}", expected_printing);
     }

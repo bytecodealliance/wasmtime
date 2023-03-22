@@ -102,21 +102,26 @@ mod tests {
     use crate::isa::{lookup, CallConv};
     use crate::settings::{builder, Flags};
     use crate::Context;
+    use cranelift_control::ControlPlane;
     use gimli::write::Address;
     use std::str::FromStr;
     use target_lexicon::triple;
 
     #[test]
     fn test_simple_func() {
+        let ctrl_plane = &mut ControlPlane::default();
         let isa = lookup(triple!("x86_64"))
             .expect("expect x86 ISA")
             .finish(Flags::new(builder()))
             .expect("expect backend creation to succeed");
 
-        let mut context = Context::for_function(create_function(
-            CallConv::SystemV,
-            Some(StackSlotData::new(StackSlotKind::ExplicitSlot, 64)),
-        ));
+        let mut context = Context::for_function(
+            create_function(
+                CallConv::SystemV,
+                Some(StackSlotData::new(StackSlotKind::ExplicitSlot, 64)),
+            ),
+            ControlPlane::default(),
+        );
 
         let code = context.compile(&*isa).expect("expected compilation");
 
@@ -150,12 +155,16 @@ mod tests {
 
     #[test]
     fn test_multi_return_func() {
+        let ctrl_plane = &mut ControlPlane::default();
         let isa = lookup(triple!("x86_64"))
             .expect("expect x86 ISA")
             .finish(Flags::new(builder()))
             .expect("expect backend creation to succeed");
 
-        let mut context = Context::for_function(create_multi_return_function(CallConv::SystemV));
+        let mut context = Context::for_function(
+            create_multi_return_function(CallConv::SystemV),
+            ControlPlane::default(),
+        );
 
         let code = context.compile(&*isa).expect("expected compilation");
 

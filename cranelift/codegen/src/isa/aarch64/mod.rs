@@ -35,9 +35,6 @@ pub struct AArch64Backend {
     flags: shared_settings::Flags,
     isa_flags: aarch64_settings::Flags,
     machine_env: MachineEnv,
-    /// Only used during fuzz-testing. Otherwise, this is a zero-sized struct
-    /// and compiled away. See [cranelift_control].
-    control_plane: ControlPlane,
 }
 
 impl AArch64Backend {
@@ -46,7 +43,6 @@ impl AArch64Backend {
         triple: Triple,
         flags: shared_settings::Flags,
         isa_flags: aarch64_settings::Flags,
-        control_plane: ControlPlane,
     ) -> AArch64Backend {
         let machine_env = create_reg_env(&flags);
         AArch64Backend {
@@ -54,7 +50,6 @@ impl AArch64Backend {
             flags,
             isa_flags,
             machine_env,
-            control_plane,
         }
     }
 
@@ -68,15 +63,7 @@ impl AArch64Backend {
         let emit_info = EmitInfo::new(self.flags.clone());
         let sigs = SigSet::new::<abi::AArch64MachineDeps>(func, &self.flags)?;
         let abi = abi::AArch64Callee::new(func, self, &self.isa_flags, &sigs)?;
-        compile::compile::<AArch64Backend>(
-            func,
-            domtree,
-            self,
-            abi,
-            emit_info,
-            sigs,
-            self.control_plane.clone(),
-        )
+        compile::compile::<AArch64Backend>(func, domtree, self, abi, emit_info, sigs)
     }
 }
 
@@ -86,6 +73,7 @@ impl TargetIsa for AArch64Backend {
         func: &Function,
         domtree: &DominatorTree,
         want_disasm: bool,
+        ctrl_plane: &mut ControlPlane,
     ) -> CodegenResult<CompiledCodeStencil> {
         let (vcode, regalloc_result) = self.compile_vcode(func, domtree)?;
 
@@ -93,10 +81,11 @@ impl TargetIsa for AArch64Backend {
             &regalloc_result,
             want_disasm,
             self.flags.machine_code_cfg_info(),
+            ctrl_plane,
         );
         let frame_size = emit_result.frame_size;
         let value_labels_ranges = emit_result.value_labels_ranges;
-        let buffer = emit_result.buffer.finish();
+        let buffer = emit_result.buffer.finish(ctrl_plane);
         let sized_stackslot_offsets = emit_result.sized_stackslot_offsets;
         let dynamic_stackslot_offsets = emit_result.dynamic_stackslot_offsets;
 
@@ -245,16 +234,14 @@ impl fmt::Display for AArch64Backend {
 }
 
 /// Create a new `isa::Builder`.
-pub fn isa_builder(triple: Triple, control_plane: ControlPlane) -> IsaBuilder {
+pub fn isa_builder(triple: Triple) -> IsaBuilder {
     assert!(triple.architecture == Architecture::Aarch64(Aarch64Architecture::Aarch64));
     IsaBuilder {
         triple,
-        control_plane,
         setup: aarch64_settings::builder(),
-        constructor: |triple, shared_flags, builder, control_plane| {
+        constructor: |triple, shared_flags, builder| {
             let isa_flags = aarch64_settings::Flags::new(&shared_flags, builder);
-            let backend =
-                AArch64Backend::new_with_flags(triple, shared_flags, isa_flags, control_plane);
+            let backend = AArch64Backend::new_with_flags(triple, shared_flags, isa_flags);
             Ok(backend.wrapped())
         },
     }

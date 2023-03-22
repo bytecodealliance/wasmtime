@@ -35,9 +35,6 @@ pub struct S390xBackend {
     flags: shared_settings::Flags,
     isa_flags: s390x_settings::Flags,
     machine_env: MachineEnv,
-    /// Only used during fuzz-testing. Otherwise, this is a zero-sized struct
-    /// and compiled away. See [cranelift_control].
-    control_plane: ControlPlane,
 }
 
 impl S390xBackend {
@@ -46,7 +43,6 @@ impl S390xBackend {
         triple: Triple,
         flags: shared_settings::Flags,
         isa_flags: s390x_settings::Flags,
-        control_plane: ControlPlane,
     ) -> S390xBackend {
         let machine_env = create_machine_env(&flags);
         S390xBackend {
@@ -54,7 +50,6 @@ impl S390xBackend {
             flags,
             isa_flags,
             machine_env,
-            control_plane,
         }
     }
 
@@ -68,15 +63,7 @@ impl S390xBackend {
         let emit_info = EmitInfo::new(self.isa_flags.clone());
         let sigs = SigSet::new::<abi::S390xMachineDeps>(func, &self.flags)?;
         let abi = abi::S390xCallee::new(func, self, &self.isa_flags, &sigs)?;
-        compile::compile::<S390xBackend>(
-            func,
-            domtree,
-            self,
-            abi,
-            emit_info,
-            sigs,
-            self.control_plane.clone(),
-        )
+        compile::compile::<S390xBackend>(func, domtree, self, abi, emit_info, sigs)
     }
 }
 
@@ -86,14 +73,20 @@ impl TargetIsa for S390xBackend {
         func: &Function,
         domtree: &DominatorTree,
         want_disasm: bool,
+        ctrl_plane: &mut ControlPlane,
     ) -> CodegenResult<CompiledCodeStencil> {
         let flags = self.flags();
         let (vcode, regalloc_result) = self.compile_vcode(func, domtree)?;
 
-        let emit_result = vcode.emit(&regalloc_result, want_disasm, flags.machine_code_cfg_info());
+        let emit_result = vcode.emit(
+            &regalloc_result,
+            want_disasm,
+            flags.machine_code_cfg_info(),
+            ctrl_plane,
+        );
         let frame_size = emit_result.frame_size;
         let value_labels_ranges = emit_result.value_labels_ranges;
-        let buffer = emit_result.buffer.finish();
+        let buffer = emit_result.buffer.finish(ctrl_plane);
         let sized_stackslot_offsets = emit_result.sized_stackslot_offsets;
         let dynamic_stackslot_offsets = emit_result.dynamic_stackslot_offsets;
 
@@ -217,16 +210,14 @@ impl fmt::Display for S390xBackend {
 }
 
 /// Create a new `isa::Builder`.
-pub fn isa_builder(triple: Triple, control_plane: ControlPlane) -> IsaBuilder {
+pub fn isa_builder(triple: Triple) -> IsaBuilder {
     assert!(triple.architecture == Architecture::S390x);
     IsaBuilder {
         triple,
-        control_plane,
         setup: s390x_settings::builder(),
-        constructor: |triple, shared_flags, builder, control_plane| {
+        constructor: |triple, shared_flags, builder| {
             let isa_flags = s390x_settings::Flags::new(&shared_flags, builder);
-            let backend =
-                S390xBackend::new_with_flags(triple, shared_flags, isa_flags, control_plane);
+            let backend = S390xBackend::new_with_flags(triple, shared_flags, isa_flags);
             Ok(backend.wrapped())
         },
     }

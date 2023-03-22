@@ -35,9 +35,6 @@ pub struct Riscv64Backend {
     flags: shared_settings::Flags,
     isa_flags: riscv_settings::Flags,
     mach_env: MachineEnv,
-    /// Only used during fuzz-testing. Otherwise, this is a zero-sized struct
-    /// and compiled away. See [cranelift_control].
-    control_plane: ControlPlane,
 }
 
 impl Riscv64Backend {
@@ -46,7 +43,6 @@ impl Riscv64Backend {
         triple: Triple,
         flags: shared_settings::Flags,
         isa_flags: riscv_settings::Flags,
-        control_plane: ControlPlane,
     ) -> Riscv64Backend {
         let mach_env = crate_reg_eviroment(&flags);
         Riscv64Backend {
@@ -54,7 +50,6 @@ impl Riscv64Backend {
             flags,
             isa_flags,
             mach_env,
-            control_plane,
         }
     }
 
@@ -68,15 +63,7 @@ impl Riscv64Backend {
         let emit_info = EmitInfo::new(self.flags.clone(), self.isa_flags.clone());
         let sigs = SigSet::new::<abi::Riscv64MachineDeps>(func, &self.flags)?;
         let abi = abi::Riscv64Callee::new(func, self, &self.isa_flags, &sigs)?;
-        compile::compile::<Riscv64Backend>(
-            func,
-            domtree,
-            self,
-            abi,
-            emit_info,
-            sigs,
-            self.control_plane.clone(),
-        )
+        compile::compile::<Riscv64Backend>(func, domtree, self, abi, emit_info, sigs)
     }
 }
 
@@ -86,6 +73,7 @@ impl TargetIsa for Riscv64Backend {
         func: &Function,
         domtree: &DominatorTree,
         want_disasm: bool,
+        ctrl_plane: &mut ControlPlane,
     ) -> CodegenResult<CompiledCodeStencil> {
         let (vcode, regalloc_result) = self.compile_vcode(func, domtree)?;
 
@@ -94,10 +82,11 @@ impl TargetIsa for Riscv64Backend {
             &regalloc_result,
             want_disasm,
             self.flags.machine_code_cfg_info(),
+            ctrl_plane,
         );
         let frame_size = emit_result.frame_size;
         let value_labels_ranges = emit_result.value_labels_ranges;
-        let buffer = emit_result.buffer.finish();
+        let buffer = emit_result.buffer.finish(ctrl_plane);
         let sized_stackslot_offsets = emit_result.sized_stackslot_offsets;
         let dynamic_stackslot_offsets = emit_result.dynamic_stackslot_offsets;
 
@@ -217,19 +206,17 @@ impl fmt::Display for Riscv64Backend {
 }
 
 /// Create a new `isa::Builder`.
-pub fn isa_builder(triple: Triple, control_plane: ControlPlane) -> IsaBuilder {
+pub fn isa_builder(triple: Triple) -> IsaBuilder {
     match triple.architecture {
         Architecture::Riscv64(..) => {}
         _ => unreachable!(),
     }
     IsaBuilder {
         triple,
-        control_plane,
         setup: riscv_settings::builder(),
-        constructor: |triple, shared_flags, builder, control_plane| {
+        constructor: |triple, shared_flags, builder| {
             let isa_flags = riscv_settings::Flags::new(&shared_flags, builder);
-            let backend =
-                Riscv64Backend::new_with_flags(triple, shared_flags, isa_flags, control_plane);
+            let backend = Riscv64Backend::new_with_flags(triple, shared_flags, isa_flags);
             Ok(backend.wrapped())
         },
     }

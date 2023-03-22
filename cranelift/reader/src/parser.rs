@@ -24,7 +24,6 @@ use cranelift_codegen::ir::{
 use cranelift_codegen::isa::{self, CallConv};
 use cranelift_codegen::packed_option::ReservedValue;
 use cranelift_codegen::{settings, settings::Configurable, timing};
-use cranelift_control::ControlPlane;
 use smallvec::SmallVec;
 use std::mem;
 use std::str::FromStr;
@@ -996,7 +995,7 @@ impl<'a> Parser<'a> {
                 Ok(triple) => triple,
                 Err(err) => return err!(loc, err),
             };
-            let isa_builder = match isa::lookup(triple, ControlPlane::noop()) {
+            let isa_builder = match isa::lookup(triple) {
                 Err(isa::LookupError::SupportDisabled) => {
                     return err!(loc, "support disabled target '{}'", targ);
                 }
@@ -1085,7 +1084,7 @@ impl<'a> Parser<'a> {
                         Ok(triple) => triple,
                         Err(err) => return err!(loc, err),
                     };
-                    let mut isa_builder = match isa::lookup(triple, ControlPlane::noop()) {
+                    let mut isa_builder = match isa::lookup(triple) {
                         Err(isa::LookupError::SupportDisabled) => {
                             continue;
                         }
