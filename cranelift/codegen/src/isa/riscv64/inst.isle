@@ -1069,6 +1069,10 @@
 (decl rv_fcvtds (Reg) Reg)
 (rule (rv_fcvtds rs1) (fpu_rr (FpuOPRR.FcvtDS) $F32 rs1))
 
+;; Helper for emitting the `fcvt.s.d` ("Float Convert Single to Double") instruction.
+(decl rv_fcvtsd (Reg) Reg)
+(rule (rv_fcvtsd rs1) (fpu_rr (FpuOPRR.FcvtSD) $F64 rs1))
+
 ;; Helper for emitting the `fsgnj` ("Floating Point Sign Injection") instruction.
 ;; The output of this instruction is `rs1` with the sign bit from `rs2`
 ;; This implements the `copysign` operation

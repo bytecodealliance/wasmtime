@@ -658,9 +658,9 @@
 (rule (lower (fpromote x))
   (rv_fcvtds x))
 
-(rule
-  (lower (has_type ty (fdemote x)))
-  (fpu_rr (FpuOPRR.FcvtSD) ty x))
+;;;;;  Rules for `fdemote`;;;;;;;;;;;;;;;;;;
+(rule (lower (fdemote x))
+  (rv_fcvtsd x))
 
 
 ;;;;;  Rules for for float arithmetic
