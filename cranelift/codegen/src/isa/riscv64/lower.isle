@@ -491,7 +491,7 @@
 (rule 2 (lower (has_type $I64 (ushr x (imm12_from_value y))))
   (alu_rr_imm12 (AluOPRRI.Srli) x y))
 (rule 1 (lower (has_type $I64 (ushr x y)))
-  (alu_rrr (AluOPRRR.Srl) x (value_regs_get y 0)))
+  (rv_srl x (value_regs_get y 0)))
 
 (rule 0 (lower (has_type $I128 (ushr x y)))
   (lower_i128_ushr x y))
