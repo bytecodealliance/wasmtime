@@ -862,7 +862,11 @@
 (rule (rv_andi rs1 imm)
   (alu_rr_imm12 (AluOPRRI.Andi) rs1 imm))
 
-
+;; Helper for emiting the `sltiu` ("Set Less Than Immediate Unsigned") instruction.
+;; rd ← rs1 < ux(imm)
+(decl rv_sltiu (Reg Imm12) Reg)
+(rule (rv_sltiu rs1 imm)
+  (alu_rr_imm12 (AluOPRRI.SltiU) rs1 imm))
 
 
 
@@ -995,15 +999,10 @@
 (rule (select_addi (fits_in_64 ty)) (AluOPRRI.Addi))
 
 
-;; Helper for emiting the `sltiu` instruction
-(decl sltiu (Reg Imm12) Reg)
-(rule (sltiu r imm)
-  (alu_rr_imm12 (AluOPRRI.SltiU) r imm))
-
 ;; Helper for emiting the `seqz` mnemonic
 (decl seqz (Reg) Reg)
 (rule (seqz r)
-  (sltiu r (imm12_const 1)))
+  (rv_sltiu r (imm12_const 1)))
 
 
 (decl bnot_128 (ValueRegs) ValueRegs)
