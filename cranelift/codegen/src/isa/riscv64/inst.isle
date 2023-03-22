@@ -1135,11 +1135,15 @@
 (rule (rv_clzw rs1)
   (alu_rr_funct12 (AluOPRRI.Clzw) rs1))
 
-
 ;; Helper for emitting the `ctz` ("Count Trailing Zero Bits") instruction.
 (decl rv_ctz (Reg) Reg)
 (rule (rv_ctz rs1)
   (alu_rr_funct12 (AluOPRRI.Ctz) rs1))
+
+;; Helper for emitting the `ctzw` ("Count Trailing Zero Bits in Word") instruction.
+(decl rv_ctzw (Reg) Reg)
+(rule (rv_ctzw rs1)
+  (alu_rr_funct12 (AluOPRRI.Ctzw) rs1))
 
 
 
@@ -1320,11 +1324,11 @@
 (rule 1 (lower_ctz (fits_in_16 ty) x)
   (if-let $true (has_zbb))
   (let ((tmp Reg (bseti x (ty_bits ty))))
-    (alu_rr_funct12 (AluOPRRI.Ctzw) tmp)))
+    (rv_ctzw tmp)))
 
 (rule 2 (lower_ctz $I32 x)
   (if-let $true (has_zbb))
-  (alu_rr_funct12 (AluOPRRI.Ctzw) x))
+  (rv_ctzw x))
 
 (rule 2 (lower_ctz $I64 x)
   (if-let $true (has_zbb))
