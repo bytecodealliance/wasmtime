@@ -180,7 +180,7 @@
       (b Reg (ext_int_if_need $true y ty))
       (_ InstOutput (gen_div_overflow a b ty))
       (_ InstOutput (gen_div_by_zero b)))
-    (alu_rrr (AluOPRRR.Divw) a b)))
+    (rv_divw a b)))
 
 (rule (lower (has_type $I64 (sdiv x y)))
   (let

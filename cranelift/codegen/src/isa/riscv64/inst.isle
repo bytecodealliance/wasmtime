@@ -987,6 +987,12 @@
 (rule (rv_mulw rs1 rs2)
   (alu_rrr (AluOPRRR.Mulw) rs1 rs2))
 
+;; Helper for emitting the `divw` ("Divide Word") instruction.
+;; rd ← sext32(rs1) ÷ sext32(rs2)
+(decl rv_divw (Reg Reg) Reg)
+(rule (rv_divw rs1 rs2)
+  (alu_rrr (AluOPRRR.Divw) rs1 rs2))
+
 
 
 
