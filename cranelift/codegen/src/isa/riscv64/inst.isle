@@ -993,6 +993,12 @@
 (rule (rv_divw rs1 rs2)
   (alu_rrr (AluOPRRR.Divw) rs1 rs2))
 
+;; Helper for emitting the `divuw` ("Divide Unsigned Word") instruction.
+;; rd ← uext32(rs1) ÷ uext32(rs2)
+(decl rv_divuw (Reg Reg) Reg)
+(rule (rv_divuw rs1 rs2)
+  (alu_rrr (AluOPRRR.Divuw) rs1 rs2))
+
 
 
 

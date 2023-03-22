@@ -172,7 +172,7 @@
   (let
     ((y2 Reg (ext_int_if_need $false y ty))
       (_ InstOutput (gen_div_by_zero y2)))
-    (alu_rrr (AluOPRRR.Divuw) (ext_int_if_need $false x ty) y2)))
+    (rv_divuw (ext_int_if_need $false x ty) y2)))
 
 (rule -1 (lower (has_type (fits_in_32 ty) (sdiv x y)))
   (let
