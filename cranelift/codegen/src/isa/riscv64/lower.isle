@@ -109,7 +109,7 @@
 ;; Base case, simply subtracting things in registers.
 
 (rule -2 (lower (has_type (fits_in_64 ty) (isub x y)))
-  (alu_rrr (AluOPRRR.Sub) x y))
+  (rv_sub x y))
 
 (rule -1 (lower (has_type (fits_in_32 ty) (isub x y)))
   (alu_rrr (AluOPRRR.Subw) x y))
@@ -600,7 +600,7 @@
     (has_type (valid_atomic_transaction ty) (atomic_rmw flags (AtomicRmwOp.Sub) addr x)))
   (let
     ((tmp WritableReg (temp_writable_reg ty))
-      (x2 Reg (alu_rrr (AluOPRRR.Sub) (zero_reg) x)))
+     (x2 Reg (rv_sub (zero_reg) x)))
     (gen_atomic (get_atomic_rmw_op ty (AtomicRmwOp.Add)) addr x2 (atomic_amo))))
 
 (decl gen_atomic_rmw_loop (AtomicRmwOp Type Reg Reg) Reg)

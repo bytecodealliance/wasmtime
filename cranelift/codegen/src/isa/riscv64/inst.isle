@@ -771,6 +771,10 @@
 (rule (rv_add rs1 rs2)
   (alu_rrr (AluOPRRR.Add) rs1 rs2))
 
+;; Helper for emitting the `sub` instruction.
+(decl rv_sub (Reg Reg) Reg)
+(rule (rv_sub rs1 rs2)
+  (alu_rrr (AluOPRRR.Sub) rs1 rs2))
 
 
 
@@ -867,12 +871,6 @@
   (alu_and rs1 rs2)
   (alu_rrr (AluOPRRR.And) rs1 rs2))
 
-
-;; Helper for emit rd = rs1 - rs2 for Interger.
-(decl alu_sub (Reg Reg) Reg)
-(rule
-  (alu_sub rs1 rs2)
-  (alu_rrr (AluOPRRR.Sub) rs1 rs2))
 
 (decl pack_float_rounding_mode (FRM) OptionFloatRoundingMode)
 (extern constructor pack_float_rounding_mode pack_float_rounding_mode)
@@ -1855,13 +1853,13 @@
   (i128_sub x y )
   (let
     (;; low part.
-      (low Reg (alu_rrr (AluOPRRR.Sub) (value_regs_get x 0) (value_regs_get y 0)))
+      (low Reg (rv_sub (value_regs_get x 0) (value_regs_get y 0)))
       ;; compute borrow.
       (borrow Reg (alu_rrr (AluOPRRR.SltU) (value_regs_get x 0) low))
       ;;
-      (high_tmp Reg (alu_rrr (AluOPRRR.Sub) (value_regs_get x 1) (value_regs_get y 1)))
+      (high_tmp Reg (rv_sub (value_regs_get x 1) (value_regs_get y 1)))
       ;;
-      (high Reg (alu_rrr (AluOPRRR.Sub) high_tmp borrow)))
+      (high Reg (rv_sub high_tmp borrow)))
     (value_regs low high)))
 
 
@@ -2039,7 +2037,7 @@
 (decl neg (Type ValueRegs) ValueRegs)
 (rule 1 (neg (fits_in_64 (ty_int ty)) val)
   (value_reg
-    (alu_rrr (AluOPRRR.Sub) (zero_reg) (value_regs_get val 0))))
+    (rv_sub (zero_reg) (value_regs_get val 0))))
 
 (rule 2 (neg $I128 val)
   (i128_sub (value_regs_zero) val))
