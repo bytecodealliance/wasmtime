@@ -953,6 +953,12 @@
 (rule (rv_mulhu rs1 rs2)
   (alu_rrr (AluOPRRR.Mulhu) rs1 rs2))
 
+;; Helper for emitting the `div` instruction.
+;; rd ← rs1 ÷ rs2
+(decl rv_div (Reg Reg) Reg)
+(rule (rv_div rs1 rs2)
+  (alu_rrr (AluOPRRR.Div) rs1 rs2))
+
 
 
 

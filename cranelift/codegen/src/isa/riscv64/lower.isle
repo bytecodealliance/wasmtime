@@ -186,7 +186,7 @@
   (let
     ((_ InstOutput (gen_div_overflow x y $I64))
       (_ InstOutput (gen_div_by_zero y))    )
-    (alu_rrr (AluOPRRR.Div) x y)))
+    (rv_div x y)))
 
 (rule (lower (has_type $I64 (udiv x y)))
   (let
