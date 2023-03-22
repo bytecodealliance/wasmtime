@@ -802,6 +802,13 @@
 (rule (rv_srl rs1 rs2)
   (alu_rrr (AluOPRRR.Srl) rs1 rs2))
 
+;; Helper for emitting the `srli` ("Shift Right Logical Immediate") instruction.
+;; rd ← rs1 >> uext(imm)
+(decl rv_srli (Reg Imm12) Reg)
+(rule (rv_srli rs1 imm)
+  (alu_rr_imm12 (AluOPRRI.Srli) rs1 imm))
+
+
 ;; Helper for emitting the `sra` ("Shift Right Arithmetic") instruction.
 ;; rd ← rs1 >> rs2
 (decl rv_sra (Reg Reg) Reg)
@@ -947,11 +954,6 @@
 (rule (alu_andi r i)
   (alu_rr_imm12 (AluOPRRI.Andi) r (imm12_const i)))
 
-
-(decl alu_srli (Reg i32) Reg)
-(rule (alu_srli r i)
-  (alu_rr_imm12 (AluOPRRI.Srli) r (imm12_const i)))
-
 ;; some instruction use imm12 as funct12.
 ;; so we don't need the imm12 paramter.
 (decl alu_rr_funct12 (AluOPRRI Reg) Reg)
@@ -959,7 +961,6 @@
       (let ((dst WritableReg (temp_writable_reg $I64))
             (_ Unit (emit (MInst.AluRRImm12 op dst src (imm12_zero)))))
         dst))
-
 
 (decl select_addi (Type) AluOPRRI)
 (rule 1 (select_addi (fits_in_32 ty)) (AluOPRRI.Addiw))
@@ -998,7 +999,7 @@
   (let
     ((tmp Reg (gen_brev8 r $I16))
       (tmp2 Reg (gen_rev8 tmp))
-      (result Reg (alu_rr_imm12 (AluOPRRI.Srli) tmp2 (imm12_const 48))))
+      (result Reg (rv_srli tmp2 (imm12_const 48))))
     result))
 
 (rule
@@ -1006,7 +1007,7 @@
   (let
     ((tmp Reg (gen_brev8 r $I32))
       (tmp2 Reg (gen_rev8 tmp))
-      (result Reg (alu_rr_imm12 (AluOPRRI.Srli) tmp2 (imm12_const 32))))
+      (result Reg (rv_srli tmp2 (imm12_const 32))))
     result))
 
 (rule
@@ -1249,7 +1250,7 @@
   (lower_umlhi ty rs1 rs2)
   (let
     ((tmp Reg (alu_rrr (AluOPRRR.Mul) (ext_int_if_need $false rs1 ty) (ext_int_if_need $false rs2 ty))))
-    (alu_rr_imm12 (AluOPRRI.Srli) tmp (imm12_const (ty_bits ty)))))
+    (rv_srli tmp (imm12_const (ty_bits ty)))))
 
 (decl lower_smlhi (Type Reg Reg) Reg)
 (rule 1
@@ -1260,7 +1261,7 @@
   (lower_smlhi ty rs1 rs2)
   (let
     ((tmp Reg (alu_rrr (AluOPRRR.Mul) rs1 rs2)))
-    (alu_rr_imm12 (AluOPRRI.Srli) tmp (imm12_const (ty_bits ty)))))
+    (rv_srli tmp (imm12_const (ty_bits ty)))))
 
 
 (decl lower_rotl (Type Reg Reg) Reg)
@@ -1925,7 +1926,7 @@
   (let ((tmp_x Reg (ext_int_if_need $false x ty))
         (tmp_y Reg (ext_int_if_need $false y ty))
         (sum Reg (rv_add tmp_x tmp_y))
-        (test Reg (alu_srli sum (ty_bits ty))))
+        (test Reg (rv_srli sum (imm12_const (ty_bits ty)))))
     (value_regs sum test)))
 
 (decl inst_output_get (InstOutput u8) ValueRegs)
