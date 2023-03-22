@@ -1119,6 +1119,12 @@
 (rule (rv_andn rs1 rs2)
   (alu_rrr (AluOPRRR.Andn) rs1 rs2))
 
+;; Helper for emitting the `orn` ("Or Negated") instruction.
+;; rd ← rs1 ∨ ~(rs2)
+(decl rv_orn (Reg Reg) Reg)
+(rule (rv_orn rs1 rs2)
+  (alu_rrr (AluOPRRR.Orn) rs1 rs2))
+
 
 
 
@@ -2248,11 +2254,6 @@
 
 (decl load_ra () Reg)
 (extern constructor load_ra load_ra)
-
-;;;
-(decl gen_orn (Reg Reg) Reg)
-(rule 1 (gen_orn rs1 rs2)
-  (alu_rrr (AluOPRRR.Orn) rs1 rs2))
 
 (decl gen_rev8 (Reg) Reg)
 (rule 1

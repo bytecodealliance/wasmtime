@@ -302,24 +302,24 @@
 
 (rule 3 (lower (has_type (fits_in_64 (ty_int ty)) (bor x (bnot y))))
   (if-let $true (has_zbb))
-  (gen_orn x y))
+  (rv_orn x y))
 
 (rule 4 (lower (has_type (fits_in_64 (ty_int ty)) (bor (bnot y) x)))
   (if-let $true (has_zbb))
-  (gen_orn x y))
+  (rv_orn x y))
 
 (rule 5 (lower (has_type $I128 (bor x (bnot y))))
   (if-let $true (has_zbb))
   (let
-    ((low Reg (gen_orn (value_regs_get x 0) (value_regs_get y 0)))
-      (high Reg (gen_orn (value_regs_get x 1) (value_regs_get y 1))))
+    ((low Reg (rv_orn (value_regs_get x 0) (value_regs_get y 0)))
+      (high Reg (rv_orn (value_regs_get x 1) (value_regs_get y 1))))
     (value_regs low high)))
 
 (rule 6 (lower (has_type $I128 (bor (bnot y) x)))
   (if-let $true (has_zbb))
   (let
-    ((low Reg (gen_orn (value_regs_get x 0) (value_regs_get y 0)))
-      (high Reg (gen_orn (value_regs_get x 1) (value_regs_get y 1))))
+    ((low Reg (rv_orn (value_regs_get x 0) (value_regs_get y 0)))
+      (high Reg (rv_orn (value_regs_get x 1) (value_regs_get y 1))))
     (value_regs low high)))
 
 
