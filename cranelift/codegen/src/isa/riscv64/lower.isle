@@ -418,10 +418,10 @@
 
 
 (rule 2 (lower (has_type $I64 (sextend (has_type $I32 (iadd x (imm12_from_value y))))))
-  (alu_rr_imm12 (AluOPRRI.Addiw) x y))
+  (rv_addiw x y))
 
 (rule 3 (lower (has_type $I64 (sextend (has_type $I32 (iadd (imm12_from_value x) y)))))
-  (alu_rr_imm12 (AluOPRRI.Addiw) y x))
+  (rv_addiw y x))
 
 (rule 2 (lower (has_type $I64 (sextend (has_type $I32 (ishl x (imm12_from_value y))))))
   (rv_slliw x y))
