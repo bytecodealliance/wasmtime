@@ -1150,6 +1150,13 @@
 (rule (rv_cpop rs1)
   (alu_rr_funct12 (AluOPRRI.Cpop) rs1))
 
+;; Helper for emitting the `max` instruction.
+(decl rv_max (Reg Reg) Reg)
+(rule (rv_max rs1 rs2)
+  (alu_rrr (AluOPRRR.Max) rs1 rs2))
+
+
+
 
 
 
@@ -2326,7 +2333,7 @@
 (decl max (Type Reg Reg) Reg)
 (rule (max (fits_in_64 (ty_int ty)) x y)
   (if-let $true (has_zbb))
-  (alu_rrr (AluOPRRR.Max) x y))
+  (rv_max x y))
 
 (rule (max (fits_in_64 (ty_int ty)) x y)
   (if-let $false (has_zbb))
