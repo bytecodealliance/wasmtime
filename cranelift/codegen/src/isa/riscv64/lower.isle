@@ -222,7 +222,7 @@
 (rule (lower (has_type $I64 (srem x y)))
   (let
     ((_ InstOutput (gen_div_by_zero y)))
-    (alu_rrr (AluOPRRR.Rem) x y)))
+    (rv_rem x y)))
 
 (rule (lower (has_type $I64 (urem x y)))
   (let

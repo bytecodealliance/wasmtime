@@ -965,6 +965,11 @@
 (rule (rv_divu rs1 rs2)
   (alu_rrr (AluOPRRR.DivU) rs1 rs2))
 
+;; Helper for emitting the `rem` instruction.
+;; rd ← rs1 mod rs2
+(decl rv_rem (Reg Reg) Reg)
+(rule (rv_rem rs1 rs2)
+  (alu_rrr (AluOPRRR.Rem) rs1 rs2))
 
 
 
