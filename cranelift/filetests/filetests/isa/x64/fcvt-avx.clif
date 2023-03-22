@@ -1,4 +1,5 @@
 test compile precise-output
+set enable_simd
 target x86_64 has_avx
 
 function %f3(i32) -> f32 {
