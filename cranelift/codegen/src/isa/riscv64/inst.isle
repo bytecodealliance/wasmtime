@@ -1136,6 +1136,11 @@
   (alu_rr_funct12 (AluOPRRI.Clzw) rs1))
 
 
+;; Helper for emitting the `ctz` ("Count Trailing Zero Bits") instruction.
+(decl rv_ctz (Reg) Reg)
+(rule (rv_ctz rs1)
+  (alu_rr_funct12 (AluOPRRI.Ctz) rs1))
+
 
 
 
@@ -1323,7 +1328,7 @@
 
 (rule 2 (lower_ctz $I64 x)
   (if-let $true (has_zbb))
-  (alu_rr_funct12 (AluOPRRI.Ctz) x))
+  (rv_ctz x))
 
 ;; Count trailing zeros from a i128 bit value.
 ;; We count both halves separately and conditionally add them if it makes sense.
