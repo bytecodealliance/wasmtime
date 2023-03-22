@@ -325,7 +325,7 @@
 
 ;;;; Rules for `xor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule -1 (lower (has_type (fits_in_64 (ty_int ty)) (bxor x y)))
-  (alu_rrr (AluOPRRR.Xor) x y))
+  (rv_xor x y))
 
 ;; Special cases for when one operand is an immediate that fits in 12 bits.
 (rule 2 (lower (has_type (fits_in_64 (ty_int ty)) (bxor x (imm12_from_value y))))

@@ -802,6 +802,12 @@
 (rule (rv_or rs1 rs2)
   (alu_rrr (AluOPRRR.Or) rs1 rs2))
 
+;; Helper for emitting the `xor` instruction.
+;; rd ← rs1 ⊕ rs2
+(decl rv_xor (Reg Reg) Reg)
+(rule (rv_xor rs1 rs2)
+  (alu_rrr (AluOPRRR.Xor) rs1 rs2))
+
 ;; Helper for emitting the `and` instruction.
 ;; rd ← rs1 ∧ rs2
 (decl rv_and (Reg Reg) Reg)
