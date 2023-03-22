@@ -83,12 +83,20 @@ fn insert_call(
         sig.params.iter().map(|abi_param| abi_param.value_type),
     )?;
 
-    if opcode == Opcode::Call {
-        builder.ins().call(func_ref, &actuals);
+    let call = if opcode == Opcode::Call {
+        builder.ins().call(func_ref, &actuals)
     } else {
         let addr_ty = args[0];
         let addr = builder.ins().func_addr(addr_ty, func_ref);
-        builder.ins().call_indirect(sig_ref, addr, &actuals);
+        builder.ins().call_indirect(sig_ref, addr, &actuals)
+    };
+
+    // Assign the return values to random variables
+    let ret_values = builder.inst_results(call).to_vec();
+    let ret_types = sig.returns.iter().map(|p| p.value_type);
+    for (ty, val) in ret_types.zip(ret_values) {
+        let var = fgen.get_variable_of_type(ty)?;
+        builder.def_var(var, val);
     }
 
     Ok(())
