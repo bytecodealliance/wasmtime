@@ -191,7 +191,7 @@
 (rule (lower (has_type $I64 (udiv x y)))
   (let
     ((_ InstOutput (gen_div_by_zero y)))
-    (alu_rrr (AluOPRRR.DivU) x y)))
+    (rv_divu x y)))
 
 ;;;; Rules for `rem` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

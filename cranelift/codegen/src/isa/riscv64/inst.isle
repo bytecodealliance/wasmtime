@@ -959,6 +959,12 @@
 (rule (rv_div rs1 rs2)
   (alu_rrr (AluOPRRR.Div) rs1 rs2))
 
+;; Helper for emitting the `divu` ("Divide Unsigned") instruction.
+;; rd ← rs1 ÷ rs2
+(decl rv_divu (Reg Reg) Reg)
+(rule (rv_divu rs1 rs2)
+  (alu_rrr (AluOPRRR.DivU) rs1 rs2))
+
 
 
 
