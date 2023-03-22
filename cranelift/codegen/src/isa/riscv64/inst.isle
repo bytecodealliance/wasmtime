@@ -796,6 +796,12 @@
 (rule (rv_sra rs1 rs2)
   (alu_rrr (AluOPRRR.Sra) rs1 rs2))
 
+;; Helper for emitting the `or` instruction.
+;; rd ← rs1 ∨ rs2
+(decl rv_or (Reg Reg) Reg)
+(rule (rv_or rs1 rs2)
+  (alu_rrr (AluOPRRR.Or) rs1 rs2))
+
 
 
 
@@ -855,7 +861,7 @@
   (if-let $false (has_zbs))
   (if-let $false (u64_le bit 12))
   (let ((const Reg (load_u64_constant (u64_shl 1 bit))))
-    (alu_rrr (AluOPRRR.Or) val const)))
+    (rv_or val const)))
 
 (rule (bseti val bit)
   (if-let $false (has_zbs))
@@ -1281,7 +1287,7 @@
       ;;
       (part2 Reg (rv_srl rs len_sub_shamt))
       (part3 Reg (gen_select_reg (IntCC.Equal) shamt (zero_reg) (zero_reg) part2)))
-    (alu_rrr (AluOPRRR.Or) part1 part3)))
+    (rv_or part1 part3)))
 
 
 ;;;; construct shift amount.rotl on i128 will use shift to implement. So can call this function.
@@ -1330,7 +1336,7 @@
       (part2 Reg (rv_sll rs len_sub_shamt))
       ;;
       (part3 Reg (gen_select_reg (IntCC.Equal) shamt (zero_reg) (zero_reg) part2)))
-    (alu_rrr (AluOPRRR.Or) part1 part3)))
+    (rv_or part1 part3)))
 
 
 (decl gen_popcnt (Reg Type) Reg)
@@ -1375,12 +1381,12 @@
       (low_part2 Reg (rv_srl (value_regs_get x 1) len_sub_shamt))
       ;;; if shamt == 0 low_part2 will overflow we should zero instead.
       (low_part3 Reg (gen_select_reg (IntCC.Equal) shamt (zero_reg) (zero_reg) low_part2))
-      (low Reg (alu_rrr (AluOPRRR.Or) low_part1 low_part3))
+      (low Reg (rv_or low_part1 low_part3))
       ;;
       (high_part1 Reg (rv_sll (value_regs_get x 1) shamt))
       (high_part2 Reg (rv_srl (value_regs_get x 0) len_sub_shamt))
       (high_part3 Reg (gen_select_reg (IntCC.Equal) shamt (zero_reg) (zero_reg) high_part2))
-      (high Reg (alu_rrr (AluOPRRR.Or) high_part1 high_part3))
+      (high Reg (rv_or high_part1 high_part3))
       ;;
       (const64 Reg (load_u64_constant 64))
       (shamt_128 Reg (alu_andi (value_regs_get y 0) 127)))
@@ -1404,12 +1410,12 @@
       (low_part2 Reg (rv_sll (value_regs_get x 1) len_sub_shamt))
       ;;; if shamt == 0 low_part2 will overflow we should zero instead.
       (low_part3 Reg (gen_select_reg (IntCC.Equal) shamt (zero_reg) (zero_reg) low_part2))
-      (low Reg (alu_rrr (AluOPRRR.Or) low_part1 low_part3))
+      (low Reg (rv_or low_part1 low_part3))
       ;;
       (high_part1 Reg (rv_srl (value_regs_get x 1) shamt))
       (high_part2 Reg (rv_sll (value_regs_get x 0) len_sub_shamt))
       (high_part3 Reg (gen_select_reg (IntCC.Equal) shamt (zero_reg) (zero_reg) high_part2))
-      (high Reg (alu_rrr (AluOPRRR.Or) high_part1 high_part3))
+      (high Reg (rv_or high_part1 high_part3))
 
       ;;
       (const64 Reg (load_u64_constant 64))
@@ -1436,7 +1442,7 @@
       (high_part2 Reg (gen_select_reg (IntCC.Equal) shamt (zero_reg) (zero_reg) high_part1))
       ;;
       (high_part3 Reg (rv_sll (value_regs_get x 1) shamt))
-      (high Reg (alu_rrr (AluOPRRR.Or) high_part2 high_part3 ))
+      (high Reg (rv_or high_part2 high_part3 ))
       ;;
       (const64 Reg (load_u64_constant 64))
       (shamt_128 Reg (alu_andi (value_regs_get y 0) 127)))
@@ -1457,7 +1463,7 @@
       (low_part2 Reg (gen_select_reg (IntCC.Equal) shamt (zero_reg) (zero_reg) low_part1))
       ;;
       (low_part3 Reg (rv_srl (value_regs_get x 0) shamt))
-      (low Reg (alu_rrr (AluOPRRR.Or) low_part2 low_part3 ))
+      (low Reg (rv_or low_part2 low_part3 ))
       ;;
       (const64 Reg (load_u64_constant 64))
 
@@ -1482,7 +1488,7 @@
       (low_part2 Reg (gen_select_reg (IntCC.Equal) shamt (zero_reg) (zero_reg) low_part1))
       ;;
       (low_part3 Reg (rv_srl (value_regs_get x 0) shamt))
-      (low Reg (alu_rrr (AluOPRRR.Or) low_part2 low_part3 ))
+      (low Reg (rv_or low_part2 low_part3 ))
       ;;
       (const64 Reg (load_u64_constant 64))
       ;;
@@ -1763,7 +1769,7 @@
       ;;;get all y part.
       (tmp_y Reg (alu_rrr (AluOPRRR.And) c_inverse y))
       ;;;get reuslt.
-      (result Reg (alu_rrr (AluOPRRR.Or) tmp_x tmp_y)))
+      (result Reg (rv_or tmp_x tmp_y)))
     result))
 
 (decl gen_int_select (Type IntSelectOP ValueRegs ValueRegs) ValueRegs)
@@ -1964,7 +1970,7 @@
 (rule 0 (truthy_to_reg $I128 regs)
       (let ((lo Reg (value_regs_get regs 0))
             (hi Reg (value_regs_get regs 1)))
-        (alu_rrr (AluOPRRR.Or) lo hi)))
+        (rv_or lo hi)))
 
 ;; Default behavior for branching based on an input value.
 (rule
@@ -2159,7 +2165,7 @@
   (lower_bmask (fits_in_64 ty) $I128 val)
   (let ((lo Reg (value_regs_get val 0))
         (hi Reg (value_regs_get val 1))
-        (combined Reg (alu_rrr (AluOPRRR.Or) lo hi)))
+        (combined Reg (rv_or lo hi)))
     (lower_bmask ty $I64 (value_reg combined))))
 
 ;; Conversion of one 64-bit value to a 128-bit one. Duplicate the result of the
@@ -2212,9 +2218,6 @@
 
 (decl not (Reg) Reg)
 (rule (not x) (alu_rr_imm12 (AluOPRRI.Xori) x (imm_from_bits 1)))
-
-(decl emit_or (Reg Reg) Reg)
-(rule (emit_or x y) (alu_rrr (AluOPRRR.Or) x y))
 
 (decl emit_and (Reg Reg) Reg)
 (rule (emit_and x y) (alu_rrr (AluOPRRR.And) x y))
@@ -2312,12 +2315,12 @@
 ;; a < b || a > b
 (rule
   (emit_fcmp (FloatCC.OrderedNotEqual) ty a b)
-  (cmp_result (emit_or (flt ty a b) (fgt ty a b))))
+  (cmp_result (rv_or (flt ty a b) (fgt ty a b))))
 
 ;; !(ordered a b) || a == b
 (rule
   (emit_fcmp (FloatCC.UnorderedOrEqual) ty a b)
-  (cmp_result (emit_or (not (ordered ty a b)) (feq ty a b))))
+  (cmp_result (rv_or (not (ordered ty a b)) (feq ty a b))))
 
 ;; a < b
 (rule
