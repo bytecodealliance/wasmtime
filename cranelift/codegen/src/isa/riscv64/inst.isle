@@ -1065,6 +1065,11 @@
 (rule (rv_fmadd $F32 rs1 rs2 rs3) (fpu_rrrr (FpuOPRRRR.FmaddS) $F32 rs1 rs2 rs3))
 (rule (rv_fmadd $F64 rs1 rs2 rs3) (fpu_rrrr (FpuOPRRRR.FmaddD) $F64 rs1 rs2 rs3))
 
+;; Helper for emitting the `fsgnj` ("Floating Point Sign Injection") instruction.
+;; This implements the `copysign` operation
+(decl rv_fsgnj (Type Reg Reg) Reg)
+(rule (rv_fsgnj $F32 rs1 rs2) (fpu_rrr (FpuOPRRR.FsgnjS) $F32 rs1 rs2))
+(rule (rv_fsgnj $F64 rs1 rs2) (fpu_rrr (FpuOPRRR.FsgnjD) $F64 rs1 rs2))
 
 
 
@@ -1896,12 +1901,6 @@
 
 (decl move_x_to_f (Reg Type) Reg)
 (extern constructor move_x_to_f move_x_to_f)
-
-
-;;float copy sign bit op.
-(decl f_copysign_op (Type) FpuOPRRR)
-(rule (f_copysign_op $F32) (FpuOPRRR.FsgnjS))
-(rule (f_copysign_op $F64) (FpuOPRRR.FsgnjD))
 
 ;;float copy neg sign bit op.
 (decl f_copy_neg_sign_op (Type) FpuOPRRR)
