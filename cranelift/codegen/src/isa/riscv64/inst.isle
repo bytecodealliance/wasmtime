@@ -1095,6 +1095,14 @@
 (rule (rv_fsgnjx $F64 rs1 rs2) (fpu_rrr (FpuOPRRR.FsgnjxD) $F64 rs1 rs2))
 
 
+;; `Zba` Extension Instructions
+
+;; Helper for emitting the `adduw` ("Add Unsigned Word") instruction.
+;; rd ← uext32(rs1) + uext32(rs2)
+(decl rv_adduw (Reg Reg) Reg)
+(rule (rv_adduw rs1 rs2)
+  (alu_rrr (AluOPRRR.Adduw) rs1 rs2))
+
 
 ;; for load immediate
 (decl imm (Type u64) Reg)
@@ -1453,7 +1461,7 @@
 (rule 2 (extend val (ExtendOp.Zero) $I32 $I64)
   (if-let $true (has_zba))
   (let ((val Reg (value_regs_get val 0)))
-    (alu_rrr (AluOPRRR.Adduw) val (zero_reg))))
+    (rv_adduw val (zero_reg))))
 
 ;;; Signed rules extending to I128
 ;; Extend the bottom part, and extract the sign bit from the bottom as the top

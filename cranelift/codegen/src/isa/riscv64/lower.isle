@@ -42,11 +42,11 @@
 ;; Needs `Zba`
 (rule 3 (lower (has_type $I64 (iadd x (uextend y @ (value_type $I32)))))
   (if-let $true (has_zba))
-  (alu_rrr (AluOPRRR.Adduw) y x))
+  (rv_adduw y x))
 
 (rule 4 (lower (has_type $I64 (iadd (uextend x @ (value_type $I32)) y)))
   (if-let $true (has_zba))
-  (alu_rrr (AluOPRRR.Adduw) x y))
+  (rv_adduw x y))
 
 ;; Add with const shift. We have a few of these instructions with `Zba`.
 (decl pure partial match_shnadd (Imm64) AluOPRRR)
