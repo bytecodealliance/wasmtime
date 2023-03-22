@@ -772,6 +772,12 @@
 (rule (rv_add rs1 rs2)
   (alu_rrr (AluOPRRR.Add) rs1 rs2))
 
+;; Helper for emitting the `addi` ("Add Immediate") instruction.
+;; rd ← rs1 + sext(imm)
+(decl rv_addi (Reg Imm12) Reg)
+(rule (rv_addi rs1 imm)
+  (alu_rr_imm12 (AluOPRRI.Addi) rs1 imm))
+
 ;; Helper for emitting the `sub` instruction.
 ;; rd ← rs1 - rs2
 (decl rv_sub (Reg Reg) Reg)
@@ -834,7 +840,7 @@
 (decl load_imm12 (i32) Reg)
 (rule
   (load_imm12 x)
-  (alu_rr_imm12 (AluOPRRI.Addi) (zero_reg) (imm12_const x)))
+  (rv_addi (zero_reg) (imm12_const x)))
   
 ;; for load immediate
 (decl imm_from_bits (u64) Imm12)
@@ -1047,7 +1053,7 @@
   (let ((tmp Reg (zext r ty $I64))
         (count Reg (alu_rr_funct12 (AluOPRRI.Clz) tmp))
         ;; We always do the operation on the full 64-bit register, so subtract 64 from the result.
-        (result Reg (alu_rr_imm12 (AluOPRRI.Addi) count (imm12_const_add (ty_bits ty) -64))))
+        (result Reg (rv_addi count (imm12_const_add (ty_bits ty) -64))))
     result))
 
 (rule 2 (lower_clz $I32 r)
@@ -1057,6 +1063,7 @@
 (rule 2 (lower_clz $I64 r)
   (if-let $true (has_zbb))
   (alu_rr_funct12 (AluOPRRI.Clz) r))
+
 
 ;; Count leading zeros from a i128 bit value.
 ;; We count both halves separately and conditionally add them if it makes sense.
@@ -1078,7 +1085,7 @@
   (let ((tmp Reg (ext_int_if_need $true r ty))
         (tmp2 Reg (gen_select_reg (IntCC.SignedLessThan) tmp (zero_reg) (gen_bit_not tmp) tmp))
         (tmp3 Reg (lower_clz ty tmp2)))
-    (alu_rr_imm12 (AluOPRRI.Addi) tmp3 (imm12_const -1))))
+    (rv_addi tmp3 (imm12_const -1))))
 
 ;; If the sign bit is set, we count the leading zeros of the inverted value.
 ;; Otherwise we can just count the leading zeros of the original value.
@@ -1091,7 +1098,7 @@
         (high Reg (gen_select_reg (IntCC.SignedLessThan) high (zero_reg) (gen_bit_not high) high))
         (tmp ValueRegs (lower_clz_i128 (value_regs low high)))
         (count Reg (value_regs_get tmp 0))
-        (result Reg (alu_rr_imm12 (AluOPRRI.Addi) count (imm12_const -1))))
+        (result Reg (rv_addi count (imm12_const -1))))
     (zext result $I64 $I128)))
 
 
