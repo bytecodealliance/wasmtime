@@ -1040,6 +1040,11 @@
 (rule (rv_fadd $F32 rs1 rs2) (fpu_rrr (FpuOPRRR.FaddS) $F32 rs1 rs2))
 (rule (rv_fadd $F64 rs1 rs2) (fpu_rrr (FpuOPRRR.FaddD) $F64 rs1 rs2))
 
+;; Helper for emitting the `fsub` instruction.
+(decl rv_fsub (Type Reg Reg) Reg)
+(rule (rv_fsub $F32 rs1 rs2) (fpu_rrr (FpuOPRRR.FsubS) $F32 rs1 rs2))
+(rule (rv_fsub $F64 rs1 rs2) (fpu_rrr (FpuOPRRR.FsubD) $F64 rs1 rs2))
+
 
 
 
@@ -1868,13 +1873,6 @@
 
 ;; float arithmatic op
 (decl f_arithmatic_op (Type Opcode) FpuOPRRR)
-(rule
-  (f_arithmatic_op $F32 (Opcode.Fsub))
-  (FpuOPRRR.FsubS))
-(rule
-  (f_arithmatic_op $F64 (Opcode.Fsub))
-  (FpuOPRRR.FsubD))
-
 (rule
   (f_arithmatic_op $F32 (Opcode.Fmul))
   (FpuOPRRR.FmulS))

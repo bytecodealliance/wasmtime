@@ -675,9 +675,9 @@
 (rule (lower (has_type ty (fadd x y)))
   (rv_fadd ty x y))
 
-(rule
-  (lower (has_type ty (fsub x y)))
-  (fpu_rrr (f_arithmatic_op ty (Opcode.Fsub)) ty x y))
+(rule (lower (has_type ty (fsub x y)))
+  (rv_fsub ty x y))
+
 (rule
   (lower (has_type ty (fmul x y)))
   (fpu_rrr (f_arithmatic_op ty (Opcode.Fmul)) ty x y))
