@@ -543,9 +543,8 @@
   (gen_fabs x ty))
 
 ;;;; Rules for `fneg` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule
-  (lower (has_type ty (fneg x)))
-  (fpu_rrr (f_copy_neg_sign_op ty) ty x x))
+(rule (lower (has_type ty (fneg x)))
+  (rv_fsgnjn ty x x))
 
 ;;;; Rules for `fcopysign` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type ty (fcopysign x y)))

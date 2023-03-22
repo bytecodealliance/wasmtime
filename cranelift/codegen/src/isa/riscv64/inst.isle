@@ -1071,6 +1071,12 @@
 (rule (rv_fsgnj $F32 rs1 rs2) (fpu_rrr (FpuOPRRR.FsgnjS) $F32 rs1 rs2))
 (rule (rv_fsgnj $F64 rs1 rs2) (fpu_rrr (FpuOPRRR.FsgnjD) $F64 rs1 rs2))
 
+;; Helper for emitting the `fsgnjn` ("Floating Point Sign Injection Negated") instruction.
+;; This implements the `neg` operation
+(decl rv_fsgnjn (Type Reg Reg) Reg)
+(rule (rv_fsgnjn $F32 rs1 rs2) (fpu_rrr (FpuOPRRR.FsgnjnS) $F32 rs1 rs2))
+(rule (rv_fsgnjn $F64 rs1 rs2) (fpu_rrr (FpuOPRRR.FsgnjnD) $F64 rs1 rs2))
+
 
 
 
@@ -1901,11 +1907,6 @@
 
 (decl move_x_to_f (Reg Type) Reg)
 (extern constructor move_x_to_f move_x_to_f)
-
-;;float copy neg sign bit op.
-(decl f_copy_neg_sign_op (Type) FpuOPRRR)
-(rule (f_copy_neg_sign_op $F32) (FpuOPRRR.FsgnjnS))
-(rule (f_copy_neg_sign_op $F64) (FpuOPRRR.FsgnjnD))
 
 (decl fabs_copy_sign (Type) FpuOPRRR)
 (rule (fabs_copy_sign $F32) (FpuOPRRR.FsgnjxS))
