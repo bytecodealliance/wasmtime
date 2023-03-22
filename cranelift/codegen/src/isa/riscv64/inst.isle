@@ -790,6 +790,12 @@
 (rule (rv_sll rs1 rs2)
   (alu_rrr (AluOPRRR.Sll) rs1 rs2))
 
+;; Helper for emitting the `slli` ("Shift Left Logical Immediate") instruction.
+;; rd ← rs1 << uext(imm)
+(decl rv_slli (Reg Imm12) Reg)
+(rule (rv_slli rs1 imm)
+  (alu_rr_imm12 (AluOPRRI.Slli) rs1 imm))
+
 ;; Helper for emitting the `srl` ("Shift Right Logical") instruction.
 ;; rd ← rs1 >> rs2
 (decl rv_srl (Reg Reg) Reg)
@@ -942,9 +948,6 @@
   (alu_rr_imm12 (AluOPRRI.Andi) r (imm12_const i)))
 
 
-(decl alu_slli (Reg i32) Reg)
-(rule (alu_slli r i)
-  (alu_rr_imm12 (AluOPRRI.Slli) r (imm12_const i)))
 (decl alu_srli (Reg i32) Reg)
 (rule (alu_srli r i)
   (alu_rr_imm12 (AluOPRRI.Srli) r (imm12_const i)))
@@ -1149,7 +1152,7 @@
 (rule 0 (extend val extend_op (fits_in_32 from_ty) (fits_in_64 to_ty))
   (let ((val Reg (value_regs_get val 0))
         (shift Imm12 (imm_from_bits (u64_sub 64 (ty_bits from_ty))))
-        (left Reg (alu_rr_imm12 (AluOPRRI.Slli) val shift))
+        (left Reg (rv_slli val shift))
         (shift_op AluOPRRI (extend_shift_op extend_op))
         (right Reg (alu_rr_imm12 shift_op left shift)))
     right))
@@ -2125,7 +2128,7 @@
   (gen_div_overflow rs1 rs2 ty)
   (let
     ((r_const_neg_1 Reg (load_imm12 -1))
-      (r_const_min Reg (alu_slli (load_imm12 1) 63))
+      (r_const_min Reg (rv_slli (load_imm12 1) (imm12_const 63)))
       (tmp_rs1 Reg (shift_int_to_most_significant rs1 ty))
       (t1 Reg (gen_icmp (IntCC.Equal) r_const_neg_1 rs2 ty))
       (t2 Reg (gen_icmp (IntCC.Equal) r_const_min tmp_rs1 ty))

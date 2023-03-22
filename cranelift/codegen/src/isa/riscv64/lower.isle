@@ -457,7 +457,7 @@
   (alu_rr_imm12 (AluOPRRI.Slliw) x y))
 
 (rule 2 (lower (has_type $I64 (ishl x (imm12_from_value y))))
-  (alu_rr_imm12 (AluOPRRI.Slli) x y))
+  (rv_slli x y))
 (rule 1 (lower (has_type $I64 (ishl x y)))
   (rv_sll x (value_regs_get y 0)))
 
@@ -634,7 +634,7 @@
 
 (decl gen_atomic_offset (Reg Type) Reg)
 (rule 1 (gen_atomic_offset p (fits_in_16 ty))
-  (alu_slli (alu_andi p 3) 3))
+  (rv_slli (alu_andi p 3) (imm12_const 3)))
 
 (rule (gen_atomic_offset p _)
   (zero_reg))
