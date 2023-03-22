@@ -1969,7 +1969,7 @@
 (rule (x64_movd_to_gpr from)
       (xmm_to_gpr (SseOpcode.Movd) from (OperandSize.Size32)))
 (rule 1 (x64_movd_to_gpr from)
-        (if-let $true (has_avx))
+        (if-let $true (use_avx_simd))
         (xmm_to_gpr_vex (AvxOpcode.Vmovd) from (OperandSize.Size32)))
 
 ;; Helper for creating `movd` instructions.
@@ -1977,7 +1977,7 @@
 (rule (x64_movd_to_xmm from)
       (gpr_to_xmm (SseOpcode.Movd) from (OperandSize.Size32)))
 (rule 1 (x64_movd_to_xmm from)
-        (if-let $true (has_avx))
+        (if-let $true (use_avx_simd))
         (gpr_to_xmm_vex (AvxOpcode.Vmovd) from (OperandSize.Size32)))
 
 ;; Helper for creating `movq` instructions.
@@ -1985,7 +1985,7 @@
 (rule (x64_movq_to_xmm src)
       (gpr_to_xmm (SseOpcode.Movq) src (OperandSize.Size64)))
 (rule 1 (x64_movq_to_xmm from)
-        (if-let $true (has_avx))
+        (if-let $true (use_avx_simd))
         (gpr_to_xmm_vex (AvxOpcode.Vmovq) from (OperandSize.Size64)))
 
 ;; Helper for creating `movq` instructions.
@@ -1993,7 +1993,7 @@
 (rule (x64_movq_to_gpr src)
       (xmm_to_gpr (SseOpcode.Movq) src (OperandSize.Size64)))
 (rule 1 (x64_movq_to_gpr from)
-        (if-let $true (has_avx))
+        (if-let $true (use_avx_simd))
         (xmm_to_gpr_vex (AvxOpcode.Vmovq) from (OperandSize.Size64)))
 
 (decl x64_movdqu_load (XmmMem) Xmm)
@@ -3730,7 +3730,7 @@
 (rule (x64_pmovmskb size src)
       (xmm_to_gpr (SseOpcode.Pmovmskb) src size))
 (rule 1 (x64_pmovmskb size src)
-        (if-let $true (has_avx))
+        (if-let $true (use_avx_simd))
         (xmm_to_gpr_vex (AvxOpcode.Vpmovmskb) src size))
 
 ;; Helper for creating `movmskps` instructions.
@@ -3738,7 +3738,7 @@
 (rule (x64_movmskps size src)
       (xmm_to_gpr (SseOpcode.Movmskps) src size))
 (rule 1 (x64_movmskps size src)
-        (if-let $true (has_avx))
+        (if-let $true (use_avx_simd))
         (xmm_to_gpr_vex (AvxOpcode.Vmovmskps) src size))
 
 ;; Helper for creating `movmskpd` instructions.
@@ -3746,7 +3746,7 @@
 (rule (x64_movmskpd size src)
       (xmm_to_gpr (SseOpcode.Movmskpd) src size))
 (rule 1 (x64_movmskpd size src)
-        (if-let $true (has_avx))
+        (if-let $true (use_avx_simd))
         (xmm_to_gpr_vex (AvxOpcode.Vmovmskpd) src size))
 
 ;; Helper for creating `MInst.GprToXmm` instructions.
@@ -4045,7 +4045,7 @@
 (rule (x64_cvtsi2ss ty x)
       (gpr_to_xmm (SseOpcode.Cvtsi2ss) x (raw_operand_size_of_type ty)))
 (rule 1 (x64_cvtsi2ss ty x)
-        (if-let $true (has_avx))
+        (if-let $true (use_avx_simd))
         (gpr_to_xmm_vex (AvxOpcode.Vcvtsi2ss) x (raw_operand_size_of_type ty)))
 
 ;; Helper for creating `cvtsi2sd` instructions.
@@ -4053,7 +4053,7 @@
 (rule (x64_cvtsi2sd ty x)
       (gpr_to_xmm (SseOpcode.Cvtsi2sd) x (raw_operand_size_of_type ty)))
 (rule 1 (x64_cvtsi2sd ty x)
-        (if-let $true (has_avx))
+        (if-let $true (use_avx_simd))
         (gpr_to_xmm_vex (AvxOpcode.Vcvtsi2sd) x (raw_operand_size_of_type ty)))
 
 ;; Helper for creating `cvttps2dq` instructions.
