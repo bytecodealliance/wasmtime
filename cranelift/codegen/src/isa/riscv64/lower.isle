@@ -205,13 +205,13 @@
   (let
     ((y2 Reg (ext_int_if_need $true y ty))
       (_ InstOutput (gen_div_by_zero y2)))
-    (alu_rrr (AluOPRRR.Remw) (ext_int_if_need $true x ty) y2)))
+    (rv_remw (ext_int_if_need $true x ty) y2)))
 
 (rule (lower (has_type $I32 (srem x y)))
   (let
     ((y2 Reg (ext_int_if_need $true y $I32))
       (_ InstOutput (gen_div_by_zero y2)))
-   (alu_rrr (AluOPRRR.Remw) x y2)))
+   (rv_remw x y2)))
 
 (rule (lower (has_type $I32 (urem x y)))
   (let

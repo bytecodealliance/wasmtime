@@ -999,6 +999,12 @@
 (rule (rv_divuw rs1 rs2)
   (alu_rrr (AluOPRRR.Divuw) rs1 rs2))
 
+;; Helper for emitting the `remw` ("Remainder Word") instruction.
+;; rd ← sext32(rs1) mod sext32(rs2)
+(decl rv_remw (Reg Reg) Reg)
+(rule (rv_remw rs1 rs2)
+  (alu_rrr (AluOPRRR.Remw) rs1 rs2))
+
 
 
 
