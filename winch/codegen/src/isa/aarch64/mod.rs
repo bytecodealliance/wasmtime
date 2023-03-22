@@ -8,7 +8,7 @@ use crate::{
     regalloc::RegAlloc,
     regset::RegSet,
     stack::Stack,
-    FuncEnv, trampoline::Trampoline,
+    FuncEnv,
 };
 use anyhow::Result;
 use cranelift_codegen::settings::{self, Flags};
@@ -116,7 +116,7 @@ impl TargetIsa for Aarch64 {
         32
     }
 
-    fn host_to_wasm_trampoline(&self, ty: &FuncType) -> Result<MachBufferFinalized<Final>> {
+    fn host_to_wasm_trampoline(&self, _ty: &FuncType) -> Result<MachBufferFinalized<Final>> {
         todo!()
     }
 }

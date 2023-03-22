@@ -14,8 +14,8 @@ where
 {
     masm: &'a mut M,
     abi: &'a A,
-    scratch: Reg,
-    argv: Reg,
+    scratch_1: Reg,
+    scratch_2: Reg,
 }
 
 impl<'a, A, M> Trampoline<'a, A, M>
@@ -23,12 +23,12 @@ where
     A: ABI,
     M: MacroAssembler,
 {
-    pub fn new(masm: &'a mut M, abi: &'a A, scratch: Reg, argv: Reg) -> Self {
+    pub fn new(masm: &'a mut M, abi: &'a A, scratch_1: Reg, scratch_2: Reg) -> Self {
         Self {
             masm,
             abi,
-            scratch,
-            argv,
+            scratch_1,
+            scratch_2,
         }
     }
 
@@ -41,6 +41,7 @@ where
         );
         let trampoline_sig = self.abi.sig(&trampoline_ty);
 
+        // Hard-coding the size in bytes of the trampoline arguments since it's static
         let trampoline_arg_size = 32;
 
         let callee_sig = self.abi.sig(ty);
@@ -48,7 +49,7 @@ where
         let val_ptr = if let ABIArg::Reg { reg, ty: _ty } = &trampoline_sig.params[3] {
             Ok(RegImm::reg(*reg))
         } else {
-            Err(anyhow::anyhow!(""))
+            Err(anyhow::anyhow!("Expected the val ptr to be in a register"))
         }
         .unwrap();
 
@@ -67,13 +68,16 @@ where
                 }
             });
 
-        // How big of an operand do we need here? My stub signature has an I32 but is that right?
+        let val_ptr_offset = offsets[3];
+        let func_ptr_offset = offsets[2];
+
         self.masm.mov(
             val_ptr,
-            RegImm::reg(self.scratch),
+            RegImm::reg(self.scratch_1),
             crate::masm::OperandSize::S64,
         );
 
+        // How much stack space we need based on the target architectures alignment
         let delta = calculate_frame_adjustment(
             self.masm.sp_offset(),
             self.abi.arg_base_offset() as u32,
@@ -95,19 +99,19 @@ where
 
             match param {
                 ABIArg::Reg { reg, ty } => self.masm.load(
-                    self.masm.address_from_reg(self.scratch, value_offset),
+                    self.masm.address_from_reg(self.scratch_1, value_offset),
                     *reg,
                     (*ty).into(),
                 ),
                 ABIArg::Stack { offset, ty } => {
                     self.masm.load(
-                        self.masm.address_from_reg(self.scratch, value_offset),
-                        self.argv,
+                        self.masm.address_from_reg(self.scratch_1, value_offset),
+                        self.scratch_2,
                         (*ty).into(),
                     );
                     self.masm.store(
-                        RegImm::reg(self.argv),
-                        self.masm.address_from_sp(24 - *offset),
+                        RegImm::reg(self.scratch_2),
+                        self.masm.address_from_sp(*offset),
                         (*ty).into(),
                     );
                 }
@@ -117,20 +121,20 @@ where
         // Move the function pointer from it's stack location into a scratch register
         self.masm.load(
             self.masm
-                .address_from_sp(self.masm.sp_offset() - offsets[2]),
-            self.scratch,
+                .address_from_sp(self.masm.sp_offset() - func_ptr_offset),
+            self.scratch_1,
             OperandSize::S64,
         );
 
         // Call the function that was passed into the trampoline
-        self.masm.call(CallKind::Indirect(self.scratch));
+        self.masm.call(CallKind::Indirect(self.scratch_1));
 
         self.masm.free_stack(total_arg_stack_space);
 
         // Move the val ptr back into the scratch register so we can load the return values
         self.masm.load(
-            self.masm.address_from_sp(trampoline_arg_size - offsets[3]),
-            self.scratch,
+            self.masm.address_from_sp(trampoline_arg_size - val_ptr_offset),
+            self.scratch_1,
             OperandSize::S64,
         );
 
@@ -139,7 +143,7 @@ where
         let ABIResult::Reg { reg, ty } = &callee_sig.result;
         self.masm.store(
             RegImm::reg(*reg),
-            self.masm.address_from_reg(self.scratch, 0),
+            self.masm.address_from_reg(self.scratch_1, 0),
             (*ty).unwrap().into(),
         );
 
