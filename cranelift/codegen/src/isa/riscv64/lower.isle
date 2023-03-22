@@ -430,7 +430,7 @@
   (rv_srliw x y))
 
 (rule 2 (lower (has_type $I64 (sextend (has_type $I32 (sshr x (imm12_from_value y))))))
-  (alu_rr_imm12 (AluOPRRI.Sraiw) x y))
+  (rv_sraiw x y))
 
 ;;;; Rules for `popcnt` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_64 ty) (popcnt x)))
@@ -513,7 +513,7 @@
 (rule 1 (lower (has_type $I32 (sshr x y)))
   (rv_sraw x (value_regs_get y 0)))
 (rule 2 (lower (has_type $I32 (sshr x (imm12_from_value y))))
-  (alu_rr_imm12 (AluOPRRI.Sraiw) x y))
+  (rv_sraiw x y))
 (rule 1 (lower (has_type $I64 (sshr x y)))
   (rv_sra x (value_regs_get y 0)))
 (rule 2 (lower (has_type $I64 (sshr x (imm12_from_value y))))
