@@ -329,10 +329,10 @@
 
 ;; Special cases for when one operand is an immediate that fits in 12 bits.
 (rule 2 (lower (has_type (fits_in_64 (ty_int ty)) (bxor x (imm12_from_value y))))
-  (alu_rr_imm12 (AluOPRRI.Xori) x y))
+  (rv_xori x y))
 
 (rule 1 (lower (has_type (fits_in_64 (ty_int ty)) (bxor (imm12_from_value x) y)))
-  (alu_rr_imm12 (AluOPRRI.Xori) y x))
+  (rv_xori y x))
 
 (rule (lower (has_type $I128 (bxor x y)))
   (lower_b128_binary (AluOPRRR.Xor) x y))
@@ -346,7 +346,7 @@
 
 ;;;; Rules for `bnot` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule -1 (lower (has_type (fits_in_64 (ty_int ty)) (bnot x)))
-  (alu_rr_imm12 (AluOPRRI.Xori) x (imm_from_neg_bits -1)))
+  (rv_xori x (imm_from_neg_bits -1)))
 
 (rule (lower (has_type $I128 (bnot x)))
   (bnot_128 x))
