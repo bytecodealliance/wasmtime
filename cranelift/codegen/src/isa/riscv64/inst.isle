@@ -1130,6 +1130,11 @@
 (rule (rv_clz rs1)
   (alu_rr_funct12 (AluOPRRI.Clz) rs1))
 
+;; Helper for emitting the `clzw` ("Count Leading Zero Bits in Word") instruction.
+(decl rv_clzw (Reg) Reg)
+(rule (rv_clzw rs1)
+  (alu_rr_funct12 (AluOPRRI.Clzw) rs1))
+
 
 
 
@@ -1348,7 +1353,7 @@
 
 (rule 2 (lower_clz $I32 r)
   (if-let $true (has_zbb))
-  (alu_rr_funct12 (AluOPRRI.Clzw) r))
+  (rv_clzw r))
 
 (rule 2 (lower_clz $I64 r)
   (if-let $true (has_zbb))
