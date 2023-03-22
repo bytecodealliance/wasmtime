@@ -802,6 +802,12 @@
 (rule (rv_or rs1 rs2)
   (alu_rrr (AluOPRRR.Or) rs1 rs2))
 
+;; Helper for emitting the `and` instruction.
+;; rd ← rs1 ∧ rs2
+(decl rv_and (Reg Reg) Reg)
+(rule (rv_and rs1 rs2)
+  (alu_rrr (AluOPRRR.And) rs1 rs2))
+
 
 
 
@@ -891,11 +897,6 @@
       (let ((dst WritableReg (temp_writable_reg $I64))
             (_ Unit (emit (MInst.AluRRR op dst src1 src2))))
         dst))
-
-(decl alu_and (Reg Reg) Reg)
-(rule
-  (alu_and rs1 rs2)
-  (alu_rrr (AluOPRRR.And) rs1 rs2))
 
 
 (decl pack_float_rounding_mode (FRM) OptionFloatRoundingMode)
@@ -1763,11 +1764,11 @@
 (rule
   (gen_bitselect ty c x y)
   (let
-    ((tmp_x Reg (alu_rrr (AluOPRRR.And) c x))
+    ((tmp_x Reg (rv_and c x))
       ;;;inverse condition
       (c_inverse Reg (gen_bit_not c))
       ;;;get all y part.
-      (tmp_y Reg (alu_rrr (AluOPRRR.And) c_inverse y))
+      (tmp_y Reg (rv_and c_inverse y))
       ;;;get reuslt.
       (result Reg (rv_or tmp_x tmp_y)))
     result))
@@ -2115,7 +2116,7 @@
       (tmp_rs1 Reg (shift_int_to_most_significant rs1 ty))
       (t1 Reg (gen_icmp (IntCC.Equal) r_const_neg_1 rs2 ty))
       (t2 Reg (gen_icmp (IntCC.Equal) r_const_min tmp_rs1 ty))
-      (test Reg (alu_and t1 t2)))
+      (test Reg (rv_and t1 t2)))
     (gen_trapif test (TrapCode.IntegerOverflow))))
 
 (decl gen_div_by_zero (Reg) InstOutput)
@@ -2219,9 +2220,6 @@
 (decl not (Reg) Reg)
 (rule (not x) (alu_rr_imm12 (AluOPRRI.Xori) x (imm_from_bits 1)))
 
-(decl emit_and (Reg Reg) Reg)
-(rule (emit_and x y) (alu_rrr (AluOPRRR.And) x y))
-
 (decl is_not_nan (Type Reg) Reg)
 (rule (is_not_nan ty a) (feq ty a a))
 
@@ -2244,7 +2242,7 @@
 (rule (fge ty a b) (fle ty b a))
 
 (decl ordered (Type Reg Reg) Reg)
-(rule (ordered ty a b) (emit_and (is_not_nan ty a) (is_not_nan ty b)))
+(rule (ordered ty a b) (rv_and (is_not_nan ty a) (is_not_nan ty b)))
 
 (type CmpResult (enum
                   (Result
@@ -2346,22 +2344,22 @@
 ;; == !(ordered a b && a >= b)
 (rule
   (emit_fcmp (FloatCC.UnorderedOrLessThan) ty a b)
-  (cmp_result_invert (emit_and (ordered ty a b) (fge ty a b))))
+  (cmp_result_invert (rv_and (ordered ty a b) (fge ty a b))))
 
 ;; !(ordered a b) || a <= b
 ;; == !(ordered a b && a > b)
 (rule
   (emit_fcmp (FloatCC.UnorderedOrLessThanOrEqual) ty a b)
-  (cmp_result_invert (emit_and (ordered ty a b) (fgt ty a b))))
+  (cmp_result_invert (rv_and (ordered ty a b) (fgt ty a b))))
 
 ;; !(ordered a b) || a > b
 ;; == !(ordered a b && a <= b)
 (rule
   (emit_fcmp (FloatCC.UnorderedOrGreaterThan) ty a b)
-  (cmp_result_invert (emit_and (ordered ty a b) (fle ty a b))))
+  (cmp_result_invert (rv_and (ordered ty a b) (fle ty a b))))
 
 ;; !(ordered a b) || a >= b
 ;; == !(ordered a b && a < b)
 (rule
   (emit_fcmp (FloatCC.UnorderedOrGreaterThanOrEqual) ty a b)
-  (cmp_result_invert (emit_and (ordered ty a b) (flt ty a b))))
+  (cmp_result_invert (rv_and (ordered ty a b) (flt ty a b))))
