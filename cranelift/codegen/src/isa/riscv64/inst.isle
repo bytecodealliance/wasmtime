@@ -1145,6 +1145,10 @@
 (rule (rv_ctzw rs1)
   (alu_rr_funct12 (AluOPRRI.Ctzw) rs1))
 
+;; Helper for emitting the `cpop` ("Count Population") instruction.
+(decl rv_cpop (Reg) Reg)
+(rule (rv_cpop rs1)
+  (alu_rr_funct12 (AluOPRRI.Cpop) rs1))
 
 
 
@@ -1668,9 +1672,9 @@
     (writable_reg_to_reg sum)))
 
 (decl lower_popcnt (Reg Type) Reg)
-(rule 1 (lower_popcnt rs ty )
+(rule 1 (lower_popcnt rs ty)
   (if-let $true (has_zbb))
-  (alu_rr_funct12 (AluOPRRI.Cpop) (ext_int_if_need $false rs ty)))
+  (rv_cpop (ext_int_if_need $false rs ty)))
 (rule (lower_popcnt rs ty)
   (if-let $false (has_zbb))
   (gen_popcnt rs ty))
