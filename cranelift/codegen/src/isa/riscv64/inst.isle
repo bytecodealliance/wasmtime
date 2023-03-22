@@ -941,6 +941,12 @@
 (rule (rv_mul rs1 rs2)
   (alu_rrr (AluOPRRR.Mul) rs1 rs2))
 
+;; Helper for emitting the `mulh` ("Multiply High Signed Signed") instruction.
+;; rd ← (sext(rs1) × sext(rs2)) » xlen
+(decl rv_mulh (Reg Reg) Reg)
+(rule (rv_mulh rs1 rs2)
+  (alu_rrr (AluOPRRR.Mulh) rs1 rs2))
+
 
 
 
@@ -1350,7 +1356,7 @@
 (decl lower_smlhi (Type Reg Reg) Reg)
 (rule 1
   (lower_smlhi $I64 rs1 rs2)
-  (alu_rrr (AluOPRRR.Mulh) rs1 rs2))
+  (rv_mulh rs1 rs2))
 
 (rule
   (lower_smlhi ty rs1 rs2)
