@@ -933,6 +933,13 @@
   (alu_rr_imm12 (AluOPRRI.Sraiw) rs1 imm))
 
 
+;; RV32M Extension
+
+;; Helper for emitting the `mul` instruction.
+;; rd ← rs1 × rs2
+(decl rv_mul (Reg Reg) Reg)
+(rule (rv_mul rs1 rs2)
+  (alu_rrr (AluOPRRR.Mul) rs1 rs2))
 
 
 
@@ -1337,7 +1344,7 @@
 (rule
   (lower_umlhi ty rs1 rs2)
   (let
-    ((tmp Reg (alu_rrr (AluOPRRR.Mul) (ext_int_if_need $false rs1 ty) (ext_int_if_need $false rs2 ty))))
+    ((tmp Reg (rv_mul (ext_int_if_need $false rs1 ty) (ext_int_if_need $false rs2 ty))))
     (rv_srli tmp (imm12_const (ty_bits ty)))))
 
 (decl lower_smlhi (Type Reg Reg) Reg)
@@ -1348,7 +1355,7 @@
 (rule
   (lower_smlhi ty rs1 rs2)
   (let
-    ((tmp Reg (alu_rrr (AluOPRRR.Mul) rs1 rs2)))
+    ((tmp Reg (rv_mul rs1 rs2)))
     (rv_srli tmp (imm12_const (ty_bits ty)))))
 
 
@@ -2237,7 +2244,7 @@
 (rule
   (madd n m a)
   (let
-    ((t Reg (alu_rrr (AluOPRRR.Mul) n m)))
+    ((t Reg (rv_mul n m)))
     (rv_add t a)))
 
 (decl umulh (Reg Reg) Reg)
