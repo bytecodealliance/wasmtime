@@ -952,6 +952,7 @@
 
 
 ;; RV32M Extension
+;; TODO: Enable these instructions only when we have the M extension
 
 ;; Helper for emitting the `mul` instruction.
 ;; rd ← rs1 × rs2
@@ -998,6 +999,7 @@
 
 
 ;; RV64M Extension
+;; TODO: Enable these instructions only when we have the M extension
 
 ;; Helper for emitting the `mulw` ("Multiply Word") instruction.
 ;; rd ← uext32(rs1) × uext32(rs2)
@@ -1028,6 +1030,16 @@
 (decl rv_remuw (Reg Reg) Reg)
 (rule (rv_remuw rs1 rs2)
   (alu_rrr (AluOPRRR.Remuw) rs1 rs2))
+
+
+;; F and D Extensions
+;; TODO: Enable these instructions only when we have the F or D extensions
+
+;; Helper for emitting the `fadd` instruction.
+(decl rv_fadd (Type Reg Reg) Reg)
+(rule (rv_fadd $F32 rs1 rs2) (fpu_rrr (FpuOPRRR.FaddS) $F32 rs1 rs2))
+(rule (rv_fadd $F64 rs1 rs2) (fpu_rrr (FpuOPRRR.FaddD) $F64 rs1 rs2))
+
 
 
 
@@ -1856,14 +1868,6 @@
 
 ;; float arithmatic op
 (decl f_arithmatic_op (Type Opcode) FpuOPRRR)
-(rule
-  (f_arithmatic_op $F32 (Opcode.Fadd))
-  (FpuOPRRR.FaddS))
-
-(rule
-  (f_arithmatic_op $F64 (Opcode.Fadd))
-  (FpuOPRRR.FaddD))
-
 (rule
   (f_arithmatic_op $F32 (Opcode.Fsub))
   (FpuOPRRR.FsubS))

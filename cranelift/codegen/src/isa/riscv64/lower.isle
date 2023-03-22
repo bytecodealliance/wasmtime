@@ -671,10 +671,10 @@
   (fpu_rr (FpuOPRR.FcvtSD) ty x))
 
 
-;;;;;  Rules for `for float arithmatic`
-(rule
-  (lower (has_type ty (fadd x y)))
-  (fpu_rrr (f_arithmatic_op ty (Opcode.Fadd)) ty x y))
+;;;;;  Rules for for float arithmetic
+(rule (lower (has_type ty (fadd x y)))
+  (rv_fadd ty x y))
+
 (rule
   (lower (has_type ty (fsub x y)))
   (fpu_rrr (f_arithmatic_op ty (Opcode.Fsub)) ty x y))
