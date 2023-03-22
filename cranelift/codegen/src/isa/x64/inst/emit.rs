@@ -2544,7 +2544,7 @@ pub(crate) fn emit(
                 .opcode(opcode);
             vex = match op {
                 // The `vmovq/vmovd` reverse the order of the destination/source
-                // relative ot other opcodes using this shape of instruction.
+                // relative to other opcodes using this shape of instruction.
                 AvxOpcode::Vmovd | AvxOpcode::Vmovq => vex
                     .rm(dst.to_real_reg().unwrap().hw_enc())
                     .reg(src.to_real_reg().unwrap().hw_enc()),
