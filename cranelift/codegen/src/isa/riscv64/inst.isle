@@ -761,6 +761,20 @@
       (_ Unit (emit (MInst.FloatSelect op rd tmp x y ty))))
     (writable_reg_to_reg rd)))
 
+
+;;;; Instruction Helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; RV32I Base Integer Instruction Set
+
+;; Helper for emitting the `add` instruction.
+(decl rv_add (Reg Reg) Reg)
+(rule (rv_add rs1 rs2)
+  (alu_rrr (AluOPRRR.Add) rs1 rs2))
+
+
+
+
+
 ;; for load immediate
 (decl imm (Type u64) Reg)
 (extern constructor imm imm)
@@ -809,7 +823,6 @@
 (extern extractor imm12_from_u64 imm12_from_u64)
 
 
-;;;; Instruction Helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 
 ;; bseti: Set a single bit in a register, indexed by a constant.
@@ -848,12 +861,6 @@
       (let ((dst WritableReg (temp_writable_reg $I64))
             (_ Unit (emit (MInst.AluRRR op dst src1 src2))))
         dst))
-
-;; Helper for emit rd = rs1 + rs2 for Interger.
-(decl alu_add (Reg Reg) Reg)
-(rule
-  (alu_add rs1 rs2)
-  (alu_rrr (AluOPRRR.Add) rs1 rs2))
 
 (decl alu_and (Reg Reg) Reg)
 (rule
@@ -997,10 +1004,8 @@
         (low Reg (lower_ctz $I64 x_lo))
         ;; Only add the top half if the bottom is zero
         (high Reg (gen_select_reg (IntCC.Equal) x_lo (zero_reg) high (zero_reg)))
-        (result Reg (alu_add low high)))
+        (result Reg (rv_add low high)))
     (zext result $I64 $I128)))
-
-
 
 (decl lower_clz (Type Reg) Reg)
 (rule (lower_clz ty rs)
@@ -1033,7 +1038,7 @@
         (low Reg (lower_clz $I64 x_lo))
         ;; Only add the bottom zeros if the top half is zero
         (low Reg (gen_select_reg (IntCC.Equal) x_hi (zero_reg) low (zero_reg)))
-        (result Reg (alu_add high low)))
+        (result Reg (rv_add high low)))
     (zext result $I64 $I128)))
 
 
@@ -1337,7 +1342,7 @@
       ;; high part.
       (high Reg (lower_popcnt (value_regs_get a 1) $I64))
       ;; add toghter.
-      (result Reg (alu_add low high)))
+      (result Reg (rv_add low high)))
     (value_regs result (load_u64_constant 0))))
 
 (decl lower_i128_rotl (ValueRegs ValueRegs) ValueRegs)
@@ -1870,7 +1875,7 @@
 
 (rule 1
   (lower_uadd_overflow x y $I64)
-  (let ((tmp Reg (alu_add x y))
+  (let ((tmp Reg (rv_add x y))
         (test Reg (gen_icmp (IntCC.UnsignedLessThan) tmp x $I64)))
     (value_regs tmp test)))
 
@@ -1878,7 +1883,7 @@
   (lower_uadd_overflow x y (fits_in_32 ty))
   (let ((tmp_x Reg (ext_int_if_need $false x ty))
         (tmp_y Reg (ext_int_if_need $false y ty))
-        (sum Reg (alu_add tmp_x tmp_y))
+        (sum Reg (rv_add tmp_x tmp_y))
         (test Reg (alu_srli sum (ty_bits ty))))
     (value_regs sum test)))
 
@@ -2108,7 +2113,7 @@
   (madd n m a)
   (let
     ((t Reg (alu_rrr (AluOPRRR.Mul) n m)))
-    (alu_add t a)))
+    (rv_add t a)))
 
 (decl umulh (Reg Reg) Reg)
 (rule (umulh a b)

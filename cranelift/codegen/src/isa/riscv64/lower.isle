@@ -29,7 +29,7 @@
 
 ;; Base case, simply adding things in registers.
 (rule 0 (lower (has_type (fits_in_64 ty) (iadd x y)))
-  (alu_add x y))
+  (rv_add x y))
 
 ;; Special cases for when one operand is an immediate that fits in 12 bits.
 (rule 1 (lower (has_type (fits_in_64 ty) (iadd x (imm12_from_value y))))
@@ -88,13 +88,13 @@
 
 ;; I128 cases
 (rule 7 (lower (has_type $I128 (iadd x y)))
-  (let ((low Reg (alu_add (value_regs_get x 0) (value_regs_get y 0)))
+  (let ((low Reg (rv_add (value_regs_get x 0) (value_regs_get y 0)))
         ;; compute carry.
         (carry Reg (alu_rrr (AluOPRRR.SltU) low (value_regs_get y 0)))
         ;;
-        (high_tmp Reg (alu_add (value_regs_get x 1) (value_regs_get y 1)))
+        (high_tmp Reg (rv_add (value_regs_get x 1) (value_regs_get y 1)))
         ;; add carry.
-        (high Reg (alu_add high_tmp carry)))
+        (high Reg (rv_add high_tmp carry)))
     (value_regs low high)))
 
 ;;; Rules for `uadd_overflow_trap` ;;;;;;;;;;;;;
