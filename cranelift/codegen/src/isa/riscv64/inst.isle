@@ -875,6 +875,17 @@
   (rv_sltiu rs1 (imm12_const 1)))
 
 
+;; RV64I Base Integer Instruction Set
+;; Unlike RV32I instructions these are only present in the 64bit ISA
+
+;; Helper for emitting the `addw` ("Add Word") instruction.
+;; rd ← sext32(rs1) + sext32(rs2)
+(decl rv_addw (Reg Reg) Reg)
+(rule (rv_addw rs1 rs2)
+  (alu_rrr (AluOPRRR.Addw) rs1 rs2))
+
+
+
 
 ;; for load immediate
 (decl imm (Type u64) Reg)

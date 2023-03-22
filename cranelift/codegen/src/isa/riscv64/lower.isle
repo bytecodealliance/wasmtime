@@ -402,7 +402,7 @@
 ;; The instructions below are present in RV64I and sign-extend the result to 64 bits.
 
 (rule 1 (lower (has_type $I64 (sextend (has_type $I32 (iadd x y)))))
-  (alu_rrr (AluOPRRR.Addw) x y))
+  (rv_addw x y))
 
 (rule 1 (lower (has_type $I64 (sextend (has_type $I32 (isub x y)))))
   (alu_rrr (AluOPRRR.Subw) x y))
