@@ -9,7 +9,7 @@ use cranelift::codegen::ir::stackslot::StackSize;
 
 use cranelift::codegen::ir::{
     types::*, AtomicRmwOp, Block, ConstantData, ExternalName, FuncRef, Function, LibCall, Opcode,
-    Signature, StackSlot, Type, UserExternalName, UserFuncName, Value,
+    SigRef, Signature, StackSlot, Type, UserExternalName, UserFuncName, Value,
 };
 use cranelift::codegen::isa::CallConv;
 use cranelift::frontend::{FunctionBuilder, FunctionBuilderContext, Switch, Variable};
@@ -72,18 +72,25 @@ fn insert_call(
     fgen: &mut FunctionGenerator,
     builder: &mut FunctionBuilder,
     opcode: Opcode,
-    _args: &[Type],
+    args: &[Type],
     _rets: &[Type],
 ) -> Result<()> {
-    assert_eq!(opcode, Opcode::Call, "only call handled at the moment");
-    let (sig, func_ref) = fgen.u.choose(&fgen.resources.func_refs)?.clone();
+    assert!(matches!(opcode, Opcode::Call | Opcode::CallIndirect));
+    let (sig, sig_ref, func_ref) = fgen.u.choose(&fgen.resources.func_refs)?.clone();
 
     let actuals = fgen.generate_values_for_signature(
         builder,
         sig.params.iter().map(|abi_param| abi_param.value_type),
     )?;
 
-    builder.ins().call(func_ref, &actuals);
+    if opcode == Opcode::Call {
+        builder.ins().call(func_ref, &actuals);
+    } else {
+        let addr_ty = args[0];
+        let addr = builder.ins().func_addr(addr_ty, func_ref);
+        builder.ins().call_indirect(sig_ref, addr, &actuals);
+    }
+
     Ok(())
 }
 
@@ -799,7 +806,7 @@ static OPCODE_SIGNATURES: Lazy<Vec<OpcodeSignature>> = Lazy::new(|| {
                 (Opcode::ResumableTrap),
                 (Opcode::Trapnz),
                 (Opcode::ResumableTrapnz),
-                (Opcode::CallIndirect),
+                (Opcode::CallIndirect, &[I32]),
                 (Opcode::ReturnCall),
                 (Opcode::ReturnCallIndirect),
                 (Opcode::FuncAddr),
@@ -1498,7 +1505,7 @@ struct Resources {
     blocks: Vec<(Block, BlockSignature)>,
     blocks_without_params: Vec<Block>,
     block_terminators: Vec<BlockTerminator>,
-    func_refs: Vec<(Signature, FuncRef)>,
+    func_refs: Vec<(Signature, SigRef, FuncRef)>,
     stack_slots: Vec<(StackSlot, StackSize)>,
     usercalls: Vec<(UserExternalName, Signature)>,
     libcalls: Vec<LibCall>,
@@ -1862,7 +1869,9 @@ where
                 colocated: self.u.arbitrary()?,
             });
 
-            self.resources.func_refs.push((signature, func_ref));
+            self.resources
+                .func_refs
+                .push((signature, sig_ref, func_ref));
         }
 
         Ok(())
