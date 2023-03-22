@@ -681,9 +681,8 @@
 (rule (lower (has_type ty (fmul x y)))
   (rv_fmul ty x y))
 
-(rule
-  (lower (has_type ty (fdiv x y)))
-  (fpu_rrr (f_arithmatic_op ty (Opcode.Fdiv)) ty x y))
+(rule (lower (has_type ty (fdiv x y)))
+  (rv_fdiv ty x y))
 
 (rule
   (lower (has_type ty (fmin x y)))

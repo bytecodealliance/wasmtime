@@ -1050,6 +1050,11 @@
 (rule (rv_fmul $F32 rs1 rs2) (fpu_rrr (FpuOPRRR.FmulS) $F32 rs1 rs2))
 (rule (rv_fmul $F64 rs1 rs2) (fpu_rrr (FpuOPRRR.FmulD) $F64 rs1 rs2))
 
+;; Helper for emitting the `fdiv` instruction.
+(decl rv_fdiv (Type Reg Reg) Reg)
+(rule (rv_fdiv $F32 rs1 rs2) (fpu_rrr (FpuOPRRR.FdivS) $F32 rs1 rs2))
+(rule (rv_fdiv $F64 rs1 rs2) (fpu_rrr (FpuOPRRR.FdivD) $F64 rs1 rs2))
+
 
 
 
@@ -1874,18 +1879,6 @@
   (gen_atomic_store p ty src)
   (side_effect (SideEffectNoResult.Inst (MInst.AtomicStore src ty p)))
 )
-
-
-;; float arithmatic op
-(decl f_arithmatic_op (Type Opcode) FpuOPRRR)
-
-(rule
-  (f_arithmatic_op $F32 (Opcode.Fdiv))
-  (FpuOPRRR.FdivS))
-
-(rule
-  (f_arithmatic_op $F64 (Opcode.Fdiv))
-  (FpuOPRRR.FdivD))
 
 
 (decl move_f_to_x (Reg Type) Reg)
