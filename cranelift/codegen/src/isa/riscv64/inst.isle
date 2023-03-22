@@ -947,6 +947,14 @@
 (rule (rv_mulh rs1 rs2)
   (alu_rrr (AluOPRRR.Mulh) rs1 rs2))
 
+;; Helper for emitting the `mulhu` ("Multiply High Unsigned Unsigned") instruction.
+;; rd ← (uext(rs1) × uext(rs2)) » xlen
+(decl rv_mulhu (Reg Reg) Reg)
+(rule (rv_mulhu rs1 rs2)
+  (alu_rrr (AluOPRRR.Mulhu) rs1 rs2))
+
+
+
 
 
 
@@ -1345,7 +1353,7 @@
 (decl lower_umlhi (Type Reg Reg) Reg)
 (rule 1
   (lower_umlhi $I64 rs1 rs2)
-  (alu_rrr (AluOPRRR.Mulhu) rs1 rs2))
+  (rv_mulhu rs1 rs2))
 
 (rule
   (lower_umlhi ty rs1 rs2)
@@ -2252,10 +2260,6 @@
   (let
     ((t Reg (rv_mul n m)))
     (rv_add t a)))
-
-(decl umulh (Reg Reg) Reg)
-(rule (umulh a b)
-  (alu_rrr (AluOPRRR.Mulhu) a b))
 
 ;;;; Helpers for bmask ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

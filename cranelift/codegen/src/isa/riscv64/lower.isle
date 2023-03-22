@@ -152,14 +152,14 @@
 
       ;; 128bit mul formula:
       ;;   dst_lo = x_lo * y_lo
-      ;;   dst_hi = umulhi(x_lo, y_lo) + (x_lo * y_hi) + (x_hi * y_lo)
+      ;;   dst_hi = mulhu(x_lo, y_lo) + (x_lo * y_hi) + (x_hi * y_lo)
       ;;
       ;; We can convert the above formula into the following
-      ;; umulh   dst_hi, x_lo, y_lo
+      ;; mulhu   dst_hi, x_lo, y_lo
       ;; madd    dst_hi, x_lo, y_hi, dst_hi
       ;; madd    dst_hi, x_hi, y_lo, dst_hi
       ;; madd    dst_lo, x_lo, y_lo, zero
-      (dst_hi1 Reg (umulh x_lo y_lo))
+      (dst_hi1 Reg (rv_mulhu x_lo y_lo))
       (dst_hi2 Reg (madd x_lo y_hi dst_hi1))
       (dst_hi Reg (madd x_hi y_lo dst_hi2))
       (dst_lo Reg (madd x_lo y_lo (zero_reg))))
