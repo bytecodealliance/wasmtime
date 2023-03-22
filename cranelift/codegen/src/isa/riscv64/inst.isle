@@ -850,6 +850,12 @@
 (rule (rv_and rs1 rs2)
   (alu_rrr (AluOPRRR.And) rs1 rs2))
 
+;; Helper for emitting the `andi` ("And Immediate") instruction.
+;; rd ← rs1 ∧ uext(imm)
+(decl rv_andi (Reg Imm12) Reg)
+(rule (rv_andi rs1 imm)
+  (alu_rr_imm12 (AluOPRRI.Andi) rs1 imm))
+
 
 
 
@@ -966,10 +972,6 @@
       (let ((dst WritableReg (temp_writable_reg $I64))
             (_ Unit (emit (MInst.AluRRImm12 op dst src imm))))
         dst))
-
-(decl alu_andi (Reg i32) Reg)
-(rule (alu_andi r i)
-  (alu_rr_imm12 (AluOPRRI.Andi) r (imm12_const i)))
 
 ;; some instruction use imm12 as funct12.
 ;; so we don't need the imm12 paramter.
@@ -1178,7 +1180,7 @@
 ;; If we are zero extending a U8 we can use a `andi` instruction.
 (rule 1 (extend val (ExtendOp.Zero) $I8 (fits_in_64 to_ty))
   (let ((val Reg (value_regs_get val 0)))
-    (alu_rr_imm12 (AluOPRRI.Andi) val (imm12_const 255))))
+    (rv_andi val (imm12_const 255))))
 
 ;; When signed extending from 32 to 64 bits we can use a
 ;; `addiw val 0`. Also known as a `sext.w`
@@ -1424,7 +1426,7 @@
       (high Reg (rv_or high_part1 high_part3))
       ;;
       (const64 Reg (load_u64_constant 64))
-      (shamt_128 Reg (alu_andi (value_regs_get y 0) 127)))
+      (shamt_128 Reg (rv_andi (value_regs_get y 0) (imm12_const 127))))
     ;; right now we only rotate less than 64 bits.
     ;; if shamt is greater than or equal 64 , we should switch low and high.
     (value_regs
@@ -1454,7 +1456,7 @@
 
       ;;
       (const64 Reg (load_u64_constant 64))
-      (shamt_128 Reg (alu_andi (value_regs_get y 0) 127)))
+      (shamt_128 Reg (rv_andi (value_regs_get y 0) (imm12_const 127))))
     ;; right now we only rotate less than 64 bits.
     ;; if shamt is greater than or equal 64 , we should switch low and high.
     (value_regs
@@ -1480,7 +1482,7 @@
       (high Reg (rv_or high_part2 high_part3 ))
       ;;
       (const64 Reg (load_u64_constant 64))
-      (shamt_128 Reg (alu_andi (value_regs_get y 0) 127)))
+      (shamt_128 Reg (rv_andi (value_regs_get y 0) (imm12_const 127))))
     (value_regs
       (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 (zero_reg) low)
       (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 low high))))
@@ -1504,7 +1506,7 @@
 
       ;;
       (high Reg (rv_srl (value_regs_get x 1) shamt))
-      (shamt_128 Reg (alu_andi (value_regs_get y 0) 127)))
+      (shamt_128 Reg (rv_andi (value_regs_get y 0) (imm12_const 127))))
     (value_regs
       (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 high low)
       (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 (zero_reg) high))))
@@ -1533,7 +1535,7 @@
       ;;
       (high_replacement Reg (gen_select_reg (IntCC.SignedLessThan) (value_regs_get x 1) (zero_reg) const_neg_1 (zero_reg)))
       (const64 Reg (load_u64_constant 64))
-      (shamt_128 Reg (alu_andi (value_regs_get y 0) 127)))
+      (shamt_128 Reg (rv_andi (value_regs_get y 0) (imm12_const 127))))
     (value_regs
       (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 high low)
       (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 high_replacement high))))

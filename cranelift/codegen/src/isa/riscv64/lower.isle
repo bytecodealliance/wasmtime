@@ -235,10 +235,10 @@
 
 ;; Special cases for when one operand is an immediate that fits in 12 bits.
 (rule 2 (lower (has_type (fits_in_64 (ty_int ty)) (band x (imm12_from_value y))))
-  (alu_rr_imm12 (AluOPRRI.Andi) x y))
+  (rv_andi x y))
 
 (rule 1 (lower (has_type (fits_in_64 (ty_int ty)) (band (imm12_from_value x) y)))
-  (alu_rr_imm12 (AluOPRRI.Andi) y x))
+  (rv_andi y x))
 
 (rule (lower (has_type $I128 (band x y)))
   (lower_b128_binary (AluOPRRR.And) x y))
@@ -440,14 +440,14 @@
 
 ;;;; Rules for `ishl` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule 1 (lower (has_type $I8 (ishl x y)))
-  (alu_rrr (AluOPRRR.Sllw) x (alu_andi (value_regs_get y 0) 7))
-)
+  (alu_rrr (AluOPRRR.Sllw) x (rv_andi (value_regs_get y 0) (imm12_const 7))))
+
 (rule 2 (lower (has_type $I8 (ishl x (imm12_from_value y))))
   (alu_rr_imm12 (AluOPRRI.Slliw) x (imm12_and y 7)))
 
 (rule 1 (lower (has_type $I16 (ishl x y)))
-  (alu_rrr (AluOPRRR.Sllw) x (alu_andi (value_regs_get y 0) 15))
-)
+  (alu_rrr (AluOPRRR.Sllw) x (rv_andi (value_regs_get y 0) (imm12_const 15))))
+
 (rule 2 (lower (has_type $I16 (ishl x (imm12_from_value y))))
   (alu_rr_imm12 (AluOPRRI.Slliw) x (imm12_and y 15)))
 
@@ -472,14 +472,14 @@
 
 ;;;; Rules for `ushr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule 1 (lower (has_type $I8 (ushr x y)))
-  (alu_rrr (AluOPRRR.Srlw) (ext_int_if_need $false x $I8) (alu_andi (value_regs_get y 0) 7))
-)
+  (alu_rrr (AluOPRRR.Srlw) (ext_int_if_need $false x $I8) (rv_andi (value_regs_get y 0) (imm12_const 7))))
+
 (rule 2 (lower (has_type $I8 (ushr x (imm12_from_value y))))
   (alu_rr_imm12 (AluOPRRI.SrliW) (ext_int_if_need $false x $I8) (imm12_and y 7)))
 
 (rule 1 (lower (has_type $I16 (ushr x y)))
-  (alu_rrr (AluOPRRR.Srlw) (ext_int_if_need $false x $I16) (alu_andi (value_regs_get y 0) 15))
-)
+  (alu_rrr (AluOPRRR.Srlw) (ext_int_if_need $false x $I16) (rv_andi (value_regs_get y 0) (imm12_const 15))))
+
 (rule 2 (lower (has_type $I16 (ushr x (imm12_from_value y))))
   (alu_rr_imm12 (AluOPRRI.SrliW) (ext_int_if_need $false x $I16) (imm12_and y 15)))
 
@@ -499,14 +499,14 @@
 
 ;;;; Rules for `sshr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule 1 (lower (has_type $I8 (sshr x y)))
-  (rv_sra (ext_int_if_need $true x $I8) (alu_andi (value_regs_get y 0) 7))
-)
+  (rv_sra (ext_int_if_need $true x $I8) (rv_andi (value_regs_get y 0) (imm12_const 7))))
+
 (rule 2 (lower (has_type $I8 (sshr x (imm12_from_value y))))
   (rv_srai (ext_int_if_need $true x $I8) (imm12_and y 7)))
 
 (rule 1 (lower (has_type $I16 (sshr x y)))
-  (rv_sra (ext_int_if_need $true x $I16) (alu_andi (value_regs_get y 0) 15))
-)
+  (rv_sra (ext_int_if_need $true x $I16) (rv_andi (value_regs_get y 0) (imm12_const 15))))
+
 (rule 2 (lower (has_type $I16 (sshr x (imm12_from_value y))))
   (rv_srai (ext_int_if_need $true x $I16) (imm12_and y 15)))
 
@@ -634,14 +634,14 @@
 
 (decl gen_atomic_offset (Reg Type) Reg)
 (rule 1 (gen_atomic_offset p (fits_in_16 ty))
-  (rv_slli (alu_andi p 3) (imm12_const 3)))
+  (rv_slli (rv_andi p (imm12_const 3)) (imm12_const 3)))
 
 (rule (gen_atomic_offset p _)
   (zero_reg))
 
 (decl gen_atomic_p (Reg Type) Reg)
 (rule 1 (gen_atomic_p p (fits_in_16 ty))
-  (alu_andi p -4))
+  (rv_andi p (imm12_const -4)))
 
 (rule (gen_atomic_p p _)
   p)
