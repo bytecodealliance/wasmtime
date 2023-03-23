@@ -44,6 +44,7 @@ block0(v0: i64, v1: i32):
 ; run: %sh1add_uext(0, 0) == 0
 ; run: %sh1add_uext(2, 1) == 4
 ; run: %sh1add_uext(2, 0xFFFFFFFF) == 0x200000000
+; run: %sh1add_uext(0x100000000, 0x80000000) == 0x200000000
 
 
 function %sh2add(i64, i64) -> i64 {
@@ -68,7 +69,8 @@ block0(v0: i64, v1: i32):
 }
 ; run: %sh2add_uext(0, 0) == 0
 ; run: %sh2add_uext(2, 1) == 6
-; run: %sh2add_uext(2, 0xFFFFFFFF) == 0x3FFFFFFFE
+; run: %sh2add_uext(4, 0xFFFFFFFF) == 0x400000000
+; run: %sh2add_uext(0x100000000, 0x80000000) == 0x300000000
 
 
 function %sh3add(i64, i64) -> i64 {
@@ -93,7 +95,8 @@ block0(v0: i64, v1: i32):
 }
 ; run: %sh3add_uext(0, 0) == 0
 ; run: %sh3add_uext(2, 1) == 10
-; run: %sh3add_uext(2, 0xFFFFFFFF) == 0x7FFFFFFFA
+; run: %sh3add_uext(8, 0xFFFFFFFF) == 0x800000000
+; run: %sh3add_uext(0x100000000, 0x80000000) == 0x500000000
 
 
 function %ishl_uextend(i32) -> i64 {
