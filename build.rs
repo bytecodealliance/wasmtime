@@ -230,7 +230,7 @@ fn build_raw_intrinsics() -> Vec<u8> {
     {
         let mut reloc = Vec::new();
         3u32.encode(&mut reloc); // target section (code is the 4th section, 3 when 0-indexed)
-        6u32.encode(&mut reloc); // 4 relocations
+        6u32.encode(&mut reloc); // 6 relocations
 
         reloc.push(0x07); // R_WASM_GLOBAL_INDEX_LEB
         internal_state_ptr_ref1.encode(&mut reloc); // offset
