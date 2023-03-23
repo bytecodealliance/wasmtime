@@ -1241,7 +1241,10 @@
 (rule (rv_pack rs1 rs2)
   (alu_rrr (AluOPRRR.Pack) rs1 rs2))
 
-
+;; Helper for emitting the `packw` ("Pack low 16-bits of registers") instruction.
+(decl rv_packw (Reg Reg) Reg)
+(rule (rv_packw rs1 rs2)
+  (alu_rrr (AluOPRRR.Packw) rs1 rs2))
 
 
 
@@ -1553,7 +1556,7 @@
 (rule 1 (extend val (ExtendOp.Zero) $I16 (fits_in_64 _))
   (if-let $true (has_zbkb))
   (let ((val Reg (value_regs_get val 0)))
-    (alu_rrr (AluOPRRR.Packw) val (zero_reg))))
+    (rv_packw val (zero_reg))))
 
 ;; If we have the `zbkb` extension `pack` can be used to zero extend 32 bit registers
 (rule 1 (extend val (ExtendOp.Zero) $I32 $I64)
