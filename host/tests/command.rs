@@ -11,6 +11,7 @@ use std::{
 use wasi_cap_std_sync::WasiCtxBuilder;
 use wasi_common::{
     clocks::{WasiMonotonicClock, WasiWallClock},
+    dir::ReadOnlyDir,
     pipe::ReadPipe,
 };
 use wasmtime::{
@@ -543,4 +544,32 @@ async fn run_export_cabi_realloc(mut store: Store<WasiCtx>, wasi: Command) -> Re
     wasi.call_main(&mut store, &[])
         .await?
         .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))
+}
+
+async fn run_read_only(mut store: Store<WasiCtx>, wasi: Command) -> Result<()> {
+    let dir = tempfile::tempdir()?;
+
+    std::fs::File::create(dir.path().join("bar.txt"))?.write_all(b"And stood awhile in thought")?;
+    std::fs::create_dir(dir.path().join("sub"))?;
+
+    let open_dir = Dir::open_ambient_dir(dir.path(), ambient_authority())?;
+    store.data_mut().push_preopened_dir(
+        Box::new(ReadOnlyDir(Box::new(
+            wasi_cap_std_sync::dir::Dir::from_cap_std(open_dir),
+        ))),
+        "/",
+    )?;
+
+    wasi.call_main(
+        &mut store,
+        0 as Descriptor,
+        1 as Descriptor,
+        2 as OutputStream,
+        &[],
+        &[],
+    )
+    .await?
+    .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))?;
+
+    Ok(())
 }

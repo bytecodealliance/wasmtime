@@ -419,3 +419,126 @@ impl OutputStream for FileStream {
         }
     }
 }
+
+pub struct ReadOnlyFile(pub Box<dyn WasiFile>);
+
+#[async_trait::async_trait]
+impl WasiFile for ReadOnlyFile {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    async fn get_filetype(&self) -> Result<FileType, Error> {
+        self.0.get_filetype().await
+    }
+
+    #[cfg(unix)]
+    fn pollable(&self) -> Option<rustix::fd::BorrowedFd> {
+        self.0.pollable()
+    }
+
+    #[cfg(windows)]
+    fn pollable(&self) -> Option<io_extras::os::windows::BorrowedHandleOrSocket> {
+        self.0.pollable()
+    }
+
+    fn isatty(&mut self) -> bool {
+        self.0.isatty()
+    }
+
+    async fn datasync(&self) -> Result<(), Error> {
+        Ok(())
+    }
+
+    async fn sync(&self) -> Result<(), Error> {
+        Ok(())
+    }
+
+    async fn get_fdflags(&self) -> Result<FdFlags, Error> {
+        self.0.get_fdflags().await
+    }
+
+    async fn set_fdflags(&mut self, _flags: FdFlags) -> Result<(), Error> {
+        Err(Error::perm())
+    }
+
+    async fn get_filestat(&self) -> Result<Filestat, Error> {
+        self.0.get_filestat().await
+    }
+
+    async fn set_filestat_size(&mut self, _size: u64) -> Result<(), Error> {
+        Err(Error::perm())
+    }
+
+    async fn advise(&mut self, offset: u64, len: u64, advice: Advice) -> Result<(), Error> {
+        self.0.advise(offset, len, advice).await
+    }
+
+    async fn allocate(&mut self, _offset: u64, _len: u64) -> Result<(), Error> {
+        Err(Error::perm())
+    }
+
+    async fn set_times(
+        &mut self,
+        _atime: Option<SystemTimeSpec>,
+        _mtime: Option<SystemTimeSpec>,
+    ) -> Result<(), Error> {
+        Err(Error::perm())
+    }
+
+    async fn read_at<'a>(&mut self, buf: &mut [u8], offset: u64) -> Result<(u64, bool), Error> {
+        self.0.read_at(buf, offset).await
+    }
+
+    async fn read_vectored_at<'a>(
+        &mut self,
+        bufs: &mut [std::io::IoSliceMut<'a>],
+        offset: u64,
+    ) -> Result<(u64, bool), Error> {
+        self.0.read_vectored_at(bufs, offset).await
+    }
+
+    fn is_read_vectored_at(&self) -> bool {
+        self.0.is_read_vectored_at()
+    }
+
+    async fn write_at<'a>(&mut self, _bufs: &[u8], _offset: u64) -> Result<u64, Error> {
+        Err(Error::perm())
+    }
+
+    async fn write_vectored_at<'a>(
+        &mut self,
+        _bufs: &[std::io::IoSlice<'a>],
+        _offset: u64,
+    ) -> Result<u64, Error> {
+        Err(Error::perm())
+    }
+
+    fn is_write_vectored_at(&self) -> bool {
+        self.0.is_write_vectored_at()
+    }
+
+    async fn append<'a>(&mut self, _bufs: &[u8]) -> Result<u64, Error> {
+        Err(Error::perm())
+    }
+
+    async fn append_vectored<'a>(&mut self, _bufs: &[std::io::IoSlice<'a>]) -> Result<u64, Error> {
+        Err(Error::perm())
+    }
+
+    fn is_append_vectored(&self) -> bool {
+        self.0.is_append_vectored()
+    }
+
+    async fn readable(&self) -> Result<(), Error> {
+        self.0.readable().await
+    }
+
+    async fn writable(&self) -> Result<(), Error> {
+        Err(Error::perm())
+    }
+
+    fn dup(&self) -> Box<dyn WasiFile> {
+        Box::new(ReadOnlyFile(self.0.dup()))
+    }
+}

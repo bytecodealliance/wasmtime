@@ -81,7 +81,7 @@ pub async fn poll_oneoff<'a>(poll: &mut Poll<'a>) -> Result<(), Error> {
                 //
                 // TODO: On Linux and FreeBSD, we could use `ppoll` instead
                 // which takes a `timespec.`
-                ((t.deadline + 999) / 1000)
+                ((t.deadline + 999_999) / 1_000_000)
                     .try_into()
                     .map_err(|_| Error::overflow().context("poll timeout"))?
             } else {
