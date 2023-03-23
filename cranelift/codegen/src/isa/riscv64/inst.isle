@@ -1157,9 +1157,15 @@
   (let ((val Reg (value_regs_get val 0)))
     (alu_rr_imm12 (AluOPRRI.Zexth) val (imm12_const 0))))
 
+;; With `zba` we have a `zext.w` instruction
+(rule 2 (extend val (ExtendOp.Zero) $I32 $I64)
+  (if-let $true (has_zba))
+  (let ((val Reg (value_regs_get val 0)))
+    (alu_rrr (AluOPRRR.Adduw) val (zero_reg))))
+
 ;;; Signed rules extending to I128
 ;; Extend the bottom part, and extract the sign bit from the bottom as the top
-(rule 2 (extend val (ExtendOp.Signed) (fits_in_64 from_ty) $I128)
+(rule 3 (extend val (ExtendOp.Signed) (fits_in_64 from_ty) $I128)
   (let ((val Reg (value_regs_get val 0))
         (low Reg (extend val (ExtendOp.Signed) from_ty $I64))
         (high Reg (alu_rr_imm12 (AluOPRRI.Srai) low (imm12_const 63))))

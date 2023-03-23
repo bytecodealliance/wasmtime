@@ -26,11 +26,9 @@
 
 
 ;;;; Rules for `iadd` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule -1 (lower (has_type (fits_in_32 ty) (iadd x y)))
-  (alu_rrr (AluOPRRR.Addw) x y))
 
 ;; Base case, simply adding things in registers.
-(rule -2 (lower (has_type (fits_in_64 ty) (iadd x y)))
+(rule 0 (lower (has_type (fits_in_64 ty) (iadd x y)))
   (alu_add x y))
 
 ;; Special cases for when one operand is an immediate that fits in 12 bits.
@@ -40,17 +38,63 @@
 (rule 2 (lower (has_type (fits_in_64 ty) (iadd (imm12_from_value x) y)))
   (alu_rr_imm12 (select_addi ty) y x))
 
-(rule
-  (lower (has_type $I128 (iadd x y)))
-  (let
-    ( ;; low part.
-      (low Reg (alu_add (value_regs_get x 0) (value_regs_get y 0)))
-      ;; compute carry.
-      (carry Reg (alu_rrr (AluOPRRR.SltU) low (value_regs_get y 0)))
-      ;;
-      (high_tmp Reg (alu_add (value_regs_get x 1) (value_regs_get y 1)))
-      ;; add carry.
-      (high Reg (alu_add high_tmp carry)))
+;; Special case when one of the operands is uextended
+;; Needs `Zba`
+(rule 3 (lower (has_type $I64 (iadd x (uextend y @ (value_type $I32)))))
+  (if-let $true (has_zba))
+  (alu_rrr (AluOPRRR.Adduw) y x))
+
+(rule 4 (lower (has_type $I64 (iadd (uextend x @ (value_type $I32)) y)))
+  (if-let $true (has_zba))
+  (alu_rrr (AluOPRRR.Adduw) x y))
+
+;; Add with const shift. We have a few of these instructions with `Zba`.
+(decl pure partial match_shnadd (Imm64) AluOPRRR)
+(rule (match_shnadd (u64_from_imm64 1)) (AluOPRRR.Sh1add))
+(rule (match_shnadd (u64_from_imm64 2)) (AluOPRRR.Sh2add))
+(rule (match_shnadd (u64_from_imm64 3)) (AluOPRRR.Sh3add))
+  
+(rule 3 (lower (has_type $I64 (iadd x (ishl y (maybe_uextend (iconst n))))))
+  (if-let $true (has_zba))
+  (if-let shnadd (match_shnadd n))
+  (alu_rrr shnadd y x))
+
+(rule 4 (lower (has_type $I64 (iadd (ishl x (maybe_uextend (iconst n))) y)))
+  (if-let $true (has_zba))
+  (if-let shnadd (match_shnadd n))
+  (alu_rrr shnadd x y))
+
+
+;; Add with uextended const shift. We have a few of these instructions with `Zba`.
+;;
+;; !!! Important !!!
+;; These rules only work for (ishl (uextend _) _) and not for (uextend (ishl _ _))!
+;; Getting this wrong means a potential misscalculation of the shift amount.
+;; Additionaly we can only ensure that this is correct if the uextend is 32 to 64 bits.
+(decl pure partial match_shnadd_uw (Imm64) AluOPRRR)
+(rule (match_shnadd_uw (u64_from_imm64 1)) (AluOPRRR.Sh1adduw))
+(rule (match_shnadd_uw (u64_from_imm64 2)) (AluOPRRR.Sh2adduw))
+(rule (match_shnadd_uw (u64_from_imm64 3)) (AluOPRRR.Sh3adduw))
+  
+(rule 5 (lower (has_type $I64 (iadd x (ishl (uextend y @ (value_type $I32)) (maybe_uextend (iconst n))))))
+  (if-let $true (has_zba))
+  (if-let shnadd_uw (match_shnadd_uw n))
+  (alu_rrr shnadd_uw y x))
+
+(rule 6 (lower (has_type $I64 (iadd (ishl (uextend x @ (value_type $I32)) (maybe_uextend (iconst n))) y)))
+  (if-let $true (has_zba))
+  (if-let shnadd_uw (match_shnadd_uw n))
+  (alu_rrr shnadd_uw x y))
+
+;; I128 cases
+(rule 7 (lower (has_type $I128 (iadd x y)))
+  (let ((low Reg (alu_add (value_regs_get x 0) (value_regs_get y 0)))
+        ;; compute carry.
+        (carry Reg (alu_rrr (AluOPRRR.SltU) low (value_regs_get y 0)))
+        ;;
+        (high_tmp Reg (alu_add (value_regs_get x 1) (value_regs_get y 1)))
+        ;; add carry.
+        (high Reg (alu_add high_tmp carry)))
     (value_regs low high)))
 
 ;;; Rules for `uadd_overflow_trap` ;;;;;;;;;;;;;
@@ -355,6 +399,38 @@
 (rule (lower (has_type out_ty (sextend val @ (value_type in_ty))))
   (sext val in_ty out_ty))
 
+;; The instructions below are present in RV64I and sign-extend the result to 64 bits.
+
+(rule 1 (lower (has_type $I64 (sextend (has_type $I32 (iadd x y)))))
+  (alu_rrr (AluOPRRR.Addw) x y))
+
+(rule 1 (lower (has_type $I64 (sextend (has_type $I32 (isub x y)))))
+  (alu_rrr (AluOPRRR.Subw) x y))
+
+(rule 1 (lower (has_type $I64 (sextend (has_type $I32 (ishl x y)))))
+  (alu_rrr (AluOPRRR.Sllw) x (value_regs_get y 0)))
+
+(rule 1 (lower (has_type $I64 (sextend (has_type $I32 (ushr x y)))))
+  (alu_rrr (AluOPRRR.Srlw) x (value_regs_get y 0)))
+
+(rule 1 (lower (has_type $I64 (sextend (has_type $I32 (sshr x y)))))
+  (alu_rrr (AluOPRRR.Sraw) x (value_regs_get y 0)))
+
+
+(rule 2 (lower (has_type $I64 (sextend (has_type $I32 (iadd x (imm12_from_value y))))))
+  (alu_rr_imm12 (AluOPRRI.Addiw) x y))
+
+(rule 3 (lower (has_type $I64 (sextend (has_type $I32 (iadd (imm12_from_value x) y)))))
+  (alu_rr_imm12 (AluOPRRI.Addiw) y x))
+
+(rule 2 (lower (has_type $I64 (sextend (has_type $I32 (ishl x (imm12_from_value y))))))
+  (alu_rr_imm12 (AluOPRRI.Slliw) x y))
+
+(rule 2 (lower (has_type $I64 (sextend (has_type $I32 (ushr x (imm12_from_value y))))))
+  (alu_rr_imm12 (AluOPRRI.SrliW) x y))
+
+(rule 2 (lower (has_type $I64 (sextend (has_type $I32 (sshr x (imm12_from_value y))))))
+  (alu_rr_imm12 (AluOPRRI.Sraiw) x y))
 
 ;;;; Rules for `popcnt` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_64 ty) (popcnt x)))
@@ -385,6 +461,12 @@
 (rule 1 (lower (has_type $I64 (ishl x y)))
   (alu_rrr (AluOPRRR.Sll) x (value_regs_get y 0)))
 
+;; With `Zba` we have a shift that zero extends the LHS argument.
+(rule 3 (lower (has_type $I64 (ishl (uextend x @ (value_type $I32)) (maybe_uextend (imm12_from_value y)))))
+  (if-let $true (has_zba))
+  (alu_rr_imm12 (AluOPRRI.SlliUw) x y))
+
+;; I128 cases
 (rule 0 (lower (has_type $I128 (ishl x y)))
   (lower_i128_ishl x y))
 
