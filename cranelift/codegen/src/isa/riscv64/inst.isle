@@ -1209,6 +1209,11 @@
 (rule (rv_ror rs1 rs2)
   (alu_rrr (AluOPRRR.Ror) rs1 rs2))
 
+;; Helper for emitting the `rorw` ("Rotate Right Word") instruction.
+(decl rv_rorw (Reg Reg) Reg)
+(rule (rv_rorw rs1 rs2)
+  (alu_rrr (AluOPRRR.Rorw) rs1 rs2))
+
 
 
 
@@ -1693,7 +1698,7 @@
 (rule 1
   (lower_rotr $I32 rs amount)
   (if-let $true (has_zbb))
-  (alu_rrr (AluOPRRR.Rorw) rs amount))
+  (rv_rorw rs amount))
 
 (rule
   (lower_rotr $I32 rs amount)
