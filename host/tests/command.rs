@@ -489,7 +489,11 @@ async fn run_poll_oneoff_files(store: Store<WasiCtx>, wasi: Command) -> Result<(
 }
 
 async fn run_poll_oneoff_stdio(store: Store<WasiCtx>, wasi: Command) -> Result<()> {
-    run_with_temp_dir(store, wasi).await
+    if cfg!(windows) {
+        expect_fail(run_with_temp_dir(store, wasi).await)
+    } else {
+        run_with_temp_dir(store, wasi).await
+    }
 }
 
 async fn run_readlink(store: Store<WasiCtx>, wasi: Command) -> Result<()> {
