@@ -1219,6 +1219,14 @@
 (rule (rv_rev8 rs1)
   (alu_rr_funct12 (AluOPRRI.Rev8) rs1))
 
+;; Helper for emitting the `brev8` ("Bit Reverse Inside Bytes") instruction.
+;; TODO: This instruction is mentioned in some older versions of the
+;; spec, but has since disappeared, we should follow up on this.
+;; It probably was renamed to `rev.b` which seems to be the closest match.
+(decl rv_brev8 (Reg) Reg)
+(rule (rv_brev8 rs1)
+  (alu_rr_funct12 (AluOPRRI.Brev8) rs1))
+
 
 
 
@@ -2370,7 +2378,7 @@
 (rule 1
   (gen_brev8 rs _)
   (if-let $true (has_zbkb))
-  (alu_rr_funct12 (AluOPRRI.Brev8) rs))
+  (rv_brev8 rs))
 (rule
   (gen_brev8 rs ty)
   (if-let $false (has_zbkb))
