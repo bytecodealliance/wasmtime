@@ -1,8 +1,6 @@
 use anyhow::Result;
 use cap_rand::RngCore;
 use cap_std::{ambient_authority, fs::Dir, time::Duration};
-use host::command::wasi::filesystem::Descriptor;
-use host::command::wasi::streams::{InputStream, OutputStream};
 use host::{command::add_to_linker, command::wasi::Command, WasiCtx};
 use std::{
     io::{Cursor, Write},
