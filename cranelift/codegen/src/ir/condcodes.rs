@@ -108,6 +108,20 @@ impl IntCC {
         ]
     }
 
+    /// Get the corresponding IntCC with the equal component added.
+    /// For conditions with a zero component, this is a no-op.
+    pub fn with_equal(self) -> Self {
+        use self::IntCC::*;
+        match self {
+            SignedGreaterThan => SignedGreaterThanOrEqual,
+            SignedLessThan => SignedLessThanOrEqual,
+            UnsignedGreaterThan => UnsignedGreaterThanOrEqual,
+            UnsignedLessThan => UnsignedLessThanOrEqual,
+            NotEqual => Equal,
+            _ => self,
+        }
+    }
+
     /// Get the corresponding IntCC with the equal component removed.
     /// For conditions without a zero component, this is a no-op.
     pub fn without_equal(self) -> Self {
