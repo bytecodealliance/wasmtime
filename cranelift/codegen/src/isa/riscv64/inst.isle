@@ -1114,6 +1114,11 @@
 (decl rv_fgt (Type Reg Reg) Reg)
 (rule (rv_fgt ty rs1 rs2) (rv_flt ty rs2 rs1))
 
+;; Helper for emitting the `fge` ("Float Greater Than or Equal") instruction.
+;; Note: The arguments are reversed
+(decl rv_fge (Type Reg Reg) Reg)
+(rule (rv_fge ty rs1 rs2) (rv_fle ty rs2 rs1))
+
 ;; `Zba` Extension Instructions
 
 ;; Helper for emitting the `adduw` ("Add Unsigned Word") instruction.
@@ -2497,9 +2502,6 @@
 (decl is_not_nan (Type Reg) Reg)
 (rule (is_not_nan ty a) (rv_feq ty a a))
 
-(decl fge (Type Reg Reg) Reg)
-(rule (fge ty a b) (rv_fle ty b a))
-
 (decl ordered (Type Reg Reg) Reg)
 (rule (ordered ty a b) (rv_and (is_not_nan ty a) (is_not_nan ty b)))
 
@@ -2597,13 +2599,13 @@
 ;; a >= b
 (rule
   (emit_fcmp (FloatCC.GreaterThanOrEqual) ty a b)
-  (cmp_result (fge ty a b)))
+  (cmp_result (rv_fge ty a b)))
 
 ;; !(ordered a b) || a < b
 ;; == !(ordered a b && a >= b)
 (rule
   (emit_fcmp (FloatCC.UnorderedOrLessThan) ty a b)
-  (cmp_result_invert (rv_and (ordered ty a b) (fge ty a b))))
+  (cmp_result_invert (rv_and (ordered ty a b) (rv_fge ty a b))))
 
 ;; !(ordered a b) || a <= b
 ;; == !(ordered a b && a > b)
