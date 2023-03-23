@@ -31,23 +31,20 @@
 (rule 0 (lower (has_type (fits_in_64 ty) (iadd x y)))
   (alu_add x y))
 
-(rule 1 (lower (has_type (fits_in_32 ty) (iadd x y)))
-  (alu_rrr (AluOPRRR.Addw) x y))
-
 ;; Special cases for when one operand is an immediate that fits in 12 bits.
-(rule 2 (lower (has_type (fits_in_64 ty) (iadd x (imm12_from_value y))))
+(rule 1 (lower (has_type (fits_in_64 ty) (iadd x (imm12_from_value y))))
   (alu_rr_imm12 (select_addi ty) x y))
 
-(rule 3 (lower (has_type (fits_in_64 ty) (iadd (imm12_from_value x) y)))
+(rule 2 (lower (has_type (fits_in_64 ty) (iadd (imm12_from_value x) y)))
   (alu_rr_imm12 (select_addi ty) y x))
 
 ;; Special case when one of the operands is uextended
 ;; Needs `Zba`
-(rule 4 (lower (has_type (ty_32_or_64 ty) (iadd x (uextend y @ (value_type $I32)))))
+(rule 3 (lower (has_type (ty_32_or_64 ty) (iadd x (uextend y @ (value_type $I32)))))
   (if-let $true (has_zba))
   (alu_rrr (AluOPRRR.Adduw) y x))
 
-(rule 5 (lower (has_type (ty_32_or_64 ty) (iadd (uextend x @ (value_type $I32)) y)))
+(rule 4 (lower (has_type (ty_32_or_64 ty) (iadd (uextend x @ (value_type $I32)) y)))
   (if-let $true (has_zba))
   (alu_rrr (AluOPRRR.Adduw) x y))
 
@@ -57,12 +54,12 @@
 (rule (match_shnadd (uimm8 2)) (AluOPRRR.Sh2add))
 (rule (match_shnadd (uimm8 3)) (AluOPRRR.Sh3add))
   
-(rule 4 (lower (has_type (fits_in_64 ty) (iadd x (ishl y (maybe_uextend (iconst n))))))
+(rule 3 (lower (has_type (fits_in_64 ty) (iadd x (ishl y (maybe_uextend (iconst n))))))
   (if-let $true (has_zba))
   (if-let shnadd (match_shnadd n))
   (alu_rrr shnadd y x))
 
-(rule 5 (lower (has_type (fits_in_64 ty) (iadd (ishl x (maybe_uextend (iconst n))) y)))
+(rule 4 (lower (has_type (fits_in_64 ty) (iadd (ishl x (maybe_uextend (iconst n))) y)))
   (if-let $true (has_zba))
   (if-let shnadd (match_shnadd n))
   (alu_rrr shnadd x y))
@@ -74,18 +71,18 @@
 (rule (match_shnadd_uw (uimm8 2)) (AluOPRRR.Sh2adduw))
 (rule (match_shnadd_uw (uimm8 3)) (AluOPRRR.Sh3adduw))
   
-(rule 6 (lower (has_type (fits_in_64 ty) (iadd x (ishl (uextend y) (maybe_uextend (iconst n))))))
+(rule 5 (lower (has_type (fits_in_64 ty) (iadd x (ishl (uextend y) (maybe_uextend (iconst n))))))
   (if-let $true (has_zba))
   (if-let shnadd_uw (match_shnadd_uw n))
   (alu_rrr shnadd_uw y x))
 
-(rule 7 (lower (has_type (fits_in_64 ty) (iadd (ishl (uextend x) (maybe_uextend (iconst n))) y)))
+(rule 6 (lower (has_type (fits_in_64 ty) (iadd (ishl (uextend x) (maybe_uextend (iconst n))) y)))
   (if-let $true (has_zba))
   (if-let shnadd_uw (match_shnadd_uw n))
   (alu_rrr shnadd_uw x y))
 
 ;; I128 cases
-(rule 8 (lower (has_type $I128 (iadd x y)))
+(rule 7 (lower (has_type $I128 (iadd x y)))
   (let ((low Reg (alu_add (value_regs_get x 0) (value_regs_get y 0)))
         ;; compute carry.
         (carry Reg (alu_rrr (AluOPRRR.SltU) low (value_regs_get y 0)))
