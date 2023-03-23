@@ -66,7 +66,7 @@ async fn run_command(
 
     let mut main_args: Vec<&str> = vec!["wasm"];
     main_args.extend(args.iter().map(String::as_str));
-    let result: Result<(), ()> = wasi.call_main(&mut store, 0, 1, 2, &main_args, &[]).await?;
+    let result: Result<(), ()> = wasi.call_main(&mut store, &main_args).await?;
 
     if result.is_err() {
         anyhow::bail!("command returned with failing exit status");
