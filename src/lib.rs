@@ -1548,255 +1548,247 @@ pub unsafe extern "C" fn poll_oneoff(
     }
 
     State::with(|state| {
-        state.import_alloc.with_buffer(
+        let mut pollables = Pollables {
+            pointer: pollables,
+            index: 0,
+            length: nsubscriptions,
+        };
+
+        for subscription in subscriptions {
+            const EVENTTYPE_CLOCK: u8 = wasi::EVENTTYPE_CLOCK.raw();
+            const EVENTTYPE_FD_READ: u8 = wasi::EVENTTYPE_FD_READ.raw();
+            const EVENTTYPE_FD_WRITE: u8 = wasi::EVENTTYPE_FD_WRITE.raw();
+            pollables.push(match subscription.u.tag {
+                EVENTTYPE_CLOCK => {
+                    let clock = &subscription.u.u.clock;
+                    let absolute = (clock.flags & SUBCLOCKFLAGS_SUBSCRIPTION_CLOCK_ABSTIME)
+                        == SUBCLOCKFLAGS_SUBSCRIPTION_CLOCK_ABSTIME;
+                    match clock.id {
+                        CLOCKID_REALTIME => {
+                            let timeout = if absolute {
+                                // Convert `clock.timeout` to `Datetime`.
+                                let mut datetime = wall_clock::Datetime {
+                                    seconds: clock.timeout / 1_000_000_000,
+                                    nanoseconds: (clock.timeout % 1_000_000_000) as _,
+                                };
+
+                                // Subtract `now`.
+                                let now = wall_clock::now(state.instance_wall_clock());
+                                datetime.seconds -= now.seconds;
+                                if datetime.nanoseconds < now.nanoseconds {
+                                    datetime.seconds -= 1;
+                                    datetime.nanoseconds += 1_000_000_000;
+                                }
+                                datetime.nanoseconds -= now.nanoseconds;
+
+                                // Convert to nanoseconds.
+                                let nanos = datetime
+                                    .seconds
+                                    .checked_mul(1_000_000_000)
+                                    .ok_or(ERRNO_OVERFLOW)?;
+                                nanos
+                                    .checked_add(datetime.nanoseconds.into())
+                                    .ok_or(ERRNO_OVERFLOW)?
+                            } else {
+                                clock.timeout
+                            };
+
+                            monotonic_clock::subscribe(
+                                state.instance_monotonic_clock(),
+                                timeout,
+                                false,
+                            )
+                        }
+
+                        CLOCKID_MONOTONIC => monotonic_clock::subscribe(
+                            state.instance_monotonic_clock(),
+                            clock.timeout,
+                            absolute,
+                        ),
+
+                        _ => return Err(ERRNO_INVAL),
+                    }
+                }
+
+                EVENTTYPE_FD_READ => {
+                    match state
+                        .descriptors()
+                        .get_read_stream(subscription.u.u.fd_read.file_descriptor)
+                    {
+                        Ok(stream) => streams::subscribe_to_input_stream(stream),
+                        // If the file descriptor isn't a stream, request a
+                        // pollable which completes immediately so that it'll
+                        // immediately fail.
+                        Err(ERRNO_BADF) => {
+                            monotonic_clock::subscribe(state.instance_monotonic_clock(), 0, false)
+                        }
+                        Err(e) => return Err(e),
+                    }
+                }
+
+                EVENTTYPE_FD_WRITE => {
+                    match state
+                        .descriptors()
+                        .get_write_stream(subscription.u.u.fd_write.file_descriptor)
+                    {
+                        Ok(stream) => streams::subscribe_to_output_stream(stream),
+                        // If the file descriptor isn't a stream, request a
+                        // pollable which completes immediately so that it'll
+                        // immediately fail.
+                        Err(ERRNO_BADF) => {
+                            monotonic_clock::subscribe(state.instance_monotonic_clock(), 0, false)
+                        }
+                        Err(e) => return Err(e),
+                    }
+                }
+
+                _ => return Err(ERRNO_INVAL),
+            });
+        }
+        let vec = state.import_alloc.with_buffer(
             results,
             nsubscriptions
                 .checked_mul(size_of::<bool>())
                 .trapping_unwrap(),
-            || {
-                let mut pollables = Pollables {
-                    pointer: pollables,
-                    index: 0,
-                    length: nsubscriptions,
-                };
+            || poll::poll_oneoff(slice::from_raw_parts(pollables.pointer, pollables.length)),
+        );
 
-                for subscription in subscriptions {
-                    const EVENTTYPE_CLOCK: u8 = wasi::EVENTTYPE_CLOCK.raw();
-                    const EVENTTYPE_FD_READ: u8 = wasi::EVENTTYPE_FD_READ.raw();
-                    const EVENTTYPE_FD_WRITE: u8 = wasi::EVENTTYPE_FD_WRITE.raw();
-                    pollables.push(match subscription.u.tag {
-                        EVENTTYPE_CLOCK => {
-                            let clock = &subscription.u.u.clock;
-                            let absolute = (clock.flags & SUBCLOCKFLAGS_SUBSCRIPTION_CLOCK_ABSTIME)
-                                == SUBCLOCKFLAGS_SUBSCRIPTION_CLOCK_ABSTIME;
-                            match clock.id {
-                                CLOCKID_REALTIME => {
-                                    let timeout = if absolute {
-                                        // Convert `clock.timeout` to `Datetime`.
-                                        let mut datetime = wall_clock::Datetime {
-                                            seconds: clock.timeout / 1_000_000_000,
-                                            nanoseconds: (clock.timeout % 1_000_000_000) as _,
-                                        };
+        assert_eq!(vec.len(), nsubscriptions);
+        assert_eq!(vec.as_ptr(), results);
+        forget(vec);
 
-                                        // Subtract `now`.
-                                        let now = wall_clock::now(state.instance_wall_clock());
-                                        datetime.seconds -= now.seconds;
-                                        if datetime.nanoseconds < now.nanoseconds {
-                                            datetime.seconds -= 1;
-                                            datetime.nanoseconds += 1_000_000_000;
-                                        }
-                                        datetime.nanoseconds -= now.nanoseconds;
+        drop(pollables);
 
-                                        // Convert to nanoseconds.
-                                        let nanos = datetime
-                                            .seconds
-                                            .checked_mul(1_000_000_000)
-                                            .ok_or(ERRNO_OVERFLOW)?;
-                                        nanos
-                                            .checked_add(datetime.nanoseconds.into())
-                                            .ok_or(ERRNO_OVERFLOW)?
-                                    } else {
-                                        clock.timeout
-                                    };
+        let ready = subscriptions
+            .iter()
+            .enumerate()
+            .filter_map(|(i, s)| (*results.add(i) != 0).then_some(s));
 
-                                    monotonic_clock::subscribe(
-                                        state.instance_monotonic_clock(),
-                                        timeout,
-                                        false,
-                                    )
-                                }
+        let mut count = 0;
 
-                                CLOCKID_MONOTONIC => monotonic_clock::subscribe(
-                                    state.instance_monotonic_clock(),
-                                    clock.timeout,
-                                    absolute,
-                                ),
+        for subscription in ready {
+            let error;
+            let type_;
+            let nbytes;
+            let flags;
 
-                                _ => return Err(ERRNO_INVAL),
-                            }
-                        }
-
-                        EVENTTYPE_FD_READ => {
-                            match state
-                                .descriptors()
-                                .get_read_stream(subscription.u.u.fd_read.file_descriptor)
-                            {
-                                Ok(stream) => streams::subscribe_to_input_stream(stream),
-                                // If the file descriptor isn't a stream, request a
-                                // pollable which completes immediately so that it'll
-                                // immediately fail.
-                                Err(ERRNO_BADF) => monotonic_clock::subscribe(
-                                    state.instance_monotonic_clock(),
-                                    0,
-                                    false,
-                                ),
-                                Err(e) => return Err(e),
-                            }
-                        }
-
-                        EVENTTYPE_FD_WRITE => {
-                            match state
-                                .descriptors()
-                                .get_write_stream(subscription.u.u.fd_write.file_descriptor)
-                            {
-                                Ok(stream) => streams::subscribe_to_output_stream(stream),
-                                // If the file descriptor isn't a stream, request a
-                                // pollable which completes immediately so that it'll
-                                // immediately fail.
-                                Err(ERRNO_BADF) => monotonic_clock::subscribe(
-                                    state.instance_monotonic_clock(),
-                                    0,
-                                    false,
-                                ),
-                                Err(e) => return Err(e),
-                            }
-                        }
-
-                        _ => return Err(ERRNO_INVAL),
-                    });
+            match subscription.u.tag {
+                0 => {
+                    error = ERRNO_SUCCESS;
+                    type_ = EVENTTYPE_CLOCK;
+                    nbytes = 0;
+                    flags = 0;
                 }
 
-                let vec =
-                    poll::poll_oneoff(slice::from_raw_parts(pollables.pointer, pollables.length));
-
-                assert_eq!(vec.len(), nsubscriptions);
-                assert_eq!(vec.as_ptr(), results);
-                forget(vec);
-
-                drop(pollables);
-
-                let ready = subscriptions
-                    .iter()
-                    .enumerate()
-                    .filter_map(|(i, s)| (*results.add(i) != 0).then_some(s));
-
-                let mut count = 0;
-
-                for subscription in ready {
-                    let error;
-                    let type_;
-                    let nbytes;
-                    let flags;
-
-                    match subscription.u.tag {
-                        0 => {
-                            error = ERRNO_SUCCESS;
-                            type_ = EVENTTYPE_CLOCK;
-                            nbytes = 0;
-                            flags = 0;
-                        }
-
-                        1 => {
-                            type_ = EVENTTYPE_FD_READ;
-                            let desc = state
-                                .descriptors()
-                                .get(subscription.u.u.fd_read.file_descriptor)
-                                .trapping_unwrap();
-                            match desc {
-                                Descriptor::Streams(streams) => match &streams.type_ {
-                                    StreamType::File(file) => match filesystem::stat(file.fd) {
-                                        Ok(stat) => {
-                                            error = ERRNO_SUCCESS;
-                                            nbytes = stat.size.saturating_sub(file.position.get());
-                                            flags = if nbytes == 0 {
-                                                EVENTRWFLAGS_FD_READWRITE_HANGUP
-                                            } else {
-                                                0
-                                            };
-                                        }
-                                        Err(e) => {
-                                            error = e.into();
-                                            nbytes = 1;
-                                            flags = 0;
-                                        }
-                                    },
-                                    StreamType::Socket(connection) => {
-                                        unreachable!() // TODO
-                                                       /*
-                                                       match tcp::bytes_readable(*connection) {
-                                                           Ok(result) => {
-                                                               error = ERRNO_SUCCESS;
-                                                               nbytes = result.0;
-                                                               flags = if result.1 {
-                                                                   EVENTRWFLAGS_FD_READWRITE_HANGUP
-                                                               } else {
-                                                                   0
-                                                               };
-                                                           }
-                                                           Err(e) => {
-                                                               error = e.into();
-                                                               nbytes = 0;
-                                                               flags = 0;
-                                                           }
-                                                       }
-                                                       */
-                                    }
-                                    StreamType::Unknown => {
-                                        error = ERRNO_SUCCESS;
-                                        nbytes = 1;
-                                        flags = 0;
-                                    }
-                                },
-                                _ => unreachable!(),
+                1 => {
+                    type_ = EVENTTYPE_FD_READ;
+                    let desc = state
+                        .descriptors()
+                        .get(subscription.u.u.fd_read.file_descriptor)
+                        .trapping_unwrap();
+                    match desc {
+                        Descriptor::Streams(streams) => match &streams.type_ {
+                            StreamType::File(file) => match filesystem::stat(file.fd) {
+                                Ok(stat) => {
+                                    error = ERRNO_SUCCESS;
+                                    nbytes = stat.size.saturating_sub(file.position.get());
+                                    flags = if nbytes == 0 {
+                                        EVENTRWFLAGS_FD_READWRITE_HANGUP
+                                    } else {
+                                        0
+                                    };
+                                }
+                                Err(e) => {
+                                    error = e.into();
+                                    nbytes = 1;
+                                    flags = 0;
+                                }
+                            },
+                            StreamType::Socket(connection) => {
+                                unreachable!() // TODO
+                                               /*
+                                               match tcp::bytes_readable(*connection) {
+                                                   Ok(result) => {
+                                                       error = ERRNO_SUCCESS;
+                                                       nbytes = result.0;
+                                                       flags = if result.1 {
+                                                           EVENTRWFLAGS_FD_READWRITE_HANGUP
+                                                       } else {
+                                                           0
+                                                       };
+                                                   }
+                                                   Err(e) => {
+                                                       error = e.into();
+                                                       nbytes = 0;
+                                                       flags = 0;
+                                                   }
+                                               }
+                                               */
                             }
-                        }
-                        2 => {
-                            type_ = EVENTTYPE_FD_WRITE;
-                            let desc = state
-                                .descriptors()
-                                .get(subscription.u.u.fd_read.file_descriptor)
-                                .trapping_unwrap();
-                            match desc {
-                                Descriptor::Streams(streams) => match streams.type_ {
-                                    StreamType::File(_) | StreamType::Unknown => {
-                                        error = ERRNO_SUCCESS;
-                                        nbytes = 1;
-                                        flags = 0;
-                                    }
-                                    StreamType::Socket(connection) => {
-                                        unreachable!() // TODO
-                                                       /*
-                                                       match tcp::bytes_writable(connection) {
-                                                           Ok(result) => {
-                                                               error = ERRNO_SUCCESS;
-                                                               nbytes = result.0;
-                                                               flags = if result.1 {
-                                                                   EVENTRWFLAGS_FD_READWRITE_HANGUP
-                                                               } else {
-                                                                   0
-                                                               };
-                                                           }
-                                                           Err(e) => {
-                                                               error = e.into();
-                                                               nbytes = 0;
-                                                               flags = 0;
-                                                           }
-                                                       }
-                                                       */
-                                    }
-                                },
-                                _ => unreachable!(),
+                            StreamType::Unknown => {
+                                error = ERRNO_SUCCESS;
+                                nbytes = 1;
+                                flags = 0;
                             }
-                        }
-
+                        },
                         _ => unreachable!(),
                     }
-
-                    *out.add(count) = Event {
-                        userdata: subscription.userdata,
-                        error,
-                        type_,
-                        fd_readwrite: EventFdReadwrite { nbytes, flags },
-                    };
-
-                    count += 1;
+                }
+                2 => {
+                    type_ = EVENTTYPE_FD_WRITE;
+                    let desc = state
+                        .descriptors()
+                        .get(subscription.u.u.fd_read.file_descriptor)
+                        .trapping_unwrap();
+                    match desc {
+                        Descriptor::Streams(streams) => match streams.type_ {
+                            StreamType::File(_) | StreamType::Unknown => {
+                                error = ERRNO_SUCCESS;
+                                nbytes = 1;
+                                flags = 0;
+                            }
+                            StreamType::Socket(connection) => {
+                                unreachable!() // TODO
+                                               /*
+                                               match tcp::bytes_writable(connection) {
+                                                   Ok(result) => {
+                                                       error = ERRNO_SUCCESS;
+                                                       nbytes = result.0;
+                                                       flags = if result.1 {
+                                                           EVENTRWFLAGS_FD_READWRITE_HANGUP
+                                                       } else {
+                                                           0
+                                                       };
+                                                   }
+                                                   Err(e) => {
+                                                       error = e.into();
+                                                       nbytes = 0;
+                                                       flags = 0;
+                                                   }
+                                               }
+                                               */
+                            }
+                        },
+                        _ => unreachable!(),
+                    }
                 }
 
-                *nevents = count;
+                _ => unreachable!(),
+            }
 
-                Ok(())
-            },
-        )
+            *out.add(count) = Event {
+                userdata: subscription.userdata,
+                error,
+                type_,
+                fd_readwrite: EventFdReadwrite { nbytes, flags },
+            };
+
+            count += 1;
+        }
+
+        *nevents = count;
+
+        Ok(())
     })
 }
 
