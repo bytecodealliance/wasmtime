@@ -560,16 +560,9 @@ async fn run_read_only(mut store: Store<WasiCtx>, wasi: Command) -> Result<()> {
         "/",
     )?;
 
-    wasi.call_main(
-        &mut store,
-        0 as Descriptor,
-        1 as Descriptor,
-        2 as OutputStream,
-        &[],
-        &[],
-    )
-    .await?
-    .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))?;
+    wasi.call_main(&mut store, &[])
+        .await?
+        .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))?;
 
     Ok(())
 }
