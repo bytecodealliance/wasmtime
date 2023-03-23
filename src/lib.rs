@@ -2,18 +2,17 @@
 
 use crate::bindings::{
     exit, filesystem, instance_monotonic_clock, instance_wall_clock, monotonic_clock, network,
-    poll, random, streams, tcp, wall_clock,
+    poll, random, streams, wall_clock,
 };
-use core::arch::wasm32;
-use core::cell::{Cell, RefCell, UnsafeCell};
+use core::cell::{Cell, RefCell, RefMut, UnsafeCell};
 use core::cmp::min;
 use core::ffi::c_void;
 use core::hint::black_box;
-use core::mem::{self, align_of, forget, replace, size_of, ManuallyDrop, MaybeUninit};
+use core::mem::{self, align_of, forget, size_of, ManuallyDrop, MaybeUninit};
+use core::ops::{Deref, DerefMut};
 use core::ptr::{self, null_mut};
 use core::slice;
 use poll::Pollable;
-use streams::{InputStream, OutputStream};
 use wasi::*;
 
 #[cfg(all(feature = "command", feature = "reactor"))]
@@ -22,7 +21,10 @@ compile_error!("only one of the `command` and `reactor` features may be selected
 #[macro_use]
 mod macros;
 
-mod bindings {
+mod descriptors;
+use crate::descriptors::{Descriptor, Descriptors, StreamType, Streams};
+
+pub mod bindings {
     #[cfg(feature = "command")]
     wit_bindgen::generate!({
         world: "command",
@@ -30,7 +32,7 @@ mod bindings {
         raw_strings,
         // The generated definition of command will pull in std, so we are defining it
         // manually below instead
-        skip: ["main", "preopens", "get-environment"],
+        skip: ["main", "get-directories", "get-environment"],
     });
 
     #[cfg(feature = "reactor")]
@@ -38,53 +40,15 @@ mod bindings {
         world: "reactor",
         std_feature,
         raw_strings,
-        skip: ["preopens", "get-environment"],
+        skip: ["get-directories", "get-environment"],
     });
 }
 
 #[no_mangle]
 #[cfg(feature = "command")]
-pub unsafe extern "C" fn main(
-    stdin: InputStream,
-    stdout: OutputStream,
-    stderr: OutputStream,
-    args_ptr: *const WasmStr,
-    args_len: usize,
-    preopens: PreopenList,
-) -> u32 {
+pub unsafe extern "C" fn main(args_ptr: *const WasmStr, args_len: usize) -> u32 {
     State::with_mut(|state| {
-        // Initialization of `State` automatically fills in some dummy
-        // structures for fds 0, 1, and 2. Overwrite the stdin/stdout slots of 0
-        // and 1 with actual files.
-        {
-            let descriptors = state.descriptors_mut();
-            if descriptors.len() < 3 {
-                unreachable!("insufficient memory for stdio descriptors");
-            }
-            descriptors[0] = Descriptor::Streams(Streams {
-                input: Cell::new(Some(stdin)),
-                output: Cell::new(None),
-                type_: StreamType::Unknown,
-            });
-            descriptors[1] = Descriptor::Streams(Streams {
-                input: Cell::new(None),
-                output: Cell::new(Some(stdout)),
-                type_: StreamType::Unknown,
-            });
-            descriptors[2] = Descriptor::Streams(Streams {
-                input: Cell::new(None),
-                output: Cell::new(Some(stderr)),
-                type_: StreamType::Unknown,
-            });
-        }
         state.args = Some(slice::from_raw_parts(args_ptr, args_len));
-
-        // Initialize `arg_preopens`.
-        let preopens: &'static [Preopen] =
-            unsafe { std::slice::from_raw_parts(preopens.base, preopens.len) };
-        state.process_preopens(&preopens);
-        state.arg_preopens.set(Some(preopens));
-
         Ok(())
     });
 
@@ -141,7 +105,7 @@ pub unsafe extern "C" fn cabi_import_realloc(
 
 /// Bump-allocated memory arena. This is a singleton - the
 /// memory will be sized according to `bump_arena_size()`.
-struct BumpArena {
+pub struct BumpArena {
     data: MaybeUninit<[u8; bump_arena_size()]>,
     position: Cell<usize>,
 }
@@ -174,7 +138,7 @@ fn align_to(ptr: usize, align: usize) -> usize {
 // because we can't use RefCell to borrow() the variants of the enum - only
 // Cell provides mutability without pulling in panic machinery - so it would
 // make the accessors a lot more awkward to write.
-struct ImportAlloc {
+pub struct ImportAlloc {
     // When not-null, allocator should use this buffer/len pair at most once
     // to satisfy allocations.
     buffer: Cell<*mut u8>,
@@ -456,7 +420,8 @@ pub unsafe extern "C" fn fd_advise(
         _ => return ERRNO_INVAL,
     };
     State::with(|state| {
-        let file = state.get_seekable_file(fd)?;
+        let ds = state.descriptors();
+        let file = ds.get_seekable_file(fd)?;
         filesystem::advise(file.fd, offset, len, advice)?;
         Ok(())
     })
@@ -481,10 +446,7 @@ pub unsafe extern "C" fn fd_close(fd: Fd) -> Errno {
             drop(state.dirent_cache.stream.replace(None));
         }
 
-        let closed = state.closed;
-        let desc = state.get_mut(fd)?;
-        *desc = Descriptor::Closed(closed);
-        state.closed = Some(fd);
+        let desc = state.descriptors_mut().close(fd)?;
         Ok(())
     })
 }
@@ -494,7 +456,8 @@ pub unsafe extern "C" fn fd_close(fd: Fd) -> Errno {
 #[no_mangle]
 pub unsafe extern "C" fn fd_datasync(fd: Fd) -> Errno {
     State::with(|state| {
-        let file = state.get_file(fd)?;
+        let ds = state.descriptors();
+        let file = ds.get_file(fd)?;
         filesystem::sync_data(file.fd)?;
         Ok(())
     })
@@ -504,7 +467,7 @@ pub unsafe extern "C" fn fd_datasync(fd: Fd) -> Errno {
 /// Note: This returns similar flags to `fsync(fd, F_GETFL)` in POSIX, as well as additional fields.
 #[no_mangle]
 pub unsafe extern "C" fn fd_fdstat_get(fd: Fd, stat: *mut Fdstat) -> Errno {
-    State::with(|state| match state.get(fd)? {
+    State::with(|state| match state.descriptors().get(fd)? {
         Descriptor::Streams(Streams {
             type_: StreamType::File(file),
             ..
@@ -547,19 +510,6 @@ pub unsafe extern "C" fn fd_fdstat_get(fd: Fd, stat: *mut Fdstat) -> Errno {
             });
             Ok(())
         }
-        Descriptor::Stderr => {
-            let fs_filetype = FILETYPE_UNKNOWN;
-            let fs_flags = 0;
-            let fs_rights_base = !RIGHTS_FD_READ;
-            let fs_rights_inheriting = fs_rights_base;
-            stat.write(Fdstat {
-                fs_filetype,
-                fs_flags,
-                fs_rights_base,
-                fs_rights_inheriting,
-            });
-            Ok(())
-        }
         Descriptor::Streams(Streams {
             input,
             output,
@@ -579,23 +529,6 @@ pub unsafe extern "C" fn fd_fdstat_get(fd: Fd, stat: *mut Fdstat) -> Errno {
             if output.get().is_some() {
                 fs_rights_base |= RIGHTS_FD_WRITE;
             }
-            let fs_rights_inheriting = fs_rights_base;
-            stat.write(Fdstat {
-                fs_filetype,
-                fs_flags,
-                fs_rights_base,
-                fs_rights_inheriting,
-            });
-            Ok(())
-        }
-        Descriptor::Streams(Streams {
-            input,
-            output,
-            type_: StreamType::EmptyStdin,
-        }) => {
-            let fs_filetype = FILETYPE_UNKNOWN;
-            let fs_flags = 0;
-            let fs_rights_base = RIGHTS_FD_READ;
             let fs_rights_inheriting = fs_rights_base;
             stat.write(Fdstat {
                 fs_filetype,
@@ -628,7 +561,8 @@ pub unsafe extern "C" fn fd_fdstat_set_flags(fd: Fd, flags: Fdflags) -> Errno {
     }
 
     State::with(|state| {
-        let file = state.get_file(fd)?;
+        let ds = state.descriptors();
+        let file = ds.get_file(fd)?;
         filesystem::set_flags(file.fd, new_flags)?;
         Ok(())
     })
@@ -649,7 +583,8 @@ pub unsafe extern "C" fn fd_fdstat_set_rights(
 #[no_mangle]
 pub unsafe extern "C" fn fd_filestat_get(fd: Fd, buf: *mut Filestat) -> Errno {
     State::with(|state| {
-        let file = state.get_file(fd)?;
+        let ds = state.descriptors();
+        let file = ds.get_file(fd)?;
         let stat = filesystem::stat(file.fd)?;
         let filetype = stat.type_.into();
         *buf = Filestat {
@@ -671,7 +606,8 @@ pub unsafe extern "C" fn fd_filestat_get(fd: Fd, buf: *mut Filestat) -> Errno {
 #[no_mangle]
 pub unsafe extern "C" fn fd_filestat_set_size(fd: Fd, size: Filesize) -> Errno {
     State::with(|state| {
-        let file = state.get_file(fd)?;
+        let ds = state.descriptors();
+        let file = ds.get_file(fd)?;
         filesystem::set_size(file.fd, size)?;
         Ok(())
     })
@@ -710,7 +646,8 @@ pub unsafe extern "C" fn fd_filestat_set_times(
         };
 
     State::with(|state| {
-        let file = state.get_file(fd)?;
+        let ds = state.descriptors();
+        let file = ds.get_file(fd)?;
         filesystem::set_times(file.fd, atim, mtim)?;
         Ok(())
     })
@@ -740,7 +677,8 @@ pub unsafe extern "C" fn fd_pread(
         let ptr = (*iovs_ptr).buf;
         let len = (*iovs_ptr).buf_len;
 
-        let file = state.get_file(fd)?;
+        let ds = state.descriptors();
+        let file = ds.get_file(fd)?;
         let (data, end) = state
             .import_alloc
             .with_buffer(ptr, len, || filesystem::read(file.fd, len as u64, offset))?;
@@ -766,7 +704,7 @@ pub unsafe extern "C" fn fd_prestat_get(fd: Fd, buf: *mut Prestat) -> Errno {
         AllocationState::StackAllocated | AllocationState::StateAllocated
     ) {
         State::with(|state| {
-            if let Some(preopen) = state.get_preopen(fd) {
+            if let Some(preopen) = state.descriptors().get_preopen(fd) {
                 buf.write(Prestat {
                     tag: 0,
                     u: PrestatU {
@@ -790,7 +728,7 @@ pub unsafe extern "C" fn fd_prestat_get(fd: Fd, buf: *mut Prestat) -> Errno {
 #[no_mangle]
 pub unsafe extern "C" fn fd_prestat_dir_name(fd: Fd, path: *mut u8, path_len: Size) -> Errno {
     State::with(|state| {
-        if let Some(preopen) = state.get_preopen(fd) {
+        if let Some(preopen) = state.descriptors().get_preopen(fd) {
             if preopen.path.len < path_len as usize {
                 Err(ERRNO_NAMETOOLONG)
             } else {
@@ -827,7 +765,8 @@ pub unsafe extern "C" fn fd_pwrite(
     let len = (*iovs_ptr).buf_len;
 
     State::with(|state| {
-        let file = state.get_seekable_file(fd)?;
+        let ds = state.descriptors();
+        let file = ds.get_seekable_file(fd)?;
         let bytes = filesystem::write(file.fd, slice::from_raw_parts(ptr, len), offset)?;
         *nwritten = bytes as usize;
         Ok(())
@@ -857,7 +796,7 @@ pub unsafe extern "C" fn fd_read(
     let len = (*iovs_ptr).buf_len;
 
     State::with(|state| {
-        match state.get(fd)? {
+        match state.descriptors().get(fd)? {
             Descriptor::Streams(streams) => {
                 let wasi_stream = streams.get_read_stream()?;
 
@@ -886,7 +825,7 @@ pub unsafe extern "C" fn fd_read(
                     Ok(())
                 }
             }
-            Descriptor::Stderr | Descriptor::Closed(_) => Err(ERRNO_BADF),
+            Descriptor::Closed(_) => Err(ERRNO_BADF),
         }
     })
 }
@@ -931,7 +870,8 @@ pub unsafe extern "C" fn fd_readdir(
 
         // Compute the inode of `.` so that the iterator can produce an entry
         // for it.
-        let dir = state.get_dir(fd)?;
+        let ds = state.descriptors();
+        let dir = ds.get_dir(fd)?;
         let stat = filesystem::stat(dir.fd)?;
         let dot_inode = stat.inode;
 
@@ -1129,25 +1069,7 @@ pub unsafe extern "C" fn fd_readdir(
 /// would disappear if `dup2()` were to be removed entirely.
 #[no_mangle]
 pub unsafe extern "C" fn fd_renumber(fd: Fd, to: Fd) -> Errno {
-    State::with_mut(|state| {
-        let closed = state.closed;
-
-        // Ensure the table is big enough to contain `to`. Do this before
-        // looking up `fd` as it can fail due to `NOMEM`.
-        while Fd::from(state.ndescriptors.get()) <= to {
-            let old_closed = state.closed;
-            let new_closed = state.push_desc(Descriptor::Closed(old_closed))?;
-            state.closed = Some(new_closed);
-        }
-
-        let fd_desc = state.get_mut(fd)?;
-        let desc = replace(fd_desc, Descriptor::Closed(closed));
-
-        let to_desc = state.get_mut(to).trapping_unwrap();
-        *to_desc = desc;
-        state.closed = Some(fd);
-        Ok(())
-    })
+    State::with_mut(|state| state.descriptors_mut().renumber(fd, to))
 }
 
 /// Move the offset of a file descriptor.
@@ -1160,7 +1082,8 @@ pub unsafe extern "C" fn fd_seek(
     newoffset: *mut Filesize,
 ) -> Errno {
     State::with(|state| {
-        let stream = state.get_seekable_stream(fd)?;
+        let ds = state.descriptors();
+        let stream = ds.get_seekable_stream(fd)?;
 
         // Seeking only works on files.
         if let StreamType::File(file) = &stream.type_ {
@@ -1188,7 +1111,8 @@ pub unsafe extern "C" fn fd_seek(
 #[no_mangle]
 pub unsafe extern "C" fn fd_sync(fd: Fd) -> Errno {
     State::with(|state| {
-        let file = state.get_file(fd)?;
+        let ds = state.descriptors();
+        let file = ds.get_file(fd)?;
         filesystem::sync(file.fd)?;
         Ok(())
     })
@@ -1199,7 +1123,8 @@ pub unsafe extern "C" fn fd_sync(fd: Fd) -> Errno {
 #[no_mangle]
 pub unsafe extern "C" fn fd_tell(fd: Fd, offset: *mut Filesize) -> Errno {
     State::with(|state| {
-        let file = state.get_seekable_file(fd)?;
+        let ds = state.descriptors();
+        let file = ds.get_seekable_file(fd)?;
         *offset = file.position.get() as Filesize;
         Ok(())
     })
@@ -1232,31 +1157,29 @@ pub unsafe extern "C" fn fd_write(
         let len = (*iovs_ptr).buf_len;
         let bytes = slice::from_raw_parts(ptr, len);
 
-        State::with(|state| match state.get(fd)? {
-            Descriptor::Streams(streams) => {
-                let wasi_stream = streams.get_write_stream()?;
-                let bytes = streams::write(wasi_stream, bytes).map_err(|_| ERRNO_IO)?;
+        State::with(|state| {
+            let ds = state.descriptors();
+            match ds.get(fd)? {
+                Descriptor::Streams(streams) => {
+                    let wasi_stream = streams.get_write_stream()?;
+                    let bytes = streams::write(wasi_stream, bytes).map_err(|_| ERRNO_IO)?;
 
-                // If this is a file, keep the current-position pointer up to date.
-                if let StreamType::File(file) = &streams.type_ {
-                    // But don't update if we're in append mode. Strictly speaking,
-                    // we should set the position to the new end of the file, but
-                    // we don't have an API to do that atomically.
-                    if !file.append {
-                        file.position
-                            .set(file.position.get() + filesystem::Filesize::from(bytes));
+                    // If this is a file, keep the current-position pointer up to date.
+                    if let StreamType::File(file) = &streams.type_ {
+                        // But don't update if we're in append mode. Strictly speaking,
+                        // we should set the position to the new end of the file, but
+                        // we don't have an API to do that atomically.
+                        if !file.append {
+                            file.position
+                                .set(file.position.get() + filesystem::Filesize::from(bytes));
+                        }
                     }
-                }
 
-                *nwritten = bytes as usize;
-                Ok(())
+                    *nwritten = bytes as usize;
+                    Ok(())
+                }
+                Descriptor::Closed(_) => Err(ERRNO_BADF),
             }
-            Descriptor::Stderr => {
-                crate::macros::print(bytes);
-                *nwritten = len;
-                Ok(())
-            }
-            Descriptor::Closed(_) => Err(ERRNO_BADF),
         })
     } else {
         *nwritten = 0;
@@ -1275,7 +1198,8 @@ pub unsafe extern "C" fn path_create_directory(
     let path = slice::from_raw_parts(path_ptr, path_len);
 
     State::with(|state| {
-        let file = state.get_dir(fd)?;
+        let ds = state.descriptors();
+        let file = ds.get_dir(fd)?;
         filesystem::create_directory_at(file.fd, path)?;
         Ok(())
     })
@@ -1295,7 +1219,8 @@ pub unsafe extern "C" fn path_filestat_get(
     let at_flags = at_flags_from_lookupflags(flags);
 
     State::with(|state| {
-        let file = state.get_dir(fd)?;
+        let ds = state.descriptors();
+        let file = ds.get_dir(fd)?;
         let stat = filesystem::stat_at(file.fd, at_flags, path)?;
         let filetype = stat.type_.into();
         *buf = Filestat {
@@ -1351,7 +1276,8 @@ pub unsafe extern "C" fn path_filestat_set_times(
     let at_flags = at_flags_from_lookupflags(flags);
 
     State::with(|state| {
-        let file = state.get_dir(fd)?;
+        let ds = state.descriptors();
+        let file = ds.get_dir(fd)?;
         filesystem::set_times_at(file.fd, at_flags, path, atim, mtim)?;
         Ok(())
     })
@@ -1374,8 +1300,8 @@ pub unsafe extern "C" fn path_link(
     let at_flags = at_flags_from_lookupflags(old_flags);
 
     State::with(|state| {
-        let old = state.get_dir(old_fd)?.fd;
-        let new = state.get_dir(new_fd)?.fd;
+        let old = state.descriptors().get_dir(old_fd)?.fd;
+        let new = state.descriptors().get_dir(new_fd)?.fd;
         filesystem::link_at(old, at_flags, old_path, new, new_path)?;
         Ok(())
     })
@@ -1410,7 +1336,8 @@ pub unsafe extern "C" fn path_open(
     let append = fdflags & wasi::FDFLAGS_APPEND == wasi::FDFLAGS_APPEND;
 
     State::with_mut(|state| {
-        let file = state.get_dir(fd)?;
+        let mut ds = state.descriptors_mut();
+        let file = ds.get_dir(fd)?;
         let result = filesystem::open_at(file.fd, at_flags, path, o_flags, flags, mode)?;
         let desc = Descriptor::Streams(Streams {
             input: Cell::new(None),
@@ -1422,22 +1349,7 @@ pub unsafe extern "C" fn path_open(
             }),
         });
 
-        let fd = match state.closed {
-            // No free fds; create a new one.
-            None => state.push_desc(desc)?,
-            // `recycle_fd` is a free fd.
-            Some(recycle_fd) => {
-                let recycle_desc = state.get_mut(recycle_fd).trapping_unwrap();
-                let next_closed = match recycle_desc {
-                    Descriptor::Closed(next) => *next,
-                    _ => unreachable!(),
-                };
-                *recycle_desc = desc;
-                state.closed = next_closed;
-                recycle_fd
-            }
-        };
-
+        let fd = ds.open(desc)?;
         *opened_fd = fd;
         Ok(())
     })
@@ -1462,7 +1374,8 @@ pub unsafe extern "C" fn path_readlink(
         // so instead we handle this case specially.
         let use_state_buf = buf_len < PATH_MAX;
 
-        let file = state.get_dir(fd)?;
+        let ds = state.descriptors();
+        let file = ds.get_dir(fd)?;
         let path = if use_state_buf {
             state
                 .import_alloc
@@ -1506,7 +1419,8 @@ pub unsafe extern "C" fn path_remove_directory(
     let path = slice::from_raw_parts(path_ptr, path_len);
 
     State::with(|state| {
-        let file = state.get_dir(fd)?;
+        let ds = state.descriptors();
+        let file = ds.get_dir(fd)?;
         filesystem::remove_directory_at(file.fd, path)?;
         Ok(())
     })
@@ -1527,8 +1441,9 @@ pub unsafe extern "C" fn path_rename(
     let new_path = slice::from_raw_parts(new_path_ptr, new_path_len);
 
     State::with(|state| {
-        let old = state.get_dir(old_fd)?.fd;
-        let new = state.get_dir(new_fd)?.fd;
+        let ds = state.descriptors();
+        let old = ds.get_dir(old_fd)?.fd;
+        let new = ds.get_dir(new_fd)?.fd;
         filesystem::rename_at(old, old_path, new, new_path)?;
         Ok(())
     })
@@ -1548,7 +1463,8 @@ pub unsafe extern "C" fn path_symlink(
     let new_path = slice::from_raw_parts(new_path_ptr, new_path_len);
 
     State::with(|state| {
-        let file = state.get_dir(fd)?;
+        let ds = state.descriptors();
+        let file = ds.get_dir(fd)?;
         filesystem::symlink_at(file.fd, old_path, new_path)?;
         Ok(())
     })
@@ -1562,7 +1478,8 @@ pub unsafe extern "C" fn path_unlink_file(fd: Fd, path_ptr: *const u8, path_len:
     let path = slice::from_raw_parts(path_ptr, path_len);
 
     State::with(|state| {
-        let file = state.get_dir(fd)?;
+        let ds = state.descriptors();
+        let file = ds.get_dir(fd)?;
         filesystem::unlink_file_at(file.fd, path)?;
         Ok(())
     })
@@ -1656,258 +1573,247 @@ pub unsafe extern "C" fn poll_oneoff(
     }
 
     State::with(|state| {
-        state.import_alloc.with_buffer(
+        let mut pollables = Pollables {
+            pointer: pollables,
+            index: 0,
+            length: nsubscriptions,
+        };
+
+        for subscription in subscriptions {
+            const EVENTTYPE_CLOCK: u8 = wasi::EVENTTYPE_CLOCK.raw();
+            const EVENTTYPE_FD_READ: u8 = wasi::EVENTTYPE_FD_READ.raw();
+            const EVENTTYPE_FD_WRITE: u8 = wasi::EVENTTYPE_FD_WRITE.raw();
+            pollables.push(match subscription.u.tag {
+                EVENTTYPE_CLOCK => {
+                    let clock = &subscription.u.u.clock;
+                    let absolute = (clock.flags & SUBCLOCKFLAGS_SUBSCRIPTION_CLOCK_ABSTIME)
+                        == SUBCLOCKFLAGS_SUBSCRIPTION_CLOCK_ABSTIME;
+                    match clock.id {
+                        CLOCKID_REALTIME => {
+                            let timeout = if absolute {
+                                // Convert `clock.timeout` to `Datetime`.
+                                let mut datetime = wall_clock::Datetime {
+                                    seconds: clock.timeout / 1_000_000_000,
+                                    nanoseconds: (clock.timeout % 1_000_000_000) as _,
+                                };
+
+                                // Subtract `now`.
+                                let now = wall_clock::now(state.instance_wall_clock());
+                                datetime.seconds -= now.seconds;
+                                if datetime.nanoseconds < now.nanoseconds {
+                                    datetime.seconds -= 1;
+                                    datetime.nanoseconds += 1_000_000_000;
+                                }
+                                datetime.nanoseconds -= now.nanoseconds;
+
+                                // Convert to nanoseconds.
+                                let nanos = datetime
+                                    .seconds
+                                    .checked_mul(1_000_000_000)
+                                    .ok_or(ERRNO_OVERFLOW)?;
+                                nanos
+                                    .checked_add(datetime.nanoseconds.into())
+                                    .ok_or(ERRNO_OVERFLOW)?
+                            } else {
+                                clock.timeout
+                            };
+
+                            monotonic_clock::subscribe(
+                                state.instance_monotonic_clock(),
+                                timeout,
+                                false,
+                            )
+                        }
+
+                        CLOCKID_MONOTONIC => monotonic_clock::subscribe(
+                            state.instance_monotonic_clock(),
+                            clock.timeout,
+                            absolute,
+                        ),
+
+                        _ => return Err(ERRNO_INVAL),
+                    }
+                }
+
+                EVENTTYPE_FD_READ => {
+                    match state
+                        .descriptors()
+                        .get_read_stream(subscription.u.u.fd_read.file_descriptor)
+                    {
+                        Ok(stream) => streams::subscribe_to_input_stream(stream),
+                        // If the file descriptor isn't a stream, request a
+                        // pollable which completes immediately so that it'll
+                        // immediately fail.
+                        Err(ERRNO_BADF) => {
+                            monotonic_clock::subscribe(state.instance_monotonic_clock(), 0, false)
+                        }
+                        Err(e) => return Err(e),
+                    }
+                }
+
+                EVENTTYPE_FD_WRITE => {
+                    match state
+                        .descriptors()
+                        .get_write_stream(subscription.u.u.fd_write.file_descriptor)
+                    {
+                        Ok(stream) => streams::subscribe_to_output_stream(stream),
+                        // If the file descriptor isn't a stream, request a
+                        // pollable which completes immediately so that it'll
+                        // immediately fail.
+                        Err(ERRNO_BADF) => {
+                            monotonic_clock::subscribe(state.instance_monotonic_clock(), 0, false)
+                        }
+                        Err(e) => return Err(e),
+                    }
+                }
+
+                _ => return Err(ERRNO_INVAL),
+            });
+        }
+        let vec = state.import_alloc.with_buffer(
             results,
             nsubscriptions
                 .checked_mul(size_of::<bool>())
                 .trapping_unwrap(),
-            || {
-                let mut pollables = Pollables {
-                    pointer: pollables,
-                    index: 0,
-                    length: nsubscriptions,
-                };
+            || poll::poll_oneoff(slice::from_raw_parts(pollables.pointer, pollables.length)),
+        );
 
-                for subscription in subscriptions {
-                    const EVENTTYPE_CLOCK: u8 = wasi::EVENTTYPE_CLOCK.raw();
-                    const EVENTTYPE_FD_READ: u8 = wasi::EVENTTYPE_FD_READ.raw();
-                    const EVENTTYPE_FD_WRITE: u8 = wasi::EVENTTYPE_FD_WRITE.raw();
-                    pollables.push(match subscription.u.tag {
-                        EVENTTYPE_CLOCK => {
-                            let clock = &subscription.u.u.clock;
-                            let absolute = (clock.flags & SUBCLOCKFLAGS_SUBSCRIPTION_CLOCK_ABSTIME)
-                                == SUBCLOCKFLAGS_SUBSCRIPTION_CLOCK_ABSTIME;
-                            match clock.id {
-                                CLOCKID_REALTIME => {
-                                    let timeout = if absolute {
-                                        // Convert `clock.timeout` to `Datetime`.
-                                        let mut datetime = wall_clock::Datetime {
-                                            seconds: clock.timeout / 1_000_000_000,
-                                            nanoseconds: (clock.timeout % 1_000_000_000) as _,
-                                        };
+        assert_eq!(vec.len(), nsubscriptions);
+        assert_eq!(vec.as_ptr(), results);
+        forget(vec);
 
-                                        // Subtract `now`.
-                                        let now = wall_clock::now(state.instance_wall_clock());
-                                        datetime.seconds -= now.seconds;
-                                        if datetime.nanoseconds < now.nanoseconds {
-                                            datetime.seconds -= 1;
-                                            datetime.nanoseconds += 1_000_000_000;
-                                        }
-                                        datetime.nanoseconds -= now.nanoseconds;
+        drop(pollables);
 
-                                        // Convert to nanoseconds.
-                                        let nanos = datetime
-                                            .seconds
-                                            .checked_mul(1_000_000_000)
-                                            .ok_or(ERRNO_OVERFLOW)?;
-                                        nanos
-                                            .checked_add(datetime.nanoseconds.into())
-                                            .ok_or(ERRNO_OVERFLOW)?
-                                    } else {
-                                        clock.timeout
-                                    };
+        let ready = subscriptions
+            .iter()
+            .enumerate()
+            .filter_map(|(i, s)| (*results.add(i) != 0).then_some(s));
 
-                                    monotonic_clock::subscribe(
-                                        state.instance_monotonic_clock(),
-                                        timeout,
-                                        false,
-                                    )
-                                }
+        let mut count = 0;
 
-                                CLOCKID_MONOTONIC => monotonic_clock::subscribe(
-                                    state.instance_monotonic_clock(),
-                                    clock.timeout,
-                                    absolute,
-                                ),
+        for subscription in ready {
+            let error;
+            let type_;
+            let nbytes;
+            let flags;
 
-                                _ => return Err(ERRNO_INVAL),
-                            }
-                        }
-
-                        EVENTTYPE_FD_READ => {
-                            match state.get_read_stream(subscription.u.u.fd_read.file_descriptor) {
-                                Ok(stream) => streams::subscribe_to_input_stream(stream),
-                                // If the file descriptor isn't a stream, request a
-                                // pollable which completes immediately so that it'll
-                                // immediately fail.
-                                Err(ERRNO_BADF) => monotonic_clock::subscribe(
-                                    state.instance_monotonic_clock(),
-                                    0,
-                                    false,
-                                ),
-                                Err(e) => return Err(e),
-                            }
-                        }
-
-                        EVENTTYPE_FD_WRITE => {
-                            match state.get_write_stream(subscription.u.u.fd_write.file_descriptor)
-                            {
-                                Ok(stream) => streams::subscribe_to_output_stream(stream),
-                                // If the file descriptor isn't a stream, request a
-                                // pollable which completes immediately so that it'll
-                                // immediately fail.
-                                Err(ERRNO_BADF) => monotonic_clock::subscribe(
-                                    state.instance_monotonic_clock(),
-                                    0,
-                                    false,
-                                ),
-                                Err(e) => return Err(e),
-                            }
-                        }
-
-                        _ => return Err(ERRNO_INVAL),
-                    });
+            match subscription.u.tag {
+                0 => {
+                    error = ERRNO_SUCCESS;
+                    type_ = EVENTTYPE_CLOCK;
+                    nbytes = 0;
+                    flags = 0;
                 }
 
-                let vec =
-                    poll::poll_oneoff(slice::from_raw_parts(pollables.pointer, pollables.length));
-
-                assert_eq!(vec.len(), nsubscriptions);
-                assert_eq!(vec.as_ptr(), results);
-                forget(vec);
-
-                drop(pollables);
-
-                let ready = subscriptions
-                    .iter()
-                    .enumerate()
-                    .filter_map(|(i, s)| (*results.add(i) != 0).then_some(s));
-
-                let mut count = 0;
-
-                for subscription in ready {
-                    let error;
-                    let type_;
-                    let nbytes;
-                    let flags;
-
-                    match subscription.u.tag {
-                        0 => {
-                            error = ERRNO_SUCCESS;
-                            type_ = EVENTTYPE_CLOCK;
-                            nbytes = 0;
-                            flags = 0;
-                        }
-
-                        1 => {
-                            type_ = EVENTTYPE_FD_READ;
-                            let desc = state
-                                .get(subscription.u.u.fd_read.file_descriptor)
-                                .trapping_unwrap();
-                            match desc {
-                                Descriptor::Streams(streams) => match &streams.type_ {
-                                    StreamType::File(file) => match filesystem::stat(file.fd) {
-                                        Ok(stat) => {
-                                            error = ERRNO_SUCCESS;
-                                            nbytes = stat.size.saturating_sub(file.position.get());
-                                            flags = if nbytes == 0 {
-                                                EVENTRWFLAGS_FD_READWRITE_HANGUP
-                                            } else {
-                                                0
-                                            };
-                                        }
-                                        Err(e) => {
-                                            error = e.into();
-                                            nbytes = 1;
-                                            flags = 0;
-                                        }
-                                    },
-                                    StreamType::Socket(connection) => {
-                                        unreachable!() // TODO
-                                                       /*
-                                                       match tcp::bytes_readable(*connection) {
-                                                           Ok(result) => {
-                                                               error = ERRNO_SUCCESS;
-                                                               nbytes = result.0;
-                                                               flags = if result.1 {
-                                                                   EVENTRWFLAGS_FD_READWRITE_HANGUP
-                                                               } else {
-                                                                   0
-                                                               };
-                                                           }
-                                                           Err(e) => {
-                                                               error = e.into();
-                                                               nbytes = 0;
-                                                               flags = 0;
-                                                           }
-                                                       }
-                                                       */
-                                    }
-                                    StreamType::EmptyStdin => {
-                                        error = ERRNO_SUCCESS;
-                                        nbytes = 0;
-                                        flags = EVENTRWFLAGS_FD_READWRITE_HANGUP;
-                                    }
-                                    StreamType::Unknown => {
-                                        error = ERRNO_SUCCESS;
-                                        nbytes = 1;
-                                        flags = 0;
-                                    }
-                                },
-                                _ => unreachable!(),
+                1 => {
+                    type_ = EVENTTYPE_FD_READ;
+                    let ds = state.descriptors();
+                    let desc = ds
+                        .get(subscription.u.u.fd_read.file_descriptor)
+                        .trapping_unwrap();
+                    match desc {
+                        Descriptor::Streams(streams) => match &streams.type_ {
+                            StreamType::File(file) => match filesystem::stat(file.fd) {
+                                Ok(stat) => {
+                                    error = ERRNO_SUCCESS;
+                                    nbytes = stat.size.saturating_sub(file.position.get());
+                                    flags = if nbytes == 0 {
+                                        EVENTRWFLAGS_FD_READWRITE_HANGUP
+                                    } else {
+                                        0
+                                    };
+                                }
+                                Err(e) => {
+                                    error = e.into();
+                                    nbytes = 1;
+                                    flags = 0;
+                                }
+                            },
+                            StreamType::Socket(connection) => {
+                                unreachable!() // TODO
+                                               /*
+                                               match tcp::bytes_readable(*connection) {
+                                                   Ok(result) => {
+                                                       error = ERRNO_SUCCESS;
+                                                       nbytes = result.0;
+                                                       flags = if result.1 {
+                                                           EVENTRWFLAGS_FD_READWRITE_HANGUP
+                                                       } else {
+                                                           0
+                                                       };
+                                                   }
+                                                   Err(e) => {
+                                                       error = e.into();
+                                                       nbytes = 0;
+                                                       flags = 0;
+                                                   }
+                                               }
+                                               */
                             }
-                        }
-                        2 => {
-                            type_ = EVENTTYPE_FD_WRITE;
-                            let desc = state
-                                .get(subscription.u.u.fd_read.file_descriptor)
-                                .trapping_unwrap();
-                            match desc {
-                                Descriptor::Streams(streams) => match streams.type_ {
-                                    StreamType::File(_) | StreamType::Unknown => {
-                                        error = ERRNO_SUCCESS;
-                                        nbytes = 1;
-                                        flags = 0;
-                                    }
-                                    StreamType::Socket(connection) => {
-                                        unreachable!() // TODO
-                                                       /*
-                                                       match tcp::bytes_writable(connection) {
-                                                           Ok(result) => {
-                                                               error = ERRNO_SUCCESS;
-                                                               nbytes = result.0;
-                                                               flags = if result.1 {
-                                                                   EVENTRWFLAGS_FD_READWRITE_HANGUP
-                                                               } else {
-                                                                   0
-                                                               };
-                                                           }
-                                                           Err(e) => {
-                                                               error = e.into();
-                                                               nbytes = 0;
-                                                               flags = 0;
-                                                           }
-                                                       }
-                                                       */
-                                    }
-                                    StreamType::EmptyStdin => {
-                                        error = ERRNO_BADF;
-                                        nbytes = 0;
-                                        flags = 0;
-                                    }
-                                },
-                                _ => unreachable!(),
+                            StreamType::Unknown => {
+                                error = ERRNO_SUCCESS;
+                                nbytes = 1;
+                                flags = 0;
                             }
-                        }
-
+                        },
                         _ => unreachable!(),
                     }
-
-                    *out.add(count) = Event {
-                        userdata: subscription.userdata,
-                        error,
-                        type_,
-                        fd_readwrite: EventFdReadwrite { nbytes, flags },
-                    };
-
-                    count += 1;
+                }
+                2 => {
+                    type_ = EVENTTYPE_FD_WRITE;
+                    let ds = state.descriptors();
+                    let desc = ds
+                        .get(subscription.u.u.fd_read.file_descriptor)
+                        .trapping_unwrap();
+                    match desc {
+                        Descriptor::Streams(streams) => match streams.type_ {
+                            StreamType::File(_) | StreamType::Unknown => {
+                                error = ERRNO_SUCCESS;
+                                nbytes = 1;
+                                flags = 0;
+                            }
+                            StreamType::Socket(connection) => {
+                                unreachable!() // TODO
+                                               /*
+                                               match tcp::bytes_writable(connection) {
+                                                   Ok(result) => {
+                                                       error = ERRNO_SUCCESS;
+                                                       nbytes = result.0;
+                                                       flags = if result.1 {
+                                                           EVENTRWFLAGS_FD_READWRITE_HANGUP
+                                                       } else {
+                                                           0
+                                                       };
+                                                   }
+                                                   Err(e) => {
+                                                       error = e.into();
+                                                       nbytes = 0;
+                                                       flags = 0;
+                                                   }
+                                               }
+                                               */
+                            }
+                        },
+                        _ => unreachable!(),
+                    }
                 }
 
-                *nevents = count;
+                _ => unreachable!(),
+            }
 
-                Ok(())
-            },
-        )
+            *out.add(count) = Event {
+                userdata: subscription.userdata,
+                error,
+                type_,
+                fd_readwrite: EventFdReadwrite { nbytes, flags },
+            };
+
+            count += 1;
+        }
+
+        *nevents = count;
+
+        Ok(())
     })
 }
 
@@ -2128,111 +2034,7 @@ impl From<filesystem::DescriptorType> for wasi::Filetype {
 }
 
 #[repr(C)]
-enum Descriptor {
-    /// A closed descriptor, holding a reference to the previous closed
-    /// descriptor to support reusing them.
-    Closed(Option<Fd>),
-
-    /// Input and/or output wasi-streams, along with stream metadata.
-    Streams(Streams),
-
-    /// Writes to `fd_write` will go to the `wasi-stderr` API.
-    Stderr,
-}
-
-/// Input and/or output wasi-streams, along with a stream type that
-/// identifies what kind of stream they are and possibly supporting
-/// type-specific operations like seeking.
-struct Streams {
-    /// The output stream, if present.
-    input: Cell<Option<InputStream>>,
-
-    /// The input stream, if present.
-    output: Cell<Option<OutputStream>>,
-
-    /// Information about the source of the stream.
-    type_: StreamType,
-}
-
-impl Streams {
-    /// Return the input stream, initializing it on the fly if needed.
-    fn get_read_stream(&self) -> Result<InputStream, Errno> {
-        match &self.input.get() {
-            Some(wasi_stream) => Ok(*wasi_stream),
-            None => match &self.type_ {
-                // For files, we may have adjusted the position for seeking, so
-                // create a new stream.
-                StreamType::File(file) => {
-                    let input = filesystem::read_via_stream(file.fd, file.position.get());
-                    self.input.set(Some(input));
-                    Ok(input)
-                }
-                _ => Err(ERRNO_BADF),
-            },
-        }
-    }
-
-    /// Return the output stream, initializing it on the fly if needed.
-    fn get_write_stream(&self) -> Result<OutputStream, Errno> {
-        match &self.output.get() {
-            Some(wasi_stream) => Ok(*wasi_stream),
-            None => match &self.type_ {
-                // For files, we may have adjusted the position for seeking, so
-                // create a new stream.
-                StreamType::File(file) => {
-                    let output = if file.append {
-                        filesystem::append_via_stream(file.fd)
-                    } else {
-                        filesystem::write_via_stream(file.fd, file.position.get())
-                    };
-                    self.output.set(Some(output));
-                    Ok(output)
-                }
-                _ => Err(ERRNO_BADF),
-            },
-        }
-    }
-}
-
-#[allow(dead_code)] // until Socket is implemented
-enum StreamType {
-    /// It's a valid stream but we don't know where it comes from.
-    Unknown,
-
-    /// A stdin source containing no bytes.
-    EmptyStdin,
-
-    /// Streaming data with a file.
-    File(File),
-
-    /// Streaming data with a socket connection.
-    Socket(tcp::TcpSocket),
-}
-
-impl Drop for Descriptor {
-    fn drop(&mut self) {
-        match self {
-            Descriptor::Streams(stream) => {
-                if let Some(input) = stream.input.get() {
-                    streams::drop_input_stream(input);
-                }
-                if let Some(output) = stream.output.get() {
-                    streams::drop_output_stream(output);
-                }
-                match &stream.type_ {
-                    StreamType::File(file) => filesystem::drop_descriptor(file.fd),
-                    StreamType::Socket(_) => unreachable!(),
-                    StreamType::EmptyStdin | StreamType::Unknown => {}
-                }
-            }
-            Descriptor::Stderr => {}
-            Descriptor::Closed(_) => {}
-        }
-    }
-}
-
-#[repr(C)]
-struct File {
+pub struct File {
     /// The handle to the preview2 descriptor that this file is referencing.
     fd: filesystem::Descriptor,
 
@@ -2269,11 +2071,10 @@ struct State {
 
     /// Storage of mapping from preview1 file descriptors to preview2 file
     /// descriptors.
-    ndescriptors: Cell<u16>,
-    descriptors: UnsafeCell<MaybeUninit<[Descriptor; MAX_DESCRIPTORS]>>,
-
-    /// Points to the head of a free-list of closed file descriptors.
-    closed: Option<Fd>,
+    ///
+    /// Do not use this member directly - use State::descriptors() to ensure
+    /// lazy initialization happens.
+    descriptors: RefCell<Option<Descriptors>>,
 
     /// Auxiliary storage to handle the `path_readlink` function.
     path_buf: UnsafeCell<MaybeUninit<[u8; PATH_MAX]>>,
@@ -2292,14 +2093,6 @@ struct State {
     /// Environment variables. Initialized lazily. Access with `State::get_environment`
     /// to take care of initialization.
     env_vars: Cell<Option<&'static [StrTuple]>>,
-
-    /// Preopened directories passed along with `main` args. Access with
-    /// `State::get_preopens` to take care of initialization.
-    arg_preopens: Cell<Option<&'static [Preopen]>>,
-
-    /// Preopened directories. Initialized lazily. Access with `State::get_preopens`
-    /// to take care of initialization.
-    env_preopens: Cell<Option<&'static [Preopen]>>,
 
     /// Cache for the `fd_readdir` call for a final `wasi::Dirent` plus path
     /// name that didn't fit into the caller's buffer.
@@ -2354,18 +2147,6 @@ pub struct StrTupleList {
     len: usize,
 }
 
-#[repr(C)]
-pub struct Preopen {
-    descriptor: u32,
-    path: WasmStr,
-}
-
-#[repr(C)]
-pub struct PreopenList {
-    base: *const Preopen,
-    len: usize,
-}
-
 const fn bump_arena_size() -> usize {
     // The total size of the struct should be a page, so start there
     let mut start = PAGE_SIZE;
@@ -2406,6 +2187,8 @@ extern "C" {
     fn set_state_ptr(state: *const RefCell<State>);
     fn get_allocation_state() -> AllocationState;
     fn set_allocation_state(state: AllocationState);
+    fn get_stderr_stream() -> Fd;
+    fn set_stderr_stream(fd: Fd);
 }
 
 impl State {
@@ -2474,20 +2257,16 @@ impl State {
 
         unsafe { set_allocation_state(AllocationState::StateAllocated) };
 
-        let ret = unsafe {
+        unsafe {
             ret.write(RefCell::new(State {
                 magic1: MAGIC,
                 magic2: MAGIC,
                 import_alloc: ImportAlloc::new(),
-                closed: None,
-                ndescriptors: Cell::new(0),
-                descriptors: UnsafeCell::new(MaybeUninit::uninit()),
+                descriptors: RefCell::new(None),
                 path_buf: UnsafeCell::new(MaybeUninit::uninit()),
                 long_lived_arena: BumpArena::new(),
                 args: None,
                 env_vars: Cell::new(None),
-                arg_preopens: Cell::new(None),
-                env_preopens: Cell::new(None),
                 dirent_cache: DirentCache {
                     stream: Cell::new(None),
                     for_fd: Cell::new(0),
@@ -2505,132 +2284,31 @@ impl State {
                 dotdot: [UnsafeCell::new(b'.'), UnsafeCell::new(b'.')],
             }));
             &*ret
-        };
-        ret.try_borrow_mut()
-            .unwrap_or_else(|_| unreachable!())
-            .init();
-        ret
-    }
-
-    fn init(&mut self) {
-        // Set up a default stdin. This will be overridden when `main`
-        // is called.
-        self.push_desc(Descriptor::Streams(Streams {
-            input: Cell::new(None),
-            output: Cell::new(None),
-            type_: StreamType::Unknown,
-        }))
-        .trapping_unwrap();
-        // Set up a default stdout, writing to the stderr device. This will
-        // be overridden when `main` is called.
-        self.push_desc(Descriptor::Stderr).trapping_unwrap();
-        // Set up a default stderr.
-        self.push_desc(Descriptor::Stderr).trapping_unwrap();
-    }
-
-    fn push_desc(&self, desc: Descriptor) -> Result<Fd, Errno> {
-        unsafe {
-            let descriptors = (*self.descriptors.get()).as_mut_ptr();
-            let ndescriptors = usize::try_from(self.ndescriptors.get()).trapping_unwrap();
-            if ndescriptors >= (*descriptors).len() {
-                return Err(ERRNO_NOMEM);
-            }
-            ptr::addr_of_mut!((*descriptors)[ndescriptors]).write(desc);
-            self.ndescriptors
-                .set(u16::try_from(ndescriptors + 1).trapping_unwrap());
-            Ok(Fd::from(u32::try_from(ndescriptors).trapping_unwrap()))
         }
     }
 
-    fn descriptors(&self) -> &[Descriptor] {
-        unsafe {
-            slice::from_raw_parts(
-                (*self.descriptors.get()).as_ptr().cast(),
-                usize::try_from(self.ndescriptors.get()).trapping_unwrap(),
-            )
+    /// Accessor for the descriptors member that ensures it is properly initialized
+    fn descriptors<'a>(&'a self) -> impl Deref<Target = Descriptors> + 'a {
+        let mut d = self
+            .descriptors
+            .try_borrow_mut()
+            .unwrap_or_else(|_| unreachable!());
+        if d.is_none() {
+            *d = Some(Descriptors::new(&self.import_alloc, &self.long_lived_arena));
         }
+        RefMut::map(d, |d| d.as_mut().unwrap_or_else(|| unreachable!()))
     }
 
-    fn descriptors_mut(&mut self) -> &mut [Descriptor] {
-        unsafe {
-            slice::from_raw_parts_mut(
-                (*self.descriptors.get()).as_mut_ptr().cast(),
-                usize::try_from(self.ndescriptors.get()).trapping_unwrap(),
-            )
+    /// Mut accessor for the descriptors member that ensures it is properly initialized
+    fn descriptors_mut<'a>(&'a mut self) -> impl DerefMut + Deref<Target = Descriptors> + 'a {
+        let mut d = self
+            .descriptors
+            .try_borrow_mut()
+            .unwrap_or_else(|_| unreachable!());
+        if d.is_none() {
+            *d = Some(Descriptors::new(&self.import_alloc, &self.long_lived_arena));
         }
-    }
-
-    fn get(&self, fd: Fd) -> Result<&Descriptor, Errno> {
-        self.descriptors()
-            .get(usize::try_from(fd).trapping_unwrap())
-            .ok_or(ERRNO_BADF)
-    }
-
-    fn get_mut(&mut self, fd: Fd) -> Result<&mut Descriptor, Errno> {
-        self.descriptors_mut()
-            .get_mut(usize::try_from(fd).trapping_unwrap())
-            .ok_or(ERRNO_BADF)
-    }
-
-    fn get_stream_with_error(&self, fd: Fd, error: Errno) -> Result<&Streams, Errno> {
-        match self.get(fd)? {
-            Descriptor::Streams(streams) => Ok(streams),
-            Descriptor::Closed(_) => Err(ERRNO_BADF),
-            _ => Err(error),
-        }
-    }
-
-    fn get_file_with_error(&self, fd: Fd, error: Errno) -> Result<&File, Errno> {
-        match self.get(fd)? {
-            Descriptor::Streams(Streams {
-                type_: StreamType::File(file),
-                ..
-            }) => Ok(file),
-            Descriptor::Closed(_) => Err(ERRNO_BADF),
-            _ => Err(error),
-        }
-    }
-
-    #[allow(dead_code)] // until Socket is implemented
-    fn get_socket(&self, fd: Fd) -> Result<tcp::TcpSocket, Errno> {
-        match self.get(fd)? {
-            Descriptor::Streams(Streams {
-                type_: StreamType::Socket(socket),
-                ..
-            }) => Ok(*socket),
-            Descriptor::Closed(_) => Err(ERRNO_BADF),
-            _ => Err(ERRNO_INVAL),
-        }
-    }
-
-    fn get_file(&self, fd: Fd) -> Result<&File, Errno> {
-        self.get_file_with_error(fd, ERRNO_INVAL)
-    }
-
-    fn get_dir(&self, fd: Fd) -> Result<&File, Errno> {
-        self.get_file_with_error(fd, ERRNO_NOTDIR)
-    }
-
-    fn get_seekable_file(&self, fd: Fd) -> Result<&File, Errno> {
-        self.get_file_with_error(fd, ERRNO_SPIPE)
-    }
-
-    fn get_seekable_stream(&self, fd: Fd) -> Result<&Streams, Errno> {
-        self.get_stream_with_error(fd, ERRNO_SPIPE)
-    }
-
-    fn get_read_stream(&self, fd: Fd) -> Result<InputStream, Errno> {
-        match self.get(fd)? {
-            Descriptor::Streams(streams) => streams.get_read_stream(),
-            Descriptor::Closed(_) | Descriptor::Stderr => Err(ERRNO_BADF),
-        }
-    }
-
-    fn get_write_stream(&self, fd: Fd) -> Result<OutputStream, Errno> {
-        match self.get(fd)? {
-            Descriptor::Streams(streams) => streams.get_write_stream(),
-            Descriptor::Closed(_) | Descriptor::Stderr => Err(ERRNO_BADF),
-        }
+        RefMut::map(d, |d| d.as_mut().unwrap_or_else(|| unreachable!()))
     }
 
     /// Return a handle to the default wall clock, creating one if we
@@ -2685,69 +2363,5 @@ impl State {
             }));
         }
         self.env_vars.get().trapping_unwrap()
-    }
-
-    fn get_preopens(&self) -> (Option<&[Preopen]>, &[Preopen]) {
-        // Lazily initialize `env_preopens`.
-        if self.env_preopens.get().is_none() {
-            #[link(wasm_import_module = "environment-preopens")]
-            extern "C" {
-                #[link_name = "preopens"]
-                fn get_preopens_import(rval: *mut PreopenList);
-            }
-            let mut list = PreopenList {
-                base: std::ptr::null(),
-                len: 0,
-            };
-            self.import_alloc
-                .with_arena(&self.long_lived_arena, || unsafe {
-                    get_preopens_import(&mut list as *mut _)
-                });
-            let preopens: &'static [Preopen] = unsafe {
-                // allocation comes from long lived arena, so it is safe to
-                // cast this to a &'static slice:
-                std::slice::from_raw_parts(list.base, list.len)
-            };
-            self.process_preopens(preopens);
-            self.env_preopens.set(Some(preopens));
-        }
-
-        let arg_preopens = self.arg_preopens.get();
-        let env_preopens = self.env_preopens.get().trapping_unwrap();
-        (arg_preopens, env_preopens)
-    }
-
-    fn get_preopen(&self, fd: Fd) -> Option<&Preopen> {
-        // Lazily initialize the preopens and obtain the two slices.
-        let (arg_preopens, env_preopens) = self.get_preopens();
-
-        // Subtract 3 or the stdio indices to compute the preopen index.
-        let mut index = fd.checked_sub(3)? as usize;
-
-        // Index into the conceptually concatenated preopen slices.
-        if let Some(arg_preopens) = arg_preopens {
-            if let Some(preopen) = arg_preopens.get(index) {
-                return Some(preopen);
-            }
-            index -= arg_preopens.len();
-        }
-        env_preopens.get(index)
-    }
-
-    fn process_preopens(&self, preopens: &[Preopen]) {
-        for preopen in preopens {
-            // Expectation is that the descriptor index is initialized with
-            // stdio (0,1,2) and no others, so that preopens are 3..
-            self.push_desc(Descriptor::Streams(Streams {
-                input: Cell::new(None),
-                output: Cell::new(None),
-                type_: StreamType::File(File {
-                    fd: preopen.descriptor,
-                    position: Cell::new(0),
-                    append: false,
-                }),
-            }))
-            .trapping_unwrap();
-        }
     }
 }

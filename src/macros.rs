@@ -2,12 +2,10 @@
 //!
 //! We're avoiding static initializers, so we can't have things like string
 //! literals. Replace the standard assert macros with simpler implementations.
-
-// TODO: Wire this up to stderr.
 #[allow(dead_code)]
 #[doc(hidden)]
 pub fn print(message: &[u8]) {
-    crate::bindings::stderr::print(message)
+    let _ = unsafe { crate::bindings::streams::write(crate::get_stderr_stream(), message) };
 }
 
 /// A minimal `eprint` for debugging.
@@ -52,19 +50,27 @@ pub(crate) fn eprint_u32(x: u32) {
 /// A minimal `unreachable`.
 macro_rules! unreachable {
     () => {{
-        eprint!("unreachable executed at line ");
+        eprint!("unreachable executed at adapter line ");
         crate::macros::eprint_u32(line!());
         eprint!("\n");
-        wasm32::unreachable()
+        #[cfg(target_arch = "wasm32")]
+        core::arch::wasm32::unreachable();
+        // This is here to keep rust-analyzer happy when building for native:
+        #[cfg(not(target_arch = "wasm32"))]
+        std::process::abort();
     }};
 
     ($arg:tt) => {{
-        eprint!("unreachable executed at line ");
+        eprint!("unreachable executed at adapter line ");
         crate::macros::eprint_u32(line!());
         eprint!(": ");
         eprintln!($arg);
         eprint!("\n");
-        wasm32::unreachable()
+        #[cfg(target_arch = "wasm32")]
+        core::arch::wasm32::unreachable();
+        // This is here to keep rust-analyzer happy when building for native:
+        #[cfg(not(target_arch = "wasm32"))]
+        std::process::abort();
     }};
 }
 
