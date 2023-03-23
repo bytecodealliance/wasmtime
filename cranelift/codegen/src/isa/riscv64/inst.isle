@@ -1184,6 +1184,11 @@
 (rule (rv_sextb rs1)
   (alu_rr_imm12 (AluOPRRI.Sextb) rs1 (imm12_const 0)))
 
+;; Helper for emitting the `sext.h` instruction.
+(decl rv_sexth (Reg) Reg)
+(rule (rv_sexth rs1)
+  (alu_rr_imm12 (AluOPRRI.Sexth) rs1 (imm12_const 0)))
+
 
 
 
@@ -1536,7 +1541,7 @@
 (rule 1 (extend val (ExtendOp.Signed) $I16 (fits_in_64 _))
   (if-let $true (has_zbb))
   (let ((val Reg (value_regs_get val 0)))
-    (alu_rr_imm12 (AluOPRRI.Sexth) val (imm12_const 0))))
+    (rv_sexth val)))
 
 ;; If we have the `zbb` extension we can use the dedicated `zext.h` instruction.
 (rule 2 (extend val (ExtendOp.Zero) $I16 (fits_in_64 _))
