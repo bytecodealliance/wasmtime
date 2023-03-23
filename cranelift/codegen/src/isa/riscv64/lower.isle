@@ -66,17 +66,22 @@
 
 
 ;; Add with uextended const shift. We have a few of these instructions with `Zba`.
+;;
+;; !!! Important !!!
+;; These rules only work for (ishl (uextend _) _) and not for (uextend (ishl _ _))!
+;; Getting this wrong means a potential misscalculation of the shift amount.
+;; Additionaly we can only ensure that this is correct if the uextend is 32 to 64 bits.
 (decl pure partial match_shnadd_uw (Imm64) AluOPRRR)
 (rule (match_shnadd_uw (u64_from_imm64 1)) (AluOPRRR.Sh1adduw))
 (rule (match_shnadd_uw (u64_from_imm64 2)) (AluOPRRR.Sh2adduw))
 (rule (match_shnadd_uw (u64_from_imm64 3)) (AluOPRRR.Sh3adduw))
   
-(rule 5 (lower (has_type $I64 (iadd x (ishl (uextend y) (maybe_uextend (iconst n))))))
+(rule 5 (lower (has_type $I64 (iadd x (ishl (uextend y @ (value_type $I32)) (maybe_uextend (iconst n))))))
   (if-let $true (has_zba))
   (if-let shnadd_uw (match_shnadd_uw n))
   (alu_rrr shnadd_uw y x))
 
-(rule 6 (lower (has_type $I64 (iadd (ishl (uextend x) (maybe_uextend (iconst n))) y)))
+(rule 6 (lower (has_type $I64 (iadd (ishl (uextend x @ (value_type $I32)) (maybe_uextend (iconst n))) y)))
   (if-let $true (has_zba))
   (if-let shnadd_uw (match_shnadd_uw n))
   (alu_rrr shnadd_uw x y))
