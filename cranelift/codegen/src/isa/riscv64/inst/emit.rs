@@ -370,68 +370,6 @@ impl Inst {
         }
         insts
     }
-
-    /// check if float is unordered.
-    pub(crate) fn lower_float_unordered(
-        tmp: Writable<Reg>,
-        ty: Type,
-        x: Reg,
-        y: Reg,
-        taken: BranchTarget,
-        not_taken: BranchTarget,
-    ) -> SmallInstVec<Inst> {
-        let mut insts = SmallInstVec::new();
-        let class_op = if ty == F32 {
-            FpuOPRR::FclassS
-        } else {
-            FpuOPRR::FclassD
-        };
-        // if x is nan
-        insts.push(Inst::FpuRR {
-            frm: None,
-            alu_op: class_op,
-            rd: tmp,
-            rs: x,
-        });
-        insts.push(Inst::AluRRImm12 {
-            alu_op: AluOPRRI::Andi,
-            rd: tmp,
-            rs: tmp.to_reg(),
-            imm12: Imm12::from_bits(FClassResult::is_nan_bits() as i16),
-        });
-        insts.push(Inst::CondBr {
-            taken,
-            not_taken: BranchTarget::zero(),
-            kind: IntegerCompare {
-                kind: IntCC::NotEqual,
-                rs1: tmp.to_reg(),
-                rs2: zero_reg(),
-            },
-        });
-        // if y is nan.
-        insts.push(Inst::FpuRR {
-            frm: None,
-            alu_op: class_op,
-            rd: tmp,
-            rs: y,
-        });
-        insts.push(Inst::AluRRImm12 {
-            alu_op: AluOPRRI::Andi,
-            rd: tmp,
-            rs: tmp.to_reg(),
-            imm12: Imm12::from_bits(FClassResult::is_nan_bits() as i16),
-        });
-        insts.push(Inst::CondBr {
-            taken,
-            not_taken,
-            kind: IntegerCompare {
-                kind: IntCC::NotEqual,
-                rs1: tmp.to_reg(),
-                rs2: zero_reg(),
-            },
-        });
-        insts
-    }
 }
 
 impl MachInstEmit for Inst {
