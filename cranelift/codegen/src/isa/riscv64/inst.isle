@@ -1227,7 +1227,10 @@
 (rule (rv_brev8 rs1)
   (alu_rr_funct12 (AluOPRRI.Brev8) rs1))
 
-
+;; Helper for emitting the `bseti` ("Single-Bit Set Immediate") instruction.
+(decl rv_bseti (Reg Imm12) Reg)
+(rule (rv_bseti rs1 imm)
+  (alu_rr_imm12 (AluOPRRI.Bseti) rs1 imm))
 
 
 
@@ -1281,25 +1284,6 @@
 (decl imm12_from_u64 (Imm12) u64)
 (extern extractor imm12_from_u64 imm12_from_u64)
 
-
-
-
-;; bseti: Set a single bit in a register, indexed by a constant.
-(decl bseti (Reg u64) Reg)
-(rule (bseti val bit)
-  (if-let $false (has_zbs))
-  (if-let $false (u64_le bit 12))
-  (let ((const Reg (load_u64_constant (u64_shl 1 bit))))
-    (rv_or val const)))
-
-(rule (bseti val bit)
-  (if-let $false (has_zbs))
-  (if-let $true (u64_le bit 12))
-  (rv_ori val (imm12_const (u64_as_i32 (u64_shl 1 bit)))))
-
-(rule (bseti val bit)
-  (if-let $true (has_zbs))
-  (alu_rr_imm12 (AluOPRRI.Bseti) val (imm12_const (u64_as_i32 bit))))
 
 
 ;; Float Helpers
@@ -1406,7 +1390,7 @@
 
 (rule 1 (lower_ctz (fits_in_16 ty) x)
   (if-let $true (has_zbb))
-  (let ((tmp Reg (bseti x (ty_bits ty))))
+  (let ((tmp Reg (gen_bseti x (ty_bits ty))))
     (rv_ctzw tmp)))
 
 (rule 2 (lower_ctz $I32 x)
@@ -1738,6 +1722,25 @@
       ;;
       (part3 Reg (gen_select_reg (IntCC.Equal) shamt (zero_reg) (zero_reg) part2)))
     (rv_or part1 part3)))
+
+
+
+;; bseti: Set a single bit in a register, indexed by a constant.
+(decl gen_bseti (Reg u64) Reg)
+(rule (gen_bseti val bit)
+  (if-let $false (has_zbs))
+  (if-let $false (u64_le bit 12))
+  (let ((const Reg (load_u64_constant (u64_shl 1 bit))))
+    (rv_or val const)))
+
+(rule (gen_bseti val bit)
+  (if-let $false (has_zbs))
+  (if-let $true (u64_le bit 12))
+  (rv_ori val (imm12_const (u64_as_i32 (u64_shl 1 bit)))))
+
+(rule (gen_bseti val bit)
+  (if-let $true (has_zbs))
+  (rv_bseti val (imm12_const (u64_as_i32 bit))))
 
 
 (decl gen_popcnt (Reg Type) Reg)
