@@ -40,11 +40,11 @@
 
 ;; Special case when one of the operands is uextended
 ;; Needs `Zba`
-(rule 3 (lower (has_type (ty_32_or_64 ty) (iadd x (uextend y @ (value_type $I32)))))
+(rule 3 (lower (has_type $I64 (iadd x (uextend y @ (value_type $I32)))))
   (if-let $true (has_zba))
   (alu_rrr (AluOPRRR.Adduw) y x))
 
-(rule 4 (lower (has_type (ty_32_or_64 ty) (iadd (uextend x @ (value_type $I32)) y)))
+(rule 4 (lower (has_type $I64 (iadd (uextend x @ (value_type $I32)) y)))
   (if-let $true (has_zba))
   (alu_rrr (AluOPRRR.Adduw) x y))
 
