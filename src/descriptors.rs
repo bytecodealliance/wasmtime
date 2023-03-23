@@ -302,16 +302,13 @@ impl Descriptors {
     pub fn renumber(&mut self, from_fd: Fd, to_fd: Fd) -> Result<(), Errno> {
         // First, ensure from_fd is in bounds:
         drop(self.get(from_fd)?);
-        // Then, make sure to_fd is not already open:
-        if self.get(to_fd).is_ok() {
-            return Err(wasi::ERRNO_INVAL);
-        }
         // Expand table until to_fd is in bounds as well:
         while self.table_len.get() as u32 <= to_fd as u32 {
             self.push_closed()?;
         }
         // Then, close from_fd and put its contents into to_fd:
         let desc = self.close_(from_fd)?;
+        // TODO FIXME if this overwrites a preopen, do we need to clear it from the preopen table?
         *self.get_mut(to_fd)? = desc;
 
         Ok(())
