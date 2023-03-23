@@ -425,11 +425,13 @@ enum OutOfGas {
 
 /// What to do when the engine epoch reaches the deadline for a Store
 /// during execution of a function using that store.
+#[derive(Default)]
 enum EpochDeadline<T> {
     /// Return early with a trap.
+    #[default]
     Trap,
     /// Call a custom deadline handler.
-    Callback(Box<dyn FnMut(&mut T) -> Result<u64> + Send + Sync>),
+    Callback(Box<dyn FnMut(StoreContextMut<T>) -> Result<u64> + Send + Sync>),
     /// Extend the deadline by the specified number of ticks after
     /// yielding to the async executor loop.
     #[cfg(feature = "async")]
@@ -932,7 +934,7 @@ impl<T> Store<T> {
     /// for an introduction to epoch-based interruption.
     pub fn epoch_deadline_callback(
         &mut self,
-        callback: impl FnMut(&mut T) -> Result<u64> + Send + Sync + 'static,
+        callback: impl FnMut(StoreContextMut<T>) -> Result<u64> + Send + Sync + 'static,
     ) {
         self.inner.epoch_deadline_callback(Box::new(callback));
     }
@@ -1975,10 +1977,13 @@ unsafe impl<T> wasmtime_runtime::Store for StoreInner<T> {
     }
 
     fn new_epoch(&mut self) -> Result<u64, anyhow::Error> {
-        return match &mut self.epoch_deadline_behavior {
+        // Temporarily take the configured behavior to avoid mutably borrowing
+        // multiple times.
+        let mut behavior = std::mem::take(&mut self.epoch_deadline_behavior);
+        let delta_result = match &mut behavior {
             EpochDeadline::Trap => Err(Trap::Interrupt.into()),
             EpochDeadline::Callback(callback) => {
-                let delta = callback(&mut self.data)?;
+                let delta = callback((&mut *self).as_context_mut())?;
                 // Set a new deadline and return the new epoch deadline so
                 // the Wasm code doesn't have to reload it.
                 self.set_epoch_deadline(delta);
@@ -1998,6 +2003,10 @@ unsafe impl<T> wasmtime_runtime::Store for StoreInner<T> {
                 Ok(self.get_epoch_deadline())
             }
         };
+
+        // Put back the original behavior which was replaced by `take`.
+        self.epoch_deadline_behavior = behavior;
+        delta_result
     }
 }
 
@@ -2022,7 +2031,7 @@ impl<T> StoreInner<T> {
 
     fn epoch_deadline_callback(
         &mut self,
-        callback: Box<dyn FnMut(&mut T) -> Result<u64> + Send + Sync>,
+        callback: Box<dyn FnMut(StoreContextMut<T>) -> Result<u64> + Send + Sync>,
     ) {
         self.epoch_deadline_behavior = EpochDeadline::Callback(callback);
     }
