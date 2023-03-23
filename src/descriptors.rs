@@ -283,6 +283,9 @@ impl Descriptors {
 
     // Close an fd.
     pub fn close(&mut self, fd: Fd) -> Result<(), Errno> {
+        if !self.is_initialized() {
+            unreachable!("bug: descriptors should be initialized")
+        }
         drop(self.close_(fd)?);
         Ok(())
     }
@@ -295,7 +298,7 @@ impl Descriptors {
         Ok(())
     }
 
-    //
+    // Implementation of fd_renumber
     pub fn renumber(&mut self, from_fd: Fd, to_fd: Fd) -> Result<(), Errno> {
         // First, ensure from_fd is in bounds:
         drop(self.get(from_fd)?);
