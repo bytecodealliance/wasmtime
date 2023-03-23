@@ -399,6 +399,38 @@
 (rule (lower (has_type out_ty (sextend val @ (value_type in_ty))))
   (sext val in_ty out_ty))
 
+;; The instructions below are present in RV64I and sign-extend the result to 64 bits.
+
+(rule 1 (lower (has_type $I64 (sextend (has_type $I32 (iadd x y)))))
+  (alu_rrr (AluOPRRR.Addw) x y))
+
+(rule 1 (lower (has_type $I64 (sextend (has_type $I32 (isub x y)))))
+  (alu_rrr (AluOPRRR.Subw) x y))
+
+(rule 1 (lower (has_type $I64 (sextend (has_type $I32 (ishl x y)))))
+  (alu_rrr (AluOPRRR.Sllw) x (value_regs_get y 0)))
+
+(rule 1 (lower (has_type $I64 (sextend (has_type $I32 (ushr x y)))))
+  (alu_rrr (AluOPRRR.Srlw) x (value_regs_get y 0)))
+
+(rule 1 (lower (has_type $I64 (sextend (has_type $I32 (sshr x y)))))
+  (alu_rrr (AluOPRRR.Sraw) x (value_regs_get y 0)))
+
+
+(rule 2 (lower (has_type $I64 (sextend (has_type $I32 (iadd x (imm12_from_value y))))))
+  (alu_rr_imm12 (AluOPRRI.Addiw) x y))
+
+(rule 3 (lower (has_type $I64 (sextend (has_type $I32 (iadd (imm12_from_value x) y)))))
+  (alu_rr_imm12 (AluOPRRI.Addiw) y x))
+
+(rule 2 (lower (has_type $I64 (sextend (has_type $I32 (ishl x (imm12_from_value y))))))
+  (alu_rr_imm12 (AluOPRRI.Slliw) x y))
+
+(rule 2 (lower (has_type $I64 (sextend (has_type $I32 (ushr x (imm12_from_value y))))))
+  (alu_rr_imm12 (AluOPRRI.SrliW) x y))
+
+(rule 2 (lower (has_type $I64 (sextend (has_type $I32 (sshr x (imm12_from_value y))))))
+  (alu_rr_imm12 (AluOPRRI.Sraiw) x y))
 
 ;;;; Rules for `popcnt` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_64 ty) (popcnt x)))
