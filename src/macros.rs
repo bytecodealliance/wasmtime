@@ -53,7 +53,11 @@ macro_rules! unreachable {
         eprint!("unreachable executed at adapter line ");
         crate::macros::eprint_u32(line!());
         eprint!("\n");
-        wasm32::unreachable()
+        #[cfg(target_arch = "wasm32")]
+        core::arch::wasm32::unreachable();
+        // This is here to keep rust-analyzer happy when building for native:
+        #[cfg(not(target_arch = "wasm32"))]
+        std::process::abort();
     }};
 
     ($arg:tt) => {{
@@ -62,7 +66,11 @@ macro_rules! unreachable {
         eprint!(": ");
         eprintln!($arg);
         eprint!("\n");
-        wasm32::unreachable()
+        #[cfg(target_arch = "wasm32")]
+        core::arch::wasm32::unreachable();
+        // This is here to keep rust-analyzer happy when building for native:
+        #[cfg(not(target_arch = "wasm32"))]
+        std::process::abort();
     }};
 }
 

@@ -4,7 +4,6 @@ use crate::bindings::{
     exit, filesystem, instance_monotonic_clock, instance_wall_clock, monotonic_clock, network,
     poll, random, streams, wall_clock,
 };
-use core::arch::wasm32;
 use core::cell::{Cell, RefCell, UnsafeCell};
 use core::cmp::min;
 use core::ffi::c_void;
@@ -18,10 +17,11 @@ use wasi::*;
 #[cfg(all(feature = "command", feature = "reactor"))]
 compile_error!("only one of the `command` and `reactor` features may be selected at a time");
 
-mod descriptors;
-use crate::descriptors::{Descriptor, Descriptors, StreamType, Streams};
 #[macro_use]
 mod macros;
+
+mod descriptors;
+use crate::descriptors::{Descriptor, Descriptors, StreamType, Streams};
 
 pub mod bindings {
     #[cfg(feature = "command")]
