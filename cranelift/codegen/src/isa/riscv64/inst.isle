@@ -1194,6 +1194,11 @@
 (rule (rv_zexth rs1)
   (alu_rr_imm12 (AluOPRRI.Zexth) rs1 (imm12_const 0)))
 
+;; Helper for emitting the `rol` ("Rotate Left") instruction.
+(decl rv_rol (Reg Reg) Reg)
+(rule (rv_rol rs1 rs2)
+  (alu_rrr (AluOPRRR.Rol) rs1 rs2))
+
 
 
 
@@ -1619,7 +1624,7 @@
 (rule 1
   (lower_rotl $I64 rs amount)
   (if-let $true (has_zbb))
-  (alu_rrr (AluOPRRR.Rol) rs amount))
+  (rv_rol rs amount))
 
 (rule
   (lower_rotl $I64 rs amount)
