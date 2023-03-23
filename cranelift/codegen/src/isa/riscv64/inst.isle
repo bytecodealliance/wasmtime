@@ -1094,6 +1094,10 @@
 (rule (rv_fsgnjx $F32 rs1 rs2) (fpu_rrr (FpuOPRRR.FsgnjxS) $F32 rs1 rs2))
 (rule (rv_fsgnjx $F64 rs1 rs2) (fpu_rrr (FpuOPRRR.FsgnjxD) $F64 rs1 rs2))
 
+;; Helper for emitting the `feq` ("Float Equal") instruction.
+(decl rv_feq (Type Reg Reg) Reg)
+(rule (rv_feq $F32 rs1 rs2) (fpu_rrr (FpuOPRRR.FeqS) $I64 rs1 rs2))
+(rule (rv_feq $F64 rs1 rs2) (fpu_rrr (FpuOPRRR.FeqD) $I64 rs1 rs2))
 
 ;; `Zba` Extension Instructions
 
@@ -2476,11 +2480,7 @@
 (rule (not x) (rv_xori x (imm_from_bits 1)))
 
 (decl is_not_nan (Type Reg) Reg)
-(rule (is_not_nan ty a) (feq ty a a))
-
-(decl feq (Type Reg Reg) Reg)
-(rule (feq $F32 a b) (fpu_rrr (FpuOPRRR.FeqS) $I64 a b))
-(rule (feq $F64 a b) (fpu_rrr (FpuOPRRR.FeqD) $I64 a b))
+(rule (is_not_nan ty a) (rv_feq ty a a))
 
 (decl flt (Type Reg Reg) Reg)
 (rule (flt $F32 a b) (fpu_rrr (FpuOPRRR.FltS) $I64 a b))
@@ -2557,13 +2557,13 @@
 ;; a == b
 (rule
   (emit_fcmp (FloatCC.Equal) ty a b)
-  (cmp_result (feq ty a b)))
+  (cmp_result (rv_feq ty a b)))
 
 ;; a != b
 ;; == !(a == b)
 (rule
   (emit_fcmp (FloatCC.NotEqual) ty a b)
-  (cmp_result_invert (feq ty a b)))
+  (cmp_result_invert (rv_feq ty a b)))
 
 ;; a < b || a > b
 (rule
@@ -2573,7 +2573,7 @@
 ;; !(ordered a b) || a == b
 (rule
   (emit_fcmp (FloatCC.UnorderedOrEqual) ty a b)
-  (cmp_result (rv_or (not (ordered ty a b)) (feq ty a b))))
+  (cmp_result (rv_or (not (ordered ty a b)) (rv_feq ty a b))))
 
 ;; a < b
 (rule
