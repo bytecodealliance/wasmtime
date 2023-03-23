@@ -54,12 +54,12 @@
 (rule (match_shnadd (uimm8 2)) (AluOPRRR.Sh2add))
 (rule (match_shnadd (uimm8 3)) (AluOPRRR.Sh3add))
   
-(rule 3 (lower (has_type (fits_in_64 ty) (iadd x (ishl y (maybe_uextend (iconst n))))))
+(rule 3 (lower (has_type $I64 (iadd x (ishl y (maybe_uextend (iconst n))))))
   (if-let $true (has_zba))
   (if-let shnadd (match_shnadd n))
   (alu_rrr shnadd y x))
 
-(rule 4 (lower (has_type (fits_in_64 ty) (iadd (ishl x (maybe_uextend (iconst n))) y)))
+(rule 4 (lower (has_type $I64 (iadd (ishl x (maybe_uextend (iconst n))) y)))
   (if-let $true (has_zba))
   (if-let shnadd (match_shnadd n))
   (alu_rrr shnadd x y))
@@ -71,12 +71,12 @@
 (rule (match_shnadd_uw (uimm8 2)) (AluOPRRR.Sh2adduw))
 (rule (match_shnadd_uw (uimm8 3)) (AluOPRRR.Sh3adduw))
   
-(rule 5 (lower (has_type (fits_in_64 ty) (iadd x (ishl (uextend y) (maybe_uextend (iconst n))))))
+(rule 5 (lower (has_type $I64 (iadd x (ishl (uextend y) (maybe_uextend (iconst n))))))
   (if-let $true (has_zba))
   (if-let shnadd_uw (match_shnadd_uw n))
   (alu_rrr shnadd_uw y x))
 
-(rule 6 (lower (has_type (fits_in_64 ty) (iadd (ishl (uextend x) (maybe_uextend (iconst n))) y)))
+(rule 6 (lower (has_type $I64 (iadd (ishl (uextend x) (maybe_uextend (iconst n))) y)))
   (if-let $true (has_zba))
   (if-let shnadd_uw (match_shnadd_uw n))
   (alu_rrr shnadd_uw x y))
