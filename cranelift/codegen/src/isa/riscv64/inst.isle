@@ -1214,6 +1214,11 @@
 (rule (rv_rorw rs1 rs2)
   (alu_rrr (AluOPRRR.Rorw) rs1 rs2))
 
+;; Helper for emitting the `rev8` ("Byte Reverse") instruction.
+(decl rv_rev8 (Reg) Reg)
+(rule (rv_rev8 rs1)
+  (alu_rr_funct12 (AluOPRRI.Rev8) rs1))
+
 
 
 
@@ -2348,7 +2353,7 @@
 (rule 1
   (gen_rev8 rs)
   (if-let $true (has_zbb))
-  (alu_rr_funct12 (AluOPRRI.Rev8) rs))
+  (rv_rev8 rs))
 
 (rule
   (gen_rev8 rs)
