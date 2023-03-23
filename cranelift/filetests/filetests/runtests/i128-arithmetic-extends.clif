@@ -1,0 +1,18 @@
+test interpret
+test run
+set enable_llvm_abi_extensions=true
+target aarch64
+target s390x
+target x86_64
+target riscv64
+target riscv64 has_zba
+
+function %sext_sshr_i32_i128(i32, i128) -> i64 {
+block0(v0: i32, v1: i128):
+    v2 = sshr.i32 v0, v1
+    v3 = sextend.i64 v2
+    return v3
+}
+; run: %sext_sshr_i32_i128(0x8000_0000, 0) == 0xFFFFFFFF80000000
+; run: %sext_sshr_i32_i128(0x8000_0000, 32) == 0xFFFFFFFF80000000
+; run: %sext_sshr_i32_i128(0x8000_0000, 0xFFFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFF20) == 0xFFFFFFFF80000000
