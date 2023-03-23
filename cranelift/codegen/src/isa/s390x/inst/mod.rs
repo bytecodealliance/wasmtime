@@ -3185,11 +3185,13 @@ impl Inst {
                 let cond = cond.pretty_print_default();
                 format!("jg{} {}", cond, target)
             }
-            &Inst::Debugtrap => "debugtrap".to_string(),
-            &Inst::Trap { .. } => "trap".to_string(),
-            &Inst::TrapIf { cond, .. } => {
-                let cond = cond.invert().pretty_print_default();
-                format!("j{} 6 ; trap", cond)
+            &Inst::Debugtrap => ".word 0x0001 # debugtrap".to_string(),
+            &Inst::Trap { trap_code } => {
+                format!(".word 0x0000 # trap={}", trap_code)
+            }
+            &Inst::TrapIf { cond, trap_code } => {
+                let cond = cond.pretty_print_default();
+                format!("jg{} .+2 # trap={}", cond, trap_code)
             }
             &Inst::JTSequence { ridx, ref targets } => {
                 let ridx = pretty_print_reg(ridx, allocs);

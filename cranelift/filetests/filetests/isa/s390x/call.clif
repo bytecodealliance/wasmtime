@@ -382,7 +382,7 @@ block0:
 ; block0:
 ;   lghi %r2, 0
 ;   brasl %r14, %g
-;   trap
+;   .word 0x0000 # trap=user0
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
