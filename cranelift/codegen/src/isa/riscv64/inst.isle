@@ -1109,6 +1109,11 @@
 (rule (rv_fle $F32 rs1 rs2) (fpu_rrr (FpuOPRRR.FleS) $I64 rs1 rs2))
 (rule (rv_fle $F64 rs1 rs2) (fpu_rrr (FpuOPRRR.FleD) $I64 rs1 rs2))
 
+;; Helper for emitting the `fgt` ("Float Greater Than") instruction.
+;; Note: The arguments are reversed
+(decl rv_fgt (Type Reg Reg) Reg)
+(rule (rv_fgt ty rs1 rs2) (rv_flt ty rs2 rs1))
+
 ;; `Zba` Extension Instructions
 
 ;; Helper for emitting the `adduw` ("Add Unsigned Word") instruction.
@@ -2492,9 +2497,6 @@
 (decl is_not_nan (Type Reg) Reg)
 (rule (is_not_nan ty a) (rv_feq ty a a))
 
-(decl fgt (Type Reg Reg) Reg)
-(rule (fgt ty a b) (rv_flt ty b a))
-
 (decl fge (Type Reg Reg) Reg)
 (rule (fge ty a b) (rv_fle ty b a))
 
@@ -2570,7 +2572,7 @@
 ;; a < b || a > b
 (rule
   (emit_fcmp (FloatCC.OrderedNotEqual) ty a b)
-  (cmp_result (rv_or (rv_flt ty a b) (fgt ty a b))))
+  (cmp_result (rv_or (rv_flt ty a b) (rv_fgt ty a b))))
 
 ;; !(ordered a b) || a == b
 (rule
@@ -2590,7 +2592,7 @@
 ;; a > b
 (rule
   (emit_fcmp (FloatCC.GreaterThan) ty a b)
-  (cmp_result (fgt ty a b)))
+  (cmp_result (rv_fgt ty a b)))
 
 ;; a >= b
 (rule
@@ -2607,7 +2609,7 @@
 ;; == !(ordered a b && a > b)
 (rule
   (emit_fcmp (FloatCC.UnorderedOrLessThanOrEqual) ty a b)
-  (cmp_result_invert (rv_and (ordered ty a b) (fgt ty a b))))
+  (cmp_result_invert (rv_and (ordered ty a b) (rv_fgt ty a b))))
 
 ;; !(ordered a b) || a > b
 ;; == !(ordered a b && a <= b)
