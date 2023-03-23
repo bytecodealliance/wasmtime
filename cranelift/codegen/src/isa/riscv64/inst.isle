@@ -1179,6 +1179,11 @@
 (rule (rv_max rs1 rs2)
   (alu_rrr (AluOPRRR.Max) rs1 rs2))
 
+;; Helper for emitting the `sext.b` instruction.
+(decl rv_sextb (Reg) Reg)
+(rule (rv_sextb rs1)
+  (alu_rr_imm12 (AluOPRRI.Sextb) rs1 (imm12_const 0)))
+
 
 
 
@@ -1525,7 +1530,7 @@
 (rule 1 (extend val (ExtendOp.Signed) $I8 (fits_in_64 _))
   (if-let $true (has_zbb))
   (let ((val Reg (value_regs_get val 0)))
-    (alu_rr_imm12 (AluOPRRI.Sextb) val (imm12_const 0))))
+    (rv_sextb val)))
 
 ;; If we have the `zbb` extension we can use the dedicated `sext.h` instruction.
 (rule 1 (extend val (ExtendOp.Signed) $I16 (fits_in_64 _))
