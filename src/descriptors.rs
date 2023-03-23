@@ -120,38 +120,30 @@ pub struct Descriptors {
 }
 
 impl Descriptors {
-    pub fn new() -> Self {
-        Descriptors {
+    pub fn new(import_alloc: &ImportAlloc, arena: &BumpArena) -> Self {
+        let d = Descriptors {
             table: UnsafeCell::new(MaybeUninit::uninit()),
             table_len: Cell::new(0),
             closed: None,
             preopens: Cell::new(None),
-        }
-    }
-    pub fn is_initialized(&self) -> bool {
-        self.table_len.get() != 0
-    }
-    pub fn init(&self, import_alloc: &ImportAlloc, arena: &BumpArena) {
-        if self.is_initialized() {
-            unreachable!("cannot initialize descriptors more than once")
-        }
+        };
 
         let stdio = crate::bindings::preopens::get_stdio();
         unsafe { set_stderr_stream(stdio.stderr) };
 
-        self.push(Descriptor::Streams(Streams {
+        d.push(Descriptor::Streams(Streams {
             input: Cell::new(Some(stdio.stdin)),
             output: Cell::new(None),
             type_: StreamType::Unknown,
         }))
         .trapping_unwrap();
-        self.push(Descriptor::Streams(Streams {
+        d.push(Descriptor::Streams(Streams {
             input: Cell::new(None),
             output: Cell::new(Some(stdio.stdout)),
             type_: StreamType::Unknown,
         }))
         .trapping_unwrap();
-        self.push(Descriptor::Streams(Streams {
+        d.push(Descriptor::Streams(Streams {
             input: Cell::new(None),
             output: Cell::new(Some(stdio.stderr)),
             type_: StreamType::Unknown,
@@ -178,7 +170,7 @@ impl Descriptors {
         for preopen in preopens {
             // Expectation is that the descriptor index is initialized with
             // stdio (0,1,2) and no others, so that preopens are 3..
-            self.push(Descriptor::Streams(Streams {
+            d.push(Descriptor::Streams(Streams {
                 input: Cell::new(None),
                 output: Cell::new(None),
                 type_: StreamType::File(File {
@@ -190,7 +182,8 @@ impl Descriptors {
             .trapping_unwrap();
         }
 
-        self.preopens.set(Some(preopens));
+        d.preopens.set(Some(preopens));
+        d
     }
 
     fn push(&self, desc: Descriptor) -> Result<Fd, Errno> {
@@ -245,27 +238,18 @@ impl Descriptors {
     }
 
     pub fn get(&self, fd: Fd) -> Result<&Descriptor, Errno> {
-        if !self.is_initialized() {
-            unreachable!("bug: descriptors should be initialized")
-        }
         self.table()
             .get(usize::try_from(fd).trapping_unwrap())
             .ok_or(wasi::ERRNO_BADF)
     }
 
     pub fn get_mut(&mut self, fd: Fd) -> Result<&mut Descriptor, Errno> {
-        if !self.is_initialized() {
-            unreachable!("bug: descriptors should be initialized")
-        }
         self.table_mut()
             .get_mut(usize::try_from(fd).trapping_unwrap())
             .ok_or(wasi::ERRNO_BADF)
     }
 
     pub fn get_preopen(&self, fd: Fd) -> Option<&Preopen> {
-        if !self.is_initialized() {
-            unreachable!("bug: descriptors should be initialized")
-        }
         let preopens = self.preopens.get().trapping_unwrap();
         // Subtract 3 for the stdio indices to compute the preopen index.
         let index = fd.checked_sub(3)? as usize;
@@ -283,9 +267,6 @@ impl Descriptors {
 
     // Close an fd.
     pub fn close(&mut self, fd: Fd) -> Result<(), Errno> {
-        if !self.is_initialized() {
-            unreachable!("bug: descriptors should be initialized")
-        }
         drop(self.close_(fd)?);
         Ok(())
     }

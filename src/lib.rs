@@ -4,11 +4,12 @@ use crate::bindings::{
     exit, filesystem, instance_monotonic_clock, instance_wall_clock, monotonic_clock, network,
     poll, random, streams, wall_clock,
 };
-use core::cell::{Cell, RefCell, UnsafeCell};
+use core::cell::{Cell, RefCell, RefMut, UnsafeCell};
 use core::cmp::min;
 use core::ffi::c_void;
 use core::hint::black_box;
 use core::mem::{self, align_of, forget, size_of, ManuallyDrop, MaybeUninit};
+use core::ops::{Deref, DerefMut};
 use core::ptr::{self, null_mut};
 use core::slice;
 use poll::Pollable;
@@ -419,7 +420,8 @@ pub unsafe extern "C" fn fd_advise(
         _ => return ERRNO_INVAL,
     };
     State::with(|state| {
-        let file = state.descriptors().get_seekable_file(fd)?;
+        let ds = state.descriptors();
+        let file = ds.get_seekable_file(fd)?;
         filesystem::advise(file.fd, offset, len, advice)?;
         Ok(())
     })
@@ -454,7 +456,8 @@ pub unsafe extern "C" fn fd_close(fd: Fd) -> Errno {
 #[no_mangle]
 pub unsafe extern "C" fn fd_datasync(fd: Fd) -> Errno {
     State::with(|state| {
-        let file = state.descriptors().get_file(fd)?;
+        let ds = state.descriptors();
+        let file = ds.get_file(fd)?;
         filesystem::sync_data(file.fd)?;
         Ok(())
     })
@@ -558,7 +561,8 @@ pub unsafe extern "C" fn fd_fdstat_set_flags(fd: Fd, flags: Fdflags) -> Errno {
     }
 
     State::with(|state| {
-        let file = state.descriptors().get_file(fd)?;
+        let ds = state.descriptors();
+        let file = ds.get_file(fd)?;
         filesystem::set_flags(file.fd, new_flags)?;
         Ok(())
     })
@@ -579,7 +583,8 @@ pub unsafe extern "C" fn fd_fdstat_set_rights(
 #[no_mangle]
 pub unsafe extern "C" fn fd_filestat_get(fd: Fd, buf: *mut Filestat) -> Errno {
     State::with(|state| {
-        let file = state.descriptors().get_file(fd)?;
+        let ds = state.descriptors();
+        let file = ds.get_file(fd)?;
         let stat = filesystem::stat(file.fd)?;
         let filetype = stat.type_.into();
         *buf = Filestat {
@@ -601,7 +606,8 @@ pub unsafe extern "C" fn fd_filestat_get(fd: Fd, buf: *mut Filestat) -> Errno {
 #[no_mangle]
 pub unsafe extern "C" fn fd_filestat_set_size(fd: Fd, size: Filesize) -> Errno {
     State::with(|state| {
-        let file = state.descriptors().get_file(fd)?;
+        let ds = state.descriptors();
+        let file = ds.get_file(fd)?;
         filesystem::set_size(file.fd, size)?;
         Ok(())
     })
@@ -640,7 +646,8 @@ pub unsafe extern "C" fn fd_filestat_set_times(
         };
 
     State::with(|state| {
-        let file = state.descriptors().get_file(fd)?;
+        let ds = state.descriptors();
+        let file = ds.get_file(fd)?;
         filesystem::set_times(file.fd, atim, mtim)?;
         Ok(())
     })
@@ -670,7 +677,8 @@ pub unsafe extern "C" fn fd_pread(
         let ptr = (*iovs_ptr).buf;
         let len = (*iovs_ptr).buf_len;
 
-        let file = state.descriptors().get_file(fd)?;
+        let ds = state.descriptors();
+        let file = ds.get_file(fd)?;
         let (data, end) = state
             .import_alloc
             .with_buffer(ptr, len, || filesystem::read(file.fd, len as u64, offset))?;
@@ -757,7 +765,8 @@ pub unsafe extern "C" fn fd_pwrite(
     let len = (*iovs_ptr).buf_len;
 
     State::with(|state| {
-        let file = state.descriptors().get_seekable_file(fd)?;
+        let ds = state.descriptors();
+        let file = ds.get_seekable_file(fd)?;
         let bytes = filesystem::write(file.fd, slice::from_raw_parts(ptr, len), offset)?;
         *nwritten = bytes as usize;
         Ok(())
@@ -861,7 +870,8 @@ pub unsafe extern "C" fn fd_readdir(
 
         // Compute the inode of `.` so that the iterator can produce an entry
         // for it.
-        let dir = state.descriptors().get_dir(fd)?;
+        let ds = state.descriptors();
+        let dir = ds.get_dir(fd)?;
         let stat = filesystem::stat(dir.fd)?;
         let dot_inode = stat.inode;
 
@@ -1072,7 +1082,8 @@ pub unsafe extern "C" fn fd_seek(
     newoffset: *mut Filesize,
 ) -> Errno {
     State::with(|state| {
-        let stream = state.descriptors().get_seekable_stream(fd)?;
+        let ds = state.descriptors();
+        let stream = ds.get_seekable_stream(fd)?;
 
         // Seeking only works on files.
         if let StreamType::File(file) = &stream.type_ {
@@ -1100,7 +1111,8 @@ pub unsafe extern "C" fn fd_seek(
 #[no_mangle]
 pub unsafe extern "C" fn fd_sync(fd: Fd) -> Errno {
     State::with(|state| {
-        let file = state.descriptors().get_file(fd)?;
+        let ds = state.descriptors();
+        let file = ds.get_file(fd)?;
         filesystem::sync(file.fd)?;
         Ok(())
     })
@@ -1111,7 +1123,8 @@ pub unsafe extern "C" fn fd_sync(fd: Fd) -> Errno {
 #[no_mangle]
 pub unsafe extern "C" fn fd_tell(fd: Fd, offset: *mut Filesize) -> Errno {
     State::with(|state| {
-        let file = state.descriptors().get_seekable_file(fd)?;
+        let ds = state.descriptors();
+        let file = ds.get_seekable_file(fd)?;
         *offset = file.position.get() as Filesize;
         Ok(())
     })
@@ -1144,26 +1157,29 @@ pub unsafe extern "C" fn fd_write(
         let len = (*iovs_ptr).buf_len;
         let bytes = slice::from_raw_parts(ptr, len);
 
-        State::with(|state| match state.descriptors().get(fd)? {
-            Descriptor::Streams(streams) => {
-                let wasi_stream = streams.get_write_stream()?;
-                let bytes = streams::write(wasi_stream, bytes).map_err(|_| ERRNO_IO)?;
+        State::with(|state| {
+            let ds = state.descriptors();
+            match ds.get(fd)? {
+                Descriptor::Streams(streams) => {
+                    let wasi_stream = streams.get_write_stream()?;
+                    let bytes = streams::write(wasi_stream, bytes).map_err(|_| ERRNO_IO)?;
 
-                // If this is a file, keep the current-position pointer up to date.
-                if let StreamType::File(file) = &streams.type_ {
-                    // But don't update if we're in append mode. Strictly speaking,
-                    // we should set the position to the new end of the file, but
-                    // we don't have an API to do that atomically.
-                    if !file.append {
-                        file.position
-                            .set(file.position.get() + filesystem::Filesize::from(bytes));
+                    // If this is a file, keep the current-position pointer up to date.
+                    if let StreamType::File(file) = &streams.type_ {
+                        // But don't update if we're in append mode. Strictly speaking,
+                        // we should set the position to the new end of the file, but
+                        // we don't have an API to do that atomically.
+                        if !file.append {
+                            file.position
+                                .set(file.position.get() + filesystem::Filesize::from(bytes));
+                        }
                     }
-                }
 
-                *nwritten = bytes as usize;
-                Ok(())
+                    *nwritten = bytes as usize;
+                    Ok(())
+                }
+                Descriptor::Closed(_) => Err(ERRNO_BADF),
             }
-            Descriptor::Closed(_) => Err(ERRNO_BADF),
         })
     } else {
         *nwritten = 0;
@@ -1182,7 +1198,8 @@ pub unsafe extern "C" fn path_create_directory(
     let path = slice::from_raw_parts(path_ptr, path_len);
 
     State::with(|state| {
-        let file = state.descriptors().get_dir(fd)?;
+        let ds = state.descriptors();
+        let file = ds.get_dir(fd)?;
         filesystem::create_directory_at(file.fd, path)?;
         Ok(())
     })
@@ -1202,7 +1219,8 @@ pub unsafe extern "C" fn path_filestat_get(
     let at_flags = at_flags_from_lookupflags(flags);
 
     State::with(|state| {
-        let file = state.descriptors().get_dir(fd)?;
+        let ds = state.descriptors();
+        let file = ds.get_dir(fd)?;
         let stat = filesystem::stat_at(file.fd, at_flags, path)?;
         let filetype = stat.type_.into();
         *buf = Filestat {
@@ -1258,7 +1276,8 @@ pub unsafe extern "C" fn path_filestat_set_times(
     let at_flags = at_flags_from_lookupflags(flags);
 
     State::with(|state| {
-        let file = state.descriptors().get_dir(fd)?;
+        let ds = state.descriptors();
+        let file = ds.get_dir(fd)?;
         filesystem::set_times_at(file.fd, at_flags, path, atim, mtim)?;
         Ok(())
     })
@@ -1317,7 +1336,8 @@ pub unsafe extern "C" fn path_open(
     let append = fdflags & wasi::FDFLAGS_APPEND == wasi::FDFLAGS_APPEND;
 
     State::with_mut(|state| {
-        let file = state.descriptors().get_dir(fd)?;
+        let mut ds = state.descriptors_mut();
+        let file = ds.get_dir(fd)?;
         let result = filesystem::open_at(file.fd, at_flags, path, o_flags, flags, mode)?;
         let desc = Descriptor::Streams(Streams {
             input: Cell::new(None),
@@ -1329,7 +1349,7 @@ pub unsafe extern "C" fn path_open(
             }),
         });
 
-        let fd = state.descriptors_mut().open(desc)?;
+        let fd = ds.open(desc)?;
         *opened_fd = fd;
         Ok(())
     })
@@ -1354,7 +1374,8 @@ pub unsafe extern "C" fn path_readlink(
         // so instead we handle this case specially.
         let use_state_buf = buf_len < PATH_MAX;
 
-        let file = state.descriptors().get_dir(fd)?;
+        let ds = state.descriptors();
+        let file = ds.get_dir(fd)?;
         let path = if use_state_buf {
             state
                 .import_alloc
@@ -1398,7 +1419,8 @@ pub unsafe extern "C" fn path_remove_directory(
     let path = slice::from_raw_parts(path_ptr, path_len);
 
     State::with(|state| {
-        let file = state.descriptors().get_dir(fd)?;
+        let ds = state.descriptors();
+        let file = ds.get_dir(fd)?;
         filesystem::remove_directory_at(file.fd, path)?;
         Ok(())
     })
@@ -1419,8 +1441,9 @@ pub unsafe extern "C" fn path_rename(
     let new_path = slice::from_raw_parts(new_path_ptr, new_path_len);
 
     State::with(|state| {
-        let old = state.descriptors().get_dir(old_fd)?.fd;
-        let new = state.descriptors().get_dir(new_fd)?.fd;
+        let ds = state.descriptors();
+        let old = ds.get_dir(old_fd)?.fd;
+        let new = ds.get_dir(new_fd)?.fd;
         filesystem::rename_at(old, old_path, new, new_path)?;
         Ok(())
     })
@@ -1440,7 +1463,8 @@ pub unsafe extern "C" fn path_symlink(
     let new_path = slice::from_raw_parts(new_path_ptr, new_path_len);
 
     State::with(|state| {
-        let file = state.descriptors().get_dir(fd)?;
+        let ds = state.descriptors();
+        let file = ds.get_dir(fd)?;
         filesystem::symlink_at(file.fd, old_path, new_path)?;
         Ok(())
     })
@@ -1454,7 +1478,8 @@ pub unsafe extern "C" fn path_unlink_file(fd: Fd, path_ptr: *const u8, path_len:
     let path = slice::from_raw_parts(path_ptr, path_len);
 
     State::with(|state| {
-        let file = state.descriptors().get_dir(fd)?;
+        let ds = state.descriptors();
+        let file = ds.get_dir(fd)?;
         filesystem::unlink_file_at(file.fd, path)?;
         Ok(())
     })
@@ -1682,8 +1707,8 @@ pub unsafe extern "C" fn poll_oneoff(
 
                 1 => {
                     type_ = EVENTTYPE_FD_READ;
-                    let desc = state
-                        .descriptors()
+                    let ds = state.descriptors();
+                    let desc = ds
                         .get(subscription.u.u.fd_read.file_descriptor)
                         .trapping_unwrap();
                     match desc {
@@ -1736,8 +1761,8 @@ pub unsafe extern "C" fn poll_oneoff(
                 }
                 2 => {
                     type_ = EVENTTYPE_FD_WRITE;
-                    let desc = state
-                        .descriptors()
+                    let ds = state.descriptors();
+                    let desc = ds
                         .get(subscription.u.u.fd_read.file_descriptor)
                         .trapping_unwrap();
                     match desc {
@@ -2049,7 +2074,7 @@ struct State {
     ///
     /// Do not use this member directly - use State::descriptors() to ensure
     /// lazy initialization happens.
-    descriptors: Descriptors,
+    descriptors: RefCell<Option<Descriptors>>,
 
     /// Auxiliary storage to handle the `path_readlink` function.
     path_buf: UnsafeCell<MaybeUninit<[u8; PATH_MAX]>>,
@@ -2133,7 +2158,7 @@ const fn bump_arena_size() -> usize {
     start -= size_of::<DirentCache>();
 
     // Remove miscellaneous metadata also stored in state.
-    start -= 24 * size_of::<usize>();
+    start -= 25 * size_of::<usize>();
 
     // Everything else is the `command_data` allocation.
     start
@@ -2237,7 +2262,7 @@ impl State {
                 magic1: MAGIC,
                 magic2: MAGIC,
                 import_alloc: ImportAlloc::new(),
-                descriptors: Descriptors::new(),
+                descriptors: RefCell::new(None),
                 path_buf: UnsafeCell::new(MaybeUninit::uninit()),
                 long_lived_arena: BumpArena::new(),
                 args: None,
@@ -2263,21 +2288,27 @@ impl State {
     }
 
     /// Accessor for the descriptors member that ensures it is properly initialized
-    fn descriptors(&self) -> &Descriptors {
-        if !self.descriptors.is_initialized() {
-            self.descriptors
-                .init(&self.import_alloc, &self.long_lived_arena);
+    fn descriptors<'a>(&'a self) -> impl Deref<Target = Descriptors> + 'a {
+        let mut d = self
+            .descriptors
+            .try_borrow_mut()
+            .unwrap_or_else(|_| unreachable!());
+        if d.is_none() {
+            *d = Some(Descriptors::new(&self.import_alloc, &self.long_lived_arena));
         }
-        &self.descriptors
+        RefMut::map(d, |d| d.as_mut().unwrap_or_else(|| unreachable!()))
     }
 
     /// Mut accessor for the descriptors member that ensures it is properly initialized
-    fn descriptors_mut(&mut self) -> &mut Descriptors {
-        if !self.descriptors.is_initialized() {
-            self.descriptors
-                .init(&self.import_alloc, &self.long_lived_arena);
+    fn descriptors_mut<'a>(&'a mut self) -> impl DerefMut + Deref<Target = Descriptors> + 'a {
+        let mut d = self
+            .descriptors
+            .try_borrow_mut()
+            .unwrap_or_else(|_| unreachable!());
+        if d.is_none() {
+            *d = Some(Descriptors::new(&self.import_alloc, &self.long_lived_arena));
         }
-        &mut self.descriptors
+        RefMut::map(d, |d| d.as_mut().unwrap_or_else(|| unreachable!()))
     }
 
     /// Return a handle to the default wall clock, creating one if we
