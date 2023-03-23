@@ -50,9 +50,9 @@
 
 ;; Add with const shift. We have a few of these instructions with `Zba`.
 (decl pure partial match_shnadd (Imm64) AluOPRRR)
-(rule (match_shnadd (uimm8 1)) (AluOPRRR.Sh1add))
-(rule (match_shnadd (uimm8 2)) (AluOPRRR.Sh2add))
-(rule (match_shnadd (uimm8 3)) (AluOPRRR.Sh3add))
+(rule (match_shnadd (u64_from_imm64 1)) (AluOPRRR.Sh1add))
+(rule (match_shnadd (u64_from_imm64 2)) (AluOPRRR.Sh2add))
+(rule (match_shnadd (u64_from_imm64 3)) (AluOPRRR.Sh3add))
   
 (rule 3 (lower (has_type $I64 (iadd x (ishl y (maybe_uextend (iconst n))))))
   (if-let $true (has_zba))
@@ -67,9 +67,9 @@
 
 ;; Add with uextended const shift. We have a few of these instructions with `Zba`.
 (decl pure partial match_shnadd_uw (Imm64) AluOPRRR)
-(rule (match_shnadd_uw (uimm8 1)) (AluOPRRR.Sh1adduw))
-(rule (match_shnadd_uw (uimm8 2)) (AluOPRRR.Sh2adduw))
-(rule (match_shnadd_uw (uimm8 3)) (AluOPRRR.Sh3adduw))
+(rule (match_shnadd_uw (u64_from_imm64 1)) (AluOPRRR.Sh1adduw))
+(rule (match_shnadd_uw (u64_from_imm64 2)) (AluOPRRR.Sh2adduw))
+(rule (match_shnadd_uw (u64_from_imm64 3)) (AluOPRRR.Sh3adduw))
   
 (rule 5 (lower (has_type $I64 (iadd x (ishl (uextend y) (maybe_uextend (iconst n))))))
   (if-let $true (has_zba))
