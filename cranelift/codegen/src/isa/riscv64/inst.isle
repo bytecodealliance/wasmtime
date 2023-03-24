@@ -1094,6 +1094,11 @@
 (rule (rv_fsgnjx $F32 rs1 rs2) (fpu_rrr (FpuOPRRR.FsgnjxS) $F32 rs1 rs2))
 (rule (rv_fsgnjx $F64 rs1 rs2) (fpu_rrr (FpuOPRRR.FsgnjxD) $F64 rs1 rs2))
 
+;; Helper for emitting the `fabs` ("Floating Point Absolute") instruction.
+;; This instruction is a mnemonic for `fsgnjx rd, rs1, rs1`
+(decl rv_fabs (Type Reg) Reg)
+(rule (rv_fabs ty rs1) (rv_fsgnjx ty rs1 rs1))
+
 ;; Helper for emitting the `feq` ("Float Equal") instruction.
 (decl rv_feq (Type Reg Reg) Reg)
 (rule (rv_feq $F32 rs1 rs2) (fpu_rrr (FpuOPRRR.FeqS) $I64 rs1 rs2))
