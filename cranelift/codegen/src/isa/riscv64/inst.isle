@@ -2262,13 +2262,18 @@
     (move_x_to_f tmp2 ty)))
 
 
-;;; lower icmp
-(decl lower_icmp (IntCC ValueRegs ValueRegs Type) Reg)
-(rule 1 (lower_icmp cc x y ty)
+(decl gen_icmp (IntCC ValueRegs ValueRegs Type) Reg)
+(rule 1 (gen_icmp cc x y ty)
   (if (signed_cond_code cc))
-  (gen_icmp cc (ext_int_if_need $true x ty) (ext_int_if_need $true y ty) ty))
-(rule (lower_icmp cc x y ty)
-  (gen_icmp cc (ext_int_if_need $false x ty) (ext_int_if_need $false y ty) ty))
+  (emit_icmp cc (ext_int_if_need $true x ty) (ext_int_if_need $true y ty) ty))
+(rule (gen_icmp cc x y ty)
+  (emit_icmp cc (ext_int_if_need $false x ty) (ext_int_if_need $false y ty) ty))
+
+(decl emit_icmp (IntCC ValueRegs ValueRegs Type) Reg)
+(rule (emit_icmp cc x y ty)
+  (let ((result WritableReg (temp_writable_reg $I64))
+        (_ Unit (emit (MInst.Icmp cc result x y ty))))
+    result))
 
 
 (decl i128_sub (ValueRegs ValueRegs) ValueRegs)
@@ -2492,8 +2497,8 @@
     ((r_const_neg_1 Reg (load_imm12 -1))
       (r_const_min Reg (rv_slli (load_imm12 1) (imm12_const 63)))
       (tmp_rs1 Reg (shift_int_to_most_significant rs1 ty))
-      (t1 Reg (gen_icmp (IntCC.Equal) r_const_neg_1 rs2 ty))
-      (t2 Reg (gen_icmp (IntCC.Equal) r_const_min tmp_rs1 ty))
+      (t1 Reg (gen_icmp (IntCC.Equal) r_const_neg_1 rs2 $I64))
+      (t2 Reg (gen_icmp (IntCC.Equal) r_const_min tmp_rs1 $I64))
       (test Reg (rv_and t1 t2)))
     (gen_trapif test (TrapCode.IntegerOverflow))))
 

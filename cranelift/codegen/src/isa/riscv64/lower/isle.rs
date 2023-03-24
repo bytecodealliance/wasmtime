@@ -102,7 +102,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Riscv64Backend> {
         targets: &VecMachLabel,
         ty: Type,
     ) -> Unit {
-        let test = generated_code::constructor_lower_icmp(self, cc, a, b, ty);
+        let test = generated_code::constructor_gen_icmp(self, cc, a, b, ty);
         self.emit(&MInst::CondBr {
             taken: BranchTarget::Label(targets[0]),
             not_taken: BranchTarget::Label(targets[1]),

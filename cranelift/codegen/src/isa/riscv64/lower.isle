@@ -833,18 +833,10 @@
   (lower (store flags x @ (value_type $I128 ) p @ (value_type (ty_addr64 _)) offset))
   (gen_store_128 p offset flags x))
 
-(decl gen_icmp (IntCC ValueRegs ValueRegs Type) Reg)
-(rule
-  (gen_icmp cc x y ty)
-  (let
-    ((result WritableReg (temp_writable_reg $I64))
-      (_ Unit (emit (MInst.Icmp cc result x y ty))))
-    result))
-
 ;;;;;  Rules for `icmp`;;;;;;;;;
 (rule
   (lower (icmp cc x @ (value_type ty) y))
-  (lower_icmp cc x y ty))
+  (gen_icmp cc x y ty))
 
 ;;;;;  Rules for `fcmp`;;;;;;;;;
 (rule
