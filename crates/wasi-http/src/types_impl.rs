@@ -6,7 +6,7 @@ use crate::types::{
     Scheme, StatusCode, Trailers,
 };
 use crate::WasiHttp;
-use anyhow::bail;
+use anyhow::{anyhow, bail};
 use std::collections::HashMap;
 
 impl crate::types::Host for WasiHttp {
@@ -29,13 +29,13 @@ impl crate::types::Host for WasiHttp {
         Ok(id)
     }
     fn fields_get(&mut self, fields: Fields, name: String) -> wasmtime::Result<Vec<String>> {
-        let res = match self.fields.get(&fields) {
-            Some(m) => match m.get(&name) {
-                Some(v) => v.clone(),
-                None => bail!("key not found"),
-            },
-            None => bail!("fields not found"),
-        };
+        let res = self
+            .fields
+            .get(&fields)
+            .ok_or_else(|| anyhow!("fields not found: {fields}"))?
+            .get(&name)
+            .ok_or_else(|| anyhow!("key not found: {name}"))?
+            .clone();
         Ok(res)
     }
     fn fields_set(
@@ -65,20 +65,19 @@ impl crate::types::Host for WasiHttp {
         name: String,
         value: String,
     ) -> wasmtime::Result<()> {
-        match self.fields.get_mut(&fields) {
-            Some(m) => {
-                match m.get_mut(&name) {
-                    Some(v) => v.push(value),
-                    None => {
-                        let mut vec = std::vec::Vec::new();
-                        vec.push(value);
-                        m.insert(name, vec);
-                    }
-                };
-                Ok(())
+        let mut m = self
+            .fields
+            .get_mut(&fields)
+            .ok_or_else(|| anyhow!("unknown fields: {fields}"))?;
+        match m.get_mut(&name) {
+            Some(v) => v.push(value),
+            None => {
+                let mut vec = std::vec::Vec::new();
+                vec.push(value);
+                m.insert(name, vec);
             }
-            None => bail!("Unknown fields!"),
-        }
+        };
+        Ok(())
     }
     fn fields_entries(&mut self, fields: Fields) -> wasmtime::Result<Vec<(String, String)>> {
         let field_map = match self.fields.get(&fields) {
@@ -95,60 +94,59 @@ impl crate::types::Host for WasiHttp {
         let id = self.fields_id_base;
         self.fields_id_base = self.fields_id_base + 1;
 
-        match self.fields.get(&fields) {
-            Some(m) => {
-                self.fields.insert(id, m.clone());
-            }
-            None => {}
-        }
+        let m = self
+            .fields
+            .get(&fields)
+            .ok_or_else(|| anyhow!("fields not found: {fields}"))?;
+        self.fields.insert(id, m.clone());
         Ok(id)
     }
     fn finish_incoming_stream(&mut self, _s: IncomingStream) -> wasmtime::Result<Option<Trailers>> {
-        todo!()
+        bail!("unimplemented: finish_incoming_stream")
     }
     fn finish_outgoing_stream(
         &mut self,
         _s: OutgoingStream,
         _trailers: Option<Trailers>,
     ) -> wasmtime::Result<()> {
-        todo!()
+        bail!("unimplemented: finish_outgoing_stream")
     }
     fn drop_incoming_request(&mut self, _request: IncomingRequest) -> wasmtime::Result<()> {
-        todo!()
+        bail!("unimplemented: drop_incoming_request")
     }
     fn drop_outgoing_request(&mut self, request: OutgoingRequest) -> wasmtime::Result<()> {
         self.requests.remove(&request);
         Ok(())
     }
     fn incoming_request_method(&mut self, _request: IncomingRequest) -> wasmtime::Result<Method> {
-        todo!()
+        bail!("unimplemented: incoming_request_method")
     }
     fn incoming_request_path(&mut self, _request: IncomingRequest) -> wasmtime::Result<String> {
-        todo!()
+        bail!("unimplemented: incoming_request_path")
     }
     fn incoming_request_scheme(
         &mut self,
         _request: IncomingRequest,
     ) -> wasmtime::Result<Option<Scheme>> {
-        todo!()
+        bail!("unimplemented: incoming_request_scheme")
     }
     fn incoming_request_authority(
         &mut self,
         _request: IncomingRequest,
     ) -> wasmtime::Result<String> {
-        todo!()
+        bail!("unimplemented: incoming_request_authority")
     }
     fn incoming_request_headers(&mut self, _request: IncomingRequest) -> wasmtime::Result<Headers> {
-        todo!()
+        bail!("unimplemented: incoming_request_headers")
     }
     fn incoming_request_consume(
         &mut self,
         _request: IncomingRequest,
     ) -> wasmtime::Result<Result<IncomingStream, ()>> {
-        todo!()
+        bail!("unimplemented: incoming_request_consume")
     }
     fn incoming_request_query(&mut self, _request: IncomingRequest) -> wasmtime::Result<String> {
-        todo!()
+        bail!("unimplemented: incoming_request_query")
     }
     fn new_outgoing_request(
         &mut self,
@@ -179,93 +177,94 @@ impl crate::types::Host for WasiHttp {
         &mut self,
         request: OutgoingRequest,
     ) -> wasmtime::Result<Result<OutgoingStream, ()>> {
-        match self.requests.get_mut(&request) {
-            Some(req) => {
-                req.body = self.streams_id_base;
-                self.streams_id_base = self.streams_id_base + 1;
-                Ok(Ok(req.body))
-            }
-            None => bail!("unknown request!"),
-        }
+        let mut req = self
+            .requests
+            .get_mut(&request)
+            .ok_or_else(|| anyhow!("unknown request: {request}"))?;
+        req.body = self.streams_id_base;
+        self.streams_id_base = self.streams_id_base + 1;
+        Ok(Ok(req.body))
     }
     fn drop_response_outparam(&mut self, _response: ResponseOutparam) -> wasmtime::Result<()> {
-        todo!()
+        bail!("unimplemented: drop_response_outparam")
     }
     fn set_response_outparam(
         &mut self,
         _response: Result<OutgoingResponse, Error>,
     ) -> wasmtime::Result<Result<(), ()>> {
-        todo!()
+        bail!("unimplemented: set_response_outparam")
     }
     fn drop_incoming_response(&mut self, response: IncomingResponse) -> wasmtime::Result<()> {
         self.responses.remove(&response);
         Ok(())
     }
     fn drop_outgoing_response(&mut self, _response: OutgoingResponse) -> wasmtime::Result<()> {
-        todo!()
+        bail!("unimplemented: drop_outgoing_response")
     }
     fn incoming_response_status(
         &mut self,
         response: IncomingResponse,
     ) -> wasmtime::Result<StatusCode> {
-        match self.responses.get(&response) {
-            Some(r) => Ok(r.status),
-            None => bail!("response not found"),
-        }
+        let r = self
+            .responses
+            .get(&response)
+            .ok_or_else(|| anyhow!("response not found: {response}"))?;
+        Ok(r.status)
     }
     fn incoming_response_headers(
         &mut self,
         response: IncomingResponse,
     ) -> wasmtime::Result<Headers> {
-        match self.responses.get(&response) {
-            Some(r) => {
-                let id = self.fields_id_base;
-                self.fields_id_base = self.fields_id_base + 1;
+        let r = self
+            .responses
+            .get(&response)
+            .ok_or_else(|| anyhow!("response not found: {response}"))?;
+        let id = self.fields_id_base;
+        self.fields_id_base = self.fields_id_base + 1;
 
-                self.fields.insert(id, r.response_headers.clone());
-                Ok(id)
-            }
-            None => bail!("response not found"),
-        }
+        self.fields.insert(id, r.response_headers.clone());
+        Ok(id)
     }
     fn incoming_response_consume(
         &mut self,
         response: IncomingResponse,
     ) -> wasmtime::Result<Result<IncomingStream, ()>> {
-        match self.responses.get(&response) {
-            Some(r) => Ok(Ok(r.body)),
-            None => bail!("response not found"),
-        }
+        let r = self
+            .responses
+            .get(&response)
+            .ok_or_else(|| anyhow!("response not found: {response}"))?;
+
+        Ok(Ok(r.body))
     }
     fn new_outgoing_response(
         &mut self,
         _status_code: StatusCode,
         _headers: Headers,
     ) -> wasmtime::Result<OutgoingResponse> {
-        todo!()
+        bail!("unimplemented: new_outgoing_response")
     }
     fn outgoing_response_write(
         &mut self,
         _response: OutgoingResponse,
     ) -> wasmtime::Result<Result<OutgoingStream, ()>> {
-        todo!()
+        bail!("unimplemented: outgoing_response_write")
     }
     fn drop_future_incoming_response(
         &mut self,
         _f: FutureIncomingResponse,
     ) -> wasmtime::Result<()> {
-        todo!()
+        bail!("unimplemented: drop_future_incoming_response")
     }
     fn future_incoming_response_get(
         &mut self,
         _f: FutureIncomingResponse,
     ) -> wasmtime::Result<Option<Result<IncomingResponse, Error>>> {
-        todo!()
+        bail!("unimplemented: future_incoming_response_get")
     }
     fn listen_to_future_incoming_response(
         &mut self,
         _f: FutureIncomingResponse,
     ) -> wasmtime::Result<Pollable> {
-        todo!()
+        bail!("unimplemented: listen_to_future_incoming_response")
     }
 }
