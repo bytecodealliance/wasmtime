@@ -6,6 +6,9 @@ impl wasi::environment::Host for WasiCtx {
     async fn get_environment(&mut self) -> anyhow::Result<Vec<(String, String)>> {
         Ok(self.env.clone())
     }
+    async fn get_arguments(&mut self) -> anyhow::Result<Vec<String>> {
+        Ok(self.args.clone())
+    }
 }
 
 #[async_trait::async_trait]
