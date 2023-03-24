@@ -184,8 +184,8 @@ impl crate::types::Host for WasiHttp {
                 req.body = self.streams_id_base;
                 self.streams_id_base = self.streams_id_base + 1;
                 Ok(Ok(req.body))
-            },
-            None => bail!("unknown request!")
+            }
+            None => bail!("unknown request!"),
         }
     }
     fn drop_response_outparam(&mut self, _response: ResponseOutparam) -> wasmtime::Result<()> {
