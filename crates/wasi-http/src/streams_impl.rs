@@ -8,14 +8,22 @@ impl crate::streams::Host for WasiHttp {
     fn read(
         &mut self,
         stream: InputStream,
-        _len: u64,
+        len: u64,
     ) -> wasmtime::Result<Result<(Vec<u8>, bool), StreamError>> {
-        let response = match self.responses.get(&stream) {
-            Some(r) => r,
+        match self.streams.get_mut(&stream) {
+            Some(s) => {
+                if len == 0 {
+                    Ok(Ok((bytes::Bytes::new().to_vec(), s.len() > 0)))
+                } else if s.len() > len.try_into()? {
+                    let result = s.split_to(len.try_into()?);
+                    Ok(Ok((result.to_vec(), false)))
+                } else {
+                    s.truncate(s.len());
+                    Ok(Ok((s.clone().to_vec(), true)))
+                }
+            }
             None => bail!("not found"),
-        };
-        let bytes = response.body.clone();
-        Ok(Ok((bytes.to_vec(), true)))
+        }
     }
 
     fn skip(
