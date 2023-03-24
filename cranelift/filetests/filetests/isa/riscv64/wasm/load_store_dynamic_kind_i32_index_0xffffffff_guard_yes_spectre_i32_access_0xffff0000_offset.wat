@@ -44,14 +44,14 @@
 ;;   slli a3,a0,32
 ;;   srli a5,a3,32
 ;;   ld a3,8(a2)
-;;   ugt a4,a5,a3##ty=i64
+;;   sltu a4,a3,a5
 ;;   ld a3,0(a2)
 ;;   add a3,a3,a5
 ;;   auipc a5,0; ld a5,12(a5); j 12; .8byte 0xffff0000
 ;;   add a3,a3,a5
 ;;   li a5,0
 ;;   andi t0,a4,255
-;;   sltu t2,zero,t0
+;;   snez t2,t0
 ;;   sub a2,zero,t2
 ;;   and a4,a5,a2
 ;;   not a5,a2
@@ -67,14 +67,14 @@
 ;;   slli a2,a0,32
 ;;   srli a5,a2,32
 ;;   ld a3,8(a1)
-;;   ugt a4,a5,a3##ty=i64
+;;   sltu a4,a3,a5
 ;;   ld a3,0(a1)
 ;;   add a3,a3,a5
 ;;   auipc a5,0; ld a5,12(a5); j 12; .8byte 0xffff0000
 ;;   add a3,a3,a5
 ;;   li a5,0
 ;;   andi t0,a4,255
-;;   sltu t2,zero,t0
+;;   snez t2,t0
 ;;   sub a1,zero,t2
 ;;   and a4,a5,a1
 ;;   not a5,a1

@@ -45,17 +45,17 @@
 ;;   srli a7,a5,32
 ;;   auipc a6,0; ld a6,12(a6); j 12; .8byte 0xffff0004
 ;;   add a5,a7,a6
-;;   ult t3,a5,a7##ty=i64
+;;   sltu t3,a5,a7
 ;;   trap_if t3,heap_oob
 ;;   ld t3,8(a2)
-;;   ugt t3,a5,t3##ty=i64
+;;   sltu t3,t3,a5
 ;;   ld t4,0(a2)
 ;;   add a7,t4,a7
 ;;   auipc t4,0; ld t4,12(t4); j 12; .8byte 0xffff0000
 ;;   add a7,a7,t4
 ;;   li t4,0
 ;;   andi a2,t3,255
-;;   sltu a3,zero,a2
+;;   snez a3,a2
 ;;   sub a5,zero,a3
 ;;   and t3,t4,a5
 ;;   not t4,a5
@@ -72,17 +72,17 @@
 ;;   srli a7,a5,32
 ;;   auipc a6,0; ld a6,12(a6); j 12; .8byte 0xffff0004
 ;;   add a5,a7,a6
-;;   ult t3,a5,a7##ty=i64
+;;   sltu t3,a5,a7
 ;;   trap_if t3,heap_oob
 ;;   ld t3,8(a1)
-;;   ugt t3,a5,t3##ty=i64
+;;   sltu t3,t3,a5
 ;;   ld t4,0(a1)
 ;;   add a7,t4,a7
 ;;   auipc t4,0; ld t4,12(t4); j 12; .8byte 0xffff0000
 ;;   add a7,a7,t4
 ;;   li t4,0
 ;;   andi a1,t3,255
-;;   sltu a3,zero,a1
+;;   snez a3,a1
 ;;   sub a5,zero,a3
 ;;   and t3,t4,a5
 ;;   not t4,a5

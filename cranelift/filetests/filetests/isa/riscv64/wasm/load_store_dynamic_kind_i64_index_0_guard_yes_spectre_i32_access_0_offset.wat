@@ -43,12 +43,12 @@
 ;; block0:
 ;;   ld a3,8(a2)
 ;;   addi a3,a3,-4
-;;   ugt a4,a0,a3##ty=i64
+;;   sltu a4,a3,a0
 ;;   ld a2,0(a2)
 ;;   add a0,a2,a0
 ;;   li a3,0
 ;;   andi a7,a4,255
-;;   sltu t4,zero,a7
+;;   snez t4,a7
 ;;   sub t1,zero,t4
 ;;   and a2,a3,t1
 ;;   not a3,t1
@@ -63,12 +63,12 @@
 ;; block0:
 ;;   ld a2,8(a1)
 ;;   addi a2,a2,-4
-;;   ugt a3,a0,a2##ty=i64
+;;   sltu a3,a2,a0
 ;;   ld a1,0(a1)
 ;;   add a0,a1,a0
 ;;   li a2,0
 ;;   andi a7,a3,255
-;;   sltu t4,zero,a7
+;;   snez t4,a7
 ;;   sub t1,zero,t4
 ;;   and a1,a2,t1
 ;;   not a2,t1

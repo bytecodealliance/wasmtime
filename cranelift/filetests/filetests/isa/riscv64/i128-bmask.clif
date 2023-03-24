@@ -11,7 +11,7 @@ block0(v0: i128):
 ; VCode:
 ; block0:
 ;   or a0,a0,a1
-;   sltu a2,zero,a0
+;   snez a2,a0
 ;   sub a1,zero,a2
 ;   mv a0,a1
 ;   ret
@@ -33,7 +33,7 @@ block0(v0: i128):
 ; VCode:
 ; block0:
 ;   or a0,a0,a1
-;   sltu a2,zero,a0
+;   snez a2,a0
 ;   sub a0,zero,a2
 ;   ret
 ; 
@@ -53,7 +53,7 @@ block0(v0: i128):
 ; VCode:
 ; block0:
 ;   or a0,a0,a1
-;   sltu a2,zero,a0
+;   snez a2,a0
 ;   sub a0,zero,a2
 ;   ret
 ; 
@@ -73,7 +73,7 @@ block0(v0: i128):
 ; VCode:
 ; block0:
 ;   or a0,a0,a1
-;   sltu a2,zero,a0
+;   snez a2,a0
 ;   sub a0,zero,a2
 ;   ret
 ; 
@@ -93,7 +93,7 @@ block0(v0: i128):
 ; VCode:
 ; block0:
 ;   or a0,a0,a1
-;   sltu a2,zero,a0
+;   snez a2,a0
 ;   sub a0,zero,a2
 ;   ret
 ; 
@@ -112,7 +112,7 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   sltu t2,zero,a0
+;   snez t2,a0
 ;   sub a1,zero,t2
 ;   mv a0,a1
 ;   ret
@@ -134,7 +134,7 @@ block0(v0: i32):
 ; block0:
 ;   slli t2,a0,32
 ;   srli a1,t2,32
-;   sltu a3,zero,a1
+;   snez a3,a1
 ;   sub a1,zero,a3
 ;   mv a0,a1
 ;   ret
@@ -158,7 +158,7 @@ block0(v0: i16):
 ; block0:
 ;   slli t2,a0,48
 ;   srli a1,t2,48
-;   sltu a3,zero,a1
+;   snez a3,a1
 ;   sub a1,zero,a3
 ;   mv a0,a1
 ;   ret
@@ -181,7 +181,7 @@ block0(v0: i8):
 ; VCode:
 ; block0:
 ;   andi t2,a0,255
-;   sltu a1,zero,t2
+;   snez a1,t2
 ;   sub a1,zero,a1
 ;   mv a0,a1
 ;   ret

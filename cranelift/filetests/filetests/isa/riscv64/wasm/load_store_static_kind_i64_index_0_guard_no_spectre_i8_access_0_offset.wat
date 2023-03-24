@@ -41,7 +41,7 @@
 ;; block0:
 ;;   lui a5,65536
 ;;   addi a5,a5,4095
-;;   ugt a5,a0,a5##ty=i64
+;;   sltu a5,a5,a0
 ;;   bne a5,zero,taken(label3),not_taken(label1)
 ;; block1:
 ;;   ld a6,0(a2)
@@ -57,7 +57,7 @@
 ;; block0:
 ;;   lui a5,65536
 ;;   addi a5,a5,4095
-;;   ugt a5,a0,a5##ty=i64
+;;   sltu a5,a5,a0
 ;;   bne a5,zero,taken(label3),not_taken(label1)
 ;; block1:
 ;;   ld a6,0(a1)

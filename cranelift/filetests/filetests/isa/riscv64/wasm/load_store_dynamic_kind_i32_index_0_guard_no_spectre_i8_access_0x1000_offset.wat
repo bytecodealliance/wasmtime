@@ -47,7 +47,7 @@
 ;;   lui a0,1048575
 ;;   addi a0,a0,4095
 ;;   add t1,t1,a0
-;;   ugt t1,t2,t1##ty=i64
+;;   sltu t1,t1,t2
 ;;   bne t1,zero,taken(label3),not_taken(label1)
 ;; block1:
 ;;   ld a0,0(a2)
@@ -69,7 +69,7 @@
 ;;   lui a0,1048575
 ;;   addi a0,a0,4095
 ;;   add t1,t1,a0
-;;   ugt t1,t2,t1##ty=i64
+;;   sltu t1,t1,t2
 ;;   bne t1,zero,taken(label3),not_taken(label1)
 ;; block1:
 ;;   ld a0,0(a1)

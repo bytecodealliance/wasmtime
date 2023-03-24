@@ -43,10 +43,10 @@
 ;; block0:
 ;;   auipc t4,0; ld t4,12(t4); j 12; .8byte 0xffff0004
 ;;   add t3,a0,t4
-;;   ult t0,t3,a0##ty=i64
+;;   sltu t0,t3,a0
 ;;   trap_if t0,heap_oob
 ;;   ld t0,8(a2)
-;;   ugt t0,t3,t0##ty=i64
+;;   sltu t0,t0,t3
 ;;   bne t0,zero,taken(label3),not_taken(label1)
 ;; block1:
 ;;   ld t1,0(a2)
@@ -64,10 +64,10 @@
 ;; block0:
 ;;   auipc t4,0; ld t4,12(t4); j 12; .8byte 0xffff0004
 ;;   add t3,a0,t4
-;;   ult t0,t3,a0##ty=i64
+;;   sltu t0,t3,a0
 ;;   trap_if t0,heap_oob
 ;;   ld t0,8(a1)
-;;   ugt t0,t3,t0##ty=i64
+;;   sltu t0,t0,t3
 ;;   bne t0,zero,taken(label3),not_taken(label1)
 ;; block1:
 ;;   ld t1,0(a1)

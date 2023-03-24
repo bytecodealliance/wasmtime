@@ -10,15 +10,14 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ; block0:
-;   eq a0,a0,a1##ty=i64
+;   xor a0,a0,a1
+;   seqz a0,a0
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   bne a0, a1, 0xc
-;   addi a0, zero, 1
-;   j 8
-;   mv a0, zero
+;   xor a0, a0, a1
+;   seqz a0, a0
 ;   ret
 
 function %icmp_eq_i128(i128, i128) -> i8 {
@@ -245,8 +244,9 @@ block2:
 
 ; VCode:
 ; block0:
-;   eq a2,a0,a1##ty=i64
-;   bne a2,zero,taken(label2),not_taken(label1)
+;   xor a2,a0,a1
+;   seqz a4,a2
+;   bne a4,zero,taken(label2),not_taken(label1)
 ; block1:
 ;   li a0,2
 ;   ret
@@ -256,15 +256,13 @@ block2:
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   bne a0, a1, 0xc
-;   addi a2, zero, 1
-;   j 8
-;   mv a2, zero
-;   bnez a2, 0xc
-; block1: ; offset 0x14
+;   xor a2, a0, a1
+;   seqz a4, a2
+;   bnez a4, 0xc
+; block1: ; offset 0xc
 ;   addi a0, zero, 2
 ;   ret
-; block2: ; offset 0x1c
+; block2: ; offset 0x14
 ;   addi a0, zero, 1
 ;   ret
 
@@ -280,8 +278,9 @@ block1:
 
 ; VCode:
 ; block0:
-;   eq a1,a0,a1##ty=i64
-;   bne a1,zero,taken(label1),not_taken(label2)
+;   xor a1,a0,a1
+;   seqz a3,a1
+;   bne a3,zero,taken(label1),not_taken(label2)
 ; block1:
 ;   j label3
 ; block2:
@@ -292,11 +291,9 @@ block1:
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   bne a0, a1, 0xc
-;   addi a1, zero, 1
-;   j 8
-;   mv a1, zero
-; block1: ; offset 0x10
+;   xor a1, a0, a1
+;   seqz a3, a1
+; block1: ; offset 0x8
 ;   addi a0, zero, 1
 ;   ret
 

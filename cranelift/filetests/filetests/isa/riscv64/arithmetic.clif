@@ -93,10 +93,12 @@ block0(v0: i64, v1: i64):
 ;   li a2,-1
 ;   li a3,1
 ;   slli a4,a3,63
-;   eq a6,a2,a1##ty=i64
-;   eq t3,a4,a0##ty=i64
-;   and t0,a6,t3
-;   trap_if t0,int_ovf
+;   xor a6,a2,a1
+;   seqz t3,a6
+;   xor t0,a4,a0
+;   seqz t2,t0
+;   and a2,t3,t2
+;   trap_if a2,int_ovf
 ;   trap_ifc int_divz##(zero eq a1)
 ;   div a0,a0,a1
 ;   ret
@@ -106,16 +108,12 @@ block0(v0: i64, v1: i64):
 ;   addi a2, zero, -1
 ;   addi a3, zero, 1
 ;   slli a4, a3, 0x3f
-;   bne a2, a1, 0xc
-;   addi a6, zero, 1
-;   j 8
-;   mv a6, zero
-;   bne a4, a0, 0xc
-;   addi t3, zero, 1
-;   j 8
-;   mv t3, zero
-;   and t0, a6, t3
-;   beqz t0, 8
+;   xor a6, a2, a1
+;   seqz t3, a6
+;   xor t0, a4, a0
+;   seqz t2, t0
+;   and a2, t3, t2
+;   beqz a2, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
 ;   bne zero, a1, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_divz
@@ -131,38 +129,36 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   li a6,2
+;   li t3,2
 ;   li a1,-1
 ;   li a2,1
 ;   slli a4,a2,63
-;   eq a7,a1,a6##ty=i64
-;   eq t3,a4,a0##ty=i64
-;   and t0,a7,t3
-;   trap_if t0,int_ovf
-;   trap_ifc int_divz##(zero eq a6)
-;   div a0,a0,a6
+;   xor a6,a1,t3
+;   seqz t4,a6
+;   xor t0,a4,a0
+;   seqz t2,t0
+;   and a1,t4,t2
+;   trap_if a1,int_ovf
+;   trap_ifc int_divz##(zero eq t3)
+;   div a0,a0,t3
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi a6, zero, 2
+;   addi t3, zero, 2
 ;   addi a1, zero, -1
 ;   addi a2, zero, 1
 ;   slli a4, a2, 0x3f
-;   bne a1, a6, 0xc
-;   addi a7, zero, 1
-;   j 8
-;   mv a7, zero
-;   bne a4, a0, 0xc
-;   addi t3, zero, 1
-;   j 8
-;   mv t3, zero
-;   and t0, a7, t3
-;   beqz t0, 8
+;   xor a6, a1, t3
+;   seqz t4, a6
+;   xor t0, a4, a0
+;   seqz t2, t0
+;   and a1, t4, t2
+;   beqz a1, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
-;   bne zero, a6, 8
+;   bne zero, t3, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_divz
-;   div a0, a0, a6
+;   div a0, a0, t3
 ;   ret
 
 function %f8(i64, i64) -> i64 {
@@ -258,10 +254,12 @@ block0(v0: i32, v1: i32):
 ;   li a6,1
 ;   slli t3,a6,63
 ;   slli t0,a0,32
-;   eq t2,a4,a2##ty=i32
-;   eq a1,t3,t0##ty=i32
-;   and a3,t2,a1
-;   trap_if a3,int_ovf
+;   xor t2,a4,a2
+;   seqz a1,t2
+;   xor a3,t3,t0
+;   seqz a5,a3
+;   and a7,a1,a5
+;   trap_if a7,int_ovf
 ;   trap_ifc int_divz##(zero eq a2)
 ;   divw a0,a0,a2
 ;   ret
@@ -274,16 +272,12 @@ block0(v0: i32, v1: i32):
 ;   addi a6, zero, 1
 ;   slli t3, a6, 0x3f
 ;   slli t0, a0, 0x20
-;   bne a4, a2, 0xc
-;   addi t2, zero, 1
-;   j 8
-;   mv t2, zero
-;   bne t3, t0, 0xc
-;   addi a1, zero, 1
-;   j 8
-;   mv a1, zero
-;   and a3, t2, a1
-;   beqz a3, 8
+;   xor t2, a4, a2
+;   seqz a1, t2
+;   xor a3, t3, t0
+;   seqz a5, a3
+;   and a7, a1, a5
+;   beqz a7, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
 ;   bne zero, a2, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_divz
@@ -299,40 +293,38 @@ block0(v0: i32):
 
 ; VCode:
 ; block0:
-;   li t4,2
+;   li t1,2
 ;   sext.w a0,a0
-;   sext.w a2,t4
+;   sext.w a2,t1
 ;   li a4,-1
 ;   li a6,1
 ;   slli t3,a6,63
 ;   slli t0,a0,32
-;   eq t2,a4,a2##ty=i32
-;   eq a1,t3,t0##ty=i32
-;   and a3,t2,a1
-;   trap_if a3,int_ovf
+;   xor t2,a4,a2
+;   seqz a1,t2
+;   xor a3,t3,t0
+;   seqz a5,a3
+;   and a7,a1,a5
+;   trap_if a7,int_ovf
 ;   trap_ifc int_divz##(zero eq a2)
 ;   divw a0,a0,a2
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi t4, zero, 2
+;   addi t1, zero, 2
 ;   sext.w a0, a0
-;   sext.w a2, t4
+;   sext.w a2, t1
 ;   addi a4, zero, -1
 ;   addi a6, zero, 1
 ;   slli t3, a6, 0x3f
 ;   slli t0, a0, 0x20
-;   bne a4, a2, 0xc
-;   addi t2, zero, 1
-;   j 8
-;   mv t2, zero
-;   bne t3, t0, 0xc
-;   addi a1, zero, 1
-;   j 8
-;   mv a1, zero
-;   and a3, t2, a1
-;   beqz a3, 8
+;   xor t2, a4, a2
+;   seqz a1, t2
+;   xor a3, t3, t0
+;   seqz a5, a3
+;   and a7, a1, a5
+;   beqz a7, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
 ;   bne zero, a2, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_divz
@@ -848,37 +840,35 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   li a6,-1
+;   li t3,-1
 ;   li a1,-1
 ;   li a2,1
 ;   slli a4,a2,63
-;   eq a7,a1,a6##ty=i64
-;   eq t3,a4,a0##ty=i64
-;   and t0,a7,t3
-;   trap_if t0,int_ovf
-;   trap_ifc int_divz##(zero eq a6)
-;   div a0,a0,a6
+;   xor a6,a1,t3
+;   seqz t4,a6
+;   xor t0,a4,a0
+;   seqz t2,t0
+;   and a1,t4,t2
+;   trap_if a1,int_ovf
+;   trap_ifc int_divz##(zero eq t3)
+;   div a0,a0,t3
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi a6, zero, -1
+;   addi t3, zero, -1
 ;   addi a1, zero, -1
 ;   addi a2, zero, 1
 ;   slli a4, a2, 0x3f
-;   bne a1, a6, 0xc
-;   addi a7, zero, 1
-;   j 8
-;   mv a7, zero
-;   bne a4, a0, 0xc
-;   addi t3, zero, 1
-;   j 8
-;   mv t3, zero
-;   and t0, a7, t3
-;   beqz t0, 8
+;   xor a6, a1, t3
+;   seqz t4, a6
+;   xor t0, a4, a0
+;   seqz t2, t0
+;   and a1, t4, t2
+;   beqz a1, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_ovf
-;   bne zero, a6, 8
+;   bne zero, t3, 8
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: int_divz
-;   div a0, a0, a6
+;   div a0, a0, t3
 ;   ret
 

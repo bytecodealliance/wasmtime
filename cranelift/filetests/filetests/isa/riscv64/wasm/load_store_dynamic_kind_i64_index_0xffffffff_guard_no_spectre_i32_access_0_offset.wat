@@ -42,7 +42,7 @@
 ;; function u0:0:
 ;; block0:
 ;;   ld a4,8(a2)
-;;   ugt a4,a0,a4##ty=i64
+;;   sltu a4,a4,a0
 ;;   bne a4,zero,taken(label3),not_taken(label1)
 ;; block1:
 ;;   ld a5,0(a2)
@@ -57,7 +57,7 @@
 ;; function u0:1:
 ;; block0:
 ;;   ld a4,8(a1)
-;;   ugt a4,a0,a4##ty=i64
+;;   sltu a4,a4,a0
 ;;   bne a4,zero,taken(label3),not_taken(label1)
 ;; block1:
 ;;   ld a5,0(a1)

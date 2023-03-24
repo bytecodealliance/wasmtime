@@ -43,7 +43,7 @@
 ;; block0:
 ;;   ld a5,8(a2)
 ;;   addi a5,a5,-4
-;;   ugt a5,a0,a5##ty=i64
+;;   sltu a5,a5,a0
 ;;   bne a5,zero,taken(label3),not_taken(label1)
 ;; block1:
 ;;   ld a6,0(a2)
@@ -59,7 +59,7 @@
 ;; block0:
 ;;   ld a5,8(a1)
 ;;   addi a5,a5,-4
-;;   ugt a5,a0,a5##ty=i64
+;;   sltu a5,a5,a0
 ;;   bne a5,zero,taken(label3),not_taken(label1)
 ;; block1:
 ;;   ld a6,0(a1)

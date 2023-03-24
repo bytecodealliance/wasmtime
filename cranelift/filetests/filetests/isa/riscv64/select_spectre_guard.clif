@@ -12,35 +12,34 @@ block0(v0: i8, v1: i8, v2: i8):
 
 ; VCode:
 ; block0:
-;   li t1,42
+;   li t2,42
 ;   andi t4,a0,255
-;   andi t1,t1,255
-;   eq a0,t4,t1##ty=i8
-;   andi a5,a0,255
-;   sltu a7,zero,a5
-;   sub t4,zero,a7
-;   and t1,a1,t4
-;   not a0,t4
-;   and a2,a2,a0
-;   or a0,t1,a2
+;   andi t1,t2,255
+;   xor a0,t4,t1
+;   seqz a3,a0
+;   andi a6,a3,255
+;   snez t3,a6
+;   sub t0,zero,t3
+;   and t2,a1,t0
+;   not a1,t0
+;   and a3,a2,a1
+;   or a0,t2,a3
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi t1, zero, 0x2a
+;   addi t2, zero, 0x2a
 ;   andi t4, a0, 0xff
-;   andi t1, t1, 0xff
-;   bne t4, t1, 0xc
-;   addi a0, zero, 1
-;   j 8
-;   mv a0, zero
-;   andi a5, a0, 0xff
-;   snez a7, a5
-;   neg t4, a7
-;   and t1, a1, t4
-;   not a0, t4
-;   and a2, a2, a0
-;   or a0, t1, a2
+;   andi t1, t2, 0xff
+;   xor a0, t4, t1
+;   seqz a3, a0
+;   andi a6, a3, 0xff
+;   snez t3, a6
+;   neg t0, t3
+;   and t2, a1, t0
+;   not a1, t0
+;   and a3, a2, a1
+;   or a0, t2, a3
 ;   ret
 
 function %f(i8, i16, i16) -> i16 {
@@ -53,35 +52,34 @@ block0(v0: i8, v1: i16, v2: i16):
 
 ; VCode:
 ; block0:
-;   li t1,42
+;   li t2,42
 ;   andi t4,a0,255
-;   andi t1,t1,255
-;   eq a0,t4,t1##ty=i8
-;   andi a5,a0,255
-;   sltu a7,zero,a5
-;   sub t4,zero,a7
-;   and t1,a1,t4
-;   not a0,t4
-;   and a2,a2,a0
-;   or a0,t1,a2
+;   andi t1,t2,255
+;   xor a0,t4,t1
+;   seqz a3,a0
+;   andi a6,a3,255
+;   snez t3,a6
+;   sub t0,zero,t3
+;   and t2,a1,t0
+;   not a1,t0
+;   and a3,a2,a1
+;   or a0,t2,a3
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi t1, zero, 0x2a
+;   addi t2, zero, 0x2a
 ;   andi t4, a0, 0xff
-;   andi t1, t1, 0xff
-;   bne t4, t1, 0xc
-;   addi a0, zero, 1
-;   j 8
-;   mv a0, zero
-;   andi a5, a0, 0xff
-;   snez a7, a5
-;   neg t4, a7
-;   and t1, a1, t4
-;   not a0, t4
-;   and a2, a2, a0
-;   or a0, t1, a2
+;   andi t1, t2, 0xff
+;   xor a0, t4, t1
+;   seqz a3, a0
+;   andi a6, a3, 0xff
+;   snez t3, a6
+;   neg t0, t3
+;   and t2, a1, t0
+;   not a1, t0
+;   and a3, a2, a1
+;   or a0, t2, a3
 ;   ret
 
 function %f(i8, i32, i32) -> i32 {
@@ -94,35 +92,34 @@ block0(v0: i8, v1: i32, v2: i32):
 
 ; VCode:
 ; block0:
-;   li t1,42
+;   li t2,42
 ;   andi t4,a0,255
-;   andi t1,t1,255
-;   eq a0,t4,t1##ty=i8
-;   andi a5,a0,255
-;   sltu a7,zero,a5
-;   sub t4,zero,a7
-;   and t1,a1,t4
-;   not a0,t4
-;   and a2,a2,a0
-;   or a0,t1,a2
+;   andi t1,t2,255
+;   xor a0,t4,t1
+;   seqz a3,a0
+;   andi a6,a3,255
+;   snez t3,a6
+;   sub t0,zero,t3
+;   and t2,a1,t0
+;   not a1,t0
+;   and a3,a2,a1
+;   or a0,t2,a3
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi t1, zero, 0x2a
+;   addi t2, zero, 0x2a
 ;   andi t4, a0, 0xff
-;   andi t1, t1, 0xff
-;   bne t4, t1, 0xc
-;   addi a0, zero, 1
-;   j 8
-;   mv a0, zero
-;   andi a5, a0, 0xff
-;   snez a7, a5
-;   neg t4, a7
-;   and t1, a1, t4
-;   not a0, t4
-;   and a2, a2, a0
-;   or a0, t1, a2
+;   andi t1, t2, 0xff
+;   xor a0, t4, t1
+;   seqz a3, a0
+;   andi a6, a3, 0xff
+;   snez t3, a6
+;   neg t0, t3
+;   and t2, a1, t0
+;   not a1, t0
+;   and a3, a2, a1
+;   or a0, t2, a3
 ;   ret
 
 function %f(i8, i64, i64) -> i64 {
@@ -135,35 +132,34 @@ block0(v0: i8, v1: i64, v2: i64):
 
 ; VCode:
 ; block0:
-;   li t1,42
+;   li t2,42
 ;   andi t4,a0,255
-;   andi t1,t1,255
-;   eq a0,t4,t1##ty=i8
-;   andi a5,a0,255
-;   sltu a7,zero,a5
-;   sub t4,zero,a7
-;   and t1,a1,t4
-;   not a0,t4
-;   and a2,a2,a0
-;   or a0,t1,a2
+;   andi t1,t2,255
+;   xor a0,t4,t1
+;   seqz a3,a0
+;   andi a6,a3,255
+;   snez t3,a6
+;   sub t0,zero,t3
+;   and t2,a1,t0
+;   not a1,t0
+;   and a3,a2,a1
+;   or a0,t2,a3
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi t1, zero, 0x2a
+;   addi t2, zero, 0x2a
 ;   andi t4, a0, 0xff
-;   andi t1, t1, 0xff
-;   bne t4, t1, 0xc
-;   addi a0, zero, 1
-;   j 8
-;   mv a0, zero
-;   andi a5, a0, 0xff
-;   snez a7, a5
-;   neg t4, a7
-;   and t1, a1, t4
-;   not a0, t4
-;   and a2, a2, a0
-;   or a0, t1, a2
+;   andi t1, t2, 0xff
+;   xor a0, t4, t1
+;   seqz a3, a0
+;   andi a6, a3, 0xff
+;   snez t3, a6
+;   neg t0, t3
+;   and t2, a1, t0
+;   not a1, t0
+;   and a3, a2, a1
+;   or a0, t2, a3
 ;   ret
 
 function %f(i8, i128, i128) -> i128 {
@@ -179,18 +175,19 @@ block0(v0: i8, v1: i128, v2: i128):
 ;   li a5,42
 ;   andi a6,a0,255
 ;   andi a5,a5,255
-;   eq a6,a6,a5##ty=i8
-;   andi a7,a6,255
-;   sltu t4,zero,a7
-;   sub t1,zero,t4
-;   and a0,a1,t1
-;   and a2,a2,t1
-;   not a5,t1
-;   not a6,t1
-;   and t3,a3,a5
-;   and t0,a4,a6
-;   or a0,a0,t3
-;   or a1,a2,t0
+;   xor a6,a6,a5
+;   seqz t3,a6
+;   andi t3,t3,255
+;   snez t0,t3
+;   sub t2,zero,t0
+;   and a1,a1,t2
+;   and a5,a2,t2
+;   not a6,t2
+;   not a7,t2
+;   and t4,a3,a6
+;   and t1,a4,a7
+;   or a0,a1,t4
+;   or a1,a5,t1
 ;   ret
 ; 
 ; Disassembled:
@@ -198,21 +195,19 @@ block0(v0: i8, v1: i128, v2: i128):
 ;   addi a5, zero, 0x2a
 ;   andi a6, a0, 0xff
 ;   andi a5, a5, 0xff
-;   bne a6, a5, 0xc
-;   addi a6, zero, 1
-;   j 8
-;   mv a6, zero
-;   andi a7, a6, 0xff
-;   snez t4, a7
-;   neg t1, t4
-;   and a0, a1, t1
-;   and a2, a2, t1
-;   not a5, t1
-;   not a6, t1
-;   and t3, a3, a5
-;   and t0, a4, a6
-;   or a0, a0, t3
-;   or a1, a2, t0
+;   xor a6, a6, a5
+;   seqz t3, a6
+;   andi t3, t3, 0xff
+;   snez t0, t3
+;   neg t2, t0
+;   and a1, a1, t2
+;   and a5, a2, t2
+;   not a6, t2
+;   not a7, t2
+;   and t4, a3, a6
+;   and t1, a4, a7
+;   or a0, a1, t4
+;   or a1, a5, t1
 ;   ret
 
 function %f(i16, i8, i8) -> i8 {
@@ -230,14 +225,15 @@ block0(v0: i16, v1: i8, v2: i8):
 ;   srli t1,t4,48
 ;   slli a0,a3,48
 ;   srli a3,a0,48
-;   eq a4,t1,a3##ty=i16
-;   andi a7,a4,255
-;   sltu t4,zero,a7
-;   sub t1,zero,t4
-;   and a0,a1,t1
-;   not a3,t1
-;   and a4,a2,a3
-;   or a0,a0,a4
+;   xor a4,t1,a3
+;   seqz a6,a4
+;   andi t3,a6,255
+;   snez t0,t3
+;   sub t2,zero,t0
+;   and a1,a1,t2
+;   not a3,t2
+;   and a5,a2,a3
+;   or a0,a1,a5
 ;   ret
 ; 
 ; Disassembled:
@@ -247,17 +243,15 @@ block0(v0: i16, v1: i8, v2: i8):
 ;   srli t1, t4, 0x30
 ;   slli a0, a3, 0x30
 ;   srli a3, a0, 0x30
-;   bne t1, a3, 0xc
-;   addi a4, zero, 1
-;   j 8
-;   mv a4, zero
-;   andi a7, a4, 0xff
-;   snez t4, a7
-;   neg t1, t4
-;   and a0, a1, t1
-;   not a3, t1
-;   and a4, a2, a3
-;   or a0, a0, a4
+;   xor a4, t1, a3
+;   seqz a6, a4
+;   andi t3, a6, 0xff
+;   snez t0, t3
+;   neg t2, t0
+;   and a1, a1, t2
+;   not a3, t2
+;   and a5, a2, a3
+;   or a0, a1, a5
 ;   ret
 
 function %f(i16, i16, i16) -> i16 {
@@ -275,14 +269,15 @@ block0(v0: i16, v1: i16, v2: i16):
 ;   srli t1,t4,48
 ;   slli a0,a3,48
 ;   srli a3,a0,48
-;   eq a4,t1,a3##ty=i16
-;   andi a7,a4,255
-;   sltu t4,zero,a7
-;   sub t1,zero,t4
-;   and a0,a1,t1
-;   not a3,t1
-;   and a4,a2,a3
-;   or a0,a0,a4
+;   xor a4,t1,a3
+;   seqz a6,a4
+;   andi t3,a6,255
+;   snez t0,t3
+;   sub t2,zero,t0
+;   and a1,a1,t2
+;   not a3,t2
+;   and a5,a2,a3
+;   or a0,a1,a5
 ;   ret
 ; 
 ; Disassembled:
@@ -292,17 +287,15 @@ block0(v0: i16, v1: i16, v2: i16):
 ;   srli t1, t4, 0x30
 ;   slli a0, a3, 0x30
 ;   srli a3, a0, 0x30
-;   bne t1, a3, 0xc
-;   addi a4, zero, 1
-;   j 8
-;   mv a4, zero
-;   andi a7, a4, 0xff
-;   snez t4, a7
-;   neg t1, t4
-;   and a0, a1, t1
-;   not a3, t1
-;   and a4, a2, a3
-;   or a0, a0, a4
+;   xor a4, t1, a3
+;   seqz a6, a4
+;   andi t3, a6, 0xff
+;   snez t0, t3
+;   neg t2, t0
+;   and a1, a1, t2
+;   not a3, t2
+;   and a5, a2, a3
+;   or a0, a1, a5
 ;   ret
 
 function %f(i16, i32, i32) -> i32 {
@@ -320,14 +313,15 @@ block0(v0: i16, v1: i32, v2: i32):
 ;   srli t1,t4,48
 ;   slli a0,a3,48
 ;   srli a3,a0,48
-;   eq a4,t1,a3##ty=i16
-;   andi a7,a4,255
-;   sltu t4,zero,a7
-;   sub t1,zero,t4
-;   and a0,a1,t1
-;   not a3,t1
-;   and a4,a2,a3
-;   or a0,a0,a4
+;   xor a4,t1,a3
+;   seqz a6,a4
+;   andi t3,a6,255
+;   snez t0,t3
+;   sub t2,zero,t0
+;   and a1,a1,t2
+;   not a3,t2
+;   and a5,a2,a3
+;   or a0,a1,a5
 ;   ret
 ; 
 ; Disassembled:
@@ -337,17 +331,15 @@ block0(v0: i16, v1: i32, v2: i32):
 ;   srli t1, t4, 0x30
 ;   slli a0, a3, 0x30
 ;   srli a3, a0, 0x30
-;   bne t1, a3, 0xc
-;   addi a4, zero, 1
-;   j 8
-;   mv a4, zero
-;   andi a7, a4, 0xff
-;   snez t4, a7
-;   neg t1, t4
-;   and a0, a1, t1
-;   not a3, t1
-;   and a4, a2, a3
-;   or a0, a0, a4
+;   xor a4, t1, a3
+;   seqz a6, a4
+;   andi t3, a6, 0xff
+;   snez t0, t3
+;   neg t2, t0
+;   and a1, a1, t2
+;   not a3, t2
+;   and a5, a2, a3
+;   or a0, a1, a5
 ;   ret
 
 function %f(i16, i64, i64) -> i64 {
@@ -365,14 +357,15 @@ block0(v0: i16, v1: i64, v2: i64):
 ;   srli t1,t4,48
 ;   slli a0,a3,48
 ;   srli a3,a0,48
-;   eq a4,t1,a3##ty=i16
-;   andi a7,a4,255
-;   sltu t4,zero,a7
-;   sub t1,zero,t4
-;   and a0,a1,t1
-;   not a3,t1
-;   and a4,a2,a3
-;   or a0,a0,a4
+;   xor a4,t1,a3
+;   seqz a6,a4
+;   andi t3,a6,255
+;   snez t0,t3
+;   sub t2,zero,t0
+;   and a1,a1,t2
+;   not a3,t2
+;   and a5,a2,a3
+;   or a0,a1,a5
 ;   ret
 ; 
 ; Disassembled:
@@ -382,17 +375,15 @@ block0(v0: i16, v1: i64, v2: i64):
 ;   srli t1, t4, 0x30
 ;   slli a0, a3, 0x30
 ;   srli a3, a0, 0x30
-;   bne t1, a3, 0xc
-;   addi a4, zero, 1
-;   j 8
-;   mv a4, zero
-;   andi a7, a4, 0xff
-;   snez t4, a7
-;   neg t1, t4
-;   and a0, a1, t1
-;   not a3, t1
-;   and a4, a2, a3
-;   or a0, a0, a4
+;   xor a4, t1, a3
+;   seqz a6, a4
+;   andi t3, a6, 0xff
+;   snez t0, t3
+;   neg t2, t0
+;   and a1, a1, t2
+;   not a3, t2
+;   and a5, a2, a3
+;   or a0, a1, a5
 ;   ret
 
 function %f(i16, i128, i128) -> i128 {
@@ -405,47 +396,46 @@ block0(v0: i16, v1: i128, v2: i128):
 
 ; VCode:
 ; block0:
-;   li a6,42
+;   li a7,42
 ;   slli a5,a0,48
 ;   srli a5,a5,48
-;   slli a6,a6,48
+;   slli a6,a7,48
 ;   srli t3,a6,48
-;   eq t0,a5,t3##ty=i16
-;   andi t4,t0,255
-;   sltu t1,zero,t4
-;   sub a0,zero,t1
-;   and a6,a1,a0
-;   and a5,a2,a0
-;   not a7,a0
-;   not t3,a0
-;   and t0,a3,a7
-;   and t2,a4,t3
-;   or a0,a6,t0
-;   or a1,a5,t2
+;   xor t0,a5,t3
+;   seqz t2,t0
+;   andi t0,t2,255
+;   snez t2,t0
+;   sub a7,zero,t2
+;   and a6,a1,a7
+;   and a5,a2,a7
+;   not t3,a7
+;   not t4,a7
+;   and t1,a3,t3
+;   and a1,a4,t4
+;   or a0,a6,t1
+;   or a1,a5,a1
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi a6, zero, 0x2a
+;   addi a7, zero, 0x2a
 ;   slli a5, a0, 0x30
 ;   srli a5, a5, 0x30
-;   slli a6, a6, 0x30
+;   slli a6, a7, 0x30
 ;   srli t3, a6, 0x30
-;   bne a5, t3, 0xc
-;   addi t0, zero, 1
-;   j 8
-;   mv t0, zero
-;   andi t4, t0, 0xff
-;   snez t1, t4
-;   neg a0, t1
-;   and a6, a1, a0
-;   and a5, a2, a0
-;   not a7, a0
-;   not t3, a0
-;   and t0, a3, a7
-;   and t2, a4, t3
-;   or a0, a6, t0
-;   or a1, a5, t2
+;   xor t0, a5, t3
+;   seqz t2, t0
+;   andi t0, t2, 0xff
+;   snez t2, t0
+;   neg a7, t2
+;   and a6, a1, a7
+;   and a5, a2, a7
+;   not t3, a7
+;   not t4, a7
+;   and t1, a3, t3
+;   and a1, a4, t4
+;   or a0, a6, t1
+;   or a1, a5, a1
 ;   ret
 
 function %f(i32, i8, i8) -> i8 {
@@ -458,39 +448,34 @@ block0(v0: i32, v1: i8, v2: i8):
 
 ; VCode:
 ; block0:
-;   li a3,42
-;   slli t4,a0,32
-;   srli t1,t4,32
-;   slli a0,a3,32
-;   srli a3,a0,32
-;   eq a4,t1,a3##ty=i32
-;   andi a7,a4,255
-;   sltu t4,zero,a7
-;   sub t1,zero,t4
-;   and a0,a1,t1
-;   not a3,t1
-;   and a4,a2,a3
-;   or a0,a0,a4
+;   li t2,42
+;   sext.w t4,a0
+;   sext.w t1,t2
+;   xor a0,t4,t1
+;   seqz a3,a0
+;   andi a6,a3,255
+;   snez t3,a6
+;   sub t0,zero,t3
+;   and t2,a1,t0
+;   not a1,t0
+;   and a3,a2,a1
+;   or a0,t2,a3
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi a3, zero, 0x2a
-;   slli t4, a0, 0x20
-;   srli t1, t4, 0x20
-;   slli a0, a3, 0x20
-;   srli a3, a0, 0x20
-;   bne t1, a3, 0xc
-;   addi a4, zero, 1
-;   j 8
-;   mv a4, zero
-;   andi a7, a4, 0xff
-;   snez t4, a7
-;   neg t1, t4
-;   and a0, a1, t1
-;   not a3, t1
-;   and a4, a2, a3
-;   or a0, a0, a4
+;   addi t2, zero, 0x2a
+;   sext.w t4, a0
+;   sext.w t1, t2
+;   xor a0, t4, t1
+;   seqz a3, a0
+;   andi a6, a3, 0xff
+;   snez t3, a6
+;   neg t0, t3
+;   and t2, a1, t0
+;   not a1, t0
+;   and a3, a2, a1
+;   or a0, t2, a3
 ;   ret
 
 function %f(i32, i16, i16) -> i16 {
@@ -503,39 +488,34 @@ block0(v0: i32, v1: i16, v2: i16):
 
 ; VCode:
 ; block0:
-;   li a3,42
-;   slli t4,a0,32
-;   srli t1,t4,32
-;   slli a0,a3,32
-;   srli a3,a0,32
-;   eq a4,t1,a3##ty=i32
-;   andi a7,a4,255
-;   sltu t4,zero,a7
-;   sub t1,zero,t4
-;   and a0,a1,t1
-;   not a3,t1
-;   and a4,a2,a3
-;   or a0,a0,a4
+;   li t2,42
+;   sext.w t4,a0
+;   sext.w t1,t2
+;   xor a0,t4,t1
+;   seqz a3,a0
+;   andi a6,a3,255
+;   snez t3,a6
+;   sub t0,zero,t3
+;   and t2,a1,t0
+;   not a1,t0
+;   and a3,a2,a1
+;   or a0,t2,a3
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi a3, zero, 0x2a
-;   slli t4, a0, 0x20
-;   srli t1, t4, 0x20
-;   slli a0, a3, 0x20
-;   srli a3, a0, 0x20
-;   bne t1, a3, 0xc
-;   addi a4, zero, 1
-;   j 8
-;   mv a4, zero
-;   andi a7, a4, 0xff
-;   snez t4, a7
-;   neg t1, t4
-;   and a0, a1, t1
-;   not a3, t1
-;   and a4, a2, a3
-;   or a0, a0, a4
+;   addi t2, zero, 0x2a
+;   sext.w t4, a0
+;   sext.w t1, t2
+;   xor a0, t4, t1
+;   seqz a3, a0
+;   andi a6, a3, 0xff
+;   snez t3, a6
+;   neg t0, t3
+;   and t2, a1, t0
+;   not a1, t0
+;   and a3, a2, a1
+;   or a0, t2, a3
 ;   ret
 
 function %f(i32, i32, i32) -> i32 {
@@ -548,39 +528,34 @@ block0(v0: i32, v1: i32, v2: i32):
 
 ; VCode:
 ; block0:
-;   li a3,42
-;   slli t4,a0,32
-;   srli t1,t4,32
-;   slli a0,a3,32
-;   srli a3,a0,32
-;   eq a4,t1,a3##ty=i32
-;   andi a7,a4,255
-;   sltu t4,zero,a7
-;   sub t1,zero,t4
-;   and a0,a1,t1
-;   not a3,t1
-;   and a4,a2,a3
-;   or a0,a0,a4
+;   li t2,42
+;   sext.w t4,a0
+;   sext.w t1,t2
+;   xor a0,t4,t1
+;   seqz a3,a0
+;   andi a6,a3,255
+;   snez t3,a6
+;   sub t0,zero,t3
+;   and t2,a1,t0
+;   not a1,t0
+;   and a3,a2,a1
+;   or a0,t2,a3
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi a3, zero, 0x2a
-;   slli t4, a0, 0x20
-;   srli t1, t4, 0x20
-;   slli a0, a3, 0x20
-;   srli a3, a0, 0x20
-;   bne t1, a3, 0xc
-;   addi a4, zero, 1
-;   j 8
-;   mv a4, zero
-;   andi a7, a4, 0xff
-;   snez t4, a7
-;   neg t1, t4
-;   and a0, a1, t1
-;   not a3, t1
-;   and a4, a2, a3
-;   or a0, a0, a4
+;   addi t2, zero, 0x2a
+;   sext.w t4, a0
+;   sext.w t1, t2
+;   xor a0, t4, t1
+;   seqz a3, a0
+;   andi a6, a3, 0xff
+;   snez t3, a6
+;   neg t0, t3
+;   and t2, a1, t0
+;   not a1, t0
+;   and a3, a2, a1
+;   or a0, t2, a3
 ;   ret
 
 function %f(i32, i64, i64) -> i64 {
@@ -593,39 +568,34 @@ block0(v0: i32, v1: i64, v2: i64):
 
 ; VCode:
 ; block0:
-;   li a3,42
-;   slli t4,a0,32
-;   srli t1,t4,32
-;   slli a0,a3,32
-;   srli a3,a0,32
-;   eq a4,t1,a3##ty=i32
-;   andi a7,a4,255
-;   sltu t4,zero,a7
-;   sub t1,zero,t4
-;   and a0,a1,t1
-;   not a3,t1
-;   and a4,a2,a3
-;   or a0,a0,a4
+;   li t2,42
+;   sext.w t4,a0
+;   sext.w t1,t2
+;   xor a0,t4,t1
+;   seqz a3,a0
+;   andi a6,a3,255
+;   snez t3,a6
+;   sub t0,zero,t3
+;   and t2,a1,t0
+;   not a1,t0
+;   and a3,a2,a1
+;   or a0,t2,a3
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi a3, zero, 0x2a
-;   slli t4, a0, 0x20
-;   srli t1, t4, 0x20
-;   slli a0, a3, 0x20
-;   srli a3, a0, 0x20
-;   bne t1, a3, 0xc
-;   addi a4, zero, 1
-;   j 8
-;   mv a4, zero
-;   andi a7, a4, 0xff
-;   snez t4, a7
-;   neg t1, t4
-;   and a0, a1, t1
-;   not a3, t1
-;   and a4, a2, a3
-;   or a0, a0, a4
+;   addi t2, zero, 0x2a
+;   sext.w t4, a0
+;   sext.w t1, t2
+;   xor a0, t4, t1
+;   seqz a3, a0
+;   andi a6, a3, 0xff
+;   snez t3, a6
+;   neg t0, t3
+;   and t2, a1, t0
+;   not a1, t0
+;   and a3, a2, a1
+;   or a0, t2, a3
 ;   ret
 
 function %f(i32, i128, i128) -> i128 {
@@ -638,47 +608,42 @@ block0(v0: i32, v1: i128, v2: i128):
 
 ; VCode:
 ; block0:
-;   li a6,42
-;   slli a5,a0,32
-;   srli a5,a5,32
-;   slli a6,a6,32
-;   srli t3,a6,32
-;   eq t0,a5,t3##ty=i32
-;   andi t4,t0,255
-;   sltu t1,zero,t4
-;   sub a0,zero,t1
-;   and a6,a1,a0
-;   and a5,a2,a0
-;   not a7,a0
-;   not t3,a0
-;   and t0,a3,a7
-;   and t2,a4,t3
-;   or a0,a6,t0
-;   or a1,a5,t2
+;   li a5,42
+;   sext.w a6,a0
+;   sext.w a5,a5
+;   xor a6,a6,a5
+;   seqz t3,a6
+;   andi t3,t3,255
+;   snez t0,t3
+;   sub t2,zero,t0
+;   and a1,a1,t2
+;   and a5,a2,t2
+;   not a6,t2
+;   not a7,t2
+;   and t4,a3,a6
+;   and t1,a4,a7
+;   or a0,a1,t4
+;   or a1,a5,t1
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi a6, zero, 0x2a
-;   slli a5, a0, 0x20
-;   srli a5, a5, 0x20
-;   slli a6, a6, 0x20
-;   srli t3, a6, 0x20
-;   bne a5, t3, 0xc
-;   addi t0, zero, 1
-;   j 8
-;   mv t0, zero
-;   andi t4, t0, 0xff
-;   snez t1, t4
-;   neg a0, t1
-;   and a6, a1, a0
-;   and a5, a2, a0
-;   not a7, a0
-;   not t3, a0
-;   and t0, a3, a7
-;   and t2, a4, t3
-;   or a0, a6, t0
-;   or a1, a5, t2
+;   addi a5, zero, 0x2a
+;   sext.w a6, a0
+;   sext.w a5, a5
+;   xor a6, a6, a5
+;   seqz t3, a6
+;   andi t3, t3, 0xff
+;   snez t0, t3
+;   neg t2, t0
+;   and a1, a1, t2
+;   and a5, a2, t2
+;   not a6, t2
+;   not a7, t2
+;   and t4, a3, a6
+;   and t1, a4, a7
+;   or a0, a1, t4
+;   or a1, a5, t1
 ;   ret
 
 function %f(i64, i8, i8) -> i8 {
@@ -691,31 +656,30 @@ block0(v0: i64, v1: i8, v2: i8):
 
 ; VCode:
 ; block0:
-;   li t4,42
-;   eq t4,a0,t4##ty=i64
-;   andi a3,t4,255
-;   sltu a5,zero,a3
-;   sub a7,zero,a5
-;   and t4,a1,a7
-;   not t1,a7
-;   and a0,a2,t1
-;   or a0,t4,a0
+;   li t0,42
+;   xor t4,a0,t0
+;   seqz t1,t4
+;   andi a4,t1,255
+;   snez a6,a4
+;   sub t3,zero,a6
+;   and t0,a1,t3
+;   not t2,t3
+;   and a1,a2,t2
+;   or a0,t0,a1
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi t4, zero, 0x2a
-;   bne a0, t4, 0xc
-;   addi t4, zero, 1
-;   j 8
-;   mv t4, zero
-;   andi a3, t4, 0xff
-;   snez a5, a3
-;   neg a7, a5
-;   and t4, a1, a7
-;   not t1, a7
-;   and a0, a2, t1
-;   or a0, t4, a0
+;   addi t0, zero, 0x2a
+;   xor t4, a0, t0
+;   seqz t1, t4
+;   andi a4, t1, 0xff
+;   snez a6, a4
+;   neg t3, a6
+;   and t0, a1, t3
+;   not t2, t3
+;   and a1, a2, t2
+;   or a0, t0, a1
 ;   ret
 
 function %f(i64, i16, i16) -> i16 {
@@ -728,31 +692,30 @@ block0(v0: i64, v1: i16, v2: i16):
 
 ; VCode:
 ; block0:
-;   li t4,42
-;   eq t4,a0,t4##ty=i64
-;   andi a3,t4,255
-;   sltu a5,zero,a3
-;   sub a7,zero,a5
-;   and t4,a1,a7
-;   not t1,a7
-;   and a0,a2,t1
-;   or a0,t4,a0
+;   li t0,42
+;   xor t4,a0,t0
+;   seqz t1,t4
+;   andi a4,t1,255
+;   snez a6,a4
+;   sub t3,zero,a6
+;   and t0,a1,t3
+;   not t2,t3
+;   and a1,a2,t2
+;   or a0,t0,a1
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi t4, zero, 0x2a
-;   bne a0, t4, 0xc
-;   addi t4, zero, 1
-;   j 8
-;   mv t4, zero
-;   andi a3, t4, 0xff
-;   snez a5, a3
-;   neg a7, a5
-;   and t4, a1, a7
-;   not t1, a7
-;   and a0, a2, t1
-;   or a0, t4, a0
+;   addi t0, zero, 0x2a
+;   xor t4, a0, t0
+;   seqz t1, t4
+;   andi a4, t1, 0xff
+;   snez a6, a4
+;   neg t3, a6
+;   and t0, a1, t3
+;   not t2, t3
+;   and a1, a2, t2
+;   or a0, t0, a1
 ;   ret
 
 function %f(i64, i32, i32) -> i32 {
@@ -765,31 +728,30 @@ block0(v0: i64, v1: i32, v2: i32):
 
 ; VCode:
 ; block0:
-;   li t4,42
-;   eq t4,a0,t4##ty=i64
-;   andi a3,t4,255
-;   sltu a5,zero,a3
-;   sub a7,zero,a5
-;   and t4,a1,a7
-;   not t1,a7
-;   and a0,a2,t1
-;   or a0,t4,a0
+;   li t0,42
+;   xor t4,a0,t0
+;   seqz t1,t4
+;   andi a4,t1,255
+;   snez a6,a4
+;   sub t3,zero,a6
+;   and t0,a1,t3
+;   not t2,t3
+;   and a1,a2,t2
+;   or a0,t0,a1
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi t4, zero, 0x2a
-;   bne a0, t4, 0xc
-;   addi t4, zero, 1
-;   j 8
-;   mv t4, zero
-;   andi a3, t4, 0xff
-;   snez a5, a3
-;   neg a7, a5
-;   and t4, a1, a7
-;   not t1, a7
-;   and a0, a2, t1
-;   or a0, t4, a0
+;   addi t0, zero, 0x2a
+;   xor t4, a0, t0
+;   seqz t1, t4
+;   andi a4, t1, 0xff
+;   snez a6, a4
+;   neg t3, a6
+;   and t0, a1, t3
+;   not t2, t3
+;   and a1, a2, t2
+;   or a0, t0, a1
 ;   ret
 
 function %f(i64, i64, i64) -> i64 {
@@ -802,31 +764,30 @@ block0(v0: i64, v1: i64, v2: i64):
 
 ; VCode:
 ; block0:
-;   li t4,42
-;   eq t4,a0,t4##ty=i64
-;   andi a3,t4,255
-;   sltu a5,zero,a3
-;   sub a7,zero,a5
-;   and t4,a1,a7
-;   not t1,a7
-;   and a0,a2,t1
-;   or a0,t4,a0
+;   li t0,42
+;   xor t4,a0,t0
+;   seqz t1,t4
+;   andi a4,t1,255
+;   snez a6,a4
+;   sub t3,zero,a6
+;   and t0,a1,t3
+;   not t2,t3
+;   and a1,a2,t2
+;   or a0,t0,a1
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi t4, zero, 0x2a
-;   bne a0, t4, 0xc
-;   addi t4, zero, 1
-;   j 8
-;   mv t4, zero
-;   andi a3, t4, 0xff
-;   snez a5, a3
-;   neg a7, a5
-;   and t4, a1, a7
-;   not t1, a7
-;   and a0, a2, t1
-;   or a0, t4, a0
+;   addi t0, zero, 0x2a
+;   xor t4, a0, t0
+;   seqz t1, t4
+;   andi a4, t1, 0xff
+;   snez a6, a4
+;   neg t3, a6
+;   and t0, a1, t3
+;   not t2, t3
+;   and a1, a2, t2
+;   or a0, t0, a1
 ;   ret
 
 function %f(i64, i128, i128) -> i128 {
@@ -840,38 +801,37 @@ block0(v0: i64, v1: i128, v2: i128):
 ; VCode:
 ; block0:
 ;   li a5,42
-;   eq a5,a0,a5##ty=i64
-;   andi a5,a5,255
-;   sltu a7,zero,a5
-;   sub t4,zero,a7
-;   and t1,a1,t4
-;   and a1,a2,t4
-;   not a2,t4
-;   not a5,t4
-;   and a6,a3,a2
-;   and t3,a4,a5
-;   or a0,t1,a6
-;   or a1,a1,t3
+;   xor a5,a0,a5
+;   seqz a5,a5
+;   andi a6,a5,255
+;   snez t3,a6
+;   sub t0,zero,t3
+;   and t2,a1,t0
+;   and a1,a2,t0
+;   not a6,t0
+;   not a5,t0
+;   and a7,a3,a6
+;   and t4,a4,a5
+;   or a0,t2,a7
+;   or a1,a1,t4
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi a5, zero, 0x2a
-;   bne a0, a5, 0xc
-;   addi a5, zero, 1
-;   j 8
-;   mv a5, zero
-;   andi a5, a5, 0xff
-;   snez a7, a5
-;   neg t4, a7
-;   and t1, a1, t4
-;   and a1, a2, t4
-;   not a2, t4
-;   not a5, t4
-;   and a6, a3, a2
-;   and t3, a4, a5
-;   or a0, t1, a6
-;   or a1, a1, t3
+;   xor a5, a0, a5
+;   seqz a5, a5
+;   andi a6, a5, 0xff
+;   snez t3, a6
+;   neg t0, t3
+;   and t2, a1, t0
+;   and a1, a2, t0
+;   not a6, t0
+;   not a5, t0
+;   and a7, a3, a6
+;   and t4, a4, a5
+;   or a0, t2, a7
+;   or a1, a1, t4
 ;   ret
 
 function %f(i128, i8, i8) -> i8 {
@@ -889,7 +849,7 @@ block0(v0: i128, v1: i8, v2: i8):
 ;   li t2,0
 ;   eq t1,[a0,a1],[t1,t2]##ty=i128
 ;   andi a5,t1,255
-;   sltu a7,zero,a5
+;   snez a7,a5
 ;   sub t4,zero,a7
 ;   and t1,a2,t4
 ;   not a0,t4
@@ -930,7 +890,7 @@ block0(v0: i128, v1: i16, v2: i16):
 ;   li t2,0
 ;   eq t1,[a0,a1],[t1,t2]##ty=i128
 ;   andi a5,t1,255
-;   sltu a7,zero,a5
+;   snez a7,a5
 ;   sub t4,zero,a7
 ;   and t1,a2,t4
 ;   not a0,t4
@@ -971,7 +931,7 @@ block0(v0: i128, v1: i32, v2: i32):
 ;   li t2,0
 ;   eq t1,[a0,a1],[t1,t2]##ty=i128
 ;   andi a5,t1,255
-;   sltu a7,zero,a5
+;   snez a7,a5
 ;   sub t4,zero,a7
 ;   and t1,a2,t4
 ;   not a0,t4
@@ -1012,7 +972,7 @@ block0(v0: i128, v1: i64, v2: i64):
 ;   li t2,0
 ;   eq t1,[a0,a1],[t1,t2]##ty=i128
 ;   andi a5,t1,255
-;   sltu a7,zero,a5
+;   snez a7,a5
 ;   sub t4,zero,a7
 ;   and t1,a2,t4
 ;   not a0,t4
@@ -1053,7 +1013,7 @@ block0(v0: i128, v1: i128, v2: i128):
 ;   li a7,0
 ;   eq a6,[a0,a1],[a6,a7]##ty=i128
 ;   andi a7,a6,255
-;   sltu t4,zero,a7
+;   snez t4,a7
 ;   sub t1,zero,t4
 ;   and a0,a2,t1
 ;   and a2,a3,t1

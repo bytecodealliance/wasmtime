@@ -1187,6 +1187,9 @@ impl Inst {
                 let rs2_s = format_reg(rs2, allocs);
                 let rd_s = format_reg(rd.to_reg(), allocs);
                 match alu_op {
+                    AluOPRRR::SltU if rs1 == zero_reg() => {
+                        format!("snez {},{}", rd_s, rs2_s)
+                    }
                     AluOPRRR::Adduw if rs2 == zero_reg() => {
                         format!("zext.w {},{}", rd_s, rs1_s)
                     }

@@ -42,12 +42,12 @@
 ;; function u0:0:
 ;; block0:
 ;;   ld t2,8(a2)
-;;   ugt a3,a0,t2##ty=i64
+;;   sltu a3,t2,a0
 ;;   ld t2,0(a2)
 ;;   add t2,t2,a0
 ;;   li a2,0
 ;;   andi a6,a3,255
-;;   sltu t3,zero,a6
+;;   snez t3,a6
 ;;   sub t0,zero,t3
 ;;   and a0,a2,t0
 ;;   not a2,t0
@@ -61,12 +61,12 @@
 ;; function u0:1:
 ;; block0:
 ;;   ld t2,8(a1)
-;;   ugt a2,a0,t2##ty=i64
+;;   sltu a2,t2,a0
 ;;   ld t2,0(a1)
 ;;   add t2,t2,a0
 ;;   li a1,0
 ;;   andi a6,a2,255
-;;   sltu t3,zero,a6
+;;   snez t3,a6
 ;;   sub t0,zero,t3
 ;;   and a0,a1,t0
 ;;   not a1,t0
