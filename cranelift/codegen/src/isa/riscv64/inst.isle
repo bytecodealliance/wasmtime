@@ -1087,6 +1087,11 @@
 (rule (rv_fsgnjn $F32 rs1 rs2) (fpu_rrr (FpuOPRRR.FsgnjnS) $F32 rs1 rs2))
 (rule (rv_fsgnjn $F64 rs1 rs2) (fpu_rrr (FpuOPRRR.FsgnjnD) $F64 rs1 rs2))
 
+;; Helper for emitting the `fneg` ("Floating Point Negate") instruction.
+;; This instruction is a mnemonic for `fsgnjn rd, rs1, rs1`
+(decl rv_fneg (Type Reg) Reg)
+(rule (rv_fneg ty rs1) (rv_fsgnjn ty rs1 rs1))
+
 ;; Helper for emitting the `fsgnjx` ("Floating Point Sign Injection Exclusive") instruction.
 ;; The output of this instruction is `rs1` with the XOR of the sign bits from `rs1` and `rs2`.
 ;; When `rs1 == rs2` this implements `fabs`
