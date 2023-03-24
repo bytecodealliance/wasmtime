@@ -10,7 +10,6 @@ mod logging;
 mod network;
 mod poll;
 mod random;
-mod stderr;
 mod tcp;
 mod udp;
 pub use wasi_common::{table::Table, WasiCtx};

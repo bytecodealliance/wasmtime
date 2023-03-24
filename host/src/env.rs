@@ -9,8 +9,15 @@ impl wasi::environment::Host for WasiCtx {
 }
 
 #[async_trait::async_trait]
-impl wasi::environment_preopens::Host for WasiCtx {
-    async fn preopens(
+impl wasi::preopens::Host for WasiCtx {
+    async fn get_stdio(&mut self) -> Result<wasi::preopens::StdioPreopens, anyhow::Error> {
+        Ok(wasi::preopens::StdioPreopens {
+            stdin: 0,
+            stdout: 1,
+            stderr: 2,
+        })
+    }
+    async fn get_directories(
         &mut self,
     ) -> Result<Vec<(wasi::filesystem::Descriptor, String)>, anyhow::Error> {
         // Create new handles to the preopens.

@@ -6,6 +6,7 @@ pub mod wasi {
         world: "command",
         tracing: true,
         async: true,
+        trappable_error_type: { "filesystem"::"error-code": Error }
     });
 }
 
@@ -19,18 +20,19 @@ pub fn add_to_linker<T: Send>(
     wasi::instance_monotonic_clock::add_to_linker(l, f)?;
     wasi::instance_wall_clock::add_to_linker(l, f)?;
     wasi::filesystem::add_to_linker(l, f)?;
-    wasi::stderr::add_to_linker(l, f)?;
     wasi::poll::add_to_linker(l, f)?;
     wasi::streams::add_to_linker(l, f)?;
     wasi::random::add_to_linker(l, f)?;
     wasi::tcp::add_to_linker(l, f)?;
+    wasi::tcp_create_socket::add_to_linker(l, f)?;
     wasi::udp::add_to_linker(l, f)?;
+    wasi::udp_create_socket::add_to_linker(l, f)?;
     wasi::ip_name_lookup::add_to_linker(l, f)?;
     wasi::instance_network::add_to_linker(l, f)?;
     wasi::network::add_to_linker(l, f)?;
     wasi::exit::add_to_linker(l, f)?;
     wasi::environment::add_to_linker(l, f)?;
-    wasi::environment_preopens::add_to_linker(l, f)?;
+    wasi::preopens::add_to_linker(l, f)?;
     wasi::types::add_to_linker(l, f)?;
     wasi::default_outgoing_http::add_to_linker(l, f)?;
     Ok(())

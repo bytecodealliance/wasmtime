@@ -3,10 +3,12 @@ use crate::{
     command::wasi::monotonic_clock::{Instant, MonotonicClock},
     command::wasi::poll::Pollable,
     command::wasi::streams::{InputStream, OutputStream, StreamError},
+    command::wasi::tcp::TcpSocket,
     proxy, WasiCtx,
 };
 use wasi_common::clocks::TableMonotonicClockExt;
 use wasi_common::stream::TableStreamExt;
+use wasi_common::tcp_socket::TableTcpSocketExt;
 
 fn convert(error: wasi_common::Error) -> anyhow::Error {
     if let Some(_errno) = error.downcast_ref() {
@@ -25,6 +27,8 @@ pub(crate) enum PollableEntry {
     Write(OutputStream),
     /// Poll for a monotonic-clock timer.
     MonotonicClock(MonotonicClock, Instant, bool),
+    /// Poll for a tcp-socket.
+    TcpSocket(TcpSocket),
 }
 
 async fn drop_pollable(ctx: &mut WasiCtx, pollable: Pollable) -> anyhow::Result<()> {
@@ -41,25 +45,27 @@ async fn poll_oneoff(ctx: &mut WasiCtx, futures: Vec<Pollable>) -> anyhow::Resul
     let mut poll = Poll::new();
     let len = futures.len();
     for (index, future) in futures.into_iter().enumerate() {
+        let userdata = Userdata::from(index as u64);
+
         match *ctx.table().get(future).map_err(convert)? {
             PollableEntry::Read(stream) => {
                 let wasi_stream: &dyn wasi_common::InputStream =
                     ctx.table().get_input_stream(stream).map_err(convert)?;
-                poll.subscribe_read(wasi_stream, Userdata::from(index as u64));
+                poll.subscribe_read(wasi_stream, userdata);
             }
             PollableEntry::Write(stream) => {
                 let wasi_stream: &dyn wasi_common::OutputStream =
                     ctx.table().get_output_stream(stream).map_err(convert)?;
-                poll.subscribe_write(wasi_stream, Userdata::from(index as u64));
+                poll.subscribe_write(wasi_stream, userdata);
             }
             PollableEntry::MonotonicClock(clock, when, absolute) => {
                 let wasi_clock = ctx.table().get_monotonic_clock(clock).map_err(convert)?;
-                poll.subscribe_monotonic_clock(
-                    wasi_clock,
-                    when,
-                    absolute,
-                    Userdata::from(index as u64),
-                );
+                poll.subscribe_monotonic_clock(wasi_clock, when, absolute, userdata);
+            }
+            PollableEntry::TcpSocket(tcp_socket) => {
+                let wasi_tcp_socket: &dyn wasi_common::WasiTcpSocket =
+                    ctx.table().get_tcp_socket(tcp_socket).map_err(convert)?;
+                poll.subscribe_tcp_socket(wasi_tcp_socket, userdata);
             }
         }
     }

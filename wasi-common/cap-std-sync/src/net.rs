@@ -1,34 +1,55 @@
-use cap_std::net::{TcpListener, TcpStream};
+use cap_std::net::{Pool, Shutdown, SocketAddr, TcpListener, TcpStream};
 use io_extras::borrowed::BorrowedReadable;
 #[cfg(windows)]
 use io_extras::os::windows::{AsHandleOrSocket, BorrowedHandleOrSocket};
 use io_lifetimes::AsSocketlike;
-#[cfg(unix)]
-use io_lifetimes::{AsFd, BorrowedFd};
 #[cfg(windows)]
 use io_lifetimes::{AsSocket, BorrowedSocket};
-use rustix::fd::OwnedFd;
+use rustix::fd::{AsFd, BorrowedFd, OwnedFd};
 use std::any::Any;
 use std::convert::TryInto;
 use std::io::{self, Read, Write};
-use std::net::SocketAddr;
+#[cfg(unix)]
+use std::os::fd::AsRawFd;
+#[cfg(windows)]
+use std::os::windows::io::AsRawSocket;
 use std::sync::Arc;
-use system_interface::io::IoExt;
-use system_interface::io::IsReadWrite;
-use system_interface::io::ReadReady;
+use std::sync::Mutex;
+use system_interface::io::{IoExt, IsReadWrite, ReadReady};
 use wasi_common::{
+    network::{AddressFamily, WasiNetwork},
     stream::{InputStream, OutputStream},
-    tcp_socket::{SdFlags, WasiTcpSocket},
+    tcp_socket::WasiTcpSocket,
     udp_socket::{RiFlags, RoFlags, WasiUdpSocket},
     Error, ErrorExt,
 };
 
-pub struct TcpSocket(Arc<OwnedFd>);
+/// Adapt between wasi-sockets where socket/bind/listen/accept are all separate
+/// steps and std/cap-std where they're combined.
+enum TcpSocketImpl {
+    Init(AddressFamily),
+    Bound(Pool, SocketAddr),
+    Listening(TcpListener),
+    Sock(OwnedFd),
+}
+
+pub struct Network(Pool);
+pub struct TcpSocket(Arc<Mutex<TcpSocketImpl>>);
 pub struct UdpSocket(Arc<OwnedFd>);
 
+impl Network {
+    pub fn new(pool: Pool) -> Self {
+        Self(pool)
+    }
+}
+
 impl TcpSocket {
-    pub fn new(owned: OwnedFd) -> Self {
-        Self(Arc::new(owned))
+    pub fn new(family: AddressFamily) -> Self {
+        Self(Arc::new(Mutex::new(TcpSocketImpl::Init(family))))
+    }
+
+    pub fn sock(fd: OwnedFd) -> Self {
+        Self(Arc::new(Mutex::new(TcpSocketImpl::Sock(fd))))
     }
 
     pub fn clone(&self) -> Self {
@@ -52,8 +73,62 @@ impl WasiTcpSocket for TcpSocket {
         self
     }
 
+    fn pollable(&self) -> BorrowedFd<'_> {
+        self.as_fd()
+    }
+
+    async fn bind(
+        &self,
+        network: &dyn WasiNetwork,
+        local_address: SocketAddr,
+    ) -> Result<(), Error> {
+        let mut sock = self.0.lock().unwrap();
+        match &mut *sock {
+            TcpSocketImpl::Init(family) => {
+                // Check that the requested family matches the address.
+                match (local_address, *family) {
+                    (SocketAddr::V4(_), AddressFamily::INET)
+                    | (SocketAddr::V6(_), AddressFamily::INET6) => {}
+                    _ => return Err(Error::invalid_argument()),
+                }
+
+                *sock = TcpSocketImpl::Bound(network.pool().clone(), local_address);
+                Ok(())
+            }
+            TcpSocketImpl::Listening(_) | TcpSocketImpl::Bound(_, _) | TcpSocketImpl::Sock(_) => {
+                Err(Error::invalid_argument())
+            }
+        }
+    }
+
+    async fn listen(
+        &self,
+        _network: &dyn WasiNetwork, // FIXME: Can we remove this from the wit?
+    ) -> Result<(), Error> {
+        let mut sock = self.0.lock().unwrap();
+        match &mut *sock {
+            TcpSocketImpl::Init(_) => {
+                // No address to bind to.
+                Err(Error::destination_address_required())
+            }
+            TcpSocketImpl::Bound(pool, local_addr) => {
+                let listener = pool.bind_tcp_listener(*local_addr)?;
+                *sock = TcpSocketImpl::Listening(listener);
+                Ok(())
+            }
+            TcpSocketImpl::Listening(_) => {
+                // Already listening.
+                Err(Error::invalid_argument())
+            }
+            TcpSocketImpl::Sock(_) => {
+                // Already bound.
+                Err(Error::invalid_argument())
+            }
+        }
+    }
+
     async fn accept(
-        &mut self,
+        &self,
         nonblocking: bool,
     ) -> Result<
         (
@@ -64,42 +139,85 @@ impl WasiTcpSocket for TcpSocket {
         ),
         Error,
     > {
-        let (connection, addr) = self.0.as_socketlike_view::<TcpListener>().accept()?;
-        connection.set_nonblocking(nonblocking)?;
-        let connection = TcpSocket::new(connection.into());
+        let mut sock = self.0.lock().unwrap();
+        match &mut *sock {
+            TcpSocketImpl::Listening(listener) => {
+                let (connection, addr) = listener.accept()?;
+                connection.set_nonblocking(nonblocking)?;
+                let connection = TcpSocket::sock(connection.into());
+                let input_stream = connection.clone();
+                let output_stream = connection.clone();
+                Ok((
+                    Box::new(connection),
+                    Box::new(input_stream),
+                    Box::new(output_stream),
+                    addr,
+                ))
+            }
+            TcpSocketImpl::Init(_) | TcpSocketImpl::Bound(_, _) | TcpSocketImpl::Sock(_) => {
+                Err(Error::invalid_argument())
+            }
+        }
+    }
+
+    async fn connect(
+        &self,
+        network: &dyn WasiNetwork,
+        remote_address: SocketAddr,
+    ) -> Result<(Box<dyn InputStream>, Box<dyn OutputStream>), Error> {
+        let connection = network.pool().connect_tcp_stream(remote_address)?;
+        let connection = TcpSocket::sock(connection.into());
         let input_stream = connection.clone();
         let output_stream = connection.clone();
-        Ok((
-            Box::new(connection),
-            Box::new(input_stream),
-            Box::new(output_stream),
-            addr,
-        ))
+        Ok((Box::new(input_stream), Box::new(output_stream)))
+    }
+
+    async fn shutdown(&self, how: Shutdown) -> Result<(), Error> {
+        self.as_socketlike_view::<TcpStream>().shutdown(how)?;
+        Ok(())
+    }
+
+    fn local_address(&self) -> Result<SocketAddr, Error> {
+        Ok(self.as_socketlike_view::<TcpStream>().local_addr()?)
+    }
+
+    fn remote_address(&self) -> Result<SocketAddr, Error> {
+        Ok(self.as_socketlike_view::<TcpStream>().peer_addr()?)
+    }
+
+    fn nodelay(&self) -> Result<bool, Error> {
+        let value = self.as_socketlike_view::<TcpStream>().nodelay()?;
+        Ok(value)
+    }
+
+    fn set_nodelay(&self, flag: bool) -> Result<(), Error> {
+        self.as_socketlike_view::<TcpStream>().set_nodelay(flag)?;
+        Ok(())
+    }
+
+    fn v6_only(&self) -> Result<bool, Error> {
+        let value = rustix::net::sockopt::get_ipv6_v6only(self).map_err(std::io::Error::from)?;
+        Ok(value)
+    }
+
+    fn set_v6_only(&self, value: bool) -> Result<(), Error> {
+        rustix::net::sockopt::set_ipv6_v6only(self, value).map_err(std::io::Error::from)?;
+        Ok(())
     }
 
     fn set_nonblocking(&mut self, flag: bool) -> Result<(), Error> {
-        self.0
-            .as_socketlike_view::<TcpStream>()
+        self.as_socketlike_view::<TcpStream>()
             .set_nonblocking(flag)?;
         Ok(())
     }
 
-    async fn sock_shutdown(&mut self, how: SdFlags) -> Result<(), Error> {
-        let how = if how == SdFlags::READ | SdFlags::WRITE {
-            cap_std::net::Shutdown::Both
-        } else if how == SdFlags::READ {
-            cap_std::net::Shutdown::Read
-        } else if how == SdFlags::WRITE {
-            cap_std::net::Shutdown::Write
-        } else {
-            return Err(Error::invalid_argument());
-        };
-        self.0.as_socketlike_view::<TcpStream>().shutdown(how)?;
-        Ok(())
-    }
-
     async fn readable(&self) -> Result<(), Error> {
-        if is_read_write(&*self.0)?.0 {
+        let sock = self.0.lock().unwrap();
+        let sock = match &*sock {
+            TcpSocketImpl::Sock(sock) => sock,
+            _ => return Err(Error::invalid_argument()),
+        };
+        if is_read_write(&sock)?.0 {
             Ok(())
         } else {
             Err(Error::badf())
@@ -107,7 +225,12 @@ impl WasiTcpSocket for TcpSocket {
     }
 
     async fn writable(&self) -> Result<(), Error> {
-        if is_read_write(&*self.0)?.1 {
+        let sock = self.0.lock().unwrap();
+        let sock = match &*sock {
+            TcpSocketImpl::Sock(sock) => sock,
+            _ => return Err(Error::invalid_argument()),
+        };
+        if is_read_write(&sock)?.1 {
             Ok(())
         } else {
             Err(Error::badf())
@@ -192,13 +315,13 @@ impl InputStream for TcpSocket {
         self
     }
     #[cfg(unix)]
-    fn pollable_read(&self) -> Option<rustix::fd::BorrowedFd> {
-        Some(self.0.as_fd())
+    fn pollable_read(&self) -> Option<BorrowedFd> {
+        Some(self.as_fd())
     }
 
     #[cfg(windows)]
     fn pollable_read(&self) -> Option<io_extras::os::windows::BorrowedHandleOrSocket> {
-        Some(BorrowedHandleOrSocket::from_socket(self.0.as_socket()))
+        Some(BorrowedHandleOrSocket::from_socket(self.as_socket()))
     }
 
     async fn read(&mut self, buf: &mut [u8]) -> Result<(u64, bool), Error> {
@@ -227,7 +350,7 @@ impl InputStream for TcpSocket {
 
     async fn skip(&mut self, nelem: u64) -> Result<(u64, bool), Error> {
         let num = io::copy(
-            &mut io::Read::take(&*self.0.as_socketlike_view::<TcpStream>(), nelem),
+            &mut io::Read::take(&*self.as_socketlike_view::<TcpStream>(), nelem),
             &mut io::sink(),
         )?;
         Ok((num, num < nelem))
@@ -239,7 +362,7 @@ impl InputStream for TcpSocket {
     }
 
     async fn readable(&self) -> Result<(), Error> {
-        if is_read_write(&*self.0)?.0 {
+        if is_read_write(&*self.as_socketlike_view::<TcpStream>())?.0 {
             Ok(())
         } else {
             Err(Error::badf())
@@ -254,13 +377,13 @@ impl OutputStream for TcpSocket {
     }
 
     #[cfg(unix)]
-    fn pollable_write(&self) -> Option<rustix::fd::BorrowedFd> {
-        Some(self.0.as_fd())
+    fn pollable_write(&self) -> Option<BorrowedFd> {
+        Some(self.as_fd())
     }
 
     #[cfg(windows)]
     fn pollable_write(&self) -> Option<io_extras::os::windows::BorrowedHandleOrSocket> {
-        Some(BorrowedHandleOrSocket::from_socket(self.0.as_socket()))
+        Some(BorrowedHandleOrSocket::from_socket(self.as_socket()))
     }
 
     async fn write(&mut self, buf: &[u8]) -> Result<u64, Error> {
@@ -283,7 +406,7 @@ impl OutputStream for TcpSocket {
         if let Some(readable) = src.pollable_read() {
             let num = io::copy(
                 &mut io::Read::take(BorrowedReadable::borrow(readable), nelem),
-                &mut &*self.0.as_socketlike_view::<TcpStream>(),
+                &mut &*self.as_socketlike_view::<TcpStream>(),
             )?;
             Ok((num, num < nelem))
         } else {
@@ -293,12 +416,12 @@ impl OutputStream for TcpSocket {
     async fn write_zeroes(&mut self, nelem: u64) -> Result<u64, Error> {
         let num = io::copy(
             &mut io::Read::take(io::repeat(0), nelem),
-            &mut &*self.0.as_socketlike_view::<TcpStream>(),
+            &mut &*self.as_socketlike_view::<TcpStream>(),
         )?;
         Ok(num)
     }
     async fn writable(&self) -> Result<(), Error> {
-        if is_read_write(&*self.0)?.1 {
+        if is_read_write(&*self.as_socketlike_view::<TcpStream>())?.1 {
             Ok(())
         } else {
             Err(Error::badf())
@@ -306,10 +429,29 @@ impl OutputStream for TcpSocket {
     }
 }
 
+#[async_trait::async_trait]
+impl WasiNetwork for Network {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn pool(&self) -> &Pool {
+        &self.0
+    }
+}
+
 #[cfg(unix)]
 impl AsFd for TcpSocket {
     fn as_fd(&self) -> BorrowedFd<'_> {
-        self.0.as_fd()
+        let sock = self.0.lock().unwrap();
+        let raw_fd = match &*sock {
+            TcpSocketImpl::Sock(sock) => sock.as_fd().as_raw_fd(),
+            TcpSocketImpl::Listening(listener) => listener.as_fd().as_raw_fd(),
+            _ => panic!(),
+        };
+        // SAFETY: Once we switch to `TcpSocketImpl::Sock`, we never
+        // switch back to `Init` or switch the file descriptor out.
+        unsafe { BorrowedFd::borrow_raw(raw_fd) }
     }
 }
 
@@ -324,7 +466,15 @@ impl AsFd for UdpSocket {
 impl AsSocket for TcpSocket {
     /// Borrows the socket.
     fn as_socket(&self) -> BorrowedSocket<'_> {
-        self.0.as_socket()
+        let sock = self.0.lock().unwrap();
+        let raw_fd = match &*sock {
+            TcpSocketImpl::Sock(sock) => sock.as_socket().as_raw_socket(),
+            TcpSocketImpl::Listening(listener) => listener.as_socket().as_raw_socket(),
+            _ => panic!(),
+        };
+        // SAFETY: Once we switch to `TcpSocketImpl::Sock`, we never
+        // switch back to `Init` or switch the file descriptor out.
+        unsafe { BorrowedFd::borrow_raw(raw_fd) }
     }
 }
 
@@ -332,7 +482,7 @@ impl AsSocket for TcpSocket {
 impl AsHandleOrSocket for TcpSocket {
     #[inline]
     fn as_handle_or_socket(&self) -> BorrowedHandleOrSocket {
-        BorrowedHandleOrSocket::from_socket(self.0.as_socket())
+        BorrowedHandleOrSocket::from_socket(self.as_socket())
     }
 }
 #[cfg(windows)]
@@ -364,7 +514,7 @@ pub fn is_read_write<Socketlike: AsSocketlike>(f: Socketlike) -> io::Result<(boo
     // On Windows, we only have a `TcpStream` impl, so make a view first.
     #[cfg(windows)]
     {
-        f.as_socketlike_view::<std::net::TcpStream>()
+        f.as_socketlike_view::<cap_std::net::TcpStream>()
             .is_read_write()
     }
 }

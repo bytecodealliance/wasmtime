@@ -60,9 +60,16 @@ pub async fn poll_oneoff<'a>(poll: &mut Poll<'a>) -> Result<(), Error> {
                     if let Some(fd) = fd.as_socket() {
                         pollfds.push(PollFd::from_borrowed_fd(fd, PollFlags::OUT));
                     } else {
-                        todo!("polling for writing to non-OS resources");
+                        return Err(Error::trap(anyhow::anyhow!(
+                            "unimplemented: polling for writing to non-OS resources"
+                        )));
                     }
                 }
+            }
+
+            RwStream::TcpSocket(tcp_socket) => {
+                let fd = tcp_socket.pollable();
+                pollfds.push(PollFd::from_borrowed_fd(fd, PollFlags::IN | PollFlags::PRI));
             }
         }
     }
@@ -76,7 +83,7 @@ pub async fn poll_oneoff<'a>(poll: &mut Poll<'a>) -> Result<(), Error> {
                 //
                 // TODO: On Linux and FreeBSD, we could use `ppoll` instead
                 // which takes a `timespec.`
-                ((t.deadline + 999) / 1000)
+                ((t.deadline + 999_999) / 1_000_000)
                     .try_into()
                     .map_err(|_| Error::overflow().context("poll timeout"))?
             } else {
