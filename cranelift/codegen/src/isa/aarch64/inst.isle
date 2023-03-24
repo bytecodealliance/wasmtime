@@ -927,6 +927,10 @@
         (symbol ExternalName)
         (rd WritableReg))
 
+       (MachOTlsGetAddr
+        (symbol ExternalName)
+        (rd WritableReg))
+
        ;; An unwind pseudo-instruction.
        (Unwind
         (inst UnwindInst))
@@ -3589,6 +3593,12 @@
 (rule (elf_tls_get_addr name)
       (let ((dst WritableReg (temp_writable_reg $I64))
             (_ Unit (emit (MInst.ElfTlsGetAddr name dst))))
+        dst))
+
+(decl macho_tls_get_addr (ExternalName) Reg)
+(rule (macho_tls_get_addr name)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.MachOTlsGetAddr name dst))))
         dst))
 
 ;; A tuple of `ProducesFlags` and `IntCC`.

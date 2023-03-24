@@ -654,6 +654,36 @@ impl ObjectModule {
                     32,
                 )
             }
+            Reloc::MachOAarch64TlsAdrPage21 => {
+                assert_eq!(
+                    self.object.format(),
+                    object::BinaryFormat::MachO,
+                    "MachOAarch64TlsAdrPage21 is not supported for this file format"
+                );
+                (
+                    RelocationKind::MachO {
+                        value: object::macho::ARM64_RELOC_TLVP_LOAD_PAGE21,
+                        relative: true,
+                    },
+                    RelocationEncoding::Generic,
+                    21,
+                )
+            }
+            Reloc::MachOAarch64TlsAdrPageOff12 => {
+                assert_eq!(
+                    self.object.format(),
+                    object::BinaryFormat::MachO,
+                    "MachOAarch64TlsAdrPageOff12 is not supported for this file format"
+                );
+                (
+                    RelocationKind::MachO {
+                        value: object::macho::ARM64_RELOC_TLVP_LOAD_PAGEOFF12,
+                        relative: false,
+                    },
+                    RelocationEncoding::Generic,
+                    12,
+                )
+            }
             Reloc::Aarch64TlsGdAdrPage21 => {
                 assert_eq!(
                     self.object.format(),
