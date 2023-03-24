@@ -113,6 +113,10 @@ impl WasiCtxBuilder {
         self.0.insert_listener(fd, listener);
         self
     }
+    pub fn args(mut self, args: &[impl AsRef<str>]) -> Self {
+        self.0.set_args(args);
+        self
+    }
     pub fn build(self) -> WasiCtx {
         self.0
     }
