@@ -54,15 +54,14 @@ impl WasiHttp {
         request_id: crate::default_outgoing_http::OutgoingRequest,
         options: Option<crate::default_outgoing_http::RequestOptions>,
     ) -> wasmtime::Result<crate::default_outgoing_http::FutureIncomingResponse> {
-        let opts = match options {
-            Some(o) => o,
+        let opts = options.unwrap_or(
             // TODO: Configurable defaults here?
-            None => RequestOptions {
+            RequestOptions {
                 connect_timeout_ms: Some(600 * 1000),
                 first_byte_timeout_ms: Some(600 * 1000),
                 between_bytes_timeout_ms: Some(600 * 1000),
             },
-        };
+        );
         let connect_timeout =
             Duration::from_millis(opts.connect_timeout_ms.unwrap_or(600 * 1000).into());
         let first_bytes_timeout =
