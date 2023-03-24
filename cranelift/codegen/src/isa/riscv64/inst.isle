@@ -1135,6 +1135,12 @@
 (rule (rv_zextw rs1)
   (rv_adduw rs1 (zero_reg)))
 
+;; Helper for emitting the `slli.uw` ("Shift Left Logical Immediate Unsigned Word") instruction.
+;; rd ← uext32(rs1) << imm
+(decl rv_slliuw (Reg Imm12) Reg)
+(rule (rv_slliuw rs1 imm)
+  (alu_rr_imm12 (AluOPRRI.SlliUw) rs1 imm))
+
 
 ;; `Zbb` Extension Instructions
 
