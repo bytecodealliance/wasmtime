@@ -54,19 +54,21 @@ async fn run_command(
 ) -> anyhow::Result<()> {
     command::add_to_linker(linker, |x| x)?;
 
+    let mut argv: Vec<&str> = vec!["wasm"];
+    argv.extend(args.iter().map(String::as_str));
+
     let mut store = Store::new(
         engine,
         WasiCtxBuilder::new()
             .inherit_stdio()
             .inherit_network()
+            .args(&argv)
             .build(),
     );
 
     let (wasi, _instance) = Command::instantiate_async(&mut store, component, linker).await?;
 
-    let mut main_args: Vec<&str> = vec!["wasm"];
-    main_args.extend(args.iter().map(String::as_str));
-    let result: Result<(), ()> = wasi.call_main(&mut store, &main_args).await?;
+    let result: Result<(), ()> = wasi.call_run(&mut store).await?;
 
     if result.is_err() {
         anyhow::bail!("command returned with failing exit status");
@@ -83,13 +85,18 @@ async fn run_proxy(
 ) -> anyhow::Result<()> {
     proxy::add_to_linker(linker, |x| x)?;
 
-    let mut store = Store::new(engine, WasiCtxBuilder::new().build());
+    let mut argv: Vec<&str> = vec!["wasm"];
+    argv.extend(args.iter().map(String::as_str));
+
+    let mut store = Store::new(
+        engine,
+        WasiCtxBuilder::new().inherit_stdio().args(&argv).build(),
+    );
 
     let (wasi, _instance) = Proxy::instantiate_async(&mut store, component, linker).await?;
 
     // TODO: do something
     let _ = wasi;
-    let _ = args;
     let result: Result<(), ()> = Ok(());
 
     if result.is_err() {

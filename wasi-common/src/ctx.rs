@@ -17,6 +17,7 @@ pub struct WasiCtx {
     pub sched: Box<dyn WasiSched>,
     pub table: Table,
     pub env: Vec<(String, String)>,
+    pub args: Vec<String>,
     pub preopens: Vec<(Box<dyn WasiDir>, String)>,
     pub pool: Pool,
     pub network_creator: Box<dyn Fn(Pool) -> Result<Box<dyn WasiNetwork>, Error> + Send + Sync>,
@@ -41,6 +42,7 @@ impl WasiCtx {
             sched,
             table,
             env: Vec::new(),
+            args: Vec::new(),
             preopens: Vec::new(),
             pool: Pool::new(),
             network_creator,
@@ -135,6 +137,17 @@ impl WasiCtx {
 
     pub fn push_env(&mut self, name: &str, value: &str) {
         self.env.push((name.to_owned(), value.to_owned()))
+    }
+
+    pub fn push_arg(&mut self, arg: &str) {
+        self.args.push(arg.to_owned())
+    }
+
+    pub fn set_args(&mut self, args: &[impl AsRef<str>]) {
+        self.args = args
+            .iter()
+            .map(|a| a.as_ref().to_string())
+            .collect::<Vec<String>>();
     }
 
     pub fn push_preopened_dir(&mut self, dir: Box<dyn WasiDir>, path: &str) -> anyhow::Result<()> {
