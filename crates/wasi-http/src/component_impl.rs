@@ -1,16 +1,11 @@
 use crate::default_outgoing_http::Host;
 pub use crate::r#struct::WasiHttp;
 use crate::streams::Host as StreamsHost;
-use crate::types::Host as TypesHost;
-use crate::types::RequestOptions;
-use crate::types::Scheme;
+use crate::types::{Host as TypesHost, RequestOptions, Scheme};
+use anyhow::anyhow;
 use std::str;
 use std::vec::Vec;
-use wasmtime::AsContext;
-use wasmtime::AsContextMut;
-use wasmtime::Caller;
-use wasmtime::Extern;
-use wasmtime::Memory;
+use wasmtime::{AsContext, AsContextMut, Caller, Extern, Memory};
 
 const MEMORY: &str = "memory";
 
@@ -24,17 +19,6 @@ enum HttpError {
     BufferTooSmall,
     #[error("UTF-8 error")]
     Utf8Error(#[from] std::str::Utf8Error),
-}
-
-impl From<HttpError> for u32 {
-    fn from(e: HttpError) -> u32 {
-        match e {
-            HttpError::MemoryNotFound => 2,
-            HttpError::MemoryAccessError(_) => 3,
-            HttpError::BufferTooSmall => 4,
-            _ => panic!("Unsupported"),
-        }
-    }
 }
 
 fn memory_get<T>(caller: &mut Caller<'_, T>) -> Result<Memory, HttpError> {
@@ -83,15 +67,15 @@ fn string_from_memory(
     Ok(std::str::from_utf8(&slice)?.to_string())
 }
 
-fn allocate_guest_pointer<T>(caller: &mut Caller<'_, T>, size: u32) -> u32 {
-    let realloc = caller.get_export("cabi_realloc").unwrap();
-    let func = realloc.into_func().unwrap();
-    let typed = func
-        .typed::<(u32, u32, u32, u32), u32>(caller.as_context())
-        .unwrap();
-    typed
-        .call(caller.as_context_mut(), (0, 0, 4, size))
-        .unwrap()
+fn allocate_guest_pointer<T>(caller: &mut Caller<'_, T>, size: u32) -> anyhow::Result<u32> {
+    let realloc = caller
+        .get_export("cabi_realloc")
+        .ok_or_else(|| anyhow!("missing required export cabi_realloc"))?;
+    let func = realloc
+        .into_func()
+        .ok_or_else(|| anyhow!("cabi_realloc must be a func"))?;
+    let typed = func.typed::<(u32, u32, u32, u32), u32>(caller.as_context())?;
+    Ok(typed.call(caller.as_context_mut(), (0, 0, 4, size))?)
 }
 
 fn u32_array_to_u8(arr: &[u32]) -> Vec<u8> {
@@ -121,7 +105,7 @@ pub fn add_component_to_linker<T>(
               first_byte_timeout_ms: u32,
               has_between_bytes_timeout: i32,
               between_bytes_timeout_ms: u32|
-              -> u32 {
+              -> anyhow::Result<u32> {
             let options = if has_options == 1 {
                 Some(RequestOptions {
                     connect_timeout_ms: if has_timeout == 1 {
@@ -144,10 +128,7 @@ pub fn add_component_to_linker<T>(
                 None
             };
 
-            match get_cx(caller.data_mut()).handle(request, options) {
-                Ok(v) => v,
-                Err(_) => 0,
-            }
+            Ok(get_cx(caller.data_mut()).handle(request, options)?)
         },
     )?;
     linker.func_wrap(
@@ -168,29 +149,23 @@ pub fn add_component_to_linker<T>(
               authority_ptr: u32,
               authority_len: u32,
               headers: u32|
-              -> u32 {
-            let memory = match memory_get(&mut caller) {
-                Ok(m) => m,
-                Err(_) => return 0,
-            };
-            let path =
-                string_from_memory(&memory, caller.as_context_mut(), path_ptr, path_len).unwrap();
-            let query =
-                string_from_memory(&memory, caller.as_context_mut(), query_ptr, query_len).unwrap();
+              -> anyhow::Result<u32> {
+            let memory = memory_get(&mut caller)?;
+            let path = string_from_memory(&memory, caller.as_context_mut(), path_ptr, path_len)?;
+            let query = string_from_memory(&memory, caller.as_context_mut(), query_ptr, query_len)?;
             let authority = string_from_memory(
                 &memory,
                 caller.as_context_mut(),
                 authority_ptr,
                 authority_len,
-            )
-            .unwrap();
+            )?;
 
             let mut s = Scheme::Https;
             if scheme_is_some == 1 {
                 s = match scheme {
                     0 => Scheme::Http,
                     1 => Scheme::Https,
-                    _ => panic!("unsupported!"),
+                    _ => anyhow::bail!("unsupported scheme {scheme}"),
                 };
             }
             let m = match method {
@@ -203,29 +178,26 @@ pub fn add_component_to_linker<T>(
                 6 => crate::types::Method::Options,
                 7 => crate::types::Method::Trace,
                 8 => crate::types::Method::Patch,
-                _ => panic!("unsupported method!"),
+                _ => anyhow::bail!("unsupported method {method}"),
             };
 
             let ctx = get_cx(caller.data_mut());
-            match ctx.new_outgoing_request(m, path, query, Some(s), authority, headers) {
-                Ok(v) => v,
-                Err(_) => 0,
-            }
+            Ok(ctx.new_outgoing_request(m, path, query, Some(s), authority, headers)?)
         },
     )?;
     linker.func_wrap(
         "types",
         "incoming-response-status",
-        move |mut caller: Caller<'_, T>, id: u32| -> u32 {
+        move |mut caller: Caller<'_, T>, id: u32| -> anyhow::Result<u32> {
             let ctx = get_cx(caller.data_mut());
-            ctx.incoming_response_status(id).unwrap().into()
+            Ok(ctx.incoming_response_status(id)?.into())
         },
     )?;
     linker.func_wrap(
         "types",
         "future-incoming-response-get",
-        move |mut caller: Caller<'_, T>, future: u32, ptr: i32| {
-            let memory = memory_get(&mut caller).unwrap();
+        move |mut caller: Caller<'_, T>, future: u32, ptr: i32| -> anyhow::Result<()> {
+            let memory = memory_get(&mut caller)?;
 
             // First == is_some
             // Second == is_err
@@ -235,20 +207,16 @@ pub fn add_component_to_linker<T>(
             let result: [u32; 5] = [1, 0, future, 0, 0];
             let raw = u32_array_to_u8(&result);
 
-            memory
-                .write(caller.as_context_mut(), ptr as _, &raw)
-                .unwrap();
+            memory.write(caller.as_context_mut(), ptr as _, &raw)?;
+            Ok(())
         },
     )?;
     linker.func_wrap(
         "types",
         "incoming-response-consume",
-        move |mut caller: Caller<'_, T>, response: u32, ptr: i32| {
+        move |mut caller: Caller<'_, T>, response: u32, ptr: i32| -> anyhow::Result<()> {
             let ctx = get_cx(caller.data_mut());
-            let stream = match ctx.incoming_response_consume(response) {
-                Ok(s) => s.unwrap_or(0),
-                Err(_) => 0,
-            };
+            let stream = ctx.incoming_response_consume(response)?.unwrap_or(0);
 
             let memory = memory_get(&mut caller).unwrap();
 
@@ -257,204 +225,189 @@ pub fn add_component_to_linker<T>(
             let result: [u32; 2] = [0, stream];
             let raw = u32_array_to_u8(&result);
 
-            memory
-                .write(caller.as_context_mut(), ptr as _, &raw)
-                .unwrap();
+            memory.write(caller.as_context_mut(), ptr as _, &raw)?;
+            Ok(())
         },
     )?;
     linker.func_wrap(
         "poll",
         "drop-pollable",
-        move |_caller: Caller<'_, T>, _a: i32| {},
+        move |_caller: Caller<'_, T>, _a: i32| -> anyhow::Result<()> {
+            anyhow::bail!("unimplemented")
+        },
     )?;
     linker.func_wrap(
         "types",
         "drop-fields",
-        move |mut caller: Caller<'_, T>, ptr: u32| {
+        move |mut caller: Caller<'_, T>, ptr: u32| -> anyhow::Result<()> {
             let ctx = get_cx(caller.data_mut());
-            ctx.drop_fields(ptr)
+            ctx.drop_fields(ptr)?;
+            Ok(())
         },
     )?;
     linker.func_wrap(
         "streams",
         "drop-input-stream",
-        move |mut caller: Caller<'_, T>, id: u32| {
+        move |mut caller: Caller<'_, T>, id: u32| -> anyhow::Result<()> {
             let ctx = get_cx(caller.data_mut());
-            match ctx.drop_input_stream(id) {
-                Ok(_) => {}
-                Err(_) => {}
-            };
+            ctx.drop_input_stream(id)?;
+            Ok(())
         },
     )?;
     linker.func_wrap(
         "types",
         "outgoing-request-write",
-        move |mut caller: Caller<'_, T>, request: u32, ptr: u32| {
+        move |mut caller: Caller<'_, T>, request: u32, ptr: u32| -> anyhow::Result<()> {
             let ctx = get_cx(caller.data_mut());
-            let stream = ctx.outgoing_request_write(request).unwrap().unwrap();
+            let stream = ctx
+                .outgoing_request_write(request)?
+                .map_err(|_| anyhow!("no outgoing stream present"))?;
 
-            let memory = memory_get(&mut caller).unwrap();
+            let memory = memory_get(&mut caller)?;
             // First == is_some
             // Second == stream_id
             let result: [u32; 2] = [0, stream];
             let raw = u32_array_to_u8(&result);
 
-            memory
-                .write(caller.as_context_mut(), ptr as _, &raw)
-                .unwrap();
+            memory.write(caller.as_context_mut(), ptr as _, &raw)?;
+            Ok(())
         },
     )?;
     linker.func_wrap(
         "types",
         "drop-outgoing-request",
-        move |mut caller: Caller<'_, T>, id: u32| {
+        move |mut caller: Caller<'_, T>, id: u32| -> anyhow::Result<()> {
             let ctx = get_cx(caller.data_mut());
-            ctx.drop_outgoing_request(id).unwrap();
+            ctx.drop_outgoing_request(id)?;
+            Ok(())
         },
     )?;
     linker.func_wrap(
         "types",
         "drop-incoming-response",
-        move |mut caller: Caller<'_, T>, id: u32| {
+        move |mut caller: Caller<'_, T>, id: u32| -> anyhow::Result<()> {
             let ctx = get_cx(caller.data_mut());
-            ctx.drop_incoming_response(id).unwrap()
+            ctx.drop_incoming_response(id)?;
+            Ok(())
         },
     )?;
     linker.func_wrap(
         "types",
         "new-fields",
-        move |mut caller: Caller<'_, T>, base_ptr: u32, len: u32| -> u32 {
-            let memory = memory_get(&mut caller).unwrap();
+        move |mut caller: Caller<'_, T>, base_ptr: u32, len: u32| -> anyhow::Result<u32> {
+            let memory = memory_get(&mut caller)?;
 
             let mut vec = Vec::new();
             let mut i = 0;
             // TODO: read this more efficiently as a single block.
             while i < len {
                 let ptr = base_ptr + i * 16;
-                let name_ptr = u32_from_memory(&memory, caller.as_context_mut(), ptr).unwrap();
-                let name_len = u32_from_memory(&memory, caller.as_context_mut(), ptr + 4).unwrap();
-                let value_ptr = u32_from_memory(&memory, caller.as_context_mut(), ptr + 8).unwrap();
-                let value_len =
-                    u32_from_memory(&memory, caller.as_context_mut(), ptr + 12).unwrap();
+                let name_ptr = u32_from_memory(&memory, caller.as_context_mut(), ptr)?;
+                let name_len = u32_from_memory(&memory, caller.as_context_mut(), ptr + 4)?;
+                let value_ptr = u32_from_memory(&memory, caller.as_context_mut(), ptr + 8)?;
+                let value_len = u32_from_memory(&memory, caller.as_context_mut(), ptr + 12)?;
 
-                let name = string_from_memory(&memory, caller.as_context_mut(), name_ptr, name_len)
-                    .unwrap();
+                let name =
+                    string_from_memory(&memory, caller.as_context_mut(), name_ptr, name_len)?;
                 let value =
-                    string_from_memory(&memory, caller.as_context_mut(), value_ptr, value_len)
-                        .unwrap();
+                    string_from_memory(&memory, caller.as_context_mut(), value_ptr, value_len)?;
 
                 vec.push((name, value));
                 i = i + 1;
             }
 
             let ctx = get_cx(caller.data_mut());
-            match ctx.new_fields(vec) {
-                Ok(v) => v,
-                Err(_) => 0,
-            }
+            Ok(ctx.new_fields(vec)?)
         },
     )?;
     linker.func_wrap(
         "streams",
         "read",
-        move |mut caller: Caller<'_, T>, stream: u32, len: u64, ptr: u32| {
+        move |mut caller: Caller<'_, T>, stream: u32, len: u64, ptr: u32| -> anyhow::Result<()> {
             let ctx = get_cx(caller.data_mut());
-            let bytes_tuple = ctx.read(stream, len).unwrap().unwrap();
+            let bytes_tuple = ctx.read(stream, len)??;
             let bytes = bytes_tuple.0;
             let done = match bytes_tuple.1 {
                 true => 1,
                 false => 0,
             };
-            let body_len: u32 = bytes.len().try_into().unwrap();
-            let out_ptr = allocate_guest_pointer(&mut caller, body_len);
+            let body_len: u32 = bytes.len().try_into()?;
+            let out_ptr = allocate_guest_pointer(&mut caller, body_len)?;
             let result: [u32; 4] = [0, out_ptr, body_len, done];
             let raw = u32_array_to_u8(&result);
 
-            let memory = memory_get(&mut caller).unwrap();
-            memory
-                .write(caller.as_context_mut(), out_ptr as _, &bytes)
-                .unwrap();
-            memory
-                .write(caller.as_context_mut(), ptr as _, &raw)
-                .unwrap();
+            let memory = memory_get(&mut caller)?;
+            memory.write(caller.as_context_mut(), out_ptr as _, &bytes)?;
+            memory.write(caller.as_context_mut(), ptr as _, &raw)?;
+            Ok(())
         },
     )?;
     linker.func_wrap(
         "streams",
         "write",
-        move |mut caller: Caller<'_, T>, stream: u32, body_ptr: u32, body_len: u32, ptr: u32| {
-            let memory = memory_get(&mut caller).unwrap();
-            let body =
-                string_from_memory(&memory, caller.as_context_mut(), body_ptr, body_len).unwrap();
+        move |mut caller: Caller<'_, T>,
+              stream: u32,
+              body_ptr: u32,
+              body_len: u32,
+              ptr: u32|
+              -> anyhow::Result<()> {
+            let memory = memory_get(&mut caller)?;
+            let body = string_from_memory(&memory, caller.as_context_mut(), body_ptr, body_len)?;
 
             let result: [u32; 3] = [0, 0, body_len];
             let raw = u32_array_to_u8(&result);
 
-            let memory = memory_get(&mut caller).unwrap();
-            memory
-                .write(caller.as_context_mut(), ptr as _, &raw)
-                .unwrap();
+            let memory = memory_get(&mut caller)?;
+            memory.write(caller.as_context_mut(), ptr as _, &raw)?;
 
             let ctx = get_cx(caller.data_mut());
-            ctx.write(stream, body.as_bytes().to_vec())
-                .unwrap()
-                .unwrap();
+            ctx.write(stream, body.as_bytes().to_vec())??;
+            Ok(())
         },
     )?;
     linker.func_wrap(
         "types",
         "fields-entries",
-        move |mut caller: Caller<'_, T>, fields: u32, out_ptr: u32| {
+        move |mut caller: Caller<'_, T>, fields: u32, out_ptr: u32| -> anyhow::Result<()> {
             let ctx = get_cx(caller.data_mut());
-            let entries = ctx.fields_entries(fields).unwrap();
+            let entries = ctx.fields_entries(fields)?;
 
             let header_len = entries.len();
-            let tuple_ptr =
-                allocate_guest_pointer(&mut caller, (16 * header_len).try_into().unwrap());
+            let tuple_ptr = allocate_guest_pointer(&mut caller, (16 * header_len).try_into()?)?;
             let mut ptr = tuple_ptr;
             for item in entries.iter() {
                 let name = &item.0;
                 let value = &item.1;
-                let name_len: u32 = name.len().try_into().unwrap();
-                let value_len: u32 = value.len().try_into().unwrap();
+                let name_len: u32 = name.len().try_into()?;
+                let value_len: u32 = value.len().try_into()?;
 
-                let name_ptr = allocate_guest_pointer(&mut caller, name_len);
-                let value_ptr = allocate_guest_pointer(&mut caller, value_len);
+                let name_ptr = allocate_guest_pointer(&mut caller, name_len)?;
+                let value_ptr = allocate_guest_pointer(&mut caller, value_len)?;
 
-                let memory = memory_get(&mut caller).unwrap();
-                memory
-                    .write(caller.as_context_mut(), name_ptr as _, &name.as_bytes())
-                    .unwrap();
-                memory
-                    .write(caller.as_context_mut(), value_ptr as _, &value.as_bytes())
-                    .unwrap();
+                let memory = memory_get(&mut caller)?;
+                memory.write(caller.as_context_mut(), name_ptr as _, &name.as_bytes())?;
+                memory.write(caller.as_context_mut(), value_ptr as _, &value.as_bytes())?;
 
                 let pair: [u32; 4] = [name_ptr, name_len, value_ptr, value_len];
                 let raw_pair = u32_array_to_u8(&pair);
-                memory
-                    .write(caller.as_context_mut(), ptr as _, &raw_pair)
-                    .unwrap();
+                memory.write(caller.as_context_mut(), ptr as _, &raw_pair)?;
 
                 ptr = ptr + 16;
             }
 
-            let memory = memory_get(&mut caller).unwrap();
-            let result: [u32; 2] = [tuple_ptr, header_len.try_into().unwrap()];
+            let memory = memory_get(&mut caller)?;
+            let result: [u32; 2] = [tuple_ptr, header_len.try_into()?];
             let raw = u32_array_to_u8(&result);
-            memory
-                .write(caller.as_context_mut(), out_ptr as _, &raw)
-                .unwrap();
+            memory.write(caller.as_context_mut(), out_ptr as _, &raw)?;
+            Ok(())
         },
     )?;
     linker.func_wrap(
         "types",
         "incoming-response-headers",
-        move |mut caller: Caller<'_, T>, handle: u32| -> u32 {
+        move |mut caller: Caller<'_, T>, handle: u32| -> anyhow::Result<u32> {
             let ctx = get_cx(caller.data_mut());
-            match ctx.incoming_response_headers(handle) {
-                Ok(h) => h,
-                Err(_) => 0,
-            }
+            Ok(ctx.incoming_response_headers(handle)?)
         },
     )?;
     Ok(())
