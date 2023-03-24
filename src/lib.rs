@@ -32,7 +32,7 @@ pub mod bindings {
         raw_strings,
         // The generated definition of command will pull in std, so we are defining it
         // manually below instead
-        skip: ["main", "get-directories", "get-environment"],
+        skip: ["run", "get-directories", "get-environment"],
     });
 
     #[cfg(feature = "reactor")]
@@ -46,12 +46,7 @@ pub mod bindings {
 
 #[no_mangle]
 #[cfg(feature = "command")]
-pub unsafe extern "C" fn main(args_ptr: *const WasmStr, args_len: usize) -> u32 {
-    State::with_mut(|state| {
-        state.args = Some(slice::from_raw_parts(args_ptr, args_len));
-        Ok(())
-    });
-
+pub unsafe extern "C" fn run() -> u32 {
     #[link(wasm_import_module = "__main_module__")]
     extern "C" {
         fn _start();
@@ -244,21 +239,19 @@ pub unsafe extern "C" fn cabi_export_realloc(
 #[no_mangle]
 pub unsafe extern "C" fn args_get(mut argv: *mut *mut u8, mut argv_buf: *mut u8) -> Errno {
     State::with(|state| {
-        if let Some(args) = state.args {
-            for arg in args {
-                // Copy the argument into `argv_buf` which must be sized
-                // appropriately by the caller.
-                ptr::copy_nonoverlapping(arg.ptr, argv_buf, arg.len);
-                *argv_buf.add(arg.len) = 0;
+        for arg in state.get_args() {
+            // Copy the argument into `argv_buf` which must be sized
+            // appropriately by the caller.
+            ptr::copy_nonoverlapping(arg.ptr, argv_buf, arg.len);
+            *argv_buf.add(arg.len) = 0;
 
-                // Copy the argument pointer into the `argv` buf
-                *argv = argv_buf;
+            // Copy the argument pointer into the `argv` buf
+            *argv = argv_buf;
 
-                // Update our pointers past what's written to prepare for the
-                // next argument.
-                argv = argv.add(1);
-                argv_buf = argv_buf.add(arg.len + 1);
-            }
+            // Update our pointers past what's written to prepare for the
+            // next argument.
+            argv = argv.add(1);
+            argv_buf = argv_buf.add(arg.len + 1);
         }
         Ok(())
     })
@@ -268,18 +261,11 @@ pub unsafe extern "C" fn args_get(mut argv: *mut *mut u8, mut argv_buf: *mut u8)
 #[no_mangle]
 pub unsafe extern "C" fn args_sizes_get(argc: *mut Size, argv_buf_size: *mut Size) -> Errno {
     State::with(|state| {
-        match state.args {
-            Some(args) => {
-                *argc = args.len();
-                // Add one to each length for the terminating nul byte added by
-                // the `args_get` function.
-                *argv_buf_size = args.iter().map(|s| s.len + 1).sum();
-            }
-            None => {
-                *argc = 0;
-                *argv_buf_size = 0;
-            }
-        }
+        let args = state.get_args();
+        *argc = args.len();
+        // Add one to each length for the terminating nul byte added by
+        // the `args_get` function.
+        *argv_buf_size = args.iter().map(|s| s.len + 1).sum();
         Ok(())
     })
 }
@@ -2087,8 +2073,9 @@ struct State {
     /// which need to be long-lived, by using `import_alloc.with_arena`.
     long_lived_arena: BumpArena,
 
-    /// Arguments passed to the `main` entrypoint
-    args: Option<&'static [WasmStr]>,
+    /// Arguments. Initialized lazily. Access with `State::get_args` to take care of
+    /// initialization.
+    args: Cell<Option<&'static [WasmStr]>>,
 
     /// Environment variables. Initialized lazily. Access with `State::get_environment`
     /// to take care of initialization.
@@ -2131,6 +2118,12 @@ impl Drop for DirectoryEntryStream {
 #[repr(C)]
 pub struct WasmStr {
     ptr: *const u8,
+    len: usize,
+}
+
+#[repr(C)]
+pub struct WasmStrList {
+    base: *const WasmStr,
     len: usize,
 }
 
@@ -2265,7 +2258,7 @@ impl State {
                 descriptors: RefCell::new(None),
                 path_buf: UnsafeCell::new(MaybeUninit::uninit()),
                 long_lived_arena: BumpArena::new(),
-                args: None,
+                args: Cell::new(None),
                 env_vars: Cell::new(None),
                 dirent_cache: DirentCache {
                     stream: Cell::new(None),
@@ -2363,5 +2356,29 @@ impl State {
             }));
         }
         self.env_vars.get().trapping_unwrap()
+    }
+
+    fn get_args(&self) -> &[WasmStr] {
+        if self.args.get().is_none() {
+            #[link(wasm_import_module = "environment")]
+            extern "C" {
+                #[link_name = "get-arguments"]
+                fn get_args_import(rval: *mut WasmStrList);
+            }
+            let mut list = WasmStrList {
+                base: std::ptr::null(),
+                len: 0,
+            };
+            self.import_alloc
+                .with_arena(&self.long_lived_arena, || unsafe {
+                    get_args_import(&mut list as *mut _)
+                });
+            self.args.set(Some(unsafe {
+                /* allocation comes from long lived arena, so it is safe to
+                 * cast this to a &'static slice: */
+                std::slice::from_raw_parts(list.base, list.len)
+            }));
+        }
+        self.args.get().trapping_unwrap()
     }
 }
