@@ -2392,9 +2392,11 @@
 ;; TODO: This currently only works for <=64bit types.
 (decl gen_icmp_imm (IntCC ValueRegs Imm12 Type) Reg)
 
-
-(rule 1 (gen_icmp_imm (IntCC.SignedLessThan) x (match_imm12 0) (fits_in_64 ty))
+(rule 2 (gen_icmp_imm (IntCC.SignedLessThan) x (match_imm12 0) (fits_in_64 ty))
   (rv_sltz (sext x ty $I64)))
+
+(rule 2 (gen_icmp_imm (IntCC.SignedGreaterThan) x (match_imm12 0) (fits_in_64 ty))
+  (rv_sgtz (sext x ty $I64)))
 
 ;; In the fallback case we load the immediate and then compare.
 (rule (gen_icmp_imm cc x imm (fits_in_64 ty))
