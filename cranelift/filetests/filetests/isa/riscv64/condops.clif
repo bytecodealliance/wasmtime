@@ -38,20 +38,20 @@ block0(v0: i8):
 
 ; VCode:
 ; block0:
-;   li a3,42
-;   andi a0,a0,255
-;   andi a2,a3,255
-;   xor a4,a0,a2
-;   seqz a0,a4
+;   andi t2,a0,255
+;   li a1,42
+;   andi a3,a1,255
+;   xor a5,t2,a3
+;   seqz a0,a5
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi a3, zero, 0x2a
-;   andi a0, a0, 0xff
-;   andi a2, a3, 0xff
-;   xor a4, a0, a2
-;   seqz a0, a4
+;   andi t2, a0, 0xff
+;   addi a1, zero, 0x2a
+;   andi a3, a1, 0xff
+;   xor a5, t2, a3
+;   seqz a0, a5
 ;   ret
 
 function %h(i8, i8, i8) -> i8 {

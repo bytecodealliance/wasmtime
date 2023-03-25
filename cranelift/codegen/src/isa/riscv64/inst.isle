@@ -2373,6 +2373,22 @@
 
 
 
+;; For some icmp's we can optimize the instruction sequence if the RHS is a constant.
+;;
+;; TODO: This currently only works for <=64bit types.
+(decl gen_icmp_imm (IntCC ValueRegs Imm12 Type) Reg)
+
+;; In the fallback case we load the immediate and then compare.
+(rule (gen_icmp_imm cc x imm (fits_in_64 ty))
+  (let ((extend_op ExtendOp (icmp_intcc_extend cc ty))
+        (x_ext Reg (extend x extend_op ty $I64))
+        ;; TODO: Use `load_constant` here when we have it.
+        (imm Reg (rv_addi (zero_reg) imm))
+        (y_ext Reg (extend imm extend_op ty $I64)))
+    (gen_icmp cc x_ext y_ext $I64)))
+
+
+
 (decl i128_sub (ValueRegs ValueRegs) ValueRegs)
 (rule
   (i128_sub x y )
