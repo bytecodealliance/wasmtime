@@ -872,6 +872,18 @@
 (rule (rv_slt rs1 rs2)
   (alu_rrr (AluOPRRR.Slt) rs1 rs2))
 
+;; Helper for emitting the `sltz` instruction.
+;; This instruction is a mnemonic for `slt rd, rs, zero`.
+(decl rv_sltz (Reg) Reg)
+(rule (rv_sltz rs1)
+  (rv_slt rs1 (zero_reg)))
+
+;; Helper for emitting the `sgtz` instruction.
+;; This instruction is a mnemonic for `slt rd, zero, rs`.
+(decl rv_sgtz (Reg) Reg)
+(rule (rv_sgtz rs1)
+  (rv_slt (zero_reg) rs1))
+
 ;; Helper for emitting the `sltu` ("Set Less Than Unsigned") instruction.
 ;; rd ← rs1 < rs2
 (decl rv_sltu (Reg Reg) Reg)
@@ -2377,6 +2389,8 @@
 ;;
 ;; TODO: This currently only works for <=64bit types.
 (decl gen_icmp_imm (IntCC ValueRegs Imm12 Type) Reg)
+
+
 
 ;; In the fallback case we load the immediate and then compare.
 (rule (gen_icmp_imm cc x imm (fits_in_64 ty))
