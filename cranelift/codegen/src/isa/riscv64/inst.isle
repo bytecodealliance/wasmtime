@@ -883,6 +883,12 @@
 (decl rv_sgtz (Reg) Reg)
 (rule (rv_sgtz rs1)
   (rv_slt (zero_reg) rs1))
+  
+;; Helper for emiting the `slti` ("Set Less Than Immediate") instruction.
+;; rd ← rs1 < imm
+(decl rv_slti (Reg Imm12) Reg)
+(rule (rv_slti rs1 imm)
+  (alu_rr_imm12 (AluOPRRI.Slti) rs1 imm))
 
 ;; Helper for emitting the `sltu` ("Set Less Than Unsigned") instruction.
 ;; rd ← rs1 < rs2
@@ -2397,6 +2403,9 @@
 
 (rule 2 (gen_icmp_imm (IntCC.SignedGreaterThan) x (match_imm12 0) (fits_in_64 ty))
   (rv_sgtz (sext x ty $I64)))
+
+(rule 1 (gen_icmp_imm (IntCC.SignedLessThan) x imm (fits_in_64 ty))
+  (rv_slti (sext x ty $I64) imm))
 
 ;; In the fallback case we load the immediate and then compare.
 (rule (gen_icmp_imm cc x imm (fits_in_64 ty))
