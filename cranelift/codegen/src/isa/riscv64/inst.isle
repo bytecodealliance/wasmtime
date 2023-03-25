@@ -1334,6 +1334,8 @@
 (decl imm12_from_u64 (Imm12) u64)
 (extern extractor imm12_from_u64 imm12_from_u64)
 
+(decl match_imm12 (i16) Imm12)
+(extern extractor infallible match_imm12 match_imm12)
 
 
 ;; Float Helpers
@@ -2391,6 +2393,8 @@
 (decl gen_icmp_imm (IntCC ValueRegs Imm12 Type) Reg)
 
 
+(rule 1 (gen_icmp_imm (IntCC.SignedLessThan) x (match_imm12 0) (fits_in_64 ty))
+  (rv_sltz (sext x ty $I64)))
 
 ;; In the fallback case we load the immediate and then compare.
 (rule (gen_icmp_imm cc x imm (fits_in_64 ty))

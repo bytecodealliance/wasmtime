@@ -1002,3 +1002,81 @@ block0(v0: i64):
 ;   sltu a0, a0, t2
 ;   ret
 
+function %icmp_slt_i8_imm_0(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 0
+    v2 = icmp slt v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   slli t2,a0,56
+;   srai a1,t2,56
+;   sltz a0,a1
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   slli t2, a0, 0x38
+;   srai a1, t2, 0x38
+;   sltz a0, a1
+;   ret
+
+function %icmp_slt_i16_imm_0(i16) -> i8 {
+block0(v0: i16):
+    v1 = iconst.i16 0
+    v2 = icmp slt v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   slli t2,a0,48
+;   srai a1,t2,48
+;   sltz a0,a1
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   slli t2, a0, 0x30
+;   srai a1, t2, 0x30
+;   sltz a0, a1
+;   ret
+
+function %icmp_slt_i32_imm_0(i32) -> i8 {
+block0(v0: i32):
+    v1 = iconst.i32 0
+    v2 = icmp slt v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   sext.w t2,a0
+;   sltz a0,t2
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   sext.w t2, a0
+;   sltz a0, t2
+;   ret
+
+function %icmp_slt_i64_imm_0(i64) -> i8 {
+block0(v0: i64):
+    v1 = iconst.i64 0
+    v2 = icmp slt v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   sltz a0,a0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   sltz a0, a0
+;   ret
+

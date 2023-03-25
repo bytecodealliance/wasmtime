@@ -196,6 +196,10 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Riscv64Backend> {
         Imm12::maybe_from_u64(arg0)
     }
     #[inline]
+    fn match_imm12(&mut self, imm: Imm12) -> i16 {
+        imm.as_i16()
+    }
+    #[inline]
     fn writable_zero_reg(&mut self) -> WritableReg {
         writable_zero_reg()
     }
