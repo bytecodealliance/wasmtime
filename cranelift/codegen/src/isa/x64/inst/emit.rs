@@ -342,12 +342,7 @@ pub(crate) fn emit(
             let mut rex = RexFlags::from(*size);
             if *size == OperandSize::Size8 {
                 debug_assert!(src2.is_real());
-                match src2.to_real_reg().unwrap().hw_enc() {
-                    regs::ENC_RBP | regs::ENC_RSP | regs::ENC_RDI | regs::ENC_RSI => {
-                        rex = RexFlags::clear_w();
-                    }
-                    _ => {}
-                }
+                rex.always_emit_if_8bit_needed(src2);
             }
 
             let enc_g = int_reg_enc(src2);
