@@ -511,6 +511,14 @@
 (decl pure partial signed_cond_code (IntCC) IntCC)
 (extern constructor signed_cond_code signed_cond_code)
 
+;; An extractor that maches SignedLessThanOrEqual or UnsignedLessThanOrEqual
+(decl pure partial intcc_sle_or_ule (IntCC) IntCC)
+(extern extractor intcc_sle_or_ule intcc_sle_or_ule)
+
+;; An extractor that maches any *GreaterThan or *GreaterThanOrEqual IntCC
+(decl pure partial intcc_greater_than (IntCC) IntCC)
+(extern extractor intcc_greater_than intcc_greater_than)
+
 ;;;; Helpers for Working with TrapCode ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (decl pure trap_code_division_by_zero () TrapCode)

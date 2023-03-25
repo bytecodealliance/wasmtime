@@ -2373,22 +2373,13 @@
 
 ;; For these rules, we can just use the normal rules and then invert the result.
 ;; i.e. `x <= y` is the same as `!(x > y)`.
-(rule (gen_icmp_inner (IntCC.SignedLessThanOrEqual) x y ty)
-  (let ((res Reg (gen_icmp_inner (IntCC.SignedGreaterThan) x y ty)))
-    (rv_xori res (imm12_const 1))))
-(rule (gen_icmp_inner (IntCC.UnsignedLessThanOrEqual) x y ty)
-  (let ((res Reg (gen_icmp_inner (IntCC.UnsignedGreaterThan) x y ty)))
+(rule 2 (gen_icmp_inner (intcc_sle_or_ule cc) x y ty)
+  (let ((res Reg (gen_icmp_inner (intcc_inverse cc) x y ty)))
     (rv_xori res (imm12_const 1))))
 
 ;; We only implement LessThan, for GreaterThan we just reverse the arguments
-(rule (gen_icmp_inner (IntCC.SignedGreaterThan) x y ty)
-  (gen_icmp_inner (IntCC.SignedLessThan) y x ty))
-(rule (gen_icmp_inner (IntCC.UnsignedGreaterThan) x y ty)
-  (gen_icmp_inner (IntCC.UnsignedLessThan) y x ty))
-(rule (gen_icmp_inner (IntCC.SignedGreaterThanOrEqual) x y ty)
-  (gen_icmp_inner (IntCC.SignedLessThanOrEqual) y x ty))
-(rule (gen_icmp_inner (IntCC.UnsignedGreaterThanOrEqual) x y ty)
-  (gen_icmp_inner (IntCC.UnsignedLessThanOrEqual) y x ty))
+(rule 3 (gen_icmp_inner (intcc_greater_than cc) x y ty)
+  (gen_icmp_inner (intcc_reverse cc) y x ty))
 
 
 
