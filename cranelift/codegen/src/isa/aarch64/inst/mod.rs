@@ -1191,16 +1191,23 @@ impl Inst {
                 rm,
                 ra,
             } => {
+                let mut da_size = size;
                 let op = match alu_op {
                     ALUOp3::MAdd => "madd",
                     ALUOp3::MSub => "msub",
-                    ALUOp3::UMAddL => "umaddl",
-                    ALUOp3::SMAddL => "smaddl",
+                    ALUOp3::UMAddL => {
+                        da_size = OperandSize::Size64;
+                        "umaddl"
+                    }
+                    ALUOp3::SMAddL => {
+                        da_size = OperandSize::Size64;
+                        "smaddl"
+                    }
                 };
-                let rd = pretty_print_ireg(rd.to_reg(), size, allocs);
+                let rd = pretty_print_ireg(rd.to_reg(), da_size, allocs);
                 let rn = pretty_print_ireg(rn, size, allocs);
                 let rm = pretty_print_ireg(rm, size, allocs);
-                let ra = pretty_print_ireg(ra, size, allocs);
+                let ra = pretty_print_ireg(ra, da_size, allocs);
 
                 format!("{} {}, {}, {}, {}", op, rd, rn, rm, ra)
             }
