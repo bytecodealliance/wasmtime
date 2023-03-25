@@ -2407,6 +2407,9 @@
 (rule 1 (gen_icmp_imm (IntCC.SignedLessThan) x imm (fits_in_64 ty))
   (rv_slti (sext x ty $I64) imm))
 
+(rule 1 (gen_icmp_imm (IntCC.UnsignedLessThan) x imm (fits_in_64 ty))
+  (rv_sltiu (zext x ty $I64) imm))
+
 ;; In the fallback case we load the immediate and then compare.
 (rule (gen_icmp_imm cc x imm (fits_in_64 ty))
   (let ((extend_op ExtendOp (icmp_intcc_extend cc ty))
