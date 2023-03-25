@@ -1160,37 +1160,79 @@ impl MachInstEmit for Inst {
             &Inst::EBreak => {
                 sink.put4(0x00100073);
             }
-            &Inst::Icmp {
-                cc,
+            &Inst::I128LessThan {
                 rd,
-                ref a,
-                ref b,
-                ty,
+                ref x,
+                ref y,
+                is_signed,
             } => {
-                let a = alloc_value_regs(a, &mut allocs);
-                let b = alloc_value_regs(b, &mut allocs);
+                let x = alloc_value_regs(x, &mut allocs);
+                let y = alloc_value_regs(y, &mut allocs);
                 let rd = allocs.next_writable(rd);
-                let label_true = sink.get_label();
-                let label_false = sink.get_label();
-                Inst::lower_br_icmp(
-                    cc,
-                    a,
-                    b,
-                    BranchTarget::Label(label_true),
-                    BranchTarget::Label(label_false),
-                    ty,
-                )
-                .into_iter()
-                .for_each(|i| i.emit(&[], sink, emit_info, state));
 
-                sink.bind_label(label_true, &mut state.ctrl_plane);
-                Inst::load_imm12(rd, Imm12::TRUE).emit(&[], sink, emit_info, state);
-                Inst::Jal {
-                    dest: BranchTarget::offset(Inst::INSTRUCTION_SIZE * 2),
+                // Compare the top halves of the two values. If they are equal, then
+                // we can just check the bottom halves as unsigned. Otherwise we can
+                // just check the top halves.
+                //
+                // In the unsigned case the sequence is the same, but we also compare
+                // the top halves as unsigned.
+                //
+                // Emit the following sequence:
+                //     beq       x_hi, y_hi, .top_equal
+                //     slt{,u}   rd, x_hi, y_hi
+                //     j         .end
+                // .top_equal:
+                //     sltu      rd, x_lo, y_lo
+                // .end:
+
+                let (x_lo, x_hi) = (x.regs()[0], x.regs()[1]);
+                let (y_lo, y_hi) = (y.regs()[0], y.regs()[1]);
+                let label_top_equal = sink.get_label();
+                let label_end = sink.get_label();
+
+                // beq x_hi, y_hi, .top_equal
+                Inst::CondBr {
+                    taken: BranchTarget::Label(label_top_equal),
+                    not_taken: BranchTarget::zero(),
+                    kind: IntegerCompare {
+                        kind: IntCC::Equal,
+                        rs1: x_hi,
+                        rs2: y_hi,
+                    },
                 }
                 .emit(&[], sink, emit_info, state);
-                sink.bind_label(label_false, &mut state.ctrl_plane);
-                Inst::load_imm12(rd, Imm12::FALSE).emit(&[], sink, emit_info, state);
+
+                // slt{,u} rd, x_hi, y_hi
+                Inst::AluRRR {
+                    alu_op: if is_signed {
+                        AluOPRRR::Slt
+                    } else {
+                        AluOPRRR::SltU
+                    },
+                    rd: rd,
+                    rs1: x_hi,
+                    rs2: y_hi,
+                }
+                .emit(&[], sink, emit_info, state);
+
+                // j .end
+                Inst::Jal {
+                    dest: BranchTarget::Label(label_end),
+                }
+                .emit(&[], sink, emit_info, state);
+
+                sink.bind_label(label_top_equal, &mut state.ctrl_plane);
+
+                // sltu rd, x_lo, y_lo
+                Inst::AluRRR {
+                    alu_op: AluOPRRR::SltU,
+                    rd: rd,
+                    rs1: x_lo,
+                    rs2: y_lo,
+                }
+                .emit(&[], sink, emit_info, state);
+
+                sink.bind_label(label_end, &mut state.ctrl_plane);
             }
             &Inst::AtomicCas {
                 offset,

@@ -234,13 +234,12 @@
       (rs OptionReg)
       (imm OptionUimm5)
       (csr CsrAddress))
-    ;; an integer compare.
-    (Icmp
-      (cc IntCC)
+    ;; I128 Less Than sequence
+    (I128LessThan
       (rd WritableReg)
-      (a ValueRegs)
-      (b ValueRegs)
-      (ty Type))
+      (x ValueRegs)
+      (y ValueRegs)
+      (is_signed bool))
     ;; select a reg base on condition.
     ;; very useful because in lowering stage we can not have condition branch.
     (SelectReg
@@ -753,6 +752,12 @@
       (tmp WritableReg (temp_writable_reg $I64))
       (_ Unit (emit (MInst.FloatSelect op rd tmp x y ty))))
     (writable_reg_to_reg rd)))
+
+(decl emit_i128_less_than (ValueRegs ValueRegs bool) Reg)
+(rule (emit_i128_less_than x y is_signed)
+  (let ((result WritableReg (temp_writable_reg $I64))
+        (_ Unit (emit (MInst.I128LessThan result x y is_signed))))
+    result))
 
 
 ;;;; Instruction Helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -2288,44 +2293,72 @@
 (rule (icmp_intcc_extend cc _) (intcc_to_extend_op cc))
 
 
+;; Generates an icmp sequence for the given type.
 (decl gen_icmp (IntCC ValueRegs ValueRegs Type) Reg)
-(rule 1 (gen_icmp cc x y ty)
-  (if (signed_cond_code cc))
-  (emit_icmp cc (ext_int_if_need $true x ty) (ext_int_if_need $true y ty) ty))
-(rule (gen_icmp cc x y ty)
-  (emit_icmp cc (ext_int_if_need $false x ty) (ext_int_if_need $false y ty) ty))
 
-;; This just does the argument extension and then calls `gen_icmp_inner` that
-;; generates the actual condition.
-(rule 2 (gen_icmp cc x y (fits_in_64 ty))
+;; On I128's we don't need any extension.
+(rule 1 (gen_icmp cc x y $I128)
+  (gen_icmp_inner cc x y $I128))
+
+;; Otherwise emit the extension sequence before the comparision.
+(rule (gen_icmp cc x y (fits_in_64 ty))
   (let ((extend_op ExtendOp (icmp_intcc_extend cc ty))
         (x_ext Reg (extend x extend_op ty $I64))
         (y_ext Reg (extend y extend_op ty $I64)))
       (gen_icmp_inner cc x_ext y_ext ty)))
 
+
+
 ;; This emits just the comparision instructions and assumes that
 ;; the arguments are already extended.
+;;
+;; We only have actual lowerings for Equal/NotEqual/SignedLessThan/UnsignedLessThan.
+;; Everything else just recurses into one of those cases.
 (decl gen_icmp_inner (IntCC ValueRegs ValueRegs Type) Reg)
 
 ;; Compare both registers using xor, and set the result using the dedicated
 ;; `seqz`/`snez` instructions.
 (rule (gen_icmp_inner (IntCC.Equal) x y (fits_in_64 ty))
-    (rv_seqz (rv_xor x y)))
+  (rv_seqz (rv_xor x y)))
 (rule (gen_icmp_inner (IntCC.NotEqual) x y (fits_in_64 ty))
-    (rv_snez (rv_xor x y)))
+  (rv_snez (rv_xor x y)))
+
+;; In the I128 case we just `xor` everything and check if its zero at the end.
+(rule 1 (gen_icmp_inner (IntCC.Equal) x y $I128)
+  (let ((top_eq Reg (rv_xor (value_regs_get x 0) (value_regs_get y 0)))
+        (bottom_eq Reg (rv_xor (value_regs_get x 1) (value_regs_get y 1)))
+        (res Reg (rv_or top_eq bottom_eq)))
+    (rv_seqz res)))
+(rule 1 (gen_icmp_inner (IntCC.NotEqual) x y $I128)
+  (let ((top_eq Reg (rv_xor (value_regs_get x 0) (value_regs_get y 0)))
+        (bottom_eq Reg (rv_xor (value_regs_get x 1) (value_regs_get y 1)))
+        (res Reg (rv_or top_eq bottom_eq)))
+    (rv_snez res)))
+
 
 ;; For `*LessThan` we have a dedicated instruction `slt`/`sltu`.
 (rule (gen_icmp_inner (IntCC.SignedLessThan) x y (fits_in_64 ty))
-    (rv_slt x y))
+  (rv_slt x y))
 (rule (gen_icmp_inner (IntCC.UnsignedLessThan) x y (fits_in_64 ty))
-    (rv_sltu x y))
+  (rv_sltu x y))
+
+;; We have a equivalent pseudo instruction for I128 less than.
+(rule 1 (gen_icmp_inner (IntCC.SignedLessThan) x y $I128)
+  (emit_i128_less_than x y $true))
+(rule 1 (gen_icmp_inner (IntCC.UnsignedLessThan) x y $I128)
+  (emit_i128_less_than x y $false))
+
+
+;; Everything else below just recurses into one of the above cases.
 
 ;; For these rules, we can just use the normal rules and then invert the result.
 ;; i.e. `x <= y` is the same as `!(x > y)`.
-(rule (gen_icmp_inner (IntCC.SignedLessThanOrEqual) x y (fits_in_64 ty))
-    (rv_xori (rv_slt y x) (imm12_const 1)))
-(rule (gen_icmp_inner (IntCC.UnsignedLessThanOrEqual) x y (fits_in_64 ty))
-    (rv_xori (rv_sltu y x) (imm12_const 1)))
+(rule (gen_icmp_inner (IntCC.SignedLessThanOrEqual) x y ty)
+  (let ((res Reg (gen_icmp_inner (IntCC.SignedGreaterThan) x y ty)))
+    (rv_xori res (imm12_const 1))))
+(rule (gen_icmp_inner (IntCC.UnsignedLessThanOrEqual) x y ty)
+  (let ((res Reg (gen_icmp_inner (IntCC.UnsignedGreaterThan) x y ty)))
+    (rv_xori res (imm12_const 1))))
 
 ;; We only implement LessThan, for GreaterThan we just reverse the arguments
 (rule (gen_icmp_inner (IntCC.SignedGreaterThan) x y ty)
@@ -2338,12 +2371,6 @@
   (gen_icmp_inner (IntCC.UnsignedLessThanOrEqual) y x ty))
 
 
-
-(decl emit_icmp (IntCC ValueRegs ValueRegs Type) Reg)
-(rule (emit_icmp cc x y ty)
-  (let ((result WritableReg (temp_writable_reg $I64))
-        (_ Unit (emit (MInst.Icmp cc result x y ty))))
-    result))
 
 
 (decl i128_sub (ValueRegs ValueRegs) ValueRegs)

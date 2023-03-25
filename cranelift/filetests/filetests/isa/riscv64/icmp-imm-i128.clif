@@ -11,20 +11,22 @@ block0(v0: i128):
 
 ; VCode:
 ; block0:
-;   li a2,42
-;   li a3,0
-;   eq a0,[a0,a1],[a2,a3]##ty=i128
+;   li a5,42
+;   li a6,0
+;   xor a2,a0,a5
+;   xor a4,a1,a6
+;   or a6,a2,a4
+;   seqz a0,a6
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi a2, zero, 0x2a
-;   mv a3, zero
-;   bne a1, a3, 0x10
-;   bne a0, a2, 0xc
-;   addi a0, zero, 1
-;   j 8
-;   mv a0, zero
+;   addi a5, zero, 0x2a
+;   mv a6, zero
+;   xor a2, a0, a5
+;   xor a4, a1, a6
+;   or a6, a2, a4
+;   seqz a0, a6
 ;   ret
 
 function %icmp_ne_i128_imm(i128) -> i8 {
@@ -37,20 +39,22 @@ block0(v0: i128):
 
 ; VCode:
 ; block0:
-;   li a2,42
-;   li a3,0
-;   ne a0,[a0,a1],[a2,a3]##ty=i128
+;   li a5,42
+;   li a6,0
+;   xor a2,a0,a5
+;   xor a4,a1,a6
+;   or a6,a2,a4
+;   snez a0,a6
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi a2, zero, 0x2a
-;   mv a3, zero
-;   bne a1, a3, 8
-;   beq a0, a2, 0xc
-;   addi a0, zero, 1
-;   j 8
-;   mv a0, zero
+;   addi a5, zero, 0x2a
+;   mv a6, zero
+;   xor a2, a0, a5
+;   xor a4, a1, a6
+;   or a6, a2, a4
+;   snez a0, a6
 ;   ret
 
 function %icmp_slt_i128_imm(i128) -> i8 {
@@ -65,19 +69,17 @@ block0(v0: i128):
 ; block0:
 ;   li a2,42
 ;   li a3,0
-;   slt a0,[a0,a1],[a2,a3]##ty=i128
+;   slt a0,[a0,a1],[a2,a3] ## ty=i128
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi a2, zero, 0x2a
 ;   mv a3, zero
-;   blt a1, a3, 0xc
-;   bne a1, a3, 0x10
-;   bgeu a0, a2, 0xc
-;   addi a0, zero, 1
+;   beq a1, a3, 0xc
+;   slt a0, a1, a3
 ;   j 8
-;   mv a0, zero
+;   sltu a0, a0, a2
 ;   ret
 
 function %icmp_sgt_i128_imm(i128) -> i8 {
@@ -92,19 +94,17 @@ block0(v0: i128):
 ; block0:
 ;   li a2,42
 ;   li a3,0
-;   sgt a0,[a0,a1],[a2,a3]##ty=i128
+;   slt a0,[a2,a3],[a0,a1] ## ty=i128
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi a2, zero, 0x2a
 ;   mv a3, zero
-;   blt a3, a1, 0xc
-;   bne a1, a3, 0x10
-;   bgeu a2, a0, 0xc
-;   addi a0, zero, 1
+;   beq a3, a1, 0xc
+;   slt a0, a3, a1
 ;   j 8
-;   mv a0, zero
+;   sltu a0, a2, a0
 ;   ret
 
 function %icmp_sle_i128_imm(i128) -> i8 {
@@ -117,21 +117,21 @@ block0(v0: i128):
 
 ; VCode:
 ; block0:
-;   li a2,42
-;   li a3,0
-;   sle a0,[a0,a1],[a2,a3]##ty=i128
+;   li a3,42
+;   li a4,0
+;   slt a2,[a3,a4],[a0,a1] ## ty=i128
+;   xori a0,a2,1
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi a2, zero, 0x2a
-;   mv a3, zero
-;   blt a1, a3, 0xc
-;   bne a1, a3, 0x10
-;   bltu a2, a0, 0xc
-;   addi a0, zero, 1
+;   addi a3, zero, 0x2a
+;   mv a4, zero
+;   beq a4, a1, 0xc
+;   slt a2, a4, a1
 ;   j 8
-;   mv a0, zero
+;   sltu a2, a3, a0
+;   xori a0, a2, 1
 ;   ret
 
 function %icmp_sge_i128_imm(i128) -> i8 {
@@ -144,21 +144,21 @@ block0(v0: i128):
 
 ; VCode:
 ; block0:
-;   li a2,42
-;   li a3,0
-;   sge a0,[a0,a1],[a2,a3]##ty=i128
+;   li a3,42
+;   li a4,0
+;   slt a2,[a0,a1],[a3,a4] ## ty=i128
+;   xori a0,a2,1
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi a2, zero, 0x2a
-;   mv a3, zero
-;   blt a3, a1, 0xc
-;   bne a1, a3, 0x10
-;   bltu a0, a2, 0xc
-;   addi a0, zero, 1
+;   addi a3, zero, 0x2a
+;   mv a4, zero
+;   beq a1, a4, 0xc
+;   slt a2, a1, a4
 ;   j 8
-;   mv a0, zero
+;   sltu a2, a0, a3
+;   xori a0, a2, 1
 ;   ret
 
 function %icmp_ult_i128_imm(i128) -> i8 {
@@ -173,19 +173,17 @@ block0(v0: i128):
 ; block0:
 ;   li a2,42
 ;   li a3,0
-;   ult a0,[a0,a1],[a2,a3]##ty=i128
+;   sltu a0,[a0,a1],[a2,a3] ## ty=i128
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi a2, zero, 0x2a
 ;   mv a3, zero
-;   bltu a1, a3, 0xc
-;   bne a1, a3, 0x10
-;   bgeu a0, a2, 0xc
-;   addi a0, zero, 1
+;   beq a1, a3, 0xc
+;   sltu a0, a1, a3
 ;   j 8
-;   mv a0, zero
+;   sltu a0, a0, a2
 ;   ret
 
 function %icmp_ugt_i128_imm(i128) -> i8 {
@@ -200,19 +198,17 @@ block0(v0: i128):
 ; block0:
 ;   li a2,42
 ;   li a3,0
-;   ugt a0,[a0,a1],[a2,a3]##ty=i128
+;   sltu a0,[a2,a3],[a0,a1] ## ty=i128
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi a2, zero, 0x2a
 ;   mv a3, zero
-;   bltu a3, a1, 0xc
-;   bne a1, a3, 0x10
-;   bgeu a2, a0, 0xc
-;   addi a0, zero, 1
+;   beq a3, a1, 0xc
+;   sltu a0, a3, a1
 ;   j 8
-;   mv a0, zero
+;   sltu a0, a2, a0
 ;   ret
 
 function %icmp_ule_i128_imm(i128) -> i8 {
@@ -225,21 +221,21 @@ block0(v0: i128):
 
 ; VCode:
 ; block0:
-;   li a2,42
-;   li a3,0
-;   ule a0,[a0,a1],[a2,a3]##ty=i128
+;   li a3,42
+;   li a4,0
+;   sltu a2,[a3,a4],[a0,a1] ## ty=i128
+;   xori a0,a2,1
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi a2, zero, 0x2a
-;   mv a3, zero
-;   bltu a1, a3, 0xc
-;   bne a1, a3, 0x10
-;   bltu a2, a0, 0xc
-;   addi a0, zero, 1
+;   addi a3, zero, 0x2a
+;   mv a4, zero
+;   beq a4, a1, 0xc
+;   sltu a2, a4, a1
 ;   j 8
-;   mv a0, zero
+;   sltu a2, a3, a0
+;   xori a0, a2, 1
 ;   ret
 
 function %icmp_uge_i128_imm(i128) -> i8 {
@@ -252,20 +248,20 @@ block0(v0: i128):
 
 ; VCode:
 ; block0:
-;   li a2,42
-;   li a3,0
-;   uge a0,[a0,a1],[a2,a3]##ty=i128
+;   li a3,42
+;   li a4,0
+;   sltu a2,[a0,a1],[a3,a4] ## ty=i128
+;   xori a0,a2,1
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi a2, zero, 0x2a
-;   mv a3, zero
-;   bltu a3, a1, 0xc
-;   bne a1, a3, 0x10
-;   bltu a0, a2, 0xc
-;   addi a0, zero, 1
+;   addi a3, zero, 0x2a
+;   mv a4, zero
+;   beq a1, a4, 0xc
+;   sltu a2, a1, a4
 ;   j 8
-;   mv a0, zero
+;   sltu a2, a0, a3
+;   xori a0, a2, 1
 ;   ret
 
