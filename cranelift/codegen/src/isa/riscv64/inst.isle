@@ -2336,6 +2336,30 @@
 ;; Everything else just recurses into one of those cases.
 (decl gen_icmp_inner (IntCC ValueRegs ValueRegs Type) Reg)
 
+;; We only implement LessThan, for GreaterThan we just reverse the arguments
+(rule 3 (gen_icmp_inner (intcc_greater_than cc) x y ty)
+  (gen_icmp_inner (intcc_reverse cc) y x ty))
+
+;; For these rules, we can just use the normal rules and then invert the result.
+;; i.e. `x <= y` is the same as `!(x > y)`.
+(rule 2 (gen_icmp_inner (intcc_sle_or_ule cc) x y ty)
+  (let ((res Reg (gen_icmp_inner (intcc_inverse cc) x y ty)))
+    (rv_xori res (imm12_const 1))))
+
+
+;; For `*LessThan` we have a dedicated instruction `slt`/`sltu`.
+(rule (gen_icmp_inner (IntCC.SignedLessThan) x y (fits_in_64 ty))
+  (rv_slt x y))
+(rule (gen_icmp_inner (IntCC.UnsignedLessThan) x y (fits_in_64 ty))
+  (rv_sltu x y))
+
+;; We have a equivalent pseudo instruction for I128 less than.
+(rule 1 (gen_icmp_inner (IntCC.SignedLessThan) x y $I128)
+  (emit_i128_less_than x y $true))
+(rule 1 (gen_icmp_inner (IntCC.UnsignedLessThan) x y $I128)
+  (emit_i128_less_than x y $false))
+
+
 ;; Compare both registers using xor, and set the result using the dedicated
 ;; `seqz`/`snez` instructions.
 (rule (gen_icmp_inner (IntCC.Equal) x y (fits_in_64 ty))
@@ -2355,31 +2379,6 @@
         (res Reg (rv_or top_eq bottom_eq)))
     (rv_snez res)))
 
-
-;; For `*LessThan` we have a dedicated instruction `slt`/`sltu`.
-(rule (gen_icmp_inner (IntCC.SignedLessThan) x y (fits_in_64 ty))
-  (rv_slt x y))
-(rule (gen_icmp_inner (IntCC.UnsignedLessThan) x y (fits_in_64 ty))
-  (rv_sltu x y))
-
-;; We have a equivalent pseudo instruction for I128 less than.
-(rule 1 (gen_icmp_inner (IntCC.SignedLessThan) x y $I128)
-  (emit_i128_less_than x y $true))
-(rule 1 (gen_icmp_inner (IntCC.UnsignedLessThan) x y $I128)
-  (emit_i128_less_than x y $false))
-
-
-;; Everything else below just recurses into one of the above cases.
-
-;; For these rules, we can just use the normal rules and then invert the result.
-;; i.e. `x <= y` is the same as `!(x > y)`.
-(rule 2 (gen_icmp_inner (intcc_sle_or_ule cc) x y ty)
-  (let ((res Reg (gen_icmp_inner (intcc_inverse cc) x y ty)))
-    (rv_xori res (imm12_const 1))))
-
-;; We only implement LessThan, for GreaterThan we just reverse the arguments
-(rule 3 (gen_icmp_inner (intcc_greater_than cc) x y ty)
-  (gen_icmp_inner (intcc_reverse cc) y x ty))
 
 
 
