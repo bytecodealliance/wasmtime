@@ -752,6 +752,48 @@ where
         Opcode::UremImm => binary_unsigned_can_trap(DataValueExt::rem, arg(0), imm_as_ctrl_ty()?)?,
         Opcode::SremImm => binary_can_trap(DataValueExt::rem, arg(0), imm_as_ctrl_ty()?)?,
         Opcode::IrsubImm => binary(DataValueExt::sub, imm_as_ctrl_ty()?, arg(0))?,
+        Opcode::UaddOverflow => {
+            let lhs = arg(0).convert(ValueConversionKind::ToUnsigned)?;
+            let rhs = arg(1).convert(ValueConversionKind::ToUnsigned)?;
+            let (mut sum, carry) = lhs.overflowing_add(rhs)?;
+            sum = sum.convert(ValueConversionKind::ToSigned)?;
+            assign_multiple(&[sum, DataValueExt::bool(carry, false, types::I8)?])
+        }
+        Opcode::SaddOverflow => {
+            let ty = arg(0).ty();
+            let lhs = arg(0).convert(ValueConversionKind::ToSigned)?;
+            let rhs = arg(1).convert(ValueConversionKind::ToSigned)?;
+            let (sum, carry) = lhs.overflowing_add(rhs)?;
+            assign_multiple(&[sum, DataValueExt::bool(carry, false, types::I8)?])
+        }
+        Opcode::UsubOverflow => {
+            let lhs = arg(0).convert(ValueConversionKind::ToUnsigned)?;
+            let rhs = arg(1).convert(ValueConversionKind::ToUnsigned)?;
+            let (mut sum, carry) = lhs.overflowing_sub(rhs)?;
+            sum = sum.convert(ValueConversionKind::ToSigned)?;
+            assign_multiple(&[sum, DataValueExt::bool(carry, false, types::I8)?])
+        }
+        Opcode::SsubOverflow => {
+            let ty = arg(0).ty();
+            let lhs = arg(0).convert(ValueConversionKind::ToSigned)?;
+            let rhs = arg(1).convert(ValueConversionKind::ToSigned)?;
+            let (sum, carry) = lhs.overflowing_sub(rhs)?;
+            assign_multiple(&[sum, DataValueExt::bool(carry, false, types::I8)?])
+        }
+        Opcode::UmulOverflow => {
+            let lhs = arg(0).convert(ValueConversionKind::ToUnsigned)?;
+            let rhs = arg(1).convert(ValueConversionKind::ToUnsigned)?;
+            let (mut sum, carry) = lhs.overflowing_mul(rhs)?;
+            sum = sum.convert(ValueConversionKind::ToSigned)?;
+            assign_multiple(&[sum, DataValueExt::bool(carry, false, types::I8)?])
+        }
+        Opcode::SmulOverflow => {
+            let ty = arg(0).ty();
+            let lhs = arg(0).convert(ValueConversionKind::ToSigned)?;
+            let rhs = arg(1).convert(ValueConversionKind::ToSigned)?;
+            let (sum, carry) = lhs.overflowing_mul(rhs)?;
+            assign_multiple(&[sum, DataValueExt::bool(carry, false, types::I8)?])
+        }
         Opcode::IaddCin => choose(
             DataValueExt::into_bool(arg(2))?,
             DataValueExt::add(

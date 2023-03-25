@@ -2057,6 +2057,125 @@ pub(crate) fn define(
         ]),
     );
 
+    {
+        let of_out = Operand::new("of", i8).with_doc("Overflow flag");
+        ig.push(
+            Inst::new(
+                "uadd_overflow",
+                r#"
+            Add integers unsigned with overflow out.
+            ``of`` is set when the addition overflowed.
+            ```text
+                a &= x + y \pmod 2^B \\
+                of &= x+y >= 2^B
+            ```
+            Polymorphic over all scalar integer types, but does not support vector
+            types.
+            "#,
+                &formats.binary,
+            )
+            .operands_in(vec![Operand::new("x", iB), Operand::new("y", iB)])
+            .operands_out(vec![Operand::new("a", iB), of_out.clone()]),
+        );
+
+        ig.push(
+            Inst::new(
+                "sadd_overflow",
+                r#"
+            Add integers signed with overflow out.
+            ``of`` is set when the addition over- or underflowed.
+            Polymorphic over all scalar integer types, but does not support vector
+            types.
+            "#,
+                &formats.binary,
+            )
+            .operands_in(vec![Operand::new("x", iB), Operand::new("y", iB)])
+            .operands_out(vec![Operand::new("a", iB), of_out.clone()]),
+        );
+
+        ig.push(
+            Inst::new(
+                "usub_overflow",
+                r#"
+            Subtract integers unsigned with overflow out.
+            ``of`` is set when the subtraction underflowed.
+            ```text
+                a &= x - y \pmod 2^B \\
+                of &= x - y < 0
+            ```
+            Polymorphic over all scalar integer types, but does not support vector
+            types.
+            "#,
+                &formats.binary,
+            )
+            .operands_in(vec![Operand::new("x", iB), Operand::new("y", iB)])
+            .operands_out(vec![Operand::new("a", iB), of_out.clone()]),
+        );
+
+        ig.push(
+            Inst::new(
+                "ssub_overflow",
+                r#"
+            Subtract integers signed with overflow out.
+            ``of`` is set when the subtraction over- or underflowed.
+            Polymorphic over all scalar integer types, but does not support vector
+            types.
+            "#,
+                &formats.binary,
+            )
+            .operands_in(vec![Operand::new("x", iB), Operand::new("y", iB)])
+            .operands_out(vec![Operand::new("a", iB), of_out.clone()]),
+        );
+
+        {
+            let NarrowScalar = &TypeVar::new(
+                "NarrowScalar",
+                "A scalar integer type up to 64 bits",
+                TypeSetBuilder::new().ints(Interval::All).build(),
+            );
+
+            ig.push(
+                Inst::new(
+                    "umul_overflow",
+                    r#"
+                Multiply integers unsigned with overflow out.
+                ``of`` is set when the multiplication overflowed.
+                ```text
+                    a &= x * y \pmod 2^B \\
+                    of &= x * y > 2^B
+                ```
+                Polymorphic over all scalar integer types except i128, but does not support vector
+                types.
+                "#,
+                    &formats.binary,
+                )
+                .operands_in(vec![
+                    Operand::new("x", NarrowScalar),
+                    Operand::new("y", NarrowScalar),
+                ])
+                .operands_out(vec![Operand::new("a", NarrowScalar), of_out.clone()]),
+            );
+
+            ig.push(
+                Inst::new(
+                    "smul_overflow",
+                    r#"
+                Multiply integers signed with overflow out.
+                ``of`` is set when the multiplication over- or underflowed.
+                Polymorphic over all scalar integer types except i128, but does not support vector
+                types.
+                "#,
+                    &formats.binary,
+                )
+                .operands_in(vec![
+                    Operand::new("x", NarrowScalar),
+                    Operand::new("y", NarrowScalar),
+                ])
+                .operands_out(vec![Operand::new("a", NarrowScalar), of_out.clone()]),
+            );
+        }
+    }
+
     let i32_64 = &TypeVar::new(
         "i32_64",
         "A 32 or 64-bit scalar integer type",

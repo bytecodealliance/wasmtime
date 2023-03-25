@@ -1,0 +1,103 @@
+test interpret
+
+function %uaddof_i64(i64, i64) -> i64 {
+block0(v0: i64,v1: i64):
+    v2, v3 = uadd_overflow v0, v1
+    return v2
+}
+; run: %uaddof_i64(0, 0) == 0
+; run: %uaddof_i64(0, 1) == 1
+; run: %uaddof_i64(-1, 0) == -1
+; run: %uaddof_i64(-1, 1) == 0
+; run: %uaddof_i64(0x7FFFFFFF_FFFFFFFF, 0x7FFFFFFF_FFFFFFFF) == -2
+; run: %uaddof_i64(0x7FFFFFFF_FFFFFFFF, 0x80000000_00000000) == -1
+; run: %uaddof_i64(0x7FFFFFFF_FFFFFFFF, 0x80000000_00000001) == 0
+; run: %uaddof_i64(0x01234567_89ABCDEF, 0xFEDCBA98_76543210) == -1
+; run: %uaddof_i64(0x01234567_89ABCDEF, 0xFEDCBA98_76543220) == 0xF
+; run: %uaddof_i64(0xA00A00A0_0A00A00A, 0x0BB0BB0B_B0BB0BB0) == 0xABBABBAB_BABBABBA
+; run: %uaddof_i64(0xC0FFEEEE_C0FFEEEE, 0x1DCB1111_1DCB1111) == 0xDECAFFFF_DECAFFFF
+
+function %uaddof_i64b(i64, i64) -> i8 {
+block0(v0: i64,v1: i64):
+    v2, v3 = uadd_overflow v0, v1
+    return v3
+}
+; run: %uaddof_i64b(0, 0) == 0
+; run: %uaddof_i64b(0, 1) == 0
+; run: %uaddof_i64b(-1, 0) == 0
+; run: %uaddof_i64b(-1, 1) == 1
+; run: %uaddof_i64b(0x7FFFFFFF_FFFFFFFF, 0x7FFFFFFF_FFFFFFFF) == 0
+; run: %uaddof_i64b(0x7FFFFFFF_FFFFFFFF, 0x80000000_00000000) == 0
+; run: %uaddof_i64b(0x7FFFFFFF_FFFFFFFF, 0x80000000_00000001) == 1
+; run: %uaddof_i64b(0x01234567_89ABCDEF, 0xFEDCBA98_76543210) == 0
+; run: %uaddof_i64b(0x01234567_89ABCDEF, 0xFEDCBA98_76543220) == 1
+; run: %uaddof_i64b(0xA00A00A0_0A00A00A, 0x0BB0BB0B_B0BB0BB0) == 0
+; run: %uaddof_i64b(0xC0FFEEEE_C0FFEEEE, 0x1DCB1111_1DCB1111) == 0
+
+function %uaddof_i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2, v3 = uadd_overflow v0, v1
+    return v2
+}
+; run: %uaddof_i8(0, 1) == 1
+; run: %uaddof_i8(100, 27) == 127
+; run: %uaddof_i8(100, -20) == 80
+; run: %uaddof_i8(100, 28) == -128
+; run: %uaddof_i8(-128, -128) == 0
+; run: %uaddof_i8(127, 1) == 0x80
+
+function %uaddof_i8b(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2, v3 = uadd_overflow v0, v1
+    return v3
+}
+; run: %uaddof_i8b(0, 1) == 0
+; run: %uaddof_i8b(100, 27) == 0
+; run: %uaddof_i8b(100, -20) == 1
+; run: %uaddof_i8b(100, 28) == 0
+; run: %uaddof_i8b(-128, -128) == 1
+; run: %uaddof_i8b(127, 1) == 0
+
+function %uaddof_i16(i16, i16) -> i16 {
+block0(v0: i16, v1: i16):
+    v2, v3 = uadd_overflow v0, v1
+    return v2
+}
+; run: %uaddof_i16(0, 1) == 1
+; run: %uaddof_i16(100, 27) == 127
+; run: %uaddof_i16(100, 28) == 128
+; run: %uaddof_i16(32000, 767) == 32767
+; run: %uaddof_i16(32000, 768) == -32768
+
+function %uaddof_i16b(i16, i16) -> i8 {
+block0(v0: i16, v1: i16):
+    v2, v3 = uadd_overflow v0, v1
+    return v3
+}
+; run: %uaddof_i16b(0, 1) == 0
+; run: %uaddof_i16b(100, 27) == 0
+; run: %uaddof_i16b(100, 28) == 0
+; run: %uaddof_i16b(65000, 535) == 0
+; run: %uaddof_i16b(65000, 536) == 1
+
+function %uaddof_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2, v3 = uadd_overflow v0, v1
+    return v2
+}
+; run: %uaddof_i32(0, 1) == 1
+; run: %uaddof_i32(100, 27) == 127
+; run: %uaddof_i32(100, 28) == 128
+; run: %uaddof_i32(3000000000, 1294967295) == -1
+; run: %uaddof_i32(3000000000, 1294967296) == 0
+
+function %uaddof_i32b(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+    v2, v3 = uadd_overflow v0, v1
+    return v3
+}
+; run: %uaddof_i32b(0, 1) == 0
+; run: %uaddof_i32b(100, 27) == 0
+; run: %uaddof_i32b(100, 28) == 0
+; run: %uaddof_i32b(3000000000, 1294967295) == 0
+; run: %uaddof_i32b(3000000000, 1294967296) == 1

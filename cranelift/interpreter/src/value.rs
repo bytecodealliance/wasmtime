@@ -44,6 +44,9 @@ pub trait DataValueExt: Sized {
     fn fma(self, a: Self, b: Self) -> ValueResult<Self>;
     fn abs(self) -> ValueResult<Self>;
     fn checked_add(self, other: Self) -> ValueResult<Option<Self>>;
+    fn overflowing_add(self, other: Self) -> ValueResult<(Self, bool)>;
+    fn overflowing_sub(self, other: Self) -> ValueResult<(Self, bool)>;
+    fn overflowing_mul(self, other: Self) -> ValueResult<(Self, bool)>;
 
     // Float operations
     fn neg(self) -> ValueResult<Self>;
@@ -178,6 +181,15 @@ macro_rules! binary_match {
     ( option $op:ident($arg1:expr, $arg2:expr); [ $( $data_value_ty:ident ),* ] ) => {
         match ($arg1, $arg2) {
             $( (DataValue::$data_value_ty(a), DataValue::$data_value_ty(b)) => { Ok(a.$op(*b).map(DataValue::$data_value_ty)) } )*
+            _ => unimplemented!()
+        }
+    };
+    ( pair $op:ident($arg1:expr, $arg2:expr); [ $( $data_value_ty:ident ),* ] ) => {
+        match ($arg1, $arg2) {
+            $( (DataValue::$data_value_ty(a), DataValue::$data_value_ty(b)) => {
+                let (f, s) = a.$op(*b);
+                Ok((DataValue::$data_value_ty(f), s))
+            } )*
             _ => unimplemented!()
         }
     };
@@ -439,6 +451,11 @@ impl DataValueExt for DataValue {
                 DataValue::I32(n) => DataValue::U32(n as u32),
                 DataValue::I64(n) => DataValue::U64(n as u64),
                 DataValue::I128(n) => DataValue::U128(n as u128),
+                DataValue::U8(_) => self,
+                DataValue::U16(_) => self,
+                DataValue::U32(_) => self,
+                DataValue::U64(_) => self,
+                DataValue::U128(_) => self,
                 _ => unimplemented!("conversion: {} -> {:?}", self.ty(), kind),
             },
             ValueConversionKind::ToSigned => match self {
@@ -447,6 +464,11 @@ impl DataValueExt for DataValue {
                 DataValue::U32(n) => DataValue::I32(n as i32),
                 DataValue::U64(n) => DataValue::I64(n as i64),
                 DataValue::U128(n) => DataValue::I128(n as i128),
+                DataValue::I8(_) => self,
+                DataValue::I16(_) => self,
+                DataValue::I32(_) => self,
+                DataValue::I64(_) => self,
+                DataValue::I128(_) => self,
                 _ => unimplemented!("conversion: {} -> {:?}", self.ty(), kind),
             },
             ValueConversionKind::RoundNearestEven(ty) => match (self, ty) {
@@ -613,6 +635,18 @@ impl DataValueExt for DataValue {
 
     fn checked_add(self, other: Self) -> ValueResult<Option<Self>> {
         binary_match!(option checked_add(&self, &other); [I8, I16, I32, I64, I128, U8, U16, U32, U64, U128])
+    }
+
+    fn overflowing_add(self, other: Self) -> ValueResult<(Self, bool)> {
+        binary_match!(pair overflowing_add(&self, &other); [I8, I16, I32, I64, I128, U8, U16, U32, U64, U128])
+    }
+
+    fn overflowing_sub(self, other: Self) -> ValueResult<(Self, bool)> {
+        binary_match!(pair overflowing_sub(&self, &other); [I8, I16, I32, I64, I128, U8, U16, U32, U64, U128])
+    }
+
+    fn overflowing_mul(self, other: Self) -> ValueResult<(Self, bool)> {
+        binary_match!(pair overflowing_mul(&self, &other); [I8, I16, I32, I64, I128, U8, U16, U32, U64, U128])
     }
 
     fn neg(self) -> ValueResult<Self> {
