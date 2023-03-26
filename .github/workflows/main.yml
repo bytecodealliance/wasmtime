@@ -363,7 +363,7 @@ jobs:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     env:
-      QEMU_BUILD_VERSION: 6.1.0
+      QEMU_BUILD_VERSION: 7.2.0
     strategy:
       matrix: ${{ fromJson(needs.determine.outputs.test-matrix) }}
     steps:
