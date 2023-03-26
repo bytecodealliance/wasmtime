@@ -387,7 +387,7 @@ jobs:
     - uses: actions/cache@v3
       with:
         path: ${{ runner.tool_cache }}/qemu
-        key: qemu-${{ matrix.target }}-${{ env.QEMU_BUILD_VERSION }}-patchmadvise2
+        key: qemu-${{ matrix.target }}-${{ env.QEMU_BUILD_VERSION }}
       if: matrix.target != '' && matrix.os == 'ubuntu-latest'
     - name: Install cross-compilation tools
       run: |
@@ -420,7 +420,6 @@ jobs:
         # quickly.
         curl https://download.qemu.org/qemu-$QEMU_BUILD_VERSION.tar.xz | tar xJf -
         cd qemu-$QEMU_BUILD_VERSION
-        patch -p1 < $GITHUB_WORKSPACE/ci/qemu-madvise.patch
         ./configure --target-list=${{ matrix.qemu_target }} --prefix=${{ runner.tool_cache}}/qemu --disable-tools --disable-slirp --disable-fdt --disable-capstone --disable-docs
         ninja -C build install
         touch ${{ runner.tool_cache }}/qemu/built
