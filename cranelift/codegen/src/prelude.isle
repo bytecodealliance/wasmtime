@@ -167,6 +167,9 @@
 (decl pure u64_lt (u64 u64) bool)
 (extern constructor u64_lt u64_lt)
 
+(decl pure u64_gt (u64 u64) bool)
+(rule (u64_gt x y) (u64_le y x))
+
 (decl pure i64_sextend_imm64 (Type Imm64) i64)
 (extern constructor i64_sextend_imm64 i64_sextend_imm64)
 
@@ -507,6 +510,12 @@
 (decl pure intcc_unsigned (IntCC) IntCC)
 (extern constructor intcc_unsigned intcc_unsigned)
 
+;; This is a direct import of `IntCC::without_equal`.
+;; Get the corresponding IntCC with the equal component removed.
+;; For conditions without an equal component, this is a no-op.
+(decl pure intcc_without_equal (IntCC) IntCC)
+(extern constructor intcc_without_equal intcc_without_equal)
+
 ;; Pure constructor that only matches signed integer cond codes.
 (decl pure partial signed_cond_code (IntCC) IntCC)
 (extern constructor signed_cond_code signed_cond_code)
@@ -514,6 +523,14 @@
 ;; An extractor that maches SignedLessThanOrEqual or UnsignedLessThanOrEqual
 (decl pure partial intcc_sle_or_ule (IntCC) IntCC)
 (extern extractor intcc_sle_or_ule intcc_sle_or_ule)
+
+;; An extractor that maches SignedLessThanOrEqual or UnsignedLessThanOrEqual
+(decl pure partial intcc_sge_or_uge (IntCC) IntCC)
+(extern extractor intcc_sge_or_uge intcc_sge_or_uge)
+
+;; An extractor that maches SignedLessThan or UnsignedLessThan
+(decl pure partial intcc_sgt_or_ugt (IntCC) IntCC)
+(extern extractor intcc_sgt_or_ugt intcc_sgt_or_ugt)
 
 ;; An extractor that maches any *GreaterThan or *GreaterThanOrEqual IntCC
 (decl pure partial intcc_greater_than (IntCC) IntCC)

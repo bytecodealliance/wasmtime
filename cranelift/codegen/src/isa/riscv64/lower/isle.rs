@@ -159,9 +159,15 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Riscv64Backend> {
         }
         tmp.map(|r| r.to_reg())
     }
+
     fn imm12_and(&mut self, imm: Imm12, x: i32) -> Imm12 {
         Imm12::from_bits(imm.as_i16() & (x as i16))
     }
+
+    fn imm12_add(&mut self, x: Imm12, y: Imm12) -> Option<Imm12> {
+        Imm12::maybe_from_u64((x.as_u32() + y.as_u32()) as u64)
+    }
+
     fn alloc_vec_writable(&mut self, ty: Type) -> VecWritableReg {
         if ty.is_int() || ty == R32 || ty == R64 {
             if ty.bits() <= 64 {
@@ -214,6 +220,16 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Riscv64Backend> {
     #[inline]
     fn imm_from_bits(&mut self, val: u64) -> Imm12 {
         Imm12::maybe_from_u64(val).unwrap()
+    }
+    #[inline]
+    fn imm12_bits(&mut self, imm: Imm12) -> u64 {
+        imm.as_u32() as u64
+    }
+    #[inline]
+    fn imm12_is_outside_signed_range(&mut self, imm: Imm12, ty: Type) -> bool {
+        let imm = imm.as_i16();
+        let ty_max = ty.bounds(true).1;
+        imm > 0 && (imm as u128) > ty_max
     }
     #[inline]
     fn imm_from_neg_bits(&mut self, val: i64) -> Imm12 {

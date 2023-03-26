@@ -727,6 +727,11 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
+        fn intcc_without_equal(&mut self, cc: &IntCC) -> IntCC {
+            cc.without_equal()
+        }
+
+        #[inline]
         fn signed_cond_code(&mut self, cc: &condcodes::IntCC) -> Option<condcodes::IntCC> {
             match cc {
                 IntCC::Equal
@@ -746,6 +751,22 @@ macro_rules! isle_common_prelude_methods {
         fn intcc_sle_or_ule(&mut self, cc: &IntCC) -> Option<IntCC> {
             match cc {
                 IntCC::SignedLessThanOrEqual | IntCC::UnsignedLessThanOrEqual => Some(*cc),
+                _ => None,
+            }
+        }
+
+        #[inline]
+        fn intcc_sge_or_uge(&mut self, cc: &IntCC) -> Option<IntCC> {
+            match cc {
+                IntCC::SignedGreaterThanOrEqual | IntCC::UnsignedGreaterThanOrEqual => Some(*cc),
+                _ => None,
+            }
+        }
+
+        #[inline]
+        fn intcc_sgt_or_ugt(&mut self, cc: &IntCC) -> Option<IntCC> {
+            match cc {
+                IntCC::SignedGreaterThan | IntCC::UnsignedGreaterThan => Some(*cc),
                 _ => None,
             }
         }

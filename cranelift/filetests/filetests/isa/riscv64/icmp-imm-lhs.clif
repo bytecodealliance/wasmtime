@@ -1,0 +1,26 @@
+test compile precise-output
+set opt_level=speed
+target riscv64
+
+;; We don't have specific rules for iconst on the lhs of a icmp.
+;; Instead we rely on the mid end rewrite rules to push it to the rhs.
+;; This tests ensures that that works with optimizations enabled.
+function %icmp_slt_i64_imm(i64) -> i8 {
+block0(v0: i64):
+    v1 = iconst.i64 42
+    v2 = icmp slt v1, v0
+    return v2
+}
+
+; VCode:
+; block0:
+;   slti t2,a0,43
+;   xori a0,t2,1
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   slti t2, a0, 0x2b
+;   xori a0, t2, 1
+;   ret
+
