@@ -7,14 +7,19 @@ use crate::{
 use std::mem;
 use wasmparser::{FuncType, ValType};
 
+/// A trampoline to provide interopt between different calling conventions.
 pub(crate) struct Trampoline<'a, A, M>
 where
     A: ABI,
     M: MacroAssembler,
 {
+    /// The macro assembler.
     masm: &'a mut M,
+    /// The ABI.
     abi: &'a A,
+    /// A scratch register.
     scratch_1: Reg,
+    /// A second scratch register. This can be allocatable for the callee.
     scratch_2: Reg,
 }
 
@@ -23,6 +28,7 @@ where
     A: ABI,
     M: MacroAssembler,
 {
+    /// Create a new trampoline.
     pub fn new(masm: &'a mut M, abi: &'a A, scratch_1: Reg, scratch_2: Reg) -> Self {
         Self {
             masm,
@@ -32,6 +38,7 @@ where
         }
     }
 
+    /// Emit the host to wasm trampoline.
     pub fn emit_host_to_wasm(&mut self, ty: &FuncType) {
         // The host to wasm trampoline is currently hard coded (see vmcontext.rs in the
         // wasmtime-runtime crate, VMTrampoline)
@@ -41,7 +48,8 @@ where
         );
         let trampoline_sig = self.abi.sig(&trampoline_ty);
 
-        // Hard-coding the size in bytes of the trampoline arguments since it's static
+        // Hard-coding the size in bytes of the trampoline arguments since it's static, based on
+        // the current signature we should always have 4 arguments, each of which is 8 bytes
         let trampoline_arg_size = 32;
 
         let callee_sig = self.abi.sig(ty);
@@ -55,7 +63,7 @@ where
 
         self.masm.prologue();
 
-        let mut offsets: [u32; 4] = [0; 4];
+        let mut trampoline_arg_offsets: [u32; 4] = [0; 4];
 
         trampoline_sig
             .params
@@ -64,12 +72,12 @@ where
             .for_each(|(i, param)| {
                 if let ABIArg::Reg { reg, ty: _ty } = param {
                     let offset = self.masm.push(*reg);
-                    offsets[i] = offset;
+                    trampoline_arg_offsets[i] = offset;
                 }
             });
 
-        let val_ptr_offset = offsets[3];
-        let func_ptr_offset = offsets[2];
+        let val_ptr_offset = trampoline_arg_offsets[3];
+        let func_ptr_offset = trampoline_arg_offsets[2];
 
         self.masm.mov(
             val_ptr,
@@ -77,13 +85,15 @@ where
             crate::masm::OperandSize::S64,
         );
 
-        // How much stack space we need based on the target architectures alignment
+        // How much we need to adjust the stack pointer by to account for the alignment
+        // required by the ISA
         let delta = calculate_frame_adjustment(
             self.masm.sp_offset(),
             self.abi.arg_base_offset() as u32,
             self.abi.call_stack_align() as u32,
         );
 
+        // The total amount of stack space we need to reserve for the arguments
         let total_arg_stack_space = align_to(
             callee_sig.stack_bytes + delta,
             self.abi.call_stack_align() as u32,
@@ -133,7 +143,7 @@ where
 
         // Move the val ptr back into the scratch register so we can load the return values
         self.masm.load(
-            self.masm.address_from_sp(trampoline_arg_size - val_ptr_offset),
+            self.masm.address_from_sp(self.masm.sp_offset() - val_ptr_offset),
             self.scratch_1,
             OperandSize::S64,
         );
