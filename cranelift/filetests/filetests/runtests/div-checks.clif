@@ -1,13 +1,8 @@
 test run
-set avoid_div_traps=false
 target aarch64
 target s390x
 target x86_64
-target riscv64 
-
-
-; Tests that the `avoid_div_traps` flag prevents a trap when {s,u}rem is called
-; with INT_MIN % -1.
+target riscv64
 
 function %i8(i8, i8) -> i8 {
 block0(v0: i8, v1: i8):

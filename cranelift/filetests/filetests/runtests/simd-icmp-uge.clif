@@ -1,8 +1,10 @@
 test interpret
 test run
+set enable_simd
 target aarch64
 target s390x
 target x86_64
+target x86_64 has_avx
 
 function %simd_icmp_uge_i8(i8x16, i8x16) -> i8x16 {
 block0(v0: i8x16, v1: i8x16):

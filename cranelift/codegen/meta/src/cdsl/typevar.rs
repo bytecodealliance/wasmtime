@@ -202,7 +202,33 @@ impl TypeVar {
                     "can't halve a scalar type"
                 );
             }
-            DerivedFunc::LaneOf | DerivedFunc::AsBool | DerivedFunc::DynamicToVector => {
+            DerivedFunc::Narrower => {
+                assert_eq!(
+                    *ts.lanes.iter().max().unwrap(),
+                    1,
+                    "The `narrower` constraint does not apply to vectors"
+                );
+                assert!(
+                    (!ts.ints.is_empty() || !ts.floats.is_empty())
+                        && ts.refs.is_empty()
+                        && ts.dynamic_lanes.is_empty(),
+                    "The `narrower` constraint only applies to scalar ints or floats"
+                );
+            }
+            DerivedFunc::Wider => {
+                assert_eq!(
+                    *ts.lanes.iter().max().unwrap(),
+                    1,
+                    "The `wider` constraint does not apply to vectors"
+                );
+                assert!(
+                    (!ts.ints.is_empty() || !ts.floats.is_empty())
+                        && ts.refs.is_empty()
+                        && ts.dynamic_lanes.is_empty(),
+                    "The `wider` constraint only applies to scalar ints or floats"
+                );
+            }
+            DerivedFunc::LaneOf | DerivedFunc::AsTruthy | DerivedFunc::DynamicToVector => {
                 /* no particular assertions */
             }
         }
@@ -223,8 +249,8 @@ impl TypeVar {
     pub fn lane_of(&self) -> TypeVar {
         self.derived(DerivedFunc::LaneOf)
     }
-    pub fn as_bool(&self) -> TypeVar {
-        self.derived(DerivedFunc::AsBool)
+    pub fn as_truthy(&self) -> TypeVar {
+        self.derived(DerivedFunc::AsTruthy)
     }
     pub fn half_width(&self) -> TypeVar {
         self.derived(DerivedFunc::HalfWidth)
@@ -240,6 +266,16 @@ impl TypeVar {
     }
     pub fn dynamic_to_vector(&self) -> TypeVar {
         self.derived(DerivedFunc::DynamicToVector)
+    }
+
+    /// Make a new [TypeVar] that includes all types narrower than self.
+    pub fn narrower(&self) -> TypeVar {
+        self.derived(DerivedFunc::Narrower)
+    }
+
+    /// Make a new [TypeVar] that includes all types wider than self.
+    pub fn wider(&self) -> TypeVar {
+        self.derived(DerivedFunc::Wider)
     }
 }
 
@@ -296,24 +332,28 @@ impl ops::Deref for TypeVar {
 #[derive(Clone, Copy, Debug, Hash, PartialEq)]
 pub(crate) enum DerivedFunc {
     LaneOf,
-    AsBool,
+    AsTruthy,
     HalfWidth,
     DoubleWidth,
     SplitLanes,
     MergeLanes,
     DynamicToVector,
+    Narrower,
+    Wider,
 }
 
 impl DerivedFunc {
     pub fn name(self) -> &'static str {
         match self {
             DerivedFunc::LaneOf => "lane_of",
-            DerivedFunc::AsBool => "as_bool",
+            DerivedFunc::AsTruthy => "as_truthy",
             DerivedFunc::HalfWidth => "half_width",
             DerivedFunc::DoubleWidth => "double_width",
             DerivedFunc::SplitLanes => "split_lanes",
             DerivedFunc::MergeLanes => "merge_lanes",
             DerivedFunc::DynamicToVector => "dynamic_to_vector",
+            DerivedFunc::Narrower => "narrower",
+            DerivedFunc::Wider => "wider",
         }
     }
 }
@@ -385,12 +425,14 @@ impl TypeSet {
     fn image(&self, derived_func: DerivedFunc) -> TypeSet {
         match derived_func {
             DerivedFunc::LaneOf => self.lane_of(),
-            DerivedFunc::AsBool => self.as_bool(),
+            DerivedFunc::AsTruthy => self.as_truthy(),
             DerivedFunc::HalfWidth => self.half_width(),
             DerivedFunc::DoubleWidth => self.double_width(),
             DerivedFunc::SplitLanes => self.half_width().double_vector(),
             DerivedFunc::MergeLanes => self.double_width().half_vector(),
             DerivedFunc::DynamicToVector => self.dynamic_to_vector(),
+            DerivedFunc::Narrower => self.clone(),
+            DerivedFunc::Wider => self.clone(),
         }
     }
 
@@ -401,10 +443,19 @@ impl TypeSet {
         copy
     }
 
-    /// Return a TypeSet describing the image of self across as_bool.
-    fn as_bool(&self) -> TypeSet {
+    /// Return a TypeSet describing the image of self across as_truthy.
+    fn as_truthy(&self) -> TypeSet {
         let mut copy = self.clone();
-        copy.ints = NumSet::new();
+
+        // If this type set represents a scalar, `as_truthy` produces an I8, otherwise it returns a
+        // vector of the same number of lanes, whose elements are integers of the same width. For
+        // example, F32X4 gets turned into I32X4, while I32 gets turned into I8.
+        if self.lanes.len() == 1 && self.lanes.contains(&1) {
+            copy.ints = NumSet::from([8]);
+        } else {
+            copy.ints.extend(&self.floats)
+        }
+
         copy.floats = NumSet::new();
         copy.refs = NumSet::new();
         copy
@@ -772,7 +823,7 @@ fn test_typevar_builder_inverted_bounds_panic() {
 }
 
 #[test]
-fn test_as_bool() {
+fn test_as_truthy() {
     let a = TypeSetBuilder::new()
         .simd_lanes(2..8)
         .ints(8..8)
@@ -782,6 +833,14 @@ fn test_as_bool() {
         a.lane_of(),
         TypeSetBuilder::new().ints(8..8).floats(32..32).build()
     );
+
+    let mut a_as_truthy = TypeSetBuilder::new().simd_lanes(2..8).build();
+    a_as_truthy.ints = num_set![8, 32];
+    assert_eq!(a.as_truthy(), a_as_truthy);
+
+    let a = TypeSetBuilder::new().ints(8..32).floats(32..64).build();
+    let a_as_truthy = TypeSetBuilder::new().ints(8..8).build();
+    assert_eq!(a.as_truthy(), a_as_truthy);
 }
 
 #[test]

@@ -15,13 +15,13 @@ block0(v0: i8, v1: i8):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movzbl  %dil, %eax
-;   div     %al, (none), %sil, %al, (none)
-;   movq    %rax, %rcx
+;   div     %al, %sil, %al ; trap=int_divz
+;   movq    %rax, %r11
 ;   movzbl  %dil, %eax
-;   div     %al, (none), %sil, %al, (none)
+;   div     %al, %sil, %al ; trap=int_divz
 ;   movq    %rax, %rdx
 ;   shrq    $8, %rdx, %rdx
-;   movq    %rcx, %rax
+;   movq    %r11, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -33,12 +33,12 @@ block0(v0: i8, v1: i8):
 ; block1: ; offset 0x4
 ;   movzbl %dil, %eax
 ;   divb %sil ; trap: int_divz
-;   movq %rax, %rcx
+;   movq %rax, %r11
 ;   movzbl %dil, %eax
 ;   divb %sil ; trap: int_divz
 ;   movq %rax, %rdx
 ;   shrq $8, %rdx
-;   movq %rcx, %rax
+;   movq %r11, %rax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -54,15 +54,14 @@ block0(v0: i16, v1: i16):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movl    $0, %edx
+;   xorq    %rdx, %rdx, %rdx
 ;   movq    %rdi, %rax
-;   div     %ax, %dx, %si, %ax, %dx
-;   movq    %rdi, %rcx
-;   movq    %rax, %r8
-;   movl    $0, %edx
+;   div     %ax, %dx, %si, %ax, %dx ; trap=int_divz
+;   movq    %rax, %rcx
+;   movq    %rdi, %rax
+;   xorq    %rdx, %rdx, %rdx
+;   div     %ax, %dx, %si, %ax, %dx ; trap=int_divz
 ;   movq    %rcx, %rax
-;   div     %ax, %dx, %si, %ax, %dx
-;   movq    %r8, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -72,15 +71,14 @@ block0(v0: i16, v1: i16):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movl $0, %edx
+;   xorq %rdx, %rdx
 ;   movq %rdi, %rax
 ;   divw %si ; trap: int_divz
-;   movq %rdi, %rcx
-;   movq %rax, %r8
-;   movl $0, %edx
-;   movq %rcx, %rax
+;   movq %rax, %rcx
+;   movq %rdi, %rax
+;   xorq %rdx, %rdx
 ;   divw %si ; trap: int_divz
-;   movq %r8, %rax
+;   movq %rcx, %rax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -96,15 +94,14 @@ block0(v0: i32, v1: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movl    $0, %edx
+;   xorq    %rdx, %rdx, %rdx
 ;   movq    %rdi, %rax
-;   div     %eax, %edx, %esi, %eax, %edx
-;   movq    %rdi, %rcx
-;   movq    %rax, %r8
-;   movl    $0, %edx
+;   div     %eax, %edx, %esi, %eax, %edx ; trap=int_divz
+;   movq    %rax, %rcx
+;   movq    %rdi, %rax
+;   xorq    %rdx, %rdx, %rdx
+;   div     %eax, %edx, %esi, %eax, %edx ; trap=int_divz
 ;   movq    %rcx, %rax
-;   div     %eax, %edx, %esi, %eax, %edx
-;   movq    %r8, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -114,15 +111,14 @@ block0(v0: i32, v1: i32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movl $0, %edx
+;   xorq %rdx, %rdx
 ;   movq %rdi, %rax
 ;   divl %esi ; trap: int_divz
-;   movq %rdi, %rcx
-;   movq %rax, %r8
-;   movl $0, %edx
-;   movq %rcx, %rax
+;   movq %rax, %rcx
+;   movq %rdi, %rax
+;   xorq %rdx, %rdx
 ;   divl %esi ; trap: int_divz
-;   movq %r8, %rax
+;   movq %rcx, %rax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -138,15 +134,14 @@ block0(v0: i64, v1: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movl    $0, %edx
+;   xorq    %rdx, %rdx, %rdx
 ;   movq    %rdi, %rax
-;   div     %rax, %rdx, %rsi, %rax, %rdx
-;   movq    %rdi, %rcx
-;   movq    %rax, %r8
-;   movl    $0, %edx
+;   div     %rax, %rdx, %rsi, %rax, %rdx ; trap=int_divz
+;   movq    %rax, %rcx
+;   movq    %rdi, %rax
+;   xorq    %rdx, %rdx, %rdx
+;   div     %rax, %rdx, %rsi, %rax, %rdx ; trap=int_divz
 ;   movq    %rcx, %rax
-;   div     %rax, %rdx, %rsi, %rax, %rdx
-;   movq    %r8, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -156,15 +151,14 @@ block0(v0: i64, v1: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movl $0, %edx
+;   xorq %rdx, %rdx
 ;   movq %rdi, %rax
 ;   divq %rsi ; trap: int_divz
-;   movq %rdi, %rcx
-;   movq %rax, %r8
-;   movl $0, %edx
-;   movq %rcx, %rax
+;   movq %rax, %rcx
+;   movq %rdi, %rax
+;   xorq %rdx, %rdx
 ;   divq %rsi ; trap: int_divz
-;   movq %r8, %rax
+;   movq %rcx, %rax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

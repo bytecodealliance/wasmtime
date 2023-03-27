@@ -135,7 +135,7 @@ fn indirect_signature(isa: &dyn TargetIsa, wasm: &WasmFuncType) -> ir::Signature
     return sig;
 }
 
-/// Returns the cranelift fucntion signature of the function specified.
+/// Returns the cranelift function signature of the function specified.
 ///
 /// Note that this will determine the calling convention for the function, and
 /// namely includes an optimization where functions never exported from a module

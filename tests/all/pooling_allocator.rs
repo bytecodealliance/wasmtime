@@ -680,19 +680,21 @@ configured maximum of 16 bytes; breakdown of allocation requirement:
 
 #[test]
 fn dynamic_memory_pooling_allocator() -> Result<()> {
-    let max_size = 128 << 20;
-    let mut pool = PoolingAllocationConfig::default();
-    pool.instance_count(1)
-        .instance_memory_pages(max_size / (64 * 1024));
-    let mut config = Config::new();
-    config.static_memory_maximum_size(max_size);
-    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
+    for guard_size in [0, 1 << 16] {
+        let max_size = 128 << 20;
+        let mut pool = PoolingAllocationConfig::default();
+        pool.instance_count(1)
+            .instance_memory_pages(max_size / (64 * 1024));
+        let mut config = Config::new();
+        config.static_memory_maximum_size(max_size);
+        config.dynamic_memory_guard_size(guard_size);
+        config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
 
-    let engine = Engine::new(&config)?;
+        let engine = Engine::new(&config)?;
 
-    let module = Module::new(
-        &engine,
-        r#"
+        let module = Module::new(
+            &engine,
+            r#"
             (module
                 (memory (export "memory") 1)
 
@@ -715,65 +717,69 @@ fn dynamic_memory_pooling_allocator() -> Result<()> {
                 (data (i32.const 100) "x")
             )
          "#,
-    )?;
+        )?;
 
-    let mut store = Store::new(&engine, ());
-    let instance = Instance::new(&mut store, &module, &[])?;
+        let mut store = Store::new(&engine, ());
+        let instance = Instance::new(&mut store, &module, &[])?;
 
-    let grow = instance.get_typed_func::<u32, i32>(&mut store, "grow")?;
-    let size = instance.get_typed_func::<(), u32>(&mut store, "size")?;
-    let i32_load = instance.get_typed_func::<u32, i32>(&mut store, "i32.load")?;
-    let i32_store = instance.get_typed_func::<(u32, i32), ()>(&mut store, "i32.store")?;
-    let memory = instance.get_memory(&mut store, "memory").unwrap();
+        let grow = instance.get_typed_func::<u32, i32>(&mut store, "grow")?;
+        let size = instance.get_typed_func::<(), u32>(&mut store, "size")?;
+        let i32_load = instance.get_typed_func::<u32, i32>(&mut store, "i32.load")?;
+        let i32_store = instance.get_typed_func::<(u32, i32), ()>(&mut store, "i32.store")?;
+        let memory = instance.get_memory(&mut store, "memory").unwrap();
 
-    // basic length 1 tests
-    // assert_eq!(memory.grow(&mut store, 1)?, 0);
-    assert_eq!(memory.size(&store), 1);
-    assert_eq!(size.call(&mut store, ())?, 1);
-    assert_eq!(i32_load.call(&mut store, 0)?, 0);
-    assert_eq!(i32_load.call(&mut store, 100)?, i32::from(b'x'));
-    i32_store.call(&mut store, (0, 0))?;
-    i32_store.call(&mut store, (100, i32::from(b'y')))?;
-    assert_eq!(i32_load.call(&mut store, 100)?, i32::from(b'y'));
+        // basic length 1 tests
+        // assert_eq!(memory.grow(&mut store, 1)?, 0);
+        assert_eq!(memory.size(&store), 1);
+        assert_eq!(size.call(&mut store, ())?, 1);
+        assert_eq!(i32_load.call(&mut store, 0)?, 0);
+        assert_eq!(i32_load.call(&mut store, 100)?, i32::from(b'x'));
+        i32_store.call(&mut store, (0, 0))?;
+        i32_store.call(&mut store, (100, i32::from(b'y')))?;
+        assert_eq!(i32_load.call(&mut store, 100)?, i32::from(b'y'));
 
-    // basic length 2 tests
-    let page = 64 * 1024;
-    assert_eq!(grow.call(&mut store, 1)?, 1);
-    assert_eq!(memory.size(&store), 2);
-    assert_eq!(size.call(&mut store, ())?, 2);
-    i32_store.call(&mut store, (page, 200))?;
-    assert_eq!(i32_load.call(&mut store, page)?, 200);
+        // basic length 2 tests
+        let page = 64 * 1024;
+        assert_eq!(grow.call(&mut store, 1)?, 1);
+        assert_eq!(memory.size(&store), 2);
+        assert_eq!(size.call(&mut store, ())?, 2);
+        i32_store.call(&mut store, (page, 200))?;
+        assert_eq!(i32_load.call(&mut store, page)?, 200);
 
-    // test writes are visible
-    i32_store.call(&mut store, (2, 100))?;
-    assert_eq!(i32_load.call(&mut store, 2)?, 100);
+        // test writes are visible
+        i32_store.call(&mut store, (2, 100))?;
+        assert_eq!(i32_load.call(&mut store, 2)?, 100);
 
-    // test growth can't exceed maximum
-    let too_many = max_size / (64 * 1024);
-    assert_eq!(grow.call(&mut store, too_many as u32)?, -1);
-    assert!(memory.grow(&mut store, too_many).is_err());
+        // test growth can't exceed maximum
+        let too_many = max_size / (64 * 1024);
+        assert_eq!(grow.call(&mut store, too_many as u32)?, -1);
+        assert!(memory.grow(&mut store, too_many).is_err());
 
-    assert_eq!(memory.data(&store)[page as usize], 200);
+        assert_eq!(memory.data(&store)[page as usize], 200);
 
-    // Re-instantiate in another store.
-    store = Store::new(&engine, ());
-    let instance = Instance::new(&mut store, &module, &[])?;
-    let i32_load = instance.get_typed_func::<u32, i32>(&mut store, "i32.load")?;
-    let memory = instance.get_memory(&mut store, "memory").unwrap();
+        // Re-instantiate in another store.
+        store = Store::new(&engine, ());
+        let instance = Instance::new(&mut store, &module, &[])?;
+        let i32_load = instance.get_typed_func::<u32, i32>(&mut store, "i32.load")?;
+        let memory = instance.get_memory(&mut store, "memory").unwrap();
 
-    // Technically this is out of bounds...
-    assert!(i32_load.call(&mut store, page).is_err());
-    // ... but implementation-wise it should still be mapped memory from before.
-    // Note though that prior writes should all appear as zeros and we can't see
-    // data from the prior instance.
-    //
-    // Note that this part is only implemented on Linux which has
-    // `MADV_DONTNEED`.
-    assert_eq!(memory.data_size(&store), page as usize);
-    if cfg!(target_os = "linux") {
-        unsafe {
-            let ptr = memory.data_ptr(&store);
-            assert_eq!(*ptr.offset(page as isize), 0);
+        // This is out of bounds...
+        assert!(i32_load.call(&mut store, page).is_err());
+        assert_eq!(memory.data_size(&store), page as usize);
+
+        // ... but implementation-wise it should still be mapped memory from
+        // before if we don't have any guard pages.
+        //
+        // Note though that prior writes should all appear as zeros and we can't see
+        // data from the prior instance.
+        //
+        // Note that this part is only implemented on Linux which has
+        // `MADV_DONTNEED`.
+        if cfg!(target_os = "linux") && guard_size == 0 {
+            unsafe {
+                let ptr = memory.data_ptr(&store);
+                assert_eq!(*ptr.offset(page as isize), 0);
+            }
         }
     }
 

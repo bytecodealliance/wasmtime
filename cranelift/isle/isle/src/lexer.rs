@@ -137,7 +137,7 @@ impl<'a> Lexer<'a> {
             file: self.pos.file,
             offset: self.pos.offset - self.file_starts[self.pos.file],
             line: self.pos.line,
-            col: self.pos.file,
+            col: self.pos.col,
         }
     }
 

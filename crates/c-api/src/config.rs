@@ -36,6 +36,7 @@ pub enum wasmtime_profiling_strategy_t {
     WASMTIME_PROFILING_STRATEGY_NONE,
     WASMTIME_PROFILING_STRATEGY_JITDUMP,
     WASMTIME_PROFILING_STRATEGY_VTUNE,
+    WASMTIME_PROFILING_STRATEGY_PERFMAP,
 }
 
 #[no_mangle]
@@ -157,6 +158,7 @@ pub extern "C" fn wasmtime_config_profiler_set(
         WASMTIME_PROFILING_STRATEGY_NONE => ProfilingStrategy::None,
         WASMTIME_PROFILING_STRATEGY_JITDUMP => ProfilingStrategy::JitDump,
         WASMTIME_PROFILING_STRATEGY_VTUNE => ProfilingStrategy::VTune,
+        WASMTIME_PROFILING_STRATEGY_PERFMAP => ProfilingStrategy::PerfMap,
     });
 }
 

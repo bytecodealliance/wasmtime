@@ -155,8 +155,7 @@ block0(v0: i64, v1: i64):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    0(%rdi), %r8
-;   movq    %r8, %r9
-;   addq    %r9, %rdi, %r9
+;   lea     0(%r8,%rdi,1), %r9
 ;   movq    %r9, 0(%rsi)
 ;   movq    0(%r8,%rdi,1), %rax
 ;   movq    %rbp, %rsp
@@ -169,8 +168,7 @@ block0(v0: i64, v1: i64):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   movq (%rdi), %r8 ; trap: heap_oob
-;   movq %r8, %r9
-;   addq %rdi, %r9
+;   leaq (%r8, %rdi), %r9
 ;   movq %r9, (%rsi) ; trap: heap_oob
 ;   movq (%r8, %rdi), %rax ; trap: heap_oob
 ;   movq %rbp, %rsp
@@ -236,6 +234,36 @@ block0(v0: i64):
 ;   cmpq (%rdi), %rdi ; trap: heap_oob
 ;   sete %dl
 ;   movzbq %dl, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %cmp_mem_zero(i64) -> i8 {
+block0(v0: i64):
+  v1 = load.i64 v0
+  v2 = icmp_imm eq v1, 0
+  return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    0(%rdi), %rcx
+;   testq   %rcx, %rcx
+;   setz    %al
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq (%rdi), %rcx ; trap: heap_oob
+;   testq %rcx, %rcx
+;   sete %al
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

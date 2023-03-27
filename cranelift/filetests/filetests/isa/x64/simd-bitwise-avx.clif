@@ -41,7 +41,7 @@ block0(v0: i64):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movl    $-2147483648, %eax
-;   movd    %eax, %xmm4
+;   vmovd   %eax, %xmm4
 ;   vandnps %xmm4, const(0), %xmm6
 ;   vandps  %xmm4, 0(%rdi), %xmm8
 ;   vorps   %xmm6, %xmm8, %xmm0
@@ -55,7 +55,7 @@ block0(v0: i64):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   movl $0x80000000, %eax
-;   movd %eax, %xmm4
+;   vmovd %eax, %xmm4
 ;   vandnps 0x1b(%rip), %xmm4, %xmm6
 ;   vandps (%rdi), %xmm4, %xmm8
 ;   vorps %xmm8, %xmm6, %xmm0
@@ -529,7 +529,7 @@ block0(v0: f32x4, v1: f32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   vinsertps $16 %xmm0, %xmm1, %xmm0
+;   vinsertps $16, %xmm0, %xmm1, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -579,7 +579,7 @@ block0(v0: i8x16, v1: i8):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   vpinsrb $1 %xmm0, %rdi, %xmm0
+;   vpinsrb $1, %xmm0, %rdi, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -604,7 +604,7 @@ block0(v0: i16x8, v1: i16):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   vpinsrw $1 %xmm0, %rdi, %xmm0
+;   vpinsrw $1, %xmm0, %rdi, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -629,7 +629,7 @@ block0(v0: i32x4, v1: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   vpinsrd $1 %xmm0, %rdi, %xmm0
+;   vpinsrd $1, %xmm0, %rdi, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -654,7 +654,7 @@ block0(v0: i64x2, v1: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   vpinsrq $1 %xmm0, %rdi, %xmm0
+;   vpinsrq $1, %xmm0, %rdi, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

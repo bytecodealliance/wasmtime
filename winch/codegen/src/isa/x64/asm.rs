@@ -5,10 +5,11 @@ use crate::{
     masm::{DivKind, OperandSize, RemKind},
 };
 use cranelift_codegen::{
+    ir::TrapCode,
     isa::x64::{
         args::{
-            self, AluRmiROpcode, Amode, DivOrRemKind, ExtMode, FromWritableReg, Gpr, GprMem,
-            GprMemImm, RegMem, RegMemImm, SyntheticAmode, WritableGpr,
+            self, AluRmiROpcode, Amode, CmpOpcode, DivSignedness, ExtMode, FromWritableReg, Gpr,
+            GprMem, GprMemImm, RegMem, RegMemImm, SyntheticAmode, WritableGpr, CC,
         },
         settings as x64_settings, EmitInfo, EmitState, Inst,
     },
@@ -64,20 +65,11 @@ impl From<OperandSize> for args::OperandSize {
     }
 }
 
-impl From<DivKind> for DivOrRemKind {
-    fn from(kind: DivKind) -> Self {
+impl From<DivKind> for DivSignedness {
+    fn from(kind: DivKind) -> DivSignedness {
         match kind {
-            DivKind::Signed => DivOrRemKind::SignedDiv,
-            DivKind::Unsigned => DivOrRemKind::UnsignedDiv,
-        }
-    }
-}
-
-impl From<RemKind> for DivOrRemKind {
-    fn from(kind: RemKind) -> Self {
-        match kind {
-            RemKind::Signed => DivOrRemKind::SignedRem,
-            RemKind::Unsigned => DivOrRemKind::UnsignedRem,
+            DivKind::Signed => DivSignedness::Signed,
+            DivKind::Unsigned => DivSignedness::Unsigned,
         }
     }
 }
@@ -290,21 +282,56 @@ impl Assembler {
     /// caller has correctly allocated the dividend as `(rdx:rax)` and
     /// accounted for the quotient to be stored in `rax`.
     pub fn div(&mut self, divisor: Reg, dst: (Reg, Reg), kind: DivKind, size: OperandSize) {
-        let tmp = if size == OperandSize::S64 && kind == DivKind::Signed {
-            Some(regs::scratch())
-        } else {
-            None
-        };
+        let trap = match kind {
+            // Signed division has two trapping conditions, integer overflow and
+            // divide-by-zero. Check for divide-by-zero explicitly and let the
+            // hardware detect overflow.
+            //
+            // The dividend is sign extended to initialize `rdx`.
+            DivKind::Signed => {
+                self.emit(Inst::CmpRmiR {
+                    size: size.into(),
+                    src: GprMemImm::new(RegMemImm::imm(0)).unwrap(),
+                    dst: divisor.into(),
+                    opcode: CmpOpcode::Cmp,
+                });
+                self.emit(Inst::TrapIf {
+                    cc: CC::Z,
+                    trap_code: TrapCode::IntegerDivisionByZero,
+                });
+                self.emit(Inst::SignExtendData {
+                    size: size.into(),
+                    src: dst.0.into(),
+                    dst: dst.1.into(),
+                });
+                TrapCode::IntegerOverflow
+            }
 
-        self.emit(Inst::CheckedDivOrRemSeq {
-            kind: kind.into(),
+            // Unsigned division only traps in one case, on divide-by-zero, so
+            // defer that to the trap opcode.
+            //
+            // The divisor_hi reg is initialized with zero through an
+            // xor-against-itself op.
+            DivKind::Unsigned => {
+                self.emit(Inst::AluRmiR {
+                    size: size.into(),
+                    op: AluRmiROpcode::Xor,
+                    src1: dst.1.into(),
+                    src2: dst.1.into(),
+                    dst: dst.1.into(),
+                });
+                TrapCode::IntegerDivisionByZero
+            }
+        };
+        self.emit(Inst::Div {
+            sign: kind.into(),
             size: size.into(),
-            divisor: divisor.into(),
+            trap,
+            divisor: GprMem::new(RegMem::reg(divisor.into())).unwrap(),
             dividend_lo: dst.0.into(),
             dividend_hi: dst.1.into(),
             dst_quotient: dst.0.into(),
             dst_remainder: dst.1.into(),
-            tmp: tmp.map(|reg| reg.into()),
         });
     }
 
@@ -316,16 +343,48 @@ impl Assembler {
     /// caller has correctly allocated the dividend as `(rdx:rax)` and
     /// accounted for the remainder to be stored in `rdx`.
     pub fn rem(&mut self, divisor: Reg, dst: (Reg, Reg), kind: RemKind, size: OperandSize) {
-        self.emit(Inst::CheckedDivOrRemSeq {
-            kind: kind.into(),
-            size: size.into(),
-            divisor: divisor.into(),
-            dividend_lo: dst.0.into(),
-            dividend_hi: dst.1.into(),
-            dst_quotient: dst.0.into(),
-            dst_remainder: dst.1.into(),
-            tmp: None,
-        });
+        match kind {
+            // Signed remainder goes through a pseudo-instruction which has
+            // some internal branching. The `dividend_hi`, or `rdx`, is
+            // initialized here with a `SignExtendData` instruction.
+            RemKind::Signed => {
+                self.emit(Inst::SignExtendData {
+                    size: size.into(),
+                    src: dst.0.into(),
+                    dst: dst.1.into(),
+                });
+                self.emit(Inst::CheckedSRemSeq {
+                    size: size.into(),
+                    divisor: divisor.into(),
+                    dividend_lo: dst.0.into(),
+                    dividend_hi: dst.1.into(),
+                    dst_quotient: dst.0.into(),
+                    dst_remainder: dst.1.into(),
+                });
+            }
+
+            // Unsigned remainder initializes `dividend_hi` with zero and
+            // then executes a normal `div` instruction.
+            RemKind::Unsigned => {
+                self.emit(Inst::AluRmiR {
+                    size: size.into(),
+                    op: AluRmiROpcode::Xor,
+                    src1: dst.1.into(),
+                    src2: dst.1.into(),
+                    dst: dst.1.into(),
+                });
+                self.emit(Inst::Div {
+                    sign: DivSignedness::Unsigned,
+                    trap: TrapCode::IntegerDivisionByZero,
+                    size: size.into(),
+                    divisor: GprMem::new(RegMem::reg(divisor.into())).unwrap(),
+                    dividend_lo: dst.0.into(),
+                    dividend_hi: dst.1.into(),
+                    dst_quotient: dst.0.into(),
+                    dst_remainder: dst.1.into(),
+                });
+            }
+        }
     }
 
     /// Multiply immediate and register.

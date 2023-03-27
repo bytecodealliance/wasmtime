@@ -959,25 +959,22 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
             match sub.u {
                 types::SubscriptionU::Clock(clocksub) => match clocksub.id {
                     types::Clockid::Monotonic => {
-                        let clock = self.clocks.monotonic.deref();
+                        let clock = self.clocks.monotonic()?;
                         let precision = Duration::from_nanos(clocksub.precision);
                         let duration = Duration::from_nanos(clocksub.timeout);
-                        let deadline = if clocksub
+                        let start = if clocksub
                             .flags
                             .contains(types::Subclockflags::SUBSCRIPTION_CLOCK_ABSTIME)
                         {
-                            self.clocks
-                                .creation_time
-                                .checked_add(duration)
-                                .ok_or_else(|| Error::overflow().context("deadline"))?
+                            clock.creation_time
                         } else {
-                            clock
-                                .now(precision)
-                                .checked_add(duration)
-                                .ok_or_else(|| Error::overflow().context("deadline"))?
+                            clock.abs_clock.now(precision)
                         };
+                        let deadline = start
+                            .checked_add(duration)
+                            .ok_or_else(|| Error::overflow().context("deadline"))?;
                         poll.subscribe_monotonic_clock(
-                            clock,
+                            &*clock.abs_clock,
                             deadline,
                             precision,
                             sub.userdata.into(),

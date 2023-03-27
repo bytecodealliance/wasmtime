@@ -11,14 +11,13 @@ block0(v0: i32):
 ; VCode:
 ; block0:
 ;   alfi %r2, 127
-;   jle 6 ; trap
+;   jgnle .+2 # trap=user0
 ;   br %r14
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   alfi %r2, 0x7f
-;   jle 0xc
-;   .byte 0x00, 0x00 ; trap: user0
+;   jgnle 8 ; trap: user0
 ;   br %r14
 
 function %f1(i32) -> i32 {
@@ -31,14 +30,13 @@ block0(v0: i32):
 ; VCode:
 ; block0:
 ;   alfi %r2, 127
-;   jle 6 ; trap
+;   jgnle .+2 # trap=user0
 ;   br %r14
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   alfi %r2, 0x7f
-;   jle 0xc
-;   .byte 0x00, 0x00 ; trap: user0
+;   jgnle 8 ; trap: user0
 ;   br %r14
 
 function %f2(i32, i32) -> i32 {
@@ -50,14 +48,13 @@ block0(v0: i32, v1: i32):
 ; VCode:
 ; block0:
 ;   alr %r2, %r3
-;   jle 6 ; trap
+;   jgnle .+2 # trap=user0
 ;   br %r14
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   alr %r2, %r3
-;   jle 8
-;   .byte 0x00, 0x00 ; trap: user0
+;   jgnle 4 ; trap: user0
 ;   br %r14
 
 function %f3(i64) -> i64 {
@@ -70,14 +67,13 @@ block0(v0: i64):
 ; VCode:
 ; block0:
 ;   algfi %r2, 127
-;   jle 6 ; trap
+;   jgnle .+2 # trap=user0
 ;   br %r14
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   algfi %r2, 0x7f
-;   jle 0xc
-;   .byte 0x00, 0x00 ; trap: user0
+;   jgnle 8 ; trap: user0
 ;   br %r14
 
 function %f3(i64) -> i64 {
@@ -90,14 +86,13 @@ block0(v0: i64):
 ; VCode:
 ; block0:
 ;   algfi %r2, 127
-;   jle 6 ; trap
+;   jgnle .+2 # trap=user0
 ;   br %r14
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   algfi %r2, 0x7f
-;   jle 0xc
-;   .byte 0x00, 0x00 ; trap: user0
+;   jgnle 8 ; trap: user0
 ;   br %r14
 
 function %f4(i64, i64) -> i64 {
@@ -109,14 +104,13 @@ block0(v0: i64, v1: i64):
 ; VCode:
 ; block0:
 ;   algr %r2, %r3
-;   jle 6 ; trap
+;   jgnle .+2 # trap=user0
 ;   br %r14
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   algr %r2, %r3
-;   jle 0xa
-;   .byte 0x00, 0x00 ; trap: user0
+;   jgnle 6 ; trap: user0
 ;   br %r14
 
 function %f5(i64, i32) -> i64 {
@@ -129,13 +123,12 @@ block0(v0: i64, v1: i32):
 ; VCode:
 ; block0:
 ;   algfr %r2, %r3
-;   jle 6 ; trap
+;   jgnle .+2 # trap=user0
 ;   br %r14
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   algfr %r2, %r3
-;   jle 0xa
-;   .byte 0x00, 0x00 ; trap: user0
+;   jgnle 6 ; trap: user0
 ;   br %r14
 

@@ -63,9 +63,6 @@ pub struct SSABuilder {
 /// Side effects of a `use_var` or a `seal_block` method call.
 #[derive(Default)]
 pub struct SideEffects {
-    /// When we want to append jump arguments to a `br_table` instruction, the critical edge is
-    /// splitted and the newly created `Block`s are signaled here.
-    pub split_blocks_created: Vec<Block>,
     /// When a variable is used but has never been defined before (this happens in the case of
     /// unreachable code), a placeholder `iconst` or `fconst` value is added to the right `Block`.
     /// This field signals if it is the case and return the `Block` to which the initialization has
@@ -75,7 +72,7 @@ pub struct SideEffects {
 
 impl SideEffects {
     fn is_empty(&self) -> bool {
-        self.split_blocks_created.is_empty() && self.instructions_added_to_blocks.is_empty()
+        self.instructions_added_to_blocks.is_empty()
     }
 }
 

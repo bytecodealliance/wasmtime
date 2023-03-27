@@ -532,7 +532,6 @@ use_egraphs = true
 enable_verifier = true
 is_pic = false
 use_colocated_libcalls = false
-avoid_div_traps = false
 enable_float = true
 enable_nan_canonicalization = false
 enable_pinned_reg = false

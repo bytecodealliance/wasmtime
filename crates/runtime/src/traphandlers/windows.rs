@@ -62,13 +62,23 @@ unsafe extern "system" fn exception_handler(exception_info: *mut EXCEPTION_POINT
                 compile_error!("unsupported platform");
             }
         }
+        // For access violations the first element in `ExceptionInformation` is
+        // an indicator as to whether the fault was a read/write. The second
+        // element is the address of the inaccessible data causing this
+        // violation.
+        let faulting_addr = if record.ExceptionCode == EXCEPTION_ACCESS_VIOLATION {
+            assert!(record.NumberParameters >= 2);
+            Some(record.ExceptionInformation[1])
+        } else {
+            None
+        };
         let jmp_buf = info.take_jmp_buf_if_trap(ip, |handler| handler(exception_info));
         if jmp_buf.is_null() {
             ExceptionContinueSearch
         } else if jmp_buf as usize == 1 {
             ExceptionContinueExecution
         } else {
-            info.set_jit_trap(ip, fp);
+            info.set_jit_trap(ip, fp, faulting_addr);
             wasmtime_longjmp(jmp_buf)
         }
     })

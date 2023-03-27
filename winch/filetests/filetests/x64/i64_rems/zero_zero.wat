@@ -11,15 +11,12 @@
 ;;    1:	 4889e5               	mov	rbp, rsp
 ;;    4:	 48c7c100000000       	mov	rcx, 0
 ;;    b:	 48c7c000000000       	mov	rax, 0
-;;   12:	 4883f900             	cmp	rcx, 0
-;;   16:	 0f8502000000         	jne	0x1e
-;;   1c:	 0f0b                 	ud2	
-;;   1e:	 4883f9ff             	cmp	rcx, -1
-;;   22:	 0f850a000000         	jne	0x32
-;;   28:	 b800000000           	mov	eax, 0
-;;   2d:	 e905000000           	jmp	0x37
-;;   32:	 4899                 	cqo	
-;;   34:	 48f7f9               	idiv	rcx
-;;   37:	 4889d0               	mov	rax, rdx
-;;   3a:	 5d                   	pop	rbp
-;;   3b:	 c3                   	ret	
+;;   12:	 4899                 	cqo	
+;;   14:	 4883f9ff             	cmp	rcx, -1
+;;   18:	 0f850a000000         	jne	0x28
+;;   1e:	 ba00000000           	mov	edx, 0
+;;   23:	 e903000000           	jmp	0x2b
+;;   28:	 48f7f9               	idiv	rcx
+;;   2b:	 4889d0               	mov	rax, rdx
+;;   2e:	 5d                   	pop	rbp
+;;   2f:	 c3                   	ret	

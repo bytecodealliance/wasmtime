@@ -8,7 +8,7 @@ pub struct JitDumpAgent {
 }
 
 impl JitDumpAgent {
-    /// Intialize a JitDumpAgent and write out the header
+    /// Intialize a dummy JitDumpAgent that will fail upon instantiation.
     pub fn new() -> Result<Self> {
         if cfg!(feature = "jitdump") {
             bail!("jitdump is not supported on this platform");

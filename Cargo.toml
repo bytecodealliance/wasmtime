@@ -102,7 +102,8 @@ members = [
   "examples/tokio/wasm",
   "fuzz",
   "winch",
-  "winch/codegen"
+  "winch/codegen",
+  "winch/environ"
 ]
 exclude = [
   'crates/wasi-common/WASI/tools/witx-cli',
@@ -166,6 +167,7 @@ cranelift = { path = "cranelift/umbrella", version = "0.95.0" }
 wasi-http = { path = "crates/wasi-http", version = "=0.0.1" }
 
 winch-codegen = { path = "winch/codegen", version = "=0.6.0" }
+winch-environ = { path = "winch/environ", version = "=0.6.0" }
 winch-filetests = { path = "winch/filetests" }
 winch-test-macros = { path = "winch/test-macros" }
 

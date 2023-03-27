@@ -44,6 +44,12 @@ runs:
         EOF
         fi
 
+        # Use a more efficient method for fetching the crates.io-index than
+        # the (currently) default git-based index.
+        cat >> "$GITHUB_ENV" <<EOF
+        CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse
+        EOF
+
     - name: Choose registry cache key
       shell: bash
       # Update the registry index cache at most once per day. actions/cache

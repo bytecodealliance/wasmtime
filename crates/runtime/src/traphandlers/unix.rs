@@ -101,7 +101,11 @@ unsafe extern "C" fn trap_handler(
         if jmp_buf as usize == 1 {
             return true;
         }
-        info.set_jit_trap(pc, fp);
+        let faulting_addr = match signum {
+            libc::SIGSEGV | libc::SIGBUS => Some((*siginfo).si_addr() as usize),
+            _ => None,
+        };
+        info.set_jit_trap(pc, fp, faulting_addr);
         // On macOS this is a bit special, unfortunately. If we were to
         // `siglongjmp` out of the signal handler that notably does
         // *not* reset the sigaltstack state of our signal handler. This

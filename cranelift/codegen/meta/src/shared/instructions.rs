@@ -647,12 +647,8 @@ pub(crate) fn define(
 
     let NarrowInt = &TypeVar::new(
         "NarrowInt",
-        "An integer type with lanes type to `i64`",
-        TypeSetBuilder::new()
-            .ints(8..64)
-            .simd_lanes(Interval::All)
-            .dynamic_simd_lanes(Interval::All)
-            .build(),
+        "An integer type of width up to `i64`",
+        TypeSetBuilder::new().ints(8..64).build(),
     );
 
     let ScalarTruthy = &TypeVar::new(
@@ -1422,7 +1418,7 @@ pub(crate) fn define(
         Shuffle two vectors using the given immediate bytes. For each of the 16 bytes of the
         immediate, a value i of 0-15 selects the i-th element of the first vector and a value i of
         16-31 selects the (i-16)th element of the second vector. Immediate values outside of the
-        0-31 range place a 0 in the resulting vector lane.
+        0-31 range are not valid.
         "#,
             &formats.shuffle,
         )
@@ -1627,7 +1623,7 @@ pub(crate) fn define(
             Operand::new("x", Int),
             Operand::new("y", Int),
         ])
-        .operands_out(vec![Operand::new("a", &Int.as_bool())]),
+        .operands_out(vec![Operand::new("a", &Int.as_truthy())]),
     );
 
     ig.push(
@@ -2684,7 +2680,7 @@ pub(crate) fn define(
             Operand::new("x", Float),
             Operand::new("y", Float),
         ])
-        .operands_out(vec![Operand::new("a", &Float.as_bool())]),
+        .operands_out(vec![Operand::new("a", &Float.as_truthy())]),
     );
 
     ig.push(
@@ -3064,12 +3060,6 @@ pub(crate) fn define(
         TypeSetBuilder::new().ints(Interval::All).build(),
     );
 
-    let IntTo = &TypeVar::new(
-        "IntTo",
-        "A smaller integer type",
-        TypeSetBuilder::new().ints(Interval::All).build(),
-    );
-
     ig.push(
         Inst::new(
             "ireduce",
@@ -3081,8 +3071,9 @@ pub(crate) fn define(
         "#,
             &formats.unary,
         )
-        .operands_in(vec![Operand::new("x", Int)])
-        .operands_out(vec![Operand::new("a", IntTo)]),
+        .operands_in(vec![Operand::new("x", &Int.wider())
+            .with_doc("A scalar integer type, wider than the controlling type")])
+        .operands_out(vec![Operand::new("a", Int)]),
     );
 
     let I16or32or64xN = &TypeVar::new(
@@ -3272,17 +3263,10 @@ pub(crate) fn define(
         .operands_out(vec![Operand::new("a", I16x8)]),
     );
 
-    {
-        let IntTo = &TypeVar::new(
-            "IntTo",
-            "A larger integer type with the same number of lanes",
-            TypeSetBuilder::new().ints(Interval::All).build(),
-        );
-
-        ig.push(
-            Inst::new(
-                "uextend",
-                r#"
+    ig.push(
+        Inst::new(
+            "uextend",
+            r#"
         Convert `x` to a larger integer type by zero-extending.
 
         Each lane in `x` is converted to a larger integer type by adding
@@ -3293,16 +3277,18 @@ pub(crate) fn define(
         and each lane must not have fewer bits that the input lanes. If the
         input and output types are the same, this is a no-op.
         "#,
-                &formats.unary,
-            )
-            .operands_in(vec![Operand::new("x", Int)])
-            .operands_out(vec![Operand::new("a", IntTo)]),
-        );
+            &formats.unary,
+        )
+        .operands_in(vec![Operand::new("x", &Int.narrower()).with_doc(
+            "A scalar integer type, narrower than the controlling type",
+        )])
+        .operands_out(vec![Operand::new("a", Int)]),
+    );
 
-        ig.push(
-            Inst::new(
-                "sextend",
-                r#"
+    ig.push(
+        Inst::new(
+            "sextend",
+            r#"
         Convert `x` to a larger integer type by sign-extending.
 
         Each lane in `x` is converted to a larger integer type by replicating
@@ -3313,20 +3299,18 @@ pub(crate) fn define(
         and each lane must not have fewer bits that the input lanes. If the
         input and output types are the same, this is a no-op.
         "#,
-                &formats.unary,
-            )
-            .operands_in(vec![Operand::new("x", Int)])
-            .operands_out(vec![Operand::new("a", IntTo)]),
-        );
-    }
+            &formats.unary,
+        )
+        .operands_in(vec![Operand::new("x", &Int.narrower()).with_doc(
+            "A scalar integer type, narrower than the controlling type",
+        )])
+        .operands_out(vec![Operand::new("a", Int)]),
+    );
 
-    let FloatTo = &TypeVar::new(
-        "FloatTo",
-        "A scalar or vector floating point number",
-        TypeSetBuilder::new()
-            .floats(Interval::All)
-            .simd_lanes(Interval::All)
-            .build(),
+    let FloatScalar = &TypeVar::new(
+        "FloatScalar",
+        "A scalar only floating point number",
+        TypeSetBuilder::new().floats(Interval::All).build(),
     );
 
     ig.push(
@@ -3346,8 +3330,10 @@ pub(crate) fn define(
         "#,
             &formats.unary,
         )
-        .operands_in(vec![Operand::new("x", Float)])
-        .operands_out(vec![Operand::new("a", FloatTo)]),
+        .operands_in(vec![Operand::new("x", &FloatScalar.narrower()).with_doc(
+            "A scalar only floating point number, narrower than the controlling type",
+        )])
+        .operands_out(vec![Operand::new("a", FloatScalar)]),
     );
 
     ig.push(
@@ -3367,8 +3353,10 @@ pub(crate) fn define(
         "#,
             &formats.unary,
         )
-        .operands_in(vec![Operand::new("x", Float)])
-        .operands_out(vec![Operand::new("a", FloatTo)]),
+        .operands_in(vec![Operand::new("x", &FloatScalar.wider()).with_doc(
+            "A scalar only floating point number, wider than the controlling type",
+        )])
+        .operands_out(vec![Operand::new("a", FloatScalar)]),
     );
 
     let F64x2 = &TypeVar::new(
@@ -3431,11 +3419,6 @@ pub(crate) fn define(
         .operands_out(vec![Operand::new("x", F64x2)]),
     );
 
-    let FloatScalar = &TypeVar::new(
-        "FloatScalar",
-        "A scalar only floating point number",
-        TypeSetBuilder::new().floats(Interval::All).build(),
-    );
     let IntTo = &TypeVar::new(
         "IntTo",
         "An scalar only integer type",
@@ -3539,6 +3522,15 @@ pub(crate) fn define(
             .build(),
     );
 
+    let FloatTo = &TypeVar::new(
+        "FloatTo",
+        "A scalar or vector floating point number",
+        TypeSetBuilder::new()
+            .floats(Interval::All)
+            .simd_lanes(Interval::All)
+            .build(),
+    );
+
     ig.push(
         Inst::new(
             "fcvt_from_uint",
@@ -3595,11 +3587,8 @@ pub(crate) fn define(
 
     let WideInt = &TypeVar::new(
         "WideInt",
-        "An integer type with lanes from `i16` upwards",
-        TypeSetBuilder::new()
-            .ints(16..128)
-            .simd_lanes(Interval::All)
-            .build(),
+        "An integer type of width `i16` upwards",
+        TypeSetBuilder::new().ints(16..128).build(),
     );
 
     ig.push(

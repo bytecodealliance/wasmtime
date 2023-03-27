@@ -3,7 +3,7 @@ use crate::instance::InstancePre;
 use crate::store::StoreOpaque;
 use crate::{
     AsContext, AsContextMut, Caller, Engine, Extern, ExternType, Func, FuncType, ImportType,
-    Instance, IntoFunc, Module, StoreContextMut, Val, ValRaw,
+    Instance, IntoFunc, Module, StoreContextMut, Val, ValRaw, ValType,
 };
 use anyhow::{bail, Context, Result};
 use log::warn;
@@ -283,6 +283,62 @@ impl<T> Linker<T> {
                     self.func_new(import.module(), import.name(), func_ty, move |_, _, _| {
                         bail!(import_err.clone());
                     })?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Implement any function imports of the [`Module`] with a function that
+    /// ignores its arguments and returns default values.
+    ///
+    /// Default values are either zero or null, depending on the value type.
+    ///
+    /// This method can be used to allow unknown imports from command modules.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use wasmtime::*;
+    /// # fn main() -> anyhow::Result<()> {
+    /// # let engine = Engine::default();
+    /// # let module = Module::new(&engine, "(module (import \"unknown\" \"import\" (func)))")?;
+    /// # let mut store = Store::new(&engine, ());
+    /// let mut linker = Linker::new(&engine);
+    /// linker.define_unknown_imports_as_default_values(&module)?;
+    /// linker.instantiate(&mut store, &module)?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[cfg(compiler)]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
+    pub fn define_unknown_imports_as_default_values(
+        &mut self,
+        module: &Module,
+    ) -> anyhow::Result<()> {
+        for import in module.imports() {
+            if let Err(import_err) = self._get_by_import(&import) {
+                if let ExternType::Func(func_ty) = import_err.ty() {
+                    let result_tys: Vec<_> = func_ty.results().collect();
+                    self.func_new(
+                        import.module(),
+                        import.name(),
+                        func_ty,
+                        move |_caller, _args, results| {
+                            for (result, ty) in results.iter_mut().zip(&result_tys) {
+                                *result = match ty {
+                                    ValType::I32 => Val::I32(0),
+                                    ValType::I64 => Val::I64(0),
+                                    ValType::F32 => Val::F32(0.0_f32.to_bits()),
+                                    ValType::F64 => Val::F64(0.0_f64.to_bits()),
+                                    ValType::V128 => Val::V128(0),
+                                    ValType::FuncRef => Val::FuncRef(None),
+                                    ValType::ExternRef => Val::ExternRef(None),
+                                };
+                            }
+                            Ok(())
+                        },
+                    )?;
                 }
             }
         }
@@ -1068,13 +1124,6 @@ impl<T> Linker<T> {
     ///
     /// Returns an error which may be downcast to an [`UnknownImportError`] if
     /// the module has any unresolvable imports.
-    ///
-    /// # Panics
-    ///
-    /// This method will panic if any item defined in this linker used by
-    /// `module` is not owned by `store`. Additionally this will panic if the
-    /// [`Engine`] that the `store` belongs to is different than this
-    /// [`Linker`].
     ///
     /// # Examples
     ///

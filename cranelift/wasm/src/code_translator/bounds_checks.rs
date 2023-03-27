@@ -7,6 +7,17 @@
 //! * a static access size,
 //!
 //! bounds check the memory access and translate it into a native memory access.
+//!
+//! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+//! !!!                                                                      !!!
+//! !!!    THIS CODE IS VERY SUBTLE, HAS MANY SPECIAL CASES, AND IS ALSO     !!!
+//! !!!   ABSOLUTELY CRITICAL FOR MAINTAINING THE SAFETY OF THE WASM HEAP    !!!
+//! !!!                             SANDBOX.                                 !!!
+//! !!!                                                                      !!!
+//! !!!    A good rule of thumb is to get two reviews on any substantive     !!!
+//! !!!                         changes in here.                             !!!
+//! !!!                                                                      !!!
+//! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 use super::Reachability;
 use crate::{FuncEnvironment, HeapData, HeapStyle};
@@ -72,120 +83,90 @@ where
         //
         //            index + 1 > bound
         //        ==> index >= bound
-        //
-        //    1.a. When Spectre mitigations are enabled, avoid duplicating
-        //         bounds checks between the mitigations and the regular bounds
-        //         checks.
-        HeapStyle::Dynamic { bound_gv } if offset_and_size == 1 && spectre_mitigations_enabled => {
-            let bound = builder.ins().global_value(env.pointer_type(), bound_gv);
-            Reachable(compute_addr(
-                &mut builder.cursor(),
-                heap,
-                env.pointer_type(),
-                index,
-                offset,
-                Some(SpectreOobComparison {
-                    cc: IntCC::UnsignedGreaterThanOrEqual,
-                    lhs: index,
-                    rhs: bound,
-                }),
-            ))
-        }
-        //    1.b. Emit explicit `index >= bound` bounds checks.
         HeapStyle::Dynamic { bound_gv } if offset_and_size == 1 => {
             let bound = builder.ins().global_value(env.pointer_type(), bound_gv);
             let oob = builder
                 .ins()
                 .icmp(IntCC::UnsignedGreaterThanOrEqual, index, bound);
-            builder.ins().trapnz(oob, ir::TrapCode::HeapOutOfBounds);
-            Reachable(compute_addr(
+            Reachable(explicit_check_oob_condition_and_compute_addr(
                 &mut builder.cursor(),
                 heap,
                 env.pointer_type(),
                 index,
                 offset,
-                None,
+                spectre_mitigations_enabled,
+                oob,
             ))
         }
 
-        // 2. Second special case for when `offset + access_size <= min_size`.
+        // 2. Second special case for when we know that there are enough guard
+        //    pages to cover the offset and access size.
+        //
+        //    The precise should-we-trap condition is
+        //
+        //        index + offset + access_size > bound
+        //
+        //    However, if we instead check only the partial condition
+        //
+        //        index > bound
+        //
+        //    then the most out of bounds that the access can be, while that
+        //    partial check still succeeds, is `offset + access_size`.
+        //
+        //    However, when we have a guard region that is at least as large as
+        //    `offset + access_size`, we can rely on the virtual memory
+        //    subsystem handling these out-of-bounds errors at
+        //    runtime. Therefore, the partial `index > bound` check is
+        //    sufficient for this heap configuration.
+        //
+        //    Additionally, this has the advantage that a series of Wasm loads
+        //    that use the same dynamic index operand but different static
+        //    offset immediates -- which is a common code pattern when accessing
+        //    multiple fields in the same struct that is in linear memory --
+        //    will all emit the same `index > bound` check, which we can GVN.
+        HeapStyle::Dynamic { bound_gv } if offset_and_size <= heap.offset_guard_size => {
+            let bound = builder.ins().global_value(env.pointer_type(), bound_gv);
+            let oob = builder.ins().icmp(IntCC::UnsignedGreaterThan, index, bound);
+            Reachable(explicit_check_oob_condition_and_compute_addr(
+                &mut builder.cursor(),
+                heap,
+                env.pointer_type(),
+                index,
+                offset,
+                spectre_mitigations_enabled,
+                oob,
+            ))
+        }
+
+        // 3. Third special case for when `offset + access_size <= min_size`.
         //
         //    We know that `bound >= min_size`, so we can do the following
         //    comparison, without fear of the right-hand side wrapping around:
         //
         //            index + offset + access_size > bound
         //        ==> index > bound - (offset + access_size)
-        //
-        //    2.a. Dedupe bounds checks with Spectre mitigations.
-        HeapStyle::Dynamic { bound_gv }
-            if offset_and_size <= heap.min_size.into() && spectre_mitigations_enabled =>
-        {
-            let bound = builder.ins().global_value(env.pointer_type(), bound_gv);
-            let adjusted_bound = builder.ins().iadd_imm(bound, -(offset_and_size as i64));
-            Reachable(compute_addr(
-                &mut builder.cursor(),
-                heap,
-                env.pointer_type(),
-                index,
-                offset,
-                Some(SpectreOobComparison {
-                    cc: IntCC::UnsignedGreaterThan,
-                    lhs: index,
-                    rhs: adjusted_bound,
-                }),
-            ))
-        }
-        //    2.b. Emit explicit `index > bound - (offset + access_size)` bounds
-        //         checks.
         HeapStyle::Dynamic { bound_gv } if offset_and_size <= heap.min_size.into() => {
             let bound = builder.ins().global_value(env.pointer_type(), bound_gv);
             let adjusted_bound = builder.ins().iadd_imm(bound, -(offset_and_size as i64));
             let oob = builder
                 .ins()
                 .icmp(IntCC::UnsignedGreaterThan, index, adjusted_bound);
-            builder.ins().trapnz(oob, ir::TrapCode::HeapOutOfBounds);
-            Reachable(compute_addr(
+            Reachable(explicit_check_oob_condition_and_compute_addr(
                 &mut builder.cursor(),
                 heap,
                 env.pointer_type(),
                 index,
                 offset,
-                None,
+                spectre_mitigations_enabled,
+                oob,
             ))
         }
 
-        // 3. General case for dynamic memories:
+        // 4. General case for dynamic memories:
         //
         //        index + offset + access_size > bound
         //
         //    And we have to handle the overflow case in the left-hand side.
-        //
-        //    3.a. Dedupe bounds checks with Spectre mitigations.
-        HeapStyle::Dynamic { bound_gv } if spectre_mitigations_enabled => {
-            let access_size_val = builder
-                .ins()
-                .iconst(env.pointer_type(), offset_and_size as i64);
-            let adjusted_index = builder.ins().uadd_overflow_trap(
-                index,
-                access_size_val,
-                ir::TrapCode::HeapOutOfBounds,
-            );
-            let bound = builder.ins().global_value(env.pointer_type(), bound_gv);
-            Reachable(compute_addr(
-                &mut builder.cursor(),
-                heap,
-                env.pointer_type(),
-                index,
-                offset,
-                Some(SpectreOobComparison {
-                    cc: IntCC::UnsignedGreaterThan,
-                    lhs: adjusted_index,
-                    rhs: bound,
-                }),
-            ))
-        }
-        //    3.b. Emit an explicit `index + offset + access_size > bound`
-        //         check.
         HeapStyle::Dynamic { bound_gv } => {
             let access_size_val = builder
                 .ins()
@@ -199,14 +180,14 @@ where
             let oob = builder
                 .ins()
                 .icmp(IntCC::UnsignedGreaterThan, adjusted_index, bound);
-            builder.ins().trapnz(oob, ir::TrapCode::HeapOutOfBounds);
-            Reachable(compute_addr(
+            Reachable(explicit_check_oob_condition_and_compute_addr(
                 &mut builder.cursor(),
                 heap,
                 env.pointer_type(),
                 index,
                 offset,
-                None,
+                spectre_mitigations_enabled,
+                oob,
             ))
         }
 
@@ -273,7 +254,6 @@ where
                 env.pointer_type(),
                 index,
                 offset,
-                None,
             ))
         }
 
@@ -288,45 +268,22 @@ where
         //    Since we have to emit explicit bounds checks, we might as well be
         //    precise, not rely on the virtual memory subsystem at all, and not
         //    factor in the guard pages here.
-        //
-        //    3.a. Dedupe the Spectre mitigation and the explicit bounds check.
-        HeapStyle::Static { bound } if spectre_mitigations_enabled => {
+        HeapStyle::Static { bound } => {
             // NB: this subtraction cannot wrap because we didn't hit the first
             // special case.
-            let adjusted_bound = u64::from(bound) - offset_and_size;
-            let adjusted_bound = builder
-                .ins()
-                .iconst(env.pointer_type(), adjusted_bound as i64);
-            Reachable(compute_addr(
-                &mut builder.cursor(),
-                heap,
-                env.pointer_type(),
-                index,
-                offset,
-                Some(SpectreOobComparison {
-                    cc: IntCC::UnsignedGreaterThan,
-                    lhs: index,
-                    rhs: adjusted_bound,
-                }),
-            ))
-        }
-        //    3.b. Emit the explicit `index > bound - (offset + access_size)`
-        //         check.
-        HeapStyle::Static { bound } => {
-            // See comment in 3.a. above.
             let adjusted_bound = u64::from(bound) - offset_and_size;
             let oob =
                 builder
                     .ins()
                     .icmp_imm(IntCC::UnsignedGreaterThan, index, adjusted_bound as i64);
-            builder.ins().trapnz(oob, ir::TrapCode::HeapOutOfBounds);
-            Reachable(compute_addr(
+            Reachable(explicit_check_oob_condition_and_compute_addr(
                 &mut builder.cursor(),
                 heap,
                 env.pointer_type(),
                 index,
                 offset,
-                None,
+                spectre_mitigations_enabled,
+                oob,
             ))
         }
     })
@@ -362,47 +319,64 @@ fn cast_index_to_pointer_ty(
     extended_index
 }
 
-struct SpectreOobComparison {
-    cc: IntCC,
-    lhs: ir::Value,
-    rhs: ir::Value,
+/// Emit explicit checks on the given out-of-bounds condition for the Wasm
+/// address and return the native address.
+///
+/// This function deduplicates explicit bounds checks and Spectre mitigations
+/// that inherently also implement bounds checking.
+fn explicit_check_oob_condition_and_compute_addr(
+    pos: &mut FuncCursor,
+    heap: &HeapData,
+    addr_ty: ir::Type,
+    index: ir::Value,
+    offset: u32,
+    // Whether Spectre mitigations are enabled for heap accesses.
+    spectre_mitigations_enabled: bool,
+    // The `i8` boolean value that is non-zero when the heap access is out of
+    // bounds (and therefore we should trap) and is zero when the heap access is
+    // in bounds (and therefore we can proceed).
+    oob_condition: ir::Value,
+) -> ir::Value {
+    if !spectre_mitigations_enabled {
+        pos.ins()
+            .trapnz(oob_condition, ir::TrapCode::HeapOutOfBounds);
+    }
+
+    let mut addr = compute_addr(pos, heap, addr_ty, index, offset);
+
+    if spectre_mitigations_enabled {
+        let null = pos.ins().iconst(addr_ty, 0);
+        addr = pos.ins().select_spectre_guard(oob_condition, null, addr);
+    }
+
+    addr
 }
 
-/// Emit code for the base address computation of a `heap_addr` instruction,
-/// without any bounds checks (other than optional Spectre mitigations).
+/// Emit code for the native address computation of a Wasm address,
+/// without any bounds checks or overflow checks.
+///
+/// It is the caller's responsibility to ensure that any necessary bounds and
+/// overflow checks are emitted, and that the resulting address is never used
+/// unless they succeed.
 fn compute_addr(
     pos: &mut FuncCursor,
     heap: &HeapData,
     addr_ty: ir::Type,
     index: ir::Value,
     offset: u32,
-    // If we are performing Spectre mitigation with conditional selects, the
-    // values to compare and the condition code that indicates an out-of bounds
-    // condition; on this condition, the conditional move will choose a
-    // speculatively safe address (a zero / null pointer) instead.
-    spectre_oob_comparison: Option<SpectreOobComparison>,
 ) -> ir::Value {
     debug_assert_eq!(pos.func.dfg.value_type(index), addr_ty);
 
-    // Add the heap base address base
-    let base = pos.ins().global_value(addr_ty, heap.base);
-
-    let final_base = pos.ins().iadd(base, index);
-    let final_addr = if offset == 0 {
-        final_base
+    let heap_base = pos.ins().global_value(addr_ty, heap.base);
+    let base_and_index = pos.ins().iadd(heap_base, index);
+    if offset == 0 {
+        base_and_index
     } else {
         // NB: The addition of the offset immediate must happen *before* the
-        // `select_spectre_guard`. If it happens after, then we potentially are
-        // letting speculative execution read the whole first 4GiB of memory.
-        pos.ins().iadd_imm(final_base, offset as i64)
-    };
-
-    if let Some(SpectreOobComparison { cc, lhs, rhs }) = spectre_oob_comparison {
-        let null = pos.ins().iconst(addr_ty, 0);
-        let cmp = pos.ins().icmp(cc, lhs, rhs);
-        pos.ins().select_spectre_guard(cmp, null, final_addr)
-    } else {
-        final_addr
+        // `select_spectre_guard`, if any. If it happens after, then we
+        // potentially are letting speculative execution read the whole first
+        // 4GiB of memory.
+        pos.ins().iadd_imm(base_and_index, offset as i64)
     }
 }
 

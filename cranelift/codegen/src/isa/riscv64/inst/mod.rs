@@ -642,6 +642,10 @@ impl MachInst for Inst {
     type LabelUse = LabelUse;
     type ABIMachineSpec = Riscv64MachineDeps;
 
+    // https://github.com/riscv/riscv-isa-manual/issues/850
+    // all zero will cause invalid opcode.
+    const TRAP_OPCODE: &'static [u8] = &[0; 4];
+
     fn gen_dummy_use(reg: Reg) -> Self {
         Inst::DummyUse { reg }
     }
@@ -1216,10 +1220,17 @@ impl Inst {
                 rs1,
                 rs2,
             } => {
-                let rs1 = format_reg(rs1, allocs);
-                let rs2 = format_reg(rs2, allocs);
-                let rd = format_reg(rd.to_reg(), allocs);
-                format!("{} {},{},{}", alu_op.op_name(), rd, rs1, rs2,)
+                let rs1_s = format_reg(rs1, allocs);
+                let rs2_s = format_reg(rs2, allocs);
+                let rd_s = format_reg(rd.to_reg(), allocs);
+                match alu_op {
+                    AluOPRRR::Adduw if rs2 == zero_reg() => {
+                        format!("zext.w {},{}", rd_s, rs1_s)
+                    }
+                    _ => {
+                        format!("{} {},{},{}", alu_op.op_name(), rd_s, rs1_s, rs2_s)
+                    }
+                }
             }
             &Inst::FpuRR {
                 frm,

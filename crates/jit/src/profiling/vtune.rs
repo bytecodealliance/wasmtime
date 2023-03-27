@@ -1,11 +1,11 @@
 //! Adds support for profiling JIT-ed code using VTune. By default, VTune
 //! support is built in to Wasmtime (configure with the `vtune` feature flag).
-//! To enable it at runtime, use the `--vtune` CLI flag.
+//! To enable it at runtime, use the `--profile=vtune` CLI flag.
 //!
 //! ### Profile
 //!
 //! ```ignore
-//! vtune -run-pass-thru=--no-altstack -v -collect hotspots target/debug/wasmtime --vtune test.wasm
+//! vtune -run-pass-thru=--no-altstack -v -collect hotspots target/debug/wasmtime --profile=vtune test.wasm
 //! ```
 //!
 //! Note: `vtune` is a command-line tool for VTune which must [be

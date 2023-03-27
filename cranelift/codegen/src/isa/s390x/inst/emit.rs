@@ -682,6 +682,7 @@ fn enc_ril_b(opcode: u16, r1: Reg, ri2: u32) -> [u8; 6] {
     let opcode1 = ((opcode >> 4) & 0xff) as u8;
     let opcode2 = (opcode & 0xf) as u8;
     let r1 = machreg_to_gpr(r1) & 0x0f;
+    let ri2 = ri2 >> 1;
 
     enc[0] = opcode1;
     enc[1] = r1 << 4 | opcode2;
@@ -700,6 +701,7 @@ fn enc_ril_c(opcode: u16, m1: u8, ri2: u32) -> [u8; 6] {
     let opcode1 = ((opcode >> 4) & 0xff) as u8;
     let opcode2 = (opcode & 0xf) as u8;
     let m1 = m1 & 0x0f;
+    let ri2 = ri2 >> 1;
 
     enc[0] = opcode1;
     enc[1] = m1 << 4 | opcode2;
@@ -3590,14 +3592,19 @@ impl Inst {
                 put_with_trap(sink, &enc_e(0x0000), trap_code);
             }
             &Inst::TrapIf { cond, trap_code } => {
-                // Branch over trap if condition is false.
-                let opcode = 0xa74; // BCR
-                put(sink, &enc_ri_c(opcode, cond.invert().bits(), 4 + 2));
-                // Now emit the actual trap.
                 if let Some(s) = state.take_stack_map() {
-                    sink.add_stack_map(StackMapExtent::UpcomingBytes(2), s);
+                    sink.add_stack_map(StackMapExtent::UpcomingBytes(6), s);
                 }
-                put_with_trap(sink, &enc_e(0x0000), trap_code);
+                // We implement a TrapIf as a conditional branch into the middle
+                // of the branch (BRCL) instruction itself - those middle two bytes
+                // are zero, which matches the trap instruction itself.
+                let opcode = 0xc04; // BCRL
+                let enc = &enc_ril_c(opcode, cond.bits(), 2);
+                debug_assert!(enc.len() == 6 && enc[2] == 0 && enc[3] == 0);
+                // The trap must be placed on the last byte of the embedded trap
+                // instruction, so we need to emit the encoding in two parts.
+                put_with_trap(sink, &enc[0..4], trap_code);
+                put(sink, &enc[4..6]);
             }
             &Inst::JTSequence { ridx, ref targets } => {
                 let ridx = allocs.next(ridx);

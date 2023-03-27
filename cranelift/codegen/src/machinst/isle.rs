@@ -285,14 +285,6 @@ macro_rules! isle_lower_prelude_methods {
             }
         }
 
-        fn avoid_div_traps(&mut self, _: Type) -> Option<()> {
-            if self.backend.flags().avoid_div_traps() {
-                Some(())
-            } else {
-                None
-            }
-        }
-
         #[inline]
         fn tls_model(&mut self, _: Type) -> TlsModel {
             self.backend.flags().tls_model()
@@ -636,6 +628,20 @@ macro_rules! isle_lower_prelude_methods {
                 shuffle_imm_as_le_lane_idx(2, &bytes[12..14])?,
                 shuffle_imm_as_le_lane_idx(2, &bytes[14..16])?,
             ))
+        }
+
+        fn safe_divisor_from_imm64(&mut self, ty: Type, val: Imm64) -> Option<u64> {
+            let minus_one = if ty.bytes() == 8 {
+                -1
+            } else {
+                (1 << (ty.bytes() * 8)) - 1
+            };
+            let bits = val.bits() & minus_one;
+            if bits == 0 || bits == minus_one {
+                None
+            } else {
+                Some(bits as u64)
+            }
         }
     };
 }

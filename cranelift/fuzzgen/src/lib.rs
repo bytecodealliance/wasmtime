@@ -6,7 +6,9 @@ use arbitrary::{Arbitrary, Unstructured};
 use cranelift::codegen::data_value::DataValue;
 use cranelift::codegen::ir::{types::*, UserExternalName, UserFuncName};
 use cranelift::codegen::ir::{Function, LibCall};
+use cranelift::codegen::isa::{self, Builder};
 use cranelift::codegen::Context;
+use cranelift::prelude::settings::SettingKind;
 use cranelift::prelude::*;
 use cranelift_arbitrary::CraneliftArbitrary;
 use cranelift_native::builder_with_options;
@@ -21,6 +23,15 @@ mod print;
 pub use print::PrintableTestCase;
 
 pub type TestCaseInput = Vec<DataValue>;
+
+pub enum IsaFlagGen {
+    /// When generating ISA flags, ensure that they are all supported by
+    /// the current host.
+    Host,
+    /// All flags available in cranelift are allowed to be generated.
+    /// We also allow generating all possible values for each enum flag.
+    All,
+}
 
 pub struct FuzzGen<'r, 'data>
 where
@@ -227,5 +238,57 @@ where
         builder.enable("machine_code_cfg_info")?;
 
         Ok(Flags::new(builder))
+    }
+
+    /// Generate a random set of ISA flags and apply them to a Builder.
+    ///
+    /// Based on `mode` we can either allow all flags, or just the subset that is
+    /// supported by the current host.
+    ///
+    /// In all cases only a subset of the allowed flags is applied to the builder.
+    pub fn set_isa_flags(&mut self, builder: &mut Builder, mode: IsaFlagGen) -> Result<()> {
+        // `max_isa` is the maximal set of flags that we can use.
+        let max_builder = match mode {
+            IsaFlagGen::All => {
+                let mut max_builder = isa::lookup(builder.triple().clone())?;
+
+                for flag in max_builder.iter() {
+                    match flag.kind {
+                        SettingKind::Bool => {
+                            max_builder.enable(flag.name)?;
+                        }
+                        SettingKind::Enum => {
+                            // Since these are enums there isn't a "max" value per se, pick one at random.
+                            let value = self.u.choose(flag.values.unwrap())?;
+                            max_builder.set(flag.name, value)?;
+                        }
+                        SettingKind::Preset => {
+                            // Presets are just special flags that combine other flags, we don't
+                            // want to enable them directly, just the underlying flags.
+                        }
+                        _ => todo!(),
+                    };
+                }
+                max_builder
+            }
+            // Use `cranelift-native` to do feature detection for us.
+            IsaFlagGen::Host => builder_with_options(true)
+                .expect("Unable to build a TargetIsa for the current host"),
+        };
+        // Cranelift has a somwhat weird API for this, but we need to build the final `TargetIsa` to be able
+        // to extract the values for the ISA flags. We need that to use the `string_value()` that formats
+        // the values so that we can pass it into the builder again.
+        let max_isa = max_builder.finish(Flags::new(settings::builder()))?;
+
+        // We give each of the flags a chance of being copied over. Otherwise we keep the default.
+        for value in max_isa.isa_flags().iter() {
+            let should_copy = bool::arbitrary(self.u)?;
+            if !should_copy {
+                continue;
+            }
+            builder.set(value.name, &value.value_string())?;
+        }
+
+        Ok(())
     }
 }

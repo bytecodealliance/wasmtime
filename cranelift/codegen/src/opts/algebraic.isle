@@ -32,6 +32,24 @@
                       x))
       (ineg ty x))
 
+;; ineg(ineg(x)) == x.
+(rule (simplify (ineg ty (ineg ty x))) (subsume x))
+
+;; ineg(x) * ineg(y) == x*y.
+(rule (simplify (imul ty (ineg ty x) (ineg ty y)))
+      (subsume (imul ty x y)))
+
+;; iabs(ineg(x)) == iabs(x).
+(rule (simplify (iabs ty (ineg ty x)))
+      (iabs ty x))
+
+;; iabs(iabs(x)) == iabs(x).
+(rule (simplify (iabs ty inner @ (iabs ty x)))
+      (subsume inner))
+
+;; x-x == 0.
+(rule (simplify (isub (fits_in_64 (ty_int ty)) x x)) (subsume (iconst ty (imm64 0))))
+
 ;; x*1 == 1*x == x.
 (rule (simplify (imul ty
                       x
@@ -51,6 +69,14 @@
                       zero @ (iconst ty (u64_from_imm64 0))
                       _))
       (subsume zero))
+
+;; x*-1 == -1*x == ineg(x).
+(rule (simplify (imul ty x (iconst ty c)))
+      (if-let -1 (i64_sextend_imm64 ty c))
+      (ineg ty x))
+(rule (simplify (imul ty (iconst ty c) x))
+      (if-let -1 (i64_sextend_imm64 ty c))
+      (ineg ty x))
 
 ;; x/1 == x.
 (rule (simplify (sdiv ty
@@ -297,14 +323,12 @@
       (remat x))
 
 ;; Optimize icmp-of-icmp.
-(rule (simplify (icmp ty
-                      (IntCC.NotEqual)
+(rule (simplify (ne ty
                       (uextend _ inner @ (icmp ty _ _ _))
                       (iconst _ (u64_from_imm64 0))))
       (subsume inner))
 
-(rule (simplify (icmp ty
-                      (IntCC.Equal)
+(rule (simplify (eq ty
                       (uextend _ (icmp ty cc x y))
                       (iconst _ (u64_from_imm64 0))))
       (subsume (icmp ty (intcc_inverse cc) x y)))
@@ -320,36 +344,16 @@
 
 ;; `x == x` is always true for integers; `x != x` is false. Strict
 ;; inequalities are false, and loose inequalities are true.
-(rule (simplify
-       (icmp (fits_in_64 (ty_int ty)) (IntCC.Equal) x x))
-      (iconst ty (imm64 1)))
-(rule (simplify
-       (icmp (fits_in_64 (ty_int ty)) (IntCC.NotEqual) x x))
-      (iconst ty (imm64 0)))
-(rule (simplify
-       (icmp (fits_in_64 (ty_int ty)) (IntCC.UnsignedGreaterThan) x x))
-      (iconst ty (imm64 0)))
-(rule (simplify
-       (icmp (fits_in_64 (ty_int ty)) (IntCC.UnsignedGreaterThanOrEqual) x x))
-      (iconst ty (imm64 1)))
-(rule (simplify
-       (icmp (fits_in_64 (ty_int ty)) (IntCC.SignedGreaterThan) x x))
-      (iconst ty (imm64 0)))
-(rule (simplify
-       (icmp (fits_in_64 (ty_int ty)) (IntCC.SignedGreaterThanOrEqual) x x))
-      (iconst ty (imm64 1)))
-(rule (simplify
-       (icmp (fits_in_64 (ty_int ty)) (IntCC.UnsignedLessThan) x x))
-      (iconst ty (imm64 0)))
-(rule (simplify
-       (icmp (fits_in_64 (ty_int ty)) (IntCC.UnsignedLessThanOrEqual) x x))
-      (iconst ty (imm64 1)))
-(rule (simplify
-       (icmp (fits_in_64 (ty_int ty)) (IntCC.SignedLessThan) x x))
-      (iconst ty (imm64 0)))
-(rule (simplify
-       (icmp (fits_in_64 (ty_int ty)) (IntCC.SignedLessThanOrEqual) x x))
-      (iconst ty (imm64 1)))
+(rule (simplify (eq  (fits_in_64 (ty_int ty)) x x)) (iconst ty (imm64 1)))
+(rule (simplify (ne  (fits_in_64 (ty_int ty)) x x)) (iconst ty (imm64 0)))
+(rule (simplify (ugt (fits_in_64 (ty_int ty)) x x)) (iconst ty (imm64 0)))
+(rule (simplify (uge (fits_in_64 (ty_int ty)) x x)) (iconst ty (imm64 1)))
+(rule (simplify (sgt (fits_in_64 (ty_int ty)) x x)) (iconst ty (imm64 0)))
+(rule (simplify (sge (fits_in_64 (ty_int ty)) x x)) (iconst ty (imm64 1)))
+(rule (simplify (ult (fits_in_64 (ty_int ty)) x x)) (iconst ty (imm64 0)))
+(rule (simplify (ule (fits_in_64 (ty_int ty)) x x)) (iconst ty (imm64 1)))
+(rule (simplify (slt (fits_in_64 (ty_int ty)) x x)) (iconst ty (imm64 0)))
+(rule (simplify (sle (fits_in_64 (ty_int ty)) x x)) (iconst ty (imm64 1)))
 
 ;; (x ^ -1) can be replaced with the `bnot` instruction
 (rule (simplify (bxor ty x (iconst ty k)))
@@ -371,140 +375,150 @@
              (iconst _ (u64_from_imm64 1))))
       extend)
 
-;; `x < 0` is always false for unsigned integers, and `x >= 0` is always true
-;; for unsigned integers, along with their reversals.
+;; ult(x, 0) == false.
 (rule (simplify
-       (icmp (fits_in_64 (ty_int ty))
-             (IntCC.UnsignedLessThan)
-             _
-             (iconst _ (u64_from_imm64 0))))
-      (iconst ty (imm64 0)))
+       (ult (fits_in_64 (ty_int bty)) x zero @ (iconst _ (u64_from_imm64 0))))
+      (subsume (iconst bty (imm64 0))))
+
+;; ule(x, 0) == eq(x, 0)
 (rule (simplify
-       (icmp (fits_in_64 (ty_int ty))
-             (IntCC.UnsignedGreaterThanOrEqual)
-             _
-             (iconst _ (u64_from_imm64 0))))
-      (iconst ty (imm64 1)))
+       (ule (fits_in_64 (ty_int bty)) x zero @ (iconst _ (u64_from_imm64 0))))
+      (eq bty x zero))
+
+;; ugt(x, 0) == ne(x, 0).
+(rule (simplify
+       (ugt (fits_in_64 (ty_int bty)) x zero @ (iconst _ (u64_from_imm64 0))))
+      (ne bty x zero))
+
+;; uge(x, 0) == true.
+(rule (simplify
+       (uge (fits_in_64 (ty_int bty)) x zero @ (iconst _ (u64_from_imm64 0))))
+      (subsume (iconst bty (imm64 1))))
+
+;; ult(x, UMAX) == ne(x, UMAX).
+(rule (simplify
+       (ult (fits_in_64 (ty_int bty)) x umax @ (iconst cty (u64_from_imm64 y))))
+       (if-let $true (u64_eq y (ty_umax cty)))
+       (ne bty x umax))
+
+;; ule(x, UMAX) == true.
+(rule (simplify
+       (ule (fits_in_64 (ty_int bty)) x umax @ (iconst cty (u64_from_imm64 y))))
+       (if-let $true (u64_eq y (ty_umax cty)))
+       (subsume (iconst bty (imm64 1))))
+
+;; ugt(x, UMAX) == false.
+(rule (simplify
+       (ugt (fits_in_64 (ty_int bty)) x umax @ (iconst cty (u64_from_imm64 y))))
+       (if-let $true (u64_eq y (ty_umax cty)))
+       (subsume (iconst bty (imm64 0))))
+
+;; uge(x, UMAX) == eq(x, UMAX).
+(rule (simplify
+       (uge (fits_in_64 (ty_int bty)) x umax @ (iconst cty (u64_from_imm64 y))))
+       (if-let $true (u64_eq y (ty_umax cty)))
+       (eq bty x umax))
+
+;; slt(x, SMIN) == false.
+(rule (simplify
+       (slt (fits_in_64 (ty_int bty)) x smin @ (iconst cty (u64_from_imm64 y))))
+       (if-let $true (u64_eq y (ty_smin cty)))
+       (subsume (iconst bty (imm64 0))))
+
+;; sle(x, SMIN) == eq(x, SMIN).
+(rule (simplify
+       (sle (fits_in_64 (ty_int bty)) x smin @ (iconst cty (u64_from_imm64 y))))
+       (if-let $true (u64_eq y (ty_smin cty)))
+       (eq bty x smin))
+
+;; sgt(x, SMIN) == ne(x, SMIN).
+(rule (simplify
+       (sgt (fits_in_64 (ty_int bty)) x smin @ (iconst cty (u64_from_imm64 y))))
+       (if-let $true (u64_eq y (ty_smin cty)))
+       (ne bty x smin))
+
+;; sge(x, SMIN) == true.
+(rule (simplify
+       (sge (fits_in_64 (ty_int bty)) x smin @ (iconst cty (u64_from_imm64 y))))
+       (if-let $true (u64_eq y (ty_smin cty)))
+       (subsume (iconst bty (imm64 1))))
+
+;; slt(x, SMAX) == ne(x, SMAX).
+(rule (simplify
+       (slt (fits_in_64 (ty_int bty)) x smax @ (iconst cty (u64_from_imm64 y))))
+       (if-let $true (u64_eq y (ty_smax cty)))
+       (ne bty x smax))
+
+;; sle(x, SMAX) == true.
+(rule (simplify
+       (sle (fits_in_64 (ty_int bty)) x smax @ (iconst cty (u64_from_imm64 y))))
+       (if-let $true (u64_eq y (ty_smax cty)))
+       (subsume (iconst bty (imm64 1))))
+
+;; sgt(x, SMAX) == false.
+(rule (simplify
+       (sgt (fits_in_64 (ty_int bty)) x smax @ (iconst cty (u64_from_imm64 y))))
+       (if-let $true (u64_eq y (ty_smax cty)))
+       (subsume (iconst bty (imm64 0))))
+
+;; sge(x, SMAX) == eq(x, SMAX).
+(rule (simplify
+       (sge (fits_in_64 (ty_int bty)) x smax @ (iconst cty (u64_from_imm64 y))))
+       (if-let $true (u64_eq y (ty_smax cty)))
+       (eq bty x smax))
 
 ;; 32-bit integers zero-extended to 64-bit integers are never negative
 (rule (simplify
-       (icmp (ty_int ty)
-             (IntCC.SignedLessThan)
+       (slt ty
              (uextend $I64 x @ (value_type $I32))
              (iconst _ (u64_from_imm64 0))))
       (iconst ty (imm64 0)))
 (rule (simplify
-       (icmp (ty_int ty)
-             (IntCC.SignedGreaterThanOrEqual)
+       (sge ty
              (uextend $I64 x @ (value_type $I32))
              (iconst _ (u64_from_imm64 0))))
       (iconst ty (imm64 1)))
 
 
 ;; Transform select-of-icmp into {u,s}{min,max} instructions where possible.
-(rule (simplify
-       (select ty (icmp _ (IntCC.SignedGreaterThan) x y) x y))
-      (smax ty x y))
-(rule (simplify
-       (select ty (icmp _ (IntCC.SignedGreaterThanOrEqual) x y) x y))
-      (smax ty x y))
-(rule (simplify
-       (select ty (icmp _ (IntCC.UnsignedGreaterThan) x y) x y))
-      (umax ty x y))
-(rule (simplify
-       (select ty (icmp _ (IntCC.UnsignedGreaterThanOrEqual) x y) x y))
-      (umax ty x y))
-(rule (simplify
-       (select ty (icmp _ (IntCC.SignedLessThan) x y) x y))
-      (smin ty x y))
-(rule (simplify
-       (select ty (icmp _ (IntCC.SignedLessThanOrEqual) x y) x y))
-      (smin ty x y))
-(rule (simplify
-       (select ty (icmp _ (IntCC.UnsignedLessThan) x y) x y))
-      (umin ty x y))
-(rule (simplify
-       (select ty (icmp _ (IntCC.UnsignedLessThanOrEqual) x y) x y))
-      (umin ty x y))
-
+(rule (simplify (select ty (sgt _ x y) x y)) (smax ty x y))
+(rule (simplify (select ty (sge _ x y) x y)) (smax ty x y))
+(rule (simplify (select ty (ugt _ x y) x y)) (umax ty x y))
+(rule (simplify (select ty (uge _ x y) x y)) (umax ty x y))
+(rule (simplify (select ty (slt _ x y) x y)) (smin ty x y))
+(rule (simplify (select ty (sle _ x y) x y)) (smin ty x y))
+(rule (simplify (select ty (ult _ x y) x y)) (umin ty x y))
+(rule (simplify (select ty (ule _ x y) x y)) (umin ty x y))
 
 ;; These are the same rules as above, but when the operands for select are swapped
-(rule (simplify
-       (select ty (icmp _ (IntCC.SignedLessThan) x y) y x))
-      (smax ty x y))
-(rule (simplify
-       (select ty (icmp _ (IntCC.SignedLessThanOrEqual) x y) y x))
-      (smax ty x y))
-(rule (simplify
-       (select ty (icmp _ (IntCC.UnsignedLessThan) x y) y x))
-      (umax ty x y))
-(rule (simplify
-       (select ty (icmp _ (IntCC.UnsignedLessThanOrEqual) x y) y x))
-      (umax ty x y))
-(rule (simplify
-       (select ty (icmp _ (IntCC.SignedGreaterThan) x y) y x))
-      (smin ty x y))
-(rule (simplify
-       (select ty (icmp _ (IntCC.SignedGreaterThanOrEqual) x y) y x))
-      (smin ty x y))
-(rule (simplify
-       (select ty (icmp _ (IntCC.UnsignedGreaterThan) x y) y x))
-      (umin ty x y))
-(rule (simplify
-       (select ty (icmp _ (IntCC.UnsignedGreaterThanOrEqual) x y) y x))
-      (umin ty x y))
+(rule (simplify (select ty (slt _ x y) y x)) (smax ty x y))
+(rule (simplify (select ty (sle _ x y) y x)) (smax ty x y))
+(rule (simplify (select ty (ult _ x y) y x)) (umax ty x y))
+(rule (simplify (select ty (ule _ x y) y x)) (umax ty x y))
+(rule (simplify (select ty (sgt _ x y) y x)) (smin ty x y))
+(rule (simplify (select ty (sge _ x y) y x)) (smin ty x y))
+(rule (simplify (select ty (ugt _ x y) y x)) (umin ty x y))
+(rule (simplify (select ty (uge _ x y) y x)) (umin ty x y))
 
 ;; Transform bitselect-of-icmp into {u,s}{min,max} instructions where possible.
-(rule (simplify
-       (bitselect ty (icmp _ (IntCC.SignedGreaterThan) x y) x y))
-      (smax ty x y))
-(rule (simplify
-       (bitselect ty (icmp _ (IntCC.SignedGreaterThanOrEqual) x y) x y))
-      (smax ty x y))
-(rule (simplify
-       (bitselect ty (icmp _ (IntCC.UnsignedGreaterThan) x y) x y))
-      (umax ty x y))
-(rule (simplify
-       (bitselect ty (icmp _ (IntCC.UnsignedGreaterThanOrEqual) x y) x y))
-      (umax ty x y))
-(rule (simplify
-       (bitselect ty (icmp _ (IntCC.SignedLessThan) x y) x y))
-      (smin ty x y))
-(rule (simplify
-       (bitselect ty (icmp _ (IntCC.SignedLessThanOrEqual) x y) x y))
-      (smin ty x y))
-(rule (simplify
-       (bitselect ty (icmp _ (IntCC.UnsignedLessThan) x y) x y))
-      (umin ty x y))
-(rule (simplify
-       (bitselect ty (icmp _ (IntCC.UnsignedLessThanOrEqual) x y) x y))
-      (umin ty x y))
+(rule (simplify (bitselect ty (sgt _ x y) x y)) (smax ty x y))
+(rule (simplify (bitselect ty (sge _ x y) x y)) (smax ty x y))
+(rule (simplify (bitselect ty (ugt _ x y) x y)) (umax ty x y))
+(rule (simplify (bitselect ty (uge _ x y) x y)) (umax ty x y))
+(rule (simplify (bitselect ty (slt _ x y) x y)) (smin ty x y))
+(rule (simplify (bitselect ty (sle _ x y) x y)) (smin ty x y))
+(rule (simplify (bitselect ty (ult _ x y) x y)) (umin ty x y))
+(rule (simplify (bitselect ty (ule _ x y) x y)) (umin ty x y))
 
 ;; These are the same rules as above, but when the operands for select are swapped
-(rule (simplify
-       (bitselect ty (icmp _ (IntCC.SignedLessThan) x y) y x))
-      (smax ty x y))
-(rule (simplify
-       (bitselect ty (icmp _ (IntCC.SignedLessThanOrEqual) x y) y x))
-      (smax ty x y))
-(rule (simplify
-       (bitselect ty (icmp _ (IntCC.UnsignedLessThan) x y) y x))
-      (umax ty x y))
-(rule (simplify
-       (bitselect ty (icmp _ (IntCC.UnsignedLessThanOrEqual) x y) y x))
-      (umax ty x y))
-(rule (simplify
-       (bitselect ty (icmp _ (IntCC.SignedGreaterThan) x y) y x))
-      (smin ty x y))
-(rule (simplify
-       (bitselect ty (icmp _ (IntCC.SignedGreaterThanOrEqual) x y) y x))
-      (smin ty x y))
-(rule (simplify
-       (bitselect ty (icmp _ (IntCC.UnsignedGreaterThan) x y) y x))
-      (umin ty x y))
-(rule (simplify
-       (bitselect ty (icmp _ (IntCC.UnsignedGreaterThanOrEqual) x y) y x))
-      (umin ty x y))
+(rule (simplify (bitselect ty (slt _ x y) y x)) (smax ty x y))
+(rule (simplify (bitselect ty (sle _ x y) y x)) (smax ty x y))
+(rule (simplify (bitselect ty (ult _ x y) y x)) (umax ty x y))
+(rule (simplify (bitselect ty (ule _ x y) y x)) (umax ty x y))
+(rule (simplify (bitselect ty (sgt _ x y) y x)) (smin ty x y))
+(rule (simplify (bitselect ty (sge _ x y) y x)) (smin ty x y))
+(rule (simplify (bitselect ty (ugt _ x y) y x)) (umin ty x y))
+(rule (simplify (bitselect ty (uge _ x y) y x)) (umin ty x y))
 
 ;; For floats convert fcmp lt into pseudo_min and gt into pseudo_max
 ;;
@@ -523,6 +537,9 @@
 ;; TODO: perform this same optimization to `f{min,max}_pseudo` for vectors
 ;; with the `bitselect` instruction, but the pattern is a bit more complicated
 ;; due to most bitselects-over-floats having bitcasts.
+
+;; fneg(fneg(x)) == x.
+(rule (simplify (fneg ty (fneg ty x))) (subsume x))
 
 ;; If both of the multiplied arguments to an `fma` are negated then remove
 ;; both of them since they cancel out.
