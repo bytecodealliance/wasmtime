@@ -33,7 +33,5 @@ pub fn add_to_linker<T: Send>(
     wasi::exit::add_to_linker(l, f)?;
     wasi::environment::add_to_linker(l, f)?;
     wasi::preopens::add_to_linker(l, f)?;
-    wasi::types::add_to_linker(l, f)?;
-    wasi::default_outgoing_http::add_to_linker(l, f)?;
     Ok(())
 }
