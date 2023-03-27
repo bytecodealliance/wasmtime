@@ -93,8 +93,14 @@ pub(crate) trait MacroAssembler {
     /// Get the address of a local slot.
     fn local_address(&mut self, local: &LocalSlot) -> Self::Address;
 
-    /// Construct an address with the stack pointer as base.
+    /// Constructs an address with an offset that is relative to the
+    /// current position of the stack pointer (e.g. [sp + (sp_offset -
+    /// offset)].
     fn address_from_sp(&self, offset: u32) -> Self::Address;
+
+    /// Constructs an address with an offset that is absolute to the
+    /// current position of the stack pointer (e.g. [sp + offset].
+    fn address_at_sp(&self, offset: u32) -> Self::Address;
 
     /// Emit a function call to a locally defined function.
     fn call(&mut self, callee: u32);

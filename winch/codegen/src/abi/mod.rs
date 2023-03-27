@@ -1,3 +1,47 @@
+//! This module provides all the necessary building blocks for
+//! implementing ISA specific ABIs.
+//!
+//! # Default ABI
+//!
+//! Winch uses a default internal ABI, for all internal functions.
+//! This allows us to push the complexity of system ABI compliance to
+//! the trampolines (not yet implemented).  The default ABI treats all
+//! allocatable registers as caller saved, which means that (i) all
+//! register values in the Wasm value stack (which are normally
+//! referred to as "live"), must be saved onto the machine stack (ii)
+//! function prologues and epilogues don't store/restore other
+//! registers more than the non-allocatable ones (e.g. rsp/rbp in
+//! x86_64).
+//!
+//! The calling convention in the default ABI, uses registers to a
+//! certain fixed count for arguments and return values, and then the
+//! stack is used for all additional arguments.
+//!
+//! Generally the stack layout looks like:
+//! +-------------------------------+
+//! |                               |
+//! |                               |
+//! |         Stack Args            |
+//! |                               |
+//! |                               |
+//! +-------------------------------+----> SP @ function entry
+//! |         Ret addr              |
+//! +-------------------------------+
+//! |            SP                 |
+//! +-------------------------------+----> SP @ Function prologue
+//! |                               |
+//! |                               |
+//! |                               |
+//! |        Stack slots            |
+//! |        + dynamic space        |
+//! |                               |
+//! |                               |
+//! |                               |
+//! +-------------------------------+----> SP @ callsite (after)
+//! |        alignment              |
+//! |        + arguments            |
+//! |                               | ----> Space allocated for calls
+//! |                               |
 use crate::isa::reg::Reg;
 use smallvec::SmallVec;
 use std::ops::{Add, BitAnd, Not, Sub};

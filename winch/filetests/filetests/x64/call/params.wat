@@ -1,18 +1,18 @@
 ;;! target = "x86_64"
 
 (module
-  (func (export "main") (result i32)
-    (local $x i32)
-    (local $y i32)
-
-    (local.set $x (i32.const 10))
-    (local.set $y (i32.const 20))
-
-    (local.get $y)
-    (local.get $x)
+  (func (export "main") (param i32) (param i32) (result i32)
+    (local.get 1)
+    (local.get 0)
     (i32.div_u)
 
     (call $add (i32.const 1) (i32.const 2) (i32.const 3) (i32.const 4) (i32.const 5) (i32.const 6) (i32.const 7) (i32.const 8))
+
+    (local.get 1)
+    (local.get 0)
+    (i32.div_u)
+
+    (call $add (i32.const 2) (i32.const 3) (i32.const 4) (i32.const 5) (i32.const 6) (i32.const 7) (i32.const 8))
   )
 
   (func $add (param i32 i32 i32 i32 i32 i32 i32 i32 i32) (result i32)
@@ -38,34 +38,56 @@
 ;;    0:	 55                   	push	rbp
 ;;    1:	 4889e5               	mov	rbp, rsp
 ;;    4:	 4883ec08             	sub	rsp, 8
-;;    8:	 48c7042400000000     	mov	qword ptr [rsp], 0
-;;   10:	 b80a000000           	mov	eax, 0xa
-;;   15:	 89442404             	mov	dword ptr [rsp + 4], eax
-;;   19:	 b814000000           	mov	eax, 0x14
-;;   1e:	 890424               	mov	dword ptr [rsp], eax
-;;   21:	 8b4c2404             	mov	ecx, dword ptr [rsp + 4]
-;;   25:	 8b0424               	mov	eax, dword ptr [rsp]
-;;   28:	 31d2                 	xor	edx, edx
-;;   2a:	 f7f1                 	div	ecx
-;;   2c:	 50                   	push	rax
-;;   2d:	 4883ec20             	sub	rsp, 0x20
-;;   31:	 8b7c2410             	mov	edi, dword ptr [rsp + 0x10]
-;;   35:	 be01000000           	mov	esi, 1
-;;   3a:	 ba02000000           	mov	edx, 2
-;;   3f:	 b903000000           	mov	ecx, 3
-;;   44:	 41b804000000         	mov	r8d, 4
-;;   4a:	 41b905000000         	mov	r9d, 5
-;;   50:	 41bb06000000         	mov	r11d, 6
-;;   56:	 44891c24             	mov	dword ptr [rsp], r11d
-;;   5a:	 41bb07000000         	mov	r11d, 7
-;;   60:	 44895c2408           	mov	dword ptr [rsp + 8], r11d
-;;   65:	 41bb08000000         	mov	r11d, 8
-;;   6b:	 44895c2410           	mov	dword ptr [rsp + 0x10], r11d
-;;   70:	 e800000000           	call	0x75
-;;   75:	 4883c428             	add	rsp, 0x28
-;;   79:	 4883c408             	add	rsp, 8
-;;   7d:	 5d                   	pop	rbp
-;;   7e:	 c3                   	ret	
+;;    8:	 897c2404             	mov	dword ptr [rsp + 4], edi
+;;    c:	 893424               	mov	dword ptr [rsp], esi
+;;    f:	 8b4c2404             	mov	ecx, dword ptr [rsp + 4]
+;;   13:	 8b0424               	mov	eax, dword ptr [rsp]
+;;   16:	 31d2                 	xor	edx, edx
+;;   18:	 f7f1                 	div	ecx
+;;   1a:	 50                   	push	rax
+;;   1b:	 4883ec20             	sub	rsp, 0x20
+;;   1f:	 8b7c2420             	mov	edi, dword ptr [rsp + 0x20]
+;;   23:	 be01000000           	mov	esi, 1
+;;   28:	 ba02000000           	mov	edx, 2
+;;   2d:	 b903000000           	mov	ecx, 3
+;;   32:	 41b804000000         	mov	r8d, 4
+;;   38:	 41b905000000         	mov	r9d, 5
+;;   3e:	 41bb06000000         	mov	r11d, 6
+;;   44:	 44891c24             	mov	dword ptr [rsp], r11d
+;;   48:	 41bb07000000         	mov	r11d, 7
+;;   4e:	 44895c2408           	mov	dword ptr [rsp + 8], r11d
+;;   53:	 41bb08000000         	mov	r11d, 8
+;;   59:	 44895c2410           	mov	dword ptr [rsp + 0x10], r11d
+;;   5e:	 e800000000           	call	0x63
+;;   63:	 4883c428             	add	rsp, 0x28
+;;   67:	 50                   	push	rax
+;;   68:	 448b5c2408           	mov	r11d, dword ptr [rsp + 8]
+;;   6d:	 4153                 	push	r11
+;;   6f:	 448b5c2414           	mov	r11d, dword ptr [rsp + 0x14]
+;;   74:	 4153                 	push	r11
+;;   76:	 59                   	pop	rcx
+;;   77:	 58                   	pop	rax
+;;   78:	 31d2                 	xor	edx, edx
+;;   7a:	 f7f1                 	div	ecx
+;;   7c:	 50                   	push	rax
+;;   7d:	 4883ec20             	sub	rsp, 0x20
+;;   81:	 8b7c2428             	mov	edi, dword ptr [rsp + 0x28]
+;;   85:	 8b742420             	mov	esi, dword ptr [rsp + 0x20]
+;;   89:	 ba02000000           	mov	edx, 2
+;;   8e:	 b903000000           	mov	ecx, 3
+;;   93:	 41b804000000         	mov	r8d, 4
+;;   99:	 41b905000000         	mov	r9d, 5
+;;   9f:	 41bb06000000         	mov	r11d, 6
+;;   a5:	 44891c24             	mov	dword ptr [rsp], r11d
+;;   a9:	 41bb07000000         	mov	r11d, 7
+;;   af:	 44895c2408           	mov	dword ptr [rsp + 8], r11d
+;;   b4:	 41bb08000000         	mov	r11d, 8
+;;   ba:	 44895c2410           	mov	dword ptr [rsp + 0x10], r11d
+;;   bf:	 e800000000           	call	0xc4
+;;   c4:	 4883c430             	add	rsp, 0x30
+;;   c8:	 4883c408             	add	rsp, 8
+;;   cc:	 5d                   	pop	rbp
+;;   cd:	 c3                   	ret	
 ;;
 ;;    0:	 55                   	push	rbp
 ;;    1:	 4889e5               	mov	rbp, rsp

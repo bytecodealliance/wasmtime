@@ -94,6 +94,10 @@ impl Masm for MacroAssembler {
     }
 
     fn address_from_sp(&self, offset: u32) -> Self::Address {
+        Address::offset(regs::rsp(), self.sp_offset - offset)
+    }
+
+    fn address_at_sp(&self, offset: u32) -> Self::Address {
         Address::offset(regs::rsp(), offset)
     }
 

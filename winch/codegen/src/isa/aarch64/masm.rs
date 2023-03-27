@@ -119,6 +119,10 @@ impl Masm for MacroAssembler {
         todo!()
     }
 
+    fn address_at_sp(&self, _offset: u32) -> Self::Address {
+        todo!()
+    }
+
     fn store(&mut self, src: RegImm, dst: Address, size: OperandSize) {
         let src = match src {
             RegImm::Imm(imm) => {
