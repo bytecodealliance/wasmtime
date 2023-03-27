@@ -195,6 +195,14 @@ pub fn add_component_to_linker<T>(
     )?;
     linker.func_wrap(
         "types",
+        "drop-future-incoming-response",
+        move |mut caller: Caller<'_, T>, _future: u32| -> anyhow::Result<()> {
+            // FIXME: Intentionally left blank
+            Ok(())
+        },
+    )?;
+    linker.func_wrap(
+        "types",
         "future-incoming-response-get",
         move |mut caller: Caller<'_, T>, future: u32, ptr: i32| -> anyhow::Result<()> {
             let memory = memory_get(&mut caller)?;
@@ -251,6 +259,15 @@ pub fn add_component_to_linker<T>(
         move |mut caller: Caller<'_, T>, id: u32| -> anyhow::Result<()> {
             let ctx = get_cx(caller.data_mut());
             ctx.drop_input_stream(id)?;
+            Ok(())
+        },
+    )?;
+    linker.func_wrap(
+        "streams",
+        "drop-output-stream",
+        move |mut caller: Caller<'_, T>, id: u32| -> anyhow::Result<()> {
+            let ctx = get_cx(caller.data_mut());
+            ctx.drop_output_stream(id)?;
             Ok(())
         },
     )?;

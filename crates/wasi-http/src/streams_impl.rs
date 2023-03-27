@@ -86,6 +86,8 @@ impl crate::streams::Host for WasiHttp {
     }
 
     fn drop_output_stream(&mut self, _this: OutputStream) -> wasmtime::Result<()> {
-        bail!("unimplemented: drop_output_stream");
+        //bail!("unimplemented: drop_output_stream");
+        //FIXME: intentionally ignoring
+        Ok(())
     }
 }
