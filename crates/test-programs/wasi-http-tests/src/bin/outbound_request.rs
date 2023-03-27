@@ -1,11 +1,24 @@
 use anyhow::{anyhow, Context, Result};
+use std::fmt;
 use wasi_http_tests::*;
 
-#[derive(Debug)]
 struct Response {
     status: types::StatusCode,
     headers: Vec<(String, String)>,
     body: Vec<u8>,
+}
+impl fmt::Debug for Response {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut out = f.debug_struct("Response");
+        out.field("status", &self.status)
+            .field("headers", &self.headers);
+        if let Ok(body) = std::str::from_utf8(&self.body) {
+            out.field("body", &body);
+        } else {
+            out.field("body", &self.body);
+        }
+        out.finish()
+    }
 }
 
 fn request(
