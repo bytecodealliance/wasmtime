@@ -622,8 +622,29 @@ impl<'a, 'data> Translator<'a, 'data> {
                     self.result
                         .initializers
                         .push(LocalInitializer::Export(item));
-                    if let ComponentItem::Type(ty) = item {
-                        self.types.push_component_typedef(ty);
+
+                    // Exports create a new index, so push the item onto the
+                    // appropriate list.
+                    match item {
+                        ComponentItem::Func(idx) => {
+                            self.result
+                                .component_funcs
+                                .push(self.result.component_funcs[idx]);
+                        }
+                        ComponentItem::Module(_idx) => {
+                            // ???
+                        }
+                        ComponentItem::Component(idx) => {
+                            self.result.components.push(self.result.components[idx]);
+                        }
+                        ComponentItem::ComponentInstance(idx) => {
+                            self.result
+                                .component_instances
+                                .push(self.result.component_instances[idx]);
+                        }
+                        ComponentItem::Type(ty) => {
+                            self.types.push_component_typedef(ty);
+                        }
                     }
                 }
             }
