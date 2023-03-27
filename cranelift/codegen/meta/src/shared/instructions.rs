@@ -2131,7 +2131,7 @@ pub(crate) fn define(
             let NarrowScalar = &TypeVar::new(
                 "NarrowScalar",
                 "A scalar integer type up to 64 bits",
-                TypeSetBuilder::new().ints(Interval::All).build(),
+                TypeSetBuilder::new().ints(8..64).build(),
             );
 
             ig.push(

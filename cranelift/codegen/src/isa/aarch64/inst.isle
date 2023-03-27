@@ -1973,7 +1973,7 @@
        (MInst.AluRRRShift (ALUOp.SubS) size (writable_zero_reg)
         src1 src2 shift)))
 
-;; Helper for emitting `cmp` instructions, setting flags, with a arithmetic right-shifted
+;; Helper for emitting `cmp` instructions, setting flags, with an arithmetic right-shifted
 ;; second operand register.
 (decl cmp_rr_shift_asr (OperandSize Reg Reg u64) ProducesFlags)
 (rule (cmp_rr_shift_asr size src1 src2 shift_amount)
@@ -3694,12 +3694,12 @@
             (rm Reg (put_in_reg y)))
        (vec_cmp rn rm in_ty cond)))
 
-;; Determines the appropriate extend op given the value type and whether it is signed.
-(decl lower_extend_op (Type bool) ExtendOp)
-(rule (lower_extend_op $I8 $true) (ExtendOp.SXTB))
-(rule (lower_extend_op $I16 $true) (ExtendOp.SXTH))
-(rule (lower_extend_op $I8 $false) (ExtendOp.UXTB))
-(rule (lower_extend_op $I16 $false) (ExtendOp.UXTH))
+;; Determines the appropriate extend op given the value type and the given ArgumentExtension.
+(decl lower_extend_op (Type ArgumentExtension) ExtendOp)
+(rule (lower_extend_op $I8 (ArgumentExtension.Sext)) (ExtendOp.SXTB))
+(rule (lower_extend_op $I16 (ArgumentExtension.Sext)) (ExtendOp.SXTH))
+(rule (lower_extend_op $I8 (ArgumentExtension.Uext)) (ExtendOp.UXTB))
+(rule (lower_extend_op $I16 (ArgumentExtension.Uext)) (ExtendOp.UXTH))
 
 ;; Integers <= 64-bits.
 (rule -2 (lower_icmp_into_reg cond rn rm in_ty out_ty)
@@ -3710,13 +3710,13 @@
 (rule 1 (lower_icmp cond rn rm (fits_in_16 ty))
       (if (signed_cond_code cond))
       (let ((rn Reg (put_in_reg_sext32 rn)))
-      (flags_and_cc (cmp_extend (operand_size ty) rn rm (lower_extend_op ty $true)) cond)))
+      (flags_and_cc (cmp_extend (operand_size ty) rn rm (lower_extend_op ty (ArgumentExtension.Sext))) cond)))
 (rule -1 (lower_icmp cond rn (imm12_from_value rm) (fits_in_16 ty))
       (let ((rn Reg (put_in_reg_zext32 rn)))
       (flags_and_cc (cmp_imm (operand_size ty) rn rm) cond)))
 (rule -2 (lower_icmp cond rn rm (fits_in_16 ty))
       (let ((rn Reg (put_in_reg_zext32 rn)))
-      (flags_and_cc (cmp_extend (operand_size ty) rn rm (lower_extend_op ty $false)) cond)))
+      (flags_and_cc (cmp_extend (operand_size ty) rn rm (lower_extend_op ty (ArgumentExtension.Uext))) cond)))
 (rule -3 (lower_icmp cond rn (u64_from_iconst c) ty)
       (if (ty_int_ref_scalar_64 ty))
       (lower_icmp_const cond rn c ty))

@@ -2580,7 +2580,7 @@
 ;; For values smaller than a register, we do a normal `add` with both arguments
 ;; sign extended. We then check if the output sign bit has flipped.
 (rule 0 (lower (has_type (fits_in_16 ty) (iadd_cout a b)))
-      (let ((extend ExtendOp (lower_extend_op ty $true))
+      (let ((extend ExtendOp (lower_extend_op ty (ArgumentExtension.Sext)))
 
             ;; Instead of emitting two `sxt{b,h}` we do one as an instruction and
             ;; the other as an extend operation in the `add` instruction.
@@ -2619,18 +2619,18 @@
 
 ;;;; Helpers for `*_overflow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; when true, sign extend, otherwise zero extend
-(decl put_in_reg_ext32 (Value bool) Reg)
-(rule (put_in_reg_ext32 val $true)
+;; put a narrow value into a register and sign-/zero-extend depending on the ArgumentExtension
+(decl put_in_reg_ext32 (Value ArgumentExtension) Reg)
+(rule (put_in_reg_ext32 val (ArgumentExtension.Sext))
       (put_in_reg_sext32 val))
-(rule (put_in_reg_ext32 val $false)
+(rule (put_in_reg_ext32 val (ArgumentExtension.Uext))
       (put_in_reg_zext32 val))
 
-;; For values smaller than a register, we emit a normal op with both arguments
-;; zero/sign extended. We then check if the output is the same as itself zero/sign extended.
-(decl overflow_op_small (Type Value Value bool ALUOp) InstOutput)
-(rule (overflow_op_small ty a b sext alu_op)
-      (let ((extend ExtendOp (lower_extend_op ty sext))
+;; For narrow values emit a normal op with both arguments zero/sign extended.
+;; Then check if the output is the same as itself zero/sign extended from the narrower width.
+(decl overflow_op_small (Type Value Value ArgumentExtension ALUOp) InstOutput)
+(rule (overflow_op_small ty a b arg_ext alu_op)
+      (let ((extend ExtendOp (lower_extend_op ty arg_ext))
 
             ;; Instead of emitting two `{u,s}xt{b,h}` we do one as an instruction and
             ;; the other as an extend operation in the alu_op.
@@ -2639,7 +2639,7 @@
             ;; alu_op  out, a_ext, b, {u,s}xtb
             ;; cmp     out, out, {u,s}xtb
             ;; cset    out_of, ne
-            (a_ext Reg (put_in_reg_ext32 a sext))
+            (a_ext Reg (put_in_reg_ext32 a arg_ext))
             (out Reg (alu_rrr_extend alu_op ty a_ext b extend))
             (out_of Reg (with_flags_reg 
                   (cmp_extend (OperandSize.Size32) out out extend)
@@ -2648,10 +2648,15 @@
             (value_reg out)
             (value_reg out_of))))
 
-;; For register sized op's we just emit a op+cset, without further masking.
+;; For register sized op's just emit a op+cset, without further masking.
 ;;
 ;; op out, a, b
 ;; cset out_of, cond
+;;
+;; conds expected:
+;; Hs: Carry set, unsigned overflow; Vs: Signed Over-/Underflow;
+;; Lo: Carry clear, meaning no unsigned overflow.
+;; (this is because subtraction is implemented as an add with the two's complement value on aarch64, meaning there is a sub-overflow if the add does not overflow)
 (decl overflow_op_normal (Type Value Value ALUOp Cond) InstOutput)
 (rule (overflow_op_normal ty a b alu_op cond)
       (let ((out ValueRegs
@@ -2662,7 +2667,7 @@
             (value_regs_get out 0)
             (value_regs_get out 1))))
 
-;; For 128bit integers we emit, for example, add+adcs+cset
+;; For 128bit integers emit, for example, add+adcs+cset
 (decl overflow_op_128 (Value Value ALUOp ALUOp Cond) InstOutput)
 (rule (overflow_op_128 x y alu_op1 alu_op2 cond)
       (let
@@ -2694,7 +2699,7 @@
 ;; For values smaller than a register, we do a normal `add` with both arguments
 ;; zero extended. We then check if the output is the same as itself zero extended.
 (rule 1 (lower (has_type (fits_in_16 ty) (uadd_overflow a b)))
-      (overflow_op_small ty a b $false (ALUOp.Add)))
+      (overflow_op_small ty a b (ArgumentExtension.Uext) (ALUOp.Add)))
 
 ;; For register sized add's we just emit a adds+cset, without further masking.
 (rule 2 (lower (has_type (ty_32_or_64 ty) (uadd_overflow a b)))
@@ -2711,7 +2716,7 @@
 ;; cmp out, out, sxt{b,h}
 ;; cset of, ne
 (rule 1 (lower (has_type (fits_in_16 ty) (sadd_overflow a b)))
-      (overflow_op_small ty a b $true (ALUOp.Add)))
+      (overflow_op_small ty a b (ArgumentExtension.Sext) (ALUOp.Add)))
 
 ;; adds a, b
 ;; cset of, vs
@@ -2731,7 +2736,7 @@
 ;; cmp out, out, uxt{b,h}
 ;; cset of, ne
 (rule 1 (lower (has_type (fits_in_16 ty) (usub_overflow a b)))
-      (overflow_op_small ty a b $false (ALUOp.Sub)))
+      (overflow_op_small ty a b (ArgumentExtension.Uext) (ALUOp.Sub)))
 
 ;; subs a, b
 ;; cset of, lo
@@ -2751,7 +2756,7 @@
 ;; cmp out, out, sxt{b,h}
 ;; cset of, ne
 (rule 1 (lower (has_type (fits_in_16 ty) (ssub_overflow a b)))
-      (overflow_op_small ty a b $true (ALUOp.Sub)))
+      (overflow_op_small ty a b (ArgumentExtension.Sext) (ALUOp.Sub)))
 
 ;; subs a, b
 ;; cset of, vs
@@ -2772,7 +2777,7 @@
 ;; cmp out, out, uxt{b,h}
 ;; cset of, ne
 (rule 1 (lower (has_type (fits_in_16 ty) (umul_overflow a b)))
-       (let ((extend ExtendOp (lower_extend_op ty $false))
+       (let ((extend ExtendOp (lower_extend_op ty (ArgumentExtension.Uext)))
 
              (a_uext Reg (put_in_reg_zext32 a))
              (b_uext Reg (put_in_reg_zext32 b))
@@ -2820,7 +2825,7 @@
 ;; cmp out, out, sxt{b,h}
 ;; cset of, ne
 (rule 1 (lower (has_type (fits_in_16 ty) (smul_overflow a b)))
-       (let ((extend ExtendOp (lower_extend_op ty $true))
+       (let ((extend ExtendOp (lower_extend_op ty (ArgumentExtension.Sext)))
 
              (a_sext Reg (put_in_reg_sext32 a))
              (b_sext Reg (put_in_reg_sext32 b))
