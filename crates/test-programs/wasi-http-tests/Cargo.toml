@@ -1,0 +1,15 @@
+[package]
+name = "wasi-http-tests"
+version = "0.0.0"
+readme = "README.md"
+edition = "2021"
+publish = false
+
+[dependencies]
+anyhow = "1"
+wit-bindgen = "0.4.0"
+
+# This crate is built with the wasm32-wasi target, so it's separate
+# from the main Wasmtime build, so use this directive to exclude it
+# from the parent directory's workspace.
+[workspace]
