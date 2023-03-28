@@ -92,6 +92,25 @@ fn allocate_guest_pointer<T>(caller: &mut Caller<'_, T>, size: u32) -> anyhow::R
     Ok(typed.call(caller.as_context_mut(), (0, 0, 4, size))?)
 }
 
+fn write_string_to_memory<T>(
+    caller: &mut Caller<'_, T>,
+    ptr: u32,
+    s: &String,
+) -> anyhow::Result<()> {
+    let len: u32 = s.len().try_into()?;
+    let str_ptr = allocate_guest_pointer(caller, len)?;
+
+    let memory = memory_get(caller)?;
+
+    memory.write(caller.as_context_mut(), str_ptr as _, s.as_bytes())?;
+
+    let result: [u32; 2] = [str_ptr, len];
+    let raw = u32_array_to_u8(&result);
+
+    memory.write(caller.as_context_mut(), ptr as _, &raw)?;
+    Ok(())
+}
+
 fn u32_array_to_u8(arr: &[u32]) -> Vec<u8> {
     let mut result = std::vec::Vec::new();
     for val in arr.iter() {
@@ -281,7 +300,7 @@ pub fn add_component_to_linker<T>(
             let ctx = get_cx(caller.data_mut());
             let stream = ctx.incoming_response_consume(response)?.unwrap_or(0);
 
-            let memory = memory_get(&mut caller).unwrap();
+            let memory = memory_get(&mut caller)?;
 
             // First == is_some
             // Second == stream_id
@@ -351,6 +370,15 @@ pub fn add_component_to_linker<T>(
         move |mut caller: Caller<'_, T>, id: u32| -> anyhow::Result<()> {
             let ctx = get_cx(caller.data_mut());
             ctx.drop_outgoing_request(id)?;
+            Ok(())
+        },
+    )?;
+    linker.func_wrap(
+        "wasi:http/types",
+        "drop-outgoing-response",
+        move |mut caller: Caller<'_, T>, id: u32| -> anyhow::Result<()> {
+            let ctx = get_cx(caller.data_mut());
+            ctx.drop_outgoing_response(id)?;
             Ok(())
         },
     )?;
@@ -480,6 +508,91 @@ pub fn add_component_to_linker<T>(
         move |mut caller: Caller<'_, T>, handle: u32| -> anyhow::Result<u32> {
             let ctx = get_cx(caller.data_mut());
             Ok(ctx.incoming_response_headers(handle)?)
+        },
+    )?;
+    linker.func_wrap(
+        "wasi:http/types",
+        "incoming-request-headers",
+        move |mut caller: Caller<'_, T>, handle: u32| -> anyhow::Result<u32> {
+            let ctx = get_cx(caller.data_mut());
+            let h = ctx.incoming_request_headers(handle)?;
+            Ok(h)
+        },
+    )?;
+    linker.func_wrap(
+        "wasi:http/types",
+        "incoming-request-authority",
+        move |mut caller: Caller<'_, T>, request: u32, ptr: u32| -> anyhow::Result<()> {
+            let ctx = get_cx(caller.data_mut());
+            let authority = ctx.incoming_request_authority(request)?;
+            write_string_to_memory(&mut caller, ptr, &authority)?;
+            Ok(())
+        },
+    )?;
+    linker.func_wrap(
+        "wasi:http/types",
+        "incoming-request-path",
+        move |mut caller: Caller<'_, T>, request: u32, ptr: u32| -> anyhow::Result<()> {
+            let ctx = get_cx(caller.data_mut());
+            let path = ctx.incoming_request_path(request)?;
+            write_string_to_memory(&mut caller, ptr, &path)?;
+            Ok(())
+        },
+    )?;
+    linker.func_wrap(
+        "wasi:http/types",
+        "incoming-request-method",
+        move |mut caller: Caller<'_, T>, request: u32, ptr: u32| -> anyhow::Result<()> {
+            let ctx = get_cx(caller.data_mut());
+            let method = ctx.incoming_request_method(request)?;
+            let memory = memory_get(&mut caller)?;
+            let result: [u32; 1] = [method.into()];
+            let raw = u32_array_to_u8(&result);
+            memory.write(caller.as_context_mut(), ptr as _, &raw)?;
+            Ok(())
+        },
+    )?;
+    linker.func_wrap(
+        "wasi:http/types",
+        "new-outgoing-response",
+        move |mut caller: Caller<'_, T>, status: i32, headers: u32| -> anyhow::Result<u32> {
+            let ctx = get_cx(caller.data_mut());
+            match ctx.new_outgoing_response(status.try_into()?, headers) {
+                Ok(id) => Ok(id),
+                Err(_) => Ok(0),
+            }
+        },
+    )?;
+    linker.func_wrap(
+        "wasi:http/types",
+        "outgoing-response-write",
+        move |mut caller: Caller<'_, T>, response: u32, ptr: u32| -> anyhow::Result<()> {
+            let ctx = get_cx(caller.data_mut());
+            let result: [u32; 2] = match ctx.outgoing_response_write(response) {
+                Ok(id) => [0, id.unwrap()],
+                Err(_) => [1, 0],
+            };
+            let raw = u32_array_to_u8(&result);
+            let memory = memory_get(&mut caller)?;
+            memory.write(caller.as_context_mut(), ptr as _, &raw)?;
+            Ok(())
+        },
+    )?;
+    linker.func_wrap(
+        "wasi:http/types",
+        "set-response-outparam",
+        move |mut caller: Caller<'_, T>,
+              outparam: u32,
+              is_err: u32,
+              response: u32,
+              _a: u32,
+              _b: u32|
+              -> anyhow::Result<u32> {
+            if is_err == 0 {
+                let ctx = get_cx(caller.data_mut());
+                ctx.set_response_outparam(outparam, Ok(response))?.unwrap();
+            }
+            Ok(0)
         },
     )?;
     Ok(())

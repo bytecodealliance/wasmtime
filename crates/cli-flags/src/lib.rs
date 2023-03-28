@@ -74,6 +74,10 @@ pub const SUPPORTED_WASI_MODULES: &[(&str, &str)] = &[
         "experimental-wasi-http",
         "enables support for the WASI HTTP APIs (experimental), see https://github.com/WebAssembly/wasi-http",
     ),
+    (
+        "experimental-wasi-http-server",
+        "enables support for the WASI HTTP APIs (experimental) for web serving, see https://github.com/WebAssembly/wasi-http",
+    ),
 ];
 
 fn init_file_per_thread_logger(prefix: &'static str) {
@@ -512,6 +516,7 @@ fn parse_wasi_modules(modules: &str) -> Result<WasiModules> {
                 "experimental-wasi-nn" => Ok(wasi_modules.wasi_nn = enable),
                 "experimental-wasi-threads" => Ok(wasi_modules.wasi_threads = enable),
                 "experimental-wasi-http" => Ok(wasi_modules.wasi_http = enable),
+                "experimental-wasi-http-server" => Ok(wasi_modules.wasi_http_server = enable),
                 "default" => bail!("'default' cannot be specified with other WASI modules"),
                 _ => bail!("unsupported WASI module '{}'", module),
             };
@@ -549,6 +554,9 @@ pub struct WasiModules {
 
     /// Enable the experimental wasi-http implementation
     pub wasi_http: bool,
+
+    /// Enable the experimental wasi-http-server implementation
+    pub wasi_http_server: bool,
 }
 
 impl Default for WasiModules {
@@ -559,6 +567,7 @@ impl Default for WasiModules {
             wasi_nn: false,
             wasi_threads: false,
             wasi_http: false,
+            wasi_http_server: false,
         }
     }
 }
@@ -572,6 +581,7 @@ impl WasiModules {
             wasi_crypto: false,
             wasi_threads: false,
             wasi_http: false,
+            wasi_http_server: false,
         }
     }
 }
@@ -734,6 +744,7 @@ mod test {
                 wasi_nn: false,
                 wasi_threads: false,
                 wasi_http: false,
+                wasi_http_server: false,
             }
         );
     }
@@ -748,7 +759,8 @@ mod test {
                 wasi_crypto: false,
                 wasi_nn: false,
                 wasi_threads: false,
-                wasi_http: false
+                wasi_http: false,
+                wasi_http_server: false,
             }
         );
     }
@@ -768,6 +780,7 @@ mod test {
                 wasi_nn: true,
                 wasi_threads: false,
                 wasi_http: false,
+                wasi_http_server: false,
             }
         );
     }
@@ -784,6 +797,45 @@ mod test {
                 wasi_nn: false,
                 wasi_threads: false,
                 wasi_http: false,
+                wasi_http_server: false,
+            }
+        );
+    }
+
+    #[test]
+    fn test_http_client() {
+        let options =
+            CommonOptions::try_parse_from(vec!["foo", "--wasi-modules=experimental-wasi-http"])
+                .unwrap();
+        assert_eq!(
+            options.wasi_modules.unwrap(),
+            WasiModules {
+                wasi_common: true,
+                wasi_crypto: false,
+                wasi_nn: false,
+                wasi_threads: false,
+                wasi_http: true,
+                wasi_http_server: false,
+            }
+        );
+    }
+
+    #[test]
+    fn test_http_server() {
+        let options = CommonOptions::try_parse_from(vec![
+            "foo",
+            "--wasi-modules=experimental-wasi-http-server",
+        ])
+        .unwrap();
+        assert_eq!(
+            options.wasi_modules.unwrap(),
+            WasiModules {
+                wasi_common: true,
+                wasi_crypto: false,
+                wasi_nn: false,
+                wasi_threads: false,
+                wasi_http: false,
+                wasi_http_server: true,
             }
         );
     }

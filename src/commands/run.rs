@@ -35,7 +35,7 @@ use wasmtime_wasi_crypto::WasiCryptoCtx;
 use wasmtime_wasi_threads::WasiThreadsCtx;
 
 #[cfg(feature = "wasi-http")]
-use wasmtime_wasi_http::WasiHttp;
+use wasmtime_wasi_http::{run_http, WasiHttp};
 
 fn parse_module(s: &OsStr) -> anyhow::Result<PathBuf> {
     // Do not accept wasmtime subcommand names as the module name
@@ -370,6 +370,17 @@ impl RunCommand {
                 // code.
                 return Err(maybe_exit_on_error(e));
             }
+        }
+
+        if self
+            .common
+            .wasi_modules
+            .unwrap_or(WasiModules::default())
+            .wasi_http_server
+        {
+            run_http(&mut linker, &mut store, |host| {
+                host.wasi_http.as_mut().unwrap()
+            });
         }
 
         Ok(())
