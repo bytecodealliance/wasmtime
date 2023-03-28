@@ -721,11 +721,16 @@ macro_rules! isle_common_prelude_methods {
         #[inline]
         fn signed_cond_code(&mut self, cc: &condcodes::IntCC) -> Option<condcodes::IntCC> {
             match cc {
-                IntCC::SignedLessThan
-                | IntCC::SignedLessThanOrEqual
+                IntCC::Equal
+                | IntCC::UnsignedGreaterThanOrEqual
+                | IntCC::UnsignedGreaterThan
+                | IntCC::UnsignedLessThanOrEqual
+                | IntCC::UnsignedLessThan
+                | IntCC::NotEqual => None,
+                IntCC::SignedGreaterThanOrEqual
                 | IntCC::SignedGreaterThan
-                | IntCC::SignedGreaterThanOrEqual => Some(*cc),
-                _ => None,
+                | IntCC::SignedLessThanOrEqual
+                | IntCC::SignedLessThan => Some(*cc),
             }
         }
 
