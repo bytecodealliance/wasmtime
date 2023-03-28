@@ -9,6 +9,7 @@ license = "Apache-2.0 WITH LLVM-exception"
 
 [build-dependencies]
 cfg-if = "1.0"
+cargo_metadata = "0.15.3"
 
 [dev-dependencies]
 wasi-common = { workspace = true }
@@ -23,6 +24,8 @@ anyhow = { workspace = true }
 wat = { workspace = true }
 cap-std = { workspace = true }
 tokio = { version = "1.8.0", features = ["rt-multi-thread"] }
+wasi-http = { workspace = true }
 
 [features]
 test_programs = []
+test_programs_http = [ "wasmtime/component-model" ]
