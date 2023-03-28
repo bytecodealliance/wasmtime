@@ -19,24 +19,24 @@
 # work on this project. We gratefully welcome reviews from other contributors,
 # but we don't believe it's fair to ask volunteers to respond quickly.
 
-# TODO: use GitHub teams instead of individual usernames
-
-# If none of the later patterns match, assign to anyone:
-* @alexcrichton @cfallin @elliottt @fitzgen @jameysharp @pchickey
+# If none of the later patterns match, assign to anyone. This team is the
+# parent of all the other teams and automatically includes everyone on those
+# teams.
+* @bytecodealliance/wasmtime-default-reviewers
 
 # Some parts of the project require more specialized knowledge. In those areas
 # we designate smaller groups who are more likely to be aware of who's working
 # in specific areas.
 
 # Wasmtime
-/crates/   @alexcrichton @fitzgen @jameysharp @pchickey
-/examples/ @alexcrichton @fitzgen @jameysharp @pchickey
-/src/      @alexcrichton @fitzgen @jameysharp @pchickey
-/tests/    @alexcrichton @fitzgen @jameysharp @pchickey
+/crates/   @bytecodealliance/wasmtime-core-reviewers
+/examples/ @bytecodealliance/wasmtime-core-reviewers
+/src/      @bytecodealliance/wasmtime-core-reviewers
+/tests/    @bytecodealliance/wasmtime-core-reviewers
 
 # Cranelift/Winch compilers
-/cranelift/ @cfallin @elliottt @fitzgen @jameysharp
-/winch/     @cfallin @elliottt @fitzgen @jameysharp
+/cranelift/ @bytecodealliance/wasmtime-compiler-reviewers
+/winch/     @bytecodealliance/wasmtime-compiler-reviewers
 
 # Fuzz testing
-/fuzz/ @alexcrichton @elliottt @fitzgen @jameysharp
+/fuzz/ @bytecodealliance/wasmtime-fuzz-reviewers
