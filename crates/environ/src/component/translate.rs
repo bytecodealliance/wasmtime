@@ -632,7 +632,9 @@ impl<'a, 'data> Translator<'a, 'data> {
                                 .push(self.result.component_funcs[idx]);
                         }
                         ComponentItem::Module(_idx) => {
-                            // ???
+                            // We don't need to do anything here for modules as
+                            // the type information isn't tracked in the initial
+                            // translation pass.
                         }
                         ComponentItem::Component(idx) => {
                             self.result.components.push(self.result.components[idx]);
