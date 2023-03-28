@@ -51,6 +51,7 @@ rustix = { workspace = true, features = ["mm", "param"] }
 [dev-dependencies]
 # depend again on wasmtime to activate its default features for tests
 wasmtime = { workspace = true, features = ['component-model', 'async', 'default'] }
+wasmtime-winch = { workspace = true, features = ['component-model', 'all-arch'] }
 env_logger = { workspace = true }
 log = { workspace = true }
 filecheck = "0.5.0"
