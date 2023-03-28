@@ -5,6 +5,7 @@ use crate::isa::x64::masm::MacroAssembler as X64Masm;
 use crate::masm::MacroAssembler;
 use crate::regalloc::RegAlloc;
 use crate::stack::Stack;
+use crate::FuncEnv;
 use crate::{
     isa::{Builder, TargetIsa},
     regset::RegSet,
@@ -85,6 +86,7 @@ impl TargetIsa for X64 {
         &self,
         sig: &FuncType,
         body: &FunctionBody,
+        env: &dyn FuncEnv,
         mut validator: FuncValidator<ValidatorResources>,
     ) -> Result<MachBufferFinalized<Final>> {
         let mut body = body.get_binary_reader();
@@ -96,7 +98,7 @@ impl TargetIsa for X64 {
         // TODO Add in floating point bitmask
         let regalloc = RegAlloc::new(RegSet::new(ALL_GPR, 0), regs::scratch());
         let codegen_context = CodeGenContext::new(regalloc, stack, &frame);
-        let mut codegen = CodeGen::new::<abi::X64ABI>(&mut masm, codegen_context, abi_sig);
+        let mut codegen = CodeGen::new(&mut masm, &abi, codegen_context, env, abi_sig);
 
         codegen.emit(&mut body, validator)?;
 

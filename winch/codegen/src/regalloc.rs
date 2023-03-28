@@ -35,6 +35,11 @@ impl RegAlloc {
         })
     }
 
+    /// Checks if a general purpose register is avaiable.
+    pub fn gpr_available(&self, reg: Reg) -> bool {
+        self.regset.named_gpr_available(reg.hw_enc() as u32)
+    }
+
     /// Request a specific general purpose register,
     /// spilling if not available.
     pub fn gpr<F>(&mut self, named: Reg, spill: &mut F) -> Reg

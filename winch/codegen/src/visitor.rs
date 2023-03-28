@@ -4,6 +4,7 @@
 //! which validates and dispatches to the corresponding
 //! machine code emitter.
 
+use crate::abi::ABI;
 use crate::codegen::CodeGen;
 use crate::masm::{DivKind, MacroAssembler, OperandSize, RegImm, RemKind};
 use crate::stack::Val;
@@ -49,14 +50,16 @@ macro_rules! def_unsupported {
     (emit I64Sub $($rest:tt)*) => {};
     (emit LocalGet $($rest:tt)*) => {};
     (emit LocalSet $($rest:tt)*) => {};
+    (emit Call $($rest:tt)*) => {};
     (emit End $($rest:tt)*) => {};
 
     (emit $unsupported:tt $($rest:tt)*) => {$($rest)*};
 }
 
-impl<'a, M> VisitOperator<'a> for CodeGen<'a, M>
+impl<'a, A, M> VisitOperator<'a> for CodeGen<'a, A, M>
 where
     M: MacroAssembler,
+    A: ABI,
 {
     type Output = ();
 
@@ -188,10 +191,14 @@ where
             .get_local(index)
             .expect(&format!("vald local at slot = {}", index));
         let size: OperandSize = slot.ty.into();
-        let src = self.context.pop_to_reg(self.masm, size);
+        let src = self.context.pop_to_reg(self.masm, None, size);
         let addr = self.masm.local_address(&slot);
         self.masm.store(RegImm::reg(src), addr, size);
         self.context.regalloc.free_gpr(src);
+    }
+
+    fn visit_call(&mut self, index: u32) {
+        self.emit_call(index);
     }
 
     wasmparser::for_each_operator!(def_unsupported);

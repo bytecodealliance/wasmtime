@@ -8,6 +8,7 @@ use crate::{
     regalloc::RegAlloc,
     regset::RegSet,
     stack::Stack,
+    FuncEnv,
 };
 use anyhow::Result;
 use cranelift_codegen::settings::{self, Flags};
@@ -84,6 +85,7 @@ impl TargetIsa for Aarch64 {
         &self,
         sig: &FuncType,
         body: &FunctionBody,
+        env: &dyn FuncEnv,
         mut validator: FuncValidator<ValidatorResources>,
     ) -> Result<MachBufferFinalized<Final>> {
         let mut body = body.get_binary_reader();
@@ -95,7 +97,7 @@ impl TargetIsa for Aarch64 {
         // TODO: Add floating point bitmask
         let regalloc = RegAlloc::new(RegSet::new(ALL_GPR, 0), scratch());
         let codegen_context = CodeGenContext::new(regalloc, stack, &frame);
-        let mut codegen = CodeGen::new::<abi::Aarch64ABI>(&mut masm, codegen_context, abi_sig);
+        let mut codegen = CodeGen::new(&mut masm, &abi, codegen_context, env, abi_sig);
 
         codegen.emit(&mut body, validator)?;
         Ok(masm.finalize())
