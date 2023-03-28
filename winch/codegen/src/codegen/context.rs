@@ -183,17 +183,17 @@ impl<'a> CodeGenContext<'a> {
     /// spill function; made available for cases in which spilling
     /// locals is not required, like for example for function calls in
     /// which locals are not reachable by the callee.  It also tracks
-    /// down the amount of memory entries in the given range.
+    /// down the number of memory values in the given range.
     ///
-    /// Returns the amount of registers spilled and the amount of
-    /// memory entries in the given range.
+    /// Returns the number of spilled registers and the number of
+    /// memory values in the given range of the value stack.
     pub fn spill_regs_and_count_memory_in<M, R>(&mut self, masm: &mut M, range: R) -> (u32, u32)
     where
         R: RangeBounds<usize>,
         M: MacroAssembler,
     {
         let mut spilled: u32 = 0;
-        let mut memory_entries_consumed = 0;
+        let mut memory_values = 0;
         for i in self.stack.inner_mut().range_mut(range) {
             if i.is_reg() {
                 let reg = i.get_reg();
@@ -202,11 +202,11 @@ impl<'a> CodeGenContext<'a> {
                 *i = Val::Memory(offset);
                 spilled += 1;
             } else if i.is_mem() {
-                memory_entries_consumed += 1;
+                memory_values += 1;
             }
         }
 
-        (spilled, memory_entries_consumed)
+        (spilled, memory_values)
     }
 
     /// Drops the last `n` elements of the stack, freeing any

@@ -114,7 +114,7 @@ pub(crate) trait MacroAssembler {
     /// Perform a stack load.
     fn load(&mut self, src: Self::Address, dst: Reg, size: OperandSize);
 
-    /// Pop a value from the machine stack in to the given register.
+    /// Pop a value from the machine stack into the given register.
     fn pop(&mut self, dst: Reg);
 
     /// Perform a move.
