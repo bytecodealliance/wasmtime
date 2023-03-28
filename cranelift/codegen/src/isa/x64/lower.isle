@@ -1582,7 +1582,7 @@
 (rule (lower (has_type ty (select (maybe_uextend (fcmp cc a b)) x y)))
       (lower_select_fcmp ty (emit_fcmp cc a b) x y))
 (rule 1 (lower (has_type ty (select (maybe_uextend (fcmp (FloatCC.Equal) a b)) x y)))
-        (lower_select_fcmp ty (emit_fcmp (FloatCC.NotEqual) b a) y x))
+        (lower_select_fcmp ty (emit_fcmp (FloatCC.NotEqual) a b) y x))
 
 (decl lower_select_fcmp (Type FcmpCondResult Value Value) InstOutput)
 (rule (lower_select_fcmp ty (FcmpCondResult.Condition flags cc) x y)
