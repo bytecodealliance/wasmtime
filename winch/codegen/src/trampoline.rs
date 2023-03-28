@@ -121,7 +121,7 @@ where
                     );
                     self.masm.store(
                         RegImm::reg(self.scratch_2),
-                        self.masm.address_from_sp(*offset),
+                        self.masm.address_at_sp(*offset),
                         (*ty).into(),
                     );
                 }
@@ -131,7 +131,7 @@ where
         // Move the function pointer from it's stack location into a scratch register
         self.masm.load(
             self.masm
-                .address_from_sp(self.masm.sp_offset() - func_ptr_offset),
+                .address_at_sp(self.masm.sp_offset() - func_ptr_offset),
             self.scratch_1,
             OperandSize::S64,
         );
@@ -143,7 +143,8 @@ where
 
         // Move the val ptr back into the scratch register so we can load the return values
         self.masm.load(
-            self.masm.address_from_sp(self.masm.sp_offset() - val_ptr_offset),
+            self.masm
+                .address_at_sp(self.masm.sp_offset() - val_ptr_offset),
             self.scratch_1,
             OperandSize::S64,
         );
