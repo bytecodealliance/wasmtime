@@ -40,7 +40,7 @@ impl Init {
 }
 
 /// A description of a data object.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct DataDescription {
     /// How the data should be initialized.
     pub init: Init,

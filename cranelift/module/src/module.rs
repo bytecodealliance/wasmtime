@@ -348,7 +348,7 @@ impl DataDeclaration {
 }
 
 /// A translated `ExternalName` into something global we can handle.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum ModuleExtName {
     /// User defined function, converted from `ExternalName::User`.
     User {
