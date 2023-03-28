@@ -3,7 +3,6 @@ pub use crate::r#struct::WasiHttp;
 use crate::types::{RequestOptions, Scheme};
 use anyhow::bail;
 use bytes::{BufMut, Bytes, BytesMut};
-use futures::executor;
 use http_body_util::{BodyExt, Full};
 use hyper::Method;
 use hyper::Request;
@@ -23,7 +22,7 @@ impl crate::default_outgoing_http::Host for WasiHttp {
         let _enter = rt.enter();
 
         let f = self.handle_async(request_id, options);
-        match executor::block_on(f) {
+        match rt.block_on(f) {
             Ok(r) => {
                 println!("{} OK", r);
                 Ok(r)
