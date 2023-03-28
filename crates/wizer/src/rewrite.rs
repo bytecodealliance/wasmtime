@@ -124,6 +124,9 @@ impl Wizer {
                                 wasmtime::Val::F64(x) => {
                                     wasm_encoder::Instruction::F64Const(f64::from_bits(*x))
                                 }
+                                wasmtime::Val::V128(x) => {
+                                    wasm_encoder::Instruction::V128Const(*x as i128)
+                                }
                                 _ => unreachable!(),
                             },
                         );
@@ -1095,6 +1098,7 @@ fn rewrite_state_module(
                     wasmtime::Val::F64(x) => {
                         wasm_encoder::Instruction::F64Const(f64::from_bits(*x))
                     }
+                    wasmtime::Val::V128(x) => wasm_encoder::Instruction::V128Const(*x as i128),
                     _ => unreachable!(),
                 },
             );

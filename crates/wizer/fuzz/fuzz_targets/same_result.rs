@@ -186,6 +186,7 @@ fn assert_val_eq(a: &Val, b: &Val) {
             let b = f64::from_bits(*b);
             a == b || (a.is_nan() && b.is_nan())
         }),
+        (Val::V128(a), Val::V128(b)) => assert_eq!(a, b),
         _ => panic!("{:?} != {:?}", a, b),
     }
 }
