@@ -35,6 +35,7 @@ const DEFAULT_WASM_MULTI_VALUE: bool = true;
 const DEFAULT_WASM_MULTI_MEMORY: bool = true;
 const DEFAULT_WASM_MODULE_LINKING: bool = false;
 const DEFAULT_WASM_BULK_MEMORY: bool = false;
+const DEFAULT_WASM_SIMD: bool = true;
 
 /// We only ever use `Store<T>` with a fixed `T` that is our optional WASI
 /// context.
@@ -209,6 +210,12 @@ pub struct Wizer {
     /// Disabled by default.
     #[cfg_attr(feature = "structopt", structopt(long, value_name = "true|false"))]
     wasm_bulk_memory: Option<bool>,
+
+    /// Enable or disable the Wasm SIMD128 proposal.
+    ///
+    /// Enabled by default.
+    #[cfg_attr(feature = "structopt", structopt(long, value_name = "true|false"))]
+    wasm_simd: Option<bool>,
 }
 
 impl std::fmt::Debug for Wizer {
@@ -227,6 +234,7 @@ impl std::fmt::Debug for Wizer {
             wasm_multi_value,
             wasm_module_linking,
             wasm_bulk_memory,
+            wasm_simd,
         } = self;
         f.debug_struct("Wizer")
             .field("init_func", &init_func)
@@ -242,6 +250,7 @@ impl std::fmt::Debug for Wizer {
             .field("wasm_multi_value", &wasm_multi_value)
             .field("wasm_module_linking", &wasm_module_linking)
             .field("wasm_bulk_memory", &wasm_bulk_memory)
+            .field("wasm_simd", &wasm_simd)
             .finish()
     }
 }
@@ -304,6 +313,7 @@ impl Wizer {
             wasm_multi_value: None,
             wasm_module_linking: None,
             wasm_bulk_memory: None,
+            wasm_simd: None,
         }
     }
 
@@ -455,6 +465,14 @@ impl Wizer {
         self
     }
 
+    /// Enable or disable the Wasm SIMD128 proposal.
+    ///
+    /// Defaults to `true`.
+    pub fn wasm_simd(&mut self, enable: bool) -> &mut Self {
+        self.wasm_simd = Some(enable);
+        self
+    }
+
     /// Initialize the given Wasm, snapshot it, and return the serialized
     /// snapshot as a new, pre-initialized Wasm module.
     pub fn run(&self, wasm: &[u8]) -> anyhow::Result<Vec<u8>> {
@@ -533,9 +551,10 @@ impl Wizer {
         // `memory.init` for the time being:
         config.wasm_bulk_memory(self.wasm_bulk_memory.unwrap_or(DEFAULT_WASM_BULK_MEMORY));
 
+        config.wasm_simd(self.wasm_simd.unwrap_or(DEFAULT_WASM_SIMD));
+
         // Proposals that we should add support for.
         config.wasm_reference_types(false);
-        config.wasm_simd(false);
         config.wasm_threads(false);
 
         Ok(config)
@@ -553,7 +572,7 @@ impl Wizer {
 
             // Proposals that we should add support for.
             reference_types: false,
-            simd: false,
+            simd: self.wasm_simd.unwrap_or(DEFAULT_WASM_SIMD),
             threads: false,
             tail_call: false,
             memory64: false,
