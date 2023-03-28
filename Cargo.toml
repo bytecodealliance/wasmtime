@@ -107,6 +107,7 @@ members = [
 ]
 exclude = [
   'crates/wasi-common/WASI/tools/witx-cli',
+  'crates/wasi-http/example/rust',
   'docs/rust_wasi_markdown_parser'
 ]
 
@@ -264,3 +265,4 @@ harness = false
 [[bench]]
 name = "wasi"
 harness = false
+
