@@ -63,7 +63,7 @@ int request(uint8_t method_tag, uint8_t scheme_tag, const char * authority_str, 
         printf("response is error!\n");
         return 2;
     }
-    poll_drop_pollable(res);
+    // poll_drop_pollable(res);
 
     types_status_code_t code = types_incoming_response_status(result.val.ok);
     printf("STATUS: %d\n", code);
