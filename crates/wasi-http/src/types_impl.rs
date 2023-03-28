@@ -65,7 +65,7 @@ impl crate::types::Host for WasiHttp {
         name: String,
         value: String,
     ) -> wasmtime::Result<()> {
-        let mut m = self
+        let m = self
             .fields
             .get_mut(&fields)
             .ok_or_else(|| anyhow!("unknown fields: {fields}"))?;
