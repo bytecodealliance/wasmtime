@@ -2315,8 +2315,7 @@
 
 ;; For Equal and NotEqual it doesen't matter the type of extension that we 
 ;; perform, as long as we are consistent on both sides. So try to pick the
-;; ExtendOp's that have a single instruction for doing the extension in the
-;; Base ISA.
+;; ExtendOp's that have a dedicated instruction in the Base ISA.
 ;;
 ;; The special cases here are:
 ;; - i8 -> any: we should prefer ExtendOp.Zero
