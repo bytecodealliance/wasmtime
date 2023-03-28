@@ -34,6 +34,7 @@ pub struct ActiveResponse {
     pub status: u16,
     pub body: u32,
     pub response_headers: HashMap<String, Vec<String>>,
+    pub trailers: u32,
 }
 
 impl ActiveRequest {
@@ -60,6 +61,7 @@ impl ActiveResponse {
             status: 0,
             body: 0,
             response_headers: HashMap::new(),
+            trailers: 0,
         }
     }
 }

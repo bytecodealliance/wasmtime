@@ -2,8 +2,8 @@ use crate::poll::Pollable;
 use crate::streams::{InputStream, OutputStream, StreamError};
 use crate::WasiHttp;
 use anyhow::{anyhow, bail};
-use std::vec::Vec;
 use bytes::BufMut;
+use std::vec::Vec;
 
 impl crate::streams::Host for WasiHttp {
     fn read(
@@ -67,10 +67,10 @@ impl crate::streams::Host for WasiHttp {
                 new.put(data.clone());
                 new.put(bytes::Bytes::from(buf.clone()));
                 self.streams.insert(this, new.freeze());
-            },
+            }
             None => {
                 self.streams.insert(this, bytes::Bytes::from(buf.clone()));
-            },
+            }
         }
         Ok(Ok(buf.len().try_into()?))
     }
