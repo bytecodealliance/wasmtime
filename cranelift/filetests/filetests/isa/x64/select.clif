@@ -46,8 +46,8 @@ block0(v0: f32, v1: f32, v2: i64, v3: i64):
 ; block0:
 ;   ucomiss %xmm0, %xmm1
 ;   movq    %rdi, %rax
-;   cmovnzq %rsi, %rax, %rax
 ;   cmovpq  %rsi, %rax, %rax
+;   cmovnzq %rsi, %rax, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -59,8 +59,8 @@ block0(v0: f32, v1: f32, v2: i64, v3: i64):
 ; block1: ; offset 0x4
 ;   ucomiss %xmm0, %xmm1
 ;   movq %rdi, %rax
-;   cmovneq %rsi, %rax
 ;   cmovpq %rsi, %rax
+;   cmovneq %rsi, %rax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

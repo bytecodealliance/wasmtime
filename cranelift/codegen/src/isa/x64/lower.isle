@@ -1588,7 +1588,7 @@
 (rule (lower_select_fcmp ty (FcmpCondResult.Condition flags cc) x y)
       (with_flags flags (cmove_from_values ty cc x y)))
 (rule (lower_select_fcmp ty (FcmpCondResult.OrCondition flags cc1 cc2) x y)
-      (with_flags flags (cmove_or_from_values ty cc2 cc1 x y)))
+      (with_flags flags (cmove_or_from_values ty cc1 cc2 x y)))
 
 ;; We also can lower `select`s that depend on an `icmp` test, but more simply
 ;; than the `fcmp` variants above. In these cases, we lower to a `CMP`

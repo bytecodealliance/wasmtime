@@ -18,8 +18,8 @@ block0(v0: f32, v1: f32):
 ; block0:
 ;   movl    $1, %eax
 ;   ucomiss %xmm0, %xmm1
-;   cmovnzl const(0), %eax, %eax
 ;   cmovpl  const(0), %eax, %eax
+;   cmovnzl const(0), %eax, %eax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -31,8 +31,8 @@ block0(v0: f32, v1: f32):
 ; block1: ; offset 0x4
 ;   movl $1, %eax
 ;   ucomiss %xmm0, %xmm1
-;   cmovnel 0xd(%rip), %eax
-;   cmovpl 6(%rip), %eax
+;   cmovpl 0xd(%rip), %eax
+;   cmovnel 6(%rip), %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

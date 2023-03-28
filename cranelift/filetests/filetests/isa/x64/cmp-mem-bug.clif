@@ -62,8 +62,8 @@ block0(v0: f64, v1: i64):
 ;   movzbq  %dil, %rax
 ;   ucomisd %xmm0, %xmm9
 ;   movdqa  %xmm0, %xmm2
-;   mov z, sd; j%xmm2 $next; mov%xmm0 %xmm0, %xmm0; $next: 
 ;   mov np, sd; j%xmm2 $next; mov%xmm0 %xmm0, %xmm0; $next: 
+;   mov z, sd; j%xmm2 $next; mov%xmm0 %xmm0, %xmm0; $next: 
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -81,9 +81,9 @@ block0(v0: f64, v1: i64):
 ;   movzbq %dil, %rax
 ;   ucomisd %xmm0, %xmm9
 ;   movdqa %xmm0, %xmm2
-;   je 0x2f
+;   jnp 0x2f
 ;   movsd %xmm2, %xmm0
-;   jnp 0x39
+;   je 0x39
 ;   movsd %xmm2, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
