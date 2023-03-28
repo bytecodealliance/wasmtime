@@ -1164,11 +1164,12 @@ impl MachInstEmit for Inst {
                 rd,
                 ref x,
                 ref y,
-                is_signed,
+                signedness,
             } => {
                 let x = alloc_value_regs(x, &mut allocs);
                 let y = alloc_value_regs(y, &mut allocs);
                 let rd = allocs.next_writable(rd);
+                let is_signed = signedness.is_signed();
 
                 // Compare the top halves of the two values. If they are equal, then
                 // we can just check the bottom halves as unsigned. Otherwise we can

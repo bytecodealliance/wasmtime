@@ -7,6 +7,7 @@
 use crate::binemit::{Addend, CodeOffset, Reloc};
 pub use crate::ir::condcodes::IntCC;
 use crate::ir::types::{F32, F64, I128, I16, I32, I64, I8, R32, R64};
+use crate::isa::riscv64::lower::isle::generated_code::Signedness;
 
 pub use crate::ir::{ExternalName, MemFlags, Opcode, SourceLoc, Type, ValueLabel};
 use crate::isa::CallConv;
@@ -1108,12 +1109,15 @@ impl Inst {
                 rd,
                 x,
                 y,
-                is_signed,
+                signedness,
             } => {
                 let x = format_regs(x.regs(), allocs);
                 let y = format_regs(y.regs(), allocs);
                 let rd = format_reg(rd.to_reg(), allocs);
-                let op = if is_signed { "slt" } else { "sltu" };
+                let op = match signedness {
+                    Signedness::Signed => "slt",
+                    Signedness::Unsigned => "sltu",
+                };
                 format!("{op} {rd},{x},{y} ## ty=i128")
             }
             &Inst::IntSelect {

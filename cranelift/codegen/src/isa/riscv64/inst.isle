@@ -239,7 +239,7 @@
       (rd WritableReg)
       (x ValueRegs)
       (y ValueRegs)
-      (is_signed bool))
+      (signedness Signedness))
     ;; select a reg base on condition.
     ;; very useful because in lowering stage we can not have condition branch.
     (SelectReg
@@ -696,6 +696,11 @@
 (type AMO (primitive AMO))
 (type VecMachLabel extern (enum))
 
+(type Signedness
+  (enum
+    (Signed)
+    (Unsigned)))
+
 ;; Converters
 
 (convert u8 i32 u8_as_i32)
@@ -753,10 +758,10 @@
       (_ Unit (emit (MInst.FloatSelect op rd tmp x y ty))))
     (writable_reg_to_reg rd)))
 
-(decl emit_i128_less_than (ValueRegs ValueRegs bool) Reg)
-(rule (emit_i128_less_than x y is_signed)
+(decl emit_i128_less_than (ValueRegs ValueRegs Signedness) Reg)
+(rule (emit_i128_less_than x y sign)
   (let ((result WritableReg (temp_writable_reg $I64))
-        (_ Unit (emit (MInst.I128LessThan result x y is_signed))))
+        (_ Unit (emit (MInst.I128LessThan result x y sign))))
     result))
 
 
@@ -2368,9 +2373,9 @@
 
 ;; We have a equivalent pseudo instruction for I128 less than.
 (rule 1 (gen_icmp_inner (IntCC.SignedLessThan) x y $I128)
-  (emit_i128_less_than x y $true))
+  (emit_i128_less_than x y (Signedness.Signed)))
 (rule 1 (gen_icmp_inner (IntCC.UnsignedLessThan) x y $I128)
-  (emit_i128_less_than x y $false))
+  (emit_i128_less_than x y (Signedness.Unsigned)))
 
 
 ;; Compare both registers using xor, and set the result using the dedicated
