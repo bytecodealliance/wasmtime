@@ -150,6 +150,38 @@ impl IntCC {
             UnsignedLessThanOrEqual => "ule",
         }
     }
+
+    /// Return `true` if `(icmp self x x) == true` for all `x`
+    pub fn is_reflexive(self) -> bool {
+        match self {
+            IntCC::Equal
+            | IntCC::SignedGreaterThanOrEqual
+            | IntCC::SignedLessThanOrEqual
+            | IntCC::UnsignedGreaterThanOrEqual
+            | IntCC::UnsignedLessThanOrEqual => true,
+            IntCC::NotEqual
+            | IntCC::SignedLessThan
+            | IntCC::SignedGreaterThan
+            | IntCC::UnsignedLessThan
+            | IntCC::UnsignedGreaterThan => false,
+        }
+    }
+
+    /// Return `true` if `(icmp self x x) == false` for all `x`
+    pub fn is_irreflexive(self) -> bool {
+        match self {
+            IntCC::Equal
+            | IntCC::SignedGreaterThanOrEqual
+            | IntCC::SignedLessThanOrEqual
+            | IntCC::UnsignedGreaterThanOrEqual
+            | IntCC::UnsignedLessThanOrEqual => false,
+            IntCC::NotEqual
+            | IntCC::SignedLessThan
+            | IntCC::SignedGreaterThan
+            | IntCC::UnsignedLessThan
+            | IntCC::UnsignedGreaterThan => true,
+        }
+    }
 }
 
 impl Display for IntCC {

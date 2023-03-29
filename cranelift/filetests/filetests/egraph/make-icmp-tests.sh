@@ -18,6 +18,80 @@ target x86_64
 ;; run with the 'CRANELIFT_TEST_BLESS=1' env var set to update this file
 
 EOF
+
+    # Reflexivity/irreflexivity of `icmp`` cond codes:
+    # for reflexive cond codes,   (icmp cc x x) == true.
+    # for irreflexive cond codes, (icmp cc x x) == false.
+    for cc in $CCS; do
+        cat << EOF >> $out
+function %icmp_${cc}_self(i32) -> i8 {
+block0(v0: i32):
+    v1 = icmp ${cc} v0, v0
+    return v1
+}
+
+EOF
+    done
+
+    # Masking the result of a comparison with 1 always results in the comparison
+    # itself (comparisons in wasm may sometimes be hidden behind extensions):
+    cat << EOF >> $out
+function %mask_icmp_result(i64, i64) -> i8 {
+block0(v1: i64, v2: i64):
+    v3 = icmp ult v1, v2
+    v4 = iconst.i8 1
+    v5 = band v3, v4
+    return v5
+}
+
+function %mask_icmp_extend_result(i64, i64) -> i64 {
+block0(v1: i64, v2: i64):
+    v3 = icmp ult v1, v2
+    v4 = uextend.i64 v3
+    v5 = iconst.i64 1
+    v6 = band v4, v5
+    return v6
+}
+
+EOF
+
+
+    # Comparisons against largest/smallest signed/unsigned values:
+    for cc in $CCS; do
+        cat << EOF >> $out
+function %icmp_${cc}_umin(i32) -> i8 {
+block0(v0: i32):
+    v1 = iconst.i32 0
+    v2 = icmp ${cc} v0, v1
+    return v2
+}
+
+function %icmp_${cc}_umax(i32) -> i8 {
+block0(v0: i32):
+    v1 = iconst.i32 0xFFFF_FFFF
+    v2 = icmp ${cc} v0, v1
+    return v2
+}
+
+function %icmp_${cc}_smin(i32) -> i8 {
+block0(v0: i32):
+    v1 = iconst.i32 0x8000_0000
+    v2 = icmp ${cc} v0, v1
+    return v2
+}
+
+function %icmp_${cc}_smax(i32) -> i8 {
+block0(v0: i32):
+    v1 = iconst.i32 0x7FFF_FFFF
+    v2 = icmp ${cc} v0, v1
+    return v2
+}
+
+EOF
+    done
+
+
+    # `band`/`bor` of 2 comparisons:
     for op in "and" "or"; do
         for cc1 in $CCS; do
             for cc2 in $CCS; do
@@ -29,6 +103,7 @@ block0(v0: i32, v1: i32):
     v4 = b${op} v2, v3
     return v4
 }
+
 EOF
             done
         done

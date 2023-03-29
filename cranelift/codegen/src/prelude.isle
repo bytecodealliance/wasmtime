@@ -283,6 +283,12 @@
 (decl pure floatcc_unordered (FloatCC) bool)
 (extern constructor floatcc_unordered floatcc_unordered)
 
+(decl intcc_reflexive (IntCC) IntCC)
+(extern extractor intcc_reflexive intcc_reflexive)
+
+(decl intcc_irreflexive (IntCC) IntCC)
+(extern extractor intcc_irreflexive intcc_irreflexive)
+
 ;;;; Helper Clif Extractors ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (decl eq (Type Value Value) Value)
