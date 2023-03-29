@@ -20,13 +20,17 @@ impl DefinedLocalsRange {
     }
 }
 
+/// An abstraction to read the defined locals from the WASM binary for a function.
 #[derive(Default)]
 pub(crate) struct DefinedLocals {
+    /// The defined locals for a function.
     pub defined_locals: Locals,
+    /// The size of the defined locals.
     pub stack_size: u32,
 }
 
 impl DefinedLocals {
+    /// Compute the local slots for a WASM function.
     pub fn new(
         reader: &mut BinaryReader<'_>,
         validator: &mut FuncValidator<ValidatorResources>,

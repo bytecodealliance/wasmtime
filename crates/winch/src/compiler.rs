@@ -47,7 +47,7 @@ impl wasmtime_environ::Compiler for Compiler {
         translation: &ModuleTranslation<'_>,
         index: DefinedFuncIndex,
         data: FunctionBodyData<'_>,
-        tunables: &Tunables,
+        _tunables: &Tunables,
         _types: &ModuleTypes,
     ) -> Result<(WasmFunctionInfo, Box<dyn Any + Send>), CompileError> {
         let index = translation.module.func_index(index);
@@ -68,9 +68,6 @@ impl wasmtime_environ::Compiler for Compiler {
         self.save_allocations(validator.into_allocations());
         let buffer = buffer?;
 
-        // TODO: this should probably get plumbed into winch
-        drop(tunables);
-
         Ok((
             WasmFunctionInfo {
                 start_srcloc,
@@ -84,9 +81,14 @@ impl wasmtime_environ::Compiler for Compiler {
         &self,
         ty: &wasmtime_environ::WasmFuncType,
     ) -> Result<Box<dyn Any + Send>, CompileError> {
+        let wasm_ty = wasmparser::FuncType::new(
+            ty.params().iter().copied().map(Into::into),
+            ty.returns().iter().copied().map(Into::into),
+        );
+
         let buffer = self
             .isa
-            .host_to_wasm_trampoline(&ty.clone().into())
+            .host_to_wasm_trampoline(&wasm_ty)
             .map_err(|e| CompileError::Codegen(format!("{:?}", e)))?;
 
         Ok(Box::new(CompiledFunction(buffer)))

@@ -151,11 +151,11 @@ mod test {
             .function_at(index.as_u32())
             .expect(&format!("function type at index {:?}", index.as_u32()));
         let FunctionBodyData { body, validator } = f.1;
-        let validator = validator.into_validator(Default::default());
+        let mut validator = validator.into_validator(Default::default());
 
         let buffer = env
             .isa
-            .compile_function(&sig, &body, env, validator)
+            .compile_function(&sig, &body, env, &mut validator)
             .expect("Couldn't compile function");
 
         disasm(buffer.data(), env.isa).unwrap()

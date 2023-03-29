@@ -90,6 +90,7 @@ pub trait TargetIsa: Send + Sync {
         false
     }
 
+    /// Compile a function.
     fn compile_function(
         &self,
         sig: &FuncType,
@@ -120,6 +121,7 @@ pub trait TargetIsa: Send + Sync {
     /// See `cranelift_codegen::isa::TargetIsa::function_alignment`.
     fn function_alignment(&self) -> u32;
 
+    /// Generate a trampoline that can be used to call a wasm function from wasmtime.
     fn host_to_wasm_trampoline(&self, ty: &FuncType) -> Result<MachBufferFinalized<Final>>;
 }
 

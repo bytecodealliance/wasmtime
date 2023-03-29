@@ -2,8 +2,8 @@
 //! calling convention, see [ABI].
 use super::CodeGenContext;
 use crate::{
-    abi::{align_to, ABIArg, ABIResult, ABISig, ABI},
-    masm::{MacroAssembler, OperandSize, CallKind},
+    abi::{align_to, ABIArg, ABIResult, ABISig, ABI, calculate_frame_adjustment},
+    masm::{MacroAssembler, OperandSize, CalleeKind},
     reg::Reg,
     stack::Val,
 };
@@ -161,7 +161,7 @@ impl<'a> FnCall<'a> {
     ) {
         masm.reserve_stack(self.arg_stack_space);
         self.assign_args(context, masm, <A as ABI>::scratch_reg());
-        masm.call(CallKind::Direct(callee));
+        masm.call(CalleeKind::Direct(callee));
         masm.free_stack(self.total_stack_space);
         context.drop_last(self.abi_sig.params.len());
         // The stack pointer at the end of the function call
@@ -214,9 +214,3 @@ impl<'a> FnCall<'a> {
     }
 }
 
-/// Calculates the delta needed to adjust a function's frame plus some
-/// addend to a given alignment.
-pub fn calculate_frame_adjustment(frame_size: u32, addend: u32, alignment: u32) -> u32 {
-    let total = frame_size + addend;
-    (alignment - (total % alignment)) % alignment
-}

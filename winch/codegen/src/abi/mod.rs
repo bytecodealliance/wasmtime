@@ -210,3 +210,11 @@ where
     let alignment_mask = alignment - 1.into();
     (value + alignment_mask) & !alignment_mask
 }
+
+/// Calculates the delta needed to adjust a function's frame plus some
+/// addend to a given alignment.
+pub(crate) fn calculate_frame_adjustment(frame_size: u32, addend: u32, alignment: u32) -> u32 {
+    let total = frame_size + addend;
+    (alignment - (total % alignment)) % alignment
+}
+

@@ -39,7 +39,7 @@ pub(crate) enum RegImm {
     Imm(i64),
 }
 
-pub(crate) enum CallKind {
+pub(crate) enum CalleeKind {
     /// A function call to a raw address.
     Indirect(Reg),
     /// A function call to a local function.
@@ -112,8 +112,8 @@ pub(crate) trait MacroAssembler {
     /// Construct an address that is relative to the given register.
     fn address_from_reg(&self, reg: Reg, offset: u32) -> Self::Address;
 
-    /// Emit a function call to a locally defined function.
-    fn call(&mut self, callee: CallKind);
+    /// Emit a function call to either a local or external function.
+    fn call(&mut self, callee: CalleeKind);
 
     /// Get stack pointer offset.
     fn sp_offset(&self) -> u32;

@@ -2,7 +2,7 @@
 
 use crate::{
     isa::reg::Reg,
-    masm::{DivKind, OperandSize, RemKind, CallKind},
+    masm::{DivKind, OperandSize, RemKind, CalleeKind},
 };
 use cranelift_codegen::{
     entity::EntityRef,
@@ -469,9 +469,9 @@ impl Assembler {
         });
     }
 
-    pub fn call(&mut self, callee: CallKind) {
+    pub fn call(&mut self, callee: CalleeKind) {
         match callee {
-            CallKind::Indirect(reg) => {
+            CalleeKind::Indirect(reg) => {
                 self.emit(Inst::CallUnknown {
                     dest: RegMem::reg(reg.into()),
                     info: Box::new(CallInfo {
@@ -482,7 +482,7 @@ impl Assembler {
                     }),
                 });
             }
-            CallKind::Direct(index) => {
+            CalleeKind::Direct(index) => {
                 let dest = ExternalName::user(UserExternalNameRef::new(index as usize));
                 self.emit(Inst::CallKnown {
                     dest,
