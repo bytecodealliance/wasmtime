@@ -1589,20 +1589,19 @@ impl PrettyPrint for Inst {
                 let alternative = pretty_print_reg(alternative.to_reg(), size, allocs);
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), size, allocs);
                 let consequent = consequent.pretty_print(size, allocs);
+                let suffix = match *ty {
+                    types::F64 => "sd",
+                    types::F32 => "ss",
+                    types::F32X4 => "aps",
+                    types::F64X2 => "apd",
+                    _ => "dqa",
+                };
                 format!(
-                    "mov {}, {}; j{} $next; mov{} {}, {}; $next: ",
+                    "mov{suffix} {alternative}, {dst}; \
+                    j{} $next; \
+                    mov{suffix} {consequent}, {dst}; \
+                    $next:",
                     cc.invert().to_string(),
-                    match *ty {
-                        types::F64 => "sd",
-                        types::F32 => "ss",
-                        types::F32X4 => "aps",
-                        types::F64X2 => "apd",
-                        _ => "dqa",
-                    },
-                    consequent,
-                    dst,
-                    alternative,
-                    dst,
                 )
             }
 
