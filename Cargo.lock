@@ -3542,6 +3542,7 @@ dependencies = [
  "wasmtime-wasi-nn",
  "wasmtime-wasi-threads",
  "wasmtime-wast",
+ "wasmtime-winch",
  "wast 55.0.0",
  "wat",
  "windows-sys",
@@ -4026,7 +4027,6 @@ version = "0.6.0"
 dependencies = [
  "anyhow",
  "cranelift-codegen",
- "cranelift-wasm",
  "gimli",
  "regalloc2",
  "smallvec",
@@ -4079,7 +4079,6 @@ dependencies = [
  "capstone",
  "clap",
  "cranelift-codegen",
- "cranelift-wasm",
  "glob",
  "serde",
  "similar",
