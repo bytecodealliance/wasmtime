@@ -2,7 +2,7 @@
 
 use crate::error::{Error, Errors, Span};
 use std::borrow::Cow;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 type Result<T> = std::result::Result<T, Errors>;
@@ -91,6 +91,17 @@ impl<'a> Lexer<'a> {
     where
         P: AsRef<Path>,
     {
+        Self::from_files_read(file_paths, std::fs::read_to_string)
+    }
+
+    /// Create a new lexer from the given files.
+    pub fn from_files_read<P>(
+        file_paths: impl IntoIterator<Item = P>,
+        mut read: impl FnMut(PathBuf) -> std::io::Result<String>,
+    ) -> Result<Lexer<'a>>
+    where
+        P: AsRef<Path>,
+    {
         let mut filenames = Vec::<Arc<str>>::new();
         let mut file_texts = Vec::<Arc<str>>::new();
 
@@ -99,7 +110,7 @@ impl<'a> Lexer<'a> {
 
             filenames.push(f.display().to_string().into());
 
-            let s = std::fs::read_to_string(f)
+            let s = read(f.to_path_buf())
                 .map_err(|e| Errors::from_io(e, format!("failed to read file: {}", f.display())))?;
             file_texts.push(s.into());
         }
