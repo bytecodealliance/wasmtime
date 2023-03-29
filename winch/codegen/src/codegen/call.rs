@@ -2,8 +2,8 @@
 //! calling convention, see [ABI].
 use super::CodeGenContext;
 use crate::{
-    abi::{align_to, ABIArg, ABIResult, ABISig, ABI, calculate_frame_adjustment},
-    masm::{MacroAssembler, OperandSize, CalleeKind},
+    abi::{align_to, calculate_frame_adjustment, ABIArg, ABIResult, ABISig, ABI},
+    masm::{CalleeKind, MacroAssembler, OperandSize},
     reg::Reg,
     stack::Val,
 };
@@ -213,4 +213,3 @@ impl<'a> FnCall<'a> {
         }
     }
 }
-

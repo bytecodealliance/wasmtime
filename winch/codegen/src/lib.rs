@@ -16,5 +16,5 @@ mod masm;
 mod regalloc;
 mod regset;
 mod stack;
-mod visitor;
 mod trampoline;
+mod visitor;

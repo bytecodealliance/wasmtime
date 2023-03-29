@@ -27,7 +27,9 @@ fn compiles_with_winch() -> Result<()> {
 
     let instance = Instance::new(&mut store, &module, &[])?;
 
-    let f = instance.get_func(&mut store, "test").ok_or(anyhow::anyhow!("test function not found"))?;
+    let f = instance
+        .get_func(&mut store, "test")
+        .ok_or(anyhow::anyhow!("test function not found"))?;
 
     let mut returns = vec![Val::null(); 1];
 
@@ -82,7 +84,9 @@ fn compiles_with_winch_stack_arguments() -> Result<()> {
 
     let instance = Instance::new(&mut store, &module, &[])?;
 
-    let f = instance.get_func(&mut store, "sum10").ok_or(anyhow::anyhow!("sum10 function not found"))?;
+    let f = instance
+        .get_func(&mut store, "sum10")
+        .ok_or(anyhow::anyhow!("sum10 function not found"))?;
 
     let mut returns = vec![Val::null(); 1];
 
@@ -97,4 +101,3 @@ fn compiles_with_winch_stack_arguments() -> Result<()> {
 
     Ok(())
 }
-

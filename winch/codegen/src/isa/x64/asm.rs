@@ -2,7 +2,7 @@
 
 use crate::{
     isa::reg::Reg,
-    masm::{DivKind, OperandSize, RemKind, CalleeKind},
+    masm::{CalleeKind, DivKind, OperandSize, RemKind},
 };
 use cranelift_codegen::{
     entity::EntityRef,

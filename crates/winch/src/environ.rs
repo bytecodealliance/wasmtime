@@ -1,5 +1,5 @@
 use wasmparser::types::Types;
-use wasmtime_environ::{Module, FuncIndex};
+use wasmtime_environ::{FuncIndex, Module};
 use winch_codegen::Callee;
 
 pub(crate) struct FuncEnv<'a> {

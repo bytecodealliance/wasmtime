@@ -68,7 +68,10 @@ fn compile(env: &FuncEnv, f: (DefinedFuncIndex, FunctionBodyData<'_>)) -> Result
         .iter()
         .for_each(|s| println!("{}", s));
 
-    let buffer = env.isa.host_to_wasm_trampoline(sig).expect("Couldn't compile trampoline");
+    let buffer = env
+        .isa
+        .host_to_wasm_trampoline(sig)
+        .expect("Couldn't compile trampoline");
 
     println!("Disassembly for trampoline: {}", index.as_u32());
     disasm(buffer.data(), env.isa)?

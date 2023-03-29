@@ -7,7 +7,7 @@ use crate::{
     abi::local::LocalSlot,
     codegen::CodeGenContext,
     isa::reg::Reg,
-    masm::{DivKind, MacroAssembler as Masm, OperandSize, RegImm, RemKind, CalleeKind},
+    masm::{CalleeKind, DivKind, MacroAssembler as Masm, OperandSize, RegImm, RemKind},
 };
 use cranelift_codegen::{settings, Final, MachBufferFinalized};
 

@@ -217,4 +217,3 @@ pub(crate) fn calculate_frame_adjustment(frame_size: u32, addend: u32, alignment
     let total = frame_size + addend;
     (alignment - (total % alignment)) % alignment
 }
-

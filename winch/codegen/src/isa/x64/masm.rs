@@ -3,9 +3,9 @@ use super::{
     asm::{Assembler, Operand},
     regs::{self, rbp, rsp},
 };
-use crate::{isa::reg::Reg, masm::CalleeKind};
 use crate::masm::{DivKind, MacroAssembler as Masm, OperandSize, RegImm, RemKind};
 use crate::{abi::LocalSlot, codegen::CodeGenContext, stack::Val};
+use crate::{isa::reg::Reg, masm::CalleeKind};
 use cranelift_codegen::{isa::x64::settings as x64_settings, settings, Final, MachBufferFinalized};
 
 /// x64 MacroAssembler.

@@ -1,5 +1,5 @@
 use crate::{
-    abi::{align_to, ABIArg, ABIResult, ABI, calculate_frame_adjustment},
+    abi::{align_to, calculate_frame_adjustment, ABIArg, ABIResult, ABI},
     masm::{CalleeKind, MacroAssembler, OperandSize, RegImm},
     reg::Reg,
 };
@@ -68,7 +68,6 @@ where
             Err(anyhow::anyhow!("Expected the val ptr to be in a register"))
         }
         .unwrap();
-
 
         self.masm.prologue();
 
@@ -143,8 +142,7 @@ where
 
         // Move the function pointer from it's stack location into a scratch register
         self.masm.load(
-            self.masm
-                .address_from_sp(func_ptr_offset),
+            self.masm.address_from_sp(func_ptr_offset),
             self.scratch_reg,
             OperandSize::S64,
         );
@@ -156,8 +154,7 @@ where
 
         // Move the val ptr back into the scratch register so we can load the return values
         self.masm.load(
-            self.masm
-                .address_from_sp(val_ptr_offset),
+            self.masm.address_from_sp(val_ptr_offset),
             self.scratch_reg,
             OperandSize::S64,
         );
