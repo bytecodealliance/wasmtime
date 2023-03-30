@@ -1798,9 +1798,19 @@
   (let
     ((result WritableReg (temp_writable_reg out_type))
       (tmp WritableReg (temp_writable_reg $F64))
-      (rs2 Reg (clamp_fcvt_from_float in_type out_type rs is_signed))
+      (rs2 Reg (clamp_fcvt_from_float_sat in_type out_type rs is_signed is_sat))
       (_ Unit (emit (MInst.FcvtToInt is_sat result tmp rs2 is_signed in_type out_type))))
     result))
+
+;;; clamp `from` value only on `sat` because if not `sat` convert 
+;;; will cause a exception at runtime.
+;;; parameters are in_ty out_ty rs is_signed is_sat
+(decl clamp_fcvt_from_float_sat (Type Type Reg bool bool) Reg)
+(rule 1 (clamp_fcvt_from_float_sat _ _ r _ false)
+  r)
+(rule 2 (clamp_fcvt_from_float_sat in_ty out_ty r is_signed true)
+  (clamp_fcvt_from_float in_ty out_ty r is_signed))
+
 
 ;;; some float binary operation
 ;;; 1. need move into x reister.
