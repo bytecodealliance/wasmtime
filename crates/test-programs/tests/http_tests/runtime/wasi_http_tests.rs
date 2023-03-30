@@ -9,7 +9,7 @@ pub fn instantiate_inherit_stdio(
     bin_name: &str,
     workspace: Option<&Path>,
 ) -> anyhow::Result<()> {
-    let mut config = Config::new();
+    let config = Config::new();
     let engine = Engine::new(&config)?;
     let module = Module::new(&engine, &data).context("failed to create wasm module")?;
     let mut linker = Linker::new(&engine);
