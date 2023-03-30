@@ -1,5 +1,0 @@
-proxy.c
-proxy.h
-proxy_component_type.o
-**/*.wasm
-rust/target/**

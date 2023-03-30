@@ -1,7 +1,0 @@
-[package]
-name = "rust"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-wit-bindgen = { features = ["macros", "realloc"] }
