@@ -7,7 +7,7 @@ use wasmtime_wasi::{sync::WasiCtxBuilder, WasiCtx};
 pub fn instantiate_inherit_stdio(
     data: &[u8],
     bin_name: &str,
-    workspace: Option<&Path>,
+    _workspace: Option<&Path>,
 ) -> anyhow::Result<()> {
     let config = Config::new();
     let engine = Engine::new(&config)?;
