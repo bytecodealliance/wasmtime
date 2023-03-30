@@ -10,6 +10,8 @@ use std::{
 use target_lexicon::{Architecture, Triple};
 use wasmparser::{FuncType, FuncValidator, FunctionBody, ValidatorResources};
 
+use crate::FuncEnv;
+
 #[cfg(feature = "x64")]
 pub(crate) mod x64;
 
@@ -92,6 +94,7 @@ pub trait TargetIsa: Send + Sync {
         &self,
         sig: &FuncType,
         body: &FunctionBody,
+        env: &dyn FuncEnv,
         validator: FuncValidator<ValidatorResources>,
     ) -> Result<MachBufferFinalized<Final>>;
 

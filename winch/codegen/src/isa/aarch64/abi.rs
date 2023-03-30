@@ -47,6 +47,10 @@ impl ABI for Aarch64ABI {
         8
     }
 
+    fn call_stack_align(&self) -> u8 {
+        16
+    }
+
     fn arg_base_offset(&self) -> u8 {
         16
     }
@@ -74,7 +78,7 @@ impl ABI for Aarch64ABI {
         let reg = regs::xreg(0);
         let result = ABIResult::reg(ty, reg);
 
-        ABISig { params, result }
+        ABISig::new(params, result, stack_offset)
     }
 
     fn scratch_reg() -> Reg {

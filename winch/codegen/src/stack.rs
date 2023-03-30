@@ -45,6 +45,14 @@ impl Val {
         }
     }
 
+    /// Check wheter the value is a memory offset.
+    pub fn is_mem(&self) -> bool {
+        match *self {
+            Self::Memory(_) => true,
+            _ => false,
+        }
+    }
+
     /// Get the register representation of the value.
     ///
     /// # Panics
@@ -109,6 +117,11 @@ impl Stack {
         }
     }
 
+    /// Get the length of the stack.
+    pub fn len(&self) -> usize {
+        self.inner.len()
+    }
+
     /// Push a value to the stack.
     pub fn push(&mut self, val: Val) {
         self.inner.push_back(val);
@@ -117,6 +130,16 @@ impl Stack {
     /// Peek into the top in the stack.
     pub fn peek(&self) -> Option<&Val> {
         self.inner.back()
+    }
+
+    /// Returns an iterator referencing the last n items of the stack,
+    /// in bottom-most to top-most order.
+    pub fn peekn(&self, n: usize) -> impl Iterator<Item = &Val> + '_ {
+        let len = self.len();
+        assert!(n <= len);
+
+        let partition = len - n;
+        self.inner.range(partition..)
     }
 
     /// Pops the top element of the stack, if any.

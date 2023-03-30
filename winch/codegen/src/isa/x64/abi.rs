@@ -39,6 +39,10 @@ impl ABI for X64ABI {
         8
     }
 
+    fn call_stack_align(&self) -> u8 {
+        16
+    }
+
     fn arg_base_offset(&self) -> u8 {
         // Two 8-byte slots, one for the return address and another
         // one for the frame pointer.
@@ -75,7 +79,7 @@ impl ABI for X64ABI {
         let reg = regs::rax();
         let result = ABIResult::reg(ty, reg);
 
-        ABISig { params, result }
+        ABISig::new(params, result, stack_offset)
     }
 
     fn scratch_reg() -> Reg {

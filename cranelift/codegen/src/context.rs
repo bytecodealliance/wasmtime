@@ -393,7 +393,7 @@ impl Context {
             &mut alias_analysis,
         );
         pass.run();
-        log::info!("egraph stats: {:?}", pass.stats);
+        log::debug!("egraph stats: {:?}", pass.stats);
         trace!("After egraph optimization:\n{}", self.func.display());
         Ok(())
     }

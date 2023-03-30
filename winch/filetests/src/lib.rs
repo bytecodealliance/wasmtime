@@ -155,7 +155,7 @@ mod test {
 
         let buffer = env
             .isa
-            .compile_function(&sig, &body, validator)
+            .compile_function(&sig, &body, env, validator)
             .expect("Couldn't compile function");
 
         disasm(buffer.data(), env.isa).unwrap()
