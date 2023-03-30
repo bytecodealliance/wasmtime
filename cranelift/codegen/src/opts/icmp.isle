@@ -1,8 +1,7 @@
 ;; `icmp`-related rewrites
 
-;; Reflexivity/irreflexivity of `icmp` cond codes:
-;; for reflexive cond codes,   (icmp cc x x) == true.
-;; for irreflexive cond codes, (icmp cc x x) == false.
+;; `x == x` is always true for integers; `x != x` is false. Strict
+;; inequalities are false, and loose inequalities are true.
 (rule (simplify (eq  (fits_in_64 (ty_int ty)) x x)) (iconst ty (imm64 1)))
 (rule (simplify (ne  (fits_in_64 (ty_int ty)) x x)) (iconst ty (imm64 0)))
 (rule (simplify (ugt (fits_in_64 (ty_int ty)) x x)) (iconst ty (imm64 0)))
@@ -14,24 +13,38 @@
 (rule (simplify (slt (fits_in_64 (ty_int ty)) x x)) (iconst ty (imm64 0)))
 (rule (simplify (sle (fits_in_64 (ty_int ty)) x x)) (iconst ty (imm64 1)))
 
-;; Optimize icmp-of-icmp:
-(rule (simplify (ne ty (uextend _ inner @ (icmp ty _ _ _)) (iconst _ (u64_from_imm64 0))))
+;; Optimize icmp-of-icmp.
+(rule (simplify (ne ty
+                      (uextend _ inner @ (icmp ty _ _ _))
+                      (iconst _ (u64_from_imm64 0))))
       (subsume inner))
-(rule (simplify (eq ty (uextend _ (icmp ty cc x y)) (iconst _ (u64_from_imm64 0))))
+
+(rule (simplify (eq ty
+                      (uextend _ (icmp ty cc x y))
+                      (iconst _ (u64_from_imm64 0))))
       (subsume (icmp ty (intcc_inverse cc) x y)))
 
 ;; Optimize select-of-uextend-of-icmp to select-of-icmp, because
-;; select can take an I8 condition too:
-(rule (simplify (select ty (uextend _ c @ (icmp _ _ _ _)) x y))
+;; select can take an I8 condition too.
+(rule (simplify
+       (select ty (uextend _ c @ (icmp _ _ _ _)) x y))
       (select ty c x y))
-(rule (simplify (select ty (uextend _ c @ (icmp _ _ _ _)) x y))
+(rule (simplify
+       (select ty (uextend _ c @ (icmp _ _ _ _)) x y))
       (select ty c x y))
 
 ;; Masking the result of a comparison with 1 always results in the comparison
-;; itself (comparisons in wasm may sometimes be hidden behind extensions):
-(rule (simplify (band (ty_int _) cmp @ (icmp _ _ _ _) (iconst _ (u64_from_imm64 1))))
+;; itself. Note that comparisons in wasm may sometimes be hidden behind
+;; extensions.
+(rule (simplify
+       (band (ty_int _)
+             cmp @ (icmp _ _ _ _)
+             (iconst _ (u64_from_imm64 1))))
       cmp)
-(rule (simplify (band (ty_int _) extend @ (uextend _ (icmp _ _ _ _)) (iconst _ (u64_from_imm64 1))))
+(rule (simplify
+       (band (ty_int _)
+             extend @ (uextend _ (icmp _ _ _ _))
+             (iconst _ (u64_from_imm64 1))))
       extend)
 
 ;; Comparisons against largest/smallest signed/unsigned values:
