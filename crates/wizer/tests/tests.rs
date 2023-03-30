@@ -1257,3 +1257,23 @@ fn accept_bulk_memory_init() -> Result<()> {
         "#,
     )
 }
+
+#[test]
+fn accept_simd128() -> Result<()> {
+    run_wat(
+        &[],
+        49,
+        r#"
+            (module
+              (global $g (mut v128) (v128.const i32x4 2 3 5 7))
+              (func (export "wizer.initialize")
+                global.get $g
+                global.get $g
+                i32x4.mul
+                global.set $g)
+              (func (export "run") (result i32)
+                global.get $g
+                i32x4.extract_lane 3))
+        "#,
+    )
+}

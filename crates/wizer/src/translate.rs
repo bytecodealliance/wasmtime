@@ -16,8 +16,9 @@ pub(crate) fn val_type(ty: wasmparser::Type) -> wasm_encoder::ValType {
         I64 => ValType::I64,
         F32 => ValType::F32,
         F64 => ValType::F64,
+        V128 => ValType::V128,
         FuncRef => ValType::FuncRef,
-        V128 | ExternRef | ExnRef => panic!("not supported"),
+        ExternRef | ExnRef => panic!("not supported"),
         Func | EmptyBlockType => unreachable!(),
     }
 }
