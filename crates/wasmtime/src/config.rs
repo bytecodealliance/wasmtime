@@ -220,7 +220,7 @@ impl Config {
     ///
     /// This method will error if the given target triple is not supported.
     #[cfg(compiler)]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
+    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))] // see build.rs
     pub fn target(&mut self, target: &str) -> Result<&mut Self> {
         self.compiler_config.target =
             Some(target_lexicon::Triple::from_str(target).map_err(|e| anyhow::anyhow!(e))?);
@@ -820,7 +820,7 @@ impl Config {
     ///
     /// The default value for this is `Strategy::Auto`.
     #[cfg(compiler)]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
+    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))] // see build.rs
     pub fn strategy(&mut self, strategy: Strategy) -> &mut Self {
         self.compiler_config.strategy = strategy;
         self
@@ -854,7 +854,7 @@ impl Config {
     ///
     /// The default value for this is `false`
     #[cfg(compiler)]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
+    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))] // see build.rs
     pub fn cranelift_debug_verifier(&mut self, enable: bool) -> &mut Self {
         let val = if enable { "true" } else { "false" };
         self.compiler_config
@@ -871,7 +871,7 @@ impl Config {
     ///
     /// The default value for this is `OptLevel::None`.
     #[cfg(compiler)]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
+    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))] // see build.rs
     pub fn cranelift_opt_level(&mut self, level: OptLevel) -> &mut Self {
         let val = match level {
             OptLevel::None => "none",
@@ -895,7 +895,7 @@ impl Config {
     ///
     /// The default value for this is `true`.
     #[cfg(compiler)]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
+    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))] // see build.rs
     #[deprecated(
         since = "5.0.0",
         note = "egraphs will be the default and this method will be removed in a future version."
@@ -917,7 +917,7 @@ impl Config {
     ///
     /// The default value for this is `false`
     #[cfg(compiler)]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
+    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))] // see build.rs
     pub fn cranelift_nan_canonicalization(&mut self, enable: bool) -> &mut Self {
         let val = if enable { "true" } else { "false" };
         self.compiler_config
@@ -943,7 +943,7 @@ impl Config {
     /// cause `Engine::new` fail if the flag's name does not exist, or the value is not appropriate
     /// for the flag type.
     #[cfg(compiler)]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
+    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))] // see build.rs
     pub unsafe fn cranelift_flag_enable(&mut self, flag: &str) -> &mut Self {
         self.compiler_config.flags.insert(flag.to_string());
         self
@@ -969,7 +969,7 @@ impl Config {
     /// For example, feature `wasm_backtrace` will set `unwind_info` to `true`, but if it's
     /// manually set to false then it will fail.
     #[cfg(compiler)]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
+    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))] // see build.rs
     pub unsafe fn cranelift_flag_set(&mut self, name: &str, value: &str) -> &mut Self {
         self.compiler_config
             .settings
