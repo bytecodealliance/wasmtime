@@ -190,6 +190,7 @@ impl crate::types::Host for WasiHttp {
     }
     fn set_response_outparam(
         &mut self,
+        _outparam: ResponseOutparam,
         _response: Result<OutgoingResponse, Error>,
     ) -> wasmtime::Result<Result<(), ()>> {
         bail!("unimplemented: set_response_outparam")
