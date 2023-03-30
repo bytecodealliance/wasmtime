@@ -57,13 +57,11 @@ async function runOnce() {
         console.log("ERROR: ", JSON.stringify(e.data, null, 2));
         core.info(`creating dev tag`);
         try {
-          await octokit.git.createTag({
+          await octokit.rest.git.createRef({
             owner,
             repo,
-            tag: 'dev',
-            message: 'dev release',
-            object: sha,
-            type: 'commit',
+            ref: 'refs/tags/dev',
+            sha,
           });
         } catch (e) {
           // we might race with others, so assume someone else has created the

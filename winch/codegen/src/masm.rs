@@ -22,7 +22,7 @@ pub(crate) enum RemKind {
 }
 
 /// Operand size, in bits.
-#[derive(Copy, Clone, Eq, PartialEq)]
+#[derive(Copy, Debug, Clone, Eq, PartialEq)]
 pub(crate) enum OperandSize {
     /// 32 bits.
     S32,
@@ -87,8 +87,23 @@ pub(crate) trait MacroAssembler {
     /// Reserve stack space.
     fn reserve_stack(&mut self, bytes: u32);
 
+    /// Free stack space.
+    fn free_stack(&mut self, bytes: u32);
+
     /// Get the address of a local slot.
     fn local_address(&mut self, local: &LocalSlot) -> Self::Address;
+
+    /// Constructs an address with an offset that is relative to the
+    /// current position of the stack pointer (e.g. [sp + (sp_offset -
+    /// offset)].
+    fn address_from_sp(&self, offset: u32) -> Self::Address;
+
+    /// Constructs an address with an offset that is absolute to the
+    /// current position of the stack pointer (e.g. [sp + offset].
+    fn address_at_sp(&self, offset: u32) -> Self::Address;
+
+    /// Emit a function call to a locally defined function.
+    fn call(&mut self, callee: u32);
 
     /// Get stack pointer offset.
     fn sp_offset(&mut self) -> u32;
@@ -98,6 +113,9 @@ pub(crate) trait MacroAssembler {
 
     /// Perform a stack load.
     fn load(&mut self, src: Self::Address, dst: Reg, size: OperandSize);
+
+    /// Pop a value from the machine stack into the given register.
+    fn pop(&mut self, dst: Reg);
 
     /// Perform a move.
     fn mov(&mut self, src: RegImm, dst: RegImm, size: OperandSize);

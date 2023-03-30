@@ -83,33 +83,33 @@ block0(v0: f32):
 ; VCode:
 ; block0:
 ;   fcmp s0, s0
-;   b.vc 8 ; udf
+;   b.vs #trap=bad_toint
 ;   fmov s4, #-1
 ;   fcmp s0, s4
-;   b.gt 8 ; udf
-;   movz x9, #17280, LSL #16
-;   fmov s17, w9
-;   fcmp s0, s17
-;   b.lt 8 ; udf
+;   b.le #trap=int_ovf
+;   movz w8, #17280, LSL #16
+;   fmov s18, w8
+;   fcmp s0, s18
+;   b.ge #trap=int_ovf
 ;   fcvtzu w0, s0
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fcmp s0, s0
-;   b.vc #0xc
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: bad_toint
+;   b.vs #0x2c
 ;   fmov s4, #-1.00000000
 ;   fcmp s0, s4
-;   b.gt #0x1c
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
-;   mov x9, #0x43800000
-;   fmov s17, w9
-;   fcmp s0, s17
-;   b.lt #0x30
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
+;   b.le #0x30
+;   mov w8, #0x43800000
+;   fmov s18, w8
+;   fcmp s0, s18
+;   b.ge #0x34
 ;   fcvtzu w0, s0
 ;   ret
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: bad_toint
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
 
 function u0:0(f64) -> i8 {
 block0(v0: f64):
@@ -120,33 +120,33 @@ block0(v0: f64):
 ; VCode:
 ; block0:
 ;   fcmp d0, d0
-;   b.vc 8 ; udf
+;   b.vs #trap=bad_toint
 ;   fmov d4, #-1
 ;   fcmp d0, d4
-;   b.gt 8 ; udf
-;   movz x9, #16496, LSL #48
-;   fmov d17, x9
-;   fcmp d0, d17
-;   b.lt 8 ; udf
+;   b.le #trap=int_ovf
+;   movz x8, #16496, LSL #48
+;   fmov d18, x8
+;   fcmp d0, d18
+;   b.ge #trap=int_ovf
 ;   fcvtzu w0, d0
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fcmp d0, d0
-;   b.vc #0xc
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: bad_toint
+;   b.vs #0x2c
 ;   fmov d4, #-1.00000000
 ;   fcmp d0, d4
-;   b.gt #0x1c
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
-;   mov x9, #0x4070000000000000
-;   fmov d17, x9
-;   fcmp d0, d17
-;   b.lt #0x30
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
+;   b.le #0x30
+;   mov x8, #0x4070000000000000
+;   fmov d18, x8
+;   fcmp d0, d18
+;   b.ge #0x34
 ;   fcvtzu w0, d0
 ;   ret
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: bad_toint
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
 
 function u0:0(f32) -> i16 {
 block0(v0: f32):
@@ -157,33 +157,33 @@ block0(v0: f32):
 ; VCode:
 ; block0:
 ;   fcmp s0, s0
-;   b.vc 8 ; udf
+;   b.vs #trap=bad_toint
 ;   fmov s4, #-1
 ;   fcmp s0, s4
-;   b.gt 8 ; udf
-;   movz x9, #18304, LSL #16
-;   fmov s17, w9
-;   fcmp s0, s17
-;   b.lt 8 ; udf
+;   b.le #trap=int_ovf
+;   movz w8, #18304, LSL #16
+;   fmov s18, w8
+;   fcmp s0, s18
+;   b.ge #trap=int_ovf
 ;   fcvtzu w0, s0
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fcmp s0, s0
-;   b.vc #0xc
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: bad_toint
+;   b.vs #0x2c
 ;   fmov s4, #-1.00000000
 ;   fcmp s0, s4
-;   b.gt #0x1c
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
-;   mov x9, #0x47800000
-;   fmov s17, w9
-;   fcmp s0, s17
-;   b.lt #0x30
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
+;   b.le #0x30
+;   mov w8, #0x47800000
+;   fmov s18, w8
+;   fcmp s0, s18
+;   b.ge #0x34
 ;   fcvtzu w0, s0
 ;   ret
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: bad_toint
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
 
 function u0:0(f64) -> i16 {
 block0(v0: f64):
@@ -194,31 +194,31 @@ block0(v0: f64):
 ; VCode:
 ; block0:
 ;   fcmp d0, d0
-;   b.vc 8 ; udf
+;   b.vs #trap=bad_toint
 ;   fmov d4, #-1
 ;   fcmp d0, d4
-;   b.gt 8 ; udf
-;   movz x9, #16624, LSL #48
-;   fmov d17, x9
-;   fcmp d0, d17
-;   b.lt 8 ; udf
+;   b.le #trap=int_ovf
+;   movz x8, #16624, LSL #48
+;   fmov d18, x8
+;   fcmp d0, d18
+;   b.ge #trap=int_ovf
 ;   fcvtzu w0, d0
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fcmp d0, d0
-;   b.vc #0xc
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: bad_toint
+;   b.vs #0x2c
 ;   fmov d4, #-1.00000000
 ;   fcmp d0, d4
-;   b.gt #0x1c
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
-;   mov x9, #0x40f0000000000000
-;   fmov d17, x9
-;   fcmp d0, d17
-;   b.lt #0x30
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
+;   b.le #0x30
+;   mov x8, #0x40f0000000000000
+;   fmov d18, x8
+;   fcmp d0, d18
+;   b.ge #0x34
 ;   fcvtzu w0, d0
 ;   ret
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: bad_toint
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
 

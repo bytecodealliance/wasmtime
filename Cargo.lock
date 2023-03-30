@@ -651,6 +651,7 @@ dependencies = [
  "arbitrary",
  "cranelift",
  "cranelift-native",
+ "once_cell",
  "target-lexicon",
 ]
 
@@ -4032,6 +4033,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "winch-environ"
+version = "0.6.0"
+dependencies = [
+ "wasmparser",
+ "wasmtime-environ",
+ "winch-codegen",
+]
+
+[[package]]
 name = "winch-filetests"
 version = "0.0.0"
 dependencies = [
@@ -4045,6 +4055,7 @@ dependencies = [
  "wasmtime-environ",
  "wat",
  "winch-codegen",
+ "winch-environ",
  "winch-test-macros",
 ]
 
@@ -4075,6 +4086,7 @@ dependencies = [
  "wasmtime-environ",
  "wat",
  "winch-codegen",
+ "winch-environ",
  "winch-filetests",
  "winch-test-macros",
 ]

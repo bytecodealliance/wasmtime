@@ -14,12 +14,9 @@
 ;;    d:	 48893424             	mov	qword ptr [rsp], rsi
 ;;   11:	 488b0c24             	mov	rcx, qword ptr [rsp]
 ;;   15:	 488b442408           	mov	rax, qword ptr [rsp + 8]
-;;   1a:	 4883f900             	cmp	rcx, 0
-;;   1e:	 0f8502000000         	jne	0x26
-;;   24:	 0f0b                 	ud2	
-;;   26:	 ba00000000           	mov	edx, 0
-;;   2b:	 48f7f1               	div	rcx
-;;   2e:	 4889d0               	mov	rax, rdx
-;;   31:	 4883c410             	add	rsp, 0x10
-;;   35:	 5d                   	pop	rbp
-;;   36:	 c3                   	ret	
+;;   1a:	 4831d2               	xor	rdx, rdx
+;;   1d:	 48f7f1               	div	rcx
+;;   20:	 4889d0               	mov	rax, rdx
+;;   23:	 4883c410             	add	rsp, 0x10
+;;   27:	 5d                   	pop	rbp
+;;   28:	 c3                   	ret	

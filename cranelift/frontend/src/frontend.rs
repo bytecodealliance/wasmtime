@@ -1095,9 +1095,6 @@ impl<'a> FunctionBuilder<'a> {
     }
 
     fn handle_ssa_side_effects(&mut self, side_effects: SideEffects) {
-        for split_block in side_effects.split_blocks_created {
-            self.func_ctx.status[split_block] = BlockStatus::Filled;
-        }
         for modified_block in side_effects.instructions_added_to_blocks {
             if self.is_pristine(modified_block) {
                 self.func_ctx.status[modified_block] = BlockStatus::Partial;

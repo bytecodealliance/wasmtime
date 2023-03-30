@@ -177,6 +177,10 @@ pub trait MachInst: Clone + Debug {
     /// A label-use kind: a type that describes the types of label references that
     /// can occur in an instruction.
     type LabelUse: MachInstLabelUse;
+
+    /// Byte representation of a trap opcode which is inserted by `MachBuffer`
+    /// during its `defer_trap` method.
+    const TRAP_OPCODE: &'static [u8];
 }
 
 /// A descriptor of a label reference (use) in an instruction set.

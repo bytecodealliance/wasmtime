@@ -12,6 +12,8 @@ use smallvec::{smallvec, SmallVec};
 use std::fmt;
 use std::string::String;
 
+pub use crate::isa::x64::lower::isle::generated_code::DivSignedness;
+
 /// An extenstion trait for converting `Writable{Xmm,Gpr}` to `Writable<Reg>`.
 pub trait ToWritableReg {
     /// Convert `Writable{Xmm,Gpr}` to `Writable<Reg>`.
@@ -926,6 +928,7 @@ pub(crate) enum InstructionSet {
     BMI2,
     FMA,
     AVX,
+    AVX2,
     AVX512BITALG,
     AVX512DQ,
     AVX512F,
@@ -1123,6 +1126,8 @@ pub enum SseOpcode {
     Punpcklqdq,
     Pshuflw,
     Pshufhw,
+    Pblendw,
+    Movddup,
 }
 
 impl SseOpcode {
@@ -1277,7 +1282,8 @@ impl SseOpcode {
             | SseOpcode::Pmulhrsw
             | SseOpcode::Pshufb
             | SseOpcode::Phaddw
-            | SseOpcode::Phaddd => SSSE3,
+            | SseOpcode::Phaddd
+            | SseOpcode::Movddup => SSSE3,
 
             SseOpcode::Blendvpd
             | SseOpcode::Blendvps
@@ -1316,7 +1322,8 @@ impl SseOpcode {
             | SseOpcode::Roundps
             | SseOpcode::Roundpd
             | SseOpcode::Roundss
-            | SseOpcode::Roundsd => SSE41,
+            | SseOpcode::Roundsd
+            | SseOpcode::Pblendw => SSE41,
 
             SseOpcode::Pcmpgtq => SSE42,
         }
@@ -1519,6 +1526,8 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Punpckhqdq => "punpckhqdq",
             SseOpcode::Pshuflw => "pshuflw",
             SseOpcode::Pshufhw => "pshufhw",
+            SseOpcode::Pblendw => "pblendw",
+            SseOpcode::Movddup => "movddup",
         };
         write!(fmt, "{}", name)
     }
@@ -1699,8 +1708,32 @@ impl AvxOpcode {
             | AvxOpcode::Vmovsd
             | AvxOpcode::Vmovups
             | AvxOpcode::Vmovupd
-            | AvxOpcode::Vmovdqu => {
+            | AvxOpcode::Vmovdqu
+            | AvxOpcode::Vpextrb
+            | AvxOpcode::Vpextrw
+            | AvxOpcode::Vpextrd
+            | AvxOpcode::Vpextrq
+            | AvxOpcode::Vpblendw
+            | AvxOpcode::Vmovddup
+            | AvxOpcode::Vbroadcastss
+            | AvxOpcode::Vmovd
+            | AvxOpcode::Vmovq
+            | AvxOpcode::Vmovmskps
+            | AvxOpcode::Vmovmskpd
+            | AvxOpcode::Vpmovmskb
+            | AvxOpcode::Vcvtsi2ss
+            | AvxOpcode::Vcvtsi2sd
+            | AvxOpcode::Vcvtss2sd
+            | AvxOpcode::Vcvtsd2ss
+            | AvxOpcode::Vsqrtss
+            | AvxOpcode::Vsqrtsd
+            | AvxOpcode::Vroundss
+            | AvxOpcode::Vroundsd => {
                 smallvec![InstructionSet::AVX]
+            }
+
+            AvxOpcode::Vpbroadcastb | AvxOpcode::Vpbroadcastw | AvxOpcode::Vpbroadcastd => {
+                smallvec![InstructionSet::AVX2]
             }
         }
     }
@@ -1871,35 +1904,6 @@ impl fmt::Debug for ShiftKind {
 impl fmt::Display for ShiftKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         fmt::Debug::fmt(self, f)
-    }
-}
-
-/// What kind of division or remainder instruction this is?
-#[derive(Clone, Eq, PartialEq)]
-pub enum DivOrRemKind {
-    /// Signed division.
-    SignedDiv,
-    /// Unsigned division.
-    UnsignedDiv,
-    /// Signed remainder.
-    SignedRem,
-    /// Unsigned remainder.
-    UnsignedRem,
-}
-
-impl DivOrRemKind {
-    pub(crate) fn is_signed(&self) -> bool {
-        match self {
-            DivOrRemKind::SignedDiv | DivOrRemKind::SignedRem => true,
-            _ => false,
-        }
-    }
-
-    pub(crate) fn is_div(&self) -> bool {
-        match self {
-            DivOrRemKind::SignedDiv | DivOrRemKind::UnsignedDiv => true,
-            _ => false,
-        }
     }
 }
 

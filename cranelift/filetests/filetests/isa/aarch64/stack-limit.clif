@@ -56,7 +56,7 @@ block0(v0: i64):
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ;   subs xzr, sp, x0, UXTX
-;   b.hs 8 ; udf
+;   b.lo #trap=stk_ovf
 ; block0:
 ;   load_ext_name x2, TestCase(%foo)+0
 ;   blr x2
@@ -68,16 +68,16 @@ block0(v0: i64):
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
 ;   cmp sp, x0
-;   b.hs #0x14
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: stk_ovf
-; block1: ; offset 0x14
-;   ldr x2, #0x1c
-;   b #0x24
+;   b.lo #0x2c
+; block1: ; offset 0x10
+;   ldr x2, #0x18
+;   b #0x20
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %foo 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
 ;   blr x2
 ;   ldp x29, x30, [sp], #0x10
 ;   ret
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: stk_ovf
 
 function %stack_limit_gv_call_zero(i64 vmctx) {
     gv0 = vmctx
@@ -96,7 +96,7 @@ block0(v0: i64):
 ;   ldr x16, [x0]
 ;   ldr x16, [x16, #4]
 ;   subs xzr, sp, x16, UXTX
-;   b.hs 8 ; udf
+;   b.lo #trap=stk_ovf
 ; block0:
 ;   load_ext_name x2, TestCase(%foo)+0
 ;   blr x2
@@ -110,16 +110,16 @@ block0(v0: i64):
 ;   ldur x16, [x0]
 ;   ldur x16, [x16, #4]
 ;   cmp sp, x16
-;   b.hs #0x1c
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: stk_ovf
-; block1: ; offset 0x1c
-;   ldr x2, #0x24
-;   b #0x2c
+;   b.lo #0x34
+; block1: ; offset 0x18
+;   ldr x2, #0x20
+;   b #0x28
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %foo 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
 ;   blr x2
 ;   ldp x29, x30, [sp], #0x10
 ;   ret
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: stk_ovf
 
 function %stack_limit(i64 stack_limit) {
     ss0 = explicit_slot 168
@@ -132,7 +132,7 @@ block0(v0: i64):
 ;   mov fp, sp
 ;   add x16, x0, #176
 ;   subs xzr, sp, x16, UXTX
-;   b.hs 8 ; udf
+;   b.lo #trap=stk_ovf
 ;   sub sp, sp, #176
 ; block0:
 ;   add sp, sp, #176
@@ -145,13 +145,13 @@ block0(v0: i64):
 ;   mov x29, sp
 ;   add x16, x0, #0xb0
 ;   cmp sp, x16
-;   b.hs #0x18
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: stk_ovf
+;   b.lo #0x24
 ;   sub sp, sp, #0xb0
-; block1: ; offset 0x1c
+; block1: ; offset 0x18
 ;   add sp, sp, #0xb0
 ;   ldp x29, x30, [sp], #0x10
 ;   ret
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: stk_ovf
 
 function %huge_stack_limit(i64 stack_limit) {
     ss0 = explicit_slot 400000
@@ -163,12 +163,12 @@ block0(v0: i64):
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
 ;   subs xzr, sp, x0, UXTX
-;   b.hs 8 ; udf
+;   b.lo #trap=stk_ovf
 ;   movz w17, #6784
 ;   movk w17, w17, #6, LSL #16
 ;   add x16, x0, x17, UXTX
 ;   subs xzr, sp, x16, UXTX
-;   b.hs 8 ; udf
+;   b.lo #trap=stk_ovf
 ;   movz w16, #6784
 ;   movk w16, w16, #6, LSL #16
 ;   sub sp, sp, x16, UXTX
@@ -184,23 +184,23 @@ block0(v0: i64):
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
 ;   cmp sp, x0
-;   b.hs #0x14
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: stk_ovf
+;   b.lo #0x44
 ;   mov w17, #0x1a80
 ;   movk w17, #6, lsl #16
 ;   add x16, x0, x17, uxtx
 ;   cmp sp, x16
-;   b.hs #0x2c
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: stk_ovf
+;   b.lo #0x48
 ;   mov w16, #0x1a80
 ;   movk w16, #6, lsl #16
 ;   sub sp, sp, x16
-; block1: ; offset 0x38
+; block1: ; offset 0x30
 ;   mov w16, #0x1a80
 ;   movk w16, #6, lsl #16
 ;   add sp, sp, x16
 ;   ldp x29, x30, [sp], #0x10
 ;   ret
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: stk_ovf
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: stk_ovf
 
 function %limit_preamble(i64 vmctx) {
     gv0 = vmctx
@@ -219,7 +219,7 @@ block0(v0: i64):
 ;   ldr x16, [x16, #4]
 ;   add x16, x16, #32
 ;   subs xzr, sp, x16, UXTX
-;   b.hs 8 ; udf
+;   b.lo #trap=stk_ovf
 ;   sub sp, sp, #32
 ; block0:
 ;   add sp, sp, #32
@@ -234,13 +234,13 @@ block0(v0: i64):
 ;   ldur x16, [x16, #4]
 ;   add x16, x16, #0x20
 ;   cmp sp, x16
-;   b.hs #0x20
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: stk_ovf
+;   b.lo #0x2c
 ;   sub sp, sp, #0x20
-; block1: ; offset 0x24
+; block1: ; offset 0x20
 ;   add sp, sp, #0x20
 ;   ldp x29, x30, [sp], #0x10
 ;   ret
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: stk_ovf
 
 function %limit_preamble_huge(i64 vmctx) {
     gv0 = vmctx
@@ -258,12 +258,12 @@ block0(v0: i64):
 ;   ldr x16, [x0]
 ;   ldr x16, [x16, #4]
 ;   subs xzr, sp, x16, UXTX
-;   b.hs 8 ; udf
+;   b.lo #trap=stk_ovf
 ;   movz w17, #6784
 ;   movk w17, w17, #6, LSL #16
 ;   add x16, x16, x17, UXTX
 ;   subs xzr, sp, x16, UXTX
-;   b.hs 8 ; udf
+;   b.lo #trap=stk_ovf
 ;   movz w16, #6784
 ;   movk w16, w16, #6, LSL #16
 ;   sub sp, sp, x16, UXTX
@@ -281,23 +281,23 @@ block0(v0: i64):
 ;   ldur x16, [x0]
 ;   ldur x16, [x16, #4]
 ;   cmp sp, x16
-;   b.hs #0x1c
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: stk_ovf
+;   b.lo #0x4c
 ;   mov w17, #0x1a80
 ;   movk w17, #6, lsl #16
 ;   add x16, x16, x17, uxtx
 ;   cmp sp, x16
-;   b.hs #0x34
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: stk_ovf
+;   b.lo #0x50
 ;   mov w16, #0x1a80
 ;   movk w16, #6, lsl #16
 ;   sub sp, sp, x16
-; block1: ; offset 0x40
+; block1: ; offset 0x38
 ;   mov w16, #0x1a80
 ;   movk w16, #6, lsl #16
 ;   add sp, sp, x16
 ;   ldp x29, x30, [sp], #0x10
 ;   ret
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: stk_ovf
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: stk_ovf
 
 function %limit_preamble_huge_offset(i64 vmctx) {
     gv0 = vmctx
@@ -314,7 +314,7 @@ block0(v0: i64):
 ;   movz w16, #6784 ; movk w16, w16, #6, LSL #16 ; ldr x16, [x0, x16, SXTX]
 ;   add x16, x16, #32
 ;   subs xzr, sp, x16, UXTX
-;   b.hs 8 ; udf
+;   b.lo #trap=stk_ovf
 ;   sub sp, sp, #32
 ; block0:
 ;   add sp, sp, #32
@@ -330,11 +330,11 @@ block0(v0: i64):
 ;   ldr x16, [x0, x16, sxtx]
 ;   add x16, x16, #0x20
 ;   cmp sp, x16
-;   b.hs #0x24
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: stk_ovf
+;   b.lo #0x30
 ;   sub sp, sp, #0x20
-; block1: ; offset 0x28
+; block1: ; offset 0x24
 ;   add sp, sp, #0x20
 ;   ldp x29, x30, [sp], #0x10
 ;   ret
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: stk_ovf
 

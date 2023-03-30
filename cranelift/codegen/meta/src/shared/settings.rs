@@ -98,19 +98,6 @@ pub(crate) fn define() -> SettingGroup {
     );
 
     settings.add_bool(
-        "avoid_div_traps",
-        "Generate explicit checks around native division instructions to avoid their trapping.",
-        r#"
-            Generate explicit checks around native division instructions to
-            avoid their trapping.
-
-            On ISAs like ARM where the native division instructions don't trap,
-            this setting has no effect - explicit checks are always inserted.
-        "#,
-        false,
-    );
-
-    settings.add_bool(
         "enable_float",
         "Enable the use of floating-point instructions.",
         r#"

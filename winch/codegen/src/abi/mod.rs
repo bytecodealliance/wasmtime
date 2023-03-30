@@ -1,3 +1,47 @@
+//! This module provides all the necessary building blocks for
+//! implementing ISA specific ABIs.
+//!
+//! # Default ABI
+//!
+//! Winch uses a default internal ABI, for all internal functions.
+//! This allows us to push the complexity of system ABI compliance to
+//! the trampolines (not yet implemented).  The default ABI treats all
+//! allocatable registers as caller saved, which means that (i) all
+//! register values in the Wasm value stack (which are normally
+//! referred to as "live"), must be saved onto the machine stack (ii)
+//! function prologues and epilogues don't store/restore other
+//! registers more than the non-allocatable ones (e.g. rsp/rbp in
+//! x86_64).
+//!
+//! The calling convention in the default ABI, uses registers to a
+//! certain fixed count for arguments and return values, and then the
+//! stack is used for all additional arguments.
+//!
+//! Generally the stack layout looks like:
+//! +-------------------------------+
+//! |                               |
+//! |                               |
+//! |         Stack Args            |
+//! |                               |
+//! |                               |
+//! +-------------------------------+----> SP @ function entry
+//! |         Ret addr              |
+//! +-------------------------------+
+//! |            SP                 |
+//! +-------------------------------+----> SP @ Function prologue
+//! |                               |
+//! |                               |
+//! |                               |
+//! |        Stack slots            |
+//! |        + dynamic space        |
+//! |                               |
+//! |                               |
+//! |                               |
+//! +-------------------------------+----> SP @ callsite (after)
+//! |        alignment              |
+//! |        + arguments            |
+//! |                               | ----> Space allocated for calls
+//! |                               |
 use crate::isa::reg::Reg;
 use smallvec::SmallVec;
 use std::ops::{Add, BitAnd, Not, Sub};
@@ -12,6 +56,9 @@ pub(crate) use local::*;
 pub(crate) trait ABI {
     /// The required stack alignment.
     fn stack_align(&self) -> u8;
+
+    /// The required stack alignment for calls.
+    fn call_stack_align(&self) -> u8;
 
     /// The offset to the argument base, relative to the frame pointer.
     fn arg_base_offset(&self) -> u8;
@@ -117,11 +164,27 @@ impl ABIResult {
     }
 }
 
+pub(crate) type ABIParams = SmallVec<[ABIArg; 6]>;
+
 /// An ABI-specific representation of a function signature.
 pub(crate) struct ABISig {
     /// Function parameters.
-    pub params: SmallVec<[ABIArg; 6]>,
+    pub params: ABIParams,
+    /// Function result.
     pub result: ABIResult,
+    /// Stack space needed for stack arguments.
+    pub stack_bytes: u32,
+}
+
+impl ABISig {
+    /// Create a new ABI signature.
+    pub fn new(params: ABIParams, result: ABIResult, stack_bytes: u32) -> Self {
+        Self {
+            params,
+            result,
+            stack_bytes,
+        }
+    }
 }
 
 /// Returns the size in bytes of a given WebAssembly type.

@@ -489,9 +489,10 @@ mod test {
         let engine = Engine::default();
         let mut metadata = Metadata::new(&engine);
 
-        metadata
-            .shared_flags
-            .insert("avoid_div_traps".to_string(), FlagValue::Bool(false));
+        metadata.shared_flags.insert(
+            "preserve_frame_pointers".to_string(),
+            FlagValue::Bool(false),
+        );
 
         match metadata.check_compatible(&engine) {
             Ok(_) => unreachable!(),
@@ -500,7 +501,7 @@ mod test {
 compilation settings of module incompatible with native host
 
 Caused by:
-    setting \"avoid_div_traps\" is configured to Bool(false) which is not supported"
+    setting \"preserve_frame_pointers\" is configured to Bool(false) which is not supported"
             )),
         }
 

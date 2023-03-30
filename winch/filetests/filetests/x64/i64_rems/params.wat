@@ -14,16 +14,13 @@
 ;;    d:	 48893424             	mov	qword ptr [rsp], rsi
 ;;   11:	 488b0c24             	mov	rcx, qword ptr [rsp]
 ;;   15:	 488b442408           	mov	rax, qword ptr [rsp + 8]
-;;   1a:	 4883f900             	cmp	rcx, 0
-;;   1e:	 0f8502000000         	jne	0x26
-;;   24:	 0f0b                 	ud2	
-;;   26:	 4883f9ff             	cmp	rcx, -1
-;;   2a:	 0f850a000000         	jne	0x3a
-;;   30:	 b800000000           	mov	eax, 0
-;;   35:	 e905000000           	jmp	0x3f
-;;   3a:	 4899                 	cqo	
-;;   3c:	 48f7f9               	idiv	rcx
-;;   3f:	 4889d0               	mov	rax, rdx
-;;   42:	 4883c410             	add	rsp, 0x10
-;;   46:	 5d                   	pop	rbp
-;;   47:	 c3                   	ret	
+;;   1a:	 4899                 	cqo	
+;;   1c:	 4883f9ff             	cmp	rcx, -1
+;;   20:	 0f850a000000         	jne	0x30
+;;   26:	 ba00000000           	mov	edx, 0
+;;   2b:	 e903000000           	jmp	0x33
+;;   30:	 48f7f9               	idiv	rcx
+;;   33:	 4889d0               	mov	rax, rdx
+;;   36:	 4883c410             	add	rsp, 0x10
+;;   3a:	 5d                   	pop	rbp
+;;   3b:	 c3                   	ret	

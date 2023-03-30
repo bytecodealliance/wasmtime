@@ -18,7 +18,7 @@
 
 ;;;; Rules for `f32const` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (f32const (u64_from_ieee32 x)))
+(rule (lower (f32const (u32_from_ieee32 x)))
       (imm $F32 x))
 
 
@@ -536,7 +536,6 @@
 (rule (lower (has_type (fits_in_64 ty) (udiv x y)))
       (let (;; Look at the divisor to determine whether we need to generate
             ;; an explicit division-by zero check.
-            (DZcheck bool (zero_divisor_check_needed y))
             ;; Load up the dividend, by loading the input (possibly zero-
             ;; extended) input into the low half of the register pair,
             ;; and setting the high half to zero.
@@ -545,10 +544,6 @@
             ;; Load up the divisor, zero-extended if necessary.
             (ext_y Reg (put_in_reg_zext32 y))
             (ext_ty Type (ty_ext32 ty))
-            ;; Now actually perform the division-by zero check if necessary.
-            ;; This cannot be done earlier than here, because the check
-            ;; requires an already extended divisor value.
-            (_ Reg (maybe_trap_if_zero_divisor DZcheck ext_ty ext_y))
             ;; Emit the actual divide instruction.
             (pair RegPair (udivmod ext_ty ext_x ext_y)))
         ;; The quotient can be found in the low half of the result.
@@ -557,37 +552,12 @@
 ;; Implement `urem`.  Same as `udiv`, but finds the remainder in
 ;; the high half of the result register pair instead.
 (rule (lower (has_type (fits_in_64 ty) (urem x y)))
-      (let ((DZcheck bool (zero_divisor_check_needed y))
-            (ext_x RegPair (regpair (imm (ty_ext32 ty) 0)
+      (let ((ext_x RegPair (regpair (imm (ty_ext32 ty) 0)
                                     (put_in_reg_zext32 x)))
             (ext_y Reg (put_in_reg_zext32 y))
             (ext_ty Type (ty_ext32 ty))
-            (_ Reg (maybe_trap_if_zero_divisor DZcheck ext_ty ext_y))
             (pair RegPair (udivmod ext_ty ext_x ext_y)))
         (copy_reg ty (regpair_hi pair))))
-
-;; Determine whether we need to perform a divide-by-zero-check.
-;;
-;; If the `avoid_div_traps` flag is false, we never need to perform
-;; that check; we can rely on the divide instruction itself to trap.
-;;
-;; If the `avoid_div_traps` flag is true, we perform the check explicitly.
-;; This still can be omittted if the divisor is a non-zero immediate.
-(decl zero_divisor_check_needed (Value) bool)
-(rule 2 (zero_divisor_check_needed (i64_from_value x))
-      (if (i64_nonzero x))
-      $false)
-(rule 1 (zero_divisor_check_needed (value_type (allow_div_traps))) $false)
-(rule 0 (zero_divisor_check_needed _) $true)
-
-;; Perform the divide-by-zero check if required.
-;; This is simply a compare-and-trap of the (extended) divisor against 0.
-(decl maybe_trap_if_zero_divisor (bool Type Reg) Reg)
-(rule (maybe_trap_if_zero_divisor $false _ _) (invalid_reg))
-(rule (maybe_trap_if_zero_divisor $true ext_ty reg)
-      (icmps_simm16_and_trap ext_ty reg 0
-                             (intcc_as_cond (IntCC.Equal))
-                             (trap_code_division_by_zero)))
 
 
 ;;;; Rules for `sdiv` and `srem` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -610,15 +580,12 @@
 (rule (lower (has_type (fits_in_64 ty) (sdiv x y)))
       (let (;; Look at the divisor to determine whether we need to generate
             ;; explicit division-by-zero and/or integer-overflow checks.
-            (DZcheck bool (zero_divisor_check_needed y))
             (OFcheck bool (div_overflow_check_needed y))
             ;; Load up the dividend (sign-extended to 64-bit)
             (ext_x Reg (put_in_reg_sext64 x))
             ;; Load up the divisor (sign-extended if necessary).
             (ext_y Reg (put_in_reg_sext32 y))
             (ext_ty Type (ty_ext32 ty))
-            ;; Perform division-by-zero check (same as for `udiv`).
-            (_ Reg (maybe_trap_if_zero_divisor DZcheck ext_ty ext_y))
             ;; Perform integer-overflow check if necessary.
             (_ Reg (maybe_trap_if_sdiv_overflow OFcheck ext_ty ty ext_x ext_y))
             ;; Emit the actual divide instruction.
@@ -630,12 +597,10 @@
 ;; the high half of the result register pair instead.  Also, handle
 ;; the integer overflow case differently, see below.
 (rule (lower (has_type (fits_in_64 ty) (srem x y)))
-      (let ((DZcheck bool (zero_divisor_check_needed y))
-            (OFcheck bool (div_overflow_check_needed y))
+      (let ((OFcheck bool (div_overflow_check_needed y))
             (ext_x Reg (put_in_reg_sext64 x))
             (ext_y Reg (put_in_reg_sext32 y))
             (ext_ty Type (ty_ext32 ty))
-            (_ Reg (maybe_trap_if_zero_divisor DZcheck ext_ty ext_y))
             (checked_x Reg (maybe_avoid_srem_overflow OFcheck ext_ty ext_x ext_y))
             (pair RegPair (sdivmod ext_ty checked_x ext_y)))
         (copy_reg ty (regpair_hi pair))))

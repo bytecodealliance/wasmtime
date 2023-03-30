@@ -90,6 +90,11 @@ pub struct RunCommand {
     #[clap(long = "trap-unknown-imports")]
     trap_unknown_imports: bool,
 
+    /// Allow the main module to import unknown functions, using an
+    /// implementation that returns default values, when running commands.
+    #[clap(long = "default-values-unknown-imports")]
+    default_values_unknown_imports: bool,
+
     /// Allow executing precompiled WebAssembly modules as `*.cwasm` files.
     ///
     /// Note that this option is not safe to pass if the module being passed in
@@ -322,6 +327,12 @@ impl RunCommand {
         if self.trap_unknown_imports {
             linker.define_unknown_imports_as_traps(&module)?;
         }
+
+        // ...or as default values.
+        if self.default_values_unknown_imports {
+            linker.define_unknown_imports_as_default_values(&module)?;
+        }
+
         // Use "" as a default module name.
         linker
             .module(&mut *store, "", &module)

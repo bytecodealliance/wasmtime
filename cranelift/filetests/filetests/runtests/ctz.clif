@@ -3,14 +3,17 @@ test run
 target aarch64
 target s390x
 target x86_64
-target riscv64
 target x86_64 has_bmi1
+target riscv64
+target riscv64 has_zbb
+target riscv64 has_zbb has_zbs
 
 function %ctz_i8(i8) -> i8 {
 block0(v0: i8):
     v1 = ctz v0
     return v1
 }
+; run: %ctz_i8(0) == 8
 ; run: %ctz_i8(1) == 0
 ; run: %ctz_i8(0x40) == 6
 ; run: %ctz_i8(-1) == 0
@@ -20,6 +23,7 @@ block0(v0: i16):
     v1 = ctz v0
     return v1
 }
+; run: %ctz_i16(0) == 16
 ; run: %ctz_i16(1) == 0
 ; run: %ctz_i16(0x4000) == 14
 ; run: %ctz_i16(-1) == 0
@@ -29,6 +33,7 @@ block0(v0: i32):
     v1 = ctz v0
     return v1
 }
+; run: %ctz_i32(0) == 32
 ; run: %ctz_i32(1) == 0
 ; run: %ctz_i32(0x40000000) == 30
 ; run: %ctz_i32(-1) == 0
@@ -38,6 +43,7 @@ block0(v0: i64):
     v1 = ctz v0
     return v1
 }
+; run: %ctz_i64(0) == 64
 ; run: %ctz_i64(1) == 0
 ; run: %ctz_i64(0x4000000000000000) == 62
 ; run: %ctz_i64(-1) == 0

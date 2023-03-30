@@ -11,7 +11,7 @@ use crate::{isle_common_prelude_methods, isle_lower_prelude_methods};
 use generated_code::{Context, MInst, RegisterClass};
 
 // Types that the generated ISLE code uses via `use super::*`.
-use super::{is_int_or_ref_ty, is_mergeable_load, lower_to_amode};
+use super::{is_int_or_ref_ty, is_mergeable_load, lower_to_amode, MergeableLoadSize};
 use crate::ir::LibCall;
 use crate::isa::x64::lower::emit_vm_call;
 use crate::isa::x64::X64Backend;
@@ -170,8 +170,13 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     }
 
     #[inline]
-    fn has_avx(&mut self) -> bool {
-        self.backend.x64_flags.has_avx()
+    fn use_avx_simd(&mut self) -> bool {
+        self.backend.x64_flags.use_avx_simd()
+    }
+
+    #[inline]
+    fn use_avx2_simd(&mut self) -> bool {
+        self.backend.x64_flags.use_avx2_simd()
     }
 
     #[inline]
@@ -268,7 +273,25 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     fn sinkable_load(&mut self, val: Value) -> Option<SinkableLoad> {
         let input = self.lower_ctx.get_value_as_source_or_const(val);
         if let InputSourceInst::UniqueUse(inst, 0) = input.inst {
-            if let Some((addr_input, offset)) = is_mergeable_load(self.lower_ctx, inst) {
+            if let Some((addr_input, offset)) =
+                is_mergeable_load(self.lower_ctx, inst, MergeableLoadSize::Min32)
+            {
+                return Some(SinkableLoad {
+                    inst,
+                    addr_input,
+                    offset,
+                });
+            }
+        }
+        None
+    }
+
+    fn sinkable_load_exact(&mut self, val: Value) -> Option<SinkableLoad> {
+        let input = self.lower_ctx.get_value_as_source_or_const(val);
+        if let InputSourceInst::UniqueUse(inst, 0) = input.inst {
+            if let Some((addr_input, offset)) =
+                is_mergeable_load(self.lower_ctx, inst, MergeableLoadSize::Exact)
+            {
                 return Some(SinkableLoad {
                     inst,
                     addr_input,
@@ -313,21 +336,6 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     #[inline]
     fn synthetic_amode_to_reg_mem(&mut self, addr: &SyntheticAmode) -> RegMem {
         RegMem::mem(addr.clone())
-    }
-
-    #[inline]
-    fn amode_imm_reg_reg_shift(&mut self, simm32: u32, base: Gpr, index: Gpr, shift: u8) -> Amode {
-        Amode::imm_reg_reg_shift(simm32, base, index, shift)
-    }
-
-    #[inline]
-    fn amode_imm_reg(&mut self, simm32: u32, base: Gpr) -> Amode {
-        Amode::imm_reg(simm32, base.to_reg())
-    }
-
-    #[inline]
-    fn amode_with_flags(&mut self, amode: &Amode, flags: MemFlags) -> Amode {
-        amode.with_flags(flags)
     }
 
     #[inline]
@@ -848,138 +856,6 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
             .use_constant(VCodeConstantData::WellKnown(&UINT_MASK))
     }
 
-    fn emit_div_or_rem(
-        &mut self,
-        kind: &DivOrRemKind,
-        ty: Type,
-        dst: WritableGpr,
-        dividend: Gpr,
-        divisor: Gpr,
-    ) {
-        let is_div = kind.is_div();
-        let size = OperandSize::from_ty(ty);
-
-        let dst_quotient = self.lower_ctx.alloc_tmp(types::I64).only_reg().unwrap();
-        let dst_remainder = self.lower_ctx.alloc_tmp(types::I64).only_reg().unwrap();
-
-        // Always do explicit checks for `srem`: otherwise, INT_MIN % -1 is not handled properly.
-        if self.backend.flags.avoid_div_traps() || *kind == DivOrRemKind::SignedRem {
-            // A vcode meta-instruction is used to lower the inline checks, since they embed
-            // pc-relative offsets that must not change, thus requiring regalloc to not
-            // interfere by introducing spills and reloads.
-            let tmp = if *kind == DivOrRemKind::SignedDiv && size == OperandSize::Size64 {
-                Some(self.lower_ctx.alloc_tmp(types::I64).only_reg().unwrap())
-            } else {
-                None
-            };
-            let dividend_hi = self.lower_ctx.alloc_tmp(types::I64).only_reg().unwrap();
-            self.lower_ctx.emit(MInst::AluConstOp {
-                op: AluRmiROpcode::Xor,
-                size: OperandSize::Size32,
-                dst: WritableGpr::from_reg(Gpr::new(dividend_hi.to_reg()).unwrap()),
-            });
-            self.lower_ctx.emit(MInst::checked_div_or_rem_seq(
-                kind.clone(),
-                size,
-                divisor.to_reg(),
-                Gpr::new(dividend.to_reg()).unwrap(),
-                Gpr::new(dividend_hi.to_reg()).unwrap(),
-                WritableGpr::from_reg(Gpr::new(dst_quotient.to_reg()).unwrap()),
-                WritableGpr::from_reg(Gpr::new(dst_remainder.to_reg()).unwrap()),
-                tmp,
-            ));
-        } else {
-            // We don't want more than one trap record for a single instruction,
-            // so let's not allow the "mem" case (load-op merging) here; force
-            // divisor into a register instead.
-            let divisor = RegMem::reg(divisor.to_reg());
-
-            let dividend_hi = self.lower_ctx.alloc_tmp(types::I64).only_reg().unwrap();
-
-            // Fill in the high parts:
-            let dividend_lo = if kind.is_signed() && ty == types::I8 {
-                let dividend_lo = self.lower_ctx.alloc_tmp(types::I64).only_reg().unwrap();
-                // 8-bit div takes its dividend in only the `lo` reg.
-                self.lower_ctx.emit(MInst::sign_extend_data(
-                    size,
-                    Gpr::new(dividend.to_reg()).unwrap(),
-                    WritableGpr::from_reg(Gpr::new(dividend_lo.to_reg()).unwrap()),
-                ));
-                // `dividend_hi` is not used by the Div below, so we
-                // don't def it here.
-
-                dividend_lo.to_reg()
-            } else if kind.is_signed() {
-                // 16-bit and higher div takes its operand in hi:lo
-                // with half in each (64:64, 32:32 or 16:16).
-                self.lower_ctx.emit(MInst::sign_extend_data(
-                    size,
-                    Gpr::new(dividend.to_reg()).unwrap(),
-                    WritableGpr::from_reg(Gpr::new(dividend_hi.to_reg()).unwrap()),
-                ));
-
-                dividend.to_reg()
-            } else if ty == types::I8 {
-                let dividend_lo = self.lower_ctx.alloc_tmp(types::I64).only_reg().unwrap();
-                self.lower_ctx.emit(MInst::movzx_rm_r(
-                    ExtMode::BL,
-                    RegMem::reg(dividend.to_reg()),
-                    dividend_lo,
-                ));
-
-                dividend_lo.to_reg()
-            } else {
-                // zero for unsigned opcodes.
-                self.lower_ctx
-                    .emit(MInst::imm(OperandSize::Size64, 0, dividend_hi));
-
-                dividend.to_reg()
-            };
-
-            // Emit the actual idiv.
-            self.lower_ctx.emit(MInst::div(
-                size,
-                kind.is_signed(),
-                divisor,
-                Gpr::new(dividend_lo).unwrap(),
-                Gpr::new(dividend_hi.to_reg()).unwrap(),
-                WritableGpr::from_reg(Gpr::new(dst_quotient.to_reg()).unwrap()),
-                WritableGpr::from_reg(Gpr::new(dst_remainder.to_reg()).unwrap()),
-            ));
-        }
-
-        // Move the result back into the destination reg.
-        if is_div {
-            // The quotient is in rax.
-            self.lower_ctx.emit(MInst::gen_move(
-                dst.to_writable_reg(),
-                dst_quotient.to_reg(),
-                ty,
-            ));
-        } else {
-            if size == OperandSize::Size8 {
-                let tmp = self.temp_writable_reg(ty);
-                // The remainder is in AH. Right-shift by 8 bits then move from rax.
-                self.lower_ctx.emit(MInst::shift_r(
-                    OperandSize::Size64,
-                    ShiftKind::ShiftRightLogical,
-                    Imm8Gpr::new(Imm8Reg::Imm8 { imm: 8 }).unwrap(),
-                    dst_quotient.to_reg(),
-                    tmp,
-                ));
-                self.lower_ctx
-                    .emit(MInst::gen_move(dst.to_writable_reg(), tmp.to_reg(), ty));
-            } else {
-                // The remainder is in rdx.
-                self.lower_ctx.emit(MInst::gen_move(
-                    dst.to_writable_reg(),
-                    dst_remainder.to_reg(),
-                    ty,
-                ));
-            }
-        }
-    }
-
     fn xmm_mem_to_xmm_mem_aligned(&mut self, arg: &XmmMem) -> XmmMemAligned {
         match XmmMemAligned::new(arg.clone().into()) {
             Some(aligned) => aligned,
@@ -1116,6 +992,55 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
         } else {
             None
         }
+    }
+
+    fn palignr_imm_from_immediate(&mut self, imm: Immediate) -> Option<u8> {
+        let bytes = self.lower_ctx.get_immediate_data(imm).as_slice();
+
+        if bytes.windows(2).all(|a| a[0] + 1 == a[1]) {
+            Some(bytes[0])
+        } else {
+            None
+        }
+    }
+
+    fn pblendw_imm(&mut self, imm: Immediate) -> Option<u8> {
+        // First make sure that the shuffle immediate is selecting 16-bit lanes.
+        let (a, b, c, d, e, f, g, h) = self.shuffle16_from_imm(imm)?;
+
+        // Next build up an 8-bit mask from each of the bits of the selected
+        // lanes above. This instruction can only be used when each lane
+        // selector chooses from the corresponding lane in either of the two
+        // operands, meaning the Nth lane selection must satisfy `lane % 8 ==
+        // N`.
+        //
+        // This helper closure is used to calculate the value of the
+        // corresponding bit.
+        let bit = |x: u8, c: u8| {
+            if x % 8 == c {
+                if x < 8 {
+                    Some(0)
+                } else {
+                    Some(1 << c)
+                }
+            } else {
+                None
+            }
+        };
+        Some(
+            bit(a, 0)?
+                | bit(b, 1)?
+                | bit(c, 2)?
+                | bit(d, 3)?
+                | bit(e, 4)?
+                | bit(f, 5)?
+                | bit(g, 6)?
+                | bit(h, 7)?,
+        )
+    }
+
+    fn xmi_imm(&mut self, imm: u32) -> XmmMemImm {
+        XmmMemImm::new(RegMemImm::imm(imm)).unwrap()
     }
 }
 

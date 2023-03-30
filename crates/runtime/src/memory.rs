@@ -9,6 +9,7 @@ use crate::{MemoryImage, MemoryImageSlot, Store, WaitResult};
 use anyhow::Error;
 use anyhow::{bail, format_err, Result};
 use std::convert::TryFrom;
+use std::ops::Range;
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
@@ -152,6 +153,12 @@ pub trait RuntimeLinearMemory: Send + Sync {
 
     /// Used for optional dynamic downcasting.
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any;
+
+    /// Returns the range of addresses that may be reached by WebAssembly.
+    ///
+    /// This starts at the base of linear memory and ends at the end of the
+    /// guard pages, if any.
+    fn wasm_accessible(&self) -> Range<usize>;
 }
 
 /// A linear memory instance.
@@ -241,7 +248,7 @@ impl MmapMemory {
                     minimum,
                     alloc_bytes + extra_to_reserve_on_growth,
                 );
-                slot.instantiate(minimum, Some(image), &plan.style)?;
+                slot.instantiate(minimum, Some(image), &plan)?;
                 // On drop, we will unmap our mmap'd range that this slot was
                 // mapped on top of, so there is no need for the slot to wipe
                 // it with an anonymous mapping first.
@@ -338,6 +345,12 @@ impl RuntimeLinearMemory for MmapMemory {
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
         self
     }
+
+    fn wasm_accessible(&self) -> Range<usize> {
+        let base = self.mmap.as_mut_ptr() as usize + self.pre_guard_size;
+        let end = base + (self.mmap.len() - self.pre_guard_size);
+        base..end
+    }
 }
 
 /// A "static" memory where the lifetime of the backing memory is managed
@@ -350,6 +363,10 @@ struct StaticMemory {
     /// The current size, in bytes, of this memory.
     size: usize,
 
+    /// The size, in bytes, of the virtual address allocation starting at `base`
+    /// and going to the end of the guard pages at the end of the linear memory.
+    memory_and_guard_size: usize,
+
     /// The image management, if any, for this memory. Owned here and
     /// returned to the pooling allocator when termination occurs.
     memory_image: MemoryImageSlot,
@@ -361,6 +378,7 @@ impl StaticMemory {
         initial_size: usize,
         maximum_size: Option<usize>,
         memory_image: MemoryImageSlot,
+        memory_and_guard_size: usize,
     ) -> Result<Self> {
         if base.len() < initial_size {
             bail!(
@@ -381,6 +399,7 @@ impl StaticMemory {
             base,
             size: initial_size,
             memory_image,
+            memory_and_guard_size,
         })
     }
 }
@@ -419,6 +438,12 @@ impl RuntimeLinearMemory for StaticMemory {
 
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
         self
+    }
+
+    fn wasm_accessible(&self) -> Range<usize> {
+        let base = self.base.as_ptr() as usize;
+        let end = base + self.memory_and_guard_size;
+        base..end
     }
 }
 
@@ -620,6 +645,10 @@ impl RuntimeLinearMemory for SharedMemory {
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
         self
     }
+
+    fn wasm_accessible(&self) -> Range<usize> {
+        self.0.memory.read().unwrap().wasm_accessible()
+    }
 }
 
 /// Representation of a runtime wasm linear memory.
@@ -648,10 +677,12 @@ impl Memory {
         plan: &MemoryPlan,
         base: &'static mut [u8],
         memory_image: MemoryImageSlot,
+        memory_and_guard_size: usize,
         store: &mut dyn Store,
     ) -> Result<Self> {
         let (minimum, maximum) = Self::limit_new(plan, Some(store))?;
-        let pooled_memory = StaticMemory::new(base, minimum, maximum, memory_image)?;
+        let pooled_memory =
+            StaticMemory::new(base, minimum, maximum, memory_image, memory_and_guard_size)?;
         let allocation = Box::new(pooled_memory);
         let allocation: Box<dyn RuntimeLinearMemory> = if plan.memory.shared {
             // FIXME: since the pooling allocator owns the memory allocation
@@ -873,6 +904,13 @@ impl Memory {
                 Err(Trap::AtomicWaitNonSharedMemory)
             }
         }
+    }
+
+    /// Returns the range of bytes that WebAssembly should be able to address in
+    /// this linear memory. Note that this includes guard pages which wasm can
+    /// hit.
+    pub fn wasm_accessible(&self) -> Range<usize> {
+        self.0.wasm_accessible()
     }
 }
 

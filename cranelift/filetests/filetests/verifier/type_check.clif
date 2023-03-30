@@ -110,16 +110,43 @@ block2(v3: f32, v4: i8):
     return
 }
 
-function %bad_extend() {
-block0:
-    v0 = iconst.i32 10
-    v1 = uextend.i16 v0 ; error: input i32 must be smaller than output i16
+function %bad_extend(i128) {
+block0(v0: i128):
+    v1 = iconst.i32 10
+    v2 = uextend.i16 v1 ; error: arg 0 (v1) with type i32 failed to satisfy type set
+    v3 = uextend.i32 v1 ; error: arg 0 (v1) with type i32 failed to satisfy type set
+    v4 = uextend.i128 v0 ; error: arg 0 (v0) with type i128 failed to satisfy type set
     return
 }
 
 function %bad_reduce() {
 block0:
     v0 = iconst.i32 10
-    v1 = ireduce.i64 v0 ; error: input i32 must be larger than output i64
+    v1 = ireduce.i32 v0 ; error: arg 0 (v0) with type i32 failed to satisfy type set
+    v2 = ireduce.i64 v0 ; error: arg 0 (v0) with type i32 failed to satisfy type set
+    v4 = iconst.i8 10
+    v5 = ireduce.i64 v4 ; error: arg 0 (v4) with type i8 failed to satisfy type set
+    return
+}
+
+function %bad_fdemote() {
+block0:
+    v0 = f32const 0xf.f
+    v1 = fdemote.f64 v0 ; error: arg 0 (v0) with type f32 failed to satisfy type set
+    v2 = fdemote.f32 v0 ; error: arg 0 (v0) with type f32 failed to satisfy type set
+    return
+}
+
+function %bad_fpromote() {
+block0:
+    v0 = f64const 0xf.f
+    v1 = fpromote.f32 v0 ; error: arg 0 (v0) with type f64 failed to satisfy type set
+    v2 = fpromote.f64 v0 ; error: arg 0 (v0) with type f64 failed to satisfy type set
+    return
+}
+
+function %bad_shuffle(i8x16, i8x16) {
+block0(v0: i8x16, v1: i8x16):
+    v2 = shuffle v0, v1, [0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 32] ; error: shuffle immediate index 32 is larger than the maximum 31
     return
 }

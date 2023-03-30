@@ -31,7 +31,7 @@ block0(v0: i64, v1: i64):
 ; block0:
 ;   movq    %rdi, %rcx
 ;   addq    %rcx, %rsi, %rcx
-;   jnb ; ud2 user0 ;
+;   jb #trap=user0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -43,9 +43,9 @@ block0(v0: i64, v1: i64):
 ; block1: ; offset 0x4
 ;   movq %rdi, %rcx
 ;   addq %rsi, %rcx
-;   jae 0x12
-;   ud2 ; trap: user0
+;   jb 0x15
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
+;   ud2 ; trap: user0
 

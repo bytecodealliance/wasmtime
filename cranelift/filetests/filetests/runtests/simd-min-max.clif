@@ -1,7 +1,9 @@
 test run
 test interpret
+set enable_simd
 target aarch64
 target x86_64
+target x86_64 has_avx
 target s390x
 
 function %smin_i8x16(i8x16, i8x16) -> i8x16 {

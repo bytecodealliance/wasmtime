@@ -4,7 +4,7 @@
 //!
 //! Usage Example:
 //!     Record
-//!         sudo perf record -k 1 -e instructions:u target/debug/wasmtime -g --jitdump test.wasm
+//!         sudo perf record -k 1 -e instructions:u target/debug/wasmtime -g --profile=jitdump test.wasm
 //!     Combine
 //!         sudo perf inject -v -j -i perf.data -o perf.jit.data
 //!     Report

@@ -14,7 +14,7 @@ block0(v0: i32):
 ; block0:
 ;   movq    %rdi, %rax
 ;   addl    %eax, $127, %eax
-;   jnb ; ud2 user0 ;
+;   jb #trap=user0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -26,11 +26,11 @@ block0(v0: i32):
 ; block1: ; offset 0x4
 ;   movq %rdi, %rax
 ;   addl $0x7f, %eax
-;   jae 0x12
-;   ud2 ; trap: user0
+;   jb 0x15
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
+;   ud2 ; trap: user0
 
 function %f1(i32) -> i32 {
 block0(v0: i32):
@@ -45,7 +45,7 @@ block0(v0: i32):
 ; block0:
 ;   movq    %rdi, %rax
 ;   addl    %eax, $127, %eax
-;   jnb ; ud2 user0 ;
+;   jb #trap=user0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -57,11 +57,11 @@ block0(v0: i32):
 ; block1: ; offset 0x4
 ;   movq %rdi, %rax
 ;   addl $0x7f, %eax
-;   jae 0x12
-;   ud2 ; trap: user0
+;   jb 0x15
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
+;   ud2 ; trap: user0
 
 function %f2(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
@@ -75,7 +75,7 @@ block0(v0: i32, v1: i32):
 ; block0:
 ;   movq    %rdi, %rax
 ;   addl    %eax, %esi, %eax
-;   jnb ; ud2 user0 ;
+;   jb #trap=user0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -87,11 +87,11 @@ block0(v0: i32, v1: i32):
 ; block1: ; offset 0x4
 ;   movq %rdi, %rax
 ;   addl %esi, %eax
-;   jae 0x11
-;   ud2 ; trap: user0
+;   jb 0x14
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
+;   ud2 ; trap: user0
 
 function %f3(i64) -> i64 {
 block0(v0: i64):
@@ -106,7 +106,7 @@ block0(v0: i64):
 ; block0:
 ;   movq    %rdi, %rax
 ;   addq    %rax, $127, %rax
-;   jnb ; ud2 user0 ;
+;   jb #trap=user0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -118,11 +118,11 @@ block0(v0: i64):
 ; block1: ; offset 0x4
 ;   movq %rdi, %rax
 ;   addq $0x7f, %rax
-;   jae 0x13
-;   ud2 ; trap: user0
+;   jb 0x16
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
+;   ud2 ; trap: user0
 
 function %f3(i64) -> i64 {
 block0(v0: i64):
@@ -137,7 +137,7 @@ block0(v0: i64):
 ; block0:
 ;   movq    %rdi, %rax
 ;   addq    %rax, $127, %rax
-;   jnb ; ud2 user0 ;
+;   jb #trap=user0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -149,11 +149,11 @@ block0(v0: i64):
 ; block1: ; offset 0x4
 ;   movq %rdi, %rax
 ;   addq $0x7f, %rax
-;   jae 0x13
-;   ud2 ; trap: user0
+;   jb 0x16
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
+;   ud2 ; trap: user0
 
 function %f4(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -167,7 +167,7 @@ block0(v0: i64, v1: i64):
 ; block0:
 ;   movq    %rdi, %rax
 ;   addq    %rax, %rsi, %rax
-;   jnb ; ud2 user0 ;
+;   jb #trap=user0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -179,9 +179,9 @@ block0(v0: i64, v1: i64):
 ; block1: ; offset 0x4
 ;   movq %rdi, %rax
 ;   addq %rsi, %rax
-;   jae 0x12
-;   ud2 ; trap: user0
+;   jb 0x15
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
+;   ud2 ; trap: user0
 
