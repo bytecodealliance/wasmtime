@@ -196,7 +196,7 @@ pub fn add_component_to_linker<T>(
     linker.func_wrap(
         "types",
         "drop-future-incoming-response",
-        move |mut caller: Caller<'_, T>, _future: u32| -> anyhow::Result<()> {
+        move |_caller: Caller<'_, T>, _future: u32| -> anyhow::Result<()> {
             // FIXME: Intentionally left blank
             Ok(())
         },
