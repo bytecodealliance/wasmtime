@@ -1721,13 +1721,10 @@ pub enum Strategy {
 
     /// Currently the default backend, Cranelift aims to be a reasonably fast
     /// code generator which generates high quality machine code.
-    #[cfg(feature = "cranelift")]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))]
     Cranelift,
 
-    /// TODO
-    #[cfg(feature = "winch")]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "winch")))]
+    /// A baseline compiler for WebAssembly, currently under active development and not ready for
+    /// production applications.
     Winch,
 }
 

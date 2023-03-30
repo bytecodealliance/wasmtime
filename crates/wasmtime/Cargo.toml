@@ -74,6 +74,11 @@ default = [
 # precompiled WebAssembly modules.
 cranelift = ["dep:wasmtime-cranelift"]
 
+# Enables support for winch, the WebAssembly baseline compiler. The Winch compiler
+# strategy in `Config` will be available. It is currently in active development
+# and shouldn't be used in production applications.
+winch = ["dep:wasmtime-winch"]
+
 # Enables support for incremental compilation cache to be enabled in `Config`.
 incremental-cache = ["wasmtime-cranelift?/incremental-cache"]
 
@@ -127,4 +132,3 @@ component-model = [
   "dep:encoding_rs",
 ]
 
-winch = ["dep:wasmtime-winch"]
