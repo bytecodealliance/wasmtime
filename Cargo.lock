@@ -3874,6 +3874,7 @@ dependencies = [
  "wasmtime-cranelift-shared",
  "wasmtime-environ",
  "winch-codegen",
+ "winch-environ",
 ]
 
 [[package]]

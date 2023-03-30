@@ -109,7 +109,7 @@ mod test {
         let body_inputs = std::mem::take(&mut translation.function_body_inputs);
         let module = &translation.module;
         let types = translation.get_types();
-        let env = FuncEnv::new(module, &types, &*isa);
+        let env = FuncEnv::new(module, &types, &isa);
 
         let binding = body_inputs
             .into_iter()

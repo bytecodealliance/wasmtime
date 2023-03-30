@@ -10,8 +10,7 @@ use wasmtime_environ::{
     ModuleTranslation, ModuleTypes, PrimaryMap, Tunables, WasmFunctionInfo,
 };
 use winch_codegen::TargetIsa;
-
-use crate::environ::FuncEnv;
+use winch_environ::FuncEnv;
 
 pub(crate) struct Compiler {
     isa: Box<dyn TargetIsa>,
@@ -60,7 +59,7 @@ impl wasmtime_environ::Compiler for Compiler {
                 .unwrap(),
         );
         let mut validator = validator.into_validator(self.take_allocations());
-        let env = FuncEnv::new(&translation.module, translation.get_types());
+        let env = FuncEnv::new(&translation.module, translation.get_types(), &self.isa);
         let buffer = self
             .isa
             .compile_function(&sig, &body, &env, &mut validator)
@@ -114,7 +113,6 @@ impl wasmtime_environ::Compiler for Compiler {
             assert!(func.relocs().is_empty());
             assert!(func.traps().is_empty());
             assert!(func.stack_maps().is_empty());
-            // assert!(func.call_sites().is_empty());
 
             let (sym, range) = builder.append_func(
                 &sym,
