@@ -209,7 +209,8 @@ jobs:
         cargo doc --no-deps --workspace \
           --exclude wasmtime-cli \
           --exclude test-programs \
-          --exclude cranelift-codegen-meta
+          --exclude cranelift-codegen-meta \
+          --features winch
     - run: cargo doc --package cranelift-codegen-meta --document-private-items
 
     # Assemble the documentation, and always upload it as an artifact for
