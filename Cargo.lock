@@ -3542,7 +3542,6 @@ dependencies = [
  "wasmtime-wasi-nn",
  "wasmtime-wasi-threads",
  "wasmtime-wast",
- "wasmtime-winch",
  "wast 55.0.0",
  "wat",
  "windows-sys",
