@@ -41,9 +41,9 @@ where
     /// Emit the host to wasm trampoline.
     pub fn emit_host_to_wasm(&mut self, ty: &FuncType) {
         // The host to wasm trampoline is currently hard coded (see vmcontext.rs in the
-        // wasmtime-runtime crate, VMTrampoline)
-        // The first two parameters are VMContexts (not used at this time)
-        // The third parameter is the function pointer to call
+        // wasmtime-runtime crate, VMTrampoline).
+        // The first two parameters are VMContexts (not used at this time).
+        // The third parameter is the function pointer to call.
         // The fourth parameter is an address to storage space for both the return value and the
         // arguments to the function.
         let trampoline_ty = FuncType::new(
@@ -57,7 +57,7 @@ where
         let trampoline_sig = self.abi.sig(&trampoline_ty);
 
         // Hard-coding the size in bytes of the trampoline arguments since it's static, based on
-        // the current signature we should always have 4 arguments, each of which is 8 bytes
+        // the current signature we should always have 4 arguments, each of which is 8 bytes.
         let trampoline_arg_size = 32;
 
         let callee_sig = self.abi.sig(ty);
@@ -98,14 +98,14 @@ where
         );
 
         // How much we need to adjust the stack pointer by to account for the alignment
-        // required by the ISA
+        // required by the ISA.
         let delta = calculate_frame_adjustment(
             self.masm.sp_offset(),
             self.abi.arg_base_offset() as u32,
             self.abi.call_stack_align() as u32,
         );
 
-        // The total amount of stack space we need to reserve for the arguments
+        // The total amount of stack space we need to reserve for the arguments.
         let total_arg_stack_space = align_to(
             callee_sig.stack_bytes + delta,
             self.abi.call_stack_align() as u32,
@@ -113,7 +113,7 @@ where
 
         self.masm.reserve_stack(total_arg_stack_space);
 
-        // The max size a value can be when reading from the params memory location
+        // The max size a value can be when reading from the params memory location.
         let value_size = mem::size_of::<u128>();
 
         callee_sig.params.iter().enumerate().for_each(|(i, param)| {
@@ -140,27 +140,27 @@ where
             }
         });
 
-        // Move the function pointer from it's stack location into a scratch register
+        // Move the function pointer from it's stack location into a scratch register.
         self.masm.load(
             self.masm.address_from_sp(func_ptr_offset),
             self.scratch_reg,
             OperandSize::S64,
         );
 
-        // Call the function that was passed into the trampoline
+        // Call the function that was passed into the trampoline.
         self.masm.call(CalleeKind::Indirect(self.scratch_reg));
 
         self.masm.free_stack(total_arg_stack_space);
 
-        // Move the val ptr back into the scratch register so we can load the return values
+        // Move the val ptr back into the scratch register so we can load the return values.
         self.masm.load(
             self.masm.address_from_sp(val_ptr_offset),
             self.scratch_reg,
             OperandSize::S64,
         );
 
-        // Move the return values into the value ptr
-        // Only doing a single return value for now
+        // Move the return values into the value ptr.
+        // We are only support a single return value at this time.
         let ABIResult::Reg { reg, ty } = &callee_sig.result;
         self.masm.store(
             RegImm::reg(*reg),
@@ -169,7 +169,7 @@ where
         );
 
         // TODO: Once we support system ABIs better, callee-saved registers will need to be
-        // restored here
+        // restored here.
 
         self.masm.epilogue(trampoline_arg_size);
     }
