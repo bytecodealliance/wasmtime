@@ -3,8 +3,16 @@
 ;; Reflexivity/irreflexivity of `icmp` cond codes:
 ;; for reflexive cond codes,   (icmp cc x x) == true.
 ;; for irreflexive cond codes, (icmp cc x x) == false.
-(rule (simplify (icmp (fits_in_64 (ty_int ty)) (intcc_reflexive cc)   x x)) (subsume (iconst ty (imm64 1))))
-(rule (simplify (icmp (fits_in_64 (ty_int ty)) (intcc_irreflexive cc) x x)) (subsume (iconst ty (imm64 0))))
+(rule (simplify (eq  (fits_in_64 (ty_int ty)) x x)) (iconst ty (imm64 1)))
+(rule (simplify (ne  (fits_in_64 (ty_int ty)) x x)) (iconst ty (imm64 0)))
+(rule (simplify (ugt (fits_in_64 (ty_int ty)) x x)) (iconst ty (imm64 0)))
+(rule (simplify (uge (fits_in_64 (ty_int ty)) x x)) (iconst ty (imm64 1)))
+(rule (simplify (sgt (fits_in_64 (ty_int ty)) x x)) (iconst ty (imm64 0)))
+(rule (simplify (sge (fits_in_64 (ty_int ty)) x x)) (iconst ty (imm64 1)))
+(rule (simplify (ult (fits_in_64 (ty_int ty)) x x)) (iconst ty (imm64 0)))
+(rule (simplify (ule (fits_in_64 (ty_int ty)) x x)) (iconst ty (imm64 1)))
+(rule (simplify (slt (fits_in_64 (ty_int ty)) x x)) (iconst ty (imm64 0)))
+(rule (simplify (sle (fits_in_64 (ty_int ty)) x x)) (iconst ty (imm64 1)))
 
 ;; Optimize icmp-of-icmp:
 (rule (simplify (ne ty (uextend _ inner @ (icmp ty _ _ _)) (iconst _ (u64_from_imm64 0))))

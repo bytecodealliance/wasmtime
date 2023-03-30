@@ -745,16 +745,6 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
-        fn intcc_reflexive(&mut self, cc: &IntCC) -> Option<IntCC> {
-            cc.is_reflexive().then_some(*cc)
-        }
-
-        #[inline]
-        fn intcc_irreflexive(&mut self, cc: &IntCC) -> Option<IntCC> {
-            cc.is_irreflexive().then_some(*cc)
-        }
-
-        #[inline]
         fn floatcc_reverse(&mut self, cc: &FloatCC) -> FloatCC {
             cc.reverse()
         }
