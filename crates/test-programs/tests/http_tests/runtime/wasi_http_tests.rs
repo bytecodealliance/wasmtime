@@ -23,7 +23,7 @@ pub fn instantiate_inherit_stdio(
     wasi_http::add_to_linker(&mut linker, |cx: &mut Ctx| &mut cx.http)?;
 
     // Create our wasi context.
-    let mut builder = WasiCtxBuilder::new().inherit_stdio().arg(bin_name)?;
+    let builder = WasiCtxBuilder::new().inherit_stdio().arg(bin_name)?;
 
     let mut store = Store::new(
         &engine,
