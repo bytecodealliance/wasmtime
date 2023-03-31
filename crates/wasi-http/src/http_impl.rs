@@ -6,11 +6,11 @@ use bytes::{BufMut, Bytes, BytesMut};
 use http_body_util::{BodyExt, Full};
 use hyper::Method;
 use hyper::Request;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::net::TcpStream;
 use tokio::runtime::Runtime;
 use tokio::time::timeout;
-use std::sync::Arc;
 use tokio_rustls::rustls::{self, OwnedTrustAnchor};
 
 impl crate::default_outgoing_http::Host for WasiHttp {
@@ -127,10 +127,10 @@ impl WasiHttp {
             let connector = tokio_rustls::TlsConnector::from(Arc::new(config));
             let mut parts = authority.split(":");
             let host = parts.next().unwrap_or(&authority);
-            let domain = rustls::ServerName::try_from(host)
-                .map_err(|_| anyhow!("invalid dnsname"))?;
+            let domain =
+                rustls::ServerName::try_from(host).map_err(|_| anyhow!("invalid dnsname"))?;
             let stream = connector.connect(domain, stream).await?;
-            
+
             let t = timeout(
                 connect_timeout,
                 hyper::client::conn::http1::handshake(stream),

@@ -14,7 +14,12 @@ use wasmtime_cli_flags::{CommonOptions, WasiModules};
 use wasmtime_wasi::maybe_exit_on_error;
 use wasmtime_wasi::sync::{ambient_authority, Dir, TcpListener, WasiCtxBuilder};
 
-#[cfg(any(feature = "wasi-crypto", feature = "wasi-nn", feature = "wasi-threads", feature = "wasi-http"))]
+#[cfg(any(
+    feature = "wasi-crypto",
+    feature = "wasi-nn",
+    feature = "wasi-threads",
+    feature = "wasi-http"
+))]
 use std::sync::Arc;
 
 #[cfg(feature = "wasi-nn")]
@@ -582,7 +587,9 @@ fn populate_with_wasi(
         #[cfg(feature = "wasi-http")]
         {
             let w_http = WasiHttp::new();
-            wasmtime_wasi_http::add_to_linker(linker, |host: &mut Host| host.wasi_http.as_mut().unwrap())?;
+            wasmtime_wasi_http::add_to_linker(linker, |host: &mut Host| {
+                host.wasi_http.as_mut().unwrap()
+            })?;
             store.data_mut().wasi_http = Some(w_http);
         }
     }
