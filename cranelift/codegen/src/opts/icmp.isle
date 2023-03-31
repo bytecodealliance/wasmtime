@@ -73,6 +73,10 @@
 (rule (simplify (ult (fits_in_64 (ty_int bty)) x zero @ (iconst _ (u64_from_imm64 0))))
       (subsume (iconst bty (imm64 0))))
 
+;; ult(x, 1) == eq(x, 0)
+(rule (simplify (ult (fits_in_64 (ty_int bty)) x (iconst cty (u64_from_imm64 0))))
+      (eq bty x (iconst cty (imm64 0))))
+
 ;; ule(x, 0) == eq(x, 0)
 (rule (simplify (ule (fits_in_64 (ty_int bty)) x zero @ (iconst _ (u64_from_imm64 0))))
       (eq bty x zero))
@@ -105,6 +109,11 @@
        (if-let $true (u64_eq y (ty_umax cty)))
        (eq bty x umax))
 
+;; ugt(x, UMAX-1) == eq(x, UMAX).
+(rule (simplify (ugt (fits_in_64 (ty_int bty)) x (iconst cty (u64_from_imm64 y))))
+       (if-let $true (u64_eq y (u64_sub (ty_umax cty) 1)))
+       (eq bty x (iconst cty (imm64 (ty_umax cty)))))
+
 ;; slt(x, SMIN) == false.
 (rule (simplify (slt (fits_in_64 (ty_int bty)) x smin @ (iconst cty (u64_from_imm64 y))))
        (if-let $true (u64_eq y (ty_smin cty)))
@@ -114,6 +123,11 @@
 (rule (simplify (sle (fits_in_64 (ty_int bty)) x smin @ (iconst cty (u64_from_imm64 y))))
        (if-let $true (u64_eq y (ty_smin cty)))
        (eq bty x smin))
+
+;; slt(x, SMIN+1) == eq(x, SMIN).
+(rule (simplify (slt (fits_in_64 (ty_int bty)) x (iconst cty (u64_from_imm64 y))))
+       (if-let $true (u64_eq y (u64_add (ty_smin cty) 1)))
+       (eq bty x (iconst cty (imm64 (ty_smin cty)))))
 
 ;; sgt(x, SMIN) == ne(x, SMIN).
 (rule (simplify (sgt (fits_in_64 (ty_int bty)) x smin @ (iconst cty (u64_from_imm64 y))))
@@ -144,6 +158,11 @@
 (rule (simplify (sge (fits_in_64 (ty_int bty)) x smax @ (iconst cty (u64_from_imm64 y))))
        (if-let $true (u64_eq y (ty_smax cty)))
        (eq bty x smax))
+
+;; sgt(x, SMAX-1) == eq(x, SMAX).
+(rule (simplify (sgt (fits_in_64 (ty_int bty)) x (iconst cty (u64_from_imm64 y))))
+       (if-let $true (u64_eq y (u64_sub (ty_smax cty) 1)))
+       (eq bty x (iconst cty (imm64 (ty_smax cty)))))
 
 ;; `band`/`bor` of 2 comparisons:
 (rule (simplify (band ty (icmp ty cc1 x y) (icmp ty cc2 x y)))
