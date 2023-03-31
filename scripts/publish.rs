@@ -64,6 +64,7 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "wasi-common",
     "wasi-cap-std-sync",
     "wasi-tokio",
+    "wasi-http",
     // other misc wasmtime crates
     "wasmtime-wasi",
     "wasmtime-wasi-crypto",
