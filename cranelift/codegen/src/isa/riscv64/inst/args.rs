@@ -4,8 +4,8 @@
 #![allow(dead_code)]
 use super::*;
 use crate::ir::condcodes::{CondCode, FloatCC};
+
 use crate::isa::riscv64::inst::{reg_name, reg_to_gpr_num};
-use crate::isa::riscv64::lower::isle::generated_code::Signedness;
 use crate::machinst::isle::WritableReg;
 
 use std::fmt::{Display, Formatter, Result};
@@ -1808,15 +1808,6 @@ impl AMO {
     }
     pub(crate) fn as_u32(self) -> u32 {
         self as u32
-    }
-}
-
-impl Signedness {
-    pub fn is_signed(self) -> bool {
-        match self {
-            Signedness::Signed => true,
-            Signedness::Unsigned => false,
-        }
     }
 }
 
