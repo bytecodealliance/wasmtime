@@ -1,5 +1,5 @@
 [package]
-name = "wasi-http"
+name = "wasmtime-wasi-http"
 version = "0.0.1"
 authors.workspace = true
 edition.workspace = true

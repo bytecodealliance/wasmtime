@@ -3221,9 +3221,9 @@ dependencies = [
  "tracing-subscriber",
  "wasi-cap-std-sync",
  "wasi-common",
- "wasi-http",
  "wasmtime",
  "wasmtime-wasi",
+ "wasmtime-wasi-http",
  "wat",
 ]
 
@@ -3638,6 +3638,7 @@ dependencies = [
 ]
 
 [[package]]
+<<<<<<< HEAD
 name = "wasi-http"
 version = "0.0.1"
 dependencies = [
@@ -3657,6 +3658,8 @@ dependencies = [
 ]
 
 [[package]]
+=======
+>>>>>>> b6a7055bd... Cleanups.
 name = "wasi-tokio"
 version = "8.0.0"
 dependencies = [
@@ -4001,7 +4004,6 @@ dependencies = [
  "tempfile",
  "test-programs",
  "tokio",
- "wasi-http",
  "wasm-coredump-builder",
  "wasmparser",
  "wasmtime",
@@ -4014,6 +4016,7 @@ dependencies = [
  "wasmtime-runtime",
  "wasmtime-wasi",
  "wasmtime-wasi-crypto",
+ "wasmtime-wasi-http",
  "wasmtime-wasi-nn",
  "wasmtime-wasi-threads",
  "wasmtime-wast",
@@ -4300,6 +4303,22 @@ dependencies = [
  "wasi-crypto",
  "wasmtime",
  "wiggle",
+]
+
+[[package]]
+name = "wasmtime-wasi-http"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "bytes",
+ "futures",
+ "http-body",
+ "http-body-util",
+ "hyper",
+ "thiserror",
+ "tokio",
+ "tokio-native-tls",
+ "wasmtime",
 ]
 
 [[package]]
