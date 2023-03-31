@@ -1,4 +1,4 @@
-#![allow(dead_code)]
+#![allow(dead_code, unused_imports)]
 //! Build program to generate a program which runs all the testsuites.
 //!
 //! By generating a separate `#[test]` test for each file, we allow cargo test
