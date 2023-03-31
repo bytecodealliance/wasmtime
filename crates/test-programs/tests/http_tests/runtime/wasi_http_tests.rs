@@ -1,8 +1,8 @@
 use anyhow::Context;
 use std::path::Path;
-use wasi_http::WasiHttp;
 use wasmtime::{Config, Engine, Linker, Module, Store};
 use wasmtime_wasi::{sync::WasiCtxBuilder, WasiCtx};
+use wasmtime_wasi_http::WasiHttp;
 
 pub fn instantiate_inherit_stdio(
     data: &[u8],
@@ -20,7 +20,7 @@ pub fn instantiate_inherit_stdio(
     }
 
     wasmtime_wasi::sync::add_to_linker(&mut linker, |cx: &mut Ctx| &mut cx.wasi)?;
-    wasi_http::add_to_linker(&mut linker, |cx: &mut Ctx| &mut cx.http)?;
+    wasmtime_wasi_http::add_to_linker(&mut linker, |cx: &mut Ctx| &mut cx.http)?;
 
     // Create our wasi context.
     let builder = WasiCtxBuilder::new().inherit_stdio().arg(bin_name)?;
