@@ -47,6 +47,27 @@
              (iconst _ (u64_from_imm64 1))))
       extend)
 
+;; Rewrite loose inequalities to strict inequalities:
+;; ule(x, c) == ult(x, c+1), for c != UMAX.
+(rule (simplify (ule (fits_in_64 (ty_int bty)) x (iconst cty (u64_from_imm64 c))))
+       (if-let $false (u64_eq c (ty_umax cty)))
+       (ult bty x (iconst cty (imm64 (u64_add c 1)))))
+
+;; uge(x, c) == ugt(x, c-1), for c != 0.
+(rule (simplify (uge (fits_in_64 (ty_int bty)) x (iconst cty (u64_from_imm64 c))))
+       (if-let $false (u64_eq c 0))
+       (ugt bty x (iconst cty (imm64 (u64_sub c 1)))))
+
+;; sle(x, c) == slt(x, c+1), for c != SMAX.
+(rule (simplify (sle (fits_in_64 (ty_int bty)) x (iconst cty (u64_from_imm64 c))))
+       (if-let $false (u64_eq c (ty_smax cty)))
+       (slt bty x (iconst cty (imm64 (u64_add c 1)))))
+
+;; sge(x, c) == sgt(x, c-1), for c != SMIN.
+(rule (simplify (sge (fits_in_64 (ty_int bty)) x (iconst cty (u64_from_imm64 c))))
+       (if-let $false (u64_eq c (ty_smin cty)))
+       (sgt bty x (iconst cty (imm64 (u64_sub c 1)))))
+
 ;; Comparisons against largest/smallest signed/unsigned values:
 ;; ult(x, 0) == false.
 (rule (simplify (ult (fits_in_64 (ty_int bty)) x zero @ (iconst _ (u64_from_imm64 0))))
