@@ -7,9 +7,9 @@
 
 use crate::machinst::{AllocationConsumer, RealReg, Reg};
 use crate::settings;
+use alloc::string::String;
 use alloc::string::ToString;
 use regalloc2::{MachineEnv, PReg, RegClass, VReg};
-use std::string::String;
 
 // Hardware encodings (note the special rax, rcx, rdx, rbx order).
 

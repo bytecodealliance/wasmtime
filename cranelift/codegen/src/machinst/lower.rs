@@ -20,9 +20,9 @@ use crate::machinst::{
 };
 use crate::{trace, CodegenResult};
 use alloc::vec::Vec;
+use core::fmt::Debug;
 use regalloc2::{MachineEnv, PRegSet};
 use smallvec::{smallvec, SmallVec};
-use std::fmt::Debug;
 
 use super::{VCodeBuildDirection, VRegAllocator};
 

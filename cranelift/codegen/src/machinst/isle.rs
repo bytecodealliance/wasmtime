@@ -1,8 +1,8 @@
 use crate::ir::{BlockCall, Value, ValueList};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
+use core::cell::Cell;
 use smallvec::SmallVec;
-use std::cell::Cell;
 
 pub use super::MachLabel;
 use super::RetPair;
@@ -83,7 +83,7 @@ macro_rules! isle_lower_prelude_methods {
 
         #[inline]
         fn output_builder_new(&mut self) -> InstOutputBuilder {
-            std::cell::Cell::new(InstOutput::new())
+            core::cell::Cell::new(InstOutput::new())
         }
 
         #[inline]

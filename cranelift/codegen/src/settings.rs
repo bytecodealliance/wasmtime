@@ -301,6 +301,7 @@ pub enum SetError {
     BadValue(String),
 }
 
+#[cfg(feature = "std")]
 impl std::error::Error for SetError {}
 
 impl fmt::Display for SetError {

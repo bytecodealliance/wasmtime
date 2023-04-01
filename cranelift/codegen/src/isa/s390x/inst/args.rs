@@ -6,7 +6,7 @@ use crate::isa::s390x::inst::*;
 use crate::machinst::MachLabel;
 use crate::machinst::{PrettyPrint, Reg};
 
-use std::string::String;
+use alloc::string::String;
 
 //=============================================================================
 // Instruction sub-components (memory addresses): definitions

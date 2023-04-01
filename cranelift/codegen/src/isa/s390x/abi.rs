@@ -80,9 +80,9 @@ use crate::machinst::{RealReg, Reg, RegClass, Writable};
 use crate::settings;
 use crate::{CodegenError, CodegenResult};
 use alloc::vec::Vec;
+use core::convert::TryFrom;
 use regalloc2::{PReg, PRegSet};
 use smallvec::{smallvec, SmallVec};
-use std::convert::TryFrom;
 
 // We use a generic implementation that factors out ABI commonalities.
 
@@ -311,12 +311,12 @@ impl ABIMachineSpec for S390xMachineDeps {
                 {
                     size
                 } else {
-                    std::cmp::max(size, 8)
+                    core::cmp::max(size, 8)
                 };
 
                 // Align the stack slot.
                 debug_assert!(slot_size.is_power_of_two());
-                let slot_align = std::cmp::min(slot_size, 8);
+                let slot_align = core::cmp::min(slot_size, 8);
                 next_stack = align_to(next_stack, slot_align);
 
                 // If the type is actually of smaller size (and the argument

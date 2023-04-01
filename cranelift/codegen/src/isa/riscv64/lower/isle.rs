@@ -21,10 +21,10 @@ use crate::{
     machinst::{ArgPair, InstOutput, Lower},
 };
 use crate::{isle_common_prelude_methods, isle_lower_prelude_methods};
+use alloc::boxed::Box;
+use alloc::vec::Vec;
+use core::convert::TryFrom;
 use regalloc2::PReg;
-use std::boxed::Box;
-use std::convert::TryFrom;
-use std::vec::Vec;
 
 type BoxCallInfo = Box<CallInfo>;
 type BoxCallIndInfo = Box<CallIndInfo>;
@@ -463,7 +463,7 @@ pub(crate) fn lower_branch(
 }
 
 /// construct destination according to ty.
-fn construct_dest<F: std::ops::FnMut(Type) -> WritableReg>(
+fn construct_dest<F: core::ops::FnMut(Type) -> WritableReg>(
     mut alloc: F,
     ty: Type,
 ) -> WritableValueRegs {

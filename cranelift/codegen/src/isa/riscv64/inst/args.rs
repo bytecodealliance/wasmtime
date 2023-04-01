@@ -8,7 +8,7 @@ use crate::ir::condcodes::{CondCode, FloatCC};
 use crate::isa::riscv64::inst::{reg_name, reg_to_gpr_num};
 use crate::machinst::isle::WritableReg;
 
-use std::fmt::{Display, Formatter, Result};
+use core::fmt::{Display, Formatter, Result};
 
 /// An addressing mode specified for a load/store operation.
 #[derive(Clone, Debug, Copy)]
@@ -1651,7 +1651,7 @@ pub enum CsrAddress {
     Vlenb = 0xc22,
 }
 
-impl std::fmt::Debug for CsrAddress {
+impl core::fmt::Debug for CsrAddress {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         write!(f, "0x{:x}", self.as_u32())
     }

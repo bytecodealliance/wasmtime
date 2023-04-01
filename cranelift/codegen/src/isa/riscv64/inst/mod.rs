@@ -15,11 +15,11 @@ use crate::{settings, CodegenError, CodegenResult};
 
 pub use crate::ir::condcodes::FloatCC;
 
+use alloc::boxed::Box;
+use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use regalloc2::{PRegSet, VReg};
 use smallvec::{smallvec, SmallVec};
-use std::boxed::Box;
-use std::string::{String, ToString};
 
 pub mod regs;
 pub use self::regs::*;
@@ -36,7 +36,7 @@ use crate::isa::riscv64::abi::Riscv64MachineDeps;
 #[cfg(test)]
 mod emit_tests;
 
-use std::fmt::{Display, Formatter};
+use core::fmt::{Display, Formatter};
 
 pub(crate) type OptionReg = Option<Reg>;
 pub(crate) type OptionImm12 = Option<Imm12>;
@@ -128,7 +128,7 @@ impl BranchTarget {
 }
 
 impl Display for BranchTarget {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         match self {
             BranchTarget::Label(l) => write!(f, "{}", l.to_string()),
             BranchTarget::ResolvedOffset(off) => write!(f, "{}", off),
@@ -1193,7 +1193,7 @@ impl Inst {
                 format!("{} {},{}", "lui", format_reg(rd.to_reg(), allocs), imm.bits)
             }
             &Inst::LoadConst32 { rd, imm } => {
-                use std::fmt::Write;
+                use core::fmt::Write;
 
                 let rd = format_reg(rd.to_reg(), allocs);
                 let mut buf = String::new();
@@ -1204,7 +1204,7 @@ impl Inst {
                 buf
             }
             &Inst::LoadConst64 { rd, imm } => {
-                use std::fmt::Write;
+                use core::fmt::Write;
 
                 let rd = format_reg(rd.to_reg(), allocs);
                 let mut buf = String::new();
@@ -1379,7 +1379,7 @@ impl Inst {
                 let mut s = "args".to_string();
                 let mut empty_allocs = AllocationConsumer::default();
                 for arg in args {
-                    use std::fmt::Write;
+                    use core::fmt::Write;
                     let preg = format_reg(arg.preg, &mut empty_allocs);
                     let def = format_reg(arg.vreg.to_reg(), allocs);
                     write!(&mut s, " {}={}", def, preg).unwrap();
@@ -1390,7 +1390,7 @@ impl Inst {
                 let mut s = "ret".to_string();
                 let mut empty_allocs = AllocationConsumer::default();
                 for ret in rets {
-                    use std::fmt::Write;
+                    use core::fmt::Write;
                     let preg = format_reg(ret.preg, &mut empty_allocs);
                     let vreg = format_reg(ret.vreg, allocs);
                     write!(&mut s, " {}={}", vreg, preg).unwrap();

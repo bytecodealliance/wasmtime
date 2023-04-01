@@ -102,8 +102,8 @@ mod tests {
     use crate::isa::{lookup, CallConv};
     use crate::settings::{builder, Flags};
     use crate::Context;
+    use core::str::FromStr;
     use gimli::write::Address;
-    use std::str::FromStr;
     use target_lexicon::triple;
 
     #[test]

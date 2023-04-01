@@ -11,9 +11,9 @@ use crate::{CodegenError, CodegenResult};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use args::*;
+use core::convert::TryFrom;
 use regalloc2::{PRegSet, VReg};
 use smallvec::{smallvec, SmallVec};
-use std::convert::TryFrom;
 
 /// This is the limit for the size of argument and return-value areas on the
 /// stack. We place a reasonable limit here to avoid integer overflow issues
@@ -201,7 +201,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                     let size = if args_or_rets == ArgsOrRets::Rets && call_conv.extends_wasmtime() {
                         size
                     } else {
-                        std::cmp::max(size, 8)
+                        core::cmp::max(size, 8)
                     };
                     // Align.
                     debug_assert!(size.is_power_of_two());

@@ -9,11 +9,11 @@ use crate::isa::CallConv;
 use crate::{machinst::*, trace};
 use crate::{settings, CodegenError, CodegenResult};
 use alloc::boxed::Box;
+use alloc::string::{String, ToString};
 use alloc::vec::Vec;
+use core::fmt;
 use regalloc2::{Allocation, PRegSet, VReg};
 use smallvec::{smallvec, SmallVec};
-use std::fmt;
-use std::string::{String, ToString};
 
 pub mod args;
 mod emit;
@@ -48,7 +48,7 @@ pub struct CallInfo {
 fn inst_size_test() {
     // This test will help with unintentionally growing the size
     // of the Inst enum.
-    assert_eq!(40, std::mem::size_of::<Inst>());
+    assert_eq!(40, core::mem::size_of::<Inst>());
 }
 
 pub(crate) fn low32_will_sign_extend_to_64(x: u64) -> bool {
@@ -1642,7 +1642,7 @@ impl PrettyPrint for Inst {
             Inst::Args { args } => {
                 let mut s = "args".to_string();
                 for arg in args {
-                    use std::fmt::Write;
+                    use core::fmt::Write;
                     let preg = regs::show_reg(arg.preg);
                     let def = pretty_print_reg(arg.vreg.to_reg(), 8, allocs);
                     write!(&mut s, " {}={}", def, preg).unwrap();
@@ -1653,7 +1653,7 @@ impl PrettyPrint for Inst {
             Inst::Ret { rets } => {
                 let mut s = "ret".to_string();
                 for ret in rets {
-                    use std::fmt::Write;
+                    use core::fmt::Write;
                     let preg = regs::show_reg(ret.preg);
                     let vreg = pretty_print_reg(ret.vreg, 8, allocs);
                     write!(&mut s, " {}={}", vreg, preg).unwrap();
@@ -1803,7 +1803,7 @@ impl PrettyPrint for Inst {
                 dst,
                 tmp,
             } => {
-                use std::fmt::Write;
+                use core::fmt::Write;
 
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
                 let tmp = allocs.next(tmp.to_reg().to_reg());
@@ -2472,7 +2472,7 @@ impl MachInst for Inst {
     }
 
     fn gen_nop(preferred_size: usize) -> Inst {
-        Inst::nop(std::cmp::min(preferred_size, 15) as u8)
+        Inst::nop(core::cmp::min(preferred_size, 15) as u8)
     }
 
     fn rc_for_type(ty: Type) -> CodegenResult<(&'static [RegClass], &'static [Type])> {

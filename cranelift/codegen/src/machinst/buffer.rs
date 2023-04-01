@@ -148,12 +148,12 @@ use crate::machinst::{
 };
 use crate::timing;
 use crate::trace;
+use alloc::string::String;
+use alloc::vec::Vec;
+use core::convert::TryFrom;
+use core::mem;
 use cranelift_entity::{entity_impl, SecondaryMap};
 use smallvec::SmallVec;
-use std::convert::TryFrom;
-use std::mem;
-use std::string::String;
-use std::vec::Vec;
 
 #[cfg(feature = "enable-serde")]
 use serde::{Deserialize, Serialize};
@@ -1500,7 +1500,7 @@ impl<T: CompilePhase> MachBufferFinalized<T> {
     /// Return the code in this mach buffer as a hex string for testing purposes.
     pub fn stringify_code_bytes(&self) -> String {
         // This is pretty lame, but whatever ..
-        use std::fmt::Write;
+        use core::fmt::Write;
         let mut s = String::with_capacity(self.data.len() * 2);
         for b in &self.data {
             write!(&mut s, "{:02X}", b).unwrap();
@@ -1772,8 +1772,8 @@ mod test {
     use crate::isa::aarch64::inst::{BranchTarget, CondBrKind, EmitInfo, Inst};
     use crate::machinst::MachInstEmit;
     use crate::settings;
-    use std::default::Default;
-    use std::vec::Vec;
+    use alloc::vec::Vec;
+    use core::default::Default;
 
     fn label(n: u32) -> MachLabel {
         MachLabel::from_block(BlockIndex::new(n as usize))

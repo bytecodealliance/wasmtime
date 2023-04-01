@@ -4,8 +4,8 @@
 //! node-internal data references some other storage (e.g., offsets into
 //! an array or pool of shared data).
 
+use core::hash::{Hash, Hasher};
 use hashbrown::raw::RawTable;
-use std::hash::{Hash, Hasher};
 
 /// Trait that allows for equality comparison given some external
 /// context.
@@ -94,7 +94,7 @@ impl<K, V> CtxHashMap<K, V> {
         }) {
             Some(bucket) => {
                 let data = unsafe { bucket.as_mut() };
-                Some(std::mem::replace(&mut data.v, v))
+                Some(core::mem::replace(&mut data.v, v))
             }
             None => {
                 let data = BucketData { hash, k, v };
@@ -125,7 +125,7 @@ impl<K, V> CtxHashMap<K, V> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use std::hash::Hash;
+    use core::hash::Hash;
 
     #[derive(Clone, Copy, Debug)]
     struct Key {
