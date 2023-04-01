@@ -1,4 +1,5 @@
 //! Implements the wasi-nn API.
+use openvino::TensorDesc;
 use crate::ctx::WasiNnResult as Result;
 use crate::witx::types::{
     ExecutionTarget, Graph, GraphBuilderArray, GraphEncoding, GraphExecutionContext, Tensor,
@@ -39,6 +40,14 @@ impl<'a> WasiEphemeralNn for WasiNnCtx {
         };
         let graph_id = self.graphs.insert(graph);
         Ok(graph_id)
+    }
+
+    fn register(
+        &mut self,
+        url: &GuestPtr<'_, u8>,
+        name: &GuestPtr<'_, u8>,
+    ) -> Result<()> {
+        Ok(())
     }
 
     fn init_execution_context(&mut self, graph_id: Graph) -> Result<GraphExecutionContext> {
