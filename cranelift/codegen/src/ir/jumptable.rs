@@ -20,7 +20,7 @@ use serde_derive::{Deserialize, Serialize};
 /// It can be accessed through the `default_block` and `default_block_mut` functions. All blocks
 /// may be iterated using the `all_branches` and `all_branches_mut` functions, which will both
 /// iterate over the default block first.
-#[derive(Clone, PartialEq, Hash)]
+#[derive(Debug, Clone, PartialEq, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct JumpTableData {
     // Table entries.
