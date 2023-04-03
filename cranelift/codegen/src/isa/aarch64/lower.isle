@@ -2682,16 +2682,18 @@
            (y_hi Reg (value_regs_get y_regs 1)))
         ;; cannot use the with_flags helper here but it should be fine right now
         (let    
-            ((lo Reg (alu_rrr alu_op1 $I64 x_lo y_lo))
-             (hi Reg (alu_rrr alu_op2 $I64 x_hi y_hi))
-             (of WritableReg (let 
-                                    ((dst WritableReg (temp_writable_reg $I64))
-                                    (_ Unit (emit (MInst.CSet dst cond))))
-                              dst)
-            ))
+            ((lo_inst ProducesFlags (alu_rrr_with_flags_paired $I64 x_lo y_lo alu_op1))
+             (hi_inst ProducesFlags (alu_rrr_with_flags_paired $I64 x_hi y_hi alu_op2))
+             (of_inst ConsumesFlags (cset_paired cond))
+             
+             (result InstOutputRef (output_to_output_ref (with_flags_extended (produces_flags_concat lo_inst hi_inst) of_inst)))
+
+             (lo ValueRegs (inst_output_get result 0))
+             (hi ValueRegs (inst_output_get result 1))
+             (of ValueRegs (inst_output_get result 2)))
             (output_pair
-                  (value_regs lo hi)
-                  (writable_reg_to_reg of))))
+                  (value_regs (value_regs_get lo 0) (value_regs_get hi 0))
+                  of)))
 )
 
 ;;;; Rules for `uadd_overflow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

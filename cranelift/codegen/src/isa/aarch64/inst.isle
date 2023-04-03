@@ -2359,7 +2359,7 @@
 ;; immediately by the `MInst.CCmp` instruction.
 (decl ccmp (OperandSize Reg Reg NZCV Cond ProducesFlags) ProducesFlags)
 (rule (ccmp size rn rm nzcv cond inst_input)
-      (produces_flags_append inst_input (MInst.CCmp size rn rm nzcv cond)))
+      (produces_flags_concat inst_input (ProducesFlags.ProducesFlagsSideEffect (MInst.CCmp size rn rm nzcv cond))))
 
 ;; Helper for generating `MInst.CCmpImm` instructions.
 (decl ccmp_imm (OperandSize Reg UImm5 NZCV Cond) ConsumesFlags)
