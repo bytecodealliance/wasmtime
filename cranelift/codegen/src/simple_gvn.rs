@@ -67,7 +67,6 @@ impl<'a, 'f: 'a> HashKey<'a, 'f> {
                 }
                 InstructionData::IntCompare { opcode, args, cond }
             }
-            // TODO: is `fcmp` always commutative?
             InstructionData::FloatCompare {
                 opcode,
                 mut args,

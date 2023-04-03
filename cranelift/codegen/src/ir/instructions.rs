@@ -221,7 +221,6 @@ impl Opcode {
             | Opcode::SaddSat => true,
 
             Opcode::Fadd | Opcode::Fmul => true,
-            // TODO: are these really commutative?
             Opcode::Fmin | Opcode::Fmax => true,
 
             _ => false,
