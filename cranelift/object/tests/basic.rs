@@ -40,7 +40,7 @@ fn define_simple_function(module: &mut ObjectModule, ctrl_plane: &mut ControlPla
     };
 
     let func_id = module
-        .declare_function("abc", Linkage::Local, &sig, ctrl_plane)
+        .declare_function("abc", Linkage::Local, &sig)
         .unwrap();
 
     let mut ctx = Context::new();
@@ -166,7 +166,7 @@ fn libcall_function() {
     };
 
     let func_id = module
-        .declare_function("function", Linkage::Local, &sig, ctrl_plane)
+        .declare_function("function", Linkage::Local, &sig)
         .unwrap();
 
     let mut ctx = Context::new();
@@ -185,7 +185,7 @@ fn libcall_function() {
         signature.params.push(AbiParam::new(int));
         signature.returns.push(AbiParam::new(int));
         let callee = module
-            .declare_function("malloc", Linkage::Import, &signature, ctrl_plane)
+            .declare_function("malloc", Linkage::Import, &signature)
             .expect("declare malloc function");
         let local_callee = module.declare_func_in_func(callee, &mut bcx.func);
         let argument_exprs = vec![size];
@@ -207,7 +207,6 @@ fn libcall_function() {
 #[test]
 #[should_panic(expected = "has a null byte, which is disallowed")]
 fn reject_nul_byte_symbol_for_func() {
-    let ctrl_plane = &mut ControlPlane::default();
     let flag_builder = settings::builder();
     let isa_builder = cranelift_codegen::isa::lookup_by_name("x86_64-unknown-linux-gnu").unwrap();
     let isa = isa_builder
@@ -223,19 +222,13 @@ fn reject_nul_byte_symbol_for_func() {
     };
 
     let _ = module
-        .declare_function(
-            "function\u{0}with\u{0}nul\u{0}bytes",
-            Linkage::Local,
-            &sig,
-            ctrl_plane,
-        )
+        .declare_function("function\u{0}with\u{0}nul\u{0}bytes", Linkage::Local, &sig)
         .unwrap();
 }
 
 #[test]
 #[should_panic(expected = "has a null byte, which is disallowed")]
 fn reject_nul_byte_symbol_for_data() {
-    let ctrl_plane = &mut ControlPlane::default();
     let flag_builder = settings::builder();
     let isa_builder = cranelift_codegen::isa::lookup_by_name("x86_64-unknown-linux-gnu").unwrap();
     let isa = isa_builder

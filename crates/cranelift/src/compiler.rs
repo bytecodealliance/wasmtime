@@ -13,6 +13,7 @@ use cranelift_codegen::print_errors::pretty_error;
 use cranelift_codegen::Context;
 use cranelift_codegen::{CompiledCode, MachSrcLoc, MachStackMap};
 use cranelift_codegen::{MachReloc, MachTrap};
+use cranelift_control::ControlPlane;
 use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_frontend::FunctionBuilder;
 use cranelift_wasm::{
@@ -67,7 +68,6 @@ impl Default for CompilerContext {
 /// A compiler that compiles a WebAssembly module with Compiler, translating
 /// the Wasm to Compiler IR, optimizing it and then translating to assembly.
 pub(crate) struct Compiler {
-    // TODO chaos: can a context be requested in different orders?
     contexts: Mutex<Vec<CompilerContext>>,
     isa: OwnedTargetIsa,
     linkopts: LinkOptions,
@@ -117,7 +117,6 @@ impl Compiler {
     }
 
     fn take_context(&self) -> CompilerContext {
-        // TODO: chaos In chaos mode, we want to construct the ControlPlane ourself
         let candidate = self.contexts.lock().unwrap().pop();
         candidate
             .map(|mut ctx| {
@@ -138,7 +137,6 @@ impl Compiler {
     }
 
     fn save_context(&self, ctx: CompilerContext) {
-        // TODO chaos: In chaos mode, we do not want to recycle contexts
         self.contexts.lock().unwrap().push(ctx);
     }
 
@@ -615,7 +613,7 @@ fn compile_uncached<'a>(
 ) -> Result<(&'a CompiledCode, Vec<u8>), CompileError> {
     let mut code_buf = Vec::new();
     let compiled_code = context
-        .compile_and_emit(isa, &mut code_buf)
+        .compile_and_emit(isa, &mut code_buf, &mut ControlPlane::default())
         .map_err(|error| CompileError::Codegen(pretty_error(&error.func, error.inner)))?;
     Ok((compiled_code, code_buf))
 }

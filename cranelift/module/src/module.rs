@@ -14,6 +14,7 @@ use cranelift_codegen::ir::Function;
 use cranelift_codegen::settings::SetError;
 use cranelift_codegen::{binemit, MachReloc};
 use cranelift_codegen::{ir, isa, CodegenError, CompileError, Context};
+use cranelift_control::ControlPlane;
 use std::borrow::ToOwned;
 use std::string::String;
 
@@ -658,6 +659,7 @@ pub trait Module {
         &mut self,
         func: FuncId,
         ctx: &mut Context,
+        ctrl_plane: &mut ControlPlane,
     ) -> ModuleResult<ModuleCompiledFunction>;
 
     /// Define a function, taking the function body from the given `bytes`.
@@ -760,8 +762,9 @@ impl<M: Module> Module for &mut M {
         &mut self,
         func: FuncId,
         ctx: &mut Context,
+        ctrl_plane: &mut ControlPlane,
     ) -> ModuleResult<ModuleCompiledFunction> {
-        (**self).define_function(func, ctx)
+        (**self).define_function(func, ctx, ctrl_plane)
     }
 
     fn define_function_bytes(

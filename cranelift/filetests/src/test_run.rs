@@ -106,7 +106,7 @@ fn compile_testfile(
     // Copy the requested ISA flags into the host ISA and use that.
     let isa = build_host_isa(false, flags.clone(), isa.isa_flags());
 
-    let mut tfc = TestFileCompiler::new(isa, panic!(""));
+    let mut tfc = TestFileCompiler::new(isa);
     tfc.add_testfile(testfile)?;
     Ok(tfc.compile()?)
 }

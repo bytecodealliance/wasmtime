@@ -57,9 +57,6 @@ pub struct Context {
 
     /// Flag: do we want a disassembly with the CompiledCode?
     pub want_disasm: bool,
-
-    /// TODO chaos: is this the right location to hold ownership?
-    pub ctrl_plane: ControlPlane,
 }
 
 impl Context {
@@ -69,11 +66,6 @@ impl Context {
     /// needless allocator thrashing.
     pub fn new() -> Self {
         Self::for_function(Function::new())
-    }
-
-    /// TODO:
-    pub fn new_with_ctrl_plane(ctrl_plane: ControlPlane) -> Self {
-        Self::for_function_with_ctrl_plane(Function::new(), ctrl_plane)
     }
 
     /// Allocate a new compilation context with an existing Function.
@@ -88,20 +80,6 @@ impl Context {
             loop_analysis: LoopAnalysis::new(),
             compiled_code: None,
             want_disasm: false,
-            ctrl_plane: ControlPlane::default(),
-        }
-    }
-
-    /// TODO:
-    pub fn for_function_with_ctrl_plane(func: Function, ctrl_plane: ControlPlane) -> Self {
-        Self {
-            func,
-            cfg: ControlFlowGraph::new(),
-            domtree: DominatorTree::new(),
-            loop_analysis: LoopAnalysis::new(),
-            compiled_code: None,
-            want_disasm: false,
-            ctrl_plane,
         }
     }
 
@@ -147,8 +125,9 @@ impl Context {
         &mut self,
         isa: &dyn TargetIsa,
         mem: &mut Vec<u8>,
+        ctrl_plane: &mut ControlPlane,
     ) -> CompileResult<&CompiledCode> {
-        let compiled_code = self.compile(isa)?;
+        let compiled_code = self.compile(isa, ctrl_plane)?;
         mem.extend_from_slice(compiled_code.code_buffer());
         Ok(compiled_code)
     }
@@ -156,19 +135,18 @@ impl Context {
     /// Internally compiles the function into a stencil.
     ///
     /// Public only for testing and fuzzing purposes.
-    pub fn compile_stencil(&mut self, isa: &dyn TargetIsa) -> CodegenResult<CompiledCodeStencil> {
+    pub fn compile_stencil(
+        &mut self,
+        isa: &dyn TargetIsa,
+        ctrl_plane: &mut ControlPlane,
+    ) -> CodegenResult<CompiledCodeStencil> {
         let _tt = timing::compile();
 
         self.verify_if(isa)?;
 
         self.optimize(isa)?;
 
-        isa.compile_function(
-            &self.func,
-            &self.domtree,
-            self.want_disasm,
-            &mut self.ctrl_plane,
-        )
+        isa.compile_function(&self.func, &self.domtree, self.want_disasm, ctrl_plane)
     }
 
     /// Optimize the function, performing all compilation steps up to
@@ -240,11 +218,17 @@ impl Context {
     /// code sink.
     ///
     /// Returns information about the function's code and read-only data.
-    pub fn compile(&mut self, isa: &dyn TargetIsa) -> CompileResult<&CompiledCode> {
-        let stencil = self.compile_stencil(isa).map_err(|error| CompileError {
-            inner: error,
-            func: &self.func,
-        })?;
+    pub fn compile(
+        &mut self,
+        isa: &dyn TargetIsa,
+        ctrl_plane: &mut ControlPlane,
+    ) -> CompileResult<&CompiledCode> {
+        let stencil = self
+            .compile_stencil(isa, ctrl_plane)
+            .map_err(|error| CompileError {
+                inner: error,
+                func: &self.func,
+            })?;
         Ok(self
             .compiled_code
             .insert(stencil.apply_params(&self.func.params)))

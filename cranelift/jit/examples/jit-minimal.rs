@@ -1,6 +1,7 @@
 use codegen::ir::UserFuncName;
 use cranelift::prelude::*;
 use cranelift_codegen::settings::{self, Configurable};
+use cranelift_control::ControlPlane;
 use cranelift_jit::{JITBuilder, JITModule};
 use cranelift_module::{default_libcall_names, Linkage, Module};
 use std::mem;
@@ -51,7 +52,10 @@ fn main() {
         bcx.seal_all_blocks();
         bcx.finalize();
     }
-    module.define_function(func_a, &mut ctx).unwrap();
+    let ctrl_plane = &mut ControlPlane::default();
+    module
+        .define_function(func_a, &mut ctx, ctrl_plane)
+        .unwrap();
     module.clear_context(&mut ctx);
 
     ctx.func.signature = sig_b;
@@ -74,7 +78,9 @@ fn main() {
         bcx.seal_all_blocks();
         bcx.finalize();
     }
-    module.define_function(func_b, &mut ctx).unwrap();
+    module
+        .define_function(func_b, &mut ctx, ctrl_plane)
+        .unwrap();
     module.clear_context(&mut ctx);
 
     // Perform linking.

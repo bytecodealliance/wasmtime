@@ -8,6 +8,7 @@ use cranelift_codegen::{
     binemit::{Addend, CodeOffset, Reloc},
     CodegenError,
 };
+use cranelift_control::ControlPlane;
 use cranelift_module::{
     DataContext, DataDescription, DataId, FuncId, Init, Linkage, Module, ModuleCompiledFunction,
     ModuleDeclarations, ModuleError, ModuleExtName, ModuleReloc, ModuleResult,
@@ -319,11 +320,12 @@ impl Module for ObjectModule {
         &mut self,
         func_id: FuncId,
         ctx: &mut cranelift_codegen::Context,
+        ctrl_plane: &mut ControlPlane,
     ) -> ModuleResult<ModuleCompiledFunction> {
         info!("defining function {}: {}", func_id, ctx.func.display());
         let mut code: Vec<u8> = Vec::new();
 
-        let res = ctx.compile_and_emit(self.isa(), &mut code)?;
+        let res = ctx.compile_and_emit(self.isa(), &mut code, ctrl_plane)?;
         let alignment = res.alignment as u64;
 
         self.define_function_bytes(

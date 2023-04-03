@@ -10,7 +10,6 @@ use cranelift_module::*;
 
 #[test]
 fn error_on_incompatible_sig_in_declare_function() {
-    let ctrl_plane = &mut ControlPlane::default();
     let mut flag_builder = settings::builder();
     flag_builder.set("use_colocated_libcalls", "false").unwrap();
     // FIXME set back to true once the x64 backend supports it.
@@ -29,16 +28,16 @@ fn error_on_incompatible_sig_in_declare_function() {
         call_conv: CallConv::SystemV,
     };
     module
-        .declare_function("abc", Linkage::Local, &sig, ctrl_plane)
+        .declare_function("abc", Linkage::Local, &sig)
         .unwrap();
     sig.params[0] = AbiParam::new(types::I32);
     module
-        .declare_function("abc", Linkage::Local, &sig, ctrl_plane)
+        .declare_function("abc", Linkage::Local, &sig)
         .err()
         .unwrap(); // Make sure this is an error
 }
 
-fn define_simple_function(module: &mut JITModule, ctrl_plane: &mut ControlPlane) -> FuncId {
+fn define_simple_function(module: &mut JITModule) -> FuncId {
     let sig = Signature {
         params: vec![],
         returns: vec![],
@@ -46,7 +45,7 @@ fn define_simple_function(module: &mut JITModule, ctrl_plane: &mut ControlPlane)
     };
 
     let func_id = module
-        .declare_function("abc", Linkage::Local, &sig, ctrl_plane)
+        .declare_function("abc", Linkage::Local, &sig)
         .unwrap();
 
     let mut ctx = Context::new();
@@ -60,7 +59,7 @@ fn define_simple_function(module: &mut JITModule, ctrl_plane: &mut ControlPlane)
     }
 
     module
-        .define_function(func_id, &mut ctx, ctrl_plane)
+        .define_function(func_id, &mut ctx, &mut ControlPlane::default())
         .unwrap();
 
     func_id
@@ -69,7 +68,6 @@ fn define_simple_function(module: &mut JITModule, ctrl_plane: &mut ControlPlane)
 #[test]
 #[should_panic(expected = "Result::unwrap()` on an `Err` value: DuplicateDefinition(\"abc\")")]
 fn panic_on_define_after_finalize() {
-    let ctrl_plane = &mut ControlPlane::default();
     let mut flag_builder = settings::builder();
     flag_builder.set("use_colocated_libcalls", "false").unwrap();
     // FIXME set back to true once the x64 backend supports it.
@@ -82,8 +80,8 @@ fn panic_on_define_after_finalize() {
         .unwrap();
     let mut module = JITModule::new(JITBuilder::with_isa(isa, default_libcall_names()));
 
-    define_simple_function(&mut module, ctrl_plane);
-    define_simple_function(&mut module, ctrl_plane);
+    define_simple_function(&mut module);
+    define_simple_function(&mut module);
 }
 
 #[test]
@@ -161,7 +159,6 @@ fn switch_error() {
 
 #[test]
 fn libcall_function() {
-    let ctrl_plane = &mut ControlPlane::default();
     let mut flag_builder = settings::builder();
     flag_builder.set("use_colocated_libcalls", "false").unwrap();
     // FIXME set back to true once the x64 backend supports it.
@@ -181,7 +178,7 @@ fn libcall_function() {
     };
 
     let func_id = module
-        .declare_function("function", Linkage::Local, &sig, ctrl_plane)
+        .declare_function("function", Linkage::Local, &sig)
         .unwrap();
 
     let mut ctx = Context::new();
@@ -201,7 +198,7 @@ fn libcall_function() {
         signature.params.push(AbiParam::new(int));
         signature.returns.push(AbiParam::new(int));
         let callee = module
-            .declare_function("malloc", Linkage::Import, &signature, ctrl_plane)
+            .declare_function("malloc", Linkage::Import, &signature)
             .expect("declare malloc function");
         let local_callee = module.declare_func_in_func(callee, &mut bcx.func);
         let argument_exprs = vec![size];
@@ -214,7 +211,7 @@ fn libcall_function() {
     }
 
     module
-        .define_function(func_id, &mut ctx, ctrl_plane)
+        .define_function(func_id, &mut ctx, &mut ControlPlane::default())
         .unwrap();
 
     module.finalize_definitions().unwrap();

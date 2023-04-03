@@ -45,11 +45,11 @@ impl<'r, 'data> FuzzGen<'r, 'data>
 where
     'data: 'r,
 {
-    pub fn new(u: &'r mut Unstructured<'data>) -> anyhow::Result<Self> {
-        Ok(Self {
+    pub fn new(u: &'r mut Unstructured<'data>) -> Self {
+        Self {
             u,
             config: Config::default(),
-        })
+        }
     }
 
     pub fn generate_signature(&mut self, architecture: Architecture) -> Result<Signature> {
@@ -106,7 +106,7 @@ where
         // This is something that we can enable via flags for the compiled version, however
         // the interpreter won't get that version, so call that pass manually here.
 
-        let mut ctx = Context::for_function_with_ctrl_plane(func, self.u.arbitrary()?);
+        let mut ctx = Context::for_function(func);
         // Assume that we are generating this function for the current ISA.
         // We disable the verifier here, since if it fails it prevents a test case from
         // being generated and formatted by `cargo fuzz fmt`.
