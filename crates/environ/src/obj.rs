@@ -166,4 +166,6 @@ libcalls! {
     CeilF64 = "libcall_ceilf64"
     TruncF32 = "libcall_truncf32"
     TruncF64 = "libcall_truncf64"
+    FmaF32 = "libcall_fmaf32"
+    FmaF64 = "libcall_fmaf64"
 }

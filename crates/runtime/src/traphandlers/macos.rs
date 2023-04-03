@@ -75,7 +75,18 @@ mod mach_addons {
         pub static NDR_record: NDR_record_t;
     }
 
-    #[repr(C)]
+    // Note that this is copied from Gecko at
+    //
+    // https://searchfox.org/mozilla-central/rev/ed93119be4818da1509bbcb7b28e245853eeedd5/js/src/wasm/WasmSignalHandlers.cpp#583-601
+    //
+    // which distinctly diverges from the actual version of this in the header
+    // files provided by macOS, notably in the `code` field which uses `i64`
+    // instead of `i32`.
+    //
+    // Also note the `packed(4)` here which forcibly decreases alignment to 4 to
+    // additionally match what mach expects (apparently, I wish I had a better
+    // reference for this).
+    #[repr(C, packed(4))]
     #[allow(dead_code)]
     #[derive(Copy, Clone, Debug)]
     pub struct __Request__exception_raise_t {
@@ -88,6 +99,11 @@ mod mach_addons {
         pub NDR: NDR_record_t,
         pub exception: exception_type_t,
         pub codeCnt: mach_msg_type_number_t,
+
+        // Note that this is a divergence from the C headers which use
+        // `integer_t` here for this field which is a `c_int`. That isn't
+        // actually reflecting reality apparently though because if `c_int` is
+        // used here then the structure is too small to receive a message.
         pub code: [i64; 2],
     }
 
@@ -172,6 +188,7 @@ pub unsafe fn platform_init() {
 // This is largely just copied from SpiderMonkey.
 #[repr(C)]
 #[allow(dead_code)]
+#[derive(Debug)]
 struct ExceptionRequest {
     body: __Request__exception_raise_t,
     trailer: mach_msg_trailer_t,
@@ -244,9 +261,19 @@ unsafe fn handle_exception(request: &mut ExceptionRequest) -> bool {
     // First make sure that this exception is one that we actually expect to
     // get raised by wasm code. All other exceptions we safely ignore.
     match request.body.exception as u32 {
-        EXC_BAD_ACCESS | EXC_BAD_INSTRUCTION => {}
+        EXC_BAD_ACCESS | EXC_BAD_INSTRUCTION | EXC_ARITHMETIC => {}
         _ => return false,
     }
+
+    // For `EXC_BAD_ACCESS` the faulting address is listed as the "subcode" in
+    // the second `code` field. If we're ever interested in it the first code
+    // field has a `kern_return_t` describing the kind of failure (e.g. SIGSEGV
+    // vs SIGBUS), but we're not interested in that right now.
+    let (fault1, fault2) = if request.body.exception as u32 == EXC_BAD_ACCESS {
+        (1, request.body.code[1] as usize)
+    } else {
+        (0, 0)
+    };
 
     // Depending on the current architecture various bits and pieces of this
     // will change. This is expected to get filled out for other macos
@@ -279,7 +306,7 @@ unsafe fn handle_exception(request: &mut ExceptionRequest) -> bool {
                 state.__rbp as usize,
             );
 
-            let resume = |state: &mut ThreadState, pc: usize, fp: usize| {
+            let resume = |state: &mut ThreadState, pc: usize, fp: usize, fault1: usize, fault2: usize| {
                 // The x86_64 ABI requires a 16-byte stack alignment for
                 // functions, so typically we'll be 16-byte aligned. In this
                 // case we simulate a `call` instruction by decrementing the
@@ -306,6 +333,8 @@ unsafe fn handle_exception(request: &mut ExceptionRequest) -> bool {
                 state.__rip = unwind as u64;
                 state.__rdi = pc as u64;
                 state.__rsi = fp as u64;
+                state.__rdx = fault1 as u64;
+                state.__rcx = fault2 as u64;
             };
             let mut thread_state = ThreadState::new();
         } else if #[cfg(target_arch = "aarch64")] {
@@ -318,7 +347,7 @@ unsafe fn handle_exception(request: &mut ExceptionRequest) -> bool {
                 state.__fp as usize,
             );
 
-            let resume = |state: &mut ThreadState, pc: usize, fp: usize| {
+            let resume = |state: &mut ThreadState, pc: usize, fp: usize, fault1: usize, fault2: usize| {
                 // Clobber LR with the faulting PC, so unwinding resumes at the
                 // faulting instruction. The previous value of LR has been saved
                 // by the callee (in Cranelift generated code), so no need to
@@ -329,6 +358,8 @@ unsafe fn handle_exception(request: &mut ExceptionRequest) -> bool {
                 // it looks like a call to unwind.
                 state.__x[0] = pc as u64;
                 state.__x[1] = fp as u64;
+                state.__x[2] = fault1 as u64;
+                state.__x[3] = fault2 as u64;
                 state.__pc = unwind as u64;
             };
             let mut thread_state = mem::zeroed::<ThreadState>();
@@ -373,7 +404,7 @@ unsafe fn handle_exception(request: &mut ExceptionRequest) -> bool {
     // force the thread itself to trap. The thread's register state is
     // configured to resume in the `unwind` function below, we update the
     // thread's register state, and then we're off to the races.
-    resume(&mut thread_state, pc as usize, fp);
+    resume(&mut thread_state, pc as usize, fp, fault1, fault2);
     let kret = thread_set_state(
         origin_thread,
         thread_state_flavor,
@@ -390,10 +421,20 @@ unsafe fn handle_exception(request: &mut ExceptionRequest) -> bool {
 /// a native backtrace once we've switched back to the thread itself. After
 /// the backtrace is captured we can do the usual `longjmp` back to the source
 /// of the wasm code.
-unsafe extern "C" fn unwind(wasm_pc: *const u8, wasm_fp: usize) -> ! {
+unsafe extern "C" fn unwind(
+    wasm_pc: *const u8,
+    wasm_fp: usize,
+    has_faulting_addr: usize,
+    faulting_addr: usize,
+) -> ! {
     let jmp_buf = tls::with(|state| {
         let state = state.unwrap();
-        state.set_jit_trap(wasm_pc, wasm_fp);
+        let faulting_addr = if has_faulting_addr != 0 {
+            Some(faulting_addr)
+        } else {
+            None
+        };
+        state.set_jit_trap(wasm_pc, wasm_fp, faulting_addr);
         state.jmp_buf.get()
     });
     debug_assert!(!jmp_buf.is_null());
@@ -424,7 +465,7 @@ pub fn lazy_per_thread_init() {
         let this_thread = mach_thread_self();
         let kret = thread_set_exception_ports(
             this_thread,
-            EXC_MASK_BAD_ACCESS | EXC_MASK_BAD_INSTRUCTION,
+            EXC_MASK_BAD_ACCESS | EXC_MASK_BAD_INSTRUCTION | EXC_MASK_ARITHMETIC,
             WASMTIME_PORT,
             EXCEPTION_DEFAULT | MACH_EXCEPTION_CODES,
             mach_addons::THREAD_STATE_NONE,

@@ -43,14 +43,6 @@
 (decl value_type (Type) Value)
 (extern extractor infallible value_type value_type)
 
-(decl pure u32_add (u32 u32) u32)
-(extern constructor u32_add u32_add)
-
-;; Pure/fallible constructor that tries to add two `u32`s, interpreted
-;; as signed values, and fails to match on overflow.
-(decl pure partial s32_add_fallible (u32 u32) u32)
-(extern constructor s32_add_fallible s32_add_fallible)
-
 ;; Extractor that matches a `u32` only if non-negative.
 (decl u32_nonnegative (u32) u32)
 (extern extractor u32_nonnegative u32_nonnegative)
@@ -83,9 +75,6 @@
 (decl uimm8 (u8) Imm64)
 (extern extractor uimm8 uimm8)
 
-(decl pure u8_and (u8 u8) u8)
-(extern constructor u8_and u8_and)
-
 ;;;; Primitive Type Conversions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (decl pure u8_as_u32 (u8) u32)
@@ -99,11 +88,35 @@
 
 (decl pure u32_as_u64 (u32) u64)
 (extern constructor u32_as_u64 u32_as_u64)
+(convert u32 u64 u32_as_u64)
 
 (decl pure i64_as_u64 (i64) u64)
 (extern constructor i64_as_u64 i64_as_u64)
 
+(decl pure i64_neg (i64) i64)
+(extern constructor i64_neg i64_neg)
+
+(decl u128_as_u64 (u64) u128)
+(extern extractor u128_as_u64 u128_as_u64)
+
+(decl u64_as_u32 (u32) u64)
+(extern extractor u64_as_u32 u64_as_u32)
+
+(decl pure u64_as_i32 (u64) i32)
+(extern constructor u64_as_i32 u64_as_i32)
+
 ;;;; Primitive Arithmetic ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl pure u8_and (u8 u8) u8)
+(extern constructor u8_and u8_and)
+
+(decl pure u32_add (u32 u32) u32)
+(extern constructor u32_add u32_add)
+
+;; Pure/fallible constructor that tries to add two `u32`s, interpreted
+;; as signed values, and fails to match on overflow.
+(decl pure partial s32_add_fallible (u32 u32) u32)
+(extern constructor s32_add_fallible s32_add_fallible)
 
 (decl pure u64_add (u64 u64) u64)
 (extern constructor u64_add u64_add)
@@ -128,6 +141,9 @@
 
 (decl pure u64_xor (u64 u64) u64)
 (extern constructor u64_xor u64_xor)
+
+(decl pure u64_shl (u64 u64) u64)
+(extern constructor u64_shl u64_shl)
 
 (decl pure imm64_shl (Type Imm64 Imm64) Imm64)
 (extern constructor imm64_shl imm64_shl)
@@ -198,6 +214,23 @@
 
 (extern const $I32X4XN Type)
 
+;; Get the unsigned minimum value for a given type.
+;; This always zero, but is included for completeness.
+(decl pure ty_umin (Type) u64)
+(extern constructor ty_umin ty_umin)
+
+;; Get the unsigned maximum value for a given type.
+(decl pure ty_umax (Type) u64)
+(extern constructor ty_umax ty_umax)
+
+;; Get the signed minimum value for a given type.
+(decl pure ty_smin (Type) u64)
+(extern constructor ty_smin ty_smin)
+
+;; Get the signed maximum value for a given type.
+(decl pure ty_smax (Type) u64)
+(extern constructor ty_smax ty_smax)
+
 ;; Get the bit width of a given type.
 (decl pure ty_bits (Type) u8)
 (extern constructor ty_bits ty_bits)
@@ -251,6 +284,36 @@
 (extern constructor floatcc_unordered floatcc_unordered)
 
 ;;;; Helper Clif Extractors ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl eq (Type Value Value) Value)
+(extractor (eq ty x y) (icmp ty (IntCC.Equal) x y))
+
+(decl ne (Type Value Value) Value)
+(extractor (ne ty x y) (icmp ty (IntCC.NotEqual) x y))
+
+(decl ult (Type Value Value) Value)
+(extractor (ult ty x y) (icmp ty (IntCC.UnsignedLessThan) x y))
+
+(decl ule (Type Value Value) Value)
+(extractor (ule ty x y) (icmp ty (IntCC.UnsignedLessThanOrEqual) x y))
+
+(decl ugt (Type Value Value) Value)
+(extractor (ugt ty x y) (icmp ty (IntCC.UnsignedGreaterThan) x y))
+
+(decl uge (Type Value Value) Value)
+(extractor (uge ty x y) (icmp ty (IntCC.UnsignedGreaterThanOrEqual) x y))
+
+(decl slt (Type Value Value) Value)
+(extractor (slt ty x y) (icmp ty (IntCC.SignedLessThan) x y))
+
+(decl sle (Type Value Value) Value)
+(extractor (sle ty x y) (icmp ty (IntCC.SignedLessThanOrEqual) x y))
+
+(decl sgt (Type Value Value) Value)
+(extractor (sgt ty x y) (icmp ty (IntCC.SignedGreaterThan) x y))
+
+(decl sge (Type Value Value) Value)
+(extractor (sge ty x y) (icmp ty (IntCC.SignedGreaterThanOrEqual) x y))
 
 ;; An extractor that only matches types that can fit in 16 bits.
 (decl fits_in_16 (Type) Type)
@@ -347,6 +410,10 @@
 (decl ty_vec128_int (Type) Type)
 (extern extractor ty_vec128_int ty_vec128_int)
 
+;; An extractor that only matches types that can be a 64-bit address.
+(decl ty_addr64 (Type) Type)
+(extern extractor ty_addr64 ty_addr64)
+
 ;; A pure constructor that matches everything except vectors with size 32X2.
 (decl pure partial not_vec32x2 (Type) Type)
 (extern constructor not_vec32x2 not_vec32x2)
@@ -384,8 +451,8 @@
 (extern constructor imm64_masked imm64_masked)
 
 ;; Extract a `u64` from an `Ieee32`.
-(decl u64_from_ieee32 (u64) Ieee32)
-(extern extractor infallible u64_from_ieee32 u64_from_ieee32)
+(decl u32_from_ieee32 (u32) Ieee32)
+(extern extractor infallible u32_from_ieee32 u32_from_ieee32)
 
 ;; Extract a `u64` from an `Ieee64`.
 (decl u64_from_ieee64 (u64) Ieee64)
@@ -424,6 +491,10 @@
 ;; Convert an `Offset32` to a primitive number.
 (decl pure offset32_to_u32 (Offset32) u32)
 (extern constructor offset32_to_u32 offset32_to_u32)
+
+;; Convert a number to an `Offset32`
+(decl pure u32_to_offset32 (u32) Offset32)
+(extern constructor u32_to_offset32 u32_to_offset32)
 
 ;; This is a direct import of `IntCC::unsigned`.
 ;; Get the corresponding IntCC with the signed component removed.
@@ -477,3 +548,4 @@
 ;;;; Automatic conversions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (convert Offset32 u32 offset32_to_u32)
+(convert u32 Offset32 u32_to_offset32)

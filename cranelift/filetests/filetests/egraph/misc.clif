@@ -16,6 +16,6 @@ block0(v0: i64):
 ; nextln:    ss0 = explicit_slot 8
 ; check:  block0(v0: i64):
 ; nextln:     v2 = stack_addr.i64 ss0
-; nextln:     store notrap aligned v0, v2
+; nextln:     store notrap v0, v2
 ; nextln:     return v0
 ; nextln: }

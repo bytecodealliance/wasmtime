@@ -7027,22 +7027,22 @@ fn test_s390x_binemit() {
         "br %r14",
     ));
 
-    insns.push((Inst::Debugtrap, "0001", "debugtrap"));
+    insns.push((Inst::Debugtrap, "0001", ".word 0x0001 # debugtrap"));
 
     insns.push((
         Inst::Trap {
             trap_code: TrapCode::StackOverflow,
         },
         "0000",
-        "trap",
+        ".word 0x0000 # trap=stk_ovf",
     ));
     insns.push((
         Inst::TrapIf {
             cond: Cond::from_mask(1),
             trap_code: TrapCode::StackOverflow,
         },
-        "A7E400030000",
-        "jno 6 ; trap",
+        "C01400000001",
+        "jgo .+2 # trap=stk_ovf",
     ));
 
     insns.push((
@@ -13362,7 +13362,7 @@ fn test_s390x_binemit() {
     use crate::settings::Configurable;
     let mut isa_flag_builder = s390x_settings::builder();
     isa_flag_builder.enable("arch13").unwrap();
-    let isa_flags = s390x_settings::Flags::new(&flags, isa_flag_builder);
+    let isa_flags = s390x_settings::Flags::new(&flags, &isa_flag_builder);
 
     let emit_info = EmitInfo::new(isa_flags);
     for (insn, expected_encoding, expected_printing) in insns {

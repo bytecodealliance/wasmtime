@@ -530,9 +530,6 @@
 
 ;;;; Helpers for accessing compilation flags ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(decl avoid_div_traps () Type)
-(extern extractor avoid_div_traps avoid_div_traps)
-
 ;; This definition should be kept up to date with the values defined in
 ;; cranelift/codegen/meta/src/shared/settings.rs
 (type TlsModel extern (enum (None) (ElfGd) (Macho) (Coff)))
@@ -591,6 +588,18 @@
 
 (decl u64_from_constant (u64) Constant)
 (extern extractor u64_from_constant u64_from_constant)
+
+;; Extracts lane indices, represented as u8's, if the immediate for a
+;; `shuffle` instruction represents shuffling N-bit values. The u8 values
+;; returned will be in the range of 0 to (256/N)-1, inclusive, and index the
+;; N-bit chunks of two concatenated 128-bit vectors starting from the
+;; least-significant bits.
+(decl shuffle64_from_imm (u8 u8) Immediate)
+(extern extractor shuffle64_from_imm shuffle64_from_imm)
+(decl shuffle32_from_imm (u8 u8 u8 u8) Immediate)
+(extern extractor shuffle32_from_imm shuffle32_from_imm)
+(decl shuffle16_from_imm (u8 u8 u8 u8 u8 u8 u8 u8) Immediate)
+(extern extractor shuffle16_from_imm shuffle16_from_imm)
 
 ;;;; Helpers for generating returns ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -709,6 +718,10 @@
 
 (decl gen_return (ValueSlice) Unit)
 (extern constructor gen_return gen_return)
+
+;; Helper for extracting an immediate that's not 0 and not -1 from an imm64.
+(decl pure partial safe_divisor_from_imm64 (Type Imm64) u64)
+(extern constructor safe_divisor_from_imm64 safe_divisor_from_imm64)
 
 ;;;; Automatic conversions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

@@ -261,10 +261,10 @@ impl Inst {
                 _ => InstructionSet::Base,
             },
             Inst::FpuRound { op, .. } => match op {
-                FpuRoundOp::ToSInt32 | FpuRoundOp::FromSInt32 => InstructionSet::MIE2,
-                FpuRoundOp::ToUInt32 | FpuRoundOp::FromUInt32 => InstructionSet::MIE2,
-                FpuRoundOp::ToSInt32x4 | FpuRoundOp::FromSInt32x4 => InstructionSet::MIE2,
-                FpuRoundOp::ToUInt32x4 | FpuRoundOp::FromUInt32x4 => InstructionSet::MIE2,
+                FpuRoundOp::ToSInt32 | FpuRoundOp::FromSInt32 => InstructionSet::VXRS_EXT2,
+                FpuRoundOp::ToUInt32 | FpuRoundOp::FromUInt32 => InstructionSet::VXRS_EXT2,
+                FpuRoundOp::ToSInt32x4 | FpuRoundOp::FromSInt32x4 => InstructionSet::VXRS_EXT2,
+                FpuRoundOp::ToUInt32x4 | FpuRoundOp::FromUInt32x4 => InstructionSet::VXRS_EXT2,
                 _ => InstructionSet::Base,
             },
 
@@ -998,6 +998,7 @@ fn s390x_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandC
 impl MachInst for Inst {
     type ABIMachineSpec = S390xMachineDeps;
     type LabelUse = LabelUse;
+    const TRAP_OPCODE: &'static [u8] = &[0, 0];
 
     fn get_operands<F: Fn(VReg) -> VReg>(&self, collector: &mut OperandCollector<'_, F>) {
         s390x_get_operands(self, collector);
@@ -3184,11 +3185,13 @@ impl Inst {
                 let cond = cond.pretty_print_default();
                 format!("jg{} {}", cond, target)
             }
-            &Inst::Debugtrap => "debugtrap".to_string(),
-            &Inst::Trap { .. } => "trap".to_string(),
-            &Inst::TrapIf { cond, .. } => {
-                let cond = cond.invert().pretty_print_default();
-                format!("j{} 6 ; trap", cond)
+            &Inst::Debugtrap => ".word 0x0001 # debugtrap".to_string(),
+            &Inst::Trap { trap_code } => {
+                format!(".word 0x0000 # trap={}", trap_code)
+            }
+            &Inst::TrapIf { cond, trap_code } => {
+                let cond = cond.pretty_print_default();
+                format!("jg{} .+2 # trap={}", cond, trap_code)
             }
             &Inst::JTSequence { ridx, ref targets } => {
                 let ridx = pretty_print_reg(ridx, allocs);

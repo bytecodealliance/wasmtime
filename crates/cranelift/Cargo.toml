@@ -19,6 +19,7 @@ cranelift-codegen = { workspace = true }
 cranelift-frontend = { workspace = true }
 cranelift-entity = { workspace = true }
 cranelift-native = { workspace = true }
+wasmtime-cranelift-shared = { workspace = true }
 wasmparser = { workspace = true }
 target-lexicon = { workspace = true }
 gimli = { workspace = true }

@@ -52,7 +52,7 @@ impl From<WasmType> for wasmparser::ValType {
             WasmType::F32 => wasmparser::ValType::F32,
             WasmType::F64 => wasmparser::ValType::F64,
             WasmType::V128 => wasmparser::ValType::V128,
-            WasmType::Ref(rt) => wasmparser::ValType::Ref(wasmparser::RefType::from(rt)),
+            WasmType::Ref(rt) => wasmparser::ValType::Ref(rt.into()),
         }
     }
 }

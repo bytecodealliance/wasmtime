@@ -146,16 +146,34 @@ impl fmt::Display for LookupError {
 /// The type of a polymorphic TargetISA object which is 'static.
 pub type OwnedTargetIsa = Arc<dyn TargetIsa>;
 
+/// Type alias of `IsaBuilder` used for building Cranelift's ISAs.
+pub type Builder = IsaBuilder<CodegenResult<OwnedTargetIsa>>;
+
 /// Builder for a `TargetIsa`.
 /// Modify the ISA-specific settings before creating the `TargetIsa` trait object with `finish`.
 #[derive(Clone)]
-pub struct Builder {
+pub struct IsaBuilder<T> {
     triple: Triple,
     setup: settings::Builder,
-    constructor: fn(Triple, settings::Flags, settings::Builder) -> CodegenResult<OwnedTargetIsa>,
+    constructor: fn(Triple, settings::Flags, &settings::Builder) -> T,
 }
 
-impl Builder {
+impl<T> IsaBuilder<T> {
+    /// Creates a new ISA-builder from its components, namely the `triple` for
+    /// the ISA, the ISA-specific settings builder, and a final constructor
+    /// function to generate the ISA from its components.
+    pub fn new(
+        triple: Triple,
+        setup: settings::Builder,
+        constructor: fn(Triple, settings::Flags, &settings::Builder) -> T,
+    ) -> Self {
+        IsaBuilder {
+            triple,
+            setup,
+            constructor,
+        }
+    }
+
     /// Gets the triple for the builder.
     pub fn triple(&self) -> &Triple {
         &self.triple
@@ -172,12 +190,12 @@ impl Builder {
     /// flags are inconsistent or incompatible: for example, some
     /// platform-independent features, like general SIMD support, may
     /// need certain ISA extensions to be enabled.
-    pub fn finish(self, shared_flags: settings::Flags) -> CodegenResult<OwnedTargetIsa> {
-        (self.constructor)(self.triple, shared_flags, self.setup)
+    pub fn finish(&self, shared_flags: settings::Flags) -> T {
+        (self.constructor)(self.triple.clone(), shared_flags, &self.setup)
     }
 }
 
-impl settings::Configurable for Builder {
+impl<T> settings::Configurable for IsaBuilder<T> {
     fn set(&mut self, name: &str, value: &str) -> SetResult<()> {
         self.setup.set(name, value)
     }
@@ -315,6 +333,13 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
     fn to_capstone(&self) -> Result<capstone::Capstone, capstone::Error> {
         Err(capstone::Error::UnsupportedArch)
     }
+
+    /// Returns whether this ISA has a native fused-multiply-and-add instruction
+    /// for floats.
+    ///
+    /// Currently this only returns false on x86 when some native features are
+    /// not detected.
+    fn has_native_fma(&self) -> bool;
 }
 
 /// Methods implemented for free for target ISA!
@@ -329,24 +354,6 @@ impl<'a> dyn TargetIsa + 'a {
         match self.triple().endianness().unwrap() {
             target_lexicon::Endianness::Little => ir::Endianness::Little,
             target_lexicon::Endianness::Big => ir::Endianness::Big,
-        }
-    }
-
-    /// Returns the code (text) section alignment for this ISA.
-    pub fn code_section_alignment(&self) -> u64 {
-        use target_lexicon::*;
-        match (self.triple().operating_system, self.triple().architecture) {
-            (
-                OperatingSystem::MacOSX { .. }
-                | OperatingSystem::Darwin
-                | OperatingSystem::Ios
-                | OperatingSystem::Tvos,
-                Architecture::Aarch64(..),
-            ) => 0x4000,
-            // 64 KB is the maximal page size (i.e. memory translation granule size)
-            // supported by the architecture and is used on some platforms.
-            (_, Architecture::Aarch64(..)) => 0x10000,
-            _ => 0x1000,
         }
     }
 

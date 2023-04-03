@@ -19,7 +19,7 @@ indexmap = { version = "1.0.2", features = ["serde-1"] }
 thiserror = { workspace = true }
 serde = { version = "1.0.94", features = ["derive"] }
 log = { workspace = true }
-gimli = { workspace = true }
+gimli = { workspace = true, features = ["write"] }
 object = { workspace = true, features = ['write_core'] }
 target-lexicon = { workspace = true }
 wasm-encoder = { workspace = true, optional = true }

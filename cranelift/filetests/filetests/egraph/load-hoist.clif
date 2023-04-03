@@ -1,0 +1,44 @@
+test optimize
+set opt_level=speed_and_size
+target x86_64
+
+function %foo(i64 vmctx, i64, i32, i32) -> i32 fast {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned readonly gv0+8
+    gv2 = load.i64 notrap aligned gv1
+    gv3 = vmctx
+    gv4 = load.i64 notrap aligned readonly gv3+80
+    stack_limit = gv2
+
+    block0(v0: i64, v1: i64, v2: i32, v3: i32):
+        v5 = iconst.i32 0
+        jump block2(v5, v2, v3)  ; v5 = 0
+
+    block2(v6: i32, v7: i32, v15: i32):
+        v9 = load.i64 notrap aligned readonly v0+80
+        v8 = uextend.i64 v7
+        v10 = iadd v9, v8
+        v11 = load.i32 little heap v10
+        v16 = iconst.i32 1
+        v17 = isub v15, v16  ; v16 = 1
+        v12 = iadd v6, v11
+        v4 -> v12
+        v13 = iconst.i32 4
+        v14 = iadd v7, v13  ; v13 = 4
+        brif v17, block2(v12, v14, v17), block4
+
+    block4:
+        jump block3
+
+    block3:
+        jump block1
+
+    block1:
+        return v12
+}
+
+; check:    v9 = load.i64 notrap aligned readonly v0+80
+; check: block2(v6: i32, v7: i32, v15: i32):
+; check:    v10 = iadd.i64 v9, v8
+; check:    v11 = load.i32 little heap v10
+; check:    brif v17, block2(v12, v14, v17), block4

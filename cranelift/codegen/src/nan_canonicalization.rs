@@ -7,6 +7,7 @@ use crate::ir::condcodes::FloatCC;
 use crate::ir::immediates::{Ieee32, Ieee64};
 use crate::ir::types;
 use crate::ir::{Function, Inst, InstBuilder, InstructionData, Opcode, Value};
+use crate::opts::MemFlags;
 use crate::timing;
 
 // Canonical 32-bit and 64-bit NaN values.
@@ -70,9 +71,10 @@ fn add_nan_canon_seq(pos: &mut FuncCursor, inst: Inst) {
             .select(is_nan, canon_nan, new_res);
     };
     let vector_select = |pos: &mut FuncCursor, canon_nan: Value| {
+        let is_nan = pos.ins().bitcast(val_type, MemFlags::new(), is_nan);
         pos.ins()
             .with_result(val)
-            .vselect(is_nan, canon_nan, new_res);
+            .bitselect(is_nan, canon_nan, new_res);
     };
 
     match val_type {

@@ -21,7 +21,7 @@ pub(crate) enum ParentGroup {
 fn gen_constructor(group: &SettingGroup, parent: ParentGroup, fmt: &mut Formatter) {
     let args = match parent {
         ParentGroup::None => "builder: Builder",
-        ParentGroup::Shared => "shared: &settings::Flags, builder: Builder",
+        ParentGroup::Shared => "shared: &settings::Flags, builder: &Builder",
     };
     fmtln!(fmt, "impl Flags {");
     fmt.indent(|fmt| {

@@ -466,14 +466,6 @@
         (mem PairAMode)
         (flags MemFlags))
 
-       (LoadFpuConst64
-        (rd WritableReg)
-        (const_data u64))
-
-       (LoadFpuConst128
-        (rd WritableReg)
-        (const_data u128))
-
        ;; Conversion: FP -> integer.
        (FpuToInt
         (op FpuToIntOp)
@@ -553,7 +545,8 @@
        (VecDupFromFpu
         (rd WritableReg)
         (rn Reg)
-        (size VectorSize))
+        (size VectorSize)
+        (lane u8))
 
        ;; Duplicate FP immediate to vector.
        (VecDupFPImm
@@ -934,6 +927,10 @@
         (symbol ExternalName)
         (rd WritableReg))
 
+       (MachOTlsGetAddr
+        (symbol ExternalName)
+        (rd WritableReg))
+
        ;; An unwind pseudo-instruction.
        (Unwind
         (inst UnwindInst))
@@ -1134,6 +1131,11 @@
          (off i64)
          (ty Type))
 
+        ;; A reference to a constant which is placed outside of the function's
+        ;; body, typically at the end.
+        (Const
+          (addr VCodeConstant))
+
         ;; Offset from the "nominal stack pointer", which is where the real SP is
         ;; just after stack and spill slots are allocated in the function prologue.
         ;; At emission time, this is converted to `SPOffset` with a fixup added to
@@ -1192,6 +1194,16 @@
 (rule (lane_size (dynamic_lane 16 _)) (ScalarSize.Size16))
 (rule (lane_size (dynamic_lane 32 _)) (ScalarSize.Size32))
 (rule (lane_size (dynamic_lane 64 _)) (ScalarSize.Size64))
+
+;; Helper for extracting the size of a lane from the input `VectorSize`
+(decl pure vector_lane_size (VectorSize) ScalarSize)
+(rule (vector_lane_size (VectorSize.Size8x16)) (ScalarSize.Size8))
+(rule (vector_lane_size (VectorSize.Size8x8))  (ScalarSize.Size8))
+(rule (vector_lane_size (VectorSize.Size16x8)) (ScalarSize.Size16))
+(rule (vector_lane_size (VectorSize.Size16x4)) (ScalarSize.Size16))
+(rule (vector_lane_size (VectorSize.Size32x4)) (ScalarSize.Size32))
+(rule (vector_lane_size (VectorSize.Size32x2)) (ScalarSize.Size32))
+(rule (vector_lane_size (VectorSize.Size64x2)) (ScalarSize.Size64))
 
 (type Cond extern
   (enum
@@ -1390,8 +1402,18 @@
     (Addp)
     ;; Zip vectors (primary) [meaning, high halves]
     (Zip1)
+    ;; Zip vectors (secondary)
+    (Zip2)
     ;; Signed saturating rounding doubling multiply returning high half
     (Sqrdmulh)
+    ;; Unzip vectors (primary)
+    (Uzp1)
+    ;; Unzip vectors (secondary)
+    (Uzp2)
+    ;; Transpose vectors (primary)
+    (Trn1)
+    ;; Transpose vectors (secondary)
+    (Trn2)
 ))
 
 ;; A Vector ALU operation which modifies a source register.
@@ -1420,6 +1442,10 @@
     (Fneg)
     ;; Floating-point square root
     (Fsqrt)
+    ;; Reverse elements in 16-bit lanes
+    (Rev16)
+    ;; Reverse elements in 32-bit lanes
+    (Rev32)
     ;; Reverse elements in 64-bit doublewords
     (Rev64)
     ;; Floating-point convert to signed integer, rounding toward zero
@@ -1682,9 +1708,6 @@
 (decl fpu_op_ri_sli (u8 u8) FPUOpRIMod)
 (extern constructor fpu_op_ri_sli fpu_op_ri_sli)
 
-(decl imm12_from_negated_u64 (Imm12) u64)
-(extern extractor imm12_from_negated_u64 imm12_from_negated_u64)
-
 (decl pure partial lshr_from_u64 (Type u64) ShiftOpAndAmt)
 (extern constructor lshr_from_u64 lshr_from_u64)
 
@@ -1712,11 +1735,13 @@
   (imm12_from_value n)
   (iconst (u64_from_imm64 (imm12_from_u64 n))))
 
-;; Same as `imm12_from_value`, but tries negating the constant value.
-(decl imm12_from_negated_value (Imm12) Value)
-(extractor
-  (imm12_from_negated_value n)
-  (iconst (u64_from_imm64 (imm12_from_negated_u64 n))))
+;; Conceptually the same as `imm12_from_value`, but tries negating the constant
+;; value (first sign-extending to handle narrow widths).
+(decl pure partial imm12_from_negated_value (Value) Imm12)
+(rule
+  (imm12_from_negated_value (has_type ty (iconst n)))
+  (if-let (imm12_from_u64 imm) (i64_as_u64 (i64_neg (i64_sextend_imm64 ty n))))
+  imm)
 
 ;; Helper type to represent a value and an extend operation fused together.
 (type ExtendedValue extern (enum))
@@ -1887,10 +1912,17 @@
         dst))
 
 ;; Helper for emitting `MInst.VecDupFromFpu` instructions.
-(decl vec_dup_from_fpu (Reg VectorSize) Reg)
-(rule (vec_dup_from_fpu src size)
+(decl vec_dup_from_fpu (Reg VectorSize u8) Reg)
+(rule (vec_dup_from_fpu src size lane)
       (let ((dst WritableReg (temp_writable_reg $I8X16))
-            (_ Unit (emit (MInst.VecDupFromFpu dst src size))))
+            (_ Unit (emit (MInst.VecDupFromFpu dst src size lane))))
+        dst))
+
+;; Helper for emitting `MInst.VecDupImm` instructions.
+(decl vec_dup_imm (ASIMDMovModImm bool VectorSize) Reg)
+(rule (vec_dup_imm imm invert size)
+      (let ((dst WritableReg (temp_writable_reg $I8X16))
+            (_ Unit (emit (MInst.VecDupImm dst imm invert size))))
         dst))
 
 ;; Helper for emitting `MInst.AluRRImm12` instructions.
@@ -2143,6 +2175,13 @@
             (_ Unit (emit (MInst.MovToFpu dst x size))))
         dst))
 
+;; Helper for emitting `MInst.FpuMoveFPImm` instructions.
+(decl fpu_move_fp_imm (ASIMDFPModImm ScalarSize) Reg)
+(rule (fpu_move_fp_imm imm size)
+      (let ((dst WritableReg (temp_writable_reg $I8X16))
+            (_ Unit (emit (MInst.FpuMoveFPImm dst imm size))))
+        dst))
+
 ;; Helper for emitting `MInst.MovToVec` instructions.
 (decl mov_to_vec (Reg Reg u8 VectorSize) Reg)
 (rule (mov_to_vec src1 src2 lane size)
@@ -2386,6 +2425,14 @@
 (decl neg (Reg VectorSize) Reg)
 (rule (neg x size) (vec_misc (VecMisc2.Neg) x size))
 
+;; Helper for generating `rev16` instructions.
+(decl rev16 (Reg VectorSize) Reg)
+(rule (rev16 x size) (vec_misc (VecMisc2.Rev16) x size))
+
+;; Helper for generating `rev32` instructions.
+(decl rev32 (Reg VectorSize) Reg)
+(rule (rev32 x size) (vec_misc (VecMisc2.Rev32) x size))
+
 ;; Helper for generating `rev64` instructions.
 (decl rev64 (Reg VectorSize) Reg)
 (rule (rev64 x size) (vec_misc (VecMisc2.Rev64) x size))
@@ -2588,6 +2635,18 @@
 ;; Helpers for generating `ushl` instructions.
 (decl ushl (Reg Reg VectorSize) Reg)
 (rule (ushl x y size) (vec_rrr (VecALUOp.Ushl) x y size))
+
+;; Helpers for generating `ushl` instructions.
+(decl ushl_vec_imm (Reg u8 VectorSize) Reg)
+(rule (ushl_vec_imm x amt size) (vec_shift_imm (VecShiftImmOp.Shl) amt x size))
+
+;; Helpers for generating `ushr` instructions.
+(decl ushr_vec_imm (Reg u8 VectorSize) Reg)
+(rule (ushr_vec_imm x amt size) (vec_shift_imm (VecShiftImmOp.Ushr) amt x size))
+
+;; Helpers for generating `sshr` instructions.
+(decl sshr_vec_imm (Reg u8 VectorSize) Reg)
+(rule (sshr_vec_imm x amt size) (vec_shift_imm (VecShiftImmOp.Sshr) amt x size))
 
 ;; Helpers for generating `rotr` instructions.
 
@@ -2963,24 +3022,122 @@
            (amode ty addr offset)))
 
 ;; Lower a constant f32.
-(decl constant_f32 (u64) Reg)
-;; TODO: Port lower_constant_f32() to ISLE.
-(extern constructor constant_f32 constant_f32)
+;;
+;; Note that we must make sure that all bits outside the lowest 32 are set to 0
+;; because this function is also used to load wider constants (that have zeros
+;; in their most significant bits).
+(decl constant_f32 (u32) Reg)
+(rule 2 (constant_f32 0)
+        (vec_dup_imm (asimd_mov_mod_imm_zero (ScalarSize.Size32))
+                     $false
+                     (VectorSize.Size32x2)))
+(rule 1 (constant_f32 n)
+        (if-let imm (asimd_fp_mod_imm_from_u64 n (ScalarSize.Size32)))
+        (fpu_move_fp_imm imm (ScalarSize.Size32)))
+(rule (constant_f32 n)
+      (mov_to_fpu (imm $I32 (ImmExtend.Zero) n) (ScalarSize.Size32)))
 
 ;; Lower a constant f64.
+;;
+;; Note that we must make sure that all bits outside the lowest 64 are set to 0
+;; because this function is also used to load wider constants (that have zeros
+;; in their most significant bits).
+;; TODO: Treat as half of a 128 bit vector and consider replicated patterns.
+;; Scalar MOVI might also be an option.
 (decl constant_f64 (u64) Reg)
-;; TODO: Port lower_constant_f64() to ISLE.
-(extern constructor constant_f64 constant_f64)
+(rule 4 (constant_f64 0)
+        (vec_dup_imm (asimd_mov_mod_imm_zero (ScalarSize.Size32))
+                     $false
+                     (VectorSize.Size32x2)))
+(rule 3 (constant_f64 n)
+        (if-let imm (asimd_fp_mod_imm_from_u64 n (ScalarSize.Size64)))
+        (fpu_move_fp_imm imm (ScalarSize.Size64)))
+(rule 2 (constant_f64 (u64_as_u32 n))
+        (constant_f32 n))
+(rule 1 (constant_f64 (u64_low32_bits_unset n))
+        (mov_to_fpu (imm $I64 (ImmExtend.Zero) n) (ScalarSize.Size64)))
+(rule (constant_f64 n)
+      (fpu_load64 (AMode.Const (emit_u64_le_const n)) (mem_flags_trusted)))
+
+;; Tests whether the low 32 bits in the input are all zero.
+(decl u64_low32_bits_unset (u64) u64)
+(extern extractor u64_low32_bits_unset u64_low32_bits_unset)
 
 ;; Lower a constant f128.
 (decl constant_f128 (u128) Reg)
-;; TODO: Port lower_constant_f128() to ISLE.
-(extern constructor constant_f128 constant_f128)
+(rule 3 (constant_f128 0)
+        (vec_dup_imm (asimd_mov_mod_imm_zero (ScalarSize.Size8))
+                     $false
+                     (VectorSize.Size8x16)))
+
+;; If the upper 64-bits are all zero then defer to `constant_f64`.
+(rule 2 (constant_f128 (u128_as_u64 n)) (constant_f64 n))
+
+;; If the low half of the u128 equals the high half then delegate to the splat
+;; logic as a splat of a 64-bit value.
+(rule 1 (constant_f128 (u128_replicated_u64 n))
+        (splat_const n (VectorSize.Size64x2)))
+
+;; Base case is to load the constant from memory.
+(rule (constant_f128 n)
+      (fpu_load128 (AMode.Const (emit_u128_le_const n)) (mem_flags_trusted)))
 
 ;; Lower a vector splat with a constant parameter.
+;;
+;; The 64-bit input here only uses the low bits for the lane size in
+;; `VectorSize` and all other bits are ignored.
 (decl splat_const (u64 VectorSize) Reg)
-;; TODO: Port lower_splat_const() to ISLE.
-(extern constructor splat_const splat_const)
+
+;; If the splat'd constant can itself be reduced in size then attempt to do so
+;; as it will make it easier to create the immediates in the instructions below.
+(rule 5 (splat_const (u64_replicated_u32 n) (VectorSize.Size64x2))
+        (splat_const n (VectorSize.Size32x4)))
+(rule 5 (splat_const (u32_replicated_u16 n) (VectorSize.Size32x4))
+        (splat_const n (VectorSize.Size16x8)))
+(rule 5 (splat_const (u32_replicated_u16 n) (VectorSize.Size32x2))
+        (splat_const n (VectorSize.Size16x4)))
+(rule 5 (splat_const (u16_replicated_u8 n) (VectorSize.Size16x8))
+        (splat_const n (VectorSize.Size8x16)))
+(rule 5 (splat_const (u16_replicated_u8 n) (VectorSize.Size16x4))
+        (splat_const n (VectorSize.Size8x8)))
+
+;; Special cases for `vec_dup_imm` instructions where the input is either
+;; negated or not.
+(rule 4 (splat_const n size)
+        (if-let imm (asimd_mov_mod_imm_from_u64 n (vector_lane_size size)))
+        (vec_dup_imm imm $false size))
+(rule 3 (splat_const n size)
+        (if-let imm (asimd_mov_mod_imm_from_u64 (u64_not n) (vector_lane_size size)))
+        (vec_dup_imm imm $true size))
+
+;; Special case a 32-bit splat where an immediate can be created by
+;; concatenating the 32-bit constant into a 64-bit value
+(rule 2 (splat_const n (VectorSize.Size32x4))
+        (if-let imm (asimd_mov_mod_imm_from_u64 (u64_or n (u64_shl n 32)) (ScalarSize.Size64)))
+        (vec_dup_imm imm $false (VectorSize.Size64x2)))
+(rule 2 (splat_const n (VectorSize.Size32x2))
+        (if-let imm (asimd_mov_mod_imm_from_u64 (u64_or n (u64_shl n 32)) (ScalarSize.Size64)))
+        (fpu_extend (vec_dup_imm imm $false (VectorSize.Size64x2)) (ScalarSize.Size64)))
+
+(rule 1 (splat_const n size)
+        (if-let imm (asimd_fp_mod_imm_from_u64 n (vector_lane_size size)))
+        (vec_dup_fp_imm imm size))
+
+;; The base case for splat is to use `vec_dup` with the immediate loaded into a
+;; register.
+(rule (splat_const n size)
+      (vec_dup (imm $I64 (ImmExtend.Zero) n) size))
+
+;; Each of these extractors tests whether the upper half of the input equals the
+;; lower half of the input
+(decl u128_replicated_u64 (u64) u128)
+(extern extractor u128_replicated_u64 u128_replicated_u64)
+(decl u64_replicated_u32 (u64) u64)
+(extern extractor u64_replicated_u32 u64_replicated_u32)
+(decl u32_replicated_u16 (u64) u64)
+(extern extractor u32_replicated_u16 u32_replicated_u16)
+(decl u16_replicated_u8 (u64) u64)
+(extern extractor u16_replicated_u8 u16_replicated_u8)
 
 ;; Lower a FloatCC to a Cond.
 (decl fp_cond_code (FloatCC) Cond)
@@ -3179,7 +3336,7 @@
        dst))
 (rule (fcopy_sign x y ty @ (multi_lane _ _))
       (let ((dst WritableReg (temp_writable_reg $I8X16))
-            (tmp Reg (vec_shift_imm (VecShiftImmOp.Ushr) (max_shift (lane_type ty)) y (vector_size ty)))
+            (tmp Reg (ushr_vec_imm y (max_shift (lane_type ty)) (vector_size ty)))
             (_ Unit (emit (MInst.VecShiftImmMod (VecShiftImmModOp.Sli) dst x tmp (vector_size ty) (max_shift (lane_type ty))))))
        dst))
 
@@ -3436,6 +3593,12 @@
 (rule (elf_tls_get_addr name)
       (let ((dst WritableReg (temp_writable_reg $I64))
             (_ Unit (emit (MInst.ElfTlsGetAddr name dst))))
+        dst))
+
+(decl macho_tls_get_addr (ExternalName) Reg)
+(rule (macho_tls_get_addr name)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.MachOTlsGetAddr name dst))))
         dst))
 
 ;; A tuple of `ProducesFlags` and `IntCC`.
@@ -3767,3 +3930,60 @@
        (emit_side_effect (with_flags_side_effect
             (cmp (OperandSize.Size32) ridx jt_size)
             (jt_sequence ridx jt_info)))))
+
+;; Helper for emitting the `uzp1` instruction
+(decl vec_uzp1 (Reg Reg VectorSize) Reg)
+(rule (vec_uzp1 rn rm size) (vec_rrr (VecALUOp.Uzp1) rn rm size))
+
+;; Helper for emitting the `uzp2` instruction
+(decl vec_uzp2 (Reg Reg VectorSize) Reg)
+(rule (vec_uzp2 rn rm size) (vec_rrr (VecALUOp.Uzp2) rn rm size))
+
+;; Helper for emitting the `zip1` instruction
+(decl vec_zip1 (Reg Reg VectorSize) Reg)
+(rule (vec_zip1 rn rm size) (vec_rrr (VecALUOp.Zip1) rn rm size))
+
+;; Helper for emitting the `zip2` instruction
+(decl vec_zip2 (Reg Reg VectorSize) Reg)
+(rule (vec_zip2 rn rm size) (vec_rrr (VecALUOp.Zip2) rn rm size))
+
+;; Helper for emitting the `trn1` instruction
+(decl vec_trn1 (Reg Reg VectorSize) Reg)
+(rule (vec_trn1 rn rm size) (vec_rrr (VecALUOp.Trn1) rn rm size))
+
+;; Helper for emitting the `trn2` instruction
+(decl vec_trn2 (Reg Reg VectorSize) Reg)
+(rule (vec_trn2 rn rm size) (vec_rrr (VecALUOp.Trn2) rn rm size))
+
+;; Helper for creating a zero value `ASIMDMovModImm` immediate.
+(decl asimd_mov_mod_imm_zero (ScalarSize) ASIMDMovModImm)
+(extern constructor asimd_mov_mod_imm_zero asimd_mov_mod_imm_zero)
+
+;; Helper for fallibly creating an `ASIMDMovModImm` immediate from its parts.
+(decl pure partial asimd_mov_mod_imm_from_u64 (u64 ScalarSize) ASIMDMovModImm)
+(extern constructor asimd_mov_mod_imm_from_u64 asimd_mov_mod_imm_from_u64)
+
+;; Helper for fallibly creating an `ASIMDFPModImm` immediate from its parts.
+(decl pure partial asimd_fp_mod_imm_from_u64 (u64 ScalarSize) ASIMDFPModImm)
+(extern constructor asimd_fp_mod_imm_from_u64 asimd_fp_mod_imm_from_u64)
+
+;; Helper for creating a `VecDupFPImm` instruction
+(decl vec_dup_fp_imm (ASIMDFPModImm VectorSize) Reg)
+(rule (vec_dup_fp_imm imm size)
+      (let ((dst WritableReg (temp_writable_reg $I8X16))
+            (_ Unit (emit (MInst.VecDupFPImm dst imm size))))
+       dst))
+
+;; Helper for creating a `FpuLoad64` instruction
+(decl fpu_load64 (AMode MemFlags) Reg)
+(rule (fpu_load64 amode flags)
+      (let ((dst WritableReg (temp_writable_reg $I8X16))
+            (_ Unit (emit (MInst.FpuLoad64 dst amode flags))))
+       dst))
+
+;; Helper for creating a `FpuLoad128` instruction
+(decl fpu_load128 (AMode MemFlags) Reg)
+(rule (fpu_load128 amode flags)
+      (let ((dst WritableReg (temp_writable_reg $I8X16))
+            (_ Unit (emit (MInst.FpuLoad128 dst amode flags))))
+       dst))

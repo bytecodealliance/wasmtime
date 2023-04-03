@@ -641,10 +641,15 @@ fn assert_trap_code(wat: &str, code: wasmtime::Trap) {
     };
     let trap = err.downcast_ref::<Trap>().unwrap();
     assert_eq!(*trap, code);
+
+    let trace = err.downcast_ref::<WasmBacktrace>().unwrap().frames();
+    assert!(trace.len() > 0);
+    assert_eq!(trace[0].func_index(), 0);
+    assert!(trace[0].func_offset().is_some());
 }
 
 #[test]
-fn heap_out_of_bounds_trap() {
+fn trap_codes() {
     assert_trap_code(
         r#"
             (module
@@ -666,6 +671,46 @@ fn heap_out_of_bounds_trap() {
          "#,
         Trap::MemoryOutOfBounds,
     );
+
+    for (ty, min) in [("i32", i32::MIN as u32 as u64), ("i64", i64::MIN as u64)] {
+        for op in ["rem", "div"] {
+            for sign in ["u", "s"] {
+                println!("testing {ty}.{op}_{sign}");
+                assert_trap_code(
+                    &format!(
+                        r#"
+                           (module
+                             (func $div (param {ty} {ty}) (result {ty})
+                               local.get 0
+                               local.get 1
+                               {ty}.{op}_{sign})
+                             (func $start (drop (call $div ({ty}.const 1) ({ty}.const 0))))
+                             (start $start)
+                           )
+                        "#
+                    ),
+                    Trap::IntegerDivisionByZero,
+                );
+            }
+        }
+
+        println!("testing {ty}.div_s INT_MIN/-1");
+        assert_trap_code(
+            &format!(
+                r#"
+                    (module
+                     (func $div (param {ty} {ty}) (result {ty})
+                      local.get 0
+                      local.get 1
+                      {ty}.div_s)
+                     (func $start (drop (call $div ({ty}.const {min}) ({ty}.const -1))))
+                     (start $start)
+                    )
+                "#
+            ),
+            Trap::IntegerOverflow,
+        );
+    }
 }
 
 fn rustc(src: &str) -> Vec<u8> {
@@ -1183,5 +1228,140 @@ fn host_return_error_no_backtrace() -> Result<()> {
     let instance = Instance::new(&mut store, &module, &[func.into()])?;
     let f = instance.get_typed_func::<(), ()>(&mut store, "f")?;
     assert!(f.call(&mut store, ()).is_err());
+    Ok(())
+}
+
+#[test]
+fn div_plus_load_reported_right() -> Result<()> {
+    let engine = Engine::default();
+    let mut store = Store::new(&engine, ());
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (memory (export "memory") 1)
+                (func (export "i32.div_s") (param i32 i32) (result i32)
+                    (i32.div_s (local.get 0) (i32.load (local.get 1))))
+                (func (export "i32.div_u") (param i32 i32) (result i32)
+                    (i32.div_u (local.get 0) (i32.load (local.get 1))))
+                (func (export "i32.rem_s") (param i32 i32) (result i32)
+                    (i32.rem_s (local.get 0) (i32.load (local.get 1))))
+                (func (export "i32.rem_u") (param i32 i32) (result i32)
+                    (i32.rem_u (local.get 0) (i32.load (local.get 1))))
+            )
+        "#,
+    )?;
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let memory = instance.get_memory(&mut store, "memory").unwrap();
+    let i32_div_s = instance.get_typed_func::<(i32, i32), i32>(&mut store, "i32.div_s")?;
+    let i32_div_u = instance.get_typed_func::<(u32, u32), u32>(&mut store, "i32.div_u")?;
+    let i32_rem_s = instance.get_typed_func::<(i32, i32), i32>(&mut store, "i32.rem_s")?;
+    let i32_rem_u = instance.get_typed_func::<(u32, u32), u32>(&mut store, "i32.rem_u")?;
+
+    memory.write(&mut store, 0, &1i32.to_le_bytes()).unwrap();
+    memory.write(&mut store, 4, &0i32.to_le_bytes()).unwrap();
+    memory.write(&mut store, 8, &(-1i32).to_le_bytes()).unwrap();
+
+    assert_eq!(i32_div_s.call(&mut store, (100, 0))?, 100);
+    assert_eq!(i32_div_u.call(&mut store, (101, 0))?, 101);
+    assert_eq!(i32_rem_s.call(&mut store, (102, 0))?, 0);
+    assert_eq!(i32_rem_u.call(&mut store, (103, 0))?, 0);
+
+    assert_trap(
+        i32_div_s.call(&mut store, (100, 4)),
+        Trap::IntegerDivisionByZero,
+    );
+    assert_trap(
+        i32_div_u.call(&mut store, (100, 4)),
+        Trap::IntegerDivisionByZero,
+    );
+    assert_trap(
+        i32_rem_s.call(&mut store, (100, 4)),
+        Trap::IntegerDivisionByZero,
+    );
+    assert_trap(
+        i32_rem_u.call(&mut store, (100, 4)),
+        Trap::IntegerDivisionByZero,
+    );
+
+    assert_trap(
+        i32_div_s.call(&mut store, (i32::MIN, 8)),
+        Trap::IntegerOverflow,
+    );
+    assert_eq!(i32_rem_s.call(&mut store, (i32::MIN, 8))?, 0);
+
+    assert_trap(
+        i32_div_s.call(&mut store, (100, 100_000)),
+        Trap::MemoryOutOfBounds,
+    );
+    assert_trap(
+        i32_div_u.call(&mut store, (100, 100_000)),
+        Trap::MemoryOutOfBounds,
+    );
+    assert_trap(
+        i32_rem_s.call(&mut store, (100, 100_000)),
+        Trap::MemoryOutOfBounds,
+    );
+    assert_trap(
+        i32_rem_u.call(&mut store, (100, 100_000)),
+        Trap::MemoryOutOfBounds,
+    );
+
+    return Ok(());
+
+    #[track_caller]
+    fn assert_trap<T>(result: Result<T>, expected: Trap) {
+        match result {
+            Ok(_) => panic!("expected failure"),
+            Err(e) => {
+                if let Some(code) = e.downcast_ref::<Trap>() {
+                    if *code == expected {
+                        return;
+                    }
+                }
+                panic!("unexpected error {e:?}");
+            }
+        }
+    }
+}
+
+#[test]
+fn wasm_fault_address_reported_by_default() -> Result<()> {
+    let engine = Engine::default();
+    let mut store = Store::new(&engine, ());
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (memory 1)
+                (func $start
+                    i32.const 0xdeadbeef
+                    i32.load
+                    drop)
+                (start $start)
+            )
+        "#,
+    )?;
+    let err = Instance::new(&mut store, &module, &[]).unwrap_err();
+
+    // On s390x faulting addressess are rounded to the nearest page boundary
+    // instead of having the precise address reported.
+    let mut expected_addr = 0xdeadbeef_u32;
+    if cfg!(target_arch = "s390x") {
+        expected_addr &= 0xfffff000;
+    }
+
+    // NB: at this time there's no programmatic access to the fault address
+    // because it's not always available for load/store traps. Only static
+    // memories on 32-bit have this information, but bounds-checked memories
+    // use manual trapping instructions and otherwise don't have a means of
+    // communicating the faulting address at this time.
+    let err = format!("{err:?}");
+    assert!(
+        err.contains(&format!(
+            "memory fault at wasm address 0x{expected_addr:x} in linear memory of size 0x10000"
+        )),
+        "bad error: {err}"
+    );
     Ok(())
 }

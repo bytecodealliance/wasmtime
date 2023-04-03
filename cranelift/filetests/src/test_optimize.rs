@@ -7,17 +7,32 @@
 //! Some legalization may be ISA-specific, so this requires an ISA
 //! (for now).
 
-use crate::subtest::{run_filecheck, Context, SubTest};
+use crate::subtest::{check_precise_output, run_filecheck, Context, SubTest};
 use anyhow::Result;
 use cranelift_codegen::ir;
-use cranelift_reader::TestCommand;
+use cranelift_reader::{TestCommand, TestOption};
 use std::borrow::Cow;
 
-struct TestOptimize;
+struct TestOptimize {
+    /// Flag indicating that the text expectation, comments after the function,
+    /// must be a precise 100% match on the compiled output of the function.
+    /// This test assertion is also automatically-update-able to allow tweaking
+    /// the code generator and easily updating all affected tests.
+    precise_output: bool,
+}
 
 pub fn subtest(parsed: &TestCommand) -> Result<Box<dyn SubTest>> {
     assert_eq!(parsed.command, "optimize");
-    Ok(Box::new(TestOptimize))
+    let mut test = TestOptimize {
+        precise_output: false,
+    };
+    for option in parsed.options.iter() {
+        match option {
+            TestOption::Flag("precise-output") => test.precise_output = true,
+            _ => anyhow::bail!("unknown option on {}", parsed),
+        }
+    }
+    Ok(Box::new(test))
 }
 
 impl SubTest for TestOptimize {
@@ -42,6 +57,12 @@ impl SubTest for TestOptimize {
             .map_err(|e| crate::pretty_anyhow_error(&comp_ctx.func, e))?;
 
         let clif = format!("{:?}", comp_ctx.func);
-        run_filecheck(&clif, context)
+
+        if self.precise_output {
+            let actual: Vec<_> = clif.lines().collect();
+            check_precise_output(&actual, context)
+        } else {
+            run_filecheck(&clif, context)
+        }
     }
 }

@@ -50,3 +50,39 @@ block0:
     return v5
 }
 ; run
+
+
+function %i8x16_ushr_const(i8x16) -> i8x16 {
+block0(v0: i8x16):
+    v1 = iconst.i32 2
+    v2 = ushr v0, v1
+    return v2
+}
+; run: %i8x16_shl_const([0x01 0x02 0x04 0x08 0x10 0x20 0x40 0x80 0 0 0 0 0 0 0 0]) == [0 0 0x01 0x02 0x04 0x08 0x10 0x20 0 0 0 0 0 0 0 0]
+
+function %i16x8_ushr_const(i16x8) -> i16x8 {
+block0(v0: i16x8):
+    v1 = iconst.i32 4
+    v2 = ushr v0, v1
+    return v2
+}
+; run: %i16x8_ushr_const([0x0001 0x0002 0x0004 0x0008 0x0010 0x0020 0x0040 0x0080]) == [0 0 0 0 0x1 0x2 0x4 0x8]
+; run: %i16x8_ushr_const([-1 -2 -4 -8 -16 16 0x8000 0x80f3]) == [0x0fff 0x0fff 0x0fff 0x0fff 0x0fff 1 0x0800 0x080f]
+
+function %i32x4_ushr_const(i32x4) -> i32x4 {
+block0(v0: i32x4):
+    v1 = iconst.i32 4
+    v2 = ushr v0, v1
+    return v2
+}
+; run: %i32x4_ushr_const([1 0xfc 0x80000000 0xf83f3000]) == [0 0xf 0x08000000 0x0f83f300]
+
+function %i64x2_ushr_const(i64x2) -> i64x2 {
+block0(v0: i64x2):
+    v1 = iconst.i32 32
+    v2 = ushr v0, v1
+    return v2
+}
+; run: %i64x2_ushr_const([0x1 0xf]) == [0 0]
+; run: %i64x2_ushr_const([0x100000000 0]) == [1 0]
+; run: %i64x2_ushr_const([-1 -1]) == [0xffffffff 0xffffffff]

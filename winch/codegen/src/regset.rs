@@ -38,7 +38,9 @@ impl RegSet {
         self.gpr |= 1 << index;
     }
 
-    fn named_gpr_available(&self, index: u32) -> bool {
+    /// Returns true if the given general purpose register
+    /// is available.
+    pub fn named_gpr_available(&self, index: u32) -> bool {
         let index = 1 << index;
         (!self.gpr & index) == 0
     }

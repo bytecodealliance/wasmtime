@@ -1,7 +1,9 @@
 test interpret
 test run
+set enable_simd
 target aarch64
 target x86_64
+target x86_64 has_avx
 target s390x
 
 function %bitcast_if32x4(i32x4) -> f32x4 {

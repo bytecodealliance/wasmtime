@@ -1,7 +1,7 @@
 use wasmparser::ValType;
 /// Base register used to address the local slot.
 ///
-/// Slots for stack arguments are addressed from the frame pointer
+/// Slots for stack arguments are addressed from the frame pointer.
 /// Slots for function-defined locals and for registers are addressed
 /// from the stack pointer.
 #[derive(Eq, PartialEq)]

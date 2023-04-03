@@ -220,11 +220,12 @@ fn get_isle_compilations(
                 output: out_dir.join("isle_opt.rs"),
                 inputs: vec![
                     prelude_isle.clone(),
-                    prelude_opt_isle.clone(),
+                    prelude_opt_isle,
                     src_opts.join("algebraic.isle"),
+                    src_opts.join("icmp.isle"),
                     src_opts.join("cprop.isle"),
                 ],
-                untracked_inputs: vec![clif_opt_isle.clone()],
+                untracked_inputs: vec![clif_opt_isle],
             },
             // The x86-64 instruction selector.
             IsleCompilation {

@@ -1,0 +1,235 @@
+test interpret
+test run
+target aarch64
+target s390x
+target x86_64
+target riscv64
+target riscv64 has_zba
+
+;; Various runtests intended to target the instructions encoded by the RISC-V `Zba` Extension
+;; Although other targets may also benefit from these tests and may implement similar optimizations
+
+
+function %add_uext_i32(i64, i32) -> i64 {
+block0(v0: i64, v1: i32):
+    v2 = uextend.i64 v1
+    v3 = iadd.i64 v0, v2
+    return v3
+}
+; run: %add_uext_i32(0, 0) == 0
+; run: %add_uext_i32(2, 1) == 3
+; run: %add_uext_i32(2, 0xFFFFFFFF) == 0x100000001
+
+
+function %sh1add(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = iconst.i64 1
+    v3 = ishl v1, v2
+    v4 = iadd.i64 v0, v3
+    return v4
+}
+; run: %sh1add(0, 0) == 0
+; run: %sh1add(2, 1) == 4
+; run: %sh1add(2, 0xFFFFFFFFFFFFFFFF) == 0
+
+
+function %sh1add_uext(i64, i32) -> i64 {
+block0(v0: i64, v1: i32):
+    v2 = uextend.i64 v1
+    v3 = iconst.i64 1
+    v4 = ishl v2, v3
+    v5 = iadd.i64 v0, v4
+    return v5
+}
+; run: %sh1add_uext(0, 0) == 0
+; run: %sh1add_uext(2, 1) == 4
+; run: %sh1add_uext(2, 0xFFFFFFFF) == 0x200000000
+; run: %sh1add_uext(0x100000000, 0x80000000) == 0x200000000
+
+
+function %sh2add(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = iconst.i64 2
+    v3 = ishl v1, v2
+    v4 = iadd.i64 v0, v3
+    return v4
+}
+; run: %sh2add(0, 0) == 0
+; run: %sh2add(2, 1) == 6
+; run: %sh2add(2, 0xFFFFFFFFFFFFFFFF) == 0xFFFFFFFFFFFFFFFE
+
+
+function %sh2add_uext(i64, i32) -> i64 {
+block0(v0: i64, v1: i32):
+    v2 = uextend.i64 v1
+    v3 = iconst.i64 2
+    v4 = ishl v2, v3
+    v5 = iadd.i64 v0, v4
+    return v5
+}
+; run: %sh2add_uext(0, 0) == 0
+; run: %sh2add_uext(2, 1) == 6
+; run: %sh2add_uext(4, 0xFFFFFFFF) == 0x400000000
+; run: %sh2add_uext(0x100000000, 0x80000000) == 0x300000000
+
+
+function %sh3add(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = iconst.i64 3
+    v3 = ishl v1, v2
+    v4 = iadd.i64 v0, v3
+    return v4
+}
+; run: %sh3add(0, 0) == 0
+; run: %sh3add(2, 1) == 10
+; run: %sh3add(2, 0xFFFFFFFFFFFFFFFF) == 0xFFFFFFFFFFFFFFFA
+
+
+function %sh3add_uext(i64, i32) -> i64 {
+block0(v0: i64, v1: i32):
+    v2 = uextend.i64 v1
+    v3 = iconst.i64 3
+    v4 = ishl v2, v3
+    v5 = iadd.i64 v0, v4
+    return v5
+}
+; run: %sh3add_uext(0, 0) == 0
+; run: %sh3add_uext(2, 1) == 10
+; run: %sh3add_uext(8, 0xFFFFFFFF) == 0x800000000
+; run: %sh3add_uext(0x100000000, 0x80000000) == 0x500000000
+
+
+function %ishl_uextend(i32) -> i64 {
+block0(v0: i32):
+    v1 = uextend.i64 v0
+    v2 = iconst.i64 5
+    v3 = ishl v1, v2
+    return v3
+}
+; run: %ishl_uextend(0) == 0
+; run: %ishl_uextend(1) == 0x20
+; run: %ishl_uextend(0xFFFFFFFF) == 0x1FFFFFFFE0
+
+
+;; These tests ensure that we don't merge the `uextend` and `ishl` instructions
+;; in a way that doesen't respect the `ishl` semantics of cutting off the high bits.
+
+function %add_uext_ishl_1(i64, i32) -> i64 {
+block0(v0: i64, v1: i32):
+    v2 = iconst.i32 1
+    v3 = ishl v1, v2
+    v4 = uextend.i64 v3
+    v5 = iadd.i64 v0, v4
+    return v5
+}
+; run: %add_uext_ishl_1(0x0123_4567, 0x8000_0000) == 0x0123_4567
+; run: %add_uext_ishl_1(0x0123_4567, 0xC000_0000) == 0x8123_4567
+; run: %add_uext_ishl_1(0x0123_4567, 0xE000_0000) == 0xC123_4567
+
+function %add_uext_ishl_2(i64, i32) -> i64 {
+block0(v0: i64, v1: i32):
+    v2 = iconst.i32 2
+    v3 = ishl v1, v2
+    v4 = uextend.i64 v3
+    v5 = iadd.i64 v0, v4
+    return v5
+}
+; run: %add_uext_ishl_2(0x0123_4567, 0x8000_0000) == 0x0123_4567
+; run: %add_uext_ishl_2(0x0123_4567, 0xC000_0000) == 0x0123_4567
+; run: %add_uext_ishl_2(0x0123_4567, 0xE000_0000) == 0x8123_4567
+
+function %add_uext_ishl_3(i64, i32) -> i64 {
+block0(v0: i64, v1: i32):
+    v2 = iconst.i32 3
+    v3 = ishl v1, v2
+    v4 = uextend.i64 v3
+    v5 = iadd.i64 v0, v4
+    return v5
+}
+; run: %add_uext_ishl_3(0x0123_4567, 0x8000_0000) == 0x0123_4567
+; run: %add_uext_ishl_3(0x0123_4567, 0xC000_0000) == 0x0123_4567
+; run: %add_uext_ishl_3(0x0123_4567, 0xE000_0000) == 0x0123_4567
+
+
+;; These tests perform the operations in 32bits but then sign extend the results to 64bits
+function %sext_add_i32(i32, i32) -> i64 {
+block0(v0: i32, v1: i32):
+    v2 = iadd.i32 v0, v1
+    v3 = sextend.i64 v2
+    return v3
+}
+; run: %sext_add_i32(1, 0) == 1
+; run: %sext_add_i32(0, -1) == -1
+
+
+function %sext_sub_i32(i32, i32) -> i64 {
+block0(v0: i32, v1: i32):
+    v2 = isub.i32 v0, v1
+    v3 = sextend.i64 v2
+    return v3
+}
+; run: %sext_sub_i32(1, 0) == 1
+; run: %sext_sub_i32(0, 1) == -1
+
+
+function %sext_ishl_i32(i32, i32) -> i64 {
+block0(v0: i32, v1: i32):
+    v2 = ishl.i32 v0, v1
+    v3 = sextend.i64 v2
+    return v3
+}
+; run: %sext_ishl_i32(1, 31) == 0xFFFFFFFF80000000
+
+function %sext_ushr_i32(i32, i32) -> i64 {
+block0(v0: i32, v1: i32):
+    v2 = ushr.i32 v0, v1
+    v3 = sextend.i64 v2
+    return v3
+}
+; run: %sext_ushr_i32(0x8000_0000, 0) == 0xFFFFFFFF80000000
+; run: %sext_ushr_i32(0x8000_0000, 32) == 0xFFFFFFFF80000000
+
+function %sext_sshr_i32(i32, i32) -> i64 {
+block0(v0: i32, v1: i32):
+    v2 = sshr.i32 v0, v1
+    v3 = sextend.i64 v2
+    return v3
+}
+; run: %sext_sshr_i32(0x8000_0000, 0) == 0xFFFFFFFF80000000
+; run: %sext_sshr_i32(0x8000_0000, 32) == 0xFFFFFFFF80000000
+
+function %sext_add_const_i32(i32) -> i64 {
+block0(v0: i32):
+    v1 = iconst.i32 -1
+    v2 = iadd.i32 v0, v1
+    v3 = sextend.i64 v2
+    return v3
+}
+; run: %sext_add_const_i32(0) == -1
+
+function %sext_ishl_const_i32(i32) -> i64 {
+block0(v0: i32):
+    v1 = iconst.i32 31
+    v2 = ishl.i32 v0, v1
+    v3 = sextend.i64 v2
+    return v3
+}
+; run: %sext_ishl_const_i32(1) == 0xFFFFFFFF80000000
+
+function %sext_ushr_const_i32(i32) -> i64 {
+block0(v0: i32):
+    v1 = iconst.i32 32
+    v2 = ushr.i32 v0, v1
+    v3 = sextend.i64 v2
+    return v3
+}
+; run: %sext_ushr_const_i32(0x8000_0000) == 0xFFFFFFFF80000000
+
+function %sext_sshr_const_i32(i32) -> i64 {
+block0(v0: i32):
+    v1 = iconst.i32 32
+    v2 = sshr.i32 v0, v1
+    v3 = sextend.i64 v2
+    return v3
+}
+; run: %sext_sshr_const_i32(0x8000_0000) == 0xFFFFFFFF80000000

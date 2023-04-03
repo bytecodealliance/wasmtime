@@ -896,7 +896,7 @@
     (CallInd
       (link WritableReg)
       (info BoxCallIndInfo))
-    
+
     ;; A pseudo-instruction that captures register arguments in vregs.
     (Args
       (args VecArgPair))
@@ -1446,10 +1446,6 @@
 (decl vxrs_ext2_disabled () Type)
 (extern extractor vxrs_ext2_disabled vxrs_ext2_disabled)
 
-(decl allow_div_traps () Type)
-(extern extractor allow_div_traps allow_div_traps)
-
-
 ;; Helpers for SIMD lane number operations ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; There are two ways to map vector types onto the SIMD vector registers
@@ -1555,8 +1551,8 @@
 (decl u8_as_u16 (u8) u16)
 (extern constructor u8_as_u16 u8_as_u16)
 
-(decl u64_as_u32 (u64) u32)
-(extern constructor u64_as_u32 u64_as_u32)
+(decl u64_truncate_to_u32 (u64) u32)
+(extern constructor u64_truncate_to_u32 u64_truncate_to_u32)
 
 (decl u64_as_i16 (u64) i16)
 (extern constructor u64_as_i16 u64_as_i16)
@@ -1811,10 +1807,10 @@
 
 (decl lower_address (MemFlags Value Offset32) MemArg)
 
-(rule (lower_address flags addr (i64_from_offset offset))
+(rule (lower_address flags addr @ (value_type (ty_addr64 _)) (i64_from_offset offset))
       (memarg_reg_plus_off addr offset 0 flags))
 
-(rule 1 (lower_address flags (iadd x y) (i64_from_offset 0))
+(rule 1 (lower_address flags (has_type (ty_addr64 _) (iadd x y)) (i64_from_offset 0))
       (memarg_reg_plus_reg x y 0 flags))
 
 (rule 1 (lower_address flags
@@ -1828,10 +1824,10 @@
 
 (decl lower_address_bias (MemFlags Value Offset32 u8) MemArg)
 
-(rule (lower_address_bias flags addr (i64_from_offset offset) bias)
+(rule (lower_address_bias flags addr @ (value_type $I64) (i64_from_offset offset) bias)
       (memarg_reg_plus_off addr offset bias flags))
 
-(rule 1 (lower_address_bias flags (iadd x y) (i64_from_offset 0) bias)
+(rule 1 (lower_address_bias flags (has_type $I64 (iadd x y)) (i64_from_offset 0) bias)
       (memarg_reg_plus_reg x y bias flags))
 
 
@@ -3000,7 +2996,7 @@
 ;; 32-bit result type, any value
 (rule 5 (imm (gpr32_ty ty) n)
       (let ((dst WritableReg (temp_writable_reg ty))
-            (_ Unit (emit (MInst.Mov32Imm dst (u64_as_u32 n)))))
+            (_ Unit (emit (MInst.Mov32Imm dst (u64_truncate_to_u32 n)))))
         dst))
 
 ;; 64-bit result type, value fits in i16
@@ -3051,7 +3047,7 @@
 ;; TODO: use LZER to load 0.0
 (rule 8 (imm $F32 n)
       (let ((dst WritableReg (temp_writable_reg $F32))
-            (_ Unit (emit (MInst.LoadFpuConst32 dst (u64_as_u32 n)))))
+            (_ Unit (emit (MInst.LoadFpuConst32 dst (u64_truncate_to_u32 n)))))
         dst))
 
 ;; 64-bit floating-point type, any value.  Loaded from literal pool.

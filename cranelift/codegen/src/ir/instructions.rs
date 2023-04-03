@@ -575,12 +575,9 @@ impl OpcodeConstraints {
     /// `ctrl_type`.
     pub fn result_type(self, n: usize, ctrl_type: Type) -> Type {
         debug_assert!(n < self.num_fixed_results(), "Invalid result index");
-        if let ResolvedConstraint::Bound(t) =
-            OPERAND_CONSTRAINTS[self.constraint_offset() + n].resolve(ctrl_type)
-        {
-            t
-        } else {
-            panic!("Result constraints can't be free");
+        match OPERAND_CONSTRAINTS[self.constraint_offset() + n].resolve(ctrl_type) {
+            ResolvedConstraint::Bound(t) => t,
+            ResolvedConstraint::Free(ts) => panic!("Result constraints can't be free: {:?}", ts),
         }
     }
 
@@ -614,7 +611,7 @@ type BitSet8 = BitSet<u8>;
 type BitSet16 = BitSet<u16>;
 
 /// A value type set describes the permitted set of types for a type variable.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ValueTypeSet {
     /// Allowed lane sizes
     pub lanes: BitSet16,
@@ -686,8 +683,8 @@ enum OperandConstraint {
     /// This operand is `ctrlType.lane_of()`.
     LaneOf,
 
-    /// This operand is `ctrlType.as_bool()`.
-    AsBool,
+    /// This operand is `ctrlType.as_truthy()`.
+    AsTruthy,
 
     /// This operand is `ctrlType.half_width()`.
     HalfWidth,
@@ -703,6 +700,12 @@ enum OperandConstraint {
 
     /// This operands is `ctrlType.dynamic_to_vector()`.
     DynamicToVector,
+
+    /// This operand is `ctrlType.narrower()`.
+    Narrower,
+
+    /// This operand is `ctrlType.wider()`.
+    Wider,
 }
 
 impl OperandConstraint {
@@ -716,7 +719,7 @@ impl OperandConstraint {
             Free(vts) => ResolvedConstraint::Free(TYPE_SETS[vts as usize]),
             Same => Bound(ctrl_type),
             LaneOf => Bound(ctrl_type.lane_of()),
-            AsBool => Bound(ctrl_type.as_bool()),
+            AsTruthy => Bound(ctrl_type.as_truthy()),
             HalfWidth => Bound(ctrl_type.half_width().expect("invalid type for half_width")),
             DoubleWidth => Bound(
                 ctrl_type
@@ -766,6 +769,57 @@ impl OperandConstraint {
                     .dynamic_to_vector()
                     .expect("invalid type for dynamic_to_vector"),
             ),
+            Narrower => {
+                let ctrl_type_bits = ctrl_type.log2_lane_bits();
+                let mut tys = ValueTypeSet::default();
+
+                // We're testing scalar values, only.
+                tys.lanes = BitSet::from_range(0, 1);
+
+                if ctrl_type.is_int() {
+                    // The upper bound in from_range is exclusive, and we want to exclude the
+                    // control type to construct the interval of [I8, ctrl_type).
+                    tys.ints = BitSet8::from_range(3, ctrl_type_bits as u8);
+                } else if ctrl_type.is_float() {
+                    // The upper bound in from_range is exclusive, and we want to exclude the
+                    // control type to construct the interval of [F32, ctrl_type).
+                    tys.floats = BitSet8::from_range(5, ctrl_type_bits as u8);
+                } else {
+                    panic!("The Narrower constraint only operates on floats or ints");
+                }
+                ResolvedConstraint::Free(tys)
+            }
+            Wider => {
+                let ctrl_type_bits = ctrl_type.log2_lane_bits();
+                let mut tys = ValueTypeSet::default();
+
+                // We're testing scalar values, only.
+                tys.lanes = BitSet::from_range(0, 1);
+
+                if ctrl_type.is_int() {
+                    let lower_bound = ctrl_type_bits as u8 + 1;
+                    // The largest integer type we can represent in `BitSet8` is I128, which is
+                    // represented by bit 7 in the bit set. Adding one to exclude I128 from the
+                    // lower bound would overflow as 2^8 doesn't fit in a u8, but this would
+                    // already describe the empty set so instead we leave `ints` in its default
+                    // empty state.
+                    if lower_bound < BitSet8::bits() as u8 {
+                        // The interval should include all types wider than `ctrl_type`, so we use
+                        // `2^8` as the upper bound, and add one to the bits of `ctrl_type` to define
+                        // the interval `(ctrl_type, I128]`.
+                        tys.ints = BitSet8::from_range(lower_bound, 8);
+                    }
+                } else if ctrl_type.is_float() {
+                    // The interval should include all float types wider than `ctrl_type`, so we
+                    // use `2^7` as the upper bound, and add one to the bits of `ctrl_type` to
+                    // define the interval `(ctrl_type, F64]`.
+                    tys.floats = BitSet8::from_range(ctrl_type_bits as u8 + 1, 7);
+                } else {
+                    panic!("The Wider constraint only operates on floats or ints");
+                }
+
+                ResolvedConstraint::Free(tys)
+            }
         }
     }
 }

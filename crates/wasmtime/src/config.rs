@@ -6,13 +6,14 @@ use std::collections::{HashMap, HashSet};
 use std::fmt;
 #[cfg(feature = "cache")]
 use std::path::Path;
+use std::str::FromStr;
 use std::sync::Arc;
 use target_lexicon::Architecture;
 use wasmparser::WasmFeatures;
 #[cfg(feature = "cache")]
 use wasmtime_cache::CacheConfig;
 use wasmtime_environ::Tunables;
-use wasmtime_jit::{JitDumpAgent, NullProfilerAgent, ProfilingAgent, VTuneAgent};
+use wasmtime_jit::{JitDumpAgent, NullProfilerAgent, PerfMapAgent, ProfilingAgent, VTuneAgent};
 use wasmtime_runtime::{InstanceAllocator, OnDemandInstanceAllocator, RuntimeMemoryCreator};
 
 pub use wasmtime_environ::CacheStore;
@@ -221,7 +222,6 @@ impl Config {
     #[cfg(compiler)]
     #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
     pub fn target(&mut self, target: &str) -> Result<&mut Self> {
-        use std::str::FromStr;
         self.compiler_config.target =
             Some(target_lexicon::Triple::from_str(target).map_err(|e| anyhow::anyhow!(e))?);
 
@@ -695,6 +695,56 @@ impl Config {
     /// [relaxed simd proposal]: https://github.com/WebAssembly/relaxed-simd
     pub fn wasm_simd(&mut self, enable: bool) -> &mut Self {
         self.features.simd = enable;
+        self
+    }
+
+    /// Configures whether the WebAssembly Relaxed SIMD proposal will be
+    /// enabled for compilation.
+    ///
+    /// The [WebAssembly Relaxed SIMD proposal][proposal] is not, at the time of
+    /// this writing, at stage 4. The relaxed SIMD proposal adds new
+    /// instructions to WebAssembly which, for some specific inputs, are allowed
+    /// to produce different results on different hosts. More-or-less this
+    /// proposal enables exposing platform-specific semantics of SIMD
+    /// instructions in a controlled fashion to a WebAssembly program. From an
+    /// embedder's perspective this means that WebAssembly programs may execute
+    /// differently depending on whether the host is x86_64 or AArch64, for
+    /// example.
+    ///
+    /// By default Wasmtime lowers relaxed SIMD instructions to the fastest
+    /// lowering for the platform it's running on. This means that, by default,
+    /// some relaxed SIMD instructions may have different results for the same
+    /// inputs across x86_64 and AArch64. This behavior can be disabled through
+    /// the [`Config::relaxed_simd_deterministic`] option which will force
+    /// deterministic behavior across all platforms, as classified by the
+    /// specification, at the cost of performance.
+    ///
+    /// This is `false` by default.
+    ///
+    /// [proposal]: https://github.com/webassembly/relaxed-simd
+    pub fn wasm_relaxed_simd(&mut self, enable: bool) -> &mut Self {
+        self.features.relaxed_simd = enable;
+        self
+    }
+
+    /// This option can be used to control the behavior of the [relaxed SIMD
+    /// proposal's][proposal] instructions.
+    ///
+    /// The relaxed SIMD proposal introduces instructions that are allowed to
+    /// have different behavior on different architectures, primarily to afford
+    /// an efficient implementation on all architectures. This means, however,
+    /// that the same module may execute differently on one host than another,
+    /// which typically is not otherwise the case. This option is provided to
+    /// force Wasmtime to generate deterministic code for all relaxed simd
+    /// instructions, at the cost of performance, for all architectures. When
+    /// this option is enabled then the deterministic behavior of all
+    /// instructions in the relaxed SIMD proposal is selected.
+    ///
+    /// This is `false` by default.
+    ///
+    /// [proposal]: https://github.com/webassembly/relaxed-simd
+    pub fn relaxed_simd_deterministic(&mut self, enable: bool) -> &mut Self {
+        self.tunables.relaxed_simd_deterministic = enable;
         self
     }
 
@@ -1333,7 +1383,7 @@ impl Config {
     /// Configures whether compiled artifacts will contain information to map
     /// native program addresses back to the original wasm module.
     ///
-    /// This configuration option is `true` by default and, if enables,
+    /// This configuration option is `true` by default and, if enabled,
     /// generates the appropriate tables in compiled modules to map from native
     /// address back to wasm source addresses. This is used for displaying wasm
     /// program counters in backtraces as well as generating filenames/line
@@ -1502,6 +1552,7 @@ impl Config {
 
     pub(crate) fn build_profiler(&self) -> Result<Box<dyn ProfilingAgent>> {
         Ok(match self.profiling_strategy {
+            ProfilingStrategy::PerfMap => Box::new(PerfMapAgent::new()?) as Box<dyn ProfilingAgent>,
             ProfilingStrategy::JitDump => Box::new(JitDumpAgent::new()?) as Box<dyn ProfilingAgent>,
             ProfilingStrategy::VTune => Box::new(VTuneAgent::new()?) as Box<dyn ProfilingAgent>,
             ProfilingStrategy::None => Box::new(NullProfilerAgent),
@@ -1576,6 +1627,10 @@ impl Config {
             }
         }
 
+        if self.features.relaxed_simd && !self.features.simd {
+            bail!("cannot disable the simd proposal but enable the relaxed simd proposal");
+        }
+
         // Apply compiler settings and flags
         for (k, v) in self.compiler_config.settings.iter() {
             compiler.set(k, v)?;
@@ -1585,7 +1640,7 @@ impl Config {
         }
 
         if let Some(cache_store) = &self.compiler_config.cache_store {
-            compiler.enable_incremental_compilation(cache_store.clone());
+            compiler.enable_incremental_compilation(cache_store.clone())?;
         }
 
         compiler.build()
@@ -1628,6 +1683,7 @@ impl fmt::Debug for Config {
             )
             .field("wasm_bulk_memory", &self.features.bulk_memory)
             .field("wasm_simd", &self.features.simd)
+            .field("wasm_relaxed_simd", &self.features.relaxed_simd)
             .field("wasm_multi_value", &self.features.multi_value)
             .field(
                 "static_memory_maximum_size",
@@ -1692,10 +1748,13 @@ pub enum OptLevel {
 }
 
 /// Select which profiling technique to support.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ProfilingStrategy {
     /// No profiler support.
     None,
+
+    /// Collect function name information as the "perf map" file format, used with `perf` on Linux.
+    PerfMap,
 
     /// Collect profiling info for "jitdump" file format, used with `perf` on
     /// Linux.
@@ -1703,6 +1762,20 @@ pub enum ProfilingStrategy {
 
     /// Collect profiling info using the "ittapi", used with `VTune` on Linux.
     VTune,
+}
+
+impl FromStr for ProfilingStrategy {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s {
+            "none" => Ok(Self::None),
+            "perfmap" => Ok(Self::PerfMap),
+            "jitdump" => Ok(Self::JitDump),
+            "vtune" => Ok(Self::VTune),
+            _ => anyhow::bail!("unknown value for profiling strategy"),
+        }
+    }
 }
 
 /// Select how wasm backtrace detailed information is handled.

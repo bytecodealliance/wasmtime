@@ -229,6 +229,8 @@ pub struct MachBuffer<I: VCodeInst> {
     label_aliases: SmallVec<[MachLabel; 16]>,
     /// Constants that must be emitted at some point.
     pending_constants: SmallVec<[MachLabelConstant; 16]>,
+    /// Traps that must be emitted at some point.
+    pending_traps: SmallVec<[MachLabelTrap; 16]>,
     /// Fixups that must be performed after all code is emitted.
     fixup_records: SmallVec<[MachLabelFixup<I>; 16]>,
     /// Current deadline at which all constants are flushed and all code labels
@@ -371,6 +373,7 @@ impl<I: VCodeInst> MachBuffer<I> {
             label_offsets: SmallVec::new(),
             label_aliases: SmallVec::new(),
             pending_constants: SmallVec::new(),
+            pending_traps: SmallVec::new(),
             fixup_records: SmallVec::new(),
             island_deadline: UNKNOWN_LABEL_OFFSET,
             island_worst_case_size: 0,
@@ -1077,15 +1080,41 @@ impl<I: VCodeInst> MachBuffer<I> {
             align,
             label
         );
-        let deadline = self.cur_offset().saturating_add(max_distance);
-        self.island_worst_case_size += data.len() as CodeOffset;
-        self.island_worst_case_size =
-            (self.island_worst_case_size + I::LabelUse::ALIGN - 1) & !(I::LabelUse::ALIGN - 1);
+        self.update_deadline(data.len(), max_distance);
         self.pending_constants.push(MachLabelConstant {
             label,
             align,
             data: SmallVec::from(data),
         });
+    }
+
+    /// Emit a trap at some point in the future with the specified code and
+    /// stack map.
+    ///
+    /// This function returns a [`MachLabel`] which will be the future address
+    /// of the trap. Jumps should refer to this label, likely by using the
+    /// [`MachBuffer::use_label_at_offset`] method, to get a relocation
+    /// patched in once the address of the trap is known.
+    ///
+    /// This will batch all traps into the end of the function.
+    pub fn defer_trap(&mut self, code: TrapCode, stack_map: Option<StackMap>) -> MachLabel {
+        let label = self.get_label();
+        self.update_deadline(I::TRAP_OPCODE.len(), u32::MAX);
+        self.pending_traps.push(MachLabelTrap {
+            label,
+            code,
+            stack_map,
+            loc: self.cur_srcloc.map(|(_start, loc)| loc),
+        });
+        label
+    }
+
+    fn update_deadline(&mut self, len: usize, max_distance: CodeOffset) {
+        trace!("defer: eventually emit {} bytes", len);
+        let deadline = self.cur_offset().saturating_add(max_distance);
+        self.island_worst_case_size += len as CodeOffset;
+        self.island_worst_case_size =
+            (self.island_worst_case_size + I::LabelUse::ALIGN - 1) & !(I::LabelUse::ALIGN - 1);
         if deadline < self.island_deadline {
             self.island_deadline = deadline;
         }
@@ -1131,8 +1160,48 @@ impl<I: VCodeInst> MachBuffer<I> {
         self.island_deadline = UNKNOWN_LABEL_OFFSET;
         self.island_worst_case_size = 0;
 
-        // First flush out all constants so we have more labels in case fixups
-        // are applied against these labels.
+        // End the current location tracking since anything emitted during this
+        // function shouldn't be attributed to whatever the current source
+        // location is.
+        //
+        // Note that the current source location, if it's set right now, will be
+        // restored at the end of this island emission.
+        let cur_loc = self.cur_srcloc.map(|(_, loc)| loc);
+        if cur_loc.is_some() {
+            self.end_srcloc();
+        }
+
+        // First flush out all traps/constants so we have more labels in case
+        // fixups are applied against these labels.
+        //
+        // Note that traps are placed first since this typically happens at the
+        // end of the function and for disassemblers we try to keep all the code
+        // contiguously together.
+        for MachLabelTrap {
+            label,
+            code,
+            stack_map,
+            loc,
+        } in mem::take(&mut self.pending_traps)
+        {
+            // If this trap has source information associated with it then
+            // emit this information for the trap instruction going out now too.
+            if let Some(loc) = loc {
+                self.start_srcloc(loc);
+            }
+            self.align_to(I::LabelUse::ALIGN);
+            self.bind_label(label);
+            self.add_trap(code);
+            if let Some(map) = stack_map {
+                let extent = StackMapExtent::UpcomingBytes(I::TRAP_OPCODE.len() as u32);
+                self.add_stack_map(extent, map);
+            }
+            self.put_data(I::TRAP_OPCODE);
+            if loc.is_some() {
+                self.end_srcloc();
+            }
+        }
+
         for MachLabelConstant { label, align, data } in mem::take(&mut self.pending_constants) {
             self.align_to(align);
             self.bind_label(label);
@@ -1209,6 +1278,10 @@ impl<I: VCodeInst> MachBuffer<I> {
                 }
             }
         }
+
+        if let Some(loc) = cur_loc {
+            self.start_srcloc(loc);
+        }
     }
 
     /// Emits a "veneer" the `kind` code at `offset` to jump to `label`.
@@ -1256,7 +1329,10 @@ impl<I: VCodeInst> MachBuffer<I> {
     }
 
     fn finish_emission_maybe_forcing_veneers(&mut self, force_veneers: bool) {
-        while !self.pending_constants.is_empty() || !self.fixup_records.is_empty() {
+        while !self.pending_constants.is_empty()
+            || !self.pending_traps.is_empty()
+            || !self.fixup_records.is_empty()
+        {
             // `emit_island()` will emit any pending veneers and constants, and
             // as a side-effect, will also take care of any fixups with resolved
             // labels eagerly.
@@ -1479,6 +1555,19 @@ struct MachLabelConstant {
     data: SmallVec<[u8; 16]>,
 }
 
+/// A trap that is deferred to the next time an island is emitted for either
+/// traps, constants, or fixups.
+struct MachLabelTrap {
+    /// This label will refer to the trap's offset.
+    label: MachLabel,
+    /// The code associated with this trap.
+    code: TrapCode,
+    /// An optional stack map to associate with this trap.
+    stack_map: Option<StackMap>,
+    /// An optional source location to assign for this trap.
+    loc: Option<RelSourceLoc>,
+}
+
 /// A fixup to perform on the buffer once code is emitted. Fixups always refer
 /// to labels and patch the code based on label offsets. Hence, they are like
 /// relocations, but internal to one buffer.
@@ -1610,6 +1699,8 @@ pub struct MachTextSectionBuilder<I: VCodeInst> {
 }
 
 impl<I: VCodeInst> MachTextSectionBuilder<I> {
+    /// Creates a new text section builder which will have `num_funcs` functions
+    /// pushed into it.
     pub fn new(num_funcs: usize) -> MachTextSectionBuilder<I> {
         let mut buf = MachBuffer::new();
         buf.reserve_labels_for_blocks(num_funcs);
@@ -1746,20 +1837,20 @@ mod test {
 
         buf.bind_label(label(0));
         let inst = Inst::CondBr {
-            kind: CondBrKind::NotZero(xreg(0)),
+            kind: CondBrKind::Zero(xreg(0)),
             taken: target(1),
             not_taken: target(2),
         };
         inst.emit(&[], &mut buf, &info, &mut state);
 
         buf.bind_label(label(1));
-        let inst = Inst::Udf {
-            trap_code: TrapCode::Interrupt,
-        };
+        let inst = Inst::Nop4;
         inst.emit(&[], &mut buf, &info, &mut state);
 
         buf.bind_label(label(2));
-        let inst = Inst::Nop4;
+        let inst = Inst::Udf {
+            trap_code: TrapCode::Interrupt,
+        };
         inst.emit(&[], &mut buf, &info, &mut state);
 
         buf.bind_label(label(3));

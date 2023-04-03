@@ -3,17 +3,109 @@
 use cranelift_codegen::{
     cursor::{Cursor, FuncCursor},
     incremental_cache as icache,
-    ir::{self, immediates::Imm64, ExternalName},
-    Context,
+    ir::{
+        self, immediates::Imm64, ExternalName, Function, LibCall, Signature, UserExternalName,
+        UserFuncName,
+    },
+    isa, Context,
 };
-use libfuzzer_sys::fuzz_target;
+use libfuzzer_sys::{
+    arbitrary::{self, Arbitrary, Unstructured},
+    fuzz_target,
+};
+use std::fmt;
 
 use cranelift_fuzzgen::*;
+
+/// TODO: This *almost* could be replaced with `LibCall::all()`, but
+/// `LibCall::signature` panics for some libcalls, so we need to avoid that.
+const ALLOWED_LIBCALLS: &'static [LibCall] = &[
+    LibCall::CeilF32,
+    LibCall::CeilF64,
+    LibCall::FloorF32,
+    LibCall::FloorF64,
+    LibCall::TruncF32,
+    LibCall::TruncF64,
+    LibCall::NearestF32,
+    LibCall::NearestF64,
+    LibCall::FmaF32,
+    LibCall::FmaF64,
+];
+
+/// A generated function with an ISA that targets one of cranelift's backends.
+pub struct FunctionWithIsa {
+    /// TargetIsa to use when compiling this test case
+    pub isa: isa::OwnedTargetIsa,
+
+    /// Function under test
+    pub func: Function,
+}
+
+impl FunctionWithIsa {
+    pub fn generate(u: &mut Unstructured) -> anyhow::Result<Self> {
+        // We filter out targets that aren't supported in the current build
+        // configuration after randomly choosing one, instead of randomly choosing
+        // a supported one, so that the same fuzz input works across different build
+        // configurations.
+        let target = u.choose(isa::ALL_ARCHITECTURES)?;
+        let mut builder =
+            isa::lookup_by_name(target).map_err(|_| arbitrary::Error::IncorrectFormat)?;
+        let architecture = builder.triple().architecture;
+
+        let mut gen = FuzzGen::new(u);
+        let flags = gen
+            .generate_flags(architecture)
+            .map_err(|_| arbitrary::Error::IncorrectFormat)?;
+        gen.set_isa_flags(&mut builder, IsaFlagGen::All)?;
+        let isa = builder
+            .finish(flags)
+            .map_err(|_| arbitrary::Error::IncorrectFormat)?;
+
+        // Function name must be in a different namespace than TESTFILE_NAMESPACE (0)
+        let fname = UserFuncName::user(1, 0);
+
+        // We don't actually generate these functions, we just simulate their signatures and names
+        let func_count = gen.u.int_in_range(gen.config.testcase_funcs.clone())?;
+        let usercalls = (0..func_count)
+            .map(|i| {
+                let name = UserExternalName::new(2, i as u32);
+                let sig = gen.generate_signature(architecture)?;
+                Ok((name, sig))
+            })
+            .collect::<anyhow::Result<Vec<(UserExternalName, Signature)>>>()
+            .map_err(|_| arbitrary::Error::IncorrectFormat)?;
+
+        let func = gen
+            .generate_func(
+                fname,
+                isa.triple().clone(),
+                usercalls,
+                ALLOWED_LIBCALLS.to_vec(),
+            )
+            .map_err(|_| arbitrary::Error::IncorrectFormat)?;
+
+        Ok(FunctionWithIsa { isa, func })
+    }
+}
+
+impl fmt::Debug for FunctionWithIsa {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // TODO: We could avoid the clone here.
+        let funcs = &[self.func.clone()];
+        PrintableTestCase::compile(&self.isa, funcs).fmt(f)
+    }
+}
+
+impl<'a> Arbitrary<'a> for FunctionWithIsa {
+    fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
+        Self::generate(u).map_err(|_| arbitrary::Error::IncorrectFormat)
+    }
+}
 
 fuzz_target!(|func: FunctionWithIsa| {
     let FunctionWithIsa { mut func, isa } = func;
 
-    let cache_key_hash = icache::compute_cache_key(&*isa, &mut func);
+    let cache_key_hash = icache::compute_cache_key(&*isa, &func);
 
     let mut context = Context::for_function(func.clone());
     let prev_stencil = match context.compile_stencil(&*isa) {
@@ -97,7 +189,7 @@ fuzz_target!(|func: FunctionWithIsa| {
         false
     };
 
-    let new_cache_key_hash = icache::compute_cache_key(&*isa, &mut func);
+    let new_cache_key_hash = icache::compute_cache_key(&*isa, &func);
 
     if expect_cache_hit {
         assert!(cache_key_hash == new_cache_key_hash);

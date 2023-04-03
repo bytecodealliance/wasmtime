@@ -60,6 +60,11 @@ $ wasmtime hello.wasm
 Hello, world!
 ```
 
+(Note: make sure you installed Rust using the `rustup` method in the official
+instructions above, and do not have a copy of the Rust toolchain installed on
+your system in some other way as well (e.g. the system package manager). Otherwise, the `rustup target add...`
+command may not install the target for the correct copy of Rust.)
+
 ## Features
 
 * **Fast**. Wasmtime is built on the optimizing [Cranelift] code generator to

@@ -1,6 +1,6 @@
 //! X86_64-bit Instruction Set Architecture.
 
-pub use self::inst::{args, EmitInfo, EmitState, Inst};
+pub use self::inst::{args, CallInfo, EmitInfo, EmitState, Inst};
 
 use super::{OwnedTargetIsa, TargetIsa};
 use crate::dominator_tree::DominatorTree;
@@ -184,6 +184,10 @@ impl TargetIsa for X64Backend {
             .syntax(arch::x86::ArchSyntax::Att)
             .build()
     }
+
+    fn has_native_fma(&self) -> bool {
+        self.x64_flags.use_fma()
+    }
 }
 
 impl fmt::Display for X64Backend {
@@ -208,7 +212,7 @@ pub(crate) fn isa_builder(triple: Triple) -> IsaBuilder {
 fn isa_constructor(
     triple: Triple,
     shared_flags: Flags,
-    builder: shared_settings::Builder,
+    builder: &shared_settings::Builder,
 ) -> CodegenResult<OwnedTargetIsa> {
     let isa_flags = x64_settings::Flags::new(&shared_flags, builder);
 

@@ -229,7 +229,7 @@ block0(v0: i32x4, v1: i32x4):
 
 function %vselect_i16x8(i16x8, i16x8, i16x8) -> i16x8 {
 block0(v0: i16x8, v1: i16x8, v2: i16x8):
-    v3 = vselect v0, v1, v2
+    v3 = bitselect v0, v1, v2
     return v3
 }
 
@@ -237,9 +237,10 @@ block0(v0: i16x8, v1: i16x8, v2: i16x8):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movdqa  %xmm2, %xmm4
-;   pblendvb %xmm4, %xmm1, %xmm4
-;   movdqa  %xmm4, %xmm0
+;   movdqa  %xmm1, %xmm4
+;   pand    %xmm4, %xmm0, %xmm4
+;   pandn   %xmm0, %xmm2, %xmm0
+;   por     %xmm0, %xmm4, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -249,16 +250,17 @@ block0(v0: i16x8, v1: i16x8, v2: i16x8):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movdqa %xmm2, %xmm4
-;   pblendvb %xmm0, %xmm1, %xmm4
-;   movdqa %xmm4, %xmm0
+;   movdqa %xmm1, %xmm4
+;   pand %xmm0, %xmm4
+;   pandn %xmm2, %xmm0
+;   por %xmm4, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
 
-function %vselect_f32x4(i32x4, f32x4, f32x4) -> f32x4 {
-block0(v0: i32x4, v1: f32x4, v2: f32x4):
-    v3 = vselect v0, v1, v2
+function %vselect_f32x4(f32x4, f32x4, f32x4) -> f32x4 {
+block0(v0: f32x4, v1: f32x4, v2: f32x4):
+    v3 = bitselect v0, v1, v2
     return v3
 }
 
@@ -266,9 +268,10 @@ block0(v0: i32x4, v1: f32x4, v2: f32x4):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movdqa  %xmm2, %xmm4
-;   blendvps %xmm4, %xmm1, %xmm4
-;   movdqa  %xmm4, %xmm0
+;   movdqa  %xmm1, %xmm4
+;   andps   %xmm4, %xmm0, %xmm4
+;   andnps  %xmm0, %xmm2, %xmm0
+;   orps    %xmm0, %xmm4, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -278,16 +281,17 @@ block0(v0: i32x4, v1: f32x4, v2: f32x4):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movdqa %xmm2, %xmm4
-;   blendvps %xmm0, %xmm1, %xmm4
-;   movdqa %xmm4, %xmm0
+;   movdqa %xmm1, %xmm4
+;   andps %xmm0, %xmm4
+;   andnps %xmm2, %xmm0
+;   orps %xmm4, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
 
-function %vselect_f64x2(i64x2, f64x2, f64x2) -> f64x2 {
-block0(v0: i64x2, v1: f64x2, v2: f64x2):
-    v3 = vselect v0, v1, v2
+function %vselect_f64x2(f64x2, f64x2, f64x2) -> f64x2 {
+block0(v0: f64x2, v1: f64x2, v2: f64x2):
+    v3 = bitselect v0, v1, v2
     return v3
 }
 
@@ -295,9 +299,10 @@ block0(v0: i64x2, v1: f64x2, v2: f64x2):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movdqa  %xmm2, %xmm4
-;   blendvpd %xmm4, %xmm1, %xmm4
-;   movdqa  %xmm4, %xmm0
+;   movdqa  %xmm1, %xmm4
+;   andpd   %xmm4, %xmm0, %xmm4
+;   andnpd  %xmm0, %xmm2, %xmm0
+;   orpd    %xmm0, %xmm4, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -307,9 +312,10 @@ block0(v0: i64x2, v1: f64x2, v2: f64x2):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movdqa %xmm2, %xmm4
-;   blendvpd %xmm0, %xmm1, %xmm4
-;   movdqa %xmm4, %xmm0
+;   movdqa %xmm1, %xmm4
+;   andpd %xmm0, %xmm4
+;   andnpd %xmm2, %xmm0
+;   orpd %xmm4, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

@@ -2,6 +2,7 @@
 
 use anyhow::Result;
 use arbitrary::{Arbitrary, Unstructured};
+use std::ops::Range;
 use wasmtime::{LinearMemory, MemoryCreator, MemoryType};
 
 /// Configuration for linear memories in Wasmtime.
@@ -85,6 +86,12 @@ unsafe impl LinearMemory for UnalignedMemory {
         // Return our allocated memory, offset by one, so that the base address
         // of memory is always unaligned.
         self.src[1..].as_ptr() as *mut _
+    }
+
+    fn wasm_accessible(&self) -> Range<usize> {
+        let base = self.as_ptr() as usize;
+        let len = self.byte_size();
+        base..base + len
     }
 }
 

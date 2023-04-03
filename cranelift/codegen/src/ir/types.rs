@@ -133,28 +133,27 @@ impl Type {
     ///
     /// Lane types are treated as vectors with one lane, so they are converted to the multi-bit
     /// boolean types.
-    pub fn as_bool_pedantic(self) -> Self {
+    pub fn as_truthy_pedantic(self) -> Self {
         // Replace the low 4 bits with the boolean version, preserve the high 4 bits.
         self.replace_lanes(match self.lane_type() {
             I8 => I8,
             I16 => I16,
             I32 | F32 => I32,
             I64 | F64 => I64,
-            R32 | R64 => panic!("Reference types should not convert to bool"),
+            R32 | R64 => panic!("Reference types are not truthy"),
             I128 => I128,
             _ => I8,
         })
     }
 
-    /// Get a type with the same number of lanes as this type, but with the lanes replaced by
-    /// booleans of the same size.
-    ///
-    /// Scalar types are all converted to `b1` which is usually what you want.
-    pub fn as_bool(self) -> Self {
+    /// Get the type of a comparison result for the given type. For vectors this will be a vector
+    /// with the same number of lanes and integer elements, and for scalar types this will be `i8`,
+    /// which is the result type of comparisons.
+    pub fn as_truthy(self) -> Self {
         if !self.is_vector() {
             I8
         } else {
-            self.as_bool_pedantic()
+            self.as_truthy_pedantic()
         }
     }
 
@@ -604,11 +603,11 @@ mod tests {
     }
 
     #[test]
-    fn as_bool() {
-        assert_eq!(I32X4.as_bool(), I32X4);
-        assert_eq!(I32.as_bool(), I8);
-        assert_eq!(I32X4.as_bool_pedantic(), I32X4);
-        assert_eq!(I32.as_bool_pedantic(), I32);
+    fn as_truthy() {
+        assert_eq!(I32X4.as_truthy(), I32X4);
+        assert_eq!(I32.as_truthy(), I8);
+        assert_eq!(I32X4.as_truthy_pedantic(), I32X4);
+        assert_eq!(I32.as_truthy_pedantic(), I32);
     }
 
     #[test]

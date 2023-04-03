@@ -1,7 +1,7 @@
 use crate::rust::{to_rust_ident, to_rust_upper_camel_case, RustGenerator, TypeMode};
 use crate::types::{TypeInfo, Types};
 use heck::*;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fmt::Write as _;
 use std::io::{Read, Write};
 use std::mem;
@@ -32,6 +32,8 @@ struct Wasmtime {
     imports: Vec<Import>,
     exports: Exports,
     types: Types,
+    sizes: SizeAlign,
+    interface_names: HashMap<InterfaceId, String>,
 }
 
 enum Import {
@@ -81,6 +83,7 @@ pub struct TrappableError {
 impl Opts {
     pub fn generate(&self, resolve: &Resolve, world: WorldId) -> String {
         let mut r = Wasmtime::default();
+        r.sizes.fill(resolve);
         r.opts = self.clone();
         r.generate(resolve, world)
     }
@@ -111,6 +114,7 @@ impl Wasmtime {
                 Import::Function { sig, add_to_linker }
             }
             WorldItem::Interface(id) => {
+                gen.gen.interface_names.insert(*id, snake.clone());
                 gen.current_interface = Some(*id);
                 gen.types(*id);
                 gen.generate_trappable_error_types(TypeOwner::Interface(*id));
@@ -157,6 +161,7 @@ impl Wasmtime {
             }
             WorldItem::Type(_) => unreachable!(),
             WorldItem::Interface(id) => {
+                gen.gen.interface_names.insert(*id, snake.clone());
                 gen.current_interface = Some(*id);
                 gen.types(*id);
                 gen.generate_trappable_error_types(TypeOwner::Interface(*id));
@@ -568,6 +573,7 @@ impl<'a> InterfaceGenerator<'a> {
                 self.push_str(&name);
                 self.push_str("{}\n");
             }
+            self.assert_type(id, &name);
         }
     }
 
@@ -584,14 +590,15 @@ impl<'a> InterfaceGenerator<'a> {
                 self.push_str(",");
             }
             self.push_str(");\n");
+            self.assert_type(id, &name);
         }
     }
 
-    fn type_flags(&mut self, _id: TypeId, name: &str, flags: &Flags, docs: &Docs) {
+    fn type_flags(&mut self, id: TypeId, name: &str, flags: &Flags, docs: &Docs) {
         self.rustdoc(docs);
+        let rust_name = to_rust_upper_camel_case(name);
         self.src.push_str("wasmtime::component::flags!(\n");
-        self.src
-            .push_str(&format!("{} {{\n", to_rust_upper_camel_case(name)));
+        self.src.push_str(&format!("{rust_name} {{\n"));
         for flag in flags.flags.iter() {
             // TODO wasmtime-component-macro doesnt support docs for flags rn
             uwrite!(
@@ -603,6 +610,7 @@ impl<'a> InterfaceGenerator<'a> {
         }
         self.src.push_str("}\n");
         self.src.push_str(");\n\n");
+        self.assert_type(id, &rust_name);
     }
 
     fn type_variant(&mut self, id: TypeId, _name: &str, variant: &Variant, docs: &Docs) {
@@ -642,7 +650,25 @@ impl<'a> InterfaceGenerator<'a> {
             self.push_str("= Option<");
             self.print_ty(payload, mode);
             self.push_str(">;\n");
+            self.assert_type(id, &name);
         }
+    }
+
+    // Emit a double-check that the wit-parser-understood size of a type agrees
+    // with the Wasmtime-understood size of a type.
+    fn assert_type(&mut self, id: TypeId, name: &str) {
+        self.push_str("const _: () = {\n");
+        uwriteln!(
+            self.src,
+            "assert!({} == <{name} as wasmtime::component::ComponentType>::SIZE32);",
+            self.gen.sizes.size(&Type::Id(id)),
+        );
+        uwriteln!(
+            self.src,
+            "assert!({} == <{name} as wasmtime::component::ComponentType>::ALIGN32);",
+            self.gen.sizes.align(&Type::Id(id)),
+        );
+        self.push_str("};\n");
     }
 
     fn print_rust_enum<'b>(
@@ -722,6 +748,8 @@ impl<'a> InterfaceGenerator<'a> {
                 self.print_generics(lt);
                 self.push_str(" {}\n");
             }
+
+            self.assert_type(id, &name);
         }
     }
 
@@ -777,6 +805,7 @@ impl<'a> InterfaceGenerator<'a> {
             self.push_str(",");
             self.print_optional_ty(result.err.as_ref(), mode);
             self.push_str(">;\n");
+            self.assert_type(id, &name);
         }
     }
 
@@ -874,6 +903,7 @@ impl<'a> InterfaceGenerator<'a> {
                     .map(|c| (c.name.to_upper_camel_case(), None)),
             )
         }
+        self.assert_type(id, &name);
     }
 
     fn type_alias(&mut self, id: TypeId, _name: &str, ty: &Type, docs: &Docs) {
@@ -886,6 +916,7 @@ impl<'a> InterfaceGenerator<'a> {
             self.push_str(" = ");
             self.print_ty(ty, mode);
             self.push_str(";\n");
+            self.assert_type(id, &name);
         }
     }
 
@@ -899,6 +930,7 @@ impl<'a> InterfaceGenerator<'a> {
             self.push_str(" = ");
             self.print_list(ty, mode);
             self.push_str(";\n");
+            self.assert_type(id, &name);
         }
     }
 
@@ -960,7 +992,7 @@ impl<'a> InterfaceGenerator<'a> {
         }
         // Generate the `pub trait` which represents the host functionality for
         // this import.
-        uwriteln!(self.src, "pub trait Host: Sized {{");
+        uwriteln!(self.src, "pub trait Host {{");
         for (_, func) in iface.functions.iter() {
             self.generate_function_trait_sig(owner, func);
         }
@@ -1353,8 +1385,18 @@ impl<'a> RustGenerator<'a> for InterfaceGenerator<'a> {
         self.resolve
     }
 
-    fn current_interface(&self) -> Option<InterfaceId> {
-        self.current_interface
+    fn path_to_interface(&self, interface: InterfaceId) -> Option<String> {
+        match self.current_interface {
+            Some(id) if id == interface => None,
+            _ => {
+                let name = &self.gen.interface_names[&interface];
+                Some(if self.current_interface.is_some() {
+                    format!("super::{name}")
+                } else {
+                    name.clone()
+                })
+            }
+        }
     }
 
     fn push_str(&mut self, s: &str) {

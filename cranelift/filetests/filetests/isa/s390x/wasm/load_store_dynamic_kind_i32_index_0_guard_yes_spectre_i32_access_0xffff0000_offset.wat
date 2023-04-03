@@ -55,7 +55,7 @@
 ;;   llgfr %r4, %r2
 ;;   llilf %r9, 4294901764
 ;;   algfr %r9, %r2
-;;   jle 6 ; trap
+;;   jgnle .+2 # trap=heap_oob
 ;;   lgr %r2, %r5
 ;;   lg %r5, 8(%r2)
 ;;   ag %r4, 0(%r2)
@@ -78,7 +78,7 @@
 ;;   llgfr %r3, %r2
 ;;   llilf %r5, 4294901764
 ;;   algfr %r5, %r2
-;;   jle 6 ; trap
+;;   jgnle .+2 # trap=heap_oob
 ;;   lgr %r2, %r4
 ;;   lg %r4, 8(%r2)
 ;;   ag %r3, 0(%r2)

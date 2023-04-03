@@ -82,7 +82,7 @@ jobs:
     if: needs.determine.outputs.audit
     runs-on: ubuntu-latest
     env:
-      CARGO_VET_VERSION: 0.3.1
+      CARGO_VET_VERSION: 0.6.1
     steps:
     - uses: actions/checkout@v3
       with:
@@ -151,6 +151,9 @@ jobs:
           if grep -q Cargo.lock names.log; then
             echo audit=true >> $GITHUB_OUTPUT
           fi
+          if grep -q supply-chain names.log; then
+            echo audit=true >> $GITHUB_OUTPUT
+          fi
         fi
         matrix="$(node ./ci/build-test-matrix.js ./commits.log ./names.log $run_full)"
         echo "test-matrix={\"include\":$(echo $matrix)}" >> $GITHUB_OUTPUT
@@ -181,7 +184,7 @@ jobs:
         submodules: true
     - uses: ./.github/actions/install-rust
       with:
-        toolchain: nightly-2022-12-15
+        toolchain: nightly-2023-03-20
 
     # Build C API documentation
     - run: curl -L https://sourceforge.net/projects/doxygen/files/rel-1.9.3/doxygen-1.9.3.linux.bin.tar.gz/download | tar xzf -
@@ -333,7 +336,7 @@ jobs:
     # flags to rustc.
     - uses: ./.github/actions/install-rust
       with:
-        toolchain: nightly-2022-12-15
+        toolchain: nightly-2023-03-20
     - run: cargo install cargo-fuzz --vers "^0.11"
     # Install the OCaml packages necessary for fuzz targets that use the
     # `wasm-spec-interpreter`.
@@ -360,7 +363,7 @@ jobs:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     env:
-      QEMU_BUILD_VERSION: 6.1.0
+      QEMU_BUILD_VERSION: 7.2.0
     strategy:
       matrix: ${{ fromJson(needs.determine.outputs.test-matrix) }}
     steps:
@@ -384,7 +387,7 @@ jobs:
     - uses: actions/cache@v3
       with:
         path: ${{ runner.tool_cache }}/qemu
-        key: qemu-${{ matrix.target }}-${{ env.QEMU_BUILD_VERSION }}-patchmadvise2
+        key: qemu-${{ matrix.target }}-${{ env.QEMU_BUILD_VERSION }}
       if: matrix.target != '' && matrix.os == 'ubuntu-latest'
     - name: Install cross-compilation tools
       run: |
@@ -417,7 +420,6 @@ jobs:
         # quickly.
         curl https://download.qemu.org/qemu-$QEMU_BUILD_VERSION.tar.xz | tar xJf -
         cd qemu-$QEMU_BUILD_VERSION
-        patch -p1 < $GITHUB_WORKSPACE/ci/qemu-madvise.patch
         ./configure --target-list=${{ matrix.qemu_target }} --prefix=${{ runner.tool_cache}}/qemu --disable-tools --disable-slirp --disable-fdt --disable-capstone --disable-docs
         ninja -C build install
         touch ${{ runner.tool_cache }}/qemu/built

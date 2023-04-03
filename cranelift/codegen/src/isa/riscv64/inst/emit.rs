@@ -370,68 +370,6 @@ impl Inst {
         }
         insts
     }
-
-    /// check if float is unordered.
-    pub(crate) fn lower_float_unordered(
-        tmp: Writable<Reg>,
-        ty: Type,
-        x: Reg,
-        y: Reg,
-        taken: BranchTarget,
-        not_taken: BranchTarget,
-    ) -> SmallInstVec<Inst> {
-        let mut insts = SmallInstVec::new();
-        let class_op = if ty == F32 {
-            FpuOPRR::FclassS
-        } else {
-            FpuOPRR::FclassD
-        };
-        // if x is nan
-        insts.push(Inst::FpuRR {
-            frm: None,
-            alu_op: class_op,
-            rd: tmp,
-            rs: x,
-        });
-        insts.push(Inst::AluRRImm12 {
-            alu_op: AluOPRRI::Andi,
-            rd: tmp,
-            rs: tmp.to_reg(),
-            imm12: Imm12::from_bits(FClassResult::is_nan_bits() as i16),
-        });
-        insts.push(Inst::CondBr {
-            taken,
-            not_taken: BranchTarget::zero(),
-            kind: IntegerCompare {
-                kind: IntCC::NotEqual,
-                rs1: tmp.to_reg(),
-                rs2: zero_reg(),
-            },
-        });
-        // if y is nan.
-        insts.push(Inst::FpuRR {
-            frm: None,
-            alu_op: class_op,
-            rd: tmp,
-            rs: y,
-        });
-        insts.push(Inst::AluRRImm12 {
-            alu_op: AluOPRRI::Andi,
-            rd: tmp,
-            rs: tmp.to_reg(),
-            imm12: Imm12::from_bits(FClassResult::is_nan_bits() as i16),
-        });
-        insts.push(Inst::CondBr {
-            taken,
-            not_taken,
-            kind: IntegerCompare {
-                kind: IntCC::NotEqual,
-                rs1: tmp.to_reg(),
-                rs2: zero_reg(),
-            },
-        });
-        insts
-    }
 }
 
 impl MachInstEmit for Inst {
@@ -1275,31 +1213,27 @@ impl MachInstEmit for Inst {
                     amo: AMO::SeqCst,
                 }
                 .emit(&[], sink, emit_info, state);
-                let origin_value = if ty.bits() < 32 {
-                    AtomicOP::extract(t0, offset, dst.to_reg(), ty)
+                if ty.bits() < 32 {
+                    AtomicOP::extract(dst, offset, dst.to_reg(), ty)
                         .iter()
                         .for_each(|i| i.emit(&[], sink, emit_info, state));
-                    t0.to_reg()
                 } else if ty.bits() == 32 {
                     Inst::Extend {
-                        rd: t0,
+                        rd: dst,
                         rn: dst.to_reg(),
                         signed: false,
                         from_bits: 32,
                         to_bits: 64,
                     }
                     .emit(&[], sink, emit_info, state);
-                    t0.to_reg()
-                } else {
-                    dst.to_reg()
-                };
+                }
                 Inst::CondBr {
                     taken: BranchTarget::Label(fail_label),
                     not_taken: BranchTarget::zero(),
                     kind: IntegerCompare {
                         kind: IntCC::NotEqual,
                         rs1: e,
-                        rs2: origin_value,
+                        rs2: dst.to_reg(),
                     },
                 }
                 .emit(&[], sink, emit_info, state);
@@ -1375,7 +1309,7 @@ impl MachInstEmit for Inst {
                     | crate::ir::AtomicRmwOp::And
                     | crate::ir::AtomicRmwOp::Or
                     | crate::ir::AtomicRmwOp::Xor => {
-                        AtomicOP::extract(t0, offset, dst.to_reg(), ty)
+                        AtomicOP::extract(dst, offset, dst.to_reg(), ty)
                             .iter()
                             .for_each(|i| i.emit(&[], sink, emit_info, state));
                         Inst::AluRRR {
@@ -1388,7 +1322,7 @@ impl MachInstEmit for Inst {
                                 _ => unreachable!(),
                             },
                             rd: t0,
-                            rs1: t0.to_reg(),
+                            rs1: dst.to_reg(),
                             rs2: x,
                         }
                         .emit(&[], sink, emit_info, state);
@@ -1412,19 +1346,16 @@ impl MachInstEmit for Inst {
                         spilltmp_reg2()
                     }
                     crate::ir::AtomicRmwOp::Nand => {
-                        let x2 = if ty.bits() < 32 {
-                            AtomicOP::extract(t0, offset, dst.to_reg(), ty)
+                        if ty.bits() < 32 {
+                            AtomicOP::extract(dst, offset, dst.to_reg(), ty)
                                 .iter()
                                 .for_each(|i| i.emit(&[], sink, emit_info, state));
-                            t0.to_reg()
-                        } else {
-                            dst.to_reg()
-                        };
+                        }
                         Inst::AluRRR {
                             alu_op: AluOPRRR::And,
                             rd: t0,
                             rs1: x,
-                            rs2: x2,
+                            rs2: dst.to_reg(),
                         }
                         .emit(&[], sink, emit_info, state);
                         Inst::construct_bit_not(t0, t0.to_reg()).emit(&[], sink, emit_info, state);
@@ -1456,12 +1387,13 @@ impl MachInstEmit for Inst {
                     | crate::ir::AtomicRmwOp::Umax
                     | crate::ir::AtomicRmwOp::Smin
                     | crate::ir::AtomicRmwOp::Smax => {
+                        let label_select_dst = sink.get_label();
                         let label_select_done = sink.get_label();
                         if op == crate::ir::AtomicRmwOp::Umin || op == crate::ir::AtomicRmwOp::Umax
                         {
-                            AtomicOP::extract(t0, offset, dst.to_reg(), ty)
+                            AtomicOP::extract(dst, offset, dst.to_reg(), ty)
                         } else {
-                            AtomicOP::extract_sext(t0, offset, dst.to_reg(), ty)
+                            AtomicOP::extract_sext(dst, offset, dst.to_reg(), ty)
                         }
                         .iter()
                         .for_each(|i| i.emit(&[], sink, emit_info, state));
@@ -1473,9 +1405,9 @@ impl MachInstEmit for Inst {
                                 crate::ir::AtomicRmwOp::Smax => IntCC::SignedGreaterThan,
                                 _ => unreachable!(),
                             },
-                            ValueRegs::one(t0.to_reg()),
+                            ValueRegs::one(dst.to_reg()),
                             ValueRegs::one(x),
-                            BranchTarget::Label(label_select_done),
+                            BranchTarget::Label(label_select_dst),
                             BranchTarget::zero(),
                             ty,
                         )
@@ -1483,6 +1415,12 @@ impl MachInstEmit for Inst {
                         .for_each(|i| i.emit(&[], sink, emit_info, state));
                         // here we select x.
                         Inst::gen_move(t0, x, I64).emit(&[], sink, emit_info, state);
+                        Inst::Jal {
+                            dest: BranchTarget::Label(label_select_done),
+                        }
+                        .emit(&[], sink, emit_info, state);
+                        sink.bind_label(label_select_dst);
+                        Inst::gen_move(t0, dst.to_reg(), I64).emit(&[], sink, emit_info, state);
                         sink.bind_label(label_select_done);
                         Inst::Atomic {
                             op: AtomicOP::load_op(ty),
@@ -1504,6 +1442,9 @@ impl MachInstEmit for Inst {
                         spilltmp_reg2()
                     }
                     crate::ir::AtomicRmwOp::Xchg => {
+                        AtomicOP::extract(dst, offset, dst.to_reg(), ty)
+                            .iter()
+                            .for_each(|i| i.emit(&[], sink, emit_info, state));
                         Inst::Atomic {
                             op: AtomicOP::load_op(ty),
                             rd: writable_spilltmp_reg2(),
@@ -1905,9 +1846,7 @@ impl MachInstEmit for Inst {
                 if let Some(s) = state.take_stack_map() {
                     sink.add_stack_map(StackMapExtent::UpcomingBytes(4), s);
                 }
-                // https://github.com/riscv/riscv-isa-manual/issues/850
-                // all zero will cause invalid opcode.
-                sink.put4(0);
+                sink.put_data(Inst::TRAP_OPCODE);
             }
             &Inst::SelectIf {
                 if_spectre_guard: _if_spectre_guard, // _if_spectre_guard not use because it is used to not be removed by optimization pass and some other staff.

@@ -52,10 +52,12 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "wasmtime-fiber",
     "wasmtime-environ",
     "wasmtime-runtime",
+    "wasmtime-cranelift-shared",
     "wasmtime-cranelift",
     "wasmtime-jit",
     "wasmtime-cache",
     "wasmtime-winch",
+    "winch-environ",
     "wasmtime",
     // wasi-common/wiggle
     "wiggle",
@@ -69,6 +71,7 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "wasmtime-wasi-threads",
     "wasmtime-wast",
     "wasmtime-cli-flags",
+    "wasmtime-explorer",
     "wasmtime-cli",
 ];
 

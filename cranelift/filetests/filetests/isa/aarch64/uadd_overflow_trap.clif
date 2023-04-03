@@ -12,16 +12,16 @@ block0(v0: i32):
 ; block0:
 ;   movz w2, #127
 ;   adds w0, w0, w2
-;   b.lo 8 ; udf
+;   b.hs #trap=user0
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov w2, #0x7f
 ;   adds w0, w0, w2
-;   b.lo #0x10
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user0
+;   b.hs #0x10
 ;   ret
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user0
 
 function %f1(i32) -> i32 {
 block0(v0: i32):
@@ -34,16 +34,16 @@ block0(v0: i32):
 ; block0:
 ;   movz w2, #127
 ;   adds w0, w2, w0
-;   b.lo 8 ; udf
+;   b.hs #trap=user0
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov w2, #0x7f
 ;   adds w0, w2, w0
-;   b.lo #0x10
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user0
+;   b.hs #0x10
 ;   ret
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user0
 
 function %f2(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
@@ -54,15 +54,15 @@ block0(v0: i32, v1: i32):
 ; VCode:
 ; block0:
 ;   adds w0, w0, w1
-;   b.lo 8 ; udf
+;   b.hs #trap=user0
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   adds w0, w0, w1
-;   b.lo #0xc
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user0
+;   b.hs #0xc
 ;   ret
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user0
 
 function %f3(i64) -> i64 {
 block0(v0: i64):
@@ -75,16 +75,16 @@ block0(v0: i64):
 ; block0:
 ;   movz x2, #127
 ;   adds x0, x0, x2
-;   b.lo 8 ; udf
+;   b.hs #trap=user0
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov x2, #0x7f
 ;   adds x0, x0, x2
-;   b.lo #0x10
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user0
+;   b.hs #0x10
 ;   ret
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user0
 
 function %f3(i64) -> i64 {
 block0(v0: i64):
@@ -97,16 +97,16 @@ block0(v0: i64):
 ; block0:
 ;   movz x2, #127
 ;   adds x0, x2, x0
-;   b.lo 8 ; udf
+;   b.hs #trap=user0
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov x2, #0x7f
 ;   adds x0, x2, x0
-;   b.lo #0x10
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user0
+;   b.hs #0x10
 ;   ret
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user0
 
 function %f4(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -117,13 +117,13 @@ block0(v0: i64, v1: i64):
 ; VCode:
 ; block0:
 ;   adds x0, x0, x1
-;   b.lo 8 ; udf
+;   b.hs #trap=user0
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   adds x0, x0, x1
-;   b.lo #0xc
-;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user0
+;   b.hs #0xc
 ;   ret
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user0
 

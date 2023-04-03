@@ -492,11 +492,6 @@ impl ValueDef {
         }
     }
 
-    /// Get the program point where the value was defined.
-    pub fn pp(self) -> ir::ExpandedProgramPoint {
-        self.into()
-    }
-
     /// Get the number component of this definition.
     ///
     /// When multiple values are defined at the same program point, this indicates the index of

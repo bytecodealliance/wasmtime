@@ -194,6 +194,7 @@ struct Instantiator<'a> {
     imports: &'a PrimaryMap<RuntimeImportIndex, RuntimeImport>,
 }
 
+#[derive(Clone)]
 pub enum RuntimeImport {
     Func(Arc<HostFunc>),
     Module(Module),
@@ -462,6 +463,17 @@ pub struct InstancePre<T> {
     component: Component,
     imports: PrimaryMap<RuntimeImportIndex, RuntimeImport>,
     _marker: marker::PhantomData<fn() -> T>,
+}
+
+// `InstancePre`'s clone does not require `T: Clone`
+impl<T> Clone for InstancePre<T> {
+    fn clone(&self) -> Self {
+        Self {
+            component: self.component.clone(),
+            imports: self.imports.clone(),
+            _marker: self._marker,
+        }
+    }
 }
 
 impl<T> InstancePre<T> {

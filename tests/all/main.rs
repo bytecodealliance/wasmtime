@@ -32,6 +32,7 @@ mod table;
 mod threads;
 mod traps;
 mod wait_notify;
+mod wasi_testsuite;
 mod wast;
 mod valtype_util;
 

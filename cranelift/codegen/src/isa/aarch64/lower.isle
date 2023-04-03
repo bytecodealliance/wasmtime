@@ -26,7 +26,7 @@
 
 ;;;; Rules for `f32const` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (f32const (u64_from_ieee32 n)))
+(rule (lower (f32const (u32_from_ieee32 n)))
       (constant_f32 n))
 
 ;;;; Rules for `f64const` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -56,11 +56,13 @@
 
 ;; Same as the previous special cases, except we can switch the addition to a
 ;; subtraction if the negated immediate fits in 12 bits.
-(rule 2 (lower (has_type (fits_in_64 ty) (iadd x (imm12_from_negated_value y))))
-      (sub_imm ty x y))
+(rule 2 (lower (has_type (fits_in_64 ty) (iadd x y)))
+      (if-let imm12_neg (imm12_from_negated_value y))
+      (sub_imm ty x imm12_neg))
 
-(rule 3 (lower (has_type (fits_in_64 ty) (iadd (imm12_from_negated_value x) y)))
-      (sub_imm ty y x))
+(rule 3 (lower (has_type (fits_in_64 ty) (iadd x y)))
+      (if-let imm12_neg (imm12_from_negated_value x))
+      (sub_imm ty y imm12_neg))
 
 ;; Special cases for when we're adding an extended register where the extending
 ;; operation can get folded into the add itself.
@@ -117,6 +119,118 @@
           (adc_paired $I64 x_hi y_hi))))
 
 ;;;; Rules for `shuffle` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; When a single element of one vector is broadcast to all the destination
+;; lanes then the `dup` instruction can be used for this operation. Note that
+;; for now this only matches lane selection from the first vector `a`, but
+;; if necessary in the future rules can be added to select from `b` as well.
+(rule 6 (lower (shuffle a b (shuffle_dup8_from_imm n)))
+        (vec_dup_from_fpu a (VectorSize.Size8x16) n))
+(rule 5 (lower (shuffle a b (shuffle_dup16_from_imm n)))
+        (vec_dup_from_fpu a (VectorSize.Size16x8) n))
+(rule 4 (lower (shuffle a b (shuffle_dup32_from_imm n)))
+        (vec_dup_from_fpu a (VectorSize.Size32x4) n))
+(rule 3 (lower (shuffle a b (shuffle_dup64_from_imm n)))
+        (vec_dup_from_fpu a (VectorSize.Size64x2) n))
+
+;; If the `Immediate` specified to the extractor looks like a duplication of the
+;; `n`th lane of the first vector of size K-byte lanes, then each extractor
+;; returns the `n` value as a `u8` to be used as part of a `vec_dup_from_fpu`
+;; instruction. Note that there's a different extractor for each bit-width of
+;; lane.
+(decl shuffle_dup8_from_imm (u8) Immediate)
+(extern extractor shuffle_dup8_from_imm shuffle_dup8_from_imm)
+(decl shuffle_dup16_from_imm (u8) Immediate)
+(extern extractor shuffle_dup16_from_imm shuffle_dup16_from_imm)
+(decl shuffle_dup32_from_imm (u8) Immediate)
+(extern extractor shuffle_dup32_from_imm shuffle_dup32_from_imm)
+(decl shuffle_dup64_from_imm (u8) Immediate)
+(extern extractor shuffle_dup64_from_imm shuffle_dup64_from_imm)
+
+;; When the shuffle looks like "concatenate `a` and `b` and shift right by n*8
+;; bytes", that's an `ext` instruction.
+(rule 2 (lower (shuffle a b (vec_extract_imm4_from_immediate n)))
+        (vec_extract a b n))
+
+;; Attempts to extract `n` from the specified shuffle `Immediate` where each
+;; byte of the `Immediate` is a consecutive sequence starting from `n`. This
+;; value of `n` is used as part of the `vec_extract` instruction which extracts
+;; consecutive bytes from two vectors into one final vector, offset by `n`
+;; bytes.
+(decl vec_extract_imm4_from_immediate (u8) Immediate)
+(extern extractor vec_extract_imm4_from_immediate vec_extract_imm4_from_immediate)
+
+;; Rules for the `uzp1` and `uzp2` instructions which gather even-numbered lanes
+;; or odd-numbered lanes
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x1e1c_1a18_1614_1210_0e0c_0a08_0604_0200)))
+      (vec_uzp1 a b (VectorSize.Size8x16)))
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x1f1d_1b19_1715_1311_0f0d_0b09_0705_0301)))
+      (vec_uzp2 a b (VectorSize.Size8x16)))
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x1d1c_1918_1514_1110_0d0c_0908_0504_0100)))
+      (vec_uzp1 a b (VectorSize.Size16x8)))
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x1f1e_1b1a_1716_1312_0f0e_0b0a_0706_0302)))
+      (vec_uzp2 a b (VectorSize.Size16x8)))
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x1b1a1918_13121110_0b0a0908_03020100)))
+      (vec_uzp1 a b (VectorSize.Size32x4)))
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x1f1e1d1c_17161514_0f0e0d0c_07060504)))
+      (vec_uzp2 a b (VectorSize.Size32x4)))
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x1716151413121110_0706050403020100)))
+      (vec_uzp1 a b (VectorSize.Size64x2)))
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x1f1e1d1c1b1a1918_0f0e0d0c0b0a0908)))
+      (vec_uzp2 a b (VectorSize.Size64x2)))
+
+;; Rules for the `zip1` and `zip2` instructions which interleave lanes in the
+;; low or high halves of the two input vectors.
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x1707_1606_1505_1404_1303_1202_1101_1000)))
+      (vec_zip1 a b (VectorSize.Size8x16)))
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x1f0f_1e0e_1d0d_1c0c_1b0b_1a0a_1909_1808)))
+      (vec_zip2 a b (VectorSize.Size8x16)))
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x1716_0706_1514_0504_1312_0302_1110_0100)))
+      (vec_zip1 a b (VectorSize.Size16x8)))
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x1f1e_0f0e_1d1c_0d0c_1b1a_0b0a_1918_0908)))
+      (vec_zip2 a b (VectorSize.Size16x8)))
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x17161514_07060504_13121110_03020100)))
+      (vec_zip1 a b (VectorSize.Size32x4)))
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x1f1e1d1c_0f0e0d0c_1b1a1918_0b0a0908)))
+      (vec_zip2 a b (VectorSize.Size32x4)))
+;; Note that zip1/zip2 for i64x2 vectors is omitted since it's already covered
+;; by the i64x2 cases of uzp1/uzp2 above where both zip and uzp have the same
+;; semantics for 64-bit lanes.
+
+;; Rules for the `trn1` and `trn2` instructions which interleave odd or even
+;; lanes in the two input vectors.
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x1e0e_1c0c_1a0a_1808_1606_1404_1202_1000)))
+      (vec_trn1 a b (VectorSize.Size8x16)))
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x1f0f_1d0d_1b0b_1909_1707_1505_1303_1101)))
+      (vec_trn2 a b (VectorSize.Size8x16)))
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x1d1c_0d0c_1918_0908_1514_0504_1110_0100)))
+      (vec_trn1 a b (VectorSize.Size16x8)))
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x1f1e_0f0e_1b1a_0b0a_1716_0706_1312_0302)))
+      (vec_trn2 a b (VectorSize.Size16x8)))
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x1b1a1918_0b0a0908_13121110_03020100)))
+      (vec_trn1 a b (VectorSize.Size32x4)))
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x1f1e1d1c_0f0e0d0c_17161514_07060504)))
+      (vec_trn2 a b (VectorSize.Size32x4)))
+;; Note that trn1/trn2 for i64x2 vectors is omitted since it's already covered
+;; by the i64x2 cases of uzp1/uzp2 above where both trn and uzp have the same
+;; semantics for 64-bit lanes.
+
+;; Rules for the `rev{16,32,64}` instructions where reversals happen at either
+;; the byte level, the 16-bit level, or 32-bit level. Note that all of these
+;; patterns only match reversals in the first operand, but they can
+;; theoretically be extended if necessary to reversals in the second operand.
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x0e0f_0c0d_0a0b_0809_0607_0405_0203_0001)))
+      (rev16 a (VectorSize.Size8x16)))
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x0c0d0e0f_08090a0b_04050607_00010203)))
+      (rev32 a (VectorSize.Size8x16)))
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x0d0c0f0e_09080b0a_05040706_01000302)))
+      (rev32 a (VectorSize.Size16x8)))
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x08090a0b0c0d0e0f_0001020304050607)))
+      (rev64 a (VectorSize.Size8x16)))
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x09080b0a0d0c0f0e_0100030205040706)))
+      (rev64 a (VectorSize.Size16x8)))
+(rule 1 (lower (shuffle a b (u128_from_immediate 0x0b0a09080f0e0d0c_0302010007060504)))
+      (rev64 a (VectorSize.Size32x4)))
 
 (rule (lower (has_type ty (shuffle rn rn2 (u128_from_immediate mask))))
       (let ((mask_reg Reg (constant_f128 mask)))
@@ -240,10 +354,8 @@
       (let ((one Reg (splat_const 1 (VectorSize.Size64x2)))
             (c Reg (orr_vec x y (VectorSize.Size64x2)))
             (c Reg (and_vec c one (VectorSize.Size64x2)))
-            (x Reg (vec_shift_imm (VecShiftImmOp.Ushr) 1 x
-                    (VectorSize.Size64x2)))
-            (y Reg (vec_shift_imm (VecShiftImmOp.Ushr) 1 y
-                    (VectorSize.Size64x2)))
+            (x Reg (ushr_vec_imm x 1 (VectorSize.Size64x2)))
+            (y Reg (ushr_vec_imm y 1 (VectorSize.Size64x2)))
             (sum Reg (add_vec x y (VectorSize.Size64x2))))
        (add_vec c sum (VectorSize.Size64x2))))
 
@@ -540,8 +652,9 @@
 
 ;; Same as the previous special case, except we can switch the subtraction to an
 ;; addition if the negated immediate fits in 12 bits.
-(rule 2 (lower (has_type (fits_in_64 ty) (isub x (imm12_from_negated_value y))))
-      (add_imm ty x y))
+(rule 2 (lower (has_type (fits_in_64 ty) (isub x y)))
+      (if-let imm12_neg (imm12_from_negated_value y))
+      (add_imm ty x imm12_neg))
 
 ;; Special cases for when we're subtracting an extended register where the
 ;; extending operation can get folded into the sub itself.
@@ -847,13 +960,10 @@
             (result Reg (a64_sdiv $I64 valid_x64 y64)))
         result))
 
-;; Helper for extracting an immediate that's not 0 and not -1 from an imm64.
-(decl safe_divisor_from_imm64 (u64) Imm64)
-(extern extractor safe_divisor_from_imm64 safe_divisor_from_imm64)
-
 ;; Special case for `sdiv` where no checks are needed due to division by a
 ;; constant meaning the checks are always passed.
-(rule 1 (lower (has_type (fits_in_64 ty) (sdiv x (iconst (safe_divisor_from_imm64 y)))))
+(rule 1 (lower (has_type (fits_in_64 ty) (sdiv x (iconst imm))))
+      (if-let y (safe_divisor_from_imm64 ty imm))
       (a64_sdiv $I64 (put_in_reg_sext64 x) (imm ty (ImmExtend.Sign) y)))
 
 ;; Helper for placing a `Value` into a `Reg` and validating that it's nonzero.
@@ -1179,11 +1289,16 @@
           (csel (Cond.Ne) lo_lshift maybe_hi)))))
 
 ;; Shift for vector types.
-(rule -2 (lower (has_type (ty_vec128 ty) (ishl x y)))
+(rule -3 (lower (has_type (ty_vec128 ty) (ishl x y)))
       (let ((size VectorSize (vector_size ty))
             (masked_shift_amt Reg (and_imm $I32 y (shift_mask ty)))
             (shift Reg (vec_dup masked_shift_amt size)))
         (sshl x shift size)))
+(rule -2 (lower (has_type (ty_vec128 ty) (ishl x (iconst (u64_from_imm64 n)))))
+        (ushl_vec_imm x (shift_masked_imm ty n) (vector_size ty)))
+
+(decl pure shift_masked_imm (Type u64) u8)
+(extern constructor shift_masked_imm shift_masked_imm)
 
 ;; Helper function to emit a shift operation with the opcode specified and
 ;; the output type specified. The `Reg` provided is shifted by the `Value`
@@ -1239,11 +1354,20 @@
       (lower_ushr128 x (value_regs_get y 0)))
 
 ;; Vector shifts.
-(rule -2 (lower (has_type (ty_vec128 ty) (ushr x y)))
+;;
+;; Note that for constant shifts a 0-width shift can't be emitted so it's
+;; special cased to pass through the input as-is since a 0-shift doesn't modify
+;; the input anyway.
+(rule -4 (lower (has_type (ty_vec128 ty) (ushr x y)))
       (let ((size VectorSize (vector_size ty))
             (masked_shift_amt Reg (and_imm $I32 y (shift_mask ty)))
             (shift Reg (vec_dup (sub $I64 (zero_reg) masked_shift_amt) size)))
         (ushl x shift size)))
+(rule -3 (lower (has_type (ty_vec128 ty) (ushr x (iconst (u64_from_imm64 n)))))
+         (ushr_vec_imm x (shift_masked_imm ty n) (vector_size ty)))
+(rule -2 (lower (has_type (ty_vec128 ty) (ushr x (iconst (u64_from_imm64 n)))))
+          (if-let 0 (shift_masked_imm ty n))
+          x)
 
 ;;     lsr       lo_rshift, src_lo, amt
 ;;     lsr       hi_rshift, src_hi, amt
@@ -1275,7 +1399,7 @@
 ;;;; Rules for `sshr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Shift for i8/i16/i32.
-(rule -2 (lower (has_type (fits_in_32 ty) (sshr x y)))
+(rule -4 (lower (has_type (fits_in_32 ty) (sshr x y)))
       (do_shift (ALUOp.Asr) ty (put_in_reg_sext32 x) y))
 
 ;; Shift for i64.
@@ -1288,12 +1412,20 @@
 
 ;; Vector shifts.
 ;;
-;; Note that right shifts are implemented with a negative left shift.
-(rule -1 (lower (has_type (ty_vec128 ty) (sshr x y)))
+;; Note that right shifts are implemented with a negative left shift. Also note
+;; that for constant shifts a 0-width shift can't be emitted so it's special
+;; cased to pass through the input as-is since a 0-shift doesn't modify the
+;; input anyway.
+(rule -3 (lower (has_type (ty_vec128 ty) (sshr x y)))
       (let ((size VectorSize (vector_size ty))
             (masked_shift_amt Reg (and_imm $I32 y (shift_mask ty)))
             (shift Reg (vec_dup (sub $I64 (zero_reg) masked_shift_amt) size)))
         (sshl x shift size)))
+(rule -2 (lower (has_type (ty_vec128 ty) (sshr x (iconst (u64_from_imm64 n)))))
+          (sshr_vec_imm x (shift_masked_imm ty n) (vector_size ty)))
+(rule -1 (lower (has_type (ty_vec128 ty) (sshr x (iconst (u64_from_imm64 n)))))
+          (if-let 0 (shift_masked_imm ty n))
+          x)
 
 ;;     lsr       lo_rshift, src_lo, amt
 ;;     asr       hi_rshift, src_hi, amt
@@ -1659,11 +1791,6 @@
 (rule 1 (lower (has_type (ty_vec128 ty) (bitselect c x y)))
         (bsl ty c x y))
 
-;;;; Rules for `vselect` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(rule (lower (has_type (ty_vec128 ty) (vselect c x y)))
-        (bsl ty c x y))
-
 ;;;; Rules for `ireduce` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; T -> I{64,32,16,8}: We can simply pass through the value: values
@@ -1845,9 +1972,9 @@
       (vec_dup x (vector_size ty)))
 
 (rule -2 (lower (has_type ty (splat x @ (value_type (ty_scalar_float _)))))
-      (vec_dup_from_fpu x (vector_size ty)))
+      (vec_dup_from_fpu x (vector_size ty) 0))
 
-(rule (lower (has_type ty (splat (f32const (u64_from_ieee32 n)))))
+(rule (lower (has_type ty (splat (f32const (u32_from_ieee32 n)))))
       (splat_const n (vector_size ty)))
 
 (rule (lower (has_type ty (splat (f64const (u64_from_ieee64 n)))))
@@ -2345,7 +2472,7 @@
       (let (
             ;; Replicate the MSB of each of the 16 byte lanes across
             ;; the whole lane (sshr is an arithmetic right shift).
-            (shifted Reg (vec_shift_imm (VecShiftImmOp.Sshr) 7 vec (VectorSize.Size8x16)))
+            (shifted Reg (sshr_vec_imm vec 7 (VectorSize.Size8x16)))
             ;; Bitwise-and with a mask
             ;; `0x80402010_08040201_80402010_08040201` to get the bit
             ;; in the proper location for each group of 8 lanes.
@@ -2369,7 +2496,7 @@
       (let (
             ;; Replicate the MSB of each of the 8 16-bit lanes across
             ;; the whole lane (sshr is an arithmetic right shift).
-            (shifted Reg (vec_shift_imm (VecShiftImmOp.Sshr) 15 vec (VectorSize.Size16x8)))
+            (shifted Reg (sshr_vec_imm vec 15 (VectorSize.Size16x8)))
             ;; Bitwise-and with a mask
             ;; `0x0080_0040_0020_0010_0008_0004_0002_0001` to get the
             ;; bit in the proper location for each group of 4 lanes.
@@ -2382,7 +2509,7 @@
       (let (
             ;; Replicate the MSB of each of the 4 32-bit lanes across
             ;; the whole lane (sshr is an arithmetic right shift).
-            (shifted Reg (vec_shift_imm (VecShiftImmOp.Sshr) 31 vec (VectorSize.Size32x4)))
+            (shifted Reg (sshr_vec_imm vec 31 (VectorSize.Size32x4)))
             ;; Bitwise-and with a mask
             ;; `0x00000008_00000004_00000002_00000001` to get the bit
             ;; in the proper location for each group of 4 lanes.
@@ -2447,9 +2574,11 @@
 
 ;;; Rules for `tls_value` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (tls_value (symbol_value_data name _ _)))
-      (if (tls_model_is_elf_gd))
+(rule (lower (has_type (tls_model (TlsModel.ElfGd)) (tls_value (symbol_value_data name _ _))))
       (elf_tls_get_addr name))
+
+(rule (lower (has_type (tls_model (TlsModel.Macho)) (tls_value (symbol_value_data name _ _))))
+      (macho_tls_get_addr name))
 
 ;;; Rules for `fcvt_low_from_sint` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

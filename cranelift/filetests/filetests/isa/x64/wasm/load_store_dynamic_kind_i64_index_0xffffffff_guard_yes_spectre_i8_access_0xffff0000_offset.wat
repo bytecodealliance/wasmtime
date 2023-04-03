@@ -45,16 +45,14 @@
 ;;   movq    %rsp, %rbp
 ;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ;; block0:
-;;   movq    %rdi, %rcx
-;;   addq    %rcx, const(1), %rcx
-;;   jnb ; ud2 heap_oob ;
 ;;   movq    8(%rdx), %rax
-;;   movq    %rdi, %r11
-;;   addq    %r11, 0(%rdx), %r11
-;;   addq    %r11, const(0), %r11
-;;   xorq    %rdi, %rdi, %rdi
-;;   cmpq    %rax, %rcx
-;;   cmovnbeq %rdi, %r11, %r11
+;;   movq    %rdi, %rcx
+;;   addq    %rcx, 0(%rdx), %rcx
+;;   movl    $-65536, %r11d
+;;   lea     0(%rcx,%r11,1), %r11
+;;   xorq    %rcx, %rcx, %rcx
+;;   cmpq    %rax, %rdi
+;;   cmovnbeq %rcx, %r11, %r11
 ;;   movb    %sil, 0(%r11)
 ;;   jmp     label1
 ;; block1:
@@ -68,16 +66,14 @@
 ;;   movq    %rsp, %rbp
 ;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ;; block0:
-;;   movq    %rdi, %rcx
-;;   addq    %rcx, const(1), %rcx
-;;   jnb ; ud2 heap_oob ;
-;;   movq    8(%rsi), %rax
-;;   movq    %rdi, %r11
-;;   addq    %r11, 0(%rsi), %r11
-;;   addq    %r11, const(0), %r11
-;;   xorq    %rsi, %rsi, %rsi
-;;   cmpq    %rax, %rcx
-;;   cmovnbeq %rsi, %r11, %r11
+;;   movq    8(%rsi), %rcx
+;;   movq    %rdi, %rax
+;;   addq    %rax, 0(%rsi), %rax
+;;   movl    $-65536, %r11d
+;;   lea     0(%rax,%r11,1), %r11
+;;   xorq    %rax, %rax, %rax
+;;   cmpq    %rcx, %rdi
+;;   cmovnbeq %rax, %r11, %r11
 ;;   movzbq  0(%r11), %rax
 ;;   jmp     label1
 ;; block1:

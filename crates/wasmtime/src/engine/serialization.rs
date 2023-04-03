@@ -199,6 +199,7 @@ impl Metadata {
 
         assert!(!memory_control);
         assert!(!tail_call);
+        //assert!(!function_references);
 
         Metadata {
             target: engine.compiler().triple().to_string(),
@@ -310,6 +311,7 @@ impl Metadata {
             epoch_interruption,
             static_memory_bound_is_maximum,
             guard_before_linear_memory,
+            relaxed_simd_deterministic,
 
             // This doesn't affect compilation, it's just a runtime setting.
             dynamic_memory_growth_reserve: _,
@@ -364,6 +366,11 @@ impl Metadata {
             guard_before_linear_memory,
             other.guard_before_linear_memory,
             "guard before linear memory",
+        )?;
+        Self::check_bool(
+            relaxed_simd_deterministic,
+            other.relaxed_simd_deterministic,
+            "relaxed simd deterministic semantics",
         )?;
 
         Ok(())
@@ -490,9 +497,10 @@ mod test {
         let engine = Engine::default();
         let mut metadata = Metadata::new(&engine);
 
-        metadata
-            .shared_flags
-            .insert("avoid_div_traps".to_string(), FlagValue::Bool(false));
+        metadata.shared_flags.insert(
+            "preserve_frame_pointers".to_string(),
+            FlagValue::Bool(false),
+        );
 
         match metadata.check_compatible(&engine) {
             Ok(_) => unreachable!(),
@@ -501,7 +509,7 @@ mod test {
 compilation settings of module incompatible with native host
 
 Caused by:
-    setting \"avoid_div_traps\" is configured to Bool(false) which is not supported"
+    setting \"preserve_frame_pointers\" is configured to Bool(false) which is not supported"
             )),
         }
 

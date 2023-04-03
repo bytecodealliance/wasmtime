@@ -13,8 +13,9 @@ block0(v0: i32x4, v1: i32x4):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   pcmpeqd %xmm0, %xmm1, %xmm0
-;   pcmpeqd %xmm5, %xmm5, %xmm5
-;   pxor    %xmm0, %xmm5, %xmm0
+;   uninit  %xmm6
+;   pcmpeqd %xmm6, %xmm6, %xmm6
+;   pxor    %xmm0, %xmm6, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -25,8 +26,8 @@ block0(v0: i32x4, v1: i32x4):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   pcmpeqd %xmm1, %xmm0
-;   pcmpeqd %xmm5, %xmm5
-;   pxor %xmm5, %xmm0
+;   pcmpeqd %xmm6, %xmm6
+;   pxor %xmm6, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -43,8 +44,9 @@ block0(v0: i32x4, v1: i32x4):
 ; block0:
 ;   pmaxud  %xmm0, %xmm1, %xmm0
 ;   pcmpeqd %xmm0, %xmm1, %xmm0
-;   pcmpeqd %xmm7, %xmm7, %xmm7
-;   pxor    %xmm0, %xmm7, %xmm0
+;   uninit  %xmm8
+;   pcmpeqd %xmm8, %xmm8, %xmm8
+;   pxor    %xmm0, %xmm8, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -56,8 +58,8 @@ block0(v0: i32x4, v1: i32x4):
 ; block1: ; offset 0x4
 ;   pmaxud %xmm1, %xmm0
 ;   pcmpeqd %xmm1, %xmm0
-;   pcmpeqd %xmm7, %xmm7
-;   pxor %xmm7, %xmm0
+;   pcmpeqd %xmm8, %xmm8
+;   pxor %xmm8, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

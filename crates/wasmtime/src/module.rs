@@ -1042,6 +1042,73 @@ impl Module {
         self.inner.memory_images()?;
         Ok(())
     }
+
+    /// Get the map from `.text` section offsets to Wasm binary offsets for this
+    /// module.
+    ///
+    /// Each entry is a (`.text` section offset, Wasm binary offset) pair.
+    ///
+    /// Entries are yielded in order of `.text` section offset.
+    ///
+    /// Some entries are missing a Wasm binary offset. This is for code that is
+    /// not associated with any single location in the Wasm binary, or for when
+    /// source information was optimized away.
+    ///
+    /// Not every module has an address map, since address map generation can be
+    /// turned off on `Config`.
+    ///
+    /// There is not an entry for every `.text` section offset. Every offset
+    /// after an entry's offset, but before the next entry's offset, is
+    /// considered to map to the same Wasm binary offset as the original
+    /// entry. For example, the address map will not contain the following
+    /// sequnce of entries:
+    ///
+    /// ```ignore
+    /// [
+    ///     // ...
+    ///     (10, Some(42)),
+    ///     (11, Some(42)),
+    ///     (12, Some(42)),
+    ///     (13, Some(43)),
+    ///     // ...
+    /// ]
+    /// ```
+    ///
+    /// Instead, it will drop the entries for offsets `11` and `12` since they
+    /// are the same as the entry for offset `10`:
+    ///
+    /// ```ignore
+    /// [
+    ///     // ...
+    ///     (10, Some(42)),
+    ///     (13, Some(43)),
+    ///     // ...
+    /// ]
+    /// ```
+    pub fn address_map<'a>(&'a self) -> Option<impl Iterator<Item = (usize, Option<u32>)> + 'a> {
+        Some(
+            wasmtime_environ::iterate_address_map(
+                self.code_object().code_memory().address_map_data(),
+            )?
+            .map(|(offset, file_pos)| (offset as usize, file_pos.file_offset())),
+        )
+    }
+
+    /// Get this module's code object's `.text` section, containing its compiled
+    /// executable code.
+    pub fn text(&self) -> &[u8] {
+        self.code_object().code_memory().text()
+    }
+
+    /// Get the locations of functions in this module's `.text` section.
+    ///
+    /// Each function's locartion is a (`.text` section offset, length) pair.
+    pub fn function_locations<'a>(&'a self) -> impl ExactSizeIterator<Item = (usize, usize)> + 'a {
+        self.compiled_module().finished_functions().map(|(f, _)| {
+            let loc = self.compiled_module().func_loc(f);
+            (loc.start as usize, loc.length as usize)
+        })
+    }
 }
 
 impl ModuleInner {

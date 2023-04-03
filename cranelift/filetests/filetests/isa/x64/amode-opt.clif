@@ -1,4 +1,6 @@
 test compile precise-output
+set use_egraphs=true
+set opt_level=speed
 target x86_64
 
 function %amode_add(i64, i64) -> i64 {
@@ -209,8 +211,9 @@ block0(v0: i64, v1: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movl    %esi, %ecx
-;   movq    -1(%rdi,%rcx,8), %rax
+;   movq    %rsi, %rdx
+;   shll    $3, %edx, %edx
+;   movq    -1(%rdi,%rdx,1), %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -220,8 +223,9 @@ block0(v0: i64, v1: i32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movl %esi, %ecx
-;   movq -1(%rdi, %rcx, 8), %rax ; trap: heap_oob
+;   movq %rsi, %rdx
+;   shll $3, %edx
+;   movq -1(%rdi, %rdx), %rax ; trap: heap_oob
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -242,9 +246,9 @@ block0(v0: i64, v1: i32, v2: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movq    %rsi, %r8
-;   addl    %r8d, %edx, %r8d
-;   movq    -1(%rdi,%r8,4), %rax
+;   lea     0(%rsi,%rdx,1), %r8d
+;   shll    $2, %r8d, %r8d
+;   movq    -1(%rdi,%r8,1), %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -254,9 +258,9 @@ block0(v0: i64, v1: i32, v2: i32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movq %rsi, %r8
-;   addl %edx, %r8d
-;   movq -1(%rdi, %r8, 4), %rax ; trap: heap_oob
+;   leal (%rsi, %rdx), %r8d
+;   shll $2, %r8d
+;   movq -1(%rdi, %r8), %rax ; trap: heap_oob
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

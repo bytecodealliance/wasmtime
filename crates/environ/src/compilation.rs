@@ -112,7 +112,9 @@ pub trait CompilerBuilder: Send + Sync + fmt::Debug {
 
     /// Enables Cranelift's incremental compilation cache, using the given `CacheStore`
     /// implementation.
-    fn enable_incremental_compilation(&mut self, cache_store: Arc<dyn CacheStore>);
+    ///
+    /// This will return an error if the compiler does not support incremental compilation.
+    fn enable_incremental_compilation(&mut self, cache_store: Arc<dyn CacheStore>) -> Result<()>;
 
     /// Builds a new [`Compiler`] object from this configuration.
     fn build(&self) -> Result<Box<dyn Compiler>>;
@@ -267,7 +269,22 @@ pub trait Compiler: Send + Sync {
     /// compilation target. Note that this may be an upper-bound where the
     /// alignment is larger than necessary for some platforms since it may
     /// depend on the platform's runtime configuration.
-    fn page_size_align(&self) -> u64;
+    fn page_size_align(&self) -> u64 {
+        use target_lexicon::*;
+        match (self.triple().operating_system, self.triple().architecture) {
+            (
+                OperatingSystem::MacOSX { .. }
+                | OperatingSystem::Darwin
+                | OperatingSystem::Ios
+                | OperatingSystem::Tvos,
+                Architecture::Aarch64(..),
+            ) => 0x4000,
+            // 64 KB is the maximal page size (i.e. memory translation granule size)
+            // supported by the architecture and is used on some platforms.
+            (_, Architecture::Aarch64(..)) => 0x10000,
+            _ => 0x1000,
+        }
+    }
 
     /// Returns a list of configured settings for this compiler.
     fn flags(&self) -> BTreeMap<String, FlagValue>;
@@ -293,6 +310,17 @@ pub trait Compiler: Send + Sync {
         translation: &ModuleTranslation<'_>,
         funcs: &PrimaryMap<DefinedFuncIndex, (SymbolId, &(dyn Any + Send))>,
     ) -> Result<()>;
+
+    /// The function alignment required by this ISA.
+    fn function_alignment(&self) -> u32;
+
+    /// Creates a new System V Common Information Entry for the ISA.
+    ///
+    /// Returns `None` if the ISA does not support System V unwind information.
+    fn create_systemv_cie(&self) -> Option<gimli::write::CommonInformationEntry> {
+        // By default, an ISA cannot create a System V CIE.
+        None
+    }
 }
 
 /// Value of a configured setting for a [`Compiler`]

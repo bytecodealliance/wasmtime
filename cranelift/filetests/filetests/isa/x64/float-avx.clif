@@ -526,7 +526,7 @@ block0(v0: f32x4):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   vcmpps  $0 %xmm0, %xmm0, %xmm2
+;   vcmpps  $0, %xmm0, %xmm0, %xmm2
 ;   vandps  %xmm0, %xmm2, %xmm4
 ;   vpxor   %xmm2, %xmm4, %xmm6
 ;   vcvttps2dq %xmm4, %xmm8
@@ -565,7 +565,7 @@ block0(v0: f64x2):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   vcmppd  $0 %xmm0, %xmm0, %xmm2
+;   vcmppd  $0, %xmm0, %xmm0, %xmm2
 ;   vandps  %xmm2, const(0), %xmm4
 ;   vminpd  %xmm0, %xmm4, %xmm6
 ;   vcvttpd2dq %xmm6, %xmm0
@@ -588,4 +588,60 @@ block0(v0: f64x2):
 ;   addb %al, (%rax)
 ;   addb %al, (%rax)
 ;   sarb $0xff, %bh
+
+function %load_and_store_f32(i64, i64) {
+block0(v0: i64, v1: i64):
+  v2 = load.f32 v0
+  store v2, v1
+  return
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   vmovss  0(%rdi), %xmm3
+;   vmovss  %xmm3, 0(%rsi)
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   vmovss (%rdi), %xmm3 ; trap: heap_oob
+;   vmovss %xmm3, (%rsi) ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %load_and_store_f64(i64, i64) {
+block0(v0: i64, v1: i64):
+  v2 = load.f64 v0
+  store v2, v1
+  return
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   vmovsd  0(%rdi), %xmm3
+;   vmovsd  %xmm3, 0(%rsi)
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   vmovsd (%rdi), %xmm3 ; trap: heap_oob
+;   vmovsd %xmm3, (%rsi) ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 

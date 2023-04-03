@@ -36,7 +36,7 @@ fn define_settings(_shared: &SettingGroup) -> SettingGroup {
         "Zbc: Carry-less multiplication",
         false,
     );
-    let _has_zbx = setting.add_bool(
+    let _has_zbs = setting.add_bool(
         "has_zbs",
         "has extension zbs?",
         "Zbs: Single-bit instructions",

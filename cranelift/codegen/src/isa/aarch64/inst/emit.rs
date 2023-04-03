@@ -2,7 +2,7 @@
 
 use regalloc2::Allocation;
 
-use crate::binemit::{CodeOffset, Reloc, StackMap};
+use crate::binemit::{Reloc, StackMap};
 use crate::ir::{types::*, RelSourceLoc};
 use crate::ir::{LibCall, MemFlags, TrapCode};
 use crate::isa::aarch64::inst::*;
@@ -10,20 +10,12 @@ use crate::machinst::{ty_bits, Reg, RegClass, Writable};
 use crate::trace;
 use core::convert::TryFrom;
 
-/// Memory label/reference finalization: convert a MemLabel to a PC-relative
-/// offset, possibly emitting relocation(s) as necessary.
-pub fn memlabel_finalize(_insn_off: CodeOffset, label: &MemLabel) -> i32 {
-    match label {
-        &MemLabel::PCRel(rel) => rel,
-    }
-}
-
 /// Memory addressing mode finalization: convert "special" modes (e.g.,
 /// generic arbitrary stack offset) into real addressing modes, possibly by
 /// emitting some helper instructions that come immediately before the use
 /// of this amode.
 pub fn mem_finalize(
-    insn_off: CodeOffset,
+    sink: Option<&mut MachBuffer<Inst>>,
     mem: &AMode,
     state: &EmitState,
 ) -> (SmallVec<[Inst; 4]>, AMode) {
@@ -74,14 +66,14 @@ pub fn mem_finalize(
             }
         }
 
-        &AMode::Label { ref label } => {
-            let off = memlabel_finalize(insn_off, label);
-            (
-                smallvec![],
-                AMode::Label {
-                    label: MemLabel::PCRel(off),
-                },
-            )
+        AMode::Const { addr } => {
+            let sink = match sink {
+                Some(sink) => sink,
+                None => return (smallvec![], mem.clone()),
+            };
+            let label = sink.get_label_for_constant(*addr);
+            let label = MemLabel::Mach(label);
+            (smallvec![], AMode::Label { label })
         }
 
         _ => (smallvec![], mem.clone()),
@@ -959,7 +951,7 @@ impl MachInstEmit for Inst {
             | &Inst::FpuLoad128 { rd, ref mem, flags } => {
                 let rd = allocs.next_writable(rd);
                 let mem = mem.with_allocs(&mut allocs);
-                let (mem_insts, mem) = mem_finalize(sink.cur_offset(), &mem, state);
+                let (mem_insts, mem) = mem_finalize(Some(sink), &mem, state);
 
                 for inst in mem_insts.into_iter() {
                     inst.emit(&[], sink, emit_info, state);
@@ -1039,7 +1031,19 @@ impl MachInstEmit for Inst {
                     &AMode::Label { ref label } => {
                         let offset = match label {
                             // cast i32 to u32 (two's-complement)
-                            &MemLabel::PCRel(off) => off as u32,
+                            MemLabel::PCRel(off) => *off as u32,
+                            // Emit a relocation into the `MachBuffer`
+                            // for the label that's being loaded from and
+                            // encode an address of 0 in its place which will
+                            // get filled in by relocation resolution later on.
+                            MemLabel::Mach(label) => {
+                                sink.use_label_at_offset(
+                                    sink.cur_offset(),
+                                    *label,
+                                    LabelUse::Ldr19,
+                                );
+                                0
+                            }
                         } / 4;
                         assert!(offset < (1 << 19));
                         match self {
@@ -1076,6 +1080,7 @@ impl MachInstEmit for Inst {
                     &AMode::SPOffset { .. }
                     | &AMode::FPOffset { .. }
                     | &AMode::NominalSPOffset { .. }
+                    | &AMode::Const { .. }
                     | &AMode::RegOffset { .. } => {
                         panic!("Should not see {:?} here!", mem)
                     }
@@ -1091,7 +1096,7 @@ impl MachInstEmit for Inst {
             | &Inst::FpuStore128 { rd, ref mem, flags } => {
                 let rd = allocs.next(rd);
                 let mem = mem.with_allocs(&mut allocs);
-                let (mem_insts, mem) = mem_finalize(sink.cur_offset(), &mem, state);
+                let (mem_insts, mem) = mem_finalize(Some(sink), &mem, state);
 
                 for inst in mem_insts.into_iter() {
                     inst.emit(&[], sink, emit_info, state);
@@ -1172,6 +1177,7 @@ impl MachInstEmit for Inst {
                     &AMode::SPOffset { .. }
                     | &AMode::FPOffset { .. }
                     | &AMode::NominalSPOffset { .. }
+                    | &AMode::Const { .. }
                     | &AMode::RegOffset { .. } => {
                         panic!("Should not see {:?} here!", mem)
                     }
@@ -1977,8 +1983,20 @@ impl MachInstEmit for Inst {
                         );
                         (0b1, 0b11111, enc_size)
                     }
+                    VecMisc2::Rev16 => {
+                        debug_assert_eq!(size, VectorSize::Size8x16);
+                        (0b0, 0b00001, enc_size)
+                    }
+                    VecMisc2::Rev32 => {
+                        debug_assert!(size == VectorSize::Size8x16 || size == VectorSize::Size16x8);
+                        (0b1, 0b00000, enc_size)
+                    }
                     VecMisc2::Rev64 => {
-                        debug_assert_ne!(VectorSize::Size64x2, size);
+                        debug_assert!(
+                            size == VectorSize::Size8x16
+                                || size == VectorSize::Size16x8
+                                || size == VectorSize::Size32x4
+                        );
                         (0b0, 0b00000, enc_size)
                     }
                     VecMisc2::Fcvtzs => {
@@ -2307,41 +2325,6 @@ impl MachInstEmit for Inst {
                 };
                 sink.put4(enc_inttofpu(top16, rd, rn));
             }
-            &Inst::LoadFpuConst64 { rd, const_data } => {
-                let rd = allocs.next_writable(rd);
-                let inst = Inst::FpuLoad64 {
-                    rd,
-                    mem: AMode::Label {
-                        label: MemLabel::PCRel(8),
-                    },
-                    flags: MemFlags::trusted(),
-                };
-                inst.emit(&[], sink, emit_info, state);
-                let inst = Inst::Jump {
-                    dest: BranchTarget::ResolvedOffset(12),
-                };
-                inst.emit(&[], sink, emit_info, state);
-                sink.put8(const_data);
-            }
-            &Inst::LoadFpuConst128 { rd, const_data } => {
-                let rd = allocs.next_writable(rd);
-                let inst = Inst::FpuLoad128 {
-                    rd,
-                    mem: AMode::Label {
-                        label: MemLabel::PCRel(8),
-                    },
-                    flags: MemFlags::trusted(),
-                };
-                inst.emit(&[], sink, emit_info, state);
-                let inst = Inst::Jump {
-                    dest: BranchTarget::ResolvedOffset(20),
-                };
-                inst.emit(&[], sink, emit_info, state);
-
-                for i in const_data.to_le_bytes().iter() {
-                    sink.put1(*i);
-                }
-            }
             &Inst::FpuCSel32 { rd, rn, rm, cond } => {
                 let rd = allocs.next_writable(rd);
                 let rn = allocs.next(rn);
@@ -2493,13 +2476,27 @@ impl MachInstEmit for Inst {
                         | machreg_to_vec(rd.to_reg()),
                 );
             }
-            &Inst::VecDupFromFpu { rd, rn, size } => {
+            &Inst::VecDupFromFpu { rd, rn, size, lane } => {
                 let rd = allocs.next_writable(rd);
                 let rn = allocs.next(rn);
                 let q = size.is_128bits() as u32;
                 let imm5 = match size.lane_size() {
-                    ScalarSize::Size32 => 0b00100,
-                    ScalarSize::Size64 => 0b01000,
+                    ScalarSize::Size8 => {
+                        assert!(lane < 16);
+                        0b00001 | (u32::from(lane) << 1)
+                    }
+                    ScalarSize::Size16 => {
+                        assert!(lane < 8);
+                        0b00010 | (u32::from(lane) << 2)
+                    }
+                    ScalarSize::Size32 => {
+                        assert!(lane < 4);
+                        0b00100 | (u32::from(lane) << 3)
+                    }
+                    ScalarSize::Size64 => {
+                        assert!(lane < 2);
+                        0b01000 | (u32::from(lane) << 4)
+                    }
                     _ => unimplemented!(),
                 };
                 sink.put4(
@@ -2870,6 +2867,7 @@ impl MachInstEmit for Inst {
                     VecALUOp::Fmul => (0b001_01110_00_1, 0b110111),
                     VecALUOp::Addp => (0b000_01110_00_1 | enc_size << 1, 0b101111),
                     VecALUOp::Zip1 => (0b01001110_00_0 | enc_size << 1, 0b001110),
+                    VecALUOp::Zip2 => (0b01001110_00_0 | enc_size << 1, 0b011110),
                     VecALUOp::Sqrdmulh => {
                         debug_assert!(
                             size.lane_size() == ScalarSize::Size16
@@ -2878,6 +2876,10 @@ impl MachInstEmit for Inst {
 
                         (0b001_01110_00_1 | enc_size << 1, 0b101101)
                     }
+                    VecALUOp::Uzp1 => (0b01001110_00_0 | enc_size << 1, 0b000110),
+                    VecALUOp::Uzp2 => (0b01001110_00_0 | enc_size << 1, 0b010110),
+                    VecALUOp::Trn1 => (0b01001110_00_0 | enc_size << 1, 0b001010),
+                    VecALUOp::Trn2 => (0b01001110_00_0 | enc_size << 1, 0b011010),
                 };
                 let top11 = if is_float {
                     top11 | size.enc_float_size() << 1
@@ -3113,20 +3115,15 @@ impl MachInstEmit for Inst {
                 sink.put4(enc_jump26(0b000101, not_taken.as_offset26_or_zero()));
             }
             &Inst::TrapIf { kind, trap_code } => {
+                let label = sink.defer_trap(trap_code, state.take_stack_map());
                 // condbr KIND, LABEL
                 let off = sink.cur_offset();
-                let label = sink.get_label();
                 sink.put4(enc_conditional_br(
                     BranchTarget::Label(label),
-                    kind.invert(),
+                    kind,
                     &mut allocs,
                 ));
                 sink.use_label_at_offset(off, label, LabelUse::Branch19);
-                // udf
-                let trap = Inst::Udf { trap_code };
-                trap.emit(&[], sink, emit_info, state);
-                // LABEL:
-                sink.bind_label(label);
             }
             &Inst::IndirectBr { rn, .. } => {
                 let rn = allocs.next(rn);
@@ -3140,15 +3137,11 @@ impl MachInstEmit for Inst {
                 sink.put4(0xd4200000);
             }
             &Inst::Udf { trap_code } => {
-                // "CLIF" in hex, to make the trap recognizable during
-                // debugging.
-                let encoding = 0xc11f;
-
                 sink.add_trap(trap_code);
                 if let Some(s) = state.take_stack_map() {
                     sink.add_stack_map(StackMapExtent::UpcomingBytes(4), s);
                 }
-                sink.put4(encoding);
+                sink.put_data(Inst::TRAP_OPCODE);
             }
             &Inst::Adr { rd, off } => {
                 let rd = allocs.next_writable(rd);
@@ -3319,7 +3312,7 @@ impl MachInstEmit for Inst {
             &Inst::LoadAddr { rd, ref mem } => {
                 let rd = allocs.next_writable(rd);
                 let mem = mem.with_allocs(&mut allocs);
-                let (mem_insts, mem) = mem_finalize(sink.cur_offset(), &mem, state);
+                let (mem_insts, mem) = mem_finalize(Some(sink), &mem, state);
                 for inst in mem_insts.into_iter() {
                     inst.emit(&[], sink, emit_info, state);
                 }
@@ -3463,6 +3456,54 @@ impl MachInstEmit for Inst {
 
                 // nop
                 sink.put4(0xd503201f);
+            }
+
+            &Inst::MachOTlsGetAddr { ref symbol, rd } => {
+                // Each thread local variable gets a descriptor, where the first xword of the descriptor is a pointer
+                // to a function that takes the descriptor address in x0, and after the function returns x0
+                // contains the address for the thread local variable
+                //
+                // what we want to emit is basically:
+                //
+                // adrp x0, <label>@TLVPPAGE  ; Load the address of the page of the thread local variable pointer (TLVP)
+                // ldr x0, [x0, <label>@TLVPPAGEOFF] ; Load the descriptor's address into x0
+                // ldr x1, [x0] ; Load the function pointer (the first part of the descriptor)
+                // blr x1 ; Call the function pointer with the descriptor address in x0
+                // ; x0 now contains the TLV address
+
+                let rd = allocs.next_writable(rd);
+                assert_eq!(xreg(0), rd.to_reg());
+                let rtmp = writable_xreg(1);
+
+                // adrp x0, <label>@TLVPPAGE
+                sink.add_reloc(Reloc::MachOAarch64TlsAdrPage21, symbol, 0);
+                sink.put4(0x90000000);
+
+                // ldr x0, [x0, <label>@TLVPPAGEOFF]
+                sink.add_reloc(Reloc::MachOAarch64TlsAdrPageOff12, symbol, 0);
+                sink.put4(0xf9400000);
+
+                // load [x0] into temp register
+                Inst::ULoad64 {
+                    rd: rtmp,
+                    mem: AMode::reg(rd.to_reg()),
+                    flags: MemFlags::trusted(),
+                }
+                .emit(&[], sink, emit_info, state);
+
+                // call function pointer in temp register
+                Inst::CallInd {
+                    info: crate::isa::Box::new(CallIndInfo {
+                        rn: rtmp.to_reg(),
+                        uses: smallvec![],
+                        defs: smallvec![],
+                        clobbers: PRegSet::empty(),
+                        opcode: Opcode::CallIndirect,
+                        caller_callconv: CallConv::AppleAarch64,
+                        callee_callconv: CallConv::AppleAarch64,
+                    }),
+                }
+                .emit(&[], sink, emit_info, state);
             }
 
             &Inst::Unwind { ref inst } => {

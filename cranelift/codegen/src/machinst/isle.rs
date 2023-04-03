@@ -285,14 +285,6 @@ macro_rules! isle_lower_prelude_methods {
             }
         }
 
-        fn avoid_div_traps(&mut self, _: Type) -> Option<()> {
-            if self.backend.flags().avoid_div_traps() {
-                Some(())
-            } else {
-                None
-            }
-        }
-
         #[inline]
         fn tls_model(&mut self, _: Type) -> TlsModel {
             self.backend.flags().tls_model()
@@ -585,7 +577,109 @@ macro_rules! isle_lower_prelude_methods {
                 .collect();
             self.lower_ctx.gen_return(rets);
         }
+
+        /// Same as `shuffle32_from_imm`, but for 64-bit lane shuffles.
+        fn shuffle64_from_imm(&mut self, imm: Immediate) -> Option<(u8, u8)> {
+            use crate::machinst::isle::shuffle_imm_as_le_lane_idx;
+
+            let bytes = self.lower_ctx.get_immediate_data(imm).as_slice();
+            Some((
+                shuffle_imm_as_le_lane_idx(8, &bytes[0..8])?,
+                shuffle_imm_as_le_lane_idx(8, &bytes[8..16])?,
+            ))
+        }
+
+        /// Attempts to interpret the shuffle immediate `imm` as a shuffle of
+        /// 32-bit lanes, returning four integers, each of which is less than 8,
+        /// which represents a permutation of 32-bit lanes as specified by
+        /// `imm`.
+        ///
+        /// For example the shuffle immediate
+        ///
+        /// `0 1 2 3 8 9 10 11 16 17 18 19 24 25 26 27`
+        ///
+        /// would return `Some((0, 2, 4, 6))`.
+        fn shuffle32_from_imm(&mut self, imm: Immediate) -> Option<(u8, u8, u8, u8)> {
+            use crate::machinst::isle::shuffle_imm_as_le_lane_idx;
+
+            let bytes = self.lower_ctx.get_immediate_data(imm).as_slice();
+            Some((
+                shuffle_imm_as_le_lane_idx(4, &bytes[0..4])?,
+                shuffle_imm_as_le_lane_idx(4, &bytes[4..8])?,
+                shuffle_imm_as_le_lane_idx(4, &bytes[8..12])?,
+                shuffle_imm_as_le_lane_idx(4, &bytes[12..16])?,
+            ))
+        }
+
+        /// Same as `shuffle32_from_imm`, but for 16-bit lane shuffles.
+        fn shuffle16_from_imm(
+            &mut self,
+            imm: Immediate,
+        ) -> Option<(u8, u8, u8, u8, u8, u8, u8, u8)> {
+            use crate::machinst::isle::shuffle_imm_as_le_lane_idx;
+            let bytes = self.lower_ctx.get_immediate_data(imm).as_slice();
+            Some((
+                shuffle_imm_as_le_lane_idx(2, &bytes[0..2])?,
+                shuffle_imm_as_le_lane_idx(2, &bytes[2..4])?,
+                shuffle_imm_as_le_lane_idx(2, &bytes[4..6])?,
+                shuffle_imm_as_le_lane_idx(2, &bytes[6..8])?,
+                shuffle_imm_as_le_lane_idx(2, &bytes[8..10])?,
+                shuffle_imm_as_le_lane_idx(2, &bytes[10..12])?,
+                shuffle_imm_as_le_lane_idx(2, &bytes[12..14])?,
+                shuffle_imm_as_le_lane_idx(2, &bytes[14..16])?,
+            ))
+        }
+
+        fn safe_divisor_from_imm64(&mut self, ty: Type, val: Imm64) -> Option<u64> {
+            let minus_one = if ty.bytes() == 8 {
+                -1
+            } else {
+                (1 << (ty.bytes() * 8)) - 1
+            };
+            let bits = val.bits() & minus_one;
+            if bits == 0 || bits == minus_one {
+                None
+            } else {
+                Some(bits as u64)
+            }
+        }
     };
+}
+
+/// Returns the `size`-byte lane referred to by the shuffle immediate specified
+/// in `bytes`.
+///
+/// This helper is used by `shuffleNN_from_imm` above and is used to interpret a
+/// byte-based shuffle as a higher-level shuffle of bigger lanes. This will see
+/// if the `bytes` specified, which must have `size` length, specifies a lane in
+/// vectors aligned to a `size`-byte boundary.
+///
+/// Returns `None` if `bytes` doesn't specify a `size`-byte lane aligned
+/// appropriately, or returns `Some(n)` where `n` is the index of the lane being
+/// shuffled.
+pub fn shuffle_imm_as_le_lane_idx(size: u8, bytes: &[u8]) -> Option<u8> {
+    assert_eq!(bytes.len(), usize::from(size));
+
+    // The first index in `bytes` must be aligned to a `size` boundary for the
+    // bytes to be a valid specifier for a lane of `size` bytes.
+    if bytes[0] % size != 0 {
+        return None;
+    }
+
+    // Afterwards the bytes must all be one larger than the prior to specify a
+    // contiguous sequence of bytes that's being shuffled. Basically `bytes`
+    // must refer to the entire `size`-byte lane, in little-endian order.
+    for i in 0..size - 1 {
+        let idx = usize::from(i);
+        if bytes[idx] + 1 != bytes[idx + 1] {
+            return None;
+        }
+    }
+
+    // All of the `bytes` are in-order, meaning that this is a valid shuffle
+    // immediate to specify a lane of `size` bytes. The index, when viewed as
+    // `size`-byte immediates, will be the first byte divided by the byte size.
+    Some(bytes[0] / size)
 }
 
 /// Helpers specifically for machines that use ABICaller.

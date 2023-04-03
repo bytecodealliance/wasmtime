@@ -292,15 +292,6 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
     }
 
     #[inline]
-    fn allow_div_traps(&mut self, _: Type) -> Option<()> {
-        if !self.backend.flags.avoid_div_traps() {
-            Some(())
-        } else {
-            None
-        }
-    }
-
-    #[inline]
     fn mie2_enabled(&mut self, _: Type) -> Option<()> {
         if self.backend.isa_flags.has_mie2() {
             Some(())
@@ -436,7 +427,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
     }
 
     #[inline]
-    fn u64_as_u32(&mut self, n: u64) -> u32 {
+    fn u64_truncate_to_u32(&mut self, n: u64) -> u32 {
         n as u32
     }
 

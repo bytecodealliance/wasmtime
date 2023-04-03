@@ -2648,10 +2648,8 @@ impl Compiler<'_, '_> {
             | (ValType::F64, ValType::F32)
 
             // not used in the component model
-            | (ValType::ExternRef, _)
-            | (_, ValType::ExternRef)
-            | (ValType::FuncRef, _)
-            | (_, ValType::FuncRef)
+            | (ValType::Ref(_), _)
+            | (_, ValType::Ref(_))
             | (ValType::V128, _)
             | (_, ValType::V128) => {
                 panic!("cannot get {dst_ty:?} from {src_ty:?} local");
@@ -2705,10 +2703,8 @@ impl Compiler<'_, '_> {
             | (ValType::F32, ValType::F64)
 
             // not used in the component model
-            | (ValType::ExternRef, _)
-            | (_, ValType::ExternRef)
-            | (ValType::FuncRef, _)
-            | (_, ValType::FuncRef)
+            | (ValType::Ref(_), _)
+            | (_, ValType::Ref(_))
             | (ValType::V128, _)
             | (_, ValType::V128) => {
                 panic!("cannot get {dst_ty:?} from {src_ty:?} local");

@@ -6,6 +6,7 @@ mod not_for_windows {
     use rustix::mm::{mmap_anonymous, mprotect, munmap, MapFlags, MprotectFlags, ProtFlags};
 
     use std::convert::TryFrom;
+    use std::ops::Range;
     use std::ptr::null_mut;
     use std::sync::{Arc, Mutex};
 
@@ -73,6 +74,12 @@ mod not_for_windows {
 
         fn as_ptr(&self) -> *mut u8 {
             self.mem as *mut u8
+        }
+
+        fn wasm_accessible(&self) -> Range<usize> {
+            let base = self.mem as usize;
+            let end = base + self.size;
+            base..end
         }
     }
 

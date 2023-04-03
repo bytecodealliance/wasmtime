@@ -4,11 +4,12 @@ use anyhow::Result;
 use arbitrary::{Arbitrary, Unstructured};
 use cranelift::codegen::data_value::DataValue;
 use cranelift::codegen::ir::immediates::Offset32;
-use cranelift::codegen::ir::instructions::InstructionFormat;
+use cranelift::codegen::ir::instructions::{InstructionFormat, ResolvedConstraint};
 use cranelift::codegen::ir::stackslot::StackSize;
+
 use cranelift::codegen::ir::{
-    types::*, AtomicRmwOp, Block, ExternalName, FuncRef, Function, LibCall, Opcode, Signature,
-    StackSlot, Type, UserExternalName, UserFuncName, Value,
+    types::*, AtomicRmwOp, Block, ConstantData, ExternalName, FuncRef, Function, LibCall, Opcode,
+    SigRef, Signature, StackSlot, Type, UserExternalName, UserFuncName, Value,
 };
 use cranelift::codegen::isa::CallConv;
 use cranelift::frontend::{FunctionBuilder, FunctionBuilderContext, Switch, Variable};
@@ -16,6 +17,7 @@ use cranelift::prelude::{
     EntityRef, ExtFuncData, FloatCC, InstBuilder, IntCC, JumpTableData, MemFlags, StackSlotData,
     StackSlotKind,
 };
+use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::ops::RangeInclusive;
 use target_lexicon::{Architecture, Triple};
@@ -26,8 +28,8 @@ fn insert_opcode(
     fgen: &mut FunctionGenerator,
     builder: &mut FunctionBuilder,
     opcode: Opcode,
-    args: &'static [Type],
-    rets: &'static [Type],
+    args: &[Type],
+    rets: &[Type],
 ) -> Result<()> {
     let mut vals = Vec::with_capacity(args.len());
     for &arg in args.into_iter() {
@@ -36,10 +38,10 @@ fn insert_opcode(
         vals.push(val);
     }
 
-    // For pretty much every instruction the control type is the return type
-    // except for Iconcat and Isplit which are *special* and the control type
-    // is the input type.
-    let ctrl_type = if opcode == Opcode::Iconcat || opcode == Opcode::Isplit {
+    // Some opcodes require us to look at their input arguments to determine the
+    // controlling type. This is not the general case, but we can neatly check this
+    // using `requires_typevar_operand`.
+    let ctrl_type = if opcode.constraints().requires_typevar_operand() {
         args.first()
     } else {
         rets.first()
@@ -70,18 +72,33 @@ fn insert_call(
     fgen: &mut FunctionGenerator,
     builder: &mut FunctionBuilder,
     opcode: Opcode,
-    _args: &'static [Type],
-    _rets: &'static [Type],
+    args: &[Type],
+    _rets: &[Type],
 ) -> Result<()> {
-    assert_eq!(opcode, Opcode::Call, "only call handled at the moment");
-    let (sig, func_ref) = fgen.u.choose(&fgen.resources.func_refs)?.clone();
+    assert!(matches!(opcode, Opcode::Call | Opcode::CallIndirect));
+    let (sig, sig_ref, func_ref) = fgen.u.choose(&fgen.resources.func_refs)?.clone();
 
     let actuals = fgen.generate_values_for_signature(
         builder,
         sig.params.iter().map(|abi_param| abi_param.value_type),
     )?;
 
-    builder.ins().call(func_ref, &actuals);
+    let call = if opcode == Opcode::Call {
+        builder.ins().call(func_ref, &actuals)
+    } else {
+        let addr_ty = args[0];
+        let addr = builder.ins().func_addr(addr_ty, func_ref);
+        builder.ins().call_indirect(sig_ref, addr, &actuals)
+    };
+
+    // Assign the return values to random variables
+    let ret_values = builder.inst_results(call).to_vec();
+    let ret_types = sig.returns.iter().map(|p| p.value_type);
+    for (ty, val) in ret_types.zip(ret_values) {
+        let var = fgen.get_variable_of_type(ty)?;
+        builder.def_var(var, val);
+    }
+
     Ok(())
 }
 
@@ -89,8 +106,8 @@ fn insert_stack_load(
     fgen: &mut FunctionGenerator,
     builder: &mut FunctionBuilder,
     _opcode: Opcode,
-    _args: &'static [Type],
-    rets: &'static [Type],
+    _args: &[Type],
+    rets: &[Type],
 ) -> Result<()> {
     let typevar = rets[0];
     let type_size = typevar.bytes();
@@ -108,8 +125,8 @@ fn insert_stack_store(
     fgen: &mut FunctionGenerator,
     builder: &mut FunctionBuilder,
     _opcode: Opcode,
-    args: &'static [Type],
-    _rets: &'static [Type],
+    args: &[Type],
+    _rets: &[Type],
 ) -> Result<()> {
     let typevar = args[0];
     let type_size = typevar.bytes();
@@ -127,8 +144,8 @@ fn insert_cmp(
     fgen: &mut FunctionGenerator,
     builder: &mut FunctionBuilder,
     opcode: Opcode,
-    args: &'static [Type],
-    rets: &'static [Type],
+    args: &[Type],
+    rets: &[Type],
 ) -> Result<()> {
     let lhs = fgen.get_variable_of_type(args[0])?;
     let lhs = builder.use_var(lhs);
@@ -139,26 +156,28 @@ fn insert_cmp(
     let res = if opcode == Opcode::Fcmp {
         let cc = *fgen.u.choose(FloatCC::all())?;
 
-        // Some FloatCC's are not implemented on AArch64, see:
-        // https://github.com/bytecodealliance/wasmtime/issues/4850
         // We filter out condition codes that aren't supported by the target at
         // this point after randomly choosing one, instead of randomly choosing a
         // supported one, to avoid invalidating the corpus when these get implemented.
-        if matches!(fgen.target_triple.architecture, Architecture::Aarch64(_))
-            && ![
-                FloatCC::Ordered,
-                FloatCC::Unordered,
-                FloatCC::Equal,
-                FloatCC::NotEqual,
-                FloatCC::LessThan,
-                FloatCC::LessThanOrEqual,
-                FloatCC::GreaterThan,
-                FloatCC::GreaterThanOrEqual,
-            ]
-            .contains(&cc)
-        {
-            return Err(arbitrary::Error::IncorrectFormat.into());
+        let unimplemented_cc = match (fgen.target_triple.architecture, cc) {
+            // Some FloatCC's are not implemented on AArch64, see:
+            // https://github.com/bytecodealliance/wasmtime/issues/4850
+            (Architecture::Aarch64(_), FloatCC::OrderedNotEqual) => true,
+            (Architecture::Aarch64(_), FloatCC::UnorderedOrEqual) => true,
+            (Architecture::Aarch64(_), FloatCC::UnorderedOrLessThan) => true,
+            (Architecture::Aarch64(_), FloatCC::UnorderedOrLessThanOrEqual) => true,
+            (Architecture::Aarch64(_), FloatCC::UnorderedOrGreaterThan) => true,
+            (Architecture::Aarch64(_), FloatCC::UnorderedOrGreaterThanOrEqual) => true,
+
+            // These are not implemented on x86_64, for vectors.
+            (Architecture::X86_64, FloatCC::UnorderedOrEqual | FloatCC::OrderedNotEqual) => {
+                args[0].is_vector()
+            }
+            _ => false,
         };
+        if unimplemented_cc {
+            return Err(arbitrary::Error::IncorrectFormat.into());
+        }
 
         builder.ins().fcmp(cc, lhs, rhs)
     } else {
@@ -176,8 +195,8 @@ fn insert_const(
     fgen: &mut FunctionGenerator,
     builder: &mut FunctionBuilder,
     _opcode: Opcode,
-    _args: &'static [Type],
-    rets: &'static [Type],
+    _args: &[Type],
+    rets: &[Type],
 ) -> Result<()> {
     let typevar = rets[0];
     let var = fgen.get_variable_of_type(typevar)?;
@@ -189,9 +208,8 @@ fn insert_const(
 fn insert_bitcast(
     fgen: &mut FunctionGenerator,
     builder: &mut FunctionBuilder,
-    _opcode: Opcode,
-    args: &'static [Type],
-    rets: &'static [Type],
+    args: &[Type],
+    rets: &[Type],
 ) -> Result<()> {
     let from_var = fgen.get_variable_of_type(args[0])?;
     let from_val = builder.use_var(from_var);
@@ -210,9 +228,13 @@ fn insert_load_store(
     fgen: &mut FunctionGenerator,
     builder: &mut FunctionBuilder,
     opcode: Opcode,
-    args: &'static [Type],
-    rets: &'static [Type],
+    args: &[Type],
+    rets: &[Type],
 ) -> Result<()> {
+    if opcode == Opcode::Bitcast {
+        return insert_bitcast(fgen, builder, args, rets);
+    }
+
     let ctrl_type = *rets.first().or(args.first()).unwrap();
     let type_size = ctrl_type.bytes();
 
@@ -264,8 +286,8 @@ fn insert_atomic_rmw(
     fgen: &mut FunctionGenerator,
     builder: &mut FunctionBuilder,
     _: Opcode,
-    _: &'static [Type],
-    rets: &'static [Type],
+    _: &[Type],
+    rets: &[Type],
 ) -> Result<()> {
     let ctrl_type = *rets.first().unwrap();
     let type_size = ctrl_type.bytes();
@@ -294,8 +316,8 @@ fn insert_atomic_cas(
     fgen: &mut FunctionGenerator,
     builder: &mut FunctionBuilder,
     _: Opcode,
-    _: &'static [Type],
-    rets: &'static [Type],
+    _: &[Type],
+    rets: &[Type],
 ) -> Result<()> {
     let ctrl_type = *rets.first().unwrap();
     let type_size = ctrl_type.bytes();
@@ -320,13 +342,84 @@ fn insert_atomic_cas(
     Ok(())
 }
 
+fn insert_shuffle(
+    fgen: &mut FunctionGenerator,
+    builder: &mut FunctionBuilder,
+    opcode: Opcode,
+    _: &[Type],
+    rets: &[Type],
+) -> Result<()> {
+    let ctrl_type = *rets.first().unwrap();
+
+    let lhs = builder.use_var(fgen.get_variable_of_type(ctrl_type)?);
+    let rhs = builder.use_var(fgen.get_variable_of_type(ctrl_type)?);
+
+    let mask = {
+        let mut lanes = [0u8; 16];
+        for lane in lanes.iter_mut() {
+            *lane = fgen.u.int_in_range(0..=31)?;
+        }
+        let lanes = ConstantData::from(lanes.as_ref());
+        builder.func.dfg.immediates.push(lanes)
+    };
+
+    // This function is called for any `InstructionFormat::Shuffle`. Which today is just
+    // `shuffle`, but lets assert that, just to be sure we don't accidentally insert
+    // something else.
+    assert_eq!(opcode, Opcode::Shuffle);
+    let res = builder.ins().shuffle(lhs, rhs, mask);
+
+    let target_var = fgen.get_variable_of_type(ctrl_type)?;
+    builder.def_var(target_var, res);
+
+    Ok(())
+}
+
+fn insert_ins_ext_lane(
+    fgen: &mut FunctionGenerator,
+    builder: &mut FunctionBuilder,
+    opcode: Opcode,
+    args: &[Type],
+    rets: &[Type],
+) -> Result<()> {
+    let vector_type = *args.first().unwrap();
+    let ret_type = *rets.first().unwrap();
+
+    let lhs = builder.use_var(fgen.get_variable_of_type(vector_type)?);
+    let max_lane = (vector_type.lane_count() as u8) - 1;
+    let lane = fgen.u.int_in_range(0..=max_lane)?;
+
+    let res = match opcode {
+        Opcode::Insertlane => {
+            let rhs = builder.use_var(fgen.get_variable_of_type(args[1])?);
+            builder.ins().insertlane(lhs, rhs, lane)
+        }
+        Opcode::Extractlane => builder.ins().extractlane(lhs, lane),
+        _ => todo!(),
+    };
+
+    let target_var = fgen.get_variable_of_type(ret_type)?;
+    builder.def_var(target_var, res);
+
+    Ok(())
+}
+
 type OpcodeInserter = fn(
     fgen: &mut FunctionGenerator,
     builder: &mut FunctionBuilder,
     Opcode,
-    &'static [Type],
-    &'static [Type],
+    &[Type],
+    &[Type],
 ) -> Result<()>;
+
+macro_rules! exceptions {
+    ($op:expr, $args:expr, $rets:expr, $(($($cases:pat),*)),* $(,)?) => {
+        match ($op, $args, $rets) {
+            $( ($($cases,)* ..) => return false, )*
+            _ => true,
+        }
+    }
+}
 
 /// Returns true if we believe this `OpcodeSignature` should compile correctly
 /// for the given target triple. We currently have a range of known issues
@@ -334,82 +427,75 @@ type OpcodeInserter = fn(
 /// fuzz bug reports for those. Over time our goal is to eliminate all of these
 /// exceptions.
 fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -> bool {
-    macro_rules! exceptions {
-        ( $(($($cases:pat),*)),* $(,)?) => {
-            match (op, args, rets) {
-                $( ($($cases,)* ..) => false, )*
-                _ => true,
+    // Rule out invalid combinations that we don't yet have a good way of rejecting with the
+    // instruction DSL type constraints.
+    match op {
+        Opcode::FcvtToUintSat | Opcode::FcvtToSintSat => {
+            assert_eq!(args.len(), 1);
+            assert_eq!(rets.len(), 1);
+
+            let arg = args[0];
+            let ret = args[0];
+
+            // Vector arguments must produce vector results, and scalar arguments must produce
+            // scalar results.
+            if arg.is_vector() != ret.is_vector() {
+                return false;
+            }
+
+            if arg.is_vector() && arg.is_vector() {
+                // Vector conversions must have the same number of lanes, and the lanes must be the
+                // same bit-width.
+                if arg.lane_count() != ret.lane_count() {
+                    return false;
+                }
+
+                if arg.lane_of().bits() != ret.lane_of().bits() {
+                    return false;
+                }
             }
         }
+
+        _ => {}
     }
 
     match triple.architecture {
         Architecture::X86_64 => {
             exceptions!(
-                (Opcode::IaddCout, &[I8, I8]),
-                (Opcode::IaddCout, &[I16, I16]),
-                (Opcode::IaddCout, &[I128, I128]),
+                op,
+                args,
+                rets,
+                (Opcode::IaddCout, &([I8, I8] | [I16, I16] | [I128, I128])),
+                (Opcode::Imul, &[I8X16, I8X16]),
                 // https://github.com/bytecodealliance/wasmtime/issues/5468
-                (Opcode::Smulhi, &[I8, I8]),
-                // https://github.com/bytecodealliance/wasmtime/issues/5468
-                (Opcode::Umulhi, &[I8, I8]),
+                (Opcode::Smulhi | Opcode::Umulhi, &[I8, I8]),
                 // https://github.com/bytecodealliance/wasmtime/issues/4756
-                (Opcode::Udiv, &[I128, I128]),
-                // https://github.com/bytecodealliance/wasmtime/issues/4770
-                (Opcode::Sdiv, &[I128, I128]),
+                (Opcode::Udiv | Opcode::Sdiv, &[I128, I128]),
                 // https://github.com/bytecodealliance/wasmtime/issues/5474
-                (Opcode::Urem, &[I128, I128]),
-                // https://github.com/bytecodealliance/wasmtime/issues/5474
-                (Opcode::Srem, &[I128, I128]),
+                (Opcode::Urem | Opcode::Srem, &[I128, I128]),
                 // https://github.com/bytecodealliance/wasmtime/issues/5466
                 (Opcode::Iabs, &[I128]),
                 // https://github.com/bytecodealliance/wasmtime/issues/3370
-                (Opcode::Smin, &[I128, I128]),
-                // https://github.com/bytecodealliance/wasmtime/issues/3370
-                (Opcode::Umin, &[I128, I128]),
-                // https://github.com/bytecodealliance/wasmtime/issues/3370
-                (Opcode::Smax, &[I128, I128]),
-                // https://github.com/bytecodealliance/wasmtime/issues/3370
-                (Opcode::Umax, &[I128, I128]),
+                (
+                    Opcode::Smin | Opcode::Umin | Opcode::Smax | Opcode::Umax,
+                    &[I128, I128]
+                ),
                 // https://github.com/bytecodealliance/wasmtime/issues/4870
-                (Opcode::Band, &[F32, F32]),
-                (Opcode::Band, &[F64, F64]),
-                // https://github.com/bytecodealliance/wasmtime/issues/4870
-                (Opcode::Bor, &[F32, F32]),
-                (Opcode::Bor, &[F64, F64]),
-                // https://github.com/bytecodealliance/wasmtime/issues/4870
-                (Opcode::Bxor, &[F32, F32]),
-                (Opcode::Bxor, &[F64, F64]),
-                // https://github.com/bytecodealliance/wasmtime/issues/4870
-                (Opcode::Bnot, &[F32, F32]),
-                (Opcode::Bnot, &[F64, F64]),
+                (Opcode::Bnot, &[F32 | F64]),
+                (
+                    Opcode::Band
+                        | Opcode::Bor
+                        | Opcode::Bxor
+                        | Opcode::BandNot
+                        | Opcode::BorNot
+                        | Opcode::BxorNot,
+                    &([F32, F32] | [F64, F64])
+                ),
                 // https://github.com/bytecodealliance/wasmtime/issues/5041
-                (Opcode::BandNot, &[I8, I8]),
-                (Opcode::BandNot, &[I16, I16]),
-                (Opcode::BandNot, &[I32, I32]),
-                (Opcode::BandNot, &[I64, I64]),
-                (Opcode::BandNot, &[I128, I128]),
-                // https://github.com/bytecodealliance/wasmtime/issues/4870
-                (Opcode::BandNot, &[F32, F32]),
-                (Opcode::BandNot, &[F64, F64]),
-                // https://github.com/bytecodealliance/wasmtime/issues/5041
-                (Opcode::BorNot, &[I8, I8]),
-                (Opcode::BorNot, &[I16, I16]),
-                (Opcode::BorNot, &[I32, I32]),
-                (Opcode::BorNot, &[I64, I64]),
-                (Opcode::BorNot, &[I128, I128]),
-                // https://github.com/bytecodealliance/wasmtime/issues/4870
-                (Opcode::BorNot, &[F32, F32]),
-                (Opcode::BorNot, &[F64, F64]),
-                // https://github.com/bytecodealliance/wasmtime/issues/5041
-                (Opcode::BxorNot, &[I8, I8]),
-                (Opcode::BxorNot, &[I16, I16]),
-                (Opcode::BxorNot, &[I32, I32]),
-                (Opcode::BxorNot, &[I64, I64]),
-                (Opcode::BxorNot, &[I128, I128]),
-                // https://github.com/bytecodealliance/wasmtime/issues/4870
-                (Opcode::BxorNot, &[F32, F32]),
-                (Opcode::BxorNot, &[F64, F64]),
+                (
+                    Opcode::BandNot | Opcode::BorNot | Opcode::BxorNot,
+                    &([I8, I8] | [I16, I16] | [I32, I32] | [I64, I64] | [I128, I128])
+                ),
                 // https://github.com/bytecodealliance/wasmtime/issues/5107
                 (Opcode::Cls, &[I8], &[I8]),
                 (Opcode::Cls, &[I16], &[I16]),
@@ -417,150 +503,169 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                 (Opcode::Cls, &[I64], &[I64]),
                 (Opcode::Cls, &[I128], &[I128]),
                 // https://github.com/bytecodealliance/wasmtime/issues/5197
-                (Opcode::Bitselect, &[I8, I8, I8]),
-                (Opcode::Bitselect, &[I16, I16, I16]),
-                (Opcode::Bitselect, &[I32, I32, I32]),
-                (Opcode::Bitselect, &[I64, I64, I64]),
-                (Opcode::Bitselect, &[I128, I128, I128]),
+                (
+                    Opcode::Bitselect,
+                    &([I8, I8, I8]
+                        | [I16, I16, I16]
+                        | [I32, I32, I32]
+                        | [I64, I64, I64]
+                        | [I128, I128, I128])
+                ),
                 // https://github.com/bytecodealliance/wasmtime/issues/4897
                 // https://github.com/bytecodealliance/wasmtime/issues/4899
-                (Opcode::FcvtToUint, &[F32], &[I8]),
-                (Opcode::FcvtToUint, &[F32], &[I16]),
-                (Opcode::FcvtToUint, &[F32], &[I128]),
-                (Opcode::FcvtToUint, &[F64], &[I8]),
-                (Opcode::FcvtToUint, &[F64], &[I16]),
-                (Opcode::FcvtToUint, &[F64], &[I128]),
-                // https://github.com/bytecodealliance/wasmtime/issues/4897
-                // https://github.com/bytecodealliance/wasmtime/issues/4899
-                (Opcode::FcvtToUintSat, &[F32], &[I8]),
-                (Opcode::FcvtToUintSat, &[F32], &[I16]),
-                (Opcode::FcvtToUintSat, &[F32], &[I128]),
-                (Opcode::FcvtToUintSat, &[F64], &[I8]),
-                (Opcode::FcvtToUintSat, &[F64], &[I16]),
-                (Opcode::FcvtToUintSat, &[F64], &[I128]),
-                // https://github.com/bytecodealliance/wasmtime/issues/4897
-                // https://github.com/bytecodealliance/wasmtime/issues/4899
-                (Opcode::FcvtToSint, &[F32], &[I8]),
-                (Opcode::FcvtToSint, &[F32], &[I16]),
-                (Opcode::FcvtToSint, &[F32], &[I128]),
-                (Opcode::FcvtToSint, &[F64], &[I8]),
-                (Opcode::FcvtToSint, &[F64], &[I16]),
-                (Opcode::FcvtToSint, &[F64], &[I128]),
-                // https://github.com/bytecodealliance/wasmtime/issues/4897
-                // https://github.com/bytecodealliance/wasmtime/issues/4899
-                (Opcode::FcvtToSintSat, &[F32], &[I8]),
-                (Opcode::FcvtToSintSat, &[F32], &[I16]),
-                (Opcode::FcvtToSintSat, &[F32], &[I128]),
-                (Opcode::FcvtToSintSat, &[F64], &[I8]),
-                (Opcode::FcvtToSintSat, &[F64], &[I16]),
-                (Opcode::FcvtToSintSat, &[F64], &[I128]),
+                (
+                    Opcode::FcvtToUint
+                        | Opcode::FcvtToUintSat
+                        | Opcode::FcvtToSint
+                        | Opcode::FcvtToSintSat,
+                    &[F32 | F64],
+                    &[I8 | I16 | I128]
+                ),
+                (Opcode::FcvtToUint | Opcode::FcvtToSint, &[F32X4], &[I32X4]),
+                (
+                    Opcode::FcvtToUint
+                        | Opcode::FcvtToUintSat
+                        | Opcode::FcvtToSint
+                        | Opcode::FcvtToSintSat,
+                    &[F64X2],
+                    &[I64X2]
+                ),
                 // https://github.com/bytecodealliance/wasmtime/issues/4900
-                (Opcode::FcvtFromUint, &[I128], &[F32]),
-                (Opcode::FcvtFromUint, &[I128], &[F64]),
+                (Opcode::FcvtFromUint, &[I128], &[F32 | F64]),
+                // This has a lowering, but only when preceded by `uwiden_low`.
+                (Opcode::FcvtFromUint, &[I64X2], &[F64X2]),
                 // https://github.com/bytecodealliance/wasmtime/issues/4900
-                (Opcode::FcvtFromSint, &[I128], &[F32]),
-                (Opcode::FcvtFromSint, &[I128], &[F64]),
+                (Opcode::FcvtFromSint, &[I128], &[F32 | F64]),
+                (Opcode::FcvtFromSint, &[I64X2], &[F64X2]),
+                (
+                    Opcode::Umulhi | Opcode::Smulhi,
+                    &([I8X16, I8X16] | [I16X8, I16X8] | [I32X4, I32X4] | [I64X2, I64X2])
+                ),
+                (
+                    Opcode::UaddSat | Opcode::SaddSat | Opcode::UsubSat | Opcode::SsubSat,
+                    &([I32X4, I32X4] | [I64X2, I64X2])
+                ),
+                (Opcode::Fcopysign, &([F32X4, F32X4] | [F64X2, F64X2])),
+                (Opcode::Popcnt, &([I8X16] | [I16X8] | [I32X4] | [I64X2])),
+                (
+                    Opcode::Umax | Opcode::Smax | Opcode::Umin | Opcode::Smin,
+                    &[I64X2, I64X2]
+                ),
+                (Opcode::Bitcast, &[I128], &[_]),
+                (Opcode::Bitcast, &[_], &[I128]),
+                (Opcode::Uunarrow),
+                (Opcode::Snarrow | Opcode::Unarrow, &[I64X2, I64X2]),
+                (Opcode::SqmulRoundSat, &[I32X4, I32X4]),
+                // This Icmp is not implemented: #5529
+                (Opcode::Icmp, &[I64X2, I64X2]),
+                // IaddPairwise is implemented, but only for some types, and with some preceding ops.
+                (Opcode::IaddPairwise),
+                // Nothing wrong with this select. But we have an isle rule that can optimize it
+                // into a `min`/`max` instructions, which we don't have implemented yet.
+                (Opcode::Select, &[_, I128, I128]),
+                // These stack accesses can cause segfaults if they are merged into an SSE instruction.
+                // See: #5922
+                (
+                    Opcode::StackStore,
+                    &[I8X16 | I16X8 | I32X4 | I64X2 | F32X4 | F64X2]
+                ),
+                (
+                    Opcode::StackLoad,
+                    &[],
+                    &[I8X16 | I16X8 | I32X4 | I64X2 | F32X4 | F64X2]
+                ),
             )
         }
 
         Architecture::Aarch64(_) => {
             exceptions!(
+                op,
+                args,
+                rets,
                 (Opcode::IaddCout, &[I128, I128]),
                 // https://github.com/bytecodealliance/wasmtime/issues/4864
-                (Opcode::Udiv, &[I128, I128]),
-                // https://github.com/bytecodealliance/wasmtime/issues/4864
-                (Opcode::Sdiv, &[I128, I128]),
+                (Opcode::Udiv | Opcode::Sdiv, &[I128, I128]),
                 // https://github.com/bytecodealliance/wasmtime/issues/5472
-                (Opcode::Urem, &[I128, I128]),
-                // https://github.com/bytecodealliance/wasmtime/issues/5472
-                (Opcode::Srem, &[I128, I128]),
+                (Opcode::Urem | Opcode::Srem, &[I128, I128]),
                 // https://github.com/bytecodealliance/wasmtime/issues/5467
                 (Opcode::Iabs, &[I128]),
                 // https://github.com/bytecodealliance/wasmtime/issues/4313
-                (Opcode::Smin, &[I128, I128]),
-                // https://github.com/bytecodealliance/wasmtime/issues/4313
-                (Opcode::Umin, &[I128, I128]),
-                // https://github.com/bytecodealliance/wasmtime/issues/4313
-                (Opcode::Smax, &[I128, I128]),
-                // https://github.com/bytecodealliance/wasmtime/issues/4313
-                (Opcode::Umax, &[I128, I128]),
+                (
+                    Opcode::Smin | Opcode::Umin | Opcode::Smax | Opcode::Umax,
+                    &[I128, I128]
+                ),
                 // https://github.com/bytecodealliance/wasmtime/issues/4870
-                (Opcode::Band, &[F32, F32]),
-                (Opcode::Band, &[F64, F64]),
-                // https://github.com/bytecodealliance/wasmtime/issues/4870
-                (Opcode::Bor, &[F32, F32]),
-                (Opcode::Bor, &[F64, F64]),
-                // https://github.com/bytecodealliance/wasmtime/issues/4870
-                (Opcode::Bxor, &[F32, F32]),
-                (Opcode::Bxor, &[F64, F64]),
-                // https://github.com/bytecodealliance/wasmtime/issues/4870
-                (Opcode::Bnot, &[F32, F32]),
-                (Opcode::Bnot, &[F64, F64]),
-                // https://github.com/bytecodealliance/wasmtime/issues/4870
-                (Opcode::BandNot, &[F32, F32]),
-                (Opcode::BandNot, &[F64, F64]),
-                // https://github.com/bytecodealliance/wasmtime/issues/4870
-                (Opcode::BorNot, &[F32, F32]),
-                (Opcode::BorNot, &[F64, F64]),
-                // https://github.com/bytecodealliance/wasmtime/issues/4870
-                (Opcode::BxorNot, &[F32, F32]),
-                (Opcode::BxorNot, &[F64, F64]),
+                (Opcode::Bnot, &[F32 | F64]),
+                (
+                    Opcode::Band
+                        | Opcode::Bor
+                        | Opcode::Bxor
+                        | Opcode::BandNot
+                        | Opcode::BorNot
+                        | Opcode::BxorNot,
+                    &([F32, F32] | [F64, F64])
+                ),
                 // https://github.com/bytecodealliance/wasmtime/issues/5198
                 (Opcode::Bitselect, &[I128, I128, I128]),
                 // https://github.com/bytecodealliance/wasmtime/issues/4934
-                (Opcode::FcvtToUint, &[F32]),
-                (Opcode::FcvtToUint, &[F64]),
-                // https://github.com/bytecodealliance/wasmtime/issues/4934
-                (Opcode::FcvtToUintSat, &[F32]),
-                (Opcode::FcvtToUintSat, &[F64]),
-                // https://github.com/bytecodealliance/wasmtime/issues/4934
-                (Opcode::FcvtToSint, &[F32]),
-                (Opcode::FcvtToSint, &[F64]),
-                // https://github.com/bytecodealliance/wasmtime/issues/4934
-                (Opcode::FcvtToSintSat, &[F32]),
-                (Opcode::FcvtToSintSat, &[F64]),
+                (
+                    Opcode::FcvtToUint
+                        | Opcode::FcvtToUintSat
+                        | Opcode::FcvtToSint
+                        | Opcode::FcvtToSintSat,
+                    &[F32 | F64]
+                ),
                 // https://github.com/bytecodealliance/wasmtime/issues/4933
-                (Opcode::FcvtFromUint, &[I128], &[F32]),
-                (Opcode::FcvtFromUint, &[I128], &[F64]),
-                // https://github.com/bytecodealliance/wasmtime/issues/4933
-                (Opcode::FcvtFromSint, &[I128], &[F32]),
-                (Opcode::FcvtFromSint, &[I128], &[F64]),
+                (
+                    Opcode::FcvtFromUint | Opcode::FcvtFromSint,
+                    &[I128],
+                    &[F32 | F64]
+                ),
+                (
+                    Opcode::Umulhi | Opcode::Smulhi,
+                    &([I8X16, I8X16] | [I16X8, I16X8] | [I32X4, I32X4] | [I64X2, I64X2])
+                ),
+                (Opcode::Popcnt, &[I16X8 | I32X4 | I64X2]),
+                // Nothing wrong with this select. But we have an isle rule that can optimize it
+                // into a `min`/`max` instructions, which we don't have implemented yet.
+                (Opcode::Select, &[I8, I128, I128]),
             )
         }
 
         Architecture::S390x => {
             exceptions!(
+                op,
+                args,
+                rets,
                 (Opcode::IaddCout),
-                (Opcode::Udiv, &[I128, I128]),
-                (Opcode::Sdiv, &[I128, I128]),
-                (Opcode::Urem, &[I128, I128]),
-                (Opcode::Srem, &[I128, I128]),
-                (Opcode::Band, &[F32, F32]),
-                (Opcode::Band, &[F64, F64]),
-                (Opcode::Bor, &[F32, F32]),
-                (Opcode::Bor, &[F64, F64]),
-                (Opcode::Bxor, &[F32, F32]),
-                (Opcode::Bxor, &[F64, F64]),
-                (Opcode::Bnot, &[F32, F32]),
-                (Opcode::Bnot, &[F64, F64]),
-                (Opcode::BandNot, &[F32, F32]),
-                (Opcode::BandNot, &[F64, F64]),
-                (Opcode::BorNot, &[F32, F32]),
-                (Opcode::BorNot, &[F64, F64]),
-                (Opcode::BxorNot, &[F32, F32]),
-                (Opcode::BxorNot, &[F64, F64]),
-                (Opcode::FcvtToUint, &[F32], &[I128]),
-                (Opcode::FcvtToUint, &[F64], &[I128]),
-                (Opcode::FcvtToUintSat, &[F32], &[I128]),
-                (Opcode::FcvtToUintSat, &[F64], &[I128]),
-                (Opcode::FcvtToSint, &[F32], &[I128]),
-                (Opcode::FcvtToSint, &[F64], &[I128]),
-                (Opcode::FcvtToSintSat, &[F32], &[I128]),
-                (Opcode::FcvtToSintSat, &[F64], &[I128]),
-                (Opcode::FcvtFromUint, &[I128], &[F32]),
-                (Opcode::FcvtFromUint, &[I128], &[F64]),
-                (Opcode::FcvtFromSint, &[I128], &[F32]),
-                (Opcode::FcvtFromSint, &[I128], &[F64]),
+                (
+                    Opcode::Udiv | Opcode::Sdiv | Opcode::Urem | Opcode::Srem,
+                    &[I128, I128]
+                ),
+                (Opcode::Bnot, &[F32 | F64]),
+                (
+                    Opcode::Band
+                        | Opcode::Bor
+                        | Opcode::Bxor
+                        | Opcode::BandNot
+                        | Opcode::BorNot
+                        | Opcode::BxorNot,
+                    &([F32, F32] | [F64, F64])
+                ),
+                (
+                    Opcode::FcvtToUint
+                        | Opcode::FcvtToUintSat
+                        | Opcode::FcvtToSint
+                        | Opcode::FcvtToSintSat,
+                    &[F32 | F64],
+                    &[I128]
+                ),
+                (
+                    Opcode::FcvtFromUint | Opcode::FcvtFromSint,
+                    &[I128],
+                    &[F32 | F64]
+                ),
+                (Opcode::SsubSat | Opcode::SaddSat, &[I64X2, I64X2]),
             )
         }
 
@@ -572,16 +677,16 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
             }
 
             exceptions!(
+                op,
+                args,
+                rets,
                 // TODO
                 (Opcode::IaddCout),
                 // TODO
-                (Opcode::Udiv, &[I128, I128]),
-                // TODO
-                (Opcode::Sdiv, &[I128, I128]),
-                // TODO
-                (Opcode::Urem, &[I128, I128]),
-                // TODO
-                (Opcode::Srem, &[I128, I128]),
+                (
+                    Opcode::Udiv | Opcode::Sdiv | Opcode::Urem | Opcode::Srem,
+                    &[I128, I128]
+                ),
                 // TODO
                 (Opcode::Iabs, &[I128]),
                 // TODO
@@ -589,70 +694,25 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                 // TODO
                 (Opcode::Bswap),
                 // https://github.com/bytecodealliance/wasmtime/issues/5528
-                (Opcode::FcvtToUint, &[F32], &[I8]),
-                (Opcode::FcvtToUint, &[F32], &[I16]),
-                // TODO
-                (Opcode::FcvtToUint, &[F32], &[I128]),
+                (
+                    Opcode::FcvtToUint
+                        | Opcode::FcvtToUintSat
+                        | Opcode::FcvtToSint
+                        | Opcode::FcvtToSintSat,
+                    &[F32 | F64],
+                    &[I8 | I16 | I128]
+                ),
                 // https://github.com/bytecodealliance/wasmtime/issues/5528
-                (Opcode::FcvtToUint, &[F64], &[I8]),
-                (Opcode::FcvtToUint, &[F64], &[I16]),
+                (
+                    Opcode::FcvtFromUint | Opcode::FcvtFromSint,
+                    &[I8 | I16 | I128],
+                    &[F32 | F64]
+                ),
                 // TODO
-                (Opcode::FcvtToUint, &[F64], &[I128]),
-                // https://github.com/bytecodealliance/wasmtime/issues/5528
-                (Opcode::FcvtToUintSat, &[F32], &[I8]),
-                (Opcode::FcvtToUintSat, &[F32], &[I16]),
-                // TODO
-                (Opcode::FcvtToUintSat, &[F32], &[I128]),
-                // https://github.com/bytecodealliance/wasmtime/issues/5528
-                (Opcode::FcvtToUintSat, &[F64], &[I8]),
-                (Opcode::FcvtToUintSat, &[F64], &[I16]),
-                // TODO
-                (Opcode::FcvtToUintSat, &[F64], &[I128]),
-                // https://github.com/bytecodealliance/wasmtime/issues/5528
-                (Opcode::FcvtToSint, &[F32], &[I8]),
-                (Opcode::FcvtToSint, &[F32], &[I16]),
-                // TODO
-                (Opcode::FcvtToSint, &[F32], &[I128]),
-                // https://github.com/bytecodealliance/wasmtime/issues/5528
-                (Opcode::FcvtToSint, &[F64], &[I8]),
-                (Opcode::FcvtToSint, &[F64], &[I16]),
-                // TODO
-                (Opcode::FcvtToSint, &[F64], &[I128]),
-                // https://github.com/bytecodealliance/wasmtime/issues/5528
-                (Opcode::FcvtToSintSat, &[F32], &[I8]),
-                (Opcode::FcvtToSintSat, &[F32], &[I16]),
-                // TODO
-                (Opcode::FcvtToSintSat, &[F32], &[I128]),
-                // https://github.com/bytecodealliance/wasmtime/issues/5528
-                (Opcode::FcvtToSintSat, &[F64], &[I8]),
-                (Opcode::FcvtToSintSat, &[F64], &[I16]),
-                // TODO
-                (Opcode::FcvtToSintSat, &[F64], &[I128]),
-                // https://github.com/bytecodealliance/wasmtime/issues/5528
-                (Opcode::FcvtFromUint, &[I8], &[F32]),
-                (Opcode::FcvtFromUint, &[I8], &[F64]),
-                (Opcode::FcvtFromUint, &[I16], &[F32]),
-                (Opcode::FcvtFromUint, &[I16], &[F64]),
-                // TODO
-                (Opcode::FcvtFromUint, &[I128], &[F32]),
-                (Opcode::FcvtFromUint, &[I128], &[F64]),
-                // https://github.com/bytecodealliance/wasmtime/issues/5528
-                (Opcode::FcvtFromSint, &[I8], &[F32]),
-                (Opcode::FcvtFromSint, &[I8], &[F64]),
-                (Opcode::FcvtFromSint, &[I16], &[F32]),
-                (Opcode::FcvtFromSint, &[I16], &[F64]),
-                // TODO
-                (Opcode::FcvtFromSint, &[I128], &[F32]),
-                (Opcode::FcvtFromSint, &[I128], &[F64]),
-                // TODO
-                (Opcode::BandNot, &[F32, F32]),
-                (Opcode::BandNot, &[F64, F64]),
-                // TODO
-                (Opcode::BorNot, &[F32, F32]),
-                (Opcode::BorNot, &[F64, F64]),
-                // TODO
-                (Opcode::BxorNot, &[F32, F32]),
-                (Opcode::BxorNot, &[F64, F64]),
+                (
+                    Opcode::BandNot | Opcode::BorNot | Opcode::BxorNot,
+                    &([F32, F32] | [F64, F64])
+                ),
                 // https://github.com/bytecodealliance/wasmtime/issues/5884
                 (Opcode::AtomicRmw),
             )
@@ -662,679 +722,760 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
     }
 }
 
-type OpcodeSignature = (
-    Opcode,
-    &'static [Type], // Args
-    &'static [Type], // Rets
-    OpcodeInserter,
-);
+type OpcodeSignature = (Opcode, Vec<Type>, Vec<Type>);
 
-// TODO: Derive this from the `cranelift-meta` generator.
-#[rustfmt::skip]
-const OPCODE_SIGNATURES: &[OpcodeSignature] = &[
-    (Opcode::Nop, &[], &[], insert_opcode),
-    // Iadd
-    (Opcode::Iadd, &[I8, I8], &[I8], insert_opcode),
-    (Opcode::Iadd, &[I16, I16], &[I16], insert_opcode),
-    (Opcode::Iadd, &[I32, I32], &[I32], insert_opcode),
-    (Opcode::Iadd, &[I64, I64], &[I64], insert_opcode),
-    (Opcode::Iadd, &[I128, I128], &[I128], insert_opcode),
-    // IaddCout
-    (Opcode::IaddCout, &[I8, I8], &[I8, I8], insert_opcode),
-    (Opcode::IaddCout, &[I16, I16], &[I16, I8], insert_opcode),
-    (Opcode::IaddCout, &[I32, I32], &[I32, I8], insert_opcode),
-    (Opcode::IaddCout, &[I64, I64], &[I64, I8], insert_opcode),
-    (Opcode::IaddCout, &[I128, I128], &[I128, I8], insert_opcode),
-    // Isub
-    (Opcode::Isub, &[I8, I8], &[I8], insert_opcode),
-    (Opcode::Isub, &[I16, I16], &[I16], insert_opcode),
-    (Opcode::Isub, &[I32, I32], &[I32], insert_opcode),
-    (Opcode::Isub, &[I64, I64], &[I64], insert_opcode),
-    (Opcode::Isub, &[I128, I128], &[I128], insert_opcode),
-    // Imul
-    (Opcode::Imul, &[I8, I8], &[I8], insert_opcode),
-    (Opcode::Imul, &[I16, I16], &[I16], insert_opcode),
-    (Opcode::Imul, &[I32, I32], &[I32], insert_opcode),
-    (Opcode::Imul, &[I64, I64], &[I64], insert_opcode),
-    (Opcode::Imul, &[I128, I128], &[I128], insert_opcode),
-    // Smulhi
-    (Opcode::Smulhi, &[I8, I8], &[I8], insert_opcode),
-    (Opcode::Smulhi, &[I16, I16], &[I16], insert_opcode),
-    (Opcode::Smulhi, &[I32, I32], &[I32], insert_opcode),
-    (Opcode::Smulhi, &[I64, I64], &[I64], insert_opcode),
-    // Umulhi
-    (Opcode::Umulhi, &[I8, I8], &[I8], insert_opcode),
-    (Opcode::Umulhi, &[I16, I16], &[I16], insert_opcode),
-    (Opcode::Umulhi, &[I32, I32], &[I32], insert_opcode),
-    (Opcode::Umulhi, &[I64, I64], &[I64], insert_opcode),
-    // Udiv
-    (Opcode::Udiv, &[I8, I8], &[I8], insert_opcode),
-    (Opcode::Udiv, &[I16, I16], &[I16], insert_opcode),
-    (Opcode::Udiv, &[I32, I32], &[I32], insert_opcode),
-    (Opcode::Udiv, &[I64, I64], &[I64], insert_opcode),
-    (Opcode::Udiv, &[I128, I128], &[I128], insert_opcode),
-    // Sdiv
-    (Opcode::Sdiv, &[I8, I8], &[I8], insert_opcode),
-    (Opcode::Sdiv, &[I16, I16], &[I16], insert_opcode),
-    (Opcode::Sdiv, &[I32, I32], &[I32], insert_opcode),
-    (Opcode::Sdiv, &[I64, I64], &[I64], insert_opcode),
-    (Opcode::Sdiv, &[I128, I128], &[I128], insert_opcode),
-    // Urem
-    (Opcode::Urem, &[I8, I8], &[I8], insert_opcode),
-    (Opcode::Urem, &[I16, I16], &[I16], insert_opcode),
-    (Opcode::Urem, &[I32, I32], &[I32], insert_opcode),
-    (Opcode::Urem, &[I64, I64], &[I64], insert_opcode),
-    (Opcode::Urem, &[I128, I128], &[I128], insert_opcode),
-    // Srem
-    (Opcode::Srem, &[I8, I8], &[I8], insert_opcode),
-    (Opcode::Srem, &[I16, I16], &[I16], insert_opcode),
-    (Opcode::Srem, &[I32, I32], &[I32], insert_opcode),
-    (Opcode::Srem, &[I64, I64], &[I64], insert_opcode),
-    (Opcode::Srem, &[I128, I128], &[I128], insert_opcode),
-    // Ineg
-    (Opcode::Ineg, &[I8, I8], &[I8], insert_opcode),
-    (Opcode::Ineg, &[I16, I16], &[I16], insert_opcode),
-    (Opcode::Ineg, &[I32, I32], &[I32], insert_opcode),
-    (Opcode::Ineg, &[I64, I64], &[I64], insert_opcode),
-    (Opcode::Ineg, &[I128, I128], &[I128], insert_opcode),
-    // Iabs
-    (Opcode::Iabs, &[I8], &[I8], insert_opcode),
-    (Opcode::Iabs, &[I16], &[I16], insert_opcode),
-    (Opcode::Iabs, &[I32], &[I32], insert_opcode),
-    (Opcode::Iabs, &[I64], &[I64], insert_opcode),
-    (Opcode::Iabs, &[I128], &[I128], insert_opcode),
-    (Opcode::Iabs, &[I8X16, I8X16], &[I8X16], insert_opcode),
-    (Opcode::Iabs, &[I16X8, I16X8], &[I16X8], insert_opcode),
-    (Opcode::Iabs, &[I32X4, I32X4], &[I32X4], insert_opcode),
-    (Opcode::Iabs, &[I64X2, I64X2], &[I64X2], insert_opcode),
-    // Smin
-    (Opcode::Smin, &[I8, I8], &[I8], insert_opcode),
-    (Opcode::Smin, &[I16, I16], &[I16], insert_opcode),
-    (Opcode::Smin, &[I32, I32], &[I32], insert_opcode),
-    (Opcode::Smin, &[I64, I64], &[I64], insert_opcode),
-    (Opcode::Smin, &[I128, I128], &[I128], insert_opcode),
-    // Umin
-    (Opcode::Umin, &[I8, I8], &[I8], insert_opcode),
-    (Opcode::Umin, &[I16, I16], &[I16], insert_opcode),
-    (Opcode::Umin, &[I32, I32], &[I32], insert_opcode),
-    (Opcode::Umin, &[I64, I64], &[I64], insert_opcode),
-    (Opcode::Umin, &[I128, I128], &[I128], insert_opcode),
-    // Smax
-    (Opcode::Smax, &[I8, I8], &[I8], insert_opcode),
-    (Opcode::Smax, &[I16, I16], &[I16], insert_opcode),
-    (Opcode::Smax, &[I32, I32], &[I32], insert_opcode),
-    (Opcode::Smax, &[I64, I64], &[I64], insert_opcode),
-    (Opcode::Smax, &[I128, I128], &[I128], insert_opcode),
-    // Umax
-    (Opcode::Umax, &[I8, I8], &[I8], insert_opcode),
-    (Opcode::Umax, &[I16, I16], &[I16], insert_opcode),
-    (Opcode::Umax, &[I32, I32], &[I32], insert_opcode),
-    (Opcode::Umax, &[I64, I64], &[I64], insert_opcode),
-    (Opcode::Umax, &[I128, I128], &[I128], insert_opcode),
-    // Rotr
-    (Opcode::Rotr, &[I8, I8], &[I8], insert_opcode),
-    (Opcode::Rotr, &[I8, I16], &[I8], insert_opcode),
-    (Opcode::Rotr, &[I8, I32], &[I8], insert_opcode),
-    (Opcode::Rotr, &[I8, I64], &[I8], insert_opcode),
-    (Opcode::Rotr, &[I8, I128], &[I8], insert_opcode),
-    (Opcode::Rotr, &[I16, I8], &[I16], insert_opcode),
-    (Opcode::Rotr, &[I16, I16], &[I16], insert_opcode),
-    (Opcode::Rotr, &[I16, I32], &[I16], insert_opcode),
-    (Opcode::Rotr, &[I16, I64], &[I16], insert_opcode),
-    (Opcode::Rotr, &[I16, I128], &[I16], insert_opcode),
-    (Opcode::Rotr, &[I32, I8], &[I32], insert_opcode),
-    (Opcode::Rotr, &[I32, I16], &[I32], insert_opcode),
-    (Opcode::Rotr, &[I32, I32], &[I32], insert_opcode),
-    (Opcode::Rotr, &[I32, I64], &[I32], insert_opcode),
-    (Opcode::Rotr, &[I32, I128], &[I32], insert_opcode),
-    (Opcode::Rotr, &[I64, I8], &[I64], insert_opcode),
-    (Opcode::Rotr, &[I64, I16], &[I64], insert_opcode),
-    (Opcode::Rotr, &[I64, I32], &[I64], insert_opcode),
-    (Opcode::Rotr, &[I64, I64], &[I64], insert_opcode),
-    (Opcode::Rotr, &[I64, I128], &[I64], insert_opcode),
-    (Opcode::Rotr, &[I128, I8], &[I128], insert_opcode),
-    (Opcode::Rotr, &[I128, I16], &[I128], insert_opcode),
-    (Opcode::Rotr, &[I128, I32], &[I128], insert_opcode),
-    (Opcode::Rotr, &[I128, I64], &[I128], insert_opcode),
-    (Opcode::Rotr, &[I128, I128], &[I128], insert_opcode),
-    // Rotl
-    (Opcode::Rotl, &[I8, I8], &[I8], insert_opcode),
-    (Opcode::Rotl, &[I8, I16], &[I8], insert_opcode),
-    (Opcode::Rotl, &[I8, I32], &[I8], insert_opcode),
-    (Opcode::Rotl, &[I8, I64], &[I8], insert_opcode),
-    (Opcode::Rotl, &[I8, I128], &[I8], insert_opcode),
-    (Opcode::Rotl, &[I16, I8], &[I16], insert_opcode),
-    (Opcode::Rotl, &[I16, I16], &[I16], insert_opcode),
-    (Opcode::Rotl, &[I16, I32], &[I16], insert_opcode),
-    (Opcode::Rotl, &[I16, I64], &[I16], insert_opcode),
-    (Opcode::Rotl, &[I16, I128], &[I16], insert_opcode),
-    (Opcode::Rotl, &[I32, I8], &[I32], insert_opcode),
-    (Opcode::Rotl, &[I32, I16], &[I32], insert_opcode),
-    (Opcode::Rotl, &[I32, I32], &[I32], insert_opcode),
-    (Opcode::Rotl, &[I32, I64], &[I32], insert_opcode),
-    (Opcode::Rotl, &[I32, I128], &[I32], insert_opcode),
-    (Opcode::Rotl, &[I64, I8], &[I64], insert_opcode),
-    (Opcode::Rotl, &[I64, I16], &[I64], insert_opcode),
-    (Opcode::Rotl, &[I64, I32], &[I64], insert_opcode),
-    (Opcode::Rotl, &[I64, I64], &[I64], insert_opcode),
-    (Opcode::Rotl, &[I64, I128], &[I64], insert_opcode),
-    (Opcode::Rotl, &[I128, I8], &[I128], insert_opcode),
-    (Opcode::Rotl, &[I128, I16], &[I128], insert_opcode),
-    (Opcode::Rotl, &[I128, I32], &[I128], insert_opcode),
-    (Opcode::Rotl, &[I128, I64], &[I128], insert_opcode),
-    (Opcode::Rotl, &[I128, I128], &[I128], insert_opcode),
-    // Ishl
-    (Opcode::Ishl, &[I8, I8], &[I8], insert_opcode),
-    (Opcode::Ishl, &[I8, I16], &[I8], insert_opcode),
-    (Opcode::Ishl, &[I8, I32], &[I8], insert_opcode),
-    (Opcode::Ishl, &[I8, I64], &[I8], insert_opcode),
-    (Opcode::Ishl, &[I8, I128], &[I8], insert_opcode),
-    (Opcode::Ishl, &[I16, I8], &[I16], insert_opcode),
-    (Opcode::Ishl, &[I16, I16], &[I16], insert_opcode),
-    (Opcode::Ishl, &[I16, I32], &[I16], insert_opcode),
-    (Opcode::Ishl, &[I16, I64], &[I16], insert_opcode),
-    (Opcode::Ishl, &[I16, I128], &[I16], insert_opcode),
-    (Opcode::Ishl, &[I32, I8], &[I32], insert_opcode),
-    (Opcode::Ishl, &[I32, I16], &[I32], insert_opcode),
-    (Opcode::Ishl, &[I32, I32], &[I32], insert_opcode),
-    (Opcode::Ishl, &[I32, I64], &[I32], insert_opcode),
-    (Opcode::Ishl, &[I32, I128], &[I32], insert_opcode),
-    (Opcode::Ishl, &[I64, I8], &[I64], insert_opcode),
-    (Opcode::Ishl, &[I64, I16], &[I64], insert_opcode),
-    (Opcode::Ishl, &[I64, I32], &[I64], insert_opcode),
-    (Opcode::Ishl, &[I64, I64], &[I64], insert_opcode),
-    (Opcode::Ishl, &[I64, I128], &[I64], insert_opcode),
-    (Opcode::Ishl, &[I128, I8], &[I128], insert_opcode),
-    (Opcode::Ishl, &[I128, I16], &[I128], insert_opcode),
-    (Opcode::Ishl, &[I128, I32], &[I128], insert_opcode),
-    (Opcode::Ishl, &[I128, I64], &[I128], insert_opcode),
-    (Opcode::Ishl, &[I128, I128], &[I128], insert_opcode),
-    // Sshr
-    (Opcode::Sshr, &[I8, I8], &[I8], insert_opcode),
-    (Opcode::Sshr, &[I8, I16], &[I8], insert_opcode),
-    (Opcode::Sshr, &[I8, I32], &[I8], insert_opcode),
-    (Opcode::Sshr, &[I8, I64], &[I8], insert_opcode),
-    (Opcode::Sshr, &[I8, I128], &[I8], insert_opcode),
-    (Opcode::Sshr, &[I16, I8], &[I16], insert_opcode),
-    (Opcode::Sshr, &[I16, I16], &[I16], insert_opcode),
-    (Opcode::Sshr, &[I16, I32], &[I16], insert_opcode),
-    (Opcode::Sshr, &[I16, I64], &[I16], insert_opcode),
-    (Opcode::Sshr, &[I16, I128], &[I16], insert_opcode),
-    (Opcode::Sshr, &[I32, I8], &[I32], insert_opcode),
-    (Opcode::Sshr, &[I32, I16], &[I32], insert_opcode),
-    (Opcode::Sshr, &[I32, I32], &[I32], insert_opcode),
-    (Opcode::Sshr, &[I32, I64], &[I32], insert_opcode),
-    (Opcode::Sshr, &[I32, I128], &[I32], insert_opcode),
-    (Opcode::Sshr, &[I64, I8], &[I64], insert_opcode),
-    (Opcode::Sshr, &[I64, I16], &[I64], insert_opcode),
-    (Opcode::Sshr, &[I64, I32], &[I64], insert_opcode),
-    (Opcode::Sshr, &[I64, I64], &[I64], insert_opcode),
-    (Opcode::Sshr, &[I64, I128], &[I64], insert_opcode),
-    (Opcode::Sshr, &[I128, I8], &[I128], insert_opcode),
-    (Opcode::Sshr, &[I128, I16], &[I128], insert_opcode),
-    (Opcode::Sshr, &[I128, I32], &[I128], insert_opcode),
-    (Opcode::Sshr, &[I128, I64], &[I128], insert_opcode),
-    (Opcode::Sshr, &[I128, I128], &[I128], insert_opcode),
-    // Ushr
-    (Opcode::Ushr, &[I8, I8], &[I8], insert_opcode),
-    (Opcode::Ushr, &[I8, I16], &[I8], insert_opcode),
-    (Opcode::Ushr, &[I8, I32], &[I8], insert_opcode),
-    (Opcode::Ushr, &[I8, I64], &[I8], insert_opcode),
-    (Opcode::Ushr, &[I8, I128], &[I8], insert_opcode),
-    (Opcode::Ushr, &[I16, I8], &[I16], insert_opcode),
-    (Opcode::Ushr, &[I16, I16], &[I16], insert_opcode),
-    (Opcode::Ushr, &[I16, I32], &[I16], insert_opcode),
-    (Opcode::Ushr, &[I16, I64], &[I16], insert_opcode),
-    (Opcode::Ushr, &[I16, I128], &[I16], insert_opcode),
-    (Opcode::Ushr, &[I32, I8], &[I32], insert_opcode),
-    (Opcode::Ushr, &[I32, I16], &[I32], insert_opcode),
-    (Opcode::Ushr, &[I32, I32], &[I32], insert_opcode),
-    (Opcode::Ushr, &[I32, I64], &[I32], insert_opcode),
-    (Opcode::Ushr, &[I32, I128], &[I32], insert_opcode),
-    (Opcode::Ushr, &[I64, I8], &[I64], insert_opcode),
-    (Opcode::Ushr, &[I64, I16], &[I64], insert_opcode),
-    (Opcode::Ushr, &[I64, I32], &[I64], insert_opcode),
-    (Opcode::Ushr, &[I64, I64], &[I64], insert_opcode),
-    (Opcode::Ushr, &[I64, I128], &[I64], insert_opcode),
-    (Opcode::Ushr, &[I128, I8], &[I128], insert_opcode),
-    (Opcode::Ushr, &[I128, I16], &[I128], insert_opcode),
-    (Opcode::Ushr, &[I128, I32], &[I128], insert_opcode),
-    (Opcode::Ushr, &[I128, I64], &[I128], insert_opcode),
-    (Opcode::Ushr, &[I128, I128], &[I128], insert_opcode),
-    // Uextend
-    (Opcode::Uextend, &[I8], &[I16], insert_opcode),
-    (Opcode::Uextend, &[I8], &[I32], insert_opcode),
-    (Opcode::Uextend, &[I8], &[I64], insert_opcode),
-    (Opcode::Uextend, &[I8], &[I128], insert_opcode),
-    (Opcode::Uextend, &[I16], &[I32], insert_opcode),
-    (Opcode::Uextend, &[I16], &[I64], insert_opcode),
-    (Opcode::Uextend, &[I16], &[I128], insert_opcode),
-    (Opcode::Uextend, &[I32], &[I64], insert_opcode),
-    (Opcode::Uextend, &[I32], &[I128], insert_opcode),
-    (Opcode::Uextend, &[I64], &[I128], insert_opcode),
-    // Sextend
-    (Opcode::Sextend, &[I8], &[I16], insert_opcode),
-    (Opcode::Sextend, &[I8], &[I32], insert_opcode),
-    (Opcode::Sextend, &[I8], &[I64], insert_opcode),
-    (Opcode::Sextend, &[I8], &[I128], insert_opcode),
-    (Opcode::Sextend, &[I16], &[I32], insert_opcode),
-    (Opcode::Sextend, &[I16], &[I64], insert_opcode),
-    (Opcode::Sextend, &[I16], &[I128], insert_opcode),
-    (Opcode::Sextend, &[I32], &[I64], insert_opcode),
-    (Opcode::Sextend, &[I32], &[I128], insert_opcode),
-    (Opcode::Sextend, &[I64], &[I128], insert_opcode),
-    // Ireduce
-    (Opcode::Ireduce, &[I16], &[I8], insert_opcode),
-    (Opcode::Ireduce, &[I32], &[I8], insert_opcode),
-    (Opcode::Ireduce, &[I32], &[I16], insert_opcode),
-    (Opcode::Ireduce, &[I64], &[I8], insert_opcode),
-    (Opcode::Ireduce, &[I64], &[I16], insert_opcode),
-    (Opcode::Ireduce, &[I64], &[I32], insert_opcode),
-    (Opcode::Ireduce, &[I128], &[I8], insert_opcode),
-    (Opcode::Ireduce, &[I128], &[I16], insert_opcode),
-    (Opcode::Ireduce, &[I128], &[I32], insert_opcode),
-    (Opcode::Ireduce, &[I128], &[I64], insert_opcode),
-    // Isplit
-    (Opcode::Isplit, &[I128], &[I64, I64], insert_opcode),
-    // Iconcat
-    (Opcode::Iconcat, &[I64, I64], &[I128], insert_opcode),
-    // Band
-    (Opcode::Band, &[I8, I8], &[I8], insert_opcode),
-    (Opcode::Band, &[I16, I16], &[I16], insert_opcode),
-    (Opcode::Band, &[I32, I32], &[I32], insert_opcode),
-    (Opcode::Band, &[I64, I64], &[I64], insert_opcode),
-    (Opcode::Band, &[I128, I128], &[I128], insert_opcode),
-    (Opcode::Band, &[F32, F32], &[F32], insert_opcode),
-    (Opcode::Band, &[F64, F64], &[F64], insert_opcode),
-    // Bor
-    (Opcode::Bor, &[I8, I8], &[I8], insert_opcode),
-    (Opcode::Bor, &[I16, I16], &[I16], insert_opcode),
-    (Opcode::Bor, &[I32, I32], &[I32], insert_opcode),
-    (Opcode::Bor, &[I64, I64], &[I64], insert_opcode),
-    (Opcode::Bor, &[I128, I128], &[I128], insert_opcode),
-    (Opcode::Bor, &[F32, F32], &[F32], insert_opcode),
-    (Opcode::Bor, &[F64, F64], &[F64], insert_opcode),
-    // Bxor
-    (Opcode::Bxor, &[I8, I8], &[I8], insert_opcode),
-    (Opcode::Bxor, &[I16, I16], &[I16], insert_opcode),
-    (Opcode::Bxor, &[I32, I32], &[I32], insert_opcode),
-    (Opcode::Bxor, &[I64, I64], &[I64], insert_opcode),
-    (Opcode::Bxor, &[I128, I128], &[I128], insert_opcode),
-    (Opcode::Bxor, &[F32, F32], &[F32], insert_opcode),
-    (Opcode::Bxor, &[F64, F64], &[F64], insert_opcode),
-    // Bnot
-    (Opcode::Bnot, &[I8, I8], &[I8], insert_opcode),
-    (Opcode::Bnot, &[I16, I16], &[I16], insert_opcode),
-    (Opcode::Bnot, &[I32, I32], &[I32], insert_opcode),
-    (Opcode::Bnot, &[I64, I64], &[I64], insert_opcode),
-    (Opcode::Bnot, &[I128, I128], &[I128], insert_opcode),
-    (Opcode::Bnot, &[F32, F32], &[F32], insert_opcode),
-    (Opcode::Bnot, &[F64, F64], &[F64], insert_opcode),
-    // BandNot
-    (Opcode::BandNot, &[I8, I8], &[I8], insert_opcode),
-    (Opcode::BandNot, &[I16, I16], &[I16], insert_opcode),
-    (Opcode::BandNot, &[I32, I32], &[I32], insert_opcode),
-    (Opcode::BandNot, &[I64, I64], &[I64], insert_opcode),
-    (Opcode::BandNot, &[I128, I128], &[I128], insert_opcode),
-    (Opcode::BandNot, &[F32, F32], &[F32], insert_opcode),
-    (Opcode::BandNot, &[F64, F64], &[F64], insert_opcode),
-    // BorNot
-    (Opcode::BorNot, &[I8, I8], &[I8], insert_opcode),
-    (Opcode::BorNot, &[I16, I16], &[I16], insert_opcode),
-    (Opcode::BorNot, &[I32, I32], &[I32], insert_opcode),
-    (Opcode::BorNot, &[I64, I64], &[I64], insert_opcode),
-    (Opcode::BorNot, &[I128, I128], &[I128], insert_opcode),
-    (Opcode::BorNot, &[F32, F32], &[F32], insert_opcode),
-    (Opcode::BorNot, &[F64, F64], &[F64], insert_opcode),
-    // BxorNot
-    (Opcode::BxorNot, &[I8, I8], &[I8], insert_opcode),
-    (Opcode::BxorNot, &[I16, I16], &[I16], insert_opcode),
-    (Opcode::BxorNot, &[I32, I32], &[I32], insert_opcode),
-    (Opcode::BxorNot, &[I64, I64], &[I64], insert_opcode),
-    (Opcode::BxorNot, &[I128, I128], &[I128], insert_opcode),
-    (Opcode::BxorNot, &[F32, F32], &[F32], insert_opcode),
-    (Opcode::BxorNot, &[F64, F64], &[F64], insert_opcode),
-    // Bitrev
-    (Opcode::Bitrev, &[I8], &[I8], insert_opcode),
-    (Opcode::Bitrev, &[I16], &[I16], insert_opcode),
-    (Opcode::Bitrev, &[I32], &[I32], insert_opcode),
-    (Opcode::Bitrev, &[I64], &[I64], insert_opcode),
-    (Opcode::Bitrev, &[I128], &[I128], insert_opcode),
-    // Clz
-    (Opcode::Clz, &[I8], &[I8], insert_opcode),
-    (Opcode::Clz, &[I16], &[I16], insert_opcode),
-    (Opcode::Clz, &[I32], &[I32], insert_opcode),
-    (Opcode::Clz, &[I64], &[I64], insert_opcode),
-    (Opcode::Clz, &[I128], &[I128], insert_opcode),
-    // Cls
-    (Opcode::Cls, &[I8], &[I8], insert_opcode),
-    (Opcode::Cls, &[I16], &[I16], insert_opcode),
-    (Opcode::Cls, &[I32], &[I32], insert_opcode),
-    (Opcode::Cls, &[I64], &[I64], insert_opcode),
-    (Opcode::Cls, &[I128], &[I128], insert_opcode),
-    // Ctz
-    (Opcode::Ctz, &[I8], &[I8], insert_opcode),
-    (Opcode::Ctz, &[I16], &[I16], insert_opcode),
-    (Opcode::Ctz, &[I32], &[I32], insert_opcode),
-    (Opcode::Ctz, &[I64], &[I64], insert_opcode),
-    (Opcode::Ctz, &[I128], &[I128], insert_opcode),
-    // Popcnt
-    (Opcode::Popcnt, &[I8], &[I8], insert_opcode),
-    (Opcode::Popcnt, &[I16], &[I16], insert_opcode),
-    (Opcode::Popcnt, &[I32], &[I32], insert_opcode),
-    (Opcode::Popcnt, &[I64], &[I64], insert_opcode),
-    (Opcode::Popcnt, &[I128], &[I128], insert_opcode),
-    // Bmask
-    (Opcode::Bmask, &[I8], &[I8], insert_opcode),
-    (Opcode::Bmask, &[I16], &[I8], insert_opcode),
-    (Opcode::Bmask, &[I32], &[I8], insert_opcode),
-    (Opcode::Bmask, &[I64], &[I8], insert_opcode),
-    (Opcode::Bmask, &[I128], &[I8], insert_opcode),
-    (Opcode::Bmask, &[I8], &[I16], insert_opcode),
-    (Opcode::Bmask, &[I16], &[I16], insert_opcode),
-    (Opcode::Bmask, &[I32], &[I16], insert_opcode),
-    (Opcode::Bmask, &[I64], &[I16], insert_opcode),
-    (Opcode::Bmask, &[I128], &[I16], insert_opcode),
-    (Opcode::Bmask, &[I8], &[I32], insert_opcode),
-    (Opcode::Bmask, &[I16], &[I32], insert_opcode),
-    (Opcode::Bmask, &[I32], &[I32], insert_opcode),
-    (Opcode::Bmask, &[I64], &[I32], insert_opcode),
-    (Opcode::Bmask, &[I128], &[I32], insert_opcode),
-    (Opcode::Bmask, &[I8], &[I64], insert_opcode),
-    (Opcode::Bmask, &[I16], &[I64], insert_opcode),
-    (Opcode::Bmask, &[I32], &[I64], insert_opcode),
-    (Opcode::Bmask, &[I64], &[I64], insert_opcode),
-    (Opcode::Bmask, &[I128], &[I64], insert_opcode),
-    (Opcode::Bmask, &[I8], &[I128], insert_opcode),
-    (Opcode::Bmask, &[I16], &[I128], insert_opcode),
-    (Opcode::Bmask, &[I32], &[I128], insert_opcode),
-    (Opcode::Bmask, &[I64], &[I128], insert_opcode),
-    (Opcode::Bmask, &[I128], &[I128], insert_opcode),
-    // Bswap
-    (Opcode::Bswap, &[I16], &[I16], insert_opcode),
-    (Opcode::Bswap, &[I32], &[I32], insert_opcode),
-    (Opcode::Bswap, &[I64], &[I64], insert_opcode),
-    (Opcode::Bswap, &[I128], &[I128], insert_opcode),
-    // Bitselect
-    (Opcode::Bitselect, &[I8, I8, I8], &[I8], insert_opcode),
-    (Opcode::Bitselect, &[I16, I16, I16], &[I16], insert_opcode),
-    (Opcode::Bitselect, &[I32, I32, I32], &[I32], insert_opcode),
-    (Opcode::Bitselect, &[I64, I64, I64], &[I64], insert_opcode),
-    (Opcode::Bitselect, &[I128, I128, I128], &[I128], insert_opcode),
-    // Select
-    (Opcode::Select, &[I8, I8, I8], &[I8], insert_opcode),
-    (Opcode::Select, &[I8, I16, I16], &[I16], insert_opcode),
-    (Opcode::Select, &[I8, I32, I32], &[I32], insert_opcode),
-    (Opcode::Select, &[I8, I64, I64], &[I64], insert_opcode),
-    (Opcode::Select, &[I8, I128, I128], &[I128], insert_opcode),
-    (Opcode::Select, &[I16, I8, I8], &[I8], insert_opcode),
-    (Opcode::Select, &[I16, I16, I16], &[I16], insert_opcode),
-    (Opcode::Select, &[I16, I32, I32], &[I32], insert_opcode),
-    (Opcode::Select, &[I16, I64, I64], &[I64], insert_opcode),
-    (Opcode::Select, &[I16, I128, I128], &[I128], insert_opcode),
-    (Opcode::Select, &[I32, I8, I8], &[I8], insert_opcode),
-    (Opcode::Select, &[I32, I16, I16], &[I16], insert_opcode),
-    (Opcode::Select, &[I32, I32, I32], &[I32], insert_opcode),
-    (Opcode::Select, &[I32, I64, I64], &[I64], insert_opcode),
-    (Opcode::Select, &[I32, I128, I128], &[I128], insert_opcode),
-    (Opcode::Select, &[I64, I8, I8], &[I8], insert_opcode),
-    (Opcode::Select, &[I64, I16, I16], &[I16], insert_opcode),
-    (Opcode::Select, &[I64, I32, I32], &[I32], insert_opcode),
-    (Opcode::Select, &[I64, I64, I64], &[I64], insert_opcode),
-    (Opcode::Select, &[I64, I128, I128], &[I128], insert_opcode),
-    (Opcode::Select, &[I128, I8, I8], &[I8], insert_opcode),
-    (Opcode::Select, &[I128, I16, I16], &[I16], insert_opcode),
-    (Opcode::Select, &[I128, I32, I32], &[I32], insert_opcode),
-    (Opcode::Select, &[I128, I64, I64], &[I64], insert_opcode),
-    (Opcode::Select, &[I128, I128, I128], &[I128], insert_opcode),
-    // SelectSpectreGuard
-    (Opcode::SelectSpectreGuard, &[I8, I8, I8], &[I8], insert_opcode),
-    (Opcode::SelectSpectreGuard, &[I8, I16, I16], &[I16], insert_opcode),
-    (Opcode::SelectSpectreGuard, &[I8, I32, I32], &[I32], insert_opcode),
-    (Opcode::SelectSpectreGuard, &[I8, I64, I64], &[I64], insert_opcode),
-    (Opcode::SelectSpectreGuard, &[I8, I128, I128], &[I128], insert_opcode),
-    (Opcode::SelectSpectreGuard, &[I16, I8, I8], &[I8], insert_opcode),
-    (Opcode::SelectSpectreGuard, &[I16, I16, I16], &[I16], insert_opcode),
-    (Opcode::SelectSpectreGuard, &[I16, I32, I32], &[I32], insert_opcode),
-    (Opcode::SelectSpectreGuard, &[I16, I64, I64], &[I64], insert_opcode),
-    (Opcode::SelectSpectreGuard, &[I16, I128, I128], &[I128], insert_opcode),
-    (Opcode::SelectSpectreGuard, &[I32, I8, I8], &[I8], insert_opcode),
-    (Opcode::SelectSpectreGuard, &[I32, I16, I16], &[I16], insert_opcode),
-    (Opcode::SelectSpectreGuard, &[I32, I32, I32], &[I32], insert_opcode),
-    (Opcode::SelectSpectreGuard, &[I32, I64, I64], &[I64], insert_opcode),
-    (Opcode::SelectSpectreGuard, &[I32, I128, I128], &[I128], insert_opcode),
-    (Opcode::SelectSpectreGuard, &[I64, I8, I8], &[I8], insert_opcode),
-    (Opcode::SelectSpectreGuard, &[I64, I16, I16], &[I16], insert_opcode),
-    (Opcode::SelectSpectreGuard, &[I64, I32, I32], &[I32], insert_opcode),
-    (Opcode::SelectSpectreGuard, &[I64, I64, I64], &[I64], insert_opcode),
-    (Opcode::SelectSpectreGuard, &[I64, I128, I128], &[I128], insert_opcode),
-    (Opcode::SelectSpectreGuard, &[I128, I8, I8], &[I8], insert_opcode),
-    (Opcode::SelectSpectreGuard, &[I128, I16, I16], &[I16], insert_opcode),
-    (Opcode::SelectSpectreGuard, &[I128, I32, I32], &[I32], insert_opcode),
-    (Opcode::SelectSpectreGuard, &[I128, I64, I64], &[I64], insert_opcode),
-    (Opcode::SelectSpectreGuard, &[I128, I128, I128], &[I128], insert_opcode),
-    // Fadd
-    (Opcode::Fadd, &[F32, F32], &[F32], insert_opcode),
-    (Opcode::Fadd, &[F64, F64], &[F64], insert_opcode),
-    // Fmul
-    (Opcode::Fmul, &[F32, F32], &[F32], insert_opcode),
-    (Opcode::Fmul, &[F64, F64], &[F64], insert_opcode),
-    // Fsub
-    (Opcode::Fsub, &[F32, F32], &[F32], insert_opcode),
-    (Opcode::Fsub, &[F64, F64], &[F64], insert_opcode),
-    // Fdiv
-    (Opcode::Fdiv, &[F32, F32], &[F32], insert_opcode),
-    (Opcode::Fdiv, &[F64, F64], &[F64], insert_opcode),
-    // Fmin
-    (Opcode::Fmin, &[F32, F32], &[F32], insert_opcode),
-    (Opcode::Fmin, &[F64, F64], &[F64], insert_opcode),
-    // Fmax
-    (Opcode::Fmax, &[F32, F32], &[F32], insert_opcode),
-    (Opcode::Fmax, &[F64, F64], &[F64], insert_opcode),
-    // FminPseudo
-    (Opcode::FminPseudo, &[F32, F32], &[F32], insert_opcode),
-    (Opcode::FminPseudo, &[F64, F64], &[F64], insert_opcode),
-    // FmaxPseudo
-    (Opcode::FmaxPseudo, &[F32, F32], &[F32], insert_opcode),
-    (Opcode::FmaxPseudo, &[F64, F64], &[F64], insert_opcode),
-    // Fcopysign
-    (Opcode::Fcopysign, &[F32, F32], &[F32], insert_opcode),
-    (Opcode::Fcopysign, &[F64, F64], &[F64], insert_opcode),
-    // Fma
-    (Opcode::Fma, &[F32, F32, F32], &[F32], insert_opcode),
-    (Opcode::Fma, &[F64, F64, F64], &[F64], insert_opcode),
-    // Fabs
-    (Opcode::Fabs, &[F32], &[F32], insert_opcode),
-    (Opcode::Fabs, &[F64], &[F64], insert_opcode),
-    // Fneg
-    (Opcode::Fneg, &[F32], &[F32], insert_opcode),
-    (Opcode::Fneg, &[F64], &[F64], insert_opcode),
-    // Sqrt
-    (Opcode::Sqrt, &[F32], &[F32], insert_opcode),
-    (Opcode::Sqrt, &[F64], &[F64], insert_opcode),
-    // Ceil
-    (Opcode::Ceil, &[F32], &[F32], insert_opcode),
-    (Opcode::Ceil, &[F64], &[F64], insert_opcode),
-    // Floor
-    (Opcode::Floor, &[F32], &[F32], insert_opcode),
-    (Opcode::Floor, &[F64], &[F64], insert_opcode),
-    // Trunc
-    (Opcode::Trunc, &[F32], &[F32], insert_opcode),
-    (Opcode::Trunc, &[F64], &[F64], insert_opcode),
-    // Nearest
-    (Opcode::Nearest, &[F32], &[F32], insert_opcode),
-    (Opcode::Nearest, &[F64], &[F64], insert_opcode),
-    // Fpromote
-    (Opcode::Fpromote, &[F32], &[F64], insert_opcode),
-    // Fdemote
-    (Opcode::Fdemote, &[F64], &[F32], insert_opcode),
-    // FcvtToUint
-    (Opcode::FcvtToUint, &[F32], &[I8], insert_opcode),
-    (Opcode::FcvtToUint, &[F32], &[I16], insert_opcode),
-    (Opcode::FcvtToUint, &[F32], &[I32], insert_opcode),
-    (Opcode::FcvtToUint, &[F32], &[I64], insert_opcode),
-    (Opcode::FcvtToUint, &[F32], &[I128], insert_opcode),
-    (Opcode::FcvtToUint, &[F64], &[I8], insert_opcode),
-    (Opcode::FcvtToUint, &[F64], &[I16], insert_opcode),
-    (Opcode::FcvtToUint, &[F64], &[I32], insert_opcode),
-    (Opcode::FcvtToUint, &[F64], &[I64], insert_opcode),
-    (Opcode::FcvtToUint, &[F64], &[I128], insert_opcode),
-    // FcvtToUintSat
-    (Opcode::FcvtToUintSat, &[F32], &[I8], insert_opcode),
-    (Opcode::FcvtToUintSat, &[F32], &[I16], insert_opcode),
-    (Opcode::FcvtToUintSat, &[F32], &[I32], insert_opcode),
-    (Opcode::FcvtToUintSat, &[F32], &[I64], insert_opcode),
-    (Opcode::FcvtToUintSat, &[F32], &[I128], insert_opcode),
-    (Opcode::FcvtToUintSat, &[F64], &[I8], insert_opcode),
-    (Opcode::FcvtToUintSat, &[F64], &[I16], insert_opcode),
-    (Opcode::FcvtToUintSat, &[F64], &[I32], insert_opcode),
-    (Opcode::FcvtToUintSat, &[F64], &[I64], insert_opcode),
-    (Opcode::FcvtToUintSat, &[F64], &[I128], insert_opcode),
-    // FcvtToSint
-    (Opcode::FcvtToSint, &[F32], &[I8], insert_opcode),
-    (Opcode::FcvtToSint, &[F32], &[I16], insert_opcode),
-    (Opcode::FcvtToSint, &[F32], &[I32], insert_opcode),
-    (Opcode::FcvtToSint, &[F32], &[I64], insert_opcode),
-    (Opcode::FcvtToSint, &[F32], &[I128], insert_opcode),
-    (Opcode::FcvtToSint, &[F64], &[I8], insert_opcode),
-    (Opcode::FcvtToSint, &[F64], &[I16], insert_opcode),
-    (Opcode::FcvtToSint, &[F64], &[I32], insert_opcode),
-    (Opcode::FcvtToSint, &[F64], &[I64], insert_opcode),
-    (Opcode::FcvtToSint, &[F64], &[I128], insert_opcode),
-    // FcvtToSintSat
-    (Opcode::FcvtToSintSat, &[F32], &[I8], insert_opcode),
-    (Opcode::FcvtToSintSat, &[F32], &[I16], insert_opcode),
-    (Opcode::FcvtToSintSat, &[F32], &[I32], insert_opcode),
-    (Opcode::FcvtToSintSat, &[F32], &[I64], insert_opcode),
-    (Opcode::FcvtToSintSat, &[F32], &[I128], insert_opcode),
-    (Opcode::FcvtToSintSat, &[F64], &[I8], insert_opcode),
-    (Opcode::FcvtToSintSat, &[F64], &[I16], insert_opcode),
-    (Opcode::FcvtToSintSat, &[F64], &[I32], insert_opcode),
-    (Opcode::FcvtToSintSat, &[F64], &[I64], insert_opcode),
-    (Opcode::FcvtToSintSat, &[F64], &[I128], insert_opcode),
-    // FcvtFromUint
-    (Opcode::FcvtFromUint, &[I8], &[F32], insert_opcode),
-    (Opcode::FcvtFromUint, &[I16], &[F32], insert_opcode),
-    (Opcode::FcvtFromUint, &[I32], &[F32], insert_opcode),
-    (Opcode::FcvtFromUint, &[I64], &[F32], insert_opcode),
-    (Opcode::FcvtFromUint, &[I128], &[F32], insert_opcode),
-    (Opcode::FcvtFromUint, &[I8], &[F64], insert_opcode),
-    (Opcode::FcvtFromUint, &[I16], &[F64], insert_opcode),
-    (Opcode::FcvtFromUint, &[I32], &[F64], insert_opcode),
-    (Opcode::FcvtFromUint, &[I64], &[F64], insert_opcode),
-    (Opcode::FcvtFromUint, &[I128], &[F64], insert_opcode),
-    // FcvtFromSint
-    (Opcode::FcvtFromSint, &[I8], &[F32], insert_opcode),
-    (Opcode::FcvtFromSint, &[I16], &[F32], insert_opcode),
-    (Opcode::FcvtFromSint, &[I32], &[F32], insert_opcode),
-    (Opcode::FcvtFromSint, &[I64], &[F32], insert_opcode),
-    (Opcode::FcvtFromSint, &[I128], &[F32], insert_opcode),
-    (Opcode::FcvtFromSint, &[I8], &[F64], insert_opcode),
-    (Opcode::FcvtFromSint, &[I16], &[F64], insert_opcode),
-    (Opcode::FcvtFromSint, &[I32], &[F64], insert_opcode),
-    (Opcode::FcvtFromSint, &[I64], &[F64], insert_opcode),
-    (Opcode::FcvtFromSint, &[I128], &[F64], insert_opcode),
-    // Fcmp
-    (Opcode::Fcmp, &[F32, F32], &[I8], insert_cmp),
-    (Opcode::Fcmp, &[F64, F64], &[I8], insert_cmp),
-    // Icmp
-    (Opcode::Icmp, &[I8, I8], &[I8], insert_cmp),
-    (Opcode::Icmp, &[I16, I16], &[I8], insert_cmp),
-    (Opcode::Icmp, &[I32, I32], &[I8], insert_cmp),
-    (Opcode::Icmp, &[I64, I64], &[I8], insert_cmp),
-    (Opcode::Icmp, &[I128, I128], &[I8], insert_cmp),
-    // Fence
-    (Opcode::Fence, &[], &[], insert_opcode),
-    // Stack Access
-    (Opcode::StackStore, &[I8], &[], insert_stack_store),
-    (Opcode::StackStore, &[I16], &[], insert_stack_store),
-    (Opcode::StackStore, &[I32], &[], insert_stack_store),
-    (Opcode::StackStore, &[I64], &[], insert_stack_store),
-    (Opcode::StackStore, &[I128], &[], insert_stack_store),
-    (Opcode::StackLoad, &[], &[I8], insert_stack_load),
-    (Opcode::StackLoad, &[], &[I16], insert_stack_load),
-    (Opcode::StackLoad, &[], &[I32], insert_stack_load),
-    (Opcode::StackLoad, &[], &[I64], insert_stack_load),
-    (Opcode::StackLoad, &[], &[I128], insert_stack_load),
-    // Loads
-    (Opcode::Load, &[], &[I8], insert_load_store),
-    (Opcode::Load, &[], &[I16], insert_load_store),
-    (Opcode::Load, &[], &[I32], insert_load_store),
-    (Opcode::Load, &[], &[I64], insert_load_store),
-    (Opcode::Load, &[], &[I128], insert_load_store),
-    (Opcode::Load, &[], &[F32], insert_load_store),
-    (Opcode::Load, &[], &[F64], insert_load_store),
-    // Special Loads
-    (Opcode::Uload8, &[], &[I16], insert_load_store),
-    (Opcode::Uload8, &[], &[I32], insert_load_store),
-    (Opcode::Uload8, &[], &[I64], insert_load_store),
-    (Opcode::Uload16, &[], &[I32], insert_load_store),
-    (Opcode::Uload16, &[], &[I64], insert_load_store),
-    (Opcode::Uload32, &[], &[I64], insert_load_store),
-    (Opcode::Sload8, &[], &[I16], insert_load_store),
-    (Opcode::Sload8, &[], &[I32], insert_load_store),
-    (Opcode::Sload8, &[], &[I64], insert_load_store),
-    (Opcode::Sload16, &[], &[I32], insert_load_store),
-    (Opcode::Sload16, &[], &[I64], insert_load_store),
-    (Opcode::Sload32, &[], &[I64], insert_load_store),
-    // TODO: Unimplemented in the interpreter
-    // Opcode::Uload8x8
-    // Opcode::Sload8x8
-    // Opcode::Uload16x4
-    // Opcode::Sload16x4
-    // Opcode::Uload32x2
-    // Opcode::Sload32x2
-    // AtomicLoad
-    (Opcode::AtomicLoad, &[], &[I8], insert_load_store),
-    (Opcode::AtomicLoad, &[], &[I16], insert_load_store),
-    (Opcode::AtomicLoad, &[], &[I32], insert_load_store),
-    (Opcode::AtomicLoad, &[], &[I64], insert_load_store),
-    // Stores
-    (Opcode::Store, &[I8], &[], insert_load_store),
-    (Opcode::Store, &[I16], &[], insert_load_store),
-    (Opcode::Store, &[I32], &[], insert_load_store),
-    (Opcode::Store, &[I64], &[], insert_load_store),
-    (Opcode::Store, &[I128], &[], insert_load_store),
-    (Opcode::Store, &[F32], &[], insert_load_store),
-    (Opcode::Store, &[F64], &[], insert_load_store),
-    // Special Stores
-    (Opcode::Istore8, &[I16], &[], insert_load_store),
-    (Opcode::Istore8, &[I32], &[], insert_load_store),
-    (Opcode::Istore8, &[I64], &[], insert_load_store),
-    (Opcode::Istore16, &[I32], &[], insert_load_store),
-    (Opcode::Istore16, &[I64], &[], insert_load_store),
-    (Opcode::Istore32, &[I64], &[], insert_load_store),
-    // AtomicStore
-    (Opcode::AtomicStore, &[I8], &[], insert_load_store),
-    (Opcode::AtomicStore, &[I16], &[], insert_load_store),
-    (Opcode::AtomicStore, &[I32], &[], insert_load_store),
-    (Opcode::AtomicStore, &[I64], &[], insert_load_store),
-    // AtomicRMW
-    (Opcode::AtomicRmw, &[I8, I8], &[I8], insert_atomic_rmw),
-    (Opcode::AtomicRmw, &[I16, I16], &[I16], insert_atomic_rmw),
-    (Opcode::AtomicRmw, &[I32, I32], &[I32], insert_atomic_rmw),
-    (Opcode::AtomicRmw, &[I64, I64], &[I64], insert_atomic_rmw),
-    // AtomicCas
-    (Opcode::AtomicCas, &[I8, I8], &[I8], insert_atomic_cas),
-    (Opcode::AtomicCas, &[I16, I16], &[I16], insert_atomic_cas),
-    (Opcode::AtomicCas, &[I32, I32], &[I32], insert_atomic_cas),
-    (Opcode::AtomicCas, &[I64, I64], &[I64], insert_atomic_cas),
-    // Bitcast
-    (Opcode::Bitcast, &[F32], &[I32], insert_bitcast),
-    (Opcode::Bitcast, &[I32], &[F32], insert_bitcast),
-    (Opcode::Bitcast, &[F64], &[I64], insert_bitcast),
-    (Opcode::Bitcast, &[I64], &[F64], insert_bitcast),
-    // Integer Consts
-    (Opcode::Iconst, &[], &[I8], insert_const),
-    (Opcode::Iconst, &[], &[I16], insert_const),
-    (Opcode::Iconst, &[], &[I32], insert_const),
-    (Opcode::Iconst, &[], &[I64], insert_const),
-    // Float Consts
-    (Opcode::F32const, &[], &[F32], insert_const),
-    (Opcode::F64const, &[], &[F64], insert_const),
-    // Call
-    (Opcode::Call, &[], &[], insert_call),
-];
+static OPCODE_SIGNATURES: Lazy<Vec<OpcodeSignature>> = Lazy::new(|| {
+    let types = &[
+        I8, I16, I32, I64, I128, // Scalar Integers
+        F32, F64, // Scalar Floats
+        I8X16, I16X8, I32X4, I64X2, // SIMD Integers
+        F32X4, F64X2, // SIMD Floats
+    ];
+
+    Opcode::all()
+        .iter()
+        .filter(|op| {
+            match op {
+                // Control flow opcodes should not be generated through `generate_instructions`.
+                Opcode::BrTable | Opcode::Brif | Opcode::Jump | Opcode::Return => false,
+
+                // Constants are generated outside of `generate_instructions`
+                Opcode::Iconst => false,
+
+                // TODO: extract_vector raises exceptions during return type generation becuase it
+                // uses dynamic vectors.
+                Opcode::ExtractVector => false,
+
+                _ => true,
+            }
+        })
+        .flat_map(|op| {
+            let constraints = op.constraints();
+
+            let ctrl_types = if let Some(ctrls) = constraints.ctrl_typeset() {
+                Vec::from_iter(types.iter().copied().filter(|ty| ctrls.contains(*ty)))
+            } else {
+                vec![INVALID]
+            };
+
+            ctrl_types.into_iter().flat_map(move |ctrl_type| {
+                let rets = Vec::from_iter(
+                    (0..constraints.num_fixed_results())
+                        .map(|i| constraints.result_type(i, ctrl_type)),
+                );
+
+                // Cols is a vector whose length will match `num_fixed_value_arguments`, and whose
+                // elements will be vectors of types that are valid for that fixed argument
+                // position.
+                let mut cols = vec![];
+
+                for i in 0..constraints.num_fixed_value_arguments() {
+                    match constraints.value_argument_constraint(i, ctrl_type) {
+                        ResolvedConstraint::Bound(ty) => cols.push(Vec::from([ty])),
+                        ResolvedConstraint::Free(tys) => cols.push(Vec::from_iter(
+                            types.iter().copied().filter(|ty| tys.contains(*ty)),
+                        )),
+                    }
+                }
+
+                // Generate the cartesian product of cols to produce a vector of argument lists,
+                // argss. The argss vector is seeded with the empty argument list, so there's an
+                // initial value to be extended in the loop below.
+                let mut argss = vec![vec![]];
+                let mut cols = cols.as_slice();
+                while let Some((col, rest)) = cols.split_last() {
+                    cols = rest;
+
+                    let mut next = vec![];
+                    for current in argss.iter() {
+                        // Extend the front of each argument candidate with every type in `col`.
+                        for ty in col {
+                            let mut args = vec![*ty];
+                            args.extend_from_slice(&current);
+                            next.push(args);
+                        }
+                    }
+
+                    let _ = std::mem::replace(&mut argss, next);
+                }
+
+                argss.into_iter().map(move |args| (*op, args, rets.clone()))
+            })
+        })
+        .filter(|(op, args, rets)| {
+            // These op/signature combinations need to be vetted
+            exceptions!(
+                op,
+                args.as_slice(),
+                rets.as_slice(),
+                (Opcode::Debugtrap),
+                (Opcode::Trap),
+                (Opcode::Trapz),
+                (Opcode::ResumableTrap),
+                (Opcode::Trapnz),
+                (Opcode::ResumableTrapnz),
+                (Opcode::CallIndirect, &[I32]),
+                (Opcode::ReturnCall),
+                (Opcode::ReturnCallIndirect),
+                (Opcode::FuncAddr),
+                (Opcode::X86Pshufb),
+                (Opcode::AvgRound),
+                (Opcode::Uload8x8),
+                (Opcode::Sload8x8),
+                (Opcode::Uload16x4),
+                (Opcode::Sload16x4),
+                (Opcode::Uload32x2),
+                (Opcode::Sload32x2),
+                (Opcode::StackAddr),
+                (Opcode::DynamicStackLoad),
+                (Opcode::DynamicStackStore),
+                (Opcode::DynamicStackAddr),
+                (Opcode::GlobalValue),
+                (Opcode::SymbolValue),
+                (Opcode::TlsValue),
+                (Opcode::GetPinnedReg),
+                (Opcode::SetPinnedReg),
+                (Opcode::GetFramePointer),
+                (Opcode::GetStackPointer),
+                (Opcode::GetReturnAddress),
+                (Opcode::TableAddr),
+                (Opcode::Null),
+                (Opcode::X86Blendv),
+                (Opcode::VallTrue),
+                (Opcode::IcmpImm),
+                (Opcode::X86Pmulhrsw),
+                (Opcode::IaddImm),
+                (Opcode::ImulImm),
+                (Opcode::UdivImm),
+                (Opcode::SdivImm),
+                (Opcode::UremImm),
+                (Opcode::SremImm),
+                (Opcode::IrsubImm),
+                (Opcode::IaddCin),
+                (Opcode::IaddCarry),
+                (Opcode::UaddOverflowTrap),
+                (Opcode::IsubBin),
+                (Opcode::IsubBout),
+                (Opcode::IsubBorrow),
+                (Opcode::BandImm),
+                (Opcode::BorImm),
+                (Opcode::BxorImm),
+                (Opcode::RotlImm),
+                (Opcode::RotrImm),
+                (Opcode::IshlImm),
+                (Opcode::UshrImm),
+                (Opcode::SshrImm),
+                (Opcode::IsNull),
+                (Opcode::IsInvalid),
+                (Opcode::ScalarToVector),
+                (Opcode::X86Pmaddubsw),
+                (Opcode::X86Cvtt2dq),
+                (Opcode::Select, &[I8, F32, F32], &[F32]),
+                (Opcode::Select, &[I16, F32, F32], &[F32]),
+                (Opcode::Select, &[I32, F32, F32], &[F32]),
+                (Opcode::Select, &[I64, F32, F32], &[F32]),
+                (Opcode::Select, &[I128, F32, F32], &[F32]),
+                (Opcode::Select, &[I8, F64, F64], &[F64]),
+                (Opcode::Select, &[I16, F64, F64], &[F64]),
+                (Opcode::Select, &[I32, F64, F64], &[F64]),
+                (Opcode::Select, &[I64, F64, F64], &[F64]),
+                (Opcode::Select, &[I128, F64, F64], &[F64]),
+                (Opcode::Select, &[I8, I8X16, I8X16], &[I8X16]),
+                (Opcode::Select, &[I16, I8X16, I8X16], &[I8X16]),
+                (Opcode::Select, &[I32, I8X16, I8X16], &[I8X16]),
+                (Opcode::Select, &[I64, I8X16, I8X16], &[I8X16]),
+                (Opcode::Select, &[I128, I8X16, I8X16], &[I8X16]),
+                (Opcode::Select, &[I8, I16X8, I16X8], &[I16X8]),
+                (Opcode::Select, &[I16, I16X8, I16X8], &[I16X8]),
+                (Opcode::Select, &[I32, I16X8, I16X8], &[I16X8]),
+                (Opcode::Select, &[I64, I16X8, I16X8], &[I16X8]),
+                (Opcode::Select, &[I128, I16X8, I16X8], &[I16X8]),
+                (Opcode::Select, &[I8, I32X4, I32X4], &[I32X4]),
+                (Opcode::Select, &[I16, I32X4, I32X4], &[I32X4]),
+                (Opcode::Select, &[I32, I32X4, I32X4], &[I32X4]),
+                (Opcode::Select, &[I64, I32X4, I32X4], &[I32X4]),
+                (Opcode::Select, &[I128, I32X4, I32X4], &[I32X4]),
+                (Opcode::Select, &[I8, I64X2, I64X2], &[I64X2]),
+                (Opcode::Select, &[I16, I64X2, I64X2], &[I64X2]),
+                (Opcode::Select, &[I32, I64X2, I64X2], &[I64X2]),
+                (Opcode::Select, &[I64, I64X2, I64X2], &[I64X2]),
+                (Opcode::Select, &[I128, I64X2, I64X2], &[I64X2]),
+                (Opcode::Select, &[I8, F32X4, F32X4], &[F32X4]),
+                (Opcode::Select, &[I16, F32X4, F32X4], &[F32X4]),
+                (Opcode::Select, &[I32, F32X4, F32X4], &[F32X4]),
+                (Opcode::Select, &[I64, F32X4, F32X4], &[F32X4]),
+                (Opcode::Select, &[I128, F32X4, F32X4], &[F32X4]),
+                (Opcode::Select, &[I8, F64X2, F64X2], &[F64X2]),
+                (Opcode::Select, &[I16, F64X2, F64X2], &[F64X2]),
+                (Opcode::Select, &[I32, F64X2, F64X2], &[F64X2]),
+                (Opcode::Select, &[I64, F64X2, F64X2], &[F64X2]),
+                (Opcode::Select, &[I128, F64X2, F64X2], &[F64X2]),
+                (Opcode::SelectSpectreGuard, &[I8, F32, F32], &[F32]),
+                (Opcode::SelectSpectreGuard, &[I16, F32, F32], &[F32]),
+                (Opcode::SelectSpectreGuard, &[I32, F32, F32], &[F32]),
+                (Opcode::SelectSpectreGuard, &[I64, F32, F32], &[F32]),
+                (Opcode::SelectSpectreGuard, &[I128, F32, F32], &[F32]),
+                (Opcode::SelectSpectreGuard, &[I8, F64, F64], &[F64]),
+                (Opcode::SelectSpectreGuard, &[I16, F64, F64], &[F64]),
+                (Opcode::SelectSpectreGuard, &[I32, F64, F64], &[F64]),
+                (Opcode::SelectSpectreGuard, &[I64, F64, F64], &[F64]),
+                (Opcode::SelectSpectreGuard, &[I128, F64, F64], &[F64]),
+                (Opcode::SelectSpectreGuard, &[I8, I8X16, I8X16], &[I8X16]),
+                (Opcode::SelectSpectreGuard, &[I16, I8X16, I8X16], &[I8X16]),
+                (Opcode::SelectSpectreGuard, &[I32, I8X16, I8X16], &[I8X16]),
+                (Opcode::SelectSpectreGuard, &[I64, I8X16, I8X16], &[I8X16]),
+                (Opcode::SelectSpectreGuard, &[I128, I8X16, I8X16], &[I8X16]),
+                (Opcode::SelectSpectreGuard, &[I8, I16X8, I16X8], &[I16X8]),
+                (Opcode::SelectSpectreGuard, &[I16, I16X8, I16X8], &[I16X8]),
+                (Opcode::SelectSpectreGuard, &[I32, I16X8, I16X8], &[I16X8]),
+                (Opcode::SelectSpectreGuard, &[I64, I16X8, I16X8], &[I16X8]),
+                (Opcode::SelectSpectreGuard, &[I128, I16X8, I16X8], &[I16X8]),
+                (Opcode::SelectSpectreGuard, &[I8, I32X4, I32X4], &[I32X4]),
+                (Opcode::SelectSpectreGuard, &[I16, I32X4, I32X4], &[I32X4]),
+                (Opcode::SelectSpectreGuard, &[I32, I32X4, I32X4], &[I32X4]),
+                (Opcode::SelectSpectreGuard, &[I64, I32X4, I32X4], &[I32X4]),
+                (Opcode::SelectSpectreGuard, &[I128, I32X4, I32X4], &[I32X4]),
+                (Opcode::SelectSpectreGuard, &[I8, I64X2, I64X2], &[I64X2]),
+                (Opcode::SelectSpectreGuard, &[I16, I64X2, I64X2], &[I64X2]),
+                (Opcode::SelectSpectreGuard, &[I32, I64X2, I64X2], &[I64X2]),
+                (Opcode::SelectSpectreGuard, &[I64, I64X2, I64X2], &[I64X2]),
+                (Opcode::SelectSpectreGuard, &[I128, I64X2, I64X2], &[I64X2]),
+                (Opcode::SelectSpectreGuard, &[I8, F32X4, F32X4], &[F32X4]),
+                (Opcode::SelectSpectreGuard, &[I16, F32X4, F32X4], &[F32X4]),
+                (Opcode::SelectSpectreGuard, &[I32, F32X4, F32X4], &[F32X4]),
+                (Opcode::SelectSpectreGuard, &[I64, F32X4, F32X4], &[F32X4]),
+                (Opcode::SelectSpectreGuard, &[I128, F32X4, F32X4], &[F32X4]),
+                (Opcode::SelectSpectreGuard, &[I8, F64X2, F64X2], &[F64X2]),
+                (Opcode::SelectSpectreGuard, &[I16, F64X2, F64X2], &[F64X2]),
+                (Opcode::SelectSpectreGuard, &[I32, F64X2, F64X2], &[F64X2]),
+                (Opcode::SelectSpectreGuard, &[I64, F64X2, F64X2], &[F64X2]),
+                (Opcode::SelectSpectreGuard, &[I128, F64X2, F64X2], &[F64X2]),
+                (Opcode::Bitselect, &[F32, F32, F32], &[F32]),
+                (Opcode::Bitselect, &[F64, F64, F64], &[F64]),
+                (Opcode::Bitselect, &[F32X4, F32X4, F32X4], &[F32X4]),
+                (Opcode::Bitselect, &[F64X2, F64X2, F64X2], &[F64X2]),
+                (Opcode::VanyTrue, &[F32X4], &[I8]),
+                (Opcode::VanyTrue, &[F64X2], &[I8]),
+                (Opcode::VhighBits, &[F32X4], &[I8]),
+                (Opcode::VhighBits, &[F64X2], &[I8]),
+                (Opcode::VhighBits, &[I8X16], &[I16]),
+                (Opcode::VhighBits, &[I16X8], &[I16]),
+                (Opcode::VhighBits, &[I32X4], &[I16]),
+                (Opcode::VhighBits, &[I64X2], &[I16]),
+                (Opcode::VhighBits, &[F32X4], &[I16]),
+                (Opcode::VhighBits, &[F64X2], &[I16]),
+                (Opcode::VhighBits, &[I8X16], &[I32]),
+                (Opcode::VhighBits, &[I16X8], &[I32]),
+                (Opcode::VhighBits, &[I32X4], &[I32]),
+                (Opcode::VhighBits, &[I64X2], &[I32]),
+                (Opcode::VhighBits, &[F32X4], &[I32]),
+                (Opcode::VhighBits, &[F64X2], &[I32]),
+                (Opcode::VhighBits, &[I8X16], &[I64]),
+                (Opcode::VhighBits, &[I16X8], &[I64]),
+                (Opcode::VhighBits, &[I32X4], &[I64]),
+                (Opcode::VhighBits, &[I64X2], &[I64]),
+                (Opcode::VhighBits, &[F32X4], &[I64]),
+                (Opcode::VhighBits, &[F64X2], &[I64]),
+                (Opcode::VhighBits, &[I8X16], &[I128]),
+                (Opcode::VhighBits, &[I16X8], &[I128]),
+                (Opcode::VhighBits, &[I32X4], &[I128]),
+                (Opcode::VhighBits, &[I64X2], &[I128]),
+                (Opcode::VhighBits, &[F32X4], &[I128]),
+                (Opcode::VhighBits, &[F64X2], &[I128]),
+                (Opcode::VhighBits, &[I8X16], &[I8X16]),
+                (Opcode::VhighBits, &[I16X8], &[I8X16]),
+                (Opcode::VhighBits, &[I32X4], &[I8X16]),
+                (Opcode::VhighBits, &[I64X2], &[I8X16]),
+                (Opcode::VhighBits, &[F32X4], &[I8X16]),
+                (Opcode::VhighBits, &[F64X2], &[I8X16]),
+                (Opcode::VhighBits, &[I8X16], &[I16X8]),
+                (Opcode::VhighBits, &[I16X8], &[I16X8]),
+                (Opcode::VhighBits, &[I32X4], &[I16X8]),
+                (Opcode::VhighBits, &[I64X2], &[I16X8]),
+                (Opcode::VhighBits, &[F32X4], &[I16X8]),
+                (Opcode::VhighBits, &[F64X2], &[I16X8]),
+                (Opcode::VhighBits, &[I8X16], &[I32X4]),
+                (Opcode::VhighBits, &[I16X8], &[I32X4]),
+                (Opcode::VhighBits, &[I32X4], &[I32X4]),
+                (Opcode::VhighBits, &[I64X2], &[I32X4]),
+                (Opcode::VhighBits, &[F32X4], &[I32X4]),
+                (Opcode::VhighBits, &[F64X2], &[I32X4]),
+                (Opcode::VhighBits, &[I8X16], &[I64X2]),
+                (Opcode::VhighBits, &[I16X8], &[I64X2]),
+                (Opcode::VhighBits, &[I32X4], &[I64X2]),
+                (Opcode::VhighBits, &[I64X2], &[I64X2]),
+                (Opcode::VhighBits, &[F32X4], &[I64X2]),
+                (Opcode::VhighBits, &[F64X2], &[I64X2]),
+                (Opcode::Ineg, &[I8X16], &[I8X16]),
+                (Opcode::Ineg, &[I16X8], &[I16X8]),
+                (Opcode::Ineg, &[I32X4], &[I32X4]),
+                (Opcode::Ineg, &[I64X2], &[I64X2]),
+                (Opcode::Umulhi, &[I128, I128], &[I128]),
+                (Opcode::Smulhi, &[I128, I128], &[I128]),
+                // https://github.com/bytecodealliance/wasmtime/issues/6073
+                (Opcode::Iconcat, &[I32, I32], &[I64]),
+                (Opcode::Iconcat, &[I16, I16], &[I32]),
+                (Opcode::Iconcat, &[I8, I8], &[I16]),
+                // https://github.com/bytecodealliance/wasmtime/issues/6073
+                (Opcode::Isplit, &[I64], &[I32, I32]),
+                (Opcode::Isplit, &[I32], &[I16, I16]),
+                (Opcode::Isplit, &[I16], &[I8, I8]),
+                (Opcode::Rotl, &[I8X16, I8], &[I8X16]),
+                (Opcode::Rotl, &[I8X16, I16], &[I8X16]),
+                (Opcode::Rotl, &[I8X16, I32], &[I8X16]),
+                (Opcode::Rotl, &[I8X16, I64], &[I8X16]),
+                (Opcode::Rotl, &[I8X16, I128], &[I8X16]),
+                (Opcode::Rotl, &[I16X8, I8], &[I16X8]),
+                (Opcode::Rotl, &[I16X8, I16], &[I16X8]),
+                (Opcode::Rotl, &[I16X8, I32], &[I16X8]),
+                (Opcode::Rotl, &[I16X8, I64], &[I16X8]),
+                (Opcode::Rotl, &[I16X8, I128], &[I16X8]),
+                (Opcode::Rotl, &[I32X4, I8], &[I32X4]),
+                (Opcode::Rotl, &[I32X4, I16], &[I32X4]),
+                (Opcode::Rotl, &[I32X4, I32], &[I32X4]),
+                (Opcode::Rotl, &[I32X4, I64], &[I32X4]),
+                (Opcode::Rotl, &[I32X4, I128], &[I32X4]),
+                (Opcode::Rotl, &[I64X2, I8], &[I64X2]),
+                (Opcode::Rotl, &[I64X2, I16], &[I64X2]),
+                (Opcode::Rotl, &[I64X2, I32], &[I64X2]),
+                (Opcode::Rotl, &[I64X2, I64], &[I64X2]),
+                (Opcode::Rotl, &[I64X2, I128], &[I64X2]),
+                (Opcode::Rotr, &[I8X16, I8], &[I8X16]),
+                (Opcode::Rotr, &[I8X16, I16], &[I8X16]),
+                (Opcode::Rotr, &[I8X16, I32], &[I8X16]),
+                (Opcode::Rotr, &[I8X16, I64], &[I8X16]),
+                (Opcode::Rotr, &[I8X16, I128], &[I8X16]),
+                (Opcode::Rotr, &[I16X8, I8], &[I16X8]),
+                (Opcode::Rotr, &[I16X8, I16], &[I16X8]),
+                (Opcode::Rotr, &[I16X8, I32], &[I16X8]),
+                (Opcode::Rotr, &[I16X8, I64], &[I16X8]),
+                (Opcode::Rotr, &[I16X8, I128], &[I16X8]),
+                (Opcode::Rotr, &[I32X4, I8], &[I32X4]),
+                (Opcode::Rotr, &[I32X4, I16], &[I32X4]),
+                (Opcode::Rotr, &[I32X4, I32], &[I32X4]),
+                (Opcode::Rotr, &[I32X4, I64], &[I32X4]),
+                (Opcode::Rotr, &[I32X4, I128], &[I32X4]),
+                (Opcode::Rotr, &[I64X2, I8], &[I64X2]),
+                (Opcode::Rotr, &[I64X2, I16], &[I64X2]),
+                (Opcode::Rotr, &[I64X2, I32], &[I64X2]),
+                (Opcode::Rotr, &[I64X2, I64], &[I64X2]),
+                (Opcode::Rotr, &[I64X2, I128], &[I64X2]),
+                (Opcode::Ishl, &[I8X16, I8], &[I8X16]),
+                (Opcode::Ishl, &[I8X16, I16], &[I8X16]),
+                (Opcode::Ishl, &[I8X16, I32], &[I8X16]),
+                (Opcode::Ishl, &[I8X16, I64], &[I8X16]),
+                (Opcode::Ishl, &[I8X16, I128], &[I8X16]),
+                (Opcode::Ishl, &[I16X8, I8], &[I16X8]),
+                (Opcode::Ishl, &[I16X8, I16], &[I16X8]),
+                (Opcode::Ishl, &[I16X8, I32], &[I16X8]),
+                (Opcode::Ishl, &[I16X8, I64], &[I16X8]),
+                (Opcode::Ishl, &[I16X8, I128], &[I16X8]),
+                (Opcode::Ishl, &[I32X4, I8], &[I32X4]),
+                (Opcode::Ishl, &[I32X4, I16], &[I32X4]),
+                (Opcode::Ishl, &[I32X4, I32], &[I32X4]),
+                (Opcode::Ishl, &[I32X4, I64], &[I32X4]),
+                (Opcode::Ishl, &[I32X4, I128], &[I32X4]),
+                (Opcode::Ishl, &[I64X2, I8], &[I64X2]),
+                (Opcode::Ishl, &[I64X2, I16], &[I64X2]),
+                (Opcode::Ishl, &[I64X2, I32], &[I64X2]),
+                (Opcode::Ishl, &[I64X2, I64], &[I64X2]),
+                (Opcode::Ishl, &[I64X2, I128], &[I64X2]),
+                (Opcode::Ushr, &[I8X16, I8], &[I8X16]),
+                (Opcode::Ushr, &[I8X16, I16], &[I8X16]),
+                (Opcode::Ushr, &[I8X16, I32], &[I8X16]),
+                (Opcode::Ushr, &[I8X16, I64], &[I8X16]),
+                (Opcode::Ushr, &[I8X16, I128], &[I8X16]),
+                (Opcode::Ushr, &[I16X8, I8], &[I16X8]),
+                (Opcode::Ushr, &[I16X8, I16], &[I16X8]),
+                (Opcode::Ushr, &[I16X8, I32], &[I16X8]),
+                (Opcode::Ushr, &[I16X8, I64], &[I16X8]),
+                (Opcode::Ushr, &[I16X8, I128], &[I16X8]),
+                (Opcode::Ushr, &[I32X4, I8], &[I32X4]),
+                (Opcode::Ushr, &[I32X4, I16], &[I32X4]),
+                (Opcode::Ushr, &[I32X4, I32], &[I32X4]),
+                (Opcode::Ushr, &[I32X4, I64], &[I32X4]),
+                (Opcode::Ushr, &[I32X4, I128], &[I32X4]),
+                (Opcode::Ushr, &[I64X2, I8], &[I64X2]),
+                (Opcode::Ushr, &[I64X2, I16], &[I64X2]),
+                (Opcode::Ushr, &[I64X2, I32], &[I64X2]),
+                (Opcode::Ushr, &[I64X2, I64], &[I64X2]),
+                (Opcode::Ushr, &[I64X2, I128], &[I64X2]),
+                (Opcode::Sshr, &[I8X16, I8], &[I8X16]),
+                (Opcode::Sshr, &[I8X16, I16], &[I8X16]),
+                (Opcode::Sshr, &[I8X16, I32], &[I8X16]),
+                (Opcode::Sshr, &[I8X16, I64], &[I8X16]),
+                (Opcode::Sshr, &[I8X16, I128], &[I8X16]),
+                (Opcode::Sshr, &[I16X8, I8], &[I16X8]),
+                (Opcode::Sshr, &[I16X8, I16], &[I16X8]),
+                (Opcode::Sshr, &[I16X8, I32], &[I16X8]),
+                (Opcode::Sshr, &[I16X8, I64], &[I16X8]),
+                (Opcode::Sshr, &[I16X8, I128], &[I16X8]),
+                (Opcode::Sshr, &[I32X4, I8], &[I32X4]),
+                (Opcode::Sshr, &[I32X4, I16], &[I32X4]),
+                (Opcode::Sshr, &[I32X4, I32], &[I32X4]),
+                (Opcode::Sshr, &[I32X4, I64], &[I32X4]),
+                (Opcode::Sshr, &[I32X4, I128], &[I32X4]),
+                (Opcode::Sshr, &[I64X2, I8], &[I64X2]),
+                (Opcode::Sshr, &[I64X2, I16], &[I64X2]),
+                (Opcode::Sshr, &[I64X2, I32], &[I64X2]),
+                (Opcode::Sshr, &[I64X2, I64], &[I64X2]),
+                (Opcode::Sshr, &[I64X2, I128], &[I64X2]),
+                (Opcode::Fmin, &[F32X4, F32X4], &[F32X4]),
+                (Opcode::Fmin, &[F64X2, F64X2], &[F64X2]),
+                (Opcode::FminPseudo, &[F32X4, F32X4], &[F32X4]),
+                (Opcode::FminPseudo, &[F64X2, F64X2], &[F64X2]),
+                (Opcode::Fmax, &[F32X4, F32X4], &[F32X4]),
+                (Opcode::Fmax, &[F64X2, F64X2], &[F64X2]),
+                (Opcode::FmaxPseudo, &[F32X4, F32X4], &[F32X4]),
+                (Opcode::FmaxPseudo, &[F64X2, F64X2], &[F64X2]),
+                (Opcode::Bitcast, &[I8], &[I8]),
+                (Opcode::Bitcast, &[I16], &[I8]),
+                (Opcode::Bitcast, &[I32], &[I8]),
+                (Opcode::Bitcast, &[I64], &[I8]),
+                (Opcode::Bitcast, &[I128], &[I8]),
+                (Opcode::Bitcast, &[F32], &[I8]),
+                (Opcode::Bitcast, &[F64], &[I8]),
+                (Opcode::Bitcast, &[I8X16], &[I8]),
+                (Opcode::Bitcast, &[I16X8], &[I8]),
+                (Opcode::Bitcast, &[I32X4], &[I8]),
+                (Opcode::Bitcast, &[I64X2], &[I8]),
+                (Opcode::Bitcast, &[F32X4], &[I8]),
+                (Opcode::Bitcast, &[F64X2], &[I8]),
+                (Opcode::Bitcast, &[I8], &[I16]),
+                (Opcode::Bitcast, &[I16], &[I16]),
+                (Opcode::Bitcast, &[I32], &[I16]),
+                (Opcode::Bitcast, &[I64], &[I16]),
+                (Opcode::Bitcast, &[I128], &[I16]),
+                (Opcode::Bitcast, &[F32], &[I16]),
+                (Opcode::Bitcast, &[F64], &[I16]),
+                (Opcode::Bitcast, &[I8X16], &[I16]),
+                (Opcode::Bitcast, &[I16X8], &[I16]),
+                (Opcode::Bitcast, &[I32X4], &[I16]),
+                (Opcode::Bitcast, &[I64X2], &[I16]),
+                (Opcode::Bitcast, &[F32X4], &[I16]),
+                (Opcode::Bitcast, &[F64X2], &[I16]),
+                (Opcode::Bitcast, &[I8], &[I32]),
+                (Opcode::Bitcast, &[I16], &[I32]),
+                (Opcode::Bitcast, &[I32], &[I32]),
+                (Opcode::Bitcast, &[I64], &[I32]),
+                (Opcode::Bitcast, &[I128], &[I32]),
+                (Opcode::Bitcast, &[F64], &[I32]),
+                (Opcode::Bitcast, &[I8X16], &[I32]),
+                (Opcode::Bitcast, &[I16X8], &[I32]),
+                (Opcode::Bitcast, &[I32X4], &[I32]),
+                (Opcode::Bitcast, &[I64X2], &[I32]),
+                (Opcode::Bitcast, &[F32X4], &[I32]),
+                (Opcode::Bitcast, &[F64X2], &[I32]),
+                (Opcode::Bitcast, &[I8], &[I64]),
+                (Opcode::Bitcast, &[I16], &[I64]),
+                (Opcode::Bitcast, &[I32], &[I64]),
+                (Opcode::Bitcast, &[I64], &[I64]),
+                (Opcode::Bitcast, &[I128], &[I64]),
+                (Opcode::Bitcast, &[F32], &[I64]),
+                (Opcode::Bitcast, &[I8X16], &[I64]),
+                (Opcode::Bitcast, &[I16X8], &[I64]),
+                (Opcode::Bitcast, &[I32X4], &[I64]),
+                (Opcode::Bitcast, &[I64X2], &[I64]),
+                (Opcode::Bitcast, &[F32X4], &[I64]),
+                (Opcode::Bitcast, &[F64X2], &[I64]),
+                (Opcode::Bitcast, &[I8], &[I128]),
+                (Opcode::Bitcast, &[I16], &[I128]),
+                (Opcode::Bitcast, &[I32], &[I128]),
+                (Opcode::Bitcast, &[I64], &[I128]),
+                (Opcode::Bitcast, &[I128], &[I128]),
+                (Opcode::Bitcast, &[F32], &[I128]),
+                (Opcode::Bitcast, &[F64], &[I128]),
+                (Opcode::Bitcast, &[I8X16], &[I128]),
+                (Opcode::Bitcast, &[I16X8], &[I128]),
+                (Opcode::Bitcast, &[I32X4], &[I128]),
+                (Opcode::Bitcast, &[I64X2], &[I128]),
+                (Opcode::Bitcast, &[F32X4], &[I128]),
+                (Opcode::Bitcast, &[F64X2], &[I128]),
+                (Opcode::Bitcast, &[I8], &[F32]),
+                (Opcode::Bitcast, &[I16], &[F32]),
+                (Opcode::Bitcast, &[I64], &[F32]),
+                (Opcode::Bitcast, &[I128], &[F32]),
+                (Opcode::Bitcast, &[F32], &[F32]),
+                (Opcode::Bitcast, &[F64], &[F32]),
+                (Opcode::Bitcast, &[I8X16], &[F32]),
+                (Opcode::Bitcast, &[I16X8], &[F32]),
+                (Opcode::Bitcast, &[I32X4], &[F32]),
+                (Opcode::Bitcast, &[I64X2], &[F32]),
+                (Opcode::Bitcast, &[F32X4], &[F32]),
+                (Opcode::Bitcast, &[F64X2], &[F32]),
+                (Opcode::Bitcast, &[I8], &[F64]),
+                (Opcode::Bitcast, &[I16], &[F64]),
+                (Opcode::Bitcast, &[I32], &[F64]),
+                (Opcode::Bitcast, &[I128], &[F64]),
+                (Opcode::Bitcast, &[F32], &[F64]),
+                (Opcode::Bitcast, &[F64], &[F64]),
+                (Opcode::Bitcast, &[I8X16], &[F64]),
+                (Opcode::Bitcast, &[I16X8], &[F64]),
+                (Opcode::Bitcast, &[I32X4], &[F64]),
+                (Opcode::Bitcast, &[I64X2], &[F64]),
+                (Opcode::Bitcast, &[F32X4], &[F64]),
+                (Opcode::Bitcast, &[F64X2], &[F64]),
+                (Opcode::Bitcast, &[I8], &[I8X16]),
+                (Opcode::Bitcast, &[I16], &[I8X16]),
+                (Opcode::Bitcast, &[I32], &[I8X16]),
+                (Opcode::Bitcast, &[I64], &[I8X16]),
+                (Opcode::Bitcast, &[I128], &[I8X16]),
+                (Opcode::Bitcast, &[F32], &[I8X16]),
+                (Opcode::Bitcast, &[F64], &[I8X16]),
+                (Opcode::Bitcast, &[I8X16], &[I8X16]),
+                (Opcode::Bitcast, &[I16X8], &[I8X16]),
+                (Opcode::Bitcast, &[I32X4], &[I8X16]),
+                (Opcode::Bitcast, &[I64X2], &[I8X16]),
+                (Opcode::Bitcast, &[F32X4], &[I8X16]),
+                (Opcode::Bitcast, &[F64X2], &[I8X16]),
+                (Opcode::Bitcast, &[I8], &[I16X8]),
+                (Opcode::Bitcast, &[I16], &[I16X8]),
+                (Opcode::Bitcast, &[I32], &[I16X8]),
+                (Opcode::Bitcast, &[I64], &[I16X8]),
+                (Opcode::Bitcast, &[I128], &[I16X8]),
+                (Opcode::Bitcast, &[F32], &[I16X8]),
+                (Opcode::Bitcast, &[F64], &[I16X8]),
+                (Opcode::Bitcast, &[I8X16], &[I16X8]),
+                (Opcode::Bitcast, &[I16X8], &[I16X8]),
+                (Opcode::Bitcast, &[I32X4], &[I16X8]),
+                (Opcode::Bitcast, &[I64X2], &[I16X8]),
+                (Opcode::Bitcast, &[F32X4], &[I16X8]),
+                (Opcode::Bitcast, &[F64X2], &[I16X8]),
+                (Opcode::Bitcast, &[I8], &[I32X4]),
+                (Opcode::Bitcast, &[I16], &[I32X4]),
+                (Opcode::Bitcast, &[I32], &[I32X4]),
+                (Opcode::Bitcast, &[I64], &[I32X4]),
+                (Opcode::Bitcast, &[I128], &[I32X4]),
+                (Opcode::Bitcast, &[F32], &[I32X4]),
+                (Opcode::Bitcast, &[F64], &[I32X4]),
+                (Opcode::Bitcast, &[I8X16], &[I32X4]),
+                (Opcode::Bitcast, &[I16X8], &[I32X4]),
+                (Opcode::Bitcast, &[I32X4], &[I32X4]),
+                (Opcode::Bitcast, &[I64X2], &[I32X4]),
+                (Opcode::Bitcast, &[F32X4], &[I32X4]),
+                (Opcode::Bitcast, &[F64X2], &[I32X4]),
+                (Opcode::Bitcast, &[I8], &[I64X2]),
+                (Opcode::Bitcast, &[I16], &[I64X2]),
+                (Opcode::Bitcast, &[I32], &[I64X2]),
+                (Opcode::Bitcast, &[I64], &[I64X2]),
+                (Opcode::Bitcast, &[I128], &[I64X2]),
+                (Opcode::Bitcast, &[F32], &[I64X2]),
+                (Opcode::Bitcast, &[F64], &[I64X2]),
+                (Opcode::Bitcast, &[I8X16], &[I64X2]),
+                (Opcode::Bitcast, &[I16X8], &[I64X2]),
+                (Opcode::Bitcast, &[I32X4], &[I64X2]),
+                (Opcode::Bitcast, &[I64X2], &[I64X2]),
+                (Opcode::Bitcast, &[F32X4], &[I64X2]),
+                (Opcode::Bitcast, &[F64X2], &[I64X2]),
+                (Opcode::Bitcast, &[I8], &[F32X4]),
+                (Opcode::Bitcast, &[I16], &[F32X4]),
+                (Opcode::Bitcast, &[I32], &[F32X4]),
+                (Opcode::Bitcast, &[I64], &[F32X4]),
+                (Opcode::Bitcast, &[I128], &[F32X4]),
+                (Opcode::Bitcast, &[F32], &[F32X4]),
+                (Opcode::Bitcast, &[F64], &[F32X4]),
+                (Opcode::Bitcast, &[I8X16], &[F32X4]),
+                (Opcode::Bitcast, &[I16X8], &[F32X4]),
+                (Opcode::Bitcast, &[I32X4], &[F32X4]),
+                (Opcode::Bitcast, &[I64X2], &[F32X4]),
+                (Opcode::Bitcast, &[F32X4], &[F32X4]),
+                (Opcode::Bitcast, &[F64X2], &[F32X4]),
+                (Opcode::Bitcast, &[I8], &[F64X2]),
+                (Opcode::Bitcast, &[I16], &[F64X2]),
+                (Opcode::Bitcast, &[I32], &[F64X2]),
+                (Opcode::Bitcast, &[I64], &[F64X2]),
+                (Opcode::Bitcast, &[I128], &[F64X2]),
+                (Opcode::Bitcast, &[F32], &[F64X2]),
+                (Opcode::Bitcast, &[F64], &[F64X2]),
+                (Opcode::Bitcast, &[I8X16], &[F64X2]),
+                (Opcode::Bitcast, &[I16X8], &[F64X2]),
+                (Opcode::Bitcast, &[I32X4], &[F64X2]),
+                (Opcode::Bitcast, &[I64X2], &[F64X2]),
+                (Opcode::Bitcast, &[F32X4], &[F64X2]),
+                (Opcode::Bitcast, &[F64X2], &[F64X2]),
+                (Opcode::FcvtToUintSat, &[F32X4], &[I8]),
+                (Opcode::FcvtToUintSat, &[F64X2], &[I8]),
+                (Opcode::FcvtToUintSat, &[F32X4], &[I16]),
+                (Opcode::FcvtToUintSat, &[F64X2], &[I16]),
+                (Opcode::FcvtToUintSat, &[F32X4], &[I32]),
+                (Opcode::FcvtToUintSat, &[F64X2], &[I32]),
+                (Opcode::FcvtToUintSat, &[F32X4], &[I64]),
+                (Opcode::FcvtToUintSat, &[F64X2], &[I64]),
+                (Opcode::FcvtToUintSat, &[F32X4], &[I128]),
+                (Opcode::FcvtToUintSat, &[F64X2], &[I128]),
+                (Opcode::FcvtToUintSat, &[F32], &[I8X16]),
+                (Opcode::FcvtToUintSat, &[F64], &[I8X16]),
+                (Opcode::FcvtToUintSat, &[F32X4], &[I8X16]),
+                (Opcode::FcvtToUintSat, &[F64X2], &[I8X16]),
+                (Opcode::FcvtToUintSat, &[F32], &[I16X8]),
+                (Opcode::FcvtToUintSat, &[F64], &[I16X8]),
+                (Opcode::FcvtToUintSat, &[F32X4], &[I16X8]),
+                (Opcode::FcvtToUintSat, &[F64X2], &[I16X8]),
+                (Opcode::FcvtToUintSat, &[F32], &[I32X4]),
+                (Opcode::FcvtToUintSat, &[F64], &[I32X4]),
+                (Opcode::FcvtToUintSat, &[F64X2], &[I32X4]),
+                (Opcode::FcvtToUintSat, &[F32], &[I64X2]),
+                (Opcode::FcvtToUintSat, &[F64], &[I64X2]),
+                (Opcode::FcvtToUintSat, &[F32X4], &[I64X2]),
+                (Opcode::FcvtToSintSat, &[F32X4], &[I8]),
+                (Opcode::FcvtToSintSat, &[F64X2], &[I8]),
+                (Opcode::FcvtToSintSat, &[F32X4], &[I16]),
+                (Opcode::FcvtToSintSat, &[F64X2], &[I16]),
+                (Opcode::FcvtToSintSat, &[F32X4], &[I32]),
+                (Opcode::FcvtToSintSat, &[F64X2], &[I32]),
+                (Opcode::FcvtToSintSat, &[F32X4], &[I64]),
+                (Opcode::FcvtToSintSat, &[F64X2], &[I64]),
+                (Opcode::FcvtToSintSat, &[F32X4], &[I128]),
+                (Opcode::FcvtToSintSat, &[F64X2], &[I128]),
+                (Opcode::FcvtToSintSat, &[F32], &[I8X16]),
+                (Opcode::FcvtToSintSat, &[F64], &[I8X16]),
+                (Opcode::FcvtToSintSat, &[F32X4], &[I8X16]),
+                (Opcode::FcvtToSintSat, &[F64X2], &[I8X16]),
+                (Opcode::FcvtToSintSat, &[F32], &[I16X8]),
+                (Opcode::FcvtToSintSat, &[F64], &[I16X8]),
+                (Opcode::FcvtToSintSat, &[F32X4], &[I16X8]),
+                (Opcode::FcvtToSintSat, &[F64X2], &[I16X8]),
+                (Opcode::FcvtToSintSat, &[F32], &[I32X4]),
+                (Opcode::FcvtToSintSat, &[F64], &[I32X4]),
+                (Opcode::FcvtToSintSat, &[F64X2], &[I32X4]),
+                (Opcode::FcvtToSintSat, &[F32], &[I64X2]),
+                (Opcode::FcvtToSintSat, &[F64], &[I64X2]),
+                (Opcode::FcvtToSintSat, &[F32X4], &[I64X2]),
+                (Opcode::FcvtFromUint, &[I8X16], &[F32]),
+                (Opcode::FcvtFromUint, &[I16X8], &[F32]),
+                (Opcode::FcvtFromUint, &[I32X4], &[F32]),
+                (Opcode::FcvtFromUint, &[I64X2], &[F32]),
+                (Opcode::FcvtFromUint, &[I8X16], &[F64]),
+                (Opcode::FcvtFromUint, &[I16X8], &[F64]),
+                (Opcode::FcvtFromUint, &[I32X4], &[F64]),
+                (Opcode::FcvtFromUint, &[I64X2], &[F64]),
+                (Opcode::FcvtFromUint, &[I8], &[F32X4]),
+                (Opcode::FcvtFromUint, &[I16], &[F32X4]),
+                (Opcode::FcvtFromUint, &[I32], &[F32X4]),
+                (Opcode::FcvtFromUint, &[I64], &[F32X4]),
+                (Opcode::FcvtFromUint, &[I128], &[F32X4]),
+                (Opcode::FcvtFromUint, &[I8X16], &[F32X4]),
+                (Opcode::FcvtFromUint, &[I16X8], &[F32X4]),
+                (Opcode::FcvtFromUint, &[I64X2], &[F32X4]),
+                (Opcode::FcvtFromUint, &[I8], &[F64X2]),
+                (Opcode::FcvtFromUint, &[I16], &[F64X2]),
+                (Opcode::FcvtFromUint, &[I32], &[F64X2]),
+                (Opcode::FcvtFromUint, &[I64], &[F64X2]),
+                (Opcode::FcvtFromUint, &[I128], &[F64X2]),
+                (Opcode::FcvtFromUint, &[I8X16], &[F64X2]),
+                (Opcode::FcvtFromUint, &[I16X8], &[F64X2]),
+                (Opcode::FcvtFromUint, &[I32X4], &[F64X2]),
+                (Opcode::FcvtFromSint, &[I8X16], &[F32]),
+                (Opcode::FcvtFromSint, &[I16X8], &[F32]),
+                (Opcode::FcvtFromSint, &[I32X4], &[F32]),
+                (Opcode::FcvtFromSint, &[I64X2], &[F32]),
+                (Opcode::FcvtFromSint, &[I8X16], &[F64]),
+                (Opcode::FcvtFromSint, &[I16X8], &[F64]),
+                (Opcode::FcvtFromSint, &[I32X4], &[F64]),
+                (Opcode::FcvtFromSint, &[I64X2], &[F64]),
+                (Opcode::FcvtFromSint, &[I8], &[F32X4]),
+                (Opcode::FcvtFromSint, &[I16], &[F32X4]),
+                (Opcode::FcvtFromSint, &[I32], &[F32X4]),
+                (Opcode::FcvtFromSint, &[I64], &[F32X4]),
+                (Opcode::FcvtFromSint, &[I128], &[F32X4]),
+                (Opcode::FcvtFromSint, &[I8X16], &[F32X4]),
+                (Opcode::FcvtFromSint, &[I16X8], &[F32X4]),
+                (Opcode::FcvtFromSint, &[I64X2], &[F32X4]),
+                (Opcode::FcvtFromSint, &[I8], &[F64X2]),
+                (Opcode::FcvtFromSint, &[I16], &[F64X2]),
+                (Opcode::FcvtFromSint, &[I32], &[F64X2]),
+                (Opcode::FcvtFromSint, &[I64], &[F64X2]),
+                (Opcode::FcvtFromSint, &[I128], &[F64X2]),
+                (Opcode::FcvtFromSint, &[I8X16], &[F64X2]),
+                (Opcode::FcvtFromSint, &[I16X8], &[F64X2]),
+                (Opcode::FcvtFromSint, &[I32X4], &[F64X2]),
+                (Opcode::FcvtLowFromSint, &[I8], &[F32]),
+                (Opcode::FcvtLowFromSint, &[I16], &[F32]),
+                (Opcode::FcvtLowFromSint, &[I32], &[F32]),
+                (Opcode::FcvtLowFromSint, &[I64], &[F32]),
+                (Opcode::FcvtLowFromSint, &[I128], &[F32]),
+                (Opcode::FcvtLowFromSint, &[I8X16], &[F32]),
+                (Opcode::FcvtLowFromSint, &[I16X8], &[F32]),
+                (Opcode::FcvtLowFromSint, &[I32X4], &[F32]),
+                (Opcode::FcvtLowFromSint, &[I64X2], &[F32]),
+                (Opcode::FcvtLowFromSint, &[I8], &[F64]),
+                (Opcode::FcvtLowFromSint, &[I16], &[F64]),
+                (Opcode::FcvtLowFromSint, &[I32], &[F64]),
+                (Opcode::FcvtLowFromSint, &[I64], &[F64]),
+                (Opcode::FcvtLowFromSint, &[I128], &[F64]),
+                (Opcode::FcvtLowFromSint, &[I8X16], &[F64]),
+                (Opcode::FcvtLowFromSint, &[I16X8], &[F64]),
+                (Opcode::FcvtLowFromSint, &[I32X4], &[F64]),
+                (Opcode::FcvtLowFromSint, &[I64X2], &[F64]),
+                (Opcode::FcvtLowFromSint, &[I8], &[F32X4]),
+                (Opcode::FcvtLowFromSint, &[I16], &[F32X4]),
+                (Opcode::FcvtLowFromSint, &[I32], &[F32X4]),
+                (Opcode::FcvtLowFromSint, &[I64], &[F32X4]),
+                (Opcode::FcvtLowFromSint, &[I128], &[F32X4]),
+                (Opcode::FcvtLowFromSint, &[I8X16], &[F32X4]),
+                (Opcode::FcvtLowFromSint, &[I16X8], &[F32X4]),
+                (Opcode::FcvtLowFromSint, &[I32X4], &[F32X4]),
+                (Opcode::FcvtLowFromSint, &[I64X2], &[F32X4]),
+                (Opcode::FcvtLowFromSint, &[I8], &[F64X2]),
+                (Opcode::FcvtLowFromSint, &[I16], &[F64X2]),
+                (Opcode::FcvtLowFromSint, &[I32], &[F64X2]),
+                (Opcode::FcvtLowFromSint, &[I64], &[F64X2]),
+                (Opcode::FcvtLowFromSint, &[I128], &[F64X2]),
+                (Opcode::FcvtLowFromSint, &[I8X16], &[F64X2]),
+                (Opcode::FcvtLowFromSint, &[I16X8], &[F64X2]),
+                (Opcode::FcvtLowFromSint, &[I64X2], &[F64X2]),
+            )
+        })
+        .collect()
+});
+
+fn inserter_for_format(fmt: InstructionFormat) -> OpcodeInserter {
+    match fmt {
+        InstructionFormat::AtomicCas => insert_atomic_cas,
+        InstructionFormat::AtomicRmw => insert_atomic_rmw,
+        InstructionFormat::Binary => insert_opcode,
+        InstructionFormat::BinaryImm64 => todo!(),
+        InstructionFormat::BinaryImm8 => insert_ins_ext_lane,
+        InstructionFormat::Call => insert_call,
+        InstructionFormat::CallIndirect => insert_call,
+        InstructionFormat::CondTrap => todo!(),
+        InstructionFormat::DynamicStackLoad => todo!(),
+        InstructionFormat::DynamicStackStore => todo!(),
+        InstructionFormat::FloatCompare => insert_cmp,
+        InstructionFormat::FuncAddr => todo!(),
+        InstructionFormat::IntAddTrap => todo!(),
+        InstructionFormat::IntCompare => insert_cmp,
+        InstructionFormat::IntCompareImm => todo!(),
+        InstructionFormat::Load => insert_load_store,
+        InstructionFormat::LoadNoOffset => insert_load_store,
+        InstructionFormat::NullAry => insert_opcode,
+        InstructionFormat::Shuffle => insert_shuffle,
+        InstructionFormat::StackLoad => insert_stack_load,
+        InstructionFormat::StackStore => insert_stack_store,
+        InstructionFormat::Store => insert_load_store,
+        InstructionFormat::StoreNoOffset => insert_load_store,
+        InstructionFormat::TableAddr => todo!(),
+        InstructionFormat::Ternary => insert_opcode,
+        InstructionFormat::TernaryImm8 => insert_ins_ext_lane,
+        InstructionFormat::Trap => todo!(),
+        InstructionFormat::Unary => insert_opcode,
+        InstructionFormat::UnaryConst => insert_const,
+        InstructionFormat::UnaryGlobalValue => todo!(),
+        InstructionFormat::UnaryIeee32 => insert_const,
+        InstructionFormat::UnaryIeee64 => insert_const,
+        InstructionFormat::UnaryImm => insert_const,
+
+        InstructionFormat::BranchTable
+        | InstructionFormat::Brif
+        | InstructionFormat::Jump
+        | InstructionFormat::MultiAry => {
+            panic!(
+                "Control-flow instructions should be handled by 'insert_terminator': {:?}",
+                fmt
+            )
+        }
+    }
+}
 
 pub struct FunctionGenerator<'r, 'data>
 where
@@ -1372,7 +1513,7 @@ struct Resources {
     blocks: Vec<(Block, BlockSignature)>,
     blocks_without_params: Vec<Block>,
     block_terminators: Vec<BlockTerminator>,
-    func_refs: Vec<(Signature, FuncRef)>,
+    func_refs: Vec<(Signature, SigRef, FuncRef)>,
     stack_slots: Vec<(StackSlot, StackSize)>,
     usercalls: Vec<(UserExternalName, Signature)>,
     libcalls: Vec<LibCall>,
@@ -1514,6 +1655,12 @@ where
         );
         let aligned = if is_atomic && requires_aligned_atomics {
             true
+        } else if min_size > 8 {
+            // TODO: We currently can't guarantee that a stack_slot will be aligned on a 16 byte
+            // boundary. We don't have a way to specify alignment when creating stack slots, and
+            // cranelift only guarantees 8 byte alignment between stack slots.
+            // See: https://github.com/bytecodealliance/wasmtime/issues/5922#issuecomment-1457926624
+            false
         } else {
             bool::arbitrary(self.u)?
         };
@@ -1682,16 +1829,17 @@ where
     /// Fills the current block with random instructions
     fn generate_instructions(&mut self, builder: &mut FunctionBuilder) -> Result<()> {
         for _ in 0..self.param(&self.config.instructions_per_block)? {
-            let (op, args, rets, inserter) = *self.u.choose(OPCODE_SIGNATURES)?;
+            let (op, args, rets) = self.u.choose(&OPCODE_SIGNATURES)?;
 
             // We filter out instructions that aren't supported by the target at this point instead
             // of building a single vector of valid instructions at the beginning of function
             // generation, to avoid invalidating the corpus when instructions are enabled/disabled.
-            if !valid_for_target(&self.target_triple, op, args, rets) {
+            if !valid_for_target(&self.target_triple, *op, &args, &rets) {
                 return Err(arbitrary::Error::IncorrectFormat.into());
             }
 
-            inserter(self, builder, op, args, rets)?;
+            let inserter = inserter_for_format(op.format());
+            inserter(self, builder, *op, &args, &rets)?;
         }
 
         Ok(())
@@ -1729,7 +1877,9 @@ where
                 colocated: self.u.arbitrary()?,
             });
 
-            self.resources.func_refs.push((signature, func_ref));
+            self.resources
+                .func_refs
+                .push((signature, sig_ref, func_ref));
         }
 
         Ok(())

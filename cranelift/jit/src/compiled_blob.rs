@@ -120,10 +120,18 @@ impl CompiledBlob {
                     // See https://github.com/riscv-non-isa/riscv-elf-psabi-doc/blob/master/riscv-elf.adoc#pc-relative-symbol-addresses
                     // for a better explanation of the following code.
                     //
-                    // Unlike the regular symbol relocations, here both "sub-relocations" point
-                    // to the same address.
+                    // Unlike the regular symbol relocations, here both "sub-relocations" point to the same address.
+                    //
+                    // `pcrel` is a signed value (+/- 2GiB range), when splitting it into two parts, we need to
+                    // ensure that `hi20` is close enough to `pcrel` to be able to add `lo12` to it and still
+                    // get a valid address.
+                    //
+                    // `lo12` is also a signed offset (+/- 2KiB range) relative to the `hi20` value.
+                    //
+                    // `hi20` should also be shifted right to be the "true" value. But we also need it
+                    // left shifted for the `lo12` calculation and it also matches the instruction encoding.
                     let hi20 = pcrel.wrapping_add(0x800) & 0xFFFFF000;
-                    let lo12 = (pcrel - hi20) & 0xFFF;
+                    let lo12 = pcrel.wrapping_sub(hi20) & 0xFFF;
 
                     unsafe {
                         // Do a R_RISCV_PCREL_HI20 on the `auipc`

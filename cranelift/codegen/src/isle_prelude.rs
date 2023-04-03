@@ -39,6 +39,16 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
+        fn u64_as_i32(&mut self, x: u64) -> i32 {
+            x as i32
+        }
+
+        #[inline]
+        fn i64_neg(&mut self, x: i64) -> i64 {
+            x.wrapping_neg()
+        }
+
+        #[inline]
         fn u64_add(&mut self, x: u64, y: u64) -> u64 {
             x.wrapping_add(y)
         }
@@ -78,6 +88,11 @@ macro_rules! isle_common_prelude_methods {
         #[inline]
         fn u64_xor(&mut self, x: u64, y: u64) -> u64 {
             x ^ y
+        }
+
+        #[inline]
+        fn u64_shl(&mut self, x: u64, y: u64) -> u64 {
+            x << y
         }
 
         #[inline]
@@ -210,6 +225,36 @@ macro_rules! isle_common_prelude_methods {
                 .checked_sub(ty_bits.into())
                 .expect("unimplemented for > 64 bits");
             u64::MAX >> shift
+        }
+
+        #[inline]
+        fn ty_umin(&mut self, _ty: Type) -> u64 {
+            0
+        }
+
+        #[inline]
+        fn ty_umax(&mut self, ty: Type) -> u64 {
+            self.ty_mask(ty)
+        }
+
+        #[inline]
+        fn ty_smin(&mut self, ty: Type) -> u64 {
+            let ty_bits = ty.bits();
+            debug_assert_ne!(ty_bits, 0);
+            let shift = 64_u64
+                .checked_sub(ty_bits.into())
+                .expect("unimplemented for > 64 bits");
+            (i64::MIN as u64) >> shift
+        }
+
+        #[inline]
+        fn ty_smax(&mut self, ty: Type) -> u64 {
+            let ty_bits = ty.bits();
+            debug_assert_ne!(ty_bits, 0);
+            let shift = 64_u64
+                .checked_sub(ty_bits.into())
+                .expect("unimplemented for > 64 bits");
+            (i64::MAX as u64) >> shift
         }
 
         fn fits_in_16(&mut self, ty: Type) -> Option<Type> {
@@ -413,6 +458,14 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
+        fn ty_addr64(&mut self, ty: Type) -> Option<Type> {
+            match ty {
+                I64 | R64 => Some(ty),
+                _ => None,
+            }
+        }
+
+        #[inline]
         fn u64_from_imm64(&mut self, imm: Imm64) -> u64 {
             imm.bits() as u64
         }
@@ -494,8 +547,8 @@ macro_rules! isle_common_prelude_methods {
             }
         }
 
-        fn u64_from_ieee32(&mut self, val: Ieee32) -> u64 {
-            val.bits().into()
+        fn u32_from_ieee32(&mut self, val: Ieee32) -> u32 {
+            val.bits()
         }
 
         fn u64_from_ieee64(&mut self, val: Ieee64) -> u64 {
@@ -635,6 +688,11 @@ macro_rules! isle_common_prelude_methods {
             offset as u32
         }
 
+        #[inline]
+        fn u32_to_offset32(&mut self, offset: u32) -> Offset32 {
+            Offset32::new(offset as i32)
+        }
+
         fn range(&mut self, start: usize, end: usize) -> Range {
             (start, end)
         }
@@ -739,6 +797,14 @@ macro_rules! isle_common_prelude_methods {
         #[inline]
         fn pack_block_array_2(&mut self, a: BlockCall, b: BlockCall) -> BlockArray2 {
             [a, b]
+        }
+
+        fn u128_as_u64(&mut self, val: u128) -> Option<u64> {
+            u64::try_from(val).ok()
+        }
+
+        fn u64_as_u32(&mut self, val: u64) -> Option<u32> {
+            u32::try_from(val).ok()
         }
     };
 }

@@ -152,3 +152,87 @@ block0(v0: i64):
 ;   popq %rbp
 ;   retq
 
+function %load_store_i8x16(i64, i64) {
+block0(v0: i64, v1: i64):
+  v2 = load.i8x16 v0
+  store v2, v1
+  return
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   vmovdqu 0(%rdi), %xmm3
+;   vmovdqu %xmm3, 0(%rsi)
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   vmovdqu (%rdi), %xmm3 ; trap: heap_oob
+;   vmovdqu %xmm3, (%rsi) ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %load_store_f32x4(i64, i64) {
+block0(v0: i64, v1: i64):
+  v2 = load.f32x4 v0
+  store v2, v1
+  return
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   vmovups 0(%rdi), %xmm3
+;   vmovups %xmm3, 0(%rsi)
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   vmovups (%rdi), %xmm3 ; trap: heap_oob
+;   vmovups %xmm3, (%rsi) ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %load_store_f64x2(i64, i64) {
+block0(v0: i64, v1: i64):
+  v2 = load.f64x2 v0
+  store v2, v1
+  return
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   vmovupd 0(%rdi), %xmm3
+;   vmovupd %xmm3, 0(%rsi)
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   vmovupd (%rdi), %xmm3 ; trap: heap_oob
+;   vmovupd %xmm3, (%rsi) ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+

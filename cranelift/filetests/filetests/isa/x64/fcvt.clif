@@ -405,23 +405,23 @@ block0(v0: f32):
 ;   movl $0x4f000000, %r8d
 ;   movd %r8d, %xmm3
 ;   ucomiss %xmm3, %xmm0
-;   jae 0x2f
-;   jnp 0x20
-;   ud2 ; trap: bad_toint
+;   jae 0x2d
+;   jp 0x4c
 ;   cvttss2si %xmm0, %eax
 ;   cmpl $0, %eax
-;   jge 0x4b
+;   jge 0x47
 ;   ud2 ; trap: int_ovf
 ;   movaps %xmm0, %xmm4
 ;   subss %xmm3, %xmm4
 ;   cvttss2si %xmm4, %eax
 ;   cmpl $0, %eax
-;   jge 0x45
-;   ud2 ; trap: int_ovf
+;   jl 0x4e
 ;   addl $0x80000000, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
+;   ud2 ; trap: bad_toint
+;   ud2 ; trap: int_ovf
 
 function %f14(f32) -> i64 {
 block0(v0: f32):
@@ -446,24 +446,24 @@ block0(v0: f32):
 ;   movl $0x5f000000, %r8d
 ;   movd %r8d, %xmm3
 ;   ucomiss %xmm3, %xmm0
-;   jae 0x31
-;   jnp 0x20
-;   ud2 ; trap: bad_toint
+;   jae 0x2f
+;   jp 0x57
 ;   cvttss2si %xmm0, %rax
 ;   cmpq $0, %rax
-;   jge 0x56
+;   jge 0x52
 ;   ud2 ; trap: int_ovf
 ;   movaps %xmm0, %xmm4
 ;   subss %xmm3, %xmm4
 ;   cvttss2si %xmm4, %rax
 ;   cmpq $0, %rax
-;   jge 0x49
-;   ud2 ; trap: int_ovf
+;   jl 0x59
 ;   movabsq $9223372036854775808, %r8
 ;   addq %r8, %rax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
+;   ud2 ; trap: bad_toint
+;   ud2 ; trap: int_ovf
 
 function %f15(f64) -> i32 {
 block0(v0: f64):
@@ -488,23 +488,23 @@ block0(v0: f64):
 ;   movabsq $0x41e0000000000000, %r8
 ;   movq %r8, %xmm3
 ;   ucomisd %xmm3, %xmm0
-;   jae 0x34
-;   jnp 0x25
-;   ud2 ; trap: bad_toint
+;   jae 0x32
+;   jp 0x51
 ;   cvttsd2si %xmm0, %eax
 ;   cmpl $0, %eax
-;   jge 0x50
+;   jge 0x4c
 ;   ud2 ; trap: int_ovf
 ;   movaps %xmm0, %xmm4
 ;   subsd %xmm3, %xmm4
 ;   cvttsd2si %xmm4, %eax
 ;   cmpl $0, %eax
-;   jge 0x4a
-;   ud2 ; trap: int_ovf
+;   jl 0x53
 ;   addl $0x80000000, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
+;   ud2 ; trap: bad_toint
+;   ud2 ; trap: int_ovf
 
 function %f16(f64) -> i64 {
 block0(v0: f64):
@@ -529,24 +529,24 @@ block0(v0: f64):
 ;   movabsq $0x43e0000000000000, %r8
 ;   movq %r8, %xmm3
 ;   ucomisd %xmm3, %xmm0
-;   jae 0x36
-;   jnp 0x25
-;   ud2 ; trap: bad_toint
+;   jae 0x34
+;   jp 0x5c
 ;   cvttsd2si %xmm0, %rax
 ;   cmpq $0, %rax
-;   jge 0x5b
+;   jge 0x57
 ;   ud2 ; trap: int_ovf
 ;   movaps %xmm0, %xmm4
 ;   subsd %xmm3, %xmm4
 ;   cvttsd2si %xmm4, %rax
 ;   cmpq $0, %rax
-;   jge 0x4e
-;   ud2 ; trap: int_ovf
+;   jl 0x5e
 ;   movabsq $9223372036854775808, %r8
 ;   addq %r8, %rax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
+;   ud2 ; trap: bad_toint
+;   ud2 ; trap: int_ovf
 
 function %f17(f32) -> i32 {
 block0(v0: f32):
@@ -748,22 +748,22 @@ block0(v0: f32):
 ; block1: ; offset 0x4
 ;   cvttss2si %xmm0, %eax
 ;   cmpl $1, %eax
-;   jno 0x3f
+;   jno 0x39
 ;   ucomiss %xmm0, %xmm0
-;   jnp 0x1c
-;   ud2 ; trap: bad_toint
+;   jp 0x3e
 ;   movl $0xcf000000, %edx
 ;   movd %edx, %xmm3
 ;   ucomiss %xmm3, %xmm0
-;   jae 0x30
-;   ud2 ; trap: int_ovf
+;   jb 0x40
 ;   xorpd %xmm3, %xmm3
 ;   ucomiss %xmm0, %xmm3
-;   jae 0x3f
-;   ud2 ; trap: int_ovf
+;   jb 0x42
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
+;   ud2 ; trap: bad_toint
+;   ud2 ; trap: int_ovf
+;   ud2 ; trap: int_ovf
 
 function %f22(f32) -> i64 {
 block0(v0: f32):
@@ -787,22 +787,22 @@ block0(v0: f32):
 ; block1: ; offset 0x4
 ;   cvttss2si %xmm0, %rax
 ;   cmpq $1, %rax
-;   jno 0x41
+;   jno 0x3b
 ;   ucomiss %xmm0, %xmm0
-;   jnp 0x1e
-;   ud2 ; trap: bad_toint
+;   jp 0x40
 ;   movl $0xdf000000, %edx
 ;   movd %edx, %xmm3
 ;   ucomiss %xmm3, %xmm0
-;   jae 0x32
-;   ud2 ; trap: int_ovf
+;   jb 0x42
 ;   xorpd %xmm3, %xmm3
 ;   ucomiss %xmm0, %xmm3
-;   jae 0x41
-;   ud2 ; trap: int_ovf
+;   jb 0x44
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
+;   ud2 ; trap: bad_toint
+;   ud2 ; trap: int_ovf
+;   ud2 ; trap: int_ovf
 
 function %f23(f64) -> i32 {
 block0(v0: f64):
@@ -826,22 +826,22 @@ block0(v0: f64):
 ; block1: ; offset 0x4
 ;   cvttsd2si %xmm0, %eax
 ;   cmpl $1, %eax
-;   jno 0x48
+;   jno 0x42
 ;   ucomisd %xmm0, %xmm0
-;   jnp 0x1d
-;   ud2 ; trap: bad_toint
+;   jp 0x47
 ;   movabsq $13970166044105375744, %rdx
 ;   movq %rdx, %xmm3
 ;   ucomisd %xmm3, %xmm0
-;   ja 0x38
-;   ud2 ; trap: int_ovf
+;   jbe 0x49
 ;   xorpd %xmm3, %xmm3
 ;   ucomisd %xmm0, %xmm3
-;   jae 0x48
-;   ud2 ; trap: int_ovf
+;   jb 0x4b
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
+;   ud2 ; trap: bad_toint
+;   ud2 ; trap: int_ovf
+;   ud2 ; trap: int_ovf
 
 function %f24(f64) -> i64 {
 block0(v0: f64):
@@ -865,22 +865,22 @@ block0(v0: f64):
 ; block1: ; offset 0x4
 ;   cvttsd2si %xmm0, %rax
 ;   cmpq $1, %rax
-;   jno 0x4a
+;   jno 0x44
 ;   ucomisd %xmm0, %xmm0
-;   jnp 0x1f
-;   ud2 ; trap: bad_toint
+;   jp 0x49
 ;   movabsq $14114281232179134464, %rdx
 ;   movq %rdx, %xmm3
 ;   ucomisd %xmm3, %xmm0
-;   jae 0x3a
-;   ud2 ; trap: int_ovf
+;   jb 0x4b
 ;   xorpd %xmm3, %xmm3
 ;   ucomisd %xmm0, %xmm3
-;   jae 0x4a
-;   ud2 ; trap: int_ovf
+;   jb 0x4d
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
+;   ud2 ; trap: bad_toint
+;   ud2 ; trap: int_ovf
+;   ud2 ; trap: int_ovf
 
 function %f25(f32) -> i32 {
 block0(v0: f32):
@@ -1032,20 +1032,22 @@ block0(v0: f32x4):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   xorps   %xmm5, %xmm5, %xmm5
-;   movdqa  %xmm0, %xmm9
-;   maxps   %xmm9, %xmm5, %xmm9
-;   pcmpeqd %xmm5, %xmm5, %xmm5
-;   psrld   %xmm5, $1, %xmm5
-;   cvtdq2ps %xmm5, %xmm13
-;   cvttps2dq %xmm9, %xmm12
-;   subps   %xmm9, %xmm13, %xmm9
-;   cmpps   $2, %xmm13, %xmm9, %xmm13
-;   cvttps2dq %xmm9, %xmm0
-;   pxor    %xmm0, %xmm13, %xmm0
-;   pxor    %xmm6, %xmm6, %xmm6
-;   pmaxsd  %xmm0, %xmm6, %xmm0
-;   paddd   %xmm0, %xmm12, %xmm0
+;   uninit  %xmm6
+;   xorps   %xmm6, %xmm6, %xmm6
+;   movdqa  %xmm0, %xmm11
+;   maxps   %xmm11, %xmm6, %xmm11
+;   pcmpeqd %xmm6, %xmm6, %xmm6
+;   psrld   %xmm6, $1, %xmm6
+;   cvtdq2ps %xmm6, %xmm15
+;   cvttps2dq %xmm11, %xmm14
+;   subps   %xmm11, %xmm15, %xmm11
+;   cmpps   $2, %xmm15, %xmm11, %xmm15
+;   cvttps2dq %xmm11, %xmm0
+;   pxor    %xmm0, %xmm15, %xmm0
+;   uninit  %xmm9
+;   pxor    %xmm9, %xmm9, %xmm9
+;   pmaxsd  %xmm0, %xmm9, %xmm0
+;   paddd   %xmm0, %xmm14, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -1055,20 +1057,20 @@ block0(v0: f32x4):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   xorps %xmm5, %xmm5
-;   movdqa %xmm0, %xmm9
-;   maxps %xmm5, %xmm9
-;   pcmpeqd %xmm5, %xmm5
-;   psrld $1, %xmm5
-;   cvtdq2ps %xmm5, %xmm13
-;   cvttps2dq %xmm9, %xmm12
-;   subps %xmm13, %xmm9
-;   cmpleps %xmm9, %xmm13
-;   cvttps2dq %xmm9, %xmm0
-;   pxor %xmm13, %xmm0
-;   pxor %xmm6, %xmm6
-;   pmaxsd %xmm6, %xmm0
-;   paddd %xmm12, %xmm0
+;   xorps %xmm6, %xmm6
+;   movdqa %xmm0, %xmm11
+;   maxps %xmm6, %xmm11
+;   pcmpeqd %xmm6, %xmm6
+;   psrld $1, %xmm6
+;   cvtdq2ps %xmm6, %xmm15
+;   cvttps2dq %xmm11, %xmm14
+;   subps %xmm15, %xmm11
+;   cmpleps %xmm11, %xmm15
+;   cvttps2dq %xmm11, %xmm0
+;   pxor %xmm15, %xmm0
+;   pxor %xmm9, %xmm9
+;   pmaxsd %xmm9, %xmm0
+;   paddd %xmm14, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

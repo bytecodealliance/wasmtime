@@ -45,6 +45,10 @@ pub struct Tunables {
     /// Flag for the component module whether adapter modules have debug
     /// assertions baked into them.
     pub debug_adapter_modules: bool,
+
+    /// Whether or not lowerings for relaxed simd instructions are forced to
+    /// be deterministic.
+    pub relaxed_simd_deterministic: bool,
 }
 
 impl Default for Tunables {
@@ -91,6 +95,7 @@ impl Default for Tunables {
             guard_before_linear_memory: true,
             generate_address_map: true,
             debug_adapter_modules: false,
+            relaxed_simd_deterministic: false,
         }
     }
 }

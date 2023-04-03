@@ -6,7 +6,7 @@
 use anyhow::Result;
 use clap::{ErrorKind, Parser};
 use wasmtime_cli::commands::{
-    CompileCommand, ConfigCommand, RunCommand, SettingsCommand, WastCommand,
+    CompileCommand, ConfigCommand, ExploreCommand, RunCommand, SettingsCommand, WastCommand,
 };
 
 /// Wasmtime WebAssembly Runtime
@@ -35,6 +35,8 @@ enum Wasmtime {
     Config(ConfigCommand),
     /// Compiles a WebAssembly module.
     Compile(CompileCommand),
+    /// Explore the compilation of a WebAssembly module to native code.
+    Explore(ExploreCommand),
     /// Runs a WebAssembly module
     Run(RunCommand),
     /// Displays available Cranelift settings for a target.
@@ -49,6 +51,7 @@ impl Wasmtime {
         match self {
             Self::Config(c) => c.execute(),
             Self::Compile(c) => c.execute(),
+            Self::Explore(c) => c.execute(),
             Self::Run(c) => c.execute(),
             Self::Settings(c) => c.execute(),
             Self::Wast(c) => c.execute(),
