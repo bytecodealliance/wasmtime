@@ -218,9 +218,7 @@ impl Opcode {
             | Opcode::Smax
             | Opcode::AvgRound
             | Opcode::UaddSat
-            | Opcode::UsubSat
-            | Opcode::SaddSat
-            | Opcode::SsubSat => true,
+            | Opcode::SaddSat => true,
 
             Opcode::Fadd | Opcode::Fmul => true,
             // TODO: are these really commutative?
