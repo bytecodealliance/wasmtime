@@ -11,17 +11,13 @@
 //! e.g. manipulate heuristic optimizations, clobber undefined register bits
 //! etc.
 //!
-//! There are three ways to acquire a [ControlPlane]:
+//! There are two ways to acquire a [ControlPlane]:
 //! - [arbitrary] for the real deal
-//! - [noop] for the zero-sized type when `chaos` is disabled
-//! - [todo] for stubbing out code paths during development
-//!
-//! The reason both [noop] and [todo] exist is so that [todo] can easily
-//! be searched for and removed later.
+//! - [default] for an "empty" control plane which always returns default
+//!   values
 //!
 //! [arbitrary]: ControlPlane#method.arbitrary
-//! [noop]: ControlPlane::noop
-//! [todo]: ControlPlane::todo
+//! [default]: ControlPlane#method.default
 
 #[cfg(not(any(feature = "chaos", doc)))]
 mod zero_sized;

@@ -776,10 +776,7 @@ impl<I: VCodeInst> MachBuffer<I> {
 
     fn optimize_branches(&mut self, ctrl_plane: &mut ControlPlane) {
         #[cfg(feature = "chaos")]
-        if let Some(true) = ctrl_plane.get_decision() {
-            println!("");
-            println!("");
-            println!("branch optimizations skipped");
+        if ctrl_plane.get_decision() {
             return;
         }
 
