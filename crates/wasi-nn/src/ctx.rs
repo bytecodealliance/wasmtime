@@ -3,9 +3,10 @@
 use crate::api::{Backend, BackendError, BackendExecutionContext, BackendGraph};
 use crate::openvino::OpenvinoBackend;
 use crate::r#impl::UsageError;
-use crate::witx::types::{Graph, GraphEncoding, GraphExecutionContext};
+use crate::witx::types::{Graph, GraphEncoding, GraphExecutionContext, ExecutionTarget, GraphBuilderArray};
 use std::collections::HashMap;
 use std::hash::Hash;
+use dashmap::DashMap;
 use thiserror::Error;
 use wiggle::GuestError;
 
@@ -14,6 +15,13 @@ pub struct WasiNnCtx {
     pub(crate) backends: HashMap<u8, Box<dyn Backend>>,
     pub(crate) graphs: Table<Graph, Box<dyn BackendGraph>>,
     pub(crate) executions: Table<GraphExecutionContext, Box<dyn BackendExecutionContext>>,
+    pub(crate) model_registry: DashMap<String, RegisteredModel>
+}
+
+pub(crate) struct RegisteredModel {
+    pub(crate) model_bytes: Vec<Vec<u8>>,
+    pub(crate) encoding: GraphEncoding,
+    pub(crate) target: ExecutionTarget
 }
 
 impl WasiNnCtx {
@@ -30,6 +38,7 @@ impl WasiNnCtx {
             backends,
             graphs: Table::default(),
             executions: Table::default(),
+            model_registry: DashMap::new()
         })
     }
 }

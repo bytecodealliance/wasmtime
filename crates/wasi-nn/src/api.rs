@@ -14,6 +14,12 @@ pub(crate) trait Backend: Send + Sync {
         builders: &GraphBuilderArray<'_>,
         target: ExecutionTarget,
     ) -> Result<Box<dyn BackendGraph>, BackendError>;
+
+    fn load_from_bytes(
+        &mut self,
+        model_bytes: &Vec<Vec<u8>>,
+        target: ExecutionTarget,
+    ) -> Result<Box<dyn BackendGraph>, BackendError>;
 }
 
 /// A [BackendGraph] can create [BackendExecutionContext]s; this is the backing
