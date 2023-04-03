@@ -170,7 +170,10 @@ fn has_wasi_entry_point(module: &Module) -> bool {
         .and_then(|t| t.func().cloned())
         .and_then(|t| {
             let params: Vec<ValType> = t.params().collect();
-            Some(pointwise_eq(params, [ValType::I32, ValType::I32].to_vec()) && t.results().len() == 0)
+            Some(
+                pointwise_eq(params, [ValType::I32, ValType::I32].to_vec())
+                    && t.results().len() == 0,
+            )
         })
         .unwrap_or(false)
 }

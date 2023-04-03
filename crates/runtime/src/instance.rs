@@ -1026,9 +1026,10 @@ impl Instance {
                     // count as values move between globals, everything else is just
                     // copy-able bits.
                     match global.wasm_ty {
-                        WasmType::Ref(WasmRefType { heap_type: WasmHeapType::Extern, .. }) => {
-                            *(*to).as_externref_mut() = from.as_externref().clone()
-                        }
+                        WasmType::Ref(WasmRefType {
+                            heap_type: WasmHeapType::Extern,
+                            ..
+                        }) => *(*to).as_externref_mut() = from.as_externref().clone(),
                         _ => ptr::copy_nonoverlapping(from, to, 1),
                     }
                 }
@@ -1075,8 +1076,9 @@ impl Drop for Instance {
             match global.wasm_ty {
                 // For now only externref globals need to get destroyed
                 WasmType::Ref(WasmRefType {
-                    heap_type: WasmHeapType::Extern, ..
-                }) => {},
+                    heap_type: WasmHeapType::Extern,
+                    ..
+                }) => {}
                 _ => continue,
             }
             unsafe {

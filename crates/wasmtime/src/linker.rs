@@ -2,8 +2,8 @@ use crate::func::HostFunc;
 use crate::instance::InstancePre;
 use crate::store::StoreOpaque;
 use crate::{
-    AsContext, AsContextMut, Caller, Engine, Extern, ExternType, Func, FuncType, HeapType, ImportType,
-    Instance, IntoFunc, Module, RefType, StoreContextMut, Val, ValRaw, ValType,
+    AsContext, AsContextMut, Caller, Engine, Extern, ExternType, Func, FuncType, HeapType,
+    ImportType, Instance, IntoFunc, Module, RefType, StoreContextMut, Val, ValRaw, ValType,
 };
 use anyhow::{bail, Context, Result};
 use log::warn;
@@ -332,8 +332,14 @@ impl<T> Linker<T> {
                                     ValType::F32 => Val::F32(0.0_f32.to_bits()),
                                     ValType::F64 => Val::F64(0.0_f64.to_bits()),
                                     ValType::V128 => Val::V128(0),
-                                    ValType::Ref(RefType { heap_type: HeapType::Func, nullable: true }) => Val::FuncRef(None),
-                                    ValType::Ref(RefType { heap_type: HeapType::Extern, nullable: true }) => Val::ExternRef(None),
+                                    ValType::Ref(RefType {
+                                        heap_type: HeapType::Func,
+                                        nullable: true,
+                                    }) => Val::FuncRef(None),
+                                    ValType::Ref(RefType {
+                                        heap_type: HeapType::Extern,
+                                        nullable: true,
+                                    }) => Val::ExternRef(None),
                                     ValType::Ref(_) => unimplemented!(),
                                 };
                             }

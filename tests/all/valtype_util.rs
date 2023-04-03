@@ -1,4 +1,4 @@
-use wasmtime::{ValType, RefType, HeapType};
+use wasmtime::{HeapType, RefType, ValType};
 
 pub const EXTERN_REF: RefType = RefType {
     nullable: true,

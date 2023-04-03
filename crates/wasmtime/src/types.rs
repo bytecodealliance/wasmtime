@@ -75,9 +75,11 @@ impl ValType {
     pub fn is_subtype(&self, other: &ValType) -> bool {
         match (self, other) {
             (ValType::Ref(x), ValType::Ref(y)) => RefType::is_subtype(x, y),
-            (ValType::I32, ValType::I32) | (ValType::I64, ValType::I64) |
-            (ValType::F32, ValType::F32) | (ValType::F64, ValType::F64) |
-            (ValType::V128, ValType::V128) => true,
+            (ValType::I32, ValType::I32)
+            | (ValType::I64, ValType::I64)
+            | (ValType::F32, ValType::F32)
+            | (ValType::F64, ValType::F64)
+            | (ValType::V128, ValType::V128) => true,
             (_, _) => false,
         }
     }
@@ -152,7 +154,8 @@ impl RefType {
 
     /// Returns true if `self` is a sub-referencetype of `other`.
     pub fn is_subtype(&self, other: &RefType) -> bool {
-        (self.nullable == other.nullable || other.nullable) && HeapType::is_subtype(&self.heap_type, &other.heap_type)
+        (self.nullable == other.nullable || other.nullable)
+            && HeapType::is_subtype(&self.heap_type, &other.heap_type)
     }
 }
 
@@ -200,17 +203,17 @@ impl HeapType {
     /// performs nominal equality on `Index`.
     pub fn is_subtype(&self, other: &HeapType) -> bool {
         match (self, other) {
-            (HeapType::Extern, HeapType::Extern) |
-            (HeapType::Func, HeapType::Func) |
-            (HeapType::Index(_), HeapType::Func) => true,
+            (HeapType::Extern, HeapType::Extern)
+            | (HeapType::Func, HeapType::Func)
+            | (HeapType::Index(_), HeapType::Func) => true,
             (HeapType::Index(m), HeapType::Index(n)) => m == n, // TODO(dhil): This is not
-                                                                // necessarily complete as
-                                                                // [m] and [n] may be
-                                                                // nominally different,
-                                                                // but whatever they point
-                                                                // to may be structurally
-                                                                // the same.
-            (_,_) => false,
+            // necessarily complete as
+            // [m] and [n] may be
+            // nominally different,
+            // but whatever they point
+            // to may be structurally
+            // the same.
+            (_, _) => false,
         }
     }
 }

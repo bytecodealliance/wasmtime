@@ -31,10 +31,10 @@ mod store;
 mod table;
 mod threads;
 mod traps;
+mod valtype_util;
 mod wait_notify;
 mod wasi_testsuite;
 mod wast;
-mod valtype_util;
 
 /// A helper to compile a module in a new store with reference types enabled.
 pub(crate) fn ref_types_module(

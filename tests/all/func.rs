@@ -81,24 +81,54 @@ fn signatures_match() {
     let mut store = Store::<()>::default();
 
     let f = Func::wrap(&mut store, || {});
-    assert!(pointwise_eq(f.ty(&store).params().collect::<Vec<_>>(), [].to_vec()));
-    assert!(pointwise_eq(f.ty(&store).results().collect::<Vec<_>>(), [].to_vec()));
+    assert!(pointwise_eq(
+        f.ty(&store).params().collect::<Vec<_>>(),
+        [].to_vec()
+    ));
+    assert!(pointwise_eq(
+        f.ty(&store).results().collect::<Vec<_>>(),
+        [].to_vec()
+    ));
 
     let f = Func::wrap(&mut store, || -> i32 { loop {} });
-    assert!(pointwise_eq(f.ty(&store).params().collect::<Vec<_>>(), [].to_vec()));
-    assert!(pointwise_eq(f.ty(&store).results().collect::<Vec<_>>(), [ValType::I32].to_vec()));
+    assert!(pointwise_eq(
+        f.ty(&store).params().collect::<Vec<_>>(),
+        [].to_vec()
+    ));
+    assert!(pointwise_eq(
+        f.ty(&store).results().collect::<Vec<_>>(),
+        [ValType::I32].to_vec()
+    ));
 
     let f = Func::wrap(&mut store, || -> i64 { loop {} });
-    assert!(pointwise_eq(f.ty(&store).params().collect::<Vec<_>>(), [].to_vec()));
-    assert!(pointwise_eq(f.ty(&store).results().collect::<Vec<_>>(), [ValType::I64].to_vec()));
+    assert!(pointwise_eq(
+        f.ty(&store).params().collect::<Vec<_>>(),
+        [].to_vec()
+    ));
+    assert!(pointwise_eq(
+        f.ty(&store).results().collect::<Vec<_>>(),
+        [ValType::I64].to_vec()
+    ));
 
     let f = Func::wrap(&mut store, || -> f32 { loop {} });
-    assert!(pointwise_eq(f.ty(&store).params().collect::<Vec<_>>(), [].to_vec()));
-    assert!(pointwise_eq(f.ty(&store).results().collect::<Vec<_>>(), [ValType::F32].to_vec()));
+    assert!(pointwise_eq(
+        f.ty(&store).params().collect::<Vec<_>>(),
+        [].to_vec()
+    ));
+    assert!(pointwise_eq(
+        f.ty(&store).results().collect::<Vec<_>>(),
+        [ValType::F32].to_vec()
+    ));
 
     let f = Func::wrap(&mut store, || -> f64 { loop {} });
-    assert!(pointwise_eq(f.ty(&store).params().collect::<Vec<_>>(), [].to_vec()));
-    assert!(pointwise_eq(f.ty(&store).results().collect::<Vec<_>>(), [ValType::F64].to_vec()));
+    assert!(pointwise_eq(
+        f.ty(&store).params().collect::<Vec<_>>(),
+        [].to_vec()
+    ));
+    assert!(pointwise_eq(
+        f.ty(&store).results().collect::<Vec<_>>(),
+        [ValType::F64].to_vec()
+    ));
 
     let f = Func::wrap(
         &mut store,
@@ -106,8 +136,8 @@ fn signatures_match() {
             loop {}
         },
     );
-    assert!(
-        pointwise_eq(f.ty(&store).params().collect::<Vec<_>>(),
+    assert!(pointwise_eq(
+        f.ty(&store).params().collect::<Vec<_>>(),
         [
             ValType::F32,
             ValType::F64,
@@ -116,9 +146,13 @@ fn signatures_match() {
             ValType::I32,
             ValType::Ref(EXTERN_REF),
             ValType::Ref(FUNC_REF),
-        ].to_vec())
-    );
-    assert!(pointwise_eq(f.ty(&store).results().collect::<Vec<_>>(), [ValType::F64].to_vec()));
+        ]
+        .to_vec()
+    ));
+    assert!(pointwise_eq(
+        f.ty(&store).results().collect::<Vec<_>>(),
+        [ValType::F64].to_vec()
+    ));
 }
 
 #[test]
