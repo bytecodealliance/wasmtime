@@ -217,7 +217,11 @@ impl TestCase {
                 ALLOWED_LIBCALLS.to_vec(),
             )?;
             functions.push(func);
-            ctrl_planes.push(ControlPlane::arbitrary(gen.u)?)
+
+            #[cfg(not(feature = "chaos"))]
+            ctrl_planes.push(ControlPlane::default());
+            #[cfg(feature = "chaos")]
+            ctrl_planes.push(ControlPlane::arbitrary(gen.u)?);
         }
         // Now reverse the functions so that the main function is at the start.
         functions.reverse();

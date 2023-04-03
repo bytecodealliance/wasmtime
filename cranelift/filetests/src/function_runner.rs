@@ -50,6 +50,7 @@ struct DefinedFunction {
 /// "outside-of-function" functionality, see `cranelift_jit::backend::JITBackend`.
 ///
 /// ```
+/// # let ctrl_plane = &mut Default::default();
 /// use cranelift_filetests::TestFileCompiler;
 /// use cranelift_reader::parse_functions;
 /// use cranelift_codegen::data_value::DataValue;
@@ -58,8 +59,8 @@ struct DefinedFunction {
 /// let func = parse_functions(code).unwrap().into_iter().nth(0).unwrap();
 /// let mut compiler = TestFileCompiler::with_default_host_isa().unwrap();
 /// compiler.declare_function(&func).unwrap();
-/// compiler.define_function(func.clone()).unwrap();
-/// compiler.create_trampoline_for_function(&func).unwrap();
+/// compiler.define_function(func.clone(), ctrl_plane).unwrap();
+/// compiler.create_trampoline_for_function(&func, ctrl_plane).unwrap();
 /// let compiled = compiler.compile().unwrap();
 /// let trampoline = compiled.get_trampoline(&func).unwrap();
 ///
