@@ -324,7 +324,6 @@ block0(v0: i8):
     v3 = iconst.i8 3
     v4 = bor v3, v2
     return v4
-    ; check: v3 = iconst.i8 3
     ; check: v5 = bor v0, v3  ; v3 = 3
     ; check: return v5
 }
@@ -378,7 +377,6 @@ block0(v0: i64):
     v3 = iconst.i64 3
     v4 = bor v3, v2
     return v4
-    ; check: v3 = iconst.i64 3
     ; check: v5 = bor v0, v3  ; v3 = 3
     ; check: return v5
 }

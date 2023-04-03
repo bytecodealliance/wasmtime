@@ -527,13 +527,6 @@ impl InstructionData {
             _ => {}
         }
     }
-
-    /// Normalize commutative instructions by sorting arguments
-    #[inline]
-    pub(crate) fn normalize(mut self) -> Self {
-        self.normalize_in_place();
-        self
-    }
 }
 
 /// Information about call instructions.

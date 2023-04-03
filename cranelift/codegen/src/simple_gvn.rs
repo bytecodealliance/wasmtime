@@ -37,8 +37,8 @@ struct HashKey<'a, 'f: 'a> {
 }
 
 impl<'a, 'f: 'a> HashKey<'a, 'f> {
-    fn new(inst: InstructionData, ty: Type, pos: &'a RefCell<FuncCursor<'f>>) -> Self {
-        let inst = inst.normalize();
+    fn new(mut inst: InstructionData, ty: Type, pos: &'a RefCell<FuncCursor<'f>>) -> Self {
+        inst.normalize_in_place();
         Self { inst, ty, pos }
     }
 }
