@@ -3,7 +3,6 @@ use crate::isa::s390x::inst::*;
 use crate::isa::s390x::settings as s390x_settings;
 use crate::settings;
 use alloc::vec::Vec;
-use cranelift_control::ControlPlane;
 use smallvec::smallvec;
 
 #[cfg(test)]
@@ -13364,7 +13363,7 @@ fn test_s390x_binemit() {
     let mut isa_flag_builder = s390x_settings::builder();
     isa_flag_builder.enable("arch13").unwrap();
     let isa_flags = s390x_settings::Flags::new(&flags, &isa_flag_builder);
-    let ctrl_plane = &mut ControlPlane::default();
+    let ctrl_plane = &mut Default::default();
 
     let emit_info = EmitInfo::new(isa_flags);
     for (insn, expected_encoding, expected_printing) in insns {
@@ -13385,13 +13384,7 @@ fn test_s390x_binemit() {
         buffer.bind_label(label0, ctrl_plane);
 
         // Emit the instruction.
-        insn.emit(
-            &[],
-            &mut buffer,
-            &emit_info,
-            &mut Default::default(),
-            ctrl_plane,
-        );
+        insn.emit(&[], &mut buffer, &emit_info, &mut Default::default());
 
         // Label 1 after the instruction.
         let label1 = buffer.get_label();

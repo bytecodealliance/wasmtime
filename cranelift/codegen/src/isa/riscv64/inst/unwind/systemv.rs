@@ -73,7 +73,6 @@ mod tests {
     use crate::isa::{lookup, CallConv};
     use crate::settings::{builder, Flags};
     use crate::Context;
-    use cranelift_control::ControlPlane;
     use gimli::write::Address;
     use std::str::FromStr;
     use target_lexicon::triple;
@@ -91,7 +90,7 @@ mod tests {
         ));
 
         let code = context
-            .compile(&*isa, &mut ControlPlane::default())
+            .compile(&*isa, &mut Default::default())
             .expect("expected compilation");
 
         let fde = match code
@@ -133,7 +132,7 @@ mod tests {
         let mut context = Context::for_function(create_multi_return_function(CallConv::SystemV));
 
         let code = context
-            .compile(&*isa, &mut ControlPlane::default())
+            .compile(&*isa, &mut Default::default())
             .expect("expected compilation");
 
         let fde = match code

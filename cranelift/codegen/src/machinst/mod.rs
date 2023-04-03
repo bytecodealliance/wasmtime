@@ -264,7 +264,6 @@ pub trait MachInstEmit: MachInst {
         code: &mut MachBuffer<Self>,
         info: &Self::Info,
         state: &mut Self::State,
-        ctrl_plane: &mut ControlPlane,
     );
     /// Pretty-print the instruction.
     fn pretty_print_inst(&self, allocs: &[Allocation], state: &mut Self::State) -> String;
@@ -274,13 +273,18 @@ pub trait MachInstEmit: MachInst {
 /// emitting a function body.
 pub trait MachInstEmitState<I: VCodeInst>: Default + Clone + Debug {
     /// Create a new emission state given the ABI object.
-    fn new(abi: &Callee<I::ABIMachineSpec>) -> Self;
+    fn new(abi: &Callee<I::ABIMachineSpec>, ctrl_plane: ControlPlane) -> Self;
     /// Update the emission state before emitting an instruction that is a
     /// safepoint.
     fn pre_safepoint(&mut self, _stack_map: StackMap) {}
     /// Update the emission state to indicate instructions are associated with a
     /// particular RelSourceLoc.
     fn pre_sourceloc(&mut self, _srcloc: RelSourceLoc) {}
+    /// The emission state holds temporary ownership of a control plane. A
+    /// mutable reference to it may be used to:
+    /// - move out of it, e.g. using [std::mem::swap]
+    /// - access that control plane temporarily
+    fn get_ctrl_plane(&mut self) -> &mut ControlPlane;
 }
 
 /// The result of a `MachBackend::compile_function()` call. Contains machine

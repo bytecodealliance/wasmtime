@@ -2548,6 +2548,9 @@ pub struct EmitState {
     stack_map: Option<StackMap>,
     /// Current source location.
     cur_srcloc: RelSourceLoc,
+    /// Only used during fuzz-testing. Otherwise, it is a zero-sized struct and
+    /// optimized away at compiletime. See [cranelift_control].
+    ctrl_plane: ControlPlane,
 }
 
 /// Constant state used during emissions of a sequence of instructions.
@@ -2573,10 +2576,9 @@ impl MachInstEmit for Inst {
         sink: &mut MachBuffer<Inst>,
         info: &Self::Info,
         state: &mut Self::State,
-        ctrl_plane: &mut ControlPlane,
     ) {
         let mut allocs = AllocationConsumer::new(allocs);
-        emit::emit(self, &mut allocs, sink, info, state, ctrl_plane);
+        emit::emit(self, &mut allocs, sink, info, state);
     }
 
     fn pretty_print_inst(&self, allocs: &[Allocation], _: &mut Self::State) -> String {
@@ -2585,12 +2587,13 @@ impl MachInstEmit for Inst {
 }
 
 impl MachInstEmitState<Inst> for EmitState {
-    fn new(abi: &Callee<X64ABIMachineSpec>) -> Self {
+    fn new(abi: &Callee<X64ABIMachineSpec>, ctrl_plane: ControlPlane) -> Self {
         EmitState {
             virtual_sp_offset: 0,
             nominal_sp_to_fp: abi.frame_size() as i64,
             stack_map: None,
             cur_srcloc: Default::default(),
+            ctrl_plane,
         }
     }
 
@@ -2600,6 +2603,10 @@ impl MachInstEmitState<Inst> for EmitState {
 
     fn pre_sourceloc(&mut self, srcloc: RelSourceLoc) {
         self.cur_srcloc = srcloc;
+    }
+
+    fn get_ctrl_plane(&mut self) -> &mut ControlPlane {
+        &mut self.ctrl_plane
     }
 }
 

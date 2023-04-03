@@ -171,7 +171,6 @@ pub fn mem_emit(
     sink: &mut MachBuffer<Inst>,
     emit_info: &EmitInfo,
     state: &mut EmitState,
-    ctrl_plane: &mut ControlPlane,
 ) {
     let (mem_insts, mem) = mem_finalize(
         mem,
@@ -185,7 +184,7 @@ pub fn mem_emit(
         },
     );
     for inst in mem_insts.into_iter() {
-        inst.emit(&[], sink, emit_info, state, ctrl_plane);
+        inst.emit(&[], sink, emit_info, state);
     }
 
     if add_trap && mem.can_trap() {
@@ -243,7 +242,6 @@ pub fn mem_rs_emit(
     sink: &mut MachBuffer<Inst>,
     emit_info: &EmitInfo,
     state: &mut EmitState,
-    ctrl_plane: &mut ControlPlane,
 ) {
     let (mem_insts, mem) = mem_finalize(
         mem,
@@ -257,7 +255,7 @@ pub fn mem_rs_emit(
         },
     );
     for inst in mem_insts.into_iter() {
-        inst.emit(&[], sink, emit_info, state, ctrl_plane);
+        inst.emit(&[], sink, emit_info, state);
     }
 
     if add_trap && mem.can_trap() {
@@ -296,7 +294,6 @@ pub fn mem_imm8_emit(
     sink: &mut MachBuffer<Inst>,
     emit_info: &EmitInfo,
     state: &mut EmitState,
-    ctrl_plane: &mut ControlPlane,
 ) {
     let (mem_insts, mem) = mem_finalize(
         mem,
@@ -310,7 +307,7 @@ pub fn mem_imm8_emit(
         },
     );
     for inst in mem_insts.into_iter() {
-        inst.emit(&[], sink, emit_info, state, ctrl_plane);
+        inst.emit(&[], sink, emit_info, state);
     }
 
     if add_trap && mem.can_trap() {
@@ -345,7 +342,6 @@ pub fn mem_imm16_emit(
     sink: &mut MachBuffer<Inst>,
     emit_info: &EmitInfo,
     state: &mut EmitState,
-    ctrl_plane: &mut ControlPlane,
 ) {
     let (mem_insts, mem) = mem_finalize(
         mem,
@@ -359,7 +355,7 @@ pub fn mem_imm16_emit(
         },
     );
     for inst in mem_insts.into_iter() {
-        inst.emit(&[], sink, emit_info, state, ctrl_plane);
+        inst.emit(&[], sink, emit_info, state);
     }
 
     if add_trap && mem.can_trap() {
@@ -418,7 +414,6 @@ pub fn mem_vrx_emit(
     sink: &mut MachBuffer<Inst>,
     emit_info: &EmitInfo,
     state: &mut EmitState,
-    ctrl_plane: &mut ControlPlane,
 ) {
     let (mem_insts, mem) = mem_finalize(
         mem,
@@ -432,7 +427,7 @@ pub fn mem_vrx_emit(
         },
     );
     for inst in mem_insts.into_iter() {
-        inst.emit(&[], sink, emit_info, state, ctrl_plane);
+        inst.emit(&[], sink, emit_info, state);
     }
 
     if add_trap && mem.can_trap() {
@@ -1353,15 +1348,19 @@ pub struct EmitState {
     stack_map: Option<StackMap>,
     /// Current source-code location corresponding to instruction to be emitted.
     cur_srcloc: RelSourceLoc,
+    /// Only used during fuzz-testing. Otherwise, it is a zero-sized struct and
+    /// optimized away at compiletime. See [cranelift_control].
+    ctrl_plane: ControlPlane,
 }
 
 impl MachInstEmitState<Inst> for EmitState {
-    fn new(abi: &Callee<S390xMachineDeps>) -> Self {
+    fn new(abi: &Callee<S390xMachineDeps>, ctrl_plane: ControlPlane) -> Self {
         EmitState {
             virtual_sp_offset: 0,
             initial_sp_offset: abi.frame_size() as i64,
             stack_map: None,
             cur_srcloc: Default::default(),
+            ctrl_plane,
         }
     }
 
@@ -1371,6 +1370,10 @@ impl MachInstEmitState<Inst> for EmitState {
 
     fn pre_sourceloc(&mut self, srcloc: RelSourceLoc) {
         self.cur_srcloc = srcloc;
+    }
+
+    fn get_ctrl_plane(&mut self) -> &mut ControlPlane {
+        &mut self.ctrl_plane
     }
 }
 
@@ -1409,10 +1412,9 @@ impl MachInstEmit for Inst {
         sink: &mut MachBuffer<Inst>,
         emit_info: &Self::Info,
         state: &mut EmitState,
-        ctrl_plane: &mut ControlPlane,
     ) {
         let mut allocs = AllocationConsumer::new(allocs);
-        self.emit_with_alloc_consumer(&mut allocs, sink, emit_info, state, ctrl_plane)
+        self.emit_with_alloc_consumer(&mut allocs, sink, emit_info, state)
     }
 
     fn pretty_print_inst(&self, allocs: &[Allocation], state: &mut EmitState) -> String {
@@ -1428,7 +1430,6 @@ impl Inst {
         sink: &mut MachBuffer<Inst>,
         emit_info: &EmitInfo,
         state: &mut EmitState,
-        ctrl_plane: &mut ControlPlane,
     ) {
         // Verify that we can emit this Inst in the current ISA
         let matches_isa_flags = |iset_requirement: &InstructionSet| -> bool {
@@ -1498,7 +1499,7 @@ impl Inst {
                         ri: rn,
                         rm,
                     };
-                    inst.emit(&[], sink, emit_info, state, ctrl_plane);
+                    inst.emit(&[], sink, emit_info, state);
                 } else {
                     put(sink, &enc_rrf_ab(opcode, rd.to_reg(), rn, rm, 0));
                 }
@@ -1519,7 +1520,7 @@ impl Inst {
                         ri: rn,
                         imm,
                     };
-                    inst.emit(&[], sink, emit_info, state, ctrl_plane);
+                    inst.emit(&[], sink, emit_info, state);
                 } else {
                     let opcode = match alu_op {
                         ALUOp::Add32 => 0xecd8, // AHIK
@@ -1608,7 +1609,7 @@ impl Inst {
                 };
                 let rd = rd.to_reg();
                 mem_emit(
-                    rd, &mem, opcode_rx, opcode_rxy, None, true, sink, emit_info, state, ctrl_plane,
+                    rd, &mem, opcode_rx, opcode_rxy, None, true, sink, emit_info, state,
                 );
             }
             &Inst::AluRSImm16 {
@@ -2009,7 +2010,6 @@ impl Inst {
                 };
                 mem_emit(
                     rn, &mem, opcode_rx, opcode_rxy, opcode_ril, true, sink, emit_info, state,
-                    ctrl_plane,
                 );
             }
             &Inst::CmpRSImm16 { op, rn, imm } => {
@@ -2137,7 +2137,6 @@ impl Inst {
                     sink,
                     emit_info,
                     state,
-                    ctrl_plane,
                 );
             }
             &Inst::Loop { ref body, cond } => {
@@ -2147,7 +2146,7 @@ impl Inst {
                 let done_label = sink.get_label();
 
                 // Emit label at the start of the loop.
-                sink.bind_label(loop_label, ctrl_plane);
+                sink.bind_label(loop_label, &mut state.ctrl_plane);
 
                 for inst in (&body).into_iter() {
                     match &inst {
@@ -2157,12 +2156,9 @@ impl Inst {
                                 target: done_label,
                                 cond: *cond,
                             };
-                            inst.emit_with_alloc_consumer(
-                                allocs, sink, emit_info, state, ctrl_plane,
-                            );
+                            inst.emit_with_alloc_consumer(allocs, sink, emit_info, state);
                         }
-                        _ => inst
-                            .emit_with_alloc_consumer(allocs, sink, emit_info, state, ctrl_plane),
+                        _ => inst.emit_with_alloc_consumer(allocs, sink, emit_info, state),
                     };
                 }
 
@@ -2170,10 +2166,10 @@ impl Inst {
                     target: loop_label,
                     cond,
                 };
-                inst.emit(&[], sink, emit_info, state, ctrl_plane);
+                inst.emit(&[], sink, emit_info, state);
 
                 // Emit label at the end of the loop.
-                sink.bind_label(done_label, ctrl_plane);
+                sink.bind_label(done_label, &mut state.ctrl_plane);
             }
             &Inst::CondBreak { .. } => unreachable!(), // Only valid inside a Loop.
             &Inst::AtomicCas32 {
@@ -2202,7 +2198,7 @@ impl Inst {
 
                 let rd = rd.to_reg();
                 mem_rs_emit(
-                    rd, rn, &mem, opcode_rs, opcode_rsy, true, sink, emit_info, state, ctrl_plane,
+                    rd, rn, &mem, opcode_rs, opcode_rsy, true, sink, emit_info, state,
                 );
             }
             &Inst::Fence => {
@@ -2248,7 +2244,6 @@ impl Inst {
                 let rd = rd.to_reg();
                 mem_emit(
                     rd, &mem, opcode_rx, opcode_rxy, opcode_ril, true, sink, emit_info, state,
-                    ctrl_plane,
                 );
             }
 
@@ -2274,7 +2269,6 @@ impl Inst {
                 };
                 mem_emit(
                     rd, &mem, opcode_rx, opcode_rxy, opcode_ril, true, sink, emit_info, state,
-                    ctrl_plane,
                 );
             }
             &Inst::StoreImm8 { imm, ref mem } => {
@@ -2283,7 +2277,7 @@ impl Inst {
                 let opcode_si = 0x92; // MVI
                 let opcode_siy = 0xeb52; // MVIY
                 mem_imm8_emit(
-                    imm, &mem, opcode_si, opcode_siy, true, sink, emit_info, state, ctrl_plane,
+                    imm, &mem, opcode_si, opcode_siy, true, sink, emit_info, state,
                 );
             }
             &Inst::StoreImm16 { imm, ref mem }
@@ -2297,7 +2291,7 @@ impl Inst {
                     &Inst::StoreImm64SExt16 { .. } => 0xe548, // MVGHI
                     _ => unreachable!(),
                 };
-                mem_imm16_emit(imm, &mem, opcode, true, sink, emit_info, state, ctrl_plane);
+                mem_imm16_emit(imm, &mem, opcode, true, sink, emit_info, state);
             }
             &Inst::Mvc {
                 ref dst,
@@ -2326,7 +2320,6 @@ impl Inst {
                     sink,
                     emit_info,
                     state,
-                    ctrl_plane,
                 );
             }
             &Inst::StoreMultiple64 { rt, rt2, ref mem } => {
@@ -2343,7 +2336,6 @@ impl Inst {
                     sink,
                     emit_info,
                     state,
-                    ctrl_plane,
                 );
             }
 
@@ -2357,7 +2349,6 @@ impl Inst {
                 let rd = rd.to_reg();
                 mem_emit(
                     rd, &mem, opcode_rx, opcode_rxy, opcode_ril, false, sink, emit_info, state,
-                    ctrl_plane,
                 );
             }
 
@@ -2372,7 +2363,7 @@ impl Inst {
                 let rm: Reg = rm.into();
                 debug_assert!([regs::gpr(0), regs::gpr(14), regs::gpr(15)].contains(&rm));
                 let rd = allocs.next_writable(rd);
-                Inst::Mov64 { rd, rm }.emit(&[], sink, emit_info, state, ctrl_plane);
+                Inst::Mov64 { rd, rm }.emit(&[], sink, emit_info, state);
             }
             &Inst::Mov32 { rd, rm } => {
                 let rd = allocs.next_writable(rd);
@@ -2526,7 +2517,7 @@ impl Inst {
                     rd,
                     mem: MemArg::reg(reg, MemFlags::trusted()),
                 };
-                inst.emit(&[], sink, emit_info, state, ctrl_plane);
+                inst.emit(&[], sink, emit_info, state);
             }
 
             &Inst::FpuMove32 { rd, rn } => {
@@ -2602,7 +2593,7 @@ impl Inst {
                     mem: MemArg::reg(reg, MemFlags::trusted()),
                     lane_imm: 0,
                 };
-                inst.emit(&[], sink, emit_info, state, ctrl_plane);
+                inst.emit(&[], sink, emit_info, state);
             }
             &Inst::LoadFpuConst64 { rd, const_data } => {
                 let rd = allocs.next_writable(rd);
@@ -2617,7 +2608,7 @@ impl Inst {
                     mem: MemArg::reg(reg, MemFlags::trusted()),
                     lane_imm: 0,
                 };
-                inst.emit(&[], sink, emit_info, state, ctrl_plane);
+                inst.emit(&[], sink, emit_info, state);
             }
             &Inst::FpuRR { fpu_op, rd, rn } => {
                 let rd = allocs.next_writable(rd);
@@ -3084,7 +3075,7 @@ impl Inst {
                     rn,
                     rm,
                 };
-                inst.emit(&[], sink, emit_info, state, ctrl_plane);
+                inst.emit(&[], sink, emit_info, state);
             }
 
             &Inst::VecLoad { rd, ref mem }
@@ -3109,17 +3100,7 @@ impl Inst {
                     &Inst::VecLoadElt64Rev { .. } => (0xe607, 3),  // VLERG
                     _ => unreachable!(),
                 };
-                mem_vrx_emit(
-                    rd.to_reg(),
-                    &mem,
-                    opcode,
-                    m3,
-                    true,
-                    sink,
-                    emit_info,
-                    state,
-                    ctrl_plane,
-                );
+                mem_vrx_emit(rd.to_reg(), &mem, opcode, m3, true, sink, emit_info, state);
             }
             &Inst::VecStore { rd, ref mem }
             | &Inst::VecStoreRev { rd, ref mem }
@@ -3143,9 +3124,7 @@ impl Inst {
                     &Inst::VecStoreElt64Rev { .. } => (0xe60f, 3),  // VSTERG
                     _ => unreachable!(),
                 };
-                mem_vrx_emit(
-                    rd, &mem, opcode, m3, true, sink, emit_info, state, ctrl_plane,
-                );
+                mem_vrx_emit(rd, &mem, opcode, m3, true, sink, emit_info, state);
             }
             &Inst::VecLoadReplicate { size, rd, ref mem }
             | &Inst::VecLoadReplicateRev { size, rd, ref mem } => {
@@ -3162,17 +3141,7 @@ impl Inst {
                     (&Inst::VecLoadReplicateRev { .. }, 64) => (0xe605, 3), // VLREPBRG
                     _ => unreachable!(),
                 };
-                mem_vrx_emit(
-                    rd.to_reg(),
-                    &mem,
-                    opcode,
-                    m3,
-                    true,
-                    sink,
-                    emit_info,
-                    state,
-                    ctrl_plane,
-                );
+                mem_vrx_emit(rd.to_reg(), &mem, opcode, m3, true, sink, emit_info, state);
             }
 
             &Inst::VecMov { rd, rn } => {
@@ -3214,7 +3183,7 @@ impl Inst {
                     rd,
                     mem: MemArg::reg(reg, MemFlags::trusted()),
                 };
-                inst.emit(&[], sink, emit_info, state, ctrl_plane);
+                inst.emit(&[], sink, emit_info, state);
             }
             &Inst::VecLoadConstReplicate {
                 size,
@@ -3234,7 +3203,7 @@ impl Inst {
                     rd,
                     mem: MemArg::reg(reg, MemFlags::trusted()),
                 };
-                inst.emit(&[], sink, emit_info, state, ctrl_plane);
+                inst.emit(&[], sink, emit_info, state);
             }
             &Inst::VecImmByteMask { rd, mask } => {
                 let rd = allocs.next_writable(rd);
@@ -3311,7 +3280,6 @@ impl Inst {
                     sink,
                     emit_info,
                     state,
-                    ctrl_plane,
                 );
             }
             &Inst::VecLoadLaneUndef {
@@ -3344,7 +3312,6 @@ impl Inst {
                 if lane_imm == 0 && is_fpr(rd) && opcode_rx.is_some() {
                     mem_emit(
                         rd, &mem, opcode_rx, opcode_rxy, None, true, sink, emit_info, state,
-                        ctrl_plane,
                     );
                 } else {
                     mem_vrx_emit(
@@ -3356,7 +3323,6 @@ impl Inst {
                         sink,
                         emit_info,
                         state,
-                        ctrl_plane,
                     );
                 }
             }
@@ -3389,7 +3355,6 @@ impl Inst {
                 if lane_imm == 0 && is_fpr(rd) && opcode_rx.is_some() {
                     mem_emit(
                         rd, &mem, opcode_rx, opcode_rxy, None, true, sink, emit_info, state,
-                        ctrl_plane,
                     );
                 } else {
                     mem_vrx_emit(
@@ -3401,7 +3366,6 @@ impl Inst {
                         sink,
                         emit_info,
                         state,
-                        ctrl_plane,
                     );
                 }
             }
@@ -3668,7 +3632,7 @@ impl Inst {
                         target: table_label,
                     },
                 };
-                inst.emit(&[], sink, emit_info, state, ctrl_plane);
+                inst.emit(&[], sink, emit_info, state);
 
                 // Set temp to target address by adding the value of the jump table entry.
                 let inst = Inst::AluRX {
@@ -3677,7 +3641,7 @@ impl Inst {
                     ri: rtmp.to_reg(),
                     mem: MemArg::reg_plus_reg(rtmp.to_reg(), ridx, MemFlags::trusted()),
                 };
-                inst.emit(&[], sink, emit_info, state, ctrl_plane);
+                inst.emit(&[], sink, emit_info, state);
 
                 // Branch to computed address. (`targets` here is only used for successor queries
                 // and is not needed for emission.)
@@ -3685,13 +3649,13 @@ impl Inst {
                     rn: rtmp.to_reg(),
                     targets: vec![],
                 };
-                inst.emit(&[], sink, emit_info, state, ctrl_plane);
+                inst.emit(&[], sink, emit_info, state);
 
                 // Emit jump table (table of 32-bit offsets).
                 // The first entry is the default target, which is not emitted
                 // into the jump table, so we skip it here.  It is only in the
                 // list so MachTerminator will see the potential target.
-                sink.bind_label(table_label, ctrl_plane);
+                sink.bind_label(table_label, &mut state.ctrl_plane);
                 let jt_off = sink.cur_offset();
                 for &target in targets.iter().skip(1) {
                     let word_off = sink.cur_offset();

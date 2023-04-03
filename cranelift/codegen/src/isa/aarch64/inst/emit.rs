@@ -639,15 +639,19 @@ pub struct EmitState {
     stack_map: Option<StackMap>,
     /// Current source-code location corresponding to instruction to be emitted.
     cur_srcloc: RelSourceLoc,
+    /// Only used during fuzz-testing. Otherwise, it is a zero-sized struct and
+    /// optimized away at compiletime. See [cranelift_control].
+    ctrl_plane: ControlPlane,
 }
 
 impl MachInstEmitState<Inst> for EmitState {
-    fn new(abi: &Callee<AArch64MachineDeps>) -> Self {
+    fn new(abi: &Callee<AArch64MachineDeps>, ctrl_plane: ControlPlane) -> Self {
         EmitState {
             virtual_sp_offset: 0,
             nominal_sp_to_fp: abi.frame_size() as i64,
             stack_map: None,
             cur_srcloc: Default::default(),
+            ctrl_plane,
         }
     }
 
@@ -657,6 +661,10 @@ impl MachInstEmitState<Inst> for EmitState {
 
     fn pre_sourceloc(&mut self, srcloc: RelSourceLoc) {
         self.cur_srcloc = srcloc;
+    }
+
+    fn get_ctrl_plane(&mut self) -> &mut ControlPlane {
+        &mut self.ctrl_plane
     }
 }
 
@@ -694,7 +702,6 @@ impl MachInstEmit for Inst {
         sink: &mut MachBuffer<Inst>,
         emit_info: &Self::Info,
         state: &mut EmitState,
-        ctrl_plane: &mut ControlPlane,
     ) {
         let mut allocs = AllocationConsumer::new(allocs);
 
@@ -956,7 +963,7 @@ impl MachInstEmit for Inst {
                 let (mem_insts, mem) = mem_finalize(Some(sink), &mem, state);
 
                 for inst in mem_insts.into_iter() {
-                    inst.emit(&[], sink, emit_info, state, ctrl_plane);
+                    inst.emit(&[], sink, emit_info, state);
                 }
 
                 // ldst encoding helpers take Reg, not Writable<Reg>.
@@ -1101,7 +1108,7 @@ impl MachInstEmit for Inst {
                 let (mem_insts, mem) = mem_finalize(Some(sink), &mem, state);
 
                 for inst in mem_insts.into_iter() {
-                    inst.emit(&[], sink, emit_info, state, ctrl_plane);
+                    inst.emit(&[], sink, emit_info, state);
                 }
 
                 let (op, bits) = match self {
@@ -1393,7 +1400,7 @@ impl MachInstEmit for Inst {
                 assert!(rm.class() == RegClass::Int);
                 assert!(rd.to_reg().class() == rm.class());
                 let size = OperandSize::Size64;
-                Inst::Mov { size, rd, rm }.emit(&[], sink, emit_info, state, ctrl_plane);
+                Inst::Mov { size, rd, rm }.emit(&[], sink, emit_info, state);
             }
             &Inst::MovToPReg { rd, rm } => {
                 allocs.next_fixed_nonallocatable(rd);
@@ -1409,7 +1416,7 @@ impl MachInstEmit for Inst {
                 assert!(rd.to_reg().class() == RegClass::Int);
                 assert!(rm.class() == rd.to_reg().class());
                 let size = OperandSize::Size64;
-                Inst::Mov { size, rd, rm }.emit(&[], sink, emit_info, state, ctrl_plane);
+                Inst::Mov { size, rd, rm }.emit(&[], sink, emit_info, state);
             }
             &Inst::MovWide { op, rd, imm, size } => {
                 let rd = allocs.next_writable(rd);
@@ -1513,7 +1520,7 @@ impl MachInstEmit for Inst {
                 let again_label = sink.get_label();
 
                 // again:
-                sink.bind_label(again_label, ctrl_plane);
+                sink.bind_label(again_label, &mut state.ctrl_plane);
 
                 let srcloc = state.cur_srcloc();
                 if !srcloc.is_default() && !flags.notrap() {
@@ -1541,7 +1548,7 @@ impl MachInstEmit for Inst {
                         from_bits,
                         to_bits: size.bits(),
                     }
-                    .emit(&[], sink, emit_info, state, ctrl_plane);
+                    .emit(&[], sink, emit_info, state);
                 }
 
                 match op {
@@ -1557,7 +1564,7 @@ impl MachInstEmit for Inst {
                             rn: x27,
                             rm: x26,
                         }
-                        .emit(&[], sink, emit_info, state, ctrl_plane);
+                        .emit(&[], sink, emit_info, state);
 
                         Inst::AluRRR {
                             alu_op: ALUOp::OrrNot,
@@ -1566,7 +1573,7 @@ impl MachInstEmit for Inst {
                             rn: xzr,
                             rm: x28,
                         }
-                        .emit(&[], sink, emit_info, state, ctrl_plane);
+                        .emit(&[], sink, emit_info, state);
                     }
                     AtomicRMWLoopOp::Umin
                     | AtomicRMWLoopOp::Umax
@@ -1593,13 +1600,7 @@ impl MachInstEmit for Inst {
                                 rm: x26,
                                 extendop,
                             }
-                            .emit(
-                                &[],
-                                sink,
-                                emit_info,
-                                state,
-                                ctrl_plane,
-                            );
+                            .emit(&[], sink, emit_info, state);
                         } else {
                             Inst::AluRRR {
                                 alu_op: ALUOp::SubS,
@@ -1608,13 +1609,7 @@ impl MachInstEmit for Inst {
                                 rn: x27,
                                 rm: x26,
                             }
-                            .emit(
-                                &[],
-                                sink,
-                                emit_info,
-                                state,
-                                ctrl_plane,
-                            );
+                            .emit(&[], sink, emit_info, state);
                         }
 
                         Inst::CSel {
@@ -1623,7 +1618,7 @@ impl MachInstEmit for Inst {
                             rn: x27,
                             rm: x26,
                         }
-                        .emit(&[], sink, emit_info, state, ctrl_plane);
+                        .emit(&[], sink, emit_info, state);
                     }
                     _ => {
                         // add/sub/and/orr/eor x28, x27, x26
@@ -1648,7 +1643,7 @@ impl MachInstEmit for Inst {
                             rn: x27,
                             rm: x26,
                         }
-                        .emit(&[], sink, emit_info, state, ctrl_plane);
+                        .emit(&[], sink, emit_info, state);
                     }
                 }
 
@@ -1727,7 +1722,7 @@ impl MachInstEmit for Inst {
                 let out_label = sink.get_label();
 
                 // again:
-                sink.bind_label(again_label, ctrl_plane);
+                sink.bind_label(again_label, &mut state.ctrl_plane);
 
                 let srcloc = state.cur_srcloc();
                 if !srcloc.is_default() && !flags.notrap() {
@@ -1776,7 +1771,7 @@ impl MachInstEmit for Inst {
                 sink.use_label_at_offset(br_again_offset, again_label, LabelUse::Branch19);
 
                 // out:
-                sink.bind_label(out_label, ctrl_plane);
+                sink.bind_label(out_label, &mut state.ctrl_plane);
             }
             &Inst::LoadAcquire {
                 access_ty,
@@ -2982,13 +2977,13 @@ impl MachInstEmit for Inst {
                 sink.put4(enc_jump26(0b000101, 0 /* will be fixed up later */));
 
                 // else:
-                sink.bind_label(else_label, ctrl_plane);
+                sink.bind_label(else_label, &mut state.ctrl_plane);
 
                 // mov rd, rn
                 sink.put4(enc_vecmov(/* 16b = */ true, rd, rn));
 
                 // out:
-                sink.bind_label(out_label, ctrl_plane);
+                sink.bind_label(out_label, &mut state.ctrl_plane);
             }
             &Inst::MovToNZCV { rn } => {
                 let rn = allocs.next(rn);
@@ -3020,7 +3015,7 @@ impl MachInstEmit for Inst {
                     rn,
                     imml,
                 }
-                .emit(&[], sink, emit_info, state, ctrl_plane);
+                .emit(&[], sink, emit_info, state);
             }
             &Inst::Extend {
                 rd,
@@ -3036,7 +3031,7 @@ impl MachInstEmit for Inst {
                     rd,
                     rm: rn,
                 };
-                mov.emit(&[], sink, emit_info, state, ctrl_plane);
+                mov.emit(&[], sink, emit_info, state);
             }
             &Inst::Extend {
                 rd,
@@ -3079,7 +3074,7 @@ impl MachInstEmit for Inst {
 
                 if is_hint {
                     sink.put4(0xd50323bf | key << 6); // autiasp / autibsp
-                    Inst::Ret { rets: vec![] }.emit(&[], sink, emit_info, state, ctrl_plane);
+                    Inst::Ret { rets: vec![] }.emit(&[], sink, emit_info, state);
                 } else {
                     sink.put4(0xd65f0bff | key << 10); // retaa / retab
                 }
@@ -3214,13 +3209,13 @@ impl MachInstEmit for Inst {
                     rn: zero_reg(),
                     rm: ridx,
                 };
-                inst.emit(&[], sink, emit_info, state, ctrl_plane);
+                inst.emit(&[], sink, emit_info, state);
                 // Prevent any data value speculation.
-                Inst::Csdb.emit(&[], sink, emit_info, state, ctrl_plane);
+                Inst::Csdb.emit(&[], sink, emit_info, state);
 
                 // Load address of jump table
                 let inst = Inst::Adr { rd: rtmp1, off: 16 };
-                inst.emit(&[], sink, emit_info, state, ctrl_plane);
+                inst.emit(&[], sink, emit_info, state);
                 // Load value out of jump table
                 let inst = Inst::SLoad32 {
                     rd: rtmp2,
@@ -3232,7 +3227,7 @@ impl MachInstEmit for Inst {
                     ),
                     flags: MemFlags::trusted(),
                 };
-                inst.emit(&[], sink, emit_info, state, ctrl_plane);
+                inst.emit(&[], sink, emit_info, state);
                 // Add base of jump table to jump-table-sourced block offset
                 let inst = Inst::AluRRR {
                     alu_op: ALUOp::Add,
@@ -3241,14 +3236,14 @@ impl MachInstEmit for Inst {
                     rn: rtmp1.to_reg(),
                     rm: rtmp2.to_reg(),
                 };
-                inst.emit(&[], sink, emit_info, state, ctrl_plane);
+                inst.emit(&[], sink, emit_info, state);
                 // Branch to computed address. (`targets` here is only used for successor queries
                 // and is not needed for emission.)
                 let inst = Inst::IndirectBr {
                     rn: rtmp1.to_reg(),
                     targets: vec![],
                 };
-                inst.emit(&[], sink, emit_info, state, ctrl_plane);
+                inst.emit(&[], sink, emit_info, state);
                 // Emit jump table (table of 32-bit offsets).
                 let jt_off = sink.cur_offset();
                 for &target in info.targets.iter() {
@@ -3288,7 +3283,7 @@ impl MachInstEmit for Inst {
                     // adrp rd, symbol
                     sink.add_reloc(Reloc::Aarch64AdrGotPage21, name, 0);
                     let inst = Inst::Adrp { rd, off: 0 };
-                    inst.emit(&[], sink, emit_info, state, ctrl_plane);
+                    inst.emit(&[], sink, emit_info, state);
 
                     // ldr rd, [rd, :got_lo12:X]
                     sink.add_reloc(Reloc::Aarch64Ld64GotLo12Nc, name, 0);
@@ -3297,7 +3292,7 @@ impl MachInstEmit for Inst {
                         mem: AMode::reg(rd.to_reg()),
                         flags: MemFlags::trusted(),
                     };
-                    inst.emit(&[], sink, emit_info, state, ctrl_plane);
+                    inst.emit(&[], sink, emit_info, state);
                 } else {
                     // With absolute offsets we set up a load from a preallocated space, and then jump
                     // over it.
@@ -3314,11 +3309,11 @@ impl MachInstEmit for Inst {
                         },
                         flags: MemFlags::trusted(),
                     };
-                    inst.emit(&[], sink, emit_info, state, ctrl_plane);
+                    inst.emit(&[], sink, emit_info, state);
                     let inst = Inst::Jump {
                         dest: BranchTarget::ResolvedOffset(12),
                     };
-                    inst.emit(&[], sink, emit_info, state, ctrl_plane);
+                    inst.emit(&[], sink, emit_info, state);
                     sink.add_reloc(Reloc::Abs8, name, offset);
                     sink.put8(0);
                 }
@@ -3328,7 +3323,7 @@ impl MachInstEmit for Inst {
                 let mem = mem.with_allocs(&mut allocs);
                 let (mem_insts, mem) = mem_finalize(Some(sink), &mem, state);
                 for inst in mem_insts.into_iter() {
-                    inst.emit(&[], sink, emit_info, state, ctrl_plane);
+                    inst.emit(&[], sink, emit_info, state);
                 }
 
                 let (reg, index_reg, offset) = match mem {
@@ -3363,7 +3358,7 @@ impl MachInstEmit for Inst {
                         extendop,
                     };
 
-                    add.emit(&[], sink, emit_info, state, ctrl_plane);
+                    add.emit(&[], sink, emit_info, state);
                 } else if offset == 0 {
                     if reg != rd.to_reg() {
                         let mov = Inst::Mov {
@@ -3372,7 +3367,7 @@ impl MachInstEmit for Inst {
                             rm: reg,
                         };
 
-                        mov.emit(&[], sink, emit_info, state, ctrl_plane);
+                        mov.emit(&[], sink, emit_info, state);
                     }
                 } else if let Some(imm12) = Imm12::maybe_from_u64(abs_offset) {
                     let add = Inst::AluRRImm12 {
@@ -3382,7 +3377,7 @@ impl MachInstEmit for Inst {
                         rn: reg,
                         imm12,
                     };
-                    add.emit(&[], sink, emit_info, state, ctrl_plane);
+                    add.emit(&[], sink, emit_info, state);
                 } else {
                     // Use `tmp2` here: `reg` may be `spilltmp` if the `AMode` on this instruction
                     // was initially an `SPOffset`. Assert that `tmp2` is truly free to use. Note
@@ -3393,7 +3388,7 @@ impl MachInstEmit for Inst {
                     debug_assert!(reg != tmp2_reg());
                     let tmp = writable_tmp2_reg();
                     for insn in Inst::load_constant(tmp, abs_offset, &mut |_| tmp).into_iter() {
-                        insn.emit(&[], sink, emit_info, state, ctrl_plane);
+                        insn.emit(&[], sink, emit_info, state);
                     }
                     let add = Inst::AluRRR {
                         alu_op,
@@ -3402,7 +3397,7 @@ impl MachInstEmit for Inst {
                         rn: reg,
                         rm: tmp.to_reg(),
                     };
-                    add.emit(&[], sink, emit_info, state, ctrl_plane);
+                    add.emit(&[], sink, emit_info, state);
                 }
             }
             &Inst::Pacisp { key } => {
@@ -3438,9 +3433,9 @@ impl MachInstEmit for Inst {
                     let jmp = Inst::Jump {
                         dest: BranchTarget::Label(jump_around_label),
                     };
-                    jmp.emit(&[], sink, emit_info, state, ctrl_plane);
-                    sink.emit_island(needed_space + 4, ctrl_plane);
-                    sink.bind_label(jump_around_label, ctrl_plane);
+                    jmp.emit(&[], sink, emit_info, state);
+                    sink.emit_island(needed_space + 4, &mut state.ctrl_plane);
+                    sink.bind_label(jump_around_label, &mut state.ctrl_plane);
                 }
             }
 
@@ -3454,7 +3449,7 @@ impl MachInstEmit for Inst {
                 // adrp x0, <label>
                 sink.add_reloc(Reloc::Aarch64TlsGdAdrPage21, symbol, 0);
                 let inst = Inst::Adrp { rd, off: 0 };
-                inst.emit(&[], sink, emit_info, state, ctrl_plane);
+                inst.emit(&[], sink, emit_info, state);
 
                 // add x0, x0, <label>
                 sink.add_reloc(Reloc::Aarch64TlsGdAddLo12Nc, symbol, 0);
@@ -3554,7 +3549,7 @@ impl MachInstEmit for Inst {
                 // out at this time.
 
                 let loop_start = sink.get_label();
-                sink.bind_label(loop_start, ctrl_plane);
+                sink.bind_label(loop_start, &mut state.ctrl_plane);
 
                 Inst::AluRRImm12 {
                     alu_op: ALUOp::Sub,
@@ -3563,7 +3558,7 @@ impl MachInstEmit for Inst {
                     rn: start.to_reg(),
                     imm12: step,
                 }
-                .emit(&[], sink, emit_info, state, ctrl_plane);
+                .emit(&[], sink, emit_info, state);
                 Inst::Store32 {
                     rd: regs::zero_reg(),
                     mem: AMode::RegReg {
@@ -3572,7 +3567,7 @@ impl MachInstEmit for Inst {
                     },
                     flags: MemFlags::trusted(),
                 }
-                .emit(&[], sink, emit_info, state, ctrl_plane);
+                .emit(&[], sink, emit_info, state);
                 Inst::AluRRR {
                     alu_op: ALUOp::AddS,
                     size: OperandSize::Size64,
@@ -3580,7 +3575,7 @@ impl MachInstEmit for Inst {
                     rn: start.to_reg(),
                     rm: end,
                 }
-                .emit(&[], sink, emit_info, state, ctrl_plane);
+                .emit(&[], sink, emit_info, state);
 
                 let loop_end = sink.get_label();
                 Inst::CondBr {
@@ -3588,8 +3583,8 @@ impl MachInstEmit for Inst {
                     not_taken: BranchTarget::Label(loop_end),
                     kind: CondBrKind::Cond(Cond::Gt),
                 }
-                .emit(&[], sink, emit_info, state, ctrl_plane);
-                sink.bind_label(loop_end, ctrl_plane);
+                .emit(&[], sink, emit_info, state);
+                sink.bind_label(loop_end, &mut state.ctrl_plane);
             }
         }
 

@@ -774,9 +774,9 @@ impl<I: VCodeInst> MachBuffer<I> {
         //   fixup record referring to that last branch is removed.
     }
 
-    fn optimize_branches(&mut self, ctrl_plane: &mut ControlPlane) {
+    fn optimize_branches(&mut self, _ctrl_plane: &mut ControlPlane) {
         #[cfg(feature = "chaos")]
-        if ctrl_plane.get_decision() {
+        if _ctrl_plane.get_decision() {
             return;
         }
 
@@ -1794,7 +1794,7 @@ mod test {
     use crate::ir::UserExternalNameRef;
     use crate::isa::aarch64::inst::xreg;
     use crate::isa::aarch64::inst::{BranchTarget, CondBrKind, EmitInfo, Inst};
-    use crate::machinst::MachInstEmit;
+    use crate::machinst::{MachInstEmit, MachInstEmitState};
     use crate::settings;
     use std::default::Default;
     use std::vec::Vec;
@@ -1810,15 +1810,14 @@ mod test {
     fn test_elide_jump_to_next() {
         let info = EmitInfo::new(settings::Flags::new(settings::builder()));
         let mut buf = MachBuffer::new();
-        let mut state = Default::default();
-        let mut ctrl_plane = &mut ControlPlane::default();
+        let mut state = <Inst as MachInstEmit>::State::default();
 
         buf.reserve_labels_for_blocks(2);
-        buf.bind_label(label(0), ctrl_plane);
+        buf.bind_label(label(0), state.get_ctrl_plane());
         let inst = Inst::Jump { dest: target(1) };
-        inst.emit(&[], &mut buf, &info, &mut state, ctrl_plane);
-        buf.bind_label(label(1), ctrl_plane);
-        let buf = buf.finish(ctrl_plane);
+        inst.emit(&[], &mut buf, &info, &mut state);
+        buf.bind_label(label(1), state.get_ctrl_plane());
+        let buf = buf.finish(state.get_ctrl_plane());
         assert_eq!(0, buf.total_size());
     }
 
@@ -1826,30 +1825,29 @@ mod test {
     fn test_elide_trivial_jump_blocks() {
         let info = EmitInfo::new(settings::Flags::new(settings::builder()));
         let mut buf = MachBuffer::new();
-        let mut state = Default::default();
-        let ctrl_plane = &mut ControlPlane::default();
+        let mut state = <Inst as MachInstEmit>::State::default();
 
         buf.reserve_labels_for_blocks(4);
 
-        buf.bind_label(label(0), ctrl_plane);
+        buf.bind_label(label(0), state.get_ctrl_plane());
         let inst = Inst::CondBr {
             kind: CondBrKind::NotZero(xreg(0)),
             taken: target(1),
             not_taken: target(2),
         };
-        inst.emit(&[], &mut buf, &info, &mut state, ctrl_plane);
+        inst.emit(&[], &mut buf, &info, &mut state);
 
-        buf.bind_label(label(1), ctrl_plane);
+        buf.bind_label(label(1), state.get_ctrl_plane());
         let inst = Inst::Jump { dest: target(3) };
-        inst.emit(&[], &mut buf, &info, &mut state, ctrl_plane);
+        inst.emit(&[], &mut buf, &info, &mut state);
 
-        buf.bind_label(label(2), ctrl_plane);
+        buf.bind_label(label(2), state.get_ctrl_plane());
         let inst = Inst::Jump { dest: target(3) };
-        inst.emit(&[], &mut buf, &info, &mut state, ctrl_plane);
+        inst.emit(&[], &mut buf, &info, &mut state);
 
-        buf.bind_label(label(3), ctrl_plane);
+        buf.bind_label(label(3), state.get_ctrl_plane());
 
-        let buf = buf.finish(ctrl_plane);
+        let buf = buf.finish(state.get_ctrl_plane());
         assert_eq!(0, buf.total_size());
     }
 
@@ -1857,32 +1855,31 @@ mod test {
     fn test_flip_cond() {
         let info = EmitInfo::new(settings::Flags::new(settings::builder()));
         let mut buf = MachBuffer::new();
-        let mut state = Default::default();
-        let ctrl_plane = &mut ControlPlane::default();
+        let mut state = <Inst as MachInstEmit>::State::default();
 
         buf.reserve_labels_for_blocks(4);
 
-        buf.bind_label(label(0), ctrl_plane);
+        buf.bind_label(label(0), state.get_ctrl_plane());
         let inst = Inst::CondBr {
             kind: CondBrKind::Zero(xreg(0)),
             taken: target(1),
             not_taken: target(2),
         };
-        inst.emit(&[], &mut buf, &info, &mut state, ctrl_plane);
+        inst.emit(&[], &mut buf, &info, &mut state);
 
-        buf.bind_label(label(1), ctrl_plane);
+        buf.bind_label(label(1), state.get_ctrl_plane());
         let inst = Inst::Nop4;
-        inst.emit(&[], &mut buf, &info, &mut state, ctrl_plane);
+        inst.emit(&[], &mut buf, &info, &mut state);
 
-        buf.bind_label(label(2), ctrl_plane);
+        buf.bind_label(label(2), state.get_ctrl_plane());
         let inst = Inst::Udf {
             trap_code: TrapCode::Interrupt,
         };
-        inst.emit(&[], &mut buf, &info, &mut state, ctrl_plane);
+        inst.emit(&[], &mut buf, &info, &mut state);
 
-        buf.bind_label(label(3), ctrl_plane);
+        buf.bind_label(label(3), state.get_ctrl_plane());
 
-        let buf = buf.finish(ctrl_plane);
+        let buf = buf.finish(state.get_ctrl_plane());
 
         let mut buf2 = MachBuffer::new();
         let mut state = Default::default();
@@ -1890,11 +1887,11 @@ mod test {
             kind: CondBrKind::NotZero(xreg(0)),
             trap_code: TrapCode::Interrupt,
         };
-        inst.emit(&[], &mut buf2, &info, &mut state, ctrl_plane);
+        inst.emit(&[], &mut buf2, &info, &mut state);
         let inst = Inst::Nop4;
-        inst.emit(&[], &mut buf2, &info, &mut state, ctrl_plane);
+        inst.emit(&[], &mut buf2, &info, &mut state);
 
-        let buf2 = buf2.finish(ctrl_plane);
+        let buf2 = buf2.finish(state.get_ctrl_plane());
 
         assert_eq!(buf.data, buf2.data);
     }
@@ -1903,37 +1900,36 @@ mod test {
     fn test_island() {
         let info = EmitInfo::new(settings::Flags::new(settings::builder()));
         let mut buf = MachBuffer::new();
-        let mut state = Default::default();
-        let mut ctrl_plane = &mut ControlPlane::default();
+        let mut state = <Inst as MachInstEmit>::State::default();
 
         buf.reserve_labels_for_blocks(4);
 
-        buf.bind_label(label(0), ctrl_plane);
+        buf.bind_label(label(0), state.get_ctrl_plane());
         let inst = Inst::CondBr {
             kind: CondBrKind::NotZero(xreg(0)),
             taken: target(2),
             not_taken: target(3),
         };
-        inst.emit(&[], &mut buf, &info, &mut state, ctrl_plane);
+        inst.emit(&[], &mut buf, &info, &mut state);
 
-        buf.bind_label(label(1), ctrl_plane);
+        buf.bind_label(label(1), state.get_ctrl_plane());
         while buf.cur_offset() < 2000000 {
             if buf.island_needed(0) {
-                buf.emit_island(0, ctrl_plane);
+                buf.emit_island(0, state.get_ctrl_plane());
             }
             let inst = Inst::Nop4;
-            inst.emit(&[], &mut buf, &info, &mut state, ctrl_plane);
+            inst.emit(&[], &mut buf, &info, &mut state);
         }
 
-        buf.bind_label(label(2), ctrl_plane);
+        buf.bind_label(label(2), state.get_ctrl_plane());
         let inst = Inst::Nop4;
-        inst.emit(&[], &mut buf, &info, &mut state, ctrl_plane);
+        inst.emit(&[], &mut buf, &info, &mut state);
 
-        buf.bind_label(label(3), ctrl_plane);
+        buf.bind_label(label(3), state.get_ctrl_plane());
         let inst = Inst::Nop4;
-        inst.emit(&[], &mut buf, &info, &mut state, ctrl_plane);
+        inst.emit(&[], &mut buf, &info, &mut state);
 
-        let buf = buf.finish(ctrl_plane);
+        let buf = buf.finish(state.get_ctrl_plane());
 
         assert_eq!(2000000 + 8, buf.total_size());
 
@@ -1960,9 +1956,9 @@ mod test {
             // go directly to the target.
             not_taken: BranchTarget::ResolvedOffset(2000000 + 4 - 4),
         };
-        inst.emit(&[], &mut buf2, &info, &mut state, ctrl_plane);
+        inst.emit(&[], &mut buf2, &info, &mut state);
 
-        let buf2 = buf2.finish(ctrl_plane);
+        let buf2 = buf2.finish(state.get_ctrl_plane());
 
         assert_eq!(&buf.data[0..8], &buf2.data[..]);
     }
@@ -1971,34 +1967,33 @@ mod test {
     fn test_island_backward() {
         let info = EmitInfo::new(settings::Flags::new(settings::builder()));
         let mut buf = MachBuffer::new();
-        let mut state = Default::default();
-        let mut ctrl_plane = &mut ControlPlane::default();
+        let mut state = <Inst as MachInstEmit>::State::default();
 
         buf.reserve_labels_for_blocks(4);
 
-        buf.bind_label(label(0), ctrl_plane);
+        buf.bind_label(label(0), state.get_ctrl_plane());
         let inst = Inst::Nop4;
-        inst.emit(&[], &mut buf, &info, &mut state, ctrl_plane);
+        inst.emit(&[], &mut buf, &info, &mut state);
 
-        buf.bind_label(label(1), ctrl_plane);
+        buf.bind_label(label(1), state.get_ctrl_plane());
         let inst = Inst::Nop4;
-        inst.emit(&[], &mut buf, &info, &mut state, ctrl_plane);
+        inst.emit(&[], &mut buf, &info, &mut state);
 
-        buf.bind_label(label(2), ctrl_plane);
+        buf.bind_label(label(2), state.get_ctrl_plane());
         while buf.cur_offset() < 2000000 {
             let inst = Inst::Nop4;
-            inst.emit(&[], &mut buf, &info, &mut state, ctrl_plane);
+            inst.emit(&[], &mut buf, &info, &mut state);
         }
 
-        buf.bind_label(label(3), ctrl_plane);
+        buf.bind_label(label(3), state.get_ctrl_plane());
         let inst = Inst::CondBr {
             kind: CondBrKind::NotZero(xreg(0)),
             taken: target(0),
             not_taken: target(1),
         };
-        inst.emit(&[], &mut buf, &info, &mut state, ctrl_plane);
+        inst.emit(&[], &mut buf, &info, &mut state);
 
-        let buf = buf.finish(ctrl_plane);
+        let buf = buf.finish(state.get_ctrl_plane());
 
         assert_eq!(2000000 + 12, buf.total_size());
 
@@ -2009,13 +2004,13 @@ mod test {
             taken: BranchTarget::ResolvedOffset(8),
             not_taken: BranchTarget::ResolvedOffset(4 - (2000000 + 4)),
         };
-        inst.emit(&[], &mut buf2, &info, &mut state, ctrl_plane);
+        inst.emit(&[], &mut buf2, &info, &mut state);
         let inst = Inst::Jump {
             dest: BranchTarget::ResolvedOffset(-(2000000 + 8)),
         };
-        inst.emit(&[], &mut buf2, &info, &mut state, ctrl_plane);
+        inst.emit(&[], &mut buf2, &info, &mut state);
 
-        let buf2 = buf2.finish(ctrl_plane);
+        let buf2 = buf2.finish(state.get_ctrl_plane());
 
         assert_eq!(&buf.data[2000000..], &buf2.data[..]);
     }
@@ -2057,51 +2052,50 @@ mod test {
 
         let info = EmitInfo::new(settings::Flags::new(settings::builder()));
         let mut buf = MachBuffer::new();
-        let mut state = Default::default();
-        let mut ctrl_plane = &mut ControlPlane::default();
+        let mut state = <Inst as MachInstEmit>::State::default();
 
         buf.reserve_labels_for_blocks(8);
 
-        buf.bind_label(label(0), ctrl_plane);
+        buf.bind_label(label(0), state.get_ctrl_plane());
         let inst = Inst::CondBr {
             kind: CondBrKind::Zero(xreg(0)),
             taken: target(1),
             not_taken: target(2),
         };
-        inst.emit(&[], &mut buf, &info, &mut state, ctrl_plane);
+        inst.emit(&[], &mut buf, &info, &mut state);
 
-        buf.bind_label(label(1), ctrl_plane);
+        buf.bind_label(label(1), state.get_ctrl_plane());
         let inst = Inst::Jump { dest: target(3) };
-        inst.emit(&[], &mut buf, &info, &mut state, ctrl_plane);
+        inst.emit(&[], &mut buf, &info, &mut state);
 
-        buf.bind_label(label(2), ctrl_plane);
+        buf.bind_label(label(2), state.get_ctrl_plane());
         let inst = Inst::Nop4;
-        inst.emit(&[], &mut buf, &info, &mut state, ctrl_plane);
-        inst.emit(&[], &mut buf, &info, &mut state, ctrl_plane);
+        inst.emit(&[], &mut buf, &info, &mut state);
+        inst.emit(&[], &mut buf, &info, &mut state);
         let inst = Inst::Jump { dest: target(0) };
-        inst.emit(&[], &mut buf, &info, &mut state, ctrl_plane);
+        inst.emit(&[], &mut buf, &info, &mut state);
 
-        buf.bind_label(label(3), ctrl_plane);
+        buf.bind_label(label(3), state.get_ctrl_plane());
         let inst = Inst::Jump { dest: target(4) };
-        inst.emit(&[], &mut buf, &info, &mut state, ctrl_plane);
+        inst.emit(&[], &mut buf, &info, &mut state);
 
-        buf.bind_label(label(4), ctrl_plane);
+        buf.bind_label(label(4), state.get_ctrl_plane());
         let inst = Inst::Jump { dest: target(5) };
-        inst.emit(&[], &mut buf, &info, &mut state, ctrl_plane);
+        inst.emit(&[], &mut buf, &info, &mut state);
 
-        buf.bind_label(label(5), ctrl_plane);
+        buf.bind_label(label(5), state.get_ctrl_plane());
         let inst = Inst::Jump { dest: target(7) };
-        inst.emit(&[], &mut buf, &info, &mut state, ctrl_plane);
+        inst.emit(&[], &mut buf, &info, &mut state);
 
-        buf.bind_label(label(6), ctrl_plane);
+        buf.bind_label(label(6), state.get_ctrl_plane());
         let inst = Inst::Nop4;
-        inst.emit(&[], &mut buf, &info, &mut state, ctrl_plane);
+        inst.emit(&[], &mut buf, &info, &mut state);
 
-        buf.bind_label(label(7), ctrl_plane);
+        buf.bind_label(label(7), state.get_ctrl_plane());
         let inst = Inst::Ret { rets: vec![] };
-        inst.emit(&[], &mut buf, &info, &mut state, ctrl_plane);
+        inst.emit(&[], &mut buf, &info, &mut state);
 
-        let buf = buf.finish(ctrl_plane);
+        let buf = buf.finish(state.get_ctrl_plane());
 
         let golden_data = vec![
             0xa0, 0x00, 0x00, 0xb4, // cbz x0, 0x14
@@ -2134,32 +2128,31 @@ mod test {
         //   b label0
         let info = EmitInfo::new(settings::Flags::new(settings::builder()));
         let mut buf = MachBuffer::new();
-        let mut state = Default::default();
-        let mut ctrl_plane = &mut ControlPlane::default();
+        let mut state = <Inst as MachInstEmit>::State::default();
 
         buf.reserve_labels_for_blocks(5);
 
-        buf.bind_label(label(0), ctrl_plane);
+        buf.bind_label(label(0), state.get_ctrl_plane());
         let inst = Inst::Jump { dest: target(1) };
-        inst.emit(&[], &mut buf, &info, &mut state, ctrl_plane);
+        inst.emit(&[], &mut buf, &info, &mut state);
 
-        buf.bind_label(label(1), ctrl_plane);
+        buf.bind_label(label(1), state.get_ctrl_plane());
         let inst = Inst::Jump { dest: target(2) };
-        inst.emit(&[], &mut buf, &info, &mut state, ctrl_plane);
+        inst.emit(&[], &mut buf, &info, &mut state);
 
-        buf.bind_label(label(2), ctrl_plane);
+        buf.bind_label(label(2), state.get_ctrl_plane());
         let inst = Inst::Jump { dest: target(3) };
-        inst.emit(&[], &mut buf, &info, &mut state, ctrl_plane);
+        inst.emit(&[], &mut buf, &info, &mut state);
 
-        buf.bind_label(label(3), ctrl_plane);
+        buf.bind_label(label(3), state.get_ctrl_plane());
         let inst = Inst::Jump { dest: target(4) };
-        inst.emit(&[], &mut buf, &info, &mut state, ctrl_plane);
+        inst.emit(&[], &mut buf, &info, &mut state);
 
-        buf.bind_label(label(4), ctrl_plane);
+        buf.bind_label(label(4), state.get_ctrl_plane());
         let inst = Inst::Jump { dest: target(1) };
-        inst.emit(&[], &mut buf, &info, &mut state, ctrl_plane);
+        inst.emit(&[], &mut buf, &info, &mut state);
 
-        let buf = buf.finish(ctrl_plane);
+        let buf = buf.finish(state.get_ctrl_plane());
 
         let golden_data = vec![
             0x00, 0x00, 0x00, 0x14, // b 0
@@ -2171,7 +2164,7 @@ mod test {
     #[test]
     fn metadata_records() {
         let mut buf = MachBuffer::<Inst>::new();
-        let mut ctrl_plane = &mut ControlPlane::default();
+        let ctrl_plane = &mut Default::default();
 
         buf.reserve_labels_for_blocks(1);
 

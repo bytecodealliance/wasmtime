@@ -100,15 +100,9 @@ pub fn lookup(triple: Triple) -> Result<Builder, LookupError> {
         Architecture::X86_64 => {
             isa_builder!(x64, (feature = "x86"), triple)
         }
-        Architecture::Aarch64 { .. } => {
-            isa_builder!(aarch64, (feature = "arm64"), triple)
-        }
-        Architecture::S390x { .. } => {
-            isa_builder!(s390x, (feature = "s390x"), triple)
-        }
-        Architecture::Riscv64 { .. } => {
-            isa_builder!(riscv64, (feature = "riscv64"), triple)
-        }
+        Architecture::Aarch64 { .. } => isa_builder!(aarch64, (feature = "arm64"), triple),
+        Architecture::S390x { .. } => isa_builder!(s390x, (feature = "s390x"), triple),
+        Architecture::Riscv64 { .. } => isa_builder!(riscv64, (feature = "riscv64"), triple),
         _ => Err(LookupError::Unsupported),
     }
 }
