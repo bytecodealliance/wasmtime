@@ -428,6 +428,11 @@ criteria = "safe-to-deploy"
 
 [[exemptions.js-sys]]
 version = "0.3.57"
+criteria = "safe-to-deploy"
+notes = "dependency of ring for wasm32 browser platform, which our project does not target"
+
+[[exemptions.js-sys]]
+version = "0.3.57"
 criteria = "safe-to-run"
 
 [[exemptions.k256]]
@@ -733,6 +738,11 @@ criteria = "safe-to-deploy"
 version = "0.5.3"
 criteria = "safe-to-deploy"
 
+[[exemptions.ring]]
+version = "0.16.20"
+criteria = "safe-to-deploy"
+notes = "contains assembly language and object file implementations of crypto primitives for a very large number of platforms"
+
 [[exemptions.rsa]]
 version = "0.5.0"
 criteria = "safe-to-deploy"
@@ -963,7 +973,17 @@ criteria = "safe-to-deploy"
 
 [[exemptions.wasm-bindgen]]
 version = "0.2.80"
+criteria = "safe-to-deploy"
+notes = "dependency of ring for wasm32 browser platform, which our project does not target"
+
+[[exemptions.wasm-bindgen]]
+version = "0.2.80"
 criteria = "safe-to-run"
+
+[[exemptions.wasm-bindgen-backend]]
+version = "0.2.80"
+criteria = "safe-to-deploy"
+notes = "dependency of ring for wasm32 browser platform, which our project does not target"
 
 [[exemptions.wasm-bindgen-backend]]
 version = "0.2.80"
@@ -971,15 +991,26 @@ criteria = "safe-to-run"
 
 [[exemptions.wasm-bindgen-macro]]
 version = "0.2.80"
+criteria = "safe-to-deploy"
+notes = "dependency of ring for wasm32 browser platform, which our project does not target"
+
+[[exemptions.wasm-bindgen-macro]]
+version = "0.2.80"
 criteria = "safe-to-run"
+
+[[exemptions.wasm-bindgen-macro-support]]
+version = "0.2.80"
+criteria = "safe-to-deploy"
+notes = "dependency of ring for wasm32 browser platform, which our project does not target"
 
 [[exemptions.wasm-bindgen-macro-support]]
 version = "0.2.80"
 criteria = "safe-to-run"
 
-[[exemptions.wasm-bindgen-shared]]
-version = "0.2.80"
-criteria = "safe-to-run"
+[[exemptions.web-sys]]
+version = "0.3.57"
+criteria = "safe-to-deploy"
+notes = "dependency of ring for wasm32 browser platform, which our project does not target"
 
 [[exemptions.web-sys]]
 version = "0.3.57"
