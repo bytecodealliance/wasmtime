@@ -3,10 +3,10 @@
 use crate::api::{Backend, BackendError, BackendExecutionContext, BackendGraph};
 use crate::openvino::OpenvinoBackend;
 use crate::r#impl::UsageError;
-use crate::witx::types::{Graph, GraphEncoding, GraphExecutionContext, ExecutionTarget, GraphBuilderArray};
+use crate::witx::types::{ExecutionTarget, Graph, GraphEncoding, GraphExecutionContext};
+use dashmap::DashMap;
 use std::collections::HashMap;
 use std::hash::Hash;
-use dashmap::DashMap;
 use thiserror::Error;
 use wiggle::GuestError;
 
@@ -15,13 +15,18 @@ pub struct WasiNnCtx {
     pub(crate) backends: HashMap<u8, Box<dyn Backend>>,
     pub(crate) graphs: Table<Graph, Box<dyn BackendGraph>>,
     pub(crate) executions: Table<GraphExecutionContext, Box<dyn BackendExecutionContext>>,
-    pub(crate) model_registry: DashMap<String, RegisteredModel>
+    pub(crate) model_registry: DashMap<String, RegisteredModel>,
+    pub(crate) loaded_models: DashMap<String, LoadedModel>,
 }
 
 pub(crate) struct RegisteredModel {
     pub(crate) model_bytes: Vec<Vec<u8>>,
     pub(crate) encoding: GraphEncoding,
-    pub(crate) target: ExecutionTarget
+    pub(crate) target: ExecutionTarget,
+}
+
+pub(crate) struct LoadedModel {
+    pub(crate) graph: Graph,
 }
 
 impl WasiNnCtx {
@@ -38,7 +43,8 @@ impl WasiNnCtx {
             backends,
             graphs: Table::default(),
             executions: Table::default(),
-            model_registry: DashMap::new()
+            model_registry: DashMap::new(),
+            loaded_models: DashMap::new(),
         })
     }
 }

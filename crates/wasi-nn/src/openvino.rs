@@ -44,7 +44,7 @@ impl Backend for OpenvinoBackend {
             .read()?
             .as_slice()?
             .expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)");
-        self.load_from_bytes( &vec![xml.to_vec(), weights.to_vec()], target)
+        self.load_from_bytes(&vec![xml.to_vec(), weights.to_vec()], target)
     }
 
     fn load_from_bytes(
@@ -53,7 +53,11 @@ impl Backend for OpenvinoBackend {
         target: ExecutionTarget,
     ) -> Result<Box<dyn BackendGraph>, BackendError> {
         if model_bytes.len() != 2 {
-            return Err(BackendError::InvalidNumberOfBuilders(2, model_bytes.len().try_into().unwrap()).into());
+            return Err(BackendError::InvalidNumberOfBuilders(
+                2,
+                model_bytes.len().try_into().unwrap(),
+            )
+            .into());
         }
 
         // Construct the context if none is present; this is done lazily (i.e.
@@ -66,9 +70,9 @@ impl Backend for OpenvinoBackend {
 
         // Read the guest array.
         let xml = model_bytes[0].as_slice();
-            // .expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)");
+        // .expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)");
         let weights = model_bytes[1].as_slice();
-            // .expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)");
+        // .expect("cannot use with shared memories; see https://github.com/bytecodealliance/wasmtime/issues/5235 (TODO)");
 
         // Construct OpenVINO graph structures: `cnn_network` contains the graph
         // structure, `exec_network` can perform inference.
