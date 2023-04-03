@@ -283,8 +283,6 @@ block0(v0: i32):
     v2 = imul v1, v0
     return v2
     ; check: v3 = ineg v0
-    ; check: v5 -> v3
-    ; check: v6 -> v3
     ; check: return v3
 }
 
@@ -326,8 +324,9 @@ block0(v0: i8):
     v3 = iconst.i8 3
     v4 = bor v3, v2
     return v4
-    ; check: v6 = bor v0, v3
-    ; check: return v6
+    ; check: v3 = iconst.i8 3
+    ; check: v5 = bor v0, v3  ; v3 = 3
+    ; check: return v5
 }
 
 function %or_and_constant_with_any_constant_should_not_apply_rule_i8(i8) -> i8 {
@@ -379,8 +378,9 @@ block0(v0: i64):
     v3 = iconst.i64 3
     v4 = bor v3, v2
     return v4
-    ; check: v6 = bor v0, v3
-    ; check: return v6
+    ; check: v3 = iconst.i64 3
+    ; check: v5 = bor v0, v3  ; v3 = 3
+    ; check: return v5
 }
 
 function %or_and_constant_with_any_constant_should_not_apply_rule_i64(i64) -> i64 {
@@ -421,8 +421,8 @@ block0(v1: i64):
     return v3
 }
 
-; check: v5 = bnot v1
-; check: return v5
+; check: v4 = bnot v1
+; check: return v4
 
 function %extend_always_above_zero(i32) -> i8 {
 block0(v1: i32):

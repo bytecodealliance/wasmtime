@@ -499,47 +499,42 @@ impl InstructionData {
 
     /// Normalize commutative instructions by sorting arguments
     #[inline]
-    pub(crate) fn normalize(self) -> Self {
+    pub(crate) fn normalize_in_place(&mut self) {
         match self {
-            InstructionData::Binary { opcode, mut args } if opcode.is_commutative() => {
+            InstructionData::Binary { opcode, args } if opcode.is_commutative() => {
                 if args[0] > args[1] {
                     args.swap(0, 1);
                 }
-                InstructionData::Binary { opcode, args }
             }
             InstructionData::Ternary {
-                opcode: opcode @ Opcode::Fma,
-                mut args,
+                opcode: Opcode::Fma,
+                args,
             } => {
                 if args[0] > args[1] {
                     args.swap(0, 1);
                 }
-                InstructionData::Ternary { opcode, args }
             }
-            InstructionData::IntCompare {
-                opcode,
-                mut args,
-                mut cond,
-            } => {
+            InstructionData::IntCompare { args, cond, .. } => {
                 if args[0] > args[1] {
                     args.swap(0, 1);
-                    cond = cond.reverse();
+                    *cond = cond.reverse();
                 }
-                InstructionData::IntCompare { opcode, args, cond }
             }
-            InstructionData::FloatCompare {
-                opcode,
-                mut args,
-                mut cond,
-            } => {
+            InstructionData::FloatCompare { args, cond, .. } => {
                 if args[0] > args[1] {
                     args.swap(0, 1);
-                    cond = cond.reverse();
+                    *cond = cond.reverse();
                 }
-                InstructionData::FloatCompare { opcode, args, cond }
             }
-            _ => self,
+            _ => {}
         }
+    }
+
+    /// Normalize commutative instructions by sorting arguments
+    #[inline]
+    pub(crate) fn normalize(mut self) -> Self {
+        self.normalize_in_place();
+        self
     }
 }
 
