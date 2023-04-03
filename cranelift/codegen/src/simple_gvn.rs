@@ -2,7 +2,6 @@
 
 use crate::cursor::{Cursor, FuncCursor};
 use crate::dominator_tree::DominatorTree;
-use crate::ir::condcodes::CondCode;
 use crate::ir::{Function, Inst, InstructionData, Opcode, Type};
 use crate::scoped_hash_map::ScopedHashMap;
 use crate::timing;
@@ -39,47 +38,7 @@ struct HashKey<'a, 'f: 'a> {
 
 impl<'a, 'f: 'a> HashKey<'a, 'f> {
     fn new(inst: InstructionData, ty: Type, pos: &'a RefCell<FuncCursor<'f>>) -> Self {
-        // normalize commutative instructions by sorting arguments
-        let inst = match inst {
-            InstructionData::Binary { opcode, mut args } if opcode.is_commutative() => {
-                if args[0] > args[1] {
-                    args.swap(0, 1);
-                }
-                InstructionData::Binary { opcode, args }
-            }
-            InstructionData::Ternary {
-                opcode: opcode @ Opcode::Fma,
-                mut args,
-            } => {
-                if args[0] > args[1] {
-                    args.swap(0, 1);
-                }
-                InstructionData::Ternary { opcode, args }
-            }
-            InstructionData::IntCompare {
-                opcode,
-                mut args,
-                mut cond,
-            } => {
-                if args[0] > args[1] {
-                    args.swap(0, 1);
-                    cond = cond.reverse();
-                }
-                InstructionData::IntCompare { opcode, args, cond }
-            }
-            InstructionData::FloatCompare {
-                opcode,
-                mut args,
-                mut cond,
-            } => {
-                if args[0] > args[1] {
-                    args.swap(0, 1);
-                    cond = cond.reverse();
-                }
-                InstructionData::FloatCompare { opcode, args, cond }
-            }
-            _ => inst,
-        };
+        let inst = inst.normalize();
         Self { inst, ty, pos }
     }
 }

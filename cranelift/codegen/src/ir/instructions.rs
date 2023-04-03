@@ -6,6 +6,7 @@
 //! A large part of this module is auto-generated from the instruction descriptions in the meta
 //! directory.
 
+use crate::ir::condcodes::CondCode;
 use alloc::vec::Vec;
 use core::fmt::{self, Display, Formatter};
 use core::ops::{Deref, DerefMut};
@@ -493,6 +494,51 @@ impl InstructionData {
                 }
             }
             _ => {}
+        }
+    }
+
+    /// Normalize commutative instructions by sorting arguments
+    #[inline]
+    pub(crate) fn normalize(self) -> Self {
+        match self {
+            InstructionData::Binary { opcode, mut args } if opcode.is_commutative() => {
+                if args[0] > args[1] {
+                    args.swap(0, 1);
+                }
+                InstructionData::Binary { opcode, args }
+            }
+            InstructionData::Ternary {
+                opcode: opcode @ Opcode::Fma,
+                mut args,
+            } => {
+                if args[0] > args[1] {
+                    args.swap(0, 1);
+                }
+                InstructionData::Ternary { opcode, args }
+            }
+            InstructionData::IntCompare {
+                opcode,
+                mut args,
+                mut cond,
+            } => {
+                if args[0] > args[1] {
+                    args.swap(0, 1);
+                    cond = cond.reverse();
+                }
+                InstructionData::IntCompare { opcode, args, cond }
+            }
+            InstructionData::FloatCompare {
+                opcode,
+                mut args,
+                mut cond,
+            } => {
+                if args[0] > args[1] {
+                    args.swap(0, 1);
+                    cond = cond.reverse();
+                }
+                InstructionData::FloatCompare { opcode, args, cond }
+            }
+            _ => self,
         }
     }
 }
