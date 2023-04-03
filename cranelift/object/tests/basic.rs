@@ -150,7 +150,6 @@ fn switch_error() {
 
 #[test]
 fn libcall_function() {
-    let ctrl_plane = &mut ControlPlane::default();
     let flag_builder = settings::builder();
     let isa_builder = cranelift_codegen::isa::lookup_by_name("x86_64-unknown-linux-gnu").unwrap();
     let isa = isa_builder
@@ -198,7 +197,7 @@ fn libcall_function() {
     }
 
     module
-        .define_function(func_id, &mut ctx, ctrl_plane)
+        .define_function(func_id, &mut ctx, &mut ControlPlane::default())
         .unwrap();
 
     module.finish();

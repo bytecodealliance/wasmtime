@@ -5,7 +5,6 @@
 
 use crate::subtest::{run_filecheck, Context, SubTest};
 use cranelift_codegen::{self, ir, isa::unwind::UnwindInfo};
-use cranelift_control::ControlPlane;
 use cranelift_reader::TestCommand;
 use gimli::{
     write::{Address, EhFrame, EndianVec, FrameTable},
@@ -41,7 +40,7 @@ impl SubTest for TestUnwind {
         let mut comp_ctx = cranelift_codegen::Context::for_function(func.into_owned());
 
         let code = comp_ctx
-            .compile(isa, &mut ControlPlane::default())
+            .compile(isa, &mut Default::default())
             .expect("failed to compile function");
 
         let mut text = String::new();

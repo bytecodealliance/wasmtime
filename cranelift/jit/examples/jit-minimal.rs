@@ -1,7 +1,6 @@
 use codegen::ir::UserFuncName;
 use cranelift::prelude::*;
 use cranelift_codegen::settings::{self, Configurable};
-use cranelift_control::ControlPlane;
 use cranelift_jit::{JITBuilder, JITModule};
 use cranelift_module::{default_libcall_names, Linkage, Module};
 use std::mem;
@@ -52,7 +51,7 @@ fn main() {
         bcx.seal_all_blocks();
         bcx.finalize();
     }
-    let ctrl_plane = &mut ControlPlane::default();
+    let ctrl_plane = &mut Default::default();
     module
         .define_function(func_a, &mut ctx, ctrl_plane)
         .unwrap();

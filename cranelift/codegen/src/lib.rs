@@ -92,8 +92,8 @@ pub use crate::machinst::buffer::{
     MachCallSite, MachReloc, MachSrcLoc, MachStackMap, MachTextSectionBuilder, MachTrap,
 };
 pub use crate::machinst::{
-    CompiledCode, Final, MachBuffer, MachBufferFinalized, MachInst, MachInstEmit, Reg,
-    TextSectionBuilder, Writable,
+    CompiledCode, Final, MachBuffer, MachBufferFinalized, MachInst, MachInstEmit,
+    MachInstEmitState, Reg, TextSectionBuilder, Writable,
 };
 
 mod alias_analysis;

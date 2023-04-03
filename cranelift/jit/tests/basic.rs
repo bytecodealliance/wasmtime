@@ -2,7 +2,6 @@ use cranelift_codegen::ir::*;
 use cranelift_codegen::isa::CallConv;
 use cranelift_codegen::settings::{self, Configurable};
 use cranelift_codegen::{ir::types::I16, Context};
-use cranelift_control::ControlPlane;
 use cranelift_entity::EntityRef;
 use cranelift_frontend::*;
 use cranelift_jit::*;
@@ -59,7 +58,7 @@ fn define_simple_function(module: &mut JITModule) -> FuncId {
     }
 
     module
-        .define_function(func_id, &mut ctx, &mut ControlPlane::default())
+        .define_function(func_id, &mut ctx, &mut Default::default())
         .unwrap();
 
     func_id
@@ -211,7 +210,7 @@ fn libcall_function() {
     }
 
     module
-        .define_function(func_id, &mut ctx, &mut ControlPlane::default())
+        .define_function(func_id, &mut ctx, &mut Default::default())
         .unwrap();
 
     module.finalize_definitions().unwrap();

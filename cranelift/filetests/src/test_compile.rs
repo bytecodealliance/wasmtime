@@ -53,7 +53,7 @@ impl SubTest for TestCompile {
         comp_ctx.set_disasm(true);
 
         let compiled_code = comp_ctx
-            .compile(isa, &mut ControlPlane::default())
+            .compile(isa, &mut Default::default())
             .map_err(|e| crate::pretty_anyhow_error(&e.func, e.inner))?;
         let total_size = compiled_code.code_info().total_size;
 

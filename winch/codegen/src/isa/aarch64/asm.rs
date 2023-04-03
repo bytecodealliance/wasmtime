@@ -9,7 +9,7 @@ use cranelift_codegen::{
         emit::{EmitInfo, EmitState},
         ALUOp, AMode, ExtendOp, Imm12, Inst, PairAMode,
     },
-    settings, Final, MachBuffer, MachBufferFinalized, MachInstEmit, Writable,
+    settings, Final, MachBuffer, MachBufferFinalized, MachInstEmit, MachInstEmitState, Writable,
 };
 
 /// An Aarch64 instruction operand.
@@ -58,8 +58,8 @@ impl Assembler {
 
 impl Assembler {
     /// Return the emitted code.
-    pub fn finalize(self) -> MachBufferFinalized<Final> {
-        let stencil = self.buffer.finish();
+    pub fn finalize(mut self) -> MachBufferFinalized<Final> {
+        let stencil = self.buffer.finish(self.emit_state.get_ctrl_plane());
         stencil.apply_base_srcloc(Default::default())
     }
 

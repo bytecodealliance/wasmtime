@@ -13,7 +13,6 @@ use cranelift_codegen::print_errors::pretty_error;
 use cranelift_codegen::Context;
 use cranelift_codegen::{CompiledCode, MachSrcLoc, MachStackMap};
 use cranelift_codegen::{MachReloc, MachTrap};
-use cranelift_control::ControlPlane;
 use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_frontend::FunctionBuilder;
 use cranelift_wasm::{
@@ -613,7 +612,7 @@ fn compile_uncached<'a>(
 ) -> Result<(&'a CompiledCode, Vec<u8>), CompileError> {
     let mut code_buf = Vec::new();
     let compiled_code = context
-        .compile_and_emit(isa, &mut code_buf, &mut ControlPlane::default())
+        .compile_and_emit(isa, &mut code_buf, &mut Default::default())
         .map_err(|error| CompileError::Codegen(pretty_error(&error.func, error.inner)))?;
     Ok((compiled_code, code_buf))
 }
