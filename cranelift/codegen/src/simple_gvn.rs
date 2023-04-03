@@ -2,6 +2,7 @@
 
 use crate::cursor::{Cursor, FuncCursor};
 use crate::dominator_tree::DominatorTree;
+use crate::ir::condcodes::CondCode;
 use crate::ir::{Function, Inst, InstructionData, Opcode, Type};
 use crate::scoped_hash_map::ScopedHashMap;
 use crate::timing;
@@ -35,6 +36,55 @@ struct HashKey<'a, 'f: 'a> {
     ty: Type,
     pos: &'a RefCell<FuncCursor<'f>>,
 }
+
+impl<'a, 'f: 'a> HashKey<'a, 'f> {
+    fn new(inst: InstructionData, ty: Type, pos: &'a RefCell<FuncCursor<'f>>) -> Self {
+        // normalize commutative instructions by sorting arguments
+        let inst = match inst {
+            InstructionData::Binary { opcode, mut args } if opcode.is_commutative() => {
+                if args[0] > args[1] {
+                    args.swap(0, 1);
+                }
+                InstructionData::Binary { opcode, args }
+            }
+            InstructionData::Ternary {
+                opcode: opcode @ Opcode::Fma,
+                mut args,
+            } => {
+                if args[0] > args[1] {
+                    args.swap(0, 1);
+                }
+                InstructionData::Ternary { opcode, args }
+            }
+            InstructionData::IntCompare {
+                opcode,
+                mut args,
+                mut cond,
+            } => {
+                if args[0] > args[1] {
+                    args.swap(0, 1);
+                    cond = cond.reverse();
+                }
+                InstructionData::IntCompare { opcode, args, cond }
+            }
+            // TODO: is `fcmp` always commutative?
+            InstructionData::FloatCompare {
+                opcode,
+                mut args,
+                mut cond,
+            } => {
+                if args[0] > args[1] {
+                    args.swap(0, 1);
+                    cond = cond.reverse();
+                }
+                InstructionData::FloatCompare { opcode, args, cond }
+            }
+            _ => inst,
+        };
+        Self { inst, ty, pos }
+    }
+}
+
 impl<'a, 'f: 'a> Hash for HashKey<'a, 'f> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         let pool = &self.pos.borrow().func.dfg.value_lists;
@@ -113,11 +163,7 @@ pub fn do_simple_gvn(func: &mut Function, domtree: &mut DominatorTree) {
             }
 
             let ctrl_typevar = func.dfg.ctrl_typevar(inst);
-            let key = HashKey {
-                inst: func.dfg.insts[inst],
-                ty: ctrl_typevar,
-                pos: &pos,
-            };
+            let key = HashKey::new(func.dfg.insts[inst], ctrl_typevar, &pos);
             use crate::scoped_hash_map::Entry::*;
             match visible_values.entry(key) {
                 Occupied(entry) => {

@@ -200,6 +200,35 @@ impl Opcode {
             _ => false,
         }
     }
+
+    /// Returns true if the instruction is commutative: `op(x, y) == op(y, x)` for all x, y
+    pub fn is_commutative(&self) -> bool {
+        match self {
+            Opcode::Band | Opcode::Bor | Opcode::Bxor | Opcode::BxorNot => true,
+
+            Opcode::Iadd
+            | Opcode::Imul
+            | Opcode::IaddPairwise
+            | Opcode::Umulhi
+            | Opcode::Smulhi
+            | Opcode::UaddOverflowTrap
+            | Opcode::Umin
+            | Opcode::Umax
+            | Opcode::Smin
+            | Opcode::Smax
+            | Opcode::AvgRound
+            | Opcode::UaddSat
+            | Opcode::UsubSat
+            | Opcode::SaddSat
+            | Opcode::SsubSat => true,
+
+            Opcode::Fadd | Opcode::Fmul => true,
+            // TODO: are these really commutative?
+            Opcode::Fmin | Opcode::Fmax => true,
+
+            _ => false,
+        }
+    }
 }
 
 // This trait really belongs in cranelift-reader where it is used by the `.clif` file parser, but since
