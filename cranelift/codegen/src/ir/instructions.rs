@@ -519,11 +519,19 @@ impl InstructionData {
                     args.swap(0, 1);
                     *cond = cond.reverse();
                 }
+                // normalize reflexive compares to use the smaller cond code
+                else if args[0] == args[1] {
+                    *cond = std::cmp::min(*cond, cond.reverse());
+                }
             }
             InstructionData::FloatCompare { args, cond, .. } => {
                 if args[0] > args[1] {
                     args.swap(0, 1);
                     *cond = cond.reverse();
+                }
+                // normalize reflexive compares to use the smaller cond code
+                else if args[0] == args[1] {
+                    *cond = std::cmp::min(*cond, cond.reverse());
                 }
             }
             _ => {}
