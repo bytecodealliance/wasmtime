@@ -501,38 +501,28 @@ impl InstructionData {
     #[inline]
     pub(crate) fn normalize_in_place(&mut self) {
         match self {
-            InstructionData::Binary { opcode, args } if opcode.is_commutative() => {
-                if args[0] > args[1] {
-                    args.swap(0, 1);
-                }
+            InstructionData::Binary { opcode, args }
+                if args[0] > args[1] && opcode.is_commutative() =>
+            {
+                args.swap(0, 1)
             }
             InstructionData::Ternary {
                 opcode: Opcode::Fma,
                 args,
-            } => {
-                if args[0] > args[1] {
-                    args.swap(0, 1);
-                }
+            } if args[0] > args[1] => args.swap(0, 1),
+            InstructionData::IntCompare { args, cond, .. } if args[0] > args[1] => {
+                args.swap(0, 1);
+                *cond = cond.reverse();
             }
-            InstructionData::IntCompare { args, cond, .. } => {
-                if args[0] > args[1] {
-                    args.swap(0, 1);
-                    *cond = cond.reverse();
-                }
-                // normalize reflexive compares to use the smaller cond code
-                else if args[0] == args[1] {
-                    *cond = std::cmp::min(*cond, cond.reverse());
-                }
+            InstructionData::IntCompare { args, cond, .. } if args[0] == args[1] => {
+                *cond = std::cmp::min(*cond, cond.reverse());
             }
-            InstructionData::FloatCompare { args, cond, .. } => {
-                if args[0] > args[1] {
-                    args.swap(0, 1);
-                    *cond = cond.reverse();
-                }
-                // normalize reflexive compares to use the smaller cond code
-                else if args[0] == args[1] {
-                    *cond = std::cmp::min(*cond, cond.reverse());
-                }
+            InstructionData::FloatCompare { args, cond, .. } if args[0] > args[1] => {
+                args.swap(0, 1);
+                *cond = cond.reverse();
+            }
+            InstructionData::FloatCompare { args, cond, .. } if args[0] == args[1] => {
+                *cond = std::cmp::min(*cond, cond.reverse());
             }
             _ => {}
         }
