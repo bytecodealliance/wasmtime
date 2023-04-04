@@ -441,8 +441,8 @@ block0(v1: i32):
     return v4
 }
 
-; check: v5 = iconst.i8 1
-; check: return v5
+; check: v7 = iconst.i8 1
+; check: return v7
 
 function %double_uextend(i16) -> i64 {
 block0(v1: i16):
