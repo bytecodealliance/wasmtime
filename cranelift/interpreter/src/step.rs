@@ -934,14 +934,15 @@ where
         Opcode::Bitcast | Opcode::ScalarToVector => {
             let input_ty = inst_context.type_of(inst_context.args()[0]).unwrap();
             let arg0 = extractlanes(&arg(0)?, input_ty)?;
-
-            assign(vectorizelanes(
-                &arg0
-                    .into_iter()
-                    .map(|x| V::convert(x, ValueConversionKind::Exact(ctrl_ty.lane_type())))
-                    .collect::<ValueResult<SimdVec<V>>>()?,
-                ctrl_ty,
-            )?)
+            let lanes = &arg0
+                .into_iter()
+                .map(|x| V::convert(x, ValueConversionKind::Exact(ctrl_ty.lane_type())))
+                .collect::<ValueResult<SimdVec<V>>>()?;
+            assign(match inst.opcode() {
+                Opcode::Bitcast => vectorizelanes(lanes, ctrl_ty)?,
+                Opcode::ScalarToVector => vectorizelanes_all(lanes, ctrl_ty)?,
+                _ => unreachable!(),
+            })
         }
         Opcode::Ireduce => assign(Value::convert(
             arg(0)?,
@@ -1552,9 +1553,17 @@ where
 {
     // If the array is only one element, return it as a scalar.
     if x.len() == 1 {
-        return Ok(x[0].clone());
+        Ok(x[0].clone())
+    } else {
+        vectorizelanes_all(x, vector_type)
     }
+}
 
+/// Convert a Rust array of [Value] back into a `Value::vector`.
+fn vectorizelanes_all<V>(x: &[V], vector_type: types::Type) -> ValueResult<V>
+where
+    V: Value,
+{
     let lane_type = vector_type.lane_type();
     let iterations = match lane_type {
         types::I8 => 1,
