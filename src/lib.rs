@@ -1,8 +1,7 @@
 #![allow(unused_variables)] // TODO: remove this when more things are implemented
 
 use crate::bindings::{
-    exit, filesystem, instance_monotonic_clock, instance_wall_clock, monotonic_clock, network,
-    poll, random, streams, wall_clock,
+    exit, filesystem, monotonic_clock, network, poll, random, streams, wall_clock,
 };
 use core::cell::{Cell, RefCell, RefMut, UnsafeCell};
 use core::cmp::min;
@@ -337,11 +336,11 @@ pub extern "C" fn clock_res_get(id: Clockid, resolution: &mut Timestamp) -> Errn
     State::with(|state| {
         match id {
             CLOCKID_MONOTONIC => {
-                let res = monotonic_clock::resolution(state.instance_monotonic_clock());
+                let res = monotonic_clock::resolution();
                 *resolution = res;
             }
             CLOCKID_REALTIME => {
-                let res = wall_clock::resolution(state.instance_wall_clock());
+                let res = wall_clock::resolution();
                 *resolution = Timestamp::from(res.seconds)
                     .checked_mul(1_000_000_000)
                     .and_then(|ns| ns.checked_add(res.nanoseconds.into()))
@@ -368,10 +367,10 @@ pub unsafe extern "C" fn clock_time_get(
         State::with(|state| {
             match id {
                 CLOCKID_MONOTONIC => {
-                    *time = monotonic_clock::now(state.instance_monotonic_clock());
+                    *time = monotonic_clock::now();
                 }
                 CLOCKID_REALTIME => {
-                    let res = wall_clock::now(state.instance_wall_clock());
+                    let res = wall_clock::now();
                     *time = Timestamp::from(res.seconds)
                         .checked_mul(1_000_000_000)
                         .and_then(|ns| ns.checked_add(res.nanoseconds.into()))
@@ -1584,7 +1583,7 @@ pub unsafe extern "C" fn poll_oneoff(
                                 };
 
                                 // Subtract `now`.
-                                let now = wall_clock::now(state.instance_wall_clock());
+                                let now = wall_clock::now();
                                 datetime.seconds -= now.seconds;
                                 if datetime.nanoseconds < now.nanoseconds {
                                     datetime.seconds -= 1;
@@ -1604,18 +1603,10 @@ pub unsafe extern "C" fn poll_oneoff(
                                 clock.timeout
                             };
 
-                            monotonic_clock::subscribe(
-                                state.instance_monotonic_clock(),
-                                timeout,
-                                false,
-                            )
+                            monotonic_clock::subscribe(timeout, false)
                         }
 
-                        CLOCKID_MONOTONIC => monotonic_clock::subscribe(
-                            state.instance_monotonic_clock(),
-                            clock.timeout,
-                            absolute,
-                        ),
+                        CLOCKID_MONOTONIC => monotonic_clock::subscribe(clock.timeout, absolute),
 
                         _ => return Err(ERRNO_INVAL),
                     }
@@ -1630,9 +1621,7 @@ pub unsafe extern "C" fn poll_oneoff(
                         // If the file descriptor isn't a stream, request a
                         // pollable which completes immediately so that it'll
                         // immediately fail.
-                        Err(ERRNO_BADF) => {
-                            monotonic_clock::subscribe(state.instance_monotonic_clock(), 0, false)
-                        }
+                        Err(ERRNO_BADF) => monotonic_clock::subscribe(0, false),
                         Err(e) => return Err(e),
                     }
                 }
@@ -1646,9 +1635,7 @@ pub unsafe extern "C" fn poll_oneoff(
                         // If the file descriptor isn't a stream, request a
                         // pollable which completes immediately so that it'll
                         // immediately fail.
-                        Err(ERRNO_BADF) => {
-                            monotonic_clock::subscribe(state.instance_monotonic_clock(), 0, false)
-                        }
+                        Err(ERRNO_BADF) => monotonic_clock::subscribe(0, false),
                         Err(e) => return Err(e),
                     }
                 }
@@ -2085,12 +2072,6 @@ struct State {
     /// name that didn't fit into the caller's buffer.
     dirent_cache: DirentCache,
 
-    /// The clock handle for `CLOCKID_MONOTONIC`.
-    instance_monotonic_clock: Cell<Option<Fd>>,
-
-    /// The clock handle for `CLOCKID_REALTIME`.
-    instance_wall_clock: Cell<Option<Fd>>,
-
     /// The string `..` for use by the directory iterator.
     dotdot: [UnsafeCell<u8>; 2],
 
@@ -2151,7 +2132,7 @@ const fn bump_arena_size() -> usize {
     start -= size_of::<DirentCache>();
 
     // Remove miscellaneous metadata also stored in state.
-    start -= 25 * size_of::<usize>();
+    start -= 22 * size_of::<usize>();
 
     // Everything else is the `command_data` allocation.
     start
@@ -2272,8 +2253,6 @@ impl State {
                     }),
                     path_data: UnsafeCell::new(MaybeUninit::uninit()),
                 },
-                instance_monotonic_clock: Cell::new(None),
-                instance_wall_clock: Cell::new(None),
                 dotdot: [UnsafeCell::new(b'.'), UnsafeCell::new(b'.')],
             }));
             &*ret
@@ -2302,36 +2281,6 @@ impl State {
             *d = Some(Descriptors::new(&self.import_alloc, &self.long_lived_arena));
         }
         RefMut::map(d, |d| d.as_mut().unwrap_or_else(|| unreachable!()))
-    }
-
-    /// Return a handle to the default wall clock, creating one if we
-    /// don't already have one.
-    fn instance_wall_clock(&self) -> Fd {
-        match self.instance_wall_clock.get() {
-            Some(fd) => fd,
-            None => self.init_instance_wall_clock(),
-        }
-    }
-
-    fn init_instance_wall_clock(&self) -> Fd {
-        let clock = instance_wall_clock::instance_wall_clock();
-        self.instance_wall_clock.set(Some(clock));
-        clock
-    }
-
-    /// Return a handle to the default monotonic clock, creating one if we
-    /// don't already have one.
-    fn instance_monotonic_clock(&self) -> Fd {
-        match self.instance_monotonic_clock.get() {
-            Some(fd) => fd,
-            None => self.init_instance_monotonic_clock(),
-        }
-    }
-
-    fn init_instance_monotonic_clock(&self) -> Fd {
-        let clock = instance_monotonic_clock::instance_monotonic_clock();
-        self.instance_monotonic_clock.set(Some(clock));
-        clock
     }
 
     fn get_environment(&self) -> &[StrTuple] {
