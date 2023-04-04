@@ -1,0 +1,139 @@
+test optimize
+set opt_level=speed
+target x86_64
+
+function %or_and_y_with_not_y_i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = band v0, v1
+    v3 = bnot v1
+    v4 = bor v2, v3
+    return v4
+    ; check: v5 = bor v0, v3
+    ; check: return v5
+}
+
+function %or_and_constant_with_not_constant_i8(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 -4
+    v2 = band v0, v1
+    v3 = iconst.i8 3
+    v4 = bor v2, v3
+    return v4
+    ; check: v5 = bor v0, v3
+    ; check: return v5
+}
+
+function %or_and_y_with_not_y_i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = band v0, v1
+    v3 = bnot v1
+    v4 = bor v3, v2
+    return v4
+    ; check: v5 = bor v0, v3
+    ; check: return v5
+}
+
+function %or_and_constant_with_not_constant_i8(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 -4
+    v2 = band v0, v1
+    v3 = iconst.i8 3
+    v4 = bor v3, v2
+    return v4
+    ; check: v6 = bor v0, v3
+    ; check: return v6
+}
+
+function %or_and_constant_with_any_constant_should_not_apply_rule_i8(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 -4
+    v2 = band v0, v1
+    ;; `v3` is not `bnot(v1)` so the rewrite should not apply.
+    v3 = iconst.i8 -5
+    v4 = bor v2, v3
+    return v4
+    ; check: return v4
+}
+
+function %or_and_y_with_not_y_i64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = band v0, v1
+    v3 = bnot v1
+    v4 = bor v2, v3
+    return v4
+    ; check: v5 = bor v0, v3
+    ; check: return v5
+}
+
+function %or_and_constant_with_not_constant_i64(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 -4
+    v2 = band v0, v1
+    v3 = iconst.i64 3
+    v4 = bor v2, v3
+    return v4
+    ; check: v5 = bor v0, v3
+    ; check: return v5
+}
+
+function %or_and_y_with_not_y_i64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = band v0, v1
+    v3 = bnot v1
+    v4 = bor v3, v2
+    return v4
+    ; check: v5 = bor v0, v3
+    ; check: return v5
+}
+
+function %or_and_constant_with_not_constant_i64(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 -4
+    v2 = band v0, v1
+    v3 = iconst.i64 3
+    v4 = bor v3, v2
+    return v4
+    ; check: v6 = bor v0, v3
+    ; check: return v6
+}
+
+function %or_and_constant_with_any_constant_should_not_apply_rule_i64(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 -4
+    v2 = band v0, v1
+    ;; `v3` is not `bnot(v1)` so the rewrite should not apply.
+    v3 = iconst.i64 -5
+    v4 = bor v2, v3
+    return v4
+    ; check: return v4
+}
+
+function %bnot1(i8) -> i8 {
+block0(v1: i8):
+    v2 = iconst.i8 -1
+    v3 = bxor v1, v2
+    return v3
+}
+
+; check: v4 = bnot v1
+; check: return v4
+
+function %bnot2(i64) -> i64 {
+block0(v1: i64):
+    v2 = iconst.i64 -1
+    v3 = bxor v1, v2
+    return v3
+}
+
+; check: v4 = bnot v1
+; check: return v4
+
+function %bnot3(i64) -> i64 {
+block0(v1: i64):
+    v2 = iconst.i64 -1
+    v3 = bxor v2, v1
+    return v3
+}
+
+; check: v5 = bnot v1
+; check: return v5
