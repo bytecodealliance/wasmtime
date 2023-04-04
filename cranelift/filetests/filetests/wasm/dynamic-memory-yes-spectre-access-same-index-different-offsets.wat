@@ -67,7 +67,7 @@
 ;; @0047                               v5 = uextend.i64 v0
 ;; @0047                               v7 = icmp ugt v5, v6
 ;; @0047                               v10 = iconst.i64 0
-;; @0047                               v9 = iadd v5, v8
+;; @0047                               v9 = iadd v8, v5
 ;; @0047                               v11 = select_spectre_guard v7, v10, v9  ; v10 = 0
 ;; @0047                               v12 = load.i32 little heap v11
 ;;                                     v2 -> v12
@@ -78,7 +78,7 @@
 ;;                                     v3 -> v21
 ;; @0051                               v23 = iconst.i64 0x0010_0003
 ;; @0051                               v24 = uadd_overflow_trap v5, v23, heap_oob  ; v23 = 0x0010_0003
-;; @0051                               v26 = icmp ult v6, v24
+;; @0051                               v26 = icmp ugt v24, v6
 ;;                                     v34 = iconst.i64 0x000f_ffff
 ;; @0051                               v29 = iadd v9, v34  ; v34 = 0x000f_ffff
 ;; @0051                               v31 = select_spectre_guard v26, v10, v29  ; v10 = 0
@@ -101,7 +101,7 @@
 ;; @005d                               v5 = uextend.i64 v0
 ;; @005d                               v7 = icmp ugt v5, v6
 ;; @005d                               v10 = iconst.i64 0
-;; @005d                               v9 = iadd v5, v8
+;; @005d                               v9 = iadd v8, v5
 ;; @005d                               v11 = select_spectre_guard v7, v10, v9  ; v10 = 0
 ;; @005d                               store little heap v1, v11
 ;;                                     v30 = iconst.i64 4
@@ -110,7 +110,7 @@
 ;; @0064                               store little heap v2, v19
 ;; @006b                               v21 = iconst.i64 0x0010_0003
 ;; @006b                               v22 = uadd_overflow_trap v5, v21, heap_oob  ; v21 = 0x0010_0003
-;; @006b                               v24 = icmp ult v6, v22
+;; @006b                               v24 = icmp ugt v22, v6
 ;;                                     v31 = iconst.i64 0x000f_ffff
 ;; @006b                               v27 = iadd v9, v31  ; v31 = 0x000f_ffff
 ;; @006b                               v29 = select_spectre_guard v24, v10, v27  ; v10 = 0

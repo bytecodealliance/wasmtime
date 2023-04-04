@@ -54,7 +54,7 @@
 ;; @0057                               v4 = uextend.i64 v0
 ;; @0057                               v6 = icmp ugt v4, v5
 ;; @0057                               v9 = iconst.i64 0
-;; @0057                               v8 = iadd v4, v7
+;; @0057                               v8 = iadd v7, v4
 ;; @0057                               v10 = select_spectre_guard v6, v9, v8  ; v9 = 0
 ;; @0057                               v11 = load.i32 little heap v10
 ;;                                     v2 -> v11
@@ -75,7 +75,7 @@
 ;; @0064                               v4 = uextend.i64 v0
 ;; @0064                               v6 = icmp ugt v4, v5
 ;; @0064                               v10 = iconst.i64 0
-;; @0064                               v8 = iadd v4, v7
+;; @0064                               v8 = iadd v7, v4
 ;;                                     v22 = iconst.i64 1234
 ;; @0064                               v9 = iadd v8, v22  ; v22 = 1234
 ;; @0064                               v11 = select_spectre_guard v6, v10, v9  ; v10 = 0
