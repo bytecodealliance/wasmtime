@@ -127,10 +127,6 @@ async fn run_time(mut store: Store<WasiCtx>, wasi: Command) -> Result<()> {
         fn now(&self) -> Duration {
             Duration::new(1431648000, 100)
         }
-
-        fn dup(&self) -> Box<dyn WasiWallClock + Send + Sync> {
-            Box::new(Self)
-        }
     }
 
     struct FakeMonotonicClock {
@@ -148,18 +144,10 @@ async fn run_time(mut store: Store<WasiCtx>, wasi: Command) -> Result<()> {
             *now += 42 * 1_000_000_000;
             then
         }
-
-        fn dup(&self) -> Box<dyn WasiMonotonicClock + Send + Sync> {
-            let now = *self.now.lock().unwrap();
-            Box::new(Self {
-                now: Mutex::new(now),
-            })
-        }
     }
 
-    store.data_mut().clocks.instance_wall_clock = Box::new(FakeWallClock);
-    store.data_mut().clocks.instance_monotonic_clock =
-        Box::new(FakeMonotonicClock { now: Mutex::new(0) });
+    store.data_mut().clocks.wall = Box::new(FakeWallClock);
+    store.data_mut().clocks.monotonic = Box::new(FakeMonotonicClock { now: Mutex::new(0) });
 
     wasi.call_run(&mut store)
         .await?

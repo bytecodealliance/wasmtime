@@ -1,12 +1,11 @@
 use crate::{
     command,
-    command::wasi::monotonic_clock::{Instant, MonotonicClock},
+    command::wasi::monotonic_clock::Instant,
     command::wasi::poll::Pollable,
     command::wasi::streams::{InputStream, OutputStream, StreamError},
     command::wasi::tcp::TcpSocket,
     proxy, WasiCtx,
 };
-use wasi_common::clocks::TableMonotonicClockExt;
 use wasi_common::stream::TableStreamExt;
 use wasi_common::tcp_socket::TableTcpSocketExt;
 
@@ -26,7 +25,7 @@ pub(crate) enum PollableEntry {
     /// Poll for write events.
     Write(OutputStream),
     /// Poll for a monotonic-clock timer.
-    MonotonicClock(MonotonicClock, Instant, bool),
+    MonotonicClock(Instant, bool),
     /// Poll for a tcp-socket.
     TcpSocket(TcpSocket),
 }
@@ -58,9 +57,8 @@ async fn poll_oneoff(ctx: &mut WasiCtx, futures: Vec<Pollable>) -> anyhow::Resul
                     ctx.table().get_output_stream(stream).map_err(convert)?;
                 poll.subscribe_write(wasi_stream, userdata);
             }
-            PollableEntry::MonotonicClock(clock, when, absolute) => {
-                let wasi_clock = ctx.table().get_monotonic_clock(clock).map_err(convert)?;
-                poll.subscribe_monotonic_clock(wasi_clock, when, absolute, userdata);
+            PollableEntry::MonotonicClock(when, absolute) => {
+                poll.subscribe_monotonic_clock(&*ctx.clocks.monotonic, when, absolute, userdata);
             }
             PollableEntry::TcpSocket(tcp_socket) => {
                 let wasi_tcp_socket: &dyn wasi_common::WasiTcpSocket =

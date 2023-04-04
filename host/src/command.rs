@@ -20,8 +20,6 @@ pub fn add_to_linker<T: Send>(
     wasi::wall_clock::add_to_linker(l, f)?;
     wasi::monotonic_clock::add_to_linker(l, f)?;
     wasi::timezone::add_to_linker(l, f)?;
-    wasi::instance_monotonic_clock::add_to_linker(l, f)?;
-    wasi::instance_wall_clock::add_to_linker(l, f)?;
     wasi::filesystem::add_to_linker(l, f)?;
     wasi::poll::add_to_linker(l, f)?;
     wasi::streams::add_to_linker(l, f)?;
