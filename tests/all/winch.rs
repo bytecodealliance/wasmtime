@@ -1,4 +1,6 @@
+#[cfg(target_arch = "x86_64")]
 use anyhow::Result;
+#[cfg(target_arch = "x86_64")]
 use wasmtime::*;
 
 #[test]
