@@ -31,11 +31,11 @@ use regalloc2::{
     RegClass, VReg,
 };
 
+use crate::hash_map::Entry;
+use crate::HashMap;
 use alloc::vec::Vec;
+use core::fmt;
 use cranelift_entity::{entity_impl, Keys, PrimaryMap};
-use std::collections::hash_map::Entry;
-use std::collections::HashMap;
-use std::fmt;
 
 /// Index referring to an instruction in VCode.
 pub type InsnIndex = regalloc2::Inst;
@@ -957,9 +957,9 @@ impl<I: VCodeInst> VCode<I> {
                                 .safepoint_slots
                                 .binary_search_by(|(progpoint, _alloc)| {
                                     if progpoint.inst() >= iix {
-                                        std::cmp::Ordering::Greater
+                                        core::cmp::Ordering::Greater
                                     } else {
-                                        std::cmp::Ordering::Less
+                                        core::cmp::Ordering::Less
                                     }
                                 })
                                 .unwrap_err();
@@ -1299,7 +1299,7 @@ impl<I: VCodeInst> RegallocFunction for VCode<I> {
     }
 
     fn num_vregs(&self) -> usize {
-        std::cmp::max(self.vreg_types.len(), first_user_vreg_index())
+        core::cmp::max(self.vreg_types.len(), first_user_vreg_index())
     }
 
     fn reftype_vregs(&self) -> &[VReg] {
@@ -1570,7 +1570,7 @@ impl VCodeConstantData {
 #[cfg(test)]
 mod test {
     use super::*;
-    use std::mem::size_of;
+    use core::mem::size_of;
 
     #[test]
     fn size_of_constant_structs() {

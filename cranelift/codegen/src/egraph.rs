@@ -17,9 +17,9 @@ use crate::opts::IsleContext;
 use crate::scoped_hash_map::{Entry as ScopedEntry, ScopedHashMap};
 use crate::trace;
 use crate::unionfind::UnionFind;
+use core::hash::Hasher;
 use cranelift_entity::packed_option::ReservedValue;
 use cranelift_entity::SecondaryMap;
-use std::hash::Hasher;
 
 mod cost;
 mod domtree;
@@ -642,7 +642,7 @@ impl<'a> CtxEq<(Type, InstructionData), (Type, InstructionData)> for GVNContext<
 
 impl<'a> CtxHash<(Type, InstructionData)> for GVNContext<'a> {
     fn ctx_hash<H: Hasher>(&self, state: &mut H, (ty, inst): &(Type, InstructionData)) {
-        std::hash::Hash::hash(&ty, state);
+        core::hash::Hash::hash(&ty, state);
         inst.hash(state, self.value_lists, |value| self.union_find.find(value));
     }
 }

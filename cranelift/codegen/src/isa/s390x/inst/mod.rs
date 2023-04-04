@@ -7,10 +7,10 @@ use crate::isa::CallConv;
 use crate::machinst::*;
 use crate::{settings, CodegenError, CodegenResult};
 use alloc::boxed::Box;
+use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use regalloc2::{PRegSet, VReg};
 use smallvec::SmallVec;
-use std::string::{String, ToString};
 pub mod regs;
 pub use self::regs::*;
 pub mod imms;
@@ -64,7 +64,7 @@ pub struct CallIndInfo {
 fn inst_size_test() {
     // This test will help with unintentionally growing the size
     // of the Inst enum.
-    assert_eq!(32, std::mem::size_of::<Inst>());
+    assert_eq!(32, core::mem::size_of::<Inst>());
 }
 
 /// A register pair. Enum so it can be destructured in ISLE.
@@ -3144,7 +3144,7 @@ impl Inst {
             &Inst::Args { ref args } => {
                 let mut s = "args".to_string();
                 for arg in args {
-                    use std::fmt::Write;
+                    use core::fmt::Write;
                     let preg = pretty_print_reg(arg.preg, &mut empty_allocs);
                     let def = pretty_print_reg(arg.vreg.to_reg(), allocs);
                     write!(&mut s, " {}={}", def, preg).unwrap();
@@ -3155,7 +3155,7 @@ impl Inst {
                 debug_assert_eq!(link, gpr(14));
                 let mut s = format!("br {}", show_reg(link));
                 for ret in rets {
-                    use std::fmt::Write;
+                    use core::fmt::Write;
                     let preg = pretty_print_reg(ret.preg, &mut empty_allocs);
                     let vreg = pretty_print_reg(ret.vreg, allocs);
                     write!(&mut s, " {}={}", vreg, preg).unwrap();

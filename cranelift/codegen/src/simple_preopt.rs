@@ -472,7 +472,7 @@ mod simplify {
         instructions::Opcode,
         types::{I16, I32, I8},
     };
-    use std::marker::PhantomData;
+    use core::marker::PhantomData;
 
     pub struct PeepholeOptimizer<'a, 'b> {
         phantom: PhantomData<(&'a (), &'b ())>,

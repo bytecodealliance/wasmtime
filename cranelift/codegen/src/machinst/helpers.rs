@@ -1,7 +1,7 @@
 //! Miscellaneous helpers for machine backends.
 
 use crate::ir::Type;
-use std::ops::{Add, BitAnd, Not, Sub};
+use core::ops::{Add, BitAnd, Not, Sub};
 
 /// Returns the size (in bits) of a given type.
 pub fn ty_bits(ty: Type) -> usize {

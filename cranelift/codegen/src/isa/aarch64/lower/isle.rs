@@ -34,10 +34,10 @@ use crate::{
     },
 };
 use crate::{isle_common_prelude_methods, isle_lower_prelude_methods};
+use alloc::boxed::Box;
+use alloc::vec::Vec;
+use core::convert::TryFrom;
 use regalloc2::PReg;
-use std::boxed::Box;
-use std::convert::TryFrom;
-use std::vec::Vec;
 
 type BoxCallInfo = Box<CallInfo>;
 type BoxCallIndInfo = Box<CallIndInfo>;

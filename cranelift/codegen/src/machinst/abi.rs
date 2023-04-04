@@ -110,15 +110,15 @@ use crate::isa::TargetIsa;
 use crate::settings;
 use crate::settings::ProbestackStrategy;
 use crate::CodegenResult;
+use crate::HashMap;
 use crate::{ir, isa};
 use crate::{machinst::*, trace};
 use alloc::vec::Vec;
+use core::convert::TryFrom;
+use core::marker::PhantomData;
+use core::mem;
 use regalloc2::{PReg, PRegSet};
 use smallvec::{smallvec, SmallVec};
-use std::collections::HashMap;
-use std::convert::TryFrom;
-use std::marker::PhantomData;
-use std::mem;
 
 /// A small vector of instructions (with some reasonable size); appropriate for
 /// a small fixed sequence implementing one operation.
@@ -943,7 +943,7 @@ impl SigSet {
 
 // NB: we do _not_ implement `IndexMut` because these signatures are
 // deduplicated and shared!
-impl std::ops::Index<Sig> for SigSet {
+impl core::ops::Index<Sig> for SigSet {
     type Output = SigData;
 
     fn index(&self, sig: Sig) -> &Self::Output {
@@ -1726,7 +1726,7 @@ impl<M: ABIMachineSpec> Callee<M> {
             // locations defined by the ABI.
             Some(M::gen_args(
                 &self.isa_flags,
-                std::mem::take(&mut self.reg_args),
+                core::mem::take(&mut self.reg_args),
             ))
         } else {
             None
@@ -1768,7 +1768,7 @@ impl<M: ABIMachineSpec> Callee<M> {
         let map_size = (virtual_sp_offset + nominal_sp_to_fp) as u32;
         let bytes = M::word_bytes();
         let map_words = (map_size + bytes - 1) / bytes;
-        let mut bits = std::iter::repeat(false)
+        let mut bits = core::iter::repeat(false)
             .take(map_words as usize)
             .collect::<Vec<bool>>();
 
@@ -2405,6 +2405,6 @@ mod tests {
     fn sig_data_size() {
         // The size of `SigData` is performance sensitive, so make sure
         // we don't regress it unintentionally.
-        assert_eq!(std::mem::size_of::<SigData>(), 24);
+        assert_eq!(core::mem::size_of::<SigData>(), 24);
     }
 }

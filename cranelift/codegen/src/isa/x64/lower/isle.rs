@@ -34,11 +34,11 @@ use crate::{
         VCodeConstant, VCodeConstantData,
     },
 };
+use alloc::boxed::Box;
 use alloc::vec::Vec;
+use core::convert::TryFrom;
 use regalloc2::PReg;
 use smallvec::SmallVec;
-use std::boxed::Box;
-use std::convert::TryFrom;
 
 type BoxCallInfo = Box<CallInfo>;
 type BoxVecMachLabel = Box<SmallVec<[MachLabel; 4]>>;

@@ -3,7 +3,7 @@
 // Some variants are never constructed, but we still want them as options in the future.
 use super::Inst;
 #[allow(dead_code)]
-use std::fmt::{Debug, Display, Formatter, Result};
+use core::fmt::{Debug, Display, Formatter, Result};
 
 #[derive(Copy, Clone, Debug, Default)]
 pub struct Imm12 {
@@ -60,7 +60,7 @@ impl Display for Imm12 {
     }
 }
 
-impl std::ops::Neg for Imm12 {
+impl core::ops::Neg for Imm12 {
     type Output = Self;
     fn neg(self) -> Self::Output {
         Self { bits: -self.bits }

@@ -2,11 +2,11 @@
 //!
 //! This modules provides facilities for timing the execution of individual compilation passes.
 
+use alloc::boxed::Box;
+use core::any::Any;
+use core::cell::{Cell, RefCell};
 use core::fmt;
-use std::any::Any;
-use std::boxed::Box;
-use std::cell::{Cell, RefCell};
-use std::mem;
+use core::mem;
 use std::time::{Duration, Instant};
 
 // Each pass that can be timed is predefined with the `define_passes!` macro. Each pass has a
@@ -120,7 +120,7 @@ thread_local! {
 ///
 /// Returns the old profiler.
 pub fn set_thread_profiler(new_profiler: Box<dyn Profiler>) -> Box<dyn Profiler> {
-    PROFILER.with(|profiler| std::mem::replace(&mut *profiler.borrow_mut(), new_profiler))
+    PROFILER.with(|profiler| core::mem::replace(&mut *profiler.borrow_mut(), new_profiler))
 }
 
 /// Start timing `pass` as a child of the currently running pass, if any.

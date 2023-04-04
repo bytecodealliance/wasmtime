@@ -201,7 +201,7 @@ impl<'a> Elaborator<'a> {
                     // the natural comparison works based on cost, and
                     // breaks ties based on value number.
                     trace!(" -> best of {:?} and {:?}", best[x], best[y]);
-                    best[value] = std::cmp::min(best[x], best[y]);
+                    best[value] = core::cmp::min(best[x], best[y]);
                     trace!(" -> {:?}", best[value]);
                 }
                 ValueDef::Param(_, _) => {

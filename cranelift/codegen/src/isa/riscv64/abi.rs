@@ -139,7 +139,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                     let size = if args_or_rets == ArgsOrRets::Rets && call_conv.extends_wasmtime() {
                         size
                     } else {
-                        std::cmp::max(size, 8)
+                        core::cmp::max(size, 8)
                     };
                     // Align.
                     debug_assert!(size.is_power_of_two());

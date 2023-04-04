@@ -5,8 +5,8 @@ use crate::ir::Type;
 use crate::isa::aarch64::inst::{OperandSize, ScalarSize};
 use crate::machinst::{AllocationConsumer, PrettyPrint};
 
+use alloc::string::String;
 use core::convert::TryFrom;
-use std::string::String;
 
 /// An immediate that represents the NZCV flags.
 #[derive(Clone, Copy, Debug)]

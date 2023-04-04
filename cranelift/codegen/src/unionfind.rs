@@ -1,8 +1,8 @@
 //! Simple union-find data structure.
 
 use crate::trace;
+use core::hash::Hash;
 use cranelift_entity::{packed_option::ReservedValue, EntityRef, SecondaryMap};
-use std::hash::Hash;
 
 /// A union-find data structure. The data structure can allocate
 /// `Id`s, indicating eclasses, and can merge eclasses together.
@@ -19,7 +19,7 @@ impl<Idx: EntityRef + ReservedValue> Default for Val<Idx> {
     }
 }
 
-impl<Idx: EntityRef + Hash + std::fmt::Display + Ord + ReservedValue> UnionFind<Idx> {
+impl<Idx: EntityRef + Hash + core::fmt::Display + Ord + ReservedValue> UnionFind<Idx> {
     /// Create a new `UnionFind` with the given capacity.
     pub fn with_capacity(cap: usize) -> Self {
         UnionFind {
@@ -64,7 +64,7 @@ impl<Idx: EntityRef + Hash + std::fmt::Display + Ord + ReservedValue> UnionFind<
     pub fn union(&mut self, a: Idx, b: Idx) {
         let a = self.find_and_update(a);
         let b = self.find_and_update(b);
-        let (a, b) = (std::cmp::min(a, b), std::cmp::max(a, b));
+        let (a, b) = (core::cmp::min(a, b), core::cmp::max(a, b));
         if a != b {
             // Always canonicalize toward lower IDs.
             self.parent[b] = Val(a);

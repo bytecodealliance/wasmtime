@@ -34,7 +34,7 @@ use crate::ir::Opcode;
 pub(crate) struct Cost(u32);
 impl Cost {
     pub(crate) fn at_level(&self, loop_level: usize) -> Cost {
-        let loop_level = std::cmp::min(2, loop_level);
+        let loop_level = core::cmp::min(2, loop_level);
         let multiplier = 1u32 << ((10 * loop_level) as u32);
         Cost(self.0.saturating_mul(multiplier)).finite()
     }
@@ -53,17 +53,17 @@ impl Cost {
     /// conjunction with saturating ops to avoid saturating into
     /// `infinity()`.
     fn finite(self) -> Cost {
-        Cost(std::cmp::min(u32::MAX - 1, self.0))
+        Cost(core::cmp::min(u32::MAX - 1, self.0))
     }
 }
 
-impl std::default::Default for Cost {
+impl core::default::Default for Cost {
     fn default() -> Cost {
         Cost::zero()
     }
 }
 
-impl std::ops::Add<Cost> for Cost {
+impl core::ops::Add<Cost> for Cost {
     type Output = Cost;
     fn add(self, other: Cost) -> Cost {
         Cost(self.0.saturating_add(other.0)).finite()
