@@ -6,7 +6,10 @@ pub mod wasi {
         world: "command",
         tracing: true,
         async: true,
-        trappable_error_type: { "filesystem"::"error-code": Error }
+        trappable_error_type: {
+            "filesystem"::"error-code": Error,
+            "streams"::"stream-error": Error,
+        }
     });
 }
 

@@ -1,31 +1,42 @@
 use crate::{
     command,
     command::wasi::poll::Pollable,
-    command::wasi::streams::{InputStream, OutputStream, StreamError},
+    command::wasi::streams::{self, InputStream, OutputStream, StreamError},
     poll::PollableEntry,
-    proxy, HostResult, WasiCtx,
+    proxy, WasiCtx,
 };
+use anyhow::anyhow;
 use wasi_common::stream::TableStreamExt;
 
-fn convert(error: wasi_common::Error) -> anyhow::Error {
-    if let Some(_errno) = error.downcast_ref() {
-        anyhow::Error::new(StreamError {})
-    } else {
-        error.into()
+impl From<wasi_common::Error> for streams::Error {
+    fn from(error: wasi_common::Error) -> streams::Error {
+        if let Some(_) = error.downcast_ref() {
+            StreamError {}.into()
+        } else {
+            streams::Error::trap(anyhow!(error))
+        }
+    }
+}
+
+impl From<streams::Error> for proxy::wasi::streams::Error {
+    fn from(error: streams::Error) -> proxy::wasi::streams::Error {
+        if let Some(_) = error.downcast_ref() {
+            proxy::wasi::streams::StreamError {}.into()
+        } else {
+            proxy::wasi::streams::Error::trap(anyhow!(error))
+        }
     }
 }
 
 async fn drop_input_stream(ctx: &mut WasiCtx, stream: InputStream) -> anyhow::Result<()> {
     ctx.table_mut()
-        .delete::<Box<dyn wasi_common::InputStream>>(stream)
-        .map_err(convert)?;
+        .delete::<Box<dyn wasi_common::InputStream>>(stream)?;
     Ok(())
 }
 
 async fn drop_output_stream(ctx: &mut WasiCtx, stream: OutputStream) -> anyhow::Result<()> {
     ctx.table_mut()
-        .delete::<Box<dyn wasi_common::OutputStream>>(stream)
-        .map_err(convert)?;
+        .delete::<Box<dyn wasi_common::OutputStream>>(stream)?;
     Ok(())
 }
 
@@ -33,11 +44,8 @@ async fn read(
     ctx: &mut WasiCtx,
     stream: InputStream,
     len: u64,
-) -> HostResult<(Vec<u8>, bool), StreamError> {
-    let s: &mut Box<dyn wasi_common::InputStream> = ctx
-        .table_mut()
-        .get_input_stream_mut(stream)
-        .map_err(convert)?;
+) -> Result<(Vec<u8>, bool), streams::Error> {
+    let s: &mut Box<dyn wasi_common::InputStream> = ctx.table_mut().get_input_stream_mut(stream)?;
 
     // Len could be any `u64` value, but we don't want to
     // allocate too much up front, so make a wild guess
@@ -45,18 +53,18 @@ async fn read(
     let buffer_len = std::cmp::min(len, 0x400000) as _;
     let mut buffer = vec![0; buffer_len];
 
-    let (bytes_read, end) = s.read(&mut buffer).await.map_err(convert)?;
+    let (bytes_read, end) = s.read(&mut buffer).await?;
 
     buffer.truncate(bytes_read as usize);
 
-    Ok(Ok((buffer, end)))
+    Ok((buffer, end))
 }
 
 async fn blocking_read(
     ctx: &mut WasiCtx,
     stream: InputStream,
     len: u64,
-) -> HostResult<(Vec<u8>, bool), StreamError> {
+) -> Result<(Vec<u8>, bool), streams::Error> {
     // TODO: When this is really async make this block.
     read(ctx, stream, len).await
 }
@@ -65,22 +73,20 @@ async fn write(
     ctx: &mut WasiCtx,
     stream: OutputStream,
     bytes: Vec<u8>,
-) -> HostResult<u64, StreamError> {
-    let s: &mut Box<dyn wasi_common::OutputStream> = ctx
-        .table_mut()
-        .get_output_stream_mut(stream)
-        .map_err(convert)?;
+) -> Result<u64, streams::Error> {
+    let s: &mut Box<dyn wasi_common::OutputStream> =
+        ctx.table_mut().get_output_stream_mut(stream)?;
 
-    let bytes_written: u64 = s.write(&bytes).await.map_err(convert)?;
+    let bytes_written: u64 = s.write(&bytes).await?;
 
-    Ok(Ok(u64::try_from(bytes_written).unwrap()))
+    Ok(u64::try_from(bytes_written).unwrap())
 }
 
 async fn blocking_write(
     ctx: &mut WasiCtx,
     stream: OutputStream,
     bytes: Vec<u8>,
-) -> HostResult<u64, StreamError> {
+) -> Result<u64, streams::Error> {
     // TODO: When this is really async make this block.
     write(ctx, stream, bytes).await
 }
@@ -89,22 +95,19 @@ async fn skip(
     ctx: &mut WasiCtx,
     stream: InputStream,
     len: u64,
-) -> HostResult<(u64, bool), StreamError> {
-    let s: &mut Box<dyn wasi_common::InputStream> = ctx
-        .table_mut()
-        .get_input_stream_mut(stream)
-        .map_err(convert)?;
+) -> Result<(u64, bool), streams::Error> {
+    let s: &mut Box<dyn wasi_common::InputStream> = ctx.table_mut().get_input_stream_mut(stream)?;
 
-    let (bytes_skipped, end) = s.skip(len).await.map_err(convert)?;
+    let (bytes_skipped, end) = s.skip(len).await?;
 
-    Ok(Ok((bytes_skipped, end)))
+    Ok((bytes_skipped, end))
 }
 
 async fn blocking_skip(
     ctx: &mut WasiCtx,
     stream: InputStream,
     len: u64,
-) -> HostResult<(u64, bool), StreamError> {
+) -> Result<(u64, bool), streams::Error> {
     // TODO: When this is really async make this block.
     skip(ctx, stream, len).await
 }
@@ -113,22 +116,20 @@ async fn write_zeroes(
     ctx: &mut WasiCtx,
     stream: OutputStream,
     len: u64,
-) -> HostResult<u64, StreamError> {
-    let s: &mut Box<dyn wasi_common::OutputStream> = ctx
-        .table_mut()
-        .get_output_stream_mut(stream)
-        .map_err(convert)?;
+) -> Result<u64, streams::Error> {
+    let s: &mut Box<dyn wasi_common::OutputStream> =
+        ctx.table_mut().get_output_stream_mut(stream)?;
 
-    let bytes_written: u64 = s.write_zeroes(len).await.map_err(convert)?;
+    let bytes_written: u64 = s.write_zeroes(len).await?;
 
-    Ok(Ok(bytes_written))
+    Ok(bytes_written)
 }
 
 async fn blocking_write_zeroes(
     ctx: &mut WasiCtx,
     stream: OutputStream,
     len: u64,
-) -> HostResult<u64, StreamError> {
+) -> Result<u64, streams::Error> {
     // TODO: When this is really async make this block.
     write_zeroes(ctx, stream, len).await
 }
@@ -138,7 +139,7 @@ async fn splice(
     _src: InputStream,
     _dst: OutputStream,
     _len: u64,
-) -> HostResult<(u64, bool), StreamError> {
+) -> Result<(u64, bool), streams::Error> {
     // TODO: We can't get two streams at the same time because they both
     // carry the exclusive lifetime of `ctx`. When [`get_many_mut`] is
     // stabilized, that could allow us to add a `get_many_stream_mut` or
@@ -149,13 +150,13 @@ async fn splice(
     let s: &mut Box<dyn wasi_common::InputStream> = ctx
         .table_mut()
         .get_input_stream_mut(src)
-        .map_err(convert)?;
+        ?;
     let d: &mut Box<dyn wasi_common::OutputStream> = ctx
         .table_mut()
         .get_output_stream_mut(dst)
-        .map_err(convert)?;
+        ?;
 
-    let bytes_spliced: u64 = s.splice(&mut **d, len).await.map_err(convert)?;
+    let bytes_spliced: u64 = s.splice(&mut **d, len).await?;
 
     Ok(bytes_spliced)
     */
@@ -168,7 +169,7 @@ async fn blocking_splice(
     src: InputStream,
     dst: OutputStream,
     len: u64,
-) -> HostResult<(u64, bool), StreamError> {
+) -> Result<(u64, bool), streams::Error> {
     // TODO: When this is really async make this block.
     splice(ctx, src, dst, len).await
 }
@@ -177,7 +178,7 @@ async fn forward(
     _ctx: &mut WasiCtx,
     _src: InputStream,
     _dst: OutputStream,
-) -> HostResult<u64, StreamError> {
+) -> Result<u64, streams::Error> {
     // TODO: We can't get two streams at the same time because they both
     // carry the exclusive lifetime of `ctx`. When [`get_many_mut`] is
     // stabilized, that could allow us to add a `get_many_stream_mut` or
@@ -188,13 +189,13 @@ async fn forward(
     let s: &mut Box<dyn wasi_common::InputStream> = ctx
         .table_mut()
         .get_input_stream_mut(src)
-        .map_err(convert)?;
+        ?;
     let d: &mut Box<dyn wasi_common::OutputStream> = ctx
         .table_mut()
         .get_output_stream_mut(dst)
-        .map_err(convert)?;
+        ?;
 
-    let bytes_spliced: u64 = s.splice(&mut **d, len).await.map_err(convert)?;
+    let bytes_spliced: u64 = s.splice(&mut **d, len).await?;
 
     Ok(bytes_spliced)
     */
@@ -239,7 +240,7 @@ impl command::wasi::streams::Host for WasiCtx {
         &mut self,
         stream: InputStream,
         len: u64,
-    ) -> HostResult<(Vec<u8>, bool), StreamError> {
+    ) -> Result<(Vec<u8>, bool), streams::Error> {
         read(self, stream, len).await
     }
 
@@ -247,15 +248,11 @@ impl command::wasi::streams::Host for WasiCtx {
         &mut self,
         stream: InputStream,
         len: u64,
-    ) -> HostResult<(Vec<u8>, bool), StreamError> {
+    ) -> Result<(Vec<u8>, bool), streams::Error> {
         blocking_read(self, stream, len).await
     }
 
-    async fn write(
-        &mut self,
-        stream: OutputStream,
-        bytes: Vec<u8>,
-    ) -> HostResult<u64, StreamError> {
+    async fn write(&mut self, stream: OutputStream, bytes: Vec<u8>) -> Result<u64, streams::Error> {
         write(self, stream, bytes).await
     }
 
@@ -263,15 +260,11 @@ impl command::wasi::streams::Host for WasiCtx {
         &mut self,
         stream: OutputStream,
         bytes: Vec<u8>,
-    ) -> HostResult<u64, StreamError> {
+    ) -> Result<u64, streams::Error> {
         blocking_write(self, stream, bytes).await
     }
 
-    async fn skip(
-        &mut self,
-        stream: InputStream,
-        len: u64,
-    ) -> HostResult<(u64, bool), StreamError> {
+    async fn skip(&mut self, stream: InputStream, len: u64) -> Result<(u64, bool), streams::Error> {
         skip(self, stream, len).await
     }
 
@@ -279,7 +272,7 @@ impl command::wasi::streams::Host for WasiCtx {
         &mut self,
         stream: InputStream,
         len: u64,
-    ) -> HostResult<(u64, bool), StreamError> {
+    ) -> Result<(u64, bool), streams::Error> {
         blocking_skip(self, stream, len).await
     }
 
@@ -287,7 +280,7 @@ impl command::wasi::streams::Host for WasiCtx {
         &mut self,
         stream: OutputStream,
         len: u64,
-    ) -> HostResult<u64, StreamError> {
+    ) -> Result<u64, streams::Error> {
         write_zeroes(self, stream, len).await
     }
 
@@ -295,7 +288,7 @@ impl command::wasi::streams::Host for WasiCtx {
         &mut self,
         stream: OutputStream,
         len: u64,
-    ) -> HostResult<u64, StreamError> {
+    ) -> Result<u64, streams::Error> {
         blocking_write_zeroes(self, stream, len).await
     }
 
@@ -304,7 +297,7 @@ impl command::wasi::streams::Host for WasiCtx {
         src: InputStream,
         dst: OutputStream,
         len: u64,
-    ) -> HostResult<(u64, bool), StreamError> {
+    ) -> Result<(u64, bool), streams::Error> {
         splice(self, src, dst, len).await
     }
 
@@ -313,7 +306,7 @@ impl command::wasi::streams::Host for WasiCtx {
         src: InputStream,
         dst: OutputStream,
         len: u64,
-    ) -> HostResult<(u64, bool), StreamError> {
+    ) -> Result<(u64, bool), streams::Error> {
         blocking_splice(self, src, dst, len).await
     }
 
@@ -321,7 +314,7 @@ impl command::wasi::streams::Host for WasiCtx {
         &mut self,
         src: InputStream,
         dst: OutputStream,
-    ) -> HostResult<u64, StreamError> {
+    ) -> Result<u64, streams::Error> {
         forward(self, src, dst).await
     }
 
@@ -351,80 +344,68 @@ impl proxy::wasi::streams::Host for WasiCtx {
         &mut self,
         stream: InputStream,
         len: u64,
-    ) -> HostResult<(Vec<u8>, bool), proxy::wasi::streams::StreamError> {
-        read(self, stream, len)
-            .await
-            .map(|r| r.map_err(|_| proxy::wasi::streams::StreamError {}))
+    ) -> Result<(Vec<u8>, bool), proxy::wasi::streams::Error> {
+        read(self, stream, len).await.map_err(|e| e.into())
     }
 
     async fn blocking_read(
         &mut self,
         stream: InputStream,
         len: u64,
-    ) -> HostResult<(Vec<u8>, bool), proxy::wasi::streams::StreamError> {
-        blocking_read(self, stream, len)
-            .await
-            .map(|r| r.map_err(|_| proxy::wasi::streams::StreamError {}))
+    ) -> Result<(Vec<u8>, bool), proxy::wasi::streams::Error> {
+        blocking_read(self, stream, len).await.map_err(|e| e.into())
     }
 
     async fn write(
         &mut self,
         stream: OutputStream,
         bytes: Vec<u8>,
-    ) -> HostResult<u64, proxy::wasi::streams::StreamError> {
-        write(self, stream, bytes)
-            .await
-            .map(|r| r.map_err(|_| proxy::wasi::streams::StreamError {}))
+    ) -> Result<u64, proxy::wasi::streams::Error> {
+        write(self, stream, bytes).await.map_err(|e| e.into())
     }
 
     async fn blocking_write(
         &mut self,
         stream: OutputStream,
         bytes: Vec<u8>,
-    ) -> HostResult<u64, proxy::wasi::streams::StreamError> {
+    ) -> Result<u64, proxy::wasi::streams::Error> {
         blocking_write(self, stream, bytes)
             .await
-            .map(|r| r.map_err(|_| proxy::wasi::streams::StreamError {}))
+            .map_err(|e| e.into())
     }
 
     async fn skip(
         &mut self,
         stream: InputStream,
         len: u64,
-    ) -> HostResult<(u64, bool), proxy::wasi::streams::StreamError> {
-        skip(self, stream, len)
-            .await
-            .map(|r| r.map_err(|_| proxy::wasi::streams::StreamError {}))
+    ) -> Result<(u64, bool), proxy::wasi::streams::Error> {
+        skip(self, stream, len).await.map_err(|e| e.into())
     }
 
     async fn blocking_skip(
         &mut self,
         stream: InputStream,
         len: u64,
-    ) -> HostResult<(u64, bool), proxy::wasi::streams::StreamError> {
-        blocking_skip(self, stream, len)
-            .await
-            .map(|r| r.map_err(|_| proxy::wasi::streams::StreamError {}))
+    ) -> Result<(u64, bool), proxy::wasi::streams::Error> {
+        blocking_skip(self, stream, len).await.map_err(|e| e.into())
     }
 
     async fn write_zeroes(
         &mut self,
         stream: OutputStream,
         len: u64,
-    ) -> HostResult<u64, proxy::wasi::streams::StreamError> {
-        write_zeroes(self, stream, len)
-            .await
-            .map(|r| r.map_err(|_| proxy::wasi::streams::StreamError {}))
+    ) -> Result<u64, proxy::wasi::streams::Error> {
+        write_zeroes(self, stream, len).await.map_err(|e| e.into())
     }
 
     async fn blocking_write_zeroes(
         &mut self,
         stream: OutputStream,
         len: u64,
-    ) -> HostResult<u64, proxy::wasi::streams::StreamError> {
+    ) -> Result<u64, proxy::wasi::streams::Error> {
         blocking_write_zeroes(self, stream, len)
             .await
-            .map(|r| r.map_err(|_| proxy::wasi::streams::StreamError {}))
+            .map_err(|e| e.into())
     }
 
     async fn splice(
@@ -432,10 +413,8 @@ impl proxy::wasi::streams::Host for WasiCtx {
         src: InputStream,
         dst: OutputStream,
         len: u64,
-    ) -> HostResult<(u64, bool), proxy::wasi::streams::StreamError> {
-        splice(self, src, dst, len)
-            .await
-            .map(|r| r.map_err(|_| proxy::wasi::streams::StreamError {}))
+    ) -> Result<(u64, bool), proxy::wasi::streams::Error> {
+        splice(self, src, dst, len).await.map_err(|e| e.into())
     }
 
     async fn blocking_splice(
@@ -443,20 +422,18 @@ impl proxy::wasi::streams::Host for WasiCtx {
         src: InputStream,
         dst: OutputStream,
         len: u64,
-    ) -> HostResult<(u64, bool), proxy::wasi::streams::StreamError> {
+    ) -> Result<(u64, bool), proxy::wasi::streams::Error> {
         blocking_splice(self, src, dst, len)
             .await
-            .map(|r| r.map_err(|_| proxy::wasi::streams::StreamError {}))
+            .map_err(|e| e.into())
     }
 
     async fn forward(
         &mut self,
         src: InputStream,
         dst: OutputStream,
-    ) -> HostResult<u64, proxy::wasi::streams::StreamError> {
-        forward(self, src, dst)
-            .await
-            .map(|r| r.map_err(|_| proxy::wasi::streams::StreamError {}))
+    ) -> Result<u64, proxy::wasi::streams::Error> {
+        forward(self, src, dst).await.map_err(|e| e.into())
     }
 
     async fn subscribe_to_input_stream(&mut self, stream: InputStream) -> anyhow::Result<Pollable> {
