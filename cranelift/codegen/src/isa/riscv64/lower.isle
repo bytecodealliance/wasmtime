@@ -839,11 +839,12 @@
 
 ;; We have some optimizations that we can do when one of the sides is
 ;; a constant.
-;;
-;; No need to do the imm12 on the LHS since we already have a mid end
-;; rule that pushes the constants to the RHS.
 (rule 1 (lower (icmp cc x @ (value_type (fits_in_64 ty)) (imm12_from_value y)))
   (gen_icmp_imm cc x y ty))
+
+;; If the const is on the LHS, move it to the right and flip the IntCC.
+(rule 2 (lower (icmp cc (imm12_from_value x) y @ (value_type (fits_in_64 ty))))
+  (gen_icmp_imm (intcc_reverse cc) y x ty))
 
 ;;;;;  Rules for `fcmp`;;;;;;;;;
 (rule
