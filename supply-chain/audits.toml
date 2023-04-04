@@ -817,6 +817,23 @@ criteria = "safe-to-deploy"
 delta = "0.36.7 -> 0.36.8"
 notes = "The Bytecode Alliance is the author of this crate."
 
+[[audits.rustls]]
+who = "Pat Hickey <phickey@fastly.com>"
+criteria = "safe-to-deploy"
+version = "0.21.0"
+notes = "no unsafe code, ambient capabilities only used in tests"
+
+[[audits.rustls-webpki]]
+who = "Pat Hickey <phickey@fastly.com>"
+criteria = "safe-to-deploy"
+version = "0.100.1"
+
+[[audits.sct]]
+who = "Pat Hickey <phickey@fastly.com>"
+criteria = "safe-to-deploy"
+version = "0.7.0"
+notes = "no unsafe, no build, no ambient capabilities"
+
 [[audits.semver]]
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
@@ -901,6 +918,12 @@ criteria = "safe-to-deploy"
 version = "0.3.1"
 notes = "unsafety is used for smuggling std::task::Context as a raw pointer. Lifetime and type safety appears to be taken care of correctly."
 
+[[audits.tokio-rustls]]
+who = "Pat Hickey <phickey@fastly.com>"
+criteria = "safe-to-deploy"
+version = "0.24.0"
+notes = "no unsafe, no build, no ambient capabilities"
+
 [[audits.tokio-util]]
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
@@ -966,6 +989,11 @@ notes = "no build.rs, no macros, no unsafe. It reads the filesystem and makes co
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
 version = "0.3.0"
+
+[[audits.wasm-bindgen-shared]]
+who = "Pat Hickey <phickey@fastly.com>"
+criteria = "safe-to-deploy"
+delta = "0.2.83 -> 0.2.80"
 
 [[audits.wasm-coredump-builder]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -1601,6 +1629,11 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 delta = "1.0.48 -> 1.0.49"
 notes = "The Bytecode Alliance is the author of this crate."
+
+[[audits.webpki-roots]]
+who = "Pat Hickey <phickey@fastly.com>"
+criteria = "safe-to-deploy"
+delta = "0.22.4 -> 0.23.0"
 
 [[audits.windows-sys]]
 who = "Dan Gohman <dev@sunfishcode.online>"
