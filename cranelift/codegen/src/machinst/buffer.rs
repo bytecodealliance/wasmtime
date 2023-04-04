@@ -1813,11 +1813,11 @@ mod test {
         let mut state = <Inst as MachInstEmit>::State::default();
 
         buf.reserve_labels_for_blocks(2);
-        buf.bind_label(label(0), state.get_ctrl_plane());
+        buf.bind_label(label(0), state.ctrl_plane_mut());
         let inst = Inst::Jump { dest: target(1) };
         inst.emit(&[], &mut buf, &info, &mut state);
-        buf.bind_label(label(1), state.get_ctrl_plane());
-        let buf = buf.finish(state.get_ctrl_plane());
+        buf.bind_label(label(1), state.ctrl_plane_mut());
+        let buf = buf.finish(state.ctrl_plane_mut());
         assert_eq!(0, buf.total_size());
     }
 
@@ -1829,7 +1829,7 @@ mod test {
 
         buf.reserve_labels_for_blocks(4);
 
-        buf.bind_label(label(0), state.get_ctrl_plane());
+        buf.bind_label(label(0), state.ctrl_plane_mut());
         let inst = Inst::CondBr {
             kind: CondBrKind::NotZero(xreg(0)),
             taken: target(1),
@@ -1837,17 +1837,17 @@ mod test {
         };
         inst.emit(&[], &mut buf, &info, &mut state);
 
-        buf.bind_label(label(1), state.get_ctrl_plane());
+        buf.bind_label(label(1), state.ctrl_plane_mut());
         let inst = Inst::Jump { dest: target(3) };
         inst.emit(&[], &mut buf, &info, &mut state);
 
-        buf.bind_label(label(2), state.get_ctrl_plane());
+        buf.bind_label(label(2), state.ctrl_plane_mut());
         let inst = Inst::Jump { dest: target(3) };
         inst.emit(&[], &mut buf, &info, &mut state);
 
-        buf.bind_label(label(3), state.get_ctrl_plane());
+        buf.bind_label(label(3), state.ctrl_plane_mut());
 
-        let buf = buf.finish(state.get_ctrl_plane());
+        let buf = buf.finish(state.ctrl_plane_mut());
         assert_eq!(0, buf.total_size());
     }
 
@@ -1859,7 +1859,7 @@ mod test {
 
         buf.reserve_labels_for_blocks(4);
 
-        buf.bind_label(label(0), state.get_ctrl_plane());
+        buf.bind_label(label(0), state.ctrl_plane_mut());
         let inst = Inst::CondBr {
             kind: CondBrKind::Zero(xreg(0)),
             taken: target(1),
@@ -1867,19 +1867,19 @@ mod test {
         };
         inst.emit(&[], &mut buf, &info, &mut state);
 
-        buf.bind_label(label(1), state.get_ctrl_plane());
+        buf.bind_label(label(1), state.ctrl_plane_mut());
         let inst = Inst::Nop4;
         inst.emit(&[], &mut buf, &info, &mut state);
 
-        buf.bind_label(label(2), state.get_ctrl_plane());
+        buf.bind_label(label(2), state.ctrl_plane_mut());
         let inst = Inst::Udf {
             trap_code: TrapCode::Interrupt,
         };
         inst.emit(&[], &mut buf, &info, &mut state);
 
-        buf.bind_label(label(3), state.get_ctrl_plane());
+        buf.bind_label(label(3), state.ctrl_plane_mut());
 
-        let buf = buf.finish(state.get_ctrl_plane());
+        let buf = buf.finish(state.ctrl_plane_mut());
 
         let mut buf2 = MachBuffer::new();
         let mut state = Default::default();
@@ -1891,7 +1891,7 @@ mod test {
         let inst = Inst::Nop4;
         inst.emit(&[], &mut buf2, &info, &mut state);
 
-        let buf2 = buf2.finish(state.get_ctrl_plane());
+        let buf2 = buf2.finish(state.ctrl_plane_mut());
 
         assert_eq!(buf.data, buf2.data);
     }
@@ -1904,7 +1904,7 @@ mod test {
 
         buf.reserve_labels_for_blocks(4);
 
-        buf.bind_label(label(0), state.get_ctrl_plane());
+        buf.bind_label(label(0), state.ctrl_plane_mut());
         let inst = Inst::CondBr {
             kind: CondBrKind::NotZero(xreg(0)),
             taken: target(2),
@@ -1912,24 +1912,24 @@ mod test {
         };
         inst.emit(&[], &mut buf, &info, &mut state);
 
-        buf.bind_label(label(1), state.get_ctrl_plane());
+        buf.bind_label(label(1), state.ctrl_plane_mut());
         while buf.cur_offset() < 2000000 {
             if buf.island_needed(0) {
-                buf.emit_island(0, state.get_ctrl_plane());
+                buf.emit_island(0, state.ctrl_plane_mut());
             }
             let inst = Inst::Nop4;
             inst.emit(&[], &mut buf, &info, &mut state);
         }
 
-        buf.bind_label(label(2), state.get_ctrl_plane());
+        buf.bind_label(label(2), state.ctrl_plane_mut());
         let inst = Inst::Nop4;
         inst.emit(&[], &mut buf, &info, &mut state);
 
-        buf.bind_label(label(3), state.get_ctrl_plane());
+        buf.bind_label(label(3), state.ctrl_plane_mut());
         let inst = Inst::Nop4;
         inst.emit(&[], &mut buf, &info, &mut state);
 
-        let buf = buf.finish(state.get_ctrl_plane());
+        let buf = buf.finish(state.ctrl_plane_mut());
 
         assert_eq!(2000000 + 8, buf.total_size());
 
@@ -1958,7 +1958,7 @@ mod test {
         };
         inst.emit(&[], &mut buf2, &info, &mut state);
 
-        let buf2 = buf2.finish(state.get_ctrl_plane());
+        let buf2 = buf2.finish(state.ctrl_plane_mut());
 
         assert_eq!(&buf.data[0..8], &buf2.data[..]);
     }
@@ -1971,21 +1971,21 @@ mod test {
 
         buf.reserve_labels_for_blocks(4);
 
-        buf.bind_label(label(0), state.get_ctrl_plane());
+        buf.bind_label(label(0), state.ctrl_plane_mut());
         let inst = Inst::Nop4;
         inst.emit(&[], &mut buf, &info, &mut state);
 
-        buf.bind_label(label(1), state.get_ctrl_plane());
+        buf.bind_label(label(1), state.ctrl_plane_mut());
         let inst = Inst::Nop4;
         inst.emit(&[], &mut buf, &info, &mut state);
 
-        buf.bind_label(label(2), state.get_ctrl_plane());
+        buf.bind_label(label(2), state.ctrl_plane_mut());
         while buf.cur_offset() < 2000000 {
             let inst = Inst::Nop4;
             inst.emit(&[], &mut buf, &info, &mut state);
         }
 
-        buf.bind_label(label(3), state.get_ctrl_plane());
+        buf.bind_label(label(3), state.ctrl_plane_mut());
         let inst = Inst::CondBr {
             kind: CondBrKind::NotZero(xreg(0)),
             taken: target(0),
@@ -1993,7 +1993,7 @@ mod test {
         };
         inst.emit(&[], &mut buf, &info, &mut state);
 
-        let buf = buf.finish(state.get_ctrl_plane());
+        let buf = buf.finish(state.ctrl_plane_mut());
 
         assert_eq!(2000000 + 12, buf.total_size());
 
@@ -2010,7 +2010,7 @@ mod test {
         };
         inst.emit(&[], &mut buf2, &info, &mut state);
 
-        let buf2 = buf2.finish(state.get_ctrl_plane());
+        let buf2 = buf2.finish(state.ctrl_plane_mut());
 
         assert_eq!(&buf.data[2000000..], &buf2.data[..]);
     }
@@ -2056,7 +2056,7 @@ mod test {
 
         buf.reserve_labels_for_blocks(8);
 
-        buf.bind_label(label(0), state.get_ctrl_plane());
+        buf.bind_label(label(0), state.ctrl_plane_mut());
         let inst = Inst::CondBr {
             kind: CondBrKind::Zero(xreg(0)),
             taken: target(1),
@@ -2064,38 +2064,38 @@ mod test {
         };
         inst.emit(&[], &mut buf, &info, &mut state);
 
-        buf.bind_label(label(1), state.get_ctrl_plane());
+        buf.bind_label(label(1), state.ctrl_plane_mut());
         let inst = Inst::Jump { dest: target(3) };
         inst.emit(&[], &mut buf, &info, &mut state);
 
-        buf.bind_label(label(2), state.get_ctrl_plane());
+        buf.bind_label(label(2), state.ctrl_plane_mut());
         let inst = Inst::Nop4;
         inst.emit(&[], &mut buf, &info, &mut state);
         inst.emit(&[], &mut buf, &info, &mut state);
         let inst = Inst::Jump { dest: target(0) };
         inst.emit(&[], &mut buf, &info, &mut state);
 
-        buf.bind_label(label(3), state.get_ctrl_plane());
+        buf.bind_label(label(3), state.ctrl_plane_mut());
         let inst = Inst::Jump { dest: target(4) };
         inst.emit(&[], &mut buf, &info, &mut state);
 
-        buf.bind_label(label(4), state.get_ctrl_plane());
+        buf.bind_label(label(4), state.ctrl_plane_mut());
         let inst = Inst::Jump { dest: target(5) };
         inst.emit(&[], &mut buf, &info, &mut state);
 
-        buf.bind_label(label(5), state.get_ctrl_plane());
+        buf.bind_label(label(5), state.ctrl_plane_mut());
         let inst = Inst::Jump { dest: target(7) };
         inst.emit(&[], &mut buf, &info, &mut state);
 
-        buf.bind_label(label(6), state.get_ctrl_plane());
+        buf.bind_label(label(6), state.ctrl_plane_mut());
         let inst = Inst::Nop4;
         inst.emit(&[], &mut buf, &info, &mut state);
 
-        buf.bind_label(label(7), state.get_ctrl_plane());
+        buf.bind_label(label(7), state.ctrl_plane_mut());
         let inst = Inst::Ret { rets: vec![] };
         inst.emit(&[], &mut buf, &info, &mut state);
 
-        let buf = buf.finish(state.get_ctrl_plane());
+        let buf = buf.finish(state.ctrl_plane_mut());
 
         let golden_data = vec![
             0xa0, 0x00, 0x00, 0xb4, // cbz x0, 0x14
@@ -2132,27 +2132,27 @@ mod test {
 
         buf.reserve_labels_for_blocks(5);
 
-        buf.bind_label(label(0), state.get_ctrl_plane());
+        buf.bind_label(label(0), state.ctrl_plane_mut());
         let inst = Inst::Jump { dest: target(1) };
         inst.emit(&[], &mut buf, &info, &mut state);
 
-        buf.bind_label(label(1), state.get_ctrl_plane());
+        buf.bind_label(label(1), state.ctrl_plane_mut());
         let inst = Inst::Jump { dest: target(2) };
         inst.emit(&[], &mut buf, &info, &mut state);
 
-        buf.bind_label(label(2), state.get_ctrl_plane());
+        buf.bind_label(label(2), state.ctrl_plane_mut());
         let inst = Inst::Jump { dest: target(3) };
         inst.emit(&[], &mut buf, &info, &mut state);
 
-        buf.bind_label(label(3), state.get_ctrl_plane());
+        buf.bind_label(label(3), state.ctrl_plane_mut());
         let inst = Inst::Jump { dest: target(4) };
         inst.emit(&[], &mut buf, &info, &mut state);
 
-        buf.bind_label(label(4), state.get_ctrl_plane());
+        buf.bind_label(label(4), state.ctrl_plane_mut());
         let inst = Inst::Jump { dest: target(1) };
         inst.emit(&[], &mut buf, &info, &mut state);
 
-        let buf = buf.finish(state.get_ctrl_plane());
+        let buf = buf.finish(state.ctrl_plane_mut());
 
         let golden_data = vec![
             0x00, 0x00, 0x00, 0x14, // b 0

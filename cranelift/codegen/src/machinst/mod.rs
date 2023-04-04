@@ -280,11 +280,14 @@ pub trait MachInstEmitState<I: VCodeInst>: Default + Clone + Debug {
     /// Update the emission state to indicate instructions are associated with a
     /// particular RelSourceLoc.
     fn pre_sourceloc(&mut self, _srcloc: RelSourceLoc) {}
-    /// The emission state holds temporary ownership of a control plane. A
-    /// mutable reference to it may be used to:
-    /// - move out of it, e.g. using [std::mem::swap]
-    /// - access that control plane temporarily
-    fn get_ctrl_plane(&mut self) -> &mut ControlPlane;
+    /// The emission state holds ownership of a control plane, so it doesn't
+    /// have to be passed around explicitly too much. `ctrl_plane_mut` may
+    /// be used if temporary access to the control plane is needed by some
+    /// other function that doesn't have access to the emission state.
+    fn ctrl_plane_mut(&mut self) -> &mut ControlPlane;
+    /// Used to continue using a control plane after the emission state is
+    /// not needed anymore.
+    fn take_ctrl_plane(self) -> ControlPlane;
 }
 
 /// The result of a `MachBackend::compile_function()` call. Contains machine

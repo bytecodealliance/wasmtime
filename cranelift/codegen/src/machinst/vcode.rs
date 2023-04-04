@@ -876,7 +876,7 @@ impl<I: VCodeInst> VCode<I> {
 
             // Now emit the regular block body.
 
-            buffer.bind_label(MachLabel::from_block(block), state.get_ctrl_plane());
+            buffer.bind_label(MachLabel::from_block(block), state.ctrl_plane_mut());
 
             if want_disasm {
                 writeln!(&mut disasm, "block{}:", block.index()).unwrap();
@@ -1039,9 +1039,6 @@ impl<I: VCodeInst> VCode<I> {
                 }
             }
 
-            // emission state is not needed anymore, move control plane back out
-            std::mem::swap(ctrl_plane, state.get_ctrl_plane());
-
             if cur_srcloc.is_some() {
                 buffer.end_srcloc();
                 cur_srcloc = None;
@@ -1063,6 +1060,9 @@ impl<I: VCodeInst> VCode<I> {
                 }
             }
         }
+
+        // emission state is not needed anymore, move control plane back out
+        *ctrl_plane = state.take_ctrl_plane();
 
         // Emit the constants used by the function.
         let mut alignment = 1;

@@ -152,8 +152,12 @@ impl MachInstEmitState<Inst> for EmitState {
         self.cur_srcloc = srcloc;
     }
 
-    fn get_ctrl_plane(&mut self) -> &mut ControlPlane {
+    fn ctrl_plane_mut(&mut self) -> &mut ControlPlane {
         &mut self.ctrl_plane
+    }
+
+    fn take_ctrl_plane(self) -> ControlPlane {
+        self.ctrl_plane
     }
 }
 
