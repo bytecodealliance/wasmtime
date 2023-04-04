@@ -6,7 +6,6 @@
 //! A large part of this module is auto-generated from the instruction descriptions in the meta
 //! directory.
 
-use crate::ir::condcodes::CondCode;
 use alloc::vec::Vec;
 use core::fmt::{self, Display, Formatter};
 use core::ops::{Deref, DerefMut};
@@ -198,32 +197,6 @@ impl Opcode {
     pub fn is_resumable_trap(&self) -> bool {
         match self {
             Opcode::ResumableTrap | Opcode::ResumableTrapnz => true,
-            _ => false,
-        }
-    }
-
-    /// Returns true if the instruction is commutative: `op(x, y) == op(y, x)` for all x, y
-    pub fn is_commutative(&self) -> bool {
-        match self {
-            Opcode::Band | Opcode::Bor | Opcode::Bxor | Opcode::BxorNot => true,
-
-            Opcode::Iadd
-            | Opcode::Imul
-            | Opcode::IaddPairwise
-            | Opcode::Umulhi
-            | Opcode::Smulhi
-            | Opcode::UaddOverflowTrap
-            | Opcode::Umin
-            | Opcode::Umax
-            | Opcode::Smin
-            | Opcode::Smax
-            | Opcode::AvgRound
-            | Opcode::UaddSat
-            | Opcode::SaddSat => true,
-
-            Opcode::Fadd | Opcode::Fmul => true,
-            Opcode::Fmin | Opcode::Fmax => true,
-
             _ => false,
         }
     }
@@ -492,37 +465,6 @@ impl InstructionData {
                 if cond.unsigned() != *cond {
                     imm.sign_extend_from_width(bit_width);
                 }
-            }
-            _ => {}
-        }
-    }
-
-    /// Normalize commutative instructions by sorting arguments
-    #[inline]
-    pub(crate) fn normalize_in_place(&mut self) {
-        match self {
-            InstructionData::Binary { opcode, args }
-                if args[0] > args[1] && opcode.is_commutative() =>
-            {
-                args.swap(0, 1)
-            }
-            InstructionData::Ternary {
-                opcode: Opcode::Fma,
-                args,
-            } if args[0] > args[1] => args.swap(0, 1),
-            InstructionData::IntCompare { args, cond, .. } if args[0] > args[1] => {
-                args.swap(0, 1);
-                *cond = cond.reverse();
-            }
-            InstructionData::IntCompare { args, cond, .. } if args[0] == args[1] => {
-                *cond = std::cmp::min(*cond, cond.reverse());
-            }
-            InstructionData::FloatCompare { args, cond, .. } if args[0] > args[1] => {
-                args.swap(0, 1);
-                *cond = cond.reverse();
-            }
-            InstructionData::FloatCompare { args, cond, .. } if args[0] == args[1] => {
-                *cond = std::cmp::min(*cond, cond.reverse());
             }
             _ => {}
         }
