@@ -659,7 +659,6 @@ dependencies = [
  "anyhow",
  "arbitrary",
  "cranelift",
- "cranelift-control",
  "cranelift-native",
  "once_cell",
  "target-lexicon",
@@ -724,7 +723,6 @@ name = "cranelift-native"
 version = "0.95.0"
 dependencies = [
  "cranelift-codegen",
- "cranelift-control",
  "libc",
  "target-lexicon",
 ]
@@ -750,7 +748,6 @@ version = "0.95.0"
 dependencies = [
  "anyhow",
  "cranelift-codegen",
- "cranelift-control",
  "smallvec",
  "target-lexicon",
 ]

@@ -37,11 +37,7 @@ component-fuzz-util = { workspace = true }
 [features]
 default = ['fuzz-spec-interpreter']
 fuzz-spec-interpreter = ['wasmtime-fuzzing/fuzz-spec-interpreter']
-chaos = [
-    "cranelift-codegen/chaos",
-    "cranelift-control/chaos",
-    "cranelift-fuzzgen/chaos",
-]
+chaos = ["cranelift-control/chaos"]
 
 [[bin]]
 name = "compile"

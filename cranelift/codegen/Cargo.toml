@@ -114,8 +114,6 @@ isle-errors = ["cranelift-isle/fancy-errors"]
 # inspection, rather than inside of target/.
 isle-in-source-tree = []
 
-chaos = ["cranelift-control/chaos"]
-
 [badges]
 maintenance = { status = "experimental" }
 

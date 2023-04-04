@@ -218,9 +218,6 @@ impl TestCase {
             )?;
             functions.push(func);
 
-            #[cfg(not(feature = "chaos"))]
-            ctrl_planes.push(ControlPlane::default());
-            #[cfg(feature = "chaos")]
             ctrl_planes.push(ControlPlane::arbitrary(gen.u)?);
         }
         // Now reverse the functions so that the main function is at the start.

@@ -774,9 +774,8 @@ impl<I: VCodeInst> MachBuffer<I> {
         //   fixup record referring to that last branch is removed.
     }
 
-    fn optimize_branches(&mut self, _ctrl_plane: &mut ControlPlane) {
-        #[cfg(feature = "chaos")]
-        if _ctrl_plane.get_decision() {
+    fn optimize_branches(&mut self, ctrl_plane: &mut ControlPlane) {
+        if ctrl_plane.get_decision() {
             return;
         }
 

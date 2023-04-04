@@ -19,12 +19,12 @@
 //! [arbitrary]: ControlPlane#method.arbitrary
 //! [default]: ControlPlane#method.default
 
-#[cfg(not(any(feature = "chaos", doc)))]
+#[cfg(not(feature = "chaos"))]
 mod zero_sized;
-#[cfg(not(any(feature = "chaos", doc)))]
+#[cfg(not(feature = "chaos"))]
 pub use zero_sized::*;
 
-#[cfg(any(feature = "chaos", doc))]
+#[cfg(feature = "chaos")]
 mod chaos;
-#[cfg(any(feature = "chaos", doc))]
+#[cfg(feature = "chaos")]
 pub use chaos::*;
