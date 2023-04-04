@@ -234,12 +234,6 @@
       (rs OptionReg)
       (imm OptionUimm5)
       (csr CsrAddress))
-    ;; I128 Less Than sequence
-    (I128LessThan
-      (rd WritableReg)
-      (x ValueRegs)
-      (y ValueRegs)
-      (is_signed bool))
     ;; select a reg base on condition.
     ;; very useful because in lowering stage we can not have condition branch.
     (SelectReg
@@ -753,11 +747,6 @@
       (_ Unit (emit (MInst.FloatSelect op rd tmp x y ty))))
     (writable_reg_to_reg rd)))
 
-(decl emit_i128_less_than (ValueRegs ValueRegs bool) Reg)
-(rule (emit_i128_less_than x y is_signed)
-  (let ((result WritableReg (temp_writable_reg $I64))
-        (_ Unit (emit (MInst.I128LessThan result x y is_signed))))
-    result))
 
 
 ;;;; Instruction Helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -2349,12 +2338,12 @@
 (decl gen_icmp_inner (IntCC ValueRegs ValueRegs Type) Reg)
 
 ;; We only implement LessThan, for GreaterThan we just reverse the arguments
-(rule 3 (gen_icmp_inner (intcc_greater_than cc) x y ty)
+(rule 4 (gen_icmp_inner (intcc_greater_than cc) x y ty)
   (gen_icmp_inner (intcc_reverse cc) y x ty))
 
 ;; For these rules, we can just use the normal rules and then invert the result.
 ;; i.e. `x <= y` is the same as `!(x > y)`.
-(rule 2 (gen_icmp_inner (intcc_sle_or_ule cc) x y ty)
+(rule 3 (gen_icmp_inner (intcc_sle_or_ule cc) x y ty)
   (let ((res Reg (gen_icmp_inner (intcc_inverse cc) x y ty)))
     (rv_xori res (imm12_const 1))))
 
@@ -2365,11 +2354,42 @@
 (rule (gen_icmp_inner (IntCC.UnsignedLessThan) x y (fits_in_64 ty))
   (rv_sltu x y))
 
-;; We have a equivalent pseudo instruction for I128 less than.
-(rule 1 (gen_icmp_inner (IntCC.SignedLessThan) x y $I128)
-  (emit_i128_less_than x y $true))
-(rule 1 (gen_icmp_inner (IntCC.UnsignedLessThan) x y $I128)
-  (emit_i128_less_than x y $false))
+
+;; Compare the top halves of the two values. If they are equal, then
+;; we can just check the bottom halves. Otherwise we only need to check
+;; the top halves.
+;;
+;; In both signed and unsigned variants the bottom half is always compared
+;; as unsigned. Since we know that the top halves are equal both signs
+;; are the same. If the number is positive, this is fairly straight forward
+;; and if the number is negative in the signed case we can still use
+;; an unsigned comparision due to the way two's complement works.
+;;
+;; As an example:  0xFFFE < 0xFFFF Here both are negative numbers, but when 
+;; considering only at the bottom byte, 0xFE is smaller than 0xFF when viewed
+;; as unsigned. This also holds true when viewing both of these numbers as
+;; signed (-2 < -1), so we can use the unsigned comparison for the bottom half.
+;;
+;; Emit the following sequence:
+;;     slt{,u}   t1, x_hi, y_hi
+;;     sltu      t2, x_lo, y_lo
+;;     beq       x_hi, y_hi, .top_is_equal
+;;     mov       rd, t1
+;;     j         .end
+;; .top_is_equal:
+;;     mov       rd, t2
+;; .end:
+(rule 2 (gen_icmp_inner (intcc_slt_or_ult cc) x y $I128)
+  (let ((x_lo Reg (value_regs_get x 0))
+        (x_hi Reg (value_regs_get x 1))
+        (y_lo Reg (value_regs_get y 0))
+        (y_hi Reg (value_regs_get y 1))
+        ;; Generate compares for both halves.
+        ;; The bottom compare depends on the IntCC.
+        (top_cmp Reg (gen_icmp_inner cc x_hi y_hi $I64))
+        (bottom_cmp Reg (rv_slt x_lo y_lo)))
+    ;; If the high parts are equal, the result only depends on the bottom
+    (gen_select_reg (IntCC.Equal) x_hi y_hi bottom_cmp top_cmp)))
 
 
 ;; Compare both registers using xor, and set the result using the dedicated

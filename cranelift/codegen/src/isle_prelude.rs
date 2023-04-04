@@ -772,6 +772,14 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
+        fn intcc_slt_or_ult(&mut self, cc: &IntCC) -> Option<IntCC> {
+            match cc {
+                IntCC::SignedLessThan | IntCC::UnsignedLessThan => Some(*cc),
+                _ => None,
+            }
+        }
+
+        #[inline]
         fn intcc_greater_than(&mut self, cc: &IntCC) -> Option<IntCC> {
             match cc {
                 IntCC::SignedGreaterThan

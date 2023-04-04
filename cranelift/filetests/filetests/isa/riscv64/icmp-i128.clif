@@ -53,15 +53,21 @@ block0(v0: i128, v1: i128):
 
 ; VCode:
 ; block0:
-;   slt a0,[a0,a1],[a2,a3] ## ty=i128
+;   mv a6,a2
+;   slt a2,a1,a3
+;   slt a4,a0,a6
+;   select_reg a0,a4,a2##condition=(a1 eq a3)
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
+;   ori a6, a2, 0
+;   slt a2, a1, a3
+;   slt a4, a0, a6
 ;   beq a1, a3, 0xc
-;   slt a0, a1, a3
+;   ori a0, a2, 0
 ;   j 8
-;   sltu a0, a0, a2
+;   ori a0, a4, 0
 ;   ret
 
 function %icmp_sgt_i128(i128, i128) -> i8 {
@@ -72,15 +78,21 @@ block0(v0: i128, v1: i128):
 
 ; VCode:
 ; block0:
-;   slt a0,[a2,a3],[a0,a1] ## ty=i128
+;   mv a6,a2
+;   slt a2,a3,a1
+;   slt a4,a6,a0
+;   select_reg a0,a4,a2##condition=(a3 eq a1)
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
+;   ori a6, a2, 0
+;   slt a2, a3, a1
+;   slt a4, a6, a0
 ;   beq a3, a1, 0xc
-;   slt a0, a3, a1
+;   ori a0, a2, 0
 ;   j 8
-;   sltu a0, a2, a0
+;   ori a0, a4, 0
 ;   ret
 
 function %icmp_sle_i128(i128, i128) -> i8 {
@@ -91,17 +103,23 @@ block0(v0: i128, v1: i128):
 
 ; VCode:
 ; block0:
-;   slt a2,[a2,a3],[a0,a1] ## ty=i128
-;   xori a0,a2,1
+;   mv a7,a2
+;   slt a2,a3,a1
+;   slt a4,a7,a0
+;   select_reg a6,a4,a2##condition=(a3 eq a1)
+;   xori a0,a6,1
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   beq a3, a1, 0xc
+;   ori a7, a2, 0
 ;   slt a2, a3, a1
+;   slt a4, a7, a0
+;   beq a3, a1, 0xc
+;   ori a6, a2, 0
 ;   j 8
-;   sltu a2, a2, a0
-;   xori a0, a2, 1
+;   ori a6, a4, 0
+;   xori a0, a6, 1
 ;   ret
 
 function %icmp_sge_i128(i128, i128) -> i8 {
@@ -112,17 +130,23 @@ block0(v0: i128, v1: i128):
 
 ; VCode:
 ; block0:
-;   slt a2,[a0,a1],[a2,a3] ## ty=i128
-;   xori a0,a2,1
+;   mv a7,a2
+;   slt a2,a1,a3
+;   slt a4,a0,a7
+;   select_reg a6,a4,a2##condition=(a1 eq a3)
+;   xori a0,a6,1
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   beq a1, a3, 0xc
+;   ori a7, a2, 0
 ;   slt a2, a1, a3
+;   slt a4, a0, a7
+;   beq a1, a3, 0xc
+;   ori a6, a2, 0
 ;   j 8
-;   sltu a2, a0, a2
-;   xori a0, a2, 1
+;   ori a6, a4, 0
+;   xori a0, a6, 1
 ;   ret
 
 function %icmp_ult_i128(i128, i128) -> i8 {
@@ -133,15 +157,21 @@ block0(v0: i128, v1: i128):
 
 ; VCode:
 ; block0:
-;   sltu a0,[a0,a1],[a2,a3] ## ty=i128
+;   mv a6,a2
+;   sltu a2,a1,a3
+;   slt a4,a0,a6
+;   select_reg a0,a4,a2##condition=(a1 eq a3)
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
+;   ori a6, a2, 0
+;   sltu a2, a1, a3
+;   slt a4, a0, a6
 ;   beq a1, a3, 0xc
-;   sltu a0, a1, a3
+;   ori a0, a2, 0
 ;   j 8
-;   sltu a0, a0, a2
+;   ori a0, a4, 0
 ;   ret
 
 function %icmp_ugt_i128(i128, i128) -> i8 {
@@ -152,15 +182,21 @@ block0(v0: i128, v1: i128):
 
 ; VCode:
 ; block0:
-;   sltu a0,[a2,a3],[a0,a1] ## ty=i128
+;   mv a6,a2
+;   sltu a2,a3,a1
+;   slt a4,a6,a0
+;   select_reg a0,a4,a2##condition=(a3 eq a1)
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
+;   ori a6, a2, 0
+;   sltu a2, a3, a1
+;   slt a4, a6, a0
 ;   beq a3, a1, 0xc
-;   sltu a0, a3, a1
+;   ori a0, a2, 0
 ;   j 8
-;   sltu a0, a2, a0
+;   ori a0, a4, 0
 ;   ret
 
 function %icmp_ule_i128(i128, i128) -> i8 {
@@ -171,17 +207,23 @@ block0(v0: i128, v1: i128):
 
 ; VCode:
 ; block0:
-;   sltu a2,[a2,a3],[a0,a1] ## ty=i128
-;   xori a0,a2,1
+;   mv a7,a2
+;   sltu a2,a3,a1
+;   slt a4,a7,a0
+;   select_reg a6,a4,a2##condition=(a3 eq a1)
+;   xori a0,a6,1
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   beq a3, a1, 0xc
+;   ori a7, a2, 0
 ;   sltu a2, a3, a1
+;   slt a4, a7, a0
+;   beq a3, a1, 0xc
+;   ori a6, a2, 0
 ;   j 8
-;   sltu a2, a2, a0
-;   xori a0, a2, 1
+;   ori a6, a4, 0
+;   xori a0, a6, 1
 ;   ret
 
 function %icmp_uge_i128(i128, i128) -> i8 {
@@ -192,16 +234,22 @@ block0(v0: i128, v1: i128):
 
 ; VCode:
 ; block0:
-;   sltu a2,[a0,a1],[a2,a3] ## ty=i128
-;   xori a0,a2,1
+;   mv a7,a2
+;   sltu a2,a1,a3
+;   slt a4,a0,a7
+;   select_reg a6,a4,a2##condition=(a1 eq a3)
+;   xori a0,a6,1
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   beq a1, a3, 0xc
+;   ori a7, a2, 0
 ;   sltu a2, a1, a3
+;   slt a4, a0, a7
+;   beq a1, a3, 0xc
+;   ori a6, a2, 0
 ;   j 8
-;   sltu a2, a0, a2
-;   xori a0, a2, 1
+;   ori a6, a4, 0
+;   xori a0, a6, 1
 ;   ret
 

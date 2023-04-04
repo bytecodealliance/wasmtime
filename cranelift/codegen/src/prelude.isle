@@ -525,9 +525,13 @@
 (decl pure partial intcc_sge_or_uge (IntCC) IntCC)
 (extern extractor intcc_sge_or_uge intcc_sge_or_uge)
 
-;; An extractor that maches SignedLessThan or UnsignedLessThan
+;; An extractor that maches SignedGreaterThan or UnsignedGreaterThan
 (decl pure partial intcc_sgt_or_ugt (IntCC) IntCC)
 (extern extractor intcc_sgt_or_ugt intcc_sgt_or_ugt)
+
+;; An extractor that maches SignedLessThan or UnsignedLessThan
+(decl pure partial intcc_slt_or_ult (IntCC) IntCC)
+(extern extractor intcc_slt_or_ult intcc_slt_or_ult)
 
 ;; An extractor that maches any *GreaterThan or *GreaterThanOrEqual IntCC
 (decl pure partial intcc_greater_than (IntCC) IntCC)

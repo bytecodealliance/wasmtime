@@ -503,12 +503,6 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_def(rd);
         }
 
-        &Inst::I128LessThan { rd, x, y, .. } => {
-            collector.reg_uses(x.regs());
-            collector.reg_uses(y.regs());
-            collector.reg_def(rd);
-        }
-
         &Inst::SelectReg {
             rd,
             rs1,
@@ -1103,18 +1097,6 @@ impl Inst {
                     "atomic_cas.{} {},{},{},({})##t0={} offset={}",
                     ty, dst, e, v, addr, t0, offset,
                 )
-            }
-            &Inst::I128LessThan {
-                rd,
-                x,
-                y,
-                is_signed,
-            } => {
-                let x = format_regs(x.regs(), allocs);
-                let y = format_regs(y.regs(), allocs);
-                let rd = format_reg(rd.to_reg(), allocs);
-                let op = if is_signed { "slt" } else { "sltu" };
-                format!("{op} {rd},{x},{y} ## ty=i128")
             }
             &Inst::IntSelect {
                 op,
