@@ -1,21 +1,21 @@
 use crate::r#struct::ActiveResponse;
 pub use crate::r#struct::WasiHttp;
 use crate::types::{RequestOptions, Scheme};
+#[cfg(not(any(target_arch = "riscv64", target_arch = "s390x")))]
+use anyhow::anyhow;
 use anyhow::bail;
 use bytes::{BufMut, Bytes, BytesMut};
 use http_body_util::{BodyExt, Full};
 use hyper::Method;
 use hyper::Request;
+#[cfg(not(any(target_arch = "riscv64", target_arch = "s390x")))]
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::net::TcpStream;
 use tokio::runtime::Runtime;
 use tokio::time::timeout;
-#[cfg(not(target_arch = "riscv64gc"))]
-use std::sync::Arc;
-#[cfg(not(target_arch = "riscv64gc"))]
+#[cfg(not(any(target_arch = "riscv64", target_arch = "s390x")))]
 use tokio_rustls::rustls::{self, OwnedTrustAnchor};
-#[cfg(not(target_arch = "riscv64gc"))]
-use anyhow::anyhow;
 
 impl crate::default_outgoing_http::Host for WasiHttp {
     fn handle(
@@ -105,7 +105,7 @@ impl WasiHttp {
             None => request.authority.clone() + port_for_scheme(&request.scheme),
         };
         let mut sender = if scheme == "https://" {
-            #[cfg(not(target_arch = "riscv64gc"))]
+            #[cfg(not(any(target_arch = "riscv64", target_arch = "s390x")))]
             {
                 let stream = TcpStream::connect(authority.clone()).await?;
                 //TODO: uncomment this code and make the tls implementation a feature decision.
@@ -116,15 +116,15 @@ impl WasiHttp {
 
                 // derived from https://github.com/tokio-rs/tls/blob/master/tokio-rustls/examples/client/src/main.rs
                 let mut root_cert_store = rustls::RootCertStore::empty();
-                root_cert_store.add_server_trust_anchors(webpki_roots::TLS_SERVER_ROOTS.0.iter().map(
-                    |ta| {
+                root_cert_store.add_server_trust_anchors(
+                    webpki_roots::TLS_SERVER_ROOTS.0.iter().map(|ta| {
                         OwnedTrustAnchor::from_subject_spki_name_constraints(
                             ta.subject,
                             ta.spki,
                             ta.name_constraints,
                         )
-                    },
-                ));
+                    }),
+                );
                 let config = rustls::ClientConfig::builder()
                     .with_safe_defaults()
                     .with_root_certificates(root_cert_store)
@@ -149,7 +149,7 @@ impl WasiHttp {
                 });
                 s
             }
-            #[cfg(target_arch = "riscv64gc")]
+            #[cfg(any(target_arch = "riscv64", target_arch = "s390x"))]
             bail!("unsupported architecture for SSL")
         } else {
             let tcp = TcpStream::connect(authority).await?;
