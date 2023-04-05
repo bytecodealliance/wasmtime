@@ -25,6 +25,7 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "cranelift-codegen-shared",
     "cranelift-codegen-meta",
     "cranelift-egraph",
+    "cranelift-control",
     "cranelift-codegen",
     "cranelift-reader",
     "cranelift-serde",
