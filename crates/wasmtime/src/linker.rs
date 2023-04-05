@@ -275,7 +275,7 @@ impl<T> Linker<T> {
     /// # }
     /// ```
     #[cfg(compiler)]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
+    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))] // see build.rs
     pub fn define_unknown_imports_as_traps(&mut self, module: &Module) -> anyhow::Result<()> {
         for import in module.imports() {
             if let Err(import_err) = self._get_by_import(&import) {
@@ -311,7 +311,7 @@ impl<T> Linker<T> {
     /// # }
     /// ```
     #[cfg(compiler)]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
+    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))] // see build.rs
     pub fn define_unknown_imports_as_default_values(
         &mut self,
         module: &Module,
@@ -416,7 +416,7 @@ impl<T> Linker<T> {
     ///
     /// For more information see [`Linker::func_wrap`].
     #[cfg(compiler)]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
+    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))] // see build.rs
     pub fn func_new(
         &mut self,
         module: &str,
@@ -434,7 +434,7 @@ impl<T> Linker<T> {
     ///
     /// For more information see [`Linker::func_wrap`].
     #[cfg(compiler)]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
+    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))] // see build.rs
     pub unsafe fn func_new_unchecked(
         &mut self,
         module: &str,
@@ -754,7 +754,7 @@ impl<T> Linker<T> {
     /// # }
     /// ```
     #[cfg(compiler)]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
+    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))] // see build.rs
     pub fn module(
         &mut self,
         mut store: impl AsContextMut<Data = T>,

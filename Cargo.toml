@@ -50,7 +50,7 @@ rustix = { workspace = true, features = ["mm", "param"] }
 
 [dev-dependencies]
 # depend again on wasmtime to activate its default features for tests
-wasmtime = { workspace = true, features = ['component-model', 'async', 'default'] }
+wasmtime = { workspace = true, features = ['component-model', 'async', 'default', 'winch'] }
 env_logger = { workspace = true }
 log = { workspace = true }
 filecheck = "0.5.0"
@@ -121,6 +121,7 @@ wasmtime-cache = { path = "crates/cache", version = "=8.0.0" }
 wasmtime-cli-flags = { path = "crates/cli-flags", version = "=8.0.0" }
 wasmtime-cranelift = { path = "crates/cranelift", version = "=8.0.0" }
 wasmtime-cranelift-shared = { path = "crates/cranelift-shared", version = "=8.0.0" }
+wasmtime-winch = { path = "crates/winch", version = "=8.0.0" }
 wasmtime-environ = { path = "crates/environ", version = "=8.0.0" }
 wasmtime-explorer = { path = "crates/explorer", version = "=8.0.0" }
 wasmtime-fiber = { path = "crates/fiber", version = "=8.0.0" }
@@ -226,6 +227,7 @@ component-model = [
   "wasmtime-wast/component-model",
   "wasmtime-cli-flags/component-model"
 ]
+winch = ["wasmtime/winch"]
 
 # Stub feature that does nothing, for Cargo-features compatibility: the new
 # backend is the default now.

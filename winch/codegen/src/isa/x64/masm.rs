@@ -3,9 +3,9 @@ use super::{
     asm::{Assembler, Operand},
     regs::{self, rbp, rsp},
 };
-use crate::isa::reg::Reg;
 use crate::masm::{DivKind, MacroAssembler as Masm, OperandSize, RegImm, RemKind};
 use crate::{abi::LocalSlot, codegen::CodeGenContext, stack::Val};
+use crate::{isa::reg::Reg, masm::CalleeKind};
 use cranelift_codegen::{isa::x64::settings as x64_settings, settings, Final, MachBufferFinalized};
 
 /// x64 MacroAssembler.
@@ -114,7 +114,7 @@ impl Masm for MacroAssembler {
         self.decrement_sp(8);
     }
 
-    fn call(&mut self, callee: u32) {
+    fn call(&mut self, callee: CalleeKind) {
         self.asm.call(callee);
     }
 
@@ -124,7 +124,7 @@ impl Masm for MacroAssembler {
         self.asm.mov(src, dst, size);
     }
 
-    fn sp_offset(&mut self) -> u32 {
+    fn sp_offset(&self) -> u32 {
         self.sp_offset
     }
 
@@ -235,6 +235,10 @@ impl Masm for MacroAssembler {
 
     fn finalize(self) -> MachBufferFinalized<Final> {
         self.asm.finalize()
+    }
+
+    fn address_from_reg(&self, reg: Reg, offset: u32) -> Self::Address {
+        Address::offset(reg, offset)
     }
 }
 
