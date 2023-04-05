@@ -1,11 +1,7 @@
-#[cfg(target_arch = "x86_64")]
 use anyhow::Result;
-#[cfg(target_arch = "x86_64")]
 use wasmtime::*;
 
 #[test]
-// For now, winch is only supported on x86_64 when running through wasmtime.
-#[cfg(target_arch = "x86_64")]
 fn compiles_with_winch() -> Result<()> {
     let mut c = Config::new();
 
@@ -45,7 +41,6 @@ fn compiles_with_winch() -> Result<()> {
 }
 
 #[test]
-#[cfg(target_arch = "x86_64")]
 fn compiles_with_winch_stack_arguments() -> Result<()> {
     let mut c = Config::new();
 
