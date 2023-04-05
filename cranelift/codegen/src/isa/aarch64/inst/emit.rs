@@ -2927,6 +2927,45 @@ impl MachInstEmit for Inst {
                 };
                 sink.put4(enc_vec_rrr(top11 | q << 9, rm, bit15_10, rn, rd));
             }
+            &Inst::VecFmlaElem {
+                rd,
+                ri,
+                rn,
+                rm,
+                alu_op,
+                size,
+                idx,
+            } => {
+                let rd = allocs.next_writable(rd);
+                let ri = allocs.next(ri);
+                debug_assert_eq!(rd.to_reg(), ri);
+                let rn = allocs.next(rn);
+                let rm = allocs.next(rm);
+                let idx = u32::from(idx);
+
+                let (q, _size) = size.enc_size();
+                let o2 = match alu_op {
+                    VecALUModOp::Fmla => 0b0,
+                    VecALUModOp::Fmls => 0b1,
+                    _ => unreachable!(),
+                };
+
+                let (h, l) = match size {
+                    VectorSize::Size32x4 => {
+                        assert!(idx < 4);
+                        (idx >> 1, idx & 1)
+                    }
+                    VectorSize::Size64x2 => {
+                        assert!(idx < 2);
+                        (idx, 0)
+                    }
+                    _ => unreachable!(),
+                };
+
+                let top11 = 0b000_011111_00 | (q << 9) | (size.enc_float_size() << 1) | l;
+                let bit15_10 = 0b000100 | (o2 << 4) | (h << 1);
+                sink.put4(enc_vec_rrr(top11, rm, bit15_10, rn, rd));
+            }
             &Inst::VecLoadReplicate {
                 rd,
                 rn,

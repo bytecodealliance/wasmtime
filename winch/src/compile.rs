@@ -41,7 +41,7 @@ pub fn run(opt: &Options) -> Result<()> {
     let body_inputs = std::mem::take(&mut translation.function_body_inputs);
     let module = &translation.module;
     let types = translation.get_types();
-    let env = FuncEnv::new(module, &types, &*isa);
+    let env = FuncEnv::new(module, &types, &isa);
 
     body_inputs
         .into_iter()
@@ -57,13 +57,23 @@ fn compile(env: &FuncEnv, f: (DefinedFuncIndex, FunctionBodyData<'_>)) -> Result
         .function_at(index.as_u32())
         .expect(&format!("function type at index {:?}", index.as_u32()));
     let FunctionBodyData { body, validator } = f.1;
-    let validator = validator.into_validator(Default::default());
+    let mut validator = validator.into_validator(Default::default());
     let buffer = env
         .isa
-        .compile_function(&sig, &body, env, validator)
+        .compile_function(&sig, &body, env, &mut validator)
         .expect("Couldn't compile function");
 
     println!("Disassembly for function: {}", index.as_u32());
+    disasm(buffer.data(), env.isa)?
+        .iter()
+        .for_each(|s| println!("{}", s));
+
+    let buffer = env
+        .isa
+        .host_to_wasm_trampoline(sig)
+        .expect("Couldn't compile trampoline");
+
+    println!("Disassembly for trampoline: {}", index.as_u32());
     disasm(buffer.data(), env.isa)?
         .iter()
         .for_each(|s| println!("{}", s));

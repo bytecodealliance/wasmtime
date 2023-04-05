@@ -2,7 +2,7 @@
 
 use crate::{
     isa::reg::Reg,
-    masm::{DivKind, OperandSize, RemKind},
+    masm::{CalleeKind, DivKind, OperandSize, RemKind},
 };
 use cranelift_codegen::{
     entity::EntityRef,
@@ -469,17 +469,31 @@ impl Assembler {
         });
     }
 
-    /// Direct function call to a user defined function.
-    pub fn call(&mut self, callee: u32) {
-        let dest = ExternalName::user(UserExternalNameRef::new(callee as usize));
-        self.emit(Inst::CallKnown {
-            dest,
-            info: Box::new(CallInfo {
-                uses: smallvec![],
-                defs: smallvec![],
-                clobbers: Default::default(),
-                opcode: Opcode::Call,
-            }),
-        });
+    pub fn call(&mut self, callee: CalleeKind) {
+        match callee {
+            CalleeKind::Indirect(reg) => {
+                self.emit(Inst::CallUnknown {
+                    dest: RegMem::reg(reg.into()),
+                    info: Box::new(CallInfo {
+                        uses: smallvec![],
+                        defs: smallvec![],
+                        clobbers: Default::default(),
+                        opcode: Opcode::Call,
+                    }),
+                });
+            }
+            CalleeKind::Direct(index) => {
+                let dest = ExternalName::user(UserExternalNameRef::new(index as usize));
+                self.emit(Inst::CallKnown {
+                    dest,
+                    info: Box::new(CallInfo {
+                        uses: smallvec![],
+                        defs: smallvec![],
+                        clobbers: Default::default(),
+                        opcode: Opcode::Call,
+                    }),
+                });
+            }
+        }
     }
 }

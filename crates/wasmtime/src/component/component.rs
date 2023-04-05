@@ -85,7 +85,7 @@ impl Component {
     //
     // FIXME: need to write more docs here.
     #[cfg(compiler)]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
+    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))] // see build.rs
     pub fn new(engine: &Engine, bytes: impl AsRef<[u8]>) -> Result<Component> {
         let bytes = bytes.as_ref();
         #[cfg(feature = "wat")]
@@ -98,7 +98,7 @@ impl Component {
     //
     // FIXME: need to write more docs here.
     #[cfg(compiler)]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
+    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))] // see build.rs
     pub fn from_file(engine: &Engine, file: impl AsRef<Path>) -> Result<Component> {
         match Self::new(
             engine,
@@ -124,7 +124,7 @@ impl Component {
     //
     // FIXME: need to write more docs here.
     #[cfg(compiler)]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
+    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))] // see build.rs
     pub fn from_binary(engine: &Engine, binary: &[u8]) -> Result<Component> {
         engine
             .check_compatible_with_native_host()
