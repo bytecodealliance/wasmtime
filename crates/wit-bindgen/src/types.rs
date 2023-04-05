@@ -54,6 +54,9 @@ impl Types {
                     for (_, f) in iface.functions.iter() {
                         self.type_info_func(resolve, f, import);
                     }
+                    if let Some(f) = &iface.wildcard {
+                        self.type_info_func(resolve, f, import);
+                    }
                 }
                 WorldItem::Type(id) => {
                     self.type_id_info(resolve, *id);

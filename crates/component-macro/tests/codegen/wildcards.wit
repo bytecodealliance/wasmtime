@@ -1,0 +1,8 @@
+default world wildcards {
+    import imports: interface {
+        *: func(s: string, v: u32, l: list<u8>) -> tuple<string, u32, list<u8>>
+    }
+    export exports: interface {
+        *: func(s: string, v: u32, l: list<u8>) -> tuple<string, u32, list<u8>>
+    }
+}
