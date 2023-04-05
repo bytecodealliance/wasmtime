@@ -6,6 +6,13 @@ Unreleased.
 
 ### Added
 
+* Introduce the `wasmtime-explorer` crate for investigating the compilation of
+  wasm modules.
+  [#5975](https://github.com/bytecodealliance/wasmtime/pull/5975)
+
+* Added support for the Relaxed SIMD proposal.
+  [#5892](https://github.com/bytecodealliance/wasmtime/pull/5892)
+
 ### Changed
 
 --------------------------------------------------------------------------------
