@@ -1370,7 +1370,7 @@ pub enum StepError {
 
 /// Enumerate the ways in which the control flow can change based on a single step in a Cranelift
 /// interpreter.
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum ControlFlow<'a, V> {
     /// Return one or more values from an instruction to be assigned to a left-hand side, e.g.:
     /// in `v0 = iadd v1, v2`, the sum of `v1` and `v2` is assigned to `v0`.
@@ -1392,30 +1392,6 @@ pub enum ControlFlow<'a, V> {
     /// Stop with a program-generated trap; note that these are distinct from errors that may occur
     /// during interpretation.
     Trap(CraneliftTrap),
-}
-
-impl<'a, V> ControlFlow<'a, V> {
-    /// For convenience, we can unwrap the [ControlFlow] state assuming that it is a
-    /// [ControlFlow::Return], panicking otherwise.
-    #[cfg(test)]
-    pub fn unwrap_return(self) -> Vec<V> {
-        if let ControlFlow::Return(values) = self {
-            values.into_vec()
-        } else {
-            panic!("expected the control flow to be in the return state")
-        }
-    }
-
-    /// For convenience, we can unwrap the [ControlFlow] state assuming that it is a
-    /// [ControlFlow::Trap], panicking otherwise.
-    #[cfg(test)]
-    pub fn unwrap_trap(self) -> CraneliftTrap {
-        if let ControlFlow::Trap(trap) = self {
-            trap
-        } else {
-            panic!("expected the control flow to be a trap")
-        }
-    }
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Hash)]
