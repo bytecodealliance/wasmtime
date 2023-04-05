@@ -83,6 +83,12 @@ Released 2023-03-20
   instructions has been fixed.
   [#5871](https://github.com/bytecodealliance/wasmtime/pull/5871)
 
+* Guest-controlled out-of-bounds read/write on x86\_64
+  [GHSA-ff4p-7xrq-q5r8](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-ff4p-7xrq-q5r8)
+
+*  Miscompilation of `i8x16.select` with the same inputs on x86\_64
+  [GHSA-xm67-587q-r2vw](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-xm67-587q-r2vw)
+
 --------------------------------------------------------------------------------
 
 ## 6.0.1
