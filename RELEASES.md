@@ -32,12 +32,12 @@ Unreleased.
 
 * Cranelift gained many new machine-independent optimizations.
   [#5909](https://github.com/bytecodealliance/wasmtime/pull/5909)
+  [#6032](https://github.com/bytecodealliance/wasmtime/pull/6032)
   [#6033](https://github.com/bytecodealliance/wasmtime/pull/6033)
   [#6034](https://github.com/bytecodealliance/wasmtime/pull/6034)
-  [#6032](https://github.com/bytecodealliance/wasmtime/pull/6032)
   [#6037](https://github.com/bytecodealliance/wasmtime/pull/6037)
-  [#6053](https://github.com/bytecodealliance/wasmtime/pull/6053)
   [#6052](https://github.com/bytecodealliance/wasmtime/pull/6052)
+  [#6053](https://github.com/bytecodealliance/wasmtime/pull/6053)
   [#6072](https://github.com/bytecodealliance/wasmtime/pull/6072)
   [#6095](https://github.com/bytecodealliance/wasmtime/pull/6095)
   [#6130](https://github.com/bytecodealliance/wasmtime/pull/6130)
