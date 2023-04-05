@@ -299,7 +299,11 @@ impl CodeMemory {
                 obj::LibCall::FmaF32 => libcalls::relocs::fmaf32 as usize,
                 obj::LibCall::FmaF64 => libcalls::relocs::fmaf64 as usize,
             };
-            *self.mmap.as_mut_ptr().add(offset).cast::<usize>() = libcall;
+            self.mmap
+                .as_mut_ptr()
+                .add(offset)
+                .cast::<usize>()
+                .write_unaligned(libcall);
         }
         Ok(())
     }
