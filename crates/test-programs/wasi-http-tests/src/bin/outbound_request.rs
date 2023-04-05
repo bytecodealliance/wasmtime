@@ -89,10 +89,10 @@ fn request(
     })
 }
 
-fn main() -> Result<()> {
+fn main() -> Result<()> {        
     let r1 = request(
         types::MethodParam::Get,
-        types::SchemeParam::Https,
+        types::SchemeParam::Http,
         "postman-echo.com",
         "/get",
         "?some=arg?goes=here",
@@ -105,7 +105,7 @@ fn main() -> Result<()> {
 
     let r2 = request(
         types::MethodParam::Post,
-        types::SchemeParam::Https,
+        types::SchemeParam::Http,
         "postman-echo.com",
         "/post",
         "",
@@ -118,7 +118,7 @@ fn main() -> Result<()> {
 
     let r3 = request(
         types::MethodParam::Put,
-        types::SchemeParam::Https,
+        types::SchemeParam::Http,
         "postman-echo.com",
         "/put",
         "",
