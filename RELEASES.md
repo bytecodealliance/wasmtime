@@ -9,22 +9,33 @@ Unreleased.
 * Allow the MPL-2.0 and OpenSSL licenses in dependencies of wasmtime.
   [#6136](https://github.com/bytecodealliance/wasmtime/pull/6136)
 
-* The initial integration between winch and wasmtime has landed behind a cargo
-  feature.
-  [#6119](https://github.com/bytecodealliance/wasmtime/pull/6119)
-
 * Add a bounds-checking optimization for dynamic memories and guard pages.
   [#6031](https://github.com/bytecodealliance/wasmtime/pull/6031)
 
-* Add support for generating perf maps for simple perf profiling.
+* Add support for generating perf maps for simple perf profiling. Additionally,
+  the `--jitdump` and `--vtune` flags have been replaced with a single
+  `--profile` flags that accepts `perfmap`, `jitdump`, and `vtune` arguments.
   [#6030](https://github.com/bytecodealliance/wasmtime/pull/6030)
+
+* Validate faulting addresses are valid to fault on. As a mitigation to CVEs
+  like `GHSA-ff4p-7xrq-q5r8`, check that the address involved in a fault is one
+  that could be contained in a `Store`, or print a scary message and abort
+  immediately.
+  [#6028](https://github.com/bytecodealliance/wasmtime/pull/6028)
 
 * Add the `--default-values-unknown-imports` option to define unknown function
   imports as functions that return the default value for their result type.
   [#6010](https://github.com/bytecodealliance/wasmtime/pull/6010)
 
+* Add `Clone` for `component::InstancePre`.
+  [#5996](https://github.com/bytecodealliance/wasmtime/issues/5996)
+
+* Add `--dynamic-memory-reserved-for-growth` cli flag.
+  [#5980](https://github.com/bytecodealliance/wasmtime/issues/5980)
+
 * Introduce the `wasmtime-explorer` crate for investigating the compilation of
-  wasm modules.
+  wasm modules. This functionality is also exposed via the `wasmtime explore`
+  command.
   [#5975](https://github.com/bytecodealliance/wasmtime/pull/5975)
 
 * Added support for the Relaxed SIMD proposal.
