@@ -6,6 +6,10 @@ Unreleased.
 
 ### Added
 
+* Add the `--default-values-unknown-imports` option to define unknown function
+  imports as functions that return the default value for their result type.
+  [#6010](https://github.com/bytecodealliance/wasmtime/pull/6010)
+
 * Introduce the `wasmtime-explorer` crate for investigating the compilation of
   wasm modules.
   [#5975](https://github.com/bytecodealliance/wasmtime/pull/5975)
