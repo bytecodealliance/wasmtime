@@ -13,11 +13,13 @@ anyhow = { workspace = true }
 bytes = "1.1.0"
 hyper = { version = "1.0.0-rc.3", features = ["full"] }
 tokio = { version = "1", default-features = false, features = ["net", "rt-multi-thread", "time"] }
-tokio-rustls = { version = "0.24.0" }
-rustls = { version = "0.21.0" }
-webpki-roots = { version = "0.23.0" }
 http = { version = "0.2.9" }
 http-body = "1.0.0-rc.2"
 http-body-util = "0.1.0-rc.2"
 thiserror = { workspace = true }
 wasmtime = { workspace = true, features = ['component-model'] }
+
+[target.'cfg(not(target_arch = "riscv64gc"))'.dependencies]
+tokio-rustls = { version = "0.24.0" }
+rustls = { version = "0.21.0" }
+webpki-roots = { version = "0.23.0" }

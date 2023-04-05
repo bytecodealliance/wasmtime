@@ -1,17 +1,21 @@
 use crate::r#struct::ActiveResponse;
 pub use crate::r#struct::WasiHttp;
 use crate::types::{RequestOptions, Scheme};
-use anyhow::{anyhow, bail};
+use anyhow::bail;
 use bytes::{BufMut, Bytes, BytesMut};
 use http_body_util::{BodyExt, Full};
 use hyper::Method;
 use hyper::Request;
-use std::sync::Arc;
 use std::time::Duration;
 use tokio::net::TcpStream;
 use tokio::runtime::Runtime;
 use tokio::time::timeout;
+#[cfg(not(target_arch = "riscv64gc"))]
+use std::sync::Arc;
+#[cfg(not(target_arch = "riscv64gc"))]
 use tokio_rustls::rustls::{self, OwnedTrustAnchor};
+#[cfg(not(target_arch = "riscv64gc"))]
+use anyhow::anyhow;
 
 impl crate::default_outgoing_http::Host for WasiHttp {
     fn handle(
@@ -100,49 +104,53 @@ impl WasiHttp {
             Some(_) => request.authority.clone(),
             None => request.authority.clone() + port_for_scheme(&request.scheme),
         };
-
         let mut sender = if scheme == "https://" {
-            let stream = TcpStream::connect(authority.clone()).await?;
-            //TODO: uncomment this code and make the tls implementation a feature decision.
-            //let connector = tokio_native_tls::native_tls::TlsConnector::builder().build()?;
-            //let connector = tokio_native_tls::TlsConnector::from(connector);
-            //let host = authority.split(":").next().unwrap_or(&authority);
-            //let stream = connector.connect(&host, stream).await?;
+            #[cfg(not(target_arch = "riscv64gc"))]
+            {
+                let stream = TcpStream::connect(authority.clone()).await?;
+                //TODO: uncomment this code and make the tls implementation a feature decision.
+                //let connector = tokio_native_tls::native_tls::TlsConnector::builder().build()?;
+                //let connector = tokio_native_tls::TlsConnector::from(connector);
+                //let host = authority.split(":").next().unwrap_or(&authority);
+                //let stream = connector.connect(&host, stream).await?;
 
-            // derived from https://github.com/tokio-rs/tls/blob/master/tokio-rustls/examples/client/src/main.rs
-            let mut root_cert_store = rustls::RootCertStore::empty();
-            root_cert_store.add_server_trust_anchors(webpki_roots::TLS_SERVER_ROOTS.0.iter().map(
-                |ta| {
-                    OwnedTrustAnchor::from_subject_spki_name_constraints(
-                        ta.subject,
-                        ta.spki,
-                        ta.name_constraints,
-                    )
-                },
-            ));
-            let config = rustls::ClientConfig::builder()
-                .with_safe_defaults()
-                .with_root_certificates(root_cert_store)
-                .with_no_client_auth();
-            let connector = tokio_rustls::TlsConnector::from(Arc::new(config));
-            let mut parts = authority.split(":");
-            let host = parts.next().unwrap_or(&authority);
-            let domain =
-                rustls::ServerName::try_from(host).map_err(|_| anyhow!("invalid dnsname"))?;
-            let stream = connector.connect(domain, stream).await?;
+                // derived from https://github.com/tokio-rs/tls/blob/master/tokio-rustls/examples/client/src/main.rs
+                let mut root_cert_store = rustls::RootCertStore::empty();
+                root_cert_store.add_server_trust_anchors(webpki_roots::TLS_SERVER_ROOTS.0.iter().map(
+                    |ta| {
+                        OwnedTrustAnchor::from_subject_spki_name_constraints(
+                            ta.subject,
+                            ta.spki,
+                            ta.name_constraints,
+                        )
+                    },
+                ));
+                let config = rustls::ClientConfig::builder()
+                    .with_safe_defaults()
+                    .with_root_certificates(root_cert_store)
+                    .with_no_client_auth();
+                let connector = tokio_rustls::TlsConnector::from(Arc::new(config));
+                let mut parts = authority.split(":");
+                let host = parts.next().unwrap_or(&authority);
+                let domain =
+                    rustls::ServerName::try_from(host).map_err(|_| anyhow!("invalid dnsname"))?;
+                let stream = connector.connect(domain, stream).await?;
 
-            let t = timeout(
-                connect_timeout,
-                hyper::client::conn::http1::handshake(stream),
-            )
-            .await?;
-            let (s, conn) = t?;
-            tokio::task::spawn(async move {
-                if let Err(err) = conn.await {
-                    println!("Connection failed: {:?}", err);
-                }
-            });
-            s
+                let t = timeout(
+                    connect_timeout,
+                    hyper::client::conn::http1::handshake(stream),
+                )
+                .await?;
+                let (s, conn) = t?;
+                tokio::task::spawn(async move {
+                    if let Err(err) = conn.await {
+                        println!("Connection failed: {:?}", err);
+                    }
+                });
+                s
+            }
+            #[cfg(target_arch = "riscv64gc")]
+            bail!("unsupported architecture for SSL")
         } else {
             let tcp = TcpStream::connect(authority).await?;
             let t = timeout(connect_timeout, hyper::client::conn::http1::handshake(tcp)).await?;
