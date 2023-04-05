@@ -14,6 +14,12 @@ fn main() {
         out_dir.to_str().unwrap()
     );
 
+    // LLVM has special handling for `main` so use a .s file to define the main
+    // function for the adapter. See the comments in src/main.s for details.
+    if env::var("CARGO_FEATURE_COMMAND").is_ok() {
+        println!("cargo:rustc-link-arg=src/main.o");
+    }
+
     // Some specific flags to `wasm-ld` to inform the shape of this adapter.
     // Notably we're importing memory from the main module and additionally our
     // own module has no stack at all since it's specifically allocated at

@@ -31,7 +31,7 @@ pub mod bindings {
         raw_strings,
         // The generated definition of command will pull in std, so we are defining it
         // manually below instead
-        skip: ["run", "get-directories", "get-environment"],
+        skip: ["main", "get-directories", "get-environment"],
     });
 
     #[cfg(feature = "reactor")]
@@ -41,17 +41,6 @@ pub mod bindings {
         raw_strings,
         skip: ["get-directories", "get-environment"],
     });
-}
-
-#[no_mangle]
-#[cfg(feature = "command")]
-pub unsafe extern "C" fn run() -> u32 {
-    #[link(wasm_import_module = "__main_module__")]
-    extern "C" {
-        fn _start();
-    }
-    _start();
-    0
 }
 
 // The unwrap/expect methods in std pull panic when they fail, which pulls
