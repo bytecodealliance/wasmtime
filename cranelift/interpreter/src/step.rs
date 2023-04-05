@@ -1397,6 +1397,7 @@ pub enum ControlFlow<'a, V> {
 impl<'a, V> ControlFlow<'a, V> {
     /// For convenience, we can unwrap the [ControlFlow] state assuming that it is a
     /// [ControlFlow::Return], panicking otherwise.
+    #[cfg(test)]
     pub fn unwrap_return(self) -> Vec<V> {
         if let ControlFlow::Return(values) = self {
             values.into_vec()
@@ -1407,6 +1408,7 @@ impl<'a, V> ControlFlow<'a, V> {
 
     /// For convenience, we can unwrap the [ControlFlow] state assuming that it is a
     /// [ControlFlow::Trap], panicking otherwise.
+    #[cfg(test)]
     pub fn unwrap_trap(self) -> CraneliftTrap {
         if let ControlFlow::Trap(trap) = self {
             trap
