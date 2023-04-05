@@ -513,17 +513,62 @@
 
 ;;;; Rules for `fma` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type ty @ (multi_lane _ _) (fma x y z)))
-      (vec_rrr_mod (VecALUModOp.Fmla) z x y (vector_size ty)))
+(rule (lower (has_type (ty_scalar_float ty) (fma x y z)))
+       (fpu_rrrr (FPUOp3.MAdd) (scalar_size ty) x y z))
 
-(rule 1 (lower (has_type ty @ (multi_lane _ _) (fma (fneg x) y z)))
-      (vec_rrr_mod (VecALUModOp.Fmls) z x y (vector_size ty)))
+;; Delegate vector-based lowerings to helpers below
+(rule 1 (lower (has_type ty @ (multi_lane _ _) (fma x y z)))
+        (lower_fmla (VecALUModOp.Fmla) x y z (vector_size ty)))
 
-(rule 2 (lower (has_type ty @ (multi_lane _ _) (fma x (fneg y) z)))
-      (vec_rrr_mod (VecALUModOp.Fmls) z x y (vector_size ty)))
+;; Lowers a fused-multiply-add operation handling various forms of the
+;; instruction to get maximal coverage of what's available on AArch64.
+(decl lower_fmla (VecALUModOp Value Value Value VectorSize) Reg)
 
-(rule 3 (lower (has_type (ty_scalar_float ty) (fma x y z)))
-      (fpu_rrrr (FPUOp3.MAdd) (scalar_size ty) x y z))
+;; Base case, emit the op requested.
+(rule (lower_fmla op x y z size)
+      (vec_rrr_mod op z x y size))
+
+;; Special case: if one of the multiplicands are a splat then the element-based
+;; fma can be used instead with 0 as the element index.
+(rule 1 (lower_fmla op (splat x) y z size)
+        (vec_fmla_elem op z y x size 0))
+(rule 2 (lower_fmla op x (splat y) z size)
+        (vec_fmla_elem op z x y size 0))
+
+;; Special case: if one of the multiplicands is a shuffle to broadcast a
+;; single element of a vector then the element-based fma can be used like splat
+;; above.
+;;
+;; Note that in Cranelift shuffle always has i8x16 inputs and outputs so
+;; a `bitcast` is matched here explicitly since that's the main way a shuffle
+;; output will be fed into this instruction.
+(rule 3 (lower_fmla op (bitcast _ (shuffle x x (shuffle32_from_imm n n n n))) y z size @ (VectorSize.Size32x4))
+        (if-let $true (u64_lt n 4))
+        (vec_fmla_elem op z y x size n))
+(rule 4 (lower_fmla op x (bitcast _ (shuffle y y (shuffle32_from_imm n n n n))) z size @ (VectorSize.Size32x4))
+        (if-let $true (u64_lt n 4))
+        (vec_fmla_elem op z x y size n))
+(rule 3 (lower_fmla op (bitcast _ (shuffle x x (shuffle64_from_imm n n))) y z size @ (VectorSize.Size64x2))
+        (if-let $true (u64_lt n 2))
+        (vec_fmla_elem op z y x size n))
+(rule 4 (lower_fmla op x (bitcast _ (shuffle y y (shuffle64_from_imm n n))) z size @ (VectorSize.Size64x2))
+        (if-let $true (u64_lt n 2))
+        (vec_fmla_elem op z x y size n))
+
+;; Special case: if one of the multiplicands is `fneg` then peel that away,
+;; reverse the operation being performed, and then recurse on `lower_fmla`
+;; again to generate the actual instruction.
+;;
+;; Note that these are the highest priority cases for `lower_fmla` to peel
+;; away as many `fneg` operations as possible.
+(rule 5 (lower_fmla op (fneg x) y z size)
+        (lower_fmla (neg_fmla op) x y z size))
+(rule 6 (lower_fmla op x (fneg y) z size)
+        (lower_fmla (neg_fmla op) x y z size))
+
+(decl neg_fmla (VecALUModOp) VecALUModOp)
+(rule (neg_fmla (VecALUModOp.Fmla)) (VecALUModOp.Fmls))
+(rule (neg_fmla (VecALUModOp.Fmls)) (VecALUModOp.Fmla))
 
 ;;;; Rules for `fcopysign` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
