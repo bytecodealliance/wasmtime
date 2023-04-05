@@ -20,6 +20,47 @@ impl DefinedLocalsRange {
     }
 }
 
+/// An abstraction to read the defined locals from the WASM binary for a function.
+#[derive(Default)]
+pub(crate) struct DefinedLocals {
+    /// The defined locals for a function.
+    pub defined_locals: Locals,
+    /// The size of the defined locals.
+    pub stack_size: u32,
+}
+
+impl DefinedLocals {
+    /// Compute the local slots for a WASM function.
+    pub fn new(
+        reader: &mut BinaryReader<'_>,
+        validator: &mut FuncValidator<ValidatorResources>,
+    ) -> Result<Self> {
+        let mut next_stack = 0;
+        // The first 32 bits of a WASM binary function describe the number of locals
+        let local_count = reader.read_var_u32()?;
+        let mut slots: Locals = Default::default();
+
+        for _ in 0..local_count {
+            let position = reader.original_position();
+            let count = reader.read_var_u32()?;
+            let ty = reader.read()?;
+            validator.define_locals(position, count, ty)?;
+
+            let ty: ValType = ty.try_into()?;
+            for _ in 0..count {
+                let ty_size = ty_size(&ty);
+                next_stack = align_to(next_stack, ty_size) + ty_size;
+                slots.push(LocalSlot::new(ty, next_stack));
+            }
+        }
+
+        Ok(Self {
+            defined_locals: slots,
+            stack_size: next_stack,
+        })
+    }
+}
+
 /// Frame handler abstraction.
 pub(crate) struct Frame {
     /// The size of the entire local area; the arguments plus the function defined locals.
@@ -37,22 +78,29 @@ pub(crate) struct Frame {
 
 impl Frame {
     /// Allocate a new Frame.
-    pub fn new<A: ABI>(
-        sig: &ABISig,
-        body: &mut BinaryReader<'_>,
-        validator: &mut FuncValidator<ValidatorResources>,
-        abi: &A,
-    ) -> Result<Self> {
+    pub fn new<A: ABI>(sig: &ABISig, defined_locals: &DefinedLocals, abi: &A) -> Result<Self> {
         let (mut locals, defined_locals_start) = Self::compute_arg_slots(sig, abi)?;
-        let (defined_slots, defined_locals_end) =
-            Self::compute_defined_slots(body, validator, defined_locals_start)?;
-        locals.extend(defined_slots);
-        let locals_size = align_to(defined_locals_end, abi.stack_align().into());
+
+        // The defined locals have a zero-based offset by default
+        // so we need to add the defined locals start to the offset.
+        locals.extend(
+            defined_locals
+                .defined_locals
+                .iter()
+                .map(|l| LocalSlot::new(l.ty, l.offset + defined_locals_start)),
+        );
+
+        let locals_size = align_to(
+            defined_locals_start + defined_locals.stack_size,
+            abi.stack_align().into(),
+        );
 
         Ok(Self {
             locals,
             locals_size,
-            defined_locals_range: DefinedLocalsRange(defined_locals_start..defined_locals_end),
+            defined_locals_range: DefinedLocalsRange(
+                defined_locals_start..defined_locals.stack_size,
+            ),
         })
     }
 
@@ -114,31 +162,5 @@ impl Frame {
             // the stack; which is the frame pointer + return address.
             ABIArg::Stack { ty, offset } => LocalSlot::stack_arg(*ty, offset + arg_base_offset),
         }
-    }
-
-    fn compute_defined_slots(
-        reader: &mut BinaryReader<'_>,
-        validator: &mut FuncValidator<ValidatorResources>,
-        next_stack: u32,
-    ) -> Result<(Locals, u32)> {
-        let mut next_stack = next_stack;
-        let local_count = reader.read_var_u32()?;
-        let mut slots: Locals = Default::default();
-
-        for _ in 0..local_count {
-            let position = reader.original_position();
-            let count = reader.read_var_u32()?;
-            let ty = reader.read()?;
-            validator.define_locals(position, count, ty)?;
-
-            let ty: ValType = ty.try_into()?;
-            for _ in 0..count {
-                let ty_size = ty_size(&ty);
-                next_stack = align_to(next_stack, ty_size) + ty_size;
-                slots.push(LocalSlot::new(ty, next_stack));
-            }
-        }
-
-        Ok((slots, next_stack))
     }
 }

@@ -3447,6 +3447,7 @@ dependencies = [
  "wasmtime-jit",
  "wasmtime-runtime",
  "wasmtime-wasi",
+ "wasmtime-winch",
  "wat",
  "windows-sys 0.45.0",
 ]
@@ -3896,6 +3897,7 @@ dependencies = [
  "wasmtime-cranelift-shared",
  "wasmtime-environ",
  "winch-codegen",
+ "winch-environ",
 ]
 
 [[package]]

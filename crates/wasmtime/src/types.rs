@@ -22,7 +22,7 @@ pub enum Mutability {
 // Value Types
 
 /// A list of all possible value types in WebAssembly.
-#[derive(Debug, Clone, Hash)]
+#[derive(Debug, Clone, Copy, Hash)]
 pub enum ValType {
     // NB: the ordering here is intended to match the ordering in
     // `wasmtime_types::WasmType` to help improve codegen when converting.
@@ -108,7 +108,7 @@ impl ValType {
 }
 
 /// A reference type holds what it refers to and whether it is nullable
-#[derive(Debug, Clone, Hash)]
+#[derive(Debug, Clone, Copy, Hash)]
 pub struct RefType {
     /// Indicates whether the reference is nullable.
     pub nullable: bool,
@@ -160,7 +160,7 @@ impl RefType {
 }
 
 /// A list of all possible heap types in WebAssembly
-#[derive(Debug, Clone, Hash)]
+#[derive(Debug, Clone, Copy, Hash)]
 pub enum HeapType {
     /// A reference to a Wasm function.
     Func,

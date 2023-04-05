@@ -32,6 +32,12 @@ criteria = "safe-to-deploy"
 version = "0.2.2"
 notes = "Inspected it and is a tiny crate with just type definitions"
 
+[[audits.embark-studios.audits.webpki-roots]]
+who = "Johan Andersson <opensource@embark-studios.com>"
+criteria = "safe-to-deploy"
+version = "0.22.4"
+notes = "Inspected it to confirm that it only contains data definitions and no runtime code"
+
 [[audits.google.audits.libfuzzer-sys]]
 who = "ChromeOS"
 criteria = "safe-to-run"
@@ -70,6 +76,16 @@ version = "0.3.0"
 who = "David Cook <dcook@divviup.org>"
 criteria = "safe-to-deploy"
 version = "0.4.1"
+
+[[audits.isrg.audits.untrusted]]
+who = "David Cook <dcook@divviup.org>"
+criteria = "safe-to-deploy"
+version = "0.7.1"
+
+[[audits.isrg.audits.wasm-bindgen-shared]]
+who = "David Cook <dcook@divviup.org>"
+criteria = "safe-to-deploy"
+version = "0.2.83"
 
 [[audits.mozilla.audits.autocfg]]
 who = "Josh Stone <jistone@redhat.com>"

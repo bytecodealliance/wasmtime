@@ -20,7 +20,7 @@ use anyhow::{bail, Result};
 use clap::Parser;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use wasmtime::{Config, ProfilingStrategy};
+use wasmtime::{Config, ProfilingStrategy, Strategy};
 
 pub const SUPPORTED_WASM_FEATURES: &[(&str, &str)] = &[
     ("all", "enables all supported WebAssembly features"),
@@ -244,6 +244,12 @@ pub struct CommonOptions {
     /// performance cost.
     #[clap(long)]
     pub relaxed_simd_deterministic: bool,
+    /// Explicitly specify the name of the compiler to use for WebAssembly.
+    ///
+    /// Currently only `cranelift` and `winch` are supported, but not all builds
+    /// of Wasmtime have both built in.
+    #[clap(long)]
+    pub compiler: Option<String>,
 }
 
 impl CommonOptions {
@@ -261,6 +267,13 @@ impl CommonOptions {
 
     pub fn config(&self, target: Option<&str>) -> Result<Config> {
         let mut config = Config::new();
+
+        config.strategy(match self.compiler.as_deref() {
+            None => Strategy::Auto,
+            Some("cranelift") => Strategy::Cranelift,
+            Some("winch") => Strategy::Winch,
+            Some(s) => bail!("unknown compiler: {s}"),
+        });
 
         // Set the target before setting any cranelift options, since the
         // target will reset any target-specific options.

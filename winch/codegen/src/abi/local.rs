@@ -4,7 +4,7 @@ use wasmparser::ValType;
 /// Slots for stack arguments are addressed from the frame pointer.
 /// Slots for function-defined locals and for registers are addressed
 /// from the stack pointer.
-#[derive(Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 enum Base {
     FP,
     SP,
@@ -14,6 +14,7 @@ enum Base {
 ///
 /// Represents the type, location and addressing mode of a local
 /// in the stack's local and argument area.
+#[derive(Clone)]
 pub(crate) struct LocalSlot {
     /// The offset of the local slot.
     pub offset: u32,
