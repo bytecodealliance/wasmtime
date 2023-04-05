@@ -162,6 +162,7 @@ cranelift-object = { path = "cranelift/object", version = "0.96.0" }
 cranelift-jit = { path = "cranelift/jit", version = "0.96.0" }
 cranelift-fuzzgen = { path = "cranelift/fuzzgen" }
 cranelift-bforest = { path = "cranelift/bforest", version = "0.96.0" }
+cranelift-control = { path = "cranelift/control", version = "0.96.0" }
 cranelift = { path = "cranelift/umbrella", version = "0.96.0" }
 
 winch-codegen = { path = "winch/codegen", version = "=0.7.0" }

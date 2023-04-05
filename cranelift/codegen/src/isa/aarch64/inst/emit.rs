@@ -1,5 +1,6 @@
 //! AArch64 ISA: binary code emission.
 
+use cranelift_control::ControlPlane;
 use regalloc2::Allocation;
 
 use crate::binemit::{Reloc, StackMap};
@@ -638,15 +639,19 @@ pub struct EmitState {
     stack_map: Option<StackMap>,
     /// Current source-code location corresponding to instruction to be emitted.
     cur_srcloc: RelSourceLoc,
+    /// Only used during fuzz-testing. Otherwise, it is a zero-sized struct and
+    /// optimized away at compiletime. See [cranelift_control].
+    ctrl_plane: ControlPlane,
 }
 
 impl MachInstEmitState<Inst> for EmitState {
-    fn new(abi: &Callee<AArch64MachineDeps>) -> Self {
+    fn new(abi: &Callee<AArch64MachineDeps>, ctrl_plane: ControlPlane) -> Self {
         EmitState {
             virtual_sp_offset: 0,
             nominal_sp_to_fp: abi.frame_size() as i64,
             stack_map: None,
             cur_srcloc: Default::default(),
+            ctrl_plane,
         }
     }
 
@@ -656,6 +661,14 @@ impl MachInstEmitState<Inst> for EmitState {
 
     fn pre_sourceloc(&mut self, srcloc: RelSourceLoc) {
         self.cur_srcloc = srcloc;
+    }
+
+    fn ctrl_plane_mut(&mut self) -> &mut ControlPlane {
+        &mut self.ctrl_plane
+    }
+
+    fn take_ctrl_plane(self) -> ControlPlane {
+        self.ctrl_plane
     }
 }
 
@@ -1511,7 +1524,7 @@ impl MachInstEmit for Inst {
                 let again_label = sink.get_label();
 
                 // again:
-                sink.bind_label(again_label);
+                sink.bind_label(again_label, &mut state.ctrl_plane);
 
                 let srcloc = state.cur_srcloc();
                 if !srcloc.is_default() && !flags.notrap() {
@@ -1713,7 +1726,7 @@ impl MachInstEmit for Inst {
                 let out_label = sink.get_label();
 
                 // again:
-                sink.bind_label(again_label);
+                sink.bind_label(again_label, &mut state.ctrl_plane);
 
                 let srcloc = state.cur_srcloc();
                 if !srcloc.is_default() && !flags.notrap() {
@@ -1762,7 +1775,7 @@ impl MachInstEmit for Inst {
                 sink.use_label_at_offset(br_again_offset, again_label, LabelUse::Branch19);
 
                 // out:
-                sink.bind_label(out_label);
+                sink.bind_label(out_label, &mut state.ctrl_plane);
             }
             &Inst::LoadAcquire {
                 access_ty,
@@ -3007,13 +3020,13 @@ impl MachInstEmit for Inst {
                 sink.put4(enc_jump26(0b000101, 0 /* will be fixed up later */));
 
                 // else:
-                sink.bind_label(else_label);
+                sink.bind_label(else_label, &mut state.ctrl_plane);
 
                 // mov rd, rn
                 sink.put4(enc_vecmov(/* 16b = */ true, rd, rn));
 
                 // out:
-                sink.bind_label(out_label);
+                sink.bind_label(out_label, &mut state.ctrl_plane);
             }
             &Inst::MovToNZCV { rn } => {
                 let rn = allocs.next(rn);
@@ -3464,8 +3477,8 @@ impl MachInstEmit for Inst {
                         dest: BranchTarget::Label(jump_around_label),
                     };
                     jmp.emit(&[], sink, emit_info, state);
-                    sink.emit_island(needed_space + 4);
-                    sink.bind_label(jump_around_label);
+                    sink.emit_island(needed_space + 4, &mut state.ctrl_plane);
+                    sink.bind_label(jump_around_label, &mut state.ctrl_plane);
                 }
             }
 
@@ -3579,7 +3592,7 @@ impl MachInstEmit for Inst {
                 // out at this time.
 
                 let loop_start = sink.get_label();
-                sink.bind_label(loop_start);
+                sink.bind_label(loop_start, &mut state.ctrl_plane);
 
                 Inst::AluRRImm12 {
                     alu_op: ALUOp::Sub,
@@ -3614,7 +3627,7 @@ impl MachInstEmit for Inst {
                     kind: CondBrKind::Cond(Cond::Gt),
                 }
                 .emit(&[], sink, emit_info, state);
-                sink.bind_label(loop_end);
+                sink.bind_label(loop_end, &mut state.ctrl_plane);
             }
         }
 

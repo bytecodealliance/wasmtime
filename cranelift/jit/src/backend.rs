@@ -5,6 +5,7 @@ use cranelift_codegen::isa::{OwnedTargetIsa, TargetIsa};
 use cranelift_codegen::settings::Configurable;
 use cranelift_codegen::{self, ir, settings, MachReloc};
 use cranelift_codegen::{binemit::Reloc, CodegenError};
+use cranelift_control::ControlPlane;
 use cranelift_entity::SecondaryMap;
 use cranelift_module::{
     DataContext, DataDescription, DataId, FuncId, Init, Linkage, Module, ModuleCompiledFunction,
@@ -682,6 +683,7 @@ impl Module for JITModule {
         &mut self,
         id: FuncId,
         ctx: &mut cranelift_codegen::Context,
+        ctrl_plane: &mut ControlPlane,
     ) -> ModuleResult<ModuleCompiledFunction> {
         info!("defining function {}: {}", id, ctx.func.display());
         let decl = self.declarations.get_function_decl(id);
@@ -694,7 +696,7 @@ impl Module for JITModule {
         }
 
         // work around borrow-checker to allow reuse of ctx below
-        let res = ctx.compile(self.isa())?;
+        let res = ctx.compile(self.isa(), ctrl_plane)?;
         let alignment = res.alignment as u64;
         let compiled_code = ctx.compiled_code().unwrap();
 

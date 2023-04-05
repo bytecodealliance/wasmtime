@@ -26,6 +26,7 @@ use crate::timing;
 use crate::trace;
 use crate::CodegenError;
 use crate::ValueLocRange;
+use cranelift_control::ControlPlane;
 use regalloc2::{
     Edit, Function as RegallocFunction, InstOrEdit, InstRange, Operand, OperandKind, PRegSet,
     RegClass, VReg,
@@ -763,6 +764,7 @@ impl<I: VCodeInst> VCode<I> {
         regalloc: &regalloc2::Output,
         want_disasm: bool,
         want_metadata: bool,
+        ctrl_plane: &mut ControlPlane,
     ) -> EmitResult<I>
     where
         I: VCodeInst,
@@ -813,7 +815,7 @@ impl<I: VCodeInst> VCode<I> {
         let mut cur_srcloc = None;
         let mut last_offset = None;
         let mut inst_offsets = vec![];
-        let mut state = I::State::new(&self.abi);
+        let mut state = I::State::new(&self.abi, std::mem::take(ctrl_plane));
 
         let mut disasm = String::new();
 
@@ -874,7 +876,7 @@ impl<I: VCodeInst> VCode<I> {
 
             // Now emit the regular block body.
 
-            buffer.bind_label(MachLabel::from_block(block));
+            buffer.bind_label(MachLabel::from_block(block), state.ctrl_plane_mut());
 
             if want_disasm {
                 writeln!(&mut disasm, "block{}:", block.index()).unwrap();
@@ -1054,10 +1056,13 @@ impl<I: VCodeInst> VCode<I> {
                 let worst_case_next_bb =
                     I::worst_case_size() * (next_block_size + next_block_ra_insertions);
                 if buffer.island_needed(worst_case_next_bb) {
-                    buffer.emit_island(worst_case_next_bb);
+                    buffer.emit_island(worst_case_next_bb, ctrl_plane);
                 }
             }
         }
+
+        // emission state is not needed anymore, move control plane back out
+        *ctrl_plane = state.take_ctrl_plane();
 
         // Emit the constants used by the function.
         let mut alignment = 1;

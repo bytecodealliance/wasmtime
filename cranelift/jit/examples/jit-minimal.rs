@@ -51,7 +51,10 @@ fn main() {
         bcx.seal_all_blocks();
         bcx.finalize();
     }
-    module.define_function(func_a, &mut ctx).unwrap();
+    let ctrl_plane = &mut Default::default();
+    module
+        .define_function(func_a, &mut ctx, ctrl_plane)
+        .unwrap();
     module.clear_context(&mut ctx);
 
     ctx.func.signature = sig_b;
@@ -74,7 +77,9 @@ fn main() {
         bcx.seal_all_blocks();
         bcx.finalize();
     }
-    module.define_function(func_b, &mut ctx).unwrap();
+    module
+        .define_function(func_b, &mut ctx, ctrl_plane)
+        .unwrap();
     module.clear_context(&mut ctx);
 
     // Perform linking.

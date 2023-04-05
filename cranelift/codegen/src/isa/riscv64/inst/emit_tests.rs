@@ -2077,7 +2077,7 @@ fn test_riscv64_binemit() {
         let mut buffer = MachBuffer::new();
         unit.inst
             .emit(&[], &mut buffer, &emit_info, &mut Default::default());
-        let buffer = buffer.finish();
+        let buffer = buffer.finish(&mut Default::default());
         if buffer.data() != unit.code.to_le_bytes() {
             {
                 let gnu = DebugRTypeInst::from_bs(&unit.code.to_le_bytes());
@@ -2304,7 +2304,7 @@ fn riscv64_worst_case_instruction_size() {
     for i in candidates {
         let mut buffer = MachBuffer::new();
         i.emit(&[], &mut buffer, &emit_info, &mut Default::default());
-        let buffer = buffer.finish();
+        let buffer = buffer.finish(&mut Default::default());
         let length = buffer.data().len() as u32;
         if length > max.0 {
             let length = buffer.data().len() as u32;

@@ -570,6 +570,7 @@ dependencies = [
  "cranelift-bforest",
  "cranelift-codegen-meta",
  "cranelift-codegen-shared",
+ "cranelift-control",
  "cranelift-entity",
  "cranelift-isle",
  "criterion",
@@ -597,6 +598,13 @@ name = "cranelift-codegen-shared"
 version = "0.96.0"
 
 [[package]]
+name = "cranelift-control"
+version = "0.96.0"
+dependencies = [
+ "arbitrary",
+]
+
+[[package]]
 name = "cranelift-entity"
 version = "0.96.0"
 dependencies = [
@@ -610,6 +618,7 @@ dependencies = [
  "anyhow",
  "cranelift",
  "cranelift-codegen",
+ "cranelift-control",
  "cranelift-frontend",
  "cranelift-interpreter",
  "cranelift-jit",
@@ -685,6 +694,7 @@ dependencies = [
  "anyhow",
  "cranelift",
  "cranelift-codegen",
+ "cranelift-control",
  "cranelift-entity",
  "cranelift-frontend",
  "cranelift-module",
@@ -704,6 +714,7 @@ version = "0.96.0"
 dependencies = [
  "anyhow",
  "cranelift-codegen",
+ "cranelift-control",
  "hashbrown 0.13.1",
 ]
 
@@ -722,6 +733,7 @@ version = "0.96.0"
 dependencies = [
  "anyhow",
  "cranelift-codegen",
+ "cranelift-control",
  "cranelift-entity",
  "cranelift-frontend",
  "cranelift-module",
@@ -3585,6 +3597,7 @@ version = "9.0.0"
 dependencies = [
  "anyhow",
  "cranelift-codegen",
+ "cranelift-control",
  "cranelift-entity",
  "cranelift-frontend",
  "cranelift-native",
@@ -3605,6 +3618,7 @@ version = "9.0.0"
 dependencies = [
  "anyhow",
  "cranelift-codegen",
+ "cranelift-control",
  "cranelift-native",
  "gimli",
  "object",
@@ -3684,6 +3698,7 @@ dependencies = [
  "component-fuzz-util",
  "component-test-util",
  "cranelift-codegen",
+ "cranelift-control",
  "cranelift-filetests",
  "cranelift-fuzzgen",
  "cranelift-interpreter",
