@@ -35,14 +35,6 @@ struct HashKey<'a, 'f: 'a> {
     ty: Type,
     pos: &'a RefCell<FuncCursor<'f>>,
 }
-
-impl<'a, 'f: 'a> HashKey<'a, 'f> {
-    fn new(mut inst: InstructionData, ty: Type, pos: &'a RefCell<FuncCursor<'f>>) -> Self {
-        inst.normalize_in_place();
-        Self { inst, ty, pos }
-    }
-}
-
 impl<'a, 'f: 'a> Hash for HashKey<'a, 'f> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         let pool = &self.pos.borrow().func.dfg.value_lists;
@@ -121,7 +113,11 @@ pub fn do_simple_gvn(func: &mut Function, domtree: &mut DominatorTree) {
             }
 
             let ctrl_typevar = func.dfg.ctrl_typevar(inst);
-            let key = HashKey::new(func.dfg.insts[inst], ctrl_typevar, &pos);
+            let key = HashKey {
+                inst: func.dfg.insts[inst],
+                ty: ctrl_typevar,
+                pos: &pos,
+            };
             use crate::scoped_hash_map::Entry::*;
             match visible_values.entry(key) {
                 Occupied(entry) => {

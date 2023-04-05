@@ -1852,32 +1852,26 @@ impl TermEnv {
         &self,
         tyenv: &mut TypeEnv,
         pat: &ast::Pattern,
-        expected_ty: Option<TypeId>,
+        expected_ty: TypeId,
         bindings: &mut Bindings,
-    ) -> Option<(Pattern, TypeId)> {
+    ) -> Option<Pattern> {
         log!("translate_pattern: {:?}", pat);
         log!("translate_pattern: bindings = {:?}", bindings);
         match pat {
             // TODO: flag on primitive type decl indicating it's an integer type?
             &ast::Pattern::ConstInt { val, pos } => {
-                let ty = match expected_ty {
-                    Some(t) => t,
-                    None => {
-                        tyenv.report_error(pos, "Need an implied type for an integer constant");
-                        return None;
-                    }
-                };
-                if !tyenv.types[ty.index()].is_prim() {
+                let ty = &tyenv.types[expected_ty.index()];
+                if !ty.is_prim() {
                     tyenv.report_error(
                         pos,
                         format!(
                             "expected non-primitive type {}, but found integer literal '{}'",
-                            tyenv.types[ty.index()].name(tyenv),
+                            ty.name(tyenv),
                             val,
                         ),
                     );
                 }
-                Some((Pattern::ConstInt(ty, val), ty))
+                Some(Pattern::ConstInt(expected_ty, val))
             }
             &ast::Pattern::ConstPrim { ref val, pos } => {
                 let val = tyenv.intern_mut(val);
@@ -1888,53 +1882,36 @@ impl TermEnv {
                         return None;
                     }
                 };
-                if expected_ty.is_some() && expected_ty != Some(const_ty) {
+                if expected_ty != const_ty {
                     tyenv.report_error(pos, "Type mismatch for constant");
                 }
-                Some((Pattern::ConstPrim(const_ty, val), const_ty))
+                Some(Pattern::ConstPrim(const_ty, val))
             }
-            &ast::Pattern::Wildcard { pos } => {
-                let ty = match expected_ty {
-                    Some(t) => t,
-                    None => {
-                        tyenv.report_error(pos, "Need an implied type for a wildcard");
-                        return None;
-                    }
-                };
-                Some((Pattern::Wildcard(ty), ty))
-            }
-            &ast::Pattern::And { ref subpats, pos } => {
-                let mut expected_ty = expected_ty;
-                let mut children = vec![];
-                for subpat in subpats {
-                    let (subpat, ty) = unwrap_or_continue!(self.translate_pattern(
-                        tyenv,
-                        subpat,
-                        expected_ty,
-                        bindings,
-                    ));
-                    expected_ty = expected_ty.or(Some(ty));
-
-                    // Normalize nested `And` nodes to a single vector of conjuncts.
-                    match subpat {
-                        Pattern::And(_, subpat_children) => children.extend(subpat_children),
-                        _ => children.push(subpat),
-                    }
-                }
-                if expected_ty.is_none() {
-                    tyenv.report_error(pos, "No type for (and ...) form.".to_string());
-                    return None;
-                }
-                let ty = expected_ty.unwrap();
-                Some((Pattern::And(ty, children), ty))
+            &ast::Pattern::Wildcard { .. } => Some(Pattern::Wildcard(expected_ty)),
+            &ast::Pattern::And { ref subpats, .. } => {
+                // If any of the subpatterns fails to type-check, we'll report
+                // an error at that point. Here, just skip it and keep looking
+                // for more errors.
+                let children = subpats
+                    .iter()
+                    .filter_map(|subpat| {
+                        self.translate_pattern(tyenv, subpat, expected_ty, bindings)
+                    })
+                    .collect();
+                Some(Pattern::And(expected_ty, children))
             }
             &ast::Pattern::BindPattern {
                 ref var,
                 ref subpat,
                 pos,
             } => {
-                // Do the subpattern first so we can resolve the type for sure.
-                let (subpat, ty) = self.translate_pattern(tyenv, subpat, expected_ty, bindings)?;
+                let subpat = self.translate_pattern(tyenv, subpat, expected_ty, bindings)?;
+
+                // The sub-pattern's type should be `expected_ty`. If it isn't,
+                // we've already reported a type error about it, but continue
+                // using the type we actually found in hopes that we'll
+                // generate fewer follow-on error messages.
+                let ty = subpat.ty();
 
                 let name = tyenv.intern_mut(var);
                 if bindings.lookup(name).is_some() {
@@ -1945,7 +1922,7 @@ impl TermEnv {
                     // Try to keep going.
                 }
                 let id = bindings.add_var(name, ty);
-                Some((Pattern::BindPattern(ty, id, Box::new(subpat)), ty))
+                Some(Pattern::BindPattern(ty, id, Box::new(subpat)))
             }
             &ast::Pattern::Var { ref var, pos } => {
                 // Look up the variable; if it has already been bound,
@@ -1956,38 +1933,27 @@ impl TermEnv {
                 let name = tyenv.intern_mut(var);
                 match bindings.lookup(name) {
                     None => {
-                        let ty = match expected_ty {
-                            Some(ty) => ty,
-                            None => {
-                                tyenv.report_error(
-                                pos,
-                                format!("Variable pattern '{}' not allowed in context without explicit type", var.0),
-                            );
-                                return None;
-                            }
-                        };
-                        let id = bindings.add_var(name, ty);
-                        Some((
-                            Pattern::BindPattern(ty, id, Box::new(Pattern::Wildcard(ty))),
-                            ty,
+                        let id = bindings.add_var(name, expected_ty);
+                        Some(Pattern::BindPattern(
+                            expected_ty,
+                            id,
+                            Box::new(Pattern::Wildcard(expected_ty)),
                         ))
                     }
                     Some(bv) => {
-                        let ty = match expected_ty {
-                            None => bv.ty,
-                            Some(expected_ty) if expected_ty == bv.ty => bv.ty,
-                            Some(expected_ty) => {
-                                tyenv.report_error(
-                            pos,
-                            format!(
-                                "Mismatched types: pattern expects type '{}' but already-bound var '{}' has type '{}'",
-                                tyenv.types[expected_ty.index()].name(tyenv),
-                                var.0,
-                                tyenv.types[bv.ty.index()].name(tyenv)));
-                                bv.ty // Try to keep going for more errors.
-                            }
-                        };
-                        Some((Pattern::Var(ty, bv.id), ty))
+                        if expected_ty != bv.ty {
+                            tyenv.report_error(
+                                pos,
+                                format!(
+                                    "Mismatched types: pattern expects type '{}' but already-bound var '{}' has type '{}'",
+                                    tyenv.types[expected_ty.index()].name(tyenv),
+                                    var.0,
+                                    tyenv.types[bv.ty.index()].name(tyenv),
+                                ),
+                            );
+                            // Try to keep going for more errors.
+                        }
+                        Some(Pattern::Var(bv.ty, bv.id))
                     }
                 }
             }
@@ -2012,35 +1978,33 @@ impl TermEnv {
                 // return type of the term. Insert an implicit
                 // converter if needed.
                 let ret_ty = termdata.ret_ty;
-                let ty = match expected_ty {
-                    None => ret_ty,
-                    Some(expected_ty) if expected_ty == ret_ty => ret_ty,
-                    Some(expected_ty) => {
-                        // Can we do an implicit type conversion? Look
-                        // up the converter term, if any. If one has
-                        // been registered, and the term has an
-                        // extractor, then build an expanded AST node
-                        // right here and recurse on it.
-                        if let Some(expanded_pattern) =
-                            self.maybe_implicit_convert_pattern(tyenv, pat, ret_ty, expected_ty)
-                        {
-                            return self.translate_pattern(
-                                tyenv,
-                                &expanded_pattern,
-                                Some(expected_ty),
-                                bindings,
-                            );
-                        }
-
-                        tyenv.report_error(
-                            pos,
-                            format!(
-                                "Mismatched types: pattern expects type '{}' but term has return type '{}'",
-                                tyenv.types[expected_ty.index()].name(tyenv),
-                                tyenv.types[ret_ty.index()].name(tyenv)));
-                        ret_ty // Try to keep going for more errors.
+                if expected_ty != ret_ty {
+                    // Can we do an implicit type conversion? Look
+                    // up the converter term, if any. If one has
+                    // been registered, and the term has an
+                    // extractor, then build an expanded AST node
+                    // right here and recurse on it.
+                    if let Some(expanded_pattern) =
+                        self.maybe_implicit_convert_pattern(tyenv, pat, ret_ty, expected_ty)
+                    {
+                        return self.translate_pattern(
+                            tyenv,
+                            &expanded_pattern,
+                            expected_ty,
+                            bindings,
+                        );
                     }
-                };
+
+                    tyenv.report_error(
+                        pos,
+                        format!(
+                            "Mismatched types: pattern expects type '{}' but term has return type '{}'",
+                            tyenv.types[expected_ty.index()].name(tyenv),
+                            tyenv.types[ret_ty.index()].name(tyenv),
+                        ),
+                    );
+                    // Try to keep going for more errors.
+                }
 
                 termdata.check_args_count(args, tyenv, pos, sym);
 
@@ -2080,7 +2044,7 @@ impl TermEnv {
                 }
 
                 let subpats = self.translate_args(args, termdata, tyenv, bindings);
-                Some((Pattern::Term(ty, tid, subpats), ty))
+                Some(Pattern::Term(ret_ty, tid, subpats))
             }
             &ast::Pattern::MacroArg { .. } => unreachable!(),
         }
@@ -2095,8 +2059,7 @@ impl TermEnv {
     ) -> Vec<Pattern> {
         args.iter()
             .zip(termdata.arg_tys.iter())
-            .filter_map(|(arg, &arg_ty)| self.translate_pattern(tyenv, arg, Some(arg_ty), bindings))
-            .map(|(subpat, _)| subpat)
+            .filter_map(|(arg, &arg_ty)| self.translate_pattern(tyenv, arg, arg_ty, bindings))
             .collect()
     }
 
@@ -2413,8 +2376,7 @@ impl TermEnv {
             root_flags,
             /* on_lhs */ true,
         )?;
-        let ty = rhs.ty();
-        let (lhs, _lhs_ty) = self.translate_pattern(tyenv, &iflet.pattern, Some(ty), bindings)?;
+        let lhs = self.translate_pattern(tyenv, &iflet.pattern, rhs.ty(), bindings)?;
 
         Some(IfLet { lhs, rhs })
     }

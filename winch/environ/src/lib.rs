@@ -15,7 +15,7 @@ pub struct FuncEnv<'a> {
     /// Type information about a module, once it has been validated.
     pub types: &'a Types,
     /// The current ISA.
-    pub isa: &'a dyn TargetIsa,
+    pub isa: &'a Box<dyn TargetIsa>,
 }
 
 impl<'a> winch_codegen::FuncEnv for FuncEnv<'a> {
@@ -35,7 +35,7 @@ impl<'a> winch_codegen::FuncEnv for FuncEnv<'a> {
 
 impl<'a> FuncEnv<'a> {
     /// Create a new function environment.
-    pub fn new(module: &'a Module, types: &'a Types, isa: &'a dyn TargetIsa) -> Self {
+    pub fn new(module: &'a Module, types: &'a Types, isa: &'a Box<dyn TargetIsa>) -> Self {
         Self { module, types, isa }
     }
 }

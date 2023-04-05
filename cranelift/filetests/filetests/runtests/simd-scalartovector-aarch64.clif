@@ -1,4 +1,5 @@
 test run
+test interpret
 target aarch64
 target s390x
 ; i8 and i16 are invalid source sizes for x86_64
@@ -16,5 +17,6 @@ block0(v0: i16):
     v1 = scalar_to_vector.i16x8 v0
     return v1
 }
+; run: %scalartovector_i16(0) == [0 0 0 0 0 0 0 0]
 ; run: %scalartovector_i16(1) == [1 0 0 0 0 0 0 0]
 ; run: %scalartovector_i16(65535) == [65535 0 0 0 0 0 0 0]

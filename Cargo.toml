@@ -51,7 +51,7 @@ rustix = { workspace = true, features = ["mm", "param"] }
 
 [dev-dependencies]
 # depend again on wasmtime to activate its default features for tests
-wasmtime = { workspace = true, features = ['component-model', 'async', 'default'] }
+wasmtime = { workspace = true, features = ['component-model', 'async', 'default', 'winch'] }
 env_logger = { workspace = true }
 log = { workspace = true }
 filecheck = "0.5.0"
@@ -111,63 +111,64 @@ exclude = [
 ]
 
 [workspace.package]
-version = "8.0.0"
+version = "9.0.0"
 authors = ["The Wasmtime Project Developers"]
 edition = "2021"
 rust-version = "1.66.0"
 
 [workspace.dependencies]
-wasmtime = { path = "crates/wasmtime", version = "8.0.0", default-features = false }
-wasmtime-cache = { path = "crates/cache", version = "=8.0.0" }
-wasmtime-cli-flags = { path = "crates/cli-flags", version = "=8.0.0" }
-wasmtime-cranelift = { path = "crates/cranelift", version = "=8.0.0" }
-wasmtime-cranelift-shared = { path = "crates/cranelift-shared", version = "=8.0.0" }
-wasmtime-environ = { path = "crates/environ", version = "=8.0.0" }
-wasmtime-explorer = { path = "crates/explorer", version = "=8.0.0" }
-wasmtime-fiber = { path = "crates/fiber", version = "=8.0.0" }
-wasmtime-types = { path = "crates/types", version = "8.0.0" }
-wasmtime-jit = { path = "crates/jit", version = "=8.0.0" }
-wasmtime-jit-debug = { path = "crates/jit-debug", version = "=8.0.0" }
-wasmtime-runtime = { path = "crates/runtime", version = "=8.0.0" }
-wasmtime-wast = { path = "crates/wast", version = "=8.0.0" }
-wasmtime-wasi = { path = "crates/wasi", version = "8.0.0" }
-wasmtime-wasi-crypto = { path = "crates/wasi-crypto", version = "8.0.0" }
-wasmtime-wasi-nn = { path = "crates/wasi-nn", version = "8.0.0" }
-wasmtime-wasi-threads = { path = "crates/wasi-threads", version = "8.0.0" }
-wasmtime-component-util = { path = "crates/component-util", version = "=8.0.0" }
-wasmtime-component-macro = { path = "crates/component-macro", version = "=8.0.0" }
-wasmtime-asm-macros = { path = "crates/asm-macros", version = "=8.0.0" }
+wasmtime = { path = "crates/wasmtime", version = "9.0.0", default-features = false }
+wasmtime-cache = { path = "crates/cache", version = "=9.0.0" }
+wasmtime-cli-flags = { path = "crates/cli-flags", version = "=9.0.0" }
+wasmtime-cranelift = { path = "crates/cranelift", version = "=9.0.0" }
+wasmtime-cranelift-shared = { path = "crates/cranelift-shared", version = "=9.0.0" }
+wasmtime-winch = { path = "crates/winch", version = "=9.0.0" }
+wasmtime-environ = { path = "crates/environ", version = "=9.0.0" }
+wasmtime-explorer = { path = "crates/explorer", version = "=9.0.0" }
+wasmtime-fiber = { path = "crates/fiber", version = "=9.0.0" }
+wasmtime-types = { path = "crates/types", version = "9.0.0" }
+wasmtime-jit = { path = "crates/jit", version = "=9.0.0" }
+wasmtime-jit-debug = { path = "crates/jit-debug", version = "=9.0.0" }
+wasmtime-runtime = { path = "crates/runtime", version = "=9.0.0" }
+wasmtime-wast = { path = "crates/wast", version = "=9.0.0" }
+wasmtime-wasi = { path = "crates/wasi", version = "9.0.0" }
+wasmtime-wasi-crypto = { path = "crates/wasi-crypto", version = "9.0.0" }
+wasmtime-wasi-nn = { path = "crates/wasi-nn", version = "9.0.0" }
+wasmtime-wasi-threads = { path = "crates/wasi-threads", version = "9.0.0" }
+wasmtime-component-util = { path = "crates/component-util", version = "=9.0.0" }
+wasmtime-component-macro = { path = "crates/component-macro", version = "=9.0.0" }
+wasmtime-asm-macros = { path = "crates/asm-macros", version = "=9.0.0" }
 component-test-util = { path = "crates/misc/component-test-util" }
 component-fuzz-util = { path = "crates/misc/component-fuzz-util" }
-wiggle = { path = "crates/wiggle", version = "=8.0.0", default-features = false }
-wiggle-macro = { path = "crates/wiggle/macro", version = "=8.0.0" }
-wiggle-generate = { path = "crates/wiggle/generate", version = "=8.0.0" }
-wasi-common = { path = "crates/wasi-common", version = "=8.0.0" }
-wasi-tokio = { path = "crates/wasi-common/tokio", version = "=8.0.0" }
-wasi-cap-std-sync = { path = "crates/wasi-common/cap-std-sync", version = "=8.0.0" }
+wiggle = { path = "crates/wiggle", version = "=9.0.0", default-features = false }
+wiggle-macro = { path = "crates/wiggle/macro", version = "=9.0.0" }
+wiggle-generate = { path = "crates/wiggle/generate", version = "=9.0.0" }
+wasi-common = { path = "crates/wasi-common", version = "=9.0.0" }
+wasi-tokio = { path = "crates/wasi-common/tokio", version = "=9.0.0" }
+wasi-cap-std-sync = { path = "crates/wasi-common/cap-std-sync", version = "=9.0.0" }
 wasmtime-fuzzing = { path = "crates/fuzzing" }
-wasmtime-jit-icache-coherence = { path = "crates/jit-icache-coherence", version = "=8.0.0" }
-wasmtime-wit-bindgen = { path = "crates/wit-bindgen", version = "=8.0.0" }
+wasmtime-jit-icache-coherence = { path = "crates/jit-icache-coherence", version = "=9.0.0" }
+wasmtime-wit-bindgen = { path = "crates/wit-bindgen", version = "=9.0.0" }
 
-cranelift-wasm = { path = "cranelift/wasm", version = "0.95.0" }
-cranelift-codegen = { path = "cranelift/codegen", version = "0.95.0" }
-cranelift-frontend = { path = "cranelift/frontend", version = "0.95.0" }
-cranelift-entity = { path = "cranelift/entity", version = "0.95.0" }
-cranelift-native = { path = "cranelift/native", version = "0.95.0" }
-cranelift-module = { path = "cranelift/module", version = "0.95.0" }
-cranelift-interpreter = { path = "cranelift/interpreter", version = "0.95.0" }
-cranelift-reader = { path = "cranelift/reader", version = "0.95.0" }
+cranelift-wasm = { path = "cranelift/wasm", version = "0.96.0" }
+cranelift-codegen = { path = "cranelift/codegen", version = "0.96.0" }
+cranelift-frontend = { path = "cranelift/frontend", version = "0.96.0" }
+cranelift-entity = { path = "cranelift/entity", version = "0.96.0" }
+cranelift-native = { path = "cranelift/native", version = "0.96.0" }
+cranelift-module = { path = "cranelift/module", version = "0.96.0" }
+cranelift-interpreter = { path = "cranelift/interpreter", version = "0.96.0" }
+cranelift-reader = { path = "cranelift/reader", version = "0.96.0" }
 cranelift-filetests = { path = "cranelift/filetests" }
-cranelift-object = { path = "cranelift/object", version = "0.95.0" }
-cranelift-jit = { path = "cranelift/jit", version = "0.95.0" }
+cranelift-object = { path = "cranelift/object", version = "0.96.0" }
+cranelift-jit = { path = "cranelift/jit", version = "0.96.0" }
 cranelift-fuzzgen = { path = "cranelift/fuzzgen" }
-cranelift-bforest = { path = "cranelift/bforest", version = "0.95.0" }
-cranelift = { path = "cranelift/umbrella", version = "0.95.0" }
+cranelift-bforest = { path = "cranelift/bforest", version = "0.96.0" }
+cranelift = { path = "cranelift/umbrella", version = "0.96.0" }
 
 wasmtime-wasi-http = { path = "crates/wasi-http", version = "=0.0.1" }
 
-winch-codegen = { path = "winch/codegen", version = "=0.6.0" }
-winch-environ = { path = "winch/environ", version = "=0.6.0" }
+winch-codegen = { path = "winch/codegen", version = "=0.7.0" }
+winch-environ = { path = "winch/environ", version = "=0.7.0" }
 winch-filetests = { path = "winch/filetests" }
 winch-test-macros = { path = "winch/test-macros" }
 
@@ -231,6 +232,7 @@ component-model = [
   "wasmtime-wast/component-model",
   "wasmtime-cli-flags/component-model"
 ]
+winch = ["wasmtime/winch"]
 
 # Stub feature that does nothing, for Cargo-features compatibility: the new
 # backend is the default now.

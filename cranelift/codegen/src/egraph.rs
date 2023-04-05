@@ -134,11 +134,6 @@ where
     /// - Update the value-to-opt-value map, and update the eclass
     ///   union-find, if we rewrote the value to different form(s).
     pub(crate) fn insert_pure_enode(&mut self, inst: NewOrExistingInst) -> Value {
-        match inst {
-            NewOrExistingInst::New(mut data, _) => data.normalize_in_place(),
-            NewOrExistingInst::Existing(inst) => self.func.dfg.insts[inst].normalize_in_place(),
-        }
-
         // Create the external context for looking up and updating the
         // GVN map. This is necessary so that instructions themselves
         // do not have to carry all the references or data for a full

@@ -204,12 +204,16 @@ jobs:
     - run: (cd docs/rust_wasi_markdown_parser && cargo build)
     - run: (cd docs && mdbook test -L ../target/debug/deps,./rust_wasi_markdown_parser/target/debug/deps)
 
-    # Build Rust API documentation
+    # Build Rust API documentation.
+    # We pass in the `component-model` feature
+    # to match the docs.rs metadata in
+    # crates/wasmtime/Cargo.toml.
     - run: |
         cargo doc --no-deps --workspace \
           --exclude wasmtime-cli \
           --exclude test-programs \
-          --exclude cranelift-codegen-meta
+          --exclude cranelift-codegen-meta \
+          --features component-model
     - run: cargo doc --package cranelift-codegen-meta --document-private-items
 
     # Assemble the documentation, and always upload it as an artifact for

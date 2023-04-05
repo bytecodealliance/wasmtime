@@ -5,7 +5,6 @@ use clap::Parser;
 use once_cell::sync::Lazy;
 use std::fs;
 use std::path::PathBuf;
-use target_lexicon::Triple;
 use wasmtime::Engine;
 use wasmtime_cli_flags::CommonOptions;
 
@@ -61,12 +60,7 @@ impl CompileCommand {
     pub fn execute(mut self) -> Result<()> {
         self.common.init_logging();
 
-        let target = self
-            .target
-            .take()
-            .unwrap_or_else(|| Triple::host().to_string());
-
-        let config = self.common.config(Some(&target))?;
+        let config = self.common.config(self.target.as_deref())?;
 
         let engine = Engine::new(&config)?;
 
