@@ -6,6 +6,9 @@ Unreleased.
 
 ### Added
 
+* Allow the MPL-2.0 and OpenSSL licenses in dependencies of wasmtime.
+  [#6136](https://github.com/bytecodealliance/wasmtime/pull/6136)
+
 * Add the `--default-values-unknown-imports` option to define unknown function
   imports as functions that return the default value for their result type.
   [#6010](https://github.com/bytecodealliance/wasmtime/pull/6010)
