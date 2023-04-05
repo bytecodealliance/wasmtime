@@ -100,6 +100,7 @@ const PUBLIC_CRATES: &[&str] = &[
     "cranelift-codegen-shared",
     "cranelift-codegen-meta",
     "cranelift-egraph",
+    "cranelift-control",
     "cranelift-codegen",
     "cranelift-reader",
     "cranelift-serde",
