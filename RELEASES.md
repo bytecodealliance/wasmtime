@@ -19,6 +19,12 @@ Unreleased.
 
 ### Changed
 
+* Derive `Copy` on `wasmtime::ValType`.
+  [#6138](https://github.com/bytecodealliance/wasmtime/pull/6138)
+
+* Make `StoreContextMut` accessible in the epoch deadline callback.
+  [#6075](https://github.com/bytecodealliance/wasmtime/pull/6075)
+
 --------------------------------------------------------------------------------
 
 ## 7.0.0
