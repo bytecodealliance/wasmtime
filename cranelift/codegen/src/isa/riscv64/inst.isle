@@ -708,8 +708,6 @@
 (decl u8_as_i32 (u8) i32)
 (extern constructor u8_as_i32 u8_as_i32)
 
-(convert u8 u64 u8_as_u64)
-
 (decl convert_valueregs_reg (ValueRegs) Reg)
 (rule (convert_valueregs_reg x)
   (value_regs_get x 0))
@@ -1283,7 +1281,7 @@
 (rule
   (load_imm12 x)
   (rv_addi (zero_reg) (imm12_const x)))
-  
+
 ;; for load immediate
 (decl imm_from_bits (u64) Imm12)
 (extern constructor imm_from_bits imm_from_bits)
@@ -1509,7 +1507,7 @@
         (_ Unit (emit (MInst.Cltz leading sum step tmp rs ty))))
     sum))
 
-  
+
 ;; Extends an integer if it is smaller than 64 bits.
 (decl ext_int_if_need (bool ValueRegs Type) ValueRegs)
 ;;; For values smaller than 64 bits, we need to extend them to 64 bits
@@ -2117,7 +2115,7 @@
       (reuslt VecWritableReg (vec_writable_clone dst))
       (_ Unit (emit (MInst.Select dst ty c x y))))
     (vec_writable_to_regs reuslt)))
-  
+
 ;; Parameters are "intcc compare_a compare_b rs1 rs2".
 (decl gen_select_reg (IntCC Reg Reg Reg Reg) Reg)
 (extern constructor gen_select_reg gen_select_reg)

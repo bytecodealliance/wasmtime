@@ -1874,19 +1874,18 @@ unsafe impl<T> wasmtime_runtime::Store for StoreInner<T> {
     ) -> Result<bool, anyhow::Error> {
         match self.limiter {
             Some(ResourceLimiterInner::Sync(ref mut limiter)) => {
-                Ok(limiter(&mut self.data).memory_growing(current, desired, maximum))
+                limiter(&mut self.data).memory_growing(current, desired, maximum)
             }
             #[cfg(feature = "async")]
             Some(ResourceLimiterInner::Async(ref mut limiter)) => unsafe {
-                Ok(self
-                    .inner
+                self.inner
                     .async_cx()
                     .expect("ResourceLimiterAsync requires async Store")
                     .block_on(
                         limiter(&mut self.data)
                             .memory_growing(current, desired, maximum)
                             .as_mut(),
-                    )?)
+                    )?
             },
             None => Ok(true),
         }
@@ -1923,17 +1922,17 @@ unsafe impl<T> wasmtime_runtime::Store for StoreInner<T> {
 
         match self.limiter {
             Some(ResourceLimiterInner::Sync(ref mut limiter)) => {
-                Ok(limiter(&mut self.data).table_growing(current, desired, maximum))
+                limiter(&mut self.data).table_growing(current, desired, maximum)
             }
             #[cfg(feature = "async")]
             Some(ResourceLimiterInner::Async(ref mut limiter)) => unsafe {
-                Ok(async_cx
+                async_cx
                     .expect("ResourceLimiterAsync requires async Store")
                     .block_on(
                         limiter(&mut self.data)
                             .table_growing(current, desired, maximum)
                             .as_mut(),
-                    )?)
+                    )?
             },
             None => Ok(true),
         }

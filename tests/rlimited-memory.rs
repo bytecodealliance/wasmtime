@@ -13,16 +13,26 @@ struct MemoryGrowFailureDetector {
 }
 
 impl ResourceLimiter for MemoryGrowFailureDetector {
-    fn memory_growing(&mut self, current: usize, desired: usize, _maximum: Option<usize>) -> bool {
+    fn memory_growing(
+        &mut self,
+        current: usize,
+        desired: usize,
+        _maximum: Option<usize>,
+    ) -> Result<bool> {
         self.current = current;
         self.desired = desired;
-        true
+        Ok(true)
     }
     fn memory_grow_failed(&mut self, err: &anyhow::Error) {
         self.error = Some(err.to_string());
     }
-    fn table_growing(&mut self, _current: u32, _desired: u32, _maximum: Option<u32>) -> bool {
-        true
+    fn table_growing(
+        &mut self,
+        _current: u32,
+        _desired: u32,
+        _maximum: Option<u32>,
+    ) -> Result<bool> {
+        Ok(true)
     }
 }
 

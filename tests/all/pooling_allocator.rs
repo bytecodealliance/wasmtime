@@ -528,12 +528,12 @@ fn drop_externref_global_during_module_init() -> Result<()> {
     struct Limiter;
 
     impl ResourceLimiter for Limiter {
-        fn memory_growing(&mut self, _: usize, _: usize, _: Option<usize>) -> bool {
-            false
+        fn memory_growing(&mut self, _: usize, _: usize, _: Option<usize>) -> Result<bool> {
+            Ok(false)
         }
 
-        fn table_growing(&mut self, _: u32, _: u32, _: Option<u32>) -> bool {
-            false
+        fn table_growing(&mut self, _: u32, _: u32, _: Option<u32>) -> Result<bool> {
+            Ok(false)
         }
     }
 
