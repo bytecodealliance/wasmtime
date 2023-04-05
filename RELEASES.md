@@ -16,7 +16,97 @@ Unreleased.
 
 ### Added
 
+* Allow the MPL-2.0 and OpenSSL licenses in dependencies of wasmtime.
+  [#6136](https://github.com/bytecodealliance/wasmtime/pull/6136)
+
+* Add a bounds-checking optimization for dynamic memories and guard pages.
+  [#6031](https://github.com/bytecodealliance/wasmtime/pull/6031)
+
+* Add support for generating perf maps for simple perf profiling. Additionally,
+  the `--jitdump` and `--vtune` flags have been replaced with a single
+  `--profile` flags that accepts `perfmap`, `jitdump`, and `vtune` arguments.
+  [#6030](https://github.com/bytecodealliance/wasmtime/pull/6030)
+
+* Validate faulting addresses are valid to fault on. As a mitigation to CVEs
+  like `GHSA-ff4p-7xrq-q5r8`, check that the address involved in a fault is one
+  that could be contained in a `Store`, or print a scary message and abort
+  immediately.
+  [#6028](https://github.com/bytecodealliance/wasmtime/pull/6028)
+
+* Add the `--default-values-unknown-imports` option to define unknown function
+  imports as functions that return the default value for their result type.
+  [#6010](https://github.com/bytecodealliance/wasmtime/pull/6010)
+
+* Add `Clone` for `component::InstancePre`.
+  [#5996](https://github.com/bytecodealliance/wasmtime/issues/5996)
+
+* Add `--dynamic-memory-reserved-for-growth` cli flag.
+  [#5980](https://github.com/bytecodealliance/wasmtime/issues/5980)
+
+* Introduce the `wasmtime-explorer` crate for investigating the compilation of
+  wasm modules. This functionality is also exposed via the `wasmtime explore`
+  command.
+  [#5975](https://github.com/bytecodealliance/wasmtime/pull/5975)
+
+* Added support for the Relaxed SIMD proposal.
+  [#5892](https://github.com/bytecodealliance/wasmtime/pull/5892)
+
+* Cranelift gained many new machine-independent optimizations.
+  [#5909](https://github.com/bytecodealliance/wasmtime/pull/5909)
+  [#6032](https://github.com/bytecodealliance/wasmtime/pull/6032)
+  [#6033](https://github.com/bytecodealliance/wasmtime/pull/6033)
+  [#6034](https://github.com/bytecodealliance/wasmtime/pull/6034)
+  [#6037](https://github.com/bytecodealliance/wasmtime/pull/6037)
+  [#6052](https://github.com/bytecodealliance/wasmtime/pull/6052)
+  [#6053](https://github.com/bytecodealliance/wasmtime/pull/6053)
+  [#6072](https://github.com/bytecodealliance/wasmtime/pull/6072)
+  [#6095](https://github.com/bytecodealliance/wasmtime/pull/6095)
+  [#6130](https://github.com/bytecodealliance/wasmtime/pull/6130)
+
 ### Changed
+
+* Derive `Copy` on `wasmtime::ValType`.
+  [#6138](https://github.com/bytecodealliance/wasmtime/pull/6138)
+
+* Make `StoreContextMut` accessible in the epoch deadline callback.
+  [#6075](https://github.com/bytecodealliance/wasmtime/pull/6075)
+
+* Take SIGFPE signals for divide traps on `x86_64`.
+  [#6026](https://github.com/bytecodealliance/wasmtime/pull/6026)
+
+* Use more specialized AVX instructions in the `x86_64` backend.
+  [#5924](https://github.com/bytecodealliance/wasmtime/pull/5924)
+  [#5930](https://github.com/bytecodealliance/wasmtime/pull/5930)
+  [#5931](https://github.com/bytecodealliance/wasmtime/pull/5931)
+  [#5982](https://github.com/bytecodealliance/wasmtime/pull/5982)
+  [#5986](https://github.com/bytecodealliance/wasmtime/pull/5986)
+  [#5999](https://github.com/bytecodealliance/wasmtime/pull/5999)
+  [#6023](https://github.com/bytecodealliance/wasmtime/pull/6023)
+  [#6025](https://github.com/bytecodealliance/wasmtime/pull/6025)
+  [#6060](https://github.com/bytecodealliance/wasmtime/pull/6060)
+  [#6086](https://github.com/bytecodealliance/wasmtime/pull/6086)
+  [#6092](https://github.com/bytecodealliance/wasmtime/pull/6092)
+
+* Generate more cache-friendly code for traps.
+  [#6011](https://github.com/bytecodealliance/wasmtime/pull/6011)
+
+### Fixed
+
+* Fixed suboptimal code generation in the `aarch64` backend.
+  [#5976](https://github.com/bytecodealliance/wasmtime/pull/5976)
+  [#5977](https://github.com/bytecodealliance/wasmtime/pull/5977)
+  [#5987](https://github.com/bytecodealliance/wasmtime/pull/5987)
+  [#5997](https://github.com/bytecodealliance/wasmtime/pull/5997)
+  [#6078](https://github.com/bytecodealliance/wasmtime/pull/6078)
+
+* Fixed suboptimal code generation in the `riscv64` backend.
+  [#5854](https://github.com/bytecodealliance/wasmtime/pull/5854)
+  [#5857](https://github.com/bytecodealliance/wasmtime/pull/5857)
+  [#5919](https://github.com/bytecodealliance/wasmtime/pull/5919)
+  [#5951](https://github.com/bytecodealliance/wasmtime/pull/5951)
+  [#5964](https://github.com/bytecodealliance/wasmtime/pull/5964)
+  [#6087](https://github.com/bytecodealliance/wasmtime/pull/6087)
+
 
 --------------------------------------------------------------------------------
 
@@ -75,6 +165,12 @@ Released 2023-03-20
 * A panic due to a race between `memory.atomic.{wait32,wait64,notify}`
   instructions has been fixed.
   [#5871](https://github.com/bytecodealliance/wasmtime/pull/5871)
+
+* Guest-controlled out-of-bounds read/write on x86\_64
+  [GHSA-ff4p-7xrq-q5r8](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-ff4p-7xrq-q5r8)
+
+*  Miscompilation of `i8x16.select` with the same inputs on x86\_64
+  [GHSA-xm67-587q-r2vw](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-xm67-587q-r2vw)
 
 --------------------------------------------------------------------------------
 
