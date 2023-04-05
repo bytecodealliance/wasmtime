@@ -604,12 +604,9 @@ mod tests {
         let mut env = FunctionStore::default();
         env.add(func.name.to_string(), &func);
         let state = InterpreterState::default().with_function_store(env);
-        let result = Interpreter::new(state)
-            .call_by_name("%test", &[])
-            .unwrap()
-            .unwrap_return();
+        let result = Interpreter::new(state).call_by_name("%test", &[]).unwrap();
 
-        assert_eq!(result, vec![DataValue::I8(1)])
+        assert_eq!(result, ControlFlow::Return(smallvec![DataValue::I8(1)]));
     }
 
     // We don't have a way to check for traps with the current filetest infrastructure
@@ -626,12 +623,12 @@ mod tests {
         let mut env = FunctionStore::default();
         env.add(func.name.to_string(), &func);
         let state = InterpreterState::default().with_function_store(env);
-        let trap = Interpreter::new(state)
-            .call_by_name("%test", &[])
-            .unwrap()
-            .unwrap_trap();
+        let trap = Interpreter::new(state).call_by_name("%test", &[]).unwrap();
 
-        assert_eq!(trap, CraneliftTrap::User(TrapCode::IntegerDivisionByZero));
+        assert_eq!(
+            trap,
+            ControlFlow::Trap(CraneliftTrap::User(TrapCode::IntegerDivisionByZero))
+        );
     }
 
     #[test]
@@ -683,10 +680,9 @@ mod tests {
         let state = InterpreterState::default().with_function_store(env);
         let result = Interpreter::new(state)
             .call_by_name("%parent", &[DataValue::I32(0)])
-            .unwrap()
-            .unwrap_return();
+            .unwrap();
 
-        assert_eq!(result, vec![DataValue::I32(0)])
+        assert_eq!(result, ControlFlow::Return(smallvec![DataValue::I32(0)]));
     }
 
     #[test]
@@ -704,11 +700,9 @@ mod tests {
 
         // The default interpreter should not enable the fuel mechanism
         let state = InterpreterState::default().with_function_store(env.clone());
-        let result = Interpreter::new(state)
-            .call_by_name("%test", &[])
-            .unwrap()
-            .unwrap_return();
-        assert_eq!(result, vec![DataValue::I32(2)]);
+        let result = Interpreter::new(state).call_by_name("%test", &[]).unwrap();
+
+        assert_eq!(result, ControlFlow::Return(smallvec![DataValue::I32(2)]));
 
         // With 2 fuel, we should execute the iconst and iadd, but not the return thus giving a
         // fuel exhausted error
@@ -726,9 +720,9 @@ mod tests {
         let result = Interpreter::new(state)
             .with_fuel(Some(3))
             .call_by_name("%test", &[])
-            .unwrap()
-            .unwrap_return();
-        assert_eq!(result, vec![DataValue::I32(2)]);
+            .unwrap();
+
+        assert_eq!(result, ControlFlow::Return(smallvec![DataValue::I32(2)]));
     }
 
     // Verifies that writing to the stack on a called function does not overwrite the parents
@@ -784,10 +778,9 @@ mod tests {
                     DataValue::I64(11),
                 ],
             )
-            .unwrap()
-            .unwrap_return();
+            .unwrap();
 
-        assert_eq!(result, vec![DataValue::I64(26)])
+        assert_eq!(result, ControlFlow::Return(smallvec![DataValue::I64(26)]))
     }
 
     #[test]
@@ -808,10 +801,12 @@ mod tests {
         let state = InterpreterState::default().with_function_store(env);
         let trap = Interpreter::new(state)
             .call_by_name("%stack_write", &[])
-            .unwrap()
-            .unwrap_trap();
+            .unwrap();
 
-        assert_eq!(trap, CraneliftTrap::User(TrapCode::HeapOutOfBounds));
+        assert_eq!(
+            trap,
+            ControlFlow::Trap(CraneliftTrap::User(TrapCode::HeapOutOfBounds))
+        );
     }
 
     #[test]
@@ -832,10 +827,12 @@ mod tests {
         let state = InterpreterState::default().with_function_store(env);
         let trap = Interpreter::new(state)
             .call_by_name("%stack_write", &[])
-            .unwrap()
-            .unwrap_trap();
+            .unwrap();
 
-        assert_eq!(trap, CraneliftTrap::User(TrapCode::HeapOutOfBounds));
+        assert_eq!(
+            trap,
+            ControlFlow::Trap(CraneliftTrap::User(TrapCode::HeapOutOfBounds))
+        );
     }
 
     #[test]
@@ -855,10 +852,12 @@ mod tests {
         let state = InterpreterState::default().with_function_store(env);
         let trap = Interpreter::new(state)
             .call_by_name("%stack_load", &[])
-            .unwrap()
-            .unwrap_trap();
+            .unwrap();
 
-        assert_eq!(trap, CraneliftTrap::User(TrapCode::HeapOutOfBounds));
+        assert_eq!(
+            trap,
+            ControlFlow::Trap(CraneliftTrap::User(TrapCode::HeapOutOfBounds))
+        );
     }
 
     #[test]
@@ -878,10 +877,12 @@ mod tests {
         let state = InterpreterState::default().with_function_store(env);
         let trap = Interpreter::new(state)
             .call_by_name("%stack_load", &[])
-            .unwrap()
-            .unwrap_trap();
+            .unwrap();
 
-        assert_eq!(trap, CraneliftTrap::User(TrapCode::HeapOutOfBounds));
+        assert_eq!(
+            trap,
+            ControlFlow::Trap(CraneliftTrap::User(TrapCode::HeapOutOfBounds))
+        );
     }
 
     #[test]
@@ -904,10 +905,12 @@ mod tests {
         let state = InterpreterState::default().with_function_store(env);
         let trap = Interpreter::new(state)
             .call_by_name("%stack_load", &[])
-            .unwrap()
-            .unwrap_trap();
+            .unwrap();
 
-        assert_eq!(trap, CraneliftTrap::User(TrapCode::HeapOutOfBounds));
+        assert_eq!(
+            trap,
+            ControlFlow::Trap(CraneliftTrap::User(TrapCode::HeapOutOfBounds))
+        );
     }
 
     #[test]
@@ -930,10 +933,12 @@ mod tests {
         let state = InterpreterState::default().with_function_store(env);
         let trap = Interpreter::new(state)
             .call_by_name("%stack_store", &[])
-            .unwrap()
-            .unwrap_trap();
+            .unwrap();
 
-        assert_eq!(trap, CraneliftTrap::User(TrapCode::HeapOutOfBounds));
+        assert_eq!(
+            trap,
+            ControlFlow::Trap(CraneliftTrap::User(TrapCode::HeapOutOfBounds))
+        );
     }
 
     #[test]
@@ -950,12 +955,12 @@ mod tests {
         let mut env = FunctionStore::default();
         env.add(func.name.to_string(), &func);
         let state = InterpreterState::default().with_function_store(env);
-        let trap = Interpreter::new(state)
-            .call_by_name("%test", &[])
-            .unwrap()
-            .unwrap_trap();
+        let trap = Interpreter::new(state).call_by_name("%test", &[]).unwrap();
 
-        assert_eq!(trap, CraneliftTrap::User(TrapCode::IntegerOverflow));
+        assert_eq!(
+            trap,
+            ControlFlow::Trap(CraneliftTrap::User(TrapCode::IntegerOverflow))
+        );
     }
 
     #[test]
@@ -980,12 +985,12 @@ mod tests {
                 }])
             });
 
-        let result = Interpreter::new(state)
-            .call_by_name("%test", &[])
-            .unwrap()
-            .unwrap_return();
+        let result = Interpreter::new(state).call_by_name("%test", &[]).unwrap();
 
-        assert_eq!(result, vec![DataValue::F32(Ieee32::with_float(1.0))])
+        assert_eq!(
+            result,
+            ControlFlow::Return(smallvec![DataValue::F32(Ieee32::with_float(1.0))])
+        )
     }
 
     #[test]
@@ -1005,12 +1010,12 @@ mod tests {
         let mut env = FunctionStore::default();
         env.add(func.name.to_string(), &func);
         let state = InterpreterState::default().with_function_store(env);
-        let trap = Interpreter::new(state)
-            .call_by_name("%test", &[])
-            .unwrap()
-            .unwrap_trap();
+        let trap = Interpreter::new(state).call_by_name("%test", &[]).unwrap();
 
-        assert_eq!(trap, CraneliftTrap::User(TrapCode::HeapMisaligned));
+        assert_eq!(
+            trap,
+            ControlFlow::Trap(CraneliftTrap::User(TrapCode::HeapMisaligned))
+        );
     }
 
     #[test]
@@ -1031,12 +1036,12 @@ mod tests {
         let mut env = FunctionStore::default();
         env.add(func.name.to_string(), &func);
         let state = InterpreterState::default().with_function_store(env);
-        let trap = Interpreter::new(state)
-            .call_by_name("%test", &[])
-            .unwrap()
-            .unwrap_trap();
+        let trap = Interpreter::new(state).call_by_name("%test", &[]).unwrap();
 
-        assert_eq!(trap, CraneliftTrap::User(TrapCode::HeapMisaligned));
+        assert_eq!(
+            trap,
+            ControlFlow::Trap(CraneliftTrap::User(TrapCode::HeapMisaligned))
+        );
     }
 
     // When a trap occurs in a function called by another function, the trap was not being propagated
@@ -1074,12 +1079,12 @@ mod tests {
         }
 
         let state = InterpreterState::default().with_function_store(env);
-        let trap = Interpreter::new(state)
-            .call_by_name("%u1", &[])
-            .unwrap()
-            .unwrap_trap();
+        let trap = Interpreter::new(state).call_by_name("%u1", &[]).unwrap();
 
         // Ensure that the correct trap was propagated.
-        assert_eq!(trap, CraneliftTrap::User(TrapCode::HeapMisaligned));
+        assert_eq!(
+            trap,
+            ControlFlow::Trap(CraneliftTrap::User(TrapCode::HeapMisaligned))
+        );
     }
 }
