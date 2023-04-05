@@ -118,17 +118,29 @@ impl<'a> Interpreter<'a> {
                     maybe_inst = layout.first_inst(block)
                 }
                 ControlFlow::Call(called_function, arguments) => {
-                    let returned_arguments =
-                        self.call(called_function, &arguments)?.unwrap_return();
-                    self.state
-                        .current_frame_mut()
-                        .set_all(function.dfg.inst_results(inst), returned_arguments);
-                    maybe_inst = layout.next_inst(inst)
+                    match self.call(called_function, &arguments)? {
+                        ControlFlow::Return(rets) => {
+                            self.state
+                                .current_frame_mut()
+                                .set_all(function.dfg.inst_results(inst), rets.to_vec());
+                            maybe_inst = layout.next_inst(inst)
+                        }
+                        ControlFlow::Trap(trap) => return Ok(ControlFlow::Trap(trap)),
+                        cf => {
+                            panic!("invalid control flow after call: {:?}", cf)
+                        }
+                    }
                 }
                 ControlFlow::ReturnCall(callee, args) => {
                     self.state.pop_frame();
-                    let rets = self.call(callee, &args)?.unwrap_return();
-                    return Ok(ControlFlow::Return(rets.into()));
+
+                    return match self.call(callee, &args)? {
+                        ControlFlow::Return(rets) => Ok(ControlFlow::Return(rets)),
+                        ControlFlow::Trap(trap) => Ok(ControlFlow::Trap(trap)),
+                        cf => {
+                            panic!("invalid control flow after return_call: {:?}", cf)
+                        }
+                    };
                 }
                 ControlFlow::Return(returned_values) => {
                     self.state.pop_frame();
@@ -1024,6 +1036,50 @@ mod tests {
             .unwrap()
             .unwrap_trap();
 
+        assert_eq!(trap, CraneliftTrap::User(TrapCode::HeapMisaligned));
+    }
+
+    // When a trap occurs in a function called by another function, the trap was not being propagated
+    // correctly. Instead the interpterer panicked with a invalid control flow state.
+    // See this issue for more details: https://github.com/bytecodealliance/wasmtime/issues/6155
+    #[test]
+    fn trap_across_call_propagates_correctly() {
+        let code = "
+        function %u2() -> f32 system_v {
+            ss0 = explicit_slot 69
+            ss1 = explicit_slot 69
+            ss2 = explicit_slot 69
+        
+        block0:
+            v0 = f32const -0x1.434342p-60
+            v1 = stack_addr.i64 ss2+24
+            store notrap aligned v0, v1
+            return v0
+        }
+        
+        function %u1() -> f32 system_v {
+            sig0 = () -> f32 system_v
+            fn0 = colocated %u2 sig0
+        
+        block0:
+            v57 = call fn0()
+            return v57
+        }";
+
+        let mut env = FunctionStore::default();
+
+        let funcs = parse_functions(code).unwrap();
+        for func in &funcs {
+            env.add(func.name.to_string(), func);
+        }
+
+        let state = InterpreterState::default().with_function_store(env);
+        let trap = Interpreter::new(state)
+            .call_by_name("%u1", &[])
+            .unwrap()
+            .unwrap_trap();
+
+        // Ensure that the correct trap was propagated.
         assert_eq!(trap, CraneliftTrap::User(TrapCode::HeapMisaligned));
     }
 }
