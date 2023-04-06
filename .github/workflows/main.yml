@@ -478,7 +478,7 @@ jobs:
           submodules: true
       - uses: ./.github/actions/install-rust
       - run: rustup target add wasm32-wasi
-      - uses: abrown/install-openvino-action@50a2ab733ef4b504dd7de3ac45c36eae7f9bc228
+      - uses: abrown/install-openvino-action@v6
         with:
           version: 2022.3.0
           apt: true
