@@ -113,7 +113,11 @@ fn handle_module(
                 cranelift_module::Linkage::Export,
                 &context.func.signature,
             )?;
-            module.define_function(fid, &mut context, &mut Default::default())?;
+            module.define_function_with_control_plane(
+                fid,
+                &mut context,
+                &mut Default::default(),
+            )?;
         }
 
         if options.print {

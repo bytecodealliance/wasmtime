@@ -679,7 +679,7 @@ impl Module for JITModule {
         })
     }
 
-    fn define_function(
+    fn define_function_with_control_plane(
         &mut self,
         id: FuncId,
         ctx: &mut cranelift_codegen::Context,

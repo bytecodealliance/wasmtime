@@ -2,7 +2,6 @@ use cranelift_codegen::ir::*;
 use cranelift_codegen::isa::CallConv;
 use cranelift_codegen::settings;
 use cranelift_codegen::{ir::types::I16, Context};
-use cranelift_control::ControlPlane;
 use cranelift_entity::EntityRef;
 use cranelift_frontend::*;
 use cranelift_module::*;
@@ -32,7 +31,7 @@ fn error_on_incompatible_sig_in_declare_function() {
         .unwrap(); // Make sure this is an error
 }
 
-fn define_simple_function(module: &mut ObjectModule, ctrl_plane: &mut ControlPlane) -> FuncId {
+fn define_simple_function(module: &mut ObjectModule) -> FuncId {
     let sig = Signature {
         params: vec![],
         returns: vec![],
@@ -53,9 +52,7 @@ fn define_simple_function(module: &mut ObjectModule, ctrl_plane: &mut ControlPla
         bcx.ins().return_(&[]);
     }
 
-    module
-        .define_function(func_id, &mut ctx, ctrl_plane)
-        .unwrap();
+    module.define_function(func_id, &mut ctx).unwrap();
 
     func_id
 }
@@ -63,7 +60,6 @@ fn define_simple_function(module: &mut ObjectModule, ctrl_plane: &mut ControlPla
 #[test]
 #[should_panic(expected = "Result::unwrap()` on an `Err` value: DuplicateDefinition(\"abc\")")]
 fn panic_on_define_after_finalize() {
-    let ctrl_plane = &mut ControlPlane::default();
     let flag_builder = settings::builder();
     let isa_builder = cranelift_codegen::isa::lookup_by_name("x86_64-unknown-linux-gnu").unwrap();
     let isa = isa_builder
@@ -72,8 +68,8 @@ fn panic_on_define_after_finalize() {
     let mut module =
         ObjectModule::new(ObjectBuilder::new(isa, "foo", default_libcall_names()).unwrap());
 
-    define_simple_function(&mut module, ctrl_plane);
-    define_simple_function(&mut module, ctrl_plane);
+    define_simple_function(&mut module);
+    define_simple_function(&mut module);
 }
 
 #[test]
@@ -196,9 +192,7 @@ fn libcall_function() {
         bcx.ins().return_(&[]);
     }
 
-    module
-        .define_function(func_id, &mut ctx, &mut ControlPlane::default())
-        .unwrap();
+    module.define_function(func_id, &mut ctx).unwrap();
 
     module.finish();
 }

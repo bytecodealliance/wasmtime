@@ -57,9 +57,7 @@ fn define_simple_function(module: &mut JITModule) -> FuncId {
         bcx.ins().return_(&[]);
     }
 
-    module
-        .define_function(func_id, &mut ctx, &mut Default::default())
-        .unwrap();
+    module.define_function(func_id, &mut ctx).unwrap();
 
     func_id
 }
@@ -210,7 +208,7 @@ fn libcall_function() {
     }
 
     module
-        .define_function(func_id, &mut ctx, &mut Default::default())
+        .define_function_with_control_plane(func_id, &mut ctx, &mut Default::default())
         .unwrap();
 
     module.finalize_definitions().unwrap();

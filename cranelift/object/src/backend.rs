@@ -316,7 +316,7 @@ impl Module for ObjectModule {
         Ok(id)
     }
 
-    fn define_function(
+    fn define_function_with_control_plane(
         &mut self,
         func_id: FuncId,
         ctx: &mut cranelift_codegen::Context,
