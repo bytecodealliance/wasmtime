@@ -77,8 +77,8 @@
 ;;   jnbe    label3; j label1
 ;; block1:
 ;;   addq    %rdi, 0(%rsi), %rdi
-;;   movl    $-65536, %esi
-;;   movzbq  0(%rdi,%rsi,1), %rax
+;;   movl    $-65536, %eax
+;;   movzbq  0(%rdi,%rax,1), %rax
 ;;   jmp     label2
 ;; block2:
 ;;   movq    %rbp, %rsp

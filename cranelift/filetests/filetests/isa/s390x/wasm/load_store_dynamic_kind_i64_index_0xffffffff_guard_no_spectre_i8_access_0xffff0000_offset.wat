@@ -65,8 +65,8 @@
 ;;   jgh label3 ; jg label1
 ;; block1:
 ;;   ag %r2, 0(%r3)
-;;   llilh %r5, 65535
-;;   llc %r2, 0(%r5,%r2)
+;;   llilh %r3, 65535
+;;   llc %r2, 0(%r3,%r2)
 ;;   jg label2
 ;; block2:
 ;;   br %r14
