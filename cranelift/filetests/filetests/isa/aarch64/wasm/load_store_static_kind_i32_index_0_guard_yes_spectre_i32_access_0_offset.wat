@@ -42,12 +42,12 @@
 ;;   mov w9, w0
 ;;   ldr x10, [x2]
 ;;   add x10, x10, x0, UXTW
-;;   orr x7, xzr, #268435452
 ;;   movz x11, #0
-;;   subs xzr, x9, x7
-;;   csel x12, x11, x10, hi
+;;   orr x8, xzr, #268435452
+;;   subs xzr, x9, x8
+;;   csel x11, x11, x10, hi
 ;;   csdb
-;;   str w1, [x12]
+;;   str w1, [x11]
 ;;   b label1
 ;; block1:
 ;;   ret
@@ -57,12 +57,12 @@
 ;;   mov w9, w0
 ;;   ldr x10, [x1]
 ;;   add x10, x10, x0, UXTW
-;;   orr x7, xzr, #268435452
 ;;   movz x11, #0
-;;   subs xzr, x9, x7
-;;   csel x12, x11, x10, hi
+;;   orr x8, xzr, #268435452
+;;   subs xzr, x9, x8
+;;   csel x11, x11, x10, hi
 ;;   csdb
-;;   ldr w0, [x12]
+;;   ldr w0, [x11]
 ;;   b label1
 ;; block1:
 ;;   ret

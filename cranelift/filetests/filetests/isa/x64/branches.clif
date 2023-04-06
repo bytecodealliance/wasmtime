@@ -630,17 +630,15 @@ block202:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movl    $1112539136, %edx
-;   movd    %edx, %xmm6
-;   ucomiss %xmm6, %xmm0
+;   movl    $1112539136, %eax
+;   movd    %eax, %xmm4
+;   ucomiss %xmm4, %xmm0
 ;   jp      label2
 ;   jnz     label2; j label1
 ; block1:
 ;   jmp     label5
 ; block2:
-;   movl    $1112539136, %r11d
-;   movd    %r11d, %xmm10
-;   ucomiss %xmm10, %xmm0
+;   ucomiss %xmm4, %xmm0
 ;   jnp     label4; j label3
 ; block3:
 ;   jmp     label5
@@ -656,19 +654,17 @@ block202:
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movl $0x42500000, %edx
-;   movd %edx, %xmm6
-;   ucomiss %xmm6, %xmm0
+;   movl $0x42500000, %eax
+;   movd %eax, %xmm4
+;   ucomiss %xmm4, %xmm0
 ;   jp 0x1c
-;   je 0x33
+;   je 0x27
 ; block2: ; offset 0x1c
-;   movl $0x42500000, %r11d
-;   movd %r11d, %xmm10
-;   ucomiss %xmm10, %xmm0
-;   jp 0x33
-; block3: ; offset 0x31
+;   ucomiss %xmm4, %xmm0
+;   jp 0x27
+; block3: ; offset 0x25
 ;   ud2 ; trap: heap_oob
-; block4: ; offset 0x33
+; block4: ; offset 0x27
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

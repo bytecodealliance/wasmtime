@@ -141,7 +141,6 @@ impl Config {
     }
 
     /// Converts this to a `wasmtime::Config` object
-    #[allow(deprecated)] // Allow use of `cranelift_use_egraphs` below.
     pub fn to_wasmtime(&self) -> wasmtime::Config {
         crate::init_fuzzing();
         log::debug!("creating wasmtime config with {:#?}", self.wasmtime);
@@ -157,7 +156,6 @@ impl Config {
             .native_unwind_info(self.wasmtime.native_unwind_info)
             .cranelift_nan_canonicalization(self.wasmtime.canonicalize_nans)
             .cranelift_opt_level(self.wasmtime.opt_level.to_wasmtime())
-            .cranelift_use_egraphs(self.wasmtime.use_egraphs)
             .consume_fuel(self.wasmtime.consume_fuel)
             .epoch_interruption(self.wasmtime.epoch_interruption)
             .memory_init_cow(self.wasmtime.memory_init_cow)
@@ -377,7 +375,6 @@ impl<'a> Arbitrary<'a> for Config {
 #[derive(Arbitrary, Clone, Debug, Eq, Hash, PartialEq)]
 pub struct WasmtimeConfig {
     opt_level: OptLevel,
-    use_egraphs: bool,
     debug_info: bool,
     canonicalize_nans: bool,
     interruptable: bool,

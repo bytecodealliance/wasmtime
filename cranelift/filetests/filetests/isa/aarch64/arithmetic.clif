@@ -542,14 +542,14 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   movz x2, #1
-;   sub x0, xzr, x2
+;   movz x3, #1
+;   sub x0, xzr, x3
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mov x2, #1
-;   neg x0, x2
+;   mov x3, #1
+;   neg x0, x3
 ;   ret
 
 function %f30(i8x16) -> i8x16 {

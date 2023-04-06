@@ -46,10 +46,10 @@
 ;;   ld t3,8(a2)
 ;;   ld t0,0(a2)
 ;;   add t0,t0,t4
-;;   ugt a7,t4,t3##ty=i64
-;;   li t4,0
-;;   selectif_spectre_guard t3,t4,t0##test=a7
-;;   sw a1,0(t3)
+;;   li t1,0
+;;   ugt t3,t4,t3##ty=i64
+;;   selectif_spectre_guard t4,t1,t0##test=t3
+;;   sw a1,0(t4)
 ;;   j label1
 ;; block1:
 ;;   ret
@@ -61,10 +61,10 @@
 ;;   ld t3,8(a1)
 ;;   ld t0,0(a1)
 ;;   add t0,t0,t4
-;;   ugt a7,t4,t3##ty=i64
-;;   li t4,0
-;;   selectif_spectre_guard t3,t4,t0##test=a7
-;;   lw a0,0(t3)
+;;   li t1,0
+;;   ugt t3,t4,t3##ty=i64
+;;   selectif_spectre_guard t4,t1,t0##test=t3
+;;   lw a0,0(t4)
 ;;   j label1
 ;; block1:
 ;;   ret

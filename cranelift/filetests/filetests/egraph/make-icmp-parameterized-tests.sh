@@ -9,7 +9,6 @@ function main {
     cat << EOF > $out
 test optimize precise-output
 set opt_level=speed
-set use_egraphs=true
 target x86_64
 
 ;; !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!

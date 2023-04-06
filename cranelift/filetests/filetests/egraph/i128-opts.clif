@@ -1,6 +1,5 @@
 test optimize
 set opt_level=speed
-set use_egraphs=true
 target x86_64
 
 ; This it a regression test to ensure that we don't insert a iconst.i128 when optimizing bxor.

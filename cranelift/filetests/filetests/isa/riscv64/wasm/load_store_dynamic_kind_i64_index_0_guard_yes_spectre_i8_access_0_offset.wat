@@ -44,10 +44,10 @@
 ;;   ld a6,8(a2)
 ;;   ld a7,0(a2)
 ;;   add a7,a7,a0
-;;   uge a5,a0,a6##ty=i64
 ;;   li t3,0
-;;   selectif_spectre_guard a6,t3,a7##test=a5
-;;   sb a1,0(a6)
+;;   uge a6,a0,a6##ty=i64
+;;   selectif_spectre_guard t4,t3,a7##test=a6
+;;   sb a1,0(t4)
 ;;   j label1
 ;; block1:
 ;;   ret
@@ -57,10 +57,10 @@
 ;;   ld a6,8(a1)
 ;;   ld a7,0(a1)
 ;;   add a7,a7,a0
-;;   uge a5,a0,a6##ty=i64
 ;;   li t3,0
-;;   selectif_spectre_guard a6,t3,a7##test=a5
-;;   lbu a0,0(a6)
+;;   uge a6,a0,a6##ty=i64
+;;   selectif_spectre_guard t4,t3,a7##test=a6
+;;   lbu a0,0(t4)
 ;;   j label1
 ;; block1:
 ;;   ret
