@@ -261,6 +261,7 @@ jobs:
     - run: cargo check -p wasmtime --no-default-features --features cranelift
     - run: cargo check -p wasmtime --no-default-features --features component-model
     - run: cargo check -p wasmtime --no-default-features --features cranelift,wat,async,cache
+    - run: cargo check -p wasmtime --no-default-features --features winch
     - run: cargo check --features component-model
 
     # Check that benchmarks of the cranelift project build
