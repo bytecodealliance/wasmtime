@@ -40,7 +40,7 @@ mod data_context;
 mod module;
 mod traps;
 
-pub use crate::data_context::{DataContext, DataDescription, Init};
+pub use crate::data_context::{DataDescription, Init};
 pub use crate::module::{
     DataDeclaration, DataId, FuncId, FuncOrDataId, FunctionDeclaration, Linkage, Module,
     ModuleCompiledFunction, ModuleDeclarations, ModuleError, ModuleExtName, ModuleReloc,

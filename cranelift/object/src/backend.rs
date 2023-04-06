@@ -10,7 +10,7 @@ use cranelift_codegen::{
 };
 use cranelift_control::ControlPlane;
 use cranelift_module::{
-    DataContext, DataDescription, DataId, FuncId, Init, Linkage, Module, ModuleCompiledFunction,
+    DataDescription, DataId, FuncId, Init, Linkage, Module, ModuleCompiledFunction,
     ModuleDeclarations, ModuleError, ModuleExtName, ModuleReloc, ModuleResult,
 };
 use log::info;
@@ -394,7 +394,7 @@ impl Module for ObjectModule {
         Ok(ModuleCompiledFunction { size: total_size })
     }
 
-    fn define_data(&mut self, data_id: DataId, data_ctx: &DataContext) -> ModuleResult<()> {
+    fn define_data(&mut self, data_id: DataId, data: &DataDescription) -> ModuleResult<()> {
         let decl = self.declarations.get_data_decl(data_id);
         if !decl.linkage.is_definable() {
             return Err(ModuleError::InvalidImportDefinition(decl.name.clone()));
@@ -414,15 +414,14 @@ impl Module for ObjectModule {
             data_relocs: _,
             ref custom_segment_section,
             align,
-        } = data_ctx.description();
+        } = data;
 
         let pointer_reloc = match self.isa.triple().pointer_width().unwrap() {
             PointerWidth::U16 => unimplemented!("16bit pointers"),
             PointerWidth::U32 => Reloc::Abs4,
             PointerWidth::U64 => Reloc::Abs8,
         };
-        let relocs = data_ctx
-            .description()
+        let relocs = data
             .all_relocs(pointer_reloc)
             .map(|record| self.process_reloc(&record))
             .collect::<Vec<_>>();

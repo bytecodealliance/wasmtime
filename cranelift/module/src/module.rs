@@ -3,10 +3,10 @@
 // TODO: Should `ir::Function` really have a `name`?
 
 // TODO: Factor out `ir::Function`'s `ext_funcs` and `global_values` into a struct
-// shared with `DataContext`?
+// shared with `DataDescription`?
 
 use super::HashMap;
-use crate::data_context::DataContext;
+use crate::data_context::DataDescription;
 use core::fmt::Display;
 use cranelift_codegen::binemit::{CodeOffset, Reloc};
 use cranelift_codegen::entity::{entity_impl, PrimaryMap};
@@ -348,7 +348,7 @@ impl DataDeclaration {
 }
 
 /// A translated `ExternalName` into something global we can handle.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum ModuleExtName {
     /// User defined function, converted from `ExternalName::User`.
     User {
@@ -641,13 +641,13 @@ pub trait Module {
     }
 
     /// TODO: Same as above.
-    fn declare_func_in_data(&self, func: FuncId, ctx: &mut DataContext) -> ir::FuncRef {
-        ctx.import_function(ModuleExtName::user(0, func.as_u32()))
+    fn declare_func_in_data(&self, func_id: FuncId, data: &mut DataDescription) -> ir::FuncRef {
+        data.import_function(ModuleExtName::user(0, func_id.as_u32()))
     }
 
     /// TODO: Same as above.
-    fn declare_data_in_data(&self, data: DataId, ctx: &mut DataContext) -> ir::GlobalValue {
-        ctx.import_global_value(ModuleExtName::user(1, data.as_u32()))
+    fn declare_data_in_data(&self, data_id: DataId, data: &mut DataDescription) -> ir::GlobalValue {
+        data.import_global_value(ModuleExtName::user(1, data_id.as_u32()))
     }
 
     /// Define a function, producing the function body from the given `Context`.
@@ -697,7 +697,7 @@ pub trait Module {
     ) -> ModuleResult<ModuleCompiledFunction>;
 
     /// Define a data object, producing the data contents from the given `DataContext`.
-    fn define_data(&mut self, data: DataId, data_ctx: &DataContext) -> ModuleResult<()>;
+    fn define_data(&mut self, data_id: DataId, data: &DataDescription) -> ModuleResult<()>;
 }
 
 impl<M: Module> Module for &mut M {
@@ -768,12 +768,12 @@ impl<M: Module> Module for &mut M {
         (**self).declare_data_in_func(data, func)
     }
 
-    fn declare_func_in_data(&self, func: FuncId, ctx: &mut DataContext) -> ir::FuncRef {
-        (**self).declare_func_in_data(func, ctx)
+    fn declare_func_in_data(&self, func_id: FuncId, data: &mut DataDescription) -> ir::FuncRef {
+        (**self).declare_func_in_data(func_id, data)
     }
 
-    fn declare_data_in_data(&self, data: DataId, ctx: &mut DataContext) -> ir::GlobalValue {
-        (**self).declare_data_in_data(data, ctx)
+    fn declare_data_in_data(&self, data_id: DataId, data: &mut DataDescription) -> ir::GlobalValue {
+        (**self).declare_data_in_data(data_id, data)
     }
 
     fn define_function(
@@ -804,7 +804,7 @@ impl<M: Module> Module for &mut M {
         (**self).define_function_bytes(func_id, func, alignment, bytes, relocs)
     }
 
-    fn define_data(&mut self, data: DataId, data_ctx: &DataContext) -> ModuleResult<()> {
-        (**self).define_data(data, data_ctx)
+    fn define_data(&mut self, data_id: DataId, data: &DataDescription) -> ModuleResult<()> {
+        (**self).define_data(data_id, data)
     }
 }
