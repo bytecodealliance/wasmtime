@@ -27,7 +27,7 @@ paste = "1.0.3"
 encoding_rs = { version = "0.8.31", optional = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
-mach = "0.3.2"
+mach2 = "0.4.1"
 
 [target.'cfg(unix)'.dependencies]
 rustix = { workspace = true, features = ["mm"] }

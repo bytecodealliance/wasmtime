@@ -1908,6 +1908,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "mach2"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6d0d1830bcd151a6fc4aea1369af235b36c1528fe976b8ff678683c9995eade8"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "maybe-owned"
 version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4054,7 +4063,7 @@ dependencies = [
  "indexmap",
  "libc",
  "log",
- "mach",
+ "mach2",
  "memfd",
  "memoffset 0.8.0",
  "once_cell",
