@@ -1,6 +1,5 @@
 test optimize precise-output
 set opt_level=speed
-set use_egraphs=true
 target x86_64
 
 function %i8x16_1() -> i8x16 {

@@ -54,19 +54,6 @@ pub(crate) fn define() -> SettingGroup {
     );
 
     settings.add_bool(
-        "use_egraphs",
-        "Enable egraph-based optimization.",
-        r#"
-            This enables an optimization phase that converts CLIF to an egraph (equivalence graph)
-            representation, performs various rewrites, and then converts it back. This should result in
-            better optimization, but the traditional optimization pass structure is also still
-            available by setting this to `false`. The `false` setting will eventually be
-            deprecated and removed.
-        "#,
-        true,
-    );
-
-    settings.add_bool(
         "enable_verifier",
         "Run the Cranelift IR verifier at strategic times during compilation.",
         r#"

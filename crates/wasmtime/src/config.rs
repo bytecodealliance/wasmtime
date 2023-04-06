@@ -884,30 +884,6 @@ impl Config {
         self
     }
 
-    /// Configures the Cranelift code generator to use its
-    /// "egraph"-based mid-end optimizer.
-    ///
-    /// This optimizer has replaced the compiler's more traditional
-    /// pipeline of optimization passes with a unified code-rewriting
-    /// system. It is on by default, but the traditional optimization
-    /// pass structure is still available for now (it is deprecrated and
-    /// will be removed in a future version).
-    ///
-    /// The default value for this is `true`.
-    #[cfg(compiler)]
-    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))] // see build.rs
-    #[deprecated(
-        since = "5.0.0",
-        note = "egraphs will be the default and this method will be removed in a future version."
-    )]
-    pub fn cranelift_use_egraphs(&mut self, enable: bool) -> &mut Self {
-        let val = if enable { "true" } else { "false" };
-        self.compiler_config
-            .settings
-            .insert("use_egraphs".to_string(), val.to_string());
-        self
-    }
-
     /// Configures whether Cranelift should perform a NaN-canonicalization pass.
     ///
     /// When Cranelift is used as a code generation backend this will configure

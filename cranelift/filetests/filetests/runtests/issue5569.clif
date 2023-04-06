@@ -1,5 +1,4 @@
 test run
-set use_egraphs=true
 target riscv64
 
 function %a(i16, f64, i32, i64, i16, i128, f32) -> i16 {

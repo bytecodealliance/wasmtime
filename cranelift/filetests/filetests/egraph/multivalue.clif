@@ -1,6 +1,5 @@
 test compile precise-output
 set opt_level=speed
-set use_egraphs=true
 set machine_code_cfg_info=true
 target x86_64
 
