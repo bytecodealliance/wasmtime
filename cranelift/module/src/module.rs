@@ -654,8 +654,26 @@ pub trait Module {
     ///
     /// Returns the size of the function's code and constant data.
     ///
+    /// Unlike [`define_function_with_control_plane`] this uses a default [`ControlPlane`] for
+    /// convenience.
+    ///
     /// Note: After calling this function the given `Context` will contain the compiled function.
+    ///
+    /// [`define_function_with_control_plane`]: Self::define_function_with_control_plane
     fn define_function(
+        &mut self,
+        func: FuncId,
+        ctx: &mut Context,
+    ) -> ModuleResult<ModuleCompiledFunction> {
+        self.define_function_with_control_plane(func, ctx, &mut ControlPlane::default())
+    }
+
+    /// Define a function, producing the function body from the given `Context`.
+    ///
+    /// Returns the size of the function's code and constant data.
+    ///
+    /// Note: After calling this function the given `Context` will contain the compiled function.
+    fn define_function_with_control_plane(
         &mut self,
         func: FuncId,
         ctx: &mut Context,
@@ -762,9 +780,17 @@ impl<M: Module> Module for &mut M {
         &mut self,
         func: FuncId,
         ctx: &mut Context,
+    ) -> ModuleResult<ModuleCompiledFunction> {
+        (**self).define_function(func, ctx)
+    }
+
+    fn define_function_with_control_plane(
+        &mut self,
+        func: FuncId,
+        ctx: &mut Context,
         ctrl_plane: &mut ControlPlane,
     ) -> ModuleResult<ModuleCompiledFunction> {
-        (**self).define_function(func, ctx, ctrl_plane)
+        (**self).define_function_with_control_plane(func, ctx, ctrl_plane)
     }
 
     fn define_function_bytes(

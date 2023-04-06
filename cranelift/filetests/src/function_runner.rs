@@ -234,8 +234,11 @@ impl TestFileCompiler {
             .ok_or(anyhow!("Undeclared function {} found!", &func.name))?;
 
         self.ctx.func = self.apply_func_rename(func, defined_func)?;
-        self.module
-            .define_function(defined_func.func_id, &mut self.ctx, ctrl_plane)?;
+        self.module.define_function_with_control_plane(
+            defined_func.func_id,
+            &mut self.ctx,
+            ctrl_plane,
+        )?;
         self.module.clear_context(&mut self.ctx);
         Ok(())
     }
