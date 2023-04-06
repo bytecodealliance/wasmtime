@@ -261,10 +261,6 @@ criteria = "safe-to-deploy"
 version = "0.9.0"
 criteria = "safe-to-deploy"
 
-[[exemptions.errno]]
-version = "0.2.8"
-criteria = "safe-to-deploy"
-
 [[exemptions.errno-dragonfly]]
 version = "0.1.2"
 criteria = "safe-to-deploy"
