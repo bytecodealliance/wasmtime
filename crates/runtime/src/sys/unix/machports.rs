@@ -35,26 +35,24 @@
 
 use crate::sys::traphandlers::wasmtime_longjmp;
 use crate::traphandlers::tls;
-use mach::exception_types::*;
-use mach::kern_return::*;
-use mach::mach_init::*;
-use mach::mach_port::*;
-use mach::message::*;
-use mach::port::*;
-use mach::thread_act::*;
-use mach::traps::*;
+use mach2::exception_types::*;
+use mach2::kern_return::*;
+use mach2::mach_init::*;
+use mach2::mach_port::*;
+use mach2::message::*;
+use mach2::port::*;
+use mach2::thread_act::*;
+use mach2::traps::*;
 use std::mem;
 use std::ptr::addr_of_mut;
 use std::thread;
 
-/// Other `mach` declarations awaiting <https://github.com/fitzgen/mach/pull/64>
-/// to be merged.
 mod mach_addons {
     #![allow(non_camel_case_types)]
     #![allow(non_upper_case_globals)]
     #![allow(dead_code)]
 
-    use mach::{
+    use mach2::{
         exception_types::*, kern_return::*, mach_types::*, message::*, port::*, thread_status::*,
     };
     use std::mem;
@@ -301,8 +299,8 @@ unsafe fn handle_exception(request: &mut ExceptionRequest) -> bool {
     // * `thread_state_count` - the size to pass to `mach_msg`.
     cfg_if::cfg_if! {
         if #[cfg(target_arch = "x86_64")] {
-            use mach::structs::x86_thread_state64_t;
-            use mach::thread_status::x86_THREAD_STATE64;
+            use mach2::structs::x86_thread_state64_t;
+            use mach2::thread_status::x86_THREAD_STATE64;
 
             type ThreadState = x86_thread_state64_t;
 
