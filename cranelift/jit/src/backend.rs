@@ -642,43 +642,6 @@ impl Module for JITModule {
         Ok(id)
     }
 
-    /// Use this when you're building the IR of a function to reference a function.
-    ///
-    /// TODO: Coalesce redundant decls and signatures.
-    /// TODO: Look into ways to reduce the risk of using a FuncRef in the wrong function.
-    fn declare_func_in_func(&mut self, func: FuncId, in_func: &mut ir::Function) -> ir::FuncRef {
-        let decl = self.declarations.get_function_decl(func);
-        let signature = in_func.import_signature(decl.signature.clone());
-        let colocated = !self.hotswap_enabled && decl.linkage.is_final();
-        let user_name_ref = in_func.declare_imported_user_function(ir::UserExternalName {
-            namespace: 0,
-            index: func.as_u32(),
-        });
-        in_func.import_function(ir::ExtFuncData {
-            name: ir::ExternalName::user(user_name_ref),
-            signature,
-            colocated,
-        })
-    }
-
-    /// Use this when you're building the IR of a function to reference a data object.
-    ///
-    /// TODO: Same as above.
-    fn declare_data_in_func(&self, data: DataId, func: &mut ir::Function) -> ir::GlobalValue {
-        let decl = self.declarations.get_data_decl(data);
-        let colocated = !self.hotswap_enabled && decl.linkage.is_final();
-        let user_name_ref = func.declare_imported_user_function(ir::UserExternalName {
-            namespace: 1,
-            index: data.as_u32(),
-        });
-        func.create_global_value(ir::GlobalValueData::Symbol {
-            name: ir::ExternalName::user(user_name_ref),
-            offset: ir::immediates::Imm64::new(0),
-            colocated,
-            tls: decl.tls,
-        })
-    }
-
     fn define_function_with_control_plane(
         &mut self,
         id: FuncId,
@@ -693,6 +656,21 @@ impl Module for JITModule {
 
         if !self.compiled_functions[id].is_none() {
             return Err(ModuleError::DuplicateDefinition(decl.name.to_owned()));
+        }
+
+        if self.hotswap_enabled {
+            // Disable colocated if hotswapping is enabled to avoid a PLT indirection in case of
+            // calls and to allow data objects to be hotswapped in the future.
+            for func in ctx.func.dfg.ext_funcs.values_mut() {
+                func.colocated = false;
+            }
+
+            for gv in ctx.func.global_values.values_mut() {
+                match gv {
+                    ir::GlobalValueData::Symbol { colocated, .. } => *colocated = false,
+                    _ => {}
+                }
+            }
         }
 
         // work around borrow-checker to allow reuse of ctx below
