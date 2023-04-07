@@ -1305,11 +1305,6 @@
 (decl imm_from_bits (u64) Imm12)
 (extern constructor imm_from_bits imm_from_bits)
 
-;; Directly returns the underlying bits of an `Imm12`.
-;; At most 12 bits will be set, even if the value is negative.
-(decl pure imm12_bits (Imm12) u64)
-(extern constructor imm12_bits imm12_bits)
-
 (decl imm_from_neg_bits (i64) Imm12)
 (extern constructor imm_from_neg_bits imm_from_neg_bits)
 
@@ -1318,9 +1313,6 @@
 
 (decl imm12_and (Imm12 i32) Imm12)
 (extern constructor imm12_and imm12_and)
-
-(decl pure partial imm12_add (Imm12 Imm12) Imm12)
-(extern constructor imm12_add imm12_add)
 
 ;; Helper for get negative of Imm12
 (decl neg_imm12 (Imm12) Imm12)
