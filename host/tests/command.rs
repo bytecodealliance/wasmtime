@@ -353,7 +353,7 @@ async fn run_dangling_symlink(store: Store<WasiCtx>, wasi: Command) -> Result<()
 }
 
 async fn run_directory_seek(store: Store<WasiCtx>, wasi: Command) -> Result<()> {
-    expect_fail(run_with_temp_dir(store, wasi).await)
+    run_with_temp_dir(store, wasi).await
 }
 
 async fn run_fd_advise(store: Store<WasiCtx>, wasi: Command) -> Result<()> {
