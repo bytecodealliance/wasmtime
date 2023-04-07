@@ -1864,48 +1864,6 @@ impl MachInstEmit for Inst {
                 }
                 sink.put_data(Inst::TRAP_OPCODE);
             }
-            &Inst::SelectIf {
-                if_spectre_guard: _if_spectre_guard, // _if_spectre_guard not use because it is used to not be removed by optimization pass and some other staff.
-                ref rd,
-                test,
-                ref x,
-                ref y,
-            } => {
-                let label_select_x = sink.get_label();
-                let label_select_y = sink.get_label();
-                let label_jump_over = sink.get_label();
-                let test = allocs.next(test);
-                let x = alloc_value_regs(x, &mut allocs);
-                let y = alloc_value_regs(y, &mut allocs);
-                let rd: Vec<_> = rd.iter().map(|r| allocs.next_writable(*r)).collect();
-                Inst::CondBr {
-                    taken: BranchTarget::Label(label_select_x),
-                    not_taken: BranchTarget::Label(label_select_y),
-                    kind: IntegerCompare {
-                        kind: IntCC::NotEqual,
-                        rs1: test,
-                        rs2: zero_reg(),
-                    },
-                }
-                .emit(&[], sink, emit_info, state);
-
-                // here select x.
-                sink.bind_label(label_select_x, &mut state.ctrl_plane);
-                gen_moves(&rd[..], x.regs())
-                    .into_iter()
-                    .for_each(|i| i.emit(&[], sink, emit_info, state));
-                // jump over
-                Inst::Jal {
-                    dest: BranchTarget::Label(label_jump_over),
-                }
-                .emit(&[], sink, emit_info, state);
-                // here select y.
-                sink.bind_label(label_select_y, &mut state.ctrl_plane);
-                gen_moves(&rd[..], y.regs())
-                    .into_iter()
-                    .for_each(|i| i.emit(&[], sink, emit_info, state));
-                sink.bind_label(label_jump_over, &mut state.ctrl_plane);
-            }
             &Inst::AtomicLoad { rd, ty, p } => {
                 let p = allocs.next(p);
                 let rd = allocs.next_writable(rd);

@@ -1,0 +1,1289 @@
+test compile precise-output
+set unwind_info=false
+target riscv64
+
+function %f(i8, i8, i8) -> i8 {
+block0(v0: i8, v1: i8, v2: i8):
+  v3 = iconst.i8 42
+  v4 = icmp eq v0, v3
+  v5 = select_spectre_guard.i8 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   li a3,42
+;   andi a0,a0,255
+;   andi a3,a3,255
+;   eq a4,a0,a3##ty=i8
+;   andi a5,a4,255
+;   not a7,a5
+;   addi t4,a7,1
+;   or t1,a5,t4
+;   srli a0,t1,63
+;   andi a3,a0,1
+;   addi a4,a3,-1
+;   not a6,a4
+;   and t3,a1,a6
+;   and t0,a2,a4
+;   or a0,t3,t0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a3, zero, 0x2a
+;   andi a0, a0, 0xff
+;   andi a3, a3, 0xff
+;   bne a0, a3, 0xc
+;   addi a4, zero, 1
+;   j 8
+;   mv a4, zero
+;   andi a5, a4, 0xff
+;   not a7, a5
+;   addi t4, a7, 1
+;   or t1, a5, t4
+;   srli a0, t1, 0x3f
+;   andi a3, a0, 1
+;   addi a4, a3, -1
+;   not a6, a4
+;   and t3, a1, a6
+;   and t0, a2, a4
+;   or a0, t3, t0
+;   ret
+
+function %f(i8, i16, i16) -> i16 {
+block0(v0: i8, v1: i16, v2: i16):
+  v3 = iconst.i8 42
+  v4 = icmp eq v0, v3
+  v5 = select_spectre_guard.i16 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   li a3,42
+;   andi a0,a0,255
+;   andi a3,a3,255
+;   eq a4,a0,a3##ty=i8
+;   andi a5,a4,255
+;   not a7,a5
+;   addi t4,a7,1
+;   or t1,a5,t4
+;   srli a0,t1,63
+;   andi a3,a0,1
+;   addi a4,a3,-1
+;   not a6,a4
+;   and t3,a1,a6
+;   and t0,a2,a4
+;   or a0,t3,t0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a3, zero, 0x2a
+;   andi a0, a0, 0xff
+;   andi a3, a3, 0xff
+;   bne a0, a3, 0xc
+;   addi a4, zero, 1
+;   j 8
+;   mv a4, zero
+;   andi a5, a4, 0xff
+;   not a7, a5
+;   addi t4, a7, 1
+;   or t1, a5, t4
+;   srli a0, t1, 0x3f
+;   andi a3, a0, 1
+;   addi a4, a3, -1
+;   not a6, a4
+;   and t3, a1, a6
+;   and t0, a2, a4
+;   or a0, t3, t0
+;   ret
+
+function %f(i8, i32, i32) -> i32 {
+block0(v0: i8, v1: i32, v2: i32):
+  v3 = iconst.i8 42
+  v4 = icmp eq v0, v3
+  v5 = select_spectre_guard.i32 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   li a3,42
+;   andi a0,a0,255
+;   andi a3,a3,255
+;   eq a4,a0,a3##ty=i8
+;   andi a5,a4,255
+;   not a7,a5
+;   addi t4,a7,1
+;   or t1,a5,t4
+;   srli a0,t1,63
+;   andi a3,a0,1
+;   addi a4,a3,-1
+;   not a6,a4
+;   and t3,a1,a6
+;   and t0,a2,a4
+;   or a0,t3,t0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a3, zero, 0x2a
+;   andi a0, a0, 0xff
+;   andi a3, a3, 0xff
+;   bne a0, a3, 0xc
+;   addi a4, zero, 1
+;   j 8
+;   mv a4, zero
+;   andi a5, a4, 0xff
+;   not a7, a5
+;   addi t4, a7, 1
+;   or t1, a5, t4
+;   srli a0, t1, 0x3f
+;   andi a3, a0, 1
+;   addi a4, a3, -1
+;   not a6, a4
+;   and t3, a1, a6
+;   and t0, a2, a4
+;   or a0, t3, t0
+;   ret
+
+function %f(i8, i64, i64) -> i64 {
+block0(v0: i8, v1: i64, v2: i64):
+  v3 = iconst.i8 42
+  v4 = icmp eq v0, v3
+  v5 = select_spectre_guard.i64 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   li a3,42
+;   andi a0,a0,255
+;   andi a3,a3,255
+;   eq a4,a0,a3##ty=i8
+;   andi a5,a4,255
+;   not a7,a5
+;   addi t4,a7,1
+;   or t1,a5,t4
+;   srli a0,t1,63
+;   andi a3,a0,1
+;   addi a4,a3,-1
+;   not a6,a4
+;   and t3,a1,a6
+;   and t0,a2,a4
+;   or a0,t3,t0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a3, zero, 0x2a
+;   andi a0, a0, 0xff
+;   andi a3, a3, 0xff
+;   bne a0, a3, 0xc
+;   addi a4, zero, 1
+;   j 8
+;   mv a4, zero
+;   andi a5, a4, 0xff
+;   not a7, a5
+;   addi t4, a7, 1
+;   or t1, a5, t4
+;   srli a0, t1, 0x3f
+;   andi a3, a0, 1
+;   addi a4, a3, -1
+;   not a6, a4
+;   and t3, a1, a6
+;   and t0, a2, a4
+;   or a0, t3, t0
+;   ret
+
+function %f(i8, i128, i128) -> i128 {
+block0(v0: i8, v1: i128, v2: i128):
+  v3 = iconst.i8 42
+  v4 = icmp eq v0, v3
+  v5 = select_spectre_guard.i128 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   li t3,42
+;   andi a6,a0,255
+;   andi t3,t3,255
+;   eq t0,a6,t3##ty=i8
+;   andi a7,t0,255
+;   not t4,a7
+;   addi t1,t4,1
+;   or a0,a7,t1
+;   srli a5,a0,63
+;   andi a5,a5,1
+;   addi a6,a5,-1
+;   not t3,a6
+;   not t0,a6
+;   and t2,a1,t3
+;   and a1,a2,t0
+;   and a3,a3,a6
+;   and a5,a4,a6
+;   or a0,t2,a3
+;   or a1,a1,a5
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   addi t3, zero, 0x2a
+;   andi a6, a0, 0xff
+;   andi t3, t3, 0xff
+;   bne a6, t3, 0xc
+;   addi t0, zero, 1
+;   j 8
+;   mv t0, zero
+;   andi a7, t0, 0xff
+;   not t4, a7
+;   addi t1, t4, 1
+;   or a0, a7, t1
+;   srli a5, a0, 0x3f
+;   andi a5, a5, 1
+;   addi a6, a5, -1
+;   not t3, a6
+;   not t0, a6
+;   and t2, a1, t3
+;   and a1, a2, t0
+;   and a3, a3, a6
+;   and a5, a4, a6
+;   or a0, t2, a3
+;   or a1, a1, a5
+;   ret
+
+function %f(i16, i8, i8) -> i8 {
+block0(v0: i16, v1: i8, v2: i8):
+  v3 = iconst.i16 42
+  v4 = icmp eq v0, v3
+  v5 = select_spectre_guard.i8 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   li a4,42
+;   slli a0,a0,48
+;   srli a3,a0,48
+;   slli a4,a4,48
+;   srli a6,a4,48
+;   eq t3,a3,a6##ty=i16
+;   andi a7,t3,255
+;   not t4,a7
+;   addi t1,t4,1
+;   or a0,a7,t1
+;   srli a3,a0,63
+;   andi a4,a3,1
+;   addi a6,a4,-1
+;   not t3,a6
+;   and t0,a1,t3
+;   and t2,a2,a6
+;   or a0,t0,t2
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a4, zero, 0x2a
+;   slli a0, a0, 0x30
+;   srli a3, a0, 0x30
+;   slli a4, a4, 0x30
+;   srli a6, a4, 0x30
+;   bne a3, a6, 0xc
+;   addi t3, zero, 1
+;   j 8
+;   mv t3, zero
+;   andi a7, t3, 0xff
+;   not t4, a7
+;   addi t1, t4, 1
+;   or a0, a7, t1
+;   srli a3, a0, 0x3f
+;   andi a4, a3, 1
+;   addi a6, a4, -1
+;   not t3, a6
+;   and t0, a1, t3
+;   and t2, a2, a6
+;   or a0, t0, t2
+;   ret
+
+function %f(i16, i16, i16) -> i16 {
+block0(v0: i16, v1: i16, v2: i16):
+  v3 = iconst.i16 42
+  v4 = icmp eq v0, v3
+  v5 = select_spectre_guard.i16 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   li a4,42
+;   slli a0,a0,48
+;   srli a3,a0,48
+;   slli a4,a4,48
+;   srli a6,a4,48
+;   eq t3,a3,a6##ty=i16
+;   andi a7,t3,255
+;   not t4,a7
+;   addi t1,t4,1
+;   or a0,a7,t1
+;   srli a3,a0,63
+;   andi a4,a3,1
+;   addi a6,a4,-1
+;   not t3,a6
+;   and t0,a1,t3
+;   and t2,a2,a6
+;   or a0,t0,t2
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a4, zero, 0x2a
+;   slli a0, a0, 0x30
+;   srli a3, a0, 0x30
+;   slli a4, a4, 0x30
+;   srli a6, a4, 0x30
+;   bne a3, a6, 0xc
+;   addi t3, zero, 1
+;   j 8
+;   mv t3, zero
+;   andi a7, t3, 0xff
+;   not t4, a7
+;   addi t1, t4, 1
+;   or a0, a7, t1
+;   srli a3, a0, 0x3f
+;   andi a4, a3, 1
+;   addi a6, a4, -1
+;   not t3, a6
+;   and t0, a1, t3
+;   and t2, a2, a6
+;   or a0, t0, t2
+;   ret
+
+function %f(i16, i32, i32) -> i32 {
+block0(v0: i16, v1: i32, v2: i32):
+  v3 = iconst.i16 42
+  v4 = icmp eq v0, v3
+  v5 = select_spectre_guard.i32 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   li a4,42
+;   slli a0,a0,48
+;   srli a3,a0,48
+;   slli a4,a4,48
+;   srli a6,a4,48
+;   eq t3,a3,a6##ty=i16
+;   andi a7,t3,255
+;   not t4,a7
+;   addi t1,t4,1
+;   or a0,a7,t1
+;   srli a3,a0,63
+;   andi a4,a3,1
+;   addi a6,a4,-1
+;   not t3,a6
+;   and t0,a1,t3
+;   and t2,a2,a6
+;   or a0,t0,t2
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a4, zero, 0x2a
+;   slli a0, a0, 0x30
+;   srli a3, a0, 0x30
+;   slli a4, a4, 0x30
+;   srli a6, a4, 0x30
+;   bne a3, a6, 0xc
+;   addi t3, zero, 1
+;   j 8
+;   mv t3, zero
+;   andi a7, t3, 0xff
+;   not t4, a7
+;   addi t1, t4, 1
+;   or a0, a7, t1
+;   srli a3, a0, 0x3f
+;   andi a4, a3, 1
+;   addi a6, a4, -1
+;   not t3, a6
+;   and t0, a1, t3
+;   and t2, a2, a6
+;   or a0, t0, t2
+;   ret
+
+function %f(i16, i64, i64) -> i64 {
+block0(v0: i16, v1: i64, v2: i64):
+  v3 = iconst.i16 42
+  v4 = icmp eq v0, v3
+  v5 = select_spectre_guard.i64 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   li a4,42
+;   slli a0,a0,48
+;   srli a3,a0,48
+;   slli a4,a4,48
+;   srli a6,a4,48
+;   eq t3,a3,a6##ty=i16
+;   andi a7,t3,255
+;   not t4,a7
+;   addi t1,t4,1
+;   or a0,a7,t1
+;   srli a3,a0,63
+;   andi a4,a3,1
+;   addi a6,a4,-1
+;   not t3,a6
+;   and t0,a1,t3
+;   and t2,a2,a6
+;   or a0,t0,t2
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a4, zero, 0x2a
+;   slli a0, a0, 0x30
+;   srli a3, a0, 0x30
+;   slli a4, a4, 0x30
+;   srli a6, a4, 0x30
+;   bne a3, a6, 0xc
+;   addi t3, zero, 1
+;   j 8
+;   mv t3, zero
+;   andi a7, t3, 0xff
+;   not t4, a7
+;   addi t1, t4, 1
+;   or a0, a7, t1
+;   srli a3, a0, 0x3f
+;   andi a4, a3, 1
+;   addi a6, a4, -1
+;   not t3, a6
+;   and t0, a1, t3
+;   and t2, a2, a6
+;   or a0, t0, t2
+;   ret
+
+function %f(i16, i128, i128) -> i128 {
+block0(v0: i16, v1: i128, v2: i128):
+  v3 = iconst.i16 42
+  v4 = icmp eq v0, v3
+  v5 = select_spectre_guard.i128 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   li t0,42
+;   slli a6,a0,48
+;   srli t3,a6,48
+;   slli t0,t0,48
+;   srli t2,t0,48
+;   eq a5,t3,t2##ty=i16
+;   andi t4,a5,255
+;   not t1,t4
+;   addi a0,t1,1
+;   or a5,t4,a0
+;   srli a5,a5,63
+;   andi a6,a5,1
+;   addi t3,a6,-1
+;   not t0,t3
+;   not t2,t3
+;   and a1,a1,t0
+;   and a5,a2,t2
+;   and a6,a3,t3
+;   and a7,a4,t3
+;   or a0,a1,a6
+;   or a1,a5,a7
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   addi t0, zero, 0x2a
+;   slli a6, a0, 0x30
+;   srli t3, a6, 0x30
+;   slli t0, t0, 0x30
+;   srli t2, t0, 0x30
+;   bne t3, t2, 0xc
+;   addi a5, zero, 1
+;   j 8
+;   mv a5, zero
+;   andi t4, a5, 0xff
+;   not t1, t4
+;   addi a0, t1, 1
+;   or a5, t4, a0
+;   srli a5, a5, 0x3f
+;   andi a6, a5, 1
+;   addi t3, a6, -1
+;   not t0, t3
+;   not t2, t3
+;   and a1, a1, t0
+;   and a5, a2, t2
+;   and a6, a3, t3
+;   and a7, a4, t3
+;   or a0, a1, a6
+;   or a1, a5, a7
+;   ret
+
+function %f(i32, i8, i8) -> i8 {
+block0(v0: i32, v1: i8, v2: i8):
+  v3 = iconst.i32 42
+  v4 = icmp eq v0, v3
+  v5 = select_spectre_guard.i8 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   li a4,42
+;   slli a0,a0,32
+;   srli a3,a0,32
+;   slli a4,a4,32
+;   srli a6,a4,32
+;   eq t3,a3,a6##ty=i32
+;   andi a7,t3,255
+;   not t4,a7
+;   addi t1,t4,1
+;   or a0,a7,t1
+;   srli a3,a0,63
+;   andi a4,a3,1
+;   addi a6,a4,-1
+;   not t3,a6
+;   and t0,a1,t3
+;   and t2,a2,a6
+;   or a0,t0,t2
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a4, zero, 0x2a
+;   slli a0, a0, 0x20
+;   srli a3, a0, 0x20
+;   slli a4, a4, 0x20
+;   srli a6, a4, 0x20
+;   bne a3, a6, 0xc
+;   addi t3, zero, 1
+;   j 8
+;   mv t3, zero
+;   andi a7, t3, 0xff
+;   not t4, a7
+;   addi t1, t4, 1
+;   or a0, a7, t1
+;   srli a3, a0, 0x3f
+;   andi a4, a3, 1
+;   addi a6, a4, -1
+;   not t3, a6
+;   and t0, a1, t3
+;   and t2, a2, a6
+;   or a0, t0, t2
+;   ret
+
+function %f(i32, i16, i16) -> i16 {
+block0(v0: i32, v1: i16, v2: i16):
+  v3 = iconst.i32 42
+  v4 = icmp eq v0, v3
+  v5 = select_spectre_guard.i16 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   li a4,42
+;   slli a0,a0,32
+;   srli a3,a0,32
+;   slli a4,a4,32
+;   srli a6,a4,32
+;   eq t3,a3,a6##ty=i32
+;   andi a7,t3,255
+;   not t4,a7
+;   addi t1,t4,1
+;   or a0,a7,t1
+;   srli a3,a0,63
+;   andi a4,a3,1
+;   addi a6,a4,-1
+;   not t3,a6
+;   and t0,a1,t3
+;   and t2,a2,a6
+;   or a0,t0,t2
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a4, zero, 0x2a
+;   slli a0, a0, 0x20
+;   srli a3, a0, 0x20
+;   slli a4, a4, 0x20
+;   srli a6, a4, 0x20
+;   bne a3, a6, 0xc
+;   addi t3, zero, 1
+;   j 8
+;   mv t3, zero
+;   andi a7, t3, 0xff
+;   not t4, a7
+;   addi t1, t4, 1
+;   or a0, a7, t1
+;   srli a3, a0, 0x3f
+;   andi a4, a3, 1
+;   addi a6, a4, -1
+;   not t3, a6
+;   and t0, a1, t3
+;   and t2, a2, a6
+;   or a0, t0, t2
+;   ret
+
+function %f(i32, i32, i32) -> i32 {
+block0(v0: i32, v1: i32, v2: i32):
+  v3 = iconst.i32 42
+  v4 = icmp eq v0, v3
+  v5 = select_spectre_guard.i32 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   li a4,42
+;   slli a0,a0,32
+;   srli a3,a0,32
+;   slli a4,a4,32
+;   srli a6,a4,32
+;   eq t3,a3,a6##ty=i32
+;   andi a7,t3,255
+;   not t4,a7
+;   addi t1,t4,1
+;   or a0,a7,t1
+;   srli a3,a0,63
+;   andi a4,a3,1
+;   addi a6,a4,-1
+;   not t3,a6
+;   and t0,a1,t3
+;   and t2,a2,a6
+;   or a0,t0,t2
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a4, zero, 0x2a
+;   slli a0, a0, 0x20
+;   srli a3, a0, 0x20
+;   slli a4, a4, 0x20
+;   srli a6, a4, 0x20
+;   bne a3, a6, 0xc
+;   addi t3, zero, 1
+;   j 8
+;   mv t3, zero
+;   andi a7, t3, 0xff
+;   not t4, a7
+;   addi t1, t4, 1
+;   or a0, a7, t1
+;   srli a3, a0, 0x3f
+;   andi a4, a3, 1
+;   addi a6, a4, -1
+;   not t3, a6
+;   and t0, a1, t3
+;   and t2, a2, a6
+;   or a0, t0, t2
+;   ret
+
+function %f(i32, i64, i64) -> i64 {
+block0(v0: i32, v1: i64, v2: i64):
+  v3 = iconst.i32 42
+  v4 = icmp eq v0, v3
+  v5 = select_spectre_guard.i64 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   li a4,42
+;   slli a0,a0,32
+;   srli a3,a0,32
+;   slli a4,a4,32
+;   srli a6,a4,32
+;   eq t3,a3,a6##ty=i32
+;   andi a7,t3,255
+;   not t4,a7
+;   addi t1,t4,1
+;   or a0,a7,t1
+;   srli a3,a0,63
+;   andi a4,a3,1
+;   addi a6,a4,-1
+;   not t3,a6
+;   and t0,a1,t3
+;   and t2,a2,a6
+;   or a0,t0,t2
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a4, zero, 0x2a
+;   slli a0, a0, 0x20
+;   srli a3, a0, 0x20
+;   slli a4, a4, 0x20
+;   srli a6, a4, 0x20
+;   bne a3, a6, 0xc
+;   addi t3, zero, 1
+;   j 8
+;   mv t3, zero
+;   andi a7, t3, 0xff
+;   not t4, a7
+;   addi t1, t4, 1
+;   or a0, a7, t1
+;   srli a3, a0, 0x3f
+;   andi a4, a3, 1
+;   addi a6, a4, -1
+;   not t3, a6
+;   and t0, a1, t3
+;   and t2, a2, a6
+;   or a0, t0, t2
+;   ret
+
+function %f(i32, i128, i128) -> i128 {
+block0(v0: i32, v1: i128, v2: i128):
+  v3 = iconst.i32 42
+  v4 = icmp eq v0, v3
+  v5 = select_spectre_guard.i128 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   li t0,42
+;   slli a6,a0,32
+;   srli t3,a6,32
+;   slli t0,t0,32
+;   srli t2,t0,32
+;   eq a5,t3,t2##ty=i32
+;   andi t4,a5,255
+;   not t1,t4
+;   addi a0,t1,1
+;   or a5,t4,a0
+;   srli a5,a5,63
+;   andi a6,a5,1
+;   addi t3,a6,-1
+;   not t0,t3
+;   not t2,t3
+;   and a1,a1,t0
+;   and a5,a2,t2
+;   and a6,a3,t3
+;   and a7,a4,t3
+;   or a0,a1,a6
+;   or a1,a5,a7
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   addi t0, zero, 0x2a
+;   slli a6, a0, 0x20
+;   srli t3, a6, 0x20
+;   slli t0, t0, 0x20
+;   srli t2, t0, 0x20
+;   bne t3, t2, 0xc
+;   addi a5, zero, 1
+;   j 8
+;   mv a5, zero
+;   andi t4, a5, 0xff
+;   not t1, t4
+;   addi a0, t1, 1
+;   or a5, t4, a0
+;   srli a5, a5, 0x3f
+;   andi a6, a5, 1
+;   addi t3, a6, -1
+;   not t0, t3
+;   not t2, t3
+;   and a1, a1, t0
+;   and a5, a2, t2
+;   and a6, a3, t3
+;   and a7, a4, t3
+;   or a0, a1, a6
+;   or a1, a5, a7
+;   ret
+
+function %f(i64, i8, i8) -> i8 {
+block0(v0: i64, v1: i8, v2: i8):
+  v3 = iconst.i64 42
+  v4 = icmp eq v0, v3
+  v5 = select_spectre_guard.i8 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   li a3,42
+;   eq a0,a0,a3##ty=i64
+;   andi a3,a0,255
+;   not a5,a3
+;   addi a7,a5,1
+;   or t4,a3,a7
+;   srli t1,t4,63
+;   andi a0,t1,1
+;   addi a3,a0,-1
+;   not a4,a3
+;   and a6,a1,a4
+;   and t3,a2,a3
+;   or a0,a6,t3
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a3, zero, 0x2a
+;   bne a0, a3, 0xc
+;   addi a0, zero, 1
+;   j 8
+;   mv a0, zero
+;   andi a3, a0, 0xff
+;   not a5, a3
+;   addi a7, a5, 1
+;   or t4, a3, a7
+;   srli t1, t4, 0x3f
+;   andi a0, t1, 1
+;   addi a3, a0, -1
+;   not a4, a3
+;   and a6, a1, a4
+;   and t3, a2, a3
+;   or a0, a6, t3
+;   ret
+
+function %f(i64, i16, i16) -> i16 {
+block0(v0: i64, v1: i16, v2: i16):
+  v3 = iconst.i64 42
+  v4 = icmp eq v0, v3
+  v5 = select_spectre_guard.i16 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   li a3,42
+;   eq a0,a0,a3##ty=i64
+;   andi a3,a0,255
+;   not a5,a3
+;   addi a7,a5,1
+;   or t4,a3,a7
+;   srli t1,t4,63
+;   andi a0,t1,1
+;   addi a3,a0,-1
+;   not a4,a3
+;   and a6,a1,a4
+;   and t3,a2,a3
+;   or a0,a6,t3
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a3, zero, 0x2a
+;   bne a0, a3, 0xc
+;   addi a0, zero, 1
+;   j 8
+;   mv a0, zero
+;   andi a3, a0, 0xff
+;   not a5, a3
+;   addi a7, a5, 1
+;   or t4, a3, a7
+;   srli t1, t4, 0x3f
+;   andi a0, t1, 1
+;   addi a3, a0, -1
+;   not a4, a3
+;   and a6, a1, a4
+;   and t3, a2, a3
+;   or a0, a6, t3
+;   ret
+
+function %f(i64, i32, i32) -> i32 {
+block0(v0: i64, v1: i32, v2: i32):
+  v3 = iconst.i64 42
+  v4 = icmp eq v0, v3
+  v5 = select_spectre_guard.i32 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   li a3,42
+;   eq a0,a0,a3##ty=i64
+;   andi a3,a0,255
+;   not a5,a3
+;   addi a7,a5,1
+;   or t4,a3,a7
+;   srli t1,t4,63
+;   andi a0,t1,1
+;   addi a3,a0,-1
+;   not a4,a3
+;   and a6,a1,a4
+;   and t3,a2,a3
+;   or a0,a6,t3
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a3, zero, 0x2a
+;   bne a0, a3, 0xc
+;   addi a0, zero, 1
+;   j 8
+;   mv a0, zero
+;   andi a3, a0, 0xff
+;   not a5, a3
+;   addi a7, a5, 1
+;   or t4, a3, a7
+;   srli t1, t4, 0x3f
+;   andi a0, t1, 1
+;   addi a3, a0, -1
+;   not a4, a3
+;   and a6, a1, a4
+;   and t3, a2, a3
+;   or a0, a6, t3
+;   ret
+
+function %f(i64, i64, i64) -> i64 {
+block0(v0: i64, v1: i64, v2: i64):
+  v3 = iconst.i64 42
+  v4 = icmp eq v0, v3
+  v5 = select_spectre_guard.i64 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   li a3,42
+;   eq a0,a0,a3##ty=i64
+;   andi a3,a0,255
+;   not a5,a3
+;   addi a7,a5,1
+;   or t4,a3,a7
+;   srli t1,t4,63
+;   andi a0,t1,1
+;   addi a3,a0,-1
+;   not a4,a3
+;   and a6,a1,a4
+;   and t3,a2,a3
+;   or a0,a6,t3
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a3, zero, 0x2a
+;   bne a0, a3, 0xc
+;   addi a0, zero, 1
+;   j 8
+;   mv a0, zero
+;   andi a3, a0, 0xff
+;   not a5, a3
+;   addi a7, a5, 1
+;   or t4, a3, a7
+;   srli t1, t4, 0x3f
+;   andi a0, t1, 1
+;   addi a3, a0, -1
+;   not a4, a3
+;   and a6, a1, a4
+;   and t3, a2, a3
+;   or a0, a6, t3
+;   ret
+
+function %f(i64, i128, i128) -> i128 {
+block0(v0: i64, v1: i128, v2: i128):
+  v3 = iconst.i64 42
+  v4 = icmp eq v0, v3
+  v5 = select_spectre_guard.i128 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   li a6,42
+;   eq a6,a0,a6##ty=i64
+;   andi a5,a6,255
+;   not a7,a5
+;   addi t4,a7,1
+;   or t1,a5,t4
+;   srli a0,t1,63
+;   andi a5,a0,1
+;   addi a5,a5,-1
+;   not a6,a5
+;   not t3,a5
+;   and t0,a1,a6
+;   and t2,a2,t3
+;   and a1,a3,a5
+;   and a3,a4,a5
+;   or a0,t0,a1
+;   or a1,t2,a3
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a6, zero, 0x2a
+;   bne a0, a6, 0xc
+;   addi a6, zero, 1
+;   j 8
+;   mv a6, zero
+;   andi a5, a6, 0xff
+;   not a7, a5
+;   addi t4, a7, 1
+;   or t1, a5, t4
+;   srli a0, t1, 0x3f
+;   andi a5, a0, 1
+;   addi a5, a5, -1
+;   not a6, a5
+;   not t3, a5
+;   and t0, a1, a6
+;   and t2, a2, t3
+;   and a1, a3, a5
+;   and a3, a4, a5
+;   or a0, t0, a1
+;   or a1, t2, a3
+;   ret
+
+function %f(i128, i8, i8) -> i8 {
+block0(v0: i128, v1: i8, v2: i8):
+  v3 = iconst.i64 42
+  v4 = uextend.i128 v3
+  v5 = icmp eq v0, v4
+  v6 = select_spectre_guard.i8 v5, v1, v2
+  return v6
+}
+
+; VCode:
+; block0:
+;   li a4,42
+;   li a5,0
+;   eq a4,[a0,a1],[a4,a5]##ty=i128
+;   andi a5,a4,255
+;   not a7,a5
+;   addi t4,a7,1
+;   or t1,a5,t4
+;   srli a0,t1,63
+;   andi a4,a0,1
+;   addi a4,a4,-1
+;   not a6,a4
+;   and t3,a2,a6
+;   and t0,a3,a4
+;   or a0,t3,t0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a4, zero, 0x2a
+;   mv a5, zero
+;   bne a1, a5, 0x10
+;   bne a0, a4, 0xc
+;   addi a4, zero, 1
+;   j 8
+;   mv a4, zero
+;   andi a5, a4, 0xff
+;   not a7, a5
+;   addi t4, a7, 1
+;   or t1, a5, t4
+;   srli a0, t1, 0x3f
+;   andi a4, a0, 1
+;   addi a4, a4, -1
+;   not a6, a4
+;   and t3, a2, a6
+;   and t0, a3, a4
+;   or a0, t3, t0
+;   ret
+
+function %f(i128, i16, i16) -> i16 {
+block0(v0: i128, v1: i16, v2: i16):
+  v3 = iconst.i64 42
+  v4 = uextend.i128 v3
+  v5 = icmp eq v0, v4
+  v6 = select_spectre_guard.i16 v5, v1, v2
+  return v6
+}
+
+; VCode:
+; block0:
+;   li a4,42
+;   li a5,0
+;   eq a4,[a0,a1],[a4,a5]##ty=i128
+;   andi a5,a4,255
+;   not a7,a5
+;   addi t4,a7,1
+;   or t1,a5,t4
+;   srli a0,t1,63
+;   andi a4,a0,1
+;   addi a4,a4,-1
+;   not a6,a4
+;   and t3,a2,a6
+;   and t0,a3,a4
+;   or a0,t3,t0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a4, zero, 0x2a
+;   mv a5, zero
+;   bne a1, a5, 0x10
+;   bne a0, a4, 0xc
+;   addi a4, zero, 1
+;   j 8
+;   mv a4, zero
+;   andi a5, a4, 0xff
+;   not a7, a5
+;   addi t4, a7, 1
+;   or t1, a5, t4
+;   srli a0, t1, 0x3f
+;   andi a4, a0, 1
+;   addi a4, a4, -1
+;   not a6, a4
+;   and t3, a2, a6
+;   and t0, a3, a4
+;   or a0, t3, t0
+;   ret
+
+function %f(i128, i32, i32) -> i32 {
+block0(v0: i128, v1: i32, v2: i32):
+  v3 = iconst.i64 42
+  v4 = uextend.i128 v3
+  v5 = icmp eq v0, v4
+  v6 = select_spectre_guard.i32 v5, v1, v2
+  return v6
+}
+
+; VCode:
+; block0:
+;   li a4,42
+;   li a5,0
+;   eq a4,[a0,a1],[a4,a5]##ty=i128
+;   andi a5,a4,255
+;   not a7,a5
+;   addi t4,a7,1
+;   or t1,a5,t4
+;   srli a0,t1,63
+;   andi a4,a0,1
+;   addi a4,a4,-1
+;   not a6,a4
+;   and t3,a2,a6
+;   and t0,a3,a4
+;   or a0,t3,t0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a4, zero, 0x2a
+;   mv a5, zero
+;   bne a1, a5, 0x10
+;   bne a0, a4, 0xc
+;   addi a4, zero, 1
+;   j 8
+;   mv a4, zero
+;   andi a5, a4, 0xff
+;   not a7, a5
+;   addi t4, a7, 1
+;   or t1, a5, t4
+;   srli a0, t1, 0x3f
+;   andi a4, a0, 1
+;   addi a4, a4, -1
+;   not a6, a4
+;   and t3, a2, a6
+;   and t0, a3, a4
+;   or a0, t3, t0
+;   ret
+
+function %f(i128, i64, i64) -> i64 {
+block0(v0: i128, v1: i64, v2: i64):
+  v3 = iconst.i64 42
+  v4 = uextend.i128 v3
+  v5 = icmp eq v0, v4
+  v6 = select_spectre_guard.i64 v5, v1, v2
+  return v6
+}
+
+; VCode:
+; block0:
+;   li a4,42
+;   li a5,0
+;   eq a4,[a0,a1],[a4,a5]##ty=i128
+;   andi a5,a4,255
+;   not a7,a5
+;   addi t4,a7,1
+;   or t1,a5,t4
+;   srli a0,t1,63
+;   andi a4,a0,1
+;   addi a4,a4,-1
+;   not a6,a4
+;   and t3,a2,a6
+;   and t0,a3,a4
+;   or a0,t3,t0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a4, zero, 0x2a
+;   mv a5, zero
+;   bne a1, a5, 0x10
+;   bne a0, a4, 0xc
+;   addi a4, zero, 1
+;   j 8
+;   mv a4, zero
+;   andi a5, a4, 0xff
+;   not a7, a5
+;   addi t4, a7, 1
+;   or t1, a5, t4
+;   srli a0, t1, 0x3f
+;   andi a4, a0, 1
+;   addi a4, a4, -1
+;   not a6, a4
+;   and t3, a2, a6
+;   and t0, a3, a4
+;   or a0, t3, t0
+;   ret
+
+function %f(i128, i128, i128) -> i128 {
+block0(v0: i128, v1: i128, v2: i128):
+  v3 = iconst.i64 42
+  v4 = uextend.i128 v3
+  v5 = icmp eq v0, v4
+  v6 = select_spectre_guard.i128 v5, v1, v2
+  return v6
+}
+
+; VCode:
+; block0:
+;   li t3,42
+;   li t4,0
+;   eq t3,[a0,a1],[t3,t4]##ty=i128
+;   andi a7,t3,255
+;   not t4,a7
+;   addi t1,t4,1
+;   or a0,a7,t1
+;   srli a6,a0,63
+;   andi a6,a6,1
+;   addi a6,a6,-1
+;   not t3,a6
+;   not t0,a6
+;   and t2,a2,t3
+;   and a1,a3,t0
+;   and a3,a4,a6
+;   and a5,a5,a6
+;   or a0,t2,a3
+;   or a1,a1,a5
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   addi t3, zero, 0x2a
+;   mv t4, zero
+;   bne a1, t4, 0x10
+;   bne a0, t3, 0xc
+;   addi t3, zero, 1
+;   j 8
+;   mv t3, zero
+;   andi a7, t3, 0xff
+;   not t4, a7
+;   addi t1, t4, 1
+;   or a0, a7, t1
+;   srli a6, a0, 0x3f
+;   andi a6, a6, 1
+;   addi a6, a6, -1
+;   not t3, a6
+;   not t0, a6
+;   and t2, a2, t3
+;   and a1, a3, t0
+;   and a3, a4, a6
+;   and a5, a5, a6
+;   or a0, t2, a3
+;   or a1, a1, a5
+;   ret
+
