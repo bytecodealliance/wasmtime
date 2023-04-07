@@ -2015,8 +2015,6 @@ const PAGE_SIZE: usize = 65536;
 /// polyfill.
 const PATH_MAX: usize = 4096;
 
-const MAX_DESCRIPTORS: usize = 128;
-
 /// Maximum number of bytes to cache for a `wasi::Dirent` plus its path name.
 const DIRENT_CACHE: usize = 256;
 
@@ -2118,11 +2116,11 @@ const fn bump_arena_size() -> usize {
     // Remove the big chunks of the struct, the `path_buf` and `descriptors`
     // fields.
     start -= PATH_MAX;
-    start -= size_of::<Descriptor>() * MAX_DESCRIPTORS;
+    start -= size_of::<Descriptors>();
     start -= size_of::<DirentCache>();
 
     // Remove miscellaneous metadata also stored in state.
-    start -= 22 * size_of::<usize>();
+    start -= 16 * size_of::<usize>();
 
     // Everything else is the `command_data` allocation.
     start
