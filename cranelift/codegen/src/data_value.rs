@@ -249,7 +249,7 @@ impl DataValue {
     ///
     /// Returns true if all bits are equal.
     ///
-    /// This behaviour is different from PartialEq for NaN floats.
+    /// This behavior is different from PartialEq for NaN floats.
     pub fn bitwise_eq(&self, other: &DataValue) -> bool {
         match (self, other) {
             // We need to bit compare the floats to ensure that we produce the correct values
