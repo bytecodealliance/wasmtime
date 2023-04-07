@@ -222,13 +222,9 @@ fn isa_constructor(
     // Check for compatibility between flags and ISA level
     // requested. In particular, SIMD support requires SSE4.2.
     if shared_flags.enable_simd() {
-        if !isa_flags.has_sse3()
-            || !isa_flags.has_ssse3()
-            || !isa_flags.has_sse41()
-            || !isa_flags.has_sse42()
-        {
+        if !isa_flags.has_sse3() || !isa_flags.has_ssse3() || !isa_flags.has_sse41() {
             return Err(CodegenError::Unsupported(
-                "SIMD support requires SSE3, SSSE3, SSE4.1, and SSE4.2 on x86_64.".into(),
+                "SIMD support requires SSE3, SSSE3, and SSE4.1 on x86_64.".into(),
             ));
         }
     }
@@ -253,7 +249,6 @@ mod test {
         isa_builder.set("has_sse3", "false").unwrap();
         isa_builder.set("has_ssse3", "false").unwrap();
         isa_builder.set("has_sse41", "false").unwrap();
-        isa_builder.set("has_sse42", "false").unwrap();
         assert!(matches!(
             isa_builder.finish(shared_flags),
             Err(CodegenError::Unsupported(_)),

@@ -80,7 +80,6 @@ pub fn infer_native_flags(isa_builder: &mut dyn Configurable) -> Result<(), &'st
         isa_builder.set("has_sse3", "false").unwrap();
         isa_builder.set("has_ssse3", "false").unwrap();
         isa_builder.set("has_sse41", "false").unwrap();
-        isa_builder.set("has_sse42", "false").unwrap();
 
         if std::is_x86_feature_detected!("sse3") {
             isa_builder.enable("has_sse3").unwrap();
