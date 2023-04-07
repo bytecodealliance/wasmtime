@@ -1061,6 +1061,12 @@ pub unsafe extern "C" fn fd_seek(
 
         // Seeking only works on files.
         if let StreamType::File(file) = &stream.type_ {
+            match file.descriptor_type {
+                // This isn't really the "right" errno, but it is consistient with wasmtime's
+                // preview 1 tests.
+                filesystem::DescriptorType::Directory => return Err(ERRNO_BADF),
+                _ => {}
+            }
             // It's ok to cast these indices; the WASI API will fail if
             // the resulting values are out of range.
             let from = match whence {
