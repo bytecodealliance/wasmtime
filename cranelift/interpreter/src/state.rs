@@ -4,8 +4,8 @@ use crate::address::{Address, AddressSize};
 use crate::interpreter::LibCallHandler;
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::{
-    ExternalName, FuncRef, Function, GlobalValue, LibCall, MemFlags, Signature, StackSlot, Type,
-    Value,
+    types, ExternalName, FuncRef, Function, GlobalValue, LibCall, MemFlags, Signature, StackSlot,
+    Type, Value,
 };
 use cranelift_codegen::isa::CallConv;
 use cranelift_entity::PrimaryMap;
@@ -111,7 +111,8 @@ impl<'a> InterpreterFunctionRef<'a> {
         match self {
             InterpreterFunctionRef::Function(f) => f.stencil.signature.clone(),
             // CallConv here is sort of irrelevant, since we don't use it for anything
-            InterpreterFunctionRef::LibCall(lc) => lc.signature(CallConv::SystemV),
+            // FIXME handle non-64bit systems
+            InterpreterFunctionRef::LibCall(lc) => lc.signature(CallConv::SystemV, types::I64),
         }
     }
 }

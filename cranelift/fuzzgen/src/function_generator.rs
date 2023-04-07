@@ -1863,7 +1863,7 @@ where
             .libcalls
             .iter()
             .map(|libcall| {
-                let signature = libcall.signature(lib_callconv);
+                let signature = libcall.signature(lib_callconv, I64);
                 let name = ExternalName::LibCall(*libcall);
                 (name, signature)
             })
