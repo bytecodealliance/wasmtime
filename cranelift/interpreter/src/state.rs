@@ -92,9 +92,6 @@ pub trait State<'a, V> {
     /// in intermediate global values.
     fn resolve_global_value(&self, gv: GlobalValue) -> Result<V, MemoryError>;
 
-    /// Checks if an address is valid and within a known region of memory
-    fn validate_address(&self, address: &Address) -> Result<(), MemoryError>;
-
     /// Retrieves the current pinned reg value
     fn get_pinned_reg(&self) -> V;
     /// Sets a value for the pinned reg
@@ -228,10 +225,6 @@ where
     }
 
     fn resolve_global_value(&self, _gv: GlobalValue) -> Result<V, MemoryError> {
-        unimplemented!()
-    }
-
-    fn validate_address(&self, _addr: &Address) -> Result<(), MemoryError> {
         unimplemented!()
     }
 

@@ -93,7 +93,7 @@ impl<'a> Interpreter<'a> {
     /// instructions, which may continue in other blocks, until the function returns.
     fn block(&mut self, block: Block) -> Result<ControlFlow<'a, DataValue>, InterpreterError> {
         trace!("Block: {}", block);
-        let function = self.state.current_frame_mut().function;
+        let function = self.state.current_frame_mut().function();
         let layout = &function.layout;
         let mut maybe_inst = layout.first_inst(block);
         while let Some(inst) = maybe_inst {
@@ -257,10 +257,10 @@ impl<'a> InterpreterState<'a> {
 impl<'a> State<'a, DataValue> for InterpreterState<'a> {
     fn get_function(&self, func_ref: FuncRef) -> Option<&'a Function> {
         self.functions
-            .get_from_func_ref(func_ref, self.frame_stack.last().unwrap().function)
+            .get_from_func_ref(func_ref, self.frame_stack.last().unwrap().function())
     }
     fn get_current_function(&self) -> &'a Function {
-        self.current_frame().function
+        self.current_frame().function()
     }
 
     fn get_libcall_handler(&self) -> LibCallHandler<DataValue> {
@@ -269,7 +269,7 @@ impl<'a> State<'a, DataValue> for InterpreterState<'a> {
 
     fn push_frame(&mut self, function: &'a Function) {
         if let Some(frame) = self.frame_stack.iter().last() {
-            self.frame_offset += frame.function.fixed_stack_size() as usize;
+            self.frame_offset += frame.function().fixed_stack_size() as usize;
         }
 
         // Grow the stack by the space necessary for this frame
@@ -282,11 +282,11 @@ impl<'a> State<'a, DataValue> for InterpreterState<'a> {
         if let Some(frame) = self.frame_stack.pop() {
             // Shorten the stack after exiting the frame
             self.stack
-                .truncate(self.stack.len() - frame.function.fixed_stack_size() as usize);
+                .truncate(self.stack.len() - frame.function().fixed_stack_size() as usize);
 
             // Reset frame_offset to the start of this function
             if let Some(frame) = self.frame_stack.iter().last() {
-                self.frame_offset -= frame.function.fixed_stack_size() as usize;
+                self.frame_offset -= frame.function().fixed_stack_size() as usize;
             }
         }
     }
@@ -548,24 +548,6 @@ impl<'a> State<'a, DataValue> for InterpreterState<'a> {
                 None => return Ok(current_val),
             }
         }
-    }
-
-    fn validate_address(&self, addr: &Address) -> Result<(), MemoryError> {
-        match addr.region {
-            AddressRegion::Stack => {
-                let stack_len = self.stack.len() as u64;
-
-                if addr.offset > stack_len {
-                    return Err(MemoryError::InvalidEntry {
-                        entry: addr.entry,
-                        max: self.stack.len() as u64,
-                    });
-                }
-            }
-            _ => unimplemented!(),
-        };
-
-        Ok(())
     }
 
     fn get_pinned_reg(&self) -> DataValue {
@@ -1054,18 +1036,18 @@ mod tests {
             ss0 = explicit_slot 69
             ss1 = explicit_slot 69
             ss2 = explicit_slot 69
-        
+
         block0:
             v0 = f32const -0x1.434342p-60
             v1 = stack_addr.i64 ss2+24
             store notrap aligned v0, v1
             return v0
         }
-        
+
         function %u1() -> f32 system_v {
             sig0 = () -> f32 system_v
             fn0 = colocated %u2 sig0
-        
+
         block0:
             v57 = call fn0()
             return v57
