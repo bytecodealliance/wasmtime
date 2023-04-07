@@ -3354,83 +3354,99 @@
 
 ;; Rules for `ceil` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type (use_sse41 $true) (ceil a @ (value_type $F32))))
-      (x64_roundss a (RoundImm.RoundUp)))
+(rule 1 (lower (ceil a @ (value_type $F32)))
+        (if-let $true (use_sse41))
+        (x64_roundss a (RoundImm.RoundUp)))
 
-(rule (lower (has_type (use_sse41 $false) (ceil a @ (value_type $F32))))
+(rule 1 (lower (ceil a @ (value_type $F64)))
+        (if-let $true (use_sse41))
+        (x64_roundsd a (RoundImm.RoundUp)))
+
+(rule 1 (lower (ceil a @ (value_type $F32X4)))
+        (if-let $true (use_sse41))
+        (x64_roundps a (RoundImm.RoundUp)))
+
+(rule 1 (lower (ceil a @ (value_type $F64X2)))
+        (if-let $true (use_sse41))
+        (x64_roundpd a (RoundImm.RoundUp)))
+
+(rule (lower (ceil a @ (value_type $F32)))
       (libcall_1 (LibCall.CeilF32) a))
 
-(rule (lower (has_type (use_sse41 $true) (ceil a @ (value_type $F64))))
-      (x64_roundsd a (RoundImm.RoundUp)))
-
-(rule (lower (has_type (use_sse41 $false) (ceil a @ (value_type $F64))))
+(rule (lower (ceil a @ (value_type $F64)))
       (libcall_1 (LibCall.CeilF64) a))
-
-(rule (lower (has_type (use_sse41 $true) (ceil a @ (value_type $F32X4))))
-      (x64_roundps a (RoundImm.RoundUp)))
-
-(rule (lower (has_type (use_sse41 $true) (ceil a @ (value_type $F64X2))))
-      (x64_roundpd a (RoundImm.RoundUp)))
 
 ;; Rules for `floor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type (use_sse41 $true) (floor a @ (value_type $F32))))
-      (x64_roundss a (RoundImm.RoundDown)))
+(rule 1 (lower (floor a @ (value_type $F32)))
+        (if-let $true (use_sse41))
+        (x64_roundss a (RoundImm.RoundDown)))
 
-(rule (lower (has_type (use_sse41 $false) (floor a @ (value_type $F32))))
+(rule 1 (lower (floor a @ (value_type $F64)))
+        (if-let $true (use_sse41))
+        (x64_roundsd a (RoundImm.RoundDown)))
+
+(rule 1 (lower (floor a @ (value_type $F32X4)))
+        (if-let $true (use_sse41))
+        (x64_roundps a (RoundImm.RoundDown)))
+
+(rule 1 (lower (floor a @ (value_type $F64X2)))
+        (if-let $true (use_sse41))
+        (x64_roundpd a (RoundImm.RoundDown)))
+
+(rule (lower (floor a @ (value_type $F32)))
       (libcall_1 (LibCall.FloorF32) a))
 
-(rule (lower (has_type (use_sse41 $true) (floor a @ (value_type $F64))))
-      (x64_roundsd a (RoundImm.RoundDown)))
-
-(rule (lower (has_type (use_sse41 $false) (floor a @ (value_type $F64))))
+(rule (lower (floor a @ (value_type $F64)))
       (libcall_1 (LibCall.FloorF64) a))
-
-(rule (lower (has_type (use_sse41 $true) (floor a @ (value_type $F32X4))))
-      (x64_roundps a (RoundImm.RoundDown)))
-
-(rule (lower (has_type (use_sse41 $true) (floor a @ (value_type $F64X2))))
-      (x64_roundpd a (RoundImm.RoundDown)))
 
 ;; Rules for `nearest` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type (use_sse41 $true) (nearest a @ (value_type $F32))))
-      (x64_roundss a (RoundImm.RoundNearest)))
+(rule 1 (lower (nearest a @ (value_type $F32)))
+        (if-let $true (use_sse41))
+        (x64_roundss a (RoundImm.RoundNearest)))
 
-(rule (lower (has_type (use_sse41 $false) (nearest a @ (value_type $F32))))
+(rule 1 (lower (nearest a @ (value_type $F64)))
+        (if-let $true (use_sse41))
+        (x64_roundsd a (RoundImm.RoundNearest)))
+
+(rule 1 (lower (nearest a @ (value_type $F32X4)))
+        (if-let $true (use_sse41))
+        (x64_roundps a (RoundImm.RoundNearest)))
+
+(rule 1 (lower (nearest a @ (value_type $F64X2)))
+        (if-let $true (use_sse41))
+        (x64_roundpd a (RoundImm.RoundNearest)))
+
+(rule (lower (nearest a @ (value_type $F32)))
       (libcall_1 (LibCall.NearestF32) a))
 
-(rule (lower (has_type (use_sse41 $true) (nearest a @ (value_type $F64))))
-      (x64_roundsd a (RoundImm.RoundNearest)))
-
-(rule (lower (has_type (use_sse41 $false) (nearest a @ (value_type $F64))))
+(rule (lower (nearest a @ (value_type $F64)))
       (libcall_1 (LibCall.NearestF64) a))
-
-(rule (lower (has_type (use_sse41 $true) (nearest a @ (value_type $F32X4))))
-      (x64_roundps a (RoundImm.RoundNearest)))
-
-(rule (lower (has_type (use_sse41 $true) (nearest a @ (value_type $F64X2))))
-      (x64_roundpd a (RoundImm.RoundNearest)))
 
 ;; Rules for `trunc` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type (use_sse41 $true) (trunc a @ (value_type $F32))))
-      (x64_roundss a (RoundImm.RoundZero)))
+(rule 1 (lower (trunc a @ (value_type $F32)))
+        (if-let $true (use_sse41))
+        (x64_roundss a (RoundImm.RoundZero)))
 
-(rule (lower (has_type (use_sse41 $false) (trunc a @ (value_type $F32))))
+(rule 1 (lower (trunc a @ (value_type $F64)))
+        (if-let $true (use_sse41))
+        (x64_roundsd a (RoundImm.RoundZero)))
+
+(rule 1 (lower (trunc a @ (value_type $F32X4)))
+        (if-let $true (use_sse41))
+        (x64_roundps a (RoundImm.RoundZero)))
+
+(rule 1 (lower (trunc a @ (value_type $F64X2)))
+        (if-let $true (use_sse41))
+        (x64_roundpd a (RoundImm.RoundZero)))
+
+(rule (lower (trunc a @ (value_type $F32)))
       (libcall_1 (LibCall.TruncF32) a))
 
-(rule (lower (has_type (use_sse41 $true) (trunc a @ (value_type $F64))))
-      (x64_roundsd a (RoundImm.RoundZero)))
-
-(rule (lower (has_type (use_sse41 $false) (trunc a @ (value_type $F64))))
+(rule (lower (trunc a @ (value_type $F64)))
       (libcall_1 (LibCall.TruncF64) a))
-
-(rule (lower (has_type (use_sse41 $true) (trunc a @ (value_type $F32X4))))
-      (x64_roundps a (RoundImm.RoundZero)))
-
-(rule (lower (has_type (use_sse41 $true) (trunc a @ (value_type $F64X2))))
-      (x64_roundpd a (RoundImm.RoundZero)))
 
 ;; Rules for `stack_addr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
