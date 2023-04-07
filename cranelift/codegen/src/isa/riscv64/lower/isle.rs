@@ -3,7 +3,7 @@
 // Pull in the ISLE generated code.
 #[allow(unused)]
 pub mod generated_code;
-use generated_code::{Context, ExtendOp, MInst};
+use generated_code::{Context, ExtendOp, MInst, VecAvl, VecLmul, VecMaskMode, VecSew, VecTailMode};
 
 // Types that the generated ISLE code uses via `use super::*`.
 use super::{writable_zero_reg, zero_reg};
@@ -283,6 +283,10 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Riscv64Backend> {
         ValueRegs::two(shamt, len_sub_shamt)
     }
 
+    fn has_v(&mut self) -> bool {
+        self.backend.isa_flags.has_v()
+    }
+
     fn has_zbkb(&mut self) -> bool {
         self.backend.isa_flags.has_zbkb()
     }
@@ -433,6 +437,11 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Riscv64Backend> {
             rs1,
             rs2,
         }
+    }
+
+    #[inline]
+    fn vstate_from_type(&mut self, ty: Type) -> VState {
+        VState::from_type(ty)
     }
 }
 

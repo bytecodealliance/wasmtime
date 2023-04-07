@@ -843,6 +843,11 @@ impl<I: VCodeInst> VCode<I> {
 
         for (block_order_idx, &block) in final_order.iter().enumerate() {
             trace!("emitting block {:?}", block);
+
+            // Back the new block hook for state
+            state.on_new_block();
+
+            // Emit NOPs to align the block.
             let new_offset = I::align_basic_block(buffer.cur_offset());
             while new_offset > buffer.cur_offset() {
                 // Pad with NOPs up to the aligned block offset.

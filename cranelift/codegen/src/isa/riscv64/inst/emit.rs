@@ -102,6 +102,13 @@ pub(crate) fn reg_to_gpr_num(m: Reg) -> u32 {
     u32::try_from(m.to_real_reg().unwrap().hw_enc() & 31).unwrap()
 }
 
+#[derive(Clone, Debug, PartialEq, Default)]
+pub enum EmitVState {
+    #[default]
+    Unknown,
+    Known(VState),
+}
+
 /// State carried between emissions of a sequence of instructions.
 #[derive(Default, Clone, Debug)]
 pub struct EmitState {
@@ -114,6 +121,9 @@ pub struct EmitState {
     /// Only used during fuzz-testing. Otherwise, it is a zero-sized struct and
     /// optimized away at compiletime. See [cranelift_control].
     ctrl_plane: ControlPlane,
+    // Vector State
+    // Controls the current state of the vector unit at the emission point.
+    vstate: EmitVState,
 }
 
 impl EmitState {
@@ -141,6 +151,7 @@ impl MachInstEmitState<Inst> for EmitState {
             stack_map: None,
             cur_srcloc: RelSourceLoc::default(),
             ctrl_plane,
+            vstate: EmitVState::Unknown,
         }
     }
 
@@ -158,6 +169,11 @@ impl MachInstEmitState<Inst> for EmitState {
 
     fn take_ctrl_plane(self) -> ControlPlane {
         self.ctrl_plane
+    }
+
+    fn on_new_block(&mut self) {
+        // Reset the vector state.
+        self.vstate = EmitVState::Unknown;
     }
 }
 
@@ -386,6 +402,74 @@ impl Inst {
         }
         insts
     }
+
+    /// Returns Some(VState) if this insturction is expecting a specific vector state
+    /// before emission.
+    fn expected_vstate(&self) -> Option<&VState> {
+        match self {
+            Inst::Nop0
+            | Inst::Nop4
+            | Inst::BrTable { .. }
+            | Inst::Auipc { .. }
+            | Inst::Lui { .. }
+            | Inst::LoadConst32 { .. }
+            | Inst::LoadConst64 { .. }
+            | Inst::AluRRR { .. }
+            | Inst::FpuRRR { .. }
+            | Inst::AluRRImm12 { .. }
+            | Inst::Load { .. }
+            | Inst::Store { .. }
+            | Inst::Args { .. }
+            | Inst::Ret { .. }
+            | Inst::Extend { .. }
+            | Inst::AjustSp { .. }
+            | Inst::Call { .. }
+            | Inst::CallInd { .. }
+            | Inst::TrapIf { .. }
+            | Inst::Jal { .. }
+            | Inst::CondBr { .. }
+            | Inst::LoadExtName { .. }
+            | Inst::LoadAddr { .. }
+            | Inst::VirtualSPOffsetAdj { .. }
+            | Inst::Mov { .. }
+            | Inst::MovFromPReg { .. }
+            | Inst::Fence { .. }
+            | Inst::FenceI
+            | Inst::ECall
+            | Inst::EBreak
+            | Inst::Udf { .. }
+            | Inst::FpuRR { .. }
+            | Inst::FpuRRRR { .. }
+            | Inst::Jalr { .. }
+            | Inst::Atomic { .. }
+            | Inst::Select { .. }
+            | Inst::AtomicCas { .. }
+            | Inst::IntSelect { .. }
+            | Inst::Csr { .. }
+            | Inst::Icmp { .. }
+            | Inst::SelectReg { .. }
+            | Inst::FcvtToInt { .. }
+            | Inst::RawData { .. }
+            | Inst::AtomicStore { .. }
+            | Inst::AtomicLoad { .. }
+            | Inst::AtomicRmwLoop { .. }
+            | Inst::TrapIfC { .. }
+            | Inst::Unwind { .. }
+            | Inst::DummyUse { .. }
+            | Inst::FloatRound { .. }
+            | Inst::FloatSelect { .. }
+            | Inst::FloatSelectPseudo { .. }
+            | Inst::Popcnt { .. }
+            | Inst::Rev8 { .. }
+            | Inst::Cltz { .. }
+            | Inst::Brev8 { .. }
+            | Inst::StackProbeLoop { .. } => None,
+            // VecSetState does not expect any vstate, rather it updates it.
+            Inst::VecSetState { .. } => None,
+
+            Inst::VecAluRRR { vstate, .. } => Some(vstate),
+        }
+    }
 }
 
 impl MachInstEmit for Inst {
@@ -400,6 +484,19 @@ impl MachInstEmit for Inst {
         state: &mut EmitState,
     ) {
         let mut allocs = AllocationConsumer::new(allocs);
+
+        // Check if we need to update the vector state before emitting this instruction
+        if let Some(expected) = self.expected_vstate() {
+            if state.vstate != EmitVState::Known(expected.clone()) {
+                // Update the vector state.
+                Inst::VecSetState {
+                    rd: writable_zero_reg(),
+                    vstate: expected.clone(),
+                }
+                .emit(&[], sink, emit_info, state);
+            }
+        }
+
         // N.B.: we *must* not exceed the "worst-case size" used to compute
         // where to insert islands, except when islands are explicitly triggered
         // (with an `EmitIsland`). We check this in debug builds. This is `mut`
@@ -530,13 +627,14 @@ impl MachInstEmit for Inst {
                     (rs1, rs2)
                 };
 
-                let x: u32 = alu_op.op_code()
-                    | reg_to_gpr_num(rd.to_reg()) << 7
-                    | (alu_op.funct3()) << 12
-                    | reg_to_gpr_num(rs1) << 15
-                    | reg_to_gpr_num(rs2) << 20
-                    | alu_op.funct7() << 25;
-                sink.put4(x);
+                sink.put4(encode_r_type(
+                    alu_op.op_code(),
+                    rd.to_reg(),
+                    alu_op.funct3(),
+                    rs1,
+                    rs2,
+                    alu_op.funct7(),
+                ));
             }
             &Inst::AluRRImm12 {
                 alu_op,
@@ -2694,6 +2792,40 @@ impl MachInstEmit for Inst {
                 }
                 .emit(&[], sink, emit_info, state);
                 sink.bind_label(label_done, &mut state.ctrl_plane);
+            }
+            &Inst::VecAluRRR {
+                op, vd, vs1, vs2, ..
+            } => {
+                let vs1 = allocs.next(vs1);
+                let vs2 = allocs.next(vs2);
+                let vd = allocs.next_writable(vd);
+
+                // This is the mask bit, we don't yet implement masking, so set it to 1, which means
+                // masking disabled.
+                let vm = 1;
+
+                sink.put4(encode_valu(
+                    op.opcode(),
+                    vd.to_reg(),
+                    op.funct3(),
+                    vs1,
+                    vs2,
+                    vm,
+                    op.funct6(),
+                ));
+            }
+            &Inst::VecSetState { rd, ref vstate } => {
+                let rd = allocs.next_writable(rd);
+
+                sink.put4(encode_vcfg_imm(
+                    0x57, // `vsetivli`
+                    rd.to_reg(),
+                    vstate.avl.unwrap_static(),
+                    &vstate.vtype,
+                ));
+
+                // Update the current vector emit state.
+                state.vstate = EmitVState::Known(vstate.clone());
             }
         };
         let end_off = sink.cur_offset();

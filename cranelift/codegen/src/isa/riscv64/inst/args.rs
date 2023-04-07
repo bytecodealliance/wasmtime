@@ -1705,7 +1705,7 @@ impl CsrOP {
         if self.need_rs() {
             reg_to_gpr_num(rs.unwrap())
         } else {
-            zimm.unwrap().as_u32()
+            zimm.unwrap().bits()
         }
     }
 }

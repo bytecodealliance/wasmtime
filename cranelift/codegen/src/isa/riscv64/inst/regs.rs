@@ -218,3 +218,13 @@ pub(crate) fn x_reg_range(start: usize, end: usize) -> Vec<Writable<Reg>> {
     }
     regs
 }
+
+#[inline]
+pub fn v_reg(enc: usize) -> Reg {
+    let p_reg = PReg::new(enc, RegClass::Float);
+    let v_reg = VReg::new(p_reg.index(), p_reg.class());
+    Reg::from(v_reg)
+}
+pub fn vx_reg(enc: usize) -> PReg {
+    PReg::new(enc, RegClass::Float)
+}

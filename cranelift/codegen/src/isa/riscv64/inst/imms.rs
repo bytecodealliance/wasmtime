@@ -99,33 +99,31 @@ impl Display for Imm20 {
     }
 }
 
-#[derive(Clone, Copy)]
-pub struct Uimm5 {
-    bits: u8,
+/// An unsigned 5-bit immediate.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct UImm5 {
+    value: u8,
 }
 
-impl Uimm5 {
-    pub fn from_bits(bits: u8) -> Self {
-        Self { bits }
+impl UImm5 {
+    /// Create an unsigned 5-bit immediate from u8.
+    pub fn maybe_from_u8(value: u8) -> Option<UImm5> {
+        if value < 32 {
+            Some(UImm5 { value })
+        } else {
+            None
+        }
     }
-    /// Create a zero immediate of this format.
-    pub fn zero() -> Self {
-        Self { bits: 0 }
-    }
-    pub fn as_u32(&self) -> u32 {
-        (self.bits as u32) & 0b1_1111
+
+    /// Bits for encoding.
+    pub fn bits(&self) -> u32 {
+        u32::from(self.value)
     }
 }
 
-impl Debug for Uimm5 {
+impl Display for UImm5 {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-        write!(f, "{}", self.bits)
-    }
-}
-
-impl Display for Uimm5 {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-        write!(f, "{}", self.bits)
+        write!(f, "{}", self.value)
     }
 }
 

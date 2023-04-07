@@ -1,0 +1,68 @@
+test compile precise-output
+set unwind_info=false
+target riscv64 has_v
+
+;; Interleaves vector operations to ensure that `vsetivli` is emitted
+function %iadd_multi(i8x16, i16x8) -> i8x16, i16x8  {
+block0(v0: i8x16, v1: i16x8):
+    v4 = iadd v0, v0
+    v5 = iadd v1, v1
+    v6 = iadd v5, v5
+    return v4, v6
+}
+
+; VCode:
+; block0:
+;   vadd.vv v10,v10,v10 #avl=16, #vtype=(e8, m1, ta, ma)
+;   vadd.vv v5,v11,v11 #avl=8, #vtype=(e16, m1, ta, ma)
+;   vadd.vv v11,v5,v5 #avl=8, #vtype=(e16, m1, ta, ma)
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x57, 0x70, 0x08, 0xcc
+;   .byte 0x57, 0x05, 0xa5, 0x02
+;   .byte 0x57, 0x70, 0x14, 0xcc
+;   .byte 0xd7, 0x82, 0xb5, 0x02
+;   .byte 0xd7, 0x85, 0x52, 0x02
+;   ret
+
+;; When the block changes, we need to reemit the vector state instruction
+;; Even if vtype is the same.
+function %(i8x16, i8x16) -> i8x16  {
+block0(v0: i8x16, v1: i8x16):
+    v2 = iadd v0, v1
+    jump block1(v1, v2)
+
+block1(v3: i8x16, v4: i8x16):
+    v5 = iadd v3, v4
+    jump block2(v4, v5)
+
+block2(v6: i8x16, v7: i8x16):
+    v8 = iadd v6, v7
+    return v8
+}
+
+; VCode:
+; block0:
+;   vadd.vv v5,v11,v10 #avl=16, #vtype=(e8, m1, ta, ma)
+;   j label1
+; block1:
+;   vadd.vv v6,v5,v11 #avl=16, #vtype=(e8, m1, ta, ma)
+;   j label2
+; block2:
+;   vadd.vv v10,v6,v5 #avl=16, #vtype=(e8, m1, ta, ma)
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x57, 0x70, 0x08, 0xcc
+;   .byte 0xd7, 0x02, 0xb5, 0x02
+; block1: ; offset 0x8
+;   .byte 0x57, 0x70, 0x08, 0xcc
+;   .byte 0x57, 0x83, 0x55, 0x02
+; block2: ; offset 0x10
+;   .byte 0x57, 0x70, 0x08, 0xcc
+;   .byte 0x57, 0x85, 0x62, 0x02
+;   ret
+

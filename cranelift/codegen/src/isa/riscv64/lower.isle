@@ -53,7 +53,7 @@
 (rule (match_shnadd (u64_from_imm64 1)) (AluOPRRR.Sh1add))
 (rule (match_shnadd (u64_from_imm64 2)) (AluOPRRR.Sh2add))
 (rule (match_shnadd (u64_from_imm64 3)) (AluOPRRR.Sh3add))
-  
+
 (rule 3 (lower (has_type $I64 (iadd x (ishl y (maybe_uextend (iconst n))))))
   (if-let $true (has_zba))
   (if-let shnadd (match_shnadd n))
@@ -75,7 +75,7 @@
 (rule (match_shnadd_uw (u64_from_imm64 1)) (AluOPRRR.Sh1adduw))
 (rule (match_shnadd_uw (u64_from_imm64 2)) (AluOPRRR.Sh2adduw))
 (rule (match_shnadd_uw (u64_from_imm64 3)) (AluOPRRR.Sh3adduw))
-  
+
 (rule 5 (lower (has_type $I64 (iadd x (ishl (uextend y @ (value_type $I32)) (maybe_uextend (iconst n))))))
   (if-let $true (has_zba))
   (if-let shnadd_uw (match_shnadd_uw n))
@@ -96,6 +96,11 @@
         ;; add carry.
         (high Reg (rv_add high_tmp carry)))
     (value_regs low high)))
+
+;; Vectors!
+(rule 8 (lower (has_type (ty_vec128_int ty) (iadd x y)))
+  (if-let $true (has_v))
+  (rv_vadd_vv x y (vstate_from_type ty)))
 
 ;;; Rules for `uadd_overflow_trap` ;;;;;;;;;;;;;
 (rule
@@ -374,7 +379,7 @@
 
 (rule 1 (lower (has_type $I128 (clz x)))
   (lower_clz_i128 x))
-  
+
 ;;;; Rules for `cls` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_64 ty) (cls x)))
   (lower_cls ty x))
