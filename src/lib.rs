@@ -1313,11 +1313,13 @@ pub unsafe extern "C" fn path_open(
         let mut ds = state.descriptors_mut();
         let file = ds.get_dir(fd)?;
         let result = filesystem::open_at(file.fd, at_flags, path, o_flags, flags, mode)?;
+        let descriptor_type = filesystem::get_type(result)?;
         let desc = Descriptor::Streams(Streams {
             input: Cell::new(None),
             output: Cell::new(None),
             type_: StreamType::File(File {
                 fd: result,
+                descriptor_type,
                 position: Cell::new(0),
                 append,
             }),
@@ -1999,6 +2001,9 @@ impl From<filesystem::DescriptorType> for wasi::Filetype {
 pub struct File {
     /// The handle to the preview2 descriptor that this file is referencing.
     fd: filesystem::Descriptor,
+
+    /// The descriptor type, as supplied by filesystem::get_type at opening
+    descriptor_type: filesystem::DescriptorType,
 
     /// The current-position pointer.
     position: Cell<filesystem::Filesize>,

@@ -175,6 +175,8 @@ impl Descriptors {
                 output: Cell::new(None),
                 type_: StreamType::File(File {
                     fd: preopen.descriptor,
+                    descriptor_type: crate::bindings::filesystem::get_type(preopen.descriptor)
+                        .trapping_unwrap(),
                     position: Cell::new(0),
                     append: false,
                 }),
@@ -332,6 +334,8 @@ impl Descriptors {
     }
 
     pub fn get_dir(&self, fd: Fd) -> Result<&File, Errno> {
+        // FIXME: do we look at the StreamType::File(File { descriptor_type }) and make sure it
+        // really is a DescriptorType::Directory here?
         self.get_file_with_error(fd, wasi::ERRNO_NOTDIR)
     }
 
