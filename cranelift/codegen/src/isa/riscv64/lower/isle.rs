@@ -201,10 +201,14 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Riscv64Backend> {
     fn imm12_from_u64(&mut self, arg0: u64) -> Option<Imm12> {
         Imm12::maybe_from_u64(arg0)
     }
+
     #[inline]
-    fn match_imm12(&mut self, imm: Imm12) -> i16 {
-        imm.as_i16()
+    fn imm12_sextend_i64(&mut self, ty: Type, imm: i64) -> Option<Imm12> {
+        let shift_count = 64 - ty.bits();
+        let value = (imm << (shift_count)) >> (shift_count);
+        Imm12::maybe_from_u64(value as u64)
     }
+
     #[inline]
     fn writable_zero_reg(&mut self) -> WritableReg {
         writable_zero_reg()
@@ -224,12 +228,6 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Riscv64Backend> {
     #[inline]
     fn imm12_bits(&mut self, imm: Imm12) -> u64 {
         imm.as_u32() as u64
-    }
-    #[inline]
-    fn imm12_is_outside_signed_range(&mut self, imm: Imm12, ty: Type) -> bool {
-        let imm = imm.as_i16();
-        let ty_max = ty.bounds(true).1;
-        imm > 0 && (imm as u128) > ty_max
     }
     #[inline]
     fn imm_from_neg_bits(&mut self, val: i64) -> Imm12 {

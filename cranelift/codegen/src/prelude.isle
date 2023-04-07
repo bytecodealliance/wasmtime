@@ -97,6 +97,9 @@
 (decl pure i64_neg (i64) i64)
 (extern constructor i64_neg i64_neg)
 
+(decl pure i64_add (i64 i64) i64)
+(extern constructor i64_add i64_add)
+
 (decl u128_as_u64 (u64) u128)
 (extern extractor u128_as_u64 u128_as_u64)
 

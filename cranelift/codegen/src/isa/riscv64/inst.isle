@@ -1310,11 +1310,6 @@
 (decl pure imm12_bits (Imm12) u64)
 (extern constructor imm12_bits imm12_bits)
 
-;; Returns true if the `Imm12` is larger than the max signed value for `Type`.
-;; This can really only happen for I8's.
-(decl pure imm12_is_outside_signed_range (Imm12 Type) bool)
-(extern constructor imm12_is_outside_signed_range imm12_is_outside_signed_range)
-
 (decl imm_from_neg_bits (i64) Imm12)
 (extern constructor imm_from_neg_bits imm_from_neg_bits)
 
@@ -1342,8 +1337,11 @@
 (decl imm12_from_u64 (Imm12) u64)
 (extern extractor imm12_from_u64 imm12_from_u64)
 
-(decl match_imm12 (i16) Imm12)
-(extern extractor infallible match_imm12 match_imm12)
+;; Extracts an imm12 from an i64. The i64 must be in a range that can be
+;; represented as an imm12. The value is sign-extended acording to the type
+;; provided.
+(decl pure partial imm12_sextend_i64 (Type i64) Imm12)
+(extern constructor imm12_sextend_i64 imm12_sextend_i64)
 
 
 ;; Float Helpers
@@ -2417,34 +2415,22 @@
 ;; For some icmp's we can optimize the instruction sequence if the RHS is a constant.
 ;;
 ;; TODO: Currently we only have rules for <=64bit types. We can add more rules for I128's
-(decl gen_icmp_imm (IntCC ValueRegs Imm12 Type) Reg)
-
-;; This deals with the case where we have an iconst.i8 that is larger than 127.
-;; This is allowed by clif semantics. However when using this constant as a signed value
-;; we need to view it as a negative value, otherwise the comparison will be wrong.
-;;
-;; This can only happen with I8's, since it's the only type smaller than 12bits.
-(rule 6 (gen_icmp_imm cc x imm ty @ $I8)
-  (if-let cc (signed_cond_code cc))
-  (if-let $true (imm12_is_outside_signed_range imm ty))
-  (gen_icmp_imm cc x (neg_imm12 (imm12_and imm 0x7F)) ty))
- 
+(decl gen_icmp_imm (IntCC ValueRegs i64 Type) Reg)
 
 ;; This rule isn't totally necessary since we can just use `slti 0`, but
 ;; it's the official mnemonic for this operation and gives a slightly nicer
 ;; disassembly output.
-(rule 5 (gen_icmp_imm (IntCC.SignedLessThan) x (match_imm12 0) (fits_in_64 ty))
+(rule 5 (gen_icmp_imm (IntCC.SignedLessThan) x 0 (fits_in_64 ty))
   (rv_sltz (sext x ty $I64)))
 
 ;; `sgtz` is preferable since our equivalent immediate lowering has to do `slt+xori`.
-(rule 5 (gen_icmp_imm (IntCC.SignedGreaterThan) x (match_imm12 0) (fits_in_64 ty))
+(rule 5 (gen_icmp_imm (IntCC.SignedGreaterThan) x 0 (fits_in_64 ty))
   (rv_sgtz (sext x ty $I64)))
 
 ;; For these IntCC's we need to both add 1 to the immediate and invert the result.
 ;; i.e. `x > imm` is the same as `!(x < imm + 1)`.
 (rule 4 (gen_icmp_imm (intcc_sgt_or_ugt cc) x imm ty)
-  (if-let imm_plus_1 (imm12_add imm (imm12_const 1)))
-  (let ((res Reg (gen_icmp_imm (intcc_reverse cc) x imm_plus_1 ty)))
+  (let ((res Reg (gen_icmp_imm (intcc_reverse cc) x (i64_add imm 1) ty)))
     (rv_xori res (imm12_const 1))))
   
 ;; We directly support the inverse of these condition codes. So lower the inverse
@@ -2457,22 +2443,25 @@
 ;; Here we can add 1 to the immediate and use the reverse condition code.
 ;; i.e. `x <= imm` is the same as `x < imm + 1`.
 (rule 2 (gen_icmp_imm (intcc_sle_or_ule cc) x imm ty)
-  (if-let imm_plus_1 (imm12_add imm (imm12_const 1)))
-  (gen_icmp_imm (intcc_without_equal cc) x imm_plus_1 ty))
+  (gen_icmp_imm (intcc_without_equal cc) x (i64_add imm 1) ty))
 
 ;; We have dedicated instructions for these two cases. (`slti`/`sltiu`)
-(rule 1 (gen_icmp_imm (IntCC.SignedLessThan) x imm (fits_in_64 ty))
+(rule 1 (gen_icmp_imm (IntCC.SignedLessThan) x n (fits_in_64 ty))
+  (if-let imm (imm12_sextend_i64 ty n))
   (rv_slti (sext x ty $I64) imm))
-(rule 1 (gen_icmp_imm (IntCC.UnsignedLessThan) x imm (fits_in_64 ty))
+(rule 1 (gen_icmp_imm (IntCC.UnsignedLessThan) x n (fits_in_64 ty)) 
+  (if-let imm (imm12_sextend_i64 ty n))
   (rv_sltiu (zext x ty $I64) imm))
 
 ;; In the fallback case we load the immediate and then compare.
-(rule (gen_icmp_imm cc x imm (fits_in_64 ty))
+(rule (gen_icmp_imm cc x n (fits_in_64 ty))
   (let ((extend_op ExtendOp (icmp_intcc_extend cc ty))
         (x_ext Reg (extend x extend_op ty $I64))
-        ;; TODO: Use `load_constant` here when we have it.
-        (imm Reg (rv_addi (zero_reg) imm))
-        (y_ext Reg (extend imm extend_op ty $I64)))
+        ;; TODO: Ideally we shouldn't need the sign extend instruction
+        ;; here. We should be able to do it at compile time. But our
+        ;; constant loading infrastructure isn't great yet.
+        (i Reg (imm $I64 (i64_as_u64 n)))
+        (y_ext Reg (extend i extend_op ty $I64)))
     (gen_icmp cc x_ext y_ext $I64)))
 
 

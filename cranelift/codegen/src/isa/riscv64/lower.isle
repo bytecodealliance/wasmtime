@@ -839,12 +839,12 @@
 
 ;; We have some optimizations that we can do when one of the sides is
 ;; a constant.
-(rule 1 (lower (icmp cc x @ (value_type (fits_in_64 ty)) (imm12_from_value y)))
-  (gen_icmp_imm cc x y ty))
+(rule 1 (lower (icmp cc x @ (value_type (fits_in_64 ty)) (u64_from_iconst y)))
+  (gen_icmp_imm cc x (i64_sextend_imm64 ty (imm64 y)) ty))
 
 ;; If the const is on the LHS, move it to the right and flip the IntCC.
-(rule 2 (lower (icmp cc (imm12_from_value x) y @ (value_type (fits_in_64 ty))))
-  (gen_icmp_imm (intcc_reverse cc) y x ty))
+(rule 2 (lower (icmp cc (u64_from_iconst x) y @ (value_type (fits_in_64 ty))))
+  (gen_icmp_imm (intcc_reverse cc) y (i64_sextend_imm64 ty (imm64 x)) ty))
 
 ;;;;;  Rules for `fcmp`;;;;;;;;;
 (rule
