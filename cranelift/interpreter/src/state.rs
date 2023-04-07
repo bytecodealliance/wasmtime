@@ -8,20 +8,17 @@ use cranelift_codegen::ir::{
     Value,
 };
 use cranelift_codegen::isa::CallConv;
-use cranelift_entity::PrimaryMap;
 use smallvec::SmallVec;
 use thiserror::Error;
 
 /// This trait manages the state necessary to interpret a single Cranelift instruction--it describes
 /// all of the ways a Cranelift interpreter can interact with its virtual state. This makes it
 /// possible to use the [Interpreter](crate::interpreter::Interpreter) in a range of situations:
-/// - when interpretation requires understanding all of the ways state can change (e.g. loading and
-/// storing from the heap) we will use a full-fledged state, like
+/// - when interpretation needs to happen in a way isolated from the host a state which keeps a
+/// stack and bound checks memory accesses can be used, like
 /// [InterpreterState](crate::interpreter::InterpreterState).
-/// - when interpretation can ignore some state changes (e.g. abstract interpretation of arithmetic
-/// instructions--no heap knowledge required), we can partially implement this trait. See
-/// [ImmutableRegisterState] for an example of this: it only exposes the values referenced by the
-/// SSA references in the current frame and not much else.
+/// - when interpretation needs to have access to the host a state which allows direct access to the
+/// host memory and native functions can be used.
 pub trait State<'a> {
     /// Retrieve a reference to a [Function].
     fn get_function(&self, func_ref: FuncRef) -> Option<&'a Function>;
@@ -143,93 +140,4 @@ pub enum MemoryError {
     MisalignedLoad { addr: Address, load_size: usize },
     #[error("Store of {store_size} bytes is misaligned at address {addr:?}")]
     MisalignedStore { addr: Address, store_size: usize },
-}
-
-/// This dummy state allows interpretation over an immutable mapping of values in a single frame.
-pub struct ImmutableRegisterState<'a>(&'a PrimaryMap<Value, DataValue>);
-impl<'a> ImmutableRegisterState<'a> {
-    pub fn new(values: &'a PrimaryMap<Value, DataValue>) -> Self {
-        Self(values)
-    }
-}
-
-impl<'a> State<'a> for ImmutableRegisterState<'a> {
-    fn get_function(&self, _func_ref: FuncRef) -> Option<&'a Function> {
-        None
-    }
-
-    fn get_current_function(&self) -> &'a Function {
-        unimplemented!()
-    }
-
-    fn get_libcall_handler(&self) -> LibCallHandler {
-        unimplemented!()
-    }
-
-    fn push_frame(&mut self, _function: &'a Function) {
-        unimplemented!()
-    }
-
-    fn pop_frame(&mut self) {
-        unimplemented!()
-    }
-
-    fn get_value(&self, name: Value) -> Option<DataValue> {
-        self.0.get(name).cloned()
-    }
-
-    fn set_value(&mut self, _name: Value, _value: DataValue) -> Option<DataValue> {
-        None
-    }
-
-    fn stack_address(
-        &self,
-        _size: AddressSize,
-        _slot: StackSlot,
-        _offset: u64,
-    ) -> Result<Address, MemoryError> {
-        unimplemented!()
-    }
-
-    fn checked_load(
-        &self,
-        _addr: Address,
-        _ty: Type,
-        _mem_flags: MemFlags,
-    ) -> Result<DataValue, MemoryError> {
-        unimplemented!()
-    }
-
-    fn checked_store(
-        &mut self,
-        _addr: Address,
-        _v: DataValue,
-        _mem_flags: MemFlags,
-    ) -> Result<(), MemoryError> {
-        unimplemented!()
-    }
-
-    fn function_address(
-        &self,
-        _size: AddressSize,
-        _name: &ExternalName,
-    ) -> Result<Address, MemoryError> {
-        unimplemented!()
-    }
-
-    fn get_function_from_address(&self, _address: Address) -> Option<InterpreterFunctionRef<'a>> {
-        unimplemented!()
-    }
-
-    fn resolve_global_value(&self, _gv: GlobalValue) -> Result<DataValue, MemoryError> {
-        unimplemented!()
-    }
-
-    fn get_pinned_reg(&self) -> DataValue {
-        unimplemented!()
-    }
-
-    fn set_pinned_reg(&mut self, _v: DataValue) {
-        unimplemented!()
-    }
 }
