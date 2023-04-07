@@ -10,7 +10,7 @@ use crate::data_context::DataDescription;
 use core::fmt::Display;
 use cranelift_codegen::binemit::{CodeOffset, Reloc};
 use cranelift_codegen::entity::{entity_impl, PrimaryMap};
-use cranelift_codegen::ir::Function;
+use cranelift_codegen::ir::function::{Function, VersionMarker};
 use cranelift_codegen::settings::SetError;
 use cranelift_codegen::MachReloc;
 use cranelift_codegen::{ir, isa, CodegenError, CompileError, Context};
@@ -55,6 +55,7 @@ impl ModuleReloc {
 
 /// A function identifier for use in the `Module` interface.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[cfg_attr(feature = "enable-serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FuncId(u32);
 entity_impl!(FuncId, "funcid");
 
@@ -82,6 +83,7 @@ impl FuncId {
 
 /// A data object identifier for use in the `Module` interface.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[cfg_attr(feature = "enable-serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DataId(u32);
 entity_impl!(DataId, "dataid");
 
@@ -109,6 +111,7 @@ impl DataId {
 
 /// Linkage refers to where an entity is defined and who can see it.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "enable-serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Linkage {
     /// Defined outside of a module.
     Import,
@@ -167,6 +170,7 @@ impl Linkage {
 
 /// A declared name may refer to either a function or data declaration
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
+#[cfg_attr(feature = "enable-serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum FuncOrDataId {
     /// When it's a FuncId
     Func(FuncId),
@@ -186,6 +190,7 @@ impl From<FuncOrDataId> for ModuleExtName {
 
 /// Information about a function which can be called.
 #[derive(Debug)]
+#[cfg_attr(feature = "enable-serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FunctionDeclaration {
     #[allow(missing_docs)]
     pub name: Option<String>,
@@ -343,6 +348,7 @@ pub type ModuleResult<T> = Result<T, ModuleError>;
 
 /// Information about a data object which can be accessed.
 #[derive(Debug)]
+#[cfg_attr(feature = "enable-serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DataDeclaration {
     #[allow(missing_docs)]
     pub name: Option<String>,
@@ -380,6 +386,7 @@ impl DataDeclaration {
 
 /// A translated `ExternalName` into something global we can handle.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "enable-serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ModuleExtName {
     /// User defined function, converted from `ExternalName::User`.
     User {
@@ -415,9 +422,234 @@ impl Display for ModuleExtName {
 /// into `FunctionDeclaration`s and `DataDeclaration`s.
 #[derive(Debug, Default)]
 pub struct ModuleDeclarations {
+    /// A version marker used to ensure that serialized clif ir is never deserialized with a
+    /// different version of Cranelift.
+    // Note: This must be the first field to ensure that Serde will deserialize it before
+    // attempting to deserialize other fields that are potentially changed between versions.
+    _version_marker: VersionMarker,
+
     names: HashMap<String, FuncOrDataId>,
     functions: PrimaryMap<FuncId, FunctionDeclaration>,
     data_objects: PrimaryMap<DataId, DataDeclaration>,
+}
+
+#[cfg(feature = "enable-serde")]
+mod serialize {
+    // This is manually implementing Serialize and Deserialize to avoid serializing the names field,
+    // which can be entirely reconstructed from the functions and data_objects fields, saving space.
+
+    use super::*;
+
+    use serde::de::{Deserialize, Deserializer, Error, MapAccess, SeqAccess, Unexpected, Visitor};
+    use serde::ser::{Serialize, SerializeStruct, Serializer};
+    use std::fmt;
+
+    fn get_names<E: Error>(
+        functions: &PrimaryMap<FuncId, FunctionDeclaration>,
+        data_objects: &PrimaryMap<DataId, DataDeclaration>,
+    ) -> Result<HashMap<String, FuncOrDataId>, E> {
+        let mut names = HashMap::new();
+        for (func_id, decl) in functions.iter() {
+            if let Some(name) = &decl.name {
+                let old = names.insert(name.clone(), FuncOrDataId::Func(func_id));
+                if old.is_some() {
+                    return Err(E::invalid_value(
+                        Unexpected::Other("duplicate name"),
+                        &"FunctionDeclaration's with no duplicate names",
+                    ));
+                }
+            }
+        }
+        for (data_id, decl) in data_objects.iter() {
+            if let Some(name) = &decl.name {
+                let old = names.insert(name.clone(), FuncOrDataId::Data(data_id));
+                if old.is_some() {
+                    return Err(E::invalid_value(
+                        Unexpected::Other("duplicate name"),
+                        &"DataDeclaration's with no duplicate names",
+                    ));
+                }
+            }
+        }
+        Ok(names)
+    }
+
+    impl Serialize for ModuleDeclarations {
+        fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+            let ModuleDeclarations {
+                _version_marker,
+                functions,
+                data_objects,
+                names: _,
+            } = self;
+
+            let mut state = s.serialize_struct("ModuleDeclarations", 4)?;
+            state.serialize_field("_version_marker", _version_marker)?;
+            state.serialize_field("functions", functions)?;
+            state.serialize_field("data_objects", data_objects)?;
+            state.end()
+        }
+    }
+
+    enum ModuleDeclarationsField {
+        VersionMarker,
+        Functions,
+        DataObjects,
+        Ignore,
+    }
+
+    struct ModuleDeclarationsFieldVisitor;
+
+    impl<'de> serde::de::Visitor<'de> for ModuleDeclarationsFieldVisitor {
+        type Value = ModuleDeclarationsField;
+
+        fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            f.write_str("field identifier")
+        }
+
+        fn visit_u64<E: Error>(self, val: u64) -> Result<Self::Value, E> {
+            match val {
+                0u64 => Ok(ModuleDeclarationsField::VersionMarker),
+                1u64 => Ok(ModuleDeclarationsField::Functions),
+                2u64 => Ok(ModuleDeclarationsField::DataObjects),
+                _ => Ok(ModuleDeclarationsField::Ignore),
+            }
+        }
+
+        fn visit_str<E: Error>(self, val: &str) -> Result<Self::Value, E> {
+            match val {
+                "_version_marker" => Ok(ModuleDeclarationsField::VersionMarker),
+                "functions" => Ok(ModuleDeclarationsField::Functions),
+                "data_objects" => Ok(ModuleDeclarationsField::DataObjects),
+                _ => Ok(ModuleDeclarationsField::Ignore),
+            }
+        }
+
+        fn visit_bytes<E: Error>(self, val: &[u8]) -> Result<Self::Value, E> {
+            match val {
+                b"_version_marker" => Ok(ModuleDeclarationsField::VersionMarker),
+                b"functions" => Ok(ModuleDeclarationsField::Functions),
+                b"data_objects" => Ok(ModuleDeclarationsField::DataObjects),
+                _ => Ok(ModuleDeclarationsField::Ignore),
+            }
+        }
+    }
+
+    impl<'de> Deserialize<'de> for ModuleDeclarationsField {
+        #[inline]
+        fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+            d.deserialize_identifier(ModuleDeclarationsFieldVisitor)
+        }
+    }
+
+    struct ModuleDeclarationsVisitor;
+
+    impl<'de> Visitor<'de> for ModuleDeclarationsVisitor {
+        type Value = ModuleDeclarations;
+
+        fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            f.write_str("struct ModuleDeclarations")
+        }
+
+        #[inline]
+        fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+            let _version_marker = match seq.next_element()? {
+                Some(val) => val,
+                None => {
+                    return Err(Error::invalid_length(
+                        0usize,
+                        &"struct ModuleDeclarations with 4 elements",
+                    ));
+                }
+            };
+            let functions = match seq.next_element()? {
+                Some(val) => val,
+                None => {
+                    return Err(Error::invalid_length(
+                        2usize,
+                        &"struct ModuleDeclarations with 4 elements",
+                    ));
+                }
+            };
+            let data_objects = match seq.next_element()? {
+                Some(val) => val,
+                None => {
+                    return Err(Error::invalid_length(
+                        3usize,
+                        &"struct ModuleDeclarations with 4 elements",
+                    ));
+                }
+            };
+            let names = get_names(&functions, &data_objects)?;
+            Ok(ModuleDeclarations {
+                _version_marker,
+                names,
+                functions,
+                data_objects,
+            })
+        }
+
+        #[inline]
+        fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
+            let mut _version_marker: Option<VersionMarker> = None;
+            let mut functions: Option<PrimaryMap<FuncId, FunctionDeclaration>> = None;
+            let mut data_objects: Option<PrimaryMap<DataId, DataDeclaration>> = None;
+            while let Some(key) = map.next_key::<ModuleDeclarationsField>()? {
+                match key {
+                    ModuleDeclarationsField::VersionMarker => {
+                        if _version_marker.is_some() {
+                            return Err(Error::duplicate_field("_version_marker"));
+                        }
+                        _version_marker = Some(map.next_value()?);
+                    }
+                    ModuleDeclarationsField::Functions => {
+                        if functions.is_some() {
+                            return Err(Error::duplicate_field("functions"));
+                        }
+                        functions = Some(map.next_value()?);
+                    }
+                    ModuleDeclarationsField::DataObjects => {
+                        if data_objects.is_some() {
+                            return Err(Error::duplicate_field("data_objects"));
+                        }
+                        data_objects = Some(map.next_value()?);
+                    }
+                    _ => {
+                        map.next_value::<serde::de::IgnoredAny>()?;
+                    }
+                }
+            }
+            let _version_marker = match _version_marker {
+                Some(_version_marker) => _version_marker,
+                None => return Err(Error::missing_field("_version_marker")),
+            };
+            let functions = match functions {
+                Some(functions) => functions,
+                None => return Err(Error::missing_field("functions")),
+            };
+            let data_objects = match data_objects {
+                Some(data_objects) => data_objects,
+                None => return Err(Error::missing_field("data_objects")),
+            };
+            let names = get_names(&functions, &data_objects)?;
+            Ok(ModuleDeclarations {
+                _version_marker,
+                names,
+                functions,
+                data_objects,
+            })
+        }
+    }
+
+    impl<'de> Deserialize<'de> for ModuleDeclarations {
+        fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+            d.deserialize_struct(
+                "ModuleDeclarations",
+                &["_version_marker", "functions", "data_objects"],
+                ModuleDeclarationsVisitor,
+            )
+        }
+    }
 }
 
 impl ModuleDeclarations {

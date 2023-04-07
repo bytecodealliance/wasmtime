@@ -13,6 +13,7 @@ use crate::ModuleExtName;
 
 /// This specifies how data is to be initialized.
 #[derive(Clone, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "enable-serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Init {
     /// This indicates that no initialization has been specified yet.
     Uninitialized,
@@ -41,6 +42,7 @@ impl Init {
 
 /// A description of a data object.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "enable-serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DataDescription {
     /// How the data should be initialized.
     pub init: Init,
