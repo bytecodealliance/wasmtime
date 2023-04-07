@@ -15,7 +15,7 @@ use cranelift_codegen::settings::SetError;
 use cranelift_codegen::MachReloc;
 use cranelift_codegen::{ir, isa, CodegenError, CompileError, Context};
 use cranelift_control::ControlPlane;
-use std::borrow::ToOwned;
+use std::borrow::{Cow, ToOwned};
 use std::string::String;
 
 /// A module relocation.
@@ -188,7 +188,7 @@ impl From<FuncOrDataId> for ModuleExtName {
 #[derive(Debug)]
 pub struct FunctionDeclaration {
     #[allow(missing_docs)]
-    pub name: String,
+    pub name: Option<String>,
     #[allow(missing_docs)]
     pub linkage: Linkage,
     #[allow(missing_docs)]
@@ -196,11 +196,29 @@ pub struct FunctionDeclaration {
 }
 
 impl FunctionDeclaration {
-    fn merge(&mut self, linkage: Linkage, sig: &ir::Signature) -> Result<(), ModuleError> {
+    /// The linkage name of the function.
+    ///
+    /// Synthesized from the given function id if it is an anonymous function.
+    pub fn linkage_name(&self, id: FuncId) -> Cow<'_, str> {
+        match &self.name {
+            Some(name) => Cow::Borrowed(name),
+            // Symbols starting with .L are completely omitted from the symbol table after linking.
+            // Using hexadecimal instead of decimal for slightly smaller symbol names and often
+            // slightly faster linking.
+            None => Cow::Owned(format!(".Lfn{:x}", id.as_u32())),
+        }
+    }
+
+    fn merge(
+        &mut self,
+        id: FuncId,
+        linkage: Linkage,
+        sig: &ir::Signature,
+    ) -> Result<(), ModuleError> {
         self.linkage = Linkage::merge(self.linkage, linkage);
         if &self.signature != sig {
             return Err(ModuleError::IncompatibleSignature(
-                self.name.clone(),
+                self.linkage_name(id).into_owned(),
                 self.signature.clone(),
                 sig.clone(),
             ));
@@ -327,7 +345,7 @@ pub type ModuleResult<T> = Result<T, ModuleError>;
 #[derive(Debug)]
 pub struct DataDeclaration {
     #[allow(missing_docs)]
-    pub name: String,
+    pub name: Option<String>,
     #[allow(missing_docs)]
     pub linkage: Linkage,
     #[allow(missing_docs)]
@@ -337,6 +355,19 @@ pub struct DataDeclaration {
 }
 
 impl DataDeclaration {
+    /// The linkage name of the data object.
+    ///
+    /// Synthesized from the given data id if it is an anonymous function.
+    pub fn linkage_name(&self, id: DataId) -> Cow<'_, str> {
+        match &self.name {
+            Some(name) => Cow::Borrowed(name),
+            // Symbols starting with .L are completely omitted from the symbol table after linking.
+            // Using hexadecimal instead of decimal for slightly smaller symbol names and often
+            // slightly faster linking.
+            None => Cow::Owned(format!(".Ldata{:x}", id.as_u32())),
+        }
+    }
+
     fn merge(&mut self, linkage: Linkage, writable: bool, tls: bool) {
         self.linkage = Linkage::merge(self.linkage, linkage);
         self.writable = self.writable || writable;
@@ -439,7 +470,7 @@ impl ModuleDeclarations {
             Occupied(entry) => match *entry.get() {
                 FuncOrDataId::Func(id) => {
                     let existing = &mut self.functions[id];
-                    existing.merge(linkage, signature)?;
+                    existing.merge(id, linkage, signature)?;
                     Ok((id, existing.linkage))
                 }
                 FuncOrDataId::Data(..) => {
@@ -448,7 +479,7 @@ impl ModuleDeclarations {
             },
             Vacant(entry) => {
                 let id = self.functions.push(FunctionDeclaration {
-                    name: name.to_owned(),
+                    name: Some(name.to_owned()),
                     linkage,
                     signature: signature.clone(),
                 });
@@ -464,11 +495,10 @@ impl ModuleDeclarations {
         signature: &ir::Signature,
     ) -> ModuleResult<FuncId> {
         let id = self.functions.push(FunctionDeclaration {
-            name: String::new(),
+            name: None,
             linkage: Linkage::Local,
             signature: signature.clone(),
         });
-        self.functions[id].name = format!(".L{:?}", id);
         Ok(id)
     }
 
@@ -496,7 +526,7 @@ impl ModuleDeclarations {
             },
             Vacant(entry) => {
                 let id = self.data_objects.push(DataDeclaration {
-                    name: name.to_owned(),
+                    name: Some(name.to_owned()),
                     linkage,
                     writable,
                     tls,
@@ -510,12 +540,11 @@ impl ModuleDeclarations {
     /// Declare an anonymous data object in this module.
     pub fn declare_anonymous_data(&mut self, writable: bool, tls: bool) -> ModuleResult<DataId> {
         let id = self.data_objects.push(DataDeclaration {
-            name: String::new(),
+            name: None,
             linkage: Linkage::Local,
             writable,
             tls,
         });
-        self.data_objects[id].name = format!(".L{:?}", id);
         Ok(id)
     }
 }
