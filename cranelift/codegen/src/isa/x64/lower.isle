@@ -3640,6 +3640,7 @@
 ;; 0 chooses the corresponding 16-it lane from `a` and a bit of 1 chooses the
 ;; corresponding 16-bit lane from `b`.
 (rule 14 (lower (shuffle a b (pblendw_imm n)))
+         (if-let $true (use_sse41))
          (x64_pblendw a b n))
 (decl pblendw_imm (u8) Immediate)
 (extern extractor pblendw_imm pblendw_imm)
