@@ -1668,55 +1668,6 @@ impl CsrAddress {
     }
 }
 
-pub(crate) struct VType {
-    vma: bool,
-    vta: bool,
-    vsew: Vsew,
-    valmul: Vlmul,
-}
-
-impl VType {
-    fn as_u32(self) -> u32 {
-        self.valmul.as_u32()
-            | self.vsew.as_u32() << 3
-            | if self.vta { 1 << 7 } else { 0 }
-            | if self.vma { 1 << 8 } else { 0 }
-    }
-
-    const fn vill_bit() -> u64 {
-        1 << 63
-    }
-}
-
-enum Vlmul {
-    vlmul_1_div_8 = 0b101,
-    vlmul_1_div_4 = 0b110,
-    vlmul_1_div_2 = 0b111,
-    vlmul_1 = 0b000,
-    vlmul_2 = 0b001,
-    vlmul_4 = 0b010,
-    vlmul_8 = 0b011,
-}
-
-impl Vlmul {
-    fn as_u32(self) -> u32 {
-        self as u32
-    }
-}
-
-enum Vsew {
-    sew_8 = 0b000,
-    sew_16 = 0b001,
-    sew_32 = 0b010,
-    sew_64 = 0b011,
-}
-
-impl Vsew {
-    fn as_u32(self) -> u32 {
-        self as u32
-    }
-}
-
 impl CsrOP {
     pub(crate) fn op_name(self) -> &'static str {
         match self {
@@ -1756,35 +1707,6 @@ impl CsrOP {
         } else {
             zimm.unwrap().as_u32()
         }
-    }
-}
-
-enum Vxrm {
-    // round-to-nearest-up (add +0.5 LSB)
-    rnu = 0b00,
-    // round-to-nearest-even
-    rne = 0b01,
-    //round-down (truncate)
-    rdn = 0b10,
-    // round-to-odd (OR bits into LSB, aka "jam")
-    rod = 0b11,
-}
-
-impl Vxrm {
-    pub(crate) fn as_u32(self) -> u32 {
-        self as u32
-    }
-}
-
-pub(crate) struct Vcsr {
-    xvrm: Vxrm,
-    // Fixed-point accrued saturation flag
-    vxsat: bool,
-}
-
-impl Vcsr {
-    pub(crate) fn as_u32(self) -> u32 {
-        return if self.vxsat { 1 } else { 0 } | self.xvrm.as_u32();
     }
 }
 
