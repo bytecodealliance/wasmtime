@@ -22,13 +22,13 @@ use thiserror::Error;
 /// instructions--no heap knowledge required), we can partially implement this trait. See
 /// [ImmutableRegisterState] for an example of this: it only exposes the values referenced by the
 /// SSA references in the current frame and not much else.
-pub trait State<'a, V> {
+pub trait State<'a> {
     /// Retrieve a reference to a [Function].
     fn get_function(&self, func_ref: FuncRef) -> Option<&'a Function>;
     /// Retrieve a reference to the currently executing [Function].
     fn get_current_function(&self) -> &'a Function;
     /// Retrieve the handler callback for a [LibCall](cranelift_codegen::ir::LibCall)
-    fn get_libcall_handler(&self) -> LibCallHandler<V>;
+    fn get_libcall_handler(&self) -> LibCallHandler;
     /// Record that an interpreter has called into a new [Function].
     fn push_frame(&mut self, function: &'a Function);
     /// Record that an interpreter has returned from a called [Function].
@@ -36,14 +36,14 @@ pub trait State<'a, V> {
 
     /// Retrieve a value `V` by its [value reference](cranelift_codegen::ir::Value) from the
     /// virtual register file.
-    fn get_value(&self, name: Value) -> Option<V>;
+    fn get_value(&self, name: Value) -> Option<DataValue>;
     /// Assign a value `V` to its [value reference](cranelift_codegen::ir::Value) in the
     /// virtual register file.
-    fn set_value(&mut self, name: Value, value: V) -> Option<V>;
+    fn set_value(&mut self, name: Value, value: DataValue) -> Option<DataValue>;
     /// Collect a list of values `V` by their  [value references](cranelift_codegen::ir::Value);
     /// this is a convenience method for `get_value`. If no value is found for a value reference,
     /// return an `Err` containing the offending reference.
-    fn collect_values(&self, names: &[Value]) -> Result<SmallVec<[V; 1]>, Value> {
+    fn collect_values(&self, names: &[Value]) -> Result<SmallVec<[DataValue; 1]>, Value> {
         let mut values = SmallVec::with_capacity(names.len());
         for &n in names {
             match self.get_value(n) {
@@ -68,13 +68,13 @@ pub trait State<'a, V> {
         address: Address,
         ty: Type,
         mem_flags: MemFlags,
-    ) -> Result<V, MemoryError>;
+    ) -> Result<DataValue, MemoryError>;
     /// Store a value `V` into memory at the given `address`, checking if it belongs either to the
     /// stack or to one of the heaps; the number of bytes stored corresponds to the specified [Type].
     fn checked_store(
         &mut self,
         address: Address,
-        v: V,
+        v: DataValue,
         mem_flags: MemFlags,
     ) -> Result<(), MemoryError>;
 
@@ -90,12 +90,12 @@ pub trait State<'a, V> {
 
     /// Given a global value, compute the final value for that global value, applying all operations
     /// in intermediate global values.
-    fn resolve_global_value(&self, gv: GlobalValue) -> Result<V, MemoryError>;
+    fn resolve_global_value(&self, gv: GlobalValue) -> Result<DataValue, MemoryError>;
 
     /// Retrieves the current pinned reg value
-    fn get_pinned_reg(&self) -> V;
+    fn get_pinned_reg(&self) -> DataValue;
     /// Sets a value for the pinned reg
-    fn set_pinned_reg(&mut self, v: V);
+    fn set_pinned_reg(&mut self, v: DataValue);
 }
 
 pub enum InterpreterFunctionRef<'a> {
@@ -146,17 +146,14 @@ pub enum MemoryError {
 }
 
 /// This dummy state allows interpretation over an immutable mapping of values in a single frame.
-pub struct ImmutableRegisterState<'a, V>(&'a PrimaryMap<Value, V>);
-impl<'a, V> ImmutableRegisterState<'a, V> {
-    pub fn new(values: &'a PrimaryMap<Value, V>) -> Self {
+pub struct ImmutableRegisterState<'a>(&'a PrimaryMap<Value, DataValue>);
+impl<'a> ImmutableRegisterState<'a> {
+    pub fn new(values: &'a PrimaryMap<Value, DataValue>) -> Self {
         Self(values)
     }
 }
 
-impl<'a, V> State<'a, V> for ImmutableRegisterState<'a, V>
-where
-    V: Clone,
-{
+impl<'a> State<'a> for ImmutableRegisterState<'a> {
     fn get_function(&self, _func_ref: FuncRef) -> Option<&'a Function> {
         None
     }
@@ -165,7 +162,7 @@ where
         unimplemented!()
     }
 
-    fn get_libcall_handler(&self) -> LibCallHandler<V> {
+    fn get_libcall_handler(&self) -> LibCallHandler {
         unimplemented!()
     }
 
@@ -177,11 +174,11 @@ where
         unimplemented!()
     }
 
-    fn get_value(&self, name: Value) -> Option<V> {
+    fn get_value(&self, name: Value) -> Option<DataValue> {
         self.0.get(name).cloned()
     }
 
-    fn set_value(&mut self, _name: Value, _value: V) -> Option<V> {
+    fn set_value(&mut self, _name: Value, _value: DataValue) -> Option<DataValue> {
         None
     }
 
@@ -199,14 +196,14 @@ where
         _addr: Address,
         _ty: Type,
         _mem_flags: MemFlags,
-    ) -> Result<V, MemoryError> {
+    ) -> Result<DataValue, MemoryError> {
         unimplemented!()
     }
 
     fn checked_store(
         &mut self,
         _addr: Address,
-        _v: V,
+        _v: DataValue,
         _mem_flags: MemFlags,
     ) -> Result<(), MemoryError> {
         unimplemented!()
@@ -224,15 +221,15 @@ where
         unimplemented!()
     }
 
-    fn resolve_global_value(&self, _gv: GlobalValue) -> Result<V, MemoryError> {
+    fn resolve_global_value(&self, _gv: GlobalValue) -> Result<DataValue, MemoryError> {
         unimplemented!()
     }
 
-    fn get_pinned_reg(&self) -> V {
+    fn get_pinned_reg(&self) -> DataValue {
         unimplemented!()
     }
 
-    fn set_pinned_reg(&mut self, _v: V) {
+    fn set_pinned_reg(&mut self, _v: DataValue) {
         unimplemented!()
     }
 }

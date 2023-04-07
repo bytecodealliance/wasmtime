@@ -11,9 +11,8 @@ use thiserror::Error;
 
 pub type ValueResult<T> = Result<T, ValueError>;
 
-pub trait Value: Clone + From<DataValue> {
+pub trait DataValueExt: Sized {
     // Identity.
-    fn ty(&self) -> Type;
     fn int(n: i128, ty: Type) -> ValueResult<Self>;
     fn into_int(self) -> ValueResult<i128>;
     fn float(n: u64, ty: Type) -> ValueResult<Self>;
@@ -34,17 +33,6 @@ pub trait Value: Clone + From<DataValue> {
     fn min(self, other: Self) -> ValueResult<Self>;
 
     // Comparison.
-    fn eq(&self, other: &Self) -> ValueResult<bool>;
-    fn gt(&self, other: &Self) -> ValueResult<bool>;
-    fn ge(&self, other: &Self) -> ValueResult<bool> {
-        Ok(self.eq(other)? || self.gt(other)?)
-    }
-    fn lt(&self, other: &Self) -> ValueResult<bool> {
-        other.gt(self)
-    }
-    fn le(&self, other: &Self) -> ValueResult<bool> {
-        Ok(other.eq(self)? || other.gt(self)?)
-    }
     fn uno(&self, other: &Self) -> ValueResult<bool>;
 
     // Arithmetic.
@@ -240,11 +228,7 @@ macro_rules! bitop {
     };
 }
 
-impl Value for DataValue {
-    fn ty(&self) -> Type {
-        self.ty()
-    }
-
+impl DataValueExt for DataValue {
     fn int(n: i128, ty: Type) -> ValueResult<Self> {
         if ty.is_int() && !ty.is_vector() {
             DataValue::from_integer(n, ty).map_err(|_| ValueError::InvalidValue(ty))
@@ -507,7 +491,7 @@ impl Value for DataValue {
     }
 
     fn max(self, other: Self) -> ValueResult<Self> {
-        if Value::gt(&self, &other)? {
+        if self > other {
             Ok(self)
         } else {
             Ok(other)
@@ -515,19 +499,11 @@ impl Value for DataValue {
     }
 
     fn min(self, other: Self) -> ValueResult<Self> {
-        if Value::lt(&self, &other)? {
+        if self < other {
             Ok(self)
         } else {
             Ok(other)
         }
-    }
-
-    fn eq(&self, other: &Self) -> ValueResult<bool> {
-        Ok(self == other)
-    }
-
-    fn gt(&self, other: &Self) -> ValueResult<bool> {
-        Ok(self > other)
     }
 
     fn uno(&self, other: &Self) -> ValueResult<bool> {
@@ -566,7 +542,7 @@ impl Value for DataValue {
         let denominator = other.clone().into_int()?;
 
         // Check if we are dividing INT_MIN / -1. This causes an integer overflow trap.
-        let min = Value::int(1i128 << (self.ty().bits() - 1), self.ty())?;
+        let min = DataValueExt::int(1i128 << (self.ty().bits() - 1), self.ty())?;
         if self == min && denominator == -1 {
             return Err(ValueError::IntegerOverflow);
         }
@@ -582,7 +558,7 @@ impl Value for DataValue {
         let denominator = other.clone().into_int()?;
 
         // Check if we are dividing INT_MIN / -1. This causes an integer overflow trap.
-        let min = Value::int(1i128 << (self.ty().bits() - 1), self.ty())?;
+        let min = DataValueExt::int(1i128 << (self.ty().bits() - 1), self.ty())?;
         if self == min && denominator == -1 {
             return Err(ValueError::IntegerOverflow);
         }
