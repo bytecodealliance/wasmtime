@@ -1,6 +1,7 @@
 //! Cranelift instructions modify the state of the machine; the [State] trait describes these
 //! ways this can happen.
 use crate::address::{Address, AddressSize};
+use crate::frame::Frame;
 use crate::interpreter::LibCallHandler;
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::{
@@ -26,29 +27,21 @@ pub trait State<'a> {
     fn get_current_function(&self) -> &'a Function;
     /// Retrieve the handler callback for a [LibCall](cranelift_codegen::ir::LibCall)
     fn get_libcall_handler(&self) -> LibCallHandler;
+
     /// Record that an interpreter has called into a new [Function].
     fn push_frame(&mut self, function: &'a Function);
     /// Record that an interpreter has returned from a called [Function].
     fn pop_frame(&mut self);
 
-    /// Retrieve a value `V` by its [value reference](cranelift_codegen::ir::Value) from the
-    /// virtual register file.
-    fn get_value(&self, name: Value) -> Option<DataValue>;
-    /// Assign a value `V` to its [value reference](cranelift_codegen::ir::Value) in the
-    /// virtual register file.
-    fn set_value(&mut self, name: Value, value: DataValue) -> Option<DataValue>;
+    fn current_frame_mut(&mut self) -> &mut Frame<'a>;
+    fn current_frame(&self) -> &Frame<'a>;
+
     /// Collect a list of values `V` by their  [value references](cranelift_codegen::ir::Value);
     /// this is a convenience method for `get_value`. If no value is found for a value reference,
     /// return an `Err` containing the offending reference.
-    fn collect_values(&self, names: &[Value]) -> Result<SmallVec<[DataValue; 1]>, Value> {
-        let mut values = SmallVec::with_capacity(names.len());
-        for &n in names {
-            match self.get_value(n) {
-                None => return Err(n),
-                Some(v) => values.push(v),
-            }
-        }
-        Ok(values)
+    fn collect_values(&self, names: &[Value]) -> SmallVec<[DataValue; 1]> {
+        let frame = self.current_frame();
+        names.into_iter().map(|n| frame.get(*n).clone()).collect()
     }
 
     /// Computes the stack address for this stack slot, including an offset.
