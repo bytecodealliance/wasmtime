@@ -550,24 +550,6 @@ impl<'a> State<'a, DataValue> for InterpreterState<'a> {
         }
     }
 
-    fn validate_address(&self, addr: &Address) -> Result<(), MemoryError> {
-        match addr.region {
-            AddressRegion::Stack => {
-                let stack_len = self.stack.len() as u64;
-
-                if addr.offset > stack_len {
-                    return Err(MemoryError::InvalidEntry {
-                        entry: addr.entry,
-                        max: self.stack.len() as u64,
-                    });
-                }
-            }
-            _ => unimplemented!(),
-        };
-
-        Ok(())
-    }
-
     fn get_pinned_reg(&self) -> DataValue {
         self.pinned_reg.clone()
     }
