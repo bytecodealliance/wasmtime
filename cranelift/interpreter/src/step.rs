@@ -563,15 +563,13 @@ where
         Opcode::DynamicStackAddr => unimplemented!("DynamicStackSlot"),
         Opcode::DynamicStackLoad => unimplemented!("DynamicStackLoad"),
         Opcode::DynamicStackStore => unimplemented!("DynamicStackStore"),
-        Opcode::GlobalValue => {
+        Opcode::GlobalValue | Opcode::SymbolValue | Opcode::TlsValue => {
             if let InstructionData::UnaryGlobalValue { global_value, .. } = inst {
                 assign_or_memtrap(state.resolve_global_value(global_value))
             } else {
                 unreachable!()
             }
         }
-        Opcode::SymbolValue => unimplemented!("SymbolValue"),
-        Opcode::TlsValue => unimplemented!("TlsValue"),
         Opcode::GetPinnedReg => assign(state.get_pinned_reg()),
         Opcode::SetPinnedReg => {
             let arg0 = arg(0)?;
