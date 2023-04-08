@@ -379,8 +379,8 @@ impl<'a> FunctionBuilder<'a> {
     }
 
     /// Declares the type of a variable, so that it can be used later (by calling
-    /// [`FunctionBuilder::use_var`]). This function will return an error if it
-    /// was not possible to use the variable.
+    /// [`FunctionBuilder::use_var`]). This function will return an error if the variable
+    /// has been previously declared.
     pub fn try_declare_var(&mut self, var: Variable, ty: Type) -> Result<(), DeclareVariableError> {
         if self.func_ctx.types[var] != types::INVALID {
             return Err(DeclareVariableError::DeclaredMultipleTimes(var));
