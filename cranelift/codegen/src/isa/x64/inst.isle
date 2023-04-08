@@ -2135,6 +2135,18 @@
                         dst)
          dst)))
 
+;; Should only be used for Adc and Sbb
+(decl x64_alurmi_with_flags_chained (AluRmiROpcode Type Gpr GprMemImm) ConsumesAndProducesFlags)
+(rule (x64_alurmi_with_flags_chained opc (fits_in_64 ty) src1 src2)
+      (let ((dst WritableGpr (temp_writable_gpr)))
+        (ConsumesAndProducesFlags.ReturnsReg
+         (MInst.AluRmiR (raw_operand_size_of_type ty)
+                        opc
+                        src1
+                        src2
+                        dst)
+         dst)))
+
 ;; Helper for creating `adc` instructions.
 (decl x64_adc_paired (Type Gpr GprMemImm) ConsumesFlags)
 (rule (x64_adc_paired ty src1 src2)

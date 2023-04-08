@@ -29,7 +29,6 @@ pub type VecMask = Vec<u8>;
 pub type ValueRegs = crate::machinst::ValueRegs<Reg>;
 pub type WritableValueRegs = crate::machinst::ValueRegs<WritableReg>;
 pub type InstOutput = SmallVec<[ValueRegs; 2]>;
-pub type InstOutputRef = InstOutput;
 pub type InstOutputBuilder = Cell<InstOutput>;
 pub type BoxExternalName = Box<ExternalName>;
 pub type Range = (usize, usize);
@@ -100,16 +99,6 @@ macro_rules! isle_lower_prelude_methods {
         }
 
         #[inline]
-        fn output_to_output_ref(&mut self, output: InstOutput) -> InstOutputRef {
-            output
-        }
-
-        #[inline]
-        fn output_ref_to_output(&mut self, output: &InstOutputRef) -> InstOutput {
-            output.clone()
-        }
-
-        #[inline]
         fn temp_writable_reg(&mut self, ty: Type) -> WritableReg {
             let value_regs = self.lower_ctx.alloc_tmp(ty);
             value_regs.only_reg().unwrap()
@@ -155,11 +144,6 @@ macro_rules! isle_lower_prelude_methods {
         #[inline]
         fn value_regs_len(&mut self, regs: ValueRegs) -> usize {
             regs.regs().len()
-        }
-
-        #[inline]
-        fn inst_output_get(&mut self, output: &InstOutputRef, i: usize) -> ValueRegs {
-            output[i]
         }
 
         #[inline]

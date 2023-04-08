@@ -139,17 +139,11 @@
               (y_lo Gpr (value_regs_get_gpr y_regs 0))
               (y_hi Gpr (value_regs_get_gpr y_regs 1)))
           (let    ((lo_inst ProducesFlags (x64_alurmi_with_flags_paired op1 $I64 x_lo y_lo))
-                   (hi_inst ProducesFlags (x64_alurmi_with_flags_paired op2 $I64 x_hi y_hi))
+                   (hi_inst ConsumesAndProducesFlags (x64_alurmi_with_flags_chained op2 $I64 x_hi y_hi))
                    (of_inst ConsumesFlags (x64_setcc_paired cc))
 
-                   (result InstOutputRef (output_to_output_ref (with_flags_extended (produces_flags_concat lo_inst hi_inst) of_inst)))
-
-                   (lo ValueRegs (inst_output_get result 0))
-                   (hi ValueRegs (inst_output_get result 1))
-                   (of ValueRegs (inst_output_get result 2)))
-                  (output_pair      (value_regs (value_regs_get lo 0)
-                                                (value_regs_get hi 0))
-                                    of)))))
+                   (result MultiReg (with_flags_chained lo_inst hi_inst of_inst)))
+                  (multi_reg_to_pair_and_single result)))))
 
 ;;;; Rules for `uadd_overflow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

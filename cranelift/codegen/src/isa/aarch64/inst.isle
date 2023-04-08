@@ -2012,6 +2012,14 @@
          (MInst.AluRRR alu_op (operand_size ty) dst src1 src2)
          dst)))
 
+;; Should only be used for AdcS and SbcS
+(decl alu_rrr_with_flags_chained (Type Reg Reg ALUOp) ConsumesAndProducesFlags)
+(rule (alu_rrr_with_flags_chained ty src1 src2 alu_op)
+      (let ((dst WritableReg (temp_writable_reg $I64)))
+        (ConsumesAndProducesFlags.ReturnsReg
+         (MInst.AluRRR alu_op (operand_size ty) dst src1 src2)
+         dst)))
+
 ;; Helper for emitting `MInst.BitRR` instructions.
 (decl bit_rr (BitOp Type Reg) Reg)
 (rule (bit_rr op ty src)
