@@ -2415,7 +2415,7 @@ pub(crate) fn define(
         places, shifting in zero bits to the MSB. Also called a *logical
         shift*.
 
-        The shift amount is masked to the size of the register.
+        The shift amount is masked to the size of ``x``.
 
         When shifting a B-bits integer type, this instruction computes:
 
@@ -2441,7 +2441,7 @@ pub(crate) fn define(
         places, shifting in sign bits to the MSB. Also called an *arithmetic
         shift*.
 
-        The shift amount is masked to the size of the register.
+        The shift amount is masked to the size of ``x``.
         "#,
             &formats.binary,
         )
@@ -2475,7 +2475,7 @@ pub(crate) fn define(
             r#"
         Unsigned shift right by immediate.
 
-        The shift amount is masked to the size of the register.
+        The shift amount is masked to the size of ``x``.
         "#,
             &formats.binary_imm64,
         )
@@ -2492,7 +2492,7 @@ pub(crate) fn define(
             r#"
         Signed shift right by immediate.
 
-        The shift amount is masked to the size of the register.
+        The shift amount is masked to the size of ``x``.
         "#,
             &formats.binary_imm64,
         )
