@@ -16,13 +16,13 @@ block0(v0: i8x16, v1: i8x16):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movdqa  %xmm0, %xmm3
-;   palignr $8, %xmm3, %xmm0, %xmm3
-;   pmovsxbw %xmm3, %xmm0
-;   movdqa  %xmm1, %xmm7
-;   palignr $8, %xmm7, %xmm1, %xmm7
-;   pmovsxbw %xmm7, %xmm9
-;   pmullw  %xmm0, %xmm9, %xmm0
+;   movdqa  %xmm0, %xmm6
+;   palignr $8, %xmm6, %xmm0, %xmm6
+;   pmovsxbw %xmm6, %xmm0
+;   movdqa  %xmm1, %xmm6
+;   palignr $8, %xmm6, %xmm1, %xmm6
+;   pmovsxbw %xmm6, %xmm8
+;   pmullw  %xmm0, %xmm8, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -32,13 +32,13 @@ block0(v0: i8x16, v1: i8x16):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movdqa %xmm0, %xmm3
-;   palignr $8, %xmm0, %xmm3
-;   pmovsxbw %xmm3, %xmm0
-;   movdqa %xmm1, %xmm7
-;   palignr $8, %xmm1, %xmm7
-;   pmovsxbw %xmm7, %xmm9
-;   pmullw %xmm9, %xmm0
+;   movdqa %xmm0, %xmm6
+;   palignr $8, %xmm0, %xmm6
+;   pmovsxbw %xmm6, %xmm0
+;   movdqa %xmm1, %xmm6
+;   palignr $8, %xmm1, %xmm6
+;   pmovsxbw %xmm6, %xmm8
+;   pmullw %xmm8, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -226,13 +226,13 @@ block0(v0: i8x16, v1: i8x16):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movdqa  %xmm0, %xmm3
-;   palignr $8, %xmm3, %xmm0, %xmm3
-;   pmovzxbw %xmm3, %xmm0
-;   movdqa  %xmm1, %xmm7
-;   palignr $8, %xmm7, %xmm1, %xmm7
-;   pmovzxbw %xmm7, %xmm9
-;   pmullw  %xmm0, %xmm9, %xmm0
+;   movdqa  %xmm0, %xmm6
+;   palignr $8, %xmm6, %xmm0, %xmm6
+;   pmovzxbw %xmm6, %xmm0
+;   movdqa  %xmm1, %xmm6
+;   palignr $8, %xmm6, %xmm1, %xmm6
+;   pmovzxbw %xmm6, %xmm8
+;   pmullw  %xmm0, %xmm8, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -242,13 +242,13 @@ block0(v0: i8x16, v1: i8x16):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movdqa %xmm0, %xmm3
-;   palignr $8, %xmm0, %xmm3
-;   pmovzxbw %xmm3, %xmm0
-;   movdqa %xmm1, %xmm7
-;   palignr $8, %xmm1, %xmm7
-;   pmovzxbw %xmm7, %xmm9
-;   pmullw %xmm9, %xmm0
+;   movdqa %xmm0, %xmm6
+;   palignr $8, %xmm0, %xmm6
+;   pmovzxbw %xmm6, %xmm0
+;   movdqa %xmm1, %xmm6
+;   palignr $8, %xmm1, %xmm6
+;   pmovzxbw %xmm6, %xmm8
+;   pmullw %xmm8, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
