@@ -941,7 +941,7 @@
 ;;
 ;;   A * B  = (Al * Bl) + ((Ah * Bl) + (Al * Bh)) << 32
 ;;
-;; Note, the algorithm will use `pmuldq` which operates directly on the lower
+;; Note, the algorithm will use `pmuludq` which operates directly on the lower
 ;; 32-bit (`Al` or `Bl`) of a lane and writes the result to the full 64-bits of
 ;; the lane of the destination. For this reason we don't need shifts to isolate
 ;; the lower 32-bits, however, we will need to use shifts to isolate the high
@@ -999,6 +999,7 @@
                                                x))
                              (swiden_high (and (value_type (multi_lane 32 4))
                                                y)))))
+      (if-let $true (use_sse41))
       (let ((x2 Xmm (x64_pshufd x 0xFA))
             (y2 Xmm (x64_pshufd y 0xFA)))
         (x64_pmuldq x2 y2)))
@@ -1031,6 +1032,7 @@
                                               x))
                              (swiden_low (and (value_type (multi_lane 32 4))
                                               y)))))
+      (if-let $true (use_sse41))
       (let ((x2 Xmm (x64_pshufd x 0x50))
             (y2 Xmm (x64_pshufd y 0x50)))
         (x64_pmuldq x2 y2)))
