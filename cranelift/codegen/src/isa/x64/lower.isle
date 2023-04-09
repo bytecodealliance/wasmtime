@@ -1383,49 +1383,121 @@
 (rule -1 (lower (has_type (fits_in_64 ty) (smax x y)))
       (cmp_and_choose ty (CC.NL) x y))
 
+;; SSE helpers for determining if single-instruction lowerings are available.
+
+(decl pure has_pmins (Type) bool)
+(rule 1 (has_pmins $I16X8) $true)
+(rule 1 (has_pmins $I64X2) $false)
+(rule (has_pmins _) (use_sse41))
+
+(decl pure has_pmaxs (Type) bool)
+(rule 1 (has_pmaxs $I16X8) $true)
+(rule 1 (has_pmaxs $I64X2) $false)
+(rule (has_pmaxs _) (use_sse41))
+
+(decl pure has_pmaxu (Type) bool)
+(rule 1 (has_pmaxu $I8X16) $true)
+(rule 1 (has_pmaxu $I64X2) $false)
+(rule (has_pmaxu _) (use_sse41))
+
+(decl pure has_pminu (Type) bool)
+(rule 1 (has_pminu $I8X16) $true)
+(rule 1 (has_pminu $I64X2) $false)
+(rule (has_pminu _) (use_sse41))
+
 ;; SSE `smax`.
 
-(rule (lower (has_type $I8X16 (smax x y)))
-      (x64_pmaxsb x y))
+(rule 1 (lower (has_type (ty_vec128 ty) (smax x y)))
+        (if-let $true (has_pmaxs ty))
+        (x64_pmaxs ty x y))
 
-(rule (lower (has_type $I16X8 (smax x y)))
-      (x64_pmaxsw x y))
-
-(rule (lower (has_type $I32X4 (smax x y)))
-      (x64_pmaxsd x y))
+(rule (lower (has_type (ty_vec128 ty) (smax x y)))
+      (let (
+          (x Xmm x)
+          (y Xmm y)
+          (cmp Xmm (x64_pcmpgt ty x y))
+          (x_is_max Xmm (x64_pand cmp x))
+          (y_is_max Xmm (x64_pandn cmp y))
+        )
+        (x64_por x_is_max y_is_max)))
 
 ;; SSE `smin`.
 
-(rule (lower (has_type $I8X16 (smin x y)))
-      (x64_pminsb x y))
+(rule 1 (lower (has_type (ty_vec128 ty) (smin x y)))
+        (if-let $true (has_pmins ty))
+        (x64_pmins ty x y))
 
-(rule (lower (has_type $I16X8 (smin x y)))
-      (x64_pminsw x y))
-
-(rule (lower (has_type $I32X4 (smin x y)))
-      (x64_pminsd x y))
+(rule (lower (has_type (ty_vec128 ty) (smin x y)))
+      (let (
+          (x Xmm x)
+          (y Xmm y)
+          (cmp Xmm (x64_pcmpgt ty y x))
+          (x_is_min Xmm (x64_pand cmp x))
+          (y_is_min Xmm (x64_pandn cmp y))
+        )
+        (x64_por x_is_min y_is_min)))
 
 ;; SSE `umax`.
 
-(rule (lower (has_type $I8X16 (umax x y)))
-      (x64_pmaxub x y))
+(rule 2 (lower (has_type (ty_vec128 ty) (umax x y)))
+        (if-let $true (has_pmaxu ty))
+        (x64_pmaxu ty x y))
 
-(rule (lower (has_type $I16X8 (umax x y)))
-      (x64_pmaxuw x y))
+;; If y < x then the saturating subtraction will be zero, otherwise when added
+;; back to x it'll return y.
+(rule 1 (lower (has_type $I16X8 (umax x y)))
+        (let ((x Xmm x))
+          (x64_paddw x (x64_psubusw y x))))
 
-(rule (lower (has_type $I32X4 (umax x y)))
-      (x64_pmaxud x y))
+;; Flip the upper bits of each lane so the signed comparison has the same
+;; result as a signed comparison, and then select the results with the output
+;; mask. See `pcmpgt` lowering for info on flipping the upper bit.
+(rule (lower (has_type (ty_vec128 ty) (umax x y)))
+      (let (
+          (x Xmm x)
+          (y Xmm y)
+          (mask Xmm (flip_high_bit_mask ty ))
+          (x_masked Xmm (x64_pxor x mask))
+          (y_masked Xmm (x64_pxor y mask))
+          (cmp Xmm (x64_pcmpgt ty x_masked y_masked))
+          (x_is_max Xmm (x64_pand cmp x))
+          (y_is_max Xmm (x64_pandn cmp y))
+        )
+        (x64_por x_is_max y_is_max)))
+
+(decl flip_high_bit_mask (Type) Xmm)
+(rule (flip_high_bit_mask $I16X8)
+      (x64_movdqu_load (emit_u128_le_const 0x8000_8000_8000_8000_8000_8000_8000_8000)))
+(rule (flip_high_bit_mask $I32X4)
+      (x64_movdqu_load (emit_u128_le_const 0x80000000_80000000_80000000_80000000)))
+(rule (flip_high_bit_mask $I64X2)
+      (x64_movdqu_load (emit_u128_le_const 0x8000000000000000_8000000000000000)))
 
 ;; SSE `umin`.
 
-(rule (lower (has_type $I8X16 (umin x y)))
-      (x64_pminub x y))
+(rule 2 (lower (has_type (ty_vec128 ty) (umin x y)))
+        (if-let $true (has_pminu ty))
+        (x64_pminu ty x y))
 
-(rule (lower (has_type $I16X8 (umin x y)))
-      (x64_pminuw x y))
+;; If x < y then the saturating subtraction will be 0. Otherwise if x > y then
+;; the saturated result, when subtracted again, will go back to `y`.
+(rule 1 (lower (has_type $I16X8 (umin x y)))
+        (let ((x Xmm x))
+          (x64_psubw x (x64_psubusw x y))))
 
-(rule (lower (has_type $I32X4 (umin x y)))
-      (x64_pminud x y))
+;; Same as `umax`, and see `pcmpgt` for docs on flipping the upper bit.
+(rule (lower (has_type (ty_vec128 ty) (umin x y)))
+      (let (
+          (x Xmm x)
+          (y Xmm y)
+          (mask Xmm (flip_high_bit_mask ty))
+          (x_masked Xmm (x64_pxor x mask))
+          (y_masked Xmm (x64_pxor y mask))
+          (cmp Xmm (x64_pcmpgt ty y_masked x_masked))
+          (x_is_max Xmm (x64_pand cmp x))
+          (y_is_max Xmm (x64_pandn cmp y))
+        )
+        (x64_por x_is_max y_is_max)))
 
 ;;;; Rules for `trap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1519,62 +1591,128 @@
       (let ((checked Xmm (x64_pcmpeq ty a b))
             (all_ones Xmm (vector_all_ones)))
            (x64_pxor checked all_ones)))
-;; Signed comparisons have a single-instruction lowering, unlike their unsigned
-;; counterparts. These latter instructions use the unsigned min/max
-;; (PMINU*/PMAXU*) and negate the result (PXOR with all 1s).
+
+;; SSE `sgt`
+
 (rule (lower (icmp (IntCC.SignedGreaterThan) a @ (value_type (ty_vec128 ty)) b))
       (x64_pcmpgt ty a b))
+
+;; SSE `slt`
+
 (rule (lower (icmp (IntCC.SignedLessThan) a @ (value_type (ty_vec128 ty)) b))
       (x64_pcmpgt ty b a))
-(rule (lower (icmp (IntCC.UnsignedGreaterThan) a @ (value_type (ty_vec128 ty)) b))
-      ;; N.B.: we must manually prevent load coalescing of these operands; the
-      ;; register allocator gets confused otherwise. TODO:
-      ;; https://github.com/bytecodealliance/wasmtime/issues/3953.
-      (let ((xmm_a Xmm (put_in_xmm a))
-            (xmm_b Xmm (put_in_xmm b))
-            (max Xmm (x64_pmaxu ty xmm_a xmm_b))
-            (eq Xmm (x64_pcmpeq ty max xmm_b))
-            (all_ones Xmm (vector_all_ones)))
-           (x64_pxor eq all_ones)))
-(rule (lower (icmp (IntCC.UnsignedLessThan) a @ (value_type (ty_vec128 ty)) b))
-      ;; N.B.: see note above.
-      (let ((xmm_a Xmm (put_in_xmm a))
-            (xmm_b Xmm (put_in_xmm b))
-            (min Xmm (x64_pminu ty xmm_a xmm_b))
-            (eq Xmm (x64_pcmpeq ty min xmm_b))
-            (all_ones Xmm (vector_all_ones)))
-           (x64_pxor eq all_ones)))
-;; To lower signed and unsigned *-or-equals comparisons, we find the minimum
-;; number (PMIN[U|S]*) and compare that to one of the terms (PCMPEQ*). Note that
-;; there is no 64x2 version of this lowering (see below).
-(rule (lower (icmp (IntCC.SignedGreaterThanOrEqual) a @ (value_type (ty_vec128 ty)) b))
-      (let ((max Xmm (x64_pmaxs ty a b)))
-           (x64_pcmpeq ty a max)))
-(rule (lower (icmp (IntCC.SignedLessThanOrEqual) a @ (value_type (ty_vec128 ty)) b))
-      (let ((min Xmm (x64_pmins ty a b)))
-           (x64_pcmpeq ty a min)))
-(rule (lower (icmp (IntCC.UnsignedGreaterThanOrEqual) a @ (value_type (ty_vec128 ty)) b))
-      (let ((max Xmm (x64_pmaxu ty a b)))
-           (x64_pcmpeq ty a max)))
-(rule (lower (icmp (IntCC.UnsignedLessThanOrEqual) a @ (value_type (ty_vec128 ty)) b))
-      (let ((min Xmm (x64_pminu ty a b)))
-           (x64_pcmpeq ty a min)))
-;; The PMIN[S|U]Q instruction is only available in AVX512VL/F so we must instead
-;; compare with flipped operands (PCMPGT*) and negate the result (PXOR with all
-;; 1s), emitting one more instruction than the smaller-lane versions.
-(rule 1 (lower (icmp (IntCC.SignedGreaterThanOrEqual) a @ (value_type $I64X2) b))
-      (let ((checked Xmm (x64_pcmpgt $I64X2 b a))
-            (all_ones Xmm (vector_all_ones)))
-           (x64_pxor checked all_ones)))
-(rule 1 (lower (icmp (IntCC.SignedLessThanOrEqual) a @ (value_type $I64X2) b))
-      (let ((checked Xmm (x64_pcmpgt $I64X2 a b))
-            (all_ones Xmm (vector_all_ones)))
-           (x64_pxor checked all_ones)))
-;; TODO: not used by WebAssembly translation
-;; (rule (lower (icmp (IntCC.UnsignedGreaterThanOrEqual) a @ (value_type $I64X2) b))
-;; TODO: not used by WebAssembly translation
-;; (rule (lower (icmp (IntCC.UnsignedLessThanOrEqual) a @ (value_type $I64X2) b))
 
+;; SSE `ugt`
+
+;; N.B.: we must manually prevent load coalescing operands; the
+;; register allocator gets confused otherwise. TODO:
+;; https://github.com/bytecodealliance/wasmtime/issues/3953.
+(rule 1 (lower (icmp (IntCC.UnsignedGreaterThan) a @ (value_type (ty_vec128 ty)) b))
+        (if-let $true (has_pmaxu ty))
+        (let ((a Xmm a)
+              (b Xmm b)
+              (max Xmm (x64_pmaxu ty a b))
+              (eq Xmm (x64_pcmpeq ty max b)))
+             (x64_pxor eq (vector_all_ones))))
+
+;; Flip the upper bit of each lane so the result of a signed comparison is the
+;; same as the result of an unsigned comparison (see docs on `pcmpgt` for more)
+(rule (lower (icmp (IntCC.UnsignedGreaterThan) a @ (value_type (ty_vec128 ty)) b))
+      (let ((mask Xmm (flip_high_bit_mask ty))
+            (a_masked Xmm (x64_pxor a mask))
+            (b_masked Xmm (x64_pxor b mask)))
+           (x64_pcmpgt ty a_masked b_masked)))
+
+;; SSE `ult`
+
+(rule 1 (lower (icmp (IntCC.UnsignedLessThan) a @ (value_type (ty_vec128 ty)) b))
+        (if-let $true (has_pminu ty))
+        ;; N.B.: see note above.
+        (let ((a Xmm a)
+              (b Xmm b)
+              (min Xmm (x64_pminu ty a b))
+              (eq Xmm (x64_pcmpeq ty min b)))
+             (x64_pxor eq (vector_all_ones))))
+
+;; Flip the upper bit of `a` and `b` so the signed comparison result will
+;; be the same as the unsigned comparison result (see docs on `pcmpgt` for more).
+(rule (lower (icmp (IntCC.UnsignedLessThan) a @ (value_type (ty_vec128 ty)) b))
+      (let ((mask Xmm (flip_high_bit_mask ty))
+            (a_masked Xmm (x64_pxor a mask))
+            (b_masked Xmm (x64_pxor b mask)))
+           (x64_pcmpgt ty b_masked a_masked)))
+
+;; SSE `sge`
+
+;; Use `pmaxs*` and compare the result to `a` to see if it's `>= b`.
+(rule 1 (lower (icmp (IntCC.SignedGreaterThanOrEqual) a @ (value_type (ty_vec128 ty)) b))
+        (if-let $true (has_pmaxs ty))
+        (x64_pcmpeq ty a (x64_pmaxs ty a b)))
+
+;; Without `pmaxs*` use a `pcmpgt*` with reversed operands and invert the
+;; result.
+(rule (lower (icmp (IntCC.SignedGreaterThanOrEqual) a @ (value_type (ty_vec128 ty)) b))
+      (x64_pxor (x64_pcmpgt ty b a) (vector_all_ones)))
+
+;; SSE `sle`
+
+;; With `pmins*` use that and compare the result to `a`.
+(rule 1 (lower (icmp (IntCC.SignedLessThanOrEqual) a @ (value_type (ty_vec128 ty)) b))
+        (if-let $true (has_pmins ty))
+        (x64_pcmpeq ty a (x64_pmins ty a b)))
+
+;; Without `pmins*` perform a greater-than test and invert the result.
+(rule (lower (icmp (IntCC.SignedLessThanOrEqual) a @ (value_type (ty_vec128 ty)) b))
+      (x64_pxor (x64_pcmpgt ty a b) (vector_all_ones)))
+
+;; SSE `uge`
+
+(rule 2 (lower (icmp (IntCC.UnsignedGreaterThanOrEqual) a @ (value_type (ty_vec128 ty)) b))
+        (if-let $true (has_pmaxu ty))
+        (x64_pcmpeq ty a (x64_pmaxu ty a b)))
+
+;; Perform a saturating subtract of `a` from `b` and if the result is zero then
+;; `a` is greater or equal.
+(rule 1 (lower (icmp (IntCC.UnsignedGreaterThanOrEqual) a @ (value_type $I16X8) b))
+         (x64_pcmpeqw (x64_psubusw b a) (xmm_zero $I16X8)))
+
+;; Flip the upper bit of each lane so the signed comparison is the same as
+;; an unsigned one and then invert the result. See docs on `pcmpgt` for why
+;; flipping the upper bit works.
+(rule (lower (icmp (IntCC.UnsignedGreaterThanOrEqual) a @ (value_type (ty_vec128 ty)) b))
+      (let (
+          (mask Xmm (flip_high_bit_mask ty))
+          (a_masked Xmm (x64_pxor a mask))
+          (b_masked Xmm (x64_pxor b mask))
+          (cmp Xmm (x64_pcmpgt ty b_masked a_masked))
+        )
+        (x64_pxor cmp (vector_all_ones))))
+
+;; SSE `ule`
+
+(rule 2 (lower (icmp (IntCC.UnsignedLessThanOrEqual) a @ (value_type (ty_vec128 ty)) b))
+        (if-let $true (has_pminu ty))
+        (x64_pcmpeq ty a (x64_pminu ty a b)))
+
+;; A saturating subtraction will produce zeros if `a` is less than `b`, so
+;; compare that result to an all-zeros result to figure out lanes of `a` that
+;; are <= to the lanes in `b`
+(rule 1 (lower (icmp (IntCC.UnsignedLessThanOrEqual) a @ (value_type $I16X8) b))
+        (let ((zeros_if_a_is_min Xmm (x64_psubusw a b)))
+            (x64_pcmpeqw zeros_if_a_is_min (xmm_zero $I8X16))))
+
+;; Flip the upper bit of each lane in `a` and `b` so a signed comparison
+;; produces the same result as an unsigned comparison. Then test test for `gt`
+;; and invert the result to get the `le` that is desired here. See docs on
+;; `pcmpgt` for why flipping the upper bit works.
+(rule (lower (icmp (IntCC.UnsignedLessThanOrEqual) a @ (value_type (ty_vec128 ty)) b))
+      (let (
+          (mask Xmm (flip_high_bit_mask ty))
+          (a_masked Xmm (x64_pxor a mask))
+          (b_masked Xmm (x64_pxor b mask))
+          (cmp Xmm (x64_pcmpgt ty a_masked b_masked))
+        )
+        (x64_pxor cmp (vector_all_ones))))
 
 ;;;; Rules for `fcmp` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
