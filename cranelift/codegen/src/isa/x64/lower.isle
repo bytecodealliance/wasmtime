@@ -916,7 +916,22 @@
       (x64_pmullw x y))
 
 (rule (lower (has_type (multi_lane 32 4) (imul x y)))
+      (if-let $true (use_sse41))
       (x64_pmulld x y))
+
+;; Without `pmulld` the `pmuludq` instruction is used instead which performs
+;; 32-bit multiplication storing the 64-bit result. The 64-bit result is
+;; truncated to 32-bits and everything else is woven into place.
+(rule -1 (lower (has_type (multi_lane 32 4) (imul x y)))
+         (let (
+            (x Xmm x)
+            (y Xmm y)
+            (x_hi Xmm (x64_pshufd x 0b00_11_00_01))
+            (y_hi Xmm (x64_pshufd y 0b00_11_00_01))
+            (mul_lo Xmm (x64_pshufd (x64_pmuludq x y)       0b00_00_10_00))
+            (mul_hi Xmm (x64_pshufd (x64_pmuludq x_hi y_hi) 0b00_00_10_00))
+          )
+          (x64_punpckldq mul_lo mul_hi)))
 
 ;; With AVX-512 we can implement `i64x2` multiplication with a single
 ;; instruction.
