@@ -145,7 +145,11 @@ impl LoweredBlock {
 
 impl BlockLoweringOrder {
     /// Compute and return a lowered block order for `f`.
-    pub fn new(f: &Function, domtree: &DominatorTree) -> BlockLoweringOrder {
+    pub fn new(
+        f: &Function,
+        domtree: &DominatorTree,
+        ctrl_plane: &mut ControlPlane,
+    ) -> BlockLoweringOrder {
         trace!("BlockLoweringOrder: function body {:?}", f);
 
         // Step 1: compute the in-edge and out-edge count of every block.
@@ -191,7 +195,8 @@ impl BlockLoweringOrder {
         let mut lb_to_bindex = FxHashMap::default();
         let mut lowered_order = Vec::new();
 
-        for &block in domtree.cfg_postorder().iter().rev() {
+        // TODO maybe randomize here?
+        for &block in ctrl_plane.change_order(domtree.cfg_postorder().iter().rev()) {
             let lb = LoweredBlock::Orig { block };
             let bindex = BlockIndex::new(lowered_order.len());
             lb_to_bindex.insert(lb.clone(), bindex);
@@ -216,6 +221,9 @@ impl BlockLoweringOrder {
                 }
             }
         }
+
+        // TODO maybe randomize here?
+        ctrl_plane.shuffle(&mut lowered_order);
 
         // Step 3: build the successor tables given the lowering order. We can't perform this step
         // during the creation of `lowering_order`, as we need `lb_to_bindex` to be fully populated
@@ -363,7 +371,7 @@ mod test {
         cfg.compute(&func);
         let dom_tree = DominatorTree::with_function(&func, &cfg);
 
-        BlockLoweringOrder::new(&func, &dom_tree)
+        BlockLoweringOrder::new(&func, &dom_tree, &mut Default::default())
     }
 
     #[test]
