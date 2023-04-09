@@ -1284,20 +1284,77 @@
 (decl vec_insert_lane (Type Xmm RegMem u8) Xmm)
 
 ;; i8x16.replace_lane
-(rule (vec_insert_lane $I8X16 vec val idx)
-      (x64_pinsrb vec val idx))
+(rule 1 (vec_insert_lane $I8X16 vec val idx)
+        (if-let $true (use_sse41))
+        (x64_pinsrb vec val idx))
+
+;; This lowering is particularly unoptimized and is mostly just here to work
+;; rather than here to be fast. Requiring SSE 4.1 for the above lowering isn't
+;; the end of the world hopefully as that's a pretty old instruction set, so
+;; this is the "simplest" version that works on SSE2 for now.
+;;
+;; This lowering loads a constant with all 1s except for the "hole" where this
+;; value will get placed into. The `val` is zero-extended to 32-bits and moved
+;; into an xmm register with `movd` which zeros upper xmm bits as well. This
+;; 32-bit value is then shuffled to the correct 32x4 lane and or'd into the
+;; final destination.
+(rule (vec_insert_lane $I8X16 vec val n)
+      (let ((vec_with_hole Xmm (x64_pand vec (insert_i8x16_lane_hole n)))
+            (val Gpr (x64_movzx (ExtMode.BL) val))
+            (val Gpr (x64_shl $I32 val (Imm8Reg.Imm8 (u8_shl (u8_and n 3) 3))))
+            (val Xmm (x64_movd_to_xmm val))
+            (val_at_hole Xmm (x64_pshufd val (insert_i8x16_lane_pshufd_imm (u8_shr n 2)))))
+        (x64_por vec_with_hole val_at_hole)))
+
+(decl insert_i8x16_lane_hole (u8) VCodeConstant)
+(extern constructor insert_i8x16_lane_hole insert_i8x16_lane_hole)
+(decl insert_i8x16_lane_pshufd_imm (u8) u8)
+(rule (insert_i8x16_lane_pshufd_imm 0) 0b01_01_01_00)
+(rule (insert_i8x16_lane_pshufd_imm 1) 0b01_01_00_01)
+(rule (insert_i8x16_lane_pshufd_imm 2) 0b01_00_01_01)
+(rule (insert_i8x16_lane_pshufd_imm 3) 0b00_01_01_01)
 
 ;; i16x8.replace_lane
 (rule (vec_insert_lane $I16X8 vec val idx)
       (x64_pinsrw vec val idx))
 
 ;; i32x4.replace_lane
-(rule (vec_insert_lane $I32X4 vec val idx)
-      (x64_pinsrd vec val idx))
+(rule 1 (vec_insert_lane $I32X4 vec val idx)
+        (if-let $true (use_sse41))
+        (x64_pinsrd vec val idx))
+
+(rule (vec_insert_lane $I32X4 vec val 0)
+      (x64_movss_regmove vec (x64_movd_to_xmm val)))
+
+;; tmp    = [ vec[1] vec[0] val[1] val[0] ]
+;; result = [ vec[3] vec[2] tmp[0] tmp[2] ]
+(rule (vec_insert_lane $I32X4 vec val 1)
+      (let ((val Xmm (x64_movd_to_xmm val))
+            (vec Xmm vec))
+        (x64_shufps (x64_punpcklqdq val vec) vec 0b11_10_00_10)))
+
+;; tmp    = [ vec[0] vec[3] val[0] val[0] ]
+;; result = [ tmp[2] tmp[0] vec[1] vec[0] ]
+(rule (vec_insert_lane $I32X4 vec val 2)
+      (let ((val Xmm (x64_movd_to_xmm val))
+            (vec Xmm vec))
+        (x64_shufps vec (x64_shufps val vec 0b00_11_00_00) 0b10_00_01_00)))
+
+;; tmp    = [ vec[3] vec[2] val[1] val[0] ]
+;; result = [ tmp[0] tmp[2] vec[1] vec[0] ]
+(rule (vec_insert_lane $I32X4 vec val 3)
+      (let ((val Xmm (x64_movd_to_xmm val))
+            (vec Xmm vec))
+        (x64_shufps vec (x64_shufps val vec 0b11_10_01_00) 0b00_10_01_00)))
 
 ;; i64x2.replace_lane
-(rule (vec_insert_lane $I64X2 vec val idx)
-      (x64_pinsrq vec val idx))
+(rule 1 (vec_insert_lane $I64X2 vec val idx)
+        (if-let $true (use_sse41))
+        (x64_pinsrq vec val idx))
+(rule (vec_insert_lane $I64X2 vec val 0)
+      (x64_movsd_regmove vec (x64_movq_to_xmm val)))
+(rule (vec_insert_lane $I64X2 vec val 1)
+      (x64_punpcklqdq vec (x64_movq_to_xmm val)))
 
 ;; f32x4.replace_lane
 (rule 1 (vec_insert_lane $F32X4 vec val idx)
@@ -4053,6 +4110,7 @@
         (if-let $true (use_avx2_simd))
         (x64_vpbroadcastb (bitcast_gpr_to_xmm $I32 src)))
 (rule 2 (lower (has_type $I8X16 (splat (sinkable_load_exact addr))))
+        (if-let $true (use_sse41))
         (x64_pshufb (x64_pinsrb (xmm_uninit_value) addr 0) (xmm_zero $I8X16)))
 (rule 3 (lower (has_type $I8X16 (splat (sinkable_load_exact addr))))
         (if-let $true (use_avx2_simd))
