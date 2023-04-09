@@ -3949,17 +3949,40 @@
 
 ;; Rules for `vany_true` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(rule 1 (lower (vany_true val))
+        (if-let $true (use_sse41))
+        (let ((val Xmm val))
+          (with_flags (x64_ptest val val) (x64_setcc (CC.NZ)))))
+
+;; Any nonzero byte in `val` means that any lane is true. Compare `val` with a
+;; zeroed register and extract the high bits to a gpr mask. If the mask is
+;; 0xffff then every byte was equal to zero, so test if the comparison is
+;; not-equal or NZ.
 (rule (lower (vany_true val))
-      (let ((val Xmm val))
-        (with_flags (x64_ptest val val) (x64_setcc (CC.NZ)))))
+      (let (
+          (any_byte_zero Xmm (x64_pcmpeqb val (xmm_zero $I8X16)))
+          (mask Gpr (x64_pmovmskb (OperandSize.Size32) any_byte_zero))
+        )
+        (with_flags (x64_cmp (OperandSize.Size32) (RegMemImm.Imm 0xffff) mask)
+                    (x64_setcc (CC.NZ)))))
 
 ;; Rules for `vall_true` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(rule 1 (lower (vall_true val @ (value_type ty)))
+        (if-let $true (use_sse41))
+        (let ((src Xmm val)
+              (zeros Xmm (xmm_zero ty))
+              (cmp Xmm (x64_pcmpeq (vec_int_type ty) src zeros)))
+          (with_flags (x64_ptest cmp cmp) (x64_setcc (CC.Z)))))
+
+;; Perform an appropriately-sized lane-wise comparison with zero. If the
+;; result is all 0s then all of them are true because nothing was equal to
+;; zero.
 (rule (lower (vall_true val @ (value_type ty)))
-      (let ((src Xmm val)
-            (zeros Xmm (xmm_zero ty))
-            (cmp Xmm (x64_pcmpeq (vec_int_type ty) src zeros)))
-        (with_flags (x64_ptest cmp cmp) (x64_setcc (CC.Z)))))
+      (let ((lanes_with_zero Xmm (x64_pcmpeq (vec_int_type ty) val (xmm_zero ty)))
+            (mask Gpr (x64_pmovmskb (OperandSize.Size32) lanes_with_zero)))
+        (with_flags (x64_test (OperandSize.Size32) mask mask)
+                    (x64_setcc (CC.Z)))))
 
 ;; Rules for `vhigh_bits` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

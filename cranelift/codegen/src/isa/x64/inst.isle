@@ -4196,7 +4196,19 @@
 (rule (x64_pcmpeq $I8X16 x y) (x64_pcmpeqb x y))
 (rule (x64_pcmpeq $I16X8 x y) (x64_pcmpeqw x y))
 (rule (x64_pcmpeq $I32X4 x y) (x64_pcmpeqd x y))
-(rule (x64_pcmpeq $I64X2 x y) (x64_pcmpeqq x y))
+(rule (x64_pcmpeq $I64X2 x y)
+      (if-let $true (use_sse41))
+      (x64_pcmpeqq x y))
+
+;; Without SSE 4.1 there's no access to `pcmpeqq`, so it's emulated by comparing
+;; 32-bit lanes instead. The upper and lower halves of the 32-bit comparison are
+;; swapped and then these two results are and'd together. This way only if both
+;; 32-bit values were equal is the result all ones, otherwise the result is
+;; all zeros if either 32-bit comparison was zero.
+(rule -1 (x64_pcmpeq $I64X2 x y)
+         (let ((cmp32         Xmm (x64_pcmpeqd x y))
+               (cmp32_swapped Xmm (x64_pshufd cmp32 0b10_11_00_01)))
+            (x64_pand cmp32 cmp32_swapped)))
 
 (decl x64_pcmpeqb (Xmm XmmMem) Xmm)
 (rule 0 (x64_pcmpeqb x y) (xmm_rm_r (SseOpcode.Pcmpeqb) x y))
