@@ -64,6 +64,7 @@ pub use crate::verifier::verify_function;
 pub use crate::write::write_function;
 
 pub use cranelift_bforest as bforest;
+pub use cranelift_control as control;
 pub use cranelift_entity as entity;
 #[cfg(feature = "unwind")]
 pub use gimli;
