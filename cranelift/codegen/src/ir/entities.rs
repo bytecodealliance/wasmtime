@@ -334,7 +334,7 @@ entity_impl!(UserExternalNameRef, "userextname");
 /// An opaque reference to a function [`Signature`](super::Signature).
 ///
 /// `SigRef`s are used to declare a function with
-/// [`FunctionBuiler::import_function`](https://docs.rs/cranelift-frontend/*/cranelift_frontend/struct.FunctionBuilder.html#method.import_function)
+/// [`FunctionBuilder::import_function`](https://docs.rs/cranelift-frontend/*/cranelift_frontend/struct.FunctionBuilder.html#method.import_function)
 /// as well as to make an [indirect function call](super::InstBuilder::call_indirect).
 ///
 /// `SigRef`s can be created with
