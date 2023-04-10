@@ -138,10 +138,10 @@ pub struct DataFlowGraph {
     /// Saves Value labels.
     pub values_labels: Option<BTreeMap<Value, ValueLabelAssignments>>,
 
-    /// Constants used within the function
+    /// Constants used within the function.
     pub constants: ConstantPool,
 
-    /// Stores large immediates that otherwise will not fit on InstructionData
+    /// Stores large immediates that otherwise will not fit on InstructionData.
     pub immediates: PrimaryMap<Immediate, ConstantData>,
 
     /// Jump tables used in this function.
