@@ -79,15 +79,7 @@ impl Parse for Config {
                     Opt::TrappableErrorType(val) => opts.trappable_error_type = val,
                     Opt::DuplicateIfNecessary(val) => opts.duplicate_if_necessary = val,
                     Opt::OnlyInterfaces(val) => opts.only_interfaces = val,
-                    Opt::With(val) => {
-                        if opts.with.is_empty() {
-                            opts.with = val;
-                        } else {
-                            for (k, v) in val {
-                                opts.with.insert(k, v);
-                            }
-                        }
-                    }
+                    Opt::With(val) => opts.with.extend(val),
                 }
             }
         } else {
