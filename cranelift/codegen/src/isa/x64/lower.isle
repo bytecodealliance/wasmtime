@@ -2848,6 +2848,7 @@
                     (has_type $I8 (extractlane value (u8_from_uimm8 n)))
                     address
                     offset))
+      (if-let $true (use_sse41))
       (side_effect
        (x64_pextrb_store (to_amode flags address offset) value n)))
 (rule 2 (lower (store flags
@@ -2860,12 +2861,14 @@
                     (has_type $I32 (extractlane value (u8_from_uimm8 n)))
                     address
                     offset))
+      (if-let $true (use_sse41))
       (side_effect
        (x64_pextrd_store (to_amode flags address offset) value n)))
 (rule 2 (lower (store flags
                     (has_type $I64 (extractlane value (u8_from_uimm8 n)))
                     address
                     offset))
+      (if-let $true (use_sse41))
       (side_effect
        (x64_pextrq_store (to_amode flags address offset) value n)))
 
@@ -4051,38 +4054,54 @@
 ;; Remove the extractlane instruction, leaving the float where it is. The upper
 ;; bits will remain unchanged; for correctness, this relies on Cranelift type
 ;; checking to avoid using those bits.
-(rule 2 (lower (has_type (ty_scalar_float _) (extractlane val (u8_from_uimm8 0))))
-      val)
+(rule 3 (lower (has_type (ty_scalar_float _) (extractlane val 0)))
+        val)
 
-;; Cases 2-4 for an F32X4
-(rule 1 (lower (has_type $F32 (extractlane val @ (value_type (ty_vec128 ty))
-                                         (u8_from_uimm8 lane))))
-      (x64_pshufd val lane))
+;; `f32x4.extract_lane N` where `N != 0`
+(rule 1 (lower (extractlane val @ (value_type $F32X4) (u8_from_uimm8 lane)))
+        (x64_pshufd val lane))
 
-;; This is the only remaining case for F64X2
-(rule 1 (lower (has_type $F64 (extractlane val @ (value_type (ty_vec128 ty))
-                                         (u8_from_uimm8 1))))
+;; `f64x2.extract_lane N` where `N != 0` (aka N == 1)
+(rule (lower (extractlane val @ (value_type $F64X2) 1))
       (x64_pshufd val 0b11_10_11_10))
 
-;; Note that the `pextrb` lowering here is relied upon by the `extend_to_gpr`
-;; helper because it will elide a `uextend` operation when `extractlane` is the
-;; inner node. The `pextrb` operation automatically zero-extends for us so the
-;; extra `uextend` doesn't have to codegen anything.
-(rule 0 (lower (extractlane val @ (value_type ty @ (multi_lane 8 16)) (u8_from_uimm8 lane)))
-      (x64_pextrb val lane))
+;; `i8x16.extract_lane N`
+;;
+;; Note that without SSE4.1 a 16-bit lane extraction is performed and then
+;; the result is updated if the desired index is either odd or even.
+(rule 2 (lower (extractlane val @ (value_type ty @ $I8X16) (u8_from_uimm8 lane)))
+        (if-let $true (use_sse41))
+        (x64_pextrb val lane))
+;; extracting an odd lane has an extra shift-right
+(rule 1 (lower (extractlane val @ (value_type ty @ $I8X16) (u8_from_uimm8 lane)))
+        (if-let 1 (u8_and lane 1))
+        (x64_shr $I16 (x64_pextrw val (u8_shr lane 1)) (Imm8Reg.Imm8 8)))
+;; extracting an even lane already has the desired lane in the lower bits
+(rule (lower (extractlane val @ (value_type ty @ $I8X16) (u8_from_uimm8 lane)))
+      (if-let 0 (u8_and lane 1))
+      (x64_pextrw val (u8_shr lane 1)))
 
-;; See the note in the 8x16 case above for how this rule is connected to
-;; `extend_to_gpr`.
-(rule 0 (lower (extractlane val @ (value_type ty @ (multi_lane 16 8)) (u8_from_uimm8 lane)))
+;; `i16x8.extract_lane N`
+(rule (lower (extractlane val @ (value_type ty @ $I16X8) (u8_from_uimm8 lane)))
       (x64_pextrw val lane))
 
-;; See the note in the 8x16 case above for how this rule is connected to
-;; `extend_to_gpr`.
-(rule 0 (lower (extractlane val @ (value_type ty @ (multi_lane 32 4)) (u8_from_uimm8 lane)))
-      (x64_pextrd val lane))
+;; `i32x4.extract_lane N`
+(rule 2 (lower (extractlane val @ (value_type ty @ $I32X4) (u8_from_uimm8 lane)))
+        (if-let $true (use_sse41))
+        (x64_pextrd val lane))
+(rule 1 (lower (extractlane val @ (value_type $I32X4) 0))
+        (x64_movd_to_gpr val))
+(rule (lower (extractlane val @ (value_type $I32X4) (u8_from_uimm8 n)))
+      (x64_movd_to_gpr (x64_pshufd val n)))
 
-(rule 0 (lower (extractlane val @ (value_type ty @ (multi_lane 64 2)) (u8_from_uimm8 lane)))
-      (x64_pextrq val lane))
+;; `i64x2.extract_lane N`
+(rule 1 (lower (extractlane val @ (value_type $I64X2) (u8_from_uimm8 lane)))
+        (if-let $true (use_sse41))
+        (x64_pextrq val lane))
+(rule (lower (extractlane val @ (value_type $I64X2) 0))
+      (x64_movq_to_gpr val))
+(rule (lower (extractlane val @ (value_type $I64X2) 1))
+      (x64_movq_to_gpr (x64_pshufd val 0b00_00_11_10)))
 
 ;; Rules for `scalar_to_vector` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
