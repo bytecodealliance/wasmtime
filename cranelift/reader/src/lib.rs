@@ -26,7 +26,7 @@
 )]
 
 pub use crate::error::{Location, ParseError, ParseResult};
-pub use crate::isaspec::{parse_options, IsaSpec, ParseOptionError};
+pub use crate::isaspec::{parse_option, parse_options, IsaSpec, ParseOptionError};
 pub use crate::parser::{parse_functions, parse_run_command, parse_test, ParseOptions};
 pub use crate::run_command::{Comparison, Invocation, RunCommand};
 pub use crate::sourcemap::SourceMap;
@@ -72,19 +72,17 @@ pub fn parse_sets_and_triple(flag_set: &[String], flag_triple: &str) -> Result<O
     // Collect unknown system-wide settings, so we can try to parse them as target specific
     // settings, if a target is defined.
     let mut unknown_settings = Vec::new();
-    match parse_options(
-        flag_set.iter().map(|x| x.as_str()),
-        &mut flag_builder,
-        Location { line_number: 0 },
-    ) {
-        Err(ParseOptionError::UnknownFlag { name, .. }) => {
-            unknown_settings.push(name);
+    for flag in flag_set {
+        match parse_option(flag, &mut flag_builder, Location { line_number: 0 }) {
+            Err(ParseOptionError::UnknownFlag { name, .. }) => {
+                unknown_settings.push(name);
+            }
+            Err(ParseOptionError::UnknownValue { name, value, .. }) => {
+                unknown_settings.push(format!("{}={}", name, value));
+            }
+            Err(ParseOptionError::Generic(err)) => return Err(err.into()),
+            Ok(()) => {}
         }
-        Err(ParseOptionError::UnknownValue { name, value, .. }) => {
-            unknown_settings.push(format!("{}={}", name, value));
-        }
-        Err(ParseOptionError::Generic(err)) => return Err(err.into()),
-        Ok(()) => {}
     }
 
     let mut words = flag_triple.trim().split_whitespace();

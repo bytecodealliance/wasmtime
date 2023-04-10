@@ -1,7 +1,7 @@
 ;;! target = "x86_64"
 ;;! compile = true
 ;;! relaxed_simd_deterministic = true
-;;! settings = ["enable_simd", "has_avx"]
+;;! settings = ["enable_simd", "sse42", "has_avx"]
 
 (module
   (func (param v128) (result v128)

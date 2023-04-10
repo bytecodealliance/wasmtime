@@ -1,5 +1,5 @@
 test compile precise-output
-target x86_64 has_sse41=true
+target x86_64 sse41
 
 function %f1(f32) -> f32 {
 block0(v0: f32):
