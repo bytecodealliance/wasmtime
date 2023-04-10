@@ -1129,7 +1129,7 @@
       (x64_pabsd x))
 
 ;; When AVX512 is available, we can use a single `vpabsq` instruction.
-(rule 1 (lower (has_type $I64X2 (iabs x)))
+(rule 2 (lower (has_type $I64X2 (iabs x)))
       (if-let $true (use_avx512vl_simd))
       (if-let $true (use_avx512f_simd))
       (x64_vpabsq x))
@@ -1138,10 +1138,21 @@
 ;; x` and then blend in those results with `blendvpd` if the MSB of `neg` was
 ;; set to 1 (i.e. if `neg` was negative or, conversely, if `x` was originally
 ;; positive).
+(rule 1 (lower (has_type $I64X2 (iabs x)))
+        (if-let $true (use_sse41))
+        (let ((rx Xmm x)
+              (neg Xmm (x64_psubq (imm $I64X2 0) rx)))
+          (x64_blendvpd neg rx neg)))
+
+;; and if `blendvpd` isn't available then perform a shift/shuffle to generate a
+;; mask of which lanes are negative, followed by flipping bits/sub to make both
+;; positive.
 (rule (lower (has_type $I64X2 (iabs x)))
-      (let ((rx Xmm x)
-            (neg Xmm (x64_psubq (imm $I64X2 0) rx)))
-        (x64_blendvpd neg rx neg)))
+      (let ((x Xmm x)
+            (signs Xmm (x64_psrad x (RegMemImm.Imm 31)))
+            (signs Xmm (x64_pshufd signs 0b11_11_01_01))
+            (xor_if_negative Xmm (x64_pxor x signs)))
+        (x64_psubq xor_if_negative signs)))
 
 ;; `i64` and smaller.
 
@@ -1287,6 +1298,7 @@
                          (bitselect condition
                                     if_true
                                     if_false)))
+      (if-let $true (use_sse41))
       (if (all_ones_or_all_zeros condition))
       (x64_blend ty
                  condition
@@ -1305,14 +1317,17 @@
 
 (rule (lower (has_type $I8X16
                        (x86_blendv condition if_true if_false)))
+      (if-let $true (use_sse41))
       (x64_pblendvb if_false if_true condition))
 
 (rule (lower (has_type $I32X4
                        (x86_blendv condition if_true if_false)))
+      (if-let $true (use_sse41))
       (x64_blendvps if_false if_true condition))
 
 (rule (lower (has_type $I64X2
                        (x86_blendv condition if_true if_false)))
+      (if-let $true (use_sse41))
       (x64_blendvpd if_false if_true condition))
 
 ;;;; Rules for `insertlane` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

@@ -4,7 +4,7 @@ pub use self::inst::{args, CallInfo, EmitInfo, EmitState, Inst};
 
 use super::{OwnedTargetIsa, TargetIsa};
 use crate::dominator_tree::DominatorTree;
-use crate::ir::{Function, Type};
+use crate::ir::{types, Function, Type};
 #[cfg(feature = "unwind")]
 use crate::isa::unwind::systemv;
 use crate::isa::x64::{inst::regs::create_reg_env_systemv, settings as x64_settings};
@@ -177,6 +177,14 @@ impl TargetIsa for X64Backend {
 
     fn has_native_fma(&self) -> bool {
         self.x64_flags.use_fma()
+    }
+
+    fn has_x86_blendv_lowering(&self, ty: Type) -> bool {
+        // The `blendvpd`, `blendvps`, and `pblendvb` instructions are all only
+        // available from SSE 4.1 and onwards. Otherwise the i16x8 type has no
+        // equivalent instruction which only looks at the top bit for a select
+        // operation, so that always returns `false`
+        self.x64_flags.use_sse41() && ty != types::I16X8
     }
 }
 
