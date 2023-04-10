@@ -18,6 +18,7 @@ macro_rules! gentest {
                     path: $path,
                     world: $name,
                     tracing: true,
+                    duplicate_if_necessary: true,
                 });
             }
         }

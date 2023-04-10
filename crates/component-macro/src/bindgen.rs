@@ -76,6 +76,7 @@ impl Parse for Config {
                     Opt::Tracing(val) => opts.tracing = val,
                     Opt::Async(val) => opts.async_ = val,
                     Opt::TrappableErrorType(val) => opts.trappable_error_type = val,
+                    Opt::DuplicateIfNecessary(val) => opts.duplicate_if_necessary = val,
                 }
             }
         } else {
@@ -131,6 +132,7 @@ mod kw {
     syn::custom_keyword!(tracing);
     syn::custom_keyword!(trappable_error_type);
     syn::custom_keyword!(world);
+    syn::custom_keyword!(duplicate_if_necessary);
 }
 
 enum Opt {
@@ -140,6 +142,7 @@ enum Opt {
     Tracing(bool),
     Async(bool),
     TrappableErrorType(Vec<TrappableError>),
+    DuplicateIfNecessary(bool),
 }
 
 impl Parse for Opt {
@@ -165,6 +168,12 @@ impl Parse for Opt {
             input.parse::<Token![async]>()?;
             input.parse::<Token![:]>()?;
             Ok(Opt::Async(input.parse::<syn::LitBool>()?.value))
+        } else if l.peek(kw::duplicate_if_necessary) {
+            input.parse::<kw::duplicate_if_necessary>()?;
+            input.parse::<Token![:]>()?;
+            Ok(Opt::DuplicateIfNecessary(
+                input.parse::<syn::LitBool>()?.value,
+            ))
         } else if l.peek(kw::trappable_error_type) {
             input.parse::<kw::trappable_error_type>()?;
             input.parse::<Token![:]>()?;
