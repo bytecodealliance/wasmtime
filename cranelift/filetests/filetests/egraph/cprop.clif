@@ -163,8 +163,8 @@ block0:
     return v2
 }
 
-; check: v5 = iconst.i8 1
-; nextln: return v5
+; check: v3 = iconst.i8 1
+; nextln: return v3
 
 function %icmp_uge_i32() -> i8 {
 block0:
@@ -174,8 +174,8 @@ block0:
     return v2
 }
 
-; check: v4 = iconst.i8 0
-; nextln: return v4
+; check: v3 = iconst.i8 0
+; nextln: return v3
 
 function %icmp_ugt_i32() -> i8 {
 block0:
@@ -207,8 +207,8 @@ block0:
     return v2
 }
 
-; check: v5 = iconst.i8 1
-; nextln: return v5
+; check: v3 = iconst.i8 1
+; nextln: return v3
 
 function %icmp_sge_i32() -> i8 {
 block0:
@@ -218,8 +218,8 @@ block0:
     return v2
 }
 
-; check: v5 = iconst.i8 0
-; nextln: return v5
+; check: v3 = iconst.i8 0
+; nextln: return v3
 
 function %icmp_sgt_i32() -> i8 {
 block0:
