@@ -867,6 +867,12 @@
 (rule (rv_sltu rs1 rs2)
   (alu_rrr (AluOPRRR.SltU) rs1 rs2))
 
+;; Helper for emitting the `snez` instruction.
+;; This instruction is a mnemonic for `sltu rd, zero, rs`.
+(decl rv_snez (Reg) Reg)
+(rule (rv_snez rs1)
+  (rv_sltu (zero_reg) rs1))
+
 ;; Helper for emiting the `sltiu` ("Set Less Than Immediate Unsigned") instruction.
 ;; rd ← rs1 < imm
 (decl rv_sltiu (Reg Imm12) Reg)
@@ -2526,9 +2532,8 @@
   0
   (lower_bmask (fits_in_64 _) (fits_in_64 in_ty) val)
   (let ((input Reg (normalize_cmp_value in_ty val (ExtendOp.Zero)))
-        (zero Reg (zero_reg))
-        (ones Reg (load_imm12 -1)))
-  (value_reg (gen_select_reg (IntCC.Equal) zero input zero ones))))
+        (non_zero Reg (rv_snez input)))
+    (value_reg (rv_neg non_zero))))
 
 ;; Bitwise-or the two registers that make up the 128-bit value, then recurse as
 ;; though it was a 64-bit value.
