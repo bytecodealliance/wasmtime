@@ -41,62 +41,54 @@
 
 ;; function u0:0:
 ;; block0:
-;;   slli t4,a0,32
-;;   srli t1,t4,32
-;;   auipc t0,0; ld t0,12(t0); j 12; .8byte 0xffff0004
-;;   add t4,t1,t0
-;;   ult t2,t4,t1##ty=i64
-;;   trap_if t2,heap_oob
-;;   ld t2,8(a2)
-;;   ugt a0,t4,t2##ty=i64
-;;   ld t2,0(a2)
-;;   add t1,t2,t1
-;;   auipc t2,0; ld t2,12(t2); j 12; .8byte 0xffff0000
-;;   add t1,t1,t2
-;;   li t2,0
-;;   andi a2,a0,255
-;;   not a3,a2
-;;   addi a5,a3,1
-;;   or a7,a2,a5
-;;   srli t4,a7,63
-;;   andi a0,t4,1
-;;   addi a0,a0,-1
-;;   not a2,a0
-;;   and a4,t2,a2
-;;   and a6,t1,a0
-;;   or t3,a4,a6
-;;   sw a1,0(t3)
+;;   slli a5,a0,32
+;;   srli a7,a5,32
+;;   auipc a6,0; ld a6,12(a6); j 12; .8byte 0xffff0004
+;;   add a5,a7,a6
+;;   ult t3,a5,a7##ty=i64
+;;   trap_if t3,heap_oob
+;;   ld t3,8(a2)
+;;   ugt t3,a5,t3##ty=i64
+;;   ld t4,0(a2)
+;;   add a7,t4,a7
+;;   auipc t4,0; ld t4,12(t4); j 12; .8byte 0xffff0000
+;;   add a7,a7,t4
+;;   li t4,0
+;;   andi a2,t3,255
+;;   sltu a3,zero,a2
+;;   sub a5,zero,a3
+;;   and t3,t4,a5
+;;   not t4,a5
+;;   and t1,a7,t4
+;;   or a0,t3,t1
+;;   sw a1,0(a0)
 ;;   j label1
 ;; block1:
 ;;   ret
 ;;
 ;; function u0:1:
 ;; block0:
-;;   slli t4,a0,32
-;;   srli t1,t4,32
-;;   auipc t0,0; ld t0,12(t0); j 12; .8byte 0xffff0004
-;;   add t4,t1,t0
-;;   ult t2,t4,t1##ty=i64
-;;   trap_if t2,heap_oob
-;;   ld t2,8(a1)
-;;   ugt a0,t4,t2##ty=i64
-;;   ld t2,0(a1)
-;;   add t1,t2,t1
-;;   auipc t2,0; ld t2,12(t2); j 12; .8byte 0xffff0000
-;;   add t1,t1,t2
-;;   li t2,0
-;;   andi a1,a0,255
-;;   not a3,a1
-;;   addi a5,a3,1
-;;   or a7,a1,a5
-;;   srli t4,a7,63
-;;   andi a0,t4,1
-;;   addi a0,a0,-1
-;;   not a2,a0
-;;   and a4,t2,a2
-;;   and a6,t1,a0
-;;   or t3,a4,a6
-;;   lw a0,0(t3)
+;;   slli a5,a0,32
+;;   srli a7,a5,32
+;;   auipc a6,0; ld a6,12(a6); j 12; .8byte 0xffff0004
+;;   add a5,a7,a6
+;;   ult t3,a5,a7##ty=i64
+;;   trap_if t3,heap_oob
+;;   ld t3,8(a1)
+;;   ugt t3,a5,t3##ty=i64
+;;   ld t4,0(a1)
+;;   add a7,t4,a7
+;;   auipc t4,0; ld t4,12(t4); j 12; .8byte 0xffff0000
+;;   add a7,a7,t4
+;;   li t4,0
+;;   andi a1,t3,255
+;;   sltu a3,zero,a1
+;;   sub a5,zero,a3
+;;   and t3,t4,a5
+;;   not t4,a5
+;;   and t1,a7,t4
+;;   or a0,t3,t1
+;;   lw a0,0(a0)
 ;;   j label1
 ;; block1:
 ;;   ret
