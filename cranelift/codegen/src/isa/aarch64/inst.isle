@@ -651,6 +651,16 @@
         (rm Reg)
         (size VectorSize))
 
+       ;; A vector ALU op modifying a source register.
+       (VecFmlaElem
+        (alu_op VecALUModOp)
+        (rd WritableReg)
+        (ri Reg)
+        (rn Reg)
+        (rm Reg)
+        (size VectorSize)
+        (idx u8))
+
        ;; Vector two register miscellaneous instruction.
        (VecMisc
         (op VecMisc2)
@@ -1850,12 +1860,20 @@
             (_ Unit (emit (MInst.FpuRR op size dst src))))
        dst))
 
-;; Helper for emitting `MInst.VecRRR` instructions which use three registers,
+;; Helper for emitting `MInst.VecRRRMod` instructions which use three registers,
 ;; one of which is both source and output.
 (decl vec_rrr_mod (VecALUModOp Reg Reg Reg VectorSize) Reg)
 (rule (vec_rrr_mod op src1 src2 src3 size)
       (let ((dst WritableReg (temp_writable_reg $I8X16))
             (_1 Unit (emit (MInst.VecRRRMod op dst src1 src2 src3 size))))
+        dst))
+
+;; Helper for emitting `MInst.VecFmlaElem` instructions which use three registers,
+;; one of which is both source and output.
+(decl vec_fmla_elem (VecALUModOp Reg Reg Reg VectorSize u8) Reg)
+(rule (vec_fmla_elem op src1 src2 src3 size idx)
+      (let ((dst WritableReg (temp_writable_reg $I8X16))
+            (_1 Unit (emit (MInst.VecFmlaElem op dst src1 src2 src3 size idx))))
         dst))
 
 (decl fpu_rri (FPUOpRI Reg) Reg)

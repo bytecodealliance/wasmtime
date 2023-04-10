@@ -73,8 +73,8 @@
 ;; block1:
 ;;   movq    %rdi, %r11
 ;;   addq    %r11, 0(%rsi), %r11
-;;   movl    $-65536, %r10d
-;;   movl    0(%r11,%r10,1), %eax
+;;   movl    $-65536, %esi
+;;   movl    0(%r11,%rsi,1), %eax
 ;;   jmp     label2
 ;; block2:
 ;;   movq    %rbp, %rsp

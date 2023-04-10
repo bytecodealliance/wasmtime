@@ -5,9 +5,10 @@ use cranelift_codegen::isa::{OwnedTargetIsa, TargetIsa};
 use cranelift_codegen::settings::Configurable;
 use cranelift_codegen::{self, ir, settings, MachReloc};
 use cranelift_codegen::{binemit::Reloc, CodegenError};
+use cranelift_control::ControlPlane;
 use cranelift_entity::SecondaryMap;
 use cranelift_module::{
-    DataContext, DataDescription, DataId, FuncId, Init, Linkage, Module, ModuleCompiledFunction,
+    DataDescription, DataId, FuncId, Init, Linkage, Module, ModuleCompiledFunction,
     ModuleDeclarations, ModuleError, ModuleExtName, ModuleReloc, ModuleResult,
 };
 use log::info;
@@ -641,47 +642,11 @@ impl Module for JITModule {
         Ok(id)
     }
 
-    /// Use this when you're building the IR of a function to reference a function.
-    ///
-    /// TODO: Coalesce redundant decls and signatures.
-    /// TODO: Look into ways to reduce the risk of using a FuncRef in the wrong function.
-    fn declare_func_in_func(&mut self, func: FuncId, in_func: &mut ir::Function) -> ir::FuncRef {
-        let decl = self.declarations.get_function_decl(func);
-        let signature = in_func.import_signature(decl.signature.clone());
-        let colocated = !self.hotswap_enabled && decl.linkage.is_final();
-        let user_name_ref = in_func.declare_imported_user_function(ir::UserExternalName {
-            namespace: 0,
-            index: func.as_u32(),
-        });
-        in_func.import_function(ir::ExtFuncData {
-            name: ir::ExternalName::user(user_name_ref),
-            signature,
-            colocated,
-        })
-    }
-
-    /// Use this when you're building the IR of a function to reference a data object.
-    ///
-    /// TODO: Same as above.
-    fn declare_data_in_func(&self, data: DataId, func: &mut ir::Function) -> ir::GlobalValue {
-        let decl = self.declarations.get_data_decl(data);
-        let colocated = !self.hotswap_enabled && decl.linkage.is_final();
-        let user_name_ref = func.declare_imported_user_function(ir::UserExternalName {
-            namespace: 1,
-            index: data.as_u32(),
-        });
-        func.create_global_value(ir::GlobalValueData::Symbol {
-            name: ir::ExternalName::user(user_name_ref),
-            offset: ir::immediates::Imm64::new(0),
-            colocated,
-            tls: decl.tls,
-        })
-    }
-
-    fn define_function(
+    fn define_function_with_control_plane(
         &mut self,
         id: FuncId,
         ctx: &mut cranelift_codegen::Context,
+        ctrl_plane: &mut ControlPlane,
     ) -> ModuleResult<ModuleCompiledFunction> {
         info!("defining function {}: {}", id, ctx.func.display());
         let decl = self.declarations.get_function_decl(id);
@@ -693,8 +658,23 @@ impl Module for JITModule {
             return Err(ModuleError::DuplicateDefinition(decl.name.to_owned()));
         }
 
+        if self.hotswap_enabled {
+            // Disable colocated if hotswapping is enabled to avoid a PLT indirection in case of
+            // calls and to allow data objects to be hotswapped in the future.
+            for func in ctx.func.dfg.ext_funcs.values_mut() {
+                func.colocated = false;
+            }
+
+            for gv in ctx.func.global_values.values_mut() {
+                match gv {
+                    ir::GlobalValueData::Symbol { colocated, .. } => *colocated = false,
+                    _ => {}
+                }
+            }
+        }
+
         // work around borrow-checker to allow reuse of ctx below
-        let res = ctx.compile(self.isa())?;
+        let res = ctx.compile(self.isa(), ctrl_plane)?;
         let alignment = res.alignment as u64;
         let compiled_code = ctx.compiled_code().unwrap();
 
@@ -835,7 +815,7 @@ impl Module for JITModule {
         Ok(ModuleCompiledFunction { size: total_size })
     }
 
-    fn define_data(&mut self, id: DataId, data: &DataContext) -> ModuleResult<()> {
+    fn define_data(&mut self, id: DataId, data: &DataDescription) -> ModuleResult<()> {
         let decl = self.declarations.get_data_decl(id);
         if !decl.linkage.is_definable() {
             return Err(ModuleError::InvalidImportDefinition(decl.name.clone()));
@@ -855,7 +835,7 @@ impl Module for JITModule {
             data_relocs: _,
             custom_segment_section: _,
             align,
-        } = data.description();
+        } = data;
 
         let size = init.size();
         let ptr = if decl.writable {
@@ -894,10 +874,7 @@ impl Module for JITModule {
             PointerWidth::U32 => Reloc::Abs4,
             PointerWidth::U64 => Reloc::Abs8,
         };
-        let relocs = data
-            .description()
-            .all_relocs(pointer_reloc)
-            .collect::<Vec<_>>();
+        let relocs = data.all_relocs(pointer_reloc).collect::<Vec<_>>();
 
         self.compiled_data_objects[id] = Some(CompiledBlob { ptr, size, relocs });
         self.data_objects_to_finalize.push(id);

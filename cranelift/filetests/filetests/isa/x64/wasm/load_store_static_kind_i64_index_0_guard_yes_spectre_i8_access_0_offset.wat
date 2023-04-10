@@ -61,12 +61,12 @@
 ;;   movq    %rsp, %rbp
 ;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ;; block0:
-;;   movq    %rdi, %r8
-;;   addq    %r8, 0(%rsi), %r8
+;;   movq    %rdi, %rdx
+;;   addq    %rdx, 0(%rsi), %rdx
 ;;   xorq    %r9, %r9, %r9
 ;;   cmpq    $268435455, %rdi
-;;   cmovnbeq %r9, %r8, %r8
-;;   movzbq  0(%r8), %rax
+;;   cmovnbeq %r9, %rdx, %rdx
+;;   movzbq  0(%rdx), %rax
 ;;   jmp     label1
 ;; block1:
 ;;   movq    %rbp, %rsp

@@ -106,7 +106,9 @@ entity_impl!(Inst, "inst");
 /// [call stack](https://en.wikipedia.org/wiki/Call_stack).
 ///
 /// `StackSlot`s can be created with
-/// [`FunctionBuilder::create_stackslot`](https://docs.rs/cranelift-frontend/*/cranelift_frontend/struct.FunctionBuilder.html#method.create_stack_slot).
+/// [`FunctionBuilder::create_sized_stack_slot`](https://docs.rs/cranelift-frontend/*/cranelift_frontend/struct.FunctionBuilder.html#method.create_sized_stack_slot)
+/// or
+/// [`FunctionBuilder::create_dynamic_stack_slot`](https://docs.rs/cranelift-frontend/*/cranelift_frontend/struct.FunctionBuilder.html#method.create_dynamic_stack_slot).
 ///
 /// `StackSlot`s are most often used with
 /// [`stack_addr`](super::InstBuilder::stack_addr),

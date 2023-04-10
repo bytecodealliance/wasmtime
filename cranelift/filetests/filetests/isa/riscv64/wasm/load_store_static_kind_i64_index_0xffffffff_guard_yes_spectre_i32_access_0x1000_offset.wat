@@ -39,32 +39,32 @@
 
 ;; function u0:0:
 ;; block0:
-;;   ld t4,0(a2)
-;;   add t4,t4,a0
-;;   lui t3,1
-;;   add t0,t4,t3
-;;   lui a7,65535
-;;   addi a7,a7,4092
-;;   ugt t1,a0,a7##ty=i64
-;;   li t2,0
-;;   selectif_spectre_guard t4,t2,t0##test=t1
-;;   sw a1,0(t4)
+;;   lui t4,65535
+;;   addi t4,t4,4092
+;;   ld t0,0(a2)
+;;   add t0,t0,a0
+;;   lui t1,1
+;;   add t0,t0,t1
+;;   li t1,0
+;;   ugt t4,a0,t4##ty=i64
+;;   selectif_spectre_guard t2,t1,t0##test=t4
+;;   sw a1,0(t2)
 ;;   j label1
 ;; block1:
 ;;   ret
 ;;
 ;; function u0:1:
 ;; block0:
-;;   ld t4,0(a1)
-;;   add t4,t4,a0
-;;   lui t3,1
-;;   add t0,t4,t3
-;;   lui a7,65535
-;;   addi a7,a7,4092
-;;   ugt t1,a0,a7##ty=i64
-;;   li t2,0
-;;   selectif_spectre_guard t4,t2,t0##test=t1
-;;   lw a0,0(t4)
+;;   lui t4,65535
+;;   addi t4,t4,4092
+;;   ld t0,0(a1)
+;;   add t0,t0,a0
+;;   lui t1,1
+;;   add t0,t0,t1
+;;   li t1,0
+;;   ugt t4,a0,t4##ty=i64
+;;   selectif_spectre_guard t2,t1,t0##test=t4
+;;   lw a0,0(t2)
 ;;   j label1
 ;; block1:
 ;;   ret

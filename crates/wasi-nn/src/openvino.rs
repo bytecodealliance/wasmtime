@@ -119,7 +119,7 @@ impl BackendExecutionContext for OpenvinoExecutionContext {
 
     fn get_output(&mut self, index: u32, destination: &mut [u8]) -> Result<u32, BackendError> {
         let output_name = self.0.get_output_name(index as usize)?;
-        let mut blob = self.1.get_blob(&output_name)?;
+        let blob = self.1.get_blob(&output_name)?;
         let blob_size = blob.byte_len()?;
         if blob_size > destination.len() {
             return Err(BackendError::NotEnoughMemory(blob_size));

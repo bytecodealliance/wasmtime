@@ -108,7 +108,7 @@ fuzz_target!(|func: FunctionWithIsa| {
     let cache_key_hash = icache::compute_cache_key(&*isa, &func);
 
     let mut context = Context::for_function(func.clone());
-    let prev_stencil = match context.compile_stencil(&*isa) {
+    let prev_stencil = match context.compile_stencil(&*isa, &mut Default::default()) {
         Ok(stencil) => stencil,
         Err(_) => return,
     };
@@ -199,7 +199,7 @@ fuzz_target!(|func: FunctionWithIsa| {
 
     context = Context::for_function(func.clone());
 
-    let after_mutation_result = match context.compile(&*isa) {
+    let after_mutation_result = match context.compile(&*isa, &mut Default::default()) {
         Ok(info) => info,
         Err(_) => return,
     };

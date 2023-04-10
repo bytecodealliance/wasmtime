@@ -1228,22 +1228,23 @@ block2(v8: i128):
 ; block0:
 ;   xorq    %rax, %rax, %rax
 ;   xorq    %r9, %r9, %r9
+;   movq    %r9, %r8
 ;   testb   %dl, %dl
 ;   jnz     label2; j label1
 ; block1:
-;   movl    $2, %r8d
+;   movl    $2, %r9d
 ;   xorq    %r10, %r10, %r10
-;   addq    %rax, %r8, %rax
-;   movq    %r9, %rdx
+;   addq    %rax, %r9, %rax
+;   movq    %r8, %rdx
 ;   adcq    %rdx, %r10, %rdx
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
 ; block2:
-;   movq    %r9, %rdx
-;   movl    $1, %r9d
+;   movq    %r8, %rdx
+;   movl    $1, %r10d
 ;   xorq    %r11, %r11, %r11
-;   addq    %rax, %r9, %rax
+;   addq    %rax, %r10, %rax
 ;   adcq    %rdx, %r11, %rdx
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -1256,22 +1257,23 @@ block2(v8: i128):
 ; block1: ; offset 0x4
 ;   xorq %rax, %rax
 ;   xorq %r9, %r9
+;   movq %r9, %r8
 ;   testb %dl, %dl
-;   jne 0x29
-; block2: ; offset 0x12
-;   movl $2, %r8d
+;   jne 0x2c
+; block2: ; offset 0x15
+;   movl $2, %r9d
 ;   xorq %r10, %r10
-;   addq %r8, %rax
-;   movq %r9, %rdx
+;   addq %r9, %rax
+;   movq %r8, %rdx
 ;   adcq %r10, %rdx
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
-; block3: ; offset 0x29
-;   movq %r9, %rdx
-;   movl $1, %r9d
+; block3: ; offset 0x2c
+;   movq %r8, %rdx
+;   movl $1, %r10d
 ;   xorq %r11, %r11
-;   addq %r9, %rax
+;   addq %r10, %rax
 ;   adcq %r11, %rdx
 ;   movq %rbp, %rsp
 ;   popq %rbp

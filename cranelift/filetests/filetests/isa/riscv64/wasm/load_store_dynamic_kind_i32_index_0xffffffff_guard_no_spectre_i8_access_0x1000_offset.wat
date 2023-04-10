@@ -49,9 +49,9 @@
 ;; block1:
 ;;   ld t0,0(a2)
 ;;   add t4,t0,t4
-;;   lui t3,1
-;;   add t0,t4,t3
-;;   sb a1,0(t0)
+;;   lui t0,1
+;;   add t4,t4,t0
+;;   sb a1,0(t4)
 ;;   j label2
 ;; block2:
 ;;   ret
@@ -68,9 +68,9 @@
 ;; block1:
 ;;   ld t0,0(a1)
 ;;   add t4,t0,t4
-;;   lui t3,1
-;;   add t0,t4,t3
-;;   lbu a0,0(t0)
+;;   lui t0,1
+;;   add t4,t4,t0
+;;   lbu a0,0(t4)
 ;;   j label2
 ;; block2:
 ;;   ret

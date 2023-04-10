@@ -92,8 +92,8 @@ pub use crate::machinst::buffer::{
     MachCallSite, MachReloc, MachSrcLoc, MachStackMap, MachTextSectionBuilder, MachTrap,
 };
 pub use crate::machinst::{
-    CompiledCode, Final, MachBuffer, MachBufferFinalized, MachInst, MachInstEmit, Reg,
-    TextSectionBuilder, Writable,
+    CompiledCode, Final, MachBuffer, MachBufferFinalized, MachInst, MachInstEmit,
+    MachInstEmitState, Reg, TextSectionBuilder, Writable,
 };
 
 mod alias_analysis;
@@ -102,21 +102,17 @@ mod constant_hash;
 mod context;
 mod ctxhash;
 mod dce;
-mod divconst_magic_numbers;
 mod egraph;
 mod fx;
 mod inst_predicates;
 mod isle_prelude;
 mod iterators;
 mod legalizer;
-mod licm;
 mod nan_canonicalization;
 mod opts;
 mod remove_constant_phis;
 mod result;
 mod scoped_hash_map;
-mod simple_gvn;
-mod simple_preopt;
 mod unionfind;
 mod unreachable_code;
 mod value_label;

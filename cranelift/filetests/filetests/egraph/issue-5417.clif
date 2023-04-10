@@ -1,6 +1,5 @@
 test compile
 set opt_level=speed
-set use_egraphs=true
 target x86_64
 target aarch64
 target s390x
