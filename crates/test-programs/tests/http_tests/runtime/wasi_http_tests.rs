@@ -4,19 +4,21 @@ use wasmtime::{Config, Engine, Linker, Module, Store};
 use wasmtime_wasi::{sync::WasiCtxBuilder, WasiCtx};
 use wasmtime_wasi_http::WasiHttp;
 
-use http_body_util::{BodyExt, Full};
+use http_body_util::combinators::BoxBody;
+use http_body_util::BodyExt;
 use hyper::server::conn::http1;
 use hyper::{body::Bytes, service::service_fn, Request, Response};
 use std::{error::Error, net::SocketAddr};
 use tokio::net::TcpListener;
 
-async fn test(req: Request<hyper::body::Incoming>) -> http::Result<Response<Full<Bytes>>> {
+async fn test(
+    req: Request<hyper::body::Incoming>,
+) -> http::Result<Response<BoxBody<Bytes, hyper::Error>>> {
     let method = req.method().to_string();
-    let body = req.collect().await.unwrap().to_bytes();
     Response::builder()
         .status(http::StatusCode::OK)
         .header("x-wasmtime-test-method", method)
-        .body(Full::new(Bytes::from(body)))
+        .body(req.into_body().boxed())
 }
 
 async fn async_run_serve() -> Result<(), Box<dyn Error + Send + Sync>> {
