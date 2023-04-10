@@ -1440,7 +1440,7 @@ fn icmp(
         Ok(DataValueExt::bool(
             match code {
                 IntCC::Equal => left == right,
-                IntCC::NotEqual => !(left == right),
+                IntCC::NotEqual => left != right,
                 IntCC::SignedGreaterThan => left > right,
                 IntCC::SignedGreaterThanOrEqual => left >= right,
                 IntCC::SignedLessThan => left < right,
