@@ -275,13 +275,13 @@ fn resolve_aliases(values: &PrimaryMap<Value, ValueDataPacked>, value: Value) ->
     }
 }
 
-/// Iterator over all Values in a DFG
+/// Iterator over all Values in a DFG.
 pub struct Values<'a> {
     inner: entity::Iter<'a, Value, ValueDataPacked>,
 }
 
-/// Check for non-values
-fn valid_valuedata(data: ValueDataPacked) -> bool {
+/// Check for non-values.
+fn valid_value_data(data: ValueDataPacked) -> bool {
     let data = ValueData::from(data);
     if let ValueData::Alias {
         ty: types::INVALID,
@@ -301,7 +301,7 @@ impl<'a> Iterator for Values<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         self.inner
             .by_ref()
-            .find(|kv| valid_valuedata(*kv.1))
+            .find(|kv| valid_value_data(*kv.1))
             .map(|kv| kv.0)
     }
 }
