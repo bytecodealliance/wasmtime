@@ -61,6 +61,11 @@ pub struct Opts {
     /// A list of "trappable errors" which are used to replace the `E` in
     /// `result<T, E>` found in WIT.
     pub trappable_error_type: Vec<TrappableError>,
+
+    /// Whether or not to generate "duplicate" type definitions for a single
+    /// WIT type if necessary, for example if it's used as both an import and an
+    /// export.
+    pub duplicate_if_necessary: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -1383,6 +1388,10 @@ impl<'a> InterfaceGenerator<'a> {
 impl<'a> RustGenerator<'a> for InterfaceGenerator<'a> {
     fn resolve(&self) -> &'a Resolve {
         self.resolve
+    }
+
+    fn duplicate_if_necessary(&self) -> bool {
+        self.gen.opts.duplicate_if_necessary
     }
 
     fn path_to_interface(&self, interface: InterfaceId) -> Option<String> {

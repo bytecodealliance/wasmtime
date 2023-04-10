@@ -17,6 +17,16 @@ pub trait RustGenerator<'a> {
     fn info(&self, ty: TypeId) -> TypeInfo;
     fn path_to_interface(&self, interface: InterfaceId) -> Option<String>;
 
+    /// This, if enabled, will possibly cause types to get duplicate copies to
+    /// get generated of each other. For example a record containing a string
+    /// used both in the import and export context would get one variant
+    /// generated for both.
+    ///
+    /// If this is disabled then the import context would require the same type
+    /// used for the export context, which has an owned string that might not
+    /// otherwise be necessary.
+    fn duplicate_if_necessary(&self) -> bool;
+
     fn print_ty(&mut self, ty: &Type, mode: TypeMode) {
         match ty {
             Type::Id(t) => self.print_tyid(*t, mode),
@@ -58,6 +68,20 @@ pub trait RustGenerator<'a> {
         let lt = self.lifetime_for(&info, mode);
         let ty = &self.resolve().types[id];
         if ty.name.is_some() {
+            // If this type has a list internally, no lifetime is being printed,
+            // but we're in a borrowed mode, then that means we're in a borrowed
+            // context and don't want ownership of the type but we're using an
+            // owned type definition. Inject a `&` in front to indicate that, at
+            // the API level, ownership isn't required.
+            if info.has_list && lt.is_none() {
+                if let TypeMode::AllBorrowed(lt) = mode {
+                    self.push_str("&");
+                    if lt != "'_" {
+                        self.push_str(lt);
+                        self.push_str(" ");
+                    }
+                }
+            }
             let name = if lt.is_some() {
                 self.param_name(id)
             } else {
@@ -197,12 +221,19 @@ pub trait RustGenerator<'a> {
 
     fn modes_of(&self, ty: TypeId) -> Vec<(String, TypeMode)> {
         let info = self.info(ty);
-        let mut result = Vec::new();
-        if info.borrowed {
-            result.push((self.param_name(ty), TypeMode::AllBorrowed("'a")));
+        if !info.owned && !info.borrowed {
+            return Vec::new();
         }
-        if info.owned && (!info.borrowed || self.uses_two_names(&info)) {
-            result.push((self.result_name(ty), TypeMode::Owned));
+        let mut result = Vec::new();
+        let first_mode = if info.owned || !info.borrowed {
+            TypeMode::Owned
+        } else {
+            assert!(!self.uses_two_names(&info));
+            TypeMode::AllBorrowed("'a")
+        };
+        result.push((self.result_name(ty), first_mode));
+        if self.uses_two_names(&info) {
+            result.push((self.param_name(ty), TypeMode::AllBorrowed("'a")));
         }
         return result;
     }
@@ -347,13 +378,27 @@ pub trait RustGenerator<'a> {
     }
 
     fn uses_two_names(&self, info: &TypeInfo) -> bool {
-        info.has_list && info.borrowed && info.owned
+        info.has_list && info.borrowed && info.owned && self.duplicate_if_necessary()
     }
 
     fn lifetime_for(&self, info: &TypeInfo, mode: TypeMode) -> Option<&'static str> {
-        match mode {
-            TypeMode::AllBorrowed(s) if info.has_list => Some(s),
-            _ => None,
+        let lt = match mode {
+            TypeMode::AllBorrowed(s) => s,
+            _ => return None,
+        };
+        // No lifetimes needed unless this has a list.
+        if !info.has_list {
+            return None;
+        }
+        // If two names are used then this type will have an owned and a
+        // borrowed copy and the borrowed copy is being used, so it needs a
+        // lifetime. Otherwise if it's only borrowed and not owned then this can
+        // also use a lifetime since it's not needed in two contexts and only
+        // the borrowed version of the structure was generated.
+        if self.uses_two_names(info) || (info.borrowed && !info.owned) {
+            Some(lt)
+        } else {
+            None
         }
     }
 }
