@@ -292,6 +292,20 @@ pub(crate) use self::store::ComponentStoreData;
 ///         interface::ErrorType: RustErrorType,
 ///     },
 ///
+///     // Restrict the code generated to what's needed for the imported
+///     // interfaces of the world file provided. This option is most useful
+///     // in conjunction with the `with` option that permits remapping of
+///     // interface names in generated code.
+///     only_interfaces: true,
+///
+///     // Remap interface names to module names, imported from elswhere.
+///     // Using this option will prevent any code from being generated
+///     // for the names mentioned in the mapping, assuming instead that the
+///     // names mentioned come from a previous use of the `bindgen!` macro
+///     // with `only_interfaces: true`.
+///     with: {
+///         "a": somewhere::else::a,
+///     },
 /// });
 /// ```
 ///
