@@ -359,6 +359,14 @@ fuzz_target!(|testcase: TestCase| {
     // This is the default, but we should ensure that it wasn't accidentally turned off anywhere.
     assert!(testcase.isa.flags().enable_verifier());
 
+    let mut ctrl_planes = testcase.ctrl_planes.clone();
+    if let Some(fuel) =
+        std::env::args().find_map(|arg| arg.strip_prefix("--fuel=").map(|s| s.to_owned()))
+    {
+        let fuel = fuel.parse().expect("fuel should be a valid integer");
+        ctrl_planes.iter_mut().for_each(|cp| cp.set_fuel(fuel));
+    }
+
     // Periodically print statistics
     let valid_inputs = STATISTICS.valid_inputs.fetch_add(1, Ordering::SeqCst);
     if valid_inputs != 0 && valid_inputs % 10000 == 0 {
@@ -378,7 +386,7 @@ fuzz_target!(|testcase: TestCase| {
     } else {
         let mut compiler = TestFileCompiler::new(testcase.isa.clone());
         compiler
-            .add_functions(&testcase.functions[..], testcase.ctrl_planes.clone())
+            .add_functions(&testcase.functions[..], ctrl_planes)
             .unwrap();
         let compiled = compiler.compile().unwrap();
         let trampoline = compiled.get_trampoline(testcase.main()).unwrap();

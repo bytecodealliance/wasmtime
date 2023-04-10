@@ -19,6 +19,11 @@ impl arbitrary::Arbitrary<'_> for ControlPlane {
 }
 
 impl ControlPlane {
+    /// Set the maximum number of perturbations to be introduced with chaos
+    /// mode. This variant is used when chaos mode is disabled. It doesn't
+    /// do anything.
+    pub fn set_fuel(&mut self, _fuel: u8) {}
+
     /// Returns a pseudo-random boolean. This variant is used when chaos
     /// mode is disabled. It always returns `false`.
     #[inline]
