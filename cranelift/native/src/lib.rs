@@ -169,7 +169,13 @@ pub fn infer_native_flags(isa_builder: &mut dyn Configurable) -> Result<(), &'st
     #[cfg(all(target_arch = "riscv64", target_os = "linux"))]
     {
         // Try both hwcap and cpuinfo
+        // HWCAP only returns single letter extensions, cpuinfo returns all of
+        // them but may not be available in some systems (QEMU < 8.1).
         riscv::hwcap_detect(isa_builder)?;
+
+        // Ignore errors for cpuinfo. QEMU versions prior to 8.1 do not emulate
+        // the cpuinfo interface, so we can't rely on it being present for now.
+        let _ = riscv::cpuinfo_detect(isa_builder);
     }
     Ok(())
 }
