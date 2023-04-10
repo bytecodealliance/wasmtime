@@ -550,6 +550,14 @@ mod tests {
     }
 
     #[test]
+    fn memory_option() {
+        use core::mem;
+        // PackedOption is used because Option<EntityRef> is twice as large
+        // as EntityRef. If this ever fails to be the case, this test will fail.
+        assert_eq!(mem::size_of::<Value>() * 2, mem::size_of::<Option<Value>>());
+    }
+
+    #[test]
     fn constant_with_number() {
         assert_eq!(Constant::with_number(0).unwrap().to_string(), "const0");
         assert_eq!(Constant::with_number(1).unwrap().to_string(), "const1");
