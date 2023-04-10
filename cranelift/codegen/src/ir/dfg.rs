@@ -281,7 +281,7 @@ pub struct Values<'a> {
 }
 
 /// Check for non-values.
-fn valid_value_data(data: ValueDataPacked) -> bool {
+fn valid_valuedata(data: ValueDataPacked) -> bool {
     let data = ValueData::from(data);
     if let ValueData::Alias {
         ty: types::INVALID,
@@ -301,7 +301,7 @@ impl<'a> Iterator for Values<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         self.inner
             .by_ref()
-            .find(|kv| valid_value_data(*kv.1))
+            .find(|kv| valid_valuedata(*kv.1))
             .map(|kv| kv.0)
     }
 }
