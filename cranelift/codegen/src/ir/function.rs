@@ -230,7 +230,7 @@ impl FunctionStencil {
         self.global_values.push(data)
     }
 
-    /// Find the global dyn_scale value associated with given DynamicType
+    /// Find the global dyn_scale value associated with given DynamicType.
     pub fn get_dyn_scale(&self, ty: DynamicType) -> GlobalValue {
         self.dfg.dynamic_types.get(ty).unwrap().dynamic_scale
     }
