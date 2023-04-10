@@ -1,12 +1,13 @@
 use crate::clocks::WasiClocks;
 use crate::dir::WasiDir;
 use crate::file::WasiFile;
-use crate::network::{AddressFamily, WasiNetwork};
+use crate::network::WasiNetwork;
 use crate::sched::WasiSched;
 use crate::stream::{InputStream, OutputStream};
 use crate::table::Table;
 use crate::tcp_socket::WasiTcpSocket;
 use crate::Error;
+use cap_net_ext::AddressFamily;
 use cap_rand::RngCore;
 use cap_std::ambient_authority;
 use cap_std::net::Pool;
@@ -82,6 +83,16 @@ impl WasiCtx {
         self.table_mut().push(Box::new(dir))
     }
 
+    /// Add network addresses to the pool.
+    pub fn insert_addr<A: cap_std::net::ToSocketAddrs>(&mut self, addrs: A) -> std::io::Result<()> {
+        self.pool.insert(addrs, ambient_authority())
+    }
+
+    /// Add a specific [`cap_std::net::SocketAddr`] to the pool.
+    pub fn insert_socket_addr(&mut self, addr: cap_std::net::SocketAddr) {
+        self.pool.insert_socket_addr(addr, ambient_authority());
+    }
+
     /// Add a range of network addresses, accepting any port, to the pool.
     ///
     /// Unlike `insert_ip_net`, this function grants access to any requested port.
@@ -108,11 +119,6 @@ impl WasiCtx {
     /// Add a range of network addresses with a specific port to the pool.
     pub fn insert_ip_net(&mut self, ip_net: ipnet::IpNet, port: u16) {
         self.pool.insert_ip_net(ip_net, port, ambient_authority())
-    }
-
-    /// Add a specific [`cap_std::net::SocketAddr`] to the pool.
-    pub fn insert_socket_addr(&mut self, addr: cap_std::net::SocketAddr) {
-        self.pool.insert_socket_addr(addr, ambient_authority());
     }
 
     pub fn table(&self) -> &Table {

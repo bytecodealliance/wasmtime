@@ -6,6 +6,6 @@ publish = false
 
 [dependencies]
 getrandom = "0.2.8"
-rustix = "0.36.6"
-cap-std = "1.0.3"
+rustix = "0.37.9"
+cap-std = "1.0.12"
 wit-bindgen = { workspace = true, default-features = true }

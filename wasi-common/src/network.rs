@@ -3,14 +3,6 @@
 use crate::Error;
 use std::any::Any;
 
-#[derive(Copy, Clone, Debug)]
-pub enum AddressFamily {
-    /// `AF_INET` for IPv4.
-    INET,
-    /// `AF_INET6` for IPv6.
-    INET6,
-}
-
 /// An IP network.
 #[async_trait::async_trait]
 pub trait WasiNetwork: Send + Sync {
