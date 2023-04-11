@@ -92,3 +92,17 @@
 (rule (simplify (bxor ty x (iconst ty k)))
   (if-let -1 (i64_sextend_imm64 ty k))
   (bnot ty x))
+
+;; bmask(input) = !(((input | ((!input) + 1)) >> 63) - 1)
+(rule (simplify (bnot ty
+                      (isub ty
+                            (ushr ty
+                                  (bor ty
+                                        input
+                                        (iadd ty
+                                              (bnot ty input)
+                                              (iconst ty (u64_from_imm64 1))))
+                                  (iconst ty (u64_from_imm64 shift_amt)))
+                            (iconst ty (u64_from_imm64 1)))))
+      (if-let $true (u64_eq shift_amt (u64_sub (ty_bits ty) 1)))
+      (bmask ty input))
