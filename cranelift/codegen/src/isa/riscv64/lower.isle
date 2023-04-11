@@ -927,17 +927,13 @@
 (rule (lower (has_type ty (select_spectre_guard cmp @ (value_type cmp_ty) x @ (value_type arg_ty) y)))
   (let (;; Build a mask that is 0 or -1 depending on the input comparision value.
         ;; `lower_bmask` handles normalizing the input.
-        (mask Reg (lower_bmask $I64 cmp_ty cmp))
-        ;; We computed the mask were computing the mask as 64bits. But for i128's we need to do
-        ;; the next part on both halves.
-        ;; This still lowers to a normal single reg based lowering if we are lowering < i128
-        (wide_mask ValueRegs (value_regs mask mask))
+        (mask ValueRegs (lower_bmask arg_ty cmp_ty cmp))
         ;; Using the mask above we can select either `x` or `y` by
         ;; performing a bitwise `and` on both sides and then merging them
         ;; together. We know that only the bits of one of the sides will be selected.
         ;; TODO: We can use `andn` here if we have `Zbb`
-        (lhs ValueRegs (gen_and arg_ty x wide_mask))
-        (rhs ValueRegs (gen_and arg_ty y (gen_bnot arg_ty wide_mask))))
+        (lhs ValueRegs (gen_and arg_ty x mask))
+        (rhs ValueRegs (gen_and arg_ty y (gen_bnot arg_ty mask))))
     (gen_or arg_ty lhs rhs)))
 
 ;;;;;  Rules for `bmask`;;;;;;;;;
