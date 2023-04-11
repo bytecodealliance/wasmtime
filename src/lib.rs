@@ -558,20 +558,46 @@ pub unsafe extern "C" fn fd_fdstat_set_rights(
 pub unsafe extern "C" fn fd_filestat_get(fd: Fd, buf: *mut Filestat) -> Errno {
     State::with(|state| {
         let ds = state.descriptors();
-        let file = ds.get_file(fd)?;
-        let stat = filesystem::stat(file.fd)?;
-        let filetype = stat.type_.into();
-        *buf = Filestat {
-            dev: stat.device,
-            ino: stat.inode,
-            filetype,
-            nlink: stat.link_count,
-            size: stat.size,
-            atim: datetime_to_timestamp(stat.data_access_timestamp),
-            mtim: datetime_to_timestamp(stat.data_modification_timestamp),
-            ctim: datetime_to_timestamp(stat.status_change_timestamp),
-        };
-        Ok(())
+
+        match ds.get(fd)? {
+            Descriptor::Streams(Streams {
+                type_: StreamType::File(file),
+                ..
+            }) => {
+                let stat = filesystem::stat(file.fd)?;
+                let filetype = stat.type_.into();
+                *buf = Filestat {
+                    dev: stat.device,
+                    ino: stat.inode,
+                    filetype,
+                    nlink: stat.link_count,
+                    size: stat.size,
+                    atim: datetime_to_timestamp(stat.data_access_timestamp),
+                    mtim: datetime_to_timestamp(stat.data_modification_timestamp),
+                    ctim: datetime_to_timestamp(stat.status_change_timestamp),
+                };
+                Ok(())
+            }
+            // For unknown (effectively, stdio) streams, instead of returning an error, return a
+            // Filestat with all zero fields and Filetype::Unknown.
+            Descriptor::Streams(Streams {
+                type_: StreamType::Unknown,
+                ..
+            }) => {
+                *buf = Filestat {
+                    dev: 0,
+                    ino: 0,
+                    filetype: FILETYPE_UNKNOWN,
+                    nlink: 0,
+                    size: 0,
+                    atim: 0,
+                    mtim: 0,
+                    ctim: 0,
+                };
+                Ok(())
+            }
+            _ => Err(wasi::ERRNO_BADF),
+        }
     })
 }
 
