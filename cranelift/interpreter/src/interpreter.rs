@@ -12,7 +12,7 @@ use crate::value::{DataValueExt, ValueError};
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::{
     ArgumentPurpose, Block, Endianness, ExternalName, FuncRef, Function, GlobalValue,
-    GlobalValueData, LibCall, MemFlags, StackSlot, TrapCode, Type, Value as ValueRef,
+    GlobalValueData, LibCall, MemFlags, StackSlot, TrapCode, Type,
 };
 use log::trace;
 use smallvec::SmallVec;
@@ -236,22 +236,6 @@ impl<'a> InterpreterState<'a> {
         self.libcall_handler = handler;
         self
     }
-
-    fn current_frame_mut(&mut self) -> &mut Frame<'a> {
-        let num_frames = self.frame_stack.len();
-        match num_frames {
-            0 => panic!("unable to retrieve the current frame because no frames were pushed"),
-            _ => &mut self.frame_stack[num_frames - 1],
-        }
-    }
-
-    fn current_frame(&self) -> &Frame<'a> {
-        let num_frames = self.frame_stack.len();
-        match num_frames {
-            0 => panic!("unable to retrieve the current frame because no frames were pushed"),
-            _ => &self.frame_stack[num_frames - 1],
-        }
-    }
 }
 
 impl<'a> State<'a> for InterpreterState<'a> {
@@ -291,12 +275,20 @@ impl<'a> State<'a> for InterpreterState<'a> {
         }
     }
 
-    fn get_value(&self, name: ValueRef) -> Option<DataValue> {
-        Some(self.current_frame().get(name).clone()) // TODO avoid clone?
+    fn current_frame_mut(&mut self) -> &mut Frame<'a> {
+        let num_frames = self.frame_stack.len();
+        match num_frames {
+            0 => panic!("unable to retrieve the current frame because no frames were pushed"),
+            _ => &mut self.frame_stack[num_frames - 1],
+        }
     }
 
-    fn set_value(&mut self, name: ValueRef, value: DataValue) -> Option<DataValue> {
-        self.current_frame_mut().set(name, value)
+    fn current_frame(&self) -> &Frame<'a> {
+        let num_frames = self.frame_stack.len();
+        match num_frames {
+            0 => panic!("unable to retrieve the current frame because no frames were pushed"),
+            _ => &self.frame_stack[num_frames - 1],
+        }
     }
 
     fn stack_address(
