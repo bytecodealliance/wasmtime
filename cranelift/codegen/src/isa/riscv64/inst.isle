@@ -2303,9 +2303,6 @@
         (test Reg (rv_srli sum (imm12_const (ty_bits ty)))))
     (value_regs sum test)))
 
-(decl inst_output_get (InstOutput u8) ValueRegs)
-(extern constructor inst_output_get inst_output_get)
-
 (decl label_to_br_target (MachLabel) BranchTarget)
 (extern constructor label_to_br_target label_to_br_target)
 

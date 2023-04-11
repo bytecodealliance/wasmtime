@@ -258,6 +258,18 @@ impl DataValue {
             (DataValue::F32(a), DataValue::F32(b)) => a.bits() == b.bits(),
             (DataValue::F64(a), DataValue::F64(b)) => a.bits() == b.bits(),
 
+            // when testing for bitwise equality, the sign information does not matter
+            (DataValue::I8(a), DataValue::U8(b)) => *a as u8 == *b,
+            (DataValue::U8(a), DataValue::I8(b)) => *a == *b as u8,
+            (DataValue::I16(a), DataValue::U16(b)) => *a as u16 == *b,
+            (DataValue::U16(a), DataValue::I16(b)) => *a == *b as u16,
+            (DataValue::I32(a), DataValue::U32(b)) => *a as u32 == *b,
+            (DataValue::U32(a), DataValue::I32(b)) => *a == *b as u32,
+            (DataValue::I64(a), DataValue::U64(b)) => *a as u64 == *b,
+            (DataValue::U64(a), DataValue::I64(b)) => *a == *b as u64,
+            (DataValue::I128(a), DataValue::U128(b)) => *a as u128 == *b,
+            (DataValue::U128(a), DataValue::I128(b)) => *a == *b as u128,
+
             // We don't need to worry about F32x4 / F64x2 Since we compare V128 which is already the
             // raw bytes anyway
             (a, b) => a == b,

@@ -1087,6 +1087,30 @@ fn test_aarch64_binemit() {
         "msub x1, x2, x3, x4",
     ));
     insns.push((
+        Inst::AluRRRR {
+            alu_op: ALUOp3::UMAddL,
+            size: OperandSize::Size32,
+            rd: writable_xreg(1),
+            rn: xreg(2),
+            rm: xreg(3),
+            ra: xreg(4),
+        },
+        "4110A39B",
+        "umaddl x1, w2, w3, x4",
+    ));
+    insns.push((
+        Inst::AluRRRR {
+            alu_op: ALUOp3::SMAddL,
+            size: OperandSize::Size32,
+            rd: writable_xreg(1),
+            rn: xreg(2),
+            rm: xreg(3),
+            ra: xreg(4),
+        },
+        "4110239B",
+        "smaddl x1, w2, w3, x4",
+    ));
+    insns.push((
         Inst::AluRRR {
             alu_op: ALUOp::SMulH,
             size: OperandSize::Size64,

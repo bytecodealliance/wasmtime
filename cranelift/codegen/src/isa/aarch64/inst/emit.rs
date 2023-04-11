@@ -789,6 +789,14 @@ impl MachInstEmit for Inst {
                 let (top11, bit15) = match alu_op {
                     ALUOp3::MAdd => (0b0_00_11011_000, 0),
                     ALUOp3::MSub => (0b0_00_11011_000, 1),
+                    ALUOp3::UMAddL => {
+                        debug_assert!(size == OperandSize::Size32);
+                        (0b1_00_11011_1_01, 0)
+                    }
+                    ALUOp3::SMAddL => {
+                        debug_assert!(size == OperandSize::Size32);
+                        (0b1_00_11011_0_01, 0)
+                    }
                 };
                 let top11 = top11 | size.sf_bit() << 10;
                 sink.put4(enc_arith_rrrr(top11, rm, bit15, ra, rn, rd));

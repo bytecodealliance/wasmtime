@@ -466,6 +466,7 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                 args,
                 rets,
                 (Opcode::IaddCout, &([I8, I8] | [I16, I16] | [I128, I128])),
+                (Opcode::UmulOverflow | Opcode::SmulOverflow, &[I128, I128]),
                 (Opcode::Imul, &[I8X16, I8X16]),
                 // https://github.com/bytecodealliance/wasmtime/issues/5468
                 (Opcode::Smulhi | Opcode::Umulhi, &[I8, I8]),
@@ -583,6 +584,7 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                 args,
                 rets,
                 (Opcode::IaddCout, &[I128, I128]),
+                (Opcode::UmulOverflow | Opcode::SmulOverflow, &[I128, I128]),
                 // https://github.com/bytecodealliance/wasmtime/issues/4864
                 (Opcode::Udiv | Opcode::Sdiv, &[I128, I128]),
                 // https://github.com/bytecodealliance/wasmtime/issues/5472
@@ -638,6 +640,9 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                 args,
                 rets,
                 (Opcode::IaddCout),
+                (Opcode::UaddOverflow | Opcode::SaddOverflow),
+                (Opcode::UsubOverflow | Opcode::SsubOverflow),
+                (Opcode::UmulOverflow | Opcode::SmulOverflow),
                 (
                     Opcode::Udiv | Opcode::Sdiv | Opcode::Urem | Opcode::Srem,
                     &[I128, I128]
@@ -682,6 +687,9 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                 rets,
                 // TODO
                 (Opcode::IaddCout),
+                (Opcode::UaddOverflow | Opcode::SaddOverflow),
+                (Opcode::UsubOverflow | Opcode::SsubOverflow),
+                (Opcode::UmulOverflow | Opcode::SmulOverflow),
                 // TODO
                 (
                     Opcode::Udiv | Opcode::Sdiv | Opcode::Urem | Opcode::Srem,
