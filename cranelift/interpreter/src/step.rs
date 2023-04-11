@@ -802,11 +802,6 @@ where
             )?,
             DataValueExt::add(arg(0), arg(1))?,
         ),
-        Opcode::IaddCout => {
-            let carry = arg(0).checked_add(arg(1))?.is_none();
-            let sum = arg(0).add(arg(1))?;
-            assign_multiple(&[sum, DataValueExt::bool(carry, false, types::I8)?])
-        }
         Opcode::IaddCarry => {
             let mut sum = DataValueExt::add(arg(0), arg(1))?;
             let mut carry = arg(0).checked_add(arg(1))?.is_none();
@@ -838,11 +833,6 @@ where
             )?,
             DataValueExt::sub(arg(0), arg(1))?,
         ),
-        Opcode::IsubBout => {
-            let sum = DataValueExt::sub(arg(0), arg(1))?;
-            let borrow = arg(0) < arg(1);
-            assign_multiple(&[sum, DataValueExt::bool(borrow, false, types::I8)?])
-        }
         Opcode::IsubBorrow => {
             let rhs = if DataValueExt::into_bool(arg(2))? {
                 DataValueExt::add(arg(1), DataValueExt::int(1, ctrl_ty)?)?

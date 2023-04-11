@@ -465,7 +465,6 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                 op,
                 args,
                 rets,
-                (Opcode::IaddCout, &([I8, I8] | [I16, I16] | [I128, I128])),
                 (Opcode::UmulOverflow | Opcode::SmulOverflow, &[I128, I128]),
                 (Opcode::Imul, &[I8X16, I8X16]),
                 // https://github.com/bytecodealliance/wasmtime/issues/5468
@@ -583,7 +582,6 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                 op,
                 args,
                 rets,
-                (Opcode::IaddCout, &[I128, I128]),
                 (Opcode::UmulOverflow | Opcode::SmulOverflow, &[I128, I128]),
                 // https://github.com/bytecodealliance/wasmtime/issues/4864
                 (Opcode::Udiv | Opcode::Sdiv, &[I128, I128]),
@@ -639,7 +637,6 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                 op,
                 args,
                 rets,
-                (Opcode::IaddCout),
                 (Opcode::UaddOverflow | Opcode::SaddOverflow),
                 (Opcode::UsubOverflow | Opcode::SsubOverflow),
                 (Opcode::UmulOverflow | Opcode::SmulOverflow),
@@ -686,7 +683,6 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                 args,
                 rets,
                 // TODO
-                (Opcode::IaddCout),
                 (Opcode::UaddOverflow | Opcode::SaddOverflow),
                 (Opcode::UsubOverflow | Opcode::SsubOverflow),
                 (Opcode::UmulOverflow | Opcode::SmulOverflow),
@@ -863,7 +859,6 @@ static OPCODE_SIGNATURES: Lazy<Vec<OpcodeSignature>> = Lazy::new(|| {
                 (Opcode::IaddCarry),
                 (Opcode::UaddOverflowTrap),
                 (Opcode::IsubBin),
-                (Opcode::IsubBout),
                 (Opcode::IsubBorrow),
                 (Opcode::BandImm),
                 (Opcode::BorImm),
