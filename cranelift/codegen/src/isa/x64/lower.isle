@@ -98,19 +98,6 @@
           (with_flags (x64_add_with_flags_paired $I64 x_lo y_lo)
                       (x64_adc_paired $I64 x_hi y_hi)))))
 
-;;;; Rules for `iadd_cout` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; TODO: i8 and i16 support. Requires either learning how to encode ALU
-;; operations on values narrower than 32-bits (better code; big change) or doing
-;; the same extend-to-32-bits trick that aarch64 does (worse code; small
-;; change).
-
-(rule (lower (iadd_cout x y @ (value_type (ty_32_or_64 ty))))
-      (let ((results ValueRegs (with_flags (x64_add_with_flags_paired ty x y)
-                                           (x64_setcc_paired (CC.O)))))
-        (output_pair (value_regs_get results 0)
-                     (value_regs_get results 1))))
-
 ;;;; Helpers for `*_overflow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (decl construct_overflow_op (CC ProducesFlags) InstOutput)
