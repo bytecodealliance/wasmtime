@@ -1,5 +1,5 @@
 //! The [step] function interprets a single Cranelift instruction given its [State] and
-//! [InstructionContext]; the interpretation is generic over [Value]s.
+//! [InstructionContext].
 use crate::address::{Address, AddressSize};
 use crate::instruction::InstructionContext;
 use crate::state::{InterpreterFunctionRef, MemoryError, State};

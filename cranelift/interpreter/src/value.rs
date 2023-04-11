@@ -1,7 +1,6 @@
-//! The [Value] trait describes what operations can be performed on interpreter values. The
-//! interpreter usually executes using [DataValue]s so an implementation is provided here. The fact
-//! that [Value] is a trait, however, allows interpretation of Cranelift IR on other kinds of
-//! values.
+//! The [DataValueExt] trait is an extension trait for [DataValue]. It provides a lot of functions
+//! used by the rest of the interpreter.
+
 use core::convert::TryFrom;
 use core::fmt::{self, Display, Formatter};
 use cranelift_codegen::data_value::{DataValue, DataValueCastFailure};
