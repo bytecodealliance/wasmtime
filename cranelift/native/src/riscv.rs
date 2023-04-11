@@ -1,6 +1,6 @@
 use cranelift_codegen::settings::Configurable;
 use std::fs::File;
-use std::io::{BufRead, BufReader, Read};
+use std::io::{BufRead, BufReader};
 
 pub fn hwcap_detect(isa_builder: &mut dyn Configurable) -> Result<(), &'static str> {
     let v = unsafe { libc::getauxval(libc::AT_HWCAP) };
@@ -59,26 +59,27 @@ pub fn hwcap_detect(isa_builder: &mut dyn Configurable) -> Result<(), &'static s
 /// An example ISA string is: rv64imafdcvh_zawrs_zba_zbb_zicbom_zicboz_zicsr_zifencei_zihintpause
 pub fn cpuinfo_detect(isa_builder: &mut dyn Configurable) -> Result<(), &'static str> {
     let file = File::open("/proc/cpuinfo").map_err(|_| "failed to open /proc/cpuinfo")?;
-    let mut reader = BufReader::new(file);
-    let isa_line = reader
-        .by_ref()
+
+    let isa_string = BufReader::new(file)
         .lines()
-        .find(|line| line.as_ref().map_or(false, |l| l.starts_with("isa")))
-        .ok_or("no isa line found in /proc/cpuinfo")?
-        .map_err(|_| "failed to read /proc/cpuinfo")?;
+        .filter_map(Result::ok)
+        .find_map(|line| {
+            if let Some((k, v)) = line.split_once(':') {
+                if k.trim_end() == "isa" {
+                    return Some(v.trim().to_string());
+                }
+            }
+            None
+        })
+        .ok_or("failed to find isa line in /proc/cpuinfo")?;
 
-    let isa_string = isa_line
-        .split(':')
-        .nth(1)
-        .ok_or("invalid isa string found in /proc/cpuinfo")?
-        .trim();
-
-    for ext in isa_string_extensions(isa_string) {
+    for ext in isa_string_extensions(&isa_string) {
         // Try enabling all the extensions that are parsed.
         // Cranelift won't recognize all of them, but that's okay we just ignore them.
         // Extensions flags in the RISC-V backend have the format of `has_x` for the `x` extension.
         let _ = isa_builder.enable(&format!("has_{ext}"));
     }
+
     Ok(())
 }
 
