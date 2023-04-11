@@ -298,7 +298,7 @@ fn build_interpreter(testcase: &TestCase) -> Interpreter {
 
     let state = InterpreterState::default()
         .with_function_store(env)
-        .with_libcall_handler(|libcall: LibCall, args: LibCallValues<DataValue>| {
+        .with_libcall_handler(|libcall: LibCall, args: LibCallValues| {
             use LibCall::*;
             Ok(smallvec![match (libcall, &args[..]) {
                 (CeilF32, [DataValue::F32(a)]) => DataValue::F32(a.ceil()),
