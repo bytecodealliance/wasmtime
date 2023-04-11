@@ -1,5 +1,9 @@
 ;; `select`/`bitselect`-related rewrites
 
+;; remove select when both choices are the same
+(rule (simplify (select    ty _ x x)) x)
+(rule (simplify (bitselect ty _ x x)) x)
+
 ;; Transform select-of-icmp into {u,s}{min,max} instructions where possible.
 (rule (simplify (select ty (sgt _ x y) x y)) (smax ty x y))
 (rule (simplify (select ty (sge _ x y) x y)) (smax ty x y))
