@@ -257,12 +257,7 @@
       (is_signed bool)
       (in_type Type)
       (out_type Type))
-    (SelectIf
-      (if_spectre_guard bool)
-      (rd VecWritableReg)
-      (test Reg)
-      (x ValueRegs)
-      (y ValueRegs))
+
     (RawData (data VecU8))
 
     ;; An unwind pseudo-instruction.
@@ -872,6 +867,12 @@
 (rule (rv_sltu rs1 rs2)
   (alu_rrr (AluOPRRR.SltU) rs1 rs2))
 
+;; Helper for emitting the `snez` instruction.
+;; This instruction is a mnemonic for `sltu rd, zero, rs`.
+(decl rv_snez (Reg) Reg)
+(rule (rv_snez rs1)
+  (rv_sltu (zero_reg) rs1))
+
 ;; Helper for emiting the `sltiu` ("Set Less Than Immediate Unsigned") instruction.
 ;; rd ← rs1 < imm
 (decl rv_sltiu (Reg Imm12) Reg)
@@ -1371,15 +1372,35 @@
 (rule (select_addi (fits_in_64 ty)) (AluOPRRI.Addi))
 
 
-(decl bnot_128 (ValueRegs) ValueRegs)
-(rule
-  (bnot_128 val)
-  (let
-    (;; low part.
-      (low Reg (rv_not (value_regs_get val 0)))
-      ;; high part.
-      (high Reg (rv_not (value_regs_get val 1))))
-    (value_regs low high)))
+(decl gen_bnot (Type ValueRegs) ValueRegs)
+(rule 1 (gen_bnot $I128 x)
+  (let ((lo Reg (rv_not (value_regs_get x 0)))
+        (hi Reg (rv_not (value_regs_get x 1))))
+    (value_regs lo hi)))
+
+(rule 0 (gen_bnot (fits_in_64 _) x)
+  (rv_not x))
+
+
+(decl gen_and (Type ValueRegs ValueRegs) ValueRegs)
+(rule 1 (gen_and $I128 x y)
+  (value_regs
+    (rv_and (value_regs_get x 0) (value_regs_get y 0))
+    (rv_and (value_regs_get x 1) (value_regs_get y 1))))
+
+(rule 0 (gen_and (fits_in_64 _) x y)
+  (rv_and (value_regs_get x 0) (value_regs_get y 0)))
+
+
+(decl gen_or (Type ValueRegs ValueRegs) ValueRegs)
+(rule 1 (gen_or $I128 x y)
+  (value_regs
+    (rv_or (value_regs_get x 0) (value_regs_get y 0))
+    (rv_or (value_regs_get x 1) (value_regs_get y 1))))
+
+(rule 0 (gen_or (fits_in_64 _) x y)
+  (rv_or (value_regs_get x 0) (value_regs_get y 0)))
+
 
 (decl lower_bit_reverse (Reg Type) Reg)
 
@@ -2511,9 +2532,8 @@
   0
   (lower_bmask (fits_in_64 _) (fits_in_64 in_ty) val)
   (let ((input Reg (normalize_cmp_value in_ty val (ExtendOp.Zero)))
-        (zero Reg (zero_reg))
-        (ones Reg (load_imm12 -1)))
-  (value_reg (gen_select_reg (IntCC.Equal) zero input zero ones))))
+        (non_zero Reg (rv_snez input)))
+    (value_reg (rv_neg non_zero))))
 
 ;; Bitwise-or the two registers that make up the 128-bit value, then recurse as
 ;; though it was a 64-bit value.
