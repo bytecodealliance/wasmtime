@@ -4,11 +4,59 @@ use wasmtime::{Config, Engine, Linker, Module, Store};
 use wasmtime_wasi::{sync::WasiCtxBuilder, WasiCtx};
 use wasmtime_wasi_http::WasiHttp;
 
+use http_body_util::combinators::BoxBody;
+use http_body_util::BodyExt;
+use hyper::server::conn::http1;
+use hyper::{body::Bytes, service::service_fn, Request, Response};
+use std::{error::Error, net::SocketAddr};
+use tokio::net::TcpListener;
+
+async fn test(
+    req: Request<hyper::body::Incoming>,
+) -> http::Result<Response<BoxBody<Bytes, hyper::Error>>> {
+    let method = req.method().to_string();
+    Response::builder()
+        .status(http::StatusCode::OK)
+        .header("x-wasmtime-test-method", method)
+        .body(req.into_body().boxed())
+}
+
+async fn async_run_serve() -> Result<(), Box<dyn Error + Send + Sync>> {
+    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
+
+    let listener = TcpListener::bind(addr).await?;
+
+    loop {
+        let (stream, _) = listener.accept().await?;
+
+        tokio::task::spawn(async move {
+            if let Err(err) = http1::Builder::new()
+                .serve_connection(stream, service_fn(test))
+                .await
+            {
+                println!("Error serving connection: {:?}", err);
+            }
+        });
+    }
+}
+
+fn run_server() -> Result<(), Box<dyn Error + Send + Sync>> {
+    let rt = tokio::runtime::Runtime::new()?;
+    let _ent = rt.enter();
+
+    rt.block_on(async_run_serve())?;
+    Ok(())
+}
+
 pub fn instantiate_inherit_stdio(
     data: &[u8],
     bin_name: &str,
     _workspace: Option<&Path>,
 ) -> anyhow::Result<()> {
+    let _thread = std::thread::spawn(|| {
+        run_server().unwrap();
+    });
+
     let config = Config::new();
     let engine = Engine::new(&config)?;
     let module = Module::new(&engine, &data).context("failed to create wasm module")?;
