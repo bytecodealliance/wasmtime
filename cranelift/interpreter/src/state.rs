@@ -36,9 +36,7 @@ pub trait State<'a> {
     fn current_frame_mut(&mut self) -> &mut Frame<'a>;
     fn current_frame(&self) -> &Frame<'a>;
 
-    /// Collect a list of values `V` by their  [value references](cranelift_codegen::ir::Value);
-    /// this is a convenience method for `get_value`. If no value is found for a value reference,
-    /// return an `Err` containing the offending reference.
+    /// Collect a list of values `V` by their [value references](cranelift_codegen::ir::Value).
     fn collect_values(&self, names: &[Value]) -> SmallVec<[DataValue; 1]> {
         let frame = self.current_frame();
         names.into_iter().map(|n| frame.get(*n).clone()).collect()
