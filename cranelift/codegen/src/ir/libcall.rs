@@ -141,18 +141,22 @@ impl LibCall {
                 sig.returns.push(AbiParam::new(ty));
             }
             LibCall::Memcpy | LibCall::Memmove => {
+                // void* memcpy(void *dest, const void *src, size_t count);
+                // void* memmove(void* dest, const void* src, size_t count);
                 sig.params.push(AbiParam::new(pointer_type));
                 sig.params.push(AbiParam::new(pointer_type));
                 sig.params.push(AbiParam::new(pointer_type));
                 sig.returns.push(AbiParam::new(pointer_type));
             }
             LibCall::Memset => {
+                // void *memset(void *dest, int ch, size_t count);
                 sig.params.push(AbiParam::new(pointer_type));
                 sig.params.push(AbiParam::new(I32));
                 sig.params.push(AbiParam::new(pointer_type));
                 sig.returns.push(AbiParam::new(pointer_type));
             }
             LibCall::Memcmp => {
+                // void* memcpy(void *dest, const void *src, size_t count);
                 sig.params.push(AbiParam::new(pointer_type));
                 sig.params.push(AbiParam::new(pointer_type));
                 sig.params.push(AbiParam::new(pointer_type));
