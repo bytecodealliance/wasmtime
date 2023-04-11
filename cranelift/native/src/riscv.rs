@@ -83,17 +83,17 @@ pub fn cpuinfo_detect(isa_builder: &mut dyn Configurable) -> Result<(), &'static
 }
 
 /// Parses an ISA string and returns an iterator over the extensions.
-fn isa_string_extensions(isa: &str) -> impl Iterator<Item = &str> {
-    isa.split('_').flat_map(|entry| {
-        // The first entry has the form `rv64imafdcvh`, we need to skip the first 4 characters.
-        // Each of the letters after the cpu architecture is an extension, so return them
-        // individually.
-        if entry.starts_with("rv") {
-            entry[4..].split("").filter(|e| !e.is_empty()).collect()
-        } else {
-            vec![entry]
-        }
-    })
+fn isa_string_extensions(isa: &str) -> Vec<&str> {
+    let mut parts = isa.split('_');
+    let mut extensions = Vec::new();
+    // The first entry has the form `rv64imafdcvh`, we need to skip the architecture ("rv64").
+    // Each of the letters after the cpu architecture is an extension, so return them
+    // individually.
+    if let Some(letters) = parts.next().unwrap().strip_prefix("rv64") {
+        extensions.extend(letters.matches(|_| true));
+        extensions.extend(parts);
+    }
+    extensions
 }
 
 #[cfg(test)]
@@ -102,25 +102,26 @@ mod tests {
 
     #[test]
     fn parse_isa() {
-        let mut extensions = isa_string_extensions(
-            "rv64imafdcvh_zawrs_zba_zbb_zicbom_zicboz_zicsr_zifencei_zihintpause",
-        );
-        assert_eq!(extensions.next(), Some("i"));
-        assert_eq!(extensions.next(), Some("m"));
-        assert_eq!(extensions.next(), Some("a"));
-        assert_eq!(extensions.next(), Some("f"));
-        assert_eq!(extensions.next(), Some("d"));
-        assert_eq!(extensions.next(), Some("c"));
-        assert_eq!(extensions.next(), Some("v"));
-        assert_eq!(extensions.next(), Some("h"));
-        assert_eq!(extensions.next(), Some("zawrs"));
-        assert_eq!(extensions.next(), Some("zba"));
-        assert_eq!(extensions.next(), Some("zbb"));
-        assert_eq!(extensions.next(), Some("zicbom"));
-        assert_eq!(extensions.next(), Some("zicboz"));
-        assert_eq!(extensions.next(), Some("zicsr"));
-        assert_eq!(extensions.next(), Some("zifencei"));
-        assert_eq!(extensions.next(), Some("zihintpause"));
-        assert_eq!(extensions.next(), None);
+        let isa_string = "rv64imafdcvh_zawrs_zba_zbb_zicbom_zicboz_zicsr_zifencei_zihintpause";
+        let extensions = vec![
+            "i",
+            "m",
+            "a",
+            "f",
+            "d",
+            "c",
+            "v",
+            "h",
+            "zawrs",
+            "zba",
+            "zbb",
+            "zicbom",
+            "zicboz",
+            "zicsr",
+            "zifencei",
+            "zihintpause",
+        ];
+
+        assert_eq!(isa_string_extensions(isa_string), extensions,);
     }
 }
