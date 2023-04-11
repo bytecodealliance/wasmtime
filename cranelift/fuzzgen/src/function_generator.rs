@@ -1863,7 +1863,11 @@ where
             .libcalls
             .iter()
             .map(|libcall| {
-                let signature = libcall.signature(lib_callconv, I64);
+                let pointer_type = Type::int_with_byte_size(
+                    self.target_triple.pointer_width().unwrap().bytes().into(),
+                )
+                .unwrap();
+                let signature = libcall.signature(lib_callconv, pointer_type);
                 let name = ExternalName::LibCall(*libcall);
                 (name, signature)
             })
