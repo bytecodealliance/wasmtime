@@ -1616,12 +1616,13 @@ pub(crate) fn define(
         When this instruction compares integer vectors, it returns a vector of
         lane-wise comparisons.
 
-        When comparing scalars, the result is `1` if the condition holds, and
-        `0` if the condition does not hold.
+        When comparing scalars, the result is:
+            - `1` if the condition holds.
+            - `0` if the condition does not hold.
 
-        When comparing vectors, the result is `-1` (ie all ones) in each lane
-        where the condition holds, and `0` in each lane where the condition does
-        not hold.
+        When comparing vectors, the result is:
+            - `-1` (ie all ones) in each lane where the condition holds.
+            - `0` in each lane where the condition does not hold.
         "#,
             &formats.int_compare,
         )
