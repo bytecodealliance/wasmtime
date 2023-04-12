@@ -4,7 +4,7 @@ use crate::{
 };
 
 use crate::frame::{DefinedLocals, Frame};
-use crate::isa::x64::masm::MacroAssembler as X64Masm;
+use crate::isa::{x64::masm::MacroAssembler as X64Masm, CallingConvention};
 use crate::masm::MacroAssembler;
 use crate::regalloc::RegAlloc;
 use crate::stack::Stack;
@@ -97,7 +97,7 @@ impl TargetIsa for X64 {
         let mut masm = X64Masm::new(self.shared_flags.clone(), self.isa_flags.clone());
         let stack = Stack::new();
         let abi = abi::X64ABI::default();
-        let abi_sig = abi.sig(sig);
+        let abi_sig = abi.sig(sig, &CallingConvention::Default);
 
         let defined_locals = DefinedLocals::new(&mut body, validator)?;
         let frame = Frame::new(&abi_sig, &defined_locals, &abi)?;
@@ -123,8 +123,10 @@ impl TargetIsa for X64 {
     fn host_to_wasm_trampoline(&self, ty: &FuncType) -> Result<MachBufferFinalized<Final>> {
         let abi = abi::X64ABI::default();
         let mut masm = X64Masm::new(self.shared_flags.clone(), self.isa_flags.clone());
+        let call_conv = self.wasmtime_call_conv();
 
-        let mut trampoline = Trampoline::new(&mut masm, &abi, regs::scratch(), regs::argv());
+        let mut trampoline =
+            Trampoline::new(&mut masm, &abi, regs::scratch(), regs::argv(), &call_conv);
 
         trampoline.emit_host_to_wasm(ty);
 

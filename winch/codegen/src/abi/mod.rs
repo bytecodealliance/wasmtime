@@ -42,7 +42,7 @@
 //! |        + arguments            |
 //! |                               | ----> Space allocated for calls
 //! |                               |
-use crate::isa::reg::Reg;
+use crate::isa::{reg::Reg, CallingConvention};
 use smallvec::SmallVec;
 use std::ops::{Add, BitAnd, Not, Sub};
 use wasmparser::{FuncType, ValType};
@@ -65,7 +65,7 @@ pub(crate) trait ABI {
 
     /// Construct the ABI-specific signature from a WebAssembly
     /// function type.
-    fn sig(&self, wasm_sig: &FuncType) -> ABISig;
+    fn sig(&self, wasm_sig: &FuncType, call_conv: &CallingConvention) -> ABISig;
 
     /// Returns the number of bits in a word.
     fn word_bits() -> u32;
@@ -77,6 +77,10 @@ pub(crate) trait ABI {
 
     /// Returns the designated scratch register.
     fn scratch_reg() -> Reg;
+
+    /// Returns the callee-saved registers for the given
+    /// calling convention.
+    fn callee_saved_regs(call_conv: &CallingConvention) -> SmallVec<[Reg; 9]>;
 }
 
 /// ABI-specific representation of a function argument.

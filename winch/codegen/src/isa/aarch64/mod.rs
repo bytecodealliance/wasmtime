@@ -3,7 +3,7 @@ use crate::{
     abi::ABI,
     codegen::{CodeGen, CodeGenContext},
     frame::{DefinedLocals, Frame},
-    isa::{Builder, TargetIsa},
+    isa::{Builder, CallingConvention, TargetIsa},
     masm::MacroAssembler,
     regalloc::RegAlloc,
     regset::RegSet,
@@ -92,7 +92,7 @@ impl TargetIsa for Aarch64 {
         let mut masm = Aarch64Masm::new(self.shared_flags.clone());
         let stack = Stack::new();
         let abi = abi::Aarch64ABI::default();
-        let abi_sig = abi.sig(sig);
+        let abi_sig = abi.sig(sig, &CallingConvention::Default);
 
         let defined_locals = DefinedLocals::new(&mut body, validator)?;
         let frame = Frame::new(&abi_sig, &defined_locals, &abi)?;
