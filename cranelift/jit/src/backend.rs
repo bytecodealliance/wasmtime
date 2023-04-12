@@ -326,11 +326,9 @@ impl JITModule {
                         }
                     }
                 };
-                let name = if let Some(name) = name {
-                    name
-                } else {
-                    panic!("anonymous symbol must be defined locally");
-                };
+                let name = name
+                    .as_ref()
+                    .expect("anonymous symbol must be defined locally");
                 if let Some(ptr) = self.lookup_symbol(name) {
                     ptr
                 } else if linkage == Linkage::Preemptible {
