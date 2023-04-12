@@ -1,9 +1,9 @@
 test run
-target x86_64 ssse3 has_sse41=false
 set enable_simd
 target aarch64
 target s390x
 target x86_64
+target x86_64 ssse3
 target x86_64 sse41
 target x86_64 sse42
 target x86_64 sse42 has_avx

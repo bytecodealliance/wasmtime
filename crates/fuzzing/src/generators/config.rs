@@ -332,11 +332,6 @@ impl<'a> Arbitrary<'a> for Config {
         // doesn't implement this yet, so forcibly always disable it.
         config.module_config.config.tail_call_enabled = false;
 
-        config
-            .wasmtime
-            .codegen
-            .maybe_disable_more_features(&config.module_config, u)?;
-
         // If using the pooling allocator, constrain the memory and module configurations
         // to the module limits.
         if let InstanceAllocationStrategy::Pooling(pooling) = &mut config.wasmtime.strategy {
