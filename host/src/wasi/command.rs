@@ -11,9 +11,7 @@ wasmtime::component::bindgen!({
     },
     with: {
        "filesystem": crate::wasi::filesystem,
-       "instance_monotonic_clock": crate::wasi::instance_monotonic_clock,
        "instance_network": crate::wasi::instance_network,
-       "instance_wall_clock": crate::wasi::instance_wall_clock,
        "ip_name_lookup": crate::wasi::ip_name_lookup,
        "monotonic_clock": crate::wasi::monotonic_clock,
        "network": crate::wasi::network,

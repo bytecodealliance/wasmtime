@@ -3,7 +3,8 @@ pub mod proxy;
 
 wasmtime::component::bindgen!({
     path: "../wit",
-    world: "command",
+    // The commmand-extended world happens to encompass all of the available interfaces:
+    world: "command-extended",
     only_interfaces: true,
     tracing: true,
     async: true,
