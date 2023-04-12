@@ -3641,10 +3641,12 @@
 ;; to the lower lanes first.
 (rule 1 (lower (has_type $I16X8 (swiden_high val @ (value_type $I8X16))))
         (if-let $true (use_sse41))
+        (if-let $true (use_ssse3))
         (let ((x Xmm val))
           (x64_pmovsxbw (x64_palignr x x 8))))
 (rule 1 (lower (has_type $I32X4 (swiden_high val @ (value_type $I16X8))))
         (if-let $true (use_sse41))
+        (if-let $true (use_ssse3))
         (let ((x Xmm val))
           (x64_pmovsxwd (x64_palignr x x 8))))
 (rule 1 (lower (has_type $I64X2 (swiden_high val @ (value_type $I32X4))))
@@ -4105,6 +4107,7 @@
 ;; operand as the low-order bytes and the first operand as high-order bytes,
 ;; so put `a` second.
 (rule 13 (lower (shuffle a b (palignr_imm_from_immediate n)))
+         (if-let $true (use_ssse3))
          (x64_palignr b a n))
 (decl palignr_imm_from_immediate (u8) Immediate)
 (extern extractor palignr_imm_from_immediate palignr_imm_from_immediate)
