@@ -168,4 +168,5 @@ libcalls! {
     TruncF64 = "libcall_truncf64"
     FmaF32 = "libcall_fmaf32"
     FmaF64 = "libcall_fmaf64"
+    X86Pshufb = "libcall_x86_pshufb"
 }

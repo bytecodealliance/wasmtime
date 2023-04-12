@@ -56,6 +56,9 @@ pub enum LibCall {
     ElfTlsGetAddr,
     /// Elf __tls_get_offset
     ElfTlsGetOffset,
+
+    /// The `pshufb` on x86 when SSSE3 isn't available.
+    X86Pshufb,
     // When adding a new variant make sure to add it to `all_libcalls` too.
 }
 
@@ -88,6 +91,8 @@ impl FromStr for LibCall {
 
             "ElfTlsGetAddr" => Ok(Self::ElfTlsGetAddr),
             "ElfTlsGetOffset" => Ok(Self::ElfTlsGetOffset),
+
+            "X86Pshufb" => Ok(Self::X86Pshufb),
             _ => Err(()),
         }
     }
@@ -115,6 +120,7 @@ impl LibCall {
             Memcmp,
             ElfTlsGetAddr,
             ElfTlsGetOffset,
+            X86Pshufb,
         ]
     }
 
@@ -165,6 +171,11 @@ impl LibCall {
 
             LibCall::Probestack | LibCall::ElfTlsGetAddr | LibCall::ElfTlsGetOffset => {
                 unimplemented!()
+            }
+            LibCall::X86Pshufb => {
+                sig.params.push(AbiParam::new(I8X16));
+                sig.params.push(AbiParam::new(I8X16));
+                sig.returns.push(AbiParam::new(I8X16));
             }
         }
 

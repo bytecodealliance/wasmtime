@@ -186,6 +186,10 @@ impl TargetIsa for X64Backend {
         // operation, so that always returns `false`
         self.x64_flags.use_sse41() && ty != types::I16X8
     }
+
+    fn has_x86_pshufb_lowering(&self) -> bool {
+        self.x64_flags.use_ssse3()
+    }
 }
 
 impl fmt::Display for X64Backend {

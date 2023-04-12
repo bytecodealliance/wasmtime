@@ -344,6 +344,10 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
     /// Returns whether the CLIF `x86_blendv` instruction is implemented for
     /// this ISA for the specified type.
     fn has_x86_blendv_lowering(&self, ty: Type) -> bool;
+
+    /// Returns whether the CLIF `x86_pshufb` instruction is implemented for
+    /// this ISA.
+    fn has_x86_pshufb_lowering(&self) -> bool;
 }
 
 /// Function alignment specifications as required by an ISA, returned by

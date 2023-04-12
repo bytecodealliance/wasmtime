@@ -2203,4 +2203,8 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     fn use_x86_blendv_for_relaxed_laneselect(&self, ty: Type) -> bool {
         self.isa.has_x86_blendv_lowering(ty)
     }
+
+    fn use_x86_pshufb_for_relaxed_swizzle(&self) -> bool {
+        self.isa.has_x86_pshufb_lowering()
+    }
 }
