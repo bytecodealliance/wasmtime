@@ -575,6 +575,12 @@ pub trait FuncEnvironment: TargetEnvironment {
     fn use_x86_pshufb_for_relaxed_swizzle(&self) -> bool {
         false
     }
+
+    /// Returns whether the CLIF `x86_pmulhrsw` instruction should be used for
+    /// the `i8x16.relaxed_q15mulr_s` instruction.
+    fn use_x86_pmulhrsw_for_relaxed_q15mul(&self) -> bool {
+        false
+    }
 }
 
 /// An object satisfying the `ModuleEnvironment` trait can be passed as argument to the
