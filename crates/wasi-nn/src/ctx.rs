@@ -23,7 +23,6 @@ pub(crate) struct RegisteredModel {
     pub(crate) model_bytes: Vec<Vec<u8>>,
     pub(crate) encoding: GraphEncoding,
     pub(crate) target: ExecutionTarget,
-    pub(crate) ttl: u32
 }
 
 pub(crate) struct LoadedModel {

@@ -66,8 +66,8 @@ impl<'a> WasiEphemeralNn for WasiNnCtx {
         Ok(graph_id)
     }
 
-    fn load_by_name<'b>(&mut self, model_name: &GuestPtr<'_, [u8]>) -> Result<Graph> {
-        let model_name = String::from_utf8(model_name.to_vec().unwrap()).unwrap();
+    fn load_by_name<'b>(&mut self, model_name: &GuestPtr<'_,str>) -> Result<Graph> {
+        let model_name = model_name.as_str().unwrap().unwrap().to_string();
         let maybe_loaded_model = self.loaded_models.get(&model_name);
 
         match maybe_loaded_model {
@@ -93,11 +93,10 @@ impl<'a> WasiEphemeralNn for WasiNnCtx {
 
     fn register_named_model(
         &mut self,
-        model_name: &GuestPtr<'_, [u8]>,
+        model_name: &GuestPtr<'_, str>,
         model_bytes: &GraphBuilderArray<'_>,
         encoding: GraphEncoding,
-        target: ExecutionTarget,
-        ttl: u32
+        target: ExecutionTarget
     ) -> Result<()> {
         let length: usize = model_bytes.len().try_into().unwrap();
         if length > MAX_GUEST_MODEL_REGISTRATION_SIZE {
@@ -105,7 +104,7 @@ impl<'a> WasiEphemeralNn for WasiNnCtx {
                 UsageError::ModelTooLarge(length, MAX_GUEST_MODEL_REGISTRATION_SIZE).into(),
             );
         }
-        let model_name_bytes = model_name.to_vec().unwrap();
+
         let mut model_bytes_vec: Vec<Vec<u8>> = Vec::with_capacity(length.try_into().unwrap());
         let mut model_bytes = model_bytes.as_ptr();
         for _ in 0..length {
@@ -117,7 +116,7 @@ impl<'a> WasiEphemeralNn for WasiNnCtx {
             model_bytes_vec.push(v);
             model_bytes = model_bytes.add(1)?;
         }
-        let model_name_key = String::from_utf8(model_name_bytes).unwrap();
+        let model_name_key = model_name.as_str().unwrap().unwrap().to_string();
         match target {
             ExecutionTarget::Cpu => {
                 let graph = self.build_graph(&model_bytes_vec, encoding, target)?;
@@ -130,8 +129,7 @@ impl<'a> WasiEphemeralNn for WasiNnCtx {
                     RegisteredModel {
                         model_bytes: model_bytes_vec,
                         encoding,
-                        target,
-                        ttl
+                        target
                     },
                 );
             }
@@ -139,18 +137,16 @@ impl<'a> WasiEphemeralNn for WasiNnCtx {
         Ok(())
     }
 
-    fn unregister(&mut self, model_name: &GuestPtr<'_, [u8]>) -> Result<()> {
-        let model_name_bytes = model_name.to_vec().unwrap();
+    fn unregister(&mut self, model_name: &GuestPtr<'_, str>) -> Result<()> {
         self.model_registry
-            .remove(&String::from_utf8(model_name_bytes).unwrap());
+            .remove(&model_name.as_str().unwrap().unwrap().to_string());
         Ok(())
     }
 
-    fn is_registered(&mut self, model_name: &GuestPtr<'_, [u8]>) -> Result<u32> {
-        let model_name_bytes = model_name.to_vec().unwrap();
+    fn is_registered(&mut self, model_name: &GuestPtr<'_, str>) -> Result<u32> {
         if self
             .model_registry
-            .contains_key(&String::from_utf8(model_name_bytes).unwrap())
+            .contains_key(&model_name.as_str().unwrap().unwrap().to_string())
         {
             Ok(1)
         } else {
