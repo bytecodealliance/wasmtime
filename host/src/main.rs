@@ -1,5 +1,5 @@
 use anyhow::Result;
-use host::{command, command::wasi::Command, proxy, proxy::wasi::Proxy, WasiCtx};
+use host::{wasi, WasiCtx};
 use wasi_cap_std_sync::WasiCtxBuilder;
 use wasmtime::{
     component::{Component, Linker},
@@ -52,7 +52,7 @@ async fn run_command(
     component: &Component,
     args: &[String],
 ) -> anyhow::Result<()> {
-    command::add_to_linker(linker, |x| x)?;
+    wasi::command::add_to_linker(linker, |x| x)?;
 
     let mut argv: Vec<&str> = vec!["wasm"];
     argv.extend(args.iter().map(String::as_str));
@@ -66,7 +66,8 @@ async fn run_command(
             .build(),
     );
 
-    let (wasi, _instance) = Command::instantiate_async(&mut store, component, linker).await?;
+    let (wasi, _instance) =
+        wasi::command::Command::instantiate_async(&mut store, component, linker).await?;
 
     let result: Result<(), ()> = wasi.call_main(&mut store).await?;
 
@@ -83,7 +84,7 @@ async fn run_proxy(
     component: &Component,
     args: &[String],
 ) -> anyhow::Result<()> {
-    proxy::add_to_linker(linker, |x| x)?;
+    wasi::proxy::add_to_linker(linker, |x| x)?;
 
     let mut argv: Vec<&str> = vec!["wasm"];
     argv.extend(args.iter().map(String::as_str));
@@ -93,14 +94,15 @@ async fn run_proxy(
         WasiCtxBuilder::new().inherit_stdio().args(&argv).build(),
     );
 
-    let (wasi, _instance) = Proxy::instantiate_async(&mut store, component, linker).await?;
+    let (wasi, _instance) =
+        wasi::proxy::Proxy::instantiate_async(&mut store, component, linker).await?;
 
     // TODO: do something
     let _ = wasi;
     let result: Result<(), ()> = Ok(());
 
     if result.is_err() {
-        anyhow::bail!("command returned with failing exit status");
+        anyhow::bail!("proxy returned with failing exit status");
     }
 
     Ok(())

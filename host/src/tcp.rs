@@ -1,16 +1,16 @@
 #![allow(unused_variables)]
 
 use crate::{
-    command::wasi::network::{
+    network::convert,
+    poll::PollableEntry,
+    wasi::network::{
         Error, IpAddressFamily, Ipv4Address, Ipv4SocketAddress, Ipv6Address, Ipv6SocketAddress,
         Network,
     },
-    command::wasi::poll::Pollable,
-    command::wasi::streams::{InputStream, OutputStream},
-    command::wasi::tcp::{self, IpSocketAddress, ShutdownType, TcpSocket},
-    command::wasi::tcp_create_socket,
-    network::convert,
-    poll::PollableEntry,
+    wasi::poll::Pollable,
+    wasi::streams::{InputStream, OutputStream},
+    wasi::tcp::{self, IpSocketAddress, ShutdownType, TcpSocket},
+    wasi::tcp_create_socket,
     HostResult, WasiCtx,
 };
 use cap_net_ext::AddressFamily;

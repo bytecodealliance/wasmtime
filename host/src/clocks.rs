@@ -1,12 +1,12 @@
 #![allow(unused_variables)]
 
-use crate::command::wasi::{
+use crate::poll::PollableEntry;
+use crate::wasi::{
     monotonic_clock::{self, Instant},
     poll::Pollable,
     timezone::{self, Timezone, TimezoneDisplay},
     wall_clock::{self, Datetime},
 };
-use crate::poll::PollableEntry;
 use crate::WasiCtx;
 use cap_std::time::SystemTime;
 

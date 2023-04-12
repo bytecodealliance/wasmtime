@@ -16,5 +16,4 @@ pub use wasi_common::{table::Table, WasiCtx};
 
 type HostResult<T, E> = anyhow::Result<Result<T, E>>;
 
-pub mod command;
-pub mod proxy;
+pub mod wasi;

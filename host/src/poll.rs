@@ -1,10 +1,10 @@
 use crate::{
-    command,
-    command::wasi::monotonic_clock::Instant,
-    command::wasi::poll::Pollable,
-    command::wasi::streams::{InputStream, OutputStream, StreamError},
-    command::wasi::tcp::TcpSocket,
-    proxy, WasiCtx,
+    wasi,
+    wasi::monotonic_clock::Instant,
+    wasi::poll::Pollable,
+    wasi::streams::{InputStream, OutputStream, StreamError},
+    wasi::tcp::TcpSocket,
+    WasiCtx,
 };
 use wasi_common::stream::TableStreamExt;
 use wasi_common::tcp_socket::TableTcpSocketExt;
@@ -79,24 +79,14 @@ async fn poll_oneoff(ctx: &mut WasiCtx, futures: Vec<Pollable>) -> anyhow::Resul
     Ok(results)
 }
 
-// Implementatations of the traits for both the command and proxy worlds.
-// The bodies have been pulled out into functions above to allow them to
-// be shared between the two. Ideally, we should add features to the
-// bindings to facilitate this kind of sharing.
+// Implementatations of the interface. The bodies had been pulled out into
+// functions above to allow them to be shared between the two worlds, which
+// used to require different traits . Features have been added to facilitate
+// sharing between worlds, but I want to avoid the huge whitespace diff on
+// this PR.
 
 #[async_trait::async_trait]
-impl command::wasi::poll::Host for WasiCtx {
-    async fn drop_pollable(&mut self, pollable: Pollable) -> anyhow::Result<()> {
-        drop_pollable(self, pollable).await
-    }
-
-    async fn poll_oneoff(&mut self, futures: Vec<Pollable>) -> anyhow::Result<Vec<u8>> {
-        poll_oneoff(self, futures).await
-    }
-}
-
-#[async_trait::async_trait]
-impl proxy::wasi::poll::Host for WasiCtx {
+impl wasi::poll::Host for WasiCtx {
     async fn drop_pollable(&mut self, pollable: Pollable) -> anyhow::Result<()> {
         drop_pollable(self, pollable).await
     }
