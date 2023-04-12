@@ -2,7 +2,7 @@
 
 use crate::ctx::{LoadedModel, RegisteredModel, WasiNnResult as Result};
 use crate::witx::types::{
-    ExecutionTarget, Graph, GraphBuilder, GraphBuilderArray, GraphEncoding, GraphExecutionContext,
+    ExecutionTarget, Graph, GraphBuilderArray, GraphEncoding, GraphExecutionContext,
     Tensor,
 };
 use crate::witx::wasi_ephemeral_nn::WasiEphemeralNn;
@@ -54,7 +54,7 @@ impl<'a> WasiEphemeralNn for WasiNnCtx {
         &mut self,
         builders: &GraphBuilderArray<'_>,
         encoding: GraphEncoding,
-        target: ExecutionTarget,
+        target: ExecutionTarget
     ) -> Result<Graph> {
         let encoding_id: u8 = encoding.into();
         let graph = if let Some(backend) = self.backends.get_mut(&encoding_id) {
@@ -97,6 +97,7 @@ impl<'a> WasiEphemeralNn for WasiNnCtx {
         model_bytes: &GraphBuilderArray<'_>,
         encoding: GraphEncoding,
         target: ExecutionTarget,
+        ttl: u32
     ) -> Result<()> {
         let length: usize = model_bytes.len().try_into().unwrap();
         if length > MAX_GUEST_MODEL_REGISTRATION_SIZE {
@@ -107,7 +108,7 @@ impl<'a> WasiEphemeralNn for WasiNnCtx {
         let model_name_bytes = model_name.to_vec().unwrap();
         let mut model_bytes_vec: Vec<Vec<u8>> = Vec::with_capacity(length.try_into().unwrap());
         let mut model_bytes = model_bytes.as_ptr();
-        for i in 0..length {
+        for _ in 0..length {
             let v = model_bytes
                 .read()?
                 .as_slice()?
@@ -130,6 +131,7 @@ impl<'a> WasiEphemeralNn for WasiNnCtx {
                         model_bytes: model_bytes_vec,
                         encoding,
                         target,
+                        ttl
                     },
                 );
             }
@@ -154,16 +156,6 @@ impl<'a> WasiEphemeralNn for WasiNnCtx {
         } else {
             Ok(0)
         }
-    }
-
-    fn register_model_uri(
-        &mut self,
-        url: &GuestPtr<'_, [u8]>,
-        model_name: &GuestPtr<'_, [u8]>,
-        encoding: GraphEncoding,
-        target: ExecutionTarget,
-    ) -> Result<()> {
-        unimplemented!()
     }
 
     fn init_execution_context(&mut self, graph_id: Graph) -> Result<GraphExecutionContext> {
