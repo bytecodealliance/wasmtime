@@ -279,14 +279,14 @@ impl TypeVar {
     }
 }
 
-impl Into<TypeVar> for &TypeVar {
-    fn into(self) -> TypeVar {
-        self.clone()
+impl From<&TypeVar> for TypeVar {
+    fn from(type_var: &TypeVar) -> Self {
+        type_var.clone()
     }
 }
-impl Into<TypeVar> for ValueType {
-    fn into(self) -> TypeVar {
-        TypeVar::new_singleton(self)
+impl From<ValueType> for TypeVar {
+    fn from(value_type: ValueType) -> Self {
+        TypeVar::new_singleton(value_type)
     }
 }
 
@@ -507,7 +507,7 @@ impl TypeSet {
             self.dynamic_lanes
                 .iter()
                 .filter(|&&x| x < MAX_LANES)
-                .map(|&x| x),
+                .copied(),
         );
         copy.dynamic_lanes = NumSet::new();
         copy
@@ -660,13 +660,7 @@ pub(crate) enum Interval {
 impl Interval {
     fn to_range(&self, full_range: Range, default: Option<RangeBound>) -> Option<Range> {
         match self {
-            Interval::None => {
-                if let Some(default_val) = default {
-                    Some(default_val..default_val)
-                } else {
-                    None
-                }
-            }
+            Interval::None => default.map(|default_val| default_val..default_val),
 
             Interval::All => Some(full_range),
 
@@ -683,9 +677,9 @@ impl Interval {
     }
 }
 
-impl Into<Interval> for Range {
-    fn into(self) -> Interval {
-        Interval::Range(self)
+impl From<Range> for Interval {
+    fn from(range: Range) -> Self {
+        Interval::Range(range)
     }
 }
 

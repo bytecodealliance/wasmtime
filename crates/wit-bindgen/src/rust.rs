@@ -204,7 +204,7 @@ pub trait RustGenerator<'a> {
         if info.owned && (!info.borrowed || self.uses_two_names(&info)) {
             result.push((self.result_name(ty), TypeMode::Owned));
         }
-        return result;
+        result
     }
 
     /// Writes the camel-cased 'name' of the passed type to `out`, as used to name union variants.

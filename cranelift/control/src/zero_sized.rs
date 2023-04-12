@@ -13,7 +13,7 @@ pub struct ControlPlane {
 /// disabled. It doesn't consume any bytes and always returns a default
 /// control plane.
 impl arbitrary::Arbitrary<'_> for ControlPlane {
-    fn arbitrary<'a>(_u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
+    fn arbitrary(_u: &mut arbitrary::Unstructured<'_>) -> arbitrary::Result<Self> {
         Ok(Self::default())
     }
 }

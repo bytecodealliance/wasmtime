@@ -95,7 +95,7 @@ impl Types {
                 _ => continue,
             };
             if let Some(Type::Id(id)) = err {
-                self.type_info.get_mut(&id).unwrap().error = true;
+                self.type_info.get_mut(id).unwrap().error = true;
             }
         }
     }

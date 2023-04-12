@@ -30,7 +30,7 @@ pub fn generate_table<'cont, T, I: iter::Iterator<Item = &'cont T>, H: Fn(&T) ->
     let mut table = vec![None; size];
 
     for i in items {
-        let mut h = hash_function(&i) % size;
+        let mut h = hash_function(i) % size;
         let mut s = 0;
         while table[h].is_some() {
             s += 1;

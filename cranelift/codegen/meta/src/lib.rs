@@ -31,9 +31,9 @@ pub fn generate(isas: &[isa::Isa], out_dir: &str, isle_dir: &str) -> Result<(), 
         &shared_defs.settings,
         gen_settings::ParentGroup::None,
         "settings.rs",
-        &out_dir,
+        out_dir,
     )?;
-    gen_types::generate("types.rs", &out_dir)?;
+    gen_types::generate("types.rs", out_dir)?;
 
     // - per ISA definitions.
     let target_isas = isa::define(isas, &mut shared_defs);
@@ -49,7 +49,7 @@ pub fn generate(isas: &[isa::Isa], out_dir: &str, isle_dir: &str) -> Result<(), 
         "inst_builder.rs",
         "clif_opt.isle",
         "clif_lower.isle",
-        &out_dir,
+        out_dir,
         isle_dir,
     )?;
 
@@ -58,7 +58,7 @@ pub fn generate(isas: &[isa::Isa], out_dir: &str, isle_dir: &str) -> Result<(), 
             &isa.settings,
             gen_settings::ParentGroup::Shared,
             &format!("settings-{}.rs", isa.name),
-            &out_dir,
+            out_dir,
         )?;
     }
 

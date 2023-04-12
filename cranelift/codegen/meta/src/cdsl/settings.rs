@@ -75,14 +75,14 @@ pub(crate) enum PresetType {
     OtherPreset(PresetIndex),
 }
 
-impl Into<PresetType> for BoolSettingIndex {
-    fn into(self) -> PresetType {
-        PresetType::BoolSetting(self)
+impl From<BoolSettingIndex> for PresetType {
+    fn from(bool_setting_index: BoolSettingIndex) -> Self {
+        PresetType::BoolSetting(bool_setting_index)
     }
 }
-impl Into<PresetType> for PresetIndex {
-    fn into(self) -> PresetType {
-        PresetType::OtherPreset(self)
+impl From<PresetIndex> for PresetType {
+    fn from(value: PresetIndex) -> Self {
+        PresetType::OtherPreset(value)
     }
 }
 
@@ -134,13 +134,7 @@ impl SettingGroup {
     fn num_bool_settings(&self) -> u8 {
         self.settings
             .iter()
-            .filter(|s| {
-                if let SpecificSetting::Bool(_) = s.specific {
-                    true
-                } else {
-                    false
-                }
-            })
+            .filter(|s| matches!(s.specific, SpecificSetting::Bool(_)))
             .count() as u8
     }
 
@@ -184,14 +178,15 @@ pub(crate) enum PredicateNode {
     And(Box<PredicateNode>, Box<PredicateNode>),
 }
 
-impl Into<PredicateNode> for BoolSettingIndex {
-    fn into(self) -> PredicateNode {
-        PredicateNode::OwnedBool(self)
+impl From<BoolSettingIndex> for PredicateNode {
+    fn from(bool_setting_index: BoolSettingIndex) -> Self {
+        PredicateNode::OwnedBool(bool_setting_index)
     }
 }
-impl<'a> Into<PredicateNode> for (BoolSettingIndex, &'a SettingGroup) {
-    fn into(self) -> PredicateNode {
-        let (index, group) = (self.0, self.1);
+
+impl<'a> From<(BoolSettingIndex, &'a SettingGroup)> for PredicateNode {
+    fn from(val: (BoolSettingIndex, &'a SettingGroup)) -> Self {
+        let (index, group) = (val.0, val.1);
         let setting = &group.settings[index.0];
         PredicateNode::SharedBool(group.name, setting.name)
     }

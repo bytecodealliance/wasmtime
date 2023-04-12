@@ -595,14 +595,14 @@ pub trait PatternVisitor {
 impl Pattern {
     /// Get this pattern's type.
     pub fn ty(&self) -> TypeId {
-        match self {
-            &Self::BindPattern(t, ..) => t,
-            &Self::Var(t, ..) => t,
-            &Self::ConstInt(t, ..) => t,
-            &Self::ConstPrim(t, ..) => t,
-            &Self::Term(t, ..) => t,
-            &Self::Wildcard(t, ..) => t,
-            &Self::And(t, ..) => t,
+        match *self {
+            Self::BindPattern(t, ..) => t,
+            Self::Var(t, ..) => t,
+            Self::ConstInt(t, ..) => t,
+            Self::ConstPrim(t, ..) => t,
+            Self::Term(t, ..) => t,
+            Self::Wildcard(t, ..) => t,
+            Self::And(t, ..) => t,
         }
     }
 
@@ -614,14 +614,14 @@ impl Pattern {
         termenv: &TermEnv,
         vars: &mut HashMap<VarId, V::PatternId>,
     ) {
-        match self {
-            &Pattern::BindPattern(_ty, var, ref subpat) => {
+        match *self {
+            Pattern::BindPattern(_ty, var, ref subpat) => {
                 // Bind the appropriate variable and recurse.
                 assert!(!vars.contains_key(&var));
                 vars.insert(var, input);
                 subpat.visit(visitor, input, termenv, vars);
             }
-            &Pattern::Var(ty, var) => {
+            Pattern::Var(ty, var) => {
                 // Assert that the value matches the existing bound var.
                 let var_val = vars
                     .get(&var)
@@ -629,9 +629,9 @@ impl Pattern {
                     .expect("Variable should already be bound");
                 visitor.add_match_equal(input, var_val, ty);
             }
-            &Pattern::ConstInt(ty, value) => visitor.add_match_int(input, ty, value),
-            &Pattern::ConstPrim(ty, value) => visitor.add_match_prim(input, ty, value),
-            &Pattern::Term(ty, term, ref args) => {
+            Pattern::ConstInt(ty, value) => visitor.add_match_int(input, ty, value),
+            Pattern::ConstPrim(ty, value) => visitor.add_match_prim(input, ty, value),
+            Pattern::Term(ty, term, ref args) => {
                 // Determine whether the term has an external extractor or not.
                 let termdata = &termenv.terms[term.index()];
                 let arg_values = match &termdata.kind {
@@ -673,12 +673,12 @@ impl Pattern {
                     pat.visit(visitor, val, termenv, vars);
                 }
             }
-            &Pattern::And(_ty, ref children) => {
+            Pattern::And(_ty, ref children) => {
                 for child in children {
                     child.visit(visitor, input, termenv, vars);
                 }
             }
-            &Pattern::Wildcard(_ty) => {
+            Pattern::Wildcard(_ty) => {
                 // Nothing!
             }
         }
@@ -719,12 +719,12 @@ pub trait ExprVisitor {
 impl Expr {
     /// Get this expression's type.
     pub fn ty(&self) -> TypeId {
-        match self {
-            &Self::Term(t, ..) => t,
-            &Self::Var(t, ..) => t,
-            &Self::ConstInt(t, ..) => t,
-            &Self::ConstPrim(t, ..) => t,
-            &Self::Let { ty: t, .. } => t,
+        match *self {
+            Self::Term(t, ..) => t,
+            Self::Var(t, ..) => t,
+            Self::ConstInt(t, ..) => t,
+            Self::ConstPrim(t, ..) => t,
+            Self::Let { ty: t, .. } => t,
         }
     }
 
@@ -736,10 +736,10 @@ impl Expr {
         vars: &HashMap<VarId, V::ExprId>,
     ) -> V::ExprId {
         log!("Expr::visit: expr {:?}", self);
-        match self {
-            &Expr::ConstInt(ty, val) => visitor.add_const_int(ty, val),
-            &Expr::ConstPrim(ty, val) => visitor.add_const_prim(ty, val),
-            &Expr::Let {
+        match *self {
+            Expr::ConstInt(ty, val) => visitor.add_const_int(ty, val),
+            Expr::ConstPrim(ty, val) => visitor.add_const_prim(ty, val),
+            Expr::Let {
                 ty: _ty,
                 ref bindings,
                 ref body,
@@ -751,8 +751,8 @@ impl Expr {
                 }
                 body.visit(visitor, termenv, &vars)
             }
-            &Expr::Var(_ty, var_id) => *vars.get(&var_id).unwrap(),
-            &Expr::Term(ty, term, ref arg_exprs) => {
+            Expr::Var(_ty, var_id) => *vars.get(&var_id).unwrap(),
+            Expr::Term(ty, term, ref arg_exprs) => {
                 let termdata = &termenv.terms[term.index()];
                 let arg_values_tys = arg_exprs
                     .iter()
@@ -917,7 +917,7 @@ impl TypeEnv {
         // in types on a second pass.
         for def in &defs.defs {
             match def {
-                &ast::Def::Type(ref td) => {
+                ast::Def::Type(td) => {
                     let tid = TypeId(tyenv.type_map.len());
                     let name = tyenv.intern_mut(&td.name);
 
@@ -945,7 +945,7 @@ impl TypeEnv {
         // duplicated.
         for def in &defs.defs {
             match def {
-                &ast::Def::Type(ref td) => {
+                ast::Def::Type(td) => {
                     let tid = tyenv.types.len();
                     if let Some(ty) = tyenv.type_from_ast(TypeId(tid), td) {
                         tyenv.types.push(ty);
@@ -957,23 +957,16 @@ impl TypeEnv {
 
         // Now collect types for extern constants.
         for def in &defs.defs {
-            match def {
-                &ast::Def::Extern(ast::Extern::Const {
-                    ref name,
-                    ref ty,
-                    pos,
-                }) => {
-                    let ty = match tyenv.get_type_by_name(ty) {
-                        Some(ty) => ty,
-                        None => {
-                            tyenv.report_error(pos, "Unknown type for constant");
-                            continue;
-                        }
-                    };
-                    let name = tyenv.intern_mut(name);
-                    tyenv.const_types.insert(name, ty);
-                }
-                _ => {}
+            if let ast::Def::Extern(ast::Extern::Const { name, ty, pos }) = def {
+                let ty = match tyenv.get_type_by_name(ty) {
+                    Some(ty) => ty,
+                    None => {
+                        tyenv.report_error(*pos, "Unknown type for constant");
+                        continue;
+                    }
+                };
+                let name = tyenv.intern_mut(name);
+                tyenv.const_types.insert(name, ty);
             }
         }
 
@@ -997,7 +990,7 @@ impl TypeEnv {
     fn type_from_ast(&mut self, tid: TypeId, ty: &ast::Type) -> Option<Type> {
         let name = self.intern(&ty.name).unwrap();
         match &ty.ty {
-            &ast::TypeValue::Primitive(ref id, ..) => {
+            ast::TypeValue::Primitive(id, ..) => {
                 if ty.is_nodebug {
                     self.report_error(ty.pos, "primitive types cannot be marked `nodebug`");
                     return None;
@@ -1008,7 +1001,7 @@ impl TypeEnv {
                 }
                 Some(Type::Primitive(tid, self.intern_mut(id), ty.pos))
             }
-            &ast::TypeValue::Enum(ref ty_variants, ..) => {
+            ast::TypeValue::Enum(ty_variants, ..) => {
                 if ty.is_extern && ty.is_nodebug {
                     self.report_error(ty.pos, "external types cannot be marked `nodebug`");
                     return None;
@@ -1195,7 +1188,7 @@ impl TermEnv {
     fn collect_term_sigs(&mut self, tyenv: &mut TypeEnv, defs: &ast::Defs) {
         for def in &defs.defs {
             match def {
-                &ast::Def::Decl(ref decl) => {
+                ast::Def::Decl(decl) => {
                     let name = tyenv.intern_mut(&decl.term);
                     if let Some(tid) = self.term_map.get(&name) {
                         tyenv.report_error(
@@ -1221,7 +1214,6 @@ impl TermEnv {
                         .map(|id| {
                             tyenv.get_type_by_name(id).ok_or_else(|| {
                                 tyenv.report_error(id.1, format!("Unknown arg type: '{}'", id.0));
-                                ()
                             })
                         })
                         .collect::<Result<Vec<_>, _>>();

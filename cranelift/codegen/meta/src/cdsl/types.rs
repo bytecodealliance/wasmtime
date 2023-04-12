@@ -267,12 +267,9 @@ impl Iterator for LaneTypeIterator {
     type Item = LaneType;
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(i) = self.int_iter.next() {
-            Some(LaneType::from(i))
-        } else if let Some(f) = self.float_iter.next() {
-            Some(LaneType::from(f))
-        } else {
-            None
+            return Some(LaneType::from(i));
         }
+        self.float_iter.next().map(LaneType::from)
     }
 }
 
@@ -491,10 +488,6 @@ impl ReferenceTypeIterator {
 impl Iterator for ReferenceTypeIterator {
     type Item = ReferenceType;
     fn next(&mut self) -> Option<Self::Item> {
-        if let Some(r) = self.reference_iter.next() {
-            Some(ReferenceType::from(r))
-        } else {
-            None
-        }
+        self.reference_iter.next().map(ReferenceType::from)
     }
 }

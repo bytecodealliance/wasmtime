@@ -138,7 +138,7 @@ impl Formatter {
     pub fn add_match(&mut self, m: Match) {
         fmtln!(self, "match {} {{", m.expr);
         self.indent(|fmt| {
-            for (&(ref fields, ref body), ref names) in m.arms.iter() {
+            for ((fields, body), names) in m.arms.iter() {
                 // name { fields } | name { fields } => { body }
                 let conditions = names
                     .iter()
@@ -189,7 +189,7 @@ fn _indent(s: &str) -> Option<usize> {
 fn parse_multiline(s: &str) -> Vec<String> {
     // Convert tabs into spaces.
     let expanded_tab = format!("{:-1$}", " ", SHIFTWIDTH);
-    let lines: Vec<String> = s.lines().map(|l| l.replace("\t", &expanded_tab)).collect();
+    let lines: Vec<String> = s.lines().map(|l| l.replace('\t', &expanded_tab)).collect();
 
     // Determine minimum indentation, ignoring the first line and empty lines.
     let indent = lines
