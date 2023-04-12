@@ -91,7 +91,7 @@ impl<'a> WasiEphemeralNn for WasiNnCtx {
         }
     }
 
-    fn register_model_bytes(
+    fn register_named_model(
         &mut self,
         model_name: &GuestPtr<'_, [u8]>,
         model_bytes: &GraphBuilderArray<'_>,
