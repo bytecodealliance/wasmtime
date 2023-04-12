@@ -1621,7 +1621,7 @@ pub(crate) fn define(
             - `0` if the condition does not hold.
 
         When comparing vectors, the result is:
-            - `-1` (ie all ones) in each lane where the condition holds.
+            - `-1` (i.e. all ones) in each lane where the condition holds.
             - `0` in each lane where the condition does not hold.
         "#,
             &formats.int_compare,
