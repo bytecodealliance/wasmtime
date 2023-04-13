@@ -27,6 +27,9 @@ use cranelift_codegen::isa;
 use cranelift_codegen::settings::Configurable;
 use target_lexicon::Triple;
 
+#[cfg(all(target_arch = "riscv64", target_os = "linux"))]
+mod riscv;
+
 /// Return an `isa` builder configured for the current host
 /// machine, or `Err(())` if the host machine is not supported
 /// in the current configuration.
@@ -165,47 +168,14 @@ pub fn infer_native_flags(isa_builder: &mut dyn Configurable) -> Result<(), &'st
     // getauxval from the libc crate directly as a temporary measure.
     #[cfg(all(target_arch = "riscv64", target_os = "linux"))]
     {
-        let v = unsafe { libc::getauxval(libc::AT_HWCAP) };
+        // Try both hwcap and cpuinfo
+        // HWCAP only returns single letter extensions, cpuinfo returns all of
+        // them but may not be available in some systems (QEMU < 8.1).
+        riscv::hwcap_detect(isa_builder)?;
 
-        const HWCAP_RISCV_EXT_A: libc::c_ulong = 1 << (b'a' - b'a');
-        const HWCAP_RISCV_EXT_C: libc::c_ulong = 1 << (b'c' - b'a');
-        const HWCAP_RISCV_EXT_D: libc::c_ulong = 1 << (b'd' - b'a');
-        const HWCAP_RISCV_EXT_F: libc::c_ulong = 1 << (b'f' - b'a');
-        const HWCAP_RISCV_EXT_M: libc::c_ulong = 1 << (b'm' - b'a');
-        const HWCAP_RISCV_EXT_V: libc::c_ulong = 1 << (b'v' - b'a');
-
-        if (v & HWCAP_RISCV_EXT_A) != 0 {
-            isa_builder.enable("has_a").unwrap();
-        }
-
-        if (v & HWCAP_RISCV_EXT_C) != 0 {
-            isa_builder.enable("has_c").unwrap();
-        }
-
-        if (v & HWCAP_RISCV_EXT_D) != 0 {
-            isa_builder.enable("has_d").unwrap();
-        }
-
-        if (v & HWCAP_RISCV_EXT_F) != 0 {
-            isa_builder.enable("has_f").unwrap();
-
-            // TODO: There doesn't seem to be a bit associated with this extension
-            // rust enables it with the `f` extension:
-            // https://github.com/rust-lang/stdarch/blob/790411f93c4b5eada3c23abb4c9a063fb0b24d99/crates/std_detect/src/detect/os/linux/riscv.rs#L43
-            isa_builder.enable("has_zicsr").unwrap();
-        }
-
-        if (v & HWCAP_RISCV_EXT_M) != 0 {
-            isa_builder.enable("has_m").unwrap();
-        }
-
-        if (v & HWCAP_RISCV_EXT_V) != 0 {
-            isa_builder.enable("has_v").unwrap();
-        }
-
-        // In general extensions that are longer than one letter
-        // won't have a bit associated with them. The Linux kernel
-        // is currently working on a new way to query the extensions.
+        // Ignore errors for cpuinfo. QEMU versions prior to 8.1 do not emulate
+        // the cpuinfo interface, so we can't rely on it being present for now.
+        let _ = riscv::cpuinfo_detect(isa_builder);
     }
     Ok(())
 }

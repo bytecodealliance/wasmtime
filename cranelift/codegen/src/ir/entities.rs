@@ -336,7 +336,7 @@ entity_impl!(UserExternalNameRef, "userextname");
 /// An opaque reference to a function [`Signature`](super::Signature).
 ///
 /// `SigRef`s are used to declare a function with
-/// [`FunctionBuiler::import_function`](https://docs.rs/cranelift-frontend/*/cranelift_frontend/struct.FunctionBuilder.html#method.import_function)
+/// [`FunctionBuilder::import_function`](https://docs.rs/cranelift-frontend/*/cranelift_frontend/struct.FunctionBuilder.html#method.import_function)
 /// as well as to make an [indirect function call](super::InstBuilder::call_indirect).
 ///
 /// `SigRef`s can be created with
@@ -549,6 +549,14 @@ mod tests {
             mem::size_of::<Value>(),
             mem::size_of::<PackedOption<Value>>()
         );
+    }
+
+    #[test]
+    fn memory_option() {
+        use core::mem;
+        // PackedOption is used because Option<EntityRef> is twice as large
+        // as EntityRef. If this ever fails to be the case, this test will fail.
+        assert_eq!(mem::size_of::<Value>() * 2, mem::size_of::<Option<Value>>());
     }
 
     #[test]

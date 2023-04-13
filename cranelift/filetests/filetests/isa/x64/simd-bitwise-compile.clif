@@ -365,6 +365,7 @@ block0(v0: i32):
 ;   addb %al, (%rax)
 ;   addb %al, (%rax)
 ;   addb %al, (%rax)
+;   addb %bh, %bh
 
 function %ishl_i8x16_imm(i8x16) -> i8x16 {
 block0(v0: i8x16):

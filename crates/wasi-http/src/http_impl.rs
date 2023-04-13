@@ -8,6 +8,7 @@ use bytes::{BufMut, Bytes, BytesMut};
 use http_body_util::{BodyExt, Full};
 use hyper::Method;
 use hyper::Request;
+use std::collections::HashMap;
 #[cfg(not(any(target_arch = "riscv64", target_arch = "s390x")))]
 use std::sync::Arc;
 use std::time::Duration;
@@ -200,6 +201,23 @@ impl WasiHttp {
             let frame = next?;
             if let Some(chunk) = frame.data_ref() {
                 buf.put(chunk.clone());
+            }
+            if let Some(trailers) = frame.trailers_ref() {
+                response.trailers = self.fields_id_base;
+                self.fields_id_base += 1;
+                let mut map: HashMap<String, Vec<String>> = HashMap::new();
+                for (name, value) in trailers.iter() {
+                    let key = name.to_string();
+                    match map.get_mut(&key) {
+                        Some(vec) => vec.push(value.to_str()?.to_string()),
+                        None => {
+                            let mut vec = Vec::new();
+                            vec.push(value.to_str()?.to_string());
+                            map.insert(key, vec);
+                        }
+                    };
+                }
+                self.fields.insert(response.trailers, map);
             }
         }
         response.body = self.streams_id_base;

@@ -21,6 +21,14 @@ impl fmt::Debug for Response {
     }
 }
 
+impl Response {
+    fn header(&self, name: &str) -> Option<&String> {
+        self.headers.iter().find_map(
+            |(k, v)| if k == name { Some(v) } else { None }
+        )
+    }
+}
+
 fn request(
     method: types::MethodParam<'_>,
     scheme: types::SchemeParam<'_>,
@@ -47,9 +55,13 @@ fn request(
         body_cursor += written as usize;
     }
 
+    let future_response = default_outgoing_http::handle(request, None);
+
+    // TODO: The current implementation requires this drop after the request is sent.
+    // The ownership semantics are unclear in wasi-http we should clarify exactly what is
+    // supposed to happen here.
     streams::drop_output_stream(request_body);
 
-    let future_response = default_outgoing_http::handle(request, None);
     // TODO: we could create a pollable from the future_response and poll on it here to test that
     // its available immediately
 
@@ -71,7 +83,6 @@ fn request(
 
     let body_stream = types::incoming_response_consume(incoming_response)
         .map_err(|()| anyhow!("incoming response has no body stream"))?;
-    types::drop_incoming_response(incoming_response);
 
     let mut body = Vec::new();
     let mut eof = false;
@@ -81,6 +92,7 @@ fn request(
         body.append(&mut body_chunk);
     }
     streams::drop_input_stream(body_stream);
+    types::drop_incoming_response(incoming_response);
 
     Ok(Response {
         status,
@@ -89,44 +101,55 @@ fn request(
     })
 }
 
-fn main() -> Result<()> {        
+fn main() -> Result<()> {       
+    let missing = "MISSING".to_string(); 
     let r1 = request(
         types::MethodParam::Get,
         types::SchemeParam::Http,
-        "postman-echo.com",
+        "localhost:3000",
         "/get",
         "?some=arg?goes=here",
         &[],
     )
-    .context("postman-echo /get")?;
+    .context("localhost:3000 /get")?;
 
-    println!("postman-echo /get: {r1:?}");
+    println!("localhost:3000 /get: {r1:?}");
     assert_eq!(r1.status, 200);
+    let method = r1.header("x-wasmtime-test-method").unwrap_or(&missing);
+    assert_eq!(method, "GET");
+    assert_eq!(r1.body, b"");
 
     let r2 = request(
         types::MethodParam::Post,
         types::SchemeParam::Http,
-        "postman-echo.com",
+        "localhost:3000",
         "/post",
         "",
         b"{\"foo\": \"bar\"}",
     )
-    .context("postman-echo /post")?;
+    .context("localhost:3000 /post")?;
 
-    println!("postman-echo /post: {r2:?}");
+    println!("localhost:3000 /post: {r2:?}");
     assert_eq!(r2.status, 200);
+    let method = r2.header("x-wasmtime-test-method").unwrap_or(&missing);
+    assert_eq!(method, "POST");
+    assert_eq!(r2.body, b"{\"foo\": \"bar\"}");
 
     let r3 = request(
         types::MethodParam::Put,
         types::SchemeParam::Http,
-        "postman-echo.com",
+        "localhost:3000",
         "/put",
         "",
         &[],
     )
-    .context("postman-echo /put")?;
+    .context("localhost:3000 /put")?;
 
-    println!("postman-echo /put: {r3:?}");
+    println!("localhost:3000 /put: {r3:?}");
     assert_eq!(r3.status, 200);
+    let method = r3.header("x-wasmtime-test-method").unwrap_or(&missing);
+    assert_eq!(method, "PUT");
+    assert_eq!(r3.body, b"");
+
     Ok(())
 }

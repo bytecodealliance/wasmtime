@@ -75,7 +75,7 @@ __attribute__((weak, noinline))
 #endif
 void __jit_debug_register_code() {
 #ifndef CFG_TARGET_OS_windows
-  asm("");
+  __asm__("");
 #endif
 }
 
@@ -88,7 +88,7 @@ struct JITDescriptor {
 
 #ifdef CFG_TARGET_OS_windows
   // export required for external access.
-  __declspec(dllexport) 
+  __declspec(dllexport)
 #else
   // Note the `weak` linkage here which is the same purpose as above. We want to
   // let other runtimes be able to override this since our own definition isn't

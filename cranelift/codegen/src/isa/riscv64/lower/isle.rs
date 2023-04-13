@@ -303,10 +303,6 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Riscv64Backend> {
         self.backend.isa_flags.has_zbs()
     }
 
-    fn inst_output_get(&mut self, x: InstOutput, index: u8) -> ValueRegs {
-        x[index as usize]
-    }
-
     fn move_f_to_x(&mut self, r: Reg, ty: Type) -> Reg {
         let result = self.temp_writable_reg(I64);
         self.emit(&gen_move(result, I64, r, ty));

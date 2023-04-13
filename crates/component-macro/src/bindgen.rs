@@ -1,4 +1,5 @@
 use proc_macro2::{Span, TokenStream};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use syn::parse::{Error, Parse, ParseStream, Result};
 use syn::punctuated::Punctuated;
@@ -76,6 +77,9 @@ impl Parse for Config {
                     Opt::Tracing(val) => opts.tracing = val,
                     Opt::Async(val) => opts.async_ = val,
                     Opt::TrappableErrorType(val) => opts.trappable_error_type = val,
+                    Opt::DuplicateIfNecessary(val) => opts.duplicate_if_necessary = val,
+                    Opt::OnlyInterfaces(val) => opts.only_interfaces = val,
+                    Opt::With(val) => opts.with.extend(val),
                 }
             }
         } else {
@@ -131,6 +135,9 @@ mod kw {
     syn::custom_keyword!(tracing);
     syn::custom_keyword!(trappable_error_type);
     syn::custom_keyword!(world);
+    syn::custom_keyword!(duplicate_if_necessary);
+    syn::custom_keyword!(only_interfaces);
+    syn::custom_keyword!(with);
 }
 
 enum Opt {
@@ -140,6 +147,9 @@ enum Opt {
     Tracing(bool),
     Async(bool),
     TrappableErrorType(Vec<TrappableError>),
+    DuplicateIfNecessary(bool),
+    OnlyInterfaces(bool),
+    With(HashMap<String, String>),
 }
 
 impl Parse for Opt {
@@ -165,6 +175,12 @@ impl Parse for Opt {
             input.parse::<Token![async]>()?;
             input.parse::<Token![:]>()?;
             Ok(Opt::Async(input.parse::<syn::LitBool>()?.value))
+        } else if l.peek(kw::duplicate_if_necessary) {
+            input.parse::<kw::duplicate_if_necessary>()?;
+            input.parse::<Token![:]>()?;
+            Ok(Opt::DuplicateIfNecessary(
+                input.parse::<syn::LitBool>()?.value,
+            ))
         } else if l.peek(kw::trappable_error_type) {
             input.parse::<kw::trappable_error_type>()?;
             input.parse::<Token![:]>()?;
@@ -182,6 +198,18 @@ impl Parse for Opt {
                     })
                     .collect(),
             ))
+        } else if l.peek(kw::only_interfaces) {
+            input.parse::<kw::only_interfaces>()?;
+            input.parse::<Token![:]>()?;
+            Ok(Opt::OnlyInterfaces(input.parse::<syn::LitBool>()?.value))
+        } else if l.peek(kw::with) {
+            input.parse::<kw::with>()?;
+            input.parse::<Token![:]>()?;
+            let contents;
+            let _lbrace = braced!(contents in input);
+            let fields: Punctuated<(String, String), Token![,]> =
+                contents.parse_terminated(with_field_parse)?;
+            Ok(Opt::With(HashMap::from_iter(fields.into_iter())))
         } else {
             Err(l.error())
         }
@@ -209,4 +237,47 @@ fn trappable_error_field_parse(input: ParseStream<'_>) -> Result<(String, String
     input.parse::<Token![:]>()?;
     let rust_type = input.parse::<Ident>()?.to_string();
     Ok((interface, type_, rust_type))
+}
+
+fn with_field_parse(input: ParseStream<'_>) -> Result<(String, String)> {
+    let interface = input.parse::<syn::LitStr>()?.value();
+    input.parse::<Token![:]>()?;
+    let start = input.span();
+    let path = input.parse::<syn::Path>()?;
+
+    // It's not possible for the segments of a path to be empty
+    let span = start
+        .join(path.segments.last().unwrap().ident.span())
+        .unwrap_or(start);
+
+    let mut buf = String::new();
+    let append = |buf: &mut String, segment: syn::PathSegment| -> Result<()> {
+        if segment.arguments != syn::PathArguments::None {
+            return Err(Error::new(
+                span,
+                "Module path must not contain angles or parens",
+            ));
+        }
+
+        buf.push_str(&segment.ident.to_string());
+
+        Ok(())
+    };
+
+    if path.leading_colon.is_some() {
+        buf.push_str("::");
+    }
+
+    let mut segments = path.segments.into_iter();
+
+    if let Some(segment) = segments.next() {
+        append(&mut buf, segment)?;
+    }
+
+    for segment in segments {
+        buf.push_str("::");
+        append(&mut buf, segment)?;
+    }
+
+    Ok((interface, buf))
 }

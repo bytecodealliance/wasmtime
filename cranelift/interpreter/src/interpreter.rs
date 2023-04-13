@@ -8,11 +8,11 @@ use crate::frame::Frame;
 use crate::instruction::DfgInstructionContext;
 use crate::state::{InterpreterFunctionRef, MemoryError, State};
 use crate::step::{step, ControlFlow, StepError};
-use crate::value::{Value, ValueError};
+use crate::value::{DataValueExt, ValueError};
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::{
     ArgumentPurpose, Block, Endianness, ExternalName, FuncRef, Function, GlobalValue,
-    GlobalValueData, LibCall, MemFlags, StackSlot, TrapCode, Type, Value as ValueRef,
+    GlobalValueData, LibCall, MemFlags, StackSlot, TrapCode, Type,
 };
 use log::trace;
 use smallvec::SmallVec;
@@ -46,7 +46,7 @@ impl<'a> Interpreter<'a> {
         &mut self,
         func_name: &str,
         arguments: &[DataValue],
-    ) -> Result<ControlFlow<'a, DataValue>, InterpreterError> {
+    ) -> Result<ControlFlow<'a>, InterpreterError> {
         let index = self
             .state
             .functions
@@ -61,7 +61,7 @@ impl<'a> Interpreter<'a> {
         &mut self,
         index: FuncIndex,
         arguments: &[DataValue],
-    ) -> Result<ControlFlow<'a, DataValue>, InterpreterError> {
+    ) -> Result<ControlFlow<'a>, InterpreterError> {
         match self.state.functions.get_by_index(index) {
             None => Err(InterpreterError::UnknownFunctionIndex(index)),
             Some(func) => self.call(func, arguments),
@@ -73,7 +73,7 @@ impl<'a> Interpreter<'a> {
         &mut self,
         function: &'a Function,
         arguments: &[DataValue],
-    ) -> Result<ControlFlow<'a, DataValue>, InterpreterError> {
+    ) -> Result<ControlFlow<'a>, InterpreterError> {
         trace!("Call: {}({:?})", function.name, arguments);
         let first_block = function
             .layout
@@ -91,7 +91,7 @@ impl<'a> Interpreter<'a> {
 
     /// Interpret a [Block] in a [Function]. This drives the interpretation over sequences of
     /// instructions, which may continue in other blocks, until the function returns.
-    fn block(&mut self, block: Block) -> Result<ControlFlow<'a, DataValue>, InterpreterError> {
+    fn block(&mut self, block: Block) -> Result<ControlFlow<'a>, InterpreterError> {
         trace!("Block: {}", block);
         let function = self.state.current_frame_mut().function();
         let layout = &function.layout;
@@ -192,13 +192,13 @@ pub enum InterpreterError {
     FuelExhausted,
 }
 
-pub type LibCallValues<V> = SmallVec<[V; 1]>;
-pub type LibCallHandler<V> = fn(LibCall, LibCallValues<V>) -> Result<LibCallValues<V>, TrapCode>;
+pub type LibCallValues = SmallVec<[DataValue; 1]>;
+pub type LibCallHandler = fn(LibCall, LibCallValues) -> Result<LibCallValues, TrapCode>;
 
 /// Maintains the [Interpreter]'s state, implementing the [State] trait.
 pub struct InterpreterState<'a> {
     pub functions: FunctionStore<'a>,
-    pub libcall_handler: LibCallHandler<DataValue>,
+    pub libcall_handler: LibCallHandler,
     pub frame_stack: Vec<Frame<'a>>,
     /// Number of bytes from the bottom of the stack where the current frame's stack space is
     pub frame_offset: usize,
@@ -232,29 +232,13 @@ impl<'a> InterpreterState<'a> {
     }
 
     /// Registers a libcall handler
-    pub fn with_libcall_handler(mut self, handler: LibCallHandler<DataValue>) -> Self {
+    pub fn with_libcall_handler(mut self, handler: LibCallHandler) -> Self {
         self.libcall_handler = handler;
         self
     }
-
-    fn current_frame_mut(&mut self) -> &mut Frame<'a> {
-        let num_frames = self.frame_stack.len();
-        match num_frames {
-            0 => panic!("unable to retrieve the current frame because no frames were pushed"),
-            _ => &mut self.frame_stack[num_frames - 1],
-        }
-    }
-
-    fn current_frame(&self) -> &Frame<'a> {
-        let num_frames = self.frame_stack.len();
-        match num_frames {
-            0 => panic!("unable to retrieve the current frame because no frames were pushed"),
-            _ => &self.frame_stack[num_frames - 1],
-        }
-    }
 }
 
-impl<'a> State<'a, DataValue> for InterpreterState<'a> {
+impl<'a> State<'a> for InterpreterState<'a> {
     fn get_function(&self, func_ref: FuncRef) -> Option<&'a Function> {
         self.functions
             .get_from_func_ref(func_ref, self.frame_stack.last().unwrap().function())
@@ -263,7 +247,7 @@ impl<'a> State<'a, DataValue> for InterpreterState<'a> {
         self.current_frame().function()
     }
 
-    fn get_libcall_handler(&self) -> LibCallHandler<DataValue> {
+    fn get_libcall_handler(&self) -> LibCallHandler {
         self.libcall_handler
     }
 
@@ -291,12 +275,20 @@ impl<'a> State<'a, DataValue> for InterpreterState<'a> {
         }
     }
 
-    fn get_value(&self, name: ValueRef) -> Option<DataValue> {
-        Some(self.current_frame().get(name).clone()) // TODO avoid clone?
+    fn current_frame_mut(&mut self) -> &mut Frame<'a> {
+        let num_frames = self.frame_stack.len();
+        match num_frames {
+            0 => panic!("unable to retrieve the current frame because no frames were pushed"),
+            _ => &mut self.frame_stack[num_frames - 1],
+        }
     }
 
-    fn set_value(&mut self, name: ValueRef, value: DataValue) -> Option<DataValue> {
-        self.current_frame_mut().set(name, value)
+    fn current_frame(&self) -> &Frame<'a> {
+        let num_frames = self.frame_stack.len();
+        match num_frames {
+            0 => panic!("unable to retrieve the current frame because no frames were pushed"),
+            _ => &self.frame_stack[num_frames - 1],
+        }
     }
 
     fn stack_address(

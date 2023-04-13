@@ -101,8 +101,16 @@ impl crate::types::Host for WasiHttp {
         self.fields.insert(id, m.clone());
         Ok(id)
     }
-    fn finish_incoming_stream(&mut self, _s: IncomingStream) -> wasmtime::Result<Option<Trailers>> {
-        bail!("unimplemented: finish_incoming_stream")
+    fn finish_incoming_stream(&mut self, s: IncomingStream) -> wasmtime::Result<Option<Trailers>> {
+        for (_, value) in self.responses.iter() {
+            if value.body == s {
+                return match value.trailers {
+                    0 => Ok(None),
+                    _ => Ok(Some(value.trailers)),
+                };
+            }
+        }
+        bail!("unknown stream!")
     }
     fn finish_outgoing_stream(
         &mut self,
@@ -181,8 +189,10 @@ impl crate::types::Host for WasiHttp {
             .requests
             .get_mut(&request)
             .ok_or_else(|| anyhow!("unknown request: {request}"))?;
-        req.body = self.streams_id_base;
-        self.streams_id_base = self.streams_id_base + 1;
+        if req.body == 0 {
+            req.body = self.streams_id_base;
+            self.streams_id_base = self.streams_id_base + 1;
+        }
         Ok(Ok(req.body))
     }
     fn drop_response_outparam(&mut self, _response: ResponseOutparam) -> wasmtime::Result<()> {

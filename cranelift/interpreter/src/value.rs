@@ -1,7 +1,6 @@
-//! The [Value] trait describes what operations can be performed on interpreter values. The
-//! interpreter usually executes using [DataValue]s so an implementation is provided here. The fact
-//! that [Value] is a trait, however, allows interpretation of Cranelift IR on other kinds of
-//! values.
+//! The [DataValueExt] trait is an extension trait for [DataValue]. It provides a lot of functions
+//! used by the rest of the interpreter.
+
 use core::convert::TryFrom;
 use core::fmt::{self, Display, Formatter};
 use cranelift_codegen::data_value::{DataValue, DataValueCastFailure};
@@ -11,9 +10,8 @@ use thiserror::Error;
 
 pub type ValueResult<T> = Result<T, ValueError>;
 
-pub trait Value: Clone + From<DataValue> {
+pub trait DataValueExt: Sized {
     // Identity.
-    fn ty(&self) -> Type;
     fn int(n: i128, ty: Type) -> ValueResult<Self>;
     fn into_int(self) -> ValueResult<i128>;
     fn float(n: u64, ty: Type) -> ValueResult<Self>;
@@ -34,17 +32,6 @@ pub trait Value: Clone + From<DataValue> {
     fn min(self, other: Self) -> ValueResult<Self>;
 
     // Comparison.
-    fn eq(&self, other: &Self) -> ValueResult<bool>;
-    fn gt(&self, other: &Self) -> ValueResult<bool>;
-    fn ge(&self, other: &Self) -> ValueResult<bool> {
-        Ok(self.eq(other)? || self.gt(other)?)
-    }
-    fn lt(&self, other: &Self) -> ValueResult<bool> {
-        other.gt(self)
-    }
-    fn le(&self, other: &Self) -> ValueResult<bool> {
-        Ok(other.eq(self)? || other.gt(self)?)
-    }
     fn uno(&self, other: &Self) -> ValueResult<bool>;
 
     // Arithmetic.
@@ -57,6 +44,9 @@ pub trait Value: Clone + From<DataValue> {
     fn fma(self, a: Self, b: Self) -> ValueResult<Self>;
     fn abs(self) -> ValueResult<Self>;
     fn checked_add(self, other: Self) -> ValueResult<Option<Self>>;
+    fn overflowing_add(self, other: Self) -> ValueResult<(Self, bool)>;
+    fn overflowing_sub(self, other: Self) -> ValueResult<(Self, bool)>;
+    fn overflowing_mul(self, other: Self) -> ValueResult<(Self, bool)>;
 
     // Float operations
     fn neg(self) -> ValueResult<Self>;
@@ -194,6 +184,15 @@ macro_rules! binary_match {
             _ => unimplemented!()
         }
     };
+    ( pair $op:ident($arg1:expr, $arg2:expr); [ $( $data_value_ty:ident ),* ] ) => {
+        match ($arg1, $arg2) {
+            $( (DataValue::$data_value_ty(a), DataValue::$data_value_ty(b)) => {
+                let (f, s) = a.$op(*b);
+                Ok((DataValue::$data_value_ty(f), s))
+            } )*
+            _ => unimplemented!()
+        }
+    };
     ( $op:tt($arg1:expr, $arg2:expr); [ $( $data_value_ty:ident ),* ] ) => {
         match ($arg1, $arg2) {
             $( (DataValue::$data_value_ty(a), DataValue::$data_value_ty(b)) => { Ok(DataValue::$data_value_ty(a $op b)) } )*
@@ -240,11 +239,7 @@ macro_rules! bitop {
     };
 }
 
-impl Value for DataValue {
-    fn ty(&self) -> Type {
-        self.ty()
-    }
-
+impl DataValueExt for DataValue {
     fn int(n: i128, ty: Type) -> ValueResult<Self> {
         if ty.is_int() && !ty.is_vector() {
             DataValue::from_integer(n, ty).map_err(|_| ValueError::InvalidValue(ty))
@@ -456,6 +451,11 @@ impl Value for DataValue {
                 DataValue::I32(n) => DataValue::U32(n as u32),
                 DataValue::I64(n) => DataValue::U64(n as u64),
                 DataValue::I128(n) => DataValue::U128(n as u128),
+                DataValue::U8(_) => self,
+                DataValue::U16(_) => self,
+                DataValue::U32(_) => self,
+                DataValue::U64(_) => self,
+                DataValue::U128(_) => self,
                 _ => unimplemented!("conversion: {} -> {:?}", self.ty(), kind),
             },
             ValueConversionKind::ToSigned => match self {
@@ -464,6 +464,11 @@ impl Value for DataValue {
                 DataValue::U32(n) => DataValue::I32(n as i32),
                 DataValue::U64(n) => DataValue::I64(n as i64),
                 DataValue::U128(n) => DataValue::I128(n as i128),
+                DataValue::I8(_) => self,
+                DataValue::I16(_) => self,
+                DataValue::I32(_) => self,
+                DataValue::I64(_) => self,
+                DataValue::I128(_) => self,
                 _ => unimplemented!("conversion: {} -> {:?}", self.ty(), kind),
             },
             ValueConversionKind::RoundNearestEven(ty) => match (self, ty) {
@@ -507,7 +512,7 @@ impl Value for DataValue {
     }
 
     fn max(self, other: Self) -> ValueResult<Self> {
-        if Value::gt(&self, &other)? {
+        if self > other {
             Ok(self)
         } else {
             Ok(other)
@@ -515,19 +520,11 @@ impl Value for DataValue {
     }
 
     fn min(self, other: Self) -> ValueResult<Self> {
-        if Value::lt(&self, &other)? {
+        if self < other {
             Ok(self)
         } else {
             Ok(other)
         }
-    }
-
-    fn eq(&self, other: &Self) -> ValueResult<bool> {
-        Ok(self == other)
-    }
-
-    fn gt(&self, other: &Self) -> ValueResult<bool> {
-        Ok(self > other)
     }
 
     fn uno(&self, other: &Self) -> ValueResult<bool> {
@@ -566,7 +563,7 @@ impl Value for DataValue {
         let denominator = other.clone().into_int()?;
 
         // Check if we are dividing INT_MIN / -1. This causes an integer overflow trap.
-        let min = Value::int(1i128 << (self.ty().bits() - 1), self.ty())?;
+        let min = DataValueExt::int(1i128 << (self.ty().bits() - 1), self.ty())?;
         if self == min && denominator == -1 {
             return Err(ValueError::IntegerOverflow);
         }
@@ -582,7 +579,7 @@ impl Value for DataValue {
         let denominator = other.clone().into_int()?;
 
         // Check if we are dividing INT_MIN / -1. This causes an integer overflow trap.
-        let min = Value::int(1i128 << (self.ty().bits() - 1), self.ty())?;
+        let min = DataValueExt::int(1i128 << (self.ty().bits() - 1), self.ty())?;
         if self == min && denominator == -1 {
             return Err(ValueError::IntegerOverflow);
         }
@@ -638,6 +635,18 @@ impl Value for DataValue {
 
     fn checked_add(self, other: Self) -> ValueResult<Option<Self>> {
         binary_match!(option checked_add(&self, &other); [I8, I16, I32, I64, I128, U8, U16, U32, U64, U128])
+    }
+
+    fn overflowing_add(self, other: Self) -> ValueResult<(Self, bool)> {
+        binary_match!(pair overflowing_add(&self, &other); [I8, I16, I32, I64, I128, U8, U16, U32, U64, U128])
+    }
+
+    fn overflowing_sub(self, other: Self) -> ValueResult<(Self, bool)> {
+        binary_match!(pair overflowing_sub(&self, &other); [I8, I16, I32, I64, I128, U8, U16, U32, U64, U128])
+    }
+
+    fn overflowing_mul(self, other: Self) -> ValueResult<(Self, bool)> {
+        binary_match!(pair overflowing_mul(&self, &other); [I8, I16, I32, I64, I128, U8, U16, U32, U64, U128])
     }
 
     fn neg(self) -> ValueResult<Self> {

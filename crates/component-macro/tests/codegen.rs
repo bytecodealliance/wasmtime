@@ -18,11 +18,20 @@ macro_rules! gentest {
                     path: $path,
                     world: $name,
                     tracing: true,
+                    duplicate_if_necessary: true,
+                });
+            }
+            mod interfaces_only {
+                wasmtime::component::bindgen!({
+                    path: $path,
+                    world: $name,
+                    only_interfaces: true,
                 });
             }
         }
         // ...
     };
+
 }
 
 component_macro_test_helpers::foreach!(gentest);

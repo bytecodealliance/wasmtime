@@ -526,18 +526,6 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_early_def(tmp);
             collector.reg_early_def(rd);
         }
-        &Inst::SelectIf {
-            ref rd,
-            test,
-            ref x,
-            ref y,
-            ..
-        } => {
-            collector.reg_use(test);
-            collector.reg_uses(x.regs());
-            collector.reg_uses(y.regs());
-            rd.iter().for_each(|r| collector.reg_early_def(*r));
-        }
         &Inst::RawData { .. } => {}
         &Inst::AtomicStore { src, p, .. } => {
             collector.reg_use(src);
@@ -1010,31 +998,6 @@ impl Inst {
                 format!(
                     "brev8 {},{}##tmp={} tmp2={} step={} ty={}",
                     rd, rs, tmp, tmp2, step, ty
-                )
-            }
-            &Inst::SelectIf {
-                if_spectre_guard,
-                ref rd,
-                test,
-                ref x,
-                ref y,
-            } => {
-                let test = format_reg(test, allocs);
-                let x = format_regs(x.regs(), allocs);
-                let y = format_regs(y.regs(), allocs);
-                let rd: Vec<_> = rd.iter().map(|r| r.to_reg()).collect();
-                let rd = format_regs(&rd[..], allocs);
-                format!(
-                    "selectif{} {},{},{}##test={}",
-                    if if_spectre_guard {
-                        "_spectre_guard"
-                    } else {
-                        ""
-                    },
-                    rd,
-                    x,
-                    y,
-                    test
                 )
             }
             &Inst::Popcnt {
