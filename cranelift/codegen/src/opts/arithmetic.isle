@@ -67,6 +67,16 @@
       (if-let -1 (i64_sextend_imm64 ty c))
       (ineg ty x))
 
+;; ineg(x) == (!x) + 1
+(rule (simplify (iadd ty (bnot ty x) (iconst ty (u64_from_imm64 1))))
+      (ineg ty x))
+(rule (simplify (iadd ty (iconst ty (u64_from_imm64 1)) (bnot ty x)))
+      (ineg ty x))
+
+;; ineg(x) == !(x - 1)
+(rule (simplify (bnot ty (isub ty x (iconst ty (u64_from_imm64 1)))))
+      (ineg ty x))
+
 ;; x/1 == x.
 (rule (simplify (sdiv ty
                       x
