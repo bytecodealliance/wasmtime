@@ -2328,12 +2328,14 @@
 (decl gen_icmp_inner (IntCC ValueRegs ValueRegs Type) Reg)
 
 ;; We only implement LessThan, for GreaterThan we just reverse the arguments
-(rule 4 (gen_icmp_inner (intcc_greater_than cc) x y ty)
+(rule 4 (gen_icmp_inner cc x y ty)
+  (if (intcc_greater_than cc))
   (gen_icmp_inner (intcc_reverse cc) y x ty))
 
 ;; For these rules, we can just use the normal rules and then invert the result.
 ;; i.e. `x <= y` is the same as `!(x > y)`.
-(rule 3 (gen_icmp_inner (intcc_sle_or_ule cc) x y ty)
+(rule 3 (gen_icmp_inner cc x y ty)
+  (if-let (IntCC.UnsignedLessThanOrEqual) (intcc_unsigned cc))
   (let ((res Reg (gen_icmp_inner (intcc_inverse cc) x y ty)))
     (rv_xori res (imm12_const 1))))
 
@@ -2369,7 +2371,8 @@
 ;; .top_is_equal:
 ;;     mov       rd, t2
 ;; .end:
-(rule 2 (gen_icmp_inner (intcc_slt_or_ult cc) x y $I128)
+(rule 2 (gen_icmp_inner cc x y $I128)
+  (if-let (IntCC.UnsignedLessThan) (intcc_unsigned cc))
   (let ((x_lo Reg (value_regs_get x 0))
         (x_hi Reg (value_regs_get x 1))
         (y_lo Reg (value_regs_get y 0))
@@ -2421,20 +2424,23 @@
 
 ;; For these IntCC's we need to both add 1 to the immediate and invert the result.
 ;; i.e. `x > imm` is the same as `!(x < imm + 1)`.
-(rule 4 (gen_icmp_imm (intcc_sgt_or_ugt cc) x imm ty)
+(rule 4 (gen_icmp_imm cc x imm ty)
+  (if-let (IntCC.UnsignedGreaterThan) (intcc_unsigned cc))
   (let ((res Reg (gen_icmp_imm (intcc_reverse cc) x (i64_add imm 1) ty)))
     (rv_xori res (imm12_const 1))))
   
 ;; We directly support the inverse of these condition codes. So lower the inverse
 ;; and then invert the result using `xor`.
 ;; i.e. `x >= imm` is the same as `!(x < imm)`.
-(rule 3 (gen_icmp_imm (intcc_sge_or_uge cc) x imm ty)
+(rule 3 (gen_icmp_imm cc x imm ty)
+  (if-let (IntCC.UnsignedGreaterThanOrEqual) (intcc_unsigned cc))
   (let ((res Reg (gen_icmp_imm (intcc_inverse cc) x imm ty)))
     (rv_xori res (imm12_const 1))))
 
 ;; Here we can add 1 to the immediate and use the reverse condition code.
 ;; i.e. `x <= imm` is the same as `x < imm + 1`.
-(rule 2 (gen_icmp_imm (intcc_sle_or_ule cc) x imm ty)
+(rule 2 (gen_icmp_imm cc x imm ty)
+  (if-let (IntCC.UnsignedLessThanOrEqual) (intcc_unsigned cc))
   (gen_icmp_imm (intcc_without_equal cc) x (i64_add imm 1) ty))
 
 ;; We have dedicated instructions for these two cases. (`slti`/`sltiu`)

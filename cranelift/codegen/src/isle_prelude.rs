@@ -753,49 +753,6 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
-        fn intcc_sle_or_ule(&mut self, cc: &IntCC) -> Option<IntCC> {
-            match cc {
-                IntCC::SignedLessThanOrEqual | IntCC::UnsignedLessThanOrEqual => Some(*cc),
-                _ => None,
-            }
-        }
-
-        #[inline]
-        fn intcc_sge_or_uge(&mut self, cc: &IntCC) -> Option<IntCC> {
-            match cc {
-                IntCC::SignedGreaterThanOrEqual | IntCC::UnsignedGreaterThanOrEqual => Some(*cc),
-                _ => None,
-            }
-        }
-
-        #[inline]
-        fn intcc_sgt_or_ugt(&mut self, cc: &IntCC) -> Option<IntCC> {
-            match cc {
-                IntCC::SignedGreaterThan | IntCC::UnsignedGreaterThan => Some(*cc),
-                _ => None,
-            }
-        }
-
-        #[inline]
-        fn intcc_slt_or_ult(&mut self, cc: &IntCC) -> Option<IntCC> {
-            match cc {
-                IntCC::SignedLessThan | IntCC::UnsignedLessThan => Some(*cc),
-                _ => None,
-            }
-        }
-
-        #[inline]
-        fn intcc_greater_than(&mut self, cc: &IntCC) -> Option<IntCC> {
-            match cc {
-                IntCC::SignedGreaterThan
-                | IntCC::UnsignedGreaterThan
-                | IntCC::SignedGreaterThanOrEqual
-                | IntCC::UnsignedGreaterThanOrEqual => Some(*cc),
-                _ => None,
-            }
-        }
-
-        #[inline]
         fn intcc_reverse(&mut self, cc: &IntCC) -> IntCC {
             cc.reverse()
         }
