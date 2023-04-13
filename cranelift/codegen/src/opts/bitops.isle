@@ -93,7 +93,7 @@
   (if-let -1 (i64_sextend_imm64 ty k))
   (bnot ty x))
 
-;; bmask(x) = sshr((x | -x), N) where N = ty_bits(ty) - 1.
+;; sshr((x | -x), N) == bmask(x) where N = ty_bits(ty) - 1.
 ;;
 ;; (x | -x) sets the sign bit to 1 if x is nonzero, and 0 if x is zero. sshr propagates
 ;; the sign bit to the rest of the value.
