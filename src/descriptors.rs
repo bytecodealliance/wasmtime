@@ -58,6 +58,12 @@ impl Streams {
         match &self.input.get() {
             Some(wasi_stream) => Ok(*wasi_stream),
             None => match &self.type_ {
+                // For directories, preview 1 behavior was to return ERRNO_BADF on attempts to read
+                // or write.
+                StreamType::File(File {
+                    descriptor_type: filesystem::DescriptorType::Directory,
+                    ..
+                }) => Err(wasi::ERRNO_BADF),
                 // For files, we may have adjusted the position for seeking, so
                 // create a new stream.
                 StreamType::File(file) => {
@@ -75,6 +81,12 @@ impl Streams {
         match &self.output.get() {
             Some(wasi_stream) => Ok(*wasi_stream),
             None => match &self.type_ {
+                // For directories, preview 1 behavior was to return ERRNO_BADF on attempts to read
+                // or write.
+                StreamType::File(File {
+                    descriptor_type: filesystem::DescriptorType::Directory,
+                    ..
+                }) => Err(wasi::ERRNO_BADF),
                 // For files, we may have adjusted the position for seeking, so
                 // create a new stream.
                 StreamType::File(file) => {
@@ -309,6 +321,14 @@ impl Descriptors {
     pub fn get_file_with_error(&self, fd: Fd, error: Errno) -> Result<&File, Errno> {
         match self.get(fd)? {
             Descriptor::Streams(Streams {
+                type_:
+                    StreamType::File(File {
+                        descriptor_type: filesystem::DescriptorType::Directory,
+                        ..
+                    }),
+                ..
+            }) => Err(wasi::ERRNO_BADF),
+            Descriptor::Streams(Streams {
                 type_: StreamType::File(file),
                 ..
             }) => Ok(file),
@@ -334,9 +354,30 @@ impl Descriptors {
     }
 
     pub fn get_dir(&self, fd: Fd) -> Result<&File, Errno> {
-        // FIXME: do we look at the StreamType::File(File { descriptor_type }) and make sure it
-        // really is a DescriptorType::Directory here?
-        self.get_file_with_error(fd, wasi::ERRNO_NOTDIR)
+        match self.get(fd)? {
+            Descriptor::Streams(Streams {
+                type_:
+                    StreamType::File(
+                        file @ File {
+                            descriptor_type: filesystem::DescriptorType::Directory,
+                            ..
+                        },
+                    ),
+                ..
+            }) => Ok(file),
+            _ => Err(wasi::ERRNO_BADF),
+        }
+    }
+
+    pub fn get_file_or_dir(&self, fd: Fd, error: Errno) -> Result<&File, Errno> {
+        match self.get(fd)? {
+            Descriptor::Streams(Streams {
+                type_: StreamType::File(file),
+                ..
+            }) => Ok(file),
+            Descriptor::Closed(_) => Err(wasi::ERRNO_BADF),
+            _ => Err(error),
+        }
     }
 
     pub fn get_seekable_file(&self, fd: Fd) -> Result<&File, Errno> {

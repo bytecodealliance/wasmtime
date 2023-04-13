@@ -405,7 +405,11 @@ pub unsafe extern "C" fn fd_advise(
 /// Note: This is similar to `posix_fallocate` in POSIX.
 #[no_mangle]
 pub unsafe extern "C" fn fd_allocate(fd: Fd, offset: Filesize, len: Filesize) -> Errno {
-    unreachable!("fd_allocate")
+    State::with(|state| {
+        let ds = state.descriptors();
+        let file = ds.get_file(fd)?;
+        unreachable!("fd_allocate is unimplemented")
+    })
 }
 
 /// Close a file descriptor.
@@ -558,7 +562,7 @@ pub unsafe extern "C" fn fd_fdstat_set_rights(
 pub unsafe extern "C" fn fd_filestat_get(fd: Fd, buf: *mut Filestat) -> Errno {
     State::with(|state| {
         let ds = state.descriptors();
-        let file = ds.get_file(fd)?;
+        let file = ds.get_file_or_dir(fd, wasi::ERRNO_BADF)?;
         let stat = filesystem::stat(file.fd)?;
         let filetype = stat.type_.into();
         *buf = Filestat {
