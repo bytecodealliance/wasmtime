@@ -101,8 +101,7 @@ fn request(
     })
 }
 
-fn main() -> Result<()> {       
-    let missing = "MISSING".to_string(); 
+fn main() -> Result<()> { 
     let r1 = request(
         types::MethodParam::Get,
         types::SchemeParam::Http,
@@ -115,7 +114,7 @@ fn main() -> Result<()> {
 
     println!("localhost:3000 /get: {r1:?}");
     assert_eq!(r1.status, 200);
-    let method = r1.header("x-wasmtime-test-method").unwrap_or(&missing);
+    let method = r1.header("x-wasmtime-test-method").unwrap();
     assert_eq!(method, "GET");
     assert_eq!(r1.body, b"");
 
@@ -131,7 +130,7 @@ fn main() -> Result<()> {
 
     println!("localhost:3000 /post: {r2:?}");
     assert_eq!(r2.status, 200);
-    let method = r2.header("x-wasmtime-test-method").unwrap_or(&missing);
+    let method = r2.header("x-wasmtime-test-method").unwrap();
     assert_eq!(method, "POST");
     assert_eq!(r2.body, b"{\"foo\": \"bar\"}");
 
@@ -147,7 +146,7 @@ fn main() -> Result<()> {
 
     println!("localhost:3000 /put: {r3:?}");
     assert_eq!(r3.status, 200);
-    let method = r3.header("x-wasmtime-test-method").unwrap_or(&missing);
+    let method = r3.header("x-wasmtime-test-method").unwrap();
     assert_eq!(method, "PUT");
     assert_eq!(r3.body, b"");
 
