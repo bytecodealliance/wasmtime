@@ -95,6 +95,17 @@ block0(v0: i32):
 ; check: v4 = ineg v0
 ; check: return v4
 
+function %ineg_not_minus_neg_1(i32) -> i32 {
+block0(v0: i32):
+    v1 = bnot v0
+    v2 = iconst.i32 -1
+    v3 = isub v1, v2
+    return v3
+}
+
+; check: v4 = ineg v0
+; check: return v4
+
 function %ineg_not_sub_one(i32) -> i32 {
 block0(v0: i32):
     v1 = iconst.i32 1
@@ -105,6 +116,29 @@ block0(v0: i32):
 
 ; check: v4 = ineg v0
 ; check: return v4
+
+function %ineg_not_add_neg_one(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 -1
+    v2 = iadd v0, v1
+    v3 = bnot v2
+    return v3
+}
+
+; check: v4 = ineg v0
+; check: return v4
+
+function %ineg_not_add_neg_one_reverse(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 -1
+    v2 = iadd v1, v0
+    v3 = bnot v2
+    return v3
+}
+
+; check: v6 = ineg v0
+; check: return v6
+
 
 
 function %double_fneg(f32) -> f32 {
