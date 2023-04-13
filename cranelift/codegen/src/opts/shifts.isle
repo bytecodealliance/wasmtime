@@ -78,3 +78,8 @@
       (if-let (u64_from_imm64 shift_u64) shift)
       (if-let $true (u64_le shift_u64 (u64_sub (ty_bits_u64 wide) (ty_bits_u64 narrow))))
       x)
+
+;; sshr(x, k) == ineg(ushr(x, k)) when k == ty_bits - 1.
+(rule (simplify (ineg ty (ushr ty x sconst @ (iconst ty (u64_from_imm64 shift_amt)))))
+      (if-let $true (u64_eq shift_amt (u64_sub (ty_bits ty) 1)))
+      (sshr ty x sconst))
