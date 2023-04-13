@@ -93,16 +93,10 @@
   (if-let -1 (i64_sextend_imm64 ty k))
   (bnot ty x))
 
-;; bmask(input) = !(((input | ((!input) + 1)) >> 63) - 1)
-(rule (simplify (bnot ty
-                      (isub ty
-                            (ushr ty
-                                  (bor ty
-                                        input
-                                        (iadd ty
-                                              (bnot ty input)
-                                              (iconst ty (u64_from_imm64 1))))
-                                  (iconst ty (u64_from_imm64 shift_amt)))
-                            (iconst ty (u64_from_imm64 1)))))
+;; bmask(x) = sshr((x | -x), N) where N = ty_bits(ty) - 1.
+;; 
+;; (x | -x) sets the sign bit to 1 if x is nonzero, and 0 if x is zero. sshr propagates
+;; the sign bit to the rest of the value.
+(rule (simplify (sshr ty (bor ty x (ineg ty x)) (iconst ty (u64_from_imm64 shift_amt))))
       (if-let $true (u64_eq shift_amt (u64_sub (ty_bits ty) 1)))
-      (bmask ty input))
+      (bmask ty x))
