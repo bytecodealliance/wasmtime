@@ -65,20 +65,20 @@ block0(v0: i64, v1: i64, v2: i64):
 
 ;; We have a optimization rule in the midend that turns this into a bmask
 ;; It's easier to have a runtest to ensure that it is correct than to inspect the output.
-function %bitops_bmask(i64) -> i64 {
-block0(v0: i64):
+function %bitops_bmask(i16) -> i16 {
+block0(v0: i16):
     v1 = bnot v0
-    v2 = iconst.i64 1
-    v3 = iadd.i64 v1, v2
-    v4 = bor.i64 v0, v3
-    v5 = iconst.i64 63
-    v6 = ushr.i64 v4, v5
-    v7 = iconst.i64 1
-    v8 = isub.i64 v6, v7
-    v9 = bnot.i64 v8
+    v2 = iconst.i16 1
+    v3 = iadd.i16 v1, v2
+    v4 = bor.i16 v0, v3
+    v5 = iconst.i16 15
+    v6 = ushr.i16 v4, v5
+    v7 = iconst.i16 1
+    v8 = isub.i16 v6, v7
+    v9 = bnot.i16 v8
     return v9
 }
 ; run: %bitops_bmask(0) == 0
 ; run: %bitops_bmask(1) == -1
-; run: %bitops_bmask(2) == -1
-; run: %bitops_bmask(3) == -1
+; run: %bitops_bmask(0xFFFF) == -1
+; run: %bitops_bmask(0x8000) == -1
