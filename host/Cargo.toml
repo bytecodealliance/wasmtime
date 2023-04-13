@@ -16,9 +16,9 @@ wasmtime = { version = "7.0.0", features = ["component-model"] }
 wasi-common = { path = "../wasi-common" }
 wasi-cap-std-sync = { path = "../wasi-common/cap-std-sync" }
 clap = { version = "4.1.9", features = ["derive"] }
+tracing-subscriber = { version = "0.3", default-features = false, features = ["env-filter", "fmt" ]}
 
 [dev-dependencies]
 test-programs-macros = { path = "../test-programs/macros" }
-tracing-subscriber = { version = "0.3", default-features = false, features = ["env-filter", "fmt" ]}
 test-log = { version = "0.2", default-features = false, features = ["trace"] }
 tempfile = "3.3.0"
