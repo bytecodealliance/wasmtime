@@ -1295,7 +1295,7 @@ impl<'a> InterfaceGenerator<'a> {
                 "
                    let span = tracing::span!(
                        tracing::Level::TRACE,
-                       \"wit-bindgen guest export\",
+                       \"wit-bindgen export\",
                        module = \"{}\",
                        function = \"{}\",
                    );
