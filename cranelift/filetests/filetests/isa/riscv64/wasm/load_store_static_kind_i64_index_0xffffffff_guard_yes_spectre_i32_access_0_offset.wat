@@ -39,42 +39,42 @@
 
 ;; function u0:0:
 ;; block0:
-;;   mv a4,a2
-;;   lui a2,65536
-;;   addi a2,a2,4092
-;;   sltu a2,a2,a0
-;;   ld a3,0(a4)
-;;   add a0,a3,a0
+;;   lui t2,65536
+;;   addi t2,t2,4093
+;;   sltu a3,a0,t2
+;;   xori a4,a3,1
+;;   ld a2,0(a2)
+;;   add a2,a2,a0
 ;;   li a3,0
-;;   andi a7,a2,255
-;;   snez t4,a7
-;;   sub t1,zero,t4
-;;   and a2,a3,t1
-;;   not a3,t1
-;;   and a4,a0,a3
-;;   or a6,a2,a4
-;;   sw a1,0(a6)
+;;   andi t3,a4,255
+;;   snez t0,t3
+;;   sub t2,zero,t0
+;;   and a3,a3,t2
+;;   not a4,t2
+;;   and a5,a2,a4
+;;   or a7,a3,a5
+;;   sw a1,0(a7)
 ;;   j label1
 ;; block1:
 ;;   ret
 ;;
 ;; function u0:1:
 ;; block0:
-;;   mv a4,a1
-;;   lui a1,65536
-;;   addi a1,a1,4092
-;;   sltu a1,a1,a0
-;;   ld a2,0(a4)
-;;   add a0,a2,a0
+;;   lui t2,65536
+;;   addi t2,t2,4093
+;;   sltu a2,a0,t2
+;;   xori a4,a2,1
+;;   ld a1,0(a1)
+;;   add a1,a1,a0
 ;;   li a2,0
-;;   andi a7,a1,255
-;;   snez t4,a7
-;;   sub t1,zero,t4
-;;   and a1,a2,t1
-;;   not a2,t1
-;;   and a4,a0,a2
-;;   or a6,a1,a4
-;;   lw a0,0(a6)
+;;   andi t3,a4,255
+;;   snez t0,t3
+;;   sub t2,zero,t0
+;;   and a2,a2,t2
+;;   not a3,t2
+;;   and a5,a1,a3
+;;   or a7,a2,a5
+;;   lw a0,0(a7)
 ;;   j label1
 ;; block1:
 ;;   ret
