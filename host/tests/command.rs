@@ -554,3 +554,7 @@ async fn run_read_only(mut store: Store<WasiCtx>, wasi: Command) -> Result<()> {
 
     Ok(())
 }
+
+async fn run_dir_fd_op_failures(store: Store<WasiCtx>, wasi: Command) -> Result<()> {
+    run_with_temp_dir(store, wasi).await
+}
