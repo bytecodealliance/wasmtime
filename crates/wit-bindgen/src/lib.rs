@@ -1112,11 +1112,12 @@ impl<'a> InterfaceGenerator<'a> {
         }
 
         if self.gen.opts.tracing {
-            self.src.push_str(&format!(
+            uwrite!(
+                self.src,
                 "
                    let span = tracing::span!(
                        tracing::Level::TRACE,
-                       \"wit-bindgen guest import\",
+                       \"wit-bindgen import\",
                        module = \"{}\",
                        function = \"{}\",
                    );
@@ -1131,7 +1132,22 @@ impl<'a> InterfaceGenerator<'a> {
                     TypeOwner::None => "<no owner>",
                 },
                 func.name,
-            ));
+            );
+            let mut event_fields = func
+                .params
+                .iter()
+                .enumerate()
+                .map(|(i, (name, _ty))| {
+                    let name = to_rust_ident(&name);
+                    format!("{name} = tracing::field::debug(&arg{i})")
+                })
+                .collect::<Vec<String>>();
+            event_fields.push(format!("\"call\""));
+            uwrite!(
+                self.src,
+                "tracing::event!(tracing::Level::TRACE, {});\n",
+                event_fields.join(", ")
+            );
         }
 
         self.src.push_str("let host = get(caller.data_mut());\n");
@@ -1144,6 +1160,13 @@ impl<'a> InterfaceGenerator<'a> {
             uwrite!(self.src, ").await;\n");
         } else {
             uwrite!(self.src, ");\n");
+        }
+
+        if self.gen.opts.tracing {
+            uwrite!(
+                self.src,
+                "tracing::event!(tracing::Level::TRACE, result = tracing::field::debug(&r), \"return\");"
+            );
         }
 
         if self
@@ -1272,7 +1295,7 @@ impl<'a> InterfaceGenerator<'a> {
                 "
                    let span = tracing::span!(
                        tracing::Level::TRACE,
-                       \"wit-bindgen guest export\",
+                       \"wit-bindgen export\",
                        module = \"{}\",
                        function = \"{}\",
                    );
