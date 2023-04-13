@@ -1142,9 +1142,7 @@ impl<'a> InterfaceGenerator<'a> {
                     format!("{name} = tracing::field::debug(&arg{i})")
                 })
                 .collect::<Vec<String>>();
-            if event_fields.is_empty() {
-                event_fields.push(format!("\"call\""));
-            }
+            event_fields.push(format!("\"call\""));
             uwrite!(
                 self.src,
                 "tracing::event!(tracing::Level::TRACE, {});\n",
@@ -1167,7 +1165,7 @@ impl<'a> InterfaceGenerator<'a> {
         if self.gen.opts.tracing {
             uwrite!(
                 self.src,
-                "tracing::event!(tracing::Level::TRACE, result = tracing::field::debug(&r));"
+                "tracing::event!(tracing::Level::TRACE, result = tracing::field::debug(&r), \"return\");"
             );
         }
 
