@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use host::{command, command::wasi::Command, proxy, proxy::wasi::Proxy, WasiCtx};
 use wasi_cap_std_sync::WasiCtxBuilder;
 use wasmtime::{
@@ -71,7 +71,9 @@ async fn main() -> Result<()> {
         .args(&argv);
 
     for (guest, host) in args.map_dirs {
-        builder = builder.preopened_dir(dir, guest)?;
+        let dir = cap_std::fs::Dir::open_ambient_dir(&host, cap_std::ambient_authority())
+            .context(format!("opening directory {host:?}"))?;
+        builder = builder.preopened_dir(dir, &guest)?;
     }
 
     let wasi_ctx = builder.build();
