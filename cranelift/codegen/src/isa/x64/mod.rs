@@ -4,7 +4,7 @@ pub use self::inst::{args, CallInfo, EmitInfo, EmitState, Inst};
 
 use super::{OwnedTargetIsa, TargetIsa};
 use crate::dominator_tree::DominatorTree;
-use crate::ir::{condcodes::IntCC, Function, Type};
+use crate::ir::{Function, Type};
 #[cfg(feature = "unwind")]
 use crate::isa::unwind::systemv;
 use crate::isa::x64::{inst::regs::create_reg_env_systemv, settings as x64_settings};
@@ -122,12 +122,6 @@ impl TargetIsa for X64Backend {
 
     fn triple(&self) -> &Triple {
         &self.triple
-    }
-
-    fn unsigned_add_overflow_condition(&self) -> IntCC {
-        // Unsigned `<`; this corresponds to the carry flag set on x86, which
-        // indicates an add has overflowed.
-        IntCC::UnsignedLessThan
     }
 
     #[cfg(feature = "unwind")]

@@ -1,7 +1,6 @@
 //! IBM Z 64-bit Instruction Set Architecture.
 
 use crate::dominator_tree::DominatorTree;
-use crate::ir::condcodes::IntCC;
 use crate::ir::{Function, Type};
 use crate::isa::s390x::settings as s390x_settings;
 #[cfg(feature = "unwind")]
@@ -129,15 +128,6 @@ impl TargetIsa for S390xBackend {
 
     fn dynamic_vector_bytes(&self, _dyn_ty: Type) -> u32 {
         16
-    }
-
-    fn unsigned_add_overflow_condition(&self) -> IntCC {
-        // The ADD LOGICAL family of instructions set the condition code
-        // differently from normal comparisons, in a way that cannot be
-        // represented by any of the standard IntCC values.  So we use a
-        // dummy value here, which gets remapped to the correct condition
-        // code mask during lowering.
-        IntCC::UnsignedGreaterThan
     }
 
     #[cfg(feature = "unwind")]
