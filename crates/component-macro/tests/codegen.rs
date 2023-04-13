@@ -21,13 +21,6 @@ macro_rules! gentest {
                     duplicate_if_necessary: true,
                 });
             }
-            mod interfaces_only {
-                wasmtime::component::bindgen!({
-                    path: $path,
-                    world: $name,
-                    only_interfaces: true,
-                });
-            }
         }
         // ...
     };

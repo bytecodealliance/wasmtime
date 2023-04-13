@@ -639,15 +639,10 @@ mod with_remapping {
 
     mod interfaces {
         wasmtime::component::bindgen!({
-            inline: "
-            default world result-playground {
-                import imports: interface {
-                    empty-error: func(a: float64) -> result<float64>
-                }
-
-                export empty-error: func(a: float64) -> result<float64>
+            interfaces: "
+            import imports: interface {
+                empty-error: func(a: float64) -> result<float64>
             }",
-            only_interfaces: true,
         });
     }
 

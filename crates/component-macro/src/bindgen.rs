@@ -78,7 +78,16 @@ impl Parse for Config {
                     Opt::Async(val) => opts.async_ = val,
                     Opt::TrappableErrorType(val) => opts.trappable_error_type = val,
                     Opt::DuplicateIfNecessary(val) => opts.duplicate_if_necessary = val,
-                    Opt::OnlyInterfaces(val) => opts.only_interfaces = val,
+                    Opt::Interfaces(s) => {
+                        if source.is_some() {
+                            return Err(Error::new(s.span(), "cannot specify a second source"));
+                        }
+                        source = Some(Source::Inline(format!(
+                            "default world interfaces {{ {} }}",
+                            s.value()
+                        )));
+                        opts.only_interfaces = true;
+                    }
                     Opt::With(val) => opts.with.extend(val),
                 }
             }
@@ -136,7 +145,7 @@ mod kw {
     syn::custom_keyword!(trappable_error_type);
     syn::custom_keyword!(world);
     syn::custom_keyword!(duplicate_if_necessary);
-    syn::custom_keyword!(only_interfaces);
+    syn::custom_keyword!(interfaces);
     syn::custom_keyword!(with);
 }
 
@@ -148,7 +157,7 @@ enum Opt {
     Async(bool),
     TrappableErrorType(Vec<TrappableError>),
     DuplicateIfNecessary(bool),
-    OnlyInterfaces(bool),
+    Interfaces(syn::LitStr),
     With(HashMap<String, String>),
 }
 
@@ -198,10 +207,10 @@ impl Parse for Opt {
                     })
                     .collect(),
             ))
-        } else if l.peek(kw::only_interfaces) {
-            input.parse::<kw::only_interfaces>()?;
+        } else if l.peek(kw::interfaces) {
+            input.parse::<kw::interfaces>()?;
             input.parse::<Token![:]>()?;
-            Ok(Opt::OnlyInterfaces(input.parse::<syn::LitBool>()?.value))
+            Ok(Opt::Interfaces(input.parse::<syn::LitStr>()?))
         } else if l.peek(kw::with) {
             input.parse::<kw::with>()?;
             input.parse::<Token![:]>()?;
