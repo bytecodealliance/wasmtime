@@ -2,7 +2,6 @@
 
 use crate::info::{Module, ModuleContext};
 use crate::stack_ext::StackExt;
-use std::convert::TryFrom;
 use wasm_encoder::SectionId;
 
 /// Instrument the input Wasm so that it exports its memories and globals,
@@ -71,24 +70,6 @@ pub(crate) fn instrument(cx: &ModuleContext<'_>) -> Vec<u8> {
 
         /// Sections in this module info that we are iterating over.
         sections: std::slice::Iter<'a, wasm_encoder::RawSection<'a>>,
-
-        /// The index of this entry's parent module on the stack. `None` if this
-        /// is the root module.
-        parent_index: Option<usize>,
-
-        /// Nested child modules that still need to be instrumented and added to
-        /// one of this entry's module's module sections.
-        children: std::slice::Iter<'a, Module>,
-
-        /// The current module section we are building for this entry's
-        /// module. Only `Some` if we are currently processing this module's
-        /// (transitive) children, i.e. this is not the module on the top of the
-        /// stack.
-        module_section: Option<wasm_encoder::ModuleSection>,
-
-        /// The number of children still remaining to be interested for the
-        /// current module section.
-        children_remaining: usize,
     }
 
     let root = cx.root();
@@ -96,10 +77,6 @@ pub(crate) fn instrument(cx: &ModuleContext<'_>) -> Vec<u8> {
         module: root,
         encoder: wasm_encoder::Module::new(),
         sections: root.raw_sections(cx).iter(),
-        parent_index: None,
-        children: root.child_modules(cx).iter(),
-        module_section: None,
-        children_remaining: 0,
     }];
 
     loop {
@@ -116,9 +93,9 @@ pub(crate) fn instrument(cx: &ModuleContext<'_>) -> Vec<u8> {
                 // First, copy over all the original exports.
                 for export in entry.module.exports(cx) {
                     exports.export(
-                        export.field,
+                        export.name,
                         match export.kind {
-                            wasmparser::ExternalKind::Function => {
+                            wasmparser::ExternalKind::Func => {
                                 wasm_encoder::Export::Function(export.index)
                             }
                             wasmparser::ExternalKind::Table => {
@@ -130,12 +107,7 @@ pub(crate) fn instrument(cx: &ModuleContext<'_>) -> Vec<u8> {
                             wasmparser::ExternalKind::Global => {
                                 wasm_encoder::Export::Global(export.index)
                             }
-                            wasmparser::ExternalKind::Instance => {
-                                wasm_encoder::Export::Instance(export.index)
-                            }
-                            wasmparser::ExternalKind::Module
-                            | wasmparser::ExternalKind::Type
-                            | wasmparser::ExternalKind::Tag => {
+                            wasmparser::ExternalKind::Tag => {
                                 unreachable!("should have been rejected in validation/parsing")
                             }
                         },
@@ -153,60 +125,8 @@ pub(crate) fn instrument(cx: &ModuleContext<'_>) -> Vec<u8> {
                     let name = format!("__wizer_memory_{}", i);
                     exports.export(&name, wasm_encoder::Export::Memory(j));
                 }
-                for (i, j) in entry.module.instantiations(cx).keys().enumerate() {
-                    let name = format!("__wizer_instance_{}", i);
-                    exports.export(&name, wasm_encoder::Export::Instance(*j));
-                }
 
                 entry.encoder.section(&exports);
-            }
-
-            // Nested module sections need to recursively instrument each child
-            // module.
-            Some(section) if section.id == SectionId::Module.into() => {
-                let reader = wasmparser::ModuleSectionReader::new(section.data, 0).unwrap();
-                let count = usize::try_from(reader.get_count()).unwrap();
-
-                assert!(stack.top().module_section.is_none());
-                if count == 0 {
-                    continue;
-                }
-
-                stack.top_mut().module_section = Some(wasm_encoder::ModuleSection::new());
-
-                assert_eq!(stack.top().children_remaining, 0);
-                stack.top_mut().children_remaining = count;
-
-                let children = stack
-                    .top_mut()
-                    .children
-                    .by_ref()
-                    .copied()
-                    .take(count)
-                    .collect::<Vec<_>>();
-
-                assert_eq!(
-                    children.len(),
-                    count,
-                    "shouldn't ever have fewer children than expected"
-                );
-
-                let parent_index = Some(stack.len() - 1);
-                stack.extend(
-                    children
-                        .into_iter()
-                        // Reverse so that we pop them off the stack in order.
-                        .rev()
-                        .map(|c| StackEntry {
-                            module: c,
-                            encoder: wasm_encoder::Module::new(),
-                            sections: c.raw_sections(cx).iter(),
-                            parent_index,
-                            children: c.child_modules(cx).iter(),
-                            module_section: None,
-                            children_remaining: 0,
-                        }),
-                );
             }
 
             // End of the current module: if this is the root, return the
@@ -214,27 +134,10 @@ pub(crate) fn instrument(cx: &ModuleContext<'_>) -> Vec<u8> {
             // module section.
             None => {
                 let entry = stack.pop().unwrap();
-                assert!(entry.module_section.is_none());
-                assert_eq!(entry.children_remaining, 0);
 
                 if entry.module.is_root() {
                     assert!(stack.is_empty());
                     return entry.encoder.finish();
-                }
-
-                let parent = &mut stack[entry.parent_index.unwrap()];
-                parent
-                    .module_section
-                    .as_mut()
-                    .unwrap()
-                    .module(&entry.encoder);
-
-                assert!(parent.children_remaining > 0);
-                parent.children_remaining -= 1;
-
-                if parent.children_remaining == 0 {
-                    let module_section = parent.module_section.take().unwrap();
-                    parent.encoder.section(&module_section);
                 }
             }
 

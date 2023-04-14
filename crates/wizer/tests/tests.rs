@@ -12,7 +12,6 @@ fn get_wizer() -> Wizer {
     let mut wizer = Wizer::new();
     wizer.allow_wasi(true).unwrap();
     wizer.wasm_multi_memory(true);
-    wizer.wasm_module_linking(true);
     wizer.wasm_bulk_memory(true);
     wizer
 }
@@ -85,9 +84,7 @@ fn fails_wizening(wat: &str) -> Result<()> {
 
     let wasm = wat_to_wasm(wat)?;
 
-    let mut validator = wasmparser::Validator::new();
-    validator.wasm_features(wasmparser::WasmFeatures {
-        module_linking: true,
+    let mut validator = wasmparser::Validator::new_with_features(wasmparser::WasmFeatures {
         multi_memory: true,
         ..Default::default()
     });
