@@ -137,3 +137,44 @@ block0(v1: i64):
 
 ; check: v5 = bnot v1
 ; check: return v5
+
+function %bitops_bmask(i64) -> i64 {
+block0(v0: i64):
+    v1 = bnot v0
+    v2 = iconst.i64 1
+    v3 = iadd.i64 v1, v2
+    v4 = bor.i64 v0, v3
+    v5 = iconst.i64 63
+    v6 = ushr.i64 v4, v5
+    v7 = iconst.i64 1
+    v8 = isub.i64 v6, v7
+    v9 = bnot.i64 v8
+    return v9
+}
+
+; check: v14 = bmask.i64 v0
+; check: return v14
+
+function %bmask_sshr(i64) -> i64 {
+block0(v0: i64):
+    v1 = ineg v0
+    v2 = bor v0, v1
+    v3 = iconst.i64 63
+    v4 = sshr v2, v3
+    return v4
+}
+
+; check: v5 = bmask.i64 v0
+; check: return v5
+
+function %bmask_reverse_sshr(i64) -> i64 {
+block0(v0: i64):
+    v1 = ineg v0
+    v2 = bor v1, v0
+    v3 = iconst.i64 63
+    v4 = sshr v2, v3
+    return v4
+}
+
+; check: v5 = bmask.i64 v0
+; check: return v5
