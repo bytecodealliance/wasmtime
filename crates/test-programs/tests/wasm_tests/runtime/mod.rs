@@ -12,8 +12,6 @@ pub fn test_suite_environment() -> &'static [(&'static str, &'static str)] {
             ("ERRNO_MODE_WINDOWS", "1"),
             // Windows does not support dangling links or symlinks in the filesystem.
             ("NO_DANGLING_FILESYSTEM", "1"),
-            // Windows does not support fd_allocate.
-            ("NO_FD_ALLOCATE", "1"),
             // Windows does not support renaming a directory to an empty directory -
             // empty directory must be deleted.
             ("NO_RENAME_DIR_TO_EMPTY_DIR", "1"),
@@ -25,10 +23,6 @@ pub fn test_suite_environment() -> &'static [(&'static str, &'static str)] {
     }
     #[cfg(target_os = "macos")]
     {
-        &[
-            ("ERRNO_MODE_MACOS", "1"),
-            // MacOS does not support fd_allocate
-            ("NO_FD_ALLOCATE", "1"),
-        ]
+        &[("ERRNO_MODE_MACOS", "1")]
     }
 }
