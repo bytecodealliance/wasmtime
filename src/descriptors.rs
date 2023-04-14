@@ -374,17 +374,6 @@ impl Descriptors {
         }
     }
 
-    pub fn get_file_or_dir(&self, fd: Fd, error: Errno) -> Result<&File, Errno> {
-        match self.get(fd)? {
-            Descriptor::Streams(Streams {
-                type_: StreamType::File(file),
-                ..
-            }) => Ok(file),
-            Descriptor::Closed(_) => Err(wasi::ERRNO_BADF),
-            _ => Err(error),
-        }
-    }
-
     pub fn get_seekable_file(&self, fd: Fd) -> Result<&File, Errno> {
         self.get_file_with_error(fd, wasi::ERRNO_SPIPE)
     }
