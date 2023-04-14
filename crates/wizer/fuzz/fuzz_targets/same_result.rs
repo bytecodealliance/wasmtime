@@ -68,7 +68,6 @@ fuzz_target!(|module: wasm_smith::ConfiguredModule<WasmConfig>| {
         // initialization routine.
         let mut wizer = wizer::Wizer::new();
         wizer
-            .wasm_module_linking(true)
             .wasm_multi_memory(true)
             .wasm_multi_value(true)
             .init_func(init_func);
@@ -197,10 +196,6 @@ impl<'a> arbitrary::Arbitrary<'a> for WasmConfig {
 }
 
 impl wasm_smith::Config for WasmConfig {
-    fn module_linking_enabled(&self) -> bool {
-        true
-    }
-
     fn max_memories(&self) -> usize {
         10
     }
