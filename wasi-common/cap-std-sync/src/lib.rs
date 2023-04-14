@@ -102,10 +102,14 @@ impl WasiCtxBuilder {
             .insert_ip_net_port_any(IpNet::new(Ipv6Addr::UNSPECIFIED.into(), 0).unwrap());
         self
     }
-    pub fn preopened_dir(mut self, fd: u32, dir: Dir) -> Self {
+    pub fn preopened_dir(
+        mut self,
+        dir: cap_std::fs::Dir,
+        guest_path: &str,
+    ) -> Result<Self, anyhow::Error> {
         let dir = Box::new(crate::dir::Dir::from_cap_std(dir));
-        self.0.insert_dir(fd, dir);
-        self
+        self.0.push_preopened_dir(dir, guest_path)?;
+        Ok(self)
     }
     pub fn preopened_listener(mut self, fd: u32, listener: impl Into<TcpSocket>) -> Self {
         let listener: TcpSocket = listener.into();
