@@ -272,6 +272,11 @@ impl Descriptors {
 
     // Internal: close a fd, returning the descriptor.
     fn close_(&mut self, fd: Fd) -> Result<Descriptor, Errno> {
+        // Throw an error if closing an fd which is already closed
+        match self.get_mut(fd)? {
+            Descriptor::Closed(_) => Err(wasi::ERRNO_BADF)?,
+            _ => {}
+        }
         // Mutate the descriptor to be closed, and push the closed fd onto the head of the linked list:
         let last_closed = self.closed;
         let prev = std::mem::replace(self.get_mut(fd)?, Descriptor::Closed(last_closed));
