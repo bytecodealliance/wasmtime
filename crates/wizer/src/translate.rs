@@ -3,8 +3,8 @@
 pub(crate) fn table_type(table_ty: wasmparser::TableType) -> wasm_encoder::TableType {
     wasm_encoder::TableType {
         element_type: val_type(table_ty.element_type),
-        minimum: table_ty.limits.initial,
-        maximum: table_ty.limits.maximum,
+        minimum: table_ty.initial,
+        maximum: table_ty.maximum,
     }
 }
 
@@ -31,16 +31,11 @@ pub(crate) fn global_type(ty: wasmparser::GlobalType) -> wasm_encoder::GlobalTyp
 }
 
 pub(crate) fn memory_type(ty: wasmparser::MemoryType) -> wasm_encoder::MemoryType {
-    match ty {
-        wasmparser::MemoryType::M32 {
-            shared: false,
-            limits: lims,
-        } => wasm_encoder::MemoryType {
-            minimum: lims.initial.into(),
-            maximum: lims.maximum.map(|val| val.into()),
-            memory64: false,
-        },
-        _ => unreachable!("handled in validation"),
+    assert!(!ty.shared);
+    wasm_encoder::MemoryType {
+        minimum: ty.initial.into(),
+        maximum: ty.maximum.map(|val| val.into()),
+        memory64: ty.memory64,
     }
 }
 
@@ -65,7 +60,7 @@ pub(crate) fn entity_type(ty: wasmparser::ImportSectionEntryType) -> wasm_encode
                  have module types"
             )
         }
-        wasmparser::ImportSectionEntryType::Event(_) => unreachable!(),
+        wasmparser::ImportSectionEntryType::Tag(_) => unreachable!(),
     }
 }
 
@@ -77,7 +72,7 @@ pub(crate) fn item_kind(kind: wasmparser::ExternalKind) -> wasm_encoder::ItemKin
         wasmparser::ExternalKind::Global => wasm_encoder::ItemKind::Global,
         wasmparser::ExternalKind::Module => wasm_encoder::ItemKind::Module,
         wasmparser::ExternalKind::Instance => wasm_encoder::ItemKind::Instance,
-        wasmparser::ExternalKind::Type | wasmparser::ExternalKind::Event => unreachable!(),
+        wasmparser::ExternalKind::Type | wasmparser::ExternalKind::Tag => unreachable!(),
     }
 }
 
@@ -88,7 +83,7 @@ pub(crate) fn export(kind: wasmparser::ExternalKind, index: u32) -> wasm_encoder
         wasmparser::ExternalKind::Table => wasm_encoder::Export::Table(index),
         wasmparser::ExternalKind::Memory => wasm_encoder::Export::Memory(index),
         wasmparser::ExternalKind::Instance => wasm_encoder::Export::Instance(index),
-        wasmparser::ExternalKind::Event
+        wasmparser::ExternalKind::Tag
         | wasmparser::ExternalKind::Type
         | wasmparser::ExternalKind::Module => unreachable!(),
     }

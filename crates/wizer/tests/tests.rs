@@ -579,12 +579,12 @@ fn accept_bulk_memory_data_count() -> Result<()> {
 
     let mut code = wasm_encoder::CodeSection::new();
     let mut func = wasm_encoder::Function::new(vec![]);
-    func.instruction(wasm_encoder::Instruction::I32Const(42));
-    func.instruction(wasm_encoder::Instruction::End);
+    func.instruction(&wasm_encoder::Instruction::I32Const(42));
+    func.instruction(&wasm_encoder::Instruction::End);
     code.function(&func);
 
     let mut func = wasm_encoder::Function::new(vec![]);
-    func.instruction(wasm_encoder::Instruction::End);
+    func.instruction(&wasm_encoder::Instruction::End);
     code.function(&func);
 
     module.section(&code);
@@ -592,8 +592,8 @@ fn accept_bulk_memory_data_count() -> Result<()> {
     // We're expecting these two data segments to be merge into one, which will exercise wizer's
     // ability to output the correct data count (1 instead of 2 above).
     let mut data = wasm_encoder::DataSection::new();
-    data.active(0, wasm_encoder::Instruction::I32Const(0), vec![0, 1, 2, 3]);
-    data.active(0, wasm_encoder::Instruction::I32Const(4), vec![5, 6, 7, 8]);
+    data.active(0, &wasm_encoder::Instruction::I32Const(0), vec![0, 1, 2, 3]);
+    data.active(0, &wasm_encoder::Instruction::I32Const(4), vec![5, 6, 7, 8]);
     module.section(&data);
 
     run_wasm(&[], 42, &module.finish()).unwrap();

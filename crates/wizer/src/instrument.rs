@@ -135,7 +135,7 @@ pub(crate) fn instrument(cx: &ModuleContext<'_>) -> Vec<u8> {
                             }
                             wasmparser::ExternalKind::Module
                             | wasmparser::ExternalKind::Type
-                            | wasmparser::ExternalKind::Event => {
+                            | wasmparser::ExternalKind::Tag => {
                                 unreachable!("should have been rejected in validation/parsing")
                             }
                         },

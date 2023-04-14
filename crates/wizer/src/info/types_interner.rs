@@ -161,7 +161,7 @@ impl<'a> TypesInterner<'a> {
             wasmparser::ImportSectionEntryType::Instance(idx) => {
                 EntityType::Instance(types_space[usize::try_from(idx).unwrap()])
             }
-            wasmparser::ImportSectionEntryType::Event(_) => unreachable!(),
+            wasmparser::ImportSectionEntryType::Tag(_) => unreachable!(),
         }
     }
 

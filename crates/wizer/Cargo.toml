@@ -34,8 +34,8 @@ log = "0.4.14"
 rayon = "1.5.0"
 structopt = { version = "0.3.21", optional = true }
 wasi-cap-std-sync = "3.0.0"
-wasm-encoder = "0.6.0"
-wasmparser = "0.78.2"
+wasm-encoder = "0.10.0"
+wasmparser = "0.83.0"
 wasmtime = "3.0.0"
 wasmtime-wasi = "3.0.0"
 

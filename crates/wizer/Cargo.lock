@@ -1878,9 +1878,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-encoder"
-version = "0.6.0"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2caacc74c68c74f0008c4055cdf509c43e623775eaf73323bb818dcf666ed9bd"
+checksum = "aa9d9bf45fc46f71c407837c9b30b1e874197f2dc357588430b21e5017d290ab"
 dependencies = [
  "leb128",
 ]
@@ -1908,9 +1908,9 @@ dependencies = [
 
 [[package]]
 name = "wasmparser"
-version = "0.78.2"
+version = "0.83.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "52144d4c78e5cf8b055ceab8e5fa22814ce4315d6002ad32cfd914f37c12fd65"
+checksum = "718ed7c55c2add6548cca3ddd6383d738cd73b892df400e96b9aa876f0141d7a"
 
 [[package]]
 name = "wasmparser"
@@ -2412,8 +2412,8 @@ dependencies = [
  "rayon",
  "structopt",
  "wasi-cap-std-sync",
- "wasm-encoder 0.6.0",
- "wasmparser 0.78.2",
+ "wasm-encoder 0.10.0",
+ "wasmparser 0.83.0",
  "wasmprinter",
  "wasmtime",
  "wasmtime-wasi",

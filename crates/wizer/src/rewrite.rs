@@ -59,7 +59,7 @@ impl Wizer {
             for seg in &snapshot.data_segments {
                 data_section.active(
                     seg.memory_index,
-                    wasm_encoder::Instruction::I32Const(seg.offset as i32),
+                    &wasm_encoder::Instruction::I32Const(seg.offset as i32),
                     seg.data(store).iter().copied(),
                 );
             }
@@ -115,7 +115,7 @@ impl Wizer {
                         let glob_ty = translate::global_type(glob_ty);
                         globals.global(
                             glob_ty,
-                            match val {
+                            &match val {
                                 wasmtime::Val::I32(x) => wasm_encoder::Instruction::I32Const(*x),
                                 wasmtime::Val::I64(x) => wasm_encoder::Instruction::I64Const(*x),
                                 wasmtime::Val::F32(x) => {
@@ -477,6 +477,7 @@ impl Wizer {
                         wasm_encoder::Export::Instance(umbrella_instances - 1)
                     }
                     wasm_encoder::ItemKind::Module => unreachable!(),
+                    wasm_encoder::ItemKind::Tag => unreachable!(),
                 },
             );
         }
@@ -1089,7 +1090,7 @@ fn rewrite_state_module(
             let glob_ty = translate::global_type(glob_ty);
             globals.global(
                 glob_ty,
-                match val {
+                &match val {
                     wasmtime::Val::I32(x) => wasm_encoder::Instruction::I32Const(*x),
                     wasmtime::Val::I64(x) => wasm_encoder::Instruction::I64Const(*x),
                     wasmtime::Val::F32(x) => {
@@ -1120,7 +1121,7 @@ fn rewrite_state_module(
         for seg in &snapshot.data_segments {
             data.active(
                 seg.memory_index,
-                wasm_encoder::Instruction::I32Const(seg.offset as i32),
+                &wasm_encoder::Instruction::I32Const(seg.offset as i32),
                 seg.data(store).iter().copied(),
             );
         }

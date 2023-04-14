@@ -116,7 +116,7 @@ pub(crate) fn parse<'a>(full_wasm: &'a [u8]) -> anyhow::Result<ModuleContext<'a>
             }
             CodeSectionEntry(_) => unreachable!(),
             UnknownSection { .. } => anyhow::bail!("unknown section"),
-            EventSection(_) => anyhow::bail!("exceptions are not supported yet"),
+            TagSection(_) => anyhow::bail!("exceptions are not supported yet"),
             End => {
                 let entry = stack.pop().unwrap();
 
@@ -329,19 +329,21 @@ fn check_import_type(
                 _ => unreachable!(),
             }
         }
-        EntityType::Memory(mem_ty) => match mem_ty {
-            wasmparser::MemoryType::M32 { limits: _, shared } => {
-                anyhow::ensure!(!shared, "shared memories are not supported by Wizer yet");
-                anyhow::ensure!(
-                    !is_root,
-                    "memory imports are not allowed in the root Wasm module"
-                );
-                Ok(())
-            }
-            wasmparser::MemoryType::M64 { .. } => {
-                anyhow::bail!("the memory64 proposal is not supported by Wizer yet")
-            }
-        },
+        EntityType::Memory(mem_ty) => {
+            anyhow::ensure!(
+                !mem_ty.shared,
+                "shared memories are not supported by Wizer yet"
+            );
+            anyhow::ensure!(
+                !mem_ty.memory64,
+                "the memory64 proposal is not supported by Wizer yet"
+            );
+            anyhow::ensure!(
+                !is_root,
+                "memory imports are not allowed in the root Wasm module"
+            );
+            Ok(())
+        }
         EntityType::Table(_) | EntityType::Global(_) => {
             anyhow::ensure!(
                 !is_root,
@@ -436,7 +438,7 @@ fn alias_section<'a>(
                     };
                     module.push_imported_global(cx, ty);
                 }
-                wasmparser::ExternalKind::Event => {
+                wasmparser::ExternalKind::Tag => {
                     unreachable!("validation should reject the exceptions proposal")
                 }
                 wasmparser::ExternalKind::Type => unreachable!("can't export types"),
@@ -568,7 +570,7 @@ fn export_section<'a>(
             wasmparser::ExternalKind::Module => {
                 anyhow::bail!("Wizer does not support importing and exporting modules")
             }
-            wasmparser::ExternalKind::Type | wasmparser::ExternalKind::Event => {
+            wasmparser::ExternalKind::Type | wasmparser::ExternalKind::Tag => {
                 unreachable!("checked in validation")
             }
             wasmparser::ExternalKind::Function

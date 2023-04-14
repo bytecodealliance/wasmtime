@@ -559,6 +559,10 @@ impl Wizer {
     // NB: keep this in sync with the Wasmtime config.
     fn wasm_features(&self) -> wasmparser::WasmFeatures {
         wasmparser::WasmFeatures {
+            mutable_global: true,
+            saturating_float_to_int: true,
+            sign_extension: true,
+
             // Proposals that we support.
             multi_memory: self.wasm_multi_memory.unwrap_or(DEFAULT_WASM_MULTI_MEMORY),
             multi_value: self.wasm_multi_value.unwrap_or(DEFAULT_WASM_MULTI_VALUE),
@@ -573,6 +577,8 @@ impl Wizer {
             tail_call: false,
             memory64: false,
             exceptions: false,
+            extended_const: false,
+            relaxed_simd: false,
 
             // XXX: Though we don't fully support bulk memory yet, we
             // unconditionally turn it on.

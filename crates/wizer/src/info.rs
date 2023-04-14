@@ -355,7 +355,7 @@ impl Module {
             wasmparser::ImportSectionEntryType::Module(_) => {
                 unreachable!("we disallow module imports; checked in validation")
             }
-            wasmparser::ImportSectionEntryType::Event(_) => {
+            wasmparser::ImportSectionEntryType::Tag(_) => {
                 unreachable!("exceptions are unsupported; checked in validation")
             }
         }
@@ -439,7 +439,7 @@ impl Module {
                         }
                         wasmparser::ExternalKind::Module
                         | wasmparser::ExternalKind::Type
-                        | wasmparser::ExternalKind::Event => unreachable!(),
+                        | wasmparser::ExternalKind::Tag => unreachable!(),
                     };
                     (name, entity)
                 })
