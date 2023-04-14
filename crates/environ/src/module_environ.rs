@@ -456,7 +456,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                             table_index,
                             offset_expr,
                         } => {
-                            let table_index = TableIndex::from_u32(table_index);
+                            let table_index = TableIndex::from_u32(table_index.unwrap_or(0));
                             let mut offset_expr_reader = offset_expr.get_binary_reader();
                             let (base, offset) = match offset_expr_reader.read_operator()? {
                                 Operator::I32Const { value } => (None, value as u32),
