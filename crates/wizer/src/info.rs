@@ -1,9 +1,9 @@
+use std::convert::TryFrom;
+use std::ops::Range;
+use types_interner::{EntityType, TypeId, TypesInterner};
 use wasm_encoder::SectionId;
 
 pub mod types_interner;
-
-use std::convert::TryFrom;
-use types_interner::{EntityType, TypeId, TypesInterner};
 
 /// A collection of info about modules within a module linking bundle.
 pub(crate) struct ModuleContext<'a> {
@@ -134,7 +134,7 @@ impl Module {
         self,
         cx: &mut ModuleContext<'a>,
         id: SectionId,
-        range: wasmparser::Range,
+        range: Range<usize>,
         full_wasm: &'a [u8],
     ) {
         cx.defined_mut(self)
@@ -146,7 +146,7 @@ impl Module {
     }
 
     /// Push a new type into this module's types space.
-    pub fn push_type<'a>(self, cx: &mut ModuleContext<'a>, ty: wasmparser::TypeDef) {
+    pub fn push_type<'a>(self, cx: &mut ModuleContext<'a>, ty: wasmparser::Type) {
         let types_space = match &cx.arena[self.id] {
             ModuleInfo::Defined(d) => &d.types,
         };

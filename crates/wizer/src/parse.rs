@@ -74,12 +74,12 @@ pub(crate) fn parse<'a>(full_wasm: &'a [u8]) -> anyhow::Result<ModuleContext<'a>
                 data.range(),
                 full_wasm,
             ),
-            CustomSection { range, .. } => {
-                stack
-                    .top_mut()
-                    .module
-                    .add_raw_section(&mut cx, SectionId::Custom, range, full_wasm)
-            }
+            CustomSection(c) => stack.top_mut().module.add_raw_section(
+                &mut cx,
+                SectionId::Custom,
+                c.range(),
+                full_wasm,
+            ),
             CodeSectionStart {
                 range,
                 count: _,
@@ -106,13 +106,16 @@ pub(crate) fn parse<'a>(full_wasm: &'a [u8]) -> anyhow::Result<ModuleContext<'a>
 
             ComponentTypeSection(_)
             | ComponentImportSection(_)
-            | ComponentFunctionSection(_)
             | ComponentExportSection(_)
             | ComponentStartSection(_)
+            | ComponentAliasSection(_)
+            | CoreTypeSection(_)
+            | InstanceSection(_)
+            | ComponentInstanceSection(_)
+            | ComponentCanonicalSection(_)
             | AliasSection(_)
             | ModuleSection { .. }
-            | ComponentSection { .. }
-            | InstanceSection(_) => {
+            | ComponentSection { .. } => {
                 unreachable!()
             }
         }
@@ -134,7 +137,7 @@ fn type_section<'a>(
     for _ in 0..count {
         let ty = types.read()?;
         match ty {
-            wasmparser::TypeDef::Func(_) => {
+            wasmparser::Type::Func(_) => {
                 module.push_type(cx, ty);
             }
         }

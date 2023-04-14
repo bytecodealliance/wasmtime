@@ -1,8 +1,8 @@
 //! Type translator functions from `wasmparser` to `wasm_encoder`.
 
-pub(crate) fn val_type(ty: wasmparser::Type) -> wasm_encoder::ValType {
+pub(crate) fn val_type(ty: wasmparser::ValType) -> wasm_encoder::ValType {
     use wasm_encoder::ValType;
-    use wasmparser::Type::*;
+    use wasmparser::ValType::*;
     match ty {
         I32 => ValType::I32,
         I64 => ValType::I64,
