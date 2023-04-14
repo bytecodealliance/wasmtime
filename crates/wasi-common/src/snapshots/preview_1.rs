@@ -123,15 +123,21 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
     async fn fd_allocate(
         &mut self,
         fd: types::Fd,
-        offset: types::Filesize,
-        len: types::Filesize,
+        _offset: types::Filesize,
+        _len: types::Filesize,
     ) -> Result<(), Error> {
-        self.table()
+        // Check if fd is a file, and has rights, just to reject those cases
+        // with the errors expected:
+        let _ = self
+            .table()
             .get_file(u32::from(fd))?
-            .get_cap(FileCaps::ALLOCATE)?
-            .allocate(offset, len)
-            .await?;
-        Ok(())
+            .get_cap(FileCaps::ALLOCATE)?;
+        // This operation from cloudabi is linux-specific, isn't even
+        // supported across all linux filesystems, and has no support on macos
+        // or windows. Rather than ship spotty support, it has been removed
+        // from preview 2, and we are no longer supporting it in preview 1 as
+        // well.
+        Err(Error::not_supported())
     }
 
     async fn fd_close(&mut self, fd: types::Fd) -> Result<(), Error> {
