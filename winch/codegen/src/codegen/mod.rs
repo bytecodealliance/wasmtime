@@ -1,6 +1,7 @@
 use crate::{
     abi::{ABISig, ABI},
     masm::{MacroAssembler, OperandSize},
+    CallingConvention,
 };
 use anyhow::Result;
 use call::FnCall;
@@ -127,7 +128,7 @@ where
             unreachable!()
         }
 
-        let sig = self.abi.sig(&callee.ty);
+        let sig = self.abi.sig(&callee.ty, &CallingConvention::Default);
         let fncall = FnCall::new(self.abi, &sig, &mut self.context, self.masm);
         fncall.emit::<M, A>(self.masm, &mut self.context, index);
     }
