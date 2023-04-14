@@ -12,7 +12,7 @@ cap-rand = { workspace = true }
 cap-net-ext = { workspace = true }
 tokio = { version = "1.22.0", features = [ "rt", "macros" ] }
 tracing = { workspace = true }
-wasmtime = { git = "https://github.com/bytecodealliance/wasmtime", rev = "9425a252bb00294194f7ca259f50ca09bd333138", features = ["component-model"] }
+wasmtime = { git = "https://github.com/bytecodealliance/wasmtime", rev = "cc1c14ac913be13329e5cfc91c33e053ab722132", features = ["component-model"] }
 wasi-common = { path = "../wasi-common" }
 wasi-cap-std-sync = { path = "../wasi-common/cap-std-sync" }
 clap = { version = "4.1.9", features = ["derive"] }
