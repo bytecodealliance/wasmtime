@@ -46,11 +46,12 @@ pub use clocks::clocks_ctx;
 pub use sched::sched_ctx;
 
 use crate::net::{Network, TcpSocket};
+use cap_net_ext::AddressFamily;
 use cap_rand::{Rng, RngCore, SeedableRng};
 use cap_std::net::{Ipv4Addr, Ipv6Addr, Pool};
 use ipnet::IpNet;
 use wasi_common::{
-    network::{AddressFamily, WasiNetwork},
+    network::WasiNetwork,
     stream::{InputStream, OutputStream},
     table::Table,
     tcp_socket::WasiTcpSocket,
@@ -128,7 +129,7 @@ fn create_network(pool: Pool) -> Result<Box<dyn WasiNetwork>, Error> {
 }
 
 fn create_tcp_socket(address_family: AddressFamily) -> Result<Box<dyn WasiTcpSocket>, Error> {
-    let socket: Box<dyn WasiTcpSocket> = Box::new(TcpSocket::new(address_family));
+    let socket: Box<dyn WasiTcpSocket> = Box::new(TcpSocket::new(address_family)?);
     Ok(socket)
 }
 

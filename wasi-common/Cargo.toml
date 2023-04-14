@@ -19,6 +19,7 @@ tracing = { workspace = true }
 cap-std = { workspace = true }
 cap-rand = { workspace = true }
 cap-fs-ext = { workspace = true }
+cap-net-ext = { workspace = true }
 bitflags = { workspace = true }
 async-trait = { workspace = true }
 system-interface = { workspace = true }

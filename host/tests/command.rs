@@ -361,7 +361,7 @@ async fn run_fd_advise(store: Store<WasiCtx>, wasi: Command) -> Result<()> {
 }
 
 async fn run_fd_filestat_get(store: Store<WasiCtx>, wasi: Command) -> Result<()> {
-    expect_fail(run_with_temp_dir(store, wasi).await)
+    run_with_temp_dir(store, wasi).await
 }
 
 async fn run_fd_filestat_set(store: Store<WasiCtx>, wasi: Command) -> Result<()> {
@@ -493,7 +493,7 @@ async fn run_remove_nonempty_directory(store: Store<WasiCtx>, wasi: Command) -> 
 }
 
 async fn run_renumber(store: Store<WasiCtx>, wasi: Command) -> Result<()> {
-    expect_fail(run_with_temp_dir(store, wasi).await)
+    run_with_temp_dir(store, wasi).await
 }
 
 async fn run_sched_yield(store: Store<WasiCtx>, wasi: Command) -> Result<()> {

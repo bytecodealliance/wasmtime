@@ -1,3 +1,4 @@
+use cap_net_ext::{AddressFamily, Blocking, PoolExt, TcpListenerExt, UdpSocketExt};
 use cap_std::net::{Pool, Shutdown, SocketAddr, TcpListener, TcpStream};
 use io_extras::borrowed::BorrowedReadable;
 #[cfg(windows)]
@@ -9,33 +10,19 @@ use rustix::fd::{AsFd, BorrowedFd, OwnedFd};
 use std::any::Any;
 use std::convert::TryInto;
 use std::io::{self, Read, Write};
-#[cfg(unix)]
-use std::os::fd::AsRawFd;
-#[cfg(windows)]
-use std::os::windows::io::AsRawSocket;
 use std::sync::Arc;
-use std::sync::Mutex;
 use system_interface::io::{IoExt, IsReadWrite, ReadReady};
 use wasi_common::{
-    network::{AddressFamily, WasiNetwork},
+    network::WasiNetwork,
     stream::{InputStream, OutputStream},
     tcp_socket::WasiTcpSocket,
     udp_socket::{RiFlags, RoFlags, WasiUdpSocket},
     Error, ErrorExt,
 };
 
-/// Adapt between wasi-sockets where socket/bind/listen/accept are all separate
-/// steps and std/cap-std where they're combined.
-enum TcpSocketImpl {
-    Init(AddressFamily),
-    Bound(Pool, SocketAddr),
-    Listening(TcpListener),
-    Sock(OwnedFd),
-}
-
 pub struct Network(Pool);
-pub struct TcpSocket(Arc<Mutex<TcpSocketImpl>>);
-pub struct UdpSocket(Arc<OwnedFd>);
+pub struct TcpSocket(Arc<TcpListener>);
+pub struct UdpSocket(Arc<cap_std::net::UdpSocket>);
 
 impl Network {
     pub fn new(pool: Pool) -> Self {
@@ -44,12 +31,12 @@ impl Network {
 }
 
 impl TcpSocket {
-    pub fn new(family: AddressFamily) -> Self {
-        Self(Arc::new(Mutex::new(TcpSocketImpl::Init(family))))
+    pub fn new(family: AddressFamily) -> io::Result<Self> {
+        Ok(Self(Arc::new(TcpListener::new(family, Blocking::Yes)?)))
     }
 
     pub fn sock(fd: OwnedFd) -> Self {
-        Self(Arc::new(Mutex::new(TcpSocketImpl::Sock(fd))))
+        Self(Arc::new(TcpListener::from(fd)))
     }
 
     pub fn clone(&self) -> Self {
@@ -58,8 +45,15 @@ impl TcpSocket {
 }
 
 impl UdpSocket {
-    pub fn new(owned: OwnedFd) -> Self {
-        Self(Arc::new(owned))
+    pub fn new(family: AddressFamily) -> io::Result<Self> {
+        Ok(Self(Arc::new(cap_std::net::UdpSocket::new(
+            family,
+            Blocking::Yes,
+        )?)))
+    }
+
+    pub fn sock(owned: OwnedFd) -> Self {
+        Self(Arc::new(cap_std::net::UdpSocket::from(owned)))
     }
 
     pub fn clone(&self) -> Self {
@@ -82,49 +76,18 @@ impl WasiTcpSocket for TcpSocket {
         network: &dyn WasiNetwork,
         local_address: SocketAddr,
     ) -> Result<(), Error> {
-        let mut sock = self.0.lock().unwrap();
-        match &mut *sock {
-            TcpSocketImpl::Init(family) => {
-                // Check that the requested family matches the address.
-                match (local_address, *family) {
-                    (SocketAddr::V4(_), AddressFamily::INET)
-                    | (SocketAddr::V6(_), AddressFamily::INET6) => {}
-                    _ => return Err(Error::invalid_argument()),
-                }
-
-                *sock = TcpSocketImpl::Bound(network.pool().clone(), local_address);
-                Ok(())
-            }
-            TcpSocketImpl::Listening(_) | TcpSocketImpl::Bound(_, _) | TcpSocketImpl::Sock(_) => {
-                Err(Error::invalid_argument())
-            }
-        }
+        network
+            .pool()
+            .bind_existing_tcp_listener(&self.0, local_address)?;
+        Ok(())
     }
 
     async fn listen(
         &self,
         _network: &dyn WasiNetwork, // FIXME: Can we remove this from the wit?
     ) -> Result<(), Error> {
-        let mut sock = self.0.lock().unwrap();
-        match &mut *sock {
-            TcpSocketImpl::Init(_) => {
-                // No address to bind to.
-                Err(Error::destination_address_required())
-            }
-            TcpSocketImpl::Bound(pool, local_addr) => {
-                let listener = pool.bind_tcp_listener(*local_addr)?;
-                *sock = TcpSocketImpl::Listening(listener);
-                Ok(())
-            }
-            TcpSocketImpl::Listening(_) => {
-                // Already listening.
-                Err(Error::invalid_argument())
-            }
-            TcpSocketImpl::Sock(_) => {
-                // Already bound.
-                Err(Error::invalid_argument())
-            }
-        }
+        self.0.listen(None)?;
+        Ok(())
     }
 
     async fn accept(
@@ -139,25 +102,20 @@ impl WasiTcpSocket for TcpSocket {
         ),
         Error,
     > {
-        let mut sock = self.0.lock().unwrap();
-        match &mut *sock {
-            TcpSocketImpl::Listening(listener) => {
-                let (connection, addr) = listener.accept()?;
-                connection.set_nonblocking(nonblocking)?;
-                let connection = TcpSocket::sock(connection.into());
-                let input_stream = connection.clone();
-                let output_stream = connection.clone();
-                Ok((
-                    Box::new(connection),
-                    Box::new(input_stream),
-                    Box::new(output_stream),
-                    addr,
-                ))
-            }
-            TcpSocketImpl::Init(_) | TcpSocketImpl::Bound(_, _) | TcpSocketImpl::Sock(_) => {
-                Err(Error::invalid_argument())
-            }
-        }
+        let blocking = match nonblocking {
+            true => Blocking::No,
+            false => Blocking::Yes,
+        };
+        let (connection, addr) = self.0.accept_with(blocking)?;
+        let connection = TcpSocket::sock(connection.into());
+        let input_stream = connection.clone();
+        let output_stream = connection.clone();
+        Ok((
+            Box::new(connection),
+            Box::new(input_stream),
+            Box::new(output_stream),
+            addr,
+        ))
     }
 
     async fn connect(
@@ -165,10 +123,11 @@ impl WasiTcpSocket for TcpSocket {
         network: &dyn WasiNetwork,
         remote_address: SocketAddr,
     ) -> Result<(Box<dyn InputStream>, Box<dyn OutputStream>), Error> {
-        let connection = network.pool().connect_tcp_stream(remote_address)?;
-        let connection = TcpSocket::sock(connection.into());
-        let input_stream = connection.clone();
-        let output_stream = connection.clone();
+        network
+            .pool()
+            .connect_existing_tcp_listener(&self.0, remote_address)?;
+        let input_stream = self.clone();
+        let output_stream = self.clone();
         Ok((Box::new(input_stream), Box::new(output_stream)))
     }
 
@@ -196,12 +155,12 @@ impl WasiTcpSocket for TcpSocket {
     }
 
     fn v6_only(&self) -> Result<bool, Error> {
-        let value = rustix::net::sockopt::get_ipv6_v6only(self).map_err(std::io::Error::from)?;
+        let value = rustix::net::sockopt::get_ipv6_v6only(self).map_err(io::Error::from)?;
         Ok(value)
     }
 
     fn set_v6_only(&self, value: bool) -> Result<(), Error> {
-        rustix::net::sockopt::set_ipv6_v6only(self, value).map_err(std::io::Error::from)?;
+        rustix::net::sockopt::set_ipv6_v6only(self, value).map_err(io::Error::from)?;
         Ok(())
     }
 
@@ -212,12 +171,7 @@ impl WasiTcpSocket for TcpSocket {
     }
 
     async fn readable(&self) -> Result<(), Error> {
-        let sock = self.0.lock().unwrap();
-        let sock = match &*sock {
-            TcpSocketImpl::Sock(sock) => sock,
-            _ => return Err(Error::invalid_argument()),
-        };
-        if is_read_write(&sock)?.0 {
+        if is_read_write(&*self.0)?.0 {
             Ok(())
         } else {
             Err(Error::badf())
@@ -225,12 +179,7 @@ impl WasiTcpSocket for TcpSocket {
     }
 
     async fn writable(&self) -> Result<(), Error> {
-        let sock = self.0.lock().unwrap();
-        let sock = match &*sock {
-            TcpSocketImpl::Sock(sock) => sock,
-            _ => return Err(Error::invalid_argument()),
-        };
-        if is_read_write(&sock)?.1 {
+        if is_read_write(&*self.0)?.1 {
             Ok(())
         } else {
             Err(Error::badf())
@@ -443,15 +392,7 @@ impl WasiNetwork for Network {
 #[cfg(unix)]
 impl AsFd for TcpSocket {
     fn as_fd(&self) -> BorrowedFd<'_> {
-        let sock = self.0.lock().unwrap();
-        let raw_fd = match &*sock {
-            TcpSocketImpl::Sock(sock) => sock.as_fd().as_raw_fd(),
-            TcpSocketImpl::Listening(listener) => listener.as_fd().as_raw_fd(),
-            _ => panic!(),
-        };
-        // SAFETY: Once we switch to `TcpSocketImpl::Sock`, we never
-        // switch back to `Init` or switch the file descriptor out.
-        unsafe { BorrowedFd::borrow_raw(raw_fd) }
+        self.0.as_fd()
     }
 }
 
@@ -466,15 +407,7 @@ impl AsFd for UdpSocket {
 impl AsSocket for TcpSocket {
     /// Borrows the socket.
     fn as_socket(&self) -> BorrowedSocket<'_> {
-        let sock = self.0.lock().unwrap();
-        let raw_fd = match &*sock {
-            TcpSocketImpl::Sock(sock) => sock.as_socket().as_raw_socket(),
-            TcpSocketImpl::Listening(listener) => listener.as_socket().as_raw_socket(),
-            _ => panic!(),
-        };
-        // SAFETY: Once we switch to `TcpSocketImpl::Sock`, we never
-        // switch back to `Init` or switch the file descriptor out.
-        unsafe { BorrowedFd::borrow_raw(raw_fd) }
+        self.0.as_socket()
     }
 }
 

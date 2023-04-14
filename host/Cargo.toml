@@ -9,6 +9,7 @@ thiserror = { workspace = true }
 async-trait = { workspace = true }
 cap-std = { workspace = true }
 cap-rand = { workspace = true }
+cap-net-ext = { workspace = true }
 tokio = { version = "1.22.0", features = [ "rt", "macros" ] }
 tracing = { workspace = true }
 wasmtime = { version = "7.0.0", features = ["component-model"] }
