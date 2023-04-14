@@ -21,20 +21,20 @@ fn run_wasm(args: &[wasmtime::Val], expected: i32, wasm: &[u8]) -> Result<()> {
     let _ = env_logger::try_init();
 
     log::debug!(
-      "=== PreWizened Wasm ==========================================================\n\
+        "=== PreWizened Wasm ==========================================================\n\
       {}\n\
       ===========================================================================",
-      wasmprinter::print_bytes(&wasm).unwrap()
+        wasmprinter::print_bytes(&wasm).unwrap()
     );
     let wasm = get_wizer().run(&wasm)?;
     log::debug!(
-      "=== Wizened Wasm ==========================================================\n\
+        "=== Wizened Wasm ==========================================================\n\
       {}\n\
       ===========================================================================",
-      wasmprinter::print_bytes(&wasm).unwrap()
+        wasmprinter::print_bytes(&wasm).unwrap()
     );
     if log::log_enabled!(log::Level::Debug) {
-      std::fs::write("test.wasm", &wasm).unwrap();
+        std::fs::write("test.wasm", &wasm).unwrap();
     }
 
     let mut config = wasmtime::Config::new();
@@ -453,13 +453,17 @@ fn rename_functions() -> Result<()> {
   (type (;1;) (func (result i32)))
   (func (;0;) (type 0))
   (func (;1;) (type 1) (result i32)
-    i32.const 1)
+    i32.const 1
+  )
   (func (;2;) (type 1) (result i32)
-    i32.const 2)
+    i32.const 2
+  )
   (func (;3;) (type 1) (result i32)
-    i32.const 3)
+    i32.const 3
+  )
   (export "func_a" (func 2))
-  (export "func_b" (func 3)))
+  (export "func_b" (func 3))
+)
   "#;
 
     assert_eq!(wat.trim(), expected_wat.trim());

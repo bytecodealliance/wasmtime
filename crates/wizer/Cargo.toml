@@ -49,8 +49,8 @@ optional = true
 [dev-dependencies]
 criterion = "0.3.4"
 env_logger = "0.8.2"
-wasmprinter = "0.2.26"
-wat = "1.0.36"
+wasmprinter = "0.2.55"
+wat = "1.0.62"
 
 [workspace]
 members = [
