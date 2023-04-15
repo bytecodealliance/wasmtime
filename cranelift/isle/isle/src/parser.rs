@@ -202,8 +202,7 @@ impl<'a> Parser<'a> {
     fn parse_const(&mut self) -> Result<Ident> {
         let pos = self.pos();
         let ident = self.parse_ident()?;
-        if ident.0.starts_with('$') {
-            let s = &ident.0[1..];
+        if let Some(s) = ident.0.strip_prefix('$') {
             Ok(Ident(s.to_string(), ident.1))
         } else {
             Err(self.error(
