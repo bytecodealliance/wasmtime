@@ -917,7 +917,7 @@ impl TypeEnv {
         // in types on a second pass.
         for def in &defs.defs {
             match def {
-                ast::Def::Type(td) => {
+                &ast::Def::Type(ref td) => {
                     let tid = TypeId(tyenv.type_map.len());
                     let name = tyenv.intern_mut(&td.name);
 
@@ -945,7 +945,7 @@ impl TypeEnv {
         // duplicated.
         for def in &defs.defs {
             match def {
-                ast::Def::Type(td) => {
+                &ast::Def::Type(ref td) => {
                     let tid = tyenv.types.len();
                     if let Some(ty) = tyenv.type_from_ast(TypeId(tid), td) {
                         tyenv.types.push(ty);
@@ -957,11 +957,16 @@ impl TypeEnv {
 
         // Now collect types for extern constants.
         for def in &defs.defs {
-            if let ast::Def::Extern(ast::Extern::Const { name, ty, pos }) = def {
+            if let &ast::Def::Extern(ast::Extern::Const {
+                ref name,
+                ref ty,
+                pos,
+            }) = def
+            {
                 let ty = match tyenv.get_type_by_name(ty) {
                     Some(ty) => ty,
                     None => {
-                        tyenv.report_error(*pos, "Unknown type for constant");
+                        tyenv.report_error(pos, "Unknown type for constant");
                         continue;
                     }
                 };
@@ -990,7 +995,7 @@ impl TypeEnv {
     fn type_from_ast(&mut self, tid: TypeId, ty: &ast::Type) -> Option<Type> {
         let name = self.intern(&ty.name).unwrap();
         match &ty.ty {
-            ast::TypeValue::Primitive(id, ..) => {
+            &ast::TypeValue::Primitive(ref id, ..) => {
                 if ty.is_nodebug {
                     self.report_error(ty.pos, "primitive types cannot be marked `nodebug`");
                     return None;
@@ -1001,7 +1006,7 @@ impl TypeEnv {
                 }
                 Some(Type::Primitive(tid, self.intern_mut(id), ty.pos))
             }
-            ast::TypeValue::Enum(ty_variants, ..) => {
+            &ast::TypeValue::Enum(ref ty_variants, ..) => {
                 if ty.is_extern && ty.is_nodebug {
                     self.report_error(ty.pos, "external types cannot be marked `nodebug`");
                     return None;
@@ -1188,7 +1193,7 @@ impl TermEnv {
     fn collect_term_sigs(&mut self, tyenv: &mut TypeEnv, defs: &ast::Defs) {
         for def in &defs.defs {
             match def {
-                ast::Def::Decl(decl) => {
+                &ast::Def::Decl(ref decl) => {
                     let name = tyenv.intern_mut(&decl.term);
                     if let Some(tid) = self.term_map.get(&name) {
                         tyenv.report_error(

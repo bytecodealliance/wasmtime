@@ -138,7 +138,7 @@ impl Formatter {
     pub fn add_match(&mut self, m: Match) {
         fmtln!(self, "match {} {{", m.expr);
         self.indent(|fmt| {
-            for ((fields, body), names) in m.arms.iter() {
+            for (&(ref fields, ref body), ref names) in m.arms.iter() {
                 // name { fields } | name { fields } => { body }
                 let conditions = names
                     .iter()

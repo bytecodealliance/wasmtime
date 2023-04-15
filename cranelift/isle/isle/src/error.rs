@@ -19,7 +19,7 @@ impl std::fmt::Debug for Errors {
         }
         let diagnostics = Vec::from_iter(self.errors.iter().map(|e| {
             let message = match e {
-                Error::IoError { context, .. } => context.to_owned(),
+                Error::IoError { context, .. } => context.clone(),
                 Error::ParseError { msg, .. } => format!("parse error: {}", msg),
                 Error::TypeError { msg, .. } => format!("type error: {}", msg),
                 Error::UnreachableError { msg, .. } => format!("unreachable rule: {}", msg),

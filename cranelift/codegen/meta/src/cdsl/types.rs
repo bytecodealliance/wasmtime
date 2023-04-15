@@ -267,9 +267,12 @@ impl Iterator for LaneTypeIterator {
     type Item = LaneType;
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(i) = self.int_iter.next() {
-            return Some(LaneType::from(i));
+            Some(LaneType::from(i))
+        } else if let Some(f) = self.float_iter.next() {
+            Some(LaneType::from(f))
+        } else {
+            None
         }
-        self.float_iter.next().map(LaneType::from)
     }
 }
 
