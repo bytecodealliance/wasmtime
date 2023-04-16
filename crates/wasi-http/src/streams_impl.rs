@@ -1,31 +1,43 @@
-use crate::wasi::io::streams::{Host, InputStream, OutputStream, Pollable, StreamError};
-use crate::WasiHttp;
-use anyhow::{anyhow, bail};
+use crate::common::stream::TableStreamExt;
+use crate::wasi::io::streams::{InputStream, OutputStream, StreamError};
+use crate::wasi::poll::poll::Pollable;
+use crate::WasiHttpCtx;
+use anyhow::bail;
 use std::vec::Vec;
 
-impl Host for WasiHttp {
+fn convert(error: crate::common::Error) -> anyhow::Error {
+    // if let Some(errno) = error.downcast_ref() {
+    //     anyhow::Error::new(StreamError {})
+    // } else {
+    error.into()
+    // }
+}
+
+impl crate::wasi::io::streams::Host for WasiHttpCtx {
     fn read(
         &mut self,
         stream: InputStream,
         len: u64,
     ) -> wasmtime::Result<Result<(Vec<u8>, bool), StreamError>> {
-        let st = self
-            .streams
-            .get_mut(&stream)
-            .ok_or_else(|| anyhow!("stream not found: {stream}"))?;
-        if st.closed {
-            bail!("stream is dropped!");
-        }
-        let s = &mut st.data;
-        if len == 0 {
-            Ok(Ok((bytes::Bytes::new().to_vec(), s.len() > 0)))
-        } else if s.len() > len.try_into()? {
-            let result = s.split_to(len.try_into()?);
-            Ok(Ok((result.to_vec(), false)))
-        } else {
-            s.truncate(s.len());
-            Ok(Ok((s.clone().to_vec(), true)))
-        }
+        let s = self
+            .table_mut()
+            .get_input_stream_mut(stream)
+            .map_err(convert)?;
+        // if s.closed {
+        //     bail!("stream is dropped!");
+        // }
+
+        // Len could be any `u64` value, but we don't want to
+        // allocate too much up front, so make a wild guess
+        // of an upper bound for the buffer size.
+        let buffer_len = std::cmp::min(len, 0x400000) as _;
+        let mut buffer = vec![0; buffer_len];
+
+        let (bytes_read, end) = s.read(&mut buffer).map_err(convert)?;
+
+        buffer.truncate(bytes_read as usize);
+
+        Ok(Ok((buffer, end)))
     }
 
     fn skip(
@@ -33,24 +45,17 @@ impl Host for WasiHttp {
         stream: InputStream,
         len: u64,
     ) -> wasmtime::Result<Result<(u64, bool), StreamError>> {
-        let st = self
-            .streams
-            .get_mut(&stream)
-            .ok_or_else(|| anyhow!("stream not found: {stream}"))?;
-        if st.closed {
-            bail!("stream is dropped!");
-        }
-        let s = &mut st.data;
-        if len == 0 {
-            Ok(Ok((0, s.len() > 0)))
-        } else if s.len() > len.try_into()? {
-            s.truncate(len.try_into()?);
-            Ok(Ok((len, false)))
-        } else {
-            let bytes = s.len();
-            s.truncate(s.len());
-            Ok(Ok((bytes.try_into()?, true)))
-        }
+        let s = self
+            .table_mut()
+            .get_input_stream_mut(stream)
+            .map_err(convert)?;
+        // if s.closed {
+        //     bail!("stream is dropped!");
+        // }
+
+        let (bytes_skipped, end) = s.skip(len).map_err(convert)?;
+
+        Ok(Ok((bytes_skipped, end)))
     }
 
     fn subscribe_to_input_stream(&mut self, _this: InputStream) -> wasmtime::Result<Pollable> {
@@ -58,40 +63,48 @@ impl Host for WasiHttp {
     }
 
     fn drop_input_stream(&mut self, stream: InputStream) -> wasmtime::Result<()> {
-        let st = self
-            .streams
-            .get_mut(&stream)
-            .ok_or_else(|| anyhow!("stream not found: {stream}"))?;
-        st.closed = true;
+        // let st = self
+        //     .streams
+        //     .get_mut(&stream)
+        //     .ok_or_else(|| anyhow!("stream not found: {stream}"))?;
+        // st.closed = true;
+        self.table_mut()
+            .delete_input_stream(stream)
+            .map_err(convert)?;
         Ok(())
     }
 
     fn write(
         &mut self,
-        this: OutputStream,
+        stream: OutputStream,
         buf: Vec<u8>,
     ) -> wasmtime::Result<Result<u64, StreamError>> {
-        let len = buf.len();
-        let st = self.streams.entry(this).or_default();
-        if st.closed {
-            bail!("cannot write to closed stream");
-        }
-        st.data.extend_from_slice(buf.as_slice());
-        Ok(Ok(len.try_into()?))
+        let s = self
+            .table_mut()
+            .get_output_stream_mut(stream)
+            .map_err(convert)?;
+        // if s.closed {
+        //     bail!("cannot write to closed stream");
+        // }
+
+        let bytes_written = s.write(&buf).map_err(convert)?;
+
+        Ok(Ok(u64::try_from(bytes_written)?))
     }
 
     fn write_zeroes(
         &mut self,
-        this: OutputStream,
+        stream: OutputStream,
         len: u64,
     ) -> wasmtime::Result<Result<u64, StreamError>> {
-        let mut data = Vec::with_capacity(len.try_into()?);
-        let mut i = 0;
-        while i < len {
-            data.push(0);
-            i = i + 1;
-        }
-        self.write(this, data)
+        let s = self
+            .table_mut()
+            .get_output_stream_mut(stream)
+            .map_err(convert)?;
+
+        let bytes_written: u64 = s.write_zeroes(len).map_err(convert)?;
+
+        Ok(Ok(bytes_written))
     }
 
     fn splice(
@@ -116,11 +129,14 @@ impl Host for WasiHttp {
     }
 
     fn drop_output_stream(&mut self, stream: OutputStream) -> wasmtime::Result<()> {
-        let st = self
-            .streams
-            .get_mut(&stream)
-            .ok_or_else(|| anyhow!("stream not found: {stream}"))?;
-        st.closed = true;
+        // let st = self
+        //     .streams
+        //     .get_mut(&stream)
+        //     .ok_or_else(|| anyhow!("stream not found: {stream}"))?;
+        // st.closed = true;
+        self.table_mut()
+            .delete_output_stream(stream)
+            .map_err(convert)?;
         Ok(())
     }
 

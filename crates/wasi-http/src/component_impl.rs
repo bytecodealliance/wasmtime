@@ -1,7 +1,7 @@
-pub use crate::r#struct::WasiHttp;
 use crate::wasi::http::outgoing_handler::Host;
 use crate::wasi::http::types::{Error, Host as TypesHost, Method, RequestOptions, Scheme};
 use crate::wasi::io::streams::Host as StreamsHost;
+pub use crate::WasiHttpCtx;
 use anyhow::anyhow;
 use std::str;
 use std::vec::Vec;
@@ -105,7 +105,7 @@ fn u32_array_to_u8(arr: &[u32]) -> Vec<u8> {
 
 pub fn add_component_to_linker<T>(
     linker: &mut wasmtime::Linker<T>,
-    get_cx: impl Fn(&mut T) -> &mut WasiHttp + Send + Sync + Copy + 'static,
+    get_cx: impl Fn(&mut T) -> &mut WasiHttpCtx + Send + Sync + Copy + 'static,
 ) -> anyhow::Result<()> {
     linker.func_wrap(
         "wasi:http/outgoing-handler",

@@ -1,14 +1,15 @@
-use crate::r#struct::{ActiveFuture, ActiveResponse};
-use crate::r#struct::{Stream, WasiHttp};
+use crate::bytestream::ByteStream;
+use crate::common::stream::{InputStream, OutputStream, TableStreamExt};
+use crate::r#struct::{ActiveFields, ActiveFuture, ActiveResponse, HttpResponse, TableExt};
 use crate::wasi::http::types::{FutureIncomingResponse, OutgoingRequest, RequestOptions, Scheme};
+pub use crate::WasiHttpCtx;
 #[cfg(not(any(target_arch = "riscv64", target_arch = "s390x")))]
 use anyhow::anyhow;
 use anyhow::bail;
-use bytes::{BufMut, Bytes, BytesMut};
-use http_body_util::{BodyExt, Full};
+use http_body::Body;
+use http_body_util::{BodyExt, Empty, Full};
 use hyper::Method;
 use hyper::Request;
-use std::collections::HashMap;
 #[cfg(not(any(target_arch = "riscv64", target_arch = "s390x")))]
 use std::sync::Arc;
 use std::time::Duration;
@@ -17,16 +18,22 @@ use tokio::time::timeout;
 #[cfg(not(any(target_arch = "riscv64", target_arch = "s390x")))]
 use tokio_rustls::rustls::{self, OwnedTrustAnchor};
 
-impl crate::wasi::http::outgoing_handler::Host for WasiHttp {
+fn convert(error: crate::common::Error) -> anyhow::Error {
+    // if let Some(errno) = error.downcast_ref() {
+    //     anyhow::Error::new(crate::types::Error::UnexpectedError(errno.to_string()))
+    // } else {
+    error.into()
+    // }
+}
+
+impl crate::wasi::http::outgoing_handler::Host for WasiHttpCtx {
     fn handle(
         &mut self,
         request_id: OutgoingRequest,
         options: Option<RequestOptions>,
     ) -> wasmtime::Result<FutureIncomingResponse> {
-        let future_id = self.future_id_base;
-        self.future_id_base = self.future_id_base + 1;
-        let future = ActiveFuture::new(future_id, request_id, options);
-        self.futures.insert(future_id, future);
+        let future = ActiveFuture::new(request_id, options);
+        let future_id = self.push_future(Box::new(future)).map_err(convert)?;
         Ok(future_id)
     }
 }
@@ -43,7 +50,7 @@ fn port_for_scheme(scheme: &Option<Scheme>) -> &str {
     }
 }
 
-impl WasiHttp {
+impl WasiHttpCtx {
     pub(crate) async fn handle_async(
         &mut self,
         request_id: OutgoingRequest,
@@ -64,12 +71,10 @@ impl WasiHttp {
         let between_bytes_timeout =
             Duration::from_millis(opts.between_bytes_timeout_ms.unwrap_or(600 * 1000).into());
 
-        let request = match self.requests.get(&request_id) {
-            Some(r) => r,
-            None => bail!("not found!"),
-        };
+        let table = self.table_mut();
+        let request = table.get_request(request_id).map_err(convert)?.clone();
 
-        let method = match &request.method {
+        let method = match request.method() {
             crate::wasi::http::types::Method::Get => Method::GET,
             crate::wasi::http::types::Method::Head => Method::HEAD,
             crate::wasi::http::types::Method::Post => Method::POST,
@@ -82,16 +87,16 @@ impl WasiHttp {
             crate::wasi::http::types::Method::Other(s) => bail!("unknown method {}", s),
         };
 
-        let scheme = match request.scheme.as_ref().unwrap_or(&Scheme::Https) {
+        let scheme = match request.scheme().as_ref().unwrap_or(&Scheme::Https) {
             Scheme::Http => "http://",
             Scheme::Https => "https://",
             Scheme::Other(s) => bail!("unsupported scheme {}", s),
         };
 
         // Largely adapted from https://hyper.rs/guides/1/client/basic/
-        let authority = match request.authority.find(":") {
-            Some(_) => request.authority.clone(),
-            None => request.authority.clone() + port_for_scheme(&request.scheme),
+        let authority = match request.authority().find(":") {
+            Some(_) => request.authority().to_owned(),
+            None => request.authority().to_owned() + port_for_scheme(request.scheme()),
         };
         let mut sender = if scheme == "https://" {
             #[cfg(not(any(target_arch = "riscv64", target_arch = "s390x")))]
@@ -152,50 +157,44 @@ impl WasiHttp {
             s
         };
 
-        let url = scheme.to_owned() + &request.authority + &request.path_with_query;
+        let url = scheme.to_owned() + &request.authority() + &request.path_with_query();
 
         let mut call = Request::builder()
             .method(method)
             .uri(url)
-            .header(hyper::header::HOST, request.authority.as_str());
+            .header(hyper::header::HOST, request.authority());
 
-        for (key, val) in request.headers.iter() {
+        for (key, val) in request.headers().iter() {
             for item in val {
                 call = call.header(key, item.clone());
             }
         }
 
-        let response_id = self.response_id_base;
-        self.response_id_base = self.response_id_base + 1;
-        let mut response = ActiveResponse::new(response_id);
-        let body = Full::<Bytes>::new(
-            self.streams
-                .get(&request.body)
-                .unwrap_or(&Stream::default())
-                .data
-                .clone()
-                .freeze(),
+        let mut response = ActiveResponse::new();
+        let body = Full::<&[u8]>::new(
+            &[],
+            // table
+            //     .get_output_stream(request.body().unwrap_or(0))
+            //     .unwrap_or(&ByteStream::new())
+            //     .clone()
+            //     .into(),
         );
         let t = timeout(first_bytes_timeout, sender.send_request(call.body(body)?)).await?;
         let mut res = t?;
         response.status = res.status().try_into()?;
         for (key, value) in res.headers().iter() {
-            let mut vec = std::vec::Vec::new();
+            let mut vec = Vec::new();
             vec.push(value.as_bytes().to_vec());
-            response
-                .response_headers
-                .insert(key.as_str().to_string(), vec);
+            response.headers().insert(key.as_str().to_string(), vec);
         }
-        let mut buf = BytesMut::new();
+        let mut buf: Vec<u8> = Vec::new();
         while let Some(next) = timeout(between_bytes_timeout, res.frame()).await? {
             let frame = next?;
             if let Some(chunk) = frame.data_ref() {
-                buf.put(chunk.clone());
+                buf.extend_from_slice(chunk);
             }
             if let Some(trailers) = frame.trailers_ref() {
-                response.trailers = self.fields_id_base;
-                self.fields_id_base += 1;
-                let mut map: HashMap<String, Vec<Vec<u8>>> = HashMap::new();
+                let mut map = ActiveFields::new();
                 for (name, value) in trailers.iter() {
                     let key = name.to_string();
                     match map.get_mut(&key) {
@@ -207,13 +206,16 @@ impl WasiHttp {
                         }
                     };
                 }
-                self.fields.insert(response.trailers, map);
+                let trailers = self.push_fields(Box::new(map)).map_err(convert)?;
+                response.set_trailers(trailers);
             }
         }
-        response.body = self.streams_id_base;
-        self.streams_id_base = self.streams_id_base + 1;
-        self.streams.insert(response.body, buf.freeze().into());
-        self.responses.insert(response_id, response);
+
+        let stream = self
+            .push_input_stream(Box::new(ByteStream::from(buf)))
+            .map_err(convert)?;
+        response.set_body(stream);
+        let response_id = self.push_response(Box::new(response)).map_err(convert)?;
         Ok(response_id)
     }
 }
