@@ -28,6 +28,12 @@
 (rule (sgt ty x y) (icmp ty (IntCC.SignedGreaterThan) x y))
 (rule (sge ty x y) (icmp ty (IntCC.SignedGreaterThanOrEqual) x y))
 
+(rule (unop ty op x) (make_inst ty (InstructionData.Unary op x)))
+
+(rule (binop ty op x y) (make_inst ty (InstructionData.Binary op (value_array_2 x y))))
+
+(rule (ternop ty op x y z) (make_inst ty (InstructionData.Ternary op (value_array_3 x y z))))
+
 ;;;;; optimization toplevel ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; The main matcher rule invoked by the toplevel driver.

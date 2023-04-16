@@ -4,6 +4,31 @@
 (rule (simplify (select    ty _ x x)) x)
 (rule (simplify (bitselect ty _ x x)) x)
 
+;; transpose operation on select to select on operation:
+;; unop(select(cond, x, y)) => select(cond, unop(x), unop(y))
+(rule (simplify (unop op_ty op (select sel_ty cond x y)))
+      (select sel_ty cond (unop op_ty op x) (unop op_ty op y)))
+
+;; binop(select(cond, x, y), z) => select(cond, binop(x, z), binop(y, z))
+(rule (simplify (binop op_ty op (select sel_ty cond x y) z))
+      (select sel_ty cond (binop op_ty op x z) (binop op_ty op y z)))
+
+;; binop(x, select(cond, y, z)) => select(cond, binop(x, y), binop(x, z))
+(rule (simplify (binop op_ty op x (select sel_ty cond y z)))
+      (select sel_ty cond (binop op_ty op x y) (binop op_ty op x z)))
+
+;; ternop(select(cond, w, x), y, z) => select(cond, ternop(w, y, z), ternop(x, y, z))
+(rule (simplify (ternop op_ty op (select sel_ty cond w x) y z))
+      (select sel_ty cond (ternop op_ty op w y z) (ternop op_ty op x y z)))
+
+;; ternop(w, select(cond, x, y), z) => select(cond, ternop(w, x, z), ternop(w, y, z))
+(rule (simplify (ternop op_ty op w (select sel_ty cond x y) z))
+      (select sel_ty cond (ternop op_ty op w x z) (ternop op_ty op w y z)))
+
+;; ternop(w, x, select(cond, y, z)) => select(cond, ternop(w, x, y), ternop(w, x, z))
+(rule (simplify (ternop op_ty op w x (select sel_ty cond y z)))
+      (select sel_ty cond (ternop op_ty op w x y) (ternop op_ty op w x z)))
+
 ;; Transform select-of-icmp into {u,s}{min,max} instructions where possible.
 (rule (simplify (select ty (sgt _ x y) x y)) (smax ty x y))
 (rule (simplify (select ty (sge _ x y) x y)) (smax ty x y))

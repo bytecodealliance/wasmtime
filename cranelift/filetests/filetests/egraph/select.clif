@@ -19,6 +19,78 @@ block0(v0: i32, v1: i32):
     ; check: return v1
 }
 
+;; unop(select(cond, x, y)) => select(cond, unop(x), unop(y))
+function %transpose_unop_select(i8, i32, i32) -> i32 {
+block0(v0: i8, v1: i32, v2: i32):
+    v3 = select v0, v1, v2
+    v4 = ineg v3
+    return v4
+    ; check: v5 = ineg v1
+    ; check: v6 = ineg v2
+    ; check: v7 = select v0, v5, v6
+    ; check: return v7
+}
+
+;; binop(select(cond, x, y), z) => select(cond, binop(x, z), binop(y, z))
+function %transpose_binop_select_1(i8, i32, i32, i32) -> i32 {
+block0(v0: i8, v1: i32, v2: i32, v3: i32):
+    v4 = select v0, v1, v2
+    v5 = isub v4, v3
+    return v5
+    ; check: v6 = isub v1, v3
+    ; check: v7 = isub v2, v3
+    ; check: v8 = select v0, v6, v7
+    ; check: return v8
+}
+
+;; binop(x, select(cond, y, z)) => select(cond, binop(x, y), binop(x, z))
+function %transpose_binop_select_2(i8, i32, i32, i32) -> i32 {
+block0(v0: i8, v1: i32, v2: i32, v3: i32):
+    v4 = select v0, v2, v3
+    v5 = isub v1, v4
+    return v5
+    ; check: v6 = isub v1, v2
+    ; check: v7 = isub v1, v3
+    ; check: v8 = select v0, v6, v7
+    ; check: return v8
+}
+
+;; ternop(select(cond, w, x), y, z) => select(cond, ternop(w, y, z), ternop(x, y, z))
+function %transpose_ternop_select_1(i8, f32, f32, f32, f32) -> f32 {
+block0(v0: i8, v1: f32, v2: f32, v3: f32, v4: f32):
+    v5 = select v0, v1, v2
+    v6 = fma v5, v3, v4
+    return v6
+    ; check: v7 = fma v1, v3, v4
+    ; check: v8 = fma v2, v3, v4
+    ; check: v9 = select v0, v7, v8
+    ; check: return v9
+}
+
+;; ternop(w, select(cond, x, y), z) => select(cond, ternop(w, x, z), ternop(w, y, z))
+function %transpose_ternop_select_2(i8, f32, f32, f32, f32) -> f32 {
+block0(v0: i8, v1: f32, v2: f32, v3: f32, v4: f32):
+    v5 = select v0, v2, v3
+    v6 = fma v1, v5, v4
+    return v6
+    ; check: v7 = fma v1, v2, v4
+    ; check: v8 = fma v1, v3, v4
+    ; check: v9 = select v0, v7, v8
+    ; check: return v9
+}
+
+;; ternop(w, x, select(cond, y, z)) => select(cond, ternop(w, x, y), ternop(w, x, z))
+function %transpose_ternop_select_3(i8, f32, f32, f32, f32) -> f32 {
+block0(v0: i8, v1: f32, v2: f32, v3: f32, v4: f32):
+    v5 = select v0, v3, v4
+    v6 = fma v1, v2, v5
+    return v6
+    ; check: v7 = fma v1, v2, v3
+    ; check: v8 = fma v1, v2, v4
+    ; check: v9 = select v0, v7, v8
+    ; check: return v9
+}
+
 function %select_sgt_to_smax(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
     v2 = icmp sgt v0, v1
