@@ -79,6 +79,25 @@
       (if-let $true (u64_le shift_u64 (u64_sub (ty_bits_u64 wide) (ty_bits_u64 narrow))))
       x)
 
+;; (x << N) >> N == x as T_SMALL as T_LARGE
+;; if N == bytesizeof(T_LARGE) - bytesizeof(T_SMALL)
+;;
+;; Note that the shift is required to be >0 to ensure this doesn't accidentally
+;; try to `ireduce` a type to itself, which isn't a valid use of `ireduce`.
+(rule (simplify (sshr ty (ishl ty x (iconst _ shift)) (iconst _ shift)))
+      (if-let (u64_from_imm64 (u64_nonzero shift_u64)) shift)
+      (if-let ty_small (shift_amt_to_type (u64_sub (ty_bits ty) shift_u64)))
+      (sextend ty (ireduce ty_small x)))
+(rule (simplify (ushr ty (ishl ty x (iconst _ shift)) (iconst _ shift)))
+      (if-let (u64_from_imm64 (u64_nonzero shift_u64)) shift)
+      (if-let ty_small (shift_amt_to_type (u64_sub (ty_bits ty) shift_u64)))
+      (uextend ty (ireduce ty_small x)))
+
+(decl pure partial shift_amt_to_type (u64) Type)
+(rule (shift_amt_to_type 8) $I8)
+(rule (shift_amt_to_type 16) $I16)
+(rule (shift_amt_to_type 32) $I32)
+
 ;; ineg(ushr(x, k)) == sshr(x, k) when k == ty_bits - 1.
 (rule (simplify (ineg ty (ushr ty x sconst @ (iconst ty (u64_from_imm64 shift_amt)))))
       (if-let $true (u64_eq shift_amt (u64_sub (ty_bits ty) 1)))
