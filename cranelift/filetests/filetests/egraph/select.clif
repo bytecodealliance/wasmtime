@@ -91,6 +91,54 @@ block0(v0: i8, v1: f32, v2: f32, v3: f32, v4: f32):
     ; check: return v9
 }
 
+;; icmp(cc, select(cond, x, y), z) => select(cond, icmp(cc, x, z), icmp(cc, y, z))
+function %transpose_icmp_select_1(i8, i32, i32, i32) -> i8 {
+block0(v0: i8, v1: i32, v2: i32, v3: i32):
+    v4 = select v0, v1, v2
+    v5 = icmp ult v4, v3
+    return v5
+    ; check: v6 = icmp ult v1, v3
+    ; check: v7 = icmp ult v2, v3
+    ; check: v8 = select v0, v6, v7
+    ; check: return v8
+}
+
+;; icmp(cc, x, select(cond, y, z)) => select(cond, icmp(cc, x, y), icmp(cc, x, z))
+function %transpose_icmp_select_2(i8, i32, i32, i32) -> i8 {
+block0(v0: i8, v1: i32, v2: i32, v3: i32):
+    v4 = select v0, v2, v3
+    v5 = icmp ult v1, v4
+    return v5
+    ; check: v6 = icmp ult v1, v2
+    ; check: v7 = icmp ult v1, v3
+    ; check: v8 = select v0, v6, v7
+    ; check: return v8
+}
+
+;; fcmp(cc, select(cond, x, y), z) => select(cond, icmp(cc, x, z), icmp(cc, y, z))
+function %transpose_fcmp_select_1(i8, f32, f32, f32) -> i8 {
+block0(v0: i8, v1: f32, v2: f32, v3: f32):
+    v4 = select v0, v1, v2
+    v5 = fcmp ult v4, v3
+    return v5
+    ; check: v6 = fcmp ult v1, v3
+    ; check: v7 = fcmp ult v2, v3
+    ; check: v8 = select v0, v6, v7
+    ; check: return v8
+}
+
+;; fcmp(cc, x, select(cond, y, z)) => select(cond, icmp(cc, x, y), icmp(cc, x, z))
+function %transpose_fcmp_select_2(i8, f32, f32, f32) -> i8 {
+block0(v0: i8, v1: f32, v2: f32, v3: f32):
+    v4 = select v0, v2, v3
+    v5 = fcmp ult v1, v4
+    return v5
+    ; check: v6 = fcmp ult v1, v2
+    ; check: v7 = fcmp ult v1, v3
+    ; check: v8 = select v0, v6, v7
+    ; check: return v8
+}
+
 function %select_sgt_to_smax(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
     v2 = icmp sgt v0, v1

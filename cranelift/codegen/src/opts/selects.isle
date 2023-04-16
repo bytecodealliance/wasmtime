@@ -29,6 +29,22 @@
 (rule (simplify (ternop op_ty op w x (select sel_ty cond y z)))
       (select sel_ty cond (ternop op_ty op w x y) (ternop op_ty op w x z)))
 
+;; icmp(cc, select(cond, x, y), z) => select(cond, icmp(cc, x, z), icmp(cc, y, z))
+(rule (simplify (icmp cmp_ty cc (select sel_ty cond x y) z))
+      (select sel_ty cond (icmp cmp_ty cc x z) (icmp cmp_ty cc y z)))
+
+;; icmp(cc, x, select(cond, y, z)) => select(cond, icmp(cc, x, y), icmp(cc, x, z))
+(rule (simplify (icmp cmp_ty cc x (select sel_ty cond y z)))
+      (select sel_ty cond (icmp cmp_ty cc x y) (icmp cmp_ty cc x z)))
+
+;; fcmp(cc, select(cond, x, y), z) => select(cond, fcmp(cc, x, z), fcmp(cc, y, z))
+(rule (simplify (fcmp cmp_ty cc (select sel_ty cond x y) z))
+      (select sel_ty cond (fcmp cmp_ty cc x z) (fcmp cmp_ty cc y z)))
+
+;; fcmp(cc, x, select(cond, y, z)) => select(cond, fcmp(cc, x, y), fcmp(cc, x, z))
+(rule (simplify (fcmp cmp_ty cc x (select sel_ty cond y z)))
+      (select sel_ty cond (fcmp cmp_ty cc x y) (fcmp cmp_ty cc x z)))
+
 ;; Transform select-of-icmp into {u,s}{min,max} instructions where possible.
 (rule (simplify (select ty (sgt _ x y) x y)) (smax ty x y))
 (rule (simplify (select ty (sge _ x y) x y)) (smax ty x y))
