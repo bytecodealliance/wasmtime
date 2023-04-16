@@ -6,44 +6,44 @@
 
 ;; transpose operation on select to select on operation:
 ;; unop(select(cond, x, y)) => select(cond, unop(x), unop(y))
-(rule (simplify (unop op_ty op (select sel_ty cond x y)))
-      (select sel_ty cond (unop op_ty op x) (unop op_ty op y)))
+(rule (simplify (unop ty op (select _ cond x y)))
+      (select ty cond (unop ty op x) (unop ty op y)))
 
 ;; binop(select(cond, x, y), z) => select(cond, binop(x, z), binop(y, z))
-(rule (simplify (binop op_ty op (select sel_ty cond x y) z))
-      (select sel_ty cond (binop op_ty op x z) (binop op_ty op y z)))
+(rule (simplify (binop ty op (select _ cond x y) z))
+      (select ty cond (binop ty op x z) (binop ty op y z)))
 
 ;; binop(x, select(cond, y, z)) => select(cond, binop(x, y), binop(x, z))
-(rule (simplify (binop op_ty op x (select sel_ty cond y z)))
-      (select sel_ty cond (binop op_ty op x y) (binop op_ty op x z)))
+(rule (simplify (binop ty op x (select _ cond y z)))
+      (select ty cond (binop ty op x y) (binop ty op x z)))
 
 ;; ternop(select(cond, w, x), y, z) => select(cond, ternop(w, y, z), ternop(x, y, z))
-(rule (simplify (ternop op_ty op (select sel_ty cond w x) y z))
-      (select sel_ty cond (ternop op_ty op w y z) (ternop op_ty op x y z)))
+(rule (simplify (ternop ty op (select _ cond w x) y z))
+      (select ty cond (ternop ty op w y z) (ternop ty op x y z)))
 
 ;; ternop(w, select(cond, x, y), z) => select(cond, ternop(w, x, z), ternop(w, y, z))
-(rule (simplify (ternop op_ty op w (select sel_ty cond x y) z))
-      (select sel_ty cond (ternop op_ty op w x z) (ternop op_ty op w y z)))
+(rule (simplify (ternop ty op w (select _ cond x y) z))
+      (select ty cond (ternop ty op w x z) (ternop ty op w y z)))
 
 ;; ternop(w, x, select(cond, y, z)) => select(cond, ternop(w, x, y), ternop(w, x, z))
-(rule (simplify (ternop op_ty op w x (select sel_ty cond y z)))
-      (select sel_ty cond (ternop op_ty op w x y) (ternop op_ty op w x z)))
+(rule (simplify (ternop ty op w x (select _ cond y z)))
+      (select ty cond (ternop ty op w x y) (ternop ty op w x z)))
 
 ;; icmp(cc, select(cond, x, y), z) => select(cond, icmp(cc, x, z), icmp(cc, y, z))
-(rule (simplify (icmp cmp_ty cc (select sel_ty cond x y) z))
-      (select sel_ty cond (icmp cmp_ty cc x z) (icmp cmp_ty cc y z)))
+(rule (simplify (icmp ty cc (select _ cond x y) z))
+      (select ty cond (icmp ty cc x z) (icmp ty cc y z)))
 
 ;; icmp(cc, x, select(cond, y, z)) => select(cond, icmp(cc, x, y), icmp(cc, x, z))
-(rule (simplify (icmp cmp_ty cc x (select sel_ty cond y z)))
-      (select sel_ty cond (icmp cmp_ty cc x y) (icmp cmp_ty cc x z)))
+(rule (simplify (icmp ty cc x (select _ cond y z)))
+      (select ty cond (icmp ty cc x y) (icmp ty cc x z)))
 
 ;; fcmp(cc, select(cond, x, y), z) => select(cond, fcmp(cc, x, z), fcmp(cc, y, z))
-(rule (simplify (fcmp cmp_ty cc (select sel_ty cond x y) z))
-      (select sel_ty cond (fcmp cmp_ty cc x z) (fcmp cmp_ty cc y z)))
+(rule (simplify (fcmp ty cc (select _ cond x y) z))
+      (select ty cond (fcmp ty cc x z) (fcmp ty cc y z)))
 
 ;; fcmp(cc, x, select(cond, y, z)) => select(cond, fcmp(cc, x, y), fcmp(cc, x, z))
-(rule (simplify (fcmp cmp_ty cc x (select sel_ty cond y z)))
-      (select sel_ty cond (fcmp cmp_ty cc x y) (fcmp cmp_ty cc x z)))
+(rule (simplify (fcmp ty cc x (select _ cond y z)))
+      (select ty cond (fcmp ty cc x y) (fcmp ty cc x z)))
 
 ;; Transform select-of-icmp into {u,s}{min,max} instructions where possible.
 (rule (simplify (select ty (sgt _ x y) x y)) (smax ty x y))
