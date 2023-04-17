@@ -191,6 +191,11 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
         return true;
     }
 
+    // Tail calls are not yet implemented.
+    if testname.contains("return_call") {
+        return true;
+    }
+
     match env::var("CARGO_CFG_TARGET_ARCH").unwrap().as_str() {
         "s390x" => {
             // FIXME: These tests fail under qemu due to a qemu bug.
