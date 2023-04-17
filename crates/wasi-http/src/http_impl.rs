@@ -6,6 +6,7 @@ pub use crate::WasiHttpCtx;
 #[cfg(not(any(target_arch = "riscv64", target_arch = "s390x")))]
 use anyhow::anyhow;
 use anyhow::bail;
+use bytes::Bytes;
 use http_body::Body;
 use http_body_util::{BodyExt, Empty, Full};
 use hyper::Method;
@@ -171,14 +172,13 @@ impl WasiHttpCtx {
         }
 
         let mut response = ActiveResponse::new();
-        let body = Full::<&[u8]>::new(
-            &[],
-            // table
-            //     .get_output_stream(request.body().unwrap_or(0))
-            //     .unwrap_or(&ByteStream::new())
-            //     .clone()
-            //     .into(),
-        );
+        let body = match request.body() {
+            Some(body) => {
+                let slice: &[u8] = table.get_output_stream_mut(body)?.try_into()?;
+                Full::<&[u8]>::new(slice.as_ref())
+            }
+            None => Full::<&[u8]>::default(),
+        };
         let t = timeout(first_bytes_timeout, sender.send_request(call.body(body)?)).await?;
         let mut res = t?;
         response.status = res.status().try_into()?;

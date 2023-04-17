@@ -105,7 +105,6 @@ impl Table {
     pub fn list<T: Any + Sized>(&self) -> HashMap<u32, &T> {
         let mut result: HashMap<u32, &T> = HashMap::new();
         for (key, value) in self.map.iter() {
-            let _test = value.is::<T>();
             if let Some(r) = value.downcast_ref::<T>() {
                 result.insert(*key, r);
             }

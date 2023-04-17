@@ -54,6 +54,9 @@ pub trait InputStream: Send + Sync {
 
     /// Test whether this stream is readable.
     fn readable(&self) -> Result<(), Error>;
+
+    /// Test whether this stream is writeable.
+    fn writable(&self) -> Result<(), Error>;
 }
 
 /// An output bytestream.
@@ -78,6 +81,12 @@ pub trait OutputStream: Send + Sync {
     /// underlying implementation.
     fn is_write_vectored(&self) -> bool {
         false
+    }
+
+    /// Read bytes. On success, returns a pair holding the number of bytes read
+    /// and a flag indicating whether the end of the stream was reached.
+    fn read(&mut self, _buf: &mut [u8]) -> Result<(u64, bool), Error> {
+        Err(Error::badf())
     }
 
     /// Transfer bytes directly from an input stream to an output stream.
@@ -116,8 +125,21 @@ pub trait OutputStream: Send + Sync {
         Ok(nwritten)
     }
 
+    /// Test whether this stream is readable.
+    fn readable(&self) -> Result<(), Error>;
+
     /// Test whether this stream is writeable.
     fn writable(&self) -> Result<(), Error>;
+}
+
+impl<'a> TryInto<&'a [u8]> for &mut Box<dyn OutputStream> {
+    type Error = Error;
+
+    fn try_into(self) -> Result<&'a [u8], Self::Error> {
+        let buffer: &mut [u8] = &mut [];
+        self.readable().map(|_| self.read(buffer))?;
+        Ok(buffer)
+    }
 }
 
 pub trait TableStreamExt {
