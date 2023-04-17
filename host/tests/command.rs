@@ -357,7 +357,7 @@ async fn run_directory_seek(store: Store<WasiCtx>, wasi: Command) -> Result<()> 
 }
 
 async fn run_fd_advise(store: Store<WasiCtx>, wasi: Command) -> Result<()> {
-    expect_fail(run_with_temp_dir(store, wasi).await)
+    run_with_temp_dir(store, wasi).await
 }
 
 async fn run_fd_filestat_get(store: Store<WasiCtx>, wasi: Command) -> Result<()> {
@@ -377,7 +377,7 @@ async fn run_fd_readdir(store: Store<WasiCtx>, wasi: Command) -> Result<()> {
 }
 
 async fn run_file_allocate(store: Store<WasiCtx>, wasi: Command) -> Result<()> {
-    expect_fail(run_with_temp_dir(store, wasi).await)
+    run_with_temp_dir(store, wasi).await
 }
 
 async fn run_file_pread_pwrite(store: Store<WasiCtx>, wasi: Command) -> Result<()> {
