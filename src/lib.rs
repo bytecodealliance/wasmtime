@@ -1399,9 +1399,6 @@ pub unsafe extern "C" fn path_readlink(
                 .with_buffer(buf, buf_len, || filesystem::readlink_at(file.fd, path))?
         };
 
-        assert_eq!(path.as_ptr(), buf);
-        assert!(path.len() <= buf_len);
-
         *bufused = path.len();
         if use_state_buf {
             // Preview1 follows POSIX in truncating the returned path if it
