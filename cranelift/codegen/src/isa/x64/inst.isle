@@ -1639,8 +1639,8 @@
 (decl pure use_fma () bool)
 (extern constructor use_fma use_fma)
 
-(decl use_sse41 (bool) Type)
-(extern extractor infallible use_sse41 use_sse41)
+(decl pure use_sse41 () bool)
+(extern constructor use_sse41 use_sse41)
 
 (decl pure use_sse42 () bool)
 (extern constructor use_sse42 use_sse42)

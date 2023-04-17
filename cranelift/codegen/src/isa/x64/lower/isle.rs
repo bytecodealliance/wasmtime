@@ -225,7 +225,7 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     }
 
     #[inline]
-    fn use_sse41(&mut self, _: Type) -> bool {
+    fn use_sse41(&mut self) -> bool {
         self.backend.x64_flags.use_sse41()
     }
 
