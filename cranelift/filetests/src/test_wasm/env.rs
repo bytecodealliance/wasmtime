@@ -604,10 +604,6 @@ impl<'a> FuncEnvironment for FuncEnv<'a> {
             .translate_atomic_notify(pos, index, heap, addr, count)
     }
 
-    fn unsigned_add_overflow_condition(&self) -> ir::condcodes::IntCC {
-        self.inner.unsigned_add_overflow_condition()
-    }
-
     fn heaps(
         &self,
     ) -> &cranelift_codegen::entity::PrimaryMap<cranelift_wasm::Heap, cranelift_wasm::HeapData>

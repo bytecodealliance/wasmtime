@@ -89,15 +89,10 @@ impl WasmRefType {
 }
 
 impl From<wasmparser::RefType> for WasmRefType {
-    fn from(
-        wasmparser::RefType {
-            nullable,
-            heap_type,
-        }: wasmparser::RefType,
-    ) -> Self {
+    fn from(rt: wasmparser::RefType) -> Self {
         WasmRefType {
-            nullable,
-            heap_type: WasmHeapType::from(heap_type),
+            nullable: rt.is_nullable(),
+            heap_type: WasmHeapType::from(rt.heap_type()),
         }
     }
 }
@@ -109,10 +104,8 @@ impl From<WasmRefType> for wasmparser::RefType {
             heap_type,
         }: WasmRefType,
     ) -> wasmparser::RefType {
-        wasmparser::RefType {
-            nullable,
-            heap_type: wasmparser::HeapType::from(heap_type),
-        }
+        wasmparser::RefType::new(nullable, wasmparser::HeapType::from(heap_type)).unwrap()
+        // TODO(dhil): Proper error handling
     }
 }
 

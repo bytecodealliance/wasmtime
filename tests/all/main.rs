@@ -35,8 +35,8 @@ mod valtype_util;
 mod wait_notify;
 mod wasi_testsuite;
 mod wast;
-// Currently Winch is only supported in x86_64 unix platforms.
-#[cfg(all(target_arch = "x86_64", target_family = "unix"))]
+// Currently Winch is only supported in x86_64.
+#[cfg(all(target_arch = "x86_64"))]
 mod winch;
 
 /// A helper to compile a module in a new store with reference types enabled.

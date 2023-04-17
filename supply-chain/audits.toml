@@ -8,6 +8,19 @@ user-id = 696
 start = "2019-03-16"
 end = "2024-03-10"
 
+[[wildcard-audits.wasm-encoder]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+user-id = 1
+start = "2020-12-11"
+end = "2024-04-14"
+notes = """
+This is a Bytecode Alliance authored crate maintained in the `wasm-tools`
+repository of which I'm one of the primary maintainers and publishers for.
+I am employed by a member of the Bytecode Alliance and plan to continue doing
+so and will actively maintain this crate over time.
+"""
+
 [[wildcard-audits.wasm-mutate]]
 who = "Nick Fitzgerald <fitzgen@gmail.com>"
 criteria = "safe-to-deploy"
@@ -15,12 +28,103 @@ user-id = 696
 start = "2022-02-17"
 end = "2024-03-10"
 
+[[wildcard-audits.wasm-mutate]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+user-id = 1
+start = "2022-01-05"
+end = "2024-04-14"
+notes = """
+This is a Bytecode Alliance authored crate maintained in the `wasm-tools`
+repository of which I'm one of the primary maintainers and publishers for.
+I am employed by a member of the Bytecode Alliance and plan to continue doing
+so and will actively maintain this crate over time.
+"""
+
+[[wildcard-audits.wasm-smith]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+user-id = 1
+start = "2020-09-03"
+end = "2024-04-14"
+notes = """
+This is a Bytecode Alliance authored crate maintained in the `wasm-tools`
+repository of which I'm one of the primary maintainers and publishers for.
+I am employed by a member of the Bytecode Alliance and plan to continue doing
+so and will actively maintain this crate over time.
+"""
+
+[[wildcard-audits.wasmparser]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+user-id = 1
+start = "2020-07-13"
+end = "2024-04-14"
+notes = """
+This is a Bytecode Alliance authored crate maintained in the `wasm-tools`
+repository of which I'm one of the primary maintainers and publishers for.
+I am employed by a member of the Bytecode Alliance and plan to continue doing
+so and will actively maintain this crate over time.
+"""
+
 [[wildcard-audits.wasmprinter]]
 who = "Nick Fitzgerald <fitzgen@gmail.com>"
 criteria = "safe-to-deploy"
 user-id = 696
 start = "2021-04-28"
 end = "2024-03-10"
+
+[[wildcard-audits.wasmprinter]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+user-id = 1
+start = "2019-11-18"
+end = "2024-04-14"
+notes = """
+This is a Bytecode Alliance authored crate maintained in the `wasm-tools`
+repository of which I'm one of the primary maintainers and publishers for.
+I am employed by a member of the Bytecode Alliance and plan to continue doing
+so and will actively maintain this crate over time.
+"""
+
+[[wildcard-audits.wast]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+user-id = 1
+start = "2019-10-16"
+end = "2024-04-14"
+notes = """
+This is a Bytecode Alliance authored crate maintained in the `wasm-tools`
+repository of which I'm one of the primary maintainers and publishers for.
+I am employed by a member of the Bytecode Alliance and plan to continue doing
+so and will actively maintain this crate over time.
+"""
+
+[[wildcard-audits.wat]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+user-id = 1
+start = "2019-10-18"
+end = "2024-04-14"
+notes = """
+This is a Bytecode Alliance authored crate maintained in the `wasm-tools`
+repository of which I'm one of the primary maintainers and publishers for.
+I am employed by a member of the Bytecode Alliance and plan to continue doing
+so and will actively maintain this crate over time.
+"""
+
+[[wildcard-audits.wit-parser]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+user-id = 1
+start = "2019-12-02"
+end = "2024-04-14"
+notes = """
+This is a Bytecode Alliance authored crate maintained in the `wasm-tools`
+repository of which I'm one of the primary maintainers and publishers for.
+I am employed by a member of the Bytecode Alliance and plan to continue doing
+so and will actively maintain this crate over time.
+"""
 
 [[audits.addr2line]]
 who = "Alex Crichton <alex@alexcrichton.com>"

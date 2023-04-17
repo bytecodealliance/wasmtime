@@ -204,3 +204,14 @@ block0(v0: i8):
     ; check: v5 = sextend.i64 v0
     ; check: return v5
 }
+
+
+function %ineg_ushr_to_sshr(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 63
+    v2 = ushr v0, v1
+    v3 = ineg v2
+    return v3
+    ; check: v4 = sshr v0, v1
+    ; check: return v4
+}

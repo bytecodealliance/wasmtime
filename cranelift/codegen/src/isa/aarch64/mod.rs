@@ -1,7 +1,6 @@
 //! ARM 64-bit Instruction Set Architecture.
 
 use crate::dominator_tree::DominatorTree;
-use crate::ir::condcodes::IntCC;
 use crate::ir::{Function, Type};
 use crate::isa::aarch64::settings as aarch64_settings;
 #[cfg(feature = "unwind")]
@@ -132,12 +131,6 @@ impl TargetIsa for AArch64Backend {
 
     fn dynamic_vector_bytes(&self, _dyn_ty: Type) -> u32 {
         16
-    }
-
-    fn unsigned_add_overflow_condition(&self) -> IntCC {
-        // Unsigned `>=`; this corresponds to the carry flag set on aarch64, which happens on
-        // overflow of an add.
-        IntCC::UnsignedGreaterThanOrEqual
     }
 
     #[cfg(feature = "unwind")]

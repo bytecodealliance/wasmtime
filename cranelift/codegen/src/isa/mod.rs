@@ -286,9 +286,6 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
         Err(RegisterMappingError::UnsupportedArchitecture)
     }
 
-    /// IntCC condition for Unsigned Addition Overflow (Carry).
-    fn unsigned_add_overflow_condition(&self) -> ir::condcodes::IntCC;
-
     /// Creates unwind information for the function.
     ///
     /// Returns `None` if there is no unwind information for the function.

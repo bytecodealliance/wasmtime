@@ -665,10 +665,6 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
     ) -> WasmResult<ir::Value> {
         Ok(pos.ins().iconst(I32, 0))
     }
-
-    fn unsigned_add_overflow_condition(&self) -> ir::condcodes::IntCC {
-        unimplemented!()
-    }
 }
 
 impl TargetEnvironment for DummyEnvironment {

@@ -1,4 +1,10 @@
 test run
+set opt_level=none
+target aarch64
+target s390x
+target riscv64
+target s390x has_mie2
+set opt_level=speed
 target aarch64
 target s390x
 target riscv64
@@ -55,3 +61,24 @@ block0(v0: i64, v1: i64, v2: i64):
 ; run: %bitselect_i64(0, 0, 0xFFFFFFFFFFFFFFFF) == 0xFFFFFFFFFFFFFFFF
 ; run: %bitselect_i64(0x5555555555555555, 0, 0xFFFFFFFFFFFFFFFF) == 0xAAAAAAAAAAAAAAAA
 ; run: %bitselect_i64(0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0) == 0xFFFFFFFFFFFFFFFF
+
+
+;; We have a optimization rule in the midend that turns this into a bmask
+;; It's easier to have a runtest to ensure that it is correct than to inspect the output.
+function %bitops_bmask(i16) -> i16 {
+block0(v0: i16):
+    v1 = bnot v0
+    v2 = iconst.i16 1
+    v3 = iadd.i16 v1, v2
+    v4 = bor.i16 v0, v3
+    v5 = iconst.i16 15
+    v6 = ushr.i16 v4, v5
+    v7 = iconst.i16 1
+    v8 = isub.i16 v6, v7
+    v9 = bnot.i16 v8
+    return v9
+}
+; run: %bitops_bmask(0) == 0
+; run: %bitops_bmask(1) == -1
+; run: %bitops_bmask(0xFFFF) == -1
+; run: %bitops_bmask(0x8000) == -1

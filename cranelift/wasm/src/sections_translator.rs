@@ -317,7 +317,7 @@ pub fn parse_element_section<'data>(
                     }
                 };
                 environ.declare_table_elements(
-                    TableIndex::from_u32(table_index),
+                    TableIndex::from_u32(table_index.unwrap_or(0)),
                     base,
                     offset,
                     segments,

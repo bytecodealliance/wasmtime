@@ -2,7 +2,6 @@
 
 use crate::dominator_tree::DominatorTree;
 use crate::ir;
-use crate::ir::condcodes::IntCC;
 use crate::ir::Function;
 
 use crate::isa::riscv64::settings as riscv_settings;
@@ -128,10 +127,6 @@ impl TargetIsa for Riscv64Backend {
 
     fn isa_flags(&self) -> Vec<shared_settings::Value> {
         self.isa_flags.iter().collect()
-    }
-
-    fn unsigned_add_overflow_condition(&self) -> IntCC {
-        IntCC::UnsignedGreaterThanOrEqual
     }
 
     #[cfg(feature = "unwind")]
