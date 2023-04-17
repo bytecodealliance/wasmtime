@@ -481,7 +481,7 @@ async fn run_poll_oneoff_stdio(store: Store<WasiCtx>, wasi: Command) -> Result<(
 }
 
 async fn run_readlink(store: Store<WasiCtx>, wasi: Command) -> Result<()> {
-    expect_fail(run_with_temp_dir(store, wasi).await)
+    run_with_temp_dir(store, wasi).await
 }
 
 async fn run_remove_directory_trailing_slashes(store: Store<WasiCtx>, wasi: Command) -> Result<()> {
