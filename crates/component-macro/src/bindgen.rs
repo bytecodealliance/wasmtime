@@ -38,17 +38,13 @@ pub fn expand(input: &Config) -> Result<TokenStream> {
     Ok(contents)
 }
 
-enum Source {
-    Path(String),
-    Inline(String),
-}
-
 impl Parse for Config {
     fn parse(input: ParseStream<'_>) -> Result<Self> {
         let call_site = Span::call_site();
         let mut opts = Opts::default();
-        let mut source = None;
         let mut world = None;
+        let mut inline = None;
+        let mut path = None;
 
         if input.peek(token::Brace) {
             let content;
@@ -57,10 +53,10 @@ impl Parse for Config {
             for field in fields.into_pairs() {
                 match field.into_value() {
                     Opt::Path(s) => {
-                        if source.is_some() {
-                            return Err(Error::new(s.span(), "cannot specify second source"));
+                        if path.is_some() {
+                            return Err(Error::new(s.span(), "cannot specify second path"));
                         }
-                        source = Some(Source::Path(s.value()));
+                        path = Some(s.value());
                     }
                     Opt::World(s) => {
                         if world.is_some() {
@@ -69,23 +65,21 @@ impl Parse for Config {
                         world = Some(s.value());
                     }
                     Opt::Inline(s) => {
-                        if source.is_some() {
+                        if inline.is_some() {
                             return Err(Error::new(s.span(), "cannot specify second source"));
                         }
-                        source = Some(Source::Inline(s.value()));
+                        inline = Some(s.value());
                     }
                     Opt::Tracing(val) => opts.tracing = val,
                     Opt::Async(val) => opts.async_ = val,
                     Opt::TrappableErrorType(val) => opts.trappable_error_type = val,
                     Opt::DuplicateIfNecessary(val) => opts.duplicate_if_necessary = val,
                     Opt::Interfaces(s) => {
-                        if source.is_some() {
+                        if inline.is_some() {
                             return Err(Error::new(s.span(), "cannot specify a second source"));
                         }
-                        source = Some(Source::Inline(format!(
-                            "default world interfaces {{ {} }}",
-                            s.value()
-                        )));
+                        inline = Some(format!("default world interfaces {{ {} }}", s.value()));
+                        world = Some("macro-input.interfaces".to_string());
                         opts.only_interfaces = true;
                     }
                     Opt::With(val) => opts.with.extend(val),
@@ -94,11 +88,12 @@ impl Parse for Config {
         } else {
             world = input.parse::<Option<syn::LitStr>>()?.map(|s| s.value());
             if input.parse::<Option<syn::token::In>>()?.is_some() {
-                source = Some(Source::Path(input.parse::<syn::LitStr>()?.value()));
+                path = Some(input.parse::<syn::LitStr>()?.value());
             }
         }
-        let (resolve, pkg, files) =
-            parse_source(&source).map_err(|err| Error::new(call_site, format!("{err:?}")))?;
+        let (resolve, pkg, files) = parse_source(&path, &inline)
+            .map_err(|err| Error::new(call_site, format!("{err:?}")))?;
+
         let world = resolve
             .select_world(pkg, world.as_deref())
             .map_err(|e| Error::new(call_site, format!("{e:?}")))?;
@@ -111,11 +106,15 @@ impl Parse for Config {
     }
 }
 
-fn parse_source(source: &Option<Source>) -> anyhow::Result<(Resolve, PackageId, Vec<PathBuf>)> {
+fn parse_source(
+    path: &Option<String>,
+    inline: &Option<String>,
+) -> anyhow::Result<(Resolve, PackageId, Vec<PathBuf>)> {
     let mut resolve = Resolve::default();
     let mut files = Vec::new();
     let root = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
-    let mut parse = |path: &Path| -> anyhow::Result<_> {
+
+    let mut parse = |resolve: &mut Resolve, path: &Path| -> anyhow::Result<_> {
         if path.is_dir() {
             let (pkg, sources) = resolve.push_dir(path)?;
             files = sources;
@@ -126,14 +125,31 @@ fn parse_source(source: &Option<Source>) -> anyhow::Result<(Resolve, PackageId, 
             resolve.push(pkg, &Default::default())
         }
     };
-    let pkg = match source {
-        Some(Source::Inline(s)) => resolve.push(
-            UnresolvedPackage::parse("macro-input".as_ref(), s)?,
-            &Default::default(),
-        )?,
-        Some(Source::Path(s)) => parse(&root.join(s))?,
-        None => parse(&root.join("wit"))?,
+
+    let path_pkg = if let Some(path) = path {
+        Some(parse(&mut resolve, &root.join(&path))?)
+    } else {
+        None
     };
+
+    let inline_pkg = if let Some(inline) = inline {
+        let deps = resolve
+            .packages
+            .iter()
+            .map(|(id, p)| (p.name.clone(), id))
+            .collect();
+
+        Some(resolve.push(
+            UnresolvedPackage::parse("macro-input".as_ref(), &inline)?,
+            &deps,
+        )?)
+    } else {
+        None
+    };
+
+    let pkg = inline_pkg
+        .or(path_pkg)
+        .map_or_else(|| parse(&mut resolve, &root.join("wit")), Ok)?;
 
     Ok((resolve, pkg, files))
 }
