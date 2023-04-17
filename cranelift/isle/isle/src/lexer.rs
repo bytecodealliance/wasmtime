@@ -110,7 +110,7 @@ impl<'a> Lexer<'a> {
         let mut buf = String::new();
         for text in &file_texts {
             file_starts.push(buf.len());
-            buf += &text;
+            buf += text;
             buf += "\n";
         }
 
@@ -316,18 +316,12 @@ impl<'a> Lexer<'a> {
 impl Token {
     /// Is this an `Int` token?
     pub fn is_int(&self) -> bool {
-        match self {
-            Token::Int(_) => true,
-            _ => false,
-        }
+        matches!(self, Token::Int(_))
     }
 
     /// Is this a `Sym` token?
     pub fn is_sym(&self) -> bool {
-        match self {
-            Token::Symbol(_) => true,
-            _ => false,
-        }
+        matches!(self, Token::Symbol(_))
     }
 }
 

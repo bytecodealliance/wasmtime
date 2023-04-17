@@ -186,7 +186,7 @@ impl<'a> Codegen<'a> {
     }
 
     fn generate_ctx_trait(&self, code: &mut String) {
-        writeln!(code, "").unwrap();
+        writeln!(code).unwrap();
         writeln!(
             code,
             "/// Context during lowering: an implementation of this trait"
@@ -287,7 +287,7 @@ impl<'a> Codegen<'a> {
                             for field in &variant.fields {
                                 let name = &self.typeenv.syms[field.name.index()];
                                 let ty_name =
-                                    self.typeenv.types[field.ty.index()].name(&self.typeenv);
+                                    self.typeenv.types[field.ty.index()].name(self.typeenv);
                                 writeln!(code, "        {}: {},", name, ty_name).unwrap();
                             }
                             writeln!(code, "    }},").unwrap();
@@ -301,9 +301,9 @@ impl<'a> Codegen<'a> {
     }
 
     fn type_name(&self, typeid: TypeId, by_ref: bool) -> String {
-        match &self.typeenv.types[typeid.index()] {
-            &Type::Primitive(_, sym, _) => self.typeenv.syms[sym.index()].clone(),
-            &Type::Enum { name, .. } => {
+        match self.typeenv.types[typeid.index()] {
+            Type::Primitive(_, sym, _) => self.typeenv.syms[sym.index()].clone(),
+            Type::Enum { name, .. } => {
                 let r = if by_ref { "&" } else { "" };
                 format!("{}{}", r, self.typeenv.syms[name.index()])
             }
@@ -620,7 +620,7 @@ impl<'a> Codegen<'a> {
                             &self.typeenv.syms[field.name.index()],
                         )?;
                         self.emit_expr(ctx, *value)?;
-                        if ctx.is_ref.contains(&value) {
+                        if ctx.is_ref.contains(value) {
                             write!(ctx.out, ".clone()")?;
                         }
                         writeln!(ctx.out, ",")?;

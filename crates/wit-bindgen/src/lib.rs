@@ -151,9 +151,9 @@ impl Wasmtime {
         let mut gen = InterfaceGenerator::new(self, resolve);
         let import = match item {
             WorldItem::Function(func) => {
-                gen.generate_function_trait_sig(TypeOwner::None, &func);
+                gen.generate_function_trait_sig(TypeOwner::None, func);
                 let sig = mem::take(&mut gen.src).into();
-                gen.generate_add_function_to_linker(TypeOwner::None, &func, "linker");
+                gen.generate_add_function_to_linker(TypeOwner::None, func, "linker");
                 let add_to_linker = gen.src.into();
                 Import::Function { sig, add_to_linker }
             }
@@ -203,7 +203,7 @@ impl Wasmtime {
                 let (_name, getter) = gen.extract_typed_function(func);
                 assert!(gen.src.is_empty());
                 self.exports.funcs.push(body);
-                (format!("wasmtime::component::Func"), getter)
+                ("wasmtime::component::Func".to_string(), getter)
             }
             WorldItem::Type(_) => unreachable!(),
             WorldItem::Interface(id) => {
@@ -1051,9 +1051,9 @@ impl<'a> InterfaceGenerator<'a> {
         uwriteln!(self.src, "}}");
 
         let where_clause = if self.gen.opts.async_ {
-            format!("T: Send, U: Host + Send")
+            "T: Send, U: Host + Send".to_string()
         } else {
-            format!("U: Host")
+            "U: Host".to_string()
         };
         uwriteln!(
             self.src,
@@ -1259,7 +1259,7 @@ impl<'a> InterfaceGenerator<'a> {
 
         let ret = (snake, mem::take(&mut self.src).to_string());
         self.src = prev;
-        return ret;
+        ret
     }
 
     fn define_rust_guest_export(&mut self, ns: Option<&str>, func: &Function) {

@@ -117,7 +117,7 @@ fn parse_source(source: &Option<Source>) -> anyhow::Result<(Resolve, PackageId, 
     let root = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
     let mut parse = |path: &Path| -> anyhow::Result<_> {
         if path.is_dir() {
-            let (pkg, sources) = resolve.push_dir(&path)?;
+            let (pkg, sources) = resolve.push_dir(path)?;
             files = sources;
             Ok(pkg)
         } else {
@@ -128,10 +128,10 @@ fn parse_source(source: &Option<Source>) -> anyhow::Result<(Resolve, PackageId, 
     };
     let pkg = match source {
         Some(Source::Inline(s)) => resolve.push(
-            UnresolvedPackage::parse("macro-input".as_ref(), &s)?,
+            UnresolvedPackage::parse("macro-input".as_ref(), s)?,
             &Default::default(),
         )?,
-        Some(Source::Path(s)) => parse(&root.join(&s))?,
+        Some(Source::Path(s)) => parse(&root.join(s))?,
         None => parse(&root.join("wit"))?,
     };
 
