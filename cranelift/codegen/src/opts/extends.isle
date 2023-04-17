@@ -27,3 +27,8 @@
              (uextend $I64 x @ (value_type $I32))
              (iconst _ (u64_from_imm64 0))))
       (iconst ty (imm64 1)))
+
+;; A reduction-of-an-extend back to the same original type is the same as not
+;; actually doing the extend in the first place.
+(rule (simplify (ireduce ty (sextend _ x @ (value_type ty)))) x)
+(rule (simplify (ireduce ty (uextend _ x @ (value_type ty)))) x)
