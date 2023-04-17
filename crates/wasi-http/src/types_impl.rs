@@ -26,10 +26,8 @@ impl crate::wasi::http::types::Host for WasiHttpCtx {
     }
     fn new_fields(&mut self, entries: Vec<(String, String)>) -> wasmtime::Result<Fields> {
         let mut map = ActiveFields::new();
-        for (key, value) in entries.iter() {
-            let mut vec = std::vec::Vec::new();
-            vec.push(value.clone().into_bytes());
-            map.insert(key.clone(), vec);
+        for (key, value) in entries {
+            map.insert(key, vec![value.clone().into_bytes()]);
         }
 
         let id = self.push_fields(Box::new(map)).map_err(convert)?;
@@ -191,7 +189,7 @@ impl crate::wasi::http::types::Host for WasiHttpCtx {
         request: OutgoingRequest,
     ) -> wasmtime::Result<Result<OutgoingStream, ()>> {
         let req = self.table().get_request(request).map_err(convert)?;
-        Ok(Ok(req.body().unwrap_or_else(|| {
+        let body = req.body().unwrap_or_else(|| {
             let buf = ByteStream::new();
             let new = self
                 .push_output_stream(Box::new(buf))
@@ -202,7 +200,8 @@ impl crate::wasi::http::types::Host for WasiHttpCtx {
                 .expect("request to be found");
             req.set_body(new);
             new
-        })))
+        });
+        Ok(Ok(body))
     }
     fn drop_response_outparam(&mut self, _response: ResponseOutparam) -> wasmtime::Result<()> {
         bail!("unimplemented: drop_response_outparam")
