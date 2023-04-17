@@ -407,8 +407,10 @@ pub unsafe extern "C" fn fd_advise(
 pub unsafe extern "C" fn fd_allocate(fd: Fd, offset: Filesize, len: Filesize) -> Errno {
     State::with(|state| {
         let ds = state.descriptors();
+        // For not-files, fail with BADF
         let file = ds.get_file(fd)?;
-        unreachable!("fd_allocate is unimplemented")
+        // For all files, fail with NOTSUP, because this call does not exist in preview 2.
+        Err(wasi::ERRNO_NOTSUP)
     })
 }
 
