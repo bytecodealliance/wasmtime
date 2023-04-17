@@ -79,7 +79,15 @@ impl Parse for Config {
                             return Err(Error::new(s.span(), "cannot specify a second source"));
                         }
                         inline = Some(format!("default world interfaces {{ {} }}", s.value()));
+
+                        if world.is_some() {
+                            return Err(Error::new(
+                                s.span(),
+                                "cannot specify a world with `interfaces`",
+                            ));
+                        }
                         world = Some("macro-input.interfaces".to_string());
+
                         opts.only_interfaces = true;
                     }
                     Opt::With(val) => opts.with.extend(val),
