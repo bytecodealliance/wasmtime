@@ -6,9 +6,7 @@ pub use crate::WasiHttpCtx;
 #[cfg(not(any(target_arch = "riscv64", target_arch = "s390x")))]
 use anyhow::anyhow;
 use anyhow::bail;
-use bytes::Bytes;
-use http_body::Body;
-use http_body_util::{BodyExt, Empty, Full};
+use http_body_util::{BodyExt, Full};
 use hyper::Method;
 use hyper::Request;
 #[cfg(not(any(target_arch = "riscv64", target_arch = "s390x")))]
@@ -165,9 +163,11 @@ impl WasiHttpCtx {
             .uri(url)
             .header(hyper::header::HOST, request.authority());
 
-        for (key, val) in request.headers().iter() {
-            for item in val {
-                call = call.header(key, item.clone());
+        if let Some(headers) = request.headers() {
+            for (key, val) in table.get_fields(headers)?.iter() {
+                for item in val {
+                    call = call.header(key, item.clone());
+                }
             }
         }
 
@@ -182,11 +182,16 @@ impl WasiHttpCtx {
         let t = timeout(first_bytes_timeout, sender.send_request(call.body(body)?)).await?;
         let mut res = t?;
         response.status = res.status().try_into()?;
+
+        let mut map = ActiveFields::new();
         for (key, value) in res.headers().iter() {
             let mut vec = Vec::new();
             vec.push(value.as_bytes().to_vec());
-            response.headers().insert(key.as_str().to_string(), vec);
+            map.insert(key.as_str().to_string(), vec);
         }
+        let headers = self.push_fields(Box::new(map)).map_err(convert)?;
+        response.set_headers(headers);
+
         let mut buf: Vec<u8> = Vec::new();
         while let Some(next) = timeout(between_bytes_timeout, res.frame()).await? {
             let frame = next?;

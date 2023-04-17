@@ -123,6 +123,18 @@ impl crate::wasi::http::types::Host for WasiHttpCtx {
         //     let r = e.remove();
         //     self.streams.remove(&r.body);
         // }
+        let r = self.table().get_request(request).map_err(convert)?;
+
+        // Cleanup dependant resources
+        let body = r.body();
+        let headers = r.headers();
+        if let Some(b) = body {
+            self.drop_output_stream(b).unwrap_or_else(|_| ());
+        }
+        if let Some(h) = headers {
+            self.drop_fields(h).unwrap_or_else(|_| ());
+        }
+
         self.table_mut().delete_request(request).map_err(convert)?;
 
         Ok(())
@@ -169,7 +181,7 @@ impl crate::wasi::http::types::Host for WasiHttpCtx {
         req.path_with_query = path_with_query.unwrap_or("".to_string());
         req.authority = authority.unwrap_or("".to_string());
         req.method = method;
-        req.headers = self.table().get_fields(headers).map_err(convert)?.clone();
+        req.headers = Some(headers);
         req.scheme = scheme;
         let id = self.push_request(Box::new(req)).map_err(convert)?;
         Ok(id)
@@ -207,6 +219,21 @@ impl crate::wasi::http::types::Host for WasiHttpCtx {
         //     let r = e.remove();
         //     self.streams.remove(&r.body);
         // }
+        let r = self.table().get_response(response).map_err(convert)?;
+
+        // Cleanup dependant resources
+        let body = r.body();
+        let headers = r.headers();
+        if let Some(b) = body {
+            if let Some(trailers) = self.finish_incoming_stream(b)? {
+                self.drop_fields(trailers).unwrap_or_else(|_| ());
+            }
+            self.drop_input_stream(b).unwrap_or_else(|_| ());
+        }
+        if let Some(h) = headers {
+            self.drop_fields(h).unwrap_or_else(|_| ());
+        }
+
         self.table_mut()
             .delete_response(response)
             .map_err(convert)?;
@@ -227,8 +254,7 @@ impl crate::wasi::http::types::Host for WasiHttpCtx {
         response: IncomingResponse,
     ) -> wasmtime::Result<Headers> {
         let r = self.table().get_response(response).map_err(convert)?;
-        let id = self.push_fields(Box::new(r.headers())).map_err(convert)?;
-        Ok(id)
+        Ok(r.headers().unwrap_or(0))
     }
     fn incoming_response_consume(
         &mut self,

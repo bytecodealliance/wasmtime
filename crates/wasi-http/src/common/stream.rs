@@ -137,7 +137,7 @@ impl<'a> TryInto<&'a [u8]> for &mut Box<dyn OutputStream> {
 
     fn try_into(self) -> Result<&'a [u8], Self::Error> {
         let buffer: &mut [u8] = &mut [];
-        self.readable().map(|_| self.read(buffer))?;
+        let _ = self.readable().map(|_| self.read(buffer))?;
         Ok(buffer)
     }
 }

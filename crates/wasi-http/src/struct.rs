@@ -82,7 +82,7 @@ pub struct ActiveRequest {
     pub scheme: Option<Scheme>,
     pub path_with_query: String,
     pub authority: String,
-    pub headers: ActiveFields,
+    pub headers: Option<u32>,
     pub body: Option<u32>,
 }
 
@@ -97,7 +97,8 @@ pub trait HttpRequest: Send + Sync {
     fn scheme(&self) -> &Option<Scheme>;
     fn path_with_query(&self) -> &str;
     fn authority(&self) -> &str;
-    fn headers(&self) -> ActiveFields;
+    fn headers(&self) -> Option<u32>;
+    fn set_headers(&mut self, headers: u32);
     fn body(&self) -> Option<u32>;
     fn set_body(&mut self, body: u32);
 }
@@ -110,7 +111,7 @@ impl HttpRequest for ActiveRequest {
             scheme: Some(Scheme::Http),
             path_with_query: "".to_string(),
             authority: "".to_string(),
-            headers: ActiveFields::new(),
+            headers: None,
             body: None,
         }
     }
@@ -135,8 +136,12 @@ impl HttpRequest for ActiveRequest {
         &self.authority
     }
 
-    fn headers(&self) -> ActiveFields {
-        self.headers.clone()
+    fn headers(&self) -> Option<u32> {
+        self.headers
+    }
+
+    fn set_headers(&mut self, headers: u32) {
+        self.headers = Some(headers);
     }
 
     fn body(&self) -> Option<u32> {
@@ -152,7 +157,7 @@ impl HttpRequest for ActiveRequest {
 pub struct ActiveResponse {
     pub active: bool,
     pub status: u16,
-    pub headers: ActiveFields,
+    pub headers: Option<u32>,
     pub body: Option<u32>,
     pub trailers: Option<u32>,
 }
@@ -165,7 +170,8 @@ pub trait HttpResponse: Send + Sync {
     fn as_any(&self) -> &dyn Any;
 
     fn status(&self) -> u16;
-    fn headers(&self) -> ActiveFields;
+    fn headers(&self) -> Option<u32>;
+    fn set_headers(&mut self, headers: u32);
     fn body(&self) -> Option<u32>;
     fn set_body(&mut self, body: u32);
     fn trailers(&self) -> Option<u32>;
@@ -177,7 +183,7 @@ impl HttpResponse for ActiveResponse {
         Self {
             active: false,
             status: 0,
-            headers: ActiveFields::new(),
+            headers: None,
             body: None,
             trailers: None,
         }
@@ -191,8 +197,12 @@ impl HttpResponse for ActiveResponse {
         self.status
     }
 
-    fn headers(&self) -> ActiveFields {
-        self.headers.clone()
+    fn headers(&self) -> Option<u32> {
+        self.headers
+    }
+
+    fn set_headers(&mut self, headers: u32) {
+        self.headers = Some(headers);
     }
 
     fn body(&self) -> Option<u32> {
