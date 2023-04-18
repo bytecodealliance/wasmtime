@@ -1346,21 +1346,21 @@
 ;; result = [ vec[3] vec[2] tmp[0] tmp[2] ]
 (rule (vec_insert_lane $F32X4 vec (RegMem.Reg val) 1)
       (let ((tmp Xmm (x64_movlhps val vec)))
-        (x64_shufps tmp vec 0xe2))) ;; 0xe2 == 0b11_10_00_10
+        (x64_shufps tmp vec 0b11_10_00_10)))
 
 ;; f32x4.replace_lane 2 - without insertps
 ;; tmp    = [ vec[0] vec[3] val[0] val[0] ]
 ;; result = [ tmp[2] tmp[0] vec[1] vec[0] ]
 (rule (vec_insert_lane $F32X4 vec (RegMem.Reg val) 2)
-      (let ((tmp Xmm (x64_shufps val vec 0x30)))  ;; 0x30 == 0b00_11_00_00
-        (x64_shufps vec tmp 0x84)))               ;; 0x84 == 0b10_00_01_00
+      (let ((tmp Xmm (x64_shufps val vec 0b00_11_00_00)))
+        (x64_shufps vec tmp 0b10_00_01_00)))
 
 ;; f32x4.replace_lane 3 - without insertps
 ;; tmp    = [ vec[3] vec[2] val[1] val[0] ]
 ;; result = [ tmp[0] tmp[2] vec[1] vec[0] ]
 (rule (vec_insert_lane $F32X4 vec (RegMem.Reg val) 3)
-      (let ((tmp Xmm (x64_shufps val vec 0xe4)))  ;; 0xe4 == 0b11_10_01_00
-        (x64_shufps vec tmp 0x24)))               ;; 0x24 == 0b00_10_01_00
+      (let ((tmp Xmm (x64_shufps val vec 0b11_10_01_00)))
+        (x64_shufps vec tmp 0b00_10_01_00)))
 
 ;; Recursively delegate to the above rules by loading from memory first.
 (rule (vec_insert_lane $F32X4 vec (RegMem.Mem addr) idx)
@@ -3422,7 +3422,7 @@
           (a Xmm a)
           (libcall LibCall (round_libcall $F64 imm))
           (result Xmm (libcall_1 libcall a))
-          (a1 Xmm (libcall_1 libcall (x64_pshufd a 0x0e))) ;; 0x0e == 0b00_00_11_10
+          (a1 Xmm (libcall_1 libcall (x64_pshufd a 0b00_00_11_10)))
           (result Xmm (vec_insert_lane $F64X2 result a1 1))
         )
         result))
@@ -3818,8 +3818,7 @@
 ;; This is the only remaining case for F64X2
 (rule 1 (lower (has_type $F64 (extractlane val @ (value_type (ty_vec128 ty))
                                          (u8_from_uimm8 1))))
-      ;; 0xee == 0b11_10_11_10
-      (x64_pshufd val 0xee))
+      (x64_pshufd val 0b11_10_11_10))
 
 ;; Note that the `pextrb` lowering here is relied upon by the `extend_to_gpr`
 ;; helper because it will elide a `uextend` operation when `extractlane` is the
