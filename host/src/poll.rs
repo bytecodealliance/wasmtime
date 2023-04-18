@@ -1,10 +1,10 @@
 use crate::{
-    command,
-    command::wasi::monotonic_clock::Instant,
-    command::wasi::poll::Pollable,
-    command::wasi::streams::{InputStream, OutputStream, StreamError},
-    command::wasi::tcp::TcpSocket,
-    proxy, WasiCtx,
+    wasi,
+    wasi::monotonic_clock::Instant,
+    wasi::poll::Pollable,
+    wasi::streams::{InputStream, OutputStream, StreamError},
+    wasi::tcp::TcpSocket,
+    WasiCtx,
 };
 use wasi_common::stream::TableStreamExt;
 use wasi_common::tcp_socket::TableTcpSocketExt;
@@ -30,78 +30,65 @@ pub(crate) enum PollableEntry {
     TcpSocket(TcpSocket),
 }
 
-async fn drop_pollable(ctx: &mut WasiCtx, pollable: Pollable) -> anyhow::Result<()> {
-    ctx.table_mut()
-        .delete::<PollableEntry>(pollable)
-        .map_err(convert)?;
-    Ok(())
-}
+// Implementatations of the interface. The bodies had been pulled out into
+// functions above to allow them to be shared between the two worlds, which
+// used to require different traits . Features have been added to facilitate
+// sharing between worlds, but I want to avoid the huge whitespace diff on
+// this PR.
 
-async fn poll_oneoff(ctx: &mut WasiCtx, futures: Vec<Pollable>) -> anyhow::Result<Vec<u8>> {
-    use wasi_common::sched::{Poll, Userdata};
+#[async_trait::async_trait]
+impl wasi::poll::Host for WasiCtx {
+    async fn drop_pollable(&mut self, pollable: Pollable) -> anyhow::Result<()> {
+        self.table_mut()
+            .delete::<PollableEntry>(pollable)
+            .map_err(convert)?;
+        Ok(())
+    }
 
-    // Convert `futures` into `Poll` subscriptions.
-    let mut poll = Poll::new();
-    let len = futures.len();
-    for (index, future) in futures.into_iter().enumerate() {
-        let userdata = Userdata::from(index as u64);
+    async fn poll_oneoff(&mut self, futures: Vec<Pollable>) -> anyhow::Result<Vec<u8>> {
+        use wasi_common::sched::{Poll, Userdata};
 
-        match *ctx.table().get(future).map_err(convert)? {
-            PollableEntry::Read(stream) => {
-                let wasi_stream: &dyn wasi_common::InputStream =
-                    ctx.table().get_input_stream(stream).map_err(convert)?;
-                poll.subscribe_read(wasi_stream, userdata);
-            }
-            PollableEntry::Write(stream) => {
-                let wasi_stream: &dyn wasi_common::OutputStream =
-                    ctx.table().get_output_stream(stream).map_err(convert)?;
-                poll.subscribe_write(wasi_stream, userdata);
-            }
-            PollableEntry::MonotonicClock(when, absolute) => {
-                poll.subscribe_monotonic_clock(&*ctx.clocks.monotonic, when, absolute, userdata);
-            }
-            PollableEntry::TcpSocket(tcp_socket) => {
-                let wasi_tcp_socket: &dyn wasi_common::WasiTcpSocket =
-                    ctx.table().get_tcp_socket(tcp_socket).map_err(convert)?;
-                poll.subscribe_tcp_socket(wasi_tcp_socket, userdata);
+        // Convert `futures` into `Poll` subscriptions.
+        let mut poll = Poll::new();
+        let len = futures.len();
+        for (index, future) in futures.into_iter().enumerate() {
+            let userdata = Userdata::from(index as u64);
+
+            match *self.table().get(future).map_err(convert)? {
+                PollableEntry::Read(stream) => {
+                    let wasi_stream: &dyn wasi_common::InputStream =
+                        self.table().get_input_stream(stream).map_err(convert)?;
+                    poll.subscribe_read(wasi_stream, userdata);
+                }
+                PollableEntry::Write(stream) => {
+                    let wasi_stream: &dyn wasi_common::OutputStream =
+                        self.table().get_output_stream(stream).map_err(convert)?;
+                    poll.subscribe_write(wasi_stream, userdata);
+                }
+                PollableEntry::MonotonicClock(when, absolute) => {
+                    poll.subscribe_monotonic_clock(
+                        &*self.clocks.monotonic,
+                        when,
+                        absolute,
+                        userdata,
+                    );
+                }
+                PollableEntry::TcpSocket(tcp_socket) => {
+                    let wasi_tcp_socket: &dyn wasi_common::WasiTcpSocket =
+                        self.table().get_tcp_socket(tcp_socket).map_err(convert)?;
+                    poll.subscribe_tcp_socket(wasi_tcp_socket, userdata);
+                }
             }
         }
-    }
 
-    // Do the poll.
-    ctx.sched.poll_oneoff(&mut poll).await?;
+        // Do the poll.
+        self.sched.poll_oneoff(&mut poll).await?;
 
-    // Convert the results into a list of `u8` to return.
-    let mut results = vec![0_u8; len];
-    for (_result, data) in poll.results() {
-        results[u64::from(data) as usize] = u8::from(true);
-    }
-    Ok(results)
-}
-
-// Implementatations of the traits for both the command and proxy worlds.
-// The bodies have been pulled out into functions above to allow them to
-// be shared between the two. Ideally, we should add features to the
-// bindings to facilitate this kind of sharing.
-
-#[async_trait::async_trait]
-impl command::wasi::poll::Host for WasiCtx {
-    async fn drop_pollable(&mut self, pollable: Pollable) -> anyhow::Result<()> {
-        drop_pollable(self, pollable).await
-    }
-
-    async fn poll_oneoff(&mut self, futures: Vec<Pollable>) -> anyhow::Result<Vec<u8>> {
-        poll_oneoff(self, futures).await
-    }
-}
-
-#[async_trait::async_trait]
-impl proxy::wasi::poll::Host for WasiCtx {
-    async fn drop_pollable(&mut self, pollable: Pollable) -> anyhow::Result<()> {
-        drop_pollable(self, pollable).await
-    }
-
-    async fn poll_oneoff(&mut self, futures: Vec<Pollable>) -> anyhow::Result<Vec<u8>> {
-        poll_oneoff(self, futures).await
+        // Convert the results into a list of `u8` to return.
+        let mut results = vec![0_u8; len];
+        for (_result, data) in poll.results() {
+            results[u64::from(data) as usize] = u8::from(true);
+        }
+        Ok(results)
     }
 }

@@ -1,5 +1,5 @@
 use anyhow::Result;
-use host::{command::add_to_linker, WasiCtx};
+use host::WasiCtx;
 use wasi_cap_std_sync::WasiCtxBuilder;
 use wasmtime::{
     component::{Component, Linker},
@@ -24,7 +24,16 @@ async fn instantiate(path: &str) -> Result<(Store<WasiCtx>, TestReactor)> {
     let engine = Engine::new(&config)?;
     let component = Component::from_file(&engine, &path)?;
     let mut linker = Linker::new(&engine);
-    add_to_linker(&mut linker, |x| x)?;
+
+    // The test-reactor wit is not faithful: we need to provide all of these
+    // in the world as well, in order for the adapter to link.
+    // However, if we make them available as imports in the world, wit-component
+    // denies us because the imports are duplicated.
+    host::wasi::filesystem::add_to_linker(&mut linker, |x| x)?;
+    host::wasi::streams::add_to_linker(&mut linker, |x| x)?;
+    host::wasi::environment::add_to_linker(&mut linker, |x| x)?;
+    host::wasi::preopens::add_to_linker(&mut linker, |x| x)?;
+    host::wasi::exit::add_to_linker(&mut linker, |x| x)?;
 
     let mut store = Store::new(&engine, WasiCtxBuilder::new().build());
 

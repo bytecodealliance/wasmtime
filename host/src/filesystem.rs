@@ -1,7 +1,7 @@
 #![allow(unused_variables)]
 
-use crate::command::wasi;
-use crate::command::wasi::streams::{InputStream, OutputStream};
+use crate::wasi;
+use crate::wasi::streams::{InputStream, OutputStream};
 use crate::WasiCtx;
 use anyhow::anyhow;
 use std::{

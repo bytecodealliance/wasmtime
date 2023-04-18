@@ -1,9 +1,9 @@
 #![allow(unused_variables)]
 
 use crate::{
-    command::wasi::ip_name_lookup::{self, ResolveAddressStream},
-    command::wasi::network::{Error, IpAddress, IpAddressFamily, Network},
-    command::wasi::poll::Pollable,
+    wasi::ip_name_lookup::{self, ResolveAddressStream},
+    wasi::network::{Error, IpAddress, IpAddressFamily, Network},
+    wasi::poll::Pollable,
     HostResult, WasiCtx,
 };
 

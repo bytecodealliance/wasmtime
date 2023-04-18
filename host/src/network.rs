@@ -1,6 +1,6 @@
 use crate::{
-    command::wasi::instance_network,
-    command::wasi::network::{self, Network},
+    wasi::instance_network,
+    wasi::network::{self, Network},
     WasiCtx,
 };
 use cap_std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6};

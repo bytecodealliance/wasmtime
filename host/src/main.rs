@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use host::{command, command::wasi::Command, proxy, proxy::wasi::Proxy, WasiCtx};
+use host::{wasi, WasiCtx};
 use wasi_cap_std_sync::WasiCtxBuilder;
 use wasmtime::{
     component::{Component, Linker},
@@ -93,10 +93,11 @@ async fn run_command(
     component: &Component,
     wasi_ctx: WasiCtx,
 ) -> anyhow::Result<()> {
-    command::add_to_linker(linker, |x| x)?;
+    wasi::command::add_to_linker(linker, |x| x)?;
     let mut store = Store::new(engine, wasi_ctx);
 
-    let (wasi, _instance) = Command::instantiate_async(&mut store, component, linker).await?;
+    let (wasi, _instance) =
+        wasi::command::Command::instantiate_async(&mut store, component, linker).await?;
 
     let result: Result<(), ()> = wasi.call_main(&mut store).await?;
 
@@ -113,18 +114,19 @@ async fn run_proxy(
     component: &Component,
     wasi_ctx: WasiCtx,
 ) -> anyhow::Result<()> {
-    proxy::add_to_linker(linker, |x| x)?;
+    wasi::proxy::add_to_linker(linker, |x| x)?;
 
     let mut store = Store::new(engine, wasi_ctx);
 
-    let (wasi, _instance) = Proxy::instantiate_async(&mut store, component, linker).await?;
+    let (wasi, _instance) =
+        wasi::proxy::Proxy::instantiate_async(&mut store, component, linker).await?;
 
     // TODO: do something
     let _ = wasi;
     let result: Result<(), ()> = Ok(());
 
     if result.is_err() {
-        anyhow::bail!("command returned with failing exit status");
+        anyhow::bail!("proxy returned with failing exit status");
     }
 
     Ok(())

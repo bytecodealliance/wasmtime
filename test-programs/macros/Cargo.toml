@@ -13,6 +13,6 @@ test = false
 quote = "1.0"
 
 [build-dependencies]
-wit-component = "0.7.0"
+wit-component = { git = "https://github.com/bytecodealliance/wasm-tools", rev = "b17fc48a23152735bafd8f7ee95e3b55683d9511" }
 cargo_metadata = "0.15.3"
 heck = "0.4.0"
