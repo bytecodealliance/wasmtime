@@ -220,7 +220,7 @@ impl Default for InterpreterState<'_> {
             frame_stack: vec![],
             frame_offset: 0,
             stack: Vec::with_capacity(1024),
-            pinned_reg: DataValue::U64(0),
+            pinned_reg: DataValue::I64(0),
             native_endianness,
         }
     }
