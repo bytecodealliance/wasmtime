@@ -3119,7 +3119,7 @@
       (if-let $true (use_avx_simd))
       (xmm_rmr_imm_vex (AvxOpcode.Vpblendw) src1 src2 imm))
 
-;; Helper for creating a `movsd`/`movss` instructions which creates a new vector
+;; Helper for creating `movsd`/`movss` instructions which create a new vector
 ;; register where the upper bits are from the first operand and the low
 ;; bits are from the second operand.
 ;;
