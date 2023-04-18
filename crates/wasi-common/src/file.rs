@@ -83,10 +83,6 @@ pub trait WasiFile: Send + Sync {
         Err(Error::badf())
     }
 
-    async fn allocate(&self, _offset: u64, _len: u64) -> Result<(), Error> {
-        Err(Error::badf())
-    }
-
     async fn set_times(
         &self,
         _atime: Option<SystemTimeSpec>,

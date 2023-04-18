@@ -50,10 +50,7 @@ impl Operand {
     }
 
     pub fn is_value(&self) -> bool {
-        match self.kind.fields {
-            OperandKindFields::TypeVar(_) => true,
-            _ => false,
-        }
+        matches!(self.kind.fields, OperandKindFields::TypeVar(_))
     }
 
     pub fn type_var(&self) -> Option<&TypeVar> {
@@ -64,28 +61,25 @@ impl Operand {
     }
 
     pub fn is_varargs(&self) -> bool {
-        match self.kind.fields {
-            OperandKindFields::VariableArgs => true,
-            _ => false,
-        }
+        matches!(self.kind.fields, OperandKindFields::VariableArgs)
     }
 
     /// Returns true if the operand has an immediate kind or is an EntityRef.
     pub fn is_immediate_or_entityref(&self) -> bool {
-        match self.kind.fields {
+        matches!(
+            self.kind.fields,
             OperandKindFields::ImmEnum(_)
-            | OperandKindFields::ImmValue
-            | OperandKindFields::EntityRef => true,
-            _ => false,
-        }
+                | OperandKindFields::ImmValue
+                | OperandKindFields::EntityRef
+        )
     }
 
     /// Returns true if the operand has an immediate kind.
     pub fn is_immediate(&self) -> bool {
-        match self.kind.fields {
-            OperandKindFields::ImmEnum(_) | OperandKindFields::ImmValue => true,
-            _ => false,
-        }
+        matches!(
+            self.kind.fields,
+            OperandKindFields::ImmEnum(_) | OperandKindFields::ImmValue
+        )
     }
 }
 
@@ -158,18 +152,18 @@ impl OperandKind {
     }
 }
 
-impl Into<OperandKind> for &TypeVar {
-    fn into(self) -> OperandKind {
+impl From<&TypeVar> for OperandKind {
+    fn from(type_var: &TypeVar) -> Self {
         OperandKind {
             rust_field_name: "value",
             rust_type: "ir::Value",
-            fields: OperandKindFields::TypeVar(self.into()),
+            fields: OperandKindFields::TypeVar(type_var.into()),
             doc: None,
         }
     }
 }
-impl Into<OperandKind> for &OperandKind {
-    fn into(self) -> OperandKind {
-        self.clone()
+impl From<&OperandKind> for OperandKind {
+    fn from(kind: &OperandKind) -> Self {
+        kind.clone()
     }
 }

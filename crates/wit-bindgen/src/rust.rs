@@ -235,7 +235,7 @@ pub trait RustGenerator<'a> {
         if self.uses_two_names(&info) {
             result.push((self.param_name(ty), TypeMode::AllBorrowed("'a")));
         }
-        return result;
+        result
     }
 
     /// Writes the camel-cased 'name' of the passed type to `out`, as used to name union variants.

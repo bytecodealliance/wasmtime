@@ -267,10 +267,10 @@ fn gen_getters(group: &SettingGroup, fmt: &mut Formatter) {
         }
 
         for setting in &group.settings {
-            gen_getter(&setting, fmt);
+            gen_getter(setting, fmt);
         }
         for predicate in &group.predicates {
-            gen_pred_getter(&predicate, &group, fmt);
+            gen_pred_getter(predicate, group, fmt);
         }
     });
     fmtln!(fmt, "}");
@@ -364,8 +364,8 @@ fn gen_descriptors(group: &SettingGroup, fmt: &mut Formatter) {
 
     // Generate hash table.
     let mut hash_entries: Vec<SettingOrPreset> = Vec::new();
-    hash_entries.extend(group.settings.iter().map(|x| SettingOrPreset::Setting(x)));
-    hash_entries.extend(group.presets.iter().map(|x| SettingOrPreset::Preset(x)));
+    hash_entries.extend(group.settings.iter().map(SettingOrPreset::Setting));
+    hash_entries.extend(group.presets.iter().map(SettingOrPreset::Preset));
 
     let hash_table = generate_table(hash_entries.iter(), hash_entries.len(), |entry| {
         simple_hash(entry.name())
@@ -399,9 +399,9 @@ fn gen_descriptors(group: &SettingGroup, fmt: &mut Formatter) {
             fmt.comment(format!(
                 "{}: {}",
                 preset.name,
-                preset.setting_names(&group).collect::<Vec<_>>().join(", ")
+                preset.setting_names(group).collect::<Vec<_>>().join(", ")
             ));
-            for (mask, value) in preset.layout(&group) {
+            for (mask, value) in preset.layout(group) {
                 fmtln!(fmt, "(0b{:08b}, 0b{:08b}),", mask, value);
             }
         }
@@ -502,7 +502,7 @@ pub(crate) fn generate(
     out_dir: &str,
 ) -> Result<(), error::Error> {
     let mut fmt = Formatter::new();
-    gen_group(&settings, parent_group, &mut fmt);
+    gen_group(settings, parent_group, &mut fmt);
     fmt.update_file(filename, out_dir)?;
     Ok(())
 }
