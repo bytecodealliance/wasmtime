@@ -607,7 +607,7 @@ dependencies = [
  "cranelift-isle",
  "criterion",
  "gimli",
- "hashbrown 0.13.1",
+ "hashbrown 0.13.2",
  "log",
  "regalloc2",
  "serde",
@@ -677,7 +677,7 @@ name = "cranelift-frontend"
 version = "0.96.0"
 dependencies = [
  "cranelift-codegen",
- "hashbrown 0.13.1",
+ "hashbrown 0.13.2",
  "log",
  "similar",
  "smallvec",
@@ -747,7 +747,7 @@ dependencies = [
  "anyhow",
  "cranelift-codegen",
  "cranelift-control",
- "hashbrown 0.13.1",
+ "hashbrown 0.13.2",
 ]
 
 [[package]]
@@ -837,7 +837,7 @@ dependencies = [
  "cranelift-codegen",
  "cranelift-entity",
  "cranelift-frontend",
- "hashbrown 0.13.1",
+ "hashbrown 0.13.2",
  "itertools",
  "log",
  "serde",
@@ -1498,9 +1498,9 @@ checksum = "8a9ee70c43aaf417c914396645a0fa852624801b24ebb7ae78fe8272889ac888"
 
 [[package]]
 name = "hashbrown"
-version = "0.13.1"
+version = "0.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "33ff8ae62cd3a9102e5637afc8452c55acf3844001bd5374e0b0bd7b6616c038"
+checksum = "43a3c133739dddd0d2990f9a4bdf8eb4b21ef50e4851ca85ab661199821d510e"
 dependencies = [
  "ahash",
 ]
@@ -2049,7 +2049,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ea86265d3d3dcb6a27fc51bd29a4bf387fae9d2986b823079d4986af253eb439"
 dependencies = [
  "crc32fast",
- "hashbrown 0.13.1",
+ "hashbrown 0.13.2",
  "indexmap",
  "memchr",
 ]
