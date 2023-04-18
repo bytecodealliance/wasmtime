@@ -107,7 +107,7 @@ means that every value is defined exactly once, and every use of a value must be
 dominated by the definition.
 
 Cranelift does not have phi instructions but uses [BB parameter]s
-instead. An BB can be defined with a list of typed parameters. Whenever control
+instead. A BB can be defined with a list of typed parameters. Whenever control
 is transferred to the BB, argument values for the parameters must be provided.
 When entering a function, the incoming function parameters are passed as
 arguments to the entry BB's parameters.
@@ -718,7 +718,7 @@ Other entities declared in the preamble
     This covers things like stack slots, jump tables, external functions, and
     function signatures, etc.
 
-Number of arguments to an BB
+Number of arguments to a BB
     At most :math:`2^{16}`.
 
 Number of arguments to a function
@@ -764,14 +764,14 @@ Size of function call arguments on the stack
 
     BB parameter
         A formal parameter for a BB is an SSA value that dominates everything
-        in the BB. For each parameter declared by an BB, a corresponding
+        in the BB. For each parameter declared by a BB, a corresponding
         argument value must be passed when branching to the BB. The function's
         entry BB has parameters that correspond to the function's parameters.
 
     BB argument
         Similar to function arguments, BB arguments must be provided when
-        branching to an BB that declares formal parameters. When execution
-        begins at the top of an BB, the formal parameters have the values of
+        branching to a BB that declares formal parameters. When execution
+        begins at the top of a BB, the formal parameters have the values of
         the arguments passed in the branch.
 
     function signature
