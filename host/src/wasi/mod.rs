@@ -2,7 +2,7 @@ pub mod command;
 pub mod proxy;
 
 wasmtime::component::bindgen!({
-    // path: "../wit",
+    path: "../wit",
     // This is a union of the imports in the command and proxy worlds:
     interfaces: "
       import wall-clock: clocks.wall-clock
