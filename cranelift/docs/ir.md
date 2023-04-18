@@ -238,7 +238,7 @@ Mem
     Any type that can be stored in memory: `Int` or `Float`.
 
 Testable
-    Either `b1` or `iN`.
+    `iN`
 
 ### Immediate operand types
 
