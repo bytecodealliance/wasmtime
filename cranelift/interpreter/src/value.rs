@@ -48,14 +48,14 @@ pub trait DataValueExt: Sized {
     fn sqrt(self) -> ValueResult<Self>;
     fn fma(self, a: Self, b: Self) -> ValueResult<Self>;
     fn abs(self) -> ValueResult<Self>;
-    fn uchecked_add(self, other: Self) -> ValueResult<Option<Self>>;
-    fn schecked_add(self, other: Self) -> ValueResult<Option<Self>>;
-    fn uoverflowing_add(self, other: Self) -> ValueResult<(Self, bool)>;
-    fn soverflowing_add(self, other: Self) -> ValueResult<(Self, bool)>;
-    fn uoverflowing_sub(self, other: Self) -> ValueResult<(Self, bool)>;
-    fn soverflowing_sub(self, other: Self) -> ValueResult<(Self, bool)>;
-    fn uoverflowing_mul(self, other: Self) -> ValueResult<(Self, bool)>;
-    fn soverflowing_mul(self, other: Self) -> ValueResult<(Self, bool)>;
+    fn uadd_checked(self, other: Self) -> ValueResult<Option<Self>>;
+    fn sadd_checked(self, other: Self) -> ValueResult<Option<Self>>;
+    fn uadd_overflow(self, other: Self) -> ValueResult<(Self, bool)>;
+    fn sadd_overflow(self, other: Self) -> ValueResult<(Self, bool)>;
+    fn usub_overflow(self, other: Self) -> ValueResult<(Self, bool)>;
+    fn ssub_overflow(self, other: Self) -> ValueResult<(Self, bool)>;
+    fn umul_overflow(self, other: Self) -> ValueResult<(Self, bool)>;
+    fn smul_overflow(self, other: Self) -> ValueResult<(Self, bool)>;
 
     // Float operations
     fn neg(self) -> ValueResult<Self>;
@@ -656,35 +656,35 @@ impl DataValueExt for DataValue {
         unary_match!(abs(&self); [F32, F64])
     }
 
-    fn schecked_add(self, other: Self) -> ValueResult<Option<Self>> {
+    fn sadd_checked(self, other: Self) -> ValueResult<Option<Self>> {
         binary_match!(option checked_add(&self, &other); [I8, I16, I32, I64, I128]; [i8, i16, i32, i64, i128])
     }
 
-    fn uchecked_add(self, other: Self) -> ValueResult<Option<Self>> {
+    fn uadd_checked(self, other: Self) -> ValueResult<Option<Self>> {
         binary_match!(option checked_add(&self, &other); [I8, I16, I32, I64, I128]; [u8, u16, u32, u64, u128])
     }
 
-    fn soverflowing_add(self, other: Self) -> ValueResult<(Self, bool)> {
+    fn sadd_overflow(self, other: Self) -> ValueResult<(Self, bool)> {
         binary_match!(pair overflowing_add(&self, &other); [I8, I16, I32, I64, I128]; [i8, i16, i32, i64, i128])
     }
 
-    fn uoverflowing_add(self, other: Self) -> ValueResult<(Self, bool)> {
+    fn uadd_overflow(self, other: Self) -> ValueResult<(Self, bool)> {
         binary_match!(pair overflowing_add(&self, &other); [I8, I16, I32, I64, I128]; [u8, u16, u32, u64, u128])
     }
 
-    fn soverflowing_sub(self, other: Self) -> ValueResult<(Self, bool)> {
+    fn ssub_overflow(self, other: Self) -> ValueResult<(Self, bool)> {
         binary_match!(pair overflowing_sub(&self, &other); [I8, I16, I32, I64, I128]; [i8, i16, i32, i64, i128])
     }
 
-    fn uoverflowing_sub(self, other: Self) -> ValueResult<(Self, bool)> {
+    fn usub_overflow(self, other: Self) -> ValueResult<(Self, bool)> {
         binary_match!(pair overflowing_sub(&self, &other); [I8, I16, I32, I64, I128]; [u8, u16, u32, u64, u128])
     }
 
-    fn soverflowing_mul(self, other: Self) -> ValueResult<(Self, bool)> {
+    fn smul_overflow(self, other: Self) -> ValueResult<(Self, bool)> {
         binary_match!(pair overflowing_mul(&self, &other); [I8, I16, I32, I64, I128]; [i8, i16, i32, i64, i128])
     }
 
-    fn uoverflowing_mul(self, other: Self) -> ValueResult<(Self, bool)> {
+    fn umul_overflow(self, other: Self) -> ValueResult<(Self, bool)> {
         binary_match!(pair overflowing_mul(&self, &other); [I8, I16, I32, I64, I128]; [u8, u16, u32, u64, u128])
     }
 

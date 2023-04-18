@@ -713,27 +713,27 @@ where
         Opcode::SremImm => binary_can_trap(DataValueExt::srem, arg(0), imm_as_ctrl_ty()?)?,
         Opcode::IrsubImm => binary(DataValueExt::sub, imm_as_ctrl_ty()?, arg(0))?,
         Opcode::UaddOverflow => {
-            let (sum, carry) = arg(0).uoverflowing_add(arg(1))?;
+            let (sum, carry) = arg(0).uadd_overflow(arg(1))?;
             assign_multiple(&[sum, DataValueExt::bool(carry, false, types::I8)?])
         }
         Opcode::SaddOverflow => {
-            let (sum, carry) = arg(0).soverflowing_add(arg(1))?;
+            let (sum, carry) = arg(0).sadd_overflow(arg(1))?;
             assign_multiple(&[sum, DataValueExt::bool(carry, false, types::I8)?])
         }
         Opcode::UsubOverflow => {
-            let (sum, carry) = arg(0).uoverflowing_sub(arg(1))?;
+            let (sum, carry) = arg(0).usub_overflow(arg(1))?;
             assign_multiple(&[sum, DataValueExt::bool(carry, false, types::I8)?])
         }
         Opcode::SsubOverflow => {
-            let (sum, carry) = arg(0).soverflowing_sub(arg(1))?;
+            let (sum, carry) = arg(0).ssub_overflow(arg(1))?;
             assign_multiple(&[sum, DataValueExt::bool(carry, false, types::I8)?])
         }
         Opcode::UmulOverflow => {
-            let (sum, carry) = arg(0).uoverflowing_mul(arg(1))?;
+            let (sum, carry) = arg(0).umul_overflow(arg(1))?;
             assign_multiple(&[sum, DataValueExt::bool(carry, false, types::I8)?])
         }
         Opcode::SmulOverflow => {
-            let (sum, carry) = arg(0).soverflowing_mul(arg(1))?;
+            let (sum, carry) = arg(0).smul_overflow(arg(1))?;
             assign_multiple(&[sum, DataValueExt::bool(carry, false, types::I8)?])
         }
         Opcode::IaddCin => choose(
@@ -746,12 +746,12 @@ where
         ),
         Opcode::IaddCarry => {
             let mut sum = DataValueExt::add(arg(0), arg(1))?;
-            let mut carry = arg(0).schecked_add(arg(1))?.is_none();
+            let mut carry = arg(0).sadd_checked(arg(1))?.is_none();
 
             if DataValueExt::into_bool(arg(2))? {
                 carry |= sum
                     .clone()
-                    .schecked_add(DataValueExt::int(1, ctrl_ty)?)?
+                    .sadd_checked(DataValueExt::int(1, ctrl_ty)?)?
                     .is_none();
                 sum = DataValueExt::add(sum, DataValueExt::int(1, ctrl_ty)?)?;
             }
