@@ -665,7 +665,7 @@ struct Host {
     #[cfg(feature = "wasi-threads")]
     wasi_threads: Option<Arc<WasiThreadsCtx<Host>>>,
     #[cfg(feature = "wasi-http")]
-    wasi_http: Option<WasiHttpCtx>,
+    wasi_http: Option<Arc<WasiHttpCtx>>,
     limits: StoreLimits,
     guest_profiler: Option<Arc<GuestProfiler>>,
 }
@@ -765,11 +765,12 @@ fn populate_with_wasi(
         }
         #[cfg(feature = "wasi-http")]
         {
-            let w_http = WasiHttpCtx::new();
-            wasmtime_wasi_http::add_to_linker(linker, |host: &mut Host| {
-                host.wasi_http.as_mut().unwrap()
+            wasmtime_wasi_http::add_to_linker(linker, |host| {
+                // See documentation for wasi-crypto for why this is needed.
+                Arc::get_mut(host.wasi_http.as_mut().unwrap())
+                    .expect("wasi-http is not implemented with multi-threading support")
             })?;
-            store.data_mut().wasi_http = Some(w_http);
+            store.data_mut().wasi_http = Some(Arc::new(WasiHttpCtx::new()));
         }
     }
 
