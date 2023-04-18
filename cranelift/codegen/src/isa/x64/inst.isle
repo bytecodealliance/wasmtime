@@ -3119,9 +3119,9 @@
       (if-let $true (use_avx_simd))
       (xmm_rmr_imm_vex (AvxOpcode.Vpblendw) src1 src2 imm))
 
-;; Helper for creating a `movsd` instruction which creates a new vector
-;; register where the upper 64-bits are from the first operand and the low
-;; 64-bits are from the second operand.
+;; Helper for creating `movsd`/`movss` instructions which create a new vector
+;; register where the upper bits are from the first operand and the low
+;; bits are from the second operand.
 ;;
 ;; Note that the second argument here is specifically `Xmm` instead of `XmmMem`
 ;; because there is no encoding of a 3-operand form of `movsd` and otherwise
@@ -3133,6 +3133,13 @@
 (rule 1 (x64_movsd_regmove src1 src2)
         (if-let $true (use_avx_simd))
         (xmm_rmir_vex (AvxOpcode.Vmovsd) src1 src2))
+
+(decl x64_movss_regmove (Xmm Xmm) Xmm)
+(rule (x64_movss_regmove src1 src2)
+      (xmm_rm_r_unaligned (SseOpcode.Movss) src1 src2))
+(rule 1 (x64_movss_regmove src1 src2)
+        (if-let $true (use_avx_simd))
+        (xmm_rmir_vex (AvxOpcode.Vmovss) src1 src2))
 
 ;; Helper for creating `movlhps` instructions.
 (decl x64_movlhps (Xmm XmmMem) Xmm)
