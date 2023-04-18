@@ -35,12 +35,12 @@ fn validate_signature_params(sig: &[AbiParam], args: &[DataValue]) -> bool {
 }
 
 // Helper for summing a sequence of values.
-fn sum(head: DataValue, tail: SmallVec<[DataValue; 1]>) -> ValueResult<i128> {
+fn sum_unsigned(head: DataValue, tail: SmallVec<[DataValue; 1]>) -> ValueResult<u128> {
     let mut acc = head;
     for t in tail {
         acc = DataValueExt::add(acc, t)?;
     }
-    acc.into_int()
+    acc.into_int_unsigned()
 }
 
 /// Interpret a single Cranelift instruction. Note that program traps and interpreter errors are
@@ -188,7 +188,7 @@ where
                 .map(|v| v.convert(ValueConversionKind::ZeroExtend(addr_ty)))
                 .collect::<ValueResult<SmallVec<[DataValue; 1]>>>()?;
 
-            Ok(sum(imm, args)? as u64)
+            Ok(sum_unsigned(imm, args)? as u64)
         };
 
     // Interpret a unary instruction with the given `op`, assigning the resulting value to the
@@ -196,7 +196,7 @@ where
     let unary =
         |op: fn(DataValue) -> ValueResult<DataValue>, arg: DataValue| -> ValueResult<ControlFlow> {
             let ctrl_ty = inst_context.controlling_type().unwrap();
-            let res = unary_arith(arg, ctrl_ty, op, false)?;
+            let res = unary_arith(arg, ctrl_ty, op)?;
             Ok(assign(res))
         };
 
@@ -207,20 +207,7 @@ where
                   right: DataValue|
      -> ValueResult<ControlFlow> {
         let ctrl_ty = inst_context.controlling_type().unwrap();
-        let res = binary_arith(left, right, ctrl_ty, op, false)?;
-        Ok(assign(res))
-    };
-
-    // Same as `binary_unsigned`, but converts the values to their unsigned form before the
-    // operation and back to signed form afterwards. Since Cranelift types have no notion of
-    // signedness, this enables operations that depend on sign.
-    let binary_unsigned = |op: fn(DataValue, DataValue) -> ValueResult<DataValue>,
-                           left: DataValue,
-                           right: DataValue|
-     -> ValueResult<ControlFlow> {
-        let ctrl_ty = inst_context.controlling_type().unwrap();
-        let res = binary_arith(left, right, ctrl_ty, op, true)
-            .and_then(|v| v.convert(ValueConversionKind::ToSigned))?;
+        let res = binary_arith(left, right, ctrl_ty, op)?;
         Ok(assign(res))
     };
 
@@ -230,20 +217,7 @@ where
                            right: DataValue|
      -> ValueResult<ControlFlow> {
         let ctrl_ty = inst_context.controlling_type().unwrap();
-        let res = binary_arith(left, right, ctrl_ty, op, false);
-        assign_or_trap(res)
-    };
-
-    // Same as `binary_can_trap`, but converts the values to their unsigned form before the
-    // operation and back to signed form afterwards. Since Cranelift types have no notion of
-    // signedness, this enables operations that depend on sign.
-    let binary_unsigned_can_trap = |op: fn(DataValue, DataValue) -> ValueResult<DataValue>,
-                                    left: DataValue,
-                                    right: DataValue|
-     -> ValueResult<ControlFlow> {
-        let ctrl_ty = inst_context.controlling_type().unwrap();
-        let res = binary_arith(left, right, ctrl_ty, op, true)
-            .and_then(|v| v.convert(ValueConversionKind::ToSigned));
+        let res = binary_arith(left, right, ctrl_ty, op);
         assign_or_trap(res)
     };
 
@@ -364,7 +338,7 @@ where
                 let jt_data = &state.get_current_function().stencil.dfg.jump_tables[table];
 
                 // Convert to usize to remove negative indexes from the following operations
-                let jump_target = usize::try_from(arg(0).into_int()?)
+                let jump_target = usize::try_from(arg(0).into_int_unsigned()?)
                     .ok()
                     .and_then(|i| jt_data.as_slice().get(i))
                     .copied()
@@ -419,7 +393,7 @@ where
         }
         Opcode::CallIndirect | Opcode::ReturnCallIndirect => {
             let args = args();
-            let addr_dv = DataValue::U64(arg(0).into_int()? as u64);
+            let addr_dv = DataValue::I64(arg(0).into_int_unsigned()? as i64);
             let addr = Address::try_from(addr_dv.clone()).map_err(StepError::MemoryError)?;
 
             let func = state
@@ -530,7 +504,7 @@ where
         Opcode::StackLoad => {
             let load_ty = inst_context.controlling_type().unwrap();
             let slot = inst.stack_slot().unwrap();
-            let offset = sum(imm(), args())? as u64;
+            let offset = sum_unsigned(imm(), args())? as u64;
             let mem_flags = MemFlags::new();
             assign_or_memtrap({
                 state
@@ -541,7 +515,7 @@ where
         Opcode::StackStore => {
             let arg = arg(0);
             let slot = inst.stack_slot().unwrap();
-            let offset = sum(imm(), args_range(1..)?)? as u64;
+            let offset = sum_unsigned(imm(), args_range(1..)?)? as u64;
             let mem_flags = MemFlags::new();
             continue_or_memtrap({
                 state
@@ -552,7 +526,7 @@ where
         Opcode::StackAddr => {
             let load_ty = inst_context.controlling_type().unwrap();
             let slot = inst.stack_slot().unwrap();
-            let offset = sum(imm(), args())? as u64;
+            let offset = sum_unsigned(imm(), args())? as u64;
             assign_or_memtrap({
                 AddressSize::try_from(load_ty).and_then(|addr_size| {
                     let addr = state.stack_address(addr_size, slot, offset)?;
@@ -599,7 +573,7 @@ where
                 unreachable!()
             }
         }
-        Opcode::Iconst => assign(DataValueExt::int(imm().into_int()?, ctrl_ty)?),
+        Opcode::Iconst => assign(DataValueExt::int(imm().into_int_signed()?, ctrl_ty)?),
         Opcode::F32const => assign(imm()),
         Opcode::F64const => assign(imm()),
         Opcode::Vconst => assign(imm()),
@@ -619,7 +593,7 @@ where
                 let icmp = icmp(ctrl_ty, IntCC::SignedGreaterThan, &arg(1), &arg(0))?;
                 assign(bitselect(icmp, arg(0), arg(1))?)
             } else {
-                choose(arg(1) > arg(0), arg(0), arg(1))
+                assign(arg(0).smin(arg(1))?)
             }
         }
         Opcode::Umin => {
@@ -627,12 +601,7 @@ where
                 let icmp = icmp(ctrl_ty, IntCC::UnsignedGreaterThan, &arg(1), &arg(0))?;
                 assign(bitselect(icmp, arg(0), arg(1))?)
             } else {
-                choose(
-                    arg(1).convert(ValueConversionKind::ToUnsigned)?
-                        > arg(0).convert(ValueConversionKind::ToUnsigned)?,
-                    arg(0),
-                    arg(1),
-                )
+                assign(arg(0).umin(arg(1))?)
             }
         }
         Opcode::Smax => {
@@ -640,7 +609,7 @@ where
                 let icmp = icmp(ctrl_ty, IntCC::SignedGreaterThan, &arg(0), &arg(1))?;
                 assign(bitselect(icmp, arg(0), arg(1))?)
             } else {
-                choose(arg(0) > arg(1), arg(0), arg(1))
+                assign(arg(0).smax(arg(1))?)
             }
         }
         Opcode::Umax => {
@@ -648,12 +617,7 @@ where
                 let icmp = icmp(ctrl_ty, IntCC::UnsignedGreaterThan, &arg(0), &arg(1))?;
                 assign(bitselect(icmp, arg(0), arg(1))?)
             } else {
-                choose(
-                    arg(0).convert(ValueConversionKind::ToUnsigned)?
-                        > arg(1).convert(ValueConversionKind::ToUnsigned)?,
-                    arg(0),
-                    arg(1),
-                )
+                assign(arg(0).umax(arg(1))?)
             }
         }
         Opcode::AvgRound => {
@@ -661,37 +625,33 @@ where
             let one = DataValueExt::int(1, arg(0).ty())?;
             let inc = DataValueExt::add(sum, one)?;
             let two = DataValueExt::int(2, arg(0).ty())?;
-            binary(DataValueExt::div, inc, two)?
+            binary(DataValueExt::udiv, inc, two)?
         }
         Opcode::Iadd => binary(DataValueExt::add, arg(0), arg(1))?,
         Opcode::UaddSat => assign(binary_arith(
             arg(0),
             arg(1),
             ctrl_ty,
-            DataValueExt::add_sat,
-            true,
+            DataValueExt::uadd_sat,
         )?),
         Opcode::SaddSat => assign(binary_arith(
             arg(0),
             arg(1),
             ctrl_ty,
-            DataValueExt::add_sat,
-            false,
+            DataValueExt::sadd_sat,
         )?),
         Opcode::Isub => binary(DataValueExt::sub, arg(0), arg(1))?,
         Opcode::UsubSat => assign(binary_arith(
             arg(0),
             arg(1),
             ctrl_ty,
-            DataValueExt::sub_sat,
-            true,
+            DataValueExt::usub_sat,
         )?),
         Opcode::SsubSat => assign(binary_arith(
             arg(0),
             arg(1),
             ctrl_ty,
-            DataValueExt::sub_sat,
-            false,
+            DataValueExt::ssub_sat,
         )?),
         Opcode::Ineg => binary(DataValueExt::sub, DataValueExt::int(0, ctrl_ty)?, arg(0))?,
         Opcode::Iabs => {
@@ -704,7 +664,7 @@ where
                     if lane == min_val {
                         Ok(min_val.clone())
                     } else {
-                        DataValueExt::int(lane.into_int()?.abs(), ctrl_ty.lane_type())
+                        DataValueExt::int(lane.into_int_signed()?.abs(), ctrl_ty.lane_type())
                     }
                 })
                 .collect::<ValueResult<SimdVec<DataValue>>>()?;
@@ -741,57 +701,39 @@ where
 
             assign(vectorizelanes(&res, ctrl_ty)?)
         }
-        Opcode::Udiv => binary_unsigned_can_trap(DataValueExt::div, arg(0), arg(1))?,
-        Opcode::Sdiv => binary_can_trap(DataValueExt::div, arg(0), arg(1))?,
-        Opcode::Urem => binary_unsigned_can_trap(DataValueExt::rem, arg(0), arg(1))?,
-        Opcode::Srem => binary_can_trap(DataValueExt::rem, arg(0), arg(1))?,
+        Opcode::Udiv => binary_can_trap(DataValueExt::udiv, arg(0), arg(1))?,
+        Opcode::Sdiv => binary_can_trap(DataValueExt::sdiv, arg(0), arg(1))?,
+        Opcode::Urem => binary_can_trap(DataValueExt::urem, arg(0), arg(1))?,
+        Opcode::Srem => binary_can_trap(DataValueExt::srem, arg(0), arg(1))?,
         Opcode::IaddImm => binary(DataValueExt::add, arg(0), imm_as_ctrl_ty()?)?,
         Opcode::ImulImm => binary(DataValueExt::mul, arg(0), imm_as_ctrl_ty()?)?,
-        Opcode::UdivImm => binary_unsigned_can_trap(DataValueExt::div, arg(0), imm_as_ctrl_ty()?)?,
-        Opcode::SdivImm => binary_can_trap(DataValueExt::div, arg(0), imm_as_ctrl_ty()?)?,
-        Opcode::UremImm => binary_unsigned_can_trap(DataValueExt::rem, arg(0), imm_as_ctrl_ty()?)?,
-        Opcode::SremImm => binary_can_trap(DataValueExt::rem, arg(0), imm_as_ctrl_ty()?)?,
+        Opcode::UdivImm => binary_can_trap(DataValueExt::udiv, arg(0), imm_as_ctrl_ty()?)?,
+        Opcode::SdivImm => binary_can_trap(DataValueExt::sdiv, arg(0), imm_as_ctrl_ty()?)?,
+        Opcode::UremImm => binary_can_trap(DataValueExt::urem, arg(0), imm_as_ctrl_ty()?)?,
+        Opcode::SremImm => binary_can_trap(DataValueExt::srem, arg(0), imm_as_ctrl_ty()?)?,
         Opcode::IrsubImm => binary(DataValueExt::sub, imm_as_ctrl_ty()?, arg(0))?,
         Opcode::UaddOverflow => {
-            let lhs = arg(0).convert(ValueConversionKind::ToUnsigned)?;
-            let rhs = arg(1).convert(ValueConversionKind::ToUnsigned)?;
-            let (mut sum, carry) = lhs.overflowing_add(rhs)?;
-            sum = sum.convert(ValueConversionKind::ToSigned)?;
+            let (sum, carry) = arg(0).uadd_overflow(arg(1))?;
             assign_multiple(&[sum, DataValueExt::bool(carry, false, types::I8)?])
         }
         Opcode::SaddOverflow => {
-            let ty = arg(0).ty();
-            let lhs = arg(0).convert(ValueConversionKind::ToSigned)?;
-            let rhs = arg(1).convert(ValueConversionKind::ToSigned)?;
-            let (sum, carry) = lhs.overflowing_add(rhs)?;
+            let (sum, carry) = arg(0).sadd_overflow(arg(1))?;
             assign_multiple(&[sum, DataValueExt::bool(carry, false, types::I8)?])
         }
         Opcode::UsubOverflow => {
-            let lhs = arg(0).convert(ValueConversionKind::ToUnsigned)?;
-            let rhs = arg(1).convert(ValueConversionKind::ToUnsigned)?;
-            let (mut sum, carry) = lhs.overflowing_sub(rhs)?;
-            sum = sum.convert(ValueConversionKind::ToSigned)?;
+            let (sum, carry) = arg(0).usub_overflow(arg(1))?;
             assign_multiple(&[sum, DataValueExt::bool(carry, false, types::I8)?])
         }
         Opcode::SsubOverflow => {
-            let ty = arg(0).ty();
-            let lhs = arg(0).convert(ValueConversionKind::ToSigned)?;
-            let rhs = arg(1).convert(ValueConversionKind::ToSigned)?;
-            let (sum, carry) = lhs.overflowing_sub(rhs)?;
+            let (sum, carry) = arg(0).ssub_overflow(arg(1))?;
             assign_multiple(&[sum, DataValueExt::bool(carry, false, types::I8)?])
         }
         Opcode::UmulOverflow => {
-            let lhs = arg(0).convert(ValueConversionKind::ToUnsigned)?;
-            let rhs = arg(1).convert(ValueConversionKind::ToUnsigned)?;
-            let (mut sum, carry) = lhs.overflowing_mul(rhs)?;
-            sum = sum.convert(ValueConversionKind::ToSigned)?;
+            let (sum, carry) = arg(0).umul_overflow(arg(1))?;
             assign_multiple(&[sum, DataValueExt::bool(carry, false, types::I8)?])
         }
         Opcode::SmulOverflow => {
-            let ty = arg(0).ty();
-            let lhs = arg(0).convert(ValueConversionKind::ToSigned)?;
-            let rhs = arg(1).convert(ValueConversionKind::ToSigned)?;
-            let (sum, carry) = lhs.overflowing_mul(rhs)?;
+            let (sum, carry) = arg(0).smul_overflow(arg(1))?;
             assign_multiple(&[sum, DataValueExt::bool(carry, false, types::I8)?])
         }
         Opcode::IaddCin => choose(
@@ -804,12 +746,12 @@ where
         ),
         Opcode::IaddCarry => {
             let mut sum = DataValueExt::add(arg(0), arg(1))?;
-            let mut carry = arg(0).checked_add(arg(1))?.is_none();
+            let mut carry = arg(0).sadd_checked(arg(1))?.is_none();
 
             if DataValueExt::into_bool(arg(2))? {
                 carry |= sum
                     .clone()
-                    .checked_add(DataValueExt::int(1, ctrl_ty)?)?
+                    .sadd_checked(DataValueExt::int(1, ctrl_ty)?)?
                     .is_none();
                 sum = DataValueExt::add(sum, DataValueExt::int(1, ctrl_ty)?)?;
             }
@@ -858,11 +800,11 @@ where
         Opcode::RotlImm => binary(DataValueExt::rotl, arg(0), imm_as_ctrl_ty()?)?,
         Opcode::RotrImm => binary(DataValueExt::rotr, arg(0), imm_as_ctrl_ty()?)?,
         Opcode::Ishl => binary(DataValueExt::shl, arg(0), arg(1))?,
-        Opcode::Ushr => binary_unsigned(DataValueExt::ushr, arg(0), arg(1))?,
-        Opcode::Sshr => binary(DataValueExt::ishr, arg(0), arg(1))?,
+        Opcode::Ushr => binary(DataValueExt::ushr, arg(0), arg(1))?,
+        Opcode::Sshr => binary(DataValueExt::sshr, arg(0), arg(1))?,
         Opcode::IshlImm => binary(DataValueExt::shl, arg(0), imm_as_ctrl_ty()?)?,
-        Opcode::UshrImm => binary_unsigned(DataValueExt::ushr, arg(0), imm_as_ctrl_ty()?)?,
-        Opcode::SshrImm => binary(DataValueExt::ishr, arg(0), imm_as_ctrl_ty()?)?,
+        Opcode::UshrImm => binary(DataValueExt::ushr, arg(0), imm_as_ctrl_ty()?)?,
+        Opcode::SshrImm => binary(DataValueExt::sshr, arg(0), imm_as_ctrl_ty()?)?,
         Opcode::Bitrev => unary(DataValueExt::reverse_bits, arg(0))?,
         Opcode::Bswap => unary(DataValueExt::swap_bytes, arg(0))?,
         Opcode::Clz => unary(DataValueExt::leading_zeros, arg(0))?,
@@ -910,7 +852,7 @@ where
         Opcode::Fadd => binary(DataValueExt::add, arg(0), arg(1))?,
         Opcode::Fsub => binary(DataValueExt::sub, arg(0), arg(1))?,
         Opcode::Fmul => binary(DataValueExt::mul, arg(0), arg(1))?,
-        Opcode::Fdiv => binary(DataValueExt::div, arg(0), arg(1))?,
+        Opcode::Fdiv => binary(DataValueExt::sdiv, arg(0), arg(1))?,
         Opcode::Sqrt => unary(DataValueExt::sqrt, arg(0))?,
         Opcode::Fma => {
             let arg0 = extractlanes(&arg(0), ctrl_ty)?;
@@ -935,24 +877,24 @@ where
             (_, b) if b.is_nan()? => b,
             (a, b) if a.is_zero()? && b.is_zero()? && a.is_negative()? => a,
             (a, b) if a.is_zero()? && b.is_zero()? && b.is_negative()? => b,
-            (a, b) => a.min(b)?,
+            (a, b) => a.smin(b)?,
         }),
         Opcode::FminPseudo => assign(match (arg(0), arg(1)) {
             (a, b) if a.is_nan()? || b.is_nan()? => a,
             (a, b) if a.is_zero()? && b.is_zero()? => a,
-            (a, b) => a.min(b)?,
+            (a, b) => a.smin(b)?,
         }),
         Opcode::Fmax => assign(match (arg(0), arg(1)) {
             (a, _) if a.is_nan()? => a,
             (_, b) if b.is_nan()? => b,
             (a, b) if a.is_zero()? && b.is_zero()? && a.is_negative()? => b,
             (a, b) if a.is_zero()? && b.is_zero()? && b.is_negative()? => a,
-            (a, b) => a.max(b)?,
+            (a, b) => a.smax(b)?,
         }),
         Opcode::FmaxPseudo => assign(match (arg(0), arg(1)) {
             (a, b) if a.is_nan()? || b.is_nan()? => a,
             (a, b) if a.is_zero()? && b.is_zero()? => a,
-            (a, b) => a.max(b)?,
+            (a, b) => a.smax(b)?,
         }),
         Opcode::Ceil => unary(DataValueExt::ceil, arg(0))?,
         Opcode::Floor => unary(DataValueExt::floor, arg(0))?,
@@ -982,22 +924,17 @@ where
             let arg1 = extractlanes(&arg(1), ctrl_ty)?;
             let new_type = ctrl_ty.split_lanes().unwrap();
             let (min, max) = new_type.bounds(inst.opcode() == Opcode::Snarrow);
-            let mut min: DataValue = DataValueExt::int(min as i128, ctrl_ty.lane_type())?;
-            let mut max: DataValue = DataValueExt::int(max as i128, ctrl_ty.lane_type())?;
-            if inst.opcode() == Opcode::Uunarrow {
-                min = min.convert(ValueConversionKind::ToUnsigned)?;
-                max = max.convert(ValueConversionKind::ToUnsigned)?;
-            }
+            let min: DataValue = DataValueExt::int(min as i128, ctrl_ty.lane_type())?;
+            let max: DataValue = DataValueExt::int(max as i128, ctrl_ty.lane_type())?;
             let narrow = |mut lane: DataValue| -> ValueResult<DataValue> {
                 if inst.opcode() == Opcode::Uunarrow {
-                    lane = lane.convert(ValueConversionKind::ToUnsigned)?;
+                    lane = DataValueExt::umax(lane, min.clone())?;
+                    lane = DataValueExt::umin(lane, max.clone())?;
+                } else {
+                    lane = DataValueExt::smax(lane, min.clone())?;
+                    lane = DataValueExt::smin(lane, max.clone())?;
                 }
-                lane = DataValueExt::max(lane, min.clone())?;
-                lane = DataValueExt::min(lane, max.clone())?;
                 lane = lane.convert(ValueConversionKind::Truncate(new_type.lane_type()))?;
-                if inst.opcode() == Opcode::Unarrow || inst.opcode() == Opcode::Uunarrow {
-                    lane = lane.convert(ValueConversionKind::ToUnsigned)?;
-                }
                 Ok(lane)
             };
             let new_vec = arg0
@@ -1065,13 +1002,13 @@ where
             assign(vectorizelanes(&new_vector, ctrl_ty)?)
         }
         Opcode::Insertlane => {
-            let idx = imm().into_int()? as usize;
+            let idx = imm().into_int_unsigned()? as usize;
             let mut vector = extractlanes(&arg(0), ctrl_ty)?;
             vector[idx] = arg(1);
             assign(vectorizelanes(&vector, ctrl_ty)?)
         }
         Opcode::Extractlane => {
-            let idx = imm().into_int()? as usize;
+            let idx = imm().into_int_unsigned()? as usize;
             let lanes = extractlanes(&arg(0), ctrl_ty)?;
             assign(lanes[idx].clone())
         }
@@ -1080,12 +1017,12 @@ where
             // must be retrieved via `inst_context`.
             let vector_type = inst_context.type_of(inst_context.args()[0]).unwrap();
             let a = extractlanes(&arg(0), vector_type)?;
-            let mut result: i128 = 0;
+            let mut result: u128 = 0;
             for (i, val) in a.into_iter().enumerate() {
-                let val = val.reverse_bits()?.into_int()?; // MSB -> LSB
+                let val = val.reverse_bits()?.into_int_unsigned()?; // MSB -> LSB
                 result |= (val & 1) << i;
             }
-            assign(DataValueExt::int(result, ctrl_ty)?)
+            assign(DataValueExt::int(result as i128, ctrl_ty)?)
         }
         Opcode::VanyTrue => {
             let lane_ty = ctrl_ty.lane_type();
@@ -1187,14 +1124,19 @@ where
                 inst_context.type_of(inst_context.args()[0]).unwrap(),
             )?;
             let bits = |x: DataValue| -> ValueResult<u64> {
-                let x = if inst.opcode() == Opcode::FcvtFromUint {
-                    x.convert(ValueConversionKind::ToUnsigned)?
-                } else {
-                    x
-                };
                 Ok(match ctrl_ty.lane_type() {
-                    types::F32 => (x.into_int()? as f32).to_bits() as u64,
-                    types::F64 => (x.into_int()? as f64).to_bits(),
+                    types::F32 => (if inst.opcode() == Opcode::FcvtFromUint {
+                        x.into_int_unsigned()? as f32
+                    } else {
+                        x.into_int_signed()? as f32
+                    })
+                    .to_bits() as u64,
+                    types::F64 => (if inst.opcode() == Opcode::FcvtFromUint {
+                        x.into_int_unsigned()? as f64
+                    } else {
+                        x.into_int_signed()? as f64
+                    })
+                    .to_bits(),
                     _ => unimplemented!("unexpected conversion to {:?}", ctrl_ty.lane_type()),
                 })
             };
@@ -1215,8 +1157,10 @@ where
                     .map(|x| {
                         DataValue::float(
                             match ctrl_ty.lane_type() {
-                                types::F32 => (x.to_owned().into_int()? as f32).to_bits() as u64,
-                                types::F64 => (x.to_owned().into_int()? as f64).to_bits(),
+                                types::F32 => {
+                                    (x.to_owned().into_int_signed()? as f32).to_bits() as u64
+                                }
+                                types::F64 => (x.to_owned().into_int_signed()? as f64).to_bits(),
                                 _ => unimplemented!("unexpected promotion to {:?}", ctrl_ty),
                             },
                             ctrl_ty.lane_type(),
@@ -1269,7 +1213,7 @@ where
         Opcode::AtomicRmw => {
             let op = inst.atomic_rmw_op().unwrap();
             let val = arg(1);
-            let addr = arg(0).into_int()? as u64;
+            let addr = arg(0).into_int_unsigned()? as u64;
             let mem_flags = inst.memflags().expect("instruction to have memory flags");
             let loaded = Address::try_from(addr)
                 .and_then(|addr| state.checked_load(addr, ctrl_ty, mem_flags));
@@ -1286,25 +1230,17 @@ where
                 AtomicRmwOp::Or => DataValueExt::or(prev_val, val),
                 AtomicRmwOp::Xor => DataValueExt::xor(prev_val, val),
                 AtomicRmwOp::Nand => DataValueExt::and(prev_val, val).and_then(DataValue::not),
-                AtomicRmwOp::Smax => DataValueExt::max(prev_val, val),
-                AtomicRmwOp::Smin => DataValueExt::min(prev_val, val),
-                AtomicRmwOp::Umax => DataValueExt::max(
-                    DataValueExt::convert(val, ValueConversionKind::ToUnsigned)?,
-                    DataValueExt::convert(prev_val, ValueConversionKind::ToUnsigned)?,
-                )
-                .and_then(|v| DataValueExt::convert(v, ValueConversionKind::ToSigned)),
-                AtomicRmwOp::Umin => DataValueExt::min(
-                    DataValueExt::convert(val, ValueConversionKind::ToUnsigned)?,
-                    DataValueExt::convert(prev_val, ValueConversionKind::ToUnsigned)?,
-                )
-                .and_then(|v| DataValueExt::convert(v, ValueConversionKind::ToSigned)),
+                AtomicRmwOp::Smax => DataValueExt::smax(prev_val, val),
+                AtomicRmwOp::Smin => DataValueExt::smin(prev_val, val),
+                AtomicRmwOp::Umax => DataValueExt::umax(val, prev_val),
+                AtomicRmwOp::Umin => DataValueExt::umin(val, prev_val),
             }?;
             let stored = Address::try_from(addr)
                 .and_then(|addr| state.checked_store(addr, replace, mem_flags));
             assign_or_memtrap(stored.map(|_| prev_val_to_assign))
         }
         Opcode::AtomicCas => {
-            let addr = arg(0).into_int()? as u64;
+            let addr = arg(0).into_int_unsigned()? as u64;
             let mem_flags = inst.memflags().expect("instruction to have memory flags");
             let loaded = Address::try_from(addr)
                 .and_then(|addr| state.checked_load(addr, ctrl_ty, mem_flags));
@@ -1325,7 +1261,7 @@ where
         }
         Opcode::AtomicLoad => {
             let load_ty = inst_context.controlling_type().unwrap();
-            let addr = arg(0).into_int()? as u64;
+            let addr = arg(0).into_int_unsigned()? as u64;
             let mem_flags = inst.memflags().expect("instruction to have memory flags");
             // We are doing a regular load here, this isn't actually thread safe.
             assign_or_memtrap(
@@ -1335,7 +1271,7 @@ where
         }
         Opcode::AtomicStore => {
             let val = arg(0);
-            let addr = arg(1).into_int()? as u64;
+            let addr = arg(1).into_int_unsigned()? as u64;
             let mem_flags = inst.memflags().expect("instruction to have memory flags");
             // We are doing a regular store here, this isn't actually thread safe.
             continue_or_memtrap(
@@ -1359,16 +1295,16 @@ where
                 .into_iter()
                 .zip(arg1.into_iter())
                 .map(|(x, y)| {
-                    let x = x.into_int()?;
-                    let y = y.into_int()?;
+                    let x = x.into_int_signed()?;
+                    let y = y.into_int_signed()?;
                     // temporarily double width of the value to avoid overflow.
                     let z: DataValue = DataValueExt::int(
                         (x * y + (1 << (lane_type.bits() - 2))) >> (lane_type.bits() - 1),
                         double_width,
                     )?;
                     // check bounds, saturate, and truncate to correct width.
-                    let z = DataValueExt::min(z, max.clone())?;
-                    let z = DataValueExt::max(z, min.clone())?;
+                    let z = DataValueExt::smin(z, max.clone())?;
+                    let z = DataValueExt::smax(z, min.clone())?;
                     let z = z.convert(ValueConversionKind::Truncate(lane_type))?;
                     Ok(z)
                 })
@@ -1461,20 +1397,16 @@ fn icmp(
                 IntCC::SignedLessThan => left < right,
                 IntCC::SignedLessThanOrEqual => left <= right,
                 IntCC::UnsignedGreaterThan => {
-                    left.clone().convert(ValueConversionKind::ToUnsigned)?
-                        > right.clone().convert(ValueConversionKind::ToUnsigned)?
+                    left.clone().into_int_unsigned()? > right.clone().into_int_unsigned()?
                 }
                 IntCC::UnsignedGreaterThanOrEqual => {
-                    left.clone().convert(ValueConversionKind::ToUnsigned)?
-                        >= right.clone().convert(ValueConversionKind::ToUnsigned)?
+                    left.clone().into_int_unsigned()? >= right.clone().into_int_unsigned()?
                 }
                 IntCC::UnsignedLessThan => {
-                    left.clone().convert(ValueConversionKind::ToUnsigned)?
-                        < right.clone().convert(ValueConversionKind::ToUnsigned)?
+                    left.clone().into_int_unsigned()? < right.clone().into_int_unsigned()?
                 }
                 IntCC::UnsignedLessThanOrEqual => {
-                    left.clone().convert(ValueConversionKind::ToUnsigned)?
-                        <= right.clone().convert(ValueConversionKind::ToUnsigned)?
+                    left.clone().into_int_unsigned()? <= right.clone().into_int_unsigned()?
                 }
             },
             ctrl_ty.is_vector(),
@@ -1579,7 +1511,7 @@ fn vectorizelanes_all(x: &[DataValue], vector_type: types::Type) -> ValueResult<
         let lane_val: i128 = val
             .clone()
             .convert(ValueConversionKind::Exact(lane_type.as_int()))?
-            .into_int()?;
+            .into_int_unsigned()? as i128;
 
         for j in 0..iterations {
             result[(i * iterations) + j] = (lane_val >> (8 * j)) as u8;
@@ -1597,12 +1529,7 @@ where
 }
 
 /// Performs the supplied unary arithmetic `op` on a Value, either Vector or Scalar.
-fn unary_arith<F>(
-    x: DataValue,
-    vector_type: types::Type,
-    op: F,
-    unsigned: bool,
-) -> ValueResult<DataValue>
+fn unary_arith<F>(x: DataValue, vector_type: types::Type, op: F) -> ValueResult<DataValue>
 where
     F: Fn(DataValue) -> ValueResult<DataValue>,
 {
@@ -1610,12 +1537,7 @@ where
 
     let result = arg
         .into_iter()
-        .map(|mut arg| {
-            if unsigned {
-                arg = arg.convert(ValueConversionKind::ToUnsigned)?;
-            }
-            Ok(op(arg)?)
-        })
+        .map(|arg| Ok(op(arg)?))
         .collect::<ValueResult<SimdVec<DataValue>>>()?;
 
     vectorizelanes(&result, vector_type)
@@ -1627,7 +1549,6 @@ fn binary_arith<F>(
     y: DataValue,
     vector_type: types::Type,
     op: F,
-    unsigned: bool,
 ) -> ValueResult<DataValue>
 where
     F: Fn(DataValue, DataValue) -> ValueResult<DataValue>,
@@ -1638,13 +1559,7 @@ where
     let result = arg0
         .into_iter()
         .zip(arg1)
-        .map(|(mut lhs, mut rhs)| {
-            if unsigned {
-                lhs = lhs.convert(ValueConversionKind::ToUnsigned)?;
-                rhs = rhs.convert(ValueConversionKind::ToUnsigned)?;
-            }
-            Ok(op(lhs, rhs)?)
-        })
+        .map(|(lhs, rhs)| Ok(op(lhs, rhs)?))
         .collect::<ValueResult<SimdVec<DataValue>>>()?;
 
     vectorizelanes(&result, vector_type)

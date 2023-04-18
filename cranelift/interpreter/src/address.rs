@@ -185,9 +185,7 @@ impl TryFrom<DataValue> for Address {
 
     fn try_from(value: DataValue) -> Result<Self, Self::Error> {
         let addr = match value {
-            DataValue::U32(v) => v as u64,
             DataValue::I32(v) => v as u32 as u64,
-            DataValue::U64(v) => v,
             DataValue::I64(v) => v as u64,
             _ => {
                 return Err(MemoryError::InvalidAddress(value));
@@ -195,8 +193,8 @@ impl TryFrom<DataValue> for Address {
         };
 
         let size = match value {
-            DataValue::U32(_) | DataValue::I32(_) => AddressSize::_32,
-            DataValue::U64(_) | DataValue::I64(_) => AddressSize::_64,
+            DataValue::I32(_) => AddressSize::_32,
+            DataValue::I64(_) => AddressSize::_64,
             _ => unreachable!(),
         };
 
@@ -217,9 +215,9 @@ impl TryFrom<u64> for Address {
 
     fn try_from(value: u64) -> Result<Self, Self::Error> {
         let dv = if value > u32::MAX as u64 {
-            DataValue::U64(value)
+            DataValue::I64(value as i64)
         } else {
-            DataValue::U32(value as u32)
+            DataValue::I32(value as i32)
         };
 
         Address::try_from(dv)
