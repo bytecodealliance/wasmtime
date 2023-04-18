@@ -842,11 +842,15 @@ impl Drop for MemoryImageSlot {
 mod test {
     use std::sync::Arc;
 
-    use super::{create_memfd, FdSource, MemoryImage, MemoryImageSlot, MemoryPlan, MemoryStyle};
+    use super::{FdSource, MemoryImage, MemoryImageSlot, MemoryPlan, MemoryStyle};
     use crate::mmap::Mmap;
     use anyhow::Result;
     use std::io::Write;
     use wasmtime_environ::Memory;
+
+    fn create_memfd() -> Result<memfd::Memfd> {
+        Ok(super::create_memfd()?.expect("kernel doesn't support memfd"))
+    }
 
     fn create_memfd_with_data(offset: usize, data: &[u8]) -> Result<MemoryImage> {
         // Offset must be page-aligned.
