@@ -1,7 +1,7 @@
 #![cfg(all(feature = "test_programs", not(skip_wasi_http_tests)))]
 use wasmtime::{Config, Engine, Linker, Store};
 use wasmtime_wasi::{sync::WasiCtxBuilder, WasiCtx};
-use wasmtime_wasi_http::WasiHttp;
+use wasmtime_wasi_http::WasiHttpCtx;
 
 use http_body_util::combinators::BoxBody;
 use http_body_util::BodyExt;
@@ -69,7 +69,7 @@ pub fn run(name: &str) -> anyhow::Result<()> {
 
     struct Ctx {
         wasi: WasiCtx,
-        http: WasiHttp,
+        http: WasiHttpCtx,
     }
 
     wasmtime_wasi::sync::add_to_linker(&mut linker, |cx: &mut Ctx| &mut cx.wasi)?;
@@ -82,7 +82,7 @@ pub fn run(name: &str) -> anyhow::Result<()> {
         &ENGINE,
         Ctx {
             wasi,
-            http: WasiHttp::new(),
+            http: WasiHttpCtx::new(),
         },
     );
 
