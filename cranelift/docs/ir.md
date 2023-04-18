@@ -312,23 +312,13 @@ Signaling NaNs
 ## Control flow
 
 Branches transfer control to a new BB and provide values for the target BB's
-arguments, if it has any. Conditional branches only take the branch if their
-condition is satisfied, otherwise execution continues at the following
-instruction in the BB.
+arguments, if it has any. Conditional branches terminate a BB, and transfer to
+the first BB if the condition is satisfied, and the second otherwise.
 
-JT = jump_table [BB0, BB1, ..., BBn]
-    Declare a jump table in the [function preamble].
-
-    This declares a jump table for use by the `br_table` indirect branch
-    instruction. Entries in the table are BB names.
-
-    The BBs listed must belong to the current function, and they can't have
-    any arguments.
-
-    :arg BB0: Target BB when `x = 0`.
-    :arg BB1: Target BB when `x = 1`.
-    :arg BBn: Target BB when `x = n`.
-    :result: A jump table identifier. (Not an SSA value).
+The `br_table v, BB(args), [BB1(args)...BBn(args)]` looks up the index `v` in
+the inline jump table given as the third argument, and jumps to that BB. If `v`
+is out of bounds for the jump table, the default BB (second argument) is used
+instead.
 
 Traps stop the program because something went wrong. The exact behavior depends
 on the target instruction set architecture and operating system. There are
