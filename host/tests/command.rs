@@ -532,11 +532,6 @@ async fn run_symlink_loop(store: Store<WasiCtx>, wasi: Command) -> Result<()> {
     }
 }
 
-async fn run_truncation_rights(store: Store<WasiCtx>, wasi: Command) -> Result<()> {
-    // opening an existing file with OFLAGS_TRUC results in EINVAL
-    expect_fail(run_with_temp_dir(store, wasi).await)
-}
-
 async fn run_unlink_file_trailing_slashes(store: Store<WasiCtx>, wasi: Command) -> Result<()> {
     run_with_temp_dir(store, wasi).await
 }
