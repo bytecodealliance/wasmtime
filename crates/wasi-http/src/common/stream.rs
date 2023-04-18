@@ -1,4 +1,5 @@
 use super::{Error, ErrorExt};
+use bytes::Bytes;
 use std::any::Any;
 
 /// An input bytestream.
@@ -132,13 +133,26 @@ pub trait OutputStream: Send + Sync {
     fn writable(&self) -> Result<(), Error>;
 }
 
-impl<'a> TryInto<&'a [u8]> for &mut Box<dyn OutputStream> {
+impl TryInto<Bytes> for &mut Box<dyn OutputStream> {
     type Error = Error;
 
-    fn try_into(self) -> Result<&'a [u8], Self::Error> {
-        let buffer: &mut [u8] = &mut [];
-        let _ = self.readable().map(|_| self.read(buffer))?;
-        Ok(buffer)
+    fn try_into(self) -> Result<Bytes, Self::Error> {
+        self.readable()?;
+        let mut buffer = Vec::new();
+        let mut eof = false;
+        while !eof {
+            let buffer_len = 0x400000;
+            let mut vec_buffer = vec![0; buffer_len];
+
+            let (bytes_read, end) = self.read(&mut vec_buffer)?;
+
+            let bytes_read = bytes_read as usize;
+            vec_buffer.truncate(bytes_read);
+
+            eof = end;
+            buffer.append(&mut vec_buffer);
+        }
+        Ok(Bytes::from(buffer))
     }
 }
 
