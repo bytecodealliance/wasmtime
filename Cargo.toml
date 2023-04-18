@@ -190,7 +190,7 @@ log = { version = "0.4.8", default-features = false }
 object = { version = "0.30.3", default-features = false, features = ['read_core', 'elf', 'std'] }
 gimli = { version = "0.27.0", default-features = false, features = ['read', 'std'] }
 clap = { version = "3.2.0", features = ["color", "suggestions", "derive"] }
-hashbrown = "0.13"
+hashbrown = "0.13.2"
 cap-std = "1.0.0"
 cap-rand = "1.0.0"
 capstone = "0.9.0"
