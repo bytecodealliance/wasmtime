@@ -205,7 +205,7 @@ Compute the dominator tree of each function and validate it against the
     }
 ```
 
-Every reachable extended basic block except for the entry block has an
+Every reachable basic block except for the entry block has an
 *immediate dominator* which is a jump or branch instruction. This test passes
 if the `dominates:` annotations on the immediate dominator instructions are
 both correct and complete.
