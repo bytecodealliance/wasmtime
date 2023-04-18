@@ -157,7 +157,10 @@ impl MemoryImage {
 
                 use std::io::Write;
 
-                let memfd = create_memfd()?;
+                let memfd = match create_memfd()? {
+                    Some(memfd) => memfd,
+                    None => return Ok(None),
+                };
                 memfd.as_file().write_all(data)?;
 
                 // Seal the memfd's data and length.
@@ -237,14 +240,23 @@ impl MemoryImage {
 }
 
 #[cfg(target_os = "linux")]
-fn create_memfd() -> Result<memfd::Memfd> {
+fn create_memfd() -> Result<Option<memfd::Memfd>> {
+    use std::io::ErrorKind;
+
     // Create the memfd. It needs a name, but the
     // documentation for `memfd_create()` says that names can
     // be duplicated with no issues.
-    memfd::MemfdOptions::new()
+    match memfd::MemfdOptions::new()
         .allow_sealing(true)
         .create("wasm-memory-image")
-        .map_err(|e| e.into())
+    {
+        Ok(memfd) => Ok(Some(memfd)),
+        // If this kernel is old enough to not support memfd then attempt to
+        // gracefully handle that and fall back to skipping the memfd
+        // optimization.
+        Err(memfd::Error::Create(err)) if err.kind() == ErrorKind::Unsupported => Ok(None),
+        Err(e) => Err(e.into()),
+    }
 }
 
 impl ModuleMemoryImages {
@@ -830,11 +842,15 @@ impl Drop for MemoryImageSlot {
 mod test {
     use std::sync::Arc;
 
-    use super::{create_memfd, FdSource, MemoryImage, MemoryImageSlot, MemoryPlan, MemoryStyle};
+    use super::{FdSource, MemoryImage, MemoryImageSlot, MemoryPlan, MemoryStyle};
     use crate::mmap::Mmap;
     use anyhow::Result;
     use std::io::Write;
     use wasmtime_environ::Memory;
+
+    fn create_memfd() -> Result<memfd::Memfd> {
+        Ok(super::create_memfd()?.expect("kernel doesn't support memfd"))
+    }
 
     fn create_memfd_with_data(offset: usize, data: &[u8]) -> Result<MemoryImage> {
         // Offset must be page-aligned.
