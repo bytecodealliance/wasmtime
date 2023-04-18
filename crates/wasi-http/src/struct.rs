@@ -3,6 +3,12 @@ use bytes::Bytes;
 use std::collections::HashMap;
 
 #[derive(Clone)]
+pub struct Stream {
+    pub closed: bool,
+    pub data: Bytes,
+}
+
+#[derive(Clone)]
 pub struct WasiHttp {
     pub request_id_base: u32,
     pub response_id_base: u32,
@@ -11,7 +17,7 @@ pub struct WasiHttp {
     pub requests: HashMap<u32, ActiveRequest>,
     pub responses: HashMap<u32, ActiveResponse>,
     pub fields: HashMap<u32, HashMap<String, Vec<String>>>,
-    pub streams: HashMap<u32, Bytes>,
+    pub streams: HashMap<u32, Stream>,
 }
 
 #[derive(Clone)]
@@ -62,6 +68,15 @@ impl ActiveResponse {
             body: 0,
             response_headers: HashMap::new(),
             trailers: 0,
+        }
+    }
+}
+
+impl Stream {
+    pub fn new() -> Self {
+        Self {
+            closed: false,
+            data: Bytes::new(),
         }
     }
 }

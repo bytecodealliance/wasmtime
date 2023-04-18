@@ -123,7 +123,13 @@ impl crate::types::Host for WasiHttp {
         bail!("unimplemented: drop_incoming_request")
     }
     fn drop_outgoing_request(&mut self, request: OutgoingRequest) -> wasmtime::Result<()> {
-        self.requests.remove(&request);
+        match self.requests.get(&request) {
+            Some(r) => {
+                self.streams.remove(&r.body);
+                self.requests.remove(&request);
+            }
+            None => { /* pass */ }
+        }
         Ok(())
     }
     fn incoming_request_method(&mut self, _request: IncomingRequest) -> wasmtime::Result<Method> {
@@ -206,7 +212,13 @@ impl crate::types::Host for WasiHttp {
         bail!("unimplemented: set_response_outparam")
     }
     fn drop_incoming_response(&mut self, response: IncomingResponse) -> wasmtime::Result<()> {
-        self.responses.remove(&response);
+        match self.responses.get(&response) {
+            Some(r) => {
+                self.streams.remove(&r.body);
+                self.responses.remove(&response);
+            }
+            None => { /* pass */ }
+        }
         Ok(())
     }
     fn drop_outgoing_response(&mut self, _response: OutgoingResponse) -> wasmtime::Result<()> {
