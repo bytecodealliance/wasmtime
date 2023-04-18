@@ -142,12 +142,22 @@ Integer values have a fixed size and can be interpreted as either signed or
 unsigned. Some instructions will interpret an operand as a signed or unsigned
 number, others don't care.
 
-The support for i8 and i16 arithmetic is incomplete and use could lead to bugs.
-
 - i8
 - i16
 - i32
 - i64
+- i128
+
+Of these types, i32 and i64 are the most heavily-tested because of their use by 
+Wasmtime. There are no known bugs in i8, i16, and i128, but their use may not 
+be supported by all instructions in all backends (that is, they may cause 
+the compiler to crash during code generation with an error that an instruction
+is unsupported). 
+
+The function `valid_for_target` within the [fuzzgen function generator][fungen] 
+contains information about which instructions support which types. 
+
+[fungen]: https://github.com/bytecodealliance/wasmtime/blob/main/cranelift/fuzzgen/src/function_generator.rs
 
 ### Floating point types
 
