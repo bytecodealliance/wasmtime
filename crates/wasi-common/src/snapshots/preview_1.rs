@@ -801,11 +801,11 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             .into_string()
             .map_err(|_| Error::illegal_byte_sequence().context("link contents"))?;
         let link_bytes = link.as_bytes();
-        let link_len = link_bytes.len();
-        if link_len > buf_len as usize {
-            return Err(Error::range());
-        }
-        buf.as_array(link_len as u32).copy_from_slice(link_bytes)?;
+        // Like posix readlink(2), silently truncate links when they are larger than the
+        // destination buffer:
+        let link_len = std::cmp::min(link_bytes.len(), buf_len as usize);
+        buf.as_array(link_len as u32)
+            .copy_from_slice(&link_bytes[..link_len])?;
         Ok(link_len as types::Size)
     }
 
