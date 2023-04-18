@@ -157,7 +157,7 @@ is unsupported).
 The function `valid_for_target` within the [fuzzgen function generator][fungen] 
 contains information about which instructions support which types. 
 
-[fungen]: https://github.com/elliottt/wasmtime/blob/545749b279974e87bfceada10f5f301f4503e4ce/cranelift/fuzzgen/src/function_generator.rs#L310
+[fungen]: https://github.com/bytecodealliance/wasmtime/blob/main/cranelift/fuzzgen/src/function_generator.rs
 
 ### Floating point types
 
