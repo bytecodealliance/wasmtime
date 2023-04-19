@@ -3,8 +3,6 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering::SeqCst};
 use std::sync::Arc;
 use wasmtime::*;
 
-use crate::valtype_util::*;
-
 #[test]
 fn func_constructors() {
     let mut store = Store::<()>::default();
@@ -81,54 +79,24 @@ fn signatures_match() {
     let mut store = Store::<()>::default();
 
     let f = Func::wrap(&mut store, || {});
-    assert!(pointwise_eq(
-        f.ty(&store).params().collect::<Vec<_>>(),
-        [].to_vec()
-    ));
-    assert!(pointwise_eq(
-        f.ty(&store).results().collect::<Vec<_>>(),
-        [].to_vec()
-    ));
+    assert_eq!(f.ty(&store).params().collect::<Vec<_>>(), &[]);
+    assert_eq!(f.ty(&store).results().collect::<Vec<_>>(), &[]);
 
     let f = Func::wrap(&mut store, || -> i32 { loop {} });
-    assert!(pointwise_eq(
-        f.ty(&store).params().collect::<Vec<_>>(),
-        [].to_vec()
-    ));
-    assert!(pointwise_eq(
-        f.ty(&store).results().collect::<Vec<_>>(),
-        [ValType::I32].to_vec()
-    ));
+    assert_eq!(f.ty(&store).params().collect::<Vec<_>>(), &[]);
+    assert_eq!(f.ty(&store).results().collect::<Vec<_>>(), &[ValType::I32]);
 
     let f = Func::wrap(&mut store, || -> i64 { loop {} });
-    assert!(pointwise_eq(
-        f.ty(&store).params().collect::<Vec<_>>(),
-        [].to_vec()
-    ));
-    assert!(pointwise_eq(
-        f.ty(&store).results().collect::<Vec<_>>(),
-        [ValType::I64].to_vec()
-    ));
+    assert_eq!(f.ty(&store).params().collect::<Vec<_>>(), &[]);
+    assert_eq!(f.ty(&store).results().collect::<Vec<_>>(), &[ValType::I64]);
 
     let f = Func::wrap(&mut store, || -> f32 { loop {} });
-    assert!(pointwise_eq(
-        f.ty(&store).params().collect::<Vec<_>>(),
-        [].to_vec()
-    ));
-    assert!(pointwise_eq(
-        f.ty(&store).results().collect::<Vec<_>>(),
-        [ValType::F32].to_vec()
-    ));
+    assert_eq!(f.ty(&store).params().collect::<Vec<_>>(), &[]);
+    assert_eq!(f.ty(&store).results().collect::<Vec<_>>(), &[ValType::F32]);
 
     let f = Func::wrap(&mut store, || -> f64 { loop {} });
-    assert!(pointwise_eq(
-        f.ty(&store).params().collect::<Vec<_>>(),
-        [].to_vec()
-    ));
-    assert!(pointwise_eq(
-        f.ty(&store).results().collect::<Vec<_>>(),
-        [ValType::F64].to_vec()
-    ));
+    assert_eq!(f.ty(&store).params().collect::<Vec<_>>(), &[]);
+    assert_eq!(f.ty(&store).results().collect::<Vec<_>>(), &[ValType::F64]);
 
     let f = Func::wrap(
         &mut store,
@@ -136,23 +104,19 @@ fn signatures_match() {
             loop {}
         },
     );
-    assert!(pointwise_eq(
+    assert_eq!(
         f.ty(&store).params().collect::<Vec<_>>(),
-        [
+        &[
             ValType::F32,
             ValType::F64,
             ValType::I32,
             ValType::I64,
             ValType::I32,
-            ValType::Ref(EXTERN_REF),
-            ValType::Ref(FUNC_REF),
+            ValType::ExternRef,
+            ValType::FuncRef,
         ]
-        .to_vec()
-    ));
-    assert!(pointwise_eq(
-        f.ty(&store).results().collect::<Vec<_>>(),
-        [ValType::F64].to_vec()
-    ));
+    );
+    assert_eq!(f.ty(&store).results().collect::<Vec<_>>(), &[ValType::F64]);
 }
 
 #[test]
@@ -555,12 +519,8 @@ fn externref_signature_no_reference_types() -> anyhow::Result<()> {
     Func::new(
         &mut store,
         FuncType::new(
-            [ValType::Ref(FUNC_REF), ValType::Ref(EXTERN_REF)]
-                .iter()
-                .cloned(),
-            [ValType::Ref(FUNC_REF), ValType::Ref(EXTERN_REF)]
-                .iter()
-                .cloned(),
+            [ValType::FuncRef, ValType::ExternRef].iter().cloned(),
+            [ValType::FuncRef, ValType::ExternRef].iter().cloned(),
         ),
         |_, _, _| Ok(()),
     );

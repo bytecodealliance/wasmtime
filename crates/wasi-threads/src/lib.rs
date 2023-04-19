@@ -147,33 +147,13 @@ pub fn add_to_linker<T: Clone + Send + 'static>(
     ))
 }
 
-fn pointwise_eq(ts1: Vec<ValType>, ts2: Vec<ValType>) -> bool {
-    if ts1.len() != ts2.len() {
-        return false;
-    }
-
-    // Note t1 <: t2 and t2 <: t1 implies t1 == t2.  The previous code
-    // used the PartialEq operator to test for equality. It is not
-    // clear to me that we want to weaken the test here.
-    for (t1, t2) in ts1.iter().zip(ts2.iter()) {
-        if !(ValType::is_subtype(t1, t2) && ValType::is_subtype(t2, t1)) {
-            return false;
-        }
-    }
-
-    return true;
-}
-
 fn has_wasi_entry_point(module: &Module) -> bool {
     module
         .get_export(WASI_ENTRY_POINT)
         .and_then(|t| t.func().cloned())
         .and_then(|t| {
             let params: Vec<ValType> = t.params().collect();
-            Some(
-                pointwise_eq(params, [ValType::I32, ValType::I32].to_vec())
-                    && t.results().len() == 0,
-            )
+            Some(params == [ValType::I32, ValType::I32] && t.results().len() == 0)
         })
         .unwrap_or(false)
 }

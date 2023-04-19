@@ -1,8 +1,5 @@
 use std::fmt;
-use wasmtime_environ::{
-    EntityType, Global, Memory, ModuleTypes, Table, WasmFuncType, WasmHeapType, WasmRefType,
-    WasmType,
-};
+use wasmtime_environ::{EntityType, Global, Memory, ModuleTypes, Table, WasmFuncType, WasmRefType, WasmType};
 
 pub(crate) mod matching;
 
@@ -22,7 +19,7 @@ pub enum Mutability {
 // Value Types
 
 /// A list of all possible value types in WebAssembly.
-#[derive(Debug, Clone, Copy, Hash)]
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub enum ValType {
     // NB: the ordering here is intended to match the ordering in
     // `wasmtime_types::WasmType` to help improve codegen when converting.
@@ -36,8 +33,10 @@ pub enum ValType {
     F64,
     /// A 128 bit number.
     V128,
-    /// A typeful reference type.
-    Ref(RefType),
+    /// A reference to a Wasm function.
+    FuncRef,
+    /// A reference to opaque data in the Wasm instance.
+    ExternRef,
 }
 
 impl fmt::Display for ValType {
@@ -48,7 +47,8 @@ impl fmt::Display for ValType {
             ValType::F32 => write!(f, "f32"),
             ValType::F64 => write!(f, "f64"),
             ValType::V128 => write!(f, "v128"),
-            ValType::Ref(rt) => write!(f, "{}", rt),
+            ValType::ExternRef => write!(f, "externref"),
+            ValType::FuncRef => write!(f, "funcref"),
         }
     }
 }
@@ -66,21 +66,8 @@ impl ValType {
     /// Returns true if `ValType` matches either of the reference types.
     pub fn is_ref(&self) -> bool {
         match self {
-            ValType::Ref(_) => true,
+            ValType::ExternRef | ValType::FuncRef => true,
             _ => false,
-        }
-    }
-
-    /// Returns true if `self` is a subtype of `other`.
-    pub fn is_subtype(&self, other: &ValType) -> bool {
-        match (self, other) {
-            (ValType::Ref(x), ValType::Ref(y)) => RefType::is_subtype(x, y),
-            (ValType::I32, ValType::I32)
-            | (ValType::I64, ValType::I64)
-            | (ValType::F32, ValType::F32)
-            | (ValType::F64, ValType::F64)
-            | (ValType::V128, ValType::V128) => true,
-            (_, _) => false,
         }
     }
 
@@ -91,7 +78,8 @@ impl ValType {
             Self::F32 => WasmType::F32,
             Self::F64 => WasmType::F64,
             Self::V128 => WasmType::V128,
-            Self::Ref(rt) => WasmType::Ref(RefType::to_wasm_ref_type(rt)),
+            Self::FuncRef => WasmType::Ref(WasmRefType::FUNCREF),
+            Self::ExternRef => WasmType::Ref(WasmRefType::EXTERNREF),
         }
     }
 
@@ -102,123 +90,15 @@ impl ValType {
             WasmType::F32 => Self::F32,
             WasmType::F64 => Self::F64,
             WasmType::V128 => Self::V128,
-            WasmType::Ref(rt) => Self::Ref(RefType::from_wasm_ref_type(&rt)),
-        }
-    }
-}
-
-/// A reference type holds what it refers to and whether it is nullable
-#[derive(Debug, Clone, Copy, Hash)]
-pub struct RefType {
-    /// Indicates whether the reference is nullable.
-    pub nullable: bool,
-    /// The reference's heap type.
-    pub heap_type: HeapType,
-}
-
-impl fmt::Display for RefType {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            RefType {
-                nullable: true,
-                heap_type: HeapType::Func | HeapType::Extern,
-            } => write!(f, "{}ref", self.heap_type),
-            RefType {
-                nullable,
-                heap_type,
-            } => {
-                if *nullable {
-                    write!(f, "(ref null {})", heap_type)
-                } else {
-                    write!(f, "(ref {})", heap_type)
-                }
-            }
-        }
-    }
-}
-
-impl RefType {
-    pub(crate) fn to_wasm_ref_type(&self) -> WasmRefType {
-        WasmRefType {
-            nullable: self.nullable,
-            heap_type: HeapType::to_wasm_heap_type(&self.heap_type),
-        }
-    }
-
-    pub(crate) fn from_wasm_ref_type(rt: &WasmRefType) -> Self {
-        RefType {
-            nullable: rt.nullable,
-            heap_type: HeapType::from_wasm_heap_type(&rt.heap_type),
-        }
-    }
-
-    /// Returns true if `self` is a sub-referencetype of `other`.
-    pub fn is_subtype(&self, other: &RefType) -> bool {
-        (self.nullable == other.nullable || other.nullable)
-            && HeapType::is_subtype(&self.heap_type, &other.heap_type)
-    }
-}
-
-/// A list of all possible heap types in WebAssembly
-#[derive(Debug, Clone, Copy, Hash)]
-pub enum HeapType {
-    /// A reference to a Wasm function.
-    Func,
-    /// A reference to opaque data in the Wasm instance.
-    Extern,
-    /// A typed reference to a Wasm function.
-    Index(u32),
-}
-
-impl fmt::Display for HeapType {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Self::Func => write!(f, "func"),
-            Self::Extern => write!(f, "extern"),
-            Self::Index(i) => write!(f, "{}", i),
-        }
-    }
-}
-
-impl HeapType {
-    pub(crate) fn to_wasm_heap_type(&self) -> WasmHeapType {
-        match self {
-            Self::Func => WasmHeapType::Func,
-            Self::Extern => WasmHeapType::Extern,
-            Self::Index(i) => WasmHeapType::Index(*i),
-        }
-    }
-
-    pub(crate) fn from_wasm_heap_type(ht: &WasmHeapType) -> Self {
-        match ht {
-            WasmHeapType::Func => Self::Func,
-            WasmHeapType::Extern => Self::Extern,
-            WasmHeapType::Index(i) => Self::Index(*i),
-        }
-    }
-
-    /// Returns true if `self` is a sub-heaptype of `other`.
-    ///
-    /// Note: The current implementation is incomplete as it only
-    /// performs nominal equality on `Index`.
-    pub fn is_subtype(&self, other: &HeapType) -> bool {
-        match (self, other) {
-            (HeapType::Extern, HeapType::Extern)
-            | (HeapType::Func, HeapType::Func)
-            | (HeapType::Index(_), HeapType::Func) => true,
-            (HeapType::Index(m), HeapType::Index(n)) => m == n, // TODO(dhil): This is not
-            // necessarily complete as
-            // [m] and [n] may be
-            // nominally different,
-            // but whatever they point
-            // to may be structurally
-            // the same.
-            (_, _) => false,
+            WasmType::Ref(WasmRefType::FUNCREF) => Self::FuncRef,
+            WasmType::Ref(WasmRefType::EXTERNREF) => Self::ExternRef,
+            WasmType::Ref(_) => unimplemented!("typed function references are not exposed in the public API yet"),
         }
     }
 }
 
 // External Types
+
 /// A list of all possible types which can be externally referenced from a
 /// WebAssembly module.
 ///
@@ -356,7 +236,7 @@ impl FuncType {
 /// This type describes an instance of a global in a WebAssembly module. Globals
 /// are local to an [`Instance`](crate::Instance) and are either immutable or
 /// mutable.
-#[derive(Debug, Clone, Hash)]
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct GlobalType {
     content: ValType,
     mutability: Mutability,
@@ -410,10 +290,10 @@ pub struct TableType {
 impl TableType {
     /// Creates a new table descriptor which will contain the specified
     /// `element` and have the `limits` applied to its length.
-    pub fn new(element: RefType, min: u32, max: Option<u32>) -> TableType {
+    pub fn new(element: ValType, min: u32, max: Option<u32>) -> TableType {
         TableType {
             ty: Table {
-                wasm_ty: element.to_wasm_ref_type(),
+                wasm_ty: Self::to_wasm_ref_type(element),
                 minimum: min,
                 maximum: max,
             },
@@ -421,8 +301,8 @@ impl TableType {
     }
 
     /// Returns the element value type of this table.
-    pub fn element(&self) -> RefType {
-        RefType::from_wasm_ref_type(&self.ty.wasm_ty)
+    pub fn element(&self) -> ValType {
+        ValType::from_wasm_type(&WasmType::Ref(self.ty.wasm_ty))
     }
 
     /// Returns minimum number of elements this table must have
@@ -444,6 +324,14 @@ impl TableType {
 
     pub(crate) fn wasmtime_table(&self) -> &Table {
         &self.ty
+    }
+
+    fn to_wasm_ref_type(element: ValType) -> WasmRefType {
+        match element {
+            ValType::FuncRef => WasmRefType::FUNCREF,
+            ValType::ExternRef => WasmRefType::EXTERNREF,
+            _ => panic!("Attempt to convert non-reference type to a reference type"),
+        }
     }
 }
 

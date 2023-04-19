@@ -6,11 +6,6 @@ use wasmtime::*;
 
 struct SetFlagOnDrop(Arc<AtomicBool>);
 
-const EXTERN_REF: RefType = RefType {
-    nullable: true,
-    heap_type: HeapType::Extern,
-};
-
 impl Drop for SetFlagOnDrop {
     fn drop(&mut self) {
         self.0.store(true, SeqCst);
@@ -269,7 +264,7 @@ fn global_drops_externref() -> anyhow::Result<()> {
         let externref = ExternRef::new(SetFlagOnDrop(flag.clone()));
         Global::new(
             &mut store,
-            GlobalType::new(ValType::Ref(EXTERN_REF), Mutability::Const),
+            GlobalType::new(ValType::ExternRef, Mutability::Const),
             externref.into(),
         )?;
         drop(store);
@@ -318,7 +313,7 @@ fn table_drops_externref() -> anyhow::Result<()> {
         let externref = ExternRef::new(SetFlagOnDrop(flag.clone()));
         Table::new(
             &mut store,
-            TableType::new(EXTERN_REF, 1, None),
+            TableType::new(ValType::ExternRef, 1, None),
             externref.into(),
         )?;
         drop(store);
@@ -429,7 +424,7 @@ fn global_init_no_leak() -> anyhow::Result<()> {
     let externref = ExternRef::new(());
     let global = Global::new(
         &mut store,
-        GlobalType::new(ValType::Ref(EXTERN_REF), Mutability::Const),
+        GlobalType::new(ValType::ExternRef, Mutability::Const),
         externref.clone().into(),
     )?;
     Instance::new(&mut store, &module, &[global.into()])?;

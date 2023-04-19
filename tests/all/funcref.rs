@@ -3,45 +3,6 @@ use std::sync::atomic::{AtomicBool, Ordering::SeqCst};
 use std::sync::Arc;
 use wasmtime::*;
 
-const FUNC_REF: RefType = RefType {
-    nullable: true,
-    heap_type: HeapType::Func,
-};
-
-#[test]
-fn store_null_funcref_into_nonnull_funcref_table() -> anyhow::Result<()> {
-    let mut cfg = Config::new();
-    cfg.wasm_function_references(true);
-    let engine = Engine::new(&cfg)?;
-    let mut store = Store::new(&engine, ());
-
-    // Non-null funcref table and initial funcref.
-    let f = Func::wrap(&mut store, || {});
-    let table = Table::new(
-        &mut store,
-        TableType::new(
-            RefType {
-                nullable: false,
-                heap_type: HeapType::Func,
-            },
-            1,
-            None,
-        ),
-        Val::FuncRef(Some(f)),
-    )?;
-    // Soundness check: expect position 0 to be inhabited.
-    assert!(table
-        .get(&mut store, 0)
-        .expect("some")
-        .unwrap_funcref()
-        .is_some());
-
-    // Attempt to store a null ref into the non-nullable cell 0.
-    assert!(table.set(&mut store, 0, Val::FuncRef(None)).is_err());
-
-    Ok(())
-}
-
 #[test]
 fn pass_funcref_in_and_out_of_wasm() -> anyhow::Result<()> {
     let (mut store, module) = ref_types_module(
@@ -175,7 +136,7 @@ fn func_new_returns_wrong_store() -> anyhow::Result<()> {
         let f1 = Func::wrap(&mut store1, move || drop(&set));
         let f2 = Func::new(
             &mut store2,
-            FuncType::new(None, Some(ValType::Ref(FUNC_REF))),
+            FuncType::new(None, Some(ValType::FuncRef)),
             move |_, _, results| {
                 results[0] = f1.clone().into();
                 Ok(())

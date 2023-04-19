@@ -3,11 +3,6 @@ use wasmtime::*;
 
 const WASM_PAGE_SIZE: usize = wasmtime_environ::WASM_PAGE_SIZE as usize;
 
-const FUNC_REF: RefType = RefType {
-    nullable: true,
-    heap_type: HeapType::Func,
-};
-
 #[test]
 fn test_limits() -> Result<()> {
     let engine = Engine::default();
@@ -55,7 +50,7 @@ fn test_limits() -> Result<()> {
         instance.get_table(&mut store, "t").unwrap(),
         Table::new(
             &mut store,
-            TableType::new(FUNC_REF, 0, None),
+            TableType::new(ValType::FuncRef, 0, None),
             Val::FuncRef(None),
         )?,
     ]) {
@@ -165,7 +160,7 @@ async fn test_limits_async() -> Result<()> {
         instance.get_table(&mut store, "t").unwrap(),
         Table::new_async(
             &mut store,
-            TableType::new(FUNC_REF, 0, None),
+            TableType::new(ValType::FuncRef, 0, None),
             Val::FuncRef(None),
         )
         .await?,
@@ -228,7 +223,7 @@ fn test_limits_memory_only() -> Result<()> {
         instance.get_table(&mut store, "t").unwrap(),
         Table::new(
             &mut store,
-            TableType::new(FUNC_REF, 0, None),
+            TableType::new(ValType::FuncRef, 0, None),
             Val::FuncRef(None),
         )?,
     ]) {
@@ -302,7 +297,7 @@ fn test_limits_table_only() -> Result<()> {
         instance.get_table(&mut store, "t").unwrap(),
         Table::new(
             &mut store,
-            TableType::new(FUNC_REF, 0, None),
+            TableType::new(ValType::FuncRef, 0, None),
             Val::FuncRef(None),
         )?,
     ]) {
@@ -340,7 +335,7 @@ fn test_initial_table_limits_exceeded() -> Result<()> {
 
     match Table::new(
         &mut store,
-        TableType::new(FUNC_REF, 99, None),
+        TableType::new(ValType::FuncRef, 99, None),
         Val::FuncRef(None),
     ) {
         Ok(_) => unreachable!(),
@@ -1139,7 +1134,7 @@ fn growth_trap() -> Result<()> {
         instance.get_table(&mut store, "t").unwrap(),
         Table::new(
             &mut store,
-            TableType::new(FUNC_REF, 0, None),
+            TableType::new(ValType::FuncRef, 0, None),
             Val::FuncRef(None),
         )?,
     ] {

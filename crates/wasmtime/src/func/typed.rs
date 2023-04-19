@@ -1,7 +1,7 @@
 use super::{invoke_wasm_and_catch_traps, HostAbi};
 use crate::store::{AutoAssertNoGc, StoreOpaque};
 use crate::{
-    AsContextMut, ExternRef, Func, FuncType, HeapType, RefType, StoreContextMut, ValRaw, ValType,
+    AsContextMut, ExternRef, Func, FuncType, StoreContextMut, ValRaw, ValType,
 };
 use anyhow::{bail, Result};
 use std::marker;
@@ -222,7 +222,7 @@ pub unsafe trait WasmTy: Send {
     #[doc(hidden)]
     #[inline]
     fn typecheck(ty: crate::ValType) -> Result<()> {
-        if ValType::is_subtype(&ty, &Self::valtype()) {
+        if ty == Self::valtype() {
             Ok(())
         } else {
             bail!("expected {} found {}", Self::valtype(), ty)
@@ -333,10 +333,7 @@ unsafe impl WasmTy for Option<ExternRef> {
 
     #[inline]
     fn valtype() -> ValType {
-        ValType::Ref(RefType {
-            nullable: true,
-            heap_type: HeapType::Extern,
-        })
+        ValType::ExternRef
     }
 
     #[inline]
@@ -418,10 +415,7 @@ unsafe impl WasmTy for Option<Func> {
 
     #[inline]
     fn valtype() -> ValType {
-        ValType::Ref(RefType {
-            nullable: true,
-            heap_type: HeapType::Func,
-        })
+        ValType::FuncRef
     }
 
     #[inline]
