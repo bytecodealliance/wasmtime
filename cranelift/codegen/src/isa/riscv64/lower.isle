@@ -816,6 +816,7 @@
 
 (rule 2
   (lower (has_type (ty_vec128_int ty) (load flags p @ (value_type (ty_addr64 _)) offset)))
+  (if-let $true (has_v))
   (if-let eew (element_width_from_type ty))
   (vec_load
     eew
@@ -849,6 +850,7 @@
 
 (rule 2
   (lower (store flags x @ (value_type (ty_vec128_int ty)) p @ (value_type (ty_addr64 _)) offset))
+  (if-let $true (has_v))
   (if-let eew (element_width_from_type ty))
   (vec_store
     eew
