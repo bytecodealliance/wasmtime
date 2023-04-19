@@ -1595,7 +1595,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             .trapz(funcref_ptr, ir::TrapCode::IndirectCallToNull);
 
         // Dereference the funcref pointer to get the function address.
-        let mem_flags = ir::MemFlags::trusted();
+        let mem_flags = ir::MemFlags::trusted().with_readonly();
         let func_addr = builder.ins().load(
             pointer_type,
             mem_flags,
@@ -1631,7 +1631,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                     .load(sig_id_type, mem_flags, signatures, offset);
 
                 // Load the callee ID.
-                let mem_flags = ir::MemFlags::trusted();
+                let mem_flags = ir::MemFlags::trusted().with_readonly();
                 let callee_sig_id = builder.ins().load(
                     sig_id_type,
                     mem_flags,
@@ -1703,7 +1703,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         let vmctx = self.vmctx(&mut pos.func);
         let base = pos.ins().global_value(pointer_type, vmctx);
 
-        let mem_flags = ir::MemFlags::trusted();
+        let mem_flags = ir::MemFlags::trusted().with_readonly();
 
         // Load the callee address.
         let body_offset =
