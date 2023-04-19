@@ -97,7 +97,7 @@
         (high Reg (rv_add high_tmp carry)))
     (value_regs low high)))
 
-;; Vectors!
+;; SIMD Vectors
 (rule 8 (lower (has_type (ty_vec128_int ty) (iadd x y)))
   (if-let $true (has_v))
   (rv_vadd_vv x y (vstate_from_type ty)))

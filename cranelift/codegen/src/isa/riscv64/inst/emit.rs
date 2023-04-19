@@ -121,8 +121,8 @@ pub struct EmitState {
     /// Only used during fuzz-testing. Otherwise, it is a zero-sized struct and
     /// optimized away at compiletime. See [cranelift_control].
     ctrl_plane: ControlPlane,
-    // Vector State
-    // Controls the current state of the vector unit at the emission point.
+    /// Vector State
+    /// Controls the current state of the vector unit at the emission point.
     vstate: EmitVState,
 }
 
@@ -2824,7 +2824,7 @@ impl MachInstEmit for Inst {
                 let rd = allocs.next_writable(rd);
 
                 sink.put4(encode_vcfg_imm(
-                    0x57, // `vsetivli`
+                    0x57,
                     rd.to_reg(),
                     vstate.avl.unwrap_static(),
                     &vstate.vtype,
