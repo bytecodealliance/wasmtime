@@ -100,7 +100,7 @@
 ;; SIMD Vectors
 (rule 8 (lower (has_type (ty_vec128_int ty) (iadd x y)))
   (if-let $true (has_v))
-  (rv_vadd_vv x y (vstate_from_type ty)))
+  (rv_vadd_vv x y ty))
 
 ;;; Rules for `uadd_overflow_trap` ;;;;;;;;;;;;;
 (rule
@@ -817,12 +817,8 @@
 (rule 2
   (lower (has_type (ty_vec128_int ty) (load flags p @ (value_type (ty_addr64 _)) offset)))
   (if-let $true (has_v))
-  (if-let eew (element_width_from_type ty))
-  (vec_load
-    eew
-    (VecAMode.UnitStride (gen_amode p offset $I64))
-    flags
-    (vstate_from_type ty)))
+  (let ((eew VecElementWidth (element_width_from_type ty)))
+    (vec_load eew (VecAMode.UnitStride (gen_amode p offset $I64)) flags ty)))
 
 ;;;;;  Rules for `istore8`;;;;;;;;;
 (rule
@@ -851,13 +847,8 @@
 (rule 2
   (lower (store flags x @ (value_type (ty_vec128_int ty)) p @ (value_type (ty_addr64 _)) offset))
   (if-let $true (has_v))
-  (if-let eew (element_width_from_type ty))
-  (vec_store
-    eew
-    (VecAMode.UnitStride (gen_amode p offset $I64))
-    x
-    flags
-    (vstate_from_type ty)))
+  (let ((eew VecElementWidth (element_width_from_type ty)))
+    (vec_store eew (VecAMode.UnitStride (gen_amode p offset $I64)) x flags ty)))
 
 (decl gen_icmp (IntCC ValueRegs ValueRegs Type) Reg)
 (rule

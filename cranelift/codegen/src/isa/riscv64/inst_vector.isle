@@ -82,9 +82,10 @@
 ;; Mask mode is set to agnostic.
 (decl pure vstate_from_type (Type) VState)
 (extern constructor vstate_from_type vstate_from_type)
+(convert Type VState vstate_from_type)
 
 ;; Extracts an element width from a SIMD type.
-(decl pure partial element_width_from_type (Type) VecElementWidth)
+(decl pure element_width_from_type (Type) VecElementWidth)
 (rule (element_width_from_type ty)
   (if-let $I8 (lane_type ty))
   (VecElementWidth.E8))
@@ -98,6 +99,7 @@
   (if-let $I64 (lane_type ty))
   (VecElementWidth.E64))
 
+(convert Type VecElementWidth element_width_from_type)
 
 ;;;; Instruction Helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
