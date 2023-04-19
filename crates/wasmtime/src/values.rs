@@ -190,10 +190,7 @@ impl Val {
         ty: ValType,
     ) -> Result<TableElement> {
         match (self, ty) {
-            (
-                Val::FuncRef(Some(f)),
-                ValType::FuncRef,
-            ) => {
+            (Val::FuncRef(Some(f)), ValType::FuncRef) => {
                 if !f.comes_from_same_store(store) {
                     bail!("cross-`Store` values are not supported in tables");
                 }
@@ -201,18 +198,11 @@ impl Val {
                     f.caller_checked_anyfunc(store).as_ptr(),
                 ))
             }
-            (
-                Val::FuncRef(None),
-                ValType::FuncRef,
-            ) => Ok(TableElement::FuncRef(ptr::null_mut())),
-            (
-                Val::ExternRef(Some(x)),
-                ValType::ExternRef,
-            ) => Ok(TableElement::ExternRef(Some(x.inner))),
-            (
-                Val::ExternRef(None),
-                ValType::ExternRef,
-            ) => Ok(TableElement::ExternRef(None)),
+            (Val::FuncRef(None), ValType::FuncRef) => Ok(TableElement::FuncRef(ptr::null_mut())),
+            (Val::ExternRef(Some(x)), ValType::ExternRef) => {
+                Ok(TableElement::ExternRef(Some(x.inner)))
+            }
+            (Val::ExternRef(None), ValType::ExternRef) => Ok(TableElement::ExternRef(None)),
             _ => bail!("value does not match table element type"),
         }
     }

@@ -1,8 +1,6 @@
 use super::{invoke_wasm_and_catch_traps, HostAbi};
 use crate::store::{AutoAssertNoGc, StoreOpaque};
-use crate::{
-    AsContextMut, ExternRef, Func, FuncType, StoreContextMut, ValRaw, ValType,
-};
+use crate::{AsContextMut, ExternRef, Func, FuncType, StoreContextMut, ValRaw, ValType};
 use anyhow::{bail, Result};
 use std::marker;
 use std::mem::{self, MaybeUninit};

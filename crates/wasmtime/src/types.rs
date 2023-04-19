@@ -1,5 +1,7 @@
 use std::fmt;
-use wasmtime_environ::{EntityType, Global, Memory, ModuleTypes, Table, WasmFuncType, WasmRefType, WasmType};
+use wasmtime_environ::{
+    EntityType, Global, Memory, ModuleTypes, Table, WasmFuncType, WasmRefType, WasmType,
+};
 
 pub(crate) mod matching;
 
@@ -92,7 +94,9 @@ impl ValType {
             WasmType::V128 => Self::V128,
             WasmType::Ref(WasmRefType::FUNCREF) => Self::FuncRef,
             WasmType::Ref(WasmRefType::EXTERNREF) => Self::ExternRef,
-            WasmType::Ref(_) => unimplemented!("typed function references are not exposed in the public API yet"),
+            WasmType::Ref(_) => {
+                unimplemented!("typed function references are not exposed in the public API yet")
+            }
         }
     }
 }

@@ -2,8 +2,8 @@ use crate::func::HostFunc;
 use crate::instance::InstancePre;
 use crate::store::StoreOpaque;
 use crate::{
-    AsContext, AsContextMut, Caller, Engine, Extern, ExternType, Func, FuncType,
-    ImportType, Instance, IntoFunc, Module, StoreContextMut, Val, ValRaw, ValType,
+    AsContext, AsContextMut, Caller, Engine, Extern, ExternType, Func, FuncType, ImportType,
+    Instance, IntoFunc, Module, StoreContextMut, Val, ValRaw, ValType,
 };
 use anyhow::{bail, Context, Result};
 use log::warn;
