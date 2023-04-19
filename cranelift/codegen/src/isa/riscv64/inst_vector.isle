@@ -86,6 +86,21 @@
 (decl pure vstate_from_type (Type) VState)
 (extern constructor vstate_from_type vstate_from_type)
 
+;; Extracts an element width from a SIMD type.
+(decl pure partial sew_from_type (Type) VecSew)
+(rule (sew_from_type ty)
+  (if-let $I8 (lane_type ty))
+  (VecSew.E8))
+(rule (sew_from_type ty)
+  (if-let $I16 (lane_type ty))
+  (VecSew.E16))
+(rule (sew_from_type ty)
+  (if-let $I32 (lane_type ty))
+  (VecSew.E32))
+(rule (sew_from_type ty)
+  (if-let $I64 (lane_type ty))
+  (VecSew.E64))
+
 
 ;;;; Instruction Helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -101,6 +116,18 @@
             (_ Unit (emit (MInst.VecAluRRR op vd vs2 vs1 vstate))))
         vd))
 
+;; Helper for emitting `MInst.VecLoad` instructions.
+(decl vec_load (VecSew VecAMode MemFlags VState) Reg)
+(rule (vec_load eew from flags vstate)
+      (let ((vd WritableReg (temp_writable_reg $I8X16))
+            (_ Unit (emit (MInst.VecLoad eew vd from flags vstate))))
+        vd))
+
+;; Helper for emitting `MInst.VecStore` instructions.
+(decl vec_store (VecSew VecAMode Reg MemFlags VState) InstOutput)
+(rule (vec_store eew to from flags vstate)
+      (side_effect
+        (SideEffectNoResult.Inst (MInst.VecStore eew to from flags vstate))))
 
 ;; Helper for emitting the `vadd.vv` instruction.
 (decl rv_vadd_vv (Reg Reg VState) Reg)

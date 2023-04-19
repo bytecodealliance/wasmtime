@@ -814,6 +814,15 @@
   (lower (has_type $I128 (load flags p @ (value_type (ty_addr64 _)) offset)))
   (gen_load_128 p offset flags))
 
+(rule 2
+  (lower (has_type (ty_vec128_int ty) (load flags p @ (value_type (ty_addr64 _)) offset)))
+  (if-let eew (sew_from_type ty))
+  (vec_load
+    eew
+    (VecAMode.UnitStride (gen_amode p offset $I64))
+    flags
+    (vstate_from_type ty)))
+
 ;;;;;  Rules for `istore8`;;;;;;;;;
 (rule
   (lower (istore8 flags x p @ (value_type (ty_addr64 _)) offset))
@@ -837,6 +846,16 @@
 (rule 1
   (lower (store flags x @ (value_type $I128 ) p @ (value_type (ty_addr64 _)) offset))
   (gen_store_128 p offset flags x))
+
+(rule 2
+  (lower (store flags x @ (value_type (ty_vec128_int ty)) p @ (value_type (ty_addr64 _)) offset))
+  (if-let eew (sew_from_type ty))
+  (vec_store
+    eew
+    (VecAMode.UnitStride (gen_amode p offset $I64))
+    x
+    flags
+    (vstate_from_type ty)))
 
 (decl gen_icmp (IntCC ValueRegs ValueRegs Type) Reg)
 (rule
