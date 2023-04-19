@@ -4,7 +4,7 @@
 #![allow(dead_code)]
 #![allow(non_camel_case_types)]
 
-use super::lower::isle::generated_code::{VecAMode, VecSew};
+use super::lower::isle::generated_code::{VecAMode, VecElementWidth};
 use crate::binemit::{Addend, CodeOffset, Reloc};
 pub use crate::ir::condcodes::IntCC;
 use crate::ir::types::{self, F32, F64, I128, I16, I32, I64, I8, R32, R64};
@@ -320,7 +320,7 @@ impl Inst {
     pub fn gen_load(into_reg: Writable<Reg>, mem: AMode, ty: Type, flags: MemFlags) -> Inst {
         if ty.is_vector() {
             Inst::VecLoad {
-                eew: VecSew::from_type(ty),
+                eew: VecElementWidth::from_type(ty),
                 to: into_reg,
                 from: VecAMode::UnitStride { base: mem },
                 flags,
@@ -340,7 +340,7 @@ impl Inst {
     pub fn gen_store(mem: AMode, from_reg: Reg, ty: Type, flags: MemFlags) -> Inst {
         if ty.is_vector() {
             Inst::VecStore {
-                eew: VecSew::from_type(ty),
+                eew: VecElementWidth::from_type(ty),
                 to: VecAMode::UnitStride { base: mem },
                 from: from_reg,
                 flags,

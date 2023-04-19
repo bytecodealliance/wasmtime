@@ -343,14 +343,14 @@
       (vstate VState))
 
     (VecLoad
-      (eew VecSew)
+      (eew VecElementWidth)
       (to WritableReg)
       (from VecAMode)
       (flags MemFlags)
       (vstate VState))
 
     (VecStore
-      (eew VecSew)
+      (eew VecElementWidth)
       (to VecAMode)
       (from Reg)
       (flags MemFlags)

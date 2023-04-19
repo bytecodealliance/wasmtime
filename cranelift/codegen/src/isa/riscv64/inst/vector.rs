@@ -1,6 +1,6 @@
 use crate::isa::riscv64::inst::EmitState;
 use crate::isa::riscv64::lower::isle::generated_code::{
-    VecAMode, VecAluOpRRR, VecAvl, VecLmul, VecMaskMode, VecSew, VecTailMode,
+    VecAMode, VecAluOpRRR, VecAvl, VecElementWidth, VecLmul, VecMaskMode, VecTailMode,
 };
 use crate::Reg;
 use core::fmt;
@@ -44,41 +44,41 @@ impl fmt::Display for VecAvl {
     }
 }
 
-impl VecSew {
+impl VecElementWidth {
     pub fn from_type(ty: Type) -> Self {
         Self::from_bits(ty.lane_bits())
     }
 
     pub fn from_bits(bits: u32) -> Self {
         match bits {
-            8 => VecSew::E8,
-            16 => VecSew::E16,
-            32 => VecSew::E32,
-            64 => VecSew::E64,
-            _ => panic!("Invalid number of bits for VecSew: {}", bits),
+            8 => VecElementWidth::E8,
+            16 => VecElementWidth::E16,
+            32 => VecElementWidth::E32,
+            64 => VecElementWidth::E64,
+            _ => panic!("Invalid number of bits for VecElementWidth: {}", bits),
         }
     }
 
     pub fn bits(&self) -> u32 {
         match self {
-            VecSew::E8 => 8,
-            VecSew::E16 => 16,
-            VecSew::E32 => 32,
-            VecSew::E64 => 64,
+            VecElementWidth::E8 => 8,
+            VecElementWidth::E16 => 16,
+            VecElementWidth::E32 => 32,
+            VecElementWidth::E64 => 64,
         }
     }
 
     pub fn encode(&self) -> u32 {
         match self {
-            VecSew::E8 => 0b000,
-            VecSew::E16 => 0b001,
-            VecSew::E32 => 0b010,
-            VecSew::E64 => 0b011,
+            VecElementWidth::E8 => 0b000,
+            VecElementWidth::E16 => 0b001,
+            VecElementWidth::E32 => 0b010,
+            VecElementWidth::E64 => 0b011,
         }
     }
 }
 
-impl fmt::Display for VecSew {
+impl fmt::Display for VecElementWidth {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "e{}", self.bits())
     }
@@ -153,7 +153,7 @@ impl fmt::Display for VecMaskMode {
 /// vtype provides the default type used to interpret the contents of the vector register file.
 #[derive(Clone, Debug, PartialEq)]
 pub struct VType {
-    pub sew: VecSew,
+    pub sew: VecElementWidth,
     pub lmul: VecLmul,
     pub tail_mode: VecTailMode,
     pub mask_mode: VecMaskMode,
@@ -197,7 +197,7 @@ impl VState {
         VState {
             avl: VecAvl::_static(ty.lane_count()),
             vtype: VType {
-                sew: VecSew::from_type(ty),
+                sew: VecElementWidth::from_type(ty),
                 lmul: VecLmul::Lmul1,
                 tail_mode: VecTailMode::Agnostic,
                 mask_mode: VecMaskMode::Agnostic,

@@ -8,7 +8,7 @@
 
 use super::{UImm5, VType};
 use crate::isa::riscv64::inst::reg_to_gpr_num;
-use crate::isa::riscv64::lower::isle::generated_code::VecSew;
+use crate::isa::riscv64::lower::isle::generated_code::VecElementWidth;
 use crate::Reg;
 
 /// Encode an R-type instruction.
@@ -76,7 +76,7 @@ pub fn encode_vcfg_imm(opcode: u32, rd: Reg, imm: UImm5, vtype: &VType) -> u32 {
 pub fn encode_vmem_load(
     opcode: u32,
     vd: Reg,
-    width: VecSew,
+    width: VecElementWidth,
     rs1: Reg,
     lumop: u32,
     vm: u32,
@@ -85,10 +85,10 @@ pub fn encode_vmem_load(
 ) -> u32 {
     // Width is encoded differently to avoid a clash with the FP load/store sizes.
     let width = match width {
-        VecSew::E8 => 0b000,
-        VecSew::E16 => 0b101,
-        VecSew::E32 => 0b110,
-        VecSew::E64 => 0b111,
+        VecElementWidth::E8 => 0b000,
+        VecElementWidth::E16 => 0b101,
+        VecElementWidth::E32 => 0b110,
+        VecElementWidth::E64 => 0b111,
     };
 
     let mut bits = 0;
@@ -115,7 +115,7 @@ pub fn encode_vmem_load(
 pub fn encode_vmem_store(
     opcode: u32,
     vs3: Reg,
-    width: VecSew,
+    width: VecElementWidth,
     rs1: Reg,
     sumop: u32,
     vm: u32,
