@@ -379,29 +379,21 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 
         // Find the sret register, if it's used.
         let mut sret_reg = None;
-        for ret in &vcode.abi().signature().returns.clone() {
+        for ret in vcode.abi().signature().returns.iter() {
             if ret.purpose == ArgumentPurpose::StructReturn {
-                if let Some(entry_bb) = f.stencil.layout.entry_block() {
-                    for (i, &param) in f.dfg.block_params(entry_bb).iter().enumerate() {
-                        if vcode.abi().signature().params[i].purpose
-                            == ArgumentPurpose::StructReturn
-                        {
-                            let regs = value_regs[param];
-                            assert!(regs.len() == 1);
+                let entry_bb = f.stencil.layout.entry_block().unwrap();
+                for (&param, sig_param) in f
+                    .dfg
+                    .block_params(entry_bb)
+                    .iter()
+                    .zip(vcode.abi().signature().params.iter())
+                {
+                    if sig_param.purpose == ArgumentPurpose::StructReturn {
+                        let regs = value_regs[param];
+                        assert!(regs.len() == 1);
 
-                            // The ABI implementation must have ensured that a StructReturn
-                            // arg is present in the return values.
-                            assert!(vcode
-                                .abi()
-                                .signature()
-                                .returns
-                                .iter()
-                                .position(|ret| ret.purpose == ArgumentPurpose::StructReturn)
-                                .is_some());
-
-                            assert!(sret_reg.is_none());
-                            sret_reg = Some(regs);
-                        }
+                        assert!(sret_reg.is_none());
+                        sret_reg = Some(regs);
                     }
                 }
             }
