@@ -163,8 +163,8 @@ impl VType {
     // https://github.com/riscv/riscv-v-spec/blob/master/vtype-format.adoc
     pub fn encode(&self) -> u32 {
         let mut bits = 0;
-        bits |= self.sew.encode();
-        bits |= self.lmul.encode() << 3;
+        bits |= self.lmul.encode();
+        bits |= self.sew.encode() << 3;
         bits |= self.tail_mode.encode() << 6;
         bits |= self.mask_mode.encode() << 7;
         bits
