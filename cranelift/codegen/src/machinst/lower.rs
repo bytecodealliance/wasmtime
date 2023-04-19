@@ -396,6 +396,8 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                         sret_reg = Some(regs);
                     }
                 }
+
+                assert!(sret_reg.is_some());
             }
         }
 
