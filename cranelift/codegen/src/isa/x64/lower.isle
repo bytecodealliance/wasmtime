@@ -1333,8 +1333,38 @@
       (x64_pinsrq vec val idx))
 
 ;; f32x4.replace_lane
-(rule (vec_insert_lane $F32X4 vec val idx)
-      (x64_insertps vec val (sse_insertps_lane_imm idx)))
+(rule 1 (vec_insert_lane $F32X4 vec val idx)
+        (if-let $true (use_sse41))
+        (x64_insertps vec val (sse_insertps_lane_imm idx)))
+
+;; f32x4.replace_lane 0 - without insertps
+(rule (vec_insert_lane $F32X4 vec (RegMem.Reg val) 0)
+      (x64_movss_regmove vec val))
+
+;; f32x4.replace_lane 1 - without insertps
+;; tmp    = [ vec[1] vec[0] val[1] val[0] ]
+;; result = [ vec[3] vec[2] tmp[0] tmp[2] ]
+(rule (vec_insert_lane $F32X4 vec (RegMem.Reg val) 1)
+      (let ((tmp Xmm (x64_movlhps val vec)))
+        (x64_shufps tmp vec 0b11_10_00_10)))
+
+;; f32x4.replace_lane 2 - without insertps
+;; tmp    = [ vec[0] vec[3] val[0] val[0] ]
+;; result = [ tmp[2] tmp[0] vec[1] vec[0] ]
+(rule (vec_insert_lane $F32X4 vec (RegMem.Reg val) 2)
+      (let ((tmp Xmm (x64_shufps val vec 0b00_11_00_00)))
+        (x64_shufps vec tmp 0b10_00_01_00)))
+
+;; f32x4.replace_lane 3 - without insertps
+;; tmp    = [ vec[3] vec[2] val[1] val[0] ]
+;; result = [ tmp[0] tmp[2] vec[1] vec[0] ]
+(rule (vec_insert_lane $F32X4 vec (RegMem.Reg val) 3)
+      (let ((tmp Xmm (x64_shufps val vec 0b11_10_01_00)))
+        (x64_shufps vec tmp 0b00_10_01_00)))
+
+;; Recursively delegate to the above rules by loading from memory first.
+(rule (vec_insert_lane $F32X4 vec (RegMem.Mem addr) idx)
+      (vec_insert_lane $F32X4 vec (x64_movss_load addr) idx))
 
 ;; External rust code used to calculate the immediate value to `insertps`.
 (decl sse_insertps_lane_imm (u8) u8)
@@ -3354,101 +3384,78 @@
           (x64_andnpd sign_bit a)
           (x64_andpd sign_bit b))))
 
+;; Helper for the `ceil`/`floor`/`nearest`/`trunc` instructions ;;;;;;;;;;;;;;;;
+
+;; Emits either a `round{ss,sd,ps,pd}` instruction, as appropriate, or generates
+;; the appropriate libcall and sequence to call that.
+(decl x64_round (Type Value RoundImm) Xmm)
+(rule 1 (x64_round $F32 a imm)
+        (if-let $true (use_sse41))
+        (x64_roundss a imm))
+(rule 1 (x64_round $F64 a imm)
+        (if-let $true (use_sse41))
+        (x64_roundsd a imm))
+(rule 1 (x64_round $F32X4 a imm)
+        (if-let $true (use_sse41))
+        (x64_roundps a imm))
+(rule 1 (x64_round $F64X2 a imm)
+        (if-let $true (use_sse41))
+        (x64_roundpd a imm))
+
+(rule (x64_round $F32 a imm) (libcall_1 (round_libcall $F32 imm) a))
+(rule (x64_round $F64 a imm) (libcall_1 (round_libcall $F64 imm) a))
+(rule (x64_round $F32X4 a imm)
+      (let (
+          (a Xmm a)
+          (libcall LibCall (round_libcall $F32 imm))
+          (result Xmm (libcall_1 libcall a))
+          (a1 Xmm (libcall_1 libcall (x64_pshufd a 1)))
+          (result Xmm (vec_insert_lane $F32X4 result a1 1))
+          (a2 Xmm (libcall_1 libcall (x64_pshufd a 2)))
+          (result Xmm (vec_insert_lane $F32X4 result a2 2))
+          (a3 Xmm (libcall_1 libcall (x64_pshufd a 3)))
+          (result Xmm (vec_insert_lane $F32X4 result a3 3))
+        )
+        result))
+(rule (x64_round $F64X2 a imm)
+      (let (
+          (a Xmm a)
+          (libcall LibCall (round_libcall $F64 imm))
+          (result Xmm (libcall_1 libcall a))
+          (a1 Xmm (libcall_1 libcall (x64_pshufd a 0b00_00_11_10)))
+          (result Xmm (vec_insert_lane $F64X2 result a1 1))
+        )
+        result))
+
+(decl round_libcall (Type RoundImm) LibCall)
+(rule (round_libcall $F32 (RoundImm.RoundUp)) (LibCall.CeilF32))
+(rule (round_libcall $F64 (RoundImm.RoundUp)) (LibCall.CeilF64))
+(rule (round_libcall $F32 (RoundImm.RoundDown)) (LibCall.FloorF32))
+(rule (round_libcall $F64 (RoundImm.RoundDown)) (LibCall.FloorF64))
+(rule (round_libcall $F32 (RoundImm.RoundNearest)) (LibCall.NearestF32))
+(rule (round_libcall $F64 (RoundImm.RoundNearest)) (LibCall.NearestF64))
+(rule (round_libcall $F32 (RoundImm.RoundZero)) (LibCall.TruncF32))
+(rule (round_libcall $F64 (RoundImm.RoundZero)) (LibCall.TruncF64))
+
 ;; Rules for `ceil` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule 1 (lower (ceil a @ (value_type $F32)))
-        (if-let $true (use_sse41))
-        (x64_roundss a (RoundImm.RoundUp)))
-
-(rule 1 (lower (ceil a @ (value_type $F64)))
-        (if-let $true (use_sse41))
-        (x64_roundsd a (RoundImm.RoundUp)))
-
-(rule 1 (lower (ceil a @ (value_type $F32X4)))
-        (if-let $true (use_sse41))
-        (x64_roundps a (RoundImm.RoundUp)))
-
-(rule 1 (lower (ceil a @ (value_type $F64X2)))
-        (if-let $true (use_sse41))
-        (x64_roundpd a (RoundImm.RoundUp)))
-
-(rule (lower (ceil a @ (value_type $F32)))
-      (libcall_1 (LibCall.CeilF32) a))
-
-(rule (lower (ceil a @ (value_type $F64)))
-      (libcall_1 (LibCall.CeilF64) a))
+(rule (lower (ceil a @ (value_type ty)))
+      (x64_round ty a (RoundImm.RoundUp)))
 
 ;; Rules for `floor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule 1 (lower (floor a @ (value_type $F32)))
-        (if-let $true (use_sse41))
-        (x64_roundss a (RoundImm.RoundDown)))
-
-(rule 1 (lower (floor a @ (value_type $F64)))
-        (if-let $true (use_sse41))
-        (x64_roundsd a (RoundImm.RoundDown)))
-
-(rule 1 (lower (floor a @ (value_type $F32X4)))
-        (if-let $true (use_sse41))
-        (x64_roundps a (RoundImm.RoundDown)))
-
-(rule 1 (lower (floor a @ (value_type $F64X2)))
-        (if-let $true (use_sse41))
-        (x64_roundpd a (RoundImm.RoundDown)))
-
-(rule (lower (floor a @ (value_type $F32)))
-      (libcall_1 (LibCall.FloorF32) a))
-
-(rule (lower (floor a @ (value_type $F64)))
-      (libcall_1 (LibCall.FloorF64) a))
+(rule (lower (floor a @ (value_type ty)))
+      (x64_round ty a (RoundImm.RoundDown)))
 
 ;; Rules for `nearest` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule 1 (lower (nearest a @ (value_type $F32)))
-        (if-let $true (use_sse41))
-        (x64_roundss a (RoundImm.RoundNearest)))
-
-(rule 1 (lower (nearest a @ (value_type $F64)))
-        (if-let $true (use_sse41))
-        (x64_roundsd a (RoundImm.RoundNearest)))
-
-(rule 1 (lower (nearest a @ (value_type $F32X4)))
-        (if-let $true (use_sse41))
-        (x64_roundps a (RoundImm.RoundNearest)))
-
-(rule 1 (lower (nearest a @ (value_type $F64X2)))
-        (if-let $true (use_sse41))
-        (x64_roundpd a (RoundImm.RoundNearest)))
-
-(rule (lower (nearest a @ (value_type $F32)))
-      (libcall_1 (LibCall.NearestF32) a))
-
-(rule (lower (nearest a @ (value_type $F64)))
-      (libcall_1 (LibCall.NearestF64) a))
+(rule (lower (nearest a @ (value_type ty)))
+      (x64_round ty a (RoundImm.RoundNearest)))
 
 ;; Rules for `trunc` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule 1 (lower (trunc a @ (value_type $F32)))
-        (if-let $true (use_sse41))
-        (x64_roundss a (RoundImm.RoundZero)))
-
-(rule 1 (lower (trunc a @ (value_type $F64)))
-        (if-let $true (use_sse41))
-        (x64_roundsd a (RoundImm.RoundZero)))
-
-(rule 1 (lower (trunc a @ (value_type $F32X4)))
-        (if-let $true (use_sse41))
-        (x64_roundps a (RoundImm.RoundZero)))
-
-(rule 1 (lower (trunc a @ (value_type $F64X2)))
-        (if-let $true (use_sse41))
-        (x64_roundpd a (RoundImm.RoundZero)))
-
-(rule (lower (trunc a @ (value_type $F32)))
-      (libcall_1 (LibCall.TruncF32) a))
-
-(rule (lower (trunc a @ (value_type $F64)))
-      (libcall_1 (LibCall.TruncF64) a))
+(rule (lower (trunc a @ (value_type ty)))
+      (x64_round ty a (RoundImm.RoundZero)))
 
 ;; Rules for `stack_addr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -3811,8 +3818,7 @@
 ;; This is the only remaining case for F64X2
 (rule 1 (lower (has_type $F64 (extractlane val @ (value_type (ty_vec128 ty))
                                          (u8_from_uimm8 1))))
-      ;; 0xee == 0b11_10_11_10
-      (x64_pshufd val 0xee))
+      (x64_pshufd val 0b11_10_11_10))
 
 ;; Note that the `pextrb` lowering here is relied upon by the `extend_to_gpr`
 ;; helper because it will elide a `uextend` operation when `extractlane` is the

@@ -1144,10 +1144,10 @@ fn _assert_send_sync() {
 /// The hash computed for this structure is used to key the global wasmtime
 /// cache and dictates whether artifacts are reused. Consequently the contents
 /// of this hash dictate when artifacts are or aren't re-used.
-#[cfg(all(feature = "cache", compiler))]
-struct HashedEngineCompileEnv<'a>(&'a Engine);
+#[cfg(compiler)]
+pub(crate) struct HashedEngineCompileEnv<'a>(pub &'a Engine);
 
-#[cfg(all(feature = "cache", compiler))]
+#[cfg(compiler)]
 impl std::hash::Hash for HashedEngineCompileEnv<'_> {
     fn hash<H: std::hash::Hasher>(&self, hasher: &mut H) {
         // Hash the compiler's state based on its target and configuration.
