@@ -9,6 +9,8 @@ fn main() {
         println!("cargo:rustc-cfg=feature=\"x64\"");
     } else if arch == "aarch64" {
         println!("cargo:rustc-cfg=feature=\"arm64\"");
+    } else {
+        println!("cargo:rustc-cfg=feature=\"{arch}\"");
     }
     println!("cargo:rerun-if-changed=build.rs");
 }
