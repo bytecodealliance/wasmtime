@@ -377,12 +377,33 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             }
         }
 
-        // Make a sret register, if one is needed.
+        // Find the sret register, if it's used.
         let mut sret_reg = None;
         for ret in &vcode.abi().signature().returns.clone() {
             if ret.purpose == ArgumentPurpose::StructReturn {
-                assert!(sret_reg.is_none());
-                sret_reg = Some(vregs.alloc(ret.value_type)?);
+                if let Some(entry_bb) = f.stencil.layout.entry_block() {
+                    for (i, &param) in f.dfg.block_params(entry_bb).iter().enumerate() {
+                        if vcode.abi().signature().params[i].purpose
+                            == ArgumentPurpose::StructReturn
+                        {
+                            let regs = value_regs[param];
+                            assert!(regs.len() == 1);
+
+                            // The ABI implementation must have ensured that a StructReturn
+                            // arg is present in the return values.
+                            assert!(vcode
+                                .abi()
+                                .signature()
+                                .returns
+                                .iter()
+                                .position(|ret| ret.purpose == ArgumentPurpose::StructReturn)
+                                .is_some());
+
+                            assert!(sret_reg.is_none());
+                            sret_reg = Some(regs);
+                        }
+                    }
+                }
             }
         }
 
@@ -575,24 +596,6 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                     .into_iter()
                 {
                     self.emit(insn);
-                }
-                if self.abi().signature().params[i].purpose == ArgumentPurpose::StructReturn {
-                    assert!(regs.len() == 1);
-                    let ty = self.abi().signature().params[i].value_type;
-                    // The ABI implementation must have ensured that a StructReturn
-                    // arg is present in the return values.
-                    assert!(self
-                        .abi()
-                        .signature()
-                        .returns
-                        .iter()
-                        .position(|ret| ret.purpose == ArgumentPurpose::StructReturn)
-                        .is_some());
-                    self.emit(I::gen_move(
-                        Writable::from_reg(self.sret_reg.unwrap().regs()[0]),
-                        regs.regs()[0].to_reg(),
-                        ty,
-                    ));
                 }
             }
             if let Some(insn) = self
