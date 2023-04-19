@@ -99,8 +99,6 @@
   (if-let $I64 (lane_type ty))
   (VecElementWidth.E64))
 
-(convert Type VecElementWidth element_width_from_type)
-
 ;;;; Instruction Helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; As noted in the RISC-V Vector Extension Specification, rs2 is the first
