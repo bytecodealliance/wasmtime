@@ -3,7 +3,7 @@
 // Pull in the ISLE generated code.
 #[allow(unused)]
 pub mod generated_code;
-use generated_code::{Context, ExtendOp, MInst, VecAvl, VecLmul, VecMaskMode, VecSew, VecTailMode};
+use generated_code::{Context, ExtendOp, MInst};
 
 // Types that the generated ISLE code uses via `use super::*`.
 use super::{writable_zero_reg, zero_reg};

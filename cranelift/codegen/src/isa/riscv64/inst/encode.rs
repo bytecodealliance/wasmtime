@@ -8,6 +8,7 @@
 
 use super::{UImm5, VType};
 use crate::isa::riscv64::inst::reg_to_gpr_num;
+use crate::isa::riscv64::lower::isle::generated_code::VecSew;
 use crate::Reg;
 
 /// Encode an R-type instruction.
@@ -66,4 +67,62 @@ pub fn encode_vcfg_imm(opcode: u32, rd: Reg, imm: UImm5, vtype: &VType) -> u32 {
     bits |= (vtype.encode() & 0b1111111111) << 20;
     bits |= 0b11 << 30;
     bits
+}
+
+/// Encodes a Vector Mem Unit Stride Load instruction.
+///
+/// See: https://github.com/riscv/riscv-v-spec/blob/master/vmem-format.adoc
+/// TODO: These instructions share opcode space with LOAD-FP and STORE-FP
+pub fn encode_vmem_load(
+    opcode: u32,
+    vd: Reg,
+    width: VecSew,
+    rs1: Reg,
+    lumop: u32,
+    vm: u32,
+    mop: u32,
+    nf: u32,
+) -> u32 {
+    // Width is encoded differently to avoid a clash with the FP load/store sizes.
+    let width = match width {
+        VecSew::E8 => 0b000,
+        VecSew::E16 => 0b101,
+        VecSew::E32 => 0b110,
+        VecSew::E64 => 0b111,
+    };
+
+    let mut bits = 0;
+    bits |= opcode & 0b1111111;
+    bits |= reg_to_gpr_num(vd) << 7;
+    bits |= width << 12;
+    bits |= reg_to_gpr_num(rs1) << 15;
+    bits |= (lumop & 0b11111) << 20;
+    bits |= (vm & 0b1) << 25;
+    bits |= (mop & 0b11) << 26;
+
+    // The mew bit (inst[28]) when set is expected to be used to encode expanded
+    // memory sizes of 128 bits and above, but these encodings are currently reserved.
+    bits |= 0b0 << 28;
+
+    bits |= (nf & 0b111) << 29;
+    bits
+}
+
+/// Encodes a Vector Mem Unit Stride Load instruction.
+///
+/// See: https://github.com/riscv/riscv-v-spec/blob/master/vmem-format.adoc
+/// TODO: These instructions share opcode space with LOAD-FP and STORE-FP
+pub fn encode_vmem_store(
+    opcode: u32,
+    vs3: Reg,
+    width: VecSew,
+    rs1: Reg,
+    sumop: u32,
+    vm: u32,
+    mop: u32,
+    nf: u32,
+) -> u32 {
+    // This is pretty much the same as the load instruction, just
+    // with different names on the fields.
+    encode_vmem_load(opcode, vs3, width, rs1, sumop, vm, mop, nf)
 }

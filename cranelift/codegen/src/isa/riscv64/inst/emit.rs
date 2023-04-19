@@ -467,7 +467,13 @@ impl Inst {
             // VecSetState does not expect any vstate, rather it updates it.
             Inst::VecSetState { .. } => None,
 
-            Inst::VecAluRRR { vstate, .. } => Some(vstate),
+            Inst::VecAluRRR { vstate, .. } |
+            // TODO: Unit-stride loads and stores only need the AVL to be correct, not
+            // the full vtype. A future optimization could be to decouple these two when
+            // updating vstate. This would allow us to avoid emitting a VecSetState in
+            // some cases.
+            Inst::VecLoad { vstate, .. }
+            | Inst::VecStore { vstate, .. } => Some(vstate),
         }
     }
 }
@@ -2826,6 +2832,86 @@ impl MachInstEmit for Inst {
 
                 // Update the current vector emit state.
                 state.vstate = EmitVState::Known(vstate.clone());
+            }
+
+            &Inst::VecLoad {
+                eew,
+                to,
+                ref from,
+                flags,
+                ..
+            } => {
+                let offset = from.get_offset_with_state(state);
+                let from_reg = allocs.next(from.get_base_register());
+                let to = allocs.next_writable(to);
+
+                // Vector Loads don't support immediate offsets, so we need to load it into a register.
+                let addr = writable_spilltmp_reg();
+                LoadConstant::U64(offset as u64)
+                    .load_constant_and_add(addr, from_reg)
+                    .into_iter()
+                    .for_each(|inst| inst.emit(&[], sink, emit_info, state));
+
+                let srcloc = state.cur_srcloc();
+                if !srcloc.is_default() && !flags.notrap() {
+                    // Register the offset at which the actual load instruction starts.
+                    sink.add_trap(TrapCode::HeapOutOfBounds);
+                }
+
+                // This is the mask bit, we don't yet implement masking, so set it to 1, which means
+                // masking disabled.
+                let vm = 1;
+
+                sink.put4(encode_vmem_load(
+                    0x07,
+                    to.to_reg(),
+                    eew,
+                    addr.to_reg(),
+                    from.lumop(),
+                    vm,
+                    from.mop(),
+                    from.nf(),
+                ));
+            }
+
+            &Inst::VecStore {
+                eew,
+                ref to,
+                from,
+                flags,
+                ..
+            } => {
+                let offset = to.get_offset_with_state(state);
+                let to_reg = allocs.next(to.get_base_register());
+                let from = allocs.next(from);
+
+                // Vector Stores don't support immediate offsets, so we need to load it into a register.
+                let addr = writable_spilltmp_reg();
+                LoadConstant::U64(offset as u64)
+                    .load_constant_and_add(addr, to_reg)
+                    .into_iter()
+                    .for_each(|inst| inst.emit(&[], sink, emit_info, state));
+
+                let srcloc = state.cur_srcloc();
+                if !srcloc.is_default() && !flags.notrap() {
+                    // Register the offset at which the actual load instruction starts.
+                    sink.add_trap(TrapCode::HeapOutOfBounds);
+                }
+
+                // This is the mask bit, we don't yet implement masking, so set it to 1, which means
+                // masking disabled.
+                let vm = 1;
+
+                sink.put4(encode_vmem_store(
+                    0x27,
+                    from,
+                    eew,
+                    addr.to_reg(),
+                    to.sumop(),
+                    vm,
+                    to.mop(),
+                    to.nf(),
+                ));
             }
         };
         let end_off = sink.cur_offset();

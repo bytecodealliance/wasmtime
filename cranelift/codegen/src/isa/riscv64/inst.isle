@@ -341,6 +341,20 @@
     (VecSetState
       (rd WritableReg)
       (vstate VState))
+
+    (VecLoad
+      (eew VecSew)
+      (to WritableReg)
+      (from VecAMode)
+      (flags MemFlags)
+      (vstate VState))
+
+    (VecStore
+      (eew VecSew)
+      (to VecAMode)
+      (from Reg)
+      (flags MemFlags)
+      (vstate VState))
 ))
 
 

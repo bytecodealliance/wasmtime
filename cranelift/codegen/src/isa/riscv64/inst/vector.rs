@@ -1,6 +1,8 @@
+use crate::isa::riscv64::inst::EmitState;
 use crate::isa::riscv64::lower::isle::generated_code::{
-    VecAluOpRRR, VecAvl, VecLmul, VecMaskMode, VecSew, VecTailMode,
+    VecAMode, VecAluOpRRR, VecAvl, VecLmul, VecMaskMode, VecSew, VecTailMode,
 };
+use crate::Reg;
 use core::fmt;
 
 use super::{Type, UImm5};
@@ -232,6 +234,56 @@ impl fmt::Display for VecAluOpRRR {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             VecAluOpRRR::Vadd => write!(f, "vadd.vv"),
+        }
+    }
+}
+
+impl VecAMode {
+    pub fn get_base_register(&self) -> Reg {
+        match self {
+            VecAMode::UnitStride { base, .. } => base.get_base_register(),
+        }
+    }
+
+    pub(crate) fn get_offset_with_state(&self, state: &EmitState) -> i64 {
+        match self {
+            VecAMode::UnitStride { base, .. } => base.get_offset_with_state(state),
+        }
+    }
+
+    /// `mop` field, described in Table 7 of Section 7.2. Vector Load/Store Addressing Modes
+    /// https://github.com/riscv/riscv-v-spec/blob/master/v-spec.adoc#72-vector-loadstore-addressing-modes
+    pub fn mop(&self) -> u32 {
+        match self {
+            VecAMode::UnitStride { .. } => 0b00,
+        }
+    }
+
+    /// `lumop` field, described in Table 9 of Section 7.2. Vector Load/Store Addressing Modes
+    /// https://github.com/riscv/riscv-v-spec/blob/master/v-spec.adoc#72-vector-loadstore-addressing-modes
+    pub fn lumop(&self) -> u32 {
+        match self {
+            VecAMode::UnitStride { .. } => 0b00000,
+        }
+    }
+
+    /// `sumop` field, described in Table 19 of Section 7.2. Vector Load/Store Addressing Modes
+    /// https://github.com/riscv/riscv-v-spec/blob/master/v-spec.adoc#72-vector-loadstore-addressing-modes
+    pub fn sumop(&self) -> u32 {
+        match self {
+            VecAMode::UnitStride { .. } => 0b00000,
+        }
+    }
+
+    /// The `nf[2:0]` field encodes the number of fields in each segment. For regular vector loads and
+    /// stores, nf=0, indicating that a single value is moved between a vector register group and memory
+    /// at each element position. Larger values in the nf field are used to access multiple contiguous
+    /// fields within a segment as described in Section 7.8 Vector Load/Store Segment Instructions.
+    ///
+    /// https://github.com/riscv/riscv-v-spec/blob/master/v-spec.adoc#72-vector-loadstore-addressing-modes
+    pub fn nf(&self) -> u32 {
+        match self {
+            VecAMode::UnitStride { .. } => 0b000,
         }
     }
 }

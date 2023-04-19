@@ -65,6 +65,18 @@
 ))
 
 
+
+;; Vector Addressing Mode
+(type VecAMode (enum
+  ;; Vector unit-stride operations access elements stored contiguously in memory
+  ;; starting from the base effective address.
+  (UnitStride
+    (base AMode))
+  ;; TODO: Constant Stride
+  ;; TODO: Indexed Operations
+))
+
+
 ;; Builds a static VState matching a SIMD type.
 ;; The VState is guaranteed to be static with AVL set to the number of lanes.
 ;; Element size is set to the size of the type.
