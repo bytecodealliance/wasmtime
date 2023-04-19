@@ -267,7 +267,7 @@ impl VecAMode {
         }
     }
 
-    /// `sumop` field, described in Table 19 of Section 7.2. Vector Load/Store Addressing Modes
+    /// `sumop` field, described in Table 10 of Section 7.2. Vector Load/Store Addressing Modes
     /// https://github.com/riscv/riscv-v-spec/blob/master/v-spec.adoc#72-vector-loadstore-addressing-modes
     pub fn sumop(&self) -> u32 {
         match self {
