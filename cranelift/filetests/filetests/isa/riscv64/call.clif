@@ -420,11 +420,10 @@ block0(v0: i64):
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ; block0:
-;   mv a4,a0
+;   mv a1,a0
 ;   li a2,42
-;   mv a0,a2
-;   mv a1,a4
 ;   load_sym a3,%f11+0
+;   mv a0,a2
 ;   callind a3
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
@@ -438,15 +437,14 @@ block0(v0: i64):
 ;   sd s0, 0(sp)
 ;   ori s0, sp, 0
 ; block1: ; offset 0x10
-;   ori a4, a0, 0
+;   ori a1, a0, 0
 ;   addi a2, zero, 0x2a
-;   ori a0, a2, 0
-;   ori a1, a4, 0
 ;   auipc a3, 0
 ;   ld a3, 0xc(a3)
 ;   j 0xc
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %f11 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
+;   ori a0, a2, 0
 ;   jalr a3
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
@@ -462,13 +460,11 @@ block0(v0: i64, v1: i128):
 ; VCode:
 ; block0:
 ;   mv a0,a1
-;   mv a1,a2
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ori a0, a1, 0
-;   ori a1, a2, 0
 ;   ret
 
 function %f12_call(i64) -> i64 {
@@ -487,11 +483,10 @@ block0(v0: i64):
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ; block0:
-;   mv a4,a0
-;   li a0,42
-;   mv a1,a4
-;   mv a2,a0
+;   mv a1,a0
+;   li a2,42
 ;   load_sym a3,%f12+0
+;   mv a0,a2
 ;   callind a3
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
@@ -505,15 +500,14 @@ block0(v0: i64):
 ;   sd s0, 0(sp)
 ;   ori s0, sp, 0
 ; block1: ; offset 0x10
-;   ori a4, a0, 0
-;   addi a0, zero, 0x2a
-;   ori a1, a4, 0
-;   ori a2, a0, 0
+;   ori a1, a0, 0
+;   addi a2, zero, 0x2a
 ;   auipc a3, 0
 ;   ld a3, 0xc(a3)
 ;   j 0xc
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %f12 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
+;   ori a0, a2, 0
 ;   jalr a3
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
@@ -529,13 +523,11 @@ block0(v0: i64, v1: i128):
 ; VCode:
 ; block0:
 ;   mv a0,a1
-;   mv a1,a2
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ori a0, a1, 0
-;   ori a1, a2, 0
 ;   ret
 
 function %f13_call(i64) -> i64 {
@@ -554,11 +546,10 @@ block0(v0: i64):
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ; block0:
-;   mv a4,a0
-;   li a0,42
-;   mv a1,a4
-;   mv a2,a0
+;   mv a1,a0
+;   li a2,42
 ;   load_sym a3,%f13+0
+;   mv a0,a2
 ;   callind a3
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
@@ -572,15 +563,14 @@ block0(v0: i64):
 ;   sd s0, 0(sp)
 ;   ori s0, sp, 0
 ; block1: ; offset 0x10
-;   ori a4, a0, 0
-;   addi a0, zero, 0x2a
-;   ori a1, a4, 0
-;   ori a2, a0, 0
+;   ori a1, a0, 0
+;   addi a2, zero, 0x2a
 ;   auipc a3, 0
 ;   ld a3, 0xc(a3)
 ;   j 0xc
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %f13 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
+;   ori a0, a2, 0
 ;   jalr a3
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)

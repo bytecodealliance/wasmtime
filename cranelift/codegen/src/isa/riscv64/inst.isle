@@ -2116,10 +2116,6 @@
 (extern constructor gen_stack_addr gen_stack_addr)
 
 
-;; parameter are 'source register' 'in_ty' 'out_ty'
-(decl gen_move2 (Reg Type Type) Reg)
-(extern constructor gen_move2 gen_move2)
-
 ;;; generate a move and reinterprete the data
 ;; parameter is "rs" "in_type" "out_type"
 (decl gen_moves (ValueRegs Type Type) ValueRegs)
