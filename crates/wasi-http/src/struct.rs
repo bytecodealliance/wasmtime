@@ -2,7 +2,7 @@ use crate::types::{Method, Scheme};
 use bytes::Bytes;
 use std::collections::HashMap;
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct Stream {
     pub closed: bool,
     pub data: Bytes,
@@ -74,9 +74,15 @@ impl ActiveResponse {
 
 impl Stream {
     pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl From<Bytes> for Stream {
+    fn from(bytes: Bytes) -> Self {
         Self {
             closed: false,
-            data: Bytes::new(),
+            data: bytes,
         }
     }
 }

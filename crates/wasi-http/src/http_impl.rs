@@ -183,7 +183,7 @@ impl WasiHttp {
         let body = Full::<Bytes>::new(
             self.streams
                 .get(&request.body)
-                .unwrap_or(&Stream::new())
+                .unwrap_or(&Stream::default())
                 .data
                 .clone(),
         );

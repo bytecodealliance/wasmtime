@@ -1,5 +1,4 @@
 use crate::poll::Pollable;
-use crate::r#struct::Stream;
 use crate::streams::{InputStream, OutputStream, StreamError};
 use crate::WasiHttp;
 use anyhow::{anyhow, bail};
@@ -74,34 +73,23 @@ impl crate::streams::Host for WasiHttp {
         this: OutputStream,
         buf: Vec<u8>,
     ) -> wasmtime::Result<Result<u64, StreamError>> {
+        let len = buf.len();
         match self.streams.get(&this) {
             Some(st) => {
                 if st.closed {
                     bail!("stream is dropped!");
                 }
-                let data = &st.data;
-                let mut new = bytes::BytesMut::with_capacity(data.len() + buf.len());
-                new.put(data.clone());
-                new.put(bytes::Bytes::from(buf.clone()));
-                self.streams.insert(
-                    this,
-                    Stream {
-                        closed: false,
-                        data: new.freeze(),
-                    },
-                );
+                let new_len = st.data.len() + len;
+                let mut new = bytes::BytesMut::with_capacity(new_len);
+                new.put(st.data.clone());
+                new.put(bytes::Bytes::from(buf));
+                self.streams.insert(this, new.freeze().into());
             }
             None => {
-                self.streams.insert(
-                    this,
-                    Stream {
-                        closed: false,
-                        data: bytes::Bytes::from(buf.clone()),
-                    },
-                );
+                self.streams.insert(this, bytes::Bytes::from(buf).into());
             }
         }
-        Ok(Ok(buf.len().try_into()?))
+        Ok(Ok(len.try_into()?))
     }
 
     fn write_zeroes(
