@@ -844,7 +844,7 @@ impl<I: VCodeInst> VCode<I> {
         for (block_order_idx, &block) in final_order.iter().enumerate() {
             trace!("emitting block {:?}", block);
 
-            // Back the new block hook for state
+            // Call the new block hook for state
             state.on_new_block();
 
             // Emit NOPs to align the block.
