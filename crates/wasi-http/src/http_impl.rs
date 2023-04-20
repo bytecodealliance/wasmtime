@@ -223,13 +223,7 @@ impl WasiHttp {
         }
         response.body = self.streams_id_base;
         self.streams_id_base = self.streams_id_base + 1;
-        self.streams.insert(
-            response.body,
-            Stream {
-                closed: false,
-                data: buf.freeze(),
-            },
-        );
+        self.streams.insert(response.body, buf.freeze().into());
         self.responses.insert(response_id, response);
         Ok(response_id)
     }
