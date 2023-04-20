@@ -618,4 +618,14 @@ impl<'a> FuncEnvironment for FuncEnv<'a> {
     fn is_x86(&self) -> bool {
         self.config.target.contains("x86_64")
     }
+
+    fn translate_call_ref(
+        &mut self,
+        _builder: &mut cranelift_frontend::FunctionBuilder<'_>,
+        _ty: ir::SigRef,
+        _func: ir::Value,
+        _args: &[ir::Value],
+    ) -> cranelift_wasm::WasmResult<ir::Inst> {
+        unimplemented!()
+    }
 }
