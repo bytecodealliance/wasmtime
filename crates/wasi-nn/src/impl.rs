@@ -137,21 +137,26 @@ impl<'a> WasiEphemeralNn for WasiNnCtx {
         Ok(())
     }
 
-    fn unregister(&mut self, model_name: &GuestPtr<'_, str>) -> Result<()> {
-        self.model_registry
-            .remove(&model_name.as_str().unwrap().unwrap().to_string());
+    fn get_model_list<'b>(&mut self,
+                          buffer: &GuestPtr<'b, u8>,
+                          model_list: &GuestPtr<'b, GuestPtr<'b, u8>>,
+                          length: u32) -> Result<()> {
+        let mut model_names: Vec<String> = self.model_registry.iter().map(|e| e.key().to_string()).collect();
+        self.loaded_models.iter().for_each(|e| model_names.push(e.key().to_string()));
+
+        println!("Model names: {:?}", model_names);
+        let model_names_array = StringArray { elems: model_names };
+        model_names_array.write_to_guest(buffer, model_list);
         Ok(())
     }
 
-    fn is_registered(&mut self, model_name: &GuestPtr<'_, str>) -> Result<u32> {
-        if self
-            .model_registry
-            .contains_key(&model_name.as_str().unwrap().unwrap().to_string())
-        {
-            Ok(1)
-        } else {
-            Ok(0)
-        }
+    fn get_model_list_sizes(&mut self) -> Result<(u32, u32)> {
+        let mut model_names: Vec<String> = self.model_registry.iter().map(|e| e.key().to_string()).collect();
+        self.loaded_models.iter().for_each(|e| model_names.push(e.key().to_string()));
+        let lengths: Vec<u32> = model_names.iter().map(|e| e.len() as u32).collect();
+        let string_count = lengths.len() as u32;
+        let buffer_size = lengths.iter().sum::<u32>() as u32 + string_count;
+        Ok((string_count, buffer_size))
     }
 
     fn init_execution_context(&mut self, graph_id: Graph) -> Result<GraphExecutionContext> {
