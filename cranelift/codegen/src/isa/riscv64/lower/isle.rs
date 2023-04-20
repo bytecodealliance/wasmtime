@@ -114,18 +114,18 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Riscv64Backend> {
         });
     }
     fn load_ra(&mut self) -> Reg {
+        let tmp = self.temp_writable_reg(I64);
         if self.backend.flags.preserve_frame_pointers() {
-            let tmp = self.temp_writable_reg(I64);
             self.emit(&MInst::Load {
                 rd: tmp,
                 op: LoadOP::Ld,
                 flags: MemFlags::trusted(),
                 from: AMode::FPOffset(8, I64),
             });
-            tmp.to_reg()
         } else {
-            self.gen_move2(link_reg(), I64, I64)
+            self.emit(&gen_move(tmp, I64, link_reg(), I64));
         }
+        tmp.to_reg()
     }
     fn int_zero_reg(&mut self, ty: Type) -> ValueRegs {
         assert!(ty.is_int(), "{:?}", ty);
@@ -378,12 +378,6 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Riscv64Backend> {
     }
     fn atomic_amo(&mut self) -> AMO {
         AMO::SeqCst
-    }
-
-    fn gen_move2(&mut self, r: Reg, ity: Type, oty: Type) -> Reg {
-        let tmp = self.temp_writable_reg(oty);
-        self.emit(&gen_move(tmp, oty, r, ity));
-        tmp.to_reg()
     }
 
     fn lower_br_table(&mut self, index: Reg, targets: &VecMachLabel) -> Unit {

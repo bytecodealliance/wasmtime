@@ -643,7 +643,7 @@
 ;;;;;  Rules for `ireduce`;;;;;;;;;;;;;;;;;
 (rule
   (lower (has_type ty (ireduce x)))
-  (gen_move2 (value_regs_get x 0) ty ty))
+  (value_regs_get x 0))
 
 ;;;;;  Rules for `fpromote`;;;;;;;;;;;;;;;;;
 (rule (lower (fpromote x))
@@ -721,16 +721,16 @@
 (rule
   (lower (isplit x))
   (let
-    ((t1 Reg (gen_move2 (value_regs_get x 0) $I64 $I64))
-      (t2 Reg (gen_move2 (value_regs_get x 1) $I64 $I64)))
+    ((t1 Reg (value_regs_get x 0))
+      (t2 Reg (value_regs_get x 1)))
     (output_pair t1 t2)))
 
 ;;;;;  Rules for `iconcat`;;;;;;;;;
 (rule
   (lower (has_type $I128 (iconcat x y)))
   (let
-    ((t1 Reg (gen_move2 x $I64 $I64))
-      (t2 Reg (gen_move2 y $I64 $I64)))
+    ((t1 Reg x)
+      (t2 Reg y))
     (value_regs t1 t2)))
 
 ;;;;;  Rules for `smax`;;;;;;;;;
