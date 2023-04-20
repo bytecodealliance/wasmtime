@@ -2,7 +2,8 @@ use crate::linker::DefinitionType;
 use crate::{signatures::SignatureCollection, Engine};
 use anyhow::{anyhow, bail, Result};
 use wasmtime_environ::{
-    EntityType, Global, Memory, ModuleTypes, SignatureIndex, Table, WasmFuncType, WasmHeapType, WasmRefType, WasmType,
+    EntityType, Global, Memory, ModuleTypes, SignatureIndex, Table, WasmFuncType, WasmHeapType,
+    WasmRefType, WasmType,
 };
 use wasmtime_runtime::VMSharedSignatureIndex;
 
@@ -192,15 +193,14 @@ fn memory_ty(expected: &Memory, actual: &Memory, actual_runtime_size: Option<u64
 }
 
 fn match_heap(expected: WasmHeapType, actual: WasmHeapType, desc: &str) -> Result<()> {
-    let result =
-        match (actual, expected) {
-            (WasmHeapType::Index(actual), WasmHeapType::Index(expected)) => {
-                // TODO(dhil): we need either canonicalised types or a context here.
-                actual == expected
-            }
-            (WasmHeapType::Index(_), WasmHeapType::Func) => true,
-            (actual, expected) => actual == expected,
-        };
+    let result = match (actual, expected) {
+        (WasmHeapType::Index(actual), WasmHeapType::Index(expected)) => {
+            // TODO(dhil): we need either canonicalised types or a context here.
+            actual == expected
+        }
+        (WasmHeapType::Index(_), WasmHeapType::Func) => true,
+        (actual, expected) => actual == expected,
+    };
     if result {
         Ok(())
     } else {
@@ -215,7 +215,7 @@ fn match_heap(expected: WasmHeapType, actual: WasmHeapType, desc: &str) -> Resul
 
 fn match_ref(expected: WasmRefType, actual: WasmRefType, desc: &str) -> Result<()> {
     if actual.nullable == expected.nullable || expected.nullable {
-        return match_heap(expected.heap_type, actual.heap_type, desc)
+        return match_heap(expected.heap_type, actual.heap_type, desc);
     }
     bail!(
         "{} types incompatible: expected {0} of type `{}`, found {0} of type `{}`",
@@ -230,7 +230,7 @@ fn match_ref(expected: WasmRefType, actual: WasmRefType, desc: &str) -> Result<(
 fn match_ty(expected: WasmType, actual: WasmType, desc: &str) -> Result<()> {
     match (actual, expected) {
         (WasmType::Ref(actual), WasmType::Ref(expected)) => match_ref(expected, actual, desc),
-        (actual, expected) => equal_ty(expected, actual, desc)
+        (actual, expected) => equal_ty(expected, actual, desc),
     }
 }
 
