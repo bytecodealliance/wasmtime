@@ -45,6 +45,47 @@
 (rule (simplify (fcmp ty cc x (select _ cond y z)))
       (select ty cond (fcmp ty cc x y) (fcmp ty cc x z)))
 
+;; transpose select on operation to operation on select:
+;; select(cond, unop(x), unop(y)) => unop(select(cond, x, y))
+(rule (simplify (select ty cond (unop _ op x) (unop _ op y)))
+      (unop ty op (select ty cond x y)))
+
+;; select(cond, binop(x, z), binop(y, z)) => binop(select(cond, x, y), z)
+(rule (simplify (select ty cond (binop _ op x z) (binop _ op y z)))
+      (binop ty op (select ty cond x y) z))
+
+;; select(cond, binop(x, y), binop(x, z)) => binop(x, select(cond, y, z))
+(rule (simplify (select ty cond (binop _ op x y) (binop _ op x z)))
+      (binop ty op x (select ty cond y z)))
+
+;; select(cond, ternop(w, y, z), ternop(x, y, z)) => ternop(select(cond, w, x), y, z)
+(rule (simplify (select ty cond (ternop ty op w y z) (ternop ty op x y z)))
+      (ternop ty op (select ty cond w x) y z))
+
+;; select(cond, ternop(w, x, z), ternop(w, y, z)) => ternop(w, select(cond, x, y), z)
+(rule (simplify (select ty cond (ternop _ op w x z) (ternop _ op w y z)))
+      (ternop ty op w (select ty cond x y) z))
+
+;; select(cond, ternop(w, x, y), ternop(w, x, z)) => ternop(w, x, select(cond, y, z))
+(rule (simplify (select ty cond (ternop _ op w x y) (ternop _ op w x z)))
+      (ternop ty op w x (select ty cond y z)))
+
+;; select(cond, icmp(cc, x, z), icmp(cc, y, z)) => icmp(cc, select(cond, x, y), z)
+(rule (simplify (select ty cond (icmp ty cc x z) (icmp ty cc y z)))
+      (icmp ty cc (select ty cond x y) z))
+
+;; select(cond, icmp(cc, x, y), icmp(cc, x, z)) => icmp(cc, x, select(cond, y, z))
+(rule (simplify (select ty cond (icmp ty cc x y) (icmp ty cc x z)))
+      (icmp ty cc x (select ty cond y z)))
+
+;; select(cond, fcmp(cc, x, z), fcmp(cc, y, z)) => fcmp(cc, select(cond, x, y), z)
+(rule (simplify (select ty cond (fcmp ty cc x z) (fcmp ty cc y z)))
+      (fcmp ty cc (select ty cond x y) z))
+
+;; select(cond, fcmp(cc, x, y), fcmp(cc, x, z)) => fcmp(cc, x, select(cond, y, z))
+(rule (simplify (select ty cond (fcmp ty cc x y) (fcmp ty cc x z)))
+      (fcmp ty cc x (select ty cond y z)))
+
 ;; Transform select-of-icmp into {u,s}{min,max} instructions where possible.
 (rule (simplify (select ty (sgt _ x y) x y)) (smax ty x y))
 (rule (simplify (select ty (sge _ x y) x y)) (smax ty x y))

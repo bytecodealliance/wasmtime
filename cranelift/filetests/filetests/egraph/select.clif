@@ -25,10 +25,54 @@ block0(v0: i8, v1: i32, v2: i32):
     v3 = select v0, v1, v2
     v4 = ineg v3
     return v4
-    ; check: v5 = ineg v1
-    ; check: v6 = ineg v2
-    ; check: v7 = select v0, v5, v6
-    ; check: return v7
+    ; check: v3 = select v0, v1, v2
+    ; check: v12 = ineg v3
+    ; check: return v12
+}
+
+;; select(cond, unop(x), unop(y)) => unop(select(cond, x, y))
+function %transpose_select_unop(i8, i32, i32) -> i32 {
+block0(v0: i8, v1: i32, v2: i32):
+    v3 = ineg v1
+    v4 = ineg v2
+    v5 = select v0, v3, v4
+    return v5
+    ; check: v3 = ineg v1
+    ; check: v4 = ineg v2
+    ; check: v12 = select v0, v3, v4
+    ; check: return v12
+}
+
+;; FIXME: `transpose_unop_both_1` and `transpose_unop_both_2` should optimise to identical result
+function %transpose_unop_both_1(i8, i32, i32) -> i32, i32 {
+block0(v0: i8, v1: i32, v2: i32):
+    v3 = ineg v1
+    v4 = ineg v2
+    v5 = select v0, v3, v4
+
+    v6 = select v0, v1, v2
+    v7 = ineg v6
+
+    return v5, v7
+    ; check: v3 = ineg v1
+    ; check: v4 = ineg v2
+    ; check: v14 = select v0, v3, v4
+    ; check: return v14, v14
+}
+
+function %transpose_unop_both_2(i8, i32, i32) -> i32, i32 {
+block0(v0: i8, v1: i32, v2: i32):
+    v3 = select v0, v1, v2
+    v4 = ineg v3
+
+    v5 = ineg v1
+    v6 = ineg v2
+    v7 = select v0, v5, v6
+
+    return v4, v7
+    ; check: v3 = select v0, v1, v2
+    ; check: v15 = ineg v3
+    ; check: return v15, v15
 }
 
 ;; binop(select(cond, x, y), z) => select(cond, binop(x, z), binop(y, z))
@@ -37,10 +81,9 @@ block0(v0: i8, v1: i32, v2: i32, v3: i32):
     v4 = select v0, v1, v2
     v5 = isub v4, v3
     return v5
-    ; check: v6 = isub v1, v3
-    ; check: v7 = isub v2, v3
-    ; check: v8 = select v0, v6, v7
-    ; check: return v8
+    ; check: v4 = select v0, v1, v2
+    ; check: v13 = isub v4, v3
+    ; check: return v13
 }
 
 ;; binop(x, select(cond, y, z)) => select(cond, binop(x, y), binop(x, z))
@@ -49,10 +92,9 @@ block0(v0: i8, v1: i32, v2: i32, v3: i32):
     v4 = select v0, v2, v3
     v5 = isub v1, v4
     return v5
-    ; check: v6 = isub v1, v2
-    ; check: v7 = isub v1, v3
-    ; check: v8 = select v0, v6, v7
-    ; check: return v8
+    ; check: v4 = select v0, v2, v3
+    ; check: v13 = isub v1, v4
+    ; check: return v13
 }
 
 ;; ternop(select(cond, w, x), y, z) => select(cond, ternop(w, y, z), ternop(x, y, z))
@@ -61,10 +103,9 @@ block0(v0: i8, v1: f32, v2: f32, v3: f32, v4: f32):
     v5 = select v0, v1, v2
     v6 = fma v5, v3, v4
     return v6
-    ; check: v7 = fma v1, v3, v4
-    ; check: v8 = fma v2, v3, v4
-    ; check: v9 = select v0, v7, v8
-    ; check: return v9
+    ; check: v5 = select v0, v1, v2
+    ; check: v14 = fma v5, v3, v4
+    ; check: return v14
 }
 
 ;; ternop(w, select(cond, x, y), z) => select(cond, ternop(w, x, z), ternop(w, y, z))
@@ -73,10 +114,9 @@ block0(v0: i8, v1: f32, v2: f32, v3: f32, v4: f32):
     v5 = select v0, v2, v3
     v6 = fma v1, v5, v4
     return v6
-    ; check: v7 = fma v1, v2, v4
-    ; check: v8 = fma v1, v3, v4
-    ; check: v9 = select v0, v7, v8
-    ; check: return v9
+    ; check: v5 = select v0, v2, v3
+    ; check: v14 = fma v1, v5, v4
+    ; check: return v14
 }
 
 ;; ternop(w, x, select(cond, y, z)) => select(cond, ternop(w, x, y), ternop(w, x, z))
@@ -85,10 +125,9 @@ block0(v0: i8, v1: f32, v2: f32, v3: f32, v4: f32):
     v5 = select v0, v3, v4
     v6 = fma v1, v2, v5
     return v6
-    ; check: v7 = fma v1, v2, v3
-    ; check: v8 = fma v1, v2, v4
-    ; check: v9 = select v0, v7, v8
-    ; check: return v9
+    ; check: v5 = select v0, v3, v4
+    ; check: v14 = fma v1, v2, v5
+    ; check: return v14
 }
 
 ;; icmp(cc, select(cond, x, y), z) => select(cond, icmp(cc, x, z), icmp(cc, y, z))
@@ -97,10 +136,9 @@ block0(v0: i8, v1: i32, v2: i32, v3: i32):
     v4 = select v0, v1, v2
     v5 = icmp ult v4, v3
     return v5
-    ; check: v6 = icmp ult v1, v3
-    ; check: v7 = icmp ult v2, v3
-    ; check: v8 = select v0, v6, v7
-    ; check: return v8
+    ; check: v9 = select v0, v1, v2
+    ; check: v14 = icmp ult v9, v3
+    ; check: return v14
 }
 
 ;; icmp(cc, x, select(cond, y, z)) => select(cond, icmp(cc, x, y), icmp(cc, x, z))
@@ -109,10 +147,9 @@ block0(v0: i8, v1: i32, v2: i32, v3: i32):
     v4 = select v0, v2, v3
     v5 = icmp ult v1, v4
     return v5
-    ; check: v6 = icmp ult v1, v2
-    ; check: v7 = icmp ult v1, v3
-    ; check: v8 = select v0, v6, v7
-    ; check: return v8
+    ; check: v9 = select v0, v2, v3
+    ; check: v14 = icmp ult v1, v9
+    ; check: return v14
 }
 
 ;; fcmp(cc, select(cond, x, y), z) => select(cond, icmp(cc, x, z), icmp(cc, y, z))
@@ -121,10 +158,9 @@ block0(v0: i8, v1: f32, v2: f32, v3: f32):
     v4 = select v0, v1, v2
     v5 = fcmp ult v4, v3
     return v5
-    ; check: v6 = fcmp ult v1, v3
-    ; check: v7 = fcmp ult v2, v3
-    ; check: v8 = select v0, v6, v7
-    ; check: return v8
+    ; check: v9 = select v0, v1, v2
+    ; check: v14 = fcmp ult v9, v3
+    ; check: return v14
 }
 
 ;; fcmp(cc, x, select(cond, y, z)) => select(cond, icmp(cc, x, y), icmp(cc, x, z))
@@ -133,10 +169,9 @@ block0(v0: i8, v1: f32, v2: f32, v3: f32):
     v4 = select v0, v2, v3
     v5 = fcmp ult v1, v4
     return v5
-    ; check: v6 = fcmp ult v1, v2
-    ; check: v7 = fcmp ult v1, v3
-    ; check: v8 = select v0, v6, v7
-    ; check: return v8
+    ; check: v9 = select v0, v2, v3
+    ; check: v14 = fcmp ult v1, v9
+    ; check: return v14
 }
 
 function %select_sgt_to_smax(i32, i32) -> i32 {
