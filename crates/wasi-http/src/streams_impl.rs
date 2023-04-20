@@ -77,7 +77,7 @@ impl crate::streams::Host for WasiHttp {
         match self.streams.get(&this) {
             Some(st) => {
                 if st.closed {
-                    bail!("stream is dropped!");
+                    bail!("cannot write to closed stream");
                 }
                 let new_len = st.data.len() + len;
                 let mut new = bytes::BytesMut::with_capacity(new_len);
