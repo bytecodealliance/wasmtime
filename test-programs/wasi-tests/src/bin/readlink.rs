@@ -1,5 +1,5 @@
 use std::{env, process};
-use wasi_tests::{assert_errno, create_file, open_scratch_directory};
+use wasi_tests::{create_file, open_scratch_directory};
 
 unsafe fn test_readlink(dir_fd: wasi::Fd) {
     // Create a file in the scratch directory.
