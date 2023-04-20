@@ -2,7 +2,7 @@
 
 ## 8.0.0
 
-Unreleased.
+Released 2023-04-20.
 
 ### Added
 
