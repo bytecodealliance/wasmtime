@@ -191,6 +191,7 @@ impl Descriptors {
                         .trapping_unwrap(),
                     position: Cell::new(0),
                     append: false,
+                    blocking: false,
                 }),
             }))
             .trapping_unwrap();
