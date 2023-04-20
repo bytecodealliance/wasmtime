@@ -73,10 +73,11 @@ impl crate::streams::Host for WasiHttp {
         buf: Vec<u8>,
     ) -> wasmtime::Result<Result<u64, StreamError>> {
         let len = buf.len();
-        self.streams.entry(this)
-            .or_default()
-            .data
-            .extend_from_slice(buf.as_slice());
+        let st = self.streams.entry(this).or_default();
+        if st.closed {
+            bail!("cannot write to closed stream");
+        }
+        st.data.extend_from_slice(buf.as_slice());
         Ok(Ok(len.try_into()?))
     }
 
