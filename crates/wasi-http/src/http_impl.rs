@@ -185,7 +185,8 @@ impl WasiHttp {
                 .get(&request.body)
                 .unwrap_or(&Stream::default())
                 .data
-                .clone(),
+                .clone()
+                .freeze(),
         );
         let t = timeout(first_bytes_timeout, sender.send_request(call.body(body)?)).await?;
         let mut res = t?;

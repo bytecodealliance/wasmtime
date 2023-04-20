@@ -2,7 +2,6 @@ use crate::poll::Pollable;
 use crate::streams::{InputStream, OutputStream, StreamError};
 use crate::WasiHttp;
 use anyhow::{anyhow, bail};
-use bytes::BufMut;
 use std::vec::Vec;
 
 impl crate::streams::Host for WasiHttp {
@@ -74,21 +73,10 @@ impl crate::streams::Host for WasiHttp {
         buf: Vec<u8>,
     ) -> wasmtime::Result<Result<u64, StreamError>> {
         let len = buf.len();
-        match self.streams.get(&this) {
-            Some(st) => {
-                if st.closed {
-                    bail!("stream is dropped!");
-                }
-                let new_len = st.data.len() + len;
-                let mut new = bytes::BytesMut::with_capacity(new_len);
-                new.put(st.data.clone());
-                new.put(bytes::Bytes::from(buf));
-                self.streams.insert(this, new.freeze().into());
-            }
-            None => {
-                self.streams.insert(this, bytes::Bytes::from(buf).into());
-            }
-        }
+        self.streams.entry(this)
+            .or_default()
+            .data
+            .extend_from_slice(buf.as_slice());
         Ok(Ok(len.try_into()?))
     }
 

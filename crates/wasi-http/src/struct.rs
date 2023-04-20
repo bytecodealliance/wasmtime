@@ -1,11 +1,11 @@
 use crate::types::{Method, Scheme};
-use bytes::Bytes;
+use bytes::{BufMut, Bytes, BytesMut};
 use std::collections::HashMap;
 
 #[derive(Clone, Default)]
 pub struct Stream {
     pub closed: bool,
-    pub data: Bytes,
+    pub data: BytesMut,
 }
 
 #[derive(Clone)]
@@ -80,9 +80,11 @@ impl Stream {
 
 impl From<Bytes> for Stream {
     fn from(bytes: Bytes) -> Self {
+        let mut buf = BytesMut::with_capacity(bytes.len());
+        buf.put(bytes);
         Self {
             closed: false,
-            data: bytes,
+            data: buf,
         }
     }
 }
