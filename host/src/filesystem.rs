@@ -101,9 +101,6 @@ impl From<FdFlags> for wasi::filesystem::DescriptorFlags {
         if fdflags.contains(FdFlags::DSYNC) {
             flags |= wasi::filesystem::DescriptorFlags::DATA_INTEGRITY_SYNC;
         }
-        if fdflags.contains(FdFlags::NONBLOCK) {
-            flags |= wasi::filesystem::DescriptorFlags::NON_BLOCKING;
-        }
         if fdflags.contains(FdFlags::RSYNC) {
             flags |= wasi::filesystem::DescriptorFlags::REQUESTED_WRITE_SYNC;
         }
@@ -119,9 +116,6 @@ impl From<wasi::filesystem::DescriptorFlags> for FdFlags {
         let mut fdflags = FdFlags::empty();
         if flags.contains(wasi::filesystem::DescriptorFlags::DATA_INTEGRITY_SYNC) {
             fdflags |= FdFlags::DSYNC;
-        }
-        if flags.contains(wasi::filesystem::DescriptorFlags::NON_BLOCKING) {
-            fdflags |= FdFlags::NONBLOCK;
         }
         if flags.contains(wasi::filesystem::DescriptorFlags::REQUESTED_WRITE_SYNC) {
             fdflags |= FdFlags::RSYNC;
@@ -259,15 +253,6 @@ impl wasi::filesystem::Host for WasiCtx {
         } else {
             Err(wasi::filesystem::ErrorCode::BadDescriptor.into())
         }
-    }
-
-    async fn set_flags(
-        &mut self,
-        fd: wasi::filesystem::Descriptor,
-        flags: wasi::filesystem::DescriptorFlags,
-    ) -> Result<(), wasi::filesystem::Error> {
-        // FIXME
-        Err(wasi::filesystem::ErrorCode::Unsupported.into())
     }
 
     async fn set_size(

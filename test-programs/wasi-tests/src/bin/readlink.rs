@@ -1,5 +1,5 @@
 use std::{env, process};
-use wasi_tests::{assert_errno, create_file, open_scratch_directory};
+use wasi_tests::{create_file, open_scratch_directory};
 
 unsafe fn test_readlink(dir_fd: wasi::Fd) {
     // Create a file in the scratch directory.
@@ -21,6 +21,8 @@ unsafe fn test_readlink(dir_fd: wasi::Fd) {
     );
 
     // Read link into smaller buffer than the actual link's length
+    // FIXME: the adapter will actually truncate in this case. we could instead
+    // return an error in the adapter?
     let buf = &mut [0u8; 4];
     let bufused = wasi::path_readlink(dir_fd, "symlink", buf.as_mut_ptr(), buf.len())
         .expect("readlink with too-small buffer should silently truncate");
