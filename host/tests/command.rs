@@ -369,6 +369,7 @@ async fn run_fd_filestat_set(store: Store<WasiCtx>, wasi: Command) -> Result<()>
 }
 
 async fn run_fd_flags_set(store: Store<WasiCtx>, wasi: Command) -> Result<()> {
+    // dies with notsup: line 95
     expect_fail(run_with_temp_dir(store, wasi).await)
 }
 
@@ -385,6 +386,7 @@ async fn run_file_pread_pwrite(store: Store<WasiCtx>, wasi: Command) -> Result<(
 }
 
 async fn run_file_seek_tell(store: Store<WasiCtx>, wasi: Command) -> Result<()> {
+    // dies when expected error doesnt happen: line 60
     expect_fail(run_with_temp_dir(store, wasi).await)
 }
 
@@ -417,6 +419,7 @@ async fn run_path_exists(store: Store<WasiCtx>, wasi: Command) -> Result<()> {
 }
 
 async fn run_path_filestat(store: Store<WasiCtx>, wasi: Command) -> Result<()> {
+    // mtim and mtim_now cant both be set: line 100
     expect_fail(run_with_temp_dir(store, wasi).await)
 }
 
@@ -433,6 +436,7 @@ async fn run_path_open_create_existing(store: Store<WasiCtx>, wasi: Command) -> 
 }
 
 async fn run_path_open_dirfd_not_dir(store: Store<WasiCtx>, wasi: Command) -> Result<()> {
+    // expected NOTDIR, got BADF, on call to path_open on a filefd.
     expect_fail(run_with_temp_dir(store, wasi).await)
 }
 
@@ -441,6 +445,8 @@ async fn run_path_open_missing(store: Store<WasiCtx>, wasi: Command) -> Result<(
 }
 
 async fn run_path_open_read_without_rights(store: Store<WasiCtx>, wasi: Command) -> Result<()> {
+    // unreachable in adapter line 557, inside fd_fdstat_set_rights, when test program is trying to
+    // drop the RIGHTS_FD_READ right
     expect_fail(run_with_temp_dir(store, wasi).await)
 }
 
@@ -457,6 +463,7 @@ async fn run_path_rename_dir_trailing_slashes(store: Store<WasiCtx>, wasi: Comma
 }
 
 async fn run_path_rename_file_trailing_slashes(store: Store<WasiCtx>, wasi: Command) -> Result<()> {
+    // renaming a file with trailing slash in destination name expected to fail, but succeeds: line 18
     expect_fail(run_with_temp_dir(store, wasi).await)
 }
 
@@ -469,6 +476,9 @@ async fn run_path_symlink_trailing_slashes(store: Store<WasiCtx>, wasi: Command)
 }
 
 async fn run_poll_oneoff_files(store: Store<WasiCtx>, wasi: Command) -> Result<()> {
+    // trapping upwrap in poll_oneoff in adapter.
+    // maybe this is related to the "if fd isnt a stream, request a pollable which completes
+    // immediately so itll immediately fail" behavior, which i think breaks internal invariant...
     expect_fail(run_with_temp_dir(store, wasi).await)
 }
 
@@ -485,6 +495,8 @@ async fn run_readlink(store: Store<WasiCtx>, wasi: Command) -> Result<()> {
 }
 
 async fn run_remove_directory_trailing_slashes(store: Store<WasiCtx>, wasi: Command) -> Result<()> {
+    // removing a directory with a trailing slash in the path succeeded under preview 1,
+    // fails now returning INVAL
     expect_fail(run_with_temp_dir(store, wasi).await)
 }
 
@@ -518,10 +530,6 @@ async fn run_symlink_loop(store: Store<WasiCtx>, wasi: Command) -> Result<()> {
     } else {
         run_with_temp_dir(store, wasi).await
     }
-}
-
-async fn run_truncation_rights(store: Store<WasiCtx>, wasi: Command) -> Result<()> {
-    expect_fail(run_with_temp_dir(store, wasi).await)
 }
 
 async fn run_unlink_file_trailing_slashes(store: Store<WasiCtx>, wasi: Command) -> Result<()> {
