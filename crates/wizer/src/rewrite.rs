@@ -4,7 +4,7 @@ use crate::{
     info::ModuleContext, snapshot::Snapshot, translate, FuncRenames, Wizer, DEFAULT_KEEP_INIT_FUNC,
 };
 use std::convert::TryFrom;
-use wasm_encoder::SectionId;
+use wasm_encoder::{ConstExpr, SectionId};
 
 impl Wizer {
     /// Given the initialized snapshot, rewrite the Wasm so that it is already
@@ -32,7 +32,7 @@ impl Wizer {
             for seg in &snapshot.data_segments {
                 data_section.active(
                     seg.memory_index,
-                    &wasm_encoder::Instruction::I32Const(seg.offset as i32),
+                    &ConstExpr::i32_const(seg.offset as i32),
                     seg.data(store).iter().copied(),
                 );
             }
@@ -89,17 +89,11 @@ impl Wizer {
                         globals.global(
                             glob_ty,
                             &match val {
-                                wasmtime::Val::I32(x) => wasm_encoder::Instruction::I32Const(*x),
-                                wasmtime::Val::I64(x) => wasm_encoder::Instruction::I64Const(*x),
-                                wasmtime::Val::F32(x) => {
-                                    wasm_encoder::Instruction::F32Const(f32::from_bits(*x))
-                                }
-                                wasmtime::Val::F64(x) => {
-                                    wasm_encoder::Instruction::F64Const(f64::from_bits(*x))
-                                }
-                                wasmtime::Val::V128(x) => {
-                                    wasm_encoder::Instruction::V128Const(*x as i128)
-                                }
+                                wasmtime::Val::I32(x) => ConstExpr::i32_const(*x),
+                                wasmtime::Val::I64(x) => ConstExpr::i64_const(*x),
+                                wasmtime::Val::F32(x) => ConstExpr::f32_const(f32::from_bits(*x)),
+                                wasmtime::Val::F64(x) => ConstExpr::f64_const(f64::from_bits(*x)),
+                                wasmtime::Val::V128(x) => ConstExpr::v128_const(*x as i128),
                                 _ => unreachable!(),
                             },
                         );
@@ -133,8 +127,8 @@ impl Wizer {
                             .get(export.name)
                             .map_or(export.name, |f| f.as_str());
 
-                        let export = translate::export(export.kind, export.index);
-                        exports.export(field, export);
+                        let kind = translate::export(export.kind);
+                        exports.export(field, kind, export.index);
                     }
                     encoder.section(&exports);
                 }

@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use wasm_encoder::ConstExpr;
 use wat::parse_str as wat_to_wasm;
 use wizer::Wizer;
 
@@ -564,12 +565,13 @@ fn accept_bulk_memory_data_count() -> Result<()> {
         minimum: 1,
         maximum: Some(1),
         memory64: false,
+        shared: false,
     });
     module.section(&memory);
 
     let mut exports = wasm_encoder::ExportSection::new();
-    exports.export("run", wasm_encoder::Export::Function(0));
-    exports.export("wizer.initialize", wasm_encoder::Export::Function(1));
+    exports.export("run", wasm_encoder::ExportKind::Func, 0);
+    exports.export("wizer.initialize", wasm_encoder::ExportKind::Func, 1);
     module.section(&exports);
 
     module.section(&wasm_encoder::DataCountSection { count: 2 });
@@ -589,8 +591,8 @@ fn accept_bulk_memory_data_count() -> Result<()> {
     // We're expecting these two data segments to be merge into one, which will exercise wizer's
     // ability to output the correct data count (1 instead of 2 above).
     let mut data = wasm_encoder::DataSection::new();
-    data.active(0, &wasm_encoder::Instruction::I32Const(0), vec![0, 1, 2, 3]);
-    data.active(0, &wasm_encoder::Instruction::I32Const(4), vec![5, 6, 7, 8]);
+    data.active(0, &ConstExpr::i32_const(0), vec![0, 1, 2, 3]);
+    data.active(0, &ConstExpr::i32_const(4), vec![5, 6, 7, 8]);
     module.section(&data);
 
     run_wasm(&[], 42, &module.finish()).unwrap();

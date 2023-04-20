@@ -9,7 +9,7 @@ pub(crate) fn val_type(ty: wasmparser::ValType) -> wasm_encoder::ValType {
         F32 => ValType::F32,
         F64 => ValType::F64,
         V128 => ValType::V128,
-        wasmparser::ValType::FUNCREF => ValType::FuncRef,
+        wasmparser::ValType::FUNCREF => ValType::FUNCREF,
         Ref(_) => panic!("not supported"),
     }
 }
@@ -22,20 +22,20 @@ pub(crate) fn global_type(ty: wasmparser::GlobalType) -> wasm_encoder::GlobalTyp
 }
 
 pub(crate) fn memory_type(ty: wasmparser::MemoryType) -> wasm_encoder::MemoryType {
-    assert!(!ty.shared);
     wasm_encoder::MemoryType {
         minimum: ty.initial.into(),
         maximum: ty.maximum.map(|val| val.into()),
         memory64: ty.memory64,
+        shared: ty.shared,
     }
 }
 
-pub(crate) fn export(kind: wasmparser::ExternalKind, index: u32) -> wasm_encoder::Export {
+pub(crate) fn export(kind: wasmparser::ExternalKind) -> wasm_encoder::ExportKind {
     match kind {
-        wasmparser::ExternalKind::Func => wasm_encoder::Export::Function(index),
-        wasmparser::ExternalKind::Global => wasm_encoder::Export::Global(index),
-        wasmparser::ExternalKind::Table => wasm_encoder::Export::Table(index),
-        wasmparser::ExternalKind::Memory => wasm_encoder::Export::Memory(index),
+        wasmparser::ExternalKind::Func => wasm_encoder::ExportKind::Func,
+        wasmparser::ExternalKind::Global => wasm_encoder::ExportKind::Global,
+        wasmparser::ExternalKind::Table => wasm_encoder::ExportKind::Table,
+        wasmparser::ExternalKind::Memory => wasm_encoder::ExportKind::Memory,
         wasmparser::ExternalKind::Tag => unreachable!(),
     }
 }
