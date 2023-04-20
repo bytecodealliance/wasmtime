@@ -33,7 +33,7 @@ unsafe fn test_unlink_file_trailing_slashes(dir_fd: wasi::Fd) {
     assert_errno!(
         wasi::path_unlink_file(dir_fd, "file/")
             .expect_err("unlink_file with a trailing slash should fail"),
-        wasi::ERRNO_NOTDIR,
+        wasi::ERRNO_NOTDIR
     );
 
     // Test that unlinking it with no trailing flash succeeds.
