@@ -6,7 +6,6 @@ use crate::stack_ext::StackExt;
 use anyhow::{Context, Result};
 use std::convert::TryFrom;
 use wasm_encoder::SectionId;
-use wasmparser::SectionReader;
 
 struct StackEntry {
     parser: wasmparser::Parser,
@@ -107,13 +106,12 @@ pub(crate) fn parse<'a>(full_wasm: &'a [u8]) -> anyhow::Result<ModuleContext<'a>
             ComponentTypeSection(_)
             | ComponentImportSection(_)
             | ComponentExportSection(_)
-            | ComponentStartSection(_)
+            | ComponentStartSection { .. }
             | ComponentAliasSection(_)
             | CoreTypeSection(_)
             | InstanceSection(_)
             | ComponentInstanceSection(_)
             | ComponentCanonicalSection(_)
-            | AliasSection(_)
             | ModuleSection { .. }
             | ComponentSection { .. } => {
                 unreachable!()
@@ -126,18 +124,16 @@ fn type_section<'a>(
     cx: &mut ModuleContext<'a>,
     stack: &mut Vec<StackEntry>,
     full_wasm: &'a [u8],
-    mut types: wasmparser::TypeSectionReader<'a>,
+    types: wasmparser::TypeSectionReader<'a>,
 ) -> anyhow::Result<()> {
     let module = stack.top().module;
     module.add_raw_section(cx, SectionId::Type, types.range(), full_wasm);
 
     // Parse out types, as we will need them later when processing
     // instance imports.
-    let count = usize::try_from(types.get_count()).unwrap();
-    for _ in 0..count {
-        let ty = types.read()?;
-        match ty {
-            wasmparser::Type::Func(_) => {
+    for ty in types {
+        match ty? {
+            ty @ wasmparser::Type::Func(_) => {
                 module.push_type(cx, ty);
             }
         }
@@ -150,7 +146,7 @@ fn import_section<'a>(
     cx: &mut ModuleContext<'a>,
     stack: &mut Vec<StackEntry>,
     full_wasm: &'a [u8],
-    mut imports: wasmparser::ImportSectionReader<'a>,
+    imports: wasmparser::ImportSectionReader<'a>,
 ) -> anyhow::Result<()> {
     let module = stack.top().module;
     stack
@@ -159,9 +155,8 @@ fn import_section<'a>(
         .add_raw_section(cx, SectionId::Import, imports.range(), full_wasm);
 
     // Check that we can properly handle all imports.
-    let count = imports.get_count();
-    for _ in 0..count {
-        let imp = imports.read()?;
+    for imp in imports {
+        let imp = imp?;
 
         if imp.module.starts_with("__wizer_") || imp.name.starts_with("__wizer_") {
             anyhow::bail!(
@@ -217,15 +212,13 @@ fn function_section<'a>(
     cx: &mut ModuleContext<'a>,
     stack: &mut Vec<StackEntry>,
     full_wasm: &'a [u8],
-    mut funcs: wasmparser::FunctionSectionReader<'a>,
+    funcs: wasmparser::FunctionSectionReader<'a>,
 ) -> anyhow::Result<()> {
     let module = stack.top().module;
     module.add_raw_section(cx, SectionId::Function, funcs.range(), full_wasm);
 
-    let count = usize::try_from(funcs.get_count()).unwrap();
-    for _ in 0..count {
-        let ty_idx = funcs.read()?;
-        let ty = module.type_id_at(cx, ty_idx);
+    for ty_idx in funcs {
+        let ty = module.type_id_at(cx, ty_idx?);
         module.push_function(cx, ty);
     }
     Ok(())
@@ -235,14 +228,13 @@ fn table_section<'a>(
     cx: &mut ModuleContext<'a>,
     stack: &mut Vec<StackEntry>,
     full_wasm: &'a [u8],
-    mut tables: wasmparser::TableSectionReader<'a>,
+    tables: wasmparser::TableSectionReader<'a>,
 ) -> anyhow::Result<()> {
     let module = stack.top().module;
     module.add_raw_section(cx, SectionId::Table, tables.range(), full_wasm);
 
-    let count = usize::try_from(tables.get_count()).unwrap();
-    for _ in 0..count {
-        module.push_table(cx, tables.read()?);
+    for table in tables {
+        module.push_table(cx, table?.ty);
     }
     Ok(())
 }
@@ -251,15 +243,13 @@ fn memory_section<'a>(
     cx: &mut ModuleContext<'a>,
     stack: &mut Vec<StackEntry>,
     full_wasm: &'a [u8],
-    mut mems: wasmparser::MemorySectionReader<'a>,
+    mems: wasmparser::MemorySectionReader<'a>,
 ) -> anyhow::Result<()> {
     let module = stack.top().module;
     module.add_raw_section(cx, SectionId::Memory, mems.range(), full_wasm);
 
-    let count = usize::try_from(mems.get_count()).unwrap();
-    for _ in 0..count {
-        let m = mems.read()?;
-        module.push_defined_memory(cx, m);
+    for m in mems {
+        module.push_defined_memory(cx, m?);
     }
     Ok(())
 }
@@ -268,15 +258,13 @@ fn global_section<'a>(
     cx: &mut ModuleContext<'a>,
     stack: &mut Vec<StackEntry>,
     full_wasm: &'a [u8],
-    mut globals: wasmparser::GlobalSectionReader<'a>,
+    globals: wasmparser::GlobalSectionReader<'a>,
 ) -> anyhow::Result<()> {
     let module = stack.top().module;
     module.add_raw_section(cx, SectionId::Global, globals.range(), full_wasm);
 
-    let count = usize::try_from(globals.get_count()).unwrap();
-    for _ in 0..count {
-        let g = globals.read()?;
-        module.push_defined_global(cx, g.ty);
+    for g in globals {
+        module.push_defined_global(cx, g?.ty);
     }
     Ok(())
 }
@@ -285,13 +273,13 @@ fn export_section<'a>(
     cx: &mut ModuleContext<'a>,
     stack: &mut Vec<StackEntry>,
     full_wasm: &'a [u8],
-    mut exports: wasmparser::ExportSectionReader<'a>,
+    exports: wasmparser::ExportSectionReader<'a>,
 ) -> anyhow::Result<()> {
     let module = stack.top().module;
     module.add_raw_section(cx, SectionId::Export, exports.range(), full_wasm);
 
-    for _ in 0..exports.get_count() {
-        let export = exports.read()?;
+    for export in exports {
+        let export = export?;
 
         if export.name.starts_with("__wizer_") {
             anyhow::bail!(

@@ -544,6 +544,7 @@ impl Wizer {
             mutable_global: true,
             saturating_float_to_int: true,
             sign_extension: true,
+            floats: true,
 
             // Proposals that we support.
             multi_memory: self.wasm_multi_memory.unwrap_or(DEFAULT_WASM_MULTI_MEMORY),
@@ -559,6 +560,8 @@ impl Wizer {
             extended_const: false,
             relaxed_simd: false,
             component_model: false,
+            memory_control: false,
+            function_references: false,
 
             // XXX: Though we don't fully support bulk memory yet, we
             // unconditionally turn it on.
@@ -584,9 +587,6 @@ impl Wizer {
             // that no table-mutating instructions exist in our input modules
             // until we *actually* support bulk memory.
             bulk_memory: true,
-
-            // We will never want to enable this.
-            deterministic_only: false,
         }
     }
 

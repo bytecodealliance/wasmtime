@@ -1908,15 +1908,6 @@ dependencies = [
 
 [[package]]
 name = "wasmparser"
-version = "0.87.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5c04e207cd2e8ecb6f9bd28a2cf3119b4c6bfeee6fe3a25cc1daf8041d00a875"
-dependencies = [
- "indexmap",
-]
-
-[[package]]
-name = "wasmparser"
 version = "0.93.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c5a4460aa3e271fa180b6a5d003e728f3963fb30e3ba0fa7c9634caa06049328"
@@ -2416,7 +2407,7 @@ dependencies = [
  "structopt",
  "wasi-cap-std-sync",
  "wasm-encoder 0.10.0",
- "wasmparser 0.87.0",
+ "wasmparser 0.103.0",
  "wasmprinter",
  "wasmtime",
  "wasmtime-wasi",
