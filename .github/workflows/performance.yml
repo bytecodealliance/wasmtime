@@ -34,6 +34,7 @@ jobs:
         || ('fitzgen' == github.event.comment.user.login)
         || ('jlb6740' == github.event.comment.user.login)
         || ('sparker-arm' == github.event.comment.user.login)
+        || ('elliottt' == github.event.comment.user.login)
         || ('uweigand' == github.event.comment.user.login))
     steps:
       - run: echo "$GITHUB_CONTEXT"
