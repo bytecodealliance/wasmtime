@@ -308,6 +308,19 @@ async fn run_with_temp_dir(mut store: Store<WasiCtx>, wasi: Command) -> Result<(
 
     store.data_mut().push_env("NO_RIGHTS_READBACK_SUPPORT", "1");
 
+    if cfg!(windows) {
+        store.data_mut().push_env("ERRNO_MODE_WINDOWS", "1");
+        store.data_mut().push_env("NO_FDFLAGS_SYNC_SUPPORT", "1");
+        store.data_mut().push_env("NO_DANGLING_FILESYSTEM", "1");
+        store.data_mut().push_env("NO_RENAME_DIR_TO_EMPTY_DIR", "1");
+    }
+    if cfg!(all(unix, not(target_os = "macos"))) {
+        store.data_mut().push_env("ERRNO_MODE_UNIX", "1");
+    }
+    if cfg!(target_os = "macos") {
+        store.data_mut().push_env("ERRNO_MODE_MACOS", "1");
+    }
+
     let open_dir = Dir::open_ambient_dir(dir.path(), ambient_authority())?;
     store.data_mut().push_preopened_dir(
         Box::new(wasi_cap_std_sync::dir::Dir::from_cap_std(open_dir)),
@@ -337,19 +350,11 @@ async fn run_overwrite_preopen(store: Store<WasiCtx>, wasi: Command) -> Result<(
 }
 
 async fn run_dangling_fd(store: Store<WasiCtx>, wasi: Command) -> Result<()> {
-    if cfg!(windows) {
-        expect_fail(run_with_temp_dir(store, wasi).await)
-    } else {
-        run_with_temp_dir(store, wasi).await
-    }
+    run_with_temp_dir(store, wasi).await
 }
 
 async fn run_dangling_symlink(store: Store<WasiCtx>, wasi: Command) -> Result<()> {
-    if cfg!(windows) {
-        expect_fail(run_with_temp_dir(store, wasi).await)
-    } else {
-        run_with_temp_dir(store, wasi).await
-    }
+    run_with_temp_dir(store, wasi).await
 }
 
 async fn run_directory_seek(store: Store<WasiCtx>, wasi: Command) -> Result<()> {
@@ -419,16 +424,11 @@ async fn run_path_exists(store: Store<WasiCtx>, wasi: Command) -> Result<()> {
 }
 
 async fn run_path_filestat(store: Store<WasiCtx>, wasi: Command) -> Result<()> {
-    // mtim and mtim_now cant both be set: line 100
-    expect_fail(run_with_temp_dir(store, wasi).await)
+    run_with_temp_dir(store, wasi).await
 }
 
 async fn run_path_link(store: Store<WasiCtx>, wasi: Command) -> Result<()> {
-    if cfg!(windows) {
-        expect_fail(run_with_temp_dir(store, wasi).await)
-    } else {
-        run_with_temp_dir(store, wasi).await
-    }
+    run_with_temp_dir(store, wasi).await
 }
 
 async fn run_path_open_create_existing(store: Store<WasiCtx>, wasi: Command) -> Result<()> {
@@ -451,11 +451,7 @@ async fn run_path_open_read_without_rights(store: Store<WasiCtx>, wasi: Command)
 }
 
 async fn run_path_rename(store: Store<WasiCtx>, wasi: Command) -> Result<()> {
-    if cfg!(windows) {
-        expect_fail(run_with_temp_dir(store, wasi).await)
-    } else {
-        run_with_temp_dir(store, wasi).await
-    }
+    run_with_temp_dir(store, wasi).await
 }
 
 async fn run_path_rename_dir_trailing_slashes(store: Store<WasiCtx>, wasi: Command) -> Result<()> {
@@ -468,11 +464,7 @@ async fn run_path_rename_file_trailing_slashes(store: Store<WasiCtx>, wasi: Comm
 }
 
 async fn run_path_symlink_trailing_slashes(store: Store<WasiCtx>, wasi: Command) -> Result<()> {
-    if cfg!(windows) {
-        expect_fail(run_with_temp_dir(store, wasi).await)
-    } else {
-        run_with_temp_dir(store, wasi).await
-    }
+    run_with_temp_dir(store, wasi).await
 }
 
 async fn run_poll_oneoff_files(store: Store<WasiCtx>, wasi: Command) -> Result<()> {
@@ -525,11 +517,7 @@ async fn run_symlink_filestat(store: Store<WasiCtx>, wasi: Command) -> Result<()
 }
 
 async fn run_symlink_loop(store: Store<WasiCtx>, wasi: Command) -> Result<()> {
-    if cfg!(windows) {
-        expect_fail(run_with_temp_dir(store, wasi).await)
-    } else {
-        run_with_temp_dir(store, wasi).await
-    }
+    run_with_temp_dir(store, wasi).await
 }
 
 async fn run_unlink_file_trailing_slashes(store: Store<WasiCtx>, wasi: Command) -> Result<()> {
