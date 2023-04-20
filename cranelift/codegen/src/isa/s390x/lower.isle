@@ -485,7 +485,7 @@
 (rule (lower (has_type $I64X2 (smulhi x y)))
       (let ((pair_0 RegPair (smul_wide (vec_extract_lane $I64X2 x 0 (zero_reg))
                                        (vec_extract_lane $I64X2 y 0 (zero_reg))))
-            (res_0 Reg (regpair_hi pair_0))
+            (res_0 Reg (copy_reg $I64 (regpair_hi pair_0)))
             (pair_1 RegPair (smul_wide (vec_extract_lane $I64X2 x 1 (zero_reg))
                                        (vec_extract_lane $I64X2 y 1 (zero_reg))))
             (res_1 Reg (regpair_hi pair_1)))
