@@ -1109,12 +1109,16 @@ pub unsafe extern "C" fn fd_seek(
                 filesystem::DescriptorType::Directory => return Err(ERRNO_BADF),
                 _ => {}
             }
-            // It's ok to cast these indices; the WASI API will fail if
-            // the resulting values are out of range.
             let from = match whence {
-                WHENCE_SET => offset,
-                WHENCE_CUR => (file.position.get() as i64).wrapping_add(offset),
-                WHENCE_END => (filesystem::stat(file.fd)?.size as i64) + offset,
+                WHENCE_SET if offset >= 0 => offset,
+                WHENCE_CUR => match (file.position.get() as i64).checked_add(offset) {
+                    Some(pos) if pos >= 0 => pos,
+                    _ => return Err(ERRNO_INVAL),
+                },
+                WHENCE_END => match (filesystem::stat(file.fd)?.size as i64).checked_add(offset) {
+                    Some(pos) if pos >= 0 => pos,
+                    _ => return Err(ERRNO_INVAL),
+                },
                 _ => return Err(ERRNO_INVAL),
             };
             stream.input.set(None);
