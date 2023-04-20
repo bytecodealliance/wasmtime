@@ -308,6 +308,19 @@ async fn run_with_temp_dir(mut store: Store<WasiCtx>, wasi: Command) -> Result<(
 
     store.data_mut().push_env("NO_RIGHTS_READBACK_SUPPORT", "1");
 
+    if cfg!(windows) {
+        store.data_mut().push_env("ERRNO_MODE_WINDOWS", "1");
+        store.data_mut().push_env("NO_FDFLAGS_SYNC_SUPPORT", "1");
+        store.data_mut().push_env("NO_DANGLING_FILESYSTEM", "1");
+        store.data_mut().push_env("NO_RENAME_DIR_TO_EMPTY_DIR", "1");
+    }
+    if cfg!(all(unix, not(target_os = "macos"))) {
+        store.data_mut().push_env("ERRNO_MODE_UNIX", "1");
+    }
+    if cfg!(target_os = "macos") {
+        store.data_mut().push_env("ERRNO_MODE_MACOS", "1");
+    }
+
     let open_dir = Dir::open_ambient_dir(dir.path(), ambient_authority())?;
     store.data_mut().push_preopened_dir(
         Box::new(wasi_cap_std_sync::dir::Dir::from_cap_std(open_dir)),
