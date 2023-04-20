@@ -615,6 +615,21 @@ pub unsafe extern "C" fn fd_filestat_set_size(fd: Fd, size: Filesize) -> Errno {
     })
 }
 
+fn systimespec(set: bool, ts: Timestamp, now: bool) -> Result<filesystem::NewTimestamp, Errno> {
+    if set && now {
+        Err(wasi::ERRNO_INVAL)
+    } else if set {
+        Ok(filesystem::NewTimestamp::Timestamp(filesystem::Datetime {
+            seconds: ts / 1_000_000_000,
+            nanoseconds: (ts % 1_000_000_000) as _,
+        }))
+    } else if now {
+        Ok(filesystem::NewTimestamp::Now)
+    } else {
+        Ok(filesystem::NewTimestamp::NoChange)
+    }
+}
+
 /// Adjust the timestamps of an open file or directory.
 /// Note: This is similar to `futimens` in POSIX.
 #[no_mangle]
@@ -624,30 +639,17 @@ pub unsafe extern "C" fn fd_filestat_set_times(
     mtim: Timestamp,
     fst_flags: Fstflags,
 ) -> Errno {
-    let atim =
-        if fst_flags & (FSTFLAGS_ATIM | FSTFLAGS_ATIM_NOW) == (FSTFLAGS_ATIM | FSTFLAGS_ATIM_NOW) {
-            filesystem::NewTimestamp::Now
-        } else if fst_flags & FSTFLAGS_ATIM == FSTFLAGS_ATIM {
-            filesystem::NewTimestamp::Timestamp(filesystem::Datetime {
-                seconds: atim / 1_000_000_000,
-                nanoseconds: (atim % 1_000_000_000) as _,
-            })
-        } else {
-            filesystem::NewTimestamp::NoChange
-        };
-    let mtim =
-        if fst_flags & (FSTFLAGS_MTIM | FSTFLAGS_MTIM_NOW) == (FSTFLAGS_MTIM | FSTFLAGS_MTIM_NOW) {
-            filesystem::NewTimestamp::Now
-        } else if fst_flags & FSTFLAGS_MTIM == FSTFLAGS_MTIM {
-            filesystem::NewTimestamp::Timestamp(filesystem::Datetime {
-                seconds: mtim / 1_000_000_000,
-                nanoseconds: (mtim % 1_000_000_000) as _,
-            })
-        } else {
-            filesystem::NewTimestamp::NoChange
-        };
-
     State::with(|state| {
+        let atim = systimespec(
+            fst_flags & FSTFLAGS_ATIM == FSTFLAGS_ATIM,
+            atim,
+            fst_flags & FSTFLAGS_ATIM_NOW == FSTFLAGS_ATIM_NOW,
+        )?;
+        let mtim = systimespec(
+            fst_flags & FSTFLAGS_MTIM == FSTFLAGS_MTIM,
+            mtim,
+            fst_flags & FSTFLAGS_MTIM_NOW == FSTFLAGS_MTIM_NOW,
+        )?;
         let ds = state.descriptors();
         let file = ds.get_file(fd)?;
         filesystem::set_times(file.fd, atim, mtim)?;
@@ -1279,33 +1281,21 @@ pub unsafe extern "C" fn path_filestat_set_times(
     mtim: Timestamp,
     fst_flags: Fstflags,
 ) -> Errno {
-    let atim =
-        if fst_flags & (FSTFLAGS_ATIM | FSTFLAGS_ATIM_NOW) == (FSTFLAGS_ATIM | FSTFLAGS_ATIM_NOW) {
-            filesystem::NewTimestamp::Now
-        } else if fst_flags & FSTFLAGS_ATIM == FSTFLAGS_ATIM {
-            filesystem::NewTimestamp::Timestamp(filesystem::Datetime {
-                seconds: atim / 1_000_000_000,
-                nanoseconds: (atim % 1_000_000_000) as _,
-            })
-        } else {
-            filesystem::NewTimestamp::NoChange
-        };
-    let mtim =
-        if fst_flags & (FSTFLAGS_MTIM | FSTFLAGS_MTIM_NOW) == (FSTFLAGS_MTIM | FSTFLAGS_MTIM_NOW) {
-            filesystem::NewTimestamp::Now
-        } else if fst_flags & FSTFLAGS_MTIM == FSTFLAGS_MTIM {
-            filesystem::NewTimestamp::Timestamp(filesystem::Datetime {
-                seconds: mtim / 1_000_000_000,
-                nanoseconds: (mtim % 1_000_000_000) as _,
-            })
-        } else {
-            filesystem::NewTimestamp::NoChange
-        };
-
     let path = slice::from_raw_parts(path_ptr, path_len);
     let at_flags = at_flags_from_lookupflags(flags);
 
     State::with(|state| {
+        let atim = systimespec(
+            fst_flags & FSTFLAGS_ATIM == FSTFLAGS_ATIM,
+            atim,
+            fst_flags & FSTFLAGS_ATIM_NOW == FSTFLAGS_ATIM_NOW,
+        )?;
+        let mtim = systimespec(
+            fst_flags & FSTFLAGS_MTIM == FSTFLAGS_MTIM,
+            mtim,
+            fst_flags & FSTFLAGS_MTIM_NOW == FSTFLAGS_MTIM_NOW,
+        )?;
+
         let ds = state.descriptors();
         let file = ds.get_dir(fd)?;
         filesystem::set_times_at(file.fd, at_flags, path, atim, mtim)?;
