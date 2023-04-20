@@ -1140,6 +1140,12 @@ criteria = "safe-to-deploy"
 delta = "0.25.4 -> 0.25.6"
 notes = "Just a dependency version bump"
 
+[[audits.system-interface]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+delta = "0.25.6 -> 0.25.7"
+notes = "This is a minor bug-fix update."
+
 [[audits.tinyvec]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
