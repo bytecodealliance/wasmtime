@@ -468,9 +468,6 @@ pub unsafe extern "C" fn fd_fdstat_get(fd: Fd, stat: *mut Fdstat) -> Errno {
             if flags.contains(filesystem::DescriptorFlags::DATA_INTEGRITY_SYNC) {
                 fs_flags |= FDFLAGS_DSYNC;
             }
-            if flags.contains(filesystem::DescriptorFlags::NON_BLOCKING) {
-                fs_flags |= FDFLAGS_NONBLOCK;
-            }
             if flags.contains(filesystem::DescriptorFlags::REQUESTED_WRITE_SYNC) {
                 fs_flags |= FDFLAGS_RSYNC;
             }
@@ -479,6 +476,9 @@ pub unsafe extern "C" fn fd_fdstat_get(fd: Fd, stat: *mut Fdstat) -> Errno {
             }
             if file.append {
                 fs_flags |= FDFLAGS_APPEND;
+            }
+            if !file.blocking {
+                fs_flags |= FDFLAGS_NONBLOCK;
             }
             let fs_rights_inheriting = fs_rights_base;
 
@@ -526,24 +526,21 @@ pub unsafe extern "C" fn fd_fdstat_get(fd: Fd, stat: *mut Fdstat) -> Errno {
 /// Note: This is similar to `fcntl(fd, F_SETFL, flags)` in POSIX.
 #[no_mangle]
 pub unsafe extern "C" fn fd_fdstat_set_flags(fd: Fd, flags: Fdflags) -> Errno {
-    let mut new_flags = filesystem::DescriptorFlags::empty();
-    if flags & FDFLAGS_DSYNC == FDFLAGS_DSYNC {
-        new_flags |= filesystem::DescriptorFlags::DATA_INTEGRITY_SYNC;
-    }
-    if flags & FDFLAGS_NONBLOCK == FDFLAGS_NONBLOCK {
-        new_flags |= filesystem::DescriptorFlags::NON_BLOCKING;
-    }
-    if flags & FDFLAGS_RSYNC == FDFLAGS_RSYNC {
-        new_flags |= filesystem::DescriptorFlags::REQUESTED_WRITE_SYNC;
-    }
-    if flags & FDFLAGS_SYNC == FDFLAGS_SYNC {
-        new_flags |= filesystem::DescriptorFlags::FILE_INTEGRITY_SYNC;
+    // Only support changing the NONBLOCK flag.
+    if flags & !FDFLAGS_NONBLOCK != 0 {
+        return wasi::ERRNO_INVAL;
     }
 
-    State::with(|state| {
-        let ds = state.descriptors();
-        let file = ds.get_file(fd)?;
-        filesystem::set_flags(file.fd, new_flags)?;
+    State::with_mut(|state| {
+        let mut ds = state.descriptors_mut();
+        let file = match ds.get_mut(fd)? {
+            Descriptor::Streams(Streams {
+                type_: StreamType::File(file),
+                ..
+            }) if !file.is_dir() => file,
+            _ => Err(wasi::ERRNO_BADF)?,
+        };
+        file.blocking = !(flags & FDFLAGS_NONBLOCK == FDFLAGS_NONBLOCK);
         Ok(())
     })
 }
@@ -805,11 +802,23 @@ pub unsafe extern "C" fn fd_read(
             Descriptor::Streams(streams) => {
                 let wasi_stream = streams.get_read_stream()?;
 
+                let blocking = if let StreamType::File(file) = &streams.type_ {
+                    file.blocking
+                } else {
+                    false
+                };
+
                 let read_len = u64::try_from(len).trapping_unwrap();
                 let wasi_stream = streams.get_read_stream()?;
                 let (data, end) = state
                     .import_alloc
-                    .with_buffer(ptr, len, || streams::read(wasi_stream, read_len))
+                    .with_buffer(ptr, len, || {
+                        if blocking {
+                            streams::blocking_read(wasi_stream, read_len)
+                        } else {
+                            streams::read(wasi_stream, read_len)
+                        }
+                    })
                     .map_err(|_| ERRNO_IO)?;
 
                 assert_eq!(data.as_ptr(), ptr);
@@ -1173,7 +1182,17 @@ pub unsafe extern "C" fn fd_write(
             match ds.get(fd)? {
                 Descriptor::Streams(streams) => {
                     let wasi_stream = streams.get_write_stream()?;
-                    let bytes = streams::write(wasi_stream, bytes).map_err(|_| ERRNO_IO)?;
+
+                    let bytes = if let StreamType::File(file) = &streams.type_ {
+                        if file.blocking {
+                            streams::blocking_write(wasi_stream, bytes)
+                        } else {
+                            streams::write(wasi_stream, bytes)
+                        }
+                    } else {
+                        streams::write(wasi_stream, bytes)
+                    }
+                    .map_err(|_| ERRNO_IO)?;
 
                     // If this is a file, keep the current-position pointer up to date.
                     if let StreamType::File(file) = &streams.type_ {
@@ -1359,6 +1378,7 @@ pub unsafe extern "C" fn path_open(
                 descriptor_type,
                 position: Cell::new(0),
                 append,
+                blocking: (fdflags & wasi::FDFLAGS_NONBLOCK) == 0,
             }),
         });
 
@@ -1963,9 +1983,6 @@ fn descriptor_flags_from_flags(rights: Rights, fdflags: Fdflags) -> filesystem::
     if fdflags & wasi::FDFLAGS_RSYNC == wasi::FDFLAGS_RSYNC {
         flags |= filesystem::DescriptorFlags::REQUESTED_WRITE_SYNC;
     }
-    if fdflags & wasi::FDFLAGS_NONBLOCK == wasi::FDFLAGS_NONBLOCK {
-        flags |= filesystem::DescriptorFlags::NON_BLOCKING;
-    }
     flags
 }
 
@@ -2047,6 +2064,20 @@ pub struct File {
 
     /// In append mode, all writes append to the file.
     append: bool,
+
+    /// In blocking mode, read and write calls dispatch to blocking_read and
+    /// blocking_write on the underlying streams. When false, read and write
+    /// dispatch to stream's plain read and write.
+    blocking: bool,
+}
+
+impl File {
+    fn is_dir(&self) -> bool {
+        match self.descriptor_type {
+            filesystem::DescriptorType::Directory => true,
+            _ => false,
+        }
+    }
 }
 
 const PAGE_SIZE: usize = 65536;
