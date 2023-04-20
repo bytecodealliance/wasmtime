@@ -196,6 +196,19 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
         return true;
     }
 
+    if testsuite == "function_references" {
+        // The following tests fail due to function references not yet
+        // being exposed in the public API.
+        if testname == "ref_null" || testname == "local_init" {
+            return true;
+        }
+        // This test fails due to incomplete support for the various
+        // table/elem syntactic sugar in wasm-tools/wast.
+        if testname == "br_table" {
+            return true;
+        }
+    }
+
     match env::var("CARGO_CFG_TARGET_ARCH").unwrap().as_str() {
         "s390x" => {
             // FIXME: These tests fail under qemu due to a qemu bug.
