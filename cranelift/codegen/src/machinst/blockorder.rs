@@ -192,15 +192,10 @@ impl BlockLoweringOrder {
         // Step 2: walk the postorder from the domtree in reverse to produce our desired node
         // lowering order, identifying critical edges to split along the way.
 
-        let mut lb_to_bindex = FxHashMap::default();
         let mut lowered_order = Vec::new();
 
-        // TODO maybe randomize here?
-        for &block in ctrl_plane.change_order(domtree.cfg_postorder().iter().rev()) {
-            let lb = LoweredBlock::Orig { block };
-            let bindex = BlockIndex::new(lowered_order.len());
-            lb_to_bindex.insert(lb.clone(), bindex);
-            lowered_order.push(lb);
+        for &block in domtree.cfg_postorder().iter().rev() {
+            lowered_order.push(LoweredBlock::Orig { block });
 
             if block_out_count[block] > 1 {
                 let range = block_succ_range[block].clone();
@@ -214,16 +209,23 @@ impl BlockLoweringOrder {
                             succ,
                             succ_idx: succ_ix as u32,
                         };
-                        let bindex = BlockIndex::new(lowered_order.len());
-                        lb_to_bindex.insert(*lb, bindex);
                         lowered_order.push(*lb);
                     }
                 }
             }
         }
 
-        // TODO maybe randomize here?
-        ctrl_plane.shuffle(&mut lowered_order);
+        // Arbitrarily reorder the basic blocks, which shoud have no impact
+        // on correctness. The entry block is an exception and has to stay
+        // first.
+        ctrl_plane.shuffle(&mut lowered_order[1..]);
+
+        let lb_to_bindex = FxHashMap::from_iter(
+            lowered_order
+                .iter()
+                .enumerate()
+                .map(|(i, &lb)| (lb, BlockIndex::new(i))),
+        );
 
         // Step 3: build the successor tables given the lowering order. We can't perform this step
         // during the creation of `lowering_order`, as we need `lb_to_bindex` to be fully populated

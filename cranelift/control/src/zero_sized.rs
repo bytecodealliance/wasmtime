@@ -30,7 +30,7 @@ impl ControlPlane {
     /// This variant is used when chaos mode is disabled. It doesn't do
     /// anything.
     #[inline]
-    pub fn shuffle<T>(&mut self, slice: &mut [T]) {}
+    pub fn shuffle<T>(&mut self, _slice: &mut [T]) {}
 
     /// Returns a new iterator over the same items as the input iterator in
     /// a pseudo-random order. This variant is used when chaos mode is
