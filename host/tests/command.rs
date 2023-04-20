@@ -392,7 +392,7 @@ async fn run_file_pread_pwrite(store: Store<WasiCtx>, wasi: Command) -> Result<(
 
 async fn run_file_seek_tell(store: Store<WasiCtx>, wasi: Command) -> Result<()> {
     // dies when expected error doesnt happen: line 60
-    expect_fail(run_with_temp_dir(store, wasi).await)
+    run_with_temp_dir(store, wasi).await
 }
 
 async fn run_file_truncation(store: Store<WasiCtx>, wasi: Command) -> Result<()> {
