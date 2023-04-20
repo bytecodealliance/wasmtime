@@ -1103,11 +1103,10 @@ pub unsafe extern "C" fn fd_seek(
 
         // Seeking only works on files.
         if let StreamType::File(file) = &stream.type_ {
-            match file.descriptor_type {
+            if let filesystem::DescriptorType::Directory = file.descriptor_type {
                 // This isn't really the "right" errno, but it is consistient with wasmtime's
                 // preview 1 tests.
-                filesystem::DescriptorType::Directory => return Err(ERRNO_BADF),
-                _ => {}
+                return Err(ERRNO_BADF);
             }
             let from = match whence {
                 WHENCE_SET if offset >= 0 => offset,
