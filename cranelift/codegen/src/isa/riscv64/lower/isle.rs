@@ -246,40 +246,44 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Riscv64Backend> {
     }
 
     fn i32_2_float_bits(&mut self, value: i32, ty: Type) -> u64 {
-        if ty.bits() == 32 {
+        if ty == F32 {
             f32_bits(value as f32) as u64
         } else {
             f64_bits(value as f64)
         }
     }
     fn i8_i16_max_value(&mut self, ty: Type, is_signed: bool) -> i32 {
-        if ty.bits() == 8 {
+        if ty == I8 {
             if is_signed {
                 i8::MAX as i32
             } else {
                 u8::MAX as i32
             }
-        } else {
+        } else if ty == I16 {
             if is_signed {
                 i16::MAX as i32
             } else {
                 u16::MAX as i32
             }
+        } else {
+            unreachable!()
         }
     }
     fn i8_i16_min_value(&mut self, ty: Type, is_signed: bool) -> i32 {
-        if ty.bits() == 8 {
+        if ty == I8 {
             if is_signed {
                 i8::MIN as i32
             } else {
                 u8::MIN as i32
             }
-        } else {
+        } else if ty == I16 {
             if is_signed {
                 i16::MIN as i32
             } else {
                 u16::MIN as i32
             }
+        } else {
+            unreachable!()
         }
     }
     fn imm12_const(&mut self, val: i32) -> Imm12 {

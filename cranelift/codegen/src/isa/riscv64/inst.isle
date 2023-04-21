@@ -2220,9 +2220,9 @@
 ;;; will cause a exception at runtime.
 ;;; parameters are in_ty out_ty rs is_signed is_sat
 (decl clamp_fcvt_from_float_sat (Type Type Reg bool bool) Reg)
-(rule 1 (clamp_fcvt_from_float_sat _ _ r _ $false)
+(rule (clamp_fcvt_from_float_sat _ _ r _ $false)
   r)
-(rule 2 (clamp_fcvt_from_float_sat in_ty out_ty r is_signed $true)
+(rule (clamp_fcvt_from_float_sat in_ty out_ty r is_signed $true)
   (clamp_fcvt_from_float in_ty out_ty r is_signed))
 
 
