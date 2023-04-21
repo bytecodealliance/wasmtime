@@ -3,6 +3,21 @@ use crate::cdsl::settings::{SettingGroup, SettingGroupBuilder};
 
 use crate::shared::Definitions as SharedDefinitions;
 
+macro_rules! define_zvl_ext {
+    ($setting:expr, $size:expr) => {
+        let name = concat!("has_zvl", $size, "b");
+        let desc = concat!("has extension Zvl", $size, "b?");
+        let comment = concat!(
+            "Zvl",
+            $size,
+            "b: Vector register has a minimum of ",
+            $size,
+            " bits"
+        );
+        let _ = $setting.add_bool(&name, &desc, &comment, false);
+    };
+}
+
 fn define_settings(_shared: &SettingGroup) -> SettingGroup {
     let mut setting = SettingGroupBuilder::new("riscv64");
 
@@ -55,6 +70,25 @@ fn define_settings(_shared: &SettingGroup) -> SettingGroup {
         "Zifencei: Instruction-Fetch Fence",
         false,
     );
+
+    // Zvl*: Minimum Vector Length Standard Extensions
+    // These extension specifiy the minimum number of bits in a vector register.
+    // Since it is a minimum, Zvl64b implies Zvl32b, Zvl128b implies Zvl64b, etc.
+    // The V extension supports a maximum of 64K bits in a single register.
+    //
+    // See: https://github.com/riscv/riscv-v-spec/blob/master/v-spec.adoc#181-zvl-minimum-vector-length-standard-extensions
+    define_zvl_ext!(setting, 32);
+    define_zvl_ext!(setting, 64);
+    define_zvl_ext!(setting, 128);
+    define_zvl_ext!(setting, 256);
+    define_zvl_ext!(setting, 512);
+    define_zvl_ext!(setting, 1024);
+    define_zvl_ext!(setting, 2048);
+    define_zvl_ext!(setting, 4096);
+    define_zvl_ext!(setting, 8192);
+    define_zvl_ext!(setting, 16384);
+    define_zvl_ext!(setting, 32768);
+    define_zvl_ext!(setting, 65536);
 
     setting.build()
 }
