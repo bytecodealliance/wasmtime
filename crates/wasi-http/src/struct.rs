@@ -1,6 +1,12 @@
 use crate::types::{Method, Scheme};
-use bytes::Bytes;
+use bytes::{BufMut, Bytes, BytesMut};
 use std::collections::HashMap;
+
+#[derive(Clone, Default)]
+pub struct Stream {
+    pub closed: bool,
+    pub data: BytesMut,
+}
 
 #[derive(Clone)]
 pub struct WasiHttp {
@@ -11,7 +17,7 @@ pub struct WasiHttp {
     pub requests: HashMap<u32, ActiveRequest>,
     pub responses: HashMap<u32, ActiveResponse>,
     pub fields: HashMap<u32, HashMap<String, Vec<String>>>,
-    pub streams: HashMap<u32, Bytes>,
+    pub streams: HashMap<u32, Stream>,
 }
 
 #[derive(Clone)]
@@ -62,6 +68,23 @@ impl ActiveResponse {
             body: 0,
             response_headers: HashMap::new(),
             trailers: 0,
+        }
+    }
+}
+
+impl Stream {
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl From<Bytes> for Stream {
+    fn from(bytes: Bytes) -> Self {
+        let mut buf = BytesMut::with_capacity(bytes.len());
+        buf.put(bytes);
+        Self {
+            closed: false,
+            data: buf,
         }
     }
 }

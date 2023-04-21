@@ -1,5 +1,5 @@
 use crate::r#struct::ActiveResponse;
-pub use crate::r#struct::WasiHttp;
+use crate::r#struct::{Stream, WasiHttp};
 use crate::types::{RequestOptions, Scheme};
 #[cfg(not(any(target_arch = "riscv64", target_arch = "s390x")))]
 use anyhow::anyhow;
@@ -183,8 +183,10 @@ impl WasiHttp {
         let body = Full::<Bytes>::new(
             self.streams
                 .get(&request.body)
-                .unwrap_or(&Bytes::new())
-                .clone(),
+                .unwrap_or(&Stream::default())
+                .data
+                .clone()
+                .freeze(),
         );
         let t = timeout(first_bytes_timeout, sender.send_request(call.body(body)?)).await?;
         let mut res = t?;
@@ -222,7 +224,7 @@ impl WasiHttp {
         }
         response.body = self.streams_id_base;
         self.streams_id_base = self.streams_id_base + 1;
-        self.streams.insert(response.body, buf.freeze());
+        self.streams.insert(response.body, buf.freeze().into());
         self.responses.insert(response_id, response);
         Ok(response_id)
     }
