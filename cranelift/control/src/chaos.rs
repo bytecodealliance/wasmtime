@@ -5,12 +5,17 @@ use arbitrary::{Arbitrary, Unstructured};
 #[derive(Debug, Clone, Default)]
 pub struct ControlPlane {
     data: Vec<u8>,
+    /// This is used as a little optimization to avoid additional heap
+    /// allocations when using `Unstructured` internally. See the source of
+    /// [`ControlPlane::shuffle`] for an example.
+    tmp: Vec<u8>,
 }
 
 impl Arbitrary<'_> for ControlPlane {
     fn arbitrary<'a>(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
         Ok(Self {
             data: u.arbitrary()?,
+            tmp: Vec::new(),
         })
     }
 }
@@ -48,7 +53,11 @@ impl ControlPlane {
             }
         }
 
-        self.data = u.take_rest().to_vec();
+        // take remaining bytes
+        let rest = u.take_rest();
+        self.tmp.resize(rest.len(), 0); // allocates once per control plane
+        self.tmp.copy_from_slice(rest);
+        std::mem::swap(&mut self.data, &mut self.tmp);
     }
 
     /// Returns a new iterator over the same items as the input iterator in
