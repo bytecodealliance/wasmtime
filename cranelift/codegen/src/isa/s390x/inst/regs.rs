@@ -151,6 +151,7 @@ pub fn create_machine_env(_flags: &settings::Flags) -> MachineEnv {
             ],
         ],
         fixed_stack_slots: vec![],
+        scratch_by_class: [None, None],
     }
 }
 

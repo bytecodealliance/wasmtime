@@ -82,9 +82,6 @@ pub struct VCode<I: VCodeInst> {
     /// Clobbers: a sparse map from instruction indices to clobber masks.
     clobbers: FxHashMap<InsnIndex, PRegSet>,
 
-    /// Move information: for a given InsnIndex, (src, dst) operand pair.
-    is_move: FxHashMap<InsnIndex, (Operand, Operand)>,
-
     /// Source locations for each instruction. (`SourceLoc` is a `u32`, so it is
     /// reasonable to keep one of these per instruction.)
     srclocs: Vec<RelSourceLoc>,
@@ -581,15 +578,6 @@ impl<I: VCodeInst> VCodeBuilder<I> {
                     "the real register {:?} was used as the destination of a move instruction",
                     dst.to_reg()
                 );
-
-                let src = Operand::reg_use(Self::resolve_vreg_alias_impl(vreg_aliases, src.into()));
-                let dst = Operand::reg_def(Self::resolve_vreg_alias_impl(
-                    vreg_aliases,
-                    dst.to_reg().into(),
-                ));
-
-                // Note that regalloc2 requires these in (src, dst) order.
-                self.vcode.is_move.insert(InsnIndex::new(i), (src, dst));
             }
         }
 
@@ -652,7 +640,6 @@ impl<I: VCodeInst> VCode<I> {
             operands: Vec::with_capacity(30 * n_blocks),
             operand_ranges: Vec::with_capacity(10 * n_blocks),
             clobbers: FxHashMap::default(),
-            is_move: FxHashMap::default(),
             srclocs: Vec::with_capacity(10 * n_blocks),
             entry: BlockIndex::new(0),
             block_ranges: Vec::with_capacity(n_blocks),
@@ -929,16 +916,6 @@ impl<I: VCodeInst> VCode<I> {
                             if !self.block_order.is_cold(block) {
                                 inst_offsets[iix.index()] = buffer.cur_offset();
                             }
-                        }
-
-                        if self.insts[iix.index()].is_move().is_some() {
-                            // Skip moves in the pre-regalloc program;
-                            // all of these are incorporated by the
-                            // regalloc into its unified move handling
-                            // and they come out the other end, if
-                            // still needed (not elided), as
-                            // regalloc-inserted moves.
-                            continue;
                         }
 
                         // Update the srcloc at this point in the buffer.
@@ -1285,14 +1262,6 @@ impl<I: VCodeInst> RegallocFunction for VCode<I> {
 
     fn requires_refs_on_stack(&self, insn: InsnIndex) -> bool {
         self.insts[insn.index()].is_safepoint()
-    }
-
-    fn is_move(&self, insn: InsnIndex) -> Option<(Operand, Operand)> {
-        let (a, b) = self.is_move.get(&insn)?;
-        Some((
-            self.assert_operand_not_vreg_alias(*a),
-            self.assert_operand_not_vreg_alias(*b),
-        ))
     }
 
     fn inst_operands(&self, insn: InsnIndex) -> &[Operand] {

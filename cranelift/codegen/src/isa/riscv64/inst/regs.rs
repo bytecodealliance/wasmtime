@@ -182,6 +182,7 @@ pub fn crate_reg_eviroment(_flags: &settings::Flags) -> MachineEnv {
         preferred_regs_by_class,
         non_preferred_regs_by_class,
         fixed_stack_slots: vec![],
+        scratch_by_class: [None, None],
     }
 }
 

@@ -92,21 +92,23 @@ block3(v7: r64, v8: r64):
 ;   mov fp, sp
 ;   sub sp, sp, #32
 ; block0:
-;   str x0, [sp, #8]
+;   mov x3, x0
 ;   str x1, [sp, #16]
+;   mov x0, x3
+;   str x3, [sp, #8]
 ;   load_ext_name x12, TestCase(%f)+0
 ;   blr x12
 ;   mov x11, sp
-;   ldr x2, [sp, #8]
-;   str x2, [x11]
+;   ldr x3, [sp, #8]
+;   str x3, [x11]
 ;   uxtb w12, w0
 ;   cbnz x12, label2 ; b label1
 ; block1:
-;   mov x1, x2
+;   mov x1, x3
 ;   ldr x0, [sp, #16]
 ;   b label3
 ; block2:
-;   mov x0, x2
+;   mov x0, x3
 ;   ldr x1, [sp, #16]
 ;   b label3
 ; block3:
@@ -122,26 +124,28 @@ block3(v7: r64, v8: r64):
 ;   mov x29, sp
 ;   sub sp, sp, #0x20
 ; block1: ; offset 0xc
-;   stur x0, [sp, #8]
+;   mov x3, x0
 ;   stur x1, [sp, #0x10]
-;   ldr x12, #0x1c
-;   b #0x24
+;   mov x0, x3
+;   stur x3, [sp, #8]
+;   ldr x12, #0x24
+;   b #0x2c
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %f 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
 ;   blr x12
 ;   mov x11, sp
-;   ldur x2, [sp, #8]
-;   str x2, [x11]
+;   ldur x3, [sp, #8]
+;   str x3, [x11]
 ;   uxtb w12, w0
-;   cbnz x12, #0x48
-; block2: ; offset 0x3c
-;   mov x1, x2
+;   cbnz x12, #0x50
+; block2: ; offset 0x44
+;   mov x1, x3
 ;   ldur x0, [sp, #0x10]
-;   b #0x50
-; block3: ; offset 0x48
-;   mov x0, x2
+;   b #0x58
+; block3: ; offset 0x50
+;   mov x0, x3
 ;   ldur x1, [sp, #0x10]
-; block4: ; offset 0x50
+; block4: ; offset 0x58
 ;   mov x15, sp
 ;   ldr x2, [x15]
 ;   add sp, sp, #0x20
