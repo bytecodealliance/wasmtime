@@ -437,6 +437,44 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Riscv64Backend> {
     fn vstate_from_type(&mut self, ty: Type) -> VState {
         VState::from_type(ty)
     }
+
+    fn min_vec_reg_size(&mut self) -> u64 {
+        let flags = &self.backend.isa_flags;
+        let entries = [
+            (flags.has_zvl65536b(), 65536),
+            (flags.has_zvl32768b(), 32768),
+            (flags.has_zvl16384b(), 16384),
+            (flags.has_zvl8192b(), 8192),
+            (flags.has_zvl4096b(), 4096),
+            (flags.has_zvl2048b(), 2048),
+            (flags.has_zvl1024b(), 1024),
+            (flags.has_zvl512b(), 512),
+            (flags.has_zvl256b(), 256),
+            // In order to claim the Application profile V extension, a minimum
+            // register size of 128 is required. i.e. V implies Zvl128b.
+            (flags.has_v(), 128),
+            (flags.has_zvl128b(), 128),
+            (flags.has_zvl64b(), 64),
+            (flags.has_zvl32b(), 32),
+        ];
+
+        for (has_flag, size) in entries.into_iter() {
+            if has_flag {
+                return size;
+            }
+        }
+
+        return 0;
+    }
+
+    #[inline]
+    fn ty_vec_fits_in_register(&mut self, ty: Type) -> Option<Type> {
+        if ty.is_vector() && (ty.bits() as u64) <= self.min_vec_reg_size() {
+            Some(ty)
+        } else {
+            None
+        }
+    }
 }
 
 impl IsleContext<'_, '_, MInst, Riscv64Backend> {

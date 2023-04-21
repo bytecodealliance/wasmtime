@@ -99,6 +99,14 @@
   (if-let $I64 (lane_type ty))
   (VecElementWidth.E64))
 
+(decl pure min_vec_reg_size () u64)
+(extern constructor min_vec_reg_size min_vec_reg_size)
+
+;; An extractor that matches any type that is known to fit in a single vector
+;; register.
+(decl ty_vec_fits_in_register (Type) Type)
+(extern extractor ty_vec_fits_in_register ty_vec_fits_in_register)
+
 ;;;; Instruction Helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; As noted in the RISC-V Vector Extension Specification, rs2 is the first

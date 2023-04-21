@@ -98,8 +98,7 @@
     (value_regs low high)))
 
 ;; SIMD Vectors
-(rule 8 (lower (has_type (ty_vec128_int ty) (iadd x y)))
-  (if-let $true (has_v))
+(rule 8 (lower (has_type (ty_vec_fits_in_register ty) (iadd x y)))
   (rv_vadd_vv x y ty))
 
 ;;; Rules for `uadd_overflow_trap` ;;;;;;;;;;;;;
@@ -815,8 +814,7 @@
   (gen_load_128 p offset flags))
 
 (rule 2
-  (lower (has_type (ty_vec128_int ty) (load flags p @ (value_type (ty_addr64 _)) offset)))
-  (if-let $true (has_v))
+  (lower (has_type (ty_vec_fits_in_register ty) (load flags p @ (value_type (ty_addr64 _)) offset)))
   (let ((eew VecElementWidth (element_width_from_type ty)))
     (vec_load eew (VecAMode.UnitStride (gen_amode p offset $I64)) flags ty)))
 
@@ -845,8 +843,7 @@
   (gen_store_128 p offset flags x))
 
 (rule 2
-  (lower (store flags x @ (value_type (ty_vec128_int ty)) p @ (value_type (ty_addr64 _)) offset))
-  (if-let $true (has_v))
+  (lower (store flags x @ (value_type (ty_vec_fits_in_register ty)) p @ (value_type (ty_addr64 _)) offset))
   (let ((eew VecElementWidth (element_width_from_type ty)))
     (vec_store eew (VecAMode.UnitStride (gen_amode p offset $I64)) x flags ty)))
 
