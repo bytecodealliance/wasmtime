@@ -526,8 +526,8 @@ pub unsafe extern "C" fn fd_fdstat_get(fd: Fd, stat: *mut Fdstat) -> Errno {
 /// Note: This is similar to `fcntl(fd, F_SETFL, flags)` in POSIX.
 #[no_mangle]
 pub unsafe extern "C" fn fd_fdstat_set_flags(fd: Fd, flags: Fdflags) -> Errno {
-    // Only support changing the NONBLOCK flag.
-    if flags & !FDFLAGS_NONBLOCK != 0 {
+    // Only support changing the NONBLOCK or APPEND flags.
+    if flags & !(FDFLAGS_NONBLOCK | FDFLAGS_APPEND) != 0 {
         return wasi::ERRNO_INVAL;
     }
 
@@ -540,6 +540,7 @@ pub unsafe extern "C" fn fd_fdstat_set_flags(fd: Fd, flags: Fdflags) -> Errno {
             }) if !file.is_dir() => file,
             _ => Err(wasi::ERRNO_BADF)?,
         };
+        file.append = (flags & FDFLAGS_APPEND == FDFLAGS_APPEND);
         file.blocking = !(flags & FDFLAGS_NONBLOCK == FDFLAGS_NONBLOCK);
         Ok(())
     })
@@ -802,8 +803,6 @@ pub unsafe extern "C" fn fd_read(
     State::with(|state| {
         match state.descriptors().get(fd)? {
             Descriptor::Streams(streams) => {
-                let wasi_stream = streams.get_read_stream()?;
-
                 let blocking = if let StreamType::File(file) = &streams.type_ {
                     file.blocking
                 } else {
@@ -1103,18 +1102,21 @@ pub unsafe extern "C" fn fd_seek(
 
         // Seeking only works on files.
         if let StreamType::File(file) = &stream.type_ {
-            match file.descriptor_type {
+            if let filesystem::DescriptorType::Directory = file.descriptor_type {
                 // This isn't really the "right" errno, but it is consistient with wasmtime's
                 // preview 1 tests.
-                filesystem::DescriptorType::Directory => return Err(ERRNO_BADF),
-                _ => {}
+                return Err(ERRNO_BADF);
             }
-            // It's ok to cast these indices; the WASI API will fail if
-            // the resulting values are out of range.
             let from = match whence {
-                WHENCE_SET => offset,
-                WHENCE_CUR => (file.position.get() as i64).wrapping_add(offset),
-                WHENCE_END => (filesystem::stat(file.fd)?.size as i64) + offset,
+                WHENCE_SET if offset >= 0 => offset,
+                WHENCE_CUR => match (file.position.get() as i64).checked_add(offset) {
+                    Some(pos) if pos >= 0 => pos,
+                    _ => return Err(ERRNO_INVAL),
+                },
+                WHENCE_END => match (filesystem::stat(file.fd)?.size as i64).checked_add(offset) {
+                    Some(pos) if pos >= 0 => pos,
+                    _ => return Err(ERRNO_INVAL),
+                },
                 _ => return Err(ERRNO_INVAL),
             };
             stream.input.set(None);
