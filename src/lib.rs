@@ -526,8 +526,8 @@ pub unsafe extern "C" fn fd_fdstat_get(fd: Fd, stat: *mut Fdstat) -> Errno {
 /// Note: This is similar to `fcntl(fd, F_SETFL, flags)` in POSIX.
 #[no_mangle]
 pub unsafe extern "C" fn fd_fdstat_set_flags(fd: Fd, flags: Fdflags) -> Errno {
-    // Only support changing the NONBLOCK flag.
-    if flags & !FDFLAGS_NONBLOCK != 0 {
+    // Only support changing the NONBLOCK or APPEND flags.
+    if flags & !(FDFLAGS_NONBLOCK | FDFLAGS_APPEND) != 0 {
         return wasi::ERRNO_INVAL;
     }
 
@@ -540,6 +540,7 @@ pub unsafe extern "C" fn fd_fdstat_set_flags(fd: Fd, flags: Fdflags) -> Errno {
             }) if !file.is_dir() => file,
             _ => Err(wasi::ERRNO_BADF)?,
         };
+        file.append = (flags & FDFLAGS_APPEND == FDFLAGS_APPEND);
         file.blocking = !(flags & FDFLAGS_NONBLOCK == FDFLAGS_NONBLOCK);
         Ok(())
     })
