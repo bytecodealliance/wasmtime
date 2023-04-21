@@ -19,6 +19,7 @@ use cranelift_codegen::binemit::Reloc;
 use cranelift_codegen::ir::LibCall;
 use cranelift_codegen::isa::unwind::{systemv, UnwindInfo};
 use cranelift_codegen::TextSectionBuilder;
+use cranelift_control::ControlPlane;
 use gimli::write::{Address, EhFrame, EndianVec, FrameTable, Writer};
 use gimli::RunTimeEndian;
 use object::write::{Object, SectionId, StandardSegment, Symbol, SymbolId, SymbolSection};
@@ -59,6 +60,8 @@ pub struct ModuleTextBuilder<'a> {
     /// Note that this isn't typically used. It's only used for SSE-disabled
     /// builds without SIMD on x86_64 right now.
     libcall_symbols: HashMap<LibCall, SymbolId>,
+
+    ctrl_plane: ControlPlane,
 }
 
 impl<'a> ModuleTextBuilder<'a> {
@@ -88,6 +91,7 @@ impl<'a> ModuleTextBuilder<'a> {
             unwind_info: Default::default(),
             text,
             libcall_symbols: HashMap::default(),
+            ctrl_plane: ControlPlane::default(),
         }
     }
 
@@ -115,6 +119,7 @@ impl<'a> ModuleTextBuilder<'a> {
             true,
             &body,
             self.compiler.function_alignment().max(alignment),
+            &mut self.ctrl_plane,
         );
 
         let symbol_id = self.obj.add_symbol(Symbol {
@@ -227,7 +232,8 @@ impl<'a> ModuleTextBuilder<'a> {
         if padding == 0 {
             return;
         }
-        self.text.append(false, &vec![0; padding], 1);
+        self.text
+            .append(false, &vec![0; padding], 1, &mut self.ctrl_plane);
     }
 
     /// Indicates that the text section has been written completely and this
@@ -237,7 +243,7 @@ impl<'a> ModuleTextBuilder<'a> {
     /// necessary.
     pub fn finish(mut self) {
         // Finish up the text section now that we're done adding functions.
-        let text = self.text.finish();
+        let text = self.text.finish(&mut self.ctrl_plane);
         self.obj
             .section_mut(self.text_section)
             .set_data(text, self.compiler.page_size_align());

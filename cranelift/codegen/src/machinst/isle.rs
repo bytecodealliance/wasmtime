@@ -128,29 +128,6 @@ macro_rules! isle_lower_prelude_methods {
 
         #[inline]
         fn put_in_regs(&mut self, val: Value) -> ValueRegs {
-            // If the value is a constant, then (re)materialize it at each
-            // use. This lowers register pressure. (Only do this if we are
-            // not using egraph-based compilation; the egraph framework
-            // more efficiently rematerializes constants where needed.)
-            if !(self.backend.flags().use_egraphs()
-                && self.backend.flags().opt_level() != OptLevel::None)
-            {
-                let inputs = self.lower_ctx.get_value_as_source_or_const(val);
-                if inputs.constant.is_some() {
-                    let insn = match inputs.inst {
-                        InputSourceInst::UniqueUse(insn, 0) => Some(insn),
-                        InputSourceInst::Use(insn, 0) => Some(insn),
-                        _ => None,
-                    };
-                    if let Some(insn) = insn {
-                        if let Some(regs) = self.backend.lower(self.lower_ctx, insn) {
-                            assert!(regs.len() == 1);
-                            return regs[0];
-                        }
-                    }
-                }
-            }
-
             self.lower_ctx.put_value_in_regs(val)
         }
 

@@ -257,12 +257,7 @@
       (is_signed bool)
       (in_type Type)
       (out_type Type))
-    (SelectIf
-      (if_spectre_guard bool)
-      (rd VecWritableReg)
-      (test Reg)
-      (x ValueRegs)
-      (y ValueRegs))
+
     (RawData (data VecU8))
 
     ;; An unwind pseudo-instruction.
@@ -334,6 +329,31 @@
       (guard_size u32)
       (probe_count u32)
       (tmp WritableReg))
+
+    (VecAluRRR
+      (op VecAluOpRRR)
+      (vd WritableReg)
+      (vs1 Reg)
+      (vs2 Reg)
+      (vstate VState))
+
+    (VecSetState
+      (rd WritableReg)
+      (vstate VState))
+
+    (VecLoad
+      (eew VecElementWidth)
+      (to WritableReg)
+      (from VecAMode)
+      (flags MemFlags)
+      (vstate VState))
+
+    (VecStore
+      (eew VecElementWidth)
+      (to VecAMode)
+      (from Reg)
+      (flags MemFlags)
+      (vstate VState))
 ))
 
 
@@ -708,8 +728,6 @@
 (decl u8_as_i32 (u8) i32)
 (extern constructor u8_as_i32 u8_as_i32)
 
-(convert u8 u64 u8_as_u64)
-
 (decl convert_valueregs_reg (ValueRegs) Reg)
 (rule (convert_valueregs_reg x)
   (value_regs_get x 0))
@@ -717,6 +735,9 @@
 
 
 ;; ISA Extension helpers
+
+(decl pure has_v () bool)
+(extern constructor has_v has_v)
 
 (decl pure has_zbkb () bool)
 (extern constructor has_zbkb has_zbkb)
@@ -873,6 +894,12 @@
 (decl rv_sltu (Reg Reg) Reg)
 (rule (rv_sltu rs1 rs2)
   (alu_rrr (AluOPRRR.SltU) rs1 rs2))
+
+;; Helper for emitting the `snez` instruction.
+;; This instruction is a mnemonic for `sltu rd, zero, rs`.
+(decl rv_snez (Reg) Reg)
+(rule (rv_snez rs1)
+  (rv_sltu (zero_reg) rs1))
 
 ;; Helper for emiting the `sltiu` ("Set Less Than Immediate Unsigned") instruction.
 ;; rd ← rs1 < imm
@@ -1283,7 +1310,7 @@
 (rule
   (load_imm12 x)
   (rv_addi (zero_reg) (imm12_const x)))
-  
+
 ;; for load immediate
 (decl imm_from_bits (u64) Imm12)
 (extern constructor imm_from_bits imm_from_bits)
@@ -1373,15 +1400,35 @@
 (rule (select_addi (fits_in_64 ty)) (AluOPRRI.Addi))
 
 
-(decl bnot_128 (ValueRegs) ValueRegs)
-(rule
-  (bnot_128 val)
-  (let
-    (;; low part.
-      (low Reg (rv_not (value_regs_get val 0)))
-      ;; high part.
-      (high Reg (rv_not (value_regs_get val 1))))
-    (value_regs low high)))
+(decl gen_bnot (Type ValueRegs) ValueRegs)
+(rule 1 (gen_bnot $I128 x)
+  (let ((lo Reg (rv_not (value_regs_get x 0)))
+        (hi Reg (rv_not (value_regs_get x 1))))
+    (value_regs lo hi)))
+
+(rule 0 (gen_bnot (fits_in_64 _) x)
+  (rv_not x))
+
+
+(decl gen_and (Type ValueRegs ValueRegs) ValueRegs)
+(rule 1 (gen_and $I128 x y)
+  (value_regs
+    (rv_and (value_regs_get x 0) (value_regs_get y 0))
+    (rv_and (value_regs_get x 1) (value_regs_get y 1))))
+
+(rule 0 (gen_and (fits_in_64 _) x y)
+  (rv_and (value_regs_get x 0) (value_regs_get y 0)))
+
+
+(decl gen_or (Type ValueRegs ValueRegs) ValueRegs)
+(rule 1 (gen_or $I128 x y)
+  (value_regs
+    (rv_or (value_regs_get x 0) (value_regs_get y 0))
+    (rv_or (value_regs_get x 1) (value_regs_get y 1))))
+
+(rule 0 (gen_or (fits_in_64 _) x y)
+  (rv_or (value_regs_get x 0) (value_regs_get y 0)))
+
 
 (decl lower_bit_reverse (Reg Type) Reg)
 
@@ -1509,7 +1556,7 @@
         (_ Unit (emit (MInst.Cltz leading sum step tmp rs ty))))
     sum))
 
-  
+
 ;; Extends an integer if it is smaller than 64 bits.
 (decl ext_int_if_need (bool ValueRegs Type) ValueRegs)
 ;;; For values smaller than 64 bits, we need to extend them to 64 bits
@@ -2097,10 +2144,6 @@
 (extern constructor gen_stack_addr gen_stack_addr)
 
 
-;; parameter are 'source register' 'in_ty' 'out_ty'
-(decl gen_move2 (Reg Type Type) Reg)
-(extern constructor gen_move2 gen_move2)
-
 ;;; generate a move and reinterprete the data
 ;; parameter is "rs" "in_type" "out_type"
 (decl gen_moves (ValueRegs Type Type) ValueRegs)
@@ -2117,7 +2160,7 @@
       (reuslt VecWritableReg (vec_writable_clone dst))
       (_ Unit (emit (MInst.Select dst ty c x y))))
     (vec_writable_to_regs reuslt)))
-  
+
 ;; Parameters are "intcc compare_a compare_b rs1 rs2".
 (decl gen_select_reg (IntCC Reg Reg Reg Reg) Reg)
 (extern constructor gen_select_reg gen_select_reg)
@@ -2294,9 +2337,6 @@
         (sum Reg (rv_add tmp_x tmp_y))
         (test Reg (rv_srli sum (imm12_const (ty_bits ty)))))
     (value_regs sum test)))
-
-(decl inst_output_get (InstOutput u8) ValueRegs)
-(extern constructor inst_output_get inst_output_get)
 
 (decl label_to_br_target (MachLabel) BranchTarget)
 (extern constructor label_to_br_target label_to_br_target)
@@ -2546,9 +2586,8 @@
   0
   (lower_bmask (fits_in_64 _) (fits_in_64 in_ty) val)
   (let ((input Reg (normalize_cmp_value in_ty val (ExtendOp.Zero)))
-        (zero Reg (zero_reg))
-        (ones Reg (load_imm12 -1)))
-  (value_reg (gen_select_reg (IntCC.Equal) zero input zero ones))))
+        (non_zero Reg (rv_snez input)))
+    (value_reg (rv_neg non_zero))))
 
 ;; Bitwise-or the two registers that make up the 128-bit value, then recurse as
 ;; though it was a 64-bit value.

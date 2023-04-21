@@ -1,7 +1,7 @@
 //! Naming well-known routines in the runtime library.
 
 use crate::{
-    ir::{types, AbiParam, ExternalName, FuncRef, Function, Signature},
+    ir::{types, AbiParam, ExternalName, FuncRef, Function, Signature, Type},
     isa::CallConv,
 };
 use core::fmt;
@@ -119,7 +119,7 @@ impl LibCall {
     }
 
     /// Get a [Signature] for the function targeted by this [LibCall].
-    pub fn signature(&self, call_conv: CallConv) -> Signature {
+    pub fn signature(&self, call_conv: CallConv, pointer_type: Type) -> Signature {
         use types::*;
         let mut sig = Signature::new(call_conv);
 
@@ -140,13 +140,32 @@ impl LibCall {
                 sig.params.push(AbiParam::new(ty));
                 sig.returns.push(AbiParam::new(ty));
             }
-            LibCall::Probestack
-            | LibCall::Memcpy
-            | LibCall::Memset
-            | LibCall::Memmove
-            | LibCall::Memcmp
-            | LibCall::ElfTlsGetAddr
-            | LibCall::ElfTlsGetOffset => unimplemented!(),
+            LibCall::Memcpy | LibCall::Memmove => {
+                // void* memcpy(void *dest, const void *src, size_t count);
+                // void* memmove(void* dest, const void* src, size_t count);
+                sig.params.push(AbiParam::new(pointer_type));
+                sig.params.push(AbiParam::new(pointer_type));
+                sig.params.push(AbiParam::new(pointer_type));
+                sig.returns.push(AbiParam::new(pointer_type));
+            }
+            LibCall::Memset => {
+                // void *memset(void *dest, int ch, size_t count);
+                sig.params.push(AbiParam::new(pointer_type));
+                sig.params.push(AbiParam::new(I32));
+                sig.params.push(AbiParam::new(pointer_type));
+                sig.returns.push(AbiParam::new(pointer_type));
+            }
+            LibCall::Memcmp => {
+                // void* memcpy(void *dest, const void *src, size_t count);
+                sig.params.push(AbiParam::new(pointer_type));
+                sig.params.push(AbiParam::new(pointer_type));
+                sig.params.push(AbiParam::new(pointer_type));
+                sig.returns.push(AbiParam::new(I32))
+            }
+
+            LibCall::Probestack | LibCall::ElfTlsGetAddr | LibCall::ElfTlsGetOffset => {
+                unimplemented!()
+            }
         }
 
         sig

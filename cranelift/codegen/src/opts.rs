@@ -4,7 +4,7 @@ use crate::egraph::{NewOrExistingInst, OptimizeCtx};
 use crate::ir::condcodes;
 pub use crate::ir::condcodes::{FloatCC, IntCC};
 use crate::ir::dfg::ValueDef;
-pub use crate::ir::immediates::{Ieee32, Ieee64, Imm64, Offset32, Uimm32, Uimm64, Uimm8};
+pub use crate::ir::immediates::{Ieee32, Ieee64, Imm64, Offset32, Uimm32, Uimm64, Uimm8, V128Imm};
 pub use crate::ir::types::*;
 pub use crate::ir::{
     dynamic_to_fixed, AtomicRmwOp, Block, BlockCall, Constant, DataFlowGraph, DynamicStackSlot,
@@ -127,5 +127,12 @@ impl<'a, 'b, 'c> generated_code::Context for IsleContext<'a, 'b, 'c> {
         self.ctx.subsume_values.insert(value);
         self.ctx.stats.subsume += 1;
         value
+    }
+
+    fn splat64(&mut self, val: u64) -> Constant {
+        let val = u128::from(val);
+        let val = val | (val << 64);
+        let imm = V128Imm(val.to_le_bytes());
+        self.ctx.func.dfg.constants.insert(imm.into())
     }
 }

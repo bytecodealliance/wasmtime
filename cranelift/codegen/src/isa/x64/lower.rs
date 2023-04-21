@@ -150,7 +150,7 @@ fn emit_vm_call(
 
     // TODO avoid recreating signatures for every single Libcall function.
     let call_conv = CallConv::for_libcall(flags, CallConv::triple_default(triple));
-    let sig = libcall.signature(call_conv);
+    let sig = libcall.signature(call_conv, types::I64);
     let caller_conv = ctx.abi().call_conv(ctx.sigs());
 
     if !ctx.sigs().have_abi_sig_for_signature(&sig) {

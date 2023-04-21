@@ -12,7 +12,7 @@ pub(crate) type Entries = Vec<Option<DataValue>>;
 #[derive(Debug)]
 pub struct Frame<'a> {
     /// The currently executing function.
-    pub(crate) function: &'a Function,
+    function: &'a Function,
     /// The current mapping of SSA value-references to their actual values. For efficiency, each SSA value is used as an
     /// index into the Vec, meaning some slots may be unused.
     registers: Entries,
@@ -99,6 +99,11 @@ impl<'a> Frame<'a> {
     /// Accessor for the current entries in the frame.
     pub fn entries_mut(&mut self) -> &mut [Option<DataValue>] {
         &mut self.registers
+    }
+
+    /// Accessor for the [`Function`] of this frame.
+    pub fn function(&self) -> &'a Function {
+        self.function
     }
 }
 

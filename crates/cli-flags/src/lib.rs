@@ -20,7 +20,7 @@ use anyhow::{bail, Result};
 use clap::Parser;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use wasmtime::{Config, ProfilingStrategy};
+use wasmtime::{Config, ProfilingStrategy, Strategy};
 
 pub const SUPPORTED_WASM_FEATURES: &[(&str, &str)] = &[
     ("all", "enables all supported WebAssembly features"),
@@ -65,6 +65,10 @@ pub const SUPPORTED_WASI_MODULES: &[(&str, &str)] = &[
     (
         "experimental-wasi-threads",
         "enables support for the WASI threading API (experimental), see https://github.com/WebAssembly/wasi-threads",
+    ),
+    (
+        "experimental-wasi-http",
+        "enables support for the WASI HTTP APIs (experimental), see https://github.com/WebAssembly/wasi-http",
     ),
 ];
 
@@ -240,6 +244,12 @@ pub struct CommonOptions {
     /// performance cost.
     #[clap(long)]
     pub relaxed_simd_deterministic: bool,
+    /// Explicitly specify the name of the compiler to use for WebAssembly.
+    ///
+    /// Currently only `cranelift` and `winch` are supported, but not all builds
+    /// of Wasmtime have both built in.
+    #[clap(long)]
+    pub compiler: Option<String>,
 }
 
 impl CommonOptions {
@@ -257,6 +267,13 @@ impl CommonOptions {
 
     pub fn config(&self, target: Option<&str>) -> Result<Config> {
         let mut config = Config::new();
+
+        config.strategy(match self.compiler.as_deref() {
+            None => Strategy::Auto,
+            Some("cranelift") => Strategy::Cranelift,
+            Some("winch") => Strategy::Winch,
+            Some(s) => bail!("unknown compiler: {s}"),
+        });
 
         // Set the target before setting any cranelift options, since the
         // target will reset any target-specific options.
@@ -489,6 +506,7 @@ fn parse_wasi_modules(modules: &str) -> Result<WasiModules> {
                 "experimental-wasi-crypto" => Ok(wasi_modules.wasi_crypto = enable),
                 "experimental-wasi-nn" => Ok(wasi_modules.wasi_nn = enable),
                 "experimental-wasi-threads" => Ok(wasi_modules.wasi_threads = enable),
+                "experimental-wasi-http" => Ok(wasi_modules.wasi_http = enable),
                 "default" => bail!("'default' cannot be specified with other WASI modules"),
                 _ => bail!("unsupported WASI module '{}'", module),
             };
@@ -523,6 +541,9 @@ pub struct WasiModules {
 
     /// Enable the experimental wasi-threads implementation.
     pub wasi_threads: bool,
+
+    /// Enable the experimental wasi-http implementation
+    pub wasi_http: bool,
 }
 
 impl Default for WasiModules {
@@ -532,6 +553,7 @@ impl Default for WasiModules {
             wasi_crypto: false,
             wasi_nn: false,
             wasi_threads: false,
+            wasi_http: false,
         }
     }
 }
@@ -544,6 +566,7 @@ impl WasiModules {
             wasi_nn: false,
             wasi_crypto: false,
             wasi_threads: false,
+            wasi_http: false,
         }
     }
 }
@@ -698,7 +721,8 @@ mod test {
                 wasi_common: true,
                 wasi_crypto: false,
                 wasi_nn: false,
-                wasi_threads: false
+                wasi_threads: false,
+                wasi_http: false,
             }
         );
     }
@@ -712,7 +736,8 @@ mod test {
                 wasi_common: true,
                 wasi_crypto: false,
                 wasi_nn: false,
-                wasi_threads: false
+                wasi_threads: false,
+                wasi_http: false
             }
         );
     }
@@ -730,7 +755,8 @@ mod test {
                 wasi_common: false,
                 wasi_crypto: false,
                 wasi_nn: true,
-                wasi_threads: false
+                wasi_threads: false,
+                wasi_http: false,
             }
         );
     }
@@ -745,7 +771,8 @@ mod test {
                 wasi_common: false,
                 wasi_crypto: false,
                 wasi_nn: false,
-                wasi_threads: false
+                wasi_threads: false,
+                wasi_http: false,
             }
         );
     }

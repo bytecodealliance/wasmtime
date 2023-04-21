@@ -10,6 +10,7 @@ use crate::{machinst::*, trace};
 use crate::{settings, CodegenError, CodegenResult};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
+use cranelift_control::ControlPlane;
 use regalloc2::{Allocation, PRegSet, VReg};
 use smallvec::{smallvec, SmallVec};
 use std::fmt;
@@ -100,6 +101,7 @@ impl Inst {
             | Inst::MovsxRmR { .. }
             | Inst::MovzxRmR { .. }
             | Inst::MulHi { .. }
+            | Inst::UMulLo { .. }
             | Inst::Neg { .. }
             | Inst::Not { .. }
             | Inst::Nop { .. }
@@ -179,7 +181,6 @@ impl Inst {
         src: RegMemImm,
         dst: Writable<Reg>,
     ) -> Self {
-        debug_assert!(size.is_one_of(&[OperandSize::Size32, OperandSize::Size64]));
         src.assert_regclass_is(RegClass::Int);
         debug_assert!(dst.to_reg().class() == RegClass::Int);
         Self::AluRmiR {
@@ -656,6 +657,7 @@ impl PrettyPrint for Inst {
             .to_string()
         }
 
+        #[allow(dead_code)]
         fn suffix_lqb(size: OperandSize) -> String {
             match size {
                 OperandSize::Size32 => "l",
@@ -690,7 +692,7 @@ impl PrettyPrint for Inst {
                 let src2 = src2.pretty_print(size_bytes, allocs);
                 format!(
                     "{} {}, {}, {}",
-                    ljustify2(op.to_string(), suffix_lqb(*size)),
+                    ljustify2(op.to_string(), suffix_bwlq(*size)),
                     src1,
                     src2,
                     dst
@@ -715,7 +717,7 @@ impl PrettyPrint for Inst {
                 let src1_dst = src1_dst.pretty_print(size_bytes, allocs);
                 format!(
                     "{} {}, {}",
-                    ljustify2(op.to_string(), suffix_lqb(*size)),
+                    ljustify2(op.to_string(), suffix_bwlq(*size)),
                     src2,
                     src1_dst,
                 )
@@ -845,6 +847,24 @@ impl PrettyPrint for Inst {
                     src2,
                     dst_lo,
                     dst_hi,
+                )
+            }
+
+            Inst::UMulLo {
+                size,
+                src1,
+                src2,
+                dst,
+            } => {
+                let src1 = pretty_print_reg(src1.to_reg(), size.to_bytes(), allocs);
+                let dst = pretty_print_reg(dst.to_reg().to_reg(), size.to_bytes(), allocs);
+                let src2 = src2.pretty_print(size.to_bytes(), allocs);
+                format!(
+                    "{} {}, {}, {}",
+                    ljustify2("mul".to_string(), suffix_bwlq(*size)),
+                    src1,
+                    src2,
+                    dst,
                 )
             }
 
@@ -1853,11 +1873,23 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
     // method above.
     match inst {
         Inst::AluRmiR {
-            src1, src2, dst, ..
+            size,
+            op,
+            src1,
+            src2,
+            dst,
+            ..
         } => {
-            collector.reg_use(src1.to_reg());
-            collector.reg_reuse_def(dst.to_writable_reg(), 0);
-            src2.get_operands(collector);
+            if *size == OperandSize::Size8 && *op == AluRmiROpcode::Mul {
+                // 8-bit imul has RAX as a fixed input/output
+                collector.reg_fixed_use(src1.to_reg(), regs::rax());
+                collector.reg_fixed_def(dst.to_writable_reg(), regs::rax());
+                src2.get_operands(collector);
+            } else {
+                collector.reg_use(src1.to_reg());
+                collector.reg_reuse_def(dst.to_writable_reg(), 0);
+                src2.get_operands(collector);
+            }
         }
         Inst::AluConstOp { dst, .. } => collector.reg_def(dst.to_writable_reg()),
         Inst::AluRM { src1_dst, src2, .. } => {
@@ -1922,6 +1954,20 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             collector.reg_fixed_use(src1.to_reg(), regs::rax());
             collector.reg_fixed_def(dst_lo.to_writable_reg(), regs::rax());
             collector.reg_fixed_def(dst_hi.to_writable_reg(), regs::rdx());
+            src2.get_operands(collector);
+        }
+        Inst::UMulLo {
+            size,
+            src1,
+            src2,
+            dst,
+            ..
+        } => {
+            collector.reg_fixed_use(src1.to_reg(), regs::rax());
+            collector.reg_fixed_def(dst.to_writable_reg(), regs::rax());
+            if *size != OperandSize::Size8 {
+                collector.reg_clobbers(PRegSet::empty().with(regs::gpr_preg(regs::ENC_RDX)));
+            }
             src2.get_operands(collector);
         }
         Inst::SignExtendData { size, src, dst } => {
@@ -2547,6 +2593,9 @@ pub struct EmitState {
     stack_map: Option<StackMap>,
     /// Current source location.
     cur_srcloc: RelSourceLoc,
+    /// Only used during fuzz-testing. Otherwise, it is a zero-sized struct and
+    /// optimized away at compiletime. See [cranelift_control].
+    ctrl_plane: ControlPlane,
 }
 
 /// Constant state used during emissions of a sequence of instructions.
@@ -2583,12 +2632,13 @@ impl MachInstEmit for Inst {
 }
 
 impl MachInstEmitState<Inst> for EmitState {
-    fn new(abi: &Callee<X64ABIMachineSpec>) -> Self {
+    fn new(abi: &Callee<X64ABIMachineSpec>, ctrl_plane: ControlPlane) -> Self {
         EmitState {
             virtual_sp_offset: 0,
             nominal_sp_to_fp: abi.frame_size() as i64,
             stack_map: None,
             cur_srcloc: Default::default(),
+            ctrl_plane,
         }
     }
 
@@ -2598,6 +2648,14 @@ impl MachInstEmitState<Inst> for EmitState {
 
     fn pre_sourceloc(&mut self, srcloc: RelSourceLoc) {
         self.cur_srcloc = srcloc;
+    }
+
+    fn ctrl_plane_mut(&mut self) -> &mut ControlPlane {
+        &mut self.ctrl_plane
+    }
+
+    fn take_ctrl_plane(self) -> ControlPlane {
+        self.ctrl_plane
     }
 }
 

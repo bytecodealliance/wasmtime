@@ -1,6 +1,5 @@
 test compile precise-output
 set opt_level=speed
-set use_egraphs=true
 target x86_64
 
 ;; `atomic_rmw` is not a load, but it reports `true` to `.can_load()`. We want

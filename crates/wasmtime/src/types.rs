@@ -19,7 +19,7 @@ pub enum Mutability {
 // Value Types
 
 /// A list of all possible value types in WebAssembly.
-#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
 pub enum ValType {
     // NB: the ordering here is intended to match the ordering in
     // `wasmtime_types::WasmType` to help improve codegen when converting.

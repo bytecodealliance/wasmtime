@@ -63,8 +63,8 @@
 ;; block1:
 ;;   lgr %r5, %r2
 ;;   ag %r5, 0(%r3)
-;;   lghi %r4, 4096
-;;   lrv %r2, 0(%r4,%r5)
+;;   lghi %r2, 4096
+;;   lrv %r2, 0(%r2,%r5)
 ;;   jg label2
 ;; block2:
 ;;   br %r14

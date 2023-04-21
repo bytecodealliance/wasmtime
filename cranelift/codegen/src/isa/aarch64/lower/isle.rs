@@ -155,6 +155,17 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
         }
     }
 
+    fn ashr_from_u64(&mut self, ty: Type, n: u64) -> Option<ShiftOpAndAmt> {
+        let shiftimm = ShiftOpShiftImm::maybe_from_shift(n)?;
+        let shiftee_bits = ty_bits(ty);
+        if shiftee_bits <= std::u8::MAX as usize {
+            let shiftimm = shiftimm.mask(shiftee_bits as u8);
+            Some(ShiftOpAndAmt::new(ShiftOp::ASR, shiftimm))
+        } else {
+            None
+        }
+    }
+
     fn integral_ty(&mut self, ty: Type) -> Option<Type> {
         match ty {
             I8 | I16 | I32 | I64 | R64 => Some(ty),

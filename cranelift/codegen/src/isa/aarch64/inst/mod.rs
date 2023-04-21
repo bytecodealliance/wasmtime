@@ -812,7 +812,7 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_use(rn);
             collector.reg_use(rm);
         }
-        &Inst::VecRRRMod { rd, ri, rn, rm, .. } => {
+        &Inst::VecRRRMod { rd, ri, rn, rm, .. } | &Inst::VecFmlaElem { rd, ri, rn, rm, .. } => {
             collector.reg_reuse_def(rd, 1); // `rd` == `ri`.
             collector.reg_use(ri);
             collector.reg_use(rn);
@@ -1191,14 +1191,16 @@ impl Inst {
                 rm,
                 ra,
             } => {
-                let op = match alu_op {
-                    ALUOp3::MAdd => "madd",
-                    ALUOp3::MSub => "msub",
+                let (op, da_size) = match alu_op {
+                    ALUOp3::MAdd => ("madd", size),
+                    ALUOp3::MSub => ("msub", size),
+                    ALUOp3::UMAddL => ("umaddl", OperandSize::Size64),
+                    ALUOp3::SMAddL => ("smaddl", OperandSize::Size64),
                 };
-                let rd = pretty_print_ireg(rd.to_reg(), size, allocs);
+                let rd = pretty_print_ireg(rd.to_reg(), da_size, allocs);
                 let rn = pretty_print_ireg(rn, size, allocs);
                 let rm = pretty_print_ireg(rm, size, allocs);
-                let ra = pretty_print_ireg(ra, size, allocs);
+                let ra = pretty_print_ireg(ra, da_size, allocs);
 
                 format!("{} {}, {}, {}, {}", op, rd, rn, rm, ra)
             }
@@ -2169,6 +2171,26 @@ impl Inst {
                 let ri = pretty_print_vreg_vector(ri, size, allocs);
                 let rn = pretty_print_vreg_vector(rn, size, allocs);
                 let rm = pretty_print_vreg_vector(rm, size, allocs);
+                format!("{} {}, {}, {}, {}", op, rd, ri, rn, rm)
+            }
+            &Inst::VecFmlaElem {
+                rd,
+                ri,
+                rn,
+                rm,
+                alu_op,
+                size,
+                idx,
+            } => {
+                let (op, size) = match alu_op {
+                    VecALUModOp::Fmla => ("fmla", size),
+                    VecALUModOp::Fmls => ("fmls", size),
+                    _ => unreachable!(),
+                };
+                let rd = pretty_print_vreg_vector(rd.to_reg(), size, allocs);
+                let ri = pretty_print_vreg_vector(ri, size, allocs);
+                let rn = pretty_print_vreg_vector(rn, size, allocs);
+                let rm = pretty_print_vreg_element(rm, idx.into(), size.lane_size(), allocs);
                 format!("{} {}, {}, {}, {}", op, rd, ri, rn, rm)
             }
             &Inst::VecRRRLong {

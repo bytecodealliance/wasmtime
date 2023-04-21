@@ -621,29 +621,29 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   li t2,17
-;   andi a1,t2,63
-;   li a3,64
-;   sub a5,a3,a1
-;   srl a7,a0,a1
-;   sll t4,a0,a5
-;   select_reg t1,zero,t4##condition=(a1 eq zero)
-;   or a0,a7,t1
+;   li a6,17
+;   andi a1,a6,63
+;   li a2,64
+;   sub a4,a2,a1
+;   srl a6,a0,a1
+;   sll t3,a0,a4
+;   select_reg t0,zero,t3##condition=(a1 eq zero)
+;   or a0,a6,t0
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi t2, zero, 0x11
-;   andi a1, t2, 0x3f
-;   addi a3, zero, 0x40
-;   sub a5, a3, a1
-;   srl a7, a0, a1
-;   sll t4, a0, a5
+;   addi a6, zero, 0x11
+;   andi a1, a6, 0x3f
+;   addi a2, zero, 0x40
+;   sub a4, a2, a1
+;   srl a6, a0, a1
+;   sll t3, a0, a4
 ;   beqz a1, 0xc
-;   ori t1, t4, 0
+;   ori t0, t3, 0
 ;   j 8
-;   ori t1, zero, 0
-;   or a0, a7, t1
+;   ori t0, zero, 0
+;   or a0, a6, t0
 ;   ret
 
 function %f21(i64) -> i64 {
@@ -655,29 +655,29 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   li t2,17
-;   andi a1,t2,63
-;   li a3,64
-;   sub a5,a3,a1
-;   sll a7,a0,a1
-;   srl t4,a0,a5
-;   select_reg t1,zero,t4##condition=(a1 eq zero)
-;   or a0,a7,t1
+;   li a6,17
+;   andi a1,a6,63
+;   li a2,64
+;   sub a4,a2,a1
+;   sll a6,a0,a1
+;   srl t3,a0,a4
+;   select_reg t0,zero,t3##condition=(a1 eq zero)
+;   or a0,a6,t0
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi t2, zero, 0x11
-;   andi a1, t2, 0x3f
-;   addi a3, zero, 0x40
-;   sub a5, a3, a1
-;   sll a7, a0, a1
-;   srl t4, a0, a5
+;   addi a6, zero, 0x11
+;   andi a1, a6, 0x3f
+;   addi a2, zero, 0x40
+;   sub a4, a2, a1
+;   sll a6, a0, a1
+;   srl t3, a0, a4
 ;   beqz a1, 0xc
-;   ori t1, t4, 0
+;   ori t0, t3, 0
 ;   j 8
-;   ori t1, zero, 0
-;   or a0, a7, t1
+;   ori t0, zero, 0
+;   or a0, a6, t0
 ;   ret
 
 function %f22(i32) -> i32 {
@@ -689,33 +689,33 @@ block0(v0: i32):
 
 ; VCode:
 ; block0:
-;   slli t2,a0,32
-;   srli a1,t2,32
-;   li a3,17
-;   andi a5,a3,31
-;   li a7,32
-;   sub t4,a7,a5
-;   sll t1,a1,a5
-;   srl a0,a1,t4
-;   select_reg a2,zero,a0##condition=(a5 eq zero)
-;   or a0,t1,a2
+;   li t3,17
+;   slli a0,a0,32
+;   srli a2,a0,32
+;   andi a4,t3,31
+;   li a6,32
+;   sub t3,a6,a4
+;   sll t0,a2,a4
+;   srl t2,a2,t3
+;   select_reg a1,zero,t2##condition=(a4 eq zero)
+;   or a0,t0,a1
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   slli t2, a0, 0x20
-;   srli a1, t2, 0x20
-;   addi a3, zero, 0x11
-;   andi a5, a3, 0x1f
-;   addi a7, zero, 0x20
-;   sub t4, a7, a5
-;   sll t1, a1, a5
-;   srl a0, a1, t4
-;   beqz a5, 0xc
-;   ori a2, a0, 0
+;   addi t3, zero, 0x11
+;   slli a0, a0, 0x20
+;   srli a2, a0, 0x20
+;   andi a4, t3, 0x1f
+;   addi a6, zero, 0x20
+;   sub t3, a6, a4
+;   sll t0, a2, a4
+;   srl t2, a2, t3
+;   beqz a4, 0xc
+;   ori a1, t2, 0
 ;   j 8
-;   ori a2, zero, 0
-;   or a0, t1, a2
+;   ori a1, zero, 0
+;   or a0, t0, a1
 ;   ret
 
 function %f23(i16) -> i16 {
@@ -727,33 +727,33 @@ block0(v0: i16):
 
 ; VCode:
 ; block0:
-;   slli t2,a0,48
-;   srli a1,t2,48
-;   li a3,10
-;   andi a5,a3,15
-;   li a7,16
-;   sub t4,a7,a5
-;   sll t1,a1,a5
-;   srl a0,a1,t4
-;   select_reg a2,zero,a0##condition=(a5 eq zero)
-;   or a0,t1,a2
+;   li t3,10
+;   slli a0,a0,48
+;   srli a2,a0,48
+;   andi a4,t3,15
+;   li a6,16
+;   sub t3,a6,a4
+;   sll t0,a2,a4
+;   srl t2,a2,t3
+;   select_reg a1,zero,t2##condition=(a4 eq zero)
+;   or a0,t0,a1
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   slli t2, a0, 0x30
-;   srli a1, t2, 0x30
-;   addi a3, zero, 0xa
-;   andi a5, a3, 0xf
-;   addi a7, zero, 0x10
-;   sub t4, a7, a5
-;   sll t1, a1, a5
-;   srl a0, a1, t4
-;   beqz a5, 0xc
-;   ori a2, a0, 0
+;   addi t3, zero, 0xa
+;   slli a0, a0, 0x30
+;   srli a2, a0, 0x30
+;   andi a4, t3, 0xf
+;   addi a6, zero, 0x10
+;   sub t3, a6, a4
+;   sll t0, a2, a4
+;   srl t2, a2, t3
+;   beqz a4, 0xc
+;   ori a1, t2, 0
 ;   j 8
-;   ori a2, zero, 0
-;   or a0, t1, a2
+;   ori a1, zero, 0
+;   or a0, t0, a1
 ;   ret
 
 function %f24(i8) -> i8 {
@@ -765,31 +765,31 @@ block0(v0: i8):
 
 ; VCode:
 ; block0:
-;   andi t2,a0,255
-;   li a1,3
-;   andi a3,a1,7
-;   li a5,8
-;   sub a7,a5,a3
-;   sll t4,t2,a3
-;   srl t1,t2,a7
-;   select_reg a0,zero,t1##condition=(a3 eq zero)
-;   or a0,t4,a0
+;   li a7,3
+;   andi a0,a0,255
+;   andi a2,a7,7
+;   li a4,8
+;   sub a6,a4,a2
+;   sll t3,a0,a2
+;   srl t0,a0,a6
+;   select_reg t2,zero,t0##condition=(a2 eq zero)
+;   or a0,t3,t2
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   andi t2, a0, 0xff
-;   addi a1, zero, 3
-;   andi a3, a1, 7
-;   addi a5, zero, 8
-;   sub a7, a5, a3
-;   sll t4, t2, a3
-;   srl t1, t2, a7
-;   beqz a3, 0xc
-;   ori a0, t1, 0
+;   addi a7, zero, 3
+;   andi a0, a0, 0xff
+;   andi a2, a7, 7
+;   addi a4, zero, 8
+;   sub a6, a4, a2
+;   sll t3, a0, a2
+;   srl t0, a0, a6
+;   beqz a2, 0xc
+;   ori t2, t0, 0
 ;   j 8
-;   ori a0, zero, 0
-;   or a0, t4, a0
+;   ori t2, zero, 0
+;   or a0, t3, t2
 ;   ret
 
 function %f25(i64) -> i64 {

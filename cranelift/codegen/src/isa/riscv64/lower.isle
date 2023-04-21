@@ -53,7 +53,7 @@
 (rule (match_shnadd (u64_from_imm64 1)) (AluOPRRR.Sh1add))
 (rule (match_shnadd (u64_from_imm64 2)) (AluOPRRR.Sh2add))
 (rule (match_shnadd (u64_from_imm64 3)) (AluOPRRR.Sh3add))
-  
+
 (rule 3 (lower (has_type $I64 (iadd x (ishl y (maybe_uextend (iconst n))))))
   (if-let $true (has_zba))
   (if-let shnadd (match_shnadd n))
@@ -75,7 +75,7 @@
 (rule (match_shnadd_uw (u64_from_imm64 1)) (AluOPRRR.Sh1adduw))
 (rule (match_shnadd_uw (u64_from_imm64 2)) (AluOPRRR.Sh2adduw))
 (rule (match_shnadd_uw (u64_from_imm64 3)) (AluOPRRR.Sh3adduw))
-  
+
 (rule 5 (lower (has_type $I64 (iadd x (ishl (uextend y @ (value_type $I32)) (maybe_uextend (iconst n))))))
   (if-let $true (has_zba))
   (if-let shnadd_uw (match_shnadd_uw n))
@@ -96,6 +96,11 @@
         ;; add carry.
         (high Reg (rv_add high_tmp carry)))
     (value_regs low high)))
+
+;; SIMD Vectors
+(rule 8 (lower (has_type (ty_vec128_int ty) (iadd x y)))
+  (if-let $true (has_v))
+  (rv_vadd_vv x y ty))
 
 ;;; Rules for `uadd_overflow_trap` ;;;;;;;;;;;;;
 (rule
@@ -230,8 +235,8 @@
     (rv_remu x y)))
 
 ;;;; Rules for `and` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule -1 (lower (has_type (fits_in_64 (ty_int ty)) (band x y)))
-  (rv_and x y))
+(rule -1 (lower (has_type (ty_int ty) (band x y)))
+  (gen_and ty x y))
 
 ;; Special cases for when one operand is an immediate that fits in 12 bits.
 (rule 2 (lower (has_type (fits_in_64 (ty_int ty)) (band x (imm12_from_value y))))
@@ -239,9 +244,6 @@
 
 (rule 1 (lower (has_type (fits_in_64 (ty_int ty)) (band (imm12_from_value x) y)))
   (rv_andi y x))
-
-(rule (lower (has_type $I128 (band x y)))
-  (lower_b128_binary (AluOPRRR.And) x y))
 
 (rule (lower (has_type $F32 (band x y)))
   (lower_float_binary (AluOPRRR.And) x y $F32))
@@ -277,8 +279,8 @@
 
 
 ;;;; Rules for `or` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule -1 (lower (has_type (fits_in_64 (ty_int ty)) (bor x y)))
-  (rv_or x y))
+(rule -1 (lower (has_type (ty_int ty) (bor x y)))
+  (gen_or ty x y))
 
 ;; Special cases for when one operand is an immediate that fits in 12 bits.
 (rule 2 (lower (has_type (fits_in_64 (ty_int ty)) (bor x (imm12_from_value y))))
@@ -286,9 +288,6 @@
 
 (rule 1 (lower (has_type (fits_in_64 (ty_int ty)) (bor (imm12_from_value x) y)))
   (rv_ori y x))
-
-(rule (lower (has_type $I128 (bor x y)))
-  (lower_b128_binary (AluOPRRR.Or) x y))
 
 (rule (lower (has_type $F32 (bor x y)))
   (lower_float_binary (AluOPRRR.Or) x y $F32))
@@ -345,11 +344,8 @@
 
 
 ;;;; Rules for `bnot` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule -1 (lower (has_type (fits_in_64 (ty_int ty)) (bnot x)))
-  (rv_xori x (imm_from_neg_bits -1)))
-
-(rule (lower (has_type $I128 (bnot x)))
-  (bnot_128 x))
+(rule -1 (lower (has_type (ty_int ty) (bnot x)))
+  (gen_bnot ty x))
 
 (rule
   (lower (has_type $F32 (bnot x)))
@@ -383,7 +379,7 @@
 
 (rule 1 (lower (has_type $I128 (clz x)))
   (lower_clz_i128 x))
-  
+
 ;;;; Rules for `cls` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_64 ty) (cls x)))
   (lower_cls ty x))
@@ -652,7 +648,7 @@
 ;;;;;  Rules for `ireduce`;;;;;;;;;;;;;;;;;
 (rule
   (lower (has_type ty (ireduce x)))
-  (gen_move2 (value_regs_get x 0) ty ty))
+  (value_regs_get x 0))
 
 ;;;;;  Rules for `fpromote`;;;;;;;;;;;;;;;;;
 (rule (lower (fpromote x))
@@ -730,16 +726,16 @@
 (rule
   (lower (isplit x))
   (let
-    ((t1 Reg (gen_move2 (value_regs_get x 0) $I64 $I64))
-      (t2 Reg (gen_move2 (value_regs_get x 1) $I64 $I64)))
+    ((t1 Reg (value_regs_get x 0))
+      (t2 Reg (value_regs_get x 1)))
     (output_pair t1 t2)))
 
 ;;;;;  Rules for `iconcat`;;;;;;;;;
 (rule
   (lower (has_type $I128 (iconcat x y)))
   (let
-    ((t1 Reg (gen_move2 x $I64 $I64))
-      (t2 Reg (gen_move2 y $I64 $I64)))
+    ((t1 Reg x)
+      (t2 Reg y))
     (value_regs t1 t2)))
 
 ;;;;;  Rules for `smax`;;;;;;;;;
@@ -818,6 +814,12 @@
   (lower (has_type $I128 (load flags p @ (value_type (ty_addr64 _)) offset)))
   (gen_load_128 p offset flags))
 
+(rule 2
+  (lower (has_type (ty_vec128_int ty) (load flags p @ (value_type (ty_addr64 _)) offset)))
+  (if-let $true (has_v))
+  (let ((eew VecElementWidth (element_width_from_type ty)))
+    (vec_load eew (VecAMode.UnitStride (gen_amode p offset $I64)) flags ty)))
+
 ;;;;;  Rules for `istore8`;;;;;;;;;
 (rule
   (lower (istore8 flags x p @ (value_type (ty_addr64 _)) offset))
@@ -841,6 +843,12 @@
 (rule 1
   (lower (store flags x @ (value_type $I128 ) p @ (value_type (ty_addr64 _)) offset))
   (gen_store_128 p offset flags x))
+
+(rule 2
+  (lower (store flags x @ (value_type (ty_vec128_int ty)) p @ (value_type (ty_addr64 _)) offset))
+  (if-let $true (has_v))
+  (let ((eew VecElementWidth (element_width_from_type ty)))
+    (vec_store eew (VecAMode.UnitStride (gen_amode p offset $I64)) x flags ty)))
 
 (decl gen_icmp (IntCC ValueRegs ValueRegs Type) Reg)
 (rule
@@ -927,17 +935,23 @@
 
 
 ;;;;;  Rules for `select_spectre_guard`;;;;;;;;;
-(rule
-  (lower (has_type r_ty (select_spectre_guard (icmp cc ca @ (value_type cty) cb) a b)))
-  (let
-    ((dst VecWritableReg (alloc_vec_writable r_ty))
-      (r Reg (lower_icmp cc ca cb cty))
-      (_ Unit (emit (MInst.SelectIf $true (vec_writable_clone dst) r a b))))
-    (vec_writable_to_regs dst)))
 
-(rule -1
-  (lower (has_type ty (select_spectre_guard c @ (value_type cty) x y)))
-  (gen_select ty (truthy_to_reg cty (normalize_cmp_value cty c (ExtendOp.Zero))) x y))
+;; SelectSpectreGuard is equivalent to Select, but we should not use a branch based
+;; lowering for it. Instead we use a conditional move based lowering.
+;;
+;; We don't have cmov's in RISC-V either, but we can emulate those using bitwise
+;; operations, which is what we do below.
+(rule (lower (has_type ty (select_spectre_guard cmp @ (value_type cmp_ty) x @ (value_type arg_ty) y)))
+  (let (;; Build a mask that is 0 or -1 depending on the input comparision value.
+        ;; `lower_bmask` handles normalizing the input.
+        (mask ValueRegs (lower_bmask arg_ty cmp_ty cmp))
+        ;; Using the mask above we can select either `x` or `y` by
+        ;; performing a bitwise `and` on both sides and then merging them
+        ;; together. We know that only the bits of one of the sides will be selected.
+        ;; TODO: We can use `andn` here if we have `Zbb`
+        (lhs ValueRegs (gen_and arg_ty x mask))
+        (rhs ValueRegs (gen_and arg_ty y (gen_bnot arg_ty mask))))
+    (gen_or arg_ty lhs rhs)))
 
 ;;;;;  Rules for `bmask`;;;;;;;;;
 (rule

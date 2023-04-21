@@ -1415,6 +1415,7 @@ block0(v0: i8x16, v1: i32):
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
+;   addb %bh, %bh
 
 function %i8x16_shl_imm(i8x16) -> i8x16 {
 block0(v0: i8x16):
@@ -1658,7 +1659,7 @@ block0(v0: i8x16, v1: i32):
 ;   retq
 ;   addb %al, (%rax)
 ;   addb %al, (%rax)
-;   addb %bh, %bh
+;   addb %al, (%rax)
 
 function %i8x16_ushr_imm(i8x16) -> i8x16 {
 block0(v0: i8x16):

@@ -89,7 +89,7 @@ pub struct ValueLabelStart {
     pub label: ValueLabel,
 }
 
-/// Value label assignements: label starts or value aliases.
+/// Value label assignments: label starts or value aliases.
 #[derive(Debug, Clone, PartialEq, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub enum ValueLabelAssignments {

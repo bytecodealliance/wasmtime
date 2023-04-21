@@ -1,0 +1,85 @@
+test interpret
+test run
+set enable_llvm_abi_extensions=true
+target x86_64
+target aarch64
+
+function %saddof_i128(i128, i128) -> i128, i8 {
+block0(v0: i128,v1: i128):
+    v2, v3 = sadd_overflow v0, v1
+    return v2, v3
+}
+; run: %saddof_i128(0, 0) == [0, 0]
+; run: %saddof_i128(1, 0) == [1, 0]
+; run: %saddof_i128(1, 1) == [2, 0]
+; run: %saddof_i128(1, -1) == [0, 0]
+; run: %saddof_i128(0xFFFFFFFF_FFFFFFFF_00000000_00000000, 0x00000000_00000000_FFFFFFFF_FFFFFFFF) == [-1, 0]
+; run: %saddof_i128(0x00000000_00000000_FFFFFFFF_FFFFFFFF, 1) == [0x1_00000000_00000000, 0]
+; run: %saddof_i128(-1, 1) == [0, 0]
+; run: %saddof_i128(0x7FFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF, 0x7FFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF) == [-2, 1]
+; run: %saddof_i128(0x7FFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF, 0x80000000_00000000_00000000_00000000) == [-1, 0]
+; run: %saddof_i128(0x7FFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF, 0x80000000_00000000_00000000_00000001) == [0, 0]
+; run: %saddof_i128(0xFFFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF, 0x80000000_00000000_00000000_00000000) == [0x7FFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF, 1]
+; run: %saddof_i128(0xFFFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF, 0x80000000_00000000_00000000_00000001) == [0x80000000_00000000_00000000_00000000, 0]
+; run: %saddof_i128(0x7FFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF, 1) == [0x80000000_00000000_00000000_00000000, 1]
+; run: %saddof_i128(0x7FFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFE, 1) == [0x7FFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF, 0]
+; run: %saddof_i128(0x01234567_89ABCDEF_01234567_89ABCDEF, 0xFEDCBA98_76543210_FEDCBA98_76543210) == [-1, 0]
+; run: %saddof_i128(0x06060606_06060606_A00A00A0_0A00A00A, 0x30303030_30303030_0BB0BB0B_B0BB0BB0) == [0x36363636_36363636_ABBABBAB_BABBABBA, 0]
+; run: %saddof_i128(0xC0FFEEEE_C0FFEEEE_C0FFEEEE_C0FFEEEE, 0x1DCB1111_1DCB1111_1DCB1111_1DCB1111) == [0xDECAFFFF_DECAFFFF_DECAFFFF_DECAFFFF, 0]
+
+function %saddof_i64(i64, i64) -> i64, i8 {
+block0(v0: i64,v1: i64):
+    v2, v3 = sadd_overflow v0, v1
+    return v2, v3
+}
+; run: %saddof_i64(0, 0) == [0, 0]
+; run: %saddof_i64(0, 1) == [1, 0]
+; run: %saddof_i64(-1, 0) == [-1, 0]
+; run: %saddof_i64(-1, 1) == [0, 0]
+; run: %saddof_i64(0x7FFFFFFF_FFFFFFFF, 0x7FFFFFFF_FFFFFFFF) == [-2, 1]
+; run: %saddof_i64(0x7FFFFFFF_FFFFFFFF, 0x80000000_00000000) == [-1, 0]
+; run: %saddof_i64(0x7FFFFFFF_FFFFFFFF, 0x80000000_00000001) == [0, 0]
+; run: %saddof_i64(0x01234567_89ABCDEF, 0xFEDCBA98_76543210) == [-1, 0]
+; run: %saddof_i64(0x01234567_89ABCDEF, 0xFEDCBA98_76543220) == [0xF, 0]
+; run: %saddof_i64(0xA00A00A0_0A00A00A, 0x0BB0BB0B_B0BB0BB0) == [0xABBABBAB_BABBABBA, 0]
+; run: %saddof_i64(0xC0FFEEEE_C0FFEEEE, 0x1DCB1111_1DCB1111) == [0xDECAFFFF_DECAFFFF, 0]
+
+function %saddof_i8(i8, i8) -> i8, i8 {
+block0(v0: i8, v1: i8):
+    v2, v3 = sadd_overflow v0, v1
+    return v2, v3
+}
+; run: %saddof_i8(0, 1) == [1, 0]
+; run: %saddof_i8(100, 27) == [127, 0]
+; run: %saddof_i8(100, -20) == [80, 0]
+; run: %saddof_i8(100, 28) == [-128, 1]
+; run: %saddof_i8(-128, -128) == [0, 1]
+; run: %saddof_i8(-128, -1) == [0x7F, 1]
+; run: %saddof_i8(-127, -1) == [-128, 0]
+; run: %saddof_i8(127, 1) == [0x80, 1]
+
+function %saddof_i16(i16, i16) -> i16, i8 {
+block0(v0: i16, v1: i16):
+    v2, v3 = sadd_overflow v0, v1
+    return v2, v3
+}
+; run: %saddof_i16(0, 1) == [1, 0]
+; run: %saddof_i16(100, 27) == [127, 0]
+; run: %saddof_i16(100, 28) == [128, 0]
+; run: %saddof_i16(32000, 767) == [32767, 0]
+; run: %saddof_i16(32000, 768) == [-32768, 1]
+; run: %saddof_i16(-32767, -1) == [-32768, 0]
+; run: %saddof_i16(-32768, -1) == [32767, 1]
+
+function %saddof_i32(i32, i32) -> i32, i8 {
+block0(v0: i32, v1: i32):
+    v2, v3 = sadd_overflow v0, v1
+    return v2, v3
+}
+; run: %saddof_i32(0, 1) == [1, 0]
+; run: %saddof_i32(100, 27) == [127, 0]
+; run: %saddof_i32(100, 28) == [128, 0]
+; run: %saddof_i32(0x7FFF_FFFE, 1) == [0x7FFF_FFFF, 0]
+; run: %saddof_i32(0x7FFF_FFFF, 1) == [0x8000_0000, 1]
+; run: %saddof_i32(0x8000_0000, 0xFFFF_FFFF) == [0x7FFF_FFFF, 1]
+; run: %saddof_i32(0x8000_0001, 0xFFFF_FFFF) == [0x8000_0000, 0]

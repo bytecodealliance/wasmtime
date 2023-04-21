@@ -2,8 +2,8 @@
 //! calling convention, see [ABI].
 use super::CodeGenContext;
 use crate::{
-    abi::{align_to, ABIArg, ABIResult, ABISig, ABI},
-    masm::{MacroAssembler, OperandSize},
+    abi::{align_to, calculate_frame_adjustment, ABIArg, ABIResult, ABISig, ABI},
+    masm::{CalleeKind, MacroAssembler, OperandSize},
     reg::Reg,
     stack::Val,
 };
@@ -39,7 +39,7 @@ pub(crate) struct FnCall<'a> {
     /// │                                                  │
     /// │  Stack space created by any previous spills      │
     /// │  from the value stack; and which memory values   │
-    /// │  are used as function arguments.                 │        
+    /// │  are used as function arguments.                 │
     /// │                                                  │
     /// ├──────────────────────────────────────────────────┤ ---> The Wasm value stack at this point in time would look like:
     /// │                                                  │      [ Reg | Reg | Mem(offset) | Mem(offset) ]
@@ -51,7 +51,7 @@ pub(crate) struct FnCall<'a> {
     /// ├─────────────────────────────────────────────────┬┤ ---> The Wasm value stack at this point in time would look like:
     /// │                                                  │      [ Mem(offset) | Mem(offset) | Mem(offset) | Mem(offset) ]
     /// │                                                  │      Assuming that the callee takes 4 arguments, we calculate
-    /// │                                                  │      2 spilled registers + 2 memory values; all of which will be used  
+    /// │                                                  │      2 spilled registers + 2 memory values; all of which will be used
     /// │   Stack space allocated for                      │      as arguments to the call via `assign_args`, thus the memory they represent is
     /// │   the callee function arguments in the stack;    │      is considered to be consumed by the call.
     /// │   represented by `arg_stack_space`               │
@@ -59,7 +59,7 @@ pub(crate) struct FnCall<'a> {
     /// │                                                  │
     /// │                                                  │
     /// └──────────────────────────────────────────────────┘ ------> Stack pointer when emitting the call
-    ///    
+    ///
     total_stack_space: u32,
     /// The total stack space needed for the callee arguments on the
     /// stack, including any adjustments to the function's frame and
@@ -161,7 +161,7 @@ impl<'a> FnCall<'a> {
     ) {
         masm.reserve_stack(self.arg_stack_space);
         self.assign_args(context, masm, <A as ABI>::scratch_reg());
-        masm.call(callee);
+        masm.call(CalleeKind::Direct(callee));
         masm.free_stack(self.total_stack_space);
         context.drop_last(self.abi_sig.params.len());
         // The stack pointer at the end of the function call
@@ -212,11 +212,4 @@ impl<'a> FnCall<'a> {
             }
         }
     }
-}
-
-/// Calculates the delta needed to adjust a function's frame plus some
-/// addend to a given alignment.
-fn calculate_frame_adjustment(frame_size: u32, addend: u32, alignment: u32) -> u32 {
-    let total = frame_size + addend;
-    (alignment - (total % alignment)) % alignment
 }

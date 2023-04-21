@@ -110,7 +110,7 @@ impl<'a> Lexer<'a> {
         let mut buf = String::new();
         for text in &file_texts {
             file_starts.push(buf.len());
-            buf += &text;
+            buf += text;
             buf += "\n";
         }
 
@@ -243,14 +243,27 @@ impl<'a> Lexer<'a> {
 
                 let mut radix = 10;
 
-                // Check for hex literals.
-                if self.buf.get(self.pos.offset).copied() == Some(b'0')
-                    && (self.buf.get(self.pos.offset + 1).copied() == Some(b'x')
-                        || self.buf.get(self.pos.offset + 1).copied() == Some(b'X'))
-                {
-                    self.advance_pos();
-                    self.advance_pos();
-                    radix = 16;
+                // Check for prefixed literals.
+                match (
+                    self.buf.get(self.pos.offset),
+                    self.buf.get(self.pos.offset + 1),
+                ) {
+                    (Some(b'0'), Some(b'x')) | (Some(b'0'), Some(b'X')) => {
+                        self.advance_pos();
+                        self.advance_pos();
+                        radix = 16;
+                    }
+                    (Some(b'0'), Some(b'o')) => {
+                        self.advance_pos();
+                        self.advance_pos();
+                        radix = 8;
+                    }
+                    (Some(b'0'), Some(b'b')) => {
+                        self.advance_pos();
+                        self.advance_pos();
+                        radix = 2;
+                    }
+                    _ => {}
                 }
 
                 // Find the range in the buffer for this integer literal. We'll
@@ -258,7 +271,7 @@ impl<'a> Lexer<'a> {
                 // string-to-integer conversion.
                 let mut s = vec![];
                 while self.pos.offset < self.buf.len()
-                    && ((radix == 10 && self.buf[self.pos.offset].is_ascii_digit())
+                    && ((radix <= 10 && self.buf[self.pos.offset].is_ascii_digit())
                         || (radix == 16 && self.buf[self.pos.offset].is_ascii_hexdigit())
                         || self.buf[self.pos.offset] == b'_')
                 {
@@ -316,18 +329,12 @@ impl<'a> Lexer<'a> {
 impl Token {
     /// Is this an `Int` token?
     pub fn is_int(&self) -> bool {
-        match self {
-            Token::Int(_) => true,
-            _ => false,
-        }
+        matches!(self, Token::Int(_))
     }
 
     /// Is this a `Sym` token?
     pub fn is_sym(&self) -> bool {
-        match self {
-            Token::Symbol(_) => true,
-            _ => false,
-        }
+        matches!(self, Token::Symbol(_))
     }
 }
 

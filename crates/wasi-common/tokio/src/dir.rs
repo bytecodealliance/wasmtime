@@ -3,7 +3,7 @@ use std::any::Any;
 use std::path::PathBuf;
 use wasi_common::{
     dir::{ReaddirCursor, ReaddirEntity, WasiDir},
-    file::{FdFlags, Filestat, OFlags, WasiFile},
+    file::{FdFlags, Filestat, OFlags},
     Error, ErrorExt,
 };
 
@@ -28,18 +28,19 @@ impl WasiDir for Dir {
         read: bool,
         write: bool,
         fdflags: FdFlags,
-    ) -> Result<Box<dyn WasiFile>, Error> {
+    ) -> Result<wasi_common::dir::OpenResult, Error> {
         let f = block_on_dummy_executor(move || async move {
             self.0
                 .open_file_(symlink_follow, path, oflags, read, write, fdflags)
         })?;
-        Ok(Box::new(File::from_inner(f)))
-    }
-
-    async fn open_dir(&self, symlink_follow: bool, path: &str) -> Result<Box<dyn WasiDir>, Error> {
-        let d =
-            block_on_dummy_executor(move || async move { self.0.open_dir_(symlink_follow, path) })?;
-        Ok(Box::new(Dir(d)))
+        match f {
+            wasi_cap_std_sync::dir::OpenResult::File(f) => Ok(wasi_common::dir::OpenResult::File(
+                Box::new(File::from_inner(f)),
+            )),
+            wasi_cap_std_sync::dir::OpenResult::Dir(d) => {
+                Ok(wasi_common::dir::OpenResult::Dir(Box::new(Dir(d))))
+            }
+        }
     }
 
     async fn create_dir(&self, path: &str) -> Result<(), Error> {
@@ -127,6 +128,7 @@ impl WasiDir for Dir {
 mod test {
     use super::Dir;
     use cap_std::ambient_authority;
+    use wasi_common::file::{FdFlags, OFlags};
 
     #[tokio::test(flavor = "multi_thread")]
     async fn scratch_dir() {
@@ -137,9 +139,17 @@ mod test {
         let preopen_dir = cap_std::fs::Dir::open_ambient_dir(tempdir.path(), ambient_authority())
             .expect("open ambient temporary dir");
         let preopen_dir = Dir::from_cap_std(preopen_dir);
-        wasi_common::WasiDir::open_dir(&preopen_dir, false, ".")
-            .await
-            .expect("open the same directory via WasiDir abstraction");
+        wasi_common::WasiDir::open_file(
+            &preopen_dir,
+            false,
+            ".",
+            OFlags::empty(),
+            false,
+            false,
+            FdFlags::empty(),
+        )
+        .await
+        .expect("open the same directory via WasiDir abstraction");
     }
 
     // Readdir does not work on windows, so we won't test it there.

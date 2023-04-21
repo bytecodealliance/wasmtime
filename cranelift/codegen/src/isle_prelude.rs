@@ -356,6 +356,14 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
+        fn ty_int_ref_16_to_64(&mut self, ty: Type) -> Option<Type> {
+            match ty {
+                I16 | I32 | I64 | R64 => Some(ty),
+                _ => None,
+            }
+        }
+
+        #[inline]
         fn ty_int(&mut self, ty: Type) -> Option<Type> {
             ty.is_int().then(|| ty)
         }

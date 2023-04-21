@@ -441,18 +441,18 @@ block0(v0: i128, v1: i8, v2: i8):
 
 ; VCode:
 ; block0:
-;   movz x6, #42
+;   movz x7, #42
 ;   movz x8, #0
-;   subs xzr, x0, x6
+;   subs xzr, x0, x7
 ;   ccmp x1, x8, #nzcv, eq
 ;   csel x0, x2, x3, eq
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mov x6, #0x2a
+;   mov x7, #0x2a
 ;   mov x8, #0
-;   cmp x0, x6
+;   cmp x0, x7
 ;   ccmp x1, x8, #0, eq
 ;   csel x0, x2, x3, eq
 ;   ret
@@ -468,18 +468,18 @@ block0(v0: i128, v1: i16, v2: i16):
 
 ; VCode:
 ; block0:
-;   movz x6, #42
+;   movz x7, #42
 ;   movz x8, #0
-;   subs xzr, x0, x6
+;   subs xzr, x0, x7
 ;   ccmp x1, x8, #nzcv, eq
 ;   csel x0, x2, x3, eq
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mov x6, #0x2a
+;   mov x7, #0x2a
 ;   mov x8, #0
-;   cmp x0, x6
+;   cmp x0, x7
 ;   ccmp x1, x8, #0, eq
 ;   csel x0, x2, x3, eq
 ;   ret
@@ -495,18 +495,18 @@ block0(v0: i128, v1: i32, v2: i32):
 
 ; VCode:
 ; block0:
-;   movz x6, #42
+;   movz x7, #42
 ;   movz x8, #0
-;   subs xzr, x0, x6
+;   subs xzr, x0, x7
 ;   ccmp x1, x8, #nzcv, eq
 ;   csel x0, x2, x3, eq
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mov x6, #0x2a
+;   mov x7, #0x2a
 ;   mov x8, #0
-;   cmp x0, x6
+;   cmp x0, x7
 ;   ccmp x1, x8, #0, eq
 ;   csel x0, x2, x3, eq
 ;   ret
@@ -522,18 +522,18 @@ block0(v0: i128, v1: i64, v2: i64):
 
 ; VCode:
 ; block0:
-;   movz x6, #42
+;   movz x7, #42
 ;   movz x8, #0
-;   subs xzr, x0, x6
+;   subs xzr, x0, x7
 ;   ccmp x1, x8, #nzcv, eq
 ;   csel x0, x2, x3, eq
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mov x6, #0x2a
+;   mov x7, #0x2a
 ;   mov x8, #0
-;   cmp x0, x6
+;   cmp x0, x7
 ;   ccmp x1, x8, #0, eq
 ;   csel x0, x2, x3, eq
 ;   ret
@@ -549,9 +549,9 @@ block0(v0: i128, v1: i128, v2: i128):
 
 ; VCode:
 ; block0:
-;   movz x9, #42
+;   movz x10, #42
 ;   movz x11, #0
-;   subs xzr, x0, x9
+;   subs xzr, x0, x10
 ;   ccmp x1, x11, #nzcv, eq
 ;   csel x0, x2, x4, eq
 ;   csel x1, x3, x5, eq
@@ -559,9 +559,9 @@ block0(v0: i128, v1: i128, v2: i128):
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mov x9, #0x2a
+;   mov x10, #0x2a
 ;   mov x11, #0
-;   cmp x0, x9
+;   cmp x0, x10
 ;   ccmp x1, x11, #0, eq
 ;   csel x0, x2, x4, eq
 ;   csel x1, x3, x5, eq
@@ -1046,9 +1046,9 @@ block0(v0: i128, v1: i8, v2: i8):
 
 ; VCode:
 ; block0:
-;   movz x6, #42
+;   movz x7, #42
 ;   movz x8, #0
-;   subs xzr, x0, x6
+;   subs xzr, x0, x7
 ;   ccmp x1, x8, #nzcv, eq
 ;   csel x0, x2, x3, eq
 ;   csdb
@@ -1056,9 +1056,9 @@ block0(v0: i128, v1: i8, v2: i8):
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mov x6, #0x2a
+;   mov x7, #0x2a
 ;   mov x8, #0
-;   cmp x0, x6
+;   cmp x0, x7
 ;   ccmp x1, x8, #0, eq
 ;   csel x0, x2, x3, eq
 ;   csdb
@@ -1075,9 +1075,9 @@ block0(v0: i128, v1: i16, v2: i16):
 
 ; VCode:
 ; block0:
-;   movz x6, #42
+;   movz x7, #42
 ;   movz x8, #0
-;   subs xzr, x0, x6
+;   subs xzr, x0, x7
 ;   ccmp x1, x8, #nzcv, eq
 ;   csel x0, x2, x3, eq
 ;   csdb
@@ -1085,9 +1085,9 @@ block0(v0: i128, v1: i16, v2: i16):
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mov x6, #0x2a
+;   mov x7, #0x2a
 ;   mov x8, #0
-;   cmp x0, x6
+;   cmp x0, x7
 ;   ccmp x1, x8, #0, eq
 ;   csel x0, x2, x3, eq
 ;   csdb
@@ -1104,9 +1104,9 @@ block0(v0: i128, v1: i32, v2: i32):
 
 ; VCode:
 ; block0:
-;   movz x6, #42
+;   movz x7, #42
 ;   movz x8, #0
-;   subs xzr, x0, x6
+;   subs xzr, x0, x7
 ;   ccmp x1, x8, #nzcv, eq
 ;   csel x0, x2, x3, eq
 ;   csdb
@@ -1114,9 +1114,9 @@ block0(v0: i128, v1: i32, v2: i32):
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mov x6, #0x2a
+;   mov x7, #0x2a
 ;   mov x8, #0
-;   cmp x0, x6
+;   cmp x0, x7
 ;   ccmp x1, x8, #0, eq
 ;   csel x0, x2, x3, eq
 ;   csdb
@@ -1133,9 +1133,9 @@ block0(v0: i128, v1: i64, v2: i64):
 
 ; VCode:
 ; block0:
-;   movz x6, #42
+;   movz x7, #42
 ;   movz x8, #0
-;   subs xzr, x0, x6
+;   subs xzr, x0, x7
 ;   ccmp x1, x8, #nzcv, eq
 ;   csel x0, x2, x3, eq
 ;   csdb
@@ -1143,9 +1143,9 @@ block0(v0: i128, v1: i64, v2: i64):
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mov x6, #0x2a
+;   mov x7, #0x2a
 ;   mov x8, #0
-;   cmp x0, x6
+;   cmp x0, x7
 ;   ccmp x1, x8, #0, eq
 ;   csel x0, x2, x3, eq
 ;   csdb
@@ -1162,9 +1162,9 @@ block0(v0: i128, v1: i128, v2: i128):
 
 ; VCode:
 ; block0:
-;   movz x9, #42
+;   movz x10, #42
 ;   movz x11, #0
-;   subs xzr, x0, x9
+;   subs xzr, x0, x10
 ;   ccmp x1, x11, #nzcv, eq
 ;   csel x0, x2, x4, eq
 ;   csel x1, x3, x5, eq
@@ -1173,9 +1173,9 @@ block0(v0: i128, v1: i128, v2: i128):
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mov x9, #0x2a
+;   mov x10, #0x2a
 ;   mov x11, #0
-;   cmp x0, x9
+;   cmp x0, x10
 ;   ccmp x1, x11, #0, eq
 ;   csel x0, x2, x4, eq
 ;   csel x1, x3, x5, eq

@@ -43,9 +43,9 @@
 ;;   srli a7,a5,32
 ;;   ld a6,0(a2)
 ;;   add a6,a6,a7
-;;   lui a5,1
-;;   add a7,a6,a5
-;;   sb a1,0(a7)
+;;   lui a7,1
+;;   add a6,a6,a7
+;;   sb a1,0(a6)
 ;;   j label1
 ;; block1:
 ;;   ret
@@ -56,9 +56,9 @@
 ;;   srli a7,a5,32
 ;;   ld a6,0(a1)
 ;;   add a6,a6,a7
-;;   lui a5,1
-;;   add a7,a6,a5
-;;   lbu a0,0(a7)
+;;   lui a7,1
+;;   add a6,a6,a7
+;;   lbu a0,0(a6)
 ;;   j label1
 ;; block1:
 ;;   ret

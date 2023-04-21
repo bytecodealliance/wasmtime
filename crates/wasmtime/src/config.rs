@@ -220,7 +220,7 @@ impl Config {
     ///
     /// This method will error if the given target triple is not supported.
     #[cfg(compiler)]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
+    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))] // see build.rs
     pub fn target(&mut self, target: &str) -> Result<&mut Self> {
         self.compiler_config.target =
             Some(target_lexicon::Triple::from_str(target).map_err(|e| anyhow::anyhow!(e))?);
@@ -820,7 +820,7 @@ impl Config {
     ///
     /// The default value for this is `Strategy::Auto`.
     #[cfg(compiler)]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
+    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))] // see build.rs
     pub fn strategy(&mut self, strategy: Strategy) -> &mut Self {
         self.compiler_config.strategy = strategy;
         self
@@ -854,7 +854,7 @@ impl Config {
     ///
     /// The default value for this is `false`
     #[cfg(compiler)]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
+    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))] // see build.rs
     pub fn cranelift_debug_verifier(&mut self, enable: bool) -> &mut Self {
         let val = if enable { "true" } else { "false" };
         self.compiler_config
@@ -871,7 +871,7 @@ impl Config {
     ///
     /// The default value for this is `OptLevel::None`.
     #[cfg(compiler)]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
+    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))] // see build.rs
     pub fn cranelift_opt_level(&mut self, level: OptLevel) -> &mut Self {
         let val = match level {
             OptLevel::None => "none",
@@ -884,30 +884,6 @@ impl Config {
         self
     }
 
-    /// Configures the Cranelift code generator to use its
-    /// "egraph"-based mid-end optimizer.
-    ///
-    /// This optimizer has replaced the compiler's more traditional
-    /// pipeline of optimization passes with a unified code-rewriting
-    /// system. It is on by default, but the traditional optimization
-    /// pass structure is still available for now (it is deprecrated and
-    /// will be removed in a future version).
-    ///
-    /// The default value for this is `true`.
-    #[cfg(compiler)]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
-    #[deprecated(
-        since = "5.0.0",
-        note = "egraphs will be the default and this method will be removed in a future version."
-    )]
-    pub fn cranelift_use_egraphs(&mut self, enable: bool) -> &mut Self {
-        let val = if enable { "true" } else { "false" };
-        self.compiler_config
-            .settings
-            .insert("use_egraphs".to_string(), val.to_string());
-        self
-    }
-
     /// Configures whether Cranelift should perform a NaN-canonicalization pass.
     ///
     /// When Cranelift is used as a code generation backend this will configure
@@ -917,7 +893,7 @@ impl Config {
     ///
     /// The default value for this is `false`
     #[cfg(compiler)]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
+    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))] // see build.rs
     pub fn cranelift_nan_canonicalization(&mut self, enable: bool) -> &mut Self {
         let val = if enable { "true" } else { "false" };
         self.compiler_config
@@ -943,7 +919,7 @@ impl Config {
     /// cause `Engine::new` fail if the flag's name does not exist, or the value is not appropriate
     /// for the flag type.
     #[cfg(compiler)]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
+    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))] // see build.rs
     pub unsafe fn cranelift_flag_enable(&mut self, flag: &str) -> &mut Self {
         self.compiler_config.flags.insert(flag.to_string());
         self
@@ -969,7 +945,7 @@ impl Config {
     /// For example, feature `wasm_backtrace` will set `unwind_info` to `true`, but if it's
     /// manually set to false then it will fail.
     #[cfg(compiler)]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
+    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))] // see build.rs
     pub unsafe fn cranelift_flag_set(&mut self, name: &str, value: &str) -> &mut Self {
         self.compiler_config
             .settings
@@ -1546,7 +1522,18 @@ impl Config {
     #[cfg(compiler)]
     pub(crate) fn build_compiler(&mut self) -> Result<Box<dyn wasmtime_environ::Compiler>> {
         let mut compiler = match self.compiler_config.strategy {
-            Strategy::Auto | Strategy::Cranelift => wasmtime_cranelift::builder(),
+            #[cfg(feature = "cranelift")]
+            Strategy::Auto => wasmtime_cranelift::builder(),
+            #[cfg(all(feature = "winch", not(feature = "cranelift")))]
+            Strategy::Auto => wasmtime_winch::builder(),
+            #[cfg(feature = "cranelift")]
+            Strategy::Cranelift => wasmtime_cranelift::builder(),
+            #[cfg(not(feature = "cranelift"))]
+            Strategy::Cranelift => bail!("cranelift support not compiled in"),
+            #[cfg(feature = "winch")]
+            Strategy::Winch => wasmtime_winch::builder(),
+            #[cfg(not(feature = "winch"))]
+            Strategy::Winch => bail!("winch support not compiled in"),
         };
 
         if let Some(target) = &self.compiler_config.target {
@@ -1711,6 +1698,10 @@ pub enum Strategy {
     /// Currently the default backend, Cranelift aims to be a reasonably fast
     /// code generator which generates high quality machine code.
     Cranelift,
+
+    /// A baseline compiler for WebAssembly, currently under active development and not ready for
+    /// production applications.
+    Winch,
 }
 
 /// Possible optimization levels for the Cranelift codegen backend.

@@ -82,6 +82,7 @@
 
 (decl pure u8_as_u64 (u8) u64)
 (extern constructor u8_as_u64 u8_as_u64)
+(convert u8 u64 u8_as_u64)
 
 (decl pure u16_as_u64 (u16) u64)
 (extern constructor u16_as_u64 u16_as_u64)
@@ -359,6 +360,10 @@
 ;; An extractor that matches I64 or R64.
 (decl ty_int_ref_64 (Type) Type)
 (extern extractor ty_int_ref_64 ty_int_ref_64)
+
+;; An extractor that matches int or reference types bigger than 16 bits but at most 64 bits.
+(decl ty_int_ref_16_to_64 (Type) Type)
+(extern extractor ty_int_ref_16_to_64 ty_int_ref_16_to_64)
 
 ;; An extractor that only matches integers.
 (decl ty_int (Type) Type)

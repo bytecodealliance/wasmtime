@@ -1,6 +1,7 @@
 use crate::{
     abi::{ABISig, ABI},
     masm::{MacroAssembler, OperandSize},
+    CallingConvention,
 };
 use anyhow::Result;
 use call::FnCall;
@@ -10,7 +11,7 @@ mod context;
 pub(crate) use context::*;
 mod env;
 pub use env::*;
-mod call;
+pub mod call;
 
 /// The code generation abstraction.
 pub(crate) struct CodeGen<'a, A, M>
@@ -59,7 +60,7 @@ where
     pub fn emit(
         &mut self,
         body: &mut BinaryReader<'a>,
-        validator: FuncValidator<ValidatorResources>,
+        validator: &mut FuncValidator<ValidatorResources>,
     ) -> Result<()> {
         self.emit_start()
             .and_then(|_| self.emit_body(body, validator))
@@ -78,7 +79,7 @@ where
     fn emit_body(
         &mut self,
         body: &mut BinaryReader<'a>,
-        mut validator: FuncValidator<ValidatorResources>,
+        validator: &mut FuncValidator<ValidatorResources>,
     ) -> Result<()> {
         self.spill_register_arguments();
         let defined_locals_range = &self.context.frame.defined_locals_range;
@@ -127,7 +128,7 @@ where
             unreachable!()
         }
 
-        let sig = self.abi.sig(&callee.ty);
+        let sig = self.abi.sig(&callee.ty, &CallingConvention::Default);
         let fncall = FnCall::new(self.abi, &sig, &mut self.context, self.masm);
         fncall.emit::<M, A>(self.masm, &mut self.context, index);
     }

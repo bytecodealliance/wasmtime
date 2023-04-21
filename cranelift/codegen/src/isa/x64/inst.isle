@@ -14,14 +14,14 @@
        ;; Integer instructions.
 
        ;; Integer arithmetic/bit-twiddling.
-       (AluRmiR (size OperandSize) ;; 4 or 8
+       (AluRmiR (size OperandSize) ;; 1, 2, 4 or 8
                 (op AluRmiROpcode)
                 (src1 Gpr)
                 (src2 GprMemImm)
                 (dst WritableGpr))
 
        ;; Integer arithmetic read-modify-write on memory.
-       (AluRM (size OperandSize) ;; 4 or 8
+       (AluRM (size OperandSize) ;; 1, 2, 4 or 8
               (op AluRmiROpcode)
               (src1_dst SyntheticAmode)
               (src2 Gpr))
@@ -85,6 +85,12 @@
               (src2 GprMem)
               (dst_lo WritableGpr)
               (dst_hi WritableGpr))
+
+       ;; x64 'mul' instruction but it only outputs the low half
+       (UMulLo    (size OperandSize)
+                  (src1 Gpr)
+                  (src2 GprMem)
+                  (dst WritableGpr))
 
        ;; A synthetic instruction sequence used as part of the lowering of the
        ;; `srem` instruction which returns 0 if the divisor is -1 and
@@ -1633,8 +1639,11 @@
 (decl pure use_fma () bool)
 (extern constructor use_fma use_fma)
 
-(decl use_sse41 (bool) Type)
-(extern extractor infallible use_sse41 use_sse41)
+(decl pure use_sse41 () bool)
+(extern constructor use_sse41 use_sse41)
+
+(decl pure use_sse42 () bool)
+(extern constructor use_sse42 use_sse42)
 
 (decl pure use_avx_simd () bool)
 (extern constructor use_avx_simd use_avx_simd)
@@ -2118,6 +2127,29 @@
                         dst)
          dst)))
 
+(decl x64_alurmi_with_flags_paired (AluRmiROpcode Type Gpr GprMemImm) ProducesFlags)
+(rule (x64_alurmi_with_flags_paired opc (fits_in_64 ty) src1 src2)
+      (let ((dst WritableGpr (temp_writable_gpr)))
+        (ProducesFlags.ProducesFlagsReturnsResultWithConsumer
+         (MInst.AluRmiR (raw_operand_size_of_type ty)
+                        opc
+                        src1
+                        src2
+                        dst)
+         dst)))
+
+;; Should only be used for Adc and Sbb
+(decl x64_alurmi_with_flags_chained (AluRmiROpcode Type Gpr GprMemImm) ConsumesAndProducesFlags)
+(rule (x64_alurmi_with_flags_chained opc (fits_in_64 ty) src1 src2)
+      (let ((dst WritableGpr (temp_writable_gpr)))
+        (ConsumesAndProducesFlags.ReturnsReg
+         (MInst.AluRmiR (raw_operand_size_of_type ty)
+                        opc
+                        src1
+                        src2
+                        dst)
+         dst)))
+
 ;; Helper for creating `adc` instructions.
 (decl x64_adc_paired (Type Gpr GprMemImm) ConsumesFlags)
 (rule (x64_adc_paired ty src1 src2)
@@ -2169,6 +2201,24 @@
                  (AluRmiROpcode.Mul)
                  src1
                  src2))
+
+;; Helper for creating `umullo` instructions.
+(decl x64_umullo (Type Gpr GprMem) Gpr)
+(rule (x64_umullo ty src1 src2)
+      (let ((dst WritableGpr (temp_writable_gpr))
+            (size OperandSize (raw_operand_size_of_type ty))
+            (_ Unit (emit (MInst.UMulLo size src1 src2 dst))))
+        dst))
+
+(decl x64_umullo_with_flags_paired (Type Gpr GprMem) ProducesFlags)
+(rule (x64_umullo_with_flags_paired ty src1 src2)
+      (let ((dst WritableGpr (temp_writable_gpr)))
+           (ProducesFlags.ProducesFlagsReturnsResultWithConsumer
+                 (MInst.UMulLo (raw_operand_size_of_type ty)
+                               src1
+                               src2
+                               dst)
+                  dst)))
 
 ;; Helper for emitting `and` instructions.
 (decl x64_and (Type Gpr GprMemImm) Gpr)
@@ -3069,9 +3119,9 @@
       (if-let $true (use_avx_simd))
       (xmm_rmr_imm_vex (AvxOpcode.Vpblendw) src1 src2 imm))
 
-;; Helper for creating a `movsd` instruction which creates a new vector
-;; register where the upper 64-bits are from the first operand and the low
-;; 64-bits are from the second operand.
+;; Helper for creating `movsd`/`movss` instructions which create a new vector
+;; register where the upper bits are from the first operand and the low
+;; bits are from the second operand.
 ;;
 ;; Note that the second argument here is specifically `Xmm` instead of `XmmMem`
 ;; because there is no encoding of a 3-operand form of `movsd` and otherwise
@@ -3083,6 +3133,13 @@
 (rule 1 (x64_movsd_regmove src1 src2)
         (if-let $true (use_avx_simd))
         (xmm_rmir_vex (AvxOpcode.Vmovsd) src1 src2))
+
+(decl x64_movss_regmove (Xmm Xmm) Xmm)
+(rule (x64_movss_regmove src1 src2)
+      (xmm_rm_r_unaligned (SseOpcode.Movss) src1 src2))
+(rule 1 (x64_movss_regmove src1 src2)
+        (if-let $true (use_avx_simd))
+        (xmm_rmir_vex (AvxOpcode.Vmovss) src1 src2))
 
 ;; Helper for creating `movlhps` instructions.
 (decl x64_movlhps (Xmm XmmMem) Xmm)
@@ -4139,7 +4196,19 @@
 (rule (x64_pcmpeq $I8X16 x y) (x64_pcmpeqb x y))
 (rule (x64_pcmpeq $I16X8 x y) (x64_pcmpeqw x y))
 (rule (x64_pcmpeq $I32X4 x y) (x64_pcmpeqd x y))
-(rule (x64_pcmpeq $I64X2 x y) (x64_pcmpeqq x y))
+(rule (x64_pcmpeq $I64X2 x y)
+      (if-let $true (use_sse41))
+      (x64_pcmpeqq x y))
+
+;; Without SSE 4.1 there's no access to `pcmpeqq`, so it's emulated by comparing
+;; 32-bit lanes instead. The upper and lower halves of the 32-bit comparison are
+;; swapped and then these two results are and'd together. This way only if both
+;; 32-bit values were equal is the result all ones, otherwise the result is
+;; all zeros if either 32-bit comparison was zero.
+(rule -1 (x64_pcmpeq $I64X2 x y)
+         (let ((cmp32         Xmm (x64_pcmpeqd x y))
+               (cmp32_swapped Xmm (x64_pshufd cmp32 0b10_11_00_01)))
+            (x64_pand cmp32 cmp32_swapped)))
 
 (decl x64_pcmpeqb (Xmm XmmMem) Xmm)
 (rule 0 (x64_pcmpeqb x y) (xmm_rm_r (SseOpcode.Pcmpeqb) x y))
@@ -4167,7 +4236,51 @@
 (rule (x64_pcmpgt $I8X16 x y) (x64_pcmpgtb x y))
 (rule (x64_pcmpgt $I16X8 x y) (x64_pcmpgtw x y))
 (rule (x64_pcmpgt $I32X4 x y) (x64_pcmpgtd x y))
-(rule (x64_pcmpgt $I64X2 x y) (x64_pcmpgtq x y))
+
+;; SSE4.2 gives a single-instruction for this lowering, but prior to that it's a
+;; bit more complicated.
+(rule 1 (x64_pcmpgt $I64X2 x y)
+        (if-let $true (use_sse42))
+        (x64_pcmpgtq x y))
+
+;; Without SSE4.2 a 64-bit comparison is expanded to a number of instructions.
+;; The basic idea is to delegate to a 32-bit comparison and work with the
+;; results from there. The comparison to execute is:
+;;
+;;    [ xhi ][ xlo ] > [ yhi ][ ylo ]
+;;
+;; If xhi != yhi, then the result is whatever the result of that comparison is.
+;; If xhi == yhi, then the result is the unsigned comparison of xlo/ylo since
+;; the 64-bit value is positive. To achieve this as part of the same comparison
+;; the upper bit of `xlo` and `ylo` is flipped to change the sign when compared
+;; as a 32-bit signed number. The result here is then:
+;;
+;; * if xlo and yhi had the same upper bit, then the unsigned comparison should
+;;   be the same as comparing the flipped versions as signed.
+;; * if xlo had an upper bit of 0 and ylo had an upper bit of 1, then xlo > ylo
+;;   is false. When flipping the bits xlo becomes negative and ylo becomes
+;;   positive when compared as 32-bits, so the result is the same.
+;; * if xlo had an upper bit of 1 and ylo had an upper bit of 0, then xlo > ylo
+;;   is true. When flipping the bits xlo becomes positive and ylo becomes
+;;   negative when compared as 32-bits, so the result is the same.
+;;
+;; Given all that the sequence here is to flip the upper bits of xlo and ylo,
+;; then compare the masked results for equality and for gt. If the upper 32-bits
+;; are not equal then the gt result for the upper bits is used. If the upper
+;; 32-bits are equal then the lower 32-bits comparison is used instead.
+(rule 0 (x64_pcmpgt $I64X2 x y)
+        (let (
+            (mask Xmm (x64_movdqu_load (emit_u128_le_const 0x00000000_80000000_00000000_80000000)))
+            (x_masked           Xmm (x64_pxor mask x))
+            (y_masked           Xmm (x64_pxor mask y))
+            (cmp32              Xmm (x64_pcmpgtd x_masked y_masked))
+            (low_halves_gt      Xmm (x64_pshufd cmp32 0xa0))
+            (high_halves_gt     Xmm (x64_pshufd cmp32 0xf5))
+            (cmp_eq             Xmm (x64_pcmpeqd x_masked y_masked))
+            (high_halves_eq     Xmm (x64_pshufd cmp_eq 0xf5))
+            (low_gt_and_high_eq Xmm (x64_pand low_halves_gt high_halves_eq))
+          )
+          (x64_por low_gt_and_high_eq high_halves_gt)))
 
 (decl x64_pcmpgtb (Xmm XmmMem) Xmm)
 (rule 0 (x64_pcmpgtb x y) (xmm_rm_r (SseOpcode.Pcmpgtb) x y))

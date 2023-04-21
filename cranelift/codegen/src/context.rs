@@ -17,15 +17,12 @@ use crate::flowgraph::ControlFlowGraph;
 use crate::ir::Function;
 use crate::isa::TargetIsa;
 use crate::legalizer::simple_legalize;
-use crate::licm::do_licm;
 use crate::loop_analysis::LoopAnalysis;
 use crate::machinst::{CompiledCode, CompiledCodeStencil};
 use crate::nan_canonicalization::do_nan_canonicalization;
 use crate::remove_constant_phis::do_remove_constant_phis;
 use crate::result::{CodegenResult, CompileResult};
 use crate::settings::{FlagsOrIsa, OptLevel};
-use crate::simple_gvn::do_simple_gvn;
-use crate::simple_preopt::do_preopt;
 use crate::trace;
 use crate::unreachable_code::eliminate_unreachable_code;
 use crate::verifier::{verify_context, VerifierErrors, VerifierResult};
@@ -33,6 +30,7 @@ use crate::{timing, CompileError};
 #[cfg(feature = "souper-harvest")]
 use alloc::string::String;
 use alloc::vec::Vec;
+use cranelift_control::ControlPlane;
 
 #[cfg(feature = "souper-harvest")]
 use crate::souper_harvest::do_souper_harvest;
@@ -124,8 +122,9 @@ impl Context {
         &mut self,
         isa: &dyn TargetIsa,
         mem: &mut Vec<u8>,
+        ctrl_plane: &mut ControlPlane,
     ) -> CompileResult<&CompiledCode> {
-        let compiled_code = self.compile(isa)?;
+        let compiled_code = self.compile(isa, ctrl_plane)?;
         mem.extend_from_slice(compiled_code.code_buffer());
         Ok(compiled_code)
     }
@@ -133,14 +132,18 @@ impl Context {
     /// Internally compiles the function into a stencil.
     ///
     /// Public only for testing and fuzzing purposes.
-    pub fn compile_stencil(&mut self, isa: &dyn TargetIsa) -> CodegenResult<CompiledCodeStencil> {
+    pub fn compile_stencil(
+        &mut self,
+        isa: &dyn TargetIsa,
+        ctrl_plane: &mut ControlPlane,
+    ) -> CodegenResult<CompiledCodeStencil> {
         let _tt = timing::compile();
 
         self.verify_if(isa)?;
 
         self.optimize(isa)?;
 
-        isa.compile_function(&self.func, &self.domtree, self.want_disasm)
+        isa.compile_function(&self.func, &self.domtree, self.want_disasm, ctrl_plane)
     }
 
     /// Optimize the function, performing all compilation steps up to
@@ -166,21 +169,11 @@ impl Context {
         );
 
         self.compute_cfg();
-        if !isa.flags().use_egraphs() && opt_level != OptLevel::None {
-            self.preopt(isa)?;
-        }
         if isa.flags().enable_nan_canonicalization() {
             self.canonicalize_nans(isa)?;
         }
 
         self.legalize(isa)?;
-
-        if !isa.flags().use_egraphs() && opt_level != OptLevel::None {
-            self.compute_domtree();
-            self.compute_loop_analysis();
-            self.licm(isa)?;
-            self.simple_gvn(isa)?;
-        }
 
         self.compute_domtree();
         self.eliminate_unreachable_code(isa)?;
@@ -192,14 +185,7 @@ impl Context {
         self.remove_constant_phis(isa)?;
 
         if opt_level != OptLevel::None {
-            if isa.flags().use_egraphs() {
-                self.egraph_pass()?;
-            } else if isa.flags().enable_alias_analysis() {
-                for _ in 0..2 {
-                    self.replace_redundant_loads()?;
-                    self.simple_gvn(isa)?;
-                }
-            }
+            self.egraph_pass()?;
         }
 
         Ok(())
@@ -212,11 +198,17 @@ impl Context {
     /// code sink.
     ///
     /// Returns information about the function's code and read-only data.
-    pub fn compile(&mut self, isa: &dyn TargetIsa) -> CompileResult<&CompiledCode> {
-        let stencil = self.compile_stencil(isa).map_err(|error| CompileError {
-            inner: error,
-            func: &self.func,
-        })?;
+    pub fn compile(
+        &mut self,
+        isa: &dyn TargetIsa,
+        ctrl_plane: &mut ControlPlane,
+    ) -> CompileResult<&CompiledCode> {
+        let stencil = self
+            .compile_stencil(isa, ctrl_plane)
+            .map_err(|error| CompileError {
+                inner: error,
+                func: &self.func,
+            })?;
         Ok(self
             .compiled_code
             .insert(stencil.apply_params(&self.func.params)))
@@ -282,13 +274,6 @@ impl Context {
         Ok(())
     }
 
-    /// Perform pre-legalization rewrites on the function.
-    pub fn preopt(&mut self, isa: &dyn TargetIsa) -> CodegenResult<()> {
-        do_preopt(&mut self.func, isa);
-        self.verify_if(isa)?;
-        Ok(())
-    }
-
     /// Perform NaN canonicalizing rewrites on the function.
     pub fn canonicalize_nans(&mut self, isa: &dyn TargetIsa) -> CodegenResult<()> {
         do_nan_canonicalization(&mut self.func);
@@ -327,23 +312,6 @@ impl Context {
     pub fn flowgraph(&mut self) {
         self.compute_cfg();
         self.compute_domtree()
-    }
-
-    /// Perform simple GVN on the function.
-    pub fn simple_gvn<'a, FOI: Into<FlagsOrIsa<'a>>>(&mut self, fisa: FOI) -> CodegenResult<()> {
-        do_simple_gvn(&mut self.func, &mut self.domtree);
-        self.verify_if(fisa)
-    }
-
-    /// Perform LICM on the function.
-    pub fn licm(&mut self, isa: &dyn TargetIsa) -> CodegenResult<()> {
-        do_licm(
-            &mut self.func,
-            &mut self.cfg,
-            &mut self.domtree,
-            &mut self.loop_analysis,
-        );
-        self.verify_if(isa)
     }
 
     /// Perform unreachable code elimination.

@@ -5,6 +5,7 @@ use cranelift_codegen::ir::Signature;
 use cranelift_codegen::ir::UserExternalName;
 use cranelift_codegen::ir::UserFuncName;
 use cranelift_codegen::Context;
+use cranelift_control::ControlPlane;
 use libfuzzer_sys::arbitrary;
 use libfuzzer_sys::arbitrary::Arbitrary;
 use libfuzzer_sys::arbitrary::Unstructured;
@@ -146,6 +147,9 @@ pub struct TestCase {
     /// Functions under test
     /// By convention the first function is the main function.
     pub functions: Vec<Function>,
+    /// Control planes for function compilation.
+    /// There should be an equal amount as functions to compile.
+    pub ctrl_planes: Vec<ControlPlane>,
     /// Generate multiple test inputs for each test case.
     /// This allows us to get more coverage per compilation, which may be somewhat expensive.
     pub inputs: Vec<TestCaseInput>,
@@ -191,6 +195,7 @@ impl TestCase {
         // the start.
         let func_count = gen.u.int_in_range(gen.config.testcase_funcs.clone())?;
         let mut functions: Vec<Function> = Vec::with_capacity(func_count);
+        let mut ctrl_planes: Vec<ControlPlane> = Vec::with_capacity(func_count);
         for i in (0..func_count).rev() {
             // Function name must be in a different namespace than TESTFILE_NAMESPACE (0)
             let fname = UserFuncName::user(1, i as u32);
@@ -212,6 +217,8 @@ impl TestCase {
                 ALLOWED_LIBCALLS.to_vec(),
             )?;
             functions.push(func);
+
+            ctrl_planes.push(ControlPlane::arbitrary(gen.u)?);
         }
         // Now reverse the functions so that the main function is at the start.
         functions.reverse();
@@ -222,6 +229,7 @@ impl TestCase {
         Ok(TestCase {
             isa,
             functions,
+            ctrl_planes,
             inputs,
             compare_against_host,
         })
@@ -241,6 +249,7 @@ impl TestCase {
         TestCase {
             isa: self.isa.clone(),
             functions: optimized_functions,
+            ctrl_planes: self.ctrl_planes.clone(),
             inputs: self.inputs.clone(),
             compare_against_host: false,
         }
@@ -289,7 +298,7 @@ fn build_interpreter(testcase: &TestCase) -> Interpreter {
 
     let state = InterpreterState::default()
         .with_function_store(env)
-        .with_libcall_handler(|libcall: LibCall, args: LibCallValues<DataValue>| {
+        .with_libcall_handler(|libcall: LibCall, args: LibCallValues| {
             use LibCall::*;
             Ok(smallvec![match (libcall, &args[..]) {
                 (CeilF32, [DataValue::F32(a)]) => DataValue::F32(a.ceil()),
@@ -368,7 +377,9 @@ fuzz_target!(|testcase: TestCase| {
         });
     } else {
         let mut compiler = TestFileCompiler::new(testcase.isa.clone());
-        compiler.add_functions(&testcase.functions[..]).unwrap();
+        compiler
+            .add_functions(&testcase.functions[..], testcase.ctrl_planes.clone())
+            .unwrap();
         let compiled = compiler.compile().unwrap();
         let trampoline = compiled.get_trampoline(testcase.main()).unwrap();
 

@@ -57,6 +57,7 @@ use crate::CodegenResult;
 use alloc::{boxed::Box, sync::Arc, vec::Vec};
 use core::fmt;
 use core::fmt::{Debug, Formatter};
+use cranelift_control::ControlPlane;
 use target_lexicon::{triple, Architecture, PointerWidth, Triple};
 
 // This module is made public here for benchmarking purposes. No guarantees are
@@ -273,6 +274,7 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
         func: &Function,
         domtree: &DominatorTree,
         want_disasm: bool,
+        ctrl_plane: &mut ControlPlane,
     ) -> CodegenResult<CompiledCodeStencil>;
 
     #[cfg(feature = "unwind")]
@@ -283,9 +285,6 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
     ) -> Result<u16, RegisterMappingError> {
         Err(RegisterMappingError::UnsupportedArchitecture)
     }
-
-    /// IntCC condition for Unsigned Addition Overflow (Carry).
-    fn unsigned_add_overflow_condition(&self) -> ir::condcodes::IntCC;
 
     /// Creates unwind information for the function.
     ///

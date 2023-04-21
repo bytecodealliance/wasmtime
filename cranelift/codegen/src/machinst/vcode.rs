@@ -26,6 +26,7 @@ use crate::timing;
 use crate::trace;
 use crate::CodegenError;
 use crate::ValueLocRange;
+use cranelift_control::ControlPlane;
 use regalloc2::{
     Edit, Function as RegallocFunction, InstOrEdit, InstRange, Operand, OperandKind, PRegSet,
     RegClass, VReg,
@@ -80,9 +81,6 @@ pub struct VCode<I: VCodeInst> {
 
     /// Clobbers: a sparse map from instruction indices to clobber masks.
     clobbers: FxHashMap<InsnIndex, PRegSet>,
-
-    /// Move information: for a given InsnIndex, (src, dst) operand pair.
-    is_move: FxHashMap<InsnIndex, (Operand, Operand)>,
 
     /// Source locations for each instruction. (`SourceLoc` is a `u32`, so it is
     /// reasonable to keep one of these per instruction.)
@@ -580,15 +578,6 @@ impl<I: VCodeInst> VCodeBuilder<I> {
                     "the real register {:?} was used as the destination of a move instruction",
                     dst.to_reg()
                 );
-
-                let src = Operand::reg_use(Self::resolve_vreg_alias_impl(vreg_aliases, src.into()));
-                let dst = Operand::reg_def(Self::resolve_vreg_alias_impl(
-                    vreg_aliases,
-                    dst.to_reg().into(),
-                ));
-
-                // Note that regalloc2 requires these in (src, dst) order.
-                self.vcode.is_move.insert(InsnIndex::new(i), (src, dst));
             }
         }
 
@@ -651,7 +640,6 @@ impl<I: VCodeInst> VCode<I> {
             operands: Vec::with_capacity(30 * n_blocks),
             operand_ranges: Vec::with_capacity(10 * n_blocks),
             clobbers: FxHashMap::default(),
-            is_move: FxHashMap::default(),
             srclocs: Vec::with_capacity(10 * n_blocks),
             entry: BlockIndex::new(0),
             block_ranges: Vec::with_capacity(n_blocks),
@@ -763,6 +751,7 @@ impl<I: VCodeInst> VCode<I> {
         regalloc: &regalloc2::Output,
         want_disasm: bool,
         want_metadata: bool,
+        ctrl_plane: &mut ControlPlane,
     ) -> EmitResult<I>
     where
         I: VCodeInst,
@@ -813,7 +802,7 @@ impl<I: VCodeInst> VCode<I> {
         let mut cur_srcloc = None;
         let mut last_offset = None;
         let mut inst_offsets = vec![];
-        let mut state = I::State::new(&self.abi);
+        let mut state = I::State::new(&self.abi, std::mem::take(ctrl_plane));
 
         let mut disasm = String::new();
 
@@ -841,6 +830,11 @@ impl<I: VCodeInst> VCode<I> {
 
         for (block_order_idx, &block) in final_order.iter().enumerate() {
             trace!("emitting block {:?}", block);
+
+            // Call the new block hook for state
+            state.on_new_block();
+
+            // Emit NOPs to align the block.
             let new_offset = I::align_basic_block(buffer.cur_offset());
             while new_offset > buffer.cur_offset() {
                 // Pad with NOPs up to the aligned block offset.
@@ -874,7 +868,7 @@ impl<I: VCodeInst> VCode<I> {
 
             // Now emit the regular block body.
 
-            buffer.bind_label(MachLabel::from_block(block));
+            buffer.bind_label(MachLabel::from_block(block), state.ctrl_plane_mut());
 
             if want_disasm {
                 writeln!(&mut disasm, "block{}:", block.index()).unwrap();
@@ -922,16 +916,6 @@ impl<I: VCodeInst> VCode<I> {
                             if !self.block_order.is_cold(block) {
                                 inst_offsets[iix.index()] = buffer.cur_offset();
                             }
-                        }
-
-                        if self.insts[iix.index()].is_move().is_some() {
-                            // Skip moves in the pre-regalloc program;
-                            // all of these are incorporated by the
-                            // regalloc into its unified move handling
-                            // and they come out the other end, if
-                            // still needed (not elided), as
-                            // regalloc-inserted moves.
-                            continue;
                         }
 
                         // Update the srcloc at this point in the buffer.
@@ -1054,10 +1038,13 @@ impl<I: VCodeInst> VCode<I> {
                 let worst_case_next_bb =
                     I::worst_case_size() * (next_block_size + next_block_ra_insertions);
                 if buffer.island_needed(worst_case_next_bb) {
-                    buffer.emit_island(worst_case_next_bb);
+                    buffer.emit_island(worst_case_next_bb, ctrl_plane);
                 }
             }
         }
+
+        // emission state is not needed anymore, move control plane back out
+        *ctrl_plane = state.take_ctrl_plane();
 
         // Emit the constants used by the function.
         let mut alignment = 1;
@@ -1275,14 +1262,6 @@ impl<I: VCodeInst> RegallocFunction for VCode<I> {
 
     fn requires_refs_on_stack(&self, insn: InsnIndex) -> bool {
         self.insts[insn.index()].is_safepoint()
-    }
-
-    fn is_move(&self, insn: InsnIndex) -> Option<(Operand, Operand)> {
-        let (a, b) = self.is_move.get(&insn)?;
-        Some((
-            self.assert_operand_not_vreg_alias(*a),
-            self.assert_operand_not_vreg_alias(*b),
-        ))
     }
 
     fn inst_operands(&self, insn: InsnIndex) -> &[Operand] {

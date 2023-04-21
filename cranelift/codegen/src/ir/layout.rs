@@ -375,7 +375,7 @@ impl Layout {
 }
 
 /// A single node in the linked-list of blocks.
-// Whenever you add new fields here, don't forget to update the custom serializer for `Layout` too.
+// **Note:** Whenever you add new fields here, don't forget to update the custom serializer for `Layout` too.
 #[derive(Clone, Debug, Default, PartialEq, Hash)]
 struct BlockNode {
     prev: PackedOption<Block>,

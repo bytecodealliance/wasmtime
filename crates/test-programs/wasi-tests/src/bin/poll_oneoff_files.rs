@@ -231,6 +231,7 @@ unsafe fn test_fd_readwrite_valid_fd(dir_fd: wasi::Fd) {
     test_fd_readwrite(readable_fd, writable_fd, wasi::ERRNO_SUCCESS);
 
     wasi::fd_close(readable_fd).expect("closing readable_file");
+    wasi::fd_close(writable_fd).expect("closing writable_file");
     wasi::path_unlink_file(dir_fd, "readable_file").expect("removing readable_file");
     wasi::path_unlink_file(dir_fd, "writable_file").expect("removing writable_file");
 }

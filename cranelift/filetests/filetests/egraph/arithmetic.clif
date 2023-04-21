@@ -1,0 +1,173 @@
+test optimize
+set opt_level=speed
+target x86_64
+
+function %f0(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 2
+    v2 = imul v0, v1
+    ; check: v5 = ishl v0, v4  ; v4 = 1
+    ; check: return v5
+    return v2
+}
+
+function %double_ineg(i32) -> i32 {
+block0(v0: i32):
+    v1 = ineg v0
+    v2 = ineg v1
+    return v2
+    ; check: return v0
+}
+
+function %imul_ineg_cancel(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = ineg v0
+    v3 = ineg v1
+    v4 = imul v2, v3
+    return v4
+    ; check: v5 = imul v0, v1
+    ; check: return v5
+}
+
+function %iabs_ineg(i32) -> i32 {
+block0(v0: i32):
+    v1 = ineg v0
+    v2 = iabs v1
+    return v2
+    ; check: v3 = iabs v0
+    ; check: return v3
+}
+
+function %iabs_iabs(i32) -> i32 {
+block0(v0: i32):
+    v1 = iabs v0
+    v2 = iabs v1
+    return v2
+    ; check: return v1
+}
+
+function %isub_self(i32) -> i32 {
+block0(v0: i32):
+    v1 = isub v0, v0
+    return v1
+    ; check: v2 = iconst.i32 0
+    ; check: return v2
+}
+
+function %mul_minus_one(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 0xffff_ffff ; -1
+    v2 = imul v0, v1
+    return v2
+    ; check: v3 = ineg v0
+    ; check: v4 -> v3
+    ; check: return v3
+}
+
+function %mul_minus_one_commuted(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 0xffff_ffff ; -1
+    v2 = imul v1, v0
+    return v2
+    ; check: v3 = ineg v0
+    ; check: return v3
+}
+
+function %ineg_not_plus_one(i32) -> i32 {
+block0(v0: i32):
+    v1 = bnot v0
+    v2 = iconst.i32 1
+    v3 = iadd v1, v2
+    return v3
+}
+
+; check: v4 = ineg v0
+; check: return v4
+
+function %ineg_not_plus_one_reverse(i32) -> i32 {
+block0(v0: i32):
+    v1 = bnot v0
+    v2 = iconst.i32 1
+    v3 = iadd v2, v1
+    return v3
+}
+
+; check: v4 = ineg v0
+; check: return v4
+
+function %ineg_not_minus_neg_1(i32) -> i32 {
+block0(v0: i32):
+    v1 = bnot v0
+    v2 = iconst.i32 -1
+    v3 = isub v1, v2
+    return v3
+}
+
+; check: v4 = ineg v0
+; check: return v4
+
+function %ineg_not_sub_one(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 1
+    v2 = isub v0, v1
+    v3 = bnot v2
+    return v3
+}
+
+; check: v4 = ineg v0
+; check: return v4
+
+function %ineg_not_add_neg_one(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 -1
+    v2 = iadd v0, v1
+    v3 = bnot v2
+    return v3
+}
+
+; check: v4 = ineg v0
+; check: return v4
+
+function %ineg_not_add_neg_one_reverse(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 -1
+    v2 = iadd v1, v0
+    v3 = bnot v2
+    return v3
+}
+
+; check: v6 = ineg v0
+; check: return v6
+
+
+
+function %double_fneg(f32) -> f32 {
+block0(v1: f32):
+    v2 = fneg v1
+    v3 = fneg v2
+    return v3
+}
+
+; check: return v1
+
+function %fma_double_fneg(f32, f32, f32) -> f32 {
+block0(v1: f32, v2: f32, v3: f32):
+    v4 = fneg v1
+    v5 = fneg v2
+    v6 = fma v4, v5, v3
+    return v6
+}
+
+; check: v7 = fma v1, v2, v3
+; check: return v7
+
+function %fmul_double_fneg(f32, f32) -> f32 {
+block0(v1: f32, v2: f32):
+    v3 = fneg v1
+    v4 = fneg v2
+    v5 = fmul v3, v4
+    return v5
+}
+
+; check: v6 = fmul v1, v2
+; check: return v6

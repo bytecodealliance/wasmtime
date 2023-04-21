@@ -39,7 +39,9 @@ impl SubTest for TestUnwind {
         let isa = context.isa.expect("unwind needs an ISA");
         let mut comp_ctx = cranelift_codegen::Context::for_function(func.into_owned());
 
-        let code = comp_ctx.compile(isa).expect("failed to compile function");
+        let code = comp_ctx
+            .compile(isa, &mut Default::default())
+            .expect("failed to compile function");
 
         let mut text = String::new();
         match code.create_unwind_info(isa).expect("unwind info") {

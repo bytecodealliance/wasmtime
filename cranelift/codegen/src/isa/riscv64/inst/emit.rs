@@ -6,6 +6,7 @@ use crate::ir::TrapCode;
 use crate::isa::riscv64::inst::*;
 use crate::isa::riscv64::inst::{zero_reg, AluOPRRR};
 use crate::machinst::{AllocationConsumer, Reg, Writable};
+use cranelift_control::ControlPlane;
 use regalloc2::Allocation;
 
 pub struct EmitInfo {
@@ -101,6 +102,13 @@ pub(crate) fn reg_to_gpr_num(m: Reg) -> u32 {
     u32::try_from(m.to_real_reg().unwrap().hw_enc() & 31).unwrap()
 }
 
+#[derive(Clone, Debug, PartialEq, Default)]
+pub enum EmitVState {
+    #[default]
+    Unknown,
+    Known(VState),
+}
+
 /// State carried between emissions of a sequence of instructions.
 #[derive(Default, Clone, Debug)]
 pub struct EmitState {
@@ -110,6 +118,12 @@ pub struct EmitState {
     stack_map: Option<StackMap>,
     /// Current source-code location corresponding to instruction to be emitted.
     cur_srcloc: RelSourceLoc,
+    /// Only used during fuzz-testing. Otherwise, it is a zero-sized struct and
+    /// optimized away at compiletime. See [cranelift_control].
+    ctrl_plane: ControlPlane,
+    /// Vector State
+    /// Controls the current state of the vector unit at the emission point.
+    vstate: EmitVState,
 }
 
 impl EmitState {
@@ -127,12 +141,17 @@ impl EmitState {
 }
 
 impl MachInstEmitState<Inst> for EmitState {
-    fn new(abi: &Callee<crate::isa::riscv64::abi::Riscv64MachineDeps>) -> Self {
+    fn new(
+        abi: &Callee<crate::isa::riscv64::abi::Riscv64MachineDeps>,
+        ctrl_plane: ControlPlane,
+    ) -> Self {
         EmitState {
             virtual_sp_offset: 0,
             nominal_sp_to_fp: abi.frame_size() as i64,
             stack_map: None,
             cur_srcloc: RelSourceLoc::default(),
+            ctrl_plane,
+            vstate: EmitVState::Unknown,
         }
     }
 
@@ -142,6 +161,19 @@ impl MachInstEmitState<Inst> for EmitState {
 
     fn pre_sourceloc(&mut self, srcloc: RelSourceLoc) {
         self.cur_srcloc = srcloc;
+    }
+
+    fn ctrl_plane_mut(&mut self) -> &mut ControlPlane {
+        &mut self.ctrl_plane
+    }
+
+    fn take_ctrl_plane(self) -> ControlPlane {
+        self.ctrl_plane
+    }
+
+    fn on_new_block(&mut self) {
+        // Reset the vector state.
+        self.vstate = EmitVState::Unknown;
     }
 }
 
@@ -370,6 +402,80 @@ impl Inst {
         }
         insts
     }
+
+    /// Returns Some(VState) if this insturction is expecting a specific vector state
+    /// before emission.
+    fn expected_vstate(&self) -> Option<&VState> {
+        match self {
+            Inst::Nop0
+            | Inst::Nop4
+            | Inst::BrTable { .. }
+            | Inst::Auipc { .. }
+            | Inst::Lui { .. }
+            | Inst::LoadConst32 { .. }
+            | Inst::LoadConst64 { .. }
+            | Inst::AluRRR { .. }
+            | Inst::FpuRRR { .. }
+            | Inst::AluRRImm12 { .. }
+            | Inst::Load { .. }
+            | Inst::Store { .. }
+            | Inst::Args { .. }
+            | Inst::Ret { .. }
+            | Inst::Extend { .. }
+            | Inst::AjustSp { .. }
+            | Inst::Call { .. }
+            | Inst::CallInd { .. }
+            | Inst::TrapIf { .. }
+            | Inst::Jal { .. }
+            | Inst::CondBr { .. }
+            | Inst::LoadExtName { .. }
+            | Inst::LoadAddr { .. }
+            | Inst::VirtualSPOffsetAdj { .. }
+            | Inst::Mov { .. }
+            | Inst::MovFromPReg { .. }
+            | Inst::Fence { .. }
+            | Inst::FenceI
+            | Inst::ECall
+            | Inst::EBreak
+            | Inst::Udf { .. }
+            | Inst::FpuRR { .. }
+            | Inst::FpuRRRR { .. }
+            | Inst::Jalr { .. }
+            | Inst::Atomic { .. }
+            | Inst::Select { .. }
+            | Inst::AtomicCas { .. }
+            | Inst::IntSelect { .. }
+            | Inst::Csr { .. }
+            | Inst::Icmp { .. }
+            | Inst::SelectReg { .. }
+            | Inst::FcvtToInt { .. }
+            | Inst::RawData { .. }
+            | Inst::AtomicStore { .. }
+            | Inst::AtomicLoad { .. }
+            | Inst::AtomicRmwLoop { .. }
+            | Inst::TrapIfC { .. }
+            | Inst::Unwind { .. }
+            | Inst::DummyUse { .. }
+            | Inst::FloatRound { .. }
+            | Inst::FloatSelect { .. }
+            | Inst::FloatSelectPseudo { .. }
+            | Inst::Popcnt { .. }
+            | Inst::Rev8 { .. }
+            | Inst::Cltz { .. }
+            | Inst::Brev8 { .. }
+            | Inst::StackProbeLoop { .. } => None,
+            // VecSetState does not expect any vstate, rather it updates it.
+            Inst::VecSetState { .. } => None,
+
+            Inst::VecAluRRR { vstate, .. } |
+            // TODO: Unit-stride loads and stores only need the AVL to be correct, not
+            // the full vtype. A future optimization could be to decouple these two when
+            // updating vstate. This would allow us to avoid emitting a VecSetState in
+            // some cases.
+            Inst::VecLoad { vstate, .. }
+            | Inst::VecStore { vstate, .. } => Some(vstate),
+        }
+    }
 }
 
 impl MachInstEmit for Inst {
@@ -384,6 +490,19 @@ impl MachInstEmit for Inst {
         state: &mut EmitState,
     ) {
         let mut allocs = AllocationConsumer::new(allocs);
+
+        // Check if we need to update the vector state before emitting this instruction
+        if let Some(expected) = self.expected_vstate() {
+            if state.vstate != EmitVState::Known(expected.clone()) {
+                // Update the vector state.
+                Inst::VecSetState {
+                    rd: writable_zero_reg(),
+                    vstate: expected.clone(),
+                }
+                .emit(&[], sink, emit_info, state);
+            }
+        }
+
         // N.B.: we *must* not exceed the "worst-case size" used to compute
         // where to insert islands, except when islands are explicitly triggered
         // (with an `EmitIsland`). We check this in debug builds. This is `mut`
@@ -514,13 +633,14 @@ impl MachInstEmit for Inst {
                     (rs1, rs2)
                 };
 
-                let x: u32 = alu_op.op_code()
-                    | reg_to_gpr_num(rd.to_reg()) << 7
-                    | (alu_op.funct3()) << 12
-                    | reg_to_gpr_num(rs1) << 15
-                    | reg_to_gpr_num(rs2) << 20
-                    | alu_op.funct7() << 25;
-                sink.put4(x);
+                sink.put4(encode_r_type(
+                    alu_op.op_code(),
+                    rd.to_reg(),
+                    alu_op.funct3(),
+                    rs1,
+                    rs2,
+                    alu_op.funct7(),
+                ));
             }
             &Inst::AluRRImm12 {
                 alu_op,
@@ -997,7 +1117,7 @@ impl MachInstEmit for Inst {
                 // we need to emit a jump table here to support that jump.
                 let distance = (targets.len() * 2 * Inst::INSTRUCTION_SIZE as usize) as u32;
                 if sink.island_needed(distance) {
-                    sink.emit_island(distance);
+                    sink.emit_island(distance, &mut state.ctrl_plane);
                 }
 
                 // Emit the jumps back to back
@@ -1125,13 +1245,13 @@ impl MachInstEmit for Inst {
                 insts
                     .drain(..)
                     .for_each(|i: Inst| i.emit(&[], sink, emit_info, state));
-                sink.bind_label(label_false);
+                sink.bind_label(label_false, &mut state.ctrl_plane);
                 // select second value1
                 insts.extend(gen_moves(&dst[..], y.regs()));
                 insts
                     .into_iter()
                     .for_each(|i| i.emit(&[], sink, emit_info, state));
-                sink.bind_label(label_jump_over);
+                sink.bind_label(label_jump_over, &mut state.ctrl_plane);
             }
             &Inst::Jalr { rd, base, offset } => {
                 let rd = allocs.next_writable(rd);
@@ -1167,13 +1287,13 @@ impl MachInstEmit for Inst {
                 .into_iter()
                 .for_each(|i| i.emit(&[], sink, emit_info, state));
 
-                sink.bind_label(label_true);
+                sink.bind_label(label_true, &mut state.ctrl_plane);
                 Inst::load_imm12(rd, Imm12::TRUE).emit(&[], sink, emit_info, state);
                 Inst::Jal {
                     dest: BranchTarget::offset(Inst::INSTRUCTION_SIZE * 2),
                 }
                 .emit(&[], sink, emit_info, state);
-                sink.bind_label(label_false);
+                sink.bind_label(label_false, &mut state.ctrl_plane);
                 Inst::load_imm12(rd, Imm12::FALSE).emit(&[], sink, emit_info, state);
             }
             &Inst::AtomicCas {
@@ -1204,7 +1324,7 @@ impl MachInstEmit for Inst {
                 // fail:
                 let fail_label = sink.get_label();
                 let cas_lebel = sink.get_label();
-                sink.bind_label(cas_lebel);
+                sink.bind_label(cas_lebel, &mut state.ctrl_plane);
                 Inst::Atomic {
                     op: AtomicOP::load_op(ty),
                     rd: dst,
@@ -1274,7 +1394,7 @@ impl MachInstEmit for Inst {
                     },
                 }
                 .emit(&[], sink, emit_info, state);
-                sink.bind_label(fail_label);
+                sink.bind_label(fail_label, &mut state.ctrl_plane);
             }
             &Inst::AtomicRmwLoop {
                 offset,
@@ -1291,7 +1411,7 @@ impl MachInstEmit for Inst {
                 let t0 = allocs.next_writable(t0);
                 let dst = allocs.next_writable(dst);
                 let retry = sink.get_label();
-                sink.bind_label(retry);
+                sink.bind_label(retry, &mut state.ctrl_plane);
                 // load old value.
                 Inst::Atomic {
                     op: AtomicOP::load_op(ty),
@@ -1419,9 +1539,9 @@ impl MachInstEmit for Inst {
                             dest: BranchTarget::Label(label_select_done),
                         }
                         .emit(&[], sink, emit_info, state);
-                        sink.bind_label(label_select_dst);
+                        sink.bind_label(label_select_dst, &mut state.ctrl_plane);
                         Inst::gen_move(t0, dst.to_reg(), I64).emit(&[], sink, emit_info, state);
-                        sink.bind_label(label_select_done);
+                        sink.bind_label(label_select_done, &mut state.ctrl_plane);
                         Inst::Atomic {
                             op: AtomicOP::load_op(ty),
                             rd: writable_spilltmp_reg2(),
@@ -1534,13 +1654,13 @@ impl MachInstEmit for Inst {
                         .for_each(|i| i.emit(&[], sink, emit_info, state));
                 };
                 //here is true , use x.
-                sink.bind_label(label_true);
+                sink.bind_label(label_true, &mut state.ctrl_plane);
                 gen_move(&dst, &x, sink, state);
                 Inst::gen_jump(label_done).emit(&[], sink, emit_info, state);
                 // here is false use y
-                sink.bind_label(label_false);
+                sink.bind_label(label_false, &mut state.ctrl_plane);
                 gen_move(&dst, &y, sink, state);
-                sink.bind_label(label_done);
+                sink.bind_label(label_done, &mut state.ctrl_plane);
             }
             &Inst::Csr {
                 csr_op,
@@ -1585,9 +1705,9 @@ impl MachInstEmit for Inst {
                 }
                 .emit(&[], sink, emit_info, state);
                 // here condition is true , use rs1
-                sink.bind_label(label_true);
+                sink.bind_label(label_true, &mut state.ctrl_plane);
                 Inst::gen_move(rd, rs1, I64).emit(&[], sink, emit_info, state);
-                sink.bind_label(label_jump_over);
+                sink.bind_label(label_jump_over, &mut state.ctrl_plane);
             }
             &Inst::FcvtToInt {
                 is_sat,
@@ -1747,7 +1867,7 @@ impl MachInstEmit for Inst {
                 }
                 .emit(&[], sink, emit_info, state);
                 // here is nan , move 0 into rd register
-                sink.bind_label(label_nan);
+                sink.bind_label(label_nan, &mut state.ctrl_plane);
                 if is_sat {
                     Inst::load_imm12(rd, Imm12::from_bits(0)).emit(&[], sink, emit_info, state);
                 } else {
@@ -1758,7 +1878,7 @@ impl MachInstEmit for Inst {
                     .emit(&[], sink, emit_info, state);
                 }
                 // bind jump_over
-                sink.bind_label(label_jump_over);
+                sink.bind_label(label_jump_over, &mut state.ctrl_plane);
             }
 
             &Inst::LoadExtName {
@@ -1812,12 +1932,12 @@ impl MachInstEmit for Inst {
                 }
                 .emit(&[], sink, emit_info, state);
                 // trap
-                sink.bind_label(label_trap);
+                sink.bind_label(label_trap, &mut state.ctrl_plane);
                 Inst::Udf {
                     trap_code: trap_code,
                 }
                 .emit(&[], sink, emit_info, state);
-                sink.bind_label(label_jump_over);
+                sink.bind_label(label_jump_over, &mut state.ctrl_plane);
             }
             &Inst::TrapIf { test, trap_code } => {
                 let test = allocs.next(test);
@@ -1834,12 +1954,12 @@ impl MachInstEmit for Inst {
                 }
                 .emit(&[], sink, emit_info, state);
                 // trap
-                sink.bind_label(label_trap);
+                sink.bind_label(label_trap, &mut state.ctrl_plane);
                 Inst::Udf {
                     trap_code: trap_code,
                 }
                 .emit(&[], sink, emit_info, state);
-                sink.bind_label(label_jump_over);
+                sink.bind_label(label_jump_over, &mut state.ctrl_plane);
             }
             &Inst::Udf { trap_code } => {
                 sink.add_trap(trap_code);
@@ -1847,48 +1967,6 @@ impl MachInstEmit for Inst {
                     sink.add_stack_map(StackMapExtent::UpcomingBytes(4), s);
                 }
                 sink.put_data(Inst::TRAP_OPCODE);
-            }
-            &Inst::SelectIf {
-                if_spectre_guard: _if_spectre_guard, // _if_spectre_guard not use because it is used to not be removed by optimization pass and some other staff.
-                ref rd,
-                test,
-                ref x,
-                ref y,
-            } => {
-                let label_select_x = sink.get_label();
-                let label_select_y = sink.get_label();
-                let label_jump_over = sink.get_label();
-                let test = allocs.next(test);
-                let x = alloc_value_regs(x, &mut allocs);
-                let y = alloc_value_regs(y, &mut allocs);
-                let rd: Vec<_> = rd.iter().map(|r| allocs.next_writable(*r)).collect();
-                Inst::CondBr {
-                    taken: BranchTarget::Label(label_select_x),
-                    not_taken: BranchTarget::Label(label_select_y),
-                    kind: IntegerCompare {
-                        kind: IntCC::NotEqual,
-                        rs1: test,
-                        rs2: zero_reg(),
-                    },
-                }
-                .emit(&[], sink, emit_info, state);
-
-                // here select x.
-                sink.bind_label(label_select_x);
-                gen_moves(&rd[..], x.regs())
-                    .into_iter()
-                    .for_each(|i| i.emit(&[], sink, emit_info, state));
-                // jump over
-                Inst::Jal {
-                    dest: BranchTarget::Label(label_jump_over),
-                }
-                .emit(&[], sink, emit_info, state);
-                // here select y.
-                sink.bind_label(label_select_y);
-                gen_moves(&rd[..], y.regs())
-                    .into_iter()
-                    .for_each(|i| i.emit(&[], sink, emit_info, state));
-                sink.bind_label(label_jump_over);
             }
             &Inst::AtomicLoad { rd, ty, p } => {
                 let p = allocs.next(p);
@@ -2049,7 +2127,7 @@ impl MachInstEmit for Inst {
                 }
                 .emit(&[], sink, emit_info, state);
                 // here is nan.
-                sink.bind_label(label_nan);
+                sink.bind_label(label_nan, &mut state.ctrl_plane);
                 Inst::FpuRRR {
                     alu_op: if ty == F32 {
                         FpuOPRRR::FaddS
@@ -2067,9 +2145,9 @@ impl MachInstEmit for Inst {
                 }
                 .emit(&[], sink, emit_info, state);
                 // here select origin x.
-                sink.bind_label(label_x);
+                sink.bind_label(label_x, &mut state.ctrl_plane);
                 Inst::gen_move(rd, rs, ty).emit(&[], sink, emit_info, state);
-                sink.bind_label(label_jump_over);
+                sink.bind_label(label_jump_over, &mut state.ctrl_plane);
             }
             &Inst::FloatSelectPseudo {
                 op,
@@ -2114,9 +2192,9 @@ impl MachInstEmit for Inst {
                     dest: BranchTarget::Label(label_jump_over),
                 }
                 .emit(&[], sink, emit_info, state);
-                sink.bind_label(label_rs2);
+                sink.bind_label(label_rs2, &mut state.ctrl_plane);
                 Inst::gen_move(rd, rs2, ty).emit(&[], sink, emit_info, state);
-                sink.bind_label(label_jump_over);
+                sink.bind_label(label_jump_over, &mut state.ctrl_plane);
             }
 
             &Inst::FloatSelect {
@@ -2224,7 +2302,7 @@ impl MachInstEmit for Inst {
                     }
                     .emit(&[], sink, emit_info, state);
                     //
-                    sink.bind_label(label_done);
+                    sink.bind_label(label_done, &mut state.ctrl_plane);
                 }
                 // we have the reuslt,jump over.
                 Inst::Jal {
@@ -2232,7 +2310,7 @@ impl MachInstEmit for Inst {
                 }
                 .emit(&[], sink, emit_info, state);
                 // here is nan.
-                sink.bind_label(label_nan);
+                sink.bind_label(label_nan, &mut state.ctrl_plane);
                 op.snan_bits(tmp, ty)
                     .into_iter()
                     .for_each(|i| i.emit(&[], sink, emit_info, state));
@@ -2244,7 +2322,7 @@ impl MachInstEmit for Inst {
                     rs: tmp.to_reg(),
                 }
                 .emit(&[], sink, emit_info, state);
-                sink.bind_label(label_jump_over);
+                sink.bind_label(label_jump_over, &mut state.ctrl_plane);
             }
             &Inst::Popcnt {
                 sum,
@@ -2277,7 +2355,7 @@ impl MachInstEmit for Inst {
                 .emit(&[], sink, emit_info, state);
                 let label_done = sink.get_label();
                 let label_loop = sink.get_label();
-                sink.bind_label(label_loop);
+                sink.bind_label(label_loop, &mut state.ctrl_plane);
                 Inst::CondBr {
                     taken: BranchTarget::Label(label_done),
                     not_taken: BranchTarget::zero(),
@@ -2315,7 +2393,7 @@ impl MachInstEmit for Inst {
                         imm12: Imm12::from_bits(1),
                     }
                     .emit(&[], sink, emit_info, state);
-                    sink.bind_label(label_over);
+                    sink.bind_label(label_over, &mut state.ctrl_plane);
                 }
                 // set step and tmp.
                 {
@@ -2338,7 +2416,7 @@ impl MachInstEmit for Inst {
                     }
                     .emit(&[], sink, emit_info, state);
                 }
-                sink.bind_label(label_done);
+                sink.bind_label(label_done, &mut state.ctrl_plane);
             }
             &Inst::Rev8 { rs, rd, tmp, step } => {
                 let rs = allocs.next(rs);
@@ -2352,7 +2430,7 @@ impl MachInstEmit for Inst {
                 Inst::load_imm12(step, Imm12::from_bits(56)).emit(&[], sink, emit_info, state);
                 let label_done = sink.get_label();
                 let label_loop = sink.get_label();
-                sink.bind_label(label_loop);
+                sink.bind_label(label_loop, &mut state.ctrl_plane);
                 Inst::CondBr {
                     taken: BranchTarget::Label(label_done),
                     not_taken: BranchTarget::zero(),
@@ -2408,7 +2486,7 @@ impl MachInstEmit for Inst {
                     }
                 }
                 .emit(&[], sink, emit_info, state);
-                sink.bind_label(label_done);
+                sink.bind_label(label_done, &mut state.ctrl_plane);
             }
             &Inst::Cltz {
                 sum,
@@ -2444,7 +2522,7 @@ impl MachInstEmit for Inst {
                 }
                 let label_done = sink.get_label();
                 let label_loop = sink.get_label();
-                sink.bind_label(label_loop);
+                sink.bind_label(label_loop, &mut state.ctrl_plane);
                 Inst::CondBr {
                     taken: BranchTarget::Label(label_done),
                     not_taken: BranchTarget::zero(),
@@ -2507,7 +2585,7 @@ impl MachInstEmit for Inst {
                     }
                     .emit(&[], sink, emit_info, state);
                 }
-                sink.bind_label(label_done);
+                sink.bind_label(label_done, &mut state.ctrl_plane);
             }
             &Inst::Brev8 {
                 rs,
@@ -2549,7 +2627,7 @@ impl MachInstEmit for Inst {
 
                 let label_done = sink.get_label();
                 let label_loop = sink.get_label();
-                sink.bind_label(label_loop);
+                sink.bind_label(label_loop, &mut state.ctrl_plane);
                 Inst::CondBr {
                     taken: BranchTarget::Label(label_done),
                     not_taken: BranchTarget::zero(),
@@ -2587,7 +2665,7 @@ impl MachInstEmit for Inst {
                         rs2: tmp2.to_reg(),
                     }
                     .emit(&[], sink, emit_info, state);
-                    sink.bind_label(label_over);
+                    sink.bind_label(label_over, &mut state.ctrl_plane);
                 }
                 // set step and tmp.
                 {
@@ -2645,7 +2723,7 @@ impl MachInstEmit for Inst {
                             dest: BranchTarget::Label(label_over),
                         }
                         .emit(&[], sink, emit_info, state);
-                        sink.bind_label(label_sll_1);
+                        sink.bind_label(label_sll_1, &mut state.ctrl_plane);
                         Inst::AluRRImm12 {
                             alu_op: AluOPRRI::Slli,
                             rd: tmp2,
@@ -2653,14 +2731,14 @@ impl MachInstEmit for Inst {
                             imm12: Imm12::from_bits(1),
                         }
                         .emit(&[], sink, emit_info, state);
-                        sink.bind_label(label_over);
+                        sink.bind_label(label_over, &mut state.ctrl_plane);
                     }
                     Inst::Jal {
                         dest: BranchTarget::Label(label_loop),
                     }
                     .emit(&[], sink, emit_info, state);
                 }
-                sink.bind_label(label_done);
+                sink.bind_label(label_done, &mut state.ctrl_plane);
             }
             &Inst::StackProbeLoop {
                 guard_size,
@@ -2681,7 +2759,7 @@ impl MachInstEmit for Inst {
 
                 let loop_start = sink.get_label();
                 let label_done = sink.get_label();
-                sink.bind_label(loop_start);
+                sink.bind_label(loop_start, &mut state.ctrl_plane);
                 Inst::CondBr {
                     taken: BranchTarget::Label(label_done),
                     not_taken: BranchTarget::zero(),
@@ -2719,7 +2797,121 @@ impl MachInstEmit for Inst {
                     dest: BranchTarget::Label(loop_start),
                 }
                 .emit(&[], sink, emit_info, state);
-                sink.bind_label(label_done);
+                sink.bind_label(label_done, &mut state.ctrl_plane);
+            }
+            &Inst::VecAluRRR {
+                op, vd, vs1, vs2, ..
+            } => {
+                let vs1 = allocs.next(vs1);
+                let vs2 = allocs.next(vs2);
+                let vd = allocs.next_writable(vd);
+
+                // This is the mask bit, we don't yet implement masking, so set it to 1, which means
+                // masking disabled.
+                let vm = 1;
+
+                sink.put4(encode_valu(
+                    op.opcode(),
+                    vd.to_reg(),
+                    op.funct3(),
+                    vs1,
+                    vs2,
+                    vm,
+                    op.funct6(),
+                ));
+            }
+            &Inst::VecSetState { rd, ref vstate } => {
+                let rd = allocs.next_writable(rd);
+
+                sink.put4(encode_vcfg_imm(
+                    0x57,
+                    rd.to_reg(),
+                    vstate.avl.unwrap_static(),
+                    &vstate.vtype,
+                ));
+
+                // Update the current vector emit state.
+                state.vstate = EmitVState::Known(vstate.clone());
+            }
+
+            &Inst::VecLoad {
+                eew,
+                to,
+                ref from,
+                flags,
+                ..
+            } => {
+                let offset = from.get_offset_with_state(state);
+                let from_reg = allocs.next(from.get_base_register());
+                let to = allocs.next_writable(to);
+
+                // Vector Loads don't support immediate offsets, so we need to load it into a register.
+                let addr = writable_spilltmp_reg();
+                LoadConstant::U64(offset as u64)
+                    .load_constant_and_add(addr, from_reg)
+                    .into_iter()
+                    .for_each(|inst| inst.emit(&[], sink, emit_info, state));
+
+                let srcloc = state.cur_srcloc();
+                if !srcloc.is_default() && !flags.notrap() {
+                    // Register the offset at which the actual load instruction starts.
+                    sink.add_trap(TrapCode::HeapOutOfBounds);
+                }
+
+                // This is the mask bit, we don't yet implement masking, so set it to 1, which means
+                // masking disabled.
+                let vm = 1;
+
+                sink.put4(encode_vmem_load(
+                    0x07,
+                    to.to_reg(),
+                    eew,
+                    addr.to_reg(),
+                    from.lumop(),
+                    vm,
+                    from.mop(),
+                    from.nf(),
+                ));
+            }
+
+            &Inst::VecStore {
+                eew,
+                ref to,
+                from,
+                flags,
+                ..
+            } => {
+                let offset = to.get_offset_with_state(state);
+                let to_reg = allocs.next(to.get_base_register());
+                let from = allocs.next(from);
+
+                // Vector Stores don't support immediate offsets, so we need to load it into a register.
+                let addr = writable_spilltmp_reg();
+                LoadConstant::U64(offset as u64)
+                    .load_constant_and_add(addr, to_reg)
+                    .into_iter()
+                    .for_each(|inst| inst.emit(&[], sink, emit_info, state));
+
+                let srcloc = state.cur_srcloc();
+                if !srcloc.is_default() && !flags.notrap() {
+                    // Register the offset at which the actual load instruction starts.
+                    sink.add_trap(TrapCode::HeapOutOfBounds);
+                }
+
+                // This is the mask bit, we don't yet implement masking, so set it to 1, which means
+                // masking disabled.
+                let vm = 1;
+
+                sink.put4(encode_vmem_store(
+                    0x27,
+                    from,
+                    eew,
+                    addr.to_reg(),
+                    to.sumop(),
+                    vm,
+                    to.mop(),
+                    to.nf(),
+                ));
             }
         };
         let end_off = sink.cur_offset();

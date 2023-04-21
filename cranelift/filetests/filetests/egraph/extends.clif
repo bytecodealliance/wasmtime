@@ -1,0 +1,73 @@
+test optimize
+set opt_level=speed
+target x86_64
+
+function %f1() -> i64 {
+block0:
+  v0 = iconst.i32 0xffff_ffff_9876_5432
+  v1 = uextend.i64 v0
+  return v1
+  ; check: v2 = iconst.i64 0x9876_5432
+  ; check: return v2  ; v2 = 0x9876_5432
+}
+
+
+function %extend_always_above_zero(i32) -> i8 {
+block0(v1: i32):
+    v2 = uextend.i64 v1
+    v3 = iconst.i64 0
+    v4 = icmp slt v2, v3
+    return v4
+}
+
+; check: v5 = iconst.i8 0
+; check: return v5
+
+function %extend_always_above_zero2(i32) -> i8 {
+block0(v1: i32):
+    v2 = uextend.i64 v1
+    v3 = iconst.i64 0
+    v4 = icmp sge v2, v3
+    return v4
+}
+
+; check: v5 = iconst.i8 1
+; check: return v5
+
+function %double_uextend(i16) -> i64 {
+block0(v1: i16):
+    v2 = uextend.i32 v1
+    v3 = uextend.i64 v2
+    return v3
+}
+
+; check: v4 = uextend.i64 v1
+; check: return v4
+
+function %double_sextend(i16) -> i64 {
+block0(v1: i16):
+    v2 = sextend.i32 v1
+    v3 = sextend.i64 v2
+    return v3
+}
+
+; check: v4 = sextend.i64 v1
+; check: return v4
+
+function %sextend_then_reduce(i16) -> i16 {
+block0(v1: i16):
+    v2 = sextend.i32 v1
+    v3 = ireduce.i16 v2
+    return v3
+}
+
+; check: return v1
+
+function %uextend_then_reduce(i32) -> i32 {
+block0(v1: i32):
+    v2 = uextend.i64 v1
+    v3 = ireduce.i32 v2
+    return v3
+}
+
+; check: return v1
