@@ -214,18 +214,18 @@ impl fmt::Display for VState {
 
 impl VecAluOpRRR {
     pub fn opcode(&self) -> u32 {
-        match self {
-            VecAluOpRRR::Vadd => 0x57,
-        }
+        // Vector Opcode
+        0x57
     }
     pub fn funct3(&self) -> u32 {
-        match self {
-            VecAluOpRRR::Vadd => 0b000,
-        }
+        // OPIVV funct3
+        0b000
     }
     pub fn funct6(&self) -> u32 {
+        // See: https://github.com/riscv/riscv-v-spec/blob/master/inst-table.adoc
         match self {
             VecAluOpRRR::Vadd => 0b000000,
+            VecAluOpRRR::Vsub => 0b000010,
         }
     }
 }
@@ -234,6 +234,7 @@ impl fmt::Display for VecAluOpRRR {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             VecAluOpRRR::Vadd => write!(f, "vadd.vv"),
+            VecAluOpRRR::Vsub => write!(f, "vsub.vv"),
         }
     }
 }

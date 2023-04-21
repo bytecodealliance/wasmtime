@@ -112,14 +112,18 @@
 ;;;; Rules for `isub` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Base case, simply subtracting things in registers.
 
-(rule -2 (lower (has_type (fits_in_64 ty) (isub x y)))
+(rule (lower (has_type (ty_int_ref_scalar_64 ty) (isub x y)))
   (rv_sub x y))
 
-(rule -1 (lower (has_type (fits_in_32 ty) (isub x y)))
+(rule 1 (lower (has_type (fits_in_32 (ty_int ty)) (isub x y)))
   (rv_subw x y))
 
-(rule (lower (has_type $I128 (isub x y)))
+(rule 2 (lower (has_type $I128 (isub x y)))
   (i128_sub x y))
+
+;; SIMD Vectors
+(rule 3 (lower (has_type (ty_vec_fits_in_register ty) (isub x y)))
+  (rv_vsub_vv x y ty))
 
 ;;;; Rules for `ineg` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

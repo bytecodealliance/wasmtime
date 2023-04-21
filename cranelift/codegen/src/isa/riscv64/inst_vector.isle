@@ -59,6 +59,7 @@
 ;; Register to Register ALU Ops
 (type VecAluOpRRR (enum
   (Vadd)
+  (Vsub)
 ))
 
 
@@ -138,3 +139,8 @@
 (decl rv_vadd_vv (Reg Reg VState) Reg)
 (rule (rv_vadd_vv vs2 vs1 vstate)
   (vec_alu_rrr (VecAluOpRRR.Vadd) vs2 vs1 vstate))
+
+;; Helper for emitting the `vsub.vv` instruction.
+(decl rv_vsub_vv (Reg Reg VState) Reg)
+(rule (rv_vsub_vv vs2 vs1 vstate)
+  (vec_alu_rrr (VecAluOpRRR.Vsub) vs2 vs1 vstate))
