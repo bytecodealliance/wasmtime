@@ -374,8 +374,7 @@ async fn run_fd_filestat_set(store: Store<WasiCtx>, wasi: Command) -> Result<()>
 }
 
 async fn run_fd_flags_set(store: Store<WasiCtx>, wasi: Command) -> Result<()> {
-    // dies with notsup: line 95
-    expect_fail(run_with_temp_dir(store, wasi).await)
+    run_with_temp_dir(store, wasi).await
 }
 
 async fn run_fd_readdir(store: Store<WasiCtx>, wasi: Command) -> Result<()> {
@@ -391,7 +390,6 @@ async fn run_file_pread_pwrite(store: Store<WasiCtx>, wasi: Command) -> Result<(
 }
 
 async fn run_file_seek_tell(store: Store<WasiCtx>, wasi: Command) -> Result<()> {
-    // dies when expected error doesnt happen: line 60
     run_with_temp_dir(store, wasi).await
 }
 
