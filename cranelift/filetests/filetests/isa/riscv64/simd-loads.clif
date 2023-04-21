@@ -1,0 +1,97 @@
+test compile precise-output
+set unwind_info=false
+target riscv64 has_v
+
+
+function %load_i8x16(i64) -> i8x16 {
+block0(v0: i64):
+    v1 = load.i8x16 v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   vle8.v v10,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x57, 0x70, 0x08, 0xcc
+;   auipc t6, 0
+;   ld t6, 0xc(t6)
+;   j 0xc
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   add t6, t6, a0
+;   .byte 0x07, 0x85, 0x0f, 0x02
+;   ret
+
+function %load_i16x8(i64) -> i16x8 {
+block0(v0: i64):
+    v1 = load.i16x8 v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   vle16.v v10,0(a0) #avl=8, #vtype=(e16, m1, ta, ma)
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x57, 0x70, 0x84, 0xcc
+;   auipc t6, 0
+;   ld t6, 0xc(t6)
+;   j 0xc
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   add t6, t6, a0
+;   .byte 0x07, 0xd5, 0x0f, 0x02
+;   ret
+
+function %load_i32x4(i64) -> i32x4 {
+block0(v0: i64):
+    v1 = load.i32x4 v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   vle32.v v10,0(a0) #avl=4, #vtype=(e32, m1, ta, ma)
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x57, 0x70, 0x02, 0xcd
+;   auipc t6, 0
+;   ld t6, 0xc(t6)
+;   j 0xc
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   add t6, t6, a0
+;   .byte 0x07, 0xe5, 0x0f, 0x02
+;   ret
+
+function %load_i64x2(i64) -> i64x2 {
+block0(v0: i64):
+    v1 = load.i64x2 v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   vle64.v v10,0(a0) #avl=2, #vtype=(e64, m1, ta, ma)
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x57, 0x70, 0x81, 0xcd
+;   auipc t6, 0
+;   ld t6, 0xc(t6)
+;   j 0xc
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   add t6, t6, a0
+;   .byte 0x07, 0xf5, 0x0f, 0x02
+;   ret
+

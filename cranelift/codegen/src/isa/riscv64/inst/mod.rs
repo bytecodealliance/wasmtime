@@ -4,9 +4,10 @@
 #![allow(dead_code)]
 #![allow(non_camel_case_types)]
 
+use super::lower::isle::generated_code::{VecAMode, VecElementWidth};
 use crate::binemit::{Addend, CodeOffset, Reloc};
 pub use crate::ir::condcodes::IntCC;
-use crate::ir::types::{F32, F64, I128, I16, I32, I64, I8, R32, R64};
+use crate::ir::types::{self, F32, F64, I128, I16, I32, I64, I8, R32, R64};
 
 pub use crate::ir::{ExternalName, MemFlags, Opcode, SourceLoc, Type, ValueLabel};
 use crate::isa::CallConv;
@@ -29,6 +30,10 @@ pub mod args;
 pub use self::args::*;
 pub mod emit;
 pub use self::emit::*;
+pub mod vector;
+pub use self::vector::*;
+pub mod encode;
+pub use self::encode::*;
 pub mod unwind;
 
 use crate::isa::riscv64::abi::Riscv64MachineDeps;
@@ -41,7 +46,7 @@ use std::fmt::{Display, Formatter};
 pub(crate) type OptionReg = Option<Reg>;
 pub(crate) type OptionImm12 = Option<Imm12>;
 pub(crate) type VecBranchTarget = Vec<BranchTarget>;
-pub(crate) type OptionUimm5 = Option<Uimm5>;
+pub(crate) type OptionUimm5 = Option<UImm5>;
 pub(crate) type OptionFloatRoundingMode = Option<FRM>;
 pub(crate) type VecU8 = Vec<u8>;
 pub(crate) type VecWritableReg = Vec<Writable<Reg>>;
@@ -313,21 +318,41 @@ impl Inst {
 
     /// Generic constructor for a load (zero-extending where appropriate).
     pub fn gen_load(into_reg: Writable<Reg>, mem: AMode, ty: Type, flags: MemFlags) -> Inst {
-        Inst::Load {
-            rd: into_reg,
-            op: LoadOP::from_type(ty),
-            from: mem,
-            flags,
+        if ty.is_vector() {
+            Inst::VecLoad {
+                eew: VecElementWidth::from_type(ty),
+                to: into_reg,
+                from: VecAMode::UnitStride { base: mem },
+                flags,
+                vstate: VState::from_type(ty),
+            }
+        } else {
+            Inst::Load {
+                rd: into_reg,
+                op: LoadOP::from_type(ty),
+                from: mem,
+                flags,
+            }
         }
     }
 
     /// Generic constructor for a store.
     pub fn gen_store(mem: AMode, from_reg: Reg, ty: Type, flags: MemFlags) -> Inst {
-        Inst::Store {
-            src: from_reg,
-            op: StoreOP::from_type(ty),
-            to: mem,
-            flags,
+        if ty.is_vector() {
+            Inst::VecStore {
+                eew: VecElementWidth::from_type(ty),
+                to: VecAMode::UnitStride { base: mem },
+                from: from_reg,
+                flags,
+                vstate: VState::from_type(ty),
+            }
+        } else {
+            Inst::Store {
+                src: from_reg,
+                op: StoreOP::from_type(ty),
+                to: mem,
+                flags,
+            }
         }
     }
 }
@@ -623,6 +648,22 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             // gen_prologue is called at emit stage.
             // no need let reg alloc know.
         }
+        &Inst::VecAluRRR { vd, vs1, vs2, .. } => {
+            collector.reg_use(vs1);
+            collector.reg_use(vs2);
+            collector.reg_def(vd);
+        }
+        &Inst::VecSetState { rd, .. } => {
+            collector.reg_def(rd);
+        }
+        &Inst::VecLoad { to, ref from, .. } => {
+            collector.reg_use(from.get_base_register());
+            collector.reg_def(to);
+        }
+        &Inst::VecStore { ref to, from, .. } => {
+            collector.reg_use(to.get_base_register());
+            collector.reg_use(from);
+        }
     }
 }
 
@@ -727,6 +768,7 @@ impl MachInst for Inst {
             F32 => Ok((&[RegClass::Float], &[F32])),
             F64 => Ok((&[RegClass::Float], &[F64])),
             I128 => Ok((&[RegClass::Int, RegClass::Int], &[I64, I64])),
+            _ if ty.is_vector() && ty.bits() == 128 => Ok((&[RegClass::Float], &[types::I8X16])),
             _ => Err(CodegenError::Unsupported(format!(
                 "Unexpected SSA-value type: {}",
                 ty
@@ -784,6 +826,17 @@ pub fn reg_name(reg: Reg) -> String {
         }
     }
 }
+pub fn vec_reg_name(reg: Reg) -> String {
+    match reg.to_real_reg() {
+        Some(real) => {
+            assert_eq!(real.class(), RegClass::Float);
+            format!("v{}", real.hw_enc())
+        }
+        None => {
+            format!("{:?}", reg)
+        }
+    }
+}
 
 impl Inst {
     fn print_with_state(
@@ -794,6 +847,16 @@ impl Inst {
         let format_reg = |reg: Reg, allocs: &mut AllocationConsumer<'_>| -> String {
             let reg = allocs.next(reg);
             reg_name(reg)
+        };
+        let format_vec_reg = |reg: Reg, allocs: &mut AllocationConsumer<'_>| -> String {
+            let reg = allocs.next(reg);
+            vec_reg_name(reg)
+        };
+
+        let format_vec_amode = |amode: &VecAMode, allocs: &mut AllocationConsumer<'_>| -> String {
+            match amode {
+                VecAMode::UnitStride { base } => base.to_string_with_alloc(allocs),
+            }
         };
 
         let format_regs = |regs: &[Reg], allocs: &mut AllocationConsumer<'_>| -> String {
@@ -839,6 +902,7 @@ impl Inst {
                 "".into()
             }
         }
+
         match self {
             &Inst::Nop0 => {
                 format!("##zero length nop")
@@ -1501,6 +1565,48 @@ impl Inst {
             &MInst::Udf { trap_code } => format!("udf##trap_code={}", trap_code),
             &MInst::EBreak {} => String::from("ebreak"),
             &MInst::ECall {} => String::from("ecall"),
+            &Inst::VecAluRRR {
+                op,
+                vd,
+                vs1,
+                vs2,
+                ref vstate,
+            } => {
+                let vs1_s = format_vec_reg(vs1, allocs);
+                let vs2_s = format_vec_reg(vs2, allocs);
+                let vd_s = format_vec_reg(vd.to_reg(), allocs);
+
+                // Note: vs2 and vs1 here are opposite to the standard scalar ordering.
+                // This is noted in Section 10.1 of the RISC-V Vector spec.
+                format!("{} {},{},{} {}", op, vd_s, vs2_s, vs1_s, vstate)
+            }
+            &Inst::VecSetState { rd, ref vstate } => {
+                let rd_s = format_reg(rd.to_reg(), allocs);
+                assert!(vstate.avl.is_static());
+                format!("vsetivli {}, {}, {}", rd_s, vstate.avl, vstate.vtype)
+            }
+            Inst::VecLoad {
+                eew,
+                to,
+                from,
+                ref vstate,
+                ..
+            } => {
+                let base = format_vec_amode(from, allocs);
+                let vd = format_vec_reg(to.to_reg(), allocs);
+                format!("vl{}.v {},{} {}", eew, vd, base, vstate)
+            }
+            Inst::VecStore {
+                eew,
+                to,
+                from,
+                ref vstate,
+                ..
+            } => {
+                let dst = format_vec_amode(to, allocs);
+                let vs3 = format_vec_reg(*from, allocs);
+                format!("vs{}.v {},{} {}", eew, vs3, dst, vstate)
+            }
         }
     }
 }

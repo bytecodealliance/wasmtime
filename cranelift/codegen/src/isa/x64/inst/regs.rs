@@ -203,6 +203,7 @@ pub(crate) fn create_reg_env_systemv(flags: &settings::Flags) -> MachineEnv {
             vec![],
         ],
         fixed_stack_slots: vec![],
+        scratch_by_class: [None, None],
     };
 
     debug_assert_eq!(r15(), pinned_reg());

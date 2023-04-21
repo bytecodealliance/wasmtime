@@ -182,6 +182,7 @@ pub fn crate_reg_eviroment(_flags: &settings::Flags) -> MachineEnv {
         preferred_regs_by_class,
         non_preferred_regs_by_class,
         fixed_stack_slots: vec![],
+        scratch_by_class: [None, None],
     }
 }
 
@@ -217,4 +218,14 @@ pub(crate) fn x_reg_range(start: usize, end: usize) -> Vec<Writable<Reg>> {
         regs.push(Writable::from_reg(x_reg(i)));
     }
     regs
+}
+
+#[inline]
+pub fn v_reg(enc: usize) -> Reg {
+    let p_reg = PReg::new(enc, RegClass::Float);
+    let v_reg = VReg::new(p_reg.index(), p_reg.class());
+    Reg::from(v_reg)
+}
+pub fn vx_reg(enc: usize) -> PReg {
+    PReg::new(enc, RegClass::Float)
 }

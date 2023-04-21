@@ -329,6 +329,31 @@
       (guard_size u32)
       (probe_count u32)
       (tmp WritableReg))
+
+    (VecAluRRR
+      (op VecAluOpRRR)
+      (vd WritableReg)
+      (vs1 Reg)
+      (vs2 Reg)
+      (vstate VState))
+
+    (VecSetState
+      (rd WritableReg)
+      (vstate VState))
+
+    (VecLoad
+      (eew VecElementWidth)
+      (to WritableReg)
+      (from VecAMode)
+      (flags MemFlags)
+      (vstate VState))
+
+    (VecStore
+      (eew VecElementWidth)
+      (to VecAMode)
+      (from Reg)
+      (flags MemFlags)
+      (vstate VState))
 ))
 
 
@@ -710,6 +735,9 @@
 
 
 ;; ISA Extension helpers
+
+(decl pure has_v () bool)
+(extern constructor has_v has_v)
 
 (decl pure has_zbkb () bool)
 (extern constructor has_zbkb has_zbkb)

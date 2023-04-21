@@ -123,8 +123,8 @@ block0:
 ;   mov fp, sp
 ;   sub sp, sp, #16
 ; block0:
-;   mov x2, sp
-;   ldr q0, [x2]
+;   mov x1, sp
+;   ldr q0, [x1]
 ;   add sp, sp, #16
 ;   ldp fp, lr, [sp], #16
 ;   ret
@@ -135,8 +135,8 @@ block0:
 ;   mov x29, sp
 ;   sub sp, sp, #0x10
 ; block1: ; offset 0xc
-;   mov x2, sp
-;   ldr q0, [x2]
+;   mov x1, sp
+;   ldr q0, [x1]
 ;   add sp, sp, #0x10
 ;   ldp x29, x30, [sp], #0x10
 ;   ret
