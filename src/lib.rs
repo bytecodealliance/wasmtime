@@ -803,8 +803,6 @@ pub unsafe extern "C" fn fd_read(
     State::with(|state| {
         match state.descriptors().get(fd)? {
             Descriptor::Streams(streams) => {
-                let wasi_stream = streams.get_read_stream()?;
-
                 let blocking = if let StreamType::File(file) = &streams.type_ {
                     file.blocking
                 } else {
