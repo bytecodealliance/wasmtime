@@ -887,6 +887,18 @@ mod test {
 
     #[test]
     fn instantiate_no_image() {
+        // Skip this tests if it looks like we're in a cross-compiled situation
+        // and we're emulating this test for a different platform. In that
+        // scenario emulators (like QEMU) tend to not implement some subtleties
+        // of virtual memory correctly.
+        if std::env::vars()
+            .filter(|(k, _v)| k.starts_with("CARGO_TARGET") && k.ends_with("RUNNER"))
+            .count()
+            > 0
+        {
+            return;
+        }
+
         let plan = dummy_memory_plan(MemoryStyle::Static { bound: 4 << 30 });
         // 4 MiB mmap'd area, not accessible
         let mut mmap = Mmap::accessible_reserved(0, 4 << 20).unwrap();
@@ -920,6 +932,18 @@ mod test {
 
     #[test]
     fn instantiate_image() {
+        // Skip this tests if it looks like we're in a cross-compiled situation
+        // and we're emulating this test for a different platform. In that
+        // scenario emulators (like QEMU) tend to not implement some subtleties
+        // of virtual memory correctly.
+        if std::env::vars()
+            .filter(|(k, _v)| k.starts_with("CARGO_TARGET") && k.ends_with("RUNNER"))
+            .count()
+            > 0
+        {
+            return;
+        }
+
         let plan = dummy_memory_plan(MemoryStyle::Static { bound: 4 << 30 });
         // 4 MiB mmap'd area, not accessible
         let mut mmap = Mmap::accessible_reserved(0, 4 << 20).unwrap();
@@ -968,6 +992,18 @@ mod test {
     #[test]
     #[cfg(target_os = "linux")]
     fn memset_instead_of_madvise() {
+        // Skip this tests if it looks like we're in a cross-compiled situation
+        // and we're emulating this test for a different platform. In that
+        // scenario emulators (like QEMU) tend to not implement some subtleties
+        // of virtual memory correctly.
+        if std::env::vars()
+            .filter(|(k, _v)| k.starts_with("CARGO_TARGET") && k.ends_with("RUNNER"))
+            .count()
+            > 0
+        {
+            return;
+        }
+
         let plan = dummy_memory_plan(MemoryStyle::Static { bound: 100 });
         let mut mmap = Mmap::accessible_reserved(0, 4 << 20).unwrap();
         let mut memfd = MemoryImageSlot::create(mmap.as_mut_ptr() as *mut _, 0, 4 << 20);
@@ -1005,6 +1041,18 @@ mod test {
     #[test]
     #[cfg(target_os = "linux")]
     fn dynamic() {
+        // Skip this tests if it looks like we're in a cross-compiled situation
+        // and we're emulating this test for a different platform. In that
+        // scenario emulators (like QEMU) tend to not implement some subtleties
+        // of virtual memory correctly.
+        if std::env::vars()
+            .filter(|(k, _v)| k.starts_with("CARGO_TARGET") && k.ends_with("RUNNER"))
+            .count()
+            > 0
+        {
+            return;
+        }
+
         let plan = dummy_memory_plan(MemoryStyle::Dynamic { reserve: 200 });
 
         let mut mmap = Mmap::accessible_reserved(0, 4 << 20).unwrap();
