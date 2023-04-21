@@ -135,54 +135,6 @@ impl<'a> Lexer<'a> {
         Ok(l)
     }
 
-    /// Create a new lexer from the given files.
-    pub fn from_files_read<P>(
-        file_paths: impl IntoIterator<Item = P>,
-        mut read: impl FnMut(PathBuf) -> std::io::Result<String>,
-    ) -> Result<Lexer<'a>>
-    where
-        P: AsRef<Path>,
-    {
-        let mut filenames = Vec::<Arc<str>>::new();
-        let mut file_texts = Vec::<Arc<str>>::new();
-
-        for f in file_paths {
-            let f = f.as_ref();
-
-            filenames.push(f.display().to_string().into());
-
-            let s = read(f.to_path_buf())
-                .map_err(|e| Errors::from_io(e, format!("failed to read file: {}", f.display())))?;
-            file_texts.push(s.into());
-        }
-
-        assert!(!filenames.is_empty());
-
-        let mut file_starts = vec![];
-        let mut buf = String::new();
-        for text in &file_texts {
-            file_starts.push(buf.len());
-            buf += text;
-            buf += "\n";
-        }
-
-        let mut l = Lexer {
-            filenames,
-            file_texts,
-            buf: Cow::Owned(buf.into_bytes()),
-            file_starts,
-            pos: Pos {
-                file: 0,
-                offset: 0,
-                line: 1,
-                col: 0,
-            },
-            lookahead: None,
-        };
-        l.reload()?;
-        Ok(l)
-    }
-
     /// Get the lexer's current source position.
     pub fn pos(&self) -> Pos {
         Pos {
