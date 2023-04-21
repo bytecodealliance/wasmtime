@@ -1,0 +1,5 @@
+fn main() {
+    let mut file = std::fs::File::open("").unwrap();
+    let mut buffer = Vec::new();
+    std::io::Read::read_to_end(&mut file, &mut buffer).unwrap();
+}
