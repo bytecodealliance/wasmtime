@@ -747,6 +747,7 @@ dependencies = [
  "cranelift-codegen",
  "cranelift-control",
  "hashbrown 0.13.2",
+ "serde",
 ]
 
 [[package]]

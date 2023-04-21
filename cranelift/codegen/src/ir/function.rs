@@ -31,7 +31,7 @@ use super::{RelSourceLoc, SourceLoc, UserExternalName};
 
 /// A version marker used to ensure that serialized clif ir is never deserialized with a
 /// different version of Cranelift.
-#[derive(Copy, Clone, Debug, PartialEq, Hash)]
+#[derive(Default, Copy, Clone, Debug, PartialEq, Hash)]
 pub struct VersionMarker;
 
 #[cfg(feature = "enable-serde")]
