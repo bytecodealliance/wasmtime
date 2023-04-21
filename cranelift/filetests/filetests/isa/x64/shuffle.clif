@@ -654,9 +654,7 @@ block0(v0: i8x16, v1: i8x16):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movdqa  %xmm0, %xmm4
-;   movdqa  %xmm1, %xmm0
-;   palignr $0, %xmm0, %xmm4, %xmm0
+;   pblendw $0, %xmm0, %xmm1, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -666,9 +664,7 @@ block0(v0: i8x16, v1: i8x16):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movdqa %xmm0, %xmm4
-;   movdqa %xmm1, %xmm0
-;   palignr $0, %xmm4, %xmm0
+;   pblendw $0, %xmm1, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -770,9 +766,7 @@ block0(v0: i8x16, v1: i8x16):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movdqa  %xmm0, %xmm4
-;   movdqa  %xmm1, %xmm0
-;   palignr $16, %xmm0, %xmm4, %xmm0
+;   pblendw $255, %xmm0, %xmm1, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -782,9 +776,35 @@ block0(v0: i8x16, v1: i8x16):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movdqa %xmm0, %xmm4
-;   movdqa %xmm1, %xmm0
-;   palignr $0x10, %xmm4, %xmm0
+;   pblendw $0xff, %xmm1, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %pblendw_0b10011001(i16x8, i16x8) -> i16x8 {
+block0(v0: i16x8, v1: i16x8):
+    v2 = bitcast.i8x16 little v0
+    v3 = bitcast.i8x16 little v1
+    v4 = shuffle v2, v3, [16 17 2 3 4 5 22 23 24 25 10 11 12 13 30 31]
+    v5 = bitcast.i16x8 little v4
+    return v5
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   pblendw $153, %xmm0, %xmm1, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   pblendw $0x99, %xmm1, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

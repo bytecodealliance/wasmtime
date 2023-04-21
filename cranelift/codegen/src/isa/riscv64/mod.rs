@@ -2,7 +2,6 @@
 
 use crate::dominator_tree::DominatorTree;
 use crate::ir;
-use crate::ir::condcodes::IntCC;
 use crate::ir::Function;
 
 use crate::isa::riscv64::settings as riscv_settings;
@@ -15,6 +14,7 @@ use crate::result::CodegenResult;
 use crate::settings as shared_settings;
 use alloc::{boxed::Box, vec::Vec};
 use core::fmt;
+use cranelift_control::ControlPlane;
 use regalloc2::MachineEnv;
 use target_lexicon::{Architecture, Triple};
 mod abi;
@@ -72,6 +72,7 @@ impl TargetIsa for Riscv64Backend {
         func: &Function,
         domtree: &DominatorTree,
         want_disasm: bool,
+        ctrl_plane: &mut ControlPlane,
     ) -> CodegenResult<CompiledCodeStencil> {
         let (vcode, regalloc_result) = self.compile_vcode(func, domtree)?;
 
@@ -80,10 +81,11 @@ impl TargetIsa for Riscv64Backend {
             &regalloc_result,
             want_disasm,
             self.flags.machine_code_cfg_info(),
+            ctrl_plane,
         );
         let frame_size = emit_result.frame_size;
         let value_labels_ranges = emit_result.value_labels_ranges;
-        let buffer = emit_result.buffer.finish();
+        let buffer = emit_result.buffer.finish(ctrl_plane);
         let sized_stackslot_offsets = emit_result.sized_stackslot_offsets;
         let dynamic_stackslot_offsets = emit_result.dynamic_stackslot_offsets;
 
@@ -125,10 +127,6 @@ impl TargetIsa for Riscv64Backend {
 
     fn isa_flags(&self) -> Vec<shared_settings::Value> {
         self.isa_flags.iter().collect()
-    }
-
-    fn unsigned_add_overflow_condition(&self) -> IntCC {
-        IntCC::UnsignedGreaterThanOrEqual
     }
 
     #[cfg(feature = "unwind")]

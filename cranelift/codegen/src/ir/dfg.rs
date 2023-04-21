@@ -138,10 +138,10 @@ pub struct DataFlowGraph {
     /// Saves Value labels.
     pub values_labels: Option<BTreeMap<Value, ValueLabelAssignments>>,
 
-    /// Constants used within the function
+    /// Constants used within the function.
     pub constants: ConstantPool,
 
-    /// Stores large immediates that otherwise will not fit on InstructionData
+    /// Stores large immediates that otherwise will not fit on InstructionData.
     pub immediates: PrimaryMap<Immediate, ConstantData>,
 
     /// Jump tables used in this function.
@@ -275,12 +275,12 @@ fn resolve_aliases(values: &PrimaryMap<Value, ValueDataPacked>, value: Value) ->
     }
 }
 
-/// Iterator over all Values in a DFG
+/// Iterator over all Values in a DFG.
 pub struct Values<'a> {
     inner: entity::Iter<'a, Value, ValueDataPacked>,
 }
 
-/// Check for non-values
+/// Check for non-values.
 fn valid_valuedata(data: ValueDataPacked) -> bool {
     let data = ValueData::from(data);
     if let ValueData::Alias {
@@ -490,11 +490,6 @@ impl ValueDef {
             Self::Param(block, _) => block,
             _ => panic!("Value is not a block parameter"),
         }
-    }
-
-    /// Get the program point where the value was defined.
-    pub fn pp(self) -> ir::ExpandedProgramPoint {
-        self.into()
     }
 
     /// Get the number component of this definition.
@@ -1649,7 +1644,7 @@ mod tests {
         assert_eq!(pos.func.dfg.resolve_aliases(v1), v1);
 
         let arg0 = pos.func.dfg.append_block_param(block0, types::I32);
-        let (s, c) = pos.ins().iadd_cout(v1, arg0);
+        let (s, c) = pos.ins().uadd_overflow(v1, arg0);
         let iadd = match pos.func.dfg.value_def(s) {
             ValueDef::Result(i, 0) => i,
             _ => panic!(),
@@ -1659,7 +1654,7 @@ mod tests {
         pos.func.dfg.clear_results(iadd);
         pos.func.dfg.attach_result(iadd, s);
 
-        // Replace `iadd_cout` with a normal `iadd` and an `icmp`.
+        // Replace `uadd_overflow` with a normal `iadd` and an `icmp`.
         pos.func.dfg.replace(iadd).iadd(v1, arg0);
         let c2 = pos.ins().icmp(IntCC::Equal, s, v1);
         pos.func.dfg.change_to_alias(c, c2);

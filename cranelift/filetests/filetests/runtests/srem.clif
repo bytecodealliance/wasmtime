@@ -1,7 +1,5 @@
 test interpret
 test run
-; Test these inputs without div traps, it shouldn't affect normal inputs
-set avoid_div_traps
 target aarch64
 target s390x
 target x86_64

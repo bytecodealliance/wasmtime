@@ -3,9 +3,9 @@ use super::{
     asm::{Assembler, Operand},
     regs::{self, rbp, rsp},
 };
-use crate::isa::reg::Reg;
 use crate::masm::{DivKind, MacroAssembler as Masm, OperandSize, RegImm, RemKind};
 use crate::{abi::LocalSlot, codegen::CodeGenContext, stack::Val};
+use crate::{isa::reg::Reg, masm::CalleeKind};
 use cranelift_codegen::{isa::x64::settings as x64_settings, settings, Final, MachBufferFinalized};
 
 /// x64 MacroAssembler.
@@ -70,6 +70,14 @@ impl Masm for MacroAssembler {
         self.increment_sp(bytes);
     }
 
+    fn free_stack(&mut self, bytes: u32) {
+        if bytes == 0 {
+            return;
+        }
+        self.asm.add_ir(bytes as i32, rsp(), OperandSize::S64);
+        self.decrement_sp(bytes);
+    }
+
     fn local_address(&mut self, local: &LocalSlot) -> Address {
         let (reg, offset) = local
             .addressed_from_sp()
@@ -85,11 +93,29 @@ impl Masm for MacroAssembler {
         Address::offset(reg, offset)
     }
 
+    fn address_from_sp(&self, offset: u32) -> Self::Address {
+        Address::offset(regs::rsp(), self.sp_offset - offset)
+    }
+
+    fn address_at_sp(&self, offset: u32) -> Self::Address {
+        Address::offset(regs::rsp(), offset)
+    }
+
     fn store(&mut self, src: RegImm, dst: Address, size: OperandSize) {
         let src: Operand = src.into();
         let dst: Operand = dst.into();
 
         self.asm.mov(src, dst, size);
+    }
+
+    fn pop(&mut self, dst: Reg) {
+        self.asm.pop_r(dst);
+        // Similar to the comment in `push`, we assume 8 bytes per pop.
+        self.decrement_sp(8);
+    }
+
+    fn call(&mut self, callee: CalleeKind) {
+        self.asm.call(callee);
     }
 
     fn load(&mut self, src: Address, dst: Reg, size: OperandSize) {
@@ -98,7 +124,7 @@ impl Masm for MacroAssembler {
         self.asm.mov(src, dst, size);
     }
 
-    fn sp_offset(&mut self) -> u32 {
+    fn sp_offset(&self) -> u32 {
         self.sp_offset
     }
 
@@ -158,12 +184,12 @@ impl Masm for MacroAssembler {
         let rax = context.gpr(regs::rax(), self);
 
         // Allocate the divisor, which can be any gpr.
-        let divisor = context.pop_to_reg(self, size);
+        let divisor = context.pop_to_reg(self, None, size);
 
         // Mark rax as allocatable.
         context.regalloc.free_gpr(rax);
         // Move the top value to rax.
-        let rax = context.pop_to_named_reg(self, rax, size);
+        let rax = context.pop_to_reg(self, Some(rax), size);
         self.asm.div(divisor, (rax, rdx), kind, size);
 
         // Free the divisor and rdx.
@@ -180,12 +206,12 @@ impl Masm for MacroAssembler {
         let rax = context.gpr(regs::rax(), self);
 
         // Allocate the divisor, which can be any gpr.
-        let divisor = context.pop_to_reg(self, size);
+        let divisor = context.pop_to_reg(self, None, size);
 
         // Mark rax as allocatable.
         context.regalloc.free_gpr(rax);
         // Move the top value to rax.
-        let rax = context.pop_to_named_reg(self, rax, size);
+        let rax = context.pop_to_reg(self, Some(rax), size);
         self.asm.rem(divisor, (rax, rdx), kind, size);
 
         // Free the divisor and rax.
@@ -210,6 +236,10 @@ impl Masm for MacroAssembler {
     fn finalize(self) -> MachBufferFinalized<Final> {
         self.asm.finalize()
     }
+
+    fn address_from_reg(&self, reg: Reg, offset: u32) -> Self::Address {
+        Address::offset(reg, offset)
+    }
 }
 
 impl MacroAssembler {
@@ -225,7 +255,6 @@ impl MacroAssembler {
         self.sp_offset += bytes;
     }
 
-    #[allow(dead_code)]
     fn decrement_sp(&mut self, bytes: u32) {
         assert!(
             self.sp_offset >= bytes,

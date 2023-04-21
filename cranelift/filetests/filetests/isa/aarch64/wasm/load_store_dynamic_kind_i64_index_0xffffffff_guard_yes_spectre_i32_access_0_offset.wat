@@ -41,30 +41,28 @@
 
 ;; function u0:0:
 ;; block0:
-;;   ldr x9, [x2, #8]
-;;   sub x9, x9, #4
-;;   ldr x10, [x2]
-;;   add x10, x10, x0
-;;   movz x8, #0
-;;   subs xzr, x0, x9
-;;   csel x11, x8, x10, hi
+;;   ldr x8, [x2, #8]
+;;   ldr x9, [x2]
+;;   add x9, x9, x0
+;;   movz x10, #0
+;;   subs xzr, x0, x8
+;;   csel x9, x10, x9, hi
 ;;   csdb
-;;   str w1, [x11]
+;;   str w1, [x9]
 ;;   b label1
 ;; block1:
 ;;   ret
 ;;
 ;; function u0:1:
 ;; block0:
-;;   ldr x9, [x1, #8]
-;;   sub x9, x9, #4
-;;   ldr x10, [x1]
-;;   add x10, x10, x0
-;;   movz x8, #0
-;;   subs xzr, x0, x9
-;;   csel x11, x8, x10, hi
+;;   ldr x8, [x1, #8]
+;;   ldr x9, [x1]
+;;   add x9, x9, x0
+;;   movz x10, #0
+;;   subs xzr, x0, x8
+;;   csel x9, x10, x9, hi
 ;;   csdb
-;;   ldr w0, [x11]
+;;   ldr w0, [x9]
 ;;   b label1
 ;; block1:
 ;;   ret

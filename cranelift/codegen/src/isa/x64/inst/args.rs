@@ -928,6 +928,7 @@ pub(crate) enum InstructionSet {
     BMI2,
     FMA,
     AVX,
+    AVX2,
     AVX512BITALG,
     AVX512DQ,
     AVX512F,
@@ -1125,6 +1126,8 @@ pub enum SseOpcode {
     Punpcklqdq,
     Pshuflw,
     Pshufhw,
+    Pblendw,
+    Movddup,
 }
 
 impl SseOpcode {
@@ -1279,7 +1282,8 @@ impl SseOpcode {
             | SseOpcode::Pmulhrsw
             | SseOpcode::Pshufb
             | SseOpcode::Phaddw
-            | SseOpcode::Phaddd => SSSE3,
+            | SseOpcode::Phaddd
+            | SseOpcode::Movddup => SSSE3,
 
             SseOpcode::Blendvpd
             | SseOpcode::Blendvps
@@ -1318,7 +1322,8 @@ impl SseOpcode {
             | SseOpcode::Roundps
             | SseOpcode::Roundpd
             | SseOpcode::Roundss
-            | SseOpcode::Roundsd => SSE41,
+            | SseOpcode::Roundsd
+            | SseOpcode::Pblendw => SSE41,
 
             SseOpcode::Pcmpgtq => SSE42,
         }
@@ -1521,6 +1526,8 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Punpckhqdq => "punpckhqdq",
             SseOpcode::Pshuflw => "pshuflw",
             SseOpcode::Pshufhw => "pshufhw",
+            SseOpcode::Pblendw => "pblendw",
+            SseOpcode::Movddup => "movddup",
         };
         write!(fmt, "{}", name)
     }
@@ -1705,8 +1712,28 @@ impl AvxOpcode {
             | AvxOpcode::Vpextrb
             | AvxOpcode::Vpextrw
             | AvxOpcode::Vpextrd
-            | AvxOpcode::Vpextrq => {
+            | AvxOpcode::Vpextrq
+            | AvxOpcode::Vpblendw
+            | AvxOpcode::Vmovddup
+            | AvxOpcode::Vbroadcastss
+            | AvxOpcode::Vmovd
+            | AvxOpcode::Vmovq
+            | AvxOpcode::Vmovmskps
+            | AvxOpcode::Vmovmskpd
+            | AvxOpcode::Vpmovmskb
+            | AvxOpcode::Vcvtsi2ss
+            | AvxOpcode::Vcvtsi2sd
+            | AvxOpcode::Vcvtss2sd
+            | AvxOpcode::Vcvtsd2ss
+            | AvxOpcode::Vsqrtss
+            | AvxOpcode::Vsqrtsd
+            | AvxOpcode::Vroundss
+            | AvxOpcode::Vroundsd => {
                 smallvec![InstructionSet::AVX]
+            }
+
+            AvxOpcode::Vpbroadcastb | AvxOpcode::Vpbroadcastw | AvxOpcode::Vpbroadcastd => {
+                smallvec![InstructionSet::AVX2]
             }
         }
     }

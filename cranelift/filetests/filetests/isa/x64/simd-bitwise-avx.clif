@@ -41,7 +41,7 @@ block0(v0: i64):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movl    $-2147483648, %eax
-;   movd    %eax, %xmm4
+;   vmovd   %eax, %xmm4
 ;   vandnps %xmm4, const(0), %xmm6
 ;   vandps  %xmm4, 0(%rdi), %xmm8
 ;   vorps   %xmm6, %xmm8, %xmm0
@@ -55,7 +55,7 @@ block0(v0: i64):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   movl $0x80000000, %eax
-;   movd %eax, %xmm4
+;   vmovd %eax, %xmm4
 ;   vandnps 0x1b(%rip), %xmm4, %xmm6
 ;   vandps (%rdi), %xmm4, %xmm8
 ;   vorps %xmm8, %xmm6, %xmm0

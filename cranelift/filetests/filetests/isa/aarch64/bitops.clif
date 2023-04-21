@@ -515,14 +515,14 @@ block0:
 
 ; VCode:
 ; block0:
-;   movz w0, #255
-;   sxtb w0, w0
+;   movz w1, #255
+;   sxtb w0, w1
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mov w0, #0xff
-;   sxtb w0, w0
+;   mov w1, #0xff
+;   sxtb w0, w1
 ;   ret
 
 function %sextend_i8() -> i32 {
@@ -534,14 +534,14 @@ block0:
 
 ; VCode:
 ; block0:
-;   movz w0, #255
-;   sxtb w0, w0
+;   movz w1, #255
+;   sxtb w0, w1
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mov w0, #0xff
-;   sxtb w0, w0
+;   mov w1, #0xff
+;   sxtb w0, w1
 ;   ret
 
 function %bnot_i32(i32) -> i32 {

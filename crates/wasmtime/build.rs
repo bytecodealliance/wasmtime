@@ -12,7 +12,7 @@ fn main() {
     // frequently then all rustdoc attributes also need to be updated with the
     // new condition to ensure the documentation accurately reflects when an API
     // is available.
-    if cfg!(feature = "cranelift") {
+    if cfg!(feature = "cranelift") || cfg!(feature = "winch") {
         println!("cargo:rustc-cfg=compiler");
     }
 

@@ -53,7 +53,7 @@ pub use crate::ir::known_symbol::KnownSymbol;
 pub use crate::ir::layout::Layout;
 pub use crate::ir::libcall::{get_probestack_funcref, LibCall};
 pub use crate::ir::memflags::{Endianness, MemFlags};
-pub use crate::ir::progpoint::{ExpandedProgramPoint, ProgramOrder, ProgramPoint};
+pub use crate::ir::progpoint::ProgramPoint;
 pub use crate::ir::sourceloc::RelSourceLoc;
 pub use crate::ir::sourceloc::SourceLoc;
 pub use crate::ir::stackslot::{
@@ -89,7 +89,7 @@ pub struct ValueLabelStart {
     pub label: ValueLabel,
 }
 
-/// Value label assignements: label starts or value aliases.
+/// Value label assignments: label starts or value aliases.
 #[derive(Debug, Clone, PartialEq, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub enum ValueLabelAssignments {

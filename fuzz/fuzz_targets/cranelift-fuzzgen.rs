@@ -4,6 +4,8 @@ use cranelift_codegen::ir::Function;
 use cranelift_codegen::ir::Signature;
 use cranelift_codegen::ir::UserExternalName;
 use cranelift_codegen::ir::UserFuncName;
+use cranelift_codegen::Context;
+use cranelift_control::ControlPlane;
 use libfuzzer_sys::arbitrary;
 use libfuzzer_sys::arbitrary::Arbitrary;
 use libfuzzer_sys::arbitrary::Unstructured;
@@ -145,13 +147,21 @@ pub struct TestCase {
     /// Functions under test
     /// By convention the first function is the main function.
     pub functions: Vec<Function>,
+    /// Control planes for function compilation.
+    /// There should be an equal amount as functions to compile.
+    pub ctrl_planes: Vec<ControlPlane>,
     /// Generate multiple test inputs for each test case.
     /// This allows us to get more coverage per compilation, which may be somewhat expensive.
     pub inputs: Vec<TestCaseInput>,
+    /// Should this `TestCase` be tested after optimizations.
+    pub compare_against_host: bool,
 }
 
 impl fmt::Debug for TestCase {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if !self.compare_against_host {
+            writeln!(f, ";; Testing against optimized version")?;
+        }
         PrintableTestCase::run(&self.isa, &self.functions, &self.inputs).fmt(f)
     }
 }
@@ -169,11 +179,14 @@ impl TestCase {
     pub fn generate(u: &mut Unstructured) -> anyhow::Result<Self> {
         let mut gen = FuzzGen::new(u);
 
+        let compare_against_host = gen.u.arbitrary()?;
+
         // TestCase is meant to be consumed by a runner, so we make the assumption here that we're
         // generating a TargetIsa for the host.
-        let builder =
+        let mut builder =
             builder_with_options(true).expect("Unable to build a TargetIsa for the current host");
         let flags = gen.generate_flags(builder.triple().architecture)?;
+        gen.set_isa_flags(&mut builder, IsaFlagGen::Host)?;
         let isa = builder.finish(flags)?;
 
         // When generating functions, we allow each function to call any function that has
@@ -182,6 +195,7 @@ impl TestCase {
         // the start.
         let func_count = gen.u.int_in_range(gen.config.testcase_funcs.clone())?;
         let mut functions: Vec<Function> = Vec::with_capacity(func_count);
+        let mut ctrl_planes: Vec<ControlPlane> = Vec::with_capacity(func_count);
         for i in (0..func_count).rev() {
             // Function name must be in a different namespace than TESTFILE_NAMESPACE (0)
             let fname = UserFuncName::user(1, i as u32);
@@ -203,6 +217,8 @@ impl TestCase {
                 ALLOWED_LIBCALLS.to_vec(),
             )?;
             functions.push(func);
+
+            ctrl_planes.push(ControlPlane::arbitrary(gen.u)?);
         }
         // Now reverse the functions so that the main function is at the start.
         functions.reverse();
@@ -213,8 +229,30 @@ impl TestCase {
         Ok(TestCase {
             isa,
             functions,
+            ctrl_planes,
             inputs,
+            compare_against_host,
         })
+    }
+
+    fn to_optimized(&self) -> Self {
+        let optimized_functions: Vec<Function> = self
+            .functions
+            .iter()
+            .map(|func| {
+                let mut ctx = Context::for_function(func.clone());
+                ctx.optimize(self.isa.as_ref()).unwrap();
+                ctx.func
+            })
+            .collect();
+
+        TestCase {
+            isa: self.isa.clone(),
+            functions: optimized_functions,
+            ctrl_planes: self.ctrl_planes.clone(),
+            inputs: self.inputs.clone(),
+            compare_against_host: false,
+        }
     }
 
     /// Returns the main function of this test case.
@@ -260,7 +298,7 @@ fn build_interpreter(testcase: &TestCase) -> Interpreter {
 
     let state = InterpreterState::default()
         .with_function_store(env)
-        .with_libcall_handler(|libcall: LibCall, args: LibCallValues<DataValue>| {
+        .with_libcall_handler(|libcall: LibCall, args: LibCallValues| {
             use LibCall::*;
             Ok(smallvec![match (libcall, &args[..]) {
                 (CeilF32, [DataValue::F32(a)]) => DataValue::F32(a.ceil()),
@@ -279,21 +317,7 @@ fn build_interpreter(testcase: &TestCase) -> Interpreter {
 
 static STATISTICS: Lazy<Statistics> = Lazy::new(Statistics::default);
 
-fuzz_target!(|testcase: TestCase| {
-    // This is the default, but we should ensure that it wasn't accidentally turned off anywhere.
-    assert!(testcase.isa.flags().enable_verifier());
-
-    // Periodically print statistics
-    let valid_inputs = STATISTICS.valid_inputs.fetch_add(1, Ordering::SeqCst);
-    if valid_inputs != 0 && valid_inputs % 10000 == 0 {
-        STATISTICS.print(valid_inputs);
-    }
-
-    let mut compiler = TestFileCompiler::new(testcase.isa.clone());
-    compiler.add_functions(&testcase.functions[..]).unwrap();
-    let compiled = compiler.compile().unwrap();
-    let trampoline = compiled.get_trampoline(testcase.main()).unwrap();
-
+fn run_test_inputs(testcase: &TestCase, run: impl Fn(&[DataValue]) -> RunResult) {
     for args in &testcase.inputs {
         STATISTICS.total_runs.fetch_add(1, Ordering::SeqCst);
 
@@ -325,12 +349,40 @@ fuzz_target!(|testcase: TestCase| {
             RunResult::Error(_) => panic!("interpreter failed: {:?}", int_res),
         }
 
-        let host_res = run_in_host(&trampoline, args);
-        match host_res {
-            RunResult::Success(_) => {}
-            _ => panic!("host failed: {:?}", host_res),
-        }
+        let res = run(args);
 
-        assert_eq!(int_res, host_res);
+        assert_eq!(int_res, res);
+    }
+}
+
+fuzz_target!(|testcase: TestCase| {
+    // This is the default, but we should ensure that it wasn't accidentally turned off anywhere.
+    assert!(testcase.isa.flags().enable_verifier());
+
+    // Periodically print statistics
+    let valid_inputs = STATISTICS.valid_inputs.fetch_add(1, Ordering::SeqCst);
+    if valid_inputs != 0 && valid_inputs % 10000 == 0 {
+        STATISTICS.print(valid_inputs);
+    }
+
+    if !testcase.compare_against_host {
+        let opt_testcase = testcase.to_optimized();
+
+        run_test_inputs(&testcase, |args| {
+            // We rebuild the interpreter every run so that we don't accidentally carry over any state
+            // between runs, such as fuel remaining.
+            let mut interpreter = build_interpreter(&opt_testcase);
+
+            run_in_interpreter(&mut interpreter, args)
+        });
+    } else {
+        let mut compiler = TestFileCompiler::new(testcase.isa.clone());
+        compiler
+            .add_functions(&testcase.functions[..], testcase.ctrl_planes.clone())
+            .unwrap();
+        let compiled = compiler.compile().unwrap();
+        let trampoline = compiled.get_trampoline(testcase.main()).unwrap();
+
+        run_test_inputs(&testcase, |args| run_in_host(&trampoline, args));
     }
 });

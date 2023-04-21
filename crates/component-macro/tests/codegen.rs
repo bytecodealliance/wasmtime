@@ -18,11 +18,13 @@ macro_rules! gentest {
                     path: $path,
                     world: $name,
                     tracing: true,
+                    duplicate_if_necessary: true,
                 });
             }
         }
         // ...
     };
+
 }
 
 component_macro_test_helpers::foreach!(gentest);

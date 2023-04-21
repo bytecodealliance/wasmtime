@@ -1,6 +1,5 @@
 test optimize
 set opt_level=speed
-set use_egraphs=true
 target x86_64
 
 function %stack_load(i64) -> i64 {
@@ -16,6 +15,6 @@ block0(v0: i64):
 ; nextln:    ss0 = explicit_slot 8
 ; check:  block0(v0: i64):
 ; nextln:     v2 = stack_addr.i64 ss0
-; nextln:     store notrap aligned v0, v2
+; nextln:     store notrap v0, v2
 ; nextln:     return v0
 ; nextln: }

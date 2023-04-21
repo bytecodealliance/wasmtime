@@ -32,6 +32,7 @@ use crate::{isa::TargetIsa, timing};
 use crate::{trace, CompileError, Context};
 use alloc::borrow::{Cow, ToOwned as _};
 use alloc::string::ToString as _;
+use cranelift_control::ControlPlane;
 
 impl Context {
     /// Compile the function, as in `compile`, but tries to reuse compiled artifacts from former
@@ -40,11 +41,12 @@ impl Context {
         &mut self,
         isa: &dyn TargetIsa,
         cache_store: &mut dyn CacheKvStore,
+        ctrl_plane: &mut ControlPlane,
     ) -> CompileResult<(&CompiledCode, bool)> {
         let cache_key_hash = {
             let _tt = timing::try_incremental_cache();
 
-            let cache_key_hash = compute_cache_key(isa, &mut self.func);
+            let cache_key_hash = compute_cache_key(isa, &self.func);
 
             if let Some(blob) = cache_store.get(&cache_key_hash.0) {
                 match try_finish_recompile(&self.func, &blob) {
@@ -52,7 +54,7 @@ impl Context {
                         let info = compiled_code.code_info();
 
                         if isa.flags().enable_incremental_compilation_cache_checks() {
-                            let actual_result = self.compile(isa)?;
+                            let actual_result = self.compile(isa, ctrl_plane)?;
                             assert_eq!(*actual_result, compiled_code);
                             assert_eq!(actual_result.code_info(), info);
                             // no need to set `compiled_code` here, it's set by `compile()`.
@@ -71,10 +73,12 @@ impl Context {
             cache_key_hash
         };
 
-        let stencil = self.compile_stencil(isa).map_err(|err| CompileError {
-            inner: err,
-            func: &self.func,
-        })?;
+        let stencil = self
+            .compile_stencil(isa, ctrl_plane)
+            .map_err(|err| CompileError {
+                inner: err,
+                func: &self.func,
+            })?;
 
         let stencil = {
             let _tt = timing::store_incremental_cache();
@@ -116,8 +120,10 @@ impl std::fmt::Display for CacheKeyHash {
 
 #[derive(serde::Serialize, serde::Deserialize)]
 struct CachedFunc {
-    stencil: CompiledCodeStencil,
+    // Note: The version marker must be first to ensure deserialization stops in case of a version
+    // mismatch before attempting to deserialize the actual compiled code.
     version_marker: VersionMarker,
+    stencil: CompiledCodeStencil,
 }
 
 /// Key for caching a single function's compilation.
@@ -160,11 +166,7 @@ impl<'a> CacheKey<'a> {
     /// Creates a new cache store key for a function.
     ///
     /// This is a bit expensive to compute, so it should be cached and reused as much as possible.
-    fn new(isa: &dyn TargetIsa, f: &'a mut Function) -> Self {
-        // Make sure the blocks and instructions are sequenced the same way as we might
-        // have serialized them earlier. This is the symmetric of what's done in
-        // `try_load`.
-        f.stencil.layout.full_renumber();
+    fn new(isa: &dyn TargetIsa, f: &'a Function) -> Self {
         CacheKey {
             stencil: &f.stencil,
             parameters: CompileParameters::from_isa(isa),
@@ -175,7 +177,7 @@ impl<'a> CacheKey<'a> {
 /// Compute a cache key, and hash it on your behalf.
 ///
 /// Since computing the `CacheKey` is a bit expensive, it should be done as least as possible.
-pub fn compute_cache_key(isa: &dyn TargetIsa, func: &mut Function) -> CacheKeyHash {
+pub fn compute_cache_key(isa: &dyn TargetIsa, func: &Function) -> CacheKeyHash {
     use core::hash::{Hash as _, Hasher};
     use sha2::Digest as _;
 
@@ -208,8 +210,8 @@ pub fn serialize_compiled(
     result: CompiledCodeStencil,
 ) -> (CompiledCodeStencil, Result<Vec<u8>, bincode::Error>) {
     let cached = CachedFunc {
-        stencil: result,
         version_marker: VersionMarker,
+        stencil: result,
     };
     let result = bincode::serialize(&cached);
     (cached.stencil, result)

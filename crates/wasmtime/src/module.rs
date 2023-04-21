@@ -196,7 +196,7 @@ impl Module {
     /// # }
     /// ```
     #[cfg(compiler)]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
+    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))] // see build.rs
     pub fn new(engine: &Engine, bytes: impl AsRef<[u8]>) -> Result<Module> {
         let bytes = bytes.as_ref();
         #[cfg(feature = "wat")]
@@ -233,7 +233,7 @@ impl Module {
     /// # }
     /// ```
     #[cfg(compiler)]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
+    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))] // see build.rs
     pub fn from_file(engine: &Engine, file: impl AsRef<Path>) -> Result<Module> {
         match Self::new(
             engine,
@@ -286,7 +286,7 @@ impl Module {
     /// # }
     /// ```
     #[cfg(compiler)]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
+    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))] // see build.rs
     pub fn from_binary(engine: &Engine, binary: &[u8]) -> Result<Module> {
         engine
             .check_compatible_with_native_host()
@@ -358,7 +358,7 @@ impl Module {
     /// reflect the current state of the file, not necessarily the origianl
     /// state of the file.
     #[cfg(compiler)]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
+    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))] // see build.rs
     pub unsafe fn from_trusted_file(engine: &Engine, file: impl AsRef<Path>) -> Result<Module> {
         let mmap = MmapVec::from_file(file.as_ref())?;
         if &mmap[0..4] == b"\x7fELF" {
@@ -738,7 +738,7 @@ impl Module {
     /// this method can be useful to get the serialized version without
     /// compiling twice.
     #[cfg(compiler)]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
+    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))] // see build.rs
     pub fn serialize(&self) -> Result<Vec<u8>> {
         // The current representation of compiled modules within a compiled
         // component means that it cannot be serialized. The mmap returned here
@@ -1144,10 +1144,10 @@ fn _assert_send_sync() {
 /// The hash computed for this structure is used to key the global wasmtime
 /// cache and dictates whether artifacts are reused. Consequently the contents
 /// of this hash dictate when artifacts are or aren't re-used.
-#[cfg(all(feature = "cache", compiler))]
-struct HashedEngineCompileEnv<'a>(&'a Engine);
+#[cfg(compiler)]
+pub(crate) struct HashedEngineCompileEnv<'a>(pub &'a Engine);
 
-#[cfg(all(feature = "cache", compiler))]
+#[cfg(compiler)]
 impl std::hash::Hash for HashedEngineCompileEnv<'_> {
     fn hash<H: std::hash::Hasher>(&self, hasher: &mut H) {
         // Hash the compiler's state based on its target and configuration.

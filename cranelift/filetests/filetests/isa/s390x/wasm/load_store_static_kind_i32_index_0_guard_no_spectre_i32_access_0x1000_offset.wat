@@ -53,7 +53,7 @@
 ;; block2:
 ;;   br %r14
 ;; block3:
-;;   trap
+;;   .word 0x0000 # trap=heap_oob
 ;;
 ;; function u0:1:
 ;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 160, offset_downward_to_clobbers: 0 }
@@ -66,10 +66,10 @@
 ;; block1:
 ;;   lgr %r4, %r5
 ;;   ag %r3, 0(%r4)
-;;   lghi %r5, 4096
-;;   lrv %r2, 0(%r5,%r3)
+;;   lghi %r2, 4096
+;;   lrv %r2, 0(%r2,%r3)
 ;;   jg label2
 ;; block2:
 ;;   br %r14
 ;; block3:
-;;   trap
+;;   .word 0x0000 # trap=heap_oob

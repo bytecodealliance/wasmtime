@@ -41,38 +41,32 @@
 
 ;; function u0:0:
 ;; block0:
-;;   movn w11, #65531
-;;   adds x13, x0, x11
-;;   b.lo 8 ; udf
-;;   ldr x14, [x2, #8]
-;;   ldr x15, [x2]
-;;   add x15, x15, x0
+;;   ldr x10, [x2, #8]
+;;   ldr x11, [x2]
+;;   add x11, x11, x0
 ;;   movz x12, #65535, LSL #16
-;;   add x15, x15, x12
+;;   add x11, x11, x12
 ;;   movz x12, #0
-;;   subs xzr, x13, x14
-;;   csel x15, x12, x15, hi
+;;   subs xzr, x0, x10
+;;   csel x11, x12, x11, hi
 ;;   csdb
-;;   str w1, [x15]
+;;   str w1, [x11]
 ;;   b label1
 ;; block1:
 ;;   ret
 ;;
 ;; function u0:1:
 ;; block0:
-;;   movn w11, #65531
-;;   adds x13, x0, x11
-;;   b.lo 8 ; udf
-;;   ldr x14, [x1, #8]
-;;   ldr x15, [x1]
-;;   add x15, x15, x0
+;;   ldr x10, [x1, #8]
+;;   ldr x11, [x1]
+;;   add x11, x11, x0
 ;;   movz x12, #65535, LSL #16
-;;   add x15, x15, x12
+;;   add x11, x11, x12
 ;;   movz x12, #0
-;;   subs xzr, x13, x14
-;;   csel x15, x12, x15, hi
+;;   subs xzr, x0, x10
+;;   csel x11, x12, x11, hi
 ;;   csdb
-;;   ldr w0, [x15]
+;;   ldr w0, [x11]
 ;;   b label1
 ;; block1:
 ;;   ret

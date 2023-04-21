@@ -13,7 +13,7 @@ use crate::vmcontext::{
 };
 use crate::{
     ExportFunction, ExportGlobal, ExportMemory, ExportTable, Imports, ModuleRuntimeInfo, Store,
-    VMFunctionBody, VMSharedSignatureIndex,
+    VMFunctionBody, VMSharedSignatureIndex, WasmFault,
 };
 use anyhow::Error;
 use anyhow::Result;
@@ -1046,6 +1046,23 @@ impl Instance {
             }
         }
     }
+
+    fn wasm_fault(&self, addr: usize) -> Option<WasmFault> {
+        let mut fault = None;
+        for (_, memory) in self.memories.iter() {
+            let accessible = memory.wasm_accessible();
+            if accessible.start <= addr && addr < accessible.end {
+                // All linear memories should be disjoint so assert that no
+                // prior fault has been found.
+                assert!(fault.is_none());
+                fault = Some(WasmFault {
+                    memory_size: memory.byte_size(),
+                    wasm_address: u64::try_from(addr - accessible.start).unwrap(),
+                });
+            }
+        }
+        fault
+    }
 }
 
 impl Drop for Instance {
@@ -1230,5 +1247,16 @@ impl InstanceHandle {
     /// state could be referenced by other instances.
     pub fn initialize(&mut self, module: &Module, is_bulk_memory: bool) -> Result<()> {
         allocator::initialize_instance(self.instance_mut(), module, is_bulk_memory)
+    }
+
+    /// Attempts to convert from the host `addr` specified to a WebAssembly
+    /// based address recorded in `WasmFault`.
+    ///
+    /// This method will check all linear memories that this instance contains
+    /// to see if any of them contain `addr`. If one does then `Some` is
+    /// returned with metadata about the wasm fault. Otherwise `None` is
+    /// returned and `addr` doesn't belong to this instance.
+    pub fn wasm_fault(&self, addr: usize) -> Option<WasmFault> {
+        self.instance().wasm_fault(addr)
     }
 }

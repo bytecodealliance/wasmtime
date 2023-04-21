@@ -41,17 +41,27 @@
 
 ;; `i64` and smaller.
 
-;; Add two registers.
-(rule -5 (lower (has_type (fits_in_64 ty)
+;; Base case for 8 and 16-bit types
+(rule -6 (lower (has_type (fits_in_16 ty)
                        (iadd x y)))
       (x64_add ty x y))
 
-;; The above case handles when the rhs is an immediate or a sinkable load, but
-;; additionally add lhs meets these criteria.
+;; Base case for 32 and 64-bit types which might end up using the `lea`
+;; instruction to fold multiple operations into one.
+;;
+;; Note that at this time this always generates a `lea` pseudo-instruction,
+;; but the actual instruction emitted might be an `add` if it's equivalent.
+;; For more details on this see the `emit.rs` logic to emit
+;; `LoadEffectiveAddress`.
+(rule -5 (lower (has_type (ty_32_or_64 ty) (iadd x y)))
+      (x64_lea ty (to_amode_add (mem_flags_trusted) x y (zero_offset))))
 
+;; Higher-priority cases than the previous two where a load can be sunk into
+;; the add instruction itself. Note that both operands are tested for
+;; sink-ability since addition is commutative
 (rule -4 (lower (has_type (fits_in_64 ty)
-                       (iadd (simm32_from_value x) y)))
-      (x64_add ty y x))
+                       (iadd x (sinkable_load y))))
+      (x64_add ty x y))
 (rule -3 (lower (has_type (fits_in_64 ty)
                        (iadd (sinkable_load x) y)))
       (x64_add ty y x))
@@ -88,18 +98,86 @@
           (with_flags (x64_add_with_flags_paired $I64 x_lo y_lo)
                       (x64_adc_paired $I64 x_hi y_hi)))))
 
-;;;; Rules for `iadd_cout` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; Helpers for `*_overflow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; TODO: i8 and i16 support. Requires either learning how to encode ALU
-;; operations on values narrower than 32-bits (better code; big change) or doing
-;; the same extend-to-32-bits trick that aarch64 does (worse code; small
-;; change).
-
-(rule (lower (iadd_cout x y @ (value_type (ty_32_or_64 ty))))
-      (let ((results ValueRegs (with_flags (x64_add_with_flags_paired ty x y)
-                                           (x64_setcc_paired (CC.O)))))
+(decl construct_overflow_op (CC ProducesFlags) InstOutput)
+(rule (construct_overflow_op cc inst)
+      (let ((results ValueRegs (with_flags inst
+                                           (x64_setcc_paired cc))))
         (output_pair (value_regs_get results 0)
                      (value_regs_get results 1))))
+
+(decl construct_overflow_op_alu (Type CC AluRmiROpcode Gpr GprMemImm) InstOutput)
+(rule (construct_overflow_op_alu ty cc alu_op src1 src2)
+      (construct_overflow_op cc (x64_alurmi_with_flags_paired alu_op ty src1 src2)))
+
+;; This essentially creates
+;; alu_<op1> x_lo, y_lo
+;; alu_<op2> x_hi, y_hi
+;; set<cc> r8
+(decl construct_overflow_op_alu_128 (CC AluRmiROpcode AluRmiROpcode Value Value) InstOutput)
+(rule (construct_overflow_op_alu_128 cc op1 op2 x y)
+      ;; Get the high/low registers for `x`.
+      (let ((x_regs ValueRegs x)
+            (x_lo Gpr (value_regs_get_gpr x_regs 0))
+            (x_hi Gpr (value_regs_get_gpr x_regs 1)))
+        ;; Get the high/low registers for `y`.
+        (let ((y_regs ValueRegs y)
+              (y_lo Gpr (value_regs_get_gpr y_regs 0))
+              (y_hi Gpr (value_regs_get_gpr y_regs 1)))
+          (let    ((lo_inst ProducesFlags (x64_alurmi_with_flags_paired op1 $I64 x_lo y_lo))
+                   (hi_inst ConsumesAndProducesFlags (x64_alurmi_with_flags_chained op2 $I64 x_hi y_hi))
+                   (of_inst ConsumesFlags (x64_setcc_paired cc))
+
+                   (result MultiReg (with_flags_chained lo_inst hi_inst of_inst)))
+                  (multi_reg_to_pair_and_single result)))))
+
+;;;; Rules for `uadd_overflow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule 1 (lower (uadd_overflow x y @ (value_type (fits_in_64 ty))))
+      (construct_overflow_op_alu ty (CC.B) (AluRmiROpcode.Add) x y))
+
+;; i128 gets lowered into adc and add
+(rule 0 (lower (uadd_overflow x y @ (value_type $I128)))
+        (construct_overflow_op_alu_128 (CC.B) (AluRmiROpcode.Add) (AluRmiROpcode.Adc) x y))
+
+;;;; Rules for `sadd_overflow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule 1 (lower (sadd_overflow x y @ (value_type (fits_in_64 ty))))
+      (construct_overflow_op_alu ty (CC.O) (AluRmiROpcode.Add) x y))
+
+(rule 0 (lower (sadd_overflow x y @ (value_type $I128)))
+        (construct_overflow_op_alu_128 (CC.O) (AluRmiROpcode.Add) (AluRmiROpcode.Adc) x y))
+
+;;;; Rules for `usub_overflow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule 1 (lower (usub_overflow x y @ (value_type (fits_in_64 ty))))
+      (construct_overflow_op_alu ty (CC.B) (AluRmiROpcode.Sub) x y))
+
+(rule 0 (lower (usub_overflow x y @ (value_type $I128)))
+        (construct_overflow_op_alu_128 (CC.B) (AluRmiROpcode.Sub) (AluRmiROpcode.Sbb) x y))
+
+;;;; Rules for `ssub_overflow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule 1 (lower (ssub_overflow x y @ (value_type (fits_in_64 ty))))
+      (construct_overflow_op_alu ty (CC.O) (AluRmiROpcode.Sub) x y))
+
+(rule 0 (lower (ssub_overflow x y @ (value_type $I128)))
+        (construct_overflow_op_alu_128 (CC.O) (AluRmiROpcode.Sub) (AluRmiROpcode.Sbb) x y))
+
+;;;; Rules for `umul_overflow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule 2 (lower (umul_overflow x y @ (value_type (fits_in_64 ty))))
+      (construct_overflow_op (CC.O) (x64_umullo_with_flags_paired ty x y)))
+
+;;;; Rules for `smul_overflow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule 2 (lower (smul_overflow x y @ (value_type (ty_int_ref_16_to_64 ty))))
+      (construct_overflow_op_alu ty (CC.O) (AluRmiROpcode.Mul) x y))
+
+;; there is no 8bit imul with an immediate operand so we need to put it in a register or memory
+(rule 1 (lower (smul_overflow x y @ (value_type $I8)))
+      (construct_overflow_op (CC.O) (x64_alurmi_with_flags_paired (AluRmiROpcode.Mul) $I8 x (reg_mem_to_reg_mem_imm (put_in_reg_mem y)))))
 
 ;;;; Rules for `sadd_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -442,13 +520,14 @@
 (extern constructor ishl_i8x16_mask_table ishl_i8x16_mask_table)
 (rule (ishl_i8x16_mask (RegMemImm.Reg amt))
       (let ((mask_table SyntheticAmode (ishl_i8x16_mask_table))
-            (base_mask_addr Gpr (x64_lea mask_table))
+            (base_mask_addr Gpr (x64_lea $I64 mask_table))
             (mask_offset Gpr (x64_shl $I64 amt
                                   (imm8_to_imm8_gpr 4))))
-        (amode_imm_reg_reg_shift 0
-                                 base_mask_addr
-                                 mask_offset
-                                 0)))
+        (Amode.ImmRegRegShift 0
+                              base_mask_addr
+                              mask_offset
+                              0
+                              (mem_flags_trusted))))
 
 (rule (ishl_i8x16_mask (RegMemImm.Mem amt))
       (ishl_i8x16_mask (RegMemImm.Reg (x64_load $I64 amt (ExtKind.None)))))
@@ -546,14 +625,15 @@
 (extern constructor ushr_i8x16_mask_table ushr_i8x16_mask_table)
 (rule (ushr_i8x16_mask (RegMemImm.Reg amt))
       (let ((mask_table SyntheticAmode (ushr_i8x16_mask_table))
-            (base_mask_addr Gpr (x64_lea mask_table))
+            (base_mask_addr Gpr (x64_lea $I64 mask_table))
             (mask_offset Gpr (x64_shl $I64
                                   amt
                                   (imm8_to_imm8_gpr 4))))
-        (amode_imm_reg_reg_shift 0
-                                 base_mask_addr
-                                 mask_offset
-                                 0)))
+        (Amode.ImmRegRegShift 0
+                              base_mask_addr
+                              mask_offset
+                              0
+                              (mem_flags_trusted))))
 
 (rule (ushr_i8x16_mask (RegMemImm.Mem amt))
       (ushr_i8x16_mask (RegMemImm.Reg (x64_load $I64 amt (ExtKind.None)))))
@@ -861,7 +941,7 @@
 ;;
 ;;   A * B  = (Al * Bl) + ((Ah * Bl) + (Al * Bh)) << 32
 ;;
-;; Note, the algorithm will use `pmuldq` which operates directly on the lower
+;; Note, the algorithm will use `pmuludq` which operates directly on the lower
 ;; 32-bit (`Al` or `Bl`) of a lane and writes the result to the full 64-bits of
 ;; the lane of the destination. For this reason we don't need shifts to isolate
 ;; the lower 32-bits, however, we will need to use shifts to isolate the high
@@ -871,17 +951,17 @@
       (let ((a0 Xmm a)
             (b0 Xmm b)
             ;; a_hi = A >> 32
-            (a_hi Xmm (x64_psrlq a0 (RegMemImm.Imm 32)))
+            (a_hi Xmm (x64_psrlq a0 (xmi_imm 32)))
             ;; ah_bl = Ah * Bl
             (ah_bl Xmm (x64_pmuludq a_hi b0))
             ;; b_hi = B >> 32
-            (b_hi Xmm (x64_psrlq b0 (RegMemImm.Imm 32)))
+            (b_hi Xmm (x64_psrlq b0 (xmi_imm 32)))
             ;; al_bh = Al * Bh
             (al_bh Xmm (x64_pmuludq a0 b_hi))
             ;; aa_bb = ah_bl + al_bh
             (aa_bb Xmm (x64_paddq ah_bl al_bh))
             ;; aa_bb_shifted = aa_bb << 32
-            (aa_bb_shifted Xmm (x64_psllq aa_bb (RegMemImm.Imm 32)))
+            (aa_bb_shifted Xmm (x64_psllq aa_bb (xmi_imm 32)))
             ;; al_bl = Al * Bl
             (al_bl Xmm (x64_pmuludq a0 b0)))
         ;; al_bl + aa_bb_shifted
@@ -919,6 +999,7 @@
                                                x))
                              (swiden_high (and (value_type (multi_lane 32 4))
                                                y)))))
+      (if-let $true (use_sse41))
       (let ((x2 Xmm (x64_pshufd x 0xFA))
             (y2 Xmm (x64_pshufd y 0xFA)))
         (x64_pmuldq x2 y2)))
@@ -951,6 +1032,7 @@
                                               x))
                              (swiden_low (and (value_type (multi_lane 32 4))
                                               y)))))
+      (if-let $true (use_sse41))
       (let ((x2 Xmm (x64_pshufd x 0x50))
             (y2 Xmm (x64_pshufd y 0x50)))
         (x64_pmuldq x2 y2)))
@@ -1075,14 +1157,12 @@
 ;; Special case for `f32x4.abs`.
 (rule (lower (has_type $F32X4 (fabs x)))
       (x64_andps x
-             (x64_psrld (vector_all_ones)
-                    (RegMemImm.Imm 1))))
+             (x64_psrld (vector_all_ones) (xmi_imm 1))))
 
 ;; Special case for `f64x2.abs`.
 (rule (lower (has_type $F64X2 (fabs x)))
       (x64_andpd x
-             (x64_psrlq (vector_all_ones)
-                    (RegMemImm.Imm 1))))
+             (x64_psrlq (vector_all_ones) (xmi_imm 1))))
 
 ;;;; Rules for `fneg` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1094,13 +1174,11 @@
 
 (rule (lower (has_type $F32X4 (fneg x)))
       (x64_xorps x
-             (x64_pslld (vector_all_ones)
-                    (RegMemImm.Imm 31))))
+             (x64_pslld (vector_all_ones) (xmi_imm 31))))
 
 (rule (lower (has_type $F64X2 (fneg x)))
       (x64_xorpd x
-             (x64_psllq (vector_all_ones)
-                    (RegMemImm.Imm 63))))
+             (x64_psllq (vector_all_ones) (xmi_imm 63))))
 
 ;;;; Rules for `bmask` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1255,8 +1333,38 @@
       (x64_pinsrq vec val idx))
 
 ;; f32x4.replace_lane
-(rule (vec_insert_lane $F32X4 vec val idx)
-      (x64_insertps vec val (sse_insertps_lane_imm idx)))
+(rule 1 (vec_insert_lane $F32X4 vec val idx)
+        (if-let $true (use_sse41))
+        (x64_insertps vec val (sse_insertps_lane_imm idx)))
+
+;; f32x4.replace_lane 0 - without insertps
+(rule (vec_insert_lane $F32X4 vec (RegMem.Reg val) 0)
+      (x64_movss_regmove vec val))
+
+;; f32x4.replace_lane 1 - without insertps
+;; tmp    = [ vec[1] vec[0] val[1] val[0] ]
+;; result = [ vec[3] vec[2] tmp[0] tmp[2] ]
+(rule (vec_insert_lane $F32X4 vec (RegMem.Reg val) 1)
+      (let ((tmp Xmm (x64_movlhps val vec)))
+        (x64_shufps tmp vec 0b11_10_00_10)))
+
+;; f32x4.replace_lane 2 - without insertps
+;; tmp    = [ vec[0] vec[3] val[0] val[0] ]
+;; result = [ tmp[2] tmp[0] vec[1] vec[0] ]
+(rule (vec_insert_lane $F32X4 vec (RegMem.Reg val) 2)
+      (let ((tmp Xmm (x64_shufps val vec 0b00_11_00_00)))
+        (x64_shufps vec tmp 0b10_00_01_00)))
+
+;; f32x4.replace_lane 3 - without insertps
+;; tmp    = [ vec[3] vec[2] val[1] val[0] ]
+;; result = [ tmp[0] tmp[2] vec[1] vec[0] ]
+(rule (vec_insert_lane $F32X4 vec (RegMem.Reg val) 3)
+      (let ((tmp Xmm (x64_shufps val vec 0b11_10_01_00)))
+        (x64_shufps vec tmp 0b00_10_01_00)))
+
+;; Recursively delegate to the above rules by loading from memory first.
+(rule (vec_insert_lane $F32X4 vec (RegMem.Mem addr) idx)
+      (vec_insert_lane $F32X4 vec (x64_movss_load addr) idx))
 
 ;; External rust code used to calculate the immediate value to `insertps`.
 (decl sse_insertps_lane_imm (u8) u8)
@@ -1562,90 +1670,25 @@
 
 ;;;; Rules for `select` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; CLIF `select` instructions receive a testable argument (i.e. boolean or
-;; integer) that determines which of the other two arguments is selected as
-;; output. Since Cranelift booleans are typically generated by a comparison, the
-;; lowerings in this section "look upwards in the tree" to emit the proper
-;; sequence of "selection" instructions.
+;; When a `select` has an `fcmp` as a condition then rely on `emit_fcmp` to
+;; figure out how to perform the comparison.
 ;;
-;; The following rules--for selecting on a floating-point comparison--emit a
-;; `UCOMIS*` instruction and then a conditional move, `cmove`. Note that for
-;; values contained in XMM registers, `cmove` and `cmove_or` may in fact emit a
-;; jump sequence, not `CMOV`. The `cmove` instruction operates on the flags set
-;; by `UCOMIS*`; the key to understanding these is the UCOMIS* documentation
-;; (see Intel's Software Developer's Manual, volume 2, chapter 4):
-;;  - unordered assigns    Z = 1, P = 1, C = 1
-;;  - greater than assigns Z = 0, P = 0, C = 0
-;;  - less than assigns    Z = 0, P = 0, C = 1
-;;  - equal assigns        Z = 1, P = 0, C = 0
-;;
-;; Note that prefixing the flag with `N` means "not," so that `CC.P -> P = 1`
-;; and `CC.NP -> P = 0`. Also, x86 uses mnemonics for certain combinations of
-;; flags; e.g.:
-;;  - `CC.B -> C = 1` (below)
-;;  - `CC.NB -> C = 0` (not below)
-;;  - `CC.BE -> C = 1 OR Z = 1` (below or equal)
-;;  - `CC.NBE -> C = 0 AND Z = 0` (not below or equal)
+;; Note, though, that the `FloatCC.Equal` requires an "and" to happen for two
+;; condition codes which isn't the easiest thing to lower to a `cmove`
+;; instruction. For this reason a `select (fcmp eq ..) ..` is instead
+;; flipped around to be `select (fcmp ne ..) ..` with all operands reversed.
+;; This will produce a `FcmpCondResult.OrCondition` which is easier to codegen
+;; for.
+(rule (lower (has_type ty (select (maybe_uextend (fcmp cc a b)) x y)))
+      (lower_select_fcmp ty (emit_fcmp cc a b) x y))
+(rule 1 (lower (has_type ty (select (maybe_uextend (fcmp (FloatCC.Equal) a b)) x y)))
+        (lower_select_fcmp ty (emit_fcmp (FloatCC.NotEqual) a b) y x))
 
-(rule (lower (has_type ty (select (maybe_uextend (fcmp (FloatCC.Ordered) a b)) x y)))
-      (with_flags (x64_ucomis b a) (cmove_from_values ty (CC.NP) x y)))
-
-(rule (lower (has_type ty (select (maybe_uextend (fcmp (FloatCC.Unordered) a b)) x y)))
-      (with_flags (x64_ucomis b a) (cmove_from_values ty (CC.P) x y)))
-
-(rule (lower (has_type ty (select (maybe_uextend (fcmp (FloatCC.GreaterThan) a b)) x y)))
-      (with_flags (x64_ucomis b a) (cmove_from_values ty (CC.NBE) x y)))
-
-(rule (lower (has_type ty (select (maybe_uextend (fcmp (FloatCC.GreaterThanOrEqual) a b)) x y)))
-      (with_flags (x64_ucomis b a) (cmove_from_values ty (CC.NB) x y)))
-
-(rule (lower (has_type ty (select (maybe_uextend (fcmp (FloatCC.UnorderedOrLessThan) a b)) x y)))
-      (with_flags (x64_ucomis b a) (cmove_from_values ty (CC.B) x y)))
-
-(rule (lower (has_type ty (select (maybe_uextend (fcmp (FloatCC.UnorderedOrLessThanOrEqual) a b)) x y)))
-      (with_flags (x64_ucomis b a) (cmove_from_values ty (CC.BE) x y)))
-
-;; Certain FloatCC variants are implemented by flipping the operands of the
-;; comparison (e.g., "greater than" is lowered the same as "less than" but the
-;; comparison is reversed). This allows us to use a single flag for the `cmove`,
-;; which involves fewer instructions than `cmove_or`.
-;;
-;; But why flip at all, you may ask? Can't we just use `CC.B` (i.e., below) for
-;; `FloatCC.LessThan`? Recall that in these floating-point lowerings, values may
-;; be unordered and we must we want to express that `FloatCC.LessThan` is `LT`,
-;; not `LT | UNO`. By flipping the operands AND inverting the comparison (e.g.,
-;; to `CC.NBE`), we also avoid these unordered cases.
-
-(rule (lower (has_type ty (select (maybe_uextend (fcmp (FloatCC.LessThan) a b)) x y)))
-      (with_flags (x64_ucomis a b) (cmove_from_values ty (CC.NBE) x y)))
-
-(rule (lower (has_type ty (select (maybe_uextend (fcmp (FloatCC.LessThanOrEqual) a b)) x y)))
-      (with_flags (x64_ucomis a b) (cmove_from_values ty (CC.NB) x y)))
-
-(rule (lower (has_type ty (select (maybe_uextend (fcmp (FloatCC.UnorderedOrGreaterThan) a b)) x y)))
-      (with_flags (x64_ucomis a b) (cmove_from_values ty (CC.B) x y)))
-
-(rule (lower (has_type ty (select (maybe_uextend (fcmp (FloatCC.UnorderedOrGreaterThanOrEqual) a b)) x y)))
-      (with_flags (x64_ucomis a b) (cmove_from_values ty (CC.BE) x y)))
-
-;; `FloatCC.Equal` and `FloatCC.NotEqual` can only be implemented with multiple
-;; flag checks. Recall from the flag assignment chart above that equality, e.g.,
-;; will assign `Z = 1`. But so does an unordered comparison: `Z = 1, P = 1, C =
-;; 1`. In order to avoid semantics like `EQ | UNO` for equality, we must ensure
-;; that the values are actually ordered, checking that `P = 0` (note that the
-;; `C` flag is irrelevant here). Since we cannot find a single instruction that
-;; implements a `Z = 1 AND P = 0` check, we invert the flag checks (i.e., `Z = 1
-;; AND P = 0` becomes `Z = 0 OR P = 1`) and also flip the select operands, `x`
-;; and `y`. The same argument applies to `FloatCC.NotEqual`.
-;;
-;; More details about the CLIF semantics for `fcmp` are available at
-;; https://docs.rs/cranelift-codegen/latest/cranelift_codegen/ir/trait.InstBuilder.html#method.fcmp.
-
-(rule (lower (has_type ty (select (maybe_uextend (fcmp (FloatCC.Equal) a b)) x y)))
-      (with_flags (x64_ucomis a b) (cmove_or_from_values ty (CC.NZ) (CC.P) y x)))
-
-(rule (lower (has_type ty (select (maybe_uextend (fcmp (FloatCC.NotEqual) a b)) x y)))
-      (with_flags (x64_ucomis a b) (cmove_or_from_values ty (CC.NZ) (CC.P) x y)))
+(decl lower_select_fcmp (Type FcmpCondResult Value Value) InstOutput)
+(rule (lower_select_fcmp ty (FcmpCondResult.Condition flags cc) x y)
+      (with_flags flags (cmove_from_values ty cc x y)))
+(rule (lower_select_fcmp ty (FcmpCondResult.OrCondition flags cc1 cc2) x y)
+      (with_flags flags (cmove_or_from_values ty cc1 cc2 x y)))
 
 ;; We also can lower `select`s that depend on an `icmp` test, but more simply
 ;; than the `fcmp` variants above. In these cases, we lower to a `CMP`
@@ -1906,7 +1949,7 @@
             ;; Note that this is a 16x8 shift, but that's OK; we mask
             ;; off anything that traverses from one byte to the next
             ;; with the low_mask below.
-            (shifted_src Xmm (x64_psrlw src (RegMemImm.Imm 4)))
+            (shifted_src Xmm (x64_psrlw src (xmi_imm 4)))
             (high_nibbles Xmm (sse_and $I8X16 shifted_src low_mask))
             (lookup Xmm (x64_xmm_load_const $I8X16 (popcount_4bit_table)))
             (bit_counts_low Xmm (x64_pshufb lookup low_nibbles))
@@ -2027,101 +2070,38 @@
 
 ;; Rules for `uextend` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; T -> T is a no-op.
-(rule 1 (lower (has_type ty (uextend src @ (value_type ty))))
-      src)
-
-;; I64 -> I128.
-(rule -1 (lower (has_type $I128 (uextend src @ (value_type $I64))))
-      (value_regs src (imm $I64 0)))
-
-;; I{8,16,32} -> I128.
-(rule (lower (has_type $I128 (uextend src @ (value_type (fits_in_32 src_ty)))))
+;; I{8,16,32,64} -> I128.
+(rule (lower (has_type $I128 (uextend src)))
       (value_regs (extend_to_gpr src $I64 (ExtendKind.Zero)) (imm $I64 0)))
 
 ;; I{8,16,32} -> I64.
-(rule -1 (lower (has_type $I64 (uextend src @ (value_type (fits_in_32 src_ty)))))
+(rule (lower (has_type $I64 (uextend src)))
       (extend_to_gpr src $I64 (ExtendKind.Zero)))
 
-;; I8 -> I{16,32}, I16 -> I32.
-(rule -2 (lower (has_type (fits_in_32 dst_ty) (uextend src @ (value_type (fits_in_32 src_ty)))))
-      (extend_to_gpr src $I32 (ExtendKind.Zero)))
-
-;; I32 -> I64 with op that produces a zero-extended value in a register.
-;;
-;; As a particular x64 extra-pattern matching opportunity, all the ALU
-;; opcodes on 32-bits will zero-extend the upper 32-bits, so we can
-;; even not generate a zero-extended move in this case.
-;;
-;; (Note that we unfortunately can't factor out the
-;; insts-that-zero-upper-32 pattern into a separate extractor until we
-;; can write internal extractors with multiple rules; and we'd rather
-;; keep these here than write an external extractor containing bits of
-;; the instruction pattern.s)
-(rule (lower (has_type $I64
-                       (uextend src @ (has_type $I32 (iadd _ _)))))
-      src)
-(rule (lower (has_type $I64
-                       (uextend src @ (has_type $I32 (isub _ _)))))
-      src)
-(rule (lower (has_type $I64
-                       (uextend src @ (has_type $I32 (imul _ _)))))
-      src)
-(rule (lower (has_type $I64
-                       (uextend src @ (has_type $I32 (band _ _)))))
-      src)
-(rule (lower (has_type $I64
-                       (uextend src @ (has_type $I32 (bor _ _)))))
-      src)
-(rule (lower (has_type $I64
-                       (uextend src @ (has_type $I32 (bxor _ _)))))
-      src)
-(rule (lower (has_type $I64
-                       (uextend src @ (has_type $I32 (ishl _ _)))))
-      src)
-(rule (lower (has_type $I64
-                       (uextend src @ (has_type $I32 (ushr _ _)))))
-      src)
-(rule (lower (has_type $I64
-                       (uextend src @ (has_type $I32 (uload32 _ _ _)))))
-      src)
+;; I{8,16} -> I32
+;; I8 -> I16
+(rule -1 (lower (has_type (fits_in_32 _) (uextend src)))
+         (extend_to_gpr src $I32 (ExtendKind.Zero)))
 
 ;; Rules for `sextend` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(decl generic_sextend (Value Type Type) InstOutput)
-
-;; T -> T is a no-op.
-(rule 4 (generic_sextend src ty ty)
-      src)
-
+;; I{8,16,32} -> I128.
+;;
 ;; Produce upper 64 bits sign-extended from lower 64: shift right by
 ;; 63 bits to spread the sign bit across the result.
-(decl spread_sign_bit (Gpr) Gpr)
-(rule (spread_sign_bit src)
-      (x64_sar $I64 src (Imm8Reg.Imm8 63)))
-
-;; I64 -> I128.
-(rule 3 (generic_sextend src $I64 $I128)
-      (value_regs src (spread_sign_bit src)))
-
-;; I{8,16,32} -> I128.
-(rule 2 (generic_sextend src (fits_in_32 src_ty) $I128)
+(rule (lower (has_type $I128 (sextend src)))
       (let ((lo Gpr (extend_to_gpr src $I64 (ExtendKind.Sign)))
-            (hi Gpr (spread_sign_bit lo)))
+            (hi Gpr (x64_sar $I64 lo (Imm8Reg.Imm8 63))))
       (value_regs lo hi)))
 
 ;; I{8,16,32} -> I64.
-(rule 1 (generic_sextend src (fits_in_32 src_ty) $I64)
+(rule (lower (has_type $I64 (sextend src)))
       (extend_to_gpr src $I64 (ExtendKind.Sign)))
 
-;; I8 -> I{16,32}, I16 -> I32.
-(rule 0 (generic_sextend src (fits_in_32 src_ty) (fits_in_32 dst_ty))
-      (extend_to_gpr src $I32 (ExtendKind.Sign)))
-
-(rule (lower
-       (has_type dst_ty
-                 (sextend src @ (value_type src_ty))))
-      (generic_sextend src src_ty dst_ty))
+;; I{8,16} -> I32
+;; I8 -> I16
+(rule -1 (lower (has_type (fits_in_32 _) (sextend src)))
+         (extend_to_gpr src $I32 (ExtendKind.Sign)))
 
 ;; Rules for `ireduce` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -2288,7 +2268,7 @@
             ;; All-ones for NaN, shifted down to leave 10 top bits (1
             ;; sign, 8 exponent, 1 QNaN bit that must remain set)
             ;; cleared.
-            (nan_fraction_mask Xmm (x64_psrld is_nan_mask (RegMemImm.Imm 10)))
+            (nan_fraction_mask Xmm (x64_psrld is_nan_mask (xmi_imm 10)))
             ;; Do a NAND, so that we retain every bit not set in
             ;; `nan_fraction_mask`. This mask will be all zeroes (so
             ;; we retain every bit) in non-NaN cases, and will have
@@ -2305,7 +2285,7 @@
             (min_or Xmm (x64_orpd min1 min2))
             (is_nan_mask Xmm (x64_cmppd min1 min2 (FcmpImm.Unordered)))
             (min_or_2 Xmm (x64_orpd min_or is_nan_mask))
-            (nan_fraction_mask Xmm (x64_psrlq is_nan_mask (RegMemImm.Imm 13)))
+            (nan_fraction_mask Xmm (x64_psrlq is_nan_mask (xmi_imm 13)))
             (final Xmm (x64_andnpd nan_fraction_mask min_or_2)))
         final))
 
@@ -2353,7 +2333,7 @@
             ;; All-ones for NaN, shifted down to leave 10 top bits (1
             ;; sign, 8 exponent, 1 QNaN bit that must remain set)
             ;; cleared.
-            (nan_fraction_mask Xmm (x64_psrld is_nan_mask (RegMemImm.Imm 10)))
+            (nan_fraction_mask Xmm (x64_psrld is_nan_mask (xmi_imm 10)))
             ;; Do a NAND, so that we retain every bit not set in
             ;; `nan_fraction_mask`. This mask will be all zeroes (so
             ;; we retain every bit) in non-NaN cases, and will have
@@ -2397,7 +2377,7 @@
             ;; All-ones for NaN, shifted down to leave 13 top bits (1
             ;; sign, 11 exponent, 1 QNaN bit that must remain set)
             ;; cleared.
-            (nan_fraction_mask Xmm (x64_psrlq is_nan_mask (RegMemImm.Imm 13)))
+            (nan_fraction_mask Xmm (x64_psrlq is_nan_mask (xmi_imm 13)))
             ;; Do a NAND, so that we retain every bit not set in
             ;; `nan_fraction_mask`. This mask will be all zeroes (so
             ;; we retain every bit) in non-NaN cases, and will have
@@ -3062,8 +3042,8 @@
       (let ((a Xmm val)
 
             ;;  get the low 16 bits
-            (a_lo Xmm (x64_pslld a (RegMemImm.Imm 16)))
-            (a_lo Xmm (x64_psrld a_lo (RegMemImm.Imm 16)))
+            (a_lo Xmm (x64_pslld a (xmi_imm 16)))
+            (a_lo Xmm (x64_psrld a_lo (xmi_imm 16)))
 
             ;; get the high 16 bits
             (a_hi Xmm (x64_psubd a a_lo))
@@ -3073,7 +3053,7 @@
 
             ;; shift the high bits by 1, convert, and double to get the correct
             ;; value
-            (a_hi Xmm (x64_psrld a_hi (RegMemImm.Imm 1)))
+            (a_hi Xmm (x64_psrld a_hi (xmi_imm 1)))
             (a_hi Xmm (x64_cvtdq2ps a_hi))
             (a_hi Xmm (x64_addps a_hi a_hi)))
 
@@ -3111,7 +3091,7 @@
 
             ;; Set top bit only if < 0
             (tmp Xmm (x64_pand dst tmp))
-            (tmp Xmm (x64_psrad tmp (RegMemImm.Imm 31))))
+            (tmp Xmm (x64_psrad tmp (xmi_imm 31))))
 
         ;; On overflow 0x80000000 is returned to a lane.
         ;; Below sets positive overflow lanes to 0x7FFFFFFF
@@ -3181,7 +3161,7 @@
             ;; integer that it can represent. In the case of INT_MAX, this value gets
             ;; represented as 0x4f000000 which is the integer value (INT_MAX+1).
             (tmp2 Xmm (x64_pcmpeqd tmp2 tmp2))
-            (tmp2 Xmm (x64_psrld tmp2 (RegMemImm.Imm 1)))
+            (tmp2 Xmm (x64_psrld tmp2 (xmi_imm 1)))
             (tmp2 Xmm (x64_cvtdq2ps tmp2))
 
             ;; Make a copy of these lanes and then do the first conversion.
@@ -3404,85 +3384,78 @@
           (x64_andnpd sign_bit a)
           (x64_andpd sign_bit b))))
 
+;; Helper for the `ceil`/`floor`/`nearest`/`trunc` instructions ;;;;;;;;;;;;;;;;
+
+;; Emits either a `round{ss,sd,ps,pd}` instruction, as appropriate, or generates
+;; the appropriate libcall and sequence to call that.
+(decl x64_round (Type Value RoundImm) Xmm)
+(rule 1 (x64_round $F32 a imm)
+        (if-let $true (use_sse41))
+        (x64_roundss a imm))
+(rule 1 (x64_round $F64 a imm)
+        (if-let $true (use_sse41))
+        (x64_roundsd a imm))
+(rule 1 (x64_round $F32X4 a imm)
+        (if-let $true (use_sse41))
+        (x64_roundps a imm))
+(rule 1 (x64_round $F64X2 a imm)
+        (if-let $true (use_sse41))
+        (x64_roundpd a imm))
+
+(rule (x64_round $F32 a imm) (libcall_1 (round_libcall $F32 imm) a))
+(rule (x64_round $F64 a imm) (libcall_1 (round_libcall $F64 imm) a))
+(rule (x64_round $F32X4 a imm)
+      (let (
+          (a Xmm a)
+          (libcall LibCall (round_libcall $F32 imm))
+          (result Xmm (libcall_1 libcall a))
+          (a1 Xmm (libcall_1 libcall (x64_pshufd a 1)))
+          (result Xmm (vec_insert_lane $F32X4 result a1 1))
+          (a2 Xmm (libcall_1 libcall (x64_pshufd a 2)))
+          (result Xmm (vec_insert_lane $F32X4 result a2 2))
+          (a3 Xmm (libcall_1 libcall (x64_pshufd a 3)))
+          (result Xmm (vec_insert_lane $F32X4 result a3 3))
+        )
+        result))
+(rule (x64_round $F64X2 a imm)
+      (let (
+          (a Xmm a)
+          (libcall LibCall (round_libcall $F64 imm))
+          (result Xmm (libcall_1 libcall a))
+          (a1 Xmm (libcall_1 libcall (x64_pshufd a 0b00_00_11_10)))
+          (result Xmm (vec_insert_lane $F64X2 result a1 1))
+        )
+        result))
+
+(decl round_libcall (Type RoundImm) LibCall)
+(rule (round_libcall $F32 (RoundImm.RoundUp)) (LibCall.CeilF32))
+(rule (round_libcall $F64 (RoundImm.RoundUp)) (LibCall.CeilF64))
+(rule (round_libcall $F32 (RoundImm.RoundDown)) (LibCall.FloorF32))
+(rule (round_libcall $F64 (RoundImm.RoundDown)) (LibCall.FloorF64))
+(rule (round_libcall $F32 (RoundImm.RoundNearest)) (LibCall.NearestF32))
+(rule (round_libcall $F64 (RoundImm.RoundNearest)) (LibCall.NearestF64))
+(rule (round_libcall $F32 (RoundImm.RoundZero)) (LibCall.TruncF32))
+(rule (round_libcall $F64 (RoundImm.RoundZero)) (LibCall.TruncF64))
+
 ;; Rules for `ceil` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type (use_sse41 $true) (ceil a @ (value_type $F32))))
-      (x64_roundss a (RoundImm.RoundUp)))
-
-(rule (lower (has_type (use_sse41 $false) (ceil a @ (value_type $F32))))
-      (libcall_1 (LibCall.CeilF32) a))
-
-(rule (lower (has_type (use_sse41 $true) (ceil a @ (value_type $F64))))
-      (x64_roundsd a (RoundImm.RoundUp)))
-
-(rule (lower (has_type (use_sse41 $false) (ceil a @ (value_type $F64))))
-      (libcall_1 (LibCall.CeilF64) a))
-
-(rule (lower (has_type (use_sse41 $true) (ceil a @ (value_type $F32X4))))
-      (x64_roundps a (RoundImm.RoundUp)))
-
-(rule (lower (has_type (use_sse41 $true) (ceil a @ (value_type $F64X2))))
-      (x64_roundpd a (RoundImm.RoundUp)))
+(rule (lower (ceil a @ (value_type ty)))
+      (x64_round ty a (RoundImm.RoundUp)))
 
 ;; Rules for `floor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type (use_sse41 $true) (floor a @ (value_type $F32))))
-      (x64_roundss a (RoundImm.RoundDown)))
-
-(rule (lower (has_type (use_sse41 $false) (floor a @ (value_type $F32))))
-      (libcall_1 (LibCall.FloorF32) a))
-
-(rule (lower (has_type (use_sse41 $true) (floor a @ (value_type $F64))))
-      (x64_roundsd a (RoundImm.RoundDown)))
-
-(rule (lower (has_type (use_sse41 $false) (floor a @ (value_type $F64))))
-      (libcall_1 (LibCall.FloorF64) a))
-
-(rule (lower (has_type (use_sse41 $true) (floor a @ (value_type $F32X4))))
-      (x64_roundps a (RoundImm.RoundDown)))
-
-(rule (lower (has_type (use_sse41 $true) (floor a @ (value_type $F64X2))))
-      (x64_roundpd a (RoundImm.RoundDown)))
+(rule (lower (floor a @ (value_type ty)))
+      (x64_round ty a (RoundImm.RoundDown)))
 
 ;; Rules for `nearest` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type (use_sse41 $true) (nearest a @ (value_type $F32))))
-      (x64_roundss a (RoundImm.RoundNearest)))
-
-(rule (lower (has_type (use_sse41 $false) (nearest a @ (value_type $F32))))
-      (libcall_1 (LibCall.NearestF32) a))
-
-(rule (lower (has_type (use_sse41 $true) (nearest a @ (value_type $F64))))
-      (x64_roundsd a (RoundImm.RoundNearest)))
-
-(rule (lower (has_type (use_sse41 $false) (nearest a @ (value_type $F64))))
-      (libcall_1 (LibCall.NearestF64) a))
-
-(rule (lower (has_type (use_sse41 $true) (nearest a @ (value_type $F32X4))))
-      (x64_roundps a (RoundImm.RoundNearest)))
-
-(rule (lower (has_type (use_sse41 $true) (nearest a @ (value_type $F64X2))))
-      (x64_roundpd a (RoundImm.RoundNearest)))
+(rule (lower (nearest a @ (value_type ty)))
+      (x64_round ty a (RoundImm.RoundNearest)))
 
 ;; Rules for `trunc` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type (use_sse41 $true) (trunc a @ (value_type $F32))))
-      (x64_roundss a (RoundImm.RoundZero)))
-
-(rule (lower (has_type (use_sse41 $false) (trunc a @ (value_type $F32))))
-      (libcall_1 (LibCall.TruncF32) a))
-
-(rule (lower (has_type (use_sse41 $true) (trunc a @ (value_type $F64))))
-      (x64_roundsd a (RoundImm.RoundZero)))
-
-(rule (lower (has_type (use_sse41 $false) (trunc a @ (value_type $F64))))
-      (libcall_1 (LibCall.TruncF64) a))
-
-(rule (lower (has_type (use_sse41 $true) (trunc a @ (value_type $F32X4))))
-      (x64_roundps a (RoundImm.RoundZero)))
-
-(rule (lower (has_type (use_sse41 $true) (trunc a @ (value_type $F64X2))))
-      (x64_roundpd a (RoundImm.RoundZero)))
+(rule (lower (trunc a @ (value_type ty)))
+      (x64_round ty a (RoundImm.RoundZero)))
 
 ;; Rules for `stack_addr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -3491,13 +3464,20 @@
 
 ;; Rules for `udiv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; NB: a `RegMem` divisor, while allowed in the instruction encoding, isn't
+;; used right now to prevent a possibly-trapping load getting folded into the
+;; `div` instruction. Ideally non-trapping loads would get folded, however, or
+;; alternatively Wasmtime/Cranelift would grow support for multiple traps on
+;; a single opcode and the signal kind would differentiate at runtime.
+
 ;; The inputs to the `div` instruction are different for 8-bit division so
 ;; it needs a special case here since the instruction being crafted has a
 ;; different shape.
 (rule 2 (lower (udiv a @ (value_type $I8) b))
         (x64_div8 (extend_to_gpr a $I32 (ExtendKind.Zero))
-                  (nonzero_divisor $I8 b)
-                  (DivSignedness.Unsigned)))
+                  (put_in_gpr b)
+                  (DivSignedness.Unsigned)
+                  (TrapCode.IntegerDivisionByZero)))
 
 ;; 16-to-64-bit division is all done with a similar instruction and the only
 ;; tricky requirement here is that when div traps are disallowed the divisor
@@ -3505,29 +3485,40 @@
 (rule 1 (lower (udiv a @ (value_type (fits_in_64 ty)) b))
         (x64_div_quotient a
                           (imm $I64 0)
-                          (nonzero_divisor ty b)
+                          (put_in_gpr b)
                           (raw_operand_size_of_type ty)
-                          (DivSignedness.Unsigned)))
+                          (DivSignedness.Unsigned)
+                          (TrapCode.IntegerDivisionByZero)))
 
-;; Helper to place `Value` into a `Gpr` while possibly trapping if it's zero.
+;; Rules for `sdiv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule 2 (lower (sdiv a @ (value_type $I8) b))
+        (x64_div8 (x64_sign_extend_data a (OperandSize.Size8))
+                  (nonzero_sdiv_divisor $I8 b)
+                  (DivSignedness.Signed)
+                  (TrapCode.IntegerOverflow)))
+
+(rule 1 (lower (sdiv a @ (value_type (fits_in_64 ty)) b))
+        (let (
+            (a Gpr a)
+            (size OperandSize (raw_operand_size_of_type ty))
+          )
+        (x64_div_quotient a
+                          (x64_sign_extend_data a size)
+                          (nonzero_sdiv_divisor ty b)
+                          size
+                          (DivSignedness.Signed)
+                          (TrapCode.IntegerOverflow))))
+
+;; Checks to make sure that the input `Value` is a non-zero value for `sdiv`.
 ;;
-;; If the `avoid_div_traps=true` codegen setting is specified then the value
-;; is checked for zero and a trap happens before the value is returned as a
-;; register here.
-(decl nonzero_divisor (Type Value) Gpr)
-
-;; As a special-case if the divisor is a constant number which is nonzero then
-;; no matter what there's no checks necessary.
-(rule 2 (nonzero_divisor ty (iconst (u64_from_imm64 (u64_nonzero n))))
+;; This is required to differentiate the divide-by-zero trap from the
+;; integer-overflow trap, the two trapping conditions of signed division.
+(decl nonzero_sdiv_divisor (Type Value) Reg)
+(rule 1 (nonzero_sdiv_divisor ty (iconst imm))
+        (if-let n (safe_divisor_from_imm64 ty imm))
         (imm ty n))
-
-;; No checks necessary when `avoid_div_traps=false`
-(rule 1 (nonzero_divisor ty val)
-        (if-let $false (avoid_div_traps))
-        val)
-
-;; Base case traps if `val` is zero by using a `test` + `trap_if` combo
-(rule (nonzero_divisor ty val)
+(rule 0 (nonzero_sdiv_divisor ty val)
       (let (
           (val Reg val)
           (_ InstOutput (side_effect (with_flags_side_effect
@@ -3536,64 +3527,26 @@
         )
         val))
 
-;; Rules for `sdiv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(rule 2 (lower (sdiv a @ (value_type $I8) b))
-        (let (
-            (a Gpr (x64_sign_extend_data a (OperandSize.Size8)))
-          )
-          (x64_div8 a (safe_sdiv_divisor $I8 a b) (DivSignedness.Signed))))
-
-(rule 1 (lower (sdiv a @ (value_type (fits_in_64 ty)) b))
-        (let (
-            (a Gpr a)
-            (size OperandSize (raw_operand_size_of_type ty))
-            (b Gpr (safe_sdiv_divisor ty a b))
-          )
-          (x64_div_quotient a (x64_sign_extend_data a size) b size (DivSignedness.Signed))))
-
-;; Similar to `nonzero_divisor` except this checks to make sure that the divisor
-;; provided as a `Value` is safe to divide into the dividend `Gpr` provided.
-(decl safe_sdiv_divisor (Type Gpr Value) Reg)
-
-;; If the divisor is a constant that isn't 0 or -1, then it's always safe so
-;; materialize it into a register.
-(rule 3 (safe_sdiv_divisor ty a (iconst imm))
-        (if-let n (safe_divisor_from_imm64 ty imm))
-        (imm ty n))
-
-;; With `avoid_div_traps=false` the divisor can be plumbed through.
-;;
-;; Note that CLIF semantics dictate that division-by-zero and INT_MIN/-1 both
-;; trap, but this matches the hardware semantics of `idiv` on x64 so they're
-;; fine to get plumbed through as-is.
-(rule 2 (safe_sdiv_divisor ty a b)
-        (if-let $false (avoid_div_traps))
-        b)
-
-;; The base cases here rely on some pseudo-instructions to do the checks to
-;; jump around with labels and such.
-(rule 1 (safe_sdiv_divisor $I64 a b) (validate_sdiv_divisor64 a b))
-(rule 0 (safe_sdiv_divisor ty a b) (validate_sdiv_divisor (raw_operand_size_of_type ty) a b))
-
 ;; Rules for `urem` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; The remainder is in AH, so take the result of the division and right-shift
 ;; by 8.
 (rule 2 (lower (urem a @ (value_type $I8) b))
         (let (
-            (a Gpr (extend_to_gpr a $I32 (ExtendKind.Zero)))
-            (b Gpr (nonzero_divisor $I8 b))
-            (result Gpr (x64_div8 a b (DivSignedness.Unsigned)))
+            (result Gpr (x64_div8 (extend_to_gpr a $I32 (ExtendKind.Zero))
+                                  (put_in_gpr b) ;; see `udiv` for why not `gpr_mem`
+                                  (DivSignedness.Unsigned)
+                                  (TrapCode.IntegerDivisionByZero)))
           )
           (x64_shr $I64 result (Imm8Reg.Imm8 8))))
 
 (rule 1 (lower (urem a @ (value_type (fits_in_64 ty)) b))
         (x64_div_remainder a
                            (imm $I64 0)
-                           (nonzero_divisor ty b)
+                           (put_in_gpr b) ;; see `udiv` for why not `gpr_mem`
                            (raw_operand_size_of_type ty)
-                           (DivSignedness.Unsigned)))
+                           (DivSignedness.Unsigned)
+                           (TrapCode.IntegerDivisionByZero)))
 
 ;; Rules for `srem` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -3606,7 +3559,7 @@
         (if-let n (safe_divisor_from_imm64 $I8 imm))
         (let (
             (a Gpr (x64_sign_extend_data a (OperandSize.Size8)))
-            (result Gpr (x64_div8 a (imm $I8 n) (DivSignedness.Signed)))
+            (result Gpr (x64_div8 a (imm $I8 n) (DivSignedness.Signed) (TrapCode.IntegerDivisionByZero)))
           )
           (x64_shr $I64 result (Imm8Reg.Imm8 8))))
 
@@ -3621,19 +3574,18 @@
                              (x64_sign_extend_data a size)
                              (imm ty n)
                              size
-                             (DivSignedness.Signed))))
+                             (DivSignedness.Signed)
+                             (TrapCode.IntegerDivisionByZero))))
 
 (rule 1 (lower (srem a @ (value_type $I8) b))
         (let (
             (a Gpr (x64_sign_extend_data a (OperandSize.Size8)))
-            (b Gpr (nonzero_divisor $I8 b))
           )
           (x64_shr $I64 (x64_checked_srem_seq8 a b) (Imm8Reg.Imm8 8))))
 
 (rule (lower (srem a @ (value_type ty) b))
       (let (
           (a Gpr a)
-          (b Gpr (nonzero_divisor ty b))
           (size OperandSize (raw_operand_size_of_type ty))
           (hi Gpr (x64_sign_extend_data a size))
           (tmp ValueRegs (x64_checked_srem_seq size a hi b))
@@ -3691,6 +3643,16 @@
       (x64_xmm_load_const ty (const_to_vconst const)))
 
 ;; Rules for `shuffle` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Special case for `pblendw` which takes an 8-bit immediate where each bit
+;; indicates which lane of the two operands is chosen for the output. A bit of
+;; 0 chooses the corresponding 16-it lane from `a` and a bit of 1 chooses the
+;; corresponding 16-bit lane from `b`.
+(rule 14 (lower (shuffle a b (pblendw_imm n)))
+         (if-let $true (use_sse41))
+         (x64_pblendw a b n))
+(decl pblendw_imm (u8) Immediate)
+(extern extractor pblendw_imm pblendw_imm)
 
 ;; When the shuffle looks like "concatenate `a` and `b` and shift right by n*8
 ;; bytes", that's a `palignr` instruction. Note that the order of operands are
@@ -3856,15 +3818,22 @@
 ;; This is the only remaining case for F64X2
 (rule 1 (lower (has_type $F64 (extractlane val @ (value_type (ty_vec128 ty))
                                          (u8_from_uimm8 1))))
-      ;; 0xee == 0b11_10_11_10
-      (x64_pshufd val 0xee))
+      (x64_pshufd val 0b11_10_11_10))
 
+;; Note that the `pextrb` lowering here is relied upon by the `extend_to_gpr`
+;; helper because it will elide a `uextend` operation when `extractlane` is the
+;; inner node. The `pextrb` operation automatically zero-extends for us so the
+;; extra `uextend` doesn't have to codegen anything.
 (rule 0 (lower (extractlane val @ (value_type ty @ (multi_lane 8 16)) (u8_from_uimm8 lane)))
       (x64_pextrb val lane))
 
+;; See the note in the 8x16 case above for how this rule is connected to
+;; `extend_to_gpr`.
 (rule 0 (lower (extractlane val @ (value_type ty @ (multi_lane 16 8)) (u8_from_uimm8 lane)))
       (x64_pextrw val lane))
 
+;; See the note in the 8x16 case above for how this rule is connected to
+;; `extend_to_gpr`.
 (rule 0 (lower (extractlane val @ (value_type ty @ (multi_lane 32 4)) (u8_from_uimm8 lane)))
       (x64_pextrd val lane))
 
@@ -3894,61 +3863,126 @@
 
 ;; Rules for `splat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type (multi_lane 8 16) (splat src)))
-      (let ((vec Xmm (vec_insert_lane $I8X16 (xmm_uninit_value) src 0))
-            (zeros Xmm (xmm_zero $I8X16)))
-        ;; Shuffle the lowest byte lane to all other lanes.
-        (x64_pshufb vec zeros)))
+;; For all the splat rules below one of the goals is that splatting a value
+;; doesn't end up accidentally depending on the previous value in a register.
+;; This means that instructions are chosen to avoid false dependencies where
+;; new values are created fresh or otherwise overwrite previous register
+;; contents where possible.
+;;
+;; Additionally splats are specialized to special-case load-and-splat which
+;; has a number of micro-optimizations available.
 
-(rule (lower (has_type (multi_lane 16 8) (splat src)))
-      (let (;; Force the input into a register so that we don't create a
-            ;; VCodeConstant.
-            (src RegMem (RegMem.Reg src))
-            (vec Xmm (vec_insert_lane $I16X8 (xmm_uninit_value) src 0))
-            (vec Xmm (vec_insert_lane $I16X8 vec src 1)))
-        ;; Shuffle the lowest two lanes to all other lanes.
-        (x64_pshufd vec 0)))
+;; i8x16 splats: use `vpbroadcastb` on AVX2 and otherwise `pshufb` broadcasts
+;; with a mask of zero which is calculated with an xor-against-itself register.
+(rule 0 (lower (has_type $I8X16 (splat src)))
+        (x64_pshufb (bitcast_gpr_to_xmm $I32 src) (xmm_zero $I8X16)))
+(rule 1 (lower (has_type $I8X16 (splat src)))
+        (if-let $true (use_avx2_simd))
+        (x64_vpbroadcastb (bitcast_gpr_to_xmm $I32 src)))
+(rule 2 (lower (has_type $I8X16 (splat (sinkable_load_exact addr))))
+        (x64_pshufb (x64_pinsrb (xmm_uninit_value) addr 0) (xmm_zero $I8X16)))
+(rule 3 (lower (has_type $I8X16 (splat (sinkable_load_exact addr))))
+        (if-let $true (use_avx2_simd))
+        (x64_vpbroadcastb addr))
 
-(rule 1 (lower (has_type (multi_lane 32 4) (splat src @ (value_type (ty_scalar_float _)))))
-      (lower_splat_32x4 $F32X4 src))
+;; i16x8 splats: use `vpbroadcastw` on AVX2 and otherwise a 16-bit value is
+;; loaded into an xmm register, `pshuflw` broadcasts the low 16-bit lane
+;; to the low four lanes, and `pshufd` broadcasts the low 32-bit lane (which
+;; at that point is two of the 16-bit values we want to broadcast) to all the
+;; lanes.
+(rule 0 (lower (has_type $I16X8 (splat src)))
+        (x64_pshufd (x64_pshuflw (bitcast_gpr_to_xmm $I32 src) 0) 0))
+(rule 1 (lower (has_type $I16X8 (splat src)))
+        (if-let $true (use_avx2_simd))
+        (x64_vpbroadcastw (bitcast_gpr_to_xmm $I32 src)))
+(rule 2 (lower (has_type $I16X8 (splat (sinkable_load_exact addr))))
+        (x64_pshufd (x64_pshuflw (x64_pinsrw (xmm_uninit_value) addr 0) 0) 0))
+(rule 3 (lower (has_type $I16X8 (splat (sinkable_load_exact addr))))
+        (if-let $true (use_avx2_simd))
+        (x64_vpbroadcastw addr))
 
-(rule (lower (has_type (multi_lane 32 4) (splat src)))
-      (lower_splat_32x4 $I32X4 src))
+;; i32x4.splat - use `vpbroadcastd` on AVX2 and otherwise `pshufd` can be
+;; used to broadcast the low lane to all other lanes.
+;;
+;; Note that sinkable-load cases come later
+(rule 0 (lower (has_type $I32X4 (splat src)))
+        (x64_pshufd (bitcast_gpr_to_xmm $I32 src) 0))
+(rule 1 (lower (has_type $I32X4 (splat src)))
+        (if-let $true (use_avx2_simd))
+        (x64_vpbroadcastd (bitcast_gpr_to_xmm $I32 src)))
 
-(decl lower_splat_32x4 (Type Value) Xmm)
-(rule (lower_splat_32x4 ty src)
-      (let ((src RegMem src)
-            (vec Xmm (vec_insert_lane ty (xmm_uninit_value) src 0)))
-        ;; Shuffle the lowest lane to all other lanes.
-        (x64_pshufd vec 0)))
+;; f32x4.splat - the source is already in an xmm register so `shufps` is all
+;; that's necessary to complete the splat. This is specialized to `vbroadcastss`
+;; on AVX2 to leverage that specific instruction for this operation.
+(rule 0 (lower (has_type $F32X4 (splat src)))
+        (let ((tmp Xmm src))
+          (x64_shufps src src 0)))
+(rule 1 (lower (has_type $F32X4 (splat src)))
+        (if-let $true (use_avx2_simd))
+        (x64_vbroadcastss src))
 
-(rule 1 (lower (has_type (multi_lane 64 2) (splat src @ (value_type (ty_scalar_float _)))))
-      (lower_splat_64x2 $F64X2 src))
+;; t32x4.splat of a load - use a `movss` to load into an xmm register and then
+;; `shufps` broadcasts to the other lanes. Note that this is used for both i32
+;; and f32 splats.
+;;
+;; With AVX the `vbroadcastss` instruction suits this purpose precisely. Note
+;; that the memory-operand encoding of `vbroadcastss` is usable with AVX, but
+;; the register-based encoding is only available with AVX2. With the
+;; `sinkable_load` extractor this should be guaranteed to use the memory-based
+;; encoding hence the `use_avx_simd` test.
+(rule 4 (lower (has_type (multi_lane 32 4) (splat (sinkable_load addr))))
+        (let ((tmp Xmm (x64_movss_load addr)))
+          (x64_shufps tmp tmp 0)))
+(rule 5 (lower (has_type (multi_lane 32 4) (splat (sinkable_load addr))))
+        (if-let $true (use_avx_simd))
+        (x64_vbroadcastss addr))
 
-(rule (lower (has_type (multi_lane 64 2) (splat src)))
-      (lower_splat_64x2 $I64X2 src))
-
-(decl lower_splat_64x2 (Type Value) Xmm)
-(rule (lower_splat_64x2 ty src)
-      (let (;; Force the input into a register so that we don't create a
-            ;; VCodeConstant.
-            (src RegMem (RegMem.Reg src))
-            (vec Xmm (vec_insert_lane ty (xmm_uninit_value) src 0)))
-        (vec_insert_lane ty vec src 1)))
+;; t64x2.splat - use `movddup` which is exactly what we want and there's a
+;; minor specialization for sinkable loads to avoid going through a gpr for i64
+;; splats
+(rule 0 (lower (has_type $I64X2 (splat src)))
+        (x64_movddup (bitcast_gpr_to_xmm $I64 src)))
+(rule 0 (lower (has_type $F64X2 (splat src)))
+        (x64_movddup src))
+(rule 5 (lower (has_type (multi_lane 64 2) (splat (sinkable_load addr))))
+        (x64_movddup addr))
 
 ;; Rules for `vany_true` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(rule 1 (lower (vany_true val))
+        (if-let $true (use_sse41))
+        (let ((val Xmm val))
+          (with_flags (x64_ptest val val) (x64_setcc (CC.NZ)))))
+
+;; Any nonzero byte in `val` means that any lane is true. Compare `val` with a
+;; zeroed register and extract the high bits to a gpr mask. If the mask is
+;; 0xffff then every byte was equal to zero, so test if the comparison is
+;; not-equal or NZ.
 (rule (lower (vany_true val))
-      (let ((val Xmm val))
-        (with_flags (x64_ptest val val) (x64_setcc (CC.NZ)))))
+      (let (
+          (any_byte_zero Xmm (x64_pcmpeqb val (xmm_zero $I8X16)))
+          (mask Gpr (x64_pmovmskb (OperandSize.Size32) any_byte_zero))
+        )
+        (with_flags (x64_cmp (OperandSize.Size32) (RegMemImm.Imm 0xffff) mask)
+                    (x64_setcc (CC.NZ)))))
 
 ;; Rules for `vall_true` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(rule 1 (lower (vall_true val @ (value_type ty)))
+        (if-let $true (use_sse41))
+        (let ((src Xmm val)
+              (zeros Xmm (xmm_zero ty))
+              (cmp Xmm (x64_pcmpeq (vec_int_type ty) src zeros)))
+          (with_flags (x64_ptest cmp cmp) (x64_setcc (CC.Z)))))
+
+;; Perform an appropriately-sized lane-wise comparison with zero. If the
+;; result is all 0s then all of them are true because nothing was equal to
+;; zero.
 (rule (lower (vall_true val @ (value_type ty)))
-      (let ((src Xmm val)
-            (zeros Xmm (xmm_zero ty))
-            (cmp Xmm (x64_pcmpeq (vec_int_type ty) src zeros)))
-        (with_flags (x64_ptest cmp cmp) (x64_setcc (CC.Z)))))
+      (let ((lanes_with_zero Xmm (x64_pcmpeq (vec_int_type ty) val (xmm_zero ty)))
+            (mask Gpr (x64_pmovmskb (OperandSize.Size32) lanes_with_zero)))
+        (with_flags (x64_test (OperandSize.Size32) mask mask)
+                    (x64_setcc (CC.Z)))))
 
 ;; Rules for `vhigh_bits` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

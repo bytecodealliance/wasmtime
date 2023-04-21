@@ -55,7 +55,7 @@
 ;; block0:
 ;;   lgr %r7, %r2
 ;;   algfi %r7, 4294901764
-;;   jle 6 ; trap
+;;   jgnle .+2 # trap=heap_oob
 ;;   lg %r5, 8(%r4)
 ;;   ag %r2, 0(%r4)
 ;;   llilh %r4, 65535
@@ -75,15 +75,15 @@
 ;; block0:
 ;;   lgr %r4, %r2
 ;;   algfi %r4, 4294901764
-;;   jle 6 ; trap
+;;   jgnle .+2 # trap=heap_oob
 ;;   lg %r5, 8(%r3)
 ;;   ag %r2, 0(%r3)
 ;;   llilh %r3, 65535
-;;   agr %r2, %r3
-;;   lghi %r3, 0
+;;   agrk %r3, %r2, %r3
+;;   lghi %r2, 0
 ;;   clgr %r4, %r5
-;;   locgrh %r2, %r3
-;;   lrv %r2, 0(%r2)
+;;   locgrh %r3, %r2
+;;   lrv %r2, 0(%r3)
 ;;   jg label1
 ;; block1:
 ;;   br %r14

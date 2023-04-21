@@ -812,7 +812,7 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_use(rn);
             collector.reg_use(rm);
         }
-        &Inst::VecRRRMod { rd, ri, rn, rm, .. } => {
+        &Inst::VecRRRMod { rd, ri, rn, rm, .. } | &Inst::VecFmlaElem { rd, ri, rn, rm, .. } => {
             collector.reg_reuse_def(rd, 1); // `rd` == `ri`.
             collector.reg_use(ri);
             collector.reg_use(rn);
@@ -907,6 +907,13 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             clobbers.remove(regs::xreg_preg(0));
             collector.reg_clobbers(clobbers);
         }
+        &Inst::MachOTlsGetAddr { rd, .. } => {
+            collector.reg_fixed_def(rd, regs::xreg(0));
+            let mut clobbers =
+                AArch64MachineDeps::get_regs_clobbered_by_call(CallConv::AppleAarch64);
+            clobbers.remove(regs::xreg_preg(0));
+            collector.reg_clobbers(clobbers);
+        }
         &Inst::Unwind { .. } => {}
         &Inst::EmitIsland { .. } => {}
         &Inst::DummyUse { reg } => {
@@ -925,6 +932,10 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
 impl MachInst for Inst {
     type ABIMachineSpec = AArch64MachineDeps;
     type LabelUse = LabelUse;
+
+    // "CLIF" in hex, to make the trap recognizable during
+    // debugging.
+    const TRAP_OPCODE: &'static [u8] = &0xc11f_u32.to_le_bytes();
 
     fn get_operands<F: Fn(VReg) -> VReg>(&self, collector: &mut OperandCollector<'_, F>) {
         aarch64_get_operands(self, collector);
@@ -1180,14 +1191,16 @@ impl Inst {
                 rm,
                 ra,
             } => {
-                let op = match alu_op {
-                    ALUOp3::MAdd => "madd",
-                    ALUOp3::MSub => "msub",
+                let (op, da_size) = match alu_op {
+                    ALUOp3::MAdd => ("madd", size),
+                    ALUOp3::MSub => ("msub", size),
+                    ALUOp3::UMAddL => ("umaddl", OperandSize::Size64),
+                    ALUOp3::SMAddL => ("smaddl", OperandSize::Size64),
                 };
-                let rd = pretty_print_ireg(rd.to_reg(), size, allocs);
+                let rd = pretty_print_ireg(rd.to_reg(), da_size, allocs);
                 let rn = pretty_print_ireg(rn, size, allocs);
                 let rm = pretty_print_ireg(rm, size, allocs);
-                let ra = pretty_print_ireg(ra, size, allocs);
+                let ra = pretty_print_ireg(ra, da_size, allocs);
 
                 format!("{} {}, {}, {}, {}", op, rd, rn, rm, ra)
             }
@@ -2160,6 +2173,26 @@ impl Inst {
                 let rm = pretty_print_vreg_vector(rm, size, allocs);
                 format!("{} {}, {}, {}, {}", op, rd, ri, rn, rm)
             }
+            &Inst::VecFmlaElem {
+                rd,
+                ri,
+                rn,
+                rm,
+                alu_op,
+                size,
+                idx,
+            } => {
+                let (op, size) = match alu_op {
+                    VecALUModOp::Fmla => ("fmla", size),
+                    VecALUModOp::Fmls => ("fmls", size),
+                    _ => unreachable!(),
+                };
+                let rd = pretty_print_vreg_vector(rd.to_reg(), size, allocs);
+                let ri = pretty_print_vreg_vector(ri, size, allocs);
+                let rn = pretty_print_vreg_vector(rn, size, allocs);
+                let rm = pretty_print_vreg_element(rm, idx.into(), size.lane_size(), allocs);
+                format!("{} {}, {}, {}, {}", op, rd, ri, rn, rm)
+            }
             &Inst::VecRRRLong {
                 rd,
                 rn,
@@ -2519,18 +2552,21 @@ impl Inst {
             }
             &Inst::Brk => "brk #0".to_string(),
             &Inst::Udf { .. } => "udf #0xc11f".to_string(),
-            &Inst::TrapIf { ref kind, .. } => match kind {
+            &Inst::TrapIf {
+                ref kind,
+                trap_code,
+            } => match kind {
                 &CondBrKind::Zero(reg) => {
                     let reg = pretty_print_reg(reg, allocs);
-                    format!("cbnz {}, 8 ; udf", reg)
+                    format!("cbz {reg}, #trap={trap_code}")
                 }
                 &CondBrKind::NotZero(reg) => {
                     let reg = pretty_print_reg(reg, allocs);
-                    format!("cbz {}, 8 ; udf", reg)
+                    format!("cbnz {reg}, #trap={trap_code}")
                 }
                 &CondBrKind::Cond(c) => {
-                    let c = c.invert().pretty_print(0, allocs);
-                    format!("b.{} 8 ; udf", c)
+                    let c = c.pretty_print(0, allocs);
+                    format!("b.{c} #trap={trap_code}")
                 }
             },
             &Inst::Adr { rd, off } => {
@@ -2693,6 +2729,10 @@ impl Inst {
             &Inst::ElfTlsGetAddr { ref symbol, rd } => {
                 let rd = pretty_print_reg(rd.to_reg(), allocs);
                 format!("elf_tls_get_addr {}, {}", rd, symbol.display(None))
+            }
+            &Inst::MachOTlsGetAddr { ref symbol, rd } => {
+                let rd = pretty_print_reg(rd.to_reg(), allocs);
+                format!("macho_tls_get_addr {}, {}", rd, symbol.display(None))
             }
             &Inst::Unwind { ref inst } => {
                 format!("unwind {:?}", inst)

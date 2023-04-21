@@ -58,7 +58,7 @@
 ;;   lgr %r5, %r2
 ;;   llilf %r2, 4294901761
 ;;   algfr %r2, %r5
-;;   jle 6 ; trap
+;;   jgnle .+2 # trap=heap_oob
 ;;   lgr %r5, %r7
 ;;   lg %r7, 8(%r5)
 ;;   clgr %r2, %r7
@@ -72,26 +72,28 @@
 ;;   lmg %r7, %r15, 56(%r15)
 ;;   br %r14
 ;; block3:
-;;   trap
+;;   .word 0x0000 # trap=heap_oob
 ;;
 ;; function u0:1:
 ;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 160, offset_downward_to_clobbers: 0 }
 ;;   unwind StackAlloc { size: 0 }
 ;; block0:
-;;   lgr %r4, %r3
+;;   lgr %r5, %r3
 ;;   llgfr %r3, %r2
-;;   llilf %r5, 4294901761
-;;   algfr %r5, %r2
-;;   jle 6 ; trap
-;;   lg %r2, 8(%r4)
-;;   clgr %r5, %r2
+;;   lgr %r4, %r2
+;;   llilf %r2, 4294901761
+;;   algfr %r2, %r4
+;;   jgnle .+2 # trap=heap_oob
+;;   lgr %r4, %r5
+;;   lg %r5, 8(%r4)
+;;   clgr %r2, %r5
 ;;   jgh label3 ; jg label1
 ;; block1:
 ;;   ag %r3, 0(%r4)
-;;   llilh %r5, 65535
-;;   llc %r2, 0(%r5,%r3)
+;;   llilh %r2, 65535
+;;   llc %r2, 0(%r2,%r3)
 ;;   jg label2
 ;; block2:
 ;;   br %r14
 ;; block3:
-;;   trap
+;;   .word 0x0000 # trap=heap_oob

@@ -39,6 +39,16 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
+        fn u64_as_i32(&mut self, x: u64) -> i32 {
+            x as i32
+        }
+
+        #[inline]
+        fn i64_neg(&mut self, x: i64) -> i64 {
+            x.wrapping_neg()
+        }
+
+        #[inline]
         fn u64_add(&mut self, x: u64, y: u64) -> u64 {
             x.wrapping_add(y)
         }
@@ -217,6 +227,36 @@ macro_rules! isle_common_prelude_methods {
             u64::MAX >> shift
         }
 
+        #[inline]
+        fn ty_umin(&mut self, _ty: Type) -> u64 {
+            0
+        }
+
+        #[inline]
+        fn ty_umax(&mut self, ty: Type) -> u64 {
+            self.ty_mask(ty)
+        }
+
+        #[inline]
+        fn ty_smin(&mut self, ty: Type) -> u64 {
+            let ty_bits = ty.bits();
+            debug_assert_ne!(ty_bits, 0);
+            let shift = 64_u64
+                .checked_sub(ty_bits.into())
+                .expect("unimplemented for > 64 bits");
+            (i64::MIN as u64) >> shift
+        }
+
+        #[inline]
+        fn ty_smax(&mut self, ty: Type) -> u64 {
+            let ty_bits = ty.bits();
+            debug_assert_ne!(ty_bits, 0);
+            let shift = 64_u64
+                .checked_sub(ty_bits.into())
+                .expect("unimplemented for > 64 bits");
+            (i64::MAX as u64) >> shift
+        }
+
         fn fits_in_16(&mut self, ty: Type) -> Option<Type> {
             if ty.bits() <= 16 && !ty.is_dynamic_vector() {
                 Some(ty)
@@ -311,6 +351,14 @@ macro_rules! isle_common_prelude_methods {
         fn ty_int_ref_64(&mut self, ty: Type) -> Option<Type> {
             match ty {
                 I64 | R64 => Some(ty),
+                _ => None,
+            }
+        }
+
+        #[inline]
+        fn ty_int_ref_16_to_64(&mut self, ty: Type) -> Option<Type> {
+            match ty {
+                I16 | I32 | I64 | R64 => Some(ty),
                 _ => None,
             }
         }
@@ -646,6 +694,11 @@ macro_rules! isle_common_prelude_methods {
         fn offset32_to_u32(&mut self, offset: Offset32) -> u32 {
             let offset: i32 = offset.into();
             offset as u32
+        }
+
+        #[inline]
+        fn u32_to_offset32(&mut self, offset: u32) -> Offset32 {
+            Offset32::new(offset as i32)
         }
 
         fn range(&mut self, start: usize, end: usize) -> Range {

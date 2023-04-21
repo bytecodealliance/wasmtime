@@ -522,10 +522,6 @@ pub trait FuncEnvironment: TargetEnvironment {
         Ok(())
     }
 
-    /// Returns the target ISA's condition to check for unsigned addition
-    /// overflowing.
-    fn unsigned_add_overflow_condition(&self) -> ir::condcodes::IntCC;
-
     /// Whether or not to force relaxed simd instructions to have deterministic
     /// lowerings meaning they will produce the same results across all hosts,
     /// regardless of the cost to performance.

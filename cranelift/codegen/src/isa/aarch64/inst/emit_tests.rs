@@ -1087,6 +1087,30 @@ fn test_aarch64_binemit() {
         "msub x1, x2, x3, x4",
     ));
     insns.push((
+        Inst::AluRRRR {
+            alu_op: ALUOp3::UMAddL,
+            size: OperandSize::Size32,
+            rd: writable_xreg(1),
+            rn: xreg(2),
+            rm: xreg(3),
+            ra: xreg(4),
+        },
+        "4110A39B",
+        "umaddl x1, w2, w3, x4",
+    ));
+    insns.push((
+        Inst::AluRRRR {
+            alu_op: ALUOp3::SMAddL,
+            size: OperandSize::Size32,
+            rd: writable_xreg(1),
+            rn: xreg(2),
+            rm: xreg(3),
+            ra: xreg(4),
+        },
+        "4110239B",
+        "smaddl x1, w2, w3, x4",
+    ));
+    insns.push((
         Inst::AluRRR {
             alu_op: ALUOp::SMulH,
             size: OperandSize::Size64,
@@ -5873,144 +5897,144 @@ fn test_aarch64_binemit() {
             trap_code: TrapCode::Interrupt,
             kind: CondBrKind::NotZero(xreg(8)),
         },
-        "480000B41FC10000",
-        "cbz x8, 8 ; udf",
+        "280000B51FC10000",
+        "cbnz x8, #trap=interrupt",
     ));
     insns.push((
         Inst::TrapIf {
             trap_code: TrapCode::Interrupt,
             kind: CondBrKind::Zero(xreg(8)),
         },
-        "480000B51FC10000",
-        "cbnz x8, 8 ; udf",
+        "280000B41FC10000",
+        "cbz x8, #trap=interrupt",
     ));
     insns.push((
         Inst::TrapIf {
             trap_code: TrapCode::Interrupt,
             kind: CondBrKind::Cond(Cond::Ne),
         },
-        "400000541FC10000",
-        "b.eq 8 ; udf",
+        "210000541FC10000",
+        "b.ne #trap=interrupt",
     ));
     insns.push((
         Inst::TrapIf {
             trap_code: TrapCode::Interrupt,
             kind: CondBrKind::Cond(Cond::Eq),
         },
-        "410000541FC10000",
-        "b.ne 8 ; udf",
+        "200000541FC10000",
+        "b.eq #trap=interrupt",
     ));
     insns.push((
         Inst::TrapIf {
             trap_code: TrapCode::Interrupt,
             kind: CondBrKind::Cond(Cond::Lo),
         },
-        "420000541FC10000",
-        "b.hs 8 ; udf",
+        "230000541FC10000",
+        "b.lo #trap=interrupt",
     ));
     insns.push((
         Inst::TrapIf {
             trap_code: TrapCode::Interrupt,
             kind: CondBrKind::Cond(Cond::Hs),
         },
-        "430000541FC10000",
-        "b.lo 8 ; udf",
+        "220000541FC10000",
+        "b.hs #trap=interrupt",
     ));
     insns.push((
         Inst::TrapIf {
             trap_code: TrapCode::Interrupt,
             kind: CondBrKind::Cond(Cond::Pl),
         },
-        "440000541FC10000",
-        "b.mi 8 ; udf",
+        "250000541FC10000",
+        "b.pl #trap=interrupt",
     ));
     insns.push((
         Inst::TrapIf {
             trap_code: TrapCode::Interrupt,
             kind: CondBrKind::Cond(Cond::Mi),
         },
-        "450000541FC10000",
-        "b.pl 8 ; udf",
+        "240000541FC10000",
+        "b.mi #trap=interrupt",
     ));
     insns.push((
         Inst::TrapIf {
             trap_code: TrapCode::Interrupt,
             kind: CondBrKind::Cond(Cond::Vc),
         },
-        "460000541FC10000",
-        "b.vs 8 ; udf",
+        "270000541FC10000",
+        "b.vc #trap=interrupt",
     ));
     insns.push((
         Inst::TrapIf {
             trap_code: TrapCode::Interrupt,
             kind: CondBrKind::Cond(Cond::Vs),
         },
-        "470000541FC10000",
-        "b.vc 8 ; udf",
+        "260000541FC10000",
+        "b.vs #trap=interrupt",
     ));
     insns.push((
         Inst::TrapIf {
             trap_code: TrapCode::Interrupt,
             kind: CondBrKind::Cond(Cond::Ls),
         },
-        "480000541FC10000",
-        "b.hi 8 ; udf",
+        "290000541FC10000",
+        "b.ls #trap=interrupt",
     ));
     insns.push((
         Inst::TrapIf {
             trap_code: TrapCode::Interrupt,
             kind: CondBrKind::Cond(Cond::Hi),
         },
-        "490000541FC10000",
-        "b.ls 8 ; udf",
+        "280000541FC10000",
+        "b.hi #trap=interrupt",
     ));
     insns.push((
         Inst::TrapIf {
             trap_code: TrapCode::Interrupt,
             kind: CondBrKind::Cond(Cond::Lt),
         },
-        "4A0000541FC10000",
-        "b.ge 8 ; udf",
+        "2B0000541FC10000",
+        "b.lt #trap=interrupt",
     ));
     insns.push((
         Inst::TrapIf {
             trap_code: TrapCode::Interrupt,
             kind: CondBrKind::Cond(Cond::Ge),
         },
-        "4B0000541FC10000",
-        "b.lt 8 ; udf",
+        "2A0000541FC10000",
+        "b.ge #trap=interrupt",
     ));
     insns.push((
         Inst::TrapIf {
             trap_code: TrapCode::Interrupt,
             kind: CondBrKind::Cond(Cond::Le),
         },
-        "4C0000541FC10000",
-        "b.gt 8 ; udf",
+        "2D0000541FC10000",
+        "b.le #trap=interrupt",
     ));
     insns.push((
         Inst::TrapIf {
             trap_code: TrapCode::Interrupt,
             kind: CondBrKind::Cond(Cond::Gt),
         },
-        "4D0000541FC10000",
-        "b.le 8 ; udf",
+        "2C0000541FC10000",
+        "b.gt #trap=interrupt",
     ));
     insns.push((
         Inst::TrapIf {
             trap_code: TrapCode::Interrupt,
             kind: CondBrKind::Cond(Cond::Nv),
         },
-        "4E0000541FC10000",
-        "b.al 8 ; udf",
+        "2F0000541FC10000",
+        "b.nv #trap=interrupt",
     ));
     insns.push((
         Inst::TrapIf {
             trap_code: TrapCode::Interrupt,
             kind: CondBrKind::Cond(Cond::Al),
         },
-        "4F0000541FC10000",
-        "b.nv 8 ; udf",
+        "2E0000541FC10000",
+        "b.al #trap=interrupt",
     ));
 
     insns.push((
@@ -7811,7 +7835,7 @@ fn test_aarch64_binemit() {
 
         let mut buffer = MachBuffer::new();
         insn.emit(&[], &mut buffer, &emit_info, &mut Default::default());
-        let buffer = buffer.finish();
+        let buffer = buffer.finish(&mut Default::default());
         let actual_encoding = &buffer.stringify_code_bytes();
         assert_eq!(expected_encoding, actual_encoding);
     }

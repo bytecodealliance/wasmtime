@@ -41,38 +41,38 @@
 
 ;; function u0:0:
 ;; block0:
-;;   movn w11, #65531
-;;   adds x13, x0, x11
-;;   b.lo 8 ; udf
-;;   ldr x14, [x2, #8]
-;;   ldr x15, [x2]
-;;   add x15, x15, x0
-;;   movz x12, #65535, LSL #16
-;;   add x15, x15, x12
-;;   movz x12, #0
-;;   subs xzr, x13, x14
-;;   csel x15, x12, x15, hi
+;;   movn w12, #65531
+;;   adds x12, x0, x12
+;;   b.hs #trap=heap_oob
+;;   ldr x13, [x2, #8]
+;;   ldr x14, [x2]
+;;   add x14, x14, x0
+;;   movz x15, #65535, LSL #16
+;;   add x14, x14, x15
+;;   movz x15, #0
+;;   subs xzr, x12, x13
+;;   csel x14, x15, x14, hi
 ;;   csdb
-;;   str w1, [x15]
+;;   str w1, [x14]
 ;;   b label1
 ;; block1:
 ;;   ret
 ;;
 ;; function u0:1:
 ;; block0:
-;;   movn w11, #65531
-;;   adds x13, x0, x11
-;;   b.lo 8 ; udf
-;;   ldr x14, [x1, #8]
-;;   ldr x15, [x1]
-;;   add x15, x15, x0
-;;   movz x12, #65535, LSL #16
-;;   add x15, x15, x12
-;;   movz x12, #0
-;;   subs xzr, x13, x14
-;;   csel x15, x12, x15, hi
+;;   movn w12, #65531
+;;   adds x12, x0, x12
+;;   b.hs #trap=heap_oob
+;;   ldr x13, [x1, #8]
+;;   ldr x14, [x1]
+;;   add x14, x14, x0
+;;   movz x15, #65535, LSL #16
+;;   add x14, x14, x15
+;;   movz x15, #0
+;;   subs xzr, x12, x13
+;;   csel x14, x15, x14, hi
 ;;   csdb
-;;   ldr w0, [x15]
+;;   ldr w0, [x14]
 ;;   b label1
 ;; block1:
 ;;   ret

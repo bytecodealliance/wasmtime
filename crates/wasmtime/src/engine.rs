@@ -218,7 +218,7 @@ impl Engine {
     /// [binary]: https://webassembly.github.io/spec/core/binary/index.html
     /// [text]: https://webassembly.github.io/spec/core/text/index.html
     #[cfg(compiler)]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
+    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))] // see build.rs
     pub fn precompile_module(&self, bytes: &[u8]) -> Result<Vec<u8>> {
         #[cfg(feature = "wat")]
         let bytes = wat::parse_bytes(&bytes)?;
@@ -229,7 +229,7 @@ impl Engine {
     /// Same as [`Engine::precompile_module`] except for a
     /// [`Component`](crate::component::Component)
     #[cfg(compiler)]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
+    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))] // see build.rs
     #[cfg(feature = "component-model")]
     #[cfg_attr(nightlydoc, doc(cfg(feature = "component-model")))]
     pub fn precompile_component(&self, bytes: &[u8]) -> Result<Vec<u8>> {
@@ -237,6 +237,18 @@ impl Engine {
         let bytes = wat::parse_bytes(&bytes)?;
         let (mmap, _) = crate::component::Component::build_artifacts(self, &bytes)?;
         Ok(mmap.to_vec())
+    }
+
+    /// Returns a [`std::hash::Hash`] that can be used to check precompiled WebAssembly compatibility.
+    ///
+    /// The outputs of [`Engine::precompile_module`] and [`Engine::precompile_component`]
+    /// are compatible with a different [`Engine`] instance only if the two engines use
+    /// compatible [`Config`]s. If this Hash matches between two [`Engine`]s then binaries
+    /// from one are guaranteed to deserialize in the other.
+    #[cfg(compiler)]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
+    pub fn precompile_compatibility_hash(&self) -> impl std::hash::Hash + '_ {
+        crate::module::HashedEngineCompileEnv(self)
     }
 
     pub(crate) fn run_maybe_parallel<
@@ -350,7 +362,7 @@ impl Engine {
     /// currently rely on the compiler informing us of all settings, including
     /// those disabled. Settings then fall in a few buckets:
     ///
-    /// * Some settings must be enabled, such as `avoid_div_traps`.
+    /// * Some settings must be enabled, such as `preserve_frame_pointers`.
     /// * Some settings must have a particular value, such as
     ///   `libcall_call_conv`.
     /// * Some settings do not matter as to their value, such as `opt_level`.
@@ -364,7 +376,6 @@ impl Engine {
             // These settings must all have be enabled, since their value
             // can affect the way the generated code performs or behaves at
             // runtime.
-            "avoid_div_traps" => *value == FlagValue::Bool(true),
             "libcall_call_conv" => *value == FlagValue::Enum("isa_default".into()),
             "preserve_frame_pointers" => *value == FlagValue::Bool(true),
             "enable_probestack" => *value == FlagValue::Bool(crate::config::probestack_supported(target.architecture)),
@@ -413,7 +424,6 @@ impl Engine {
             | "machine_code_cfg_info"
             | "tls_model" // wasmtime doesn't use tls right now
             | "opt_level" // opt level doesn't change semantics
-            | "use_egraphs" // optimizing with egraphs doesn't change semantics
             | "enable_alias_analysis" // alias analysis-based opts don't change semantics
             | "probestack_func_adjusts_sp" // probestack above asserted disabled
             | "probestack_size_log2" // probestack above asserted disabled
@@ -630,6 +640,11 @@ impl Default for Engine {
 
 #[cfg(test)]
 mod tests {
+    use std::{
+        collections::hash_map::DefaultHasher,
+        hash::{Hash, Hasher},
+    };
+
     use crate::{Config, Engine, Module, OptLevel};
 
     use anyhow::Result;
@@ -694,5 +709,21 @@ mod tests {
         assert_eq!(engine.config().cache_config.cache_misses(), 1);
 
         Ok(())
+    }
+
+    #[test]
+    fn precompile_compatibility_key_accounts_for_opt_level() {
+        fn hash_for_config(cfg: &Config) -> u64 {
+            let engine = Engine::new(cfg).expect("Config should be valid");
+            let mut hasher = DefaultHasher::new();
+            engine.precompile_compatibility_hash().hash(&mut hasher);
+            hasher.finish()
+        }
+        let mut cfg = Config::new();
+        cfg.cranelift_opt_level(OptLevel::None);
+        let opt_none_hash = hash_for_config(&cfg);
+        cfg.cranelift_opt_level(OptLevel::Speed);
+        let opt_speed_hash = hash_for_config(&cfg);
+        assert_ne!(opt_none_hash, opt_speed_hash)
     }
 }

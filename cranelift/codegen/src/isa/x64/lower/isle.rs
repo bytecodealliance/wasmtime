@@ -11,7 +11,7 @@ use crate::{isle_common_prelude_methods, isle_lower_prelude_methods};
 use generated_code::{Context, MInst, RegisterClass};
 
 // Types that the generated ISLE code uses via `use super::*`.
-use super::{is_int_or_ref_ty, is_mergeable_load, lower_to_amode};
+use super::{is_int_or_ref_ty, is_mergeable_load, lower_to_amode, MergeableLoadSize};
 use crate::ir::LibCall;
 use crate::isa::x64::lower::emit_vm_call;
 use crate::isa::x64::X64Backend;
@@ -170,8 +170,13 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     }
 
     #[inline]
-    fn has_avx(&mut self) -> bool {
-        self.backend.x64_flags.has_avx()
+    fn use_avx_simd(&mut self) -> bool {
+        self.backend.x64_flags.use_avx_simd()
+    }
+
+    #[inline]
+    fn use_avx2_simd(&mut self) -> bool {
+        self.backend.x64_flags.use_avx2_simd()
     }
 
     #[inline]
@@ -220,8 +225,13 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     }
 
     #[inline]
-    fn use_sse41(&mut self, _: Type) -> bool {
+    fn use_sse41(&mut self) -> bool {
         self.backend.x64_flags.use_sse41()
+    }
+
+    #[inline]
+    fn use_sse42(&mut self) -> bool {
+        self.backend.x64_flags.use_sse42()
     }
 
     #[inline]
@@ -268,7 +278,25 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     fn sinkable_load(&mut self, val: Value) -> Option<SinkableLoad> {
         let input = self.lower_ctx.get_value_as_source_or_const(val);
         if let InputSourceInst::UniqueUse(inst, 0) = input.inst {
-            if let Some((addr_input, offset)) = is_mergeable_load(self.lower_ctx, inst) {
+            if let Some((addr_input, offset)) =
+                is_mergeable_load(self.lower_ctx, inst, MergeableLoadSize::Min32)
+            {
+                return Some(SinkableLoad {
+                    inst,
+                    addr_input,
+                    offset,
+                });
+            }
+        }
+        None
+    }
+
+    fn sinkable_load_exact(&mut self, val: Value) -> Option<SinkableLoad> {
+        let input = self.lower_ctx.get_value_as_source_or_const(val);
+        if let InputSourceInst::UniqueUse(inst, 0) = input.inst {
+            if let Some((addr_input, offset)) =
+                is_mergeable_load(self.lower_ctx, inst, MergeableLoadSize::Exact)
+            {
                 return Some(SinkableLoad {
                     inst,
                     addr_input,
@@ -313,21 +341,6 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     #[inline]
     fn synthetic_amode_to_reg_mem(&mut self, addr: &SyntheticAmode) -> RegMem {
         RegMem::mem(addr.clone())
-    }
-
-    #[inline]
-    fn amode_imm_reg_reg_shift(&mut self, simm32: u32, base: Gpr, index: Gpr, shift: u8) -> Amode {
-        Amode::imm_reg_reg_shift(simm32, base, index, shift)
-    }
-
-    #[inline]
-    fn amode_imm_reg(&mut self, simm32: u32, base: Gpr) -> Amode {
-        Amode::imm_reg(simm32, base.to_reg())
-    }
-
-    #[inline]
-    fn amode_with_flags(&mut self, amode: &Amode, flags: MemFlags) -> Amode {
-        amode.with_flags(flags)
     }
 
     #[inline]
@@ -621,7 +634,7 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
 
     fn libcall_1(&mut self, libcall: &LibCall, a: Reg) -> Reg {
         let call_conv = self.lower_ctx.abi().call_conv(self.lower_ctx.sigs());
-        let ret_ty = libcall.signature(call_conv).returns[0].value_type;
+        let ret_ty = libcall.signature(call_conv, I64).returns[0].value_type;
         let output_reg = self.lower_ctx.alloc_tmp(ret_ty).only_reg().unwrap();
 
         emit_vm_call(
@@ -639,7 +652,7 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
 
     fn libcall_3(&mut self, libcall: &LibCall, a: Reg, b: Reg, c: Reg) -> Reg {
         let call_conv = self.lower_ctx.abi().call_conv(self.lower_ctx.sigs());
-        let ret_ty = libcall.signature(call_conv).returns[0].value_type;
+        let ret_ty = libcall.signature(call_conv, I64).returns[0].value_type;
         let output_reg = self.lower_ctx.alloc_tmp(ret_ty).only_reg().unwrap();
 
         emit_vm_call(
@@ -994,6 +1007,45 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
         } else {
             None
         }
+    }
+
+    fn pblendw_imm(&mut self, imm: Immediate) -> Option<u8> {
+        // First make sure that the shuffle immediate is selecting 16-bit lanes.
+        let (a, b, c, d, e, f, g, h) = self.shuffle16_from_imm(imm)?;
+
+        // Next build up an 8-bit mask from each of the bits of the selected
+        // lanes above. This instruction can only be used when each lane
+        // selector chooses from the corresponding lane in either of the two
+        // operands, meaning the Nth lane selection must satisfy `lane % 8 ==
+        // N`.
+        //
+        // This helper closure is used to calculate the value of the
+        // corresponding bit.
+        let bit = |x: u8, c: u8| {
+            if x % 8 == c {
+                if x < 8 {
+                    Some(0)
+                } else {
+                    Some(1 << c)
+                }
+            } else {
+                None
+            }
+        };
+        Some(
+            bit(a, 0)?
+                | bit(b, 1)?
+                | bit(c, 2)?
+                | bit(d, 3)?
+                | bit(e, 4)?
+                | bit(f, 5)?
+                | bit(g, 6)?
+                | bit(h, 7)?,
+        )
+    }
+
+    fn xmi_imm(&mut self, imm: u32) -> XmmMemImm {
+        XmmMemImm::new(RegMemImm::imm(imm)).unwrap()
     }
 }
 

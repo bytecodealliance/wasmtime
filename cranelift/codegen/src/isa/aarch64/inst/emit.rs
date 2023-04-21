@@ -1,5 +1,6 @@
 //! AArch64 ISA: binary code emission.
 
+use cranelift_control::ControlPlane;
 use regalloc2::Allocation;
 
 use crate::binemit::{Reloc, StackMap};
@@ -638,15 +639,19 @@ pub struct EmitState {
     stack_map: Option<StackMap>,
     /// Current source-code location corresponding to instruction to be emitted.
     cur_srcloc: RelSourceLoc,
+    /// Only used during fuzz-testing. Otherwise, it is a zero-sized struct and
+    /// optimized away at compiletime. See [cranelift_control].
+    ctrl_plane: ControlPlane,
 }
 
 impl MachInstEmitState<Inst> for EmitState {
-    fn new(abi: &Callee<AArch64MachineDeps>) -> Self {
+    fn new(abi: &Callee<AArch64MachineDeps>, ctrl_plane: ControlPlane) -> Self {
         EmitState {
             virtual_sp_offset: 0,
             nominal_sp_to_fp: abi.frame_size() as i64,
             stack_map: None,
             cur_srcloc: Default::default(),
+            ctrl_plane,
         }
     }
 
@@ -656,6 +661,14 @@ impl MachInstEmitState<Inst> for EmitState {
 
     fn pre_sourceloc(&mut self, srcloc: RelSourceLoc) {
         self.cur_srcloc = srcloc;
+    }
+
+    fn ctrl_plane_mut(&mut self) -> &mut ControlPlane {
+        &mut self.ctrl_plane
+    }
+
+    fn take_ctrl_plane(self) -> ControlPlane {
+        self.ctrl_plane
     }
 }
 
@@ -776,6 +789,14 @@ impl MachInstEmit for Inst {
                 let (top11, bit15) = match alu_op {
                     ALUOp3::MAdd => (0b0_00_11011_000, 0),
                     ALUOp3::MSub => (0b0_00_11011_000, 1),
+                    ALUOp3::UMAddL => {
+                        debug_assert!(size == OperandSize::Size32);
+                        (0b1_00_11011_1_01, 0)
+                    }
+                    ALUOp3::SMAddL => {
+                        debug_assert!(size == OperandSize::Size32);
+                        (0b1_00_11011_0_01, 0)
+                    }
                 };
                 let top11 = top11 | size.sf_bit() << 10;
                 sink.put4(enc_arith_rrrr(top11, rm, bit15, ra, rn, rd));
@@ -1511,7 +1532,7 @@ impl MachInstEmit for Inst {
                 let again_label = sink.get_label();
 
                 // again:
-                sink.bind_label(again_label);
+                sink.bind_label(again_label, &mut state.ctrl_plane);
 
                 let srcloc = state.cur_srcloc();
                 if !srcloc.is_default() && !flags.notrap() {
@@ -1713,7 +1734,7 @@ impl MachInstEmit for Inst {
                 let out_label = sink.get_label();
 
                 // again:
-                sink.bind_label(again_label);
+                sink.bind_label(again_label, &mut state.ctrl_plane);
 
                 let srcloc = state.cur_srcloc();
                 if !srcloc.is_default() && !flags.notrap() {
@@ -1762,7 +1783,7 @@ impl MachInstEmit for Inst {
                 sink.use_label_at_offset(br_again_offset, again_label, LabelUse::Branch19);
 
                 // out:
-                sink.bind_label(out_label);
+                sink.bind_label(out_label, &mut state.ctrl_plane);
             }
             &Inst::LoadAcquire {
                 access_ty,
@@ -2914,6 +2935,45 @@ impl MachInstEmit for Inst {
                 };
                 sink.put4(enc_vec_rrr(top11 | q << 9, rm, bit15_10, rn, rd));
             }
+            &Inst::VecFmlaElem {
+                rd,
+                ri,
+                rn,
+                rm,
+                alu_op,
+                size,
+                idx,
+            } => {
+                let rd = allocs.next_writable(rd);
+                let ri = allocs.next(ri);
+                debug_assert_eq!(rd.to_reg(), ri);
+                let rn = allocs.next(rn);
+                let rm = allocs.next(rm);
+                let idx = u32::from(idx);
+
+                let (q, _size) = size.enc_size();
+                let o2 = match alu_op {
+                    VecALUModOp::Fmla => 0b0,
+                    VecALUModOp::Fmls => 0b1,
+                    _ => unreachable!(),
+                };
+
+                let (h, l) = match size {
+                    VectorSize::Size32x4 => {
+                        assert!(idx < 4);
+                        (idx >> 1, idx & 1)
+                    }
+                    VectorSize::Size64x2 => {
+                        assert!(idx < 2);
+                        (idx, 0)
+                    }
+                    _ => unreachable!(),
+                };
+
+                let top11 = 0b000_011111_00 | (q << 9) | (size.enc_float_size() << 1) | l;
+                let bit15_10 = 0b000100 | (o2 << 4) | (h << 1);
+                sink.put4(enc_vec_rrr(top11, rm, bit15_10, rn, rd));
+            }
             &Inst::VecLoadReplicate {
                 rd,
                 rn,
@@ -2968,13 +3028,13 @@ impl MachInstEmit for Inst {
                 sink.put4(enc_jump26(0b000101, 0 /* will be fixed up later */));
 
                 // else:
-                sink.bind_label(else_label);
+                sink.bind_label(else_label, &mut state.ctrl_plane);
 
                 // mov rd, rn
                 sink.put4(enc_vecmov(/* 16b = */ true, rd, rn));
 
                 // out:
-                sink.bind_label(out_label);
+                sink.bind_label(out_label, &mut state.ctrl_plane);
             }
             &Inst::MovToNZCV { rn } => {
                 let rn = allocs.next(rn);
@@ -3115,20 +3175,15 @@ impl MachInstEmit for Inst {
                 sink.put4(enc_jump26(0b000101, not_taken.as_offset26_or_zero()));
             }
             &Inst::TrapIf { kind, trap_code } => {
+                let label = sink.defer_trap(trap_code, state.take_stack_map());
                 // condbr KIND, LABEL
                 let off = sink.cur_offset();
-                let label = sink.get_label();
                 sink.put4(enc_conditional_br(
                     BranchTarget::Label(label),
-                    kind.invert(),
+                    kind,
                     &mut allocs,
                 ));
                 sink.use_label_at_offset(off, label, LabelUse::Branch19);
-                // udf
-                let trap = Inst::Udf { trap_code };
-                trap.emit(&[], sink, emit_info, state);
-                // LABEL:
-                sink.bind_label(label);
             }
             &Inst::IndirectBr { rn, .. } => {
                 let rn = allocs.next(rn);
@@ -3142,15 +3197,11 @@ impl MachInstEmit for Inst {
                 sink.put4(0xd4200000);
             }
             &Inst::Udf { trap_code } => {
-                // "CLIF" in hex, to make the trap recognizable during
-                // debugging.
-                let encoding = 0xc11f;
-
                 sink.add_trap(trap_code);
                 if let Some(s) = state.take_stack_map() {
                     sink.add_stack_map(StackMapExtent::UpcomingBytes(4), s);
                 }
-                sink.put4(encoding);
+                sink.put_data(Inst::TRAP_OPCODE);
             }
             &Inst::Adr { rd, off } => {
                 let rd = allocs.next_writable(rd);
@@ -3434,8 +3485,8 @@ impl MachInstEmit for Inst {
                         dest: BranchTarget::Label(jump_around_label),
                     };
                     jmp.emit(&[], sink, emit_info, state);
-                    sink.emit_island(needed_space + 4);
-                    sink.bind_label(jump_around_label);
+                    sink.emit_island(needed_space + 4, &mut state.ctrl_plane);
+                    sink.bind_label(jump_around_label, &mut state.ctrl_plane);
                 }
             }
 
@@ -3465,6 +3516,54 @@ impl MachInstEmit for Inst {
 
                 // nop
                 sink.put4(0xd503201f);
+            }
+
+            &Inst::MachOTlsGetAddr { ref symbol, rd } => {
+                // Each thread local variable gets a descriptor, where the first xword of the descriptor is a pointer
+                // to a function that takes the descriptor address in x0, and after the function returns x0
+                // contains the address for the thread local variable
+                //
+                // what we want to emit is basically:
+                //
+                // adrp x0, <label>@TLVPPAGE  ; Load the address of the page of the thread local variable pointer (TLVP)
+                // ldr x0, [x0, <label>@TLVPPAGEOFF] ; Load the descriptor's address into x0
+                // ldr x1, [x0] ; Load the function pointer (the first part of the descriptor)
+                // blr x1 ; Call the function pointer with the descriptor address in x0
+                // ; x0 now contains the TLV address
+
+                let rd = allocs.next_writable(rd);
+                assert_eq!(xreg(0), rd.to_reg());
+                let rtmp = writable_xreg(1);
+
+                // adrp x0, <label>@TLVPPAGE
+                sink.add_reloc(Reloc::MachOAarch64TlsAdrPage21, symbol, 0);
+                sink.put4(0x90000000);
+
+                // ldr x0, [x0, <label>@TLVPPAGEOFF]
+                sink.add_reloc(Reloc::MachOAarch64TlsAdrPageOff12, symbol, 0);
+                sink.put4(0xf9400000);
+
+                // load [x0] into temp register
+                Inst::ULoad64 {
+                    rd: rtmp,
+                    mem: AMode::reg(rd.to_reg()),
+                    flags: MemFlags::trusted(),
+                }
+                .emit(&[], sink, emit_info, state);
+
+                // call function pointer in temp register
+                Inst::CallInd {
+                    info: crate::isa::Box::new(CallIndInfo {
+                        rn: rtmp.to_reg(),
+                        uses: smallvec![],
+                        defs: smallvec![],
+                        clobbers: PRegSet::empty(),
+                        opcode: Opcode::CallIndirect,
+                        caller_callconv: CallConv::AppleAarch64,
+                        callee_callconv: CallConv::AppleAarch64,
+                    }),
+                }
+                .emit(&[], sink, emit_info, state);
             }
 
             &Inst::Unwind { ref inst } => {
@@ -3501,7 +3600,7 @@ impl MachInstEmit for Inst {
                 // out at this time.
 
                 let loop_start = sink.get_label();
-                sink.bind_label(loop_start);
+                sink.bind_label(loop_start, &mut state.ctrl_plane);
 
                 Inst::AluRRImm12 {
                     alu_op: ALUOp::Sub,
@@ -3536,7 +3635,7 @@ impl MachInstEmit for Inst {
                     kind: CondBrKind::Cond(Cond::Gt),
                 }
                 .emit(&[], sink, emit_info, state);
-                sink.bind_label(loop_end);
+                sink.bind_label(loop_end, &mut state.ctrl_plane);
             }
         }
 

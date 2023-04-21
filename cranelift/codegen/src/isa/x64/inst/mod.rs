@@ -10,6 +10,7 @@ use crate::{machinst::*, trace};
 use crate::{settings, CodegenError, CodegenResult};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
+use cranelift_control::ControlPlane;
 use regalloc2::{Allocation, PRegSet, VReg};
 use smallvec::{smallvec, SmallVec};
 use std::fmt;
@@ -73,8 +74,6 @@ impl Inst {
             | Inst::CallUnknown { .. }
             | Inst::CheckedSRemSeq { .. }
             | Inst::CheckedSRemSeq8 { .. }
-            | Inst::ValidateSdivDivisor { .. }
-            | Inst::ValidateSdivDivisor64 { .. }
             | Inst::Cmove { .. }
             | Inst::CmpRmiR { .. }
             | Inst::CvtFloatToSintSeq { .. }
@@ -102,6 +101,7 @@ impl Inst {
             | Inst::MovsxRmR { .. }
             | Inst::MovzxRmR { .. }
             | Inst::MulHi { .. }
+            | Inst::UMulLo { .. }
             | Inst::Neg { .. }
             | Inst::Not { .. }
             | Inst::Nop { .. }
@@ -160,7 +160,9 @@ impl Inst {
             | Inst::XmmUnaryRmRImmVex { op, .. }
             | Inst::XmmMovRMVex { op, .. }
             | Inst::XmmMovRMImmVex { op, .. }
-            | Inst::XmmToGprImmVex { op, .. } => op.available_from(),
+            | Inst::XmmToGprImmVex { op, .. }
+            | Inst::XmmToGprVex { op, .. }
+            | Inst::GprToXmmVex { op, .. } => op.available_from(),
         }
     }
 }
@@ -179,7 +181,6 @@ impl Inst {
         src: RegMemImm,
         dst: Writable<Reg>,
     ) -> Self {
-        debug_assert!(size.is_one_of(&[OperandSize::Size32, OperandSize::Size64]));
         src.assert_regclass_is(RegClass::Int);
         debug_assert!(dst.to_reg().class() == RegClass::Int);
         Self::AluRmiR {
@@ -225,6 +226,7 @@ impl Inst {
     pub(crate) fn div(
         size: OperandSize,
         sign: DivSignedness,
+        trap: TrapCode,
         divisor: RegMem,
         dividend_lo: Gpr,
         dividend_hi: Gpr,
@@ -235,6 +237,7 @@ impl Inst {
         Inst::Div {
             size,
             sign,
+            trap,
             divisor: GprMem::new(divisor).unwrap(),
             dividend_lo,
             dividend_hi,
@@ -245,6 +248,7 @@ impl Inst {
 
     pub(crate) fn div8(
         sign: DivSignedness,
+        trap: TrapCode,
         divisor: RegMem,
         dividend: Gpr,
         dst: WritableGpr,
@@ -252,6 +256,7 @@ impl Inst {
         divisor.assert_regclass_is(RegClass::Int);
         Inst::Div8 {
             sign,
+            trap,
             divisor: GprMem::new(divisor).unwrap(),
             dividend,
             dst,
@@ -429,6 +434,7 @@ impl Inst {
         Inst::LoadEffectiveAddress {
             addr: addr.into(),
             dst: WritableGpr::from_writable_reg(dst).unwrap(),
+            size: OperandSize::Size64,
         }
     }
 
@@ -467,6 +473,10 @@ impl Inst {
 
     pub(crate) fn trap(trap_code: TrapCode) -> Inst {
         Inst::Ud2 { trap_code }
+    }
+
+    pub(crate) fn trap_if(cc: CC, trap_code: TrapCode) -> Inst {
+        Inst::TrapIf { cc, trap_code }
     }
 
     pub(crate) fn cmove(size: OperandSize, cc: CC, src: RegMem, dst: Writable<Reg>) -> Inst {
@@ -545,10 +555,6 @@ impl Inst {
     pub(crate) fn jmp_unknown(target: RegMem) -> Inst {
         target.assert_regclass_is(RegClass::Int);
         Inst::JmpUnknown { target }
-    }
-
-    pub(crate) fn trap_if(cc: CC, trap_code: TrapCode) -> Inst {
-        Inst::TrapIf { cc, trap_code }
     }
 
     /// Choose which instruction to use for loading a register value from memory. For loads smaller
@@ -651,6 +657,7 @@ impl PrettyPrint for Inst {
             .to_string()
         }
 
+        #[allow(dead_code)]
         fn suffix_lqb(size: OperandSize) -> String {
             match size {
                 OperandSize::Size32 => "l",
@@ -685,7 +692,7 @@ impl PrettyPrint for Inst {
                 let src2 = src2.pretty_print(size_bytes, allocs);
                 format!(
                     "{} {}, {}, {}",
-                    ljustify2(op.to_string(), suffix_lqb(*size)),
+                    ljustify2(op.to_string(), suffix_bwlq(*size)),
                     src1,
                     src2,
                     dst
@@ -710,7 +717,7 @@ impl PrettyPrint for Inst {
                 let src1_dst = src1_dst.pretty_print(size_bytes, allocs);
                 format!(
                     "{} {}, {}",
-                    ljustify2(op.to_string(), suffix_lqb(*size)),
+                    ljustify2(op.to_string(), suffix_bwlq(*size)),
                     src2,
                     src1_dst,
                 )
@@ -770,6 +777,7 @@ impl PrettyPrint for Inst {
             Inst::Div {
                 size,
                 sign,
+                trap,
                 divisor,
                 dividend_lo,
                 dividend_hi,
@@ -784,7 +792,7 @@ impl PrettyPrint for Inst {
                 let dst_remainder =
                     pretty_print_reg(dst_remainder.to_reg().to_reg(), size.to_bytes(), allocs);
                 format!(
-                    "{} {}, {}, {}, {}, {}",
+                    "{} {}, {}, {}, {}, {} ; trap={trap}",
                     ljustify(match sign {
                         DivSignedness::Signed => "idiv".to_string(),
                         DivSignedness::Unsigned => "div".to_string(),
@@ -799,6 +807,7 @@ impl PrettyPrint for Inst {
 
             Inst::Div8 {
                 sign,
+                trap,
                 divisor,
                 dividend,
                 dst,
@@ -807,7 +816,7 @@ impl PrettyPrint for Inst {
                 let dividend = pretty_print_reg(dividend.to_reg(), 1, allocs);
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 1, allocs);
                 format!(
-                    "{} {dividend}, {divisor}, {dst}",
+                    "{} {dividend}, {divisor}, {dst} ; trap={trap}",
                     ljustify(match sign {
                         DivSignedness::Signed => "idiv".to_string(),
                         DivSignedness::Unsigned => "div".to_string(),
@@ -841,6 +850,24 @@ impl PrettyPrint for Inst {
                 )
             }
 
+            Inst::UMulLo {
+                size,
+                src1,
+                src2,
+                dst,
+            } => {
+                let src1 = pretty_print_reg(src1.to_reg(), size.to_bytes(), allocs);
+                let dst = pretty_print_reg(dst.to_reg().to_reg(), size.to_bytes(), allocs);
+                let src2 = src2.pretty_print(size.to_bytes(), allocs);
+                format!(
+                    "{} {}, {}, {}",
+                    ljustify2("mul".to_string(), suffix_bwlq(*size)),
+                    src1,
+                    src2,
+                    dst,
+                )
+            }
+
             Inst::CheckedSRemSeq {
                 size,
                 divisor,
@@ -871,27 +898,6 @@ impl PrettyPrint for Inst {
                 let dividend = pretty_print_reg(dividend.to_reg(), 1, allocs);
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 1, allocs);
                 format!("checked_srem_seq {dividend}, {divisor}, {dst}")
-            }
-
-            Inst::ValidateSdivDivisor {
-                dividend,
-                divisor,
-                size,
-            } => {
-                let dividend = pretty_print_reg(dividend.to_reg(), size.to_bytes(), allocs);
-                let divisor = pretty_print_reg(divisor.to_reg(), size.to_bytes(), allocs);
-                format!("validate_sdiv_divisor {dividend}, {divisor}")
-            }
-
-            Inst::ValidateSdivDivisor64 {
-                dividend,
-                divisor,
-                tmp,
-            } => {
-                let dividend = pretty_print_reg(dividend.to_reg(), 8, allocs);
-                let divisor = pretty_print_reg(divisor.to_reg(), 8, allocs);
-                let tmp = pretty_print_reg(tmp.to_reg().to_reg(), 8, allocs);
-                format!("validate_sdiv_divisor {dividend}, {divisor} {tmp}")
             }
 
             Inst::SignExtendData { size, src, dst } => {
@@ -1218,6 +1224,18 @@ impl PrettyPrint for Inst {
                 format!("{} {}, {}", ljustify(op.to_string()), src, dst)
             }
 
+            Inst::XmmToGprVex {
+                op,
+                src,
+                dst,
+                dst_size,
+            } => {
+                let dst_size = dst_size.to_bytes();
+                let src = pretty_print_reg(src.to_reg(), 8, allocs);
+                let dst = pretty_print_reg(dst.to_reg().to_reg(), dst_size, allocs);
+                format!("{} {src}, {dst}", ljustify(op.to_string()))
+            }
+
             Inst::XmmToGprImm { op, src, dst, imm } => {
                 let src = pretty_print_reg(src.to_reg(), 8, allocs);
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
@@ -1239,6 +1257,17 @@ impl PrettyPrint for Inst {
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
                 let src = src.pretty_print(src_size.to_bytes(), allocs);
                 format!("{} {}, {}", ljustify(op.to_string()), src, dst)
+            }
+
+            Inst::GprToXmmVex {
+                op,
+                src,
+                src_size,
+                dst,
+            } => {
+                let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
+                let src = src.pretty_print(src_size.to_bytes(), allocs);
+                format!("{} {src}, {dst}", ljustify(op.to_string()))
             }
 
             Inst::XmmCmpRmR { op, src, dst } => {
@@ -1432,8 +1461,8 @@ impl PrettyPrint for Inst {
                 format!("{} {}, {}", ljustify("movq".to_string()), src, dst)
             }
 
-            Inst::LoadEffectiveAddress { addr, dst } => {
-                let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
+            Inst::LoadEffectiveAddress { addr, dst, size } => {
+                let dst = pretty_print_reg(dst.to_reg().to_reg(), size.to_bytes(), allocs);
                 let addr = addr.pretty_print(8, allocs);
                 format!("{} {}, {}", ljustify("lea".to_string()), addr, dst)
             }
@@ -1580,20 +1609,19 @@ impl PrettyPrint for Inst {
                 let alternative = pretty_print_reg(alternative.to_reg(), size, allocs);
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), size, allocs);
                 let consequent = consequent.pretty_print(size, allocs);
+                let suffix = match *ty {
+                    types::F64 => "sd",
+                    types::F32 => "ss",
+                    types::F32X4 => "aps",
+                    types::F64X2 => "apd",
+                    _ => "dqa",
+                };
                 format!(
-                    "mov {}, {}; j{} $next; mov{} {}, {}; $next: ",
+                    "mov{suffix} {alternative}, {dst}; \
+                    j{} $next; \
+                    mov{suffix} {consequent}, {dst}; \
+                    $next:",
                     cc.invert().to_string(),
-                    match *ty {
-                        types::F64 => "sd",
-                        types::F32 => "ss",
-                        types::F32X4 => "aps",
-                        types::F64X2 => "apd",
-                        _ => "dqa",
-                    },
-                    consequent,
-                    dst,
-                    alternative,
-                    dst,
                 )
             }
 
@@ -1695,7 +1723,7 @@ impl PrettyPrint for Inst {
             }
 
             Inst::TrapIf { cc, trap_code, .. } => {
-                format!("j{} ; ud2 {} ;", cc.invert().to_string(), trap_code)
+                format!("j{cc} #trap={trap_code}")
             }
 
             Inst::TrapIfAnd {
@@ -1845,11 +1873,23 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
     // method above.
     match inst {
         Inst::AluRmiR {
-            src1, src2, dst, ..
+            size,
+            op,
+            src1,
+            src2,
+            dst,
+            ..
         } => {
-            collector.reg_use(src1.to_reg());
-            collector.reg_reuse_def(dst.to_writable_reg(), 0);
-            src2.get_operands(collector);
+            if *size == OperandSize::Size8 && *op == AluRmiROpcode::Mul {
+                // 8-bit imul has RAX as a fixed input/output
+                collector.reg_fixed_use(src1.to_reg(), regs::rax());
+                collector.reg_fixed_def(dst.to_writable_reg(), regs::rax());
+                src2.get_operands(collector);
+            } else {
+                collector.reg_use(src1.to_reg());
+                collector.reg_reuse_def(dst.to_writable_reg(), 0);
+                src2.get_operands(collector);
+            }
         }
         Inst::AluConstOp { dst, .. } => collector.reg_def(dst.to_writable_reg()),
         Inst::AluRM { src1_dst, src2, .. } => {
@@ -1916,20 +1956,19 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             collector.reg_fixed_def(dst_hi.to_writable_reg(), regs::rdx());
             src2.get_operands(collector);
         }
-        Inst::ValidateSdivDivisor {
-            dividend, divisor, ..
+        Inst::UMulLo {
+            size,
+            src1,
+            src2,
+            dst,
+            ..
         } => {
-            collector.reg_use(divisor.to_reg());
-            collector.reg_use(dividend.to_reg());
-        }
-        Inst::ValidateSdivDivisor64 {
-            dividend,
-            divisor,
-            tmp,
-        } => {
-            collector.reg_use(divisor.to_reg());
-            collector.reg_use(dividend.to_reg());
-            collector.reg_early_def(tmp.to_writable_reg());
+            collector.reg_fixed_use(src1.to_reg(), regs::rax());
+            collector.reg_fixed_def(dst.to_writable_reg(), regs::rax());
+            if *size != OperandSize::Size8 {
+                collector.reg_clobbers(PRegSet::empty().with(regs::gpr_preg(regs::ENC_RDX)));
+            }
+            src2.get_operands(collector);
         }
         Inst::SignExtendData { size, src, dst } => {
             match size {
@@ -2113,12 +2152,13 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             collector.reg_fixed_nonallocatable(*dst);
         }
         Inst::XmmToGpr { src, dst, .. }
+        | Inst::XmmToGprVex { src, dst, .. }
         | Inst::XmmToGprImm { src, dst, .. }
         | Inst::XmmToGprImmVex { src, dst, .. } => {
             collector.reg_use(src.to_reg());
             collector.reg_def(dst.to_writable_reg());
         }
-        Inst::GprToXmm { src, dst, .. } => {
+        Inst::GprToXmm { src, dst, .. } | Inst::GprToXmmVex { src, dst, .. } => {
             collector.reg_def(dst.to_writable_reg());
             src.get_operands(collector);
         }
@@ -2173,7 +2213,7 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             collector.reg_def(dst.to_writable_reg());
             src.get_operands(collector);
         }
-        Inst::LoadEffectiveAddress { addr: src, dst } => {
+        Inst::LoadEffectiveAddress { addr: src, dst, .. } => {
             collector.reg_def(dst.to_writable_reg());
             src.get_operands(collector);
         }
@@ -2537,6 +2577,8 @@ impl MachInst for Inst {
     }
 
     type LabelUse = LabelUse;
+
+    const TRAP_OPCODE: &'static [u8] = &[0x0f, 0x0b];
 }
 
 /// State carried between emissions of a sequence of instructions.
@@ -2551,6 +2593,9 @@ pub struct EmitState {
     stack_map: Option<StackMap>,
     /// Current source location.
     cur_srcloc: RelSourceLoc,
+    /// Only used during fuzz-testing. Otherwise, it is a zero-sized struct and
+    /// optimized away at compiletime. See [cranelift_control].
+    ctrl_plane: ControlPlane,
 }
 
 /// Constant state used during emissions of a sequence of instructions.
@@ -2587,12 +2632,13 @@ impl MachInstEmit for Inst {
 }
 
 impl MachInstEmitState<Inst> for EmitState {
-    fn new(abi: &Callee<X64ABIMachineSpec>) -> Self {
+    fn new(abi: &Callee<X64ABIMachineSpec>, ctrl_plane: ControlPlane) -> Self {
         EmitState {
             virtual_sp_offset: 0,
             nominal_sp_to_fp: abi.frame_size() as i64,
             stack_map: None,
             cur_srcloc: Default::default(),
+            ctrl_plane,
         }
     }
 
@@ -2602,6 +2648,14 @@ impl MachInstEmitState<Inst> for EmitState {
 
     fn pre_sourceloc(&mut self, srcloc: RelSourceLoc) {
         self.cur_srcloc = srcloc;
+    }
+
+    fn ctrl_plane_mut(&mut self) -> &mut ControlPlane {
+        &mut self.ctrl_plane
+    }
+
+    fn take_ctrl_plane(self) -> ControlPlane {
+        self.ctrl_plane
     }
 }
 

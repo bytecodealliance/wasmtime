@@ -1,6 +1,5 @@
 test optimize
 set opt_level=speed
-set use_egraphs=true
 target x86_64
 
 function %f(i32) -> i32 {

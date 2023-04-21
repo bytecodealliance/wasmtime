@@ -17,6 +17,17 @@
 (decl value_array_3_ctor (Value Value Value) ValueArray3)
 (extern constructor value_array_3_ctor value_array_3_ctor)
 
+(rule (eq ty x y) (icmp ty (IntCC.Equal) x y))
+(rule (ne ty x y) (icmp ty (IntCC.NotEqual) x y))
+(rule (ult ty x y) (icmp ty (IntCC.UnsignedLessThan) x y))
+(rule (ule ty x y) (icmp ty (IntCC.UnsignedLessThanOrEqual) x y))
+(rule (ugt ty x y) (icmp ty (IntCC.UnsignedGreaterThan) x y))
+(rule (uge ty x y) (icmp ty (IntCC.UnsignedGreaterThanOrEqual) x y))
+(rule (slt ty x y) (icmp ty (IntCC.SignedLessThan) x y))
+(rule (sle ty x y) (icmp ty (IntCC.SignedLessThanOrEqual) x y))
+(rule (sgt ty x y) (icmp ty (IntCC.SignedGreaterThan) x y))
+(rule (sge ty x y) (icmp ty (IntCC.SignedGreaterThanOrEqual) x y))
+
 ;;;;; optimization toplevel ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; The main matcher rule invoked by the toplevel driver.

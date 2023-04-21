@@ -58,7 +58,7 @@ impl Definitions {
             // Check name.
             if let Some(existing_format) = format_names.get(&inst.format.name) {
                 assert!(
-                    Rc::ptr_eq(&existing_format, &inst.format),
+                    Rc::ptr_eq(existing_format, &inst.format),
                     "formats must uniquely named; there's a\
                      conflict on the name '{}', please make sure it is used only once.",
                     existing_format.name
@@ -80,7 +80,7 @@ impl Definitions {
             }
         }
 
-        let mut result = Vec::from_iter(format_structures.into_iter().map(|(_, v)| v));
+        let mut result = Vec::from_iter(format_structures.into_values());
         result.sort_by_key(|format| format.name);
         result
     }

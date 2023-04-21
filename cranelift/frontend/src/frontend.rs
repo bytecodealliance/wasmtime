@@ -379,8 +379,8 @@ impl<'a> FunctionBuilder<'a> {
     }
 
     /// Declares the type of a variable, so that it can be used later (by calling
-    /// [`FunctionBuilder::use_var`]). This function will return an error if it
-    /// was not possible to use the variable.
+    /// [`FunctionBuilder::use_var`]). This function will return an error if the variable
+    /// has been previously declared.
     pub fn try_declare_var(&mut self, var: Variable, ty: Type) -> Result<(), DeclareVariableError> {
         if self.func_ctx.types[var] != types::INVALID {
             return Err(DeclareVariableError::DeclaredMultipleTimes(var));
@@ -753,6 +753,7 @@ impl<'a> FunctionBuilder<'a> {
             s.params.push(AbiParam::new(pointer_type));
             s.params.push(AbiParam::new(pointer_type));
             s.params.push(AbiParam::new(pointer_type));
+            s.returns.push(AbiParam::new(pointer_type));
             self.import_signature(s)
         };
 
@@ -853,6 +854,7 @@ impl<'a> FunctionBuilder<'a> {
             s.params.push(AbiParam::new(pointer_type));
             s.params.push(AbiParam::new(types::I32));
             s.params.push(AbiParam::new(pointer_type));
+            s.returns.push(AbiParam::new(pointer_type));
             self.import_signature(s)
         };
 
@@ -949,6 +951,7 @@ impl<'a> FunctionBuilder<'a> {
             s.params.push(AbiParam::new(pointer_type));
             s.params.push(AbiParam::new(pointer_type));
             s.params.push(AbiParam::new(pointer_type));
+            s.returns.push(AbiParam::new(pointer_type));
             self.import_signature(s)
         };
 
@@ -1095,9 +1098,6 @@ impl<'a> FunctionBuilder<'a> {
     }
 
     fn handle_ssa_side_effects(&mut self, side_effects: SideEffects) {
-        for split_block in side_effects.split_blocks_created {
-            self.func_ctx.status[split_block] = BlockStatus::Filled;
-        }
         for modified_block in side_effects.instructions_added_to_blocks {
             if self.is_pristine(modified_block) {
                 self.func_ctx.status[modified_block] = BlockStatus::Partial;
@@ -1286,15 +1286,15 @@ mod tests {
         check(
             &func,
             "function %sample() -> i32 system_v {
-    sig0 = (i64, i64, i64) system_v
+    sig0 = (i64, i64, i64) -> i64 system_v
     fn0 = %Memcpy sig0
 
 block0:
+    v4 = iconst.i64 0
+    v1 -> v4
     v3 = iconst.i64 0
-    v1 -> v3
-    v2 = iconst.i64 0
-    v0 -> v2
-    call fn0(v1, v0, v1)  ; v1 = 0, v0 = 0, v1 = 0
+    v0 -> v3
+    v2 = call fn0(v1, v0, v1)  ; v1 = 0, v0 = 0, v1 = 0
     return v1  ; v1 = 0
 }
 ",
@@ -1396,16 +1396,16 @@ block0:
         check(
             &func,
             "function %sample() -> i32 system_v {
-    sig0 = (i64, i64, i64) system_v
+    sig0 = (i64, i64, i64) -> i64 system_v
     fn0 = %Memcpy sig0
 
 block0:
+    v5 = iconst.i64 0
+    v1 -> v5
     v4 = iconst.i64 0
-    v1 -> v4
-    v3 = iconst.i64 0
-    v0 -> v3
+    v0 -> v4
     v2 = iconst.i64 8192
-    call fn0(v1, v0, v2)  ; v1 = 0, v0 = 0, v2 = 8192
+    v3 = call fn0(v1, v0, v2)  ; v1 = 0, v0 = 0, v2 = 8192
     return v1  ; v1 = 0
 }
 ",
@@ -1481,16 +1481,16 @@ block0:
         check(
             &func,
             "function %sample() -> i32 system_v {
-    sig0 = (i64, i32, i64) system_v
+    sig0 = (i64, i32, i64) -> i64 system_v
     fn0 = %Memset sig0
 
 block0:
-    v4 = iconst.i64 0
-    v0 -> v4
+    v5 = iconst.i64 0
+    v0 -> v5
     v1 = iconst.i8 1
     v2 = iconst.i64 8192
     v3 = uextend.i32 v1  ; v1 = 1
-    call fn0(v0, v3, v2)  ; v0 = 0, v2 = 8192
+    v4 = call fn0(v0, v3, v2)  ; v0 = 0, v2 = 8192
     return v0  ; v0 = 0
 }
 ",

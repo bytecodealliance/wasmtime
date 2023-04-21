@@ -43,13 +43,13 @@
 ;;   ldr x12, [x2]
 ;;   add x12, x12, x0, UXTW
 ;;   add x12, x12, #4096
-;;   movz w9, #61439
-;;   movk w9, w9, #4095, LSL #16
 ;;   movz x13, #0
-;;   subs xzr, x11, x9
-;;   csel x15, x13, x12, hi
+;;   movz w10, #61439
+;;   movk w10, w10, #4095, LSL #16
+;;   subs xzr, x11, x10
+;;   csel x14, x13, x12, hi
 ;;   csdb
-;;   strb w1, [x15]
+;;   strb w1, [x14]
 ;;   b label1
 ;; block1:
 ;;   ret
@@ -60,13 +60,13 @@
 ;;   ldr x12, [x1]
 ;;   add x12, x12, x0, UXTW
 ;;   add x12, x12, #4096
-;;   movz w9, #61439
-;;   movk w9, w9, #4095, LSL #16
 ;;   movz x13, #0
-;;   subs xzr, x11, x9
-;;   csel x15, x13, x12, hi
+;;   movz w10, #61439
+;;   movk w10, w10, #4095, LSL #16
+;;   subs xzr, x11, x10
+;;   csel x14, x13, x12, hi
 ;;   csdb
-;;   ldrb w0, [x15]
+;;   ldrb w0, [x14]
 ;;   b label1
 ;; block1:
 ;;   ret

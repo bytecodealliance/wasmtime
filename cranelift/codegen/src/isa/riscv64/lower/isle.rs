@@ -114,18 +114,18 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Riscv64Backend> {
         });
     }
     fn load_ra(&mut self) -> Reg {
+        let tmp = self.temp_writable_reg(I64);
         if self.backend.flags.preserve_frame_pointers() {
-            let tmp = self.temp_writable_reg(I64);
             self.emit(&MInst::Load {
                 rd: tmp,
                 op: LoadOP::Ld,
                 flags: MemFlags::trusted(),
                 from: AMode::FPOffset(8, I64),
             });
-            tmp.to_reg()
         } else {
-            self.gen_move2(link_reg(), I64, I64)
+            self.emit(&gen_move(tmp, I64, link_reg(), I64));
         }
+        tmp.to_reg()
     }
     fn int_zero_reg(&mut self, ty: Type) -> ValueRegs {
         assert!(ty.is_int(), "{:?}", ty);
@@ -283,6 +283,10 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Riscv64Backend> {
         ValueRegs::two(shamt, len_sub_shamt)
     }
 
+    fn has_v(&mut self) -> bool {
+        self.backend.isa_flags.has_v()
+    }
+
     fn has_zbkb(&mut self) -> bool {
         self.backend.isa_flags.has_zbkb()
     }
@@ -301,10 +305,6 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Riscv64Backend> {
 
     fn has_zbs(&mut self) -> bool {
         self.backend.isa_flags.has_zbs()
-    }
-
-    fn inst_output_get(&mut self, x: InstOutput, index: u8) -> ValueRegs {
-        x[index as usize]
     }
 
     fn move_f_to_x(&mut self, r: Reg, ty: Type) -> Reg {
@@ -384,12 +384,6 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Riscv64Backend> {
         AMO::SeqCst
     }
 
-    fn gen_move2(&mut self, r: Reg, ity: Type, oty: Type) -> Reg {
-        let tmp = self.temp_writable_reg(oty);
-        self.emit(&gen_move(tmp, oty, r, ity));
-        tmp.to_reg()
-    }
-
     fn lower_br_table(&mut self, index: Reg, targets: &VecMachLabel) -> Unit {
         let tmp1 = self.temp_writable_reg(I64);
         let tmp2 = self.temp_writable_reg(I64);
@@ -437,6 +431,11 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Riscv64Backend> {
             rs1,
             rs2,
         }
+    }
+
+    #[inline]
+    fn vstate_from_type(&mut self, ty: Type) -> VState {
+        VState::from_type(ty)
     }
 }
 

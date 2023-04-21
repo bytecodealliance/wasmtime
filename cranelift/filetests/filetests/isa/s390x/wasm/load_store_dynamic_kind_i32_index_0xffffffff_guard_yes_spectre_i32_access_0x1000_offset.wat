@@ -54,16 +54,15 @@
 ;;   unwind SaveReg { clobber_offset: 120, reg: p15i }
 ;;   unwind StackAlloc { size: 0 }
 ;; block0:
-;;   llgfr %r2, %r2
-;;   lghi %r5, -4100
-;;   ag %r5, 8(%r4)
-;;   lgr %r7, %r2
-;;   ag %r7, 0(%r4)
-;;   aghik %r4, %r7, 4096
-;;   lghi %r6, 0
-;;   clgr %r2, %r5
-;;   locgrh %r4, %r6
-;;   strv %r3, 0(%r4)
+;;   llgfr %r6, %r2
+;;   lg %r5, 8(%r4)
+;;   lgr %r2, %r6
+;;   ag %r2, 0(%r4)
+;;   aghi %r2, 4096
+;;   lghi %r4, 0
+;;   clgr %r6, %r5
+;;   locgrh %r2, %r4
+;;   strv %r3, 0(%r2)
 ;;   jg label1
 ;; block1:
 ;;   lmg %r6, %r15, 48(%r15)
@@ -73,16 +72,15 @@
 ;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 160, offset_downward_to_clobbers: 0 }
 ;;   unwind StackAlloc { size: 0 }
 ;; block0:
-;;   llgfr %r4, %r2
-;;   lghi %r5, -4100
-;;   ag %r5, 8(%r3)
-;;   lgr %r2, %r4
-;;   ag %r2, 0(%r3)
-;;   aghik %r3, %r2, 4096
-;;   lghi %r2, 0
-;;   clgr %r4, %r5
-;;   locgrh %r3, %r2
-;;   lrv %r2, 0(%r3)
+;;   llgfr %r2, %r2
+;;   lg %r4, 8(%r3)
+;;   lgr %r5, %r2
+;;   ag %r5, 0(%r3)
+;;   aghi %r5, 4096
+;;   lghi %r3, 0
+;;   clgr %r2, %r4
+;;   locgrh %r5, %r3
+;;   lrv %r2, 0(%r5)
 ;;   jg label1
 ;; block1:
 ;;   br %r14

@@ -8,6 +8,7 @@ use crate::isa::s390x::settings as s390x_settings;
 use crate::machinst::{Reg, RegClass};
 use crate::trace;
 use core::convert::TryFrom;
+use cranelift_control::ControlPlane;
 use regalloc2::Allocation;
 
 /// Debug macro for testing that a regpair is valid: that the high register is even, and the low
@@ -682,6 +683,7 @@ fn enc_ril_b(opcode: u16, r1: Reg, ri2: u32) -> [u8; 6] {
     let opcode1 = ((opcode >> 4) & 0xff) as u8;
     let opcode2 = (opcode & 0xf) as u8;
     let r1 = machreg_to_gpr(r1) & 0x0f;
+    let ri2 = ri2 >> 1;
 
     enc[0] = opcode1;
     enc[1] = r1 << 4 | opcode2;
@@ -700,6 +702,7 @@ fn enc_ril_c(opcode: u16, m1: u8, ri2: u32) -> [u8; 6] {
     let opcode1 = ((opcode >> 4) & 0xff) as u8;
     let opcode2 = (opcode & 0xf) as u8;
     let m1 = m1 & 0x0f;
+    let ri2 = ri2 >> 1;
 
     enc[0] = opcode1;
     enc[1] = m1 << 4 | opcode2;
@@ -1345,15 +1348,19 @@ pub struct EmitState {
     stack_map: Option<StackMap>,
     /// Current source-code location corresponding to instruction to be emitted.
     cur_srcloc: RelSourceLoc,
+    /// Only used during fuzz-testing. Otherwise, it is a zero-sized struct and
+    /// optimized away at compiletime. See [cranelift_control].
+    ctrl_plane: ControlPlane,
 }
 
 impl MachInstEmitState<Inst> for EmitState {
-    fn new(abi: &Callee<S390xMachineDeps>) -> Self {
+    fn new(abi: &Callee<S390xMachineDeps>, ctrl_plane: ControlPlane) -> Self {
         EmitState {
             virtual_sp_offset: 0,
             initial_sp_offset: abi.frame_size() as i64,
             stack_map: None,
             cur_srcloc: Default::default(),
+            ctrl_plane,
         }
     }
 
@@ -1363,6 +1370,14 @@ impl MachInstEmitState<Inst> for EmitState {
 
     fn pre_sourceloc(&mut self, srcloc: RelSourceLoc) {
         self.cur_srcloc = srcloc;
+    }
+
+    fn ctrl_plane_mut(&mut self) -> &mut ControlPlane {
+        &mut self.ctrl_plane
+    }
+
+    fn take_ctrl_plane(self) -> ControlPlane {
+        self.ctrl_plane
     }
 }
 
@@ -2135,7 +2150,7 @@ impl Inst {
                 let done_label = sink.get_label();
 
                 // Emit label at the start of the loop.
-                sink.bind_label(loop_label);
+                sink.bind_label(loop_label, &mut state.ctrl_plane);
 
                 for inst in (&body).into_iter() {
                     match &inst {
@@ -2158,7 +2173,7 @@ impl Inst {
                 inst.emit(&[], sink, emit_info, state);
 
                 // Emit label at the end of the loop.
-                sink.bind_label(done_label);
+                sink.bind_label(done_label, &mut state.ctrl_plane);
             }
             &Inst::CondBreak { .. } => unreachable!(), // Only valid inside a Loop.
             &Inst::AtomicCas32 {
@@ -3590,14 +3605,19 @@ impl Inst {
                 put_with_trap(sink, &enc_e(0x0000), trap_code);
             }
             &Inst::TrapIf { cond, trap_code } => {
-                // Branch over trap if condition is false.
-                let opcode = 0xa74; // BCR
-                put(sink, &enc_ri_c(opcode, cond.invert().bits(), 4 + 2));
-                // Now emit the actual trap.
                 if let Some(s) = state.take_stack_map() {
-                    sink.add_stack_map(StackMapExtent::UpcomingBytes(2), s);
+                    sink.add_stack_map(StackMapExtent::UpcomingBytes(6), s);
                 }
-                put_with_trap(sink, &enc_e(0x0000), trap_code);
+                // We implement a TrapIf as a conditional branch into the middle
+                // of the branch (BRCL) instruction itself - those middle two bytes
+                // are zero, which matches the trap instruction itself.
+                let opcode = 0xc04; // BCRL
+                let enc = &enc_ril_c(opcode, cond.bits(), 2);
+                debug_assert!(enc.len() == 6 && enc[2] == 0 && enc[3] == 0);
+                // The trap must be placed on the last byte of the embedded trap
+                // instruction, so we need to emit the encoding in two parts.
+                put_with_trap(sink, &enc[0..4], trap_code);
+                put(sink, &enc[4..6]);
             }
             &Inst::JTSequence { ridx, ref targets } => {
                 let ridx = allocs.next(ridx);
@@ -3639,7 +3659,7 @@ impl Inst {
                 // The first entry is the default target, which is not emitted
                 // into the jump table, so we skip it here.  It is only in the
                 // list so MachTerminator will see the potential target.
-                sink.bind_label(table_label);
+                sink.bind_label(table_label, &mut state.ctrl_plane);
                 let jt_off = sink.cur_offset();
                 for &target in targets.iter().skip(1) {
                     let word_off = sink.cur_offset();

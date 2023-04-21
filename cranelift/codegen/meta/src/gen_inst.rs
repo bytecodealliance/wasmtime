@@ -602,7 +602,22 @@ fn gen_opcodes(all_inst: &AllInstructions, fmt: &mut Formatter) {
             "side_effects_idempotent",
             "Despite having side effects, is this instruction okay to GVN?",
             fmt,
-        )
+        );
+
+        // Generate an opcode list, for iterating over all known opcodes.
+        fmt.doc_comment("All cranelift opcodes.");
+        fmt.line("pub fn all() -> &'static [Opcode] {");
+        fmt.indent(|fmt| {
+            fmt.line("return &[");
+            for inst in all_inst {
+                fmt.indent(|fmt| {
+                    fmtln!(fmt, "Opcode::{},", inst.camel_name);
+                });
+            }
+            fmt.line("];");
+        });
+        fmt.line("}");
+        fmt.empty_line();
     });
     fmt.line("}");
     fmt.empty_line();
@@ -669,7 +684,7 @@ fn gen_opcodes(all_inst: &AllInstructions, fmt: &mut Formatter) {
 /// Each operand constraint is represented as a string, one of:
 /// - `Concrete(vt)`, where `vt` is a value type name.
 /// - `Free(idx)` where `idx` is an index into `type_sets`.
-/// - `Same`, `Lane`, `AsBool` for controlling typevar-derived constraints.
+/// - `Same`, `Lane`, `AsTruthy` for controlling typevar-derived constraints.
 fn get_constraint<'entries, 'table>(
     operand: &'entries Operand,
     ctrl_typevar: Option<&TypeVar>,
@@ -685,7 +700,7 @@ fn get_constraint<'entries, 'table>(
     if let Some(free_typevar) = type_var.free_typevar() {
         if ctrl_typevar.is_some() && free_typevar != *ctrl_typevar.unwrap() {
             assert!(type_var.base.is_none());
-            return format!("Free({})", type_sets.add(&type_var.get_raw_typeset()));
+            return format!("Free({})", type_sets.add(type_var.get_raw_typeset()));
         }
     }
 
@@ -778,7 +793,7 @@ fn gen_type_constraints(all_inst: &AllInstructions, fmt: &mut Formatter) {
     // constraint is represented as a string, one of:
     // - `Concrete(vt)`, where `vt` is a value type name.
     // - `Free(idx)` where `idx` is an index into `type_sets`.
-    // - `Same`, `Lane`, `AsBool` for controlling typevar-derived constraints.
+    // - `Same`, `Lane`, `AsTruthy` for controlling typevar-derived constraints.
     let mut operand_seqs = UniqueSeqTable::new();
 
     // Preload table with constraints for typical binops.
@@ -794,7 +809,7 @@ fn gen_type_constraints(all_inst: &AllInstructions, fmt: &mut Formatter) {
     fmt.indent(|fmt| {
         for inst in all_inst.iter() {
             let (ctrl_typevar, ctrl_typeset) = if let Some(poly) = &inst.polymorphic_info {
-                let index = type_sets.add(&*poly.ctrl_typevar.get_raw_typeset());
+                let index = type_sets.add(poly.ctrl_typevar.get_raw_typeset());
                 (Some(&poly.ctrl_typevar), index)
             } else {
                 (None, TYPESET_LIMIT)
@@ -842,7 +857,7 @@ fn gen_type_constraints(all_inst: &AllInstructions, fmt: &mut Formatter) {
                 .collect::<Vec<_>>()
                 .join(", ")));
             if let Some(poly) = &inst.polymorphic_info {
-                fmt.comment(format!("Polymorphic over {}", typeset_to_string(&poly.ctrl_typevar.get_raw_typeset())));
+                fmt.comment(format!("Polymorphic over {}", typeset_to_string(poly.ctrl_typevar.get_raw_typeset())));
             }
 
             // Compute the bit field encoding, c.f. instructions.rs.
@@ -1715,7 +1730,7 @@ fn gen_builder(
     fmt.line("pub trait InstBuilder<'f>: InstBuilderBase<'f> {");
     fmt.indent(|fmt| {
         for inst in instructions.iter() {
-            gen_inst_builder(inst, &*inst.format, fmt);
+            gen_inst_builder(inst, &inst.format, fmt);
             fmt.empty_line();
         }
         for (i, format) in formats.iter().enumerate() {

@@ -4,6 +4,7 @@ use crate::store::{InstanceId, StoreOpaque};
 use crate::MemoryType;
 use anyhow::{anyhow, Result};
 use std::convert::TryFrom;
+use std::ops::Range;
 use std::sync::Arc;
 use wasmtime_environ::{
     DefinedMemoryIndex, DefinedTableIndex, EntityIndex, MemoryPlan, MemoryStyle, Module,
@@ -98,6 +99,10 @@ impl RuntimeLinearMemory for LinearMemoryProxy {
 
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
         self
+    }
+
+    fn wasm_accessible(&self) -> Range<usize> {
+        self.mem.wasm_accessible()
     }
 }
 

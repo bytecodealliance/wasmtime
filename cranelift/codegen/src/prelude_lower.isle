@@ -17,6 +17,16 @@
 ;; (Mutable) builder to incrementally construct an `InstOutput`.
 (type InstOutputBuilder extern (enum))
 
+;; Type to hold multiple Regs
+(type MultiReg 
+      (enum
+       (Empty)
+       (One (a Reg))
+       (Two (a Reg) (b Reg))
+       (Three (a Reg) (b Reg) (c Reg))
+       (Four (a Reg) (b Reg) (c Reg) (d Reg))
+      ))
+
 ;;;; Registers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (type Reg (primitive Reg))
@@ -143,6 +153,22 @@
 ;; Convert a `PReg` into a `Reg`.
 (decl preg_to_reg (PReg) Reg)
 (extern constructor preg_to_reg preg_to_reg)
+
+;; Convert a MultiReg with three registers into an InstOutput containing
+;; one ValueRegs containing the first two regs and one containing the third reg
+(decl multi_reg_to_pair_and_single (MultiReg) InstOutput)
+(rule (multi_reg_to_pair_and_single (MultiReg.Three a b c))
+      (output_pair (value_regs a b) c))
+
+;; Convert a MultiReg with two registers into an InstOutput containing one ValueRegs with both regs
+(decl multi_reg_to_pair (MultiReg) InstOutput)
+(rule (multi_reg_to_pair (MultiReg.Two a b))
+      (value_regs a b))
+
+;; Convert a MultiReg with one register into an InstOutput containing one ValueRegs with the register
+(decl multi_reg_to_single (MultiReg) InstOutput)
+(rule (multi_reg_to_single (MultiReg.One a))
+      (value_reg a))
 
 ;;;; Common Mach Types ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -335,9 +361,14 @@
                      (ProducesFlagsReturnsResultWithConsumer (inst MInst) (result Reg))))
 
 ;; Chain another producer to a `ProducesFlags`.
-(decl produces_flags_append (ProducesFlags MInst) ProducesFlags)
-(rule (produces_flags_append (ProducesFlags.ProducesFlagsSideEffect inst1) inst2)
+(decl produces_flags_concat (ProducesFlags ProducesFlags) ProducesFlags)
+(rule (produces_flags_concat (ProducesFlags.ProducesFlagsSideEffect inst1) (ProducesFlags.ProducesFlagsSideEffect inst2))
       (ProducesFlags.ProducesFlagsTwiceSideEffect inst1 inst2))
+
+;; Newtype wrapper around `MInst` for instructions that consume and produce flags
+(type ConsumesAndProducesFlags (enum
+                      (SideEffect (inst MInst))
+                      (ReturnsReg (inst MInst) (result Reg))))
 
 ;; Newtype wrapper around `MInst` for instructions that consume flags.
 ;;
@@ -528,10 +559,251 @@
         (ConsumesFlags.ConsumesFlagsSideEffect c))
       (SideEffectNoResult.Inst3 p1 p2 c))
 
-;;;; Helpers for accessing compilation flags ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Combine flag-producing and -consuming instruction that allows more than two results to be returned
+(decl with_flags_chained (ProducesFlags ConsumesAndProducesFlags ConsumesFlags) MultiReg)
 
-(decl pure avoid_div_traps () bool)
-(extern constructor avoid_div_traps avoid_div_traps)
+;; ProducesFlags.SideEffect + ConsumesAndProducesFlags.SideEffect with all possible ConsumeFlags options
+(rule (with_flags_chained (ProducesFlags.ProducesFlagsSideEffect prod_inst)
+                          (ConsumesAndProducesFlags.SideEffect middle_inst)
+                          (ConsumesFlags.ConsumesFlagsSideEffect consume_inst))
+      (let ((_ Unit (emit prod_inst))
+            (_ Unit (emit middle_inst))
+            (_ Unit (emit consume_inst)))
+        (MultiReg.Empty)))
+
+(rule (with_flags_chained (ProducesFlags.ProducesFlagsSideEffect prod_inst)
+                          (ConsumesAndProducesFlags.SideEffect middle_inst)
+                          (ConsumesFlags.ConsumesFlagsSideEffect2 consume_inst1 consume_inst2))
+      (let ((_ Unit (emit prod_inst))
+            (_ Unit (emit middle_inst))
+            (_ Unit (emit consume_inst1))
+            (_ Unit (emit consume_inst2)))
+        (MultiReg.Empty)))
+
+(rule (with_flags_chained (ProducesFlags.ProducesFlagsSideEffect prod_inst)
+                          (ConsumesAndProducesFlags.SideEffect middle_inst)
+                          (ConsumesFlags.ConsumesFlagsReturnsReg consume_inst reg))
+      (let ((_ Unit (emit prod_inst))
+            (_ Unit (emit middle_inst))
+            (_ Unit (emit consume_inst)))
+        (MultiReg.One reg)))
+
+(rule (with_flags_chained (ProducesFlags.ProducesFlagsSideEffect prod_inst)
+                          (ConsumesAndProducesFlags.SideEffect middle_inst)
+                          (ConsumesFlags.ConsumesFlagsTwiceReturnsValueRegs consume_inst1 consume_inst2 consume_result))
+      (let ((_ Unit (emit prod_inst))
+            (_ Unit (emit middle_inst))
+            (_ Unit (emit consume_inst1))
+            (_ Unit (emit consume_inst2)))
+        (MultiReg.Two (value_regs_get consume_result 0) (value_regs_get consume_result 1))))
+
+(rule (with_flags_chained (ProducesFlags.ProducesFlagsSideEffect prod_inst)
+                          (ConsumesAndProducesFlags.SideEffect middle_inst)
+                          (ConsumesFlags.ConsumesFlagsFourTimesReturnsValueRegs consume_inst1 consume_inst2 consume_inst3 consume_inst4 consume_result))
+      (let ((_ Unit (emit prod_inst))
+            (_ Unit (emit middle_inst))
+            (_ Unit (emit consume_inst1))
+            (_ Unit (emit consume_inst2))
+            (_ Unit (emit consume_inst3))
+            (_ Unit (emit consume_inst4)))
+        (MultiReg.Two (value_regs_get consume_result 0) (value_regs_get consume_result 1))))
+
+
+;; ProducesFlags.ReturnsReg + ConsumesAndProducesFlags.SideEffect with all possible ConsumeFlags options
+(rule (with_flags_chained (ProducesFlags.ProducesFlagsReturnsReg prod_inst prod_result)
+                          (ConsumesAndProducesFlags.SideEffect middle_inst)
+                          (ConsumesFlags.ConsumesFlagsSideEffect consume_inst))
+      (let ((_ Unit (emit prod_inst))
+            (_ Unit (emit middle_inst))
+            (_ Unit (emit consume_inst)))
+        (MultiReg.One prod_result)))
+
+(rule (with_flags_chained (ProducesFlags.ProducesFlagsReturnsReg prod_inst prod_result)
+                          (ConsumesAndProducesFlags.SideEffect middle_inst)
+                          (ConsumesFlags.ConsumesFlagsSideEffect2 consume_inst1 consume_inst2))
+      (let ((_ Unit (emit prod_inst))
+            (_ Unit (emit middle_inst))
+            (_ Unit (emit consume_inst1))
+            (_ Unit (emit consume_inst2)))
+        (MultiReg.One prod_result)))
+
+(rule (with_flags_chained (ProducesFlags.ProducesFlagsReturnsReg prod_inst prod_result)
+                          (ConsumesAndProducesFlags.SideEffect middle_inst)
+                          (ConsumesFlags.ConsumesFlagsReturnsReg consume_inst consume_result))
+      (let ((_ Unit (emit prod_inst))
+            (_ Unit (emit middle_inst))
+            (_ Unit (emit consume_inst)))
+        (MultiReg.Two prod_result consume_result)))
+
+(rule (with_flags_chained (ProducesFlags.ProducesFlagsReturnsReg prod_inst prod_result)
+                          (ConsumesAndProducesFlags.SideEffect middle_inst)
+                          (ConsumesFlags.ConsumesFlagsTwiceReturnsValueRegs consume_inst1 consume_inst2 consume_result))
+      (let ((_ Unit (emit prod_inst))
+            (_ Unit (emit middle_inst))
+            (_ Unit (emit consume_inst1))
+            (_ Unit (emit consume_inst2)))
+        (MultiReg.Three prod_result (value_regs_get consume_result 0) (value_regs_get consume_result 1))))
+
+(rule (with_flags_chained (ProducesFlags.ProducesFlagsReturnsReg prod_inst prod_result)
+                          (ConsumesAndProducesFlags.SideEffect middle_inst)
+                          (ConsumesFlags.ConsumesFlagsFourTimesReturnsValueRegs consume_inst1 consume_inst2 consume_inst3 consume_inst4 consume_result))
+      (let ((_ Unit (emit prod_inst))
+            (_ Unit (emit middle_inst))
+            (_ Unit (emit consume_inst1))
+            (_ Unit (emit consume_inst2))
+            (_ Unit (emit consume_inst3))
+            (_ Unit (emit consume_inst4)))
+        (MultiReg.Three prod_result (value_regs_get consume_result 0) (value_regs_get consume_result 1))))
+
+
+;; ProducesFlags.SideEffect + ConsumesAndProducesFlags.ReturnsReg with all possible ConsumeFlags options
+(rule (with_flags_chained (ProducesFlags.ProducesFlagsSideEffect prod_inst)
+                          (ConsumesAndProducesFlags.ReturnsReg middle_inst middle_result)
+                          (ConsumesFlags.ConsumesFlagsSideEffect consume_inst))
+      (let ((_ Unit (emit prod_inst))
+            (_ Unit (emit middle_inst))
+            (_ Unit (emit consume_inst)))
+        (MultiReg.One middle_result)))
+
+(rule (with_flags_chained (ProducesFlags.ProducesFlagsSideEffect prod_inst)
+                          (ConsumesAndProducesFlags.ReturnsReg middle_inst middle_result)
+                          (ConsumesFlags.ConsumesFlagsSideEffect2 consume_inst1 consume_inst2))
+      (let ((_ Unit (emit prod_inst))
+            (_ Unit (emit middle_inst))
+            (_ Unit (emit consume_inst1))
+            (_ Unit (emit consume_inst2)))
+        (MultiReg.One middle_result)))
+
+(rule (with_flags_chained (ProducesFlags.ProducesFlagsSideEffect prod_inst)
+                          (ConsumesAndProducesFlags.ReturnsReg middle_inst middle_result)
+                          (ConsumesFlags.ConsumesFlagsReturnsReg consume_inst consume_result))
+      (let ((_ Unit (emit prod_inst))
+            (_ Unit (emit middle_inst))
+            (_ Unit (emit consume_inst)))
+        (MultiReg.Two middle_result consume_result)))
+
+(rule (with_flags_chained (ProducesFlags.ProducesFlagsSideEffect prod_inst)
+                          (ConsumesAndProducesFlags.ReturnsReg middle_inst middle_result)
+                          (ConsumesFlags.ConsumesFlagsTwiceReturnsValueRegs consume_inst1 consume_inst2 consume_result))
+      (let ((_ Unit (emit prod_inst))
+            (_ Unit (emit middle_inst))
+            (_ Unit (emit consume_inst1))
+            (_ Unit (emit consume_inst2)))
+        (MultiReg.Three middle_result (value_regs_get consume_result 0) (value_regs_get consume_result 1))))
+
+(rule (with_flags_chained (ProducesFlags.ProducesFlagsSideEffect prod_inst)
+                          (ConsumesAndProducesFlags.ReturnsReg middle_inst middle_result)
+                          (ConsumesFlags.ConsumesFlagsFourTimesReturnsValueRegs consume_inst1 consume_inst2 consume_inst3 consume_inst4 consume_result))
+      (let ((_ Unit (emit prod_inst))
+            (_ Unit (emit middle_inst))
+            (_ Unit (emit consume_inst1))
+            (_ Unit (emit consume_inst2))
+            (_ Unit (emit consume_inst3))
+            (_ Unit (emit consume_inst4)))
+        (MultiReg.Three middle_result (value_regs_get consume_result 0) (value_regs_get consume_result 1))))
+
+
+;; ProducesFlags.ReturnsReg + ConsumesAndProducesFlags.ReturnsReg with all possible ConsumeFlags options
+(rule (with_flags_chained (ProducesFlags.ProducesFlagsReturnsReg prod_inst prod_result)
+                          (ConsumesAndProducesFlags.ReturnsReg middle_inst middle_result)
+                          (ConsumesFlags.ConsumesFlagsSideEffect consume_inst))
+      (let ((_ Unit (emit prod_inst))
+            (_ Unit (emit middle_inst))
+            (_ Unit (emit consume_inst)))
+        (MultiReg.Two prod_result middle_result)))
+
+(rule (with_flags_chained (ProducesFlags.ProducesFlagsReturnsReg prod_inst prod_result)
+                          (ConsumesAndProducesFlags.ReturnsReg middle_inst middle_result)
+                          (ConsumesFlags.ConsumesFlagsSideEffect2 consume_inst1 consume_inst2))
+      (let ((_ Unit (emit prod_inst))
+            (_ Unit (emit middle_inst))
+            (_ Unit (emit consume_inst1))
+            (_ Unit (emit consume_inst2)))
+        (MultiReg.Two prod_result middle_result)))
+
+(rule (with_flags_chained (ProducesFlags.ProducesFlagsReturnsReg prod_inst prod_result)
+                          (ConsumesAndProducesFlags.ReturnsReg middle_inst middle_result)
+                          (ConsumesFlags.ConsumesFlagsReturnsReg consume_inst consume_result))
+      (let ((_ Unit (emit prod_inst))
+            (_ Unit (emit middle_inst))
+            (_ Unit (emit consume_inst)))
+        (MultiReg.Three prod_result middle_result consume_result)))
+
+(rule (with_flags_chained (ProducesFlags.ProducesFlagsReturnsReg prod_inst prod_result)
+                          (ConsumesAndProducesFlags.ReturnsReg middle_inst middle_result)
+                          (ConsumesFlags.ConsumesFlagsTwiceReturnsValueRegs consume_inst1 consume_inst2 consume_result))
+      (let ((_ Unit (emit prod_inst))
+            (_ Unit (emit middle_inst))
+            (_ Unit (emit consume_inst1))
+            (_ Unit (emit consume_inst2)))
+        (MultiReg.Four prod_result middle_result (value_regs_get consume_result 0) (value_regs_get consume_result 1))))
+
+(rule (with_flags_chained (ProducesFlags.ProducesFlagsReturnsReg prod_inst prod_result)
+                          (ConsumesAndProducesFlags.ReturnsReg middle_inst middle_result)
+                          (ConsumesFlags.ConsumesFlagsFourTimesReturnsValueRegs consume_inst1 consume_inst2 consume_inst3 consume_inst4 consume_result))
+      (let ((_ Unit (emit prod_inst))
+            (_ Unit (emit middle_inst))
+            (_ Unit (emit consume_inst1))
+            (_ Unit (emit consume_inst2))
+            (_ Unit (emit consume_inst3))
+            (_ Unit (emit consume_inst4)))
+        (MultiReg.Four prod_result middle_result (value_regs_get consume_result 0) (value_regs_get consume_result 1))))
+
+;; ProducesFlags.ReturnsResultWithConsumer + ConsumesAndProducesFlags.ReturnsReg with all possible ConsumeFlags options
+(rule (with_flags_chained (ProducesFlags.ProducesFlagsReturnsResultWithConsumer prod_inst prod_result)
+                          (ConsumesAndProducesFlags.ReturnsReg middle_inst middle_result)
+                          (ConsumesFlags.ConsumesFlagsSideEffect consume_inst))
+      (let ((_ Unit (emit prod_inst))
+            (_ Unit (emit middle_inst))
+            (_ Unit (emit consume_inst)))
+        (MultiReg.Two prod_result middle_result)))
+
+(rule (with_flags_chained (ProducesFlags.ProducesFlagsReturnsResultWithConsumer prod_inst prod_result)
+                          (ConsumesAndProducesFlags.ReturnsReg middle_inst middle_result)
+                          (ConsumesFlags.ConsumesFlagsSideEffect2 consume_inst1 consume_inst2))
+      (let ((_ Unit (emit prod_inst))
+            (_ Unit (emit middle_inst))
+            (_ Unit (emit consume_inst1))
+            (_ Unit (emit consume_inst2)))
+        (MultiReg.Two prod_result middle_result)))
+
+(rule (with_flags_chained (ProducesFlags.ProducesFlagsReturnsResultWithConsumer prod_inst prod_result)
+                          (ConsumesAndProducesFlags.ReturnsReg middle_inst middle_result)
+                          (ConsumesFlags.ConsumesFlagsReturnsReg consume_inst consume_result))
+      (let ((_ Unit (emit prod_inst))
+            (_ Unit (emit middle_inst))
+            (_ Unit (emit consume_inst)))
+        (MultiReg.Three prod_result middle_result consume_result)))
+
+(rule (with_flags_chained (ProducesFlags.ProducesFlagsReturnsResultWithConsumer prod_inst prod_result)
+                          (ConsumesAndProducesFlags.ReturnsReg middle_inst middle_result)
+                          (ConsumesFlags.ConsumesFlagsReturnsResultWithProducer consume_inst consume_result))
+      (let ((_ Unit (emit prod_inst))
+            (_ Unit (emit middle_inst))
+            (_ Unit (emit consume_inst)))
+        (MultiReg.Three prod_result middle_result consume_result)))
+
+(rule (with_flags_chained (ProducesFlags.ProducesFlagsReturnsResultWithConsumer prod_inst prod_result)
+                          (ConsumesAndProducesFlags.ReturnsReg middle_inst middle_result)
+                          (ConsumesFlags.ConsumesFlagsTwiceReturnsValueRegs consume_inst1 consume_inst2 consume_result))
+      (let ((_ Unit (emit prod_inst))
+            (_ Unit (emit middle_inst))
+            (_ Unit (emit consume_inst1))
+            (_ Unit (emit consume_inst2)))
+        (MultiReg.Four prod_result middle_result (value_regs_get consume_result 0) (value_regs_get consume_result 1))))
+
+(rule (with_flags_chained (ProducesFlags.ProducesFlagsReturnsResultWithConsumer prod_inst prod_result)
+                          (ConsumesAndProducesFlags.ReturnsReg middle_inst middle_result)
+                          (ConsumesFlags.ConsumesFlagsFourTimesReturnsValueRegs consume_inst1 consume_inst2 consume_inst3 consume_inst4 consume_result))
+      (let ((_ Unit (emit prod_inst))
+            (_ Unit (emit middle_inst))
+            (_ Unit (emit consume_inst1))
+            (_ Unit (emit consume_inst2))
+            (_ Unit (emit consume_inst3))
+            (_ Unit (emit consume_inst4)))
+        (MultiReg.Four prod_result middle_result (value_regs_get consume_result 0) (value_regs_get consume_result 1))))
+
+;;;; Helpers for accessing compilation flags ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; This definition should be kept up to date with the values defined in
 ;; cranelift/codegen/meta/src/shared/settings.rs

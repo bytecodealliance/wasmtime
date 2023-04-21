@@ -5,12 +5,14 @@ target s390x
 target x86_64
 target x86_64 has_lzcnt
 target riscv64
+target riscv64 has_zbb
 
 function %clz_i8(i8) -> i8 {
 block0(v0: i8):
     v1 = clz v0
     return v1
 }
+; run: %clz_i8(0) == 8
 ; run: %clz_i8(1) == 7
 ; run: %clz_i8(0x40) == 1
 ; run: %clz_i8(-1) == 0
@@ -20,6 +22,7 @@ block0(v0: i16):
     v1 = clz v0
     return v1
 }
+; run: %clz_i16(0) == 16
 ; run: %clz_i16(1) == 15
 ; run: %clz_i16(0x4000) == 1
 ; run: %clz_i16(-1) == 0
@@ -29,6 +32,7 @@ block0(v0: i32):
     v1 = clz v0
     return v1
 }
+; run: %clz_i32(0) == 32
 ; run: %clz_i32(1) == 31
 ; run: %clz_i32(0x40000000) == 1
 ; run: %clz_i32(-1) == 0
@@ -38,6 +42,7 @@ block0(v0: i64):
     v1 = clz v0
     return v1
 }
+; run: %clz_i64(0) == 64
 ; run: %clz_i64(1) == 63
 ; run: %clz_i64(0x4000000000000000) == 1
 ; run: %clz_i64(-1) == 0

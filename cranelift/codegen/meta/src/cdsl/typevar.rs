@@ -228,7 +228,7 @@ impl TypeVar {
                     "The `wider` constraint only applies to scalar ints or floats"
                 );
             }
-            DerivedFunc::LaneOf | DerivedFunc::AsBool | DerivedFunc::DynamicToVector => {
+            DerivedFunc::LaneOf | DerivedFunc::AsTruthy | DerivedFunc::DynamicToVector => {
                 /* no particular assertions */
             }
         }
@@ -249,8 +249,8 @@ impl TypeVar {
     pub fn lane_of(&self) -> TypeVar {
         self.derived(DerivedFunc::LaneOf)
     }
-    pub fn as_bool(&self) -> TypeVar {
-        self.derived(DerivedFunc::AsBool)
+    pub fn as_truthy(&self) -> TypeVar {
+        self.derived(DerivedFunc::AsTruthy)
     }
     pub fn half_width(&self) -> TypeVar {
         self.derived(DerivedFunc::HalfWidth)
@@ -279,14 +279,14 @@ impl TypeVar {
     }
 }
 
-impl Into<TypeVar> for &TypeVar {
-    fn into(self) -> TypeVar {
-        self.clone()
+impl From<&TypeVar> for TypeVar {
+    fn from(type_var: &TypeVar) -> Self {
+        type_var.clone()
     }
 }
-impl Into<TypeVar> for ValueType {
-    fn into(self) -> TypeVar {
-        TypeVar::new_singleton(self)
+impl From<ValueType> for TypeVar {
+    fn from(value_type: ValueType) -> Self {
+        TypeVar::new_singleton(value_type)
     }
 }
 
@@ -332,7 +332,7 @@ impl ops::Deref for TypeVar {
 #[derive(Clone, Copy, Debug, Hash, PartialEq)]
 pub(crate) enum DerivedFunc {
     LaneOf,
-    AsBool,
+    AsTruthy,
     HalfWidth,
     DoubleWidth,
     SplitLanes,
@@ -346,7 +346,7 @@ impl DerivedFunc {
     pub fn name(self) -> &'static str {
         match self {
             DerivedFunc::LaneOf => "lane_of",
-            DerivedFunc::AsBool => "as_bool",
+            DerivedFunc::AsTruthy => "as_truthy",
             DerivedFunc::HalfWidth => "half_width",
             DerivedFunc::DoubleWidth => "double_width",
             DerivedFunc::SplitLanes => "split_lanes",
@@ -425,7 +425,7 @@ impl TypeSet {
     fn image(&self, derived_func: DerivedFunc) -> TypeSet {
         match derived_func {
             DerivedFunc::LaneOf => self.lane_of(),
-            DerivedFunc::AsBool => self.as_bool(),
+            DerivedFunc::AsTruthy => self.as_truthy(),
             DerivedFunc::HalfWidth => self.half_width(),
             DerivedFunc::DoubleWidth => self.double_width(),
             DerivedFunc::SplitLanes => self.half_width().double_vector(),
@@ -443,10 +443,19 @@ impl TypeSet {
         copy
     }
 
-    /// Return a TypeSet describing the image of self across as_bool.
-    fn as_bool(&self) -> TypeSet {
+    /// Return a TypeSet describing the image of self across as_truthy.
+    fn as_truthy(&self) -> TypeSet {
         let mut copy = self.clone();
-        copy.ints = NumSet::new();
+
+        // If this type set represents a scalar, `as_truthy` produces an I8, otherwise it returns a
+        // vector of the same number of lanes, whose elements are integers of the same width. For
+        // example, F32X4 gets turned into I32X4, while I32 gets turned into I8.
+        if self.lanes.len() == 1 && self.lanes.contains(&1) {
+            copy.ints = NumSet::from([8]);
+        } else {
+            copy.ints.extend(&self.floats)
+        }
+
         copy.floats = NumSet::new();
         copy.refs = NumSet::new();
         copy
@@ -498,7 +507,7 @@ impl TypeSet {
             self.dynamic_lanes
                 .iter()
                 .filter(|&&x| x < MAX_LANES)
-                .map(|&x| x),
+                .copied(),
         );
         copy.dynamic_lanes = NumSet::new();
         copy
@@ -651,13 +660,7 @@ pub(crate) enum Interval {
 impl Interval {
     fn to_range(&self, full_range: Range, default: Option<RangeBound>) -> Option<Range> {
         match self {
-            Interval::None => {
-                if let Some(default_val) = default {
-                    Some(default_val..default_val)
-                } else {
-                    None
-                }
-            }
+            Interval::None => default.map(|default_val| default_val..default_val),
 
             Interval::All => Some(full_range),
 
@@ -674,9 +677,9 @@ impl Interval {
     }
 }
 
-impl Into<Interval> for Range {
-    fn into(self) -> Interval {
-        Interval::Range(self)
+impl From<Range> for Interval {
+    fn from(range: Range) -> Self {
+        Interval::Range(range)
     }
 }
 
@@ -814,7 +817,7 @@ fn test_typevar_builder_inverted_bounds_panic() {
 }
 
 #[test]
-fn test_as_bool() {
+fn test_as_truthy() {
     let a = TypeSetBuilder::new()
         .simd_lanes(2..8)
         .ints(8..8)
@@ -824,6 +827,14 @@ fn test_as_bool() {
         a.lane_of(),
         TypeSetBuilder::new().ints(8..8).floats(32..32).build()
     );
+
+    let mut a_as_truthy = TypeSetBuilder::new().simd_lanes(2..8).build();
+    a_as_truthy.ints = num_set![8, 32];
+    assert_eq!(a.as_truthy(), a_as_truthy);
+
+    let a = TypeSetBuilder::new().ints(8..32).floats(32..64).build();
+    let a_as_truthy = TypeSetBuilder::new().ints(8..8).build();
+    assert_eq!(a.as_truthy(), a_as_truthy);
 }
 
 #[test]

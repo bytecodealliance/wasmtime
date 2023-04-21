@@ -25,6 +25,7 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "cranelift-codegen-shared",
     "cranelift-codegen-meta",
     "cranelift-egraph",
+    "cranelift-control",
     "cranelift-codegen",
     "cranelift-reader",
     "cranelift-serde",
@@ -56,8 +57,8 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "wasmtime-cranelift",
     "wasmtime-jit",
     "wasmtime-cache",
-    "wasmtime-winch",
     "winch-environ",
+    "wasmtime-winch",
     "wasmtime",
     // wasi-common/wiggle
     "wiggle",
@@ -67,6 +68,7 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     // other misc wasmtime crates
     "wasmtime-wasi",
     "wasmtime-wasi-crypto",
+    "wasmtime-wasi-http",
     "wasmtime-wasi-nn",
     "wasmtime-wasi-threads",
     "wasmtime-wast",
@@ -99,6 +101,7 @@ const PUBLIC_CRATES: &[&str] = &[
     "cranelift-codegen-shared",
     "cranelift-codegen-meta",
     "cranelift-egraph",
+    "cranelift-control",
     "cranelift-codegen",
     "cranelift-reader",
     "cranelift-serde",

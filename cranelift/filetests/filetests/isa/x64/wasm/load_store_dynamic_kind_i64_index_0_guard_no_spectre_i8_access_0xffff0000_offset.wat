@@ -46,15 +46,15 @@
 ;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ;; block0:
 ;;   movq    %rdi, %r10
-;;   addq    %r10, const(1), %r10
-;;   jnb ; ud2 heap_oob ;
+;;   addq    %r10, const(0), %r10
+;;   jb #trap=heap_oob
 ;;   movq    8(%rdx), %r11
 ;;   cmpq    %r11, %r10
 ;;   jnbe    label3; j label1
 ;; block1:
-;;   movq    0(%rdx), %rax
-;;   addq    %rax, const(0), %rax
-;;   movb    %sil, 0(%rax,%rdi,1)
+;;   addq    %rdi, 0(%rdx), %rdi
+;;   movl    $-65536, %eax
+;;   movb    %sil, 0(%rdi,%rax,1)
 ;;   jmp     label2
 ;; block2:
 ;;   movq    %rbp, %rsp
@@ -70,15 +70,15 @@
 ;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ;; block0:
 ;;   movq    %rdi, %r10
-;;   addq    %r10, const(1), %r10
-;;   jnb ; ud2 heap_oob ;
+;;   addq    %r10, const(0), %r10
+;;   jb #trap=heap_oob
 ;;   movq    8(%rsi), %r11
 ;;   cmpq    %r11, %r10
 ;;   jnbe    label3; j label1
 ;; block1:
-;;   movq    0(%rsi), %r11
-;;   addq    %r11, const(0), %r11
-;;   movzbq  0(%r11,%rdi,1), %rax
+;;   addq    %rdi, 0(%rsi), %rdi
+;;   movl    $-65536, %eax
+;;   movzbq  0(%rdi,%rax,1), %rax
 ;;   jmp     label2
 ;; block2:
 ;;   movq    %rbp, %rsp

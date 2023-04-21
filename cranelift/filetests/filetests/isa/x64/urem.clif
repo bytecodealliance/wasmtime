@@ -12,7 +12,7 @@ block0(v0: i8, v1: i8):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movzbl  %dil, %eax
-;   div     %al, %sil, %al
+;   div     %al, %sil, %al ; trap=int_divz
 ;   shrq    $8, %rax, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -42,7 +42,7 @@ block0(v0: i16, v1: i16):
 ; block0:
 ;   movq    %rdi, %rax
 ;   xorq    %rdx, %rdx, %rdx
-;   div     %ax, %dx, %si, %ax, %dx
+;   div     %ax, %dx, %si, %ax, %dx ; trap=int_divz
 ;   movq    %rdx, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -73,7 +73,7 @@ block0(v0: i32, v1: i32):
 ; block0:
 ;   movq    %rdi, %rax
 ;   xorq    %rdx, %rdx, %rdx
-;   div     %eax, %edx, %esi, %eax, %edx
+;   div     %eax, %edx, %esi, %eax, %edx ; trap=int_divz
 ;   movq    %rdx, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -104,7 +104,7 @@ block0(v0: i64, v1: i64):
 ; block0:
 ;   movq    %rdi, %rax
 ;   xorq    %rdx, %rdx, %rdx
-;   div     %rax, %rdx, %rsi, %rax, %rdx
+;   div     %rax, %rdx, %rsi, %rax, %rdx ; trap=int_divz
 ;   movq    %rdx, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp

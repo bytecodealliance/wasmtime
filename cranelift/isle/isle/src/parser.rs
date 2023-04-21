@@ -68,7 +68,7 @@ impl<'a> Parser<'a> {
     }
 
     fn is<F: Fn(&Token) -> bool>(&self, f: F) -> bool {
-        if let Some(&(_, ref peek)) = self.lexer.peek() {
+        if let Some((_, peek)) = self.lexer.peek() {
             f(peek)
         } else {
             false
@@ -99,7 +99,7 @@ impl<'a> Parser<'a> {
 
     fn is_const(&self) -> bool {
         self.is(|tok| match tok {
-            &Token::Symbol(ref tok_s) if tok_s.starts_with("$") => true,
+            Token::Symbol(tok_s) if tok_s.starts_with('$') => true,
             _ => false,
         })
     }
@@ -123,7 +123,7 @@ impl<'a> Parser<'a> {
 
     fn eat_sym_str(&mut self, s: &str) -> Result<bool> {
         self.eat(|tok| match tok {
-            &Token::Symbol(ref tok_s) if tok_s == s => true,
+            Token::Symbol(ref tok_s) if tok_s == s => true,
             _ => false,
         })
         .map(|token| token.is_some())
@@ -202,8 +202,7 @@ impl<'a> Parser<'a> {
     fn parse_const(&mut self) -> Result<Ident> {
         let pos = self.pos();
         let ident = self.parse_ident()?;
-        if ident.0.starts_with("$") {
-            let s = &ident.0[1..];
+        if let Some(s) = ident.0.strip_prefix('$') {
             Ok(Ident(s.to_string(), ident.1))
         } else {
             Err(self.error(
@@ -216,9 +215,8 @@ impl<'a> Parser<'a> {
     fn parse_pragma(&mut self) -> Result<Pragma> {
         let ident = self.parse_ident()?;
         // currently, no pragmas are defined, but the infrastructure is useful to keep around
-        match ident.0.as_str() {
-            pragma => Err(self.error(ident.1, format!("Unknown pragma '{}'", pragma))),
-        }
+        let pragma = ident.0.as_str();
+        Err(self.error(ident.1, format!("Unknown pragma '{}'", pragma)))
     }
 
     fn parse_type(&mut self) -> Result<Type> {
@@ -472,7 +470,7 @@ impl<'a> Parser<'a> {
             self.expect_rparen()?;
             Ok(ret)
         } else {
-            self.parse_expr().map(|expr| IfLetOrExpr::Expr(expr))
+            self.parse_expr().map(IfLetOrExpr::Expr)
         }
     }
 

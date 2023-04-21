@@ -220,11 +220,17 @@ fn get_isle_compilations(
                 output: out_dir.join("isle_opt.rs"),
                 inputs: vec![
                     prelude_isle.clone(),
-                    prelude_opt_isle.clone(),
-                    src_opts.join("algebraic.isle"),
+                    prelude_opt_isle,
+                    src_opts.join("arithmetic.isle"),
+                    src_opts.join("bitops.isle"),
                     src_opts.join("cprop.isle"),
+                    src_opts.join("extends.isle"),
+                    src_opts.join("icmp.isle"),
+                    src_opts.join("remat.isle"),
+                    src_opts.join("selects.isle"),
+                    src_opts.join("shifts.isle"),
                 ],
-                untracked_inputs: vec![clif_opt_isle.clone()],
+                untracked_inputs: vec![clif_opt_isle],
             },
             // The x86-64 instruction selector.
             IsleCompilation {
@@ -268,6 +274,7 @@ fn get_isle_compilations(
                     prelude_isle.clone(),
                     prelude_lower_isle.clone(),
                     src_isa_risc_v.join("inst.isle"),
+                    src_isa_risc_v.join("inst_vector.isle"),
                     src_isa_risc_v.join("lower.isle"),
                 ],
                 untracked_inputs: vec![clif_lower_isle.clone()],

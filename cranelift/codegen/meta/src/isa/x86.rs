@@ -38,7 +38,7 @@ fn define_settings(shared: &SettingGroup) -> SettingGroup {
         "has_sse42",
         "Has support for SSE4.2.",
         "SSE4.2: CPUID.01H:ECX.SSE4_2[bit 20]",
-        true,
+        false,
     );
     let has_avx = settings.add_bool(
         "has_avx",
@@ -138,7 +138,10 @@ fn define_settings(shared: &SettingGroup) -> SettingGroup {
     );
 
     settings.add_predicate("use_avx_simd", predicate!(shared_enable_simd && has_avx));
-    settings.add_predicate("use_avx2_simd", predicate!(shared_enable_simd && has_avx2));
+    settings.add_predicate(
+        "use_avx2_simd",
+        predicate!(shared_enable_simd && has_avx && has_avx2),
+    );
     settings.add_predicate(
         "use_avx512bitalg_simd",
         predicate!(shared_enable_simd && has_avx512bitalg),

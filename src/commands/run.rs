@@ -9,12 +9,19 @@ use std::io::Write;
 use std::path::{Component, Path, PathBuf};
 use std::thread;
 use std::time::Duration;
-use wasmtime::{Engine, Func, Linker, Module, Store, Val, ValType};
+use wasmtime::{
+    Engine, Func, Linker, Module, Store, StoreLimits, StoreLimitsBuilder, Val, ValType,
+};
 use wasmtime_cli_flags::{CommonOptions, WasiModules};
 use wasmtime_wasi::maybe_exit_on_error;
 use wasmtime_wasi::sync::{ambient_authority, Dir, TcpListener, WasiCtxBuilder};
 
-#[cfg(any(feature = "wasi-crypto", feature = "wasi-nn", feature = "wasi-threads"))]
+#[cfg(any(
+    feature = "wasi-crypto",
+    feature = "wasi-nn",
+    feature = "wasi-threads",
+    feature = "wasi-http"
+))]
 use std::sync::Arc;
 
 #[cfg(feature = "wasi-nn")]
@@ -25,6 +32,9 @@ use wasmtime_wasi_crypto::WasiCryptoCtx;
 
 #[cfg(feature = "wasi-threads")]
 use wasmtime_wasi_threads::WasiThreadsCtx;
+
+#[cfg(feature = "wasi-http")]
+use wasmtime_wasi_http::WasiHttp;
 
 fn parse_module(s: &OsStr) -> anyhow::Result<PathBuf> {
     // Do not accept wasmtime subcommand names as the module name
@@ -166,6 +176,38 @@ pub struct RunCommand {
     /// The arguments to pass to the module
     #[clap(value_name = "ARGS")]
     module_args: Vec<String>,
+
+    /// Maximum size, in bytes, that a linear memory is allowed to reach.
+    ///
+    /// Growth beyond this limit will cause `memory.grow` instructions in
+    /// WebAssembly modules to return -1 and fail.
+    #[clap(long, value_name = "BYTES")]
+    max_memory_size: Option<usize>,
+
+    /// Maximum size, in table elements, that a table is allowed to reach.
+    #[clap(long)]
+    max_table_elements: Option<u32>,
+
+    /// Maximum number of WebAssembly instances allowed to be created.
+    #[clap(long)]
+    max_instances: Option<usize>,
+
+    /// Maximum number of WebAssembly tables allowed to be created.
+    #[clap(long)]
+    max_tables: Option<usize>,
+
+    /// Maximum number of WebAssembly linear memories allowed to be created.
+    #[clap(long)]
+    max_memories: Option<usize>,
+
+    /// Force a trap to be raised on `memory.grow` and `table.grow` failure
+    /// instead of returning -1 from these instructions.
+    ///
+    /// This is not necessarily a spec-compliant option to enable but can be
+    /// useful for tracking down a backtrace of what is requesting so much
+    /// memory, for example.
+    #[clap(long)]
+    trap_on_grow_failure: bool,
 }
 
 impl RunCommand {
@@ -211,6 +253,27 @@ impl RunCommand {
             self.listenfd,
             preopen_sockets,
         )?;
+
+        let mut limits = StoreLimitsBuilder::new();
+        if let Some(max) = self.max_memory_size {
+            limits = limits.memory_size(max);
+        }
+        if let Some(max) = self.max_table_elements {
+            limits = limits.table_elements(max);
+        }
+        if let Some(max) = self.max_instances {
+            limits = limits.instances(max);
+        }
+        if let Some(max) = self.max_tables {
+            limits = limits.tables(max);
+        }
+        if let Some(max) = self.max_memories {
+            limits = limits.memories(max);
+        }
+        store.data_mut().limits = limits
+            .trap_on_grow_failure(self.trap_on_grow_failure)
+            .build();
+        store.limiter(|t| &mut t.limits);
 
         // If fuel has been configured, we want to add the configured
         // fuel amount to this store.
@@ -470,6 +533,9 @@ struct Host {
     wasi_nn: Option<Arc<WasiNnCtx>>,
     #[cfg(feature = "wasi-threads")]
     wasi_threads: Option<Arc<WasiThreadsCtx<Host>>>,
+    #[cfg(feature = "wasi-http")]
+    wasi_http: Option<WasiHttp>,
+    limits: StoreLimits,
 }
 
 /// Populates the given `Linker` with WASI APIs.
@@ -566,6 +632,21 @@ fn populate_with_wasi(
                 module,
                 Arc::new(linker.clone()),
             )?));
+        }
+    }
+
+    if wasi_modules.wasi_http {
+        #[cfg(not(feature = "wasi-http"))]
+        {
+            bail!("Cannot enable wasi-http when the binary is not compiled with this feature.");
+        }
+        #[cfg(feature = "wasi-http")]
+        {
+            let w_http = WasiHttp::new();
+            wasmtime_wasi_http::add_to_linker(linker, |host: &mut Host| {
+                host.wasi_http.as_mut().unwrap()
+            })?;
+            store.data_mut().wasi_http = Some(w_http);
         }
     }
 

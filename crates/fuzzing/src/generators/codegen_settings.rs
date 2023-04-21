@@ -35,7 +35,7 @@ impl CodegenSettings {
         }
     }
 
-    /// Features such as sse4.2 are unconditionally enabled on the x86_64 target
+    /// Features such as sse3 are unconditionally enabled on the x86_64 target
     /// because they are hard required for SIMD, but when SIMD is disabled, for
     /// example, we support disabling these features.
     ///
@@ -57,7 +57,7 @@ impl CodegenSettings {
             // to have test case failures unrelated to codegen setting input
             // that fail on one architecture to fail on other architectures as
             // well.
-            let new_flags = ["has_sse3", "has_ssse3", "has_sse41", "has_sse42"]
+            let new_flags = ["has_sse3", "has_ssse3", "has_sse41"]
                 .into_iter()
                 .map(|name| Ok((name, u.arbitrary()?)))
                 .collect::<arbitrary::Result<HashMap<_, bool>>>()?;
@@ -147,8 +147,8 @@ impl<'a> Arbitrary<'a> for CodegenSettings {
                     std:"sse3" => clif:"has_sse3" ratio: 1 in 1,
                     std:"ssse3" => clif:"has_ssse3" ratio: 1 in 1,
                     std:"sse4.1" => clif:"has_sse41" ratio: 1 in 1,
-                    std:"sse4.2" => clif:"has_sse42" ratio: 1 in 1,
 
+                    std:"sse4.2" => clif:"has_sse42",
                     std:"popcnt" => clif:"has_popcnt",
                     std:"avx" => clif:"has_avx",
                     std:"avx2" => clif:"has_avx2",

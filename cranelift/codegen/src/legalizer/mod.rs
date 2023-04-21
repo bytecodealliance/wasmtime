@@ -82,8 +82,10 @@ pub fn simple_legalize(func: &mut ir::Function, cfg: &mut ControlFlowGraph, isa:
 
                     let addr = pos.ins().stack_addr(addr_ty, stack_slot, offset);
 
-                    // Stack slots are required to be accessible and aligned.
-                    let mflags = MemFlags::trusted();
+                    // Stack slots are required to be accessible.
+                    // We can't currently ensure that they are aligned.
+                    let mut mflags = MemFlags::new();
+                    mflags.set_notrap();
                     pos.func.dfg.replace(inst).load(ty, mflags, addr, 0);
                 }
                 InstructionData::StackStore {
@@ -99,10 +101,10 @@ pub fn simple_legalize(func: &mut ir::Function, cfg: &mut ControlFlowGraph, isa:
 
                     let addr = pos.ins().stack_addr(addr_ty, stack_slot, offset);
 
+                    // Stack slots are required to be accessible.
+                    // We can't currently ensure that they are aligned.
                     let mut mflags = MemFlags::new();
-                    // Stack slots are required to be accessible and aligned.
                     mflags.set_notrap();
-                    mflags.set_aligned();
                     pos.func.dfg.replace(inst).store(mflags, arg, addr, 0);
                 }
                 InstructionData::DynamicStackLoad {
@@ -297,7 +299,10 @@ fn expand_cond_trap(
     //
     //   new_block_resume:
     //     ..
-    let old_block = func.layout.pp_block(inst);
+    let old_block = func
+        .layout
+        .inst_block(inst)
+        .expect("Instruction not in layout.");
     let new_block_trap = func.dfg.make_block();
     let new_block_resume = func.dfg.make_block();
 

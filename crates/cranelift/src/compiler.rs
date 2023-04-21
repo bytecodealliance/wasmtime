@@ -612,7 +612,7 @@ fn compile_uncached<'a>(
 ) -> Result<(&'a CompiledCode, Vec<u8>), CompileError> {
     let mut code_buf = Vec::new();
     let compiled_code = context
-        .compile_and_emit(isa, &mut code_buf)
+        .compile_and_emit(isa, &mut code_buf, &mut Default::default())
         .map_err(|error| CompileError::Codegen(pretty_error(&error.func, error.inner)))?;
     Ok((compiled_code, code_buf))
 }

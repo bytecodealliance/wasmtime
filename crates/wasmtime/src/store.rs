@@ -97,7 +97,7 @@ use wasmtime_runtime::{
     InstanceAllocationRequest, InstanceAllocator, InstanceHandle, ModuleInfo,
     OnDemandInstanceAllocator, SignalHandler, StorePtr, VMCallerCheckedFuncRef, VMContext,
     VMExternRef, VMExternRefActivationsTable, VMRuntimeLimits, VMSharedSignatureIndex,
-    VMTrampoline,
+    VMTrampoline, WasmFault,
 };
 
 mod context;
@@ -425,11 +425,13 @@ enum OutOfGas {
 
 /// What to do when the engine epoch reaches the deadline for a Store
 /// during execution of a function using that store.
+#[derive(Default)]
 enum EpochDeadline<T> {
     /// Return early with a trap.
+    #[default]
     Trap,
     /// Call a custom deadline handler.
-    Callback(Box<dyn FnMut(&mut T) -> Result<u64> + Send + Sync>),
+    Callback(Box<dyn FnMut(StoreContextMut<T>) -> Result<u64> + Send + Sync>),
     /// Extend the deadline by the specified number of ticks after
     /// yielding to the async executor loop.
     #[cfg(feature = "async")]
@@ -932,7 +934,7 @@ impl<T> Store<T> {
     /// for an introduction to epoch-based interruption.
     pub fn epoch_deadline_callback(
         &mut self,
-        callback: impl FnMut(&mut T) -> Result<u64> + Send + Sync + 'static,
+        callback: impl FnMut(StoreContextMut<T>) -> Result<u64> + Send + Sync + 'static,
     ) {
         self.inner.epoch_deadline_callback(Box::new(callback));
     }
@@ -1501,6 +1503,68 @@ impl StoreOpaque {
     pub(crate) fn push_rooted_funcs(&mut self, funcs: Arc<[Definition]>) {
         self.rooted_host_funcs.push(funcs);
     }
+
+    /// Translates a WebAssembly fault at the native `pc` and native `addr` to a
+    /// WebAssembly-relative fault.
+    ///
+    /// This function may abort the process if `addr` is not found to actually
+    /// reside in any linear memory. In such a situation it means that the
+    /// segfault was erroneously caught by Wasmtime and is possibly indicative
+    /// of a code generator bug.
+    ///
+    /// This function returns `None` for dynamically-bounds-checked-memories
+    /// with spectre mitigations enabled since the hardware fault address is
+    /// always zero in these situations which means that the trapping context
+    /// doesn't have enough information to report the fault address.
+    pub(crate) fn wasm_fault(&self, pc: usize, addr: usize) -> Option<WasmFault> {
+        // Explicitly bounds-checked memories with spectre-guards enabled will
+        // cause out-of-bounds accesses to get routed to address 0, so allow
+        // wasm instructions to fault on the null address.
+        if addr == 0 {
+            return None;
+        }
+
+        // Search all known instances in this store for this address. Note that
+        // this is probably not the speediest way to do this. Traps, however,
+        // are generally not expected to be super fast and additionally stores
+        // probably don't have all that many instances or memories.
+        //
+        // If this loop becomes hot in the future, however, it should be
+        // possible to precompute maps about linear memories in a store and have
+        // a quicker lookup.
+        let mut fault = None;
+        for instance in self.instances.iter() {
+            if let Some(f) = instance.handle.wasm_fault(addr) {
+                assert!(fault.is_none());
+                fault = Some(f);
+            }
+        }
+        if fault.is_some() {
+            return fault;
+        }
+
+        eprintln!(
+            "\
+Wasmtime caught a segfault for a wasm program because the faulting instruction
+is allowed to segfault due to how linear memories are implemented. The address
+that was accessed, however, is not known to any linear memory in use within this
+Store. This may be indicative of a critical bug in Wasmtime's code generation
+because all addresses which are known to be reachable from wasm won't reach this
+message.
+
+    pc:      0x{pc:x}
+    address: 0x{addr:x}
+
+This is a possible security issue because WebAssembly has accessed something it
+shouldn't have been able to. Other accesses may have succeeded and this one just
+happened to be caught. The process will now be aborted to prevent this damage
+from going any further and to alert what's going on. If this is a security
+issue please reach out to the Wasmtime team via its security policy
+at https://bytecodealliance.org/security.
+"
+        );
+        std::process::abort();
+    }
 }
 
 impl<T> StoreContextMut<'_, T> {
@@ -1810,19 +1874,18 @@ unsafe impl<T> wasmtime_runtime::Store for StoreInner<T> {
     ) -> Result<bool, anyhow::Error> {
         match self.limiter {
             Some(ResourceLimiterInner::Sync(ref mut limiter)) => {
-                Ok(limiter(&mut self.data).memory_growing(current, desired, maximum))
+                limiter(&mut self.data).memory_growing(current, desired, maximum)
             }
             #[cfg(feature = "async")]
             Some(ResourceLimiterInner::Async(ref mut limiter)) => unsafe {
-                Ok(self
-                    .inner
+                self.inner
                     .async_cx()
                     .expect("ResourceLimiterAsync requires async Store")
                     .block_on(
                         limiter(&mut self.data)
                             .memory_growing(current, desired, maximum)
                             .as_mut(),
-                    )?)
+                    )?
             },
             None => Ok(true),
         }
@@ -1859,17 +1922,17 @@ unsafe impl<T> wasmtime_runtime::Store for StoreInner<T> {
 
         match self.limiter {
             Some(ResourceLimiterInner::Sync(ref mut limiter)) => {
-                Ok(limiter(&mut self.data).table_growing(current, desired, maximum))
+                limiter(&mut self.data).table_growing(current, desired, maximum)
             }
             #[cfg(feature = "async")]
             Some(ResourceLimiterInner::Async(ref mut limiter)) => unsafe {
-                Ok(async_cx
+                async_cx
                     .expect("ResourceLimiterAsync requires async Store")
                     .block_on(
                         limiter(&mut self.data)
                             .table_growing(current, desired, maximum)
                             .as_mut(),
-                    )?)
+                    )?
             },
             None => Ok(true),
         }
@@ -1913,10 +1976,13 @@ unsafe impl<T> wasmtime_runtime::Store for StoreInner<T> {
     }
 
     fn new_epoch(&mut self) -> Result<u64, anyhow::Error> {
-        return match &mut self.epoch_deadline_behavior {
+        // Temporarily take the configured behavior to avoid mutably borrowing
+        // multiple times.
+        let mut behavior = std::mem::take(&mut self.epoch_deadline_behavior);
+        let delta_result = match &mut behavior {
             EpochDeadline::Trap => Err(Trap::Interrupt.into()),
             EpochDeadline::Callback(callback) => {
-                let delta = callback(&mut self.data)?;
+                let delta = callback((&mut *self).as_context_mut())?;
                 // Set a new deadline and return the new epoch deadline so
                 // the Wasm code doesn't have to reload it.
                 self.set_epoch_deadline(delta);
@@ -1936,6 +2002,10 @@ unsafe impl<T> wasmtime_runtime::Store for StoreInner<T> {
                 Ok(self.get_epoch_deadline())
             }
         };
+
+        // Put back the original behavior which was replaced by `take`.
+        self.epoch_deadline_behavior = behavior;
+        delta_result
     }
 }
 
@@ -1960,7 +2030,7 @@ impl<T> StoreInner<T> {
 
     fn epoch_deadline_callback(
         &mut self,
-        callback: Box<dyn FnMut(&mut T) -> Result<u64> + Send + Sync>,
+        callback: Box<dyn FnMut(StoreContextMut<T>) -> Result<u64> + Send + Sync>,
     ) {
         self.epoch_deadline_behavior = EpochDeadline::Callback(callback);
     }

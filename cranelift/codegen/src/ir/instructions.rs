@@ -683,8 +683,8 @@ enum OperandConstraint {
     /// This operand is `ctrlType.lane_of()`.
     LaneOf,
 
-    /// This operand is `ctrlType.as_bool()`.
-    AsBool,
+    /// This operand is `ctrlType.as_truthy()`.
+    AsTruthy,
 
     /// This operand is `ctrlType.half_width()`.
     HalfWidth,
@@ -719,7 +719,7 @@ impl OperandConstraint {
             Free(vts) => ResolvedConstraint::Free(TYPE_SETS[vts as usize]),
             Same => Bound(ctrl_type),
             LaneOf => Bound(ctrl_type.lane_of()),
-            AsBool => Bound(ctrl_type.as_bool()),
+            AsTruthy => Bound(ctrl_type.as_truthy()),
             HalfWidth => Bound(ctrl_type.half_width().expect("invalid type for half_width")),
             DoubleWidth => Bound(
                 ctrl_type
@@ -933,6 +933,7 @@ mod tests {
         assert!(cmp.requires_typevar_operand());
         assert_eq!(cmp.num_fixed_results(), 1);
         assert_eq!(cmp.num_fixed_value_arguments(), 2);
+        assert_eq!(cmp.result_type(0, types::I64), types::I8);
     }
 
     #[test]

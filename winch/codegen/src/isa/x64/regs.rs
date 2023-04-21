@@ -1,7 +1,8 @@
 //! X64 register definition.
 
-use crate::isa::reg::Reg;
+use crate::isa::{reg::Reg, CallingConvention};
 use regalloc2::{PReg, RegClass};
+use smallvec::{smallvec, SmallVec};
 
 const ENC_RAX: u8 = 0;
 const ENC_RCX: u8 = 1;
@@ -81,6 +82,18 @@ pub(crate) fn scratch() -> Reg {
     r11()
 }
 
+/// This register is used as a scratch register, in the context of trampolines only,
+/// where we assume that callee-saved registers are given the correct handling
+/// according to the system ABI. r12 is chosen given that it's a callee-saved,
+/// non-argument register.
+///
+/// In the context of all other internal functions, this register is not excluded
+/// from register allocation, so no extra assumptions should be made regarding
+/// its availability.
+pub(crate) fn argv() -> Reg {
+    r12()
+}
+
 fn fpr(enc: u8) -> Reg {
     Reg::new(PReg::new(enc as usize, RegClass::Float))
 }
@@ -142,3 +155,24 @@ const NON_ALLOCATABLE_GPR: u32 = (1 << ENC_RBP) | (1 << ENC_RSP) | (1 << ENC_R11
 
 /// Bitmask to represent the available general purpose registers.
 pub(crate) const ALL_GPR: u32 = ALLOCATABLE_GPR & !NON_ALLOCATABLE_GPR;
+
+/// Returns the callee-saved registers according to a particular calling
+/// convention.
+///
+/// This function will return the set of registers that need to be saved
+/// according to the system ABI and that are known not to be saved during the
+/// prologue emission.
+pub(crate) fn callee_saved(call_conv: &CallingConvention) -> SmallVec<[Reg; 9]> {
+    use CallingConvention::*;
+    match call_conv {
+        WasmtimeSystemV => {
+            smallvec![rbx(), r12(), r13(), r14(), r15(),]
+        }
+        // TODO: Once float registers are supported,
+        // account for callee-saved float registers.
+        WasmtimeFastcall => {
+            smallvec![rbx(), rdi(), rsi(), r12(), r13(), r14(), r15(),]
+        }
+        _ => unreachable!(),
+    }
+}

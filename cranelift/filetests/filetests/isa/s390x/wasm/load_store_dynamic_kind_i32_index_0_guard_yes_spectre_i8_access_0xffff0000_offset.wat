@@ -41,8 +41,7 @@
 
 ;; function u0:0:
 ;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 160, offset_downward_to_clobbers: 0 }
-;;   stmg %r9, %r15, 72(%r15)
-;;   unwind SaveReg { clobber_offset: 72, reg: p9i }
+;;   stmg %r10, %r15, 80(%r15)
 ;;   unwind SaveReg { clobber_offset: 80, reg: p10i }
 ;;   unwind SaveReg { clobber_offset: 88, reg: p11i }
 ;;   unwind SaveReg { clobber_offset: 96, reg: p12i }
@@ -51,43 +50,43 @@
 ;;   unwind SaveReg { clobber_offset: 120, reg: p15i }
 ;;   unwind StackAlloc { size: 0 }
 ;; block0:
-;;   lgr %r5, %r4
-;;   llgfr %r4, %r2
-;;   llilf %r9, 4294901761
-;;   algfr %r9, %r2
-;;   jle 6 ; trap
-;;   lgr %r2, %r5
-;;   lg %r5, 8(%r2)
-;;   ag %r4, 0(%r2)
-;;   llilh %r2, 65535
-;;   agr %r4, %r2
-;;   lghi %r2, 0
-;;   clgr %r9, %r5
-;;   locgrh %r4, %r2
-;;   stc %r3, 0(%r4)
+;;   llgfr %r14, %r2
+;;   llilf %r5, 4294901761
+;;   algfr %r5, %r2
+;;   jgnle .+2 # trap=heap_oob
+;;   lg %r10, 8(%r4)
+;;   ag %r14, 0(%r4)
+;;   llilh %r4, 65535
+;;   agrk %r2, %r14, %r4
+;;   lghi %r4, 0
+;;   clgr %r5, %r10
+;;   locgrh %r2, %r4
+;;   stc %r3, 0(%r2)
 ;;   jg label1
 ;; block1:
-;;   lmg %r9, %r15, 72(%r15)
+;;   lmg %r10, %r15, 80(%r15)
 ;;   br %r14
 ;;
 ;; function u0:1:
 ;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 160, offset_downward_to_clobbers: 0 }
+;;   stmg %r14, %r15, 112(%r15)
+;;   unwind SaveReg { clobber_offset: 112, reg: p14i }
+;;   unwind SaveReg { clobber_offset: 120, reg: p15i }
 ;;   unwind StackAlloc { size: 0 }
 ;; block0:
-;;   lgr %r4, %r3
-;;   llgfr %r3, %r2
+;;   llgfr %r14, %r2
 ;;   llilf %r5, 4294901761
 ;;   algfr %r5, %r2
-;;   jle 6 ; trap
-;;   lgr %r2, %r4
-;;   lg %r4, 8(%r2)
-;;   ag %r3, 0(%r2)
-;;   llilh %r2, 65535
-;;   agr %r3, %r2
-;;   lghi %r2, 0
+;;   jgnle .+2 # trap=heap_oob
+;;   lg %r4, 8(%r3)
+;;   ag %r14, 0(%r3)
+;;   llilh %r3, 65535
+;;   agrk %r2, %r14, %r3
+;;   lghi %r3, 0
 ;;   clgr %r5, %r4
-;;   locgrh %r3, %r2
-;;   llc %r2, 0(%r3)
+;;   locgrh %r2, %r3
+;;   llc %r2, 0(%r2)
 ;;   jg label1
 ;; block1:
+;;   lmg %r14, %r15, 112(%r15)
 ;;   br %r14

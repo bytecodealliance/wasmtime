@@ -2,21 +2,24 @@
 
 use crate::{
     isa::reg::Reg,
-    masm::{DivKind, OperandSize, RemKind},
+    masm::{CalleeKind, DivKind, OperandSize, RemKind},
 };
 use cranelift_codegen::{
+    entity::EntityRef,
     ir::TrapCode,
+    ir::{ExternalName, Opcode, UserExternalNameRef},
     isa::x64::{
         args::{
             self, AluRmiROpcode, Amode, CmpOpcode, DivSignedness, ExtMode, FromWritableReg, Gpr,
             GprMem, GprMemImm, RegMem, RegMemImm, SyntheticAmode, WritableGpr, CC,
         },
-        settings as x64_settings, EmitInfo, EmitState, Inst,
+        settings as x64_settings, CallInfo, EmitInfo, EmitState, Inst,
     },
-    settings, Final, MachBuffer, MachBufferFinalized, MachInstEmit, Writable,
+    settings, Final, MachBuffer, MachBufferFinalized, MachInstEmit, MachInstEmitState, Writable,
 };
 
 use super::{address::Address, regs};
+use smallvec::smallvec;
 
 /// A x64 instruction operand.
 #[derive(Debug, Copy, Clone)]
@@ -95,8 +98,8 @@ impl Assembler {
     }
 
     /// Return the emitted code.
-    pub fn finalize(self) -> MachBufferFinalized<Final> {
-        let stencil = self.buffer.finish();
+    pub fn finalize(mut self) -> MachBufferFinalized<Final> {
+        let stencil = self.buffer.finish(self.emit_state.ctrl_plane_mut());
         stencil.apply_base_srcloc(Default::default())
     }
 
@@ -282,34 +285,13 @@ impl Assembler {
     /// caller has correctly allocated the dividend as `(rdx:rax)` and
     /// accounted for the quotient to be stored in `rax`.
     pub fn div(&mut self, divisor: Reg, dst: (Reg, Reg), kind: DivKind, size: OperandSize) {
-        match kind {
-            // Signed division goes through a pseudo-instruction to validate
-            // the divisor followed by a sign extension to initialize `rdx`.
+        let trap = match kind {
+            // Signed division has two trapping conditions, integer overflow and
+            // divide-by-zero. Check for divide-by-zero explicitly and let the
+            // hardware detect overflow.
+            //
+            // The dividend is sign extended to initialize `rdx`.
             DivKind::Signed => {
-                if size == OperandSize::S64 {
-                    self.emit(Inst::ValidateSdivDivisor64 {
-                        dividend: dst.0.into(),
-                        divisor: divisor.into(),
-                        tmp: regs::scratch().into(),
-                    });
-                } else {
-                    self.emit(Inst::ValidateSdivDivisor {
-                        dividend: dst.0.into(),
-                        divisor: divisor.into(),
-                        size: size.into(),
-                    });
-                }
-                self.emit(Inst::SignExtendData {
-                    size: size.into(),
-                    src: dst.0.into(),
-                    dst: dst.1.into(),
-                });
-            }
-
-            // Unsigned division only needs to check for 0 and then the `rdx`
-            // divisor_hi is initialized with zero through an xor-against-itself
-            // op.
-            DivKind::Unsigned => {
                 self.emit(Inst::CmpRmiR {
                     size: size.into(),
                     src: GprMemImm::new(RegMemImm::imm(0)).unwrap(),
@@ -320,6 +302,20 @@ impl Assembler {
                     cc: CC::Z,
                     trap_code: TrapCode::IntegerDivisionByZero,
                 });
+                self.emit(Inst::SignExtendData {
+                    size: size.into(),
+                    src: dst.0.into(),
+                    dst: dst.1.into(),
+                });
+                TrapCode::IntegerOverflow
+            }
+
+            // Unsigned division only traps in one case, on divide-by-zero, so
+            // defer that to the trap opcode.
+            //
+            // The divisor_hi reg is initialized with zero through an
+            // xor-against-itself op.
+            DivKind::Unsigned => {
                 self.emit(Inst::AluRmiR {
                     size: size.into(),
                     op: AluRmiROpcode::Xor,
@@ -327,11 +323,13 @@ impl Assembler {
                     src2: dst.1.into(),
                     dst: dst.1.into(),
                 });
+                TrapCode::IntegerDivisionByZero
             }
-        }
+        };
         self.emit(Inst::Div {
             sign: kind.into(),
             size: size.into(),
+            trap,
             divisor: GprMem::new(RegMem::reg(divisor.into())).unwrap(),
             dividend_lo: dst.0.into(),
             dividend_hi: dst.1.into(),
@@ -348,17 +346,6 @@ impl Assembler {
     /// caller has correctly allocated the dividend as `(rdx:rax)` and
     /// accounted for the remainder to be stored in `rdx`.
     pub fn rem(&mut self, divisor: Reg, dst: (Reg, Reg), kind: RemKind, size: OperandSize) {
-        // First check for zero and explicitly trap.
-        self.emit(Inst::CmpRmiR {
-            size: size.into(),
-            src: GprMemImm::new(RegMemImm::imm(0)).unwrap(),
-            dst: divisor.into(),
-            opcode: CmpOpcode::Cmp,
-        });
-        self.emit(Inst::TrapIf {
-            cc: CC::Z,
-            trap_code: TrapCode::IntegerDivisionByZero,
-        });
         match kind {
             // Signed remainder goes through a pseudo-instruction which has
             // some internal branching. The `dividend_hi`, or `rdx`, is
@@ -391,6 +378,7 @@ impl Assembler {
                 });
                 self.emit(Inst::Div {
                     sign: DivSignedness::Unsigned,
+                    trap: TrapCode::IntegerDivisionByZero,
                     size: size.into(),
                     divisor: GprMem::new(RegMem::reg(divisor.into())).unwrap(),
                     dividend_lo: dst.0.into(),
@@ -479,5 +467,33 @@ impl Assembler {
             src2: src.into(),
             dst: dst.into(),
         });
+    }
+
+    pub fn call(&mut self, callee: CalleeKind) {
+        match callee {
+            CalleeKind::Indirect(reg) => {
+                self.emit(Inst::CallUnknown {
+                    dest: RegMem::reg(reg.into()),
+                    info: Box::new(CallInfo {
+                        uses: smallvec![],
+                        defs: smallvec![],
+                        clobbers: Default::default(),
+                        opcode: Opcode::Call,
+                    }),
+                });
+            }
+            CalleeKind::Direct(index) => {
+                let dest = ExternalName::user(UserExternalNameRef::new(index as usize));
+                self.emit(Inst::CallKnown {
+                    dest,
+                    info: Box::new(CallInfo {
+                        uses: smallvec![],
+                        defs: smallvec![],
+                        clobbers: Default::default(),
+                        opcode: Opcode::Call,
+                    }),
+                });
+            }
+        }
     }
 }

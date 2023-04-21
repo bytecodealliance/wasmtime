@@ -1,5 +1,8 @@
 use crate::{
-    dir::{DirCaps, DirEntry, DirEntryExt, DirFdStat, ReaddirCursor, ReaddirEntity, TableDirExt},
+    dir::{
+        DirCaps, DirEntry, DirEntryExt, DirFdStat, OpenResult, ReaddirCursor, ReaddirEntity,
+        TableDirExt,
+    },
     file::{
         Advice, FdFlags, FdStat, FileCaps, FileEntry, FileEntryExt, FileType, Filestat, OFlags,
         RiFlags, RoFlags, SdFlags, SiFlags, TableFileExt, WasiFile,
@@ -123,15 +126,21 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
     async fn fd_allocate(
         &mut self,
         fd: types::Fd,
-        offset: types::Filesize,
-        len: types::Filesize,
+        _offset: types::Filesize,
+        _len: types::Filesize,
     ) -> Result<(), Error> {
-        self.table()
+        // Check if fd is a file, and has rights, just to reject those cases
+        // with the errors expected:
+        let _ = self
+            .table()
             .get_file(u32::from(fd))?
-            .get_cap(FileCaps::ALLOCATE)?
-            .allocate(offset, len)
-            .await?;
-        Ok(())
+            .get_cap(FileCaps::ALLOCATE)?;
+        // This operation from cloudabi is linux-specific, isn't even
+        // supported across all linux filesystems, and has no support on macos
+        // or windows. Rather than ship spotty support, it has been removed
+        // from preview 2, and we are no longer supporting it in preview 1 as
+        // well.
+        Err(Error::not_supported())
     }
 
     async fn fd_close(&mut self, fd: types::Fd) -> Result<(), Error> {
@@ -741,41 +750,36 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         let oflags = OFlags::from(&oflags);
         let fdflags = FdFlags::from(fdflags);
         let path = path.as_cow()?;
-        if oflags.contains(OFlags::DIRECTORY) {
-            if oflags.contains(OFlags::CREATE)
-                || oflags.contains(OFlags::EXCLUSIVE)
-                || oflags.contains(OFlags::TRUNCATE)
-            {
-                return Err(Error::invalid_argument().context("directory oflags"));
-            }
-            let dir_caps = dir_entry.child_dir_caps(DirCaps::from(&fs_rights_base));
-            let file_caps = dir_entry.child_file_caps(FileCaps::from(&fs_rights_inheriting));
-            let dir = dir_entry.get_cap(DirCaps::OPEN)?;
-            let child_dir = dir.open_dir(symlink_follow, path.deref()).await?;
-            drop(dir);
-            let fd = table.push(Arc::new(DirEntry::new(
-                dir_caps, file_caps, None, child_dir,
-            )))?;
-            Ok(types::Fd::from(fd))
-        } else {
-            let mut required_caps = DirCaps::OPEN;
-            if oflags.contains(OFlags::CREATE) {
-                required_caps = required_caps | DirCaps::CREATE_FILE;
-            }
 
-            let file_caps = dir_entry.child_file_caps(FileCaps::from(&fs_rights_base));
-            let dir = dir_entry.get_cap(required_caps)?;
-            let read = file_caps.contains(FileCaps::READ);
-            let write = file_caps.contains(FileCaps::WRITE)
-                || file_caps.contains(FileCaps::ALLOCATE)
-                || file_caps.contains(FileCaps::FILESTAT_SET_SIZE);
-            let file = dir
-                .open_file(symlink_follow, path.deref(), oflags, read, write, fdflags)
-                .await?;
-            drop(dir);
-            let fd = table.push(Arc::new(FileEntry::new(file_caps, file)))?;
-            Ok(types::Fd::from(fd))
+        let mut required_caps = DirCaps::OPEN;
+        if oflags.contains(OFlags::CREATE) {
+            required_caps = required_caps | DirCaps::CREATE_FILE;
         }
+
+        let dir_dir_caps = dir_entry.child_dir_caps(DirCaps::from(&fs_rights_base));
+        let dir_file_caps = dir_entry.child_file_caps(FileCaps::from(&fs_rights_inheriting));
+        let file_caps = dir_entry.child_file_caps(FileCaps::from(&fs_rights_base));
+
+        let dir = dir_entry.get_cap(required_caps)?;
+        let read = file_caps.contains(FileCaps::READ);
+        let write = file_caps.contains(FileCaps::WRITE)
+            || file_caps.contains(FileCaps::ALLOCATE)
+            || file_caps.contains(FileCaps::FILESTAT_SET_SIZE);
+        let file = dir
+            .open_file(symlink_follow, path.deref(), oflags, read, write, fdflags)
+            .await?;
+        drop(dir);
+
+        let fd = match file {
+            OpenResult::File(file) => table.push(Arc::new(FileEntry::new(file_caps, file)))?,
+            OpenResult::Dir(child_dir) => table.push(Arc::new(DirEntry::new(
+                dir_dir_caps,
+                dir_file_caps,
+                None,
+                child_dir,
+            )))?,
+        };
+        Ok(types::Fd::from(fd))
     }
 
     async fn path_readlink<'a>(
@@ -795,11 +799,11 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             .into_string()
             .map_err(|_| Error::illegal_byte_sequence().context("link contents"))?;
         let link_bytes = link.as_bytes();
-        let link_len = link_bytes.len();
-        if link_len > buf_len as usize {
-            return Err(Error::range());
-        }
-        buf.as_array(link_len as u32).copy_from_slice(link_bytes)?;
+        // Like posix readlink(2), silently truncate links when they are larger than the
+        // destination buffer:
+        let link_len = std::cmp::min(link_bytes.len(), buf_len as usize);
+        buf.as_array(link_len as u32)
+            .copy_from_slice(&link_bytes[..link_len])?;
         Ok(link_len as types::Size)
     }
 

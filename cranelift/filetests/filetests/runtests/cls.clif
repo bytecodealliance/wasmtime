@@ -2,6 +2,7 @@ test interpret
 test run
 target aarch64
 target riscv64
+target riscv64 has_zbb
 target s390x
 ; not implemented on `x86_64`
 

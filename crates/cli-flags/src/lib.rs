@@ -20,7 +20,7 @@ use anyhow::{bail, Result};
 use clap::Parser;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use wasmtime::{Config, ProfilingStrategy};
+use wasmtime::{Config, ProfilingStrategy, Strategy};
 
 pub const SUPPORTED_WASM_FEATURES: &[(&str, &str)] = &[
     ("all", "enables all supported WebAssembly features"),
@@ -66,19 +66,11 @@ pub const SUPPORTED_WASI_MODULES: &[(&str, &str)] = &[
         "experimental-wasi-threads",
         "enables support for the WASI threading API (experimental), see https://github.com/WebAssembly/wasi-threads",
     ),
+    (
+        "experimental-wasi-http",
+        "enables support for the WASI HTTP APIs (experimental), see https://github.com/WebAssembly/wasi-http",
+    ),
 ];
-
-fn pick_profiling_strategy(jitdump: bool, vtune: bool) -> Result<ProfilingStrategy> {
-    Ok(match (jitdump, vtune) {
-        (true, false) => ProfilingStrategy::JitDump,
-        (false, true) => ProfilingStrategy::VTune,
-        (true, true) => {
-            println!("Can't enable --jitdump and --vtune at the same time. Profiling not enabled.");
-            ProfilingStrategy::None
-        }
-        _ => ProfilingStrategy::None,
-    })
-}
 
 fn init_file_per_thread_logger(prefix: &'static str) {
     file_per_thread_logger::initialize(prefix);
@@ -142,14 +134,11 @@ pub struct CommonOptions {
     #[clap(long, value_name = "MODULE,MODULE,...", parse(try_from_str = parse_wasi_modules))]
     pub wasi_modules: Option<WasiModules>,
 
+    /// Profiling strategy (valid options are: perfmap, jitdump, vtune)
+    #[clap(long)]
+    pub profile: Option<ProfilingStrategy>,
+
     /// Generate jitdump file (supported on --features=profiling build)
-    #[clap(long, conflicts_with = "vtune")]
-    pub jitdump: bool,
-
-    /// Generate vtune (supported on --features=vtune build)
-    #[clap(long, conflicts_with = "jitdump")]
-    pub vtune: bool,
-
     /// Run optimization passes on translated functions, on by default
     #[clap(short = 'O', long)]
     pub optimize: bool,
@@ -255,6 +244,12 @@ pub struct CommonOptions {
     /// performance cost.
     #[clap(long)]
     pub relaxed_simd_deterministic: bool,
+    /// Explicitly specify the name of the compiler to use for WebAssembly.
+    ///
+    /// Currently only `cranelift` and `winch` are supported, but not all builds
+    /// of Wasmtime have both built in.
+    #[clap(long)]
+    pub compiler: Option<String>,
 }
 
 impl CommonOptions {
@@ -273,6 +268,13 @@ impl CommonOptions {
     pub fn config(&self, target: Option<&str>) -> Result<Config> {
         let mut config = Config::new();
 
+        config.strategy(match self.compiler.as_deref() {
+            None => Strategy::Auto,
+            Some("cranelift") => Strategy::Cranelift,
+            Some("winch") => Strategy::Winch,
+            Some(s) => bail!("unknown compiler: {s}"),
+        });
+
         // Set the target before setting any cranelift options, since the
         // target will reset any target-specific options.
         if let Some(target) = target {
@@ -283,7 +285,7 @@ impl CommonOptions {
             .cranelift_debug_verifier(self.enable_cranelift_debug_verifier)
             .debug_info(self.debug_info)
             .cranelift_opt_level(self.opt_level())
-            .profiler(pick_profiling_strategy(self.jitdump, self.vtune)?)
+            .profiler(self.profile.unwrap_or(ProfilingStrategy::None))
             .cranelift_nan_canonicalization(self.enable_cranelift_nan_canonicalization);
 
         self.enable_wasm_features(&mut config);
@@ -504,6 +506,7 @@ fn parse_wasi_modules(modules: &str) -> Result<WasiModules> {
                 "experimental-wasi-crypto" => Ok(wasi_modules.wasi_crypto = enable),
                 "experimental-wasi-nn" => Ok(wasi_modules.wasi_nn = enable),
                 "experimental-wasi-threads" => Ok(wasi_modules.wasi_threads = enable),
+                "experimental-wasi-http" => Ok(wasi_modules.wasi_http = enable),
                 "default" => bail!("'default' cannot be specified with other WASI modules"),
                 _ => bail!("unsupported WASI module '{}'", module),
             };
@@ -538,6 +541,9 @@ pub struct WasiModules {
 
     /// Enable the experimental wasi-threads implementation.
     pub wasi_threads: bool,
+
+    /// Enable the experimental wasi-http implementation
+    pub wasi_http: bool,
 }
 
 impl Default for WasiModules {
@@ -547,6 +553,7 @@ impl Default for WasiModules {
             wasi_crypto: false,
             wasi_nn: false,
             wasi_threads: false,
+            wasi_http: false,
         }
     }
 }
@@ -559,6 +566,7 @@ impl WasiModules {
             wasi_nn: false,
             wasi_crypto: false,
             wasi_threads: false,
+            wasi_http: false,
         }
     }
 }
@@ -713,7 +721,8 @@ mod test {
                 wasi_common: true,
                 wasi_crypto: false,
                 wasi_nn: false,
-                wasi_threads: false
+                wasi_threads: false,
+                wasi_http: false,
             }
         );
     }
@@ -727,7 +736,8 @@ mod test {
                 wasi_common: true,
                 wasi_crypto: false,
                 wasi_nn: false,
-                wasi_threads: false
+                wasi_threads: false,
+                wasi_http: false
             }
         );
     }
@@ -745,7 +755,8 @@ mod test {
                 wasi_common: false,
                 wasi_crypto: false,
                 wasi_nn: true,
-                wasi_threads: false
+                wasi_threads: false,
+                wasi_http: false,
             }
         );
     }
@@ -760,7 +771,8 @@ mod test {
                 wasi_common: false,
                 wasi_crypto: false,
                 wasi_nn: false,
-                wasi_threads: false
+                wasi_threads: false,
+                wasi_http: false,
             }
         );
     }

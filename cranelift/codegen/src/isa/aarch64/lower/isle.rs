@@ -126,10 +126,6 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
         Imm12::maybe_from_u64(n)
     }
 
-    fn imm12_from_negated_u64(&mut self, n: u64) -> Option<Imm12> {
-        Imm12::maybe_from_u64((n as i64).wrapping_neg() as u64)
-    }
-
     fn imm_shift_from_u8(&mut self, n: u8) -> ImmShift {
         ImmShift::maybe_from_u64(n.into()).unwrap()
     }
@@ -154,6 +150,17 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
         if shiftee_bits <= std::u8::MAX as usize {
             let shiftimm = shiftimm.mask(shiftee_bits as u8);
             Some(ShiftOpAndAmt::new(ShiftOp::LSL, shiftimm))
+        } else {
+            None
+        }
+    }
+
+    fn ashr_from_u64(&mut self, ty: Type, n: u64) -> Option<ShiftOpAndAmt> {
+        let shiftimm = ShiftOpShiftImm::maybe_from_shift(n)?;
+        let shiftee_bits = ty_bits(ty);
+        if shiftee_bits <= std::u8::MAX as usize {
+            let shiftimm = shiftimm.mask(shiftee_bits as u8);
+            Some(ShiftOpAndAmt::new(ShiftOp::ASR, shiftimm))
         } else {
             None
         }

@@ -1,50 +1,136 @@
 use anyhow::Result;
+use cranelift_codegen::{Final, MachBufferFinalized};
 use object::write::{Object, SymbolId};
 use std::any::Any;
+use std::sync::Mutex;
+use wasmparser::FuncValidatorAllocations;
+use wasmtime_cranelift_shared::obj::ModuleTextBuilder;
 use wasmtime_environ::{
-    CompileError, DefinedFuncIndex, FuncIndex, FunctionBodyData, FunctionLoc, ModuleTranslation,
-    ModuleTypes, PrimaryMap, Tunables, WasmFunctionInfo,
+    CompileError, DefinedFuncIndex, FilePos, FuncIndex, FunctionBodyData, FunctionLoc,
+    ModuleTranslation, ModuleTypes, PrimaryMap, Tunables, WasmFunctionInfo,
 };
 use winch_codegen::TargetIsa;
+use winch_environ::FuncEnv;
 
 pub(crate) struct Compiler {
     isa: Box<dyn TargetIsa>,
+    allocations: Mutex<Vec<FuncValidatorAllocations>>,
 }
+
+struct CompiledFunction(MachBufferFinalized<Final>);
 
 impl Compiler {
     pub fn new(isa: Box<dyn TargetIsa>) -> Self {
-        Self { isa }
+        Self {
+            isa,
+            allocations: Mutex::new(Vec::new()),
+        }
+    }
+
+    fn take_allocations(&self) -> FuncValidatorAllocations {
+        self.allocations
+            .lock()
+            .unwrap()
+            .pop()
+            .unwrap_or_else(Default::default)
+    }
+
+    fn save_allocations(&self, allocs: FuncValidatorAllocations) {
+        self.allocations.lock().unwrap().push(allocs)
     }
 }
 
 impl wasmtime_environ::Compiler for Compiler {
     fn compile_function(
         &self,
-        _translation: &ModuleTranslation<'_>,
-        _index: DefinedFuncIndex,
-        _data: FunctionBodyData<'_>,
+        translation: &ModuleTranslation<'_>,
+        index: DefinedFuncIndex,
+        data: FunctionBodyData<'_>,
         _tunables: &Tunables,
         _types: &ModuleTypes,
     ) -> Result<(WasmFunctionInfo, Box<dyn Any + Send>), CompileError> {
-        todo!()
+        let index = translation.module.func_index(index);
+        let sig = translation.get_types().function_at(index.as_u32()).unwrap();
+        let FunctionBodyData { body, validator } = data;
+        let start_srcloc = FilePos::new(
+            body.get_binary_reader()
+                .original_position()
+                .try_into()
+                .unwrap(),
+        );
+        let mut validator = validator.into_validator(self.take_allocations());
+        let env = FuncEnv::new(&translation.module, translation.get_types(), &self.isa);
+        let buffer = self
+            .isa
+            .compile_function(&sig, &body, &env, &mut validator)
+            .map_err(|e| CompileError::Codegen(format!("{e:?}")));
+        self.save_allocations(validator.into_allocations());
+        let buffer = buffer?;
+
+        Ok((
+            WasmFunctionInfo {
+                start_srcloc,
+                stack_maps: Box::new([]),
+            },
+            Box::new(CompiledFunction(buffer)),
+        ))
     }
 
     fn compile_host_to_wasm_trampoline(
         &self,
-        _ty: &wasmtime_environ::WasmFuncType,
+        ty: &wasmtime_environ::WasmFuncType,
     ) -> Result<Box<dyn Any + Send>, CompileError> {
-        todo!()
+        let wasm_ty = wasmparser::FuncType::new(
+            ty.params().iter().copied().map(Into::into),
+            ty.returns().iter().copied().map(Into::into),
+        );
+
+        let buffer = self
+            .isa
+            .host_to_wasm_trampoline(&wasm_ty)
+            .map_err(|e| CompileError::Codegen(format!("{:?}", e)))?;
+
+        Ok(Box::new(CompiledFunction(buffer)))
     }
 
     fn append_code(
         &self,
-        _obj: &mut Object<'static>,
-        _funcs: &[(String, Box<dyn Any + Send>)],
+        obj: &mut Object<'static>,
+        funcs: &[(String, Box<dyn Any + Send>)],
         _tunables: &Tunables,
-        _resolve_reloc: &dyn Fn(usize, FuncIndex) -> usize,
+        resolve_reloc: &dyn Fn(usize, FuncIndex) -> usize,
     ) -> Result<Vec<(SymbolId, FunctionLoc)>> {
-        assert!(_funcs.is_empty());
-        Ok(Vec::new())
+        let mut builder =
+            ModuleTextBuilder::new(obj, self, self.isa.text_section_builder(funcs.len()));
+
+        let mut ret = Vec::with_capacity(funcs.len());
+        for (i, (sym, func)) in funcs.iter().enumerate() {
+            let func = &func.downcast_ref::<CompiledFunction>().unwrap().0;
+
+            // TODO: Implement copying over this data into the
+            // `ModuleTextBuilder` type. Note that this should probably be
+            // deduplicated with the cranelift implementation in the long run.
+            assert!(func.relocs().is_empty());
+            assert!(func.traps().is_empty());
+            assert!(func.stack_maps().is_empty());
+
+            let (sym, range) = builder.append_func(
+                &sym,
+                func.data(),
+                self.function_alignment(),
+                None,
+                &[],
+                |idx| resolve_reloc(i, idx),
+            );
+
+            let info = FunctionLoc {
+                start: u32::try_from(range.start).unwrap(),
+                length: u32::try_from(range.end - range.start).unwrap(),
+            };
+            ret.push((sym, info));
+        }
+        builder.finish();
+        Ok(ret)
     }
 
     fn emit_trampoline_obj(

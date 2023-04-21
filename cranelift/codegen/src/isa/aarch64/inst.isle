@@ -651,6 +651,16 @@
         (rm Reg)
         (size VectorSize))
 
+       ;; A vector ALU op modifying a source register.
+       (VecFmlaElem
+        (alu_op VecALUModOp)
+        (rd WritableReg)
+        (ri Reg)
+        (rn Reg)
+        (rm Reg)
+        (size VectorSize)
+        (idx u8))
+
        ;; Vector two register miscellaneous instruction.
        (VecMisc
         (op VecMisc2)
@@ -927,6 +937,10 @@
         (symbol ExternalName)
         (rd WritableReg))
 
+       (MachOTlsGetAddr
+        (symbol ExternalName)
+        (rd WritableReg))
+
        ;; An unwind pseudo-instruction.
        (Unwind
         (inst UnwindInst))
@@ -990,6 +1004,10 @@
     (MAdd)
     ;; Multiply-sub
     (MSub)
+    ;; Unsigned-Multiply-add
+    (UMAddL)
+    ;; Signed-Multiply-add
+    (SMAddL)
 ))
 
 (type MoveWideOp
@@ -1704,9 +1722,6 @@
 (decl fpu_op_ri_sli (u8 u8) FPUOpRIMod)
 (extern constructor fpu_op_ri_sli fpu_op_ri_sli)
 
-(decl imm12_from_negated_u64 (Imm12) u64)
-(extern extractor imm12_from_negated_u64 imm12_from_negated_u64)
-
 (decl pure partial lshr_from_u64 (Type u64) ShiftOpAndAmt)
 (extern constructor lshr_from_u64 lshr_from_u64)
 
@@ -1715,6 +1730,9 @@
 
 (decl pure partial lshl_from_u64 (Type u64) ShiftOpAndAmt)
 (extern constructor lshl_from_u64 lshl_from_u64)
+
+(decl pure partial ashr_from_u64 (Type u64) ShiftOpAndAmt)
+(extern constructor ashr_from_u64 ashr_from_u64)
 
 (decl integral_ty (Type) Type)
 (extern extractor integral_ty integral_ty)
@@ -1734,11 +1752,13 @@
   (imm12_from_value n)
   (iconst (u64_from_imm64 (imm12_from_u64 n))))
 
-;; Same as `imm12_from_value`, but tries negating the constant value.
-(decl imm12_from_negated_value (Imm12) Value)
-(extractor
-  (imm12_from_negated_value n)
-  (iconst (u64_from_imm64 (imm12_from_negated_u64 n))))
+;; Conceptually the same as `imm12_from_value`, but tries negating the constant
+;; value (first sign-extending to handle narrow widths).
+(decl pure partial imm12_from_negated_value (Value) Imm12)
+(rule
+  (imm12_from_negated_value (has_type ty (iconst n)))
+  (if-let (imm12_from_u64 imm) (i64_as_u64 (i64_neg (i64_sextend_imm64 ty n))))
+  imm)
 
 ;; Helper type to represent a value and an extend operation fused together.
 (type ExtendedValue extern (enum))
@@ -1847,12 +1867,20 @@
             (_ Unit (emit (MInst.FpuRR op size dst src))))
        dst))
 
-;; Helper for emitting `MInst.VecRRR` instructions which use three registers,
+;; Helper for emitting `MInst.VecRRRMod` instructions which use three registers,
 ;; one of which is both source and output.
 (decl vec_rrr_mod (VecALUModOp Reg Reg Reg VectorSize) Reg)
 (rule (vec_rrr_mod op src1 src2 src3 size)
       (let ((dst WritableReg (temp_writable_reg $I8X16))
             (_1 Unit (emit (MInst.VecRRRMod op dst src1 src2 src3 size))))
+        dst))
+
+;; Helper for emitting `MInst.VecFmlaElem` instructions which use three registers,
+;; one of which is both source and output.
+(decl vec_fmla_elem (VecALUModOp Reg Reg Reg VectorSize u8) Reg)
+(rule (vec_fmla_elem op src1 src2 src3 size idx)
+      (let ((dst WritableReg (temp_writable_reg $I8X16))
+            (_1 Unit (emit (MInst.VecFmlaElem op dst src1 src2 src3 size idx))))
         dst))
 
 (decl fpu_rri (FPUOpRI Reg) Reg)
@@ -1945,6 +1973,15 @@
        (MInst.AluRRRShift (ALUOp.SubS) size (writable_zero_reg)
         src1 src2 shift)))
 
+;; Helper for emitting `cmp` instructions, setting flags, with an arithmetic right-shifted
+;; second operand register.
+(decl cmp_rr_shift_asr (OperandSize Reg Reg u64) ProducesFlags)
+(rule (cmp_rr_shift_asr size src1 src2 shift_amount)
+      (if-let shift (ashr_from_u64 $I64 shift_amount))
+      (ProducesFlags.ProducesFlagsSideEffect
+       (MInst.AluRRRShift (ALUOp.SubS) size (writable_zero_reg)
+        src1 src2 shift)))
+
 ;; Helper for emitting `MInst.AluRRRExtend` instructions.
 (decl alu_rrr_extend (ALUOp Type Reg Reg ExtendOp) Reg)
 (rule (alu_rrr_extend op ty src1 src2 extend)
@@ -1966,6 +2003,22 @@
       (let ((dst WritableReg (temp_writable_reg $I64))
             (_ Unit (emit (MInst.AluRRRR op (operand_size ty) dst src1 src2 src3))))
         dst))
+
+;; Helper for emitting paired `MInst.AluRRR` instructions
+(decl alu_rrr_with_flags_paired (Type Reg Reg ALUOp) ProducesFlags)
+(rule (alu_rrr_with_flags_paired ty src1 src2 alu_op)
+      (let ((dst WritableReg (temp_writable_reg $I64)))
+        (ProducesFlags.ProducesFlagsReturnsResultWithConsumer
+         (MInst.AluRRR alu_op (operand_size ty) dst src1 src2)
+         dst)))
+
+;; Should only be used for AdcS and SbcS
+(decl alu_rrr_with_flags_chained (Type Reg Reg ALUOp) ConsumesAndProducesFlags)
+(rule (alu_rrr_with_flags_chained ty src1 src2 alu_op)
+      (let ((dst WritableReg (temp_writable_reg $I64)))
+        (ConsumesAndProducesFlags.ReturnsReg
+         (MInst.AluRRR alu_op (operand_size ty) dst src1 src2)
+         dst)))
 
 ;; Helper for emitting `MInst.BitRR` instructions.
 (decl bit_rr (BitOp Type Reg) Reg)
@@ -2314,7 +2367,7 @@
 ;; immediately by the `MInst.CCmp` instruction.
 (decl ccmp (OperandSize Reg Reg NZCV Cond ProducesFlags) ProducesFlags)
 (rule (ccmp size rn rm nzcv cond inst_input)
-      (produces_flags_append inst_input (MInst.CCmp size rn rm nzcv cond)))
+      (produces_flags_concat inst_input (ProducesFlags.ProducesFlagsSideEffect (MInst.CCmp size rn rm nzcv cond))))
 
 ;; Helper for generating `MInst.CCmpImm` instructions.
 (decl ccmp_imm (OperandSize Reg UImm5 NZCV Cond) ConsumesFlags)
@@ -2389,6 +2442,14 @@
 
 (decl msub (Type Reg Reg Reg) Reg)
 (rule (msub ty x y z) (alu_rrrr (ALUOp3.MSub) ty x y z))
+
+;; Helpers for generating `umaddl` instructions
+(decl umaddl (Reg Reg Reg) Reg)
+(rule (umaddl x y z) (alu_rrrr (ALUOp3.UMAddL) $I32 x y z))
+
+;; Helpers for generating `smaddl` instructions
+(decl smaddl (Reg Reg Reg) Reg)
+(rule (smaddl x y z) (alu_rrrr (ALUOp3.SMAddL) $I32 x y z))
 
 ;; Helper for generating `uqadd` instructions.
 (decl uqadd (Reg Reg VectorSize) Reg)
@@ -2598,6 +2659,9 @@
 
 (decl orr_imm (Type Reg ImmLogic) Reg)
 (rule (orr_imm ty x y) (alu_rr_imm_logic (ALUOp.Orr) ty x y))
+
+(decl orr_shift (Type Reg Reg ShiftOpAndAmt) Reg)
+(rule (orr_shift ty x y shift) (alu_rrr_shift (ALUOp.Orr) ty x y shift))
 
 (decl orr_vec (Reg Reg VectorSize) Reg)
 (rule (orr_vec x y size) (vec_rrr (VecALUOp.Orr) x y size))
@@ -3592,6 +3656,12 @@
             (_ Unit (emit (MInst.ElfTlsGetAddr name dst))))
         dst))
 
+(decl macho_tls_get_addr (ExternalName) Reg)
+(rule (macho_tls_get_addr name)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.MachOTlsGetAddr name dst))))
+        dst))
+
 ;; A tuple of `ProducesFlags` and `IntCC`.
 (type FlagsAndCC (enum (FlagsAndCC (flags ProducesFlags)
                                    (cc IntCC))))
@@ -3632,12 +3702,12 @@
             (rm Reg (put_in_reg y)))
        (vec_cmp rn rm in_ty cond)))
 
-;; Determines the appropriate extend op given the value type and whether it is signed.
-(decl lower_extend_op (Type bool) ExtendOp)
-(rule (lower_extend_op $I8 $true) (ExtendOp.SXTB))
-(rule (lower_extend_op $I16 $true) (ExtendOp.SXTH))
-(rule (lower_extend_op $I8 $false) (ExtendOp.UXTB))
-(rule (lower_extend_op $I16 $false) (ExtendOp.UXTH))
+;; Determines the appropriate extend op given the value type and the given ArgumentExtension.
+(decl lower_extend_op (Type ArgumentExtension) ExtendOp)
+(rule (lower_extend_op $I8 (ArgumentExtension.Sext)) (ExtendOp.SXTB))
+(rule (lower_extend_op $I16 (ArgumentExtension.Sext)) (ExtendOp.SXTH))
+(rule (lower_extend_op $I8 (ArgumentExtension.Uext)) (ExtendOp.UXTB))
+(rule (lower_extend_op $I16 (ArgumentExtension.Uext)) (ExtendOp.UXTH))
 
 ;; Integers <= 64-bits.
 (rule -2 (lower_icmp_into_reg cond rn rm in_ty out_ty)
@@ -3648,13 +3718,13 @@
 (rule 1 (lower_icmp cond rn rm (fits_in_16 ty))
       (if (signed_cond_code cond))
       (let ((rn Reg (put_in_reg_sext32 rn)))
-      (flags_and_cc (cmp_extend (operand_size ty) rn rm (lower_extend_op ty $true)) cond)))
+      (flags_and_cc (cmp_extend (operand_size ty) rn rm (lower_extend_op ty (ArgumentExtension.Sext))) cond)))
 (rule -1 (lower_icmp cond rn (imm12_from_value rm) (fits_in_16 ty))
       (let ((rn Reg (put_in_reg_zext32 rn)))
       (flags_and_cc (cmp_imm (operand_size ty) rn rm) cond)))
 (rule -2 (lower_icmp cond rn rm (fits_in_16 ty))
       (let ((rn Reg (put_in_reg_zext32 rn)))
-      (flags_and_cc (cmp_extend (operand_size ty) rn rm (lower_extend_op ty $false)) cond)))
+      (flags_and_cc (cmp_extend (operand_size ty) rn rm (lower_extend_op ty (ArgumentExtension.Uext))) cond)))
 (rule -3 (lower_icmp cond rn (u64_from_iconst c) ty)
       (if (ty_int_ref_scalar_64 ty))
       (lower_icmp_const cond rn c ty))

@@ -1,0 +1,63 @@
+;; `select`/`bitselect`-related rewrites
+
+;; remove select when both choices are the same
+(rule (simplify (select    ty _ x x)) x)
+(rule (simplify (bitselect ty _ x x)) x)
+
+;; Transform select-of-icmp into {u,s}{min,max} instructions where possible.
+(rule (simplify (select ty (sgt _ x y) x y)) (smax ty x y))
+(rule (simplify (select ty (sge _ x y) x y)) (smax ty x y))
+(rule (simplify (select ty (ugt _ x y) x y)) (umax ty x y))
+(rule (simplify (select ty (uge _ x y) x y)) (umax ty x y))
+(rule (simplify (select ty (slt _ x y) x y)) (smin ty x y))
+(rule (simplify (select ty (sle _ x y) x y)) (smin ty x y))
+(rule (simplify (select ty (ult _ x y) x y)) (umin ty x y))
+(rule (simplify (select ty (ule _ x y) x y)) (umin ty x y))
+
+;; These are the same rules as above, but when the operands for select are swapped
+(rule (simplify (select ty (slt _ x y) y x)) (smax ty x y))
+(rule (simplify (select ty (sle _ x y) y x)) (smax ty x y))
+(rule (simplify (select ty (ult _ x y) y x)) (umax ty x y))
+(rule (simplify (select ty (ule _ x y) y x)) (umax ty x y))
+(rule (simplify (select ty (sgt _ x y) y x)) (smin ty x y))
+(rule (simplify (select ty (sge _ x y) y x)) (smin ty x y))
+(rule (simplify (select ty (ugt _ x y) y x)) (umin ty x y))
+(rule (simplify (select ty (uge _ x y) y x)) (umin ty x y))
+
+;; Transform bitselect-of-icmp into {u,s}{min,max} instructions where possible.
+(rule (simplify (bitselect ty @ (multi_lane _ _) (sgt _ x y) x y)) (smax ty x y))
+(rule (simplify (bitselect ty @ (multi_lane _ _) (sge _ x y) x y)) (smax ty x y))
+(rule (simplify (bitselect ty @ (multi_lane _ _) (ugt _ x y) x y)) (umax ty x y))
+(rule (simplify (bitselect ty @ (multi_lane _ _) (uge _ x y) x y)) (umax ty x y))
+(rule (simplify (bitselect ty @ (multi_lane _ _) (slt _ x y) x y)) (smin ty x y))
+(rule (simplify (bitselect ty @ (multi_lane _ _) (sle _ x y) x y)) (smin ty x y))
+(rule (simplify (bitselect ty @ (multi_lane _ _) (ult _ x y) x y)) (umin ty x y))
+(rule (simplify (bitselect ty @ (multi_lane _ _) (ule _ x y) x y)) (umin ty x y))
+
+;; These are the same rules as above, but when the operands for select are swapped
+(rule (simplify (bitselect ty @ (multi_lane _ _) (slt _ x y) y x)) (smax ty x y))
+(rule (simplify (bitselect ty @ (multi_lane _ _) (sle _ x y) y x)) (smax ty x y))
+(rule (simplify (bitselect ty @ (multi_lane _ _) (ult _ x y) y x)) (umax ty x y))
+(rule (simplify (bitselect ty @ (multi_lane _ _) (ule _ x y) y x)) (umax ty x y))
+(rule (simplify (bitselect ty @ (multi_lane _ _) (sgt _ x y) y x)) (smin ty x y))
+(rule (simplify (bitselect ty @ (multi_lane _ _) (sge _ x y) y x)) (smin ty x y))
+(rule (simplify (bitselect ty @ (multi_lane _ _) (ugt _ x y) y x)) (umin ty x y))
+(rule (simplify (bitselect ty @ (multi_lane _ _) (uge _ x y) y x)) (umin ty x y))
+
+;; For floats convert fcmp lt into pseudo_min and gt into pseudo_max
+;;
+;; fmax_pseudo docs state:
+;; The behaviour for this operations is defined as  fmax_pseudo(a, b) = (a < b) ? b : a, and the behaviour for zero
+;; or NaN inputs follows from the behaviour of < with such inputs.
+;;
+;; That is exactly the operation that we match here!
+(rule (simplify
+       (select ty (fcmp _ (FloatCC.LessThan) x y) x y))
+      (fmin_pseudo ty x y))
+(rule (simplify
+       (select ty (fcmp _ (FloatCC.GreaterThan) x y) x y))
+      (fmax_pseudo ty x y))
+
+;; TODO: perform this same optimization to `f{min,max}_pseudo` for vectors
+;; with the `bitselect` instruction, but the pattern is a bit more complicated
+;; due to most bitselects-over-floats having bitcasts.

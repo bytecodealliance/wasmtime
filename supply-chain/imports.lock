@@ -2,82 +2,53 @@
 # cargo-vet imports lock
 
 [[publisher.wasm-mutate]]
-version = "0.2.22"
-when = "2023-03-10"
-user-id = 696
-user-login = "fitzgen"
-user-name = "Nick Fitzgerald"
+version = "0.2.23"
+when = "2023-04-13"
+user-id = 1
+user-login = "alexcrichton"
+user-name = "Alex Crichton"
+
+[[publisher.wasm-smith]]
+version = "0.12.6"
+when = "2023-04-13"
+user-id = 1
+user-login = "alexcrichton"
+user-name = "Alex Crichton"
+
+[[publisher.wasmparser]]
+version = "0.103.0"
+when = "2023-04-13"
+user-id = 1
+user-login = "alexcrichton"
+user-name = "Alex Crichton"
 
 [[publisher.wasmprinter]]
-version = "0.2.54"
-when = "2023-03-10"
-user-id = 696
-user-login = "fitzgen"
-user-name = "Nick Fitzgerald"
+version = "0.2.55"
+when = "2023-04-13"
+user-id = 1
+user-login = "alexcrichton"
+user-name = "Alex Crichton"
 
-[audits.chromeos.criteria.crypto-safe]
-description = """
-All crypto algorithms in this crate have been reviewed by a relevant expert.
+[[publisher.wast]]
+version = "56.0.0"
+when = "2023-04-13"
+user-id = 1
+user-login = "alexcrichton"
+user-name = "Alex Crichton"
 
-**Note**: If a crate does not implement crypto, use `does-not-implement-crypto`,
-which implies `crypto-safe`, but does not require expert review in order to
-audit for."""
+[[publisher.wat]]
+version = "1.0.62"
+when = "2023-04-13"
+user-id = 1
+user-login = "alexcrichton"
+user-name = "Alex Crichton"
 
-[audits.chromeos.criteria.does-not-implement-crypto]
-description = """
-Inspection reveals that the crate in question does not attempt to implement any
-cryptographic algorithms on its own.
-
-Note that certification of this does not require an expert on all forms of
-cryptography: it's expected for crates we import to be \"good enough\" citizens,
-so they'll at least be forthcoming if they try to implement something
-cryptographic. When in doubt, please ask an expert."""
-implies = "crypto-safe"
-
-[audits.chromeos.criteria.rule-of-two-safe-to-deploy]
-description = """
-This is a stronger requirement than the built-in safe-to-deploy criteria,
-motivated by Chromium's rule-of-two related requirements:
-https://chromium.googlesource.com/chromium/src/+/master/docs/security/rule-of-2.md#unsafe-code-in-safe-languages
-
-This crate will not introduce a serious security vulnerability to production
-software exposed to untrusted input.
-
-Auditors are not required to perform a full logic review of the entire crate.
-Rather, they must review enough to fully reason about the behavior of all unsafe
-blocks and usage of powerful imports. For any reasonable usage of the crate in
-real-world software, an attacker must not be able to manipulate the runtime
-behavior of these sections in an exploitable or surprising way.
-
-Ideally, ambient capabilities (e.g. filesystem access) are hardened against
-manipulation and consistent with the advertised behavior of the crate. However,
-some discretion is permitted. In such cases, the nature of the discretion should
-be recorded in the `notes` field of the audit record.
-
-Any unsafe code in this crate must, in general, be kept well-contained, and
-documentation must exist to describe how Rust's invariants are being upheld
-despite the unsafe block(s). Nontrivial uses of unsafe must be reviewed by an
-expert in Rust's unsafety guarantees/non-guarantees.
-
-For crates which generate deployed code (e.g. build dependencies or procedural
-macros), reasonable usage of the crate should output code which meets the above
-criteria."""
-implies = "safe-to-deploy"
-
-[[audits.chromeos.audits.libfuzzer-sys]]
-who = "ChromeOS"
-criteria = ["safe-to-run", "does-not-implement-crypto"]
-version = "0.4.4"
-
-[[audits.chromeos.audits.miniz_oxide]]
-who = "George Burgess IV <gbiv@google.com>"
-criteria = ["safe-to-run", "does-not-implement-crypto"]
-version = "0.6.2"
-
-[[audits.chromeos.audits.static_assertions]]
-who = "ChromeOS"
-criteria = ["safe-to-run", "does-not-implement-crypto"]
-version = "1.1.0"
+[[publisher.wit-parser]]
+version = "0.7.0"
+when = "2023-04-13"
+user-id = 1
+user-login = "alexcrichton"
+user-name = "Alex Crichton"
 
 [[audits.embark-studios.audits.anyhow]]
 who = "Johan Andersson <opensource@embark-studios.com>"
@@ -96,6 +67,36 @@ criteria = "safe-to-deploy"
 version = "0.2.2"
 notes = "Inspected it and is a tiny crate with just type definitions"
 
+[[audits.embark-studios.audits.webpki-roots]]
+who = "Johan Andersson <opensource@embark-studios.com>"
+criteria = "safe-to-deploy"
+version = "0.22.4"
+notes = "Inspected it to confirm that it only contains data definitions and no runtime code"
+
+[[audits.google.audits.libfuzzer-sys]]
+who = "ChromeOS"
+criteria = "safe-to-run"
+version = "0.4.4"
+aggregated-from = "https://chromium.googlesource.com/chromiumos/third_party/rust_crates/+/main/cargo-vet/audits.toml?format=TEXT"
+
+[[audits.google.audits.miniz_oxide]]
+who = "George Burgess IV <gbiv@google.com>"
+criteria = "safe-to-run"
+version = "0.6.2"
+aggregated-from = "https://chromium.googlesource.com/chromiumos/third_party/rust_crates/+/main/cargo-vet/audits.toml?format=TEXT"
+
+[[audits.google.audits.static_assertions]]
+who = "ChromeOS"
+criteria = "safe-to-run"
+version = "1.1.0"
+aggregated-from = "https://chromium.googlesource.com/chromiumos/third_party/rust_crates/+/main/cargo-vet/audits.toml?format=TEXT"
+
+[[audits.google.audits.version_check]]
+who = "George Burgess IV <gbiv@google.com>"
+criteria = "safe-to-deploy"
+version = "0.9.4"
+aggregated-from = "https://chromium.googlesource.com/chromiumos/third_party/rust_crates/+/main/cargo-vet/audits.toml?format=TEXT"
+
 [[audits.isrg.audits.block-buffer]]
 who = "David Cook <dcook@divviup.org>"
 criteria = "safe-to-deploy"
@@ -110,6 +111,16 @@ version = "0.3.0"
 who = "David Cook <dcook@divviup.org>"
 criteria = "safe-to-deploy"
 version = "0.4.1"
+
+[[audits.isrg.audits.untrusted]]
+who = "David Cook <dcook@divviup.org>"
+criteria = "safe-to-deploy"
+version = "0.7.1"
+
+[[audits.isrg.audits.wasm-bindgen-shared]]
+who = "David Cook <dcook@divviup.org>"
+criteria = "safe-to-deploy"
+version = "0.2.83"
 
 [[audits.mozilla.audits.autocfg]]
 who = "Josh Stone <jistone@redhat.com>"
@@ -153,6 +164,18 @@ who = "Henri Sivonen <hsivonen@hsivonen.fi>"
 criteria = "safe-to-deploy"
 version = "0.8.31"
 notes = "I, Henri Sivonen, wrote encoding_rs for Gecko and have reviewed contributions by others. There are two caveats to the certification: 1) The crate does things that are documented to be UB but that do not appear to actually be UB due to integer types differing from the general rule; https://github.com/hsivonen/encoding_rs/issues/79 . 2) It would be prudent to re-review the code that reinterprets buffers of integers as SIMD vectors; see https://github.com/hsivonen/encoding_rs/issues/87 ."
+aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
+
+[[audits.mozilla.audits.env_logger]]
+who = "Mike Hommey <mh+mozilla@glandium.org>"
+criteria = "safe-to-deploy"
+delta = "0.9.0 -> 0.9.3"
+aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
+
+[[audits.mozilla.audits.env_logger]]
+who = "Nicolas Silva <nical@fastmail.com>"
+criteria = "safe-to-deploy"
+delta = "0.9.3 -> 0.10.0"
 aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
 
 [[audits.mozilla.audits.flagset]]
@@ -278,6 +301,25 @@ This crate contains no unsafe code, and the internal logic, while difficult to
 read, is generally straightforward. I have audited the the quote macros, ident
 formatter, and runtime logic.
 """
+aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
+
+[[audits.mozilla.audits.rustc-hash]]
+who = "Bobby Holley <bobbyholley@gmail.com>"
+criteria = "safe-to-deploy"
+version = "1.1.0"
+notes = "Straightforward crate with no unsafe code, does what it says on the tin."
+aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
+
+[[audits.mozilla.audits.slab]]
+who = "Mike Hommey <mh+mozilla@glandium.org>"
+criteria = "safe-to-deploy"
+delta = "0.4.6 -> 0.4.7"
+aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
+
+[[audits.mozilla.audits.socket2]]
+who = "Mike Hommey <mh+mozilla@glandium.org>"
+criteria = "safe-to-deploy"
+delta = "0.4.4 -> 0.4.7"
 aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
 
 [[audits.mozilla.audits.synstructure]]
