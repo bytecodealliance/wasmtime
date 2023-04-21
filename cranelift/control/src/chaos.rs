@@ -4,15 +4,13 @@ use arbitrary::{Arbitrary, Unstructured};
 /// Please see the [crate-level documentation](crate).
 #[derive(Debug, Clone, Default)]
 pub struct ControlPlane {
-    booleans: Vec<bool>,
-    bytes: Vec<u8>,
+    data: Vec<u8>,
 }
 
 impl Arbitrary<'_> for ControlPlane {
     fn arbitrary<'a>(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
         Ok(Self {
-            booleans: u.arbitrary()?,
-            bytes: u.arbitrary()?,
+            data: u.arbitrary()?,
         })
     }
 }
@@ -25,7 +23,7 @@ impl ControlPlane {
     /// pseudo-random data is exhausted or the control plane was constructed
     /// with `default`.
     pub fn get_decision(&mut self) -> bool {
-        self.booleans.pop().unwrap_or_default()
+        self.data.pop().unwrap_or_default() & 1 == 1
     }
 
     /// Shuffles the items in the slice into a pseudo-random permutation if
@@ -35,7 +33,7 @@ impl ControlPlane {
     /// performed if the pseudo-random data is exhausted or the control
     /// plane was constructed with `default`.
     pub fn shuffle<T>(&mut self, slice: &mut [T]) {
-        let mut u = Unstructured::new(&self.bytes);
+        let mut u = Unstructured::new(&self.data);
 
         // adapted from:
         // https://docs.rs/arbitrary/1.3.0/arbitrary/struct.Unstructured.html#examples-1
@@ -50,7 +48,7 @@ impl ControlPlane {
             }
         }
 
-        self.bytes = u.take_rest().to_vec();
+        self.data = u.take_rest().to_vec();
     }
 
     /// Returns a new iterator over the same items as the input iterator in
