@@ -170,12 +170,18 @@
   (rv_vmul_vv x y ty))
 
 ;;;; Rules for `smulhi` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule (lower (has_type (fits_in_64 ty) (smulhi x y)))
+(rule 0 (lower (has_type (ty_int_ref_scalar_64 ty) (smulhi x y)))
   (lower_smlhi ty (ext_int_if_need $true x ty) (ext_int_if_need $true y ty)))
 
+(rule 1 (lower (has_type (ty_vec_fits_in_register ty) (smulhi x y)))
+  (rv_vmulh_vv x y ty))
+
 ;;;; Rules for `umulhi` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule (lower (has_type (fits_in_64 ty) (umulhi x y)))
+(rule 0 (lower (has_type (ty_int_ref_scalar_64 ty) (umulhi x y)))
   (lower_umlhi ty (ext_int_if_need $false x ty) (ext_int_if_need $false y ty)))
+
+(rule 1 (lower (has_type (ty_vec_fits_in_register ty) (umulhi x y)))
+  (rv_vmulhu_vv x y ty))
 
 ;;;; Rules for `div` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

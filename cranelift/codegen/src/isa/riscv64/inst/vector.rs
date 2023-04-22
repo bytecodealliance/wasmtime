@@ -222,7 +222,7 @@ impl VecAluOpRRR {
             // OPIVV
             VecAluOpRRR::Vadd | VecAluOpRRR::Vsub => 0b000,
             // OPIMV
-            VecAluOpRRR::Vmul => 0b010,
+            VecAluOpRRR::Vmul | VecAluOpRRR::Vmulh | VecAluOpRRR::Vmulhu => 0b010,
         }
     }
     pub fn funct6(&self) -> u32 {
@@ -231,6 +231,8 @@ impl VecAluOpRRR {
             VecAluOpRRR::Vadd => 0b000000,
             VecAluOpRRR::Vsub => 0b000010,
             VecAluOpRRR::Vmul => 0b100101,
+            VecAluOpRRR::Vmulh => 0b100111,
+            VecAluOpRRR::Vmulhu => 0b100100,
         }
     }
 }
@@ -241,6 +243,8 @@ impl fmt::Display for VecAluOpRRR {
             VecAluOpRRR::Vadd => write!(f, "vadd.vv"),
             VecAluOpRRR::Vsub => write!(f, "vsub.vv"),
             VecAluOpRRR::Vmul => write!(f, "vmul.vv"),
+            VecAluOpRRR::Vmulh => write!(f, "vmulh.vv"),
+            VecAluOpRRR::Vmulhu => write!(f, "vmulhu.vv"),
         }
     }
 }
