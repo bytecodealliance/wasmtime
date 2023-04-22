@@ -220,7 +220,11 @@ impl VecAluOpRRR {
     pub fn funct3(&self) -> u32 {
         match self {
             // OPIVV
-            VecAluOpRRR::Vadd | VecAluOpRRR::Vsub => 0b000,
+            VecAluOpRRR::Vadd
+            | VecAluOpRRR::Vsub
+            | VecAluOpRRR::Vand
+            | VecAluOpRRR::Vor
+            | VecAluOpRRR::Vxor => 0b000,
             // OPIMV
             VecAluOpRRR::Vmul | VecAluOpRRR::Vmulh | VecAluOpRRR::Vmulhu => 0b010,
         }
@@ -233,6 +237,9 @@ impl VecAluOpRRR {
             VecAluOpRRR::Vmul => 0b100101,
             VecAluOpRRR::Vmulh => 0b100111,
             VecAluOpRRR::Vmulhu => 0b100100,
+            VecAluOpRRR::Vand => 0b001001,
+            VecAluOpRRR::Vor => 0b001010,
+            VecAluOpRRR::Vxor => 0b001011,
         }
     }
 }
@@ -245,6 +252,9 @@ impl fmt::Display for VecAluOpRRR {
             VecAluOpRRR::Vmul => write!(f, "vmul.vv"),
             VecAluOpRRR::Vmulh => write!(f, "vmulh.vv"),
             VecAluOpRRR::Vmulhu => write!(f, "vmulhu.vv"),
+            VecAluOpRRR::Vand => write!(f, "vand.vv"),
+            VecAluOpRRR::Vor => write!(f, "vor.vv"),
+            VecAluOpRRR::Vxor => write!(f, "vxor.vv"),
         }
     }
 }

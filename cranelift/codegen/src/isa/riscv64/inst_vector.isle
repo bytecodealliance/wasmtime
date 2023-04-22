@@ -63,6 +63,9 @@
   (Vmul)
   (Vmulh)
   (Vmulhu)
+  (Vand)
+  (Vor)
+  (Vxor)
 ))
 
 
@@ -162,3 +165,18 @@
 (decl rv_vmulhu_vv (Reg Reg VState) Reg)
 (rule (rv_vmulhu_vv vs2 vs1 vstate)
   (vec_alu_rrr (VecAluOpRRR.Vmulhu) vs2 vs1 vstate))
+
+;; Helper for emitting the `vand.vv` instruction.
+(decl rv_vand_vv (Reg Reg VState) Reg)
+(rule (rv_vand_vv vs2 vs1 vstate)
+  (vec_alu_rrr (VecAluOpRRR.Vand) vs2 vs1 vstate))
+
+;; Helper for emitting the `vor.vv` instruction.
+(decl rv_vor_vv (Reg Reg VState) Reg)
+(rule (rv_vor_vv vs2 vs1 vstate)
+  (vec_alu_rrr (VecAluOpRRR.Vor) vs2 vs1 vstate))
+
+;; Helper for emitting the `vxor.vv` instruction.
+(decl rv_vxor_vv (Reg Reg VState) Reg)
+(rule (rv_vxor_vv vs2 vs1 vstate)
+  (vec_alu_rrr (VecAluOpRRR.Vxor) vs2 vs1 vstate))
