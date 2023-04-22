@@ -218,14 +218,19 @@ impl VecAluOpRRR {
         0x57
     }
     pub fn funct3(&self) -> u32 {
-        // OPIVV funct3
-        0b000
+        match self {
+            // OPIVV
+            VecAluOpRRR::Vadd | VecAluOpRRR::Vsub => 0b000,
+            // OPIMV
+            VecAluOpRRR::Vmul => 0b010,
+        }
     }
     pub fn funct6(&self) -> u32 {
         // See: https://github.com/riscv/riscv-v-spec/blob/master/inst-table.adoc
         match self {
             VecAluOpRRR::Vadd => 0b000000,
             VecAluOpRRR::Vsub => 0b000010,
+            VecAluOpRRR::Vmul => 0b100101,
         }
     }
 }
@@ -235,6 +240,7 @@ impl fmt::Display for VecAluOpRRR {
         match self {
             VecAluOpRRR::Vadd => write!(f, "vadd.vv"),
             VecAluOpRRR::Vsub => write!(f, "vsub.vv"),
+            VecAluOpRRR::Vmul => write!(f, "vmul.vv"),
         }
     }
 }

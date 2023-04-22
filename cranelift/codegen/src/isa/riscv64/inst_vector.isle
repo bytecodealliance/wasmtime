@@ -60,6 +60,7 @@
 (type VecAluOpRRR (enum
   (Vadd)
   (Vsub)
+  (Vmul)
 ))
 
 
@@ -144,3 +145,8 @@
 (decl rv_vsub_vv (Reg Reg VState) Reg)
 (rule (rv_vsub_vv vs2 vs1 vstate)
   (vec_alu_rrr (VecAluOpRRR.Vsub) vs2 vs1 vstate))
+
+;; Helper for emitting the `vmul.vv` instruction.
+(decl rv_vmul_vv (Reg Reg VState) Reg)
+(rule (rv_vmul_vv vs2 vs1 vstate)
+  (vec_alu_rrr (VecAluOpRRR.Vmul) vs2 vs1 vstate))

@@ -133,21 +133,14 @@
 
 ;;;; Rules for `imul` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule -2 (lower (has_type (fits_in_64 ty) (imul x y)))
+(rule 0 (lower (has_type (ty_int_ref_scalar_64 ty) (imul x y)))
   (rv_mul x y))
-(rule -1 (lower (has_type (fits_in_32 ty) (imul x y)))
+
+(rule 1 (lower (has_type (fits_in_32 (ty_int ty)) (imul x y)))
   (rv_mulw x y))
 
-;;;; Rules for `smulhi` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule (lower (has_type (fits_in_64 ty) (smulhi x y)))
-  (lower_smlhi ty (ext_int_if_need $true x ty) (ext_int_if_need $true y ty)))
-
-;;;; Rules for `umulhi` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule (lower (has_type (fits_in_64 ty) (umulhi x y)))
-  (lower_umlhi ty (ext_int_if_need $false x ty) (ext_int_if_need $false y ty)))
-
 ;; for I128
-(rule (lower (has_type $I128 (imul x y)))
+(rule 2 (lower (has_type $I128 (imul x y)))
   (let
     ((x_regs ValueRegs x)
       (x_lo Reg (value_regs_get x_regs 0))
@@ -173,6 +166,16 @@
       (dst_lo Reg (madd x_lo y_lo (zero_reg))))
     (value_regs dst_lo dst_hi)))
 
+(rule 3 (lower (has_type (ty_vec_fits_in_register ty) (imul x y)))
+  (rv_vmul_vv x y ty))
+
+;;;; Rules for `smulhi` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(rule (lower (has_type (fits_in_64 ty) (smulhi x y)))
+  (lower_smlhi ty (ext_int_if_need $true x ty) (ext_int_if_need $true y ty)))
+
+;;;; Rules for `umulhi` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(rule (lower (has_type (fits_in_64 ty) (umulhi x y)))
+  (lower_umlhi ty (ext_int_if_need $false x ty) (ext_int_if_need $false y ty)))
 
 ;;;; Rules for `div` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
