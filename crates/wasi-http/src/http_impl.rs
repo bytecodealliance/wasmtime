@@ -24,21 +24,16 @@ impl crate::default_outgoing_http::Host for WasiHttp {
         request_id: crate::default_outgoing_http::OutgoingRequest,
         options: Option<crate::default_outgoing_http::RequestOptions>,
     ) -> wasmtime::Result<crate::default_outgoing_http::FutureIncomingResponse> {
-        // TODO: Initialize this once?
-        let rt = Runtime::new().unwrap();
-        let _enter = rt.enter();
-
+        let (handle, _runtime) = match tokio::runtime::Handle::try_current() {
+            Ok(h) => (h, None),
+            Err(_) => {
+                let rt = Runtime::new().unwrap();
+                let _enter = rt.enter();
+                (rt.handle().clone(), Some(rt))
+            }
+        };
         let f = self.handle_async(request_id, options);
-        match rt.block_on(f) {
-            Ok(r) => {
-                println!("{} OK", r);
-                Ok(r)
-            }
-            Err(e) => {
-                println!("{} ERR", e);
-                Err(e)
-            }
-        }
+        handle.block_on(f)
     }
 }
 
