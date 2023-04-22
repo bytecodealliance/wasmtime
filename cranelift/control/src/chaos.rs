@@ -59,17 +59,4 @@ impl ControlPlane {
         self.tmp.copy_from_slice(rest);
         std::mem::swap(&mut self.data, &mut self.tmp);
     }
-
-    /// Returns a new iterator over the same items as the input iterator in
-    /// a pseudo-random order if the control plane was constructed with
-    /// `arbitrary`.
-    ///
-    /// The default value, an iterator with an unchanged order, will always
-    /// be returned if the pseudo-random data is exhausted or the control
-    /// plane was constructed with `default`.
-    pub fn change_order<T>(&mut self, iter: impl Iterator<Item = T>) -> impl Iterator<Item = T> {
-        let mut slice: Vec<_> = iter.collect();
-        self.shuffle(&mut slice);
-        slice.into_iter()
-    }
 }
