@@ -445,7 +445,6 @@ impl Inst {
             | Inst::Select { .. }
             | Inst::AtomicCas { .. }
             | Inst::IntSelect { .. }
-            | Inst::Csr { .. }
             | Inst::Icmp { .. }
             | Inst::SelectReg { .. }
             | Inst::FcvtToInt { .. }
@@ -1661,23 +1660,6 @@ impl MachInstEmit for Inst {
                 sink.bind_label(label_false, &mut state.ctrl_plane);
                 gen_move(&dst, &y, sink, state);
                 sink.bind_label(label_done, &mut state.ctrl_plane);
-            }
-            &Inst::Csr {
-                csr_op,
-                rd,
-                rs,
-                imm,
-                csr,
-            } => {
-                let rs = rs.map(|r| allocs.next(r));
-                let rd = allocs.next_writable(rd);
-                let x = csr_op.op_code()
-                    | reg_to_gpr_num(rd.to_reg()) << 7
-                    | csr_op.funct3() << 12
-                    | csr_op.rs1(rs, imm) << 15
-                    | csr.as_u32() << 20;
-
-                sink.put4(x);
             }
 
             &Inst::SelectReg {
