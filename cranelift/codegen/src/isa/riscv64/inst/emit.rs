@@ -684,13 +684,14 @@ impl MachInstEmit for Inst {
                     // Register the offset at which the actual load instruction starts.
                     sink.add_trap(TrapCode::HeapOutOfBounds);
                 }
-                sink.put4(
-                    op.op_code()
-                        | reg_to_gpr_num(rd.to_reg()) << 7
-                        | op.funct3() << 12
-                        | reg_to_gpr_num(addr) << 15
-                        | (imm12.as_u32()) << 20,
-                );
+
+                sink.put4(encode_i_type(
+                    op.op_code(),
+                    rd.to_reg(),
+                    op.funct3(),
+                    addr,
+                    imm12,
+                ));
             }
             &Inst::Store { op, src, flags, to } => {
                 let base = allocs.next(to.get_base_register());
