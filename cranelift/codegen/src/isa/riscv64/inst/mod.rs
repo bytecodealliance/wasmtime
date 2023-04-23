@@ -55,7 +55,7 @@ pub(crate) type VecWritableReg = Vec<Writable<Reg>>;
 
 use crate::isa::riscv64::lower::isle::generated_code::MInst;
 pub use crate::isa::riscv64::lower::isle::generated_code::{
-    AluOPRRI, AluOPRRR, AtomicOP, CsrOP, FClassResult, FFlagsException, FenceFm, FloatRoundOP,
+    AluOPRRI, AluOPRRR, AtomicOP, FClassResult, FFlagsException, FenceFm, FloatRoundOP,
     FloatSelectOP, FpuOPRR, FpuOPRRR, FpuOPRRRR, IntSelectOP, LoadOP, MInst as Inst, StoreOP, FRM,
 };
 
@@ -519,13 +519,6 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             for d in dst.iter() {
                 collector.reg_early_def(d.clone());
             }
-        }
-
-        &Inst::Csr { rd, rs, .. } => {
-            if let Some(rs) = rs {
-                collector.reg_use(rs);
-            }
-            collector.reg_def(rd);
         }
 
         &Inst::Icmp { rd, a, b, .. } => {
@@ -1311,21 +1304,6 @@ impl Inst {
                         rs2,
                         format_frm(frm)
                     )
-                }
-            }
-            &Inst::Csr {
-                csr_op,
-                rd,
-                rs,
-                imm,
-                csr,
-            } => {
-                let rs = rs.map_or("".into(), |r| format_reg(r, allocs));
-                let rd = format_reg(rd.to_reg(), allocs);
-                if csr_op.need_rs() {
-                    format!("{} {},{},{}", csr_op.op_name(), rd, csr, rs)
-                } else {
-                    format!("{} {},{},{}", csr_op.op_name(), rd, csr, imm.unwrap())
                 }
             }
             &Inst::FpuRRRR {
