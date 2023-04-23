@@ -42,6 +42,14 @@ impl AMode {
         AMode::RegOffset(reg, imm, ty)
     }
 
+    pub(crate) fn with_allocs(self, allocs: &mut AllocationConsumer<'_>) -> Self {
+        let reg = allocs.next(self.get_base_register());
+        match self {
+            AMode::RegOffset(_, offset, ty) => AMode::RegOffset(reg, offset, ty),
+            AMode::SPOffset(..) | AMode::FPOffset(..) | AMode::NominalSPOffset(..) => self,
+        }
+    }
+
     pub(crate) fn get_base_register(&self) -> Reg {
         match self {
             &AMode::RegOffset(reg, ..) => reg,

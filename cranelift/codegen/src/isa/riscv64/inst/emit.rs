@@ -664,10 +664,10 @@ impl MachInstEmit for Inst {
                 from,
                 flags,
             } => {
+                let from = from.clone().with_allocs(&mut allocs);
                 let base = from.get_base_register();
-                let base = allocs.next(base);
-                let rd = allocs.next_writable(rd);
                 let offset = from.get_offset_with_state(state);
+                let rd = allocs.next_writable(rd);
 
                 let (addr, imm12) = if let Some(imm12) = Imm12::maybe_from_u64(offset as u64) {
                     // If the offset fits into an imm12 we can directly encode it.
@@ -694,9 +694,10 @@ impl MachInstEmit for Inst {
                 ));
             }
             &Inst::Store { op, src, flags, to } => {
-                let base = allocs.next(to.get_base_register());
-                let src = allocs.next(src);
+                let to = to.clone().with_allocs(&mut allocs);
+                let base = to.get_base_register();
                 let offset = to.get_offset_with_state(state);
+                let src = allocs.next(src);
 
                 let (addr, imm12) = if let Some(imm12) = Imm12::maybe_from_u64(offset as u64) {
                     // If the offset fits into an imm12 we can directly encode it.
@@ -1178,10 +1179,10 @@ impl MachInstEmit for Inst {
                     }
                     .emit(&[], sink, emit_info, state);
                 } else {
-                    let insts = LoadConstant::U64(offset as u64).load_constant_and_add(rd, base);
-                    insts
+                    LoadConstant::U64(offset as u64)
+                        .load_constant_and_add(rd, base)
                         .into_iter()
-                        .for_each(|i| i.emit(&[], sink, emit_info, state));
+                        .for_each(|inst| inst.emit(&[], sink, emit_info, state));
                 }
             }
 
@@ -2798,16 +2799,20 @@ impl MachInstEmit for Inst {
                 flags,
                 ..
             } => {
-                let offset = from.get_offset_with_state(state);
-                let from_reg = allocs.next(from.get_base_register());
+                let from = from.clone().with_allocs(&mut allocs);
                 let to = allocs.next_writable(to);
 
                 // Vector Loads don't support immediate offsets, so we need to load it into a register.
-                let addr = writable_spilltmp_reg();
-                LoadConstant::U64(offset as u64)
-                    .load_constant_and_add(addr, from_reg)
-                    .into_iter()
-                    .for_each(|inst| inst.emit(&[], sink, emit_info, state));
+                let addr = match from {
+                    VecAMode::UnitStride { base } if base.get_offset_with_state(state) == 0 => {
+                        base.get_base_register()
+                    }
+                    VecAMode::UnitStride { base } => {
+                        let tmp = writable_spilltmp_reg();
+                        Inst::LoadAddr { rd: tmp, mem: base }.emit(&[], sink, emit_info, state);
+                        tmp.to_reg()
+                    }
+                };
 
                 let srcloc = state.cur_srcloc();
                 if !srcloc.is_default() && !flags.notrap() {
@@ -2819,7 +2824,7 @@ impl MachInstEmit for Inst {
                     0x07,
                     to.to_reg(),
                     eew,
-                    addr.to_reg(),
+                    addr,
                     from.lumop(),
                     // We don't implement masking yet.
                     VecOpMasking::Disabled,
@@ -2835,16 +2840,20 @@ impl MachInstEmit for Inst {
                 flags,
                 ..
             } => {
-                let offset = to.get_offset_with_state(state);
-                let to_reg = allocs.next(to.get_base_register());
+                let to = to.clone().with_allocs(&mut allocs);
                 let from = allocs.next(from);
 
                 // Vector Stores don't support immediate offsets, so we need to load it into a register.
-                let addr = writable_spilltmp_reg();
-                LoadConstant::U64(offset as u64)
-                    .load_constant_and_add(addr, to_reg)
-                    .into_iter()
-                    .for_each(|inst| inst.emit(&[], sink, emit_info, state));
+                let addr = match to {
+                    VecAMode::UnitStride { base } if base.get_offset_with_state(state) == 0 => {
+                        base.get_base_register()
+                    }
+                    VecAMode::UnitStride { base } => {
+                        let tmp = writable_spilltmp_reg();
+                        Inst::LoadAddr { rd: tmp, mem: base }.emit(&[], sink, emit_info, state);
+                        tmp.to_reg()
+                    }
+                };
 
                 let srcloc = state.cur_srcloc();
                 if !srcloc.is_default() && !flags.notrap() {
@@ -2856,7 +2865,7 @@ impl MachInstEmit for Inst {
                     0x27,
                     from,
                     eew,
-                    addr.to_reg(),
+                    addr,
                     to.sumop(),
                     // We don't implement masking yet.
                     VecOpMasking::Disabled,
