@@ -664,80 +664,62 @@ impl MachInstEmit for Inst {
                 from,
                 flags,
             } => {
-                let x;
                 let base = from.get_base_register();
                 let base = allocs.next(base);
                 let rd = allocs.next_writable(rd);
                 let offset = from.get_offset_with_state(state);
-                if let Some(imm12) = Imm12::maybe_from_u64(offset as u64) {
-                    let srcloc = state.cur_srcloc();
-                    if !srcloc.is_default() && !flags.notrap() {
-                        // Register the offset at which the actual load instruction starts.
-                        sink.add_trap(TrapCode::HeapOutOfBounds);
-                    }
-                    x = op.op_code()
+
+                let (addr, imm12) = if let Some(imm12) = Imm12::maybe_from_u64(offset as u64) {
+                    // If the offset fits into an imm12 we can directly encode it.
+                    (base, imm12)
+                } else {
+                    // Otherwise load the address it into a reg and load from it.
+                    let tmp = writable_spilltmp_reg();
+                    Inst::LoadAddr { rd: tmp, mem: from }.emit(&[], sink, emit_info, state);
+                    (tmp.to_reg(), Imm12::zero())
+                };
+
+                let srcloc = state.cur_srcloc();
+                if !srcloc.is_default() && !flags.notrap() {
+                    // Register the offset at which the actual load instruction starts.
+                    sink.add_trap(TrapCode::HeapOutOfBounds);
+                }
+                sink.put4(
+                    op.op_code()
                         | reg_to_gpr_num(rd.to_reg()) << 7
                         | op.funct3() << 12
-                        | reg_to_gpr_num(base) << 15
-                        | (imm12.as_u32()) << 20;
-                    sink.put4(x);
-                } else {
-                    let tmp = writable_spilltmp_reg();
-                    let mut insts =
-                        LoadConstant::U64(offset as u64).load_constant_and_add(tmp, base);
-                    let srcloc = state.cur_srcloc();
-                    if !srcloc.is_default() && !flags.notrap() {
-                        // Register the offset at which the actual load instruction starts.
-                        sink.add_trap(TrapCode::HeapOutOfBounds);
-                    }
-                    insts.push(Inst::Load {
-                        op,
-                        from: AMode::RegOffset(tmp.to_reg(), 0, I64),
-                        rd,
-                        flags,
-                    });
-                    insts
-                        .into_iter()
-                        .for_each(|inst| inst.emit(&[], sink, emit_info, state));
-                }
+                        | reg_to_gpr_num(addr) << 15
+                        | (imm12.as_u32()) << 20,
+                );
             }
             &Inst::Store { op, src, flags, to } => {
                 let base = allocs.next(to.get_base_register());
                 let src = allocs.next(src);
                 let offset = to.get_offset_with_state(state);
-                let x;
-                if let Some(imm12) = Imm12::maybe_from_u64(offset as u64) {
-                    let srcloc = state.cur_srcloc();
-                    if !srcloc.is_default() && !flags.notrap() {
-                        // Register the offset at which the actual load instruction starts.
-                        sink.add_trap(TrapCode::HeapOutOfBounds);
-                    }
-                    x = op.op_code()
+
+                let (addr, imm12) = if let Some(imm12) = Imm12::maybe_from_u64(offset as u64) {
+                    // If the offset fits into an imm12 we can directly encode it.
+                    (base, imm12)
+                } else {
+                    // Otherwise load the address it into a reg and load from it.
+                    let tmp = writable_spilltmp_reg();
+                    Inst::LoadAddr { rd: tmp, mem: to }.emit(&[], sink, emit_info, state);
+                    (tmp.to_reg(), Imm12::zero())
+                };
+
+                let srcloc = state.cur_srcloc();
+                if !srcloc.is_default() && !flags.notrap() {
+                    // Register the offset at which the actual load instruction starts.
+                    sink.add_trap(TrapCode::HeapOutOfBounds);
+                }
+                sink.put4(
+                    op.op_code()
                         | (imm12.as_u32() & 0x1f) << 7
                         | op.funct3() << 12
-                        | reg_to_gpr_num(base) << 15
+                        | reg_to_gpr_num(addr) << 15
                         | reg_to_gpr_num(src) << 20
-                        | (imm12.as_u32() >> 5) << 25;
-                    sink.put4(x);
-                } else {
-                    let tmp = writable_spilltmp_reg();
-                    let mut insts =
-                        LoadConstant::U64(offset as u64).load_constant_and_add(tmp, base);
-                    let srcloc = state.cur_srcloc();
-                    if !srcloc.is_default() && !flags.notrap() {
-                        // Register the offset at which the actual load instruction starts.
-                        sink.add_trap(TrapCode::HeapOutOfBounds);
-                    }
-                    insts.push(Inst::Store {
-                        op,
-                        to: AMode::RegOffset(tmp.to_reg(), 0, I64),
-                        flags,
-                        src,
-                    });
-                    insts
-                        .into_iter()
-                        .for_each(|inst| inst.emit(&[], sink, emit_info, state));
-                }
+                        | (imm12.as_u32() >> 5) << 25,
+                );
             }
             &Inst::Args { .. } => {
                 // Nothing: this is a pseudoinstruction that serves
