@@ -67,6 +67,22 @@ pub fn encode_i_type(opcode: u32, rd: Reg, width: u32, rs1: Reg, offset: Imm12) 
     bits
 }
 
+/// Encode an S-type instruction.
+///
+/// Layout:
+/// 0-------6-7-------11-12------14-15------19-20---24-25-------------31
+/// | Opcode | imm[4:0] |  width   |   base   |  src  |    imm[11:5]   |
+pub fn encode_s_type(opcode: u32, width: u32, base: Reg, src: Reg, offset: Imm12) -> u32 {
+    let mut bits = 0;
+    bits |= opcode & 0b1111111;
+    bits |= (offset.as_u32() & 0b11111) << 7;
+    bits |= (width & 0b111) << 12;
+    bits |= reg_to_gpr_num(base) << 15;
+    bits |= reg_to_gpr_num(src) << 20;
+    bits |= ((offset.as_u32() >> 5) & 0b1111111) << 25;
+    bits
+}
+
 /// Encodes a Vector ALU instruction.
 ///
 /// Fields:

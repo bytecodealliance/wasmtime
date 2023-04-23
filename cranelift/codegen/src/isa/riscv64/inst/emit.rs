@@ -713,14 +713,8 @@ impl MachInstEmit for Inst {
                     // Register the offset at which the actual load instruction starts.
                     sink.add_trap(TrapCode::HeapOutOfBounds);
                 }
-                sink.put4(
-                    op.op_code()
-                        | (imm12.as_u32() & 0x1f) << 7
-                        | op.funct3() << 12
-                        | reg_to_gpr_num(addr) << 15
-                        | reg_to_gpr_num(src) << 20
-                        | (imm12.as_u32() >> 5) << 25,
-                );
+
+                sink.put4(encode_s_type(op.op_code(), op.funct3(), addr, src, imm12));
             }
             &Inst::Args { .. } => {
                 // Nothing: this is a pseudoinstruction that serves
