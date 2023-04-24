@@ -466,10 +466,11 @@ async fn run_path_symlink_trailing_slashes(store: Store<WasiCtx>, wasi: Command)
 }
 
 async fn run_poll_oneoff_files(store: Store<WasiCtx>, wasi: Command) -> Result<()> {
-    // trapping upwrap in poll_oneoff in adapter.
-    // maybe this is related to the "if fd isnt a stream, request a pollable which completes
-    // immediately so itll immediately fail" behavior, which i think breaks internal invariant...
-    expect_fail(run_with_temp_dir(store, wasi).await)
+    if cfg!(windows) {
+        expect_fail(run_with_temp_dir(store, wasi).await)
+    } else {
+        run_with_temp_dir(store, wasi).await
+    }
 }
 
 async fn run_poll_oneoff_stdio(store: Store<WasiCtx>, wasi: Command) -> Result<()> {
