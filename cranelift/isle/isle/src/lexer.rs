@@ -2,7 +2,7 @@
 
 use crate::error::{Error, Errors, Span};
 use std::borrow::Cow;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 type Result<T> = std::result::Result<T, Errors>;
@@ -91,21 +91,26 @@ impl<'a> Lexer<'a> {
     where
         P: AsRef<Path>,
     {
+        let mut files = vec![];
+        for f in file_paths.into_iter() {
+            let f = f.as_ref().to_path_buf();
+            let s = std::fs::read_to_string(f.as_path())
+                .map_err(|e| Errors::from_io(e, format!("failed to read file: {}", f.display())))?;
+            files.push((f, s));
+        }
+        Self::from_file_contents(files)
+    }
+
+    /// Create a new lexer from the given files and contents.
+    pub fn from_file_contents(files: Vec<(PathBuf, String)>) -> Result<Lexer<'a>> {
         let mut filenames = Vec::<Arc<str>>::new();
         let mut file_texts = Vec::<Arc<str>>::new();
-
-        for f in file_paths {
-            let f = f.as_ref();
-
+        for (f, content) in files.iter() {
             filenames.push(f.display().to_string().into());
 
-            let s = std::fs::read_to_string(f)
-                .map_err(|e| Errors::from_io(e, format!("failed to read file: {}", f.display())))?;
-            file_texts.push(s.into());
+            file_texts.push(content.as_str().into());
         }
-
         assert!(!filenames.is_empty());
-
         let mut file_starts = vec![];
         let mut buf = String::new();
         for text in &file_texts {
@@ -113,7 +118,6 @@ impl<'a> Lexer<'a> {
             buf += text;
             buf += "\n";
         }
-
         let mut l = Lexer {
             filenames,
             file_texts,
