@@ -37,6 +37,7 @@ wasmtime-wasi-http = { workspace = true, optional = true }
 clap = { workspace = true, features = ["color", "suggestions", "derive"] }
 anyhow = { workspace = true }
 target-lexicon = { workspace = true }
+fxprof-processed-profile = "0.6.0"
 humantime = "2.0.0"
 once_cell = { workspace = true }
 listenfd = "1.0.0"
