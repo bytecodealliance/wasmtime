@@ -11,12 +11,12 @@
 
 ;; ;;;; Rules for `vconst` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; (rule (lower (has_type (ty_vec_fits_in_register ty) (vconst n)))
-;;   (vec_load
-;;     (element_width_from_type ty)
-;;     (VecAMode.UnitStride (gen_const_amode (const_to_vconst n)))
-;;     (mem_flags_trusted)
-;;     ty))
+(rule (lower (has_type (ty_vec_fits_in_register ty) (vconst n)))
+  (vec_load
+    (element_width_from_type ty)
+    (VecAMode.UnitStride (gen_const_amode (const_to_vconst n)))
+    (mem_flags_trusted)
+    ty))
 
 ;;;; Rules for `f32const` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

@@ -91,7 +91,7 @@ impl AMode {
         let reg = self.get_base_register().map(|r| allocs.next(r));
         match (self, reg) {
             (&AMode::NominalSPOffset(..), _) => format!("{}", self),
-            (&AMode::Const(addr), _) => format!("{}(const)", addr.as_u32()),
+            (&AMode::Const(addr), _) => format!("[const({})]", addr.as_u32()),
             (&AMode::Label(label), _) => format!("[label{}]", label.as_u32()),
             (_, Some(reg)) => format!("{}({})", self.get_offset(), reg_name(reg)),
             (_, None) => unreachable!(),
