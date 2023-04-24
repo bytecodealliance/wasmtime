@@ -1664,6 +1664,20 @@ pub enum LabelUse {
     /// is added to the current pc to give the target address. The
     /// conditional branch range is ±4 KiB.
     B12,
+
+    /// Equivalent to the `R_RISCV_PCREL_HI20` relocation, Allows setting
+    /// the immediate field of an `auipc` instruction.
+    ///
+    /// Since we currently don't support offsets in labels, this relocation has
+    /// an implicit offset of 4.
+    PCRelHi20,
+
+    /// Equivalent to the `R_RISCV_PCREL_LO12_I` relocation, Allows setting
+    /// the immediate field of I Type instructions such as `addi` or `lw`.
+    ///
+    /// Since we currently don't support offsets in labels, this relocation has
+    /// an implicit offset of 4.
+    PCRelLo12I,
 }
 
 impl MachInstLabelUse for LabelUse {
@@ -1675,7 +1689,9 @@ impl MachInstLabelUse for LabelUse {
     fn max_pos_range(self) -> CodeOffset {
         match self {
             LabelUse::Jal20 => ((1 << 19) - 1) * 2,
-            LabelUse::PCRel32 => Inst::imm_max() as CodeOffset,
+            LabelUse::PCRelLo12I | LabelUse::PCRelHi20 | LabelUse::PCRel32 => {
+                Inst::imm_max() as CodeOffset
+            }
             LabelUse::B12 => ((1 << 11) - 1) * 2,
         }
     }
@@ -1691,9 +1707,8 @@ impl MachInstLabelUse for LabelUse {
     /// Size of window into code needed to do the patch.
     fn patch_size(self) -> CodeOffset {
         match self {
-            LabelUse::Jal20 => 4,
+            LabelUse::Jal20 | LabelUse::B12 | LabelUse::PCRelHi20 | LabelUse::PCRelLo12I => 4,
             LabelUse::PCRel32 => 8,
-            LabelUse::B12 => 4,
         }
     }
 
@@ -1718,8 +1733,7 @@ impl MachInstLabelUse for LabelUse {
     /// Is a veneer supported for this label reference type?
     fn supports_veneer(self) -> bool {
         match self {
-            Self::B12 => true,
-            Self::Jal20 => true,
+            Self::Jal20 | Self::B12 => true,
             _ => false,
         }
     }
@@ -1727,8 +1741,7 @@ impl MachInstLabelUse for LabelUse {
     /// How large is the veneer, if supported?
     fn veneer_size(self) -> CodeOffset {
         match self {
-            Self::B12 => 8,
-            Self::Jal20 => 8,
+            Self::B12 | Self::Jal20 => 8,
             _ => unreachable!(),
         }
     }
@@ -1811,6 +1824,19 @@ impl LabelUse {
                     | ((offset >> 5 & 0b11_1111) << 25)
                     | ((offset >> 12 & 0b1) << 31);
                 buffer[0..4].clone_from_slice(&u32::to_le_bytes(insn | v));
+            }
+
+            LabelUse::PCRelHi20 => {
+                let offset = offset as u32 + 4;
+                let hi20 = offset & 0xFFFFF000;
+                let insn = (insn & 0xFFF) | hi20;
+                buffer[0..4].clone_from_slice(&u32::to_le_bytes(insn));
+            }
+
+            LabelUse::PCRelLo12I => {
+                let offset = (offset as u32 + 4) & 0xFFF;
+                let insn = (insn & 0xFFFFF) | (offset << 20);
+                buffer[0..4].clone_from_slice(&u32::to_le_bytes(insn));
             }
         }
     }

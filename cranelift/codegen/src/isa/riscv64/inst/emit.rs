@@ -1195,15 +1195,39 @@ impl MachInstEmit for Inst {
                             .into_iter()
                             .for_each(|inst| inst.emit(&[], sink, emit_info, state));
                     }
-                    (AMode::Const(addr), None, _) => unimplemented!("LoadAddr: {:?}", addr),
-                    (AMode::Label(label), None, _) => unimplemented!("LoadAddr: {:?}", label),
+                    (AMode::Const(addr), None, _) => {
+                        // Get an address label for the constant and recurse.
+                        let label = sink.get_label_for_constant(addr);
+                        Inst::LoadAddr {
+                            rd,
+                            mem: AMode::Label(label),
+                        }
+                        .emit(&[], sink, emit_info, state);
+                    }
+                    (AMode::Label(label), None, _) => {
+                        // Get the current PC.
+                        sink.use_label_at_offset(sink.cur_offset(), label, LabelUse::PCRelHi20);
+                        let inst = Inst::Auipc {
+                            rd,
+                            imm: Imm20::from_bits(0),
+                        };
+                        inst.emit(&[], sink, emit_info, state);
+
+                        // Emit an add to the address with a relocation.
+                        // This later gets patched up with the correct offset.
+                        sink.use_label_at_offset(sink.cur_offset(), label, LabelUse::PCRelLo12I);
+                        Inst::AluRRImm12 {
+                            alu_op: AluOPRRI::Addi,
+                            rd,
+                            rs: rd.to_reg(),
+                            imm12: Imm12::zero(),
+                        }
+                        .emit(&[], sink, emit_info, state);
+                    }
                     (amode, _, _) => {
                         unimplemented!("LoadAddr: {:?}", amode);
                     }
                 }
-
-                // let label = sink.get_label_for_constant(*addr);
-                // let label = MemLabel::Mach(label);
             }
 
             &Inst::Select {
