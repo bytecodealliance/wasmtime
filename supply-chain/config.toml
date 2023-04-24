@@ -459,7 +459,7 @@ version = "0.5.1"
 criteria = "safe-to-run"
 
 [[exemptions.mio]]
-version = "0.8.2"
+version = "0.8.5"
 criteria = "safe-to-deploy"
 
 [[exemptions.miow]]
