@@ -1585,7 +1585,6 @@ pub unsafe extern "C" fn poll_oneoff(
                 )
                 .trapping_unwrap()
     );
-
     // Store the pollable handles at the beginning, and the bool results at the
     // end, so that we don't clobber the bool results when writting the events.
     let pollables = out as *mut c_void as *mut Pollable;
@@ -1653,36 +1652,23 @@ pub unsafe extern "C" fn poll_oneoff(
                 }
 
                 EVENTTYPE_FD_READ => {
-                    match state
+                    let stream = state
                         .descriptors()
-                        .get_read_stream(subscription.u.u.fd_read.file_descriptor)
-                    {
-                        Ok(stream) => streams::subscribe_to_input_stream(stream),
-                        // If the file descriptor isn't a stream, request a
-                        // pollable which completes immediately so that it'll
-                        // immediately fail.
-                        Err(ERRNO_BADF) => monotonic_clock::subscribe(0, false),
-                        Err(e) => return Err(e),
-                    }
+                        .get_read_stream(subscription.u.u.fd_read.file_descriptor)?;
+                    streams::subscribe_to_input_stream(stream)
                 }
 
                 EVENTTYPE_FD_WRITE => {
-                    match state
+                    let stream = state
                         .descriptors()
-                        .get_write_stream(subscription.u.u.fd_write.file_descriptor)
-                    {
-                        Ok(stream) => streams::subscribe_to_output_stream(stream),
-                        // If the file descriptor isn't a stream, request a
-                        // pollable which completes immediately so that it'll
-                        // immediately fail.
-                        Err(ERRNO_BADF) => monotonic_clock::subscribe(0, false),
-                        Err(e) => return Err(e),
-                    }
+                        .get_write_stream(subscription.u.u.fd_write.file_descriptor)?;
+                    streams::subscribe_to_output_stream(stream)
                 }
 
                 _ => return Err(ERRNO_INVAL),
             });
         }
+
         let vec = state.import_alloc.with_buffer(
             results,
             nsubscriptions
@@ -1776,7 +1762,7 @@ pub unsafe extern "C" fn poll_oneoff(
                     type_ = wasi::EVENTTYPE_FD_WRITE;
                     let ds = state.descriptors();
                     let desc = ds
-                        .get(subscription.u.u.fd_read.file_descriptor)
+                        .get(subscription.u.u.fd_write.file_descriptor)
                         .trapping_unwrap();
                     match desc {
                         Descriptor::Streams(streams) => match streams.type_ {
