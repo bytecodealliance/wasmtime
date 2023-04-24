@@ -1,5 +1,5 @@
 use std::{env, process};
-use wasi_tests::{assert_errno, open_scratch_directory, TESTCONFIG};
+use wasi_tests::{assert_errno, open_scratch_directory};
 
 unsafe fn test_renumber(dir_fd: wasi::Fd) {
     let pre_fd: wasi::Fd = (libc::STDERR_FILENO + 1) as wasi::Fd;
@@ -62,16 +62,14 @@ unsafe fn test_renumber(dir_fd: wasi::Fd) {
         fdstat_from.fs_flags, fdstat_to.fs_flags,
         "expected fd_to have the same fdstat as fd_from"
     );
-    if TESTCONFIG.support_rights_readback() {
-        assert_eq!(
-            fdstat_from.fs_rights_base, fdstat_to.fs_rights_base,
-            "expected fd_to have the same fdstat as fd_from"
-        );
-        assert_eq!(
-            fdstat_from.fs_rights_inheriting, fdstat_to.fs_rights_inheriting,
-            "expected fd_to have the same fdstat as fd_from"
-        );
-    }
+    assert_eq!(
+        fdstat_from.fs_rights_base, fdstat_to.fs_rights_base,
+        "expected fd_to have the same fdstat as fd_from"
+    );
+    assert_eq!(
+        fdstat_from.fs_rights_inheriting, fdstat_to.fs_rights_inheriting,
+        "expected fd_to have the same fdstat as fd_from"
+    );
 
     wasi::fd_close(fd_to).expect("closing a file");
 }

@@ -3,7 +3,6 @@ pub struct TestConfig {
     no_dangling_filesystem: bool,
     no_rename_dir_to_empty_dir: bool,
     no_fdflags_sync_support: bool,
-    no_rights_readback_support: bool,
 }
 
 enum ErrnoMode {
@@ -27,15 +26,11 @@ impl TestConfig {
         let no_dangling_filesystem = std::env::var("NO_DANGLING_FILESYSTEM").is_ok();
         let no_rename_dir_to_empty_dir = std::env::var("NO_RENAME_DIR_TO_EMPTY_DIR").is_ok();
         let no_fdflags_sync_support = std::env::var("NO_FDFLAGS_SYNC_SUPPORT").is_ok();
-        // Current support for rights readback is buggy, lets ignore that in tests and get
-        // everything working first:
-        let no_rights_readback_support = std::env::var("NO_RIGHTS_READBACK_SUPPORT").is_ok();
         TestConfig {
             errno_mode,
             no_dangling_filesystem,
             no_rename_dir_to_empty_dir,
             no_fdflags_sync_support,
-            no_rights_readback_support,
         }
     }
     pub fn errno_expect_unix(&self) -> bool {
@@ -64,10 +59,5 @@ impl TestConfig {
     }
     pub fn support_fdflags_sync(&self) -> bool {
         !self.no_fdflags_sync_support
-    }
-    // Current support for rights readback is buggy, lets ignore that in tests and get
-    // everything working first:
-    pub fn support_rights_readback(&self) -> bool {
-        !self.no_rights_readback_support
     }
 }

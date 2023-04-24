@@ -98,10 +98,7 @@ unsafe fn test_fd_readdir(dir_fd: wasi::Fd) {
         0,
         "file",
         wasi::OFLAGS_CREAT,
-        wasi::RIGHTS_FD_READ
-            | wasi::RIGHTS_FD_WRITE
-            | wasi::RIGHTS_FD_READDIR
-            | wasi::RIGHTS_FD_FILESTAT_GET,
+        wasi::RIGHTS_FD_READ | wasi::RIGHTS_FD_WRITE,
         0,
         0,
     )
@@ -155,10 +152,7 @@ unsafe fn test_fd_readdir_lots(dir_fd: wasi::Fd) {
             0,
             &format!("file.{}", count),
             wasi::OFLAGS_CREAT,
-            wasi::RIGHTS_FD_READ
-                | wasi::RIGHTS_FD_WRITE
-                | wasi::RIGHTS_FD_READDIR
-                | wasi::RIGHTS_FD_FILESTAT_GET,
+            wasi::RIGHTS_FD_READ | wasi::RIGHTS_FD_WRITE,
             0,
             0,
         )
