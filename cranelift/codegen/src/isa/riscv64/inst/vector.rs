@@ -305,7 +305,7 @@ impl fmt::Display for VecAluOpRRImm5 {
 }
 
 impl VecAMode {
-    pub fn get_base_register(&self) -> Reg {
+    pub fn get_base_register(&self) -> Option<Reg> {
         match self {
             VecAMode::UnitStride { base, .. } => base.get_base_register(),
         }

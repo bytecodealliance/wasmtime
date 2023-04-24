@@ -388,11 +388,15 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_def(rd);
         }
         &Inst::Load { rd, from, .. } => {
-            collector.reg_use(from.get_base_register());
+            if let Some(r) = from.get_base_register() {
+                collector.reg_use(r);
+            }
             collector.reg_def(rd);
         }
         &Inst::Store { to, src, .. } => {
-            collector.reg_use(to.get_base_register());
+            if let Some(r) = to.get_base_register() {
+                collector.reg_use(r);
+            }
             collector.reg_use(src);
         }
 
@@ -443,7 +447,9 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_def(rd);
         }
         &Inst::LoadAddr { rd, mem } => {
-            collector.reg_use(mem.get_base_register());
+            if let Some(r) = mem.get_base_register() {
+                collector.reg_use(r);
+            }
             collector.reg_early_def(rd);
         }
 
@@ -654,11 +660,15 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_def(rd);
         }
         &Inst::VecLoad { to, ref from, .. } => {
-            collector.reg_use(from.get_base_register());
+            if let Some(r) = from.get_base_register() {
+                collector.reg_use(r);
+            }
             collector.reg_def(to);
         }
         &Inst::VecStore { ref to, from, .. } => {
-            collector.reg_use(to.get_base_register());
+            if let Some(r) = to.get_base_register() {
+                collector.reg_use(r);
+            }
             collector.reg_use(from);
         }
     }
@@ -1524,7 +1534,7 @@ impl Inst {
                 format!("load_sym {},{}{:+}", rd, name.display(None), offset)
             }
             &MInst::LoadAddr { ref rd, ref mem } => {
-                let rs = mem.to_addr(allocs);
+                let rs = mem.to_string_with_alloc(allocs);
                 let rd = format_reg(rd.to_reg(), allocs);
                 format!("load_addr {},{}", rd, rs)
             }

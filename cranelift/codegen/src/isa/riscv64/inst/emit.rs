@@ -665,18 +665,21 @@ impl MachInstEmit for Inst {
                 flags,
             } => {
                 let from = from.clone().with_allocs(&mut allocs);
-                let base = from.get_base_register();
-                let offset = from.get_offset_with_state(state);
                 let rd = allocs.next_writable(rd);
 
-                let (addr, imm12) = if let Some(imm12) = Imm12::maybe_from_u64(offset as u64) {
+                let base = from.get_base_register();
+                let offset = from.get_offset_with_state(state);
+                let offset_imm12 = Imm12::maybe_from_u64(offset as u64);
+
+                let (addr, imm12) = match (base, offset_imm12) {
                     // If the offset fits into an imm12 we can directly encode it.
-                    (base, imm12)
-                } else {
+                    (Some(base), Some(imm12)) => (base, imm12),
                     // Otherwise load the address it into a reg and load from it.
-                    let tmp = writable_spilltmp_reg();
-                    Inst::LoadAddr { rd: tmp, mem: from }.emit(&[], sink, emit_info, state);
-                    (tmp.to_reg(), Imm12::zero())
+                    _ => {
+                        let tmp = writable_spilltmp_reg();
+                        Inst::LoadAddr { rd: tmp, mem: from }.emit(&[], sink, emit_info, state);
+                        (tmp.to_reg(), Imm12::zero())
+                    }
                 };
 
                 let srcloc = state.cur_srcloc();
@@ -695,18 +698,21 @@ impl MachInstEmit for Inst {
             }
             &Inst::Store { op, src, flags, to } => {
                 let to = to.clone().with_allocs(&mut allocs);
-                let base = to.get_base_register();
-                let offset = to.get_offset_with_state(state);
                 let src = allocs.next(src);
 
-                let (addr, imm12) = if let Some(imm12) = Imm12::maybe_from_u64(offset as u64) {
+                let base = to.get_base_register();
+                let offset = to.get_offset_with_state(state);
+                let offset_imm12 = Imm12::maybe_from_u64(offset as u64);
+
+                let (addr, imm12) = match (base, offset_imm12) {
                     // If the offset fits into an imm12 we can directly encode it.
-                    (base, imm12)
-                } else {
+                    (Some(base), Some(imm12)) => (base, imm12),
                     // Otherwise load the address it into a reg and load from it.
-                    let tmp = writable_spilltmp_reg();
-                    Inst::LoadAddr { rd: tmp, mem: to }.emit(&[], sink, emit_info, state);
-                    (tmp.to_reg(), Imm12::zero())
+                    _ => {
+                        let tmp = writable_spilltmp_reg();
+                        Inst::LoadAddr { rd: tmp, mem: to }.emit(&[], sink, emit_info, state);
+                        (tmp.to_reg(), Imm12::zero())
+                    }
                 };
 
                 let srcloc = state.cur_srcloc();
@@ -1166,24 +1172,38 @@ impl MachInstEmit for Inst {
             }
 
             &Inst::LoadAddr { rd, mem } => {
-                let base = mem.get_base_register();
-                let base = allocs.next(base);
+                let mem = mem.with_allocs(&mut allocs);
                 let rd = allocs.next_writable(rd);
+
+                let base = mem.get_base_register();
                 let offset = mem.get_offset_with_state(state);
-                if let Some(offset) = Imm12::maybe_from_u64(offset as u64) {
-                    Inst::AluRRImm12 {
-                        alu_op: AluOPRRI::Addi,
-                        rd,
-                        rs: base,
-                        imm12: offset,
+                let offset_imm12 = Imm12::maybe_from_u64(offset as u64);
+
+                match (mem, base, offset_imm12) {
+                    (_, Some(rs), Some(imm12)) => {
+                        Inst::AluRRImm12 {
+                            alu_op: AluOPRRI::Addi,
+                            rd,
+                            rs,
+                            imm12,
+                        }
+                        .emit(&[], sink, emit_info, state);
                     }
-                    .emit(&[], sink, emit_info, state);
-                } else {
-                    LoadConstant::U64(offset as u64)
-                        .load_constant_and_add(rd, base)
-                        .into_iter()
-                        .for_each(|inst| inst.emit(&[], sink, emit_info, state));
+                    (_, Some(rs), None) => {
+                        LoadConstant::U64(offset as u64)
+                            .load_constant_and_add(rd, rs)
+                            .into_iter()
+                            .for_each(|inst| inst.emit(&[], sink, emit_info, state));
+                    }
+                    (AMode::Const(addr), None, _) => unimplemented!("LoadAddr: {:?}", addr),
+                    (AMode::Label(label), None, _) => unimplemented!("LoadAddr: {:?}", label),
+                    (amode, _, _) => {
+                        unimplemented!("LoadAddr: {:?}", amode);
+                    }
                 }
+
+                // let label = sink.get_label_for_constant(*addr);
+                // let label = MemLabel::Mach(label);
             }
 
             &Inst::Select {
@@ -2802,14 +2822,21 @@ impl MachInstEmit for Inst {
                 let from = from.clone().with_allocs(&mut allocs);
                 let to = allocs.next_writable(to);
 
+                let base = from.get_base_register();
+                let offset = from.get_offset_with_state(state);
+
                 // Vector Loads don't support immediate offsets, so we need to load it into a register.
-                let addr = match from {
-                    VecAMode::UnitStride { base } if base.get_offset_with_state(state) == 0 => {
-                        base.get_base_register()
-                    }
-                    VecAMode::UnitStride { base } => {
+                let addr = match (&from, base, offset) {
+                    // Reg+0 Offset can be directly encoded
+                    (_, Some(base), 0) => base,
+                    // Otherwise load the address it into a reg and load from it.
+                    (VecAMode::UnitStride { base }, _, _) => {
                         let tmp = writable_spilltmp_reg();
-                        Inst::LoadAddr { rd: tmp, mem: base }.emit(&[], sink, emit_info, state);
+                        Inst::LoadAddr {
+                            rd: tmp,
+                            mem: base.clone(),
+                        }
+                        .emit(&[], sink, emit_info, state);
                         tmp.to_reg()
                     }
                 };
@@ -2843,14 +2870,21 @@ impl MachInstEmit for Inst {
                 let to = to.clone().with_allocs(&mut allocs);
                 let from = allocs.next(from);
 
+                let base = to.get_base_register();
+                let offset = to.get_offset_with_state(state);
+
                 // Vector Stores don't support immediate offsets, so we need to load it into a register.
-                let addr = match to {
-                    VecAMode::UnitStride { base } if base.get_offset_with_state(state) == 0 => {
-                        base.get_base_register()
-                    }
-                    VecAMode::UnitStride { base } => {
+                let addr = match (&to, base, offset) {
+                    // Reg+0 Offset can be directly encoded
+                    (_, Some(base), 0) => base,
+                    // Otherwise load the address it into a reg and load from it.
+                    (VecAMode::UnitStride { base }, _, _) => {
                         let tmp = writable_spilltmp_reg();
-                        Inst::LoadAddr { rd: tmp, mem: base }.emit(&[], sink, emit_info, state);
+                        Inst::LoadAddr {
+                            rd: tmp,
+                            mem: base.clone(),
+                        }
+                        .emit(&[], sink, emit_info, state);
                         tmp.to_reg()
                     }
                 };
