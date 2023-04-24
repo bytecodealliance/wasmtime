@@ -3976,6 +3976,7 @@ dependencies = [
  "rand 0.8.5",
  "smallvec",
  "target-lexicon",
+ "wasmparser",
  "wasmtime",
  "wasmtime-fuzzing",
 ]

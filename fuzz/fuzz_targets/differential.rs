@@ -6,10 +6,14 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering::SeqCst;
 use std::sync::Once;
 use wasmtime::Trap;
+#[cfg(feature = "winch")]
+use wasmtime_fuzzing::generators::CompilerStrategy;
 use wasmtime_fuzzing::generators::{Config, DiffValue, DiffValueType, SingleInstModule};
 use wasmtime_fuzzing::oracles::diff_wasmtime::WasmtimeInstance;
 use wasmtime_fuzzing::oracles::engine::{build_allowed_env_list, parse_env_list};
 use wasmtime_fuzzing::oracles::{differential, engine, log_wasm};
+#[cfg(feature = "winch")]
+use wasmtime_fuzzing::wasm_smith::{InstructionKind, InstructionKinds};
 
 // Upper limit on the number of invocations for each WebAssembly function
 // executed by this fuzz target.
@@ -35,16 +39,22 @@ fuzz_target!(|data: &[u8]| {
         // `setup_ocaml_runtime`.
         engine::setup_engine_runtimes();
 
+        let (default_engines, default_modules) = if cfg!(feature = "winch") {
+            (vec!["wasmi"], vec!["wasm-smith", "single-inst"])
+        } else {
+            (
+                vec!["wasmtime", "wasmi", "spec", "v8"],
+                vec!["wasm-smith", "single-inst"],
+            )
+        };
+
         // Retrieve the configuration for this fuzz target from `ALLOWED_*`
         // environment variables.
-        let allowed_engines = build_allowed_env_list(
-            parse_env_list("ALLOWED_ENGINES"),
-            &["wasmtime", "wasmi", "spec", "v8"],
-        );
-        let allowed_modules = build_allowed_env_list(
-            parse_env_list("ALLOWED_MODULES"),
-            &["wasm-smith", "single-inst"],
-        );
+        let allowed_engines =
+            build_allowed_env_list(parse_env_list("ALLOWED_ENGINES"), &default_engines);
+        let allowed_modules =
+            build_allowed_env_list(parse_env_list("ALLOWED_MODULES"), &default_modules);
+
         unsafe {
             ALLOWED_ENGINES = allowed_engines;
             ALLOWED_MODULES = allowed_modules;
@@ -67,6 +77,16 @@ fn execute_one(data: &[u8]) -> Result<()> {
     // refined below.
     let mut config: Config = u.arbitrary()?;
     config.set_differential_config();
+
+    #[cfg(feature = "winch")]
+    {
+        // When fuzzing Winch:
+        // 1. Explicitly override the compiler strategy.
+        // 2. Explicitly set the allowed instructions for `wasm-smith`.
+        config.wasmtime.compiler_strategy = CompilerStrategy::Winch;
+        config.module_config.config.allowed_instructions =
+            InstructionKinds::new(&[InstructionKind::Numeric, InstructionKind::Variable]);
+    }
 
     // Choose an engine that Wasmtime will be differentially executed against.
     // The chosen engine is then created, which might update `config`, and
@@ -100,6 +120,12 @@ fn execute_one(data: &[u8]) -> Result<()> {
         "single-inst" => build_single_inst_module(&mut u, &config)?,
         _ => unreachable!(),
     };
+
+    #[cfg(feature = "winch")]
+    if !winch_supports_module(&wasm) {
+        return Ok(());
+    }
+
     log_wasm(&wasm);
 
     // Instantiate the generated wasm file in the chosen differential engine.
@@ -262,4 +288,55 @@ impl RuntimeStats {
             _ => return,
         };
     }
+}
+
+#[cfg(feature = "winch")]
+// Returns true if the module only contains operators supported by
+// Winch. Winch's x86_64 target has broader support for Wasm operators
+// than the aarch64 target. This list assumes fuzzing on the x86_64
+// target.
+fn winch_supports_module(module: &[u8]) -> bool {
+    use wasmparser::{Operator::*, Parser, Payload};
+
+    let mut supported = true;
+    let mut parser = Parser::new(0).parse_all(module);
+
+    'main: while let Some(payload) = parser.next() {
+        match payload.unwrap() {
+            Payload::CodeSectionEntry(body) => {
+                let op_reader = body.get_operators_reader().unwrap();
+                for op in op_reader {
+                    match op.unwrap() {
+                        I32Const { .. }
+                        | I64Const { .. }
+                        | I32Add { .. }
+                        | I64Add { .. }
+                        | I32Sub { .. }
+                        | I32Mul { .. }
+                        | I32DivS { .. }
+                        | I32DivU { .. }
+                        | I64DivS { .. }
+                        | I64DivU { .. }
+                        | I64RemU { .. }
+                        | I64RemS { .. }
+                        | I32RemU { .. }
+                        | I32RemS { .. }
+                        | I64Mul { .. }
+                        | I64Sub { .. }
+                        | LocalGet { .. }
+                        | LocalSet { .. }
+                        | Call { .. }
+                        | End { .. } => {}
+                        _ => {
+                            supported = false;
+                            break 'main;
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    supported
 }

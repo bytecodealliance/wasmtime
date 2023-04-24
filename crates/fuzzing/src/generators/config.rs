@@ -168,6 +168,9 @@ impl Config {
             .allocation_strategy(self.wasmtime.strategy.to_wasmtime())
             .generate_address_map(self.wasmtime.generate_address_map);
 
+        #[cfg(feature = "winch")]
+        cfg.strategy(self.wasmtime.compiler_strategy.to_wasmtime());
+
         self.wasmtime.codegen.configure(&mut cfg);
 
         // If the wasm-smith-generated module use nan canonicalization then we
@@ -392,6 +395,9 @@ pub struct WasmtimeConfig {
     padding_between_functions: Option<u16>,
     generate_address_map: bool,
     native_unwind_info: bool,
+    #[cfg(feature = "winch")]
+    /// Configuration for the compiler to use.
+    pub compiler_strategy: CompilerStrategy,
 }
 
 impl WasmtimeConfig {
@@ -432,6 +438,26 @@ impl OptLevel {
             OptLevel::None => wasmtime::OptLevel::None,
             OptLevel::Speed => wasmtime::OptLevel::Speed,
             OptLevel::SpeedAndSize => wasmtime::OptLevel::SpeedAndSize,
+        }
+    }
+}
+
+#[cfg(feature = "winch")]
+#[derive(Arbitrary, Clone, Debug, PartialEq, Eq, Hash)]
+/// Compiler to use.
+pub enum CompilerStrategy {
+    /// Cranelift compiler.
+    Cranelift,
+    /// Winch compiler.
+    Winch,
+}
+
+#[cfg(feature = "winch")]
+impl CompilerStrategy {
+    fn to_wasmtime(&self) -> wasmtime::Strategy {
+        match self {
+            CompilerStrategy::Cranelift => wasmtime::Strategy::Cranelift,
+            CompilerStrategy::Winch => wasmtime::Strategy::Winch,
         }
     }
 }

@@ -21,6 +21,7 @@ cranelift-control = { workspace = true }
 libfuzzer-sys = { version = "0.4.0", features = ["arbitrary-derive"] }
 target-lexicon = { workspace = true }
 smallvec = { workspace = true }
+wasmparser = { workspace = true, optional = true }
 wasmtime = { workspace = true }
 wasmtime-fuzzing = { workspace = true }
 component-test-util = { workspace = true }
@@ -35,6 +36,7 @@ quote = "1.0"
 component-fuzz-util = { workspace = true }
 
 [features]
+winch = ["wasmtime/winch", "wasmtime-fuzzing/winch", "dep:wasmparser"]
 default = ['fuzz-spec-interpreter']
 fuzz-spec-interpreter = ['wasmtime-fuzzing/fuzz-spec-interpreter']
 chaos = ["cranelift-control/chaos"]
