@@ -137,7 +137,8 @@ impl WasiHttp {
             // TODO: Configurable default
             Duration::from_millis(600)
         };
-        let mut body = res.into_body();
+        let body = res.into_body();
+        let mut body = body.lock().await;
         let mut buf = BytesMut::new();
         while let Some(next) = timeout(between_bytes_timeout, body.frame()).await? {
             let frame = next?;

@@ -9,6 +9,7 @@ use async_trait::async_trait;
 use bytes::{BufMut, Bytes, BytesMut};
 use http_body_util::Full;
 use tokio::net::TcpStream;
+use tokio::sync::Mutex;
 use tokio::time;
 
 #[derive(Clone, Default)]
@@ -24,7 +25,7 @@ impl From<Stream> for Bytes {
 }
 
 #[derive(Clone)]
-pub struct WasiHttp<Response = hyper::body::Incoming> {
+pub struct WasiHttp<Response = Arc<Mutex<hyper::body::Incoming>>> {
     pub outgoing_handler: Arc<Box<dyn OutgoingHandler<Body = Response>>>,
     pub request_id_base: u32,
     pub response_id_base: u32,
@@ -106,7 +107,7 @@ impl From<Bytes> for Stream {
 }
 
 #[async_trait]
-pub trait OutgoingHandler {
+pub trait OutgoingHandler: Sync + Send {
     type Body;
 
     async fn handle(
@@ -123,7 +124,7 @@ pub struct DefaultOutgoingHandler;
 
 #[async_trait]
 impl OutgoingHandler for DefaultOutgoingHandler {
-    type Body = hyper::body::Incoming;
+    type Body = Arc<Mutex<hyper::body::Incoming>>;
 
     async fn handle(
         &self,
@@ -202,6 +203,7 @@ impl OutgoingHandler for DefaultOutgoingHandler {
         time::timeout(first_byte_timeout, sender.send_request(request))
             .await
             .context("request timed out")?
+            .map(|res| res.map(|b| Arc::new(Mutex::new(b))))
             .context("failed to send request")
     }
 }
