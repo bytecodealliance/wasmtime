@@ -10,6 +10,7 @@ readme = "readme.md"
 
 [dependencies]
 anyhow = { workspace = true }
+async-trait = { workspace = true }
 bytes = "1.1.0"
 hyper = { version = "1.0.0-rc.3", features = ["full"] }
 tokio = { version = "1", default-features = false, features = ["net", "rt-multi-thread", "time"] }

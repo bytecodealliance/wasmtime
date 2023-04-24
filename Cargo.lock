@@ -4119,6 +4119,7 @@ name = "wasmtime-wasi-http"
 version = "0.0.1"
 dependencies = [
  "anyhow",
+ "async-trait",
  "bytes",
  "http",
  "http-body",
