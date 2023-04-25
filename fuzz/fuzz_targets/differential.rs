@@ -6,13 +6,13 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering::SeqCst;
 use std::sync::Once;
 use wasmtime::Trap;
-#[cfg(feature = "winch")]
+#[cfg(feature = "fuzz-winch")]
 use wasmtime_fuzzing::generators::CompilerStrategy;
 use wasmtime_fuzzing::generators::{Config, DiffValue, DiffValueType, SingleInstModule};
 use wasmtime_fuzzing::oracles::diff_wasmtime::WasmtimeInstance;
 use wasmtime_fuzzing::oracles::engine::{build_allowed_env_list, parse_env_list};
 use wasmtime_fuzzing::oracles::{differential, engine, log_wasm};
-#[cfg(feature = "winch")]
+#[cfg(feature = "fuzz-winch")]
 use wasmtime_fuzzing::wasm_smith::{InstructionKind, InstructionKinds};
 
 // Upper limit on the number of invocations for each WebAssembly function
@@ -39,7 +39,7 @@ fuzz_target!(|data: &[u8]| {
         // `setup_ocaml_runtime`.
         engine::setup_engine_runtimes();
 
-        let (default_engines, default_modules) = if cfg!(feature = "winch") {
+        let (default_engines, default_modules) = if cfg!(feature = "fuzz-winch") {
             (vec!["wasmi"], vec!["wasm-smith", "single-inst"])
         } else {
             (
@@ -78,7 +78,7 @@ fn execute_one(data: &[u8]) -> Result<()> {
     let mut config: Config = u.arbitrary()?;
     config.set_differential_config();
 
-    #[cfg(feature = "winch")]
+    #[cfg(feature = "fuzz-winch")]
     {
         // When fuzzing Winch:
         // 1. Explicitly override the compiler strategy.
@@ -121,7 +121,7 @@ fn execute_one(data: &[u8]) -> Result<()> {
         _ => unreachable!(),
     };
 
-    #[cfg(feature = "winch")]
+    #[cfg(feature = "fuzz-winch")]
     if !winch_supports_module(&wasm) {
         return Ok(());
     }
@@ -290,7 +290,7 @@ impl RuntimeStats {
     }
 }
 
-#[cfg(feature = "winch")]
+#[cfg(feature = "fuzz-winch")]
 // Returns true if the module only contains operators supported by
 // Winch. Winch's x86_64 target has broader support for Wasm operators
 // than the aarch64 target. This list assumes fuzzing on the x86_64
