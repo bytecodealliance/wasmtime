@@ -246,16 +246,10 @@ impl VecAluOpRRR {
 
 impl fmt::Display for VecAluOpRRR {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            VecAluOpRRR::Vadd => write!(f, "vadd.vv"),
-            VecAluOpRRR::Vsub => write!(f, "vsub.vv"),
-            VecAluOpRRR::Vmul => write!(f, "vmul.vv"),
-            VecAluOpRRR::Vmulh => write!(f, "vmulh.vv"),
-            VecAluOpRRR::Vmulhu => write!(f, "vmulhu.vv"),
-            VecAluOpRRR::Vand => write!(f, "vand.vv"),
-            VecAluOpRRR::Vor => write!(f, "vor.vv"),
-            VecAluOpRRR::Vxor => write!(f, "vxor.vv"),
-        }
+        let mut s = format!("{self:?}");
+        s.make_ascii_lowercase();
+        s.push_str(".vv");
+        f.write_str(&s)
     }
 }
 
