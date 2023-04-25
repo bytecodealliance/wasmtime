@@ -1,13 +1,14 @@
 use crate::component::*;
 use crate::ScopeVec;
 use crate::{
-    EntityIndex, ModuleEnvironment, ModuleTranslation, PrimaryMap, SignatureIndex, Tunables,
-    TypeConvert,
+    EntityIndex, ModuleEnvironment, ModuleTranslation, ModuleTypesBuilder, PrimaryMap,
+    SignatureIndex, Tunables, TypeConvert, WasmHeapType, WasmType,
 };
 use anyhow::{bail, Result};
 use indexmap::IndexMap;
 use std::collections::HashMap;
 use std::mem;
+use wasmparser::types::{self, ComponentEntityType, TypeId, Types};
 use wasmparser::{Chunk, ComponentExternName, Encoding, Parser, Payload, Validator};
 
 mod adapt;
@@ -43,7 +44,7 @@ pub struct Translator<'a, 'data> {
     ///
     /// This builder is also used for all core wasm modules found to intern
     /// signatures across all modules.
-    types: &'a mut ComponentTypesBuilder,
+    types: PreInliningComponentTypes<'a>,
 
     /// The compiler configuration provided by the embedder.
     tunables: &'a Tunables,
@@ -148,24 +149,30 @@ struct Translation<'data> {
     /// index into an index space of what's being exported.
     exports: IndexMap<&'data str, ComponentItem>,
 
-    /// The next core function index that's going to be defined, used to lookup
-    /// type information when lowering.
-    core_func_index: u32,
+    /// TODO
+    types: Option<Types>,
 }
 
+// TODO: comment about how this uses wasmparser type information
 #[allow(missing_docs)]
 enum LocalInitializer<'data> {
     // imports
-    Import(ComponentExternName<'data>, TypeDef),
+    Import(ComponentExternName<'data>, ComponentEntityType),
 
     // canonical function sections
     Lower {
         func: ComponentFuncIndex,
-        lower_ty: TypeFuncIndex,
+        lower_ty: TypeId,
         canonical_abi: SignatureIndex,
         options: LocalCanonicalOptions,
     },
-    Lift(TypeFuncIndex, FuncIndex, LocalCanonicalOptions),
+    Lift(TypeId, FuncIndex, LocalCanonicalOptions),
+
+    // resources
+    Resource(TypeId, WasmType, Option<FuncIndex>),
+    ResourceNew(TypeId, SignatureIndex),
+    ResourceRep(TypeId, SignatureIndex),
+    ResourceDrop(TypeId, SignatureIndex),
 
     // core wasm modules
     ModuleStatic(StaticModuleIndex),
@@ -178,7 +185,7 @@ enum LocalInitializer<'data> {
     ComponentStatic(StaticComponentIndex, ClosedOverVars),
 
     // component instances
-    ComponentInstantiate(ComponentIndex, HashMap<&'data str, ComponentItem>),
+    ComponentInstantiate(ComponentIndex, HashMap<&'data str, ComponentItem>, TypeId),
     ComponentSynthetic(HashMap<&'data str, ComponentItem>),
 
     // alias section
@@ -250,7 +257,7 @@ impl<'a, 'data> Translator<'a, 'data> {
             result: Translation::default(),
             tunables,
             validator,
-            types,
+            types: PreInliningComponentTypes { types },
             parser: Parser::new(0),
             lexical_scopes: Vec::new(),
             static_components: Default::default(),
@@ -324,7 +331,7 @@ impl<'a, 'data> Translator<'a, 'data> {
         // Wasmtime to process at runtime as well (e.g. no string lookups as
         // most everything is done through indices instead).
         let mut component = inline::run(
-            &self.types,
+            self.types.types,
             &self.result,
             &self.static_modules,
             &self.static_components,
@@ -355,7 +362,7 @@ impl<'a, 'data> Translator<'a, 'data> {
             }
 
             Payload::End(offset) => {
-                self.validator.end(offset)?;
+                self.result.types = Some(self.validator.end(offset)?);
 
                 // Exit the current lexical scope. If there is no parent (no
                 // frame currently on the stack) then translation is finished.
@@ -386,7 +393,33 @@ impl<'a, 'data> Translator<'a, 'data> {
             // in `Version` and `End` since multiple type sections can appear
             // within a component.
             Payload::ComponentTypeSection(s) => {
+                let mut component_type_index =
+                    self.validator.types(0).unwrap().component_type_count();
                 self.validator.component_type_section(&s)?;
+                let types = self.validator.types(0).unwrap();
+
+                for ty in s {
+                    match ty? {
+                        wasmparser::ComponentType::Resource { rep, dtor } => {
+                            let rep = self.types.convert_valtype(rep);
+                            let id = types
+                                .id_from_type_index(component_type_index, false)
+                                .unwrap();
+                            let dtor = dtor.map(FuncIndex::from_u32);
+                            self.result
+                                .initializers
+                                .push(LocalInitializer::Resource(id, rep, dtor));
+                        }
+
+                        // no extra processing needed
+                        wasmparser::ComponentType::Defined(_)
+                        | wasmparser::ComponentType::Func(_)
+                        | wasmparser::ComponentType::Instance(_)
+                        | wasmparser::ComponentType::Component(_) => {}
+                    }
+
+                    component_type_index += 1;
+                }
             }
             Payload::CoreTypeSection(s) => {
                 self.validator.core_type_section(&s)?;
@@ -403,7 +436,6 @@ impl<'a, 'data> Translator<'a, 'data> {
                     let ty = types
                         .component_entity_type_of_import(import.name.as_str())
                         .unwrap();
-                    let ty = self.types.convert_component_entity_type(types, ty)?;
                     self.result
                         .initializers
                         .push(LocalInitializer::Import(import.name, ty));
@@ -413,61 +445,70 @@ impl<'a, 'data> Translator<'a, 'data> {
             // Entries in the canonical section will get initializers recorded
             // with the listed options for lifting/lowering.
             Payload::ComponentCanonicalSection(s) => {
+                let mut core_func_index = self.validator.types(0).unwrap().function_count();
                 self.validator.component_canonical_section(&s)?;
-                let types = self.validator.types(0).unwrap();
                 for func in s {
-                    match func? {
+                    let types = self.validator.types(0).unwrap();
+                    let init = match func? {
                         wasmparser::CanonicalFunction::Lift {
                             type_index,
                             core_func_index,
                             options,
                         } => {
-                            let ty = types
-                                .type_at(type_index, false)
-                                .unwrap()
-                                .as_component_func_type()
-                                .unwrap();
-                            let ty = self.types.convert_component_func_type(types, ty)?;
+                            let ty = types.id_from_type_index(type_index, false).unwrap();
                             let func = FuncIndex::from_u32(core_func_index);
                             let options = self.canonical_options(&options);
-                            self.result
-                                .initializers
-                                .push(LocalInitializer::Lift(ty, func, options));
+                            LocalInitializer::Lift(ty, func, options)
                         }
                         wasmparser::CanonicalFunction::Lower {
                             func_index,
                             options,
                         } => {
                             let lower_ty = types.component_function_at(func_index).unwrap();
-                            let lower_ty =
-                                self.types.convert_component_func_type(types, lower_ty)?;
-
                             let func = ComponentFuncIndex::from_u32(func_index);
                             let options = self.canonical_options(&options);
+                            let canonical_abi = self.core_func_signature(core_func_index);
 
-                            let canonical_abi =
-                                types.function_at(self.result.core_func_index).unwrap();
-                            let canonical_abi = self.types.convert_func_type(canonical_abi);
-                            let canonical_abi = self
-                                .types
-                                .module_types_builder()
-                                .wasm_func_type(canonical_abi);
-
-                            self.result.initializers.push(LocalInitializer::Lower {
+                            core_func_index += 1;
+                            LocalInitializer::Lower {
                                 func,
                                 options,
                                 canonical_abi,
                                 lower_ty,
-                            });
-                            self.result.core_func_index += 1;
+                            }
                         }
-
-                        wasmparser::CanonicalFunction::ResourceNew { .. }
-                        | wasmparser::CanonicalFunction::ResourceDrop { .. }
-                        | wasmparser::CanonicalFunction::ResourceRep { .. } => {
-                            unimplemented!("resource types")
+                        wasmparser::CanonicalFunction::ResourceNew { resource } => {
+                            let resource = types.id_from_type_index(resource, false).unwrap();
+                            let ty = self.core_func_signature(core_func_index);
+                            core_func_index += 1;
+                            LocalInitializer::ResourceNew(resource, ty)
                         }
-                    }
+                        wasmparser::CanonicalFunction::ResourceDrop { ty } => {
+                            let ty = match ty {
+                                wasmparser::ComponentValType::Type(t) => {
+                                    types.id_from_type_index(t, false).unwrap()
+                                }
+                                wasmparser::ComponentValType::Primitive(_) => unreachable!(),
+                            };
+                            let resource = match types.type_from_id(ty) {
+                                Some(types::Type::Defined(
+                                    types::ComponentDefinedType::Own(id)
+                                    | types::ComponentDefinedType::Borrow(id),
+                                )) => *id,
+                                _ => unreachable!(),
+                            };
+                            let ty = self.core_func_signature(core_func_index);
+                            core_func_index += 1;
+                            LocalInitializer::ResourceDrop(resource, ty)
+                        }
+                        wasmparser::CanonicalFunction::ResourceRep { resource } => {
+                            let resource = types.id_from_type_index(resource, false).unwrap();
+                            let ty = self.core_func_signature(core_func_index);
+                            core_func_index += 1;
+                            LocalInitializer::ResourceRep(resource, ty)
+                        }
+                    };
+                    self.result.initializers.push(init);
                 }
             }
 
@@ -531,6 +572,7 @@ impl<'a, 'data> Translator<'a, 'data> {
                 }
             }
             Payload::ComponentInstanceSection(s) => {
+                let mut index = self.validator.types(0).unwrap().component_instance_count();
                 self.validator.component_instance_section(&s)?;
                 for instance in s {
                     let init = match instance? {
@@ -538,14 +580,17 @@ impl<'a, 'data> Translator<'a, 'data> {
                             component_index,
                             args,
                         } => {
+                            let types = self.validator.types(0).unwrap();
+                            let ty = types.component_instance_at(index).unwrap();
                             let index = ComponentIndex::from_u32(component_index);
-                            self.instantiate_component(index, &args)?
+                            self.instantiate_component(index, &args, ty)?
                         }
                         wasmparser::ComponentInstance::FromExports(exports) => {
                             self.instantiate_component_from_exports(&exports)?
                         }
                     };
                     self.result.initializers.push(init);
+                    index += 1;
                 }
             }
 
@@ -679,6 +724,7 @@ impl<'a, 'data> Translator<'a, 'data> {
         &mut self,
         component: ComponentIndex,
         raw_args: &[wasmparser::ComponentInstantiationArg<'data>],
+        ty: TypeId,
     ) -> Result<LocalInitializer<'data>> {
         let mut args = HashMap::with_capacity(raw_args.len());
         for arg in raw_args {
@@ -686,7 +732,7 @@ impl<'a, 'data> Translator<'a, 'data> {
             args.insert(arg.name, idx);
         }
 
-        Ok(LocalInitializer::ComponentInstantiate(component, args))
+        Ok(LocalInitializer::ComponentInstantiate(component, args, ty))
     }
 
     /// Creates a synthetic module from the list of items currently in the
@@ -732,7 +778,6 @@ impl<'a, 'data> Translator<'a, 'data> {
             wasmparser::ComponentExternalKind::Type => {
                 let types = self.validator.types(0).unwrap();
                 let ty = types.id_from_type_index(index, false).unwrap();
-                let ty = self.types.convert_type(types, ty)?;
                 ComponentItem::Type(ty)
             }
         })
@@ -745,10 +790,7 @@ impl<'a, 'data> Translator<'a, 'data> {
         name: &'data str,
     ) -> LocalInitializer<'data> {
         match kind {
-            wasmparser::ExternalKind::Func => {
-                self.result.core_func_index += 1;
-                LocalInitializer::AliasExportFunc(instance, name)
-            }
+            wasmparser::ExternalKind::Func => LocalInitializer::AliasExportFunc(instance, name),
             wasmparser::ExternalKind::Memory => LocalInitializer::AliasExportMemory(instance, name),
             wasmparser::ExternalKind::Table => LocalInitializer::AliasExportTable(instance, name),
             wasmparser::ExternalKind::Global => LocalInitializer::AliasExportGlobal(instance, name),
@@ -765,8 +807,8 @@ impl<'a, 'data> Translator<'a, 'data> {
         index: u32,
     ) {
         match kind {
-            wasmparser::ComponentOuterAliasKind::CoreType => {}
-            wasmparser::ComponentOuterAliasKind::Type => {}
+            wasmparser::ComponentOuterAliasKind::CoreType
+            | wasmparser::ComponentOuterAliasKind::Type => {}
 
             // For more information about the implementation of outer aliases
             // see the documentation of `LexicalScope`. Otherwise though the
@@ -839,5 +881,35 @@ impl<'a, 'data> Translator<'a, 'data> {
             }
         }
         return ret;
+    }
+
+    fn core_func_signature(&mut self, idx: u32) -> SignatureIndex {
+        let types = self.validator.types(0).unwrap();
+        let id = types.function_at(idx).unwrap();
+        let ty = types.type_from_id(id).unwrap().as_func_type().unwrap();
+        let ty = self.types.convert_func_type(ty);
+        self.types.module_types_builder().wasm_func_type(ty)
+    }
+}
+
+struct PreInliningComponentTypes<'a> {
+    types: &'a mut ComponentTypesBuilder,
+}
+
+impl PreInliningComponentTypes<'_> {
+    fn module_types_builder(&mut self) -> &mut ModuleTypesBuilder {
+        self.types.module_types_builder()
+    }
+}
+
+impl TypeConvert for PreInliningComponentTypes<'_> {
+    fn lookup_heap_type(&self, index: TypeIndex) -> WasmHeapType {
+        self.types.lookup_heap_type(index)
+    }
+}
+
+impl Translation<'_> {
+    fn types_ref(&self) -> wasmparser::types::TypesRef<'_> {
+        self.types.as_ref().unwrap().as_ref()
     }
 }

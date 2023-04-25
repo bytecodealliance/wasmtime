@@ -184,7 +184,8 @@ impl<'data> Translator<'_, 'data> {
         // the module using standard core wasm translation, and then fills out
         // the dfg metadata for each adapter.
         for (module_id, adapter_module) in state.adapter_modules.iter() {
-            let mut module = fact::Module::new(self.types, self.tunables.debug_adapter_modules);
+            let mut module =
+                fact::Module::new(self.types.types, self.tunables.debug_adapter_modules);
             let mut names = Vec::with_capacity(adapter_module.adapters.len());
             for adapter in adapter_module.adapters.iter() {
                 let name = format!("adapter{}", adapter.as_u32());
@@ -380,7 +381,10 @@ impl PartitionAdapterModules {
             // These items can't transitively depend on an adapter
             dfg::CoreDef::Lowered(_)
             | dfg::CoreDef::AlwaysTrap(_)
-            | dfg::CoreDef::InstanceFlags(_) => {}
+            | dfg::CoreDef::InstanceFlags(_)
+            | dfg::CoreDef::ResourceNew(..)
+            | dfg::CoreDef::ResourceDrop(..)
+            | dfg::CoreDef::ResourceRep(..) => {}
 
             // should not be in the dfg yet
             dfg::CoreDef::Transcoder(_) => unreachable!(),

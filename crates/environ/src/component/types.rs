@@ -16,6 +16,9 @@ use wasmtime_component_util::{DiscriminantSize, FlagsSize};
 
 pub use wasmtime_types::StaticModuleIndex;
 
+mod resources;
+pub use resources::ResourcesBuilder;
+
 /// Maximum nesting depth of a type allowed in Wasmtime.
 ///
 /// This constant isn't chosen via any scientific means and its main purpose is
@@ -107,6 +110,17 @@ indices! {
     pub struct TypeResultIndex(u32);
     /// Index pointing to a list type in the component model.
     pub struct TypeListIndex(u32);
+    /// TODO
+    ///
+    /// TODO: this is not a great name, it's more of a "unique ID" and there
+    /// should be a separate pass, probably the dfg pass, which keeps track of
+    /// which resources actually need tables. Only those lifted or lowered
+    /// actually need tables, not literally all resources within a component.
+    pub struct TypeResourceTableIndex(u32);
+    /// TODO
+    pub struct ResourceIndex(u32);
+    /// TODO
+    pub struct DefinedResourceIndex(u32);
 
     // ========================================================================
     // Index types used to identify modules and components during compilation.
@@ -178,6 +192,13 @@ indices! {
     /// This is used to index the `VMFuncRef` slots reserved for string encoders
     /// which reference linear memories defined within a component.
     pub struct RuntimeTranscoderIndex(u32);
+
+    /// TODO
+    pub struct RuntimeResourceNewIndex(u32);
+    /// TODO
+    pub struct RuntimeResourceDropIndex(u32);
+    /// TODO
+    pub struct RuntimeResourceRepIndex(u32);
 }
 
 // Reexport for convenience some core-wasm indices which are also used in the
@@ -186,14 +207,14 @@ pub use crate::{FuncIndex, GlobalIndex, MemoryIndex, TableIndex, TypeIndex};
 
 /// Equivalent of `EntityIndex` but for the component model instead of core
 /// wasm.
-#[derive(Debug, Clone, Copy, Deserialize, Serialize)]
+#[derive(Debug, Clone, Copy)]
 #[allow(missing_docs)]
 pub enum ComponentItem {
     Func(ComponentFuncIndex),
     Module(ModuleIndex),
     Component(ComponentIndex),
     ComponentInstance(ComponentInstanceIndex),
-    Type(TypeDef),
+    Type(wasmparser::types::TypeId),
 }
 
 /// Runtime information about the type information contained within a component.
@@ -216,6 +237,7 @@ pub struct ComponentTypes {
     unions: PrimaryMap<TypeUnionIndex, TypeUnion>,
     options: PrimaryMap<TypeOptionIndex, TypeOption>,
     results: PrimaryMap<TypeResultIndex, TypeResult>,
+    resource_tables: PrimaryMap<TypeResourceTableIndex, TypeResourceTable>,
 
     module_types: ModuleTypes,
 }
@@ -238,7 +260,9 @@ impl ComponentTypes {
             InterfaceType::U32
             | InterfaceType::S32
             | InterfaceType::Float32
-            | InterfaceType::Char => &CanonicalAbiInfo::SCALAR4,
+            | InterfaceType::Char
+            | InterfaceType::Own(_)
+            | InterfaceType::Borrow(_) => &CanonicalAbiInfo::SCALAR4,
 
             InterfaceType::U64 | InterfaceType::S64 | InterfaceType::Float64 => {
                 &CanonicalAbiInfo::SCALAR8
@@ -283,6 +307,7 @@ impl_index! {
     impl Index<TypeOptionIndex> for ComponentTypes { TypeOption => options }
     impl Index<TypeResultIndex> for ComponentTypes { TypeResult => results }
     impl Index<TypeListIndex> for ComponentTypes { TypeList => lists }
+    impl Index<TypeResourceTableIndex> for ComponentTypes { TypeResourceTable => resource_tables }
 }
 
 // Additionally forward anything that can index `ModuleTypes` to `ModuleTypes`
@@ -322,10 +347,7 @@ pub struct ComponentTypesBuilder {
     // as opposed to `ComponentTypes`.
     type_info: TypeInformationCache,
 
-    defined_types_cache: HashMap<types::TypeId, InterfaceType>,
-    module_types_cache: HashMap<types::TypeId, TypeModuleIndex>,
-    component_types_cache: HashMap<types::TypeId, TypeComponentIndex>,
-    instance_types_cache: HashMap<types::TypeId, TypeComponentInstanceIndex>,
+    resources: ResourcesBuilder,
 }
 
 macro_rules! intern_and_fill_flat_types {
@@ -364,13 +386,33 @@ impl ComponentTypesBuilder {
         &mut self.module_types
     }
 
+    /// TODO
+    pub fn num_resource_tables(&self) -> usize {
+        self.component_types.resource_tables.len()
+    }
+
+    /// TODO
+    pub fn resources_mut(&mut self) -> &mut ResourcesBuilder {
+        &mut self.resources
+    }
+
+    /// TODO
+    pub fn resources_mut_and_types(&mut self) -> (&mut ResourcesBuilder, &ComponentTypes) {
+        (&mut self.resources, &self.component_types)
+    }
+
     /// Converts a wasmparser `ComponentFuncType` into Wasmtime's type
     /// representation.
     pub fn convert_component_func_type(
         &mut self,
         types: types::TypesRef<'_>,
-        ty: &types::ComponentFuncType,
+        id: types::TypeId,
     ) -> Result<TypeFuncIndex> {
+        let ty = types
+            .type_from_id(id)
+            .unwrap()
+            .as_component_func_type()
+            .unwrap();
         let params = ty
             .params
             .iter()
@@ -406,19 +448,14 @@ impl ComponentTypesBuilder {
                 TypeDef::ComponentInstance(self.convert_instance(types, id)?)
             }
             types::ComponentEntityType::Func(id) => {
-                let id = types
-                    .type_from_id(id)
-                    .unwrap()
-                    .as_component_func_type()
-                    .unwrap();
-                let idx = self.convert_component_func_type(types, id)?;
-                TypeDef::ComponentFunc(idx)
+                TypeDef::ComponentFunc(self.convert_component_func_type(types, id)?)
             }
             types::ComponentEntityType::Type { created, .. } => {
                 match types.type_from_id(created).unwrap() {
                     types::Type::Defined(_) => {
                         TypeDef::Interface(self.defined_type(types, created)?)
                     }
+                    types::Type::Resource(_) => TypeDef::Resource(self.resource_id(types, created)),
                     _ => bail!("unsupported type export"),
                 }
             }
@@ -439,13 +476,16 @@ impl ComponentTypesBuilder {
             types::Type::ComponentInstance(_) => {
                 TypeDef::ComponentInstance(self.convert_instance(types, id)?)
             }
-            types::Type::ComponentFunc(f) => {
-                TypeDef::ComponentFunc(self.convert_component_func_type(types, f)?)
+            types::Type::ComponentFunc(_) => {
+                TypeDef::ComponentFunc(self.convert_component_func_type(types, id)?)
             }
-            types::Type::Instance(_) | types::Type::Func(_) | types::Type::Array(_) => {
+            types::Type::Instance(_)
+            | types::Type::Func(_)
+            | types::Type::Array(_)
+            | types::Type::Struct(_) => {
                 unreachable!()
             }
-            types::Type::Resource(_) => unimplemented!(),
+            types::Type::Resource(_) => TypeDef::Resource(self.resource_id(types, id)),
         })
     }
 
@@ -454,9 +494,6 @@ impl ComponentTypesBuilder {
         types: types::TypesRef<'_>,
         id: types::TypeId,
     ) -> Result<TypeComponentIndex> {
-        if let Some(ret) = self.component_types_cache.get(&id) {
-            return Ok(*ret);
-        }
         let ty = &types.type_from_id(id).unwrap().as_component_type().unwrap();
         let mut result = TypeComponent::default();
         for (name, ty) in ty.imports.iter() {
@@ -471,9 +508,7 @@ impl ComponentTypesBuilder {
                 self.convert_component_entity_type(types, *ty)?,
             );
         }
-        let ret = self.component_types.components.push(result);
-        self.component_types_cache.insert(id, ret);
-        Ok(ret)
+        Ok(self.component_types.components.push(result))
     }
 
     fn convert_instance(
@@ -481,9 +516,6 @@ impl ComponentTypesBuilder {
         types: types::TypesRef<'_>,
         id: types::TypeId,
     ) -> Result<TypeComponentInstanceIndex> {
-        if let Some(ret) = self.instance_types_cache.get(&id) {
-            return Ok(*ret);
-        }
         let ty = &types
             .type_from_id(id)
             .unwrap()
@@ -496,9 +528,7 @@ impl ComponentTypesBuilder {
                 self.convert_component_entity_type(types, *ty)?,
             );
         }
-        let ret = self.component_types.component_instances.push(result);
-        self.instance_types_cache.insert(id, ret);
-        Ok(ret)
+        Ok(self.component_types.component_instances.push(result))
     }
 
     fn convert_module(
@@ -506,9 +536,6 @@ impl ComponentTypesBuilder {
         types: types::TypesRef<'_>,
         id: types::TypeId,
     ) -> Result<TypeModuleIndex> {
-        if let Some(ret) = self.module_types_cache.get(&id) {
-            return Ok(*ret);
-        }
         let ty = &types.type_from_id(id).unwrap().as_module_type().unwrap();
         let mut result = TypeModule::default();
         for ((module, field), ty) in ty.imports.iter() {
@@ -522,9 +549,7 @@ impl ComponentTypesBuilder {
                 .exports
                 .insert(name.clone(), self.entity_type(types, ty)?);
         }
-        let ret = self.component_types.modules.push(result);
-        self.module_types_cache.insert(id, ret);
-        Ok(ret)
+        Ok(self.component_types.modules.push(result))
     }
 
     fn entity_type(
@@ -550,9 +575,6 @@ impl ComponentTypesBuilder {
         types: types::TypesRef<'_>,
         id: types::TypeId,
     ) -> Result<InterfaceType> {
-        if let Some(ty) = self.defined_types_cache.get(&id) {
-            return Ok(*ty);
-        }
         let ret = match types.type_from_id(id).unwrap().as_defined_type().unwrap() {
             types::ComponentDefinedType::Primitive(ty) => ty.into(),
             types::ComponentDefinedType::Record(e) => {
@@ -576,19 +598,20 @@ impl ComponentTypesBuilder {
             types::ComponentDefinedType::Result { ok, err } => {
                 InterfaceType::Result(self.result_type(types, ok, err)?)
             }
-            types::ComponentDefinedType::Own(_) | types::ComponentDefinedType::Borrow(_) => {
-                unimplemented!("resource types")
+            types::ComponentDefinedType::Own(r) => InterfaceType::Own(self.resource_id(types, *r)),
+            types::ComponentDefinedType::Borrow(r) => {
+                InterfaceType::Borrow(self.resource_id(types, *r))
             }
         };
         let info = self.type_information(&ret);
         if info.depth > MAX_TYPE_DEPTH {
             bail!("type nesting is too deep");
         }
-        self.defined_types_cache.insert(id, ret);
         Ok(ret)
     }
 
-    fn valtype(
+    /// TODO
+    pub fn valtype(
         &mut self,
         types: types::TypesRef<'_>,
         ty: &types::ComponentValType,
@@ -746,6 +769,19 @@ impl ComponentTypesBuilder {
         Ok(self.add_list_type(TypeList { element }))
     }
 
+    /// TODO
+    pub fn resource_id(
+        &mut self,
+        types: types::TypesRef<'_>,
+        id: types::TypeId,
+    ) -> TypeResourceTableIndex {
+        let id = match types.type_from_id(id) {
+            Some(wasmparser::types::Type::Resource(id)) => *id,
+            _ => unreachable!(),
+        };
+        self.resources.convert(id, &mut self.component_types)
+    }
+
     /// Interns a new function type within this type information.
     pub fn add_func_type(&mut self, ty: TypeFunc) -> TypeFuncIndex {
         intern(&mut self.functions, &mut self.component_types.functions, ty)
@@ -819,7 +855,9 @@ impl ComponentTypesBuilder {
             | InterfaceType::S16
             | InterfaceType::U32
             | InterfaceType::S32
-            | InterfaceType::Char => {
+            | InterfaceType::Char
+            | InterfaceType::Own(_)
+            | InterfaceType::Borrow(_) => {
                 static INFO: TypeInformation = TypeInformation::primitive(FlatType::I32);
                 &INFO
             }
@@ -903,6 +941,8 @@ pub enum TypeDef {
     Module(TypeModuleIndex),
     /// A core wasm function using only core wasm types.
     CoreFunc(SignatureIndex),
+    /// TODO
+    Resource(TypeResourceTableIndex),
 }
 
 // NB: Note that maps below are stored as an `IndexMap` now but the order
@@ -991,6 +1031,8 @@ pub enum InterfaceType {
     Union(TypeUnionIndex),
     Option(TypeOptionIndex),
     Result(TypeResultIndex),
+    Own(TypeResourceTableIndex),
+    Borrow(TypeResourceTableIndex),
 }
 
 impl From<&wasmparser::PrimitiveValType> for InterfaceType {
@@ -1469,6 +1511,13 @@ pub struct TypeResult {
     pub abi: CanonicalAbiInfo,
     /// Byte information about this variant type.
     pub info: VariantInfo,
+}
+
+/// TODO
+#[derive(Serialize, Deserialize, Clone, Hash, Eq, PartialEq, Debug)]
+pub struct TypeResourceTable {
+    /// TODO
+    pub ty: ResourceIndex,
 }
 
 /// Shape of a "list" interface type.

@@ -18,7 +18,7 @@ wasmtime-jit-debug = { workspace = true, features = ["gdb_jit_int"] }
 libc = { version = "0.2.112", default-features = false }
 log = { workspace = true }
 memoffset = "0.8.0"
-indexmap = "1.0.2"
+indexmap = { workspace = true }
 cfg-if = { workspace = true }
 rand = { version = "0.8.3", features = ['small_rng'] }
 anyhow = { workspace = true }

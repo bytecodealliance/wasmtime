@@ -239,6 +239,7 @@ tempfile = "3.1.0"
 filecheck = "0.5.0"
 libc = "0.2.60"
 file-per-thread-logger = "0.2.0"
+indexmap = "2.0.0"
 
 [features]
 default = [
@@ -310,3 +311,11 @@ debug-assertions = false
 # Omit integer overflow checks, which include failure messages which require
 # string initializers.
 overflow-checks = false
+
+[patch.crates-io]
+wasmparser = { git = 'https://github.com/alexcrichton/wasm-tools', branch = 'wasmtime-resources' }
+wasmprinter = { git = 'https://github.com/alexcrichton/wasm-tools', branch = 'wasmtime-resources' }
+wit-component = { git = 'https://github.com/alexcrichton/wasm-tools', branch = 'wasmtime-resources' }
+# wasmparser = { path = '../wasm-tools/crates/wasmparser' }
+# wasmprinter = { path = '../wasm-tools/crates/wasmprinter' }
+# wit-component = { path = '../wasm-tools/crates/wit-component' }

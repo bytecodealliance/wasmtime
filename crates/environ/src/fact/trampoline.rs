@@ -554,6 +554,9 @@ impl Compiler<'_, '_> {
 
             // 2 cases to consider for each of these variants.
             InterfaceType::Option(_) | InterfaceType::Result(_) => 2,
+
+            // TODO - something nonzero, is 1 right?
+            InterfaceType::Own(_) | InterfaceType::Borrow(_) => 1,
         };
 
         match self.fuel.checked_sub(cost) {
@@ -587,6 +590,10 @@ impl Compiler<'_, '_> {
                     InterfaceType::Enum(t) => self.translate_enum(*t, src, dst_ty, dst),
                     InterfaceType::Option(t) => self.translate_option(*t, src, dst_ty, dst),
                     InterfaceType::Result(t) => self.translate_result(*t, src, dst_ty, dst),
+                    // InterfaceType::Own(t) => self.translate_own(*t, src, dst_ty, dst),
+                    // InterfaceType::Borrow(t) => self.translate_borrow(*t, src, dst_ty, dst),
+                    InterfaceType::Own(t) => todo!(),
+                    InterfaceType::Borrow(t) => todo!(),
                 }
             }
 
@@ -2446,6 +2453,38 @@ impl Compiler<'_, '_> {
             self.instruction(End); // end this case's block
         }
     }
+
+    // fn translate_own(
+    //     &mut self,
+    //     src_ty: ResourceId,
+    //     src: &Source<'_>,
+    //     dst_ty: &InterfaceType,
+    //     dst: &Destination,
+    // ) {
+    //     let dst_ty = match dst_ty {
+    //         InterfaceType::Own(t) => t,
+    //         _ => panic!("expected an `Own`"),
+    //     };
+
+    //     drop((src_ty, src, dst_ty, dst));
+    //     todo!();
+    // }
+
+    // fn translate_borrow(
+    //     &mut self,
+    //     src_ty: ResourceId,
+    //     src: &Source<'_>,
+    //     dst_ty: &InterfaceType,
+    //     dst: &Destination,
+    // ) {
+    //     let dst_ty = match dst_ty {
+    //         InterfaceType::Borrow(t) => t,
+    //         _ => panic!("expected an `Borrow`"),
+    //     };
+
+    //     drop((src_ty, src, dst_ty, dst));
+    //     todo!();
+    // }
 
     fn trap_if_not_flag(&mut self, flags_global: GlobalIndex, flag_to_test: i32, trap: Trap) {
         self.instruction(GlobalGet(flags_global.as_u32()));

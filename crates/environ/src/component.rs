@@ -70,3 +70,15 @@ macro_rules! foreach_transcoder {
         }
     };
 }
+
+/// TODO
+#[macro_export]
+macro_rules! foreach_builtin_component_function {
+    ($mac:ident) => {
+        $mac! {
+            resource_new32(vmctx: vmctx, resource: u32, rep: u32) -> u32;
+            resource_rep32(vmctx: vmctx, resource: u32, idx: u32) -> u32;
+            resource_drop(vmctx: vmctx, resource: u32, idx: u32);
+        }
+    };
+}

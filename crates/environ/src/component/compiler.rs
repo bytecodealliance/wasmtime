@@ -1,4 +1,6 @@
-use crate::component::{Component, ComponentTypes, LowerImport, Transcoder};
+use crate::component::{
+    Component, ComponentTypes, LowerImport, ResourceDrop, ResourceNew, ResourceRep, Transcoder,
+};
 use crate::WasmFuncType;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
@@ -79,6 +81,30 @@ pub trait ComponentCompiler: Send + Sync {
         &self,
         component: &Component,
         transcoder: &Transcoder,
+        types: &ComponentTypes,
+    ) -> Result<AllCallFunc<Box<dyn Any + Send>>>;
+
+    /// TODO
+    fn compile_resource_new(
+        &self,
+        component: &Component,
+        resource: &ResourceNew,
+        types: &ComponentTypes,
+    ) -> Result<AllCallFunc<Box<dyn Any + Send>>>;
+
+    /// TODO
+    fn compile_resource_rep(
+        &self,
+        component: &Component,
+        resource: &ResourceRep,
+        types: &ComponentTypes,
+    ) -> Result<AllCallFunc<Box<dyn Any + Send>>>;
+
+    /// TODO
+    fn compile_resource_drop(
+        &self,
+        component: &Component,
+        resource: &ResourceDrop,
         types: &ComponentTypes,
     ) -> Result<AllCallFunc<Box<dyn Any + Send>>>;
 }

@@ -777,11 +777,14 @@ fn strings() -> Result<()> {
         list16_to_str.post_return(&mut store)?;
 
         let ret = str_to_list8.call(&mut store, (x,))?.0;
-        assert_eq!(ret.iter(&store).collect::<Result<Vec<_>>>()?, x.as_bytes());
+        assert_eq!(
+            ret.iter(&mut store).collect::<Result<Vec<_>>>()?,
+            x.as_bytes()
+        );
         str_to_list8.post_return(&mut store)?;
 
         let ret = str_to_list16.call(&mut store, (x,))?.0;
-        assert_eq!(ret.iter(&store).collect::<Result<Vec<_>>>()?, utf16,);
+        assert_eq!(ret.iter(&mut store).collect::<Result<Vec<_>>>()?, utf16,);
         str_to_list16.post_return(&mut store)?;
 
         Ok(())

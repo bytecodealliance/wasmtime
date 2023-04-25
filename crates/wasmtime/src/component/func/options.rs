@@ -1,9 +1,12 @@
+use crate::component::matching::InstanceType;
+use crate::component::ResourceType;
 use crate::store::{StoreId, StoreOpaque};
 use crate::StoreContextMut;
 use anyhow::{bail, Result};
 use std::ptr::NonNull;
 use std::sync::Arc;
-use wasmtime_environ::component::{ComponentTypes, StringEncoding};
+use wasmtime_environ::component::{ComponentTypes, StringEncoding, TypeResourceTableIndex};
+use wasmtime_runtime::component::ComponentInstance;
 use wasmtime_runtime::{VMFuncRef, VMMemoryDefinition};
 
 /// Runtime representation of canonical ABI options in the component model.
@@ -177,10 +180,32 @@ pub struct LowerContext<'a, T> {
     /// used for type lookups and general type queries during the
     /// lifting/lowering process.
     pub types: &'a ComponentTypes,
+
+    /// TODO
+    instance: *mut ComponentInstance,
 }
 
 #[doc(hidden)]
 impl<'a, T> LowerContext<'a, T> {
+    /// TODO
+    ///
+    /// # Unsafety
+    ///
+    /// TODO: ptr must be valid
+    pub unsafe fn new(
+        store: StoreContextMut<'a, T>,
+        options: &'a Options,
+        types: &'a ComponentTypes,
+        instance: *mut ComponentInstance,
+    ) -> LowerContext<'a, T> {
+        LowerContext {
+            store,
+            options,
+            types,
+            instance,
+        }
+    }
+
     /// Returns a view into memory as a mutable slice of bytes.
     ///
     /// # Panics
@@ -235,6 +260,15 @@ impl<'a, T> LowerContext<'a, T> {
             .try_into()
             .unwrap()
     }
+
+    /// TODO
+    pub fn resource_lower_own(&mut self, ty: TypeResourceTableIndex, rep: u32) -> u32 {
+        unsafe { (*self.instance).resource_lower_own(ty, rep) }
+    }
+
+    pub fn resource_type(&self, ty: TypeResourceTableIndex) -> ResourceType {
+        InstanceType::new(self.store.0, unsafe { &*self.instance }).resource_type(ty)
+    }
 }
 
 /// Contextual information used when lifting a type from a component into the
@@ -253,10 +287,31 @@ pub struct LiftContext<'a> {
 
     /// Instance type information, like with lowering.
     pub types: &'a Arc<ComponentTypes>,
+
+    instance: *mut ComponentInstance,
 }
 
 #[doc(hidden)]
 impl<'a> LiftContext<'a> {
+    /// TODO
+    ///
+    /// # Unsafety
+    ///
+    /// TODO: ptr must be valid
+    pub unsafe fn new(
+        store: &'a StoreOpaque,
+        options: &'a Options,
+        types: &'a Arc<ComponentTypes>,
+        instance: *mut ComponentInstance,
+    ) -> LiftContext<'a> {
+        LiftContext {
+            store,
+            options,
+            types,
+            instance,
+        }
+    }
+
     /// Returns the entire contents of linear memory for this set of lifting
     /// options.
     ///
@@ -266,5 +321,20 @@ impl<'a> LiftContext<'a> {
     /// operation.
     pub fn memory(&self) -> &'a [u8] {
         self.options.memory(self.store)
+    }
+
+    /// TODO
+    pub fn instance_ptr(&self) -> *mut ComponentInstance {
+        self.instance
+    }
+
+    /// TODO
+    pub fn resource_lift_own(&self, ty: TypeResourceTableIndex, idx: u32) -> Result<u32> {
+        // TODO: document unsafe
+        unsafe { (*self.instance).resource_lift_own(ty, idx) }
+    }
+
+    pub fn resource_type(&self, ty: TypeResourceTableIndex) -> ResourceType {
+        InstanceType::new(self.store, unsafe { &*self.instance }).resource_type(ty)
     }
 }

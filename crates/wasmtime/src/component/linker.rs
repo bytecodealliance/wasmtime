@@ -1,7 +1,9 @@
 use crate::component::func::HostFunc;
 use crate::component::instance::RuntimeImport;
 use crate::component::matching::TypeChecker;
-use crate::component::{Component, ComponentNamedList, Instance, InstancePre, Lift, Lower, Val};
+use crate::component::{
+    Component, ComponentNamedList, Instance, InstancePre, Lift, Lower, ResourceType, Val,
+};
 use crate::{AsContextMut, Engine, Module, StoreContextMut};
 use anyhow::{anyhow, bail, Context, Result};
 use indexmap::IndexMap;
@@ -57,6 +59,7 @@ pub enum Definition {
     Instance(NameMap),
     Func(Arc<HostFunc>),
     Module(Module),
+    Resource(ResourceType, Arc<dyn Fn(*mut u8, u32) + Send + Sync>),
 }
 
 impl<T> Linker<T> {
@@ -129,9 +132,11 @@ impl<T> Linker<T> {
     /// `component` imports or if a name defined doesn't match the type of the
     /// item imported by the `component` provided.
     pub fn instantiate_pre(&self, component: &Component) -> Result<InstancePre<T>> {
-        let cx = TypeChecker {
+        let mut cx = TypeChecker {
+            component: component.env_component(),
             types: component.types(),
             strings: &self.strings,
+            imported_resources: Default::default(),
         };
 
         // Walk over the component's list of import names and use that to lookup
@@ -170,6 +175,7 @@ impl<T> Linker<T> {
             let import = match cur {
                 Definition::Module(m) => RuntimeImport::Module(m.clone()),
                 Definition::Func(f) => RuntimeImport::Func(f.clone()),
+                Definition::Resource(t, dtor) => RuntimeImport::Resource(t.clone(), dtor.clone()),
 
                 // This is guaranteed by the compilation process that "leaf"
                 // runtime imports are never instances.
@@ -365,6 +371,17 @@ impl<T> LinkerInstance<'_, T> {
     pub fn module(&mut self, name: &str, module: &Module) -> Result<()> {
         let name = self.strings.intern(name);
         self.insert(name, Definition::Module(module.clone()))
+    }
+
+    /// TODO
+    pub fn resource<U: 'static>(
+        &mut self,
+        name: &str,
+        dtor: impl Fn(&mut T, u32) + Send + Sync + 'static,
+    ) -> Result<()> {
+        let name = self.strings.intern(name);
+        let dtor = Arc::new(move |ptr: *mut u8, val| unsafe { dtor(&mut *ptr.cast(), val) });
+        self.insert(name, Definition::Resource(ResourceType::host::<U>(), dtor))
     }
 
     /// Defines a nested instance within this instance.

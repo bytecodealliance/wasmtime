@@ -57,6 +57,8 @@ pub fn link_spectest<T>(
 
 #[cfg(feature = "component-model")]
 pub fn link_component_spectest<T>(linker: &mut component::Linker<T>) -> Result<()> {
+    use wasmtime::component::Resource;
+
     let engine = linker.engine().clone();
     linker
         .root()
@@ -76,5 +78,25 @@ pub fn link_component_spectest<T>(linker: &mut component::Linker<T>) -> Result<(
         "#,
     )?;
     i.module("simple-module", &module)?;
+
+    struct Resource1;
+    struct Resource2;
+
+    // TODO: this is specifying two different destructors for `Resource1`, that
+    // seems bad.
+    i.resource::<Resource1>("resource1", |_, _| {})?;
+    i.resource::<Resource2>("resource2", |_, _| {})?;
+    i.resource::<Resource1>("resource1-again", |_, _| {})?;
+
+    i.func_wrap("[constructor]resource1", |_, (rep,): (u32,)| {
+        Ok((Resource::<Resource1>::new(rep),))
+    })?;
+    i.func_wrap(
+        "[static]resource1.assert",
+        |_, (resource, rep): (Resource<Resource1>, u32)| {
+            assert_eq!(resource.rep(), rep);
+            Ok(())
+        },
+    )?;
     Ok(())
 }

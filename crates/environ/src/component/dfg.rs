@@ -28,7 +28,7 @@
 //! fused adapters, what arguments make their way to core wasm modules, etc.
 
 use crate::component::*;
-use crate::{EntityIndex, EntityRef, PrimaryMap, SignatureIndex};
+use crate::{EntityIndex, EntityRef, PrimaryMap, SignatureIndex, WasmType};
 use indexmap::IndexMap;
 use std::collections::HashMap;
 use std::hash::Hash;
@@ -108,6 +108,15 @@ pub struct ComponentDfg {
     /// as the core wasm index of the export corresponding to the lowered
     /// version of the adapter.
     pub adapter_paritionings: PrimaryMap<AdapterId, (AdapterModuleId, EntityIndex)>,
+
+    /// TODO
+    pub resources: PrimaryMap<DefinedResourceIndex, Resource>,
+
+    /// TODO
+    pub imported_resources: PrimaryMap<ResourceIndex, RuntimeImportIndex>,
+
+    /// TODO
+    pub num_resource_tables: usize,
 }
 
 macro_rules! id {
@@ -165,6 +174,10 @@ pub enum CoreDef {
     InstanceFlags(RuntimeComponentInstanceIndex),
     Transcoder(TranscoderId),
 
+    ResourceNew(TypeResourceTableIndex, SignatureIndex),
+    ResourceRep(TypeResourceTableIndex, SignatureIndex),
+    ResourceDrop(TypeResourceTableIndex, SignatureIndex),
+
     /// This is a special variant not present in `info::CoreDef` which
     /// represents that this definition refers to a fused adapter function. This
     /// adapter is fully processed after the initial translation and
@@ -213,6 +226,7 @@ pub struct LowerImport {
     pub import: RuntimeImportIndex,
     pub canonical_abi: SignatureIndex,
     pub options: CanonicalOptions,
+    pub lower_ty: TypeFuncIndex,
 }
 
 /// Same as `info::CanonicalOptions`
@@ -236,6 +250,13 @@ pub struct Transcoder {
     pub to: MemoryId,
     pub to64: bool,
     pub signature: SignatureIndex,
+}
+
+/// Same as `info::Resource`
+#[allow(missing_docs)]
+pub struct Resource {
+    pub rep: WasmType,
+    pub dtor: Option<CoreDef>,
 }
 
 /// A helper structure to "intern" and deduplicate values of type `V` with an
@@ -310,6 +331,10 @@ impl ComponentDfg {
             runtime_always_trap: Default::default(),
             runtime_lowerings: Default::default(),
             runtime_transcoders: Default::default(),
+            // runtime_resources: Default::default(),
+            runtime_resource_new: Default::default(),
+            runtime_resource_rep: Default::default(),
+            runtime_resource_drop: Default::default(),
         };
 
         // First the instances are all processed for instantiation. This will,
@@ -342,11 +367,36 @@ impl ComponentDfg {
             num_always_trap: linearize.runtime_always_trap.len() as u32,
             num_lowerings: linearize.runtime_lowerings.len() as u32,
             num_transcoders: linearize.runtime_transcoders.len() as u32,
+            num_resource_new: linearize.runtime_resource_new.len() as u32,
+            num_resource_rep: linearize.runtime_resource_rep.len() as u32,
+            num_resource_drop: linearize.runtime_resource_drop.len() as u32,
 
+            // runtime_resources: {
+            //     let mut list = linearize
+            //         .runtime_resources
+            //         .iter()
+            //         .map(|(id, idx)| (*idx, *id))
+            //         .collect::<Vec<_>>();
+            //     list.sort_by_key(|(idx, _)| *idx);
+            //     let mut runtime_resources = PrimaryMap::new();
+            //     for (idx, id) in list {
+            //         let ty = self.resources[id].ty;
+            //         let idx2 = runtime_resources.push(ty);
+            //         assert_eq!(idx, idx2);
+            //     }
+            //     runtime_resources
+            // },
             imports: self.imports,
             import_types: self.import_types,
             num_runtime_component_instances: self.num_runtime_component_instances,
+            num_resource_tables: self.num_resource_tables,
+            imported_resources: self.imported_resources,
         }
+    }
+
+    /// TODO
+    pub fn resource_index(&self, defined: DefinedResourceIndex) -> ResourceIndex {
+        ResourceIndex::from_u32(defined.as_u32() + (self.imported_resources.len() as u32))
     }
 }
 
@@ -360,6 +410,10 @@ struct LinearizeDfg<'a> {
     runtime_always_trap: HashMap<AlwaysTrapId, RuntimeAlwaysTrapIndex>,
     runtime_lowerings: HashMap<LowerImportId, LoweredIndex>,
     runtime_transcoders: HashMap<TranscoderId, RuntimeTranscoderIndex>,
+    // runtime_resources: HashSet<TypeResourceTableIndex>,
+    runtime_resource_new: HashMap<TypeResourceTableIndex, RuntimeResourceNewIndex>,
+    runtime_resource_rep: HashMap<TypeResourceTableIndex, RuntimeResourceRepIndex>,
+    runtime_resource_drop: HashMap<TypeResourceTableIndex, RuntimeResourceDropIndex>,
 }
 
 #[derive(Copy, Clone, Hash, Eq, PartialEq)]
@@ -468,6 +522,11 @@ impl LinearizeDfg<'_> {
             CoreDef::InstanceFlags(i) => info::CoreDef::InstanceFlags(*i),
             CoreDef::Adapter(id) => info::CoreDef::Export(self.adapter(*id)),
             CoreDef::Transcoder(id) => info::CoreDef::Transcoder(self.runtime_transcoder(*id)),
+            CoreDef::ResourceNew(id, ty) => info::CoreDef::ResourceNew(self.resource_new(*id, *ty)),
+            CoreDef::ResourceRep(id, ty) => info::CoreDef::ResourceRep(self.resource_rep(*id, *ty)),
+            CoreDef::ResourceDrop(id, ty) => {
+                info::CoreDef::ResourceDrop(self.resource_drop(*id, *ty))
+            }
         }
     }
 
@@ -492,14 +551,15 @@ impl LinearizeDfg<'_> {
             |me, id| {
                 let info = &me.dfg.lowerings[id];
                 let options = me.options(&info.options);
-                (info.import, info.canonical_abi, options)
+                (info.import, info.canonical_abi, options, info.lower_ty)
             },
-            |index, (import, canonical_abi, options)| {
+            |index, (import, canonical_abi, options, lower_ty)| {
                 GlobalInitializer::LowerImport(info::LowerImport {
                     index,
                     import,
                     canonical_abi,
                     options,
+                    lower_ty,
                 })
             },
         )
@@ -533,6 +593,93 @@ impl LinearizeDfg<'_> {
             },
         )
     }
+
+    fn resource_new(
+        &mut self,
+        id: TypeResourceTableIndex,
+        signature: SignatureIndex,
+    ) -> RuntimeResourceNewIndex {
+        self.intern(
+            id,
+            |me| &mut me.runtime_resource_new,
+            |_me, id| id,
+            |index, resource| {
+                GlobalInitializer::ResourceNew(info::ResourceNew {
+                    index,
+                    resource,
+                    signature,
+                })
+            },
+        )
+    }
+
+    fn resource_rep(
+        &mut self,
+        id: TypeResourceTableIndex,
+        signature: SignatureIndex,
+    ) -> RuntimeResourceRepIndex {
+        self.intern(
+            id,
+            |me| &mut me.runtime_resource_rep,
+            |_me, id| id,
+            |index, resource| {
+                GlobalInitializer::ResourceRep(info::ResourceRep {
+                    index,
+                    resource,
+                    signature,
+                })
+            },
+        )
+    }
+
+    fn resource_drop(
+        &mut self,
+        id: TypeResourceTableIndex,
+        signature: SignatureIndex,
+    ) -> RuntimeResourceDropIndex {
+        self.intern(
+            id,
+            |me| &mut me.runtime_resource_drop,
+            |_me, ty| ty,
+            |index, resource| {
+                GlobalInitializer::ResourceDrop(info::ResourceDrop {
+                    index,
+                    resource,
+                    signature,
+                })
+            },
+        )
+    }
+
+    // fn resource(&mut self, id: TypeResourceTableIndex) -> TypeResourceTableIndex {
+    //     if self.runtime_resources.insert(id) {
+    //         let dtor =
+    //         self.initializers
+    //             .push(GlobalInitializer::Resource(info::Resource {
+    //                 index,
+    //                 dtor,
+    //                 rep,
+    //                 // ty,
+    //             }));
+    //     }
+    //     id
+    //     // let ret = self.intern(
+    //     //     id,
+    //     //     |me| &mut me.runtime_resources,
+    //     //     |me, id| {
+    //     //         let info = &me.dfg.resources[id];
+    //     //         (
+    //     //             info.dtor.as_ref().map(|i| me.core_def(i)),
+    //     //             info.rep,
+    //     //             info.ty,
+    //     //         )
+    //     //     },
+    //     //     |index, (dtor, rep, ty)| {
+    //     //     },
+    //     // );
+    //     // assert_eq!(id, ret);
+    //     // ret
+    // }
 
     fn core_export<T>(&mut self, export: &CoreExport<T>) -> info::CoreExport<T>
     where

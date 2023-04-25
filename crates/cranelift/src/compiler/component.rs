@@ -7,11 +7,8 @@ use cranelift_codegen::isa::CallConv;
 use cranelift_frontend::FunctionBuilder;
 use std::any::Any;
 use wasmtime_cranelift_shared::ALWAYS_TRAP_CODE;
-use wasmtime_environ::component::{
-    AllCallFunc, CanonicalOptions, Component, ComponentCompiler, ComponentTypes, FixedEncoding,
-    LowerImport, RuntimeMemoryIndex, Transcode, Transcoder, TypeDef, VMComponentOffsets,
-};
-use wasmtime_environ::{PtrSize, WasmFuncType};
+use wasmtime_environ::component::*;
+use wasmtime_environ::{PtrSize, WasmFuncType, WasmType};
 
 #[derive(Copy, Clone)]
 enum Abi {
@@ -94,10 +91,7 @@ impl Compiler {
         ));
 
         // ty: TypeFuncIndex,
-        let ty = match component.type_of_import(lowering.import, types) {
-            TypeDef::ComponentFunc(func) => func,
-            _ => unreachable!(),
-        };
+        let ty = lowering.lower_ty;
         host_sig.params.push(ir::AbiParam::new(ir::types::I32));
         callee_args.push(builder.ins().iconst(ir::types::I32, i64::from(ty.as_u32())));
 
@@ -231,6 +225,141 @@ impl Compiler {
         Ok(Box::new(compiler.finish()?))
     }
 
+    fn compile_resource_new_for_abi(
+        &self,
+        component: &Component,
+        resource: &ResourceNew,
+        types: &ComponentTypes,
+        abi: Abi,
+    ) -> Result<Box<dyn Any + Send>> {
+        let ty = &types[resource.signature];
+        let isa = &*self.isa;
+        let offsets = VMComponentOffsets::new(isa.pointer_bytes(), component);
+        let mut compiler = self.function_compiler();
+        let func = self.func(ty, abi);
+        let (mut builder, block0) = compiler.builder(func);
+
+        let args = self.abi_load_params(&mut builder, ty, block0, abi);
+        let vmctx = args[0];
+
+        self.abi_preamble(&mut builder, &offsets, vmctx, abi);
+
+        // The arguments this shim passes along to the libcall are:
+        //
+        //   * the vmctx
+        //   * a constant value for this `ResourceNew` intrinsic
+        //   * the wasm argument to wrap
+        let mut host_args = Vec::new();
+        host_args.push(vmctx);
+        host_args.push(
+            builder
+                .ins()
+                .iconst(ir::types::I32, i64::from(resource.resource.as_u32())),
+        );
+        host_args.push(args[2]);
+
+        // Currently this only support resources represented by `i32`
+        assert_eq!(ty.params()[0], WasmType::I32);
+        let (host_sig, offset) = host::resource_new32(self, &mut builder.func);
+
+        let host_fn = self.load_libcall(&mut builder, &offsets, vmctx, offset);
+        let call = builder.ins().call_indirect(host_sig, host_fn, &host_args);
+        let result = builder.func.dfg.inst_results(call)[0];
+        self.abi_store_results(&mut builder, ty, block0, &[result], abi);
+
+        builder.finalize();
+        Ok(Box::new(compiler.finish()?))
+    }
+
+    fn compile_resource_rep_for_abi(
+        &self,
+        component: &Component,
+        resource: &ResourceRep,
+        types: &ComponentTypes,
+        abi: Abi,
+    ) -> Result<Box<dyn Any + Send>> {
+        let ty = &types[resource.signature];
+        let isa = &*self.isa;
+        let offsets = VMComponentOffsets::new(isa.pointer_bytes(), component);
+        let mut compiler = self.function_compiler();
+        let func = self.func(ty, abi);
+        let (mut builder, block0) = compiler.builder(func);
+
+        let args = self.abi_load_params(&mut builder, ty, block0, abi);
+        let vmctx = args[0];
+
+        self.abi_preamble(&mut builder, &offsets, vmctx, abi);
+
+        // The arguments this shim passes along to the libcall are:
+        //
+        //   * the vmctx
+        //   * a constant value for this `ResourceRep` intrinsic
+        //   * the wasm argument to unwrap
+        let mut host_args = Vec::new();
+        host_args.push(vmctx);
+        host_args.push(
+            builder
+                .ins()
+                .iconst(ir::types::I32, i64::from(resource.resource.as_u32())),
+        );
+        host_args.push(args[2]);
+
+        // Currently this only support resources represented by `i32`
+        assert_eq!(ty.returns()[0], WasmType::I32);
+        let (host_sig, offset) = host::resource_rep32(self, &mut builder.func);
+
+        let host_fn = self.load_libcall(&mut builder, &offsets, vmctx, offset);
+        let call = builder.ins().call_indirect(host_sig, host_fn, &host_args);
+        let result = builder.func.dfg.inst_results(call)[0];
+        self.abi_store_results(&mut builder, ty, block0, &[result], abi);
+
+        builder.finalize();
+        Ok(Box::new(compiler.finish()?))
+    }
+
+    fn compile_resource_drop_for_abi(
+        &self,
+        component: &Component,
+        resource: &ResourceDrop,
+        types: &ComponentTypes,
+        abi: Abi,
+    ) -> Result<Box<dyn Any + Send>> {
+        let ty = &types[resource.signature];
+        let isa = &*self.isa;
+        let offsets = VMComponentOffsets::new(isa.pointer_bytes(), component);
+        let mut compiler = self.function_compiler();
+        let func = self.func(ty, abi);
+        let (mut builder, block0) = compiler.builder(func);
+
+        let args = self.abi_load_params(&mut builder, ty, block0, abi);
+        let vmctx = args[0];
+
+        self.abi_preamble(&mut builder, &offsets, vmctx, abi);
+
+        // The arguments this shim passes along to the libcall are:
+        //
+        //   * the vmctx
+        //   * a constant value for this `ResourceDrop` intrinsic
+        //   * the wasm handle index to drop
+        let mut host_args = Vec::new();
+        host_args.push(vmctx);
+        host_args.push(
+            builder
+                .ins()
+                .iconst(ir::types::I32, i64::from(resource.resource.as_u32())),
+        );
+        host_args.push(args[2]);
+
+        let (host_sig, offset) = host::resource_drop(self, &mut builder.func);
+        let host_fn = self.load_libcall(&mut builder, &offsets, vmctx, offset);
+        let call = builder.ins().call_indirect(host_sig, host_fn, &host_args);
+        builder.func.dfg.inst_results(call);
+        self.abi_store_results(&mut builder, ty, block0, &[], abi);
+
+        builder.finalize();
+        Ok(Box::new(compiler.finish()?))
+    }
+
     fn func(&self, ty: &WasmFuncType, abi: Abi) -> ir::Function {
         let isa = &*self.isa;
         ir::Function::with_name_signature(
@@ -252,6 +381,84 @@ impl Compiler {
             array_call: compile(Abi::Array)?,
             native_call: compile(Abi::Native)?,
         })
+    }
+
+    fn load_libcall(
+        &self,
+        builder: &mut FunctionBuilder<'_>,
+        offsets: &VMComponentOffsets<u8>,
+        vmctx: ir::Value,
+        offset: u32,
+    ) -> ir::Value {
+        let pointer_type = self.isa.pointer_type();
+        // Load the host function pointer for this transcode which comes from a
+        // function pointer within the VMComponentContext's libcall array.
+        let libcalls_array = builder.ins().load(
+            pointer_type,
+            MemFlags::trusted(),
+            vmctx,
+            i32::try_from(offsets.libcalls()).unwrap(),
+        );
+        builder.ins().load(
+            pointer_type,
+            MemFlags::trusted(),
+            libcalls_array,
+            i32::try_from(offset * u32::from(offsets.ptr.size())).unwrap(),
+        )
+    }
+
+    fn abi_load_params(
+        &self,
+        builder: &mut FunctionBuilder<'_>,
+        ty: &WasmFuncType,
+        block0: ir::Block,
+        abi: Abi,
+    ) -> Vec<ir::Value> {
+        let mut block0_params = builder.func.dfg.block_params(block0).to_vec();
+        match abi {
+            Abi::Wasm | Abi::Native => block0_params,
+            Abi::Array => {
+                // After the host function has returned the results are loaded from
+                // `values_vec_ptr` and then returned.
+                let results = self.load_values_from_array(
+                    ty.params(),
+                    builder,
+                    block0_params[2],
+                    block0_params[3],
+                );
+                block0_params.truncate(2);
+                block0_params.extend(results);
+                block0_params
+            }
+        }
+    }
+
+    fn abi_store_results(
+        &self,
+        builder: &mut FunctionBuilder<'_>,
+        ty: &WasmFuncType,
+        block0: ir::Block,
+        results: &[ir::Value],
+        abi: Abi,
+    ) {
+        match abi {
+            Abi::Wasm | Abi::Native => {
+                builder.ins().return_(results);
+            }
+            Abi::Array => {
+                // After the host function has returned the results are loaded from
+                // `values_vec_ptr` and then returned.
+                let block0_params = builder.func.dfg.block_params(block0);
+                self.store_values_to_array(
+                    builder,
+                    ty.returns(),
+                    results,
+                    block0_params[2],
+                    block0_params[3],
+                );
+                builder.ins().return_(&[]);
+            }
+        }
     }
 
     fn abi_preamble(
@@ -311,6 +518,39 @@ impl ComponentCompiler for Compiler {
             self.compile_transcoder_for_abi(component, transcoder, types, abi)
         })
     }
+
+    fn compile_resource_new(
+        &self,
+        component: &Component,
+        resource: &ResourceNew,
+        types: &ComponentTypes,
+    ) -> Result<AllCallFunc<Box<dyn Any + Send>>> {
+        self.compile_func_ref(|abi| {
+            self.compile_resource_new_for_abi(component, resource, types, abi)
+        })
+    }
+
+    fn compile_resource_rep(
+        &self,
+        component: &Component,
+        resource: &ResourceRep,
+        types: &ComponentTypes,
+    ) -> Result<AllCallFunc<Box<dyn Any + Send>>> {
+        self.compile_func_ref(|abi| {
+            self.compile_resource_rep_for_abi(component, resource, types, abi)
+        })
+    }
+
+    fn compile_resource_drop(
+        &self,
+        component: &Component,
+        resource: &ResourceDrop,
+        types: &ComponentTypes,
+    ) -> Result<AllCallFunc<Box<dyn Any + Send>>> {
+        self.compile_func_ref(|abi| {
+            self.compile_resource_drop_for_abi(component, resource, types, abi)
+        })
+    }
 }
 
 impl Compiler {
@@ -347,20 +587,7 @@ impl Compiler {
             Transcode::Utf8ToUtf16 => host::utf8_to_utf16(self, func),
         };
 
-        // Load the host function pointer for this transcode which comes from a
-        // function pointer within the VMComponentContext's libcall array.
-        let transcode_libcalls_array = builder.ins().load(
-            pointer_type,
-            MemFlags::trusted(),
-            vmctx,
-            i32::try_from(offsets.transcode_libcalls()).unwrap(),
-        );
-        let transcode_libcall = builder.ins().load(
-            pointer_type,
-            MemFlags::trusted(),
-            transcode_libcalls_array,
-            i32::try_from(offset * u32::from(offsets.ptr.size())).unwrap(),
-        );
+        let libcall = self.load_libcall(builder, offsets, vmctx, offset);
 
         // Load the base pointers for the from/to linear memories.
         let from_base = self.load_runtime_memory_base(builder, vmctx, offsets, transcoder.from);
@@ -447,7 +674,7 @@ impl Compiler {
             ));
             args.push(builder.ins().stack_addr(pointer_type, slot, 0));
         }
-        let call = builder.ins().call_indirect(sig, transcode_libcall, &args);
+        let call = builder.ins().call_indirect(sig, libcall, &args);
         let mut results = builder.func.dfg.inst_results(call).to_vec();
         if uses_retptr {
             results.push(builder.ins().load(
@@ -531,7 +758,7 @@ mod host {
     use cranelift_codegen::ir::{self, AbiParam};
     use cranelift_codegen::isa::CallConv;
 
-    macro_rules! host_transcode {
+    macro_rules! define {
         (
             $(
                 $( #[$attr:meta] )*
@@ -542,10 +769,10 @@ mod host {
                 pub(super) fn $name(compiler: &Compiler, func: &mut ir::Function) -> (ir::SigRef, u32) {
                     let pointer_type = compiler.isa.pointer_type();
                     let mut params = vec![
-                        $( AbiParam::new(host_transcode!(@ty pointer_type $param)) ),*
+                        $( AbiParam::new(define!(@ty pointer_type $param)) ),*
                     ];
                     let mut returns = Vec::new();
-                    $(host_transcode!(@push_return pointer_type params returns $result);)?
+                    $(define!(@push_return pointer_type params returns $result);)?
                     let sig = func.import_signature(ir::Signature {
                         params,
                         returns,
@@ -560,15 +787,19 @@ mod host {
         (@ty $ptr:ident size) => ($ptr);
         (@ty $ptr:ident ptr_u8) => ($ptr);
         (@ty $ptr:ident ptr_u16) => ($ptr);
+        (@ty $ptr:ident u32) => (ir::types::I32);
+        (@ty $ptr:ident vmctx) => ($ptr);
 
         (@push_return $ptr:ident $params:ident $returns:ident size) => ($returns.push(AbiParam::new($ptr)););
+        (@push_return $ptr:ident $params:ident $returns:ident u32) => ($returns.push(AbiParam::new(ir::types::I32)););
         (@push_return $ptr:ident $params:ident $returns:ident size_pair) => ({
             $params.push(AbiParam::new($ptr));
             $returns.push(AbiParam::new($ptr));
         });
     }
 
-    wasmtime_environ::foreach_transcoder!(host_transcode);
+    wasmtime_environ::foreach_transcoder!(define);
+    wasmtime_environ::foreach_builtin_component_function!(define);
 
     mod offsets {
         macro_rules! offsets {
@@ -581,13 +812,32 @@ mod host {
                 offsets!(@declare (0) $($name)*);
             };
 
-            (@declare ($n:expr)) => ();
+            (@declare ($n:expr)) => (const LAST_BUILTIN: u32 = $n;);
             (@declare ($n:expr) $name:ident $($rest:tt)*) => (
-                pub static $name: u32 = $n;
+                pub const $name: u32 = $n;
                 offsets!(@declare ($n + 1) $($rest)*);
             );
         }
 
-        wasmtime_environ::foreach_transcoder!(offsets);
+        wasmtime_environ::foreach_builtin_component_function!(offsets);
+
+        macro_rules! transcode_offsets {
+            (
+                $(
+                    $( #[$attr:meta] )*
+                    $name:ident($($t:tt)*) $( -> $result:ident )?;
+                )*
+            ) => {
+                transcode_offsets!(@declare (0) $($name)*);
+            };
+
+            (@declare ($n:expr)) => ();
+            (@declare ($n:expr) $name:ident $($rest:tt)*) => (
+                pub const $name: u32 = LAST_BUILTIN + $n;
+                transcode_offsets!(@declare ($n + 1) $($rest)*);
+            );
+        }
+
+        wasmtime_environ::foreach_transcoder!(transcode_offsets);
     }
 }

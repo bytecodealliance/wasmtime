@@ -41,13 +41,15 @@ type CompileInput<'a> =
 /// Two `u32`s to align with `cranelift_codegen::ir::UserExternalName`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 struct CompileKey {
-    // [ kind:i3 module:i29 ]
+    // [ kind:i4 module:i28 ]
     namespace: u32,
     index: u32,
 }
 
 impl CompileKey {
-    const KIND_MASK: u32 = 0b111 << 29;
+    const KIND_BITS: u32 = 4;
+    const KIND_OFFSET: u32 = 32 - Self::KIND_BITS;
+    const KIND_MASK: u32 = ((1 << Self::KIND_BITS) - 1) << Self::KIND_OFFSET;
 
     fn kind(&self) -> u32 {
         self.namespace & Self::KIND_MASK
@@ -57,10 +59,16 @@ impl CompileKey {
         StaticModuleIndex::from_u32(self.namespace & !Self::KIND_MASK)
     }
 
-    const WASM_FUNCTION_KIND: u32 = 0b000 << 29;
-    const ARRAY_TO_WASM_TRAMPOLINE_KIND: u32 = 0b001 << 29;
-    const NATIVE_TO_WASM_TRAMPOLINE_KIND: u32 = 0b010 << 29;
-    const WASM_TO_NATIVE_TRAMPOLINE_KIND: u32 = 0b011 << 29;
+    const WASM_FUNCTION_KIND: u32 = Self::new_kind(0);
+    const ARRAY_TO_WASM_TRAMPOLINE_KIND: u32 = Self::new_kind(1);
+    const NATIVE_TO_WASM_TRAMPOLINE_KIND: u32 = Self::new_kind(2);
+    const WASM_TO_NATIVE_TRAMPOLINE_KIND: u32 = Self::new_kind(3);
+
+    const fn new_kind(kind: u32) -> u32 {
+        assert!(kind < (1 << Self::KIND_BITS));
+        kind << Self::KIND_OFFSET
+    }
+
     // NB: more kinds in the other `impl` block.
 
     fn wasm_function(module: StaticModuleIndex, index: DefinedFuncIndex) -> Self {
@@ -97,9 +105,12 @@ impl CompileKey {
 
 #[cfg(feature = "component-model")]
 impl CompileKey {
-    const LOWERING_KIND: u32 = 0b100 << 29;
-    const ALWAYS_TRAP_KIND: u32 = 0b101 << 29;
-    const TRANSCODER_KIND: u32 = 0b110 << 29;
+    const LOWERING_KIND: u32 = Self::new_kind(4);
+    const ALWAYS_TRAP_KIND: u32 = Self::new_kind(5);
+    const TRANSCODER_KIND: u32 = Self::new_kind(6);
+    const RESOURCE_NEW_KIND: u32 = Self::new_kind(7);
+    const RESOURCE_REP_KIND: u32 = Self::new_kind(8);
+    const RESOURCE_DROP_KIND: u32 = Self::new_kind(9);
 
     fn lowering(index: wasmtime_environ::component::LoweredIndex) -> Self {
         Self {
@@ -118,6 +129,27 @@ impl CompileKey {
     fn transcoder(index: wasmtime_environ::component::RuntimeTranscoderIndex) -> Self {
         Self {
             namespace: Self::TRANSCODER_KIND,
+            index: index.as_u32(),
+        }
+    }
+
+    fn resource_new(index: wasmtime_environ::component::RuntimeResourceNewIndex) -> Self {
+        Self {
+            namespace: Self::RESOURCE_NEW_KIND,
+            index: index.as_u32(),
+        }
+    }
+
+    fn resource_rep(index: wasmtime_environ::component::RuntimeResourceRepIndex) -> Self {
+        Self {
+            namespace: Self::RESOURCE_REP_KIND,
+            index: index.as_u32(),
+        }
+    }
+
+    fn resource_drop(index: wasmtime_environ::component::RuntimeResourceDropIndex) -> Self {
+        Self {
+            namespace: Self::RESOURCE_DROP_KIND,
             index: index.as_u32(),
         }
     }
@@ -255,7 +287,49 @@ impl<'a> CompileInputs<'a> {
                         })
                     });
                 }
-                wasmtime_environ::component::GlobalInitializer::InstantiateModule(_)
+
+                wasmtime_environ::component::GlobalInitializer::ResourceNew(r) => {
+                    push_input(&mut inputs, move |_tunables, compiler| {
+                        Ok(CompileOutput {
+                            key: CompileKey::resource_new(r.index),
+                            symbol: r.symbol_name(),
+                            function: compiler
+                                .component_compiler()
+                                .compile_resource_new(component, r, types)?
+                                .into(),
+                            info: None,
+                        })
+                    });
+                }
+                wasmtime_environ::component::GlobalInitializer::ResourceRep(r) => {
+                    push_input(&mut inputs, move |_tunables, compiler| {
+                        Ok(CompileOutput {
+                            key: CompileKey::resource_rep(r.index),
+                            symbol: r.symbol_name(),
+                            function: compiler
+                                .component_compiler()
+                                .compile_resource_rep(component, r, types)?
+                                .into(),
+                            info: None,
+                        })
+                    });
+                }
+                wasmtime_environ::component::GlobalInitializer::ResourceDrop(r) => {
+                    push_input(&mut inputs, move |_tunables, compiler| {
+                        Ok(CompileOutput {
+                            key: CompileKey::resource_drop(r.index),
+                            symbol: r.symbol_name(),
+                            function: compiler
+                                .component_compiler()
+                                .compile_resource_drop(component, r, types)?
+                                .into(),
+                            info: None,
+                        })
+                    });
+                }
+
+                wasmtime_environ::component::GlobalInitializer::Resource(_)
+                | wasmtime_environ::component::GlobalInitializer::InstantiateModule(_)
                 | wasmtime_environ::component::GlobalInitializer::ExtractMemory(_)
                 | wasmtime_environ::component::GlobalInitializer::ExtractRealloc(_)
                 | wasmtime_environ::component::GlobalInitializer::ExtractPostReturn(_) => {
@@ -670,6 +744,27 @@ impl FunctionIndices {
                 .into_iter()
                 .map(|(_id, x)| x.unwrap_all_call_func().map(|i| symbol_ids_and_locs[i].1))
                 .collect();
+            artifacts.resource_new = self
+                .indices
+                .remove(&CompileKey::RESOURCE_NEW_KIND)
+                .unwrap_or_default()
+                .into_iter()
+                .map(|(_id, x)| x.unwrap_all_call_func().map(|i| symbol_ids_and_locs[i].1))
+                .collect();
+            artifacts.resource_rep = self
+                .indices
+                .remove(&CompileKey::RESOURCE_REP_KIND)
+                .unwrap_or_default()
+                .into_iter()
+                .map(|(_id, x)| x.unwrap_all_call_func().map(|i| symbol_ids_and_locs[i].1))
+                .collect();
+            artifacts.resource_drop = self
+                .indices
+                .remove(&CompileKey::RESOURCE_DROP_KIND)
+                .unwrap_or_default()
+                .into_iter()
+                .map(|(_id, x)| x.unwrap_all_call_func().map(|i| symbol_ids_and_locs[i].1))
+                .collect();
         }
 
         debug_assert!(
@@ -701,6 +796,21 @@ pub struct Artifacts {
         wasmtime_environ::component::RuntimeTranscoderIndex,
         wasmtime_environ::component::AllCallFunc<FunctionLoc>,
     >,
+    #[cfg(feature = "component-model")]
+    pub resource_new: PrimaryMap<
+        wasmtime_environ::component::RuntimeResourceNewIndex,
+        wasmtime_environ::component::AllCallFunc<FunctionLoc>,
+    >,
+    #[cfg(feature = "component-model")]
+    pub resource_rep: PrimaryMap<
+        wasmtime_environ::component::RuntimeResourceRepIndex,
+        wasmtime_environ::component::AllCallFunc<FunctionLoc>,
+    >,
+    #[cfg(feature = "component-model")]
+    pub resource_drop: PrimaryMap<
+        wasmtime_environ::component::RuntimeResourceDropIndex,
+        wasmtime_environ::component::AllCallFunc<FunctionLoc>,
+    >,
 }
 
 impl Artifacts {
@@ -713,6 +823,9 @@ impl Artifacts {
             assert!(self.lowerings.is_empty());
             assert!(self.always_traps.is_empty());
             assert!(self.transcoders.is_empty());
+            assert!(self.resource_new.is_empty());
+            assert!(self.resource_rep.is_empty());
+            assert!(self.resource_drop.is_empty());
         }
         self.modules.into_iter().next().unwrap().1
     }

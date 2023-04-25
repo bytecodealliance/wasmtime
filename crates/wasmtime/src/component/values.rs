@@ -775,6 +775,9 @@ impl Val {
                     value,
                 })
             }
+
+            InterfaceType::Own(i) => todo!(),
+            InterfaceType::Borrow(i) => todo!(),
         })
     }
 
@@ -885,6 +888,9 @@ impl Val {
                         .collect::<Result<_>>()?,
                 },
             }),
+
+            InterfaceType::Own(i) => todo!(),
+            InterfaceType::Borrow(i) => todo!(),
         })
     }
 

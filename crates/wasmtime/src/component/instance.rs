@@ -1,5 +1,7 @@
+use super::component::AllCallFuncPointers;
 use crate::component::func::HostFunc;
-use crate::component::{Component, ComponentNamedList, Func, Lift, Lower, TypedFunc};
+use crate::component::matching::InstanceType;
+use crate::component::{Component, ComponentNamedList, Func, Lift, Lower, ResourceType, TypedFunc};
 use crate::instance::OwnedImports;
 use crate::linker::DefinitionType;
 use crate::store::{StoreOpaque, Stored};
@@ -7,16 +9,14 @@ use crate::{AsContextMut, Module, StoreContextMut};
 use anyhow::{anyhow, Context, Result};
 use indexmap::IndexMap;
 use std::marker;
+use std::ptr::NonNull;
 use std::sync::Arc;
-use wasmtime_environ::component::{
-    AlwaysTrap, ComponentTypes, CoreDef, CoreExport, Export, ExportItem, ExtractMemory,
-    ExtractPostReturn, ExtractRealloc, GlobalInitializer, InstantiateModule, LowerImport,
-    RuntimeImportIndex, RuntimeInstanceIndex, Transcoder,
-};
-use wasmtime_environ::{EntityIndex, EntityType, Global, PrimaryMap, WasmType};
+use wasmtime_environ::component::*;
+use wasmtime_environ::{EntityIndex, EntityType, Global, PrimaryMap, SignatureIndex, WasmType};
 use wasmtime_runtime::component::{ComponentInstance, OwnedComponentInstance};
-
-use super::component::AllCallFuncPointers;
+use wasmtime_runtime::{
+    VMArrayCallFunction, VMNativeCallFunction, VMSharedSignatureIndex, VMWasmCallFunction,
+};
 
 /// An instantiated component.
 ///
@@ -133,6 +133,11 @@ impl Instance {
             .module(name)
             .cloned()
     }
+
+    /// TODO
+    pub fn get_resource(&self, mut store: impl AsContextMut, name: &str) -> Option<ResourceType> {
+        self.exports(store.as_context_mut()).root().resource(name)
+    }
 }
 
 impl InstanceData {
@@ -161,6 +166,21 @@ impl InstanceData {
             CoreDef::Transcoder(idx) => {
                 wasmtime_runtime::Export::Function(wasmtime_runtime::ExportFunction {
                     func_ref: self.state.transcoder_func_ref(*idx),
+                })
+            }
+            CoreDef::ResourceNew(idx) => {
+                wasmtime_runtime::Export::Function(wasmtime_runtime::ExportFunction {
+                    func_ref: self.state.resource_new_func_ref(*idx),
+                })
+            }
+            CoreDef::ResourceRep(idx) => {
+                wasmtime_runtime::Export::Function(wasmtime_runtime::ExportFunction {
+                    func_ref: self.state.resource_rep_func_ref(*idx),
+                })
+            }
+            CoreDef::ResourceDrop(idx) => {
+                wasmtime_runtime::Export::Function(wasmtime_runtime::ExportFunction {
+                    func_ref: self.state.resource_drop_func_ref(*idx),
                 })
             }
         }
@@ -198,8 +218,16 @@ impl InstanceData {
         &self.state
     }
 
+    pub fn instance_ptr(&self) -> *mut ComponentInstance {
+        self.state.instance_ptr()
+    }
+
     pub fn component_types(&self) -> &Arc<ComponentTypes> {
         self.component.types()
+    }
+
+    pub fn ty(&self, store: &StoreOpaque) -> InstanceType<'_> {
+        InstanceType::new(store, self.instance())
     }
 }
 
@@ -214,7 +242,10 @@ struct Instantiator<'a> {
 pub enum RuntimeImport {
     Func(Arc<HostFunc>),
     Module(Module),
+    Resource(ResourceType, Arc<dyn Fn(*mut u8, u32) + Send + Sync>),
 }
+
+pub type ImportedResources = PrimaryMap<ResourceIndex, ResourceType>;
 
 impl<'a> Instantiator<'a> {
     fn new(
@@ -224,6 +255,8 @@ impl<'a> Instantiator<'a> {
     ) -> Instantiator<'a> {
         let env_component = component.env_component();
         store.modules_mut().register_component(component);
+        let imported_resources: ImportedResources =
+            PrimaryMap::with_capacity(env_component.imported_resources.len());
         Instantiator {
             component,
             imports,
@@ -231,7 +264,11 @@ impl<'a> Instantiator<'a> {
             data: InstanceData {
                 instances: PrimaryMap::with_capacity(env_component.num_runtime_instances as usize),
                 component: component.clone(),
-                state: OwnedComponentInstance::new(component.runtime_info(), store.traitobj()),
+                state: OwnedComponentInstance::new(
+                    component.runtime_info(),
+                    Box::new(imported_resources),
+                    store.traitobj(),
+                ),
                 imports: imports.clone(),
             },
         }
@@ -239,6 +276,19 @@ impl<'a> Instantiator<'a> {
 
     fn run<T>(&mut self, store: &mut StoreContextMut<'_, T>) -> Result<()> {
         let env_component = self.component.env_component();
+        let imported_resources = self
+            .data
+            .state
+            .imported_resources_mut()
+            .downcast_mut::<ImportedResources>()
+            .unwrap();
+        for (idx, import) in env_component.imported_resources.iter() {
+            let i = imported_resources.push(match &self.imports[*import] {
+                RuntimeImport::Resource(ty, _dtor) => *ty,
+                _ => unreachable!(),
+            });
+            assert_eq!(i, idx);
+        }
         for initializer in env_component.initializers.iter() {
             match initializer {
                 GlobalInitializer::InstantiateModule(m) => {
@@ -301,6 +351,11 @@ impl<'a> Instantiator<'a> {
                 }
 
                 GlobalInitializer::Transcoder(e) => self.transcoder(e),
+
+                GlobalInitializer::Resource(r) => self.resource(r),
+                GlobalInitializer::ResourceNew(r) => self.resource_new(r),
+                GlobalInitializer::ResourceRep(r) => self.resource_rep(r),
+                GlobalInitializer::ResourceDrop(r) => self.resource_drop(r),
             }
         }
         Ok(())
@@ -331,40 +386,87 @@ impl<'a> Instantiator<'a> {
         );
     }
 
-    fn always_trap(&mut self, trap: &AlwaysTrap) {
+    fn set_funcref<T: Copy>(
+        &mut self,
+        index: T,
+        signature: SignatureIndex,
+        func_ptrs: impl FnOnce(&Component, T) -> AllCallFuncPointers,
+        set_funcref: impl FnOnce(
+            &mut OwnedComponentInstance,
+            T,
+            NonNull<VMWasmCallFunction>,
+            NonNull<VMNativeCallFunction>,
+            VMArrayCallFunction,
+            VMSharedSignatureIndex,
+        ),
+    ) {
         let AllCallFuncPointers {
             wasm_call,
             array_call,
             native_call,
-        } = self.component.always_trap_ptrs(trap.index);
+        } = func_ptrs(&self.component, index);
         let signature = self
             .component
             .signatures()
-            .shared_signature(trap.canonical_abi)
+            .shared_signature(signature)
             .expect("found unregistered signature");
-        self.data
-            .state
-            .set_always_trap(trap.index, wasm_call, native_call, array_call, signature);
-    }
-
-    fn transcoder(&mut self, transcoder: &Transcoder) {
-        let AllCallFuncPointers {
-            wasm_call,
-            array_call,
-            native_call,
-        } = self.component.transcoder_ptrs(transcoder.index);
-        let signature = self
-            .component
-            .signatures()
-            .shared_signature(transcoder.signature)
-            .expect("found unregistered signature");
-        self.data.state.set_transcoder(
-            transcoder.index,
+        set_funcref(
+            &mut self.data.state,
+            index,
             wasm_call,
             native_call,
             array_call,
             signature,
-        );
+        )
+    }
+
+    fn always_trap(&mut self, trap: &AlwaysTrap) {
+        self.set_funcref(
+            trap.index,
+            trap.canonical_abi,
+            Component::always_trap_ptrs,
+            OwnedComponentInstance::set_always_trap,
+        )
+    }
+
+    fn transcoder(&mut self, transcoder: &Transcoder) {
+        self.set_funcref(
+            transcoder.index,
+            transcoder.signature,
+            Component::transcoder_ptrs,
+            OwnedComponentInstance::set_transcoder,
+        )
+    }
+
+    fn resource(&mut self, resource: &Resource) {
+        // TODO
+    }
+
+    fn resource_new(&mut self, resource: &ResourceNew) {
+        self.set_funcref(
+            resource.index,
+            resource.signature,
+            Component::resource_new_ptrs,
+            OwnedComponentInstance::set_resource_new,
+        )
+    }
+
+    fn resource_rep(&mut self, resource: &ResourceRep) {
+        self.set_funcref(
+            resource.index,
+            resource.signature,
+            Component::resource_rep_ptrs,
+            OwnedComponentInstance::set_resource_rep,
+        )
+    }
+
+    fn resource_drop(&mut self, resource: &ResourceDrop) {
+        self.set_funcref(
+            resource.index,
+            resource.signature,
+            Component::resource_drop_ptrs,
+            OwnedComponentInstance::set_resource_drop,
+        )
     }
 
     fn extract_memory(&mut self, store: &mut StoreOpaque, memory: &ExtractMemory) {
@@ -656,7 +758,7 @@ impl<'a, 'store> ExportInstance<'a, 'store> {
             .func(name)
             .ok_or_else(|| anyhow!("failed to find function export `{}`", name))?;
         Ok(func
-            ._typed::<Params, Results>(self.store)
+            ._typed::<Params, Results>(self.store, Some(self.data))
             .with_context(|| format!("failed to convert function `{}` to given type", name))?)
     }
 
@@ -669,6 +771,19 @@ impl<'a, 'store> ExportInstance<'a, 'store> {
                 _ => unreachable!(),
             }),
             _ => None,
+        }
+    }
+
+    /// Same as [`Instance::get_resource`]
+    pub fn resource(&mut self, name: &str) -> Option<ResourceType> {
+        match self.exports.get(name)? {
+            Export::Type(TypeDef::Resource(id)) => {
+                Some(self.data.ty(self.store).resource_type(*id))
+            }
+            Export::Type(_)
+            | Export::LiftedFunction { .. }
+            | Export::Module(_)
+            | Export::Instance(_) => None,
         }
     }
 

@@ -187,7 +187,7 @@ where
 /// owned by a `Store` and will embed a `StoreId` internally to say which store
 /// it came from. Comparisons with this value are how panics are generated for
 /// mismatching the item that a store belongs to.
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct StoreId(NonZeroU64);
 
 impl StoreId {

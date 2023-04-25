@@ -218,32 +218,40 @@ impl Func {
         Params: ComponentNamedList + Lower,
         Return: ComponentNamedList + Lift,
     {
-        self._typed(store.as_context().0)
+        self._typed(store.as_context().0, None)
     }
 
     pub(crate) fn _typed<Params, Return>(
         &self,
         store: &StoreOpaque,
+        instance: Option<&InstanceData>,
     ) -> Result<TypedFunc<Params, Return>>
     where
         Params: ComponentNamedList + Lower,
         Return: ComponentNamedList + Lift,
     {
-        self.typecheck::<Params, Return>(store)?;
+        self.typecheck::<Params, Return>(store, instance)?;
         unsafe { Ok(TypedFunc::new_unchecked(*self)) }
     }
 
-    fn typecheck<Params, Return>(&self, store: &StoreOpaque) -> Result<()>
+    fn typecheck<Params, Return>(
+        &self,
+        store: &StoreOpaque,
+        instance: Option<&InstanceData>,
+    ) -> Result<()>
     where
         Params: ComponentNamedList + Lower,
         Return: ComponentNamedList + Lift,
     {
         let data = &store[self.0];
-        let ty = &data.types[data.ty];
+        let cx = instance
+            .unwrap_or_else(|| &store[data.instance.0].as_ref().unwrap())
+            .ty(store);
+        let ty = &cx.types[data.ty];
 
-        Params::typecheck(&InterfaceType::Tuple(ty.params), &data.types)
+        Params::typecheck(&InterfaceType::Tuple(ty.params), &cx)
             .context("type mismatch with parameters")?;
-        Return::typecheck(&InterfaceType::Tuple(ty.results), &data.types)
+        Return::typecheck(&InterfaceType::Tuple(ty.results), &cx)
             .context("type mismatch with results")?;
 
         Ok(())
@@ -461,12 +469,9 @@ impl Func {
 
             debug_assert!(flags.may_leave());
             flags.set_may_leave(false);
+            let instance_ptr = instance.instance_ptr();
             let result = lower(
-                &mut LowerContext {
-                    store: store.as_context_mut(),
-                    options: &options,
-                    types: &types,
-                },
+                &mut LowerContext::new(store.as_context_mut(), &options, &types, instance_ptr),
                 params,
                 InterfaceType::Tuple(types[ty].params),
                 map_maybe_uninit!(space.params),
@@ -507,11 +512,7 @@ impl Func {
             // later get used in post-return.
             flags.set_needs_post_return(true);
             let val = lift(
-                &LiftContext {
-                    store: store.0,
-                    options: &options,
-                    types: &types,
-                },
+                &LiftContext::new(store.0, &options, &types, instance_ptr),
                 InterfaceType::Tuple(types[ty].results),
                 ret,
             )?;

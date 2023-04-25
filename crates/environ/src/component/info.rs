@@ -47,7 +47,7 @@
 // requirements of embeddings change over time.
 
 use crate::component::*;
-use crate::{EntityIndex, PrimaryMap, SignatureIndex};
+use crate::{EntityIndex, PrimaryMap, SignatureIndex, WasmType};
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 
@@ -147,21 +147,28 @@ pub struct Component {
     /// The number of host transcoder functions needed for strings in adapter
     /// modules.
     pub num_transcoders: u32,
+
+    /// TODO
+    pub num_resource_new: u32,
+    /// TODO
+    pub num_resource_rep: u32,
+    /// TODO
+    pub num_resource_drop: u32,
+    /// TODO
+    pub num_resource_tables: usize,
+    /// TODO
+    pub imported_resources: PrimaryMap<ResourceIndex, RuntimeImportIndex>,
+    // /// TODO
+    // pub runtime_resources: PrimaryMap<RuntimeResourceIndex, TypeResourceIndex>,
 }
 
 impl Component {
-    /// Returns the type of the specified import
-    pub fn type_of_import(&self, import: RuntimeImportIndex, types: &ComponentTypes) -> TypeDef {
-        let (index, path) = &self.imports[import];
-        let (_, mut ty) = self.import_types[*index];
-        for entry in path {
-            let instance_ty = match ty {
-                TypeDef::ComponentInstance(ty) => ty,
-                _ => unreachable!(),
-            };
-            ty = types[instance_ty].exports[entry];
-        }
-        ty
+    /// TODO
+    pub fn defined_resource_index(&self, idx: ResourceIndex) -> Option<DefinedResourceIndex> {
+        let idx = idx
+            .as_u32()
+            .checked_sub(self.imported_resources.len() as u32)?;
+        Some(DefinedResourceIndex::from_u32(idx))
     }
 }
 
@@ -221,6 +228,15 @@ pub enum GlobalInitializer {
     /// needs to be initialized for a transcoder function and this will later be
     /// used to instantiate an adapter module.
     Transcoder(Transcoder),
+
+    /// TODO
+    Resource(Resource),
+    /// TODO
+    ResourceNew(ResourceNew),
+    /// TODO
+    ResourceRep(ResourceRep),
+    /// TODO
+    ResourceDrop(ResourceDrop),
 }
 
 /// Metadata for extraction of a memory of what's being extracted and where it's
@@ -288,6 +304,10 @@ pub struct LowerImport {
     /// It's guaranteed that this `RuntimeImportIndex` points to a function.
     pub import: RuntimeImportIndex,
 
+    /// The type of the function that is being lowered, as perceived by the
+    /// component doing the lowering.
+    pub lower_ty: TypeFuncIndex,
+
     /// The core wasm signature of the function that's being created.
     pub canonical_abi: SignatureIndex,
 
@@ -347,6 +367,13 @@ pub enum CoreDef {
     /// This refers to a cranelift-generated trampoline which calls to a
     /// host-defined transcoding function.
     Transcoder(RuntimeTranscoderIndex),
+
+    /// TODO
+    ResourceNew(RuntimeResourceNewIndex),
+    /// TODO
+    ResourceRep(RuntimeResourceRepIndex),
+    /// TODO
+    ResourceDrop(RuntimeResourceDropIndex),
 }
 
 impl<T> From<CoreExport<T>> for CoreDef
@@ -516,3 +543,73 @@ impl Transcoder {
 }
 
 pub use crate::fact::{FixedEncoding, Transcode};
+
+/// TODO
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Resource {
+    /// TODO
+    pub index: DefinedResourceIndex,
+    /// TODO
+    pub rep: WasmType,
+    /// TODO
+    pub dtor: Option<CoreDef>,
+    // /// TODO
+    // pub ty: TypeResourceIndex,
+}
+
+/// TODO
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ResourceNew {
+    /// TODO
+    pub index: RuntimeResourceNewIndex,
+    /// TODO
+    pub resource: TypeResourceTableIndex,
+    /// TODO
+    pub signature: SignatureIndex,
+}
+
+impl ResourceNew {
+    /// TODO
+    pub fn symbol_name(&self) -> String {
+        let resource = self.resource.as_u32();
+        format!("wasm_component_resource_new{resource}")
+    }
+}
+
+/// TODO
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ResourceRep {
+    /// TODO
+    pub index: RuntimeResourceRepIndex,
+    /// TODO
+    pub resource: TypeResourceTableIndex,
+    /// TODO
+    pub signature: SignatureIndex,
+}
+
+impl ResourceRep {
+    /// TODO
+    pub fn symbol_name(&self) -> String {
+        let resource = self.resource.as_u32();
+        format!("wasm_component_resource_rep{resource}")
+    }
+}
+
+/// TODO
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ResourceDrop {
+    /// TODO
+    pub index: RuntimeResourceDropIndex,
+    /// TODO
+    pub resource: TypeResourceTableIndex,
+    /// TODO
+    pub signature: SignatureIndex,
+}
+
+impl ResourceDrop {
+    /// TODO
+    pub fn symbol_name(&self) -> String {
+        let resource = self.resource.as_u32();
+        format!("wasm_component_resource_drop{resource}")
+    }
+}

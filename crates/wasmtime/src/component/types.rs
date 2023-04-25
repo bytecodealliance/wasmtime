@@ -12,6 +12,8 @@ use wasmtime_environ::component::{
     TypeVariantIndex,
 };
 
+pub use crate::component::resources::ResourceType;
+
 #[derive(Clone)]
 struct Handle<T> {
     index: T,
@@ -482,6 +484,9 @@ impl Type {
             InterfaceType::Option(index) => Type::Option(OptionType::from(*index, types)),
             InterfaceType::Result(index) => Type::Result(ResultType::from(*index, types)),
             InterfaceType::Flags(index) => Type::Flags(Flags::from(*index, types)),
+
+            InterfaceType::Own(id) => todo!(),
+            InterfaceType::Borrow(id) => todo!(),
         }
     }
 

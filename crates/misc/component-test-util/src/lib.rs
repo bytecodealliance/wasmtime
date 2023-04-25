@@ -2,7 +2,7 @@ use anyhow::Result;
 use arbitrary::Arbitrary;
 use std::mem::MaybeUninit;
 use wasmtime::component::__internal::{
-    CanonicalAbiInfo, ComponentTypes, InterfaceType, LiftContext, LowerContext,
+    CanonicalAbiInfo, InstanceType, InterfaceType, LiftContext, LowerContext,
 };
 use wasmtime::component::{ComponentNamedList, ComponentType, Func, Lift, Lower, TypedFunc, Val};
 use wasmtime::{AsContextMut, Config, Engine};
@@ -87,7 +87,7 @@ macro_rules! forward_impls {
             const ABI: CanonicalAbiInfo = <$b as ComponentType>::ABI;
 
             #[inline]
-            fn typecheck(ty: &InterfaceType, types: &ComponentTypes) -> Result<()> {
+            fn typecheck(ty: &InterfaceType, types: &InstanceType<'_>) -> Result<()> {
                 <$b as ComponentType>::typecheck(ty, types)
             }
         }

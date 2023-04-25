@@ -6,28 +6,27 @@
 //! Eventually it's intended that module-to-module calls, which would be
 //! cranelift-compiled adapters, will use this `VMComponentContext` as well.
 
+use self::resources::ResourceTables;
 use crate::{
     SendSyncPtr, Store, VMArrayCallFunction, VMFuncRef, VMGlobalDefinition, VMMemoryDefinition,
     VMNativeCallFunction, VMOpaqueContext, VMSharedSignatureIndex, VMWasmCallFunction, ValRaw,
 };
+use anyhow::Result;
 use memoffset::offset_of;
 use sptr::Strict;
 use std::alloc::{self, Layout};
+use std::any::Any;
 use std::marker;
 use std::mem;
 use std::ops::Deref;
 use std::ptr::{self, NonNull};
 use std::sync::Arc;
-use wasmtime_environ::component::{
-    Component, ComponentTypes, LoweredIndex, RuntimeAlwaysTrapIndex, RuntimeComponentInstanceIndex,
-    RuntimeMemoryIndex, RuntimePostReturnIndex, RuntimeReallocIndex, RuntimeTranscoderIndex,
-    StringEncoding, TypeFuncIndex, VMComponentOffsets, FLAG_MAY_ENTER, FLAG_MAY_LEAVE,
-    FLAG_NEEDS_POST_RETURN, VMCOMPONENT_MAGIC,
-};
+use wasmtime_environ::component::*;
 use wasmtime_environ::HostPtr;
 
 const INVALID_PTR: usize = 0xdead_dead_beef_beef_u64 as usize;
 
+mod resources;
 mod transcode;
 
 /// Runtime representation of a component instance and all state necessary for
@@ -48,6 +47,13 @@ pub struct ComponentInstance {
 
     /// Runtime type information about this component.
     runtime_info: Arc<dyn ComponentRuntimeInfo>,
+
+    /// TODO
+    resource_tables: ResourceTables,
+
+    /// TODO:
+    /// TODO: Any is bad
+    imported_resources: Box<dyn Any + Send + Sync>,
 
     /// A zero-sized field which represents the end of the struct for the actual
     /// `VMComponentContext` to be allocated behind.
@@ -128,6 +134,18 @@ pub struct VMComponentContext {
 }
 
 impl ComponentInstance {
+    /// TODO
+    pub unsafe fn from_vmctx<R>(
+        vmctx: *mut VMComponentContext,
+        f: impl FnOnce(&mut ComponentInstance) -> R,
+    ) -> R {
+        let ptr = vmctx
+            .cast::<u8>()
+            .sub(mem::size_of::<ComponentInstance>())
+            .cast::<ComponentInstance>();
+        f(&mut *ptr)
+    }
+
     /// Returns the layout corresponding to what would be an allocation of a
     /// `ComponentInstance` for the `offsets` provided.
     ///
@@ -153,6 +171,7 @@ impl ComponentInstance {
         alloc_size: usize,
         offsets: VMComponentOffsets<HostPtr>,
         runtime_info: Arc<dyn ComponentRuntimeInfo>,
+        imported_resources: Box<dyn Any + Send + Sync>,
         store: *mut dyn Store,
     ) {
         assert!(alloc_size >= Self::alloc_layout(&offsets).size());
@@ -170,7 +189,9 @@ impl ComponentInstance {
                     )
                     .unwrap(),
                 ),
+                resource_tables: ResourceTables::new(runtime_info.component().num_resource_tables),
                 runtime_info,
+                imported_resources,
                 vmctx: VMComponentContext {
                     _marker: marker::PhantomPinned,
                 },
@@ -290,6 +311,21 @@ impl ComponentInstance {
     /// Same as `lowering_func_ref` except for the transcoding functions.
     pub fn transcoder_func_ref(&self, idx: RuntimeTranscoderIndex) -> NonNull<VMFuncRef> {
         unsafe { self.func_ref(self.offsets.transcoder_func_ref(idx)) }
+    }
+
+    /// Same as `lowering_func_ref` except for the transcoding functions.
+    pub fn resource_new_func_ref(&self, idx: RuntimeResourceNewIndex) -> NonNull<VMFuncRef> {
+        unsafe { self.func_ref(self.offsets.resource_new_func_ref(idx)) }
+    }
+
+    /// Same as `lowering_func_ref` except for the transcoding functions.
+    pub fn resource_rep_func_ref(&self, idx: RuntimeResourceRepIndex) -> NonNull<VMFuncRef> {
+        unsafe { self.func_ref(self.offsets.resource_rep_func_ref(idx)) }
+    }
+
+    /// Same as `lowering_func_ref` except for the transcoding functions.
+    pub fn resource_drop_func_ref(&self, idx: RuntimeResourceDropIndex) -> NonNull<VMFuncRef> {
+        unsafe { self.func_ref(self.offsets.resource_drop_func_ref(idx)) }
     }
 
     unsafe fn func_ref(&self, offset: u32) -> NonNull<VMFuncRef> {
@@ -417,6 +453,66 @@ impl ComponentInstance {
         }
     }
 
+    /// Same as `set_lowering` but for the transcoder functions.
+    pub fn set_resource_new(
+        &mut self,
+        idx: RuntimeResourceNewIndex,
+        wasm_call: NonNull<VMWasmCallFunction>,
+        native_call: NonNull<VMNativeCallFunction>,
+        array_call: VMArrayCallFunction,
+        type_index: VMSharedSignatureIndex,
+    ) {
+        unsafe {
+            self.set_func_ref(
+                self.offsets.resource_new_func_ref(idx),
+                wasm_call,
+                native_call,
+                array_call,
+                type_index,
+            );
+        }
+    }
+
+    /// Same as `set_lowering` but for the transcoder functions.
+    pub fn set_resource_rep(
+        &mut self,
+        idx: RuntimeResourceRepIndex,
+        wasm_call: NonNull<VMWasmCallFunction>,
+        native_call: NonNull<VMNativeCallFunction>,
+        array_call: VMArrayCallFunction,
+        type_index: VMSharedSignatureIndex,
+    ) {
+        unsafe {
+            self.set_func_ref(
+                self.offsets.resource_rep_func_ref(idx),
+                wasm_call,
+                native_call,
+                array_call,
+                type_index,
+            );
+        }
+    }
+
+    /// Same as `set_lowering` but for the transcoder functions.
+    pub fn set_resource_drop(
+        &mut self,
+        idx: RuntimeResourceDropIndex,
+        wasm_call: NonNull<VMWasmCallFunction>,
+        native_call: NonNull<VMNativeCallFunction>,
+        array_call: VMArrayCallFunction,
+        type_index: VMSharedSignatureIndex,
+    ) {
+        unsafe {
+            self.set_func_ref(
+                self.offsets.resource_drop_func_ref(idx),
+                wasm_call,
+                native_call,
+                array_call,
+                type_index,
+            );
+        }
+    }
+
     unsafe fn set_func_ref(
         &mut self,
         offset: u32,
@@ -438,8 +534,8 @@ impl ComponentInstance {
 
     unsafe fn initialize_vmctx(&mut self, store: *mut dyn Store) {
         *self.vmctx_plus_offset_mut(self.offsets.magic()) = VMCOMPONENT_MAGIC;
-        *self.vmctx_plus_offset_mut(self.offsets.transcode_libcalls()) =
-            &transcode::VMBuiltinTranscodeArray::INIT;
+        *self.vmctx_plus_offset_mut(self.offsets.libcalls()) =
+            &transcode::VMComponentLibcalls::INIT;
         *self.vmctx_plus_offset_mut(self.offsets.store()) = store;
         *self.vmctx_plus_offset_mut(self.offsets.limits()) = (*store).vmruntime_limits();
 
@@ -474,6 +570,21 @@ impl ComponentInstance {
                 let offset = self.offsets.transcoder_func_ref(i);
                 *self.vmctx_plus_offset_mut(offset) = INVALID_PTR;
             }
+            for i in 0..self.offsets.num_resource_new {
+                let i = RuntimeResourceNewIndex::from_u32(i);
+                let offset = self.offsets.resource_new_func_ref(i);
+                *self.vmctx_plus_offset_mut(offset) = INVALID_PTR;
+            }
+            for i in 0..self.offsets.num_resource_rep {
+                let i = RuntimeResourceRepIndex::from_u32(i);
+                let offset = self.offsets.resource_rep_func_ref(i);
+                *self.vmctx_plus_offset_mut(offset) = INVALID_PTR;
+            }
+            for i in 0..self.offsets.num_resource_drop {
+                let i = RuntimeResourceDropIndex::from_u32(i);
+                let offset = self.offsets.resource_drop_func_ref(i);
+                *self.vmctx_plus_offset_mut(offset) = INVALID_PTR;
+            }
             for i in 0..self.offsets.num_runtime_memories {
                 let i = RuntimeMemoryIndex::from_u32(i);
                 let offset = self.offsets.runtime_memory(i);
@@ -492,9 +603,44 @@ impl ComponentInstance {
         }
     }
 
+    /// TODO
+    pub fn component(&self) -> &Component {
+        self.runtime_info.component()
+    }
+
     /// Returns the type information that this instance is instantiated with.
     pub fn component_types(&self) -> &Arc<ComponentTypes> {
         self.runtime_info.component_types()
+    }
+
+    /// TODO
+    pub fn imported_resources(&self) -> &dyn Any {
+        &*self.imported_resources
+    }
+
+    /// TODO
+    pub fn resource_new32(&mut self, resource: TypeResourceTableIndex, rep: u32) -> u32 {
+        self.resource_tables.resource_new(resource, rep)
+    }
+
+    /// TODO
+    pub fn resource_lower_own(&mut self, ty: TypeResourceTableIndex, rep: u32) -> u32 {
+        self.resource_tables.resource_lower_own(ty, rep)
+    }
+
+    /// TODO
+    pub fn resource_lift_own(&mut self, ty: TypeResourceTableIndex, idx: u32) -> Result<u32> {
+        self.resource_tables.resource_lift_own(ty, idx)
+    }
+
+    /// TODO
+    pub fn resource_rep32(&mut self, resource: TypeResourceTableIndex, idx: u32) -> Result<u32> {
+        self.resource_tables.resource_rep(resource, idx)
+    }
+
+    /// TODO
+    pub fn resource_drop(&mut self, resource: TypeResourceTableIndex, idx: u32) -> Result<()> {
+        self.resource_tables.resource_drop(resource, idx)
     }
 }
 
@@ -524,6 +670,7 @@ impl OwnedComponentInstance {
     /// heap with `malloc` and configures it for the `component` specified.
     pub fn new(
         runtime_info: Arc<dyn ComponentRuntimeInfo>,
+        imported_resources: Box<dyn Any + Send + Sync>,
         store: *mut dyn Store,
     ) -> OwnedComponentInstance {
         let component = runtime_info.component();
@@ -541,7 +688,14 @@ impl OwnedComponentInstance {
             let ptr = alloc::alloc_zeroed(layout) as *mut ComponentInstance;
             let ptr = NonNull::new(ptr).unwrap();
 
-            ComponentInstance::new_at(ptr, layout.size(), offsets, runtime_info, store);
+            ComponentInstance::new_at(
+                ptr,
+                layout.size(),
+                offsets,
+                runtime_info,
+                imported_resources,
+                store,
+            );
 
             let ptr = SendSyncPtr::new(ptr);
             OwnedComponentInstance { ptr }
@@ -554,6 +708,11 @@ impl OwnedComponentInstance {
     // convenience to forward to `&mut` methods on `ComponentInstance`.
     unsafe fn instance_mut(&mut self) -> &mut ComponentInstance {
         &mut *self.ptr.as_ptr()
+    }
+
+    /// TODO
+    pub fn instance_ptr(&self) -> *mut ComponentInstance {
+        self.ptr.as_ptr()
     }
 
     /// See `ComponentInstance::set_runtime_memory`
@@ -625,6 +784,71 @@ impl OwnedComponentInstance {
             self.instance_mut()
                 .set_transcoder(idx, wasm_call, native_call, array_call, type_index)
         }
+    }
+
+    /// See `ComponentInstance::set_resource_new`
+    pub fn set_resource_new(
+        &mut self,
+        idx: RuntimeResourceNewIndex,
+        wasm_call: NonNull<VMWasmCallFunction>,
+        native_call: NonNull<VMNativeCallFunction>,
+        array_call: VMArrayCallFunction,
+        type_index: VMSharedSignatureIndex,
+    ) {
+        unsafe {
+            self.instance_mut().set_resource_new(
+                idx,
+                wasm_call,
+                native_call,
+                array_call,
+                type_index,
+            )
+        }
+    }
+
+    /// See `ComponentInstance::set_resource_rep`
+    pub fn set_resource_rep(
+        &mut self,
+        idx: RuntimeResourceRepIndex,
+        wasm_call: NonNull<VMWasmCallFunction>,
+        native_call: NonNull<VMNativeCallFunction>,
+        array_call: VMArrayCallFunction,
+        type_index: VMSharedSignatureIndex,
+    ) {
+        unsafe {
+            self.instance_mut().set_resource_rep(
+                idx,
+                wasm_call,
+                native_call,
+                array_call,
+                type_index,
+            )
+        }
+    }
+
+    /// See `ComponentInstance::set_resource_drop`
+    pub fn set_resource_drop(
+        &mut self,
+        idx: RuntimeResourceDropIndex,
+        wasm_call: NonNull<VMWasmCallFunction>,
+        native_call: NonNull<VMNativeCallFunction>,
+        array_call: VMArrayCallFunction,
+        type_index: VMSharedSignatureIndex,
+    ) {
+        unsafe {
+            self.instance_mut().set_resource_drop(
+                idx,
+                wasm_call,
+                native_call,
+                array_call,
+                type_index,
+            )
+        }
+    }
+
+    /// TODO
+    pub fn imported_resources_mut(&mut self) -> &mut dyn Any {
+        unsafe { &mut *(*self.ptr.as_ptr()).imported_resources }
     }
 }
 

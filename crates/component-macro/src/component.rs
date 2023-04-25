@@ -353,7 +353,7 @@ fn expand_record_for_component_type(
             #[inline]
             fn typecheck(
                 ty: &#internal::InterfaceType,
-                types: &#internal::ComponentTypes,
+                types: &#internal::InstanceType<'_>,
             ) -> #internal::anyhow::Result<()> {
                 #internal::#typecheck(ty, types, &[#typecheck_argument])
             }
@@ -888,7 +888,7 @@ impl Expander for ComponentTypeExpander {
                 #[inline]
                 fn typecheck(
                     ty: &#internal::InterfaceType,
-                    types: &#internal::ComponentTypes,
+                    types: &#internal::InstanceType<'_>,
                 ) -> #internal::anyhow::Result<()> {
                     #internal::#typecheck(ty, types, &[#case_names_and_checks])
                 }
