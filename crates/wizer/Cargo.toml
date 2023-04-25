@@ -33,23 +33,29 @@ env_logger = { version = "0.8.2", optional = true }
 log = "0.4.14"
 rayon = "1.5.0"
 structopt = { version = "0.3.21", optional = true }
-wasi-cap-std-sync = "4.0.0"
+wasi-cap-std-sync = { workspace = true }
 wasm-encoder = "0.25.0"
 wasmparser = "0.103.0"
-wasmtime = "4.0.0"
-wasmtime-wasi = "4.0.0"
+wasmtime = { workspace = true }
+wasmtime-wasi = { workspace = true }
 
 # Enable this dependency to get messages with WAT disassemblies when certain
 # internal panics occur.
 [dependencies.wasmprinter]
-version = "0.2.26"
+workspace = true
 optional = true
+
+[workspace.dependencies]
+wasmprinter = "0.2.26"
+wasmtime = "8.0.0"
+wasmtime-wasi = "8.0.0"
+wasi-cap-std-sync = "8.0.0"
 
 
 [dev-dependencies]
 criterion = "0.3.4"
 env_logger = "0.8.2"
-wasmprinter = "0.2.55"
+wasmprinter = { workspace = true }
 wat = "1.0.62"
 
 [workspace]

@@ -19,18 +19,12 @@ pub fn dummy_imports(
             // Already defined, must be part of WASI.
             continue;
         }
-
-        linker
-            .define(
-                imp.module(),
-                name,
-                dummy_extern(
-                    &mut *store,
-                    imp.ty(),
-                    &format!("'{}' '{}'", imp.module(), name),
-                )?,
-            )
-            .unwrap();
+        let val = dummy_extern(
+            &mut *store,
+            imp.ty(),
+            &format!("'{}' '{}'", imp.module(), name),
+        )?;
+        linker.define(&mut *store, imp.module(), name, val).unwrap();
     }
 
     Ok(())
