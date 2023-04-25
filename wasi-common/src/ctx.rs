@@ -83,6 +83,14 @@ impl WasiCtx {
         self.table_mut().push(Box::new(dir))
     }
 
+    pub fn push_input_stream(&mut self, i: Box<dyn InputStream>) -> Result<u32, Error> {
+        self.table_mut().push(Box::new(i))
+    }
+
+    pub fn push_output_stream(&mut self, o: Box<dyn OutputStream>) -> Result<u32, Error> {
+        self.table_mut().push(Box::new(o))
+    }
+
     /// Add network addresses to the pool.
     pub fn insert_addr<A: cap_std::net::ToSocketAddrs>(&mut self, addrs: A) -> std::io::Result<()> {
         self.pool.insert(addrs, ambient_authority())
