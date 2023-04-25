@@ -95,22 +95,15 @@ pub(crate) fn instrument(cx: &ModuleContext<'_>) -> Vec<u8> {
                     exports.export(
                         export.name,
                         match export.kind {
-                            wasmparser::ExternalKind::Func => {
-                                wasm_encoder::Export::Function(export.index)
-                            }
-                            wasmparser::ExternalKind::Table => {
-                                wasm_encoder::Export::Table(export.index)
-                            }
-                            wasmparser::ExternalKind::Memory => {
-                                wasm_encoder::Export::Memory(export.index)
-                            }
-                            wasmparser::ExternalKind::Global => {
-                                wasm_encoder::Export::Global(export.index)
-                            }
+                            wasmparser::ExternalKind::Func => wasm_encoder::ExportKind::Func,
+                            wasmparser::ExternalKind::Table => wasm_encoder::ExportKind::Table,
+                            wasmparser::ExternalKind::Memory => wasm_encoder::ExportKind::Memory,
+                            wasmparser::ExternalKind::Global => wasm_encoder::ExportKind::Global,
                             wasmparser::ExternalKind::Tag => {
                                 unreachable!("should have been rejected in validation/parsing")
                             }
                         },
+                        export.index,
                     );
                 }
 
@@ -119,11 +112,11 @@ pub(crate) fn instrument(cx: &ModuleContext<'_>) -> Vec<u8> {
                 // them after initialization.
                 for (i, (j, _)) in entry.module.defined_globals(cx).enumerate() {
                     let name = format!("__wizer_global_{}", i);
-                    exports.export(&name, wasm_encoder::Export::Global(j));
+                    exports.export(&name, wasm_encoder::ExportKind::Global, j);
                 }
                 for (i, (j, _)) in entry.module.defined_memories(cx).enumerate() {
                     let name = format!("__wizer_memory_{}", i);
-                    exports.export(&name, wasm_encoder::Export::Memory(j));
+                    exports.export(&name, wasm_encoder::ExportKind::Memory, j);
                 }
 
                 entry.encoder.section(&exports);
