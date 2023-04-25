@@ -1,5 +1,6 @@
 use anyhow::Result;
 use host::WasiCtx;
+use std::sync::{Arc, RwLock};
 use wasi_cap_std_sync::WasiCtxBuilder;
 use wasmtime::{
     component::{Component, Linker},
@@ -67,5 +68,14 @@ async fn run_reactor_tests(mut store: Store<WasiCtx>, reactor: TestReactor) -> R
 
     let contents = reactor.call_get_strings(&mut store).await?;
     assert_eq!(contents, &["hello", "gussie", "hello again", "gussie"]);
+
+    let write_dest: Arc<RwLock<Vec<u8>>> = Arc::new(RwLock::new(Vec::new()));
+    let writepipe = wasi_common::pipe::WritePipe::from_shared(write_dest.clone());
+    let table_ix = store.data_mut().push_output_stream(Box::new(writepipe))?;
+    let r = reactor.call_write_strings_to(&mut store, table_ix).await?;
+    assert_eq!(r, Ok(()));
+
+    assert_eq!(*write_dest.read().unwrap(), b"hellogussiehello againgussie");
+
     Ok(())
 }
