@@ -1,0 +1,31 @@
+test interpret
+test run
+target riscv64 has_v
+
+;; We only test 64bit values here since the interpreter does not support anything smaller.
+
+function %iadd_i8x8(i8x8, i8x8) -> i8x8 {
+block0(v0:i8x8, v1:i8x8):
+    v2 = iadd v0, v1
+    return v2
+}
+; run: %iadd_i8x8([1 1 1 1 1 1 1 1], [1 2 3 4 5 6 7 8]) == [2 3 4 5 6 7 8 9]
+; run: %iadd_i8x8([2 2 2 2 2 2 2 2], [-1 -1 -1 -1 -1 -1 -1 -1]) == [1 1 1 1 1 1 1 1]
+
+
+function %iadd_i16x4(i16x4, i16x4) -> i16x4 {
+block0(v0:i16x4, v1:i16x4):
+    v2 = iadd v0, v1
+    return v2
+}
+; run: %iadd_i16x4([1 1 1 1], [1 2 3 4]) == [2 3 4 5]
+; run: %iadd_i16x4([2 2 2 2], [-1 -1 -1 -1]) == [1 1 1 1]
+
+
+function %iadd_i32x2(i32x2, i32x2) -> i32x2 {
+block0(v0:i32x2, v1:i32x2):
+    v2 = iadd v0, v1
+    return v2
+}
+; run: %iadd_i32x2([1 1], [1 2]) == [2 3]
+; run: %iadd_i32x2([2 2], [-1 -1]) == [1 1]

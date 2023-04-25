@@ -28,14 +28,14 @@
 ;;;; Rules for `iadd` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Base case, simply adding things in registers.
-(rule 0 (lower (has_type (fits_in_64 ty) (iadd x y)))
+(rule 0 (lower (has_type (ty_int_ref_scalar_64 ty) (iadd x y)))
   (rv_add x y))
 
 ;; Special cases for when one operand is an immediate that fits in 12 bits.
-(rule 1 (lower (has_type (fits_in_64 ty) (iadd x (imm12_from_value y))))
+(rule 1 (lower (has_type (ty_int_ref_scalar_64 ty) (iadd x (imm12_from_value y))))
   (alu_rr_imm12 (select_addi ty) x y))
 
-(rule 2 (lower (has_type (fits_in_64 ty) (iadd (imm12_from_value x) y)))
+(rule 2 (lower (has_type (ty_int_ref_scalar_64 ty) (iadd (imm12_from_value x) y)))
   (alu_rr_imm12 (select_addi ty) y x))
 
 ;; Special case when one of the operands is uextended
@@ -98,8 +98,7 @@
     (value_regs low high)))
 
 ;; SIMD Vectors
-(rule 8 (lower (has_type (ty_vec128_int ty) (iadd x y)))
-  (if-let $true (has_v))
+(rule 8 (lower (has_type (ty_vec_fits_in_register ty) (iadd x y)))
   (rv_vadd_vv x y ty))
 
 ;;; Rules for `uadd_overflow_trap` ;;;;;;;;;;;;;
@@ -815,8 +814,7 @@
   (gen_load_128 p offset flags))
 
 (rule 2
-  (lower (has_type (ty_vec128_int ty) (load flags p @ (value_type (ty_addr64 _)) offset)))
-  (if-let $true (has_v))
+  (lower (has_type (ty_vec_fits_in_register ty) (load flags p @ (value_type (ty_addr64 _)) offset)))
   (let ((eew VecElementWidth (element_width_from_type ty)))
     (vec_load eew (VecAMode.UnitStride (gen_amode p offset $I64)) flags ty)))
 
@@ -845,8 +843,7 @@
   (gen_store_128 p offset flags x))
 
 (rule 2
-  (lower (store flags x @ (value_type (ty_vec128_int ty)) p @ (value_type (ty_addr64 _)) offset))
-  (if-let $true (has_v))
+  (lower (store flags x @ (value_type (ty_vec_fits_in_register ty)) p @ (value_type (ty_addr64 _)) offset))
   (let ((eew VecElementWidth (element_width_from_type ty)))
     (vec_store eew (VecAMode.UnitStride (gen_amode p offset $I64)) x flags ty)))
 
