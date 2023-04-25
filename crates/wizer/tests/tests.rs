@@ -49,11 +49,12 @@ fn run_wasm(args: &[wasmtime::Val], expected: i32, wasm: &[u8]) -> Result<()> {
         wasmtime::Module::new(store.engine(), wasm).context("Wasm test case failed to compile")?;
 
     let mut linker = wasmtime::Linker::new(&engine);
+    let thunk = wasmtime::Func::wrap(&mut store, || {});
     linker
-        .define_name("dummy_func", wasmtime::Func::wrap(&mut store, || {}))?
-        .define("env", "f", wasmtime::Func::wrap(&mut store, || {}))?
-        .define_name("f", wasmtime::Func::wrap(&mut store, || {}))?
-        .define("x", "f", wasmtime::Func::wrap(&mut store, || {}))?;
+        .define_name(&mut store, "dummy_func", thunk)?
+        .define(&mut store, "env", "f", thunk)?
+        .define_name(&mut store, "f", thunk)?
+        .define(&mut store, "x", "f", thunk)?;
 
     wasmtime_wasi::add_to_linker(&mut linker, |wasi| wasi)?;
 
