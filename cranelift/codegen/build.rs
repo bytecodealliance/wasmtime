@@ -274,6 +274,7 @@ fn get_isle_compilations(
                     prelude_isle.clone(),
                     prelude_lower_isle.clone(),
                     src_isa_risc_v.join("inst.isle"),
+                    src_isa_risc_v.join("inst_vector.isle"),
                     src_isa_risc_v.join("lower.isle"),
                 ],
                 untracked_inputs: vec![clif_lower_isle.clone()],

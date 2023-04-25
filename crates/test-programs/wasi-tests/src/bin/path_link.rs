@@ -91,9 +91,9 @@ unsafe fn test_path_link(dir_fd: wasi::Fd) {
     wasi::path_link(dir_fd, 0, "file", subdir_fd, "link").expect("creating a link in subdirectory");
     let link_fd = open_link(subdir_fd, "link");
     check_rights(file_fd, link_fd);
+    wasi::fd_close(link_fd).expect("Closing link_fd"); // needed for Windows
     wasi::path_unlink_file(subdir_fd, "link").expect("removing a link");
     wasi::fd_close(subdir_fd).expect("Closing subdir_fd"); // needed for Windows
-    wasi::fd_close(link_fd).expect("Closing link_fd"); // needed for Windows
     wasi::path_remove_directory(dir_fd, "subdir").expect("removing a subdirectory");
 
     // Create a link to a path that already exists

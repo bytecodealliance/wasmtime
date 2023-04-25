@@ -227,13 +227,6 @@
       (x ValueRegs)
       (y ValueRegs)
       (ty Type))
-    ;; risc-v csr operations.
-    (Csr
-      (csr_op CsrOP)
-      (rd WritableReg)
-      (rs OptionReg)
-      (imm OptionUimm5)
-      (csr CsrAddress))
     ;; an integer compare.
     (Icmp
       (cc IntCC)
@@ -329,6 +322,31 @@
       (guard_size u32)
       (probe_count u32)
       (tmp WritableReg))
+
+    (VecAluRRR
+      (op VecAluOpRRR)
+      (vd WritableReg)
+      (vs1 Reg)
+      (vs2 Reg)
+      (vstate VState))
+
+    (VecSetState
+      (rd WritableReg)
+      (vstate VState))
+
+    (VecLoad
+      (eew VecElementWidth)
+      (to WritableReg)
+      (from VecAMode)
+      (flags MemFlags)
+      (vstate VState))
+
+    (VecStore
+      (eew VecElementWidth)
+      (to VecAMode)
+      (from Reg)
+      (flags MemFlags)
+      (vstate VState))
 ))
 
 
@@ -342,15 +360,6 @@
   (Ceil)
   (Floor)
   (Trunc)
-))
-
-(type CsrOP (enum
-  (Csrrw)
-  (Csrrs)
-  (Csrrc)
-  (Csrrwi)
-  (Csrrsi)
-  (Csrrci)
 ))
 
 (type IntSelectOP (enum
@@ -691,7 +700,6 @@
 (type Imm20 (primitive Imm20))
 (type Imm3 (primitive Imm3))
 (type BranchTarget (primitive BranchTarget))
-(type CsrAddress (primitive CsrAddress))
 (type OptionFloatRoundingMode (primitive OptionFloatRoundingMode))
 (type VecU8 (primitive VecU8))
 (type AMO (primitive AMO))
@@ -710,6 +718,9 @@
 
 
 ;; ISA Extension helpers
+
+(decl pure has_v () bool)
+(extern constructor has_v has_v)
 
 (decl pure has_zbkb () bool)
 (extern constructor has_zbkb has_zbkb)

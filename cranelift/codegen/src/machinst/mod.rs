@@ -288,6 +288,9 @@ pub trait MachInstEmitState<I: VCodeInst>: Default + Clone + Debug {
     /// Used to continue using a control plane after the emission state is
     /// not needed anymore.
     fn take_ctrl_plane(self) -> ControlPlane;
+    /// A hook that triggers when first emitting a new block.
+    /// It is guaranteed to be called before any instructions are emitted.
+    fn on_new_block(&mut self) {}
 }
 
 /// The result of a `MachBackend::compile_function()` call. Contains machine

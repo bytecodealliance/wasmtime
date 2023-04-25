@@ -1,6 +1,14 @@
 
 # cargo-vet audits file
 
+[[wildcard-audits.arbitrary]]
+who = "Nick Fitzgerald <fitzgen@gmail.com>"
+criteria = "safe-to-deploy"
+user-id = 696
+start = "2020-01-14"
+end = "2024-04-21"
+notes = "I am an author of this crate."
+
 [[wildcard-audits.bumpalo]]
 who = "Nick Fitzgerald <fitzgen@gmail.com>"
 criteria = "safe-to-deploy"
@@ -1039,6 +1047,12 @@ criteria = "safe-to-deploy"
 delta = "0.6.0 -> 0.6.1"
 notes = "Bytecode Alliance is the author of this crate."
 
+[[audits.regalloc2]]
+who = "Trevor Elliott <telliott@fastly.com>"
+criteria = "safe-to-deploy"
+delta = "0.6.1 -> 0.7.0"
+notes = "The Bytecode Alliance is the author of this crate."
+
 [[audits.rustc-demangle]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -1139,6 +1153,12 @@ who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
 delta = "0.25.4 -> 0.25.6"
 notes = "Just a dependency version bump"
+
+[[audits.system-interface]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+delta = "0.25.6 -> 0.25.7"
+notes = "This is a minor bug-fix update."
 
 [[audits.tinyvec]]
 who = "Alex Crichton <alex@alexcrichton.com>"

@@ -1,15 +1,15 @@
 //! Defines `JITModule`.
 
 use crate::{compiled_blob::CompiledBlob, memory::BranchProtection, memory::Memory};
+use cranelift_codegen::binemit::Reloc;
 use cranelift_codegen::isa::{OwnedTargetIsa, TargetIsa};
 use cranelift_codegen::settings::Configurable;
 use cranelift_codegen::{self, ir, settings, MachReloc};
-use cranelift_codegen::{binemit::Reloc, CodegenError};
 use cranelift_control::ControlPlane;
 use cranelift_entity::SecondaryMap;
 use cranelift_module::{
-    DataDescription, DataId, FuncId, Init, Linkage, Module, ModuleCompiledFunction,
-    ModuleDeclarations, ModuleError, ModuleExtName, ModuleReloc, ModuleResult,
+    DataDescription, DataId, FuncId, Init, Linkage, Module, ModuleDeclarations, ModuleError,
+    ModuleExtName, ModuleReloc, ModuleResult,
 };
 use log::info;
 use std::cell::RefCell;
@@ -272,7 +272,10 @@ impl JITModule {
         self.record_function_for_perf(
             plt_entry.as_ptr().cast(),
             std::mem::size_of::<[u8; 16]>(),
-            &format!("{}@plt", self.declarations.get_function_decl(id).name),
+            &format!(
+                "{}@plt",
+                self.declarations.get_function_decl(id).linkage_name(id)
+            ),
         );
         self.function_plt_entries[id] = Some(plt_entry);
     }
@@ -323,6 +326,9 @@ impl JITModule {
                         }
                     }
                 };
+                let name = name
+                    .as_ref()
+                    .expect("anonymous symbol must be defined locally");
                 if let Some(ptr) = self.lookup_symbol(name) {
                     ptr
                 } else if linkage == Linkage::Preemptible {
@@ -554,13 +560,15 @@ impl JITModule {
         assert!(self.hotswap_enabled, "Hotswap support is not enabled");
         let decl = self.declarations.get_function_decl(func_id);
         if !decl.linkage.is_definable() {
-            return Err(ModuleError::InvalidImportDefinition(decl.name.clone()));
+            return Err(ModuleError::InvalidImportDefinition(
+                decl.linkage_name(func_id).into_owned(),
+            ));
         }
 
         if self.compiled_functions[func_id].is_none() {
             return Err(ModuleError::Backend(anyhow::anyhow!(
                 "Tried to redefine not yet defined function {}",
-                decl.name
+                decl.linkage_name(func_id),
             )));
         }
 
@@ -647,15 +655,19 @@ impl Module for JITModule {
         id: FuncId,
         ctx: &mut cranelift_codegen::Context,
         ctrl_plane: &mut ControlPlane,
-    ) -> ModuleResult<ModuleCompiledFunction> {
+    ) -> ModuleResult<()> {
         info!("defining function {}: {}", id, ctx.func.display());
         let decl = self.declarations.get_function_decl(id);
         if !decl.linkage.is_definable() {
-            return Err(ModuleError::InvalidImportDefinition(decl.name.clone()));
+            return Err(ModuleError::InvalidImportDefinition(
+                decl.linkage_name(id).into_owned(),
+            ));
         }
 
         if !self.compiled_functions[id].is_none() {
-            return Err(ModuleError::DuplicateDefinition(decl.name.to_owned()));
+            return Err(ModuleError::DuplicateDefinition(
+                decl.linkage_name(id).into_owned(),
+            ));
         }
 
         if self.hotswap_enabled {
@@ -678,9 +690,7 @@ impl Module for JITModule {
         let alignment = res.alignment as u64;
         let compiled_code = ctx.compiled_code().unwrap();
 
-        let code_size = compiled_code.code_info().total_size;
-
-        let size = code_size as usize;
+        let size = compiled_code.code_info().total_size as usize;
         let align = alignment
             .max(self.isa.function_alignment() as u64)
             .max(self.isa.symbol_alignment());
@@ -705,7 +715,7 @@ impl Module for JITModule {
             .map(|reloc| ModuleReloc::from_mach_reloc(reloc, &ctx.func))
             .collect();
 
-        self.record_function_for_perf(ptr, size, &decl.name);
+        self.record_function_for_perf(ptr, size, &decl.linkage_name(id));
         self.compiled_functions[id] = Some(CompiledBlob { ptr, size, relocs });
 
         if self.isa.flags().is_pic() {
@@ -739,7 +749,7 @@ impl Module for JITModule {
             self.functions_to_finalize.push(id);
         }
 
-        Ok(ModuleCompiledFunction { size: code_size })
+        Ok(())
     }
 
     fn define_function_bytes(
@@ -749,20 +759,19 @@ impl Module for JITModule {
         alignment: u64,
         bytes: &[u8],
         relocs: &[MachReloc],
-    ) -> ModuleResult<ModuleCompiledFunction> {
+    ) -> ModuleResult<()> {
         info!("defining function {} with bytes", id);
-        let total_size: u32 = match bytes.len().try_into() {
-            Ok(total_size) => total_size,
-            _ => Err(CodegenError::CodeTooLarge)?,
-        };
-
         let decl = self.declarations.get_function_decl(id);
         if !decl.linkage.is_definable() {
-            return Err(ModuleError::InvalidImportDefinition(decl.name.clone()));
+            return Err(ModuleError::InvalidImportDefinition(
+                decl.linkage_name(id).into_owned(),
+            ));
         }
 
         if !self.compiled_functions[id].is_none() {
-            return Err(ModuleError::DuplicateDefinition(decl.name.to_owned()));
+            return Err(ModuleError::DuplicateDefinition(
+                decl.linkage_name(id).into_owned(),
+            ));
         }
 
         let size = bytes.len();
@@ -782,7 +791,7 @@ impl Module for JITModule {
             ptr::copy_nonoverlapping(bytes.as_ptr(), ptr, size);
         }
 
-        self.record_function_for_perf(ptr, size, &decl.name);
+        self.record_function_for_perf(ptr, size, &decl.linkage_name(id));
         self.compiled_functions[id] = Some(CompiledBlob {
             ptr,
             size,
@@ -812,17 +821,21 @@ impl Module for JITModule {
             self.functions_to_finalize.push(id);
         }
 
-        Ok(ModuleCompiledFunction { size: total_size })
+        Ok(())
     }
 
     fn define_data(&mut self, id: DataId, data: &DataDescription) -> ModuleResult<()> {
         let decl = self.declarations.get_data_decl(id);
         if !decl.linkage.is_definable() {
-            return Err(ModuleError::InvalidImportDefinition(decl.name.clone()));
+            return Err(ModuleError::InvalidImportDefinition(
+                decl.linkage_name(id).into_owned(),
+            ));
         }
 
         if !self.compiled_data_objects[id].is_none() {
-            return Err(ModuleError::DuplicateDefinition(decl.name.to_owned()));
+            return Err(ModuleError::DuplicateDefinition(
+                decl.linkage_name(id).into_owned(),
+            ));
         }
 
         assert!(!decl.tls, "JIT doesn't yet support TLS");
