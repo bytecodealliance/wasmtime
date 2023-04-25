@@ -326,8 +326,8 @@
     (VecAluRRR
       (op VecAluOpRRR)
       (vd WritableReg)
-      (vs1 Reg)
       (vs2 Reg)
+      (vs1 Reg)
       (vstate VState))
 
     (VecSetState

@@ -112,14 +112,18 @@
 ;;;; Rules for `isub` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Base case, simply subtracting things in registers.
 
-(rule -2 (lower (has_type (fits_in_64 ty) (isub x y)))
+(rule (lower (has_type (ty_int_ref_scalar_64 ty) (isub x y)))
   (rv_sub x y))
 
-(rule -1 (lower (has_type (fits_in_32 ty) (isub x y)))
+(rule 1 (lower (has_type (fits_in_32 (ty_int ty)) (isub x y)))
   (rv_subw x y))
 
-(rule (lower (has_type $I128 (isub x y)))
+(rule 2 (lower (has_type $I128 (isub x y)))
   (i128_sub x y))
+
+;; SIMD Vectors
+(rule 3 (lower (has_type (ty_vec_fits_in_register ty) (isub x y)))
+  (rv_vsub_vv x y ty))
 
 ;;;; Rules for `ineg` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -129,21 +133,14 @@
 
 ;;;; Rules for `imul` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule -2 (lower (has_type (fits_in_64 ty) (imul x y)))
+(rule 0 (lower (has_type (ty_int_ref_scalar_64 ty) (imul x y)))
   (rv_mul x y))
-(rule -1 (lower (has_type (fits_in_32 ty) (imul x y)))
+
+(rule 1 (lower (has_type (fits_in_32 (ty_int ty)) (imul x y)))
   (rv_mulw x y))
 
-;;;; Rules for `smulhi` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule (lower (has_type (fits_in_64 ty) (smulhi x y)))
-  (lower_smlhi ty (ext_int_if_need $true x ty) (ext_int_if_need $true y ty)))
-
-;;;; Rules for `umulhi` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule (lower (has_type (fits_in_64 ty) (umulhi x y)))
-  (lower_umlhi ty (ext_int_if_need $false x ty) (ext_int_if_need $false y ty)))
-
 ;; for I128
-(rule (lower (has_type $I128 (imul x y)))
+(rule 2 (lower (has_type $I128 (imul x y)))
   (let
     ((x_regs ValueRegs x)
       (x_lo Reg (value_regs_get x_regs 0))
@@ -169,6 +166,22 @@
       (dst_lo Reg (madd x_lo y_lo (zero_reg))))
     (value_regs dst_lo dst_hi)))
 
+(rule 3 (lower (has_type (ty_vec_fits_in_register ty) (imul x y)))
+  (rv_vmul_vv x y ty))
+
+;;;; Rules for `smulhi` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(rule 0 (lower (has_type (ty_int_ref_scalar_64 ty) (smulhi x y)))
+  (lower_smlhi ty (ext_int_if_need $true x ty) (ext_int_if_need $true y ty)))
+
+(rule 1 (lower (has_type (ty_vec_fits_in_register ty) (smulhi x y)))
+  (rv_vmulh_vv x y ty))
+
+;;;; Rules for `umulhi` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(rule 0 (lower (has_type (ty_int_ref_scalar_64 ty) (umulhi x y)))
+  (lower_umlhi ty (ext_int_if_need $false x ty) (ext_int_if_need $false y ty)))
+
+(rule 1 (lower (has_type (ty_vec_fits_in_register ty) (umulhi x y)))
+  (rv_vmulhu_vv x y ty))
 
 ;;;; Rules for `div` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -277,6 +290,10 @@
     (value_regs low high)))
 
 
+(rule 7 (lower (has_type (ty_vec_fits_in_register ty) (band x y)))
+  (rv_vand_vv x y ty))
+
+
 ;;;; Rules for `or` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule -1 (lower (has_type (ty_int ty) (bor x y)))
   (gen_or ty x y))
@@ -320,6 +337,8 @@
       (high Reg (rv_orn (value_regs_get x 1) (value_regs_get y 1))))
     (value_regs low high)))
 
+(rule 7 (lower (has_type (ty_vec_fits_in_register ty) (bor x y)))
+  (rv_vor_vv x y ty))
 
 ;;;; Rules for `xor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule -1 (lower (has_type (fits_in_64 (ty_int ty)) (bxor x y)))
@@ -341,6 +360,8 @@
 (rule (lower (has_type $F64 (bxor x y)))
   (lower_float_binary (AluOPRRR.Xor) x y $F64))
 
+(rule 3 (lower (has_type (ty_vec_fits_in_register ty) (bxor x y)))
+  (rv_vxor_vv x y ty))
 
 ;;;; Rules for `bnot` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule -1 (lower (has_type (ty_int ty) (bnot x)))

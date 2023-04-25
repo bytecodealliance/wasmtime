@@ -45,24 +45,24 @@ block2(v6: i8x16, v7: i8x16):
 
 ; VCode:
 ; block0:
-;   vadd.vv v5,v11,v10 #avl=16, #vtype=(e8, m1, ta, ma)
+;   vadd.vv v5,v10,v11 #avl=16, #vtype=(e8, m1, ta, ma)
 ;   j label1
 ; block1:
-;   vadd.vv v6,v5,v11 #avl=16, #vtype=(e8, m1, ta, ma)
+;   vadd.vv v6,v11,v5 #avl=16, #vtype=(e8, m1, ta, ma)
 ;   j label2
 ; block2:
-;   vadd.vv v10,v6,v5 #avl=16, #vtype=(e8, m1, ta, ma)
+;   vadd.vv v10,v5,v6 #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0x57, 0x70, 0x08, 0xcc
-;   .byte 0xd7, 0x02, 0xb5, 0x02
+;   .byte 0xd7, 0x82, 0xa5, 0x02
 ; block1: ; offset 0x8
 ;   .byte 0x57, 0x70, 0x08, 0xcc
-;   .byte 0x57, 0x83, 0x55, 0x02
+;   .byte 0x57, 0x83, 0xb2, 0x02
 ; block2: ; offset 0x10
 ;   .byte 0x57, 0x70, 0x08, 0xcc
-;   .byte 0x57, 0x85, 0x62, 0x02
+;   .byte 0x57, 0x05, 0x53, 0x02
 ;   ret
 
