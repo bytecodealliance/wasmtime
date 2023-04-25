@@ -225,9 +225,16 @@ impl RunCommand {
         self.common.init_logging();
 
         let mut config = self.common.config(None)?;
-        if self.wasm_timeout.is_some() || self.profile_guest {
+
+        if self.wasm_timeout.is_some() {
             config.epoch_interruption(true);
         }
+
+        if self.profile_guest {
+            config.epoch_interruption(true);
+            config.generate_address_map(true);
+        }
+
         let engine = Engine::new(&config)?;
 
         let preopen_sockets = self.compute_preopen_sockets()?;
@@ -599,6 +606,8 @@ impl GuestProfiler {
                 let idx = self.profile.intern_string(name);
                 Frame::Label(idx)
             } else {
+                // `func_offset` should always be set because we force
+                // `generate_address_map` on if profiling is enabled.
                 let func_offset = frame.func_offset().unwrap();
                 Frame::InstructionPointer(func_offset.try_into().unwrap())
             };
