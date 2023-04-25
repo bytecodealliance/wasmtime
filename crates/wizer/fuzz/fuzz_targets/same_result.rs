@@ -105,7 +105,7 @@ fuzz_target!(|module: wasm_smith::ConfiguredModule<WasmConfig>| {
             // and main functions back to back.
             let instance = Instance::new(&mut store, &module, &[]).unwrap();
             let init_func = instance
-                .get_typed_func::<(), (), _>(&mut store, init_func)
+                .get_typed_func::<(), ()>(&mut store, init_func)
                 .unwrap();
             init_func.call(&mut store, ()).unwrap();
             let main_func = instance.get_func(&mut store, main_func).unwrap();
