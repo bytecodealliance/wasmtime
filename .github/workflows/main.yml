@@ -351,6 +351,8 @@ jobs:
     - run: cargo fuzz build --dev -s none
     # Check that the ISLE fuzz targets build too.
     - run: cargo fuzz build --dev -s none --fuzz-dir ./cranelift/isle/fuzz
+    # Check that winch fuzzing builds too.
+    - run: cargo fuzz build --dev -s none --features fuzz-winch
 
     # common logic to cancel the entire run if this job fails
     - run: gh run cancel ${{ github.run_id }}
