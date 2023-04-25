@@ -1,5 +1,23 @@
 --------------------------------------------------------------------------------
 
+## 8.0.1
+
+Released 2023-04-27.
+
+### Changed
+
+* Breaking: Files opened using Wasmtime's implementation of WASI on Windows now
+  cannot be deleted until the file handle is closed. This was already true for
+  open directories. The change was necessary for the bug fix in
+  [#6163](https://github.com/bytecodealliance/wasmtime/pull/6163).
+
+### Fixed
+
+* Fixed wasi-common's implementation of the `O_DIRECTORY` flag to match POSIX.
+  [#6163](https://github.com/bytecodealliance/wasmtime/pull/6163)
+
+--------------------------------------------------------------------------------
+
 ## 8.0.0
 
 Released 2023-04-20.
