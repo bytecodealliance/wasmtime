@@ -1,6 +1,7 @@
 use crate::isa::riscv64::inst::EmitState;
 use crate::isa::riscv64::lower::isle::generated_code::{
-    VecAMode, VecAluOpRRR, VecAvl, VecElementWidth, VecLmul, VecMaskMode, VecTailMode,
+    VecAMode, VecAluOpRRImm5, VecAluOpRRR, VecAvl, VecElementWidth, VecLmul, VecMaskMode,
+    VecTailMode,
 };
 use crate::Reg;
 use core::fmt;
@@ -218,6 +219,7 @@ impl VecAluOpRRR {
         0x57
     }
     pub fn funct3(&self) -> u32 {
+        // See: https://github.com/riscv/riscv-v-spec/blob/master/v-spec.adoc#101-vector-arithmetic-instruction-encoding
         match self {
             // OPIVV
             VecAluOpRRR::Vadd
@@ -249,6 +251,32 @@ impl fmt::Display for VecAluOpRRR {
         let mut s = format!("{self:?}");
         s.make_ascii_lowercase();
         s.push_str(".vv");
+        f.write_str(&s)
+    }
+}
+
+impl VecAluOpRRImm5 {
+    pub fn opcode(&self) -> u32 {
+        // Vector Opcode
+        0x57
+    }
+    pub fn funct3(&self) -> u32 {
+        // OPIVI
+        0b011
+    }
+    pub fn funct6(&self) -> u32 {
+        // See: https://github.com/riscv/riscv-v-spec/blob/master/inst-table.adoc
+        match self {
+            VecAluOpRRImm5::Vadd => 0b000000,
+        }
+    }
+}
+
+impl fmt::Display for VecAluOpRRImm5 {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut s = format!("{self:?}");
+        s.make_ascii_lowercase();
+        s.push_str(".vi");
         f.write_str(&s)
     }
 }

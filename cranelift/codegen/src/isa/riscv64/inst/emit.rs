@@ -467,6 +467,7 @@ impl Inst {
             Inst::VecSetState { .. } => None,
 
             Inst::VecAluRRR { vstate, .. } |
+            Inst::VecAluRRImm5 { vstate, .. } |
             // TODO: Unit-stride loads and stores only need the AVL to be correct, not
             // the full vtype. A future optimization could be to decouple these two when
             // updating vstate. This would allow us to avoid emitting a VecSetState in
@@ -2797,6 +2798,26 @@ impl MachInstEmit for Inst {
                     vd.to_reg(),
                     op.funct3(),
                     vs1,
+                    vs2,
+                    vm,
+                    op.funct6(),
+                ));
+            }
+            &Inst::VecAluRRImm5 {
+                op, vd, imm, vs2, ..
+            } => {
+                let vs2 = allocs.next(vs2);
+                let vd = allocs.next_writable(vd);
+
+                // This is the mask bit, we don't yet implement masking, so set it to 1, which means
+                // masking disabled.
+                let vm = 1;
+
+                sink.put4(encode_valu_imm(
+                    op.opcode(),
+                    vd.to_reg(),
+                    op.funct3(),
+                    imm,
                     vs2,
                     vm,
                     op.funct6(),
