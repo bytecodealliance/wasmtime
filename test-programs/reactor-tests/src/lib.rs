@@ -31,4 +31,7 @@ impl TestReactor for T {
             Ok(())
         }
     }
+    fn pass_an_imported_record(stat: filesystem::DescriptorStat) -> String {
+        format!("{stat:?}")
+    }
 }

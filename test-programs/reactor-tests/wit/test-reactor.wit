@@ -12,4 +12,7 @@ default world test-reactor {
   use io.streams.{output-stream}
 
   export write-strings-to: func(o: output-stream) -> result
+
+  use filesystem.filesystem.{descriptor-stat}
+  export pass-an-imported-record: func(d: descriptor-stat) -> string
 }
