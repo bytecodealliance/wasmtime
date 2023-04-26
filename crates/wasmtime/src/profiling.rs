@@ -6,6 +6,15 @@ use std::time::{Duration, Instant};
 
 use crate::{AsContext, WasmBacktrace};
 
+// TODO: collect more data
+// - Provide additional hooks for recording host-guest transitions, to be
+//   invoked from a Store::call_hook
+// - On non-Windows, measure thread-local CPU usage between events with
+//   rustix::time::clock_gettime(ClockId::ThreadCPUTime)
+// - Report which wasm module, and maybe instance, each frame came from
+
+// TODO: batch symbolication using Frame::RelativeAddressFromReturnAddress
+
 /// Collects profiling data for a single WebAssembly guest.
 ///
 /// To use this, you'll need to arrange to call [`GuestProfiler::sample`] at
