@@ -322,7 +322,7 @@ impl RunCommand {
 
         // Load the main wasm module.
         match self
-            .load_main_module(&mut store, &mut linker, module)
+            .load_main_module(&mut store, &mut linker, module, &argv[0])
             .with_context(|| format!("failed to run main module `{}`", self.module.display()))
         {
             Ok(()) => (),
@@ -396,10 +396,10 @@ impl RunCommand {
         result
     }
 
-    fn setup_epoch_handler(&self, store: &mut Store<Host>) -> Box<dyn FnOnce()> {
+    fn setup_epoch_handler(&self, store: &mut Store<Host>, module_name: &str) -> Box<dyn FnOnce()> {
         if let Some(path) = &self.profile_guest {
             let interval = self.profile_guest_interval;
-            let profiler = Arc::new(Mutex::new(GuestProfiler::new(interval)));
+            let profiler = Arc::new(Mutex::new(GuestProfiler::new(module_name, interval)));
 
             let cloned = profiler.clone();
             if let Some(timeout) = self.wasm_timeout {
@@ -456,6 +456,7 @@ impl RunCommand {
         store: &mut Store<Host>,
         linker: &mut Linker<Host>,
         module: Module,
+        module_name: &str,
     ) -> Result<()> {
         // The main module might be allowed to have unknown imports, which
         // should be defined as traps:
@@ -481,7 +482,7 @@ impl RunCommand {
         };
 
         // Finish all lookups before starting any epoch timers.
-        let finish_epoch_handler = self.setup_epoch_handler(store);
+        let finish_epoch_handler = self.setup_epoch_handler(store, module_name);
         let result = self.invoke_func(store, func, self.invoke.as_deref());
         finish_epoch_handler();
         result

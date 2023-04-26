@@ -1,13 +1,17 @@
-#![allow(missing_docs)]
 use anyhow::Result;
 use fxprof_processed_profile::{
     CategoryHandle, CpuDelta, Frame, FrameFlags, FrameInfo, Profile, Timestamp,
 };
-use std::io::Write;
 use std::time::{Duration, Instant};
 
 use crate::{AsContext, WasmBacktrace};
 
+/// Collects profiling data for a single WebAssembly guest.
+///
+/// To use this, you'll need to arrange to call [`GuestProfiler::sample`] at
+/// regular intervals while the guest is on the stack. The most straightforward
+/// way to do that is to call it from a callback registered with
+/// [`Store::epoch_deadline_callback()`](crate::Store::epoch_deadline_callback).
 pub struct GuestProfiler {
     profile: Profile,
     process: fxprof_processed_profile::ProcessHandle,
@@ -16,13 +20,22 @@ pub struct GuestProfiler {
 }
 
 impl GuestProfiler {
-    pub fn new(interval: Duration) -> Self {
+    /// Begin profiling a new guest. When this function is called, the current
+    /// wall-clock time is recorded as the start time for the guest.
+    ///
+    /// The `module_name` parameter is recorded in the profile to help identify
+    /// where the profile came from.
+    ///
+    /// The `interval` parameter should match the rate at which you intend
+    /// to call `sample`. However, this is used as a hint and not required to
+    /// exactly match the real sample rate.
+    pub fn new(module_name: &str, interval: Duration) -> Self {
         let mut profile = Profile::new(
-            "Wasmtime",
+            module_name,
             std::time::SystemTime::now().into(),
             interval.into(),
         );
-        let process = profile.add_process("main", 0, Timestamp::from_nanos_since_reference(0));
+        let process = profile.add_process(module_name, 0, Timestamp::from_nanos_since_reference(0));
         let thread = profile.add_thread(process, 0, Timestamp::from_nanos_since_reference(0), true);
         let start = Instant::now();
         Self {
@@ -33,6 +46,10 @@ impl GuestProfiler {
         }
     }
 
+    /// Add a sample to the profile. This function collects a backtrace from
+    /// any stack frames associated with the given `store` on the current
+    /// stack. It should typically be called from a callback registered using
+    /// [`Store::epoch_deadline_callback()`](crate::Store::epoch_deadline_callback).
     pub fn sample(&mut self, store: impl AsContext) {
         let now = Timestamp::from_nanos_since_reference(
             self.start.elapsed().as_nanos().try_into().unwrap(),
@@ -62,7 +79,9 @@ impl GuestProfiler {
             .add_sample(self.thread, now, frames.into_iter(), CpuDelta::ZERO, 1);
     }
 
-    pub fn finish(&mut self, output: impl Write) -> Result<()> {
+    /// When the guest finishes running, call this function to write the
+    /// profile to the given `output`.
+    pub fn finish(&mut self, output: impl std::io::Write) -> Result<()> {
         let now = Timestamp::from_nanos_since_reference(
             self.start.elapsed().as_nanos().try_into().unwrap(),
         );
