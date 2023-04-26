@@ -581,7 +581,7 @@ mod incremental_cache {
 
         let mut cache_store = CraneliftCacheStore(cache_ctx.cache_store.clone());
         let (compiled_code, from_cache) = context
-            .compile_with_cache(isa, &mut cache_store)
+            .compile_with_cache(isa, &mut cache_store, &mut Default::default())
             .map_err(|error| CompileError::Codegen(pretty_error(&error.func, error.inner)))?;
 
         if from_cache {
