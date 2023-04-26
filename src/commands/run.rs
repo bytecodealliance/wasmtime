@@ -2,9 +2,6 @@
 
 use anyhow::{anyhow, bail, Context as _, Result};
 use clap::Parser;
-use fxprof_processed_profile::{
-    CategoryHandle, CpuDelta, Frame, FrameFlags, FrameInfo, Profile, Timestamp,
-};
 use once_cell::sync::Lazy;
 use std::ffi::OsStr;
 use std::fs::File;
@@ -12,10 +9,10 @@ use std::io::Write;
 use std::path::{Component, Path, PathBuf};
 use std::sync::Mutex;
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use wasmtime::{
-    AsContext, Engine, Func, Linker, Module, Store, StoreLimits, StoreLimitsBuilder, Val, ValType,
-    WasmBacktrace,
+    Engine, Func, GuestProfiler, Linker, Module, Store, StoreLimits, StoreLimitsBuilder, Val,
+    ValType,
 };
 use wasmtime_cli_flags::{CommonOptions, WasiModules};
 use wasmtime_wasi::maybe_exit_on_error;
@@ -173,8 +170,9 @@ pub struct RunCommand {
     )]
     wasm_timeout: Option<Duration>,
 
-    /// Enable in-process sampling profiling of the guest WebAssembly program, and
-    /// write the captured profile to the given path.
+    /// Enable in-process sampling profiling of the guest WebAssembly program,
+    /// and write the captured profile to the given path. The resulting file
+    /// can be viewed using https://profiler.firefox.com/.
     #[clap(long, value_name = "PATH")]
     profile_guest: Option<PathBuf>,
 
@@ -600,72 +598,6 @@ impl RunCommand {
             Module::from_file(engine, path)
                 .context("if you're trying to run a precompiled module, pass --allow-precompiled")
         }
-    }
-}
-
-struct GuestProfiler {
-    profile: Profile,
-    process: fxprof_processed_profile::ProcessHandle,
-    thread: fxprof_processed_profile::ThreadHandle,
-    start: Instant,
-}
-
-impl GuestProfiler {
-    fn new(interval: Duration) -> Self {
-        let mut profile = Profile::new(
-            "Wasmtime",
-            std::time::SystemTime::now().into(),
-            interval.into(),
-        );
-        let process = profile.add_process("main", 0, Timestamp::from_nanos_since_reference(0));
-        let thread = profile.add_thread(process, 0, Timestamp::from_nanos_since_reference(0), true);
-        let start = Instant::now();
-        Self {
-            profile,
-            process,
-            thread,
-            start,
-        }
-    }
-
-    fn sample(&mut self, store: impl AsContext) {
-        let now = Timestamp::from_nanos_since_reference(
-            self.start.elapsed().as_nanos().try_into().unwrap(),
-        );
-
-        let trace = WasmBacktrace::force_capture(store);
-        // Samply needs to see the oldest frame first, but we list the newest
-        // first, so iterate in reverse.
-        let frames = Vec::from_iter(trace.frames().iter().rev().map(|frame| {
-            let frame = if let Some(name) = frame.func_name() {
-                let idx = self.profile.intern_string(name);
-                Frame::Label(idx)
-            } else {
-                // `func_offset` should always be set because we force
-                // `generate_address_map` on if profiling is enabled.
-                let func_offset = frame.func_offset().unwrap();
-                Frame::InstructionPointer(func_offset.try_into().unwrap())
-            };
-            FrameInfo {
-                frame,
-                category_pair: CategoryHandle::OTHER.into(),
-                flags: FrameFlags::empty(),
-            }
-        }));
-
-        self.profile
-            .add_sample(self.thread, now, frames.into_iter(), CpuDelta::ZERO, 1);
-    }
-
-    fn finish(&mut self, output: impl Write) -> Result<()> {
-        let now = Timestamp::from_nanos_since_reference(
-            self.start.elapsed().as_nanos().try_into().unwrap(),
-        );
-        self.profile.set_thread_end_time(self.thread, now);
-        self.profile.set_process_end_time(self.process, now);
-
-        serde_json::to_writer(output, &self.profile)?;
-        Ok(())
     }
 }
 

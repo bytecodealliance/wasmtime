@@ -1355,7 +1355,7 @@ fn dirent_bytes(dirent: types::Dirent) -> Vec<u8> {
     use wiggle::GuestType;
     assert_eq!(
         types::Dirent::guest_size(),
-        std::mem::size_of::<types::Dirent>() as _,
+        std::mem::size_of::<types::Dirent>() as u32,
         "Dirent guest repr and host repr should match"
     );
     assert_eq!(
