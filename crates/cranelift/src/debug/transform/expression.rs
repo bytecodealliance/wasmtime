@@ -1112,8 +1112,8 @@ mod tests {
     }
 
     fn create_mock_address_transform() -> AddressTransform {
-        use crate::FunctionAddressMap;
         use cranelift_entity::PrimaryMap;
+        use wasmtime_cranelift_shared::FunctionAddressMap;
         use wasmtime_environ::InstructionAddressMap;
         use wasmtime_environ::WasmFileInfo;
         let mut module_map = PrimaryMap::new();

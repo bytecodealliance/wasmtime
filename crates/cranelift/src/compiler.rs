@@ -2,17 +2,14 @@ use crate::debug::{DwarfSectionRelocTarget, ModuleMemoryOffset};
 use crate::func_environ::FuncEnvironment;
 use crate::{array_call_signature, native_call_signature, DEBUG_ASSERT_TRAP_CODE};
 use crate::{
-    builder::LinkOptions, value_type, wasm_call_signature, CompiledFunction, FunctionAddressMap,
+    builder::LinkOptions, value_type, wasm_call_signature,
 };
 use anyhow::{Context as _, Result};
-use cranelift_codegen::ir::{
-    self, ExternalName, Function, InstBuilder, MemFlags, UserExternalName, UserFuncName, Value,
-};
+use cranelift_codegen::ir::{self, InstBuilder, MemFlags, UserExternalName, UserFuncName, Value};
 use cranelift_codegen::isa::{OwnedTargetIsa, TargetIsa};
 use cranelift_codegen::print_errors::pretty_error;
 use cranelift_codegen::Context;
 use cranelift_codegen::{CompiledCode, MachSrcLoc, MachStackMap};
-use cranelift_codegen::{MachReloc, MachTrap};
 use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_frontend::FunctionBuilder;
 use cranelift_wasm::{
@@ -29,12 +26,11 @@ use std::convert::TryFrom;
 use std::mem;
 use std::sync::{Arc, Mutex};
 use wasmparser::{FuncValidatorAllocations, FunctionBody};
-use wasmtime_cranelift_shared::obj::ModuleTextBuilder;
-use wasmtime_cranelift_shared::{Relocation, RelocationTarget};
+use wasmtime_cranelift_shared::{CompiledFunction, FunctionAddressMap, ModuleTextBuilder};
 use wasmtime_environ::{
     AddressMapSection, CacheStore, CompileError, FilePos, FlagValue, FunctionBodyData, FunctionLoc,
-    InstructionAddressMap, ModuleTranslation, ModuleTypes, PtrSize, StackMapInformation, Trap,
-    TrapEncodingBuilder, TrapInformation, Tunables, VMOffsets, WasmFunctionInfo,
+    InstructionAddressMap, ModuleTranslation, ModuleTypes, PtrSize, StackMapInformation,
+    TrapEncodingBuilder, Tunables, VMOffsets, WasmFunctionInfo,
 };
 
 #[cfg(feature = "component-model")]
@@ -1020,19 +1016,8 @@ impl FunctionCompiler<'_> {
             compile_maybe_cached(context, isa, self.cx.incremental_cache_ctx.as_mut())?;
         let compiled_code = context.compiled_code().unwrap();
 
-        let relocations = compiled_code
-            .buffer
-            .relocs()
-            .into_iter()
-            .map(|item| mach_reloc_to_reloc(&context.func, item))
-            .collect();
-
-        let traps = compiled_code
-            .buffer
-            .traps()
-            .into_iter()
-            .filter_map(mach_trap_to_trap)
-            .collect();
+        assert!(compiled_code.buffer.relocs().is_empty());
+        let mut compiled_function = CompiledFunction::default();
 
         // Give wasm functions, user defined code, a "preferred" alignment
         // instead of the minimum alignment as this can help perf in niche
@@ -1054,7 +1039,7 @@ impl FunctionCompiler<'_> {
             None => Default::default(),
         };
 
-        let value_labels_ranges = if body_and_tunables
+        compiled_function.value_labels_ranges = if body_and_tunables
             .map(|(_, t)| t.generate_native_debuginfo)
             .unwrap_or(false)
         {
@@ -1063,7 +1048,10 @@ impl FunctionCompiler<'_> {
             Default::default()
         };
 
-        let unwind_info = if isa.flags().unwind_info() {
+        compiled_function.body = code_buf;
+        compiled_function.set_traps(&compiled_code.buffer);
+        compiled_function.alignment = alignment;
+        compiled_function.unwind_info = if isa.flags().unwind_info() {
             compiled_code
                 .create_unwind_info(isa)
                 .map_err(|error| CompileError::Codegen(pretty_error(&context.func, error)))?
@@ -1071,24 +1059,14 @@ impl FunctionCompiler<'_> {
             None
         };
         let stack_maps = mach_stack_maps_to_stack_maps(compiled_code.buffer.stack_maps());
-        let sized_stack_slots = std::mem::take(&mut context.func.sized_stack_slots);
+        compiled_function.sized_stack_slots = std::mem::take(&mut context.func.sized_stack_slots);
         self.compiler.contexts.lock().unwrap().push(self.cx);
 
-        Ok((
-            WasmFunctionInfo {
-                start_srcloc: address_map.start_srcloc,
-                stack_maps: stack_maps.into(),
-            },
-            CompiledFunction {
-                body: code_buf,
-                unwind_info,
-                relocations,
-                sized_stack_slots,
-                value_labels_ranges,
-                address_map,
-                traps,
-                alignment,
-            },
+        Ok((WasmFunctionInfo {
+            start_srcloc: address_map.start_srcloc,
+            stack_maps: stack_maps.into(),
+        },
+        compiled_function
         ))
     }
 }
@@ -1154,61 +1132,6 @@ fn collect_address_maps(
             FilePos::new(loc.bits())
         }
     }
-}
-
-fn mach_reloc_to_reloc(func: &Function, reloc: &MachReloc) -> Relocation {
-    let &MachReloc {
-        offset,
-        kind,
-        ref name,
-        addend,
-    } = reloc;
-    let reloc_target = if let ExternalName::User(user_func_ref) = *name {
-        let UserExternalName { namespace, index } = func.params.user_named_funcs()[user_func_ref];
-        debug_assert_eq!(namespace, 0);
-        RelocationTarget::UserFunc(FuncIndex::from_u32(index))
-    } else if let ExternalName::LibCall(libcall) = *name {
-        RelocationTarget::LibCall(libcall)
-    } else {
-        panic!("unrecognized external name")
-    };
-    Relocation {
-        reloc: kind,
-        reloc_target,
-        offset,
-        addend,
-    }
-}
-
-const ALWAYS_TRAP_CODE: u16 = 100;
-
-fn mach_trap_to_trap(trap: &MachTrap) -> Option<TrapInformation> {
-    let &MachTrap { offset, code } = trap;
-    Some(TrapInformation {
-        code_offset: offset,
-        trap_code: match code {
-            ir::TrapCode::StackOverflow => Trap::StackOverflow,
-            ir::TrapCode::HeapOutOfBounds => Trap::MemoryOutOfBounds,
-            ir::TrapCode::HeapMisaligned => Trap::HeapMisaligned,
-            ir::TrapCode::TableOutOfBounds => Trap::TableOutOfBounds,
-            ir::TrapCode::IndirectCallToNull => Trap::IndirectCallToNull,
-            ir::TrapCode::BadSignature => Trap::BadSignature,
-            ir::TrapCode::IntegerOverflow => Trap::IntegerOverflow,
-            ir::TrapCode::IntegerDivisionByZero => Trap::IntegerDivisionByZero,
-            ir::TrapCode::BadConversionToInteger => Trap::BadConversionToInteger,
-            ir::TrapCode::UnreachableCodeReached => Trap::UnreachableCodeReached,
-            ir::TrapCode::Interrupt => Trap::Interrupt,
-            ir::TrapCode::User(ALWAYS_TRAP_CODE) => Trap::AlwaysTrapAdapter,
-
-            // These do not get converted to wasmtime traps, since they
-            // shouldn't ever be hit in theory. Instead of catching and handling
-            // these, we let the signal crash the process.
-            ir::TrapCode::User(DEBUG_ASSERT_TRAP_CODE) => return None,
-
-            // these should never be emitted by wasmtime-cranelift
-            ir::TrapCode::User(_) => unreachable!(),
-        },
-    })
 }
 
 fn mach_stack_maps_to_stack_maps(mach_stack_maps: &[MachStackMap]) -> Vec<StackMapInformation> {
