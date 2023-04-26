@@ -19,6 +19,3 @@ cranelift-frontend = { workspace = true }
 default = ["std"]
 std = ["cranelift-codegen/std", "cranelift-frontend/std"]
 core = ["cranelift-codegen/core", "cranelift-frontend/core"]
-
-[badges]
-maintenance = { status = "experimental" }

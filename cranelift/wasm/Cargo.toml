@@ -32,6 +32,3 @@ default = ["std"]
 std = ["cranelift-codegen/std", "cranelift-frontend/std"]
 core = ["hashbrown", "cranelift-codegen/core", "cranelift-frontend/core"]
 enable-serde = ["serde"]
-
-[badges]
-maintenance = { status = "experimental" }

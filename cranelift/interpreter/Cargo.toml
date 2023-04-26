@@ -23,6 +23,3 @@ libm = "0.2.4"
 [dev-dependencies]
 cranelift-frontend = { workspace = true }
 cranelift-reader = { workspace = true }
-
-[badges]
-maintenance = { status = "experimental" }

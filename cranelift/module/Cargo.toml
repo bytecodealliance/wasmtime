@@ -24,6 +24,3 @@ core = ["hashbrown", "cranelift-codegen/core"]
 
 # For dependent crates that want to serialize some parts of cranelift
 enable-serde = ["serde", "cranelift-codegen/enable-serde"]
-
-[badges]
-maintenance = { status = "experimental" }
