@@ -9,11 +9,16 @@ on:
     - main
     - 'release-*'
 
+  # Run full CI on the `main` branch once a day to prime the GitHub Actions
+  # caches used by PRs and the merge queue.
+  schedule:
+  - cron: '13 4 * * *'
+
+  # This is the CI that runs for PRs-to-merge.
+  merge_group:
+
   push:
     branches:
-    # This is an alternative to using `merge_group:` which doesn't work at the
-    # time of this writing.
-    - 'gh-readonly-queue/main/*'
     # Right now merge queues can't be used with wildcards in branch protections
     # so full CI runs both on PRs to release branches as well as merges to
     # release branches. Note that the merge to a release branch may produce a
