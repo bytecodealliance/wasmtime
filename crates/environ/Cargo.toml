@@ -36,9 +36,6 @@ wat = { workspace = true }
 name = "factc"
 required-features = ['component-model']
 
-[badges]
-maintenance = { status = "actively-developed" }
-
 [features]
 component-model = [
   "dep:wasm-encoder",

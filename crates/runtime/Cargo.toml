@@ -50,9 +50,6 @@ once_cell = { workspace = true }
 [build-dependencies]
 cc = "1.0"
 
-[badges]
-maintenance = { status = "actively-developed" }
-
 [features]
 async = ["wasmtime-fiber"]
 

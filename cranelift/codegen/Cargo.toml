@@ -114,9 +114,6 @@ isle-errors = ["cranelift-isle/fancy-errors"]
 # inspection, rather than inside of target/.
 isle-in-source-tree = []
 
-[badges]
-maintenance = { status = "experimental" }
-
 [[bench]]
 name = "x64-evex-encoding"
 harness = false

@@ -239,9 +239,6 @@ winch = ["wasmtime/winch"]
 # backend is the default now.
 experimental_x64 = []
 
-[badges]
-maintenance = { status = "actively-developed" }
-
 [[test]]
 name = "host_segfault"
 harness = false

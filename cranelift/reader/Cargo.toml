@@ -15,9 +15,6 @@ cranelift-codegen = { workspace = true }
 smallvec = { workspace = true }
 target-lexicon = { workspace = true }
 
-[badges]
-maintenance = { status = "experimental" }
-
 [features]
 default = []
 experimental_x64 = []
