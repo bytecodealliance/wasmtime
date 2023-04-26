@@ -173,9 +173,10 @@ pub struct RunCommand {
     )]
     wasm_timeout: Option<Duration>,
 
-    /// Enable in-process sampling profiling of the guest WebAssembly program.
-    #[clap(long)]
-    profile_guest: bool,
+    /// Enable in-process sampling profiling of the guest WebAssembly program, and
+    /// write the captured profile to the given path.
+    #[clap(long, value_name = "PATH")]
+    profile_guest: Option<PathBuf>,
 
     /// Enable coredump generation after a WebAssembly trap.
     #[clap(long = "coredump-on-trap", value_name = "PATH")]
@@ -230,7 +231,7 @@ impl RunCommand {
             config.epoch_interruption(true);
         }
 
-        if self.profile_guest {
+        if self.profile_guest.is_some() {
             config.epoch_interruption(true);
             config.generate_address_map(true);
         }
@@ -386,14 +387,45 @@ impl RunCommand {
         result
     }
 
-    fn load_main_module(
-        &self,
-        store: &mut Store<Host>,
-        linker: &mut Linker<Host>,
-        module: Module,
-    ) -> Result<()> {
-        // TODO: share epoch handler between timeout and profiling
-        assert!(self.wasm_timeout.is_none() || !self.profile_guest);
+    fn setup_epoch_handler(&self, store: &mut Store<Host>) -> Box<dyn FnOnce() -> Result<()>> {
+        if let Some(path) = &self.profile_guest {
+            let interval = Duration::from_millis(1);
+            let profiler = Arc::new(Mutex::new(GuestProfiler::new(interval)));
+
+            let cloned = profiler.clone();
+            if let Some(timeout) = self.wasm_timeout {
+                let mut timeout = (timeout.as_secs_f64() / interval.as_secs_f64()).ceil() as u64;
+                assert!(timeout > 0);
+                store.epoch_deadline_callback(move |store| {
+                    cloned.lock().unwrap().sample(store);
+                    timeout -= 1;
+                    if timeout == 0 {
+                        bail!("timeout exceeded");
+                    }
+                    Ok(1)
+                });
+            } else {
+                store.epoch_deadline_callback(move |store| {
+                    cloned.lock().unwrap().sample(store);
+                    Ok(1)
+                });
+            }
+
+            store.set_epoch_deadline(1);
+            let engine = store.engine().clone();
+            thread::spawn(move || loop {
+                thread::sleep(interval);
+                engine.increment_epoch();
+            });
+
+            let path = path.clone();
+            return Box::new(move || {
+                let mut profiler = profiler.lock().unwrap();
+                let output = std::fs::File::create(path)?;
+                let buf = std::io::BufWriter::new(output);
+                profiler.finish(buf)
+            });
+        }
 
         if let Some(timeout) = self.wasm_timeout {
             store.set_epoch_deadline(1);
@@ -404,26 +436,15 @@ impl RunCommand {
             });
         }
 
-        let profiler = if self.profile_guest {
-            let profiler = Arc::new(Mutex::new(GuestProfiler::new()));
-            store.set_epoch_deadline(1);
-            store.epoch_deadline_callback({
-                let profiler = profiler.clone();
-                move |store| {
-                    profiler.lock().unwrap().sample(store);
-                    Ok(1)
-                }
-            });
-            let engine = store.engine().clone();
-            thread::spawn(move || loop {
-                thread::sleep(Duration::from_millis(10));
-                engine.increment_epoch();
-            });
-            Some(profiler)
-        } else {
-            None
-        };
+        Box::new(|| Ok(()))
+    }
 
+    fn load_main_module(
+        &self,
+        store: &mut Store<Host>,
+        linker: &mut Linker<Host>,
+        module: Module,
+    ) -> Result<()> {
         // The main module might be allowed to have unknown imports, which
         // should be defined as traps:
         if self.trap_unknown_imports {
@@ -441,28 +462,25 @@ impl RunCommand {
             .context(format!("failed to instantiate {:?}", self.module))?;
 
         // If a function to invoke was given, invoke it.
-        let result = if let Some(name) = self.invoke.as_ref() {
-            self.invoke_export(store, linker, name)
+        let func = if let Some(name) = &self.invoke {
+            self.find_export(store, linker, name)?
         } else {
-            let func = linker.get_default(&mut *store, "")?;
-            self.invoke_func(store, func, None)
+            linker.get_default(&mut *store, "")?
         };
 
-        if let Some(profiler) = profiler {
-            let profiler = profiler.lock().unwrap();
-            let output = std::fs::File::create("profile.json")?;
-            let buf = std::io::BufWriter::new(output);
-            serde_json::to_writer(buf, &profiler.profile)?;
-        }
+        // Finish all lookups before starting any epoch timers.
+        let finish_epoch_handler = self.setup_epoch_handler(store);
+        let result = self.invoke_func(store, func, self.invoke.as_deref());
+        finish_epoch_handler()?;
         result
     }
 
-    fn invoke_export(
+    fn find_export(
         &self,
         store: &mut Store<Host>,
         linker: &Linker<Host>,
         name: &str,
-    ) -> Result<()> {
+    ) -> Result<Func> {
         let func = match linker
             .get(&mut *store, "", name)
             .ok_or_else(|| anyhow!("no export named `{}` found", name))?
@@ -471,7 +489,7 @@ impl RunCommand {
             Some(func) => func,
             None => bail!("export of `{}` wasn't a function", name),
         };
-        self.invoke_func(store, func, Some(name))
+        Ok(func)
     }
 
     fn invoke_func(&self, store: &mut Store<Host>, func: Func, name: Option<&str>) -> Result<()> {
@@ -573,31 +591,34 @@ impl RunCommand {
 
 struct GuestProfiler {
     profile: Profile,
+    process: fxprof_processed_profile::ProcessHandle,
     thread: fxprof_processed_profile::ThreadHandle,
     start: Instant,
 }
 
 impl GuestProfiler {
-    const INTERVAL: Duration = Duration::from_millis(10);
-
-    fn new() -> Self {
+    fn new(interval: Duration) -> Self {
         let mut profile = Profile::new(
             "Wasmtime",
             std::time::SystemTime::now().into(),
-            Self::INTERVAL.into(),
+            interval.into(),
         );
         let process = profile.add_process("main", 0, Timestamp::from_nanos_since_reference(0));
         let thread = profile.add_thread(process, 0, Timestamp::from_nanos_since_reference(0), true);
         let start = Instant::now();
         Self {
             profile,
+            process,
             thread,
             start,
         }
     }
 
     fn sample(&mut self, store: impl AsContext) {
-        let now = Instant::now();
+        let now = Timestamp::from_nanos_since_reference(
+            (Instant::now() - self.start).as_nanos().try_into().unwrap(),
+        );
+
         let trace = WasmBacktrace::force_capture(store);
         // Samply needs to see the oldest frame first, but we list the newest
         // first, so iterate in reverse.
@@ -617,15 +638,20 @@ impl GuestProfiler {
                 flags: FrameFlags::empty(),
             }
         }));
-        self.profile.add_sample(
-            self.thread,
-            Timestamp::from_nanos_since_reference(
-                (now - self.start).as_nanos().try_into().unwrap(),
-            ),
-            frames.into_iter(),
-            CpuDelta::ZERO,
-            1,
+
+        self.profile
+            .add_sample(self.thread, now, frames.into_iter(), CpuDelta::ZERO, 1);
+    }
+
+    fn finish(&mut self, output: impl std::io::Write) -> Result<()> {
+        let now = Timestamp::from_nanos_since_reference(
+            (Instant::now() - self.start).as_nanos().try_into().unwrap(),
         );
+        self.profile.set_thread_end_time(self.thread, now);
+        self.profile.set_process_end_time(self.process, now);
+
+        serde_json::to_writer(output, &self.profile)?;
+        Ok(())
     }
 }
 
