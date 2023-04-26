@@ -21,6 +21,9 @@ use crate::{AsContext, WasmBacktrace};
 /// regular intervals while the guest is on the stack. The most straightforward
 /// way to do that is to call it from a callback registered with
 /// [`Store::epoch_deadline_callback()`](crate::Store::epoch_deadline_callback).
+///
+/// This implementation requires that the `Engine` was constructed with
+/// [`Config::generate_address_map(true)`](crate::Config::generate_address_map).
 pub struct GuestProfiler {
     profile: Profile,
     process: fxprof_processed_profile::ProcessHandle,
@@ -72,10 +75,10 @@ impl GuestProfiler {
                 let idx = self.profile.intern_string(name);
                 Frame::Label(idx)
             } else {
-                // `func_offset` should always be set because we force
-                // `generate_address_map` on if profiling is enabled.
-                let func_offset = frame.func_offset().unwrap();
-                Frame::InstructionPointer(func_offset.try_into().unwrap())
+                // `module_offset` should always be set because we require
+                // `generate_address_map` to be enabled.
+                let offset = frame.module_offset().unwrap();
+                Frame::InstructionPointer(offset.try_into().unwrap())
             };
             FrameInfo {
                 frame,
