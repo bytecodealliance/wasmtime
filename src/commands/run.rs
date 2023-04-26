@@ -178,6 +178,17 @@ pub struct RunCommand {
     #[clap(long, value_name = "PATH")]
     profile_guest: Option<PathBuf>,
 
+    /// Sampling interval for in-process profiling with `--profile-guest`. When
+    /// used together with `--wasm-timeout`, the timeout will be rounded up to
+    /// the nearest multiple of this interval.
+    #[clap(
+        long,
+        default_value = "10ms",
+        value_name = "TIME",
+        parse(try_from_str = parse_dur),
+    )]
+    profile_guest_interval: Duration,
+
     /// Enable coredump generation after a WebAssembly trap.
     #[clap(long = "coredump-on-trap", value_name = "PATH")]
     coredump_on_trap: Option<String>,
@@ -387,9 +398,9 @@ impl RunCommand {
         result
     }
 
-    fn setup_epoch_handler(&self, store: &mut Store<Host>) -> Box<dyn FnOnce() -> Result<()>> {
+    fn setup_epoch_handler(&self, store: &mut Store<Host>) -> Box<dyn FnOnce()> {
         if let Some(path) = &self.profile_guest {
-            let interval = Duration::from_millis(1);
+            let interval = self.profile_guest_interval;
             let profiler = Arc::new(Mutex::new(GuestProfiler::new(interval)));
 
             let cloned = profiler.clone();
@@ -421,9 +432,12 @@ impl RunCommand {
             let path = path.clone();
             return Box::new(move || {
                 let mut profiler = profiler.lock().unwrap();
-                let output = std::fs::File::create(path)?;
-                let buf = std::io::BufWriter::new(output);
-                profiler.finish(buf)
+                if let Err(e) = std::fs::File::create(&path)
+                    .map_err(anyhow::Error::new)
+                    .and_then(|output| profiler.finish(std::io::BufWriter::new(output)))
+                {
+                    eprintln!("failed writing profile at {}: {e:#}", path.display());
+                }
             });
         }
 
@@ -436,7 +450,7 @@ impl RunCommand {
             });
         }
 
-        Box::new(|| Ok(()))
+        Box::new(|| {})
     }
 
     fn load_main_module(
@@ -471,7 +485,7 @@ impl RunCommand {
         // Finish all lookups before starting any epoch timers.
         let finish_epoch_handler = self.setup_epoch_handler(store);
         let result = self.invoke_func(store, func, self.invoke.as_deref());
-        finish_epoch_handler()?;
+        finish_epoch_handler();
         result
     }
 
@@ -616,7 +630,7 @@ impl GuestProfiler {
 
     fn sample(&mut self, store: impl AsContext) {
         let now = Timestamp::from_nanos_since_reference(
-            (Instant::now() - self.start).as_nanos().try_into().unwrap(),
+            self.start.elapsed().as_nanos().try_into().unwrap(),
         );
 
         let trace = WasmBacktrace::force_capture(store);
@@ -643,9 +657,9 @@ impl GuestProfiler {
             .add_sample(self.thread, now, frames.into_iter(), CpuDelta::ZERO, 1);
     }
 
-    fn finish(&mut self, output: impl std::io::Write) -> Result<()> {
+    fn finish(&mut self, output: impl Write) -> Result<()> {
         let now = Timestamp::from_nanos_since_reference(
-            (Instant::now() - self.start).as_nanos().try_into().unwrap(),
+            self.start.elapsed().as_nanos().try_into().unwrap(),
         );
         self.profile.set_thread_end_time(self.thread, now);
         self.profile.set_process_end_time(self.process, now);
