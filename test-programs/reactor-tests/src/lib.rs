@@ -22,4 +22,16 @@ impl TestReactor for T {
     fn get_strings() -> Vec<String> {
         unsafe { STATE.clone() }
     }
+
+    fn write_strings_to(o: OutputStream) -> Result<(), ()> {
+        unsafe {
+            for s in STATE.iter() {
+                streams::write(o, s.as_bytes()).map_err(|_| ())?;
+            }
+            Ok(())
+        }
+    }
+    fn pass_an_imported_record(stat: filesystem::DescriptorStat) -> String {
+        format!("{stat:?}")
+    }
 }
