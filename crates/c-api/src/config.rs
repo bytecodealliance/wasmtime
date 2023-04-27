@@ -87,7 +87,10 @@ pub extern "C" fn wasmtime_config_wasm_relaxed_simd_set(c: &mut wasm_config_t, e
 }
 
 #[no_mangle]
-pub extern "C" fn wasmtime_config_wasm_relaxed_simd_deterministic_set(c: &mut wasm_config_t, enable: bool) {
+pub extern "C" fn wasmtime_config_wasm_relaxed_simd_deterministic_set(
+    c: &mut wasm_config_t,
+    enable: bool,
+) {
     c.config.relaxed_simd_deterministic(enable);
 }
 
