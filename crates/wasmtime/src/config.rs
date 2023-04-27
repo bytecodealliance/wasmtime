@@ -1536,7 +1536,7 @@ impl Config {
     }
 
     #[cfg(compiler)]
-    pub(crate) fn build_compiler(&mut self) -> Result<Box<dyn wasmtime_environ::Compiler>> {
+    pub(crate) fn build_compiler(mut self) -> Result<(Self, Box<dyn wasmtime_environ::Compiler>)> {
         let mut compiler = match self.compiler_config.strategy {
             #[cfg(feature = "cranelift")]
             Strategy::Auto => wasmtime_cranelift::builder(),
@@ -1630,7 +1630,7 @@ impl Config {
             compiler.enable_incremental_compilation(cache_store.clone())?;
         }
 
-        compiler.build()
+        Ok((self, compiler.build()?))
     }
 
     /// Internal setting for whether adapter modules for components will have

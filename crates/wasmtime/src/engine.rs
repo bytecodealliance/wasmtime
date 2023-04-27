@@ -81,12 +81,11 @@ impl Engine {
         debug_builtins::ensure_exported();
 
         let registry = SignatureRegistry::new();
-        let mut config = config.clone();
+        let config = config.clone();
         config.validate()?;
 
         #[cfg(compiler)]
-        let compiler = config.build_compiler()?;
-        drop(&mut config); // silence warnings without `cfg(compiler)`
+        let (config, compiler) = config.build_compiler()?;
 
         let allocator = config.build_allocator()?;
         let profiler = config.build_profiler()?;

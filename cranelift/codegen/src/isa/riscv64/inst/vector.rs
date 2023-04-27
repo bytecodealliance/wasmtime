@@ -214,27 +214,42 @@ impl fmt::Display for VState {
 
 impl VecAluOpRRR {
     pub fn opcode(&self) -> u32 {
-        match self {
-            VecAluOpRRR::Vadd => 0x57,
-        }
+        // Vector Opcode
+        0x57
     }
     pub fn funct3(&self) -> u32 {
         match self {
-            VecAluOpRRR::Vadd => 0b000,
+            // OPIVV
+            VecAluOpRRR::Vadd
+            | VecAluOpRRR::Vsub
+            | VecAluOpRRR::Vand
+            | VecAluOpRRR::Vor
+            | VecAluOpRRR::Vxor => 0b000,
+            // OPIMV
+            VecAluOpRRR::Vmul | VecAluOpRRR::Vmulh | VecAluOpRRR::Vmulhu => 0b010,
         }
     }
     pub fn funct6(&self) -> u32 {
+        // See: https://github.com/riscv/riscv-v-spec/blob/master/inst-table.adoc
         match self {
             VecAluOpRRR::Vadd => 0b000000,
+            VecAluOpRRR::Vsub => 0b000010,
+            VecAluOpRRR::Vmul => 0b100101,
+            VecAluOpRRR::Vmulh => 0b100111,
+            VecAluOpRRR::Vmulhu => 0b100100,
+            VecAluOpRRR::Vand => 0b001001,
+            VecAluOpRRR::Vor => 0b001010,
+            VecAluOpRRR::Vxor => 0b001011,
         }
     }
 }
 
 impl fmt::Display for VecAluOpRRR {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            VecAluOpRRR::Vadd => write!(f, "vadd.vv"),
-        }
+        let mut s = format!("{self:?}");
+        s.make_ascii_lowercase();
+        s.push_str(".vv");
+        f.write_str(&s)
     }
 }
 

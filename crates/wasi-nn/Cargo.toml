@@ -22,6 +22,3 @@ thiserror = { workspace = true }
 
 [build-dependencies]
 walkdir = "2.3"
-
-[badges]
-maintenance = { status = "experimental" }

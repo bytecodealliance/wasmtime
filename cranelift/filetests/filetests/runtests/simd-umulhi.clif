@@ -1,4 +1,6 @@
 test interpret
+test run
+target riscv64 has_v
 ; x86_64 only supports `i16`, `i32`, and `i64`
 
 function %umulhi_i8(i8, i8) -> i8 {

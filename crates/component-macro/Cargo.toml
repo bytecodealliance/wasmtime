@@ -24,9 +24,6 @@ wasmtime-component-util = { workspace = true }
 wasmtime-wit-bindgen = { workspace = true }
 wit-parser = { workspace = true }
 
-[badges]
-maintenance = { status = "actively-developed" }
-
 [dev-dependencies]
 wasmtime = { path = '../wasmtime', features = ['component-model'] }
 component-macro-test-helpers = { path = 'test-helpers' }

@@ -908,6 +908,7 @@
             Ucomiss
             Ucomisd
             Unpcklps
+            Unpckhps
             Xorps
             Xorpd
             Phaddw
@@ -1183,6 +1184,7 @@
             Vpunpckhwd
             Vpunpcklwd
             Vunpcklps
+            Vunpckhps
             Vandnps
             Vandnpd
             Vpandn
@@ -2900,6 +2902,14 @@
 (rule 1 (x64_unpcklps src1 src2)
       (if-let $true (use_avx_simd))
       (xmm_rmir_vex (AvxOpcode.Vunpcklps) src1 src2))
+
+;; Helper for creating `unpckhps` instructions.
+(decl x64_unpckhps (Xmm XmmMem) Xmm)
+(rule 0 (x64_unpckhps src1 src2)
+      (xmm_rm_r (SseOpcode.Unpckhps) src1 src2))
+(rule 1 (x64_unpckhps src1 src2)
+      (if-let $true (use_avx_simd))
+      (xmm_rmir_vex (AvxOpcode.Vunpckhps) src1 src2))
 
 ;; Helper for creating `andnps` instructions.
 (decl x64_andnps (Xmm XmmMem) Xmm)
@@ -4908,6 +4918,7 @@
 (convert Xmm XmmMemAligned xmm_to_xmm_mem_aligned)
 (convert XmmMem XmmMemImm xmm_mem_to_xmm_mem_imm)
 (convert XmmMem RegMem xmm_mem_to_reg_mem)
+(convert RegMemImm XmmMemImm xmm_mem_imm_new)
 (convert WritableXmm Xmm writable_xmm_to_xmm)
 (convert WritableXmm WritableReg writable_xmm_to_reg)
 (convert WritableXmm Reg writable_xmm_to_r_reg)

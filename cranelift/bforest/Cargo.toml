@@ -13,6 +13,3 @@ edition.workspace = true
 
 [dependencies]
 cranelift-entity = { workspace = true }
-
-[badges]
-maintenance = { status = "experimental" }

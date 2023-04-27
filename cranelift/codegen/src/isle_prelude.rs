@@ -304,6 +304,11 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
+        fn ty_int_ref_scalar_64_extract(&mut self, ty: Type) -> Option<Type> {
+            self.ty_int_ref_scalar_64(ty)
+        }
+
+        #[inline]
         fn ty_32(&mut self, ty: Type) -> Option<Type> {
             if ty.bits() == 32 {
                 Some(ty)

@@ -59,6 +59,13 @@
 ;; Register to Register ALU Ops
 (type VecAluOpRRR (enum
   (Vadd)
+  (Vsub)
+  (Vmul)
+  (Vmulh)
+  (Vmulhu)
+  (Vand)
+  (Vor)
+  (Vxor)
 ))
 
 
@@ -99,6 +106,14 @@
   (if-let $I64 (lane_type ty))
   (VecElementWidth.E64))
 
+(decl pure min_vec_reg_size () u64)
+(extern constructor min_vec_reg_size min_vec_reg_size)
+
+;; An extractor that matches any type that is known to fit in a single vector
+;; register.
+(decl ty_vec_fits_in_register (Type) Type)
+(extern extractor ty_vec_fits_in_register ty_vec_fits_in_register)
+
 ;;;; Instruction Helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; As noted in the RISC-V Vector Extension Specification, rs2 is the first
@@ -130,3 +145,38 @@
 (decl rv_vadd_vv (Reg Reg VState) Reg)
 (rule (rv_vadd_vv vs2 vs1 vstate)
   (vec_alu_rrr (VecAluOpRRR.Vadd) vs2 vs1 vstate))
+
+;; Helper for emitting the `vsub.vv` instruction.
+(decl rv_vsub_vv (Reg Reg VState) Reg)
+(rule (rv_vsub_vv vs2 vs1 vstate)
+  (vec_alu_rrr (VecAluOpRRR.Vsub) vs2 vs1 vstate))
+
+;; Helper for emitting the `vmul.vv` instruction.
+(decl rv_vmul_vv (Reg Reg VState) Reg)
+(rule (rv_vmul_vv vs2 vs1 vstate)
+  (vec_alu_rrr (VecAluOpRRR.Vmul) vs2 vs1 vstate))
+
+;; Helper for emitting the `vmulh.vv` instruction.
+(decl rv_vmulh_vv (Reg Reg VState) Reg)
+(rule (rv_vmulh_vv vs2 vs1 vstate)
+  (vec_alu_rrr (VecAluOpRRR.Vmulh) vs2 vs1 vstate))
+
+;; Helper for emitting the `vmulhu.vv` instruction.
+(decl rv_vmulhu_vv (Reg Reg VState) Reg)
+(rule (rv_vmulhu_vv vs2 vs1 vstate)
+  (vec_alu_rrr (VecAluOpRRR.Vmulhu) vs2 vs1 vstate))
+
+;; Helper for emitting the `vand.vv` instruction.
+(decl rv_vand_vv (Reg Reg VState) Reg)
+(rule (rv_vand_vv vs2 vs1 vstate)
+  (vec_alu_rrr (VecAluOpRRR.Vand) vs2 vs1 vstate))
+
+;; Helper for emitting the `vor.vv` instruction.
+(decl rv_vor_vv (Reg Reg VState) Reg)
+(rule (rv_vor_vv vs2 vs1 vstate)
+  (vec_alu_rrr (VecAluOpRRR.Vor) vs2 vs1 vstate))
+
+;; Helper for emitting the `vxor.vv` instruction.
+(decl rv_vxor_vv (Reg Reg VState) Reg)
+(rule (rv_vxor_vv vs2 vs1 vstate)
+  (vec_alu_rrr (VecAluOpRRR.Vxor) vs2 vs1 vstate))

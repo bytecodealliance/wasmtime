@@ -24,6 +24,3 @@ similar = { workspace = true }
 default = ["std"]
 std = ["cranelift-codegen/std"]
 core = ["hashbrown", "cranelift-codegen/core"]
-
-[badges]
-maintenance = { status = "experimental" }

@@ -239,6 +239,16 @@ criteria = "safe-to-run"
 version = "0.21.0"
 notes = "This crate has no dependencies, no build.rs, and contains no unsafe code."
 
+[[audits.bitflags]]
+who = "Jamey Sharp <jsharp@fastly.com>"
+criteria = "safe-to-deploy"
+delta = "2.1.0 -> 2.2.1"
+notes = """
+This version adds unsafe impls of traits from the bytemuck crate when built
+with that library enabled, but I believe the impls satisfy the documented
+safety requirements for bytemuck. The other changes are minor.
+"""
+
 [[audits.block-buffer]]
 who = "Benjamin Bouvier <public@benj.me>"
 criteria = "safe-to-deploy"
@@ -628,6 +638,17 @@ version = "0.3.27"
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
 version = "0.3.27"
+
+[[audits.fxprof-processed-profile]]
+who = "Jamey Sharp <jsharp@fastly.com>"
+criteria = "safe-to-deploy"
+version = "0.6.0"
+notes = """
+No unsafe code, I/O, or powerful imports. This is a straightforward set of data
+structures representing the Firefox \"processed\" profile format, with serde
+serialization support. All logic is trivial: either unit conversion, or
+hash-consing to support de-duplication required by the format.
+"""
 
 [[audits.gimli]]
 who = "Alex Crichton <alex@alexcrichton.com>"
