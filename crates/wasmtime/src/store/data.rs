@@ -96,10 +96,6 @@ impl StoreData {
         true
     }
 
-    pub(crate) fn funcs(&self) -> impl Iterator<Item = &crate::func::FuncData> {
-        self.funcs.iter()
-    }
-
     pub(crate) fn reserve_funcs(&mut self, count: usize) {
         self.funcs.reserve(count);
     }

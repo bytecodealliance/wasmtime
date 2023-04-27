@@ -7,8 +7,8 @@
 //! cranelift-compiled adapters, will use this `VMComponentContext` as well.
 
 use crate::{
-    Store, VMCallerCheckedFuncRef, VMFunctionBody, VMGlobalDefinition, VMMemoryDefinition,
-    VMOpaqueContext, VMSharedSignatureIndex, ValRaw,
+    Store, VMArrayCallFunction, VMCallerCheckedFuncRef, VMGlobalDefinition, VMMemoryDefinition,
+    VMNativeCallFunction, VMOpaqueContext, VMSharedSignatureIndex, VMWasmCallFunction, ValRaw,
 };
 use memoffset::offset_of;
 use std::alloc::{self, Layout};
@@ -268,7 +268,10 @@ impl ComponentInstance {
 
     unsafe fn anyfunc(&self, offset: u32) -> NonNull<VMCallerCheckedFuncRef> {
         let ret = self.vmctx_plus_offset::<VMCallerCheckedFuncRef>(offset);
-        debug_assert!((*ret).func_ptr.as_ptr() as usize != INVALID_PTR);
+        debug_assert!(
+            mem::transmute::<Option<NonNull<VMWasmCallFunction>>, usize>((*ret).wasm_call)
+                != INVALID_PTR
+        );
         debug_assert!((*ret).vmctx as usize != INVALID_PTR);
         NonNull::new(ret).unwrap()
     }
@@ -321,18 +324,18 @@ impl ComponentInstance {
     /// * `idx` - the index that's being configured
     /// * `lowering` - the host-related closure information to get invoked when
     ///   the lowering is called.
-    /// * `anyfunc_func_ptr` - the cranelift-compiled trampoline which will
-    ///   read the `VMComponentContext` and invoke `lowering` provided. This
-    ///   function pointer will be passed to wasm if wasm needs to instantiate
-    ///   something.
-    /// * `anyfunc_type_index` - the signature index for the core wasm type
+    /// * `{wasm,native,array}_call` - the cranelift-compiled trampolines which will
+    ///   read the `VMComponentContext` and invoke `lowering` provided.
+    /// * `type_index` - the signature index for the core wasm type
     ///   registered within the engine already.
     pub fn set_lowering(
         &mut self,
         idx: LoweredIndex,
         lowering: VMLowering,
-        anyfunc_func_ptr: NonNull<VMFunctionBody>,
-        anyfunc_type_index: VMSharedSignatureIndex,
+        wasm_call: NonNull<VMWasmCallFunction>,
+        native_call: NonNull<VMNativeCallFunction>,
+        array_call: VMArrayCallFunction,
+        type_index: VMSharedSignatureIndex,
     ) {
         unsafe {
             debug_assert!(
@@ -344,8 +347,10 @@ impl ComponentInstance {
             *self.vmctx_plus_offset(self.offsets.lowering(idx)) = lowering;
             self.set_anyfunc(
                 self.offsets.lowering_anyfunc(idx),
-                anyfunc_func_ptr,
-                anyfunc_type_index,
+                wasm_call,
+                native_call,
+                array_call,
+                type_index,
             );
         }
     }
@@ -354,34 +359,58 @@ impl ComponentInstance {
     pub fn set_always_trap(
         &mut self,
         idx: RuntimeAlwaysTrapIndex,
-        func_ptr: NonNull<VMFunctionBody>,
+        wasm_call: NonNull<VMWasmCallFunction>,
+        native_call: NonNull<VMNativeCallFunction>,
+        array_call: VMArrayCallFunction,
         type_index: VMSharedSignatureIndex,
     ) {
-        unsafe { self.set_anyfunc(self.offsets.always_trap_anyfunc(idx), func_ptr, type_index) }
+        unsafe {
+            self.set_anyfunc(
+                self.offsets.always_trap_anyfunc(idx),
+                wasm_call,
+                native_call,
+                array_call,
+                type_index,
+            );
+        }
     }
 
     /// Same as `set_lowering` but for the transcoder functions.
     pub fn set_transcoder(
         &mut self,
         idx: RuntimeTranscoderIndex,
-        func_ptr: NonNull<VMFunctionBody>,
+        wasm_call: NonNull<VMWasmCallFunction>,
+        native_call: NonNull<VMNativeCallFunction>,
+        array_call: VMArrayCallFunction,
         type_index: VMSharedSignatureIndex,
     ) {
-        unsafe { self.set_anyfunc(self.offsets.transcoder_anyfunc(idx), func_ptr, type_index) }
+        unsafe {
+            self.set_anyfunc(
+                self.offsets.transcoder_anyfunc(idx),
+                wasm_call,
+                native_call,
+                array_call,
+                type_index,
+            );
+        }
     }
 
     unsafe fn set_anyfunc(
         &mut self,
         offset: u32,
-        func_ptr: NonNull<VMFunctionBody>,
+        wasm_call: NonNull<VMWasmCallFunction>,
+        native_call: NonNull<VMNativeCallFunction>,
+        array_call: VMArrayCallFunction,
         type_index: VMSharedSignatureIndex,
     ) {
         debug_assert!(*self.vmctx_plus_offset::<usize>(offset) == INVALID_PTR);
-        let vmctx = self.vmctx();
+        let vmctx = VMOpaqueContext::from_vmcomponent(self.vmctx());
         *self.vmctx_plus_offset(offset) = VMCallerCheckedFuncRef {
-            func_ptr,
+            wasm_call: Some(wasm_call),
+            native_call,
+            array_call,
             type_index,
-            vmctx: VMOpaqueContext::from_vmcomponent(vmctx),
+            vmctx,
         };
     }
 
@@ -529,12 +558,20 @@ impl OwnedComponentInstance {
         &mut self,
         idx: LoweredIndex,
         lowering: VMLowering,
-        anyfunc_func_ptr: NonNull<VMFunctionBody>,
-        anyfunc_type_index: VMSharedSignatureIndex,
+        wasm_call: NonNull<VMWasmCallFunction>,
+        native_call: NonNull<VMNativeCallFunction>,
+        array_call: VMArrayCallFunction,
+        type_index: VMSharedSignatureIndex,
     ) {
         unsafe {
-            self.instance_mut()
-                .set_lowering(idx, lowering, anyfunc_func_ptr, anyfunc_type_index)
+            self.instance_mut().set_lowering(
+                idx,
+                lowering,
+                wasm_call,
+                native_call,
+                array_call,
+                type_index,
+            )
         }
     }
 
@@ -542,12 +579,14 @@ impl OwnedComponentInstance {
     pub fn set_always_trap(
         &mut self,
         idx: RuntimeAlwaysTrapIndex,
-        func_ptr: NonNull<VMFunctionBody>,
+        wasm_call: NonNull<VMWasmCallFunction>,
+        native_call: NonNull<VMNativeCallFunction>,
+        array_call: VMArrayCallFunction,
         type_index: VMSharedSignatureIndex,
     ) {
         unsafe {
             self.instance_mut()
-                .set_always_trap(idx, func_ptr, type_index)
+                .set_always_trap(idx, wasm_call, native_call, array_call, type_index)
         }
     }
 
@@ -555,12 +594,14 @@ impl OwnedComponentInstance {
     pub fn set_transcoder(
         &mut self,
         idx: RuntimeTranscoderIndex,
-        func_ptr: NonNull<VMFunctionBody>,
+        wasm_call: NonNull<VMWasmCallFunction>,
+        native_call: NonNull<VMNativeCallFunction>,
+        array_call: VMArrayCallFunction,
         type_index: VMSharedSignatureIndex,
     ) {
         unsafe {
             self.instance_mut()
-                .set_transcoder(idx, func_ptr, type_index)
+                .set_transcoder(idx, wasm_call, native_call, array_call, type_index)
         }
     }
 }

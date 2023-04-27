@@ -9,7 +9,7 @@ use crate::table::{Table, TableElement, TableElementType};
 use crate::vmcontext::{
     VMBuiltinFunctionsArray, VMCallerCheckedFuncRef, VMContext, VMFunctionImport,
     VMGlobalDefinition, VMGlobalImport, VMMemoryDefinition, VMMemoryImport, VMOpaqueContext,
-    VMRuntimeLimits, VMTableDefinition, VMTableImport, VMCONTEXT_MAGIC,
+    VMRuntimeLimits, VMTableDefinition, VMTableImport,
 };
 use crate::{
     ExportFunction, ExportGlobal, ExportMemory, ExportTable, Imports, ModuleRuntimeInfo, Store,
@@ -31,7 +31,7 @@ use wasmtime_environ::{
     packed_option::ReservedValue, DataIndex, DefinedGlobalIndex, DefinedMemoryIndex,
     DefinedTableIndex, ElemIndex, EntityIndex, EntityRef, EntitySet, FuncIndex, GlobalIndex,
     GlobalInit, HostPtr, MemoryIndex, Module, PrimaryMap, SignatureIndex, TableIndex,
-    TableInitialization, Trap, VMOffsets, WasmType,
+    TableInitialization, Trap, VMOffsets, WasmType, VMCONTEXT_MAGIC,
 };
 
 mod allocator;
@@ -163,6 +163,7 @@ impl Instance {
         self.runtime_info.module()
     }
 
+    #[inline]
     fn offsets(&self) -> &VMOffsets<HostPtr> {
         self.runtime_info.offsets()
     }
@@ -525,24 +526,35 @@ impl Instance {
             *base.add(sig.index())
         };
 
-        let (func_ptr, vmctx) = if let Some(def_index) = self.module().defined_func_index(index) {
-            (
-                self.runtime_info.function(def_index),
-                VMOpaqueContext::from_vmcontext(self.vmctx_ptr()),
-            )
+        let funcref = if let Some(def_index) = self.module().defined_func_index(index) {
+            VMCallerCheckedFuncRef {
+                native_call: self
+                    .runtime_info
+                    .native_to_wasm_trampoline(def_index)
+                    .expect("should have native-to-Wasm trampoline for escaping function"),
+                array_call: self
+                    .runtime_info
+                    .array_to_wasm_trampoline(def_index)
+                    .expect("should have array-to-Wasm trampoline for escaping function"),
+                wasm_call: Some(self.runtime_info.function(def_index)),
+                vmctx: VMOpaqueContext::from_vmcontext(self.vmctx_ptr()),
+                type_index,
+            }
         } else {
             let import = self.imported_function(index);
-            (import.body.as_ptr(), import.vmctx)
+            VMCallerCheckedFuncRef {
+                native_call: import.native_call,
+                array_call: import.array_call,
+                wasm_call: Some(import.wasm_call),
+                vmctx: import.vmctx,
+                type_index,
+            }
         };
 
         // Safety: we have a `&mut self`, so we have exclusive access
         // to this Instance.
         unsafe {
-            *into = VMCallerCheckedFuncRef {
-                vmctx,
-                type_index,
-                func_ptr: NonNull::new(func_ptr).expect("Non-null function pointer"),
-            };
+            std::ptr::write(into, funcref);
         }
     }
 
@@ -1248,7 +1260,7 @@ impl InstanceHandle {
     }
 
     /// Performs post-initialization of an instance after its handle has been
-    /// creqtaed and registered with a store.
+    /// created and registered with a store.
     ///
     /// Failure of this function means that the instance still must persist
     /// within the store since failure may indicate partial failure, or some

@@ -9,11 +9,8 @@ pub unsafe fn get_next_older_pc_from_fp(fp: usize) -> usize {
 // by the current "FP".
 pub const NEXT_OLDER_FP_FROM_FP_OFFSET: usize = 0;
 
-pub fn reached_entry_sp(fp: usize, first_wasm_sp: usize) -> bool {
-    // The "FP" (backchain pointer) holds the value of the stack pointer at
-    // function entry. If this equals the value the stack pointer had when we
-    // first entered a Wasm function, we are done.
-    fp == first_wasm_sp
+pub fn reached_entry_sp(fp: usize, entry_sp: usize) -> bool {
+    fp > entry_sp
 }
 
 pub fn assert_entry_sp_is_aligned(sp: usize) {

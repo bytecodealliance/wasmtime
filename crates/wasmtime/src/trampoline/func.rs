@@ -6,7 +6,7 @@ use std::panic::{self, AssertUnwindSafe};
 use std::ptr::NonNull;
 use wasmtime_jit::{CodeMemory, ProfilingAgent};
 use wasmtime_runtime::{
-    VMContext, VMHostFuncContext, VMOpaqueContext, VMSharedSignatureIndex, VMTrampoline,
+    VMArrayCallHostFuncContext, VMCallerCheckedFuncRef, VMContext, VMOpaqueContext,
 };
 
 struct TrampolineState<F> {
@@ -15,9 +15,16 @@ struct TrampolineState<F> {
     code_memory: CodeMemory,
 }
 
-unsafe extern "C" fn stub_fn<F>(
+/// Shim to call a host-defined function that uses the array calling convention.
+///
+/// Together with `VMArrayCallHostFuncContext`, this implements the transition
+/// from a raw, non-closure function pointer to a Rust closure that associates
+/// data and function together.
+///
+/// Also shepherds panics and traps across Wasm.
+unsafe extern "C" fn array_call_shim<F>(
     vmctx: *mut VMOpaqueContext,
-    caller_vmctx: *mut VMContext,
+    caller_vmctx: *mut VMOpaqueContext,
     values_vec: *mut ValRaw,
     values_vec_len: usize,
 ) where
@@ -37,7 +44,7 @@ unsafe extern "C" fn stub_fn<F>(
     // have any. To prevent leaks we avoid having any local destructors by
     // avoiding local variables.
     let result = panic::catch_unwind(AssertUnwindSafe(|| {
-        let vmctx = VMHostFuncContext::from_opaque(vmctx);
+        let vmctx = VMArrayCallHostFuncContext::from_opaque(vmctx);
         // Double-check ourselves in debug mode, but we control
         // the `Any` here so an unsafe downcast should also
         // work.
@@ -45,7 +52,7 @@ unsafe extern "C" fn stub_fn<F>(
         debug_assert!(state.is::<TrampolineState<F>>());
         let state = &*(state as *const _ as *const TrampolineState<F>);
         let values_vec = std::slice::from_raw_parts_mut(values_vec, values_vec_len);
-        (state.func)(caller_vmctx, values_vec)
+        (state.func)(VMContext::from_opaque(caller_vmctx), values_vec)
     }));
 
     match result {
@@ -104,22 +111,26 @@ fn register_trampolines(profiler: &dyn ProfilingAgent, code: &CodeMemory) {
 }
 
 #[cfg(compiler)]
-pub fn create_function<F>(
+pub fn create_array_call_function<F>(
     ft: &FuncType,
     func: F,
     engine: &Engine,
-) -> Result<(Box<VMHostFuncContext>, VMSharedSignatureIndex, VMTrampoline)>
+) -> Result<Box<VMArrayCallHostFuncContext>>
 where
     F: Fn(*mut VMContext, &mut [ValRaw]) -> Result<()> + Send + Sync + 'static,
 {
+    use std::ptr;
+
     let mut obj = engine
         .compiler()
         .object(wasmtime_environ::ObjectKind::Module)?;
-    let (t1, t2) = engine.compiler().emit_trampoline_obj(
-        ft.as_wasm_func_type(),
-        stub_fn::<F> as usize,
-        &mut obj,
-    )?;
+    let (wasm_call_range, native_call_range) = engine
+        .compiler()
+        .emit_trampolines_for_array_call_host_func(
+            ft.as_wasm_func_type(),
+            array_call_shim::<F> as usize,
+            &mut obj,
+        )?;
     engine.append_bti(&mut obj);
     let obj = wasmtime_jit::ObjectBuilder::new(obj, &engine.config().tunables).finish()?;
 
@@ -134,19 +145,27 @@ where
     // we know their start/length.
 
     let text = code_memory.text();
-    let host_trampoline = text[t1.start as usize..][..t1.length as usize].as_ptr();
-    let wasm_trampoline = text[t2.start as usize..].as_ptr() as *mut _;
-    let wasm_trampoline = NonNull::new(wasm_trampoline).unwrap();
+
+    let array_call = array_call_shim::<F>;
+
+    let wasm_call = text[wasm_call_range.start as usize..].as_ptr() as *mut _;
+    let wasm_call = Some(NonNull::new(wasm_call).unwrap());
+
+    let native_call = text[native_call_range.start as usize..].as_ptr() as *mut _;
+    let native_call = NonNull::new(native_call).unwrap();
 
     let sig = engine.signatures().register(ft.as_wasm_func_type());
 
     unsafe {
-        let ctx = VMHostFuncContext::new(
-            wasm_trampoline,
-            sig,
+        Ok(VMArrayCallHostFuncContext::new(
+            VMCallerCheckedFuncRef {
+                array_call,
+                wasm_call,
+                native_call,
+                type_index: sig,
+                vmctx: ptr::null_mut(),
+            },
             Box::new(TrampolineState { func, code_memory }),
-        );
-        let host_trampoline = std::mem::transmute::<*const u8, VMTrampoline>(host_trampoline);
-        Ok((ctx, sig, host_trampoline))
+        ))
     }
 }

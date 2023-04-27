@@ -107,7 +107,6 @@ wasmtime_environ::foreach_builtin_function!(declare_function_signatures);
 pub struct FuncEnvironment<'module_environment> {
     isa: &'module_environment (dyn TargetIsa + 'module_environment),
     module: &'module_environment Module,
-    translation: &'module_environment ModuleTranslation<'module_environment>,
     types: &'module_environment ModuleTypes,
 
     /// Heaps implementing WebAssembly linear memories.
@@ -171,7 +170,6 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         Self {
             isa,
             module: &translation.module,
-            translation,
             types,
             heaps: PrimaryMap::default(),
             vmctx: None,
@@ -1536,7 +1534,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         index: TypeIndex,
     ) -> WasmResult<ir::SigRef> {
         let index = self.module.types[index].unwrap_function();
-        let sig = crate::indirect_signature(self.isa, &self.types[index]);
+        let sig = crate::wasm_call_signature(self.isa, &self.types[index]);
         Ok(func.import_signature(sig))
     }
 
@@ -1545,7 +1543,8 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         func: &mut ir::Function,
         index: FuncIndex,
     ) -> WasmResult<ir::FuncRef> {
-        let sig = crate::func_signature(self.isa, self.translation, self.types, index);
+        let sig = self.module.functions[index].signature;
+        let sig = crate::wasm_call_signature(self.isa, &self.types[sig]);
         let signature = func.import_signature(sig);
         let name =
             ir::ExternalName::User(func.declare_imported_user_function(ir::UserExternalName {
@@ -1600,7 +1599,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             pointer_type,
             mem_flags,
             funcref_ptr,
-            i32::from(self.offsets.ptr.vmcaller_checked_func_ref_func_ptr()),
+            i32::from(self.offsets.ptr.vmcaller_checked_func_ref_wasm_call()),
         );
 
         // If necessary, check the signature.
@@ -1707,7 +1706,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
 
         // Load the callee address.
         let body_offset =
-            i32::try_from(self.offsets.vmctx_vmfunction_import_body(callee_index)).unwrap();
+            i32::try_from(self.offsets.vmctx_vmfunction_import_wasm_call(callee_index)).unwrap();
         let func_addr = pos.ins().load(pointer_type, mem_flags, base, body_offset);
 
         // First append the callee vmctx address.

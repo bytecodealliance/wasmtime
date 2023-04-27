@@ -1365,3 +1365,106 @@ fn wasm_fault_address_reported_by_default() -> Result<()> {
     );
     Ok(())
 }
+
+#[test]
+fn trap_with_array_to_wasm_stack_args() -> Result<()> {
+    let engine = Engine::default();
+    let mut store = Store::new(&engine, ());
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (func $trap
+                    unreachable)
+                (func $run (param i64 i64 i64 i64 i64 i64 i64 i64 i64 i64 i64 i64 i64 i64 i64)
+                    call $trap)
+                (export "run" (func $run))
+            )
+        "#,
+    )?;
+
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let run = instance.get_func(&mut store, "run").unwrap();
+
+    let err = run
+        .call(
+            &mut store,
+            &[
+                Val::I64(0),
+                Val::I64(0),
+                Val::I64(0),
+                Val::I64(0),
+                Val::I64(0),
+                Val::I64(0),
+                Val::I64(0),
+                Val::I64(0),
+                Val::I64(0),
+                Val::I64(0),
+                Val::I64(0),
+                Val::I64(0),
+                Val::I64(0),
+                Val::I64(0),
+                Val::I64(0),
+            ],
+            &mut [],
+        )
+        .unwrap_err();
+    assert!(err.is::<Trap>());
+
+    let trace = err.downcast_ref::<WasmBacktrace>().unwrap();
+    assert_eq!(trace.frames().len(), 2);
+    assert_eq!(trace.frames()[0].func_name(), Some("trap"));
+    assert_eq!(trace.frames()[1].func_name(), Some("run"));
+
+    Ok(())
+}
+
+#[test]
+fn trap_with_native_to_wasm_stack_args() -> Result<()> {
+    let engine = Engine::default();
+    let mut store = Store::new(&engine, ());
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (func $trap
+                    unreachable)
+                (func $run (param i64 i64 i64 i64 i64 i64 i64 i64 i64 i64 i64 i64 i64 i64 i64)
+                    call $trap)
+                (export "run" (func $run))
+            )
+        "#,
+    )?;
+
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let run = instance.get_func(&mut store, "run").unwrap();
+
+    let err = run
+        .typed::<(
+            i64,
+            i64,
+            i64,
+            i64,
+            i64,
+            i64,
+            i64,
+            i64,
+            i64,
+            i64,
+            i64,
+            i64,
+            i64,
+            i64,
+            i64,
+        ), ()>(&mut store)?
+        .call(&mut store, (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0))
+        .unwrap_err();
+    assert!(err.is::<Trap>());
+
+    let trace = err.downcast_ref::<WasmBacktrace>().unwrap();
+    assert_eq!(trace.frames().len(), 2);
+    assert_eq!(trace.frames()[0].func_name(), Some("trap"));
+    assert_eq!(trace.frames()[1].func_name(), Some("run"));
+
+    Ok(())
+}

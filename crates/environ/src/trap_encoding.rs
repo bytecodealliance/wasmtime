@@ -87,6 +87,7 @@ pub enum Trap {
 
     /// Used to indicate that a trap was raised by atomic wait operations on non shared memory.
     AtomicWaitNonSharedMemory,
+    //
     // if adding a variant here be sure to update the `check!` macro below
 }
 

@@ -161,7 +161,7 @@ impl<'a> ModuleTextBuilder<'a> {
                     // loop could also be updated to forward the relocation to
                     // the final object file as well.
                     panic!(
-                        "unresolved relocation could not be procesed against \
+                        "unresolved relocation could not be processed against \
                          {index:?}: {r:?}"
                     );
                 }
