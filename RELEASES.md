@@ -16,6 +16,9 @@ Released 2023-04-27.
 * Fixed wasi-common's implementation of the `O_DIRECTORY` flag to match POSIX.
   [#6163](https://github.com/bytecodealliance/wasmtime/pull/6163)
 
+* Undefined Behavior in Rust runtime functions
+  [GHSA-ch89-5g45-qwc7](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-ch89-5g45-qwc7)
+
 --------------------------------------------------------------------------------
 
 ## 8.0.0
@@ -118,6 +121,17 @@ Released 2023-04-20.
 
 --------------------------------------------------------------------------------
 
+## 7.0.1
+
+Released 2023-04-27.
+
+### Fixed
+
+* Undefined Behavior in Rust runtime functions
+  [GHSA-ch89-5g45-qwc7](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-ch89-5g45-qwc7)
+
+--------------------------------------------------------------------------------
+
 ## 7.0.0
 
 Released 2023-03-20
@@ -179,6 +193,17 @@ Released 2023-03-20
 
 *  Miscompilation of `i8x16.select` with the same inputs on x86\_64
   [GHSA-xm67-587q-r2vw](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-xm67-587q-r2vw)
+
+--------------------------------------------------------------------------------
+
+## 6.0.2
+
+Released 2023-04-27.
+
+### Fixed
+
+* Undefined Behavior in Rust runtime functions
+  [GHSA-ch89-5g45-qwc7](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-ch89-5g45-qwc7)
 
 --------------------------------------------------------------------------------
 
