@@ -625,12 +625,6 @@ jobs:
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
-      # Note that the usage of this nightly toolchain is temporary until it
-      # rides to stable. After this nightly version becomes stable (Rust 1.69.0)
-      # then this should switch back to using stable by deleting the `with` and
-      # `toolchain` options.
-      with:
-        toolchain: nightly-2023-01-31
     # On one builder produce the source tarball since there's no need to produce
     # it everywhere
     - run: ./ci/build-src-tarball.sh
