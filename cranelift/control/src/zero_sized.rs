@@ -36,6 +36,6 @@ impl ControlPlane {
 
 impl Display for ControlPlane {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "control plane: ()")
+        write!(f, "; control plane: ()")
     }
 }

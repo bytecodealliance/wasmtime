@@ -53,14 +53,14 @@ impl ControlPlane {
 
 impl Display for ControlPlane {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "control plane:")?;
-        write!(f, "    data:")?;
+        writeln!(f, "; control plane:")?;
+        write!(f, ";    data:")?;
         for b in &self.data {
             // TODO will be replaced by hex (or base64 ?) encoded data
             // once we switch to from `Vec<bool>` to `Vec<u8>`.
             write!(f, " {b}")?;
         }
         writeln!(f, "")?;
-        writeln!(f, "    fuel: {:?}", self.fuel)
+        writeln!(f, ";    fuel: {:?}", self.fuel)
     }
 }
