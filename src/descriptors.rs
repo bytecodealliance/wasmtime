@@ -324,6 +324,16 @@ impl Descriptors {
         }
     }
 
+    pub fn get_file_or_dir(&self, fd: Fd) -> Result<&File, Errno> {
+        match self.get(fd)? {
+            Descriptor::Streams(Streams {
+                type_: StreamType::File(file),
+                ..
+            }) => Ok(file),
+            _ => Err(wasi::ERRNO_BADF),
+        }
+    }
+
     pub fn get_file_with_error(&self, fd: Fd, error: Errno) -> Result<&File, Errno> {
         match self.get(fd)? {
             Descriptor::Streams(Streams {
@@ -371,6 +381,15 @@ impl Descriptors {
                     ),
                 ..
             }) => Ok(file),
+            Descriptor::Streams(Streams {
+                type_:
+                    StreamType::File(
+                        file @ File {
+                            descriptor_type: _, ..
+                        },
+                    ),
+                ..
+            }) => Err(wasi::ERRNO_NOTDIR),
             _ => Err(wasi::ERRNO_BADF),
         }
     }
