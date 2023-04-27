@@ -10,12 +10,12 @@ use crate::data_context::DataDescription;
 use core::fmt::Display;
 use cranelift_codegen::binemit::{CodeOffset, Reloc};
 use cranelift_codegen::entity::{entity_impl, PrimaryMap};
-use cranelift_codegen::ir::Function;
+use cranelift_codegen::ir::function::{Function, VersionMarker};
 use cranelift_codegen::settings::SetError;
-use cranelift_codegen::{binemit, MachReloc};
+use cranelift_codegen::MachReloc;
 use cranelift_codegen::{ir, isa, CodegenError, CompileError, Context};
 use cranelift_control::ControlPlane;
-use std::borrow::ToOwned;
+use std::borrow::{Cow, ToOwned};
 use std::string::String;
 
 /// A module relocation.
@@ -55,6 +55,7 @@ impl ModuleReloc {
 
 /// A function identifier for use in the `Module` interface.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[cfg_attr(feature = "enable-serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FuncId(u32);
 entity_impl!(FuncId, "funcid");
 
@@ -82,6 +83,7 @@ impl FuncId {
 
 /// A data object identifier for use in the `Module` interface.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[cfg_attr(feature = "enable-serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DataId(u32);
 entity_impl!(DataId, "dataid");
 
@@ -109,6 +111,7 @@ impl DataId {
 
 /// Linkage refers to where an entity is defined and who can see it.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "enable-serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Linkage {
     /// Defined outside of a module.
     Import,
@@ -167,6 +170,7 @@ impl Linkage {
 
 /// A declared name may refer to either a function or data declaration
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
+#[cfg_attr(feature = "enable-serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum FuncOrDataId {
     /// When it's a FuncId
     Func(FuncId),
@@ -186,9 +190,10 @@ impl From<FuncOrDataId> for ModuleExtName {
 
 /// Information about a function which can be called.
 #[derive(Debug)]
+#[cfg_attr(feature = "enable-serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FunctionDeclaration {
     #[allow(missing_docs)]
-    pub name: String,
+    pub name: Option<String>,
     #[allow(missing_docs)]
     pub linkage: Linkage,
     #[allow(missing_docs)]
@@ -196,11 +201,29 @@ pub struct FunctionDeclaration {
 }
 
 impl FunctionDeclaration {
-    fn merge(&mut self, linkage: Linkage, sig: &ir::Signature) -> Result<(), ModuleError> {
+    /// The linkage name of the function.
+    ///
+    /// Synthesized from the given function id if it is an anonymous function.
+    pub fn linkage_name(&self, id: FuncId) -> Cow<'_, str> {
+        match &self.name {
+            Some(name) => Cow::Borrowed(name),
+            // Symbols starting with .L are completely omitted from the symbol table after linking.
+            // Using hexadecimal instead of decimal for slightly smaller symbol names and often
+            // slightly faster linking.
+            None => Cow::Owned(format!(".Lfn{:x}", id.as_u32())),
+        }
+    }
+
+    fn merge(
+        &mut self,
+        id: FuncId,
+        linkage: Linkage,
+        sig: &ir::Signature,
+    ) -> Result<(), ModuleError> {
         self.linkage = Linkage::merge(self.linkage, linkage);
         if &self.signature != sig {
             return Err(ModuleError::IncompatibleSignature(
-                self.name.clone(),
+                self.linkage_name(id).into_owned(),
                 self.signature.clone(),
                 sig.clone(),
             ));
@@ -325,9 +348,10 @@ pub type ModuleResult<T> = Result<T, ModuleError>;
 
 /// Information about a data object which can be accessed.
 #[derive(Debug)]
+#[cfg_attr(feature = "enable-serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DataDeclaration {
     #[allow(missing_docs)]
-    pub name: String,
+    pub name: Option<String>,
     #[allow(missing_docs)]
     pub linkage: Linkage,
     #[allow(missing_docs)]
@@ -337,6 +361,19 @@ pub struct DataDeclaration {
 }
 
 impl DataDeclaration {
+    /// The linkage name of the data object.
+    ///
+    /// Synthesized from the given data id if it is an anonymous function.
+    pub fn linkage_name(&self, id: DataId) -> Cow<'_, str> {
+        match &self.name {
+            Some(name) => Cow::Borrowed(name),
+            // Symbols starting with .L are completely omitted from the symbol table after linking.
+            // Using hexadecimal instead of decimal for slightly smaller symbol names and often
+            // slightly faster linking.
+            None => Cow::Owned(format!(".Ldata{:x}", id.as_u32())),
+        }
+    }
+
     fn merge(&mut self, linkage: Linkage, writable: bool, tls: bool) {
         self.linkage = Linkage::merge(self.linkage, linkage);
         self.writable = self.writable || writable;
@@ -349,6 +386,7 @@ impl DataDeclaration {
 
 /// A translated `ExternalName` into something global we can handle.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "enable-serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ModuleExtName {
     /// User defined function, converted from `ExternalName::User`.
     User {
@@ -384,9 +422,234 @@ impl Display for ModuleExtName {
 /// into `FunctionDeclaration`s and `DataDeclaration`s.
 #[derive(Debug, Default)]
 pub struct ModuleDeclarations {
+    /// A version marker used to ensure that serialized clif ir is never deserialized with a
+    /// different version of Cranelift.
+    // Note: This must be the first field to ensure that Serde will deserialize it before
+    // attempting to deserialize other fields that are potentially changed between versions.
+    _version_marker: VersionMarker,
+
     names: HashMap<String, FuncOrDataId>,
     functions: PrimaryMap<FuncId, FunctionDeclaration>,
     data_objects: PrimaryMap<DataId, DataDeclaration>,
+}
+
+#[cfg(feature = "enable-serde")]
+mod serialize {
+    // This is manually implementing Serialize and Deserialize to avoid serializing the names field,
+    // which can be entirely reconstructed from the functions and data_objects fields, saving space.
+
+    use super::*;
+
+    use serde::de::{Deserialize, Deserializer, Error, MapAccess, SeqAccess, Unexpected, Visitor};
+    use serde::ser::{Serialize, SerializeStruct, Serializer};
+    use std::fmt;
+
+    fn get_names<E: Error>(
+        functions: &PrimaryMap<FuncId, FunctionDeclaration>,
+        data_objects: &PrimaryMap<DataId, DataDeclaration>,
+    ) -> Result<HashMap<String, FuncOrDataId>, E> {
+        let mut names = HashMap::new();
+        for (func_id, decl) in functions.iter() {
+            if let Some(name) = &decl.name {
+                let old = names.insert(name.clone(), FuncOrDataId::Func(func_id));
+                if old.is_some() {
+                    return Err(E::invalid_value(
+                        Unexpected::Other("duplicate name"),
+                        &"FunctionDeclaration's with no duplicate names",
+                    ));
+                }
+            }
+        }
+        for (data_id, decl) in data_objects.iter() {
+            if let Some(name) = &decl.name {
+                let old = names.insert(name.clone(), FuncOrDataId::Data(data_id));
+                if old.is_some() {
+                    return Err(E::invalid_value(
+                        Unexpected::Other("duplicate name"),
+                        &"DataDeclaration's with no duplicate names",
+                    ));
+                }
+            }
+        }
+        Ok(names)
+    }
+
+    impl Serialize for ModuleDeclarations {
+        fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+            let ModuleDeclarations {
+                _version_marker,
+                functions,
+                data_objects,
+                names: _,
+            } = self;
+
+            let mut state = s.serialize_struct("ModuleDeclarations", 4)?;
+            state.serialize_field("_version_marker", _version_marker)?;
+            state.serialize_field("functions", functions)?;
+            state.serialize_field("data_objects", data_objects)?;
+            state.end()
+        }
+    }
+
+    enum ModuleDeclarationsField {
+        VersionMarker,
+        Functions,
+        DataObjects,
+        Ignore,
+    }
+
+    struct ModuleDeclarationsFieldVisitor;
+
+    impl<'de> serde::de::Visitor<'de> for ModuleDeclarationsFieldVisitor {
+        type Value = ModuleDeclarationsField;
+
+        fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            f.write_str("field identifier")
+        }
+
+        fn visit_u64<E: Error>(self, val: u64) -> Result<Self::Value, E> {
+            match val {
+                0u64 => Ok(ModuleDeclarationsField::VersionMarker),
+                1u64 => Ok(ModuleDeclarationsField::Functions),
+                2u64 => Ok(ModuleDeclarationsField::DataObjects),
+                _ => Ok(ModuleDeclarationsField::Ignore),
+            }
+        }
+
+        fn visit_str<E: Error>(self, val: &str) -> Result<Self::Value, E> {
+            match val {
+                "_version_marker" => Ok(ModuleDeclarationsField::VersionMarker),
+                "functions" => Ok(ModuleDeclarationsField::Functions),
+                "data_objects" => Ok(ModuleDeclarationsField::DataObjects),
+                _ => Ok(ModuleDeclarationsField::Ignore),
+            }
+        }
+
+        fn visit_bytes<E: Error>(self, val: &[u8]) -> Result<Self::Value, E> {
+            match val {
+                b"_version_marker" => Ok(ModuleDeclarationsField::VersionMarker),
+                b"functions" => Ok(ModuleDeclarationsField::Functions),
+                b"data_objects" => Ok(ModuleDeclarationsField::DataObjects),
+                _ => Ok(ModuleDeclarationsField::Ignore),
+            }
+        }
+    }
+
+    impl<'de> Deserialize<'de> for ModuleDeclarationsField {
+        #[inline]
+        fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+            d.deserialize_identifier(ModuleDeclarationsFieldVisitor)
+        }
+    }
+
+    struct ModuleDeclarationsVisitor;
+
+    impl<'de> Visitor<'de> for ModuleDeclarationsVisitor {
+        type Value = ModuleDeclarations;
+
+        fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            f.write_str("struct ModuleDeclarations")
+        }
+
+        #[inline]
+        fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+            let _version_marker = match seq.next_element()? {
+                Some(val) => val,
+                None => {
+                    return Err(Error::invalid_length(
+                        0usize,
+                        &"struct ModuleDeclarations with 4 elements",
+                    ));
+                }
+            };
+            let functions = match seq.next_element()? {
+                Some(val) => val,
+                None => {
+                    return Err(Error::invalid_length(
+                        2usize,
+                        &"struct ModuleDeclarations with 4 elements",
+                    ));
+                }
+            };
+            let data_objects = match seq.next_element()? {
+                Some(val) => val,
+                None => {
+                    return Err(Error::invalid_length(
+                        3usize,
+                        &"struct ModuleDeclarations with 4 elements",
+                    ));
+                }
+            };
+            let names = get_names(&functions, &data_objects)?;
+            Ok(ModuleDeclarations {
+                _version_marker,
+                names,
+                functions,
+                data_objects,
+            })
+        }
+
+        #[inline]
+        fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
+            let mut _version_marker: Option<VersionMarker> = None;
+            let mut functions: Option<PrimaryMap<FuncId, FunctionDeclaration>> = None;
+            let mut data_objects: Option<PrimaryMap<DataId, DataDeclaration>> = None;
+            while let Some(key) = map.next_key::<ModuleDeclarationsField>()? {
+                match key {
+                    ModuleDeclarationsField::VersionMarker => {
+                        if _version_marker.is_some() {
+                            return Err(Error::duplicate_field("_version_marker"));
+                        }
+                        _version_marker = Some(map.next_value()?);
+                    }
+                    ModuleDeclarationsField::Functions => {
+                        if functions.is_some() {
+                            return Err(Error::duplicate_field("functions"));
+                        }
+                        functions = Some(map.next_value()?);
+                    }
+                    ModuleDeclarationsField::DataObjects => {
+                        if data_objects.is_some() {
+                            return Err(Error::duplicate_field("data_objects"));
+                        }
+                        data_objects = Some(map.next_value()?);
+                    }
+                    _ => {
+                        map.next_value::<serde::de::IgnoredAny>()?;
+                    }
+                }
+            }
+            let _version_marker = match _version_marker {
+                Some(_version_marker) => _version_marker,
+                None => return Err(Error::missing_field("_version_marker")),
+            };
+            let functions = match functions {
+                Some(functions) => functions,
+                None => return Err(Error::missing_field("functions")),
+            };
+            let data_objects = match data_objects {
+                Some(data_objects) => data_objects,
+                None => return Err(Error::missing_field("data_objects")),
+            };
+            let names = get_names(&functions, &data_objects)?;
+            Ok(ModuleDeclarations {
+                _version_marker,
+                names,
+                functions,
+                data_objects,
+            })
+        }
+    }
+
+    impl<'de> Deserialize<'de> for ModuleDeclarations {
+        fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+            d.deserialize_struct(
+                "ModuleDeclarations",
+                &["_version_marker", "functions", "data_objects"],
+                ModuleDeclarationsVisitor,
+            )
+        }
+    }
 }
 
 impl ModuleDeclarations {
@@ -439,7 +702,7 @@ impl ModuleDeclarations {
             Occupied(entry) => match *entry.get() {
                 FuncOrDataId::Func(id) => {
                     let existing = &mut self.functions[id];
-                    existing.merge(linkage, signature)?;
+                    existing.merge(id, linkage, signature)?;
                     Ok((id, existing.linkage))
                 }
                 FuncOrDataId::Data(..) => {
@@ -448,7 +711,7 @@ impl ModuleDeclarations {
             },
             Vacant(entry) => {
                 let id = self.functions.push(FunctionDeclaration {
-                    name: name.to_owned(),
+                    name: Some(name.to_owned()),
                     linkage,
                     signature: signature.clone(),
                 });
@@ -464,11 +727,10 @@ impl ModuleDeclarations {
         signature: &ir::Signature,
     ) -> ModuleResult<FuncId> {
         let id = self.functions.push(FunctionDeclaration {
-            name: String::new(),
+            name: None,
             linkage: Linkage::Local,
             signature: signature.clone(),
         });
-        self.functions[id].name = format!(".L{:?}", id);
         Ok(id)
     }
 
@@ -496,7 +758,7 @@ impl ModuleDeclarations {
             },
             Vacant(entry) => {
                 let id = self.data_objects.push(DataDeclaration {
-                    name: name.to_owned(),
+                    name: Some(name.to_owned()),
                     linkage,
                     writable,
                     tls,
@@ -510,20 +772,13 @@ impl ModuleDeclarations {
     /// Declare an anonymous data object in this module.
     pub fn declare_anonymous_data(&mut self, writable: bool, tls: bool) -> ModuleResult<DataId> {
         let id = self.data_objects.push(DataDeclaration {
-            name: String::new(),
+            name: None,
             linkage: Linkage::Local,
             writable,
             tls,
         });
-        self.data_objects[id].name = format!(".L{:?}", id);
         Ok(id)
     }
-}
-
-/// Information about the compiled function.
-pub struct ModuleCompiledFunction {
-    /// The size of the compiled function.
-    pub size: binemit::CodeOffset,
 }
 
 /// A `Module` is a utility for collecting functions and data objects, and linking them together.
@@ -660,11 +915,7 @@ pub trait Module {
     /// Note: After calling this function the given `Context` will contain the compiled function.
     ///
     /// [`define_function_with_control_plane`]: Self::define_function_with_control_plane
-    fn define_function(
-        &mut self,
-        func: FuncId,
-        ctx: &mut Context,
-    ) -> ModuleResult<ModuleCompiledFunction> {
+    fn define_function(&mut self, func: FuncId, ctx: &mut Context) -> ModuleResult<()> {
         self.define_function_with_control_plane(func, ctx, &mut ControlPlane::default())
     }
 
@@ -678,7 +929,7 @@ pub trait Module {
         func: FuncId,
         ctx: &mut Context,
         ctrl_plane: &mut ControlPlane,
-    ) -> ModuleResult<ModuleCompiledFunction>;
+    ) -> ModuleResult<()>;
 
     /// Define a function, taking the function body from the given `bytes`.
     ///
@@ -694,7 +945,7 @@ pub trait Module {
         alignment: u64,
         bytes: &[u8],
         relocs: &[MachReloc],
-    ) -> ModuleResult<ModuleCompiledFunction>;
+    ) -> ModuleResult<()>;
 
     /// Define a data object, producing the data contents from the given `DataContext`.
     fn define_data(&mut self, data_id: DataId, data: &DataDescription) -> ModuleResult<()>;
@@ -776,11 +1027,7 @@ impl<M: Module> Module for &mut M {
         (**self).declare_data_in_data(data_id, data)
     }
 
-    fn define_function(
-        &mut self,
-        func: FuncId,
-        ctx: &mut Context,
-    ) -> ModuleResult<ModuleCompiledFunction> {
+    fn define_function(&mut self, func: FuncId, ctx: &mut Context) -> ModuleResult<()> {
         (**self).define_function(func, ctx)
     }
 
@@ -789,7 +1036,7 @@ impl<M: Module> Module for &mut M {
         func: FuncId,
         ctx: &mut Context,
         ctrl_plane: &mut ControlPlane,
-    ) -> ModuleResult<ModuleCompiledFunction> {
+    ) -> ModuleResult<()> {
         (**self).define_function_with_control_plane(func, ctx, ctrl_plane)
     }
 
@@ -800,7 +1047,7 @@ impl<M: Module> Module for &mut M {
         alignment: u64,
         bytes: &[u8],
         relocs: &[MachReloc],
-    ) -> ModuleResult<ModuleCompiledFunction> {
+    ) -> ModuleResult<()> {
         (**self).define_function_bytes(func_id, func, alignment, bytes, relocs)
     }
 

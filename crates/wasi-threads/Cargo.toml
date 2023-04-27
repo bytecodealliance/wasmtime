@@ -18,6 +18,3 @@ rand = "0.8"
 wasi-common = { workspace = true }
 wasmtime = { workspace = true }
 wasmtime-wasi = { workspace = true, features = ["exit"] }
-
-[badges]
-maintenance = { status = "experimental" }

@@ -340,10 +340,11 @@
 (decl ty_64 (Type) Type)
 (extern extractor ty_64 ty_64)
 
-;; A pure constructor that only matches scalar integers, and references that can
-;; fit in 64 bits.
+;; A pure constructor/extractor that only matches scalar integers, and
+;; references that can fit in 64 bits.
 (decl pure partial ty_int_ref_scalar_64 (Type) Type)
 (extern constructor ty_int_ref_scalar_64 ty_int_ref_scalar_64)
+(extern extractor ty_int_ref_scalar_64 ty_int_ref_scalar_64_extract)
 
 ;; An extractor that matches 32- and 64-bit types only.
 (decl ty_32_or_64 (Type) Type)

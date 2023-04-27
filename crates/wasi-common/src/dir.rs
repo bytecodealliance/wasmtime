@@ -5,6 +5,11 @@ use std::any::Any;
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 
+pub enum OpenResult {
+    File(Box<dyn WasiFile>),
+    Dir(Box<dyn WasiDir>),
+}
+
 #[wiggle::async_trait]
 pub trait WasiDir: Send + Sync {
     fn as_any(&self) -> &dyn Any;
@@ -17,15 +22,7 @@ pub trait WasiDir: Send + Sync {
         _read: bool,
         _write: bool,
         _fdflags: FdFlags,
-    ) -> Result<Box<dyn WasiFile>, Error> {
-        Err(Error::not_supported())
-    }
-
-    async fn open_dir(
-        &self,
-        _symlink_follow: bool,
-        _path: &str,
-    ) -> Result<Box<dyn WasiDir>, Error> {
+    ) -> Result<OpenResult, Error> {
         Err(Error::not_supported())
     }
 

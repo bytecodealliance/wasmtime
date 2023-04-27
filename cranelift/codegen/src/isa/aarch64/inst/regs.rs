@@ -230,6 +230,7 @@ pub fn create_reg_env(flags: &settings::Flags) -> MachineEnv {
             ],
         ],
         fixed_stack_slots: vec![],
+        scratch_by_class: [None, None],
     };
 
     if !flags.enable_pinned_reg() {

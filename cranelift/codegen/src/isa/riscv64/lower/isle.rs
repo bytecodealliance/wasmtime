@@ -33,23 +33,67 @@ type VecMachLabel = Vec<MachLabel>;
 type VecArgPair = Vec<ArgPair>;
 use crate::machinst::valueregs;
 
-/// The main entry point for lowering with ISLE.
-pub(crate) fn lower(
-    lower_ctx: &mut Lower<MInst>,
-    backend: &Riscv64Backend,
-    inst: Inst,
-) -> Option<InstOutput> {
-    // TODO: reuse the ISLE context across lowerings so we can reuse its
-    // internal heap allocations.
-    let mut isle_ctx = IsleContext { lower_ctx, backend };
-    generated_code::constructor_lower(&mut isle_ctx, inst)
+pub(crate) struct RV64IsleContext<'a, 'b, I, B>
+where
+    I: VCodeInst,
+    B: LowerBackend,
+{
+    pub lower_ctx: &'a mut Lower<'b, I>,
+    pub backend: &'a B,
+    /// Precalucated value for the minimum vector register size. Will be 0 if
+    /// vectors are not supported.
+    min_vec_reg_size: u64,
 }
 
-impl IsleContext<'_, '_, MInst, Riscv64Backend> {
+impl<'a, 'b> RV64IsleContext<'a, 'b, MInst, Riscv64Backend> {
     isle_prelude_method_helpers!(Riscv64ABICaller);
+
+    fn new(lower_ctx: &'a mut Lower<'b, MInst>, backend: &'a Riscv64Backend) -> Self {
+        Self {
+            lower_ctx,
+            backend,
+            min_vec_reg_size: Self::compute_min_vec_reg_size(backend),
+        }
+    }
+
+    fn compute_min_vec_reg_size(backend: &Riscv64Backend) -> u64 {
+        let flags = &backend.isa_flags;
+        let entries = [
+            (flags.has_zvl65536b(), 65536),
+            (flags.has_zvl32768b(), 32768),
+            (flags.has_zvl16384b(), 16384),
+            (flags.has_zvl8192b(), 8192),
+            (flags.has_zvl4096b(), 4096),
+            (flags.has_zvl2048b(), 2048),
+            (flags.has_zvl1024b(), 1024),
+            (flags.has_zvl512b(), 512),
+            (flags.has_zvl256b(), 256),
+            // In order to claim the Application Profile V extension, a minimum
+            // register size of 128 is required. i.e. V implies Zvl128b.
+            (flags.has_v(), 128),
+            (flags.has_zvl128b(), 128),
+            (flags.has_zvl64b(), 64),
+            (flags.has_zvl32b(), 32),
+        ];
+
+        for (has_flag, size) in entries.into_iter() {
+            if has_flag {
+                return size;
+            }
+        }
+
+        return 0;
+    }
+
+    #[inline]
+    fn emit_list(&mut self, list: &SmallInstVec<MInst>) {
+        for i in list {
+            self.lower_ctx.emit(i.clone());
+        }
+    }
 }
 
-impl generated_code::Context for IsleContext<'_, '_, MInst, Riscv64Backend> {
+impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> {
     isle_lower_prelude_methods!();
     isle_prelude_caller_methods!(Riscv64MachineDeps, Riscv64ABICaller);
 
@@ -114,18 +158,18 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Riscv64Backend> {
         });
     }
     fn load_ra(&mut self) -> Reg {
+        let tmp = self.temp_writable_reg(I64);
         if self.backend.flags.preserve_frame_pointers() {
-            let tmp = self.temp_writable_reg(I64);
             self.emit(&MInst::Load {
                 rd: tmp,
                 op: LoadOP::Ld,
                 flags: MemFlags::trusted(),
                 from: AMode::FPOffset(8, I64),
             });
-            tmp.to_reg()
         } else {
-            self.gen_move2(link_reg(), I64, I64)
+            self.emit(&gen_move(tmp, I64, link_reg(), I64));
         }
+        tmp.to_reg()
     }
     fn int_zero_reg(&mut self, ty: Type) -> ValueRegs {
         assert!(ty.is_int(), "{:?}", ty);
@@ -283,6 +327,10 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Riscv64Backend> {
         ValueRegs::two(shamt, len_sub_shamt)
     }
 
+    fn has_v(&mut self) -> bool {
+        self.backend.isa_flags.has_v()
+    }
+
     fn has_zbkb(&mut self) -> bool {
         self.backend.isa_flags.has_zbkb()
     }
@@ -380,12 +428,6 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Riscv64Backend> {
         AMO::SeqCst
     }
 
-    fn gen_move2(&mut self, r: Reg, ity: Type, oty: Type) -> Reg {
-        let tmp = self.temp_writable_reg(oty);
-        self.emit(&gen_move(tmp, oty, r, ity));
-        tmp.to_reg()
-    }
-
     fn lower_br_table(&mut self, index: Reg, targets: &VecMachLabel) -> Unit {
         let tmp1 = self.temp_writable_reg(I64);
         let tmp2 = self.temp_writable_reg(I64);
@@ -434,15 +476,36 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Riscv64Backend> {
             rs2,
         }
     }
-}
 
-impl IsleContext<'_, '_, MInst, Riscv64Backend> {
     #[inline]
-    fn emit_list(&mut self, list: &SmallInstVec<MInst>) {
-        for i in list {
-            self.lower_ctx.emit(i.clone());
+    fn vstate_from_type(&mut self, ty: Type) -> VState {
+        VState::from_type(ty)
+    }
+
+    fn min_vec_reg_size(&mut self) -> u64 {
+        self.min_vec_reg_size
+    }
+
+    #[inline]
+    fn ty_vec_fits_in_register(&mut self, ty: Type) -> Option<Type> {
+        if ty.is_vector() && (ty.bits() as u64) <= self.min_vec_reg_size() {
+            Some(ty)
+        } else {
+            None
         }
     }
+}
+
+/// The main entry point for lowering with ISLE.
+pub(crate) fn lower(
+    lower_ctx: &mut Lower<MInst>,
+    backend: &Riscv64Backend,
+    inst: Inst,
+) -> Option<InstOutput> {
+    // TODO: reuse the ISLE context across lowerings so we can reuse its
+    // internal heap allocations.
+    let mut isle_ctx = RV64IsleContext::new(lower_ctx, backend);
+    generated_code::constructor_lower(&mut isle_ctx, inst)
 }
 
 /// The main entry point for branch lowering with ISLE.
@@ -454,7 +517,7 @@ pub(crate) fn lower_branch(
 ) -> Option<()> {
     // TODO: reuse the ISLE context across lowerings so we can reuse its
     // internal heap allocations.
-    let mut isle_ctx = IsleContext { lower_ctx, backend };
+    let mut isle_ctx = RV64IsleContext::new(lower_ctx, backend);
     generated_code::constructor_lower_branch(&mut isle_ctx, branch, &targets.to_vec())
 }
 

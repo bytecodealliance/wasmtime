@@ -17,9 +17,6 @@ object = { workspace = true, optional = true }
 [target.'cfg(target_os = "linux")'.dependencies]
 rustix = { workspace = true, features = ["mm", "param", "time"], optional = true }
 
-[badges]
-maintenance = { status = "actively-developed" }
-
 [features]
 gdb_jit_int = ["once_cell"]
 perf_jitdump = ["rustix", "object"]

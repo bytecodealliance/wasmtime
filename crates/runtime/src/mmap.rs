@@ -137,7 +137,7 @@ impl Mmap {
                     0,
                     0,
                     len,
-                );
+                ) as *mut std::ffi::c_void;
                 let err = io::Error::last_os_error();
                 CloseHandle(mapping);
                 if ptr.is_null() {
@@ -492,7 +492,7 @@ impl Drop for Mmap {
                 let r = unsafe { VirtualFree(self.ptr as *mut c_void, 0, MEM_RELEASE) };
                 assert_ne!(r, 0);
             } else {
-                let r = unsafe { UnmapViewOfFile(self.ptr as *mut c_void) };
+                let r = unsafe { UnmapViewOfFile(self.ptr as MEMORYMAPPEDVIEW_HANDLE) };
                 assert_ne!(r, 0);
             }
         }

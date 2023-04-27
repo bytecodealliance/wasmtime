@@ -68,7 +68,7 @@ pub use crate::table::{Table, TableElement};
 pub use crate::trampolines::prepare_host_to_wasm_trampoline;
 pub use crate::traphandlers::{
     catch_traps, init_traps, raise_lib_trap, raise_user_trap, resume_panic, tls_eager_initialize,
-    Backtrace, SignalHandler, TlsRestore, Trap, TrapReason,
+    Backtrace, Frame, SignalHandler, TlsRestore, Trap, TrapReason,
 };
 pub use crate::vmcontext::{
     VMCallerCheckedFuncRef, VMContext, VMFunctionBody, VMFunctionImport, VMGlobalDefinition,

@@ -83,6 +83,7 @@ impl StoreLimits {
     }
 
     fn alloc(&mut self, amt: usize) -> bool {
+        log::trace!("alloc {amt:#x} bytes");
         match self.0.remaining_memory.get().checked_sub(amt) {
             Some(mem) => {
                 self.0.remaining_memory.set(mem);
@@ -90,9 +91,14 @@ impl StoreLimits {
             }
             None => {
                 self.0.oom.set(true);
+                log::debug!("OOM hit");
                 false
             }
         }
+    }
+
+    fn is_oom(&self) -> bool {
+        self.0.oom.get()
     }
 }
 
@@ -298,7 +304,7 @@ pub fn instantiate_with_dummy(store: &mut Store<StoreLimits>, module: &Module) -
     // If the instantiation hit OOM for some reason then that's ok, it's
     // expected that fuzz-generated programs try to allocate lots of
     // stuff.
-    if store.data().0.oom.get() {
+    if store.data().is_oom() {
         log::debug!("failed to instantiate: OOM");
         return None;
     }
@@ -363,6 +369,16 @@ pub fn differential(
         .map(|results| results.unwrap());
     log::debug!(" -> results on {}: {:?}", rhs.name(), &rhs_results);
 
+    // If Wasmtime hit its OOM condition, which is possible since it's set
+    // somewhat low while fuzzing, then don't return an error but return
+    // `false` indicating that differential fuzzing must stop. There's no
+    // guarantee the other engine has the same OOM limits as Wasmtime, and
+    // it's assumed that Wasmtime is configured to have a more conservative
+    // limit than the other engine.
+    if rhs.is_oom() {
+        return Ok(false);
+    }
+
     match (lhs_results, rhs_results) {
         // If the evaluation succeeds, we compare the results.
         (Ok(lhs_results), Ok(rhs_results)) => assert_eq!(lhs_results, rhs_results),
@@ -407,6 +423,8 @@ pub fn differential(
         if lhs == rhs {
             continue;
         }
+        eprintln!("differential memory is {} bytes long", lhs.len());
+        eprintln!("wasmtime memory is     {} bytes long", rhs.len());
         panic!("memories have differing values");
     }
 

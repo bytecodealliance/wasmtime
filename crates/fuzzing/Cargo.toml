@@ -46,3 +46,4 @@ wasm-spec-interpreter = { path = "./wasm-spec-interpreter", optional = true, fea
 
 [features]
 fuzz-spec-interpreter = ['wasm-spec-interpreter']
+winch = ["wasmtime/winch"]

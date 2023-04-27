@@ -93,22 +93,24 @@ block3(v7: r64, v8: r64):
 ;   sd s3,-8(sp)
 ;   add sp,-48
 ; block0:
-;   sd a0,8(nominal_sp)
+;   mv a6,a0
 ;   sd a1,16(nominal_sp)
 ;   mv s3,a2
+;   mv a6,a0
+;   sd a6,8(nominal_sp)
 ;   load_sym t0,%f+0
 ;   callind t0
 ;   load_addr t4,nsp+0
-;   ld a5,8(nominal_sp)
-;   sd a5,0(t4)
+;   ld a6,8(nominal_sp)
+;   sd a6,0(t4)
 ;   andi t0,a0,255
 ;   bne t0,zero,taken(label2),not_taken(label1)
 ; block1:
-;   mv a1,a5
+;   mv a1,a6
 ;   ld a0,16(nominal_sp)
 ;   j label3
 ; block2:
-;   mv a0,a5
+;   mv a0,a6
 ;   ld a1,16(nominal_sp)
 ;   j label3
 ; block3:
@@ -132,9 +134,11 @@ block3(v7: r64, v8: r64):
 ;   sd s3, -8(sp)
 ;   addi sp, sp, -0x30
 ; block1: ; offset 0x18
-;   sd a0, 8(sp)
+;   ori a6, a0, 0
 ;   sd a1, 0x10(sp)
 ;   ori s3, a2, 0
+;   ori a0, a6, 0
+;   sd a6, 8(sp)
 ;   auipc t0, 0
 ;   ld t0, 0xc(t0)
 ;   j 0xc
@@ -142,18 +146,18 @@ block3(v7: r64, v8: r64):
 ;   .byte 0x00, 0x00, 0x00, 0x00
 ;   jalr t0
 ;   mv t4, sp
-;   ld a5, 8(sp)
-;   sd a5, 0(t4)
+;   ld a6, 8(sp)
+;   sd a6, 0(t4)
 ;   andi t0, a0, 0xff
 ;   bnez t0, 0x10
-; block2: ; offset 0x50
-;   ori a1, a5, 0
+; block2: ; offset 0x58
+;   ori a1, a6, 0
 ;   ld a0, 0x10(sp)
 ;   j 0xc
-; block3: ; offset 0x5c
-;   ori a0, a5, 0
+; block3: ; offset 0x64
+;   ori a0, a6, 0
 ;   ld a1, 0x10(sp)
-; block4: ; offset 0x64
+; block4: ; offset 0x6c
 ;   mv a2, sp
 ;   ld a2, 0(a2)
 ;   ori t3, s3, 0

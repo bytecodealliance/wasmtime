@@ -60,5 +60,5 @@ skip-tree = [
     # The native-tls crate hasn't kept up with updates to the underlying
     # windows-sys, while the rest of the ecosystem has. This duplicated
     # dependency appears to be benign.
-    { name = "windows-sys", depth = 2 },
+    { name = "windows-sys", depth = 3 },
 ]

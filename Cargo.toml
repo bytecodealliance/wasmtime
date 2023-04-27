@@ -183,9 +183,9 @@ wasm-encoder = "0.25.0"
 wasm-smith = "0.12.6"
 wasm-mutate = "0.2.23"
 wit-parser = "0.7.0"
-windows-sys = "0.45.0"
-env_logger = "0.9"
-rustix = "0.36.7"
+windows-sys = "0.48.0"
+env_logger = "0.10"
+rustix = "0.37.13"
 log = { version = "0.4.8", default-features = false }
 object = { version = "0.30.3", default-features = false, features = ['read_core', 'elf', 'std'] }
 gimli = { version = "0.27.0", default-features = false, features = ['read', 'std'] }
@@ -238,9 +238,6 @@ winch = ["wasmtime/winch"]
 # Stub feature that does nothing, for Cargo-features compatibility: the new
 # backend is the default now.
 experimental_x64 = []
-
-[badges]
-maintenance = { status = "actively-developed" }
 
 [[test]]
 name = "host_segfault"

@@ -2,7 +2,6 @@ use crate::poll::Pollable;
 use crate::streams::{InputStream, OutputStream, StreamError};
 use crate::WasiHttp;
 use anyhow::{anyhow, bail};
-use bytes::BufMut;
 use std::vec::Vec;
 
 impl crate::streams::Host for WasiHttp {
@@ -11,10 +10,14 @@ impl crate::streams::Host for WasiHttp {
         stream: InputStream,
         len: u64,
     ) -> wasmtime::Result<Result<(Vec<u8>, bool), StreamError>> {
-        let s = self
+        let st = self
             .streams
             .get_mut(&stream)
             .ok_or_else(|| anyhow!("stream not found: {stream}"))?;
+        if st.closed {
+            bail!("stream is dropped!");
+        }
+        let s = &mut st.data;
         if len == 0 {
             Ok(Ok((bytes::Bytes::new().to_vec(), s.len() > 0)))
         } else if s.len() > len.try_into()? {
@@ -31,10 +34,14 @@ impl crate::streams::Host for WasiHttp {
         stream: InputStream,
         len: u64,
     ) -> wasmtime::Result<Result<(u64, bool), StreamError>> {
-        let s = self
+        let st = self
             .streams
             .get_mut(&stream)
             .ok_or_else(|| anyhow!("stream not found: {stream}"))?;
+        if st.closed {
+            bail!("stream is dropped!");
+        }
+        let s = &mut st.data;
         if len == 0 {
             Ok(Ok((0, s.len() > 0)))
         } else if s.len() > len.try_into()? {
@@ -52,7 +59,11 @@ impl crate::streams::Host for WasiHttp {
     }
 
     fn drop_input_stream(&mut self, stream: InputStream) -> wasmtime::Result<()> {
-        self.streams.remove(&stream);
+        let st = self
+            .streams
+            .get_mut(&stream)
+            .ok_or_else(|| anyhow!("stream not found: {stream}"))?;
+        st.closed = true;
         Ok(())
     }
 
@@ -61,18 +72,13 @@ impl crate::streams::Host for WasiHttp {
         this: OutputStream,
         buf: Vec<u8>,
     ) -> wasmtime::Result<Result<u64, StreamError>> {
-        match self.streams.get(&this) {
-            Some(data) => {
-                let mut new = bytes::BytesMut::with_capacity(data.len() + buf.len());
-                new.put(data.clone());
-                new.put(bytes::Bytes::from(buf.clone()));
-                self.streams.insert(this, new.freeze());
-            }
-            None => {
-                self.streams.insert(this, bytes::Bytes::from(buf.clone()));
-            }
+        let len = buf.len();
+        let st = self.streams.entry(this).or_default();
+        if st.closed {
+            bail!("cannot write to closed stream");
         }
-        Ok(Ok(buf.len().try_into()?))
+        st.data.extend_from_slice(buf.as_slice());
+        Ok(Ok(len.try_into()?))
     }
 
     fn write_zeroes(
@@ -111,7 +117,11 @@ impl crate::streams::Host for WasiHttp {
     }
 
     fn drop_output_stream(&mut self, stream: OutputStream) -> wasmtime::Result<()> {
-        self.streams.remove(&stream);
+        let st = self
+            .streams
+            .get_mut(&stream)
+            .ok_or_else(|| anyhow!("stream not found: {stream}"))?;
+        st.closed = true;
         Ok(())
     }
 }

@@ -1,5 +1,5 @@
 use crate::poll::Pollable;
-use crate::r#struct::ActiveRequest;
+use crate::r#struct::{ActiveRequest, Stream};
 use crate::types::{
     Error, Fields, FutureIncomingResponse, Headers, IncomingRequest, IncomingResponse,
     IncomingStream, Method, OutgoingRequest, OutgoingResponse, OutgoingStream, ResponseOutparam,
@@ -7,7 +7,7 @@ use crate::types::{
 };
 use crate::WasiHttp;
 use anyhow::{anyhow, bail};
-use std::collections::HashMap;
+use std::collections::{hash_map::Entry, HashMap};
 
 impl crate::types::Host for WasiHttp {
     fn drop_fields(&mut self, fields: Fields) -> wasmtime::Result<()> {
@@ -123,7 +123,10 @@ impl crate::types::Host for WasiHttp {
         bail!("unimplemented: drop_incoming_request")
     }
     fn drop_outgoing_request(&mut self, request: OutgoingRequest) -> wasmtime::Result<()> {
-        self.requests.remove(&request);
+        if let Entry::Occupied(e) = self.requests.entry(request) {
+            let r = e.remove();
+            self.streams.remove(&r.body);
+        }
         Ok(())
     }
     fn incoming_request_method(&mut self, _request: IncomingRequest) -> wasmtime::Result<Method> {
@@ -192,6 +195,7 @@ impl crate::types::Host for WasiHttp {
         if req.body == 0 {
             req.body = self.streams_id_base;
             self.streams_id_base = self.streams_id_base + 1;
+            self.streams.insert(req.body, Stream::default());
         }
         Ok(Ok(req.body))
     }
@@ -206,7 +210,10 @@ impl crate::types::Host for WasiHttp {
         bail!("unimplemented: set_response_outparam")
     }
     fn drop_incoming_response(&mut self, response: IncomingResponse) -> wasmtime::Result<()> {
-        self.responses.remove(&response);
+        if let Entry::Occupied(e) = self.responses.entry(response) {
+            let r = e.remove();
+            self.streams.remove(&r.body);
+        }
         Ok(())
     }
     fn drop_outgoing_response(&mut self, _response: OutgoingResponse) -> wasmtime::Result<()> {
