@@ -700,6 +700,52 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         insts
     }
 
+    fn gen_return_call(
+        callee: CallDest,
+        new_stack_arg_size: u32,
+        old_stack_arg_size: u32,
+        ret_addr: Reg,
+        fp: Reg,
+        tmp: Writable<Reg>,
+        tmp2: Writable<Reg>,
+        uses: abi::CallArgList,
+    ) -> SmallVec<[Self::I; 2]> {
+        let ret_addr = Gpr::new(ret_addr).unwrap();
+        let fp = Gpr::new(fp).unwrap();
+        let tmp = WritableGpr::from_writable_reg(tmp).unwrap();
+        let info = Box::new(ReturnCallInfo {
+            new_stack_arg_size,
+            old_stack_arg_size,
+            ret_addr,
+            fp,
+            tmp,
+            uses,
+        });
+        match callee {
+            CallDest::ExtName(callee, RelocDistance::Near) => {
+                smallvec![Inst::ReturnCallKnown { callee, info }]
+            }
+            CallDest::ExtName(callee, RelocDistance::Far) => {
+                smallvec![
+                    Inst::LoadExtName {
+                        dst: tmp2,
+                        name: Box::new(callee.clone()),
+                        offset: 0,
+                        distance: RelocDistance::Far,
+                    },
+                    Inst::ReturnCallUnknown {
+                        callee: tmp2.into(),
+                        info,
+                    }
+                ]
+            }
+            CallDest::Reg(callee) => smallvec![Inst::ReturnCallUnknown {
+                callee: callee.into(),
+                info,
+            }],
+        }
+    }
+
     fn gen_memcpy<F: FnMut(Type) -> Writable<Reg>>(
         call_conv: isa::CallConv,
         dst: Reg,
@@ -878,10 +924,9 @@ fn get_intreg_for_arg(call_conv: &CallConv, idx: usize, arg_idx: usize) -> Optio
             7 => Some(regs::r9()),
             8 => Some(regs::r10()),
             9 => Some(regs::r11()),
-            10 => Some(regs::r12()),
-            11 => Some(regs::r13()),
-            12 => Some(regs::r14()),
-            // NB: `r15` is reserved as a scratch register.
+            // NB: `r12`, `r13`, `r14` and `r15` are reserved for indirect
+            // callee addresses and temporaries required for our tail call
+            // sequence (fp, ret_addr, tmp).
             _ => None,
         };
     }

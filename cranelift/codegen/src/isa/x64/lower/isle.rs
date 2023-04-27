@@ -5,9 +5,9 @@ pub(crate) mod generated_code;
 use crate::{
     ir::types,
     ir::AtomicRmwOp,
+    isa, isle_common_prelude_methods, isle_lower_prelude_methods,
     machinst::{InputSourceInst, Reg, Writable},
 };
-use crate::{isle_common_prelude_methods, isle_lower_prelude_methods};
 use generated_code::{Context, MInst, RegisterClass};
 
 // Types that the generated ISLE code uses via `use super::*`.
@@ -26,7 +26,7 @@ use crate::{
         unwind::UnwindInst,
         x64::{
             abi::X64CallSite,
-            inst::{args::*, regs, CallInfo},
+            inst::{args::*, regs, CallInfo, ReturnCallInfo},
         },
     },
     machinst::{
@@ -41,6 +41,7 @@ use std::boxed::Box;
 use std::convert::TryFrom;
 
 type BoxCallInfo = Box<CallInfo>;
+type BoxReturnCallInfo = Box<ReturnCallInfo>;
 type BoxVecMachLabel = Box<SmallVec<[MachLabel; 4]>>;
 type MachLabelSlice = [MachLabel];
 type VecArgPair = Vec<ArgPair>;
@@ -78,6 +79,143 @@ pub(crate) fn lower_branch(
 impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     isle_lower_prelude_methods!();
     isle_prelude_caller_methods!(X64ABIMachineSpec, X64CallSite);
+
+    fn gen_return_call_indirect(
+        &mut self,
+        callee_sig: SigRef,
+        callee: Value,
+        args: ValueSlice,
+    ) -> InstOutput {
+        let caller_conv = isa::CallConv::Tail;
+        debug_assert_eq!(
+            self.lower_ctx.abi().call_conv(self.lower_ctx.sigs()),
+            caller_conv,
+            "Can only do `return_call`s from within a `tail` calling convention function"
+        );
+
+        let callee = self.put_in_reg(callee);
+
+        let mut call_site = X64CallSite::from_ptr(
+            self.lower_ctx.sigs(),
+            callee_sig,
+            callee,
+            Opcode::ReturnCallIndirect,
+            caller_conv,
+            self.backend.flags().clone(),
+        )
+        .unwrap();
+
+        // First, load the return address, because copying our new stack frame
+        // over our current stack frame might overwrite it, and we'll need to
+        // place it in the correct location after we do that copy.
+        let fp = self.temp_writable_gpr();
+        let rbp = self.preg_rbp();
+        self.lower_ctx
+            .emit(MInst::MovFromPReg { src: rbp, dst: fp });
+        let ret_addr = self.temp_writable_gpr();
+        self.lower_ctx.emit(MInst::Mov64MR {
+            src: SyntheticAmode::Real(Amode::ImmReg {
+                simm32: 8,
+                base: fp.to_reg().to_reg(),
+                flags: MemFlags::trusted(),
+            }),
+            dst: ret_addr,
+        });
+
+        // Next, allocate additional stack space for the new stack frame. We
+        // will build it in the newly allocated space, but then copy it over our
+        // current frame at the last moment.
+        let new_stack_arg_size = call_site.emit_allocate_tail_call_frame(self.lower_ctx);
+        let old_stack_arg_size = self.lower_ctx.abi().stack_args_size(self.lower_ctx.sigs());
+
+        // Put all arguments in registers and stack slots (within that newly
+        // allocated stack space).
+        self.gen_call_common_args(&mut call_site, args);
+
+        // Finally, emit the macro instruction to copy the new stack frame over
+        // our current one and do the actual tail call!
+        let tmp = self.temp_writable_gpr();
+        let tmp2 = self.temp_writable_gpr();
+        call_site.emit_return_call(
+            self.lower_ctx,
+            new_stack_arg_size,
+            old_stack_arg_size,
+            ret_addr.to_reg().to_reg(),
+            fp.to_reg().to_reg(),
+            tmp.to_writable_reg(),
+            tmp2.to_writable_reg(),
+        );
+
+        InstOutput::new()
+    }
+
+    fn gen_return_call(
+        &mut self,
+        callee_sig: SigRef,
+        callee: ExternalName,
+        distance: RelocDistance,
+        args: ValueSlice,
+    ) -> InstOutput {
+        let caller_conv = isa::CallConv::Tail;
+        debug_assert_eq!(
+            self.lower_ctx.abi().call_conv(self.lower_ctx.sigs()),
+            caller_conv,
+            "Can only do `return_call`s from within a `tail` calling convention function"
+        );
+
+        let mut call_site = X64CallSite::from_func(
+            self.lower_ctx.sigs(),
+            callee_sig,
+            &callee,
+            distance,
+            caller_conv,
+            self.backend.flags().clone(),
+        )
+        .unwrap();
+
+        // First, load the return address, because copying our new stack frame
+        // over our current stack frame might overwrite it, and we'll need to
+        // place it in the correct location after we do that copy.
+        let fp = self.temp_writable_gpr();
+        let rbp = self.preg_rbp();
+        self.lower_ctx
+            .emit(MInst::MovFromPReg { src: rbp, dst: fp });
+        let ret_addr = self.temp_writable_gpr();
+        self.lower_ctx.emit(MInst::Mov64MR {
+            src: SyntheticAmode::Real(Amode::ImmReg {
+                simm32: 8,
+                base: fp.to_reg().to_reg(),
+                flags: MemFlags::trusted(),
+            }),
+            dst: ret_addr,
+        });
+
+        // Next, allocate additional stack space for the new stack frame. We
+        // will build it in the newly allocated space, but then copy it over our
+        // current frame at the last moment.
+        let new_stack_arg_size = call_site.emit_allocate_tail_call_frame(self.lower_ctx);
+        let old_stack_arg_size = self.lower_ctx.abi().stack_args_size(self.lower_ctx.sigs());
+
+        // Put all arguments in registers and stack slots (within that newly
+        // allocated stack space).
+        self.gen_call_common_args(&mut call_site, args);
+
+        // Finally, emit the macro instruction to copy the new stack frame over
+        // our current one and do the actual tail call!
+        let tmp = self.temp_writable_gpr();
+        let tmp2 = self.temp_writable_gpr();
+        call_site.emit_return_call(
+            self.lower_ctx,
+            new_stack_arg_size,
+            old_stack_arg_size,
+            ret_addr.to_reg().to_reg(),
+            fp.to_reg().to_reg(),
+            tmp.to_writable_reg(),
+            tmp2.to_writable_reg(),
+        );
+
+        InstOutput::new()
+    }
 
     #[inline]
     fn operand_size_of_type_32_64(&mut self, ty: Type) -> OperandSize {

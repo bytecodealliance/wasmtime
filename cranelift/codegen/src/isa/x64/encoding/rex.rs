@@ -49,7 +49,7 @@ pub(crate) fn encode_sib(shift: u8, enc_index: u8, enc_base: u8) -> u8 {
 #[inline(always)]
 pub(crate) fn int_reg_enc(reg: impl Into<Reg>) -> u8 {
     let reg = reg.into();
-    debug_assert!(reg.is_real());
+    debug_assert!(reg.is_real(), "reg = {reg:?}");
     debug_assert_eq!(reg.class(), RegClass::Int);
     reg.to_real_reg().unwrap().hw_enc()
 }

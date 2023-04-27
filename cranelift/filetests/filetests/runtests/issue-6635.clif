@@ -1,0 +1,18 @@
+test run
+set preserve_frame_pointers=true
+target x86_64
+
+function %b(i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8) -> i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8 tail {
+block0(v0: i8, v1: i8, v2: i8, v3: i8, v4: i8, v5: i8, v6: i8, v7: i8, v8: i8, v9: i8, v10: i8, v11: i8, v12: i8, v13: i8, v14: i8, v15: i8):
+    return v0, v0, v0, v0, v0, v0, v0, v0, v0, v0, v9, v9, v9, v9, v9, v9
+}
+
+
+function %a(i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8) -> i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8 tail {
+    sig0 = (i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8) -> i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8 tail
+    fn0 = %b sig0
+block0(v0: i8, v1: i8, v2: i8, v3: i8, v4: i8, v5: i8, v6: i8, v7: i8, v8: i8, v9: i8, v10: i8, v11: i8, v12: i8, v13: i8, v14: i8, v15: i8):
+    return_call fn0(v0, v0, v0, v0, v0, v0, v0, v0, v0, v0, v0, v0, v0, v0, v0, v0)
+}
+
+; run: %a(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0) == [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
