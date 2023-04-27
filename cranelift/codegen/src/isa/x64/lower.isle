@@ -3322,21 +3322,10 @@
 
 ;; Rules for `uwiden_high` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; Similar to `uwiden_low` with SSE4.1 except that the upper lanes are moved
-;; to the lower lanes first.
-(rule 1 (lower (has_type $I16X8 (uwiden_high val @ (value_type $I8X16))))
-        (if-let $true (use_sse41))
-        (let ((x Xmm val))
-          (x64_pmovzxbw (x64_palignr x x 8))))
-(rule 1 (lower (has_type $I32X4 (uwiden_high val @ (value_type $I16X8))))
-        (if-let $true (use_sse41))
-        (let ((x Xmm val))
-          (x64_pmovzxwd (x64_palignr x x 8))))
-(rule 1 (lower (has_type $I64X2 (uwiden_high val @ (value_type $I32X4))))
-        (if-let $true (use_sse41))
-        (x64_pmovzxdq (x64_pshufd val 0xEE)))
-
 ;; Same as `uwiden_high`, but interleaving high lanes instead.
+;;
+;; Note that according to `llvm-mca` at least these instructions are faster
+;; than using `pmovzx*` in terms of cycles, even if SSE4.1 is available.
 (rule (lower (has_type $I16X8 (uwiden_high val @ (value_type $I8X16))))
       (x64_punpckhbw val (xmm_zero $I8X16)))
 (rule (lower (has_type $I32X4 (uwiden_high val @ (value_type $I16X8))))
