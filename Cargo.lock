@@ -747,6 +747,7 @@ dependencies = [
  "cranelift-codegen",
  "cranelift-control",
  "hashbrown 0.13.2",
+ "serde",
 ]
 
 [[package]]
@@ -3983,6 +3984,7 @@ dependencies = [
  "rand 0.8.5",
  "smallvec",
  "target-lexicon",
+ "wasmparser",
  "wasmtime",
  "wasmtime-fuzzing",
 ]

@@ -39,6 +39,3 @@ ittapi = { version = "0.3.3", optional = true  }
 [features]
 jitdump = ['wasmtime-jit-debug']
 vtune = ['ittapi']
-
-[badges]
-maintenance = { status = "actively-developed" }

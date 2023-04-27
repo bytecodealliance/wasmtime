@@ -9,11 +9,16 @@ on:
     - main
     - 'release-*'
 
+  # Run full CI on the `main` branch once a day to prime the GitHub Actions
+  # caches used by PRs and the merge queue.
+  schedule:
+  - cron: '13 4 * * *'
+
+  # This is the CI that runs for PRs-to-merge.
+  merge_group:
+
   push:
     branches:
-    # This is an alternative to using `merge_group:` which doesn't work at the
-    # time of this writing.
-    - 'gh-readonly-queue/main/*'
     # Right now merge queues can't be used with wildcards in branch protections
     # so full CI runs both on PRs to release branches as well as merges to
     # release branches. Note that the merge to a release branch may produce a
@@ -263,6 +268,7 @@ jobs:
     - run: cargo check -p wasmtime --no-default-features --features cranelift,wat,async,cache
     - run: cargo check -p wasmtime --no-default-features --features winch
     - run: cargo check --features component-model
+    - run: cargo check -p wasmtime --features incremental-cache
 
     # Check that benchmarks of the cranelift project build
     - run: cargo check --benches -p cranelift-codegen
@@ -351,6 +357,8 @@ jobs:
     - run: cargo fuzz build --dev -s none
     # Check that the ISLE fuzz targets build too.
     - run: cargo fuzz build --dev -s none --fuzz-dir ./cranelift/isle/fuzz
+    # Check that winch fuzzing builds too.
+    - run: cargo fuzz build --dev -s none --features fuzz-winch
 
     # common logic to cancel the entire run if this job fails
     - run: gh run cancel ${{ github.run_id }}

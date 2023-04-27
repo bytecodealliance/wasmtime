@@ -16,6 +16,3 @@ serde = { version = "1.0.94", features = ["derive"], optional = true }
 
 [features]
 enable-serde = ["serde"]
-
-[badges]
-maintenance = { status = "experimental" }

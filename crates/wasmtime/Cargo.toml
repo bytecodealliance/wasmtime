@@ -56,9 +56,6 @@ tempfile = "3.0"
 wasmtime-wasi = { path = "../wasi" }
 wasi-cap-std-sync = { path = "../wasi-common/cap-std-sync" }
 
-[badges]
-maintenance = { status = "actively-developed" }
-
 [features]
 default = [
   'async',

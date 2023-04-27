@@ -916,7 +916,22 @@
       (x64_pmullw x y))
 
 (rule (lower (has_type (multi_lane 32 4) (imul x y)))
+      (if-let $true (use_sse41))
       (x64_pmulld x y))
+
+;; Without `pmulld` the `pmuludq` instruction is used instead which performs
+;; 32-bit multiplication storing the 64-bit result. The 64-bit result is
+;; truncated to 32-bits and everything else is woven into place.
+(rule -1 (lower (has_type (multi_lane 32 4) (imul x y)))
+         (let (
+            (x Xmm x)
+            (y Xmm y)
+            (x_hi Xmm (x64_pshufd x 0b00_11_00_01))
+            (y_hi Xmm (x64_pshufd y 0b00_11_00_01))
+            (mul_lo Xmm (x64_pshufd (x64_pmuludq x y)       0b00_00_10_00))
+            (mul_hi Xmm (x64_pshufd (x64_pmuludq x_hi y_hi) 0b00_00_10_00))
+          )
+          (x64_punpckldq mul_lo mul_hi)))
 
 ;; With AVX-512 we can implement `i64x2` multiplication with a single
 ;; instruction.
@@ -967,20 +982,6 @@
         ;; al_bl + aa_bb_shifted
         (x64_paddq al_bl aa_bb_shifted)))
 
-;; Special case for `i16x8.extmul_high_i8x16_s`.
-(rule 1 (lower (has_type (multi_lane 16 8)
-                       (imul (swiden_high (and (value_type (multi_lane 8 16))
-                                               x))
-                             (swiden_high (and (value_type (multi_lane 8 16))
-                                               y)))))
-      (let ((x1 Xmm x)
-            (x2 Xmm (x64_palignr x1 x1 8))
-            (x3 Xmm (x64_pmovsxbw x2))
-            (y1 Xmm y)
-            (y2 Xmm (x64_palignr y1 y1 8))
-            (y3 Xmm (x64_pmovsxbw y2)))
-        (x64_pmullw x3 y3)))
-
 ;; Special case for `i32x4.extmul_high_i16x8_s`.
 (rule 1 (lower (has_type (multi_lane 32 4)
                        (imul (swiden_high (and (value_type (multi_lane 16 8))
@@ -1003,16 +1004,6 @@
       (let ((x2 Xmm (x64_pshufd x 0xFA))
             (y2 Xmm (x64_pshufd y 0xFA)))
         (x64_pmuldq x2 y2)))
-
-;; Special case for `i16x8.extmul_low_i8x16_s`.
-(rule 1 (lower (has_type (multi_lane 16 8)
-                       (imul (swiden_low (and (value_type (multi_lane 8 16))
-                                              x))
-                             (swiden_low (and (value_type (multi_lane 8 16))
-                                              y)))))
-      (let ((x2 Xmm (x64_pmovsxbw x))
-            (y2 Xmm (x64_pmovsxbw y)))
-        (x64_pmullw x2 y2)))
 
 ;; Special case for `i32x4.extmul_low_i16x8_s`.
 (rule 1 (lower (has_type (multi_lane 32 4)
@@ -1037,20 +1028,6 @@
             (y2 Xmm (x64_pshufd y 0x50)))
         (x64_pmuldq x2 y2)))
 
-;; Special case for `i16x8.extmul_high_i8x16_u`.
-(rule 1 (lower (has_type (multi_lane 16 8)
-                       (imul (uwiden_high (and (value_type (multi_lane 8 16))
-                                               x))
-                             (uwiden_high (and (value_type (multi_lane 8 16))
-                                               y)))))
-      (let ((x1 Xmm x)
-            (x2 Xmm (x64_palignr x1 x1 8))
-            (x3 Xmm (x64_pmovzxbw x2))
-            (y1 Xmm y)
-            (y2 Xmm (x64_palignr y1 y1 8))
-            (y3 Xmm (x64_pmovzxbw y2)))
-        (x64_pmullw x3 y3)))
-
 ;; Special case for `i32x4.extmul_high_i16x8_u`.
 (rule 1 (lower (has_type (multi_lane 32 4)
                        (imul (uwiden_high (and (value_type (multi_lane 16 8))
@@ -1072,16 +1049,6 @@
       (let ((x2 Xmm (x64_pshufd x 0xFA))
             (y2 Xmm (x64_pshufd y 0xFA)))
         (x64_pmuludq x2 y2)))
-
-;; Special case for `i16x8.extmul_low_i8x16_u`.
-(rule 1 (lower (has_type (multi_lane 16 8)
-                       (imul (uwiden_low (and (value_type (multi_lane 8 16))
-                                              x))
-                             (uwiden_low (and (value_type (multi_lane 8 16))
-                                              y)))))
-      (let ((x2 Xmm (x64_pmovzxbw x))
-            (y2 Xmm (x64_pmovzxbw y)))
-        (x64_pmullw x2 y2)))
 
 ;; Special case for `i32x4.extmul_low_i16x8_u`.
 (rule 1 (lower (has_type (multi_lane 32 4)
@@ -2544,18 +2511,37 @@
 
 ;; We also include widening vector loads; these sign- or zero-extend each lane
 ;; to the next wider width (e.g., 16x4 -> 32x4).
+(rule 1 (lower (has_type $I16X8 (sload8x8 flags address offset)))
+        (if-let $true (use_sse41))
+        (x64_pmovsxbw (to_amode flags address offset)))
+(rule 1 (lower (has_type $I16X8 (uload8x8 flags address offset)))
+        (if-let $true (use_sse41))
+        (x64_pmovzxbw (to_amode flags address offset)))
+(rule 1 (lower (has_type $I32X4 (sload16x4 flags address offset)))
+        (if-let $true (use_sse41))
+        (x64_pmovsxwd (to_amode flags address offset)))
+(rule 1 (lower (has_type $I32X4 (uload16x4 flags address offset)))
+        (if-let $true (use_sse41))
+        (x64_pmovzxwd (to_amode flags address offset)))
+(rule 1 (lower (has_type $I64X2 (sload32x2 flags address offset)))
+        (if-let $true (use_sse41))
+        (x64_pmovsxdq (to_amode flags address offset)))
+(rule 1 (lower (has_type $I64X2 (uload32x2 flags address offset)))
+        (if-let $true (use_sse41))
+        (x64_pmovzxdq (to_amode flags address offset)))
+
 (rule (lower (has_type $I16X8 (sload8x8 flags address offset)))
-      (x64_pmovsxbw (to_amode flags address offset)))
+      (lower_swiden_low $I16X8 (x64_movq_to_xmm (to_amode flags address offset))))
 (rule (lower (has_type $I16X8 (uload8x8 flags address offset)))
-      (x64_pmovzxbw (to_amode flags address offset)))
+      (lower_uwiden_low $I16X8 (x64_movq_to_xmm (to_amode flags address offset))))
 (rule (lower (has_type $I32X4 (sload16x4 flags address offset)))
-      (x64_pmovsxwd (to_amode flags address offset)))
+      (lower_swiden_low $I32X4 (x64_movq_to_xmm (to_amode flags address offset))))
 (rule (lower (has_type $I32X4 (uload16x4 flags address offset)))
-      (x64_pmovzxwd (to_amode flags address offset)))
+      (lower_uwiden_low $I32X4 (x64_movq_to_xmm (to_amode flags address offset))))
 (rule (lower (has_type $I64X2 (sload32x2 flags address offset)))
-      (x64_pmovsxdq (to_amode flags address offset)))
+      (lower_swiden_low $I64X2 (x64_movq_to_xmm (to_amode flags address offset))))
 (rule (lower (has_type $I64X2 (uload32x2 flags address offset)))
-      (x64_pmovzxdq (to_amode flags address offset)))
+      (lower_uwiden_low $I64X2 (x64_movq_to_xmm (to_amode flags address offset))))
 
 ;; Rules for `store*` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -3251,51 +3237,101 @@
 
 ;; Rules for `swiden_low` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type $I16X8 (swiden_low val @ (value_type $I8X16))))
-      (x64_pmovsxbw val))
+;; With SSE4.1 use the `pmovsx*` instructions for this
+(rule 1 (lower (has_type $I16X8 (swiden_low val @ (value_type $I8X16))))
+        (if-let $true (use_sse41))
+        (x64_pmovsxbw val))
+(rule 1 (lower (has_type $I32X4 (swiden_low val @ (value_type $I16X8))))
+        (if-let $true (use_sse41))
+        (x64_pmovsxwd val))
+(rule 1 (lower (has_type $I64X2 (swiden_low val @ (value_type $I32X4))))
+        (if-let $true (use_sse41))
+        (x64_pmovsxdq val))
 
-(rule (lower (has_type $I32X4 (swiden_low val @ (value_type $I16X8))))
-      (x64_pmovsxwd val))
+(rule (lower (has_type ty (swiden_low val))) (lower_swiden_low ty val))
 
-(rule (lower (has_type $I64X2 (swiden_low val @ (value_type $I32X4))))
-      (x64_pmovsxdq val))
+(decl lower_swiden_low (Type Xmm) Xmm)
+
+;; Duplicate the low lanes next to each other, then perform a wider shift-right
+;; by the low lane width to move the upper of each pair back into the lower lane
+;; of each pair, achieving the widening of the lower lanes.
+(rule (lower_swiden_low $I16X8 val)
+      (x64_psraw (x64_punpcklbw val val) (xmi_imm 8)))
+(rule (lower_swiden_low $I32X4 val)
+      (x64_psrad (x64_punpcklwd val val) (xmi_imm 16)))
+
+;; Generate the sign-extended halves with a `val < 0` comparison (expressed
+;; reversed here), then interleave the low 32-bit halves to create the full
+;; 64-bit results.
+(rule (lower_swiden_low $I64X2 val)
+      (let ((tmp Xmm (x64_pcmpgtd (xmm_zero $I32X4) val)))
+      (x64_punpckldq val tmp)))
 
 ;; Rules for `swiden_high` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; Similar to `swiden_low` with SSE4.1 except that the upper lanes are moved
+;; to the lower lanes first.
+(rule 1 (lower (has_type $I16X8 (swiden_high val @ (value_type $I8X16))))
+        (if-let $true (use_sse41))
+        (let ((x Xmm val))
+          (x64_pmovsxbw (x64_palignr x x 8))))
+(rule 1 (lower (has_type $I32X4 (swiden_high val @ (value_type $I16X8))))
+        (if-let $true (use_sse41))
+        (let ((x Xmm val))
+          (x64_pmovsxwd (x64_palignr x x 8))))
+(rule 1 (lower (has_type $I64X2 (swiden_high val @ (value_type $I32X4))))
+        (if-let $true (use_sse41))
+        (x64_pmovsxdq (x64_pshufd val 0b11_10_11_10)))
+
+;; Similar to `swiden_low` versions but using `punpckh*` instructions to
+;; pair the high lanes next to each other.
 (rule (lower (has_type $I16X8 (swiden_high val @ (value_type $I8X16))))
-      (let ((x Xmm val))
-        (x64_pmovsxbw (x64_palignr x x 8))))
-
+      (let ((val Xmm val))
+        (x64_psraw (x64_punpckhbw val val) (xmi_imm 8))))
 (rule (lower (has_type $I32X4 (swiden_high val @ (value_type $I16X8))))
-      (let ((x Xmm val))
-        (x64_pmovsxwd (x64_palignr x x 8))))
+      (let ((val Xmm val))
+        (x64_psrad (x64_punpckhwd val val) (xmi_imm 16))))
 
+;; Same as `swiden_low`, but `val` has its high lanes moved down.
 (rule (lower (has_type $I64X2 (swiden_high val @ (value_type $I32X4))))
-      (x64_pmovsxdq (x64_pshufd val 0xEE)))
+      (let ((val Xmm (x64_pshufd val 0b00_00_11_10))
+            (tmp Xmm (x64_pcmpgtd (xmm_zero $I32X4) val)))
+      (x64_punpckldq val tmp)))
 
 ;; Rules for `uwiden_low` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type $I16X8 (uwiden_low val @ (value_type $I8X16))))
-      (x64_pmovzxbw val))
+;; With SSE4.1 use the `pmovzx*` instructions for this
+(rule 1 (lower (has_type $I16X8 (uwiden_low val @ (value_type $I8X16))))
+        (if-let $true (use_sse41))
+        (x64_pmovzxbw val))
+(rule 1 (lower (has_type $I32X4 (uwiden_low val @ (value_type $I16X8))))
+        (if-let $true (use_sse41))
+        (x64_pmovzxwd val))
+(rule 1 (lower (has_type $I64X2 (uwiden_low val @ (value_type $I32X4))))
+        (if-let $true (use_sse41))
+        (x64_pmovzxdq val))
 
-(rule (lower (has_type $I32X4 (uwiden_low val @ (value_type $I16X8))))
-      (x64_pmovzxwd val))
+(rule (lower (has_type ty (uwiden_low val))) (lower_uwiden_low ty val))
 
-(rule (lower (has_type $I64X2 (uwiden_low val @ (value_type $I32X4))))
-      (x64_pmovzxdq val))
+;; Interleave an all-zero register with the low lanes to produce zero-extended
+;; results.
+(decl lower_uwiden_low (Type Xmm) Xmm)
+(rule (lower_uwiden_low $I16X8 val) (x64_punpcklbw val (xmm_zero $I8X16)))
+(rule (lower_uwiden_low $I32X4 val) (x64_punpcklwd val (xmm_zero $I8X16)))
+(rule (lower_uwiden_low $I64X2 val) (x64_unpcklps val (xmm_zero $F32X4)))
 
 ;; Rules for `uwiden_high` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; Same as `uwiden_high`, but interleaving high lanes instead.
+;;
+;; Note that according to `llvm-mca` at least these instructions are faster
+;; than using `pmovzx*` in terms of cycles, even if SSE4.1 is available.
 (rule (lower (has_type $I16X8 (uwiden_high val @ (value_type $I8X16))))
-      (let ((x Xmm val))
-        (x64_pmovzxbw (x64_palignr x x 8))))
-
+      (x64_punpckhbw val (xmm_zero $I8X16)))
 (rule (lower (has_type $I32X4 (uwiden_high val @ (value_type $I16X8))))
-      (let ((x Xmm val))
-        (x64_pmovzxwd (x64_palignr x x 8))))
-
+      (x64_punpckhwd val (xmm_zero $I8X16)))
 (rule (lower (has_type $I64X2 (uwiden_high val @ (value_type $I32X4))))
-      (x64_pmovzxdq (x64_pshufd val 0xEE)))
+      (x64_unpckhps val (xmm_zero $F32X4)))
 
 ;; Rules for `snarrow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

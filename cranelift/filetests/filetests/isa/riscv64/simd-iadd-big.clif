@@ -1,0 +1,40 @@
+test compile precise-output
+set unwind_info=false
+target riscv64 has_v has_zvl2048b
+
+
+
+function %iadd_i64x4(i64x4, i64x4) -> i64x4 {
+block0(v0:i64x4, v1:i64x4):
+    v2 = iadd v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   vadd.vv v10,v10,v11 #avl=4, #vtype=(e64, m1, ta, ma)
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x57, 0x70, 0x82, 0xcd
+;   .byte 0x57, 0x85, 0xa5, 0x02
+;   ret
+
+function %iadd_i64x8(i64x8, i64x8) -> i64x8 {
+block0(v0:i64x8, v1:i64x8):
+    v2 = iadd v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   vadd.vv v10,v10,v11 #avl=8, #vtype=(e64, m1, ta, ma)
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x57, 0x70, 0x84, 0xcd
+;   .byte 0x57, 0x85, 0xa5, 0x02
+;   ret
+

@@ -18,7 +18,7 @@ jobs:
         sha=${{ github.sha }}
         run_id=$(
           gh api -H 'Accept: application/vnd.github+json' \
-              /repos/${{ github.repository }}/actions/workflows/main.yml/runs\?event=push\&exclude_pull_requests=true \
+              /repos/${{ github.repository }}/actions/workflows/main.yml/runs\?exclude_pull_requests=true \
               | jq '.workflow_runs' \
               | jq "map(select(.head_commit.id == \"$sha\"))[0].id" \
         )

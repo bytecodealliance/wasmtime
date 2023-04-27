@@ -11,7 +11,7 @@ use std::mem::MaybeUninit;
 use std::ptr;
 use std::sync::Once;
 
-pub use self::backtrace::Backtrace;
+pub use self::backtrace::{Backtrace, Frame};
 pub use self::tls::{tls_eager_initialize, TlsRestore};
 
 #[link(name = "wasmtime-helpers")]

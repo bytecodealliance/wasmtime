@@ -39,6 +39,3 @@ default = []
 cranelift = { workspace = true }
 cranelift-frontend = { workspace = true }
 cranelift-entity = { workspace = true }
-
-[badges]
-maintenance = { status = "experimental" }

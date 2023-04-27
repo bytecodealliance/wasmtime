@@ -1204,8 +1204,9 @@ block0(v0: i8x16):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   vpalignr $8, %xmm0, %xmm0, %xmm2
-;   vpmovzxbw %xmm2, %xmm0
+;   uninit  %xmm2
+;   vpxor   %xmm2, %xmm2, %xmm4
+;   vpunpckhbw %xmm0, %xmm4, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -1215,8 +1216,8 @@ block0(v0: i8x16):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   vpalignr $8, %xmm0, %xmm0, %xmm2
-;   vpmovzxbw %xmm2, %xmm0
+;   vpxor %xmm2, %xmm2, %xmm4
+;   vpunpckhbw %xmm4, %xmm0, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

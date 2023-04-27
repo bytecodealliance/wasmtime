@@ -21,7 +21,3 @@ libc = "0.2.95"
 default = ["std"]
 std = ["cranelift-codegen/std"]
 core = ["cranelift-codegen/core"]
-
-[badges]
-maintenance = { status = "experimental" }
-

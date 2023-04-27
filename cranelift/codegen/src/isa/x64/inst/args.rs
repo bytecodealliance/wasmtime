@@ -1116,6 +1116,7 @@ pub enum SseOpcode {
     Ucomiss,
     Ucomisd,
     Unpcklps,
+    Unpckhps,
     Xorps,
     Xorpd,
     Phaddw,
@@ -1168,6 +1169,7 @@ impl SseOpcode {
             | SseOpcode::Subss
             | SseOpcode::Ucomiss
             | SseOpcode::Unpcklps
+            | SseOpcode::Unpckhps
             | SseOpcode::Xorps => SSE,
 
             SseOpcode::Addpd
@@ -1516,6 +1518,7 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Ucomiss => "ucomiss",
             SseOpcode::Ucomisd => "ucomisd",
             SseOpcode::Unpcklps => "unpcklps",
+            SseOpcode::Unpckhps => "unpckhps",
             SseOpcode::Xorps => "xorps",
             SseOpcode::Xorpd => "xorpd",
             SseOpcode::Phaddw => "phaddw",
@@ -1611,6 +1614,7 @@ impl AvxOpcode {
             | AvxOpcode::Vpunpckhwd
             | AvxOpcode::Vpunpcklwd
             | AvxOpcode::Vunpcklps
+            | AvxOpcode::Vunpckhps
             | AvxOpcode::Vaddps
             | AvxOpcode::Vaddpd
             | AvxOpcode::Vsubps

@@ -50,7 +50,7 @@ pub fn encode_valu(
 ) -> u32 {
     let funct6 = funct6 & 0b111111;
     let vm = vm & 0b1;
-    let funct7 = (funct6 << 6) | vm;
+    let funct7 = (funct6 << 1) | vm;
     encode_r_type(opcode, vd, funct3, vs1, vs2, funct7)
 }
 
