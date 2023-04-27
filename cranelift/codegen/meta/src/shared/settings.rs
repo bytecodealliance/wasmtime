@@ -325,23 +325,6 @@ pub(crate) fn define() -> SettingGroup {
         false,
     );
 
-    settings.add_num(
-        "chaos_mode_fuel",
-        "The fuel parameter of chaos mode.",
-        r#"
-            This may be used to pinpoint the source of a bug discovered
-            by chaos mode using bisection. The control plane of chaos mode
-            will generate a no more perturbations than this fuel parameter
-            specifies. Since the order of perturbations is deterministic,
-            this allows searching for the source of a bug efficiently.
-
-            The default is 0, which translates to the fuel parameter being
-            disabled. Unless the feature "chaos" of cranelift-control is
-            enabled, this option has no effect.
-        "#,
-        0,
-    );
-
     // When adding new settings please check if they can also be added
     // in cranelift/fuzzgen/src/lib.rs for fuzzing.
     settings.build()
