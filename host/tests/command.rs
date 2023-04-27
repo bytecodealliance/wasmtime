@@ -433,7 +433,7 @@ async fn run_path_open_create_existing(store: Store<WasiCtx>, wasi: Command) -> 
 
 async fn run_path_open_dirfd_not_dir(store: Store<WasiCtx>, wasi: Command) -> Result<()> {
     // expected NOTDIR, got BADF, on call to path_open on a filefd.
-    expect_fail(run_with_temp_dir(store, wasi).await)
+    run_with_temp_dir(store, wasi).await
 }
 
 async fn run_path_open_missing(store: Store<WasiCtx>, wasi: Command) -> Result<()> {

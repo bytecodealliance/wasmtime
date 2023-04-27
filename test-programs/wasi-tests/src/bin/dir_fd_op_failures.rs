@@ -74,6 +74,60 @@ unsafe fn test_fd_dir_ops(dir_fd: wasi::Fd) {
     assert_eq!(r, Err(wasi::ERRNO_BADF), "fd_filestat_set_size error");
 }
 
+unsafe fn test_path_file_ops(dir_fd: wasi::Fd) {
+    // Create a file in the scratch directory.
+    let file_fd = wasi::path_open(
+        dir_fd,
+        0,
+        "file",
+        wasi::OFLAGS_CREAT,
+        wasi::RIGHTS_FD_READ | wasi::RIGHTS_FD_SEEK,
+        0,
+        0,
+    )
+    .expect("opening a file");
+
+    let r = wasi::path_create_directory(file_fd, "foo");
+    assert_eq!(r, Err(wasi::ERRNO_NOTDIR));
+
+    let r = wasi::path_filestat_get(file_fd, 0, "foo").err().unwrap();
+    assert_eq!(r, wasi::ERRNO_NOTDIR);
+
+    let r = wasi::path_filestat_set_times(file_fd, 0, "foo", 0, 0, 0);
+    assert_eq!(r, Err(wasi::ERRNO_NOTDIR));
+
+    let r = wasi::path_link(file_fd, 0, "foo", dir_fd, "bar");
+    assert_eq!(r, Err(wasi::ERRNO_NOTDIR));
+
+    let r = wasi::path_link(dir_fd, 0, "foo", file_fd, "bar");
+    assert_eq!(r, Err(wasi::ERRNO_NOTDIR));
+
+    let r = wasi::path_open(file_fd, 0, "foo", 0, 0, 0, 0);
+    assert_eq!(r, Err(wasi::ERRNO_NOTDIR));
+
+    let r = wasi::path_readlink(file_fd, "foo", std::ptr::null_mut(), 0);
+    assert_eq!(r, Err(wasi::ERRNO_NOTDIR));
+
+    let r = wasi::path_remove_directory(file_fd, "foo");
+    assert_eq!(r, Err(wasi::ERRNO_NOTDIR));
+
+    let r = wasi::path_rename(file_fd, "foo", dir_fd, "bar");
+    assert_eq!(r, Err(wasi::ERRNO_NOTDIR));
+
+    let r = wasi::path_rename(dir_fd, "foo", file_fd, "bar");
+    assert_eq!(r, Err(wasi::ERRNO_NOTDIR));
+
+    let r = wasi::path_symlink("foo", file_fd, "bar");
+    assert_eq!(r, Err(wasi::ERRNO_NOTDIR));
+
+    let r = wasi::path_unlink_file(file_fd, "bar");
+    assert_eq!(r, Err(wasi::ERRNO_NOTDIR));
+
+    // Doesn't have the path_ prefix, but does require a dirfd:
+    let r = wasi::fd_readdir(file_fd, std::ptr::null_mut(), 0, 0);
+    assert_eq!(r, Err(wasi::ERRNO_NOTDIR));
+}
+
 fn main() {
     let mut args = env::args();
     let prog = args.next().unwrap();
@@ -95,5 +149,6 @@ fn main() {
 
     unsafe {
         test_fd_dir_ops(dir_fd);
+        test_path_file_ops(dir_fd);
     }
 }
