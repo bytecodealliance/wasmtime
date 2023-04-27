@@ -5,7 +5,7 @@ use arbitrary::Arbitrary;
 #[derive(Debug, Clone, Default)]
 pub struct ControlPlane {
     data: Vec<bool>,
-    fuel: Option<u8>,
+    fuel: Option<u32>,
 }
 
 impl Arbitrary<'_> for ControlPlane {
@@ -18,7 +18,8 @@ impl Arbitrary<'_> for ControlPlane {
 }
 
 impl ControlPlane {
-    /// returns false if there is no more available fuel
+    /// Returns `true` if fuel wasn't activated in the first place, `false`
+    /// if there is no more fuel available.
     fn consume_fuel(&mut self) -> bool {
         match self.fuel {
             None => true,               // fuel deactivated
@@ -31,9 +32,9 @@ impl ControlPlane {
     }
 
     /// Set the maximum number of perturbations to be introduced with chaos
-    /// mode. Can be used to binary-search for a perturbation that caused a
-    /// bug.
-    pub fn set_fuel(&mut self, fuel: u8) {
+    /// mode. Can be used to binary-search for a perturbation that triggered
+    /// a bug.
+    pub fn set_fuel(&mut self, fuel: u32) {
         self.fuel = Some(fuel)
     }
 
