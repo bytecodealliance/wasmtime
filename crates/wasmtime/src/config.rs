@@ -675,6 +675,7 @@ impl Config {
     /// This is `true` by default.
     ///
     /// [proposal]: https://github.com/webassembly/simd
+    /// [relaxed simd proposal]: https://github.com/WebAssembly/relaxed-simd
     pub fn wasm_simd(&mut self, enable: bool) -> &mut Self {
         self.features.simd = enable;
         self
