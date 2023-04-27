@@ -167,8 +167,8 @@ impl TargetIsa for Riscv64Backend {
         inst::unwind::systemv::map_reg(reg).map(|reg| reg.0)
     }
 
-    fn function_alignment(&self) -> u32 {
-        4
+    fn min_and_preferred_function_alignment(&self) -> (u32, u32) {
+        (4, 4)
     }
 
     #[cfg(feature = "disas")]

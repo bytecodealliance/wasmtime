@@ -118,7 +118,7 @@ impl<'a> ModuleTextBuilder<'a> {
         let off = self.text.append(
             true,
             &body,
-            self.compiler.function_alignment().max(alignment),
+            self.compiler.min_function_alignment().max(alignment),
             &mut self.ctrl_plane,
         );
 

@@ -352,7 +352,7 @@ impl Module for ObjectModule {
         *defined = true;
 
         let align = alignment
-            .max(self.isa.function_alignment() as u64)
+            .max(self.isa.min_and_preferred_function_alignment().0 as u64)
             .max(self.isa.symbol_alignment());
         let (section, offset) = if self.per_function_section {
             let symbol_name = self.object.symbol(symbol).name.clone();

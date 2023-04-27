@@ -166,10 +166,10 @@ impl TargetIsa for X64Backend {
         Box::new(MachTextSectionBuilder::<inst::Inst>::new(num_funcs))
     }
 
-    /// Align functions on x86 to 16 bytes, ensuring that rip-relative loads to SSE registers are
-    /// always from aligned memory.
-    fn function_alignment(&self) -> u32 {
-        16
+    /// Prefer an alignment of 16-bytes to hypothetically get the whole function
+    /// into a minimum number of lines.
+    fn min_and_preferred_function_alignment(&self) -> (u32, u32) {
+        (1, 16)
     }
 
     #[cfg(feature = "disas")]

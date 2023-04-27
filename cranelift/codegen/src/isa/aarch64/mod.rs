@@ -189,10 +189,10 @@ impl TargetIsa for AArch64Backend {
         inst::unwind::systemv::map_reg(reg).map(|reg| reg.0)
     }
 
-    fn function_alignment(&self) -> u32 {
+    fn min_and_preferred_function_alignment(&self) -> (u32, u32) {
         // We use 32-byte alignment for performance reasons, but for correctness we would only need
         // 4-byte alignment.
-        32
+        (4, 32)
     }
 
     #[cfg(feature = "disas")]

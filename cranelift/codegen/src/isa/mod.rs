@@ -316,8 +316,9 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
     /// of defined functions in the object file.
     fn text_section_builder(&self, num_labeled_funcs: usize) -> Box<dyn TextSectionBuilder>;
 
-    /// The function alignment required by this ISA.
-    fn function_alignment(&self) -> u32;
+    /// Returns the minimum function alignment and the preferred function
+    /// alignment, for performance, required by this ISA.
+    fn min_and_preferred_function_alignment(&self) -> (u32, u32);
 
     /// Create a polymorphic TargetIsa from this specific implementation.
     fn wrapped(self) -> OwnedTargetIsa

@@ -363,8 +363,8 @@ pub trait Compiler: Send + Sync {
         funcs: &PrimaryMap<DefinedFuncIndex, (SymbolId, &(dyn Any + Send))>,
     ) -> Result<()>;
 
-    /// The function alignment required by this ISA.
-    fn function_alignment(&self) -> u32;
+    /// The minimum function alignment required by this ISA.
+    fn min_function_alignment(&self) -> u32;
 
     /// Creates a new System V Common Information Entry for the ISA.
     ///

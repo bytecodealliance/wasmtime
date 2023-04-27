@@ -167,8 +167,8 @@ impl TargetIsa for S390xBackend {
         Box::new(MachTextSectionBuilder::<inst::Inst>::new(num_funcs))
     }
 
-    fn function_alignment(&self) -> u32 {
-        4
+    fn min_and_preferred_function_alignment(&self) -> (u32, u32) {
+        (4, 4)
     }
 
     #[cfg(feature = "disas")]
