@@ -556,8 +556,8 @@ impl wasmtime_environ::Compiler for Compiler {
             pointer_type,
             MemFlags::trusted(),
             callee_vmctx,
-            ptr_size.vmnative_call_host_func_context_funcref()
-                + ptr_size.vmcaller_checked_func_ref_native_call(),
+            ptr_size.vmnative_call_host_func_context_func_ref()
+                + ptr_size.vm_func_ref_native_call(),
         );
 
         // Do an indirect call to the callee.

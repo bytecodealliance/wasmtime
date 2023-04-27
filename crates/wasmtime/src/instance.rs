@@ -11,9 +11,8 @@ use std::ptr::NonNull;
 use std::sync::Arc;
 use wasmtime_environ::{EntityType, FuncIndex, GlobalIndex, MemoryIndex, PrimaryMap, TableIndex};
 use wasmtime_runtime::{
-    Imports, InstanceAllocationRequest, StorePtr, VMCallerCheckedFuncRef, VMContext,
-    VMFunctionImport, VMGlobalImport, VMMemoryImport, VMNativeCallFunction, VMOpaqueContext,
-    VMTableImport,
+    Imports, InstanceAllocationRequest, StorePtr, VMContext, VMFuncRef, VMFunctionImport,
+    VMGlobalImport, VMMemoryImport, VMNativeCallFunction, VMOpaqueContext, VMTableImport,
 };
 
 /// An instantiated WebAssembly module.
@@ -347,8 +346,8 @@ impl Instance {
                 let func = mem::transmute::<
                     NonNull<VMNativeCallFunction>,
                     extern "C" fn(*mut VMOpaqueContext, *mut VMContext),
-                >(f.anyfunc.as_ref().native_call);
-                func(f.anyfunc.as_ref().vmctx, caller_vmctx)
+                >(f.func_ref.as_ref().native_call);
+                func(f.func_ref.as_ref().vmctx, caller_vmctx)
             })?;
         }
         Ok(())
@@ -594,7 +593,7 @@ impl OwnedImports {
     pub(crate) unsafe fn push_export(&mut self, item: &wasmtime_runtime::Export) {
         match item {
             wasmtime_runtime::Export::Function(f) => {
-                let f = f.anyfunc.as_ref();
+                let f = f.func_ref.as_ref();
                 self.functions.push(VMFunctionImport {
                     wasm_call: f.wasm_call.unwrap(),
                     native_call: f.native_call,
@@ -661,9 +660,9 @@ pub struct InstancePre<T> {
     /// preallocate space in a `Store` up front for all entries to be inserted.
     host_funcs: usize,
 
-    /// The `VMCallerCheckedFuncRef`s for the functions in `items` that do not
+    /// The `VMFuncRef`s for the functions in `items` that do not
     /// have a `wasm_call` trampoline. We pre-allocate and pre-patch these
-    /// `VMCallerCheckedFuncRef`s so that we don't have to do it at
+    /// `VMFuncRef`s so that we don't have to do it at
     /// instantiation time.
     ///
     /// This is an `Arc<[T]>` for the same reason as `items`.
@@ -676,18 +675,18 @@ pub(crate) use pre_patched_func_ref::PrePatchedFuncRef;
 mod pre_patched_func_ref {
     use super::*;
 
-    pub struct PrePatchedFuncRef(VMCallerCheckedFuncRef);
+    pub struct PrePatchedFuncRef(VMFuncRef);
 
     impl PrePatchedFuncRef {
         /// Safety: callers must arrange for the given `func_ref` to be usable
         /// in a `Send + Sync` manner (i.e. its associated `Module` is kept
         /// alive or `Func` is alive and supports these things) and that the
         /// `wasm_call` field is already patched in, if necessary.
-        pub unsafe fn new(func_ref: VMCallerCheckedFuncRef) -> PrePatchedFuncRef {
+        pub unsafe fn new(func_ref: VMFuncRef) -> PrePatchedFuncRef {
             PrePatchedFuncRef(func_ref)
         }
 
-        pub fn func_ref(&self) -> &VMCallerCheckedFuncRef {
+        pub fn func_ref(&self) -> &VMFuncRef {
             &self.0
         }
     }
@@ -729,15 +728,15 @@ impl<T> InstancePre<T> {
                 Definition::Extern(_, _) => {}
                 Definition::HostFunc(f) => {
                     host_funcs += 1;
-                    if f.funcref().wasm_call.is_none() {
-                        // `f` needs its `VMCallerCheckedFuncRef::wasm_call`
+                    if f.func_ref().wasm_call.is_none() {
+                        // `f` needs its `VMFuncRef::wasm_call`
                         // patched with a Wasm-to-native trampoline.
                         debug_assert!(matches!(f.host_ctx(), crate::HostContext::Native(_)));
-                        func_refs.push(PrePatchedFuncRef::new(VMCallerCheckedFuncRef {
+                        func_refs.push(PrePatchedFuncRef::new(VMFuncRef {
                             wasm_call: module
                                 .runtime_info()
                                 .wasm_to_native_trampoline(f.sig_index()),
-                            ..*f.funcref()
+                            ..*f.func_ref()
                         }));
                     }
                 }
@@ -868,7 +867,7 @@ fn pre_instantiate_raw(
             Definition::HostFunc(func) => unsafe {
                 func.to_func_store_rooted(
                     store,
-                    if func.funcref().wasm_call.is_none() {
+                    if func.func_ref().wasm_call.is_none() {
                         Some(func_refs.next().unwrap())
                     } else {
                         None
