@@ -71,11 +71,11 @@ pub use crate::traphandlers::{
     Backtrace, Frame, SignalHandler, TlsRestore, Trap, TrapReason,
 };
 pub use crate::vmcontext::{
-    VMArrayCallFunction, VMArrayCallHostFuncContext, VMCallerCheckedFuncRef, VMContext,
-    VMFunctionBody, VMFunctionImport, VMGlobalDefinition, VMGlobalImport, VMInvokeArgument,
-    VMMemoryDefinition, VMMemoryImport, VMNativeCallFunction, VMNativeCallHostFuncContext,
-    VMOpaqueContext, VMRuntimeLimits, VMSharedSignatureIndex, VMTableDefinition, VMTableImport,
-    VMWasmCallFunction, ValRaw,
+    VMArrayCallFunction, VMArrayCallHostFuncContext, VMContext, VMFuncRef, VMFunctionBody,
+    VMFunctionImport, VMGlobalDefinition, VMGlobalImport, VMInvokeArgument, VMMemoryDefinition,
+    VMMemoryImport, VMNativeCallFunction, VMNativeCallHostFuncContext, VMOpaqueContext,
+    VMRuntimeLimits, VMSharedSignatureIndex, VMTableDefinition, VMTableImport, VMWasmCallFunction,
+    ValRaw,
 };
 
 mod module_id;

@@ -11,7 +11,7 @@ use std::pin::Pin;
 use std::ptr::{self, NonNull};
 use std::sync::Arc;
 use wasmtime_runtime::{
-    ExportFunction, InstanceHandle, VMArrayCallHostFuncContext, VMCallerCheckedFuncRef, VMContext,
+    ExportFunction, InstanceHandle, VMArrayCallHostFuncContext, VMContext, VMFuncRef,
     VMFunctionImport, VMNativeCallHostFuncContext, VMOpaqueContext, VMSharedSignatureIndex,
 };
 
@@ -181,13 +181,13 @@ pub struct Func(Stored<FuncData>);
 pub(crate) struct FuncData {
     kind: FuncKind,
 
-    // A pointer to the in-store `VMCallerCheckedFuncRef` for this function, if
+    // A pointer to the in-store `VMFuncRef` for this function, if
     // any.
     //
     // When a function is passed to Wasm but doesn't have a Wasm-to-native
     // trampoline, we have to patch it in. But that requires mutating the
-    // `VMCallerCheckedFuncRef`, and this function could be shared across
-    // threads. So we instead copy and pin the `VMCallerCheckedFuncRef` into
+    // `VMFuncRef`, and this function could be shared across
+    // threads. So we instead copy and pin the `VMFuncRef` into
     // `StoreOpaque::func_refs`, where we can safely patch the field without
     // worrying about synchronization and we hold a pointer to it here so we can
     // reuse it rather than re-copy if it is passed to Wasm again.
@@ -208,7 +208,7 @@ mod in_store_func_ref {
     use super::*;
 
     #[derive(Copy, Clone)]
-    pub struct InStoreFuncRef(NonNull<VMCallerCheckedFuncRef>);
+    pub struct InStoreFuncRef(NonNull<VMFuncRef>);
 
     impl InStoreFuncRef {
         /// Create a new `InStoreFuncRef`.
@@ -216,11 +216,11 @@ mod in_store_func_ref {
         /// Safety: Callers must ensure that the given `func_ref` is pinned
         /// inside a store, and that this resulting `InStoreFuncRef` is only
         /// used in conjuction with that store and on its same thread.
-        pub unsafe fn new(func_ref: NonNull<VMCallerCheckedFuncRef>) -> InStoreFuncRef {
+        pub unsafe fn new(func_ref: NonNull<VMFuncRef>) -> InStoreFuncRef {
             InStoreFuncRef(func_ref)
         }
 
-        pub fn func_ref(&self) -> NonNull<VMCallerCheckedFuncRef> {
+        pub fn func_ref(&self) -> NonNull<VMFuncRef> {
             self.0
         }
     }
@@ -534,11 +534,11 @@ impl Func {
 
     pub(crate) unsafe fn from_caller_checked_func_ref(
         store: &mut StoreOpaque,
-        raw: *mut VMCallerCheckedFuncRef,
+        raw: *mut VMFuncRef,
     ) -> Option<Func> {
-        let anyfunc = NonNull::new(raw)?;
-        debug_assert!(anyfunc.as_ref().type_index != VMSharedSignatureIndex::default());
-        let export = ExportFunction { anyfunc };
+        let func_ref = NonNull::new(raw)?;
+        debug_assert!(func_ref.as_ref().type_index != VMSharedSignatureIndex::default());
+        let export = ExportFunction { func_ref };
         Some(Func::from_wasmtime_function(export, store))
     }
 
@@ -922,10 +922,10 @@ impl Func {
     ) -> Result<()> {
         let mut store = store.as_context_mut();
         let data = &store.0.store_data()[self.0];
-        let anyfunc = data.export().anyfunc;
+        let func_ref = data.export().func_ref;
         Self::call_unchecked_raw(
             &mut store,
-            anyfunc,
+            func_ref,
             params_and_returns,
             params_and_returns_capacity,
         )
@@ -933,14 +933,14 @@ impl Func {
 
     pub(crate) unsafe fn call_unchecked_raw<T>(
         store: &mut StoreContextMut<'_, T>,
-        anyfunc: NonNull<VMCallerCheckedFuncRef>,
+        func_ref: NonNull<VMFuncRef>,
         params_and_returns: *mut ValRaw,
         params_and_returns_capacity: usize,
     ) -> Result<()> {
         invoke_wasm_and_catch_traps(store, |caller| {
-            let anyfunc = anyfunc.as_ref();
-            (anyfunc.array_call)(
-                anyfunc.vmctx,
+            let func_ref = func_ref.as_ref();
+            (func_ref.array_call)(
+                func_ref.vmctx,
                 caller.cast::<VMOpaqueContext>(),
                 params_and_returns,
                 params_and_returns_capacity,
@@ -1106,15 +1106,12 @@ impl Func {
     }
 
     #[inline]
-    pub(crate) fn caller_checked_func_ref(
-        &self,
-        store: &mut StoreOpaque,
-    ) -> NonNull<VMCallerCheckedFuncRef> {
+    pub(crate) fn caller_checked_func_ref(&self, store: &mut StoreOpaque) -> NonNull<VMFuncRef> {
         let func_data = &mut store.store_data_mut()[self.0];
         if let Some(in_store) = func_data.in_store_func_ref {
             in_store.func_ref()
         } else {
-            let func_ref = func_data.export().anyfunc;
+            let func_ref = func_data.export().func_ref;
             unsafe {
                 if func_ref.as_ref().wasm_call.is_none() {
                     let func_ref = store.func_refs().push(func_ref.as_ref().clone());
@@ -1154,7 +1151,7 @@ impl Func {
                 if let Some(func_ref) = func_data.in_store_func_ref {
                     func_ref.func_ref()
                 } else {
-                    func_data.export().anyfunc
+                    func_data.export().func_ref
                 }
             };
             VMFunctionImport {
@@ -1761,7 +1758,7 @@ for_each_function_signature!(impl_host_abi);
 /// as an implementation detail of this crate.
 pub trait IntoFunc<T, Params, Results>: Send + Sync + 'static {
     /// Convert this function into a `VM{Array,Native}CallHostFuncContext` and
-    /// internal `VMCallerCheckedFuncRef`.
+    /// internal `VMFuncRef`.
     #[doc(hidden)]
     fn into_func(self, engine: &Engine) -> HostContext;
 }
@@ -1953,7 +1950,7 @@ macro_rules! impl_into_func {
         {
             fn into_func(self, engine: &Engine) -> HostContext {
                 /// This shim is a regular, non-closure function we can stuff
-                /// inside `VMCallerCheckedFuncRef::native_call`.
+                /// inside `VMFuncRef::native_call`.
                 ///
                 /// It reads the actual callee closure out of
                 /// `VMNativeCallHostFuncContext::host_state`, forwards
@@ -2086,7 +2083,7 @@ macro_rules! impl_into_func {
 
                 let ctx = unsafe {
                     VMNativeCallHostFuncContext::new(
-                        VMCallerCheckedFuncRef {
+                        VMFuncRef {
                             native_call,
                             array_call,
                             wasm_call: None,
@@ -2232,12 +2229,12 @@ impl HostFunc {
     pub unsafe fn to_func_store_rooted(
         self: &Arc<Self>,
         store: &mut StoreOpaque,
-        rooted_func_ref: Option<NonNull<VMCallerCheckedFuncRef>>,
+        rooted_func_ref: Option<NonNull<VMFuncRef>>,
     ) -> Func {
         self.validate_store(store);
 
         if rooted_func_ref.is_some() {
-            debug_assert!(self.funcref().wasm_call.is_none());
+            debug_assert!(self.func_ref().wasm_call.is_none());
             debug_assert!(matches!(self.ctx, HostContext::Native(_)));
         }
 
@@ -2265,13 +2262,13 @@ impl HostFunc {
     }
 
     pub(crate) fn sig_index(&self) -> VMSharedSignatureIndex {
-        self.funcref().type_index
+        self.func_ref().type_index
     }
 
-    pub(crate) fn funcref(&self) -> &VMCallerCheckedFuncRef {
+    pub(crate) fn func_ref(&self) -> &VMFuncRef {
         match &self.ctx {
-            HostContext::Native(ctx) => ctx.funcref(),
-            HostContext::Array(ctx) => ctx.funcref(),
+            HostContext::Native(ctx) => ctx.func_ref(),
+            HostContext::Array(ctx) => ctx.func_ref(),
         }
     }
 
@@ -2281,7 +2278,7 @@ impl HostFunc {
 
     fn export_func(&self) -> ExportFunction {
         ExportFunction {
-            anyfunc: NonNull::from(self.funcref()),
+            func_ref: NonNull::from(self.func_ref()),
         }
     }
 }
@@ -2301,7 +2298,7 @@ impl FuncData {
     }
 
     pub(crate) fn sig_index(&self) -> VMSharedSignatureIndex {
-        unsafe { self.export().anyfunc.as_ref().type_index }
+        unsafe { self.export().func_ref.as_ref().type_index }
     }
 }
 
@@ -2312,7 +2309,7 @@ impl FuncKind {
             FuncKind::StoreOwned { export, .. } => *export,
             FuncKind::SharedHost(host) => host.export_func(),
             FuncKind::RootedHost(rooted) => ExportFunction {
-                anyfunc: NonNull::from(rooted.func_ref()),
+                func_ref: NonNull::from(rooted.func_ref()),
             },
             FuncKind::Host(host) => host.export_func(),
         }
@@ -2325,7 +2322,7 @@ use self::rooted::*;
 /// `RootedHostFunc` instead of accidentally safely allowing access to its
 /// constructor.
 mod rooted {
-    use wasmtime_runtime::VMCallerCheckedFuncRef;
+    use wasmtime_runtime::VMFuncRef;
 
     use super::HostFunc;
     use std::ptr::NonNull;
@@ -2338,7 +2335,7 @@ mod rooted {
     /// `HostFunc::to_func_store_rooted`.
     pub(crate) struct RootedHostFunc {
         func: NonNull<HostFunc>,
-        func_ref: Option<NonNull<VMCallerCheckedFuncRef>>,
+        func_ref: Option<NonNull<VMFuncRef>>,
     }
 
     // These are required due to the usage of `NonNull` but should be safe
@@ -2356,7 +2353,7 @@ mod rooted {
         /// for the liftime of the return value.
         pub(crate) unsafe fn new(
             func: &Arc<HostFunc>,
-            func_ref: Option<NonNull<VMCallerCheckedFuncRef>>,
+            func_ref: Option<NonNull<VMFuncRef>>,
         ) -> RootedHostFunc {
             RootedHostFunc {
                 func: NonNull::from(&**func),
@@ -2369,12 +2366,12 @@ mod rooted {
             unsafe { self.func.as_ref() }
         }
 
-        pub(crate) fn func_ref(&self) -> &VMCallerCheckedFuncRef {
+        pub(crate) fn func_ref(&self) -> &VMFuncRef {
             if let Some(f) = self.func_ref {
                 // Safety invariants are upheld by the `RootedHostFunc::new` caller.
                 unsafe { f.as_ref() }
             } else {
-                self.func().funcref()
+                self.func().func_ref()
             }
         }
     }

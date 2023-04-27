@@ -58,7 +58,7 @@ struct CompiledComponentInfo {
     /// 2. array-call, and
     /// 3. native-call
     ///
-    /// function pointers that end up in a `VMCallerCheckedFuncRef` for each
+    /// function pointers that end up in a `VMFuncRef` for each
     /// lowering.
     lowerings: PrimaryMap<LoweredIndex, AllCallFunc<FunctionLoc>>,
 

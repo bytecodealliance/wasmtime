@@ -2,7 +2,7 @@
 //!
 //! Keep in sync with `wasmtime_environ::VMHostFuncOffsets`.
 
-use crate::VMCallerCheckedFuncRef;
+use crate::VMFuncRef;
 
 use super::VMOpaqueContext;
 use std::any::Any;
@@ -18,7 +18,7 @@ use wasmtime_environ::{VM_ARRAY_CALL_HOST_FUNC_MAGIC, VM_NATIVE_CALL_HOST_FUNC_M
 pub struct VMArrayCallHostFuncContext {
     magic: u32,
     // _padding: u32, // (on 64-bit systems)
-    pub(crate) funcref: VMCallerCheckedFuncRef,
+    pub(crate) func_ref: VMFuncRef,
     host_state: Box<dyn Any + Send + Sync>,
 }
 
@@ -35,16 +35,16 @@ impl VMArrayCallHostFuncContext {
     /// The `host_func` must be a pointer to a host (not Wasm) function and it
     /// must be `Send` and `Sync`.
     pub unsafe fn new(
-        funcref: VMCallerCheckedFuncRef,
+        func_ref: VMFuncRef,
         host_state: Box<dyn Any + Send + Sync>,
     ) -> Box<VMArrayCallHostFuncContext> {
-        debug_assert!(funcref.vmctx.is_null());
+        debug_assert!(func_ref.vmctx.is_null());
         let mut ctx = Box::new(VMArrayCallHostFuncContext {
             magic: wasmtime_environ::VM_ARRAY_CALL_HOST_FUNC_MAGIC,
-            funcref,
+            func_ref,
             host_state,
         });
-        ctx.funcref.vmctx = VMOpaqueContext::from_vm_array_call_host_func_context(&mut *ctx);
+        ctx.func_ref.vmctx = VMOpaqueContext::from_vm_array_call_host_func_context(&mut *ctx);
         ctx
     }
 
@@ -54,10 +54,10 @@ impl VMArrayCallHostFuncContext {
         &*self.host_state
     }
 
-    /// Get this context's funcref.
+    /// Get this context's `VMFuncRef`.
     #[inline]
-    pub fn funcref(&self) -> &VMCallerCheckedFuncRef {
-        &self.funcref
+    pub fn func_ref(&self) -> &VMFuncRef {
+        &self.func_ref
     }
 
     /// Helper function to cast between context types using a debug assertion to
@@ -80,7 +80,7 @@ impl VMArrayCallHostFuncContext {
 pub struct VMNativeCallHostFuncContext {
     magic: u32,
     // _padding: u32, // (on 64-bit systems)
-    funcref: VMCallerCheckedFuncRef,
+    func_ref: VMFuncRef,
     host_state: Box<dyn Any + Send + Sync>,
 }
 
@@ -89,8 +89,8 @@ fn vmnative_call_host_func_context_offsets() {
     use memoffset::offset_of;
     use wasmtime_environ::{HostPtr, PtrSize};
     assert_eq!(
-        usize::from(HostPtr.vmnative_call_host_func_context_funcref()),
-        offset_of!(VMNativeCallHostFuncContext, funcref)
+        usize::from(HostPtr.vmnative_call_host_func_context_func_ref()),
+        offset_of!(VMNativeCallHostFuncContext, func_ref)
     );
 }
 
@@ -107,15 +107,15 @@ impl VMNativeCallHostFuncContext {
     /// The `host_func` must be a pointer to a host (not Wasm) function and it
     /// must be `Send` and `Sync`.
     pub unsafe fn new(
-        funcref: VMCallerCheckedFuncRef,
+        func_ref: VMFuncRef,
         host_state: Box<dyn Any + Send + Sync>,
     ) -> Box<VMNativeCallHostFuncContext> {
         let mut ctx = Box::new(VMNativeCallHostFuncContext {
             magic: wasmtime_environ::VM_NATIVE_CALL_HOST_FUNC_MAGIC,
-            funcref,
+            func_ref,
             host_state,
         });
-        ctx.funcref.vmctx = VMOpaqueContext::from_vm_native_call_host_func_context(&mut *ctx);
+        ctx.func_ref.vmctx = VMOpaqueContext::from_vm_native_call_host_func_context(&mut *ctx);
         ctx
     }
 
@@ -125,10 +125,10 @@ impl VMNativeCallHostFuncContext {
         &*self.host_state
     }
 
-    /// Get this context's funcref.
+    /// Get this context's `VMFuncRef`.
     #[inline]
-    pub fn funcref(&self) -> &VMCallerCheckedFuncRef {
-        &self.funcref
+    pub fn func_ref(&self) -> &VMFuncRef {
+        &self.func_ref
     }
 
     /// Helper function to cast between context types using a debug assertion to

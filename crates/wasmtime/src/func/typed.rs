@@ -6,8 +6,7 @@ use std::marker;
 use std::mem::{self, MaybeUninit};
 use std::ptr::{self, NonNull};
 use wasmtime_runtime::{
-    VMCallerCheckedFuncRef, VMContext, VMNativeCallFunction, VMOpaqueContext,
-    VMSharedSignatureIndex,
+    VMContext, VMFuncRef, VMNativeCallFunction, VMOpaqueContext, VMSharedSignatureIndex,
 };
 
 /// A statically typed WebAssembly function.
@@ -131,7 +130,7 @@ where
 
     pub(crate) unsafe fn call_raw<T>(
         store: &mut StoreContextMut<'_, T>,
-        func: ptr::NonNull<VMCallerCheckedFuncRef>,
+        func: ptr::NonNull<VMFuncRef>,
         params: Params,
     ) -> Result<Results> {
         // double-check that params/results match for this function's type in
@@ -176,10 +175,10 @@ where
         let mut captures = (func, MaybeUninit::uninit(), params, false);
 
         let result = invoke_wasm_and_catch_traps(store, |caller| {
-            let (anyfunc, ret, params, returned) = &mut captures;
-            let anyfunc = anyfunc.as_ref();
+            let (func_ref, ret, params, returned) = &mut captures;
+            let func_ref = func_ref.as_ref();
             let result =
-                Params::invoke::<Results>(anyfunc.native_call, anyfunc.vmctx, caller, *params);
+                Params::invoke::<Results>(func_ref.native_call, func_ref.vmctx, caller, *params);
             ptr::write(ret.as_mut_ptr(), result);
             *returned = true
         });
@@ -406,7 +405,7 @@ unsafe impl WasmTy for Option<ExternRef> {
 }
 
 unsafe impl WasmTy for Option<Func> {
-    type Abi = *mut wasmtime_runtime::VMCallerCheckedFuncRef;
+    type Abi = *mut wasmtime_runtime::VMFuncRef;
 
     #[inline]
     fn valtype() -> ValType {

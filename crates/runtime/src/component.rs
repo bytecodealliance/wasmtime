@@ -7,7 +7,7 @@
 //! cranelift-compiled adapters, will use this `VMComponentContext` as well.
 
 use crate::{
-    Store, VMArrayCallFunction, VMCallerCheckedFuncRef, VMGlobalDefinition, VMMemoryDefinition,
+    Store, VMArrayCallFunction, VMFuncRef, VMGlobalDefinition, VMMemoryDefinition,
     VMNativeCallFunction, VMOpaqueContext, VMSharedSignatureIndex, VMWasmCallFunction, ValRaw,
 };
 use memoffset::offset_of;
@@ -79,7 +79,7 @@ pub type VMLoweringCallee = extern "C" fn(
     data: *mut u8,
     flags: InstanceFlags,
     opt_memory: *mut VMMemoryDefinition,
-    opt_realloc: *mut VMCallerCheckedFuncRef,
+    opt_realloc: *mut VMFuncRef,
     string_encoding: StringEncoding,
     args_and_results: *mut ValRaw,
     nargs_and_results: usize,
@@ -201,7 +201,7 @@ impl ComponentInstance {
     ///
     /// This can only be called after `idx` has been initialized at runtime
     /// during the instantiation process of a component.
-    pub fn runtime_realloc(&self, idx: RuntimeReallocIndex) -> NonNull<VMCallerCheckedFuncRef> {
+    pub fn runtime_realloc(&self, idx: RuntimeReallocIndex) -> NonNull<VMFuncRef> {
         unsafe {
             let ret = *self.vmctx_plus_offset::<NonNull<_>>(self.offsets.runtime_realloc(idx));
             debug_assert!(ret.as_ptr() as usize != INVALID_PTR);
@@ -213,10 +213,7 @@ impl ComponentInstance {
     ///
     /// This can only be called after `idx` has been initialized at runtime
     /// during the instantiation process of a component.
-    pub fn runtime_post_return(
-        &self,
-        idx: RuntimePostReturnIndex,
-    ) -> NonNull<VMCallerCheckedFuncRef> {
+    pub fn runtime_post_return(&self, idx: RuntimePostReturnIndex) -> NonNull<VMFuncRef> {
         unsafe {
             let ret = *self.vmctx_plus_offset::<NonNull<_>>(self.offsets.runtime_post_return(idx));
             debug_assert!(ret.as_ptr() as usize != INVALID_PTR);
@@ -246,28 +243,22 @@ impl ComponentInstance {
     ///
     /// This can only be called after `idx` has been initialized at runtime
     /// during the instantiation process of a component.
-    pub fn lowering_anyfunc(&self, idx: LoweredIndex) -> NonNull<VMCallerCheckedFuncRef> {
-        unsafe { self.anyfunc(self.offsets.lowering_anyfunc(idx)) }
+    pub fn lowering_func_ref(&self, idx: LoweredIndex) -> NonNull<VMFuncRef> {
+        unsafe { self.func_ref(self.offsets.lowering_func_ref(idx)) }
     }
 
-    /// Same as `lowering_anyfunc` except for the functions that always trap.
-    pub fn always_trap_anyfunc(
-        &self,
-        idx: RuntimeAlwaysTrapIndex,
-    ) -> NonNull<VMCallerCheckedFuncRef> {
-        unsafe { self.anyfunc(self.offsets.always_trap_anyfunc(idx)) }
+    /// Same as `lowering_func_ref` except for the functions that always trap.
+    pub fn always_trap_func_ref(&self, idx: RuntimeAlwaysTrapIndex) -> NonNull<VMFuncRef> {
+        unsafe { self.func_ref(self.offsets.always_trap_func_ref(idx)) }
     }
 
-    /// Same as `lowering_anyfunc` except for the transcoding functions.
-    pub fn transcoder_anyfunc(
-        &self,
-        idx: RuntimeTranscoderIndex,
-    ) -> NonNull<VMCallerCheckedFuncRef> {
-        unsafe { self.anyfunc(self.offsets.transcoder_anyfunc(idx)) }
+    /// Same as `lowering_func_ref` except for the transcoding functions.
+    pub fn transcoder_func_ref(&self, idx: RuntimeTranscoderIndex) -> NonNull<VMFuncRef> {
+        unsafe { self.func_ref(self.offsets.transcoder_func_ref(idx)) }
     }
 
-    unsafe fn anyfunc(&self, offset: u32) -> NonNull<VMCallerCheckedFuncRef> {
-        let ret = self.vmctx_plus_offset::<VMCallerCheckedFuncRef>(offset);
+    unsafe fn func_ref(&self, offset: u32) -> NonNull<VMFuncRef> {
+        let ret = self.vmctx_plus_offset::<VMFuncRef>(offset);
         debug_assert!(
             mem::transmute::<Option<NonNull<VMWasmCallFunction>>, usize>((*ret).wasm_call)
                 != INVALID_PTR
@@ -294,11 +285,7 @@ impl ComponentInstance {
     }
 
     /// Same as `set_runtime_memory` but for realloc function pointers.
-    pub fn set_runtime_realloc(
-        &mut self,
-        idx: RuntimeReallocIndex,
-        ptr: NonNull<VMCallerCheckedFuncRef>,
-    ) {
+    pub fn set_runtime_realloc(&mut self, idx: RuntimeReallocIndex, ptr: NonNull<VMFuncRef>) {
         unsafe {
             let storage = self.vmctx_plus_offset(self.offsets.runtime_realloc(idx));
             debug_assert!(*storage as usize == INVALID_PTR);
@@ -310,7 +297,7 @@ impl ComponentInstance {
     pub fn set_runtime_post_return(
         &mut self,
         idx: RuntimePostReturnIndex,
-        ptr: NonNull<VMCallerCheckedFuncRef>,
+        ptr: NonNull<VMFuncRef>,
     ) {
         unsafe {
             let storage = self.vmctx_plus_offset(self.offsets.runtime_post_return(idx));
@@ -345,8 +332,8 @@ impl ComponentInstance {
                 *self.vmctx_plus_offset::<usize>(self.offsets.lowering_data(idx)) == INVALID_PTR
             );
             *self.vmctx_plus_offset(self.offsets.lowering(idx)) = lowering;
-            self.set_anyfunc(
-                self.offsets.lowering_anyfunc(idx),
+            self.set_func_ref(
+                self.offsets.lowering_func_ref(idx),
                 wasm_call,
                 native_call,
                 array_call,
@@ -365,8 +352,8 @@ impl ComponentInstance {
         type_index: VMSharedSignatureIndex,
     ) {
         unsafe {
-            self.set_anyfunc(
-                self.offsets.always_trap_anyfunc(idx),
+            self.set_func_ref(
+                self.offsets.always_trap_func_ref(idx),
                 wasm_call,
                 native_call,
                 array_call,
@@ -385,8 +372,8 @@ impl ComponentInstance {
         type_index: VMSharedSignatureIndex,
     ) {
         unsafe {
-            self.set_anyfunc(
-                self.offsets.transcoder_anyfunc(idx),
+            self.set_func_ref(
+                self.offsets.transcoder_func_ref(idx),
                 wasm_call,
                 native_call,
                 array_call,
@@ -395,7 +382,7 @@ impl ComponentInstance {
         }
     }
 
-    unsafe fn set_anyfunc(
+    unsafe fn set_func_ref(
         &mut self,
         offset: u32,
         wasm_call: NonNull<VMWasmCallFunction>,
@@ -405,7 +392,7 @@ impl ComponentInstance {
     ) {
         debug_assert!(*self.vmctx_plus_offset::<usize>(offset) == INVALID_PTR);
         let vmctx = VMOpaqueContext::from_vmcomponent(self.vmctx());
-        *self.vmctx_plus_offset(offset) = VMCallerCheckedFuncRef {
+        *self.vmctx_plus_offset(offset) = VMFuncRef {
             wasm_call: Some(wasm_call),
             native_call,
             array_call,
@@ -439,17 +426,17 @@ impl ComponentInstance {
                 *self.vmctx_plus_offset(offset) = INVALID_PTR;
                 let offset = self.offsets.lowering_data(i);
                 *self.vmctx_plus_offset(offset) = INVALID_PTR;
-                let offset = self.offsets.lowering_anyfunc(i);
+                let offset = self.offsets.lowering_func_ref(i);
                 *self.vmctx_plus_offset(offset) = INVALID_PTR;
             }
             for i in 0..self.offsets.num_always_trap {
                 let i = RuntimeAlwaysTrapIndex::from_u32(i);
-                let offset = self.offsets.always_trap_anyfunc(i);
+                let offset = self.offsets.always_trap_func_ref(i);
                 *self.vmctx_plus_offset(offset) = INVALID_PTR;
             }
             for i in 0..self.offsets.num_transcoders {
                 let i = RuntimeTranscoderIndex::from_u32(i);
-                let offset = self.offsets.transcoder_anyfunc(i);
+                let offset = self.offsets.transcoder_func_ref(i);
                 *self.vmctx_plus_offset(offset) = INVALID_PTR;
             }
             for i in 0..self.offsets.num_runtime_memories {
@@ -536,11 +523,7 @@ impl OwnedComponentInstance {
     }
 
     /// See `ComponentInstance::set_runtime_realloc`
-    pub fn set_runtime_realloc(
-        &mut self,
-        idx: RuntimeReallocIndex,
-        ptr: NonNull<VMCallerCheckedFuncRef>,
-    ) {
+    pub fn set_runtime_realloc(&mut self, idx: RuntimeReallocIndex, ptr: NonNull<VMFuncRef>) {
         unsafe { self.instance_mut().set_runtime_realloc(idx, ptr) }
     }
 
@@ -548,7 +531,7 @@ impl OwnedComponentInstance {
     pub fn set_runtime_post_return(
         &mut self,
         idx: RuntimePostReturnIndex,
-        ptr: NonNull<VMCallerCheckedFuncRef>,
+        ptr: NonNull<VMFuncRef>,
     ) {
         unsafe { self.instance_mut().set_runtime_post_return(idx, ptr) }
     }
