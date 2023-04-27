@@ -138,12 +138,7 @@ pub async fn poll_oneoff<'a>(poll: &mut Poll<'a>) -> Result<(), Error> {
 
     Ok(())
 }
-pub struct SyncSched {}
-impl SyncSched {
-    pub fn new() -> Self {
-        Self {}
-    }
-}
+pub struct SyncSched;
 #[async_trait::async_trait]
 impl WasiSched for SyncSched {
     async fn poll_oneoff<'a>(&self, poll: &mut Poll<'a>) -> Result<(), Error> {
@@ -157,7 +152,4 @@ impl WasiSched for SyncSched {
         std::thread::sleep(duration);
         Ok(())
     }
-}
-pub fn sched_ctx() -> Box<dyn WasiSched> {
-    Box::new(SyncSched::new())
 }

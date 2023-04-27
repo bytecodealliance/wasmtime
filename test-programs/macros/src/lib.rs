@@ -3,34 +3,42 @@ use quote::quote;
 
 include!(concat!(env!("OUT_DIR"), "/components.rs"));
 
-#[proc_macro]
-pub fn command_tests(_input: TokenStream) -> TokenStream {
-    let tests = COMMAND_COMPONENTS.iter().map(|(stem, file)| {
-        let name = quote::format_ident!("{}", stem);
-        let runner = quote::format_ident!("run_{}", stem);
+fn compiled_components(components: &[(&str, &str)]) -> TokenStream {
+    let globals = components.iter().map(|(stem, file)| {
+        let global = quote::format_ident!("{}_COMPONENT", stem.to_uppercase());
         quote! {
-            #[test_log::test(tokio::test)]
-            async fn #name() -> anyhow::Result<()> {
-                let (store, inst) = instantiate(#file).await?;
-                #runner(store, inst).await
+            lazy_static::lazy_static! {
+                static ref #global: wasmtime::component::Component = {
+                    wasmtime::component::Component::from_file(&ENGINE, #file).unwrap()
+                };
             }
         }
     });
-    quote!(#(#tests)*).into()
+
+    let cases = components.iter().map(|(stem, _file)| {
+        let global = quote::format_ident!("{}_COMPONENT", stem.to_uppercase());
+        quote! {
+            #stem => #global.clone()
+        }
+    });
+    quote! {
+        #(#globals)*
+        fn get_component(s: &str) -> wasmtime::component::Component {
+            match s {
+                #(#cases),*,
+                _ => panic!("no such component: {}", s),
+            }
+        }
+    }
+    .into()
 }
 
 #[proc_macro]
-pub fn reactor_tests(_input: TokenStream) -> TokenStream {
-    let tests = REACTOR_COMPONENTS.iter().map(|(stem, file)| {
-        let name = quote::format_ident!("{}", stem);
-        let runner = quote::format_ident!("run_{}", stem);
-        quote! {
-            #[test_log::test(tokio::test)]
-            async fn #name() -> anyhow::Result<()> {
-                let (store, inst) = instantiate(#file).await?;
-                #runner(store, inst).await
-            }
-        }
-    });
-    quote!(#(#tests)*).into()
+pub fn command_components(_input: TokenStream) -> TokenStream {
+    compiled_components(COMMAND_COMPONENTS)
+}
+
+#[proc_macro]
+pub fn reactor_components(_input: TokenStream) -> TokenStream {
+    compiled_components(REACTOR_COMPONENTS)
 }

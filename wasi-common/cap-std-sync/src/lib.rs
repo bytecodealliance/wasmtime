@@ -39,11 +39,10 @@ pub mod net;
 pub mod sched;
 pub mod stdio;
 
-pub use cap_std::ambient_authority;
 pub use cap_std::fs::Dir;
 pub use cap_std::net::TcpListener;
+pub use cap_std::AmbientAuthority;
 pub use clocks::clocks_ctx;
-pub use sched::sched_ctx;
 
 use crate::net::{Network, TcpSocket};
 use cap_net_ext::AddressFamily;
@@ -52,65 +51,90 @@ use cap_std::net::{Ipv4Addr, Ipv6Addr, Pool};
 use ipnet::IpNet;
 use wasi_common::{
     network::WasiNetwork,
+    pipe::{ReadPipe, WritePipe},
     stream::{InputStream, OutputStream},
     table::Table,
     tcp_socket::WasiTcpSocket,
-    Error, WasiCtx,
+    Error, WasiCtx, WasiCtxBuilder as B,
 };
 
-pub struct WasiCtxBuilder(WasiCtx);
+pub struct WasiCtxBuilder {
+    b: B,
+    pool: Pool,
+}
 
 impl WasiCtxBuilder {
     pub fn new() -> Self {
-        WasiCtxBuilder(WasiCtx::new(
-            random_ctx(),
-            clocks_ctx(),
-            sched_ctx(),
-            Table::new(),
-            Box::new(create_network),
-            Box::new(create_tcp_socket),
-        ))
+        WasiCtxBuilder {
+            b: B::default()
+                .set_random(random_ctx())
+                .set_clocks(clocks_ctx())
+                .set_sched(sched::SyncSched)
+                .set_stdin(ReadPipe::new(std::io::empty()))
+                .set_stdout(WritePipe::new(std::io::sink()))
+                .set_stderr(WritePipe::new(std::io::sink())),
+            pool: Pool::new(),
+        }
     }
-    pub fn stdin(mut self, f: Box<dyn InputStream>) -> Self {
-        self.0.set_stdin(f);
+    pub fn stdin(mut self, f: impl InputStream + 'static) -> Self {
+        self.b = self.b.set_stdin(f);
         self
     }
-    pub fn stdout(mut self, f: Box<dyn OutputStream>) -> Self {
-        self.0.set_stdout(f);
+    pub fn stdout(mut self, f: impl OutputStream + 'static) -> Self {
+        self.b = self.b.set_stdout(f);
         self
     }
-    pub fn stderr(mut self, f: Box<dyn OutputStream>) -> Self {
-        self.0.set_stderr(f);
+    pub fn stderr(mut self, f: impl OutputStream + 'static) -> Self {
+        self.b = self.b.set_stderr(f);
+        self
+    }
+    pub fn set_args(mut self, args: &[impl AsRef<str>]) -> Self {
+        self.b = self.b.set_args(args);
+        self
+    }
+    pub fn push_env(mut self, k: impl AsRef<str>, v: impl AsRef<str>) -> Self {
+        self.b = self.b.push_env(k, v);
         self
     }
     pub fn inherit_stdin(self) -> Self {
-        self.stdin(Box::new(crate::stdio::stdin()))
+        self.stdin(crate::stdio::stdin())
     }
     pub fn inherit_stdout(self) -> Self {
-        self.stdout(Box::new(crate::stdio::stdout()))
+        self.stdout(crate::stdio::stdout())
     }
     pub fn inherit_stderr(self) -> Self {
-        self.stderr(Box::new(crate::stdio::stderr()))
+        self.stderr(crate::stdio::stderr())
     }
     pub fn inherit_stdio(self) -> Self {
         self.inherit_stdin().inherit_stdout().inherit_stderr()
     }
-    pub fn inherit_network(mut self) -> Self {
-        self.0
-            .insert_ip_net_port_any(IpNet::new(Ipv4Addr::UNSPECIFIED.into(), 0).unwrap());
-        self.0
-            .insert_ip_net_port_any(IpNet::new(Ipv6Addr::UNSPECIFIED.into(), 0).unwrap());
+    pub fn inherit_network(mut self, ambient_authority: AmbientAuthority) -> Self {
+        self.pool.insert_ip_net_port_any(
+            IpNet::new(Ipv4Addr::UNSPECIFIED.into(), 0).unwrap(),
+            ambient_authority,
+        );
+        self.pool.insert_ip_net_port_any(
+            IpNet::new(Ipv6Addr::UNSPECIFIED.into(), 0).unwrap(),
+            ambient_authority,
+        );
         self
     }
-    pub fn preopened_dir(
-        mut self,
-        dir: cap_std::fs::Dir,
-        guest_path: &str,
-    ) -> Result<Self, anyhow::Error> {
-        let dir = Box::new(crate::dir::Dir::from_cap_std(dir));
-        self.0.push_preopened_dir(dir, guest_path)?;
-        Ok(self)
+    pub fn preopened_dir(mut self, dir: cap_std::fs::Dir, guest_path: &str) -> Self {
+        let dir = crate::dir::Dir::from_cap_std(dir);
+        self.b = self.b.push_preopened_dir(dir, guest_path);
+        self
     }
+    pub fn preopened_dir_impl(
+        mut self,
+        dir: impl wasi_common::WasiDir + 'static,
+        guest_path: &str,
+    ) -> Self {
+        self.b = self.b.push_preopened_dir(dir, guest_path);
+        self
+    }
+
+    /* FIXME: idk how to translate this idiom because i don't have any tests checked in showing its
+     * use. we cant allocate the fd until build().
     pub fn preopened_listener(mut self, fd: u32, listener: impl Into<TcpSocket>) -> Self {
         let listener: TcpSocket = listener.into();
         let listener: Box<dyn WasiTcpSocket> = Box::new(TcpSocket::from(listener));
@@ -118,12 +142,17 @@ impl WasiCtxBuilder {
         self.0.insert_listener(fd, listener);
         self
     }
+    */
     pub fn args(mut self, args: &[impl AsRef<str>]) -> Self {
-        self.0.set_args(args);
+        self.b = self.b.set_args(args);
         self
     }
-    pub fn build(self) -> WasiCtx {
-        self.0
+    pub fn build(self) -> anyhow::Result<WasiCtx> {
+        self.b
+            .set_pool(self.pool)
+            .set_network_creator(Box::new(create_network))
+            .set_tcp_socket_creator(Box::new(create_tcp_socket))
+            .build(Table::new())
     }
 }
 

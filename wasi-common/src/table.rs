@@ -23,11 +23,6 @@ impl Table {
         }
     }
 
-    /// Insert a resource at a certain index.
-    pub fn insert_at(&mut self, key: u32, a: Box<dyn Any + Send + Sync>) {
-        self.map.insert(key, a);
-    }
-
     /// Insert a resource at the next available index.
     pub fn push(&mut self, a: Box<dyn Any + Send + Sync>) -> Result<u32, Error> {
         // NOTE: The performance of this new key calculation could be very bad once keys wrap
@@ -44,6 +39,28 @@ impl Table {
             self.map.insert(key, a);
             return Ok(key);
         }
+    }
+
+    pub fn push_file(&mut self, file: Box<dyn crate::WasiFile>) -> Result<u32, Error> {
+        self.push(Box::new(file))
+    }
+
+    pub fn push_dir(&mut self, dir: Box<dyn crate::WasiDir>) -> Result<u32, Error> {
+        self.push(Box::new(dir))
+    }
+
+    pub fn push_input_stream(
+        &mut self,
+        istream: Box<dyn crate::InputStream>,
+    ) -> Result<u32, Error> {
+        self.push(Box::new(istream))
+    }
+
+    pub fn push_output_stream(
+        &mut self,
+        ostream: Box<dyn crate::OutputStream>,
+    ) -> Result<u32, Error> {
+        self.push(Box::new(ostream))
     }
 
     /// Check if the table has a resource at the given index.

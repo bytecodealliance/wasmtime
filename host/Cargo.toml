@@ -22,3 +22,4 @@ tracing-subscriber = { version = "0.3", default-features = false, features = ["e
 test-programs-macros = { path = "../test-programs/macros" }
 test-log = { version = "0.2", default-features = false, features = ["trace"] }
 tempfile = "3.3.0"
+lazy_static = "1"
