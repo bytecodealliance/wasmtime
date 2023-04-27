@@ -197,16 +197,8 @@ unsafe fn test_fd_readwrite_valid_fd(dir_fd: wasi::Fd) {
     wasi::fd_close(nonempty_file).expect("close");
 
     // Now open the file for reading
-    let readable_fd = wasi::path_open(
-        dir_fd,
-        0,
-        "readable_file",
-        0,
-        wasi::RIGHTS_FD_READ | wasi::RIGHTS_POLL_FD_READWRITE,
-        0,
-        0,
-    )
-    .expect("opening a readable file");
+    let readable_fd = wasi::path_open(dir_fd, 0, "readable_file", 0, wasi::RIGHTS_FD_READ, 0, 0)
+        .expect("opening a readable file");
 
     assert!(
         readable_fd > libc::STDERR_FILENO as wasi::Fd,
@@ -218,7 +210,7 @@ unsafe fn test_fd_readwrite_valid_fd(dir_fd: wasi::Fd) {
         0,
         "writable_file",
         wasi::OFLAGS_CREAT,
-        wasi::RIGHTS_FD_WRITE | wasi::RIGHTS_POLL_FD_READWRITE,
+        wasi::RIGHTS_FD_WRITE,
         0,
         0,
     )
