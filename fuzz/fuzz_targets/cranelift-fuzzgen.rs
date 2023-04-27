@@ -162,7 +162,7 @@ impl fmt::Debug for TestCase {
         if !self.compare_against_host {
             writeln!(f, ";; Testing against optimized version")?;
         }
-        PrintableTestCase::run(&self.isa, &self.functions, &self.inputs).fmt(f)
+        PrintableTestCase::run(&self.isa, &self.functions, &self.ctrl_planes, &self.inputs).fmt(f)
     }
 }
 

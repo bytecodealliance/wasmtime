@@ -2,6 +2,7 @@ use cranelift::codegen::data_value::DataValue;
 use cranelift::codegen::ir::Function;
 use cranelift::prelude::settings::{self, SettingKind};
 use cranelift::prelude::*;
+use cranelift_control::ControlPlane;
 use std::fmt;
 
 use crate::TestCaseInput;
@@ -17,17 +18,23 @@ pub struct PrintableTestCase<'a> {
     kind: TestCaseKind,
     isa: &'a isa::OwnedTargetIsa,
     functions: &'a [Function],
+    ctrl_planes: &'a [ControlPlane],
     // Only applicable for run test cases
     inputs: &'a [TestCaseInput],
 }
 
 impl<'a> PrintableTestCase<'a> {
     /// Emits a `test compile` test case.
-    pub fn compile(isa: &'a isa::OwnedTargetIsa, functions: &'a [Function]) -> Self {
+    pub fn compile(
+        isa: &'a isa::OwnedTargetIsa,
+        functions: &'a [Function],
+        ctrl_planes: &'a [ControlPlane],
+    ) -> Self {
         Self {
             kind: TestCaseKind::Compile,
             isa,
             functions,
+            ctrl_planes,
             inputs: &[],
         }
     }
@@ -38,12 +45,14 @@ impl<'a> PrintableTestCase<'a> {
     pub fn run(
         isa: &'a isa::OwnedTargetIsa,
         functions: &'a [Function],
+        ctrl_planes: &'a [ControlPlane],
         inputs: &'a [TestCaseInput],
     ) -> Self {
         Self {
             kind: TestCaseKind::Run,
             isa,
             functions,
+            ctrl_planes,
             inputs,
         }
     }
@@ -76,7 +85,10 @@ impl<'a> fmt::Debug for PrintableTestCase<'a> {
 
         // Print the functions backwards, so that the main function is printed last
         // and near the test inputs for run test cases.
-        for func in self.functions.iter().rev() {
+        for (i, func) in self.functions.iter().enumerate().rev() {
+            if let Some(ctrl_plane) = self.ctrl_planes.get(i) {
+                writeln!(f, "{}", ctrl_plane)?;
+            }
             writeln!(f, "{}\n", func)?;
         }
 

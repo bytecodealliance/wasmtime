@@ -1,6 +1,8 @@
 //! Shims for ControlPlane when chaos mode is disabled. Enables
 //! unconditional use of the type and its methods throughout cranelift.
 
+use std::fmt::Display;
+
 /// A shim for ControlPlane when chaos mode is disabled.
 /// Please see the [crate-level documentation](crate).
 #[derive(Debug, Clone, Default)]
@@ -29,5 +31,11 @@ impl ControlPlane {
     #[inline]
     pub fn get_decision(&mut self) -> bool {
         false
+    }
+}
+
+impl Display for ControlPlane {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "control plane: ()")
     }
 }

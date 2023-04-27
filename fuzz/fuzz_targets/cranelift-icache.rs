@@ -92,7 +92,7 @@ impl fmt::Debug for FunctionWithIsa {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // TODO: We could avoid the clone here.
         let funcs = &[self.func.clone()];
-        PrintableTestCase::compile(&self.isa, funcs).fmt(f)
+        PrintableTestCase::compile(&self.isa, funcs, &[]).fmt(f)
     }
 }
 

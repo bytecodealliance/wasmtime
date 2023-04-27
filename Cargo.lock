@@ -690,6 +690,7 @@ dependencies = [
  "anyhow",
  "arbitrary",
  "cranelift",
+ "cranelift-control",
  "cranelift-native",
  "once_cell",
  "target-lexicon",
