@@ -940,10 +940,9 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
 mod test {
     use super::*;
     use crate::{
-        CompiledModuleId, Imports, MemoryImage, ModuleRuntimeInfo, StorePtr, VMFunctionBody,
-        VMSharedSignatureIndex,
+        CompiledModuleId, Imports, MemoryImage, ModuleRuntimeInfo, StorePtr, VMSharedSignatureIndex,
     };
-    use std::sync::Arc;
+    use std::{ptr::NonNull, sync::Arc};
     use wasmtime_environ::{DefinedFuncIndex, DefinedMemoryIndex};
 
     pub(crate) fn empty_runtime_info(
@@ -955,7 +954,25 @@ mod test {
             fn module(&self) -> &Arc<wasmtime_environ::Module> {
                 &self.0
             }
-            fn function(&self, _: DefinedFuncIndex) -> *mut VMFunctionBody {
+            fn function(&self, _: DefinedFuncIndex) -> NonNull<crate::VMWasmCallFunction> {
+                unimplemented!()
+            }
+            fn array_to_wasm_trampoline(
+                &self,
+                _: DefinedFuncIndex,
+            ) -> Option<crate::VMArrayCallFunction> {
+                unimplemented!()
+            }
+            fn native_to_wasm_trampoline(
+                &self,
+                _: DefinedFuncIndex,
+            ) -> Option<std::ptr::NonNull<crate::VMNativeCallFunction>> {
+                unimplemented!()
+            }
+            fn wasm_to_native_trampoline(
+                &self,
+                _: VMSharedSignatureIndex,
+            ) -> Option<std::ptr::NonNull<crate::VMWasmCallFunction>> {
                 unimplemented!()
             }
             fn memory_image(

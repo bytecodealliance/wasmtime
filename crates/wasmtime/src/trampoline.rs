@@ -5,19 +5,19 @@ mod global;
 mod memory;
 mod table;
 
+pub use self::func::*;
+pub use self::global::*;
 pub(crate) use memory::MemoryCreatorProxy;
 
-pub use self::func::*;
-use self::global::create_global;
 use self::memory::create_memory;
 use self::table::create_table;
 use crate::module::BareModuleInfo;
 use crate::store::{InstanceId, StoreOpaque};
-use crate::{GlobalType, MemoryType, TableType, Val};
+use crate::{MemoryType, TableType};
 use anyhow::Result;
 use std::any::Any;
 use std::sync::Arc;
-use wasmtime_environ::{GlobalIndex, MemoryIndex, Module, TableIndex};
+use wasmtime_environ::{MemoryIndex, Module, TableIndex};
 use wasmtime_runtime::{
     Imports, InstanceAllocationRequest, InstanceAllocator, OnDemandInstanceAllocator, SharedMemory,
     StorePtr, VMFunctionImport, VMSharedSignatureIndex,
@@ -52,17 +52,6 @@ fn create_handle(
 
         Ok(store.add_instance(handle, true))
     }
-}
-
-pub fn generate_global_export(
-    store: &mut StoreOpaque,
-    gt: &GlobalType,
-    val: Val,
-) -> Result<wasmtime_runtime::ExportGlobal> {
-    let instance = create_global(store, gt, val)?;
-    Ok(store
-        .instance_mut(instance)
-        .get_exported_global(GlobalIndex::from_u32(0)))
 }
 
 pub fn generate_memory_export(

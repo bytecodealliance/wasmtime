@@ -6,12 +6,10 @@
 use cranelift_codegen::ir;
 use cranelift_codegen::isa::{unwind::UnwindInfo, CallConv, TargetIsa};
 use cranelift_entity::PrimaryMap;
-use cranelift_wasm::{DefinedFuncIndex, FuncIndex, WasmFuncType, WasmType};
+use cranelift_wasm::{DefinedFuncIndex, WasmFuncType, WasmType};
 use target_lexicon::{Architecture, CallingConvention};
 use wasmtime_cranelift_shared::Relocation;
-use wasmtime_environ::{
-    FilePos, InstructionAddressMap, ModuleTranslation, ModuleTypes, TrapInformation,
-};
+use wasmtime_environ::{FilePos, InstructionAddressMap, TrapInformation};
 
 pub use builder::builder;
 
@@ -21,6 +19,9 @@ mod debug;
 mod func_environ;
 
 type CompiledFunctions<'a> = PrimaryMap<DefinedFuncIndex, &'a CompiledFunction>;
+
+/// Trap code used for debug assertions we emit in our JIT code.
+const DEBUG_ASSERT_TRAP_CODE: u16 = u16::MAX;
 
 /// Compiled function: machine code body, jump table offsets, and unwind information.
 #[derive(Default)]
@@ -122,66 +123,94 @@ fn value_type(isa: &dyn TargetIsa, ty: WasmType) -> ir::types::Type {
     }
 }
 
-/// Returns a cranelift signature suitable to indirectly call the wasm signature
-/// specified by `wasm`.
+/// Get the Cranelift signature with the native calling convention for the given
+/// Wasm function type.
 ///
-/// This will implicitly use the default calling convention for `isa` since to
-/// indirectly call a wasm function it must be possibly exported somehow (e.g.
-/// this assumes the function target to call doesn't use the "fast" calling
-/// convention).
-fn indirect_signature(isa: &dyn TargetIsa, wasm: &WasmFuncType) -> ir::Signature {
+/// This parameters will start with the callee and caller VM contexts, followed
+/// by the translation of each of the Wasm parameter types to native types. The
+/// results are the Wasm result types translated to native types.
+///
+/// The signature uses the wasmtime variant of the target's default calling
+/// convention. The only difference from the default calling convention is how
+/// multiple results are handled.
+///
+/// When there is only a single result, or zero results, these signatures are
+/// suitable for calling from the host via
+///
+/// ```ignore
+/// unsafe extern "C" fn(
+///     callee_vmctx: *mut VMOpaqueContext,
+///     caller_vmctx: *mut VMOpaqueContext,
+///     // ...wasm parameter types...
+/// ) -> // ...wasm result type...
+/// ```
+///
+/// When there are more than one results, these signatures are suitable for
+/// calling from the host via
+///
+/// ```ignore
+/// unsafe extern "C" fn(
+///     callee_vmctx: *mut VMOpaqueContext,
+///     caller_vmctx: *mut VMOpaqueContext,
+///     // ...wasm parameter types...
+///     retptr: *mut (),
+/// ) -> // ...wasm result type 0...
+/// ```
+///
+/// where the first result is returned directly and the rest via the return
+/// pointer.
+fn native_call_signature(isa: &dyn TargetIsa, wasm: &WasmFuncType) -> ir::Signature {
     let mut sig = blank_sig(isa, wasmtime_call_conv(isa));
     push_types(isa, &mut sig, wasm);
-    return sig;
+    sig
 }
 
-/// Returns the cranelift function signature of the function specified.
+/// Get the Cranelift signature for all array-call functions, that is:
 ///
-/// Note that this will determine the calling convention for the function, and
-/// namely includes an optimization where functions never exported from a module
-/// use a custom theoretically faster calling convention instead of the default.
-fn func_signature(
-    isa: &dyn TargetIsa,
-    translation: &ModuleTranslation,
-    types: &ModuleTypes,
-    index: FuncIndex,
-) -> ir::Signature {
-    let func = &translation.module.functions[index];
-    let call_conv = match translation.module.defined_func_index(index) {
-        // If this is a defined function in the module and it doesn't escape
-        // then we can optimize this function to use the fastest calling
-        // convention since it's purely an internal implementation detail of
-        // the module itself.
-        Some(_idx) if !func.is_escaping() => {
-            let on_apple_aarch64 = isa
-                .triple()
-                .default_calling_convention()
-                .unwrap_or(CallingConvention::SystemV)
-                == CallingConvention::AppleAarch64;
+/// ```ignore
+/// unsafe extern "C" fn(
+///     callee_vmctx: *mut VMOpaqueContext,
+///     caller_vmctx: *mut VMOpaqueContext,
+///     values_ptr: *mut ValRaw,
+///     values_len: usize,
+/// )
+/// ```
+///
+/// This signature uses the target's default calling convention.
+///
+/// Note that regardless of the Wasm function type, the array-call calling
+/// convention always uses that same signature.
+fn array_call_signature(isa: &dyn TargetIsa) -> ir::Signature {
+    let mut sig = blank_sig(isa, CallConv::triple_default(isa.triple()));
+    // The array-call signature has an added parameter for the `values_vec`
+    // input/output buffer in addition to the size of the buffer, in units
+    // of `ValRaw`.
+    sig.params.push(ir::AbiParam::new(isa.pointer_type()));
+    sig.params.push(ir::AbiParam::new(isa.pointer_type()));
+    sig
+}
 
-            if on_apple_aarch64 {
-                // FIXME: We need an Apple-specific calling convention, so that
-                // Cranelift's ABI implementation generates unwinding directives
-                // about pointer authentication usage, so we can't just use
-                // `CallConv::Fast`.
-                CallConv::WasmtimeAppleAarch64
-            } else if isa.triple().architecture == Architecture::S390x {
-                // On S390x we need a Wasmtime calling convention to ensure
-                // we're using little-endian vector lane order.
-                wasmtime_call_conv(isa)
-            } else {
-                CallConv::Fast
-            }
-        }
-
-        // ... otherwise if it's an imported function or if it's a possibly
-        // exported function then we use the default ABI wasmtime would
-        // otherwise select.
-        _ => wasmtime_call_conv(isa),
+/// Get the internal Wasm calling convention signature for the given type.
+fn wasm_call_signature(isa: &dyn TargetIsa, wasm_func_ty: &WasmFuncType) -> ir::Signature {
+    let call_conv = if isa.triple().default_calling_convention().ok()
+        == Some(CallingConvention::AppleAarch64)
+    {
+        // FIXME: We need an Apple-specific calling convention, so that
+        // Cranelift's ABI implementation generates unwinding directives
+        // about pointer authentication usage, so we can't just use
+        // `CallConv::Fast`.
+        CallConv::WasmtimeAppleAarch64
+    } else if isa.triple().architecture == Architecture::S390x {
+        // On S390x we need a Wasmtime calling convention to ensure
+        // we're using little-endian vector lane order.
+        wasmtime_call_conv(isa)
+    } else {
+        CallConv::Fast
     };
+
     let mut sig = blank_sig(isa, call_conv);
-    push_types(isa, &mut sig, &types[func.signature]);
-    return sig;
+    push_types(isa, &mut sig, wasm_func_ty);
+    sig
 }
 
 /// Returns the reference type to use for the provided wasm type.

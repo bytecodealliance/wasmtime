@@ -233,6 +233,8 @@ WASM_API_EXTERN wasmtime_error_t *wasmtime_func_call(
  *
  * * The `args_and_results` pointer has enough space to hold all the parameters
  *   and all the results (but not at the same time).
+ * * The `args_and_results_len` contains the length of the `args_and_results`
+ *   buffer.
  * * Parameters must all be configured as if they were the correct type.
  * * Values such as `externref` and `funcref` are valid within the store being
  *   called.
@@ -245,6 +247,7 @@ WASM_API_EXTERN wasmtime_error_t *wasmtime_func_call_unchecked(
     wasmtime_context_t *store,
     const wasmtime_func_t *func,
     wasmtime_val_raw_t *args_and_results,
+    size_t args_and_results_len,
     wasm_trap_t **trap
 );
 

@@ -44,6 +44,10 @@ fn bench_sequential(c: &mut Criterion, path: &Path) {
                 panic!("failed to load benchmark `{}`: {:?}", path.display(), e)
             });
             let mut linker = Linker::new(&engine);
+            // Add these imports so we can benchmark instantiation of Sightglass
+            // benchmark programs.
+            linker.func_wrap("bench", "start", || {}).unwrap();
+            linker.func_wrap("bench", "end", || {}).unwrap();
             wasmtime_wasi::add_to_linker(&mut linker, |cx| cx).unwrap();
             let pre = linker
                 .instantiate_pre(&module)
@@ -74,6 +78,10 @@ fn bench_parallel(c: &mut Criterion, path: &Path) {
             let module =
                 Module::from_file(&engine, path).expect("failed to load WASI example module");
             let mut linker = Linker::new(&engine);
+            // Add these imports so we can benchmark instantiation of Sightglass
+            // benchmark programs.
+            linker.func_wrap("bench", "start", || {}).unwrap();
+            linker.func_wrap("bench", "end", || {}).unwrap();
             wasmtime_wasi::add_to_linker(&mut linker, |cx| cx).unwrap();
             let pre = Arc::new(
                 linker

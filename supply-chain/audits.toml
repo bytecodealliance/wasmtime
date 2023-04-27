@@ -16,6 +16,14 @@ user-id = 696
 start = "2019-03-16"
 end = "2024-03-10"
 
+[[wildcard-audits.derive_arbitrary]]
+who = "Nick Fitzgerald <fitzgen@gmail.com>"
+criteria = "safe-to-deploy"
+user-id = 696
+start = "2020-01-14"
+end = "2024-04-27"
+notes = "I am an author of this crate"
+
 [[wildcard-audits.wasm-encoder]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"

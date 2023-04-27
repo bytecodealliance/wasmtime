@@ -7,7 +7,7 @@ use std::{
 };
 use std::{convert::TryFrom, sync::Arc};
 use wasmtime_environ::{ModuleTypes, PrimaryMap, SignatureIndex, WasmFuncType};
-use wasmtime_runtime::{VMSharedSignatureIndex, VMTrampoline};
+use wasmtime_runtime::VMSharedSignatureIndex;
 
 /// Represents a collection of shared signatures.
 ///
@@ -19,27 +19,19 @@ use wasmtime_runtime::{VMSharedSignatureIndex, VMTrampoline};
 pub struct SignatureCollection {
     registry: Arc<RwLock<SignatureRegistryInner>>,
     signatures: PrimaryMap<SignatureIndex, VMSharedSignatureIndex>,
-    trampolines: HashMap<VMSharedSignatureIndex, VMTrampoline>,
+    reverse_signatures: HashMap<VMSharedSignatureIndex, SignatureIndex>,
 }
 
 impl SignatureCollection {
-    /// Creates a signature collection for a module given the module's signatures
-    /// and trampolines.
-    pub fn new_for_module(
-        registry: &SignatureRegistry,
-        types: &ModuleTypes,
-        trampolines: impl Iterator<Item = (SignatureIndex, VMTrampoline)>,
-    ) -> Self {
-        let (signatures, trampolines) = registry
-            .0
-            .write()
-            .unwrap()
-            .register_for_module(types, trampolines);
+    /// Creates a signature collection for a module given the module's signatures.
+    pub fn new_for_module(registry: &SignatureRegistry, types: &ModuleTypes) -> Self {
+        let signatures = registry.0.write().unwrap().register_for_module(types);
+        let reverse_signatures = signatures.iter().map(|(k, v)| (*v, k)).collect();
 
         Self {
             registry: registry.0.clone(),
             signatures,
-            trampolines,
+            reverse_signatures,
         }
     }
 
@@ -57,15 +49,15 @@ impl SignatureCollection {
         self.signatures.get(index).copied()
     }
 
-    /// Gets a trampoline for a registered signature.
-    pub fn trampoline(&self, index: VMSharedSignatureIndex) -> Option<VMTrampoline> {
-        self.trampolines.get(&index).copied()
+    /// Get the module-local signature index for the given shared signature index.
+    pub fn local_signature(&self, index: VMSharedSignatureIndex) -> Option<SignatureIndex> {
+        self.reverse_signatures.get(&index).copied()
     }
 }
 
 impl Drop for SignatureCollection {
     fn drop(&mut self) {
-        if !self.signatures.is_empty() || !self.trampolines.is_empty() {
+        if !self.signatures.is_empty() {
             self.registry.write().unwrap().unregister_signatures(self);
         }
     }
@@ -88,24 +80,13 @@ impl SignatureRegistryInner {
     fn register_for_module(
         &mut self,
         types: &ModuleTypes,
-        trampolines: impl Iterator<Item = (SignatureIndex, VMTrampoline)>,
-    ) -> (
-        PrimaryMap<SignatureIndex, VMSharedSignatureIndex>,
-        HashMap<VMSharedSignatureIndex, VMTrampoline>,
-    ) {
+    ) -> PrimaryMap<SignatureIndex, VMSharedSignatureIndex> {
         let mut sigs = PrimaryMap::default();
-        let mut map = HashMap::default();
-
         for (idx, ty) in types.wasm_signatures() {
             let b = sigs.push(self.register(ty));
             assert_eq!(idx, b);
         }
-
-        for (index, trampoline) in trampolines {
-            map.insert(sigs[index], trampoline);
-        }
-
-        (sigs, map)
+        sigs
     }
 
     fn register(&mut self, ty: &WasmFuncType) -> VMSharedSignatureIndex {
@@ -154,18 +135,8 @@ impl SignatureRegistryInner {
     }
 
     fn unregister_signatures(&mut self, collection: &SignatureCollection) {
-        // If the collection has a populated signatures map, use it to deregister
-        // This is always 1:1 from entry to registration
-        if !collection.signatures.is_empty() {
-            for (_, index) in collection.signatures.iter() {
-                self.unregister_entry(*index, 1);
-            }
-        } else {
-            // Otherwise, use the trampolines map, which has reference counts related
-            // to the stored index
-            for (index, _) in collection.trampolines.iter() {
-                self.unregister_entry(*index, 1);
-            }
+        for (_, index) in collection.signatures.iter() {
+            self.unregister_entry(*index, 1);
         }
     }
 

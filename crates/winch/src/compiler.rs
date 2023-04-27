@@ -76,21 +76,33 @@ impl wasmtime_environ::Compiler for Compiler {
         ))
     }
 
-    fn compile_host_to_wasm_trampoline(
+    fn compile_array_to_wasm_trampoline(
         &self,
-        ty: &wasmtime_environ::WasmFuncType,
+        translation: &ModuleTranslation<'_>,
+        types: &ModuleTypes,
+        index: DefinedFuncIndex,
     ) -> Result<Box<dyn Any + Send>, CompileError> {
-        let wasm_ty = wasmparser::FuncType::new(
-            ty.params().iter().copied().map(Into::into),
-            ty.returns().iter().copied().map(Into::into),
-        );
+        let _ = (translation, types, index);
+        todo!()
+    }
 
-        let buffer = self
-            .isa
-            .host_to_wasm_trampoline(&wasm_ty)
-            .map_err(|e| CompileError::Codegen(format!("{:?}", e)))?;
+    fn compile_native_to_wasm_trampoline(
+        &self,
+        translation: &ModuleTranslation<'_>,
+        types: &ModuleTypes,
+        index: DefinedFuncIndex,
+    ) -> Result<Box<dyn Any + Send>, CompileError> {
+        let _ = (translation, types, index);
+        todo!()
+    }
 
-        Ok(Box::new(CompiledFunction(buffer)))
+    fn compile_wasm_to_native_trampoline(
+        &self,
+        translation: &ModuleTranslation<'_>,
+        wasm_func_ty: &wasmtime_environ::WasmFuncType,
+    ) -> Result<Box<dyn Any + Send>, CompileError> {
+        let _ = (translation, wasm_func_ty);
+        todo!()
     }
 
     fn append_code(
@@ -133,12 +145,15 @@ impl wasmtime_environ::Compiler for Compiler {
         Ok(ret)
     }
 
-    fn emit_trampoline_obj(
+    fn emit_trampolines_for_array_call_host_func(
         &self,
-        _ty: &wasmtime_environ::WasmFuncType,
-        _host_fn: usize,
-        _obj: &mut wasmtime_environ::object::write::Object<'static>,
+        ty: &wasmtime_environ::WasmFuncType,
+        // Actually `host_fn: VMArrayCallFunction` but that type is not
+        // available in `wasmtime-environ`.
+        host_fn: usize,
+        obj: &mut Object<'static>,
     ) -> Result<(FunctionLoc, FunctionLoc)> {
+        drop((ty, host_fn, obj));
         todo!()
     }
 

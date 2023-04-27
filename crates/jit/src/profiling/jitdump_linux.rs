@@ -88,10 +88,30 @@ impl ProfilingAgent for JitDumpAgent {
         }
 
         // Note: these are the trampolines into exported functions.
-        for (idx, func, len) in module.trampolines() {
-            let (addr, len) = (func as usize as *const u8, len);
+        for (name, body) in module
+            .array_to_wasm_trampolines()
+            .map(|(i, body)| {
+                (
+                    format!("wasm::array_to_wasm_trampoline[{}]", i.index()),
+                    body,
+                )
+            })
+            .chain(module.native_to_wasm_trampolines().map(|(i, body)| {
+                (
+                    format!("wasm::native_to_wasm_trampoline[{}]", i.index()),
+                    body,
+                )
+            }))
+            .chain(module.wasm_to_native_trampolines().map(|(i, body)| {
+                (
+                    format!("wasm::wasm_to_native_trampolines[{}]", i.index()),
+                    body,
+                )
+            }))
+        {
+            let addr = body.as_ptr();
+            let len = body.len();
             let timestamp = jitdump_file.get_time_stamp();
-            let name = format!("wasm::trampoline[{}]", idx.index());
             if let Err(err) =
                 jitdump_file.dump_code_load_record(&name, addr, len, timestamp, pid, tid)
             {
