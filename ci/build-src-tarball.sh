@@ -4,8 +4,8 @@ set -ex
 
 # Determine the name of the tarball
 tag=dev
-if [[ $GITHUB_REF == refs/tags/v* ]]; then
-  tag=${GITHUB_REF#refs/tags/}
+if [[ $GITHUB_REF == refs/heads/release-* ]]; then
+  tag=v$(./ci/print-current-version.sh)
 fi
 pkgname=wasmtime-$tag-src
 
