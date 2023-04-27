@@ -412,7 +412,7 @@ unsafe fn activations_table_insert_with_gc(vmctx: *mut VMContext, externref: *mu
 // Perform a Wasm `global.get` for `externref` globals.
 unsafe fn externref_global_get(vmctx: *mut VMContext, index: u32) -> *mut u8 {
     let index = GlobalIndex::from_u32(index);
-    let instance = (*vmctx).instance();
+    let instance = (*vmctx).instance_mut();
     let global = instance.defined_or_imported_global_ptr(index);
     match (*global).as_externref().clone() {
         None => ptr::null_mut(),
@@ -435,7 +435,7 @@ unsafe fn externref_global_set(vmctx: *mut VMContext, index: u32, externref: *mu
     };
 
     let index = GlobalIndex::from_u32(index);
-    let instance = (*vmctx).instance();
+    let instance = (*vmctx).instance_mut();
     let global = instance.defined_or_imported_global_ptr(index);
 
     // Swap the new `externref` value into the global before we drop the old

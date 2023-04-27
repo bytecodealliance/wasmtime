@@ -200,16 +200,10 @@ pub unsafe trait InstanceAllocator {
     fn purge_module(&self, module: CompiledModuleId);
 }
 
-fn get_table_init_start(init: &TableInitializer, instance: &Instance) -> Result<u32> {
+fn get_table_init_start(init: &TableInitializer, instance: &mut Instance) -> Result<u32> {
     match init.base {
         Some(base) => {
-            let val = unsafe {
-                if let Some(def_index) = instance.module().defined_global_index(base) {
-                    *instance.global(def_index).as_u32()
-                } else {
-                    *(*instance.imported_global(base).from).as_u32()
-                }
-            };
+            let val = unsafe { *(*instance.defined_or_imported_global_ptr(base)).as_u32() };
 
             init.offset
                 .checked_add(val)
@@ -256,10 +250,11 @@ fn initialize_tables(instance: &mut Instance, module: &Module) -> Result<()> {
         TableInitialization::FuncTable { segments, .. }
         | TableInitialization::Segments { segments } => {
             for segment in segments {
+                let start = get_table_init_start(segment, instance)?;
                 instance.table_init_segment(
                     segment.table_index,
                     &segment.elements,
-                    get_table_init_start(segment, instance)?,
+                    start,
                     0,
                     segment.elements.len() as u32,
                 )?;
@@ -270,22 +265,18 @@ fn initialize_tables(instance: &mut Instance, module: &Module) -> Result<()> {
     Ok(())
 }
 
-fn get_memory_init_start(init: &MemoryInitializer, instance: &Instance) -> Result<u64> {
+fn get_memory_init_start(init: &MemoryInitializer, instance: &mut Instance) -> Result<u64> {
     match init.base {
         Some(base) => {
             let mem64 = instance.module().memory_plans[init.memory_index]
                 .memory
                 .memory64;
             let val = unsafe {
-                let global = if let Some(def_index) = instance.module().defined_global_index(base) {
-                    instance.global(def_index)
-                } else {
-                    &*instance.imported_global(base).from
-                };
+                let global = instance.defined_or_imported_global_ptr(base);
                 if mem64 {
-                    *global.as_u64()
+                    *(*global).as_u64()
                 } else {
-                    u64::from(*global.as_u32())
+                    u64::from(*(*global).as_u32())
                 }
             };
 
@@ -297,7 +288,10 @@ fn get_memory_init_start(init: &MemoryInitializer, instance: &Instance) -> Resul
     }
 }
 
-fn check_memory_init_bounds(instance: &Instance, initializers: &[MemoryInitializer]) -> Result<()> {
+fn check_memory_init_bounds(
+    instance: &mut Instance,
+    initializers: &[MemoryInitializer],
+) -> Result<()> {
     for init in initializers {
         let memory = instance.get_memory(init.memory_index);
         let start = get_memory_init_start(init, instance)?;
@@ -319,21 +313,18 @@ fn check_memory_init_bounds(instance: &Instance, initializers: &[MemoryInitializ
 }
 
 fn initialize_memories(instance: &mut Instance, module: &Module) -> Result<()> {
-    let memory_size_in_pages =
-        &|memory| (instance.get_memory(memory).current_length() as u64) / u64::from(WASM_PAGE_SIZE);
+    let memory_size_in_pages = &|instance: &mut Instance, memory| {
+        (instance.get_memory(memory).current_length() as u64) / u64::from(WASM_PAGE_SIZE)
+    };
 
     // Loads the `global` value and returns it as a `u64`, but sign-extends
     // 32-bit globals which can be used as the base for 32-bit memories.
-    let get_global_as_u64 = &|global| unsafe {
-        let def = if let Some(def_index) = instance.module().defined_global_index(global) {
-            instance.global(def_index)
-        } else {
-            &*instance.imported_global(global).from
-        };
+    let get_global_as_u64 = &mut |instance: &mut Instance, global| unsafe {
+        let def = instance.defined_or_imported_global_ptr(global);
         if module.globals[global].wasm_ty == WasmType::I64 {
-            *def.as_u64()
+            *(*def).as_u64()
         } else {
-            u64::from(*def.as_u32())
+            u64::from(*(*def).as_u32())
         }
     };
 
@@ -346,11 +337,12 @@ fn initialize_memories(instance: &mut Instance, module: &Module) -> Result<()> {
     // so errors only happen if an out-of-bounds segment is found, in which case
     // a trap is returned.
     let ok = module.memory_initialization.init_memory(
+        instance,
         InitMemory::Runtime {
             memory_size_in_pages,
             get_global_as_u64,
         },
-        &mut |memory_index, init| {
+        |instance, memory_index, init| {
             // If this initializer applies to a defined memory but that memory
             // doesn't need initialization, due to something like copy-on-write
             // pre-initializing it via mmap magic, then this initializer can be
@@ -383,7 +375,7 @@ fn initialize_memories(instance: &mut Instance, module: &Module) -> Result<()> {
 fn check_init_bounds(instance: &mut Instance, module: &Module) -> Result<()> {
     check_table_init_bounds(instance, module)?;
 
-    match &instance.module().memory_initialization {
+    match &module.memory_initialization {
         MemoryInitialization::Segmented(initializers) => {
             check_memory_init_bounds(instance, initializers)?;
         }

@@ -1,5 +1,16 @@
 --------------------------------------------------------------------------------
 
+## 6.0.2
+
+Released 2023-04-27.
+
+### Fixed
+
+* Undefined Behavior in Rust runtime functions
+  [GHSA-ch89-5g45-qwc7](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-ch89-5g45-qwc7)
+
+--------------------------------------------------------------------------------
+
 ## 6.0.1
 
 Released 2023-03-08.

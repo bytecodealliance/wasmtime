@@ -203,7 +203,7 @@ pub unsafe fn catch_traps<'a, F>(
 where
     F: FnMut(*mut VMContext),
 {
-    let limits = (*caller).instance().runtime_limits();
+    let limits = (*caller).instance_mut().runtime_limits();
 
     let result = CallThreadState::new(signal_handler, capture_backtrace, *limits).with(|cx| {
         wasmtime_setjmp(
