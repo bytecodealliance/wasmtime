@@ -244,7 +244,7 @@ dependencies = [
  "cap-primitives",
  "cap-std",
  "io-lifetimes",
- "windows-sys",
+ "windows-sys 0.45.0",
 ]
 
 [[package]]
@@ -260,7 +260,7 @@ dependencies = [
  "ipnet",
  "maybe-owned",
  "rustix",
- "windows-sys",
+ "windows-sys 0.45.0",
  "winx",
 ]
 
@@ -525,7 +525,7 @@ dependencies = [
 
 [[package]]
 name = "cranelift"
-version = "0.94.0"
+version = "0.94.1"
 dependencies = [
  "cranelift-codegen",
  "cranelift-frontend",
@@ -533,14 +533,14 @@ dependencies = [
 
 [[package]]
 name = "cranelift-bforest"
-version = "0.94.0"
+version = "0.94.1"
 dependencies = [
  "cranelift-entity",
 ]
 
 [[package]]
 name = "cranelift-codegen"
-version = "0.94.0"
+version = "0.94.1"
 dependencies = [
  "anyhow",
  "bincode",
@@ -566,18 +566,18 @@ dependencies = [
 
 [[package]]
 name = "cranelift-codegen-meta"
-version = "0.94.0"
+version = "0.94.1"
 dependencies = [
  "cranelift-codegen-shared",
 ]
 
 [[package]]
 name = "cranelift-codegen-shared"
-version = "0.94.0"
+version = "0.94.1"
 
 [[package]]
 name = "cranelift-entity"
-version = "0.94.0"
+version = "0.94.1"
 dependencies = [
  "serde",
 ]
@@ -612,7 +612,7 @@ dependencies = [
 
 [[package]]
 name = "cranelift-frontend"
-version = "0.94.0"
+version = "0.94.1"
 dependencies = [
  "cranelift-codegen",
  "hashbrown 0.13.1",
@@ -635,7 +635,7 @@ dependencies = [
 
 [[package]]
 name = "cranelift-interpreter"
-version = "0.94.0"
+version = "0.94.1"
 dependencies = [
  "cranelift-codegen",
  "cranelift-entity",
@@ -649,7 +649,7 @@ dependencies = [
 
 [[package]]
 name = "cranelift-isle"
-version = "0.94.0"
+version = "0.94.1"
 dependencies = [
  "codespan-reporting",
  "log",
@@ -658,7 +658,7 @@ dependencies = [
 
 [[package]]
 name = "cranelift-jit"
-version = "0.94.0"
+version = "0.94.1"
 dependencies = [
  "anyhow",
  "cranelift",
@@ -673,12 +673,12 @@ dependencies = [
  "region",
  "target-lexicon",
  "wasmtime-jit-icache-coherence",
- "windows-sys",
+ "windows-sys 0.45.0",
 ]
 
 [[package]]
 name = "cranelift-module"
-version = "0.94.0"
+version = "0.94.1"
 dependencies = [
  "anyhow",
  "cranelift-codegen",
@@ -687,7 +687,7 @@ dependencies = [
 
 [[package]]
 name = "cranelift-native"
-version = "0.94.0"
+version = "0.94.1"
 dependencies = [
  "cranelift-codegen",
  "libc",
@@ -696,7 +696,7 @@ dependencies = [
 
 [[package]]
 name = "cranelift-object"
-version = "0.94.0"
+version = "0.94.1"
 dependencies = [
  "anyhow",
  "cranelift-codegen",
@@ -710,7 +710,7 @@ dependencies = [
 
 [[package]]
 name = "cranelift-reader"
-version = "0.94.0"
+version = "0.94.1"
 dependencies = [
  "anyhow",
  "cranelift-codegen",
@@ -720,7 +720,7 @@ dependencies = [
 
 [[package]]
 name = "cranelift-serde"
-version = "0.94.0"
+version = "0.94.1"
 dependencies = [
  "clap 3.2.8",
  "cranelift-codegen",
@@ -766,7 +766,7 @@ dependencies = [
 
 [[package]]
 name = "cranelift-wasm"
-version = "0.94.0"
+version = "0.94.1"
 dependencies = [
  "cranelift-codegen",
  "cranelift-entity",
@@ -1216,7 +1216,7 @@ checksum = "8ef1a30ae415c3a691a4f41afddc2dbcd6d70baf338368d85ebc1e8ed92cedb9"
 dependencies = [
  "cfg-if",
  "rustix",
- "windows-sys",
+ "windows-sys 0.45.0",
 ]
 
 [[package]]
@@ -1290,7 +1290,7 @@ checksum = "857cf27edcb26c2a36d84b2954019573d335bb289876113aceacacdca47a4fd4"
 dependencies = [
  "io-lifetimes",
  "rustix",
- "windows-sys",
+ "windows-sys 0.45.0",
 ]
 
 [[package]]
@@ -1529,7 +1529,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d79107d6e60d78351e11f0a2dc9d0eaf304a7efb592e92603783afb8479c7d97"
 dependencies = [
  "io-lifetimes",
- "windows-sys",
+ "windows-sys 0.45.0",
 ]
 
 [[package]]
@@ -1539,7 +1539,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1abeb7a0dd0f8181267ff8adc397075586500b81b28a73e8a0208b00fc170fb3"
 dependencies = [
  "libc",
- "windows-sys",
+ "windows-sys 0.45.0",
 ]
 
 [[package]]
@@ -1557,7 +1557,7 @@ dependencies = [
  "hermit-abi 0.3.0",
  "io-lifetimes",
  "rustix",
- "windows-sys",
+ "windows-sys 0.45.0",
 ]
 
 [[package]]
@@ -1802,34 +1802,14 @@ dependencies = [
 
 [[package]]
 name = "mio"
-version = "0.8.2"
+version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "52da4364ffb0e4fe33a9841a98a3f3014fb964045ce4f7a45a398243c8d6b0c9"
+checksum = "e5d732bc30207a6423068df043e3d02e0735b155ad7ce1a6f76fe2baa5b158de"
 dependencies = [
  "libc",
  "log",
- "miow",
- "ntapi",
  "wasi 0.11.0+wasi-snapshot-preview1",
- "winapi",
-]
-
-[[package]]
-name = "miow"
-version = "0.3.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b9f1c5b025cda876f66ef43a113f91ebc9f4ccef34843000e0adf6ebbab84e21"
-dependencies = [
- "winapi",
-]
-
-[[package]]
-name = "ntapi"
-version = "0.3.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c28774a7fd2fbb4f0babd8237ce554b73af68021b5f695a3cebd6c59bac0980f"
-dependencies = [
- "winapi",
+ "windows-sys 0.42.0",
 ]
 
 [[package]]
@@ -2521,7 +2501,7 @@ dependencies = [
  "libc",
  "linux-raw-sys",
  "once_cell",
- "windows-sys",
+ "windows-sys 0.45.0",
 ]
 
 [[package]]
@@ -2788,7 +2768,7 @@ dependencies = [
  "fd-lock",
  "io-lifetimes",
  "rustix",
- "windows-sys",
+ "windows-sys 0.45.0",
  "winx",
 ]
 
@@ -3138,7 +3118,7 @@ checksum = "9c8d87e72b64a3b4db28d11ce29237c246188f4f51057d65a7eab63b7987e423"
 
 [[package]]
 name = "wasi-cap-std-sync"
-version = "7.0.0"
+version = "7.0.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3156,12 +3136,12 @@ dependencies = [
  "tempfile",
  "tracing",
  "wasi-common",
- "windows-sys",
+ "windows-sys 0.45.0",
 ]
 
 [[package]]
 name = "wasi-common"
-version = "7.0.0"
+version = "7.0.1"
 dependencies = [
  "anyhow",
  "bitflags",
@@ -3174,7 +3154,7 @@ dependencies = [
  "tracing",
  "wasmtime",
  "wiggle",
- "windows-sys",
+ "windows-sys 0.45.0",
 ]
 
 [[package]]
@@ -3208,7 +3188,7 @@ dependencies = [
 
 [[package]]
 name = "wasi-tokio"
-version = "7.0.0"
+version = "7.0.1"
 dependencies = [
  "anyhow",
  "cap-std",
@@ -3410,7 +3390,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime"
-version = "7.0.0"
+version = "7.0.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3440,19 +3420,19 @@ dependencies = [
  "wasmtime-runtime",
  "wasmtime-wasi",
  "wat",
- "windows-sys",
+ "windows-sys 0.45.0",
 ]
 
 [[package]]
 name = "wasmtime-asm-macros"
-version = "7.0.0"
+version = "7.0.1"
 dependencies = [
  "cfg-if",
 ]
 
 [[package]]
 name = "wasmtime-bench-api"
-version = "7.0.0"
+version = "7.0.1"
 dependencies = [
  "anyhow",
  "cap-std",
@@ -3470,7 +3450,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-c-api"
-version = "7.0.0"
+version = "7.0.1"
 dependencies = [
  "anyhow",
  "cap-std",
@@ -3494,7 +3474,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-cache"
-version = "7.0.0"
+version = "7.0.1"
 dependencies = [
  "anyhow",
  "base64",
@@ -3510,13 +3490,13 @@ dependencies = [
  "sha2 0.10.2",
  "tempfile",
  "toml",
- "windows-sys",
+ "windows-sys 0.45.0",
  "zstd",
 ]
 
 [[package]]
 name = "wasmtime-cli"
-version = "7.0.0"
+version = "7.0.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3558,12 +3538,12 @@ dependencies = [
  "wasmtime-wast",
  "wast 53.0.0",
  "wat",
- "windows-sys",
+ "windows-sys 0.45.0",
 ]
 
 [[package]]
 name = "wasmtime-cli-flags"
-version = "7.0.0"
+version = "7.0.1"
 dependencies = [
  "anyhow",
  "clap 3.2.8",
@@ -3575,7 +3555,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-component-macro"
-version = "7.0.0"
+version = "7.0.1"
 dependencies = [
  "anyhow",
  "component-macro-test-helpers",
@@ -3591,11 +3571,11 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-component-util"
-version = "7.0.0"
+version = "7.0.1"
 
 [[package]]
 name = "wasmtime-cranelift"
-version = "7.0.0"
+version = "7.0.1"
 dependencies = [
  "anyhow",
  "cranelift-codegen",
@@ -3614,7 +3594,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-environ"
-version = "7.0.0"
+version = "7.0.1"
 dependencies = [
  "anyhow",
  "atty",
@@ -3652,14 +3632,14 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-fiber"
-version = "7.0.0"
+version = "7.0.1"
 dependencies = [
  "backtrace",
  "cc",
  "cfg-if",
  "rustix",
  "wasmtime-asm-macros",
- "windows-sys",
+ "windows-sys 0.45.0",
 ]
 
 [[package]]
@@ -3717,7 +3697,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-jit"
-version = "7.0.0"
+version = "7.0.1"
 dependencies = [
  "addr2line",
  "anyhow",
@@ -3735,12 +3715,12 @@ dependencies = [
  "wasmtime-jit-debug",
  "wasmtime-jit-icache-coherence",
  "wasmtime-runtime",
- "windows-sys",
+ "windows-sys 0.45.0",
 ]
 
 [[package]]
 name = "wasmtime-jit-debug"
-version = "7.0.0"
+version = "7.0.1"
 dependencies = [
  "object",
  "once_cell",
@@ -3749,16 +3729,16 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-jit-icache-coherence"
-version = "7.0.0"
+version = "7.0.1"
 dependencies = [
  "cfg-if",
  "libc",
- "windows-sys",
+ "windows-sys 0.45.0",
 ]
 
 [[package]]
 name = "wasmtime-runtime"
-version = "7.0.0"
+version = "7.0.1"
 dependencies = [
  "anyhow",
  "cc",
@@ -3778,12 +3758,12 @@ dependencies = [
  "wasmtime-environ",
  "wasmtime-fiber",
  "wasmtime-jit-debug",
- "windows-sys",
+ "windows-sys 0.45.0",
 ]
 
 [[package]]
 name = "wasmtime-types"
-version = "7.0.0"
+version = "7.0.1"
 dependencies = [
  "cranelift-entity",
  "serde",
@@ -3793,7 +3773,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-wasi"
-version = "7.0.0"
+version = "7.0.1"
 dependencies = [
  "anyhow",
  "libc",
@@ -3806,7 +3786,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-wasi-crypto"
-version = "7.0.0"
+version = "7.0.1"
 dependencies = [
  "anyhow",
  "wasi-crypto",
@@ -3816,7 +3796,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-wasi-nn"
-version = "7.0.0"
+version = "7.0.1"
 dependencies = [
  "anyhow",
  "openvino",
@@ -3827,7 +3807,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-wasi-threads"
-version = "7.0.0"
+version = "7.0.1"
 dependencies = [
  "anyhow",
  "log",
@@ -3839,7 +3819,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-wast"
-version = "7.0.0"
+version = "7.0.1"
 dependencies = [
  "anyhow",
  "log",
@@ -3849,7 +3829,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-winch"
-version = "7.0.0"
+version = "7.0.1"
 dependencies = [
  "anyhow",
  "cranelift-codegen",
@@ -3861,7 +3841,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-wit-bindgen"
-version = "7.0.0"
+version = "7.0.1"
 dependencies = [
  "anyhow",
  "heck",
@@ -3921,7 +3901,7 @@ dependencies = [
 
 [[package]]
 name = "wiggle"
-version = "7.0.0"
+version = "7.0.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3938,7 +3918,7 @@ dependencies = [
 
 [[package]]
 name = "wiggle-generate"
-version = "7.0.0"
+version = "7.0.1"
 dependencies = [
  "anyhow",
  "heck",
@@ -3951,7 +3931,7 @@ dependencies = [
 
 [[package]]
 name = "wiggle-macro"
-version = "7.0.0"
+version = "7.0.1"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4006,7 +3986,7 @@ checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
 
 [[package]]
 name = "winch-codegen"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "anyhow",
  "cranelift-codegen",
@@ -4062,6 +4042,21 @@ dependencies = [
  "winch-codegen",
  "winch-filetests",
  "winch-test-macros",
+]
+
+[[package]]
+name = "windows-sys"
+version = "0.42.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5a3e1820f08b8513f676f7ab6c1f99ff312fb97b553d30ff4dd86f9f15728aa7"
+dependencies = [
+ "windows_aarch64_gnullvm",
+ "windows_aarch64_msvc",
+ "windows_i686_gnu",
+ "windows_i686_msvc",
+ "windows_x86_64_gnu",
+ "windows_x86_64_gnullvm",
+ "windows_x86_64_msvc",
 ]
 
 [[package]]
@@ -4138,7 +4133,7 @@ checksum = "129cd8ee937d535e1a239d9d3c9c0525af0454bc0967d9211a251be062513520"
 dependencies = [
  "bitflags",
  "io-lifetimes",
- "windows-sys",
+ "windows-sys 0.45.0",
 ]
 
 [[package]]
