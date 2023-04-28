@@ -631,7 +631,7 @@ impl wasmtime_environ::Compiler for Compiler {
     }
 
     fn min_function_alignment(&self) -> u32 {
-        self.isa.min_and_preferred_function_alignment().0
+        self.isa.function_alignment().minimum
     }
 
     fn create_systemv_cie(&self) -> Option<gimli::write::CommonInformationEntry> {
@@ -1042,7 +1042,7 @@ impl FunctionCompiler<'_> {
         // instead of the minimum alignment as this can help perf in niche
         // situations.
         let preferred_alignment = if body_and_tunables.is_some() {
-            self.compiler.isa.min_and_preferred_function_alignment().1
+            self.compiler.isa.function_alignment().preferred
         } else {
             1
         };

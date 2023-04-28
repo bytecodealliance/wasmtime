@@ -318,7 +318,7 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
 
     /// Returns the minimum function alignment and the preferred function
     /// alignment, for performance, required by this ISA.
-    fn min_and_preferred_function_alignment(&self) -> (u32, u32);
+    fn function_alignment(&self) -> FunctionAlignment;
 
     /// Create a polymorphic TargetIsa from this specific implementation.
     fn wrapped(self) -> OwnedTargetIsa
@@ -340,6 +340,19 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
     /// Currently this only returns false on x86 when some native features are
     /// not detected.
     fn has_native_fma(&self) -> bool;
+}
+
+/// Function alignment specifications as required by an ISA, returned by
+/// [`TargetIsa::function_alignment`].
+#[derive(Copy, Clone)]
+pub struct FunctionAlignment {
+    /// The minimum alignment required by an ISA, where all functions must be
+    /// aligned to at least this amount.
+    pub minimum: u32,
+    /// A "preferred" alignment which should be used for more
+    /// performance-sensitive situations. This can involve cache-line-aligning
+    /// for example to get more of a small function into fewer cache lines.
+    pub preferred: u32,
 }
 
 /// Methods implemented for free for target ISA!

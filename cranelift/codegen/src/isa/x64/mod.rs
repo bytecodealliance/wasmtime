@@ -8,7 +8,7 @@ use crate::ir::{Function, Type};
 #[cfg(feature = "unwind")]
 use crate::isa::unwind::systemv;
 use crate::isa::x64::{inst::regs::create_reg_env_systemv, settings as x64_settings};
-use crate::isa::Builder as IsaBuilder;
+use crate::isa::{Builder as IsaBuilder, FunctionAlignment};
 use crate::machinst::{
     compile, CompiledCode, CompiledCodeStencil, MachTextSectionBuilder, Reg, SigSet,
     TextSectionBuilder, VCode,
@@ -166,10 +166,13 @@ impl TargetIsa for X64Backend {
         Box::new(MachTextSectionBuilder::<inst::Inst>::new(num_funcs))
     }
 
-    /// Prefer an alignment of 16-bytes to hypothetically get the whole function
-    /// into a minimum number of lines.
-    fn min_and_preferred_function_alignment(&self) -> (u32, u32) {
-        (1, 16)
+    fn function_alignment(&self) -> FunctionAlignment {
+        FunctionAlignment {
+            minimum: 1,
+            // Prefer an alignment of 16-bytes to hypothetically get the whole
+            // function into a minimum number of lines.
+            preferred: 16,
+        }
     }
 
     #[cfg(feature = "disas")]

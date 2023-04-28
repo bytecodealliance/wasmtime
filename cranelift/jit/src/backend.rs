@@ -255,7 +255,7 @@ impl JITModule {
                 std::mem::size_of::<[u8; 16]>(),
                 self.isa
                     .symbol_alignment()
-                    .max(self.isa.min_and_preferred_function_alignment().0 as u64),
+                    .max(self.isa.function_alignment().minimum as u64),
             )
             .unwrap()
             .cast::<[u8; 16]>();
@@ -692,7 +692,7 @@ impl Module for JITModule {
 
         let size = compiled_code.code_info().total_size as usize;
         let align = alignment
-            .max(self.isa.min_and_preferred_function_alignment().0 as u64)
+            .max(self.isa.function_alignment().minimum as u64)
             .max(self.isa.symbol_alignment());
         let ptr = self
             .memory
@@ -776,7 +776,7 @@ impl Module for JITModule {
 
         let size = bytes.len();
         let align = alignment
-            .max(self.isa.min_and_preferred_function_alignment().0 as u64)
+            .max(self.isa.function_alignment().minimum as u64)
             .max(self.isa.symbol_alignment());
         let ptr = self
             .memory
