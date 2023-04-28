@@ -5,13 +5,7 @@ edition.workspace = true
 
 [dependencies]
 anyhow = { workspace = true }
-thiserror = { workspace = true }
-async-trait = { workspace = true }
 cap-std = { workspace = true }
-cap-rand = { workspace = true }
-cap-net-ext = { workspace = true }
-tokio = { version = "1.22.0", features = [ "rt", "macros" ] }
-tracing = { workspace = true }
 wasmtime = { git = "https://github.com/bytecodealliance/wasmtime", rev = "299131ae2d6655c49138bfab2c4469650763ef3b", features = ["component-model"] }
 wasi-common = { path = "../wasi-common" }
 wasi-cap-std-sync = { path = "../wasi-common/cap-std-sync" }

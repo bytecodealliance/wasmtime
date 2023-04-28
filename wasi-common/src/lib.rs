@@ -58,12 +58,14 @@ mod error;
 pub mod file;
 pub mod network;
 pub mod pipe;
+pub mod preview2;
 pub mod random;
 pub mod sched;
 pub mod stream;
 pub mod table;
 pub mod tcp_socket;
 pub mod udp_socket;
+pub mod wasi;
 
 pub use cap_fs_ext::SystemTimeSpec;
 pub use cap_rand::RngCore;

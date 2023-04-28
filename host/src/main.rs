@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
-use host::{wasi, WasiCtx};
 use wasi_cap_std_sync::WasiCtxBuilder;
+use wasi_common::{wasi, WasiCtx};
 use wasmtime::{
     component::{Component, Linker},
     Config, Engine, Store,
