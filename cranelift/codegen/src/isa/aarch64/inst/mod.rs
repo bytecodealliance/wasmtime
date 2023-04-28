@@ -975,7 +975,10 @@ impl MachInst for Inst {
         // more information on this ABI-implementation hack.
         let caller_clobbers = AArch64MachineDeps::get_regs_clobbered_by_call(caller_callconv);
         let callee_clobbers = AArch64MachineDeps::get_regs_clobbered_by_call(callee_callconv);
-        caller_clobbers != callee_clobbers
+
+        let mut all_clobbers = caller_clobbers;
+        all_clobbers.union_from(callee_clobbers);
+        all_clobbers != caller_clobbers
     }
 
     fn is_trap(&self) -> bool {
