@@ -7,7 +7,7 @@ use crate::isa::s390x::settings as s390x_settings;
 use crate::isa::unwind::systemv::RegisterMappingError;
 use crate::isa::{Builder as IsaBuilder, FunctionAlignment, TargetIsa};
 use crate::machinst::{
-    compile, CompiledCode, CompiledCodeStencil, MachTextSectionBuilder, Reg, SigSet,
+    compile, CompiledCode, CompiledCodeStencil, MachInst, MachTextSectionBuilder, Reg, SigSet,
     TextSectionBuilder, VCode,
 };
 use crate::result::CodegenResult;
@@ -168,10 +168,7 @@ impl TargetIsa for S390xBackend {
     }
 
     fn function_alignment(&self) -> FunctionAlignment {
-        FunctionAlignment {
-            minimum: 4,
-            preferred: 4,
-        }
+        inst::Inst::function_alignment()
     }
 
     #[cfg(feature = "disas")]

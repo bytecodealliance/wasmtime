@@ -3,7 +3,7 @@
 use crate::binemit::{Addend, CodeOffset, Reloc};
 use crate::ir::types::{F32, F64, I128, I16, I32, I64, I8, I8X16, R32, R64};
 use crate::ir::{types, ExternalName, MemFlags, Opcode, Type};
-use crate::isa::CallConv;
+use crate::isa::{CallConv, FunctionAlignment};
 use crate::machinst::*;
 use crate::{settings, CodegenError, CodegenResult};
 
@@ -1117,6 +1117,15 @@ impl MachInst for Inst {
             })
         } else {
             None
+        }
+    }
+
+    fn function_alignment() -> FunctionAlignment {
+        // We use 32-byte alignment for performance reasons, but for correctness
+        // we would only need 4-byte alignment.
+        FunctionAlignment {
+            minimum: 4,
+            preferred: 32,
         }
     }
 }

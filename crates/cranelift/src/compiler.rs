@@ -630,10 +630,6 @@ impl wasmtime_environ::Compiler for Compiler {
         Ok(())
     }
 
-    fn min_function_alignment(&self) -> u32 {
-        self.isa.function_alignment().minimum
-    }
-
     fn create_systemv_cie(&self) -> Option<gimli::write::CommonInformationEntry> {
         self.isa.create_systemv_cie()
     }

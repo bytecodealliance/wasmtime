@@ -7,7 +7,7 @@ use crate::isa::aarch64::settings as aarch64_settings;
 use crate::isa::unwind::systemv;
 use crate::isa::{Builder as IsaBuilder, FunctionAlignment, TargetIsa};
 use crate::machinst::{
-    compile, CompiledCode, CompiledCodeStencil, MachTextSectionBuilder, Reg, SigSet,
+    compile, CompiledCode, CompiledCodeStencil, MachInst, MachTextSectionBuilder, Reg, SigSet,
     TextSectionBuilder, VCode,
 };
 use crate::result::CodegenResult;
@@ -190,12 +190,7 @@ impl TargetIsa for AArch64Backend {
     }
 
     fn function_alignment(&self) -> FunctionAlignment {
-        // We use 32-byte alignment for performance reasons, but for correctness
-        // we would only need 4-byte alignment.
-        FunctionAlignment {
-            minimum: 4,
-            preferred: 32,
-        }
+        inst::Inst::function_alignment()
     }
 
     #[cfg(feature = "disas")]

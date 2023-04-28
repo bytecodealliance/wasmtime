@@ -129,7 +129,7 @@ impl wasmtime_environ::Compiler for Compiler {
             let (sym, range) = builder.append_func(
                 &sym,
                 func.data(),
-                self.min_function_alignment(),
+                self.isa.function_alignment(),
                 None,
                 &[],
                 |idx| resolve_reloc(i, idx),
@@ -185,10 +185,6 @@ impl wasmtime_environ::Compiler for Compiler {
         _funcs: &PrimaryMap<DefinedFuncIndex, (SymbolId, &(dyn Any + Send))>,
     ) -> Result<()> {
         todo!()
-    }
-
-    fn min_function_alignment(&self) -> u32 {
-        self.isa.function_alignment()
     }
 
     fn create_systemv_cie(&self) -> Option<gimli::write::CommonInformationEntry> {

@@ -10,7 +10,7 @@ use crate::isa::unwind::systemv;
 use crate::isa::x64::{inst::regs::create_reg_env_systemv, settings as x64_settings};
 use crate::isa::{Builder as IsaBuilder, FunctionAlignment};
 use crate::machinst::{
-    compile, CompiledCode, CompiledCodeStencil, MachTextSectionBuilder, Reg, SigSet,
+    compile, CompiledCode, CompiledCodeStencil, MachInst, MachTextSectionBuilder, Reg, SigSet,
     TextSectionBuilder, VCode,
 };
 use crate::result::{CodegenError, CodegenResult};
@@ -167,12 +167,7 @@ impl TargetIsa for X64Backend {
     }
 
     fn function_alignment(&self) -> FunctionAlignment {
-        FunctionAlignment {
-            minimum: 1,
-            // Prefer an alignment of 16-bytes to hypothetically get the whole
-            // function into a minimum number of lines.
-            preferred: 16,
-        }
+        Inst::function_alignment()
     }
 
     #[cfg(feature = "disas")]

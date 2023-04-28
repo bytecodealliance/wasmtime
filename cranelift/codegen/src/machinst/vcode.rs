@@ -1047,7 +1047,7 @@ impl<I: VCodeInst> VCode<I> {
         *ctrl_plane = state.take_ctrl_plane();
 
         // Emit the constants used by the function.
-        let mut alignment = 1;
+        let mut alignment = I::function_alignment().minimum;
         for (constant, data) in self.constants.iter() {
             alignment = data.alignment().max(alignment);
 

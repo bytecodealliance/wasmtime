@@ -115,12 +115,9 @@ impl<'a> ModuleTextBuilder<'a> {
         resolve_reloc_target: impl Fn(FuncIndex) -> usize,
     ) -> (SymbolId, Range<u64>) {
         let body_len = body.len() as u64;
-        let off = self.text.append(
-            true,
-            &body,
-            self.compiler.min_function_alignment().max(alignment),
-            &mut self.ctrl_plane,
-        );
+        let off = self
+            .text
+            .append(true, &body, alignment, &mut self.ctrl_plane);
 
         let symbol_id = self.obj.add_symbol(Symbol {
             name: name.as_bytes().to_vec(),
