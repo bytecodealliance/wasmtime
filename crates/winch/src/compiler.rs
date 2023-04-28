@@ -129,7 +129,7 @@ impl wasmtime_environ::Compiler for Compiler {
             let (sym, range) = builder.append_func(
                 &sym,
                 func.data(),
-                self.function_alignment(),
+                self.min_function_alignment(),
                 None,
                 &[],
                 |idx| resolve_reloc(i, idx),
@@ -187,7 +187,7 @@ impl wasmtime_environ::Compiler for Compiler {
         todo!()
     }
 
-    fn function_alignment(&self) -> u32 {
+    fn min_function_alignment(&self) -> u32 {
         self.isa.function_alignment()
     }
 
