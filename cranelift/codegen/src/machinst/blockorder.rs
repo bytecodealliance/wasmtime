@@ -215,9 +215,9 @@ impl BlockLoweringOrder {
             }
         }
 
-        // Arbitrarily reorder the basic blocks, which shoud have no impact
-        // on correctness. The entry block is an exception and has to stay
-        // first.
+        // If chaos-mode is enabled in the control plane, arbitrarily reorder
+        // the basic blocks, which should have no impact on correctness.
+        // The entry block is an exception and has to stay first.
         ctrl_plane.shuffle(&mut lowered_order[1..]);
 
         let lb_to_bindex = FxHashMap::from_iter(
