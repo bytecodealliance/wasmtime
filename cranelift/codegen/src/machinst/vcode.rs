@@ -1046,10 +1046,13 @@ impl<I: VCodeInst> VCode<I> {
         // emission state is not needed anymore, move control plane back out
         *ctrl_plane = state.take_ctrl_plane();
 
-        // Emit the constants used by the function.
-        let mut alignment = I::function_alignment().minimum;
+        // Emit the constants used by the function, and additionally collect
+        // this function's alignment at the same time. The alignment start at
+        // the ISA-defined minimum, and can possibly get increased if necessary
+        // for constants.
+        let mut function_alignment = I::function_alignment().minimum;
         for (constant, data) in self.constants.iter() {
-            alignment = data.alignment().max(alignment);
+            function_alignment = data.alignment().max(function_alignment);
 
             let label = buffer.get_label_for_constant(constant);
             buffer.defer_constant(label, data.alignment(), data.as_slice(), u32::max_value());
@@ -1093,7 +1096,7 @@ impl<I: VCodeInst> VCode<I> {
             dynamic_stackslot_offsets: self.abi.dynamic_stackslot_offsets().clone(),
             value_labels_ranges,
             frame_size,
-            alignment,
+            alignment: function_alignment,
         }
     }
 
