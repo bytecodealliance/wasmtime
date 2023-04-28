@@ -831,31 +831,24 @@ fn generate_coredump(err: &anyhow::Error, source_name: &str, coredump_path: &str
         .downcast_ref::<wasmtime::WasmBacktrace>()
         .ok_or_else(|| anyhow!("no wasm backtrace found to generate coredump with"))?;
 
-    let mut coredump_builder =
-        wasm_coredump_builder::CoredumpBuilder::new().executable_name(source_name);
-
-    {
-        let mut thread_builder = wasm_coredump_builder::ThreadBuilder::new().thread_name("main");
-
-        for frame in bt.frames() {
-            let coredump_frame = wasm_coredump_builder::FrameBuilder::new()
-                .codeoffset(frame.func_offset().unwrap_or(0) as u32)
-                .funcidx(frame.func_index())
-                .build();
-            thread_builder.add_frame(coredump_frame);
-        }
-
-        coredump_builder.add_thread(thread_builder.build());
+    let coredump = wasm_encoder::CoreDumpSection::new(source_name);
+    let mut stacksection = wasm_encoder::CoreDumpStackSection::new("main");
+    for f in bt.frames() {
+        stacksection.frame(
+            f.func_index(),
+            u32::try_from(f.func_offset().unwrap_or(0)).unwrap(),
+            // We don't currently have access to locals/stack values
+            [],
+            [],
+        );
     }
-
-    let coredump = coredump_builder
-        .serialize()
-        .map_err(|err| anyhow!("failed to serialize coredump: {}", err))?;
+    let mut module = wasm_encoder::Module::new();
+    module.section(&coredump);
+    module.section(&stacksection);
 
     let mut f = File::create(coredump_path)
         .context(format!("failed to create file at `{}`", coredump_path))?;
-    f.write_all(&coredump)
+    f.write_all(module.as_slice())
         .with_context(|| format!("failed to write coredump file at `{}`", coredump_path))?;
-
     Ok(())
 }
