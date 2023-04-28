@@ -955,22 +955,30 @@ impl MachInst for Inst {
     }
 
     fn is_included_in_clobbers(&self) -> bool {
+        let (caller_callconv, callee_callconv) = match self {
+            Inst::Args { .. } => return false,
+            Inst::Call { info } => (info.caller_callconv, info.callee_callconv),
+            Inst::CallInd { info } => (info.caller_callconv, info.callee_callconv),
+            _ => return true,
+        };
+
         // We exclude call instructions from the clobber-set when they are calls
-        // from caller to callee with the same ABI. Such calls cannot possibly
-        // force any new registers to be saved in the prologue, because anything
-        // that the callee clobbers, the caller is also allowed to clobber. This
-        // both saves work and enables us to more precisely follow the
+        // from caller to callee that both clobber the same register (such as
+        // using the same or similar ABIs). Such calls cannot possibly force any
+        // new registers to be saved in the prologue, because anything that the
+        // callee clobbers, the caller is also allowed to clobber. This both
+        // saves work and enables us to more precisely follow the
         // half-caller-save, half-callee-save SysV ABI for some vector
         // registers.
         //
         // See the note in [crate::isa::aarch64::abi::is_caller_save_reg] for
         // more information on this ABI-implementation hack.
-        match self {
-            &Inst::Args { .. } => false,
-            &Inst::Call { ref info } => info.caller_callconv != info.callee_callconv,
-            &Inst::CallInd { ref info } => info.caller_callconv != info.callee_callconv,
-            _ => true,
-        }
+        let caller_clobbers = AArch64MachineDeps::get_regs_clobbered_by_call(caller_callconv);
+        let callee_clobbers = AArch64MachineDeps::get_regs_clobbered_by_call(callee_callconv);
+
+        let mut all_clobbers = caller_clobbers;
+        all_clobbers.union_from(callee_clobbers);
+        all_clobbers != caller_clobbers
     }
 
     fn is_trap(&self) -> bool {
