@@ -38,6 +38,9 @@ impl ControlPlane {
     /// performed if the pseudo-random data is exhausted or the control
     /// plane was constructed with `default`.
     pub fn shuffle<T>(&mut self, slice: &mut [T]) {
+        if self.data.is_empty() {
+            return;
+        }
         let mut u = Unstructured::new(&self.data);
 
         // adapted from:
