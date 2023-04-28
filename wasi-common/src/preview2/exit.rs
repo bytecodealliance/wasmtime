@@ -1,5 +1,5 @@
 use crate::wasi::exit;
-use crate::WasiCtx;
+use crate::{I32Exit, WasiCtx};
 
 #[async_trait::async_trait]
 impl exit::Host for WasiCtx {
@@ -8,6 +8,6 @@ impl exit::Host for WasiCtx {
             Ok(()) => 0,
             Err(()) => 1,
         };
-        Err(anyhow::anyhow!(wasi_common::I32Exit(status)))
+        Err(anyhow::anyhow!(I32Exit(status)))
     }
 }

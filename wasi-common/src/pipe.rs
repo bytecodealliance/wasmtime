@@ -25,16 +25,10 @@ use system_interface::io::ReadReady;
 /// A variety of `From` impls are provided so that common pipe types are
 /// easy to create. For example:
 ///
-/// ```no_run
-/// use wasi_common::{pipe::ReadPipe, WasiCtx, Table};
+/// ```
+/// use wasi_common::{pipe::ReadPipe, WasiCtx};
 /// let stdin = ReadPipe::from("hello from stdin!");
-/// // Brint these instances from elsewhere (e.g. wasi-cap-std-sync):
-/// let random = todo!();
-/// let clocks = todo!();
-/// let sched = todo!();
-/// let table = Table::new();
-/// let mut ctx = WasiCtx::new(random, clocks, sched, table);
-/// ctx.set_stdin(Box::new(stdin.clone()));
+/// let builder = WasiCtx::builder().set_stdin(stdin);
 /// ```
 #[derive(Debug)]
 pub struct ReadPipe<R: Read + ReadReady> {
@@ -142,13 +136,8 @@ impl<R: Read + ReadReady + Any + Send + Sync> InputStream for ReadPipe<R> {
 /// ```no_run
 /// use wasi_common::{pipe::WritePipe, WasiCtx, Table};
 /// let stdout = WritePipe::new_in_memory();
-/// // Brint these instances from elsewhere (e.g. wasi-cap-std-sync):
-/// let random = todo!();
-/// let clocks = todo!();
-/// let sched = todo!();
-/// let table = Table::new();
-/// let mut ctx = WasiCtx::new(random, clocks, sched, table);
-/// ctx.set_stdout(Box::new(stdout.clone()));
+/// // This is not a complete builder, use a real one from e.g. wasi-cap-std-sync or elsewhere:
+/// let mut ctx = WasiCtx::builder().set_stdout(stdout.clone()).build(Table::new()).unwrap();
 /// // use ctx in an instance, then make sure it is dropped:
 /// drop(ctx);
 /// let contents: Vec<u8> = stdout.try_into_inner().expect("sole remaining reference to WritePipe").into_inner();

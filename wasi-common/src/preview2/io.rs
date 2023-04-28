@@ -1,14 +1,14 @@
 use crate::{
-    poll::PollableEntry,
+    preview2::poll::PollableEntry,
+    stream::TableStreamExt,
     wasi::poll::Pollable,
     wasi::streams::{self, InputStream, OutputStream, StreamError},
     WasiCtx,
 };
 use anyhow::anyhow;
-use wasi_common::stream::TableStreamExt;
 
-impl From<wasi_common::Error> for streams::Error {
-    fn from(error: wasi_common::Error) -> streams::Error {
+impl From<crate::Error> for streams::Error {
+    fn from(error: crate::Error) -> streams::Error {
         if let Some(_) = error.downcast_ref() {
             StreamError {}.into()
         } else {
@@ -21,13 +21,13 @@ impl From<wasi_common::Error> for streams::Error {
 impl streams::Host for WasiCtx {
     async fn drop_input_stream(&mut self, stream: InputStream) -> anyhow::Result<()> {
         self.table_mut()
-            .delete::<Box<dyn wasi_common::InputStream>>(stream)?;
+            .delete::<Box<dyn crate::InputStream>>(stream)?;
         Ok(())
     }
 
     async fn drop_output_stream(&mut self, stream: OutputStream) -> anyhow::Result<()> {
         self.table_mut()
-            .delete::<Box<dyn wasi_common::OutputStream>>(stream)?;
+            .delete::<Box<dyn crate::OutputStream>>(stream)?;
         Ok(())
     }
 
@@ -36,8 +36,7 @@ impl streams::Host for WasiCtx {
         stream: InputStream,
         len: u64,
     ) -> Result<(Vec<u8>, bool), streams::Error> {
-        let s: &mut Box<dyn wasi_common::InputStream> =
-            self.table_mut().get_input_stream_mut(stream)?;
+        let s: &mut Box<dyn crate::InputStream> = self.table_mut().get_input_stream_mut(stream)?;
 
         // Len could be any `u64` value, but we don't want to
         // allocate too much up front, so make a wild guess
@@ -62,7 +61,7 @@ impl streams::Host for WasiCtx {
     }
 
     async fn write(&mut self, stream: OutputStream, bytes: Vec<u8>) -> Result<u64, streams::Error> {
-        let s: &mut Box<dyn wasi_common::OutputStream> =
+        let s: &mut Box<dyn crate::OutputStream> =
             self.table_mut().get_output_stream_mut(stream)?;
 
         let bytes_written: u64 = s.write(&bytes).await?;
@@ -80,8 +79,7 @@ impl streams::Host for WasiCtx {
     }
 
     async fn skip(&mut self, stream: InputStream, len: u64) -> Result<(u64, bool), streams::Error> {
-        let s: &mut Box<dyn wasi_common::InputStream> =
-            self.table_mut().get_input_stream_mut(stream)?;
+        let s: &mut Box<dyn crate::InputStream> = self.table_mut().get_input_stream_mut(stream)?;
 
         let (bytes_skipped, end) = s.skip(len).await?;
 
@@ -102,7 +100,7 @@ impl streams::Host for WasiCtx {
         stream: OutputStream,
         len: u64,
     ) -> Result<u64, streams::Error> {
-        let s: &mut Box<dyn wasi_common::OutputStream> =
+        let s: &mut Box<dyn crate::OutputStream> =
             self.table_mut().get_output_stream_mut(stream)?;
 
         let bytes_written: u64 = s.write_zeroes(len).await?;
@@ -132,11 +130,11 @@ impl streams::Host for WasiCtx {
         //
         // [`get_many_mut`]: https://doc.rust-lang.org/stable/std/collections/hash_map/struct.HashMap.html#method.get_many_mut
         /*
-        let s: &mut Box<dyn wasi_common::InputStream> = ctx
+        let s: &mut Box<dyn crate::InputStream> = ctx
             .table_mut()
             .get_input_stream_mut(src)
             ?;
-        let d: &mut Box<dyn wasi_common::OutputStream> = ctx
+        let d: &mut Box<dyn crate::OutputStream> = ctx
             .table_mut()
             .get_output_stream_mut(dst)
             ?;
@@ -170,11 +168,11 @@ impl streams::Host for WasiCtx {
         //
         // [`get_many_mut`]: https://doc.rust-lang.org/stable/std/collections/hash_map/struct.HashMap.html#method.get_many_mut
         /*
-        let s: &mut Box<dyn wasi_common::InputStream> = ctx
+        let s: &mut Box<dyn crate::InputStream> = ctx
             .table_mut()
             .get_input_stream_mut(src)
             ?;
-        let d: &mut Box<dyn wasi_common::OutputStream> = ctx
+        let d: &mut Box<dyn crate::OutputStream> = ctx
             .table_mut()
             .get_output_stream_mut(dst)
             ?;

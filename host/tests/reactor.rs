@@ -1,7 +1,7 @@
 use anyhow::Result;
-use host::WasiCtx;
 use std::sync::{Arc, RwLock};
 use wasi_cap_std_sync::WasiCtxBuilder;
+use wasi_common::{wasi, WasiCtx};
 use wasmtime::{
     component::{Component, Linker},
     Config, Engine, Store,
@@ -27,11 +27,11 @@ wasmtime::component::bindgen!({
     world: "test-reactor",
     async: true,
     with: {
-       "environment": host::wasi::environment,
-       "streams": host::wasi::streams,
-       "preopens": host::wasi::preopens,
-       "filesystem": host::wasi::filesystem,
-       "exit": host::wasi::exit,
+       "environment": wasi::environment,
+       "streams": wasi::streams,
+       "preopens": wasi::preopens,
+       "filesystem": wasi::filesystem,
+       "exit": wasi::exit,
     },
 });
 
@@ -41,12 +41,12 @@ async fn instantiate(
 ) -> Result<(Store<WasiCtx>, TestReactor)> {
     let mut linker = Linker::new(&ENGINE);
 
-    // All of the imports available to the world are provided by the host crate:
-    host::wasi::filesystem::add_to_linker(&mut linker, |x| x)?;
-    host::wasi::streams::add_to_linker(&mut linker, |x| x)?;
-    host::wasi::environment::add_to_linker(&mut linker, |x| x)?;
-    host::wasi::preopens::add_to_linker(&mut linker, |x| x)?;
-    host::wasi::exit::add_to_linker(&mut linker, |x| x)?;
+    // All of the imports available to the world are provided by the wasi-common crate:
+    wasi::filesystem::add_to_linker(&mut linker, |x| x)?;
+    wasi::streams::add_to_linker(&mut linker, |x| x)?;
+    wasi::environment::add_to_linker(&mut linker, |x| x)?;
+    wasi::preopens::add_to_linker(&mut linker, |x| x)?;
+    wasi::exit::add_to_linker(&mut linker, |x| x)?;
 
     let mut store = Store::new(&ENGINE, wasi_ctx);
 
@@ -104,12 +104,12 @@ async fn reactor_tests() -> Result<()> {
 
     // Show that the `with` invocation in the macro means we get to re-use the
     // type definitions from inside the `host` crate for these structures:
-    let ds = host::wasi::filesystem::DescriptorStat {
-        data_access_timestamp: host::wasi::wall_clock::Datetime {
+    let ds = wasi::filesystem::DescriptorStat {
+        data_access_timestamp: wasi::wall_clock::Datetime {
             nanoseconds: 123,
             seconds: 45,
         },
-        data_modification_timestamp: host::wasi::wall_clock::Datetime {
+        data_modification_timestamp: wasi::wall_clock::Datetime {
             nanoseconds: 789,
             seconds: 10,
         },
@@ -117,11 +117,11 @@ async fn reactor_tests() -> Result<()> {
         inode: 0,
         link_count: 0,
         size: 0,
-        status_change_timestamp: host::wasi::wall_clock::Datetime {
+        status_change_timestamp: wasi::wall_clock::Datetime {
             nanoseconds: 0,
             seconds: 1,
         },
-        type_: host::wasi::filesystem::DescriptorType::Unknown,
+        type_: wasi::filesystem::DescriptorType::Unknown,
     };
     let expected = format!("{ds:?}");
     let got = reactor.call_pass_an_imported_record(&mut store, ds).await?;

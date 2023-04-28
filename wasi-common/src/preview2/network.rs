@@ -1,12 +1,11 @@
 use crate::{
     wasi::instance_network,
     wasi::network::{self, Network},
-    WasiCtx,
+    WasiCtx, WasiNetwork,
 };
 use cap_std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6};
-use wasi_common::WasiNetwork;
 
-pub(crate) fn convert(_error: wasi_common::Error) -> anyhow::Error {
+pub(crate) fn convert(_error: crate::Error) -> anyhow::Error {
     todo!("convert wasi-common Error to wasi_network::Error")
 }
 

@@ -174,6 +174,11 @@ pub struct WasiCtx {
 }
 
 impl WasiCtx {
+    /// Create an empty `WasiCtxBuilder`
+    pub fn builder() -> WasiCtxBuilder {
+        WasiCtxBuilder::default()
+    }
+
     /// Add network addresses to the pool.
     pub fn insert_addr<A: cap_std::net::ToSocketAddrs>(&mut self, addrs: A) -> std::io::Result<()> {
         self.pool.insert(addrs, ambient_authority())

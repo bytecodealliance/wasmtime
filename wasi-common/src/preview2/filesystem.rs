@@ -1,8 +1,12 @@
 #![allow(unused_variables)]
 
-use crate::wasi;
-use crate::wasi::streams::{InputStream, OutputStream};
-use crate::WasiCtx;
+use crate::{
+    dir::{ReaddirCursor, ReaddirIterator, TableDirExt},
+    file::{FdFlags, FileStream, TableFileExt},
+    wasi,
+    wasi::streams::{InputStream, OutputStream},
+    WasiCtx, WasiDir, WasiFile,
+};
 use anyhow::anyhow;
 use std::{
     io::{IoSlice, IoSliceMut},
@@ -10,16 +14,11 @@ use std::{
     sync::Mutex,
     time::{Duration, SystemTime},
 };
-use wasi_common::{
-    dir::{ReaddirCursor, ReaddirIterator, TableDirExt},
-    file::{FdFlags, FileStream, TableFileExt},
-    WasiDir, WasiFile,
-};
 
-impl From<wasi_common::Error> for wasi::filesystem::Error {
-    fn from(error: wasi_common::Error) -> wasi::filesystem::Error {
+impl From<crate::Error> for wasi::filesystem::Error {
+    fn from(error: crate::Error) -> wasi::filesystem::Error {
+        use crate::Errno::*;
         use wasi::filesystem::ErrorCode;
-        use wasi_common::Errno::*;
         if let Some(errno) = error.downcast_ref() {
             match errno {
                 Acces => ErrorCode::Access.into(),
@@ -76,20 +75,20 @@ impl From<wasi_common::Error> for wasi::filesystem::Error {
     }
 }
 
-impl From<wasi::filesystem::OpenFlags> for wasi_common::file::OFlags {
+impl From<wasi::filesystem::OpenFlags> for crate::file::OFlags {
     fn from(oflags: wasi::filesystem::OpenFlags) -> Self {
-        let mut flags = wasi_common::file::OFlags::empty();
+        let mut flags = crate::file::OFlags::empty();
         if oflags.contains(wasi::filesystem::OpenFlags::CREATE) {
-            flags |= wasi_common::file::OFlags::CREATE;
+            flags |= crate::file::OFlags::CREATE;
         }
         if oflags.contains(wasi::filesystem::OpenFlags::DIRECTORY) {
-            flags |= wasi_common::file::OFlags::DIRECTORY;
+            flags |= crate::file::OFlags::DIRECTORY;
         }
         if oflags.contains(wasi::filesystem::OpenFlags::EXCLUSIVE) {
-            flags |= wasi_common::file::OFlags::EXCLUSIVE;
+            flags |= crate::file::OFlags::EXCLUSIVE;
         }
         if oflags.contains(wasi::filesystem::OpenFlags::TRUNCATE) {
-            flags |= wasi_common::file::OFlags::TRUNCATE;
+            flags |= crate::file::OFlags::TRUNCATE;
         }
         flags
     }
@@ -127,24 +126,25 @@ impl From<wasi::filesystem::DescriptorFlags> for FdFlags {
     }
 }
 
-impl From<wasi_common::file::FileType> for wasi::filesystem::DescriptorType {
-    fn from(type_: wasi_common::file::FileType) -> Self {
+impl From<crate::file::FileType> for wasi::filesystem::DescriptorType {
+    fn from(type_: crate::file::FileType) -> Self {
         match type_ {
-            wasi_common::file::FileType::Unknown => Self::Unknown,
-            wasi_common::file::FileType::BlockDevice => Self::BlockDevice,
-            wasi_common::file::FileType::CharacterDevice => Self::CharacterDevice,
-            wasi_common::file::FileType::Directory => Self::Directory,
-            wasi_common::file::FileType::RegularFile => Self::RegularFile,
-            wasi_common::file::FileType::SocketDgram
-            | wasi_common::file::FileType::SocketStream => Self::Socket,
-            wasi_common::file::FileType::SymbolicLink => Self::SymbolicLink,
-            wasi_common::file::FileType::Pipe => Self::Fifo,
+            crate::file::FileType::Unknown => Self::Unknown,
+            crate::file::FileType::BlockDevice => Self::BlockDevice,
+            crate::file::FileType::CharacterDevice => Self::CharacterDevice,
+            crate::file::FileType::Directory => Self::Directory,
+            crate::file::FileType::RegularFile => Self::RegularFile,
+            crate::file::FileType::SocketDgram | crate::file::FileType::SocketStream => {
+                Self::Socket
+            }
+            crate::file::FileType::SymbolicLink => Self::SymbolicLink,
+            crate::file::FileType::Pipe => Self::Fifo,
         }
     }
 }
 
-impl From<wasi_common::file::Filestat> for wasi::filesystem::DescriptorStat {
-    fn from(stat: wasi_common::file::Filestat) -> Self {
+impl From<crate::file::Filestat> for wasi::filesystem::DescriptorStat {
+    fn from(stat: crate::file::Filestat) -> Self {
         fn timestamp(time: Option<std::time::SystemTime>) -> wasi::filesystem::Datetime {
             time.map(|t| {
                 let since = t.duration_since(SystemTime::UNIX_EPOCH).unwrap();
@@ -172,27 +172,27 @@ impl From<wasi_common::file::Filestat> for wasi::filesystem::DescriptorStat {
     }
 }
 
-impl From<wasi::filesystem::Advice> for wasi_common::file::Advice {
+impl From<wasi::filesystem::Advice> for crate::file::Advice {
     fn from(advice: wasi::filesystem::Advice) -> Self {
         match advice {
-            wasi::filesystem::Advice::Normal => wasi_common::file::Advice::Normal,
-            wasi::filesystem::Advice::Sequential => wasi_common::file::Advice::Sequential,
-            wasi::filesystem::Advice::Random => wasi_common::file::Advice::Random,
-            wasi::filesystem::Advice::WillNeed => wasi_common::file::Advice::WillNeed,
-            wasi::filesystem::Advice::DontNeed => wasi_common::file::Advice::DontNeed,
-            wasi::filesystem::Advice::NoReuse => wasi_common::file::Advice::NoReuse,
+            wasi::filesystem::Advice::Normal => crate::file::Advice::Normal,
+            wasi::filesystem::Advice::Sequential => crate::file::Advice::Sequential,
+            wasi::filesystem::Advice::Random => crate::file::Advice::Random,
+            wasi::filesystem::Advice::WillNeed => crate::file::Advice::WillNeed,
+            wasi::filesystem::Advice::DontNeed => crate::file::Advice::DontNeed,
+            wasi::filesystem::Advice::NoReuse => crate::file::Advice::NoReuse,
         }
     }
 }
 
 fn system_time_spec_from_timestamp(
     t: wasi::filesystem::NewTimestamp,
-) -> Option<wasi_common::SystemTimeSpec> {
+) -> Option<crate::SystemTimeSpec> {
     match t {
         wasi::filesystem::NewTimestamp::NoChange => None,
-        wasi::filesystem::NewTimestamp::Now => Some(wasi_common::SystemTimeSpec::SymbolicNow),
+        wasi::filesystem::NewTimestamp::Now => Some(crate::SystemTimeSpec::SymbolicNow),
         wasi::filesystem::NewTimestamp::Timestamp(datetime) => Some(
-            wasi_common::SystemTimeSpec::Absolute(cap_std::time::SystemTime::from_std(
+            crate::SystemTimeSpec::Absolute(cap_std::time::SystemTime::from_std(
                 SystemTime::UNIX_EPOCH + Duration::new(datetime.seconds, datetime.nanoseconds),
             )),
         ),
@@ -645,7 +645,7 @@ impl wasi::filesystem::Host for WasiCtx {
         let reader = FileStream::new_reader(clone, offset);
 
         // Box it up.
-        let boxed: Box<dyn wasi_common::InputStream> = Box::new(reader);
+        let boxed: Box<dyn crate::InputStream> = Box::new(reader);
 
         // Insert the stream view into the table. Trap if the table is full.
         let index = self.table_mut().push(Box::new(boxed))?;
@@ -668,7 +668,7 @@ impl wasi::filesystem::Host for WasiCtx {
         let writer = FileStream::new_writer(clone, offset);
 
         // Box it up.
-        let boxed: Box<dyn wasi_common::OutputStream> = Box::new(writer);
+        let boxed: Box<dyn crate::OutputStream> = Box::new(writer);
 
         // Insert the stream view into the table. Trap if the table is full.
         let index = self.table_mut().push(Box::new(boxed))?;
@@ -690,7 +690,7 @@ impl wasi::filesystem::Host for WasiCtx {
         let appender = FileStream::new_appender(clone);
 
         // Box it up.
-        let boxed: Box<dyn wasi_common::OutputStream> = Box::new(appender);
+        let boxed: Box<dyn crate::OutputStream> = Box::new(appender);
 
         // Insert the stream view into the table. Trap if the table is full.
         let index = self.table_mut().push(Box::new(boxed))?;

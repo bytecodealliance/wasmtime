@@ -1,6 +1,6 @@
 #![allow(unused_variables)]
 
-use crate::poll::PollableEntry;
+use crate::preview2::poll::PollableEntry;
 use crate::wasi::{
     monotonic_clock::{self, Instant},
     poll::Pollable,

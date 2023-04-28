@@ -1,4 +1,6 @@
 use crate::{
+    stream::TableStreamExt,
+    tcp_socket::TableTcpSocketExt,
     wasi,
     wasi::monotonic_clock::Instant,
     wasi::poll::Pollable,
@@ -6,10 +8,8 @@ use crate::{
     wasi::tcp::TcpSocket,
     WasiCtx,
 };
-use wasi_common::stream::TableStreamExt;
-use wasi_common::tcp_socket::TableTcpSocketExt;
 
-fn convert(error: wasi_common::Error) -> anyhow::Error {
+fn convert(error: crate::Error) -> anyhow::Error {
     if let Some(_errno) = error.downcast_ref() {
         anyhow::Error::new(StreamError {})
     } else {
@@ -46,7 +46,7 @@ impl wasi::poll::Host for WasiCtx {
     }
 
     async fn poll_oneoff(&mut self, futures: Vec<Pollable>) -> anyhow::Result<Vec<u8>> {
-        use wasi_common::sched::{Poll, Userdata};
+        use crate::sched::{Poll, Userdata};
 
         // Convert `futures` into `Poll` subscriptions.
         let mut poll = Poll::new();
@@ -56,12 +56,12 @@ impl wasi::poll::Host for WasiCtx {
 
             match *self.table().get(future).map_err(convert)? {
                 PollableEntry::Read(stream) => {
-                    let wasi_stream: &dyn wasi_common::InputStream =
+                    let wasi_stream: &dyn crate::InputStream =
                         self.table().get_input_stream(stream).map_err(convert)?;
                     poll.subscribe_read(wasi_stream, userdata);
                 }
                 PollableEntry::Write(stream) => {
-                    let wasi_stream: &dyn wasi_common::OutputStream =
+                    let wasi_stream: &dyn crate::OutputStream =
                         self.table().get_output_stream(stream).map_err(convert)?;
                     poll.subscribe_write(wasi_stream, userdata);
                 }
@@ -74,7 +74,7 @@ impl wasi::poll::Host for WasiCtx {
                     );
                 }
                 PollableEntry::TcpSocket(tcp_socket) => {
-                    let wasi_tcp_socket: &dyn wasi_common::WasiTcpSocket =
+                    let wasi_tcp_socket: &dyn crate::WasiTcpSocket =
                         self.table().get_tcp_socket(tcp_socket).map_err(convert)?;
                     poll.subscribe_tcp_socket(wasi_tcp_socket, userdata);
                 }
