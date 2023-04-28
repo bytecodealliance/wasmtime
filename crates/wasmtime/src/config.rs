@@ -112,6 +112,7 @@ struct CompilerConfig {
     flags: HashSet<String>,
     #[cfg(compiler)]
     cache_store: Option<Arc<dyn CacheStore>>,
+    clif_dir: Option<std::path::PathBuf>,
 }
 
 #[cfg(compiler)]
@@ -123,6 +124,7 @@ impl CompilerConfig {
             settings: HashMap::new(),
             flags: HashSet::new(),
             cache_store: None,
+            clif_dir: None,
         }
     }
 
@@ -1539,6 +1541,10 @@ impl Config {
             compiler.target(target.clone())?;
         }
 
+        if let Some(path) = &self.compiler_config.clif_dir {
+            compiler.clif_dir(path)?;
+        }
+
         // If probestack is enabled for a target, Wasmtime will always use the
         // inline strategy which doesn't require us to define a `__probestack`
         // function or similar.
@@ -1623,6 +1629,12 @@ impl Config {
     pub fn debug_adapter_modules(&mut self, debug: bool) -> &mut Self {
         self.tunables.debug_adapter_modules = debug;
         self
+    }
+
+    /// Enables clif output when compiling a WebAssembly module.
+    #[cfg(compiler)]
+    pub fn emit_clif(&mut self, path: &Path) {
+        self.compiler_config.clif_dir = Some(path.to_path_buf());
     }
 }
 

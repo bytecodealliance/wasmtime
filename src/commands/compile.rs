@@ -50,6 +50,10 @@ pub struct CompileCommand {
     #[clap(short = 'o', long, value_name = "OUTPUT", parse(from_os_str))]
     output: Option<PathBuf>,
 
+    /// Emit one clif file for each function in this directory
+    #[clap(long = "emit-clif", value_name = "PATH", parse(from_os_str))]
+    emit_clif: Option<PathBuf>,
+
     /// The path of the WebAssembly to compile
     #[clap(index = 1, value_name = "MODULE", parse(from_os_str))]
     module: PathBuf,
@@ -60,7 +64,14 @@ impl CompileCommand {
     pub fn execute(mut self) -> Result<()> {
         self.common.init_logging();
 
-        let config = self.common.config(self.target.as_deref())?;
+        let mut config = self.common.config(self.target.as_deref())?;
+
+        if let Some(dir) = self.emit_clif {
+            if !dir.is_dir() {
+                std::fs::create_dir(&dir)?;
+            }
+            config.emit_clif(&dir);
+        }
 
         let engine = Engine::new(&config)?;
 

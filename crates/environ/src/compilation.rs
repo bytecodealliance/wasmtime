@@ -14,6 +14,7 @@ use std::any::Any;
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::fmt;
+use std::path;
 use std::sync::Arc;
 use thiserror::Error;
 
@@ -88,6 +89,11 @@ pub trait CacheStore: Send + Sync + std::fmt::Debug {
 pub trait CompilerBuilder: Send + Sync + fmt::Debug {
     /// Sets the target of compilation to the target specified.
     fn target(&mut self, target: target_lexicon::Triple) -> Result<()>;
+
+    /// Enables clif output in the directory specified.
+    fn clif_dir(&mut self, _path: &path::Path) -> Result<()> {
+        anyhow::bail!("clif output not supported");
+    }
 
     /// Returns the currently configured target triple that compilation will
     /// produce artifacts for.
