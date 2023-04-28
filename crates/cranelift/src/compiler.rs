@@ -630,10 +630,6 @@ impl wasmtime_environ::Compiler for Compiler {
         Ok(())
     }
 
-    fn function_alignment(&self) -> u32 {
-        self.isa.function_alignment()
-    }
-
     fn create_systemv_cie(&self) -> Option<gimli::write::CommonInformationEntry> {
         self.isa.create_systemv_cie()
     }
@@ -1037,7 +1033,16 @@ impl FunctionCompiler<'_> {
             .into_iter()
             .filter_map(mach_trap_to_trap)
             .collect();
-        let alignment = compiled_code.alignment;
+
+        // Give wasm functions, user defined code, a "preferred" alignment
+        // instead of the minimum alignment as this can help perf in niche
+        // situations.
+        let preferred_alignment = if body_and_tunables.is_some() {
+            self.compiler.isa.function_alignment().preferred
+        } else {
+            1
+        };
+        let alignment = compiled_code.alignment.max(preferred_alignment);
 
         let address_map = match body_and_tunables {
             Some((body, tunables)) => Compiler::get_function_address_map(

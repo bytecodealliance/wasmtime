@@ -8,9 +8,9 @@ use crate::ir::{Function, Type};
 #[cfg(feature = "unwind")]
 use crate::isa::unwind::systemv;
 use crate::isa::x64::{inst::regs::create_reg_env_systemv, settings as x64_settings};
-use crate::isa::Builder as IsaBuilder;
+use crate::isa::{Builder as IsaBuilder, FunctionAlignment};
 use crate::machinst::{
-    compile, CompiledCode, CompiledCodeStencil, MachTextSectionBuilder, Reg, SigSet,
+    compile, CompiledCode, CompiledCodeStencil, MachInst, MachTextSectionBuilder, Reg, SigSet,
     TextSectionBuilder, VCode,
 };
 use crate::result::{CodegenError, CodegenResult};
@@ -166,10 +166,8 @@ impl TargetIsa for X64Backend {
         Box::new(MachTextSectionBuilder::<inst::Inst>::new(num_funcs))
     }
 
-    /// Align functions on x86 to 16 bytes, ensuring that rip-relative loads to SSE registers are
-    /// always from aligned memory.
-    fn function_alignment(&self) -> u32 {
-        16
+    fn function_alignment(&self) -> FunctionAlignment {
+        Inst::function_alignment()
     }
 
     #[cfg(feature = "disas")]
