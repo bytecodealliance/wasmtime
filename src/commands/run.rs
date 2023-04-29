@@ -236,13 +236,8 @@ impl RunCommand {
 
         let mut config = self.common.config(None)?;
 
-        if self.wasm_timeout.is_some() {
+        if self.wasm_timeout.is_some() || self.profile_guest.is_some() {
             config.epoch_interruption(true);
-        }
-
-        if self.profile_guest.is_some() {
-            config.epoch_interruption(true);
-            config.generate_address_map(true);
         }
 
         let engine = Engine::new(&config)?;
@@ -265,6 +260,7 @@ impl RunCommand {
 
         // Read the wasm module binary either as `*.wat` or a raw binary.
         let module = self.load_module(linker.engine(), &self.module)?;
+        let mut modules = vec![(String::new(), module.clone())];
 
         let host = Host::default();
         let mut store = Store::new(&engine, host);
@@ -311,6 +307,7 @@ impl RunCommand {
         for (name, path) in self.preloads.iter() {
             // Read the wasm module binary either as `*.wat` or a raw binary
             let module = self.load_module(&engine, path)?;
+            modules.push((name.clone(), module.clone()));
 
             // Add the module's functions to the linker.
             linker.module(&mut store, name, &module).context(format!(
@@ -322,7 +319,7 @@ impl RunCommand {
 
         // Load the main wasm module.
         match self
-            .load_main_module(&mut store, &mut linker, module, &argv[0])
+            .load_main_module(&mut store, &mut linker, module, modules, &argv[0])
             .with_context(|| format!("failed to run main module `{}`", self.module.display()))
         {
             Ok(()) => (),
@@ -396,17 +393,26 @@ impl RunCommand {
         result
     }
 
-    fn setup_epoch_handler(&self, store: &mut Store<Host>, module_name: &str) -> Box<dyn FnOnce()> {
+    fn setup_epoch_handler(
+        &self,
+        store: &mut Store<Host>,
+        module_name: &str,
+        modules: Vec<(String, Module)>,
+    ) -> Box<dyn FnOnce()> {
         if let Some(path) = &self.profile_guest {
             let interval = self.profile_guest_interval;
-            let profiler = Arc::new(Mutex::new(GuestProfiler::new(module_name, interval)));
+            let profiler = Arc::new(Mutex::new(GuestProfiler::new(
+                module_name,
+                interval,
+                modules,
+            )));
 
             let cloned = profiler.clone();
             if let Some(timeout) = self.wasm_timeout {
                 let mut timeout = (timeout.as_secs_f64() / interval.as_secs_f64()).ceil() as u64;
                 assert!(timeout > 0);
-                store.epoch_deadline_callback(move |store| {
-                    cloned.lock().unwrap().sample(store);
+                store.epoch_deadline_callback(move |_store| {
+                    cloned.lock().unwrap().sample();
                     timeout -= 1;
                     if timeout == 0 {
                         bail!("timeout exceeded");
@@ -414,8 +420,8 @@ impl RunCommand {
                     Ok(1)
                 });
             } else {
-                store.epoch_deadline_callback(move |store| {
-                    cloned.lock().unwrap().sample(store);
+                store.epoch_deadline_callback(move |_store| {
+                    cloned.lock().unwrap().sample();
                     Ok(1)
                 });
             }
@@ -456,6 +462,7 @@ impl RunCommand {
         store: &mut Store<Host>,
         linker: &mut Linker<Host>,
         module: Module,
+        modules: Vec<(String, Module)>,
         module_name: &str,
     ) -> Result<()> {
         // The main module might be allowed to have unknown imports, which
@@ -482,8 +489,8 @@ impl RunCommand {
         };
 
         // Finish all lookups before starting any epoch timers.
-        let finish_epoch_handler = self.setup_epoch_handler(store, module_name);
-        let result = self.invoke_func(store, func, self.invoke.as_deref());
+        let finish_epoch_handler = self.setup_epoch_handler(store, module_name, modules);
+        let result = self.invoke_func(store, func);
         finish_epoch_handler();
         result
     }
@@ -505,7 +512,7 @@ impl RunCommand {
         Ok(func)
     }
 
-    fn invoke_func(&self, store: &mut Store<Host>, func: Func, name: Option<&str>) -> Result<()> {
+    fn invoke_func(&self, store: &mut Store<Host>, func: Func) -> Result<()> {
         let ty = func.ty(&store);
         if ty.params().len() > 0 {
             eprintln!(
@@ -519,7 +526,7 @@ impl RunCommand {
             let val = match args.next() {
                 Some(s) => s,
                 None => {
-                    if let Some(name) = name {
+                    if let Some(name) = &self.invoke {
                         bail!("not enough arguments for `{}`", name)
                     } else {
                         bail!("not enough arguments for command default")
@@ -542,7 +549,7 @@ impl RunCommand {
         // out, if there are any.
         let mut results = vec![Val::null(); ty.results().len()];
         let invoke_res = func.call(store, &values, &mut results).with_context(|| {
-            if let Some(name) = name {
+            if let Some(name) = &self.invoke {
                 format!("failed to invoke `{}`", name)
             } else {
                 format!("failed to invoke command default")
