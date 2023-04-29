@@ -2,7 +2,7 @@ use crate::clocks::WasiClocks;
 use crate::dir::WasiDir;
 use crate::sched::WasiSched;
 use crate::stream::{InputStream, OutputStream};
-use crate::table::Table;
+use crate::Table;
 use cap_rand::RngCore;
 
 #[derive(Default)]
@@ -84,7 +84,7 @@ impl WasiCtxBuilder {
         self
     }
 
-    pub fn build(self, mut table: Table) -> Result<WasiCtx, anyhow::Error> {
+    pub fn build(self, table: &mut Table) -> Result<WasiCtx, anyhow::Error> {
         use anyhow::Context;
 
         let stdin = table
@@ -106,8 +106,6 @@ impl WasiCtxBuilder {
         }
 
         Ok(WasiCtx {
-            table,
-
             random: self.random.context("required member random")?,
             clocks: self.clocks.context("required member clocks")?,
             sched: self.sched.context("required member sched")?,
@@ -121,9 +119,14 @@ impl WasiCtxBuilder {
     }
 }
 
-pub struct WasiCtx {
-    pub table: Table,
+pub trait WasiView: Send {
+    fn table(&self) -> &Table;
+    fn table_mut(&mut self) -> &mut Table;
+    fn ctx(&self) -> &WasiCtx;
+    fn ctx_mut(&mut self) -> &mut WasiCtx;
+}
 
+pub struct WasiCtx {
     pub random: Box<dyn RngCore + Send + Sync>,
     pub clocks: WasiClocks,
     pub sched: Box<dyn WasiSched>,
@@ -139,13 +142,5 @@ impl WasiCtx {
     /// Create an empty `WasiCtxBuilder`
     pub fn builder() -> WasiCtxBuilder {
         WasiCtxBuilder::default()
-    }
-
-    pub fn table(&self) -> &Table {
-        &self.table
-    }
-
-    pub fn table_mut(&mut self) -> &mut Table {
-        &mut self.table
     }
 }

@@ -1,11 +1,11 @@
 use crate::{
     wasi,
     wasi::types::{FutureIncomingResponse as Response, OutgoingRequest as Request, RequestOptions},
-    WasiCtx,
+    WasiView,
 };
 
 #[async_trait::async_trait]
-impl wasi::default_outgoing_http::Host for WasiCtx {
+impl<T: WasiView> wasi::default_outgoing_http::Host for T {
     async fn handle(
         &mut self,
         _req: Request,

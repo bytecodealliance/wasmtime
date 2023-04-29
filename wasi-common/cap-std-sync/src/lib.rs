@@ -113,8 +113,8 @@ impl WasiCtxBuilder {
         self.0 = self.0.set_args(args);
         self
     }
-    pub fn build(self) -> anyhow::Result<WasiCtx> {
-        self.0.build(Table::new())
+    pub fn build(self, table: &mut Table) -> anyhow::Result<WasiCtx> {
+        self.0.build(table)
     }
 }
 

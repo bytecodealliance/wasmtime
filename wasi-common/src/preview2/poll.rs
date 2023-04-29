@@ -4,7 +4,7 @@ use crate::{
     wasi::monotonic_clock::Instant,
     wasi::poll::Pollable,
     wasi::streams::{InputStream, OutputStream, StreamError},
-    WasiCtx,
+    WasiView,
 };
 
 fn convert(error: crate::Error) -> anyhow::Error {
@@ -37,7 +37,7 @@ pub(crate) enum PollableEntry {
 // this PR.
 
 #[async_trait::async_trait]
-impl wasi::poll::Host for WasiCtx {
+impl<T: WasiView> wasi::poll::Host for T {
     async fn drop_pollable(&mut self, pollable: Pollable) -> anyhow::Result<()> {
         self.table_mut()
             .delete::<PollableEntry>(pollable)
@@ -67,7 +67,7 @@ impl wasi::poll::Host for WasiCtx {
                 }
                 PollableEntry::MonotonicClock(when, absolute) => {
                     poll.subscribe_monotonic_clock(
-                        &*self.clocks.monotonic,
+                        &*self.ctx().clocks.monotonic,
                         when,
                         absolute,
                         userdata,
@@ -82,8 +82,9 @@ impl wasi::poll::Host for WasiCtx {
             }
         }
 
+        let ctx = self.ctx();
         // Do the poll.
-        self.sched.poll_oneoff(&mut poll).await?;
+        ctx.sched.poll_oneoff(&mut poll).await?;
 
         // Convert the results into a list of `u8` to return.
         let mut results = vec![0_u8; len];

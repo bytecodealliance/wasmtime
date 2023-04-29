@@ -1,8 +1,8 @@
 use crate::wasi::exit;
-use crate::{I32Exit, WasiCtx};
+use crate::{I32Exit, WasiView};
 
 #[async_trait::async_trait]
-impl exit::Host for WasiCtx {
+impl<T: WasiView> exit::Host for T {
     async fn exit(&mut self, status: Result<(), ()>) -> anyhow::Result<()> {
         let status = match status {
             Ok(()) => 0,

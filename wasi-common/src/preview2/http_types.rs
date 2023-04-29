@@ -6,11 +6,11 @@ use crate::{
         IncomingStream, Method, OutgoingRequest, OutgoingResponse, OutgoingStream,
         ResponseOutparam, Scheme, StatusCode, Trailers,
     },
-    WasiCtx,
+    WasiView,
 };
 
 #[async_trait::async_trait]
-impl wasi::types::Host for WasiCtx {
+impl<T: WasiView> wasi::types::Host for T {
     async fn drop_fields(&mut self, _fields: Fields) -> wasmtime::Result<()> {
         anyhow::bail!("not implemented")
     }

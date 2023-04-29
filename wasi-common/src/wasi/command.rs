@@ -1,4 +1,4 @@
-use crate::WasiCtx;
+use crate::WasiView;
 
 wasmtime::component::bindgen!({
     path: "../wit",
@@ -23,19 +23,16 @@ wasmtime::component::bindgen!({
     },
 });
 
-pub fn add_to_linker<T: Send>(
-    l: &mut wasmtime::component::Linker<T>,
-    f: impl (Fn(&mut T) -> &mut WasiCtx) + Copy + Send + Sync + 'static,
-) -> anyhow::Result<()> {
-    crate::wasi::wall_clock::add_to_linker(l, f)?;
-    crate::wasi::monotonic_clock::add_to_linker(l, f)?;
-    crate::wasi::timezone::add_to_linker(l, f)?;
-    crate::wasi::filesystem::add_to_linker(l, f)?;
-    crate::wasi::poll::add_to_linker(l, f)?;
-    crate::wasi::streams::add_to_linker(l, f)?;
-    crate::wasi::random::add_to_linker(l, f)?;
-    crate::wasi::exit::add_to_linker(l, f)?;
-    crate::wasi::environment::add_to_linker(l, f)?;
-    crate::wasi::preopens::add_to_linker(l, f)?;
+pub fn add_to_linker<T: WasiView>(l: &mut wasmtime::component::Linker<T>) -> anyhow::Result<()> {
+    crate::wasi::wall_clock::add_to_linker(l, |t| t)?;
+    crate::wasi::monotonic_clock::add_to_linker(l, |t| t)?;
+    crate::wasi::timezone::add_to_linker(l, |t| t)?;
+    crate::wasi::filesystem::add_to_linker(l, |t| t)?;
+    crate::wasi::poll::add_to_linker(l, |t| t)?;
+    crate::wasi::streams::add_to_linker(l, |t| t)?;
+    crate::wasi::random::add_to_linker(l, |t| t)?;
+    crate::wasi::exit::add_to_linker(l, |t| t)?;
+    crate::wasi::environment::add_to_linker(l, |t| t)?;
+    crate::wasi::preopens::add_to_linker(l, |t| t)?;
     Ok(())
 }

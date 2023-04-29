@@ -67,7 +67,7 @@ pub mod wasi;
 pub use cap_fs_ext::SystemTimeSpec;
 pub use cap_rand::RngCore;
 pub use clocks::{WasiClocks, WasiMonotonicClock, WasiWallClock};
-pub use ctx::{WasiCtx, WasiCtxBuilder};
+pub use ctx::{WasiCtx, WasiCtxBuilder, WasiView};
 pub use dir::WasiDir;
 pub use error::{Errno, Error, ErrorExt, I32Exit};
 pub use file::WasiFile;

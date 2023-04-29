@@ -5,7 +5,7 @@ use crate::{
     file::{FdFlags, FileStream, TableFileExt},
     wasi,
     wasi::streams::{InputStream, OutputStream},
-    WasiCtx, WasiDir, WasiFile,
+    WasiDir, WasiFile, WasiView,
 };
 use anyhow::anyhow;
 use std::{
@@ -200,7 +200,7 @@ fn system_time_spec_from_timestamp(
 }
 
 #[async_trait::async_trait]
-impl wasi::filesystem::Host for WasiCtx {
+impl<T: WasiView> wasi::filesystem::Host for T {
     async fn advise(
         &mut self,
         fd: wasi::filesystem::Descriptor,
@@ -332,13 +332,10 @@ impl wasi::filesystem::Host for WasiCtx {
         &mut self,
         fd: wasi::filesystem::Descriptor,
     ) -> Result<wasi::filesystem::DirectoryEntryStream, wasi::filesystem::Error> {
-        let iterator = self
-            .table()
-            .get_dir(fd)?
-            .readdir(ReaddirCursor::from(0))
-            .await?;
+        let table = self.table_mut();
+        let iterator = table.get_dir(fd)?.readdir(ReaddirCursor::from(0)).await?;
 
-        Ok(self.table_mut().push(Box::new(Mutex::new(iterator)))?)
+        Ok(table.push(Box::new(Mutex::new(iterator)))?)
     }
 
     async fn read_directory_entry(

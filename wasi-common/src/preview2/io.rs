@@ -3,7 +3,7 @@ use crate::{
     stream::TableStreamExt,
     wasi::poll::Pollable,
     wasi::streams::{self, InputStream, OutputStream, StreamError},
-    WasiCtx,
+    WasiView,
 };
 use anyhow::anyhow;
 
@@ -18,7 +18,7 @@ impl From<crate::Error> for streams::Error {
 }
 
 #[async_trait::async_trait]
-impl streams::Host for WasiCtx {
+impl<T: WasiView> streams::Host for T {
     async fn drop_input_stream(&mut self, stream: InputStream) -> anyhow::Result<()> {
         self.table_mut()
             .delete::<Box<dyn crate::InputStream>>(stream)?;
