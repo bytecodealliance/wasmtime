@@ -1,7 +1,6 @@
 //! Compilation support for the component model.
 
-use crate::compiler::{Compiler, CompilerContext};
-use crate::CompiledFunction;
+use crate::compiler::Compiler;
 use anyhow::Result;
 use cranelift_codegen::ir::{self, InstBuilder, MemFlags};
 use cranelift_frontend::FunctionBuilder;
@@ -31,14 +30,9 @@ impl Compiler {
         let pointer_type = isa.pointer_type();
         let offsets = VMComponentOffsets::new(isa.pointer_bytes(), component);
 
-        let CompilerContext {
-            mut func_translator,
-            codegen_context: mut context,
-            mut incremental_cache_ctx,
-            validator_allocations,
-        } = self.take_context();
+        let mut compiler = self.function_compiler();
 
-        context.func = ir::Function::with_name_signature(
+        let func = ir::Function::with_name_signature(
             ir::UserFuncName::user(0, 0),
             match abi {
                 Abi::Wasm => crate::wasm_call_signature(isa, wasm_func_ty),
@@ -46,12 +40,7 @@ impl Compiler {
                 Abi::Array => crate::array_call_signature(isa),
             },
         );
-
-        let mut builder = FunctionBuilder::new(&mut context.func, func_translator.context());
-        let block0 = builder.create_block();
-        builder.append_block_params_for_function_params(block0);
-        builder.switch_to_block(block0);
-        builder.seal_block(block0);
+        let (mut builder, block0) = compiler.builder(func);
 
         // Start off by spilling all the wasm arguments into a stack slot to be
         // passed to the host function.
@@ -137,7 +126,7 @@ impl Compiler {
             None => builder.ins().iconst(pointer_type, 0),
         });
 
-        // realloc: *mut VMCallerCheckedFuncRef
+        // realloc: *mut VMFuncRef
         host_sig.params.push(ir::AbiParam::new(pointer_type));
         callee_args.push(match realloc {
             Some(idx) => builder.ins().load(
@@ -199,15 +188,7 @@ impl Compiler {
         }
         builder.finalize();
 
-        let func: CompiledFunction =
-            self.finish_trampoline(&mut context, incremental_cache_ctx.as_mut(), isa)?;
-        self.save_context(CompilerContext {
-            func_translator,
-            codegen_context: context,
-            incremental_cache_ctx,
-            validator_allocations,
-        });
-        Ok(Box::new(func))
+        Ok(Box::new(compiler.finish()?))
     }
 
     fn compile_always_trap_for_abi(
@@ -216,13 +197,8 @@ impl Compiler {
         abi: Abi,
     ) -> Result<Box<dyn Any + Send>> {
         let isa = &*self.isa;
-        let CompilerContext {
-            mut func_translator,
-            codegen_context: mut context,
-            mut incremental_cache_ctx,
-            validator_allocations,
-        } = self.take_context();
-        context.func = ir::Function::with_name_signature(
+        let mut compiler = self.function_compiler();
+        let func = ir::Function::with_name_signature(
             ir::UserFuncName::user(0, 0),
             match abi {
                 Abi::Wasm => crate::wasm_call_signature(isa, ty),
@@ -230,25 +206,13 @@ impl Compiler {
                 Abi::Array => crate::array_call_signature(isa),
             },
         );
-        let mut builder = FunctionBuilder::new(&mut context.func, func_translator.context());
-        let block0 = builder.create_block();
-        builder.append_block_params_for_function_params(block0);
-        builder.switch_to_block(block0);
-        builder.seal_block(block0);
+        let (mut builder, _block0) = compiler.builder(func);
         builder
             .ins()
             .trap(ir::TrapCode::User(super::ALWAYS_TRAP_CODE));
         builder.finalize();
 
-        let func: CompiledFunction =
-            self.finish_trampoline(&mut context, incremental_cache_ctx.as_mut(), isa)?;
-        self.save_context(CompilerContext {
-            func_translator,
-            codegen_context: context,
-            incremental_cache_ctx,
-            validator_allocations,
-        });
-        Ok(Box::new(func))
+        Ok(Box::new(compiler.finish()?))
     }
 
     fn compile_transcoder_for_abi(
@@ -261,15 +225,8 @@ impl Compiler {
         let ty = &types[transcoder.signature];
         let isa = &*self.isa;
         let offsets = VMComponentOffsets::new(isa.pointer_bytes(), component);
-
-        let CompilerContext {
-            mut func_translator,
-            codegen_context: mut context,
-            mut incremental_cache_ctx,
-            validator_allocations,
-        } = self.take_context();
-
-        context.func = ir::Function::with_name_signature(
+        let mut compiler = self.function_compiler();
+        let func = ir::Function::with_name_signature(
             ir::UserFuncName::user(0, 0),
             match abi {
                 Abi::Wasm => crate::wasm_call_signature(isa, ty),
@@ -277,12 +234,7 @@ impl Compiler {
                 Abi::Array => crate::array_call_signature(isa),
             },
         );
-
-        let mut builder = FunctionBuilder::new(&mut context.func, func_translator.context());
-        let block0 = builder.create_block();
-        builder.append_block_params_for_function_params(block0);
-        builder.switch_to_block(block0);
-        builder.seal_block(block0);
+        let (mut builder, block0) = compiler.builder(func);
 
         match abi {
             Abi::Wasm => {
@@ -298,15 +250,7 @@ impl Compiler {
         }
 
         builder.finalize();
-        let func: CompiledFunction =
-            self.finish_trampoline(&mut context, incremental_cache_ctx.as_mut(), isa)?;
-        self.save_context(CompilerContext {
-            func_translator,
-            codegen_context: context,
-            incremental_cache_ctx,
-            validator_allocations,
-        });
-        Ok(Box::new(func))
+        Ok(Box::new(compiler.finish()?))
     }
 }
 

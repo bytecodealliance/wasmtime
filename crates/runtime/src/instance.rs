@@ -7,9 +7,9 @@ use crate::externref::VMExternRefActivationsTable;
 use crate::memory::{Memory, RuntimeMemoryCreator};
 use crate::table::{Table, TableElement, TableElementType};
 use crate::vmcontext::{
-    VMBuiltinFunctionsArray, VMCallerCheckedFuncRef, VMContext, VMFunctionImport,
-    VMGlobalDefinition, VMGlobalImport, VMMemoryDefinition, VMMemoryImport, VMOpaqueContext,
-    VMRuntimeLimits, VMTableDefinition, VMTableImport,
+    VMBuiltinFunctionsArray, VMContext, VMFuncRef, VMFunctionImport, VMGlobalDefinition,
+    VMGlobalImport, VMMemoryDefinition, VMMemoryImport, VMOpaqueContext, VMRuntimeLimits,
+    VMTableDefinition, VMTableImport,
 };
 use crate::{
     ExportFunction, ExportGlobal, ExportMemory, ExportTable, Imports, ModuleRuntimeInfo, Store,
@@ -340,9 +340,9 @@ impl Instance {
     }
 
     fn get_exported_func(&mut self, index: FuncIndex) -> ExportFunction {
-        let anyfunc = self.get_caller_checked_anyfunc(index).unwrap();
-        let anyfunc = NonNull::new(anyfunc as *const VMCallerCheckedFuncRef as *mut _).unwrap();
-        ExportFunction { anyfunc }
+        let func_ref = self.get_func_ref(index).unwrap();
+        let func_ref = NonNull::new(func_ref as *const VMFuncRef as *mut _).unwrap();
+        ExportFunction { func_ref }
     }
 
     fn get_exported_table(&mut self, index: TableIndex) -> ExportTable {
@@ -505,29 +505,24 @@ impl Instance {
         Layout::from_size_align(size, align).unwrap()
     }
 
-    /// Construct a new VMCallerCheckedFuncRef for the given function
+    /// Construct a new VMFuncRef for the given function
     /// (imported or defined in this module) and store into the given
     /// location. Used during lazy initialization.
     ///
     /// Note that our current lazy-init scheme actually calls this every
-    /// time the anyfunc pointer is fetched; this turns out to be better
+    /// time the funcref pointer is fetched; this turns out to be better
     /// than tracking state related to whether it's been initialized
     /// before, because resetting that state on (re)instantiation is
-    /// very expensive if there are many anyfuncs.
-    fn construct_anyfunc(
-        &mut self,
-        index: FuncIndex,
-        sig: SignatureIndex,
-        into: *mut VMCallerCheckedFuncRef,
-    ) {
+    /// very expensive if there are many funcrefs.
+    fn construct_func_ref(&mut self, index: FuncIndex, sig: SignatureIndex, into: *mut VMFuncRef) {
         let type_index = unsafe {
             let base: *const VMSharedSignatureIndex =
                 *self.vmctx_plus_offset_mut(self.offsets().vmctx_signature_ids_array());
             *base.add(sig.index())
         };
 
-        let funcref = if let Some(def_index) = self.module().defined_func_index(index) {
-            VMCallerCheckedFuncRef {
+        let func_ref = if let Some(def_index) = self.module().defined_func_index(index) {
+            VMFuncRef {
                 native_call: self
                     .runtime_info
                     .native_to_wasm_trampoline(def_index)
@@ -542,7 +537,7 @@ impl Instance {
             }
         } else {
             let import = self.imported_function(index);
-            VMCallerCheckedFuncRef {
+            VMFuncRef {
                 native_call: import.native_call,
                 array_call: import.array_call,
                 wasm_call: Some(import.wasm_call),
@@ -554,20 +549,17 @@ impl Instance {
         // Safety: we have a `&mut self`, so we have exclusive access
         // to this Instance.
         unsafe {
-            std::ptr::write(into, funcref);
+            std::ptr::write(into, func_ref);
         }
     }
 
-    /// Get a `&VMCallerCheckedFuncRef` for the given `FuncIndex`.
+    /// Get a `&VMFuncRef` for the given `FuncIndex`.
     ///
     /// Returns `None` if the index is the reserved index value.
     ///
     /// The returned reference is a stable reference that won't be moved and can
     /// be passed into JIT code.
-    pub(crate) fn get_caller_checked_anyfunc(
-        &mut self,
-        index: FuncIndex,
-    ) -> Option<*mut VMCallerCheckedFuncRef> {
+    pub(crate) fn get_func_ref(&mut self, index: FuncIndex) -> Option<*mut VMFuncRef> {
         if index == FuncIndex::reserved_value() {
             return None;
         }
@@ -575,9 +567,9 @@ impl Instance {
         // Safety: we have a `&mut self`, so we have exclusive access
         // to this Instance.
         unsafe {
-            // For now, we eagerly initialize an anyfunc struct in-place
+            // For now, we eagerly initialize an funcref struct in-place
             // whenever asked for a reference to it. This is mostly
-            // fine, because in practice each anyfunc is unlikely to be
+            // fine, because in practice each funcref is unlikely to be
             // requested more than a few times: once-ish for funcref
             // tables used for call_indirect (the usual compilation
             // strategy places each function in the table at most once),
@@ -591,7 +583,7 @@ impl Instance {
             // otherwise see a use-case where this becomes a hotpath,
             // we can reconsider by using some state to track
             // "uninitialized" explicitly, for example by zeroing the
-            // anyfuncs (perhaps together with other
+            // funcrefs (perhaps together with other
             // zeroed-at-instantiate-time state) or using a separate
             // is-initialized bitmap.
             //
@@ -601,13 +593,11 @@ impl Instance {
             // all!
             let func = &self.module().functions[index];
             let sig = func.signature;
-            let anyfunc: *mut VMCallerCheckedFuncRef = self
-                .vmctx_plus_offset_mut::<VMCallerCheckedFuncRef>(
-                    self.offsets().vmctx_anyfunc(func.anyfunc),
-                );
-            self.construct_anyfunc(index, sig, anyfunc);
+            let func_ref: *mut VMFuncRef = self
+                .vmctx_plus_offset_mut::<VMFuncRef>(self.offsets().vmctx_func_ref(func.func_ref));
+            self.construct_func_ref(index, sig, func_ref);
 
-            Some(anyfunc)
+            Some(func_ref)
         }
     }
 
@@ -664,10 +654,9 @@ impl Instance {
             TableElementType::Func => {
                 table.init_funcs(
                     dst,
-                    elements.iter().map(|idx| {
-                        self.get_caller_checked_anyfunc(*idx)
-                            .unwrap_or(std::ptr::null_mut())
-                    }),
+                    elements
+                        .iter()
+                        .map(|idx| self.get_func_ref(*idx).unwrap_or(std::ptr::null_mut())),
                 )?;
             }
 
@@ -862,11 +851,9 @@ impl Instance {
                 };
                 if value.is_uninit() {
                     let table_init = match &instance.module().table_initialization {
-                        // We unfortunately can't borrow `tables`
-                        // outside the loop because we need to call
-                        // `get_caller_checked_anyfunc` (a `&mut`
-                        // method) below; so unwrap it dynamically
-                        // here.
+                        // We unfortunately can't borrow `tables` outside the
+                        // loop because we need to call `get_func_ref` (a `&mut`
+                        // method) below; so unwrap it dynamically here.
                         TableInitialization::FuncTable { tables, .. } => tables,
                         _ => break,
                     }
@@ -882,11 +869,11 @@ impl Instance {
                     // we're past its end.
                     let func_index =
                         table_init.and_then(|indices| indices.get(i as usize).cloned());
-                    let anyfunc = func_index
-                        .and_then(|func_index| instance.get_caller_checked_anyfunc(func_index))
+                    let func_ref = func_index
+                        .and_then(|func_index| instance.get_func_ref(func_index))
                         .unwrap_or(std::ptr::null_mut());
 
-                    let value = TableElement::FuncRef(anyfunc);
+                    let value = TableElement::FuncRef(func_ref);
 
                     instance.tables[idx]
                         .set(i, value)
@@ -979,11 +966,10 @@ impl Instance {
             imports.globals.len(),
         );
 
-        // N.B.: there is no need to initialize the anyfuncs array because
-        // we eagerly construct each element in it whenever asked for a
-        // reference to that element. In other words, there is no state
-        // needed to track the lazy-init, so we don't need to initialize
-        // any state now.
+        // N.B.: there is no need to initialize the funcrefs array because we
+        // eagerly construct each element in it whenever asked for a reference
+        // to that element. In other words, there is no state needed to track
+        // the lazy-init, so we don't need to initialize any state now.
 
         // Initialize the defined tables
         let mut ptr = self.vmctx_plus_offset_mut(offsets.vmctx_tables_begin());
@@ -1052,8 +1038,7 @@ impl Instance {
                     }
                 }
                 GlobalInit::RefFunc(f) => {
-                    *(*to).as_anyfunc_mut() = self.get_caller_checked_anyfunc(f).unwrap()
-                        as *const VMCallerCheckedFuncRef;
+                    *(*to).as_func_ref_mut() = self.get_func_ref(f).unwrap() as *const VMFuncRef;
                 }
                 GlobalInit::RefNullConst => match global.wasm_ty {
                     // `VMGlobalDefinition::new()` already zeroed out the bits

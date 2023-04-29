@@ -166,6 +166,22 @@ WASMTIME_CONFIG_PROP(void, wasm_reference_types, bool)
 WASMTIME_CONFIG_PROP(void, wasm_simd, bool)
 
 /**
+ * \brief Configures whether the WebAssembly relaxed SIMD proposal is
+ * enabled.
+ *
+ * This setting is `false` by default.
+ */
+WASMTIME_CONFIG_PROP(void, wasm_relaxed_simd, bool)
+
+/**
+ * \brief Configures whether the WebAssembly relaxed SIMD proposal is
+ * in deterministic mode.
+ *
+ * This setting is `false` by default.
+ */
+WASMTIME_CONFIG_PROP(void, wasm_relaxed_simd_deterministic, bool)
+
+/**
  * \brief Configures whether the WebAssembly bulk memory proposal is
  * enabled.
  *

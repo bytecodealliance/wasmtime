@@ -932,3 +932,33 @@ block0(v0: i64):
 ;   ldp x29, x30, [sp], #0x10
 ;   ret
 
+function %f19() system_v {
+    fn0 = %g() fast
+
+block0:
+    call fn0()
+    return
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+; block0:
+;   load_ext_name x0, TestCase(%g)+0
+;   blr x0
+;   ldp fp, lr, [sp], #16
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+; block1: ; offset 0x8
+;   ldr x0, #0x10
+;   b #0x18
+;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g 0
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   blr x0
+;   ldp x29, x30, [sp], #0x10
+;   ret
+

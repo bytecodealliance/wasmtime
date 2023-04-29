@@ -20,11 +20,11 @@
 //      memories: [*mut VMMemoryDefinition; module.num_defined_memories],
 //      owned_memories: [VMMemoryDefinition; module.num_owned_memories],
 //      globals: [VMGlobalDefinition; module.num_defined_globals],
-//      anyfuncs: [VMCallerCheckedFuncRef; module.num_escaped_funcs],
+//      func_refs: [VMFuncRef; module.num_escaped_funcs],
 // }
 
 use crate::{
-    AnyfuncIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex,
+    DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex, FuncRefIndex,
     GlobalIndex, MemoryIndex, Module, TableIndex,
 };
 use cranelift_entity::packed_option::ReservedValue;
@@ -68,7 +68,7 @@ pub struct VMOffsets<P> {
     pub num_owned_memories: u32,
     /// The number of defined globals in the module.
     pub num_defined_globals: u32,
-    /// The number of escaped functions in the module, the size of the anyfuncs
+    /// The number of escaped functions in the module, the size of the func_refs
     /// array.
     pub num_escaped_funcs: u32,
 
@@ -89,7 +89,7 @@ pub struct VMOffsets<P> {
     defined_memories: u32,
     owned_memories: u32,
     defined_globals: u32,
-    defined_anyfuncs: u32,
+    defined_func_refs: u32,
     size: u32,
 }
 
@@ -110,40 +110,40 @@ pub trait PtrSize {
     /// The offset of the `native_call` field.
     #[allow(clippy::erasing_op)]
     #[inline]
-    fn vmcaller_checked_func_ref_native_call(&self) -> u8 {
+    fn vm_func_ref_native_call(&self) -> u8 {
         0 * self.size()
     }
 
     /// The offset of the `array_call` field.
     #[allow(clippy::erasing_op)]
     #[inline]
-    fn vmcaller_checked_func_ref_array_call(&self) -> u8 {
+    fn vm_func_ref_array_call(&self) -> u8 {
         1 * self.size()
     }
 
     /// The offset of the `wasm_call` field.
     #[allow(clippy::erasing_op)]
     #[inline]
-    fn vmcaller_checked_func_ref_wasm_call(&self) -> u8 {
+    fn vm_func_ref_wasm_call(&self) -> u8 {
         2 * self.size()
     }
 
     /// The offset of the `type_index` field.
     #[allow(clippy::identity_op)]
     #[inline]
-    fn vmcaller_checked_func_ref_type_index(&self) -> u8 {
+    fn vm_func_ref_type_index(&self) -> u8 {
         3 * self.size()
     }
 
     /// The offset of the `vmctx` field.
     #[inline]
-    fn vmcaller_checked_func_ref_vmctx(&self) -> u8 {
+    fn vm_func_ref_vmctx(&self) -> u8 {
         4 * self.size()
     }
 
-    /// Return the size of `VMCallerCheckedFuncRef`.
+    /// Return the size of `VMFuncRef`.
     #[inline]
-    fn size_of_vmcaller_checked_func_ref(&self) -> u8 {
+    fn size_of_vm_func_ref(&self) -> u8 {
         5 * self.size()
     }
 
@@ -221,8 +221,8 @@ pub trait PtrSize {
 
     // Offsets within `VMNativeCallHostFuncContext`.
 
-    /// Return the offset of `VMNativeCallHostFuncContext::funcref`.
-    fn vmnative_call_host_func_context_funcref(&self) -> u8 {
+    /// Return the offset of `VMNativeCallHostFuncContext::func_ref`.
+    fn vmnative_call_host_func_context_func_ref(&self) -> u8 {
         u8::try_from(align(
             u32::try_from(std::mem::size_of::<u32>()).unwrap(),
             u32::from(self.size()),
@@ -269,8 +269,8 @@ pub struct VMOffsetsFields<P> {
     pub num_owned_memories: u32,
     /// The number of defined globals in the module.
     pub num_defined_globals: u32,
-    /// The number of escaped functions in the module, the size of the funcref
-    /// array.
+    /// The number of escaped functions in the module, the size of the function
+    /// references array.
     pub num_escaped_funcs: u32,
 }
 
@@ -352,7 +352,7 @@ impl<P: PtrSize> VMOffsets<P> {
         }
 
         calculate_sizes! {
-            defined_anyfuncs: "module functions",
+            defined_func_refs: "module functions",
             defined_globals: "defined globals",
             owned_memories: "owned memories",
             defined_memories: "defined memories",
@@ -402,7 +402,7 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
             defined_memories: 0,
             owned_memories: 0,
             defined_globals: 0,
-            defined_anyfuncs: 0,
+            defined_func_refs: 0,
             size: 0,
         };
 
@@ -462,9 +462,9 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
             align(16),
             size(defined_globals)
                 = cmul(ret.num_defined_globals, ret.ptr.size_of_vmglobal_definition()),
-            size(defined_anyfuncs) = cmul(
+            size(defined_func_refs) = cmul(
                 ret.num_escaped_funcs,
-                ret.ptr.size_of_vmcaller_checked_func_ref(),
+                ret.ptr.size_of_vm_func_ref(),
             ),
         }
 
@@ -718,10 +718,10 @@ impl<P: PtrSize> VMOffsets<P> {
         self.defined_globals
     }
 
-    /// The offset of the `anyfuncs` array.
+    /// The offset of the `func_refs` array.
     #[inline]
-    pub fn vmctx_anyfuncs_begin(&self) -> u32 {
-        self.defined_anyfuncs
+    pub fn vmctx_func_refs_begin(&self) -> u32 {
+        self.defined_func_refs
     }
 
     /// The offset of the builtin functions array.
@@ -799,14 +799,13 @@ impl<P: PtrSize> VMOffsets<P> {
             + index.as_u32() * u32::from(self.ptr.size_of_vmglobal_definition())
     }
 
-    /// Return the offset to the `VMCallerCheckedFuncRef` for the given function
+    /// Return the offset to the `VMFuncRef` for the given function
     /// index (either imported or defined).
     #[inline]
-    pub fn vmctx_anyfunc(&self, index: AnyfuncIndex) -> u32 {
+    pub fn vmctx_func_ref(&self, index: FuncRefIndex) -> u32 {
         assert!(!index.is_reserved_value());
         assert!(index.as_u32() < self.num_escaped_funcs);
-        self.vmctx_anyfuncs_begin()
-            + index.as_u32() * u32::from(self.ptr.size_of_vmcaller_checked_func_ref())
+        self.vmctx_func_refs_begin() + index.as_u32() * u32::from(self.ptr.size_of_vm_func_ref())
     }
 
     /// Return the offset to the `wasm_call` field in `*const VMFunctionBody` index `index`.

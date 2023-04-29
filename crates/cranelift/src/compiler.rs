@@ -116,30 +116,6 @@ impl Compiler {
         }
     }
 
-    fn take_context(&self) -> CompilerContext {
-        let candidate = self.contexts.lock().unwrap().pop();
-        candidate
-            .map(|mut ctx| {
-                ctx.codegen_context.clear();
-                ctx
-            })
-            .unwrap_or_else(|| CompilerContext {
-                #[cfg(feature = "incremental-cache")]
-                incremental_cache_ctx: self.cache_store.as_ref().map(|cache_store| {
-                    IncrementalCacheContext {
-                        cache_store: cache_store.clone(),
-                        num_hits: 0,
-                        num_cached: 0,
-                    }
-                }),
-                ..Default::default()
-            })
-    }
-
-    fn save_context(&self, ctx: CompilerContext) {
-        self.contexts.lock().unwrap().push(ctx);
-    }
-
     fn get_function_address_map(
         compiled_code: &CompiledCode,
         body: &FunctionBody<'_>,
@@ -195,13 +171,9 @@ impl wasmtime_environ::Compiler for Compiler {
         let sig = translation.module.functions[func_index].signature;
         let wasm_func_ty = &types[sig];
 
-        let CompilerContext {
-            mut func_translator,
-            codegen_context: mut context,
-            incremental_cache_ctx: mut cache_ctx,
-            validator_allocations,
-        } = self.take_context();
+        let mut compiler = self.function_compiler();
 
+        let context = &mut compiler.cx.codegen_context;
         context.func.signature = wasm_call_signature(isa, wasm_func_ty);
         context.func.name = UserFuncName::User(UserExternalName {
             namespace: 0,
@@ -267,85 +239,22 @@ impl wasmtime_environ::Compiler for Compiler {
         });
         context.func.stack_limit = Some(stack_limit);
         let FunctionBodyData { validator, body } = input;
-        let mut validator = validator.into_validator(validator_allocations);
-        func_translator.translate_body(
+        let mut validator =
+            validator.into_validator(mem::take(&mut compiler.cx.validator_allocations));
+        compiler.cx.func_translator.translate_body(
             &mut validator,
             body.clone(),
             &mut context.func,
             &mut func_env,
         )?;
 
-        let (_, code_buf) = compile_maybe_cached(&mut context, isa, cache_ctx.as_mut())?;
-        // compile_maybe_cached returns the compiled_code but that borrow has the same lifetime as
-        // the mutable borrow of `context`, so the borrow checker prohibits other borrows from
-        // `context` while it's alive. Borrow it again to make the borrow checker happy.
-        let compiled_code = context.compiled_code().unwrap();
-        let alignment = compiled_code.alignment;
-
-        let func_relocs = compiled_code
-            .buffer
-            .relocs()
-            .into_iter()
-            .map(|item| mach_reloc_to_reloc(&context.func, item))
-            .collect();
-
-        let traps = compiled_code
-            .buffer
-            .traps()
-            .into_iter()
-            .filter_map(mach_trap_to_trap)
-            .collect();
-
-        let stack_maps = mach_stack_maps_to_stack_maps(compiled_code.buffer.stack_maps());
-
-        let unwind_info = if isa.flags().unwind_info() {
-            compiled_code
-                .create_unwind_info(isa)
-                .map_err(|error| CompileError::Codegen(pretty_error(&context.func, error)))?
-        } else {
-            None
-        };
-
-        let length = u32::try_from(code_buf.len()).unwrap();
-
-        let address_transform =
-            Self::get_function_address_map(compiled_code, &body, length, tunables);
-
-        let ranges = if tunables.generate_native_debuginfo {
-            Some(compiled_code.value_labels_ranges.clone())
-        } else {
-            None
-        };
+        let (info, func) = compiler.finish_with_info(Some((&body, tunables)))?;
 
         let timing = cranelift_codegen::timing::take_current();
         log::debug!("{:?} translated in {:?}", func_index, timing.total());
         log::trace!("{:?} timing info\n{}", func_index, timing);
 
-        let sized_stack_slots = std::mem::take(&mut context.func.sized_stack_slots);
-
-        self.save_context(CompilerContext {
-            func_translator,
-            codegen_context: context,
-            incremental_cache_ctx: cache_ctx,
-            validator_allocations: validator.into_allocations(),
-        });
-
-        Ok((
-            WasmFunctionInfo {
-                start_srcloc: address_transform.start_srcloc,
-                stack_maps: stack_maps.into(),
-            },
-            Box::new(CompiledFunction {
-                body: code_buf,
-                relocations: func_relocs,
-                value_labels_ranges: ranges.unwrap_or(Default::default()),
-                sized_stack_slots,
-                unwind_info,
-                traps,
-                alignment,
-                address_map: address_transform,
-            }),
-        ))
+        Ok((info, Box::new(func)))
     }
 
     fn compile_array_to_wasm_trampoline(
@@ -363,20 +272,9 @@ impl wasmtime_environ::Compiler for Compiler {
         let wasm_call_sig = wasm_call_signature(isa, wasm_func_ty);
         let array_call_sig = array_call_signature(isa);
 
-        let CompilerContext {
-            mut func_translator,
-            codegen_context: mut context,
-            incremental_cache_ctx: mut cache_ctx,
-            validator_allocations,
-        } = self.take_context();
-
-        context.func = ir::Function::with_name_signature(Default::default(), array_call_sig);
-
-        let mut builder = FunctionBuilder::new(&mut context.func, func_translator.context());
-        let block0 = builder.create_block();
-        builder.append_block_params_for_function_params(block0);
-        builder.switch_to_block(block0);
-        builder.seal_block(block0);
+        let mut compiler = self.function_compiler();
+        let func = ir::Function::with_name_signature(Default::default(), array_call_sig);
+        let (mut builder, block0) = compiler.builder(func);
 
         let (vmctx, caller_vmctx, values_vec_ptr, values_vec_len) = {
             let params = builder.func.dfg.block_params(block0);
@@ -424,14 +322,7 @@ impl wasmtime_environ::Compiler for Compiler {
         builder.ins().return_(&[]);
         builder.finalize();
 
-        let func = self.finish_trampoline(&mut context, cache_ctx.as_mut(), isa)?;
-        self.save_context(CompilerContext {
-            func_translator,
-            codegen_context: context,
-            incremental_cache_ctx: cache_ctx,
-            validator_allocations,
-        });
-        Ok(Box::new(func) as _)
+        Ok(Box::new(compiler.finish()?))
     }
 
     fn compile_native_to_wasm_trampoline(
@@ -450,20 +341,9 @@ impl wasmtime_environ::Compiler for Compiler {
         let wasm_call_sig = wasm_call_signature(isa, wasm_func_ty);
         let native_call_sig = native_call_signature(isa, wasm_func_ty);
 
-        let CompilerContext {
-            mut func_translator,
-            codegen_context: mut context,
-            incremental_cache_ctx: mut cache_ctx,
-            validator_allocations,
-        } = self.take_context();
-
-        context.func = ir::Function::with_name_signature(Default::default(), native_call_sig);
-
-        let mut builder = FunctionBuilder::new(&mut context.func, func_translator.context());
-        let block0 = builder.create_block();
-        builder.append_block_params_for_function_params(block0);
-        builder.switch_to_block(block0);
-        builder.seal_block(block0);
+        let mut compiler = self.function_compiler();
+        let func = ir::Function::with_name_signature(Default::default(), native_call_sig);
+        let (mut builder, block0) = compiler.builder(func);
 
         let args = builder.func.dfg.block_params(block0).to_vec();
         let vmctx = args[0];
@@ -491,14 +371,7 @@ impl wasmtime_environ::Compiler for Compiler {
         builder.ins().return_(&results);
         builder.finalize();
 
-        let func = self.finish_trampoline(&mut context, cache_ctx.as_mut(), isa)?;
-        self.save_context(CompilerContext {
-            func_translator,
-            codegen_context: context,
-            incremental_cache_ctx: cache_ctx,
-            validator_allocations,
-        });
-        Ok(Box::new(func) as _)
+        Ok(Box::new(compiler.finish()?))
     }
 
     fn compile_wasm_to_native_trampoline(
@@ -511,20 +384,9 @@ impl wasmtime_environ::Compiler for Compiler {
         let wasm_call_sig = wasm_call_signature(isa, wasm_func_ty);
         let native_call_sig = native_call_signature(isa, wasm_func_ty);
 
-        let CompilerContext {
-            mut func_translator,
-            codegen_context: mut context,
-            incremental_cache_ctx: mut cache_ctx,
-            validator_allocations,
-        } = self.take_context();
-
-        context.func = ir::Function::with_name_signature(Default::default(), wasm_call_sig);
-
-        let mut builder = FunctionBuilder::new(&mut context.func, func_translator.context());
-        let block0 = builder.create_block();
-        builder.append_block_params_for_function_params(block0);
-        builder.switch_to_block(block0);
-        builder.seal_block(block0);
+        let mut compiler = self.function_compiler();
+        let func = ir::Function::with_name_signature(Default::default(), wasm_call_sig);
+        let (mut builder, block0) = compiler.builder(func);
 
         let args = builder.func.dfg.block_params(block0).to_vec();
         let callee_vmctx = args[0];
@@ -556,8 +418,8 @@ impl wasmtime_environ::Compiler for Compiler {
             pointer_type,
             MemFlags::trusted(),
             callee_vmctx,
-            ptr_size.vmnative_call_host_func_context_funcref()
-                + ptr_size.vmcaller_checked_func_ref_native_call(),
+            ptr_size.vmnative_call_host_func_context_func_ref()
+                + ptr_size.vm_func_ref_native_call(),
         );
 
         // Do an indirect call to the callee.
@@ -569,14 +431,7 @@ impl wasmtime_environ::Compiler for Compiler {
         builder.ins().return_(&results);
         builder.finalize();
 
-        let func = self.finish_trampoline(&mut context, cache_ctx.as_mut(), isa)?;
-        self.save_context(CompilerContext {
-            func_translator,
-            codegen_context: context,
-            incremental_cache_ctx: cache_ctx,
-            validator_allocations,
-        });
-        Ok(Box::new(func) as _)
+        Ok(Box::new(compiler.finish()?))
     }
 
     fn append_code(
@@ -775,10 +630,6 @@ impl wasmtime_environ::Compiler for Compiler {
         Ok(())
     }
 
-    fn function_alignment(&self) -> u32 {
-        self.isa.function_alignment()
-    }
-
     fn create_systemv_cie(&self) -> Option<gimli::write::CommonInformationEntry> {
         self.isa.create_systemv_cie()
     }
@@ -882,20 +733,9 @@ impl Compiler {
         let native_call_sig = native_call_signature(isa, ty);
         let array_call_sig = array_call_signature(isa);
 
-        let CompilerContext {
-            mut func_translator,
-            codegen_context: mut context,
-            incremental_cache_ctx: mut cache_ctx,
-            validator_allocations,
-        } = self.take_context();
-
-        context.func = ir::Function::with_name_signature(Default::default(), native_call_sig);
-
-        let mut builder = FunctionBuilder::new(&mut context.func, func_translator.context());
-        let block0 = builder.create_block();
-        builder.append_block_params_for_function_params(block0);
-        builder.switch_to_block(block0);
-        builder.seal_block(block0);
+        let mut compiler = self.function_compiler();
+        let func = ir::Function::with_name_signature(Default::default(), native_call_sig);
+        let (mut builder, block0) = compiler.builder(func);
 
         let (values_vec_ptr, values_vec_len) =
             self.allocate_stack_array_and_spill_args(ty, &mut builder, block0);
@@ -922,14 +762,7 @@ impl Compiler {
         builder.ins().return_(&results);
         builder.finalize();
 
-        let func = self.finish_trampoline(&mut context, cache_ctx.as_mut(), isa)?;
-        self.save_context(CompilerContext {
-            func_translator,
-            codegen_context: context,
-            incremental_cache_ctx: cache_ctx,
-            validator_allocations,
-        });
-        Ok(func)
+        compiler.finish()
     }
 
     /// Creates a trampoline for WebAssembly to call a host function defined
@@ -965,21 +798,9 @@ impl Compiler {
         let wasm_call_sig = wasm_call_signature(isa, ty);
         let array_call_sig = array_call_signature(isa);
 
-        let CompilerContext {
-            mut func_translator,
-            codegen_context: mut context,
-            incremental_cache_ctx: mut cache_ctx,
-            validator_allocations,
-        } = self.take_context();
-
-        context.func = ir::Function::with_name_signature(Default::default(), wasm_call_sig);
-
-        let mut builder = FunctionBuilder::new(&mut context.func, func_translator.context());
-        let block0 = builder.create_block();
-        builder.append_block_params_for_function_params(block0);
-        builder.switch_to_block(block0);
-        builder.seal_block(block0);
-
+        let mut compiler = self.function_compiler();
+        let func = ir::Function::with_name_signature(Default::default(), wasm_call_sig);
+        let (mut builder, block0) = compiler.builder(func);
         let caller_vmctx = builder.func.dfg.block_params(block0)[1];
 
         // Assert that we were really given a core Wasm vmctx, since that's
@@ -1024,14 +845,7 @@ impl Compiler {
         builder.ins().return_(&results);
         builder.finalize();
 
-        let func = self.finish_trampoline(&mut context, cache_ctx.as_mut(), isa)?;
-        self.save_context(CompilerContext {
-            func_translator,
-            codegen_context: context,
-            incremental_cache_ctx: cache_ctx,
-            validator_allocations,
-        });
-        Ok(func)
+        compiler.finish()
     }
 
     /// This function will allocate a stack slot suitable for storing both the
@@ -1146,13 +960,64 @@ impl Compiler {
         results
     }
 
-    fn finish_trampoline(
-        &self,
-        context: &mut Context,
-        cache_ctx: Option<&mut IncrementalCacheContext>,
-        isa: &dyn TargetIsa,
-    ) -> Result<CompiledFunction, CompileError> {
-        let (_, code_buf) = compile_maybe_cached(context, isa, cache_ctx)?;
+    fn function_compiler(&self) -> FunctionCompiler<'_> {
+        let saved_context = self.contexts.lock().unwrap().pop();
+        FunctionCompiler {
+            compiler: self,
+            cx: saved_context
+                .map(|mut ctx| {
+                    ctx.codegen_context.clear();
+                    ctx
+                })
+                .unwrap_or_else(|| CompilerContext {
+                    #[cfg(feature = "incremental-cache")]
+                    incremental_cache_ctx: self.cache_store.as_ref().map(|cache_store| {
+                        IncrementalCacheContext {
+                            cache_store: cache_store.clone(),
+                            num_hits: 0,
+                            num_cached: 0,
+                        }
+                    }),
+                    ..Default::default()
+                }),
+        }
+    }
+}
+
+struct FunctionCompiler<'a> {
+    compiler: &'a Compiler,
+    cx: CompilerContext,
+}
+
+impl FunctionCompiler<'_> {
+    fn builder(&mut self, func: ir::Function) -> (FunctionBuilder<'_>, ir::Block) {
+        self.cx.codegen_context.func = func;
+        let mut builder = FunctionBuilder::new(
+            &mut self.cx.codegen_context.func,
+            self.cx.func_translator.context(),
+        );
+
+        let block0 = builder.create_block();
+        builder.append_block_params_for_function_params(block0);
+        builder.switch_to_block(block0);
+        builder.seal_block(block0);
+        (builder, block0)
+    }
+
+    fn finish(self) -> Result<CompiledFunction, CompileError> {
+        let (info, func) = self.finish_with_info(None)?;
+        assert!(info.stack_maps.is_empty());
+        Ok(func)
+    }
+
+    fn finish_with_info(
+        mut self,
+        body_and_tunables: Option<(&FunctionBody<'_>, &Tunables)>,
+    ) -> Result<(WasmFunctionInfo, CompiledFunction), CompileError> {
+        let context = &mut self.cx.codegen_context;
+        let isa = &*self.compiler.isa;
+        let (_, code_buf) =
+            compile_maybe_cached(context, isa, self.cx.incremental_cache_ctx.as_mut())?;
         let compiled_code = context.compiled_code().unwrap();
 
         let relocations = compiled_code
@@ -1168,7 +1033,35 @@ impl Compiler {
             .into_iter()
             .filter_map(mach_trap_to_trap)
             .collect();
-        let alignment = compiled_code.alignment;
+
+        // Give wasm functions, user defined code, a "preferred" alignment
+        // instead of the minimum alignment as this can help perf in niche
+        // situations.
+        let preferred_alignment = if body_and_tunables.is_some() {
+            self.compiler.isa.function_alignment().preferred
+        } else {
+            1
+        };
+        let alignment = compiled_code.alignment.max(preferred_alignment);
+
+        let address_map = match body_and_tunables {
+            Some((body, tunables)) => Compiler::get_function_address_map(
+                compiled_code,
+                body,
+                u32::try_from(code_buf.len()).unwrap(),
+                tunables,
+            ),
+            None => Default::default(),
+        };
+
+        let value_labels_ranges = if body_and_tunables
+            .map(|(_, t)| t.generate_native_debuginfo)
+            .unwrap_or(false)
+        {
+            compiled_code.value_labels_ranges.clone()
+        } else {
+            Default::default()
+        };
 
         let unwind_info = if isa.flags().unwind_info() {
             compiled_code
@@ -1177,17 +1070,26 @@ impl Compiler {
         } else {
             None
         };
+        let stack_maps = mach_stack_maps_to_stack_maps(compiled_code.buffer.stack_maps());
+        let sized_stack_slots = std::mem::take(&mut context.func.sized_stack_slots);
+        self.compiler.contexts.lock().unwrap().push(self.cx);
 
-        Ok(CompiledFunction {
-            body: code_buf,
-            unwind_info,
-            relocations,
-            sized_stack_slots: Default::default(),
-            value_labels_ranges: Default::default(),
-            address_map: Default::default(),
-            traps,
-            alignment,
-        })
+        Ok((
+            WasmFunctionInfo {
+                start_srcloc: address_map.start_srcloc,
+                stack_maps: stack_maps.into(),
+            },
+            CompiledFunction {
+                body: code_buf,
+                unwind_info,
+                relocations,
+                sized_stack_slots,
+                value_labels_ranges,
+                address_map,
+                traps,
+                alignment,
+            },
+        ))
     }
 }
 

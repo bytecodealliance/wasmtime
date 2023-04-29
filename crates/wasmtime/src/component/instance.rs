@@ -126,12 +126,12 @@ impl InstanceData {
             CoreDef::Export(e) => self.lookup_export(store, e),
             CoreDef::Lowered(idx) => {
                 wasmtime_runtime::Export::Function(wasmtime_runtime::ExportFunction {
-                    anyfunc: self.state.lowering_anyfunc(*idx),
+                    func_ref: self.state.lowering_func_ref(*idx),
                 })
             }
             CoreDef::AlwaysTrap(idx) => {
                 wasmtime_runtime::Export::Function(wasmtime_runtime::ExportFunction {
-                    anyfunc: self.state.always_trap_anyfunc(*idx),
+                    func_ref: self.state.always_trap_func_ref(*idx),
                 })
             }
             CoreDef::InstanceFlags(idx) => {
@@ -146,7 +146,7 @@ impl InstanceData {
             }
             CoreDef::Transcoder(idx) => {
                 wasmtime_runtime::Export::Function(wasmtime_runtime::ExportFunction {
-                    anyfunc: self.state.transcoder_anyfunc(*idx),
+                    func_ref: self.state.transcoder_func_ref(*idx),
                 })
             }
         }
@@ -389,21 +389,21 @@ impl<'a> Instantiator<'a> {
     }
 
     fn extract_realloc(&mut self, store: &mut StoreOpaque, realloc: &ExtractRealloc) {
-        let anyfunc = match self.data.lookup_def(store, &realloc.def) {
-            wasmtime_runtime::Export::Function(f) => f.anyfunc,
+        let func_ref = match self.data.lookup_def(store, &realloc.def) {
+            wasmtime_runtime::Export::Function(f) => f.func_ref,
             _ => unreachable!(),
         };
-        self.data.state.set_runtime_realloc(realloc.index, anyfunc);
+        self.data.state.set_runtime_realloc(realloc.index, func_ref);
     }
 
     fn extract_post_return(&mut self, store: &mut StoreOpaque, post_return: &ExtractPostReturn) {
-        let anyfunc = match self.data.lookup_def(store, &post_return.def) {
-            wasmtime_runtime::Export::Function(f) => f.anyfunc,
+        let func_ref = match self.data.lookup_def(store, &post_return.def) {
+            wasmtime_runtime::Export::Function(f) => f.func_ref,
             _ => unreachable!(),
         };
         self.data
             .state
-            .set_runtime_post_return(post_return.index, anyfunc);
+            .set_runtime_post_return(post_return.index, func_ref);
     }
 
     fn build_imports<'b>(
@@ -456,7 +456,7 @@ impl<'a> Instantiator<'a> {
         if let wasmtime_runtime::Export::Function(f) = &export {
             match expected {
                 EntityType::Function(expected) => {
-                    let actual = unsafe { f.anyfunc.as_ref().type_index };
+                    let actual = unsafe { f.func_ref.as_ref().type_index };
                     assert_eq!(module.signatures().shared_signature(expected), Some(actual));
                     return;
                 }

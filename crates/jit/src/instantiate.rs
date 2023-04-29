@@ -599,7 +599,7 @@ impl CompiledModule {
     /// Get the Wasm-to-native trampoline for the given signature.
     ///
     /// These trampolines are used for filling in
-    /// `VMCallerCheckedFuncRef::wasm_call` for `Func::wrap`-style host funcrefs
+    /// `VMFuncRef::wasm_call` for `Func::wrap`-style host funcrefs
     /// that don't have access to a compiler when created.
     pub fn wasm_to_native_trampoline(&self, signature: SignatureIndex) -> &[u8] {
         let idx = self

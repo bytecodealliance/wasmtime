@@ -568,24 +568,20 @@ impl VMGlobalDefinition {
             .cast::<Option<VMExternRef>>())
     }
 
-    /// Return a reference to the value as an anyfunc.
+    /// Return a reference to the value as a `VMFuncRef`.
     #[allow(clippy::cast_ptr_alignment)]
-    pub unsafe fn as_anyfunc(&self) -> *const VMCallerCheckedFuncRef {
-        *(self
-            .storage
-            .as_ref()
-            .as_ptr()
-            .cast::<*const VMCallerCheckedFuncRef>())
+    pub unsafe fn as_func_ref(&self) -> *const VMFuncRef {
+        *(self.storage.as_ref().as_ptr().cast::<*const VMFuncRef>())
     }
 
-    /// Return a mutable reference to the value as an anyfunc.
+    /// Return a mutable reference to the value as a `VMFuncRef`.
     #[allow(clippy::cast_ptr_alignment)]
-    pub unsafe fn as_anyfunc_mut(&mut self) -> &mut *const VMCallerCheckedFuncRef {
+    pub unsafe fn as_func_ref_mut(&mut self) -> &mut *const VMFuncRef {
         &mut *(self
             .storage
             .as_mut()
             .as_mut_ptr()
-            .cast::<*const VMCallerCheckedFuncRef>())
+            .cast::<*const VMFuncRef>())
     }
 }
 
@@ -639,7 +635,7 @@ impl Default for VMSharedSignatureIndex {
 /// caller, and the vmctx closure associated with this function.
 #[derive(Debug, Clone)]
 #[repr(C)]
-pub struct VMCallerCheckedFuncRef {
+pub struct VMFuncRef {
     /// Function pointer for this funcref if being called via the native calling
     /// convention.
     pub native_call: NonNull<VMNativeCallFunction>,
@@ -681,43 +677,43 @@ pub struct VMCallerCheckedFuncRef {
     // If more elements are added here, remember to add offset_of tests below!
 }
 
-unsafe impl Send for VMCallerCheckedFuncRef {}
-unsafe impl Sync for VMCallerCheckedFuncRef {}
+unsafe impl Send for VMFuncRef {}
+unsafe impl Sync for VMFuncRef {}
 
 #[cfg(test)]
-mod test_vmcaller_checked_anyfunc {
-    use super::VMCallerCheckedFuncRef;
+mod test_vm_func_ref {
+    use super::VMFuncRef;
     use memoffset::offset_of;
     use std::mem::size_of;
     use wasmtime_environ::{Module, PtrSize, VMOffsets};
 
     #[test]
-    fn check_vmcaller_checked_func_ref_offsets() {
+    fn check_vm_func_ref_offsets() {
         let module = Module::new();
         let offsets = VMOffsets::new(size_of::<*mut u8>() as u8, &module);
         assert_eq!(
-            size_of::<VMCallerCheckedFuncRef>(),
-            usize::from(offsets.ptr.size_of_vmcaller_checked_func_ref())
+            size_of::<VMFuncRef>(),
+            usize::from(offsets.ptr.size_of_vm_func_ref())
         );
         assert_eq!(
-            offset_of!(VMCallerCheckedFuncRef, native_call),
-            usize::from(offsets.ptr.vmcaller_checked_func_ref_native_call())
+            offset_of!(VMFuncRef, native_call),
+            usize::from(offsets.ptr.vm_func_ref_native_call())
         );
         assert_eq!(
-            offset_of!(VMCallerCheckedFuncRef, array_call),
-            usize::from(offsets.ptr.vmcaller_checked_func_ref_array_call())
+            offset_of!(VMFuncRef, array_call),
+            usize::from(offsets.ptr.vm_func_ref_array_call())
         );
         assert_eq!(
-            offset_of!(VMCallerCheckedFuncRef, wasm_call),
-            usize::from(offsets.ptr.vmcaller_checked_func_ref_wasm_call())
+            offset_of!(VMFuncRef, wasm_call),
+            usize::from(offsets.ptr.vm_func_ref_wasm_call())
         );
         assert_eq!(
-            offset_of!(VMCallerCheckedFuncRef, type_index),
-            usize::from(offsets.ptr.vmcaller_checked_func_ref_type_index())
+            offset_of!(VMFuncRef, type_index),
+            usize::from(offsets.ptr.vm_func_ref_type_index())
         );
         assert_eq!(
-            offset_of!(VMCallerCheckedFuncRef, vmctx),
-            usize::from(offsets.ptr.vmcaller_checked_func_ref_vmctx())
+            offset_of!(VMFuncRef, vmctx),
+            usize::from(offsets.ptr.vm_func_ref_vmctx())
         );
     }
 }
@@ -1207,11 +1203,11 @@ impl ValRaw {
 /// target context.
 ///
 /// This context is used to represent that contexts specified in
-/// `VMCallerCheckedFuncRef` can have any type and don't have an implicit
+/// `VMFuncRef` can have any type and don't have an implicit
 /// structure. Neither wasmtime nor cranelift-generated code can rely on the
 /// structure of an opaque context in general and only the code which configured
 /// the context is able to rely on a particular structure. This is because the
-/// context pointer configured for `VMCallerCheckedFuncRef` is guaranteed to be
+/// context pointer configured for `VMFuncRef` is guaranteed to be
 /// the first parameter passed.
 ///
 /// Note that Wasmtime currently has a layout where all contexts that are casted

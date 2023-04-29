@@ -120,8 +120,8 @@ impl Func {
             .map(|i| NonNull::new(data.instance().runtime_memory(i)).unwrap());
         let realloc = options.realloc.map(|i| data.instance().runtime_realloc(i));
         let post_return = options.post_return.map(|i| {
-            let anyfunc = data.instance().runtime_post_return(i);
-            ExportFunction { anyfunc }
+            let func_ref = data.instance().runtime_post_return(i);
+            ExportFunction { func_ref }
         });
         let component_instance = options.instance;
         let options = unsafe { Options::new(store.id(), memory, realloc, options.string_encoding) };
@@ -470,7 +470,7 @@ impl Func {
             // implementations, hence `ComponentType` being an `unsafe` trait.
             crate::Func::call_unchecked_raw(
                 store,
-                export.anyfunc,
+                export.func_ref,
                 space.as_mut_ptr().cast(),
                 mem::size_of_val(space) / mem::size_of::<ValRaw>(),
             )?;
@@ -617,7 +617,7 @@ impl Func {
             if let Some(func) = post_return {
                 crate::Func::call_unchecked_raw(
                     &mut store,
-                    func.anyfunc,
+                    func.func_ref,
                     &post_return_arg as *const ValRaw as *mut ValRaw,
                     1,
                 )?;

@@ -5,7 +5,7 @@ use crate::ir::{types, ExternalName, LibCall, Opcode, RelSourceLoc, TrapCode, Ty
 use crate::isa::x64::abi::X64ABIMachineSpec;
 use crate::isa::x64::inst::regs::{pretty_print_reg, show_ireg_sized};
 use crate::isa::x64::settings as x64_settings;
-use crate::isa::CallConv;
+use crate::isa::{CallConv, FunctionAlignment};
 use crate::{machinst::*, trace};
 use crate::{settings, CodegenError, CodegenResult};
 use alloc::boxed::Box;
@@ -2573,6 +2573,15 @@ impl MachInst for Inst {
             | Inst::TrapIf { .. }
             | Inst::Ud2 { .. } => true,
             _ => false,
+        }
+    }
+
+    fn function_alignment() -> FunctionAlignment {
+        FunctionAlignment {
+            minimum: 1,
+            // Prefer an alignment of 16-bytes to hypothetically get the whole
+            // function into a minimum number of lines.
+            preferred: 16,
         }
     }
 

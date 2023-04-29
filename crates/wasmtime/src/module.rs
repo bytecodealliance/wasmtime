@@ -161,9 +161,16 @@ impl<'a> ModuleFunctionIndices<'a> {
     ) -> Self {
         let mut func_infos = PrimaryMap::with_capacity(function_compilations.len());
         let mut func_indices = Vec::with_capacity(function_compilations.len());
-        let mut array_to_wasm_trampoline_indices = vec![];
-        let mut native_to_wasm_trampoline_indices = vec![];
 
+        // Place all wasm-compiled functions, in order, into the final object.
+        // This should help keep a sense of locality between functions, if
+        // necessary.
+        //
+        // Trampolines are deferred to get inserted after all wasm functions
+        // since they don't need the same locality and also don't require
+        // alignment since they're not hot.
+        let mut array_to_wasm_trampolines = Vec::new();
+        let mut native_to_wasm_trampolines = Vec::new();
         for CompileFunctionResult {
             info,
             function,
@@ -174,21 +181,31 @@ impl<'a> ModuleFunctionIndices<'a> {
             let def_idx = func_infos.push(info);
             let idx = translation.module.func_index(def_idx).as_u32();
 
-            if let Some(array_to_wasm_trampoline) = array_to_wasm_trampoline {
+            if let Some(trampoline) = array_to_wasm_trampoline {
                 let sym = format!("{symbol_prefix}_array_to_wasm_trampoline_{idx}");
-                array_to_wasm_trampoline_indices.push((compiled_funcs.len(), def_idx));
-                compiled_funcs.push((sym, array_to_wasm_trampoline));
+                array_to_wasm_trampolines.push((def_idx, (sym, trampoline)));
             }
 
-            if let Some(native_to_wasm_trampoline) = native_to_wasm_trampoline {
+            if let Some(trampoline) = native_to_wasm_trampoline {
                 let sym = format!("{symbol_prefix}_native_to_wasm_trampoline_{idx}");
-                native_to_wasm_trampoline_indices.push((compiled_funcs.len(), def_idx));
-                compiled_funcs.push((sym, native_to_wasm_trampoline));
+                native_to_wasm_trampolines.push((def_idx, (sym, trampoline)));
             }
 
             let sym = format!("{symbol_prefix}_function_{idx}");
             func_indices.push(compiled_funcs.len());
             compiled_funcs.push((sym, function));
+        }
+
+        let mut array_to_wasm_trampoline_indices = vec![];
+        for (def_idx, pair) in array_to_wasm_trampolines {
+            array_to_wasm_trampoline_indices.push((compiled_funcs.len(), def_idx));
+            compiled_funcs.push(pair);
+        }
+
+        let mut native_to_wasm_trampoline_indices = vec![];
+        for (def_idx, pair) in native_to_wasm_trampolines {
+            native_to_wasm_trampoline_indices.push((compiled_funcs.len(), def_idx));
+            compiled_funcs.push(pair);
         }
 
         ModuleFunctionIndices {

@@ -5,9 +5,9 @@ use crate::ir::{Function, Type};
 use crate::isa::aarch64::settings as aarch64_settings;
 #[cfg(feature = "unwind")]
 use crate::isa::unwind::systemv;
-use crate::isa::{Builder as IsaBuilder, TargetIsa};
+use crate::isa::{Builder as IsaBuilder, FunctionAlignment, TargetIsa};
 use crate::machinst::{
-    compile, CompiledCode, CompiledCodeStencil, MachTextSectionBuilder, Reg, SigSet,
+    compile, CompiledCode, CompiledCodeStencil, MachInst, MachTextSectionBuilder, Reg, SigSet,
     TextSectionBuilder, VCode,
 };
 use crate::result::CodegenResult;
@@ -190,10 +190,8 @@ impl TargetIsa for AArch64Backend {
         inst::unwind::systemv::map_reg(reg).map(|reg| reg.0)
     }
 
-    fn function_alignment(&self) -> u32 {
-        // We use 32-byte alignment for performance reasons, but for correctness we would only need
-        // 4-byte alignment.
-        32
+    fn function_alignment(&self) -> FunctionAlignment {
+        inst::Inst::function_alignment()
     }
 
     #[cfg(feature = "disas")]

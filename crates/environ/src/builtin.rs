@@ -23,15 +23,15 @@ macro_rules! foreach_builtin_function {
             /// Returns an index for wasm's `data.drop` instruction.
             data_drop(vmctx: vmctx, data: i32);
             /// Returns a table entry after lazily initializing it.
-            table_get_lazy_init_funcref(vmctx: vmctx, table: i32, index: i32) -> pointer;
+            table_get_lazy_init_func_ref(vmctx: vmctx, table: i32, index: i32) -> pointer;
             /// Returns an index for Wasm's `table.grow` instruction for `funcref`s.
-            table_grow_funcref(vmctx: vmctx, table: i32, delta: i32, init: pointer) -> i32;
+            table_grow_func_ref(vmctx: vmctx, table: i32, delta: i32, init: pointer) -> i32;
             /// Returns an index for Wasm's `table.grow` instruction for `externref`s.
             table_grow_externref(vmctx: vmctx, table: i32, delta: i32, init: reference) -> i32;
             /// Returns an index for Wasm's `table.fill` instruction for `externref`s.
             table_fill_externref(vmctx: vmctx, table: i32, dst: i32, val: reference, len: i32);
             /// Returns an index for Wasm's `table.fill` instruction for `funcref`s.
-            table_fill_funcref(vmctx: vmctx, table: i32, dst: i32, val: pointer, len: i32);
+            table_fill_func_ref(vmctx: vmctx, table: i32, dst: i32, val: pointer, len: i32);
             /// Returns an index to drop a `VMExternRef`.
             drop_externref(vmctx: vmctx, val: pointer);
             /// Returns an index to do a GC and then insert a `VMExternRef` into the

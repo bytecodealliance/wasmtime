@@ -5,9 +5,7 @@ use anyhow::Result;
 use std::panic::{self, AssertUnwindSafe};
 use std::ptr::NonNull;
 use wasmtime_jit::{CodeMemory, ProfilingAgent};
-use wasmtime_runtime::{
-    VMArrayCallHostFuncContext, VMCallerCheckedFuncRef, VMContext, VMOpaqueContext,
-};
+use wasmtime_runtime::{VMArrayCallHostFuncContext, VMContext, VMFuncRef, VMOpaqueContext};
 
 struct TrampolineState<F> {
     func: F,
@@ -158,7 +156,7 @@ where
 
     unsafe {
         Ok(VMArrayCallHostFuncContext::new(
-            VMCallerCheckedFuncRef {
+            VMFuncRef {
                 array_call,
                 wasm_call,
                 native_call,

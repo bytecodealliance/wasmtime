@@ -23,10 +23,10 @@ const MAX_ARITY: u32 = 5;
 const MAX_TYPE_DEPTH: u32 = 99;
 
 /// The name of the imported host function which the generated component will call
-pub const IMPORT_FUNCTION: &str = "echo";
+pub const IMPORT_FUNCTION: &str = "echo-import";
 
 /// The name of the exported guest function which the host should call
-pub const EXPORT_FUNCTION: &str = "echo";
+pub const EXPORT_FUNCTION: &str = "echo-export";
 
 #[derive(Copy, Clone, PartialEq, Eq)]
 enum CoreType {
@@ -834,7 +834,7 @@ impl Declarations {
             format!(
                 r#"
                 (component ${name}
-                    (import "echo" (func $f (type $sig)))
+                    (import "{IMPORT_FUNCTION}" (func $f (type $sig)))
 
                     (core instance $libc (instantiate $libc))
 
@@ -850,9 +850,9 @@ impl Declarations {
                         (with "host" (instance (export "{IMPORT_FUNCTION}" (func $f_lower))))
                     ))
 
-                    (func (export "echo") (type $sig)
+                    (func (export "{EXPORT_FUNCTION}") (type $sig)
                         (canon lift
-                            (core func $i "echo")
+                            (core func $i "{EXPORT_FUNCTION}")
                             (memory $libc "memory")
                             (realloc (func $libc "realloc"))
                             string-encoding={encoding}
@@ -888,9 +888,9 @@ impl Declarations {
 
                 {c1}
                 {c2}
-                (instance $c1 (instantiate $c1 (with "echo" (func $f))))
-                (instance $c2 (instantiate $c2 (with "echo" (func $c1 "echo"))))
-                (export "echo" (func $c2 "echo"))
+                (instance $c1 (instantiate $c1 (with "{IMPORT_FUNCTION}" (func $f))))
+                (instance $c2 (instantiate $c2 (with "{IMPORT_FUNCTION}" (func $c1 "{EXPORT_FUNCTION}"))))
+                (export "{EXPORT_FUNCTION}" (func $c2 "{EXPORT_FUNCTION}"))
             )"#,
         )
         .into()
