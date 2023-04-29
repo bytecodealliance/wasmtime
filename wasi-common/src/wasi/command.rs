@@ -11,17 +11,10 @@ wasmtime::component::bindgen!({
     },
     with: {
        "filesystem": crate::wasi::filesystem,
-       "instance_network": crate::wasi::instance_network,
-       "ip_name_lookup": crate::wasi::ip_name_lookup,
        "monotonic_clock": crate::wasi::monotonic_clock,
-       "network": crate::wasi::network,
        "poll": crate::wasi::poll,
        "streams": crate::wasi::streams,
-       "tcp": crate::wasi::tcp,
-       "tcp_create_socket": crate::wasi::tcp_create_socket,
        "timezone": crate::wasi::timezone,
-       "udp": crate::wasi::udp,
-       "udp_create_socket": crate::wasi::udp_create_socket,
        "wall_clock": crate::wasi::wall_clock,
        "random": crate::wasi::random,
        "environment": crate::wasi::environment,
@@ -41,13 +34,6 @@ pub fn add_to_linker<T: Send>(
     crate::wasi::poll::add_to_linker(l, f)?;
     crate::wasi::streams::add_to_linker(l, f)?;
     crate::wasi::random::add_to_linker(l, f)?;
-    crate::wasi::tcp::add_to_linker(l, f)?;
-    crate::wasi::tcp_create_socket::add_to_linker(l, f)?;
-    crate::wasi::udp::add_to_linker(l, f)?;
-    crate::wasi::udp_create_socket::add_to_linker(l, f)?;
-    crate::wasi::ip_name_lookup::add_to_linker(l, f)?;
-    crate::wasi::instance_network::add_to_linker(l, f)?;
-    crate::wasi::network::add_to_linker(l, f)?;
     crate::wasi::exit::add_to_linker(l, f)?;
     crate::wasi::environment::add_to_linker(l, f)?;
     crate::wasi::preopens::add_to_linker(l, f)?;

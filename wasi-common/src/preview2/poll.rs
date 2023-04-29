@@ -1,11 +1,9 @@
 use crate::{
     stream::TableStreamExt,
-    tcp_socket::TableTcpSocketExt,
     wasi,
     wasi::monotonic_clock::Instant,
     wasi::poll::Pollable,
     wasi::streams::{InputStream, OutputStream, StreamError},
-    wasi::tcp::TcpSocket,
     WasiCtx,
 };
 
@@ -26,8 +24,10 @@ pub(crate) enum PollableEntry {
     Write(OutputStream),
     /// Poll for a monotonic-clock timer.
     MonotonicClock(Instant, bool),
+    /* FIXME: need to rebuild the poll interface to let pollables be created in different crates.
     /// Poll for a tcp-socket.
     TcpSocket(TcpSocket),
+    */
 }
 
 // Implementatations of the interface. The bodies had been pulled out into
@@ -72,12 +72,13 @@ impl wasi::poll::Host for WasiCtx {
                         absolute,
                         userdata,
                     );
-                }
-                PollableEntry::TcpSocket(tcp_socket) => {
-                    let wasi_tcp_socket: &dyn crate::WasiTcpSocket =
-                        self.table().get_tcp_socket(tcp_socket).map_err(convert)?;
-                    poll.subscribe_tcp_socket(wasi_tcp_socket, userdata);
-                }
+                } /*
+                  PollableEntry::TcpSocket(tcp_socket) => {
+                      let wasi_tcp_socket: &dyn crate::WasiTcpSocket =
+                          self.table().get_tcp_socket(tcp_socket).map_err(convert)?;
+                      poll.subscribe_tcp_socket(wasi_tcp_socket, userdata);
+                  }
+                  */
             }
         }
 
