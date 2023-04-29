@@ -65,12 +65,12 @@ pub async fn poll_oneoff<'a>(poll: &mut Poll<'a>) -> Result<(), Error> {
                         )));
                     }
                 }
-            }
-
-            RwStream::TcpSocket(tcp_socket) => {
-                let fd = tcp_socket.pollable();
-                pollfds.push(PollFd::from_borrowed_fd(fd, PollFlags::IN | PollFlags::PRI));
-            }
+            } /* FIXME redesign of sched to make it possible to define pollables out of crate
+              RwStream::TcpSocket(tcp_socket) => {
+                  let fd = tcp_socket.pollable();
+                  pollfds.push(PollFd::from_borrowed_fd(fd, PollFlags::IN | PollFlags::PRI));
+              }
+              */
         }
     }
 
