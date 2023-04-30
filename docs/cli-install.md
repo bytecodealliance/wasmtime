@@ -15,9 +15,9 @@ This will download a precompiled version of `wasmtime` and place it in
 `$HOME/.wasmtime`, and update your shell configuration to place the right
 directory in `PATH`.
 
-Windows users will want to visit our [releases page][releases] and can download
+Windows users can either (i) visit our [releases page][releases] and download
 the MSI installer (`wasmtime-dev-x86_64-windows.msi` for example) and use that
-to install.
+to install or (ii) use the `winget` package manager `winget install -Id BytecodeAlliance.Wasmtime`
 
 [releases]: https://github.com/bytecodealliance/wasmtime/releases
 
