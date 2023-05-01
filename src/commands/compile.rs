@@ -66,11 +66,19 @@ impl CompileCommand {
 
         let mut config = self.common.config(self.target.as_deref())?;
 
-        if let Some(dir) = self.emit_clif {
-            if !dir.is_dir() {
-                std::fs::create_dir(&dir)?;
+        if let Some(path) = self.emit_clif {
+            if !path.exists() {
+                std::fs::create_dir(&path)?;
             }
-            config.emit_clif(&dir);
+
+            if !path.is_dir() {
+                bail!(
+                    "the path passed for '--emit-clif' ({}) must be a directory",
+                    path.display()
+                );
+            }
+
+            config.emit_clif(&path);
         }
 
         let engine = Engine::new(&config)?;
