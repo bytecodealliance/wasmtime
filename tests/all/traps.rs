@@ -1468,3 +1468,53 @@ fn trap_with_native_to_wasm_stack_args() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn dont_see_stale_stack_walking_registers() -> Result<()> {
+    let engine = Engine::default();
+
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (import "" "host_start" (func $host_start))
+                (import "" "host_get_trap" (func $host_get_trap))
+                (export "get_trap" (func $host_get_trap))
+
+                ;; We enter and exit Wasm, which saves registers in the
+                ;; `VMRuntimeLimits`. Later, when we call a re-exported host
+                ;; function, we should not accidentally reuse those saved
+                ;; registers.
+                (start $start)
+                (func $start
+                    (call $host_start)
+                )
+            )
+        "#,
+    )?;
+
+    let mut store = Store::new(&engine, ());
+    let mut linker = Linker::new(&engine);
+
+    let host_start = Func::new(
+        &mut store,
+        FuncType::new([], []),
+        |_caller, _args, _results| Ok(()),
+    );
+    linker.define(&store, "", "host_start", host_start)?;
+
+    let host_get_trap = Func::new(
+        &mut store,
+        FuncType::new([], []),
+        |_caller, _args, _results| Err(anyhow::anyhow!("trap!!!")),
+    );
+    linker.define(&store, "", "host_get_trap", host_get_trap)?;
+
+    let instance = linker.instantiate(&mut store, &module)?;
+    let get_trap = instance.get_func(&mut store, "get_trap").unwrap();
+
+    let err = get_trap.call(&mut store, &[], &mut []).unwrap_err();
+    assert!(err.to_string().contains("trap!!!"));
+
+    Ok(())
+}

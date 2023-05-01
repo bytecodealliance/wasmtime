@@ -1,6 +1,7 @@
 use anyhow::{anyhow, bail, Result};
 use std::future::Future;
 use std::pin::Pin;
+use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
 use wasmtime::*;
 
@@ -705,4 +706,140 @@ fn noop_waker() -> Waker {
         RawWakerVTable::new(|ptr| RawWaker::new(ptr, &VTABLE), |_| {}, |_| {}, |_| {});
     const RAW: RawWaker = RawWaker::new(0 as *const (), &VTABLE);
     unsafe { Waker::from_raw(RAW) }
+}
+
+#[tokio::test]
+async fn non_stacky_async_activations() -> Result<()> {
+    let mut config = Config::new();
+    config.async_support(true);
+    let engine = Engine::new(&config)?;
+    let mut store1: Store<Option<Pin<Box<dyn Future<Output = Result<()>> + Send>>>> =
+        Store::new(&engine, None);
+    let mut linker1 = Linker::new(&engine);
+
+    let module1 = Module::new(
+        &engine,
+        r#"
+            (module $m1
+                (import "" "host_capture_stack" (func $host_capture_stack))
+                (import "" "start_async_instance" (func $start_async_instance))
+                (func $capture_stack (export "capture_stack")
+                    call $host_capture_stack
+                )
+                (func $run_sync (export "run_sync")
+                    call $start_async_instance
+                )
+            )
+        "#,
+    )?;
+
+    let module2 = Module::new(
+        &engine,
+        r#"
+            (module $m2
+                (import "" "yield" (func $yield))
+
+                (func $run_async (export "run_async")
+                    call $yield
+                )
+            )
+        "#,
+    )?;
+
+    let stacks = Arc::new(Mutex::new(vec![]));
+    fn capture_stack(stacks: &Arc<Mutex<Vec<WasmBacktrace>>>, store: impl AsContext) {
+        let mut stacks = stacks.lock().unwrap();
+        stacks.push(wasmtime::WasmBacktrace::force_capture(store));
+    }
+
+    linker1.func_wrap0_async("", "host_capture_stack", {
+        let stacks = stacks.clone();
+        move |caller| {
+            capture_stack(&stacks, &caller);
+            Box::new(async { Ok(()) })
+        }
+    })?;
+
+    linker1.func_wrap0_async("", "start_async_instance", {
+        let stacks = stacks.clone();
+        move |mut caller| {
+            let stacks = stacks.clone();
+            capture_stack(&stacks, &caller);
+
+            let module2 = module2.clone();
+            let mut store2 = Store::new(caller.engine(), ());
+            let mut linker2 = Linker::new(caller.engine());
+            linker2
+                .func_wrap0_async("", "yield", {
+                    let stacks = stacks.clone();
+                    move |caller| {
+                        let stacks = stacks.clone();
+                        Box::new(async move {
+                            capture_stack(&stacks, &caller);
+                            tokio::task::yield_now().await;
+                            capture_stack(&stacks, &caller);
+                            Ok(())
+                        })
+                    }
+                })
+                .unwrap();
+
+            Box::new(async move {
+                let future = PollOnce::new(Box::pin({
+                    let stacks = stacks.clone();
+                    async move {
+                        let instance2 = linker2.instantiate_async(&mut store2, &module2).await?;
+
+                        instance2
+                            .get_func(&mut store2, "run_async")
+                            .unwrap()
+                            .call_async(&mut store2, &[], &mut [])
+                            .await?;
+
+                        capture_stack(&stacks, &store2);
+                        Ok(())
+                    }
+                }) as _)
+                .await;
+                capture_stack(&stacks, &caller);
+                *caller.data_mut() = Some(future);
+                Ok(())
+            })
+        }
+    })?;
+
+    let instance1 = linker1.instantiate_async(&mut store1, &module1).await?;
+    instance1
+        .get_typed_func::<(), ()>(&mut store1, "run_sync")?
+        .call_async(&mut store1, ())
+        .await?;
+    let future = store1.data_mut().take().unwrap();
+    future.await?;
+
+    instance1
+        .get_typed_func::<(), ()>(&mut store1, "capture_stack")?
+        .call_async(&mut store1, ())
+        .await?;
+
+    let stacks = stacks.lock().unwrap();
+    eprintln!("stacks = {stacks:#?}");
+
+    assert_eq!(stacks.len(), 6);
+    for (actual, expected) in stacks.iter().zip(vec![
+        vec!["run_sync"],
+        vec!["run_async"],
+        vec!["run_sync"],
+        vec!["run_async"],
+        vec![],
+        vec!["capture_stack"],
+    ]) {
+        eprintln!("expected = {expected:?}");
+        eprintln!("actual = {actual:?}");
+        assert_eq!(actual.frames().len(), expected.len());
+        for (actual, expected) in actual.frames().iter().zip(expected) {
+            assert_eq!(actual.func_name(), Some(expected));
+        }
+    }
+
+    Ok(())
 }
