@@ -525,6 +525,15 @@ impl<'a, 'data> Translator<'a, 'data> {
                                 .initializers
                                 .push(LocalInitializer::Lower(func, options));
                         }
+                        wasmparser::CanonicalFunction::ResourceNew { .. } => {
+                            todo!("resource types not yet implemented")
+                        }
+                        wasmparser::CanonicalFunction::ResourceDrop { .. } => {
+                            todo!("resource types not yet implemented")
+                        }
+                        wasmparser::CanonicalFunction::ResourceRep { .. } => {
+                            todo!("resource types not yet implemented")
+                        }
                     }
                 }
             }

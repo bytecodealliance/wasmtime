@@ -448,6 +448,9 @@ impl ComponentTypesBuilder {
             wasmparser::ComponentType::Instance(ty) => {
                 TypeDef::ComponentInstance(self.component_instance_type(ty)?)
             }
+            wasmparser::ComponentType::Resource { .. } => {
+                todo!("resource types not yet implemented")
+            }
         })
     }
 
@@ -469,13 +472,16 @@ impl ComponentTypesBuilder {
                 self.core_outer_type(0, TypeIndex::from_u32(*ty))
             }
             wasmparser::ComponentTypeRef::Func(ty)
-            | wasmparser::ComponentTypeRef::Type(wasmparser::TypeBounds::Eq, ty)
+            | wasmparser::ComponentTypeRef::Type(wasmparser::TypeBounds::Eq(ty))
             | wasmparser::ComponentTypeRef::Instance(ty)
             | wasmparser::ComponentTypeRef::Component(ty) => {
                 self.component_outer_type(0, ComponentTypeIndex::from_u32(*ty))
             }
             wasmparser::ComponentTypeRef::Value(..) => {
                 unimplemented!("references to value types");
+            }
+            wasmparser::ComponentTypeRef::Type(wasmparser::TypeBounds::SubResource) => {
+                todo!("resource types not yet implemented")
             }
         }
     }
@@ -707,6 +713,10 @@ impl ComponentTypesBuilder {
             }
             wasmparser::ComponentDefinedType::Result { ok, err } => {
                 InterfaceType::Result(self.result_type(ok, err))
+            }
+            wasmparser::ComponentDefinedType::Own(_) => todo!("resource types not yet implemented"),
+            wasmparser::ComponentDefinedType::Borrow(_) => {
+                todo!("resource types not yet implemented")
             }
         };
         let info = self.type_information(&result);

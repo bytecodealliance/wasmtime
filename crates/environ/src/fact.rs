@@ -25,6 +25,7 @@ use crate::component::{
 };
 use crate::fact::transcode::Transcoder;
 use crate::{EntityRef, FuncIndex, GlobalIndex, MemoryIndex, PrimaryMap};
+use std::borrow::Cow;
 use std::collections::HashMap;
 use wasm_encoder::*;
 
@@ -437,8 +438,8 @@ impl<'a> Module<'a> {
         result.section(&code);
         if self.debug {
             result.section(&CustomSection {
-                name: "wasmtime-trampoline-traps",
-                data: &traps,
+                name: "wasmtime-trampoline-traps".into(),
+                data: Cow::Borrowed(&traps),
             });
         }
         result.finish()
