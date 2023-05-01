@@ -19,12 +19,40 @@ use crate::Module;
 //   rustix::time::clock_gettime(ClockId::ThreadCPUTime)
 // - Report which wasm module, and maybe instance, each frame came from
 
-/// Collects profiling data for a single WebAssembly guest.
+/// Collects basic profiling data for a single WebAssembly guest.
+///
+/// This profiler can't provide measurements that are as accurate or detailed
+/// as a platform-specific profiler, such as `perf` on Linux. On the other
+/// hand, this profiler works on every platform that Wasmtime supports. Also,
+/// as an embedder you can use this profiler selectively on individual guest
+/// instances rather than profiling the entire process.
 ///
 /// To use this, you'll need to arrange to call [`GuestProfiler::sample`] at
 /// regular intervals while the guest is on the stack. The most straightforward
 /// way to do that is to call it from a callback registered with
 /// [`Store::epoch_deadline_callback()`](crate::Store::epoch_deadline_callback).
+///
+/// # Accuracy
+///
+/// The data collection granularity is limited by the mechanism you use to
+/// interrupt guest execution and collect a profiling sample.
+///
+/// If you use epoch interruption, then samples will only be collected at
+/// function entry points and loop headers. This introduces some bias to the
+/// results. In addition, samples will only be taken at times when WebAssembly
+/// functions are running, not during host-calls.
+///
+/// It is technically possible to use fuel interruption instead. That
+/// introduces worse bias since samples occur after a certain number of
+/// WebAssembly instructions, which can take different amounts of time.
+///
+/// You may instead be able to use platform-specific methods, such as
+/// `setitimer(ITIMER_VIRTUAL, ...)` on POSIX-compliant systems, to sample on
+/// a more accurate interval. The only current requirement is that the guest
+/// you wish to profile must be on the same stack where you call `sample`,
+/// and executing within the same thread. However, the `GuestProfiler::sample`
+/// method is not currently async-signal-safe, so doing this correctly is not
+/// easy.
 ///
 /// # Security
 ///
@@ -41,8 +69,9 @@ use crate::Module;
 /// the same information by compiling the module for themself using a similar
 /// version of Wasmtime on the same target architecture, but for any module
 /// where they don't already have the WebAssembly module binary available this
-/// could theoretically lead to an undesrable information disclosure. So you
+/// could theoretically lead to an undesirable information disclosure. So you
 /// should only include user-provided modules in profiles.
+#[derive(Debug)]
 pub struct GuestProfiler {
     profile: Profile,
     modules: Vec<(Range<usize>, fxprof_processed_profile::LibraryHandle)>,
@@ -118,16 +147,14 @@ impl GuestProfiler {
                     .partition_point(|(range, _)| range.start > frame.pc());
                 if let Some((range, lib)) = self.modules.get(module_idx) {
                     if range.contains(&frame.pc()) {
-                        let frame = Frame::RelativeAddressFromReturnAddress(
-                            *lib,
-                            u32::try_from(frame.pc() - range.start).unwrap(),
-                        );
-                        let frame_info = FrameInfo {
-                            frame,
+                        return Some(FrameInfo {
+                            frame: Frame::RelativeAddressFromReturnAddress(
+                                *lib,
+                                u32::try_from(frame.pc() - range.start).unwrap(),
+                            ),
                             category_pair: CategoryHandle::OTHER.into(),
                             flags: FrameFlags::empty(),
-                        };
-                        return Some(frame_info);
+                        });
                     }
                 }
                 None
@@ -138,8 +165,12 @@ impl GuestProfiler {
     }
 
     /// When the guest finishes running, call this function to write the
-    /// profile to the given `output`.
-    pub fn finish(&mut self, output: impl std::io::Write) -> Result<()> {
+    /// profile to the given `output`. The output is a JSON-formatted object in
+    /// the [Firefox "processed profile format"][fmt]. Files in this format may
+    /// be visualized at <https://profiler.firefox.com/>.
+    ///
+    /// [fmt]: https://github.com/firefox-devtools/profiler/blob/main/docs-developer/processed-profile-format.md
+    pub fn finish(mut self, output: impl std::io::Write) -> Result<()> {
         let now = Timestamp::from_nanos_since_reference(
             self.start.elapsed().as_nanos().try_into().unwrap(),
         );
