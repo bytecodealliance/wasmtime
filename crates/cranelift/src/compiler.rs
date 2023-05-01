@@ -27,6 +27,7 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::mem;
+use std::path;
 use std::sync::{Arc, Mutex};
 use wasmparser::{FuncValidatorAllocations, FunctionBody};
 use wasmtime_cranelift_shared::obj::ModuleTextBuilder;
@@ -72,6 +73,7 @@ pub(crate) struct Compiler {
     isa: OwnedTargetIsa,
     linkopts: LinkOptions,
     cache_store: Option<Arc<dyn CacheStore>>,
+    clif_dir: Option<path::PathBuf>,
 }
 
 impl Drop for Compiler {
@@ -107,12 +109,14 @@ impl Compiler {
         isa: OwnedTargetIsa,
         cache_store: Option<Arc<dyn CacheStore>>,
         linkopts: LinkOptions,
+        clif_dir: Option<path::PathBuf>,
     ) -> Compiler {
         Compiler {
             contexts: Default::default(),
             isa,
             linkopts,
             cache_store,
+            clif_dir,
         }
     }
 
@@ -247,6 +251,17 @@ impl wasmtime_environ::Compiler for Compiler {
             &mut context.func,
             &mut func_env,
         )?;
+
+        if let Some(path) = &self.clif_dir {
+            use std::io::Write;
+
+            let mut path = path.to_path_buf();
+            path.push(format!("wasm_func_{}", func_index.as_u32()));
+            path.set_extension("clif");
+
+            let mut output = std::fs::File::create(path).unwrap();
+            write!(output, "{}", context.func.display()).unwrap();
+        }
 
         let (info, func) = compiler.finish_with_info(Some((&body, tunables)))?;
 
