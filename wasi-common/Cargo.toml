@@ -24,6 +24,7 @@ async-trait = { workspace = true }
 system-interface = { workspace = true }
 rustix = { workspace = true, features = ["net"] }
 wasmtime = { workspace = true }
+wiggle = { workspace = true, optional = true }
 
 [target.'cfg(unix)'.dependencies]
 rustix = { workspace = true, features = ["fs"] }
@@ -42,8 +43,11 @@ features = [
 maintenance = { status = "actively-developed" }
 
 [features]
-default = ["trace_log"]
+default = ["trace_log", "preview1"]
 # This feature enables the `tracing` logs in the calls to target the `log`
 # ecosystem of backends (e.g. `env_logger`. Disable this if you want to use
 # `tracing-subscriber`.
 trace_log = [ "tracing/log" ]
+
+# This feature enables support for wasi preview 1
+preview1 = [ "dep:wiggle" ]

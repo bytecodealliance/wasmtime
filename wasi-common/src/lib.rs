@@ -57,6 +57,8 @@ pub mod dir;
 mod error;
 pub mod file;
 pub mod pipe;
+#[cfg(feature = "preview1")]
+pub mod preview1;
 pub mod preview2;
 pub mod random;
 pub mod sched;
