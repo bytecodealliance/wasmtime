@@ -1456,7 +1456,7 @@
       (let (
           (x Xmm x)
           (y Xmm y)
-          (mask Xmm (flip_high_bit_mask ty ))
+          (mask Xmm (flip_high_bit_mask ty))
           (x_masked Xmm (x64_pxor x mask))
           (y_masked Xmm (x64_pxor y mask))
           (cmp Xmm (x64_pcmpgt ty x_masked y_masked))
@@ -1605,8 +1605,7 @@
 ;; SSE `ugt`
 
 ;; N.B.: we must manually prevent load coalescing operands; the
-;; register allocator gets confused otherwise. TODO:
-;; https://github.com/bytecodealliance/wasmtime/issues/3953.
+;; register allocator gets confused otherwise.
 (rule 1 (lower (icmp (IntCC.UnsignedGreaterThan) a @ (value_type (ty_vec128 ty)) b))
         (if-let $true (has_pmaxu ty))
         (let ((a Xmm a)
