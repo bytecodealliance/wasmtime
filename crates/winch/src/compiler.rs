@@ -16,6 +16,17 @@ pub(crate) struct Compiler {
     allocations: Mutex<Vec<FuncValidatorAllocations>>,
 }
 
+/// The compiled function environment.
+pub struct CompiledFuncEnv;
+impl wasmtime_cranelift_shared::CompiledFuncEnv for CompiledFuncEnv {
+    fn resolve_user_external_name_ref(
+        &self,
+        external: cranelift_codegen::ir::UserExternalNameRef,
+    ) -> (u32, u32) {
+        (0, external.as_u32())
+    }
+}
+
 impl Compiler {
     pub fn new(isa: Box<dyn TargetIsa>) -> Self {
         Self {
@@ -63,13 +74,8 @@ impl wasmtime_environ::Compiler for Compiler {
             .map_err(|e| CompileError::Codegen(format!("{e:?}")));
         self.save_allocations(validator.into_allocations());
         let buffer = buffer?;
-        let mut compiled_function =
-            CompiledFunction::new(&buffer, buffer.data().into(), &mut |user_func_ref| {
-                let index = user_func_ref.as_u32();
-                assert!(translation.get_types().func_type_at(index).is_some());
-                (0, index)
-            });
-        compiled_function.alignment = self.isa.function_alignment();
+        let compiled_function =
+            CompiledFunction::new(buffer, CompiledFuncEnv {}, self.isa.function_alignment());
 
         Ok((
             WasmFunctionInfo {
@@ -121,16 +127,11 @@ impl wasmtime_environ::Compiler for Compiler {
 
         let mut ret = Vec::with_capacity(funcs.len());
         for (i, (sym, func)) in funcs.iter().enumerate() {
-            let func = &func.downcast_ref::<CompiledFunction>().unwrap();
+            let func = func
+                .downcast_ref::<CompiledFunction<CompiledFuncEnv>>()
+                .unwrap();
 
-            let (sym, range) = builder.append_func(
-                &sym,
-                &func.body,
-                func.alignment,
-                func.unwind_info.as_ref(),
-                &func.relocations,
-                |idx| resolve_reloc(i, idx),
-            );
+            let (sym, range) = builder.append_func(&sym, func, |idx| resolve_reloc(i, idx));
 
             let info = FunctionLoc {
                 start: u32::try_from(range.start).unwrap(),

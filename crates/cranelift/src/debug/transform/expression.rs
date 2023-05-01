@@ -782,7 +782,7 @@ mod tests {
         compile_expression, AddressTransform, CompiledExpression, CompiledExpressionPart,
         FunctionFrameInfo, JumpTargetMarker, ValueLabel, ValueLabelsRanges,
     };
-    use crate::CompiledFunction;
+    use crate::CompiledFunctionMetadata;
     use gimli::{self, constants, Encoding, EndianSlice, Expression, RunTimeEndian};
     use wasmtime_environ::FilePos;
 
@@ -1116,9 +1116,10 @@ mod tests {
         use wasmtime_cranelift_shared::FunctionAddressMap;
         use wasmtime_environ::InstructionAddressMap;
         use wasmtime_environ::WasmFileInfo;
+
         let mut module_map = PrimaryMap::new();
         let code_section_offset: u32 = 100;
-        let func = CompiledFunction {
+        let func = CompiledFunctionMetadata {
             address_map: FunctionAddressMap {
                 instructions: vec![
                     InstructionAddressMap {

@@ -53,13 +53,16 @@ fn to_flag_value(v: &settings::Value) -> FlagValue {
     }
 }
 
+/// Trap code used for debug assertions we emit in our JIT code.
+const DEBUG_ASSERT_TRAP_CODE: u16 = u16::MAX;
+
 /// Code used as the user-defined trap code.
 pub const ALWAYS_TRAP_CODE: u16 = 100;
 
 /// Converts machine traps to trap information.
-pub fn mach_trap_to_trap(trap: &MachTrap) -> TrapInformation {
+pub fn mach_trap_to_trap(trap: &MachTrap) -> Option<TrapInformation> {
     let &MachTrap { offset, code } = trap;
-    TrapInformation {
+    Some(TrapInformation {
         code_offset: offset,
         trap_code: match code {
             ir::TrapCode::StackOverflow => Trap::StackOverflow,
@@ -75,17 +78,22 @@ pub fn mach_trap_to_trap(trap: &MachTrap) -> TrapInformation {
             ir::TrapCode::Interrupt => Trap::Interrupt,
             ir::TrapCode::User(ALWAYS_TRAP_CODE) => Trap::AlwaysTrapAdapter,
 
+            // These do not get converted to wasmtime traps, since they
+            // shouldn't ever be hit in theory. Instead of catching and handling
+            // these, we let the signal crash the process.
+            ir::TrapCode::User(DEBUG_ASSERT_TRAP_CODE) => return None,
+
             // these should never be emitted by wasmtime-cranelift
             ir::TrapCode::User(_) => unreachable!(),
         },
-    }
+    })
 }
 
 /// Converts machine relocations to relocation information
 /// to perform.
-fn mach_reloc_to_reloc<F>(reloc: &MachReloc, transform_user_func_ref: &mut F) -> Relocation
+fn mach_reloc_to_reloc<F>(reloc: &MachReloc, transform_user_func_ref: F) -> Relocation
 where
-    F: FnMut(UserExternalNameRef) -> (u32, u32),
+    F: Fn(UserExternalNameRef) -> (u32, u32),
 {
     let &MachReloc {
         offset,

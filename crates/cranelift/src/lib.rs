@@ -8,7 +8,7 @@ use cranelift_codegen::isa::{CallConv, TargetIsa};
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{DefinedFuncIndex, WasmFuncType, WasmType};
 use target_lexicon::{Architecture, CallingConvention};
-use wasmtime_cranelift_shared::CompiledFunction;
+use wasmtime_cranelift_shared::CompiledFunctionMetadata;
 
 pub use builder::builder;
 
@@ -17,7 +17,7 @@ mod compiler;
 mod debug;
 mod func_environ;
 
-type CompiledFunctions<'a> = PrimaryMap<DefinedFuncIndex, &'a CompiledFunction>;
+type CompiledFunctionsMetadata<'a> = PrimaryMap<DefinedFuncIndex, &'a CompiledFunctionMetadata>;
 
 /// Trap code used for debug assertions we emit in our JIT code.
 const DEBUG_ASSERT_TRAP_CODE: u16 = u16::MAX;

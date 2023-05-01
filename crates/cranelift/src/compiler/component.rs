@@ -208,9 +208,7 @@ impl Compiler {
             },
         );
         let (mut builder, _block0) = compiler.builder(func);
-        builder
-            .ins()
-            .trap(ir::TrapCode::User(ALWAYS_TRAP_CODE));
+        builder.ins().trap(ir::TrapCode::User(ALWAYS_TRAP_CODE));
         builder.finalize();
 
         Ok(Box::new(compiler.finish()?))
