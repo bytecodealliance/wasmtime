@@ -101,10 +101,16 @@ async fn main() -> Result<()> {
             .inherit_network(cap_std::ambient_authority())
             .build();
         impl WasiSocketsView for CommandCtx {
-            fn table(&mut self) -> &mut Table {
+            fn table(&self) -> &Table {
+                &self.table
+            }
+            fn table_mut(&mut self) -> &mut Table {
                 &mut self.table
             }
-            fn ctx(&mut self) -> &mut WasiSocketsCtx {
+            fn ctx(&self) -> &WasiSocketsCtx {
+                &self.sockets
+            }
+            fn ctx_mut(&mut self) -> &mut WasiSocketsCtx {
                 &mut self.sockets
             }
         }
