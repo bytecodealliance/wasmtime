@@ -107,7 +107,6 @@ wasmtime_environ::foreach_builtin_function!(declare_function_signatures);
 pub struct FuncEnvironment<'module_environment> {
     isa: &'module_environment (dyn TargetIsa + 'module_environment),
     module: &'module_environment Module,
-    translation: &'module_environment ModuleTranslation<'module_environment>,
     types: &'module_environment ModuleTypes,
 
     /// Heaps implementing WebAssembly linear memories.
@@ -171,7 +170,6 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         Self {
             isa,
             module: &translation.module,
-            translation,
             types,
             heaps: PrimaryMap::default(),
             vmctx: None,
@@ -761,7 +759,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         }
     }
 
-    fn get_or_init_funcref_table_elem(
+    fn get_or_init_func_ref_table_elem(
         &mut self,
         builder: &mut FunctionBuilder,
         table_index: TableIndex,
@@ -796,10 +794,10 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
 
         builder.switch_to_block(null_block);
         let table_index = builder.ins().iconst(I32, table_index.index() as i64);
-        let builtin_idx = BuiltinFunctionIndex::table_get_lazy_init_funcref();
+        let builtin_idx = BuiltinFunctionIndex::table_get_lazy_init_func_ref();
         let builtin_sig = self
             .builtin_function_signatures
-            .table_get_lazy_init_funcref(builder.func);
+            .table_get_lazy_init_func_ref(builder.func);
         let (vmctx, builtin_addr) =
             self.translate_load_builtin_function_address(&mut builder.cursor(), builtin_idx);
         let call_inst =
@@ -917,9 +915,9 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         let (func_idx, func_sig) =
             match self.module.table_plans[table_index].table.wasm_ty {
                 WasmType::FuncRef => (
-                    BuiltinFunctionIndex::table_grow_funcref(),
+                    BuiltinFunctionIndex::table_grow_func_ref(),
                     self.builtin_function_signatures
-                        .table_grow_funcref(&mut pos.func),
+                        .table_grow_func_ref(&mut pos.func),
                 ),
                 WasmType::ExternRef => (
                     BuiltinFunctionIndex::table_grow_externref(),
@@ -957,7 +955,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         match plan.table.wasm_ty {
             WasmType::FuncRef => match plan.style {
                 TableStyle::CallerChecksSignature => {
-                    Ok(self.get_or_init_funcref_table_elem(builder, table_index, table, index))
+                    Ok(self.get_or_init_func_ref_table_elem(builder, table_index, table, index))
                 }
             },
             WasmType::ExternRef => {
@@ -1259,9 +1257,9 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         let (builtin_idx, builtin_sig) =
             match self.module.table_plans[table_index].table.wasm_ty {
                 WasmType::FuncRef => (
-                    BuiltinFunctionIndex::table_fill_funcref(),
+                    BuiltinFunctionIndex::table_fill_func_ref(),
                     self.builtin_function_signatures
-                        .table_fill_funcref(&mut pos.func),
+                        .table_fill_func_ref(&mut pos.func),
                 ),
                 WasmType::ExternRef => (
                     BuiltinFunctionIndex::table_fill_externref(),
@@ -1536,7 +1534,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         index: TypeIndex,
     ) -> WasmResult<ir::SigRef> {
         let index = self.module.types[index].unwrap_function();
-        let sig = crate::indirect_signature(self.isa, &self.types[index]);
+        let sig = crate::wasm_call_signature(self.isa, &self.types[index]);
         Ok(func.import_signature(sig))
     }
 
@@ -1545,7 +1543,8 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         func: &mut ir::Function,
         index: FuncIndex,
     ) -> WasmResult<ir::FuncRef> {
-        let sig = crate::func_signature(self.isa, self.translation, self.types, index);
+        let sig = self.module.functions[index].signature;
+        let sig = crate::wasm_call_signature(self.isa, &self.types[sig]);
         let signature = func.import_signature(sig);
         let name =
             ir::ExternalName::User(func.declare_imported_user_function(ir::UserExternalName {
@@ -1587,7 +1586,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         let pointer_type = self.pointer_type();
 
         // Get the funcref pointer from the table.
-        let funcref_ptr = self.get_or_init_funcref_table_elem(builder, table_index, table, callee);
+        let funcref_ptr = self.get_or_init_func_ref_table_elem(builder, table_index, table, callee);
 
         // Check for whether the table element is null, and trap if so.
         builder
@@ -1600,7 +1599,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             pointer_type,
             mem_flags,
             funcref_ptr,
-            i32::from(self.offsets.ptr.vmcaller_checked_func_ref_func_ptr()),
+            i32::from(self.offsets.ptr.vm_func_ref_wasm_call()),
         );
 
         // If necessary, check the signature.
@@ -1611,10 +1610,9 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 let vmctx = self.vmctx(builder.func);
                 let base = builder.ins().global_value(pointer_type, vmctx);
 
-                // Load the caller ID. This requires loading the
-                // `*mut VMCallerCheckedFuncRef` base pointer from `VMContext`
-                // and then loading, based on `SignatureIndex`, the
-                // corresponding entry.
+                // Load the caller ID. This requires loading the `*mut
+                // VMFuncRef` base pointer from `VMContext` and then loading,
+                // based on `SignatureIndex`, the corresponding entry.
                 let mem_flags = ir::MemFlags::trusted().with_readonly();
                 let signatures = builder.ins().load(
                     pointer_type,
@@ -1636,7 +1634,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                     sig_id_type,
                     mem_flags,
                     funcref_ptr,
-                    i32::from(self.offsets.ptr.vmcaller_checked_func_ref_type_index()),
+                    i32::from(self.offsets.ptr.vm_func_ref_type_index()),
                 );
 
                 // Check that they match.
@@ -1658,7 +1656,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             pointer_type,
             mem_flags,
             funcref_ptr,
-            i32::from(self.offsets.ptr.vmcaller_checked_func_ref_vmctx()),
+            i32::from(self.offsets.ptr.vm_func_ref_vmctx()),
         );
         real_call_args.push(vmctx);
         real_call_args.push(caller_vmctx);
@@ -1707,7 +1705,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
 
         // Load the callee address.
         let body_offset =
-            i32::try_from(self.offsets.vmctx_vmfunction_import_body(callee_index)).unwrap();
+            i32::try_from(self.offsets.vmctx_vmfunction_import_wasm_call(callee_index)).unwrap();
         let func_addr = pos.ins().load(pointer_type, mem_flags, base, body_offset);
 
         // First append the callee vmctx address.

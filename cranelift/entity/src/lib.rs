@@ -254,6 +254,7 @@ mod tests {
             }
 
             #[should_panic]
+            #[cfg(debug_assertions)]
             #[test]
             fn cannot_construct_from_reserved_u32() {
                 use crate::packed_option::ReservedValue;
@@ -262,6 +263,7 @@ mod tests {
             }
 
             #[should_panic]
+            #[cfg(debug_assertions)]
             #[test]
             fn cannot_construct_from_reserved_usize() {
                 use crate::packed_option::ReservedValue;

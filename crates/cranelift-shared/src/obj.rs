@@ -115,12 +115,9 @@ impl<'a> ModuleTextBuilder<'a> {
         resolve_reloc_target: impl Fn(FuncIndex) -> usize,
     ) -> (SymbolId, Range<u64>) {
         let body_len = body.len() as u64;
-        let off = self.text.append(
-            true,
-            &body,
-            self.compiler.function_alignment().max(alignment),
-            &mut self.ctrl_plane,
-        );
+        let off = self
+            .text
+            .append(true, &body, alignment, &mut self.ctrl_plane);
 
         let symbol_id = self.obj.add_symbol(Symbol {
             name: name.as_bytes().to_vec(),
@@ -161,7 +158,7 @@ impl<'a> ModuleTextBuilder<'a> {
                     // loop could also be updated to forward the relocation to
                     // the final object file as well.
                     panic!(
-                        "unresolved relocation could not be procesed against \
+                        "unresolved relocation could not be processed against \
                          {index:?}: {r:?}"
                     );
                 }

@@ -106,16 +106,31 @@ impl State {
         }
 
         // Note: these are the trampolines into exported functions.
-        for (idx, func, len) in module.trampolines() {
-            let idx = idx.index();
-            let (addr, len) = (func as usize as *const u8, len);
-            let method_name = format!("wasm::trampoline[{}]", idx,);
-            log::trace!(
-                "new trampoline for exported signature {} @ {:?}\n",
-                idx,
-                addr
-            );
-            self.notify_code(&module_name, &method_name, addr, len);
+        for (name, body) in module
+            .array_to_wasm_trampolines()
+            .map(|(i, body)| {
+                (
+                    format!("wasm::array_to_wasm_trampoline[{}]", i.index()),
+                    body,
+                )
+            })
+            .chain(module.native_to_wasm_trampolines().map(|(i, body)| {
+                (
+                    format!("wasm::native_to_wasm_trampoline[{}]", i.index()),
+                    body,
+                )
+            }))
+            .chain(module.wasm_to_native_trampolines().map(|(i, body)| {
+                (
+                    format!("wasm::wasm_to_native_trampolines[{}]", i.index()),
+                    body,
+                )
+            }))
+        {
+            let addr = body.as_ptr();
+            let len = body.len();
+            log::trace!("new trampoline `{}` @ {:?}\n", name, addr);
+            self.notify_code(&module_name, &name, addr, len);
         }
     }
 

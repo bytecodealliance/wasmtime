@@ -666,8 +666,7 @@ impl Config {
     ///
     /// The [WebAssembly SIMD proposal][proposal]. This feature gates items such
     /// as the `v128` type and all of its operators being in a module. Note that
-    /// this does not enable the [relaxed simd proposal] as that is not
-    /// implemented in Wasmtime at this time.
+    /// this does not enable the [relaxed simd proposal].
     ///
     /// On x86_64 platforms note that enabling this feature requires SSE 4.2 and
     /// below to be available on the target platform. Compilation will fail if

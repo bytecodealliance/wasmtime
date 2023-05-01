@@ -8,6 +8,18 @@ Unreleased.
 
 ### Changed
 
+* Overhauled the way that Wasmtime calls into Wasm and Wasm calls back out to
+  the host. Instead of chaining together trampolines to convert between calling
+  conventions, we now represent `funcref`s with multiple function pointers, one
+  per calling convention. This paves the way for supporting Wasm tail calls and
+  also results in ~10% speed ups to a variety of function call benchmarks,
+  however there are some slight compiled Wasm module code size regressions
+  (which can be alleviated by disabling optional `.eh_frame`
+  generation). Additionally, in the C API the `wasmtime_func_call_unchecked`
+  function gained one more parameter, which is the capacity of the
+  args-and-results
+  buffer. [#6262](https://github.com/bytecodealliance/wasmtime/pull/6262)
+
 --------------------------------------------------------------------------------
 
 ## 8.0.1

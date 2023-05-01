@@ -5,9 +5,9 @@ use crate::ir;
 use crate::ir::Function;
 
 use crate::isa::riscv64::settings as riscv_settings;
-use crate::isa::{Builder as IsaBuilder, TargetIsa};
+use crate::isa::{Builder as IsaBuilder, FunctionAlignment, TargetIsa};
 use crate::machinst::{
-    compile, CompiledCode, CompiledCodeStencil, MachTextSectionBuilder, Reg, SigSet,
+    compile, CompiledCode, CompiledCodeStencil, MachInst, MachTextSectionBuilder, Reg, SigSet,
     TextSectionBuilder, VCode,
 };
 use crate::result::CodegenResult;
@@ -167,8 +167,8 @@ impl TargetIsa for Riscv64Backend {
         inst::unwind::systemv::map_reg(reg).map(|reg| reg.0)
     }
 
-    fn function_alignment(&self) -> u32 {
-        4
+    fn function_alignment(&self) -> FunctionAlignment {
+        inst::Inst::function_alignment()
     }
 
     #[cfg(feature = "disas")]

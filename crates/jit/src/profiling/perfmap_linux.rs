@@ -54,9 +54,28 @@ impl ProfilingAgent for PerfMapAgent {
         }
 
         // Note: these are the trampolines into exported functions.
-        for (idx, func, len) in module.trampolines() {
-            let (addr, len) = (func as usize as *const u8, len);
-            let name = format!("wasm::trampoline[{}]", idx.index());
+        for (name, body) in module
+            .array_to_wasm_trampolines()
+            .map(|(i, body)| {
+                (
+                    format!("wasm::array_to_wasm_trampoline[{}]", i.index()),
+                    body,
+                )
+            })
+            .chain(module.native_to_wasm_trampolines().map(|(i, body)| {
+                (
+                    format!("wasm::native_to_wasm_trampoline[{}]", i.index()),
+                    body,
+                )
+            }))
+            .chain(module.wasm_to_native_trampolines().map(|(i, body)| {
+                (
+                    format!("wasm::wasm_to_native_trampolines[{}]", i.index()),
+                    body,
+                )
+            }))
+        {
+            let (addr, len) = (body.as_ptr(), body.len());
             if let Err(err) = Self::make_line(&mut file, &name, addr, len) {
                 eprintln!("Error when writing export trampoline info to the perf map file: {err}");
                 return;

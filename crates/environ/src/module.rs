@@ -811,10 +811,10 @@ pub struct Module {
     pub num_imported_globals: usize,
 
     /// Number of functions that "escape" from this module may need to have a
-    /// `VMCallerCheckedFuncRef` constructed for them.
+    /// `VMFuncRef` constructed for them.
     ///
     /// This is also the number of functions in the `functions` array below with
-    /// an `anyfunc` index (and is the maximum anyfunc index).
+    /// an `func_ref` index (and is the maximum func_ref index).
     pub num_escaped_funcs: usize,
 
     /// Types of functions, imported and local.
@@ -1000,7 +1000,7 @@ impl Module {
     pub fn push_function(&mut self, signature: SignatureIndex) -> FuncIndex {
         self.functions.push(FunctionType {
             signature,
-            anyfunc: AnyfuncIndex::reserved_value(),
+            func_ref: FuncRefIndex::reserved_value(),
         })
     }
 
@@ -1008,9 +1008,12 @@ impl Module {
     pub fn push_escaped_function(
         &mut self,
         signature: SignatureIndex,
-        anyfunc: AnyfuncIndex,
+        func_ref: FuncRefIndex,
     ) -> FuncIndex {
-        self.functions.push(FunctionType { signature, anyfunc })
+        self.functions.push(FunctionType {
+            signature,
+            func_ref,
+        })
     }
 }
 
@@ -1020,9 +1023,9 @@ pub struct FunctionType {
     /// The type of this function, indexed into the module-wide type tables for
     /// a module compilation.
     pub signature: SignatureIndex,
-    /// The index into the anyfunc table, if present. Note that this is
+    /// The index into the funcref table, if present. Note that this is
     /// `reserved_value()` if the function does not escape from a module.
-    pub anyfunc: AnyfuncIndex,
+    pub func_ref: FuncRefIndex,
 }
 
 impl FunctionType {
@@ -1030,11 +1033,11 @@ impl FunctionType {
     /// module, meaning that the function is exported, used in `ref.func`, used
     /// in a table, etc.
     pub fn is_escaping(&self) -> bool {
-        !self.anyfunc.is_reserved_value()
+        !self.func_ref.is_reserved_value()
     }
 }
 
-/// Index into the anyfunc table within a VMContext for a function.
+/// Index into the funcref table within a VMContext for a function.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
-pub struct AnyfuncIndex(u32);
-cranelift_entity::entity_impl!(AnyfuncIndex);
+pub struct FuncRefIndex(u32);
+cranelift_entity::entity_impl!(FuncRefIndex);

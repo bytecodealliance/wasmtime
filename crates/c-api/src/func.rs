@@ -365,9 +365,10 @@ pub unsafe extern "C" fn wasmtime_func_call_unchecked(
     store: CStoreContextMut<'_>,
     func: &Func,
     args_and_results: *mut ValRaw,
+    args_and_results_len: usize,
     trap_ret: &mut *mut wasm_trap_t,
 ) -> Option<Box<wasmtime_error_t>> {
-    match func.call_unchecked(store, args_and_results) {
+    match func.call_unchecked(store, args_and_results, args_and_results_len) {
         Ok(()) => None,
         Err(trap) => store_err(trap, trap_ret),
     }
