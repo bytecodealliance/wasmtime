@@ -30,6 +30,7 @@ fn bare_bones() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn mildly_more_interesting() -> Result<()> {
     let engine = super::engine();
     let component = Component::new(

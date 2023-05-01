@@ -1,3 +1,5 @@
+#![cfg(not(miri))]
+
 use anyhow::{bail, Error, Result};
 use std::panic::{self, AssertUnwindSafe};
 use std::process::Command;

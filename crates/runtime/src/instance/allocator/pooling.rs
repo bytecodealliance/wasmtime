@@ -35,7 +35,7 @@ cfg_if::cfg_if! {
 
 use imp::{commit_table_pages, decommit_table_pages};
 
-#[cfg(all(feature = "async", unix))]
+#[cfg(all(feature = "async", unix, not(miri)))]
 use imp::{commit_stack_pages, reset_stack_pages_to_zero};
 
 fn round_up_to_pow2(n: usize, to: usize) -> usize {
@@ -368,7 +368,7 @@ impl TablePool {
 ///
 /// The top of the stack (starting stack pointer) is returned when a stack is allocated
 /// from the pool.
-#[cfg(all(feature = "async", unix))]
+#[cfg(all(feature = "async", unix, not(miri)))]
 #[derive(Debug)]
 struct StackPool {
     mapping: Mmap,
@@ -380,7 +380,7 @@ struct StackPool {
     async_stack_keep_resident: usize,
 }
 
-#[cfg(all(feature = "async", unix))]
+#[cfg(all(feature = "async", unix, not(miri)))]
 impl StackPool {
     fn new(config: &PoolingInstanceAllocatorConfig) -> Result<Self> {
         use rustix::mm::{mprotect, MprotectFlags};
@@ -578,7 +578,7 @@ pub struct PoolingInstanceAllocator {
     linear_memory_keep_resident: usize,
     table_keep_resident: usize,
 
-    #[cfg(all(feature = "async", unix))]
+    #[cfg(all(feature = "async", unix, not(miri)))]
     stacks: StackPool,
     #[cfg(all(feature = "async", windows))]
     stack_size: usize,
@@ -601,7 +601,7 @@ impl PoolingInstanceAllocator {
             tables: TablePool::new(&config.limits)?,
             linear_memory_keep_resident: config.linear_memory_keep_resident,
             table_keep_resident: config.table_keep_resident,
-            #[cfg(all(feature = "async", unix))]
+            #[cfg(all(feature = "async", unix, not(miri)))]
             stacks: StackPool::new(config)?,
             #[cfg(all(feature = "async", windows))]
             stack_size: config.stack_size,
@@ -612,7 +612,8 @@ impl PoolingInstanceAllocator {
         let size_to_memset = size.min(self.table_keep_resident);
         unsafe {
             std::ptr::write_bytes(base, 0, size_to_memset);
-            decommit_table_pages(base.add(size_to_memset), size - size_to_memset)?;
+            decommit_table_pages(base.add(size_to_memset), size - size_to_memset)
+                .context("failed to decommit table page")?;
         }
         Ok(())
     }
@@ -895,30 +896,43 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
         }
     }
 
-    #[cfg(all(feature = "async", unix))]
+    #[cfg(feature = "async")]
     fn allocate_fiber_stack(&self) -> Result<wasmtime_fiber::FiberStack> {
-        self.stacks.allocate()
-    }
+        cfg_if::cfg_if! {
+            if #[cfg(miri)] {
+                unimplemented!()
+            } else if #[cfg(unix)] {
+                self.stacks.allocate()
+            } else if #[cfg(windows)] {
+                if self.stack_size == 0 {
+                    bail!("fiber stack allocation not supported")
+                }
 
-    #[cfg(all(feature = "async", unix))]
-    unsafe fn deallocate_fiber_stack(&self, stack: &wasmtime_fiber::FiberStack) {
-        self.stacks.deallocate(stack);
-    }
-
-    #[cfg(all(feature = "async", windows))]
-    fn allocate_fiber_stack(&self) -> Result<wasmtime_fiber::FiberStack> {
-        if self.stack_size == 0 {
-            bail!("fiber stack allocation not supported")
+                // On windows, we don't use a stack pool as we use the native
+                // fiber implementation
+                let stack = wasmtime_fiber::FiberStack::new(self.stack_size)?;
+                Ok(stack)
+            } else {
+                compile_error!("not implemented");
+            }
         }
-
-        // On windows, we don't use a stack pool as we use the native fiber implementation
-        let stack = wasmtime_fiber::FiberStack::new(self.stack_size)?;
-        Ok(stack)
     }
 
-    #[cfg(all(feature = "async", windows))]
-    unsafe fn deallocate_fiber_stack(&self, _stack: &wasmtime_fiber::FiberStack) {
-        // A no-op as we don't own the fiber stack on Windows
+    #[cfg(feature = "async")]
+    unsafe fn deallocate_fiber_stack(&self, stack: &wasmtime_fiber::FiberStack) {
+        cfg_if::cfg_if! {
+            if #[cfg(miri)] {
+                let _ = stack;
+                unimplemented!()
+            } else if #[cfg(unix)] {
+                self.stacks.deallocate(stack);
+            } else if #[cfg(windows)] {
+                // A no-op as we don't own the fiber stack on Windows
+                let _ = stack;
+            } else {
+                compile_error!("not implemented");
+            }
+        }
     }
 
     fn purge_module(&self, module: CompiledModuleId) {
@@ -1160,7 +1174,7 @@ mod test {
         Ok(())
     }
 
-    #[cfg(all(unix, target_pointer_width = "64", feature = "async"))]
+    #[cfg(all(unix, target_pointer_width = "64", feature = "async", not(miri)))]
     #[test]
     fn test_stack_pool() -> Result<()> {
         let config = PoolingInstanceAllocatorConfig {
@@ -1283,7 +1297,7 @@ mod test {
         assert_eq!(pool.memories.memory_size, 2 * 65536);
     }
 
-    #[cfg(all(unix, target_pointer_width = "64", feature = "async"))]
+    #[cfg(all(unix, target_pointer_width = "64", feature = "async", not(miri)))]
     #[test]
     fn test_stack_zeroed() -> Result<()> {
         let config = PoolingInstanceAllocatorConfig {
@@ -1319,7 +1333,7 @@ mod test {
         Ok(())
     }
 
-    #[cfg(all(unix, target_pointer_width = "64", feature = "async"))]
+    #[cfg(all(unix, target_pointer_width = "64", feature = "async", not(miri)))]
     #[test]
     fn test_stack_unzeroed() -> Result<()> {
         let config = PoolingInstanceAllocatorConfig {

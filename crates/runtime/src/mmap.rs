@@ -11,6 +11,9 @@ cfg_if::cfg_if! {
     if #[cfg(windows)] {
         mod windows;
         use windows as sys;
+    } else if #[cfg(miri)] {
+        mod miri;
+        use miri as sys;
     } else {
         mod unix;
         use unix as sys;

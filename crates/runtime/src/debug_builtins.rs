@@ -45,6 +45,9 @@ pub unsafe extern "C" fn set_vmctx_memory(vmctx_ptr: *mut VMContext) {
 // exported as symbols. It is a workaround: the executable normally ignores
 // `pub extern "C"`, see rust-lang/rust#25057.
 pub fn ensure_exported() {
+    if cfg!(miri) {
+        return;
+    }
     unsafe {
         std::ptr::read_volatile(resolve_vmctx_memory_ptr as *const u8);
         std::ptr::read_volatile(set_vmctx_memory as *const u8);

@@ -155,6 +155,8 @@ fn write_testsuite_tests(
     // Ignore when using QEMU for running tests (limited memory).
     if ignore(testsuite, &testname, strategy) {
         writeln!(out, "#[ignore]")?;
+    } else {
+        writeln!(out, "#[cfg_attr(miri, ignore)]")?;
     }
 
     writeln!(

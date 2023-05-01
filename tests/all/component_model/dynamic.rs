@@ -1,3 +1,5 @@
+#![cfg(not(miri))]
+
 use super::{make_echo_component, make_echo_component_with_params, Param, Type};
 use anyhow::Result;
 use component_test_util::FuncExt;

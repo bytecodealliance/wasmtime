@@ -185,7 +185,7 @@ impl Config {
             async_stack_size: 2 << 20,
             async_support: false,
             module_version: ModuleVersionStrategy::default(),
-            parallel_compilation: true,
+            parallel_compilation: !cfg!(miri),
             memory_init_cow: true,
             memory_guaranteed_dense_image_size: 16 << 20,
             force_memory_init_memfd: false,

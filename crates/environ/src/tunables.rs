@@ -53,23 +53,26 @@ pub struct Tunables {
 
 impl Default for Tunables {
     fn default() -> Self {
-        let (static_memory_bound, static_memory_offset_guard_size) =
-            if cfg!(target_pointer_width = "64") {
-                // 64-bit has tons of address space to static memories can have 4gb
-                // address space reservations liberally by default, allowing us to
-                // help eliminate bounds checks.
-                //
-                // Coupled with a 2 GiB address space guard it lets us translate
-                // wasm offsets into x86 offsets as aggressively as we can.
-                (0x1_0000, 0x8000_0000)
-            } else if cfg!(target_pointer_width = "32") {
-                // For 32-bit we scale way down to 10MB of reserved memory. This
-                // impacts performance severely but allows us to have more than a
-                // few instances running around.
-                ((10 * (1 << 20)) / crate::WASM_PAGE_SIZE as u64, 0x1_0000)
-            } else {
-                panic!("unsupported target_pointer_width");
-            };
+        let (static_memory_bound, static_memory_offset_guard_size) = if cfg!(miri) {
+            // No virtual memory tricks are available on miri so make these
+            // limits quite conservative.
+            ((1 << 20) / crate::WASM_PAGE_SIZE as u64, 0)
+        } else if cfg!(target_pointer_width = "64") {
+            // 64-bit has tons of address space to static memories can have 4gb
+            // address space reservations liberally by default, allowing us to
+            // help eliminate bounds checks.
+            //
+            // Coupled with a 2 GiB address space guard it lets us translate
+            // wasm offsets into x86 offsets as aggressively as we can.
+            (0x1_0000, 0x8000_0000)
+        } else if cfg!(target_pointer_width = "32") {
+            // For 32-bit we scale way down to 10MB of reserved memory. This
+            // impacts performance severely but allows us to have more than a
+            // few instances running around.
+            ((10 * (1 << 20)) / crate::WASM_PAGE_SIZE as u64, 0x1_0000)
+        } else {
+            panic!("unsupported target_pointer_width");
+        };
         Self {
             static_memory_bound,
             static_memory_offset_guard_size,
@@ -78,14 +81,21 @@ impl Default for Tunables {
             //
             // Allocate a small guard to optimize common cases but without
             // wasting too much memory.
-            dynamic_memory_offset_guard_size: 0x1_0000,
+            dynamic_memory_offset_guard_size: if cfg!(miri) { 0 } else { 0x1_0000 },
 
             // We've got lots of address space on 64-bit so use a larger
-            // grow-into-this area, but on 32-bit we aren't as lucky.
-            #[cfg(target_pointer_width = "64")]
-            dynamic_memory_growth_reserve: 2 << 30, // 2GB
-            #[cfg(target_pointer_width = "32")]
-            dynamic_memory_growth_reserve: 1 << 20, // 1MB
+            // grow-into-this area, but on 32-bit we aren't as lucky. Miri is
+            // not exactly fast so reduce memory consumption instead of trying
+            // to avoid memory movement.
+            dynamic_memory_growth_reserve: if cfg!(miri) {
+                0
+            } else if cfg!(target_pointer_width = "64") {
+                2 << 30 // 2GB
+            } else if cfg!(target_pointer_width = "32") {
+                1 << 20 // 1MB
+            } else {
+                panic!("unsupported target_pointer_width");
+            },
 
             generate_native_debuginfo: false,
             parse_wasm_debuginfo: true,

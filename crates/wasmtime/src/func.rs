@@ -11,7 +11,7 @@ use std::pin::Pin;
 use std::ptr::{self, NonNull};
 use std::sync::Arc;
 use wasmtime_runtime::{
-    ExportFunction, InstanceHandle, VMArrayCallHostFuncContext, VMContext, VMFuncRef,
+    ExportFunction, InstanceHandle, StoreBox, VMArrayCallHostFuncContext, VMContext, VMFuncRef,
     VMFunctionImport, VMNativeCallHostFuncContext, VMOpaqueContext, VMSharedSignatureIndex,
 };
 
@@ -1426,6 +1426,13 @@ fn enter_wasm<T>(store: &mut StoreContextMut<'_, T>) -> Option<usize> {
         return None;
     }
 
+    // Ignore this stack pointer business on miri since we can't execute wasm
+    // anyway and the concept of a stack pointer on miri is a bit nebulous
+    // regardless.
+    if cfg!(miri) {
+        return None;
+    }
+
     let stack_pointer = psm::stack_pointer() as usize;
 
     // Determine the stack pointer where, after which, any wasm code will
@@ -2104,18 +2111,18 @@ for_each_function_signature!(impl_into_func);
 
 #[doc(hidden)]
 pub enum HostContext {
-    Native(Box<VMNativeCallHostFuncContext>),
-    Array(Box<VMArrayCallHostFuncContext>),
+    Native(StoreBox<VMNativeCallHostFuncContext>),
+    Array(StoreBox<VMArrayCallHostFuncContext>),
 }
 
-impl From<Box<VMNativeCallHostFuncContext>> for HostContext {
-    fn from(ctx: Box<VMNativeCallHostFuncContext>) -> Self {
+impl From<StoreBox<VMNativeCallHostFuncContext>> for HostContext {
+    fn from(ctx: StoreBox<VMNativeCallHostFuncContext>) -> Self {
         HostContext::Native(ctx)
     }
 }
 
-impl From<Box<VMArrayCallHostFuncContext>> for HostContext {
-    fn from(ctx: Box<VMArrayCallHostFuncContext>) -> Self {
+impl From<StoreBox<VMArrayCallHostFuncContext>> for HostContext {
+    fn from(ctx: StoreBox<VMArrayCallHostFuncContext>) -> Self {
         HostContext::Array(ctx)
     }
 }
@@ -2267,8 +2274,8 @@ impl HostFunc {
 
     pub(crate) fn func_ref(&self) -> &VMFuncRef {
         match &self.ctx {
-            HostContext::Native(ctx) => ctx.func_ref(),
-            HostContext::Array(ctx) => ctx.func_ref(),
+            HostContext::Native(ctx) => unsafe { (*ctx.get()).func_ref() },
+            HostContext::Array(ctx) => unsafe { (*ctx.get()).func_ref() },
         }
     }
 

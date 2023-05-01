@@ -1,7 +1,7 @@
 //! Copy-on-write initialization support: creation of backing images for
 //! modules, and logic to support mapping these backing images into memory.
 
-#![cfg_attr(not(unix), allow(unused_imports, unused_variables))]
+#![cfg_attr(any(not(unix), miri), allow(unused_imports, unused_variables))]
 
 use crate::MmapVec;
 use anyhow::Result;
@@ -62,14 +62,14 @@ pub struct MemoryImage {
 
 #[derive(Debug)]
 enum FdSource {
-    #[cfg(unix)]
+    #[cfg(all(unix, not(miri)))]
     Mmap(Arc<File>),
-    #[cfg(target_os = "linux")]
+    #[cfg(all(target_os = "linux", not(miri)))]
     Memfd(memfd::Memfd),
 }
 
 impl FdSource {
-    #[cfg(unix)]
+    #[cfg(all(unix, not(miri)))]
     fn as_file(&self) -> &File {
         match self {
             FdSource::Mmap(ref file) => file,
@@ -82,7 +82,7 @@ impl FdSource {
 impl PartialEq for FdSource {
     fn eq(&self, other: &FdSource) -> bool {
         cfg_if::cfg_if! {
-            if #[cfg(unix)] {
+            if #[cfg(all(unix, not(miri)))] {
                 use rustix::fd::AsRawFd;
                 self.as_file().as_raw_fd() == other.as_file().as_raw_fd()
             } else {
@@ -123,7 +123,7 @@ impl MemoryImage {
         // files, but for now this is still a Linux-specific region of Wasmtime.
         // Some work will be needed to get this file compiling for macOS and
         // Windows.
-        #[cfg(not(windows))]
+        #[cfg(not(any(windows, miri)))]
         if let Some(mmap) = mmap {
             let start = mmap.as_ptr() as usize;
             let end = start + mmap.len();
@@ -150,7 +150,7 @@ impl MemoryImage {
         // may be used to place the data in a form that's amenable to an mmap.
 
         cfg_if::cfg_if! {
-            if #[cfg(target_os = "linux")] {
+            if #[cfg(all(target_os = "linux", not(miri)))] {
                 // On Linux `memfd_create` is used to create an anonymous
                 // in-memory file to represent the heap image. This anonymous
                 // file is then used as the basis for further mmaps.
@@ -204,7 +204,7 @@ impl MemoryImage {
 
     unsafe fn map_at(&self, base: usize) -> Result<()> {
         cfg_if::cfg_if! {
-            if #[cfg(unix)] {
+            if #[cfg(all(unix, not(miri)))] {
                 let ptr = rustix::mm::mmap(
                     (base + self.linear_memory_offset) as *mut c_void,
                     self.len,
@@ -239,7 +239,7 @@ impl MemoryImage {
     }
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", not(miri)))]
 fn create_memfd() -> Result<Option<memfd::Memfd>> {
     use std::io::ErrorKind;
 
@@ -592,7 +592,7 @@ impl MemoryImageSlot {
 
     #[allow(dead_code)] // ignore warnings as this is only used in some cfgs
     unsafe fn reset_all_memory_contents(&mut self, keep_resident: usize) -> Result<()> {
-        if !cfg!(target_os = "linux") {
+        if !cfg!(target_os = "linux") || cfg!(miri) {
             // If we're not on Linux then there's no generic platform way to
             // reset memory back to its original state, so instead reset memory
             // back to entirely zeros with an anonymous backing.
@@ -730,7 +730,11 @@ impl MemoryImageSlot {
 
         unsafe {
             cfg_if::cfg_if! {
-                if #[cfg(unix)] {
+                if #[cfg(miri)] {
+                    if readwrite {
+                        std::ptr::write_bytes(start as *mut u8, 0u8, range.len());
+                    }
+                } else if #[cfg(unix)] {
                     let flags = if readwrite {
                         rustix::mm::MprotectFlags::READ | rustix::mm::MprotectFlags::WRITE
                     } else {
@@ -775,7 +779,9 @@ impl MemoryImageSlot {
 
         unsafe {
             cfg_if::cfg_if! {
-                if #[cfg(unix)] {
+                if #[cfg(miri)] {
+                    std::ptr::write_bytes(self.base as *mut u8, 0, self.static_size);
+                } else if #[cfg(unix)] {
                     let ptr = rustix::mm::mmap_anonymous(
                         self.base as *mut c_void,
                         self.static_size,
@@ -838,7 +844,7 @@ impl Drop for MemoryImageSlot {
     }
 }
 
-#[cfg(all(test, target_os = "linux"))]
+#[cfg(all(test, target_os = "linux", not(miri)))]
 mod test {
     use std::sync::Arc;
 

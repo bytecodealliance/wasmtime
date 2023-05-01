@@ -650,6 +650,7 @@ mod tests {
     use tempfile::TempDir;
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn cache_accounts_for_opt_level() -> Result<()> {
         let td = TempDir::new()?;
         let config_path = td.path().join("config.toml");

@@ -769,7 +769,7 @@ impl SharedMemory {
     pub fn data(&self) -> &[UnsafeCell<u8>] {
         unsafe {
             let definition = &*self.0.vmmemory_ptr();
-            slice::from_raw_parts_mut(definition.base.cast(), definition.current_length())
+            slice::from_raw_parts(definition.base.cast(), definition.current_length())
         }
     }
 
