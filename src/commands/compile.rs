@@ -50,7 +50,7 @@ pub struct CompileCommand {
     #[clap(short = 'o', long, value_name = "OUTPUT", parse(from_os_str))]
     output: Option<PathBuf>,
 
-    /// Emit one clif file for each function in this directory
+    /// The directory path to write clif files into, one clif file per wasm function.
     #[clap(long = "emit-clif", value_name = "PATH", parse(from_os_str))]
     emit_clif: Option<PathBuf>,
 
