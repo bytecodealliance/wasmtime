@@ -10,8 +10,10 @@ use wasi_common::{
     clocks::{WasiMonotonicClock, WasiWallClock},
     dir::ReadOnlyDir,
     pipe::ReadPipe,
+    wasi::command::add_to_linker,
+    wasi::command::Command,
+    Table, WasiCtx, WasiView,
 };
-use wasi_common::{wasi::command::add_to_linker, wasi::command::Command, WasiCtx};
 use wasmtime::{
     component::{Component, Linker},
     Config, Engine, Store,
@@ -42,11 +44,34 @@ fn expect_fail(r: Result<()>) -> Result<()> {
     }
 }
 
-async fn instantiate(component: Component, wasi_ctx: WasiCtx) -> Result<(Store<WasiCtx>, Command)> {
-    let mut linker = Linker::new(&ENGINE);
-    add_to_linker(&mut linker, |x| x)?;
+struct CommandCtx {
+    table: Table,
+    wasi: WasiCtx,
+}
 
-    let mut store = Store::new(&ENGINE, wasi_ctx);
+impl WasiView for CommandCtx {
+    fn table(&self) -> &Table {
+        &self.table
+    }
+    fn table_mut(&mut self) -> &mut Table {
+        &mut self.table
+    }
+    fn ctx(&self) -> &WasiCtx {
+        &self.wasi
+    }
+    fn ctx_mut(&mut self) -> &mut WasiCtx {
+        &mut self.wasi
+    }
+}
+
+async fn instantiate(
+    component: Component,
+    ctx: CommandCtx,
+) -> Result<(Store<CommandCtx>, Command)> {
+    let mut linker = Linker::new(&ENGINE);
+    add_to_linker(&mut linker)?;
+
+    let mut store = Store::new(&ENGINE, ctx);
 
     let (command, _instance) = Command::instantiate_async(&mut store, &component, &linker).await?;
     Ok((store, command))
@@ -54,10 +79,12 @@ async fn instantiate(component: Component, wasi_ctx: WasiCtx) -> Result<(Store<W
 
 #[test_log::test(tokio::test)]
 async fn hello_stdout() -> Result<()> {
+    let mut table = Table::new();
     let wasi = WasiCtxBuilder::new()
         .args(&["gussie", "sparky", "willa"])
-        .build()?;
-    let (mut store, command) = instantiate(get_component("hello_stdout"), wasi).await?;
+        .build(&mut table)?;
+    let (mut store, command) =
+        instantiate(get_component("hello_stdout"), CommandCtx { table, wasi }).await?;
     command
         .call_main(&mut store)
         .await?
@@ -66,6 +93,7 @@ async fn hello_stdout() -> Result<()> {
 
 #[test_log::test(tokio::test)]
 async fn panic() -> Result<()> {
+    let mut table = Table::new();
     let wasi = WasiCtxBuilder::new()
         .args(&[
             "diesel",
@@ -77,8 +105,9 @@ async fn panic() -> Result<()> {
             "good",
             "yesterday",
         ])
-        .build()?;
-    let (mut store, command) = instantiate(get_component("panic"), wasi).await?;
+        .build(&mut table)?;
+    let (mut store, command) =
+        instantiate(get_component("panic"), CommandCtx { table, wasi }).await?;
     let r = command.call_main(&mut store).await;
     assert!(r.is_err());
     println!("{:?}", r);
@@ -87,10 +116,12 @@ async fn panic() -> Result<()> {
 
 #[test_log::test(tokio::test)]
 async fn args() -> Result<()> {
+    let mut table = Table::new();
     let wasi = WasiCtxBuilder::new()
         .args(&["hello", "this", "", "is an argument", "with 🚩 emoji"])
-        .build()?;
-    let (mut store, command) = instantiate(get_component("args"), wasi).await?;
+        .build(&mut table)?;
+    let (mut store, command) =
+        instantiate(get_component("args"), CommandCtx { table, wasi }).await?;
     command
         .call_main(&mut store)
         .await?
@@ -119,9 +150,11 @@ async fn random() -> Result<()> {
         }
     }
 
-    let mut wasi = WasiCtxBuilder::new().build()?;
+    let mut table = Table::new();
+    let mut wasi = WasiCtxBuilder::new().build(&mut table)?;
     wasi.random = Box::new(FakeRng);
-    let (mut store, command) = instantiate(get_component("random"), wasi).await?;
+    let (mut store, command) =
+        instantiate(get_component("random"), CommandCtx { table, wasi }).await?;
 
     command
         .call_main(&mut store)
@@ -160,11 +193,13 @@ async fn time() -> Result<()> {
         }
     }
 
-    let mut wasi = WasiCtxBuilder::new().build()?;
+    let mut table = Table::new();
+    let mut wasi = WasiCtxBuilder::new().build(&mut table)?;
     wasi.clocks.wall = Box::new(FakeWallClock);
     wasi.clocks.monotonic = Box::new(FakeMonotonicClock { now: Mutex::new(0) });
 
-    let (mut store, command) = instantiate(get_component("time"), wasi).await?;
+    let (mut store, command) =
+        instantiate(get_component("time"), CommandCtx { table, wasi }).await?;
 
     command
         .call_main(&mut store)
@@ -174,13 +209,15 @@ async fn time() -> Result<()> {
 
 #[test_log::test(tokio::test)]
 async fn stdin() -> Result<()> {
+    let mut table = Table::new();
     let wasi = WasiCtxBuilder::new()
         .stdin(ReadPipe::new(Cursor::new(
             "So rested he by the Tumtum tree",
         )))
-        .build()?;
+        .build(&mut table)?;
 
-    let (mut store, command) = instantiate(get_component("stdin"), wasi).await?;
+    let (mut store, command) =
+        instantiate(get_component("stdin"), CommandCtx { table, wasi }).await?;
 
     command
         .call_main(&mut store)
@@ -190,13 +227,15 @@ async fn stdin() -> Result<()> {
 
 #[test_log::test(tokio::test)]
 async fn poll_stdin() -> Result<()> {
+    let mut table = Table::new();
     let wasi = WasiCtxBuilder::new()
         .stdin(ReadPipe::new(Cursor::new(
             "So rested he by the Tumtum tree",
         )))
-        .build()?;
+        .build(&mut table)?;
 
-    let (mut store, command) = instantiate(get_component("poll_stdin"), wasi).await?;
+    let (mut store, command) =
+        instantiate(get_component("poll_stdin"), CommandCtx { table, wasi }).await?;
 
     command
         .call_main(&mut store)
@@ -206,12 +245,14 @@ async fn poll_stdin() -> Result<()> {
 
 #[test_log::test(tokio::test)]
 async fn env() -> Result<()> {
+    let mut table = Table::new();
     let wasi = WasiCtxBuilder::new()
         .push_env("frabjous", "day")
         .push_env("callooh", "callay")
-        .build()?;
+        .build(&mut table)?;
 
-    let (mut store, command) = instantiate(get_component("env"), wasi).await?;
+    let (mut store, command) =
+        instantiate(get_component("env"), CommandCtx { table, wasi }).await?;
 
     command
         .call_main(&mut store)
@@ -227,9 +268,13 @@ async fn file_read() -> Result<()> {
 
     let open_dir = Dir::open_ambient_dir(dir.path(), ambient_authority())?;
 
-    let wasi = WasiCtxBuilder::new().preopened_dir(open_dir, "/").build()?;
+    let mut table = Table::new();
+    let wasi = WasiCtxBuilder::new()
+        .preopened_dir(open_dir, "/")
+        .build(&mut table)?;
 
-    let (mut store, command) = instantiate(get_component("file_read"), wasi).await?;
+    let (mut store, command) =
+        instantiate(get_component("file_read"), CommandCtx { table, wasi }).await?;
 
     command
         .call_main(&mut store)
@@ -246,9 +291,13 @@ async fn file_append() -> Result<()> {
 
     let open_dir = Dir::open_ambient_dir(dir.path(), ambient_authority())?;
 
-    let wasi = WasiCtxBuilder::new().preopened_dir(open_dir, "/").build()?;
+    let mut table = Table::new();
+    let wasi = WasiCtxBuilder::new()
+        .preopened_dir(open_dir, "/")
+        .build(&mut table)?;
 
-    let (mut store, command) = instantiate(get_component("file_append"), wasi).await?;
+    let (mut store, command) =
+        instantiate(get_component("file_append"), CommandCtx { table, wasi }).await?;
     command
         .call_main(&mut store)
         .await?
@@ -274,9 +323,13 @@ async fn file_dir_sync() -> Result<()> {
 
     let open_dir = Dir::open_ambient_dir(dir.path(), ambient_authority())?;
 
-    let wasi = WasiCtxBuilder::new().preopened_dir(open_dir, "/").build()?;
+    let mut table = Table::new();
+    let wasi = WasiCtxBuilder::new()
+        .preopened_dir(open_dir, "/")
+        .build(&mut table)?;
 
-    let (mut store, command) = instantiate(get_component("file_dir_sync"), wasi).await?;
+    let (mut store, command) =
+        instantiate(get_component("file_dir_sync"), CommandCtx { table, wasi }).await?;
 
     command
         .call_main(&mut store)
@@ -286,9 +339,11 @@ async fn file_dir_sync() -> Result<()> {
 
 #[test_log::test(tokio::test)]
 async fn exit_success() -> Result<()> {
-    let wasi = WasiCtxBuilder::new().build()?;
+    let mut table = Table::new();
+    let wasi = WasiCtxBuilder::new().build(&mut table)?;
 
-    let (mut store, command) = instantiate(get_component("exit_success"), wasi).await?;
+    let (mut store, command) =
+        instantiate(get_component("exit_success"), CommandCtx { table, wasi }).await?;
 
     let r = command.call_main(&mut store).await;
     let err = r.unwrap_err();
@@ -299,9 +354,11 @@ async fn exit_success() -> Result<()> {
 
 #[test_log::test(tokio::test)]
 async fn exit_default() -> Result<()> {
-    let wasi = WasiCtxBuilder::new().build()?;
+    let mut table = Table::new();
+    let wasi = WasiCtxBuilder::new().build(&mut table)?;
 
-    let (mut store, command) = instantiate(get_component("exit_default"), wasi).await?;
+    let (mut store, command) =
+        instantiate(get_component("exit_default"), CommandCtx { table, wasi }).await?;
 
     let r = command.call_main(&mut store).await?;
     assert!(r.is_ok());
@@ -310,9 +367,11 @@ async fn exit_default() -> Result<()> {
 
 #[test_log::test(tokio::test)]
 async fn exit_failure() -> Result<()> {
-    let wasi = WasiCtxBuilder::new().build()?;
+    let mut table = Table::new();
+    let wasi = WasiCtxBuilder::new().build(&mut table)?;
 
-    let (mut store, command) = instantiate(get_component("exit_failure"), wasi).await?;
+    let (mut store, command) =
+        instantiate(get_component("exit_failure"), CommandCtx { table, wasi }).await?;
 
     let r = command.call_main(&mut store).await;
     let err = r.unwrap_err();
@@ -323,9 +382,11 @@ async fn exit_failure() -> Result<()> {
 
 #[test_log::test(tokio::test)]
 async fn exit_panic() -> Result<()> {
-    let wasi = WasiCtxBuilder::new().build()?;
+    let mut table = Table::new();
+    let wasi = WasiCtxBuilder::new().build(&mut table)?;
 
-    let (mut store, command) = instantiate(get_component("exit_panic"), wasi).await?;
+    let (mut store, command) =
+        instantiate(get_component("exit_panic"), CommandCtx { table, wasi }).await?;
 
     let r = command.call_main(&mut store).await;
     let err = r.unwrap_err();
@@ -347,9 +408,13 @@ async fn directory_list() -> Result<()> {
 
     let open_dir = Dir::open_ambient_dir(dir.path(), ambient_authority())?;
 
-    let wasi = WasiCtxBuilder::new().preopened_dir(open_dir, "/").build()?;
+    let mut table = Table::new();
+    let wasi = WasiCtxBuilder::new()
+        .preopened_dir(open_dir, "/")
+        .build(&mut table)?;
 
-    let (mut store, command) = instantiate(get_component("directory_list"), wasi).await?;
+    let (mut store, command) =
+        instantiate(get_component("directory_list"), CommandCtx { table, wasi }).await?;
 
     command
         .call_main(&mut store)
@@ -359,9 +424,11 @@ async fn directory_list() -> Result<()> {
 
 #[test_log::test(tokio::test)]
 async fn default_clocks() -> Result<()> {
-    let wasi = WasiCtxBuilder::new().build()?;
+    let mut table = Table::new();
+    let wasi = WasiCtxBuilder::new().build(&mut table)?;
 
-    let (mut store, command) = instantiate(get_component("default_clocks"), wasi).await?;
+    let (mut store, command) =
+        instantiate(get_component("default_clocks"), CommandCtx { table, wasi }).await?;
 
     command
         .call_main(&mut store)
@@ -389,12 +456,14 @@ async fn run_with_temp_dir(component: &str) -> Result<()> {
     let dir = tempfile::tempdir()?;
     let open_dir = Dir::open_ambient_dir(dir.path(), ambient_authority())?;
 
+    let mut table = Table::new();
     let wasi = builder
         .preopened_dir(open_dir, "/foo")
         .set_args(&["program", "/foo"])
-        .build()?;
+        .build(&mut table)?;
 
-    let (mut store, command) = instantiate(get_component(component), wasi).await?;
+    let (mut store, command) =
+        instantiate(get_component(component), CommandCtx { table, wasi }).await?;
 
     command
         .call_main(&mut store)
@@ -625,8 +694,13 @@ async fn unlink_file_trailing_slashes() -> Result<()> {
 
 #[test_log::test(tokio::test)]
 async fn export_cabi_realloc() -> Result<()> {
-    let wasi = WasiCtxBuilder::new().build()?;
-    let (mut store, command) = instantiate(get_component("export_cabi_realloc"), wasi).await?;
+    let mut table = Table::new();
+    let wasi = WasiCtxBuilder::new().build(&mut table)?;
+    let (mut store, command) = instantiate(
+        get_component("export_cabi_realloc"),
+        CommandCtx { table, wasi },
+    )
+    .await?;
 
     command
         .call_main(&mut store)
@@ -641,6 +715,7 @@ async fn read_only() -> Result<()> {
     std::fs::File::create(dir.path().join("bar.txt"))?.write_all(b"And stood awhile in thought")?;
     std::fs::create_dir(dir.path().join("sub"))?;
 
+    let mut table = Table::new();
     let open_dir = Dir::open_ambient_dir(dir.path(), ambient_authority())?;
     let wasi = WasiCtxBuilder::new()
         .preopened_dir_impl(
@@ -649,9 +724,10 @@ async fn read_only() -> Result<()> {
             ))),
             "/",
         )
-        .build()?;
+        .build(&mut table)?;
 
-    let (mut store, command) = instantiate(get_component("read_only"), wasi).await?;
+    let (mut store, command) =
+        instantiate(get_component("read_only"), CommandCtx { table, wasi }).await?;
 
     command
         .call_main(&mut store)

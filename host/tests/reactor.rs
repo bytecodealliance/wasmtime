@@ -1,7 +1,7 @@
 use anyhow::Result;
 use std::sync::{Arc, RwLock};
 use wasi_cap_std_sync::WasiCtxBuilder;
-use wasi_common::{wasi, WasiCtx};
+use wasi_common::{wasi, Table, WasiCtx, WasiView};
 use wasmtime::{
     component::{Component, Linker},
     Config, Engine, Store,
@@ -35,10 +35,30 @@ wasmtime::component::bindgen!({
     },
 });
 
+struct ReactorCtx {
+    table: Table,
+    wasi: WasiCtx,
+}
+
+impl WasiView for ReactorCtx {
+    fn table(&self) -> &Table {
+        &self.table
+    }
+    fn table_mut(&mut self) -> &mut Table {
+        &mut self.table
+    }
+    fn ctx(&self) -> &WasiCtx {
+        &self.wasi
+    }
+    fn ctx_mut(&mut self) -> &mut WasiCtx {
+        &mut self.wasi
+    }
+}
+
 async fn instantiate(
     component: Component,
-    wasi_ctx: WasiCtx,
-) -> Result<(Store<WasiCtx>, TestReactor)> {
+    wasi_ctx: ReactorCtx,
+) -> Result<(Store<ReactorCtx>, TestReactor)> {
     let mut linker = Linker::new(&ENGINE);
 
     // All of the imports available to the world are provided by the wasi-common crate:
@@ -57,12 +77,15 @@ async fn instantiate(
 
 #[test_log::test(tokio::test)]
 async fn reactor_tests() -> Result<()> {
-    let wasi = WasiCtxBuilder::new().build()?;
+    let mut table = Table::new();
+    let wasi = WasiCtxBuilder::new().build(&mut table)?;
 
-    let (mut store, reactor) = instantiate(get_component("reactor_tests"), wasi).await?;
+    let (mut store, reactor) =
+        instantiate(get_component("reactor_tests"), ReactorCtx { table, wasi }).await?;
 
     store
         .data_mut()
+        .wasi
         .env
         .push(("GOOD_DOG".to_owned(), "gussie".to_owned()));
 
@@ -73,9 +96,10 @@ async fn reactor_tests() -> Result<()> {
 
     // Redefine the env, show that the adapter only fetches it once
     // even if the libc ctors copy it in multiple times:
-    store.data_mut().env.clear();
+    store.data_mut().wasi.env.clear();
     store
         .data_mut()
+        .wasi
         .env
         .push(("GOOD_DOG".to_owned(), "cody".to_owned()));
     // Cody is indeed good but this should be "hello again" "gussie"
