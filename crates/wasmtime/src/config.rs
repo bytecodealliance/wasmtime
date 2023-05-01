@@ -4,7 +4,7 @@ use anyhow::{bail, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::fmt;
-#[cfg(feature = "cache")]
+#[cfg(any(feature = "cache", compiler))]
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
