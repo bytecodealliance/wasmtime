@@ -199,7 +199,15 @@ impl BlockLoweringOrder {
 
             if block_out_count[block] > 1 {
                 let range = block_succ_range[block].clone();
-                for (succ_ix, lb) in block_succs[range].iter_mut().enumerate() {
+
+                // If chaos-mode is enabled in the control plane, iterate over
+                // the successors in an arbtirary order, which should have no
+                // impact on correctness. The order of the blocks is generally
+                // relevant: Uses must be seen before defs for dead-code
+                // elimination.
+                let succs = ctrl_plane.get_permutation(block_succs[range].iter_mut().enumerate());
+
+                for (succ_ix, lb) in succs {
                     let succ = lb.orig_block().unwrap();
                     if block_in_count[succ] > 1 {
                         // Mutate the successor to be a critical edge, as `block` has multiple
@@ -214,11 +222,6 @@ impl BlockLoweringOrder {
                 }
             }
         }
-
-        // If chaos-mode is enabled in the control plane, arbitrarily reorder
-        // the basic blocks, which should have no impact on correctness.
-        // The entry block is an exception and has to stay first.
-        ctrl_plane.shuffle(&mut lowered_order[1..]);
 
         let lb_to_bindex = FxHashMap::from_iter(
             lowered_order
