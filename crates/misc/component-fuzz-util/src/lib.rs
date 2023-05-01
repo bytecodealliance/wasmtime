@@ -17,16 +17,15 @@ use wasmtime_component_util::{DiscriminantSize, FlagsSize, REALLOC_AND_FREE};
 
 const MAX_FLAT_PARAMS: usize = 16;
 const MAX_FLAT_RESULTS: usize = 1;
-const MAX_ARITY: u32 = 5;
-
-// Wasmtime allows up to 100 type depth so limit this to just under that.
-const MAX_TYPE_DEPTH: u32 = 99;
 
 /// The name of the imported host function which the generated component will call
 pub const IMPORT_FUNCTION: &str = "echo-import";
 
 /// The name of the exported guest function which the host should call
 pub const EXPORT_FUNCTION: &str = "echo-export";
+
+/// Wasmtime allows up to 100 type depth so limit this to just under that.
+pub const MAX_TYPE_DEPTH: u32 = 99;
 
 #[derive(Copy, Clone, PartialEq, Eq)]
 enum CoreType {
@@ -60,21 +59,6 @@ impl fmt::Display for CoreType {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct UsizeInRange<const L: usize, const H: usize>(usize);
-
-impl<const L: usize, const H: usize> UsizeInRange<L, H> {
-    pub fn as_usize(&self) -> usize {
-        self.0
-    }
-}
-
-impl<'a, const L: usize, const H: usize> Arbitrary<'a> for UsizeInRange<L, H> {
-    fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
-        Ok(UsizeInRange(u.int_in_range(L..=H)?))
-    }
-}
-
 /// Wraps a `Box<[T]>` and provides an `Arbitrary` implementation that always generates slices of length less than
 /// or equal to the longest tuple for which Wasmtime generates a `ComponentType` impl
 #[derive(Debug, Clone)]
@@ -83,20 +67,20 @@ pub struct VecInRange<T, const L: u32, const H: u32>(Vec<T>);
 impl<T, const L: u32, const H: u32> VecInRange<T, L, H> {
     fn new<'a>(
         input: &mut Unstructured<'a>,
-        gen: impl Fn(&mut Unstructured<'a>) -> arbitrary::Result<T>,
+        fuel: &mut u32,
+        gen: impl Fn(&mut Unstructured<'a>, &mut u32) -> arbitrary::Result<T>,
     ) -> arbitrary::Result<Self> {
         let mut ret = Vec::new();
         input.arbitrary_loop(Some(L), Some(H), |input| {
-            ret.push(gen(input)?);
-            Ok(std::ops::ControlFlow::Continue(()))
+            if *fuel > 0 {
+                *fuel = *fuel - 1;
+                ret.push(gen(input, fuel)?);
+                Ok(std::ops::ControlFlow::Continue(()))
+            } else {
+                Ok(std::ops::ControlFlow::Break(()))
+            }
         })?;
         Ok(Self(ret))
-    }
-}
-
-impl<'a, T: Arbitrary<'a>, const L: u32, const H: u32> Arbitrary<'a> for VecInRange<T, L, H> {
-    fn arbitrary(input: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
-        VecInRange::new(input, |input| input.arbitrary())
     }
 }
 
@@ -141,7 +125,7 @@ pub enum Type {
     // Like records, allow a good number of variants, but variants require at
     // least one case.
     Variant(VecInRange<Option<Type>, 1, 200>),
-    Enum(UsizeInRange<1, 257>),
+    Enum(u32),
     Union(VecInRange<Type, 1, 200>),
 
     Option(Box<Type>),
@@ -150,14 +134,17 @@ pub enum Type {
         err: Option<Box<Type>>,
     },
 
-    // Generate 0 flags all the way up to 65 flags which exercises the 0 to
-    // 3 x u32 cases.
-    Flags(UsizeInRange<0, 65>),
+    Flags(u32),
 }
 
 impl Type {
-    fn generate(u: &mut Unstructured<'_>, depth: u32) -> arbitrary::Result<Type> {
-        let max = if depth == 0 { 12 } else { 21 };
+    pub fn generate(
+        u: &mut Unstructured<'_>,
+        depth: u32,
+        fuel: &mut u32,
+    ) -> arbitrary::Result<Type> {
+        *fuel = fuel.saturating_sub(1);
+        let max = if depth == 0 || *fuel == 0 { 12 } else { 21 };
         Ok(match u.int_in_range(0..=max)? {
             0 => Type::Bool,
             1 => Type::S8,
@@ -173,26 +160,42 @@ impl Type {
             11 => Type::Char,
             12 => Type::String,
             // ^-- if you add something here update the `depth == 0` case above
-            13 => Type::List(Box::new(Type::generate(u, depth - 1)?)),
-            14 => Type::Record(Type::generate_list(u, depth - 1)?),
-            15 => Type::Tuple(Type::generate_list(u, depth - 1)?),
-            16 => Type::Variant(VecInRange::new(u, |u| Type::generate_opt(u, depth - 1))?),
-            17 => Type::Enum(u.arbitrary()?),
-            18 => Type::Union(Type::generate_list(u, depth - 1)?),
-            19 => Type::Option(Box::new(Type::generate(u, depth - 1)?)),
+            13 => Type::List(Box::new(Type::generate(u, depth - 1, fuel)?)),
+            14 => Type::Record(Type::generate_list(u, depth - 1, fuel)?),
+            15 => Type::Tuple(Type::generate_list(u, depth - 1, fuel)?),
+            16 => Type::Variant(VecInRange::new(u, fuel, |u, fuel| {
+                Type::generate_opt(u, depth - 1, fuel)
+            })?),
+            17 => {
+                let amt = u.int_in_range(1..=(*fuel).max(1).min(257))?;
+                *fuel -= amt;
+                Type::Enum(amt)
+            }
+            18 => Type::Union(Type::generate_list(u, depth - 1, fuel)?),
+            19 => Type::Option(Box::new(Type::generate(u, depth - 1, fuel)?)),
             20 => Type::Result {
-                ok: Type::generate_opt(u, depth - 1)?.map(Box::new),
-                err: Type::generate_opt(u, depth - 1)?.map(Box::new),
+                ok: Type::generate_opt(u, depth - 1, fuel)?.map(Box::new),
+                err: Type::generate_opt(u, depth - 1, fuel)?.map(Box::new),
             },
-            21 => Type::Flags(u.arbitrary()?),
+            21 => {
+                // Generate 0 flags all the way up to 65 flags which exercises
+                // the 0 to 3 x u32 cases.
+                let amt = u.int_in_range(0..=(*fuel).min(65))?;
+                *fuel -= amt;
+                Type::Flags(amt)
+            }
             // ^-- if you add something here update the `depth != 0` case above
             _ => unreachable!(),
         })
     }
 
-    fn generate_opt(u: &mut Unstructured<'_>, depth: u32) -> arbitrary::Result<Option<Type>> {
+    fn generate_opt(
+        u: &mut Unstructured<'_>,
+        depth: u32,
+        fuel: &mut u32,
+    ) -> arbitrary::Result<Option<Type>> {
         Ok(if u.arbitrary()? {
-            Some(Type::generate(u, depth)?)
+            Some(Type::generate(u, depth, fuel)?)
         } else {
             None
         })
@@ -201,16 +204,18 @@ impl Type {
     fn generate_list<const L: u32, const H: u32>(
         u: &mut Unstructured<'_>,
         depth: u32,
+        fuel: &mut u32,
     ) -> arbitrary::Result<VecInRange<Type, L, H>> {
-        VecInRange::new(u, |u| Type::generate(u, depth))
+        VecInRange::new(u, fuel, |u, fuel| Type::generate(u, depth, fuel))
     }
 }
 
-impl<'a> Arbitrary<'a> for Type {
-    fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Type> {
-        Type::generate(u, MAX_TYPE_DEPTH)
-    }
-}
+// impl<'a> Arbitrary<'a> for Type {
+//     fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Type> {
+//         let mut fuel = 500;
+//         Type::generate(u, MAX_TYPE_DEPTH, &mut fuel)
+//     }
+// }
 
 fn lower_record<'a>(types: impl Iterator<Item = &'a Type>, vec: &mut Vec<CoreType>) {
     for ty in types {
@@ -283,9 +288,9 @@ impl Type {
             Type::Result { ok, err } => {
                 lower_variant([ok.as_deref(), err.as_deref()].into_iter(), vec)
             }
-            Type::Flags(count) => {
-                vec.extend(iter::repeat(CoreType::I32).take(u32_count_from_flag_count(count.0)))
-            }
+            Type::Flags(count) => vec.extend(
+                iter::repeat(CoreType::I32).take(u32_count_from_flag_count(*count as usize)),
+            ),
         }
     }
 
@@ -323,7 +328,7 @@ impl Type {
             Type::Variant(types) => variant_size_and_alignment(types.0.iter().map(|t| t.as_ref())),
             Type::Union(types) => variant_size_and_alignment(types.0.iter().map(Some)),
 
-            Type::Enum(count) => variant_size_and_alignment((0..count.0).map(|_| None)),
+            Type::Enum(count) => variant_size_and_alignment((0..*count).map(|_| None)),
 
             Type::Option(ty) => variant_size_and_alignment([None, Some(&**ty)].into_iter()),
 
@@ -331,7 +336,7 @@ impl Type {
                 variant_size_and_alignment([ok.as_deref(), err.as_deref()].into_iter())
             }
 
-            Type::Flags(count) => match FlagsSize::from_count(count.0) {
+            Type::Flags(count) => match FlagsSize::from_count(*count as usize) {
                 FlagsSize::Size0 => SizeAndAlignment {
                     size: 0,
                     alignment: 1,
@@ -396,7 +401,7 @@ fn variant_size_and_alignment<'a>(
     }
 }
 
-fn make_import_and_export(params: &[Type], results: &[Type]) -> String {
+fn make_import_and_export(params: &[&Type], results: &[&Type]) -> String {
     let params_lowered = params
         .iter()
         .flat_map(|ty| ty.lowered())
@@ -449,7 +454,8 @@ fn make_import_and_export(params: &[Type], results: &[Type]) -> String {
         )
     } else {
         let SizeAndAlignment { size, alignment } =
-            Type::Record(VecInRange(results.to_vec())).size_and_alignment();
+            Type::Record(VecInRange(results.iter().map(|t| (*t).clone()).collect()))
+                .size_and_alignment();
 
         format!(
             r#"
@@ -591,7 +597,7 @@ pub fn rust_type(ty: &Type, name_counter: &mut u32, declarations: &mut TokenStre
             quote!(#name)
         }
         Type::Enum(count) => {
-            let cases = (0..count.0)
+            let cases = (0..*count)
                 .map(|index| {
                     let name = format_ident!("E{index}");
                     quote!(#name,)
@@ -631,7 +637,7 @@ pub fn rust_type(ty: &Type, name_counter: &mut u32, declarations: &mut TokenStre
             let mut flags = TokenStream::new();
             let mut names = TokenStream::new();
 
-            for index in 0..count.0 {
+            for index in 0..*count {
                 let name = format_ident!("F{index}");
                 flags.extend(quote!(const #name;));
                 names.extend(quote!(#type_name::#name,))
@@ -758,7 +764,7 @@ impl<'a> TypesBuilder<'a> {
             }
             Type::Enum(count) => {
                 decl.push_str("(enum");
-                for index in 0..count.0 {
+                for index in 0..*count {
                     write!(decl, r#" "E{index}""#).unwrap();
                 }
                 decl.push_str(")");
@@ -791,7 +797,7 @@ impl<'a> TypesBuilder<'a> {
             }
             Type::Flags(count) => {
                 decl.push_str("(flags");
-                for index in 0..count.0 {
+                for index in 0..*count {
                     write!(decl, r#" "F{index}""#).unwrap();
                 }
                 decl.push_str(")");
@@ -898,19 +904,40 @@ impl Declarations {
 }
 
 /// Represents a test case for calling a component function
-#[derive(Arbitrary, Debug)]
-pub struct TestCase {
+#[derive(Debug)]
+pub struct TestCase<'a> {
     /// The types of parameters to pass to the function
-    pub params: VecInRange<Type, 0, MAX_ARITY>,
+    pub params: Vec<&'a Type>,
     /// The result types of the the function
-    pub results: VecInRange<Type, 0, MAX_ARITY>,
+    pub results: Vec<&'a Type>,
     /// String encoding to use from host-to-component.
     pub encoding1: StringEncoding,
     /// String encoding to use from component-to-host.
     pub encoding2: StringEncoding,
 }
 
-impl TestCase {
+// impl<'a> Arbitrary<'a> for TestCase {
+//     fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<TestCase> {
+//         let mut params = Vec::new();
+//         let mut results = Vec::new();
+//         let mut fuel = 300;
+//         for _ in 0..u.int_in_range(0..=MAX_ARITY)? {
+//             params.push(Type::generate(u, MAX_TYPE_DEPTH, &mut fuel)?);
+//         }
+//         for _ in 0..u.int_in_range(0..=MAX_ARITY)? {
+//             results.push(Type::generate(u, MAX_TYPE_DEPTH, &mut fuel)?);
+//         }
+
+//         Ok(TestCase {
+//             params,
+//             results,
+//             encoding1: u.arbitrary()?,
+//             encoding2: u.arbitrary()?,
+//         })
+//     }
+// }
+
+impl TestCase<'_> {
     /// Generate a `Declarations` for this `TestCase` which may be used to build a component to execute the case.
     pub fn declarations(&self) -> Declarations {
         let mut builder = TypesBuilder::default();
