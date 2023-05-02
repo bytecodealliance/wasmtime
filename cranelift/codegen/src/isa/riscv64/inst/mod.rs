@@ -676,6 +676,7 @@ impl MachInst for Inst {
         match rc {
             regalloc2::RegClass::Int => I64,
             regalloc2::RegClass::Float => F64,
+            regalloc2::RegClass::Vector => unreachable!(),
         }
     }
 
@@ -838,6 +839,7 @@ pub fn reg_name(reg: Reg) -> String {
                 28..=31 => format!("ft{}", real.hw_enc() - 20),
                 _ => unreachable!(),
             },
+            RegClass::Vector => unreachable!(),
         },
         None => {
             format!("{:?}", reg)

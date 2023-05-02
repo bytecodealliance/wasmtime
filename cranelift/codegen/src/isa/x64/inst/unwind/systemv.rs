@@ -76,6 +76,7 @@ pub fn map_reg(reg: Reg) -> Result<Register, RegisterMappingError> {
             Ok(X86_GP_REG_MAP[reg.to_real_reg().unwrap().hw_enc() as usize])
         }
         RegClass::Float => Ok(X86_XMM_REG_MAP[reg.to_real_reg().unwrap().hw_enc() as usize]),
+        RegClass::Vector => unreachable!(),
     }
 }
 

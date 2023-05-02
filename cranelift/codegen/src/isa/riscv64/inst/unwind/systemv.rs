@@ -39,6 +39,7 @@ pub fn map_reg(reg: Reg) -> Result<Register, RegisterMappingError> {
             let reg = reg.to_real_reg().unwrap().hw_enc() as u16;
             Ok(Register(32 + reg))
         }
+        RegClass::Vector => unreachable!(),
     }
 }
 

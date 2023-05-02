@@ -766,6 +766,7 @@ impl ABIMachineSpec for S390xMachineDeps {
         match rc {
             RegClass::Int => 1,
             RegClass::Float => 2,
+            RegClass::Vector => unreachable!(),
         }
     }
 
@@ -834,6 +835,7 @@ fn is_reg_saved_in_prologue(_call_conv: isa::CallConv, r: RealReg) -> bool {
             // f8 - f15 inclusive are callee-saves.
             r.hw_enc() >= 8 && r.hw_enc() <= 15
         }
+        RegClass::Vector => unreachable!(),
     }
 }
 
@@ -878,6 +880,7 @@ fn get_clobbered_gpr_fpr(
                 }
             }
             RegClass::Float => clobbered_fpr.push(reg),
+            RegClass::Vector => unreachable!(),
         }
     }
 

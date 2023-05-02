@@ -83,6 +83,7 @@ pub fn map_reg(reg: Reg) -> Result<Register, RegisterMappingError> {
     match reg.class() {
         RegClass::Int => Ok(GPR_MAP[reg.to_real_reg().unwrap().hw_enc() as usize]),
         RegClass::Float => Ok(VR_MAP[reg.to_real_reg().unwrap().hw_enc() as usize]),
+        RegClass::Vector => unreachable!(),
     }
 }
 

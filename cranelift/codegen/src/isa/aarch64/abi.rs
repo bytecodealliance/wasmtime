@@ -254,12 +254,14 @@ impl ABIMachineSpec for AArch64MachineDeps {
                 let next_reg = match rc {
                     RegClass::Int => &mut next_xreg,
                     RegClass::Float => &mut next_vreg,
+                    RegClass::Vector => unreachable!(),
                 };
 
                 if *next_reg < max_per_class_reg_vals && remaining_reg_vals > 0 {
                     let reg = match rc {
                         RegClass::Int => xreg(*next_reg),
                         RegClass::Float => vreg(*next_reg),
+                        RegClass::Vector => unreachable!(),
                     };
                     // Overlay Z-regs on V-regs for parameter passing.
                     let ty = if param.value_type.is_dynamic_vector() {
@@ -707,6 +709,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
             match reg.to_reg().class() {
                 RegClass::Int => clobbered_int.push(reg),
                 RegClass::Float => clobbered_vec.push(reg),
+                RegClass::Vector => unreachable!(),
             }
         }
 
@@ -1072,6 +1075,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
         match rc {
             RegClass::Int => 1,
             RegClass::Float => vector_size / 8,
+            RegClass::Vector => unreachable!(),
         }
     }
 
@@ -1174,6 +1178,7 @@ fn is_reg_saved_in_prologue(enable_pinned_reg: bool, sig: &Signature, r: RealReg
                 r.hw_enc() >= 8 && r.hw_enc() <= 15
             }
         }
+        RegClass::Vector => unreachable!(),
     }
 }
 
@@ -1192,6 +1197,7 @@ fn get_regs_restored_in_epilogue(
             match reg.to_reg().class() {
                 RegClass::Int => int_saves.push(reg),
                 RegClass::Float => vec_saves.push(reg),
+                RegClass::Vector => unreachable!(),
             }
         }
     }
