@@ -1,15 +1,9 @@
 use crate::clocks::WasiClocks;
 use crate::dir::WasiDir;
-use crate::network::WasiNetwork;
 use crate::sched::WasiSched;
 use crate::stream::{InputStream, OutputStream};
-use crate::table::Table;
-use crate::tcp_socket::WasiTcpSocket;
-use crate::Error;
-use cap_net_ext::AddressFamily;
+use crate::Table;
 use cap_rand::RngCore;
-use cap_std::ambient_authority;
-use cap_std::net::Pool;
 
 #[derive(Default)]
 pub struct WasiCtxBuilder {
@@ -24,10 +18,6 @@ pub struct WasiCtxBuilder {
     clocks: Option<WasiClocks>,
 
     sched: Option<Box<dyn WasiSched>>,
-
-    pool: Option<Pool>,
-    network_creator: Option<NetworkCreator>,
-    tcp_socket_creator: Option<TcpSocketCreator>,
 }
 
 impl WasiCtxBuilder {
@@ -94,20 +84,7 @@ impl WasiCtxBuilder {
         self
     }
 
-    pub fn set_pool(mut self, pool: Pool) -> Self {
-        self.pool = Some(pool);
-        self
-    }
-    pub fn set_network_creator(mut self, network_creator: NetworkCreator) -> Self {
-        self.network_creator = Some(network_creator);
-        self
-    }
-    pub fn set_tcp_socket_creator(mut self, tcp_socket_creator: TcpSocketCreator) -> Self {
-        self.tcp_socket_creator = Some(tcp_socket_creator);
-        self
-    }
-
-    pub fn build(self, mut table: Table) -> Result<WasiCtx, anyhow::Error> {
+    pub fn build(self, table: &mut Table) -> Result<WasiCtx, anyhow::Error> {
         use anyhow::Context;
 
         let stdin = table
@@ -129,22 +106,11 @@ impl WasiCtxBuilder {
         }
 
         Ok(WasiCtx {
-            table,
-
             random: self.random.context("required member random")?,
             clocks: self.clocks.context("required member clocks")?,
             sched: self.sched.context("required member sched")?,
             env: self.env,
             args: self.args,
-
-            pool: self.pool.context("required member pool")?,
-            network_creator: self
-                .network_creator
-                .context("required member network_creator")?,
-            tcp_socket_creator: self
-                .tcp_socket_creator
-                .context("required member tcp_socket_creator")?,
-
             preopens,
             stdin,
             stdout,
@@ -153,75 +119,28 @@ impl WasiCtxBuilder {
     }
 }
 
-pub type NetworkCreator = Box<dyn Fn(Pool) -> Result<Box<dyn WasiNetwork>, Error> + Send + Sync>;
-pub type TcpSocketCreator =
-    Box<dyn Fn(AddressFamily) -> Result<Box<dyn WasiTcpSocket>, Error> + Send + Sync>;
+pub trait WasiView: Send {
+    fn table(&self) -> &Table;
+    fn table_mut(&mut self) -> &mut Table;
+    fn ctx(&self) -> &WasiCtx;
+    fn ctx_mut(&mut self) -> &mut WasiCtx;
+}
 
 pub struct WasiCtx {
     pub random: Box<dyn RngCore + Send + Sync>,
     pub clocks: WasiClocks,
     pub sched: Box<dyn WasiSched>,
-    pub table: Table,
     pub env: Vec<(String, String)>,
     pub args: Vec<String>,
     pub preopens: Vec<(u32, String)>,
     pub stdin: u32,
     pub stdout: u32,
     pub stderr: u32,
-    pub pool: Pool,
-    pub network_creator: NetworkCreator,
-    pub tcp_socket_creator: TcpSocketCreator,
 }
 
 impl WasiCtx {
     /// Create an empty `WasiCtxBuilder`
     pub fn builder() -> WasiCtxBuilder {
         WasiCtxBuilder::default()
-    }
-
-    /// Add network addresses to the pool.
-    pub fn insert_addr<A: cap_std::net::ToSocketAddrs>(&mut self, addrs: A) -> std::io::Result<()> {
-        self.pool.insert(addrs, ambient_authority())
-    }
-
-    /// Add a specific [`cap_std::net::SocketAddr`] to the pool.
-    pub fn insert_socket_addr(&mut self, addr: cap_std::net::SocketAddr) {
-        self.pool.insert_socket_addr(addr, ambient_authority());
-    }
-
-    /// Add a range of network addresses, accepting any port, to the pool.
-    ///
-    /// Unlike `insert_ip_net`, this function grants access to any requested port.
-    pub fn insert_ip_net_port_any(&mut self, ip_net: ipnet::IpNet) {
-        self.pool
-            .insert_ip_net_port_any(ip_net, ambient_authority())
-    }
-
-    /// Add a range of network addresses, accepting a range of ports, to
-    /// per-instance networks.
-    ///
-    /// This grants access to the port range starting at `ports_start` and, if
-    /// `ports_end` is provided, ending before `ports_end`.
-    pub fn insert_ip_net_port_range(
-        &mut self,
-        ip_net: ipnet::IpNet,
-        ports_start: u16,
-        ports_end: Option<u16>,
-    ) {
-        self.pool
-            .insert_ip_net_port_range(ip_net, ports_start, ports_end, ambient_authority())
-    }
-
-    /// Add a range of network addresses with a specific port to the pool.
-    pub fn insert_ip_net(&mut self, ip_net: ipnet::IpNet, port: u16) {
-        self.pool.insert_ip_net(ip_net, port, ambient_authority())
-    }
-
-    pub fn table(&self) -> &Table {
-        &self.table
-    }
-
-    pub fn table_mut(&mut self) -> &mut Table {
-        &mut self.table
     }
 }

@@ -7,7 +7,7 @@ use crate::wasi::{
     timezone::{self, Timezone, TimezoneDisplay},
     wall_clock::{self, Datetime},
 };
-use crate::WasiCtx;
+use crate::WasiView;
 use cap_std::time::SystemTime;
 
 impl TryFrom<SystemTime> for Datetime {
@@ -25,9 +25,9 @@ impl TryFrom<SystemTime> for Datetime {
 }
 
 #[async_trait::async_trait]
-impl wall_clock::Host for WasiCtx {
+impl<T: WasiView> wall_clock::Host for T {
     async fn now(&mut self) -> anyhow::Result<Datetime> {
-        let now = self.clocks.wall.now();
+        let now = self.ctx().clocks.wall.now();
         Ok(Datetime {
             seconds: now.as_secs(),
             nanoseconds: now.subsec_nanos(),
@@ -35,7 +35,7 @@ impl wall_clock::Host for WasiCtx {
     }
 
     async fn resolution(&mut self) -> anyhow::Result<Datetime> {
-        let res = self.clocks.wall.resolution();
+        let res = self.ctx().clocks.wall.resolution();
         Ok(Datetime {
             seconds: res.as_secs(),
             nanoseconds: res.subsec_nanos(),
@@ -44,13 +44,13 @@ impl wall_clock::Host for WasiCtx {
 }
 
 #[async_trait::async_trait]
-impl monotonic_clock::Host for WasiCtx {
+impl<T: WasiView> monotonic_clock::Host for T {
     async fn now(&mut self) -> anyhow::Result<Instant> {
-        Ok(self.clocks.monotonic.now())
+        Ok(self.ctx().clocks.monotonic.now())
     }
 
     async fn resolution(&mut self) -> anyhow::Result<Instant> {
-        Ok(self.clocks.monotonic.resolution())
+        Ok(self.ctx().clocks.monotonic.resolution())
     }
 
     async fn subscribe(&mut self, when: Instant, absolute: bool) -> anyhow::Result<Pollable> {
@@ -61,7 +61,7 @@ impl monotonic_clock::Host for WasiCtx {
 }
 
 #[async_trait::async_trait]
-impl timezone::Host for WasiCtx {
+impl<T: WasiView> timezone::Host for T {
     async fn display(
         &mut self,
         timezone: Timezone,

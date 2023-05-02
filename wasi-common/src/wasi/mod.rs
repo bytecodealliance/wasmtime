@@ -3,19 +3,11 @@ pub mod proxy;
 
 wasmtime::component::bindgen!({
     path: "../wit",
-    // This is a union of the imports in the command and proxy worlds:
     interfaces: "
       import wall-clock: clocks.wall-clock
       import monotonic-clock: clocks.monotonic-clock
       import timezone: clocks.timezone
       import filesystem: filesystem.filesystem
-      import instance-network: sockets.instance-network
-      import ip-name-lookup: sockets.ip-name-lookup
-      import network: sockets.network
-      import tcp-create-socket: sockets.tcp-create-socket
-      import tcp: sockets.tcp
-      import udp-create-socket: sockets.udp-create-socket
-      import udp: sockets.udp
       import random: random.random
       import poll: poll.poll
       import streams: io.streams

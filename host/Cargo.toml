@@ -9,6 +9,8 @@ cap-std = { workspace = true }
 wasmtime = { workspace = true }
 wasi-common = { workspace = true }
 wasi-cap-std-sync = { workspace = true }
+wasmtime-wasi-sockets = { workspace = true }
+wasmtime-wasi-sockets-sync = { workspace = true }
 clap = { version = "4.1.9", features = ["derive"] }
 tracing-subscriber = { version = "0.3", default-features = false, features = ["env-filter", "fmt" ]}
 tokio = { version = "1", features = ["full"] }

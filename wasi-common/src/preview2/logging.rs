@@ -1,8 +1,8 @@
 use crate::wasi::console;
-use crate::WasiCtx;
+use crate::WasiView;
 
 #[async_trait::async_trait]
-impl console::Host for WasiCtx {
+impl<T: WasiView> console::Host for T {
     async fn log(
         &mut self,
         level: console::Level,

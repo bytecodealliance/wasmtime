@@ -1,6 +1,5 @@
 use crate::clocks::WasiMonotonicClock;
 use crate::stream::{InputStream, OutputStream};
-use crate::tcp_socket::WasiTcpSocket;
 use crate::Error;
 pub mod subscription;
 pub use cap_std::time::Duration;
@@ -70,12 +69,14 @@ impl<'a> Poll<'a> {
             ud,
         ));
     }
+    /* FIXME need to redo poll interface to support pollables defined in other crates
     pub fn subscribe_tcp_socket(&mut self, tcp_socket: &'a dyn WasiTcpSocket, ud: Userdata) {
         self.subs.push((
             Subscription::ReadWrite(RwSubscription::new_tcp_socket(tcp_socket)),
             ud,
         ));
     }
+    */
     pub fn results(self) -> impl Iterator<Item = (SubscriptionResult, Userdata)> + 'a {
         self.subs
             .into_iter()

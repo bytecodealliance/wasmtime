@@ -1,10 +1,12 @@
 use anyhow::{Context, Result};
 use wasi_cap_std_sync::WasiCtxBuilder;
-use wasi_common::{wasi, WasiCtx};
+use wasi_common::{wasi, Table, WasiCtx, WasiView};
 use wasmtime::{
     component::{Component, Linker},
     Config, Engine, Store,
 };
+use wasmtime_wasi_sockets::{WasiSocketsCtx, WasiSocketsView};
+use wasmtime_wasi_sockets_sync::WasiSocketsCtxBuilder;
 
 use clap::Parser;
 
@@ -60,15 +62,11 @@ async fn main() -> Result<()> {
 
     let engine = Engine::new(&config)?;
     let component = Component::from_file(&engine, &input)?;
-    let mut linker = Linker::new(&engine);
 
     let mut argv: Vec<&str> = vec!["wasm"];
     argv.extend(args.args.iter().map(String::as_str));
 
-    let mut builder = WasiCtxBuilder::new()
-        .inherit_stdio()
-        .inherit_network(cap_std::ambient_authority())
-        .args(&argv);
+    let mut builder = WasiCtxBuilder::new().inherit_stdio().args(&argv);
 
     for (guest, host) in args.map_dirs {
         let dir = cap_std::fs::Dir::open_ambient_dir(&host, cap_std::ambient_authority())
@@ -76,58 +74,107 @@ async fn main() -> Result<()> {
         builder = builder.preopened_dir(dir, &guest);
     }
 
-    let wasi_ctx = builder.build()?;
+    let mut table = Table::new();
+    let wasi = builder.build(&mut table)?;
 
     if args.world == "command" {
-        run_command(&mut linker, &engine, &component, wasi_ctx).await?;
+        struct CommandCtx {
+            table: Table,
+            wasi: WasiCtx,
+            sockets: WasiSocketsCtx,
+        }
+        impl WasiView for CommandCtx {
+            fn table(&self) -> &Table {
+                &self.table
+            }
+            fn table_mut(&mut self) -> &mut Table {
+                &mut self.table
+            }
+            fn ctx(&self) -> &WasiCtx {
+                &self.wasi
+            }
+            fn ctx_mut(&mut self) -> &mut WasiCtx {
+                &mut self.wasi
+            }
+        }
+        let sockets = WasiSocketsCtxBuilder::new()
+            .inherit_network(cap_std::ambient_authority())
+            .build();
+        impl WasiSocketsView for CommandCtx {
+            fn table(&self) -> &Table {
+                &self.table
+            }
+            fn table_mut(&mut self) -> &mut Table {
+                &mut self.table
+            }
+            fn ctx(&self) -> &WasiSocketsCtx {
+                &self.sockets
+            }
+            fn ctx_mut(&mut self) -> &mut WasiSocketsCtx {
+                &mut self.sockets
+            }
+        }
+
+        let mut linker = Linker::new(&engine);
+        wasi::command::add_to_linker(&mut linker)?;
+        wasmtime_wasi_sockets::add_to_linker(&mut linker)?;
+        let mut store = Store::new(
+            &engine,
+            CommandCtx {
+                table,
+                wasi,
+                sockets,
+            },
+        );
+
+        let (wasi, _instance) =
+            wasi::command::Command::instantiate_async(&mut store, &component, &linker).await?;
+
+        let result: Result<(), ()> = wasi.call_main(&mut store).await?;
+
+        if result.is_err() {
+            anyhow::bail!("command returned with failing exit status");
+        }
+
+        Ok(())
     } else if args.world == "proxy" {
-        run_proxy(&mut linker, &engine, &component, wasi_ctx).await?;
+        struct ProxyCtx {
+            table: Table,
+            wasi: WasiCtx,
+        }
+        impl WasiView for ProxyCtx {
+            fn table(&self) -> &Table {
+                &self.table
+            }
+            fn table_mut(&mut self) -> &mut Table {
+                &mut self.table
+            }
+            fn ctx(&self) -> &WasiCtx {
+                &self.wasi
+            }
+            fn ctx_mut(&mut self) -> &mut WasiCtx {
+                &mut self.wasi
+            }
+        }
+
+        let mut linker = Linker::new(&engine);
+        wasi::proxy::add_to_linker(&mut linker)?;
+
+        let mut store = Store::new(&engine, ProxyCtx { table, wasi });
+
+        let (wasi, _instance) =
+            wasi::proxy::Proxy::instantiate_async(&mut store, &component, &linker).await?;
+
+        // TODO: do something
+        let _ = wasi;
+        let result: Result<(), ()> = Ok(());
+
+        if result.is_err() {
+            anyhow::bail!("proxy returned with failing exit status");
+        }
+
+        Ok(())
+    } else {
+        anyhow::bail!("no such world {}", args.world)
     }
-
-    Ok(())
-}
-
-async fn run_command(
-    linker: &mut Linker<WasiCtx>,
-    engine: &Engine,
-    component: &Component,
-    wasi_ctx: WasiCtx,
-) -> anyhow::Result<()> {
-    wasi::command::add_to_linker(linker, |x| x)?;
-    let mut store = Store::new(engine, wasi_ctx);
-
-    let (wasi, _instance) =
-        wasi::command::Command::instantiate_async(&mut store, component, linker).await?;
-
-    let result: Result<(), ()> = wasi.call_main(&mut store).await?;
-
-    if result.is_err() {
-        anyhow::bail!("command returned with failing exit status");
-    }
-
-    Ok(())
-}
-
-async fn run_proxy(
-    linker: &mut Linker<WasiCtx>,
-    engine: &Engine,
-    component: &Component,
-    wasi_ctx: WasiCtx,
-) -> anyhow::Result<()> {
-    wasi::proxy::add_to_linker(linker, |x| x)?;
-
-    let mut store = Store::new(engine, wasi_ctx);
-
-    let (wasi, _instance) =
-        wasi::proxy::Proxy::instantiate_async(&mut store, component, linker).await?;
-
-    // TODO: do something
-    let _ = wasi;
-    let result: Result<(), ()> = Ok(());
-
-    if result.is_err() {
-        anyhow::bail!("proxy returned with failing exit status");
-    }
-
-    Ok(())
 }
