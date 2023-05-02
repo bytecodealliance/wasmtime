@@ -4,19 +4,46 @@
 use crate::wasi;
 use wiggle::GuestPtr;
 
-pub struct WasiPreview1Adapter {/* all members private and only used inside this module */}
+pub struct WasiPreview1Adapter {/* all members private and only used inside this module. also, this struct should be Send. */}
 impl WasiPreview1Adapter {
-    // This should be the only public interface of this struct:
+    // This should be the only public interface of this struct. It should take
+    // no parameters: anything it needs from the preview 2 implementation
+    // should be retrieved lazily.
     pub fn new() -> Self {
         todo!()
     }
 }
 
+// Any context that needs to support preview 1 will impl this trait. They can
+// construct the needed member with WasiPreview1Adapter::new().
 pub trait WasiPreview1View: Send {
     fn adapter(&self) -> &WasiPreview1Adapter;
     fn adapter_mut(&mut self) -> &mut WasiPreview1Adapter;
 }
 
+// This becomes the only way to add preview 1 support to a wasmtime (module)
+// Linker:
+pub fn add_to_linker<
+    T: WasiPreview1View
+        + wasi::environment::Host
+        + wasi::exit::Host
+        + wasi::filesystem::Host
+        + wasi::monotonic_clock::Host
+        + wasi::poll::Host
+        + wasi::preopens::Host
+        + wasi::random::Host
+        + wasi::streams::Host
+        + wasi::wall_clock::Host,
+>(
+    linker: &mut wasmtime::Linker<T>,
+) -> anyhow::Result<()> {
+    wasi_snapshot_preview1::add_to_linker(linker, |t| t)
+}
+
+// Generate the wasi_snapshot_preview1::WasiSnapshotPreview1 trait,
+// and the module types.
+// None of the generated modules, traits, or types should be used externally
+// to this module.
 wiggle::from_witx!({
     witx: ["$CARGO_MANIFEST_DIR/witx/wasi_snapshot_preview1.witx"],
     errors: { errno => trappable Error },
@@ -29,11 +56,12 @@ impl wiggle::GuestErrorType for types::Errno {
     }
 }
 
+// Implement the WasiSnapshotPreview1 trait using only the traits that are
+// required for T, i.e., in terms of the preview 2 wit interface, and state
+// stored in the WasiPreview1Adapter struct.
 #[wiggle::async_trait]
 impl<
         T: WasiPreview1View
-            // Use only the following set of traits, and the
-            // WasiPreview1Adapter state, to implement all of these functions:
             + wasi::environment::Host
             + wasi::exit::Host
             + wasi::filesystem::Host
