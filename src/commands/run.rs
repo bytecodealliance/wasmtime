@@ -10,7 +10,8 @@ use std::path::{Component, Path, PathBuf};
 use std::thread;
 use std::time::Duration;
 use wasmtime::{
-    Engine, Func, Linker, Module, Store, StoreLimits, StoreLimitsBuilder, Val, ValType,
+    Engine, Func, GuestProfiler, Linker, Module, Store, StoreLimits, StoreLimitsBuilder, Val,
+    ValType,
 };
 use wasmtime_cli_flags::{CommonOptions, WasiModules};
 use wasmtime_wasi::maybe_exit_on_error;
@@ -168,6 +169,23 @@ pub struct RunCommand {
     )]
     wasm_timeout: Option<Duration>,
 
+    /// Enable in-process sampling profiling of the guest WebAssembly program,
+    /// and write the captured profile to the given path. The resulting file
+    /// can be viewed using https://profiler.firefox.com/.
+    #[clap(long, value_name = "PATH")]
+    profile_guest: Option<PathBuf>,
+
+    /// Sampling interval for in-process profiling with `--profile-guest`. When
+    /// used together with `--wasm-timeout`, the timeout will be rounded up to
+    /// the nearest multiple of this interval.
+    #[clap(
+        long,
+        default_value = "10ms",
+        value_name = "TIME",
+        parse(try_from_str = parse_dur),
+    )]
+    profile_guest_interval: Duration,
+
     /// Enable coredump generation after a WebAssembly trap.
     #[clap(long = "coredump-on-trap", value_name = "PATH")]
     coredump_on_trap: Option<String>,
@@ -216,9 +234,11 @@ impl RunCommand {
         self.common.init_logging();
 
         let mut config = self.common.config(None)?;
-        if self.wasm_timeout.is_some() {
+
+        if self.wasm_timeout.is_some() || self.profile_guest.is_some() {
             config.epoch_interruption(true);
         }
+
         let engine = Engine::new(&config)?;
 
         let preopen_sockets = self.compute_preopen_sockets()?;
@@ -239,6 +259,7 @@ impl RunCommand {
 
         // Read the wasm module binary either as `*.wat` or a raw binary.
         let module = self.load_module(linker.engine(), &self.module)?;
+        let mut modules = vec![(String::new(), module.clone())];
 
         let host = Host::default();
         let mut store = Store::new(&engine, host);
@@ -285,6 +306,7 @@ impl RunCommand {
         for (name, path) in self.preloads.iter() {
             // Read the wasm module binary either as `*.wat` or a raw binary
             let module = self.load_module(&engine, path)?;
+            modules.push((name.clone(), module.clone()));
 
             // Add the module's functions to the linker.
             linker.module(&mut store, name, &module).context(format!(
@@ -296,7 +318,7 @@ impl RunCommand {
 
         // Load the main wasm module.
         match self
-            .load_main_module(&mut store, &mut linker, module)
+            .load_main_module(&mut store, &mut linker, module, modules, &argv[0])
             .with_context(|| format!("failed to run main module `{}`", self.module.display()))
         {
             Ok(()) => (),
@@ -370,12 +392,63 @@ impl RunCommand {
         result
     }
 
-    fn load_main_module(
+    fn setup_epoch_handler(
         &self,
         store: &mut Store<Host>,
-        linker: &mut Linker<Host>,
-        module: Module,
-    ) -> Result<()> {
+        module_name: &str,
+        modules: Vec<(String, Module)>,
+    ) -> Box<dyn FnOnce(&mut Store<Host>)> {
+        if let Some(path) = &self.profile_guest {
+            let interval = self.profile_guest_interval;
+            store.data_mut().guest_profiler =
+                Some(Arc::new(GuestProfiler::new(module_name, interval, modules)));
+
+            if let Some(timeout) = self.wasm_timeout {
+                let mut timeout = (timeout.as_secs_f64() / interval.as_secs_f64()).ceil() as u64;
+                assert!(timeout > 0);
+                store.epoch_deadline_callback(move |mut store| {
+                    Arc::get_mut(store.data_mut().guest_profiler.as_mut().unwrap())
+                        .expect("profiling doesn't support threads yet")
+                        .sample();
+                    timeout -= 1;
+                    if timeout == 0 {
+                        bail!("timeout exceeded");
+                    }
+                    Ok(1)
+                });
+            } else {
+                store.epoch_deadline_callback(move |mut store| {
+                    Arc::get_mut(store.data_mut().guest_profiler.as_mut().unwrap())
+                        .expect("profiling doesn't support threads yet")
+                        .sample();
+                    Ok(1)
+                });
+            }
+
+            store.set_epoch_deadline(1);
+            let engine = store.engine().clone();
+            thread::spawn(move || loop {
+                thread::sleep(interval);
+                engine.increment_epoch();
+            });
+
+            let path = path.clone();
+            return Box::new(move |store| {
+                let profiler = Arc::try_unwrap(store.data_mut().guest_profiler.take().unwrap())
+                    .expect("profiling doesn't support threads yet");
+                if let Err(e) = std::fs::File::create(&path)
+                    .map_err(anyhow::Error::new)
+                    .and_then(|output| profiler.finish(std::io::BufWriter::new(output)))
+                {
+                    eprintln!("failed writing profile at {}: {e:#}", path.display());
+                } else {
+                    eprintln!();
+                    eprintln!("Profile written to: {}", path.display());
+                    eprintln!("View this profile at https://profiler.firefox.com/.");
+                }
+            });
+        }
+
         if let Some(timeout) = self.wasm_timeout {
             store.set_epoch_deadline(1);
             let engine = store.engine().clone();
@@ -385,6 +458,17 @@ impl RunCommand {
             });
         }
 
+        Box::new(|_store| {})
+    }
+
+    fn load_main_module(
+        &self,
+        store: &mut Store<Host>,
+        linker: &mut Linker<Host>,
+        module: Module,
+        modules: Vec<(String, Module)>,
+        module_name: &str,
+    ) -> Result<()> {
         // The main module might be allowed to have unknown imports, which
         // should be defined as traps:
         if self.trap_unknown_imports {
@@ -402,20 +486,25 @@ impl RunCommand {
             .context(format!("failed to instantiate {:?}", self.module))?;
 
         // If a function to invoke was given, invoke it.
-        if let Some(name) = self.invoke.as_ref() {
-            self.invoke_export(store, linker, name)
+        let func = if let Some(name) = &self.invoke {
+            self.find_export(store, linker, name)?
         } else {
-            let func = linker.get_default(&mut *store, "")?;
-            self.invoke_func(store, func, None)
-        }
+            linker.get_default(&mut *store, "")?
+        };
+
+        // Finish all lookups before starting any epoch timers.
+        let finish_epoch_handler = self.setup_epoch_handler(store, module_name, modules);
+        let result = self.invoke_func(store, func);
+        finish_epoch_handler(store);
+        result
     }
 
-    fn invoke_export(
+    fn find_export(
         &self,
         store: &mut Store<Host>,
         linker: &Linker<Host>,
         name: &str,
-    ) -> Result<()> {
+    ) -> Result<Func> {
         let func = match linker
             .get(&mut *store, "", name)
             .ok_or_else(|| anyhow!("no export named `{}` found", name))?
@@ -424,10 +513,10 @@ impl RunCommand {
             Some(func) => func,
             None => bail!("export of `{}` wasn't a function", name),
         };
-        self.invoke_func(store, func, Some(name))
+        Ok(func)
     }
 
-    fn invoke_func(&self, store: &mut Store<Host>, func: Func, name: Option<&str>) -> Result<()> {
+    fn invoke_func(&self, store: &mut Store<Host>, func: Func) -> Result<()> {
         let ty = func.ty(&store);
         if ty.params().len() > 0 {
             eprintln!(
@@ -441,7 +530,7 @@ impl RunCommand {
             let val = match args.next() {
                 Some(s) => s,
                 None => {
-                    if let Some(name) = name {
+                    if let Some(name) = &self.invoke {
                         bail!("not enough arguments for `{}`", name)
                     } else {
                         bail!("not enough arguments for command default")
@@ -464,7 +553,7 @@ impl RunCommand {
         // out, if there are any.
         let mut results = vec![Val::null(); ty.results().len()];
         let invoke_res = func.call(store, &values, &mut results).with_context(|| {
-            if let Some(name) = name {
+            if let Some(name) = &self.invoke {
                 format!("failed to invoke `{}`", name)
             } else {
                 format!("failed to invoke command default")
@@ -536,6 +625,7 @@ struct Host {
     #[cfg(feature = "wasi-http")]
     wasi_http: Option<WasiHttp>,
     limits: StoreLimits,
+    guest_profiler: Option<Arc<GuestProfiler>>,
 }
 
 /// Populates the given `Linker` with WASI APIs.

@@ -304,7 +304,9 @@ impl Backtrace {
     }
 
     /// Iterate over the frames inside this backtrace.
-    pub fn frames<'a>(&'a self) -> impl ExactSizeIterator<Item = &'a Frame> + 'a {
+    pub fn frames<'a>(
+        &'a self,
+    ) -> impl ExactSizeIterator<Item = &'a Frame> + DoubleEndedIterator + 'a {
         self.0.iter()
     }
 }
