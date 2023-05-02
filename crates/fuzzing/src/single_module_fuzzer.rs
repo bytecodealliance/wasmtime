@@ -11,7 +11,9 @@
 //! To help with this the module here implements a scheme where Wasmtime's fuzz
 //! inputs are highly likely to be of the form:
 //!
-//!     [ ... wasm module ... ][ .. fuzz custom section .. ]
+//! ```text
+//! [ ... wasm module ... ][ .. fuzz custom section .. ]
+//! ```
 //!
 //! The `fuzz custom section` here contains the original fuzz input used to
 //! generate the `wasm module`, and if the DNA hasn't changed then it should
