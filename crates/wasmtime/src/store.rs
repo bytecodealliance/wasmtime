@@ -1228,7 +1228,13 @@ impl StoreOpaque {
     pub fn gc(&mut self) {
         // For this crate's API, we ensure that `set_stack_canary` invariants
         // are upheld for all host-->Wasm calls.
-        unsafe { wasmtime_runtime::gc(&self.modules, &mut self.externref_activations_table) }
+        unsafe {
+            wasmtime_runtime::gc(
+                self.runtime_limits(),
+                &self.modules,
+                &mut self.externref_activations_table,
+            )
+        }
     }
 
     /// Yields the async context, assuming that we are executing on a fiber and

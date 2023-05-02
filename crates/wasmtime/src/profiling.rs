@@ -1,3 +1,4 @@
+use crate::{AsContext, Module};
 use anyhow::Result;
 use fxprof_processed_profile::debugid::DebugId;
 use fxprof_processed_profile::{
@@ -9,8 +10,6 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use wasmtime_jit::CompiledModule;
 use wasmtime_runtime::Backtrace;
-
-use crate::Module;
 
 // TODO: collect more data
 // - Provide additional hooks for recording host-guest transitions, to be
@@ -129,12 +128,12 @@ impl GuestProfiler {
     /// any stack frames for allowed modules on the current stack. It should
     /// typically be called from a callback registered using
     /// [`Store::epoch_deadline_callback()`](crate::Store::epoch_deadline_callback).
-    pub fn sample(&mut self) {
+    pub fn sample(&mut self, store: impl AsContext) {
         let now = Timestamp::from_nanos_since_reference(
             self.start.elapsed().as_nanos().try_into().unwrap(),
         );
 
-        let backtrace = Backtrace::new();
+        let backtrace = Backtrace::new(store.as_context().0.vmruntime_limits());
         let frames = backtrace
             .frames()
             // Samply needs to see the oldest frame first, but we list the newest

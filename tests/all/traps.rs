@@ -1,6 +1,7 @@
 use anyhow::{bail, Error, Result};
 use std::panic::{self, AssertUnwindSafe};
 use std::process::Command;
+use std::sync::{Arc, Mutex};
 use wasmtime::*;
 
 #[test]
@@ -1515,6 +1516,128 @@ fn dont_see_stale_stack_walking_registers() -> Result<()> {
 
     let err = get_trap.call(&mut store, &[], &mut []).unwrap_err();
     assert!(err.to_string().contains("trap!!!"));
+
+    Ok(())
+}
+
+#[test]
+fn same_module_multiple_stores() -> Result<()> {
+    let _ = env_logger::try_init();
+
+    let engine = Engine::default();
+
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (import "" "f" (func $f))
+                (import "" "call_ref" (func $call_ref (param funcref)))
+                (global $g (mut i32) (i32.const 0))
+                (func $a (export "a")
+                    call $b
+                )
+                (func $b
+                    call $c
+                )
+                (func $c
+                    global.get $g
+                    if
+                        call $f
+                    else
+                        i32.const 1
+                        global.set $g
+                        ref.func $a
+                        call $call_ref
+                    end
+                )
+            )
+        "#,
+    )?;
+
+    let stacks = Arc::new(Mutex::new(vec![]));
+
+    let mut store3 = Store::new(&engine, ());
+    let f3 = Func::new(&mut store3, FuncType::new([], []), {
+        let stacks = stacks.clone();
+        move |caller, _params, _results| {
+            stacks
+                .lock()
+                .unwrap()
+                .push(WasmBacktrace::force_capture(caller));
+            Ok(())
+        }
+    });
+    let call_ref3 = Func::wrap(&mut store3, |caller: Caller<'_, _>, f: Option<Func>| {
+        f.unwrap().call(caller, &[], &mut [])
+    });
+    let instance3 = Instance::new(&mut store3, &module, &[f3.into(), call_ref3.into()])?;
+
+    let mut store2 = Store::new(&engine, store3);
+    let f2 = Func::new(&mut store2, FuncType::new([], []), {
+        let stacks = stacks.clone();
+        move |mut caller, _params, _results| {
+            stacks
+                .lock()
+                .unwrap()
+                .push(WasmBacktrace::force_capture(&mut caller));
+            instance3
+                .get_typed_func::<(), ()>(caller.data_mut(), "a")
+                .unwrap()
+                .call(caller.data_mut(), ())
+                .unwrap();
+            Ok(())
+        }
+    });
+    let call_ref2 = Func::wrap(&mut store2, |caller: Caller<'_, _>, f: Option<Func>| {
+        f.unwrap().call(caller, &[], &mut [])
+    });
+    let instance2 = Instance::new(&mut store2, &module, &[f2.into(), call_ref2.into()])?;
+
+    let mut store1 = Store::new(&engine, store2);
+    let f1 = Func::new(&mut store1, FuncType::new([], []), {
+        let stacks = stacks.clone();
+        move |mut caller, _params, _results| {
+            stacks
+                .lock()
+                .unwrap()
+                .push(WasmBacktrace::force_capture(&mut caller));
+            instance2
+                .get_typed_func::<(), ()>(caller.data_mut(), "a")
+                .unwrap()
+                .call(caller.data_mut(), ())
+                .unwrap();
+            Ok(())
+        }
+    });
+    let call_ref1 = Func::wrap(&mut store1, |caller: Caller<'_, _>, f: Option<Func>| {
+        f.unwrap().call(caller, &[], &mut [])
+    });
+    let instance1 = Instance::new(&mut store1, &module, &[f1.into(), call_ref1.into()])?;
+
+    instance1
+        .get_typed_func(&mut store1, "a")?
+        .call(&mut store1, ())?;
+
+    let expected_stacks = vec![
+        // [f1, c1, b1, a1, call_ref1, c1, b1, a1]
+        vec!["c", "b", "a", "c", "b", "a"],
+        // [f2, c2, b2, a2, call_ref2, c2, b2, a2, f1, c1, b1, a1, call_ref1, c1, b1, a1]
+        vec!["c", "b", "a", "c", "b", "a"],
+        // [f3, c3, b3, a3, call_ref3, c3, b3, a3, f2, c2, b2, a2, call_ref2, c2, b2, a2, f1, c1, b1, a1, call_ref1, c1, b1, a1]
+        vec!["c", "b", "a", "c", "b", "a"],
+    ];
+    eprintln!("expected = {expected_stacks:#?}");
+    let actual_stacks = stacks.lock().unwrap();
+    eprintln!("actaul = {actual_stacks:#?}");
+
+    assert_eq!(actual_stacks.len(), expected_stacks.len());
+    for (expected_stack, actual_stack) in expected_stacks.into_iter().zip(actual_stacks.iter()) {
+        assert_eq!(expected_stack.len(), actual_stack.frames().len());
+        for (expected_frame, actual_frame) in expected_stack.into_iter().zip(actual_stack.frames())
+        {
+            assert_eq!(actual_frame.func_name(), Some(expected_frame));
+        }
+    }
 
     Ok(())
 }

@@ -375,7 +375,7 @@ impl CallThreadState {
                 needs_backtrace: false,
                 ..
             }) => None,
-            UnwindReason::Trap(_) => self.capture_backtrace(None),
+            UnwindReason::Trap(_) => self.capture_backtrace(self.limits, None),
         };
         unsafe {
             (*self.unwind.get()).as_mut_ptr().write((reason, backtrace));
@@ -429,7 +429,7 @@ impl CallThreadState {
     }
 
     fn set_jit_trap(&self, pc: *const u8, fp: usize, faulting_addr: Option<usize>) {
-        let backtrace = self.capture_backtrace(Some((pc as usize, fp)));
+        let backtrace = self.capture_backtrace(self.limits, Some((pc as usize, fp)));
         unsafe {
             (*self.unwind.get()).as_mut_ptr().write((
                 UnwindReason::Trap(TrapReason::Jit {
@@ -441,12 +441,16 @@ impl CallThreadState {
         }
     }
 
-    fn capture_backtrace(&self, pc_and_fp: Option<(usize, usize)>) -> Option<Backtrace> {
+    fn capture_backtrace(
+        &self,
+        limits: *const VMRuntimeLimits,
+        trap_pc_and_fp: Option<(usize, usize)>,
+    ) -> Option<Backtrace> {
         if !self.capture_backtrace {
             return None;
         }
 
-        Some(unsafe { Backtrace::new_with_trap_state(self, pc_and_fp) })
+        Some(unsafe { Backtrace::new_with_trap_state(limits, self, trap_pc_and_fp) })
     }
 
     pub(crate) fn iter<'a>(&'a self) -> impl Iterator<Item = &Self> + 'a {
