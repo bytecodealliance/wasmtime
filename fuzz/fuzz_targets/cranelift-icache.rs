@@ -54,7 +54,7 @@ impl FunctionWithIsa {
 
         let mut gen = FuzzGen::new(u);
         let flags = gen
-            .generate_flags(architecture)
+            .generate_flags(architecture, None)
             .map_err(|_| arbitrary::Error::IncorrectFormat)?;
         gen.set_isa_flags(&mut builder, IsaFlagGen::All)?;
         let isa = builder

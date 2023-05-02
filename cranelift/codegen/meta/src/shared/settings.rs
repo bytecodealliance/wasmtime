@@ -325,6 +325,25 @@ pub(crate) fn define() -> SettingGroup {
         false,
     );
 
+    settings.add_num(
+        "control_plane_fuel",
+        "The fuel limit of the control plane.",
+        r#"
+            Currently only used by chaos mode.
+
+            This may be used to pinpoint the source of a bug discovered
+            by chaos mode using bisection. The control plane will generate
+            no more perturbations than this fuel limit specifies.
+            Since the order of perturbations is deterministic, this allows
+            searching for the source of a bug efficiently.
+
+            The default is 0, which translates to the fuel limit being
+            disabled. Unless the feature "chaos" of cranelift-control is
+            enabled, this option has no effect.
+        "#,
+        0,
+    );
+
     // When adding new settings please check if they can also be added
     // in cranelift/fuzzgen/src/lib.rs for fuzzing.
     settings.build()

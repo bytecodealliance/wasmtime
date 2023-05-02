@@ -1,27 +1,28 @@
 use std::fmt::Display;
 
-use arbitrary::Arbitrary;
+use arbitrary::Unstructured;
 
 /// The control plane of chaos mode.
 /// Please see the [crate-level documentation](crate).
 #[derive(Debug, Clone, Default)]
 pub struct ControlPlane {
     data: Vec<bool>,
-    fuel: Option<u32>,
-}
-
-impl Arbitrary<'_> for ControlPlane {
-    fn arbitrary<'a>(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
-        Ok(Self {
-            data: u.arbitrary()?,
-            fuel: None,
-        })
-    }
+    fuel: Option<u8>,
 }
 
 impl ControlPlane {
-    /// Returns `true` if fuel wasn't activated in the first place, `false`
-    /// if there is no more fuel available.
+    /// Generate a new control plane using arbitrary and a given [fuel
+    /// limit](crate#fuel-limit). The fuel limit should be determined by the
+    /// cranelift setting `control_plane_fuel`.
+    pub fn new(u: &mut Unstructured, fuel: u8) -> arbitrary::Result<Self> {
+        Ok(Self {
+            data: u.arbitrary()?,
+            fuel: (fuel != 0).then_some(fuel),
+        })
+    }
+
+    /// Tries to consume fuel, returning `true` if successful (or if
+    /// fuel-limiting is disabled).
     fn consume_fuel(&mut self) -> bool {
         match self.fuel {
             None => true,               // fuel deactivated
@@ -31,13 +32,6 @@ impl ControlPlane {
                 true
             }
         }
-    }
-
-    /// Set the maximum number of perturbations to be introduced with chaos
-    /// mode. Can be used to binary-search for a perturbation that triggered
-    /// a bug.
-    pub fn set_fuel(&mut self, fuel: u32) {
-        self.fuel = Some(fuel)
     }
 
     /// Returns a pseudo-random boolean if the control plane was constructed

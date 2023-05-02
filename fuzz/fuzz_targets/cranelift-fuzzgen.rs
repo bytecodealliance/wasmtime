@@ -181,11 +181,15 @@ impl TestCase {
 
         let compare_against_host = gen.u.arbitrary()?;
 
+        let fuel = std::env::args()
+            .find_map(|arg| arg.strip_prefix("--fuel=").map(|s| s.to_owned()))
+            .map(|fuel| fuel.parse().expect("fuel should be a valid integer"));
+
         // TestCase is meant to be consumed by a runner, so we make the assumption here that we're
         // generating a TargetIsa for the host.
         let mut builder =
             builder_with_options(true).expect("Unable to build a TargetIsa for the current host");
-        let flags = gen.generate_flags(builder.triple().architecture)?;
+        let flags = gen.generate_flags(builder.triple().architecture, fuel)?;
         gen.set_isa_flags(&mut builder, IsaFlagGen::Host)?;
         let isa = builder.finish(flags)?;
 
@@ -218,7 +222,7 @@ impl TestCase {
             )?;
             functions.push(func);
 
-            ctrl_planes.push(ControlPlane::arbitrary(gen.u)?);
+            ctrl_planes.push(ControlPlane::new(gen.u, isa.flags().control_plane_fuel())?);
         }
         // Now reverse the functions so that the main function is at the start.
         functions.reverse();
@@ -359,14 +363,6 @@ fuzz_target!(|testcase: TestCase| {
     // This is the default, but we should ensure that it wasn't accidentally turned off anywhere.
     assert!(testcase.isa.flags().enable_verifier());
 
-    let mut ctrl_planes = testcase.ctrl_planes.clone();
-    if let Some(fuel) =
-        std::env::args().find_map(|arg| arg.strip_prefix("--fuel=").map(|s| s.to_owned()))
-    {
-        let fuel = fuel.parse().expect("fuel should be a valid integer");
-        ctrl_planes.iter_mut().for_each(|cp| cp.set_fuel(fuel));
-    }
-
     // Periodically print statistics
     let valid_inputs = STATISTICS.valid_inputs.fetch_add(1, Ordering::SeqCst);
     if valid_inputs != 0 && valid_inputs % 10000 == 0 {
@@ -386,7 +382,7 @@ fuzz_target!(|testcase: TestCase| {
     } else {
         let mut compiler = TestFileCompiler::new(testcase.isa.clone());
         compiler
-            .add_functions(&testcase.functions[..], ctrl_planes)
+            .add_functions(&testcase.functions[..], testcase.ctrl_planes.clone())
             .unwrap();
         let compiled = compiler.compile().unwrap();
         let trampoline = compiled.get_trampoline(testcase.main()).unwrap();
