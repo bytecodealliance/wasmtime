@@ -82,7 +82,11 @@ impl Mmap {
                     .context(format!("mmap failed to reserve {mapping_size:#x} bytes"))?,
                 file: None,
             };
-            result.make_accessible(0, accessible_size)?;
+            if accessible_size > 0 {
+                result.make_accessible(0, accessible_size).context(format!(
+                    "mmap failed to allocate {accessible_size:#x} bytes"
+                ))?;
+            }
             Ok(result)
         }
     }
