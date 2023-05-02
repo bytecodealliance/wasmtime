@@ -808,13 +808,31 @@ pub fn set_fuel<T>(store: &mut Store<T>, fuel: u64) {
 /// arbitrary types and values.
 pub fn dynamic_component_api_target(input: &mut arbitrary::Unstructured) -> arbitrary::Result<()> {
     use crate::generators::component_types;
-    use component_fuzz_util::{TestCase, EXPORT_FUNCTION, IMPORT_FUNCTION};
+    use component_fuzz_util::{TestCase, Type, EXPORT_FUNCTION, IMPORT_FUNCTION, MAX_TYPE_DEPTH};
     use component_test_util::FuncExt;
     use wasmtime::component::{Component, Linker, Val};
 
     crate::init_fuzzing();
 
-    let case = input.arbitrary::<TestCase>()?;
+    let mut types = Vec::new();
+    let mut type_fuel = 500;
+
+    for _ in 0..5 {
+        types.push(Type::generate(input, MAX_TYPE_DEPTH, &mut type_fuel)?);
+    }
+    let params = (0..input.int_in_range(0..=5)?)
+        .map(|_| input.choose(&types))
+        .collect::<arbitrary::Result<Vec<_>>>()?;
+    let results = (0..input.int_in_range(0..=5)?)
+        .map(|_| input.choose(&types))
+        .collect::<arbitrary::Result<Vec<_>>>()?;
+
+    let case = TestCase {
+        params,
+        results,
+        encoding1: input.arbitrary()?,
+        encoding2: input.arbitrary()?,
+    };
 
     let mut config = component_test_util::config();
     config.debug_adapter_modules(input.arbitrary()?);
