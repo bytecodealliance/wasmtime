@@ -205,7 +205,7 @@ impl BlockLoweringOrder {
                 // impact on correctness. The order of the blocks is generally
                 // relevant: Uses must be seen before defs for dead-code
                 // elimination.
-                let succs = ctrl_plane.get_permutation(block_succs[range].iter_mut().enumerate());
+                let succs = ctrl_plane.shuffled(block_succs[range].iter_mut().enumerate());
 
                 for (succ_ix, lb) in succs {
                     let succ = lb.orig_block().unwrap();

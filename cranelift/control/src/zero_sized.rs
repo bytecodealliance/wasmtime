@@ -36,7 +36,7 @@ impl ControlPlane {
     /// a pseudo-random order. This variant is used when chaos mode is
     /// disabled. It always returns the same order.
     #[inline]
-    pub fn get_permutation<T>(&mut self, iter: impl Iterator<Item = T>) -> impl Iterator<Item = T> {
+    pub fn shuffled<T>(&mut self, iter: impl Iterator<Item = T>) -> impl Iterator<Item = T> {
         iter
     }
 }

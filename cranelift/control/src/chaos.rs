@@ -70,7 +70,7 @@ impl ControlPlane {
     /// The default value, an iterator with an unchanged order, will always
     /// be returned if the pseudo-random data is exhausted or the control
     /// plane was constructed with `default`.
-    pub fn get_permutation<T>(&mut self, iter: impl Iterator<Item = T>) -> impl Iterator<Item = T> {
+    pub fn shuffled<T>(&mut self, iter: impl Iterator<Item = T>) -> impl Iterator<Item = T> {
         let mut slice: Vec<_> = iter.collect();
         self.shuffle(&mut slice);
         slice.into_iter()
