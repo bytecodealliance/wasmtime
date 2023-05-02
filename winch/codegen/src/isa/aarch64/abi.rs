@@ -87,6 +87,14 @@ impl ABI for Aarch64ABI {
         todo!()
     }
 
+    fn fp_reg() -> Reg {
+        regs::fp()
+    }
+
+    fn vmctx_reg() -> Reg {
+        regs::xreg(9)
+    }
+
     fn callee_saved_regs(_call_conv: &CallingConvention) -> SmallVec<[Reg; 9]> {
         regs::callee_saved()
     }

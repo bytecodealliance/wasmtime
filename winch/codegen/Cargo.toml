@@ -19,6 +19,7 @@ target-lexicon = { workspace = true, features = ["std"] }
 cranelift-codegen = { workspace = true }
 regalloc2 = { workspace = true }
 gimli = { workspace = true }
+wasmtime-environ = { workspace = true }
 
 [features]
 x64 = ["cranelift-codegen/x86"]

@@ -9,12 +9,15 @@
 )
 ;;    0:	 55                   	push	rbp
 ;;    1:	 4889e5               	mov	rbp, rsp
-;;    4:	 b900000000           	mov	ecx, 0
-;;    9:	 b801000000           	mov	eax, 1
-;;    e:	 83f900               	cmp	ecx, 0
-;;   11:	 0f8405000000         	je	0x1c
-;;   17:	 99                   	cdq	
-;;   18:	 f7f9                 	idiv	ecx
-;;   1a:	 5d                   	pop	rbp
-;;   1b:	 c3                   	ret	
-;;   1c:	 0f0b                 	ud2	
+;;    4:	 4883ec08             	sub	rsp, 8
+;;    8:	 4c893424             	mov	qword ptr [rsp], r14
+;;    c:	 b900000000           	mov	ecx, 0
+;;   11:	 b801000000           	mov	eax, 1
+;;   16:	 83f900               	cmp	ecx, 0
+;;   19:	 0f8409000000         	je	0x28
+;;   1f:	 99                   	cdq	
+;;   20:	 f7f9                 	idiv	ecx
+;;   22:	 4883c408             	add	rsp, 8
+;;   26:	 5d                   	pop	rbp
+;;   27:	 c3                   	ret	
+;;   28:	 0f0b                 	ud2	

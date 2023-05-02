@@ -33,6 +33,7 @@
 //! |                               |
 //! |                               |
 //! |        Stack slots            |
+//! |        + `VMContext` slot     |
 //! |        + dynamic space        |
 //! |                               |
 //! |                               |
@@ -77,6 +78,13 @@ pub(crate) trait ABI {
 
     /// Returns the designated scratch register.
     fn scratch_reg() -> Reg;
+
+    /// Returns the frame pointer register.
+    fn fp_reg() -> Reg;
+
+    /// Returns the pinned register used to hold
+    /// the `VMContext`.
+    fn vmctx_reg() -> Reg;
 
     /// Returns the callee-saved registers for the given
     /// calling convention.

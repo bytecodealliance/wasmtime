@@ -121,6 +121,14 @@ impl ABI for X64ABI {
         regs::scratch()
     }
 
+    fn fp_reg() -> Reg {
+        regs::rbp()
+    }
+
+    fn vmctx_reg() -> Reg {
+        regs::vmctx()
+    }
+
     fn callee_saved_regs(call_conv: &CallingConvention) -> SmallVec<[Reg; 9]> {
         regs::callee_saved(call_conv)
     }
