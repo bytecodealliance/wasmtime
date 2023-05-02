@@ -578,7 +578,11 @@ pub trait ABIMachineSpec {
     ) -> SmallVec<[Self::I; 8]>;
 
     /// Get the number of spillslots required for the given register-class.
-    fn get_number_of_spillslots_for_value(rc: RegClass, target_vector_bytes: u32) -> u32;
+    fn get_number_of_spillslots_for_value(
+        rc: RegClass,
+        target_vector_bytes: u32,
+        isa_flags: &Self::F,
+    ) -> u32;
 
     /// Get the current virtual-SP offset from an instruction-emission state.
     fn get_virtual_sp_offset_from_state(s: &<Self::I as MachInstEmit>::State) -> i64;
@@ -1937,7 +1941,7 @@ impl<M: ABIMachineSpec> Callee<M> {
                 .map(|(_k, v)| v)
                 .unwrap()
         };
-        M::get_number_of_spillslots_for_value(rc, max)
+        M::get_number_of_spillslots_for_value(rc, max, &self.isa_flags)
     }
 
     /// Generate a spill.

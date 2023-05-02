@@ -43,6 +43,36 @@ pub struct Riscv64MachineDeps;
 
 impl IsaFlags for RiscvFlags {}
 
+impl RiscvFlags {
+    pub(crate) fn min_vec_reg_size(&self) -> u64 {
+        let entries = [
+            (self.has_zvl65536b(), 65536),
+            (self.has_zvl32768b(), 32768),
+            (self.has_zvl16384b(), 16384),
+            (self.has_zvl8192b(), 8192),
+            (self.has_zvl4096b(), 4096),
+            (self.has_zvl2048b(), 2048),
+            (self.has_zvl1024b(), 1024),
+            (self.has_zvl512b(), 512),
+            (self.has_zvl256b(), 256),
+            // In order to claim the Application Profile V extension, a minimum
+            // register size of 128 is required. i.e. V implies Zvl128b.
+            (self.has_v(), 128),
+            (self.has_zvl128b(), 128),
+            (self.has_zvl64b(), 64),
+            (self.has_zvl32b(), 32),
+        ];
+
+        for (has_flag, size) in entries.into_iter() {
+            if has_flag {
+                return size;
+            }
+        }
+
+        return 0;
+    }
+}
+
 impl ABIMachineSpec for Riscv64MachineDeps {
     type I = Inst;
     type F = RiscvFlags;
@@ -415,9 +445,9 @@ impl ABIMachineSpec for Riscv64MachineDeps {
             for reg in clobbered_callee_saves {
                 let r_reg = reg.to_reg();
                 let ty = match r_reg.class() {
-                    regalloc2::RegClass::Int => I64,
-                    regalloc2::RegClass::Float => F64,
-                    RegClass::Vector => unreachable!(),
+                    RegClass::Int => I64,
+                    RegClass::Float => F64,
+                    RegClass::Vector => unimplemented!("Vector Clobber Saves"),
                 };
                 if flags.unwind_info() {
                     insts.push(Inst::Unwind {
@@ -462,9 +492,9 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         for reg in &clobbered_callee_saves {
             let rreg = reg.to_reg();
             let ty = match rreg.class() {
-                regalloc2::RegClass::Int => I64,
-                regalloc2::RegClass::Float => F64,
-                RegClass::Vector => unreachable!(),
+                RegClass::Int => I64,
+                RegClass::Float => F64,
+                RegClass::Vector => unimplemented!("Vector Clobber Restores"),
             };
             insts.push(Self::gen_load_stack(
                 StackAMode::SPOffset(-cur_offset, ty),
@@ -572,12 +602,16 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         insts
     }
 
-    fn get_number_of_spillslots_for_value(rc: RegClass, _target_vector_bytes: u32) -> u32 {
+    fn get_number_of_spillslots_for_value(
+        rc: RegClass,
+        _target_vector_bytes: u32,
+        isa_flags: &RiscvFlags,
+    ) -> u32 {
         // We allocate in terms of 8-byte slots.
         match rc {
             RegClass::Int => 1,
             RegClass::Float => 1,
-            RegClass::Vector => unreachable!(),
+            RegClass::Vector => (isa_flags.min_vec_reg_size() / 8) as u32,
         }
     }
 
@@ -592,20 +626,24 @@ impl ABIMachineSpec for Riscv64MachineDeps {
     }
 
     fn get_regs_clobbered_by_call(_call_conv_of_callee: isa::CallConv) -> PRegSet {
-        let mut v = PRegSet::empty();
-        for (k, need_save) in CALLER_SAVE_X_REG.iter().enumerate() {
-            if !*need_save {
-                continue;
-            }
-            v.add(px_reg(k));
+        let x_clobbers = CALLER_SAVE_X_REG
+            .iter()
+            .enumerate()
+            .filter(|(_, clobbered)| **clobbered)
+            .map(|(i, _)| px_reg(i));
+        let f_clobbers = CALLER_SAVE_F_REG
+            .iter()
+            .enumerate()
+            .filter(|(_, clobbered)| **clobbered)
+            .map(|(i, _)| pf_reg(i));
+        // We clobber all vector registers (and vector state) on calls.
+        let v_clobbers = (0..=31).map(|i| pv_reg(i));
+
+        let mut clobbers = PRegSet::empty();
+        for clobber in x_clobbers.chain(f_clobbers).chain(v_clobbers) {
+            clobbers.add(clobber);
         }
-        for (k, need_save) in CALLER_SAVE_F_REG.iter().enumerate() {
-            if !*need_save {
-                continue;
-            }
-            v.add(pf_reg(k));
-        }
-        v
+        clobbers
     }
 
     fn get_clobbered_callee_saves(
@@ -680,10 +718,11 @@ const CALLEE_SAVE_F_REG: [bool; 32] = [
 /// This should be the registers that must be saved by callee.
 #[inline]
 fn is_reg_saved_in_prologue(_conv: CallConv, reg: RealReg) -> bool {
-    if reg.class() == RegClass::Int {
-        CALLEE_SAVE_X_REG[reg.hw_enc() as usize]
-    } else {
-        CALLEE_SAVE_F_REG[reg.hw_enc() as usize]
+    match reg.class() {
+        RegClass::Int => CALLEE_SAVE_X_REG[reg.hw_enc() as usize],
+        RegClass::Float => CALLEE_SAVE_F_REG[reg.hw_enc() as usize],
+        // All vector registers are caller saved.
+        RegClass::Vector => false,
     }
 }
 
@@ -697,7 +736,7 @@ fn compute_clobber_size(clobbers: &[Writable<RealReg>]) -> u32 {
             RegClass::Float => {
                 clobbered_size += 8;
             }
-            RegClass::Vector => unreachable!(),
+            RegClass::Vector => unimplemented!("Vector Size Clobbered"),
         }
     }
     align_to(clobbered_size, 16)
