@@ -4,8 +4,6 @@
 mod vm_host_func_context;
 
 use crate::externref::VMExternRef;
-use crate::instance::Instance;
-use std::any::Any;
 use std::cell::UnsafeCell;
 use std::marker;
 use std::ptr::NonNull;
@@ -965,32 +963,6 @@ impl VMContext {
         // opposed to a regular assertion.
         debug_assert_eq!((*opaque).magic, VMCONTEXT_MAGIC);
         opaque.cast()
-    }
-
-    /// Return a mutable reference to the associated `Instance`.
-    ///
-    /// # Safety
-    /// This is unsafe because it doesn't work on just any `VMContext`, it must
-    /// be a `VMContext` allocated as part of an `Instance`.
-    #[allow(clippy::cast_ptr_alignment)]
-    #[inline]
-    pub(crate) unsafe fn instance(&self) -> &Instance {
-        &*((self as *const Self as *mut u8).offset(-Instance::vmctx_offset()) as *const Instance)
-    }
-
-    #[inline]
-    pub(crate) unsafe fn instance_mut(&mut self) -> &mut Instance {
-        &mut *((self as *const Self as *mut u8).offset(-Instance::vmctx_offset()) as *mut Instance)
-    }
-
-    /// Return a reference to the host state associated with this `Instance`.
-    ///
-    /// # Safety
-    /// This is unsafe because it doesn't work on just any `VMContext`, it must
-    /// be a `VMContext` allocated as part of an `Instance`.
-    #[inline]
-    pub unsafe fn host_state(&self) -> &dyn Any {
-        self.instance().host_state()
     }
 }
 

@@ -448,26 +448,6 @@ impl<T> Store<T> {
     /// tables created to 10,000. This can be overridden with the
     /// [`Store::limiter`] configuration method.
     pub fn new(engine: &Engine, data: T) -> Self {
-        // Wasmtime uses the callee argument to host functions to learn about
-        // the original pointer to the `Store` itself, allowing it to
-        // reconstruct a `StoreContextMut<T>`. When we initially call a `Func`,
-        // however, there's no "callee" to provide. To fix this we allocate a
-        // single "default callee" for the entire `Store`. This is then used as
-        // part of `Func::call` to guarantee that the `callee: *mut VMContext`
-        // is never null.
-        let default_callee = {
-            let module = Arc::new(wasmtime_environ::Module::default());
-            let shim = BareModuleInfo::empty(module).into_traitobj();
-            OnDemandInstanceAllocator::default()
-                .allocate(InstanceAllocationRequest {
-                    host_state: Box::new(()),
-                    imports: Default::default(),
-                    store: StorePtr::empty(),
-                    runtime_info: &shim,
-                })
-                .expect("failed to allocate default callee")
-        };
-
         let mut inner = Box::new(StoreInner {
             inner: StoreOpaque {
                 _marker: marker::PhantomPinned,
@@ -493,7 +473,7 @@ impl<T> Store<T> {
                 },
                 out_of_gas_behavior: OutOfGas::Trap,
                 store_data: ManuallyDrop::new(StoreData::new()),
-                default_caller: default_callee,
+                default_caller: InstanceHandle::null(),
                 hostcall_val_storage: Vec::new(),
                 wasm_val_raw_storage: Vec::new(),
                 rooted_host_funcs: ManuallyDrop::new(Vec::new()),
@@ -504,18 +484,38 @@ impl<T> Store<T> {
             data: ManuallyDrop::new(data),
         });
 
-        // Once we've actually allocated the store itself we can configure the
-        // trait object pointer of the default callee. Note the erasure of the
-        // lifetime here into `'static`, so in general usage of this trait
-        // object must be strictly bounded to the `Store` itself, and is a
-        // variant that we have to maintain throughout Wasmtime.
-        unsafe {
-            let traitobj = std::mem::transmute::<
-                *mut (dyn wasmtime_runtime::Store + '_),
-                *mut (dyn wasmtime_runtime::Store + 'static),
-            >(&mut *inner);
-            inner.default_caller.set_store(traitobj);
-        }
+        // Wasmtime uses the callee argument to host functions to learn about
+        // the original pointer to the `Store` itself, allowing it to
+        // reconstruct a `StoreContextMut<T>`. When we initially call a `Func`,
+        // however, there's no "callee" to provide. To fix this we allocate a
+        // single "default callee" for the entire `Store`. This is then used as
+        // part of `Func::call` to guarantee that the `callee: *mut VMContext`
+        // is never null.
+        inner.default_caller = {
+            let module = Arc::new(wasmtime_environ::Module::default());
+            let shim = BareModuleInfo::empty(module).into_traitobj();
+            let mut instance = OnDemandInstanceAllocator::default()
+                .allocate(InstanceAllocationRequest {
+                    host_state: Box::new(()),
+                    imports: Default::default(),
+                    store: StorePtr::empty(),
+                    runtime_info: &shim,
+                })
+                .expect("failed to allocate default callee");
+
+            // Note the erasure of the lifetime here into `'static`, so in
+            // general usage of this trait object must be strictly bounded to
+            // the `Store` itself, and is a variant that we have to maintain
+            // throughout Wasmtime.
+            unsafe {
+                let traitobj = std::mem::transmute::<
+                    *mut (dyn wasmtime_runtime::Store + '_),
+                    *mut (dyn wasmtime_runtime::Store + 'static),
+                >(&mut *inner);
+                instance.set_store(traitobj);
+            }
+            instance
+        };
 
         Self {
             inner: ManuallyDrop::new(inner),
@@ -1395,7 +1395,7 @@ impl StoreOpaque {
 
     #[inline]
     pub fn default_caller(&self) -> *mut VMContext {
-        self.default_caller.vmctx_ptr()
+        self.default_caller.vmctx()
     }
 
     pub fn traitobj(&self) -> *mut dyn wasmtime_runtime::Store {

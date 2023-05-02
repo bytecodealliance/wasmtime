@@ -11,8 +11,8 @@ use std::pin::Pin;
 use std::ptr::{self, NonNull};
 use std::sync::Arc;
 use wasmtime_runtime::{
-    ExportFunction, InstanceHandle, StoreBox, VMArrayCallHostFuncContext, VMContext, VMFuncRef,
-    VMFunctionImport, VMNativeCallHostFuncContext, VMOpaqueContext, VMSharedSignatureIndex,
+    ExportFunction, StoreBox, VMArrayCallHostFuncContext, VMContext, VMFuncRef, VMFunctionImport,
+    VMNativeCallHostFuncContext, VMOpaqueContext, VMSharedSignatureIndex,
 };
 
 /// A WebAssembly function which can be called.
@@ -1792,17 +1792,18 @@ pub trait IntoFunc<T, Params, Results>: Send + Sync + 'static {
 /// recommended to use this type.
 pub struct Caller<'a, T> {
     pub(crate) store: StoreContextMut<'a, T>,
-    caller: &'a InstanceHandle,
+    caller: &'a wasmtime_runtime::Instance,
 }
 
 impl<T> Caller<'_, T> {
     unsafe fn with<R>(caller: *mut VMContext, f: impl FnOnce(Caller<'_, T>) -> R) -> R {
         assert!(!caller.is_null());
-        let instance = InstanceHandle::from_vmctx(caller);
-        let store = StoreContextMut::from_raw(instance.store());
-        f(Caller {
-            store,
-            caller: &instance,
+        wasmtime_runtime::Instance::from_vmctx(caller, |instance| {
+            let store = StoreContextMut::from_raw(instance.store());
+            f(Caller {
+                store,
+                caller: &instance,
+            })
         })
     }
 

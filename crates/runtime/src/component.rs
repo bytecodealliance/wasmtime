@@ -11,6 +11,7 @@ use crate::{
     VMNativeCallFunction, VMOpaqueContext, VMSharedSignatureIndex, VMWasmCallFunction, ValRaw,
 };
 use memoffset::offset_of;
+use sptr::Strict;
 use std::alloc::{self, Layout};
 use std::marker;
 use std::mem;
@@ -40,36 +41,19 @@ pub struct ComponentInstance {
     /// Size and offset information for the trailing `VMComponentContext`.
     offsets: VMComponentOffsets<HostPtr>,
 
-    /// A self-referential pointer to the `ComponentInstance` itself.
-    ///
-    /// The reason for this field's existence is a bit subtle because if you
-    /// have a pointer to `ComponentInstance` then why have this field which has
-    /// the same information? The subtlety here is due to the fact that this is
-    /// here to handle provenance and aliasing issues with optimizations in LLVM
-    /// and Rustc. Put another way, this is here to make MIRI happy. That's an
-    /// oversimplification, though, since this is actually required for
-    /// correctness to communicate the actual intent to LLVM's optimizations and
-    /// such.
-    ///
-    /// This field is chiefly used during `ComponentInstance::vmctx`. If you
-    /// think of pointers as a pair of address and provenance, this type stores
-    /// the provenance of the entire allocation. That's technically all we need
-    /// here, just the provenance, but that can only be done with storage of a
-    /// pointer hence the storage here.
-    ///
-    /// Finally note that there's a small wrapper around this to add `Send` and
-    /// `Sync` bounds, but serves no other purpose.
-    self_reference: RawComponentInstance,
+    /// For more information about this see the documentation on
+    /// `Instance::vmctx_self_reference`.
+    vmctx_self_reference: VMComponentContextSelfReference,
 
     /// A zero-sized field which represents the end of the struct for the actual
     /// `VMComponentContext` to be allocated behind.
     vmctx: VMComponentContext,
 }
 
-struct RawComponentInstance(NonNull<ComponentInstance>);
+struct VMComponentContextSelfReference(NonNull<VMComponentContext>);
 
-unsafe impl Send for RawComponentInstance {}
-unsafe impl Sync for RawComponentInstance {}
+unsafe impl Send for VMComponentContextSelfReference {}
+unsafe impl Sync for VMComponentContextSelfReference {}
 
 /// Type signature for host-defined trampolines that are called from
 /// WebAssembly.
@@ -174,7 +158,15 @@ impl ComponentInstance {
             ptr.as_ptr(),
             ComponentInstance {
                 offsets,
-                self_reference: RawComponentInstance(ptr),
+                vmctx_self_reference: VMComponentContextSelfReference(
+                    NonNull::new(
+                        ptr.as_ptr()
+                            .cast::<u8>()
+                            .add(mem::size_of::<ComponentInstance>())
+                            .cast(),
+                    )
+                    .unwrap(),
+                ),
                 vmctx: VMComponentContext {
                     _marker: marker::PhantomPinned,
                 },
@@ -185,13 +177,8 @@ impl ComponentInstance {
     }
 
     fn vmctx(&self) -> *mut VMComponentContext {
-        let self_ref = self.self_reference.0.as_ptr();
-        unsafe {
-            self_ref
-                .cast::<u8>()
-                .add(mem::size_of::<ComponentInstance>())
-                .cast()
-        }
+        let addr = std::ptr::addr_of!(self.vmctx);
+        Strict::with_addr(self.vmctx_self_reference.0.as_ptr(), Strict::addr(addr))
     }
 
     unsafe fn vmctx_plus_offset<T>(&self, offset: u32) -> *const T {

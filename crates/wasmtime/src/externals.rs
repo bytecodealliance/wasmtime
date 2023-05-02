@@ -7,7 +7,7 @@ use crate::{
 use anyhow::{anyhow, bail, Result};
 use std::mem;
 use std::ptr;
-use wasmtime_runtime::{self as runtime, InstanceHandle};
+use wasmtime_runtime::{self as runtime};
 
 // Externals
 
@@ -477,9 +477,10 @@ impl Table {
     ) -> *mut runtime::Table {
         unsafe {
             let export = &store[self.0];
-            let mut handle = InstanceHandle::from_vmctx(export.vmctx);
-            let idx = handle.table_index(&*export.definition);
-            handle.get_defined_table_with_lazy_init(idx, lazy_init_range)
+            wasmtime_runtime::Instance::from_vmctx(export.vmctx, |handle| {
+                let idx = handle.table_index(&*export.definition);
+                handle.get_defined_table_with_lazy_init(idx, lazy_init_range)
+            })
         }
     }
 

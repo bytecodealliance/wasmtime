@@ -53,13 +53,13 @@ pub use wasmtime_jit_debug::gdb_jit_int::GdbJitImageRegistration;
 pub use crate::export::*;
 pub use crate::externref::*;
 pub use crate::imports::Imports;
+#[cfg(feature = "pooling-allocator")]
+pub use crate::instance::{
+    Instance, InstanceLimits, PoolingInstanceAllocator, PoolingInstanceAllocatorConfig,
+};
 pub use crate::instance::{
     InstanceAllocationRequest, InstanceAllocator, InstanceHandle, OnDemandInstanceAllocator,
     StorePtr,
-};
-#[cfg(feature = "pooling-allocator")]
-pub use crate::instance::{
-    InstanceLimits, PoolingInstanceAllocator, PoolingInstanceAllocatorConfig,
 };
 pub use crate::memory::{
     DefaultMemoryCreator, Memory, RuntimeLinearMemory, RuntimeMemoryCreator, SharedMemory,

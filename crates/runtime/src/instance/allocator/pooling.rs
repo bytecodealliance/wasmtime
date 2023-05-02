@@ -794,12 +794,8 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
                 MemoryStyle::Dynamic { .. } => {}
             }
 
-            let memory = unsafe {
-                std::slice::from_raw_parts_mut(
-                    self.memories.get_base(index, defined_index),
-                    self.memories.max_accessible,
-                )
-            };
+            let base_ptr = self.memories.get_base(index, defined_index);
+            let base_capacity = self.memories.max_accessible;
 
             let mut slot = self.memories.take_memory_image_slot(index, defined_index);
             let image = req.runtime_info.memory_image(defined_index)?;
@@ -822,7 +818,8 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
 
             memories.push(Memory::new_static(
                 plan,
-                memory,
+                base_ptr,
+                base_capacity,
                 slot,
                 self.memories.memory_and_guard_size,
                 unsafe { &mut *req.store.get().unwrap() },

@@ -1190,6 +1190,16 @@ and does what it says on the tin, providing spin-based synchronization
 primitives.
 """
 
+[[audits.sptr]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "0.3.2"
+notes = """
+This crate is 90% documentation and does contain a good deal of `unsafe` code,
+but it's all doing what it says on the tin: being a stable polyfill for strict
+provenance APIs in the standard library while they're on Nightly.
+"""
+
 [[audits.system-interface]]
 who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
