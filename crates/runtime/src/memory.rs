@@ -295,8 +295,15 @@ impl RuntimeLinearMemory for MmapMemory {
             let mut new_mmap = Mmap::accessible_reserved(0, request_bytes)?;
             new_mmap.make_accessible(self.pre_guard_size, new_size)?;
 
-            new_mmap.as_mut_slice()[self.pre_guard_size..][..self.accessible]
-                .copy_from_slice(&self.mmap.as_slice()[self.pre_guard_size..][..self.accessible]);
+            // This method has an exclusive reference to `self.mmap` and just
+            // created `new_mmap` so it should be safe to acquire references
+            // into both of them and copy between them.
+            unsafe {
+                let range = self.pre_guard_size..self.pre_guard_size + self.accessible;
+                let src = self.mmap.slice(range.clone());
+                let dst = new_mmap.slice_mut(range);
+                dst.copy_from_slice(src);
+            }
 
             // Now drop the MemoryImageSlot, if any. We've lost the CoW
             // advantages by explicitly copying all data, but we have
@@ -347,7 +354,7 @@ impl RuntimeLinearMemory for MmapMemory {
     }
 
     fn wasm_accessible(&self) -> Range<usize> {
-        let base = self.mmap.as_mut_ptr() as usize + self.pre_guard_size;
+        let base = self.mmap.as_ptr() as usize + self.pre_guard_size;
         let end = base + (self.mmap.len() - self.pre_guard_size);
         base..end
     }

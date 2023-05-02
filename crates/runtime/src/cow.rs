@@ -899,14 +899,14 @@ mod test {
         assert!(memfd.is_dirty());
         // We should be able to access this 64 KiB (try both ends) and
         // it should consist of zeroes.
-        let slice = mmap.as_mut_slice();
+        let slice = unsafe { mmap.slice_mut(0..65536) };
         assert_eq!(0, slice[0]);
         assert_eq!(0, slice[65535]);
         slice[1024] = 42;
         assert_eq!(42, slice[1024]);
         // grow the heap
         memfd.set_heap_limit(128 << 10).unwrap();
-        let slice = mmap.as_slice();
+        let slice = unsafe { mmap.slice(0..1 << 20) };
         assert_eq!(42, slice[1024]);
         assert_eq!(0, slice[131071]);
         // instantiate again; we should see zeroes, even as the
@@ -914,7 +914,7 @@ mod test {
         memfd.clear_and_remain_ready(0).unwrap();
         assert!(!memfd.is_dirty());
         memfd.instantiate(64 << 10, None, &plan).unwrap();
-        let slice = mmap.as_slice();
+        let slice = unsafe { mmap.slice(0..65536) };
         assert_eq!(0, slice[1024]);
     }
 
@@ -931,37 +931,37 @@ mod test {
         // Instantiate with this image
         memfd.instantiate(64 << 10, Some(&image), &plan).unwrap();
         assert!(memfd.has_image());
-        let slice = mmap.as_mut_slice();
+        let slice = unsafe { mmap.slice_mut(0..65536) };
         assert_eq!(&[1, 2, 3, 4], &slice[4096..4100]);
         slice[4096] = 5;
         // Clear and re-instantiate same image
         memfd.clear_and_remain_ready(0).unwrap();
         memfd.instantiate(64 << 10, Some(&image), &plan).unwrap();
-        let slice = mmap.as_slice();
+        let slice = unsafe { mmap.slice_mut(0..65536) };
         // Should not see mutation from above
         assert_eq!(&[1, 2, 3, 4], &slice[4096..4100]);
         // Clear and re-instantiate no image
         memfd.clear_and_remain_ready(0).unwrap();
         memfd.instantiate(64 << 10, None, &plan).unwrap();
         assert!(!memfd.has_image());
-        let slice = mmap.as_slice();
+        let slice = unsafe { mmap.slice_mut(0..65536) };
         assert_eq!(&[0, 0, 0, 0], &slice[4096..4100]);
         // Clear and re-instantiate image again
         memfd.clear_and_remain_ready(0).unwrap();
         memfd.instantiate(64 << 10, Some(&image), &plan).unwrap();
-        let slice = mmap.as_slice();
+        let slice = unsafe { mmap.slice_mut(0..65536) };
         assert_eq!(&[1, 2, 3, 4], &slice[4096..4100]);
         // Create another image with different data.
         let image2 = Arc::new(create_memfd_with_data(4096, &[10, 11, 12, 13]).unwrap());
         memfd.clear_and_remain_ready(0).unwrap();
         memfd.instantiate(128 << 10, Some(&image2), &plan).unwrap();
-        let slice = mmap.as_slice();
+        let slice = unsafe { mmap.slice_mut(0..65536) };
         assert_eq!(&[10, 11, 12, 13], &slice[4096..4100]);
         // Instantiate the original image again; we should notice it's
         // a different image and not reuse the mappings.
         memfd.clear_and_remain_ready(0).unwrap();
         memfd.instantiate(64 << 10, Some(&image), &plan).unwrap();
-        let slice = mmap.as_slice();
+        let slice = unsafe { mmap.slice_mut(0..65536) };
         assert_eq!(&[1, 2, 3, 4], &slice[4096..4100]);
     }
 
@@ -979,7 +979,7 @@ mod test {
             for amt_to_memset in [0, 4096, 10 << 12, 1 << 20, 10 << 20] {
                 memfd.instantiate(64 << 10, Some(&image), &plan).unwrap();
                 assert!(memfd.has_image());
-                let slice = mmap.as_mut_slice();
+                let slice = unsafe { mmap.slice_mut(0..64 << 10) };
                 if image_off > 0 {
                     assert_eq!(slice[image_off - 1], 0);
                 }
@@ -994,7 +994,8 @@ mod test {
         // Test without an image
         for amt_to_memset in [0, 4096, 10 << 12, 1 << 20, 10 << 20] {
             memfd.instantiate(64 << 10, None, &plan).unwrap();
-            for chunk in mmap.as_mut_slice()[..64 << 10].chunks_mut(1024) {
+            let mem = unsafe { mmap.slice_mut(0..64 << 10) };
+            for chunk in mem.chunks_mut(1024) {
                 assert_eq!(chunk[0], 0);
                 chunk[0] = 5;
             }
@@ -1017,7 +1018,7 @@ mod test {
         // it's cleared.
         memfd.instantiate(initial, Some(&image), &plan).unwrap();
         assert!(memfd.has_image());
-        let slice = mmap.as_mut_slice();
+        let slice = unsafe { mmap.slice_mut(0..(64 << 10) + 4096) };
         assert_eq!(&[1, 2, 3, 4], &slice[4096..4100]);
         slice[4096] = 5;
         assert_eq!(&[5, 2, 3, 4], &slice[4096..4100]);

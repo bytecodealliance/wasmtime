@@ -222,7 +222,7 @@ impl MemoryPool {
         assert!(memory_index < self.max_memories);
         let idx = instance_index * self.max_memories + memory_index;
         let offset = self.initial_memory_offset + idx * self.memory_and_guard_size;
-        unsafe { self.mapping.as_mut_ptr().offset(offset as isize) }
+        unsafe { self.mapping.as_ptr().offset(offset as isize).cast_mut() }
     }
 
     #[cfg(test)]
@@ -348,8 +348,9 @@ impl TablePool {
 
         let base: *mut u8 = unsafe {
             self.mapping
-                .as_mut_ptr()
-                .add(instance_index * self.table_size * self.max_tables) as _
+                .as_ptr()
+                .add(instance_index * self.table_size * self.max_tables)
+                .cast_mut()
         };
 
         let size = self.table_size;
@@ -409,7 +410,7 @@ impl StackPool {
             unsafe {
                 for i in 0..max_instances {
                     // Make the stack guard page inaccessible
-                    let bottom_of_stack = mapping.as_mut_ptr().add(i * stack_size);
+                    let bottom_of_stack = mapping.as_ptr().add(i * stack_size).cast_mut();
                     mprotect(bottom_of_stack.cast(), page_size, MprotectFlags::empty())
                         .context("failed to protect stack guard page")?;
                 }
@@ -454,8 +455,9 @@ impl StackPool {
 
             let bottom_of_stack = self
                 .mapping
-                .as_mut_ptr()
-                .add((index * self.stack_size) + self.page_size);
+                .as_ptr()
+                .add((index * self.stack_size) + self.page_size)
+                .cast_mut();
 
             commit_stack_pages(bottom_of_stack, size_without_guard)?;
 
