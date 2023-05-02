@@ -62,3 +62,7 @@ skip-tree = [
     # dependency appears to be benign.
     { name = "windows-sys", depth = 3 },
 ]
+
+skip = [
+    { name = "wasm-encoder", version = "=0.25.0" }
+]
