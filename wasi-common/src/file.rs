@@ -1,4 +1,4 @@
-use crate::{Error, ErrorExt, InputStream, OutputStream, SystemTimeSpec};
+use crate::{Error, ErrorExt, InputStream, OutputStream, SystemTimeSpec, TableError};
 use bitflags::bitflags;
 use std::any::Any;
 use std::io;
@@ -163,14 +163,14 @@ pub struct Filestat {
 }
 
 pub trait TableFileExt {
-    fn get_file(&self, fd: u32) -> Result<&dyn WasiFile, Error>;
-    fn get_file_mut(&mut self, fd: u32) -> Result<&mut Box<dyn WasiFile>, Error>;
+    fn get_file(&self, fd: u32) -> Result<&dyn WasiFile, TableError>;
+    fn get_file_mut(&mut self, fd: u32) -> Result<&mut Box<dyn WasiFile>, TableError>;
 }
 impl TableFileExt for crate::table::Table {
-    fn get_file(&self, fd: u32) -> Result<&dyn WasiFile, Error> {
+    fn get_file(&self, fd: u32) -> Result<&dyn WasiFile, TableError> {
         self.get::<Box<dyn WasiFile>>(fd).map(|f| f.as_ref())
     }
-    fn get_file_mut(&mut self, fd: u32) -> Result<&mut Box<dyn WasiFile>, Error> {
+    fn get_file_mut(&mut self, fd: u32) -> Result<&mut Box<dyn WasiFile>, TableError> {
         self.get_mut::<Box<dyn WasiFile>>(fd)
     }
 }

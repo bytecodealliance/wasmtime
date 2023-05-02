@@ -17,6 +17,18 @@ impl From<crate::Error> for streams::Error {
     }
 }
 
+impl From<crate::TableError> for streams::Error {
+    fn from(error: crate::TableError) -> streams::Error {
+        match error {
+            crate::TableError::Full => streams::Error::trap(anyhow!(error)),
+            crate::TableError::NotPresent | crate::TableError::WrongType => {
+                // wit definition needs to define a badf-equiv variant:
+                streams::StreamError {}.into()
+            }
+        }
+    }
+}
+
 #[async_trait::async_trait]
 impl<T: WasiView> streams::Host for T {
     async fn drop_input_stream(&mut self, stream: InputStream) -> anyhow::Result<()> {

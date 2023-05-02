@@ -73,4 +73,4 @@ pub use error::{Errno, Error, ErrorExt, I32Exit};
 pub use file::WasiFile;
 pub use sched::{Poll, WasiSched};
 pub use stream::{InputStream, OutputStream};
-pub use table::Table;
+pub use table::{Table, TableError};

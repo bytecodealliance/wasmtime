@@ -3,17 +3,9 @@ use crate::{
     wasi,
     wasi::monotonic_clock::Instant,
     wasi::poll::Pollable,
-    wasi::streams::{InputStream, OutputStream, StreamError},
+    wasi::streams::{InputStream, OutputStream},
     WasiView,
 };
-
-fn convert(error: crate::Error) -> anyhow::Error {
-    if let Some(_errno) = error.downcast_ref() {
-        anyhow::Error::new(StreamError {})
-    } else {
-        error.into()
-    }
-}
 
 /// A pollable resource table entry.
 #[derive(Copy, Clone)]
@@ -39,9 +31,7 @@ pub(crate) enum PollableEntry {
 #[async_trait::async_trait]
 impl<T: WasiView> wasi::poll::Host for T {
     async fn drop_pollable(&mut self, pollable: Pollable) -> anyhow::Result<()> {
-        self.table_mut()
-            .delete::<PollableEntry>(pollable)
-            .map_err(convert)?;
+        self.table_mut().delete::<PollableEntry>(pollable)?;
         Ok(())
     }
 
@@ -54,15 +44,15 @@ impl<T: WasiView> wasi::poll::Host for T {
         for (index, future) in futures.into_iter().enumerate() {
             let userdata = Userdata::from(index as u64);
 
-            match *self.table().get(future).map_err(convert)? {
+            match *self.table().get(future)? {
                 PollableEntry::Read(stream) => {
                     let wasi_stream: &dyn crate::InputStream =
-                        self.table().get_input_stream(stream).map_err(convert)?;
+                        self.table().get_input_stream(stream)?;
                     poll.subscribe_read(wasi_stream, userdata);
                 }
                 PollableEntry::Write(stream) => {
                     let wasi_stream: &dyn crate::OutputStream =
-                        self.table().get_output_stream(stream).map_err(convert)?;
+                        self.table().get_output_stream(stream)?;
                     poll.subscribe_write(wasi_stream, userdata);
                 }
                 PollableEntry::MonotonicClock(when, absolute) => {
@@ -75,7 +65,7 @@ impl<T: WasiView> wasi::poll::Host for T {
                 } /*
                   PollableEntry::TcpSocket(tcp_socket) => {
                       let wasi_tcp_socket: &dyn crate::WasiTcpSocket =
-                          self.table().get_tcp_socket(tcp_socket).map_err(convert)?;
+                          self.table().get_tcp_socket(tcp_socket)?;
                       poll.subscribe_tcp_socket(wasi_tcp_socket, userdata);
                   }
                   */
