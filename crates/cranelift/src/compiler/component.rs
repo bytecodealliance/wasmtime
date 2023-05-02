@@ -5,6 +5,7 @@ use anyhow::Result;
 use cranelift_codegen::ir::{self, InstBuilder, MemFlags};
 use cranelift_frontend::FunctionBuilder;
 use std::any::Any;
+use wasmtime_cranelift_shared::ALWAYS_TRAP_CODE;
 use wasmtime_environ::component::{
     AllCallFunc, CanonicalOptions, Component, ComponentCompiler, ComponentTypes, FixedEncoding,
     LowerImport, RuntimeMemoryIndex, Transcode, Transcoder, VMComponentOffsets,
@@ -207,9 +208,7 @@ impl Compiler {
             },
         );
         let (mut builder, _block0) = compiler.builder(func);
-        builder
-            .ins()
-            .trap(ir::TrapCode::User(super::ALWAYS_TRAP_CODE));
+        builder.ins().trap(ir::TrapCode::User(ALWAYS_TRAP_CODE));
         builder.finalize();
 
         Ok(Box::new(compiler.finish()?))
