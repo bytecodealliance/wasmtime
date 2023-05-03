@@ -18,7 +18,7 @@ tokio = { version = "1", features = ["full"] }
 [dev-dependencies]
 tracing = { workspace = true }
 cap-rand = { workspace = true }
-test-programs-macros = { path = "../test-programs/macros" }
+test-programs = { path = "../test-programs" }
 test-log = { version = "0.2", default-features = false, features = ["trace"] }
 tempfile = "3.3.0"
 lazy_static = "1"

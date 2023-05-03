@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use wasi_cap_std_sync::WasiCtxBuilder;
+use wasi_common::preview1::{self, WasiPreview1Adapter, WasiPreview1View};
 use wasi_common::{wasi, Table, WasiCtx, WasiView};
 use wasmtime::{
     component::{Component, Linker},
@@ -53,15 +54,8 @@ async fn main() -> Result<()> {
         .init();
 
     let args = Args::parse();
-    let input = args.component;
-
-    let mut config = Config::new();
-    config.wasm_backtrace_details(wasmtime::WasmBacktraceDetails::Enable);
-    config.wasm_component_model(true);
-    config.async_support(true);
-
-    let engine = Engine::new(&config)?;
-    let component = Component::from_file(&engine, &input)?;
+    let input =
+        std::fs::read(&args.component).with_context(|| format!("reading '{}'", args.component))?;
 
     let mut argv: Vec<&str> = vec!["wasm"];
     argv.extend(args.args.iter().map(String::as_str));
@@ -76,6 +70,18 @@ async fn main() -> Result<()> {
 
     let mut table = Table::new();
     let wasi = builder.build(&mut table)?;
+
+    if input.get(0..8) != Some(&[0x00, 0x61, 0x73, 0x6d, 0x0a, 0x00, 0x01, 0x00]) {
+        return module_main(input, table, wasi).await;
+    }
+
+    let mut config = Config::new();
+    config.wasm_backtrace_details(wasmtime::WasmBacktraceDetails::Enable);
+    config.async_support(true);
+    config.wasm_component_model(true);
+
+    let engine = Engine::new(&config)?;
+    let component = Component::new(&engine, &input)?;
 
     if args.world == "command" {
         struct CommandCtx {
@@ -177,4 +183,79 @@ async fn main() -> Result<()> {
     } else {
         anyhow::bail!("no such world {}", args.world)
     }
+}
+
+async fn module_main(module_bytes: Vec<u8>, table: Table, wasi: WasiCtx) -> Result<()> {
+    struct Preview1CommandCtx {
+        table: Table,
+        wasi: WasiCtx,
+        sockets: WasiSocketsCtx,
+        adapter: WasiPreview1Adapter,
+    }
+    impl WasiView for Preview1CommandCtx {
+        fn table(&self) -> &Table {
+            &self.table
+        }
+        fn table_mut(&mut self) -> &mut Table {
+            &mut self.table
+        }
+        fn ctx(&self) -> &WasiCtx {
+            &self.wasi
+        }
+        fn ctx_mut(&mut self) -> &mut WasiCtx {
+            &mut self.wasi
+        }
+    }
+    impl WasiSocketsView for Preview1CommandCtx {
+        fn table(&self) -> &Table {
+            &self.table
+        }
+        fn table_mut(&mut self) -> &mut Table {
+            &mut self.table
+        }
+        fn ctx(&self) -> &WasiSocketsCtx {
+            &self.sockets
+        }
+        fn ctx_mut(&mut self) -> &mut WasiSocketsCtx {
+            &mut self.sockets
+        }
+    }
+    impl WasiPreview1View for Preview1CommandCtx {
+        fn adapter(&self) -> &WasiPreview1Adapter {
+            &self.adapter
+        }
+        fn adapter_mut(&mut self) -> &mut WasiPreview1Adapter {
+            &mut self.adapter
+        }
+    }
+
+    let sockets = WasiSocketsCtxBuilder::new()
+        .inherit_network(cap_std::ambient_authority())
+        .build();
+    let adapter = WasiPreview1Adapter::new();
+    let ctx = Preview1CommandCtx {
+        table,
+        wasi,
+        sockets,
+        adapter,
+    };
+
+    let mut config = Config::new();
+    config.wasm_backtrace_details(wasmtime::WasmBacktraceDetails::Enable);
+    config.async_support(true);
+
+    let engine = Engine::new(&config)?;
+    let module = wasmtime::Module::new(&engine, module_bytes)?;
+    let mut linker = wasmtime::Linker::new(&engine);
+    preview1::add_to_linker(&mut linker)?;
+
+    let mut store = Store::new(&engine, ctx);
+
+    let inst = linker.instantiate_async(&mut store, &module).await?;
+
+    let start: wasmtime::TypedFunc<(), ()> = inst.get_typed_func(&mut store, "_start")?;
+
+    start.call_async(&mut store, ()).await?;
+
+    Ok(())
 }

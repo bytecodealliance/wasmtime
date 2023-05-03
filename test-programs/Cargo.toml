@@ -4,8 +4,15 @@ version = "0.0.0"
 edition = "2021"
 publish = false
 
+[lib]
+proc-macro = true
+doctest = false
+test = false
+
 [dependencies]
-getrandom = "0.2.8"
-rustix = "0.37.9"
-cap-std = "1.0.12"
-wit-bindgen = { workspace = true, default-features = true }
+quote = "1.0"
+
+[build-dependencies]
+wit-component = { git = "https://github.com/bytecodealliance/wasm-tools", rev = "b17fc48a23152735bafd8f7ee95e3b55683d9511" }
+cargo_metadata = "0.15.3"
+heck = "0.4.0"
