@@ -625,7 +625,7 @@ jobs:
           -p wasmtime-runtime \
           -p wasmtime-environ
       env:
-        MIRIFLAGS: -Zmiri-tree-borrows
+        MIRIFLAGS: -Zmiri-strict-provenance
 
     # common logic to cancel the entire run if this job fails
     - run: gh run cancel ${{ github.run_id }}
