@@ -31,7 +31,7 @@ pub mod bindings {
         raw_strings,
         // The generated definition of command will pull in std, so we are defining it
         // manually below instead
-        skip: ["main", "get-directories", "get-environment"],
+        skip: ["run", "get-directories", "get-environment"],
     });
 
     #[cfg(feature = "reactor")]
@@ -41,6 +41,17 @@ pub mod bindings {
         raw_strings,
         skip: ["get-directories", "get-environment"],
     });
+}
+
+#[no_mangle]
+#[cfg(feature = "command")]
+pub unsafe extern "C" fn run() -> u32 {
+    #[link(wasm_import_module = "__main_module__")]
+    extern "C" {
+        fn _start();
+    }
+    _start();
+    0
 }
 
 // The unwrap/expect methods in std pull panic when they fail, which pulls
@@ -197,7 +208,7 @@ impl ImportAlloc {
     }
 }
 
-/// This allocator is only used for the `main` entrypoint.
+/// This allocator is only used for the `run` entrypoint.
 ///
 /// The implementation here is a bump allocator into `State::long_lived_arena` which
 /// traps when it runs out of data. This means that the total size of
@@ -2092,7 +2103,7 @@ struct State {
     /// Long-lived bump allocated memory arena.
     ///
     /// This is used for the cabi_export_realloc to allocate data passed to the
-    /// `main` entrypoint. Allocations in this arena are safe to use for
+    /// `run` entrypoint. Allocations in this arena are safe to use for
     /// the lifetime of the State struct. It may also be used for import allocations
     /// which need to be long-lived, by using `import_alloc.with_arena`.
     long_lived_arena: BumpArena,
