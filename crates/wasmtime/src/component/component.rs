@@ -94,8 +94,8 @@ impl Component {
     /// provided.
     //
     // FIXME: need to write more docs here.
-    #[cfg(compiler)]
-    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))] // see build.rs
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
+    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn new(engine: &Engine, bytes: impl AsRef<[u8]>) -> Result<Component> {
         let bytes = bytes.as_ref();
         #[cfg(feature = "wat")]
@@ -107,8 +107,8 @@ impl Component {
     /// by `file`.
     //
     // FIXME: need to write more docs here.
-    #[cfg(compiler)]
-    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))] // see build.rs
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
+    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn from_file(engine: &Engine, file: impl AsRef<Path>) -> Result<Component> {
         match Self::new(
             engine,
@@ -133,8 +133,8 @@ impl Component {
     /// provided.
     //
     // FIXME: need to write more docs here.
-    #[cfg(compiler)]
-    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))] // see build.rs
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
+    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn from_binary(engine: &Engine, binary: &[u8]) -> Result<Component> {
         engine
             .check_compatible_with_native_host()
@@ -178,7 +178,7 @@ impl Component {
     /// any necessary extra functions required for operation with components.
     /// The output artifact here is the serialized object file contained within
     /// an owned mmap along with metadata about the compilation itself.
-    #[cfg(compiler)]
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub(crate) fn build_artifacts(
         engine: &Engine,
         binary: &[u8],

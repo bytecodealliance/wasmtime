@@ -40,7 +40,7 @@ const VERSION: u8 = 0;
 ///
 /// The blob of bytes is inserted into the object file specified to become part
 /// of the final compiled artifact.
-#[cfg(compiler)]
+#[cfg(any(feature = "cranelift", feature = "winch"))]
 pub fn append_compiler_info(engine: &Engine, obj: &mut Object<'_>) {
     let section = obj.add_section(
         obj.segment_name(StandardSegment::Data).to_vec(),
@@ -171,7 +171,7 @@ struct WasmFeatures {
 }
 
 impl Metadata {
-    #[cfg(compiler)]
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
     fn new(engine: &Engine) -> Metadata {
         let wasmparser::WasmFeatures {
             reference_types,

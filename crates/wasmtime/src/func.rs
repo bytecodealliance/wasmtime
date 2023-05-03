@@ -355,8 +355,8 @@ impl Func {
     /// documentation.
     ///
     /// [`Trap`]: crate::Trap
-    #[cfg(compiler)]
-    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))] // see build.rs
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
+    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn new<T>(
         store: impl AsContextMut<Data = T>,
         ty: FuncType,
@@ -393,8 +393,8 @@ impl Func {
     /// This function is not safe because it's not known at compile time that
     /// the `func` provided correctly interprets the argument types provided to
     /// it, or that the results it produces will be of the correct type.
-    #[cfg(compiler)]
-    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))] // see build.rs
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
+    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub unsafe fn new_unchecked<T>(
         mut store: impl AsContextMut<Data = T>,
         ty: FuncType,
@@ -2122,7 +2122,7 @@ pub(crate) struct HostFunc {
 
 impl HostFunc {
     /// Analog of [`Func::new`]
-    #[cfg(compiler)]
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub fn new<T>(
         engine: &Engine,
         ty: FuncType,
@@ -2137,7 +2137,7 @@ impl HostFunc {
     }
 
     /// Analog of [`Func::new_unchecked`]
-    #[cfg(compiler)]
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub unsafe fn new_unchecked<T>(
         engine: &Engine,
         ty: FuncType,

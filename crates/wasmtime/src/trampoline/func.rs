@@ -72,7 +72,7 @@ unsafe extern "C" fn array_call_shim<F>(
     }
 }
 
-#[cfg(compiler)]
+#[cfg(any(feature = "cranelift", feature = "winch"))]
 pub fn create_array_call_function<F>(
     ft: &FuncType,
     func: F,
