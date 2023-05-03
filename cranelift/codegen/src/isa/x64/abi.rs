@@ -514,6 +514,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                     ));
                     cur_offset += 16;
                 }
+                RegClass::Vector => unreachable!(),
             };
             if flags.unwind_info() {
                 insts.push(Inst::Unwind {
@@ -566,6 +567,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                     ));
                     cur_offset += 16;
                 }
+                RegClass::Vector => unreachable!(),
             }
         }
         // Adjust RSP back upward.
@@ -675,6 +677,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         match rc {
             RegClass::Int => 1,
             RegClass::Float => vector_scale / 8,
+            RegClass::Vector => unreachable!(),
         }
     }
 
@@ -887,6 +890,7 @@ fn is_callee_save_systemv(r: RealReg, enable_pinned_reg: bool) -> bool {
             _ => false,
         },
         RegClass::Float => false,
+        RegClass::Vector => unreachable!(),
     }
 }
 
@@ -903,6 +907,7 @@ fn is_callee_save_fastcall(r: RealReg, enable_pinned_reg: bool) -> bool {
             6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 => true,
             _ => false,
         },
+        RegClass::Vector => unreachable!(),
     }
 }
 
@@ -917,6 +922,7 @@ fn compute_clobber_size(clobbers: &[Writable<RealReg>]) -> u32 {
                 clobbered_size = align_to(clobbered_size, 16);
                 clobbered_size += 16;
             }
+            RegClass::Vector => unreachable!(),
         }
     }
     align_to(clobbered_size, 16)

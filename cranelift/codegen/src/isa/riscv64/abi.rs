@@ -417,6 +417,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                 let ty = match r_reg.class() {
                     regalloc2::RegClass::Int => I64,
                     regalloc2::RegClass::Float => F64,
+                    RegClass::Vector => unreachable!(),
                 };
                 if flags.unwind_info() {
                     insts.push(Inst::Unwind {
@@ -463,6 +464,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
             let ty = match rreg.class() {
                 regalloc2::RegClass::Int => I64,
                 regalloc2::RegClass::Float => F64,
+                RegClass::Vector => unreachable!(),
             };
             insts.push(Self::gen_load_stack(
                 StackAMode::SPOffset(-cur_offset, ty),
@@ -575,6 +577,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         match rc {
             RegClass::Int => 1,
             RegClass::Float => 1,
+            RegClass::Vector => unreachable!(),
         }
     }
 
@@ -694,6 +697,7 @@ fn compute_clobber_size(clobbers: &[Writable<RealReg>]) -> u32 {
             RegClass::Float => {
                 clobbered_size += 8;
             }
+            RegClass::Vector => unreachable!(),
         }
     }
     align_to(clobbered_size, 16)

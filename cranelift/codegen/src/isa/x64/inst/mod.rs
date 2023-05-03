@@ -606,6 +606,7 @@ impl Inst {
                 };
                 Inst::xmm_unary_rm_r(opcode, RegMem::mem(from_addr), to_reg)
             }
+            RegClass::Vector => unreachable!(),
         }
     }
 
@@ -625,6 +626,7 @@ impl Inst {
                 };
                 Inst::xmm_mov_r_m(opcode, from_reg, to_addr)
             }
+            RegClass::Vector => unreachable!(),
         }
     }
 }
@@ -2514,6 +2516,7 @@ impl MachInst for Inst {
                 };
                 Inst::xmm_unary_rm_r(opcode, RegMem::reg(src_reg), dst_reg)
             }
+            RegClass::Vector => unreachable!(),
         }
     }
 
@@ -2547,6 +2550,7 @@ impl MachInst for Inst {
         match rc {
             RegClass::Float => types::I8X16,
             RegClass::Int => types::I64,
+            RegClass::Vector => unreachable!(),
         }
     }
 

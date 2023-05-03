@@ -36,6 +36,13 @@ user-id = 187138
 user-login = "elliottt"
 user-name = "Trevor Elliott"
 
+[[publisher.regalloc2]]
+version = "0.8.1"
+when = "2023-05-01"
+user-id = 3726
+user-login = "cfallin"
+user-name = "Chris Fallin"
+
 [[publisher.wasm-mutate]]
 version = "0.2.23"
 when = "2023-04-13"
