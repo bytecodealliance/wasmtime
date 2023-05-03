@@ -2,6 +2,7 @@
 
 use crate::AsContextMut;
 use std::any::Any;
+use std::ffi::c_void;
 use wasmtime_runtime::VMExternRef;
 
 /// Represents an opaque reference to any data within WebAssembly.
@@ -70,8 +71,8 @@ impl ExternRef {
     /// [`Store`]: crate::Store
     /// [`TypedFunc`]: crate::TypedFunc
     /// [`ValRaw`]: crate::ValRaw
-    pub unsafe fn from_raw(raw: usize) -> Option<ExternRef> {
-        let raw = raw as *mut u8;
+    pub unsafe fn from_raw(raw: *mut c_void) -> Option<ExternRef> {
+        let raw = raw.cast::<u8>();
         if raw.is_null() {
             None
         } else {
@@ -91,13 +92,13 @@ impl ExternRef {
     /// into the store.
     ///
     /// [`ValRaw`]: crate::ValRaw
-    pub unsafe fn to_raw(&self, mut store: impl AsContextMut) -> usize {
+    pub unsafe fn to_raw(&self, mut store: impl AsContextMut) -> *mut c_void {
         let externref_ptr = self.inner.as_raw();
         store
             .as_context_mut()
             .0
             .insert_vmexternref_without_gc(self.inner.clone());
-        externref_ptr as usize
+        externref_ptr.cast()
     }
 }
 

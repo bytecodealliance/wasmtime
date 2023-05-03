@@ -4,6 +4,7 @@ use crate::{
     StoreContextMut, Val, ValRaw, ValType,
 };
 use anyhow::{bail, Context as _, Error, Result};
+use std::ffi::c_void;
 use std::future::Future;
 use std::mem;
 use std::panic::{self, AssertUnwindSafe};
@@ -930,8 +931,8 @@ impl Func {
     /// This function is not safe because `raw` is not validated at all. The
     /// caller must guarantee that `raw` is owned by the `store` provided and is
     /// valid within the `store`.
-    pub unsafe fn from_raw(mut store: impl AsContextMut, raw: usize) -> Option<Func> {
-        Func::from_caller_checked_func_ref(store.as_context_mut().0, raw as *mut _)
+    pub unsafe fn from_raw(mut store: impl AsContextMut, raw: *mut c_void) -> Option<Func> {
+        Func::from_caller_checked_func_ref(store.as_context_mut().0, raw.cast())
     }
 
     /// Extracts the raw value of this `Func`, which is owned by `store`.
@@ -944,9 +945,10 @@ impl Func {
     /// The returned value is only valid for as long as the store is alive and
     /// this function is properly rooted within it. Additionally this function
     /// should not be liberally used since it's a very low-level knob.
-    pub unsafe fn to_raw(&self, mut store: impl AsContextMut) -> usize {
+    pub unsafe fn to_raw(&self, mut store: impl AsContextMut) -> *mut c_void {
         self.caller_checked_func_ref(store.as_context_mut().0)
-            .as_ptr() as usize
+            .as_ptr()
+            .cast()
     }
 
     /// Invokes this function with the `params` given, returning the results

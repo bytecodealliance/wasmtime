@@ -1153,7 +1153,7 @@ impl Instance {
                     }
                 }
                 GlobalInit::RefFunc(f) => {
-                    *(*to).as_func_ref_mut() = self.get_func_ref(f).unwrap() as *const VMFuncRef;
+                    *(*to).as_func_ref_mut() = self.get_func_ref(f).unwrap();
                 }
                 GlobalInit::RefNullConst => match global.wasm_ty {
                     // `VMGlobalDefinition::new()` already zeroed out the bits

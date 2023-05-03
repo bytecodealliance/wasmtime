@@ -280,7 +280,7 @@ impl Global {
                         .map(|inner| ExternRef { inner }),
                 ),
                 ValType::FuncRef => {
-                    Val::FuncRef(Func::from_raw(store, definition.as_func_ref() as usize))
+                    Val::FuncRef(Func::from_raw(store, definition.as_func_ref().cast()))
                 }
                 ValType::V128 => Val::V128(*definition.as_u128()),
             }
@@ -319,7 +319,7 @@ impl Global {
                 Val::F32(f) => *definition.as_u32_mut() = f,
                 Val::F64(f) => *definition.as_u64_mut() = f,
                 Val::FuncRef(f) => {
-                    *definition.as_func_ref_mut() = f.map_or(ptr::null(), |f| {
+                    *definition.as_func_ref_mut() = f.map_or(ptr::null_mut(), |f| {
                         f.caller_checked_func_ref(store).as_ptr().cast()
                     });
                 }
