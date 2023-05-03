@@ -3,10 +3,11 @@
 
 #![cfg_attr(any(not(unix), miri), allow(unused_imports, unused_variables))]
 
-use crate::MmapVec;
+use crate::{MmapVec, SendSyncPtr};
 use anyhow::Result;
 use libc::c_void;
 use std::fs::File;
+use std::ptr::NonNull;
 use std::sync::Arc;
 use std::{convert::TryFrom, ops::Range};
 use wasmtime_environ::{
@@ -202,18 +203,18 @@ impl MemoryImage {
         }
     }
 
-    unsafe fn map_at(&self, base: usize) -> Result<()> {
+    unsafe fn map_at(&self, base: *mut u8) -> Result<()> {
         cfg_if::cfg_if! {
             if #[cfg(all(unix, not(miri)))] {
                 let ptr = rustix::mm::mmap(
-                    (base + self.linear_memory_offset) as *mut c_void,
+                    base.add(self.linear_memory_offset).cast(),
                     self.len,
                     rustix::mm::ProtFlags::READ | rustix::mm::ProtFlags::WRITE,
                     rustix::mm::MapFlags::PRIVATE | rustix::mm::MapFlags::FIXED,
                     self.fd.as_file(),
                     self.fd_offset,
                 )?;
-                assert_eq!(ptr as usize, base + self.linear_memory_offset);
+                assert_eq!(ptr, base.add(self.linear_memory_offset).cast());
                 Ok(())
             } else {
                 match self.fd {}
@@ -221,16 +222,16 @@ impl MemoryImage {
         }
     }
 
-    unsafe fn remap_as_zeros_at(&self, base: usize) -> Result<()> {
+    unsafe fn remap_as_zeros_at(&self, base: *mut u8) -> Result<()> {
         cfg_if::cfg_if! {
             if #[cfg(unix)] {
                 let ptr = rustix::mm::mmap_anonymous(
-                    (base + self.linear_memory_offset) as *mut c_void,
+                    base.add(self.linear_memory_offset).cast(),
                     self.len,
                     rustix::mm::ProtFlags::READ | rustix::mm::ProtFlags::WRITE,
                     rustix::mm::MapFlags::PRIVATE | rustix::mm::MapFlags::FIXED,
                 )?;
-                assert_eq!(ptr as usize, base + self.linear_memory_offset);
+                assert_eq!(ptr.cast(), base.add(self.linear_memory_offset));
                 Ok(())
             } else {
                 match self.fd {}
@@ -372,10 +373,7 @@ pub struct MemoryImageSlot {
     /// The base address in virtual memory of the actual heap memory.
     ///
     /// Bytes at this address are what is seen by the Wasm guest code.
-    ///
-    /// Note that this is stored as `usize` instead of `*mut u8` to not deal
-    /// with `Send`/`Sync.
-    base: usize,
+    base: SendSyncPtr<u8>,
 
     /// The maximum static memory size which `self.accessible` can grow to.
     static_size: usize,
@@ -424,9 +422,8 @@ impl MemoryImageSlot {
     /// and all memory from `accessible` from `static_size` should be mapped as
     /// `PROT_NONE` backed by zero-bytes.
     pub(crate) fn create(base_addr: *mut c_void, accessible: usize, static_size: usize) -> Self {
-        let base = base_addr as usize;
         MemoryImageSlot {
-            base,
+            base: NonNull::new(base_addr.cast()).unwrap().into(),
             static_size,
             accessible,
             image: None,
@@ -438,7 +435,7 @@ impl MemoryImageSlot {
     #[cfg(feature = "pooling-allocator")]
     pub(crate) fn dummy() -> MemoryImageSlot {
         MemoryImageSlot {
-            base: 0,
+            base: NonNull::new(sptr::invalid_mut(1)).unwrap().into(),
             static_size: 0,
             image: None,
             accessible: 0,
@@ -547,7 +544,7 @@ impl MemoryImageSlot {
                 );
                 if image.len > 0 {
                     unsafe {
-                        image.map_at(self.base)?;
+                        image.map_at(self.base.as_ptr())?;
                     }
                 }
             }
@@ -564,7 +561,7 @@ impl MemoryImageSlot {
     pub(crate) fn remove_image(&mut self) -> Result<()> {
         if let Some(image) = &self.image {
             unsafe {
-                image.remap_as_zeros_at(self.base)?;
+                image.remap_as_zeros_at(self.base.as_ptr())?;
             }
             self.image = None;
         }
@@ -642,17 +639,13 @@ impl MemoryImageSlot {
                         (keep_resident - image.linear_memory_offset).min(mem_after_image);
 
                     // This is memset (1)
-                    std::ptr::write_bytes(self.base as *mut u8, 0u8, image.linear_memory_offset);
+                    std::ptr::write_bytes(self.base.as_ptr(), 0u8, image.linear_memory_offset);
 
                     // This is madvise (2)
                     self.madvise_reset(image.linear_memory_offset, image.len)?;
 
                     // This is memset (3)
-                    std::ptr::write_bytes(
-                        (self.base + image_end) as *mut u8,
-                        0u8,
-                        remaining_memset,
-                    );
+                    std::ptr::write_bytes(self.base.as_ptr().add(image_end), 0u8, remaining_memset);
 
                     // This is madvise (4)
                     self.madvise_reset(
@@ -680,7 +673,7 @@ impl MemoryImageSlot {
                     // Note that the memset may be zero bytes here.
 
                     // This is memset (1)
-                    std::ptr::write_bytes(self.base as *mut u8, 0u8, keep_resident);
+                    std::ptr::write_bytes(self.base.as_ptr(), 0u8, keep_resident);
 
                     // This is madvise (2)
                     self.madvise_reset(keep_resident, self.accessible - keep_resident)?;
@@ -692,7 +685,7 @@ impl MemoryImageSlot {
             // the rest.
             None => {
                 let size_to_memset = keep_resident.min(self.accessible);
-                std::ptr::write_bytes(self.base as *mut u8, 0u8, size_to_memset);
+                std::ptr::write_bytes(self.base.as_ptr(), 0u8, size_to_memset);
                 self.madvise_reset(size_to_memset, self.accessible - size_to_memset)?;
             }
         }
@@ -709,7 +702,7 @@ impl MemoryImageSlot {
         cfg_if::cfg_if! {
             if #[cfg(target_os = "linux")] {
                 rustix::mm::madvise(
-                    (self.base + base) as *mut c_void,
+                    self.base.as_ptr().add(base).cast(),
                     len,
                     rustix::mm::Advice::LinuxDontNeed,
                 )?;
@@ -723,16 +716,16 @@ impl MemoryImageSlot {
     fn set_protection(&self, range: Range<usize>, readwrite: bool) -> Result<()> {
         assert!(range.start <= range.end);
         assert!(range.end <= self.static_size);
-        let start = self.base.checked_add(range.start).unwrap();
         if range.len() == 0 {
             return Ok(());
         }
 
         unsafe {
+            let start = self.base.as_ptr().add(range.start);
             cfg_if::cfg_if! {
                 if #[cfg(miri)] {
                     if readwrite {
-                        std::ptr::write_bytes(start as *mut u8, 0u8, range.len());
+                        std::ptr::write_bytes(start, 0u8, range.len());
                     }
                 } else if #[cfg(unix)] {
                     let flags = if readwrite {
@@ -740,14 +733,14 @@ impl MemoryImageSlot {
                     } else {
                         rustix::mm::MprotectFlags::empty()
                     };
-                    rustix::mm::mprotect(start as *mut _, range.len(), flags)?;
+                    rustix::mm::mprotect(start.cast(), range.len(), flags)?;
                 } else {
                     use windows_sys::Win32::System::Memory::*;
 
                     let failure = if readwrite {
-                        VirtualAlloc(start as _, range.len(), MEM_COMMIT, PAGE_READWRITE).is_null()
+                        VirtualAlloc(start.cast(), range.len(), MEM_COMMIT, PAGE_READWRITE).is_null()
                     } else {
-                        VirtualFree(start as _, range.len(), MEM_DECOMMIT) == 0
+                        VirtualFree(start.cast(), range.len(), MEM_DECOMMIT) == 0
                     };
                     if failure {
                         return Err(std::io::Error::last_os_error().into());
@@ -780,18 +773,18 @@ impl MemoryImageSlot {
         unsafe {
             cfg_if::cfg_if! {
                 if #[cfg(miri)] {
-                    std::ptr::write_bytes(self.base as *mut u8, 0, self.static_size);
+                    std::ptr::write_bytes(self.base.as_ptr(), 0, self.static_size);
                 } else if #[cfg(unix)] {
                     let ptr = rustix::mm::mmap_anonymous(
-                        self.base as *mut c_void,
+                        self.base.as_ptr().cast(),
                         self.static_size,
                         rustix::mm::ProtFlags::empty(),
                         rustix::mm::MapFlags::PRIVATE | rustix::mm::MapFlags::FIXED,
                     )?;
-                    assert_eq!(ptr as usize, self.base);
+                    assert_eq!(ptr, self.base.as_ptr().cast());
                 } else {
                     use windows_sys::Win32::System::Memory::*;
-                    if VirtualFree(self.base as _, self.static_size, MEM_DECOMMIT) == 0 {
+                    if VirtualFree(self.base.as_ptr().cast(), self.static_size, MEM_DECOMMIT) == 0 {
                         return Err(std::io::Error::last_os_error().into());
                     }
                 }
