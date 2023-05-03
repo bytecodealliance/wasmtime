@@ -145,7 +145,7 @@ impl Imm5 {
 
     /// Bits for encoding.
     pub fn bits(&self) -> u8 {
-        self.value as u8
+        self.value as u8 & 0x1f
     }
 }
 

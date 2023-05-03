@@ -1,7 +1,7 @@
 use crate::isa::riscv64::inst::EmitState;
 use crate::isa::riscv64::lower::isle::generated_code::{
     VecAMode, VecAluOpRRImm5, VecAluOpRRR, VecAvl, VecElementWidth, VecLmul, VecMaskMode,
-    VecOpCategory, VecTailMode,
+    VecOpCategory, VecTailMode, VecOpMasking
 };
 use crate::Reg;
 use core::fmt;
@@ -225,6 +225,15 @@ impl VecOpCategory {
             VecOpCategory::OPFVF => 0b101,
             VecOpCategory::OPMVX => 0b110,
             VecOpCategory::OPCFG => 0b111,
+        }
+    }
+}
+
+impl VecOpMasking {
+    pub fn encode(&self) -> u32 {
+        match self {
+            VecOpMasking::Enabled => 0,
+            VecOpMasking::Disabled => 1,
         }
     }
 }

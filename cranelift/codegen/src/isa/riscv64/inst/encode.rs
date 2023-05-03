@@ -8,28 +8,43 @@
 
 use super::{Imm5, UImm5, VType};
 use crate::isa::riscv64::inst::reg_to_gpr_num;
-use crate::isa::riscv64::lower::isle::generated_code::VecElementWidth;
+use crate::isa::riscv64::lower::isle::generated_code::{
+    VecAluOpRRImm5, VecAluOpRRR, VecElementWidth, VecOpMasking,
+};
+use crate::machinst::isle::WritableReg;
 use crate::Reg;
+
+fn unsigned_field_width(value: u32, width: u8) -> u32 {
+    debug_assert_eq!(value & (!0 << width), 0);
+    value
+}
 
 /// Layout:
 /// 0-------6-7-------11-12------14-15------19-20------24-25-------31
 /// | Opcode |   rd     |  funct3  |   rs1    |   rs2    |   funct7  |
 fn encode_r_type_bits(opcode: u32, rd: u32, funct3: u32, rs1: u32, rs2: u32, funct7: u32) -> u32 {
     let mut bits = 0;
-    bits |= opcode & 0b1111111;
-    bits |= (rd & 0b11111) << 7;
-    bits |= (funct3 & 0b111) << 12;
-    bits |= (rs1 & 0b11111) << 15;
-    bits |= (rs2 & 0b11111) << 20;
-    bits |= (funct7 & 0b1111111) << 25;
+    bits |= unsigned_field_width(opcode, 7);
+    bits |= unsigned_field_width(rd, 5) << 7;
+    bits |= unsigned_field_width(funct3, 3) << 12;
+    bits |= unsigned_field_width(rs1, 5) << 15;
+    bits |= unsigned_field_width(rs2, 5) << 20;
+    bits |= unsigned_field_width(funct7, 7) << 25;
     bits
 }
 
 /// Encode an R-type instruction.
-pub fn encode_r_type(opcode: u32, rd: Reg, funct3: u32, rs1: Reg, rs2: Reg, funct7: u32) -> u32 {
+pub fn encode_r_type(
+    opcode: u32,
+    rd: WritableReg,
+    funct3: u32,
+    rs1: Reg,
+    rs2: Reg,
+    funct7: u32,
+) -> u32 {
     encode_r_type_bits(
         opcode,
-        reg_to_gpr_num(rd),
+        reg_to_gpr_num(rd.to_reg()),
         funct3,
         reg_to_gpr_num(rs1),
         reg_to_gpr_num(rs2),
@@ -50,17 +65,21 @@ pub fn encode_r_type(opcode: u32, rd: Reg, funct3: u32, rs1: Reg, rs2: Reg, func
 ///
 /// See: https://github.com/riscv/riscv-v-spec/blob/master/valu-format.adoc
 pub fn encode_valu(
-    opcode: u32,
-    vd: Reg,
-    funct3: u32,
+    op: VecAluOpRRR,
+    vd: WritableReg,
     vs1: Reg,
     vs2: Reg,
-    vm: u32,
-    funct6: u32,
+    masking: VecOpMasking,
 ) -> u32 {
-    // VALU is just VALUImm with the register in the immediate field.
-    let imm = Imm5::maybe_from_i8((reg_to_gpr_num(vs1) as i8) << 3 >> 3).unwrap();
-    encode_valu_imm(opcode, vd, funct3, imm, vs2, vm, funct6)
+    let funct7 = (op.funct6() << 1) | masking.encode();
+    encode_r_type_bits(
+        op.opcode(),
+        reg_to_gpr_num(vd.to_reg()),
+        op.funct3(),
+        reg_to_gpr_num(vs1),
+        reg_to_gpr_num(vs2),
+        funct7,
+    )
 }
 
 /// Encodes a Vector ALU+Imm instruction.
@@ -77,22 +96,18 @@ pub fn encode_valu(
 ///
 /// See: https://github.com/riscv/riscv-v-spec/blob/master/valu-format.adoc
 pub fn encode_valu_imm(
-    opcode: u32,
-    vd: Reg,
-    funct3: u32,
+    op: VecAluOpRRImm5,
+    vd: WritableReg,
     imm: Imm5,
     vs2: Reg,
-    vm: u32,
-    funct6: u32,
+    masking: VecOpMasking,
 ) -> u32 {
-    let funct6 = funct6 & 0b111111;
-    let vm = vm & 0b1;
-    let funct7 = (funct6 << 1) | vm;
-    let imm = (imm.bits() & 0b11111) as u32;
+    let funct7 = (op.funct6() << 1) | masking.encode();
+    let imm = imm.bits() as u32;
     encode_r_type_bits(
-        opcode,
-        reg_to_gpr_num(vd),
-        funct3,
+        op.opcode(),
+        reg_to_gpr_num(vd.to_reg()),
+        op.funct3(),
         imm,
         reg_to_gpr_num(vs2),
         funct7,
@@ -105,11 +120,11 @@ pub fn encode_valu_imm(
 // TODO: Check if this is any of the known instruction types in the spec.
 pub fn encode_vcfg_imm(opcode: u32, rd: Reg, imm: UImm5, vtype: &VType) -> u32 {
     let mut bits = 0;
-    bits |= opcode & 0b1111111;
+    bits |= unsigned_field_width(opcode, 7);
     bits |= reg_to_gpr_num(rd) << 7;
     bits |= 0b111 << 12;
-    bits |= (imm.bits() & 0b11111) << 15;
-    bits |= (vtype.encode() & 0b1111111111) << 20;
+    bits |= unsigned_field_width(imm.bits(), 5) << 15;
+    bits |= unsigned_field_width(vtype.encode(), 10) << 20;
     bits |= 0b11 << 30;
     bits
 }
@@ -124,7 +139,7 @@ pub fn encode_vmem_load(
     width: VecElementWidth,
     rs1: Reg,
     lumop: u32,
-    vm: u32,
+    masking: VecOpMasking,
     mop: u32,
     nf: u32,
 ) -> u32 {
@@ -137,19 +152,19 @@ pub fn encode_vmem_load(
     };
 
     let mut bits = 0;
-    bits |= opcode & 0b1111111;
+    bits |= unsigned_field_width(opcode, 7);
     bits |= reg_to_gpr_num(vd) << 7;
     bits |= width << 12;
     bits |= reg_to_gpr_num(rs1) << 15;
-    bits |= (lumop & 0b11111) << 20;
-    bits |= (vm & 0b1) << 25;
-    bits |= (mop & 0b11) << 26;
+    bits |= unsigned_field_width(lumop, 5) << 20;
+    bits |= masking.encode() << 25;
+    bits |= unsigned_field_width(mop, 2) << 26;
 
     // The mew bit (inst[28]) when set is expected to be used to encode expanded
     // memory sizes of 128 bits and above, but these encodings are currently reserved.
     bits |= 0b0 << 28;
 
-    bits |= (nf & 0b111) << 29;
+    bits |= unsigned_field_width(nf, 3) << 29;
     bits
 }
 
@@ -163,11 +178,11 @@ pub fn encode_vmem_store(
     width: VecElementWidth,
     rs1: Reg,
     sumop: u32,
-    vm: u32,
+    masking: VecOpMasking,
     mop: u32,
     nf: u32,
 ) -> u32 {
     // This is pretty much the same as the load instruction, just
     // with different names on the fields.
-    encode_vmem_load(opcode, vs3, width, rs1, sumop, vm, mop, nf)
+    encode_vmem_load(opcode, vs3, width, rs1, sumop, masking, mop, nf)
 }

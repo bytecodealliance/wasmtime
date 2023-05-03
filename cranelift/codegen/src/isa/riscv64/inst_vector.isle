@@ -72,6 +72,15 @@
   (OPCFG)
 ))
 
+;; Vector Opcode Masking
+;;
+;; When masked, the instruction will only operate on the elements that are dictated by
+;; the mask register. Currently this is always fixed to v0.
+(type VecOpMasking (enum
+  (Enabled)
+  (Disabled)
+))
+
 ;; Register to Register ALU Ops
 (type VecAluOpRRR (enum
   (Vadd)
