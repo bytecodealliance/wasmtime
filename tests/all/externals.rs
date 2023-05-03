@@ -57,6 +57,7 @@ fn bad_tables() {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn cross_store() -> anyhow::Result<()> {
     let mut cfg = Config::new();
     cfg.wasm_reference_types(true);

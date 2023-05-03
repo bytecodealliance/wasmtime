@@ -532,6 +532,7 @@ Caused by:
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn test_tunables_int_mismatch() -> Result<()> {
         let engine = Engine::default();
         let mut metadata = Metadata::new(&engine);

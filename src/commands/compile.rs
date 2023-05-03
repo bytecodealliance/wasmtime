@@ -122,7 +122,7 @@ impl CompileCommand {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(miri)))]
 mod test {
     use super::*;
     use std::io::Write;

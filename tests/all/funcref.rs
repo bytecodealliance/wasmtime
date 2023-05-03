@@ -4,6 +4,7 @@ use std::sync::Arc;
 use wasmtime::*;
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn pass_funcref_in_and_out_of_wasm() -> anyhow::Result<()> {
     let (mut store, module) = ref_types_module(
         false,
@@ -77,6 +78,7 @@ fn pass_funcref_in_and_out_of_wasm() -> anyhow::Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn receive_null_funcref_from_wasm() -> anyhow::Result<()> {
     let (mut store, module) = ref_types_module(
         false,
@@ -126,6 +128,7 @@ fn wrong_store() -> anyhow::Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn func_new_returns_wrong_store() -> anyhow::Result<()> {
     let dropped = Arc::new(AtomicBool::new(false));
     {

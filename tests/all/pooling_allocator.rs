@@ -25,6 +25,7 @@ fn successful_instantiation() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn memory_limit() -> Result<()> {
     let mut pool = PoolingAllocationConfig::default();
     pool.instance_count(1)
@@ -112,7 +113,13 @@ fn memory_init() -> Result<()> {
 
     let module = Module::new(
         &engine,
-        r#"(module (memory (export "m") 2) (data (i32.const 65530) "this data spans multiple pages") (data (i32.const 10) "hello world"))"#,
+        r#"
+            (module
+                (memory (export "m") 2)
+                (data (i32.const 65530) "this data spans multiple pages")
+                (data (i32.const 10) "hello world")
+            )
+        "#,
     )?;
 
     let mut store = Store::new(&engine, ());
@@ -129,6 +136,7 @@ fn memory_init() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn memory_guard_page_trap() -> Result<()> {
     let mut pool = PoolingAllocationConfig::default();
     pool.instance_count(1)
@@ -141,7 +149,12 @@ fn memory_guard_page_trap() -> Result<()> {
 
     let module = Module::new(
         &engine,
-        r#"(module (memory (export "m") 0) (func (export "f") (param i32) local.get 0 i32.load drop))"#,
+        r#"
+            (module
+                (memory (export "m") 0)
+                (func (export "f") (param i32) local.get 0 i32.load drop)
+            )
+        "#,
     )?;
 
     // Instantiate the module and check for out of bounds trap
@@ -231,6 +244,7 @@ fn memory_zeroed() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn table_limit() -> Result<()> {
     const TABLE_ELEMENTS: u32 = 10;
     let mut pool = PoolingAllocationConfig::default();
@@ -315,6 +329,7 @@ fn table_limit() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn table_init() -> Result<()> {
     let mut pool = PoolingAllocationConfig::default();
     pool.instance_count(1)
@@ -327,7 +342,18 @@ fn table_init() -> Result<()> {
 
     let module = Module::new(
         &engine,
-        r#"(module (table (export "t") 6 funcref) (elem (i32.const 1) 1 2 3 4) (elem (i32.const 0) 0) (func) (func (param i32)) (func (param i32 i32)) (func (param i32 i32 i32)) (func (param i32 i32 i32 i32)))"#,
+        r#"
+            (module
+                (table (export "t") 6 funcref)
+                (elem (i32.const 1) 1 2 3 4)
+                (elem (i32.const 0) 0)
+                (func)
+                (func (param i32))
+                (func (param i32 i32))
+                (func (param i32 i32 i32))
+                (func (param i32 i32 i32 i32))
+            )
+        "#,
     )?;
 
     let mut store = Store::new(&engine, ());
@@ -473,15 +499,17 @@ fn preserve_data_segments() -> Result<()> {
     // Spray some stuff on the heap. If wasm data lived on the heap this should
     // paper over things and help us catch use-after-free here if it would
     // otherwise happen.
-    let mut strings = Vec::new();
-    for _ in 0..1000 {
-        let mut string = String::new();
+    if !cfg!(miri) {
+        let mut strings = Vec::new();
         for _ in 0..1000 {
-            string.push('g');
+            let mut string = String::new();
+            for _ in 0..1000 {
+                string.push('g');
+            }
+            strings.push(string);
         }
-        strings.push(string);
+        drop(strings);
     }
-    drop(strings);
 
     let mem = i.get_memory(&mut store, "mem").unwrap();
 
@@ -580,6 +608,7 @@ fn drop_externref_global_during_module_init() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn switch_image_and_non_image() -> Result<()> {
     let mut pool = PoolingAllocationConfig::default();
     pool.instance_count(1);
@@ -638,6 +667,7 @@ fn switch_image_and_non_image() -> Result<()> {
 
 #[test]
 #[cfg(target_pointer_width = "64")]
+#[cfg_attr(miri, ignore)]
 fn instance_too_large() -> Result<()> {
     let mut pool = PoolingAllocationConfig::default();
     pool.instance_size(16).instance_count(1);
@@ -679,6 +709,7 @@ configured maximum of 16 bytes; breakdown of allocation requirement:
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn dynamic_memory_pooling_allocator() -> Result<()> {
     for guard_size in [0, 1 << 16] {
         let max_size = 128 << 20;
@@ -787,6 +818,7 @@ fn dynamic_memory_pooling_allocator() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn zero_memory_pages_disallows_oob() -> Result<()> {
     let mut pool = PoolingAllocationConfig::default();
     pool.instance_count(1).instance_memory_pages(0);

@@ -14,16 +14,54 @@ use std::sync::Once;
 pub use self::backtrace::{Backtrace, Frame};
 pub use self::tls::{tls_eager_initialize, TlsRestore};
 
-#[link(name = "wasmtime-helpers")]
-extern "C" {
-    #[allow(improper_ctypes)]
-    fn wasmtime_setjmp(
-        jmp_buf: *mut *const u8,
-        callback: extern "C" fn(*mut u8, *mut VMContext),
-        payload: *mut u8,
-        callee: *mut VMContext,
-    ) -> i32;
-    fn wasmtime_longjmp(jmp_buf: *const u8) -> !;
+cfg_if::cfg_if! {
+    if #[cfg(miri)] {
+        // With MIRI set up just enough of a setjmp/longjmp with catching panics
+        // to get a few tests working that use this.
+        //
+        // Note that no actual JIT code runs in MIRI so this is purely here for
+        // host-to-host calls.
+
+        struct WasmtimeLongjmp;
+
+        unsafe extern "C" fn wasmtime_setjmp(
+            _jmp_buf: *mut *const u8,
+            callback: extern "C" fn(*mut u8, *mut VMContext),
+            payload: *mut u8,
+            callee: *mut VMContext,
+        ) -> i32 {
+            use std::panic::{self, AssertUnwindSafe};
+            let result = panic::catch_unwind(AssertUnwindSafe(|| {
+                callback(payload, callee);
+            }));
+            match result {
+                Ok(()) => 1,
+                Err(e) => {
+                    if e.is::<WasmtimeLongjmp>() {
+                        0
+                    } else {
+                        panic::resume_unwind(e)
+                    }
+                }
+            }
+        }
+
+        unsafe extern "C" fn wasmtime_longjmp(_jmp_buf: *const u8) -> ! {
+            std::panic::panic_any(WasmtimeLongjmp)
+        }
+    } else {
+        #[link(name = "wasmtime-helpers")]
+        extern "C" {
+            #[allow(improper_ctypes)]
+            fn wasmtime_setjmp(
+                jmp_buf: *mut *const u8,
+                callback: extern "C" fn(*mut u8, *mut VMContext),
+                payload: *mut u8,
+                callee: *mut VMContext,
+            ) -> i32;
+            fn wasmtime_longjmp(jmp_buf: *const u8) -> !;
+        }
+    }
 }
 
 cfg_if::cfg_if! {

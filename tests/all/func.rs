@@ -4,6 +4,7 @@ use std::sync::Arc;
 use wasmtime::*;
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn call_wasm_to_wasm() -> Result<()> {
     let wasm = wat::parse_str(
         r#"
@@ -31,6 +32,7 @@ fn call_wasm_to_wasm() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn call_wasm_to_native() -> Result<()> {
     let wasm = wat::parse_str(
         r#"
@@ -55,6 +57,7 @@ fn call_wasm_to_native() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn call_wasm_to_array() -> Result<()> {
     let wasm = wat::parse_str(
         r#"
@@ -88,6 +91,7 @@ fn call_wasm_to_array() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn call_native_to_wasm() -> Result<()> {
     let wasm = wat::parse_str(
         r#"
@@ -125,6 +129,7 @@ fn call_native_to_native() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn call_native_to_array() -> Result<()> {
     let mut store = Store::<()>::default();
 
@@ -148,6 +153,7 @@ fn call_native_to_array() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn call_array_to_wasm() -> Result<()> {
     let wasm = wat::parse_str(
         r#"
@@ -195,6 +201,7 @@ fn call_array_to_native() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn call_array_to_array() -> Result<()> {
     let mut store = Store::<()>::default();
     let func = Func::new(
@@ -223,6 +230,7 @@ fn call_array_to_array() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn call_indirect_native_from_wasm_import_global() -> Result<()> {
     let wasm = wat::parse_str(
         r#"
@@ -255,6 +263,7 @@ fn call_indirect_native_from_wasm_import_global() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn call_indirect_native_from_wasm_import_table() -> Result<()> {
     let wasm = wat::parse_str(
         r#"
@@ -283,6 +292,7 @@ fn call_indirect_native_from_wasm_import_table() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn call_indirect_native_from_wasm_import_func_returns_funcref() -> Result<()> {
     let wasm = wat::parse_str(
         r#"
@@ -311,6 +321,7 @@ fn call_indirect_native_from_wasm_import_func_returns_funcref() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn call_indirect_native_from_exported_table() -> Result<()> {
     let wasm = wat::parse_str(
         r#"
@@ -337,6 +348,7 @@ fn call_indirect_native_from_exported_table() -> Result<()> {
 
 // wasm exports global, host puts native-call funcref in global, wasm calls funcref
 #[test]
+#[cfg_attr(miri, ignore)]
 fn call_indirect_native_from_exported_global() -> Result<()> {
     let wasm = wat::parse_str(
         r#"
@@ -482,6 +494,7 @@ fn signatures_match() {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn import_works() -> Result<()> {
     static HITS: AtomicUsize = AtomicUsize::new(0);
 
@@ -589,6 +602,7 @@ fn trap_smoke() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn trap_import() -> Result<()> {
     let wasm = wat::parse_str(
         r#"
@@ -645,6 +659,7 @@ fn get_from_wrapper() {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn get_from_signature() {
     let mut store = Store::<()>::default();
     let ty = FuncType::new(None, None);
@@ -662,6 +677,7 @@ fn get_from_signature() {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn get_from_module() -> anyhow::Result<()> {
     let mut store = Store::<()>::default();
     let module = Module::new(
@@ -733,6 +749,7 @@ fn call_wrapped_func() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn caller_memory() -> anyhow::Result<()> {
     let mut store = Store::<()>::default();
     let f = Func::wrap(&mut store, |mut c: Caller<'_, ()>| {
@@ -798,6 +815,7 @@ fn caller_memory() -> anyhow::Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn func_write_nothing() -> anyhow::Result<()> {
     let mut store = Store::<()>::default();
     let ty = FuncType::new(None, Some(ValType::I32));
@@ -810,6 +828,7 @@ fn func_write_nothing() -> anyhow::Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn return_cross_store_value() -> anyhow::Result<()> {
     let _ = env_logger::try_init();
 
@@ -875,6 +894,7 @@ fn pass_cross_store_arg() -> anyhow::Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn externref_signature_no_reference_types() -> anyhow::Result<()> {
     let mut config = Config::new();
     config.wasm_reference_types(false);
@@ -892,6 +912,7 @@ fn externref_signature_no_reference_types() -> anyhow::Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn trampolines_always_valid() -> anyhow::Result<()> {
     // Compile two modules up front
     let mut store = Store::<()>::default();
@@ -918,6 +939,7 @@ fn trampolines_always_valid() -> anyhow::Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn typed_multiple_results() -> anyhow::Result<()> {
     let mut store = Store::<()>::default();
     let module = Module::new(
@@ -954,6 +976,7 @@ fn typed_multiple_results() -> anyhow::Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn trap_doesnt_leak() -> anyhow::Result<()> {
     #[derive(Default)]
     struct Canary(Arc<AtomicBool>);
@@ -994,6 +1017,7 @@ fn trap_doesnt_leak() -> anyhow::Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn wrap_multiple_results() -> anyhow::Result<()> {
     fn test<T>(store: &mut Store<()>, t: T) -> anyhow::Result<()>
     where
@@ -1158,6 +1182,7 @@ fn wrap_multiple_results() -> anyhow::Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn trampoline_for_declared_elem() -> anyhow::Result<()> {
     let engine = Engine::default();
 
@@ -1185,6 +1210,7 @@ fn trampoline_for_declared_elem() -> anyhow::Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn wasm_ty_roundtrip() -> Result<(), anyhow::Error> {
     let mut store = Store::<()>::default();
     let debug = Func::wrap(
@@ -1240,6 +1266,7 @@ fn wasm_ty_roundtrip() -> Result<(), anyhow::Error> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn typed_funcs_count_params_correctly_in_error_messages() -> anyhow::Result<()> {
     let mut store = Store::<()>::default();
     let module = Module::new(

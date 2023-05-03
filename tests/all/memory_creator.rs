@@ -1,4 +1,4 @@
-#[cfg(not(target_os = "windows"))]
+#[cfg(all(not(target_os = "windows"), not(miri)))]
 mod not_for_windows {
     use wasmtime::*;
     use wasmtime_environ::{WASM32_MAX_PAGES, WASM_PAGE_SIZE};

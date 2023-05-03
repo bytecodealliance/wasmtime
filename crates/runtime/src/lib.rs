@@ -40,6 +40,7 @@ mod memory;
 mod mmap;
 mod mmap_vec;
 mod parking_spot;
+mod store_box;
 mod table;
 mod traphandlers;
 mod vmcontext;
@@ -65,6 +66,7 @@ pub use crate::memory::{
 };
 pub use crate::mmap::Mmap;
 pub use crate::mmap_vec::MmapVec;
+pub use crate::store_box::*;
 pub use crate::table::{Table, TableElement};
 pub use crate::traphandlers::{
     catch_traps, init_traps, raise_lib_trap, raise_user_trap, resume_panic, tls_eager_initialize,

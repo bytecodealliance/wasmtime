@@ -40,10 +40,36 @@ pub struct ComponentInstance {
     /// Size and offset information for the trailing `VMComponentContext`.
     offsets: VMComponentOffsets<HostPtr>,
 
+    /// A self-referential pointer to the `ComponentInstance` itself.
+    ///
+    /// The reason for this field's existence is a bit subtle because if you
+    /// have a pointer to `ComponentInstance` then why have this field which has
+    /// the same information? The subtlety here is due to the fact that this is
+    /// here to handle provenance and aliasing issues with optimizations in LLVM
+    /// and Rustc. Put another way, this is here to make MIRI happy. That's an
+    /// oversimplification, though, since this is actually required for
+    /// correctness to communicate the actual intent to LLVM's optimizations and
+    /// such.
+    ///
+    /// This field is chiefly used during `ComponentInstance::vmctx`. If you
+    /// think of pointers as a pair of address and provenance, this type stores
+    /// the provenance of the entire allocation. That's technically all we need
+    /// here, just the provenance, but that can only be done with storage of a
+    /// pointer hence the storage here.
+    ///
+    /// Finally note that there's a small wrapper around this to add `Send` and
+    /// `Sync` bounds, but serves no other purpose.
+    self_reference: RawComponentInstance,
+
     /// A zero-sized field which represents the end of the struct for the actual
     /// `VMComponentContext` to be allocated behind.
     vmctx: VMComponentContext,
 }
+
+struct RawComponentInstance(NonNull<ComponentInstance>);
+
+unsafe impl Send for RawComponentInstance {}
+unsafe impl Sync for RawComponentInstance {}
 
 /// Type signature for host-defined trampolines that are called from
 /// WebAssembly.
@@ -108,9 +134,8 @@ pub struct VMLowering {
 /// `ComponentInstance`.
 #[repr(C)]
 // Set an appropriate alignment for this structure where the most-aligned value
-// internally right now is a pointer.
-#[cfg_attr(target_pointer_width = "32", repr(align(4)))]
-#[cfg_attr(target_pointer_width = "64", repr(align(8)))]
+// internally right now `VMGlobalDefinition` which has an alignment of 16 bytes.
+#[repr(align(16))]
 pub struct VMComponentContext {
     /// For more information about this see the equivalent field in `VMContext`
     _marker: marker::PhantomPinned,
@@ -138,7 +163,7 @@ impl ComponentInstance {
     /// the shape of the component being instantiated and `store` is a pointer
     /// back to the Wasmtime store for host functions to have access to.
     unsafe fn new_at(
-        ptr: *mut ComponentInstance,
+        ptr: NonNull<ComponentInstance>,
         alloc_size: usize,
         offsets: VMComponentOffsets<HostPtr>,
         store: *mut dyn Store,
@@ -146,23 +171,37 @@ impl ComponentInstance {
         assert!(alloc_size >= Self::alloc_layout(&offsets).size());
 
         ptr::write(
-            ptr,
+            ptr.as_ptr(),
             ComponentInstance {
                 offsets,
+                self_reference: RawComponentInstance(ptr),
                 vmctx: VMComponentContext {
                     _marker: marker::PhantomPinned,
                 },
             },
         );
 
-        (*ptr).initialize_vmctx(store);
+        (*ptr.as_ptr()).initialize_vmctx(store);
     }
 
     fn vmctx(&self) -> *mut VMComponentContext {
-        &self.vmctx as *const VMComponentContext as *mut VMComponentContext
+        let self_ref = self.self_reference.0.as_ptr();
+        unsafe {
+            self_ref
+                .cast::<u8>()
+                .add(mem::size_of::<ComponentInstance>())
+                .cast()
+        }
     }
 
-    unsafe fn vmctx_plus_offset<T>(&self, offset: u32) -> *mut T {
+    unsafe fn vmctx_plus_offset<T>(&self, offset: u32) -> *const T {
+        self.vmctx()
+            .cast::<u8>()
+            .add(usize::try_from(offset).unwrap())
+            .cast()
+    }
+
+    unsafe fn vmctx_plus_offset_mut<T>(&mut self, offset: u32) -> *mut T {
         self.vmctx()
             .cast::<u8>()
             .add(usize::try_from(offset).unwrap())
@@ -172,7 +211,12 @@ impl ComponentInstance {
     /// Returns a pointer to the "may leave" flag for this instance specified
     /// for canonical lowering and lifting operations.
     pub fn instance_flags(&self, instance: RuntimeComponentInstanceIndex) -> InstanceFlags {
-        unsafe { InstanceFlags(self.vmctx_plus_offset(self.offsets.instance_flags(instance))) }
+        unsafe {
+            InstanceFlags(
+                self.vmctx_plus_offset::<VMGlobalDefinition>(self.offsets.instance_flags(instance))
+                    .cast_mut(),
+            )
+        }
     }
 
     /// Returns the store that this component was created with.
@@ -264,7 +308,7 @@ impl ComponentInstance {
                 != INVALID_PTR
         );
         debug_assert!((*ret).vmctx as usize != INVALID_PTR);
-        NonNull::new(ret).unwrap()
+        NonNull::new(ret.cast_mut()).unwrap()
     }
 
     /// Stores the runtime memory pointer at the index specified.
@@ -278,7 +322,7 @@ impl ComponentInstance {
     pub fn set_runtime_memory(&mut self, idx: RuntimeMemoryIndex, ptr: *mut VMMemoryDefinition) {
         unsafe {
             debug_assert!(!ptr.is_null());
-            let storage = self.vmctx_plus_offset(self.offsets.runtime_memory(idx));
+            let storage = self.vmctx_plus_offset_mut(self.offsets.runtime_memory(idx));
             debug_assert!(*storage as usize == INVALID_PTR);
             *storage = ptr;
         }
@@ -287,7 +331,7 @@ impl ComponentInstance {
     /// Same as `set_runtime_memory` but for realloc function pointers.
     pub fn set_runtime_realloc(&mut self, idx: RuntimeReallocIndex, ptr: NonNull<VMFuncRef>) {
         unsafe {
-            let storage = self.vmctx_plus_offset(self.offsets.runtime_realloc(idx));
+            let storage = self.vmctx_plus_offset_mut(self.offsets.runtime_realloc(idx));
             debug_assert!(*storage as usize == INVALID_PTR);
             *storage = ptr.as_ptr();
         }
@@ -300,7 +344,7 @@ impl ComponentInstance {
         ptr: NonNull<VMFuncRef>,
     ) {
         unsafe {
-            let storage = self.vmctx_plus_offset(self.offsets.runtime_post_return(idx));
+            let storage = self.vmctx_plus_offset_mut(self.offsets.runtime_post_return(idx));
             debug_assert!(*storage as usize == INVALID_PTR);
             *storage = ptr.as_ptr();
         }
@@ -331,7 +375,7 @@ impl ComponentInstance {
             debug_assert!(
                 *self.vmctx_plus_offset::<usize>(self.offsets.lowering_data(idx)) == INVALID_PTR
             );
-            *self.vmctx_plus_offset(self.offsets.lowering(idx)) = lowering;
+            *self.vmctx_plus_offset_mut(self.offsets.lowering(idx)) = lowering;
             self.set_func_ref(
                 self.offsets.lowering_func_ref(idx),
                 wasm_call,
@@ -392,7 +436,7 @@ impl ComponentInstance {
     ) {
         debug_assert!(*self.vmctx_plus_offset::<usize>(offset) == INVALID_PTR);
         let vmctx = VMOpaqueContext::from_vmcomponent(self.vmctx());
-        *self.vmctx_plus_offset(offset) = VMFuncRef {
+        *self.vmctx_plus_offset_mut(offset) = VMFuncRef {
             wasm_call: Some(wasm_call),
             native_call,
             array_call,
@@ -402,11 +446,11 @@ impl ComponentInstance {
     }
 
     unsafe fn initialize_vmctx(&mut self, store: *mut dyn Store) {
-        *self.vmctx_plus_offset(self.offsets.magic()) = VMCOMPONENT_MAGIC;
-        *self.vmctx_plus_offset(self.offsets.transcode_libcalls()) =
+        *self.vmctx_plus_offset_mut(self.offsets.magic()) = VMCOMPONENT_MAGIC;
+        *self.vmctx_plus_offset_mut(self.offsets.transcode_libcalls()) =
             &transcode::VMBuiltinTranscodeArray::INIT;
-        *self.vmctx_plus_offset(self.offsets.store()) = store;
-        *self.vmctx_plus_offset(self.offsets.limits()) = (*store).vmruntime_limits();
+        *self.vmctx_plus_offset_mut(self.offsets.store()) = store;
+        *self.vmctx_plus_offset_mut(self.offsets.limits()) = (*store).vmruntime_limits();
 
         for i in 0..self.offsets.num_runtime_component_instances {
             let i = RuntimeComponentInstanceIndex::from_u32(i);
@@ -423,36 +467,36 @@ impl ComponentInstance {
             for i in 0..self.offsets.num_lowerings {
                 let i = LoweredIndex::from_u32(i);
                 let offset = self.offsets.lowering_callee(i);
-                *self.vmctx_plus_offset(offset) = INVALID_PTR;
+                *self.vmctx_plus_offset_mut(offset) = INVALID_PTR;
                 let offset = self.offsets.lowering_data(i);
-                *self.vmctx_plus_offset(offset) = INVALID_PTR;
+                *self.vmctx_plus_offset_mut(offset) = INVALID_PTR;
                 let offset = self.offsets.lowering_func_ref(i);
-                *self.vmctx_plus_offset(offset) = INVALID_PTR;
+                *self.vmctx_plus_offset_mut(offset) = INVALID_PTR;
             }
             for i in 0..self.offsets.num_always_trap {
                 let i = RuntimeAlwaysTrapIndex::from_u32(i);
                 let offset = self.offsets.always_trap_func_ref(i);
-                *self.vmctx_plus_offset(offset) = INVALID_PTR;
+                *self.vmctx_plus_offset_mut(offset) = INVALID_PTR;
             }
             for i in 0..self.offsets.num_transcoders {
                 let i = RuntimeTranscoderIndex::from_u32(i);
                 let offset = self.offsets.transcoder_func_ref(i);
-                *self.vmctx_plus_offset(offset) = INVALID_PTR;
+                *self.vmctx_plus_offset_mut(offset) = INVALID_PTR;
             }
             for i in 0..self.offsets.num_runtime_memories {
                 let i = RuntimeMemoryIndex::from_u32(i);
                 let offset = self.offsets.runtime_memory(i);
-                *self.vmctx_plus_offset(offset) = INVALID_PTR;
+                *self.vmctx_plus_offset_mut(offset) = INVALID_PTR;
             }
             for i in 0..self.offsets.num_runtime_reallocs {
                 let i = RuntimeReallocIndex::from_u32(i);
                 let offset = self.offsets.runtime_realloc(i);
-                *self.vmctx_plus_offset(offset) = INVALID_PTR;
+                *self.vmctx_plus_offset_mut(offset) = INVALID_PTR;
             }
             for i in 0..self.offsets.num_runtime_post_returns {
                 let i = RuntimePostReturnIndex::from_u32(i);
                 let offset = self.offsets.runtime_post_return(i);
-                *self.vmctx_plus_offset(offset) = INVALID_PTR;
+                *self.vmctx_plus_offset_mut(offset) = INVALID_PTR;
             }
         }
     }
@@ -503,7 +547,7 @@ impl OwnedComponentInstance {
             let ptr = alloc::alloc_zeroed(layout) as *mut ComponentInstance;
             let ptr = ptr::NonNull::new(ptr).unwrap();
 
-            ComponentInstance::new_at(ptr.as_ptr(), layout.size(), offsets, store);
+            ComponentInstance::new_at(ptr, layout.size(), offsets, store);
 
             OwnedComponentInstance { ptr }
         }

@@ -1,3 +1,5 @@
+#![cfg(not(miri))]
+
 use super::{make_echo_component, TypedFuncExt};
 use anyhow::Result;
 use component_macro_test::{add_variants, flags_test};

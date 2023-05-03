@@ -1,3 +1,5 @@
+#![cfg(not(miri))]
+
 use crate::async_functions::{CountPending, PollOnce};
 use anyhow::{anyhow, Result};
 use std::sync::atomic::{AtomicBool, Ordering};

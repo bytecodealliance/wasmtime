@@ -18,6 +18,7 @@ mod post_return;
 mod strings;
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn components_importing_modules() -> Result<()> {
     let engine = engine();
 

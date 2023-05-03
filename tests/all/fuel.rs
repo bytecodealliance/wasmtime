@@ -25,6 +25,7 @@ impl<'a> Parse<'a> for FuelWast<'a> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn run() -> Result<()> {
     let test = std::fs::read_to_string("tests/all/fuel.wast")?;
     let buf = ParseBuffer::new(&test)?;
@@ -58,6 +59,7 @@ fn fuel_consumed(wasm: &[u8]) -> u64 {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn iloop() {
     iloop_aborts(
         r#"
@@ -141,6 +143,7 @@ fn manual_fuel() {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn host_function_consumes_all() {
     const FUEL: u64 = 10_000;
     let mut config = Config::new();
@@ -185,6 +188,7 @@ fn manual_edge_cases() {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn unconditionally_trapping_memory_accesses_save_fuel_before_trapping() {
     let mut config = Config::new();
     config.consume_fuel(true);
