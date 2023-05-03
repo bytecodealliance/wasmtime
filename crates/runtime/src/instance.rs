@@ -941,7 +941,10 @@ impl Instance {
         })
     }
 
-    /// TODO
+    /// Gets the raw runtime table data structure owned by this instance
+    /// given the provided `idx`.
+    ///
+    /// The `range` specified is eagerly initialized for funcref tables.
     pub fn get_defined_table_with_lazy_init(
         &mut self,
         idx: DefinedTableIndex,
@@ -1211,7 +1214,8 @@ pub struct InstanceHandle {
 }
 
 impl InstanceHandle {
-    /// TODO
+    /// Creates an "empty" instance handle which internally has a null pointer
+    /// to an instance.
     pub fn null() -> InstanceHandle {
         InstanceHandle { instance: None }
     }

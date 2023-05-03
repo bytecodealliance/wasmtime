@@ -385,7 +385,7 @@ unsafe fn table_get_lazy_init_func_ref(
             .get(index)
             .expect("table access already bounds-checked");
 
-        elem.into_ref_asserting_initialized() as *mut u8
+        elem.into_ref_asserting_initialized()
     })
 }
 
