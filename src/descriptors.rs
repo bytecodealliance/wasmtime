@@ -30,7 +30,7 @@ impl Drop for Descriptor {
                 match &stream.type_ {
                     StreamType::File(file) => filesystem::drop_descriptor(file.fd),
                     StreamType::Socket(_) => unreachable!(),
-                    StreamType::Unknown => {}
+                    StreamType::Stdio => {}
                 }
             }
             Descriptor::Closed(_) => {}
@@ -106,8 +106,8 @@ impl Streams {
 
 #[allow(dead_code)] // until Socket is implemented
 pub enum StreamType {
-    /// It's a valid stream but we don't know where it comes from.
-    Unknown,
+    /// Stream is used for implementing stdio.
+    Stdio,
 
     /// Streaming data with a file.
     File(File),
@@ -146,19 +146,19 @@ impl Descriptors {
         d.push(Descriptor::Streams(Streams {
             input: Cell::new(Some(stdio.stdin)),
             output: Cell::new(None),
-            type_: StreamType::Unknown,
+            type_: StreamType::Stdio,
         }))
         .trapping_unwrap();
         d.push(Descriptor::Streams(Streams {
             input: Cell::new(None),
             output: Cell::new(Some(stdio.stdout)),
-            type_: StreamType::Unknown,
+            type_: StreamType::Stdio,
         }))
         .trapping_unwrap();
         d.push(Descriptor::Streams(Streams {
             input: Cell::new(None),
             output: Cell::new(Some(stdio.stderr)),
-            type_: StreamType::Unknown,
+            type_: StreamType::Stdio,
         }))
         .trapping_unwrap();
 
@@ -321,16 +321,6 @@ impl Descriptors {
         match self.get(fd)? {
             Descriptor::Streams(streams) => Ok(streams),
             Descriptor::Closed(_) => Err(wasi::ERRNO_BADF),
-        }
-    }
-
-    pub fn get_file_or_dir(&self, fd: Fd) -> Result<&File, Errno> {
-        match self.get(fd)? {
-            Descriptor::Streams(Streams {
-                type_: StreamType::File(file),
-                ..
-            }) => Ok(file),
-            _ => Err(wasi::ERRNO_BADF),
         }
     }
 

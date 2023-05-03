@@ -498,9 +498,9 @@ pub unsafe extern "C" fn fd_fdstat_get(fd: Fd, stat: *mut Fdstat) -> Errno {
         | Descriptor::Streams(Streams {
             input,
             output,
-            type_: StreamType::Unknown,
+            type_: StreamType::Stdio,
         }) => {
-            let fs_filetype = FILETYPE_UNKNOWN;
+            let fs_filetype = FILETYPE_CHARACTER_DEVICE;
             let fs_flags = 0;
             let mut fs_rights_base = 0;
             if input.get().is_some() {
@@ -540,7 +540,7 @@ pub unsafe extern "C" fn fd_fdstat_set_flags(fd: Fd, flags: Fdflags) -> Errno {
             }) if !file.is_dir() => file,
             _ => Err(wasi::ERRNO_BADF)?,
         };
-        file.append = (flags & FDFLAGS_APPEND == FDFLAGS_APPEND);
+        file.append = flags & FDFLAGS_APPEND == FDFLAGS_APPEND;
         file.blocking = !(flags & FDFLAGS_NONBLOCK == FDFLAGS_NONBLOCK);
         Ok(())
     })
@@ -581,16 +581,15 @@ pub unsafe extern "C" fn fd_filestat_get(fd: Fd, buf: *mut Filestat) -> Errno {
                 };
                 Ok(())
             }
-            // For unknown (effectively, stdio) streams, instead of returning an error, return a
-            // Filestat with all zero fields and Filetype::Unknown.
+            // Stdio is all zero fields, except for filetype character device
             Descriptor::Streams(Streams {
-                type_: StreamType::Unknown,
+                type_: StreamType::Stdio,
                 ..
             }) => {
                 *buf = Filestat {
                     dev: 0,
                     ino: 0,
-                    filetype: FILETYPE_UNKNOWN,
+                    filetype: FILETYPE_CHARACTER_DEVICE,
                     nlink: 0,
                     size: 0,
                     atim: 0,
@@ -1749,7 +1748,7 @@ pub unsafe extern "C" fn poll_oneoff(
                                                }
                                                */
                             }
-                            StreamType::Unknown => {
+                            StreamType::Stdio => {
                                 error = ERRNO_SUCCESS;
                                 nbytes = 1;
                                 flags = 0;
@@ -1766,7 +1765,7 @@ pub unsafe extern "C" fn poll_oneoff(
                         .trapping_unwrap();
                     match desc {
                         Descriptor::Streams(streams) => match streams.type_ {
-                            StreamType::File(_) | StreamType::Unknown => {
+                            StreamType::File(_) | StreamType::Stdio => {
                                 error = ERRNO_SUCCESS;
                                 nbytes = 1;
                                 flags = 0;
