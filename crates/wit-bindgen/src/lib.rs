@@ -1027,9 +1027,10 @@ impl<'a> InterfaceGenerator<'a> {
             _ => return None,
         };
         let error_typeid = match result.err? {
-            Type::Id(id) => id,
+            Type::Id(id) => resolve_type_definition_id(&self.resolve, id),
             _ => return None,
         };
+
         self.trappable_error_types(owner)
             .find(|(wit_error_typeid, _)| error_typeid == *wit_error_typeid)
             .map(|(_, rust_errortype)| (result, rust_errortype))
@@ -1484,5 +1485,17 @@ impl<'a> RustGenerator<'a> for InterfaceGenerator<'a> {
 
     fn info(&self, ty: TypeId) -> TypeInfo {
         self.gen.types.get(ty)
+    }
+}
+
+/// When an interface `use`s a type from another interface, it creates a new TypeId
+/// referring to the definition TypeId. Chase this chain of references down to
+/// a TypeId for type's definition.
+fn resolve_type_definition_id(resolve: &Resolve, mut id: TypeId) -> TypeId {
+    loop {
+        match resolve.types[id].kind {
+            TypeDefKind::Type(Type::Id(def_id)) => id = def_id,
+            _ => return id,
+        }
     }
 }
