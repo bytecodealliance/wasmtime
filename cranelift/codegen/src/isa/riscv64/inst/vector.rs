@@ -1,7 +1,7 @@
 use crate::isa::riscv64::inst::EmitState;
 use crate::isa::riscv64::lower::isle::generated_code::{
     VecAMode, VecAluOpRRImm5, VecAluOpRRR, VecAvl, VecElementWidth, VecLmul, VecMaskMode,
-    VecOpCategory, VecTailMode, VecOpMasking
+    VecOpCategory, VecOpMasking, VecTailMode,
 };
 use crate::Reg;
 use core::fmt;
