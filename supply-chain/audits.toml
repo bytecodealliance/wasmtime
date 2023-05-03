@@ -1168,6 +1168,16 @@ criteria = "safe-to-deploy"
 version = "0.4.6"
 notes = "provides a datastructure implemented using std's Vec. all uses of unsafe are just delegating to the underlying unsafe Vec methods."
 
+[[audits.slice-group-by]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.3.0 -> 0.3.1"
+notes = """
+This update runs `rustfmt` for the first time in awhile and additionally fixes a
+few minor issues related to Stacked Borrows and running in MIRI. No fundamental
+change to any preexisting unsafe code is happening here.
+"""
+
 [[audits.spin]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-run"
