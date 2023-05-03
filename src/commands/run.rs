@@ -10,8 +10,8 @@ use std::path::{Component, Path, PathBuf};
 use std::thread;
 use std::time::Duration;
 use wasmtime::{
-    Engine, Func, GuestProfiler, Linker, Module, Store, StoreLimits, StoreLimitsBuilder, Val,
-    ValType,
+    AsContextMut, Engine, Func, GuestProfiler, Linker, Module, Store, StoreLimits,
+    StoreLimitsBuilder, Val, ValType,
 };
 use wasmtime_cli_flags::{CommonOptions, WasiModules};
 use wasmtime_wasi::maybe_exit_on_error;
@@ -403,13 +403,24 @@ impl RunCommand {
             store.data_mut().guest_profiler =
                 Some(Arc::new(GuestProfiler::new(module_name, interval, modules)));
 
+            fn sample(mut store: impl AsContextMut<Data = Host>) {
+                let mut profiler = store
+                    .as_context_mut()
+                    .data_mut()
+                    .guest_profiler
+                    .take()
+                    .unwrap();
+                Arc::get_mut(&mut profiler)
+                    .expect("profiling doesn't support threads yet")
+                    .sample(&store);
+                store.as_context_mut().data_mut().guest_profiler = Some(profiler);
+            }
+
             if let Some(timeout) = self.wasm_timeout {
                 let mut timeout = (timeout.as_secs_f64() / interval.as_secs_f64()).ceil() as u64;
                 assert!(timeout > 0);
                 store.epoch_deadline_callback(move |mut store| {
-                    Arc::get_mut(store.data_mut().guest_profiler.as_mut().unwrap())
-                        .expect("profiling doesn't support threads yet")
-                        .sample();
+                    sample(&mut store);
                     timeout -= 1;
                     if timeout == 0 {
                         bail!("timeout exceeded");
@@ -418,9 +429,7 @@ impl RunCommand {
                 });
             } else {
                 store.epoch_deadline_callback(move |mut store| {
-                    Arc::get_mut(store.data_mut().guest_profiler.as_mut().unwrap())
-                        .expect("profiling doesn't support threads yet")
-                        .sample();
+                    sample(&mut store);
                     Ok(1)
                 });
             }
