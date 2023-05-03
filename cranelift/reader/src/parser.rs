@@ -2731,7 +2731,6 @@ impl<'a> Parser<'a> {
                 ctx.check_table(table, self.loc)?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
                 let arg = self.match_value("expected SSA value table address")?;
-                self.match_token(Token::Comma, "expected ',' between operands")?;
                 let offset = self.optional_offset32()?;
                 InstructionData::TableAddr {
                     opcode,
