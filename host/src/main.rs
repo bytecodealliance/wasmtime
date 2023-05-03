@@ -136,7 +136,7 @@ async fn main() -> Result<()> {
         let (wasi, _instance) =
             wasi::command::Command::instantiate_async(&mut store, &component, &linker).await?;
 
-        let result: Result<(), ()> = wasi.call_main(&mut store).await?;
+        let result: Result<(), ()> = wasi.call_run(&mut store).await?;
 
         if result.is_err() {
             anyhow::bail!("command returned with failing exit status");

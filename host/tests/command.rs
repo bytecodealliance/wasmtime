@@ -75,7 +75,7 @@ async fn hello_stdout() -> Result<()> {
     let (mut store, command) =
         instantiate(get_component("hello_stdout"), CommandCtx { table, wasi }).await?;
     command
-        .call_main(&mut store)
+        .call_run(&mut store)
         .await?
         .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))
 }
@@ -97,7 +97,7 @@ async fn panic() -> Result<()> {
         .build(&mut table)?;
     let (mut store, command) =
         instantiate(get_component("panic"), CommandCtx { table, wasi }).await?;
-    let r = command.call_main(&mut store).await;
+    let r = command.call_run(&mut store).await;
     assert!(r.is_err());
     println!("{:?}", r);
     Ok(())
@@ -112,7 +112,7 @@ async fn args() -> Result<()> {
     let (mut store, command) =
         instantiate(get_component("args"), CommandCtx { table, wasi }).await?;
     command
-        .call_main(&mut store)
+        .call_run(&mut store)
         .await?
         .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))
 }
@@ -146,7 +146,7 @@ async fn random() -> Result<()> {
         instantiate(get_component("random"), CommandCtx { table, wasi }).await?;
 
     command
-        .call_main(&mut store)
+        .call_run(&mut store)
         .await?
         .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))
 }
@@ -191,7 +191,7 @@ async fn time() -> Result<()> {
         instantiate(get_component("time"), CommandCtx { table, wasi }).await?;
 
     command
-        .call_main(&mut store)
+        .call_run(&mut store)
         .await?
         .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))
 }
@@ -209,7 +209,7 @@ async fn stdin() -> Result<()> {
         instantiate(get_component("stdin"), CommandCtx { table, wasi }).await?;
 
     command
-        .call_main(&mut store)
+        .call_run(&mut store)
         .await?
         .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))
 }
@@ -227,7 +227,7 @@ async fn poll_stdin() -> Result<()> {
         instantiate(get_component("poll_stdin"), CommandCtx { table, wasi }).await?;
 
     command
-        .call_main(&mut store)
+        .call_run(&mut store)
         .await?
         .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))
 }
@@ -244,7 +244,7 @@ async fn env() -> Result<()> {
         instantiate(get_component("env"), CommandCtx { table, wasi }).await?;
 
     command
-        .call_main(&mut store)
+        .call_run(&mut store)
         .await?
         .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))
 }
@@ -266,7 +266,7 @@ async fn file_read() -> Result<()> {
         instantiate(get_component("file_read"), CommandCtx { table, wasi }).await?;
 
     command
-        .call_main(&mut store)
+        .call_run(&mut store)
         .await?
         .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))
 }
@@ -288,7 +288,7 @@ async fn file_append() -> Result<()> {
     let (mut store, command) =
         instantiate(get_component("file_append"), CommandCtx { table, wasi }).await?;
     command
-        .call_main(&mut store)
+        .call_run(&mut store)
         .await?
         .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))?;
 
@@ -321,7 +321,7 @@ async fn file_dir_sync() -> Result<()> {
         instantiate(get_component("file_dir_sync"), CommandCtx { table, wasi }).await?;
 
     command
-        .call_main(&mut store)
+        .call_run(&mut store)
         .await?
         .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))
 }
@@ -334,7 +334,7 @@ async fn exit_success() -> Result<()> {
     let (mut store, command) =
         instantiate(get_component("exit_success"), CommandCtx { table, wasi }).await?;
 
-    let r = command.call_main(&mut store).await;
+    let r = command.call_run(&mut store).await;
     let err = r.unwrap_err();
     let status = err.downcast_ref::<wasi_common::I32Exit>().unwrap();
     assert_eq!(status.0, 0);
@@ -349,7 +349,7 @@ async fn exit_default() -> Result<()> {
     let (mut store, command) =
         instantiate(get_component("exit_default"), CommandCtx { table, wasi }).await?;
 
-    let r = command.call_main(&mut store).await?;
+    let r = command.call_run(&mut store).await?;
     assert!(r.is_ok());
     Ok(())
 }
@@ -362,7 +362,7 @@ async fn exit_failure() -> Result<()> {
     let (mut store, command) =
         instantiate(get_component("exit_failure"), CommandCtx { table, wasi }).await?;
 
-    let r = command.call_main(&mut store).await;
+    let r = command.call_run(&mut store).await;
     let err = r.unwrap_err();
     let status = err.downcast_ref::<wasi_common::I32Exit>().unwrap();
     assert_eq!(status.0, 1);
@@ -377,7 +377,7 @@ async fn exit_panic() -> Result<()> {
     let (mut store, command) =
         instantiate(get_component("exit_panic"), CommandCtx { table, wasi }).await?;
 
-    let r = command.call_main(&mut store).await;
+    let r = command.call_run(&mut store).await;
     let err = r.unwrap_err();
     // The panic should trap.
     assert!(err.downcast_ref::<wasi_common::I32Exit>().is_none());
@@ -406,7 +406,7 @@ async fn directory_list() -> Result<()> {
         instantiate(get_component("directory_list"), CommandCtx { table, wasi }).await?;
 
     command
-        .call_main(&mut store)
+        .call_run(&mut store)
         .await?
         .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))
 }
@@ -420,7 +420,7 @@ async fn default_clocks() -> Result<()> {
         instantiate(get_component("default_clocks"), CommandCtx { table, wasi }).await?;
 
     command
-        .call_main(&mut store)
+        .call_run(&mut store)
         .await?
         .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))
 }
@@ -436,7 +436,7 @@ async fn export_cabi_realloc() -> Result<()> {
     .await?;
 
     command
-        .call_main(&mut store)
+        .call_run(&mut store)
         .await?
         .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))
 }
@@ -463,7 +463,7 @@ async fn read_only() -> Result<()> {
         instantiate(get_component("read_only"), CommandCtx { table, wasi }).await?;
 
     command
-        .call_main(&mut store)
+        .call_run(&mut store)
         .await?
         .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))
 }

@@ -86,7 +86,7 @@ async fn run_with_temp_dir(component: &str) {
         .expect("instantiate");
 
     command
-        .call_main(&mut store)
+        .call_run(&mut store)
         .await
         .expect("command did not trap")
         .expect("command returned success");
