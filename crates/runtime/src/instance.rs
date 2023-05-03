@@ -31,7 +31,7 @@ use wasmtime_environ::{
     packed_option::ReservedValue, DataIndex, DefinedGlobalIndex, DefinedMemoryIndex,
     DefinedTableIndex, ElemIndex, EntityIndex, EntityRef, EntitySet, FuncIndex, GlobalIndex,
     GlobalInit, HostPtr, MemoryIndex, Module, PrimaryMap, SignatureIndex, TableIndex,
-    TableInitialization, Trap, VMOffsets, WasmHeapType, WasmRefType, WasmType, VMCONTEXT_MAGIC
+    TableInitialization, Trap, VMOffsets, WasmHeapType, WasmRefType, WasmType, VMCONTEXT_MAGIC,
 };
 
 mod allocator;
