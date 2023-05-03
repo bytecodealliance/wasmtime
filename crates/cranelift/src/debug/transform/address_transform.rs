@@ -1,7 +1,8 @@
-use crate::{CompiledFunctions, FunctionAddressMap};
+use crate::CompiledFunctionsMetadata;
 use gimli::write;
 use std::collections::BTreeMap;
 use std::iter::FromIterator;
+use wasmtime_cranelift_shared::FunctionAddressMap;
 use wasmtime_environ::{DefinedFuncIndex, EntityRef, FilePos, PrimaryMap, WasmFileInfo};
 
 pub type GeneratedAddress = usize;
@@ -188,12 +189,12 @@ fn build_function_lookup(
 }
 
 fn build_function_addr_map(
-    funcs: &CompiledFunctions,
+    funcs: &CompiledFunctionsMetadata,
     code_section_offset: u64,
 ) -> PrimaryMap<DefinedFuncIndex, FunctionMap> {
     let mut map = PrimaryMap::new();
-    for (_, f) in funcs {
-        let ft = &f.address_map;
+    for (_, metadata) in funcs {
+        let ft = &metadata.address_map;
         let mut fn_map = Vec::new();
         for t in ft.instructions.iter() {
             if t.srcloc.file_offset().is_none() {
@@ -449,13 +450,13 @@ impl<'a> Iterator for TransformRangeIter<'a> {
 }
 
 impl AddressTransform {
-    pub fn new(funcs: &CompiledFunctions, wasm_file: &WasmFileInfo) -> Self {
+    pub fn new(funcs: &CompiledFunctionsMetadata, wasm_file: &WasmFileInfo) -> Self {
         let code_section_offset = wasm_file.code_section_offset;
 
         let mut func = BTreeMap::new();
-        for (i, f) in funcs {
-            let ft = &f.address_map;
-            let (fn_start, fn_end, lookup) = build_function_lookup(ft, code_section_offset);
+        for (i, metadata) in funcs {
+            let (fn_start, fn_end, lookup) =
+                build_function_lookup(&metadata.address_map, code_section_offset);
 
             func.insert(
                 fn_start,
@@ -605,11 +606,11 @@ impl AddressTransform {
 #[cfg(test)]
 mod tests {
     use super::{build_function_lookup, get_wasm_code_offset, AddressTransform};
-    use crate::{CompiledFunction, FunctionAddressMap};
     use cranelift_entity::PrimaryMap;
     use gimli::write::Address;
     use std::iter::FromIterator;
     use std::mem;
+    use wasmtime_cranelift_shared::{CompiledFunctionMetadata, FunctionAddressMap};
     use wasmtime_environ::{FilePos, InstructionAddressMap, WasmFileInfo};
 
     #[test]
@@ -728,7 +729,7 @@ mod tests {
 
     #[test]
     fn test_addr_translate() {
-        let func = CompiledFunction {
+        let func = CompiledFunctionMetadata {
             address_map: create_simple_func(11),
             ..Default::default()
         };

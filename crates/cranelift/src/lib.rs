@@ -4,12 +4,11 @@
 //! and `wasmtime_environ::CompilerBuilder` traits.
 
 use cranelift_codegen::ir;
-use cranelift_codegen::isa::{unwind::UnwindInfo, CallConv, TargetIsa};
+use cranelift_codegen::isa::{CallConv, TargetIsa};
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{DefinedFuncIndex, WasmFuncType, WasmType};
 use target_lexicon::{Architecture, CallingConvention};
-use wasmtime_cranelift_shared::Relocation;
-use wasmtime_environ::{FilePos, InstructionAddressMap, TrapInformation};
+use wasmtime_cranelift_shared::CompiledFunctionMetadata;
 
 pub use builder::builder;
 
@@ -18,59 +17,10 @@ mod compiler;
 mod debug;
 mod func_environ;
 
-type CompiledFunctions<'a> = PrimaryMap<DefinedFuncIndex, &'a CompiledFunction>;
+type CompiledFunctionsMetadata<'a> = PrimaryMap<DefinedFuncIndex, &'a CompiledFunctionMetadata>;
 
 /// Trap code used for debug assertions we emit in our JIT code.
 const DEBUG_ASSERT_TRAP_CODE: u16 = u16::MAX;
-
-/// Compiled function: machine code body, jump table offsets, and unwind information.
-#[derive(Default)]
-pub struct CompiledFunction {
-    /// The machine code for this function.
-    body: Vec<u8>,
-
-    /// The unwind information.
-    unwind_info: Option<UnwindInfo>,
-
-    /// Information used to translate from binary offsets back to the original
-    /// location found in the wasm input.
-    address_map: FunctionAddressMap,
-
-    /// Metadata about traps in this module, mapping code offsets to the trap
-    /// that they may cause.
-    traps: Vec<TrapInformation>,
-
-    relocations: Vec<Relocation>,
-    value_labels_ranges: cranelift_codegen::ValueLabelsRanges,
-    sized_stack_slots: ir::StackSlots,
-    alignment: u32,
-}
-
-/// Function and its instructions addresses mappings.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-struct FunctionAddressMap {
-    /// An array of data for the instructions in this function, indicating where
-    /// each instruction maps back to in the original function.
-    ///
-    /// This array is sorted least-to-greatest by the `code_offset` field.
-    /// Additionally the span of each `InstructionAddressMap` is implicitly the
-    /// gap between it and the next item in the array.
-    instructions: Box<[InstructionAddressMap]>,
-
-    /// Function's initial offset in the source file, specified in bytes from
-    /// the front of the file.
-    start_srcloc: FilePos,
-
-    /// Function's end offset in the source file, specified in bytes from
-    /// the front of the file.
-    end_srcloc: FilePos,
-
-    /// Generated function body offset if applicable, otherwise 0.
-    body_offset: usize,
-
-    /// Generated function body length.
-    body_len: u32,
-}
 
 /// Creates a new cranelift `Signature` with no wasm params/results for the
 /// given calling convention.

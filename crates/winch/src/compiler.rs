@@ -1,10 +1,9 @@
 use anyhow::Result;
-use cranelift_codegen::{Final, MachBufferFinalized};
 use object::write::{Object, SymbolId};
 use std::any::Any;
 use std::sync::Mutex;
 use wasmparser::FuncValidatorAllocations;
-use wasmtime_cranelift_shared::obj::ModuleTextBuilder;
+use wasmtime_cranelift_shared::{CompiledFunction, ModuleTextBuilder};
 use wasmtime_environ::{
     CompileError, DefinedFuncIndex, FilePos, FuncIndex, FunctionBodyData, FunctionLoc,
     ModuleTranslation, ModuleTypes, PrimaryMap, Tunables, WasmFunctionInfo,
@@ -17,7 +16,16 @@ pub(crate) struct Compiler {
     allocations: Mutex<Vec<FuncValidatorAllocations>>,
 }
 
-struct CompiledFunction(MachBufferFinalized<Final>);
+/// The compiled function environment.
+pub struct CompiledFuncEnv;
+impl wasmtime_cranelift_shared::CompiledFuncEnv for CompiledFuncEnv {
+    fn resolve_user_external_name_ref(
+        &self,
+        external: cranelift_codegen::ir::UserExternalNameRef,
+    ) -> (u32, u32) {
+        (0, external.as_u32())
+    }
+}
 
 impl Compiler {
     pub fn new(isa: Box<dyn TargetIsa>) -> Self {
@@ -66,13 +74,15 @@ impl wasmtime_environ::Compiler for Compiler {
             .map_err(|e| CompileError::Codegen(format!("{e:?}")));
         self.save_allocations(validator.into_allocations());
         let buffer = buffer?;
+        let compiled_function =
+            CompiledFunction::new(buffer, CompiledFuncEnv {}, self.isa.function_alignment());
 
         Ok((
             WasmFunctionInfo {
                 start_srcloc,
                 stack_maps: Box::new([]),
             },
-            Box::new(CompiledFunction(buffer)),
+            Box::new(compiled_function),
         ))
     }
 
@@ -117,23 +127,11 @@ impl wasmtime_environ::Compiler for Compiler {
 
         let mut ret = Vec::with_capacity(funcs.len());
         for (i, (sym, func)) in funcs.iter().enumerate() {
-            let func = &func.downcast_ref::<CompiledFunction>().unwrap().0;
+            let func = func
+                .downcast_ref::<CompiledFunction<CompiledFuncEnv>>()
+                .unwrap();
 
-            // TODO: Implement copying over this data into the
-            // `ModuleTextBuilder` type. Note that this should probably be
-            // deduplicated with the cranelift implementation in the long run.
-            assert!(func.relocs().is_empty());
-            assert!(func.traps().is_empty());
-            assert!(func.stack_maps().is_empty());
-
-            let (sym, range) = builder.append_func(
-                &sym,
-                func.data(),
-                self.isa.function_alignment(),
-                None,
-                &[],
-                |idx| resolve_reloc(i, idx),
-            );
+            let (sym, range) = builder.append_func(&sym, func, |idx| resolve_reloc(i, idx));
 
             let info = FunctionLoc {
                 start: u32::try_from(range.start).unwrap(),

@@ -20,7 +20,10 @@
 //! exit FP and stopping once we reach the entry SP (meaning that the next older
 //! frame is a host frame).
 
-use crate::traphandlers::{tls, CallThreadState};
+use crate::{
+    traphandlers::{tls, CallThreadState},
+    VMRuntimeLimits,
+};
 use cfg_if::cfg_if;
 use std::ops::ControlFlow;
 
@@ -80,9 +83,9 @@ impl Backtrace {
     }
 
     /// Capture the current Wasm stack in a backtrace.
-    pub fn new() -> Backtrace {
+    pub fn new(limits: *const VMRuntimeLimits) -> Backtrace {
         tls::with(|state| match state {
-            Some(state) => unsafe { Self::new_with_trap_state(state, None) },
+            Some(state) => unsafe { Self::new_with_trap_state(limits, state, None) },
             None => Backtrace(vec![]),
         })
     }
@@ -93,11 +96,12 @@ impl Backtrace {
     /// Wasm exit trampoline didn't run, and we use the provided PC and FP
     /// instead of looking them up in `VMRuntimeLimits`.
     pub(crate) unsafe fn new_with_trap_state(
+        limits: *const VMRuntimeLimits,
         state: &CallThreadState,
         trap_pc_and_fp: Option<(usize, usize)>,
     ) -> Backtrace {
         let mut frames = vec![];
-        Self::trace_with_trap_state(state, trap_pc_and_fp, |frame| {
+        Self::trace_with_trap_state(limits, state, trap_pc_and_fp, |frame| {
             frames.push(frame);
             ControlFlow::Continue(())
         });
@@ -105,9 +109,9 @@ impl Backtrace {
     }
 
     /// Walk the current Wasm stack, calling `f` for each frame we walk.
-    pub fn trace(f: impl FnMut(Frame) -> ControlFlow<()>) {
+    pub fn trace(limits: *const VMRuntimeLimits, f: impl FnMut(Frame) -> ControlFlow<()>) {
         tls::with(|state| match state {
-            Some(state) => unsafe { Self::trace_with_trap_state(state, None, f) },
+            Some(state) => unsafe { Self::trace_with_trap_state(limits, state, None, f) },
             None => {}
         });
     }
@@ -118,88 +122,63 @@ impl Backtrace {
     /// Wasm exit trampoline didn't run, and we use the provided PC and FP
     /// instead of looking them up in `VMRuntimeLimits`.
     pub(crate) unsafe fn trace_with_trap_state(
+        limits: *const VMRuntimeLimits,
         state: &CallThreadState,
         trap_pc_and_fp: Option<(usize, usize)>,
         mut f: impl FnMut(Frame) -> ControlFlow<()>,
     ) {
         log::trace!("====== Capturing Backtrace ======");
+
         let (last_wasm_exit_pc, last_wasm_exit_fp) = match trap_pc_and_fp {
             // If we exited Wasm by catching a trap, then the Wasm-to-host
             // trampoline did not get a chance to save the last Wasm PC and FP,
             // and we need to use the plumbed-through values instead.
-            Some((pc, fp)) => (pc, fp),
+            Some((pc, fp)) => {
+                assert!(std::ptr::eq(limits, state.limits));
+                (pc, fp)
+            }
             // Either there is no Wasm currently on the stack, or we exited Wasm
             // through the Wasm-to-host trampoline.
             None => {
-                let pc = *(*state.limits).last_wasm_exit_pc.get();
-                let fp = *(*state.limits).last_wasm_exit_fp.get();
-
-                if pc == 0 {
-                    // Host function calling another host function that
-                    // traps. No Wasm on the stack.
-                    assert_eq!(fp, 0);
-                    return;
-                }
-
+                let pc = *(*limits).last_wasm_exit_pc.get();
+                let fp = *(*limits).last_wasm_exit_fp.get();
                 (pc, fp)
             }
         };
 
-        // Trace through the first contiguous sequence of Wasm frames on the
-        // stack.
-        if let ControlFlow::Break(()) = Self::trace_through_wasm(
+        let activations = std::iter::once((
             last_wasm_exit_pc,
             last_wasm_exit_fp,
-            *(*state.limits).last_wasm_entry_sp.get(),
-            &mut f,
-        ) {
-            log::trace!("====== Done Capturing Backtrace ======");
-            return;
-        }
-
-        // And then trace through each of the older contiguous sequences of Wasm
-        // frames on the stack.
-        for state in state.iter() {
-            // If there is no previous call state, then there is nothing more to
-            // trace through (since each `CallTheadState` saves the *previous*
-            // call into Wasm's saved registers, and the youngest call into
-            // Wasm's registers are saved in the `VMRuntimeLimits`)
-            if state.prev().is_null() {
-                debug_assert_eq!(state.old_last_wasm_exit_pc(), 0);
-                debug_assert_eq!(state.old_last_wasm_exit_fp(), 0);
-                debug_assert_eq!(state.old_last_wasm_entry_sp(), 0);
-                log::trace!("====== Done Capturing Backtrace ======");
-                return;
+            *(*limits).last_wasm_entry_sp.get(),
+        ))
+        .chain(
+            state
+                .iter()
+                .filter(|state| std::ptr::eq(limits, state.limits))
+                .map(|state| {
+                    (
+                        state.old_last_wasm_exit_pc(),
+                        state.old_last_wasm_exit_fp(),
+                        state.old_last_wasm_entry_sp(),
+                    )
+                }),
+        )
+        .take_while(|&(pc, fp, sp)| {
+            if pc == 0 {
+                debug_assert_eq!(fp, 0);
+                debug_assert_eq!(sp, 0);
             }
+            pc != 0
+        });
 
-            // We save `CallThreadState` linked list entries for various kinds
-            // of {native,array} x {native,array} calls -- and we technically
-            // "shouldn't" because these calls can't enter Wasm -- because our
-            // Wasm call path unconditionally calls
-            // `wasmtime_runtime::catch_traps` even when the callee is not
-            // actually Wasm. We do this because the host-to-Wasm call path is
-            // very hot and these host-to-host calls that flow through that code
-            // path are very rare and also not hot. Anyways, these unnecessary
-            // `catch_traps` calls result in these null/empty `CallThreadState`
-            // entries. Recognize and ignore them.
-            if state.old_last_wasm_entry_sp() == 0 {
-                debug_assert_eq!(state.old_last_wasm_exit_fp(), 0);
-                debug_assert_eq!(state.old_last_wasm_exit_pc(), 0);
-                continue;
-            }
-
-            if let ControlFlow::Break(()) = Self::trace_through_wasm(
-                state.old_last_wasm_exit_pc(),
-                state.old_last_wasm_exit_fp(),
-                state.old_last_wasm_entry_sp(),
-                &mut f,
-            ) {
-                log::trace!("====== Done Capturing Backtrace ======");
+        for (pc, fp, sp) in activations {
+            if let ControlFlow::Break(()) = Self::trace_through_wasm(pc, fp, sp, &mut f) {
+                log::trace!("====== Done Capturing Backtrace (closure break) ======");
                 return;
             }
         }
 
-        unreachable!()
+        log::trace!("====== Done Capturing Backtrace (reached end of activations) ======");
     }
 
     /// Walk through a contiguous sequence of Wasm frames starting with the
@@ -304,7 +283,9 @@ impl Backtrace {
     }
 
     /// Iterate over the frames inside this backtrace.
-    pub fn frames<'a>(&'a self) -> impl ExactSizeIterator<Item = &'a Frame> + 'a {
+    pub fn frames<'a>(
+        &'a self,
+    ) -> impl ExactSizeIterator<Item = &'a Frame> + DoubleEndedIterator + 'a {
         self.0.iter()
     }
 }

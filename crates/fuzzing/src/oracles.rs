@@ -139,6 +139,11 @@ pub enum Timeout {
 pub fn instantiate(wasm: &[u8], known_valid: bool, config: &generators::Config, timeout: Timeout) {
     let mut store = config.to_store();
 
+    let module = match compile_module(store.engine(), wasm, known_valid, config) {
+        Some(module) => module,
+        None => return,
+    };
+
     let mut timeout_state = SignalOnDrop::default();
     match timeout {
         Timeout::Fuel(fuel) => set_fuel(&mut store, fuel),
@@ -159,9 +164,7 @@ pub fn instantiate(wasm: &[u8], known_valid: bool, config: &generators::Config, 
         Timeout::None => {}
     }
 
-    if let Some(module) = compile_module(store.engine(), wasm, known_valid, config) {
-        instantiate_with_dummy(&mut store, &module);
-    }
+    instantiate_with_dummy(&mut store, &module);
 }
 
 /// Represents supported commands to the `instantiate_many` function.

@@ -394,7 +394,8 @@ unsafe fn drop_externref(_vmctx: *mut VMContext, externref: *mut u8) {
 // `VMExternRefActivationsTable`.
 unsafe fn activations_table_insert_with_gc(vmctx: *mut VMContext, externref: *mut u8) {
     let externref = VMExternRef::clone_from_raw(externref);
-    let instance = (*vmctx).instance();
+    let instance = (*vmctx).instance_mut();
+    let limits = *instance.runtime_limits();
     let (activations_table, module_info_lookup) = (*instance.store()).externref_activations_table();
 
     // Invariant: all `externref`s on the stack have an entry in the activations
@@ -406,13 +407,14 @@ unsafe fn activations_table_insert_with_gc(vmctx: *mut VMContext, externref: *mu
     // but it isn't really a concern because this is already a slow path.
     activations_table.insert_without_gc(externref.clone());
 
-    activations_table.insert_with_gc(externref, module_info_lookup);
+    activations_table.insert_with_gc(limits, externref, module_info_lookup);
 }
 
 // Perform a Wasm `global.get` for `externref` globals.
 unsafe fn externref_global_get(vmctx: *mut VMContext, index: u32) -> *mut u8 {
     let index = GlobalIndex::from_u32(index);
     let instance = (*vmctx).instance_mut();
+    let limits = *instance.runtime_limits();
     let global = instance.defined_or_imported_global_ptr(index);
     match (*global).as_externref().clone() {
         None => ptr::null_mut(),
@@ -420,7 +422,7 @@ unsafe fn externref_global_get(vmctx: *mut VMContext, index: u32) -> *mut u8 {
             let raw = externref.as_raw();
             let (activations_table, module_info_lookup) =
                 (*instance.store()).externref_activations_table();
-            activations_table.insert_with_gc(externref, module_info_lookup);
+            activations_table.insert_with_gc(limits, externref, module_info_lookup);
             raw
         }
     }

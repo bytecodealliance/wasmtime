@@ -2,7 +2,7 @@ use super::expression::{CompiledExpression, FunctionFrameInfo};
 use super::utils::{add_internal_types, append_vmctx_info, get_function_frame_info};
 use super::AddressTransform;
 use crate::debug::ModuleMemoryOffset;
-use crate::CompiledFunctions;
+use crate::CompiledFunctionsMetadata;
 use anyhow::{Context, Error};
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_wasm::get_vmctx_value_label;
@@ -282,7 +282,7 @@ pub fn generate_simulated_dwarf(
     addr_tr: &AddressTransform,
     di: &DebugInfoData,
     memory_offset: &ModuleMemoryOffset,
-    funcs: &CompiledFunctions,
+    funcs: &CompiledFunctionsMetadata,
     translated: &HashSet<DefinedFuncIndex>,
     out_encoding: gimli::Encoding,
     out_units: &mut write::UnitTable,

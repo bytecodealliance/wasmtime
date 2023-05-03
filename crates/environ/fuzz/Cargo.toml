@@ -11,7 +11,7 @@ cargo-fuzz = true
 [dependencies]
 arbitrary = { version = "1.1.0", features = ["derive"] }
 env_logger = { workspace = true }
-libfuzzer-sys = "0.4"
+libfuzzer-sys = { workspace = true }
 wasmparser = { workspace = true }
 wasmprinter = { workspace = true }
 wat = { workspace = true }

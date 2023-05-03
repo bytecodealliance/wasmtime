@@ -207,6 +207,7 @@ toml = "0.5.9"
 serde = "1.0.94"
 serde_json = "1.0.80"
 glob = "0.3.0"
+libfuzzer-sys = "0.4.0"
 
 [features]
 default = [

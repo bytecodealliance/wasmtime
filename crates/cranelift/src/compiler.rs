@@ -1,18 +1,15 @@
 use crate::debug::{DwarfSectionRelocTarget, ModuleMemoryOffset};
 use crate::func_environ::FuncEnvironment;
 use crate::{array_call_signature, native_call_signature, DEBUG_ASSERT_TRAP_CODE};
-use crate::{
-    builder::LinkOptions, value_type, wasm_call_signature, CompiledFunction, FunctionAddressMap,
-};
+use crate::{builder::LinkOptions, value_type, wasm_call_signature};
 use anyhow::{Context as _, Result};
 use cranelift_codegen::ir::{
-    self, ExternalName, Function, InstBuilder, MemFlags, UserExternalName, UserFuncName, Value,
+    self, InstBuilder, MemFlags, UserExternalName, UserExternalNameRef, UserFuncName, Value,
 };
 use cranelift_codegen::isa::{OwnedTargetIsa, TargetIsa};
 use cranelift_codegen::print_errors::pretty_error;
 use cranelift_codegen::Context;
-use cranelift_codegen::{CompiledCode, MachSrcLoc, MachStackMap};
-use cranelift_codegen::{MachReloc, MachTrap};
+use cranelift_codegen::{CompiledCode, MachStackMap};
 use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_frontend::FunctionBuilder;
 use cranelift_wasm::{
@@ -27,14 +24,14 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::mem;
+use std::path;
 use std::sync::{Arc, Mutex};
 use wasmparser::{FuncValidatorAllocations, FunctionBody};
-use wasmtime_cranelift_shared::obj::ModuleTextBuilder;
-use wasmtime_cranelift_shared::{Relocation, RelocationTarget};
+use wasmtime_cranelift_shared::{CompiledFunction, ModuleTextBuilder};
 use wasmtime_environ::{
-    AddressMapSection, CacheStore, CompileError, FilePos, FlagValue, FunctionBodyData, FunctionLoc,
-    InstructionAddressMap, ModuleTranslation, ModuleTypes, PtrSize, StackMapInformation, Trap,
-    TrapEncodingBuilder, TrapInformation, Tunables, VMOffsets, WasmFunctionInfo,
+    AddressMapSection, CacheStore, CompileError, FlagValue, FunctionBodyData, FunctionLoc,
+    ModuleTranslation, ModuleTypes, PtrSize, StackMapInformation, TrapEncodingBuilder, Tunables,
+    VMOffsets, WasmFunctionInfo,
 };
 
 #[cfg(feature = "component-model")]
@@ -72,6 +69,7 @@ pub(crate) struct Compiler {
     isa: OwnedTargetIsa,
     linkopts: LinkOptions,
     cache_store: Option<Arc<dyn CacheStore>>,
+    clif_dir: Option<path::PathBuf>,
 }
 
 impl Drop for Compiler {
@@ -107,51 +105,14 @@ impl Compiler {
         isa: OwnedTargetIsa,
         cache_store: Option<Arc<dyn CacheStore>>,
         linkopts: LinkOptions,
+        clif_dir: Option<path::PathBuf>,
     ) -> Compiler {
         Compiler {
             contexts: Default::default(),
             isa,
             linkopts,
             cache_store,
-        }
-    }
-
-    fn get_function_address_map(
-        compiled_code: &CompiledCode,
-        body: &FunctionBody<'_>,
-        body_len: u32,
-        tunables: &Tunables,
-    ) -> FunctionAddressMap {
-        // Generate artificial srcloc for function start/end to identify boundary
-        // within module.
-        let data = body.get_binary_reader();
-        let offset = data.original_position();
-        let len = data.bytes_remaining();
-        assert!((offset + len) <= u32::max_value() as usize);
-        let start_srcloc = FilePos::new(offset as u32);
-        let end_srcloc = FilePos::new((offset + len) as u32);
-
-        // New-style backend: we have a `CompiledCode` that will give us `MachSrcLoc` mapping
-        // tuples.
-        let instructions = if tunables.generate_address_map {
-            collect_address_maps(
-                body_len,
-                compiled_code
-                    .buffer
-                    .get_srclocs_sorted()
-                    .into_iter()
-                    .map(|&MachSrcLoc { start, end, loc }| (loc, start, (end - start))),
-            )
-        } else {
-            Vec::new()
-        };
-
-        FunctionAddressMap {
-            instructions: instructions.into(),
-            start_srcloc,
-            end_srcloc,
-            body_offset: 0,
-            body_len,
+            clif_dir,
         }
     }
 }
@@ -247,6 +208,17 @@ impl wasmtime_environ::Compiler for Compiler {
             &mut context.func,
             &mut func_env,
         )?;
+
+        if let Some(path) = &self.clif_dir {
+            use std::io::Write;
+
+            let mut path = path.to_path_buf();
+            path.push(format!("wasm_func_{}", func_index.as_u32()));
+            path.set_extension("clif");
+
+            let mut output = std::fs::File::create(path).unwrap();
+            write!(output, "{}", context.func.display()).unwrap();
+        }
 
         let (info, func) = compiler.finish_with_info(Some((&body, tunables)))?;
 
@@ -451,19 +423,15 @@ impl wasmtime_environ::Compiler for Compiler {
 
         let mut ret = Vec::with_capacity(funcs.len());
         for (i, (sym, func)) in funcs.iter().enumerate() {
-            let func = func.downcast_ref::<CompiledFunction>().unwrap();
-            let (sym, range) = builder.append_func(
-                &sym,
-                &func.body,
-                func.alignment,
-                func.unwind_info.as_ref(),
-                &func.relocations,
-                |idx| resolve_reloc(i, idx),
-            );
+            let func = func
+                .downcast_ref::<CompiledFunction<CompiledFuncEnv>>()
+                .unwrap();
+            let (sym, range) = builder.append_func(&sym, func, |idx| resolve_reloc(i, idx));
             if tunables.generate_address_map {
-                addrs.push(range.clone(), &func.address_map.instructions);
+                let addr = func.address_map();
+                addrs.push(range.clone(), &addr.instructions);
             }
-            traps.push(range.clone(), &func.traps);
+            traps.push(range.clone(), &func.traps().collect::<Vec<_>>());
             builder.append_padding(self.linkopts.padding_between_functions);
             let info = FunctionLoc {
                 start: u32::try_from(range.start).unwrap(),
@@ -488,27 +456,15 @@ impl wasmtime_environ::Compiler for Compiler {
         host_fn: usize,
         obj: &mut Object<'static>,
     ) -> Result<(FunctionLoc, FunctionLoc)> {
-        let wasm_to_array = self.wasm_to_array_trampoline(ty, host_fn)?;
-        let native_to_array = self.native_to_array_trampoline(ty, host_fn)?;
+        let mut wasm_to_array = self.wasm_to_array_trampoline(ty, host_fn)?;
+        let mut native_to_array = self.native_to_array_trampoline(ty, host_fn)?;
 
         let mut builder = ModuleTextBuilder::new(obj, self, self.isa.text_section_builder(2));
 
-        let (_, wasm_to_array) = builder.append_func(
-            "wasm_to_array",
-            &wasm_to_array.body,
-            wasm_to_array.alignment,
-            wasm_to_array.unwind_info.as_ref(),
-            &wasm_to_array.relocations,
-            |_| unreachable!(),
-        );
-        let (_, native_to_array) = builder.append_func(
-            "native_to_array",
-            &native_to_array.body,
-            native_to_array.alignment,
-            native_to_array.unwind_info.as_ref(),
-            &native_to_array.relocations,
-            |_| unreachable!(),
-        );
+        let (_, wasm_to_array) =
+            builder.append_func("wasm_to_array", &mut wasm_to_array, |_| unreachable!());
+        let (_, native_to_array) =
+            builder.append_func("native_to_array", &mut native_to_array, |_| unreachable!());
 
         let wasm_to_array = FunctionLoc {
             start: u32::try_from(wasm_to_array.start).unwrap(),
@@ -579,14 +535,17 @@ impl wasmtime_environ::Compiler for Compiler {
         } else {
             ModuleMemoryOffset::None
         };
-        let compiled_funcs = funcs
+        let functions_info = funcs
             .iter()
-            .map(|(_, (_, func))| func.downcast_ref().unwrap())
+            .map(|(_, (_, func))| {
+                let f: &CompiledFunction<CompiledFuncEnv> = func.downcast_ref().unwrap();
+                f.metadata()
+            })
             .collect();
         let dwarf_sections = crate::debug::emit_dwarf(
             &*self.isa,
             &translation.debuginfo,
-            &compiled_funcs,
+            &functions_info,
             &memory_offset,
         )
         .with_context(|| "failed to emit DWARF debug information")?;
@@ -727,7 +686,7 @@ impl Compiler {
         &self,
         ty: &WasmFuncType,
         host_fn: usize,
-    ) -> Result<CompiledFunction, CompileError> {
+    ) -> Result<CompiledFunction<CompiledFuncEnv>, CompileError> {
         let isa = &*self.isa;
         let pointer_type = isa.pointer_type();
         let native_call_sig = native_call_signature(isa, ty);
@@ -792,7 +751,7 @@ impl Compiler {
         &self,
         ty: &WasmFuncType,
         host_fn: usize,
-    ) -> Result<CompiledFunction, CompileError> {
+    ) -> Result<CompiledFunction<CompiledFuncEnv>, CompileError> {
         let isa = &*self.isa;
         let pointer_type = isa.pointer_type();
         let wasm_call_sig = wasm_call_signature(isa, ty);
@@ -984,6 +943,20 @@ impl Compiler {
     }
 }
 
+/// The compiled function environment.
+pub struct CompiledFuncEnv {
+    /// Map to resolve external name references.
+    map: PrimaryMap<UserExternalNameRef, UserExternalName>,
+}
+
+impl wasmtime_cranelift_shared::CompiledFuncEnv for CompiledFuncEnv {
+    fn resolve_user_external_name_ref(&self, external: ir::UserExternalNameRef) -> (u32, u32) {
+        let UserExternalName { index, namespace } = self.map[external];
+
+        (namespace, index)
+    }
+}
+
 struct FunctionCompiler<'a> {
     compiler: &'a Compiler,
     cx: CompilerContext,
@@ -1004,7 +977,7 @@ impl FunctionCompiler<'_> {
         (builder, block0)
     }
 
-    fn finish(self) -> Result<CompiledFunction, CompileError> {
+    fn finish(self) -> Result<CompiledFunction<CompiledFuncEnv>, CompileError> {
         let (info, func) = self.finish_with_info(None)?;
         assert!(info.stack_maps.is_empty());
         Ok(func)
@@ -1013,26 +986,12 @@ impl FunctionCompiler<'_> {
     fn finish_with_info(
         mut self,
         body_and_tunables: Option<(&FunctionBody<'_>, &Tunables)>,
-    ) -> Result<(WasmFunctionInfo, CompiledFunction), CompileError> {
+    ) -> Result<(WasmFunctionInfo, CompiledFunction<CompiledFuncEnv>), CompileError> {
         let context = &mut self.cx.codegen_context;
         let isa = &*self.compiler.isa;
-        let (_, code_buf) =
+        let (_, _code_buf) =
             compile_maybe_cached(context, isa, self.cx.incremental_cache_ctx.as_mut())?;
         let compiled_code = context.compiled_code().unwrap();
-
-        let relocations = compiled_code
-            .buffer
-            .relocs()
-            .into_iter()
-            .map(|item| mach_reloc_to_reloc(&context.func, item))
-            .collect();
-
-        let traps = compiled_code
-            .buffer
-            .traps()
-            .into_iter()
-            .filter_map(mach_trap_to_trap)
-            .collect();
 
         // Give wasm functions, user defined code, a "preferred" alignment
         // instead of the minimum alignment as this can help perf in niche
@@ -1042,173 +1001,55 @@ impl FunctionCompiler<'_> {
         } else {
             1
         };
+
         let alignment = compiled_code.alignment.max(preferred_alignment);
-
-        let address_map = match body_and_tunables {
-            Some((body, tunables)) => Compiler::get_function_address_map(
-                compiled_code,
-                body,
-                u32::try_from(code_buf.len()).unwrap(),
-                tunables,
-            ),
-            None => Default::default(),
+        let env = CompiledFuncEnv {
+            map: context.func.params.user_named_funcs().clone(),
         };
+        let mut compiled_function =
+            CompiledFunction::new(compiled_code.buffer.clone(), env, alignment);
 
-        let value_labels_ranges = if body_and_tunables
+        if let Some((body, tunables)) = body_and_tunables {
+            let data = body.get_binary_reader();
+            let offset = data.original_position();
+            let len = data.bytes_remaining();
+            compiled_function.set_address_map(
+                offset as u32,
+                len as u32,
+                tunables.generate_address_map,
+            );
+        }
+
+        if body_and_tunables
             .map(|(_, t)| t.generate_native_debuginfo)
             .unwrap_or(false)
         {
-            compiled_code.value_labels_ranges.clone()
-        } else {
-            Default::default()
-        };
+            compiled_function.set_value_labels_ranges(compiled_code.value_labels_ranges.clone());
+        }
 
-        let unwind_info = if isa.flags().unwind_info() {
-            compiled_code
+        if isa.flags().unwind_info() {
+            let unwind = compiled_code
                 .create_unwind_info(isa)
-                .map_err(|error| CompileError::Codegen(pretty_error(&context.func, error)))?
-        } else {
-            None
-        };
+                .map_err(|error| CompileError::Codegen(pretty_error(&context.func, error)))?;
+
+            if let Some(unwind_info) = unwind {
+                compiled_function.set_unwind_info(unwind_info);
+            }
+        }
+
         let stack_maps = mach_stack_maps_to_stack_maps(compiled_code.buffer.stack_maps());
-        let sized_stack_slots = std::mem::take(&mut context.func.sized_stack_slots);
+        compiled_function
+            .set_sized_stack_slots(std::mem::take(&mut context.func.sized_stack_slots));
         self.compiler.contexts.lock().unwrap().push(self.cx);
 
         Ok((
             WasmFunctionInfo {
-                start_srcloc: address_map.start_srcloc,
+                start_srcloc: compiled_function.metadata().address_map.start_srcloc,
                 stack_maps: stack_maps.into(),
             },
-            CompiledFunction {
-                body: code_buf,
-                unwind_info,
-                relocations,
-                sized_stack_slots,
-                value_labels_ranges,
-                address_map,
-                traps,
-                alignment,
-            },
+            compiled_function,
         ))
     }
-}
-
-// Collects an iterator of `InstructionAddressMap` into a `Vec` for insertion
-// into a `FunctionAddressMap`. This will automatically coalesce adjacent
-// instructions which map to the same original source position.
-fn collect_address_maps(
-    code_size: u32,
-    iter: impl IntoIterator<Item = (ir::SourceLoc, u32, u32)>,
-) -> Vec<InstructionAddressMap> {
-    let mut iter = iter.into_iter();
-    let (mut cur_loc, mut cur_offset, mut cur_len) = match iter.next() {
-        Some(i) => i,
-        None => return Vec::new(),
-    };
-    let mut ret = Vec::new();
-    for (loc, offset, len) in iter {
-        // If this instruction is adjacent to the previous and has the same
-        // source location then we can "coalesce" it with the current
-        // instruction.
-        if cur_offset + cur_len == offset && loc == cur_loc {
-            cur_len += len;
-            continue;
-        }
-
-        // Push an entry for the previous source item.
-        ret.push(InstructionAddressMap {
-            srcloc: cvt(cur_loc),
-            code_offset: cur_offset,
-        });
-        // And push a "dummy" entry if necessary to cover the span of ranges,
-        // if any, between the previous source offset and this one.
-        if cur_offset + cur_len != offset {
-            ret.push(InstructionAddressMap {
-                srcloc: FilePos::default(),
-                code_offset: cur_offset + cur_len,
-            });
-        }
-        // Update our current location to get extended later or pushed on at
-        // the end.
-        cur_loc = loc;
-        cur_offset = offset;
-        cur_len = len;
-    }
-    ret.push(InstructionAddressMap {
-        srcloc: cvt(cur_loc),
-        code_offset: cur_offset,
-    });
-    if cur_offset + cur_len != code_size {
-        ret.push(InstructionAddressMap {
-            srcloc: FilePos::default(),
-            code_offset: cur_offset + cur_len,
-        });
-    }
-
-    return ret;
-
-    fn cvt(loc: ir::SourceLoc) -> FilePos {
-        if loc.is_default() {
-            FilePos::default()
-        } else {
-            FilePos::new(loc.bits())
-        }
-    }
-}
-
-fn mach_reloc_to_reloc(func: &Function, reloc: &MachReloc) -> Relocation {
-    let &MachReloc {
-        offset,
-        kind,
-        ref name,
-        addend,
-    } = reloc;
-    let reloc_target = if let ExternalName::User(user_func_ref) = *name {
-        let UserExternalName { namespace, index } = func.params.user_named_funcs()[user_func_ref];
-        debug_assert_eq!(namespace, 0);
-        RelocationTarget::UserFunc(FuncIndex::from_u32(index))
-    } else if let ExternalName::LibCall(libcall) = *name {
-        RelocationTarget::LibCall(libcall)
-    } else {
-        panic!("unrecognized external name")
-    };
-    Relocation {
-        reloc: kind,
-        reloc_target,
-        offset,
-        addend,
-    }
-}
-
-const ALWAYS_TRAP_CODE: u16 = 100;
-
-fn mach_trap_to_trap(trap: &MachTrap) -> Option<TrapInformation> {
-    let &MachTrap { offset, code } = trap;
-    Some(TrapInformation {
-        code_offset: offset,
-        trap_code: match code {
-            ir::TrapCode::StackOverflow => Trap::StackOverflow,
-            ir::TrapCode::HeapOutOfBounds => Trap::MemoryOutOfBounds,
-            ir::TrapCode::HeapMisaligned => Trap::HeapMisaligned,
-            ir::TrapCode::TableOutOfBounds => Trap::TableOutOfBounds,
-            ir::TrapCode::IndirectCallToNull => Trap::IndirectCallToNull,
-            ir::TrapCode::BadSignature => Trap::BadSignature,
-            ir::TrapCode::IntegerOverflow => Trap::IntegerOverflow,
-            ir::TrapCode::IntegerDivisionByZero => Trap::IntegerDivisionByZero,
-            ir::TrapCode::BadConversionToInteger => Trap::BadConversionToInteger,
-            ir::TrapCode::UnreachableCodeReached => Trap::UnreachableCodeReached,
-            ir::TrapCode::Interrupt => Trap::Interrupt,
-            ir::TrapCode::User(ALWAYS_TRAP_CODE) => Trap::AlwaysTrapAdapter,
-
-            // These do not get converted to wasmtime traps, since they
-            // shouldn't ever be hit in theory. Instead of catching and handling
-            // these, we let the signal crash the process.
-            ir::TrapCode::User(DEBUG_ASSERT_TRAP_CODE) => return None,
-
-            // these should never be emitted by wasmtime-cranelift
-            ir::TrapCode::User(_) => unreachable!(),
-        },
-    })
 }
 
 fn mach_stack_maps_to_stack_maps(mach_stack_maps: &[MachStackMap]) -> Vec<StackMapInformation> {

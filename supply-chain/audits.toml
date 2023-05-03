@@ -24,6 +24,27 @@ start = "2020-01-14"
 end = "2024-04-27"
 notes = "I am an author of this crate"
 
+[[wildcard-audits.regalloc2]]
+who = "Chris Fallin <chris@cfallin.org>"
+criteria = "safe-to-deploy"
+user-id = 3726
+start = "2021-12-03"
+end = "2024-05-02"
+notes = "We (Bytecode Alliance) are the primary authors of regalloc2 and co-develop it with Cranelift/Wasmtime, with the same code-review, testing/fuzzing, and security standards."
+
+[[wildcard-audits.regalloc2]]
+who = "Trevor Elliott <telliott@fastly.com>"
+criteria = "safe-to-deploy"
+user-id = 187138
+start = "2022-11-29"
+end = "2024-05-02"
+notes = """
+This is a Bytecode Alliance authored crate maintained in the `regalloc2`
+repository of which I'm one of the maintainers and publishers for. I am employed
+by a member of the Bytecode Alliance and plan to continue doing so and will
+actively maintain this crate over time.
+"""
+
 [[wildcard-audits.wasm-encoder]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"

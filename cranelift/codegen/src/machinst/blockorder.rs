@@ -145,7 +145,11 @@ impl LoweredBlock {
 
 impl BlockLoweringOrder {
     /// Compute and return a lowered block order for `f`.
-    pub fn new(f: &Function, domtree: &DominatorTree) -> BlockLoweringOrder {
+    pub fn new(
+        f: &Function,
+        domtree: &DominatorTree,
+        ctrl_plane: &mut ControlPlane,
+    ) -> BlockLoweringOrder {
         trace!("BlockLoweringOrder: function body {:?}", f);
 
         // Step 1: compute the in-edge and out-edge count of every block.
@@ -195,7 +199,15 @@ impl BlockLoweringOrder {
 
             if block_out_count[block] > 1 {
                 let range = block_succ_range[block].clone();
-                for (succ_ix, lb) in block_succs[range].iter_mut().enumerate() {
+
+                // If chaos-mode is enabled in the control plane, iterate over
+                // the successors in an arbtirary order, which should have no
+                // impact on correctness. The order of the blocks is generally
+                // relevant: Uses must be seen before defs for dead-code
+                // elimination.
+                let succs = ctrl_plane.shuffled(block_succs[range].iter_mut().enumerate());
+
+                for (succ_ix, lb) in succs {
                     let succ = lb.orig_block().unwrap();
                     if block_in_count[succ] > 1 {
                         // Mutate the successor to be a critical edge, as `block` has multiple
@@ -364,7 +376,7 @@ mod test {
         cfg.compute(&func);
         let dom_tree = DominatorTree::with_function(&func, &cfg);
 
-        BlockLoweringOrder::new(&func, &dom_tree)
+        BlockLoweringOrder::new(&func, &dom_tree, &mut Default::default())
     }
 
     #[test]

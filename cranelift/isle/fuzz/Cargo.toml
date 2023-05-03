@@ -11,7 +11,7 @@ cargo-fuzz = true
 [dependencies]
 env_logger = { workspace = true }
 cranelift-isle = { path = "../isle" }
-libfuzzer-sys = "0.4"
+libfuzzer-sys = { workspace = true }
 log = { workspace = true }
 
 [[bin]]
