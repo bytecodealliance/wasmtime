@@ -1,5 +1,5 @@
 use crate::file::{FdFlags, FileType, Filestat, OFlags, ReadOnlyFile, WasiFile};
-use crate::{Error, ErrorExt, SystemTimeSpec};
+use crate::{Error, ErrorExt, SystemTimeSpec, TableError};
 use std::any::Any;
 use std::path::PathBuf;
 
@@ -104,11 +104,11 @@ pub trait WasiDir: Send + Sync {
 }
 
 pub trait TableDirExt {
-    fn get_dir(&self, fd: u32) -> Result<&Box<dyn WasiDir>, Error>;
+    fn get_dir(&self, fd: u32) -> Result<&Box<dyn WasiDir>, TableError>;
 }
 
 impl TableDirExt for crate::table::Table {
-    fn get_dir(&self, fd: u32) -> Result<&Box<dyn WasiDir>, Error> {
+    fn get_dir(&self, fd: u32) -> Result<&Box<dyn WasiDir>, TableError> {
         self.get(fd)
     }
 }

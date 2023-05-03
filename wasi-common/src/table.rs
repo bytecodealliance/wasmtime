@@ -1,6 +1,15 @@
-use crate::{Error, ErrorExt};
 use std::any::Any;
 use std::collections::HashMap;
+
+#[derive(thiserror::Error, Debug)]
+pub enum TableError {
+    #[error("table has no free keys")]
+    Full,
+    #[error("value not present")]
+    NotPresent,
+    #[error("value is of another type")]
+    WrongType,
+}
 
 /// The `Table` type is designed to map u32 handles to resources. The table is now part of the
 /// public interface to a `WasiCtx` - it is reference counted so that it can be shared beyond a
@@ -24,11 +33,11 @@ impl Table {
     }
 
     /// Insert a resource at the next available index.
-    pub fn push(&mut self, a: Box<dyn Any + Send + Sync>) -> Result<u32, Error> {
+    pub fn push(&mut self, a: Box<dyn Any + Send + Sync>) -> Result<u32, TableError> {
         // NOTE: The performance of this new key calculation could be very bad once keys wrap
         // around.
         if self.map.len() == u32::MAX as usize {
-            return Err(Error::trap(anyhow::Error::msg("table has no free keys")));
+            return Err(TableError::Full);
         }
         loop {
             let key = self.next_key;
@@ -41,25 +50,25 @@ impl Table {
         }
     }
 
-    pub fn push_file(&mut self, file: Box<dyn crate::WasiFile>) -> Result<u32, Error> {
+    pub fn push_file(&mut self, file: Box<dyn crate::WasiFile>) -> Result<u32, TableError> {
         self.push(Box::new(file))
     }
 
-    pub fn push_dir(&mut self, dir: Box<dyn crate::WasiDir>) -> Result<u32, Error> {
+    pub fn push_dir(&mut self, dir: Box<dyn crate::WasiDir>) -> Result<u32, TableError> {
         self.push(Box::new(dir))
     }
 
     pub fn push_input_stream(
         &mut self,
         istream: Box<dyn crate::InputStream>,
-    ) -> Result<u32, Error> {
+    ) -> Result<u32, TableError> {
         self.push(Box::new(istream))
     }
 
     pub fn push_output_stream(
         &mut self,
         ostream: Box<dyn crate::OutputStream>,
-    ) -> Result<u32, Error> {
+    ) -> Result<u32, TableError> {
         self.push(Box::new(ostream))
     }
 
@@ -81,35 +90,33 @@ impl Table {
     /// Get an immutable reference to a resource of a given type at a given index. Multiple
     /// immutable references can be borrowed at any given time. Borrow failure
     /// results in a trapping error.
-    pub fn get<T: Any + Sized>(&self, key: u32) -> Result<&T, Error> {
+    pub fn get<T: Any + Sized>(&self, key: u32) -> Result<&T, TableError> {
         if let Some(r) = self.map.get(&key) {
-            r.downcast_ref::<T>()
-                .ok_or_else(|| Error::badf().context("element is a different type"))
+            r.downcast_ref::<T>().ok_or_else(|| TableError::WrongType)
         } else {
-            Err(Error::badf().context("key not in table"))
+            Err(TableError::NotPresent)
         }
     }
 
     /// Get a mutable reference to a resource of a given type at a given index. Only one mutable
     /// reference can be borrowed at any given time. Borrow failure results in a trapping error.
-    pub fn get_mut<T: Any + Sized>(&mut self, key: u32) -> Result<&mut T, Error> {
+    pub fn get_mut<T: Any + Sized>(&mut self, key: u32) -> Result<&mut T, TableError> {
         if let Some(r) = self.map.get_mut(&key) {
-            r.downcast_mut::<T>()
-                .ok_or_else(|| Error::badf().context("element is a different type"))
+            r.downcast_mut::<T>().ok_or_else(|| TableError::WrongType)
         } else {
-            Err(Error::badf().context("key not in table"))
+            Err(TableError::NotPresent)
         }
     }
 
     /// Remove a resource at a given index from the table. Returns the resource
     /// if it was present.
-    pub fn delete<T: Any + Sized>(&mut self, key: u32) -> Result<Option<T>, Error> {
+    pub fn delete<T: Any + Sized>(&mut self, key: u32) -> Result<Option<T>, TableError> {
         self.map
             .remove(&key)
             .map(|r| {
                 r.downcast::<T>()
                     .map(|r| *r)
-                    .map_err(|_| Error::badf().context("element is a different type"))
+                    .map_err(|_| TableError::WrongType)
             })
             .transpose()
     }

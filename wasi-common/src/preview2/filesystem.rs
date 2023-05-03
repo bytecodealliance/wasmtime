@@ -75,6 +75,17 @@ impl From<crate::Error> for wasi::filesystem::Error {
     }
 }
 
+impl From<crate::TableError> for wasi::filesystem::Error {
+    fn from(error: crate::TableError) -> wasi::filesystem::Error {
+        match error {
+            crate::TableError::Full => wasi::filesystem::Error::trap(anyhow!(error)),
+            crate::TableError::NotPresent | crate::TableError::WrongType => {
+                wasi::filesystem::ErrorCode::BadDescriptor.into()
+            }
+        }
+    }
+}
+
 impl From<wasi::filesystem::OpenFlags> for crate::file::OFlags {
     fn from(oflags: wasi::filesystem::OpenFlags) -> Self {
         let mut flags = crate::file::OFlags::empty();
