@@ -392,7 +392,7 @@ unsafe fn table_get_lazy_init_func_ref(
 // Drop a `VMExternRef`.
 unsafe fn drop_externref(_vmctx: *mut VMContext, externref: *mut u8) {
     let externref = externref as *mut crate::externref::VMExternData;
-    let externref = NonNull::new(externref).unwrap();
+    let externref = NonNull::new(externref).unwrap().into();
     crate::externref::VMExternData::drop_and_dealloc(externref);
 }
 

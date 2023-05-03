@@ -1,23 +1,21 @@
+use crate::SendSyncPtr;
 use anyhow::{anyhow, Context, Result};
 use rustix::mm::{mprotect, MprotectFlags};
 use std::fs::File;
 use std::ops::Range;
 use std::path::Path;
-use std::ptr;
+use std::ptr::{self, NonNull};
 
 #[derive(Debug)]
 pub struct Mmap {
-    memory: *mut [u8],
+    memory: SendSyncPtr<[u8]>,
 }
-
-// Mmaps are sendable and threadsafe, and otherwise fix the auto-traits on the
-// `*mut [u8]` storage internally.
-unsafe impl Send for Mmap {}
-unsafe impl Sync for Mmap {}
 
 impl Mmap {
     pub fn new_empty() -> Mmap {
-        Mmap { memory: &mut [] }
+        Mmap {
+            memory: SendSyncPtr::from(&mut [][..]),
+        }
     }
 
     pub fn new(size: usize) -> Result<Self> {
@@ -30,6 +28,7 @@ impl Mmap {
             )?
         };
         let memory = std::ptr::slice_from_raw_parts_mut(ptr.cast(), size);
+        let memory = SendSyncPtr::new(NonNull::new(memory).unwrap());
         Ok(Mmap { memory })
     }
 
@@ -44,6 +43,7 @@ impl Mmap {
         };
 
         let memory = std::ptr::slice_from_raw_parts_mut(ptr.cast(), size);
+        let memory = SendSyncPtr::new(NonNull::new(memory).unwrap());
         Ok(Mmap { memory })
     }
 
@@ -66,12 +66,13 @@ impl Mmap {
             .context(format!("mmap failed to allocate {:#x} bytes", len))?
         };
         let memory = std::ptr::slice_from_raw_parts_mut(ptr.cast(), len);
+        let memory = SendSyncPtr::new(NonNull::new(memory).unwrap());
 
         Ok((Mmap { memory }, file))
     }
 
     pub fn make_accessible(&mut self, start: usize, len: usize) -> Result<()> {
-        let ptr = self.memory.cast::<u8>();
+        let ptr = self.memory.as_ptr().cast::<u8>();
         unsafe {
             mprotect(
                 ptr.add(start).cast(),
@@ -84,15 +85,15 @@ impl Mmap {
     }
 
     pub fn as_ptr(&self) -> *const u8 {
-        self.memory as *const u8
+        self.memory.as_ptr() as *const u8
     }
 
     pub fn as_mut_ptr(&mut self) -> *mut u8 {
-        self.memory.cast()
+        self.memory.as_ptr().cast()
     }
 
     pub fn len(&self) -> usize {
-        unsafe { (*self.memory).len() }
+        unsafe { (*self.memory.as_ptr()).len() }
     }
 
     pub unsafe fn make_executable(
@@ -100,7 +101,7 @@ impl Mmap {
         range: Range<usize>,
         enable_branch_protection: bool,
     ) -> Result<()> {
-        let base = self.memory.cast::<u8>().add(range.start).cast();
+        let base = self.memory.as_ptr().cast::<u8>().add(range.start).cast();
         let len = range.end - range.start;
 
         let flags = MprotectFlags::READ | MprotectFlags::EXEC;
@@ -124,7 +125,7 @@ impl Mmap {
     }
 
     pub unsafe fn make_readonly(&self, range: Range<usize>) -> Result<()> {
-        let base = self.memory.cast::<u8>().add(range.start).cast();
+        let base = self.memory.as_ptr().cast::<u8>().add(range.start).cast();
         let len = range.end - range.start;
 
         mprotect(base, len, MprotectFlags::READ)?;
@@ -136,8 +137,8 @@ impl Mmap {
 impl Drop for Mmap {
     fn drop(&mut self) {
         unsafe {
-            let ptr = self.memory.cast();
-            let len = (*self.memory).len();
+            let ptr = self.memory.as_ptr().cast();
+            let len = (*self.memory.as_ptr()).len();
             if len == 0 {
                 return;
             }

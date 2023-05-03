@@ -12,8 +12,8 @@ use crate::vmcontext::{
     VMTableDefinition, VMTableImport,
 };
 use crate::{
-    ExportFunction, ExportGlobal, ExportMemory, ExportTable, Imports, ModuleRuntimeInfo, Store,
-    VMFunctionBody, VMSharedSignatureIndex, WasmFault,
+    ExportFunction, ExportGlobal, ExportMemory, ExportTable, Imports, ModuleRuntimeInfo,
+    SendSyncPtr, Store, VMFunctionBody, VMSharedSignatureIndex, WasmFault,
 };
 use anyhow::Error;
 use anyhow::Result;
@@ -21,7 +21,6 @@ use sptr::Strict;
 use std::alloc::{self, Layout};
 use std::any::Any;
 use std::convert::TryFrom;
-use std::hash::Hash;
 use std::ops::Range;
 use std::ptr::NonNull;
 use std::sync::atomic::AtomicU64;
@@ -139,18 +138,13 @@ pub struct Instance {
     /// the future if the memory consumption of this field is a problem we could
     /// shrink it slightly, but for now one extra pointer per wasm instance
     /// seems not too bad.
-    vmctx_self_reference: VMContextSelfReference,
+    vmctx_self_reference: SendSyncPtr<VMContext>,
 
     /// Additional context used by compiled wasm code. This field is last, and
     /// represents a dynamically-sized array that extends beyond the nominal
     /// end of the struct (similar to a flexible array member).
     vmctx: VMContext,
 }
-
-struct VMContextSelfReference(NonNull<VMContext>);
-
-unsafe impl Send for VMContextSelfReference {}
-unsafe impl Sync for VMContextSelfReference {}
 
 #[allow(clippy::cast_ptr_alignment)]
 impl Instance {
@@ -186,7 +180,7 @@ impl Instance {
                 dropped_elements,
                 dropped_data,
                 host_state: req.host_state,
-                vmctx_self_reference: VMContextSelfReference(
+                vmctx_self_reference: SendSyncPtr::new(
                     NonNull::new(ptr.cast::<u8>().add(mem::size_of::<Instance>()).cast()).unwrap(),
                 ),
                 vmctx: VMContext {
@@ -196,7 +190,9 @@ impl Instance {
         );
 
         (*ptr).initialize_vmctx(module, req.runtime_info.offsets(), req.store, req.imports);
-        InstanceHandle { instance: ptr }
+        InstanceHandle {
+            instance: Some(SendSyncPtr::new(NonNull::new(ptr).unwrap())),
+        }
     }
 
     /// Converts the provided `*mut VMContext` to an `Instance` pointer and runs
@@ -438,7 +434,7 @@ impl Instance {
         // trait `Strict` but the method names conflict with the nightly methods
         // so a different syntax is used to invoke methods here.
         let addr = std::ptr::addr_of!(self.vmctx);
-        Strict::with_addr(self.vmctx_self_reference.0.as_ptr(), Strict::addr(addr))
+        Strict::with_addr(self.vmctx_self_reference.as_ptr(), Strict::addr(addr))
     }
 
     fn get_exported_func(&mut self, index: FuncIndex) -> ExportFunction {
@@ -1210,27 +1206,14 @@ impl Drop for Instance {
 }
 
 /// A handle holding an `Instance` of a WebAssembly module.
-#[derive(Hash, PartialEq, Eq)]
 pub struct InstanceHandle {
-    instance: *mut Instance,
-}
-
-// These are only valid if the `Instance` type is send/sync, hence the
-// assertion below.
-unsafe impl Send for InstanceHandle {}
-unsafe impl Sync for InstanceHandle {}
-
-fn _assert_send_sync() {
-    fn _assert<T: Send + Sync>() {}
-    _assert::<Instance>();
+    instance: Option<SendSyncPtr<Instance>>,
 }
 
 impl InstanceHandle {
     /// TODO
     pub fn null() -> InstanceHandle {
-        InstanceHandle {
-            instance: ptr::null_mut(),
-        }
+        InstanceHandle { instance: None }
     }
 
     /// Return a raw pointer to the vmctx used by compiled wasm code.
@@ -1307,11 +1290,11 @@ impl InstanceHandle {
     /// Return a reference to the contained `Instance`.
     #[inline]
     pub(crate) fn instance(&self) -> &Instance {
-        unsafe { &*(self.instance as *const Instance) }
+        unsafe { &*self.instance.unwrap().as_ptr() }
     }
 
     pub(crate) fn instance_mut(&mut self) -> &mut Instance {
-        unsafe { &mut *self.instance }
+        unsafe { &mut *self.instance.unwrap().as_ptr() }
     }
 
     /// Returns the `Store` pointer that was stored on creation

@@ -7,7 +7,7 @@
 //! cranelift-compiled adapters, will use this `VMComponentContext` as well.
 
 use crate::{
-    Store, VMArrayCallFunction, VMFuncRef, VMGlobalDefinition, VMMemoryDefinition,
+    SendSyncPtr, Store, VMArrayCallFunction, VMFuncRef, VMGlobalDefinition, VMMemoryDefinition,
     VMNativeCallFunction, VMOpaqueContext, VMSharedSignatureIndex, VMWasmCallFunction, ValRaw,
 };
 use memoffset::offset_of;
@@ -43,17 +43,12 @@ pub struct ComponentInstance {
 
     /// For more information about this see the documentation on
     /// `Instance::vmctx_self_reference`.
-    vmctx_self_reference: VMComponentContextSelfReference,
+    vmctx_self_reference: SendSyncPtr<VMComponentContext>,
 
     /// A zero-sized field which represents the end of the struct for the actual
     /// `VMComponentContext` to be allocated behind.
     vmctx: VMComponentContext,
 }
-
-struct VMComponentContextSelfReference(NonNull<VMComponentContext>);
-
-unsafe impl Send for VMComponentContextSelfReference {}
-unsafe impl Sync for VMComponentContextSelfReference {}
 
 /// Type signature for host-defined trampolines that are called from
 /// WebAssembly.
@@ -158,7 +153,7 @@ impl ComponentInstance {
             ptr.as_ptr(),
             ComponentInstance {
                 offsets,
-                vmctx_self_reference: VMComponentContextSelfReference(
+                vmctx_self_reference: SendSyncPtr::new(
                     NonNull::new(
                         ptr.as_ptr()
                             .cast::<u8>()
@@ -178,7 +173,7 @@ impl ComponentInstance {
 
     fn vmctx(&self) -> *mut VMComponentContext {
         let addr = std::ptr::addr_of!(self.vmctx);
-        Strict::with_addr(self.vmctx_self_reference.0.as_ptr(), Strict::addr(addr))
+        Strict::with_addr(self.vmctx_self_reference.as_ptr(), Strict::addr(addr))
     }
 
     unsafe fn vmctx_plus_offset<T>(&self, offset: u32) -> *const T {
@@ -507,14 +502,8 @@ impl VMComponentContext {
 /// This type can be dereferenced to `ComponentInstance` to access the
 /// underlying methods.
 pub struct OwnedComponentInstance {
-    ptr: ptr::NonNull<ComponentInstance>,
+    ptr: SendSyncPtr<ComponentInstance>,
 }
-
-// Using `NonNull` turns off auto-derivation of these traits but the owned usage
-// here enables these trait impls so long as `ComponentInstance` itself
-// implements these traits.
-unsafe impl Send for OwnedComponentInstance where ComponentInstance: Send {}
-unsafe impl Sync for OwnedComponentInstance where ComponentInstance: Sync {}
 
 impl OwnedComponentInstance {
     /// Allocates a new `ComponentInstance + VMComponentContext` pair on the
@@ -532,10 +521,11 @@ impl OwnedComponentInstance {
             // zeroed allocation is done here to try to contain
             // use-before-initialized issues.
             let ptr = alloc::alloc_zeroed(layout) as *mut ComponentInstance;
-            let ptr = ptr::NonNull::new(ptr).unwrap();
+            let ptr = NonNull::new(ptr).unwrap();
 
             ComponentInstance::new_at(ptr, layout.size(), offsets, store);
 
+            let ptr = SendSyncPtr::new(ptr);
             OwnedComponentInstance { ptr }
         }
     }

@@ -5,7 +5,7 @@
 use crate::mmap::Mmap;
 use crate::parking_spot::ParkingSpot;
 use crate::vmcontext::VMMemoryDefinition;
-use crate::{MemoryImage, MemoryImageSlot, Store, WaitResult};
+use crate::{MemoryImage, MemoryImageSlot, SendSyncPtr, Store, WaitResult};
 use anyhow::Error;
 use anyhow::{bail, format_err, Result};
 use std::convert::TryFrom;
@@ -366,7 +366,7 @@ impl RuntimeLinearMemory for MmapMemory {
 struct StaticMemory {
     /// The base pointer of this static memory, wrapped up in a send/sync
     /// wrapper.
-    base: RawBase,
+    base: SendSyncPtr<u8>,
 
     /// The byte capacity of the `base` pointer.
     capacity: usize,
@@ -382,11 +382,6 @@ struct StaticMemory {
     /// returned to the pooling allocator when termination occurs.
     memory_image: MemoryImageSlot,
 }
-
-struct RawBase(NonNull<u8>);
-
-unsafe impl Send for RawBase {}
-unsafe impl Sync for RawBase {}
 
 impl StaticMemory {
     fn new(
@@ -413,7 +408,7 @@ impl StaticMemory {
         };
 
         Ok(Self {
-            base: RawBase(NonNull::new(base_ptr).unwrap()),
+            base: SendSyncPtr::new(NonNull::new(base_ptr).unwrap()),
             capacity: base_capacity,
             size: initial_size,
             memory_image,
@@ -445,7 +440,7 @@ impl RuntimeLinearMemory for StaticMemory {
 
     fn vmmemory(&mut self) -> VMMemoryDefinition {
         VMMemoryDefinition {
-            base: self.base.0.as_ptr(),
+            base: self.base.as_ptr(),
             current_length: self.size.into(),
         }
     }
@@ -459,7 +454,7 @@ impl RuntimeLinearMemory for StaticMemory {
     }
 
     fn wasm_accessible(&self) -> Range<usize> {
-        let base = self.base.0.as_ptr() as usize;
+        let base = self.base.as_ptr() as usize;
         let end = base + self.memory_and_guard_size;
         base..end
     }

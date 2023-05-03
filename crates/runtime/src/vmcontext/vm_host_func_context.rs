@@ -21,11 +21,6 @@ pub struct VMArrayCallHostFuncContext {
     host_state: Box<dyn Any + Send + Sync>,
 }
 
-// Declare that this type is send/sync, it's the responsibility of
-// `VMHostFuncContext::new` callers to uphold this guarantee.
-unsafe impl Send for VMArrayCallHostFuncContext {}
-unsafe impl Sync for VMArrayCallHostFuncContext {}
-
 impl VMArrayCallHostFuncContext {
     /// Create the context for the given host function.
     ///
@@ -95,11 +90,6 @@ fn vmnative_call_host_func_context_offsets() {
         offset_of!(VMNativeCallHostFuncContext, func_ref)
     );
 }
-
-// Declare that this type is send/sync, it's the responsibility of
-// `VMHostFuncContext::new` callers to uphold this guarantee.
-unsafe impl Send for VMNativeCallHostFuncContext {}
-unsafe impl Sync for VMNativeCallHostFuncContext {}
 
 impl VMNativeCallHostFuncContext {
     /// Create the context for the given host function.

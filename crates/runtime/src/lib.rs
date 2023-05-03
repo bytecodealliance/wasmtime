@@ -40,6 +40,7 @@ mod memory;
 mod mmap;
 mod mmap_vec;
 mod parking_spot;
+mod send_sync_ptr;
 mod store_box;
 mod table;
 mod traphandlers;
@@ -53,13 +54,13 @@ pub use wasmtime_jit_debug::gdb_jit_int::GdbJitImageRegistration;
 pub use crate::export::*;
 pub use crate::externref::*;
 pub use crate::imports::Imports;
+pub use crate::instance::{
+    Instance, InstanceAllocationRequest, InstanceAllocator, InstanceHandle,
+    OnDemandInstanceAllocator, StorePtr,
+};
 #[cfg(feature = "pooling-allocator")]
 pub use crate::instance::{
-    Instance, InstanceLimits, PoolingInstanceAllocator, PoolingInstanceAllocatorConfig,
-};
-pub use crate::instance::{
-    InstanceAllocationRequest, InstanceAllocator, InstanceHandle, OnDemandInstanceAllocator,
-    StorePtr,
+    InstanceLimits, PoolingInstanceAllocator, PoolingInstanceAllocatorConfig,
 };
 pub use crate::memory::{
     DefaultMemoryCreator, Memory, RuntimeLinearMemory, RuntimeMemoryCreator, SharedMemory,
@@ -79,6 +80,7 @@ pub use crate::vmcontext::{
     VMRuntimeLimits, VMSharedSignatureIndex, VMTableDefinition, VMTableImport, VMWasmCallFunction,
     ValRaw,
 };
+pub use send_sync_ptr::SendSyncPtr;
 
 mod module_id;
 pub use module_id::{CompiledModuleId, CompiledModuleIdAllocator};

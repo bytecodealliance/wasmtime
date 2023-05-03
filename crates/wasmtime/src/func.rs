@@ -11,8 +11,8 @@ use std::pin::Pin;
 use std::ptr::{self, NonNull};
 use std::sync::Arc;
 use wasmtime_runtime::{
-    ExportFunction, StoreBox, VMArrayCallHostFuncContext, VMContext, VMFuncRef, VMFunctionImport,
-    VMNativeCallHostFuncContext, VMOpaqueContext, VMSharedSignatureIndex,
+    ExportFunction, SendSyncPtr, StoreBox, VMArrayCallHostFuncContext, VMContext, VMFuncRef,
+    VMFunctionImport, VMNativeCallHostFuncContext, VMOpaqueContext, VMSharedSignatureIndex,
 };
 
 /// A WebAssembly function which can be called.
@@ -191,7 +191,7 @@ pub(crate) struct FuncData {
     // `StoreOpaque::func_refs`, where we can safely patch the field without
     // worrying about synchronization and we hold a pointer to it here so we can
     // reuse it rather than re-copy if it is passed to Wasm again.
-    in_store_func_ref: Option<InStoreFuncRef>,
+    in_store_func_ref: Option<SendSyncPtr<VMFuncRef>>,
 
     // This is somewhat expensive to load from the `Engine` and in most
     // optimized use cases (e.g. `TypedFunc`) it's not actually needed or it's
@@ -201,34 +201,6 @@ pub(crate) struct FuncData {
     // Also note that this is intentionally placed behind a pointer to keep it
     // small as `FuncData` instances are often inserted into a `Store`.
     ty: Option<Box<FuncType>>,
-}
-
-use in_store_func_ref::InStoreFuncRef;
-mod in_store_func_ref {
-    use super::*;
-
-    #[derive(Copy, Clone)]
-    pub struct InStoreFuncRef(NonNull<VMFuncRef>);
-
-    impl InStoreFuncRef {
-        /// Create a new `InStoreFuncRef`.
-        ///
-        /// Safety: Callers must ensure that the given `func_ref` is pinned
-        /// inside a store, and that this resulting `InStoreFuncRef` is only
-        /// used in conjuction with that store and on its same thread.
-        pub unsafe fn new(func_ref: NonNull<VMFuncRef>) -> InStoreFuncRef {
-            InStoreFuncRef(func_ref)
-        }
-
-        pub fn func_ref(&self) -> NonNull<VMFuncRef> {
-            self.0
-        }
-    }
-
-    // Safety: The `InStoreFuncRef::new` constructor puts the correctness
-    // responsibility on its callers.
-    unsafe impl Send for InStoreFuncRef {}
-    unsafe impl Sync for InStoreFuncRef {}
 }
 
 /// The three ways that a function can be created and referenced from within a
@@ -1109,14 +1081,14 @@ impl Func {
     pub(crate) fn caller_checked_func_ref(&self, store: &mut StoreOpaque) -> NonNull<VMFuncRef> {
         let func_data = &mut store.store_data_mut()[self.0];
         if let Some(in_store) = func_data.in_store_func_ref {
-            in_store.func_ref()
+            in_store.as_non_null()
         } else {
             let func_ref = func_data.export().func_ref;
             unsafe {
                 if func_ref.as_ref().wasm_call.is_none() {
                     let func_ref = store.func_refs().push(func_ref.as_ref().clone());
                     store.store_data_mut()[self.0].in_store_func_ref =
-                        Some(InStoreFuncRef::new(func_ref));
+                        Some(SendSyncPtr::new(func_ref));
                     store.fill_func_refs();
                     func_ref
                 } else {
@@ -1149,7 +1121,7 @@ impl Func {
                 // copy in the store, use the patched version. Otherwise, use
                 // the potentially un-patched version.
                 if let Some(func_ref) = func_data.in_store_func_ref {
-                    func_ref.func_ref()
+                    func_ref.as_non_null()
                 } else {
                     func_data.export().func_ref
                 }
@@ -2330,7 +2302,7 @@ use self::rooted::*;
 /// `RootedHostFunc` instead of accidentally safely allowing access to its
 /// constructor.
 mod rooted {
-    use wasmtime_runtime::VMFuncRef;
+    use wasmtime_runtime::{SendSyncPtr, VMFuncRef};
 
     use super::HostFunc;
     use std::ptr::NonNull;
@@ -2342,14 +2314,9 @@ mod rooted {
     /// For more documentation see `FuncKind::RootedHost`, `InstancePre`, and
     /// `HostFunc::to_func_store_rooted`.
     pub(crate) struct RootedHostFunc {
-        func: NonNull<HostFunc>,
-        func_ref: Option<NonNull<VMFuncRef>>,
+        func: SendSyncPtr<HostFunc>,
+        func_ref: Option<SendSyncPtr<VMFuncRef>>,
     }
-
-    // These are required due to the usage of `NonNull` but should be safe
-    // because `HostFunc` is itself send/sync.
-    unsafe impl Send for RootedHostFunc where HostFunc: Send {}
-    unsafe impl Sync for RootedHostFunc where HostFunc: Sync {}
 
     impl RootedHostFunc {
         /// Note that this is `unsafe` because this wrapper type allows safe
@@ -2364,8 +2331,8 @@ mod rooted {
             func_ref: Option<NonNull<VMFuncRef>>,
         ) -> RootedHostFunc {
             RootedHostFunc {
-                func: NonNull::from(&**func),
-                func_ref,
+                func: NonNull::from(&**func).into(),
+                func_ref: func_ref.map(|p| p.into()),
             }
         }
 
