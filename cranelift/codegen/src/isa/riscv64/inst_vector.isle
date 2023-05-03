@@ -56,6 +56,22 @@
 (type VType (primitive VType))
 (type VState (primitive VState))
 
+
+;; Vector Opcode Category
+;;
+;; These categories are used to determine the type of operands that are allowed in the
+;; instruction.
+(type VecOpCategory (enum
+  (OPIVV)
+  (OPFVV)
+  (OPMVV)
+  (OPIVI)
+  (OPIVX)
+  (OPFVF)
+  (OPMVX)
+  (OPCFG)
+))
+
 ;; Register to Register ALU Ops
 (type VecAluOpRRR (enum
   (Vadd)

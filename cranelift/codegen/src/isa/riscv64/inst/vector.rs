@@ -1,7 +1,7 @@
 use crate::isa::riscv64::inst::EmitState;
 use crate::isa::riscv64::lower::isle::generated_code::{
     VecAMode, VecAluOpRRImm5, VecAluOpRRR, VecAvl, VecElementWidth, VecLmul, VecMaskMode,
-    VecTailMode,
+    VecOpCategory, VecTailMode,
 };
 use crate::Reg;
 use core::fmt;
@@ -213,23 +213,37 @@ impl fmt::Display for VState {
     }
 }
 
+impl VecOpCategory {
+    pub fn encode(&self) -> u32 {
+        // See: https://github.com/riscv/riscv-v-spec/blob/master/v-spec.adoc#101-vector-arithmetic-instruction-encoding
+        match self {
+            VecOpCategory::OPIVV => 0b000,
+            VecOpCategory::OPFVV => 0b001,
+            VecOpCategory::OPMVV => 0b010,
+            VecOpCategory::OPIVI => 0b011,
+            VecOpCategory::OPIVX => 0b100,
+            VecOpCategory::OPFVF => 0b101,
+            VecOpCategory::OPMVX => 0b110,
+            VecOpCategory::OPCFG => 0b111,
+        }
+    }
+}
+
 impl VecAluOpRRR {
     pub fn opcode(&self) -> u32 {
         // Vector Opcode
         0x57
     }
     pub fn funct3(&self) -> u32 {
-        // See: https://github.com/riscv/riscv-v-spec/blob/master/v-spec.adoc#101-vector-arithmetic-instruction-encoding
         match self {
-            // OPIVV
             VecAluOpRRR::Vadd
             | VecAluOpRRR::Vsub
             | VecAluOpRRR::Vand
             | VecAluOpRRR::Vor
-            | VecAluOpRRR::Vxor => 0b000,
-            // OPIMV
-            VecAluOpRRR::Vmul | VecAluOpRRR::Vmulh | VecAluOpRRR::Vmulhu => 0b010,
+            | VecAluOpRRR::Vxor => VecOpCategory::OPIVV,
+            VecAluOpRRR::Vmul | VecAluOpRRR::Vmulh | VecAluOpRRR::Vmulhu => VecOpCategory::OPMVV,
         }
+        .encode()
     }
     pub fn funct6(&self) -> u32 {
         // See: https://github.com/riscv/riscv-v-spec/blob/master/inst-table.adoc
@@ -261,8 +275,7 @@ impl VecAluOpRRImm5 {
         0x57
     }
     pub fn funct3(&self) -> u32 {
-        // OPIVI
-        0b011
+        VecOpCategory::OPIVI.encode()
     }
     pub fn funct6(&self) -> u32 {
         // See: https://github.com/riscv/riscv-v-spec/blob/master/inst-table.adoc
