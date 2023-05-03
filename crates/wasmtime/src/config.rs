@@ -4,7 +4,7 @@ use anyhow::{bail, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::fmt;
-#[cfg(feature = "cache")]
+#[cfg(any(feature = "cache", compiler))]
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -112,6 +112,7 @@ struct CompilerConfig {
     flags: HashSet<String>,
     #[cfg(compiler)]
     cache_store: Option<Arc<dyn CacheStore>>,
+    clif_dir: Option<std::path::PathBuf>,
 }
 
 #[cfg(compiler)]
@@ -123,6 +124,7 @@ impl CompilerConfig {
             settings: HashMap::new(),
             flags: HashSet::new(),
             cache_store: None,
+            clif_dir: None,
         }
     }
 
@@ -682,8 +684,7 @@ impl Config {
     ///
     /// The [WebAssembly SIMD proposal][proposal]. This feature gates items such
     /// as the `v128` type and all of its operators being in a module. Note that
-    /// this does not enable the [relaxed simd proposal] as that is not
-    /// implemented in Wasmtime at this time.
+    /// this does not enable the [relaxed simd proposal].
     ///
     /// On x86_64 platforms note that enabling this feature requires SSE 4.2 and
     /// below to be available on the target platform. Compilation will fail if
@@ -1556,6 +1557,10 @@ impl Config {
             compiler.target(target.clone())?;
         }
 
+        if let Some(path) = &self.compiler_config.clif_dir {
+            compiler.clif_dir(path)?;
+        }
+
         // If probestack is enabled for a target, Wasmtime will always use the
         // inline strategy which doesn't require us to define a `__probestack`
         // function or similar.
@@ -1640,6 +1645,12 @@ impl Config {
     pub fn debug_adapter_modules(&mut self, debug: bool) -> &mut Self {
         self.tunables.debug_adapter_modules = debug;
         self
+    }
+
+    /// Enables clif output when compiling a WebAssembly module.
+    #[cfg(compiler)]
+    pub fn emit_clif(&mut self, path: &Path) {
+        self.compiler_config.clif_dir = Some(path.to_path_buf());
     }
 }
 

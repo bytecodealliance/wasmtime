@@ -8,9 +8,9 @@ use crate::ir::{Function, Type};
 #[cfg(feature = "unwind")]
 use crate::isa::unwind::systemv;
 use crate::isa::x64::{inst::regs::create_reg_env_systemv, settings as x64_settings};
-use crate::isa::Builder as IsaBuilder;
+use crate::isa::{Builder as IsaBuilder, FunctionAlignment};
 use crate::machinst::{
-    compile, CompiledCode, CompiledCodeStencil, MachTextSectionBuilder, Reg, SigSet,
+    compile, CompiledCode, CompiledCodeStencil, MachInst, MachTextSectionBuilder, Reg, SigSet,
     TextSectionBuilder, VCode,
 };
 use crate::result::{CodegenError, CodegenResult};
@@ -51,13 +51,14 @@ impl X64Backend {
         &self,
         func: &Function,
         domtree: &DominatorTree,
+        ctrl_plane: &mut ControlPlane,
     ) -> CodegenResult<(VCode<inst::Inst>, regalloc2::Output)> {
         // This performs lowering to VCode, register-allocates the code, computes
         // block layout and finalizes branches. The result is ready for binary emission.
         let emit_info = EmitInfo::new(self.flags.clone(), self.x64_flags.clone());
         let sigs = SigSet::new::<abi::X64ABIMachineSpec>(func, &self.flags)?;
         let abi = abi::X64Callee::new(func, self, &self.x64_flags, &sigs)?;
-        compile::compile::<Self>(func, domtree, self, abi, emit_info, sigs)
+        compile::compile::<Self>(func, domtree, self, abi, emit_info, sigs, ctrl_plane)
     }
 }
 
@@ -69,7 +70,7 @@ impl TargetIsa for X64Backend {
         want_disasm: bool,
         ctrl_plane: &mut ControlPlane,
     ) -> CodegenResult<CompiledCodeStencil> {
-        let (vcode, regalloc_result) = self.compile_vcode(func, domtree)?;
+        let (vcode, regalloc_result) = self.compile_vcode(func, domtree, ctrl_plane)?;
 
         let emit_result = vcode.emit(
             &regalloc_result,
@@ -166,10 +167,8 @@ impl TargetIsa for X64Backend {
         Box::new(MachTextSectionBuilder::<inst::Inst>::new(num_funcs))
     }
 
-    /// Align functions on x86 to 16 bytes, ensuring that rip-relative loads to SSE registers are
-    /// always from aligned memory.
-    fn function_alignment(&self) -> u32 {
-        16
+    fn function_alignment(&self) -> FunctionAlignment {
+        Inst::function_alignment()
     }
 
     #[cfg(feature = "disas")]

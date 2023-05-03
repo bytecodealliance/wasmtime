@@ -102,10 +102,7 @@ unsafe fn test_fd_readdir(dir_fd: wasi::Fd) {
         0,
         "file",
         wasi::OFLAGS_CREAT,
-        wasi::RIGHTS_FD_READ
-            | wasi::RIGHTS_FD_WRITE
-            | wasi::RIGHTS_FD_READDIR
-            | wasi::RIGHTS_FD_FILESTAT_GET,
+        wasi::RIGHTS_FD_READ | wasi::RIGHTS_FD_WRITE,
         0,
         0,
     )
@@ -119,16 +116,8 @@ unsafe fn test_fd_readdir(dir_fd: wasi::Fd) {
     wasi::fd_close(file_fd).expect("closing a file");
 
     wasi::path_create_directory(dir_fd, "nested").expect("create a directory");
-    let nested_fd = wasi::path_open(
-        dir_fd,
-        0,
-        "nested",
-        0,
-        wasi::RIGHTS_FD_READ | wasi::RIGHTS_FD_READDIR | wasi::RIGHTS_FD_FILESTAT_GET,
-        0,
-        0,
-    )
-    .expect("failed to open nested directory");
+    let nested_fd =
+        wasi::path_open(dir_fd, 0, "nested", 0, 0, 0, 0).expect("failed to open nested directory");
     assert!(
         nested_fd > file_fd,
         "nested directory file descriptor range check",
@@ -190,10 +179,7 @@ unsafe fn test_fd_readdir_lots(dir_fd: wasi::Fd) {
             0,
             &format!("file.{}", count),
             wasi::OFLAGS_CREAT,
-            wasi::RIGHTS_FD_READ
-                | wasi::RIGHTS_FD_WRITE
-                | wasi::RIGHTS_FD_READDIR
-                | wasi::RIGHTS_FD_FILESTAT_GET,
+            wasi::RIGHTS_FD_READ | wasi::RIGHTS_FD_WRITE,
             0,
             0,
         )

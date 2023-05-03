@@ -1,5 +1,5 @@
 use crate::module::{
-    AnyfuncIndex, Initializer, MemoryInitialization, MemoryInitializer, MemoryPlan, Module,
+    FuncRefIndex, Initializer, MemoryInitialization, MemoryInitializer, MemoryPlan, Module,
     ModuleType, TableInitializer, TablePlan,
 };
 use crate::{
@@ -753,12 +753,12 @@ and for re-adding support for interface types you can see this issue:
 
     fn flag_func_escaped(&mut self, func: FuncIndex) {
         let ty = &mut self.result.module.functions[func];
-        // If this was already assigned an anyfunc index no need to re-assign it.
+        // If this was already assigned a funcref index no need to re-assign it.
         if ty.is_escaping() {
             return;
         }
         let index = self.result.module.num_escaped_funcs as u32;
-        ty.anyfunc = AnyfuncIndex::from_u32(index);
+        ty.func_ref = FuncRefIndex::from_u32(index);
         self.result.module.num_escaped_funcs += 1;
     }
 

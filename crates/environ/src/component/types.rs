@@ -181,9 +181,8 @@ indices! {
 
     /// Index into the list of transcoders identified during compilation.
     ///
-    /// This is used to index the `VMCallerCheckedFuncRef` slots reserved for
-    /// string encoders which reference linear memories defined within a
-    /// component.
+    /// This is used to index the `VMFuncRef` slots reserved for string encoders
+    /// which reference linear memories defined within a component.
     pub struct RuntimeTranscoderIndex(u32);
 }
 

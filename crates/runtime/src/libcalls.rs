@@ -56,7 +56,7 @@
 
 use crate::externref::VMExternRef;
 use crate::table::{Table, TableElementType};
-use crate::vmcontext::{VMCallerCheckedFuncRef, VMContext};
+use crate::vmcontext::{VMContext, VMFuncRef};
 use crate::TrapReason;
 use anyhow::Result;
 use std::mem;
@@ -209,14 +209,14 @@ unsafe fn table_grow(
     vmctx: *mut VMContext,
     table_index: u32,
     delta: u32,
-    // NB: we don't know whether this is a pointer to a `VMCallerCheckedFuncRef`
+    // NB: we don't know whether this is a pointer to a `VMFuncRef`
     // or is a `VMExternRef` until we look at the table type.
     init_value: *mut u8,
 ) -> Result<u32> {
     let instance = (*vmctx).instance_mut();
     let table_index = TableIndex::from_u32(table_index);
     let element = match instance.table_element_type(table_index) {
-        TableElementType::Func => (init_value as *mut VMCallerCheckedFuncRef).into(),
+        TableElementType::Func => (init_value as *mut VMFuncRef).into(),
         TableElementType::Extern => {
             let init_value = if init_value.is_null() {
                 None
@@ -232,7 +232,7 @@ unsafe fn table_grow(
     })
 }
 
-use table_grow as table_grow_funcref;
+use table_grow as table_grow_func_ref;
 use table_grow as table_grow_externref;
 
 // Implementation of `table.fill`.
@@ -241,7 +241,7 @@ unsafe fn table_fill(
     table_index: u32,
     dst: u32,
     // NB: we don't know whether this is a `VMExternRef` or a pointer to a
-    // `VMCallerCheckedFuncRef` until we look at the table's element type.
+    // `VMFuncRef` until we look at the table's element type.
     val: *mut u8,
     len: u32,
 ) -> Result<(), Trap> {
@@ -250,7 +250,7 @@ unsafe fn table_fill(
     let table = &mut *instance.get_table(table_index);
     match table.element_type() {
         TableElementType::Func => {
-            let val = val as *mut VMCallerCheckedFuncRef;
+            let val = val as *mut VMFuncRef;
             table.fill(dst, val.into(), len)
         }
         TableElementType::Extern => {
@@ -264,7 +264,7 @@ unsafe fn table_fill(
     }
 }
 
-use table_fill as table_fill_funcref;
+use table_fill as table_fill_func_ref;
 use table_fill as table_fill_externref;
 
 // Implementation of `table.copy`.
@@ -354,10 +354,10 @@ unsafe fn memory_init(
 // Implementation of `ref.func`.
 unsafe fn ref_func(vmctx: *mut VMContext, func_index: u32) -> *mut u8 {
     let instance = (*vmctx).instance_mut();
-    let anyfunc = instance
-        .get_caller_checked_anyfunc(FuncIndex::from_u32(func_index))
-        .expect("ref_func: caller_checked_anyfunc should always be available for given func index");
-    anyfunc as *mut _
+    let func_ref = instance
+        .get_func_ref(FuncIndex::from_u32(func_index))
+        .expect("ref_func: `get_func_ref` should always be available for our given func index");
+    func_ref as *mut _
 }
 
 // Implementation of `data.drop`.
@@ -368,7 +368,7 @@ unsafe fn data_drop(vmctx: *mut VMContext, data_index: u32) {
 }
 
 // Returns a table entry after lazily initializing it.
-unsafe fn table_get_lazy_init_funcref(
+unsafe fn table_get_lazy_init_func_ref(
     vmctx: *mut VMContext,
     table_index: u32,
     index: u32,
@@ -394,7 +394,8 @@ unsafe fn drop_externref(_vmctx: *mut VMContext, externref: *mut u8) {
 // `VMExternRefActivationsTable`.
 unsafe fn activations_table_insert_with_gc(vmctx: *mut VMContext, externref: *mut u8) {
     let externref = VMExternRef::clone_from_raw(externref);
-    let instance = (*vmctx).instance();
+    let instance = (*vmctx).instance_mut();
+    let limits = *instance.runtime_limits();
     let (activations_table, module_info_lookup) = (*instance.store()).externref_activations_table();
 
     // Invariant: all `externref`s on the stack have an entry in the activations
@@ -406,13 +407,14 @@ unsafe fn activations_table_insert_with_gc(vmctx: *mut VMContext, externref: *mu
     // but it isn't really a concern because this is already a slow path.
     activations_table.insert_without_gc(externref.clone());
 
-    activations_table.insert_with_gc(externref, module_info_lookup);
+    activations_table.insert_with_gc(limits, externref, module_info_lookup);
 }
 
 // Perform a Wasm `global.get` for `externref` globals.
 unsafe fn externref_global_get(vmctx: *mut VMContext, index: u32) -> *mut u8 {
     let index = GlobalIndex::from_u32(index);
-    let instance = (*vmctx).instance();
+    let instance = (*vmctx).instance_mut();
+    let limits = *instance.runtime_limits();
     let global = instance.defined_or_imported_global_ptr(index);
     match (*global).as_externref().clone() {
         None => ptr::null_mut(),
@@ -420,7 +422,7 @@ unsafe fn externref_global_get(vmctx: *mut VMContext, index: u32) -> *mut u8 {
             let raw = externref.as_raw();
             let (activations_table, module_info_lookup) =
                 (*instance.store()).externref_activations_table();
-            activations_table.insert_with_gc(externref, module_info_lookup);
+            activations_table.insert_with_gc(limits, externref, module_info_lookup);
             raw
         }
     }
@@ -435,7 +437,7 @@ unsafe fn externref_global_set(vmctx: *mut VMContext, index: u32, externref: *mu
     };
 
     let index = GlobalIndex::from_u32(index);
-    let instance = (*vmctx).instance();
+    let instance = (*vmctx).instance_mut();
     let global = instance.defined_or_imported_global_ptr(index);
 
     // Swap the new `externref` value into the global before we drop the old

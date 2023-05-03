@@ -47,6 +47,7 @@
 use crate::binemit::{Addend, CodeInfo, CodeOffset, Reloc, StackMap};
 use crate::ir::function::FunctionParameters;
 use crate::ir::{DynamicStackSlot, RelSourceLoc, StackSlot, Type};
+use crate::isa::FunctionAlignment;
 use crate::result::CodegenResult;
 use crate::settings::Flags;
 use crate::value_label::ValueLabelsRanges;
@@ -174,6 +175,10 @@ pub trait MachInst: Clone + Debug {
     ) -> Option<Self> {
         None
     }
+
+    /// Returns a description of the alignment required for functions for this
+    /// architecture.
+    fn function_alignment() -> FunctionAlignment;
 
     /// A label-use kind: a type that describes the types of label references that
     /// can occur in an instruction.

@@ -184,7 +184,7 @@ pub enum GlobalInitializer {
     /// A core wasm function was "generated" via `canon lower` of a function
     /// that was `canon lift`'d in the same component, meaning that the function
     /// always traps. This is recorded within the `VMComponentContext` as a new
-    /// `VMCallerCheckedFuncRef` that's available for use.
+    /// `VMFuncRef` that's available for use.
     AlwaysTrap(AlwaysTrap),
 
     /// A core wasm linear memory is going to be saved into the
@@ -212,9 +212,9 @@ pub enum GlobalInitializer {
     /// Same as `SaveModuleUpvar`, but for imports.
     SaveModuleImport(RuntimeImportIndex),
 
-    /// Similar to `ExtractMemory` and friends and indicates that a
-    /// `VMCallerCheckedFuncRef` needs to be initialized for a transcoder
-    /// function and this will later be used to instantiate an adapter module.
+    /// Similar to `ExtractMemory` and friends and indicates that a `VMFuncRef`
+    /// needs to be initialized for a transcoder function and this will later be
+    /// used to instantiate an adapter module.
     Transcoder(Transcoder),
 }
 
@@ -291,6 +291,13 @@ pub struct LowerImport {
     pub options: CanonicalOptions,
 }
 
+impl LowerImport {
+    /// Get the symbol name for this lowered import.
+    pub fn symbol_name(&self) -> String {
+        format!("wasm_component_lowering_{}", self.index.as_u32())
+    }
+}
+
 /// Description of what to initialize when a `GlobalInitializer::AlwaysTrap` is
 /// encountered.
 #[derive(Debug, Serialize, Deserialize)]
@@ -300,6 +307,13 @@ pub struct AlwaysTrap {
     pub index: RuntimeAlwaysTrapIndex,
     /// The core wasm signature of the function that's inserted.
     pub canonical_abi: SignatureIndex,
+}
+
+impl AlwaysTrap {
+    /// Get the symbol name for this always-trap function.
+    pub fn symbol_name(&self) -> String {
+        format!("wasm_component_always_trap_{}", self.index.as_u32())
+    }
 }
 
 /// Definition of a core wasm item and where it can come from within a
@@ -469,7 +483,7 @@ pub enum StringEncoding {
 pub struct Transcoder {
     /// The index of the transcoder being defined and initialized.
     ///
-    /// This indicates which `VMCallerCheckedFuncRef` slot is written to in a
+    /// This indicates which `VMFuncRef` slot is written to in a
     /// `VMComponentContext`.
     pub index: RuntimeTranscoderIndex,
     /// The transcoding operation being performed.
@@ -484,6 +498,17 @@ pub struct Transcoder {
     pub to64: bool,
     /// The wasm signature of the cranelift-generated trampoline.
     pub signature: SignatureIndex,
+}
+
+impl Transcoder {
+    /// Get the symbol name for this transcoder function.
+    pub fn symbol_name(&self) -> String {
+        let index = self.index.as_u32();
+        let op = self.op.symbol_fragment();
+        let from = if self.from64 { "64" } else { "32" };
+        let to = if self.to64 { "64" } else { "32" };
+        format!("wasm_component_transcoder_{index}_{op}_memory{from}_to_memory{to}")
+    }
 }
 
 pub use crate::fact::{FixedEncoding, Transcode};

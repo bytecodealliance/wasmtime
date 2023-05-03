@@ -91,6 +91,7 @@ pub enum Trap {
 
     /// Call to a null reference.
     NullReference,
+
     // if adding a variant here be sure to update the `check!` macro below
 }
 

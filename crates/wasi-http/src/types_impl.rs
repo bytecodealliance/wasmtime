@@ -188,7 +188,7 @@ impl crate::types::Host for WasiHttp {
         &mut self,
         request: OutgoingRequest,
     ) -> wasmtime::Result<Result<OutgoingStream, ()>> {
-        let mut req = self
+        let req = self
             .requests
             .get_mut(&request)
             .ok_or_else(|| anyhow!("unknown request: {request}"))?;

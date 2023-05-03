@@ -1,10 +1,9 @@
 use anyhow::Result;
-use cranelift_codegen::{Final, MachBufferFinalized};
 use object::write::{Object, SymbolId};
 use std::any::Any;
 use std::sync::Mutex;
 use wasmparser::FuncValidatorAllocations;
-use wasmtime_cranelift_shared::obj::ModuleTextBuilder;
+use wasmtime_cranelift_shared::{CompiledFunction, ModuleTextBuilder};
 use wasmtime_environ::{
     CompileError, DefinedFuncIndex, FilePos, FuncIndex, FunctionBodyData, FunctionLoc,
     ModuleTranslation, ModuleTypes, PrimaryMap, Tunables, WasmFunctionInfo,
@@ -17,7 +16,16 @@ pub(crate) struct Compiler {
     allocations: Mutex<Vec<FuncValidatorAllocations>>,
 }
 
-struct CompiledFunction(MachBufferFinalized<Final>);
+/// The compiled function environment.
+pub struct CompiledFuncEnv;
+impl wasmtime_cranelift_shared::CompiledFuncEnv for CompiledFuncEnv {
+    fn resolve_user_external_name_ref(
+        &self,
+        external: cranelift_codegen::ir::UserExternalNameRef,
+    ) -> (u32, u32) {
+        (0, external.as_u32())
+    }
+}
 
 impl Compiler {
     pub fn new(isa: Box<dyn TargetIsa>) -> Self {
@@ -66,31 +74,45 @@ impl wasmtime_environ::Compiler for Compiler {
             .map_err(|e| CompileError::Codegen(format!("{e:?}")));
         self.save_allocations(validator.into_allocations());
         let buffer = buffer?;
+        let compiled_function =
+            CompiledFunction::new(buffer, CompiledFuncEnv {}, self.isa.function_alignment());
 
         Ok((
             WasmFunctionInfo {
                 start_srcloc,
                 stack_maps: Box::new([]),
             },
-            Box::new(CompiledFunction(buffer)),
+            Box::new(compiled_function),
         ))
     }
 
-    fn compile_host_to_wasm_trampoline(
+    fn compile_array_to_wasm_trampoline(
         &self,
-        ty: &wasmtime_environ::WasmFuncType,
+        translation: &ModuleTranslation<'_>,
+        types: &ModuleTypes,
+        index: DefinedFuncIndex,
     ) -> Result<Box<dyn Any + Send>, CompileError> {
-        let wasm_ty = wasmparser::FuncType::new(
-            ty.params().iter().copied().map(Into::into),
-            ty.returns().iter().copied().map(Into::into),
-        );
+        let _ = (translation, types, index);
+        todo!()
+    }
 
-        let buffer = self
-            .isa
-            .host_to_wasm_trampoline(&wasm_ty)
-            .map_err(|e| CompileError::Codegen(format!("{:?}", e)))?;
+    fn compile_native_to_wasm_trampoline(
+        &self,
+        translation: &ModuleTranslation<'_>,
+        types: &ModuleTypes,
+        index: DefinedFuncIndex,
+    ) -> Result<Box<dyn Any + Send>, CompileError> {
+        let _ = (translation, types, index);
+        todo!()
+    }
 
-        Ok(Box::new(CompiledFunction(buffer)))
+    fn compile_wasm_to_native_trampoline(
+        &self,
+        translation: &ModuleTranslation<'_>,
+        wasm_func_ty: &wasmtime_environ::WasmFuncType,
+    ) -> Result<Box<dyn Any + Send>, CompileError> {
+        let _ = (translation, wasm_func_ty);
+        todo!()
     }
 
     fn append_code(
@@ -105,23 +127,11 @@ impl wasmtime_environ::Compiler for Compiler {
 
         let mut ret = Vec::with_capacity(funcs.len());
         for (i, (sym, func)) in funcs.iter().enumerate() {
-            let func = &func.downcast_ref::<CompiledFunction>().unwrap().0;
+            let func = func
+                .downcast_ref::<CompiledFunction<CompiledFuncEnv>>()
+                .unwrap();
 
-            // TODO: Implement copying over this data into the
-            // `ModuleTextBuilder` type. Note that this should probably be
-            // deduplicated with the cranelift implementation in the long run.
-            assert!(func.relocs().is_empty());
-            assert!(func.traps().is_empty());
-            assert!(func.stack_maps().is_empty());
-
-            let (sym, range) = builder.append_func(
-                &sym,
-                func.data(),
-                self.function_alignment(),
-                None,
-                &[],
-                |idx| resolve_reloc(i, idx),
-            );
+            let (sym, range) = builder.append_func(&sym, func, |idx| resolve_reloc(i, idx));
 
             let info = FunctionLoc {
                 start: u32::try_from(range.start).unwrap(),
@@ -133,12 +143,15 @@ impl wasmtime_environ::Compiler for Compiler {
         Ok(ret)
     }
 
-    fn emit_trampoline_obj(
+    fn emit_trampolines_for_array_call_host_func(
         &self,
-        _ty: &wasmtime_environ::WasmFuncType,
-        _host_fn: usize,
-        _obj: &mut wasmtime_environ::object::write::Object<'static>,
+        ty: &wasmtime_environ::WasmFuncType,
+        // Actually `host_fn: VMArrayCallFunction` but that type is not
+        // available in `wasmtime-environ`.
+        host_fn: usize,
+        obj: &mut Object<'static>,
     ) -> Result<(FunctionLoc, FunctionLoc)> {
+        drop((ty, host_fn, obj));
         todo!()
     }
 
@@ -170,10 +183,6 @@ impl wasmtime_environ::Compiler for Compiler {
         _funcs: &PrimaryMap<DefinedFuncIndex, (SymbolId, &(dyn Any + Send))>,
     ) -> Result<()> {
         todo!()
-    }
-
-    fn function_alignment(&self) -> u32 {
-        self.isa.function_alignment()
     }
 
     fn create_systemv_cie(&self) -> Option<gimli::write::CommonInformationEntry> {

@@ -2,7 +2,7 @@
 //!
 //! `Table` is to WebAssembly tables what `LinearMemory` is to WebAssembly linear memories.
 
-use crate::vmcontext::{VMCallerCheckedFuncRef, VMTableDefinition};
+use crate::vmcontext::{VMFuncRef, VMTableDefinition};
 use crate::{Store, VMExternRef};
 use anyhow::{bail, format_err, Error, Result};
 use std::convert::{TryFrom, TryInto};
@@ -18,7 +18,7 @@ use wasmtime_environ::{
 #[derive(Clone)]
 pub enum TableElement {
     /// A `funcref`.
-    FuncRef(*mut VMCallerCheckedFuncRef),
+    FuncRef(*mut VMFuncRef),
     /// An `exrernref`.
     ExternRef(Option<VMExternRef>),
     /// An uninitialized funcref value. This should never be exposed
@@ -34,7 +34,7 @@ pub enum TableElementType {
     Extern,
 }
 
-// The usage of `*mut VMCallerCheckedFuncRef` is safe w.r.t. thread safety, this
+// The usage of `*mut VMFuncRef` is safe w.r.t. thread safety, this
 // just relies on thread-safety of `VMExternRef` itself.
 unsafe impl Send for TableElement where VMExternRef: Send {}
 unsafe impl Sync for TableElement where VMExternRef: Sync {}
@@ -121,8 +121,8 @@ impl TableElement {
     }
 }
 
-impl From<*mut VMCallerCheckedFuncRef> for TableElement {
-    fn from(f: *mut VMCallerCheckedFuncRef) -> TableElement {
+impl From<*mut VMFuncRef> for TableElement {
+    fn from(f: *mut VMFuncRef) -> TableElement {
         TableElement::FuncRef(f)
     }
 }
@@ -268,7 +268,7 @@ impl Table {
     pub fn init_funcs(
         &mut self,
         dst: u32,
-        items: impl ExactSizeIterator<Item = *mut VMCallerCheckedFuncRef>,
+        items: impl ExactSizeIterator<Item = *mut VMFuncRef>,
     ) -> Result<(), Trap> {
         assert!(self.element_type() == TableElementType::Func);
 

@@ -99,6 +99,7 @@
 //! Examination of Deferred Reference Counting and Cycle Detection* by Quinane:
 //! <https://openresearch-repository.anu.edu.au/bitstream/1885/42030/2/hon-thesis.pdf>
 
+use crate::{Backtrace, VMRuntimeLimits};
 use std::alloc::Layout;
 use std::any::Any;
 use std::cell::UnsafeCell;
@@ -110,8 +111,6 @@ use std::ops::Deref;
 use std::ptr::{self, NonNull};
 use std::sync::atomic::{self, AtomicUsize, Ordering};
 use wasmtime_environ::StackMap;
-
-use crate::Backtrace;
 
 /// An external reference to some opaque data.
 ///
@@ -649,6 +648,7 @@ impl VMExternRefActivationsTable {
     #[inline]
     pub unsafe fn insert_with_gc(
         &mut self,
+        limits: *const VMRuntimeLimits,
         externref: VMExternRef,
         module_info_lookup: &dyn ModuleInfoLookup,
     ) {
@@ -656,17 +656,18 @@ impl VMExternRefActivationsTable {
         assert!(self.gc_okay);
 
         if let Err(externref) = self.try_insert(externref) {
-            self.gc_and_insert_slow(externref, module_info_lookup);
+            self.gc_and_insert_slow(limits, externref, module_info_lookup);
         }
     }
 
     #[inline(never)]
     unsafe fn gc_and_insert_slow(
         &mut self,
+        limits: *const VMRuntimeLimits,
         externref: VMExternRef,
         module_info_lookup: &dyn ModuleInfoLookup,
     ) {
-        gc(module_info_lookup, self);
+        gc(limits, module_info_lookup, self);
 
         // Might as well insert right into the hash set, rather than the bump
         // chunk, since we are already on a slow path and we get de-duplication
@@ -854,6 +855,7 @@ impl<T> std::ops::DerefMut for DebugOnly<T> {
 /// Additionally, you must have registered the stack maps for every Wasm module
 /// that has frames on the stack with the given `stack_maps_registry`.
 pub unsafe fn gc(
+    limits: *const VMRuntimeLimits,
     module_info_lookup: &dyn ModuleInfoLookup,
     externref_activations_table: &mut VMExternRefActivationsTable,
 ) {
@@ -894,7 +896,7 @@ pub unsafe fn gc(
     }
 
     log::trace!("begin GC trace");
-    Backtrace::trace(|frame| {
+    Backtrace::trace(limits, |frame| {
         let pc = frame.pc();
         debug_assert!(pc != 0, "we should always get a valid PC for Wasm frames");
 

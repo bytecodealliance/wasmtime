@@ -241,8 +241,9 @@ impl ModuleTranslation<'_> {
         }
         let mut idx = 0;
         let ok = self.module.memory_initialization.init_memory(
+            &mut (),
             InitMemory::CompileTime(&self.module),
-            &mut |memory, init| {
+            |(), memory, init| {
                 // Currently `Static` only applies to locally-defined memories,
                 // so if a data segment references an imported memory then
                 // transitioning to a `Static` memory initializer is not
@@ -530,10 +531,11 @@ impl MemoryInitialization {
     /// question needs to be deferred to runtime, and at runtime this means
     /// that an invalid initializer has been found and a trap should be
     /// generated.
-    pub fn init_memory(
+    pub fn init_memory<T>(
         &self,
-        state: InitMemory<'_>,
-        write: &mut dyn FnMut(MemoryIndex, &StaticMemoryInitializer) -> bool,
+        state: &mut T,
+        init: InitMemory<'_, T>,
+        mut write: impl FnMut(&mut T, MemoryIndex, &StaticMemoryInitializer) -> bool,
     ) -> bool {
         let initializers = match self {
             // Fall through below to the segmented memory one-by-one
@@ -548,7 +550,7 @@ impl MemoryInitialization {
             MemoryInitialization::Static { map } => {
                 for (index, init) in map {
                     if let Some(init) = init {
-                        let result = write(index, init);
+                        let result = write(state, index, init);
                         if !result {
                             return result;
                         }
@@ -572,10 +574,10 @@ impl MemoryInitialization {
             // (e.g. this is a task happening before instantiation at
             // compile-time).
             let base = match base {
-                Some(index) => match &state {
+                Some(index) => match &init {
                     InitMemory::Runtime {
                         get_global_as_u64, ..
-                    } => get_global_as_u64(index),
+                    } => get_global_as_u64(state, index),
                     InitMemory::CompileTime(_) => return false,
                 },
                 None => 0,
@@ -590,12 +592,12 @@ impl MemoryInitialization {
                 None => return false,
             };
 
-            let cur_size_in_pages = match &state {
+            let cur_size_in_pages = match &init {
                 InitMemory::CompileTime(module) => module.memory_plans[memory_index].memory.minimum,
                 InitMemory::Runtime {
                     memory_size_in_pages,
                     ..
-                } => memory_size_in_pages(memory_index),
+                } => memory_size_in_pages(state, memory_index),
             };
 
             // Note that this `minimum` can overflow if `minimum` is
@@ -621,7 +623,7 @@ impl MemoryInitialization {
                 offset: start,
                 data: data.clone(),
             };
-            let result = write(memory_index, &init);
+            let result = write(state, memory_index, &init);
             if !result {
                 return result;
             }
@@ -633,7 +635,7 @@ impl MemoryInitialization {
 
 /// Argument to [`MemoryInitialization::init_memory`] indicating the current
 /// status of the instance.
-pub enum InitMemory<'a> {
+pub enum InitMemory<'a, T> {
     /// This evaluation of memory initializers is happening at compile time.
     /// This means that the current state of memories is whatever their initial
     /// state is, and additionally globals are not available if data segments
@@ -645,10 +647,10 @@ pub enum InitMemory<'a> {
     /// instance's state.
     Runtime {
         /// Returns the size, in wasm pages, of the the memory specified.
-        memory_size_in_pages: &'a dyn Fn(MemoryIndex) -> u64,
+        memory_size_in_pages: &'a dyn Fn(&mut T, MemoryIndex) -> u64,
         /// Returns the value of the global, as a `u64`. Note that this may
         /// involve zero-extending a 32-bit global to a 64-bit number.
-        get_global_as_u64: &'a dyn Fn(GlobalIndex) -> u64,
+        get_global_as_u64: &'a dyn Fn(&mut T, GlobalIndex) -> u64,
     },
 }
 
@@ -814,10 +816,10 @@ pub struct Module {
     pub num_imported_globals: usize,
 
     /// Number of functions that "escape" from this module may need to have a
-    /// `VMCallerCheckedFuncRef` constructed for them.
+    /// `VMFuncRef` constructed for them.
     ///
     /// This is also the number of functions in the `functions` array below with
-    /// an `anyfunc` index (and is the maximum anyfunc index).
+    /// an `func_ref` index (and is the maximum func_ref index).
     pub num_escaped_funcs: usize,
 
     /// Types of functions, imported and local.
@@ -1003,7 +1005,7 @@ impl Module {
     pub fn push_function(&mut self, signature: SignatureIndex) -> FuncIndex {
         self.functions.push(FunctionType {
             signature,
-            anyfunc: AnyfuncIndex::reserved_value(),
+            func_ref: FuncRefIndex::reserved_value(),
         })
     }
 
@@ -1011,9 +1013,12 @@ impl Module {
     pub fn push_escaped_function(
         &mut self,
         signature: SignatureIndex,
-        anyfunc: AnyfuncIndex,
+        func_ref: FuncRefIndex,
     ) -> FuncIndex {
-        self.functions.push(FunctionType { signature, anyfunc })
+        self.functions.push(FunctionType {
+            signature,
+            func_ref,
+        })
     }
 }
 
@@ -1023,9 +1028,9 @@ pub struct FunctionType {
     /// The type of this function, indexed into the module-wide type tables for
     /// a module compilation.
     pub signature: SignatureIndex,
-    /// The index into the anyfunc table, if present. Note that this is
+    /// The index into the funcref table, if present. Note that this is
     /// `reserved_value()` if the function does not escape from a module.
-    pub anyfunc: AnyfuncIndex,
+    pub func_ref: FuncRefIndex,
 }
 
 impl FunctionType {
@@ -1033,11 +1038,11 @@ impl FunctionType {
     /// module, meaning that the function is exported, used in `ref.func`, used
     /// in a table, etc.
     pub fn is_escaping(&self) -> bool {
-        !self.anyfunc.is_reserved_value()
+        !self.func_ref.is_reserved_value()
     }
 }
 
-/// Index into the anyfunc table within a VMContext for a function.
+/// Index into the funcref table within a VMContext for a function.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
-pub struct AnyfuncIndex(u32);
-cranelift_entity::entity_impl!(AnyfuncIndex);
+pub struct FuncRefIndex(u32);
+cranelift_entity::entity_impl!(FuncRefIndex);

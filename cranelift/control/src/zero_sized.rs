@@ -25,4 +25,18 @@ impl ControlPlane {
     pub fn get_decision(&mut self) -> bool {
         false
     }
+
+    /// Shuffles the items in the slice into a pseudo-random permutation.
+    /// This variant is used when chaos mode is disabled. It doesn't do
+    /// anything.
+    #[inline]
+    pub fn shuffle<T>(&mut self, _slice: &mut [T]) {}
+
+    /// Returns a new iterator over the same items as the input iterator in
+    /// a pseudo-random order. This variant is used when chaos mode is
+    /// disabled. It always returns the same order.
+    #[inline]
+    pub fn shuffled<T>(&mut self, iter: impl Iterator<Item = T>) -> impl Iterator<Item = T> {
+        iter
+    }
 }

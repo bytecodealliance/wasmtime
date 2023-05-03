@@ -14,6 +14,7 @@ use std::any::Any;
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::fmt;
+use std::path;
 use std::sync::Arc;
 use thiserror::Error;
 
@@ -88,6 +89,11 @@ pub trait CacheStore: Send + Sync + std::fmt::Debug {
 pub trait CompilerBuilder: Send + Sync + fmt::Debug {
     /// Sets the target of compilation to the target specified.
     fn target(&mut self, target: target_lexicon::Triple) -> Result<()>;
+
+    /// Enables clif output in the directory specified.
+    fn clif_dir(&mut self, _path: &path::Path) -> Result<()> {
+        anyhow::bail!("clif output not supported");
+    }
 
     /// Returns the currently configured target triple that compilation will
     /// produce artifacts for.
@@ -172,11 +178,39 @@ pub trait Compiler: Send + Sync {
         types: &ModuleTypes,
     ) -> Result<(WasmFunctionInfo, Box<dyn Any + Send>), CompileError>;
 
-    /// Creates a function of type `VMTrampoline` which will then call the
-    /// function pointer argument which has the `ty` type provided.
-    fn compile_host_to_wasm_trampoline(
+    /// Compile a trampoline for an array-call host function caller calling the
+    /// `index`th Wasm function.
+    ///
+    /// The trampoline should save the necessary state to record the
+    /// host-to-Wasm transition (e.g. registers used for fast stack walking).
+    fn compile_array_to_wasm_trampoline(
         &self,
-        ty: &WasmFuncType,
+        translation: &ModuleTranslation<'_>,
+        types: &ModuleTypes,
+        index: DefinedFuncIndex,
+    ) -> Result<Box<dyn Any + Send>, CompileError>;
+
+    /// Compile a trampoline for a native-call host function caller calling the
+    /// `index`th Wasm function.
+    ///
+    /// The trampoline should save the necessary state to record the
+    /// host-to-Wasm transition (e.g. registers used for fast stack walking).
+    fn compile_native_to_wasm_trampoline(
+        &self,
+        translation: &ModuleTranslation<'_>,
+        types: &ModuleTypes,
+        index: DefinedFuncIndex,
+    ) -> Result<Box<dyn Any + Send>, CompileError>;
+
+    /// Compile a trampoline for a Wasm caller calling a native callee with the
+    /// given signature.
+    ///
+    /// The trampoline should save the necessary state to record the
+    /// Wasm-to-host transition (e.g. registers used for fast stack walking).
+    fn compile_wasm_to_native_trampoline(
+        &self,
+        translation: &ModuleTranslation<'_>,
+        wasm_func_ty: &WasmFuncType,
     ) -> Result<Box<dyn Any + Send>, CompileError>;
 
     /// Appends a list of compiled functions to an in-memory object.
@@ -197,10 +231,15 @@ pub trait Compiler: Send + Sync {
     ///
     /// The `resolve_reloc` argument is intended to resolving relocations
     /// between function, chiefly resolving intra-module calls within one core
-    /// wasm module. The closure here takes two arguments: first the index
-    /// within `funcs` that is being resolved and next the `FuncIndex` which is
-    /// the relocation target to resolve. The return value is an index within
-    /// `funcs` that the relocation points to.
+    /// wasm module. The closure here takes two arguments:
+    ///
+    /// 1. First, the index within `funcs` that is being resolved,
+    ///
+    /// 2. and next the `FuncIndex` which is the relocation target to
+    /// resolve.
+    ///
+    /// The return value is an index within `funcs` that the relocation points
+    /// to.
     fn append_code(
         &self,
         obj: &mut Object<'static>,
@@ -209,16 +248,35 @@ pub trait Compiler: Send + Sync {
         resolve_reloc: &dyn Fn(usize, FuncIndex) -> usize,
     ) -> Result<Vec<(SymbolId, FunctionLoc)>>;
 
-    /// Inserts two functions for host-to-wasm and wasm-to-host trampolines into
-    /// the `obj` provided.
+    /// Inserts two trampolines into `obj` for a array-call host function:
     ///
-    /// This will configure the same sections as `emit_obj`, but will likely be
-    /// much smaller. The two returned `Trampoline` structures describe where to
-    /// find the host-to-wasm and wasm-to-host trampolines in the text section,
-    /// respectively.
-    fn emit_trampoline_obj(
+    /// 1. A wasm-call trampoline: A trampoline that takes arguments in their
+    ///    wasm-call locations, moves them to their array-call locations, calls
+    ///    the array-call host function, and finally moves the return values
+    ///    from the array-call locations to the wasm-call return
+    ///    locations. Additionally, this trampoline manages the wasm-to-host
+    ///    state transition for the runtime.
+    ///
+    /// 2. A native-call trampoline: A trampoline that takes arguments in their
+    ///    native-call locations, moves them to their array-call locations,
+    ///    calls the array-call host function, and finally moves the return
+    ///    values from the array-call locations to the native-call return
+    ///    locations. Does not need to manage any wasm/host state transitions,
+    ///    since both caller and callee are on the host side.
+    ///
+    /// This will configure the same sections as `append_code`, but will likely
+    /// be much smaller.
+    ///
+    /// The two returned `FunctionLoc` structures describe where to find these
+    /// trampolines in the text section, respectively.
+    ///
+    /// These trampolines are only valid for in-process JIT usage. They bake in
+    /// the function pointer to the host code.
+    fn emit_trampolines_for_array_call_host_func(
         &self,
         ty: &WasmFuncType,
+        // Actually `host_fn: VMArrayCallFunction` but that type is not
+        // available in `wasmtime-environ`.
         host_fn: usize,
         obj: &mut Object<'static>,
     ) -> Result<(FunctionLoc, FunctionLoc)>;
@@ -310,9 +368,6 @@ pub trait Compiler: Send + Sync {
         translation: &ModuleTranslation<'_>,
         funcs: &PrimaryMap<DefinedFuncIndex, (SymbolId, &(dyn Any + Send))>,
     ) -> Result<()>;
-
-    /// The function alignment required by this ISA.
-    fn function_alignment(&self) -> u32;
 
     /// Creates a new System V Common Information Entry for the ISA.
     ///

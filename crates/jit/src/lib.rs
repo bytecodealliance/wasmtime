@@ -29,7 +29,8 @@ mod unwind;
 
 pub use crate::code_memory::CodeMemory;
 pub use crate::instantiate::{
-    subslice_range, CompiledModule, CompiledModuleInfo, ObjectBuilder, SymbolizeContext,
+    subslice_range, CompiledFunctionInfo, CompiledModule, CompiledModuleInfo, ObjectBuilder,
+    SymbolizeContext,
 };
 pub use demangling::*;
 pub use profiling::*;

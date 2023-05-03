@@ -435,7 +435,7 @@ fn test_custom_memory_limiter() -> Result<()> {
         "",
         "alloc",
         |mut caller: Caller<'_, MemoryContext>, size: u32| -> u32 {
-            let mut ctx = caller.data_mut();
+            let ctx = caller.data_mut();
             let size = size as usize;
 
             if size + ctx.host_memory_used + ctx.wasm_memory_used <= ctx.memory_limit {
@@ -552,7 +552,7 @@ async fn test_custom_memory_limiter_async() -> Result<()> {
         "",
         "alloc",
         |mut caller: Caller<'_, MemoryContext>, size: u32| -> u32 {
-            let mut ctx = caller.data_mut();
+            let ctx = caller.data_mut();
             let size = size as usize;
 
             if size + ctx.host_memory_used + ctx.wasm_memory_used <= ctx.memory_limit {

@@ -35,3 +35,13 @@ block0(v0: i128, v1: i128, v2: i128):
 ; run: %i128_cond_select(1, 0x00000000_00000000_DECAFFFF_C0FFEEEE, 0xFFFFFFFF_FFFFFFFF_C0FFEEEE_DECAFFFF) == 0x00000000_00000000_DECAFFFF_C0FFEEEE
 ; run: %i128_cond_select(0, 0x00000000_00000000_DECAFFFF_C0FFEEEE, 0xFFFFFFFF_FFFFFFFF_C0FFEEEE_DECAFFFF) == 0xFFFFFFFF_FFFFFFFF_C0FFEEEE_DECAFFFF
 ; run: %i128_cond_select(0x1_00000000_00000000, 2, 3) == 2
+
+; See: https://github.com/bytecodealliance/wasmtime/issues/6312
+function %i128_select_of_icmp(i64, i64, i128, i128) -> i64, i8 {
+block0(v0: i64, v1: i64, v2: i128,  v3: i128):
+    v4 = icmp.i128 sle v3, v2
+    v6 = select.i64 v4, v1, v0
+    return v6, v4
+}
+
+; run: %i128_select_of_icmp(0, 13724266, 0, 142088073609408121139349355241191013256) == [0, 0]

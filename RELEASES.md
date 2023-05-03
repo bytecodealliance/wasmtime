@@ -8,6 +8,39 @@ Unreleased.
 
 ### Changed
 
+* Overhauled the way that Wasmtime calls into Wasm and Wasm calls back out to
+  the host. Instead of chaining together trampolines to convert between calling
+  conventions, we now represent `funcref`s with multiple function pointers, one
+  per calling convention. This paves the way for supporting Wasm tail calls and
+  also results in ~10% speed ups to a variety of function call benchmarks,
+  however there are some slight compiled Wasm module code size regressions
+  (which can be alleviated by disabling optional `.eh_frame`
+  generation). Additionally, in the C API the `wasmtime_func_call_unchecked`
+  function gained one more parameter, which is the capacity of the
+  args-and-results
+  buffer. [#6262](https://github.com/bytecodealliance/wasmtime/pull/6262)
+
+--------------------------------------------------------------------------------
+
+## 8.0.1
+
+Released 2023-04-27.
+
+### Changed
+
+* Breaking: Files opened using Wasmtime's implementation of WASI on Windows now
+  cannot be deleted until the file handle is closed. This was already true for
+  open directories. The change was necessary for the bug fix in
+  [#6163](https://github.com/bytecodealliance/wasmtime/pull/6163).
+
+### Fixed
+
+* Fixed wasi-common's implementation of the `O_DIRECTORY` flag to match POSIX.
+  [#6163](https://github.com/bytecodealliance/wasmtime/pull/6163)
+
+* Undefined Behavior in Rust runtime functions
+  [GHSA-ch89-5g45-qwc7](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-ch89-5g45-qwc7)
+
 --------------------------------------------------------------------------------
 
 ## 8.0.0
@@ -110,6 +143,17 @@ Released 2023-04-20
 
 --------------------------------------------------------------------------------
 
+## 7.0.1
+
+Released 2023-04-27.
+
+### Fixed
+
+* Undefined Behavior in Rust runtime functions
+  [GHSA-ch89-5g45-qwc7](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-ch89-5g45-qwc7)
+
+--------------------------------------------------------------------------------
+
 ## 7.0.0
 
 Released 2023-03-20
@@ -171,6 +215,17 @@ Released 2023-03-20
 
 *  Miscompilation of `i8x16.select` with the same inputs on x86\_64
   [GHSA-xm67-587q-r2vw](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-xm67-587q-r2vw)
+
+--------------------------------------------------------------------------------
+
+## 6.0.2
+
+Released 2023-04-27.
+
+### Fixed
+
+* Undefined Behavior in Rust runtime functions
+  [GHSA-ch89-5g45-qwc7](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-ch89-5g45-qwc7)
 
 --------------------------------------------------------------------------------
 

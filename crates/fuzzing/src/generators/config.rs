@@ -267,7 +267,7 @@ impl Config {
     /// Generates an arbitrary method of timing out an instance, ensuring that
     /// this configuration supports the returned timeout.
     pub fn generate_timeout(&mut self, u: &mut Unstructured<'_>) -> arbitrary::Result<Timeout> {
-        let time_duration = Duration::from_secs(20);
+        let time_duration = Duration::from_millis(100);
         let timeout = u
             .choose(&[Timeout::Fuel(100_000), Timeout::Epoch(time_duration)])?
             .clone();
