@@ -134,7 +134,7 @@ pub struct VMLowering {
 /// `ComponentInstance`.
 #[repr(C)]
 // Set an appropriate alignment for this structure where the most-aligned value
-// internally right now is a pointer.
+// internally right now `VMGlobalDefinition` which has an alignment of 16 bytes.
 #[repr(align(16))]
 pub struct VMComponentContext {
     /// For more information about this see the equivalent field in `VMContext`
