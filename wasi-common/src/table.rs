@@ -50,14 +50,6 @@ impl Table {
         }
     }
 
-    pub fn push_file(&mut self, file: Box<dyn crate::WasiFile>) -> Result<u32, TableError> {
-        self.push(Box::new(file))
-    }
-
-    pub fn push_dir(&mut self, dir: Box<dyn crate::WasiDir>) -> Result<u32, TableError> {
-        self.push(Box::new(dir))
-    }
-
     pub fn push_input_stream(
         &mut self,
         istream: Box<dyn crate::InputStream>,

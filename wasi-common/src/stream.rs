@@ -1,4 +1,5 @@
-use crate::{Error, ErrorExt, TableError};
+use crate::TableError;
+use anyhow::Error;
 use std::any::Any;
 
 /// An input bytestream.
@@ -27,7 +28,7 @@ pub trait InputStream: Send + Sync {
     /// Read bytes. On success, returns a pair holding the number of bytes read
     /// and a flag indicating whether the end of the stream was reached.
     async fn read(&mut self, _buf: &mut [u8]) -> Result<(u64, bool), Error> {
-        Err(Error::badf())
+        Err(anyhow::anyhow!("badf"))
     }
 
     /// Vectored-I/O form of `read`.
@@ -35,7 +36,7 @@ pub trait InputStream: Send + Sync {
         &mut self,
         _bufs: &mut [std::io::IoSliceMut<'a>],
     ) -> Result<(u64, bool), Error> {
-        Err(Error::badf())
+        Err(anyhow::anyhow!("badf"))
     }
 
     /// Test whether vectored I/O reads are known to be optimized in the
@@ -96,12 +97,12 @@ pub trait OutputStream: Send + Sync {
 
     /// Write bytes. On success, returns the number of bytes written.
     async fn write(&mut self, _buf: &[u8]) -> Result<u64, Error> {
-        Err(Error::badf())
+        Err(anyhow::anyhow!("badf"))
     }
 
     /// Vectored-I/O form of `write`.
     async fn write_vectored<'a>(&mut self, _bufs: &[std::io::IoSlice<'a>]) -> Result<u64, Error> {
-        Err(Error::badf())
+        Err(anyhow::anyhow!("badf"))
     }
 
     /// Test whether vectored I/O writes are known to be optimized in the

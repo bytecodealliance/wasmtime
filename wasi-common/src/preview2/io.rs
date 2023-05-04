@@ -7,13 +7,9 @@ use crate::{
 };
 use anyhow::anyhow;
 
-impl From<crate::Error> for streams::Error {
-    fn from(error: crate::Error) -> streams::Error {
-        if let Some(_) = error.downcast_ref() {
-            StreamError {}.into()
-        } else {
-            streams::Error::trap(anyhow!(error))
-        }
+impl From<anyhow::Error> for streams::Error {
+    fn from(error: anyhow::Error) -> streams::Error {
+        streams::Error::trap(error)
     }
 }
 

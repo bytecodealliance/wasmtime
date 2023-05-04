@@ -8,7 +8,7 @@
 //! but the virtual pipes can be instantiated with any `Read` or `Write` type.
 //!
 use crate::stream::{InputStream, OutputStream};
-use crate::Error;
+use anyhow::Error;
 use std::any::Any;
 use std::convert::TryInto;
 use std::io::{self, Read, Write};
