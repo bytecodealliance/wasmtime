@@ -21,6 +21,7 @@ harness = false
 [dependencies]
 cfg-if = "1.0"
 cranelift-codegen = { workspace = true, features = ["disas"] }
+cranelift-control = { workspace = true }
 cranelift-entity = { workspace = true }
 cranelift-interpreter = { workspace = true }
 cranelift-reader = { workspace = true }
@@ -56,3 +57,4 @@ disas = ["capstone"]
 wasm = ["wat", "cranelift-wasm"]
 souper-harvest = ["cranelift-codegen/souper-harvest", "rayon"]
 all-arch = ["cranelift-codegen/all-arch"]
+chaos = ["cranelift-control/chaos"]

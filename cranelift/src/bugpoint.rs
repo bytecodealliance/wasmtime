@@ -57,7 +57,7 @@ pub fn run(options: &Options) -> Result<()> {
 
     std::env::set_var("RUST_BACKTRACE", "0"); // Disable backtraces to reduce verbosity
 
-    for (func, _) in test_file.functions {
+    for (func, _, _) in test_file.functions {
         let (orig_block_count, orig_inst_count) = (block_count(&func), inst_count(&func));
 
         match reduce(isa, func, options.verbose) {
@@ -1069,7 +1069,7 @@ mod tests {
         // file contains a unique isa, use that.
         let isa = test_file.isa_spec.unique_isa().expect("Unknown isa");
 
-        for (func, _) in test_file.functions {
+        for (func, _, _) in test_file.functions {
             let (reduced_func, crash_msg) =
                 reduce(isa, func, false).expect("Couldn't reduce test case");
             assert_eq!(crash_msg, "test crash");

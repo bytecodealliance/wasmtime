@@ -147,7 +147,7 @@ impl TestFileCompiler {
         let functions = testfile
             .functions
             .iter()
-            .map(|(f, _)| f)
+            .map(|(f, _, _)| f)
             .cloned()
             .collect::<Vec<_>>();
 

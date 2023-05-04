@@ -179,7 +179,7 @@ impl SubTest for TestRun {
 
         let compiled_testfile = compile_testfile(&testfile, flags, isa.unwrap())?;
 
-        for (func, details) in &testfile.functions {
+        for (func, details, _) in &testfile.functions {
             info!(
                 "Test: {}({}) {}",
                 self.name(),

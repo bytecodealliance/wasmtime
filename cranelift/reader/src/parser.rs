@@ -7,6 +7,7 @@ use crate::run_command::{Comparison, Invocation, RunCommand};
 use crate::sourcemap::SourceMap;
 use crate::testcommand::TestCommand;
 use crate::testfile::{Comment, Details, Feature, TestFile};
+use cranelift_codegen::control::ControlPlane;
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::entity::{EntityRef, PrimaryMap};
 use cranelift_codegen::ir::entities::{AnyEntity, DynamicType};
@@ -83,8 +84,12 @@ const MAX_BLOCKS_IN_A_FUNCTION: u32 = 100_000;
 /// Any test commands or target declarations are ignored.
 pub fn parse_functions(text: &str) -> ParseResult<Vec<Function>> {
     let _tt = timing::parse_text();
-    parse_test(text, ParseOptions::default())
-        .map(|file| file.functions.into_iter().map(|(func, _)| func).collect())
+    parse_test(text, ParseOptions::default()).map(|file| {
+        file.functions
+            .into_iter()
+            .map(|(func, _, _)| func)
+            .collect()
+    })
 }
 
 /// Options for configuring the parsing of filetests.
@@ -1153,10 +1158,14 @@ impl<'a> Parser<'a> {
     /// Parse a list of function definitions.
     ///
     /// This is the top-level parse function matching the whole contents of a file.
-    pub fn parse_function_list(&mut self) -> ParseResult<Vec<(Function, Details<'a>)>> {
+    pub fn parse_function_list(
+        &mut self,
+    ) -> ParseResult<Vec<(Function, Details<'a>, ControlPlane)>> {
         let mut list = Vec::new();
         while self.token().is_some() {
-            list.push(self.parse_function()?);
+            let ctrl_plane = self.parse_ctrl_plane()?;
+            let (func, det) = self.parse_function()?;
+            list.push((func, det, ctrl_plane));
         }
         if let Some(err) = self.lex_error {
             return match err {
@@ -1164,6 +1173,20 @@ impl<'a> Parser<'a> {
             };
         }
         Ok(list)
+    }
+
+    fn parse_ctrl_plane(&mut self) -> ParseResult<ControlPlane> {
+        if self
+            .match_identifier("control_plane", "expected 'control_plane'")
+            .is_err()
+        {
+            return Ok(ControlPlane::default());
+        };
+        ControlPlane::try_from(self.lex.rest_of_line()).map_err(|_| ParseError {
+            location: self.loc,
+            message: "failed to parse control plane".into(),
+            is_warning: false,
+        })
     }
 
     // Parse a whole function definition.

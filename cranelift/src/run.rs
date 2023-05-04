@@ -90,7 +90,7 @@ fn run_file_contents(file_contents: String) -> Result<()> {
     tfc.add_testfile(&test_file)?;
     let compiled = tfc.compile()?;
 
-    for (func, Details { comments, .. }) in test_file.functions {
+    for (func, Details { comments, .. }, _) in test_file.functions {
         for comment in comments {
             if let Some(command) = parse_run_command(comment.text, &func.signature)? {
                 let trampoline = compiled.get_trampoline(&func).unwrap();

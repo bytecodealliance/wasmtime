@@ -52,11 +52,11 @@ impl SubTest for TestInterpret {
     ) -> anyhow::Result<()> {
         // We can build the FunctionStore once and reuse it
         let mut func_store = FunctionStore::default();
-        for (func, _) in &testfile.functions {
+        for (func, _, _) in &testfile.functions {
             func_store.add(func.name.to_string(), &func);
         }
 
-        for (func, details) in &testfile.functions {
+        for (func, details, _) in &testfile.functions {
             info!("Test: {}({}) interpreter", self.name(), func.name);
 
             run_test(&func_store, func, details).context(self.name())?;

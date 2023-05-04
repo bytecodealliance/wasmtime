@@ -48,7 +48,14 @@ impl ControlPlane {
 }
 
 impl Display for ControlPlane {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "; control plane: ()")
+    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Ok(())
+    }
+}
+
+impl TryFrom<&str> for ControlPlane {
+    type Error = ();
+    fn try_from(_value: &str) -> Result<Self, Self::Error> {
+        Ok(Self::default())
     }
 }

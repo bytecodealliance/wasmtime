@@ -8,6 +8,7 @@ use crate::error::Location;
 use crate::isaspec::IsaSpec;
 use crate::sourcemap::SourceMap;
 use crate::testcommand::TestCommand;
+use cranelift_codegen::control::ControlPlane;
 use cranelift_codegen::ir::entities::AnyEntity;
 use cranelift_codegen::ir::Function;
 
@@ -26,7 +27,7 @@ pub struct TestFile<'a> {
     /// These are all tagged as 'Function' scope for lack of a better entity.
     pub preamble_comments: Vec<Comment<'a>>,
     /// Parsed functions and additional details about each function.
-    pub functions: Vec<(Function, Details<'a>)>,
+    pub functions: Vec<(Function, Details<'a>, ControlPlane)>,
 }
 
 /// Additional details about a function parsed from a text string.

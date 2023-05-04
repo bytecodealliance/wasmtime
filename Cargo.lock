@@ -811,6 +811,7 @@ dependencies = [
  "clap",
  "cranelift",
  "cranelift-codegen",
+ "cranelift-control",
  "cranelift-entity",
  "cranelift-filetests",
  "cranelift-frontend",

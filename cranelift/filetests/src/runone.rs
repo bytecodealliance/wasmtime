@@ -107,7 +107,7 @@ pub fn run(
 
 // Verifies all functions in a testfile
 fn verify_testfile(testfile: &TestFile, fisa: FlagsOrIsa) -> anyhow::Result<()> {
-    for (func, _) in &testfile.functions {
+    for (func, _, _) in &testfile.functions {
         verify_function(func, fisa)
             .map_err(|errors| anyhow::anyhow!("{}", pretty_verifier_error(&func, None, errors)))?;
     }

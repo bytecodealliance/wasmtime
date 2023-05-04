@@ -95,7 +95,7 @@ fn handle_module(
         Some(isa) => isa,
     };
 
-    for (func, _) in test_file.functions {
+    for (func, _, mut ctrl_plane) in test_file.functions {
         let mut context = Context::new();
         context.func = func;
         let mut mem = vec![];
@@ -113,11 +113,7 @@ fn handle_module(
                 cranelift_module::Linkage::Export,
                 &context.func.signature,
             )?;
-            module.define_function_with_control_plane(
-                fid,
-                &mut context,
-                &mut Default::default(),
-            )?;
+            module.define_function_with_control_plane(fid, &mut context, &mut ctrl_plane)?;
         }
 
         if options.print {

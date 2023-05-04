@@ -16,15 +16,19 @@ pub struct ControlPlane {
 
 impl Arbitrary<'_> for ControlPlane {
     fn arbitrary<'a>(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
-        Ok(Self {
-            data: u.arbitrary()?,
-            fuel: None,
-            tmp: Vec::new(),
-        })
+        Ok(Self::new(u.arbitrary()?))
     }
 }
 
 impl ControlPlane {
+    fn new(data: Vec<u8>) -> Self {
+        Self {
+            data,
+            fuel: None,
+            tmp: Vec::new(),
+        }
+    }
+
     /// Set the [fuel limit](crate#fuel-limit). Zero is interpreted as the
     /// fuel limit being deactivated, consistent with the cranelift setting
     /// `control_plane_fuel`.
@@ -103,14 +107,27 @@ impl ControlPlane {
 
 impl Display for ControlPlane {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "; control plane:")?;
-        write!(f, ";    data:")?;
+        write!(f, "control_plane data=")?;
         for b in &self.data {
-            // TODO will be replaced by hex (or base64 ?) encoded data
-            // once we switch to from `Vec<bool>` to `Vec<u8>`.
-            write!(f, " {b}")?;
+            write!(f, "{b:02x}")?;
         }
-        writeln!(f, "")?;
-        writeln!(f, ";    fuel: {:?}", self.fuel)
+        Ok(())
+    }
+}
+
+impl TryFrom<&str> for ControlPlane {
+    type Error = String;
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        let value = value.trim_start_matches(" data=");
+        let data = value
+            .as_bytes()
+            .chunks(2)
+            .map(|two_bytes| {
+                String::from_utf8(two_bytes.to_vec())
+                    .map_err(|e| e.to_string())
+                    .and_then(|s| u8::from_str_radix(&s, 16).map_err(|e| e.to_string()))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(Self::new(data))
     }
 }

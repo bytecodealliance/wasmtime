@@ -105,7 +105,7 @@ impl FileInterpreter {
         // collect functions
         let mut env = FunctionStore::default();
         let mut commands = vec![];
-        for (func, details) in test.functions.iter() {
+        for (func, details, _) in test.functions.iter() {
             for comment in &details.comments {
                 if let Some(command) = parse_run_command(comment.text, &func.signature)
                     .map_err(|e| FileInterpreterFailure::ParsingClif(self.path(), e))?
