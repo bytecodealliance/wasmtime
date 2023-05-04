@@ -436,9 +436,10 @@ impl MemoryImageSlot {
     pub(crate) fn dummy() -> MemoryImageSlot {
         MemoryImageSlot {
             // This pointer isn't ever actually used so its value doesn't
-            // matter, but we need to satisfy `NonNull` so pass a "1" value to
-            // handle that. Otherwise this shouldn't be used anywhere else.
-            base: NonNull::new(sptr::invalid_mut(1)).unwrap().into(),
+            // matter but we need to satisfy `NonNull` requirement so create a
+            // `dangling` pointer as a sentinel that should cause problems if
+            // it's actually used.
+            base: NonNull::dangling().into(),
             static_size: 0,
             image: None,
             accessible: 0,
