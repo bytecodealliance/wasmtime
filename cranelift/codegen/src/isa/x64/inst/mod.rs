@@ -3,7 +3,7 @@
 pub use emit_state::EmitState;
 
 use crate::binemit::{Addend, CodeOffset, Reloc, StackMap};
-use crate::ir::{types, ExternalName, LibCall, Opcode, TrapCode, Type};
+use crate::ir::{types, ExternalName, LibCall, TrapCode, Type};
 use crate::isa::x64::abi::X64ABIMachineSpec;
 use crate::isa::x64::inst::regs::{pretty_print_reg, show_ireg_sized};
 use crate::isa::x64::settings as x64_settings;
@@ -541,13 +541,11 @@ impl Inst {
         uses: CallArgList,
         defs: CallRetList,
         clobbers: PRegSet,
-        opcode: Opcode,
         callee_pop_size: u32,
         callee_conv: CallConv,
     ) -> Inst {
         Inst::CallKnown {
             dest,
-            opcode,
             info: Some(Box::new(CallInfo {
                 uses,
                 defs,
@@ -563,14 +561,12 @@ impl Inst {
         uses: CallArgList,
         defs: CallRetList,
         clobbers: PRegSet,
-        opcode: Opcode,
         callee_pop_size: u32,
         callee_conv: CallConv,
     ) -> Inst {
         dest.assert_regclass_is(RegClass::Int);
         Inst::CallUnknown {
             dest,
-            opcode,
             info: Some(Box::new(CallInfo {
                 uses,
                 defs,

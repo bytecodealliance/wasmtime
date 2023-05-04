@@ -532,12 +532,10 @@
 
        ;; Direct call: call simm32.
        (CallKnown (dest ExternalName)
-                  (opcode Opcode)
                   (info BoxCallInfo))
 
        ;; Indirect call: callq (reg mem)
        (CallUnknown (dest RegMem)
-                    (opcode Opcode)
                     (info BoxCallInfo))
 
        ;; Tail call to a direct destination.

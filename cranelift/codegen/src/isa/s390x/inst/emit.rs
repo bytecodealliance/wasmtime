@@ -3267,9 +3267,7 @@ impl Inst {
                 }
 
                 put(sink, &enc_ril_b(opcode, link.to_reg(), 0));
-                if info.opcode.is_call() {
-                    sink.add_call_site(info.opcode);
-                }
+                sink.add_call_site();
             }
             &Inst::CallInd { link, ref info } => {
                 debug_assert_eq!(link.to_reg(), gpr(14));
@@ -3286,9 +3284,7 @@ impl Inst {
 
                 let opcode = 0x0d; // BASR
                 put(sink, &enc_rr(opcode, link.to_reg(), rn));
-                if info.opcode.is_call() {
-                    sink.add_call_site(info.opcode);
-                }
+                sink.add_call_site();
             }
             &Inst::Args { .. } => {}
             &Inst::Rets { .. } => {}

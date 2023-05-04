@@ -546,7 +546,6 @@ pub trait ABIMachineSpec {
         uses: CallArgList,
         defs: CallRetList,
         clobbers: PRegSet,
-        opcode: ir::Opcode,
         tmp: Writable<Reg>,
         callee_conv: isa::CallConv,
         caller_conv: isa::CallConv,
@@ -1969,8 +1968,7 @@ pub struct CallSite<M: ABIMachineSpec> {
     clobbers: PRegSet,
     /// Call destination.
     dest: CallDest,
-    /// Actual call opcode; used to distinguish various types of calls.
-    opcode: ir::Opcode,
+    is_tail_call: bool,
     /// Caller's calling convention.
     caller_conv: isa::CallConv,
     /// The settings controlling this compilation.
@@ -1994,7 +1992,7 @@ impl<M: ABIMachineSpec> CallSite<M> {
         sigs: &SigSet,
         sig_ref: ir::SigRef,
         extname: &ir::ExternalName,
-        opcode: ir::Opcode,
+        is_tail_call: bool,
         dist: RelocDistance,
         caller_conv: isa::CallConv,
         flags: settings::Flags,
@@ -2007,7 +2005,7 @@ impl<M: ABIMachineSpec> CallSite<M> {
             defs: smallvec![],
             clobbers,
             dest: CallDest::ExtName(extname.clone(), dist),
-            opcode,
+            is_tail_call,
             caller_conv,
             flags,
             _mach: PhantomData,
@@ -2032,7 +2030,7 @@ impl<M: ABIMachineSpec> CallSite<M> {
             defs: smallvec![],
             clobbers,
             dest: CallDest::ExtName(extname.clone(), dist),
-            opcode: ir::Opcode::Call,
+            is_tail_call: false,
             caller_conv,
             flags,
             _mach: PhantomData,
@@ -2045,7 +2043,7 @@ impl<M: ABIMachineSpec> CallSite<M> {
         sigs: &SigSet,
         sig_ref: ir::SigRef,
         ptr: Reg,
-        opcode: ir::Opcode,
+        is_tail_call: bool,
         caller_conv: isa::CallConv,
         flags: settings::Flags,
     ) -> CallSite<M> {
@@ -2057,7 +2055,7 @@ impl<M: ABIMachineSpec> CallSite<M> {
             defs: smallvec![],
             clobbers,
             dest: CallDest::Reg(ptr),
-            opcode,
+            is_tail_call,
             caller_conv,
             flags,
             _mach: PhantomData,
@@ -2066,10 +2064,6 @@ impl<M: ABIMachineSpec> CallSite<M> {
 
     pub(crate) fn dest(&self) -> &CallDest {
         &self.dest
-    }
-
-    pub(crate) fn opcode(&self) -> ir::Opcode {
-        self.opcode
     }
 
     pub(crate) fn take_uses(self) -> CallArgList {
@@ -2081,10 +2075,7 @@ impl<M: ABIMachineSpec> CallSite<M> {
     }
 
     pub(crate) fn is_tail_call(&self) -> bool {
-        matches!(
-            self.opcode,
-            ir::Opcode::ReturnCall | ir::Opcode::ReturnCallIndirect
-        )
+        self.is_tail_call
     }
 }
 
@@ -2416,7 +2407,6 @@ impl<M: ABIMachineSpec> CallSite<M> {
             uses,
             defs,
             self.clobbers,
-            self.opcode,
             tmp,
             call_conv,
             self.caller_conv,

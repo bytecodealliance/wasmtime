@@ -79,7 +79,7 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
             self.lower_ctx.sigs(),
             callee_sig,
             &callee,
-            Opcode::ReturnCall,
+            true,
             distance,
             caller_conv,
             self.backend.flags().clone(),
@@ -108,7 +108,7 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
             self.lower_ctx.sigs(),
             callee_sig,
             callee,
-            Opcode::ReturnCallIndirect,
+            true,
             caller_conv,
             self.backend.flags().clone(),
         );

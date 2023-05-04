@@ -91,7 +91,7 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
             self.lower_ctx.sigs(),
             callee_sig,
             callee,
-            Opcode::ReturnCallIndirect,
+            true,
             caller_conv,
             self.backend.flags().clone(),
         );
@@ -118,7 +118,7 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
             self.lower_ctx.sigs(),
             callee_sig,
             &callee,
-            Opcode::ReturnCall,
+            true,
             distance,
             caller_conv,
             self.backend.flags().clone(),
