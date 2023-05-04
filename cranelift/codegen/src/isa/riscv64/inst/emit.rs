@@ -5,6 +5,7 @@ use crate::ir::RelSourceLoc;
 use crate::ir::TrapCode;
 use crate::isa::riscv64::inst::*;
 use crate::isa::riscv64::inst::{zero_reg, AluOPRRR};
+use crate::isa::riscv64::lower::isle::generated_code::VecOpMasking;
 use crate::machinst::{AllocationConsumer, Reg, Writable};
 use cranelift_control::ControlPlane;
 use regalloc2::Allocation;
@@ -467,6 +468,7 @@ impl Inst {
             Inst::VecSetState { .. } => None,
 
             Inst::VecAluRRR { vstate, .. } |
+            Inst::VecAluRRImm5 { vstate, .. } |
             // TODO: Unit-stride loads and stores only need the AVL to be correct, not
             // the full vtype. A future optimization could be to decouple these two when
             // updating vstate. This would allow us to avoid emitting a VecSetState in
@@ -634,7 +636,7 @@ impl MachInstEmit for Inst {
 
                 sink.put4(encode_r_type(
                     alu_op.op_code(),
-                    rd.to_reg(),
+                    rd,
                     alu_op.funct3(),
                     rs1,
                     rs2,
@@ -2788,19 +2790,15 @@ impl MachInstEmit for Inst {
                 let vs2 = allocs.next(vs2);
                 let vd = allocs.next_writable(vd);
 
-                // This is the mask bit, we don't yet implement masking, so set it to 1, which means
-                // masking disabled.
-                let vm = 1;
+                sink.put4(encode_valu(op, vd, vs1, vs2, VecOpMasking::Disabled));
+            }
+            &Inst::VecAluRRImm5 {
+                op, vd, imm, vs2, ..
+            } => {
+                let vs2 = allocs.next(vs2);
+                let vd = allocs.next_writable(vd);
 
-                sink.put4(encode_valu(
-                    op.opcode(),
-                    vd.to_reg(),
-                    op.funct3(),
-                    vs1,
-                    vs2,
-                    vm,
-                    op.funct6(),
-                ));
+                sink.put4(encode_valu_imm(op, vd, imm, vs2, VecOpMasking::Disabled));
             }
             &Inst::VecSetState { rd, ref vstate } => {
                 let rd = allocs.next_writable(rd);
@@ -2840,17 +2838,14 @@ impl MachInstEmit for Inst {
                     sink.add_trap(TrapCode::HeapOutOfBounds);
                 }
 
-                // This is the mask bit, we don't yet implement masking, so set it to 1, which means
-                // masking disabled.
-                let vm = 1;
-
                 sink.put4(encode_vmem_load(
                     0x07,
                     to.to_reg(),
                     eew,
                     addr.to_reg(),
                     from.lumop(),
-                    vm,
+                    // We don't implement masking yet.
+                    VecOpMasking::Disabled,
                     from.mop(),
                     from.nf(),
                 ));
@@ -2880,17 +2875,14 @@ impl MachInstEmit for Inst {
                     sink.add_trap(TrapCode::HeapOutOfBounds);
                 }
 
-                // This is the mask bit, we don't yet implement masking, so set it to 1, which means
-                // masking disabled.
-                let vm = 1;
-
                 sink.put4(encode_vmem_store(
                     0x27,
                     from,
                     eew,
                     addr.to_reg(),
                     to.sumop(),
-                    vm,
+                    // We don't implement masking yet.
+                    VecOpMasking::Disabled,
                     to.mop(),
                     to.nf(),
                 ));

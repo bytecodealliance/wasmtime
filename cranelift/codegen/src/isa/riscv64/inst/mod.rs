@@ -646,6 +646,10 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_use(vs2);
             collector.reg_def(vd);
         }
+        &Inst::VecAluRRImm5 { vd, vs2, .. } => {
+            collector.reg_use(vs2);
+            collector.reg_def(vd);
+        }
         &Inst::VecSetState { rd, .. } => {
             collector.reg_def(rd);
         }
@@ -1584,6 +1588,18 @@ impl Inst {
                 // Note: vs2 and vs1 here are opposite to the standard scalar ordering.
                 // This is noted in Section 10.1 of the RISC-V Vector spec.
                 format!("{} {},{},{} {}", op, vd_s, vs2_s, vs1_s, vstate)
+            }
+            &Inst::VecAluRRImm5 {
+                op,
+                vd,
+                imm,
+                vs2,
+                ref vstate,
+            } => {
+                let vs2_s = format_vec_reg(vs2, allocs);
+                let vd_s = format_vec_reg(vd.to_reg(), allocs);
+
+                format!("{} {},{},{} {}", op, vd_s, vs2_s, imm, vstate)
             }
             &Inst::VecSetState { rd, ref vstate } => {
                 let rd_s = format_reg(rd.to_reg(), allocs);
