@@ -18,7 +18,6 @@ use crate::isa::aarch64::inst::{FPULeftShiftImm, FPURightShiftImm, ReturnCallInf
 use crate::isa::aarch64::AArch64Backend;
 use crate::isle_common_prelude_methods;
 use crate::machinst::isle::*;
-use crate::machinst::valueregs;
 use crate::{
     binemit::CodeOffset,
     ir::{
