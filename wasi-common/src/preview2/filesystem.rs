@@ -126,7 +126,7 @@ impl<T: WasiView> wasi::filesystem::Host for T {
 
         if table.is_file(fd) {
             let meta = table.get_file(fd)?.file.metadata()?;
-            Ok(filetype_from(meta.file_type()))
+            Ok(descriptortype_from(meta.file_type()))
         } else if table.is_dir(fd) {
             Ok(wasi::filesystem::DescriptorType::Directory)
         } else {
@@ -321,27 +321,93 @@ impl<T: WasiView> wasi::filesystem::Host for T {
         path: String,
     ) -> Result<(), wasi::filesystem::Error> {
         let table = self.table();
-        todo!();
-        /*
-        Ok(table.get_dir(fd)?.create_dir(&path).await?)
-        */
+        let d = table.get_dir(fd)?;
+        if !d.perms.contains(DirPerms::MUTATE) {
+            return Err(wasi::filesystem::ErrorCode::NotPermitted.into());
+        }
+        d.dir.create_dir(std::path::Path::new(&path))?;
+        Ok(())
     }
 
     async fn stat(
         &mut self,
         fd: wasi::filesystem::Descriptor,
     ) -> Result<wasi::filesystem::DescriptorStat, wasi::filesystem::Error> {
+        use cap_fs_ext::MetadataExt;
+
         let table = self.table();
-        todo!();
-        /*
-        if table.is::<Box<dyn WasiFile>>(fd) {
-            Ok(table.get_file(fd)?.get_filestat().await?.into())
-        } else if table.is::<Box<dyn WasiDir>>(fd) {
-            Ok(table.get_dir(fd)?.get_filestat().await?.into())
+        if table.is_file(fd) {
+            let f = table.get_file(fd)?;
+            if !f.perms.contains(FilePerms::READ) {
+                return Err(wasi::filesystem::ErrorCode::NotPermitted.into());
+            }
+            let meta = f.file.metadata()?;
+            Ok(wasi::filesystem::DescriptorStat {
+                device: meta.dev(),
+                inode: meta.ino(),
+                type_: descriptortype_from(meta.file_type()),
+                link_count: meta.nlink(),
+                size: meta.len(),
+                data_access_timestamp: meta
+                    .accessed()
+                    .map(|t| datetime_from(t.into_std()))
+                    .unwrap_or(wasi::wall_clock::Datetime {
+                        seconds: 0,
+                        nanoseconds: 0,
+                    }),
+                data_modification_timestamp: meta
+                    .modified()
+                    .map(|t| datetime_from(t.into_std()))
+                    .unwrap_or(wasi::wall_clock::Datetime {
+                        seconds: 0,
+                        nanoseconds: 0,
+                    }),
+                status_change_timestamp: meta
+                    .created()
+                    .map(|t| datetime_from(t.into_std()))
+                    .unwrap_or(wasi::wall_clock::Datetime {
+                        seconds: 0,
+                        nanoseconds: 0,
+                    }),
+            })
+        } else if table.is_dir(fd) {
+            let d = table.get_dir(fd)?;
+            if !d.perms.contains(DirPerms::READ) {
+                return Err(wasi::filesystem::ErrorCode::NotPermitted.into());
+            }
+
+            let meta = d.dir.dir_metadata()?;
+            Ok(wasi::filesystem::DescriptorStat {
+                device: meta.dev(),
+                inode: meta.ino(),
+                type_: descriptortype_from(meta.file_type()),
+                link_count: meta.nlink(),
+                size: meta.len(),
+                data_access_timestamp: meta
+                    .accessed()
+                    .map(|t| datetime_from(t.into_std()))
+                    .unwrap_or(wasi::wall_clock::Datetime {
+                        seconds: 0,
+                        nanoseconds: 0,
+                    }),
+                data_modification_timestamp: meta
+                    .modified()
+                    .map(|t| datetime_from(t.into_std()))
+                    .unwrap_or(wasi::wall_clock::Datetime {
+                        seconds: 0,
+                        nanoseconds: 0,
+                    }),
+                status_change_timestamp: meta
+                    .created()
+                    .map(|t| datetime_from(t.into_std()))
+                    .unwrap_or(wasi::wall_clock::Datetime {
+                        seconds: 0,
+                        nanoseconds: 0,
+                    }),
+            })
         } else {
             Err(wasi::filesystem::ErrorCode::BadDescriptor.into())
         }
-        */
     }
 
     async fn stat_at(
@@ -350,18 +416,47 @@ impl<T: WasiView> wasi::filesystem::Host for T {
         at_flags: wasi::filesystem::PathFlags,
         path: String,
     ) -> Result<wasi::filesystem::DescriptorStat, wasi::filesystem::Error> {
+        use cap_fs_ext::MetadataExt;
+
         let table = self.table();
-        todo!();
-        /*
-        Ok(table
-            .get_dir(fd)?
-            .get_path_filestat(
-                &path,
-                at_flags.contains(wasi::filesystem::PathFlags::SYMLINK_FOLLOW),
-            )
-            .await?
-            .into())
-        */
+        let d = table.get_dir(fd)?;
+        if !d.perms.contains(DirPerms::READ) {
+            return Err(wasi::filesystem::ErrorCode::NotPermitted.into());
+        }
+
+        let meta = if at_flags.contains(wasi::filesystem::PathFlags::SYMLINK_FOLLOW) {
+            d.dir.metadata(std::path::Path::new(&path))?
+        } else {
+            d.dir.symlink_metadata(std::path::Path::new(&path))?
+        };
+        Ok(wasi::filesystem::DescriptorStat {
+            device: meta.dev(),
+            inode: meta.ino(),
+            type_: descriptortype_from(meta.file_type()),
+            link_count: meta.nlink(),
+            size: meta.len(),
+            data_access_timestamp: meta
+                .accessed()
+                .map(|t| datetime_from(t.into_std()))
+                .unwrap_or(wasi::wall_clock::Datetime {
+                    seconds: 0,
+                    nanoseconds: 0,
+                }),
+            data_modification_timestamp: meta
+                .modified()
+                .map(|t| datetime_from(t.into_std()))
+                .unwrap_or(wasi::wall_clock::Datetime {
+                    seconds: 0,
+                    nanoseconds: 0,
+                }),
+            status_change_timestamp: meta
+                .created()
+                .map(|t| datetime_from(t.into_std()))
+                .unwrap_or(wasi::wall_clock::Datetime {
+                    seconds: 0,
+                    nanoseconds: 0,
+                }),
+        })
     }
 
     async fn set_times_at(
@@ -824,7 +919,7 @@ impl From<std::num::TryFromIntError> for wasi::filesystem::Error {
     }
 }
 
-fn filetype_from(ft: cap_std::fs::FileType) -> wasi::filesystem::DescriptorType {
+fn descriptortype_from(ft: cap_std::fs::FileType) -> wasi::filesystem::DescriptorType {
     use cap_fs_ext::FileTypeExt;
     use wasi::filesystem::DescriptorType;
     if ft.is_dir() {
@@ -861,4 +956,8 @@ fn systemtime_from(
     SystemTime::UNIX_EPOCH
         .checked_add(Duration::new(t.seconds, t.nanoseconds))
         .ok_or_else(|| wasi::filesystem::ErrorCode::Overflow.into())
+}
+
+fn datetime_from(t: std::time::SystemTime) -> wasi::filesystem::Datetime {
+    todo!()
 }
