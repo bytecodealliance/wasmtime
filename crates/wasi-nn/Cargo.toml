@@ -21,4 +21,4 @@ openvino = { version = "0.5.0", features = ["runtime-linking"] }
 thiserror = { workspace = true }
 
 [build-dependencies]
-walkdir = "2.3"
+walkdir = { workspace = true }
