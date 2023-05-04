@@ -19,3 +19,7 @@
 [submodule "crates/wasi-http/wasi-http"]
 	path = crates/wasi-http/wasi-http
 	url = https://github.com/WebAssembly/wasi-http
+[submodule "tests/wasi_testsuite/wasi"]
+	path = tests/wasi_testsuite/wasi-common
+	url = https://github.com/WebAssembly/wasi-testsuite.git
+	branch = prod/testsuite-base
