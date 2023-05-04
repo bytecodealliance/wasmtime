@@ -33,21 +33,7 @@ fn wasi_testsuite() -> Result<()> {
     const WASI_COMMON_IGNORE_LIST: &[&str] = &[
         "environ_get-multiple-variables.wasm",
         "environ_sizes_get-multiple-variables.wasm",
-        "fdopendir-with-access.wasm",
-        "fopen-with-access.wasm",
-        "lseek.wasm",
-        "pread-with-access.wasm",
-        "pwrite-with-access.wasm",
-        "stat-dev-ino.wasm",
-        "close_preopen.wasm",
-        "dangling_fd.wasm",
-        "dangling_symlink.wasm",
-        "directory_seek.wasm",
         "fd_advise.wasm",
-        "fd_filestat_set.wasm",
-        "fd_flags_set.wasm",
-        "fd_readdir.wasm",
-        "interesting_paths.wasm",
     ];
     run_all(
         "tests/wasi_testsuite/wasi-common",
@@ -132,8 +118,8 @@ fn build_command<P: AsRef<Path>>(module: P, extra_flags: &[&str], spec: &Spec) -
     cmd.args(extra_flags);
     if let Some(dirs) = &spec.dirs {
         for dir in dirs {
-            cmd.arg("--dir");
-            cmd.arg(parent_dir.join(dir));
+            cmd.arg("--mapdir");
+            cmd.arg(format!("{}::{}", dir, parent_dir.join(dir).display()));
         }
     }
     cmd.arg(module.as_ref().to_str().unwrap());
