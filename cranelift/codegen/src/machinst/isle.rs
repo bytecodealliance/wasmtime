@@ -758,7 +758,6 @@ macro_rules! isle_prelude_caller_methods {
             let caller_conv = self.lower_ctx.abi().call_conv(self.lower_ctx.sigs());
             let sig = &self.lower_ctx.dfg().signatures[sig_ref];
             let num_rets = sig.returns.len();
-            let abi = self.lower_ctx.sigs().abi_sig_for_sig_ref(sig_ref);
             let caller = <$abicaller>::from_func(
                 self.lower_ctx.sigs(),
                 sig_ref,
@@ -774,7 +773,7 @@ macro_rules! isle_prelude_caller_methods {
                 sig.params.len()
             );
 
-            self.gen_call_common(abi, num_rets, caller, args)
+            self.gen_call_common(num_rets, caller, args)
         }
 
         fn gen_call_indirect(
@@ -787,7 +786,6 @@ macro_rules! isle_prelude_caller_methods {
             let ptr = self.put_in_reg(val);
             let sig = &self.lower_ctx.dfg().signatures[sig_ref];
             let num_rets = sig.returns.len();
-            let abi = self.lower_ctx.sigs().abi_sig_for_sig_ref(sig_ref);
             let caller = <$abicaller>::from_ptr(
                 self.lower_ctx.sigs(),
                 sig_ref,
@@ -802,7 +800,7 @@ macro_rules! isle_prelude_caller_methods {
                 sig.params.len()
             );
 
-            self.gen_call_common(abi, num_rets, caller, args)
+            self.gen_call_common(num_rets, caller, args)
         }
     };
 }
@@ -837,7 +835,6 @@ macro_rules! isle_prelude_method_helpers {
 
         fn gen_call_common(
             &mut self,
-            abi: Sig,
             num_rets: usize,
             mut caller: $abicaller,
             args: ValueSlice,
@@ -851,7 +848,7 @@ macro_rules! isle_prelude_method_helpers {
             let mut retval_insts = crate::machinst::abi::SmallInstVec::new();
             // We take the *last* `num_rets` returns of the sig:
             // this skips a StructReturn, if any, that is present.
-            let sigdata_num_rets = self.lower_ctx.sigs().num_rets(abi);
+            let sigdata_num_rets = caller.num_rets(self.lower_ctx.sigs());
             debug_assert!(num_rets <= sigdata_num_rets);
             for i in (sigdata_num_rets - num_rets)..sigdata_num_rets {
                 let (retval_inst, retval_regs) = caller.gen_retval(self.lower_ctx, i);
