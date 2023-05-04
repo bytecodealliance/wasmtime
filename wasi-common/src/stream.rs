@@ -156,13 +156,21 @@ pub trait OutputStream: Send + Sync {
 }
 
 pub trait TableStreamExt {
+    fn push_input_stream(&mut self, istream: Box<dyn InputStream>) -> Result<u32, TableError>;
     fn get_input_stream(&self, fd: u32) -> Result<&dyn InputStream, TableError>;
     fn get_input_stream_mut(&mut self, fd: u32) -> Result<&mut Box<dyn InputStream>, TableError>;
 
+    fn push_output_stream(&mut self, ostream: Box<dyn OutputStream>) -> Result<u32, TableError>;
     fn get_output_stream(&self, fd: u32) -> Result<&dyn OutputStream, TableError>;
     fn get_output_stream_mut(&mut self, fd: u32) -> Result<&mut Box<dyn OutputStream>, TableError>;
 }
 impl TableStreamExt for crate::table::Table {
+    fn push_input_stream(
+        &mut self,
+        istream: Box<dyn crate::InputStream>,
+    ) -> Result<u32, TableError> {
+        self.push(Box::new(istream))
+    }
     fn get_input_stream(&self, fd: u32) -> Result<&dyn InputStream, TableError> {
         self.get::<Box<dyn InputStream>>(fd).map(|f| f.as_ref())
     }
@@ -170,6 +178,12 @@ impl TableStreamExt for crate::table::Table {
         self.get_mut::<Box<dyn InputStream>>(fd)
     }
 
+    fn push_output_stream(
+        &mut self,
+        ostream: Box<dyn crate::OutputStream>,
+    ) -> Result<u32, TableError> {
+        self.push(Box::new(ostream))
+    }
     fn get_output_stream(&self, fd: u32) -> Result<&dyn OutputStream, TableError> {
         self.get::<Box<dyn OutputStream>>(fd).map(|f| f.as_ref())
     }

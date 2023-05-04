@@ -1,6 +1,5 @@
 #![allow(unused_variables, unreachable_code)]
-use crate::wasi::streams::{InputStream, OutputStream};
-use crate::{wasi, WasiView};
+use crate::{wasi, Dir, DirPerms, File, FilePerms, TableDirExt, TableFileExt, WasiView};
 
 impl From<crate::TableError> for wasi::filesystem::Error {
     fn from(error: crate::TableError) -> wasi::filesystem::Error {
@@ -22,12 +21,21 @@ impl<T: WasiView> wasi::filesystem::Host for T {
         len: wasi::filesystem::Filesize,
         advice: wasi::filesystem::Advice,
     ) -> Result<(), wasi::filesystem::Error> {
-        todo!();
-        /*
-        let f = self.table_mut().get_file_mut(fd)?;
-        f.advise(offset, len, advice.into()).await?;
+        use system_interface::fs::{Advice as A, FileIoExt};
+        use wasi::filesystem::Advice;
+
+        let advice = match advice {
+            Advice::Normal => A::Normal,
+            Advice::Sequential => A::Sequential,
+            Advice::Random => A::Random,
+            Advice::WillNeed => A::WillNeed,
+            Advice::DontNeed => A::DontNeed,
+            Advice::NoReuse => A::NoReuse,
+        };
+
+        let f = self.table().get_file(fd)?;
+        f.file.advise(offset, len, advice)?;
         Ok(())
-        */
     }
 
     async fn sync_data(
@@ -35,33 +43,79 @@ impl<T: WasiView> wasi::filesystem::Host for T {
         fd: wasi::filesystem::Descriptor,
     ) -> Result<(), wasi::filesystem::Error> {
         let table = self.table();
-        todo!();
-        /*
-        if table.is::<Box<dyn WasiFile>>(fd) {
-            Ok(table.get_file(fd)?.datasync().await?)
-        } else if table.is::<Box<dyn WasiDir>>(fd) {
-            Ok(table.get_dir(fd)?.datasync().await?)
+        if table.is_file(fd) {
+            match table.get_file(fd)?.file.sync_data() {
+                Ok(()) => Ok(()),
+                // On windows, `sync_data` uses `FileFlushBuffers` which fails with
+                // `ERROR_ACCESS_DENIED` if the file is not upen for writing. Ignore
+                // this error, for POSIX compatibility.
+                #[cfg(windows)]
+                Err(e)
+                    if e.raw_os_error()
+                        == Some(windows_sys::Win32::Foundation::ERROR_ACCESS_DENIED as _) =>
+                {
+                    Ok(())
+                }
+                Err(e) => Err(e.into()),
+            }
+        } else if table.is_dir(fd) {
+            Ok(table
+                .get_dir(fd)?
+                .dir
+                .open(std::path::Component::CurDir)?
+                .sync_data()?)
         } else {
             Err(wasi::filesystem::ErrorCode::BadDescriptor.into())
         }
-        */
     }
 
     async fn get_flags(
         &mut self,
         fd: wasi::filesystem::Descriptor,
     ) -> Result<wasi::filesystem::DescriptorFlags, wasi::filesystem::Error> {
+        use cap_std::io_lifetimes::AsFilelike;
+        use system_interface::fs::{FdFlags, GetSetFdFlags};
+        use wasi::filesystem::DescriptorFlags;
+
+        fn get_from_fdflags(f: impl AsFilelike) -> std::io::Result<DescriptorFlags> {
+            let flags = f.as_filelike().get_fd_flags()?;
+            let mut out = DescriptorFlags::empty();
+            if flags.contains(FdFlags::DSYNC) {
+                out |= DescriptorFlags::REQUESTED_WRITE_SYNC;
+            }
+            if flags.contains(FdFlags::RSYNC) {
+                out |= DescriptorFlags::DATA_INTEGRITY_SYNC;
+            }
+            if flags.contains(FdFlags::SYNC) {
+                out |= DescriptorFlags::FILE_INTEGRITY_SYNC;
+            }
+            Ok(out)
+        }
+
         let table = self.table();
-        todo!();
-        /*
-        if table.is::<Box<dyn WasiFile>>(fd) {
-            Ok(table.get_file(fd)?.get_fdflags().await?.into())
-        } else if table.is::<Box<dyn WasiDir>>(fd) {
-            Ok(table.get_dir(fd)?.get_fdflags().await?.into())
+        if table.is_file(fd) {
+            let f = table.get_file(fd)?;
+            let mut flags = get_from_fdflags(&f.file)?;
+            if f.perms.contains(FilePerms::READ) {
+                flags |= DescriptorFlags::READ;
+            }
+            if f.perms.contains(FilePerms::WRITE) {
+                flags |= DescriptorFlags::WRITE;
+            }
+            Ok(flags)
+        } else if table.is_dir(fd) {
+            let d = table.get_dir(fd)?;
+            let mut flags = get_from_fdflags(d.dir)?;
+            if d.perms.contains(DirPerms::READ) {
+                flags |= DescriptorFlags::READ;
+            }
+            if d.perms.contains(DirPerms::MUTATE) {
+                flags |= DescriptorFlags::MUTATE_DIRECTORY;
+            }
+            Ok(flags)
         } else {
             Err(wasi::filesystem::ErrorCode::BadDescriptor.into())
         }
-        */
     }
 
     async fn get_type(
@@ -69,16 +123,15 @@ impl<T: WasiView> wasi::filesystem::Host for T {
         fd: wasi::filesystem::Descriptor,
     ) -> Result<wasi::filesystem::DescriptorType, wasi::filesystem::Error> {
         let table = self.table();
-        todo!();
-        /*
-        if table.is::<Box<dyn WasiFile>>(fd) {
-            Ok(table.get_file(fd)?.get_filetype().await?.into())
-        } else if table.is::<Box<dyn WasiDir>>(fd) {
+
+        if table.is_file(fd) {
+            let meta = table.get_file(fd)?.file.metadata()?;
+            Ok(filetype_from(meta.file_type()))
+        } else if table.is_dir(fd) {
             Ok(wasi::filesystem::DescriptorType::Directory)
         } else {
             Err(wasi::filesystem::ErrorCode::BadDescriptor.into())
         }
-        */
     }
 
     async fn set_size(
@@ -86,11 +139,11 @@ impl<T: WasiView> wasi::filesystem::Host for T {
         fd: wasi::filesystem::Descriptor,
         size: wasi::filesystem::Filesize,
     ) -> Result<(), wasi::filesystem::Error> {
-        todo!();
-        /*
-        let f = self.table_mut().get_file_mut(fd)?;
-        f.set_filestat_size(size).await?;
-        */
+        let f = self.table().get_file(fd)?;
+        if !f.perms.contains(FilePerms::WRITE) {
+            Err(wasi::filesystem::ErrorCode::NotPermitted)?;
+        }
+        f.file.set_len(size)?;
         Ok(())
     }
 
@@ -543,7 +596,7 @@ impl<T: WasiView> wasi::filesystem::Host for T {
         &mut self,
         fd: wasi::filesystem::Descriptor,
         offset: wasi::filesystem::Filesize,
-    ) -> anyhow::Result<OutputStream> {
+    ) -> anyhow::Result<wasi::streams::OutputStream> {
         todo!();
         /*
         // Trap if fd lookup fails:
@@ -568,7 +621,7 @@ impl<T: WasiView> wasi::filesystem::Host for T {
     async fn append_via_stream(
         &mut self,
         fd: wasi::filesystem::Descriptor,
-    ) -> anyhow::Result<OutputStream> {
+    ) -> anyhow::Result<wasi::streams::OutputStream> {
         todo!();
         /*
         // Trap if fd lookup fails:
@@ -737,5 +790,23 @@ impl From<cap_rand::Error> for wasi::filesystem::Error {
 impl From<std::num::TryFromIntError> for wasi::filesystem::Error {
     fn from(_err: std::num::TryFromIntError) -> wasi::filesystem::Error {
         wasi::filesystem::ErrorCode::Overflow.into()
+    }
+}
+
+fn filetype_from(ft: cap_std::fs::FileType) -> wasi::filesystem::DescriptorType {
+    use cap_fs_ext::FileTypeExt;
+    use wasi::filesystem::DescriptorType;
+    if ft.is_dir() {
+        DescriptorType::Directory
+    } else if ft.is_symlink() {
+        DescriptorType::SymbolicLink
+    } else if ft.is_block_device() {
+        DescriptorType::BlockDevice
+    } else if ft.is_char_device() {
+        DescriptorType::CharacterDevice
+    } else if ft.is_file() {
+        DescriptorType::RegularFile
+    } else {
+        DescriptorType::Unknown
     }
 }

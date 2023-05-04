@@ -19,7 +19,7 @@ impl From<crate::TableError> for streams::Error {
             crate::TableError::Full => streams::Error::trap(anyhow!(error)),
             crate::TableError::NotPresent | crate::TableError::WrongType => {
                 // wit definition needs to define a badf-equiv variant:
-                streams::StreamError {}.into()
+                StreamError {}.into()
             }
         }
     }

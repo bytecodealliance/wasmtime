@@ -1,9 +1,8 @@
 use crate::clocks::WasiClocks;
 use crate::sched::WasiSched;
-use crate::stream::{InputStream, OutputStream};
-use crate::Table;
+use crate::stream::{InputStream, OutputStream, TableStreamExt};
+use crate::{Dir, DirPerms, FilePerms, Table, TableDirExt};
 use cap_rand::RngCore;
-use cap_std::fs::Dir;
 
 #[derive(Default)]
 pub struct WasiCtxBuilder {
@@ -60,8 +59,16 @@ impl WasiCtxBuilder {
         self
     }
 
-    pub fn push_preopened_dir(mut self, dir: Dir, path: impl AsRef<str>) -> Self {
-        self.preopens.push((dir, path.as_ref().to_owned()));
+    // TODO: optionally read-only
+    pub fn push_preopened_dir(
+        mut self,
+        dir: cap_std::fs::Dir,
+        perms: DirPerms,
+        file_perms: FilePerms,
+        path: impl AsRef<str>,
+    ) -> Self {
+        self.preopens
+            .push((Dir::new(dir, perms, file_perms), path.as_ref().to_owned()));
         self
     }
 
@@ -95,7 +102,7 @@ impl WasiCtxBuilder {
         let mut preopens = Vec::new();
         for (dir, path) in self.preopens {
             let dirfd = table
-                .push(Box::new(dir))
+                .push_dir(dir)
                 .with_context(|| format!("preopen {path:?}"))?;
             preopens.push((dirfd, path));
         }

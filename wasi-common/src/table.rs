@@ -50,20 +50,6 @@ impl Table {
         }
     }
 
-    pub fn push_input_stream(
-        &mut self,
-        istream: Box<dyn crate::InputStream>,
-    ) -> Result<u32, TableError> {
-        self.push(Box::new(istream))
-    }
-
-    pub fn push_output_stream(
-        &mut self,
-        ostream: Box<dyn crate::OutputStream>,
-    ) -> Result<u32, TableError> {
-        self.push(Box::new(ostream))
-    }
-
     /// Check if the table has a resource at the given index.
     pub fn contains_key(&self, key: u32) -> bool {
         self.map.contains_key(&key)
