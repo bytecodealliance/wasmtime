@@ -34,7 +34,6 @@ type BoxReturnCallInfo = Box<ReturnCallInfo>;
 type BoxExternalName = Box<ExternalName>;
 type VecMachLabel = Vec<MachLabel>;
 type VecArgPair = Vec<ArgPair>;
-use crate::machinst::valueregs;
 
 pub(crate) struct RV64IsleContext<'a, 'b, I, B>
 where

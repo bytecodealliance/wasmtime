@@ -854,17 +854,9 @@ macro_rules! isle_prelude_method_helpers {
             let sigdata_num_rets = self.lower_ctx.sigs().num_rets(abi);
             debug_assert!(num_rets <= sigdata_num_rets);
             for i in (sigdata_num_rets - num_rets)..sigdata_num_rets {
-                // Borrow `sigdata` again so we don't hold a `self`
-                // borrow across the `&mut self` arg to
-                // `abi_arg_slot_regs()` below.
-                let ret = self.lower_ctx.sigs().get_ret(abi, i);
-                let retval_regs = self.abi_arg_slot_regs(&ret).unwrap();
-                retval_insts.extend(
-                    caller
-                        .gen_retval(self.lower_ctx, i, retval_regs.clone())
-                        .into_iter(),
-                );
-                outputs.push(valueregs::non_writable_value_regs(retval_regs));
+                let (retval_inst, retval_regs) = caller.gen_retval(self.lower_ctx, i);
+                retval_insts.extend(retval_inst.into_iter());
+                outputs.push(retval_regs);
             }
 
             caller.emit_call(self.lower_ctx);
@@ -874,24 +866,6 @@ macro_rules! isle_prelude_method_helpers {
             }
 
             outputs
-        }
-
-        fn abi_arg_slot_regs(&mut self, arg: &ABIArg) -> Option<WritableValueRegs> {
-            match arg {
-                &ABIArg::Slots { ref slots, .. } => match slots.len() {
-                    1 => {
-                        let a = self.temp_writable_reg(slots[0].get_type());
-                        Some(WritableValueRegs::one(a))
-                    }
-                    2 => {
-                        let a = self.temp_writable_reg(slots[0].get_type());
-                        let b = self.temp_writable_reg(slots[1].get_type());
-                        Some(WritableValueRegs::two(a, b))
-                    }
-                    _ => panic!("Expected to see one or two slots only from {:?}", arg),
-                },
-                _ => None,
-            }
         }
     };
 }
