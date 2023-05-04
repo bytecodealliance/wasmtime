@@ -1,7 +1,7 @@
 //! A "dummy" implementation of mmaps for miri where "we do the best we can"
 //!
 //! Namely this uses `alloc` to allocate memory for the "mmap" specifically to
-//! create page-aligned allocations. This allocation doesn't handle oeprations
+//! create page-aligned allocations. This allocation doesn't handle operations
 //! like becoming executable or becoming readonly or being created from files,
 //! but it's enough to get various tests running relying on memories and such.
 
