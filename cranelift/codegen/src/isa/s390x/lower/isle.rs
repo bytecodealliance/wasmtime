@@ -193,7 +193,6 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
         name: ExternalName,
         uses: &CallArgList,
         defs: &CallRetList,
-        opcode: &Opcode,
     ) -> BoxCallInfo {
         let clobbers = self.lower_ctx.sigs().call_clobbers::<S390xMachineDeps>(abi);
         Box::new(CallInfo {
@@ -201,7 +200,6 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
             uses: uses.clone(),
             defs: defs.clone(),
             clobbers,
-            opcode: *opcode,
             caller_callconv: self.lower_ctx.abi().call_conv(self.lower_ctx.sigs()),
             callee_callconv: self.lower_ctx.sigs()[abi].call_conv(),
             tls_symbol: None,
@@ -214,7 +212,6 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
         target: Reg,
         uses: &CallArgList,
         defs: &CallRetList,
-        opcode: &Opcode,
     ) -> BoxCallIndInfo {
         let clobbers = self.lower_ctx.sigs().call_clobbers::<S390xMachineDeps>(abi);
         Box::new(CallIndInfo {
@@ -222,7 +219,6 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
             uses: uses.clone(),
             defs: defs.clone(),
             clobbers,
-            opcode: *opcode,
             caller_callconv: self.lower_ctx.abi().call_conv(self.lower_ctx.sigs()),
             callee_callconv: self.lower_ctx.sigs()[abi].call_conv(),
         })
@@ -299,7 +295,6 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
             uses: info.uses.clone(),
             defs: info.defs.clone(),
             clobbers,
-            opcode: Opcode::Call,
             caller_callconv,
             callee_callconv,
             tls_symbol: info.tls_symbol.clone(),

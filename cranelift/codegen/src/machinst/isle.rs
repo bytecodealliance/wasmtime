@@ -762,7 +762,7 @@ macro_rules! isle_prelude_caller_methods {
                 self.lower_ctx.sigs(),
                 sig_ref,
                 &extname,
-                Opcode::Call,
+                IsTailCall::No,
                 dist,
                 caller_conv,
                 self.backend.flags().clone(),
@@ -790,7 +790,7 @@ macro_rules! isle_prelude_caller_methods {
                 self.lower_ctx.sigs(),
                 sig_ref,
                 ptr,
-                Opcode::CallIndirect,
+                IsTailCall::No,
                 caller_conv,
                 self.backend.flags().clone(),
             );

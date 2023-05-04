@@ -5,7 +5,7 @@ use crate::binemit::{Addend, CodeOffset, Reloc};
 pub use crate::ir::condcodes::IntCC;
 use crate::ir::types::{self, F32, F64, I128, I16, I32, I64, I8, I8X16, R32, R64};
 
-pub use crate::ir::{ExternalName, MemFlags, Opcode, Type};
+pub use crate::ir::{ExternalName, MemFlags, Type};
 use crate::isa::{CallConv, FunctionAlignment};
 use crate::machinst::*;
 use crate::{settings, CodegenError, CodegenResult};
@@ -58,7 +58,6 @@ pub struct CallInfo {
     pub dest: ExternalName,
     pub uses: CallArgList,
     pub defs: CallRetList,
-    pub opcode: Opcode,
     pub caller_callconv: CallConv,
     pub callee_callconv: CallConv,
     pub clobbers: PRegSet,
@@ -72,7 +71,6 @@ pub struct CallIndInfo {
     pub rn: Reg,
     pub uses: CallArgList,
     pub defs: CallRetList,
-    pub opcode: Opcode,
     pub caller_callconv: CallConv,
     pub callee_callconv: CallConv,
     pub clobbers: PRegSet,
@@ -84,7 +82,6 @@ pub struct CallIndInfo {
 #[derive(Clone, Debug)]
 pub struct ReturnCallInfo {
     pub uses: CallArgList,
-    pub opcode: Opcode,
     pub new_stack_arg_size: u32,
 }
 

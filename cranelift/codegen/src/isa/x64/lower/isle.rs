@@ -22,8 +22,8 @@ use crate::{
         inst::{args::*, regs, CallInfo, ReturnCallInfo},
     },
     machinst::{
-        isle::*, ArgPair, InsnInput, InstOutput, MachAtomicRmwOp, MachInst, VCodeConstant,
-        VCodeConstantData,
+        isle::*, ArgPair, InsnInput, InstOutput, IsTailCall, MachAtomicRmwOp, MachInst,
+        VCodeConstant, VCodeConstantData,
     },
 };
 use alloc::vec::Vec;
@@ -91,7 +91,7 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
             self.lower_ctx.sigs(),
             callee_sig,
             callee,
-            Opcode::ReturnCallIndirect,
+            IsTailCall::Yes,
             caller_conv,
             self.backend.flags().clone(),
         );
@@ -118,7 +118,7 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
             self.lower_ctx.sigs(),
             callee_sig,
             &callee,
-            Opcode::ReturnCall,
+            IsTailCall::Yes,
             distance,
             caller_conv,
             self.backend.flags().clone(),

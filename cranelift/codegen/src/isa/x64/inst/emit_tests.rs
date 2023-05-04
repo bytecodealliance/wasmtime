@@ -3762,7 +3762,6 @@ fn test_x64_emit() {
             smallvec![],
             smallvec![],
             PRegSet::default(),
-            Opcode::Call,
             0,
             CallConv::SystemV,
         ),
@@ -3778,7 +3777,6 @@ fn test_x64_emit() {
             smallvec![],
             smallvec![],
             PRegSet::default(),
-            Opcode::CallIndirect,
             0,
             CallConv::SystemV,
         )

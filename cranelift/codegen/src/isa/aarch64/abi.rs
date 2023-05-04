@@ -4,7 +4,6 @@ use crate::ir;
 use crate::ir::types;
 use crate::ir::types::*;
 use crate::ir::MemFlags;
-use crate::ir::Opcode;
 use crate::ir::{dynamic_to_fixed, ExternalName, LibCall, Signature};
 use crate::isa;
 use crate::isa::aarch64::{inst::*, settings as aarch64_settings};
@@ -1019,7 +1018,6 @@ impl ABIMachineSpec for AArch64MachineDeps {
         uses: CallArgList,
         defs: CallRetList,
         clobbers: PRegSet,
-        opcode: ir::Opcode,
         tmp: Writable<Reg>,
         callee_conv: isa::CallConv,
         caller_conv: isa::CallConv,
@@ -1033,7 +1031,6 @@ impl ABIMachineSpec for AArch64MachineDeps {
                     uses,
                     defs,
                     clobbers,
-                    opcode,
                     caller_callconv: caller_conv,
                     callee_callconv: callee_conv,
                     callee_pop_size,
@@ -1051,7 +1048,6 @@ impl ABIMachineSpec for AArch64MachineDeps {
                         uses,
                         defs,
                         clobbers,
-                        opcode,
                         caller_callconv: caller_conv,
                         callee_callconv: callee_conv,
                         callee_pop_size,
@@ -1064,7 +1060,6 @@ impl ABIMachineSpec for AArch64MachineDeps {
                     uses,
                     defs,
                     clobbers,
-                    opcode,
                     caller_callconv: caller_conv,
                     callee_callconv: callee_conv,
                     callee_pop_size,
@@ -1107,7 +1102,6 @@ impl ABIMachineSpec for AArch64MachineDeps {
                 ],
                 defs: smallvec![],
                 clobbers: Self::get_regs_clobbered_by_call(call_conv),
-                opcode: Opcode::Call,
                 caller_callconv: call_conv,
                 callee_callconv: call_conv,
                 callee_pop_size: 0,
@@ -1299,11 +1293,9 @@ impl AArch64CallSite {
         self.emit_stack_ret_arg_for_tail_call(ctx);
 
         let dest = self.dest().clone();
-        let opcode = self.opcode();
         let uses = self.take_uses();
         let info = Box::new(ReturnCallInfo {
             uses,
-            opcode,
             new_stack_arg_size,
             key: select_api_key(isa_flags, isa::CallConv::Tail, true),
         });
