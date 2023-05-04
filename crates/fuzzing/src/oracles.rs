@@ -421,7 +421,7 @@ pub enum DiffEqResult<T, U> {
     /// Both engines succeeded.
     Success(T, U),
     /// The result has reached the state where engines may have diverged and
-    /// results can no longer be compard.
+    /// results can no longer be compared.
     Poisoned,
     /// Both engines failed with the same error message, and internal state
     /// should still match between the two engines.
