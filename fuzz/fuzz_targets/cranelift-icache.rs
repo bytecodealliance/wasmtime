@@ -7,7 +7,7 @@ use cranelift_codegen::{
         self, immediates::Imm64, ExternalName, Function, LibCall, Signature, UserExternalName,
         UserFuncName,
     },
-    isa, Context,
+    isa, settings, Context,
 };
 use libfuzzer_sys::{
     arbitrary::{self, Arbitrary, Unstructured},
@@ -54,7 +54,8 @@ impl FunctionWithIsa {
 
         let mut gen = FuzzGen::new(u);
         let flags = gen
-            .generate_flags(architecture, None)
+            .generate_flags(architecture)
+            .map(settings::Flags::new)
             .map_err(|_| arbitrary::Error::IncorrectFormat)?;
         gen.set_isa_flags(&mut builder, IsaFlagGen::All)?;
         let isa = builder

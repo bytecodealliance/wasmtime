@@ -3,8 +3,6 @@
 
 use std::fmt::Display;
 
-use arbitrary::Unstructured;
-
 /// A shim for ControlPlane when chaos mode is disabled.
 /// Please see the [crate-level documentation](crate).
 #[derive(Debug, Clone, Default)]
@@ -13,13 +11,19 @@ pub struct ControlPlane {
     _private: (),
 }
 
-impl ControlPlane {
-    /// Generate a new control plane. This variant is used when chaos mode is
-    /// disabled. It doesn't consume any bytes and always returns a default
-    /// control plane.
-    pub fn new(_u: &mut Unstructured, _fuel: u8) -> arbitrary::Result<Self> {
+/// A shim for ControlPlane's `Arbitrary` implementation when chaos mode is
+/// disabled. It doesn't consume any bytes and always returns a default
+/// control plane.
+impl arbitrary::Arbitrary<'_> for ControlPlane {
+    fn arbitrary(_u: &mut arbitrary::Unstructured<'_>) -> arbitrary::Result<Self> {
         Ok(Self::default())
     }
+}
+
+impl ControlPlane {
+    /// Set the [fuel limit](crate#fuel-limit). This variant is used when
+    /// chaos mode is disabled. It doesn't do anything.
+    pub fn set_fuel(&mut self, _fuel: u8) {}
 
     /// Returns a pseudo-random boolean. This variant is used when chaos
     /// mode is disabled. It always returns `false`.

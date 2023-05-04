@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use arbitrary::Unstructured;
+use arbitrary::{Arbitrary, Unstructured};
 
 /// The control plane of chaos mode.
 /// Please see the [crate-level documentation](crate).
@@ -14,16 +14,22 @@ pub struct ControlPlane {
     tmp: Vec<u8>,
 }
 
-impl ControlPlane {
-    /// Generate a new control plane using arbitrary and a given [fuel
-    /// limit](crate#fuel-limit). The fuel limit should be determined by the
-    /// cranelift setting `control_plane_fuel`.
-    pub fn new(u: &mut Unstructured, fuel: u8) -> arbitrary::Result<Self> {
+impl Arbitrary<'_> for ControlPlane {
+    fn arbitrary<'a>(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
         Ok(Self {
             data: u.arbitrary()?,
-            fuel: (fuel != 0).then_some(fuel),
+            fuel: None,
             tmp: Vec::new(),
         })
+    }
+}
+
+impl ControlPlane {
+    /// Set the [fuel limit](crate#fuel-limit). Zero is interpreted as the
+    /// fuel limit being deactivated, consistent with the cranelift setting
+    /// `control_plane_fuel`.
+    pub fn set_fuel(&mut self, fuel: u8) {
+        self.fuel = (fuel != 0).then_some(fuel)
     }
 
     /// Tries to consume fuel, returning `true` if successful (or if
