@@ -20,7 +20,7 @@ cap-fs-ext = { workspace = true }
 cap-net-ext = { workspace = true }
 cap-time-ext = "1.0.0"
 cap-rand = { workspace = true }
-fs-set-times = "0.19.0"
+fs-set-times = { workspace = true }
 system-interface = { workspace = true }
 tracing = { workspace = true }
 io-lifetimes = { workspace = true }

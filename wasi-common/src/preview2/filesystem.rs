@@ -105,7 +105,7 @@ impl<T: WasiView> wasi::filesystem::Host for T {
             Ok(flags)
         } else if table.is_dir(fd) {
             let d = table.get_dir(fd)?;
-            let mut flags = get_from_fdflags(d.dir)?;
+            let mut flags = get_from_fdflags(&d.dir)?;
             if d.perms.contains(DirPerms::READ) {
                 flags |= DescriptorFlags::READ;
             }
@@ -153,28 +153,30 @@ impl<T: WasiView> wasi::filesystem::Host for T {
         atim: wasi::filesystem::NewTimestamp,
         mtim: wasi::filesystem::NewTimestamp,
     ) -> Result<(), wasi::filesystem::Error> {
-        todo!();
-        /*
-        let atim = system_time_spec_from_timestamp(atim);
-        let mtim = system_time_spec_from_timestamp(mtim);
+        use fs_set_times::SetTimes;
 
-        let table = self.table_mut();
-        if table.is::<Box<dyn WasiFile>>(fd) {
-            Ok(table
-                .get_file_mut(fd)
-                .expect("checked entry is a file")
-                .set_times(atim, mtim)
-                .await?)
-        } else if table.is::<Box<dyn WasiDir>>(fd) {
-            Ok(table
-                .get_dir(fd)
-                .expect("checked entry is a dir")
-                .set_times(".", atim, mtim, false)
-                .await?)
+        let table = self.table();
+        if table.is_file(fd) {
+            let f = table.get_file(fd)?;
+            if !f.perms.contains(FilePerms::WRITE) {
+                return Err(wasi::filesystem::ErrorCode::NotPermitted.into());
+            }
+            let atim = systemtimespec_from(atim)?;
+            let mtim = systemtimespec_from(mtim)?;
+            f.file.set_times(atim, mtim)?;
+            Ok(())
+        } else if table.is_dir(fd) {
+            let d = table.get_dir(fd)?;
+            if !d.perms.contains(DirPerms::MUTATE) {
+                return Err(wasi::filesystem::ErrorCode::NotPermitted.into());
+            }
+            let atim = systemtimespec_from(atim)?;
+            let mtim = systemtimespec_from(mtim)?;
+            d.dir.set_times(atim, mtim)?;
+            Ok(())
         } else {
             Err(wasi::filesystem::ErrorCode::BadDescriptor.into())
         }
-        */
     }
 
     async fn read(
@@ -183,14 +185,26 @@ impl<T: WasiView> wasi::filesystem::Host for T {
         len: wasi::filesystem::Filesize,
         offset: wasi::filesystem::Filesize,
     ) -> Result<(Vec<u8>, bool), wasi::filesystem::Error> {
-        todo!();
-        /*
-        let f = self.table_mut().get_file_mut(fd)?;
+        use std::io::IoSliceMut;
+        use system_interface::fs::FileIoExt;
+
+        let table = self.table();
+
+        let f = table.get_file(fd)?;
+        if !f.perms.contains(FilePerms::READ) {
+            return Err(wasi::filesystem::ErrorCode::NotPermitted.into());
+        }
 
         let mut buffer = vec![0; len.try_into().unwrap_or(usize::MAX)];
-        let (bytes_read, end) = f
+        let (bytes_read, end) = match f
+            .file
             .read_vectored_at(&mut [IoSliceMut::new(&mut buffer)], offset)
-            .await?;
+        {
+            Ok(0) => (0, true),
+            Ok(n) => (n as u64, false),
+            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => (0, false),
+            Err(e) => Err(e)?,
+        };
 
         buffer.truncate(
             bytes_read
@@ -199,7 +213,6 @@ impl<T: WasiView> wasi::filesystem::Host for T {
         );
 
         Ok((buffer, end))
-        */
     }
 
     async fn write(
@@ -208,14 +221,18 @@ impl<T: WasiView> wasi::filesystem::Host for T {
         buf: Vec<u8>,
         offset: wasi::filesystem::Filesize,
     ) -> Result<wasi::filesystem::Filesize, wasi::filesystem::Error> {
-        todo!()
-        /*
-        let f = self.table_mut().get_file_mut(fd)?;
+        use std::io::IoSlice;
+        use system_interface::fs::FileIoExt;
 
-        let bytes_written = f.write_vectored_at(&[IoSlice::new(&buf)], offset).await?;
+        let table = self.table();
+        let f = table.get_file(fd)?;
+        if !f.perms.contains(FilePerms::WRITE) {
+            return Err(wasi::filesystem::ErrorCode::NotPermitted.into());
+        }
+
+        let bytes_written = f.file.write_vectored_at(&[IoSlice::new(&buf)], offset)?;
 
         Ok(wasi::filesystem::Filesize::try_from(bytes_written).expect("usize fits in Filesize"))
-        */
     }
 
     async fn read_directory(
@@ -570,7 +587,7 @@ impl<T: WasiView> wasi::filesystem::Host for T {
         &mut self,
         fd: wasi::filesystem::Descriptor,
         offset: wasi::filesystem::Filesize,
-    ) -> anyhow::Result<InputStream> {
+    ) -> anyhow::Result<wasi::streams::InputStream> {
         todo!();
         /*
         // Trap if fd lookup fails:
@@ -809,4 +826,25 @@ fn filetype_from(ft: cap_std::fs::FileType) -> wasi::filesystem::DescriptorType 
     } else {
         DescriptorType::Unknown
     }
+}
+
+fn systemtimespec_from(
+    t: wasi::filesystem::NewTimestamp,
+) -> Result<Option<fs_set_times::SystemTimeSpec>, wasi::filesystem::Error> {
+    use fs_set_times::SystemTimeSpec;
+    use wasi::filesystem::NewTimestamp;
+    match t {
+        NewTimestamp::NoChange => Ok(None),
+        NewTimestamp::Now => Ok(Some(SystemTimeSpec::SymbolicNow)),
+        NewTimestamp::Timestamp(st) => Ok(Some(SystemTimeSpec::Absolute(systemtime_from(st)?))),
+    }
+}
+
+fn systemtime_from(
+    t: wasi::wall_clock::Datetime,
+) -> Result<std::time::SystemTime, wasi::filesystem::Error> {
+    use std::time::{Duration, SystemTime};
+    SystemTime::UNIX_EPOCH
+        .checked_add(Duration::new(t.seconds, t.nanoseconds))
+        .ok_or_else(|| wasi::filesystem::ErrorCode::Overflow.into())
 }
