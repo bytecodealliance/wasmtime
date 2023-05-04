@@ -212,7 +212,7 @@ impl Instance {
     pub unsafe fn from_vmctx<R>(vmctx: *mut VMContext, f: impl FnOnce(&mut Instance) -> R) -> R {
         let ptr = vmctx
             .cast::<u8>()
-            .offset(-(mem::size_of::<Instance>() as isize))
+            .sub(mem::size_of::<Instance>())
             .cast::<Instance>();
         f(&mut *ptr)
     }
