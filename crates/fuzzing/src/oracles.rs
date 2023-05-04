@@ -382,30 +382,11 @@ pub fn differential(
         return Ok(false);
     }
 
-    match (lhs_results, rhs_results) {
-        // If the evaluation succeeds, we compare the results.
-        (Ok(lhs_results), Ok(rhs_results)) => assert_eq!(lhs_results, rhs_results),
-
-        // Both sides failed. If either one hits a stack overflow then that's an
-        // engine defined limit which means we can no longer compare the state
-        // of the two instances, so `false` is returned and nothing else is
-        // compared.
-        //
-        // Otherwise, though, the same error should have popped out and this
-        // falls through to checking the intermediate state otherwise.
-        (Err(lhs), Err(rhs)) => {
-            let err = rhs.downcast::<Trap>().expect("not a trap");
-            let poisoned = err == Trap::StackOverflow || lhs_engine.is_stack_overflow(&lhs);
-
-            if poisoned {
-                return Ok(false);
-            }
-            lhs_engine.assert_error_match(&err, &lhs);
-        }
-        // A real bug is found if only one side fails.
-        (Ok(_), Err(_)) => panic!("only the `rhs` ({}) failed for this input", rhs.name()),
-        (Err(_), Ok(_)) => panic!("only the `lhs` ({}) failed for this input", lhs.name()),
-    };
+    match DiffEqResult::new(lhs_engine, lhs_results, rhs_results) {
+        DiffEqResult::Success(lhs, rhs) => assert_eq!(lhs, rhs),
+        DiffEqResult::Poisoned => return Ok(false),
+        DiffEqResult::Failed => {}
+    }
 
     for (global, ty) in rhs.exported_globals() {
         log::debug!("Comparing global `{global}`");
@@ -432,6 +413,51 @@ pub fn differential(
     }
 
     Ok(true)
+}
+
+/// Result of comparing the result of two operations during differential
+/// execution.
+pub enum DiffEqResult<T, U> {
+    /// Both engines succeeded.
+    Success(T, U),
+    /// The result has reached the state where engines may have diverged and
+    /// results can no longer be compard.
+    Poisoned,
+    /// Both engines failed with the same error message, and internal state
+    /// should still match between the two engines.
+    Failed,
+}
+
+impl<T, U> DiffEqResult<T, U> {
+    /// Computes the differential result from executing in two different
+    /// engines.
+    pub fn new(
+        lhs_engine: &dyn DiffEngine,
+        lhs_result: Result<T>,
+        rhs_result: Result<U>,
+    ) -> DiffEqResult<T, U> {
+        match (lhs_result, rhs_result) {
+            (Ok(lhs_result), Ok(rhs_result)) => DiffEqResult::Success(lhs_result, rhs_result),
+
+            // Both sides failed. If either one hits a stack overflow then that's an
+            // engine defined limit which means we can no longer compare the state
+            // of the two instances, so `None` is returned and nothing else is
+            // compared.
+            (Err(lhs), Err(rhs)) => {
+                let err = rhs.downcast::<Trap>().expect("not a trap");
+                let poisoned = err == Trap::StackOverflow || lhs_engine.is_stack_overflow(&lhs);
+
+                if poisoned {
+                    return DiffEqResult::Poisoned;
+                }
+                lhs_engine.assert_error_match(&err, &lhs);
+                DiffEqResult::Failed
+            }
+            // A real bug is found if only one side fails.
+            (Ok(_), Err(_)) => panic!("only the `rhs` failed for this input"),
+            (Err(_), Ok(_)) => panic!("only the `lhs` failed for this input"),
+        }
+    }
 }
 
 /// Invoke the given API calls.
