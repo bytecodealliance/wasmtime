@@ -136,7 +136,7 @@ pub fn writable_spilltmp_reg2() -> Writable<Reg> {
 }
 
 pub fn crate_reg_eviroment(_flags: &settings::Flags) -> MachineEnv {
-    let preferred_regs_by_class: [Vec<PReg>; 2] = {
+    let preferred_regs_by_class: [Vec<PReg>; 3] = {
         let mut x_register: Vec<PReg> = vec![];
         x_register.push(PReg::new(5, RegClass::Int));
         for i in 6..=7 {
@@ -159,10 +159,10 @@ pub fn crate_reg_eviroment(_flags: &settings::Flags) -> MachineEnv {
         for i in 28..=31 {
             f_register.push(PReg::new(i, RegClass::Float));
         }
-        [x_register, f_register]
+        [x_register, f_register, vec![]]
     };
 
-    let non_preferred_regs_by_class: [Vec<PReg>; 2] = {
+    let non_preferred_regs_by_class: [Vec<PReg>; 3] = {
         let mut x_register: Vec<PReg> = vec![];
         x_register.push(PReg::new(9, RegClass::Int));
         for i in 18..=27 {
@@ -175,14 +175,14 @@ pub fn crate_reg_eviroment(_flags: &settings::Flags) -> MachineEnv {
         for i in 18..=27 {
             f_register.push(PReg::new(i, RegClass::Float));
         }
-        [x_register, f_register]
+        [x_register, f_register, vec![]]
     };
 
     MachineEnv {
         preferred_regs_by_class,
         non_preferred_regs_by_class,
         fixed_stack_slots: vec![],
-        scratch_by_class: [None, None],
+        scratch_by_class: [None, None, None],
     }
 }
 

@@ -3,6 +3,8 @@ Cranelift Code Generator
 
 **A [Bytecode Alliance][BA] project**
 
+[Website](https://cranelift.dev/)
+
 Cranelift is a low-level retargetable code generator. It translates a
 [target-independent intermediate representation](docs/ir.md)
 into executable machine code.

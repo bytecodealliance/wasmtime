@@ -14,6 +14,9 @@ static mut PREV_SIGILL: MaybeUninit<libc::sigaction> = MaybeUninit::uninit();
 static mut PREV_SIGFPE: MaybeUninit<libc::sigaction> = MaybeUninit::uninit();
 
 pub unsafe fn platform_init() {
+    if cfg!(miri) {
+        return;
+    }
     let register = |slot: &mut MaybeUninit<libc::sigaction>, signal: i32| {
         let mut handler: libc::sigaction = mem::zeroed();
         // The flags here are relatively careful, and they are...
@@ -312,6 +315,10 @@ pub fn lazy_per_thread_init() {
     });
 
     unsafe fn allocate_sigaltstack() -> Option<Stack> {
+        if cfg!(miri) {
+            return None;
+        }
+
         // Check to see if the existing sigaltstack, if it exists, is big
         // enough. If so we don't need to allocate our own.
         let mut old_stack = mem::zeroed();

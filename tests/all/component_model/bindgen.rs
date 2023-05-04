@@ -1,3 +1,5 @@
+#![cfg(not(miri))]
+
 use super::engine;
 use anyhow::Result;
 use wasmtime::{

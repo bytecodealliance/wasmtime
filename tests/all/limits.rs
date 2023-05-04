@@ -4,6 +4,7 @@ use wasmtime::*;
 const WASM_PAGE_SIZE: usize = wasmtime_environ::WASM_PAGE_SIZE as usize;
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn test_limits() -> Result<()> {
     let engine = Engine::default();
     let module = Module::new(
@@ -91,6 +92,7 @@ fn test_limits() -> Result<()> {
 }
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn test_limits_async() -> Result<()> {
     let mut config = Config::new();
     config.async_support(true);
@@ -425,6 +427,7 @@ impl ResourceLimiter for MemoryContext {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn test_custom_memory_limiter() -> Result<()> {
     let engine = Engine::default();
     let mut linker = Linker::new(&engine);
@@ -540,6 +543,7 @@ impl ResourceLimiterAsync for MemoryContext {
 }
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn test_custom_memory_limiter_async() -> Result<()> {
     let mut config = Config::new();
     config.async_support(true);
@@ -840,6 +844,7 @@ impl ResourceLimiterAsync for FailureDetector {
 }
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn custom_limiter_async_detect_grow_failure() -> Result<()> {
     if std::env::var("WASMTIME_TEST_NO_HOG_MEMORY").is_ok() {
         return Ok(());
@@ -979,6 +984,7 @@ fn panic_in_memory_limiter() {
 
 #[test]
 #[should_panic(expected = "resource limiter memory growing")]
+#[cfg_attr(miri, ignore)]
 fn panic_in_memory_limiter_wasm_stack() {
     // Like the test above, except the memory.grow happens in wasm code
     // instead of a host function call.
@@ -1025,6 +1031,7 @@ fn panic_in_table_limiter() {
 
 #[tokio::test]
 #[should_panic(expected = "async resource limiter memory growing")]
+#[cfg_attr(miri, ignore)]
 async fn panic_in_async_memory_limiter() {
     let mut config = Config::new();
     config.async_support(true);
@@ -1044,6 +1051,7 @@ async fn panic_in_async_memory_limiter() {
 
 #[tokio::test]
 #[should_panic(expected = "async resource limiter memory growing")]
+#[cfg_attr(miri, ignore)]
 async fn panic_in_async_memory_limiter_wasm_stack() {
     // Like the test above, except the memory.grow happens in
     // wasm code instead of a host function call.
@@ -1075,6 +1083,7 @@ async fn panic_in_async_memory_limiter_wasm_stack() {
 
 #[tokio::test]
 #[should_panic(expected = "async resource limiter table growing")]
+#[cfg_attr(miri, ignore)]
 async fn panic_in_async_table_limiter() {
     let mut config = Config::new();
     config.async_support(true);
@@ -1096,6 +1105,7 @@ async fn panic_in_async_table_limiter() {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn growth_trap() -> Result<()> {
     let engine = Engine::default();
     let module = Module::new(

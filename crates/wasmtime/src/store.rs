@@ -96,7 +96,7 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 use wasmtime_runtime::{
     InstanceAllocationRequest, InstanceAllocator, InstanceHandle, ModuleInfo,
-    OnDemandInstanceAllocator, SignalHandler, StorePtr, VMContext, VMExternRef,
+    OnDemandInstanceAllocator, SignalHandler, StoreBox, StorePtr, VMContext, VMExternRef,
     VMExternRefActivationsTable, VMRuntimeLimits, WasmFault,
 };
 
@@ -281,7 +281,7 @@ pub struct StoreOpaque {
     externref_activations_table: VMExternRefActivationsTable,
     modules: ModuleRegistry,
     func_refs: FuncRefs,
-    host_globals: Vec<Box<VMHostGlobalContext>>,
+    host_globals: Vec<StoreBox<VMHostGlobalContext>>,
 
     // Numbers of resources instantiated in this store, and their limits
     instance_count: usize,
@@ -1190,7 +1190,7 @@ impl StoreOpaque {
         self.func_refs.push_instance_pre_func_refs(func_refs);
     }
 
-    pub(crate) fn host_globals(&mut self) -> &mut Vec<Box<VMHostGlobalContext>> {
+    pub(crate) fn host_globals(&mut self) -> &mut Vec<StoreBox<VMHostGlobalContext>> {
         &mut self.host_globals
     }
 

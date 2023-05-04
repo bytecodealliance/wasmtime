@@ -588,6 +588,51 @@ jobs:
       env:
         GH_TOKEN: ${{ github.token }}
 
+  # Run a subset of tests under MIRI on CI to help check the `unsafe` code in
+  # Wasmtime to make sure it's at least not obviously incorrect for basic usage.
+  # Note that this doesn't run the full test suite since MIRI can't actually run
+  # WebAssembly itself at this time (aka it doesn't support a JIT). There are a
+  # number of annotations throughout the code which gates some tests on MIRI not
+  # being run.
+  #
+  # Note that `cargo nextest` is used here additionally to get parallel test
+  # execution by default to help cut down on the time in CI.
+  miri:
+    needs: determine
+    if: needs.determine.outputs.run-full
+    name: Miri
+    runs-on: ubuntu-latest
+    env:
+      CARGO_NEXTEST_VERSION: 0.9.51
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: true
+    - uses: ./.github/actions/install-rust
+      with:
+        toolchain: nightly-2023-03-20
+    - run: rustup component add rust-src miri
+    - uses: actions/cache@v3
+      with:
+        path: ${{ runner.tool_cache }}/cargo-nextest
+        key: cargo-nextest-bin-${{ env.CARGO_NEXTEST_VERSION }}
+    - run: echo "${{ runner.tool_cache }}/cargo-nextest/bin" >> $GITHUB_PATH
+    - run: cargo install --root ${{ runner.tool_cache }}/cargo-nextest --version ${{ env.CARGO_NEXTEST_VERSION }} cargo-nextest
+    - run: |
+        cargo miri nextest run -j4 --no-fail-fast \
+          -p wasmtime \
+          -p wasmtime-cli \
+          -p wasmtime-runtime \
+          -p wasmtime-environ
+      env:
+        MIRIFLAGS: -Zmiri-tree-borrows
+
+    # common logic to cancel the entire run if this job fails
+    - run: gh run cancel ${{ github.run_id }}
+      if: failure() && github.event_name != 'pull_request'
+      env:
+        GH_TOKEN: ${{ github.token }}
+
   # Perform release builds of `wasmtime` and `libwasmtime.so`. Builds a variety
   # of platforms and architectures and then uploads the release artifacts to
   # this workflow run's list of artifacts.
@@ -694,6 +739,7 @@ jobs:
       - meta_deterministic_check
       - verify-publish
       - determine
+      - miri
     if: always()
     steps:
     - name: Dump needs context

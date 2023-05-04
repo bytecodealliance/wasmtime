@@ -457,7 +457,15 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
             dynamic_stack_slot,
             ..
         } => write!(w, " {}, {}", arg, dynamic_stack_slot),
-        TableAddr { table, arg, .. } => write!(w, " {}, {}", table, arg),
+        TableAddr {
+            table, arg, offset, ..
+        } => {
+            if i32::from(offset) == 0 {
+                write!(w, " {}, {}", table, arg)
+            } else {
+                write!(w, " {}, {}{}", table, arg, offset)
+            }
+        }
         Load {
             flags, arg, offset, ..
         } => write!(w, "{} {}{}", flags, arg, offset),

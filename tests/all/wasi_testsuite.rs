@@ -3,6 +3,8 @@
 //!
 //! [wasi-testsuite]: https://github.com/WebAssembly/wasi-testsuite
 
+#![cfg(not(miri))]
+
 use crate::cli_tests::run_wasmtime_for_output;
 use anyhow::Result;
 use serde::Deserialize;

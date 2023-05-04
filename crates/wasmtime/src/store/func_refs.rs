@@ -49,7 +49,7 @@ mod unpatched_func_ref {
     impl UnpatchedFuncRef {
         /// Safety: Callers must ensure that the given `func_ref` and resulting
         /// wrapped value are used in a `Send + Sync` compatible way.
-        pub unsafe fn new(func_ref: &VMFuncRef) -> UnpatchedFuncRef {
+        pub unsafe fn new(func_ref: &mut VMFuncRef) -> UnpatchedFuncRef {
             debug_assert!(func_ref.wasm_call.is_none());
             UnpatchedFuncRef(NonNull::from(func_ref))
         }
@@ -80,8 +80,10 @@ impl FuncRefs {
         let _ = unsafe { VMNativeCallHostFuncContext::from_opaque(func_ref.vmctx) };
 
         let func_ref = self.bump.alloc(func_ref);
-        self.with_holes.push(UnpatchedFuncRef::new(func_ref));
-        NonNull::from(func_ref)
+        let unpatched = UnpatchedFuncRef::new(func_ref);
+        let ret = unpatched.func_ref();
+        self.with_holes.push(unpatched);
+        ret
     }
 
     /// Patch any `VMFuncRef::wasm_call`s that need filling in.

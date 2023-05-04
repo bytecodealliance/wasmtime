@@ -5,7 +5,9 @@ use anyhow::Result;
 use std::panic::{self, AssertUnwindSafe};
 use std::ptr::NonNull;
 use wasmtime_jit::{CodeMemory, ProfilingAgent};
-use wasmtime_runtime::{VMArrayCallHostFuncContext, VMContext, VMFuncRef, VMOpaqueContext};
+use wasmtime_runtime::{
+    StoreBox, VMArrayCallHostFuncContext, VMContext, VMFuncRef, VMOpaqueContext,
+};
 
 struct TrampolineState<F> {
     func: F,
@@ -113,7 +115,7 @@ pub fn create_array_call_function<F>(
     ft: &FuncType,
     func: F,
     engine: &Engine,
-) -> Result<Box<VMArrayCallHostFuncContext>>
+) -> Result<StoreBox<VMArrayCallHostFuncContext>>
 where
     F: Fn(*mut VMContext, &mut [ValRaw]) -> Result<()> + Send + Sync + 'static,
 {

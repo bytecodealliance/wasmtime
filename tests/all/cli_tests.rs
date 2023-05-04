@@ -1,3 +1,5 @@
+#![cfg(not(miri))]
+
 use anyhow::{bail, Context, Result};
 use std::fs::File;
 use std::io::{Read, Write};

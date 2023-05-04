@@ -1,3 +1,5 @@
+#![cfg(not(miri))]
+
 use anyhow::{bail, Error, Result};
 use std::future::Future;
 use std::pin::Pin;

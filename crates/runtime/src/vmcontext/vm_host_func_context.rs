@@ -2,9 +2,8 @@
 //!
 //! Keep in sync with `wasmtime_environ::VMHostFuncOffsets`.
 
-use crate::VMFuncRef;
-
 use super::VMOpaqueContext;
+use crate::{StoreBox, VMFuncRef};
 use std::any::Any;
 use wasmtime_environ::{VM_ARRAY_CALL_HOST_FUNC_MAGIC, VM_NATIVE_CALL_HOST_FUNC_MAGIC};
 
@@ -37,14 +36,17 @@ impl VMArrayCallHostFuncContext {
     pub unsafe fn new(
         func_ref: VMFuncRef,
         host_state: Box<dyn Any + Send + Sync>,
-    ) -> Box<VMArrayCallHostFuncContext> {
+    ) -> StoreBox<VMArrayCallHostFuncContext> {
         debug_assert!(func_ref.vmctx.is_null());
-        let mut ctx = Box::new(VMArrayCallHostFuncContext {
+        let ctx = StoreBox::new(VMArrayCallHostFuncContext {
             magic: wasmtime_environ::VM_ARRAY_CALL_HOST_FUNC_MAGIC,
             func_ref,
             host_state,
         });
-        ctx.func_ref.vmctx = VMOpaqueContext::from_vm_array_call_host_func_context(&mut *ctx);
+        let vmctx = VMOpaqueContext::from_vm_array_call_host_func_context(ctx.get());
+        unsafe {
+            (*ctx.get()).func_ref.vmctx = vmctx;
+        }
         ctx
     }
 
@@ -109,13 +111,16 @@ impl VMNativeCallHostFuncContext {
     pub unsafe fn new(
         func_ref: VMFuncRef,
         host_state: Box<dyn Any + Send + Sync>,
-    ) -> Box<VMNativeCallHostFuncContext> {
-        let mut ctx = Box::new(VMNativeCallHostFuncContext {
+    ) -> StoreBox<VMNativeCallHostFuncContext> {
+        let ctx = StoreBox::new(VMNativeCallHostFuncContext {
             magic: wasmtime_environ::VM_NATIVE_CALL_HOST_FUNC_MAGIC,
             func_ref,
             host_state,
         });
-        ctx.func_ref.vmctx = VMOpaqueContext::from_vm_native_call_host_func_context(&mut *ctx);
+        let vmctx = VMOpaqueContext::from_vm_native_call_host_func_context(ctx.get());
+        unsafe {
+            (*ctx.get()).func_ref.vmctx = vmctx;
+        }
         ctx
     }
 

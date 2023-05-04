@@ -1030,6 +1030,7 @@ impl MachInst for Inst {
                     }
                 }
             }
+            RegClass::Vector => unreachable!(),
         }
     }
 
@@ -1083,6 +1084,7 @@ impl MachInst for Inst {
         match rc {
             RegClass::Float => types::I8X16,
             RegClass::Int => types::I64,
+            RegClass::Vector => unreachable!(),
         }
     }
 

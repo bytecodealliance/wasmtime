@@ -1,3 +1,5 @@
+#![cfg(not(miri))]
+
 use anyhow::Result;
 use std::time::Instant;
 use wasmtime::*;
