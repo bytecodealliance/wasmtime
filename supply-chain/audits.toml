@@ -1323,6 +1323,12 @@ criteria = "safe-to-deploy"
 version = "0.2.15"
 notes = "no build.rs, no macros, no unsafe. It reads the filesystem and makes copies of DLLs into OUT_DIR."
 
+[[audits.walkdir]]
+who = "Andrew Brown <andrew.brown@intel.com>"
+criteria = "safe-to-deploy"
+delta = "2.3.2 -> 2.3.3"
+notes = "No significant changes: minor refactoring and removes the need to use `winapi`."
+
 [[audits.want]]
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
