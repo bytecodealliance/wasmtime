@@ -25,10 +25,11 @@ fn wasi_testsuite() -> Result<()> {
     //  - wasi-testsuite overspecifies (or incorrectly specifies) a test
     //  - this test runner incorrectly configures Wasmtime's CLI execution.
     //
-    // The easiest way to resolve one of these is to remove the file from the
-    // list and run `cargo test wasi_testsuite -- --nocapture`. The printed
-    // output will show the expected result, the actual result, and a command to
-    // replicate the failure from the command line.
+    // This list is expected to shrink as the failures are resolved. The easiest
+    // way to resolve one of these is to remove the file from the list and run
+    // `cargo test wasi_testsuite -- --nocapture`. The printed output will show
+    // the expected result, the actual result, and a command to replicate the
+    // failure from the command line.
     const WASI_COMMON_IGNORE_LIST: &[&str] = &[
         "environ_get-multiple-variables.wasm",
         "environ_sizes_get-multiple-variables.wasm",
