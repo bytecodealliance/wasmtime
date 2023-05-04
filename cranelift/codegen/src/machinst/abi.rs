@@ -2094,6 +2094,11 @@ impl<M: ABIMachineSpec> CallSite<M> {
         sigs.num_args(self.sig)
     }
 
+    /// Get the number of return values expected.
+    pub fn num_rets(&self, sigs: &SigSet) -> usize {
+        sigs.num_rets(self.sig)
+    }
+
     /// Emit a copy of a large argument into its associated stack buffer, if
     /// any.  We must be careful to perform all these copies (as necessary)
     /// before setting up the argument registers, since we may have to invoke
