@@ -68,7 +68,12 @@ fn wasi_testsuite() -> Result<()> {
 }
 
 fn run_all(testsuite_dir: &str, extra_flags: &[&str], ignore: &[&str]) -> Result<()> {
-    for module in list_modules(testsuite_dir) {
+    // In case the previous run ended in failure, we clean up any created files
+    // that would otherwise be cleaned up at the end of this function.
+    clean_garbage(testsuite_dir)?;
+
+    // Execute and check each WebAssembly test case.
+    for module in list_files(testsuite_dir, is_wasm) {
         if should_ignore(&module, ignore) {
             println!("Ignoring {}", module.display());
         } else {
@@ -88,14 +93,19 @@ fn run_all(testsuite_dir: &str, extra_flags: &[&str], ignore: &[&str]) -> Result
             }
         }
     }
-    Ok(())
+
+    // Clean up any created files to avoid making the Git repository dirty.
+    clean_garbage(testsuite_dir)
 }
 
-fn list_modules(testsuite_dir: &str) -> impl Iterator<Item = PathBuf> {
+fn list_files<F>(testsuite_dir: &str, filter: F) -> impl Iterator<Item = PathBuf>
+where
+    F: FnMut(&DirEntry) -> bool,
+{
     WalkDir::new(testsuite_dir)
         .into_iter()
         .filter_map(Result::ok)
-        .filter(is_wasm)
+        .filter(filter)
         .map(|e| e.path().to_path_buf())
 }
 
@@ -139,6 +149,24 @@ fn build_command<P: AsRef<Path>>(module: P, extra_flags: &[&str], spec: &Spec) -
     }
 
     Ok(cmd)
+}
+
+fn clean_garbage(testsuite_dir: &str) -> Result<()> {
+    for path in list_files(testsuite_dir, is_garbage) {
+        println!("Removing {}", path.display());
+        if path.is_dir() {
+            fs::remove_dir(path)?;
+        } else {
+            fs::remove_file(path)?;
+        }
+    }
+    Ok(())
+}
+
+fn is_garbage(entry: &DirEntry) -> bool {
+    let path = entry.path();
+    let ext = path.extension().map(OsStr::to_str).flatten();
+    ext == Some("cleanup")
 }
 
 #[derive(Debug, Default, Deserialize)]
