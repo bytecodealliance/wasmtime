@@ -325,7 +325,7 @@ impl<T: WasiView> wasi::filesystem::Host for T {
         if !d.perms.contains(DirPerms::MUTATE) {
             return Err(wasi::filesystem::ErrorCode::NotPermitted.into());
         }
-        d.dir.create_dir(std::path::Path::new(&path))?;
+        d.dir.create_dir(&path)?;
         Ok(())
     }
 
@@ -333,8 +333,6 @@ impl<T: WasiView> wasi::filesystem::Host for T {
         &mut self,
         fd: wasi::filesystem::Descriptor,
     ) -> Result<wasi::filesystem::DescriptorStat, wasi::filesystem::Error> {
-        use cap_fs_ext::MetadataExt;
-
         let table = self.table();
         if table.is_file(fd) {
             let f = table.get_file(fd)?;
@@ -342,69 +340,14 @@ impl<T: WasiView> wasi::filesystem::Host for T {
                 return Err(wasi::filesystem::ErrorCode::NotPermitted.into());
             }
             let meta = f.file.metadata()?;
-            Ok(wasi::filesystem::DescriptorStat {
-                device: meta.dev(),
-                inode: meta.ino(),
-                type_: descriptortype_from(meta.file_type()),
-                link_count: meta.nlink(),
-                size: meta.len(),
-                data_access_timestamp: meta
-                    .accessed()
-                    .map(|t| datetime_from(t.into_std()))
-                    .unwrap_or(wasi::wall_clock::Datetime {
-                        seconds: 0,
-                        nanoseconds: 0,
-                    }),
-                data_modification_timestamp: meta
-                    .modified()
-                    .map(|t| datetime_from(t.into_std()))
-                    .unwrap_or(wasi::wall_clock::Datetime {
-                        seconds: 0,
-                        nanoseconds: 0,
-                    }),
-                status_change_timestamp: meta
-                    .created()
-                    .map(|t| datetime_from(t.into_std()))
-                    .unwrap_or(wasi::wall_clock::Datetime {
-                        seconds: 0,
-                        nanoseconds: 0,
-                    }),
-            })
+            Ok(descriptorstat_from(meta))
         } else if table.is_dir(fd) {
             let d = table.get_dir(fd)?;
             if !d.perms.contains(DirPerms::READ) {
                 return Err(wasi::filesystem::ErrorCode::NotPermitted.into());
             }
-
             let meta = d.dir.dir_metadata()?;
-            Ok(wasi::filesystem::DescriptorStat {
-                device: meta.dev(),
-                inode: meta.ino(),
-                type_: descriptortype_from(meta.file_type()),
-                link_count: meta.nlink(),
-                size: meta.len(),
-                data_access_timestamp: meta
-                    .accessed()
-                    .map(|t| datetime_from(t.into_std()))
-                    .unwrap_or(wasi::wall_clock::Datetime {
-                        seconds: 0,
-                        nanoseconds: 0,
-                    }),
-                data_modification_timestamp: meta
-                    .modified()
-                    .map(|t| datetime_from(t.into_std()))
-                    .unwrap_or(wasi::wall_clock::Datetime {
-                        seconds: 0,
-                        nanoseconds: 0,
-                    }),
-                status_change_timestamp: meta
-                    .created()
-                    .map(|t| datetime_from(t.into_std()))
-                    .unwrap_or(wasi::wall_clock::Datetime {
-                        seconds: 0,
-                        nanoseconds: 0,
-                    }),
-            })
+            Ok(descriptorstat_from(meta))
         } else {
             Err(wasi::filesystem::ErrorCode::BadDescriptor.into())
         }
@@ -413,103 +356,74 @@ impl<T: WasiView> wasi::filesystem::Host for T {
     async fn stat_at(
         &mut self,
         fd: wasi::filesystem::Descriptor,
-        at_flags: wasi::filesystem::PathFlags,
+        path_flags: wasi::filesystem::PathFlags,
         path: String,
     ) -> Result<wasi::filesystem::DescriptorStat, wasi::filesystem::Error> {
-        use cap_fs_ext::MetadataExt;
-
         let table = self.table();
         let d = table.get_dir(fd)?;
         if !d.perms.contains(DirPerms::READ) {
             return Err(wasi::filesystem::ErrorCode::NotPermitted.into());
         }
 
-        let meta = if at_flags.contains(wasi::filesystem::PathFlags::SYMLINK_FOLLOW) {
-            d.dir.metadata(std::path::Path::new(&path))?
+        let meta = if symlink_follow(path_flags) {
+            d.dir.metadata(&path)?
         } else {
-            d.dir.symlink_metadata(std::path::Path::new(&path))?
+            d.dir.symlink_metadata(&path)?
         };
-        Ok(wasi::filesystem::DescriptorStat {
-            device: meta.dev(),
-            inode: meta.ino(),
-            type_: descriptortype_from(meta.file_type()),
-            link_count: meta.nlink(),
-            size: meta.len(),
-            data_access_timestamp: meta
-                .accessed()
-                .map(|t| datetime_from(t.into_std()))
-                .unwrap_or(wasi::wall_clock::Datetime {
-                    seconds: 0,
-                    nanoseconds: 0,
-                }),
-            data_modification_timestamp: meta
-                .modified()
-                .map(|t| datetime_from(t.into_std()))
-                .unwrap_or(wasi::wall_clock::Datetime {
-                    seconds: 0,
-                    nanoseconds: 0,
-                }),
-            status_change_timestamp: meta
-                .created()
-                .map(|t| datetime_from(t.into_std()))
-                .unwrap_or(wasi::wall_clock::Datetime {
-                    seconds: 0,
-                    nanoseconds: 0,
-                }),
-        })
+        Ok(descriptorstat_from(meta))
     }
 
     async fn set_times_at(
         &mut self,
         fd: wasi::filesystem::Descriptor,
-        at_flags: wasi::filesystem::PathFlags,
+        path_flags: wasi::filesystem::PathFlags,
         path: String,
         atim: wasi::filesystem::NewTimestamp,
         mtim: wasi::filesystem::NewTimestamp,
     ) -> Result<(), wasi::filesystem::Error> {
+        use cap_fs_ext::DirExt;
+
         let table = self.table();
-        todo!();
-        /*
-        Ok(table
-            .get_dir(fd)?
-            .set_times(
-                &path,
-                system_time_spec_from_timestamp(atim),
-                system_time_spec_from_timestamp(mtim),
-                at_flags.contains(wasi::filesystem::PathFlags::SYMLINK_FOLLOW),
-            )
-            .await?)
-        */
+        let d = table.get_dir(fd)?;
+        if !d.perms.contains(DirPerms::MUTATE) {
+            return Err(wasi::filesystem::ErrorCode::NotPermitted.into());
+        }
+        let atim = systemtimespec_from(atim)?;
+        let mtim = systemtimespec_from(mtim)?;
+        d.dir.set_times(
+            &path,
+            atim.map(cap_fs_ext::SystemTimeSpec::from_std),
+            mtim.map(cap_fs_ext::SystemTimeSpec::from_std),
+        )?;
+        Ok(())
     }
 
     async fn link_at(
         &mut self,
         fd: wasi::filesystem::Descriptor,
-        // TODO delete the at flags from this function
-        old_at_flags: wasi::filesystem::PathFlags,
+        // TODO delete the path flags from this function
+        _old_path_flags: wasi::filesystem::PathFlags,
         old_path: String,
         new_descriptor: wasi::filesystem::Descriptor,
         new_path: String,
     ) -> Result<(), wasi::filesystem::Error> {
         let table = self.table();
-        todo!();
-        /*
         let old_dir = table.get_dir(fd)?;
-        let new_dir = table.get_dir(new_descriptor)?;
-        if old_at_flags.contains(wasi::filesystem::PathFlags::SYMLINK_FOLLOW) {
-            return Err(wasi::filesystem::ErrorCode::Invalid.into());
+        if !old_dir.perms.contains(DirPerms::MUTATE) {
+            return Err(wasi::filesystem::ErrorCode::NotPermitted.into());
         }
-        old_dir
-            .hard_link(&old_path, new_dir.deref(), &new_path)
-            .await?;
+        let new_dir = table.get_dir(new_descriptor)?;
+        if !new_dir.perms.contains(DirPerms::MUTATE) {
+            return Err(wasi::filesystem::ErrorCode::NotPermitted.into());
+        }
+        old_dir.dir.hard_link(&old_path, &new_dir.dir, &new_path)?;
         Ok(())
-        */
     }
 
     async fn open_at(
         &mut self,
         fd: wasi::filesystem::Descriptor,
-        at_flags: wasi::filesystem::PathFlags,
+        path_flags: wasi::filesystem::PathFlags,
         old_path: String,
         oflags: wasi::filesystem::OpenFlags,
         flags: wasi::filesystem::DescriptorFlags,
@@ -521,7 +435,7 @@ impl<T: WasiView> wasi::filesystem::Host for T {
         /*
         let dir = table.get_dir(fd)?;
 
-        let symlink_follow = at_flags.contains(wasi::filesystem::PathFlags::SYMLINK_FOLLOW);
+        let symlink_follow = path_flags.contains(wasi::filesystem::PathFlags::SYMLINK_FOLLOW);
 
         if oflags.contains(wasi::filesystem::OpenFlags::DIRECTORY) {
             if oflags.contains(wasi::filesystem::OpenFlags::CREATE)
@@ -552,15 +466,9 @@ impl<T: WasiView> wasi::filesystem::Host for T {
 
     async fn drop_descriptor(&mut self, fd: wasi::filesystem::Descriptor) -> anyhow::Result<()> {
         let table = self.table_mut();
-        todo!();
-        /*
-        if !(table.delete::<Box<dyn WasiFile>>(fd).is_ok()
-            || table.delete::<Box<dyn WasiDir>>(fd).is_ok())
-        {
-            // this will trap:
-            anyhow::bail!("{fd} is neither a file nor a directory");
+        if table.delete_file(fd).is_err() {
+            table.delete_dir(fd)?;
         }
-        */
         Ok(())
     }
 
@@ -570,15 +478,15 @@ impl<T: WasiView> wasi::filesystem::Host for T {
         path: String,
     ) -> Result<String, wasi::filesystem::Error> {
         let table = self.table();
-        todo!();
-        /*
-        let dir = table.get_dir(fd)?;
-        let link = dir.read_link(&path).await?;
+        let d = table.get_dir(fd)?;
+        if !d.perms.contains(DirPerms::READ) {
+            return Err(wasi::filesystem::ErrorCode::NotPermitted.into());
+        }
+        let link = d.dir.read_link(&path)?;
         Ok(link
             .into_os_string()
             .into_string()
             .map_err(|_| wasi::filesystem::ErrorCode::IllegalByteSequence)?)
-        */
     }
 
     async fn remove_directory_at(
@@ -587,10 +495,11 @@ impl<T: WasiView> wasi::filesystem::Host for T {
         path: String,
     ) -> Result<(), wasi::filesystem::Error> {
         let table = self.table();
-        todo!();
-        /*
-        Ok(table.get_dir(fd)?.remove_dir(&path).await?)
-        */
+        let d = table.get_dir(fd)?;
+        if !d.perms.contains(DirPerms::MUTATE) {
+            return Err(wasi::filesystem::ErrorCode::NotPermitted.into());
+        }
+        Ok(d.dir.remove_dir(&path)?)
     }
 
     async fn rename_at(
@@ -601,28 +510,31 @@ impl<T: WasiView> wasi::filesystem::Host for T {
         new_path: String,
     ) -> Result<(), wasi::filesystem::Error> {
         let table = self.table();
-        todo!();
-        /*
         let old_dir = table.get_dir(fd)?;
+        if !old_dir.perms.contains(DirPerms::MUTATE) {
+            return Err(wasi::filesystem::ErrorCode::NotPermitted.into());
+        }
         let new_dir = table.get_dir(new_fd)?;
-        old_dir
-            .rename(&old_path, new_dir.deref(), &new_path)
-            .await?;
+        if !new_dir.perms.contains(DirPerms::MUTATE) {
+            return Err(wasi::filesystem::ErrorCode::NotPermitted.into());
+        }
+        old_dir.dir.rename(&old_path, &new_dir.dir, &new_path)?;
         Ok(())
-        */
     }
 
     async fn symlink_at(
         &mut self,
         fd: wasi::filesystem::Descriptor,
-        old_path: String,
-        new_path: String,
+        src_path: String,
+        dest_path: String,
     ) -> Result<(), wasi::filesystem::Error> {
         let table = self.table();
-        todo!();
-        /*
-        Ok(table.get_dir(fd)?.symlink(&old_path, &new_path).await?)
-        */
+        let d = table.get_dir(fd)?;
+        if !d.perms.contains(DirPerms::MUTATE) {
+            return Err(wasi::filesystem::ErrorCode::NotPermitted.into());
+        }
+        d.dir.symlink(&src_path, &dest_path)?;
+        Ok(())
     }
 
     async fn unlink_file_at(
@@ -630,17 +542,21 @@ impl<T: WasiView> wasi::filesystem::Host for T {
         fd: wasi::filesystem::Descriptor,
         path: String,
     ) -> Result<(), wasi::filesystem::Error> {
+        use cap_fs_ext::DirExt;
+
         let table = self.table();
-        todo!();
-        /*
-        Ok(table.get_dir(fd)?.unlink_file(&path).await?)
-        */
+        let d = table.get_dir(fd)?;
+        if !d.perms.contains(DirPerms::MUTATE) {
+            return Err(wasi::filesystem::ErrorCode::NotPermitted.into());
+        }
+        d.dir.remove_file_or_symlink(&path)?;
+        Ok(())
     }
 
     async fn change_file_permissions_at(
         &mut self,
         fd: wasi::filesystem::Descriptor,
-        at_flags: wasi::filesystem::PathFlags,
+        path_flags: wasi::filesystem::PathFlags,
         path: String,
         mode: wasi::filesystem::Modes,
     ) -> Result<(), wasi::filesystem::Error> {
@@ -650,7 +566,7 @@ impl<T: WasiView> wasi::filesystem::Host for T {
     async fn change_directory_permissions_at(
         &mut self,
         fd: wasi::filesystem::Descriptor,
-        at_flags: wasi::filesystem::PathFlags,
+        path_flags: wasi::filesystem::PathFlags,
         path: String,
         mode: wasi::filesystem::Modes,
     ) -> Result<(), wasi::filesystem::Error> {
@@ -960,4 +876,40 @@ fn systemtime_from(
 
 fn datetime_from(t: std::time::SystemTime) -> wasi::filesystem::Datetime {
     todo!()
+}
+
+fn descriptorstat_from(meta: cap_std::fs::Metadata) -> wasi::filesystem::DescriptorStat {
+    use cap_fs_ext::MetadataExt;
+    wasi::filesystem::DescriptorStat {
+        device: meta.dev(),
+        inode: meta.ino(),
+        type_: descriptortype_from(meta.file_type()),
+        link_count: meta.nlink(),
+        size: meta.len(),
+        data_access_timestamp: meta
+            .accessed()
+            .map(|t| datetime_from(t.into_std()))
+            .unwrap_or(wasi::wall_clock::Datetime {
+                seconds: 0,
+                nanoseconds: 0,
+            }),
+        data_modification_timestamp: meta
+            .modified()
+            .map(|t| datetime_from(t.into_std()))
+            .unwrap_or(wasi::wall_clock::Datetime {
+                seconds: 0,
+                nanoseconds: 0,
+            }),
+        status_change_timestamp: meta
+            .created()
+            .map(|t| datetime_from(t.into_std()))
+            .unwrap_or(wasi::wall_clock::Datetime {
+                seconds: 0,
+                nanoseconds: 0,
+            }),
+    }
+}
+
+fn symlink_follow(path_flags: wasi::filesystem::PathFlags) -> bool {
+    path_flags.contains(wasi::filesystem::PathFlags::SYMLINK_FOLLOW)
 }

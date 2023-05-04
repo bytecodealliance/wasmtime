@@ -28,6 +28,7 @@ impl Dir {
 
 pub(crate) trait TableDirExt {
     fn push_dir(&mut self, dir: Dir) -> Result<u32, TableError>;
+    fn delete_dir(&mut self, fd: u32) -> Result<(), TableError>;
     fn is_dir(&self, fd: u32) -> bool;
     fn get_dir(&self, fd: u32) -> Result<&Dir, TableError>;
 }
@@ -35,6 +36,9 @@ pub(crate) trait TableDirExt {
 impl TableDirExt for Table {
     fn push_dir(&mut self, dir: Dir) -> Result<u32, TableError> {
         self.push(Box::new(dir))
+    }
+    fn delete_dir(&mut self, fd: u32) -> Result<(), TableError> {
+        self.delete::<Box<Dir>>(fd)
     }
     fn is_dir(&self, fd: u32) -> bool {
         self.is::<Box<Dir>>(fd)
