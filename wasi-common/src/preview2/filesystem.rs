@@ -289,16 +289,30 @@ impl<T: WasiView> wasi::filesystem::Host for T {
         fd: wasi::filesystem::Descriptor,
     ) -> Result<(), wasi::filesystem::Error> {
         let table = self.table();
-        todo!();
-        /*
-        if table.is::<Box<dyn WasiFile>>(fd) {
-            Ok(table.get_file(fd)?.sync().await?)
-        } else if table.is::<Box<dyn WasiDir>>(fd) {
-            Ok(table.get_dir(fd)?.sync().await?)
+        if table.is_file(fd) {
+            match table.get_file(fd)?.file.sync_all() {
+                Ok(()) => Ok(()),
+                // On windows, `sync_data` uses `FileFlushBuffers` which fails with
+                // `ERROR_ACCESS_DENIED` if the file is not upen for writing. Ignore
+                // this error, for POSIX compatibility.
+                #[cfg(windows)]
+                Err(e)
+                    if e.raw_os_error()
+                        == Some(windows_sys::Win32::Foundation::ERROR_ACCESS_DENIED as _) =>
+                {
+                    Ok(())
+                }
+                Err(e) => Err(e.into()),
+            }
+        } else if table.is_dir(fd) {
+            Ok(table
+                .get_dir(fd)?
+                .dir
+                .open(std::path::Component::CurDir)?
+                .sync_all()?)
         } else {
             Err(wasi::filesystem::ErrorCode::BadDescriptor.into())
         }
-        */
     }
 
     async fn create_directory_at(
