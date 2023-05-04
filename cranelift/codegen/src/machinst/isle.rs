@@ -12,8 +12,8 @@ pub use crate::ir::{
 };
 pub use crate::isa::{unwind::UnwindInst, TargetIsa};
 pub use crate::machinst::{
-    ABIArg, ABIArgSlot, InputSourceInst, Lower, LowerBackend, RealReg, Reg, RelocDistance, Sig,
-    VCodeInst, Writable,
+    ABIArg, ABIArgSlot, ABIMachineSpec, CallSite, InputSourceInst, Lower, LowerBackend, RealReg,
+    Reg, RelocDistance, Sig, VCodeInst, Writable,
 };
 pub use crate::settings::TlsModel;
 
@@ -773,7 +773,7 @@ macro_rules! isle_prelude_caller_methods {
                 sig.params.len()
             );
 
-            self.gen_call_common(num_rets, caller, args)
+            crate::machinst::isle::gen_call_common(&mut self.lower_ctx, num_rets, caller, args)
         }
 
         fn gen_call_indirect(
@@ -800,71 +800,62 @@ macro_rules! isle_prelude_caller_methods {
                 sig.params.len()
             );
 
-            self.gen_call_common(num_rets, caller, args)
+            crate::machinst::isle::gen_call_common(&mut self.lower_ctx, num_rets, caller, args)
         }
     };
 }
 
-/// Helpers for the above ISLE prelude implementations. Meant to go
-/// inside the `impl` for the context type, not the trait impl.
-#[macro_export]
-#[doc(hidden)]
-macro_rules! isle_prelude_method_helpers {
-    ($abicaller:ty) => {
-        fn gen_call_common_args(&mut self, call_site: &mut $abicaller, (inputs, off): ValueSlice) {
-            let num_args = call_site.num_args(self.lower_ctx.sigs());
+fn gen_call_common_args<M: ABIMachineSpec>(
+    ctx: &mut Lower<'_, M::I>,
+    call_site: &mut CallSite<M>,
+    (inputs, off): ValueSlice,
+) {
+    let num_args = call_site.num_args(ctx.sigs());
 
-            assert_eq!(
-                inputs.len(&self.lower_ctx.dfg().value_lists) - off,
-                num_args
-            );
-            let mut arg_regs = vec![];
-            for i in 0..num_args {
-                let input = inputs
-                    .get(off + i, &self.lower_ctx.dfg().value_lists)
-                    .unwrap();
-                arg_regs.push(self.put_in_regs(input));
-            }
-            for (i, arg_regs) in arg_regs.iter().enumerate() {
-                call_site.emit_copy_regs_to_buffer(self.lower_ctx, i, *arg_regs);
-            }
-            for (i, arg_regs) in arg_regs.iter().enumerate() {
-                call_site.gen_arg(self.lower_ctx, i, *arg_regs);
-            }
-        }
+    assert_eq!(inputs.len(&ctx.dfg().value_lists) - off, num_args);
+    let mut arg_regs = vec![];
+    for i in 0..num_args {
+        let input = inputs.get(off + i, &ctx.dfg().value_lists).unwrap();
+        arg_regs.push(ctx.put_value_in_regs(input));
+    }
+    for (i, arg_regs) in arg_regs.iter().enumerate() {
+        call_site.emit_copy_regs_to_buffer(ctx, i, *arg_regs);
+    }
+    for (i, arg_regs) in arg_regs.iter().enumerate() {
+        call_site.gen_arg(ctx, i, *arg_regs);
+    }
+}
 
-        fn gen_call_common(
-            &mut self,
-            num_rets: usize,
-            mut caller: $abicaller,
-            args: ValueSlice,
-        ) -> InstOutput {
-            self.gen_call_common_args(&mut caller, args);
+pub fn gen_call_common<M: ABIMachineSpec>(
+    ctx: &mut Lower<'_, M::I>,
+    num_rets: usize,
+    mut caller: CallSite<M>,
+    args: ValueSlice,
+) -> InstOutput {
+    gen_call_common_args(ctx, &mut caller, args);
 
-            // Handle retvals prior to emitting call, so the
-            // constraints are on the call instruction; but buffer the
-            // instructions till after the call.
-            let mut outputs = InstOutput::new();
-            let mut retval_insts = crate::machinst::abi::SmallInstVec::new();
-            // We take the *last* `num_rets` returns of the sig:
-            // this skips a StructReturn, if any, that is present.
-            let sigdata_num_rets = caller.num_rets(self.lower_ctx.sigs());
-            debug_assert!(num_rets <= sigdata_num_rets);
-            for i in (sigdata_num_rets - num_rets)..sigdata_num_rets {
-                let (retval_inst, retval_regs) = caller.gen_retval(self.lower_ctx, i);
-                retval_insts.extend(retval_inst.into_iter());
-                outputs.push(retval_regs);
-            }
+    // Handle retvals prior to emitting call, so the
+    // constraints are on the call instruction; but buffer the
+    // instructions till after the call.
+    let mut outputs = InstOutput::new();
+    let mut retval_insts = crate::machinst::abi::SmallInstVec::new();
+    // We take the *last* `num_rets` returns of the sig:
+    // this skips a StructReturn, if any, that is present.
+    let sigdata_num_rets = caller.num_rets(ctx.sigs());
+    debug_assert!(num_rets <= sigdata_num_rets);
+    for i in (sigdata_num_rets - num_rets)..sigdata_num_rets {
+        let (retval_inst, retval_regs) = caller.gen_retval(ctx, i);
+        retval_insts.extend(retval_inst.into_iter());
+        outputs.push(retval_regs);
+    }
 
-            caller.emit_call(self.lower_ctx);
+    caller.emit_call(ctx);
 
-            for inst in retval_insts {
-                self.lower_ctx.emit(inst);
-            }
+    for inst in retval_insts {
+        ctx.emit(inst);
+    }
 
-            outputs
-        }
-    };
+    outputs
 }
 
 /// This structure is used to implement the ISLE-generated `Context` trait and

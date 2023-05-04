@@ -3,7 +3,7 @@
 // Pull in the ISLE generated code.
 #[allow(unused)]
 pub mod generated_code;
-use generated_code::{Context, MInst};
+use generated_code::MInst;
 
 // Types that the generated ISLE code uses via `use super::*`.
 use self::generated_code::{VecAluOpRR, VecLmul};
@@ -48,8 +48,6 @@ where
 }
 
 impl<'a, 'b> RV64IsleContext<'a, 'b, MInst, Riscv64Backend> {
-    isle_prelude_method_helpers!(Riscv64ABICallSite);
-
     fn new(lower_ctx: &'a mut Lower<'b, MInst>, backend: &'a Riscv64Backend) -> Self {
         Self {
             lower_ctx,
