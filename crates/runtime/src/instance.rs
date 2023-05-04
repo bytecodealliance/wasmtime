@@ -97,7 +97,7 @@ pub struct Instance {
     /// A pointer to the `vmctx` field at the end of the `Instance`.
     ///
     /// If you're looking at this a reasonable question would be "why do we need
-    /// a pointer to ourselves?" because after all the pointer's valid is
+    /// a pointer to ourselves?" because after all the pointer's value is
     /// trivially derivable from any `&Instance` pointer. The rationale for this
     /// field's existence is subtle, but it's required for correctness. The
     /// short version is "this makes miri happy".
