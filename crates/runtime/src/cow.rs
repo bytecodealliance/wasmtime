@@ -435,6 +435,9 @@ impl MemoryImageSlot {
     #[cfg(feature = "pooling-allocator")]
     pub(crate) fn dummy() -> MemoryImageSlot {
         MemoryImageSlot {
+            // This pointer isn't ever actually used so its value doesn't
+            // matter, but we need to satisfy `NonNull` so pass a "1" value to
+            // handle that. Otherwise this shouldn't be used anywhere else.
             base: NonNull::new(sptr::invalid_mut(1)).unwrap().into(),
             static_size: 0,
             image: None,
