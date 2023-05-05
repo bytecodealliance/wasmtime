@@ -88,14 +88,7 @@ impl AMode {
     }
 
     pub(crate) fn to_string_with_alloc(&self, allocs: &mut AllocationConsumer<'_>) -> String {
-        let reg = self.get_base_register().map(|r| allocs.next(r));
-        match (self, reg) {
-            (&AMode::NominalSPOffset(..), _) => format!("{}", self),
-            (&AMode::Const(addr), _) => format!("[const({})]", addr.as_u32()),
-            (&AMode::Label(label), _) => format!("[label{}]", label.as_u32()),
-            (_, Some(reg)) => format!("{}({})", self.get_offset(), reg_name(reg)),
-            (_, None) => unreachable!(),
-        }
+        format!("{}", self.clone().with_allocs(allocs))
     }
 }
 
@@ -103,7 +96,7 @@ impl Display for AMode {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
             &AMode::RegOffset(r, offset, ..) => {
-                write!(f, "{}({:?})", offset, r)
+                write!(f, "{}({})", offset, reg_name(r))
             }
             &AMode::SPOffset(offset, ..) => {
                 write!(f, "{}(sp)", offset)
