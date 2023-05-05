@@ -21,6 +21,10 @@ impl arbitrary::Arbitrary<'_> for ControlPlane {
 }
 
 impl ControlPlane {
+    pub fn new(_data: Vec<u8>) -> Self {
+        Self::default()
+    }
+
     /// Set the [fuel limit](crate#fuel-limit). This variant is used when
     /// chaos mode is disabled. It doesn't do anything.
     pub fn set_fuel(&mut self, _fuel: u8) {}
@@ -50,12 +54,5 @@ impl ControlPlane {
 impl Display for ControlPlane {
     fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         Ok(())
-    }
-}
-
-impl TryFrom<&str> for ControlPlane {
-    type Error = ();
-    fn try_from(_value: &str) -> Result<Self, Self::Error> {
-        Ok(Self::default())
     }
 }

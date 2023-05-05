@@ -1182,11 +1182,23 @@ impl<'a> Parser<'a> {
         {
             return Ok(ControlPlane::default());
         };
-        ControlPlane::try_from(self.lex.rest_of_line()).map_err(|_| ParseError {
-            location: self.loc,
-            message: "failed to parse control plane".into(),
-            is_warning: false,
-        })
+        self.lex
+            .rest_of_line()
+            .trim_start_matches(" data=")
+            .as_bytes()
+            .chunks(2)
+            .map(|two_bytes| {
+                String::from_utf8(two_bytes.to_vec())
+                    .map_err(|e| e.to_string())
+                    .and_then(|s| u8::from_str_radix(&s, 16).map_err(|e| e.to_string()))
+            })
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|_| ParseError {
+                location: self.loc,
+                message: "failed to parse control plane".into(),
+                is_warning: false,
+            })
+            .map(ControlPlane::new)
     }
 
     // Parse a whole function definition.

@@ -21,7 +21,7 @@ impl Arbitrary<'_> for ControlPlane {
 }
 
 impl ControlPlane {
-    fn new(data: Vec<u8>) -> Self {
+    pub fn new(data: Vec<u8>) -> Self {
         Self {
             data,
             fuel: None,
@@ -112,22 +112,5 @@ impl Display for ControlPlane {
             write!(f, "{b:02x}")?;
         }
         Ok(())
-    }
-}
-
-impl TryFrom<&str> for ControlPlane {
-    type Error = String;
-    fn try_from(value: &str) -> Result<Self, Self::Error> {
-        let value = value.trim_start_matches(" data=");
-        let data = value
-            .as_bytes()
-            .chunks(2)
-            .map(|two_bytes| {
-                String::from_utf8(two_bytes.to_vec())
-                    .map_err(|e| e.to_string())
-                    .and_then(|s| u8::from_str_radix(&s, 16).map_err(|e| e.to_string()))
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        Ok(Self::new(data))
     }
 }
