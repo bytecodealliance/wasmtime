@@ -688,13 +688,7 @@ impl MachInstEmit for Inst {
                     sink.add_trap(TrapCode::HeapOutOfBounds);
                 }
 
-                sink.put4(encode_i_type(
-                    op.op_code(),
-                    rd.to_reg(),
-                    op.funct3(),
-                    addr,
-                    imm12,
-                ));
+                sink.put4(encode_i_type(op.op_code(), rd, op.funct3(), addr, imm12));
             }
             &Inst::Store { op, src, flags, to } => {
                 let to = to.clone().with_allocs(&mut allocs);

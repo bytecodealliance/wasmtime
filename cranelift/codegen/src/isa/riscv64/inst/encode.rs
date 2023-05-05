@@ -57,10 +57,10 @@ pub fn encode_r_type(
 /// Layout:
 /// 0-------6-7-------11-12------14-15------19-20------------------31
 /// | Opcode |   rd     |  width   |   rs1    |     Offset[11:0]    |
-pub fn encode_i_type(opcode: u32, rd: Reg, width: u32, rs1: Reg, offset: Imm12) -> u32 {
+pub fn encode_i_type(opcode: u32, rd: WritableReg, width: u32, rs1: Reg, offset: Imm12) -> u32 {
     let mut bits = 0;
     bits |= unsigned_field_width(opcode, 7);
-    bits |= reg_to_gpr_num(rd) << 7;
+    bits |= reg_to_gpr_num(rd.to_reg()) << 7;
     bits |= unsigned_field_width(width, 3) << 12;
     bits |= reg_to_gpr_num(rs1) << 15;
     bits |= unsigned_field_width(offset.as_u32(), 12) << 20;
