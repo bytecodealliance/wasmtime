@@ -1667,9 +1667,6 @@ pub enum LabelUse {
 
     /// Equivalent to the `R_RISCV_PCREL_HI20` relocation, Allows setting
     /// the immediate field of an `auipc` instruction.
-    ///
-    /// Since we currently don't support offsets in labels, this relocation has
-    /// an implicit offset of 4.
     PCRelHi20,
 
     /// Equivalent to the `R_RISCV_PCREL_LO12_I` relocation, Allows setting
@@ -1827,15 +1824,22 @@ impl LabelUse {
             }
 
             LabelUse::PCRelHi20 => {
-                let offset = offset as u32 + 4;
-                let hi20 = offset & 0xFFFFF000;
-                let insn = (insn & 0xFFF) | hi20;
+                // See https://github.com/riscv-non-isa/riscv-elf-psabi-doc/blob/master/riscv-elf.adoc#pc-relative-symbol-addresses
+                //
+                // We need to add 0x800 to ensure that we land at the next page as soon as it goes out of range for the
+                // Lo12 relocation. That relocation is signed and has a maximum range of -2048..2047. So when we get an
+                // offset of 2048, we need to land at the next page and subtract instead.
+                let offset = offset as u32;
+                let hi20 = offset.wrapping_add(0x800) >> 12;
+                let insn = (insn & 0xFFF) | (hi20 << 12);
                 buffer[0..4].clone_from_slice(&u32::to_le_bytes(insn));
             }
 
             LabelUse::PCRelLo12I => {
-                let offset = (offset as u32 + 4) & 0xFFF;
-                let insn = (insn & 0xFFFFF) | (offset << 20);
+                // We add 4 here since this relocation usually follows a PCRelHi20 relocation, at the previous
+                // instruction. So we need to account for the 4 byte difference in offsets there.
+                let lo12 = (offset + 4) as u32 & 0xFFF;
+                let insn = (insn & 0xFFFFF) | (lo12 << 20);
                 buffer[0..4].clone_from_slice(&u32::to_le_bytes(insn));
             }
         }
