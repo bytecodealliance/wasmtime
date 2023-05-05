@@ -216,7 +216,8 @@ fn get_table_init_start(init: &TableInitializer, instance: &mut Instance) -> Res
 fn check_table_init_bounds(instance: &mut Instance, module: &Module) -> Result<()> {
     match &module.table_initialization {
         TableInitialization::FuncTable { segments, .. }
-        | TableInitialization::Segments { segments } => {
+        | TableInitialization::Segments { segments }
+        | TableInitialization::EagerFuncTable { segments, .. } => {
             for segment in segments {
                 let table = unsafe { &*instance.get_table(segment.table_index) };
                 let start = get_table_init_start(segment, instance)?;
@@ -239,6 +240,26 @@ fn check_table_init_bounds(instance: &mut Instance, module: &Module) -> Result<(
 }
 
 fn initialize_tables(instance: &mut Instance, module: &Module) -> Result<()> {
+    let segments = match &module.table_initialization {
+        TableInitialization::Segments { segments } |
+        TableInitialization::FuncTable { segments, .. } => segments,
+        TableInitialization::EagerFuncTable { tables, segments } => {
+            for wasmtime_environ::EagerTableInitializer { table_index, initializer } in tables {
+                match initializer {
+                    wasmtime_environ::EagerTableElementInitializer::Null => {
+                        let table = unsafe { &mut *instance.get_table(*table_index) };
+                        table.init_null()?;
+                    }
+                    wasmtime_environ::EagerTableElementInitializer::FuncRef(func_index) => {
+                        let table = unsafe { &mut *instance.get_table(*table_index) };
+                        let funcref = unsafe { &mut *instance.get_func_ref(*func_index).unwrap() };
+                        table.init_func(funcref)?;
+                    }
+                }
+            }
+            segments
+        }
+    };
     // Note: if the module's table initializer state is in
     // FuncTable mode, we will lazily initialize tables based on
     // any statically-precomputed image of FuncIndexes, but there
@@ -246,20 +267,15 @@ fn initialize_tables(instance: &mut Instance, module: &Module) -> Result<()> {
     // incorporated. So we have a unified handler here that
     // iterates over all segments (Segments mode) or leftover
     // segments (FuncTable mode) to initialize.
-    match &module.table_initialization {
-        TableInitialization::FuncTable { segments, .. }
-        | TableInitialization::Segments { segments } => {
-            for segment in segments {
-                let start = get_table_init_start(segment, instance)?;
-                instance.table_init_segment(
-                    segment.table_index,
-                    &segment.elements,
-                    start,
-                    0,
-                    segment.elements.len() as u32,
-                )?;
-            }
-        }
+    for segment in segments {
+        let start = get_table_init_start(segment, instance)?;
+        instance.table_init_segment(
+            segment.table_index,
+            &segment.elements,
+            start,
+            0,
+            segment.elements.len() as u32,
+        )?;
     }
 
     Ok(())

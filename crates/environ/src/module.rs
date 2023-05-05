@@ -407,6 +407,9 @@ impl ModuleTranslation<'_> {
                 // Already done!
                 return;
             }
+            TableInitialization::EagerFuncTable { .. } => {
+                return;
+            }
         };
 
         // Build the table arrays per-table.
@@ -699,6 +702,23 @@ pub struct TableInitializer {
     pub elements: Box<[FuncIndex]>,
 }
 
+/// TODO
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct EagerTableInitializer {
+    /// TODO
+    pub table_index: TableIndex,
+    /// TODO
+    pub initializer: EagerTableElementInitializer,
+}
+/// TODO
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum EagerTableElementInitializer {
+    /// TODO
+    Null,
+    /// TODO
+    FuncRef(FuncIndex),
+}
+
 /// Table initialization data for all tables in the module.
 #[derive(Debug, Serialize, Deserialize)]
 pub enum TableInitialization {
@@ -741,6 +761,14 @@ pub enum TableInitialization {
         /// determined bases.
         segments: Vec<TableInitializer>,
     },
+
+    /// TODO
+    EagerFuncTable {
+        /// TODO
+        tables: Vec<EagerTableInitializer>,
+        /// TODO
+        segments: Vec<TableInitializer>,
+    }
 }
 
 impl Default for TableInitialization {
