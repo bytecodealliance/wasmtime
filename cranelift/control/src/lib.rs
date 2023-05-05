@@ -16,6 +16,21 @@
 //! - [default] for an "empty" control plane which always returns default
 //!   values
 //!
+//! ## Fuel Limit
+//!
+//! Controls the number of mutations or optimizations that the compiler will
+//! perform before stopping.
+//!
+//! When a perturbation introduced by chaos mode triggers a bug, it may not be
+//! immediately clear which of the introduced perturbations was the trigger. The
+//! fuel limit can then be used to binary-search for the trigger. It limits the
+//! number of perturbations introduced by the control plane. The fuel limit will
+//! typically be set with a command line argument passed to a fuzz target. For
+//! example:
+//! ```sh
+//! cargo fuzz run --features chaos $TARGET -- --fuel=16
+//! ```
+//!
 //! [arbitrary]: ControlPlane#method.arbitrary
 //! [default]: ControlPlane#method.default
 
