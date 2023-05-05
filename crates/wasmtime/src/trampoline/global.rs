@@ -1,7 +1,6 @@
 use crate::store::StoreOpaque;
 use crate::{GlobalType, Mutability, Val};
 use std::ptr;
-use wasmtime_environ::GlobalInit;
 use wasmtime_runtime::{StoreBox, VMGlobalDefinition};
 
 #[repr(C)]
@@ -39,9 +38,6 @@ pub fn generate_global_export(
             Mutability::Const => false,
             Mutability::Var => true,
         },
-        // TODO: This is just a dummy value; nothing should actually read
-        // this. We should probably remove this field from the struct.
-        initializer: GlobalInit::I32Const(0),
     };
     let ctx = StoreBox::new(VMHostGlobalContext {
         ty,

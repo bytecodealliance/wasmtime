@@ -149,8 +149,12 @@ impl<'data> ModuleEnvironment<'data> for ModuleEnv {
         self.inner.declare_memory(memory)
     }
 
-    fn declare_global(&mut self, global: cranelift_wasm::Global) -> cranelift_wasm::WasmResult<()> {
-        self.inner.declare_global(global)
+    fn declare_global(
+        &mut self,
+        global: cranelift_wasm::Global,
+        init: cranelift_wasm::GlobalInit,
+    ) -> cranelift_wasm::WasmResult<()> {
+        self.inner.declare_global(global, init)
     }
 
     fn declare_func_export(

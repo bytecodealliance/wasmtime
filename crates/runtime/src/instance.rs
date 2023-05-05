@@ -1015,7 +1015,7 @@ impl Instance {
             // Initialize the global before writing to it
             ptr::write(to, VMGlobalDefinition::new());
 
-            match global.initializer {
+            match module.global_initializers[def_index] {
                 GlobalInit::I32Const(x) => *(*to).as_i32_mut() = x,
                 GlobalInit::I64Const(x) => *(*to).as_i64_mut() = x,
                 GlobalInit::F32Const(x) => *(*to).as_f32_bits_mut() = x,
@@ -1046,7 +1046,6 @@ impl Instance {
                     WasmType::ExternRef => {}
                     ty => panic!("unsupported reference type for global: {:?}", ty),
                 },
-                GlobalInit::Import => panic!("locally-defined global initialized as import"),
             }
         }
     }

@@ -1,7 +1,5 @@
 use crate::component::{MAX_FLAT_PARAMS, MAX_FLAT_RESULTS};
-use crate::{
-    EntityType, Global, GlobalInit, ModuleTypes, ModuleTypesBuilder, PrimaryMap, SignatureIndex,
-};
+use crate::{EntityType, Global, ModuleTypes, ModuleTypesBuilder, PrimaryMap, SignatureIndex};
 use anyhow::{bail, Result};
 use cranelift_entity::EntityRef;
 use indexmap::IndexMap;
@@ -534,9 +532,7 @@ impl ComponentTypesBuilder {
             }
             wasmparser::TypeRef::Table(ty) => EntityType::Table(ty.clone().try_into()?),
             wasmparser::TypeRef::Memory(ty) => EntityType::Memory(ty.clone().into()),
-            wasmparser::TypeRef::Global(ty) => {
-                EntityType::Global(Global::new(ty.clone(), GlobalInit::Import)?)
-            }
+            wasmparser::TypeRef::Global(ty) => EntityType::Global(Global::new(ty.clone())?),
             wasmparser::TypeRef::Tag(_) => bail!("exceptions proposal not implemented"),
         })
     }
