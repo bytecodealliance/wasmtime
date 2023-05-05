@@ -2380,10 +2380,8 @@ impl<M: ABIMachineSpec> CallSite<M> {
             self.gen_arg(ctx, i.into(), ValueRegs::one(rd.to_reg()));
         }
 
-        let (uses, defs) = (
-            mem::replace(&mut self.uses, Default::default()),
-            mem::replace(&mut self.defs, Default::default()),
-        );
+        let uses = mem::take(&mut self.uses);
+        let defs = mem::take(&mut self.defs);
 
         let sig = &ctx.sigs()[self.sig];
         let callee_pop_size = if sig.call_conv() == isa::CallConv::Tail {
