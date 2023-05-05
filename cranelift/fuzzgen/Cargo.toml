@@ -13,7 +13,6 @@ publish = false
 [dependencies]
 cranelift = { workspace = true }
 cranelift-native = { workspace = true }
-cranelift-control = { workspace = true }
 
 anyhow = { workspace = true }
 arbitrary = "1.0.0"

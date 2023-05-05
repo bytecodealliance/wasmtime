@@ -161,7 +161,7 @@ where
 
     /// Generate a random set of cranelift flags.
     /// Only semantics preserving flags are considered
-    pub fn generate_flags(&mut self, target_arch: Architecture) -> Result<settings::Builder> {
+    pub fn generate_flags(&mut self, target_arch: Architecture) -> Result<Flags> {
         let mut builder = settings::builder();
 
         let opt = self.u.choose(OptLevel::all())?;
@@ -236,7 +236,7 @@ where
         // into compilation anywhere, we leave it on unconditionally to make sure the generation doesn't panic.
         builder.enable("machine_code_cfg_info")?;
 
-        Ok(builder)
+        Ok(Flags::new(builder))
     }
 
     /// Generate a random set of ISA flags and apply them to a Builder.

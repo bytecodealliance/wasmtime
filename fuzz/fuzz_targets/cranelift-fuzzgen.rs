@@ -4,10 +4,6 @@ use cranelift_codegen::ir::Function;
 use cranelift_codegen::ir::Signature;
 use cranelift_codegen::ir::UserExternalName;
 use cranelift_codegen::ir::UserFuncName;
-use cranelift_codegen::isa::OwnedTargetIsa;
-use cranelift_codegen::isa::TargetIsa;
-use cranelift_codegen::settings;
-use cranelift_codegen::CodegenError;
 use cranelift_codegen::Context;
 use cranelift_control::ControlPlane;
 use libfuzzer_sys::arbitrary;
@@ -17,14 +13,12 @@ use libfuzzer_sys::fuzz_target;
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::fmt;
-use std::rc::Rc;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::{LibCall, TrapCode};
 use cranelift_codegen::isa;
-use cranelift_codegen::settings::Configurable;
 use cranelift_filetests::function_runner::{TestFileCompiler, Trampoline};
 use cranelift_fuzzgen::*;
 use cranelift_interpreter::environment::FuncIndex;
@@ -149,9 +143,7 @@ impl PartialEq for RunResult {
 
 pub struct TestCase {
     /// TargetIsa to use when compiling this test case
-    pub isa_builder: Rc<isa::IsaBuilder<Result<OwnedTargetIsa, CodegenError>>>,
-    /// Builder with some flags pregenerated for the target isa.
-    pub flags_builder: settings::Builder,
+    pub isa: isa::OwnedTargetIsa,
     /// Functions under test
     /// By convention the first function is the main function.
     pub functions: Vec<Function>,
@@ -170,13 +162,7 @@ impl fmt::Debug for TestCase {
         if !self.compare_against_host {
             writeln!(f, ";; Testing against optimized version")?;
         }
-        PrintableTestCase::run(
-            &self.build_isa(None).unwrap(),
-            &self.functions,
-            &self.ctrl_planes,
-            &self.inputs,
-        )
-        .fmt(f)
+        PrintableTestCase::run(&self.isa, &self.functions, &self.inputs).fmt(f)
     }
 }
 
@@ -197,10 +183,11 @@ impl TestCase {
 
         // TestCase is meant to be consumed by a runner, so we make the assumption here that we're
         // generating a TargetIsa for the host.
-        let mut isa_builder =
+        let mut builder =
             builder_with_options(true).expect("Unable to build a TargetIsa for the current host");
-        let flags_builder = gen.generate_flags(isa_builder.triple().architecture)?;
-        gen.set_isa_flags(&mut isa_builder, IsaFlagGen::Host)?;
+        let flags = gen.generate_flags(builder.triple().architecture)?;
+        gen.set_isa_flags(&mut builder, IsaFlagGen::Host)?;
+        let isa = builder.finish(flags)?;
 
         // When generating functions, we allow each function to call any function that has
         // already been generated. This guarantees that we never have loops in the call graph.
@@ -225,7 +212,7 @@ impl TestCase {
 
             let func = gen.generate_func(
                 fname,
-                isa_builder.triple().clone(),
+                isa.triple().clone(),
                 usercalls,
                 ALLOWED_LIBCALLS.to_vec(),
             )?;
@@ -240,8 +227,7 @@ impl TestCase {
         let inputs = gen.generate_test_inputs(&main.signature)?;
 
         Ok(TestCase {
-            isa_builder: Rc::new(isa_builder),
-            flags_builder,
+            isa,
             functions,
             ctrl_planes,
             inputs,
@@ -249,31 +235,19 @@ impl TestCase {
         })
     }
 
-    fn build_isa(&self, fuel: Option<u8>) -> anyhow::Result<OwnedTargetIsa> {
-        use anyhow::Context;
-        let mut flags_builder = self.flags_builder.clone();
-        flags_builder
-            .set("control_plane_fuel", &fuel.unwrap_or_default().to_string())
-            .context("failed to set control_plane_fuel flag")?;
-        self.isa_builder
-            .finish(settings::Flags::new(flags_builder))
-            .context("failed to build isa")
-    }
-
-    fn to_optimized(&self, isa: &dyn TargetIsa) -> Self {
+    fn to_optimized(&self) -> Self {
         let optimized_functions: Vec<Function> = self
             .functions
             .iter()
             .map(|func| {
                 let mut ctx = Context::for_function(func.clone());
-                ctx.optimize(isa).unwrap();
+                ctx.optimize(self.isa.as_ref()).unwrap();
                 ctx.func
             })
             .collect();
 
         TestCase {
-            isa_builder: self.isa_builder.clone(),
-            flags_builder: self.flags_builder.clone(),
+            isa: self.isa.clone(),
             functions: optimized_functions,
             ctrl_planes: self.ctrl_planes.clone(),
             inputs: self.inputs.clone(),
@@ -383,16 +357,17 @@ fn run_test_inputs(testcase: &TestCase, run: impl Fn(&[DataValue]) -> RunResult)
 
 fuzz_target!(|testcase: TestCase| {
     let mut testcase = testcase;
-    let fuel: Option<u8> = std::env::args()
+    let fuel: u8 = std::env::args()
         .find_map(|arg| arg.strip_prefix("--fuel=").map(|s| s.to_owned()))
-        .map(|fuel| fuel.parse().expect("fuel should be a valid integer"));
-    let isa = testcase.build_isa(fuel).unwrap();
+        .map(|fuel| fuel.parse().expect("fuel should be a valid integer"))
+        .unwrap_or_default();
     for i in 0..testcase.ctrl_planes.len() {
-        testcase.ctrl_planes[i].set_fuel(isa.flags().control_plane_fuel())
+        testcase.ctrl_planes[i].set_fuel(fuel)
     }
+    let testcase = testcase;
 
     // This is the default, but we should ensure that it wasn't accidentally turned off anywhere.
-    assert!(isa.flags().enable_verifier());
+    assert!(testcase.isa.flags().enable_verifier());
 
     // Periodically print statistics
     let valid_inputs = STATISTICS.valid_inputs.fetch_add(1, Ordering::SeqCst);
@@ -401,7 +376,7 @@ fuzz_target!(|testcase: TestCase| {
     }
 
     if !testcase.compare_against_host {
-        let opt_testcase = testcase.to_optimized(isa.as_ref());
+        let opt_testcase = testcase.to_optimized();
 
         run_test_inputs(&testcase, |args| {
             // We rebuild the interpreter every run so that we don't accidentally carry over any state
@@ -411,7 +386,7 @@ fuzz_target!(|testcase: TestCase| {
             run_in_interpreter(&mut interpreter, args)
         });
     } else {
-        let mut compiler = TestFileCompiler::new(isa.clone());
+        let mut compiler = TestFileCompiler::new(testcase.isa.clone());
         compiler
             .add_functions(&testcase.functions[..], testcase.ctrl_planes.clone())
             .unwrap();

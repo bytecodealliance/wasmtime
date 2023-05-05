@@ -1,5 +1,3 @@
-use std::fmt::Display;
-
 use arbitrary::{Arbitrary, Unstructured};
 
 /// The control plane of chaos mode.
@@ -21,7 +19,7 @@ impl Arbitrary<'_> for ControlPlane {
 }
 
 impl ControlPlane {
-    pub fn new(data: Vec<u8>) -> Self {
+    fn new(data: Vec<u8>) -> Self {
         Self {
             data,
             fuel: None,
@@ -102,15 +100,5 @@ impl ControlPlane {
         let mut slice: Vec<_> = iter.collect();
         self.shuffle(&mut slice);
         slice.into_iter()
-    }
-}
-
-impl Display for ControlPlane {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "control_plane data=")?;
-        for b in &self.data {
-            write!(f, "{b:02x}")?;
-        }
-        Ok(())
     }
 }

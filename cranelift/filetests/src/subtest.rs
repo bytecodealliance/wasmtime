@@ -80,7 +80,7 @@ pub trait SubTest {
         flags: &'a Flags,
         isa: Option<&'a dyn TargetIsa>,
     ) -> anyhow::Result<()> {
-        for (func, details, _) in &testfile.functions {
+        for (func, details) in &testfile.functions {
             info!(
                 "Test: {}({}) {}",
                 self.name(),
