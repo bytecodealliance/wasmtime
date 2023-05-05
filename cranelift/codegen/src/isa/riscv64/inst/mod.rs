@@ -388,13 +388,13 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_def(rd);
         }
         &Inst::Load { rd, from, .. } => {
-            if let Some(r) = from.get_base_register() {
+            if let Some(r) = from.get_allocatable_register() {
                 collector.reg_use(r);
             }
             collector.reg_def(rd);
         }
         &Inst::Store { to, src, .. } => {
-            if let Some(r) = to.get_base_register() {
+            if let Some(r) = to.get_allocatable_register() {
                 collector.reg_use(r);
             }
             collector.reg_use(src);
@@ -447,7 +447,7 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_def(rd);
         }
         &Inst::LoadAddr { rd, mem } => {
-            if let Some(r) = mem.get_base_register() {
+            if let Some(r) = mem.get_allocatable_register() {
                 collector.reg_use(r);
             }
             collector.reg_early_def(rd);
@@ -660,13 +660,13 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_def(rd);
         }
         &Inst::VecLoad { to, ref from, .. } => {
-            if let Some(r) = from.get_base_register() {
+            if let Some(r) = from.get_allocatable_register() {
                 collector.reg_use(r);
             }
             collector.reg_def(to);
         }
         &Inst::VecStore { ref to, from, .. } => {
-            if let Some(r) = to.get_base_register() {
+            if let Some(r) = to.get_allocatable_register() {
                 collector.reg_use(r);
             }
             collector.reg_use(from);

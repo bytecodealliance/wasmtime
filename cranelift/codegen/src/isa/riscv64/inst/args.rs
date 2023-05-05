@@ -45,18 +45,27 @@ pub enum AMode {
 }
 
 impl AMode {
-    pub(crate) fn reg_offset(reg: Reg, imm: i64, ty: Type) -> AMode {
-        AMode::RegOffset(reg, imm, ty)
-    }
-
     pub(crate) fn with_allocs(self, allocs: &mut AllocationConsumer<'_>) -> Self {
         match self {
             AMode::RegOffset(reg, offset, ty) => AMode::RegOffset(allocs.next(reg), offset, ty),
-            AMode::SPOffset(..) | AMode::FPOffset(..) | AMode::NominalSPOffset(..) => {
-                allocs.next(self.get_base_register().unwrap());
-                self
-            }
-            AMode::Const(..) | AMode::Label(..) => self,
+            AMode::SPOffset(..)
+            | AMode::FPOffset(..)
+            | AMode::NominalSPOffset(..)
+            | AMode::Const(..)
+            | AMode::Label(..) => self,
+        }
+    }
+
+    /// Returns the registers that known to the register allocator.
+    /// Keep this in sync with `with_allocs`.
+    pub(crate) fn get_allocatable_register(&self) -> Option<Reg> {
+        match self {
+            AMode::RegOffset(reg, ..) => Some(*reg),
+            AMode::SPOffset(..)
+            | AMode::FPOffset(..)
+            | AMode::NominalSPOffset(..)
+            | AMode::Const(..)
+            | AMode::Label(..) => None,
         }
     }
 

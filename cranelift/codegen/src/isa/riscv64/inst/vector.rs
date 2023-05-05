@@ -311,6 +311,12 @@ impl VecAMode {
         }
     }
 
+    pub fn get_allocatable_register(&self) -> Option<Reg> {
+        match self {
+            VecAMode::UnitStride { base, .. } => base.get_allocatable_register(),
+        }
+    }
+
     pub(crate) fn with_allocs(self, allocs: &mut AllocationConsumer<'_>) -> Self {
         match self {
             VecAMode::UnitStride { base } => VecAMode::UnitStride {
