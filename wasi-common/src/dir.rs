@@ -21,9 +21,6 @@ impl Dir {
             file_perms,
         }
     }
-    pub fn read_only(dir: cap_std::fs::Dir) -> Self {
-        Dir::new(dir, DirPerms::READ, FilePerms::READ)
-    }
 }
 
 pub(crate) trait TableDirExt {

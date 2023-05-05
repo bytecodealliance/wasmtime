@@ -449,44 +449,94 @@ impl<T: WasiView> wasi::filesystem::Host for T {
         &mut self,
         fd: wasi::filesystem::Descriptor,
         path_flags: wasi::filesystem::PathFlags,
-        old_path: String,
+        path: String,
         oflags: wasi::filesystem::OpenFlags,
         flags: wasi::filesystem::DescriptorFlags,
-        // TODO: How should this be used?
+        // TODO: These are the permissions to use when creating a new file.
+        // Not implemented yet.
         _mode: wasi::filesystem::Modes,
     ) -> Result<wasi::filesystem::Descriptor, wasi::filesystem::Error> {
+        use cap_fs_ext::{FollowSymlinks, OpenOptionsFollowExt, OpenOptionsMaybeDirExt};
+        use system_interface::fs::{FdFlags, GetSetFdFlags};
+        use wasi::filesystem::{DescriptorFlags, OpenFlags};
+
         let table = self.table_mut();
-        todo!();
-        /*
-        let dir = table.get_dir(fd)?;
-
-        let symlink_follow = path_flags.contains(wasi::filesystem::PathFlags::SYMLINK_FOLLOW);
-
-        if oflags.contains(wasi::filesystem::OpenFlags::DIRECTORY) {
-            if oflags.contains(wasi::filesystem::OpenFlags::CREATE)
-                || oflags.contains(wasi::filesystem::OpenFlags::EXCLUSIVE)
-                || oflags.contains(wasi::filesystem::OpenFlags::TRUNCATE)
-            {
-                return Err(wasi::filesystem::ErrorCode::Invalid.into());
-            }
-            let child_dir = dir.open_dir(symlink_follow, &old_path).await?;
-            drop(dir);
-            Ok(table.push(Box::new(child_dir))?)
-        } else {
-            let file = dir
-                .open_file(
-                    symlink_follow,
-                    &old_path,
-                    oflags.into(),
-                    flags.contains(wasi::filesystem::DescriptorFlags::READ),
-                    flags.contains(wasi::filesystem::DescriptorFlags::WRITE),
-                    flags.into(),
-                )
-                .await?;
-            drop(dir);
-            Ok(table.push(Box::new(file))?)
+        if table.is_file(fd) {
+            Err(ErrorCode::NotDirectory)?;
         }
-        */
+        let d = table.get_dir(fd)?;
+        if !d.perms.contains(DirPerms::READ) {
+            Err(ErrorCode::NotPermitted)?;
+        }
+        if oflags.contains(OpenFlags::CREATE) || oflags.contains(OpenFlags::TRUNCATE) {
+            if !d.perms.contains(DirPerms::MUTATE) {
+                Err(ErrorCode::NotPermitted)?;
+            }
+        }
+
+        let mut opts = cap_std::fs::OpenOptions::new();
+        opts.maybe_dir(true);
+
+        if oflags.contains(OpenFlags::CREATE | OpenFlags::EXCLUSIVE) {
+            opts.create_new(true);
+            opts.write(true);
+        } else if oflags.contains(OpenFlags::CREATE) {
+            opts.create(true);
+            opts.write(true);
+        }
+        if oflags.contains(OpenFlags::TRUNCATE) {
+            opts.truncate(true);
+        }
+        if flags.contains(DescriptorFlags::READ) {
+            opts.read(true);
+        }
+        if flags.contains(DescriptorFlags::WRITE) {
+            opts.write(true);
+        } else {
+            // If not opened write, open read. This way the OS lets us open
+            // the file, but we can use perms to reject use of the file later.
+            opts.read(true);
+        }
+        if symlink_follow(path_flags) {
+            opts.follow(FollowSymlinks::Yes);
+        } else {
+            opts.follow(FollowSymlinks::No);
+        }
+
+        // These flags are not yet supported in cap-std:
+        if flags.contains(DescriptorFlags::FILE_INTEGRITY_SYNC)
+            | flags.contains(DescriptorFlags::DATA_INTEGRITY_SYNC)
+            | flags.contains(DescriptorFlags::REQUESTED_WRITE_SYNC)
+        {
+            Err(ErrorCode::Unsupported)?;
+        }
+
+        if oflags.contains(OpenFlags::DIRECTORY) {
+            if oflags.contains(OpenFlags::CREATE)
+                || oflags.contains(OpenFlags::EXCLUSIVE)
+                || oflags.contains(OpenFlags::TRUNCATE)
+            {
+                Err(ErrorCode::Invalid)?;
+            }
+        }
+        let mut opened = d.dir.open_with(&path, &opts)?;
+
+        // FIXME cap-std needs a nonblocking open option so that files reads and writes
+        // are nonblocking. Instead we set it after opening here:
+        let set_fd_flags = opened.new_set_fd_flags(FdFlags::NONBLOCK)?;
+        opened.set_fd_flags(set_fd_flags)?;
+
+        if opened.metadata()?.is_dir() {
+            Ok(table.push_dir(Dir::new(
+                cap_std::fs::Dir::from_std_file(opened.into_std()),
+                d.perms,
+                d.file_perms,
+            ))?)
+        } else if oflags.contains(OpenFlags::DIRECTORY) {
+            Err(ErrorCode::NotDirectory)?
+        } else {
+            Ok(table.push_file(File::new(opened, d.file_perms))?)
+        }
     }
 
     async fn drop_descriptor(&mut self, fd: wasi::filesystem::Descriptor) -> anyhow::Result<()> {

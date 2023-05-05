@@ -13,17 +13,8 @@ pub(crate) struct File {
 }
 
 impl File {
-    pub fn new(file: cap_std::fs::File) -> Self {
-        Self {
-            file,
-            perms: FilePerms::READ | FilePerms::WRITE,
-        }
-    }
-    pub fn read_only(file: cap_std::fs::File) -> Self {
-        Self {
-            file,
-            perms: FilePerms::READ,
-        }
+    pub fn new(file: cap_std::fs::File, perms: FilePerms) -> Self {
+        Self { file, perms }
     }
 }
 pub(crate) trait TableFileExt {
