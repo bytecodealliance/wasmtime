@@ -2840,22 +2840,25 @@ impl MachInstEmit for Inst {
                 let from = from.clone().with_allocs(&mut allocs);
                 let to = allocs.next_writable(to);
 
-                let base = from.get_base_register();
-                let offset = from.get_offset_with_state(state);
-
                 // Vector Loads don't support immediate offsets, so we need to load it into a register.
-                let addr = match (&from, base, offset) {
-                    // Reg+0 Offset can be directly encoded
-                    (_, Some(base), 0) => base,
-                    // Otherwise load the address it into a reg and load from it.
-                    (VecAMode::UnitStride { base }, _, _) => {
-                        let tmp = writable_spilltmp_reg();
-                        Inst::LoadAddr {
-                            rd: tmp,
-                            mem: base.clone(),
+                let addr = match from {
+                    VecAMode::UnitStride { base } => {
+                        let base_reg = base.get_base_register();
+                        let offset = base.get_offset_with_state(state);
+
+                        // Reg+0 Offset can be directly encoded
+                        if let (Some(base_reg), 0) = (base_reg, offset) {
+                            base_reg
+                        } else {
+                            // Otherwise load the address it into a reg and load from it.
+                            let tmp = writable_spilltmp_reg();
+                            Inst::LoadAddr {
+                                rd: tmp,
+                                mem: base.clone(),
+                            }
+                            .emit(&[], sink, emit_info, state);
+                            tmp.to_reg()
                         }
-                        .emit(&[], sink, emit_info, state);
-                        tmp.to_reg()
                     }
                 };
 
@@ -2888,22 +2891,25 @@ impl MachInstEmit for Inst {
                 let to = to.clone().with_allocs(&mut allocs);
                 let from = allocs.next(from);
 
-                let base = to.get_base_register();
-                let offset = to.get_offset_with_state(state);
-
                 // Vector Stores don't support immediate offsets, so we need to load it into a register.
-                let addr = match (&to, base, offset) {
-                    // Reg+0 Offset can be directly encoded
-                    (_, Some(base), 0) => base,
-                    // Otherwise load the address it into a reg and load from it.
-                    (VecAMode::UnitStride { base }, _, _) => {
-                        let tmp = writable_spilltmp_reg();
-                        Inst::LoadAddr {
-                            rd: tmp,
-                            mem: base.clone(),
+                let addr = match to {
+                    VecAMode::UnitStride { base } => {
+                        let base_reg = base.get_base_register();
+                        let offset = base.get_offset_with_state(state);
+
+                        // Reg+0 Offset can be directly encoded
+                        if let (Some(base_reg), 0) = (base_reg, offset) {
+                            base_reg
+                        } else {
+                            // Otherwise load the address it into a reg and load from it.
+                            let tmp = writable_spilltmp_reg();
+                            Inst::LoadAddr {
+                                rd: tmp,
+                                mem: base.clone(),
+                            }
+                            .emit(&[], sink, emit_info, state);
+                            tmp.to_reg()
                         }
-                        .emit(&[], sink, emit_info, state);
-                        tmp.to_reg()
                     }
                 };
 
