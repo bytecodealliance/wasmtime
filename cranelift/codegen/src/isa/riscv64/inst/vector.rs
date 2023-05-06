@@ -292,7 +292,7 @@ impl VecAluOpRRImm5 {
     pub fn funct6(&self) -> u32 {
         // See: https://github.com/riscv/riscv-v-spec/blob/master/inst-table.adoc
         match self {
-            VecAluOpRRImm5::Vadd => 0b000000,
+            VecAluOpRRImm5::VaddVI => 0b000000,
         }
     }
 }
@@ -301,8 +301,8 @@ impl fmt::Display for VecAluOpRRImm5 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut s = format!("{self:?}");
         s.make_ascii_lowercase();
-        s.push_str(".vi");
-        f.write_str(&s)
+        let (opcode, category) = s.split_at(s.len() - 2);
+        f.write_str(&format!("{}.{}", opcode, category))
     }
 }
 
