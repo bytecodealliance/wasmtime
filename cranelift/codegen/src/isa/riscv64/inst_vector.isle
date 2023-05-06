@@ -83,14 +83,14 @@
 
 ;; Register to Register ALU Ops
 (type VecAluOpRRR (enum
-  (Vadd)
-  (Vsub)
-  (Vmul)
-  (Vmulh)
-  (Vmulhu)
-  (Vand)
-  (Vor)
-  (Vxor)
+  (VaddVV)
+  (VsubVV)
+  (VmulVV)
+  (VmulhVV)
+  (VmulhuVV)
+  (VandVV)
+  (VorVV)
+  (VxorVV)
 ))
 
 ;; Register-Imm ALU Ops
@@ -181,7 +181,7 @@
 ;; Helper for emitting the `vadd.vv` instruction.
 (decl rv_vadd_vv (Reg Reg VState) Reg)
 (rule (rv_vadd_vv vs2 vs1 vstate)
-  (vec_alu_rrr (VecAluOpRRR.Vadd) vs2 vs1 vstate))
+  (vec_alu_rrr (VecAluOpRRR.VaddVV) vs2 vs1 vstate))
 
 ;; Helper for emitting the `vadd.vi` instruction.
 (decl rv_vadd_vi (Reg Imm5 VState) Reg)
@@ -191,34 +191,34 @@
 ;; Helper for emitting the `vsub.vv` instruction.
 (decl rv_vsub_vv (Reg Reg VState) Reg)
 (rule (rv_vsub_vv vs2 vs1 vstate)
-  (vec_alu_rrr (VecAluOpRRR.Vsub) vs2 vs1 vstate))
+  (vec_alu_rrr (VecAluOpRRR.VsubVV) vs2 vs1 vstate))
 
 ;; Helper for emitting the `vmul.vv` instruction.
 (decl rv_vmul_vv (Reg Reg VState) Reg)
 (rule (rv_vmul_vv vs2 vs1 vstate)
-  (vec_alu_rrr (VecAluOpRRR.Vmul) vs2 vs1 vstate))
+  (vec_alu_rrr (VecAluOpRRR.VmulVV) vs2 vs1 vstate))
 
 ;; Helper for emitting the `vmulh.vv` instruction.
 (decl rv_vmulh_vv (Reg Reg VState) Reg)
 (rule (rv_vmulh_vv vs2 vs1 vstate)
-  (vec_alu_rrr (VecAluOpRRR.Vmulh) vs2 vs1 vstate))
+  (vec_alu_rrr (VecAluOpRRR.VmulhVV) vs2 vs1 vstate))
 
 ;; Helper for emitting the `vmulhu.vv` instruction.
 (decl rv_vmulhu_vv (Reg Reg VState) Reg)
 (rule (rv_vmulhu_vv vs2 vs1 vstate)
-  (vec_alu_rrr (VecAluOpRRR.Vmulhu) vs2 vs1 vstate))
+  (vec_alu_rrr (VecAluOpRRR.VmulhuVV) vs2 vs1 vstate))
 
 ;; Helper for emitting the `vand.vv` instruction.
 (decl rv_vand_vv (Reg Reg VState) Reg)
 (rule (rv_vand_vv vs2 vs1 vstate)
-  (vec_alu_rrr (VecAluOpRRR.Vand) vs2 vs1 vstate))
+  (vec_alu_rrr (VecAluOpRRR.VandVV) vs2 vs1 vstate))
 
 ;; Helper for emitting the `vor.vv` instruction.
 (decl rv_vor_vv (Reg Reg VState) Reg)
 (rule (rv_vor_vv vs2 vs1 vstate)
-  (vec_alu_rrr (VecAluOpRRR.Vor) vs2 vs1 vstate))
+  (vec_alu_rrr (VecAluOpRRR.VorVV) vs2 vs1 vstate))
 
 ;; Helper for emitting the `vxor.vv` instruction.
 (decl rv_vxor_vv (Reg Reg VState) Reg)
 (rule (rv_vxor_vv vs2 vs1 vstate)
-  (vec_alu_rrr (VecAluOpRRR.Vxor) vs2 vs1 vstate))
+  (vec_alu_rrr (VecAluOpRRR.VxorVV) vs2 vs1 vstate))
