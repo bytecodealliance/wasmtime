@@ -252,6 +252,7 @@ impl VecAluOpRRR {
         match self {
             VecAluOpRRR::VaddVV => 0b000000,
             VecAluOpRRR::VsubVV | VecAluOpRRR::VsubVX => 0b000010,
+            VecAluOpRRR::VrsubVX => 0b000011,
             VecAluOpRRR::VmulVV => 0b100101,
             VecAluOpRRR::VmulhVV => 0b100111,
             VecAluOpRRR::VmulhuVV => 0b100100,
@@ -271,7 +272,7 @@ impl VecAluOpRRR {
             VecAluOpRRR::VmulVV | VecAluOpRRR::VmulhVV | VecAluOpRRR::VmulhuVV => {
                 VecOpCategory::OPMVV
             }
-            VecAluOpRRR::VsubVX => VecOpCategory::OPIVX,
+            VecAluOpRRR::VsubVX | VecAluOpRRR::VrsubVX => VecOpCategory::OPIVX,
         }
     }
 }

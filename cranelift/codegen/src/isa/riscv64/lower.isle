@@ -143,6 +143,10 @@
 (rule 4 (lower (has_type (ty_vec_fits_in_register ty) (isub x (splat y))))
   (rv_vsub_vx x y ty))
 
+(rule 5 (lower (has_type (ty_vec_fits_in_register ty) (isub (splat x) y)))
+  (rv_vrsub_vx y x ty))
+
+
 ;;;; Rules for `ineg` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; `i64` and smaller.

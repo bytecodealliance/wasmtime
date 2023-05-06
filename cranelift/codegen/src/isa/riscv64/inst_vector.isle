@@ -95,6 +95,7 @@
 
   ;; Vector-Scalar Opcodes
   (VsubVX)
+  (VrsubVX)
 ))
 
 ;; Register-Imm ALU Ops
@@ -201,6 +202,11 @@
 (decl rv_vsub_vx (Reg Reg VState) Reg)
 (rule (rv_vsub_vx vs2 vs1 vstate)
   (vec_alu_rrr (VecAluOpRRR.VsubVX) vs2 vs1 vstate))
+
+;; Helper for emitting the `vrsub.vx` instruction.
+(decl rv_vrsub_vx (Reg Reg VState) Reg)
+(rule (rv_vrsub_vx vs2 vs1 vstate)
+  (vec_alu_rrr (VecAluOpRRR.VrsubVX) vs2 vs1 vstate))
 
 ;; Helper for emitting the `vmul.vv` instruction.
 (decl rv_vmul_vv (Reg Reg VState) Reg)

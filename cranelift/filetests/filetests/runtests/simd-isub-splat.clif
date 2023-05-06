@@ -9,6 +9,40 @@ target x86_64 skylake
 target riscv64 has_v
 
 
+function %isub_splat_reverse_i8x16(i8x16, i8) -> i8x16 {
+block0(v0: i8x16, v1: i8):
+    v2 = splat.i8x16 v1
+    v3 = isub v2, v0
+    return v3
+}
+; run: %isub_splat_reverse_i8x16([1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16], 22) == [21 20 19 18 17 16 15 14 13 12 11 10 9 8 7 6]
+
+function %isub_splat_reverse_i16x8(i16x8, i16) -> i16x8 {
+block0(v0: i16x8, v1: i16):
+    v2 = splat.i16x8 v1
+    v3 = isub v2, v0
+    return v3
+}
+; run: %isub_splat_reverse_i16x8([1 2 3 4 5 6 7 8], 22) == [21 20 19 18 17 16 15 14]
+
+function %isub_splat_reverse_i32x4(i32x4, i32) -> i32x4 {
+block0(v0: i32x4, v1: i32):
+    v2 = splat.i32x4 v1
+    v3 = isub v2, v0
+    return v3
+}
+; run: %isub_splat_reverse_i32x4([1 2 3 4], 22) == [21 20 19 18]
+
+function %isub_splat_reverse_i64x2(i64x2, i64) -> i64x2 {
+block0(v0: i64x2, v1: i64):
+    v2 = splat.i64x2 v1
+    v3 = isub v2, v0
+    return v3
+}
+; run: %isub_splat_reverse_i64x2([1 2], 22) == [21 20]
+
+
+
 function %isub_splat_i8x16(i8x16, i8) -> i8x16 {
 block0(v0: i8x16, v1: i8):
     v2 = splat.i8x16 v1

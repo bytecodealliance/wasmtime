@@ -209,3 +209,43 @@ block0(v0: i64x2, v1: i64):
 ;   addi sp, sp, 0x10
 ;   ret
 
+function %isub_splat_reverse_i64x2(i64x2, i64) -> i64x2 {
+block0(v0: i64x2, v1: i64):
+    v2 = splat.i64x2 v1
+    v3 = isub v2, v0
+    return v3
+}
+
+; VCode:
+;   add sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+; block0:
+;   vle8.v v1,16(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vrsub.vx v5,v1,a0 #avl=2, #vtype=(e64, m1, ta, ma)
+;   vse8.v v5,0(a1) #avl=16, #vtype=(e8, m1, ta, ma)
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   add sp,+16
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   ori s0, sp, 0
+; block1: ; offset 0x10
+;   .byte 0x57, 0x70, 0x08, 0xcc
+;   addi t6, s0, 0x10
+;   .byte 0x87, 0x80, 0x0f, 0x02
+;   .byte 0x57, 0x70, 0x81, 0xcd
+;   .byte 0xd7, 0x42, 0x15, 0x0e
+;   .byte 0x57, 0x70, 0x08, 0xcc
+;   .byte 0xa7, 0x82, 0x05, 0x02
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+
