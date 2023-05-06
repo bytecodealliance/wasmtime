@@ -94,6 +94,7 @@
   (VxorVV)
 
   ;; Vector-Scalar Opcodes
+  (VaddVX)
   (VsubVX)
   (VrsubVX)
 ))
@@ -188,6 +189,11 @@
 (decl rv_vadd_vv (Reg Reg VState) Reg)
 (rule (rv_vadd_vv vs2 vs1 vstate)
   (vec_alu_rrr (VecAluOpRRR.VaddVV) vs2 vs1 vstate))
+
+;; Helper for emitting the `vadd.vx` instruction.
+(decl rv_vadd_vx (Reg Reg VState) Reg)
+(rule (rv_vadd_vx vs2 vs1 vstate)
+  (vec_alu_rrr (VecAluOpRRR.VaddVX) vs2 vs1 vstate))
 
 ;; Helper for emitting the `vadd.vi` instruction.
 (decl rv_vadd_vi (Reg Imm5 VState) Reg)

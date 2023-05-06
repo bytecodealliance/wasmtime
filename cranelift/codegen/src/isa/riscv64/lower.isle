@@ -110,10 +110,16 @@
 (rule 8 (lower (has_type (ty_vec_fits_in_register ty) (iadd x y)))
   (rv_vadd_vv x y ty))
 
-(rule 9 (lower (has_type (ty_vec_fits_in_register ty) (iadd x (replicated_imm5 y))))
+(rule 9 (lower (has_type (ty_vec_fits_in_register ty) (iadd x (splat y))))
+  (rv_vadd_vx x y ty))
+
+(rule 10 (lower (has_type (ty_vec_fits_in_register ty) (iadd (splat x) y)))
+  (rv_vadd_vx y x ty))
+
+(rule 11 (lower (has_type (ty_vec_fits_in_register ty) (iadd x (replicated_imm5 y))))
   (rv_vadd_vi x y ty))
 
-(rule 10 (lower (has_type (ty_vec_fits_in_register ty) (iadd (replicated_imm5 x) y)))
+(rule 12 (lower (has_type (ty_vec_fits_in_register ty) (iadd (replicated_imm5 x) y)))
   (rv_vadd_vi y x ty))
 
 ;;; Rules for `uadd_overflow_trap` ;;;;;;;;;;;;;
