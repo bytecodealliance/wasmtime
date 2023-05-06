@@ -152,9 +152,12 @@
 
 ;;;; Rules for `ineg` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; `i64` and smaller.
-(rule (lower (has_type ty (ineg val)))
+(rule (lower (has_type (ty_int ty) (ineg val)))
   (neg ty val))
+
+(rule 1 (lower (has_type (ty_vec_fits_in_register ty) (ineg x)))
+  (rv_vneg_v x ty))
+
 
 ;;;; Rules for `imul` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

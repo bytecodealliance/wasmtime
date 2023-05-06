@@ -209,6 +209,11 @@
 (rule (rv_vrsub_vx vs2 vs1 vstate)
   (vec_alu_rrr (VecAluOpRRR.VrsubVX) vs2 vs1 vstate))
 
+;; Helper for emitting the `vneg.v` pseudo-instruction.
+(decl rv_vneg_v (Reg VState) Reg)
+(rule (rv_vneg_v vs2 vstate)
+  (vec_alu_rrr (VecAluOpRRR.VrsubVX) vs2 (zero_reg) vstate))
+
 ;; Helper for emitting the `vrsub.vi` instruction.
 (decl rv_vrsub_vi (Reg Imm5 VState) Reg)
 (rule (rv_vrsub_vi vs2 imm vstate)
