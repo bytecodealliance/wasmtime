@@ -83,6 +83,7 @@
 
 ;; Register to Register ALU Ops
 (type VecAluOpRRR (enum
+  ;; Vector-Vector Opcodes
   (VaddVV)
   (VsubVV)
   (VmulVV)
@@ -91,6 +92,9 @@
   (VandVV)
   (VorVV)
   (VxorVV)
+
+  ;; Vector-Scalar Opcodes
+  (VsubVX)
 ))
 
 ;; Register-Imm ALU Ops
@@ -192,6 +196,11 @@
 (decl rv_vsub_vv (Reg Reg VState) Reg)
 (rule (rv_vsub_vv vs2 vs1 vstate)
   (vec_alu_rrr (VecAluOpRRR.VsubVV) vs2 vs1 vstate))
+
+;; Helper for emitting the `vsub.vx` instruction.
+(decl rv_vsub_vx (Reg Reg VState) Reg)
+(rule (rv_vsub_vx vs2 vs1 vstate)
+  (vec_alu_rrr (VecAluOpRRR.VsubVX) vs2 vs1 vstate))
 
 ;; Helper for emitting the `vmul.vv` instruction.
 (decl rv_vmul_vv (Reg Reg VState) Reg)

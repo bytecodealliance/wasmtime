@@ -4,7 +4,7 @@
 #![allow(dead_code)]
 #![allow(non_camel_case_types)]
 
-use super::lower::isle::generated_code::{VecAMode, VecElementWidth};
+use super::lower::isle::generated_code::{VecAMode, VecElementWidth, VecOpCategory};
 use crate::binemit::{Addend, CodeOffset, Reloc};
 pub use crate::ir::condcodes::IntCC;
 use crate::ir::types::{self, F32, F64, I128, I16, I32, I64, I8, I8X16, R32, R64};
@@ -17,7 +17,7 @@ use crate::{settings, CodegenError, CodegenResult};
 pub use crate::ir::condcodes::FloatCC;
 
 use alloc::vec::Vec;
-use regalloc2::{PRegSet, VReg};
+use regalloc2::{PRegSet, RegClass, VReg};
 use smallvec::{smallvec, SmallVec};
 use std::boxed::Box;
 use std::string::{String, ToString};
@@ -624,7 +624,23 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             // gen_prologue is called at emit stage.
             // no need let reg alloc know.
         }
-        &Inst::VecAluRRR { vd, vs1, vs2, .. } => {
+        &Inst::VecAluRRR {
+            op, vd, vs1, vs2, ..
+        } => {
+            debug_assert_eq!(vs2.class(), RegClass::Vector);
+            match op.category() {
+                VecOpCategory::OPIVV | VecOpCategory::OPFVV | VecOpCategory::OPMVV => {
+                    debug_assert_eq!(vs1.class(), RegClass::Vector);
+                }
+                VecOpCategory::OPIVX | VecOpCategory::OPMVX => {
+                    debug_assert_eq!(vs1.class(), RegClass::Int);
+                }
+                VecOpCategory::OPFVF => {
+                    debug_assert_eq!(vs1.class(), RegClass::Float);
+                }
+                _ => unreachable!(),
+            }
+
             collector.reg_use(vs1);
             collector.reg_use(vs2);
             collector.reg_def(vd);

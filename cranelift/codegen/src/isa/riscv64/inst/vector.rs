@@ -245,6 +245,23 @@ impl VecAluOpRRR {
         0x57
     }
     pub fn funct3(&self) -> u32 {
+        self.category().encode()
+    }
+    pub fn funct6(&self) -> u32 {
+        // See: https://github.com/riscv/riscv-v-spec/blob/master/inst-table.adoc
+        match self {
+            VecAluOpRRR::VaddVV => 0b000000,
+            VecAluOpRRR::VsubVV | VecAluOpRRR::VsubVX => 0b000010,
+            VecAluOpRRR::VmulVV => 0b100101,
+            VecAluOpRRR::VmulhVV => 0b100111,
+            VecAluOpRRR::VmulhuVV => 0b100100,
+            VecAluOpRRR::VandVV => 0b001001,
+            VecAluOpRRR::VorVV => 0b001010,
+            VecAluOpRRR::VxorVV => 0b001011,
+        }
+    }
+
+    pub fn category(&self) -> VecOpCategory {
         match self {
             VecAluOpRRR::VaddVV
             | VecAluOpRRR::VsubVV
@@ -254,20 +271,7 @@ impl VecAluOpRRR {
             VecAluOpRRR::VmulVV | VecAluOpRRR::VmulhVV | VecAluOpRRR::VmulhuVV => {
                 VecOpCategory::OPMVV
             }
-        }
-        .encode()
-    }
-    pub fn funct6(&self) -> u32 {
-        // See: https://github.com/riscv/riscv-v-spec/blob/master/inst-table.adoc
-        match self {
-            VecAluOpRRR::VaddVV => 0b000000,
-            VecAluOpRRR::VsubVV => 0b000010,
-            VecAluOpRRR::VmulVV => 0b100101,
-            VecAluOpRRR::VmulhVV => 0b100111,
-            VecAluOpRRR::VmulhuVV => 0b100100,
-            VecAluOpRRR::VandVV => 0b001001,
-            VecAluOpRRR::VorVV => 0b001010,
-            VecAluOpRRR::VxorVV => 0b001011,
+            VecAluOpRRR::VsubVX => VecOpCategory::OPIVX,
         }
     }
 }
