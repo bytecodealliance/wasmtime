@@ -194,7 +194,10 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
         uses: &CallArgList,
         defs: &CallRetList,
     ) -> BoxCallInfo {
-        let clobbers = self.lower_ctx.sigs().call_clobbers::<S390xMachineDeps>(abi);
+        let sig_data = &self.lower_ctx.sigs()[abi];
+        // Get clobbers: all caller-saves. These may include return value
+        // regs, which we will remove from the clobber set later.
+        let clobbers = S390xMachineDeps::get_regs_clobbered_by_call(sig_data.call_conv());
         Box::new(CallInfo {
             dest: name.clone(),
             uses: uses.clone(),
@@ -213,7 +216,10 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
         uses: &CallArgList,
         defs: &CallRetList,
     ) -> BoxCallIndInfo {
-        let clobbers = self.lower_ctx.sigs().call_clobbers::<S390xMachineDeps>(abi);
+        let sig_data = &self.lower_ctx.sigs()[abi];
+        // Get clobbers: all caller-saves. These may include return value
+        // regs, which we will remove from the clobber set later.
+        let clobbers = S390xMachineDeps::get_regs_clobbered_by_call(sig_data.call_conv());
         Box::new(CallIndInfo {
             rn: target,
             uses: uses.clone(),
@@ -284,11 +290,8 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
         let caller_callconv = self.lower_ctx.abi().call_conv(self.lower_ctx.sigs());
         let callee_callconv = CallConv::for_libcall(&self.backend.flags, caller_callconv);
 
-        // Clobbers are defined by the calling convention.  Remove defs from clobbers.
-        let mut clobbers = S390xMachineDeps::get_regs_clobbered_by_call(callee_callconv);
-        for reg in &info.defs {
-            clobbers.remove(PReg::from(reg.preg.to_real_reg().unwrap()));
-        }
+        // Clobbers are defined by the calling convention. We will remove return value regs later.
+        let clobbers = S390xMachineDeps::get_regs_clobbered_by_call(callee_callconv);
 
         Box::new(CallInfo {
             dest: ExternalName::LibCall(info.libcall),
