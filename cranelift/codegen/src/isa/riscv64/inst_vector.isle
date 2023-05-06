@@ -101,6 +101,7 @@
 ;; Register-Imm ALU Ops
 (type VecAluOpRRImm5 (enum
   (VaddVI)
+  (VrsubVI)
 ))
 
 
@@ -207,6 +208,11 @@
 (decl rv_vrsub_vx (Reg Reg VState) Reg)
 (rule (rv_vrsub_vx vs2 vs1 vstate)
   (vec_alu_rrr (VecAluOpRRR.VrsubVX) vs2 vs1 vstate))
+
+;; Helper for emitting the `vrsub.vi` instruction.
+(decl rv_vrsub_vi (Reg Imm5 VState) Reg)
+(rule (rv_vrsub_vi vs2 imm vstate)
+  (vec_alu_rr_imm5 (VecAluOpRRImm5.VrsubVI) vs2 imm vstate))
 
 ;; Helper for emitting the `vmul.vv` instruction.
 (decl rv_vmul_vv (Reg Reg VState) Reg)

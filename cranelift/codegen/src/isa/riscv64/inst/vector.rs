@@ -298,6 +298,7 @@ impl VecAluOpRRImm5 {
         // See: https://github.com/riscv/riscv-v-spec/blob/master/inst-table.adoc
         match self {
             VecAluOpRRImm5::VaddVI => 0b000000,
+            VecAluOpRRImm5::VrsubVI => 0b000011,
         }
     }
 }
