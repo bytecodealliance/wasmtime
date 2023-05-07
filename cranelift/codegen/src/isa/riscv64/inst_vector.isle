@@ -97,12 +97,14 @@
   (VaddVX)
   (VsubVX)
   (VrsubVX)
+  (VslidedownVX)
 ))
 
 ;; Register-Imm ALU Ops
 (type VecAluOpRRImm5 (enum
   (VaddVI)
   (VrsubVI)
+  (VslidedownVI)
 ))
 
 
@@ -171,6 +173,12 @@
       (let ((vd WritableReg (temp_writable_reg $I8X16))
             (_ Unit (emit (MInst.VecAluRRImm5 op vd vs2 imm vstate))))
         vd))
+
+;; Helper for emitting `MInst.VecAluRRImm5` instructions where the immediate
+;; is zero extended instead of sign extended.
+(decl vec_alu_rr_uimm5 (VecAluOpRRImm5 Reg UImm5 VState) Reg)
+(rule (vec_alu_rr_uimm5 op vs2 imm vstate)
+      (vec_alu_rr_imm5 op vs2 (uimm5_bitcast_to_imm5 imm) vstate))
 
 ;; Helper for emitting `MInst.VecLoad` instructions.
 (decl vec_load (VecElementWidth VecAMode MemFlags VState) Reg)
@@ -254,3 +262,16 @@
 (decl rv_vxor_vv (Reg Reg VState) Reg)
 (rule (rv_vxor_vv vs2 vs1 vstate)
   (vec_alu_rrr (VecAluOpRRR.VxorVV) vs2 vs1 vstate))
+
+;; Helper for emitting the `vslidedown.vx` instruction.
+;; `vslidedown` moves all elements in the vector down by n elements.
+;; The top most elements are up to the tail policy.
+(decl rv_vslidedown_vx (Reg Reg VState) Reg)
+(rule (rv_vslidedown_vx vs2 vs1 vstate)
+  (vec_alu_rrr (VecAluOpRRR.VslidedownVX) vs2 vs1 vstate))
+
+;; Helper for emitting the `vslidedown.vi` instruction.
+;; Unlike other `vi` instructions the immediate is zero extended.
+(decl rv_vslidedown_vi (Reg UImm5 VState) Reg)
+(rule (rv_vslidedown_vi vs2 imm vstate)
+  (vec_alu_rr_uimm5 (VecAluOpRRImm5.VslidedownVI) vs2 imm vstate))

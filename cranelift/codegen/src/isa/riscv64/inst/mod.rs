@@ -1585,7 +1585,15 @@ impl Inst {
                 let vs2_s = format_reg(vs2, allocs);
                 let vd_s = format_reg(vd.to_reg(), allocs);
 
-                format!("{} {},{},{} {}", op, vd_s, vs2_s, imm, vstate)
+                // Some opcodes interpret the immediate as unsigned, lets show the
+                // correct number here.
+                let imm_s = if op.imm_is_unsigned() {
+                    format!("{}", imm.bits())
+                } else {
+                    format!("{}", imm)
+                };
+
+                format!("{} {},{},{} {}", op, vd_s, vs2_s, imm_s, vstate)
             }
             &Inst::VecSetState { rd, ref vstate } => {
                 let rd_s = format_reg(rd.to_reg(), allocs);

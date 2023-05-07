@@ -205,6 +205,12 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         Imm5::maybe_from_i8(i8::try_from(arg0 as i64).ok()?)
     }
     #[inline]
+    fn uimm5_bitcast_to_imm5(&mut self, arg0: UImm5) -> Imm5 {
+        let bits = arg0.bits() as u8;
+        let signed = ((bits << 3) as i8) >> 3;
+        Imm5::maybe_from_i8(signed).unwrap()
+    }
+    #[inline]
     fn writable_zero_reg(&mut self) -> WritableReg {
         writable_zero_reg()
     }

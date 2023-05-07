@@ -260,6 +260,7 @@ impl VecAluOpRRR {
             VecAluOpRRR::VandVV => 0b001001,
             VecAluOpRRR::VorVV => 0b001010,
             VecAluOpRRR::VxorVV => 0b001011,
+            VecAluOpRRR::VslidedownVX => 0b001111,
         }
     }
 
@@ -273,9 +274,10 @@ impl VecAluOpRRR {
             VecAluOpRRR::VmulVV | VecAluOpRRR::VmulhVV | VecAluOpRRR::VmulhuVV => {
                 VecOpCategory::OPMVV
             }
-            VecAluOpRRR::VaddVX | VecAluOpRRR::VsubVX | VecAluOpRRR::VrsubVX => {
-                VecOpCategory::OPIVX
-            }
+            VecAluOpRRR::VaddVX
+            | VecAluOpRRR::VsubVX
+            | VecAluOpRRR::VrsubVX
+            | VecAluOpRRR::VslidedownVX => VecOpCategory::OPIVX,
         }
     }
 
@@ -312,6 +314,14 @@ impl VecAluOpRRImm5 {
         match self {
             VecAluOpRRImm5::VaddVI => 0b000000,
             VecAluOpRRImm5::VrsubVI => 0b000011,
+            VecAluOpRRImm5::VslidedownVI => 0b001111,
+        }
+    }
+
+    pub fn imm_is_unsigned(&self) -> bool {
+        match self {
+            VecAluOpRRImm5::VslidedownVI => true,
+            VecAluOpRRImm5::VaddVI | VecAluOpRRImm5::VrsubVI => false,
         }
     }
 }
