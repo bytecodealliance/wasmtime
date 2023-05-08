@@ -161,33 +161,10 @@ pub(crate) fn gen_moves(rd: &[Writable<Reg>], src: &[Reg]) -> SmallInstVec<Inst>
     assert!(rd.len() > 0);
     let mut insts = SmallInstVec::new();
     for (dst, src) in rd.iter().zip(src.iter()) {
-        let out_ty = Inst::canonical_type_for_rc(dst.to_reg().class());
-        let in_ty = Inst::canonical_type_for_rc(src.class());
-        insts.push(gen_move(*dst, out_ty, *src, in_ty));
+        let ty = Inst::canonical_type_for_rc(dst.to_reg().class());
+        insts.push(Inst::gen_move(*dst, *src, ty));
     }
     insts
-}
-
-/// if input or output is float,
-/// you should use special instruction.
-/// generate a move and re-interpret the data.
-pub(crate) fn gen_move(rd: Writable<Reg>, oty: Type, rm: Reg, ity: Type) -> Inst {
-    match (ity.is_float(), oty.is_float()) {
-        (false, false) => Inst::gen_move(rd, rm, oty),
-        (true, true) => Inst::gen_move(rd, rm, oty),
-        (false, true) => Inst::FpuRR {
-            frm: None,
-            alu_op: FpuOPRR::move_x_to_f_op(oty),
-            rd: rd,
-            rs: rm,
-        },
-        (true, false) => Inst::FpuRR {
-            frm: None,
-            alu_op: FpuOPRR::move_f_to_x_op(ity),
-            rd: rd,
-            rs: rm,
-        },
-    }
 }
 
 impl Inst {
