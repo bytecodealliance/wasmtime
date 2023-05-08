@@ -64,9 +64,13 @@ impl RiscvFlags {
         ];
 
         for (has_flag, size) in entries.into_iter() {
-            if has_flag {
-                return size;
+            if !has_flag {
+                continue;
             }
+
+            // Due to a limitation in regalloc2, we can't support types
+            // larger than 1024 bytes. So limit that here.
+            return std::cmp::min(size, 1024);
         }
 
         return 0;
