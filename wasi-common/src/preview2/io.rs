@@ -9,7 +9,10 @@ use anyhow::anyhow;
 
 impl From<anyhow::Error> for streams::Error {
     fn from(error: anyhow::Error) -> streams::Error {
-        streams::Error::trap(error)
+        tracing::trace!(
+            "turning anyhow::Error in the streams interface into the empty error result: {error:?}"
+        );
+        StreamError {}.into()
     }
 }
 

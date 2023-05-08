@@ -473,8 +473,12 @@ impl<T: WasiView> wasi::filesystem::Host for T {
         if !d.perms.contains(DirPerms::READ) {
             Err(ErrorCode::NotPermitted)?;
         }
-        if oflags.contains(OpenFlags::CREATE) || oflags.contains(OpenFlags::TRUNCATE) {
-            if !d.perms.contains(DirPerms::MUTATE) {
+
+        if !d.perms.contains(DirPerms::MUTATE) {
+            if oflags.contains(OpenFlags::CREATE) || oflags.contains(OpenFlags::TRUNCATE) {
+                Err(ErrorCode::NotPermitted)?;
+            }
+            if flags.contains(DescriptorFlags::WRITE) {
                 Err(ErrorCode::NotPermitted)?;
             }
         }
