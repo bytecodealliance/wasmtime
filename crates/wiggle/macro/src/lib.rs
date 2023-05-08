@@ -137,7 +137,7 @@ use syn::parse_macro_input;
 ///             YourRichError::InvalidArg{..} => Ok(types::Errno::InvalidArg),
 ///             YourRichError::Io{..} => Ok(types::Errno::Io),
 ///             YourRichError::Overflow => Ok(types::Errno::Overflow),
-///             YourRichError::Trap(s) => Err(wiggle::wasmtime_crate::Error::new(s)),
+///             YourRichError::Trap(s) => Err(wiggle::wasmtime_crate::Error::msg(s)),
 ///         }
 ///     }
 /// }
