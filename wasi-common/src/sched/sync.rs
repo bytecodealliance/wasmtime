@@ -1,11 +1,12 @@
+use crate::sched::{
+    subscription::{RwEventFlags, RwStream},
+    Poll, WasiSched,
+};
 use rustix::io::{PollFd, PollFlags};
 use std::thread;
 use std::time::Duration;
-use wasi_common::sched::subscription::{RwEventFlags, RwStream};
-use wasi_common::{
-    sched::{Poll, WasiSched},
-    Error, ErrorExt,
-};
+
+use anyhow::Error;
 
 pub async fn poll_oneoff<'a>(poll: &mut Poll<'a>) -> Result<(), Error> {
     // Collect all stream I/O subscriptions. Clock subscriptions are handled
@@ -42,13 +43,13 @@ pub async fn poll_oneoff<'a>(poll: &mut Poll<'a>) -> Result<(), Error> {
                     }
                 }
 
-                return Err(Error::invalid_argument().context("stream is not pollable for reading"));
+                return Err(anyhow::anyhow!("stream is not pollable for reading"));
             }
 
             RwStream::Write(stream) => {
-                let fd = stream.pollable_write().ok_or(
-                    Error::invalid_argument().context("stream is not pollable for writing"),
-                )?;
+                let fd = stream
+                    .pollable_write()
+                    .ok_or_else(|| anyhow::anyhow!("stream is not pollable for writing"))?;
 
                 #[cfg(unix)]
                 {
@@ -60,9 +61,9 @@ pub async fn poll_oneoff<'a>(poll: &mut Poll<'a>) -> Result<(), Error> {
                     if let Some(fd) = fd.as_socket() {
                         pollfds.push(PollFd::from_borrowed_fd(fd, PollFlags::OUT));
                     } else {
-                        return Err(Error::trap(anyhow::anyhow!(
+                        return Err(anyhow::anyhow!(
                             "unimplemented: polling for writing to non-OS resources"
-                        )));
+                        ));
                     }
                 }
             } /* FIXME redesign of sched to make it possible to define pollables out of crate
@@ -85,7 +86,7 @@ pub async fn poll_oneoff<'a>(poll: &mut Poll<'a>) -> Result<(), Error> {
                 // which takes a `timespec.`
                 ((t.deadline + 999_999) / 1_000_000)
                     .try_into()
-                    .map_err(|_| Error::overflow().context("poll timeout"))?
+                    .map_err(|_| anyhow::anyhow!("overflow: poll timeout"))?
             } else {
                 // A negative value requests an infinite timeout.
                 -1
@@ -114,9 +115,9 @@ pub async fn poll_oneoff<'a>(poll: &mut Poll<'a>) -> Result<(), Error> {
             for (rwsub, pollfd) in poll.rw_subscriptions().zip(pollfds.into_iter()) {
                 let revents = pollfd.revents();
                 if revents.contains(PollFlags::NVAL) {
-                    rwsub.error(Error::badf());
+                    rwsub.error(anyhow::anyhow!("rw subscription badf"));
                 } else if revents.contains(PollFlags::ERR) {
-                    rwsub.error(Error::io());
+                    rwsub.error(anyhow::anyhow!("rw subscription io error"));
                 } else if revents.contains(PollFlags::HUP) {
                     rwsub.complete(RwEventFlags::HANGUP);
                 } else {

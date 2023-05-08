@@ -1,7 +1,8 @@
 use crate::clocks::WasiClocks;
+use crate::filesystem::{Dir, TableFsExt};
 use crate::sched::WasiSched;
 use crate::stream::{InputStream, OutputStream, TableStreamExt};
-use crate::{Dir, DirPerms, FilePerms, Table, TableFsExt};
+use crate::{DirPerms, FilePerms, Table};
 use cap_rand::RngCore;
 
 #[derive(Default)]
@@ -20,6 +21,10 @@ pub struct WasiCtxBuilder {
 }
 
 impl WasiCtxBuilder {
+    pub fn new_sync() -> Self {
+        Self::default().set_sched(crate::sched::sync::SyncSched)
+    }
+
     pub fn set_stdin(mut self, stdin: impl InputStream + 'static) -> Self {
         self.stdin = Some(Box::new(stdin));
         self
@@ -33,6 +38,12 @@ impl WasiCtxBuilder {
     pub fn set_stderr(mut self, stderr: impl OutputStream + 'static) -> Self {
         self.stderr = Some(Box::new(stderr));
         self
+    }
+
+    pub fn inherit_stdio(self) -> Self {
+        self.set_stdin(crate::stdio::stdin())
+            .set_stdout(crate::stdio::stdout())
+            .set_stderr(crate::stdio::stderr())
     }
 
     pub fn set_env(mut self, env: &[(impl AsRef<str>, impl AsRef<str>)]) -> Self {

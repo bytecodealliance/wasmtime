@@ -1,19 +1,16 @@
+use anyhow::Error;
 use std::any::Any;
 use std::convert::TryInto;
-use std::io;
-use std::io::{Read, Write};
+use std::io::{self, Read, Write};
 use system_interface::io::ReadReady;
 
+use crate::{InputStream, OutputStream};
+#[cfg(unix)]
+use cap_std::io_lifetimes::{AsFd, BorrowedFd};
+#[cfg(windows)]
+use cap_std::io_lifetimes::{AsHandle, BorrowedHandle};
 #[cfg(windows)]
 use io_extras::os::windows::{AsHandleOrSocket, BorrowedHandleOrSocket};
-#[cfg(unix)]
-use io_lifetimes::{AsFd, BorrowedFd};
-#[cfg(windows)]
-use io_lifetimes::{AsHandle, BorrowedHandle};
-use wasi_common::{
-    stream::{InputStream, OutputStream},
-    Error, ErrorExt,
-};
 
 pub struct Stdin(std::io::Stdin);
 
@@ -70,7 +67,7 @@ impl InputStream for Stdin {
     }
 
     async fn readable(&self) -> Result<(), Error> {
-        Err(Error::badf())
+        Err(anyhow::anyhow!("idk"))
     }
 }
 #[cfg(windows)]
@@ -93,7 +90,7 @@ impl AsFd for Stdin {
     }
 }
 
-macro_rules! wasi_file_write_impl {
+macro_rules! wasi_output_stream_impl {
     ($ty:ty, $ident:ident) => {
         #[async_trait::async_trait]
         impl OutputStream for $ty {
@@ -169,11 +166,11 @@ pub struct Stdout(std::io::Stdout);
 pub fn stdout() -> Stdout {
     Stdout(std::io::stdout())
 }
-wasi_file_write_impl!(Stdout, Stdout);
+wasi_output_stream_impl!(Stdout, Stdout);
 
 pub struct Stderr(std::io::Stderr);
 
 pub fn stderr() -> Stderr {
     Stderr(std::io::stderr())
 }
-wasi_file_write_impl!(Stderr, Stderr);
+wasi_output_stream_impl!(Stderr, Stderr);

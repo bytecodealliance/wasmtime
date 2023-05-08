@@ -1,5 +1,5 @@
-#![allow(unused_variables, unreachable_code)]
-use crate::{wasi, Dir, DirPerms, File, FilePerms, Table, TableError, TableFsExt, WasiView};
+use crate::filesystem::{Dir, File, TableFsExt};
+use crate::{wasi, DirPerms, FilePerms, Table, TableError, WasiView};
 
 use wasi::filesystem::ErrorCode;
 
@@ -394,7 +394,9 @@ impl<T: WasiView> wasi::filesystem::Host for T {
     async fn set_times_at(
         &mut self,
         fd: wasi::filesystem::Descriptor,
-        path_flags: wasi::filesystem::PathFlags,
+        // TODO either remove the path flags or get cap_std to introduce a variant for set_times
+        // that doesnt follow symlinks:
+        _path_flags: wasi::filesystem::PathFlags,
         path: String,
         atim: wasi::filesystem::NewTimestamp,
         mtim: wasi::filesystem::NewTimestamp,
@@ -623,55 +625,55 @@ impl<T: WasiView> wasi::filesystem::Host for T {
 
     async fn change_file_permissions_at(
         &mut self,
-        fd: wasi::filesystem::Descriptor,
-        path_flags: wasi::filesystem::PathFlags,
-        path: String,
-        mode: wasi::filesystem::Modes,
+        _fd: wasi::filesystem::Descriptor,
+        _path_flags: wasi::filesystem::PathFlags,
+        _path: String,
+        _mode: wasi::filesystem::Modes,
     ) -> Result<(), wasi::filesystem::Error> {
         todo!()
     }
 
     async fn change_directory_permissions_at(
         &mut self,
-        fd: wasi::filesystem::Descriptor,
-        path_flags: wasi::filesystem::PathFlags,
-        path: String,
-        mode: wasi::filesystem::Modes,
+        _fd: wasi::filesystem::Descriptor,
+        _path_flags: wasi::filesystem::PathFlags,
+        _path: String,
+        _mode: wasi::filesystem::Modes,
     ) -> Result<(), wasi::filesystem::Error> {
         todo!()
     }
 
     async fn lock_shared(
         &mut self,
-        fd: wasi::filesystem::Descriptor,
+        _fd: wasi::filesystem::Descriptor,
     ) -> Result<(), wasi::filesystem::Error> {
         todo!()
     }
 
     async fn lock_exclusive(
         &mut self,
-        fd: wasi::filesystem::Descriptor,
+        _fd: wasi::filesystem::Descriptor,
     ) -> Result<(), wasi::filesystem::Error> {
         todo!()
     }
 
     async fn try_lock_shared(
         &mut self,
-        fd: wasi::filesystem::Descriptor,
+        _fd: wasi::filesystem::Descriptor,
     ) -> Result<(), wasi::filesystem::Error> {
         todo!()
     }
 
     async fn try_lock_exclusive(
         &mut self,
-        fd: wasi::filesystem::Descriptor,
+        _fd: wasi::filesystem::Descriptor,
     ) -> Result<(), wasi::filesystem::Error> {
         todo!()
     }
 
     async fn unlock(
         &mut self,
-        fd: wasi::filesystem::Descriptor,
+        _fd: wasi::filesystem::Descriptor,
     ) -> Result<(), wasi::filesystem::Error> {
         todo!()
     }
@@ -933,7 +935,7 @@ fn systemtime_from(
         .ok_or_else(|| ErrorCode::Overflow.into())
 }
 
-fn datetime_from(t: std::time::SystemTime) -> wasi::filesystem::Datetime {
+fn datetime_from(_t: std::time::SystemTime) -> wasi::filesystem::Datetime {
     todo!()
 }
 
