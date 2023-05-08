@@ -54,12 +54,12 @@ async fn instantiate(
     Ok((store, command))
 }
 async fn run_with_temp_dir(component: &str) {
-    let mut builder = WasiCtxBuilder::new_sync();
+    let mut builder = WasiCtxBuilder::new_sync().push_env("NO_FDFLAGS_SYNC_SUPPORT", "1");
 
     if cfg!(windows) {
         builder = builder
+            .inherit_stdio()
             .push_env("ERRNO_MODE_WINDOWS", "1")
-            .push_env("NO_FDFLAGS_SYNC_SUPPORT", "1")
             .push_env("NO_DANGLING_FILESYSTEM", "1")
             .push_env("NO_RENAME_DIR_TO_EMPTY_DIR", "1");
     }

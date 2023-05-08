@@ -395,9 +395,7 @@ impl<T: WasiView> wasi::filesystem::Host for T {
     async fn set_times_at(
         &mut self,
         fd: wasi::filesystem::Descriptor,
-        // TODO either remove the path flags or get cap_std to introduce a variant for set_times
-        // that doesnt follow symlinks:
-        _path_flags: wasi::filesystem::PathFlags,
+        path_flags: wasi::filesystem::PathFlags,
         path: String,
         atim: wasi::filesystem::NewTimestamp,
         mtim: wasi::filesystem::NewTimestamp,
@@ -411,11 +409,19 @@ impl<T: WasiView> wasi::filesystem::Host for T {
         }
         let atim = systemtimespec_from(atim)?;
         let mtim = systemtimespec_from(mtim)?;
-        d.dir.set_times(
-            &path,
-            atim.map(cap_fs_ext::SystemTimeSpec::from_std),
-            mtim.map(cap_fs_ext::SystemTimeSpec::from_std),
-        )?;
+        if symlink_follow(path_flags) {
+            d.dir.set_times(
+                &path,
+                atim.map(cap_fs_ext::SystemTimeSpec::from_std),
+                mtim.map(cap_fs_ext::SystemTimeSpec::from_std),
+            )?;
+        } else {
+            d.dir.set_symlink_times(
+                &path,
+                atim.map(cap_fs_ext::SystemTimeSpec::from_std),
+                mtim.map(cap_fs_ext::SystemTimeSpec::from_std),
+            )?;
+        }
         Ok(())
     }
 
@@ -423,7 +429,7 @@ impl<T: WasiView> wasi::filesystem::Host for T {
         &mut self,
         fd: wasi::filesystem::Descriptor,
         // TODO delete the path flags from this function
-        _old_path_flags: wasi::filesystem::PathFlags,
+        old_path_flags: wasi::filesystem::PathFlags,
         old_path: String,
         new_descriptor: wasi::filesystem::Descriptor,
         new_path: String,
@@ -436,6 +442,9 @@ impl<T: WasiView> wasi::filesystem::Host for T {
         let new_dir = table.get_dir(new_descriptor)?;
         if !new_dir.perms.contains(DirPerms::MUTATE) {
             return Err(ErrorCode::NotPermitted.into());
+        }
+        if symlink_follow(old_path_flags) {
+            return Err(ErrorCode::Invalid.into());
         }
         old_dir.dir.hard_link(&old_path, &new_dir.dir, &new_path)?;
         Ok(())
