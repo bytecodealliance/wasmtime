@@ -137,7 +137,6 @@ impl<R: Read + ReadReady + Any + Send + Sync> InputStream for ReadPipe<R> {
 /// use wasi_common::{pipe::WritePipe, WasiCtx, Table};
 /// let mut table = Table::new();
 /// let stdout = WritePipe::new_in_memory();
-/// // This is not a complete builder, use a real one from e.g. wasi-cap-std-sync or elsewhere:
 /// let mut ctx = WasiCtx::builder().set_stdout(stdout.clone()).build(&mut table).unwrap();
 /// // use ctx and table in an instance, then make sure it is dropped:
 /// drop(ctx);
