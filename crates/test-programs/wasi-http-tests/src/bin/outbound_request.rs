@@ -23,9 +23,9 @@ impl fmt::Debug for Response {
 
 impl Response {
     fn header(&self, name: &str) -> Option<&String> {
-        self.headers.iter().find_map(
-            |(k, v)| if k == name { Some(v) } else { None }
-        )
+        self.headers
+            .iter()
+            .find_map(|(k, v)| if k == name { Some(v) } else { None })
     }
 }
 
@@ -57,6 +57,12 @@ fn request(
 
     let future_response = default_outgoing_http::handle(request, None);
 
+    let incoming_response = types::future_incoming_response_get(future_response)
+        .ok_or_else(|| anyhow!("incoming response is available immediately"))?
+        // TODO: maybe anything that appears in the Result<_, E> position should impl
+        // Error? anyway, just use its Debug here:
+        .map_err(|e| anyhow!("{e:?}"))?;
+
     // TODO: The current implementation requires this drop after the request is sent.
     // The ownership semantics are unclear in wasi-http we should clarify exactly what is
     // supposed to happen here.
@@ -66,12 +72,6 @@ fn request(
     // its available immediately
 
     types::drop_outgoing_request(request);
-
-    let incoming_response = types::future_incoming_response_get(future_response)
-        .ok_or_else(|| anyhow!("incoming response is available immediately"))?
-        // TODO: maybe anything that appears in the Result<_, E> position should impl
-        // Error? anyway, just use its Debug here:
-        .map_err(|e| anyhow!("incoming response error: {e:?}"))?;
 
     types::drop_future_incoming_response(future_response);
 
@@ -101,7 +101,7 @@ fn request(
     })
 }
 
-fn main() -> Result<()> { 
+fn main() -> Result<()> {
     let r1 = request(
         types::MethodParam::Get,
         types::SchemeParam::Http,
@@ -149,6 +149,36 @@ fn main() -> Result<()> {
     let method = r3.header("x-wasmtime-test-method").unwrap();
     assert_eq!(method, "PUT");
     assert_eq!(r3.body, b"");
+
+    let r4 = request(
+        types::MethodParam::Other("OTHER"),
+        types::SchemeParam::Http,
+        "localhost:3000",
+        "/",
+        "",
+        &[],
+    );
+
+    let error = r4.unwrap_err();
+    assert_eq!(
+        error.to_string(),
+        "ErrorResult::UnexpectedError(\"unknown method OTHER\")"
+    );
+
+    let r5 = request(
+        types::MethodParam::Get,
+        types::SchemeParam::Other("WS"),
+        "localhost:3000",
+        "/",
+        "",
+        &[],
+    );
+
+    let error = r5.unwrap_err();
+    assert_eq!(
+        error.to_string(),
+        "ErrorResult::UnexpectedError(\"unsupported scheme WS\")"
+    );
 
     Ok(())
 }
