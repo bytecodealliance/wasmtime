@@ -1,7 +1,7 @@
 use crate::clocks::WasiClocks;
 use crate::sched::WasiSched;
 use crate::stream::{InputStream, OutputStream, TableStreamExt};
-use crate::{Dir, DirPerms, FilePerms, Table, TableDirExt};
+use crate::{Dir, DirPerms, FilePerms, Table, TableFsExt};
 use cap_rand::RngCore;
 
 #[derive(Default)]

@@ -1,7 +1,5 @@
 #![allow(unused_variables, unreachable_code)]
-use crate::{
-    wasi, Dir, DirPerms, File, FilePerms, Table, TableDirExt, TableError, TableFileExt, WasiView,
-};
+use crate::{wasi, Dir, DirPerms, File, FilePerms, Table, TableError, TableFsExt, WasiView};
 
 use wasi::filesystem::ErrorCode;
 
@@ -198,15 +196,10 @@ impl<T: WasiView> wasi::filesystem::Host for T {
         }
 
         let mut buffer = vec![0; len.try_into().unwrap_or(usize::MAX)];
-        let (bytes_read, end) = match f
-            .file
-            .read_vectored_at(&mut [IoSliceMut::new(&mut buffer)], offset)
-        {
-            Ok(0) => (0, true),
-            Ok(n) => (n as u64, false),
-            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => (0, false),
-            Err(e) => Err(e)?,
-        };
+        let (bytes_read, end) = crate::filesystem::read_result(
+            f.file
+                .read_vectored_at(&mut [IoSliceMut::new(&mut buffer)], offset),
+        )?;
 
         buffer.truncate(
             bytes_read
@@ -688,16 +681,17 @@ impl<T: WasiView> wasi::filesystem::Host for T {
         fd: wasi::filesystem::Descriptor,
         offset: wasi::filesystem::Filesize,
     ) -> anyhow::Result<wasi::streams::InputStream> {
-        todo!();
-        /*
+        // FIXME: this skips the perm check. We can't return a NotPermitted
+        // error code here. Do we need to change the interface?
+
         // Trap if fd lookup fails:
-        let f = self.table_mut().get_file_mut(fd)?;
+        let f = self.table().get_file(fd)?;
 
         // Duplicate the file descriptor so that we get an indepenent lifetime.
-        let clone = f.dup();
+        let clone = std::sync::Arc::clone(&f.file);
 
         // Create a stream view for it.
-        let reader = FileStream::new_reader(clone, offset);
+        let reader = crate::filesystem::FileInputStream::new(clone, offset);
 
         // Box it up.
         let boxed: Box<dyn crate::InputStream> = Box::new(reader);
@@ -706,7 +700,6 @@ impl<T: WasiView> wasi::filesystem::Host for T {
         let index = self.table_mut().push(Box::new(boxed))?;
 
         Ok(index)
-        */
     }
 
     async fn write_via_stream(
@@ -714,16 +707,14 @@ impl<T: WasiView> wasi::filesystem::Host for T {
         fd: wasi::filesystem::Descriptor,
         offset: wasi::filesystem::Filesize,
     ) -> anyhow::Result<wasi::streams::OutputStream> {
-        todo!();
-        /*
         // Trap if fd lookup fails:
-        let f = self.table_mut().get_file_mut(fd)?;
+        let f = self.table().get_file(fd)?;
 
         // Duplicate the file descriptor so that we get an indepenent lifetime.
-        let clone = f.dup();
+        let clone = std::sync::Arc::clone(&f.file);
 
         // Create a stream view for it.
-        let writer = FileStream::new_writer(clone, offset);
+        let writer = crate::filesystem::FileOutputStream::new(clone, offset);
 
         // Box it up.
         let boxed: Box<dyn crate::OutputStream> = Box::new(writer);
@@ -732,23 +723,20 @@ impl<T: WasiView> wasi::filesystem::Host for T {
         let index = self.table_mut().push(Box::new(boxed))?;
 
         Ok(index)
-        */
     }
 
     async fn append_via_stream(
         &mut self,
         fd: wasi::filesystem::Descriptor,
     ) -> anyhow::Result<wasi::streams::OutputStream> {
-        todo!();
-        /*
         // Trap if fd lookup fails:
-        let f = self.table_mut().get_file_mut(fd)?;
+        let f = self.table().get_file(fd)?;
 
         // Duplicate the file descriptor so that we get an indepenent lifetime.
-        let clone = f.dup();
+        let clone = std::sync::Arc::clone(&f.file);
 
         // Create a stream view for it.
-        let appender = FileStream::new_appender(clone);
+        let appender = crate::filesystem::FileAppendStream::new(clone);
 
         // Box it up.
         let boxed: Box<dyn crate::OutputStream> = Box::new(appender);
@@ -757,7 +745,6 @@ impl<T: WasiView> wasi::filesystem::Host for T {
         let index = self.table_mut().push(Box::new(boxed))?;
 
         Ok(index)
-        */
     }
 }
 
