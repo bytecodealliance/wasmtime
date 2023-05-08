@@ -5,8 +5,8 @@ use wasmtime::{
     component::{Component, Linker},
     Config, Engine, Store,
 };
-//use wasmtime_wasi_sockets::{WasiSocketsCtx, WasiSocketsView};
-//use wasmtime_wasi_sockets_sync::WasiSocketsCtxBuilder;
+use wasmtime_wasi_sockets::{WasiSocketsCtx, WasiSocketsView};
+use wasmtime_wasi_sockets_sync::WasiSocketsCtxBuilder;
 
 use clap::Parser;
 
@@ -91,7 +91,7 @@ async fn main() -> Result<()> {
         struct CommandCtx {
             table: Table,
             wasi: WasiCtx,
-            // sockets: WasiSocketsCtx,
+            sockets: WasiSocketsCtx,
         }
         impl WasiView for CommandCtx {
             fn table(&self) -> &Table {
@@ -107,7 +107,6 @@ async fn main() -> Result<()> {
                 &mut self.wasi
             }
         }
-        /*
         let sockets = WasiSocketsCtxBuilder::new()
             .inherit_network(cap_std::ambient_authority())
             .build();
@@ -125,17 +124,16 @@ async fn main() -> Result<()> {
                 &mut self.sockets
             }
         }
-        */
 
         let mut linker = Linker::new(&engine);
         wasi::command::add_to_linker(&mut linker)?;
-        //wasmtime_wasi_sockets::add_to_linker(&mut linker)?;
+        wasmtime_wasi_sockets::add_to_linker(&mut linker)?;
         let mut store = Store::new(
             &engine,
             CommandCtx {
                 table,
                 wasi,
-                //sockets,
+                sockets,
             },
         );
 
@@ -195,7 +193,7 @@ async fn module_main(module_bytes: Vec<u8>, table: Table, wasi: WasiCtx) -> Resu
     struct Preview1CommandCtx {
         table: Table,
         wasi: WasiCtx,
-        //sockets: WasiSocketsCtx,
+        sockets: WasiSocketsCtx,
         adapter: WasiPreview1Adapter,
     }
     impl WasiView for Preview1CommandCtx {
@@ -212,7 +210,6 @@ async fn module_main(module_bytes: Vec<u8>, table: Table, wasi: WasiCtx) -> Resu
             &mut self.wasi
         }
     }
-    /*
     impl WasiSocketsView for Preview1CommandCtx {
         fn table(&self) -> &Table {
             &self.table
@@ -227,7 +224,6 @@ async fn module_main(module_bytes: Vec<u8>, table: Table, wasi: WasiCtx) -> Resu
             &mut self.sockets
         }
     }
-    */
     impl WasiPreview1View for Preview1CommandCtx {
         fn adapter(&self) -> &WasiPreview1Adapter {
             &self.adapter
@@ -237,16 +233,14 @@ async fn module_main(module_bytes: Vec<u8>, table: Table, wasi: WasiCtx) -> Resu
         }
     }
 
-    /*
     let sockets = WasiSocketsCtxBuilder::new()
         .inherit_network(cap_std::ambient_authority())
         .build();
-    */
     let adapter = WasiPreview1Adapter::new();
     let ctx = Preview1CommandCtx {
         table,
         wasi,
-        // sockets,
+        sockets,
         adapter,
     };
 
