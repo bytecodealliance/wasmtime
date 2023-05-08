@@ -8,6 +8,7 @@ use crate::types::{
 use crate::WasiHttp;
 use anyhow::{anyhow, bail};
 use std::collections::{hash_map::Entry, HashMap};
+use tokio::runtime::{Handle, Runtime};
 
 impl crate::types::Host for WasiHttp {
     fn drop_fields(&mut self, fields: Fields) -> wasmtime::Result<()> {
@@ -269,15 +270,32 @@ impl crate::types::Host for WasiHttp {
     }
     fn drop_future_incoming_response(
         &mut self,
-        _f: FutureIncomingResponse,
+        future: FutureIncomingResponse,
     ) -> wasmtime::Result<()> {
-        bail!("unimplemented: drop_future_incoming_response")
+        self.futures.remove(&future);
+        Ok(())
     }
     fn future_incoming_response_get(
         &mut self,
-        _f: FutureIncomingResponse,
+        future: FutureIncomingResponse,
     ) -> wasmtime::Result<Option<Result<IncomingResponse, Error>>> {
-        bail!("unimplemented: future_incoming_response_get")
+        let f = self
+            .futures
+            .get(&future)
+            .ok_or_else(|| anyhow!("future not found: {future}"))?;
+
+        let (handle, _runtime) = match Handle::try_current() {
+            Ok(h) => (h, None),
+            Err(_) => {
+                let rt = Runtime::new().unwrap();
+                let _enter = rt.enter();
+                (rt.handle().clone(), Some(rt))
+            }
+        };
+        let response = handle
+            .block_on(self.handle_async(f.request_id, f.options))
+            .map_err(|e| crate::types::Error::UnexpectedError(e.to_string()));
+        Ok(Some(response))
     }
     fn listen_to_future_incoming_response(
         &mut self,
