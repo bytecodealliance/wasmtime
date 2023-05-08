@@ -111,6 +111,12 @@
 (decl pure u8_and (u8 u8) u8)
 (extern constructor u8_and u8_and)
 
+(decl pure u8_shl (u8 u8) u8)
+(extern constructor u8_shl u8_shl)
+
+(decl pure u8_shr (u8 u8) u8)
+(extern constructor u8_shr u8_shr)
+
 (decl pure u32_add (u32 u32) u32)
 (extern constructor u32_add u32_add)
 

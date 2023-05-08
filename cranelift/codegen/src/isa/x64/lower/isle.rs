@@ -1047,6 +1047,11 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     fn xmi_imm(&mut self, imm: u32) -> XmmMemImm {
         XmmMemImm::new(RegMemImm::imm(imm)).unwrap()
     }
+
+    fn insert_i8x16_lane_hole(&mut self, hole_idx: u8) -> VCodeConstant {
+        let mask = -1i128 as u128;
+        self.emit_u128_le_const(mask ^ (0xff << (hole_idx * 8)))
+    }
 }
 
 impl IsleContext<'_, '_, MInst, X64Backend> {
