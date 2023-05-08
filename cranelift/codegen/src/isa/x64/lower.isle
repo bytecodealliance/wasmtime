@@ -1293,11 +1293,25 @@
 ;; the end of the world hopefully as that's a pretty old instruction set, so
 ;; this is the "simplest" version that works on SSE2 for now.
 ;;
-;; This lowering loads a constant with all 1s except for the "hole" where this
-;; value will get placed into. The `val` is zero-extended to 32-bits and moved
-;; into an xmm register with `movd` which zeros upper xmm bits as well. This
-;; 32-bit value is then shuffled to the correct 32x4 lane and or'd into the
-;; final destination.
+;; This lowering masks the original vector with a constant with all 1s except
+;; for the "hole" where this value will get placed into, meaning the desired
+;; lane is guaranteed as all 0s. Next the `val` is shuffled into this hole with
+;; a few operations:
+;;
+;;  1. The `val` is zero-extended to 32-bits to guarantee the lower 32-bits
+;;     are all defined.
+;;  2. An arithmetic shift-left is used with the low two bits of `n`, the
+;;     desired lane, to move the value into the right position within the 32-bit
+;;     register value.
+;;  3. The 32-bit register is moved with `movd` into an XMM register
+;;  4. The XMM register, where all lanes are 0 except for the first lane which
+;;     has the shifted value, is then shuffled with `pshufd` to move the
+;;     shifted value to the correct and final lane. This uses the upper two
+;;     bits of `n` to index the i32x4 lane that we're targeting.
+;;
+;; This all, laboriously, gets the `val` into the desired lane so it's then
+;; `por`'d with the original vec-with-a-hole to produce the final result of the
+;; insertion.
 (rule (vec_insert_lane $I8X16 vec val n)
       (let ((vec_with_hole Xmm (x64_pand vec (insert_i8x16_lane_hole n)))
             (val Gpr (x64_movzx (ExtMode.BL) val))
