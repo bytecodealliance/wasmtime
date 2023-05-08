@@ -1669,7 +1669,8 @@ pub enum LabelUse {
     /// the immediate field of an `auipc` instruction.
     PCRelHi20,
 
-    /// Equivalent to the `R_RISCV_PCREL_LO12_I` relocation, Allows setting
+    /// Similar to the `R_RISCV_PCREL_LO12_I` relocation but pointing to
+    /// the final address, instead of the `PCREL_HI20` label. Allows setting
     /// the immediate field of I Type instructions such as `addi` or `lw`.
     ///
     /// Since we currently don't support offsets in labels, this relocation has
@@ -1836,8 +1837,17 @@ impl LabelUse {
             }
 
             LabelUse::PCRelLo12I => {
-                // We add 4 here since this relocation usually follows a PCRelHi20 relocation, at the previous
-                // instruction. So we need to account for the 4 byte difference in offsets there.
+                // `offset` is the offset from the current instruction to the target address.
+                //
+                // However we are trying to compute the offset to the target address from the previous instruction.
+                // The previous instruction should be the one that contains the PCRelHi20 relocation and
+                // stores/references the program counter (`auipc` usually).
+                //
+                // Since we are trying to compute the offset from the previous instruction, we can
+                // represent it as offset = target_address - (current_instruction_address - 4)
+                // which is equivalent to offset = target_address - current_instruction_address + 4.
+                //
+                // Thus we need to add 4 to the offset here.
                 let lo12 = (offset + 4) as u32 & 0xFFF;
                 let insn = (insn & 0xFFFFF) | (lo12 << 20);
                 buffer[0..4].clone_from_slice(&u32::to_le_bytes(insn));
