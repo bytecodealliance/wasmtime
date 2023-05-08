@@ -39,26 +39,26 @@ impl TableFsExt for Table {
         self.push(Box::new(file))
     }
     fn delete_file(&mut self, fd: u32) -> Result<(), TableError> {
-        self.delete::<Box<File>>(fd)
+        self.delete::<File>(fd)
     }
     fn is_file(&self, fd: u32) -> bool {
-        self.is::<Box<File>>(fd)
+        self.is::<File>(fd)
     }
     fn get_file(&self, fd: u32) -> Result<&File, TableError> {
-        self.get::<Box<File>>(fd).map(|d| d.as_ref())
+        self.get::<File>(fd)
     }
 
     fn push_dir(&mut self, dir: Dir) -> Result<u32, TableError> {
         self.push(Box::new(dir))
     }
     fn delete_dir(&mut self, fd: u32) -> Result<(), TableError> {
-        self.delete::<Box<Dir>>(fd)
+        self.delete::<Dir>(fd)
     }
     fn is_dir(&self, fd: u32) -> bool {
-        self.is::<Box<Dir>>(fd)
+        self.is::<Dir>(fd)
     }
     fn get_dir(&self, fd: u32) -> Result<&Dir, TableError> {
-        self.get::<Box<Dir>>(fd).map(|d| d.as_ref())
+        self.get::<Dir>(fd)
     }
 }
 

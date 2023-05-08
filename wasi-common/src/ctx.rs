@@ -22,7 +22,13 @@ pub struct WasiCtxBuilder {
 
 impl WasiCtxBuilder {
     pub fn new_sync() -> Self {
-        Self::default().set_sched(crate::sched::sync::SyncSched)
+        Self::default()
+            .set_sched(crate::sched::sync::SyncSched)
+            .set_clocks(crate::clocks::host::clocks_ctx())
+            .set_random(crate::random::thread_rng())
+            .set_stdin(crate::pipe::ReadPipe::new(std::io::empty()))
+            .set_stdout(crate::pipe::WritePipe::new(std::io::sink()))
+            .set_stderr(crate::pipe::WritePipe::new(std::io::sink()))
     }
 
     pub fn set_stdin(mut self, stdin: impl InputStream + 'static) -> Self {

@@ -935,18 +935,22 @@ fn systemtime_from(
         .ok_or_else(|| ErrorCode::Overflow.into())
 }
 
-fn datetime_from(_t: std::time::SystemTime) -> wasi::filesystem::Datetime {
-    todo!()
+fn datetime_from(t: std::time::SystemTime) -> wasi::wall_clock::Datetime {
+    // FIXME make this infallible or handle errors properly
+    wasi::wall_clock::Datetime::try_from(cap_std::time::SystemTime::from_std(t)).unwrap()
 }
 
 fn descriptorstat_from(meta: cap_std::fs::Metadata) -> wasi::filesystem::DescriptorStat {
     use cap_fs_ext::MetadataExt;
     wasi::filesystem::DescriptorStat {
+        // FIXME didn't we agree that the wit could be changed to make the device and ino fields
+        // optional?
         device: meta.dev(),
         inode: meta.ino(),
         type_: descriptortype_from(meta.file_type()),
         link_count: meta.nlink(),
         size: meta.len(),
+        // FIXME change the wit to make these timestamps optional
         data_access_timestamp: meta
             .accessed()
             .map(|t| datetime_from(t.into_std()))
