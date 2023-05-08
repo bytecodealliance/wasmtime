@@ -1783,9 +1783,6 @@ impl LabelUse {
     }
 }
 
-pub(crate) fn overflow_already_lowerd() -> ! {
-    unreachable!("overflow and nof should be lowered at early phase.")
-}
 #[cfg(test)]
 mod test {
     use super::*;
