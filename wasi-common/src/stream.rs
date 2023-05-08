@@ -164,7 +164,7 @@ pub trait TableStreamExt {
     fn get_output_stream(&self, fd: u32) -> Result<&dyn OutputStream, TableError>;
     fn get_output_stream_mut(&mut self, fd: u32) -> Result<&mut Box<dyn OutputStream>, TableError>;
 }
-impl TableStreamExt for crate::table::Table {
+impl TableStreamExt for crate::Table {
     fn push_input_stream(
         &mut self,
         istream: Box<dyn crate::InputStream>,
@@ -189,5 +189,27 @@ impl TableStreamExt for crate::table::Table {
     }
     fn get_output_stream_mut(&mut self, fd: u32) -> Result<&mut Box<dyn OutputStream>, TableError> {
         self.get_mut::<Box<dyn OutputStream>>(fd)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    #[test]
+    fn input_stream_in_table() {
+        let empty_pipe = crate::pipe::ReadPipe::new(std::io::empty());
+        let mut table = crate::Table::new();
+        let ix = table.push_input_stream(Box::new(empty_pipe)).unwrap();
+        let _ = table.get_input_stream(ix).unwrap();
+        let _ = table.get_input_stream_mut(ix).unwrap();
+    }
+
+    #[test]
+    fn output_stream_in_table() {
+        let dev_null = crate::pipe::WritePipe::new(std::io::sink());
+        let mut table = crate::Table::new();
+        let ix = table.push_output_stream(Box::new(dev_null)).unwrap();
+        let _ = table.get_output_stream(ix).unwrap();
+        let _ = table.get_output_stream_mut(ix).unwrap();
     }
 }

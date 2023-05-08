@@ -1,4 +1,5 @@
 use crate::filesystem::{Dir, File, TableFsExt};
+use crate::stream::TableStreamExt;
 use crate::{wasi, DirPerms, FilePerms, Table, TableError, WasiView};
 
 use wasi::filesystem::ErrorCode;
@@ -695,11 +696,8 @@ impl<T: WasiView> wasi::filesystem::Host for T {
         // Create a stream view for it.
         let reader = crate::filesystem::FileInputStream::new(clone, offset);
 
-        // Box it up.
-        let boxed: Box<dyn crate::InputStream> = Box::new(reader);
-
         // Insert the stream view into the table. Trap if the table is full.
-        let index = self.table_mut().push(Box::new(boxed))?;
+        let index = self.table_mut().push_input_stream(Box::new(reader))?;
 
         Ok(index)
     }
@@ -718,11 +716,8 @@ impl<T: WasiView> wasi::filesystem::Host for T {
         // Create a stream view for it.
         let writer = crate::filesystem::FileOutputStream::new(clone, offset);
 
-        // Box it up.
-        let boxed: Box<dyn crate::OutputStream> = Box::new(writer);
-
         // Insert the stream view into the table. Trap if the table is full.
-        let index = self.table_mut().push(Box::new(boxed))?;
+        let index = self.table_mut().push_output_stream(Box::new(writer))?;
 
         Ok(index)
     }
@@ -740,11 +735,8 @@ impl<T: WasiView> wasi::filesystem::Host for T {
         // Create a stream view for it.
         let appender = crate::filesystem::FileAppendStream::new(clone);
 
-        // Box it up.
-        let boxed: Box<dyn crate::OutputStream> = Box::new(appender);
-
         // Insert the stream view into the table. Trap if the table is full.
-        let index = self.table_mut().push(Box::new(boxed))?;
+        let index = self.table_mut().push_output_stream(Box::new(appender))?;
 
         Ok(index)
     }
@@ -1013,10 +1005,24 @@ impl TableReaddirExt for Table {
         self.push(Box::new(readdir))
     }
     fn delete_readdir(&mut self, fd: u32) -> Result<(), TableError> {
-        self.delete::<Box<ReaddirIterator>>(fd)
+        self.delete::<ReaddirIterator>(fd)
     }
 
     fn get_readdir(&self, fd: u32) -> Result<&ReaddirIterator, TableError> {
-        self.get::<Box<ReaddirIterator>>(fd).map(|d| d.as_ref())
+        self.get::<ReaddirIterator>(fd)
+    }
+}
+#[cfg(test)]
+mod test {
+    use super::*;
+    #[test]
+    fn table_readdir_works() {
+        let mut table = Table::new();
+        let ix = table
+            .push_readdir(ReaddirIterator::new(std::iter::empty()))
+            .unwrap();
+        let _ = table.get_readdir(ix).unwrap();
+        table.delete_readdir(ix).unwrap();
+        let _ = table.get_readdir(ix).err().unwrap();
     }
 }
