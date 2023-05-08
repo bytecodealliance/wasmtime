@@ -310,8 +310,6 @@ pub struct Global {
     pub wasm_ty: crate::WasmType,
     /// A flag indicating whether the value may change at runtime.
     pub mutability: bool,
-    // /// The source of the initial value.
-    // pub initializer: GlobalInit,
 }
 
 /// Globals are initialized via the `const` operators or by referring to another import.
