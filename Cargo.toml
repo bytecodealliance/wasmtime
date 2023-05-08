@@ -239,10 +239,6 @@ component-model = [
 ]
 winch = ["wasmtime/winch"]
 
-# Stub feature that does nothing, for Cargo-features compatibility: the new
-# backend is the default now.
-experimental_x64 = []
-
 [[test]]
 name = "host_segfault"
 harness = false

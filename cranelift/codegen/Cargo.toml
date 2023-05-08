@@ -77,9 +77,6 @@ x86 = []
 arm64 = []
 s390x = []
 riscv64 = []
-# Stub feature that does nothing, for Cargo-features compatibility: the new
-# backend is the default now.
-experimental_x64 = []
 
 # Option to enable all architectures.
 all-arch = [
