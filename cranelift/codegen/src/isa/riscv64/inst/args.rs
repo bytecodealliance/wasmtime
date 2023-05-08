@@ -1623,19 +1623,7 @@ impl Inst {
         s
     }
 }
-impl Default for FenceFm {
-    fn default() -> Self {
-        Self::None
-    }
-}
-impl FenceFm {
-    pub(crate) fn as_u32(self) -> u32 {
-        match self {
-            FenceFm::None => 0,
-            FenceFm::Tso => 0b1000,
-        }
-    }
-}
+
 impl FloatRoundOP {
     pub(crate) fn op_name(self) -> &'static str {
         match self {
