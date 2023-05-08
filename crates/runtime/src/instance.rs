@@ -1007,15 +1007,14 @@ impl Instance {
     }
 
     unsafe fn initialize_vmctx_globals(&mut self, module: &Module) {
-        let num_imports = module.num_imported_globals;
-        for (index, global) in module.globals.iter().skip(num_imports) {
-            let def_index = module.defined_global_index(index).unwrap();
-            let to = self.global_ptr(def_index);
+        for (index, init) in module.global_initializers.iter() {
+            let to = self.global_ptr(index);
+            let wasm_ty = module.globals[module.global_index(index)].wasm_ty;
 
             // Initialize the global before writing to it
             ptr::write(to, VMGlobalDefinition::new());
 
-            match module.global_initializers[def_index] {
+            match *init {
                 GlobalInit::I32Const(x) => *(*to).as_i32_mut() = x,
                 GlobalInit::I64Const(x) => *(*to).as_i64_mut() = x,
                 GlobalInit::F32Const(x) => *(*to).as_f32_bits_mut() = x,
@@ -1030,7 +1029,7 @@ impl Instance {
                     // Globals of type `externref` need to manage the reference
                     // count as values move between globals, everything else is just
                     // copy-able bits.
-                    match global.wasm_ty {
+                    match wasm_ty {
                         WasmType::ExternRef => {
                             *(*to).as_externref_mut() = from.as_externref().clone()
                         }
@@ -1040,7 +1039,7 @@ impl Instance {
                 GlobalInit::RefFunc(f) => {
                     *(*to).as_func_ref_mut() = self.get_func_ref(f).unwrap() as *const VMFuncRef;
                 }
-                GlobalInit::RefNullConst => match global.wasm_ty {
+                GlobalInit::RefNullConst => match wasm_ty {
                     // `VMGlobalDefinition::new()` already zeroed out the bits
                     WasmType::FuncRef => {}
                     WasmType::ExternRef => {}
