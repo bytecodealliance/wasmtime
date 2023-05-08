@@ -267,7 +267,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                         }
                         TypeRef::Global(ty) => {
                             self.result.module.num_imported_globals += 1;
-                            EntityType::Global(Global::new(ty, GlobalInit::Import)?)
+                            EntityType::Global(Global::new(ty)?)
                         }
                         TypeRef::Table(ty) => {
                             self.result.module.num_imported_tables += 1;
@@ -361,8 +361,9 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                             )));
                         }
                     };
-                    let ty = Global::new(ty, initializer)?;
+                    let ty = Global::new(ty)?;
                     self.result.module.globals.push(ty);
+                    self.result.module.global_initializers.push(initializer);
                 }
             }
 

@@ -10,8 +10,9 @@ use crate::func_translator::FuncTranslator;
 use crate::state::FuncTranslationState;
 use crate::WasmType;
 use crate::{
-    DataIndex, DefinedFuncIndex, ElemIndex, FuncIndex, Global, GlobalIndex, Heap, HeapData,
-    HeapStyle, Memory, MemoryIndex, Table, TableIndex, TypeIndex, WasmFuncType, WasmResult,
+    DataIndex, DefinedFuncIndex, ElemIndex, FuncIndex, Global, GlobalIndex, GlobalInit, Heap,
+    HeapData, HeapStyle, Memory, MemoryIndex, Table, TableIndex, TypeIndex, WasmFuncType,
+    WasmResult,
 };
 use core::convert::TryFrom;
 use cranelift_codegen::cursor::FuncCursor;
@@ -714,7 +715,7 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
         Ok(())
     }
 
-    fn declare_global(&mut self, global: Global) -> WasmResult<()> {
+    fn declare_global(&mut self, global: Global, _init: GlobalInit) -> WasmResult<()> {
         self.info.globals.push(Exportable::new(global));
         Ok(())
     }

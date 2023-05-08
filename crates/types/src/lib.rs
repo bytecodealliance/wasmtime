@@ -310,8 +310,6 @@ pub struct Global {
     pub wasm_ty: crate::WasmType,
     /// A flag indicating whether the value may change at runtime.
     pub mutability: bool,
-    /// The source of the initial value.
-    pub initializer: GlobalInit,
 }
 
 /// Globals are initialized via the `const` operators or by referring to another import.
@@ -333,17 +331,14 @@ pub enum GlobalInit {
     RefNullConst,
     /// A `ref.func <index>`.
     RefFunc(FuncIndex),
-    ///< The global is imported from, and thus initialized by, a different module.
-    Import,
 }
 
 impl Global {
     /// Creates a new `Global` type from wasmparser's representation.
-    pub fn new(ty: wasmparser::GlobalType, initializer: GlobalInit) -> WasmResult<Global> {
+    pub fn new(ty: wasmparser::GlobalType) -> WasmResult<Global> {
         Ok(Global {
             wasm_ty: ty.content_type.try_into()?,
             mutability: ty.mutable,
-            initializer,
         })
     }
 }
