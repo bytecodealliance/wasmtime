@@ -517,7 +517,7 @@ impl<
     }
 
     async fn proc_raise(&mut self, _sig: types::Signal) -> Result<(), types::Error> {
-        todo!()
+        Err(types::Errno::Notsup.into())
     }
 
     async fn sched_yield(&mut self) -> Result<(), types::Error> {
