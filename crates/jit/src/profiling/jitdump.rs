@@ -55,6 +55,9 @@ pub fn new() -> Result<Box<dyn ProfilingAgent>> {
 impl ProfilingAgent for JitDumpAgent {
     /// Sent when a method is compiled and loaded into memory by the VM.
     fn module_load(&self, module: &CompiledModule) {
+        let mut jitdump_file = JITDUMP_FILE.lock().unwrap();
+        let jitdump_file = jitdump_file.as_mut().unwrap();
+
         for (idx, func) in module.finished_functions() {
             let addr = func.as_ptr();
             let len = func.len();
@@ -86,17 +89,22 @@ impl ProfilingAgent for JitDumpAgent {
         {
             let addr = body.as_ptr();
             let len = body.len();
-            self.load_single_trampoline(&name, addr, len);
+            self.load(&name, addr, len, jitdump_file);
         }
     }
 
     fn load_single_trampoline(&self, name: &str, addr: *const u8, size: usize) {
         let mut jitdump_file = JITDUMP_FILE.lock().unwrap();
         let jitdump_file = jitdump_file.as_mut().unwrap();
+        self.load(&name, addr, size, jitdump_file);
+    }
+}
 
-        let timestamp = jitdump_file.get_time_stamp();
+impl JitDumpAgent {
+    fn load(&self, name: &str, addr: *const u8, size: usize, file: &mut JitDumpFile) {
+        let timestamp = file.get_time_stamp();
         if let Err(err) =
-            jitdump_file.dump_code_load_record(&name, addr, size, timestamp, self.pid, self.pid)
+            file.dump_code_load_record(&name, addr, size, timestamp, self.pid, self.pid)
         {
             println!("Jitdump: write_code_load_failed_record failed: {:?}\n", err);
         }
