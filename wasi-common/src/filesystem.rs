@@ -107,6 +107,7 @@ impl InputStream for FileInputStream {
     }
     #[cfg(windows)]
     fn pollable_read(&self) -> Option<io_extras::os::windows::BorrowedHandleOrSocket> {
+        use io_extras::os::windows::AsHandleOrSocket;
         Some(self.file.as_handle_or_socket())
     }
     async fn read(&mut self, buf: &mut [u8]) -> anyhow::Result<(u64, bool)> {
@@ -175,6 +176,7 @@ impl OutputStream for FileOutputStream {
     /// that it can be polled with a host poll.
     #[cfg(windows)]
     fn pollable_write(&self) -> Option<io_extras::os::windows::BorrowedHandleOrSocket> {
+        use io_extras::os::windows::AsHandleOrSocket;
         Some(self.file.as_handle_or_socket())
     }
 
@@ -235,6 +237,7 @@ impl OutputStream for FileAppendStream {
     /// that it can be polled with a host poll.
     #[cfg(windows)]
     fn pollable_write(&self) -> Option<io_extras::os::windows::BorrowedHandleOrSocket> {
+        use io_extras::os::windows::AsHandleOrSocket;
         Some(self.file.as_handle_or_socket())
     }
 

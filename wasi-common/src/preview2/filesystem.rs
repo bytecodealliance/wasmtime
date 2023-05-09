@@ -96,7 +96,7 @@ impl<T: WasiView> wasi::filesystem::Host for T {
         let table = self.table();
         if table.is_file(fd) {
             let f = table.get_file(fd)?;
-            let mut flags = get_from_fdflags(&f.file)?;
+            let mut flags = get_from_fdflags(&*f.file)?;
             if f.perms.contains(FilePerms::READ) {
                 flags |= DescriptorFlags::READ;
             }
@@ -270,8 +270,8 @@ impl<T: WasiView> wasi::filesystem::Host for T {
         let entries = entries.filter(|entry| {
             use windows_sys::Win32::Foundation::{ERROR_ACCESS_DENIED, ERROR_SHARING_VIOLATION};
             if let Err(ReaddirError::Io(err)) = entry {
-                if err.raw_os_error() == Some(ERROR_SHARING_VIOLATION as u32)
-                    || err.raw_os_error() == Some(ERROR_ACCESS_DENIED as u32)
+                if err.raw_os_error() == Some(ERROR_SHARING_VIOLATION as i32)
+                    || err.raw_os_error() == Some(ERROR_ACCESS_DENIED as i32)
                 {
                     return false;
                 }
@@ -612,6 +612,10 @@ impl<T: WasiView> wasi::filesystem::Host for T {
         src_path: String,
         dest_path: String,
     ) -> Result<(), wasi::filesystem::Error> {
+        // On windows, Dir.symlink is provided by DirExt
+        #[cfg(windows)]
+        use cap_fs_ext::DirExt;
+
         let table = self.table();
         let d = table.get_dir(fd)?;
         if !d.perms.contains(DirPerms::MUTATE) {
@@ -796,78 +800,33 @@ fn from_raw_os_error(err: Option<i32>) -> Option<wasi::filesystem::Error> {
     })
 }
 #[cfg(windows)]
-fn from_raw_os_error(raw_os_error: Option<i32>) -> Option<Error> {
+fn from_raw_os_error(raw_os_error: Option<i32>) -> Option<wasi::filesystem::Error> {
     use windows_sys::Win32::Foundation;
-    use windows_sys::Win32::Networking::WinSock;
-
-    match raw_os_error.map(|code| code as u32) {
-        Some(Foundation::ERROR_BAD_ENVIRONMENT) => return Some(ErrorCode::TooBig.into()),
-        Some(Foundation::ERROR_FILE_NOT_FOUND) => return Some(ErrorCode::Noent.into()),
-        Some(Foundation::ERROR_PATH_NOT_FOUND) => return Some(ErrorCode::Noent.into()),
-        Some(Foundation::ERROR_TOO_MANY_OPEN_FILES) => return Some(ErrorCode::Nfile.into()),
-        Some(Foundation::ERROR_ACCESS_DENIED) => return Some(ErrorCode::Acces.into()),
-        Some(Foundation::ERROR_SHARING_VIOLATION) => return Some(ErrorCode::Acces.into()),
-        Some(Foundation::ERROR_PRIVILEGE_NOT_HELD) => return Some(ErrorCode::Perm.into()),
-        Some(Foundation::ERROR_INVALID_HANDLE) => return Some(ErrorCode::Badf.into()),
-        Some(Foundation::ERROR_INVALID_NAME) => return Some(ErrorCode::Noent.into()),
-        Some(Foundation::ERROR_NOT_ENOUGH_MEMORY) => return Some(ErrorCode::Nomem.into()),
-        Some(Foundation::ERROR_OUTOFMEMORY) => return Some(ErrorCode::Nomem.into()),
-        Some(Foundation::ERROR_DIR_NOT_EMPTY) => return Some(ErrorCode::Notempty.into()),
-        Some(Foundation::ERROR_NOT_READY) => return Some(ErrorCode::Busy.into()),
-        Some(Foundation::ERROR_BUSY) => return Some(ErrorCode::Busy.into()),
-        Some(Foundation::ERROR_NOT_SUPPORTED) => return Some(ErrorCode::Notsup.into()),
-        Some(Foundation::ERROR_FILE_EXISTS) => return Some(ErrorCode::Exist.into()),
-        Some(Foundation::ERROR_BROKEN_PIPE) => return Some(ErrorCode::Pipe.into()),
-        Some(Foundation::ERROR_BUFFER_OVERFLOW) => return Some(ErrorCode::Nametoolong.into()),
-        Some(Foundation::ERROR_NOT_A_REPARSE_POINT) => return Some(ErrorCode::Inval.into()),
-        Some(Foundation::ERROR_NEGATIVE_SEEK) => return Some(ErrorCode::Inval.into()),
-        Some(Foundation::ERROR_DIRECTORY) => return Some(ErrorCode::Notdir.into()),
-        Some(Foundation::ERROR_ALREADY_EXISTS) => return Some(ErrorCode::Exist.into()),
-        Some(Foundation::ERROR_STOPPED_ON_SYMLINK) => return Some(ErrorCode::Loop.into()),
-        Some(Foundation::ERROR_DIRECTORY_NOT_SUPPORTED) => return Some(ErrorCode::Isdir.into()),
-        _ => {}
-    }
-
-    match raw_os_error {
-        Some(WinSock::WSAEWOULDBLOCK) => Some(ErrorCode::Again.into()),
-        Some(WinSock::WSAECANCELLED) => Some(ErrorCode::Canceled.into()),
-        Some(WinSock::WSA_E_CANCELLED) => Some(ErrorCode::Canceled.into()),
-        Some(WinSock::WSAEBADF) => Some(ErrorCode::Badf.into()),
-        Some(WinSock::WSAEFAULT) => Some(ErrorCode::Fault.into()),
-        Some(WinSock::WSAEINVAL) => Some(ErrorCode::Inval.into()),
-        Some(WinSock::WSAEMFILE) => Some(ErrorCode::Mfile.into()),
-        Some(WinSock::WSAENAMETOOLONG) => Some(ErrorCode::Nametoolong.into()),
-        Some(WinSock::WSAENOTEMPTY) => Some(ErrorCode::Notempty.into()),
-        Some(WinSock::WSAELOOP) => Some(ErrorCode::Loop.into()),
-        Some(WinSock::WSAEOPNOTSUPP) => Some(ErrorCode::Notsup.into()),
-        Some(WinSock::WSAEADDRINUSE) => Some(ErrorCode::Addrinuse.into()),
-        Some(WinSock::WSAEACCES) => Some(ErrorCode::Acces.into()),
-        Some(WinSock::WSAEADDRNOTAVAIL) => Some(ErrorCode::Addrnotavail.into()),
-        Some(WinSock::WSAEAFNOSUPPORT) => Some(ErrorCode::Afnosupport.into()),
-        Some(WinSock::WSAEALREADY) => Some(ErrorCode::Already.into()),
-        Some(WinSock::WSAECONNABORTED) => Some(ErrorCode::Connaborted.into()),
-        Some(WinSock::WSAECONNREFUSED) => Some(ErrorCode::Connrefused.into()),
-        Some(WinSock::WSAECONNRESET) => Some(ErrorCode::Connreset.into()),
-        Some(WinSock::WSAEDESTADDRREQ) => Some(ErrorCode::Destaddrreq.into()),
-        Some(WinSock::WSAEDQUOT) => Some(ErrorCode::Dquot.into()),
-        Some(WinSock::WSAEHOSTUNREACH) => Some(ErrorCode::Hostunreach.into()),
-        Some(WinSock::WSAEINPROGRESS) => Some(ErrorCode::Inprogress.into()),
-        Some(WinSock::WSAEINTR) => Some(ErrorCode::Intr.into()),
-        Some(WinSock::WSAEISCONN) => Some(ErrorCode::Isconn.into()),
-        Some(WinSock::WSAEMSGSIZE) => Some(ErrorCode::Msgsize.into()),
-        Some(WinSock::WSAENETDOWN) => Some(ErrorCode::Netdown.into()),
-        Some(WinSock::WSAENETRESET) => Some(ErrorCode::Netreset.into()),
-        Some(WinSock::WSAENETUNREACH) => Some(ErrorCode::Netunreach.into()),
-        Some(WinSock::WSAENOBUFS) => Some(ErrorCode::Nobufs.into()),
-        Some(WinSock::WSAENOPROTOOPT) => Some(ErrorCode::Noprotoopt.into()),
-        Some(WinSock::WSAENOTCONN) => Some(ErrorCode::Notconn.into()),
-        Some(WinSock::WSAENOTSOCK) => Some(ErrorCode::Notsock.into()),
-        Some(WinSock::WSAEPROTONOSUPPORT) => Some(ErrorCode::Protonosupport.into()),
-        Some(WinSock::WSAEPROTOTYPE) => Some(ErrorCode::Prototype.into()),
-        Some(WinSock::WSAESTALE) => Some(ErrorCode::Stale.into()),
-        Some(WinSock::WSAETIMEDOUT) => Some(ErrorCode::Timedout.into()),
-        _ => None,
-    }
+    Some(match raw_os_error.map(|code| code as u32) {
+        Some(Foundation::ERROR_FILE_NOT_FOUND) => ErrorCode::NoEntry.into(),
+        Some(Foundation::ERROR_PATH_NOT_FOUND) => ErrorCode::NoEntry.into(),
+        Some(Foundation::ERROR_ACCESS_DENIED) => ErrorCode::NotPermitted.into(),
+        Some(Foundation::ERROR_SHARING_VIOLATION) => ErrorCode::NotPermitted.into(),
+        Some(Foundation::ERROR_PRIVILEGE_NOT_HELD) => ErrorCode::NotPermitted.into(),
+        Some(Foundation::ERROR_INVALID_HANDLE) => ErrorCode::BadDescriptor.into(),
+        Some(Foundation::ERROR_INVALID_NAME) => ErrorCode::NoEntry.into(),
+        Some(Foundation::ERROR_NOT_ENOUGH_MEMORY) => ErrorCode::InsufficientMemory.into(),
+        Some(Foundation::ERROR_OUTOFMEMORY) => ErrorCode::InsufficientMemory.into(),
+        Some(Foundation::ERROR_DIR_NOT_EMPTY) => ErrorCode::NotEmpty.into(),
+        Some(Foundation::ERROR_NOT_READY) => ErrorCode::Busy.into(),
+        Some(Foundation::ERROR_BUSY) => ErrorCode::Busy.into(),
+        Some(Foundation::ERROR_NOT_SUPPORTED) => ErrorCode::Unsupported.into(),
+        Some(Foundation::ERROR_FILE_EXISTS) => ErrorCode::Exist.into(),
+        Some(Foundation::ERROR_BROKEN_PIPE) => ErrorCode::Pipe.into(),
+        Some(Foundation::ERROR_BUFFER_OVERFLOW) => ErrorCode::NameTooLong.into(),
+        Some(Foundation::ERROR_NOT_A_REPARSE_POINT) => ErrorCode::Invalid.into(),
+        Some(Foundation::ERROR_NEGATIVE_SEEK) => ErrorCode::Invalid.into(),
+        Some(Foundation::ERROR_DIRECTORY) => ErrorCode::NotDirectory.into(),
+        Some(Foundation::ERROR_ALREADY_EXISTS) => ErrorCode::Exist.into(),
+        Some(Foundation::ERROR_STOPPED_ON_SYMLINK) => ErrorCode::Loop.into(),
+        Some(Foundation::ERROR_DIRECTORY_NOT_SUPPORTED) => ErrorCode::IsDirectory.into(),
+        _ => return None,
+    })
 }
 
 impl From<std::io::Error> for wasi::filesystem::Error {
