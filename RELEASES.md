@@ -6,7 +6,26 @@ Unreleased.
 
 ### Added
 
+* A callback invoked when an epoch deadline is reached can now be configured via
+  the C API.
+  [#6359](https://github.com/bytecodealliance/wasmtime/pull/6359)
+
 ### Changed
+
+* The "raw" representation of `funcref` and `externref` in the embedding API has
+  been updated from a `usize` to a `*mut u8` to be compatible with Rust's
+  proposed strict provenance rules. This change is additionally reflected into
+  the C API as well.
+  [#6338](https://github.com/bytecodealliance/wasmtime/pull/6338)
+
+* The `--profile-guest` flag has now been folded into `--profile=guest`
+  [#6352](https://github.com/bytecodealliance/wasmtime/pull/6352)
+
+### Fixed
+
+* Opening directories with WASI on Windows with `NONBLOCK` in flags has been
+  fixed.
+  [#6348](https://github.com/bytecodealliance/wasmtime/pull/6348)
 
 --------------------------------------------------------------------------------
 
