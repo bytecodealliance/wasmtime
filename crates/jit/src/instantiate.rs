@@ -471,17 +471,14 @@ impl CompiledModule {
     }
 
     fn register_debug_and_profiling(&mut self, profiler: &dyn ProfilingAgent) -> Result<()> {
-        // Register GDB JIT images; initialize profiler and load the wasm module.
         if self.meta.native_debug_info_present {
             let text = self.text();
             let bytes = create_gdbjit_image(self.mmap().to_vec(), (text.as_ptr(), text.len()))
                 .context("failed to create jit image for gdb")?;
-            profiler.module_load(self, Some(&bytes));
             let reg = GdbJitImageRegistration::register(bytes);
             self.dbg_jit_registration = Some(reg);
-        } else {
-            profiler.module_load(self, None);
         }
+        profiler.module_load(self);
         Ok(())
     }
 

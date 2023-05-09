@@ -54,7 +54,7 @@ pub fn new() -> Result<Box<dyn ProfilingAgent>> {
 
 impl ProfilingAgent for JitDumpAgent {
     /// Sent when a method is compiled and loaded into memory by the VM.
-    fn module_load(&self, module: &CompiledModule, _dbg_image: Option<&[u8]>) {
+    fn module_load(&self, module: &CompiledModule) {
         for (idx, func) in module.finished_functions() {
             let addr = func.as_ptr();
             let len = func.len();

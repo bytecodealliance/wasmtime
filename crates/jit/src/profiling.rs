@@ -50,7 +50,7 @@ cfg_if::cfg_if! {
 /// Common interface for profiling tools.
 pub trait ProfilingAgent: Send + Sync + 'static {
     /// Notify the profiler of a new module loaded into memory
-    fn module_load(&self, module: &CompiledModule, dbg_image: Option<&[u8]>);
+    fn module_load(&self, module: &CompiledModule);
 
     /// Notify the profiler about a single dynamically-generated trampoline (for host function)
     /// that is being loaded now.`
@@ -100,7 +100,7 @@ pub fn new_null() -> Box<dyn ProfilingAgent> {
 struct NullProfilerAgent;
 
 impl ProfilingAgent for NullProfilerAgent {
-    fn module_load(&self, _module: &CompiledModule, _dbg_image: Option<&[u8]>) {}
+    fn module_load(&self, _module: &CompiledModule) {}
     fn load_single_trampoline(&self, _name: &str, _addr: *const u8, _size: usize) {}
     fn register_trampolines(&self, _code: &CodeMemory) {}
 }

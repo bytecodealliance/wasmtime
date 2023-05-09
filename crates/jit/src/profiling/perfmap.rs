@@ -39,7 +39,7 @@ impl PerfMapAgent {
 
 impl ProfilingAgent for PerfMapAgent {
     /// Sent when a method is compiled and loaded into memory by the VM.
-    fn module_load(&self, module: &CompiledModule, _dbg_image: Option<&[u8]>) {
+    fn module_load(&self, module: &CompiledModule) {
         let mut file = PERFMAP_FILE.lock().unwrap();
         let file = file.as_mut().unwrap();
         let mut file = BufWriter::new(file);

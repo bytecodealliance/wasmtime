@@ -81,7 +81,7 @@ impl ProfilingAgent for VTuneAgent {
 }
 
 impl State {
-    fn module_load(&mut self, module: &CompiledModule, _dbg_image: Option<&[u8]>) {
+    fn module_load(&mut self, module: &CompiledModule) {
         // Global counter for module ids.
         static MODULE_ID: atomic::AtomicUsize = atomic::AtomicUsize::new(0);
         let global_module_id = MODULE_ID.fetch_add(1, atomic::Ordering::SeqCst);
