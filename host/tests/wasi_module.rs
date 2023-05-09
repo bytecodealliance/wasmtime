@@ -328,7 +328,6 @@ async fn renumber() {
 }
 
 #[test_log::test(tokio::test)]
-#[should_panic]
 async fn sched_yield() {
     run_with_temp_dir("sched_yield").await
 }

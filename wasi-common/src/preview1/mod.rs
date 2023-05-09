@@ -521,7 +521,8 @@ impl<
     }
 
     async fn sched_yield(&mut self) -> Result<(), types::Error> {
-        todo!()
+        // TODO: This is not yet covered in Preview2.
+        Ok(())
     }
 
     async fn random_get<'a>(
