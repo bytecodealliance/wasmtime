@@ -179,7 +179,21 @@ impl<
     }
 
     async fn environ_sizes_get(&mut self) -> Result<(types::Size, types::Size), types::Error> {
-        todo!()
+        let environ = self
+            .get_environment()
+            .await
+            .context("failed to call `get-environment`")?;
+        let num = environ
+            .len()
+            .try_into()
+            .map_err(|_| types::Errno::Overflow)?;
+        let len = environ
+            .iter()
+            .map(|(k, v)| k.len() + 1 + v.len() + 1) // Key/value pairs are expected to be joined with `=`s, and terminated with `\0`s.
+            .sum::<usize>()
+            .try_into()
+            .map_err(|_| types::Errno::Overflow)?;
+        Ok((num, len))
     }
 
     async fn clock_res_get(
