@@ -13,7 +13,7 @@ use std::sync::Arc;
 use wasmtime_cache::CacheConfig;
 use wasmtime_environ::obj;
 use wasmtime_environ::{FlagValue, ObjectKind};
-use wasmtime_jit::{CodeMemory, ProfilingAgent};
+use wasmtime_jit::{profiling::ProfilingAgent, CodeMemory};
 use wasmtime_runtime::{debug_builtins, CompiledModuleIdAllocator, InstanceAllocator, MmapVec};
 
 mod serialization;

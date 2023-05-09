@@ -1,4 +1,5 @@
-use crate::{CompiledModule, ProfilingAgent};
+use crate::profiling::ProfilingAgent;
+use crate::CompiledModule;
 use anyhow::Result;
 use std::io::{self, BufWriter, Write};
 use std::process;
@@ -9,19 +10,19 @@ use wasmtime_environ::EntityRef as _;
 static PERFMAP_FILE: Mutex<Option<File>> = Mutex::new(None);
 
 /// Interface for driving the creation of jitdump files
-pub struct PerfMapAgent;
+struct PerfMapAgent;
+
+/// Intialize a JitDumpAgent and write out the header.
+pub fn new() -> Result<Box<dyn ProfilingAgent>> {
+    let mut file = PERFMAP_FILE.lock().unwrap();
+    if file.is_none() {
+        let filename = format!("/tmp/perf-{}.map", process::id());
+        *file = Some(File::create(filename)?);
+    }
+    Ok(Box::new(PerfMapAgent))
+}
 
 impl PerfMapAgent {
-    /// Intialize a JitDumpAgent and write out the header.
-    pub fn new() -> Result<Self> {
-        let mut file = PERFMAP_FILE.lock().unwrap();
-        if file.is_none() {
-            let filename = format!("/tmp/perf-{}.map", process::id());
-            *file = Some(File::create(filename)?);
-        }
-        Ok(PerfMapAgent)
-    }
-
     fn make_line(
         writer: &mut dyn Write,
         name: &str,
@@ -87,14 +88,7 @@ impl ProfilingAgent for PerfMapAgent {
         }
     }
 
-    fn load_single_trampoline(
-        &self,
-        name: &str,
-        addr: *const u8,
-        size: usize,
-        _pid: u32,
-        _tid: u32,
-    ) {
+    fn load_single_trampoline(&self, name: &str, addr: *const u8, size: usize) {
         let mut file = PERFMAP_FILE.lock().unwrap();
         let file = file.as_mut().unwrap();
         if let Err(err) = Self::make_line(file, name, addr, size) {

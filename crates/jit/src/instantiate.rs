@@ -5,7 +5,7 @@
 
 use crate::code_memory::CodeMemory;
 use crate::debug::create_gdbjit_image;
-use crate::ProfilingAgent;
+use crate::profiling::ProfilingAgent;
 use anyhow::{bail, Context, Error, Result};
 use object::write::{Object, SectionId, StandardSegment, WritableBuffer};
 use object::SectionKind;

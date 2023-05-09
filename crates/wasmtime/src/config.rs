@@ -13,7 +13,7 @@ use wasmparser::WasmFeatures;
 #[cfg(feature = "cache")]
 use wasmtime_cache::CacheConfig;
 use wasmtime_environ::Tunables;
-use wasmtime_jit::{JitDumpAgent, NullProfilerAgent, PerfMapAgent, ProfilingAgent, VTuneAgent};
+use wasmtime_jit::profiling::{self, ProfilingAgent};
 use wasmtime_runtime::{InstanceAllocator, OnDemandInstanceAllocator, RuntimeMemoryCreator};
 
 pub use wasmtime_environ::CacheStore;
@@ -1513,10 +1513,10 @@ impl Config {
 
     pub(crate) fn build_profiler(&self) -> Result<Box<dyn ProfilingAgent>> {
         Ok(match self.profiling_strategy {
-            ProfilingStrategy::PerfMap => Box::new(PerfMapAgent::new()?) as Box<dyn ProfilingAgent>,
-            ProfilingStrategy::JitDump => Box::new(JitDumpAgent::new()?) as Box<dyn ProfilingAgent>,
-            ProfilingStrategy::VTune => Box::new(VTuneAgent::new()?) as Box<dyn ProfilingAgent>,
-            ProfilingStrategy::None => Box::new(NullProfilerAgent),
+            ProfilingStrategy::PerfMap => profiling::new_perfmap()?,
+            ProfilingStrategy::JitDump => profiling::new_jitdump()?,
+            ProfilingStrategy::VTune => profiling::new_vtune()?,
+            ProfilingStrategy::None => profiling::new_null(),
         })
     }
 

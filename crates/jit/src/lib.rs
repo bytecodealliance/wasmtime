@@ -24,7 +24,7 @@ mod code_memory;
 mod debug;
 mod demangling;
 mod instantiate;
-mod profiling;
+pub mod profiling;
 mod unwind;
 
 pub use crate::code_memory::CodeMemory;
@@ -33,7 +33,6 @@ pub use crate::instantiate::{
     SymbolizeContext,
 };
 pub use demangling::*;
-pub use profiling::*;
 
 /// Version number of this crate.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

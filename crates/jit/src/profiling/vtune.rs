@@ -12,7 +12,8 @@
 //! installed](https://www.intel.com/content/www/us/en/developer/tools/oneapi/vtune-profiler.html#standalone)
 //! for this to work.
 
-use crate::{CompiledModule, ProfilingAgent};
+use crate::profiling::ProfilingAgent;
+use crate::CompiledModule;
 use anyhow::Result;
 use ittapi::jit::MethodLoadBuilder;
 use std::sync::{atomic, Mutex};
@@ -71,11 +72,11 @@ impl ProfilingAgent for VTuneAgent {
     fn module_load(&self, module: &CompiledModule, dbg_image: Option<&[u8]>) {
         self.state.lock().unwrap().module_load(module, dbg_image);
     }
-    fn load_single_trampoline(&self, name: &str, addr: *const u8, size: usize, pid: u32, tid: u32) {
+    fn load_single_trampoline(&self, name: &str, addr: *const u8, size: usize) {
         self.state
             .lock()
             .unwrap()
-            .load_single_trampoline(name, addr, size, pid, tid);
+            .load_single_trampoline(name, addr, size);
     }
 }
 
@@ -134,14 +135,7 @@ impl State {
         }
     }
 
-    fn load_single_trampoline(
-        &mut self,
-        name: &str,
-        addr: *const u8,
-        size: usize,
-        _pid: u32,
-        _tid: u32,
-    ) {
+    fn load_single_trampoline(&mut self, name: &str, addr: *const u8, size: usize) {
         self.notify_code("wasm trampoline for Func::new", name, addr, size);
     }
 }

@@ -11,7 +11,8 @@
 //!         sudo perf report -i perf.jit.data -F+period,srcline
 //! Note: For descriptive results, the WASM file being executed should contain dwarf debug data
 
-use crate::{CompiledModule, ProfilingAgent};
+use crate::profiling::ProfilingAgent;
+use crate::CompiledModule;
 use anyhow::Result;
 use object::{Object, ObjectSection};
 use std::sync::Mutex;
@@ -23,36 +24,38 @@ use wasmtime_jit_debug::perf_jitdump::*;
 use object::elf;
 
 /// Interface for driving the creation of jitdump files
-pub struct JitDumpAgent {
+struct JitDumpAgent {
     /// Flag for experimenting with dumping code load record
     /// after each function (true) or after each module. This
     /// flag is currently set to true.
     dump_funcs: bool,
+    pid: u32,
 }
 
 /// Process-wide JIT dump file. Perf only accepts a unique file per process, in the injection step.
 static JITDUMP_FILE: Mutex<Option<JitDumpFile>> = Mutex::new(None);
 
-impl JitDumpAgent {
-    /// Intialize a JitDumpAgent and write out the header.
-    pub fn new() -> Result<Self> {
-        let mut jitdump_file = JITDUMP_FILE.lock().unwrap();
+/// Intialize a JitDumpAgent and write out the header.
+pub fn new() -> Result<Box<dyn ProfilingAgent>> {
+    let mut jitdump_file = JITDUMP_FILE.lock().unwrap();
 
-        if jitdump_file.is_none() {
-            let filename = format!("./jit-{}.dump", process::id());
-            let e_machine = match target_lexicon::HOST.architecture {
-                Architecture::X86_64 => elf::EM_X86_64 as u32,
-                Architecture::X86_32(_) => elf::EM_386 as u32,
-                Architecture::Arm(_) => elf::EM_ARM as u32,
-                Architecture::Aarch64(_) => elf::EM_AARCH64 as u32,
-                Architecture::S390x => elf::EM_S390 as u32,
-                _ => unimplemented!("unrecognized architecture"),
-            };
-            *jitdump_file = Some(JitDumpFile::new(filename, e_machine)?);
-        }
-
-        Ok(JitDumpAgent { dump_funcs: true })
+    if jitdump_file.is_none() {
+        let filename = format!("./jit-{}.dump", process::id());
+        let e_machine = match target_lexicon::HOST.architecture {
+            Architecture::X86_64 => elf::EM_X86_64 as u32,
+            Architecture::X86_32(_) => elf::EM_386 as u32,
+            Architecture::Arm(_) => elf::EM_ARM as u32,
+            Architecture::Aarch64(_) => elf::EM_AARCH64 as u32,
+            Architecture::S390x => elf::EM_S390 as u32,
+            _ => unimplemented!("unrecognized architecture"),
+        };
+        *jitdump_file = Some(JitDumpFile::new(filename, e_machine)?);
     }
+
+    Ok(Box::new(JitDumpAgent {
+        dump_funcs: true,
+        pid: std::process::id(),
+    }))
 }
 
 impl ProfilingAgent for JitDumpAgent {
@@ -61,29 +64,19 @@ impl ProfilingAgent for JitDumpAgent {
         let mut jitdump_file = JITDUMP_FILE.lock().unwrap();
         let jitdump_file = jitdump_file.as_mut().unwrap();
 
-        let pid = process::id();
-        let tid = pid; // ThreadId does appear to track underlying thread. Using PID.
-
         for (idx, func) in module.finished_functions() {
             let addr = func.as_ptr();
             let len = func.len();
             if let Some(img) = &dbg_image {
-                if let Err(err) =
-                    self.dump_from_debug_image(jitdump_file, img, "wasm", addr, len, pid, tid)
-                {
+                if let Err(err) = self.dump_from_debug_image(jitdump_file, img, "wasm", addr, len) {
                     println!(
                         "Jitdump: module_load failed dumping from debug image: {:?}\n",
                         err
                     );
                 }
             } else {
-                let timestamp = jitdump_file.get_time_stamp();
                 let name = super::debug_name(module, idx);
-                if let Err(err) =
-                    jitdump_file.dump_code_load_record(&name, addr, len, timestamp, pid, tid)
-                {
-                    println!("Jitdump: write_code_load_failed_record failed: {:?}\n", err);
-                }
+                self.load_single_trampoline(&name, addr, len);
             }
         }
 
@@ -111,21 +104,17 @@ impl ProfilingAgent for JitDumpAgent {
         {
             let addr = body.as_ptr();
             let len = body.len();
-            let timestamp = jitdump_file.get_time_stamp();
-            if let Err(err) =
-                jitdump_file.dump_code_load_record(&name, addr, len, timestamp, pid, tid)
-            {
-                println!("Jitdump: write_code_load_failed_record failed: {:?}\n", err);
-            }
+            self.load_single_trampoline(&name, addr, len);
         }
     }
 
-    fn load_single_trampoline(&self, name: &str, addr: *const u8, size: usize, pid: u32, tid: u32) {
+    fn load_single_trampoline(&self, name: &str, addr: *const u8, size: usize) {
         let mut jitdump_file = JITDUMP_FILE.lock().unwrap();
         let jitdump_file = jitdump_file.as_mut().unwrap();
 
         let timestamp = jitdump_file.get_time_stamp();
-        if let Err(err) = jitdump_file.dump_code_load_record(&name, addr, size, timestamp, pid, tid)
+        if let Err(err) =
+            jitdump_file.dump_code_load_record(&name, addr, size, timestamp, self.pid, self.pid)
         {
             println!("Jitdump: write_code_load_failed_record failed: {:?}\n", err);
         }
@@ -142,8 +131,6 @@ impl JitDumpAgent {
         module_name: &str,
         addr: *const u8,
         len: usize,
-        pid: u32,
-        tid: u32,
     ) -> Result<()> {
         let file = object::File::parse(dbg_image).unwrap();
         let endian = if file.is_little_endian() {
@@ -177,16 +164,21 @@ impl JitDumpAgent {
                     return Ok(());
                 }
             };
-            self.dump_entries(jitdump_file, unit, &dwarf, module_name, addr, len, pid, tid)?;
+            self.dump_entries(jitdump_file, unit, &dwarf, module_name, addr, len)?;
             // TODO: Temp exit to avoid duplicate addresses being covered by only
             // processing the top unit
             break;
         }
         if !self.dump_funcs {
             let timestamp = jitdump_file.get_time_stamp();
-            if let Err(err) =
-                jitdump_file.dump_code_load_record(module_name, addr, len, timestamp, pid, tid)
-            {
+            if let Err(err) = jitdump_file.dump_code_load_record(
+                module_name,
+                addr,
+                len,
+                timestamp,
+                self.pid,
+                self.pid,
+            ) {
                 println!("Jitdump: write_code_load_failed_record failed: {:?}\n", err);
             }
         }
@@ -201,8 +193,6 @@ impl JitDumpAgent {
         module_name: &str,
         addr: *const u8,
         len: usize,
-        pid: u32,
-        tid: u32,
     ) -> Result<()> {
         let mut depth = 0;
         let mut entries = unit.entries();
@@ -216,8 +206,8 @@ impl JitDumpAgent {
 
                 let mut clr = CodeLoadRecord {
                     header: record_header,
-                    pid,
-                    tid,
+                    pid: self.pid,
+                    tid: self.pid,
                     virtual_address: 0,
                     address: 0,
                     size: 0,
