@@ -805,8 +805,8 @@ fn from_raw_os_error(raw_os_error: Option<i32>) -> Option<wasi::filesystem::Erro
     Some(match raw_os_error.map(|code| code as u32) {
         Some(Foundation::ERROR_FILE_NOT_FOUND) => ErrorCode::NoEntry.into(),
         Some(Foundation::ERROR_PATH_NOT_FOUND) => ErrorCode::NoEntry.into(),
-        Some(Foundation::ERROR_ACCESS_DENIED) => ErrorCode::NotPermitted.into(),
-        Some(Foundation::ERROR_SHARING_VIOLATION) => ErrorCode::NotPermitted.into(),
+        Some(Foundation::ERROR_ACCESS_DENIED) => ErrorCode::Access.into(),
+        Some(Foundation::ERROR_SHARING_VIOLATION) => ErrorCode::Access.into(),
         Some(Foundation::ERROR_PRIVILEGE_NOT_HELD) => ErrorCode::NotPermitted.into(),
         Some(Foundation::ERROR_INVALID_HANDLE) => ErrorCode::BadDescriptor.into(),
         Some(Foundation::ERROR_INVALID_NAME) => ErrorCode::NoEntry.into(),
