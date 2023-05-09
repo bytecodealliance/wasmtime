@@ -2,6 +2,10 @@
 #![allow(unused_variables)]
 
 use crate::wasi;
+
+use core::borrow::Borrow;
+
+use anyhow::Context;
 use wiggle::GuestPtr;
 
 pub struct WasiPreview1Adapter {/* all members private and only used inside this module. also, this struct should be Send. */}
@@ -56,6 +60,36 @@ impl wiggle::GuestErrorType for types::Errno {
     }
 }
 
+impl From<anyhow::Error> for types::Error {
+    fn from(e: anyhow::Error) -> Self {
+        types::Error::trap(e)
+    }
+}
+
+type ErrnoResult<T> = Result<T, types::Errno>;
+
+fn write_bytes<'a>(
+    ptr: impl Borrow<GuestPtr<'a, u8>>,
+    buf: impl AsRef<[u8]>,
+) -> ErrnoResult<GuestPtr<'a, u8>> {
+    // NOTE: legacy implementation always returns Inval errno
+
+    let buf = buf.as_ref();
+    let len = buf.len().try_into().or(Err(types::Errno::Inval))?;
+
+    let ptr = ptr.borrow();
+    ptr.as_array(len)
+        .copy_from_slice(buf)
+        .or(Err(types::Errno::Inval))?;
+    ptr.add(len).or(Err(types::Errno::Inval))
+}
+
+fn write_byte<'a>(ptr: impl Borrow<GuestPtr<'a, u8>>, byte: u8) -> ErrnoResult<GuestPtr<'a, u8>> {
+    let ptr = ptr.borrow();
+    ptr.write(byte).or(Err(types::Errno::Inval))?;
+    ptr.add(1).or(Err(types::Errno::Inval))
+}
+
 // Implement the WasiSnapshotPreview1 trait using only the traits that are
 // required for T, i.e., in terms of the preview 2 wit interface, and state
 // stored in the WasiPreview1Adapter struct.
@@ -78,7 +112,25 @@ impl<
         argv: &GuestPtr<'b, GuestPtr<'b, u8>>,
         argv_buf: &GuestPtr<'b, u8>,
     ) -> Result<(), types::Error> {
-        todo!()
+        self.get_arguments()
+            .await
+            .context("failed to call `get-arguments`")?
+            .into_iter()
+            .try_fold(
+                (*argv, *argv_buf),
+                |(argv, argv_buf), arg| -> ErrnoResult<_> {
+                    // NOTE: legacy implementation always returns Inval errno
+
+                    argv.write(argv_buf).map_err(|_| types::Errno::Inval)?;
+                    let argv = argv.add(1).map_err(|_| types::Errno::Inval)?;
+
+                    let argv_buf = write_bytes(argv_buf, arg)?;
+                    let argv_buf = write_byte(argv_buf, 0)?;
+
+                    Ok((argv, argv_buf))
+                },
+            )?;
+        Ok(())
     }
 
     async fn args_sizes_get(&mut self) -> Result<(types::Size, types::Size), types::Error> {
