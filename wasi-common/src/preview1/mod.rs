@@ -153,7 +153,29 @@ impl<
         environ: &GuestPtr<'b, GuestPtr<'b, u8>>,
         environ_buf: &GuestPtr<'b, u8>,
     ) -> Result<(), types::Error> {
-        todo!()
+        self.get_environment()
+            .await
+            .context("failed to call `get-environment`")?
+            .into_iter()
+            .try_fold(
+                (*environ, *environ_buf),
+                |(environ, environ_buf), (k, v)| -> ErrnoResult<_> {
+                    // NOTE: legacy implementation always returns Inval errno
+
+                    environ
+                        .write(environ_buf)
+                        .map_err(|_| types::Errno::Inval)?;
+                    let environ = environ.add(1).map_err(|_| types::Errno::Inval)?;
+
+                    let environ_buf = write_bytes(environ_buf, k)?;
+                    let environ_buf = write_byte(environ_buf, b'=')?;
+                    let environ_buf = write_bytes(environ_buf, v)?;
+                    let environ_buf = write_byte(environ_buf, 0)?;
+
+                    Ok((environ, environ_buf))
+                },
+            )?;
+        Ok(())
     }
 
     async fn environ_sizes_get(&mut self) -> Result<(types::Size, types::Size), types::Error> {
