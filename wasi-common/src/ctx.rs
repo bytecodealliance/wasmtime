@@ -21,7 +21,7 @@ pub struct WasiCtxBuilder {
 }
 
 impl WasiCtxBuilder {
-    pub fn new_sync() -> Self {
+    pub fn new() -> Self {
         Self::default()
             .set_sched(crate::sched::sync::SyncSched)
             .set_clocks(crate::clocks::host::clocks_ctx())

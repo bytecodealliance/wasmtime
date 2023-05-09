@@ -59,7 +59,7 @@ async fn main() -> Result<()> {
     let mut argv: Vec<&str> = vec!["wasm"];
     argv.extend(args.args.iter().map(String::as_str));
 
-    let mut builder = WasiCtxBuilder::new_sync().inherit_stdio().set_args(&argv);
+    let mut builder = WasiCtxBuilder::new().inherit_stdio().set_args(&argv);
 
     for (guest, host) in args.map_dirs {
         let dir = cap_std::fs::Dir::open_ambient_dir(&host, cap_std::ambient_authority())

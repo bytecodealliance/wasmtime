@@ -60,7 +60,7 @@ async fn instantiate(module: Module, ctx: CommandCtx) -> Result<(Store<CommandCt
     Ok((store, instance))
 }
 async fn run_with_temp_dir(module: &str) {
-    let mut builder = WasiCtxBuilder::new_sync();
+    let mut builder = WasiCtxBuilder::new();
 
     if cfg!(windows) {
         builder = builder

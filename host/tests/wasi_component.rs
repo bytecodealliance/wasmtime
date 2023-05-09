@@ -54,7 +54,7 @@ async fn instantiate(
     Ok((store, command))
 }
 async fn run_with_temp_dir(component: &str) {
-    let mut builder = WasiCtxBuilder::new_sync().push_env("NO_FDFLAGS_SYNC_SUPPORT", "1");
+    let mut builder = WasiCtxBuilder::new().push_env("NO_FDFLAGS_SYNC_SUPPORT", "1");
 
     if cfg!(windows) {
         builder = builder

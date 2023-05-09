@@ -77,7 +77,7 @@ async fn instantiate(
 #[test_log::test(tokio::test)]
 async fn reactor_tests() -> Result<()> {
     let mut table = Table::new();
-    let wasi = WasiCtxBuilder::new_sync().build(&mut table)?;
+    let wasi = WasiCtxBuilder::new().build(&mut table)?;
 
     let (mut store, reactor) =
         instantiate(get_component("reactor_tests"), ReactorCtx { table, wasi }).await?;
