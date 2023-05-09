@@ -275,7 +275,7 @@ impl RunCommand {
                 config.profiler(s);
             }
             Some(Profile::Guest { .. }) => {
-                // further configured down below as well
+                // Further configured down below as well.
                 config.epoch_interruption(true);
             }
             None => {}
