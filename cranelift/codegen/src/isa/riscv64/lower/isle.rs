@@ -359,9 +359,15 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
     fn int_convert_2_float_op(&mut self, from: Type, is_signed: bool, to: Type) -> FpuOPRR {
         FpuOPRR::int_convert_2_float_op(from, is_signed, to)
     }
+
     fn gen_amode(&mut self, base: Reg, offset: Offset32, ty: Type) -> AMode {
         AMode::RegOffset(base, i64::from(offset), ty)
     }
+
+    fn gen_const_amode(&mut self, c: VCodeConstant) -> AMode {
+        AMode::Const(c)
+    }
+
     fn valid_atomic_transaction(&mut self, ty: Type) -> Option<Type> {
         if ty.is_int() && ty.bits() <= 64 {
             Some(ty)

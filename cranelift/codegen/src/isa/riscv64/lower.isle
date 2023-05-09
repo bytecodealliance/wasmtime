@@ -9,6 +9,15 @@
 (rule (lower (has_type ty (iconst (u64_from_imm64 n))))
   (imm ty n))
 
+;; ;;;; Rules for `vconst` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type (ty_vec_fits_in_register ty) (vconst n)))
+  (vec_load
+    (element_width_from_type ty)
+    (VecAMode.UnitStride (gen_const_amode (const_to_vconst n)))
+    (mem_flags_trusted)
+    ty))
+
 ;;;; Rules for `f32const` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (f32const (u32_from_ieee32 n)))

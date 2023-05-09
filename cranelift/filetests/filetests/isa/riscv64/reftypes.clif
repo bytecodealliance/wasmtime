@@ -100,7 +100,7 @@ block3(v7: r64, v8: r64):
 ;   sd a6,8(nominal_sp)
 ;   load_sym t0,%f+0
 ;   callind t0
-;   load_addr t4,nsp+0
+;   load_addr t4,0(nominal_sp)
 ;   ld a6,8(nominal_sp)
 ;   sd a6,0(t4)
 ;   andi t0,a0,255
@@ -114,7 +114,7 @@ block3(v7: r64, v8: r64):
 ;   ld a1,16(nominal_sp)
 ;   j label3
 ; block3:
-;   load_addr a2,nsp+0
+;   load_addr a2,0(nominal_sp)
 ;   ld a2,0(a2)
 ;   mv t3,s3
 ;   sd a2,0(t3)

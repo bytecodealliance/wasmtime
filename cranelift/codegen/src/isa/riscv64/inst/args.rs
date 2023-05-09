@@ -35,19 +35,47 @@ pub enum AMode {
     /// clobber pushes. See the diagram in the documentation for
     /// [crate::isa::riscv64::abi](the ABI module) for more details.
     NominalSPOffset(i64, Type),
+
+    /// A reference to a constant which is placed outside of the function's
+    /// body, typically at the end.
+    Const(VCodeConstant),
+
+    /// A reference to a label.
+    Label(MachLabel),
 }
 
 impl AMode {
-    pub(crate) fn reg_offset(reg: Reg, imm: i64, ty: Type) -> AMode {
-        AMode::RegOffset(reg, imm, ty)
+    pub(crate) fn with_allocs(self, allocs: &mut AllocationConsumer<'_>) -> Self {
+        match self {
+            AMode::RegOffset(reg, offset, ty) => AMode::RegOffset(allocs.next(reg), offset, ty),
+            AMode::SPOffset(..)
+            | AMode::FPOffset(..)
+            | AMode::NominalSPOffset(..)
+            | AMode::Const(..)
+            | AMode::Label(..) => self,
+        }
     }
 
-    pub(crate) fn get_base_register(&self) -> Reg {
+    /// Returns the registers that known to the register allocator.
+    /// Keep this in sync with `with_allocs`.
+    pub(crate) fn get_allocatable_register(&self) -> Option<Reg> {
         match self {
-            &AMode::RegOffset(reg, ..) => reg,
-            &AMode::SPOffset(..) => stack_reg(),
-            &AMode::FPOffset(..) => fp_reg(),
-            &AMode::NominalSPOffset(..) => stack_reg(),
+            AMode::RegOffset(reg, ..) => Some(*reg),
+            AMode::SPOffset(..)
+            | AMode::FPOffset(..)
+            | AMode::NominalSPOffset(..)
+            | AMode::Const(..)
+            | AMode::Label(..) => None,
+        }
+    }
+
+    pub(crate) fn get_base_register(&self) -> Option<Reg> {
+        match self {
+            &AMode::RegOffset(reg, ..) => Some(reg),
+            &AMode::SPOffset(..) => Some(stack_reg()),
+            &AMode::FPOffset(..) => Some(fp_reg()),
+            &AMode::NominalSPOffset(..) => Some(stack_reg()),
+            &AMode::Const(..) | AMode::Label(..) => None,
         }
     }
 
@@ -64,27 +92,12 @@ impl AMode {
             &AMode::SPOffset(offset, _) => offset,
             &AMode::FPOffset(offset, _) => offset,
             &AMode::NominalSPOffset(offset, _) => offset,
+            &AMode::Const(_) | &AMode::Label(_) => 0,
         }
     }
 
     pub(crate) fn to_string_with_alloc(&self, allocs: &mut AllocationConsumer<'_>) -> String {
-        let reg = self.get_base_register();
-        let next = allocs.next(reg);
-        let offset = self.get_offset();
-        match self {
-            &AMode::NominalSPOffset(..) => format!("{}", self),
-            _ => format!("{}({})", offset, reg_name(next),),
-        }
-    }
-
-    pub(crate) fn to_addr(&self, allocs: &mut AllocationConsumer<'_>) -> String {
-        let reg = self.get_base_register();
-        let next = allocs.next(reg);
-        let offset = self.get_offset();
-        match self {
-            &AMode::NominalSPOffset(..) => format!("nsp{:+}", offset),
-            _ => format!("{}{:+}", reg_name(next), offset),
-        }
+        format!("{}", self.clone().with_allocs(allocs))
     }
 }
 
@@ -92,7 +105,7 @@ impl Display for AMode {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
             &AMode::RegOffset(r, offset, ..) => {
-                write!(f, "{}({:?})", offset, r)
+                write!(f, "{}({})", offset, reg_name(r))
             }
             &AMode::SPOffset(offset, ..) => {
                 write!(f, "{}(sp)", offset)
@@ -102,6 +115,12 @@ impl Display for AMode {
             }
             &AMode::FPOffset(offset, ..) => {
                 write!(f, "{}(fp)", offset)
+            }
+            &AMode::Const(addr, ..) => {
+                write!(f, "[const({})]", addr.as_u32())
+            }
+            &AMode::Label(label) => {
+                write!(f, "[label{}]", label.as_u32())
             }
         }
     }

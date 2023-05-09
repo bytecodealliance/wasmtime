@@ -2004,6 +2004,10 @@
 (decl gen_amode (Reg Offset32 Type) AMode)
 (extern constructor gen_amode gen_amode)
 
+;; Generates a AMode that points to a constant in the constant pool.
+(decl gen_const_amode (VCodeConstant) AMode)
+(extern constructor gen_const_amode gen_const_amode)
+
 (decl offset32_imm (i32) Offset32)
 (extern constructor offset32_imm offset32_imm)
 
