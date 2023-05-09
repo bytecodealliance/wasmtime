@@ -206,14 +206,29 @@ WASM_API_EXTERN wasmtime_error_t *wasmtime_context_set_wasi(wasmtime_context_t *
 
 /**
  * \brief Configures the relative deadline at which point WebAssembly code will
- * trap.
+ * trap or invoke the callback function.
  *
  * This function configures the store-local epoch deadline after which point
- * WebAssembly code will trap.
+ * WebAssembly code will trap or invoke the callback function.
  *
- * See also #wasmtime_config_epoch_interruption_set.
+ * See also #wasmtime_config_epoch_interruption_set and
+ * #wasmtime_store_epoch_deadline_callback.
  */
 WASM_API_EXTERN void wasmtime_context_set_epoch_deadline(wasmtime_context_t *context, uint64_t ticks_beyond_current);
+
+/**
+ * \brief Configures epoch deadline callback to C function.
+ *
+ * This function configures a store-local callback function that will be
+ * called when the running WebAssembly function has exceeded its epoch
+ * deadline. That function can return a #wasmtime_error_t to terminate
+ * the function, or set the delta argument and return NULL to update the
+ * epoch deadline and resume function execution.
+ *
+ * See also #wasmtime_config_epoch_interruption_set and
+ * #wasmtime_context_set_epoch_deadline.
+ */
+WASM_API_EXTERN void wasmtime_store_epoch_deadline_callback(wasmtime_store_t *store, wasmtime_error_t* (*func)(wasmtime_context_t*, void*, uint64_t*), void *data);
 
 #ifdef __cplusplus
 }  // extern "C"
