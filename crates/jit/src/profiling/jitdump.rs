@@ -12,12 +12,10 @@
 //! Note: For descriptive results, the WASM file being executed should contain dwarf debug data
 
 use crate::profiling::ProfilingAgent;
-use crate::CompiledModule;
 use anyhow::Result;
 use std::process;
 use std::sync::Mutex;
 use target_lexicon::Architecture;
-use wasmtime_environ::EntityRef;
 use wasmtime_jit_debug::perf_jitdump::*;
 
 use object::elf;
@@ -53,58 +51,14 @@ pub fn new() -> Result<Box<dyn ProfilingAgent>> {
 }
 
 impl ProfilingAgent for JitDumpAgent {
-    /// Sent when a method is compiled and loaded into memory by the VM.
-    fn module_load(&self, module: &CompiledModule) {
+    fn register_function(&self, name: &str, addr: *const u8, size: usize) {
         let mut jitdump_file = JITDUMP_FILE.lock().unwrap();
         let jitdump_file = jitdump_file.as_mut().unwrap();
-
-        for (idx, func) in module.finished_functions() {
-            let addr = func.as_ptr();
-            let len = func.len();
-            let name = super::debug_name(module, idx);
-            self.load_single_trampoline(&name, addr, len);
-        }
-
-        // Note: these are the trampolines into exported functions.
-        for (name, body) in module
-            .array_to_wasm_trampolines()
-            .map(|(i, body)| {
-                (
-                    format!("wasm::array_to_wasm_trampoline[{}]", i.index()),
-                    body,
-                )
-            })
-            .chain(module.native_to_wasm_trampolines().map(|(i, body)| {
-                (
-                    format!("wasm::native_to_wasm_trampoline[{}]", i.index()),
-                    body,
-                )
-            }))
-            .chain(module.wasm_to_native_trampolines().map(|(i, body)| {
-                (
-                    format!("wasm::wasm_to_native_trampolines[{}]", i.index()),
-                    body,
-                )
-            }))
-        {
-            let addr = body.as_ptr();
-            let len = body.len();
-            self.load(&name, addr, len, jitdump_file);
-        }
-    }
-
-    fn load_single_trampoline(&self, name: &str, addr: *const u8, size: usize) {
-        let mut jitdump_file = JITDUMP_FILE.lock().unwrap();
-        let jitdump_file = jitdump_file.as_mut().unwrap();
-        self.load(&name, addr, size, jitdump_file);
-    }
-}
-
-impl JitDumpAgent {
-    fn load(&self, name: &str, addr: *const u8, size: usize, file: &mut JitDumpFile) {
-        let timestamp = file.get_time_stamp();
+        let timestamp = jitdump_file.get_time_stamp();
         let tid = rustix::thread::gettid().as_raw_nonzero().get();
-        if let Err(err) = file.dump_code_load_record(&name, addr, size, timestamp, self.pid, tid) {
+        if let Err(err) =
+            jitdump_file.dump_code_load_record(&name, addr, size, timestamp, self.pid, tid)
+        {
             println!("Jitdump: write_code_load_failed_record failed: {:?}\n", err);
         }
     }

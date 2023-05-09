@@ -1,13 +1,11 @@
 use crate::profiling::ProfilingAgent;
-use crate::CompiledModule;
 use anyhow::Result;
 use std::io::{self, BufWriter, Write};
 use std::process;
 use std::{fs::File, sync::Mutex};
-use wasmtime_environ::EntityRef as _;
 
 /// Process-wide perf map file. Perf only reads a unique file per process.
-static PERFMAP_FILE: Mutex<Option<File>> = Mutex::new(None);
+static PERFMAP_FILE: Mutex<Option<BufWriter<File>>> = Mutex::new(None);
 
 /// Interface for driving the creation of jitdump files
 struct PerfMapAgent;
@@ -17,7 +15,7 @@ pub fn new() -> Result<Box<dyn ProfilingAgent>> {
     let mut file = PERFMAP_FILE.lock().unwrap();
     if file.is_none() {
         let filename = format!("/tmp/perf-{}.map", process::id());
-        *file = Some(File::create(filename)?);
+        *file = Some(BufWriter::new(File::create(filename)?));
     }
     Ok(Box::new(PerfMapAgent))
 }
@@ -33,62 +31,13 @@ impl PerfMapAgent {
         // Try our best to sanitize the name, since wasm allows for any utf8 string in there.
         let sanitized_name = name.replace('\n', "_").replace('\r', "_");
         write!(writer, "{:x} {:x} {}\n", addr as usize, len, sanitized_name)?;
+        writer.flush()?;
         Ok(())
     }
 }
 
 impl ProfilingAgent for PerfMapAgent {
-    /// Sent when a method is compiled and loaded into memory by the VM.
-    fn module_load(&self, module: &CompiledModule) {
-        let mut file = PERFMAP_FILE.lock().unwrap();
-        let file = file.as_mut().unwrap();
-        let mut file = BufWriter::new(file);
-
-        for (idx, func) in module.finished_functions() {
-            let addr = func.as_ptr();
-            let len = func.len();
-            let name = super::debug_name(module, idx);
-            if let Err(err) = Self::make_line(&mut file, &name, addr, len) {
-                eprintln!("Error when writing function info to the perf map file: {err}");
-                return;
-            }
-        }
-
-        // Note: these are the trampolines into exported functions.
-        for (name, body) in module
-            .array_to_wasm_trampolines()
-            .map(|(i, body)| {
-                (
-                    format!("wasm::array_to_wasm_trampoline[{}]", i.index()),
-                    body,
-                )
-            })
-            .chain(module.native_to_wasm_trampolines().map(|(i, body)| {
-                (
-                    format!("wasm::native_to_wasm_trampoline[{}]", i.index()),
-                    body,
-                )
-            }))
-            .chain(module.wasm_to_native_trampolines().map(|(i, body)| {
-                (
-                    format!("wasm::wasm_to_native_trampolines[{}]", i.index()),
-                    body,
-                )
-            }))
-        {
-            let (addr, len) = (body.as_ptr(), body.len());
-            if let Err(err) = Self::make_line(&mut file, &name, addr, len) {
-                eprintln!("Error when writing export trampoline info to the perf map file: {err}");
-                return;
-            }
-        }
-
-        if let Err(err) = file.flush() {
-            eprintln!("Error when flushing the perf map file buffer: {err}");
-        }
-    }
-
-    fn load_single_trampoline(&self, name: &str, addr: *const u8, size: usize) {
+    fn register_function(&self, name: &str, addr: *const u8, size: usize) {
         let mut file = PERFMAP_FILE.lock().unwrap();
         let file = file.as_mut().unwrap();
         if let Err(err) = Self::make_line(file, name, addr, size) {

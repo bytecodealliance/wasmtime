@@ -69,10 +69,7 @@ impl State {
 }
 
 impl ProfilingAgent for VTuneAgent {
-    fn module_load(&self, module: &CompiledModule, dbg_image: Option<&[u8]>) {
-        self.state.lock().unwrap().module_load(module, dbg_image);
-    }
-    fn load_single_trampoline(&self, name: &str, addr: *const u8, size: usize) {
+    fn register_function(&self, name: &str, addr: *const u8, size: usize) {
         self.state
             .lock()
             .unwrap()

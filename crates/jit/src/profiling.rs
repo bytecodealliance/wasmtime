@@ -1,8 +1,7 @@
 #![allow(missing_docs)]
 
-use crate::{demangling::demangle_function_name_or_index, CodeMemory, CompiledModule};
+use crate::CodeMemory;
 use anyhow::{bail, Result};
-use wasmtime_environ::{DefinedFuncIndex, EntityRef};
 
 cfg_if::cfg_if! {
     if #[cfg(all(feature = "jitdump", target_os = "linux"))] {
@@ -49,14 +48,9 @@ cfg_if::cfg_if! {
 
 /// Common interface for profiling tools.
 pub trait ProfilingAgent: Send + Sync + 'static {
-    /// Notify the profiler of a new module loaded into memory
-    fn module_load(&self, module: &CompiledModule);
+    fn register_function(&self, name: &str, addr: *const u8, size: usize);
 
-    /// Notify the profiler about a single dynamically-generated trampoline (for host function)
-    /// that is being loaded now.`
-    fn load_single_trampoline(&self, name: &str, addr: *const u8, size: usize);
-
-    fn register_trampolines(&self, code: &CodeMemory) {
+    fn register_module(&self, code: &CodeMemory, custom_name: &dyn Fn(usize) -> Option<String>) {
         use object::{File, Object as _, ObjectSection, ObjectSymbol, SectionKind, SymbolKind};
 
         let image = match File::parse(&code.mmap()[..]) {
@@ -86,7 +80,15 @@ pub trait ProfilingAgent: Send + Sync + 'static {
             }
             if let Ok(name) = sym.name() {
                 let addr = text_base + address as usize;
-                self.load_single_trampoline(name, addr as *const u8, size as usize);
+                let owned;
+                let name = match custom_name(address as usize) {
+                    Some(name) => {
+                        owned = name;
+                        &owned
+                    }
+                    None => name,
+                };
+                self.register_function(name, addr as *const u8, size as usize);
             }
         }
     }
@@ -100,16 +102,6 @@ pub fn new_null() -> Box<dyn ProfilingAgent> {
 struct NullProfilerAgent;
 
 impl ProfilingAgent for NullProfilerAgent {
-    fn module_load(&self, _module: &CompiledModule) {}
-    fn load_single_trampoline(&self, _name: &str, _addr: *const u8, _size: usize) {}
-    fn register_trampolines(&self, _code: &CodeMemory) {}
-}
-
-#[allow(dead_code)]
-fn debug_name(module: &CompiledModule, index: DefinedFuncIndex) -> String {
-    let index = module.module().func_index(index);
-    let mut debug_name = String::new();
-    demangle_function_name_or_index(&mut debug_name, module.func_name(index), index.index())
-        .unwrap();
-    debug_name
+    fn register_function(&self, _name: &str, _addr: *const u8, _size: usize) {}
+    fn register_module(&self, _code: &CodeMemory, _custom_name: &dyn Fn(usize) -> Option<String>) {}
 }

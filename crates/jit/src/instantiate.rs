@@ -478,7 +478,14 @@ impl CompiledModule {
             let reg = GdbJitImageRegistration::register(bytes);
             self.dbg_jit_registration = Some(reg);
         }
-        profiler.module_load(self);
+        profiler.register_module(&self.code_memory, &|addr| {
+            let (idx, _) = self.func_by_text_offset(addr)?;
+            let idx = self.module.func_index(idx);
+            let name = self.func_name(idx)?;
+            let mut demangled = String::new();
+            crate::demangling::demangle_function_name(&mut demangled, name).unwrap();
+            Some(demangled)
+        });
         Ok(())
     }
 
