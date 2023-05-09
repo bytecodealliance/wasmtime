@@ -27,6 +27,9 @@ cpp_demangle = "0.3.2"
 log = { workspace = true }
 wasmtime-jit-icache-coherence = { workspace = true }
 
+[target.'cfg(target_os = "linux")'.dependencies]
+rustix = { workspace = true, features = ['thread'] }
+
 [target.'cfg(target_os = "windows")'.dependencies.windows-sys]
 workspace = true
 features = [

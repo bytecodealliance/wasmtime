@@ -4,7 +4,7 @@ use crate::{Engine, FuncType, ValRaw};
 use anyhow::Result;
 use std::panic::{self, AssertUnwindSafe};
 use std::ptr::NonNull;
-use wasmtime_jit::{CodeMemory, ProfilingAgent};
+use wasmtime_jit::CodeMemory;
 use wasmtime_runtime::{
     StoreBox, VMArrayCallHostFuncContext, VMContext, VMFuncRef, VMOpaqueContext,
 };
@@ -73,44 +73,6 @@ unsafe extern "C" fn array_call_shim<F>(
 }
 
 #[cfg(compiler)]
-fn register_trampolines(profiler: &dyn ProfilingAgent, code: &CodeMemory) {
-    use object::{File, Object as _, ObjectSection, ObjectSymbol, SectionKind, SymbolKind};
-    let pid = std::process::id();
-    let tid = pid;
-
-    let image = match File::parse(&code.mmap()[..]) {
-        Ok(image) => image,
-        Err(_) => return,
-    };
-
-    let text_base = match image.sections().find(|s| s.kind() == SectionKind::Text) {
-        Some(section) => match section.data() {
-            Ok(data) => data.as_ptr() as usize,
-            Err(_) => return,
-        },
-        None => return,
-    };
-
-    for sym in image.symbols() {
-        if !sym.is_definition() {
-            continue;
-        }
-        if sym.kind() != SymbolKind::Text {
-            continue;
-        }
-        let address = sym.address();
-        let size = sym.size();
-        if address == 0 || size == 0 {
-            continue;
-        }
-        if let Ok(name) = sym.name() {
-            let addr = text_base + address as usize;
-            profiler.load_single_trampoline(name, addr as *const u8, size as usize, pid, tid);
-        }
-    }
-}
-
-#[cfg(compiler)]
 pub fn create_array_call_function<F>(
     ft: &FuncType,
     func: F,
@@ -139,7 +101,7 @@ where
     let mut code_memory = CodeMemory::new(obj)?;
     code_memory.publish()?;
 
-    register_trampolines(engine.profiler(), &code_memory);
+    engine.profiler().register_module(&code_memory, &|_| None);
 
     // Extract the host/wasm trampolines from the results of compilation since
     // we know their start/length.
