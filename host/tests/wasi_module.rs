@@ -60,7 +60,7 @@ async fn instantiate(module: Module, ctx: CommandCtx) -> Result<(Store<CommandCt
     Ok((store, instance))
 }
 async fn run_with_temp_dir(module: &str) {
-    let mut builder = WasiCtxBuilder::new();
+    let mut builder = WasiCtxBuilder::new().push_env("TEST", "1");
 
     if cfg!(windows) {
         builder = builder
@@ -365,4 +365,9 @@ async fn unlink_file_trailing_slashes() {
 #[should_panic]
 async fn dir_fd_op_failures() {
     run_with_temp_dir("dir_fd_op_failures").await
+}
+
+#[test_log::test(tokio::test)]
+async fn environment() {
+    run_with_temp_dir("environment").await
 }
