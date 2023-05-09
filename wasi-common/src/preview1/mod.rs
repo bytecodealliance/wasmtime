@@ -66,6 +66,22 @@ impl From<anyhow::Error> for types::Error {
     }
 }
 
+impl TryFrom<wasi::wall_clock::Datetime> for types::Timestamp {
+    type Error = types::Errno;
+
+    fn try_from(
+        wasi::wall_clock::Datetime {
+            seconds,
+            nanoseconds,
+        }: wasi::wall_clock::Datetime,
+    ) -> Result<Self, Self::Error> {
+        types::Timestamp::from(seconds)
+            .checked_mul(1_000_000_000)
+            .and_then(|ns| ns.checked_add(nanoseconds.into()))
+            .ok_or(types::Errno::Overflow)
+    }
+}
+
 type ErrnoResult<T> = Result<T, types::Errno>;
 
 fn write_bytes<'a>(
@@ -200,7 +216,19 @@ impl<
         &mut self,
         id: types::Clockid,
     ) -> Result<types::Timestamp, types::Error> {
-        todo!()
+        let res = match id {
+            types::Clockid::Realtime => wasi::wall_clock::Host::resolution(self)
+                .await
+                .context("failed to call `wall_clock::resolution`")?
+                .try_into()?,
+            types::Clockid::Monotonic => wasi::monotonic_clock::Host::resolution(self)
+                .await
+                .context("failed to call `monotonic_clock::resolution`")?,
+            types::Clockid::ProcessCputimeId | types::Clockid::ThreadCputimeId => {
+                return Err(types::Errno::Badf.into())
+            }
+        };
+        Ok(res)
     }
 
     async fn clock_time_get(
