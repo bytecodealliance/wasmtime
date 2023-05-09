@@ -530,11 +530,6 @@ impl<T: WasiView> wasi::filesystem::Host for T {
         }
         let mut opened = d.dir.open_with(&path, &opts)?;
 
-        // FIXME cap-std needs a nonblocking open option so that files reads and writes
-        // are nonblocking. Instead we set it after opening here:
-        let set_fd_flags = opened.new_set_fd_flags(FdFlags::NONBLOCK)?;
-        opened.set_fd_flags(set_fd_flags)?;
-
         if opened.metadata()?.is_dir() {
             Ok(table.push_dir(Dir::new(
                 cap_std::fs::Dir::from_std_file(opened.into_std()),
@@ -544,6 +539,11 @@ impl<T: WasiView> wasi::filesystem::Host for T {
         } else if oflags.contains(OpenFlags::DIRECTORY) {
             Err(ErrorCode::NotDirectory)?
         } else {
+            // FIXME cap-std needs a nonblocking open option so that files reads and writes
+            // are nonblocking. Instead we set it after opening here:
+            let set_fd_flags = opened.new_set_fd_flags(FdFlags::NONBLOCK)?;
+            opened.set_fd_flags(set_fd_flags)?;
+
             Ok(table.push_file(File::new(opened, d.file_perms))?)
         }
     }
