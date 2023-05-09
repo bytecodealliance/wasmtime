@@ -110,7 +110,6 @@ async fn run_with_temp_dir(module: &str) {
 }
 
 #[test_log::test(tokio::test)]
-#[should_panic]
 async fn big_random_buf() {
     run_with_temp_dir("big_random_buf").await
 }

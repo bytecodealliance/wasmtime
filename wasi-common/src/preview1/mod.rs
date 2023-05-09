@@ -530,7 +530,12 @@ impl<
         buf: &GuestPtr<'a, u8>,
         buf_len: types::Size,
     ) -> Result<(), types::Error> {
-        todo!()
+        let rand = self
+            .get_random_bytes(buf_len.into())
+            .await
+            .context("failed to call `get-random-bytes`")?;
+        write_bytes(buf, rand)?;
+        Ok(())
     }
 
     async fn sock_accept(
