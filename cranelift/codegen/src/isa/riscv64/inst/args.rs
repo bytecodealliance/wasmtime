@@ -3,7 +3,7 @@
 // Some variants are never constructed, but we still want them as options in the future.
 #![allow(dead_code)]
 use super::*;
-use crate::ir::condcodes::{CondCode, FloatCC};
+use crate::ir::condcodes::CondCode;
 
 use crate::isa::riscv64::inst::{reg_name, reg_to_gpr_num};
 use crate::machinst::isle::WritableReg;
@@ -1312,68 +1312,6 @@ impl FClassResult {
     }
 }
 
-/// Condition code for comparing floating point numbers.
-/// This condition code is used by the fcmp instruction to compare floating point values. Two IEEE floating point values relate in exactly one of four ways:
-/// UN - unordered when either value is NaN.
-/// EQ - equal numerical value.
-/// LT - x is less than y.
-/// GT - x is greater than y.
-#[derive(Clone, Copy)]
-pub struct FloatCCArgs(pub(crate) u8);
-
-impl FloatCCArgs {
-    // unorder
-    pub(crate) const UN: u8 = 1 << 0;
-    // equal
-    pub(crate) const EQ: u8 = 1 << 1;
-    // less than
-    pub(crate) const LT: u8 = 1 << 2;
-    // greater than
-    pub(crate) const GT: u8 = 1 << 3;
-    // not equal
-    pub(crate) const NE: u8 = 1 << 4;
-
-    /// mask bit for floatcc
-    pub(crate) fn from_floatcc<T: Into<FloatCC>>(t: T) -> Self {
-        let x = match t.into() {
-            FloatCC::Ordered => Self::EQ | Self::LT | Self::GT,
-            FloatCC::Unordered => Self::UN,
-            FloatCC::Equal => Self::EQ,
-            FloatCC::NotEqual => Self::NE,
-            FloatCC::OrderedNotEqual => Self::LT | Self::GT,
-            FloatCC::UnorderedOrEqual => Self::UN | Self::EQ,
-            FloatCC::LessThan => Self::LT,
-            FloatCC::LessThanOrEqual => Self::LT | Self::EQ,
-            FloatCC::GreaterThan => Self::GT,
-            FloatCC::GreaterThanOrEqual => Self::GT | Self::EQ,
-            FloatCC::UnorderedOrLessThan => Self::UN | Self::LT,
-            FloatCC::UnorderedOrLessThanOrEqual => Self::UN | Self::LT | Self::EQ,
-            FloatCC::UnorderedOrGreaterThan => Self::UN | Self::GT,
-            FloatCC::UnorderedOrGreaterThanOrEqual => Self::UN | Self::GT | Self::EQ,
-        };
-
-        Self(x)
-    }
-
-    #[inline]
-    pub(crate) fn has(&self, other: u8) -> bool {
-        (self.0 & other) == other
-    }
-
-    pub(crate) fn has_and_clear(&mut self, other: u8) -> bool {
-        if !self.has(other) {
-            return false;
-        }
-        self.clear_bits(other);
-        return true;
-    }
-
-    #[inline]
-    fn clear_bits(&mut self, c: u8) {
-        self.0 = self.0 & !c;
-    }
-}
-
 impl AtomicOP {
     #[inline]
     pub(crate) fn is_load(self) -> bool {
@@ -1685,19 +1623,7 @@ impl Inst {
         s
     }
 }
-impl Default for FenceFm {
-    fn default() -> Self {
-        Self::None
-    }
-}
-impl FenceFm {
-    pub(crate) fn as_u32(self) -> u32 {
-        match self {
-            FenceFm::None => 0,
-            FenceFm::Tso => 0b1000,
-        }
-    }
-}
+
 impl FloatRoundOP {
     pub(crate) fn op_name(self) -> &'static str {
         match self {
@@ -1798,25 +1724,5 @@ pub(crate) fn f64_cvt_to_int_bounds(signed: bool, out_bits: u8) -> (f64, f64) {
         (false, 32) => (-1., 4294967296.0),
         (false, 64) => (-1., 18446744073709551616.0),
         _ => unreachable!(),
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use super::FloatCCArgs;
-    #[test]
-
-    fn float_cc_bit_clear() {
-        let mut x = FloatCCArgs(FloatCCArgs::UN | FloatCCArgs::GT | FloatCCArgs::EQ);
-        assert!(x.has_and_clear(FloatCCArgs::UN | FloatCCArgs::GT));
-        assert!(x.has(FloatCCArgs::EQ));
-        assert!(!x.has(FloatCCArgs::UN));
-        assert!(!x.has(FloatCCArgs::GT));
-    }
-    #[test]
-    fn float_cc_bit_has() {
-        let x = FloatCCArgs(FloatCCArgs::UN | FloatCCArgs::GT | FloatCCArgs::EQ);
-        assert!(x.has(FloatCCArgs::UN | FloatCCArgs::GT));
-        assert!(!x.has(FloatCCArgs::LT));
     }
 }
