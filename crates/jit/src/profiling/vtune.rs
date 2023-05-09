@@ -13,14 +13,12 @@
 //! for this to work.
 
 use crate::profiling::ProfilingAgent;
-use crate::CompiledModule;
 use anyhow::Result;
 use ittapi::jit::MethodLoadBuilder;
-use std::sync::{atomic, Mutex};
-use wasmtime_environ::EntityRef;
+use std::sync::Mutex;
 
 /// Interface for driving the ittapi for VTune support
-pub struct VTuneAgent {
+struct VTuneAgent {
     // Note that we use a mutex internally to serialize state updates since multiple threads may be
     // sharing this agent.
     state: Mutex<State>,
@@ -32,15 +30,13 @@ struct State {
     vtune: ittapi::jit::Jit,
 }
 
-impl VTuneAgent {
-    /// Initialize a VTuneAgent.
-    pub fn new() -> Result<Self> {
-        Ok(VTuneAgent {
-            state: Mutex::new(State {
-                vtune: Default::default(),
-            }),
-        })
-    }
+/// Initialize a VTuneAgent.
+pub fn new() -> Result<Box<dyn ProfilingAgent>> {
+    Ok(Box::new(VTuneAgent {
+        state: Mutex::new(State {
+            vtune: Default::default(),
+        }),
+    }))
 }
 
 impl Drop for VTuneAgent {
@@ -73,66 +69,12 @@ impl ProfilingAgent for VTuneAgent {
         self.state
             .lock()
             .unwrap()
-            .load_single_trampoline(name, addr, size);
+            .register_function(name, addr, size);
     }
 }
 
 impl State {
-    fn module_load(&mut self, module: &CompiledModule) {
-        // Global counter for module ids.
-        static MODULE_ID: atomic::AtomicUsize = atomic::AtomicUsize::new(0);
-        let global_module_id = MODULE_ID.fetch_add(1, atomic::Ordering::SeqCst);
-
-        let module_name = module
-            .module()
-            .name
-            .as_ref()
-            .cloned()
-            .unwrap_or_else(|| format!("wasm_module_{}", global_module_id));
-
-        for (idx, func) in module.finished_functions() {
-            let addr = func.as_ptr();
-            let len = func.len();
-            let method_name = super::debug_name(module, idx);
-            log::trace!(
-                "new function {:?}::{:?} @ {:?}\n",
-                module_name,
-                method_name,
-                addr
-            );
-            self.notify_code(&module_name, &method_name, addr, len);
-        }
-
-        // Note: these are the trampolines into exported functions.
-        for (name, body) in module
-            .array_to_wasm_trampolines()
-            .map(|(i, body)| {
-                (
-                    format!("wasm::array_to_wasm_trampoline[{}]", i.index()),
-                    body,
-                )
-            })
-            .chain(module.native_to_wasm_trampolines().map(|(i, body)| {
-                (
-                    format!("wasm::native_to_wasm_trampoline[{}]", i.index()),
-                    body,
-                )
-            }))
-            .chain(module.wasm_to_native_trampolines().map(|(i, body)| {
-                (
-                    format!("wasm::wasm_to_native_trampolines[{}]", i.index()),
-                    body,
-                )
-            }))
-        {
-            let addr = body.as_ptr();
-            let len = body.len();
-            log::trace!("new trampoline `{}` @ {:?}\n", name, addr);
-            self.notify_code(&module_name, &name, addr, len);
-        }
-    }
-
-    fn load_single_trampoline(&mut self, name: &str, addr: *const u8, size: usize) {
-        self.notify_code("wasm trampoline for Func::new", name, addr, size);
+    fn register_function(&mut self, name: &str, addr: *const u8, size: usize) {
+        self.notify_code("wasmtime", name, addr, size);
     }
 }

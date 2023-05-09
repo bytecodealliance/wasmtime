@@ -1,6 +1,7 @@
 #![allow(missing_docs)]
 
 use crate::CodeMemory;
+#[allow(unused_imports)]
 use anyhow::{bail, Result};
 
 cfg_if::cfg_if! {
