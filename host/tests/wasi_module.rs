@@ -116,7 +116,6 @@ async fn big_random_buf() {
 }
 
 #[test_log::test(tokio::test)]
-#[should_panic]
 async fn clock_time_get() {
     run_with_temp_dir("clock_time_get").await
 }

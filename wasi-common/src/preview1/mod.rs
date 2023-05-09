@@ -234,9 +234,21 @@ impl<
     async fn clock_time_get(
         &mut self,
         id: types::Clockid,
-        precision: types::Timestamp,
+        _precision: types::Timestamp,
     ) -> Result<types::Timestamp, types::Error> {
-        todo!()
+        let now = match id {
+            types::Clockid::Realtime => wasi::wall_clock::Host::now(self)
+                .await
+                .context("failed to call `wall_clock::now`")?
+                .try_into()?,
+            types::Clockid::Monotonic => wasi::monotonic_clock::Host::now(self)
+                .await
+                .context("failed to call `monotonic_clock::now`")?,
+            types::Clockid::ProcessCputimeId | types::Clockid::ThreadCputimeId => {
+                return Err(types::Errno::Badf.into())
+            }
+        };
+        Ok(now)
     }
 
     async fn fd_advise(
