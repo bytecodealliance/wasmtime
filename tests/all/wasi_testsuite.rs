@@ -30,11 +30,7 @@ fn wasi_testsuite() -> Result<()> {
     // `cargo test wasi_testsuite -- --nocapture`. The printed output will show
     // the expected result, the actual result, and a command to replicate the
     // failure from the command line.
-    const WASI_COMMON_IGNORE_LIST: &[&str] = &[
-        "environ_get-multiple-variables.wasm",
-        "environ_sizes_get-multiple-variables.wasm",
-        "fd_advise.wasm",
-    ];
+    const WASI_COMMON_IGNORE_LIST: &[&str] = &["fd_advise.wasm"];
     run_all(
         "tests/wasi_testsuite/wasi-common",
         &[],
@@ -127,10 +123,12 @@ fn build_command<P: AsRef<Path>>(module: P, extra_flags: &[&str], spec: &Spec) -
         cmd.args(spec_args);
     }
 
-    // Create the environment. This uses the shell environment, but we could also
-    // have used the Wasmtime CLI's `--env` parameter here.
-    cmd.env_clear();
+    // Add environment variables as CLI arguments.
     if let Some(env) = &spec.env {
+        for env_pair in env {
+            cmd.arg("--env");
+            cmd.arg(format!("{}={}", env_pair.0, env_pair.1));
+        }
         cmd.envs(env);
     }
 
