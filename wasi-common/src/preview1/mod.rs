@@ -14,7 +14,7 @@ impl WasiPreview1Adapter {
     // no parameters: anything it needs from the preview 2 implementation
     // should be retrieved lazily.
     pub fn new() -> Self {
-        todo!()
+        Self {}
     }
 }
 
