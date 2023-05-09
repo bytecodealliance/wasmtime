@@ -32,29 +32,12 @@ jobs:
         - build: x86_64-mingw
           os: windows-latest
           target: x86_64-pc-windows-gnu
-          
-        # TODO: aarch64-linux and s390x-linux are commented out due to build errors
-        # these errors are solved in a newer version of wasmtime, when wizer
-        # updates to the newer wasmtime then we should uncomment these builds
-          
-        #src/arch/aarch64.S: Assembler messages:
-        #src/arch/aarch64.S:21: Error: operand 1 should be a floating-point register -- `stp lr,fp,[sp,-16]!'
-        #src/arch/aarch64.S:50: Error: operand 1 should be a floating-point register -- `ldp lr,fp,[sp],16'
-        #src/arch/aarch64.S:90: Error: bad register expression
-        #exit status: 1
-        #- build: aarch64-linux
-          #os: ubuntu-latest
-          #target: aarch64-unknown-linux-gnu
-          
-        #/rust/lib/rustlib/s390x-unknown-linux-gnu/lib/libstd-f6c951af7877beaf.rlib(std-f6c951af7877beaf.std.e2801c51-cgu.0.rcgu.o): In function `std::sys::unix::rand::imp::getrandom_fill_bytes::hb641b796bca799e8':
-        #/rustc/4b91a6ea7258a947e59c6522cd5898e7c0a6a88f/library/std/src/sys/unix/rand.rs:(.text._ZN3std3sys4unix4rand19hashmap_random_keys17h949023c83f75d545E+0x30): undefined reference to `getrandom'
-        #/rust/lib/rustlib/s390x-unknown-linux-gnu/lib/libstd-f6c951af7877beaf.rlib(std-f6c951af7877beaf.std.e2801c51-cgu.0.rcgu.o): In function `std::sys::unix::rand::imp::getrandom::getrandom::h09b00f3fdb24c5b7':
-        #/rustc/4b91a6ea7258a947e59c6522cd5898e7c0a6a88f/library/std/src/sys/unix/weak.rs:176: undefined reference to `getrandom'
-        #/rustc/4b91a6ea7258a947e59c6522cd5898e7c0a6a88f/library/std/src/sys/unix/weak.rs:176: undefined reference to `getrandom'
-        #collect2: error: ld returned 1 exit status
-        #- build: s390x-linux
-          #os: ubuntu-latest
-          #target: s390x-unknown-linux-gnu
+        - build: aarch64-linux
+          os: ubuntu-latest
+          target: aarch64-unknown-linux-gnu
+        - build: s390x-linux
+          os: ubuntu-latest
+          target: s390x-unknown-linux-gnu
     steps:
     - uses: actions/checkout@v2
       with:
