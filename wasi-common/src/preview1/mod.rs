@@ -5,7 +5,7 @@ use crate::wasi;
 
 use core::borrow::Borrow;
 
-use anyhow::Context;
+use anyhow::{anyhow, Context};
 use wiggle::GuestPtr;
 
 pub struct WasiPreview1Adapter {/* all members private and only used inside this module. also, this struct should be Send. */}
@@ -466,7 +466,14 @@ impl<
     }
 
     async fn proc_exit(&mut self, status: types::Exitcode) -> anyhow::Error {
-        todo!()
+        let status = match status {
+            0 => Ok(()),
+            _ => Err(()),
+        };
+        match self.exit(status).await {
+            Err(e) => e,
+            Ok(()) => anyhow!("`exit` did not return an error"),
+        }
     }
 
     async fn proc_raise(&mut self, _sig: types::Signal) -> Result<(), types::Error> {
