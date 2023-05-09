@@ -5,23 +5,24 @@
 //! like becoming executable or becoming readonly or being created from files,
 //! but it's enough to get various tests running relying on memories and such.
 
+use crate::SendSyncPtr;
 use anyhow::{bail, Result};
 use std::alloc::{self, Layout};
 use std::fs::File;
 use std::ops::Range;
 use std::path::Path;
+use std::ptr::NonNull;
 
 #[derive(Debug)]
 pub struct Mmap {
-    memory: *mut [u8],
+    memory: SendSyncPtr<[u8]>,
 }
-
-unsafe impl Send for Mmap {}
-unsafe impl Sync for Mmap {}
 
 impl Mmap {
     pub fn new_empty() -> Mmap {
-        Mmap { memory: &mut [] }
+        Mmap {
+            memory: SendSyncPtr::from(&mut [][..]),
+        }
     }
 
     pub fn new(size: usize) -> Result<Self> {
@@ -37,9 +38,9 @@ impl Mmap {
             bail!("failed to allocate memory");
         }
 
-        Ok(Mmap {
-            memory: std::ptr::slice_from_raw_parts_mut(ptr, size),
-        })
+        let memory = std::ptr::slice_from_raw_parts_mut(ptr.cast(), size);
+        let memory = SendSyncPtr::new(NonNull::new(memory).unwrap());
+        Ok(Mmap { memory })
     }
 
     pub fn from_file(_path: &Path) -> Result<(Self, File)> {
@@ -50,21 +51,21 @@ impl Mmap {
         // The memory is technically always accessible but this marks it as
         // initialized for miri-level checking.
         unsafe {
-            std::ptr::write_bytes(self.memory.cast::<u8>().add(start), 0u8, len);
+            std::ptr::write_bytes(self.memory.as_ptr().cast::<u8>().add(start), 0u8, len);
         }
         Ok(())
     }
 
     pub fn as_ptr(&self) -> *const u8 {
-        self.memory as *const u8
+        self.memory.as_ptr() as *const u8
     }
 
     pub fn as_mut_ptr(&mut self) -> *mut u8 {
-        self.memory.cast()
+        self.memory.as_ptr().cast()
     }
 
     pub fn len(&self) -> usize {
-        unsafe { (*self.memory).len() }
+        unsafe { (*self.memory.as_ptr()).len() }
     }
 
     pub unsafe fn make_executable(

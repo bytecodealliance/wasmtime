@@ -4,6 +4,7 @@ use crate::{
     StoreContextMut, Val, ValRaw, ValType,
 };
 use anyhow::{bail, Context as _, Error, Result};
+use std::ffi::c_void;
 use std::future::Future;
 use std::mem;
 use std::panic::{self, AssertUnwindSafe};
@@ -11,7 +12,7 @@ use std::pin::Pin;
 use std::ptr::{self, NonNull};
 use std::sync::Arc;
 use wasmtime_runtime::{
-    ExportFunction, InstanceHandle, StoreBox, VMArrayCallHostFuncContext, VMContext, VMFuncRef,
+    ExportFunction, SendSyncPtr, StoreBox, VMArrayCallHostFuncContext, VMContext, VMFuncRef,
     VMFunctionImport, VMNativeCallHostFuncContext, VMOpaqueContext, VMSharedSignatureIndex,
 };
 
@@ -191,7 +192,7 @@ pub(crate) struct FuncData {
     // `StoreOpaque::func_refs`, where we can safely patch the field without
     // worrying about synchronization and we hold a pointer to it here so we can
     // reuse it rather than re-copy if it is passed to Wasm again.
-    in_store_func_ref: Option<InStoreFuncRef>,
+    in_store_func_ref: Option<SendSyncPtr<VMFuncRef>>,
 
     // This is somewhat expensive to load from the `Engine` and in most
     // optimized use cases (e.g. `TypedFunc`) it's not actually needed or it's
@@ -201,34 +202,6 @@ pub(crate) struct FuncData {
     // Also note that this is intentionally placed behind a pointer to keep it
     // small as `FuncData` instances are often inserted into a `Store`.
     ty: Option<Box<FuncType>>,
-}
-
-use in_store_func_ref::InStoreFuncRef;
-mod in_store_func_ref {
-    use super::*;
-
-    #[derive(Copy, Clone)]
-    pub struct InStoreFuncRef(NonNull<VMFuncRef>);
-
-    impl InStoreFuncRef {
-        /// Create a new `InStoreFuncRef`.
-        ///
-        /// Safety: Callers must ensure that the given `func_ref` is pinned
-        /// inside a store, and that this resulting `InStoreFuncRef` is only
-        /// used in conjuction with that store and on its same thread.
-        pub unsafe fn new(func_ref: NonNull<VMFuncRef>) -> InStoreFuncRef {
-            InStoreFuncRef(func_ref)
-        }
-
-        pub fn func_ref(&self) -> NonNull<VMFuncRef> {
-            self.0
-        }
-    }
-
-    // Safety: The `InStoreFuncRef::new` constructor puts the correctness
-    // responsibility on its callers.
-    unsafe impl Send for InStoreFuncRef {}
-    unsafe impl Sync for InStoreFuncRef {}
 }
 
 /// The three ways that a function can be created and referenced from within a
@@ -958,8 +931,8 @@ impl Func {
     /// This function is not safe because `raw` is not validated at all. The
     /// caller must guarantee that `raw` is owned by the `store` provided and is
     /// valid within the `store`.
-    pub unsafe fn from_raw(mut store: impl AsContextMut, raw: usize) -> Option<Func> {
-        Func::from_caller_checked_func_ref(store.as_context_mut().0, raw as *mut _)
+    pub unsafe fn from_raw(mut store: impl AsContextMut, raw: *mut c_void) -> Option<Func> {
+        Func::from_caller_checked_func_ref(store.as_context_mut().0, raw.cast())
     }
 
     /// Extracts the raw value of this `Func`, which is owned by `store`.
@@ -972,9 +945,10 @@ impl Func {
     /// The returned value is only valid for as long as the store is alive and
     /// this function is properly rooted within it. Additionally this function
     /// should not be liberally used since it's a very low-level knob.
-    pub unsafe fn to_raw(&self, mut store: impl AsContextMut) -> usize {
+    pub unsafe fn to_raw(&self, mut store: impl AsContextMut) -> *mut c_void {
         self.caller_checked_func_ref(store.as_context_mut().0)
-            .as_ptr() as usize
+            .as_ptr()
+            .cast()
     }
 
     /// Invokes this function with the `params` given, returning the results
@@ -1109,14 +1083,14 @@ impl Func {
     pub(crate) fn caller_checked_func_ref(&self, store: &mut StoreOpaque) -> NonNull<VMFuncRef> {
         let func_data = &mut store.store_data_mut()[self.0];
         if let Some(in_store) = func_data.in_store_func_ref {
-            in_store.func_ref()
+            in_store.as_non_null()
         } else {
             let func_ref = func_data.export().func_ref;
             unsafe {
                 if func_ref.as_ref().wasm_call.is_none() {
                     let func_ref = store.func_refs().push(func_ref.as_ref().clone());
                     store.store_data_mut()[self.0].in_store_func_ref =
-                        Some(InStoreFuncRef::new(func_ref));
+                        Some(SendSyncPtr::new(func_ref));
                     store.fill_func_refs();
                     func_ref
                 } else {
@@ -1149,7 +1123,7 @@ impl Func {
                 // copy in the store, use the patched version. Otherwise, use
                 // the potentially un-patched version.
                 if let Some(func_ref) = func_data.in_store_func_ref {
-                    func_ref.func_ref()
+                    func_ref.as_non_null()
                 } else {
                     func_data.export().func_ref
                 }
@@ -1792,17 +1766,18 @@ pub trait IntoFunc<T, Params, Results>: Send + Sync + 'static {
 /// recommended to use this type.
 pub struct Caller<'a, T> {
     pub(crate) store: StoreContextMut<'a, T>,
-    caller: &'a InstanceHandle,
+    caller: &'a wasmtime_runtime::Instance,
 }
 
 impl<T> Caller<'_, T> {
     unsafe fn with<R>(caller: *mut VMContext, f: impl FnOnce(Caller<'_, T>) -> R) -> R {
         assert!(!caller.is_null());
-        let instance = InstanceHandle::from_vmctx(caller);
-        let store = StoreContextMut::from_raw(instance.store());
-        f(Caller {
-            store,
-            caller: &instance,
+        wasmtime_runtime::Instance::from_vmctx(caller, |instance| {
+            let store = StoreContextMut::from_raw(instance.store());
+            f(Caller {
+                store,
+                caller: &instance,
+            })
         })
     }
 
@@ -2329,7 +2304,7 @@ use self::rooted::*;
 /// `RootedHostFunc` instead of accidentally safely allowing access to its
 /// constructor.
 mod rooted {
-    use wasmtime_runtime::VMFuncRef;
+    use wasmtime_runtime::{SendSyncPtr, VMFuncRef};
 
     use super::HostFunc;
     use std::ptr::NonNull;
@@ -2341,14 +2316,9 @@ mod rooted {
     /// For more documentation see `FuncKind::RootedHost`, `InstancePre`, and
     /// `HostFunc::to_func_store_rooted`.
     pub(crate) struct RootedHostFunc {
-        func: NonNull<HostFunc>,
-        func_ref: Option<NonNull<VMFuncRef>>,
+        func: SendSyncPtr<HostFunc>,
+        func_ref: Option<SendSyncPtr<VMFuncRef>>,
     }
-
-    // These are required due to the usage of `NonNull` but should be safe
-    // because `HostFunc` is itself send/sync.
-    unsafe impl Send for RootedHostFunc where HostFunc: Send {}
-    unsafe impl Sync for RootedHostFunc where HostFunc: Sync {}
 
     impl RootedHostFunc {
         /// Note that this is `unsafe` because this wrapper type allows safe
@@ -2363,8 +2333,8 @@ mod rooted {
             func_ref: Option<NonNull<VMFuncRef>>,
         ) -> RootedHostFunc {
             RootedHostFunc {
-                func: NonNull::from(&**func),
-                func_ref,
+                func: NonNull::from(&**func).into(),
+                func_ref: func_ref.map(|p| p.into()),
             }
         }
 

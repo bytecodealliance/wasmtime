@@ -1,29 +1,25 @@
+use crate::SendSyncPtr;
 use anyhow::{anyhow, bail, Context, Result};
 use std::fs::{File, OpenOptions};
 use std::io;
 use std::ops::Range;
 use std::os::windows::prelude::*;
 use std::path::Path;
-use std::ptr;
+use std::ptr::{self, NonNull};
 use windows_sys::Win32::Foundation::*;
 use windows_sys::Win32::Storage::FileSystem::*;
 use windows_sys::Win32::System::Memory::*;
 
 #[derive(Debug)]
 pub struct Mmap {
-    memory: *mut [u8],
+    memory: SendSyncPtr<[u8]>,
     is_file: bool,
 }
-
-// Mappings are threadsafe and this is fixing up the auto-traits from the usage
-// of a raw pointer in the above structure.
-unsafe impl Send for Mmap {}
-unsafe impl Sync for Mmap {}
 
 impl Mmap {
     pub fn new_empty() -> Mmap {
         Mmap {
-            memory: &mut [],
+            memory: SendSyncPtr::from(&mut [][..]),
             is_file: false,
         }
     }
@@ -41,8 +37,10 @@ impl Mmap {
             bail!(io::Error::last_os_error())
         }
 
+        let memory = std::ptr::slice_from_raw_parts_mut(ptr.cast(), size);
+        let memory = SendSyncPtr::new(NonNull::new(memory).unwrap());
         Ok(Self {
-            memory: ptr::slice_from_raw_parts_mut(ptr.cast(), size),
+            memory,
             is_file: false,
         })
     }
@@ -52,9 +50,10 @@ impl Mmap {
         if ptr.is_null() {
             bail!(io::Error::last_os_error())
         }
-
+        let memory = std::ptr::slice_from_raw_parts_mut(ptr.cast(), size);
+        let memory = SendSyncPtr::new(NonNull::new(memory).unwrap());
         Ok(Self {
-            memory: ptr::slice_from_raw_parts_mut(ptr.cast(), size),
+            memory,
             is_file: false,
         })
     }
@@ -112,8 +111,10 @@ impl Mmap {
                 return Err(err).context(format!("failed to create map view of {:#x} bytes", len));
             }
 
+            let memory = std::ptr::slice_from_raw_parts_mut(ptr.cast(), len);
+            let memory = SendSyncPtr::new(NonNull::new(memory).unwrap());
             let mut ret = Self {
-                memory: ptr::slice_from_raw_parts_mut(ptr.cast(), len),
+                memory,
                 is_file: true,
             };
 
@@ -147,15 +148,15 @@ impl Mmap {
     }
 
     pub fn as_ptr(&self) -> *const u8 {
-        self.memory as *const u8
+        self.memory.as_ptr() as *const u8
     }
 
     pub fn as_mut_ptr(&mut self) -> *mut u8 {
-        self.memory.cast()
+        self.memory.as_ptr().cast()
     }
 
     pub fn len(&self) -> usize {
-        unsafe { (*self.memory).len() }
+        unsafe { (*self.memory.as_ptr()).len() }
     }
 
     pub unsafe fn make_executable(

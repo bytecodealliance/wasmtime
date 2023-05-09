@@ -57,7 +57,7 @@
 use crate::externref::VMExternRef;
 use crate::table::{Table, TableElementType};
 use crate::vmcontext::{VMContext, VMFuncRef};
-use crate::TrapReason;
+use crate::{Instance, TrapReason};
 use anyhow::Result;
 use std::mem;
 use std::ptr::{self, NonNull};
@@ -114,9 +114,9 @@ pub mod trampolines {
                     vmctx : *mut VMContext,
                     $( $pname : libcall!(@ty $param), )*
                 ) $( -> libcall!(@ty $result))? {
-                    let result = std::panic::catch_unwind(|| {
+                    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                         super::$name(vmctx, $($pname),*)
-                    });
+                    }));
                     match result {
                         Ok(ret) => LibcallResult::convert(ret),
                         Err(panic) => crate::traphandlers::resume_panic(panic),
@@ -186,19 +186,20 @@ unsafe fn memory32_grow(
     delta: u64,
     memory_index: u32,
 ) -> Result<*mut u8, TrapReason> {
-    let instance = (*vmctx).instance_mut();
-    let memory_index = MemoryIndex::from_u32(memory_index);
-    let result =
-        match instance
-            .memory_grow(memory_index, delta)
-            .map_err(|error| TrapReason::User {
-                error,
-                needs_backtrace: true,
-            })? {
-            Some(size_in_bytes) => size_in_bytes / (wasmtime_environ::WASM_PAGE_SIZE as usize),
-            None => usize::max_value(),
-        };
-    Ok(result as *mut _)
+    Instance::from_vmctx(vmctx, |instance| {
+        let memory_index = MemoryIndex::from_u32(memory_index);
+        let result =
+            match instance
+                .memory_grow(memory_index, delta)
+                .map_err(|error| TrapReason::User {
+                    error,
+                    needs_backtrace: true,
+                })? {
+                Some(size_in_bytes) => size_in_bytes / (wasmtime_environ::WASM_PAGE_SIZE as usize),
+                None => usize::max_value(),
+            };
+        Ok(result as *mut _)
+    })
 }
 
 // Implementation of `table.grow`.
@@ -213,22 +214,23 @@ unsafe fn table_grow(
     // or is a `VMExternRef` until we look at the table type.
     init_value: *mut u8,
 ) -> Result<u32> {
-    let instance = (*vmctx).instance_mut();
     let table_index = TableIndex::from_u32(table_index);
-    let element = match instance.table_element_type(table_index) {
-        TableElementType::Func => (init_value as *mut VMFuncRef).into(),
-        TableElementType::Extern => {
-            let init_value = if init_value.is_null() {
-                None
-            } else {
-                Some(VMExternRef::clone_from_raw(init_value))
-            };
-            init_value.into()
-        }
-    };
-    Ok(match instance.table_grow(table_index, delta, element)? {
-        Some(r) => r,
-        None => -1_i32 as u32,
+    Instance::from_vmctx(vmctx, |instance| {
+        let element = match instance.table_element_type(table_index) {
+            TableElementType::Func => (init_value as *mut VMFuncRef).into(),
+            TableElementType::Extern => {
+                let init_value = if init_value.is_null() {
+                    None
+                } else {
+                    Some(VMExternRef::clone_from_raw(init_value))
+                };
+                init_value.into()
+            }
+        };
+        Ok(match instance.table_grow(table_index, delta, element)? {
+            Some(r) => r,
+            None => -1_i32 as u32,
+        })
     })
 }
 
@@ -245,23 +247,24 @@ unsafe fn table_fill(
     val: *mut u8,
     len: u32,
 ) -> Result<(), Trap> {
-    let instance = (*vmctx).instance_mut();
-    let table_index = TableIndex::from_u32(table_index);
-    let table = &mut *instance.get_table(table_index);
-    match table.element_type() {
-        TableElementType::Func => {
-            let val = val as *mut VMFuncRef;
-            table.fill(dst, val.into(), len)
+    Instance::from_vmctx(vmctx, |instance| {
+        let table_index = TableIndex::from_u32(table_index);
+        let table = &mut *instance.get_table(table_index);
+        match table.element_type() {
+            TableElementType::Func => {
+                let val = val as *mut VMFuncRef;
+                table.fill(dst, val.into(), len)
+            }
+            TableElementType::Extern => {
+                let val = if val.is_null() {
+                    None
+                } else {
+                    Some(VMExternRef::clone_from_raw(val))
+                };
+                table.fill(dst, val.into(), len)
+            }
         }
-        TableElementType::Extern => {
-            let val = if val.is_null() {
-                None
-            } else {
-                Some(VMExternRef::clone_from_raw(val))
-            };
-            table.fill(dst, val.into(), len)
-        }
-    }
+    })
 }
 
 use table_fill as table_fill_func_ref;
@@ -278,12 +281,13 @@ unsafe fn table_copy(
 ) -> Result<(), Trap> {
     let dst_table_index = TableIndex::from_u32(dst_table_index);
     let src_table_index = TableIndex::from_u32(src_table_index);
-    let instance = (*vmctx).instance_mut();
-    let dst_table = instance.get_table(dst_table_index);
-    // Lazy-initialize the whole range in the source table first.
-    let src_range = src..(src.checked_add(len).unwrap_or(u32::MAX));
-    let src_table = instance.get_table_with_lazy_init(src_table_index, src_range);
-    Table::copy(dst_table, src_table, dst, src, len)
+    Instance::from_vmctx(vmctx, |instance| {
+        let dst_table = instance.get_table(dst_table_index);
+        // Lazy-initialize the whole range in the source table first.
+        let src_range = src..(src.checked_add(len).unwrap_or(u32::MAX));
+        let src_table = instance.get_table_with_lazy_init(src_table_index, src_range);
+        Table::copy(dst_table, src_table, dst, src, len)
+    })
 }
 
 // Implementation of `table.init`.
@@ -297,15 +301,15 @@ unsafe fn table_init(
 ) -> Result<(), Trap> {
     let table_index = TableIndex::from_u32(table_index);
     let elem_index = ElemIndex::from_u32(elem_index);
-    let instance = (*vmctx).instance_mut();
-    instance.table_init(table_index, elem_index, dst, src, len)
+    Instance::from_vmctx(vmctx, |i| {
+        i.table_init(table_index, elem_index, dst, src, len)
+    })
 }
 
 // Implementation of `elem.drop`.
 unsafe fn elem_drop(vmctx: *mut VMContext, elem_index: u32) {
     let elem_index = ElemIndex::from_u32(elem_index);
-    let instance = (*vmctx).instance_mut();
-    instance.elem_drop(elem_index);
+    Instance::from_vmctx(vmctx, |i| i.elem_drop(elem_index))
 }
 
 // Implementation of `memory.copy` for locally defined memories.
@@ -319,8 +323,9 @@ unsafe fn memory_copy(
 ) -> Result<(), Trap> {
     let src_index = MemoryIndex::from_u32(src_index);
     let dst_index = MemoryIndex::from_u32(dst_index);
-    let instance = (*vmctx).instance_mut();
-    instance.memory_copy(dst_index, dst, src_index, src, len)
+    Instance::from_vmctx(vmctx, |i| {
+        i.memory_copy(dst_index, dst, src_index, src, len)
+    })
 }
 
 // Implementation of `memory.fill` for locally defined memories.
@@ -332,8 +337,7 @@ unsafe fn memory_fill(
     len: u64,
 ) -> Result<(), Trap> {
     let memory_index = MemoryIndex::from_u32(memory_index);
-    let instance = (*vmctx).instance_mut();
-    instance.memory_fill(memory_index, dst, val as u8, len)
+    Instance::from_vmctx(vmctx, |i| i.memory_fill(memory_index, dst, val as u8, len))
 }
 
 // Implementation of `memory.init`.
@@ -347,24 +351,25 @@ unsafe fn memory_init(
 ) -> Result<(), Trap> {
     let memory_index = MemoryIndex::from_u32(memory_index);
     let data_index = DataIndex::from_u32(data_index);
-    let instance = (*vmctx).instance_mut();
-    instance.memory_init(memory_index, data_index, dst, src, len)
+    Instance::from_vmctx(vmctx, |i| {
+        i.memory_init(memory_index, data_index, dst, src, len)
+    })
 }
 
 // Implementation of `ref.func`.
 unsafe fn ref_func(vmctx: *mut VMContext, func_index: u32) -> *mut u8 {
-    let instance = (*vmctx).instance_mut();
-    let func_ref = instance
-        .get_func_ref(FuncIndex::from_u32(func_index))
-        .expect("ref_func: `get_func_ref` should always be available for our given func index");
-    func_ref as *mut _
+    Instance::from_vmctx(vmctx, |instance| {
+        instance
+            .get_func_ref(FuncIndex::from_u32(func_index))
+            .expect("ref_func: funcref should always be available for given func index")
+            .cast()
+    })
 }
 
 // Implementation of `data.drop`.
 unsafe fn data_drop(vmctx: *mut VMContext, data_index: u32) {
     let data_index = DataIndex::from_u32(data_index);
-    let instance = (*vmctx).instance_mut();
-    instance.data_drop(data_index)
+    Instance::from_vmctx(vmctx, |i| i.data_drop(data_index))
 }
 
 // Returns a table entry after lazily initializing it.
@@ -373,20 +378,21 @@ unsafe fn table_get_lazy_init_func_ref(
     table_index: u32,
     index: u32,
 ) -> *mut u8 {
-    let instance = (*vmctx).instance_mut();
-    let table_index = TableIndex::from_u32(table_index);
-    let table = instance.get_table_with_lazy_init(table_index, std::iter::once(index));
-    let elem = (*table)
-        .get(index)
-        .expect("table access already bounds-checked");
+    Instance::from_vmctx(vmctx, |instance| {
+        let table_index = TableIndex::from_u32(table_index);
+        let table = instance.get_table_with_lazy_init(table_index, std::iter::once(index));
+        let elem = (*table)
+            .get(index)
+            .expect("table access already bounds-checked");
 
-    elem.into_ref_asserting_initialized() as *mut _
+        elem.into_ref_asserting_initialized()
+    })
 }
 
 // Drop a `VMExternRef`.
 unsafe fn drop_externref(_vmctx: *mut VMContext, externref: *mut u8) {
     let externref = externref as *mut crate::externref::VMExternData;
-    let externref = NonNull::new(externref).unwrap();
+    let externref = NonNull::new(externref).unwrap().into();
     crate::externref::VMExternData::drop_and_dealloc(externref);
 }
 
@@ -394,38 +400,41 @@ unsafe fn drop_externref(_vmctx: *mut VMContext, externref: *mut u8) {
 // `VMExternRefActivationsTable`.
 unsafe fn activations_table_insert_with_gc(vmctx: *mut VMContext, externref: *mut u8) {
     let externref = VMExternRef::clone_from_raw(externref);
-    let instance = (*vmctx).instance_mut();
-    let limits = *instance.runtime_limits();
-    let (activations_table, module_info_lookup) = (*instance.store()).externref_activations_table();
+    Instance::from_vmctx(vmctx, |instance| {
+        let limits = *instance.runtime_limits();
+        let (activations_table, module_info_lookup) =
+            (*instance.store()).externref_activations_table();
 
-    // Invariant: all `externref`s on the stack have an entry in the activations
-    // table. So we need to ensure that this `externref` is in the table
-    // *before* we GC, even though `insert_with_gc` will ensure that it is in
-    // the table *after* the GC. This technically results in one more hash table
-    // look up than is strictly necessary -- which we could avoid by having an
-    // additional GC method that is aware of these GC-triggering references --
-    // but it isn't really a concern because this is already a slow path.
-    activations_table.insert_without_gc(externref.clone());
+        // Invariant: all `externref`s on the stack have an entry in the activations
+        // table. So we need to ensure that this `externref` is in the table
+        // *before* we GC, even though `insert_with_gc` will ensure that it is in
+        // the table *after* the GC. This technically results in one more hash table
+        // look up than is strictly necessary -- which we could avoid by having an
+        // additional GC method that is aware of these GC-triggering references --
+        // but it isn't really a concern because this is already a slow path.
+        activations_table.insert_without_gc(externref.clone());
 
-    activations_table.insert_with_gc(limits, externref, module_info_lookup);
+        activations_table.insert_with_gc(limits, externref, module_info_lookup);
+    })
 }
 
 // Perform a Wasm `global.get` for `externref` globals.
 unsafe fn externref_global_get(vmctx: *mut VMContext, index: u32) -> *mut u8 {
     let index = GlobalIndex::from_u32(index);
-    let instance = (*vmctx).instance_mut();
-    let limits = *instance.runtime_limits();
-    let global = instance.defined_or_imported_global_ptr(index);
-    match (*global).as_externref().clone() {
-        None => ptr::null_mut(),
-        Some(externref) => {
-            let raw = externref.as_raw();
-            let (activations_table, module_info_lookup) =
-                (*instance.store()).externref_activations_table();
-            activations_table.insert_with_gc(limits, externref, module_info_lookup);
-            raw
+    Instance::from_vmctx(vmctx, |instance| {
+        let limits = *instance.runtime_limits();
+        let global = instance.defined_or_imported_global_ptr(index);
+        match (*global).as_externref().clone() {
+            None => ptr::null_mut(),
+            Some(externref) => {
+                let raw = externref.as_raw();
+                let (activations_table, module_info_lookup) =
+                    (*instance.store()).externref_activations_table();
+                activations_table.insert_with_gc(limits, externref, module_info_lookup);
+                raw
+            }
         }
-    }
+    })
 }
 
 // Perform a Wasm `global.set` for `externref` globals.
@@ -437,15 +446,16 @@ unsafe fn externref_global_set(vmctx: *mut VMContext, index: u32, externref: *mu
     };
 
     let index = GlobalIndex::from_u32(index);
-    let instance = (*vmctx).instance_mut();
-    let global = instance.defined_or_imported_global_ptr(index);
+    Instance::from_vmctx(vmctx, |instance| {
+        let global = instance.defined_or_imported_global_ptr(index);
 
-    // Swap the new `externref` value into the global before we drop the old
-    // value. This protects against an `externref` with a `Drop` implementation
-    // that calls back into Wasm and touches this global again (we want to avoid
-    // it observing a halfway-deinitialized value).
-    let old = mem::replace((*global).as_externref_mut(), externref);
-    drop(old);
+        // Swap the new `externref` value into the global before we drop the old
+        // value. This protects against an `externref` with a `Drop` implementation
+        // that calls back into Wasm and touches this global again (we want to avoid
+        // it observing a halfway-deinitialized value).
+        let old = mem::replace((*global).as_externref_mut(), externref);
+        drop(old);
+    })
 }
 
 // Implementation of `memory.atomic.notify` for locally defined memories.
@@ -456,10 +466,11 @@ unsafe fn memory_atomic_notify(
     count: u32,
 ) -> Result<u32, Trap> {
     let memory = MemoryIndex::from_u32(memory_index);
-    let instance = (*vmctx).instance_mut();
-    instance
-        .get_runtime_memory(memory)
-        .atomic_notify(addr_index, count)
+    Instance::from_vmctx(vmctx, |instance| {
+        instance
+            .get_runtime_memory(memory)
+            .atomic_notify(addr_index, count)
+    })
 }
 
 // Implementation of `memory.atomic.wait32` for locally defined memories.
@@ -473,10 +484,11 @@ unsafe fn memory_atomic_wait32(
     // convert timeout to Instant, before any wait happens on locking
     let timeout = (timeout as i64 >= 0).then(|| Instant::now() + Duration::from_nanos(timeout));
     let memory = MemoryIndex::from_u32(memory_index);
-    let instance = (*vmctx).instance_mut();
-    Ok(instance
-        .get_runtime_memory(memory)
-        .atomic_wait32(addr_index, expected, timeout)? as u32)
+    Instance::from_vmctx(vmctx, |instance| {
+        Ok(instance
+            .get_runtime_memory(memory)
+            .atomic_wait32(addr_index, expected, timeout)? as u32)
+    })
 }
 
 // Implementation of `memory.atomic.wait64` for locally defined memories.
@@ -490,20 +502,21 @@ unsafe fn memory_atomic_wait64(
     // convert timeout to Instant, before any wait happens on locking
     let timeout = (timeout as i64 >= 0).then(|| Instant::now() + Duration::from_nanos(timeout));
     let memory = MemoryIndex::from_u32(memory_index);
-    let instance = (*vmctx).instance_mut();
-    Ok(instance
-        .get_runtime_memory(memory)
-        .atomic_wait64(addr_index, expected, timeout)? as u32)
+    Instance::from_vmctx(vmctx, |instance| {
+        Ok(instance
+            .get_runtime_memory(memory)
+            .atomic_wait64(addr_index, expected, timeout)? as u32)
+    })
 }
 
 // Hook for when an instance runs out of fuel.
 unsafe fn out_of_gas(vmctx: *mut VMContext) -> Result<()> {
-    (*(*vmctx).instance().store()).out_of_gas()
+    Instance::from_vmctx(vmctx, |i| (*i.store()).out_of_gas())
 }
 
 // Hook for when an instance observes that the epoch has changed.
 unsafe fn new_epoch(vmctx: *mut VMContext) -> Result<u64> {
-    (*(*vmctx).instance().store()).new_epoch()
+    Instance::from_vmctx(vmctx, |i| (*i.store()).new_epoch())
 }
 
 /// This module contains functions which are used for resolving relocations at

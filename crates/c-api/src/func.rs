@@ -420,13 +420,16 @@ pub unsafe extern "C" fn wasmtime_caller_export_get(
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_func_from_raw(
     store: CStoreContextMut<'_>,
-    raw: usize,
+    raw: *mut c_void,
     func: &mut Func,
 ) {
     *func = Func::from_raw(store, raw).unwrap();
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn wasmtime_func_to_raw(store: CStoreContextMut<'_>, func: &Func) -> usize {
+pub unsafe extern "C" fn wasmtime_func_to_raw(
+    store: CStoreContextMut<'_>,
+    func: &Func,
+) -> *mut c_void {
     func.to_raw(store)
 }

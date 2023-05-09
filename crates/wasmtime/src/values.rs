@@ -111,14 +111,14 @@ impl Val {
             Val::ExternRef(e) => {
                 let externref = match e {
                     Some(e) => e.to_raw(store),
-                    None => 0,
+                    None => ptr::null_mut(),
                 };
                 ValRaw::externref(externref)
             }
             Val::FuncRef(f) => {
                 let funcref = match f {
                     Some(f) => f.to_raw(store),
-                    None => 0,
+                    None => ptr::null_mut(),
                 };
                 ValRaw::funcref(funcref)
             }

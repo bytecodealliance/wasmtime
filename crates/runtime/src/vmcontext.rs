@@ -4,9 +4,9 @@
 mod vm_host_func_context;
 
 use crate::externref::VMExternRef;
-use crate::instance::Instance;
-use std::any::Any;
+use sptr::Strict;
 use std::cell::UnsafeCell;
+use std::ffi::c_void;
 use std::marker;
 use std::ptr::NonNull;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -570,18 +570,14 @@ impl VMGlobalDefinition {
 
     /// Return a reference to the value as a `VMFuncRef`.
     #[allow(clippy::cast_ptr_alignment)]
-    pub unsafe fn as_func_ref(&self) -> *const VMFuncRef {
-        *(self.storage.as_ref().as_ptr().cast::<*const VMFuncRef>())
+    pub unsafe fn as_func_ref(&self) -> *mut VMFuncRef {
+        *(self.storage.as_ref().as_ptr().cast::<*mut VMFuncRef>())
     }
 
     /// Return a mutable reference to the value as a `VMFuncRef`.
     #[allow(clippy::cast_ptr_alignment)]
-    pub unsafe fn as_func_ref_mut(&mut self) -> &mut *const VMFuncRef {
-        &mut *(self
-            .storage
-            .as_mut()
-            .as_mut_ptr()
-            .cast::<*const VMFuncRef>())
+    pub unsafe fn as_func_ref_mut(&mut self) -> &mut *mut VMFuncRef {
+        &mut *(self.storage.as_mut().as_mut_ptr().cast::<*mut VMFuncRef>())
     }
 }
 
@@ -966,32 +962,6 @@ impl VMContext {
         debug_assert_eq!((*opaque).magic, VMCONTEXT_MAGIC);
         opaque.cast()
     }
-
-    /// Return a mutable reference to the associated `Instance`.
-    ///
-    /// # Safety
-    /// This is unsafe because it doesn't work on just any `VMContext`, it must
-    /// be a `VMContext` allocated as part of an `Instance`.
-    #[allow(clippy::cast_ptr_alignment)]
-    #[inline]
-    pub(crate) unsafe fn instance(&self) -> &Instance {
-        &*((self as *const Self as *mut u8).offset(-Instance::vmctx_offset()) as *const Instance)
-    }
-
-    #[inline]
-    pub(crate) unsafe fn instance_mut(&mut self) -> &mut Instance {
-        &mut *((self as *const Self as *mut u8).offset(-Instance::vmctx_offset()) as *mut Instance)
-    }
-
-    /// Return a reference to the host state associated with this `Instance`.
-    ///
-    /// # Safety
-    /// This is unsafe because it doesn't work on just any `VMContext`, it must
-    /// be a `VMContext` allocated as part of an `Instance`.
-    #[inline]
-    pub unsafe fn host_state(&self) -> &dyn Any {
-        self.instance().host_state()
-    }
 }
 
 /// A "raw" and unsafe representation of a WebAssembly value.
@@ -1064,7 +1034,7 @@ pub union ValRaw {
     /// carefully calling the correct functions throughout the runtime.
     ///
     /// This value is always stored in a little-endian format.
-    funcref: usize,
+    funcref: *mut c_void,
 
     /// A WebAssembly `externref` value.
     ///
@@ -1074,8 +1044,13 @@ pub union ValRaw {
     /// carefully calling the correct functions throughout the runtime.
     ///
     /// This value is always stored in a little-endian format.
-    externref: usize,
+    externref: *mut c_void,
 }
+
+// This type is just a bag-of-bits so it's up to the caller to figure out how
+// to safely deal with threading concerns and safely access interior bits.
+unsafe impl Send for ValRaw {}
+unsafe impl Sync for ValRaw {}
 
 impl ValRaw {
     /// Creates a WebAssembly `i32` value
@@ -1132,15 +1107,17 @@ impl ValRaw {
 
     /// Creates a WebAssembly `funcref` value
     #[inline]
-    pub fn funcref(i: usize) -> ValRaw {
-        ValRaw { funcref: i.to_le() }
+    pub fn funcref(i: *mut c_void) -> ValRaw {
+        ValRaw {
+            funcref: Strict::map_addr(i, |i| i.to_le()),
+        }
     }
 
     /// Creates a WebAssembly `externref` value
     #[inline]
-    pub fn externref(i: usize) -> ValRaw {
+    pub fn externref(i: *mut c_void) -> ValRaw {
         ValRaw {
-            externref: i.to_le(),
+            externref: Strict::map_addr(i, |i| i.to_le()),
         }
     }
 
@@ -1188,14 +1165,14 @@ impl ValRaw {
 
     /// Gets the WebAssembly `funcref` value
     #[inline]
-    pub fn get_funcref(&self) -> usize {
-        unsafe { usize::from_le(self.funcref) }
+    pub fn get_funcref(&self) -> *mut c_void {
+        unsafe { Strict::map_addr(self.funcref, |i| usize::from_le(i)) }
     }
 
     /// Gets the WebAssembly `externref` value
     #[inline]
-    pub fn get_externref(&self) -> usize {
-        unsafe { usize::from_le(self.externref) }
+    pub fn get_externref(&self) -> *mut c_void {
+        unsafe { Strict::map_addr(self.externref, |i| usize::from_le(i)) }
     }
 }
 

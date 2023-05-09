@@ -40,6 +40,7 @@ mod memory;
 mod mmap;
 mod mmap_vec;
 mod parking_spot;
+mod send_sync_ptr;
 mod store_box;
 mod table;
 mod traphandlers;
@@ -54,8 +55,8 @@ pub use crate::export::*;
 pub use crate::externref::*;
 pub use crate::imports::Imports;
 pub use crate::instance::{
-    InstanceAllocationRequest, InstanceAllocator, InstanceHandle, OnDemandInstanceAllocator,
-    StorePtr,
+    Instance, InstanceAllocationRequest, InstanceAllocator, InstanceHandle,
+    OnDemandInstanceAllocator, StorePtr,
 };
 #[cfg(feature = "pooling-allocator")]
 pub use crate::instance::{
@@ -79,6 +80,7 @@ pub use crate::vmcontext::{
     VMRuntimeLimits, VMSharedSignatureIndex, VMTableDefinition, VMTableImport, VMWasmCallFunction,
     ValRaw,
 };
+pub use send_sync_ptr::SendSyncPtr;
 
 mod module_id;
 pub use module_id::{CompiledModuleId, CompiledModuleIdAllocator};
