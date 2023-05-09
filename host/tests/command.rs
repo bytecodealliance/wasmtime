@@ -397,6 +397,7 @@ async fn directory_list() -> Result<()> {
 
     let mut table = Table::new();
     let wasi = WasiCtxBuilder::new_sync()
+        .inherit_stdio()
         .push_preopened_dir(open_dir, DirPerms::all(), FilePerms::all(), "/")
         .build(&mut table)?;
 
