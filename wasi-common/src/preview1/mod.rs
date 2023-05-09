@@ -134,7 +134,18 @@ impl<
     }
 
     async fn args_sizes_get(&mut self) -> Result<(types::Size, types::Size), types::Error> {
-        todo!()
+        let args = self
+            .get_arguments()
+            .await
+            .context("failed to call `get-arguments`")?;
+        let num = args.len().try_into().map_err(|_| types::Errno::Overflow)?;
+        let len = args
+            .iter()
+            .map(|buf| buf.len() + 1) // Each argument is expected to be `\0` terminated.
+            .sum::<usize>()
+            .try_into()
+            .map_err(|_| types::Errno::Overflow)?;
+        Ok((num, len))
     }
 
     async fn environ_get<'b>(
