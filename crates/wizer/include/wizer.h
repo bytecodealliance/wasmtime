@@ -84,6 +84,7 @@
 #define WIZER_INIT(init_func)                                                  \
     __WIZER_EXTERN_C void __wasm_call_ctors();                                 \
     __WIZER_EXTERN_C void __wasm_call_dtors();                                 \
+    __WIZER_EXTERN_C void __wasi_proc_exit(int);                               \
     __WIZER_EXTERN_C int WIZER_MAIN_VOID();                                    \
     /* This function's export name `wizer.initialize` is specially          */ \
     /* recognized by Wizer. It is the direct entry point for pre-init.      */ \
@@ -108,10 +109,14 @@
         /* `main()`. This may change in the future; when it does, we will   */ \
         /* coordinate with the WASI-SDK toolchain to implement this entry   */ \
         /* point in an alternate way. */                                       \
-        WIZER_MAIN_VOID();                                                     \
+        int r = WIZER_MAIN_VOID();                                             \
         /* Because we are replacing `_start()`, we need to manually invoke  */ \
         /* destructors as well.                                             */ \
         __wasm_call_dtors();                                                   \
+        /* If main returned non-zero code, call `__wasi_proc_exit`. */         \
+        if (r != 0) {                                                          \
+          __wasi_proc_exit(r);                                                 \
+        }                                                                      \
     }
 
 /*
