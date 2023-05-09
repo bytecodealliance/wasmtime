@@ -4,7 +4,7 @@ use crate::{Engine, FuncType, ValRaw};
 use anyhow::Result;
 use std::panic::{self, AssertUnwindSafe};
 use std::ptr::NonNull;
-use wasmtime_jit::{profiling::ProfilingAgent, CodeMemory};
+use wasmtime_jit::CodeMemory;
 use wasmtime_runtime::{
     StoreBox, VMArrayCallHostFuncContext, VMContext, VMFuncRef, VMOpaqueContext,
 };
