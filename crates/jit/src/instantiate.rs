@@ -568,16 +568,6 @@ impl CompiledModule {
         Some(&self.text()[loc.start as usize..][..loc.length as usize])
     }
 
-    /// Returns an iterator over all array-to-Wasm trampolines defined within
-    /// this module, providing both their index and their in-memory body.
-    pub fn array_to_wasm_trampolines(
-        &self,
-    ) -> impl ExactSizeIterator<Item = (DefinedFuncIndex, &[u8])> + '_ {
-        self.funcs
-            .keys()
-            .map(move |i| (i, self.array_to_wasm_trampoline(i).unwrap()))
-    }
-
     /// Get the native-to-Wasm trampoline for the function `index` points to.
     ///
     /// If the function `index` points to does not escape, then `None` is
@@ -588,16 +578,6 @@ impl CompiledModule {
     pub fn native_to_wasm_trampoline(&self, index: DefinedFuncIndex) -> Option<&[u8]> {
         let loc = self.funcs[index].native_to_wasm_trampoline?;
         Some(&self.text()[loc.start as usize..][..loc.length as usize])
-    }
-
-    /// Returns an iterator over all native-to-Wasm trampolines defined within
-    /// this module, providing both their index and their in-memory body.
-    pub fn native_to_wasm_trampolines(
-        &self,
-    ) -> impl ExactSizeIterator<Item = (DefinedFuncIndex, &[u8])> + '_ {
-        self.funcs
-            .keys()
-            .map(move |i| (i, self.native_to_wasm_trampoline(i).unwrap()))
     }
 
     /// Get the Wasm-to-native trampoline for the given signature.
@@ -612,16 +592,6 @@ impl CompiledModule {
             .expect("should have a Wasm-to-native trampline for all signatures");
         let (_, loc) = self.wasm_to_native_trampolines[idx];
         &self.text()[loc.start as usize..][..loc.length as usize]
-    }
-
-    /// Returns an iterator over all native-to-Wasm trampolines defined within
-    /// this module, providing both their index and their in-memory body.
-    pub fn wasm_to_native_trampolines(
-        &self,
-    ) -> impl ExactSizeIterator<Item = (SignatureIndex, &[u8])> + '_ {
-        self.wasm_to_native_trampolines
-            .iter()
-            .map(move |(i, _)| (*i, self.wasm_to_native_trampoline(*i)))
     }
 
     /// Returns the stack map information for all functions defined in this
