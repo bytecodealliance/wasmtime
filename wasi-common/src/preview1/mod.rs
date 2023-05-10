@@ -60,12 +60,6 @@ impl wiggle::GuestErrorType for types::Errno {
     }
 }
 
-impl From<anyhow::Error> for types::Error {
-    fn from(e: anyhow::Error) -> Self {
-        types::Error::trap(e)
-    }
-}
-
 impl TryFrom<wasi::wall_clock::Datetime> for types::Timestamp {
     type Error = types::Errno;
 
@@ -130,7 +124,8 @@ impl<
     ) -> Result<(), types::Error> {
         self.get_arguments()
             .await
-            .context("failed to call `get-arguments`")?
+            .context("failed to call `get-arguments`")
+            .map_err(types::Error::trap)?
             .into_iter()
             .try_fold(
                 (*argv, *argv_buf),
@@ -153,7 +148,8 @@ impl<
         let args = self
             .get_arguments()
             .await
-            .context("failed to call `get-arguments`")?;
+            .context("failed to call `get-arguments`")
+            .map_err(types::Error::trap)?;
         let num = args.len().try_into().map_err(|_| types::Errno::Overflow)?;
         let len = args
             .iter()
@@ -171,7 +167,8 @@ impl<
     ) -> Result<(), types::Error> {
         self.get_environment()
             .await
-            .context("failed to call `get-environment`")?
+            .context("failed to call `get-environment`")
+            .map_err(types::Error::trap)?
             .into_iter()
             .try_fold(
                 (*environ, *environ_buf),
@@ -198,7 +195,8 @@ impl<
         let environ = self
             .get_environment()
             .await
-            .context("failed to call `get-environment`")?;
+            .context("failed to call `get-environment`")
+            .map_err(types::Error::trap)?;
         let num = environ
             .len()
             .try_into()
@@ -219,11 +217,13 @@ impl<
         let res = match id {
             types::Clockid::Realtime => wasi::wall_clock::Host::resolution(self)
                 .await
-                .context("failed to call `wall_clock::resolution`")?
+                .context("failed to call `wall_clock::resolution`")
+                .map_err(types::Error::trap)?
                 .try_into()?,
             types::Clockid::Monotonic => wasi::monotonic_clock::Host::resolution(self)
                 .await
-                .context("failed to call `monotonic_clock::resolution`")?,
+                .context("failed to call `monotonic_clock::resolution`")
+                .map_err(types::Error::trap)?,
             types::Clockid::ProcessCputimeId | types::Clockid::ThreadCputimeId => {
                 return Err(types::Errno::Badf.into())
             }
@@ -239,11 +239,13 @@ impl<
         let now = match id {
             types::Clockid::Realtime => wasi::wall_clock::Host::now(self)
                 .await
-                .context("failed to call `wall_clock::now`")?
+                .context("failed to call `wall_clock::now`")
+                .map_err(types::Error::trap)?
                 .try_into()?,
             types::Clockid::Monotonic => wasi::monotonic_clock::Host::now(self)
                 .await
-                .context("failed to call `monotonic_clock::now`")?,
+                .context("failed to call `monotonic_clock::now`")
+                .map_err(types::Error::trap)?,
             types::Clockid::ProcessCputimeId | types::Clockid::ThreadCputimeId => {
                 return Err(types::Errno::Badf.into())
             }
@@ -533,7 +535,8 @@ impl<
         let rand = self
             .get_random_bytes(buf_len.into())
             .await
-            .context("failed to call `get-random-bytes`")?;
+            .context("failed to call `get-random-bytes`")
+            .map_err(types::Error::trap)?;
         write_bytes(buf, rand)?;
         Ok(())
     }
