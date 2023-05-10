@@ -25,7 +25,7 @@ pub extern "C" fn wasmtime_error_new(
     msg: *const std::ffi::c_char,
 ) -> Option<Box<wasmtime_error_t>> {
     let msg_string = String::from_utf8_lossy(unsafe { std::ffi::CStr::from_ptr(msg).to_bytes() });
-    Some(Box::new(wasmtime_error_t::from(anyhow!(msg_string))))
+    Some(Box::new(wasmtime_error_t::from(anyhow!("{msg_string}"))))
 }
 
 pub(crate) fn handle_result<T>(
