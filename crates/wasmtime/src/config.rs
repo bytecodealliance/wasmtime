@@ -110,6 +110,7 @@ pub struct Config {
     pub(crate) memory_init_cow: bool,
     pub(crate) memory_guaranteed_dense_image_size: u64,
     pub(crate) force_memory_init_memfd: bool,
+    pub(crate) coredump_on_trap: bool,
 }
 
 /// User-provided configuration for the compiler.
@@ -199,6 +200,7 @@ impl Config {
             memory_init_cow: true,
             memory_guaranteed_dense_image_size: 16 << 20,
             force_memory_init_memfd: false,
+            coredump_on_trap: false,
         };
         #[cfg(any(feature = "cranelift", feature = "winch"))]
         {
@@ -1447,6 +1449,15 @@ impl Config {
     /// This option is disabled by default.
     pub fn force_memory_init_memfd(&mut self, enable: bool) -> &mut Self {
         self.force_memory_init_memfd = enable;
+        self
+    }
+
+    /// Whether or not a coredump should be generated and attached to the Error when
+    /// a trap is raised.
+    ///
+    /// This option is disabled by default.
+    pub fn coredump_on_trap(&mut self, enable: bool) -> &mut Self {
+        self.coredump_on_trap = enable;
         self
     }
 
