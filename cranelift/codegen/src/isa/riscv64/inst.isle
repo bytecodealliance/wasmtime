@@ -1358,6 +1358,10 @@
 
 ;; UImm5 Helpers
 
+;; Extract a `UImm5` from an `u8`.
+(decl pure partial uimm5_from_u8 (UImm5) u8)
+(extern extractor uimm5_from_u8 uimm5_from_u8)
+
 (decl uimm5_bitcast_to_imm5 (UImm5) Imm5)
 (extern constructor uimm5_bitcast_to_imm5 uimm5_bitcast_to_imm5)
 

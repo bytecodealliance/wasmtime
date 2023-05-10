@@ -214,6 +214,10 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         Imm5::from_bits(arg0.bits() as u8)
     }
     #[inline]
+    fn uimm5_from_u8(&mut self, arg0: u8) -> Option<UImm5> {
+        UImm5::maybe_from_u8(arg0)
+    }
+    #[inline]
     fn writable_zero_reg(&mut self) -> WritableReg {
         writable_zero_reg()
     }

@@ -1030,3 +1030,8 @@
 
 (rule (lower (call_indirect sig_ref val inputs))
   (gen_call_indirect sig_ref val inputs))
+
+;;;; Rules for `extractlane` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (extractlane x @ (value_type ty) (u8_from_uimm8 idx)))
+  (gen_extractlane ty x idx))

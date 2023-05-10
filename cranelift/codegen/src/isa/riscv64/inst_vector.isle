@@ -154,7 +154,13 @@
   (if-let $I32 (lane_type ty))
   (VecElementWidth.E32))
 (rule (element_width_from_type ty)
+  (if-let $F32 (lane_type ty))
+  (VecElementWidth.E32))
+(rule (element_width_from_type ty)
   (if-let $I64 (lane_type ty))
+  (VecElementWidth.E64))
+(rule (element_width_from_type ty)
+  (if-let $F64 (lane_type ty))
   (VecElementWidth.E64))
 
 (decl pure min_vec_reg_size () u64)
@@ -295,3 +301,40 @@
 (decl rv_vslidedown_vi (Reg UImm5 VState) Reg)
 (rule (rv_vslidedown_vi vs2 imm vstate)
   (vec_alu_rr_uimm5 (VecAluOpRRImm5.VslidedownVI) vs2 imm vstate))
+
+;; Helper for emitting the `vmv.x.s` instruction.
+;; This instruction copies the first element of the source vector to the destination X register.
+(decl rv_vmv_xs (Reg VState) Reg)
+(rule (rv_vmv_xs vs2 vstate)
+  (vec_alu_rr_aux (VecAluOpRRImm5.VmvXS) vs2 vstate))
+
+;; Helper for emitting the `vfmv.f.s` instruction.
+;; This instruction copies the first element of the source vector to the destination F register.
+(decl rv_vfmv_fs (Reg VState) Reg)
+(rule (rv_vfmv_fs vs2 vstate)
+  (vec_alu_rr_aux (VecAluOpRRImm5.VfmvFS) vs2 vstate))
+
+
+;;;; Multi-Instruction Helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl gen_extractlane (Type Reg u8) Reg)
+
+;; When extracting lane 0 for floats, we can use `vfmv.f.s` directly.
+(rule 3 (gen_extractlane (ty_vec_fits_in_register ty) src 0)
+  (if (ty_vector_float ty))
+  (rv_vfmv_fs src ty))
+
+;; When extracting lane 0 for integers, we can use `vmv.x.s` directly.
+(rule 2 (gen_extractlane (ty_vec_fits_in_register ty) src 0)
+  (if (ty_vector_not_float ty))
+  (rv_vmv_xs src ty))
+
+;; In the general case, we must first use a `vslidedown` to place the correct lane
+;; in index 0, and then use the appropriate `vmv` instruction.
+;; If the index fits into a 5-bit immediate, we can emit a `vslidedown.vi`.
+(rule 1 (gen_extractlane (ty_vec_fits_in_register ty) src (uimm5_from_u8 idx))
+  (gen_extractlane ty (rv_vslidedown_vi src idx ty) 0))
+
+;; Otherwise lower it into an X register.
+(rule 0 (gen_extractlane (ty_vec_fits_in_register ty) src idx)
+  (gen_extractlane ty (rv_vslidedown_vx src (imm $I64 idx) ty) 0))
