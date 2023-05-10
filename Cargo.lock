@@ -3569,46 +3569,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d554b7f530dee5964d9a9468d95c1f8b8acae4f282807e7d27d4b03099a46744"
 
 [[package]]
-name = "wasm-coredump-builder"
-version = "0.1.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "158180f35c9ba89a3e7763f20be93e77d5e41535c18e22c85d6dd5b5bce18108"
-dependencies = [
- "wasm-coredump-encoder",
- "wasm-coredump-types",
- "wasm-encoder 0.23.0",
-]
-
-[[package]]
-name = "wasm-coredump-encoder"
-version = "0.1.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2f0c99cdf3a88363570f1027e2f337de6647cac9fed5d474f86103d7c45c8700"
-dependencies = [
- "leb128",
- "wasm-coredump-types",
-]
-
-[[package]]
-name = "wasm-coredump-types"
-version = "0.1.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "10e35729a021e44c20511e23ac2b215df05da243bdc4bad336fd3686552539fc"
-
-[[package]]
-name = "wasm-encoder"
-version = "0.23.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1c3e4bc09095436c8e7584d86d33e6c3ee67045af8fb262cbb9cc321de553428"
-dependencies = [
- "leb128",
-]
-
-[[package]]
 name = "wasm-encoder"
 version = "0.25.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4eff853c4f09eec94d76af527eddad4e9de13b11d6286a1ef7134bc30135a2b7"
+dependencies = [
+ "leb128",
+]
+
+[[package]]
+name = "wasm-encoder"
+version = "0.26.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d05d0b6fcd0aeb98adf16e7975331b3c17222aa815148f5b976370ce589d80ef"
 dependencies = [
  "leb128",
 ]
@@ -3847,7 +3820,7 @@ dependencies = [
  "test-programs",
  "tokio",
  "walkdir",
- "wasm-coredump-builder",
+ "wasm-encoder 0.26.0",
  "wasmparser",
  "wasmtime",
  "wasmtime-cache",
@@ -3951,7 +3924,7 @@ dependencies = [
  "serde",
  "target-lexicon",
  "thiserror",
- "wasm-encoder 0.25.0",
+ "wasm-encoder 0.26.0",
  "wasmparser",
  "wasmprinter",
  "wasmtime-component-util",
@@ -4041,7 +4014,7 @@ dependencies = [
  "target-lexicon",
  "tempfile",
  "v8",
- "wasm-encoder 0.25.0",
+ "wasm-encoder 0.26.0",
  "wasm-mutate",
  "wasm-smith",
  "wasm-spec-interpreter",

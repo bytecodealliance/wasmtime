@@ -103,7 +103,7 @@ fn run_wasmtime_simple() -> Result<()> {
     Ok(())
 }
 
-// Wasmtime shakk when not enough arguments were provided.
+// Wasmtime shall fail when not enough arguments were provided.
 #[test]
 fn run_wasmtime_simple_fail_no_args() -> Result<()> {
     let wasm = build_wasm("tests/all/cli_tests/simple.wat")?;
@@ -118,6 +118,27 @@ fn run_wasmtime_simple_fail_no_args() -> Result<()> {
         .is_err(),
         "shall fail"
     );
+    Ok(())
+}
+
+#[test]
+fn run_coredump_smoketest() -> Result<()> {
+    let wasm = build_wasm("tests/all/cli_tests/coredump_smoketest.wat")?;
+    let coredump_file = NamedTempFile::new()?;
+    let coredump_arg = format!("--coredump-on-trap={}", coredump_file.path().display());
+    let err = run_wasmtime(&[
+        "run",
+        wasm.path().to_str().unwrap(),
+        "--invoke",
+        "a",
+        "--disable-cache",
+        &coredump_arg,
+    ])
+    .unwrap_err();
+    assert!(err.to_string().contains(&format!(
+        "core dumped at {}",
+        coredump_file.path().display()
+    )));
     Ok(())
 }
 

@@ -44,7 +44,7 @@ wat = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 wasmparser = { workspace = true }
-wasm-coredump-builder = { version = "0.1.11" }
+wasm-encoder = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
 rustix = { workspace = true, features = ["mm", "param"] }
@@ -180,7 +180,7 @@ wasmparser = "0.103.0"
 wat = "1.0.62"
 wast = "56.0.0"
 wasmprinter = "0.2.55"
-wasm-encoder = "0.25.0"
+wasm-encoder = "0.26.0"
 wasm-smith = "0.12.6"
 wasm-mutate = "0.2.23"
 wit-parser = "0.7.0"
