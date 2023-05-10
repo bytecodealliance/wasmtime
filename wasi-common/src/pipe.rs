@@ -8,7 +8,7 @@
 //! but the virtual pipes can be instantiated with any `Read` or `Write` type.
 //!
 use crate::stream::{InputStream, OutputStream};
-use crate::Error;
+use anyhow::Error;
 use std::any::Any;
 use std::convert::TryInto;
 use std::io::{self, Read, Write};
@@ -135,11 +135,12 @@ impl<R: Read + ReadReady + Any + Send + Sync> InputStream for ReadPipe<R> {
 ///
 /// ```no_run
 /// use wasi_common::{pipe::WritePipe, WasiCtx, Table};
+/// let mut table = Table::new();
 /// let stdout = WritePipe::new_in_memory();
-/// // This is not a complete builder, use a real one from e.g. wasi-cap-std-sync or elsewhere:
-/// let mut ctx = WasiCtx::builder().set_stdout(stdout.clone()).build(Table::new()).unwrap();
-/// // use ctx in an instance, then make sure it is dropped:
+/// let mut ctx = WasiCtx::builder().set_stdout(stdout.clone()).build(&mut table).unwrap();
+/// // use ctx and table in an instance, then make sure it is dropped:
 /// drop(ctx);
+/// drop(table);
 /// let contents: Vec<u8> = stdout.try_into_inner().expect("sole remaining reference to WritePipe").into_inner();
 /// println!("contents of stdout: {:?}", contents);
 /// ```

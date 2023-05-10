@@ -1,7 +1,8 @@
 use crate::clocks::WasiMonotonicClock;
 use crate::stream::{InputStream, OutputStream};
-use crate::Error;
+use anyhow::Error;
 pub mod subscription;
+pub mod sync;
 pub use cap_std::time::Duration;
 
 pub use subscription::{

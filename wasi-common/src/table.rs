@@ -50,28 +50,6 @@ impl Table {
         }
     }
 
-    pub fn push_file(&mut self, file: Box<dyn crate::WasiFile>) -> Result<u32, TableError> {
-        self.push(Box::new(file))
-    }
-
-    pub fn push_dir(&mut self, dir: Box<dyn crate::WasiDir>) -> Result<u32, TableError> {
-        self.push(Box::new(dir))
-    }
-
-    pub fn push_input_stream(
-        &mut self,
-        istream: Box<dyn crate::InputStream>,
-    ) -> Result<u32, TableError> {
-        self.push(Box::new(istream))
-    }
-
-    pub fn push_output_stream(
-        &mut self,
-        ostream: Box<dyn crate::OutputStream>,
-    ) -> Result<u32, TableError> {
-        self.push(Box::new(ostream))
-    }
-
     /// Check if the table has a resource at the given index.
     pub fn contains_key(&self, key: u32) -> bool {
         self.map.contains_key(&key)
@@ -108,16 +86,15 @@ impl Table {
         }
     }
 
-    /// Remove a resource at a given index from the table. Returns the resource
-    /// if it was present.
-    pub fn delete<T: Any + Sized>(&mut self, key: u32) -> Result<Option<T>, TableError> {
-        self.map
-            .remove(&key)
-            .map(|r| {
-                r.downcast::<T>()
-                    .map(|r| *r)
-                    .map_err(|_| TableError::WrongType)
-            })
-            .transpose()
+    /// Remove a resource at a given index from the table.
+    pub fn delete<T: Any + Sized>(&mut self, key: u32) -> Result<(), TableError> {
+        if !self.contains_key(key) {
+            Err(TableError::NotPresent)?
+        }
+        if !self.is::<T>(key) {
+            Err(TableError::WrongType)?
+        }
+        let _ = self.map.remove(&key);
+        Ok(())
     }
 }

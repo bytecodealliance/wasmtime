@@ -7,13 +7,12 @@ use crate::{
 };
 use anyhow::anyhow;
 
-impl From<crate::Error> for streams::Error {
-    fn from(error: crate::Error) -> streams::Error {
-        if let Some(_) = error.downcast_ref() {
-            StreamError {}.into()
-        } else {
-            streams::Error::trap(anyhow!(error))
-        }
+impl From<anyhow::Error> for streams::Error {
+    fn from(error: anyhow::Error) -> streams::Error {
+        tracing::trace!(
+            "turning anyhow::Error in the streams interface into the empty error result: {error:?}"
+        );
+        StreamError {}.into()
     }
 }
 
@@ -23,7 +22,7 @@ impl From<crate::TableError> for streams::Error {
             crate::TableError::Full => streams::Error::trap(anyhow!(error)),
             crate::TableError::NotPresent | crate::TableError::WrongType => {
                 // wit definition needs to define a badf-equiv variant:
-                streams::StreamError {}.into()
+                StreamError {}.into()
             }
         }
     }

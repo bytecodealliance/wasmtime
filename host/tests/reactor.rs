@@ -1,7 +1,6 @@
 use anyhow::Result;
 use std::sync::{Arc, RwLock};
-use wasi_cap_std_sync::WasiCtxBuilder;
-use wasi_common::{wasi, Table, WasiCtx, WasiView};
+use wasi_common::{wasi, Table, WasiCtx, WasiCtxBuilder, WasiView};
 use wasmtime::{
     component::{Component, Linker},
     Config, Engine, Store,
@@ -117,10 +116,8 @@ async fn reactor_tests() -> Result<()> {
     // `host` crate for `streams`, not because of `with` in the bindgen macro.
     let write_dest: Arc<RwLock<Vec<u8>>> = Arc::new(RwLock::new(Vec::new()));
     let writepipe = wasi_common::pipe::WritePipe::from_shared(write_dest.clone());
-    let table_ix = store
-        .data_mut()
-        .table_mut()
-        .push_output_stream(Box::new(writepipe))?;
+    let outputstream: Box<dyn wasi_common::OutputStream> = Box::new(writepipe);
+    let table_ix = store.data_mut().table_mut().push(Box::new(outputstream))?;
     let r = reactor.call_write_strings_to(&mut store, table_ix).await?;
     assert_eq!(r, Ok(()));
 

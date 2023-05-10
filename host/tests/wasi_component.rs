@@ -1,8 +1,7 @@
 use anyhow::Result;
 use cap_std::{ambient_authority, fs::Dir};
-use wasi_cap_std_sync::WasiCtxBuilder;
 use wasi_common::wasi::command::add_to_linker;
-use wasi_common::{wasi::command::Command, Table, WasiCtx, WasiView};
+use wasi_common::{wasi::command::Command, Table, WasiCtx, WasiCtxBuilder, WasiView};
 use wasmtime::{
     component::{Component, Linker},
     Config, Engine, Store,
@@ -55,12 +54,12 @@ async fn instantiate(
     Ok((store, command))
 }
 async fn run_with_temp_dir(component: &str) {
-    let mut builder = WasiCtxBuilder::new();
+    let mut builder = WasiCtxBuilder::new().push_env("NO_FDFLAGS_SYNC_SUPPORT", "1");
 
     if cfg!(windows) {
         builder = builder
+            .inherit_stdio()
             .push_env("ERRNO_MODE_WINDOWS", "1")
-            .push_env("NO_FDFLAGS_SYNC_SUPPORT", "1")
             .push_env("NO_DANGLING_FILESYSTEM", "1")
             .push_env("NO_RENAME_DIR_TO_EMPTY_DIR", "1");
     }
@@ -76,7 +75,12 @@ async fn run_with_temp_dir(component: &str) {
 
     let mut table = Table::new();
     let wasi = builder
-        .preopened_dir(open_dir, "/foo")
+        .push_preopened_dir(
+            open_dir,
+            wasi_common::DirPerms::all(),
+            wasi_common::FilePerms::all(),
+            "/foo",
+        )
         .set_args(&["program", "/foo"])
         .build(&mut table)
         .expect("build wasi ctx");

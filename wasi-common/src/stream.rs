@@ -1,4 +1,5 @@
-use crate::{Error, ErrorExt, TableError};
+use crate::TableError;
+use anyhow::Error;
 use std::any::Any;
 
 /// An input bytestream.
@@ -27,7 +28,7 @@ pub trait InputStream: Send + Sync {
     /// Read bytes. On success, returns a pair holding the number of bytes read
     /// and a flag indicating whether the end of the stream was reached.
     async fn read(&mut self, _buf: &mut [u8]) -> Result<(u64, bool), Error> {
-        Err(Error::badf())
+        Err(anyhow::anyhow!("badf"))
     }
 
     /// Vectored-I/O form of `read`.
@@ -35,7 +36,7 @@ pub trait InputStream: Send + Sync {
         &mut self,
         _bufs: &mut [std::io::IoSliceMut<'a>],
     ) -> Result<(u64, bool), Error> {
-        Err(Error::badf())
+        Err(anyhow::anyhow!("badf"))
     }
 
     /// Test whether vectored I/O reads are known to be optimized in the
@@ -96,12 +97,12 @@ pub trait OutputStream: Send + Sync {
 
     /// Write bytes. On success, returns the number of bytes written.
     async fn write(&mut self, _buf: &[u8]) -> Result<u64, Error> {
-        Err(Error::badf())
+        Err(anyhow::anyhow!("badf"))
     }
 
     /// Vectored-I/O form of `write`.
     async fn write_vectored<'a>(&mut self, _bufs: &[std::io::IoSlice<'a>]) -> Result<u64, Error> {
-        Err(Error::badf())
+        Err(anyhow::anyhow!("badf"))
     }
 
     /// Test whether vectored I/O writes are known to be optimized in the
@@ -155,13 +156,21 @@ pub trait OutputStream: Send + Sync {
 }
 
 pub trait TableStreamExt {
+    fn push_input_stream(&mut self, istream: Box<dyn InputStream>) -> Result<u32, TableError>;
     fn get_input_stream(&self, fd: u32) -> Result<&dyn InputStream, TableError>;
     fn get_input_stream_mut(&mut self, fd: u32) -> Result<&mut Box<dyn InputStream>, TableError>;
 
+    fn push_output_stream(&mut self, ostream: Box<dyn OutputStream>) -> Result<u32, TableError>;
     fn get_output_stream(&self, fd: u32) -> Result<&dyn OutputStream, TableError>;
     fn get_output_stream_mut(&mut self, fd: u32) -> Result<&mut Box<dyn OutputStream>, TableError>;
 }
-impl TableStreamExt for crate::table::Table {
+impl TableStreamExt for crate::Table {
+    fn push_input_stream(
+        &mut self,
+        istream: Box<dyn crate::InputStream>,
+    ) -> Result<u32, TableError> {
+        self.push(Box::new(istream))
+    }
     fn get_input_stream(&self, fd: u32) -> Result<&dyn InputStream, TableError> {
         self.get::<Box<dyn InputStream>>(fd).map(|f| f.as_ref())
     }
@@ -169,10 +178,38 @@ impl TableStreamExt for crate::table::Table {
         self.get_mut::<Box<dyn InputStream>>(fd)
     }
 
+    fn push_output_stream(
+        &mut self,
+        ostream: Box<dyn crate::OutputStream>,
+    ) -> Result<u32, TableError> {
+        self.push(Box::new(ostream))
+    }
     fn get_output_stream(&self, fd: u32) -> Result<&dyn OutputStream, TableError> {
         self.get::<Box<dyn OutputStream>>(fd).map(|f| f.as_ref())
     }
     fn get_output_stream_mut(&mut self, fd: u32) -> Result<&mut Box<dyn OutputStream>, TableError> {
         self.get_mut::<Box<dyn OutputStream>>(fd)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    #[test]
+    fn input_stream_in_table() {
+        let empty_pipe = crate::pipe::ReadPipe::new(std::io::empty());
+        let mut table = crate::Table::new();
+        let ix = table.push_input_stream(Box::new(empty_pipe)).unwrap();
+        let _ = table.get_input_stream(ix).unwrap();
+        let _ = table.get_input_stream_mut(ix).unwrap();
+    }
+
+    #[test]
+    fn output_stream_in_table() {
+        let dev_null = crate::pipe::WritePipe::new(std::io::sink());
+        let mut table = crate::Table::new();
+        let ix = table.push_output_stream(Box::new(dev_null)).unwrap();
+        let _ = table.get_output_stream(ix).unwrap();
+        let _ = table.get_output_stream_mut(ix).unwrap();
     }
 }

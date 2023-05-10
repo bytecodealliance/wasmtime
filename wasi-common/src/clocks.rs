@@ -1,3 +1,4 @@
+pub mod host;
 use cap_std::time::Duration;
 
 pub trait WasiWallClock: Send + Sync {

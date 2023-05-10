@@ -1,7 +1,6 @@
 use anyhow::{Context, Result};
-use wasi_cap_std_sync::WasiCtxBuilder;
 use wasi_common::preview1::{self, WasiPreview1Adapter, WasiPreview1View};
-use wasi_common::{wasi, Table, WasiCtx, WasiView};
+use wasi_common::{wasi, Table, WasiCtx, WasiCtxBuilder, WasiView};
 use wasmtime::{
     component::{Component, Linker},
     Config, Engine, Store,
@@ -60,12 +59,17 @@ async fn main() -> Result<()> {
     let mut argv: Vec<&str> = vec!["wasm"];
     argv.extend(args.args.iter().map(String::as_str));
 
-    let mut builder = WasiCtxBuilder::new().inherit_stdio().args(&argv);
+    let mut builder = WasiCtxBuilder::new().inherit_stdio().set_args(&argv);
 
     for (guest, host) in args.map_dirs {
         let dir = cap_std::fs::Dir::open_ambient_dir(&host, cap_std::ambient_authority())
             .context(format!("opening directory {host:?}"))?;
-        builder = builder.preopened_dir(dir, &guest);
+        builder = builder.push_preopened_dir(
+            dir,
+            wasi_common::DirPerms::all(),
+            wasi_common::FilePerms::all(),
+            &guest,
+        );
     }
 
     let mut table = Table::new();
