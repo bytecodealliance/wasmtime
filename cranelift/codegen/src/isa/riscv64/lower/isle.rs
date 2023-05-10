@@ -6,6 +6,7 @@ pub mod generated_code;
 use generated_code::{Context, ExtendOp, MInst};
 
 // Types that the generated ISLE code uses via `use super::*`.
+use self::generated_code::VecAluOpRRImm5;
 use super::{writable_zero_reg, zero_reg};
 use crate::isa::riscv64::abi::Riscv64ABICaller;
 use crate::isa::riscv64::Riscv64Backend;
@@ -205,10 +206,12 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         Imm5::maybe_from_i8(i8::try_from(arg0 as i64).ok()?)
     }
     #[inline]
+    fn imm5_zero(&mut self) -> Imm5 {
+        Imm5::from_bits(0)
+    }
+    #[inline]
     fn uimm5_bitcast_to_imm5(&mut self, arg0: UImm5) -> Imm5 {
-        let bits = arg0.bits() as u8;
-        let signed = ((bits << 3) as i8) >> 3;
-        Imm5::maybe_from_i8(signed).unwrap()
+        Imm5::from_bits(arg0.bits() as u8)
     }
     #[inline]
     fn writable_zero_reg(&mut self) -> WritableReg {
@@ -460,6 +463,10 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         } else {
             None
         }
+    }
+
+    fn vec_alu_rr_imm5_dst_type(&mut self, op: &VecAluOpRRImm5) -> Type {
+        MInst::canonical_type_for_rc(op.dst_regclass())
     }
 }
 

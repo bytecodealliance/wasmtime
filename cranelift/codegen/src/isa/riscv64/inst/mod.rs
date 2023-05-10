@@ -4,7 +4,7 @@
 #![allow(dead_code)]
 #![allow(non_camel_case_types)]
 
-use super::lower::isle::generated_code::{VecAMode, VecElementWidth};
+use super::lower::isle::generated_code::{VecAMode, VecAluOpRRImm5, VecElementWidth};
 use crate::binemit::{Addend, CodeOffset, Reloc};
 pub use crate::ir::condcodes::IntCC;
 use crate::ir::types::{self, F32, F64, I128, I16, I32, I64, I8, I8X16, R32, R64};
@@ -635,9 +635,9 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_use(vs2);
             collector.reg_def(vd);
         }
-        &Inst::VecAluRRImm5 { vd, vs2, .. } => {
-            debug_assert_eq!(vd.to_reg().class(), RegClass::Vector);
-            debug_assert_eq!(vs2.class(), RegClass::Vector);
+        &Inst::VecAluRRImm5 { op, vd, vs2, .. } => {
+            debug_assert_eq!(vd.to_reg().class(), op.dst_regclass());
+            debug_assert_eq!(vs2.class(), op.src_regclass());
 
             collector.reg_use(vs2);
             collector.reg_def(vd);
@@ -1585,15 +1585,25 @@ impl Inst {
                 let vs2_s = format_reg(vs2, allocs);
                 let vd_s = format_reg(vd.to_reg(), allocs);
 
-                // Some opcodes interpret the immediate as unsigned, lets show the
-                // correct number here.
-                let imm_s = if op.imm_is_unsigned() {
-                    format!("{}", imm.bits())
-                } else {
-                    format!("{}", imm)
-                };
+                match op {
+                    VecAluOpRRImm5::VmvSX
+                    | VecAluOpRRImm5::VmvXS
+                    | VecAluOpRRImm5::VfmvSF
+                    | VecAluOpRRImm5::VfmvFS => {
+                        format!("{} {},{} {}", op, vd_s, vs2_s, vstate)
+                    }
+                    _ => {
+                        // Some opcodes interpret the immediate as unsigned, lets show the
+                        // correct number here.
+                        let imm_s = if op.imm_is_unsigned() {
+                            format!("{}", imm.bits())
+                        } else {
+                            format!("{}", imm)
+                        };
 
-                format!("{} {},{},{} {}", op, vd_s, vs2_s, imm_s, vstate)
+                        format!("{} {},{},{} {}", op, vd_s, vs2_s, imm_s, vstate)
+                    }
+                }
             }
             &Inst::VecSetState { rd, ref vstate } => {
                 let rd_s = format_reg(rd.to_reg(), allocs);

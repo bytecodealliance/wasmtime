@@ -2816,6 +2816,13 @@ impl MachInstEmit for Inst {
                 let vs2 = allocs.next(vs2);
                 let vd = allocs.next_writable(vd);
 
+                let imm = if let Some(aux) = op.aux_encoding() {
+                    debug_assert_eq!(imm.bits(), 0);
+                    aux
+                } else {
+                    imm
+                };
+
                 sink.put4(encode_valu_imm(op, vd, imm, vs2, VecOpMasking::Disabled));
             }
             &Inst::VecSetState { rd, ref vstate } => {

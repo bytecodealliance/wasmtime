@@ -102,11 +102,23 @@
 
 ;; Register-Imm ALU Ops
 (type VecAluOpRRImm5 (enum
+  ;; Regular VI Opcodes
   (VaddVI)
   (VrsubVI)
   (VslidedownVI)
+
+  ;; Special Opcodes
+  ;; These opcodes use the imm field as auxiliary encoding space, but
+  ;; are otherwise identical to the regular VI opcodes.
+  (VmvSX)
+  (VmvXS)
+  (VfmvSF)
+  (VfmvFS)
 ))
 
+;; Returns the canonical destination type for a VecAluOpRRImm5.
+(decl pure vec_alu_rr_imm5_dst_type (VecAluOpRRImm5) Type)
+(extern constructor vec_alu_rr_imm5_dst_type vec_alu_rr_imm5_dst_type)
 
 
 ;; Vector Addressing Mode
@@ -170,7 +182,7 @@
 ;; Helper for emitting `MInst.VecAluRRImm5` instructions.
 (decl vec_alu_rr_imm5 (VecAluOpRRImm5 Reg Imm5 VState) Reg)
 (rule (vec_alu_rr_imm5 op vs2 imm vstate)
-      (let ((vd WritableReg (temp_writable_reg $I8X16))
+      (let ((vd WritableReg (temp_writable_reg (vec_alu_rr_imm5_dst_type op)))
             (_ Unit (emit (MInst.VecAluRRImm5 op vd vs2 imm vstate))))
         vd))
 
@@ -179,6 +191,14 @@
 (decl vec_alu_rr_uimm5 (VecAluOpRRImm5 Reg UImm5 VState) Reg)
 (rule (vec_alu_rr_uimm5 op vs2 imm vstate)
       (vec_alu_rr_imm5 op vs2 (uimm5_bitcast_to_imm5 imm) vstate))
+
+;; Helper for emitting `MInst.VecAluRRImm5` instructions that use the Imm5 as
+;; auxiliary encoding space.
+(decl vec_alu_rr_aux (VecAluOpRRImm5 Reg VState) Reg)
+(rule (vec_alu_rr_aux op vs2 vstate)
+      ;; We can ignore the immediate value here since it gets replaced
+      ;; with the correct value when emitting this instruction.
+      (vec_alu_rr_imm5 op vs2 (imm5_zero) vstate))
 
 ;; Helper for emitting `MInst.VecLoad` instructions.
 (decl vec_load (VecElementWidth VecAMode MemFlags VState) Reg)

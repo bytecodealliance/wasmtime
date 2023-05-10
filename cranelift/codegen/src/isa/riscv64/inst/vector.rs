@@ -8,6 +8,7 @@ use crate::machinst::RegClass;
 use crate::Reg;
 use core::fmt;
 
+use super::Imm5;
 use super::{Type, UImm5};
 
 impl VecAvl {
@@ -307,14 +308,31 @@ impl VecAluOpRRImm5 {
         0x57
     }
     pub fn funct3(&self) -> u32 {
-        VecOpCategory::OPIVI.encode()
+        self.category().encode()
     }
+
     pub fn funct6(&self) -> u32 {
         // See: https://github.com/riscv/riscv-v-spec/blob/master/inst-table.adoc
         match self {
             VecAluOpRRImm5::VaddVI => 0b000000,
             VecAluOpRRImm5::VrsubVI => 0b000011,
             VecAluOpRRImm5::VslidedownVI => 0b001111,
+            VecAluOpRRImm5::VmvSX
+            | VecAluOpRRImm5::VmvXS
+            | VecAluOpRRImm5::VfmvSF
+            | VecAluOpRRImm5::VfmvFS => 0b010000,
+        }
+    }
+
+    pub fn category(&self) -> VecOpCategory {
+        match self {
+            VecAluOpRRImm5::VmvSX => VecOpCategory::OPMVX,
+            VecAluOpRRImm5::VmvXS => VecOpCategory::OPMVV,
+            VecAluOpRRImm5::VfmvSF => VecOpCategory::OPFVF,
+            VecAluOpRRImm5::VfmvFS => VecOpCategory::OPFVV,
+            VecAluOpRRImm5::VaddVI | VecAluOpRRImm5::VrsubVI | VecAluOpRRImm5::VslidedownVI => {
+                VecOpCategory::OPIVI
+            }
         }
     }
 
@@ -322,16 +340,71 @@ impl VecAluOpRRImm5 {
         match self {
             VecAluOpRRImm5::VslidedownVI => true,
             VecAluOpRRImm5::VaddVI | VecAluOpRRImm5::VrsubVI => false,
+
+            // These opcodes don't have an imm field. The imm field is used
+            // as auxiliary encoding space.
+            VecAluOpRRImm5::VmvSX
+            | VecAluOpRRImm5::VmvXS
+            | VecAluOpRRImm5::VfmvSF
+            | VecAluOpRRImm5::VfmvFS => unreachable!(),
+        }
+    }
+
+    /// Returns the auxiliary encoding field for the instruction, if any.
+    pub fn aux_encoding(&self) -> Option<Imm5> {
+        match self {
+            // VRXUNARY0
+            VecAluOpRRImm5::VmvSX => Some(0b00000),
+            // VWXUNARY0
+            VecAluOpRRImm5::VmvXS => Some(0b00000),
+            // VRFUNARY0
+            VecAluOpRRImm5::VfmvSF => Some(0b00000),
+            // VWFUNARY0
+            VecAluOpRRImm5::VfmvFS => Some(0b00000),
+            _ => None,
+        }
+        .map(Imm5::from_bits)
+    }
+
+    pub fn dst_regclass(&self) -> RegClass {
+        match self {
+            VecAluOpRRImm5::VaddVI
+            | VecAluOpRRImm5::VrsubVI
+            | VecAluOpRRImm5::VslidedownVI
+            | VecAluOpRRImm5::VfmvSF
+            | VecAluOpRRImm5::VmvSX => RegClass::Vector,
+            VecAluOpRRImm5::VmvXS => RegClass::Int,
+            VecAluOpRRImm5::VfmvFS => RegClass::Float,
+        }
+    }
+
+    pub fn src_regclass(&self) -> RegClass {
+        match self {
+            VecAluOpRRImm5::VaddVI
+            | VecAluOpRRImm5::VrsubVI
+            | VecAluOpRRImm5::VslidedownVI
+            | VecAluOpRRImm5::VmvXS
+            | VecAluOpRRImm5::VfmvFS => RegClass::Vector,
+            VecAluOpRRImm5::VfmvSF => RegClass::Float,
+            VecAluOpRRImm5::VmvSX => RegClass::Int,
         }
     }
 }
 
 impl fmt::Display for VecAluOpRRImm5 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let mut s = format!("{self:?}");
-        s.make_ascii_lowercase();
-        let (opcode, category) = s.split_at(s.len() - 2);
-        f.write_str(&format!("{}.{}", opcode, category))
+        match self {
+            VecAluOpRRImm5::VmvSX => f.write_str("vmv.s.x"),
+            VecAluOpRRImm5::VmvXS => f.write_str("vmv.x.s"),
+            VecAluOpRRImm5::VfmvSF => f.write_str("vfmv.s.f"),
+            VecAluOpRRImm5::VfmvFS => f.write_str("vfmv.f.s"),
+            _ => {
+                let mut s = format!("{self:?}");
+                s.make_ascii_lowercase();
+                let (opcode, category) = s.split_at(s.len() - 2);
+                f.write_str(&format!("{}.{}", opcode, category))
+            }
+        }
     }
 }
 

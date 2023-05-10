@@ -143,6 +143,12 @@ impl Imm5 {
         }
     }
 
+    pub fn from_bits(value: u8) -> Imm5 {
+        assert_eq!(value & 0x1f, value);
+        let signed = ((value << 3) as i8) >> 3;
+        Imm5 { value: signed }
+    }
+
     /// Bits for encoding.
     pub fn bits(&self) -> u8 {
         self.value as u8 & 0x1f
