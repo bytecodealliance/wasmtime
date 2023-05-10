@@ -47,9 +47,10 @@ Unreleased.
   encountering OOM.
   [#6149](https://github.com/bytecodealliance/wasmtime/pull/6149)
 
-* An initial implementation of the wasi-http proposal was added to Wasmtime.
-  Note that this is not on-by-default and still in an experimental status at
-  this time.
+* An initial implementation of the wasi-http proposal was added to Wasmtime in
+  the shape of a new `wasmtime-wasi-http` crate and a
+  `--wasi-modules=experimental-wasi-http` CLI flag.  Note that this is not
+  on-by-default and still in an experimental status at this time.
   [#5929](https://github.com/bytecodealliance/wasmtime/pull/5929)
 
 * Wasmtime's `bindgen!` macro for components now has `interfaces` and
