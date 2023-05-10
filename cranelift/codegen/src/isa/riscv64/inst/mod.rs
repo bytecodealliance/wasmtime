@@ -4,7 +4,7 @@
 #![allow(dead_code)]
 #![allow(non_camel_case_types)]
 
-use super::lower::isle::generated_code::{VecAMode, VecElementWidth, VecOpCategory};
+use super::lower::isle::generated_code::{VecAMode, VecElementWidth};
 use crate::binemit::{Addend, CodeOffset, Reloc};
 pub use crate::ir::condcodes::IntCC;
 use crate::ir::types::{self, F32, F64, I128, I16, I32, I64, I8, I8X16, R32, R64};
@@ -627,25 +627,18 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
         &Inst::VecAluRRR {
             op, vd, vs1, vs2, ..
         } => {
+            debug_assert_eq!(vd.to_reg().class(), RegClass::Vector);
             debug_assert_eq!(vs2.class(), RegClass::Vector);
-            match op.category() {
-                VecOpCategory::OPIVV | VecOpCategory::OPFVV | VecOpCategory::OPMVV => {
-                    debug_assert_eq!(vs1.class(), RegClass::Vector);
-                }
-                VecOpCategory::OPIVX | VecOpCategory::OPMVX => {
-                    debug_assert_eq!(vs1.class(), RegClass::Int);
-                }
-                VecOpCategory::OPFVF => {
-                    debug_assert_eq!(vs1.class(), RegClass::Float);
-                }
-                _ => unreachable!(),
-            }
+            debug_assert_eq!(vs1.class(), op.vs1_regclass());
 
             collector.reg_use(vs1);
             collector.reg_use(vs2);
             collector.reg_def(vd);
         }
         &Inst::VecAluRRImm5 { vd, vs2, .. } => {
+            debug_assert_eq!(vd.to_reg().class(), RegClass::Vector);
+            debug_assert_eq!(vs2.class(), RegClass::Vector);
+
             collector.reg_use(vs2);
             collector.reg_def(vd);
         }

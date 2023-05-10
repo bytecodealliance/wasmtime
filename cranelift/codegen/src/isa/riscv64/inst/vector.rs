@@ -4,6 +4,7 @@ use crate::isa::riscv64::lower::isle::generated_code::{
     VecAMode, VecAluOpRRImm5, VecAluOpRRR, VecAvl, VecElementWidth, VecLmul, VecMaskMode,
     VecOpCategory, VecOpMasking, VecTailMode,
 };
+use crate::machinst::RegClass;
 use crate::Reg;
 use core::fmt;
 
@@ -275,6 +276,16 @@ impl VecAluOpRRR {
             VecAluOpRRR::VaddVX | VecAluOpRRR::VsubVX | VecAluOpRRR::VrsubVX => {
                 VecOpCategory::OPIVX
             }
+        }
+    }
+
+    // vs1 is the only variable source, vs2 is fixed.
+    pub fn vs1_regclass(&self) -> RegClass {
+        match self.category() {
+            VecOpCategory::OPIVV | VecOpCategory::OPFVV | VecOpCategory::OPMVV => RegClass::Vector,
+            VecOpCategory::OPIVX | VecOpCategory::OPMVX => RegClass::Int,
+            VecOpCategory::OPFVF => RegClass::Float,
+            _ => unreachable!(),
         }
     }
 }
