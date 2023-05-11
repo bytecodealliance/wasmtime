@@ -106,19 +106,27 @@
   (VaddVI)
   (VrsubVI)
   (VslidedownVI)
+))
 
-  ;; Special Opcodes
-  ;; These opcodes use the imm field as auxiliary encoding space, but
-  ;; are otherwise identical to the regular VI opcodes.
+
+;; These are all of the special cases that have weird encodings. They are all
+;; single source, single destination instructions, and usually use one of
+;; the two source registers as auxiliary encoding space.
+(type VecAluOpRR (enum
   (VmvSX)
   (VmvXS)
   (VfmvSF)
   (VfmvFS)
+  ;; vmv.v* is special in that vs2 must be v0 (and is ignored) otherwise the instruction is illegal.
+  (VmvVV)
+  (VmvVX)
+  (VfmvVF)
+  ;; (VmvVI)
 ))
 
 ;; Returns the canonical destination type for a VecAluOpRRImm5.
-(decl pure vec_alu_rr_imm5_dst_type (VecAluOpRRImm5) Type)
-(extern constructor vec_alu_rr_imm5_dst_type vec_alu_rr_imm5_dst_type)
+(decl pure vec_alu_rr_dst_type (VecAluOpRR) Type)
+(extern constructor vec_alu_rr_dst_type vec_alu_rr_dst_type)
 
 
 ;; Vector Addressing Mode
@@ -188,7 +196,7 @@
 ;; Helper for emitting `MInst.VecAluRRImm5` instructions.
 (decl vec_alu_rr_imm5 (VecAluOpRRImm5 Reg Imm5 VState) Reg)
 (rule (vec_alu_rr_imm5 op vs2 imm vstate)
-      (let ((vd WritableReg (temp_writable_reg (vec_alu_rr_imm5_dst_type op)))
+      (let ((vd WritableReg (temp_writable_reg $I8X16))
             (_ Unit (emit (MInst.VecAluRRImm5 op vd vs2 imm vstate))))
         vd))
 
@@ -200,11 +208,11 @@
 
 ;; Helper for emitting `MInst.VecAluRRImm5` instructions that use the Imm5 as
 ;; auxiliary encoding space.
-(decl vec_alu_rr_aux (VecAluOpRRImm5 Reg VState) Reg)
-(rule (vec_alu_rr_aux op vs2 vstate)
-      ;; We can ignore the immediate value here since it gets replaced
-      ;; with the correct value when emitting this instruction.
-      (vec_alu_rr_imm5 op vs2 (imm5_zero) vstate))
+(decl vec_alu_rr (VecAluOpRR Reg VState) Reg)
+(rule (vec_alu_rr op vs vstate)
+      (let ((vd WritableReg (temp_writable_reg (vec_alu_rr_dst_type op)))
+            (_ Unit (emit (MInst.VecAluRR op vd vs vstate))))
+        vd))
 
 ;; Helper for emitting `MInst.VecLoad` instructions.
 (decl vec_load (VecElementWidth VecAMode MemFlags VState) Reg)
@@ -305,14 +313,14 @@
 ;; Helper for emitting the `vmv.x.s` instruction.
 ;; This instruction copies the first element of the source vector to the destination X register.
 (decl rv_vmv_xs (Reg VState) Reg)
-(rule (rv_vmv_xs vs2 vstate)
-  (vec_alu_rr_aux (VecAluOpRRImm5.VmvXS) vs2 vstate))
+(rule (rv_vmv_xs vs vstate)
+  (vec_alu_rr (VecAluOpRR.VmvXS) vs vstate))
 
 ;; Helper for emitting the `vfmv.f.s` instruction.
 ;; This instruction copies the first element of the source vector to the destination F register.
 (decl rv_vfmv_fs (Reg VState) Reg)
-(rule (rv_vfmv_fs vs2 vstate)
-  (vec_alu_rr_aux (VecAluOpRRImm5.VfmvFS) vs2 vstate))
+(rule (rv_vfmv_fs vs vstate)
+  (vec_alu_rr (VecAluOpRR.VfmvFS) vs vstate))
 
 
 ;;;; Multi-Instruction Helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

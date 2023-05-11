@@ -467,6 +467,7 @@ impl Inst {
             // VecSetState does not expect any vstate, rather it updates it.
             Inst::VecSetState { .. } => None,
 
+            Inst::VecAluRR { vstate, .. } |
             Inst::VecAluRRR { vstate, .. } |
             Inst::VecAluRRImm5 { vstate, .. } |
             // TODO: Unit-stride loads and stores only need the AVL to be correct, not
@@ -2816,14 +2817,13 @@ impl MachInstEmit for Inst {
                 let vs2 = allocs.next(vs2);
                 let vd = allocs.next_writable(vd);
 
-                let imm = if let Some(aux) = op.aux_encoding() {
-                    debug_assert_eq!(imm.bits(), 0);
-                    aux
-                } else {
-                    imm
-                };
-
                 sink.put4(encode_valu_imm(op, vd, imm, vs2, VecOpMasking::Disabled));
+            }
+            &Inst::VecAluRR { op, vd, vs, .. } => {
+                let vs = allocs.next(vs);
+                let vd = allocs.next_writable(vd);
+
+                sink.put4(encode_valu_rr(op, vd, vs, VecOpMasking::Disabled));
             }
             &Inst::VecSetState { rd, ref vstate } => {
                 let rd = allocs.next_writable(rd);

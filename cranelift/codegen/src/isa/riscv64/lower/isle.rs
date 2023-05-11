@@ -6,7 +6,7 @@ pub mod generated_code;
 use generated_code::{Context, ExtendOp, MInst};
 
 // Types that the generated ISLE code uses via `use super::*`.
-use self::generated_code::VecAluOpRRImm5;
+use self::generated_code::VecAluOpRR;
 use super::{writable_zero_reg, zero_reg};
 use crate::isa::riscv64::abi::Riscv64ABICaller;
 use crate::isa::riscv64::Riscv64Backend;
@@ -469,7 +469,7 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         }
     }
 
-    fn vec_alu_rr_imm5_dst_type(&mut self, op: &VecAluOpRRImm5) -> Type {
+    fn vec_alu_rr_dst_type(&mut self, op: &VecAluOpRR) -> Type {
         MInst::canonical_type_for_rc(op.dst_regclass())
     }
 }

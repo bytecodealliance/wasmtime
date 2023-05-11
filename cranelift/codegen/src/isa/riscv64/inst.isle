@@ -337,6 +337,12 @@
       (imm Imm5)
       (vstate VState))
 
+    (VecAluRR
+      (op VecAluOpRR)
+      (vd WritableReg)
+      (vs Reg)
+      (vstate VState))
+
     (VecSetState
       (rd WritableReg)
       (vstate VState))
