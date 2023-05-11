@@ -1,10 +1,10 @@
 default world test-reactor {
 
-  import environment: wasi-base.environment
+  import environment: wasi-cli-base.environment
   import streams: io.streams
-  import preopens: wasi-base.preopens
+  import preopens: wasi-cli-base.preopens
   import filesystem: filesystem.filesystem
-  import exit: wasi-base.exit
+  import exit: wasi-cli-base.exit
 
   export add-strings: func(s: list<string>) -> u32
   export get-strings: func() -> list<string>

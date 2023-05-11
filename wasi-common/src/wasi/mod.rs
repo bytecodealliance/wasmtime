@@ -11,9 +11,9 @@ wasmtime::component::bindgen!({
       import random: random.random
       import poll: poll.poll
       import streams: io.streams
-      import environment: wasi-base.environment
-      import preopens: wasi-base.preopens
-      import exit: wasi-base.exit
+      import environment: wasi-cli-base.environment
+      import preopens: wasi-cli-base.preopens
+      import exit: wasi-cli-base.exit
       import console: logging.handler
       import default-outgoing-HTTP: http.outgoing-handler
     ",
