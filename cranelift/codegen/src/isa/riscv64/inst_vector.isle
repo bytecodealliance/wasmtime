@@ -322,6 +322,16 @@
 (rule (rv_vfmv_fs vs vstate)
   (vec_alu_rr (VecAluOpRR.VfmvFS) vs vstate))
 
+;; Helper for emitting the `vmv.v.x` instruction.
+(decl rv_vmv_vx (Reg VState) Reg)
+(rule (rv_vmv_vx vs vstate)
+  (vec_alu_rr (VecAluOpRR.VmvVX) vs vstate))
+
+;; Helper for emitting the `vfmv.v.f` instruction.
+(decl rv_vfmv_vf (Reg VState) Reg)
+(rule (rv_vfmv_vf vs vstate)
+  (vec_alu_rr (VecAluOpRR.VfmvVF) vs vstate))
+
 
 ;;;; Multi-Instruction Helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

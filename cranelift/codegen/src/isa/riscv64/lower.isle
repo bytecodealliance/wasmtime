@@ -1035,3 +1035,14 @@
 
 (rule (lower (extractlane x @ (value_type ty) (u8_from_uimm8 idx)))
   (gen_extractlane ty x idx))
+
+;;;; Rules for `splat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule 0 (lower (has_type ty (splat n @ (value_type (ty_scalar_float _)))))
+  (rv_vfmv_vf n ty))
+
+(rule 1 (lower (has_type ty (splat n @ (value_type (ty_int_ref_scalar_64 _)))))
+  (rv_vmv_vx n ty))
+
+;; (rule (lower (has_type ty (replicated_imm5 imm)))
+;;   (rv_vmv_vi imm ty))
