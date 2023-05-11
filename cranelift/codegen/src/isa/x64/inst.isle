@@ -1746,7 +1746,7 @@
 (decl extend_to_gpr (Value Type ExtendKind) Gpr)
 
 ;; If the value is already of the requested type, no extending is necessary.
-(rule 3 (extend_to_gpr val @ (value_type ty) ty _kind)
+(rule 2 (extend_to_gpr val @ (value_type ty) ty _kind)
       val)
 
 ;; I32 -> I64 with op that produces a zero-extended value in a register.
@@ -1754,23 +1754,8 @@
 ;; As a particular x64 extra-pattern matching opportunity, all the ALU
 ;; opcodes on 32-bits will zero-extend the upper 32-bits, so we can
 ;; even not generate a zero-extended move in this case.
-(rule 2 (extend_to_gpr src @ (value_type $I32) $I64 (ExtendKind.Zero))
+(rule 1 (extend_to_gpr src @ (value_type $I32) $I64 (ExtendKind.Zero))
         (if-let $true (value32_zeros_upper32 src))
-        src)
-
-;; The `extractlane` instruction, when paired with a zero-extension, means
-;; that one of `i{8x16,16x8,32x4}` is being extracted and extend. These
-;; extractions are implemented with the `pextr{b,w,d}` instructions which
-;; automatically zero the upper bits of the destination register so the
-;; `uextend` in these cases can be elided.
-;;
-;; TODO: the interaction here between this rule and the "it's written far away"
-;; rule to lower `extractlane` isn't great. Ideally this rule (and the other
-;; special cases for `value32_zeros_upper32`) would live contextually closer or
-;; be connected to the extractlane rules. There's some discussion of this on
-;; #6022 but the gist is that there's not a lot of great options at this time,
-;; so this doc block is what's here for now.
-(rule 1 (extend_to_gpr src @ (extractlane _ _) _ (ExtendKind.Zero))
         src)
 
 (rule (extend_to_gpr (and val (value_type from_ty))
