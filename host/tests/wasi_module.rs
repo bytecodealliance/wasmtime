@@ -60,7 +60,7 @@ async fn instantiate(module: Module, ctx: CommandCtx) -> Result<(Store<CommandCt
     Ok((store, instance))
 }
 async fn run_with_temp_dir(module: &str) {
-    let mut builder = WasiCtxBuilder::new();
+    let mut builder = WasiCtxBuilder::new().push_env("TEST", "1");
 
     if cfg!(windows) {
         builder = builder
@@ -110,13 +110,11 @@ async fn run_with_temp_dir(module: &str) {
 }
 
 #[test_log::test(tokio::test)]
-#[should_panic]
 async fn big_random_buf() {
     run_with_temp_dir("big_random_buf").await
 }
 
 #[test_log::test(tokio::test)]
-#[should_panic]
 async fn clock_time_get() {
     run_with_temp_dir("clock_time_get").await
 }
@@ -329,7 +327,6 @@ async fn renumber() {
 }
 
 #[test_log::test(tokio::test)]
-#[should_panic]
 async fn sched_yield() {
     run_with_temp_dir("sched_yield").await
 }
@@ -368,4 +365,9 @@ async fn unlink_file_trailing_slashes() {
 #[should_panic]
 async fn dir_fd_op_failures() {
     run_with_temp_dir("dir_fd_op_failures").await
+}
+
+#[test_log::test(tokio::test)]
+async fn environment() {
+    run_with_temp_dir("environment").await
 }
