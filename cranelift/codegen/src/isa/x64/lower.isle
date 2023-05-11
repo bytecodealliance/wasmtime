@@ -4076,7 +4076,10 @@
 (rule 1 (lower (extractlane val @ (value_type ty @ $I8X16) (u8_from_uimm8 lane)))
         (if-let 1 (u8_and lane 1))
         (x64_shr $I16 (x64_pextrw val (u8_shr lane 1)) (Imm8Reg.Imm8 8)))
-;; extracting an even lane already has the desired lane in the lower bits
+;; Extracting an even lane already has the desired lane in the lower bits. Note
+;; that having arbitrary upper bits in the returned register should be ok since
+;; all operators on the resulting `i8` type should work correctly regardless of
+;; the bits in the rest of the register.
 (rule (lower (extractlane val @ (value_type ty @ $I8X16) (u8_from_uimm8 lane)))
       (if-let 0 (u8_and lane 1))
       (x64_pextrw val (u8_shr lane 1)))
