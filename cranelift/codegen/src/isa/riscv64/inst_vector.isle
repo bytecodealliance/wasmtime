@@ -108,6 +108,10 @@
   (VslidedownVI)
 ))
 
+;; Imm only ALU Ops
+(type VecAluOpRImm5 (enum
+  (VmvVI)
+))
 
 ;; These are all of the special cases that have weird encodings. They are all
 ;; single source, single destination instructions, and usually use one of
@@ -121,7 +125,6 @@
   (VmvVV)
   (VmvVX)
   (VfmvVF)
-  ;; (VmvVI)
 ))
 
 ;; Returns the canonical destination type for a VecAluOpRRImm5.
@@ -212,6 +215,13 @@
 (rule (vec_alu_rr op vs vstate)
       (let ((vd WritableReg (temp_writable_reg (vec_alu_rr_dst_type op)))
             (_ Unit (emit (MInst.VecAluRR op vd vs vstate))))
+        vd))
+
+;; Helper for emitting `MInst.VecAluRImm5` instructions.
+(decl vec_alu_r_imm5 (VecAluOpRImm5 Imm5 VState) Reg)
+(rule (vec_alu_r_imm5 op imm vstate)
+      (let ((vd WritableReg (temp_writable_reg $I8X16))
+            (_ Unit (emit (MInst.VecAluRImm5 op vd imm vstate))))
         vd))
 
 ;; Helper for emitting `MInst.VecLoad` instructions.
@@ -323,15 +333,22 @@
   (vec_alu_rr (VecAluOpRR.VfmvFS) vs vstate))
 
 ;; Helper for emitting the `vmv.v.x` instruction.
+;; This instruction splats the X regsiter into all elements of the destination vector.
 (decl rv_vmv_vx (Reg VState) Reg)
 (rule (rv_vmv_vx vs vstate)
   (vec_alu_rr (VecAluOpRR.VmvVX) vs vstate))
 
 ;; Helper for emitting the `vfmv.v.f` instruction.
+;; This instruction splats the F regsiter into all elements of the destination vector.
 (decl rv_vfmv_vf (Reg VState) Reg)
 (rule (rv_vfmv_vf vs vstate)
   (vec_alu_rr (VecAluOpRR.VfmvVF) vs vstate))
 
+;; Helper for emitting the `vmv.v.i` instruction.
+;; This instruction splat's the immediate value into all elements of the destination vector.
+(decl rv_vmv_vi (Imm5 VState) Reg)
+(rule (rv_vmv_vi imm vstate)
+  (vec_alu_r_imm5 (VecAluOpRImm5.VmvVI) imm vstate))
 
 ;;;; Multi-Instruction Helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

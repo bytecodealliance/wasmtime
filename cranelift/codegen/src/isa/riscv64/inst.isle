@@ -343,6 +343,12 @@
       (vs Reg)
       (vstate VState))
 
+    (VecAluRImm5
+      (op VecAluOpRImm5)
+      (vd WritableReg)
+      (imm Imm5)
+      (vstate VState))
+
     (VecSetState
       (rd WritableReg)
       (vstate VState))

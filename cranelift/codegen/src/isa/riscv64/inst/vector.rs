@@ -1,8 +1,8 @@
 use crate::isa::riscv64::inst::AllocationConsumer;
 use crate::isa::riscv64::inst::EmitState;
 use crate::isa::riscv64::lower::isle::generated_code::{
-    VecAMode, VecAluOpRR, VecAluOpRRImm5, VecAluOpRRR, VecAvl, VecElementWidth, VecLmul,
-    VecMaskMode, VecOpCategory, VecOpMasking, VecTailMode,
+    VecAMode, VecAluOpRImm5, VecAluOpRR, VecAluOpRRImm5, VecAluOpRRR, VecAvl, VecElementWidth,
+    VecLmul, VecMaskMode, VecOpCategory, VecOpMasking, VecTailMode,
 };
 use crate::machinst::RegClass;
 use crate::Reg;
@@ -433,6 +433,46 @@ impl fmt::Display for VecAluOpRR {
             VecAluOpRR::VmvVV => "vmv.v.v",
             VecAluOpRR::VmvVX => "vmv.v.x",
             VecAluOpRR::VfmvVF => "vfmv.v.f",
+        })
+    }
+}
+
+impl VecAluOpRImm5 {
+    pub fn opcode(&self) -> u32 {
+        // Vector Opcode
+        0x57
+    }
+    pub fn funct3(&self) -> u32 {
+        self.category().encode()
+    }
+
+    pub fn funct6(&self) -> u32 {
+        // See: https://github.com/riscv/riscv-v-spec/blob/master/inst-table.adoc
+        match self {
+            VecAluOpRImm5::VmvVI => 0b010111,
+        }
+    }
+
+    pub fn category(&self) -> VecOpCategory {
+        match self {
+            VecAluOpRImm5::VmvVI => VecOpCategory::OPIVI,
+        }
+    }
+
+    /// Returns the auxiliary encoding field for the instruction, if any.
+    pub fn aux_encoding(&self) -> u32 {
+        match self {
+            // These don't have a explicit encoding table, but Section 11.16 Vector Integer Move Instruction states:
+            // > The first operand specifier (vs2) must contain v0, and any other vector register number in vs2 is reserved.
+            VecAluOpRImm5::VmvVI => 0,
+        }
+    }
+}
+
+impl fmt::Display for VecAluOpRImm5 {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(match self {
+            VecAluOpRImm5::VmvVI => "vmv.v.i",
         })
     }
 }

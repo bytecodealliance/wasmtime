@@ -90,17 +90,15 @@ block0:
 
 ; VCode:
 ; block0:
-;   li a1,2
-;   vmv.v.x v3,a1 #avl=16, #vtype=(e8, m1, ta, ma)
-;   vse8.v v3,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vmv.v.i v2,2 #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v2,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi a1, zero, 2
 ;   .byte 0x57, 0x70, 0x08, 0xcc
-;   .byte 0xd7, 0xc1, 0x05, 0x5e
-;   .byte 0xa7, 0x01, 0x05, 0x02
+;   .byte 0x57, 0x31, 0x01, 0x5e
+;   .byte 0x27, 0x01, 0x05, 0x02
 ;   ret
 
 function %splat_const_i16x8() -> i16x8 {
@@ -112,18 +110,16 @@ block0:
 
 ; VCode:
 ; block0:
-;   li a1,2
-;   vmv.v.x v3,a1 #avl=8, #vtype=(e16, m1, ta, ma)
-;   vse8.v v3,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vmv.v.i v2,2 #avl=8, #vtype=(e16, m1, ta, ma)
+;   vse8.v v2,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi a1, zero, 2
 ;   .byte 0x57, 0x70, 0x84, 0xcc
-;   .byte 0xd7, 0xc1, 0x05, 0x5e
+;   .byte 0x57, 0x31, 0x01, 0x5e
 ;   .byte 0x57, 0x70, 0x08, 0xcc
-;   .byte 0xa7, 0x01, 0x05, 0x02
+;   .byte 0x27, 0x01, 0x05, 0x02
 ;   ret
 
 function %splat_const_i32x4() -> i32x4 {
@@ -135,18 +131,16 @@ block0:
 
 ; VCode:
 ; block0:
-;   li a1,2
-;   vmv.v.x v3,a1 #avl=4, #vtype=(e32, m1, ta, ma)
-;   vse8.v v3,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vmv.v.i v2,2 #avl=4, #vtype=(e32, m1, ta, ma)
+;   vse8.v v2,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi a1, zero, 2
 ;   .byte 0x57, 0x70, 0x02, 0xcd
-;   .byte 0xd7, 0xc1, 0x05, 0x5e
+;   .byte 0x57, 0x31, 0x01, 0x5e
 ;   .byte 0x57, 0x70, 0x08, 0xcc
-;   .byte 0xa7, 0x01, 0x05, 0x02
+;   .byte 0x27, 0x01, 0x05, 0x02
 ;   ret
 
 function %splat_const_i64x2() -> i64x2 {
@@ -158,18 +152,16 @@ block0:
 
 ; VCode:
 ; block0:
-;   li a1,2
-;   vmv.v.x v3,a1 #avl=2, #vtype=(e64, m1, ta, ma)
-;   vse8.v v3,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vmv.v.i v2,2 #avl=2, #vtype=(e64, m1, ta, ma)
+;   vse8.v v2,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi a1, zero, 2
 ;   .byte 0x57, 0x70, 0x81, 0xcd
-;   .byte 0xd7, 0xc1, 0x05, 0x5e
+;   .byte 0x57, 0x31, 0x01, 0x5e
 ;   .byte 0x57, 0x70, 0x08, 0xcc
-;   .byte 0xa7, 0x01, 0x05, 0x02
+;   .byte 0x27, 0x01, 0x05, 0x02
 ;   ret
 
 function %splat_f32x4(f32) -> f32x4 {

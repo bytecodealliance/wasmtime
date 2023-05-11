@@ -9,7 +9,8 @@
 use super::{Imm12, Imm5, UImm5, VType};
 use crate::isa::riscv64::inst::reg_to_gpr_num;
 use crate::isa::riscv64::lower::isle::generated_code::{
-    VecAluOpRR, VecAluOpRRImm5, VecAluOpRRR, VecElementWidth, VecOpCategory, VecOpMasking,
+    VecAluOpRImm5, VecAluOpRR, VecAluOpRRImm5, VecAluOpRRR, VecElementWidth, VecOpCategory,
+    VecOpMasking,
 };
 use crate::machinst::isle::WritableReg;
 use crate::Reg;
@@ -153,6 +154,29 @@ pub fn encode_valu_rr(op: VecAluOpRR, vd: WritableReg, vs: Reg, masking: VecOpMa
     } else {
         (reg_to_gpr_num(vs), op.aux_encoding())
     };
+
+    encode_r_type_bits(
+        op.opcode(),
+        reg_to_gpr_num(vd.to_reg()),
+        op.funct3(),
+        vs1,
+        vs2,
+        funct7,
+    )
+}
+
+pub fn encode_valu_r_imm(
+    op: VecAluOpRImm5,
+    vd: WritableReg,
+    imm: Imm5,
+    masking: VecOpMasking,
+) -> u32 {
+    let funct7 = (op.funct6() << 1) | masking.encode();
+
+    // This is true for this opcode, not sure if there are any other ones.
+    debug_assert_eq!(op, VecAluOpRImm5::VmvVI);
+    let vs1 = imm.bits() as u32;
+    let vs2 = op.aux_encoding();
 
     encode_r_type_bits(
         op.opcode(),

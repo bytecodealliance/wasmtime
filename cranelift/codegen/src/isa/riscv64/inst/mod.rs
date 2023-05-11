@@ -649,6 +649,11 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_use(vs);
             collector.reg_def(vd);
         }
+        &Inst::VecAluRImm5 { vd, .. } => {
+            debug_assert_eq!(vd.to_reg().class(), RegClass::Vector);
+
+            collector.reg_def(vd);
+        }
         &Inst::VecSetState { rd, .. } => {
             collector.reg_def(rd);
         }
@@ -1612,6 +1617,16 @@ impl Inst {
                 let vd_s = format_reg(vd.to_reg(), allocs);
 
                 format!("{} {},{} {}", op, vd_s, vs_s, vstate)
+            }
+            &Inst::VecAluRImm5 {
+                op,
+                vd,
+                imm,
+                ref vstate,
+            } => {
+                let vd_s = format_reg(vd.to_reg(), allocs);
+
+                format!("{} {},{} {}", op, vd_s, imm, vstate)
             }
             &Inst::VecSetState { rd, ref vstate } => {
                 let rd_s = format_reg(rd.to_reg(), allocs);
