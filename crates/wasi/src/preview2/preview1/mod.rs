@@ -6,6 +6,7 @@ use crate::preview2::wasi;
 use core::borrow::Borrow;
 
 use anyhow::{anyhow, Context};
+use wiggle::tracing::instrument;
 use wiggle::GuestPtr;
 
 pub struct WasiPreview1Adapter {/* all members private and only used inside this module. also, this struct should be Send. */}
@@ -117,6 +118,7 @@ impl<
             + wasi::wall_clock::Host,
     > wasi_snapshot_preview1::WasiSnapshotPreview1 for T
 {
+    #[instrument(skip(self))]
     async fn args_get<'b>(
         &mut self,
         argv: &GuestPtr<'b, GuestPtr<'b, u8>>,
@@ -144,6 +146,7 @@ impl<
         Ok(())
     }
 
+    #[instrument(skip(self))]
     async fn args_sizes_get(&mut self) -> Result<(types::Size, types::Size), types::Error> {
         let args = self
             .get_arguments()
@@ -160,6 +163,7 @@ impl<
         Ok((num, len))
     }
 
+    #[instrument(skip(self))]
     async fn environ_get<'b>(
         &mut self,
         environ: &GuestPtr<'b, GuestPtr<'b, u8>>,
@@ -191,6 +195,7 @@ impl<
         Ok(())
     }
 
+    #[instrument(skip(self))]
     async fn environ_sizes_get(&mut self) -> Result<(types::Size, types::Size), types::Error> {
         let environ = self
             .get_environment()
@@ -210,6 +215,7 @@ impl<
         Ok((num, len))
     }
 
+    #[instrument(skip(self))]
     async fn clock_res_get(
         &mut self,
         id: types::Clockid,
@@ -231,6 +237,7 @@ impl<
         Ok(res)
     }
 
+    #[instrument(skip(self))]
     async fn clock_time_get(
         &mut self,
         id: types::Clockid,
@@ -253,6 +260,7 @@ impl<
         Ok(now)
     }
 
+    #[instrument(skip(self))]
     async fn fd_advise(
         &mut self,
         fd: types::Fd,
@@ -263,6 +271,7 @@ impl<
         todo!()
     }
 
+    #[instrument(skip(self))]
     async fn fd_allocate(
         &mut self,
         fd: types::Fd,
@@ -272,18 +281,22 @@ impl<
         todo!()
     }
 
+    #[instrument(skip(self))]
     async fn fd_close(&mut self, fd: types::Fd) -> Result<(), types::Error> {
         todo!()
     }
 
+    #[instrument(skip(self))]
     async fn fd_datasync(&mut self, fd: types::Fd) -> Result<(), types::Error> {
         todo!()
     }
 
+    #[instrument(skip(self))]
     async fn fd_fdstat_get(&mut self, fd: types::Fd) -> Result<types::Fdstat, types::Error> {
         todo!()
     }
 
+    #[instrument(skip(self))]
     async fn fd_fdstat_set_flags(
         &mut self,
         fd: types::Fd,
@@ -292,6 +305,7 @@ impl<
         todo!()
     }
 
+    #[instrument(skip(self))]
     async fn fd_fdstat_set_rights(
         &mut self,
         fd: types::Fd,
@@ -301,10 +315,12 @@ impl<
         todo!()
     }
 
+    #[instrument(skip(self))]
     async fn fd_filestat_get(&mut self, fd: types::Fd) -> Result<types::Filestat, types::Error> {
         todo!()
     }
 
+    #[instrument(skip(self))]
     async fn fd_filestat_set_size(
         &mut self,
         fd: types::Fd,
@@ -313,6 +329,7 @@ impl<
         todo!()
     }
 
+    #[instrument(skip(self))]
     async fn fd_filestat_set_times(
         &mut self,
         fd: types::Fd,
@@ -323,6 +340,7 @@ impl<
         todo!()
     }
 
+    #[instrument(skip(self))]
     async fn fd_read<'a>(
         &mut self,
         fd: types::Fd,
@@ -331,6 +349,7 @@ impl<
         todo!()
     }
 
+    #[instrument(skip(self))]
     async fn fd_pread<'a>(
         &mut self,
         fd: types::Fd,
@@ -340,6 +359,7 @@ impl<
         todo!()
     }
 
+    #[instrument(skip(self))]
     async fn fd_write<'a>(
         &mut self,
         fd: types::Fd,
@@ -348,6 +368,7 @@ impl<
         todo!()
     }
 
+    #[instrument(skip(self))]
     async fn fd_pwrite<'a>(
         &mut self,
         fd: types::Fd,
@@ -357,10 +378,12 @@ impl<
         todo!()
     }
 
+    #[instrument(skip(self))]
     async fn fd_prestat_get(&mut self, fd: types::Fd) -> Result<types::Prestat, types::Error> {
         todo!()
     }
 
+    #[instrument(skip(self))]
     async fn fd_prestat_dir_name<'a>(
         &mut self,
         fd: types::Fd,
@@ -369,10 +392,13 @@ impl<
     ) -> Result<(), types::Error> {
         todo!()
     }
+
+    #[instrument(skip(self))]
     async fn fd_renumber(&mut self, from: types::Fd, to: types::Fd) -> Result<(), types::Error> {
         todo!()
     }
 
+    #[instrument(skip(self))]
     async fn fd_seek(
         &mut self,
         fd: types::Fd,
@@ -382,14 +408,17 @@ impl<
         todo!()
     }
 
+    #[instrument(skip(self))]
     async fn fd_sync(&mut self, fd: types::Fd) -> Result<(), types::Error> {
         todo!()
     }
 
+    #[instrument(skip(self))]
     async fn fd_tell(&mut self, fd: types::Fd) -> Result<types::Filesize, types::Error> {
         todo!()
     }
 
+    #[instrument(skip(self))]
     async fn fd_readdir<'a>(
         &mut self,
         fd: types::Fd,
@@ -400,6 +429,7 @@ impl<
         todo!()
     }
 
+    #[instrument(skip(self))]
     async fn path_create_directory<'a>(
         &mut self,
         dirfd: types::Fd,
@@ -408,6 +438,7 @@ impl<
         todo!()
     }
 
+    #[instrument(skip(self))]
     async fn path_filestat_get<'a>(
         &mut self,
         dirfd: types::Fd,
@@ -417,6 +448,7 @@ impl<
         todo!()
     }
 
+    #[instrument(skip(self))]
     async fn path_filestat_set_times<'a>(
         &mut self,
         dirfd: types::Fd,
@@ -429,6 +461,7 @@ impl<
         todo!()
     }
 
+    #[instrument(skip(self))]
     async fn path_link<'a>(
         &mut self,
         src_fd: types::Fd,
@@ -440,6 +473,7 @@ impl<
         todo!()
     }
 
+    #[instrument(skip(self))]
     async fn path_open<'a>(
         &mut self,
         dirfd: types::Fd,
@@ -453,6 +487,7 @@ impl<
         todo!()
     }
 
+    #[instrument(skip(self))]
     async fn path_readlink<'a>(
         &mut self,
         dirfd: types::Fd,
@@ -463,6 +498,7 @@ impl<
         todo!()
     }
 
+    #[instrument(skip(self))]
     async fn path_remove_directory<'a>(
         &mut self,
         dirfd: types::Fd,
@@ -471,6 +507,7 @@ impl<
         todo!()
     }
 
+    #[instrument(skip(self))]
     async fn path_rename<'a>(
         &mut self,
         src_fd: types::Fd,
@@ -481,6 +518,7 @@ impl<
         todo!()
     }
 
+    #[instrument(skip(self))]
     async fn path_symlink<'a>(
         &mut self,
         src_path: &GuestPtr<'a, str>,
@@ -490,6 +528,7 @@ impl<
         todo!()
     }
 
+    #[instrument(skip(self))]
     async fn path_unlink_file<'a>(
         &mut self,
         dirfd: types::Fd,
@@ -498,6 +537,7 @@ impl<
         todo!()
     }
 
+    #[instrument(skip(self))]
     async fn poll_oneoff<'a>(
         &mut self,
         subs: &GuestPtr<'a, types::Subscription>,
@@ -507,6 +547,7 @@ impl<
         todo!()
     }
 
+    #[instrument(skip(self))]
     async fn proc_exit(&mut self, status: types::Exitcode) -> anyhow::Error {
         let status = match status {
             0 => Ok(()),
@@ -518,15 +559,18 @@ impl<
         }
     }
 
+    #[instrument(skip(self))]
     async fn proc_raise(&mut self, _sig: types::Signal) -> Result<(), types::Error> {
         Err(types::Errno::Notsup.into())
     }
 
+    #[instrument(skip(self))]
     async fn sched_yield(&mut self) -> Result<(), types::Error> {
         // TODO: This is not yet covered in Preview2.
         Ok(())
     }
 
+    #[instrument(skip(self))]
     async fn random_get<'a>(
         &mut self,
         buf: &GuestPtr<'a, u8>,
@@ -541,6 +585,7 @@ impl<
         Ok(())
     }
 
+    #[instrument(skip(self))]
     async fn sock_accept(
         &mut self,
         fd: types::Fd,
@@ -549,6 +594,7 @@ impl<
         todo!()
     }
 
+    #[instrument(skip(self))]
     async fn sock_recv<'a>(
         &mut self,
         fd: types::Fd,
@@ -558,6 +604,7 @@ impl<
         todo!()
     }
 
+    #[instrument(skip(self))]
     async fn sock_send<'a>(
         &mut self,
         fd: types::Fd,
@@ -567,6 +614,7 @@ impl<
         todo!()
     }
 
+    #[instrument(skip(self))]
     async fn sock_shutdown(
         &mut self,
         fd: types::Fd,
