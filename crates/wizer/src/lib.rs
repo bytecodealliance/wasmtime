@@ -29,7 +29,7 @@ use std::path::PathBuf;
 use std::rc::Rc;
 #[cfg(feature = "structopt")]
 use structopt::StructOpt;
-use wasmtime::Extern;
+use wasmtime::{Engine, Extern};
 use wasmtime_wasi::WasiCtx;
 
 const DEFAULT_INHERIT_STDIO: bool = true;
@@ -128,6 +128,32 @@ pub struct Wizer {
     #[cfg_attr(feature = "structopt", structopt(long = "allow-wasi"))]
     allow_wasi: bool,
 
+    /// Provide an additional preloaded module that is available to the
+    /// main module.
+    ///
+    /// This allows running a module that depends on imports from
+    /// another module. Note that the additional module's state is *not*
+    /// snapshotted, nor is its code included in the Wasm snapshot;
+    /// rather, it is assumed that the resulting snapshot Wasm will also
+    /// be executed with the same imports available.
+    ///
+    /// The main purpose of this option is to allow "stubs" for certain
+    /// intrinsics to be included, when these will be provided with
+    /// different implementations when running or further processing the
+    /// snapshot.
+    ///
+    /// The format of this option is `name=file.{wasm,wat}`; e.g.,
+    /// `intrinsics=stubs.wat`. Multiple instances of the option may
+    /// appear.
+    #[cfg_attr(feature = "structopt", structopt(long = "preload"))]
+    preload: Vec<String>,
+
+    /// Like `preload` above, but with the module contents provided,
+    /// rather than a filename. This is more useful for programmatic
+    /// use-cases where the embedding tool may also embed a Wasm module.
+    #[cfg_attr(feature = "structopt", structopt(skip))]
+    preload_bytes: Vec<(String, Vec<u8>)>,
+
     #[cfg_attr(feature = "structopt", structopt(skip))]
     make_linker: Option<Rc<dyn Fn(&wasmtime::Engine) -> anyhow::Result<Linker>>>,
 
@@ -221,6 +247,8 @@ impl std::fmt::Debug for Wizer {
             init_func,
             func_renames,
             allow_wasi,
+            preload,
+            preload_bytes,
             make_linker: _,
             inherit_stdio,
             inherit_env,
@@ -236,6 +264,8 @@ impl std::fmt::Debug for Wizer {
             .field("init_func", &init_func)
             .field("func_renames", &func_renames)
             .field("allow_wasi", &allow_wasi)
+            .field("preload", &preload)
+            .field("preload_bytes", &preload_bytes)
             .field("make_linker", &"..")
             .field("inherit_stdio", &inherit_stdio)
             .field("inherit_env", &inherit_env)
@@ -298,6 +328,8 @@ impl Wizer {
             init_func: "wizer.initialize".into(),
             func_renames: vec![],
             allow_wasi: false,
+            preload: vec![],
+            preload_bytes: vec![],
             make_linker: None,
             inherit_stdio: None,
             inherit_env: None,
@@ -345,6 +377,61 @@ impl Wizer {
             "Cannot use 'allow_wasi' with a custom linker"
         );
         self.allow_wasi = allow;
+        Ok(self)
+    }
+
+    /// Provide an additional preloaded module that is available to the
+    /// main module.
+    ///
+    /// This allows running a module that depends on imports from
+    /// another module. Note that the additional module's state is *not*
+    /// snapshotted, nor is its code included in the Wasm snapshot;
+    /// rather, it is assumed that the resulting snapshot Wasm will also
+    /// be executed with the same imports available.
+    ///
+    /// The main purpose of this option is to allow "stubs" for certain
+    /// intrinsics to be included, when these will be provided with
+    /// different implementations when running or further processing the
+    /// snapshot.
+    pub fn preload(&mut self, name: &str, filename: &str) -> anyhow::Result<&mut Self> {
+        anyhow::ensure!(
+            self.make_linker.is_none(),
+            "Cannot use 'preload' with a custom linker"
+        );
+        anyhow::ensure!(
+            !name.contains("="),
+            "Module name cannot contain an `=` character"
+        );
+        self.preload.push(format!("{}={}", name, filename));
+        Ok(self)
+    }
+
+    /// Provide an additional preloaded module that is available to the
+    /// main module. Unlike `preload()`, this method takes an owned
+    /// vector of bytes as the module's actual content, rather than a
+    /// filename. As with `preload()`, the module may be in Wasm binary
+    /// format or in WAT text format.
+    ///
+    /// This allows running a module that depends on imports from
+    /// another module. Note that the additional module's state is *not*
+    /// snapshotted, nor is its code included in the Wasm snapshot;
+    /// rather, it is assumed that the resulting snapshot Wasm will also
+    /// be executed with the same imports available.
+    ///
+    /// The main purpose of this option is to allow "stubs" for certain
+    /// intrinsics to be included, when these will be provided with
+    /// different implementations when running or further processing the
+    /// snapshot.
+    pub fn preload_bytes(
+        &mut self,
+        name: &str,
+        module_bytes: Vec<u8>,
+    ) -> anyhow::Result<&mut Self> {
+        anyhow::ensure!(
+            self.make_linker.is_none(),
+            "Cannot use 'preload_bytes' with a custom linker"
+        );
+        self.preload_bytes.push((name.to_owned(), module_bytes));
         Ok(self)
     }
 
@@ -493,7 +580,7 @@ impl Wizer {
             .context("failed to compile the Wasm module")?;
         self.validate_init_func(&module)?;
 
-        let (instance, has_wasi_initialize) = self.initialize(&mut store, &module)?;
+        let (instance, has_wasi_initialize) = self.initialize(&engine, &mut store, &module)?;
         let snapshot = snapshot::snapshot(&mut store, &instance);
         let rewritten_wasm = self.rewrite(
             &mut cx,
@@ -708,9 +795,29 @@ impl Wizer {
         Ok(Some(ctx.build()))
     }
 
+    /// Preload a module.
+    fn do_preload(
+        &self,
+        engine: &Engine,
+        store: &mut Store,
+        linker: &mut Linker,
+        name: &str,
+        content: &[u8],
+    ) -> anyhow::Result<()> {
+        let module =
+            wasmtime::Module::new(engine, content).context("failed to parse preload module")?;
+        let instance = wasmtime::Instance::new(&mut *store, &module, &[])
+            .context("failed to instantiate preload module")?;
+        linker
+            .instance(&mut *store, name, instance)
+            .context("failed to add preload's exports to linker")?;
+        Ok(())
+    }
+
     /// Instantiate the module and call its initialization function.
     fn initialize(
         &self,
+        engine: &Engine,
         store: &mut Store,
         module: &wasmtime::Module,
     ) -> anyhow::Result<(wasmtime::Instance, bool)> {
@@ -726,6 +833,21 @@ impl Wizer {
             wasmtime_wasi::add_to_linker(&mut linker, |ctx: &mut Option<WasiCtx>| {
                 ctx.as_mut().unwrap()
             })?;
+        }
+
+        for preload in &self.preload {
+            if let Some((name, value)) = preload.split_once('=') {
+                let content = std::fs::read(value).context("failed to read preload module")?;
+                self.do_preload(engine, &mut *store, &mut linker, &name[..], &content[..])?;
+            } else {
+                anyhow::bail!(
+                    "Bad preload option: {} (must be of form `name=file`)",
+                    preload
+                );
+            }
+        }
+        for (name, bytes) in &self.preload_bytes {
+            self.do_preload(engine, &mut *store, &mut linker, &name[..], &bytes[..])?;
         }
 
         dummy_imports(&mut *store, &module, &mut linker)?;
