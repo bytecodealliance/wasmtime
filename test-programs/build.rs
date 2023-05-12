@@ -8,11 +8,11 @@ use wit_component::ComponentEncoder;
 fn build_adapter(name: &str, features: &[&str]) -> Vec<u8> {
     let out_dir = PathBuf::from(env::var_os("OUT_DIR").unwrap());
 
-    println!("cargo:rerun-if-changed=../src");
+    println!("cargo:rerun-if-changed=../crates/wasi-preview1-component-adapter");
     let mut cmd = Command::new("cargo");
     cmd.arg("build")
         .arg("--release")
-        .current_dir("../")
+        .current_dir("../crates/wasi-preview1-component-adapter")
         .arg("--target=wasm32-unknown-unknown")
         .env("CARGO_TARGET_DIR", &out_dir)
         .env_remove("CARGO_ENCODED_RUSTFLAGS");
@@ -22,9 +22,9 @@ fn build_adapter(name: &str, features: &[&str]) -> Vec<u8> {
     let status = cmd.status().unwrap();
     assert!(status.success());
 
-    let adapter = out_dir.join(format!("wasi_snapshot_preview1.{name}.wasm"));
+    let adapter = out_dir.join(format!("wasi_preview1_component_adapter.{name}.wasm"));
     std::fs::copy(
-        out_dir.join("wasm32-unknown-unknown/release/wasi_snapshot_preview1.wasm"),
+        out_dir.join("wasm32-unknown-unknown/release/wasi_preview1_component_adapter.wasm"),
         &adapter,
     )
     .unwrap();
