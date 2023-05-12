@@ -17,6 +17,10 @@ mod snapshot;
 mod stack_ext;
 mod translate;
 
+/// Re-export wasmtime so users can align with our version. This is
+/// especially useful when providing a custom Linker.
+pub use wasmtime;
+
 use anyhow::Context;
 use dummy::dummy_imports;
 use std::collections::{HashMap, HashSet};
