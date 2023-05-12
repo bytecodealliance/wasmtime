@@ -234,8 +234,17 @@ impl VecOpCategory {
 impl VecOpMasking {
     pub fn encode(&self) -> u32 {
         match self {
-            VecOpMasking::Enabled => 0,
+            VecOpMasking::Enabled { .. } => 0,
             VecOpMasking::Disabled => 1,
+        }
+    }
+
+    pub(crate) fn with_allocs(&self, allocs: &mut AllocationConsumer<'_>) -> Self {
+        match self {
+            VecOpMasking::Enabled { reg } => VecOpMasking::Enabled {
+                reg: allocs.next(*reg),
+            },
+            VecOpMasking::Disabled => VecOpMasking::Disabled,
         }
     }
 }

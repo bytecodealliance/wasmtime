@@ -16,6 +16,7 @@
     (element_width_from_type ty)
     (VecAMode.UnitStride (gen_const_amode (const_to_vconst n)))
     (mem_flags_trusted)
+    (unmasked)
     ty))
 
 ;;;; Rules for `f32const` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -108,19 +109,19 @@
 
 ;; SIMD Vectors
 (rule 8 (lower (has_type (ty_vec_fits_in_register ty) (iadd x y)))
-  (rv_vadd_vv x y ty))
+  (rv_vadd_vv x y (unmasked) ty))
 
 (rule 9 (lower (has_type (ty_vec_fits_in_register ty) (iadd x (splat y))))
-  (rv_vadd_vx x y ty))
+  (rv_vadd_vx x y (unmasked) ty))
 
 (rule 10 (lower (has_type (ty_vec_fits_in_register ty) (iadd (splat x) y)))
-  (rv_vadd_vx y x ty))
+  (rv_vadd_vx y x (unmasked) ty))
 
 (rule 11 (lower (has_type (ty_vec_fits_in_register ty) (iadd x (replicated_imm5 y))))
-  (rv_vadd_vi x y ty))
+  (rv_vadd_vi x y (unmasked) ty))
 
 (rule 12 (lower (has_type (ty_vec_fits_in_register ty) (iadd (replicated_imm5 x) y)))
-  (rv_vadd_vi y x ty))
+  (rv_vadd_vi y x (unmasked) ty))
 
 ;;; Rules for `uadd_overflow_trap` ;;;;;;;;;;;;;
 (rule
@@ -144,16 +145,16 @@
 
 ;; SIMD Vectors
 (rule 3 (lower (has_type (ty_vec_fits_in_register ty) (isub x y)))
-  (rv_vsub_vv x y ty))
+  (rv_vsub_vv x y (unmasked) ty))
 
 (rule 4 (lower (has_type (ty_vec_fits_in_register ty) (isub x (splat y))))
-  (rv_vsub_vx x y ty))
+  (rv_vsub_vx x y (unmasked) ty))
 
 (rule 5 (lower (has_type (ty_vec_fits_in_register ty) (isub (splat x) y)))
-  (rv_vrsub_vx y x ty))
+  (rv_vrsub_vx y x (unmasked) ty))
 
 (rule 6 (lower (has_type (ty_vec_fits_in_register ty) (isub (replicated_imm5 x) y)))
-  (rv_vrsub_vi y x ty))
+  (rv_vrsub_vi y x (unmasked) ty))
 
 
 ;;;; Rules for `ineg` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -162,7 +163,7 @@
   (neg ty val))
 
 (rule 1 (lower (has_type (ty_vec_fits_in_register ty) (ineg x)))
-  (rv_vneg_v x ty))
+  (rv_vneg_v x (unmasked) ty))
 
 
 ;;;; Rules for `imul` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -201,21 +202,21 @@
     (value_regs dst_lo dst_hi)))
 
 (rule 3 (lower (has_type (ty_vec_fits_in_register ty) (imul x y)))
-  (rv_vmul_vv x y ty))
+  (rv_vmul_vv x y (unmasked) ty))
 
 ;;;; Rules for `smulhi` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule 0 (lower (has_type (ty_int_ref_scalar_64 ty) (smulhi x y)))
   (lower_smlhi ty (ext_int_if_need $true x ty) (ext_int_if_need $true y ty)))
 
 (rule 1 (lower (has_type (ty_vec_fits_in_register ty) (smulhi x y)))
-  (rv_vmulh_vv x y ty))
+  (rv_vmulh_vv x y (unmasked) ty))
 
 ;;;; Rules for `umulhi` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule 0 (lower (has_type (ty_int_ref_scalar_64 ty) (umulhi x y)))
   (lower_umlhi ty (ext_int_if_need $false x ty) (ext_int_if_need $false y ty)))
 
 (rule 1 (lower (has_type (ty_vec_fits_in_register ty) (umulhi x y)))
-  (rv_vmulhu_vv x y ty))
+  (rv_vmulhu_vv x y (unmasked) ty))
 
 ;;;; Rules for `div` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -325,7 +326,7 @@
 
 
 (rule 7 (lower (has_type (ty_vec_fits_in_register ty) (band x y)))
-  (rv_vand_vv x y ty))
+  (rv_vand_vv x y (unmasked) ty))
 
 
 ;;;; Rules for `or` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -372,7 +373,7 @@
     (value_regs low high)))
 
 (rule 7 (lower (has_type (ty_vec_fits_in_register ty) (bor x y)))
-  (rv_vor_vv x y ty))
+  (rv_vor_vv x y (unmasked) ty))
 
 ;;;; Rules for `xor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule -1 (lower (has_type (fits_in_64 (ty_int ty)) (bxor x y)))
@@ -395,7 +396,7 @@
   (lower_float_binary (AluOPRRR.Xor) x y $F64))
 
 (rule 3 (lower (has_type (ty_vec_fits_in_register ty) (bxor x y)))
-  (rv_vxor_vv x y ty))
+  (rv_vxor_vv x y (unmasked) ty))
 
 ;;;; Rules for `bnot` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type ty (bnot x)))
@@ -588,7 +589,7 @@
   (rv_fneg ty x))
 
 (rule 1 (lower (has_type (ty_vec_fits_in_register ty) (fneg x)))
-  (rv_vfneg_v x ty))
+  (rv_vfneg_v x (unmasked) ty))
 
 ;;;; Rules for `fcopysign` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type ty (fcopysign x y)))
@@ -604,7 +605,7 @@
   (rv_fsqrt ty x))
 
 (rule 1 (lower (has_type (ty_vec_fits_in_register ty) (sqrt x)))
-  (rv_vfsqrt_v x ty))
+  (rv_vfsqrt_v x (unmasked) ty))
 
 ;;;; Rules for `AtomicRMW` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule -1
@@ -719,13 +720,13 @@
   (rv_fadd ty x y))
 
 (rule 1 (lower (has_type (ty_vec_fits_in_register ty) (fadd x y)))
-  (rv_vfadd_vv x y ty))
+  (rv_vfadd_vv x y (unmasked) ty))
 
 (rule 2 (lower (has_type (ty_vec_fits_in_register ty) (fadd x (splat y))))
-  (rv_vfadd_vf x y ty))
+  (rv_vfadd_vf x y (unmasked) ty))
 
 (rule 3 (lower (has_type (ty_vec_fits_in_register ty) (fadd (splat x) y)))
-  (rv_vfadd_vf y x ty))
+  (rv_vfadd_vf y x (unmasked) ty))
 
 
 ;;;; Rules for `fsub` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -733,26 +734,26 @@
   (rv_fsub ty x y))
 
 (rule 1 (lower (has_type (ty_vec_fits_in_register ty) (fsub x y)))
-  (rv_vfsub_vv x y ty))
+  (rv_vfsub_vv x y (unmasked) ty))
 
 (rule 2 (lower (has_type (ty_vec_fits_in_register ty) (fsub x (splat y))))
-  (rv_vfsub_vf x y ty))
+  (rv_vfsub_vf x y (unmasked) ty))
 
 (rule 3 (lower (has_type (ty_vec_fits_in_register ty) (fsub (splat x) y)))
-  (rv_vfrsub_vf y x ty))
+  (rv_vfrsub_vf y x (unmasked) ty))
 
 ;;;; Rules for `fmul` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule 0 (lower (has_type (ty_scalar_float ty) (fmul x y)))
   (rv_fmul ty x y))
 
 (rule 1 (lower (has_type (ty_vec_fits_in_register ty) (fmul x y)))
-  (rv_vfmul_vv x y ty))
+  (rv_vfmul_vv x y (unmasked) ty))
 
 (rule 2 (lower (has_type (ty_vec_fits_in_register ty) (fmul x (splat y))))
-  (rv_vfmul_vf x y ty))
+  (rv_vfmul_vf x y (unmasked) ty))
 
 (rule 3 (lower (has_type (ty_vec_fits_in_register ty) (fmul (splat x) y)))
-  (rv_vfmul_vf y x ty))
+  (rv_vfmul_vf y x (unmasked) ty))
 
 
 ;;;; Rules for `fdiv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -760,13 +761,13 @@
   (rv_fdiv ty x y))
 
 (rule 1 (lower (has_type (ty_vec_fits_in_register ty) (fdiv x y)))
-  (rv_vfdiv_vv x y ty))
+  (rv_vfdiv_vv x y (unmasked) ty))
 
 (rule 2 (lower (has_type (ty_vec_fits_in_register ty) (fdiv x (splat y))))
-  (rv_vfdiv_vf x y ty))
+  (rv_vfdiv_vf x y (unmasked) ty))
 
 (rule 3 (lower (has_type (ty_vec_fits_in_register ty) (fdiv (splat x) y)))
-  (rv_vfrdiv_vf y x ty))
+  (rv_vfrdiv_vf y x (unmasked) ty))
 
 ;;;; Rules for `fmin/fmax` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -915,7 +916,7 @@
 (rule 2
   (lower (has_type (ty_vec_fits_in_register ty) (load flags p @ (value_type (ty_addr64 _)) offset)))
   (let ((eew VecElementWidth (element_width_from_type ty)))
-    (vec_load eew (VecAMode.UnitStride (gen_amode p offset $I64)) flags ty)))
+    (vec_load eew (VecAMode.UnitStride (gen_amode p offset $I64)) flags (unmasked) ty)))
 
 ;;;;;  Rules for `istore8`;;;;;;;;;
 (rule
@@ -944,7 +945,7 @@
 (rule 2
   (lower (store flags x @ (value_type (ty_vec_fits_in_register ty)) p @ (value_type (ty_addr64 _)) offset))
   (let ((eew VecElementWidth (element_width_from_type ty)))
-    (vec_store eew (VecAMode.UnitStride (gen_amode p offset $I64)) x flags ty)))
+    (vec_store eew (VecAMode.UnitStride (gen_amode p offset $I64)) x flags (unmasked) ty)))
 
 (decl gen_icmp (IntCC ValueRegs ValueRegs Type) Reg)
 (rule
