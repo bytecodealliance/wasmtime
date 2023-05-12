@@ -103,6 +103,7 @@
   (VfmulVV)
   (VfdivVV)
   (VfsgnjnVV)
+  (VmergeVVM)
 
   ;; Vector-Scalar Opcodes
   (VaddVX)
@@ -115,6 +116,8 @@
   (VfmulVF)
   (VfdivVF)
   (VfrdivVF)
+  (VmergeVXM)
+  (VfmergeVFM)
 ))
 
 ;; Register-Imm ALU Ops
@@ -123,6 +126,7 @@
   (VaddVI)
   (VrsubVI)
   (VslidedownVI)
+  (VmergeVIM)
 ))
 
 ;; Imm only ALU Ops
@@ -439,6 +443,44 @@
 (decl rv_vmv_vi (Imm5 VState) Reg)
 (rule (rv_vmv_vi imm vstate)
   (vec_alu_r_imm5 (VecAluOpRImm5.VmvVI) imm (unmasked) vstate))
+
+;; Helper for emitting the `vmerge.vvm` instruction.
+;; This instruction merges the elements of the two source vectors into the destination vector
+;; based on a mask. Elements are taken from the first source vector if the mask bit is clear,
+;; and from the second source vector if the mask bit is set. This instruction is always masked.
+;;
+;; vd[i] = v0.mask[i] ? vs1[i] : vs2[i]
+(decl rv_vmerge_vvm (Reg Reg Reg VState) Reg)
+(rule (rv_vmerge_vvm vs2 vs1 mask vstate)
+  (vec_alu_rrr (VecAluOpRRR.VmergeVVM) vs2 vs1 (masked mask) vstate))
+
+;; Helper for emitting the `vmerge.vxm` instruction.
+;; Elements are taken from the first source vector if the mask bit is clear, and from the X
+;; register if the mask bit is set. This instruction is always masked.
+;;
+;; vd[i] = v0.mask[i] ? x[rs1] : vs2[i]
+(decl rv_vmerge_vxm (Reg Reg Reg VState) Reg)
+(rule (rv_vmerge_vxm vs2 vs1 mask vstate)
+  (vec_alu_rrr (VecAluOpRRR.VmergeVXM) vs2 vs1 (masked mask) vstate))
+
+;; Helper for emitting the `vfmerge.vfm` instruction.
+;; Elements are taken from the first source vector if the mask bit is clear, and from the F
+;; register if the mask bit is set. This instruction is always masked.
+;;
+;; vd[i] = v0.mask[i] ? f[rs1] : vs2[i]
+(decl rv_vfmerge_vfm (Reg Reg Reg VState) Reg)
+(rule (rv_vfmerge_vfm vs2 vs1 mask vstate)
+  (vec_alu_rrr (VecAluOpRRR.VfmergeVFM) vs2 vs1 (masked mask) vstate))
+
+;; Helper for emitting the `vmerge.vim` instruction.
+;; Elements are taken from the first source vector if the mask bit is clear, and from the
+;; immediate value if the mask bit is set. This instruction is always masked.
+;;
+;; vd[i] = v0.mask[i] ? imm : vs2[i]
+(decl rv_vmerge_vim (Reg Imm5 Reg VState) Reg)
+(rule (rv_vmerge_vim vs2 imm mask vstate)
+  (vec_alu_rr_imm5 (VecAluOpRRImm5.VmergeVIM) vs2 imm (masked mask) vstate))
+
 
 ;;;; Multi-Instruction Helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
