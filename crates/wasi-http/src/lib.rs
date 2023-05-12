@@ -2,7 +2,6 @@ use crate::component_impl::add_component_to_linker;
 use crate::http_server::async_http_server;
 use crate::http_server::spawn_http_server;
 pub use crate::r#struct::WasiHttp;
-use wasmtime::Store;
 
 wasmtime::component::bindgen!({ path: "wasi-http/wit", world: "proxy"});
 
@@ -23,25 +22,18 @@ pub fn add_to_component_linker<T>(
     Ok(())
 }
 
-pub fn add_to_linker<T>(
+pub fn add_to_linker<T: Send>(
     linker: &mut wasmtime::Linker<T>,
     get_cx: impl Fn(&mut T) -> &mut WasiHttp + Send + Sync + Copy + 'static,
+    is_async: bool,
 ) -> anyhow::Result<()> {
-    add_component_to_linker(linker, get_cx)
+    add_component_to_linker(linker, get_cx, is_async)
 }
 
-pub fn run_http<T>(
-    linker: &mut wasmtime::Linker<T>,
-    wasi_http: &mut Store<T>,
-    get_cx: impl Fn(&mut T) -> &mut WasiHttp + Send + Sync + Copy + 'static,
-) {
-    spawn_http_server(linker, wasi_http, get_cx);
+pub fn run_http(engine: &wasmtime::Engine, module: &std::path::PathBuf) {
+    spawn_http_server(engine, module);
 }
 
-pub async fn async_run_http<T>(
-    linker: &mut wasmtime::Linker<T>,
-    wasi_http: &mut Store<T>,
-    get_cx: impl Fn(&mut T) -> &mut WasiHttp + Send + Sync + Copy + 'static,
-) {
-    async_http_server(linker, wasi_http, get_cx).await
+pub async fn async_run_http(engine: &wasmtime::Engine, module: &std::path::PathBuf) {
+    async_http_server(engine, module).await
 }

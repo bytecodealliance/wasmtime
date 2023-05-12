@@ -81,7 +81,23 @@ fn read_option_string(
     }
 }
 
-fn allocate_guest_pointer<T>(caller: &mut Caller<'_, T>, size: u32) -> anyhow::Result<u32> {
+async fn allocate_guest_pointer_async<T: Send>(
+    caller: &mut Caller<'_, T>,
+    size: u32,
+) -> anyhow::Result<u32> {
+    let realloc = caller
+        .get_export("cabi_realloc")
+        .ok_or_else(|| anyhow!("missing required export cabi_realloc"))?;
+    let func = realloc
+        .into_func()
+        .ok_or_else(|| anyhow!("cabi_realloc must be a func"))?;
+    let typed = func.typed::<(u32, u32, u32, u32), u32>(caller.as_context())?;
+    Ok(typed
+        .call_async(caller.as_context_mut(), (0, 0, 4, size))
+        .await?)
+}
+
+fn allocate_guest_pointer<T: Send>(caller: &mut Caller<'_, T>, size: u32) -> anyhow::Result<u32> {
     let realloc = caller
         .get_export("cabi_realloc")
         .ok_or_else(|| anyhow!("missing required export cabi_realloc"))?;
@@ -92,7 +108,26 @@ fn allocate_guest_pointer<T>(caller: &mut Caller<'_, T>, size: u32) -> anyhow::R
     Ok(typed.call(caller.as_context_mut(), (0, 0, 4, size))?)
 }
 
-fn write_string_to_memory<T>(
+async fn write_string_to_memory_async<T: Send>(
+    caller: &mut Caller<'_, T>,
+    ptr: u32,
+    s: &String,
+) -> anyhow::Result<()> {
+    let len: u32 = s.len().try_into()?;
+    let str_ptr = allocate_guest_pointer_async(caller, len).await?;
+
+    let memory = memory_get(caller)?;
+
+    memory.write(caller.as_context_mut(), str_ptr as _, s.as_bytes())?;
+
+    let result: [u32; 2] = [str_ptr, len];
+    let raw = u32_array_to_u8(&result);
+
+    memory.write(caller.as_context_mut(), ptr as _, &raw)?;
+    Ok(())
+}
+
+fn write_string_to_memory<T: Send>(
     caller: &mut Caller<'_, T>,
     ptr: u32,
     s: &String,
@@ -122,9 +157,10 @@ fn u32_array_to_u8(arr: &[u32]) -> Vec<u8> {
     result
 }
 
-pub fn add_component_to_linker<T>(
+pub fn add_component_to_linker<T: Send>(
     linker: &mut wasmtime::Linker<T>,
     get_cx: impl Fn(&mut T) -> &mut WasiHttp + Send + Sync + Copy + 'static,
+    is_async: bool,
 ) -> anyhow::Result<()> {
     linker.func_wrap(
         "wasi:http/outgoing-handler",
@@ -420,26 +456,32 @@ pub fn add_component_to_linker<T>(
             Ok(ctx.new_fields(vec)?)
         },
     )?;
-    linker.func_wrap(
+    linker.func_wrap3_async(
         "wasi:io/streams",
         "read",
-        move |mut caller: Caller<'_, T>, stream: u32, len: u64, ptr: u32| -> anyhow::Result<()> {
-            let ctx = get_cx(caller.data_mut());
-            let bytes_tuple = ctx.read(stream, len)??;
-            let bytes = bytes_tuple.0;
-            let done = match bytes_tuple.1 {
-                true => 1,
-                false => 0,
-            };
-            let body_len: u32 = bytes.len().try_into()?;
-            let out_ptr = allocate_guest_pointer(&mut caller, body_len)?;
-            let result: [u32; 4] = [0, out_ptr, body_len, done];
-            let raw = u32_array_to_u8(&result);
+        move |mut caller: Caller<'_, T>,
+              stream: u32,
+              len: u64,
+              ptr: u32|
+              -> Box<dyn std::future::Future<Output = anyhow::Result<()>> + Send> {
+            Box::new(async move {
+                let ctx = get_cx(caller.data_mut());
+                let bytes_tuple = ctx.read(stream, len)??;
+                let bytes = bytes_tuple.0;
+                let done = match bytes_tuple.1 {
+                    true => 1,
+                    false => 0,
+                };
+                let body_len: u32 = bytes.len().try_into()?;
+                let out_ptr = allocate_guest_pointer_async(&mut caller, body_len).await?;
+                let result: [u32; 4] = [0, out_ptr, body_len, done];
+                let raw = u32_array_to_u8(&result);
 
-            let memory = memory_get(&mut caller)?;
-            memory.write(caller.as_context_mut(), out_ptr as _, &bytes)?;
-            memory.write(caller.as_context_mut(), ptr as _, &raw)?;
-            Ok(())
+                let memory = memory_get(&mut caller)?;
+                memory.write(caller.as_context_mut(), out_ptr as _, &bytes)?;
+                memory.write(caller.as_context_mut(), ptr as _, &raw)?;
+                Ok(())
+            })
         },
     )?;
     linker.func_wrap(
@@ -465,43 +507,91 @@ pub fn add_component_to_linker<T>(
             Ok(())
         },
     )?;
-    linker.func_wrap(
-        "wasi:http/types",
-        "fields-entries",
-        move |mut caller: Caller<'_, T>, fields: u32, out_ptr: u32| -> anyhow::Result<()> {
-            let ctx = get_cx(caller.data_mut());
-            let entries = ctx.fields_entries(fields)?;
+    if is_async {
+        linker.func_wrap2_async(
+            "wasi:http/types",
+            "fields-entries",
+            move |mut caller: Caller<'_, T>,
+                  fields: u32,
+                  out_ptr: u32|
+                  -> Box<dyn std::future::Future<Output = anyhow::Result<()>> + Send> {
+                Box::new(async move {
+                    let ctx = get_cx(caller.data_mut());
+                    let entries = ctx.fields_entries(fields)?;
 
-            let header_len = entries.len();
-            let tuple_ptr = allocate_guest_pointer(&mut caller, (16 * header_len).try_into()?)?;
-            let mut ptr = tuple_ptr;
-            for item in entries.iter() {
-                let name = &item.0;
-                let value = &item.1;
-                let name_len: u32 = name.len().try_into()?;
-                let value_len: u32 = value.len().try_into()?;
+                    let header_len = entries.len();
+                    let tuple_ptr =
+                        allocate_guest_pointer_async(&mut caller, (16 * header_len).try_into()?)
+                            .await?;
+                    let mut ptr = tuple_ptr;
+                    for item in entries.iter() {
+                        let name = &item.0;
+                        let value = &item.1;
+                        let name_len: u32 = name.len().try_into()?;
+                        let value_len: u32 = value.len().try_into()?;
 
-                let name_ptr = allocate_guest_pointer(&mut caller, name_len)?;
-                let value_ptr = allocate_guest_pointer(&mut caller, value_len)?;
+                        let name_ptr = allocate_guest_pointer_async(&mut caller, name_len).await?;
+                        let value_ptr =
+                            allocate_guest_pointer_async(&mut caller, value_len).await?;
+
+                        let memory = memory_get(&mut caller)?;
+                        memory.write(caller.as_context_mut(), name_ptr as _, &name.as_bytes())?;
+                        memory.write(caller.as_context_mut(), value_ptr as _, &value.as_bytes())?;
+
+                        let pair: [u32; 4] = [name_ptr, name_len, value_ptr, value_len];
+                        let raw_pair = u32_array_to_u8(&pair);
+                        memory.write(caller.as_context_mut(), ptr as _, &raw_pair)?;
+
+                        ptr = ptr + 16;
+                    }
+
+                    let memory = memory_get(&mut caller)?;
+                    let result: [u32; 2] = [tuple_ptr, header_len.try_into()?];
+                    let raw = u32_array_to_u8(&result);
+                    memory.write(caller.as_context_mut(), out_ptr as _, &raw)?;
+                    Ok(())
+                })
+            },
+        )?;
+    } else {
+        linker.func_wrap(
+            "wasi:http/types",
+            "fields-entries",
+            move |mut caller: Caller<'_, T>, fields: u32, out_ptr: u32| -> anyhow::Result<()> {
+                let ctx = get_cx(caller.data_mut());
+                let entries = ctx.fields_entries(fields)?;
+
+                let header_len = entries.len();
+                let tuple_ptr = allocate_guest_pointer(&mut caller, (16 * header_len).try_into()?)?;
+                let mut ptr = tuple_ptr;
+                for item in entries.iter() {
+                    let name = &item.0;
+                    let value = &item.1;
+                    let name_len: u32 = name.len().try_into()?;
+                    let value_len: u32 = value.len().try_into()?;
+
+                    let name_ptr = allocate_guest_pointer(&mut caller, name_len)?;
+                    let value_ptr = allocate_guest_pointer(&mut caller, value_len)?;
+
+                    let memory = memory_get(&mut caller)?;
+                    memory.write(caller.as_context_mut(), name_ptr as _, &name.as_bytes())?;
+                    memory.write(caller.as_context_mut(), value_ptr as _, &value.as_bytes())?;
+
+                    let pair: [u32; 4] = [name_ptr, name_len, value_ptr, value_len];
+                    let raw_pair = u32_array_to_u8(&pair);
+                    memory.write(caller.as_context_mut(), ptr as _, &raw_pair)?;
+
+                    ptr = ptr + 16;
+                }
 
                 let memory = memory_get(&mut caller)?;
-                memory.write(caller.as_context_mut(), name_ptr as _, &name.as_bytes())?;
-                memory.write(caller.as_context_mut(), value_ptr as _, value)?;
-
-                let pair: [u32; 4] = [name_ptr, name_len, value_ptr, value_len];
-                let raw_pair = u32_array_to_u8(&pair);
-                memory.write(caller.as_context_mut(), ptr as _, &raw_pair)?;
-
-                ptr = ptr + 16;
-            }
-
-            let memory = memory_get(&mut caller)?;
-            let result: [u32; 2] = [tuple_ptr, header_len.try_into()?];
-            let raw = u32_array_to_u8(&result);
-            memory.write(caller.as_context_mut(), out_ptr as _, &raw)?;
-            Ok(())
-        },
-    )?;
+                let result: [u32; 2] = [tuple_ptr, header_len.try_into()?];
+                let raw = u32_array_to_u8(&result);
+                memory.write(caller.as_context_mut(), out_ptr as _, &raw)?;
+                Ok(())
+            },
+        )?;
+    }
     linker.func_wrap(
         "wasi:http/types",
         "incoming-response-headers",
@@ -519,26 +609,59 @@ pub fn add_component_to_linker<T>(
             Ok(h)
         },
     )?;
-    linker.func_wrap(
-        "wasi:http/types",
-        "incoming-request-authority",
-        move |mut caller: Caller<'_, T>, request: u32, ptr: u32| -> anyhow::Result<()> {
-            let ctx = get_cx(caller.data_mut());
-            let authority = ctx.incoming_request_authority(request)?;
-            write_string_to_memory(&mut caller, ptr, &authority)?;
-            Ok(())
-        },
-    )?;
-    linker.func_wrap(
-        "wasi:http/types",
-        "incoming-request-path",
-        move |mut caller: Caller<'_, T>, request: u32, ptr: u32| -> anyhow::Result<()> {
-            let ctx = get_cx(caller.data_mut());
-            let path = ctx.incoming_request_path(request)?;
-            write_string_to_memory(&mut caller, ptr, &path)?;
-            Ok(())
-        },
-    )?;
+    if is_async {
+        linker.func_wrap2_async(
+            "wasi:http/types",
+            "incoming-request-authority",
+            move |mut caller: Caller<'_, T>,
+                  request: u32,
+                  ptr: u32|
+                  -> Box<dyn std::future::Future<Output = anyhow::Result<()>> + Send> {
+                Box::new(async move {
+                    let ctx = get_cx(caller.data_mut());
+                    let authority = ctx.incoming_request_authority(request)?;
+                    write_string_to_memory_async(&mut caller, ptr, &authority).await?;
+                    Ok(())
+                })
+            },
+        )?;
+        linker.func_wrap2_async(
+            "wasi:http/types",
+            "incoming-request-path",
+            move |mut caller: Caller<'_, T>,
+                  request: u32,
+                  ptr: u32|
+                  -> Box<dyn std::future::Future<Output = anyhow::Result<()>> + Send> {
+                Box::new(async move {
+                    let ctx = get_cx(caller.data_mut());
+                    let path = ctx.incoming_request_path(request)?;
+                    write_string_to_memory_async(&mut caller, ptr, &path).await?;
+                    Ok(())
+                })
+            },
+        )?;
+    } else {
+        linker.func_wrap(
+            "wasi:http/types",
+            "incoming-request-authority",
+            move |mut caller: Caller<'_, T>, request: u32, ptr: u32| -> anyhow::Result<()> {
+                let ctx = get_cx(caller.data_mut());
+                let authority = ctx.incoming_request_authority(request)?;
+                write_string_to_memory(&mut caller, ptr, &authority)?;
+                Ok(())
+            },
+        )?;
+        linker.func_wrap(
+            "wasi:http/types",
+            "incoming-request-path",
+            move |mut caller: Caller<'_, T>, request: u32, ptr: u32| -> anyhow::Result<()> {
+                let ctx = get_cx(caller.data_mut());
+                let path = ctx.incoming_request_path(request)?;
+                write_string_to_memory(&mut caller, ptr, &path)?;
+                Ok(())
+            },
+        )?;
+    }
     linker.func_wrap(
         "wasi:http/types",
         "incoming-request-method",

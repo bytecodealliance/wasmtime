@@ -4273,6 +4273,7 @@ dependencies = [
  "tokio",
  "tokio-rustls",
  "wasmtime",
+ "wasmtime-wasi",
  "webpki-roots",
 ]
 

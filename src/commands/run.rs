@@ -281,6 +281,14 @@ impl RunCommand {
             None => {}
         }
 
+        if self
+            .common
+            .wasi_modules
+            .unwrap_or(WasiModules::default())
+            .wasi_http_server
+        {
+            config.async_support(true);
+        }
         let engine = Engine::new(&config)?;
 
         let preopen_sockets = self.compute_preopen_sockets()?;
@@ -358,29 +366,27 @@ impl RunCommand {
             ))?;
         }
 
-        // Load the main wasm module.
-        match self
-            .load_main_module(&mut store, &mut linker, module, modules, &argv[0])
-            .with_context(|| format!("failed to run main module `{}`", self.module.display()))
-        {
-            Ok(()) => (),
-            Err(e) => {
-                // Exit the process if Wasmtime understands the error;
-                // otherwise, fall back on Rust's default error printing/return
-                // code.
-                return Err(maybe_exit_on_error(e));
-            }
-        }
-
         if self
             .common
             .wasi_modules
             .unwrap_or(WasiModules::default())
             .wasi_http_server
         {
-            run_http(&mut linker, &mut store, |host| {
-                host.wasi_http.as_mut().unwrap()
-            });
+            run_http(&engine, &self.module);
+        } else {
+            // Load the main wasm module.
+            match self
+                .load_main_module(&mut store, &mut linker, module, modules, &argv[0])
+                .with_context(|| format!("failed to run main module `{}`", self.module.display()))
+            {
+                Ok(()) => (),
+                Err(e) => {
+                    // Exit the process if Wasmtime understands the error;
+                    // otherwise, fall back on Rust's default error printing/return
+                    // code.
+                    return Err(maybe_exit_on_error(e));
+                }
+            }
         }
 
         Ok(())
@@ -795,9 +801,11 @@ fn populate_with_wasi(
         #[cfg(feature = "wasi-http")]
         {
             let w_http = WasiHttp::new();
-            wasmtime_wasi_http::add_to_linker(linker, |host: &mut Host| {
-                host.wasi_http.as_mut().unwrap()
-            })?;
+            wasmtime_wasi_http::add_to_linker(
+                linker,
+                |host: &mut Host| host.wasi_http.as_mut().unwrap(),
+                false,
+            )?;
             store.data_mut().wasi_http = Some(w_http);
         }
     }
