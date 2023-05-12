@@ -10,7 +10,7 @@ use std::any::Any;
 /// Generic so we can use this with either the `Box<dyn Any + Send>`s that
 /// implementations of the compiler trait return or with `FunctionLoc`s inside
 /// an object file, for example.
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Copy, Default, Serialize, Deserialize)]
 pub struct AllCallFunc<T> {
     /// The function exposing the Wasm calling convention.
     pub wasm_call: T,

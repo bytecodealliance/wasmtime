@@ -6,8 +6,6 @@ use crate::{
 };
 use anyhow::{bail, Context, Result};
 use once_cell::sync::OnceCell;
-use std::any::Any;
-use std::collections::BTreeMap;
 use std::fs;
 use std::mem;
 use std::ops::Range;
@@ -16,13 +14,10 @@ use std::ptr::NonNull;
 use std::sync::Arc;
 use wasmparser::{Parser, ValidPayload, Validator};
 use wasmtime_environ::{
-    DefinedFuncIndex, DefinedMemoryIndex, FuncIndex, FunctionLoc, HostPtr, ModuleEnvironment,
-    ModuleTranslation, ModuleType, ModuleTypes, ObjectKind, PrimaryMap, SignatureIndex, VMOffsets,
-    WasmFunctionInfo,
+    DefinedFuncIndex, DefinedMemoryIndex, HostPtr, ModuleEnvironment, ModuleTypes, ObjectKind,
+    VMOffsets,
 };
-use wasmtime_jit::{
-    CodeMemory, CompiledFunctionInfo, CompiledModule, CompiledModuleInfo, ObjectBuilder,
-};
+use wasmtime_jit::{CodeMemory, CompiledModule, CompiledModuleInfo};
 use wasmtime_runtime::{
     CompiledModuleId, MemoryImage, MmapVec, ModuleMemoryImages, VMArrayCallFunction,
     VMNativeCallFunction, VMSharedSignatureIndex, VMWasmCallFunction,
@@ -132,151 +127,6 @@ struct ModuleInner {
 
     /// Runtime offset information for `VMContext`.
     offsets: VMOffsets<HostPtr>,
-}
-
-pub(crate) struct CompileFunctionResult {
-    info: WasmFunctionInfo,
-    function: Box<dyn Any + Send>,
-    // These trampolines are only present if the function can escape.
-    array_to_wasm_trampoline: Option<Box<dyn Any + Send>>,
-    native_to_wasm_trampoline: Option<Box<dyn Any + Send>>,
-}
-
-pub(crate) struct ModuleFunctionIndices<'a> {
-    translation: ModuleTranslation<'a>,
-    func_infos: PrimaryMap<DefinedFuncIndex, WasmFunctionInfo>,
-
-    // Indices within the associated `compiled_funcs` for various types of code.
-    func_indices: Vec<usize>,
-    array_to_wasm_trampoline_indices: Vec<(usize, DefinedFuncIndex)>,
-    native_to_wasm_trampoline_indices: Vec<(usize, DefinedFuncIndex)>,
-}
-
-impl<'a> ModuleFunctionIndices<'a> {
-    pub(crate) fn new(
-        translation: ModuleTranslation<'a>,
-        function_compilations: Vec<CompileFunctionResult>,
-        symbol_prefix: &str,
-        compiled_funcs: &mut Vec<(String, Box<dyn Any + Send>)>,
-    ) -> Self {
-        let mut func_infos = PrimaryMap::with_capacity(function_compilations.len());
-        let mut func_indices = Vec::with_capacity(function_compilations.len());
-
-        // Place all wasm-compiled functions, in order, into the final object.
-        // This should help keep a sense of locality between functions, if
-        // necessary.
-        //
-        // Trampolines are deferred to get inserted after all wasm functions
-        // since they don't need the same locality and also don't require
-        // alignment since they're not hot.
-        let mut array_to_wasm_trampolines = Vec::new();
-        let mut native_to_wasm_trampolines = Vec::new();
-        for CompileFunctionResult {
-            info,
-            function,
-            array_to_wasm_trampoline,
-            native_to_wasm_trampoline,
-        } in function_compilations
-        {
-            let def_idx = func_infos.push(info);
-            let idx = translation.module.func_index(def_idx).as_u32();
-
-            if let Some(trampoline) = array_to_wasm_trampoline {
-                let sym = format!("{symbol_prefix}_array_to_wasm_trampoline_{idx}");
-                array_to_wasm_trampolines.push((def_idx, (sym, trampoline)));
-            }
-
-            if let Some(trampoline) = native_to_wasm_trampoline {
-                let sym = format!("{symbol_prefix}_native_to_wasm_trampoline_{idx}");
-                native_to_wasm_trampolines.push((def_idx, (sym, trampoline)));
-            }
-
-            let sym = format!("{symbol_prefix}_function_{idx}");
-            func_indices.push(compiled_funcs.len());
-            compiled_funcs.push((sym, function));
-        }
-
-        let mut array_to_wasm_trampoline_indices = vec![];
-        for (def_idx, pair) in array_to_wasm_trampolines {
-            array_to_wasm_trampoline_indices.push((compiled_funcs.len(), def_idx));
-            compiled_funcs.push(pair);
-        }
-
-        let mut native_to_wasm_trampoline_indices = vec![];
-        for (def_idx, pair) in native_to_wasm_trampolines {
-            native_to_wasm_trampoline_indices.push((compiled_funcs.len(), def_idx));
-            compiled_funcs.push(pair);
-        }
-
-        ModuleFunctionIndices {
-            translation,
-            func_infos,
-            func_indices,
-            array_to_wasm_trampoline_indices,
-            native_to_wasm_trampoline_indices,
-        }
-    }
-
-    pub(crate) fn resolve_reloc(&self, idx: FuncIndex) -> usize {
-        let defined = self.translation.module.defined_func_index(idx).unwrap();
-        self.func_indices[defined.as_u32() as usize]
-    }
-
-    pub(crate) fn append_to_object(
-        self,
-        locs: &[(object::write::SymbolId, FunctionLoc)],
-        wasm_to_native_trampoline_indices: &[(usize, SignatureIndex)],
-        object: &mut ObjectBuilder,
-    ) -> Result<CompiledModuleInfo> {
-        let funcs: PrimaryMap<DefinedFuncIndex, CompiledFunctionInfo> = self
-            .func_infos
-            .into_iter()
-            .enumerate()
-            .zip(self.func_indices.iter().copied().map(|i| locs[i].1))
-            .map(
-                |((defined_func_index, (_id, wasm_func_info)), wasm_func_loc)| {
-                    let defined_func_index =
-                        DefinedFuncIndex::from_u32(u32::try_from(defined_func_index).unwrap());
-
-                    let array_to_wasm_trampoline_index = self
-                        .array_to_wasm_trampoline_indices
-                        .binary_search_by_key(&defined_func_index, |(_i, def_func_idx)| {
-                            *def_func_idx
-                        })
-                        .ok();
-                    let array_to_wasm_trampoline = array_to_wasm_trampoline_index.map(|i| {
-                        let compiled_func_index = self.array_to_wasm_trampoline_indices[i].0;
-                        locs[compiled_func_index].1
-                    });
-
-                    let native_to_wasm_trampoline_index = self
-                        .native_to_wasm_trampoline_indices
-                        .binary_search_by_key(&defined_func_index, |(_i, def_func_idx)| {
-                            *def_func_idx
-                        })
-                        .ok();
-                    let native_to_wasm_trampoline = native_to_wasm_trampoline_index.map(|i| {
-                        let compiled_func_index = self.native_to_wasm_trampoline_indices[i].0;
-                        locs[compiled_func_index].1
-                    });
-
-                    CompiledFunctionInfo::new(
-                        wasm_func_info,
-                        wasm_func_loc,
-                        array_to_wasm_trampoline,
-                        native_to_wasm_trampoline,
-                    )
-                },
-            )
-            .collect();
-
-        let wasm_to_native_trampolines = wasm_to_native_trampoline_indices
-            .iter()
-            .map(|&(i, sig_idx)| (sig_idx, locs[i].1))
-            .collect();
-
-        object.append(self.translation, funcs, wasm_to_native_trampolines)
-    }
 }
 
 impl Module {
@@ -519,44 +369,6 @@ impl Module {
         Module::new(engine, &*mmap)
     }
 
-    #[cfg(any(feature = "cranelift", feature = "winch"))]
-    pub(crate) fn compile_wasm_to_native_trampolines(
-        engine: &Engine,
-        translations: &[ModuleTranslation<'_>],
-        types: &ModuleTypes,
-        compiled_funcs: &mut Vec<(String, Box<dyn Any + Send>)>,
-    ) -> Result<Vec<(usize, SignatureIndex)>> {
-        let mut sigs = BTreeMap::new();
-        for trans in translations.iter() {
-            sigs.extend(trans.module.types.iter().filter_map(|(_, ty)| match ty {
-                ModuleType::Function(ty) => Some((*ty, trans)),
-            }));
-        }
-
-        let trampolines = engine.run_maybe_parallel(
-            sigs.into_iter().collect(),
-            |(sig_index, translation)| -> Result<_> {
-                let wasm_func_ty = &types[sig_index];
-                Ok((
-                    format!("wasm_to_native_trampoline[{}]", sig_index.as_u32()),
-                    sig_index,
-                    engine
-                        .compiler()
-                        .compile_wasm_to_native_trampoline(&translation, wasm_func_ty)?,
-                ))
-            },
-        )?;
-
-        let mut indices = Vec::with_capacity(trampolines.len());
-        for (symbol, sig, trampoline) in trampolines {
-            let idx = compiled_funcs.len();
-            indices.push((idx, sig));
-            compiled_funcs.push((symbol, trampoline));
-        }
-
-        Ok(indices)
-    }
-
     /// Converts an input binary-encoded WebAssembly module to compilation
     /// artifacts and type information.
     ///
@@ -574,6 +386,8 @@ impl Module {
         engine: &Engine,
         wasm: &[u8],
     ) -> Result<(MmapVec, Option<(CompiledModuleInfo, ModuleTypes)>)> {
+        use crate::compiler::CompileInputs;
+
         let tunables = &engine.config().tunables;
         let compiler = engine.compiler();
 
@@ -588,42 +402,16 @@ impl Module {
         let mut translation = ModuleEnvironment::new(tunables, &mut validator, &mut types)
             .translate(parser, wasm)
             .context("failed to parse WebAssembly module")?;
+        let functions = mem::take(&mut translation.function_body_inputs);
         let types = types.finish();
 
-        // Afterwards compile all functions and trampolines required by the
-        // module. Note that this is also where the actual validation of all
-        // function bodies happens as well.
-        let funcs = Self::compile_functions(engine, &mut translation, &types)?;
-        let mut compiled_funcs = vec![];
-
-        let wasm_to_native_trampolines = Module::compile_wasm_to_native_trampolines(
-            engine,
-            std::slice::from_ref(&translation),
-            &types,
-            &mut compiled_funcs,
-        )?;
-
-        let module_func_indices =
-            ModuleFunctionIndices::new(translation, funcs, "wasm", &mut compiled_funcs);
+        let compile_inputs = CompileInputs::for_module(&types, &translation, functions);
+        let unlinked_compile_outputs = compile_inputs.compile(engine)?;
+        let (compiled_funcs, function_indices) = unlinked_compile_outputs.pre_link();
 
         // Emplace all compiled functions into the object file with any other
         // sections associated with code as well.
-        let mut obj = engine.compiler().object(ObjectKind::Module)?;
-        let locs = compiler.append_code(&mut obj, &compiled_funcs, tunables, &|_i, idx| {
-            module_func_indices.resolve_reloc(idx)
-        })?;
-
-        // If requested, generate and add dwarf information.
-        if tunables.generate_native_debuginfo && !module_func_indices.func_indices.is_empty() {
-            let funcs = module_func_indices
-                .func_indices
-                .iter()
-                .copied()
-                .map(|i| (locs[i].0, &*compiled_funcs[i].1))
-                .collect();
-            compiler.append_dwarf(&mut obj, &module_func_indices.translation, &funcs)?;
-        }
-
+        let mut object = engine.compiler().object(ObjectKind::Module)?;
         // Insert `Engine` and type-level information into the compiled
         // artifact so if this module is deserialized later it contains all
         // information necessary.
@@ -633,76 +421,8 @@ impl Module {
         // They're only used during deserialization and not during runtime for
         // the module itself. Currently there's no need for that, however, so
         // it's left as an exercise for later.
-        engine.append_compiler_info(&mut obj);
-        engine.append_bti(&mut obj);
-
-        let mut obj = wasmtime_jit::ObjectBuilder::new(obj, tunables);
-        let info =
-            module_func_indices.append_to_object(&locs, &wasm_to_native_trampolines, &mut obj)?;
-        obj.serialize_info(&(&info, &types));
-        let mmap = obj.finish()?;
-
-        Ok((mmap, Some((info, types))))
-    }
-
-    #[cfg(any(feature = "cranelift", feature = "winch"))]
-    pub(crate) fn compile_functions(
-        engine: &Engine,
-        translation: &mut ModuleTranslation<'_>,
-        types: &ModuleTypes,
-    ) -> Result<Vec<CompileFunctionResult>> {
-        let tunables = &engine.config().tunables;
-        let functions = mem::take(&mut translation.function_body_inputs);
-        let functions = functions.into_iter().collect::<Vec<_>>();
-        let compiler = engine.compiler();
-        let funcs =
-            engine.run_maybe_parallel(functions, |(def_func_index, func)| -> Result<_> {
-                let func_index = translation.module.func_index(def_func_index);
-                let offset = func.body.range().start;
-
-                let (info, function) = compiler
-                    .compile_function(&translation, def_func_index, func, tunables, types)
-                    .with_context(|| {
-                        let name = match translation
-                            .debuginfo
-                            .name_section
-                            .func_names
-                            .get(&func_index)
-                        {
-                            Some(name) => format!(" (`{}`)", name),
-                            None => String::new(),
-                        };
-                        let func_index = func_index.as_u32();
-                        format!(
-                        "failed to compile wasm function {func_index}{name} at offset {offset:#x}"
-                    )
-                    })?;
-
-                let (array_to_wasm_trampoline, native_to_wasm_trampoline) =
-                    if translation.module.functions[func_index].is_escaping() {
-                        (
-                            Some(compiler.compile_array_to_wasm_trampoline(
-                                &translation,
-                                types,
-                                def_func_index,
-                            )?),
-                            Some(compiler.compile_native_to_wasm_trampoline(
-                                &translation,
-                                types,
-                                def_func_index,
-                            )?),
-                        )
-                    } else {
-                        (None, None)
-                    };
-
-                Ok(CompileFunctionResult {
-                    info,
-                    function,
-                    array_to_wasm_trampoline,
-                    native_to_wasm_trampoline,
-                })
-            })?;
+        engine.append_compiler_info(&mut object);
+        engine.append_bti(&mut object);
 
         // If configured attempt to use static memory initialization which
         // can either at runtime be implemented as a single memcpy to
@@ -719,7 +439,19 @@ impl Module {
         // table lazy init.
         translation.try_func_table_init();
 
-        Ok(funcs)
+        let (mut object, compilation_artifacts) = function_indices.link_and_append_code(
+            object,
+            tunables,
+            compiler,
+            compiled_funcs,
+            std::iter::once(translation).collect(),
+        )?;
+
+        let info = compilation_artifacts.unwrap_as_module_info();
+        object.serialize_info(&(&info, &types));
+        let mmap = object.finish()?;
+
+        Ok((mmap, Some((info, types))))
     }
 
     /// Deserializes an in-memory compiled module previously created with
