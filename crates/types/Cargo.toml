@@ -1,0 +1,15 @@
+[package]
+name = "wasmtime-types"
+version.workspace = true
+authors.workspace = true
+description = "WebAssembly type definitions for Cranelift"
+license = "Apache-2.0 WITH LLVM-exception"
+repository = "https://github.com/bytecodealliance/wasmtime"
+documentation = "https://docs.rs/wasmtime-types"
+edition.workspace = true
+
+[dependencies]
+cranelift-entity = { workspace = true, features = ['enable-serde'] }
+serde = { version = "1.0.94", features = ["derive"] }
+thiserror = { workspace = true }
+wasmparser = { workspace = true }

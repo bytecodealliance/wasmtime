@@ -1,0 +1,52 @@
+test interpret
+; `fcvt_to_{u,s}int.i128` not currently supported by any backend.
+
+function %fcvt_to_uint_i128(f32) -> i128 {
+block0(v0: f32):
+    v1 = fcvt_to_uint.i128 v0
+    return v1
+}
+; run: %fcvt_to_uint_i128(0x0.0) == 0
+; run: %fcvt_to_uint_i128(0x1.0) == 1
+; run: %fcvt_to_uint_i128(0x1.0p31) == 2147483648
+; run: %fcvt_to_uint_i128(0x1.fffffp31) == 4294965248
+; run: %fcvt_to_uint_i128(0x1.0p63) == 9223372036854775808
+; run: %fcvt_to_uint_i128(0x1.fffffep127) == 170141183460469231731687303715884105727
+
+function %fcvt_to_sint_i128(f32) -> i128 {
+block0(v0: f32):
+    v1 = fcvt_to_sint.i128 v0
+    return v1
+}
+; run: %fcvt_to_sint_i128(0x0.0) == 0
+; run: %fcvt_to_sint_i128(0x1.0) == 1
+; run: %fcvt_to_sint_i128(0x1.0p31) == 2147483648
+; run: %fcvt_to_sint_i128(0x1.fffffp31) == 4294965248
+; run: %fcvt_to_sint_i128(-0x1.fffffp31) == -4294965248
+; run: %fcvt_to_sint_i128(0x1.0p63) == 9223372036854775808
+; run: %fcvt_to_sint_i128(-0x1.0p63) == -9223372036854775808
+; run: %fcvt_to_sint_i128(0x1.fffffep127) == 170141183460469231731687303715884105727
+
+function %fcvt_to_uint_sat_i128(f32) -> i128 {
+block0(v0: f32):
+    v1 = fcvt_to_uint_sat.i128 v0
+    return v1
+}
+; run: %fcvt_to_uint_sat_i128(0x0.0) == 0
+; run: %fcvt_to_uint_sat_i128(0x1.0) == 1
+; run: %fcvt_to_uint_sat_i128(0x1.0p31) == 2147483648
+; run: %fcvt_to_uint_sat_i128(0x1.fffffp31) == 4294965248
+; run: %fcvt_to_uint_sat_i128(-0x1.fffffp31) == 0
+; run: %fcvt_to_uint_sat_i128(0x1.fffffep127) == 170141183460469231731687303715884105727
+
+function %fcvt_to_sint_sat_i128(f32) -> i128 {
+block0(v0: f32):
+    v1 = fcvt_to_sint_sat.i128 v0
+    return v1
+}
+; run: %fcvt_to_sint_sat_i128(0x0.0) == 0
+; run: %fcvt_to_sint_sat_i128(0x1.0) == 1
+; run: %fcvt_to_sint_sat_i128(0x1.0p31) == 2147483648
+; run: %fcvt_to_sint_sat_i128(0x1.fffffp31) == 4294965248
+; run: %fcvt_to_sint_sat_i128(-0x1.fffffp31) == -4294965248
+; run: %fcvt_to_sint_sat_i128(0x1.fffffep127) == 170141183460469231731687303715884105727

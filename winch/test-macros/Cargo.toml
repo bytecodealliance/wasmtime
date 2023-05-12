@@ -1,0 +1,18 @@
+[package]
+authors = ["The Winch Project Developers"]
+name = "winch-test-macros"
+description = "Winch test macros"
+license = "Apache-2.0 WITH LLVM-exception"
+repository = "https://github.com/bytecodealliance/wasmtime"
+version = "0.0.0"
+publish = false
+edition.workspace = true
+
+[lib]
+proc-macro = true
+
+[dependencies]
+quote = "1.0"
+syn = { version = "1.0", features = ["full"]}
+proc-macro2 = "1.0"
+glob = { workspace = true }

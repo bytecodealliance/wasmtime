@@ -1,0 +1,64 @@
+test compile precise-output
+set unwind_info=false
+target riscv64
+
+function %f() {
+block0:
+  trap user0
+}
+
+; VCode:
+; block0:
+;   udf##trap_code=user0
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: user0
+
+function %g(i64) {
+block0(v0: i64):
+  v1 = iconst.i64 42
+  v2 = icmp eq v0, v1
+  trapnz v2, user0
+  return
+}
+
+; VCode:
+; block0:
+;   li a1,42
+;   eq a0,a0,a1##ty=i64
+;   bne a0,zero,taken(label2),not_taken(label1)
+; block1:
+;   ret
+; block2:
+;   udf##trap_code=user0
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a1, zero, 0x2a
+;   bne a0, a1, 0xc
+;   addi a0, zero, 1
+;   j 8
+;   mv a0, zero
+;   bnez a0, 8
+; block1: ; offset 0x18
+;   ret
+; block2: ; offset 0x1c
+;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: user0
+
+function %h() {
+block0:
+  debugtrap
+  return
+}
+
+; VCode:
+; block0:
+;   ebreak
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   ebreak
+;   ret
+

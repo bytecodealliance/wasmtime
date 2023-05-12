@@ -1,0 +1,44 @@
+[package]
+name = "wasmtime-jit"
+version.workspace = true
+authors.workspace = true
+description = "JIT-style execution for WebAsssembly code in Cranelift"
+documentation = "https://docs.rs/wasmtime-jit"
+license = "Apache-2.0 WITH LLVM-exception"
+categories = ["wasm"]
+keywords = ["webassembly", "wasm"]
+repository = "https://github.com/bytecodealliance/wasmtime"
+edition.workspace = true
+
+[dependencies]
+wasmtime-environ = { workspace = true }
+wasmtime-jit-debug = { workspace = true, features = ["perf_jitdump"], optional = true }
+wasmtime-runtime = { workspace = true }
+target-lexicon = { workspace = true }
+anyhow = { workspace = true }
+cfg-if = "1.0"
+gimli = { workspace = true }
+object = { workspace = true }
+serde = { version = "1.0.94", features = ["derive"] }
+addr2line = { version = "0.19.0", default-features = false }
+bincode = "1.2.1"
+rustc-demangle = "0.1.16"
+cpp_demangle = "0.3.2"
+log = { workspace = true }
+wasmtime-jit-icache-coherence = { workspace = true }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+rustix = { workspace = true, features = ['thread'] }
+
+[target.'cfg(target_os = "windows")'.dependencies.windows-sys]
+workspace = true
+features = [
+  "Win32_System_Diagnostics_Debug",
+]
+
+[target.'cfg(target_arch = "x86_64")'.dependencies]
+ittapi = { version = "0.3.3", optional = true  }
+
+[features]
+jitdump = ['wasmtime-jit-debug']
+vtune = ['ittapi']

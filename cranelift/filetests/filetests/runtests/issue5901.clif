@@ -1,0 +1,21 @@
+test interpret
+test run
+target aarch64
+target s390x
+target x86_64
+target riscv64
+
+function %a(i8) -> i8 sext system_v {
+    ss2 = explicit_slot 2
+
+block0(v0: i8):
+    v2 = iconst.i16 0x00ff
+    v3 = stack_addr.i64 ss2
+    store little v2, v3
+
+    v4 = stack_addr.i64 ss2+1
+    v5 = atomic_cas little v4, v0, v0
+    return v5
+}
+
+; run: %a(0) == 0

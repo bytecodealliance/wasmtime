@@ -1,0 +1,20 @@
+test interpret
+test run
+target aarch64
+
+; i32x4 vectors aren't supported in `uadd_sat` outside AArch64 at the moment
+function %uaddsat_i32x4(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+    v2 = uadd_sat v0, v1
+    return v2
+}
+; run: %uaddsat_i32x4([40 40 40 40], [2 2 2 2]) == [42 42 42 42]
+; run: %uaddsat_i32x4([4294967290 2147483640 4294967290 4294967290], [100 100 100 100]) == [4294967295 2147483740 4294967295 4294967295]
+
+function %uaddsat_i64x2(i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2):
+    v2 = uadd_sat v0, v1
+    return v2
+}
+; run: %uaddsat_i64x2([40 40], [2 2]) == [42 42]
+; run: %uaddsat_i64x2([4294967290 18446744073709551610], [100 100]) == [4294967390 18446744073709551615]

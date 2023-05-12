@@ -1,0 +1,26 @@
+test verifier
+
+function %float_with_sext(f32 sext) -> f32 { ; error: Parameter at position 0 has invalid extension Sext
+block0(v0: f32):
+    return v0
+}
+
+function %float_with_uext(f32 uext) -> f32 { ; error: Parameter at position 0 has invalid extension Uext
+block0(v0: f32):
+    return v0
+}
+
+function %float_ret_with_sext(f32) -> f32 sext { ; error: Return value at position 0 has invalid extension Sext
+block0(v0: f32):
+    return v0
+}
+
+function %float_ret_with_uext(f32) -> f32 uext { ; error: Return value at position 0 has invalid extension Uext
+block0(v0: f32):
+    return v0
+}
+
+function %simd_ext(i32x4 sext) -> i32x4 { ; error: Parameter at position 0 has invalid extension Sext
+block0(v0: i32x4):
+    return v0
+}

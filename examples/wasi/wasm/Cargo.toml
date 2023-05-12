@@ -1,0 +1,10 @@
+[package]
+name = "example-wasi-wasm"
+version = "0.0.0"
+authors = ["The Wasmtime Project Developers"]
+edition = "2021"
+publish = false
+
+[[bin]]
+path = "wasi.rs"
+name = "wasi"

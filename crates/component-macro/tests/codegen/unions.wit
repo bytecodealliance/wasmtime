@@ -1,0 +1,64 @@
+interface unions {
+  /// A union of all of the integral types
+  union all-integers {
+      /// Bool is equivalent to a 1 bit integer
+      /// and is treated that way in some languages
+      bool,
+      u8, u16, u32, u64,
+      s8, s16, s32, s64
+  }
+  union all-floats {
+      float32, float64
+  }
+  union all-text {
+      char, string
+  }
+
+  // Returns the same case as the input but with 1 added
+  add-one-integer: func(num: all-integers) -> all-integers
+  // Returns the same case as the input but with 1 added
+  add-one-float: func(num: all-floats) -> all-floats
+  // Returns the same case as the input but with the first character replaced
+  replace-first-char: func(text: all-text, letter: char) -> all-text
+
+  // Returns the index of the case provided
+  identify-integer: func(num: all-integers) -> u8
+  // Returns the index of the case provided
+  identify-float: func(num: all-floats) -> u8
+  // Returns the index of the case provided
+  identify-text: func(text: all-text) -> u8
+
+  union duplicated-s32 {
+      /// The first s32
+      s32,
+      /// The second s32
+      s32,
+      /// The third s32
+      s32
+  }
+
+  // Returns the same case as the input but with 1 added
+  add-one-duplicated: func(num: duplicated-s32) -> duplicated-s32
+
+  // Returns the index of the case provided
+  identify-duplicated: func(num: duplicated-s32) -> u8
+
+  /// A type containing numeric types that are distinct in most languages
+  union distinguishable-num {
+      /// A Floating Point Number
+      float64,
+      /// A Signed Integer
+      s64
+  }
+
+  // Returns the same case as the input but with 1 added
+  add-one-distinguishable-num: func(num: distinguishable-num) -> distinguishable-num
+
+  // Returns the index of the case provided
+  identify-distinguishable-num: func(num: distinguishable-num) -> u8
+}
+
+default world the-unions {
+  import import-unions: self.unions
+  export export-unions: self.unions
+}

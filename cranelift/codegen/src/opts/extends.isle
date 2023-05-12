@@ -1,0 +1,34 @@
+;; Chained `uextend` and `sextend`.
+(rule (simplify (uextend ty (uextend _intermediate_ty x)))
+      (uextend ty x))
+(rule (simplify (sextend ty (sextend _intermediate_ty x)))
+      (sextend ty x))
+
+;; Masking out any of the top bits of the result of `uextend` is a no-op. (This
+;; is like a cheap version of known-bits analysis.)
+(rule (simplify (band wide x @ (uextend _ (value_type narrow)) (iconst _ (u64_from_imm64 mask))))
+      ; Check that `narrow_mask` has a subset of the bits that `mask` does.
+      (if-let $true (let ((narrow_mask u64 (ty_mask narrow))) (u64_eq narrow_mask (u64_and mask narrow_mask))))
+      x)
+
+;; Masking out the sign-extended bits of an `sextend` turns it into a `uextend`.
+(rule (simplify (band wide (sextend _ x @ (value_type narrow)) (iconst _ (u64_from_imm64 mask))))
+      (if-let $true (u64_eq mask (ty_mask narrow)))
+      (uextend wide x))
+
+;; 32-bit integers zero-extended to 64-bit integers are never negative
+(rule (simplify
+       (slt ty
+             (uextend $I64 x @ (value_type $I32))
+             (iconst _ (u64_from_imm64 0))))
+      (iconst ty (imm64 0)))
+(rule (simplify
+       (sge ty
+             (uextend $I64 x @ (value_type $I32))
+             (iconst _ (u64_from_imm64 0))))
+      (iconst ty (imm64 1)))
+
+;; A reduction-of-an-extend back to the same original type is the same as not
+;; actually doing the extend in the first place.
+(rule (simplify (ireduce ty (sextend _ x @ (value_type ty)))) x)
+(rule (simplify (ireduce ty (uextend _ x @ (value_type ty)))) x)

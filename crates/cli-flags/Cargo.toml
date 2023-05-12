@@ -1,0 +1,28 @@
+[package]
+name = "wasmtime-cli-flags"
+version.workspace = true
+authors.workspace = true
+description = "Exposes common CLI flags used for running Wasmtime"
+license = "Apache-2.0 WITH LLVM-exception"
+repository = "https://github.com/bytecodealliance/wasmtime"
+documentation = "https://docs.rs/wasmtime-cache/"
+edition.workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+clap = { workspace = true }
+file-per-thread-logger = "0.1.1"
+pretty_env_logger = "0.4.0"
+rayon = "1.5.0"
+wasmtime = { workspace = true }
+
+[features]
+default = [
+    "wasmtime/cache",
+    "wasmtime/cranelift",
+    "wasmtime/jitdump",
+    "wasmtime/vtune",
+    "wasmtime/parallel-compilation",
+]
+pooling-allocator = []
+component-model = []

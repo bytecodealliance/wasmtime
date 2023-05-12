@@ -1,0 +1,28 @@
+[package]
+name = "wasmtime-wasi"
+version.workspace = true
+authors.workspace = true
+description = "WASI implementation in Rust"
+license = "Apache-2.0 WITH LLVM-exception"
+categories = ["wasm"]
+keywords = ["webassembly", "wasm"]
+repository = "https://github.com/bytecodealliance/wasmtime"
+readme = "README.md"
+edition.workspace = true
+include = ["src/**/*", "README.md", "LICENSE", "build.rs"]
+build = "build.rs"
+
+[dependencies]
+libc = "0.2.60"
+wasi-common = { workspace = true }
+wasi-cap-std-sync = { workspace = true, optional = true }
+wasi-tokio = { workspace = true, optional = true }
+wiggle = { workspace = true }
+wasmtime = { workspace = true }
+anyhow = { workspace = true }
+
+[features]
+default = ["sync"]
+sync = ["wasi-cap-std-sync"]
+tokio = ["wasi-tokio", "wasmtime/async", "wiggle/wasmtime_async"]
+exit = []

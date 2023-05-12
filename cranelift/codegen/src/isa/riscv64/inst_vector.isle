@@ -1,0 +1,224 @@
+;; Represents the possible widths of an element when used in an operation.
+(type VecElementWidth (enum
+  (E8)
+  (E16)
+  (E32)
+  (E64)
+))
+
+;; Vector Register Group Multiplier (LMUL)
+;;
+;; The LMUL setting specifies how we should group registers together. LMUL can
+;; also be a fractional value, reducing the number of bits used in a single
+;; vector register. Fractional LMUL is used to increase the number of effective
+;; usable vector register groups when operating on mixed-width values.
+(type VecLmul (enum
+  (LmulF8)
+  (LmulF4)
+  (LmulF2)
+  (Lmul1)
+  (Lmul2)
+  (Lmul4)
+  (Lmul8)
+))
+
+;; Tail Mode
+;;
+;; The tail mode specifies how the tail elements of a vector register are handled.
+(type VecTailMode (enum
+  ;; Tail Agnostic means that the tail elements are left in an undefined state.
+  (Agnostic)
+  ;; Tail Undisturbed means that the tail elements are left in their original values.
+  (Undisturbed)
+))
+
+;; Mask Mode
+;;
+;; The mask mode specifies how the masked elements of a vector register are handled.
+(type VecMaskMode (enum
+  ;; Mask Agnostic means that the masked out elements are left in an undefined state.
+  (Agnostic)
+  ;; Mask Undisturbed means that the masked out elements are left in their original values.
+  (Undisturbed)
+))
+
+;; Application Vector Length (AVL)
+;;
+;; This setting specifies the number of elements that are going to be processed
+;; in a single instruction. Note: We may end up processing fewer elements than
+;; the AVL setting, if they don't fit in a single register.
+(type VecAvl (enum
+  ;; Static AVL emits a `vsetivli` that uses a constant value
+  (Static (size UImm5))
+  ;; TODO: Add a dynamic, register based AVL mode when we are able to properly test it
+))
+
+(type VType (primitive VType))
+(type VState (primitive VState))
+
+
+;; Vector Opcode Category
+;;
+;; These categories are used to determine the type of operands that are allowed in the
+;; instruction.
+(type VecOpCategory (enum
+  (OPIVV)
+  (OPFVV)
+  (OPMVV)
+  (OPIVI)
+  (OPIVX)
+  (OPFVF)
+  (OPMVX)
+  (OPCFG)
+))
+
+;; Vector Opcode Masking
+;;
+;; When masked, the instruction will only operate on the elements that are dictated by
+;; the mask register. Currently this is always fixed to v0.
+(type VecOpMasking (enum
+  (Enabled)
+  (Disabled)
+))
+
+;; Register to Register ALU Ops
+(type VecAluOpRRR (enum
+  (Vadd)
+  (Vsub)
+  (Vmul)
+  (Vmulh)
+  (Vmulhu)
+  (Vand)
+  (Vor)
+  (Vxor)
+))
+
+;; Register-Imm ALU Ops
+(type VecAluOpRRImm5 (enum
+  (Vadd)
+))
+
+
+
+;; Vector Addressing Mode
+(type VecAMode (enum
+  ;; Vector unit-stride operations access elements stored contiguously in memory
+  ;; starting from the base effective address.
+  (UnitStride
+    (base AMode))
+  ;; TODO: Constant Stride
+  ;; TODO: Indexed Operations
+))
+
+
+;; Builds a static VState matching a SIMD type.
+;; The VState is guaranteed to be static with AVL set to the number of lanes.
+;; Element size is set to the size of the type.
+;; LMUL is set to 1.
+;; Tail mode is set to agnostic.
+;; Mask mode is set to agnostic.
+(decl pure vstate_from_type (Type) VState)
+(extern constructor vstate_from_type vstate_from_type)
+(convert Type VState vstate_from_type)
+
+;; Extracts an element width from a SIMD type.
+(decl pure element_width_from_type (Type) VecElementWidth)
+(rule (element_width_from_type ty)
+  (if-let $I8 (lane_type ty))
+  (VecElementWidth.E8))
+(rule (element_width_from_type ty)
+  (if-let $I16 (lane_type ty))
+  (VecElementWidth.E16))
+(rule (element_width_from_type ty)
+  (if-let $I32 (lane_type ty))
+  (VecElementWidth.E32))
+(rule (element_width_from_type ty)
+  (if-let $I64 (lane_type ty))
+  (VecElementWidth.E64))
+
+(decl pure min_vec_reg_size () u64)
+(extern constructor min_vec_reg_size min_vec_reg_size)
+
+;; An extractor that matches any type that is known to fit in a single vector
+;; register.
+(decl ty_vec_fits_in_register (Type) Type)
+(extern extractor ty_vec_fits_in_register ty_vec_fits_in_register)
+
+;;;; Instruction Helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; As noted in the RISC-V Vector Extension Specification, rs2 is the first
+;; source register and rs1 is the second source register. This is the opposite
+;; of the usual RISC-V register order.
+;; See Section 10.1 of the RISC-V Vector Extension Specification.
+
+;; Helper for emitting `MInst.VecAluRRR` instructions.
+(decl vec_alu_rrr (VecAluOpRRR Reg Reg VState) Reg)
+(rule (vec_alu_rrr op vs2 vs1 vstate)
+      (let ((vd WritableReg (temp_writable_reg $I8X16))
+            (_ Unit (emit (MInst.VecAluRRR op vd vs2 vs1 vstate))))
+        vd))
+
+;; Helper for emitting `MInst.VecAluRRImm5` instructions.
+(decl vec_alu_rr_imm5 (VecAluOpRRImm5 Reg Imm5 VState) Reg)
+(rule (vec_alu_rr_imm5 op vs2 imm vstate)
+      (let ((vd WritableReg (temp_writable_reg $I8X16))
+            (_ Unit (emit (MInst.VecAluRRImm5 op vd vs2 imm vstate))))
+        vd))
+
+;; Helper for emitting `MInst.VecLoad` instructions.
+(decl vec_load (VecElementWidth VecAMode MemFlags VState) Reg)
+(rule (vec_load eew from flags vstate)
+      (let ((vd WritableReg (temp_writable_reg $I8X16))
+            (_ Unit (emit (MInst.VecLoad eew vd from flags vstate))))
+        vd))
+
+;; Helper for emitting `MInst.VecStore` instructions.
+(decl vec_store (VecElementWidth VecAMode Reg MemFlags VState) InstOutput)
+(rule (vec_store eew to from flags vstate)
+      (side_effect
+        (SideEffectNoResult.Inst (MInst.VecStore eew to from flags vstate))))
+
+;; Helper for emitting the `vadd.vv` instruction.
+(decl rv_vadd_vv (Reg Reg VState) Reg)
+(rule (rv_vadd_vv vs2 vs1 vstate)
+  (vec_alu_rrr (VecAluOpRRR.Vadd) vs2 vs1 vstate))
+
+;; Helper for emitting the `vadd.vi` instruction.
+(decl rv_vadd_vi (Reg Imm5 VState) Reg)
+(rule (rv_vadd_vi vs2 imm vstate)
+  (vec_alu_rr_imm5 (VecAluOpRRImm5.Vadd) vs2 imm vstate))
+
+;; Helper for emitting the `vsub.vv` instruction.
+(decl rv_vsub_vv (Reg Reg VState) Reg)
+(rule (rv_vsub_vv vs2 vs1 vstate)
+  (vec_alu_rrr (VecAluOpRRR.Vsub) vs2 vs1 vstate))
+
+;; Helper for emitting the `vmul.vv` instruction.
+(decl rv_vmul_vv (Reg Reg VState) Reg)
+(rule (rv_vmul_vv vs2 vs1 vstate)
+  (vec_alu_rrr (VecAluOpRRR.Vmul) vs2 vs1 vstate))
+
+;; Helper for emitting the `vmulh.vv` instruction.
+(decl rv_vmulh_vv (Reg Reg VState) Reg)
+(rule (rv_vmulh_vv vs2 vs1 vstate)
+  (vec_alu_rrr (VecAluOpRRR.Vmulh) vs2 vs1 vstate))
+
+;; Helper for emitting the `vmulhu.vv` instruction.
+(decl rv_vmulhu_vv (Reg Reg VState) Reg)
+(rule (rv_vmulhu_vv vs2 vs1 vstate)
+  (vec_alu_rrr (VecAluOpRRR.Vmulhu) vs2 vs1 vstate))
+
+;; Helper for emitting the `vand.vv` instruction.
+(decl rv_vand_vv (Reg Reg VState) Reg)
+(rule (rv_vand_vv vs2 vs1 vstate)
+  (vec_alu_rrr (VecAluOpRRR.Vand) vs2 vs1 vstate))
+
+;; Helper for emitting the `vor.vv` instruction.
+(decl rv_vor_vv (Reg Reg VState) Reg)
+(rule (rv_vor_vv vs2 vs1 vstate)
+  (vec_alu_rrr (VecAluOpRRR.Vor) vs2 vs1 vstate))
+
+;; Helper for emitting the `vxor.vv` instruction.
+(decl rv_vxor_vv (Reg Reg VState) Reg)
+(rule (rv_vxor_vv vs2 vs1 vstate)
+  (vec_alu_rrr (VecAluOpRRR.Vxor) vs2 vs1 vstate))

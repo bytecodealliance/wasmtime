@@ -1,0 +1,28 @@
+test interpret
+test run
+set opt_level=speed
+set enable_llvm_abi_extensions=true
+target x86_64
+target aarch64
+target s390x
+
+function %a(i128) -> i32 {
+block0(v0: i128):
+  v1 = iconst.i32 -1
+  v2, v3 = isplit v0
+  v4 = ushr v1, v3
+  return v4
+}
+
+; run: %a(871558149430564685057836279141) == 2147483647
+
+function %b(i128, i16) -> i16 {
+block0(v0: i128, v1: i16):
+    v2, v3 = isplit v0
+    v4 = rotr v1, v3
+    v5, v6 = isplit v0
+    v7 = rotr v4, v6
+    return v7
+}
+
+; run: %b(1234, 56) == 56

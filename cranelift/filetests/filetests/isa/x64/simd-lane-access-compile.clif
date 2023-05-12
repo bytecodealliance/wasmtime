@@ -1,0 +1,350 @@
+test compile precise-output
+set enable_simd
+target x86_64 has_sse3 has_ssse3 has_sse41
+
+;; shuffle
+
+function %shuffle_different_ssa_values() -> i8x16 {
+block0:
+    v0 = vconst.i8x16 0x00
+    v1 = vconst.i8x16 0x01
+    v2 = shuffle v0, v1, 0x11000000000000000000000000000000     ;; pick the second lane of v1, the rest use the first lane of v0
+    return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movdqu  const(3), %xmm0
+;   movdqu  const(2), %xmm2
+;   pshufb  %xmm0, const(0), %xmm0
+;   pshufb  %xmm2, const(1), %xmm2
+;   por     %xmm0, %xmm2, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movdqu 0x54(%rip), %xmm0
+;   movdqu 0x3c(%rip), %xmm2
+;   pshufb 0x13(%rip), %xmm0
+;   pshufb 0x1a(%rip), %xmm2
+;   por %xmm2, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb $0x80, -0x7f7f7f80(%rax)
+;   addb $0x80, -0x7f7f7f80(%rax)
+;   addb $0, 0x101(%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+
+function %shuffle_same_ssa_value() -> i8x16 {
+block0:
+    v1 = vconst.i8x16 0x01
+    v2 = shuffle v1, v1, 0x13000000000000000000000000000000     ;; pick the fourth lane of v1 and the rest from the first lane of v1
+    return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movdqu  const(1), %xmm0
+;   pshufb  %xmm0, const(0), %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movdqu 0x24(%rip), %xmm0
+;   pshufb 0xb(%rip), %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rbx)
+;   addl %eax, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+
+function %swizzle() -> i8x16 {
+block0:
+    v0 = vconst.i8x16 [0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15]
+    v1 = vconst.i8x16 [0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15]
+    v2 = swizzle v0, v1
+    return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movdqu  const(1), %xmm0
+;   movdqu  const(1), %xmm1
+;   paddusb %xmm1, const(0), %xmm1
+;   pshufb  %xmm0, %xmm1, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movdqu 0x34(%rip), %xmm0
+;   movdqu 0x2c(%rip), %xmm1
+;   paddusb 0x14(%rip), %xmm1
+;   pshufb %xmm1, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   jo 0xa2
+;   jo 0xa4
+;   jo 0xa6
+;   jo 0xa8
+;   jo 0xaa
+;   jo 0xac
+;   jo 0xae
+;   jo 0xb0
+;   addb %al, (%rcx)
+;   addb (%rbx), %al
+;   addb $5, %al
+
+function %splat_i8(i8) -> i8x16 {
+block0(v0: i8):
+    v1 = splat.i8x16 v0
+    return v1
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movd    %edi, %xmm0
+;   uninit  %xmm5
+;   pxor    %xmm5, %xmm5, %xmm5
+;   pshufb  %xmm0, %xmm5, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movd %edi, %xmm0
+;   pxor %xmm5, %xmm5
+;   pshufb %xmm5, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %splat_i16() -> i16x8 {
+block0:
+    v0 = iconst.i16 -1
+    v1 = splat.i16x8 v0
+    return v1
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movl    $-1, %ecx
+;   movd    %ecx, %xmm1
+;   pshuflw $0, %xmm1, %xmm3
+;   pshufd  $0, %xmm3, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movl $0xffffffff, %ecx
+;   movd %ecx, %xmm1
+;   pshuflw $0, %xmm1, %xmm3
+;   pshufd $0, %xmm3, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %splat_i32(i32) -> i32x4 {
+block0(v0: i32):
+    v1 = splat.i32x4 v0
+    return v1
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movd    %edi, %xmm2
+;   pshufd  $0, %xmm2, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movd %edi, %xmm2
+;   pshufd $0, %xmm2, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %splat_f64(f64) -> f64x2 {
+block0(v0: f64):
+    v1 = splat.f64x2 v0
+    return v1
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movddup %xmm0, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movddup %xmm0, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %load32_zero_coalesced(i64) -> i32x4 {
+block0(v0: i64):
+    v1 = load.i32 v0
+    v2 = scalar_to_vector.i32x4 v1
+    return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movss   0(%rdi), %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movss (%rdi), %xmm0 ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %load32_zero_int(i32) -> i32x4 {
+block0(v0: i32):
+    v1 = scalar_to_vector.i32x4 v0
+    return v1
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movd    %edi, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movd %edi, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %load32_zero_float(f32) -> f32x4 {
+block0(v0: f32):
+    v1 = scalar_to_vector.f32x4 v0
+    return v1
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+

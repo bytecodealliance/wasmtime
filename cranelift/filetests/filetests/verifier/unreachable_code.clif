@@ -1,0 +1,45 @@
+test verifier
+
+function %test() -> i32 {   ; Ok
+block0:
+    v0 = iconst.i32 0
+    v1 = iconst.i32 0
+    jump block2
+
+block2:
+    jump block4
+
+block4:
+    jump block2
+
+block3(v2: i32):
+    v4 = iadd.i32 v1, v2
+    jump block9(v4)
+
+block9(v7: i32):
+    v9 = iadd.i32 v2, v7
+    return v9
+
+}
+
+; Using a function argument in an unreachable block is ok.
+function %arg(i32) -> i32 {
+block0(v0: i32):
+    v1 = iadd_imm v0, 1
+    return v1
+
+block1:
+    v10 = iadd_imm v0, 10
+    return v10
+}
+
+; Using a block argument from an unreachable block is not ok.
+function %arg2(i32) -> i32 {
+block0(v0: i32):
+    v1 = iadd v0, v10   ; error: uses value arg from non-dominating
+    return v1
+
+block1(v10: i32):
+    v11 = iadd v0, v10
+    return v11
+}

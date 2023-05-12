@@ -1,0 +1,14 @@
+test interpret
+test run
+target aarch64
+target x86_64
+target s390x
+target riscv64
+
+function %a(i16 uext) -> f32 {
+block0(v0: i16):
+    v1 = fcvt_from_sint.f32 v0
+    return v1
+}
+
+; run: %a(-12800) == -0x1.900000p13

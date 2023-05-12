@@ -1,0 +1,14 @@
+interface red {
+  use self.green.{thing}
+
+  foo: func() -> thing
+}
+
+interface green {
+  type thing = s32
+}
+
+default world neptune {
+  import blue: self.red
+  import orange: self.green
+}

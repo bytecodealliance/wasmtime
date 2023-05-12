@@ -1,0 +1,84 @@
+# This file configures which paths automatically get which label on new pull
+# requests.
+#
+# It generally has the syntax:
+#
+#     <label 0>:
+#       - <glob-path 0>
+#       - ...
+#       - <glob-path n>
+#     ...
+#     <label n>:
+#       - <glob-path 0>
+#       - ...
+#       - <glob-path n>
+#
+# See https://github.com/actions/labeler for details.
+#
+# Note that we keep the labels in alphabetical order below.
+
+"cranelift":
+  - "cranelift/**"
+
+"cranelift:area:machinst":
+  - "cranelift/codegen/src/machinst/**"
+
+"cranelift:area:aarch64":
+  - "cranelift/codegen/src/isa/aarch64/**"
+
+"cranelift:area:x64":
+  - "cranelift/codegen/src/isa/x64/**"
+
+"cranelift:docs":
+  - "cranelift/docs/**"
+
+"cranelift:meta":
+  - "cranelift/codegen/meta/**"
+
+"cranelift:module":
+  - "cranelift/faerie/**"
+  - "cranelift/module/**"
+  - "cranelift/object/**"
+  - "cranelift/simplejit/**"
+
+"cranelift:wasm":
+  - "cranelift/wasm/**"
+  - "cranelift/wasmtests/**"
+
+"fuzzing":
+  - "crates/fuzzing/**"
+  - "fuzz/**"
+
+"isle":
+  - "cranelift/isle/**"
+  - "**.isle"
+  - "cranelift/codegen/src/isa/*/lower/isle.rs"
+  - "cranelift/codegen/src/isa/*/lower/isle/**"
+  - "cranelift/codegen/src/opts/*"
+
+"wasi":
+  - "crates/wasi/**"
+  - "crates/wasi-common/**"
+  - "crates/wiggle/**"
+
+"wasmtime:api":
+  - "crates/wasmtime/**"
+
+"wasmtime:c-api":
+  - "crates/c-api/**"
+
+"wasmtime:config":
+  - "crates/wasmtime/src/config.rs"
+  - "crates/wasmtime/src/config/**"
+
+"wasmtime:docs":
+  - "*.md"
+  - "docs/**"
+
+"wasmtime:ref-types":
+  - "crates/wasmtime/src/ref.rs"
+  - "crates/runtime/src/externref.rs"
+
+"winch":
+  - "winch/**"
+  - "crates/winch/**"

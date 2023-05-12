@@ -1,0 +1,56 @@
+#!/usr/bin/env node
+
+const child_process = require('child_process');
+const stdio = { stdio: 'inherit' };
+const fs = require('fs');
+
+function set_env(name, val) {
+  fs.appendFileSync(process.env['GITHUB_ENV'], `${name}=${val}\n`)
+}
+
+// On OSX all we need to do is configure our deployment target as old as
+// possible. For now 10.9 is the limit.
+if (process.platform == 'darwin') {
+  set_env("MACOSX_DEPLOYMENT_TARGET", "10.9");
+  return;
+}
+
+// On Windows we build against the static CRT to reduce dll dependencies
+if (process.platform == 'win32') {
+  set_env("RUSTFLAGS", "-Ctarget-feature=+crt-static");
+  return;
+}
+
+// ... and on Linux we do fancy things with containers. We'll spawn an old
+// CentOS container in the background with a super old glibc, and then we'll run
+// commands in there with the `$CENTOS` env var.
+
+if (process.env.CENTOS !== undefined) {
+  const args = ['exec', '-w', process.cwd(), '-i', 'build-container'];
+  for (const arg of process.argv.slice(2)) {
+    args.push(arg);
+  }
+  child_process.execFileSync('docker', args, stdio);
+  return;
+}
+
+const name = process.env.INPUT_NAME;
+
+child_process.execFileSync('docker', [
+  'build',
+  '--tag', 'build-image',
+  `${process.cwd()}/ci/docker/${name}`
+], stdio);
+
+child_process.execFileSync('docker', [
+  'run',
+  '--detach',
+  '--interactive',
+  '--name', 'build-container',
+  '-v', `${process.cwd()}:${process.cwd()}`,
+  '-v', `${child_process.execSync('rustc --print sysroot').toString().trim()}:/rust:ro`,
+  'build-image',
+], stdio);
+
+// Use ourselves to run future commands
+set_env("CENTOS", __filename);
