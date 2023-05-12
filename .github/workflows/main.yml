@@ -526,7 +526,7 @@ jobs:
   build-preview1-component-adapter:
     name: Build wasi-preview1-component-adapter
     needs: determine
-      # if: needs.determine.outputs.run-full
+    if: needs.determine.outputs.run-full
     runs-on: ubuntu-latest
     permissions:
       deployments: write
