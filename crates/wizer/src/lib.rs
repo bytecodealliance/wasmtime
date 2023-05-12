@@ -139,15 +139,16 @@ pub struct Wizer {
     /// snapshot.
     ///
     /// The format of this option is `name=file.{wasm,wat}`; e.g.,
-    /// `intrinsics=stubs.wat`.
+    /// `intrinsics=stubs.wat`. Multiple instances of the option may
+    /// appear.
     #[cfg_attr(feature = "structopt", structopt(long = "preload"))]
-    preload: Option<String>,
+    preload: Vec<String>,
 
     /// Like `preload` above, but with the module contents provided,
     /// rather than a filename. This is more useful for programmatic
     /// use-cases where the embedding tool may also embed a Wasm module.
     #[cfg_attr(feature = "structopt", structopt(skip))]
-    preload_bytes: Option<(String, Vec<u8>)>,
+    preload_bytes: Vec<(String, Vec<u8>)>,
 
     #[cfg_attr(feature = "structopt", structopt(skip))]
     make_linker: Option<Rc<dyn Fn(&wasmtime::Engine) -> anyhow::Result<Linker>>>,
@@ -323,8 +324,8 @@ impl Wizer {
             init_func: "wizer.initialize".into(),
             func_renames: vec![],
             allow_wasi: false,
-            preload: None,
-            preload_bytes: None,
+            preload: vec![],
+            preload_bytes: vec![],
             make_linker: None,
             inherit_stdio: None,
             inherit_env: None,
@@ -388,21 +389,16 @@ impl Wizer {
     /// intrinsics to be included, when these will be provided with
     /// different implementations when running or further processing the
     /// snapshot.
-    pub fn preload(
-        &mut self,
-        name_and_filename: Option<(&str, &str)>,
-    ) -> anyhow::Result<&mut Self> {
+    pub fn preload(&mut self, name: &str, filename: &str) -> anyhow::Result<&mut Self> {
         anyhow::ensure!(
             self.make_linker.is_none(),
             "Cannot use 'preload' with a custom linker"
         );
-        if let Some((name, _)) = name_and_filename {
-            anyhow::ensure!(
-                !name.contains("="),
-                "Module name cannot contain an `=` character"
-            );
-        }
-        self.preload = name_and_filename.map(|(name, filename)| format!("{}={}", name, filename));
+        anyhow::ensure!(
+            !name.contains("="),
+            "Module name cannot contain an `=` character"
+        );
+        self.preload.push(format!("{}={}", name, filename));
         Ok(self)
     }
 
@@ -422,17 +418,16 @@ impl Wizer {
     /// intrinsics to be included, when these will be provided with
     /// different implementations when running or further processing the
     /// snapshot.
-    ///
-    /// The argument is either `Some((module_name, bytes))` or `None`.
     pub fn preload_bytes(
         &mut self,
-        name_and_bytes: Option<(&str, Vec<u8>)>,
+        name: &str,
+        module_bytes: Vec<u8>,
     ) -> anyhow::Result<&mut Self> {
         anyhow::ensure!(
             self.make_linker.is_none(),
             "Cannot use 'preload_bytes' with a custom linker"
         );
-        self.preload_bytes = name_and_bytes.map(|(name, bytes)| (name.to_owned(), bytes));
+        self.preload_bytes.push((name.to_owned(), module_bytes));
         Ok(self)
     }
 
@@ -836,7 +831,7 @@ impl Wizer {
             })?;
         }
 
-        if let Some(preload) = &self.preload {
+        for preload in &self.preload {
             if let Some((name, value)) = preload.split_once('=') {
                 let content = std::fs::read(value).context("failed to read preload module")?;
                 self.do_preload(engine, &mut *store, &mut linker, &name[..], &content[..])?;
@@ -847,7 +842,7 @@ impl Wizer {
                 );
             }
         }
-        if let Some((name, bytes)) = &self.preload_bytes {
+        for (name, bytes) in &self.preload_bytes {
             self.do_preload(engine, &mut *store, &mut linker, &name[..], &bytes[..])?;
         }
 
