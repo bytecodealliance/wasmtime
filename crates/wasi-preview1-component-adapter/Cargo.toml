@@ -1,0 +1,58 @@
+[package]
+name = "wasi-preview1-component-adapter"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+
+[dependencies]
+wasi = { version = "0.11.0", default-features = false }
+wit-bindgen = { version = "0.4.0", default-features = false, features = ["macros"] }
+byte-array-literals = { workspace = true }
+
+[build-dependencies]
+wasm-encoder = "0.25"
+object = { version = "0.30.0", default-features = false, features = ["archive"] }
+
+[lib]
+crate-type = ["cdylib"]
+
+[profile.release]
+# Omit any unwinding support. This is currently the default for wasm, though
+# that could theoretically change in the future.
+panic = 'abort'
+opt-level = 's'
+strip = 'debuginfo'
+
+# Make dev look like a release build since this adapter module won't work with
+# a debug build that uses data segments and such.
+[profile.dev]
+panic = 'abort'
+incremental = false
+opt-level = 's'
+
+# Omit assertions, which include failure messages which require string
+# initializers.
+debug-assertions = false
+
+# Omit integer overflow checks, which include failure messages which require
+# string initializers.
+overflow-checks = false
+
+[features]
+default = ["reactor"]
+reactor = []
+command = []
+
+[workspace]
+members = [
+    "verify",
+    "byte-array-literals"
+]
+
+[workspace.package]
+version = "0.0.1"
+edition = "2021"
+authors = ["The Wasmtime Project Developers"]
+
+[workspace.dependencies]
+byte-array-literals = { path = "byte-array-literals" }

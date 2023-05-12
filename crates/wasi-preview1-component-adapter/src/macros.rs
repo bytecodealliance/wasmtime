@@ -14,7 +14,7 @@ macro_rules! eprint {
     ($arg:tt) => {{
         // We have to expand string literals into byte arrays to prevent them
         // from getting statically initialized.
-        let message = byte_array::str!($arg);
+        let message = byte_array_literals::str!($arg);
         $crate::macros::print(&message);
     }};
 }
@@ -25,7 +25,7 @@ macro_rules! eprintln {
     ($arg:tt) => {{
         // We have to expand string literals into byte arrays to prevent them
         // from getting statically initialized.
-        let message = byte_array::str_nl!($arg);
+        let message = byte_array_literals::str_nl!($arg);
         $crate::macros::print(&message);
     }};
 }

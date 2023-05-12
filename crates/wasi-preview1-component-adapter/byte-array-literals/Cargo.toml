@@ -1,0 +1,8 @@
+[package]
+name = "byte-array-literals"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+
+[lib]
+proc-macro = true
