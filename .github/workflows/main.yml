@@ -523,6 +523,46 @@ jobs:
       env:
         GH_TOKEN: ${{ github.token }}
 
+  build-preview1-component-adapter:
+    name: Build wasi-preview1-component-adapter
+    needs: determine
+    if: needs.determine.outputs.run-full
+    runs-on: ubuntu-latest
+    permissions:
+      deployments: write
+      contents: write
+    steps:
+    - uses: actions/checkout@v3
+    - run: rustup update stable && rustup default stable
+    - run: rustup target add wasm32-wasi wasm32-unknown-unknown
+
+    - name: Install wasm-tools
+      run: |
+        curl -L https://github.com/bytecodealliance/wasm-tools/releases/download/wasm-tools-1.0.27/wasm-tools-1.0.27-x86_64-linux.tar.gz | tar xfz -
+        echo `pwd`/wasm-tools-1.0.27-x86_64-linux >> $GITHUB_PATH
+
+    - run: ./ci/build-wasi-preview1-component-adapter.sh
+      env:
+        VERSION: ${{ github.sha }}
+
+    - uses: actions/upload-artifact@v3
+      with:
+        name: wasi_preview1_component_adapter.reactor.wasm
+        path: crates/wasi-preview1-component-adapter/target/wasm32-unknown-unknown/release/wasi_preview1_component_adapter.reactor.wasm
+
+    - uses: actions/upload-artifact@v3
+      with:
+        name: wasi_preview1_component_adapter.command.wasm
+        path: crates/wasi-preview1-component-adapter/target/wasm32-unknown-unknown/release/wasi_preview1_component_adapter.command.wasm
+
+
+    # common logic to cancel the entire run if this job fails
+    - run: gh run cancel ${{ github.run_id }}
+      if: failure() && github.event_name != 'pull_request'
+      env:
+        GH_TOKEN: ${{ github.token }}
+
+
   bench:
     needs: determine
     if: needs.determine.outputs.run-full
