@@ -73,7 +73,7 @@ pub fn run(name: &str) -> anyhow::Result<()> {
     }
 
     wasmtime_wasi::sync::add_to_linker(&mut linker, |cx: &mut Ctx| &mut cx.wasi)?;
-    wasmtime_wasi_http::add_to_linker(&mut linker, |cx: &mut Ctx| &mut cx.http)?;
+    wasmtime_wasi_http::add_to_linker(&mut linker, |cx: &mut Ctx| &mut cx.http, false)?;
 
     // Create our wasi context.
     let builder = WasiCtxBuilder::new().inherit_stdio().arg(name)?;

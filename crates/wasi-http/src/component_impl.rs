@@ -456,15 +456,44 @@ pub fn add_component_to_linker<T: Send>(
             Ok(ctx.new_fields(vec)?)
         },
     )?;
-    linker.func_wrap3_async(
-        "wasi:io/streams",
-        "read",
-        move |mut caller: Caller<'_, T>,
-              stream: u32,
-              len: u64,
-              ptr: u32|
-              -> Box<dyn std::future::Future<Output = anyhow::Result<()>> + Send> {
-            Box::new(async move {
+    if is_async {
+        linker.func_wrap3_async(
+            "wasi:io/streams",
+            "read",
+            move |mut caller: Caller<'_, T>,
+                  stream: u32,
+                  len: u64,
+                  ptr: u32|
+                  -> Box<dyn std::future::Future<Output = anyhow::Result<()>> + Send> {
+                Box::new(async move {
+                    let ctx = get_cx(caller.data_mut());
+                    let bytes_tuple = ctx.read(stream, len)??;
+                    let bytes = bytes_tuple.0;
+                    let done = match bytes_tuple.1 {
+                        true => 1,
+                        false => 0,
+                    };
+                    let body_len: u32 = bytes.len().try_into()?;
+                    let out_ptr = allocate_guest_pointer_async(&mut caller, body_len).await?;
+                    let result: [u32; 4] = [0, out_ptr, body_len, done];
+                    let raw = u32_array_to_u8(&result);
+
+                    let memory = memory_get(&mut caller)?;
+                    memory.write(caller.as_context_mut(), out_ptr as _, &bytes)?;
+                    memory.write(caller.as_context_mut(), ptr as _, &raw)?;
+                    Ok(())
+                })
+            },
+        )?;
+    } else {
+        linker.func_wrap(
+            "wasi:io/streams",
+            "read",
+            move |mut caller: Caller<'_, T>,
+                  stream: u32,
+                  len: u64,
+                  ptr: u32|
+                  -> anyhow::Result<()> {
                 let ctx = get_cx(caller.data_mut());
                 let bytes_tuple = ctx.read(stream, len)??;
                 let bytes = bytes_tuple.0;
@@ -473,7 +502,7 @@ pub fn add_component_to_linker<T: Send>(
                     false => 0,
                 };
                 let body_len: u32 = bytes.len().try_into()?;
-                let out_ptr = allocate_guest_pointer_async(&mut caller, body_len).await?;
+                let out_ptr = allocate_guest_pointer(&mut caller, body_len)?;
                 let result: [u32; 4] = [0, out_ptr, body_len, done];
                 let raw = u32_array_to_u8(&result);
 
@@ -481,9 +510,9 @@ pub fn add_component_to_linker<T: Send>(
                 memory.write(caller.as_context_mut(), out_ptr as _, &bytes)?;
                 memory.write(caller.as_context_mut(), ptr as _, &raw)?;
                 Ok(())
-            })
-        },
-    )?;
+            },
+        )?;
+    }
     linker.func_wrap(
         "wasi:io/streams",
         "write",
