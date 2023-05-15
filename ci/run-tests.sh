@@ -7,5 +7,4 @@ cargo test \
     --workspace \
     --exclude 'wasmtime-wasi-*' \
     --exclude wasi-crypto \
-    --exclude wasi-preview1-component-adapter \
     $@
