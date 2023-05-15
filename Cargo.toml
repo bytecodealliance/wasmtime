@@ -97,6 +97,8 @@ members = [
   "crates/cli-flags",
   "crates/environ/fuzz",
   "crates/jit-icache-coherence",
+  "crates/wasi-preview1-component-adapter",
+  "crates/wasi-preview1-component-adapter/verify",
   "crates/winch",
   "examples/fib-debug/wasm",
   "examples/wasi/wasm",
@@ -173,6 +175,9 @@ winch-codegen = { path = "winch/codegen", version = "=0.8.0" }
 winch-environ = { path = "winch/environ", version = "=0.8.0" }
 winch-filetests = { path = "winch/filetests" }
 winch-test-macros = { path = "winch/test-macros" }
+
+wasi-preview1-component-adapter = { path = "crates/wasi-preview1-component-adapter" }
+byte-array-literals = { path = "crates/wasi-preview1-component-adapter/byte-array-literals" }
 
 target-lexicon = { version = "0.12.3", default-features = false, features = ["std"] }
 anyhow = "1.0.22"
@@ -266,4 +271,20 @@ harness = false
 [[bench]]
 name = "wasi"
 harness = false
+
+[profile.release.package.wasi-preview1-component-adapter]
+opt-level = 's'
+strip = 'debuginfo'
+
+[profile.dev.package.wasi-preview1-component-adapter]
+# Make dev look like a release build since this adapter module won't work with
+# a debug build that uses data segments and such.
+incremental = false
+opt-level = 's'
+# Omit assertions, which include failure messages which require string
+# initializers.
+debug-assertions = false
+# Omit integer overflow checks, which include failure messages which require
+# string initializers.
+overflow-checks = false
 
