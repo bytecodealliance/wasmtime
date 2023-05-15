@@ -44,6 +44,7 @@ fn add_fn(store: impl AsContextMut) -> Func {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn array_to_wasm() {
     let mut c = Config::new();
     c.strategy(Strategy::Winch);
@@ -77,6 +78,7 @@ fn array_to_wasm() {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn native_to_wasm() {
     let mut c = Config::new();
     c.strategy(Strategy::Winch);
@@ -100,6 +102,7 @@ fn native_to_wasm() {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn wasm_to_native() {
     let mut c = Config::new();
     c.strategy(Strategy::Winch);

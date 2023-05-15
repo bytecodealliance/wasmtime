@@ -4431,6 +4431,7 @@ dependencies = [
  "smallvec",
  "target-lexicon",
  "wasmparser 0.104.0",
+ "wasmtime-environ",
 ]
 
 [[package]]
