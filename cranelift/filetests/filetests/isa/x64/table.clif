@@ -26,10 +26,11 @@ block0(v0: i32, v1: r64, v2: i64):
 ; block1:
 ;   movl    %edi, %ecx
 ;   movq    0(%rdx), %rax
-;   lea     0(%rax,%rcx,1), %rcx
+;   movq    %rax, %rdx
+;   addq    %rdx, %rcx, %rdx
 ;   cmpl    %r11d, %edi
-;   cmovnbq %rax, %rcx, %rcx
-;   movq    %rsi, 0(%rcx)
+;   cmovnbq %rax, %rdx, %rdx
+;   movq    %rsi, 0(%rdx)
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -43,17 +44,18 @@ block0(v0: i32, v1: r64, v2: i64):
 ; block1: ; offset 0x4
 ;   movl 8(%rdx), %r11d
 ;   cmpl %r11d, %edi
-;   jae 0x28
+;   jae 0x2b
 ; block2: ; offset 0x11
 ;   movl %edi, %ecx
 ;   movq (%rdx), %rax
-;   addq %rax, %rcx
+;   movq %rax, %rdx
+;   addq %rcx, %rdx
 ;   cmpl %r11d, %edi
-;   cmovaeq %rax, %rcx
-;   movq %rsi, (%rcx)
+;   cmovaeq %rax, %rdx
+;   movq %rsi, (%rdx)
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
-; block3: ; offset 0x28
+; block3: ; offset 0x2b
 ;   ud2 ; trap: table_oob
 
