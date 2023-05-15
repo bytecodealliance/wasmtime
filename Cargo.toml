@@ -176,8 +176,8 @@ winch-environ = { path = "winch/environ", version = "=0.8.0" }
 winch-filetests = { path = "winch/filetests" }
 winch-test-macros = { path = "winch/test-macros" }
 
-wasi-preview1-component-adapter = { path = "crates/wasi-preview1-component-adapter", version = "=10.0.0" }
-byte-array-literals = { path = "crates/wasi-preview1-component-adapter/byte-array-literals", version = "=10.0.0" }
+wasi-preview1-component-adapter = { path = "crates/wasi-preview1-component-adapter" }
+byte-array-literals = { path = "crates/wasi-preview1-component-adapter/byte-array-literals" }
 
 target-lexicon = { version = "0.12.3", default-features = false, features = ["std"] }
 anyhow = "1.0.22"
