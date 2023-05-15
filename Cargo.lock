@@ -4148,7 +4148,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-wasi-http"
-version = "0.0.1"
+version = "9.0.0"
 dependencies = [
  "anyhow",
  "bytes",
