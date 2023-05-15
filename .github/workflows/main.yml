@@ -548,7 +548,7 @@ jobs:
     - uses: actions/upload-artifact@v3
       with:
         name: bins-wasi-preview1-component-adapter
-        path: crates/wasi-preview1-component-adapter/target/wasm32-unknown-unknown/release/wasi_preview1_component_adapter.*.wasm
+        path: target/wasm32-unknown-unknown/release/wasi_preview1_component_adapter.*.wasm
 
 
     # common logic to cancel the entire run if this job fails
