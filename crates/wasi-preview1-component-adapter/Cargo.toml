@@ -15,6 +15,7 @@ wasm-encoder = "0.25"
 object = { version = "0.30.0", default-features = false, features = ["archive"] }
 
 [lib]
+test = false
 crate-type = ["cdylib"]
 
 [features]
