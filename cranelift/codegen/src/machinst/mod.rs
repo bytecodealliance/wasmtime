@@ -334,9 +334,6 @@ pub struct CompiledCodeBase<T: CompilePhase> {
     /// This info is generated only if the `machine_code_cfg_info`
     /// flag is set.
     pub bb_edges: Vec<(CodeOffset, CodeOffset)>,
-    /// Minimum alignment for the function, derived from the use of any
-    /// pc-relative loads.
-    pub alignment: u32,
 }
 
 impl CompiledCodeStencil {
@@ -351,7 +348,6 @@ impl CompiledCodeStencil {
             dynamic_stackslot_offsets: self.dynamic_stackslot_offsets,
             bb_starts: self.bb_starts,
             bb_edges: self.bb_edges,
-            alignment: self.alignment,
         }
     }
 }

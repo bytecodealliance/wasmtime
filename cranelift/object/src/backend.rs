@@ -316,7 +316,7 @@ impl Module for ObjectModule {
         let mut code: Vec<u8> = Vec::new();
 
         let res = ctx.compile_and_emit(self.isa(), &mut code, ctrl_plane)?;
-        let alignment = res.alignment as u64;
+        let alignment = res.buffer.alignment as u64;
 
         self.define_function_bytes(
             func_id,

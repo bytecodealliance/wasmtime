@@ -86,7 +86,7 @@ impl TargetIsa for S390xBackend {
         );
         let frame_size = emit_result.frame_size;
         let value_labels_ranges = emit_result.value_labels_ranges;
-        let buffer = emit_result.buffer.finish(ctrl_plane);
+        let buffer = emit_result.buffer;
         let sized_stackslot_offsets = emit_result.sized_stackslot_offsets;
         let dynamic_stackslot_offsets = emit_result.dynamic_stackslot_offsets;
 
@@ -103,7 +103,6 @@ impl TargetIsa for S390xBackend {
             dynamic_stackslot_offsets,
             bb_starts: emit_result.bb_offsets,
             bb_edges: emit_result.bb_edges,
-            alignment: emit_result.alignment,
         })
     }
 

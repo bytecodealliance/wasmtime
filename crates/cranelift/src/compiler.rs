@@ -1002,7 +1002,7 @@ impl FunctionCompiler<'_> {
             1
         };
 
-        let alignment = compiled_code.alignment.max(preferred_alignment);
+        let alignment = compiled_code.buffer.alignment.max(preferred_alignment);
         let env = CompiledFuncEnv {
             map: context.func.params.user_named_funcs().clone(),
         };

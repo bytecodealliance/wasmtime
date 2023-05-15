@@ -533,7 +533,7 @@ impl SyntheticAmode {
         }
     }
 
-    pub(crate) fn finalize(&self, state: &mut EmitState, buffer: &MachBuffer<Inst>) -> Amode {
+    pub(crate) fn finalize(&self, state: &mut EmitState, buffer: &mut MachBuffer<Inst>) -> Amode {
         match self {
             SyntheticAmode::Real(addr) => addr.clone(),
             SyntheticAmode::NominalSPOffset { simm32 } => {

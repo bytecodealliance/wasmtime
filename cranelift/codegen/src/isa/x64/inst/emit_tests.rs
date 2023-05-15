@@ -5632,6 +5632,7 @@ fn test_x64_emit() {
     // ========================================================
     // Actually run the tests!
     let ctrl_plane = &mut Default::default();
+    let constants = Default::default();
     let mut flag_builder = settings::builder();
     flag_builder.enable("is_pic").unwrap();
     let flags = settings::Flags::new(flag_builder);
@@ -5662,7 +5663,7 @@ fn test_x64_emit() {
         let label = buffer.get_label();
         buffer.bind_label(label, ctrl_plane);
 
-        let buffer = buffer.finish(ctrl_plane);
+        let buffer = buffer.finish(&constants, ctrl_plane);
         let actual_encoding = &buffer.stringify_code_bytes();
         assert_eq!(expected_encoding, actual_encoding, "{}", expected_printing);
     }

@@ -13364,8 +13364,9 @@ fn test_s390x_binemit() {
     isa_flag_builder.enable("arch13").unwrap();
     let isa_flags = s390x_settings::Flags::new(&flags, &isa_flag_builder);
     let ctrl_plane = &mut Default::default();
+    let constants = Default::default();
 
-    let emit_info = EmitInfo::new(isa_flags);
+    let emit_info = EmitInfo::new(flags.clone(), isa_flags);
     for (insn, expected_encoding, expected_printing) in insns {
         println!(
             "S390x: {:?}, {}, {}",
@@ -13390,7 +13391,7 @@ fn test_s390x_binemit() {
         let label1 = buffer.get_label();
         buffer.bind_label(label1, ctrl_plane);
 
-        let buffer = buffer.finish(ctrl_plane);
+        let buffer = buffer.finish(&constants, ctrl_plane);
         let actual_encoding = &buffer.stringify_code_bytes();
         assert_eq!(expected_encoding, actual_encoding);
     }

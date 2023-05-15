@@ -177,9 +177,9 @@ pub struct VCode<I: VCodeInst> {
 /// The result of `VCode::emit`. Contains all information computed
 /// during emission: actual machine code, optionally a disassembly,
 /// and optionally metadata about the code layout.
-pub struct EmitResult<I: VCodeInst> {
+pub struct EmitResult {
     /// The MachBuffer containing the machine code.
-    pub buffer: MachBuffer<I>,
+    pub buffer: MachBufferFinalized<Stencil>,
 
     /// Offset of each basic block, recorded during emission. Computed
     /// only if `debug_value_labels` is non-empty.
@@ -213,9 +213,6 @@ pub struct EmitResult<I: VCodeInst> {
 
     /// Stack frame size.
     pub frame_size: u32,
-
-    /// The alignment requirement for pc-relative loads.
-    pub alignment: u32,
 }
 
 /// A builder for a VCode function body.
@@ -752,7 +749,7 @@ impl<I: VCodeInst> VCode<I> {
         want_disasm: bool,
         want_metadata: bool,
         ctrl_plane: &mut ControlPlane,
-    ) -> EmitResult<I>
+    ) -> EmitResult
     where
         I: VCodeInst,
     {
@@ -763,10 +760,13 @@ impl<I: VCodeInst> VCode<I> {
         let mut buffer = MachBuffer::new();
         let mut bb_starts: Vec<Option<CodeOffset>> = vec![];
 
-        // The first M MachLabels are reserved for block indices, the next N MachLabels for
-        // constants.
+        // The first M MachLabels are reserved for block indices.
         buffer.reserve_labels_for_blocks(self.num_blocks());
-        buffer.reserve_labels_for_constants(&self.constants);
+
+        // Register all allocated constants with the `MachBuffer` to ensure that
+        // any references to the constants during instructions can be handled
+        // correctly.
+        buffer.register_constants(&self.constants);
 
         // Construct the final order we emit code in: cold blocks at the end.
         let mut final_order: SmallVec<[BlockIndex; 16]> = smallvec![];
@@ -1058,18 +1058,6 @@ impl<I: VCodeInst> VCode<I> {
         // emission state is not needed anymore, move control plane back out
         *ctrl_plane = state.take_ctrl_plane();
 
-        // Emit the constants used by the function, and additionally collect
-        // this function's alignment at the same time. The alignment start at
-        // the ISA-defined minimum, and can possibly get increased if necessary
-        // for constants.
-        let mut function_alignment = I::function_alignment().minimum;
-        for (constant, data) in self.constants.iter() {
-            function_alignment = data.alignment().max(function_alignment);
-
-            let label = buffer.get_label_for_constant(constant);
-            buffer.defer_constant(label, data.alignment(), data.as_slice(), u32::max_value());
-        }
-
         let func_body_len = buffer.cur_offset();
 
         // Create `bb_edges` and final (filtered) `bb_starts`.
@@ -1098,7 +1086,7 @@ impl<I: VCodeInst> VCode<I> {
         let frame_size = self.abi.frame_size();
 
         EmitResult {
-            buffer,
+            buffer: buffer.finish(&self.constants, ctrl_plane),
             bb_offsets,
             bb_edges,
             inst_offsets,
@@ -1108,7 +1096,6 @@ impl<I: VCodeInst> VCode<I> {
             dynamic_stackslot_offsets: self.abi.dynamic_stackslot_offsets().clone(),
             value_labels_ranges,
             frame_size,
-            alignment: function_alignment,
         }
     }
 
@@ -1517,6 +1504,11 @@ impl VCodeConstants {
     /// structure.
     pub fn iter(&self) -> impl Iterator<Item = (VCodeConstant, &VCodeConstantData)> {
         self.constants.iter()
+    }
+
+    /// Returns the data associated with the specified constant.
+    pub fn get(&self, c: VCodeConstant) -> &VCodeConstantData {
+        &self.constants[c]
     }
 }
 
