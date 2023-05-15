@@ -6,6 +6,7 @@ use crate::isa::s390x::abi::S390xMachineDeps;
 use crate::isa::s390x::inst::*;
 use crate::isa::s390x::settings as s390x_settings;
 use crate::machinst::{Reg, RegClass};
+use crate::settings;
 use crate::trace;
 use core::convert::TryFrom;
 use cranelift_control::ControlPlane;
@@ -1398,11 +1399,21 @@ impl EmitState {
 /// Constant state used during function compilation.
 pub struct EmitInfo {
     isa_flags: s390x_settings::Flags,
+    shared_flags: settings::Flags,
 }
 
 impl EmitInfo {
-    pub(crate) fn new(isa_flags: s390x_settings::Flags) -> Self {
-        Self { isa_flags }
+    pub(crate) fn new(shared_flags: settings::Flags, isa_flags: s390x_settings::Flags) -> Self {
+        Self {
+            shared_flags,
+            isa_flags,
+        }
+    }
+}
+
+impl MachInstEmitInfo for EmitInfo {
+    fn settings(&self) -> &settings::Flags {
+        &self.shared_flags
     }
 }
 

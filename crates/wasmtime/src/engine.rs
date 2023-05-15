@@ -420,6 +420,7 @@ impl Engine {
             | "regalloc_checker"
             | "regalloc_verbose_logs"
             | "is_pic"
+            | "bb_padding_log2"
             | "machine_code_cfg_info"
             | "tls_model" // wasmtime doesn't use tls right now
             | "opt_level" // opt level doesn't change semantics

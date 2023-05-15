@@ -827,6 +827,10 @@ impl<I: VCodeInst> VCode<I> {
         }
 
         let is_forward_edge_cfi_enabled = self.abi.is_forward_edge_cfi_enabled();
+        let bb_padding = match self.emit_info.settings().bb_padding_log2() {
+            0 => Vec::new(),
+            n => vec![0; 1 << n],
+        };
 
         for (block_order_idx, &block) in final_order.iter().enumerate() {
             trace!("emitting block {:?}", block);
@@ -1040,6 +1044,14 @@ impl<I: VCodeInst> VCode<I> {
                 if buffer.island_needed(worst_case_next_bb) {
                     buffer.emit_island(worst_case_next_bb, ctrl_plane);
                 }
+            }
+
+            if !bb_padding.is_empty() {
+                let size = bb_padding.len() as u32;
+                if buffer.island_needed(size) {
+                    buffer.emit_island(size, ctrl_plane);
+                }
+                buffer.put_data(&bb_padding);
             }
         }
 

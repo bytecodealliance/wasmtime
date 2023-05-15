@@ -325,6 +325,22 @@ pub(crate) fn define() -> SettingGroup {
         false,
     );
 
+    settings.add_num(
+        "bb_padding_log2",
+        "The log2 of the size to insert dummy padding between basic blocks",
+        r#"
+            This is a debugging option for stressing various cases during code
+            generation without requiring large functions. This will insert
+            0-byte padding between basic blocks of the specified size.
+
+            The default for this is 0 because this is only intended for testing
+            and development. Note that a value of 0 is intepreted as "insert no
+            padding" and there is no way to specify that one byte of padding
+            should be inserted.
+        "#,
+        0,
+    );
+
     // When adding new settings please check if they can also be added
     // in cranelift/fuzzgen/src/lib.rs for fuzzing.
     settings.build()

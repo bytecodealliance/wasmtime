@@ -7,7 +7,7 @@ use crate::binemit::{Reloc, StackMap};
 use crate::ir::{types::*, RelSourceLoc};
 use crate::ir::{LibCall, MemFlags, TrapCode};
 use crate::isa::aarch64::inst::*;
-use crate::machinst::{ty_bits, Reg, RegClass, Writable};
+use crate::machinst::{ty_bits, MachInstEmitInfo, Reg, RegClass, Writable};
 use crate::trace;
 use core::convert::TryFrom;
 
@@ -693,6 +693,12 @@ impl EmitInfo {
     /// Create a constant state for emission of instructions.
     pub fn new(flags: settings::Flags) -> Self {
         Self(flags)
+    }
+}
+
+impl MachInstEmitInfo for EmitInfo {
+    fn settings(&self) -> &settings::Flags {
+        &self.0
     }
 }
 

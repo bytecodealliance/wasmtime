@@ -2623,6 +2623,12 @@ impl EmitInfo {
     }
 }
 
+impl MachInstEmitInfo for EmitInfo {
+    fn settings(&self) -> &settings::Flags {
+        &self.flags
+    }
+}
+
 impl MachInstEmit for Inst {
     type State = EmitState;
     type Info = EmitInfo;
