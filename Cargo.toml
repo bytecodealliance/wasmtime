@@ -167,7 +167,7 @@ cranelift-bforest = { path = "cranelift/bforest", version = "0.97.0" }
 cranelift-control = { path = "cranelift/control", version = "0.97.0" }
 cranelift = { path = "cranelift/umbrella", version = "0.97.0" }
 
-wasmtime-wasi-http = { path = "crates/wasi-http", version = "=0.0.2" }
+wasmtime-wasi-http = { path = "crates/wasi-http", version = "=10.0.0" }
 
 winch-codegen = { path = "winch/codegen", version = "=0.8.0" }
 winch-environ = { path = "winch/environ", version = "=0.8.0" }
