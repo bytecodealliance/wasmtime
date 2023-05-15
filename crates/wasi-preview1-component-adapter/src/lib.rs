@@ -14,9 +14,6 @@ use core::slice;
 use poll::Pollable;
 use wasi::*;
 
-#[cfg(any(not(target_arch = "wasm32"), not(target_os = "unknown")))]
-compile_error!("This crate should only be built for wasm32-unknown-unknown");
-
 #[cfg(all(feature = "command", feature = "reactor"))]
 compile_error!("only one of the `command` and `reactor` features may be selected at a time");
 
@@ -2192,7 +2189,7 @@ const fn bump_arena_size() -> usize {
 // Statically assert that the `State` structure is the size of a wasm page. This
 // mostly guarantees that it's not larger than one page which is relied upon
 // below.
-// If you see a type error here, make sure you are targeting wasm32-unknown-unknown!
+#[cfg(target_arch = "wasm32")]
 const _: () = {
     let _size_assert: [(); PAGE_SIZE] = [(); size_of::<RefCell<State>>()];
 };
