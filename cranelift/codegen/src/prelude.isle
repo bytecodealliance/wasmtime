@@ -505,10 +505,6 @@
 (decl pure offset32_to_u32 (Offset32) u32)
 (extern constructor offset32_to_u32 offset32_to_u32)
 
-;; Convert a number to an `Offset32`
-(decl pure u32_to_offset32 (u32) Offset32)
-(extern constructor u32_to_offset32 u32_to_offset32)
-
 ;; This is a direct import of `IntCC::unsigned`.
 ;; Get the corresponding IntCC with the signed component removed.
 ;; For conditions without a signed component, this is a no-op.
@@ -561,4 +557,3 @@
 ;;;; Automatic conversions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (convert Offset32 u32 offset32_to_u32)
-(convert u32 Offset32 u32_to_offset32)

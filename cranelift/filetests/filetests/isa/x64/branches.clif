@@ -924,7 +924,8 @@ block5(v5: i32):
 ;   movl    $4, %esi
 ;   jmp     label7
 ; block7:
-;   lea     0(%rdi,%rsi,1), %eax
+;   movq    %rdi, %rax
+;   addl    %eax, %esi, %eax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -964,7 +965,8 @@ block5(v5: i32):
 ; block6: ; offset 0x58
 ;   movl $4, %esi
 ; block7: ; offset 0x5d
-;   leal (%rdi, %rsi), %eax
+;   movq %rdi, %rax
+;   addl %esi, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
