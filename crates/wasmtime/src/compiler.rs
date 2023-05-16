@@ -41,7 +41,7 @@ type CompileInput<'a> =
 /// Two `u32`s to align with `cranelift_codegen::ir::UserExternalName`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 struct CompileKey {
-    // [ kind:i3 module:i129 ]
+    // [ kind:i3 module:i29 ]
     namespace: u32,
     index: u32,
 }
@@ -186,7 +186,7 @@ impl<'a> CompileInputs<'a> {
 
         Self::collect_inputs_in_translations(
             types,
-            std::iter::once((module_index, translation, functions)),
+            [(module_index, translation, functions)],
             &mut inputs,
         );
 
@@ -514,8 +514,13 @@ impl FunctionIndices {
             },
         )?;
 
-        // If requested, generate and add dwarf information.
-        if tunables.generate_native_debuginfo {
+        // If requested, generate and add DWARF information.
+        if tunables.generate_native_debuginfo &&
+            // We can only add DWARF once. Supporting DWARF for components of
+            // multiple Wasm modules will require merging the DWARF sections
+            // together.
+            translations.len() == 1
+        {
             for (module, translation) in &translations {
                 let funcs: PrimaryMap<_, _> = self
                     .indices
@@ -618,7 +623,7 @@ impl FunctionIndices {
 
                 let wasm_to_native_trampolines: Vec<(SignatureIndex, FunctionLoc)> = self
                     .indices
-                    .get(&CompileKey::WASM_TO_NATIVE_TRAMPOLINE_KIND)
+                    .remove(&CompileKey::WASM_TO_NATIVE_TRAMPOLINE_KIND)
                     .into_iter()
                     .flat_map(|x| x)
                     .map(|(key, i)| {
@@ -657,6 +662,11 @@ impl FunctionIndices {
                 .map(|(_id, x)| x.unwrap_all_call_func().map(|i| symbol_ids_and_locs[i].1))
                 .collect();
         }
+
+        debug_assert!(
+            self.indices.is_empty(),
+            "Should have processed all compile outputs"
+        );
 
         Ok((obj, artifacts))
     }
