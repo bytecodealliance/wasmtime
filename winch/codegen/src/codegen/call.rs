@@ -147,8 +147,10 @@ impl<'a> FnCall<'a> {
         masm: &mut M,
         context: &mut CodeGenContext,
         callee: FuncIndex,
+        alignment: u32,
+        addend: u32,
     ) {
-        let reserved_stack = masm.call(16, 16, self.arg_stack_space, |masm| {
+        let reserved_stack = masm.call(alignment, addend, self.arg_stack_space, |masm| {
             self.assign_args(context, masm, <A as ABI>::scratch_reg());
             CalleeKind::Direct(callee.as_u32())
         });
@@ -161,8 +163,10 @@ impl<'a> FnCall<'a> {
         masm: &mut M,
         context: &mut CodeGenContext,
         addr: M::Address,
+        alignment: u32,
+        addend: u32,
     ) {
-        let reserved_stack = masm.call(16, 16, self.arg_stack_space, |masm| {
+        let reserved_stack = masm.call(alignment, addend, self.arg_stack_space, |masm| {
             let scratch = <A as ABI>::scratch_reg();
             self.assign_args(context, masm, scratch);
             masm.load(addr, scratch, OperandSize::S64);

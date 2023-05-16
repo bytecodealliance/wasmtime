@@ -172,11 +172,24 @@ where
         };
 
         let fncall = FnCall::new::<A, M>(&sig, &mut self.context, self.masm);
-
+        let alignment = self.abi.call_stack_align();
+        let addend = self.abi.arg_base_offset();
         if let Some(addr) = callee_addr {
-            fncall.indirect::<M, A>(self.masm, &mut self.context, addr);
+            fncall.indirect::<M, A>(
+                self.masm,
+                &mut self.context,
+                addr,
+                alignment.into(),
+                addend.into(),
+            );
         } else {
-            fncall.direct::<M, A>(self.masm, &mut self.context, index);
+            fncall.direct::<M, A>(
+                self.masm,
+                &mut self.context,
+                index,
+                alignment.into(),
+                addend.into(),
+            );
         }
     }
 
