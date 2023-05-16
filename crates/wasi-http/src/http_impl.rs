@@ -82,14 +82,11 @@ impl WasiHttp {
             crate::types::Method::Other(s) => bail!("unknown method {}", s),
         };
 
-        let scheme = format!(
-            "{}://",
-            match request.scheme.as_ref().unwrap_or(&Scheme::Https) {
-                Scheme::Http => "http://",
-                Scheme::Https => "https://",
-                Scheme::Other(s) => bail!("unsupported scheme {}", s),
-            }
-        );
+        let scheme = match request.scheme.as_ref().unwrap_or(&Scheme::Https) {
+            Scheme::Http => "http://",
+            Scheme::Https => "https://",
+            Scheme::Other(s) => bail!("unsupported scheme {}", s),
+        };
 
         // Largely adapted from https://hyper.rs/guides/1/client/basic/
         let authority = match request.authority.find(":") {
