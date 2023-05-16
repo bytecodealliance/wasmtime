@@ -1,6 +1,6 @@
-use crate::filesystem::{Dir, File, TableFsExt};
-use crate::stream::TableStreamExt;
-use crate::{wasi, DirPerms, FilePerms, Table, TableError, WasiView};
+use crate::preview2::filesystem::{Dir, File, TableFsExt};
+use crate::preview2::stream::TableStreamExt;
+use crate::preview2::{wasi, DirPerms, FilePerms, Table, TableError, WasiView};
 
 use wasi::filesystem::ErrorCode;
 
@@ -197,7 +197,7 @@ impl<T: WasiView> wasi::filesystem::Host for T {
         }
 
         let mut buffer = vec![0; len.try_into().unwrap_or(usize::MAX)];
-        let (bytes_read, end) = crate::filesystem::read_result(
+        let (bytes_read, end) = crate::preview2::filesystem::read_result(
             f.file
                 .read_vectored_at(&mut [IoSliceMut::new(&mut buffer)], offset),
         )?;
@@ -711,7 +711,7 @@ impl<T: WasiView> wasi::filesystem::Host for T {
         let clone = std::sync::Arc::clone(&f.file);
 
         // Create a stream view for it.
-        let reader = crate::filesystem::FileInputStream::new(clone, offset);
+        let reader = crate::preview2::filesystem::FileInputStream::new(clone, offset);
 
         // Insert the stream view into the table. Trap if the table is full.
         let index = self.table_mut().push_input_stream(Box::new(reader))?;
@@ -731,7 +731,7 @@ impl<T: WasiView> wasi::filesystem::Host for T {
         let clone = std::sync::Arc::clone(&f.file);
 
         // Create a stream view for it.
-        let writer = crate::filesystem::FileOutputStream::new(clone, offset);
+        let writer = crate::preview2::filesystem::FileOutputStream::new(clone, offset);
 
         // Insert the stream view into the table. Trap if the table is full.
         let index = self.table_mut().push_output_stream(Box::new(writer))?;
@@ -750,7 +750,7 @@ impl<T: WasiView> wasi::filesystem::Host for T {
         let clone = std::sync::Arc::clone(&f.file);
 
         // Create a stream view for it.
-        let appender = crate::filesystem::FileAppendStream::new(clone);
+        let appender = crate::preview2::filesystem::FileAppendStream::new(clone);
 
         // Insert the stream view into the table. Trap if the table is full.
         let index = self.table_mut().push_output_stream(Box::new(appender))?;

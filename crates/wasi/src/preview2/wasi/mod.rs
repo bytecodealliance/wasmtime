@@ -1,8 +1,7 @@
 pub mod command;
-pub mod proxy;
 
 wasmtime::component::bindgen!({
-    path: "../wit",
+    path: "wit",
     interfaces: "
       import wall-clock: clocks.wall-clock
       import monotonic-clock: clocks.monotonic-clock
@@ -14,8 +13,6 @@ wasmtime::component::bindgen!({
       import environment: wasi-cli-base.environment
       import preopens: wasi-cli-base.preopens
       import exit: wasi-cli-base.exit
-      import console: logging.handler
-      import default-outgoing-HTTP: http.outgoing-handler
     ",
     tracing: true,
     async: true,

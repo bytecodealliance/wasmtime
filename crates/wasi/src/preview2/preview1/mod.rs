@@ -1,7 +1,7 @@
 // Temporary for scaffolding this module out:
 #![allow(unused_variables)]
 
-use crate::wasi;
+use crate::preview2::wasi;
 
 use core::borrow::Borrow;
 

@@ -1,4 +1,4 @@
-use crate::{InputStream, OutputStream, Table, TableError};
+use crate::preview2::{InputStream, OutputStream, Table, TableError};
 use std::any::Any;
 use std::sync::Arc;
 

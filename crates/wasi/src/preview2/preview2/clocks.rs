@@ -1,13 +1,13 @@
 #![allow(unused_variables)]
 
-use crate::preview2::poll::PollableEntry;
-use crate::wasi::{
+use crate::preview2::preview2::poll::PollableEntry;
+use crate::preview2::wasi::{
     monotonic_clock::{self, Instant},
     poll::Pollable,
     timezone::{self, Timezone, TimezoneDisplay},
     wall_clock::{self, Datetime},
 };
-use crate::WasiView;
+use crate::preview2::WasiView;
 use cap_std::time::SystemTime;
 
 impl TryFrom<SystemTime> for Datetime {

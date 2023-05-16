@@ -1,4 +1,4 @@
-use crate::sched::{
+use crate::preview2::sched::{
     subscription::{RwEventFlags, RwStream},
     Poll, WasiSched,
 };

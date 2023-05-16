@@ -1,5 +1,4 @@
-use crate::wasi;
-use crate::WasiView;
+use crate::preview2::{wasi, WasiView};
 
 #[async_trait::async_trait]
 impl<T: WasiView> wasi::environment::Host for T {

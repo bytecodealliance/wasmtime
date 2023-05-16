@@ -4,7 +4,7 @@ use std::convert::TryInto;
 use std::io::{self, Read, Write};
 use system_interface::io::ReadReady;
 
-use crate::{InputStream, OutputStream};
+use crate::preview2::{InputStream, OutputStream};
 #[cfg(unix)]
 use cap_std::io_lifetimes::{AsFd, BorrowedFd};
 #[cfg(windows)]

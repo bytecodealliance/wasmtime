@@ -3,7 +3,7 @@ mod ctx;
 mod error;
 pub(crate) mod filesystem;
 pub mod pipe;
-#[cfg(feature = "preview1")]
+#[cfg(feature = "preview1-on-preview2")]
 pub mod preview1;
 pub mod preview2;
 pub mod random;

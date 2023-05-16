@@ -1,4 +1,4 @@
-use crate::TableError;
+use crate::preview2::{Table, TableError};
 use anyhow::Error;
 use std::any::Any;
 
@@ -164,11 +164,8 @@ pub trait TableStreamExt {
     fn get_output_stream(&self, fd: u32) -> Result<&dyn OutputStream, TableError>;
     fn get_output_stream_mut(&mut self, fd: u32) -> Result<&mut Box<dyn OutputStream>, TableError>;
 }
-impl TableStreamExt for crate::Table {
-    fn push_input_stream(
-        &mut self,
-        istream: Box<dyn crate::InputStream>,
-    ) -> Result<u32, TableError> {
+impl TableStreamExt for Table {
+    fn push_input_stream(&mut self, istream: Box<dyn InputStream>) -> Result<u32, TableError> {
         self.push(Box::new(istream))
     }
     fn get_input_stream(&self, fd: u32) -> Result<&dyn InputStream, TableError> {
@@ -178,10 +175,7 @@ impl TableStreamExt for crate::Table {
         self.get_mut::<Box<dyn InputStream>>(fd)
     }
 
-    fn push_output_stream(
-        &mut self,
-        ostream: Box<dyn crate::OutputStream>,
-    ) -> Result<u32, TableError> {
+    fn push_output_stream(&mut self, ostream: Box<dyn OutputStream>) -> Result<u32, TableError> {
         self.push(Box::new(ostream))
     }
     fn get_output_stream(&self, fd: u32) -> Result<&dyn OutputStream, TableError> {
@@ -195,10 +189,11 @@ impl TableStreamExt for crate::Table {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::preview2::pipe::{ReadPipe, WritePipe};
     #[test]
     fn input_stream_in_table() {
-        let empty_pipe = crate::pipe::ReadPipe::new(std::io::empty());
-        let mut table = crate::Table::new();
+        let empty_pipe = ReadPipe::new(std::io::empty());
+        let mut table = Table::new();
         let ix = table.push_input_stream(Box::new(empty_pipe)).unwrap();
         let _ = table.get_input_stream(ix).unwrap();
         let _ = table.get_input_stream_mut(ix).unwrap();
@@ -206,8 +201,8 @@ mod test {
 
     #[test]
     fn output_stream_in_table() {
-        let dev_null = crate::pipe::WritePipe::new(std::io::sink());
-        let mut table = crate::Table::new();
+        let dev_null = WritePipe::new(std::io::sink());
+        let mut table = Table::new();
         let ix = table.push_output_stream(Box::new(dev_null)).unwrap();
         let _ = table.get_output_stream(ix).unwrap();
         let _ = table.get_output_stream_mut(ix).unwrap();

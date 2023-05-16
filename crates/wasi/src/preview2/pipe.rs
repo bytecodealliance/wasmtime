@@ -7,7 +7,7 @@
 //! Some convenience constructors are included for common backing types like `Vec<u8>` and `String`,
 //! but the virtual pipes can be instantiated with any `Read` or `Write` type.
 //!
-use crate::stream::{InputStream, OutputStream};
+use crate::preview2::stream::{InputStream, OutputStream};
 use anyhow::Error;
 use std::any::Any;
 use std::convert::TryInto;

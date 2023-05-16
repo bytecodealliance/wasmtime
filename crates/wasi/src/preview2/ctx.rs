@@ -1,8 +1,12 @@
-use crate::clocks::WasiClocks;
-use crate::filesystem::{Dir, TableFsExt};
-use crate::sched::WasiSched;
-use crate::stream::{InputStream, OutputStream, TableStreamExt};
-use crate::{DirPerms, FilePerms, Table};
+use crate::preview2::{
+    clocks::{self, WasiClocks},
+    filesystem::{Dir, TableFsExt},
+    pipe, random,
+    sched::{self, WasiSched},
+    stdio,
+    stream::{InputStream, OutputStream, TableStreamExt},
+    DirPerms, FilePerms, Table,
+};
 use cap_rand::RngCore;
 
 #[derive(Default)]
@@ -23,12 +27,12 @@ pub struct WasiCtxBuilder {
 impl WasiCtxBuilder {
     pub fn new() -> Self {
         Self::default()
-            .set_sched(crate::sched::sync::SyncSched)
-            .set_clocks(crate::clocks::host::clocks_ctx())
-            .set_random(crate::random::thread_rng())
-            .set_stdin(crate::pipe::ReadPipe::new(std::io::empty()))
-            .set_stdout(crate::pipe::WritePipe::new(std::io::sink()))
-            .set_stderr(crate::pipe::WritePipe::new(std::io::sink()))
+            .set_sched(sched::sync::SyncSched)
+            .set_clocks(clocks::host::clocks_ctx())
+            .set_random(random::thread_rng())
+            .set_stdin(pipe::ReadPipe::new(std::io::empty()))
+            .set_stdout(pipe::WritePipe::new(std::io::sink()))
+            .set_stderr(pipe::WritePipe::new(std::io::sink()))
     }
 
     pub fn set_stdin(mut self, stdin: impl InputStream + 'static) -> Self {
@@ -47,9 +51,9 @@ impl WasiCtxBuilder {
     }
 
     pub fn inherit_stdio(self) -> Self {
-        self.set_stdin(crate::stdio::stdin())
-            .set_stdout(crate::stdio::stdout())
-            .set_stderr(crate::stdio::stderr())
+        self.set_stdin(stdio::stdin())
+            .set_stdout(stdio::stdout())
+            .set_stderr(stdio::stderr())
     }
 
     pub fn set_env(mut self, env: &[(impl AsRef<str>, impl AsRef<str>)]) -> Self {

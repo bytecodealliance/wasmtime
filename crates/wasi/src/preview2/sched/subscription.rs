@@ -1,5 +1,7 @@
-use crate::clocks::WasiMonotonicClock;
-use crate::stream::{InputStream, OutputStream};
+use crate::preview2::{
+    clocks::WasiMonotonicClock,
+    stream::{InputStream, OutputStream},
+};
 use anyhow::Error;
 use bitflags::bitflags;
 

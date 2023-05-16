@@ -1,4 +1,4 @@
-use crate::{
+use crate::preview2::{
     stream::TableStreamExt,
     wasi,
     wasi::monotonic_clock::Instant,
@@ -36,7 +36,7 @@ impl<T: WasiView> wasi::poll::Host for T {
     }
 
     async fn poll_oneoff(&mut self, futures: Vec<Pollable>) -> anyhow::Result<Vec<u8>> {
-        use crate::sched::{Poll, Userdata};
+        use crate::preview2::sched::{Poll, Userdata};
 
         // Convert `futures` into `Poll` subscriptions.
         let mut poll = Poll::new();
@@ -46,12 +46,12 @@ impl<T: WasiView> wasi::poll::Host for T {
 
             match *self.table().get(future)? {
                 PollableEntry::Read(stream) => {
-                    let wasi_stream: &dyn crate::InputStream =
+                    let wasi_stream: &dyn crate::preview2::InputStream =
                         self.table().get_input_stream(stream)?;
                     poll.subscribe_read(wasi_stream, userdata);
                 }
                 PollableEntry::Write(stream) => {
-                    let wasi_stream: &dyn crate::OutputStream =
+                    let wasi_stream: &dyn crate::preview2::OutputStream =
                         self.table().get_output_stream(stream)?;
                     poll.subscribe_write(wasi_stream, userdata);
                 }

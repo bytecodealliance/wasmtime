@@ -1,7 +1,6 @@
 use cap_rand::{distributions::Standard, Rng};
 
-use crate::wasi;
-use crate::WasiView;
+use crate::preview2::{wasi, WasiView};
 
 #[async_trait::async_trait]
 impl<T: WasiView> wasi::random::Host for T {

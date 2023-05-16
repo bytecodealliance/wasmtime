@@ -1,10 +1,7 @@
 mod clocks;
-mod default_outgoing_http;
 mod env;
 mod exit;
 mod filesystem;
-mod http_types;
 mod io;
-mod logging;
 mod poll;
 mod random;

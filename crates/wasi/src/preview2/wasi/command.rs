@@ -1,7 +1,7 @@
-use crate::WasiView;
+use crate::preview2::WasiView;
 
 wasmtime::component::bindgen!({
-    path: "../wit",
+    path: "wit",
     world: "command",
     tracing: true,
     async: true,
@@ -10,29 +10,29 @@ wasmtime::component::bindgen!({
         "streams"::"stream-error": Error,
     },
     with: {
-       "filesystem": crate::wasi::filesystem,
-       "monotonic_clock": crate::wasi::monotonic_clock,
-       "poll": crate::wasi::poll,
-       "streams": crate::wasi::streams,
-       "timezone": crate::wasi::timezone,
-       "wall_clock": crate::wasi::wall_clock,
-       "random": crate::wasi::random,
-       "environment": crate::wasi::environment,
-       "exit": crate::wasi::exit,
-       "preopens": crate::wasi::preopens,
+       "filesystem": crate::preview2::wasi::filesystem,
+       "monotonic_clock": crate::preview2::wasi::monotonic_clock,
+       "poll": crate::preview2::wasi::poll,
+       "streams": crate::preview2::wasi::streams,
+       "timezone": crate::preview2::wasi::timezone,
+       "wall_clock": crate::preview2::wasi::wall_clock,
+       "random": crate::preview2::wasi::random,
+       "environment": crate::preview2::wasi::environment,
+       "exit": crate::preview2::wasi::exit,
+       "preopens": crate::preview2::wasi::preopens,
     },
 });
 
 pub fn add_to_linker<T: WasiView>(l: &mut wasmtime::component::Linker<T>) -> anyhow::Result<()> {
-    crate::wasi::wall_clock::add_to_linker(l, |t| t)?;
-    crate::wasi::monotonic_clock::add_to_linker(l, |t| t)?;
-    crate::wasi::timezone::add_to_linker(l, |t| t)?;
-    crate::wasi::filesystem::add_to_linker(l, |t| t)?;
-    crate::wasi::poll::add_to_linker(l, |t| t)?;
-    crate::wasi::streams::add_to_linker(l, |t| t)?;
-    crate::wasi::random::add_to_linker(l, |t| t)?;
-    crate::wasi::exit::add_to_linker(l, |t| t)?;
-    crate::wasi::environment::add_to_linker(l, |t| t)?;
-    crate::wasi::preopens::add_to_linker(l, |t| t)?;
+    crate::preview2::wasi::wall_clock::add_to_linker(l, |t| t)?;
+    crate::preview2::wasi::monotonic_clock::add_to_linker(l, |t| t)?;
+    crate::preview2::wasi::timezone::add_to_linker(l, |t| t)?;
+    crate::preview2::wasi::filesystem::add_to_linker(l, |t| t)?;
+    crate::preview2::wasi::poll::add_to_linker(l, |t| t)?;
+    crate::preview2::wasi::streams::add_to_linker(l, |t| t)?;
+    crate::preview2::wasi::random::add_to_linker(l, |t| t)?;
+    crate::preview2::wasi::exit::add_to_linker(l, |t| t)?;
+    crate::preview2::wasi::environment::add_to_linker(l, |t| t)?;
+    crate::preview2::wasi::preopens::add_to_linker(l, |t| t)?;
     Ok(())
 }
