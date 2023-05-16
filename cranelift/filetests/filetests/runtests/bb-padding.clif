@@ -4,7 +4,7 @@ set bb_padding_log2=20
 target aarch64
 target s390x
 target x86_64
-target riscv64
+target riscv64 has_v
 
 function %ret_big_number() -> i64x2 {
 block0:
