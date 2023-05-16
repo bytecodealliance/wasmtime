@@ -184,7 +184,7 @@ pub fn x_reg(enc: usize) -> Reg {
     let v_reg = VReg::new(p_reg.index(), p_reg.class());
     Reg::from(v_reg)
 }
-pub fn px_reg(enc: usize) -> PReg {
+pub const fn px_reg(enc: usize) -> PReg {
     PReg::new(enc, RegClass::Int)
 }
 
@@ -218,6 +218,6 @@ pub fn v_reg(enc: usize) -> Reg {
     let v_reg = VReg::new(p_reg.index(), p_reg.class());
     Reg::from(v_reg)
 }
-pub fn pv_reg(enc: usize) -> PReg {
+pub const fn pv_reg(enc: usize) -> PReg {
     PReg::new(enc, RegClass::Vector)
 }
