@@ -6,7 +6,8 @@ use wasmparser::FuncValidatorAllocations;
 use wasmtime_cranelift_shared::{CompiledFunction, ModuleTextBuilder};
 use wasmtime_environ::{
     CompileError, DefinedFuncIndex, FilePos, FuncIndex, FunctionBodyData, FunctionLoc,
-    ModuleTranslation, ModuleTypes, PrimaryMap, Tunables, VMOffsets, WasmFunctionInfo,
+    ModuleTranslation, ModuleTypes, PrimaryMap, TrapEncodingBuilder, Tunables, VMOffsets,
+    WasmFunctionInfo,
 };
 use winch_codegen::{TargetIsa, TrampolineKind};
 use winch_environ::FuncEnv;
@@ -165,6 +166,7 @@ impl wasmtime_environ::Compiler for Compiler {
     ) -> Result<Vec<(SymbolId, FunctionLoc)>> {
         let mut builder =
             ModuleTextBuilder::new(obj, self, self.isa.text_section_builder(funcs.len()));
+        let mut traps = TrapEncodingBuilder::default();
 
         let mut ret = Vec::with_capacity(funcs.len());
         for (i, (sym, func)) in funcs.iter().enumerate() {
@@ -173,6 +175,7 @@ impl wasmtime_environ::Compiler for Compiler {
                 .unwrap();
 
             let (sym, range) = builder.append_func(&sym, func, |idx| resolve_reloc(i, idx));
+            traps.push(range.clone(), &func.traps().collect::<Vec<_>>());
 
             let info = FunctionLoc {
                 start: u32::try_from(range.start).unwrap(),
@@ -181,6 +184,7 @@ impl wasmtime_environ::Compiler for Compiler {
             ret.push((sym, info));
         }
         builder.finish();
+        traps.append_to(obj);
         Ok(ret)
     }
 
