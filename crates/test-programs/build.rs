@@ -60,7 +60,8 @@ fn modules_rs(meta: &cargo_metadata::Metadata, package: &str, kind: &str, out_di
             (
                 stem.clone(),
                 out_dir
-                    .join("wasm32-wasi/debug")
+                    .join("wasm32-wasi")
+                    .join("debug")
                     .join(format!("{stem}.wasm"))
                     .as_os_str()
                     .to_str()
@@ -78,7 +79,7 @@ fn modules_rs(meta: &cargo_metadata::Metadata, package: &str, kind: &str, out_di
             "
             lazy_static::lazy_static!{{
                 static ref {global}: wasmtime::Module = {{
-                    wasmtime::Module::from_file(&ENGINE, \"{file}\").unwrap()
+                    wasmtime::Module::from_file(&ENGINE, {file:?}).unwrap()
                 }};
             }}
         "
@@ -121,7 +122,10 @@ fn build_adapter(out_dir: &PathBuf, name: &str, features: &[&str]) -> Vec<u8> {
 
     let adapter = out_dir.join(format!("wasi_preview1_component_adapter.{name}.wasm"));
     std::fs::copy(
-        out_dir.join("wasm32-unknown-unknown/release/wasi_preview1_component_adapter.wasm"),
+        out_dir
+            .join("wasm32-unknown-unknown")
+            .join("release")
+            .join("wasi_preview1_component_adapter.wasm"),
         &adapter,
     )
     .unwrap();
@@ -177,7 +181,8 @@ fn components_rs(
 // Compile a component, return the path of the binary:
 fn compile_component(stem: &str, out_dir: &PathBuf, adapter: &[u8]) -> PathBuf {
     let file = out_dir
-        .join("wasm32-wasi/debug")
+        .join("wasm32-wasi")
+        .join("debug")
         .join(format!("{stem}.wasm"));
     let module = fs::read(&file).expect("read wasm module");
     let component = ComponentEncoder::default()
