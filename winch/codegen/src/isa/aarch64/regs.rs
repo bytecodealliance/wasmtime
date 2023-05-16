@@ -53,6 +53,11 @@ pub(crate) const fn zero() -> Reg {
     xreg(31)
 }
 
+/// The VM context register.
+pub(crate) const fn vmctx() -> Reg {
+    xreg(9)
+}
+
 /// Stack pointer register.
 ///
 /// In aarch64 the zero and stack pointer registers are contextually
@@ -132,7 +137,8 @@ const NON_ALLOCATABLE_GPR: u32 = (1 << ip0().hw_enc())
     | (1 << fp().hw_enc())
     | (1 << lr().hw_enc())
     | (1 << zero().hw_enc())
-    | (1 << shadow_sp().hw_enc());
+    | (1 << shadow_sp().hw_enc())
+    | (1 << vmctx().hw_enc());
 
 /// Bitmask to represent the available general purpose registers.
 pub(crate) const ALL_GPR: u32 = u32::MAX & !NON_ALLOCATABLE_GPR;

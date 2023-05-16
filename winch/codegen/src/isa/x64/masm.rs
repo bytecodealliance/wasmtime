@@ -4,7 +4,11 @@ use super::{
     regs::{self, rbp, rsp},
 };
 use crate::masm::{DivKind, MacroAssembler as Masm, OperandSize, RegImm, RemKind};
-use crate::{abi::LocalSlot, codegen::CodeGenContext, stack::Val};
+use crate::{
+    abi::{align_to, calculate_frame_adjustment, LocalSlot},
+    codegen::CodeGenContext,
+    stack::Val,
+};
 use crate::{isa::reg::Reg, masm::CalleeKind};
 use cranelift_codegen::{isa::x64::settings as x64_settings, settings, Final, MachBufferFinalized};
 
@@ -114,8 +118,20 @@ impl Masm for MacroAssembler {
         self.decrement_sp(8);
     }
 
-    fn call(&mut self, callee: CalleeKind) {
+    fn call(
+        &mut self,
+        alignment: u32,
+        addend: u32,
+        stack_args_size: u32,
+        mut load_callee: impl FnMut(&mut Self) -> CalleeKind,
+    ) -> u32 {
+        let delta = calculate_frame_adjustment(self.sp_offset(), addend, alignment);
+        let aligned_args_size = align_to(stack_args_size, alignment);
+        let total_stack = delta + aligned_args_size;
+        self.reserve_stack(total_stack);
+        let callee = load_callee(self);
         self.asm.call(callee);
+        total_stack
     }
 
     fn load(&mut self, src: Address, dst: Reg, size: OperandSize) {
@@ -237,7 +253,7 @@ impl Masm for MacroAssembler {
         self.asm.finalize()
     }
 
-    fn address_from_reg(&self, reg: Reg, offset: u32) -> Self::Address {
+    fn address_at_reg(&self, reg: Reg, offset: u32) -> Self::Address {
         Address::offset(reg, offset)
     }
 }

@@ -51,18 +51,25 @@ pub(crate) fn r9() -> Reg {
 pub(crate) fn r10() -> Reg {
     gpr(ENC_R10)
 }
-pub(crate) fn r11() -> Reg {
-    gpr(ENC_R11)
-}
 pub(crate) fn r12() -> Reg {
     gpr(ENC_R12)
 }
 pub(crate) fn r13() -> Reg {
     gpr(ENC_R13)
 }
+/// Used as a pinned register to hold
+/// the `VMContext`.
+/// Non-allocatable in Winch's default
+/// ABI, and callee-saved in SystemV and
+/// Fastcall.
 pub(crate) fn r14() -> Reg {
     gpr(ENC_R14)
 }
+
+pub(crate) fn vmctx() -> Reg {
+    r14()
+}
+
 pub(crate) fn rbx() -> Reg {
     gpr(ENC_RBX)
 }
@@ -76,6 +83,13 @@ pub(crate) fn rsp() -> Reg {
 }
 pub(crate) fn rbp() -> Reg {
     gpr(ENC_RBP)
+}
+
+/// Used as the scratch register.
+/// Non-allocatable in Winch's default
+/// ABI.
+pub(crate) fn r11() -> Reg {
+    gpr(ENC_R11)
 }
 
 pub(crate) fn scratch() -> Reg {
@@ -151,7 +165,7 @@ pub(crate) fn xmm15() -> Reg {
 
 const GPR: u32 = 16;
 const ALLOCATABLE_GPR: u32 = (1 << GPR) - 1;
-const NON_ALLOCATABLE_GPR: u32 = (1 << ENC_RBP) | (1 << ENC_RSP) | (1 << ENC_R11);
+const NON_ALLOCATABLE_GPR: u32 = (1 << ENC_RBP) | (1 << ENC_RSP) | (1 << ENC_R11) | (1 << ENC_R14);
 
 /// Bitmask to represent the available general purpose registers.
 pub(crate) const ALL_GPR: u32 = ALLOCATABLE_GPR & !NON_ALLOCATABLE_GPR;

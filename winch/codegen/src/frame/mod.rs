@@ -20,7 +20,7 @@ impl DefinedLocalsRange {
     }
 }
 
-/// An abstraction to read the defined locals from the WASM binary for a function.
+/// An abstraction to read the defined locals from the Wasm binary for a function.
 #[derive(Default)]
 pub(crate) struct DefinedLocals {
     /// The defined locals for a function.
@@ -30,13 +30,13 @@ pub(crate) struct DefinedLocals {
 }
 
 impl DefinedLocals {
-    /// Compute the local slots for a WASM function.
+    /// Compute the local slots for a Wasm function.
     pub fn new(
         reader: &mut BinaryReader<'_>,
         validator: &mut FuncValidator<ValidatorResources>,
     ) -> Result<Self> {
         let mut next_stack = 0;
-        // The first 32 bits of a WASM binary function describe the number of locals
+        // The first 32 bits of a Wasm binary function describe the number of locals.
         let local_count = reader.read_var_u32()?;
         let mut slots: Locals = Default::default();
 
@@ -74,6 +74,9 @@ pub(crate) struct Frame {
     /// Locals get calculated when allocating a frame and are readonly
     /// through the function compilation lifetime.
     pub locals: Locals,
+
+    /// The offset to the slot containing the `VMContext`.
+    pub vmctx_slot: LocalSlot,
 }
 
 impl Frame {
@@ -90,14 +93,15 @@ impl Frame {
                 .map(|l| LocalSlot::new(l.ty, l.offset + defined_locals_start)),
         );
 
-        let locals_size = align_to(
-            defined_locals_start + defined_locals.stack_size,
-            abi.stack_align().into(),
-        );
+        let vmctx_slots_size = <A as ABI>::word_bytes();
+        let vmctx_offset = defined_locals_start + defined_locals.stack_size + vmctx_slots_size;
+
+        let locals_size = align_to(vmctx_offset, abi.stack_align().into());
 
         Ok(Self {
             locals,
             locals_size,
+            vmctx_slot: LocalSlot::i64(vmctx_offset),
             defined_locals_range: DefinedLocalsRange(
                 defined_locals_start..defined_locals.stack_size,
             ),

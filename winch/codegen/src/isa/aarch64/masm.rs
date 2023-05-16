@@ -136,7 +136,13 @@ impl Masm for MacroAssembler {
         self.asm.str(src, dst, size);
     }
 
-    fn call(&mut self, _callee: CalleeKind) {
+    fn call(
+        &mut self,
+        _alignment: u32,
+        _addend: u32,
+        _stack_args_size: u32,
+        _load_callee: impl FnMut(&mut Self) -> CalleeKind,
+    ) -> u32 {
         todo!()
     }
 
@@ -195,7 +201,7 @@ impl Masm for MacroAssembler {
         self.sp_offset
     }
 
-    fn address_from_reg(&self, reg: Reg, offset: u32) -> Self::Address {
+    fn address_at_reg(&self, reg: Reg, offset: u32) -> Self::Address {
         Address::offset(reg, offset as i64)
     }
 }
