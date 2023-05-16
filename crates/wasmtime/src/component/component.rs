@@ -1,18 +1,16 @@
 use crate::code::CodeObject;
-use crate::module::ModuleFunctionIndices;
 use crate::signatures::SignatureCollection;
 use crate::{Engine, Module};
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
-use std::any::Any;
 use std::fs;
 use std::mem;
 use std::path::Path;
 use std::ptr::NonNull;
 use std::sync::Arc;
 use wasmtime_environ::component::{
-    AllCallFunc, ComponentTypes, GlobalInitializer, LoweredIndex, RuntimeAlwaysTrapIndex,
-    RuntimeTranscoderIndex, StaticModuleIndex, Translator,
+    AllCallFunc, ComponentTypes, LoweredIndex, RuntimeAlwaysTrapIndex, RuntimeTranscoderIndex,
+    StaticModuleIndex, Translator,
 };
 use wasmtime_environ::{FunctionLoc, ObjectKind, PrimaryMap, ScopeVec};
 use wasmtime_jit::{CodeMemory, CompiledModuleInfo};
@@ -183,6 +181,8 @@ impl Component {
         engine: &Engine,
         binary: &[u8],
     ) -> Result<(MmapVec, ComponentArtifacts)> {
+        use crate::compiler::CompileInputs;
+
         let tunables = &engine.config().tunables;
         let compiler = engine.compiler();
 
@@ -190,153 +190,49 @@ impl Component {
         let mut validator =
             wasmparser::Validator::new_with_features(engine.config().features.clone());
         let mut types = Default::default();
-        let (component, mut modules) =
+        let (component, mut module_translations) =
             Translator::new(tunables, &mut validator, &mut types, &scope)
                 .translate(binary)
                 .context("failed to parse WebAssembly module")?;
         let types = types.finish();
 
-        // Compile all core wasm modules, in parallel, which will internally
-        // compile all their functions in parallel as well.
-        let compilations = engine.run_maybe_parallel(modules.values_mut().collect(), |module| {
-            Module::compile_functions(engine, module, types.module_types())
-        })?;
-
-        let mut compiled_funcs = vec![];
-        let wasm_to_native_trampoline_indices = Module::compile_wasm_to_native_trampolines(
-            engine,
-            modules.values().as_slice(),
-            types.module_types(),
-            &mut compiled_funcs,
-        )?;
-
-        let mut indices = vec![];
-        for ((i, translation), compilation) in modules.into_iter().zip(compilations) {
-            let prefix = format!("wasm_{}_", i.as_u32());
-            indices.push((
-                compiled_funcs.len(),
-                ModuleFunctionIndices::new(translation, compilation, &prefix, &mut compiled_funcs),
-            ));
-        }
-
-        // Compile all transcoders required which adapt from a
-        // core-wasm-specific ABI (e.g. 32 or 64-bit) into the host transcoder
-        // ABI through an indirect libcall.
-        let transcoders = component
-            .initializers
-            .iter()
-            .filter_map(|init| match init {
-                GlobalInitializer::Transcoder(i) => Some(i),
-                _ => None,
-            })
-            .collect();
-        let transcoder_indices = flatten_all_calls(
-            &mut compiled_funcs,
-            engine.run_maybe_parallel(transcoders, |info| -> Result<_> {
-                Ok((
-                    info.symbol_name(),
-                    compiler
-                        .component_compiler()
-                        .compile_transcoder(&component, info, &types)?,
-                ))
-            })?,
+        let compile_inputs = CompileInputs::for_component(
+            &types,
+            &component,
+            module_translations.iter_mut().map(|(i, translation)| {
+                let functions = mem::take(&mut translation.function_body_inputs);
+                (i, &*translation, functions)
+            }),
         );
-
-        // Compile all "always trap" functions which are small typed shims that
-        // exits to solely trap immediately for components.
-        let always_trap = component
-            .initializers
-            .iter()
-            .filter_map(|init| match init {
-                GlobalInitializer::AlwaysTrap(i) => Some(i),
-                _ => None,
-            })
-            .collect();
-        let always_trap_indices = flatten_all_calls(
-            &mut compiled_funcs,
-            engine.run_maybe_parallel(always_trap, |info| -> Result<_> {
-                Ok((
-                    info.symbol_name(),
-                    compiler
-                        .component_compiler()
-                        .compile_always_trap(&types[info.canonical_abi])?,
-                ))
-            })?,
-        );
-
-        // Compile all "lowerings" which are adapters that go from core wasm
-        // into the host which will process the canonical ABI.
-        let lowerings = component
-            .initializers
-            .iter()
-            .filter_map(|init| match init {
-                GlobalInitializer::LowerImport(i) => Some(i),
-                _ => None,
-            })
-            .collect();
-        let lowering_indices = flatten_all_calls(
-            &mut compiled_funcs,
-            engine.run_maybe_parallel(lowerings, |lowering| -> Result<_> {
-                Ok((
-                    lowering.symbol_name(),
-                    compiler
-                        .component_compiler()
-                        .compile_lowered_trampoline(&component, lowering, &types)?,
-                ))
-            })?,
-        );
+        let unlinked_compile_outputs = compile_inputs.compile(&engine)?;
+        let (compiled_funcs, function_indices) = unlinked_compile_outputs.pre_link();
 
         let mut object = compiler.object(ObjectKind::Component)?;
-        let locs = compiler.append_code(
-            &mut object,
-            &compiled_funcs,
-            tunables,
-            &|caller_index, callee_index| {
-                // Find the index of the module that contains the function we are calling.
-                let module_index = indices.partition_point(|(i, _)| *i <= caller_index) - 1;
-                indices[module_index].1.resolve_reloc(callee_index)
-            },
-        )?;
         engine.append_compiler_info(&mut object);
         engine.append_bti(&mut object);
 
-        // Convert all `ModuleTranslation` instances into `CompiledModuleInfo`
-        // through an `ObjectBuilder` here. This is then used to create the
-        // final `mmap` which is the final compilation artifact.
-        let mut builder = wasmtime_jit::ObjectBuilder::new(object, tunables);
-        let mut static_modules = PrimaryMap::new();
-        for (_, module_indices) in indices {
-            let info = module_indices.append_to_object(
-                &locs,
-                &wasm_to_native_trampoline_indices,
-                &mut builder,
-            )?;
-            static_modules.push(info);
-        }
+        let (mut object, compilation_artifacts) = function_indices.link_and_append_code(
+            object,
+            tunables,
+            compiler,
+            compiled_funcs,
+            module_translations,
+        )?;
 
         let info = CompiledComponentInfo {
             component,
-            always_trap: always_trap_indices
-                .into_iter()
-                .map(|x| x.map(|i| locs[i].1))
-                .collect(),
-            lowerings: lowering_indices
-                .into_iter()
-                .map(|x| x.map(|i| locs[i].1))
-                .collect(),
-            transcoders: transcoder_indices
-                .into_iter()
-                .map(|x| x.map(|i| locs[i].1))
-                .collect(),
+            always_trap: compilation_artifacts.always_traps,
+            lowerings: compilation_artifacts.lowerings,
+            transcoders: compilation_artifacts.transcoders,
         };
         let artifacts = ComponentArtifacts {
             info,
             types,
-            static_modules,
+            static_modules: compilation_artifacts.modules,
         };
-        builder.serialize_info(&artifacts);
+        object.serialize_info(&artifacts);
 
-        let mmap = builder.finish()?;
+        let mmap = object.finish()?;
         Ok((mmap, artifacts))
     }
 
@@ -483,37 +379,4 @@ impl Component {
     pub fn serialize(&self) -> Result<Vec<u8>> {
         Ok(self.code_object().code_memory().mmap().to_vec())
     }
-}
-
-/// Flatten a list of grouped `AllCallFunc<Box<dyn Any + Send>>` into the flat
-/// list of all compiled functions.
-fn flatten_all_calls(
-    compiled_funcs: &mut Vec<(String, Box<dyn Any + Send>)>,
-    all_calls: Vec<(String, AllCallFunc<Box<dyn Any + Send>>)>,
-) -> Vec<AllCallFunc<usize>> {
-    compiled_funcs.reserve(3 * all_calls.len());
-
-    all_calls
-        .into_iter()
-        .map(
-            |(
-                prefix,
-                AllCallFunc {
-                    wasm_call,
-                    array_call,
-                    native_call,
-                },
-            )| {
-                let i = compiled_funcs.len();
-                compiled_funcs.push((format!("{prefix}_wasm_call"), wasm_call));
-                compiled_funcs.push((format!("{prefix}_array_call"), array_call));
-                compiled_funcs.push((format!("{prefix}_native_call"), native_call));
-                AllCallFunc {
-                    wasm_call: i + 0,
-                    array_call: i + 1,
-                    native_call: i + 2,
-                }
-            },
-        )
-        .collect()
 }
