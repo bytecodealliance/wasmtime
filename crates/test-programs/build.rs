@@ -52,7 +52,9 @@ fn build_and_generate_tests() {
     //components_rs(&meta, "wasi-http-tests", "bin", &command_adapter, &out_dir);
 }
 
-// Creates an `${out_dir}/${package}_modules.rs` file that exposes a `get_module(&str) -> Module`
+// Creates an `${out_dir}/${package}_modules.rs` file that exposes a `get_module(&str) -> Module`,
+// and a contains a `use self::{module} as _;` for each module that ensures that the user defines
+// a symbol (ideally a #[test]) corresponding to each module.
 fn modules_rs(meta: &cargo_metadata::Metadata, package: &str, kind: &str, out_dir: &PathBuf) {
     let modules = targets_in_package(meta, package, kind)
         .into_iter()
@@ -73,8 +75,10 @@ fn modules_rs(meta: &cargo_metadata::Metadata, package: &str, kind: &str, out_di
 
     let mut decls = String::new();
     let mut cases = String::new();
+    let mut uses = String::new();
     for (stem, file) in modules {
         let global = format!("{}_MODULE", stem.to_uppercase());
+        // Load the module from disk only once, in case it is used many times:
         decls += &format!(
             "
             lazy_static::lazy_static!{{
@@ -84,20 +88,24 @@ fn modules_rs(meta: &cargo_metadata::Metadata, package: &str, kind: &str, out_di
             }}
         "
         );
-        cases += &format!("{stem:?} => {global}.clone(),");
+        // Match the stem str literal to the module. Cloning is just a ref count incr.
+        cases += &format!("{stem:?} => {global}.clone(),\n");
+        // Statically ensure that the user defines a function (ideally a #[test]) for each stem.
+        uses += &format!("#[allow(unused_imports)] use self::{stem} as _;\n");
     }
 
     std::fs::write(
         out_dir.join(&format!("{}_modules.rs", package.to_snake_case())),
         format!(
             "
-        {decls}\n
+        {decls}
         pub fn get_module(s: &str) -> wasmtime::Module {{
             match s {{
                 {cases}
                 _ => panic!(\"no such module: {{}}\", s),
             }}
         }}
+        {uses}
         "
         ),
     )
@@ -135,6 +143,8 @@ fn build_adapter(out_dir: &PathBuf, name: &str, features: &[&str]) -> Vec<u8> {
 
 // Builds components out of modules, and creates an `${out_dir}/${package}_component.rs` file that
 // exposes a `get_component(&str) -> Component`
+// and a contains a `use self::{component} as _;` for each module that ensures that the user defines
+// a symbol (ideally a #[test]) corresponding to each component.
 fn components_rs(
     meta: &cargo_metadata::Metadata,
     package: &str,
@@ -144,6 +154,7 @@ fn components_rs(
 ) {
     let mut decls = String::new();
     let mut cases = String::new();
+    let mut uses = String::new();
     for target_name in targets_in_package(&meta, package, kind) {
         let stem = target_name.to_snake_case();
         let file = compile_component(&stem, out_dir, adapter);
@@ -158,20 +169,22 @@ fn components_rs(
             }}
         "
         );
-        cases += &format!("{stem:?} => {global}.clone(),");
+        cases += &format!("{stem:?} => {global}.clone(),\n");
+        uses += &format!("use self::{stem} as _;\n");
     }
 
     std::fs::write(
         out_dir.join(&format!("{}_components.rs", package.to_snake_case())),
         format!(
             "
-        {decls}\n
+        {decls}
         pub fn get_component(s: &str) -> wasmtime::component::Component {{
             match s {{
                 {cases}
                 _ => panic!(\"no such component: {{}}\", s),
             }}
         }}
+        {uses}
         "
         ),
     )
