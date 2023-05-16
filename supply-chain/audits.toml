@@ -241,6 +241,13 @@ I am employed by a member of the Bytecode Alliance and plan to continue doing
 so and will actively maintain this crate over time.
 """
 
+[[wildcard-audits.wit-component]]
+who = "Nick Fitzgerald <fitzgen@gmail.com>"
+criteria = "safe-to-deploy"
+user-id = 696
+start = "2019-03-16"
+end = "2024-03-10"
+
 [[wildcard-audits.wit-parser]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -983,6 +990,11 @@ criteria = "safe-to-deploy"
 version = "0.3.3"
 notes = "I am the author of this crate."
 
+[[audits.matchers]]
+who = "Pat Hickey <phickey@fastly.com>"
+criteria = "safe-to-deploy"
+version = "0.1.0"
+
 [[audits.memfd]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -1340,6 +1352,11 @@ who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
 delta = "0.25.6 -> 0.25.7"
 notes = "This is a minor bug-fix update."
+
+[[audits.test-log]]
+who = "Pat Hickey <phickey@fastly.com>"
+criteria = "safe-to-deploy"
+version = "0.2.11"
 
 [[audits.tinyvec]]
 who = "Alex Crichton <alex@alexcrichton.com>"
