@@ -1030,27 +1030,31 @@ impl<I: VCodeInst> VCode<I> {
                 cur_srcloc = None;
             }
 
-            // Do we need an island? Get the worst-case size of the
-            // next BB and see if, having emitted that many bytes, we
-            // will be beyond the deadline.
-            if block_order_idx < final_order.len() - 1 {
+            // Do we need an island? Get the worst-case size of the next BB, add
+            // it to the optional padding behind the block, and pass this to the
+            // `MachBuffer` to determine if an island is necessary.
+            let worst_case_next_bb = if block_order_idx < final_order.len() - 1 {
                 let next_block = final_order[block_order_idx + 1];
                 let next_block_range = self.block_ranges[next_block.index()];
                 let next_block_size =
                     (next_block_range.1.index() - next_block_range.0.index()) as u32;
                 let next_block_ra_insertions = ra_edits_per_block[next_block.index()];
-                let worst_case_next_bb =
-                    I::worst_case_size() * (next_block_size + next_block_ra_insertions);
-                if buffer.island_needed(worst_case_next_bb) {
-                    buffer.emit_island(worst_case_next_bb, ctrl_plane);
-                }
+                I::worst_case_size() * (next_block_size + next_block_ra_insertions)
+            } else {
+                0
+            };
+            let padding = if bb_padding.is_empty() {
+                0
+            } else {
+                bb_padding.len() as u32 + I::LabelUse::ALIGN - 1
+            };
+            if buffer.island_needed(padding + worst_case_next_bb) {
+                buffer.emit_island(padding + worst_case_next_bb, ctrl_plane);
             }
 
+            // Insert padding, if configured, to stress the `MachBuffer`'s
+            // relocation and island calculations.
             if !bb_padding.is_empty() {
-                let size = bb_padding.len() as u32;
-                if buffer.island_needed(size) {
-                    buffer.emit_island(size, ctrl_plane);
-                }
                 buffer.put_data(&bb_padding);
                 buffer.align_to(I::LabelUse::ALIGN);
             }
