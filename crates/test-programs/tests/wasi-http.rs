@@ -1,6 +1,5 @@
-use anyhow::Context;
-use std::path::Path;
-use wasmtime::{Config, Engine, Linker, Module, Store};
+#![cfg(feature = "test_programs")]
+use wasmtime::{Config, Engine, Linker, Store};
 use wasmtime_wasi::{sync::WasiCtxBuilder, WasiCtx};
 use wasmtime_wasi_http::WasiHttp;
 
@@ -10,6 +9,17 @@ use hyper::server::conn::http1;
 use hyper::{body::Bytes, service::service_fn, Request, Response};
 use std::{error::Error, net::SocketAddr};
 use tokio::net::TcpListener;
+
+lazy_static::lazy_static! {
+    static ref ENGINE: Engine = {
+        let mut config = Config::new();
+        config.wasm_backtrace_details(wasmtime::WasmBacktraceDetails::Enable);
+        let engine = Engine::new(&config).unwrap();
+        engine
+    };
+}
+// uses ENGINE, creates a fn get_module(&str) -> Module
+include!(concat!(env!("OUT_DIR"), "/wasi_http_tests_modules.rs"));
 
 async fn test(
     req: Request<hyper::body::Incoming>,
@@ -48,19 +58,13 @@ fn run_server() -> Result<(), Box<dyn Error + Send + Sync>> {
     Ok(())
 }
 
-pub fn instantiate_inherit_stdio(
-    data: &[u8],
-    bin_name: &str,
-    _workspace: Option<&Path>,
-) -> anyhow::Result<()> {
+pub fn run(name: &str) -> anyhow::Result<()> {
     let _thread = std::thread::spawn(|| {
         run_server().unwrap();
     });
 
-    let config = Config::new();
-    let engine = Engine::new(&config)?;
-    let module = Module::new(&engine, &data).context("failed to create wasm module")?;
-    let mut linker = Linker::new(&engine);
+    let module = get_module(name);
+    let mut linker = Linker::new(&ENGINE);
 
     struct Ctx {
         wasi: WasiCtx,
@@ -71,10 +75,10 @@ pub fn instantiate_inherit_stdio(
     wasmtime_wasi_http::add_to_linker(&mut linker, |cx: &mut Ctx| &mut cx.http)?;
 
     // Create our wasi context.
-    let builder = WasiCtxBuilder::new().inherit_stdio().arg(bin_name)?;
+    let builder = WasiCtxBuilder::new().inherit_stdio().arg(name)?;
 
     let mut store = Store::new(
-        &engine,
+        &ENGINE,
         Ctx {
             wasi: builder.build(),
             http: WasiHttp::new(),
@@ -84,4 +88,9 @@ pub fn instantiate_inherit_stdio(
     let instance = linker.instantiate(&mut store, &module)?;
     let start = instance.get_typed_func::<(), ()>(&mut store, "_start")?;
     start.call(&mut store, ())
+}
+
+#[test_log::test]
+fn outbound_request() {
+    run("outbound_request").unwrap()
 }
