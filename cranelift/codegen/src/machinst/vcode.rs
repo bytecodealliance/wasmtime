@@ -747,7 +747,7 @@ impl<I: VCodeInst> VCode<I> {
         mut self,
         regalloc: &regalloc2::Output,
         want_disasm: bool,
-        want_metadata: bool,
+        flags: &settings::Flags,
         ctrl_plane: &mut ControlPlane,
     ) -> EmitResult
     where
@@ -827,7 +827,7 @@ impl<I: VCodeInst> VCode<I> {
         }
 
         let is_forward_edge_cfi_enabled = self.abi.is_forward_edge_cfi_enabled();
-        let bb_padding = match self.emit_info.settings().bb_padding_log2_minus_one() {
+        let bb_padding = match flags.bb_padding_log2_minus_one() {
             0 => Vec::new(),
             n => vec![0; 1 << (n - 1)],
         };
@@ -878,7 +878,7 @@ impl<I: VCodeInst> VCode<I> {
                 writeln!(&mut disasm, "block{}:", block.index()).unwrap();
             }
 
-            if want_metadata {
+            if flags.machine_code_cfg_info() {
                 // Track BB starts. If we have backed up due to MachBuffer
                 // branch opts, note that the removed blocks were removed.
                 let cur_offset = buffer.cur_offset();
@@ -1064,7 +1064,7 @@ impl<I: VCodeInst> VCode<I> {
         // Create `bb_edges` and final (filtered) `bb_starts`.
         let mut bb_edges = vec![];
         let mut bb_offsets = vec![];
-        if want_metadata {
+        if flags.machine_code_cfg_info() {
             for block in 0..self.num_blocks() {
                 if bb_starts[block].is_none() {
                     // Block was deleted by MachBuffer; skip.

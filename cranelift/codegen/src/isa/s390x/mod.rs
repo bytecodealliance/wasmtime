@@ -60,7 +60,7 @@ impl S390xBackend {
         domtree: &DominatorTree,
         ctrl_plane: &mut ControlPlane,
     ) -> CodegenResult<(VCode<inst::Inst>, regalloc2::Output)> {
-        let emit_info = EmitInfo::new(self.flags.clone(), self.isa_flags.clone());
+        let emit_info = EmitInfo::new(self.isa_flags.clone());
         let sigs = SigSet::new::<abi::S390xMachineDeps>(func, &self.flags)?;
         let abi = abi::S390xCallee::new(func, self, &self.isa_flags, &sigs)?;
         compile::compile::<S390xBackend>(func, domtree, self, abi, emit_info, sigs, ctrl_plane)
@@ -78,12 +78,7 @@ impl TargetIsa for S390xBackend {
         let flags = self.flags();
         let (vcode, regalloc_result) = self.compile_vcode(func, domtree, ctrl_plane)?;
 
-        let emit_result = vcode.emit(
-            &regalloc_result,
-            want_disasm,
-            flags.machine_code_cfg_info(),
-            ctrl_plane,
-        );
+        let emit_result = vcode.emit(&regalloc_result, want_disasm, flags, ctrl_plane);
         let frame_size = emit_result.frame_size;
         let value_labels_ranges = emit_result.value_labels_ranges;
         let buffer = emit_result.buffer;

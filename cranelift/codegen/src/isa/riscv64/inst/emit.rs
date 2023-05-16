@@ -27,12 +27,6 @@ impl EmitInfo {
     }
 }
 
-impl MachInstEmitInfo for EmitInfo {
-    fn settings(&self) -> &settings::Flags {
-        &self.shared_flag
-    }
-}
-
 /// load constant by put the constant in the code stream.
 /// calculate the pc and using load instruction.
 /// This is only allow used in the emit stage.

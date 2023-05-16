@@ -262,7 +262,7 @@ pub trait MachInstEmit: MachInst {
     /// Persistent state carried across `emit` invocations.
     type State: MachInstEmitState<Self>;
     /// Constant information used in `emit` invocations.
-    type Info: MachInstEmitInfo;
+    type Info;
     /// Emit the instruction.
     fn emit(
         &self,
@@ -297,12 +297,6 @@ pub trait MachInstEmitState<I: VCodeInst>: Default + Clone + Debug {
     /// A hook that triggers when first emitting a new block.
     /// It is guaranteed to be called before any instructions are emitted.
     fn on_new_block(&mut self) {}
-}
-
-/// Trait describing what is expected of `EmitInfo` in each backend.
-pub trait MachInstEmitInfo {
-    /// Returns target-independent compilation settings.
-    fn settings(&self) -> &settings::Flags;
 }
 
 /// The result of a `MachBackend::compile_function()` call. Contains machine
