@@ -18,6 +18,7 @@ async fn test(
     Response::builder()
         .status(http::StatusCode::OK)
         .header("x-wasmtime-test-method", method)
+        .header("x-wasmtime-test-uri", req.uri().to_string())
         .body(req.into_body().boxed())
 }
 
