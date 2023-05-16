@@ -3,6 +3,7 @@ name = "wasi-tests"
 version = "0.0.0"
 readme = "README.md"
 edition = "2021"
+test = false
 publish = false
 
 [dependencies]
