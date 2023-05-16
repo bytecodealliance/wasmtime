@@ -30,8 +30,8 @@ impl Response {
 }
 
 fn request(
-    method: types::MethodParam<'_>,
-    scheme: types::SchemeParam<'_>,
+    method: types::Method,
+    scheme: types::Scheme,
     authority: &str,
     path: &str,
     query: &str,
@@ -43,7 +43,7 @@ fn request(
     ]);
 
     let request =
-        types::new_outgoing_request(method, path, query, Some(scheme), authority, headers);
+        types::new_outgoing_request(&method, path, query, Some(&scheme), authority, headers);
 
     let request_body = types::outgoing_request_write(request)
         .map_err(|_| anyhow!("outgoing request write failed"))?;
@@ -103,8 +103,8 @@ fn request(
 
 fn main() -> Result<()> {
     let r1 = request(
-        types::MethodParam::Get,
-        types::SchemeParam::Http,
+        types::Method::Get,
+        types::Scheme::Http,
         "localhost:3000",
         "/get",
         "?some=arg?goes=here",
@@ -119,8 +119,8 @@ fn main() -> Result<()> {
     assert_eq!(r1.body, b"");
 
     let r2 = request(
-        types::MethodParam::Post,
-        types::SchemeParam::Http,
+        types::Method::Post,
+        types::Scheme::Http,
         "localhost:3000",
         "/post",
         "",
@@ -135,8 +135,8 @@ fn main() -> Result<()> {
     assert_eq!(r2.body, b"{\"foo\": \"bar\"}");
 
     let r3 = request(
-        types::MethodParam::Put,
-        types::SchemeParam::Http,
+        types::Method::Put,
+        types::Scheme::Http,
         "localhost:3000",
         "/put",
         "",
@@ -151,8 +151,8 @@ fn main() -> Result<()> {
     assert_eq!(r3.body, b"");
 
     let r4 = request(
-        types::MethodParam::Other("OTHER"),
-        types::SchemeParam::Http,
+        types::Method::Other("OTHER".to_owned()),
+        types::Scheme::Http,
         "localhost:3000",
         "/",
         "",
@@ -162,12 +162,12 @@ fn main() -> Result<()> {
     let error = r4.unwrap_err();
     assert_eq!(
         error.to_string(),
-        "ErrorResult::UnexpectedError(\"unknown method OTHER\")"
+        "Error::UnexpectedError(\"unknown method OTHER\")"
     );
 
     let r5 = request(
-        types::MethodParam::Get,
-        types::SchemeParam::Other("WS"),
+        types::Method::Get,
+        types::Scheme::Other("WS".to_owned()),
         "localhost:3000",
         "/",
         "",
@@ -177,7 +177,7 @@ fn main() -> Result<()> {
     let error = r5.unwrap_err();
     assert_eq!(
         error.to_string(),
-        "ErrorResult::UnexpectedError(\"unsupported scheme WS\")"
+        "Error::UnexpectedError(\"unsupported scheme WS\")"
     );
 
     Ok(())

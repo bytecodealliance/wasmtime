@@ -7,4 +7,4 @@ publish = false
 
 [dependencies]
 anyhow = "1"
-wit-bindgen = "0.4.0"
+wit-bindgen = "0.6.0"
