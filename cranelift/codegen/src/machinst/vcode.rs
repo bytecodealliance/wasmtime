@@ -1052,6 +1052,7 @@ impl<I: VCodeInst> VCode<I> {
                     buffer.emit_island(size, ctrl_plane);
                 }
                 buffer.put_data(&bb_padding);
+                buffer.align_to(I::LabelUse::ALIGN);
             }
         }
 
