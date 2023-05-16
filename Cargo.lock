@@ -3105,6 +3105,7 @@ dependencies = [
  "cap-std",
  "cargo_metadata",
  "cfg-if",
+ "heck",
  "http",
  "http-body",
  "http-body-util",
@@ -3120,6 +3121,7 @@ dependencies = [
  "wasmtime-wasi",
  "wasmtime-wasi-http",
  "wat",
+ "wit-component 0.9.0",
 ]
 
 [[package]]
@@ -3654,6 +3656,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "wasm-encoder"
+version = "0.27.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e77053dc709db790691d3732cfc458adc5acc881dec524965c608effdcd9c581"
+dependencies = [
+ "leb128",
+]
+
+[[package]]
 name = "wasm-metadata"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3677,6 +3688,19 @@ dependencies = [
  "serde",
  "wasm-encoder 0.26.0",
  "wasmparser 0.104.0",
+]
+
+[[package]]
+name = "wasm-metadata"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "27e6532071b112df81d756fabafab8cc882b84ae3d6ce9b90f3d90c80e4abe05"
+dependencies = [
+ "anyhow",
+ "indexmap",
+ "serde",
+ "wasm-encoder 0.27.0",
+ "wasmparser 0.105.0",
 ]
 
 [[package]]
@@ -3769,6 +3793,16 @@ name = "wasmparser"
 version = "0.104.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6a396af81a7c56ad976131d6a35e4b693b78a1ea0357843bd436b4577e254a7d"
+dependencies = [
+ "indexmap",
+ "url",
+]
+
+[[package]]
+name = "wasmparser"
+version = "0.105.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "83be9e0b3f9570dc1979a33ae7b89d032c73211564232b99976553e5c155ec32"
 dependencies = [
  "indexmap",
  "url",
@@ -4823,6 +4857,23 @@ dependencies = [
  "wasm-encoder 0.26.0",
  "wasm-metadata 0.5.0",
  "wasmparser 0.104.0",
+ "wit-parser 0.7.1",
+]
+
+[[package]]
+name = "wit-component"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b3cc435c15009f80d5e114d0dd3792959171f1fc28be2418e0f570d83b925a33"
+dependencies = [
+ "anyhow",
+ "bitflags 1.3.2",
+ "indexmap",
+ "log",
+ "url",
+ "wasm-encoder 0.27.0",
+ "wasm-metadata 0.6.0",
+ "wasmparser 0.105.0",
  "wit-parser 0.7.1",
 ]
 
