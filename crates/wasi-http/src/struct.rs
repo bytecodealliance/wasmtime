@@ -1,6 +1,36 @@
 use crate::wasi::http::types::{Method, RequestOptions, Scheme};
 use bytes::{BufMut, Bytes, BytesMut};
 use std::collections::HashMap;
+use std::fmt;
+
+impl fmt::Display for Scheme {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let scheme_str = match self {
+            Scheme::Http => "http",
+            Scheme::Https => "https",
+            Scheme::Other(s) => s,
+        };
+        write!(f, "{}", scheme_str)
+    }
+}
+
+impl fmt::Display for Method {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let method_str = match self {
+            Method::Get => "GET",
+            Method::Put => "PUT",
+            Method::Post => "POST",
+            Method::Options => "OPTIONS",
+            Method::Head => "HEAD",
+            Method::Patch => "PATCH",
+            Method::Connect => "CONNECT",
+            Method::Delete => "DELETE",
+            Method::Trace => "TRACE",
+            Method::Other(s) => s,
+        };
+        write!(f, "{}", method_str)
+    }
+}
 
 #[derive(Clone, Default)]
 pub struct Stream {
@@ -20,6 +50,9 @@ pub struct WasiHttp {
     pub fields: HashMap<u32, HashMap<String, Vec<Vec<u8>>>>,
     pub streams: HashMap<u32, Stream>,
     pub futures: HashMap<u32, ActiveFuture>,
+
+    pub allowed_methods: Vec<String>,
+    pub allowed_schemes: Vec<String>,
 }
 
 #[derive(Clone)]
@@ -119,6 +152,8 @@ impl WasiHttp {
             fields: HashMap::new(),
             streams: HashMap::new(),
             futures: HashMap::new(),
+            allowed_methods: vec!("*".to_string()),
+            allowed_schemes: vec!("*".to_string()),
         }
     }
 }

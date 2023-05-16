@@ -82,11 +82,43 @@ impl WasiHttp {
             crate::wasi::http::types::Method::Other(s) => bail!("unknown method {}", s),
         };
 
+        let mut allowed = false;
+        let method_str = request.method.to_string();
+        for allowed_method in self.allowed_methods.iter() {
+            if allowed_method == "*" {
+                allowed = true;
+                break;
+            }
+            if method_str == *allowed_method {
+                allowed = true;
+                break;
+            }
+        }
+        if !allowed {
+            bail!("Method {} is not allowed.", method.to_string());
+        }
+
         let scheme = match request.scheme.as_ref().unwrap_or(&Scheme::Https) {
             Scheme::Http => "http://",
             Scheme::Https => "https://",
             Scheme::Other(s) => bail!("unsupported scheme {}", s),
         };
+
+        let mut allowed = false;
+        let scheme_str = request.scheme.to_string();
+        for allowed_scheme in self.allowed_schemes.iter() {
+            if allowed_scheme == "*" {
+                allowed = true;
+                break;
+            }
+            if scheme_str == *allowed_scheme {
+                allowed = true;
+                break;
+            }
+        }
+        if !allowed {
+            bail!("Scheme {} is not allowed.", scheme_str);
+        }
 
         // Largely adapted from https://hyper.rs/guides/1/client/basic/
         let authority = match request.authority.find(":") {
