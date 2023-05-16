@@ -251,7 +251,9 @@ fn no_leak_with_imports() -> Result<()> {
         let mut store = Store::new(&Engine::default(), DropMe(flag.clone()));
         let mut linker = Linker::new(store.engine());
         let drop_me = DropMe(flag.clone());
-        linker.func_wrap("", "", move || drop(&drop_me))?;
+        linker.func_wrap("", "", move || {
+            let _ = &drop_me;
+        })?;
         let module = Module::new(
             store.engine(),
             r#"
@@ -296,7 +298,9 @@ fn funcs_live_on_to_fight_another_day() -> Result<()> {
     let engine = Engine::default();
     let mut linker = Linker::new(&engine);
     let drop_me = DropMe(flag.clone());
-    linker.func_wrap("", "", move || drop(&drop_me))?;
+    linker.func_wrap("", "", move || {
+        let _ = &drop_me;
+    })?;
     assert_eq!(flag.load(SeqCst), 0);
 
     let get_and_call = || -> Result<()> {

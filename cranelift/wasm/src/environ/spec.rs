@@ -101,7 +101,7 @@ pub trait FuncEnvironment: TargetEnvironment {
     /// Called after the locals for a function have been parsed, and the number
     /// of variables defined by this function is provided.
     fn after_locals(&mut self, num_locals_defined: usize) {
-        drop(num_locals_defined);
+        let _ = num_locals_defined;
     }
 
     /// Set up the necessary preamble definitions in `func` to access the global variable
@@ -560,7 +560,7 @@ pub trait ModuleEnvironment<'data> {
     /// Translates a type index to its signature index, only called for type
     /// indices which point to functions.
     fn type_to_signature(&self, index: TypeIndex) -> WasmResult<SignatureIndex> {
-        drop(index);
+        let _ = index;
         Err(WasmError::Unsupported("module linking".to_string()))
     }
 
@@ -601,7 +601,7 @@ pub trait ModuleEnvironment<'data> {
         module: &'data str,
         field: &'data str,
     ) -> WasmResult<()> {
-        drop((tag, module, field));
+        let _ = (tag, module, field);
         Err(WasmError::Unsupported("wasm tags".to_string()))
     }
 
@@ -653,7 +653,7 @@ pub trait ModuleEnvironment<'data> {
 
     /// Declares an tag to the environment
     fn declare_tag(&mut self, tag: Tag) -> WasmResult<()> {
-        drop(tag);
+        let _ = tag;
         Err(WasmError::Unsupported("wasm tags".to_string()))
     }
 
@@ -688,7 +688,7 @@ pub trait ModuleEnvironment<'data> {
 
     /// Declares an tag export to the environment.
     fn declare_tag_export(&mut self, tag_index: TagIndex, name: &'data str) -> WasmResult<()> {
-        drop((tag_index, name));
+        let _ = (tag_index, name);
         Err(WasmError::Unsupported("wasm tags".to_string()))
     }
 
@@ -732,7 +732,7 @@ pub trait ModuleEnvironment<'data> {
     /// Indicates that a declarative element segment was seen in the wasm
     /// module.
     fn declare_elements(&mut self, elements: Box<[FuncIndex]>) -> WasmResult<()> {
-        drop(elements);
+        let _ = elements;
         Ok(())
     }
 
@@ -751,7 +751,7 @@ pub trait ModuleEnvironment<'data> {
     /// Indicates how many functions the code section reports and the byte
     /// offset of where the code sections starts.
     fn reserve_function_bodies(&mut self, bodies: u32, code_section_offset: u64) {
-        drop((bodies, code_section_offset));
+        let _ = (bodies, code_section_offset);
     }
 
     /// Provides the contents of a function body.
