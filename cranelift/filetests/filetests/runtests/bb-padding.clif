@@ -1,6 +1,6 @@
 test interpret
 test run
-set bb_padding_log2=20
+set bb_padding_log2_minus_one=21
 target aarch64
 target s390x
 target x86_64

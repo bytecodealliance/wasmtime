@@ -827,9 +827,9 @@ impl<I: VCodeInst> VCode<I> {
         }
 
         let is_forward_edge_cfi_enabled = self.abi.is_forward_edge_cfi_enabled();
-        let bb_padding = match self.emit_info.settings().bb_padding_log2() {
+        let bb_padding = match self.emit_info.settings().bb_padding_log2_minus_one() {
             0 => Vec::new(),
-            n => vec![0; 1 << n],
+            n => vec![0; 1 << (n - 1)],
         };
 
         for (block_order_idx, &block) in final_order.iter().enumerate() {

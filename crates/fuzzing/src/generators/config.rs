@@ -208,7 +208,7 @@ impl Config {
         // time.
         unsafe {
             cfg.cranelift_flag_set(
-                "bb_padding_log2",
+                "bb_padding_log2_minus_one",
                 &(self.wasmtime.bb_padding_log2 & 0xf).to_string(),
             );
         }
