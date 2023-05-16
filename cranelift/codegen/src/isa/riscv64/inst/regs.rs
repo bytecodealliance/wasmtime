@@ -149,7 +149,7 @@ pub fn crate_reg_eviroment(_flags: &settings::Flags) -> MachineEnv {
             .map(|i| PReg::new(i, RegClass::Float))
             .collect();
 
-        let v_registers: Vec<PReg> = (1..=31).map(|i| PReg::new(i, RegClass::Vector)).collect();
+        let v_registers: Vec<PReg> = (0..=31).map(|i| PReg::new(i, RegClass::Vector)).collect();
 
         [x_registers, f_registers, v_registers]
     };
@@ -165,9 +165,7 @@ pub fn crate_reg_eviroment(_flags: &settings::Flags) -> MachineEnv {
             .map(|i| PReg::new(i, RegClass::Float))
             .collect();
 
-        // Only v0 is non-preferred since it's the only mask register and we
-        // don't want to needlessly overwrite it.
-        let v_registers = vec![PReg::new(0, RegClass::Vector)];
+        let v_registers = vec![];
 
         [x_registers, f_registers, v_registers]
     };

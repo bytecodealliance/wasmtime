@@ -24,12 +24,12 @@ block0:
 ;   add sp,-1040
 ; block0:
 ;   mv s7,a0
-;   vle16.v v4,[const(0)] #avl=8, #vtype=(e16, m1, ta, ma)
-;   vse8.v v4,0(nominal_sp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle16.v v3,[const(0)] #avl=8, #vtype=(e16, m1, ta, ma)
+;   vse8.v v3,0(nominal_sp) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   call userextname0
 ;   mv a0,s7
-;   vle8.v v4,0(nominal_sp) #avl=16, #vtype=(e8, m1, ta, ma)
-;   vse8.v v4,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v3,0(nominal_sp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v3,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
 ;   add sp,+1040
 ;   ld s7,-8(sp)
 ;   ld ra,8(sp)
@@ -50,14 +50,14 @@ block0:
 ;   .byte 0x57, 0x70, 0x84, 0xcc
 ;   auipc t6, 0
 ;   addi t6, t6, 0x40
-;   .byte 0x07, 0xd2, 0x0f, 0x02
+;   .byte 0x87, 0xd1, 0x0f, 0x02
 ;   .byte 0x57, 0x70, 0x08, 0xcc
-;   .byte 0x27, 0x02, 0x01, 0x02
+;   .byte 0xa7, 0x01, 0x01, 0x02
 ;   auipc ra, 0 ; reloc_external RiscvCall u2:0 0
 ;   jalr ra
 ;   ori a0, s7, 0
-;   .byte 0x07, 0x02, 0x01, 0x02
-;   .byte 0x27, 0x02, 0x05, 0x02
+;   .byte 0x87, 0x01, 0x01, 0x02
+;   .byte 0xa7, 0x01, 0x05, 0x02
 ;   addi sp, sp, 0x410
 ;   ld s7, -8(sp)
 ;   ld ra, 8(sp)
