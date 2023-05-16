@@ -202,6 +202,17 @@ impl Config {
             }
         }
 
+        // Allow at most 1<<16 == 64k of padding between basic blocks. If this
+        // gets too large then functions actually grow to 4G+ sizes which is not
+        // really that interesting to test as it's pretty unrealistic at this
+        // time.
+        unsafe {
+            cfg.cranelift_flag_set(
+                "bb_padding_log2",
+                &(self.wasmtime.bb_padding_log2 & 0xf).to_string(),
+            );
+        }
+
         // Vary the memory configuration, but only if threads are not enabled.
         // When the threads proposal is enabled we might generate shared memory,
         // which is less amenable to different memory configurations:
@@ -398,6 +409,7 @@ pub struct WasmtimeConfig {
     #[cfg(feature = "winch")]
     /// Configuration for the compiler to use.
     pub compiler_strategy: CompilerStrategy,
+    bb_padding_log2: u8,
 }
 
 impl WasmtimeConfig {
