@@ -927,6 +927,8 @@ impl MachInstEmit for Inst {
             }
 
             &Inst::Mov { rd, rm, ty } => {
+                debug_assert_ne!(rd.to_reg().class(), RegClass::Vector);
+                debug_assert_ne!(rm.class(), RegClass::Vector);
                 if rd.to_reg() != rm {
                     let rm = allocs.next(rm);
                     let rd = allocs.next_writable(rd);

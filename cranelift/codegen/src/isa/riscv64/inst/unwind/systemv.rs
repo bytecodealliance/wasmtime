@@ -30,17 +30,14 @@ pub fn create_cie() -> CommonInformationEntry {
 
 /// Map Cranelift registers to their corresponding Gimli registers.
 pub fn map_reg(reg: Reg) -> Result<Register, RegisterMappingError> {
-    match reg.class() {
-        RegClass::Int => {
-            let reg = reg.to_real_reg().unwrap().hw_enc() as u16;
-            Ok(Register(reg))
-        }
-        RegClass::Float => {
-            let reg = reg.to_real_reg().unwrap().hw_enc() as u16;
-            Ok(Register(32 + reg))
-        }
-        RegClass::Vector => unreachable!(),
-    }
+    let reg_offset = match reg.class() {
+        RegClass::Int => 0,
+        RegClass::Float => 32,
+        RegClass::Vector => 64,
+    };
+
+    let reg = reg.to_real_reg().unwrap().hw_enc() as u16;
+    Ok(Register(reg_offset + reg))
 }
 
 pub(crate) struct RegisterMapper;

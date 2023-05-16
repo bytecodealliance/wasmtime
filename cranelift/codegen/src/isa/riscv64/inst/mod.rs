@@ -7,7 +7,7 @@
 use super::lower::isle::generated_code::{VecAMode, VecElementWidth};
 use crate::binemit::{Addend, CodeOffset, Reloc};
 pub use crate::ir::condcodes::IntCC;
-use crate::ir::types::{self, F32, F64, I128, I16, I32, I64, I8, R32, R64};
+use crate::ir::types::{self, F32, F64, I128, I16, I32, I64, I8, I8X16, R32, R64};
 
 pub use crate::ir::{ExternalName, MemFlags, Opcode, SourceLoc, Type, ValueLabel};
 use crate::isa::{CallConv, FunctionAlignment};
@@ -667,7 +667,7 @@ impl MachInst for Inst {
         match rc {
             regalloc2::RegClass::Int => I64,
             regalloc2::RegClass::Float => F64,
-            regalloc2::RegClass::Vector => unreachable!(),
+            regalloc2::RegClass::Vector => I8X16,
         }
     }
 
@@ -770,7 +770,7 @@ impl MachInst for Inst {
                 let idx = (ty.bytes().ilog2() - 1) as usize;
                 let ty = &SIMD_TYPES[idx][..];
 
-                Ok((&[RegClass::Float], ty))
+                Ok((&[RegClass::Vector], ty))
             }
             _ => Err(CodegenError::Unsupported(format!(
                 "Unexpected SSA-value type: {}",
@@ -830,19 +830,8 @@ pub fn reg_name(reg: Reg) -> String {
                 28..=31 => format!("ft{}", real.hw_enc() - 20),
                 _ => unreachable!(),
             },
-            RegClass::Vector => unreachable!(),
+            RegClass::Vector => format!("v{}", real.hw_enc()),
         },
-        None => {
-            format!("{:?}", reg)
-        }
-    }
-}
-pub fn vec_reg_name(reg: Reg) -> String {
-    match reg.to_real_reg() {
-        Some(real) => {
-            assert_eq!(real.class(), RegClass::Float);
-            format!("v{}", real.hw_enc())
-        }
         None => {
             format!("{:?}", reg)
         }
@@ -858,10 +847,6 @@ impl Inst {
         let format_reg = |reg: Reg, allocs: &mut AllocationConsumer<'_>| -> String {
             let reg = allocs.next(reg);
             reg_name(reg)
-        };
-        let format_vec_reg = |reg: Reg, allocs: &mut AllocationConsumer<'_>| -> String {
-            let reg = allocs.next(reg);
-            vec_reg_name(reg)
         };
 
         let format_vec_amode = |amode: &VecAMode, allocs: &mut AllocationConsumer<'_>| -> String {
@@ -1568,9 +1553,9 @@ impl Inst {
                 vs2,
                 ref vstate,
             } => {
-                let vs1_s = format_vec_reg(vs1, allocs);
-                let vs2_s = format_vec_reg(vs2, allocs);
-                let vd_s = format_vec_reg(vd.to_reg(), allocs);
+                let vs1_s = format_reg(vs1, allocs);
+                let vs2_s = format_reg(vs2, allocs);
+                let vd_s = format_reg(vd.to_reg(), allocs);
 
                 // Note: vs2 and vs1 here are opposite to the standard scalar ordering.
                 // This is noted in Section 10.1 of the RISC-V Vector spec.
@@ -1583,8 +1568,8 @@ impl Inst {
                 vs2,
                 ref vstate,
             } => {
-                let vs2_s = format_vec_reg(vs2, allocs);
-                let vd_s = format_vec_reg(vd.to_reg(), allocs);
+                let vs2_s = format_reg(vs2, allocs);
+                let vd_s = format_reg(vd.to_reg(), allocs);
 
                 format!("{} {},{},{} {}", op, vd_s, vs2_s, imm, vstate)
             }
@@ -1601,7 +1586,7 @@ impl Inst {
                 ..
             } => {
                 let base = format_vec_amode(from, allocs);
-                let vd = format_vec_reg(to.to_reg(), allocs);
+                let vd = format_reg(to.to_reg(), allocs);
                 format!("vl{}.v {},{} {}", eew, vd, base, vstate)
             }
             Inst::VecStore {
@@ -1612,7 +1597,7 @@ impl Inst {
                 ..
             } => {
                 let dst = format_vec_amode(to, allocs);
-                let vs3 = format_vec_reg(*from, allocs);
+                let vs3 = format_reg(*from, allocs);
                 format!("vs{}.v {},{} {}", eew, vs3, dst, vstate)
             }
         }
