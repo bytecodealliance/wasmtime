@@ -97,6 +97,8 @@ members = [
   "crates/cli-flags",
   "crates/environ/fuzz",
   "crates/jit-icache-coherence",
+  "crates/test-programs/wasi-tests",
+  "crates/test-programs/wasi-http-tests",
   "crates/wasi-preview1-component-adapter",
   "crates/wasi-preview1-component-adapter/verify",
   "crates/winch",
