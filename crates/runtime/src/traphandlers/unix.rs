@@ -251,7 +251,7 @@ unsafe fn get_pc_and_fp(cx: *mut libc::c_void, _signum: libc::c_int) -> (*const 
 unsafe fn set_pc(cx: *mut libc::c_void, pc: usize, arg1: usize) {
     cfg_if::cfg_if! {
         if #[cfg(not(target_os = "macos"))] {
-            drop((cx, pc, arg1));
+            let _ = (cx, pc, arg1);
             unreachable!(); // not used on these platforms
         } else if #[cfg(target_arch = "x86_64")] {
             let cx = &mut *(cx as *mut libc::ucontext_t);

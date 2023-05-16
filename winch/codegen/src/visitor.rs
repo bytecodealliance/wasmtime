@@ -26,7 +26,7 @@ macro_rules! def_unsupported {
 		$op
 
 		fn $visit(&mut self $($(,$arg: $argty)*)?) -> Self::Output {
-		    $($(drop($arg);)*)?
+		    $($(let _ = $arg;)*)?
 		    todo!(stringify!($op))
 		}
 	    );

@@ -670,12 +670,11 @@ impl<'a, 'data> Translator<'a, 'data> {
                 for alias in s {
                     let init = match alias? {
                         wasmparser::ComponentAlias::InstanceExport {
-                            kind,
+                            kind: _,
                             instance_index,
                             name,
                         } => {
                             let instance = ComponentInstanceIndex::from_u32(instance_index);
-                            drop(kind);
                             self.alias_component_instance_export(instance, name);
                             LocalInitializer::AliasComponentExport(instance, name)
                         }

@@ -110,7 +110,9 @@ fn wrong_store() -> anyhow::Result<()> {
         let mut store2 = Store::<()>::default();
 
         let set = SetOnDrop(dropped.clone());
-        let f1 = Func::wrap(&mut store1, move || drop(&set));
+        let f1 = Func::wrap(&mut store1, move || {
+            let _ = &set;
+        });
         let f2 = Func::wrap(&mut store2, move || Some(f1.clone()));
         assert!(f2.call(&mut store2, &[], &mut []).is_err());
     }
@@ -136,7 +138,9 @@ fn func_new_returns_wrong_store() -> anyhow::Result<()> {
         let mut store2 = Store::<()>::default();
 
         let set = SetOnDrop(dropped.clone());
-        let f1 = Func::wrap(&mut store1, move || drop(&set));
+        let f1 = Func::wrap(&mut store1, move || {
+            let _ = &set;
+        });
         let f2 = Func::new(
             &mut store2,
             FuncType::new(None, Some(ValType::FuncRef)),

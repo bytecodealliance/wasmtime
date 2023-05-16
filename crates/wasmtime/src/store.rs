@@ -356,7 +356,7 @@ where
     T: std::ops::DerefMut<Target = StoreOpaque>,
 {
     pub fn new(mut store: T) -> Self {
-        drop(&mut store);
+        let _ = &mut store;
         #[cfg(debug_assertions)]
         {
             let prev_okay = store.externref_activations_table.set_gc_okay(false);
@@ -1979,7 +1979,7 @@ impl<T> StoreInner<T> {
         {
             self.epoch_deadline_behavior = EpochDeadline::YieldAndExtendDeadline { delta };
         }
-        drop(delta); // suppress warning in non-async build
+        let _ = delta; // suppress warning in non-async build
     }
 
     fn get_epoch_deadline(&self) -> u64 {
