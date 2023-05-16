@@ -525,6 +525,12 @@ impl<'a, 'data> Translator<'a, 'data> {
                                 .initializers
                                 .push(LocalInitializer::Lower(func, options));
                         }
+
+                        wasmparser::CanonicalFunction::ResourceNew { .. }
+                        | wasmparser::CanonicalFunction::ResourceDrop { .. }
+                        | wasmparser::CanonicalFunction::ResourceRep { .. } => {
+                            unimplemented!("resource types")
+                        }
                     }
                 }
             }
