@@ -267,7 +267,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                         }
                         TypeRef::Global(ty) => {
                             self.result.module.num_imported_globals += 1;
-                            EntityType::Global(Global::new(ty, GlobalInit::Import)?)
+                            EntityType::Global(Global::new(ty)?)
                         }
                         TypeRef::Table(ty) => {
                             self.result.module.num_imported_tables += 1;
@@ -311,7 +311,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                         wasmparser::TableInit::RefNull => {
                             eager.push(crate::EagerTableInitializer {
                                 table_index,
-                                initializer: crate::EagerTableElementInitializer::Null
+                                initializer: crate::EagerTableElementInitializer::Null,
                             })
                         }
                         wasmparser::TableInit::Expr(cexpr) => {
@@ -320,7 +320,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                                 Operator::RefNull { hty: _ } => {
                                     eager.push(crate::EagerTableInitializer {
                                         table_index,
-                                        initializer: crate::EagerTableElementInitializer::Null
+                                        initializer: crate::EagerTableElementInitializer::Null,
                                     })
                                 }
                                 Operator::RefFunc { function_index } => {
@@ -329,7 +329,9 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                                     self.flag_func_escaped(index);
                                     eager.push(crate::EagerTableInitializer {
                                         table_index,
-                                        initializer: crate::EagerTableElementInitializer::FuncRef(index)
+                                        initializer: crate::EagerTableElementInitializer::FuncRef(
+                                            index,
+                                        ),
                                     })
                                 }
                                 s => {
@@ -404,8 +406,9 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                             )));
                         }
                     };
-                    let ty = Global::new(ty, initializer)?;
+                    let ty = Global::new(ty)?;
                     self.result.module.globals.push(ty);
+                    self.result.module.global_initializers.push(initializer);
                 }
             }
 

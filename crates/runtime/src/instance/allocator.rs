@@ -133,9 +133,9 @@ pub unsafe trait InstanceAllocator {
         self.deallocate_tables(index, &mut handle.instance_mut().tables);
         unsafe {
             let layout = Instance::alloc_layout(handle.instance().offsets());
-            ptr::drop_in_place(handle.instance);
-            alloc::dealloc(handle.instance.cast(), layout);
-            handle.instance = std::ptr::null_mut();
+            let ptr = handle.instance.take().unwrap();
+            ptr::drop_in_place(ptr.as_ptr());
+            alloc::dealloc(ptr.as_ptr().cast(), layout);
         }
         self.deallocate_index(index);
     }
@@ -241,10 +241,14 @@ fn check_table_init_bounds(instance: &mut Instance, module: &Module) -> Result<(
 
 fn initialize_tables(instance: &mut Instance, module: &Module) -> Result<()> {
     let segments = match &module.table_initialization {
-        TableInitialization::Segments { segments } |
-        TableInitialization::FuncTable { segments, .. } => segments,
+        TableInitialization::Segments { segments }
+        | TableInitialization::FuncTable { segments, .. } => segments,
         TableInitialization::EagerFuncTable { tables, segments } => {
-            for wasmtime_environ::EagerTableInitializer { table_index, initializer } in tables {
+            for wasmtime_environ::EagerTableInitializer {
+                table_index,
+                initializer,
+            } in tables
+            {
                 match initializer {
                     wasmtime_environ::EagerTableElementInitializer::Null => {
                         let table = unsafe { &mut *instance.get_table(*table_index) };

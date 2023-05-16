@@ -5,6 +5,7 @@ use crate::ir::RelSourceLoc;
 use crate::ir::TrapCode;
 use crate::isa::riscv64::inst::*;
 use crate::isa::riscv64::inst::{zero_reg, AluOPRRR};
+use crate::isa::riscv64::lower::isle::generated_code::VecOpMasking;
 use crate::machinst::{AllocationConsumer, Reg, Writable};
 use cranelift_control::ControlPlane;
 use regalloc2::Allocation;
@@ -467,6 +468,7 @@ impl Inst {
             Inst::VecSetState { .. } => None,
 
             Inst::VecAluRRR { vstate, .. } |
+            Inst::VecAluRRImm5 { vstate, .. } |
             // TODO: Unit-stride loads and stores only need the AVL to be correct, not
             // the full vtype. A future optimization could be to decouple these two when
             // updating vstate. This would allow us to avoid emitting a VecSetState in
@@ -634,7 +636,7 @@ impl MachInstEmit for Inst {
 
                 sink.put4(encode_r_type(
                     alu_op.op_code(),
-                    rd.to_reg(),
+                    rd,
                     alu_op.funct3(),
                     rs1,
                     rs2,
@@ -662,80 +664,58 @@ impl MachInstEmit for Inst {
                 from,
                 flags,
             } => {
-                let x;
-                let base = from.get_base_register();
-                let base = allocs.next(base);
+                let from = from.clone().with_allocs(&mut allocs);
                 let rd = allocs.next_writable(rd);
+
+                let base = from.get_base_register();
                 let offset = from.get_offset_with_state(state);
-                if let Some(imm12) = Imm12::maybe_from_u64(offset as u64) {
-                    let srcloc = state.cur_srcloc();
-                    if !srcloc.is_default() && !flags.notrap() {
-                        // Register the offset at which the actual load instruction starts.
-                        sink.add_trap(TrapCode::HeapOutOfBounds);
+                let offset_imm12 = Imm12::maybe_from_u64(offset as u64);
+
+                let (addr, imm12) = match (base, offset_imm12) {
+                    // If the offset fits into an imm12 we can directly encode it.
+                    (Some(base), Some(imm12)) => (base, imm12),
+                    // Otherwise load the address it into a reg and load from it.
+                    _ => {
+                        let tmp = writable_spilltmp_reg();
+                        Inst::LoadAddr { rd: tmp, mem: from }.emit(&[], sink, emit_info, state);
+                        (tmp.to_reg(), Imm12::zero())
                     }
-                    x = op.op_code()
-                        | reg_to_gpr_num(rd.to_reg()) << 7
-                        | op.funct3() << 12
-                        | reg_to_gpr_num(base) << 15
-                        | (imm12.as_u32()) << 20;
-                    sink.put4(x);
-                } else {
-                    let tmp = writable_spilltmp_reg();
-                    let mut insts =
-                        LoadConstant::U64(offset as u64).load_constant_and_add(tmp, base);
-                    let srcloc = state.cur_srcloc();
-                    if !srcloc.is_default() && !flags.notrap() {
-                        // Register the offset at which the actual load instruction starts.
-                        sink.add_trap(TrapCode::HeapOutOfBounds);
-                    }
-                    insts.push(Inst::Load {
-                        op,
-                        from: AMode::RegOffset(tmp.to_reg(), 0, I64),
-                        rd,
-                        flags,
-                    });
-                    insts
-                        .into_iter()
-                        .for_each(|inst| inst.emit(&[], sink, emit_info, state));
+                };
+
+                let srcloc = state.cur_srcloc();
+                if !srcloc.is_default() && !flags.notrap() {
+                    // Register the offset at which the actual load instruction starts.
+                    sink.add_trap(TrapCode::HeapOutOfBounds);
                 }
+
+                sink.put4(encode_i_type(op.op_code(), rd, op.funct3(), addr, imm12));
             }
             &Inst::Store { op, src, flags, to } => {
-                let base = allocs.next(to.get_base_register());
+                let to = to.clone().with_allocs(&mut allocs);
                 let src = allocs.next(src);
+
+                let base = to.get_base_register();
                 let offset = to.get_offset_with_state(state);
-                let x;
-                if let Some(imm12) = Imm12::maybe_from_u64(offset as u64) {
-                    let srcloc = state.cur_srcloc();
-                    if !srcloc.is_default() && !flags.notrap() {
-                        // Register the offset at which the actual load instruction starts.
-                        sink.add_trap(TrapCode::HeapOutOfBounds);
+                let offset_imm12 = Imm12::maybe_from_u64(offset as u64);
+
+                let (addr, imm12) = match (base, offset_imm12) {
+                    // If the offset fits into an imm12 we can directly encode it.
+                    (Some(base), Some(imm12)) => (base, imm12),
+                    // Otherwise load the address it into a reg and load from it.
+                    _ => {
+                        let tmp = writable_spilltmp_reg();
+                        Inst::LoadAddr { rd: tmp, mem: to }.emit(&[], sink, emit_info, state);
+                        (tmp.to_reg(), Imm12::zero())
                     }
-                    x = op.op_code()
-                        | (imm12.as_u32() & 0x1f) << 7
-                        | op.funct3() << 12
-                        | reg_to_gpr_num(base) << 15
-                        | reg_to_gpr_num(src) << 20
-                        | (imm12.as_u32() >> 5) << 25;
-                    sink.put4(x);
-                } else {
-                    let tmp = writable_spilltmp_reg();
-                    let mut insts =
-                        LoadConstant::U64(offset as u64).load_constant_and_add(tmp, base);
-                    let srcloc = state.cur_srcloc();
-                    if !srcloc.is_default() && !flags.notrap() {
-                        // Register the offset at which the actual load instruction starts.
-                        sink.add_trap(TrapCode::HeapOutOfBounds);
-                    }
-                    insts.push(Inst::Store {
-                        op,
-                        to: AMode::RegOffset(tmp.to_reg(), 0, I64),
-                        flags,
-                        src,
-                    });
-                    insts
-                        .into_iter()
-                        .for_each(|inst| inst.emit(&[], sink, emit_info, state));
+                };
+
+                let srcloc = state.cur_srcloc();
+                if !srcloc.is_default() && !flags.notrap() {
+                    // Register the offset at which the actual load instruction starts.
+                    sink.add_trap(TrapCode::HeapOutOfBounds);
                 }
+
+                sink.put4(encode_s_type(op.op_code(), op.funct3(), addr, src, imm12));
             }
             &Inst::Args { .. } => {
                 // Nothing: this is a pseudoinstruction that serves
@@ -1186,23 +1166,61 @@ impl MachInstEmit for Inst {
             }
 
             &Inst::LoadAddr { rd, mem } => {
-                let base = mem.get_base_register();
-                let base = allocs.next(base);
+                let mem = mem.with_allocs(&mut allocs);
                 let rd = allocs.next_writable(rd);
+
+                let base = mem.get_base_register();
                 let offset = mem.get_offset_with_state(state);
-                if let Some(offset) = Imm12::maybe_from_u64(offset as u64) {
-                    Inst::AluRRImm12 {
-                        alu_op: AluOPRRI::Addi,
-                        rd,
-                        rs: base,
-                        imm12: offset,
+                let offset_imm12 = Imm12::maybe_from_u64(offset as u64);
+
+                match (mem, base, offset_imm12) {
+                    (_, Some(rs), Some(imm12)) => {
+                        Inst::AluRRImm12 {
+                            alu_op: AluOPRRI::Addi,
+                            rd,
+                            rs,
+                            imm12,
+                        }
+                        .emit(&[], sink, emit_info, state);
                     }
-                    .emit(&[], sink, emit_info, state);
-                } else {
-                    let insts = LoadConstant::U64(offset as u64).load_constant_and_add(rd, base);
-                    insts
-                        .into_iter()
-                        .for_each(|i| i.emit(&[], sink, emit_info, state));
+                    (_, Some(rs), None) => {
+                        LoadConstant::U64(offset as u64)
+                            .load_constant_and_add(rd, rs)
+                            .into_iter()
+                            .for_each(|inst| inst.emit(&[], sink, emit_info, state));
+                    }
+                    (AMode::Const(addr), None, _) => {
+                        // Get an address label for the constant and recurse.
+                        let label = sink.get_label_for_constant(addr);
+                        Inst::LoadAddr {
+                            rd,
+                            mem: AMode::Label(label),
+                        }
+                        .emit(&[], sink, emit_info, state);
+                    }
+                    (AMode::Label(label), None, _) => {
+                        // Get the current PC.
+                        sink.use_label_at_offset(sink.cur_offset(), label, LabelUse::PCRelHi20);
+                        let inst = Inst::Auipc {
+                            rd,
+                            imm: Imm20::from_bits(0),
+                        };
+                        inst.emit(&[], sink, emit_info, state);
+
+                        // Emit an add to the address with a relocation.
+                        // This later gets patched up with the correct offset.
+                        sink.use_label_at_offset(sink.cur_offset(), label, LabelUse::PCRelLo12I);
+                        Inst::AluRRImm12 {
+                            alu_op: AluOPRRI::Addi,
+                            rd,
+                            rs: rd.to_reg(),
+                            imm12: Imm12::zero(),
+                        }
+                        .emit(&[], sink, emit_info, state);
+                    }
+                    (amode, _, _) => {
+                        unimplemented!("LoadAddr: {:?}", amode);
+                    }
                 }
             }
 
@@ -2788,19 +2806,15 @@ impl MachInstEmit for Inst {
                 let vs2 = allocs.next(vs2);
                 let vd = allocs.next_writable(vd);
 
-                // This is the mask bit, we don't yet implement masking, so set it to 1, which means
-                // masking disabled.
-                let vm = 1;
+                sink.put4(encode_valu(op, vd, vs1, vs2, VecOpMasking::Disabled));
+            }
+            &Inst::VecAluRRImm5 {
+                op, vd, imm, vs2, ..
+            } => {
+                let vs2 = allocs.next(vs2);
+                let vd = allocs.next_writable(vd);
 
-                sink.put4(encode_valu(
-                    op.opcode(),
-                    vd.to_reg(),
-                    op.funct3(),
-                    vs1,
-                    vs2,
-                    vm,
-                    op.funct6(),
-                ));
+                sink.put4(encode_valu_imm(op, vd, imm, vs2, VecOpMasking::Disabled));
             }
             &Inst::VecSetState { rd, ref vstate } => {
                 let rd = allocs.next_writable(rd);
@@ -2823,16 +2837,30 @@ impl MachInstEmit for Inst {
                 flags,
                 ..
             } => {
-                let offset = from.get_offset_with_state(state);
-                let from_reg = allocs.next(from.get_base_register());
+                let from = from.clone().with_allocs(&mut allocs);
                 let to = allocs.next_writable(to);
 
                 // Vector Loads don't support immediate offsets, so we need to load it into a register.
-                let addr = writable_spilltmp_reg();
-                LoadConstant::U64(offset as u64)
-                    .load_constant_and_add(addr, from_reg)
-                    .into_iter()
-                    .for_each(|inst| inst.emit(&[], sink, emit_info, state));
+                let addr = match from {
+                    VecAMode::UnitStride { base } => {
+                        let base_reg = base.get_base_register();
+                        let offset = base.get_offset_with_state(state);
+
+                        // Reg+0 Offset can be directly encoded
+                        if let (Some(base_reg), 0) = (base_reg, offset) {
+                            base_reg
+                        } else {
+                            // Otherwise load the address it into a reg and load from it.
+                            let tmp = writable_spilltmp_reg();
+                            Inst::LoadAddr {
+                                rd: tmp,
+                                mem: base.clone(),
+                            }
+                            .emit(&[], sink, emit_info, state);
+                            tmp.to_reg()
+                        }
+                    }
+                };
 
                 let srcloc = state.cur_srcloc();
                 if !srcloc.is_default() && !flags.notrap() {
@@ -2840,17 +2868,14 @@ impl MachInstEmit for Inst {
                     sink.add_trap(TrapCode::HeapOutOfBounds);
                 }
 
-                // This is the mask bit, we don't yet implement masking, so set it to 1, which means
-                // masking disabled.
-                let vm = 1;
-
                 sink.put4(encode_vmem_load(
                     0x07,
                     to.to_reg(),
                     eew,
-                    addr.to_reg(),
+                    addr,
                     from.lumop(),
-                    vm,
+                    // We don't implement masking yet.
+                    VecOpMasking::Disabled,
                     from.mop(),
                     from.nf(),
                 ));
@@ -2863,16 +2888,30 @@ impl MachInstEmit for Inst {
                 flags,
                 ..
             } => {
-                let offset = to.get_offset_with_state(state);
-                let to_reg = allocs.next(to.get_base_register());
+                let to = to.clone().with_allocs(&mut allocs);
                 let from = allocs.next(from);
 
                 // Vector Stores don't support immediate offsets, so we need to load it into a register.
-                let addr = writable_spilltmp_reg();
-                LoadConstant::U64(offset as u64)
-                    .load_constant_and_add(addr, to_reg)
-                    .into_iter()
-                    .for_each(|inst| inst.emit(&[], sink, emit_info, state));
+                let addr = match to {
+                    VecAMode::UnitStride { base } => {
+                        let base_reg = base.get_base_register();
+                        let offset = base.get_offset_with_state(state);
+
+                        // Reg+0 Offset can be directly encoded
+                        if let (Some(base_reg), 0) = (base_reg, offset) {
+                            base_reg
+                        } else {
+                            // Otherwise load the address it into a reg and load from it.
+                            let tmp = writable_spilltmp_reg();
+                            Inst::LoadAddr {
+                                rd: tmp,
+                                mem: base.clone(),
+                            }
+                            .emit(&[], sink, emit_info, state);
+                            tmp.to_reg()
+                        }
+                    }
+                };
 
                 let srcloc = state.cur_srcloc();
                 if !srcloc.is_default() && !flags.notrap() {
@@ -2880,17 +2919,14 @@ impl MachInstEmit for Inst {
                     sink.add_trap(TrapCode::HeapOutOfBounds);
                 }
 
-                // This is the mask bit, we don't yet implement masking, so set it to 1, which means
-                // masking disabled.
-                let vm = 1;
-
                 sink.put4(encode_vmem_store(
                     0x27,
                     from,
                     eew,
-                    addr.to_reg(),
+                    addr,
                     to.sumop(),
-                    vm,
+                    // We don't implement masking yet.
+                    VecOpMasking::Disabled,
                     to.mop(),
                     to.nf(),
                 ));

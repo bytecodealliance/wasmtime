@@ -5,13 +5,12 @@ use libfuzzer_sys::fuzz_target;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering::SeqCst;
 use std::sync::Once;
-use wasmtime::Trap;
 #[cfg(feature = "fuzz-winch")]
 use wasmtime_fuzzing::generators::CompilerStrategy;
 use wasmtime_fuzzing::generators::{Config, DiffValue, DiffValueType, SingleInstModule};
 use wasmtime_fuzzing::oracles::diff_wasmtime::WasmtimeInstance;
 use wasmtime_fuzzing::oracles::engine::{build_allowed_env_list, parse_env_list};
-use wasmtime_fuzzing::oracles::{differential, engine, log_wasm};
+use wasmtime_fuzzing::oracles::{differential, engine, log_wasm, DiffEqResult};
 #[cfg(feature = "fuzz-winch")]
 use wasmtime_fuzzing::wasm_smith::{InstructionKind, InstructionKinds};
 
@@ -137,27 +136,15 @@ fn execute_one(data: &[u8]) -> Result<()> {
     let rhs_module = wasmtime::Module::new(rhs_store.engine(), &wasm).unwrap();
     let rhs_instance = WasmtimeInstance::new(rhs_store, rhs_module);
 
-    let (mut lhs_instance, mut rhs_instance) = match (lhs_instance, rhs_instance) {
-        // Both sides successful, continue below to invoking exports.
-        (Ok(l), Ok(r)) => (l, r),
+    let (mut lhs_instance, mut rhs_instance) =
+        match DiffEqResult::new(&*lhs, lhs_instance, rhs_instance) {
+            // Both sides successful, continue below to invoking exports.
+            DiffEqResult::Success(l, r) => (l, r),
 
-        // Both sides failed, make sure they failed for the same reason but then
-        // we're done with this fuzz test case.
-        (Err(l), Err(r)) => {
-            let err = r.downcast::<Trap>().expect("not a trap");
-            lhs.assert_error_match(&err, &l);
-            return Ok(());
-        }
-
-        // One side succeeded and one side failed, that means a bug happened!
-        (l, r) => {
-            panic!(
-                "failed to instantiate only one side: {:?} != {:?}",
-                l.err(),
-                r.err()
-            )
-        }
-    };
+            // Both sides failed, or computation has diverged. In both cases this
+            // test case is done.
+            DiffEqResult::Poisoned | DiffEqResult::Failed => return Ok(()),
+        };
 
     // Call each exported function with different sets of arguments.
     'outer: for (name, signature) in rhs_instance.exported_functions() {

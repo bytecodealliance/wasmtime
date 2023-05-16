@@ -9,6 +9,15 @@
 (rule (lower (has_type ty (iconst (u64_from_imm64 n))))
   (imm ty n))
 
+;; ;;;; Rules for `vconst` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type (ty_vec_fits_in_register ty) (vconst n)))
+  (vec_load
+    (element_width_from_type ty)
+    (VecAMode.UnitStride (gen_const_amode (const_to_vconst n)))
+    (mem_flags_trusted)
+    ty))
+
 ;;;; Rules for `f32const` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (f32const (u32_from_ieee32 n)))
@@ -100,6 +109,12 @@
 ;; SIMD Vectors
 (rule 8 (lower (has_type (ty_vec_fits_in_register ty) (iadd x y)))
   (rv_vadd_vv x y ty))
+
+(rule 9 (lower (has_type (ty_vec_fits_in_register ty) (iadd x (replicated_imm5 y))))
+  (rv_vadd_vi x y ty))
+
+(rule 10 (lower (has_type (ty_vec_fits_in_register ty) (iadd (replicated_imm5 x) y)))
+  (rv_vadd_vi y x ty))
 
 ;;; Rules for `uadd_overflow_trap` ;;;;;;;;;;;;;
 (rule
@@ -364,16 +379,8 @@
   (rv_vxor_vv x y ty))
 
 ;;;; Rules for `bnot` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule -1 (lower (has_type (ty_int ty) (bnot x)))
+(rule (lower (has_type ty (bnot x)))
   (gen_bnot ty x))
-
-(rule
-  (lower (has_type $F32 (bnot x)))
-  (lower_float_bnot x $F32))
-
-(rule
-  (lower (has_type $F64 (bnot x)))
-  (lower_float_bnot x $F64))
 
 ;;;; Rules for `bit_reverse` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_64 (ty_int ty)) (bitrev x)))
@@ -928,8 +935,8 @@
 )
 ;;;;;  Rules for `bitcast`;;;;;;;;;
 (rule
-   (lower (has_type out (bitcast _ v @ (value_type in_ty))))
-   (gen_moves v in_ty out))
+   (lower (has_type out_ty (bitcast _ v @ (value_type in_ty))))
+   (gen_bitcast v in_ty out_ty))
 
 ;;;;;  Rules for `ceil`;;;;;;;;;
 (rule

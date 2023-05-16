@@ -340,7 +340,7 @@ impl Instance {
         // trap-handling configuration in `store` as well.
         let instance = store.0.instance_mut(id);
         let f = instance.get_exported_func(start);
-        let caller_vmctx = instance.vmctx_ptr();
+        let caller_vmctx = instance.vmctx();
         unsafe {
             super::func::invoke_wasm_and_catch_traps(store, |_default_caller| {
                 let func = mem::transmute::<

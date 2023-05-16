@@ -691,6 +691,16 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
+        fn u8_shl(&mut self, a: u8, b: u8) -> u8 {
+            a << b
+        }
+
+        #[inline]
+        fn u8_shr(&mut self, a: u8, b: u8) -> u8 {
+            a >> b
+        }
+
+        #[inline]
         fn lane_type(&mut self, ty: Type) -> Type {
             ty.lane_type()
         }
@@ -699,11 +709,6 @@ macro_rules! isle_common_prelude_methods {
         fn offset32_to_u32(&mut self, offset: Offset32) -> u32 {
             let offset: i32 = offset.into();
             offset as u32
-        }
-
-        #[inline]
-        fn u32_to_offset32(&mut self, offset: u32) -> Offset32 {
-            Offset32::new(offset as i32)
         }
 
         fn range(&mut self, start: usize, end: usize) -> Range {

@@ -9,7 +9,7 @@
 //! cd to the top of your wasmtime tree, then:
 //!
 //! RUST_BACKTRACE=1 cargo test --features test-programs/test_programs \
-//!   --features experimental_x64 --all --exclude wasmtime-wasi-nn \
+//!   --all --exclude wasmtime-wasi-nn \
 //!   -- isa::x64::inst::emit_tests::test_x64_emit
 
 use super::*;

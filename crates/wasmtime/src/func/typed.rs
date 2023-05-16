@@ -347,7 +347,7 @@ unsafe impl WasmTy for Option<ExternRef> {
 
     #[inline]
     unsafe fn abi_into_raw(abi: *mut u8, raw: *mut ValRaw) {
-        *raw = ValRaw::externref(abi as usize);
+        *raw = ValRaw::externref(abi.cast());
     }
 
     #[inline]
@@ -433,7 +433,7 @@ unsafe impl WasmTy for Option<Func> {
 
     #[inline]
     unsafe fn abi_into_raw(abi: Self::Abi, raw: *mut ValRaw) {
-        *raw = ValRaw::funcref(abi as usize);
+        *raw = ValRaw::funcref(abi.cast());
     }
 
     #[inline]

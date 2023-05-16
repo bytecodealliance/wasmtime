@@ -50,11 +50,10 @@ fn table(ty: TableType) -> Table {
     }
 }
 
-fn global(ty: GlobalType, initializer: GlobalInit) -> WasmResult<Global> {
+fn global(ty: GlobalType) -> WasmResult<Global> {
     Ok(Global {
         wasm_ty: ty.content_type.try_into()?,
         mutability: ty.mutable,
-        initializer,
     })
 }
 
@@ -100,7 +99,7 @@ pub fn parse_import_section<'data>(
                 environ.declare_tag_import(tag(e), import.module, import.name)?;
             }
             TypeRef::Global(ty) => {
-                let ty = global(ty, GlobalInit::Import)?;
+                let ty = global(ty)?;
                 environ.declare_global_import(ty, import.module, import.name)?;
             }
             TypeRef::Table(ty) => {
@@ -212,8 +211,8 @@ pub fn parse_global_section(
                 ));
             }
         };
-        let ty = global(ty, initializer)?;
-        environ.declare_global(ty)?;
+        let ty = global(ty)?;
+        environ.declare_global(ty, initializer)?;
     }
 
     Ok(())

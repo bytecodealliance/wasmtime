@@ -158,18 +158,18 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         });
     }
     fn load_ra(&mut self) -> Reg {
-        let tmp = self.temp_writable_reg(I64);
         if self.backend.flags.preserve_frame_pointers() {
+            let tmp = self.temp_writable_reg(I64);
             self.emit(&MInst::Load {
                 rd: tmp,
                 op: LoadOP::Ld,
                 flags: MemFlags::trusted(),
                 from: AMode::FPOffset(8, I64),
             });
+            tmp.to_reg()
         } else {
-            self.emit(&gen_move(tmp, I64, link_reg(), I64));
+            link_reg()
         }
-        tmp.to_reg()
     }
     fn int_zero_reg(&mut self, ty: Type) -> ValueRegs {
         assert!(ty.is_int(), "{:?}", ty);
@@ -192,20 +192,10 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         v.clone()
     }
 
-    fn gen_moves(&mut self, rs: ValueRegs, in_ty: Type, out_ty: Type) -> ValueRegs {
-        let tmp = construct_dest(|ty| self.temp_writable_reg(ty), out_ty);
-        if in_ty.bits() < 64 {
-            self.emit(&gen_move(tmp.regs()[0], out_ty, rs.regs()[0], in_ty));
-        } else {
-            gen_moves(tmp.regs(), rs.regs())
-                .iter()
-                .for_each(|i| self.emit(i));
-        }
-        tmp.map(|r| r.to_reg())
-    }
     fn imm12_and(&mut self, imm: Imm12, x: i32) -> Imm12 {
         Imm12::from_bits(imm.as_i16() & (x as i16))
     }
+
     fn alloc_vec_writable(&mut self, ty: Type) -> VecWritableReg {
         if ty.is_int() || ty == R32 || ty == R64 {
             if ty.bits() <= 64 {
@@ -238,6 +228,10 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
     #[inline]
     fn imm12_from_u64(&mut self, arg0: u64) -> Option<Imm12> {
         Imm12::maybe_from_u64(arg0)
+    }
+    #[inline]
+    fn imm5_from_u64(&mut self, arg0: u64) -> Option<Imm5> {
+        Imm5::maybe_from_i8(i8::try_from(arg0 as i64).ok()?)
     }
     #[inline]
     fn writable_zero_reg(&mut self) -> WritableReg {
@@ -351,21 +345,11 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         self.backend.isa_flags.has_zbs()
     }
 
-    fn move_f_to_x(&mut self, r: Reg, ty: Type) -> Reg {
-        let result = self.temp_writable_reg(I64);
-        self.emit(&gen_move(result, I64, r, ty));
-        result.to_reg()
-    }
     fn offset32_imm(&mut self, offset: i32) -> Offset32 {
         Offset32::new(offset)
     }
     fn default_memflags(&mut self) -> MemFlags {
         MemFlags::new()
-    }
-    fn move_x_to_f(&mut self, r: Reg, ty: Type) -> Reg {
-        let result = self.temp_writable_reg(ty);
-        self.emit(&gen_move(result, ty, r, I64));
-        result.to_reg()
     }
 
     fn pack_float_rounding_mode(&mut self, f: &FRM) -> OptionFloatRoundingMode {
@@ -375,9 +359,15 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
     fn int_convert_2_float_op(&mut self, from: Type, is_signed: bool, to: Type) -> FpuOPRR {
         FpuOPRR::int_convert_2_float_op(from, is_signed, to)
     }
+
     fn gen_amode(&mut self, base: Reg, offset: Offset32, ty: Type) -> AMode {
         AMode::RegOffset(base, i64::from(offset), ty)
     }
+
+    fn gen_const_amode(&mut self, c: VCodeConstant) -> AMode {
+        AMode::Const(c)
+    }
+
     fn valid_atomic_transaction(&mut self, ty: Type) -> Option<Type> {
         if ty.is_int() && ty.bits() <= 64 {
             Some(ty)
@@ -519,22 +509,4 @@ pub(crate) fn lower_branch(
     // internal heap allocations.
     let mut isle_ctx = RV64IsleContext::new(lower_ctx, backend);
     generated_code::constructor_lower_branch(&mut isle_ctx, branch, &targets.to_vec())
-}
-
-/// construct destination according to ty.
-fn construct_dest<F: std::ops::FnMut(Type) -> WritableReg>(
-    mut alloc: F,
-    ty: Type,
-) -> WritableValueRegs {
-    if ty.is_int() || ty.is_ref() {
-        if ty.bits() == 128 {
-            WritableValueRegs::two(alloc(I64), alloc(I64))
-        } else {
-            WritableValueRegs::one(alloc(I64))
-        }
-    } else if ty.is_float() {
-        WritableValueRegs::one(alloc(F64))
-    } else {
-        unimplemented!("vector type not implemented.");
-    }
 }

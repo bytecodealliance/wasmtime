@@ -330,6 +330,13 @@
       (vs1 Reg)
       (vstate VState))
 
+    (VecAluRRImm5
+      (op VecAluOpRRImm5)
+      (vd WritableReg)
+      (vs2 Reg)
+      (imm Imm5)
+      (vstate VState))
+
     (VecSetState
       (rd WritableReg)
       (vstate VState))
@@ -682,11 +689,6 @@
 ;;;; lowest four bit are used.
 (type FenceReq (primitive u8))
 
-(type FenceFm (enum
-    (None)
-    (Tso)
-))
-
 (type VecBranchTarget (primitive VecBranchTarget))
 (type BoxCallInfo (primitive BoxCallInfo))
 (type BoxCallIndInfo (primitive BoxCallIndInfo))
@@ -697,6 +699,7 @@
 (type OptionUimm5 (primitive OptionUimm5))
 (type Imm12 (primitive Imm12))
 (type UImm5 (primitive UImm5))
+(type Imm5 (primitive Imm5))
 (type Imm20 (primitive Imm20))
 (type Imm3 (primitive Imm3))
 (type BranchTarget (primitive BranchTarget))
@@ -1075,6 +1078,22 @@
 (rule (rv_fmadd $F32 rs1 rs2 rs3) (fpu_rrrr (FpuOPRRRR.FmaddS) $F32 rs1 rs2 rs3))
 (rule (rv_fmadd $F64 rs1 rs2 rs3) (fpu_rrrr (FpuOPRRRR.FmaddD) $F64 rs1 rs2 rs3))
 
+;; Helper for emitting the `fmv.x.w` instruction.
+(decl rv_fmvxw (Reg) Reg)
+(rule (rv_fmvxw r) (fpu_rr (FpuOPRR.FmvXW) $I32 r))
+
+;; Helper for emitting the `fmv.x.d` instruction.
+(decl rv_fmvxd (Reg) Reg)
+(rule (rv_fmvxd r) (fpu_rr (FpuOPRR.FmvXD) $I64 r))
+
+;; Helper for emitting the `fmv.w.x` instruction.
+(decl rv_fmvwx (Reg) Reg)
+(rule (rv_fmvwx r) (fpu_rr (FpuOPRR.FmvWX) $F32 r))
+
+;; Helper for emitting the `fmv.d.x` instruction.
+(decl rv_fmvdx (Reg) Reg)
+(rule (rv_fmvdx r) (fpu_rr (FpuOPRR.FmvDX) $F64 r))
+
 ;; Helper for emitting the `fcvt.d.s` ("Float Convert Double to Single") instruction.
 (decl rv_fcvtds (Reg) Reg)
 (rule (rv_fcvtds rs1) (fpu_rr (FpuOPRR.FcvtDS) $F32 rs1))
@@ -1323,6 +1342,17 @@
 (extern extractor imm12_from_u64 imm12_from_u64)
 
 
+;; Imm5 Extractors
+
+(decl imm5_from_u64 (Imm5) u64)
+(extern extractor imm5_from_u64 imm5_from_u64)
+
+;; Extractor that matches a `Value` equivalent to a replicated Imm5 on all lanes.
+;; TODO: Try matching vconst here as well
+(decl replicated_imm5 (Imm5) Value)
+(extractor (replicated_imm5 n)
+  (def_inst (splat (iconst (u64_from_imm64 (imm5_from_u64 n))))))
+
 
 ;; Float Helpers
 
@@ -1384,12 +1414,17 @@
 
 
 (decl gen_bnot (Type ValueRegs) ValueRegs)
+(rule 2 (gen_bnot (ty_scalar_float ty) x)
+  (let ((tmp Reg (move_f_to_x x ty))
+        (tmp2 Reg (rv_not tmp)))
+    (move_x_to_f tmp2 (float_int_of_same_size ty))))
+
 (rule 1 (gen_bnot $I128 x)
   (let ((lo Reg (rv_not (value_regs_get x 0)))
         (hi Reg (rv_not (value_regs_get x 1))))
     (value_regs lo hi)))
 
-(rule 0 (gen_bnot (fits_in_64 _) x)
+(rule 0 (gen_bnot (ty_int_ref_scalar_64 _) x)
   (rv_not x))
 
 
@@ -1969,6 +2004,10 @@
 (decl gen_amode (Reg Offset32 Type) AMode)
 (extern constructor gen_amode gen_amode)
 
+;; Generates a AMode that points to a constant in the constant pool.
+(decl gen_const_amode (VCodeConstant) AMode)
+(extern constructor gen_const_amode gen_const_amode)
+
 (decl offset32_imm (i32) Offset32)
 (extern constructor offset32_imm offset32_imm)
 
@@ -2117,21 +2156,8 @@
 )
 
 
-(decl move_f_to_x (Reg Type) Reg)
-(extern constructor move_f_to_x move_f_to_x)
-
-(decl move_x_to_f (Reg Type) Reg)
-(extern constructor move_x_to_f move_x_to_f)
-
 (decl gen_stack_addr (StackSlot Offset32) Reg )
 (extern constructor gen_stack_addr gen_stack_addr)
-
-
-;;; generate a move and reinterprete the data
-;; parameter is "rs" "in_type" "out_type"
-(decl gen_moves (ValueRegs Type Type) ValueRegs)
-(extern constructor gen_moves gen_moves)
-
 
 ;;
 (decl gen_select (Type Reg ValueRegs ValueRegs) ValueRegs)
@@ -2248,25 +2274,10 @@
 (decl lower_float_binary (AluOPRRR Reg Reg Type) Reg)
 (rule
   (lower_float_binary op rs1 rs2 ty)
-  (let
-    ((x_rs1 Reg (move_f_to_x rs1 ty))
-      (x_rs2 Reg (move_f_to_x rs2 ty))
-      ;;;
-      (tmp Reg (alu_rrr op x_rs1 x_rs2)))
-    ;;; move back.
-    (move_x_to_f tmp ty)))
-
-;;;;
-(decl lower_float_bnot (Reg Type) Reg)
-(rule
-  (lower_float_bnot x ty)
-  (let
-    (;; move to x register.
-      (tmp Reg (move_f_to_x x ty))
-      ;; inverse all bits.
-      (tmp2 Reg (rv_not tmp)))
-    ;; move back to float register.
-    (move_x_to_f tmp2 ty)))
+  (let ((x_rs1 Reg (move_f_to_x rs1 ty))
+        (x_rs2 Reg (move_f_to_x rs2 ty))
+        (tmp Reg (alu_rrr op x_rs1 x_rs2)))
+    (move_x_to_f tmp (float_int_of_same_size ty))))
 
 
 ;;; lower icmp
@@ -2410,6 +2421,29 @@
 
 (decl load_ra () Reg)
 (extern constructor load_ra load_ra)
+
+
+;; Generates a bitcast instruction.
+;; Args are: src, src_ty, dst_ty
+(decl gen_bitcast (Reg Type Type) Reg)
+(rule 1 (gen_bitcast r $F32 $I32) (rv_fmvxw r))
+(rule 1 (gen_bitcast r $F64 $I64) (rv_fmvxd r))
+(rule 1 (gen_bitcast r $I32 $F32) (rv_fmvwx r))
+(rule 1 (gen_bitcast r $I64 $F64) (rv_fmvdx r))
+(rule (gen_bitcast r _ _) r)
+
+(decl move_f_to_x (Reg Type) Reg)
+(rule (move_f_to_x r $F32) (gen_bitcast r $F32 $I32))
+(rule (move_f_to_x r $F64) (gen_bitcast r $F64 $I64))
+
+(decl move_x_to_f (Reg Type) Reg)
+(rule (move_x_to_f r $I32) (gen_bitcast r $I32 $F32))
+(rule (move_x_to_f r $I64) (gen_bitcast r $I64 $F64))
+
+(decl float_int_of_same_size (Type) Type)
+(rule (float_int_of_same_size $F32) $I32)
+(rule (float_int_of_same_size $F64) $I64)
+
 
 (decl gen_rev8 (Reg) Reg)
 (rule 1

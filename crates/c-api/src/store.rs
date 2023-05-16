@@ -106,6 +106,48 @@ pub extern "C" fn wasmtime_store_new(
     })
 }
 
+// Internal structure to add Send/Sync to the c_void member.
+#[derive(Debug)]
+pub struct CallbackDataPtr {
+    pub ptr: *mut c_void,
+}
+
+impl CallbackDataPtr {
+    fn as_mut_ptr(&self) -> *mut c_void {
+        self.ptr
+    }
+}
+
+unsafe impl Send for CallbackDataPtr {}
+unsafe impl Sync for CallbackDataPtr {}
+
+#[no_mangle]
+pub extern "C" fn wasmtime_store_epoch_deadline_callback(
+    store: &mut wasmtime_store_t,
+    func: extern "C" fn(
+        CStoreContextMut<'_>,
+        *mut c_void,
+        *mut u64,
+    ) -> Option<Box<wasmtime_error_t>>,
+    data: *mut c_void,
+) {
+    let sendable = CallbackDataPtr { ptr: data };
+    store.store.epoch_deadline_callback(move |mut store_ctx| {
+        let mut delta: u64 = 0;
+        let result = (func)(
+            store_ctx.as_context_mut(),
+            sendable.as_mut_ptr(),
+            &mut delta as *mut u64,
+        );
+        match result {
+            Some(err) => Err(wasmtime::Error::from(<wasmtime_error_t as Into<
+                anyhow::Error,
+            >>::into(*err))),
+            None => Ok(delta),
+        }
+    });
+}
+
 #[no_mangle]
 pub extern "C" fn wasmtime_store_context(store: &mut wasmtime_store_t) -> CStoreContextMut<'_> {
     store.store.as_context_mut()

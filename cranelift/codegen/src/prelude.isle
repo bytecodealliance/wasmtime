@@ -79,6 +79,7 @@
 
 (decl pure u8_as_u32 (u8) u32)
 (extern constructor u8_as_u32 u8_as_u32)
+(convert u8 u32 u8_as_u32)
 
 (decl pure u8_as_u64 (u8) u64)
 (extern constructor u8_as_u64 u8_as_u64)
@@ -110,6 +111,12 @@
 
 (decl pure u8_and (u8 u8) u8)
 (extern constructor u8_and u8_and)
+
+(decl pure u8_shl (u8 u8) u8)
+(extern constructor u8_shl u8_shl)
+
+(decl pure u8_shr (u8 u8) u8)
+(extern constructor u8_shr u8_shr)
 
 (decl pure u32_add (u32 u32) u32)
 (extern constructor u32_add u32_add)
@@ -498,10 +505,6 @@
 (decl pure offset32_to_u32 (Offset32) u32)
 (extern constructor offset32_to_u32 offset32_to_u32)
 
-;; Convert a number to an `Offset32`
-(decl pure u32_to_offset32 (u32) Offset32)
-(extern constructor u32_to_offset32 u32_to_offset32)
-
 ;; This is a direct import of `IntCC::unsigned`.
 ;; Get the corresponding IntCC with the signed component removed.
 ;; For conditions without a signed component, this is a no-op.
@@ -554,4 +557,3 @@
 ;;;; Automatic conversions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (convert Offset32 u32 offset32_to_u32)
-(convert u32 Offset32 u32_to_offset32)

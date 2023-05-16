@@ -41,27 +41,17 @@
 
 ;; `i64` and smaller.
 
-;; Base case for 8 and 16-bit types
-(rule -6 (lower (has_type (fits_in_16 ty)
+;; Add two registers.
+(rule -5 (lower (has_type (fits_in_64 ty)
                        (iadd x y)))
       (x64_add ty x y))
 
-;; Base case for 32 and 64-bit types which might end up using the `lea`
-;; instruction to fold multiple operations into one.
-;;
-;; Note that at this time this always generates a `lea` pseudo-instruction,
-;; but the actual instruction emitted might be an `add` if it's equivalent.
-;; For more details on this see the `emit.rs` logic to emit
-;; `LoadEffectiveAddress`.
-(rule -5 (lower (has_type (ty_32_or_64 ty) (iadd x y)))
-      (x64_lea ty (to_amode_add (mem_flags_trusted) x y (zero_offset))))
+;; The above case handles when the rhs is an immediate or a sinkable load, but
+;; additionally add lhs meets these criteria.
 
-;; Higher-priority cases than the previous two where a load can be sunk into
-;; the add instruction itself. Note that both operands are tested for
-;; sink-ability since addition is commutative
 (rule -4 (lower (has_type (fits_in_64 ty)
-                       (iadd x (sinkable_load y))))
-      (x64_add ty x y))
+                       (iadd (simm32_from_value x) y)))
+      (x64_add ty y x))
 (rule -3 (lower (has_type (fits_in_64 ty)
                        (iadd (sinkable_load x) y)))
       (x64_add ty y x))
@@ -520,14 +510,13 @@
 (extern constructor ishl_i8x16_mask_table ishl_i8x16_mask_table)
 (rule (ishl_i8x16_mask (RegMemImm.Reg amt))
       (let ((mask_table SyntheticAmode (ishl_i8x16_mask_table))
-            (base_mask_addr Gpr (x64_lea $I64 mask_table))
+            (base_mask_addr Gpr (x64_lea mask_table))
             (mask_offset Gpr (x64_shl $I64 amt
                                   (imm8_to_imm8_gpr 4))))
-        (Amode.ImmRegRegShift 0
-                              base_mask_addr
-                              mask_offset
-                              0
-                              (mem_flags_trusted))))
+        (amode_imm_reg_reg_shift 0
+                                 base_mask_addr
+                                 mask_offset
+                                 0)))
 
 (rule (ishl_i8x16_mask (RegMemImm.Mem amt))
       (ishl_i8x16_mask (RegMemImm.Reg (x64_load $I64 amt (ExtKind.None)))))
@@ -625,15 +614,14 @@
 (extern constructor ushr_i8x16_mask_table ushr_i8x16_mask_table)
 (rule (ushr_i8x16_mask (RegMemImm.Reg amt))
       (let ((mask_table SyntheticAmode (ushr_i8x16_mask_table))
-            (base_mask_addr Gpr (x64_lea $I64 mask_table))
+            (base_mask_addr Gpr (x64_lea mask_table))
             (mask_offset Gpr (x64_shl $I64
                                   amt
                                   (imm8_to_imm8_gpr 4))))
-        (Amode.ImmRegRegShift 0
-                              base_mask_addr
-                              mask_offset
-                              0
-                              (mem_flags_trusted))))
+        (amode_imm_reg_reg_shift 0
+                                 base_mask_addr
+                                 mask_offset
+                                 0)))
 
 (rule (ushr_i8x16_mask (RegMemImm.Mem amt))
       (ushr_i8x16_mask (RegMemImm.Reg (x64_load $I64 amt (ExtKind.None)))))
@@ -1284,20 +1272,91 @@
 (decl vec_insert_lane (Type Xmm RegMem u8) Xmm)
 
 ;; i8x16.replace_lane
-(rule (vec_insert_lane $I8X16 vec val idx)
-      (x64_pinsrb vec val idx))
+(rule 1 (vec_insert_lane $I8X16 vec val idx)
+        (if-let $true (use_sse41))
+        (x64_pinsrb vec val idx))
+
+;; This lowering is particularly unoptimized and is mostly just here to work
+;; rather than here to be fast. Requiring SSE 4.1 for the above lowering isn't
+;; the end of the world hopefully as that's a pretty old instruction set, so
+;; this is the "simplest" version that works on SSE2 for now.
+;;
+;; This lowering masks the original vector with a constant with all 1s except
+;; for the "hole" where this value will get placed into, meaning the desired
+;; lane is guaranteed as all 0s. Next the `val` is shuffled into this hole with
+;; a few operations:
+;;
+;;  1. The `val` is zero-extended to 32-bits to guarantee the lower 32-bits
+;;     are all defined.
+;;  2. An arithmetic shift-left is used with the low two bits of `n`, the
+;;     desired lane, to move the value into the right position within the 32-bit
+;;     register value.
+;;  3. The 32-bit register is moved with `movd` into an XMM register
+;;  4. The XMM register, where all lanes are 0 except for the first lane which
+;;     has the shifted value, is then shuffled with `pshufd` to move the
+;;     shifted value to the correct and final lane. This uses the upper two
+;;     bits of `n` to index the i32x4 lane that we're targeting.
+;;
+;; This all, laboriously, gets the `val` into the desired lane so it's then
+;; `por`'d with the original vec-with-a-hole to produce the final result of the
+;; insertion.
+(rule (vec_insert_lane $I8X16 vec val n)
+      (let ((vec_with_hole Xmm (x64_pand vec (insert_i8x16_lane_hole n)))
+            (val Gpr (x64_movzx (ExtMode.BL) val))
+            (val Gpr (x64_shl $I32 val (Imm8Reg.Imm8 (u8_shl (u8_and n 3) 3))))
+            (val Xmm (x64_movd_to_xmm val))
+            (val_at_hole Xmm (x64_pshufd val (insert_i8x16_lane_pshufd_imm (u8_shr n 2)))))
+        (x64_por vec_with_hole val_at_hole)))
+
+(decl insert_i8x16_lane_hole (u8) VCodeConstant)
+(extern constructor insert_i8x16_lane_hole insert_i8x16_lane_hole)
+(decl insert_i8x16_lane_pshufd_imm (u8) u8)
+(rule (insert_i8x16_lane_pshufd_imm 0) 0b01_01_01_00)
+(rule (insert_i8x16_lane_pshufd_imm 1) 0b01_01_00_01)
+(rule (insert_i8x16_lane_pshufd_imm 2) 0b01_00_01_01)
+(rule (insert_i8x16_lane_pshufd_imm 3) 0b00_01_01_01)
 
 ;; i16x8.replace_lane
 (rule (vec_insert_lane $I16X8 vec val idx)
       (x64_pinsrw vec val idx))
 
 ;; i32x4.replace_lane
-(rule (vec_insert_lane $I32X4 vec val idx)
-      (x64_pinsrd vec val idx))
+(rule 1 (vec_insert_lane $I32X4 vec val idx)
+        (if-let $true (use_sse41))
+        (x64_pinsrd vec val idx))
+
+(rule (vec_insert_lane $I32X4 vec val 0)
+      (x64_movss_regmove vec (x64_movd_to_xmm val)))
+
+;; tmp    = [ vec[1] vec[0] val[1] val[0] ]
+;; result = [ vec[3] vec[2] tmp[0] tmp[2] ]
+(rule (vec_insert_lane $I32X4 vec val 1)
+      (let ((val Xmm (x64_movd_to_xmm val))
+            (vec Xmm vec))
+        (x64_shufps (x64_punpcklqdq val vec) vec 0b11_10_00_10)))
+
+;; tmp    = [ vec[0] vec[3] val[0] val[0] ]
+;; result = [ tmp[2] tmp[0] vec[1] vec[0] ]
+(rule (vec_insert_lane $I32X4 vec val 2)
+      (let ((val Xmm (x64_movd_to_xmm val))
+            (vec Xmm vec))
+        (x64_shufps vec (x64_shufps val vec 0b00_11_00_00) 0b10_00_01_00)))
+
+;; tmp    = [ vec[3] vec[2] val[1] val[0] ]
+;; result = [ tmp[0] tmp[2] vec[1] vec[0] ]
+(rule (vec_insert_lane $I32X4 vec val 3)
+      (let ((val Xmm (x64_movd_to_xmm val))
+            (vec Xmm vec))
+        (x64_shufps vec (x64_shufps val vec 0b11_10_01_00) 0b00_10_01_00)))
 
 ;; i64x2.replace_lane
-(rule (vec_insert_lane $I64X2 vec val idx)
-      (x64_pinsrq vec val idx))
+(rule 1 (vec_insert_lane $I64X2 vec val idx)
+        (if-let $true (use_sse41))
+        (x64_pinsrq vec val idx))
+(rule (vec_insert_lane $I64X2 vec val 0)
+      (x64_movsd_regmove vec (x64_movq_to_xmm val)))
+(rule (vec_insert_lane $I64X2 vec val 1)
+      (x64_punpcklqdq vec (x64_movq_to_xmm val)))
 
 ;; f32x4.replace_lane
 (rule 1 (vec_insert_lane $F32X4 vec val idx)
@@ -2777,6 +2836,7 @@
                     (has_type $I8 (extractlane value (u8_from_uimm8 n)))
                     address
                     offset))
+      (if-let $true (use_sse41))
       (side_effect
        (x64_pextrb_store (to_amode flags address offset) value n)))
 (rule 2 (lower (store flags
@@ -2789,12 +2849,14 @@
                     (has_type $I32 (extractlane value (u8_from_uimm8 n)))
                     address
                     offset))
+      (if-let $true (use_sse41))
       (side_effect
        (x64_pextrd_store (to_amode flags address offset) value n)))
 (rule 2 (lower (store flags
                     (has_type $I64 (extractlane value (u8_from_uimm8 n)))
                     address
                     offset))
+      (if-let $true (use_sse41))
       (side_effect
        (x64_pextrq_store (to_amode flags address offset) value n)))
 
@@ -3980,38 +4042,57 @@
 ;; Remove the extractlane instruction, leaving the float where it is. The upper
 ;; bits will remain unchanged; for correctness, this relies on Cranelift type
 ;; checking to avoid using those bits.
-(rule 2 (lower (has_type (ty_scalar_float _) (extractlane val (u8_from_uimm8 0))))
-      val)
+(rule 3 (lower (has_type (ty_scalar_float _) (extractlane val 0)))
+        val)
 
-;; Cases 2-4 for an F32X4
-(rule 1 (lower (has_type $F32 (extractlane val @ (value_type (ty_vec128 ty))
-                                         (u8_from_uimm8 lane))))
-      (x64_pshufd val lane))
+;; `f32x4.extract_lane N` where `N != 0`
+(rule 1 (lower (extractlane val @ (value_type $F32X4) (u8_from_uimm8 lane)))
+        (x64_pshufd val lane))
 
-;; This is the only remaining case for F64X2
-(rule 1 (lower (has_type $F64 (extractlane val @ (value_type (ty_vec128 ty))
-                                         (u8_from_uimm8 1))))
+;; `f64x2.extract_lane N` where `N != 0` (aka N == 1)
+(rule (lower (extractlane val @ (value_type $F64X2) 1))
       (x64_pshufd val 0b11_10_11_10))
 
-;; Note that the `pextrb` lowering here is relied upon by the `extend_to_gpr`
-;; helper because it will elide a `uextend` operation when `extractlane` is the
-;; inner node. The `pextrb` operation automatically zero-extends for us so the
-;; extra `uextend` doesn't have to codegen anything.
-(rule 0 (lower (extractlane val @ (value_type ty @ (multi_lane 8 16)) (u8_from_uimm8 lane)))
-      (x64_pextrb val lane))
+;; `i8x16.extract_lane N`
+;;
+;; Note that without SSE4.1 a 16-bit lane extraction is performed and then
+;; the result is updated if the desired index is either odd or even.
+(rule 2 (lower (extractlane val @ (value_type ty @ $I8X16) (u8_from_uimm8 lane)))
+        (if-let $true (use_sse41))
+        (x64_pextrb val lane))
+;; extracting an odd lane has an extra shift-right
+(rule 1 (lower (extractlane val @ (value_type ty @ $I8X16) (u8_from_uimm8 lane)))
+        (if-let 1 (u8_and lane 1))
+        (x64_shr $I16 (x64_pextrw val (u8_shr lane 1)) (Imm8Reg.Imm8 8)))
+;; Extracting an even lane already has the desired lane in the lower bits. Note
+;; that having arbitrary upper bits in the returned register should be ok since
+;; all operators on the resulting `i8` type should work correctly regardless of
+;; the bits in the rest of the register.
+(rule (lower (extractlane val @ (value_type ty @ $I8X16) (u8_from_uimm8 lane)))
+      (if-let 0 (u8_and lane 1))
+      (x64_pextrw val (u8_shr lane 1)))
 
-;; See the note in the 8x16 case above for how this rule is connected to
-;; `extend_to_gpr`.
-(rule 0 (lower (extractlane val @ (value_type ty @ (multi_lane 16 8)) (u8_from_uimm8 lane)))
+;; `i16x8.extract_lane N`
+(rule (lower (extractlane val @ (value_type ty @ $I16X8) (u8_from_uimm8 lane)))
       (x64_pextrw val lane))
 
-;; See the note in the 8x16 case above for how this rule is connected to
-;; `extend_to_gpr`.
-(rule 0 (lower (extractlane val @ (value_type ty @ (multi_lane 32 4)) (u8_from_uimm8 lane)))
-      (x64_pextrd val lane))
+;; `i32x4.extract_lane N`
+(rule 2 (lower (extractlane val @ (value_type ty @ $I32X4) (u8_from_uimm8 lane)))
+        (if-let $true (use_sse41))
+        (x64_pextrd val lane))
+(rule 1 (lower (extractlane val @ (value_type $I32X4) 0))
+        (x64_movd_to_gpr val))
+(rule (lower (extractlane val @ (value_type $I32X4) (u8_from_uimm8 n)))
+      (x64_movd_to_gpr (x64_pshufd val n)))
 
-(rule 0 (lower (extractlane val @ (value_type ty @ (multi_lane 64 2)) (u8_from_uimm8 lane)))
-      (x64_pextrq val lane))
+;; `i64x2.extract_lane N`
+(rule 1 (lower (extractlane val @ (value_type $I64X2) (u8_from_uimm8 lane)))
+        (if-let $true (use_sse41))
+        (x64_pextrq val lane))
+(rule (lower (extractlane val @ (value_type $I64X2) 0))
+      (x64_movq_to_gpr val))
+(rule (lower (extractlane val @ (value_type $I64X2) 1))
+      (x64_movq_to_gpr (x64_pshufd val 0b00_00_11_10)))
 
 ;; Rules for `scalar_to_vector` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -4053,6 +4134,7 @@
         (if-let $true (use_avx2_simd))
         (x64_vpbroadcastb (bitcast_gpr_to_xmm $I32 src)))
 (rule 2 (lower (has_type $I8X16 (splat (sinkable_load_exact addr))))
+        (if-let $true (use_sse41))
         (x64_pshufb (x64_pinsrb (xmm_uninit_value) addr 0) (xmm_zero $I8X16)))
 (rule 3 (lower (has_type $I8X16 (splat (sinkable_load_exact addr))))
         (if-let $true (use_avx2_simd))

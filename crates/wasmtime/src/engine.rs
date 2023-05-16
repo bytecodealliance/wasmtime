@@ -13,7 +13,7 @@ use std::sync::Arc;
 use wasmtime_cache::CacheConfig;
 use wasmtime_environ::obj;
 use wasmtime_environ::{FlagValue, ObjectKind};
-use wasmtime_jit::{CodeMemory, ProfilingAgent};
+use wasmtime_jit::{profiling::ProfilingAgent, CodeMemory};
 use wasmtime_runtime::{debug_builtins, CompiledModuleIdAllocator, InstanceAllocator, MmapVec};
 
 mod serialization;
@@ -47,7 +47,7 @@ pub struct Engine {
 
 struct EngineInner {
     config: Config,
-    #[cfg(compiler)]
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
     compiler: Box<dyn wasmtime_environ::Compiler>,
     allocator: Box<dyn InstanceAllocator + Send + Sync>,
     profiler: Box<dyn ProfilingAgent>,
@@ -84,7 +84,7 @@ impl Engine {
         let config = config.clone();
         config.validate()?;
 
-        #[cfg(compiler)]
+        #[cfg(any(feature = "cranelift", feature = "winch"))]
         let (config, compiler) = config.build_compiler()?;
 
         let allocator = config.build_allocator()?;
@@ -92,7 +92,7 @@ impl Engine {
 
         Ok(Engine {
             inner: Arc::new(EngineInner {
-                #[cfg(compiler)]
+                #[cfg(any(feature = "cranelift", feature = "winch"))]
                 compiler,
                 config,
                 allocator,
@@ -132,7 +132,7 @@ impl Engine {
         &self.inner.config
     }
 
-    #[cfg(compiler)]
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub(crate) fn compiler(&self) -> &dyn wasmtime_environ::Compiler {
         &*self.inner.compiler
     }
@@ -216,8 +216,8 @@ impl Engine {
     ///
     /// [binary]: https://webassembly.github.io/spec/core/binary/index.html
     /// [text]: https://webassembly.github.io/spec/core/text/index.html
-    #[cfg(compiler)]
-    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))] // see build.rs
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
+    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn precompile_module(&self, bytes: &[u8]) -> Result<Vec<u8>> {
         #[cfg(feature = "wat")]
         let bytes = wat::parse_bytes(&bytes)?;
@@ -227,8 +227,8 @@ impl Engine {
 
     /// Same as [`Engine::precompile_module`] except for a
     /// [`Component`](crate::component::Component)
-    #[cfg(compiler)]
-    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))] // see build.rs
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
+    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     #[cfg(feature = "component-model")]
     #[cfg_attr(nightlydoc, doc(cfg(feature = "component-model")))]
     pub fn precompile_component(&self, bytes: &[u8]) -> Result<Vec<u8>> {
@@ -244,7 +244,7 @@ impl Engine {
     /// are compatible with a different [`Engine`] instance only if the two engines use
     /// compatible [`Config`]s. If this Hash matches between two [`Engine`]s then binaries
     /// from one are guaranteed to deserialize in the other.
-    #[cfg(compiler)]
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
     #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
     pub fn precompile_compatibility_hash(&self) -> impl std::hash::Hash + '_ {
         crate::module::HashedEngineCompileEnv(self)
@@ -299,11 +299,11 @@ impl Engine {
     /// and/or running code for.
     pub(crate) fn target(&self) -> target_lexicon::Triple {
         // If a compiler is configured, use that target.
-        #[cfg(compiler)]
+        #[cfg(any(feature = "cranelift", feature = "winch"))]
         return self.compiler().triple().clone();
 
         // ... otherwise it's the native target
-        #[cfg(not(compiler))]
+        #[cfg(not(any(feature = "cranelift", feature = "winch")))]
         return target_lexicon::Triple::host();
     }
 
@@ -323,7 +323,7 @@ impl Engine {
     }
 
     fn _check_compatible_with_native_host(&self) -> Result<(), String> {
-        #[cfg(compiler)]
+        #[cfg(any(feature = "cranelift", feature = "winch"))]
         {
             let compiler = self.compiler();
 
@@ -576,12 +576,12 @@ impl Engine {
         ))
     }
 
-    #[cfg(compiler)]
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub(crate) fn append_compiler_info(&self, obj: &mut Object<'_>) {
         serialization::append_compiler_info(self, obj);
     }
 
-    #[cfg(compiler)]
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub(crate) fn append_bti(&self, obj: &mut Object<'_>) {
         let section = obj.add_section(
             obj.segment_name(StandardSegment::Data).to_vec(),

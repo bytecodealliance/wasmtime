@@ -55,8 +55,8 @@ pub(crate) type VecWritableReg = Vec<Writable<Reg>>;
 
 use crate::isa::riscv64::lower::isle::generated_code::MInst;
 pub use crate::isa::riscv64::lower::isle::generated_code::{
-    AluOPRRI, AluOPRRR, AtomicOP, FClassResult, FFlagsException, FenceFm, FloatRoundOP,
-    FloatSelectOP, FpuOPRR, FpuOPRRR, FpuOPRRRR, IntSelectOP, LoadOP, MInst as Inst, StoreOP, FRM,
+    AluOPRRI, AluOPRRR, AtomicOP, FClassResult, FFlagsException, FloatRoundOP, FloatSelectOP,
+    FpuOPRR, FpuOPRRR, FpuOPRRRR, IntSelectOP, LoadOP, MInst as Inst, StoreOP, FRM,
 };
 
 type BoxCallInfo = Box<CallInfo>;
@@ -161,33 +161,10 @@ pub(crate) fn gen_moves(rd: &[Writable<Reg>], src: &[Reg]) -> SmallInstVec<Inst>
     assert!(rd.len() > 0);
     let mut insts = SmallInstVec::new();
     for (dst, src) in rd.iter().zip(src.iter()) {
-        let out_ty = Inst::canonical_type_for_rc(dst.to_reg().class());
-        let in_ty = Inst::canonical_type_for_rc(src.class());
-        insts.push(gen_move(*dst, out_ty, *src, in_ty));
+        let ty = Inst::canonical_type_for_rc(dst.to_reg().class());
+        insts.push(Inst::gen_move(*dst, *src, ty));
     }
     insts
-}
-
-/// if input or output is float,
-/// you should use special instruction.
-/// generate a move and re-interpret the data.
-pub(crate) fn gen_move(rd: Writable<Reg>, oty: Type, rm: Reg, ity: Type) -> Inst {
-    match (ity.is_float(), oty.is_float()) {
-        (false, false) => Inst::gen_move(rd, rm, oty),
-        (true, true) => Inst::gen_move(rd, rm, oty),
-        (false, true) => Inst::FpuRR {
-            frm: None,
-            alu_op: FpuOPRR::move_x_to_f_op(oty),
-            rd: rd,
-            rs: rm,
-        },
-        (true, false) => Inst::FpuRR {
-            frm: None,
-            alu_op: FpuOPRR::move_f_to_x_op(ity),
-            rd: rd,
-            rs: rm,
-        },
-    }
 }
 
 impl Inst {
@@ -388,11 +365,15 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_def(rd);
         }
         &Inst::Load { rd, from, .. } => {
-            collector.reg_use(from.get_base_register());
+            if let Some(r) = from.get_allocatable_register() {
+                collector.reg_use(r);
+            }
             collector.reg_def(rd);
         }
         &Inst::Store { to, src, .. } => {
-            collector.reg_use(to.get_base_register());
+            if let Some(r) = to.get_allocatable_register() {
+                collector.reg_use(r);
+            }
             collector.reg_use(src);
         }
 
@@ -443,7 +424,9 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_def(rd);
         }
         &Inst::LoadAddr { rd, mem } => {
-            collector.reg_use(mem.get_base_register());
+            if let Some(r) = mem.get_allocatable_register() {
+                collector.reg_use(r);
+            }
             collector.reg_early_def(rd);
         }
 
@@ -646,15 +629,23 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_use(vs2);
             collector.reg_def(vd);
         }
+        &Inst::VecAluRRImm5 { vd, vs2, .. } => {
+            collector.reg_use(vs2);
+            collector.reg_def(vd);
+        }
         &Inst::VecSetState { rd, .. } => {
             collector.reg_def(rd);
         }
         &Inst::VecLoad { to, ref from, .. } => {
-            collector.reg_use(from.get_base_register());
+            if let Some(r) = from.get_allocatable_register() {
+                collector.reg_use(r);
+            }
             collector.reg_def(to);
         }
         &Inst::VecStore { ref to, from, .. } => {
-            collector.reg_use(to.get_base_register());
+            if let Some(r) = to.get_allocatable_register() {
+                collector.reg_use(r);
+            }
             collector.reg_use(from);
         }
     }
@@ -1520,7 +1511,7 @@ impl Inst {
                 format!("load_sym {},{}{:+}", rd, name.display(None), offset)
             }
             &MInst::LoadAddr { ref rd, ref mem } => {
-                let rs = mem.to_addr(allocs);
+                let rs = mem.to_string_with_alloc(allocs);
                 let rd = format_reg(rd.to_reg(), allocs);
                 format!("load_addr {},{}", rd, rs)
             }
@@ -1585,6 +1576,18 @@ impl Inst {
                 // This is noted in Section 10.1 of the RISC-V Vector spec.
                 format!("{} {},{},{} {}", op, vd_s, vs2_s, vs1_s, vstate)
             }
+            &Inst::VecAluRRImm5 {
+                op,
+                vd,
+                imm,
+                vs2,
+                ref vstate,
+            } => {
+                let vs2_s = format_vec_reg(vs2, allocs);
+                let vd_s = format_vec_reg(vd.to_reg(), allocs);
+
+                format!("{} {},{},{} {}", op, vd_s, vs2_s, imm, vstate)
+            }
             &Inst::VecSetState { rd, ref vstate } => {
                 let rd_s = format_reg(rd.to_reg(), allocs);
                 assert!(vstate.avl.is_static());
@@ -1638,6 +1641,18 @@ pub enum LabelUse {
     /// is added to the current pc to give the target address. The
     /// conditional branch range is ±4 KiB.
     B12,
+
+    /// Equivalent to the `R_RISCV_PCREL_HI20` relocation, Allows setting
+    /// the immediate field of an `auipc` instruction.
+    PCRelHi20,
+
+    /// Similar to the `R_RISCV_PCREL_LO12_I` relocation but pointing to
+    /// the final address, instead of the `PCREL_HI20` label. Allows setting
+    /// the immediate field of I Type instructions such as `addi` or `lw`.
+    ///
+    /// Since we currently don't support offsets in labels, this relocation has
+    /// an implicit offset of 4.
+    PCRelLo12I,
 }
 
 impl MachInstLabelUse for LabelUse {
@@ -1649,7 +1664,9 @@ impl MachInstLabelUse for LabelUse {
     fn max_pos_range(self) -> CodeOffset {
         match self {
             LabelUse::Jal20 => ((1 << 19) - 1) * 2,
-            LabelUse::PCRel32 => Inst::imm_max() as CodeOffset,
+            LabelUse::PCRelLo12I | LabelUse::PCRelHi20 | LabelUse::PCRel32 => {
+                Inst::imm_max() as CodeOffset
+            }
             LabelUse::B12 => ((1 << 11) - 1) * 2,
         }
     }
@@ -1665,9 +1682,8 @@ impl MachInstLabelUse for LabelUse {
     /// Size of window into code needed to do the patch.
     fn patch_size(self) -> CodeOffset {
         match self {
-            LabelUse::Jal20 => 4,
+            LabelUse::Jal20 | LabelUse::B12 | LabelUse::PCRelHi20 | LabelUse::PCRelLo12I => 4,
             LabelUse::PCRel32 => 8,
-            LabelUse::B12 => 4,
         }
     }
 
@@ -1692,8 +1708,7 @@ impl MachInstLabelUse for LabelUse {
     /// Is a veneer supported for this label reference type?
     fn supports_veneer(self) -> bool {
         match self {
-            Self::B12 => true,
-            Self::Jal20 => true,
+            Self::Jal20 | Self::B12 => true,
             _ => false,
         }
     }
@@ -1701,8 +1716,7 @@ impl MachInstLabelUse for LabelUse {
     /// How large is the veneer, if supported?
     fn veneer_size(self) -> CodeOffset {
         match self {
-            Self::B12 => 8,
-            Self::Jal20 => 8,
+            Self::B12 | Self::Jal20 => 8,
             _ => unreachable!(),
         }
     }
@@ -1786,13 +1800,39 @@ impl LabelUse {
                     | ((offset >> 12 & 0b1) << 31);
                 buffer[0..4].clone_from_slice(&u32::to_le_bytes(insn | v));
             }
+
+            LabelUse::PCRelHi20 => {
+                // See https://github.com/riscv-non-isa/riscv-elf-psabi-doc/blob/master/riscv-elf.adoc#pc-relative-symbol-addresses
+                //
+                // We need to add 0x800 to ensure that we land at the next page as soon as it goes out of range for the
+                // Lo12 relocation. That relocation is signed and has a maximum range of -2048..2047. So when we get an
+                // offset of 2048, we need to land at the next page and subtract instead.
+                let offset = offset as u32;
+                let hi20 = offset.wrapping_add(0x800) >> 12;
+                let insn = (insn & 0xFFF) | (hi20 << 12);
+                buffer[0..4].clone_from_slice(&u32::to_le_bytes(insn));
+            }
+
+            LabelUse::PCRelLo12I => {
+                // `offset` is the offset from the current instruction to the target address.
+                //
+                // However we are trying to compute the offset to the target address from the previous instruction.
+                // The previous instruction should be the one that contains the PCRelHi20 relocation and
+                // stores/references the program counter (`auipc` usually).
+                //
+                // Since we are trying to compute the offset from the previous instruction, we can
+                // represent it as offset = target_address - (current_instruction_address - 4)
+                // which is equivalent to offset = target_address - current_instruction_address + 4.
+                //
+                // Thus we need to add 4 to the offset here.
+                let lo12 = (offset + 4) as u32 & 0xFFF;
+                let insn = (insn & 0xFFFFF) | (lo12 << 20);
+                buffer[0..4].clone_from_slice(&u32::to_le_bytes(insn));
+            }
         }
     }
 }
 
-pub(crate) fn overflow_already_lowerd() -> ! {
-    unreachable!("overflow and nof should be lowered at early phase.")
-}
 #[cfg(test)]
 mod test {
     use super::*;

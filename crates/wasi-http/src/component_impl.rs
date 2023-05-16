@@ -136,16 +136,16 @@ pub fn add_component_to_linker<T>(
         "new-outgoing-request",
         move |mut caller: Caller<'_, T>,
               method: i32,
-              _b: i32,
-              _c: i32,
+              method_ptr: i32,
+              method_len: i32,
               path_ptr: u32,
               path_len: u32,
               query_ptr: u32,
               query_len: u32,
               scheme_is_some: i32,
               scheme: i32,
-              _h: i32,
-              _i: i32,
+              scheme_ptr: i32,
+              scheme_len: i32,
               authority_ptr: u32,
               authority_len: u32,
               headers: u32|
@@ -165,7 +165,15 @@ pub fn add_component_to_linker<T>(
                 s = match scheme {
                     0 => Scheme::Http,
                     1 => Scheme::Https,
-                    _ => anyhow::bail!("unsupported scheme {scheme}"),
+                    _ => {
+                        let value = string_from_memory(
+                            &memory,
+                            caller.as_context_mut(),
+                            scheme_ptr.try_into()?,
+                            scheme_len.try_into()?,
+                        )?;
+                        Scheme::Other(value)
+                    }
                 };
             }
             let m = match method {
@@ -178,7 +186,15 @@ pub fn add_component_to_linker<T>(
                 6 => crate::types::Method::Options,
                 7 => crate::types::Method::Trace,
                 8 => crate::types::Method::Patch,
-                _ => anyhow::bail!("unsupported method {method}"),
+                _ => {
+                    let value = string_from_memory(
+                        &memory,
+                        caller.as_context_mut(),
+                        method_ptr.try_into()?,
+                        method_len.try_into()?,
+                    )?;
+                    crate::types::Method::Other(value)
+                }
             };
 
             let ctx = get_cx(caller.data_mut());
@@ -196,8 +212,9 @@ pub fn add_component_to_linker<T>(
     linker.func_wrap(
         "types",
         "drop-future-incoming-response",
-        move |_caller: Caller<'_, T>, _future: u32| -> anyhow::Result<()> {
-            // FIXME: Intentionally left blank
+        move |mut caller: Caller<'_, T>, future: u32| -> anyhow::Result<()> {
+            let ctx = get_cx(caller.data_mut());
+            ctx.drop_future_incoming_response(future)?;
             Ok(())
         },
     )?;
@@ -205,6 +222,9 @@ pub fn add_component_to_linker<T>(
         "types",
         "future-incoming-response-get",
         move |mut caller: Caller<'_, T>, future: u32, ptr: i32| -> anyhow::Result<()> {
+            let ctx = get_cx(caller.data_mut());
+            let response = ctx.future_incoming_response_get(future)?.unwrap_or(Ok(0));
+
             let memory = memory_get(&mut caller)?;
 
             // First == is_some
@@ -212,7 +232,22 @@ pub fn add_component_to_linker<T>(
             // Third == {ok: is_err = false, tag: is_err = true}
             // Fourth == string ptr
             // Fifth == string len
-            let result: [u32; 5] = [1, 0, future, 0, 0];
+            let result: [u32; 5] = match response {
+                Ok(value) => [1, 0, value, 0, 0],
+                Err(error) => {
+                    let (tag, err_string) = match error {
+                        crate::types::Error::InvalidUrl(e) => (0u32, e),
+                        crate::types::Error::TimeoutError(e) => (1u32, e),
+                        crate::types::Error::ProtocolError(e) => (2u32, e),
+                        crate::types::Error::UnexpectedError(e) => (3u32, e),
+                    };
+                    let bytes = err_string.as_bytes();
+                    let len = bytes.len().try_into().unwrap();
+                    let ptr = allocate_guest_pointer(&mut caller, len)?;
+                    memory.write(caller.as_context_mut(), ptr as _, bytes)?;
+                    [1, 1, tag, ptr, len]
+                }
+            };
             let raw = u32_array_to_u8(&result);
 
             memory.write(caller.as_context_mut(), ptr as _, &raw)?;

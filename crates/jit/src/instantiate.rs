@@ -5,7 +5,7 @@
 
 use crate::code_memory::CodeMemory;
 use crate::debug::create_gdbjit_image;
-use crate::ProfilingAgent;
+use crate::profiling::ProfilingAgent;
 use anyhow::{bail, Context, Error, Result};
 use object::write::{Object, SectionId, StandardSegment, WritableBuffer};
 use object::SectionKind;
@@ -471,17 +471,21 @@ impl CompiledModule {
     }
 
     fn register_debug_and_profiling(&mut self, profiler: &dyn ProfilingAgent) -> Result<()> {
-        // Register GDB JIT images; initialize profiler and load the wasm module.
         if self.meta.native_debug_info_present {
             let text = self.text();
             let bytes = create_gdbjit_image(self.mmap().to_vec(), (text.as_ptr(), text.len()))
                 .context("failed to create jit image for gdb")?;
-            profiler.module_load(self, Some(&bytes));
             let reg = GdbJitImageRegistration::register(bytes);
             self.dbg_jit_registration = Some(reg);
-        } else {
-            profiler.module_load(self, None);
         }
+        profiler.register_module(&self.code_memory, &|addr| {
+            let (idx, _) = self.func_by_text_offset(addr)?;
+            let idx = self.module.func_index(idx);
+            let name = self.func_name(idx)?;
+            let mut demangled = String::new();
+            crate::demangling::demangle_function_name(&mut demangled, name).unwrap();
+            Some(demangled)
+        });
         Ok(())
     }
 
@@ -564,16 +568,6 @@ impl CompiledModule {
         Some(&self.text()[loc.start as usize..][..loc.length as usize])
     }
 
-    /// Returns an iterator over all array-to-Wasm trampolines defined within
-    /// this module, providing both their index and their in-memory body.
-    pub fn array_to_wasm_trampolines(
-        &self,
-    ) -> impl ExactSizeIterator<Item = (DefinedFuncIndex, &[u8])> + '_ {
-        self.funcs
-            .keys()
-            .map(move |i| (i, self.array_to_wasm_trampoline(i).unwrap()))
-    }
-
     /// Get the native-to-Wasm trampoline for the function `index` points to.
     ///
     /// If the function `index` points to does not escape, then `None` is
@@ -584,16 +578,6 @@ impl CompiledModule {
     pub fn native_to_wasm_trampoline(&self, index: DefinedFuncIndex) -> Option<&[u8]> {
         let loc = self.funcs[index].native_to_wasm_trampoline?;
         Some(&self.text()[loc.start as usize..][..loc.length as usize])
-    }
-
-    /// Returns an iterator over all native-to-Wasm trampolines defined within
-    /// this module, providing both their index and their in-memory body.
-    pub fn native_to_wasm_trampolines(
-        &self,
-    ) -> impl ExactSizeIterator<Item = (DefinedFuncIndex, &[u8])> + '_ {
-        self.funcs
-            .keys()
-            .map(move |i| (i, self.native_to_wasm_trampoline(i).unwrap()))
     }
 
     /// Get the Wasm-to-native trampoline for the given signature.
@@ -608,16 +592,6 @@ impl CompiledModule {
             .expect("should have a Wasm-to-native trampline for all signatures");
         let (_, loc) = self.wasm_to_native_trampolines[idx];
         &self.text()[loc.start as usize..][..loc.length as usize]
-    }
-
-    /// Returns an iterator over all native-to-Wasm trampolines defined within
-    /// this module, providing both their index and their in-memory body.
-    pub fn wasm_to_native_trampolines(
-        &self,
-    ) -> impl ExactSizeIterator<Item = (SignatureIndex, &[u8])> + '_ {
-        self.wasm_to_native_trampolines
-            .iter()
-            .map(move |(i, _)| (*i, self.wasm_to_native_trampoline(*i)))
     }
 
     /// Returns the stack map information for all functions defined in this

@@ -48,6 +48,8 @@
 //!    This can be useful in case an input is in its binary form or if a
 //!    preexisting corpus is being rewritten.
 
+use std::borrow::Cow;
+
 use arbitrary::{Arbitrary, Result, Unstructured};
 use wasm_encoder::Section;
 
@@ -198,8 +200,8 @@ where
 fn encode_module(module: &[u8], fuzz_data: &[u8]) -> Vec<u8> {
     let mut module = module.to_vec();
     wasm_encoder::CustomSection {
-        name: SECTION_NAME,
-        data: &fuzz_data,
+        name: SECTION_NAME.into(),
+        data: Cow::Borrowed(&fuzz_data),
     }
     .append_to(&mut module);
     module

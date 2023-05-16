@@ -926,84 +926,20 @@ pub(crate) fn emit(
             )
         }
 
-        Inst::LoadEffectiveAddress { addr, dst, size } => {
+        Inst::LoadEffectiveAddress { addr, dst } => {
             let dst = allocs.next(dst.to_reg().to_reg());
             let amode = addr.finalize(state, sink).with_allocs(allocs);
 
-            // If this `lea` can actually get encoded as an `add` then do that
-            // instead. Currently all candidate `iadd`s become an `lea`
-            // pseudo-instruction here but maximizing the sue of `lea` is not
-            // necessarily optimal. The `lea` instruction goes through dedicated
-            // address units on cores which are finite and disjoint from the
-            // general ALU, so if everything uses `lea` then those units can get
-            // saturated while leaving the ALU idle.
-            //
-            // To help make use of more parts of a cpu, this attempts to use
-            // `add` when it's semantically equivalent to `lea`, or otherwise
-            // when the `dst` register is the same as the `base` or `index`
-            // register.
-            //
-            // FIXME: ideally regalloc is informed of this constraint. Register
-            // allocation of `lea` should "attempt" to put the `base` in the
-            // same register as `dst` but not at the expense of generating a
-            // `mov` instruction. Currently that's not possible but perhaps one
-            // day it may be worth it.
-            match amode {
-                // If `base == dst` then this is `add $imm, %dst`, so encode
-                // that instead.
-                Amode::ImmReg {
-                    simm32,
-                    base,
-                    flags: _,
-                } if base == dst => {
-                    let inst = Inst::alu_rmi_r(
-                        *size,
-                        AluRmiROpcode::Add,
-                        RegMemImm::imm(simm32),
-                        Writable::from_reg(dst),
-                    );
-                    inst.emit(&[], sink, info, state);
-                }
-                // If the offset is 0 and the shift is 0 (meaning multiplication
-                // by 1) then:
-                //
-                // * If `base == dst`, then this is `add %index, %base`
-                // * If `index == dst`, then this is `add %base, %index`
-                //
-                // Encode the appropriate instruction here in that case.
-                Amode::ImmRegRegShift {
-                    simm32: 0,
-                    base,
-                    index,
-                    shift: 0,
-                    flags: _,
-                } if base == dst || index == dst => {
-                    let (dst, operand) = if base == dst {
-                        (base, index)
-                    } else {
-                        (index, base)
-                    };
-                    let inst = Inst::alu_rmi_r(
-                        *size,
-                        AluRmiROpcode::Add,
-                        RegMemImm::reg(operand.to_reg()),
-                        Writable::from_reg(dst.to_reg()),
-                    );
-                    inst.emit(&[], sink, info, state);
-                }
-
-                // If `lea`'s 3-operand mode is leveraged by regalloc, or if
-                // it's fancy like imm-plus-shift-plus-base, then `lea` is
-                // actually emitted.
-                _ => {
-                    let flags = match size {
-                        OperandSize::Size32 => RexFlags::clear_w(),
-                        OperandSize::Size64 => RexFlags::set_w(),
-                        _ => unreachable!(),
-                    };
-                    emit_std_reg_mem(sink, LegacyPrefixes::None, 0x8D, 1, dst, &amode, flags, 0);
-                }
-            };
+            emit_std_reg_mem(
+                sink,
+                LegacyPrefixes::None,
+                0x8D,
+                1,
+                dst,
+                &amode,
+                RexFlags::set_w(),
+                0,
+            );
         }
 
         Inst::MovsxRmR { ext_mode, src, dst } => {
@@ -2065,6 +2001,7 @@ pub(crate) fn emit(
                 SseOpcode::Xorpd => (LegacyPrefixes::_66, 0x0F57, 2),
                 SseOpcode::Phaddw => (LegacyPrefixes::_66, 0x0F3801, 3),
                 SseOpcode::Phaddd => (LegacyPrefixes::_66, 0x0F3802, 3),
+                SseOpcode::Movss => (LegacyPrefixes::_F3, 0x0F10, 2),
                 _ => unimplemented!("Opcode {:?} not implemented", op),
             };
 
@@ -2270,6 +2207,7 @@ pub(crate) fn emit(
                 AvxOpcode::Vpunpcklqdq => (LP::_66, OM::_0F, 0x6C),
                 AvxOpcode::Vpunpckhqdq => (LP::_66, OM::_0F, 0x6D),
                 AvxOpcode::Vmovsd => (LP::_F2, OM::_0F, 0x10),
+                AvxOpcode::Vmovss => (LP::_F3, OM::_0F, 0x10),
                 _ => panic!("unexpected rmir vex opcode {op:?}"),
             };
             VexInstruction::new()

@@ -768,7 +768,7 @@ pub enum TableInitialization {
         tables: Vec<EagerTableInitializer>,
         /// TODO
         segments: Vec<TableInitializer>,
-    }
+    },
 }
 
 impl Default for TableInitialization {
@@ -861,6 +861,9 @@ pub struct Module {
 
     /// WebAssembly global variables.
     pub globals: PrimaryMap<GlobalIndex, Global>,
+
+    /// WebAssembly global initializers for locally-defined globals.
+    pub global_initializers: PrimaryMap<DefinedGlobalIndex, GlobalInit>,
 }
 
 /// Initialization routines for creating an instance, encompassing imports,

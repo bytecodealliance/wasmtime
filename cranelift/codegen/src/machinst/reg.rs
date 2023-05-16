@@ -496,7 +496,12 @@ impl<'a> AllocationConsumer<'a> {
             )
         });
 
-        assert_eq!(preg, alloc.unwrap().to_real_reg().unwrap().into());
+        match alloc {
+            Some(alloc) => {
+                assert_eq!(preg, alloc.to_real_reg().unwrap().into());
+            }
+            None => {}
+        }
     }
 
     pub fn next(&mut self, pre_regalloc_reg: Reg) -> Reg {

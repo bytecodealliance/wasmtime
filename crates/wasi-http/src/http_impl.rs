@@ -1,4 +1,4 @@
-use crate::r#struct::ActiveResponse;
+use crate::r#struct::{ActiveFuture, ActiveResponse};
 use crate::r#struct::{Stream, WasiHttp};
 use crate::types::{RequestOptions, Scheme};
 #[cfg(not(any(target_arch = "riscv64", target_arch = "s390x")))]
@@ -13,7 +13,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::net::TcpStream;
-use tokio::runtime::Runtime;
 use tokio::time::timeout;
 #[cfg(not(any(target_arch = "riscv64", target_arch = "s390x")))]
 use tokio_rustls::rustls::{self, OwnedTrustAnchor};
@@ -24,16 +23,11 @@ impl crate::default_outgoing_http::Host for WasiHttp {
         request_id: crate::default_outgoing_http::OutgoingRequest,
         options: Option<crate::default_outgoing_http::RequestOptions>,
     ) -> wasmtime::Result<crate::default_outgoing_http::FutureIncomingResponse> {
-        let (handle, _runtime) = match tokio::runtime::Handle::try_current() {
-            Ok(h) => (h, None),
-            Err(_) => {
-                let rt = Runtime::new().unwrap();
-                let _enter = rt.enter();
-                (rt.handle().clone(), Some(rt))
-            }
-        };
-        let f = self.handle_async(request_id, options);
-        handle.block_on(f)
+        let future_id = self.future_id_base;
+        self.future_id_base = self.future_id_base + 1;
+        let future = ActiveFuture::new(future_id, request_id, options);
+        self.futures.insert(future_id, future);
+        Ok(future_id)
     }
 }
 
@@ -50,7 +44,7 @@ fn port_for_scheme(scheme: &Option<Scheme>) -> &str {
 }
 
 impl WasiHttp {
-    async fn handle_async(
+    pub(crate) async fn handle_async(
         &mut self,
         request_id: crate::default_outgoing_http::OutgoingRequest,
         options: Option<crate::default_outgoing_http::RequestOptions>,
@@ -75,7 +69,7 @@ impl WasiHttp {
             None => bail!("not found!"),
         };
 
-        let method = match request.method {
+        let method = match &request.method {
             crate::types::Method::Get => Method::GET,
             crate::types::Method::Head => Method::HEAD,
             crate::types::Method::Post => Method::POST,
@@ -85,15 +79,17 @@ impl WasiHttp {
             crate::types::Method::Options => Method::OPTIONS,
             crate::types::Method::Trace => Method::TRACE,
             crate::types::Method::Patch => Method::PATCH,
-            _ => bail!("unknown method!"),
+            crate::types::Method::Other(s) => bail!("unknown method {}", s),
         };
 
-        let scheme = match request.scheme.as_ref().unwrap_or(&Scheme::Https) {
-            Scheme::Http => "http://",
-            Scheme::Https => "https://",
-            // TODO: this is wrong, fix this.
-            _ => panic!("Unsupported scheme!"),
-        };
+        let scheme = format!(
+            "{}://",
+            match request.scheme.as_ref().unwrap_or(&Scheme::Https) {
+                Scheme::Http => "http://",
+                Scheme::Https => "https://",
+                Scheme::Other(s) => bail!("unsupported scheme {}", s),
+            }
+        );
 
         // Largely adapted from https://hyper.rs/guides/1/client/basic/
         let authority = match request.authority.find(":") {

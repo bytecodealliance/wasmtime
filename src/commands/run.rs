@@ -83,6 +83,28 @@ fn parse_preloads(s: &str) -> Result<(String, PathBuf)> {
     Ok((parts[0].into(), parts[1].into()))
 }
 
+fn parse_profile(s: &str) -> Result<Profile> {
+    let parts = s.split(',').collect::<Vec<_>>();
+    match &parts[..] {
+        ["perfmap"] => Ok(Profile::Native(wasmtime::ProfilingStrategy::PerfMap)),
+        ["jitdump"] => Ok(Profile::Native(wasmtime::ProfilingStrategy::JitDump)),
+        ["vtune"] => Ok(Profile::Native(wasmtime::ProfilingStrategy::VTune)),
+        ["guest"] => Ok(Profile::Guest {
+            path: "wasmtime-guest-profile.json".to_string(),
+            interval: Duration::from_millis(10),
+        }),
+        ["guest", path] => Ok(Profile::Guest {
+            path: path.to_string(),
+            interval: Duration::from_millis(10),
+        }),
+        ["guest", path, dur] => Ok(Profile::Guest {
+            path: path.to_string(),
+            interval: parse_dur(dur)?,
+        }),
+        _ => bail!("unknown profiling strategy: {s}"),
+    }
+}
+
 static AFTER_HELP: Lazy<String> = Lazy::new(|| crate::FLAG_EXPLANATIONS.to_string());
 
 /// Runs a WebAssembly module
@@ -169,22 +191,27 @@ pub struct RunCommand {
     )]
     wasm_timeout: Option<Duration>,
 
-    /// Enable in-process sampling profiling of the guest WebAssembly program,
-    /// and write the captured profile to the given path. The resulting file
-    /// can be viewed using https://profiler.firefox.com/.
-    #[clap(long, value_name = "PATH")]
-    profile_guest: Option<PathBuf>,
-
-    /// Sampling interval for in-process profiling with `--profile-guest`. When
-    /// used together with `--wasm-timeout`, the timeout will be rounded up to
-    /// the nearest multiple of this interval.
+    /// Profiling strategy (valid options are: perfmap, jitdump, vtune, guest)
+    ///
+    /// The perfmap, jitdump, and vtune profiling strategies integrate Wasmtime
+    /// with external profilers such as `perf`. The guest profiling strategy
+    /// enables in-process sampling and will write the captured profile to
+    /// `wasmtime-guest-profile.json` by default which can be viewed at
+    /// https://profiler.firefox.com/.
+    ///
+    /// The `guest` option can be additionally configured as:
+    ///
+    ///     --profile=guest[,path[,interval]]
+    ///
+    /// where `path` is where to write the profile and `interval` is the
+    /// duration between samples. When used with `--wasm-timeout` the timeout
+    /// will be rounded up to the nearest multiple of this interval.
     #[clap(
         long,
-        default_value = "10ms",
-        value_name = "TIME",
-        parse(try_from_str = parse_dur),
+        value_name = "STRATEGY",
+        parse(try_from_str = parse_profile),
     )]
-    profile_guest_interval: Duration,
+    profile: Option<Profile>,
 
     /// Enable coredump generation after a WebAssembly trap.
     #[clap(long = "coredump-on-trap", value_name = "PATH")]
@@ -228,6 +255,11 @@ pub struct RunCommand {
     trap_on_grow_failure: bool,
 }
 
+enum Profile {
+    Native(wasmtime::ProfilingStrategy),
+    Guest { path: String, interval: Duration },
+}
+
 impl RunCommand {
     /// Executes the command.
     pub fn execute(&self) -> Result<()> {
@@ -235,8 +267,18 @@ impl RunCommand {
 
         let mut config = self.common.config(None)?;
 
-        if self.wasm_timeout.is_some() || self.profile_guest.is_some() {
+        if self.wasm_timeout.is_some() {
             config.epoch_interruption(true);
+        }
+        match self.profile {
+            Some(Profile::Native(s)) => {
+                config.profiler(s);
+            }
+            Some(Profile::Guest { .. }) => {
+                // Further configured down below as well.
+                config.epoch_interruption(true);
+            }
+            None => {}
         }
 
         let engine = Engine::new(&config)?;
@@ -398,8 +440,8 @@ impl RunCommand {
         module_name: &str,
         modules: Vec<(String, Module)>,
     ) -> Box<dyn FnOnce(&mut Store<Host>)> {
-        if let Some(path) = &self.profile_guest {
-            let interval = self.profile_guest_interval;
+        if let Some(Profile::Guest { path, interval }) = &self.profile {
+            let interval = *interval;
             store.data_mut().guest_profiler =
                 Some(Arc::new(GuestProfiler::new(module_name, interval, modules)));
 
@@ -449,10 +491,10 @@ impl RunCommand {
                     .map_err(anyhow::Error::new)
                     .and_then(|output| profiler.finish(std::io::BufWriter::new(output)))
                 {
-                    eprintln!("failed writing profile at {}: {e:#}", path.display());
+                    eprintln!("failed writing profile at {path}: {e:#}");
                 } else {
                     eprintln!();
-                    eprintln!("Profile written to: {}", path.display());
+                    eprintln!("Profile written to: {path}");
                     eprintln!("View this profile at https://profiler.firefox.com/.");
                 }
             });
@@ -789,31 +831,24 @@ fn generate_coredump(err: &anyhow::Error, source_name: &str, coredump_path: &str
         .downcast_ref::<wasmtime::WasmBacktrace>()
         .ok_or_else(|| anyhow!("no wasm backtrace found to generate coredump with"))?;
 
-    let mut coredump_builder =
-        wasm_coredump_builder::CoredumpBuilder::new().executable_name(source_name);
-
-    {
-        let mut thread_builder = wasm_coredump_builder::ThreadBuilder::new().thread_name("main");
-
-        for frame in bt.frames() {
-            let coredump_frame = wasm_coredump_builder::FrameBuilder::new()
-                .codeoffset(frame.func_offset().unwrap_or(0) as u32)
-                .funcidx(frame.func_index())
-                .build();
-            thread_builder.add_frame(coredump_frame);
-        }
-
-        coredump_builder.add_thread(thread_builder.build());
+    let coredump = wasm_encoder::CoreDumpSection::new(source_name);
+    let mut stacksection = wasm_encoder::CoreDumpStackSection::new("main");
+    for f in bt.frames() {
+        stacksection.frame(
+            f.func_index(),
+            u32::try_from(f.func_offset().unwrap_or(0)).unwrap(),
+            // We don't currently have access to locals/stack values
+            [],
+            [],
+        );
     }
-
-    let coredump = coredump_builder
-        .serialize()
-        .map_err(|err| anyhow!("failed to serialize coredump: {}", err))?;
+    let mut module = wasm_encoder::Module::new();
+    module.section(&coredump);
+    module.section(&stacksection);
 
     let mut f = File::create(coredump_path)
         .context(format!("failed to create file at `{}`", coredump_path))?;
-    f.write_all(&coredump)
+    f.write_all(module.as_slice())
         .with_context(|| format!("failed to write coredump file at `{}`", coredump_path))?;
-
     Ok(())
 }

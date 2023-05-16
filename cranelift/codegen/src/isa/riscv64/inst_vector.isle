@@ -56,6 +56,31 @@
 (type VType (primitive VType))
 (type VState (primitive VState))
 
+
+;; Vector Opcode Category
+;;
+;; These categories are used to determine the type of operands that are allowed in the
+;; instruction.
+(type VecOpCategory (enum
+  (OPIVV)
+  (OPFVV)
+  (OPMVV)
+  (OPIVI)
+  (OPIVX)
+  (OPFVF)
+  (OPMVX)
+  (OPCFG)
+))
+
+;; Vector Opcode Masking
+;;
+;; When masked, the instruction will only operate on the elements that are dictated by
+;; the mask register. Currently this is always fixed to v0.
+(type VecOpMasking (enum
+  (Enabled)
+  (Disabled)
+))
+
 ;; Register to Register ALU Ops
 (type VecAluOpRRR (enum
   (Vadd)
@@ -66,6 +91,11 @@
   (Vand)
   (Vor)
   (Vxor)
+))
+
+;; Register-Imm ALU Ops
+(type VecAluOpRRImm5 (enum
+  (Vadd)
 ))
 
 
@@ -128,6 +158,13 @@
             (_ Unit (emit (MInst.VecAluRRR op vd vs2 vs1 vstate))))
         vd))
 
+;; Helper for emitting `MInst.VecAluRRImm5` instructions.
+(decl vec_alu_rr_imm5 (VecAluOpRRImm5 Reg Imm5 VState) Reg)
+(rule (vec_alu_rr_imm5 op vs2 imm vstate)
+      (let ((vd WritableReg (temp_writable_reg $I8X16))
+            (_ Unit (emit (MInst.VecAluRRImm5 op vd vs2 imm vstate))))
+        vd))
+
 ;; Helper for emitting `MInst.VecLoad` instructions.
 (decl vec_load (VecElementWidth VecAMode MemFlags VState) Reg)
 (rule (vec_load eew from flags vstate)
@@ -145,6 +182,11 @@
 (decl rv_vadd_vv (Reg Reg VState) Reg)
 (rule (rv_vadd_vv vs2 vs1 vstate)
   (vec_alu_rrr (VecAluOpRRR.Vadd) vs2 vs1 vstate))
+
+;; Helper for emitting the `vadd.vi` instruction.
+(decl rv_vadd_vi (Reg Imm5 VState) Reg)
+(rule (rv_vadd_vi vs2 imm vstate)
+  (vec_alu_rr_imm5 (VecAluOpRRImm5.Vadd) vs2 imm vstate))
 
 ;; Helper for emitting the `vsub.vv` instruction.
 (decl rv_vsub_vv (Reg Reg VState) Reg)

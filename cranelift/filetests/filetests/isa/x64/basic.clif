@@ -11,7 +11,8 @@ block0(v0: i32, v1: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   lea     0(%rdi,%rsi,1), %eax
+;   movq    %rdi, %rax
+;   addl    %eax, %esi, %eax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -21,7 +22,8 @@ block0(v0: i32, v1: i32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   leal (%rdi, %rsi), %eax
+;   movq %rdi, %rax
+;   addl %esi, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

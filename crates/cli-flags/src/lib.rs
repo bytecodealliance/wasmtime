@@ -20,7 +20,7 @@ use anyhow::{bail, Result};
 use clap::Parser;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use wasmtime::{Config, ProfilingStrategy, Strategy};
+use wasmtime::{Config, Strategy};
 
 pub const SUPPORTED_WASM_FEATURES: &[(&str, &str)] = &[
     ("all", "enables all supported WebAssembly features"),
@@ -137,10 +137,6 @@ pub struct CommonOptions {
     /// Enable or disable WASI modules
     #[clap(long, value_name = "MODULE,MODULE,...", parse(try_from_str = parse_wasi_modules))]
     pub wasi_modules: Option<WasiModules>,
-
-    /// Profiling strategy (valid options are: perfmap, jitdump, vtune)
-    #[clap(long)]
-    pub profile: Option<ProfilingStrategy>,
 
     /// Generate jitdump file (supported on --features=profiling build)
     /// Run optimization passes on translated functions, on by default
@@ -289,7 +285,6 @@ impl CommonOptions {
             .cranelift_debug_verifier(self.enable_cranelift_debug_verifier)
             .debug_info(self.debug_info)
             .cranelift_opt_level(self.opt_level())
-            .profiler(self.profile.unwrap_or(ProfilingStrategy::None))
             .cranelift_nan_canonicalization(self.enable_cranelift_nan_canonicalization);
 
         self.enable_wasm_features(&mut config);

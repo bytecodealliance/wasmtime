@@ -8,9 +8,9 @@
 
 use crate::state::FuncTranslationState;
 use crate::{
-    DataIndex, ElemIndex, FuncIndex, Global, GlobalIndex, Heap, HeapData, Memory, MemoryIndex,
-    SignatureIndex, Table, TableIndex, Tag, TagIndex, TypeIndex, WasmError, WasmFuncType,
-    WasmHeapType, WasmResult,
+    DataIndex, ElemIndex, FuncIndex, Global, GlobalIndex, GlobalInit, Heap, HeapData, Memory,
+    MemoryIndex, SignatureIndex, Table, TableIndex, Tag, TagIndex, TypeIndex, WasmError,
+    WasmFuncType, WasmHeapType, WasmResult,
 };
 use core::convert::From;
 use cranelift_codegen::cursor::FuncCursor;
@@ -684,7 +684,7 @@ pub trait ModuleEnvironment<'data> {
     }
 
     /// Declares a global to the environment.
-    fn declare_global(&mut self, global: Global) -> WasmResult<()>;
+    fn declare_global(&mut self, global: Global, init: GlobalInit) -> WasmResult<()>;
 
     /// Provides the number of exports up front. By default this does nothing, but
     /// implementations can use this to preallocate memory if desired.

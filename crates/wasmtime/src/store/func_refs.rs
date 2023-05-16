@@ -1,6 +1,6 @@
 use crate::{instance::PrePatchedFuncRef, module::ModuleRegistry};
 use std::{ptr::NonNull, sync::Arc};
-use wasmtime_runtime::{VMFuncRef, VMNativeCallHostFuncContext};
+use wasmtime_runtime::{SendSyncPtr, VMFuncRef, VMNativeCallHostFuncContext};
 
 /// An arena of `VMFuncRef`s.
 ///
@@ -15,7 +15,7 @@ pub struct FuncRefs {
 
     /// Pointers into `self.bump` for entries that need `wasm_call` field filled
     /// in.
-    with_holes: Vec<UnpatchedFuncRef>,
+    with_holes: Vec<SendSyncPtr<VMFuncRef>>,
 
     /// Pinned `VMFuncRef`s that had their `wasm_call` field
     /// pre-patched when constructing an `InstancePre`, and which we need to
@@ -40,31 +40,6 @@ mod send_sync_bump {
     unsafe impl Sync for SendSyncBump {}
 }
 
-use unpatched_func_ref::UnpatchedFuncRef;
-mod unpatched_func_ref {
-    use super::*;
-
-    pub struct UnpatchedFuncRef(NonNull<VMFuncRef>);
-
-    impl UnpatchedFuncRef {
-        /// Safety: Callers must ensure that the given `func_ref` and resulting
-        /// wrapped value are used in a `Send + Sync` compatible way.
-        pub unsafe fn new(func_ref: &mut VMFuncRef) -> UnpatchedFuncRef {
-            debug_assert!(func_ref.wasm_call.is_none());
-            UnpatchedFuncRef(NonNull::from(func_ref))
-        }
-
-        pub fn func_ref(&self) -> NonNull<VMFuncRef> {
-            self.0
-        }
-    }
-
-    // Safety: It is `UnpatchedFuncRef::new` callers' responsibility to uphold
-    // this.
-    unsafe impl Send for UnpatchedFuncRef {}
-    unsafe impl Sync for UnpatchedFuncRef {}
-}
-
 impl FuncRefs {
     /// Push the given `VMFuncRef` into this arena, returning a
     /// pinned pointer to it.
@@ -80,8 +55,8 @@ impl FuncRefs {
         let _ = unsafe { VMNativeCallHostFuncContext::from_opaque(func_ref.vmctx) };
 
         let func_ref = self.bump.alloc(func_ref);
-        let unpatched = UnpatchedFuncRef::new(func_ref);
-        let ret = unpatched.func_ref();
+        let unpatched = SendSyncPtr::from(func_ref);
+        let ret = unpatched.as_non_null();
         self.with_holes.push(unpatched);
         ret
     }
@@ -90,7 +65,7 @@ impl FuncRefs {
     pub fn fill(&mut self, modules: &ModuleRegistry) {
         self.with_holes.retain_mut(|f| {
             unsafe {
-                let func_ref = f.func_ref().as_mut();
+                let func_ref = f.as_mut();
                 debug_assert!(func_ref.wasm_call.is_none());
 
                 // Debug assert that the vmctx is a `VMNativeCallHostFuncContext` as

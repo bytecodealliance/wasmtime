@@ -356,6 +356,16 @@ fn run_test_inputs(testcase: &TestCase, run: impl Fn(&[DataValue]) -> RunResult)
 }
 
 fuzz_target!(|testcase: TestCase| {
+    let mut testcase = testcase;
+    let fuel: u8 = std::env::args()
+        .find_map(|arg| arg.strip_prefix("--fuel=").map(|s| s.to_owned()))
+        .map(|fuel| fuel.parse().expect("fuel should be a valid integer"))
+        .unwrap_or_default();
+    for i in 0..testcase.ctrl_planes.len() {
+        testcase.ctrl_planes[i].set_fuel(fuel)
+    }
+    let testcase = testcase;
+
     // This is the default, but we should ensure that it wasn't accidentally turned off anywhere.
     assert!(testcase.isa.flags().enable_verifier());
 
