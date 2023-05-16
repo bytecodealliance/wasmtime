@@ -687,7 +687,7 @@ impl Module for JITModule {
 
         // work around borrow-checker to allow reuse of ctx below
         let res = ctx.compile(self.isa(), ctrl_plane)?;
-        let alignment = res.alignment as u64;
+        let alignment = res.buffer.alignment as u64;
         let compiled_code = ctx.compiled_code().unwrap();
 
         let size = compiled_code.code_info().total_size as usize;

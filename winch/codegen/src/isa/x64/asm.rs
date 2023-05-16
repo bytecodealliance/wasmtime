@@ -99,7 +99,10 @@ impl Assembler {
 
     /// Return the emitted code.
     pub fn finalize(mut self) -> MachBufferFinalized<Final> {
-        let stencil = self.buffer.finish(self.emit_state.ctrl_plane_mut());
+        let constants = Default::default();
+        let stencil = self
+            .buffer
+            .finish(&constants, self.emit_state.ctrl_plane_mut());
         stencil.apply_base_srcloc(Default::default())
     }
 

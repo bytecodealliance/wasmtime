@@ -349,12 +349,12 @@ block0(v0: i32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movdqu 0xb4(%rip), %xmm0
+;   movdqu 0x34(%rip), %xmm0
 ;   movq %rdi, %r10
 ;   andq $7, %r10
 ;   movd %r10d, %xmm5
 ;   psllw %xmm5, %xmm0
-;   leaq 0x1d(%rip), %rsi
+;   leaq 0x2d(%rip), %rsi
 ;   shlq $4, %r10
 ;   movdqu (%rsi, %r10), %xmm13
 ;   pand %xmm13, %xmm0
@@ -365,7 +365,11 @@ block0(v0: i32):
 ;   addb %al, (%rax)
 ;   addb %al, (%rax)
 ;   addb %al, (%rax)
-;   addb %bh, %bh
+;   addb %al, (%rax)
+;   addl %eax, (%rdx)
+;   addl 0x9080706(, %rax), %eax
+;   orb (%rbx), %cl
+;   orb $0xd, %al
 
 function %ishl_i8x16_imm(i8x16) -> i8x16 {
 block0(v0: i8x16):
@@ -502,21 +506,13 @@ block0:
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movdqu 0x24(%rip), %xmm0
+;   movdqu 0x14(%rip), %xmm0
 ;   psrlw $1, %xmm0
-;   pand 7(%rip), %xmm0
+;   pand 0x17(%rip), %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
 ;   addb %al, (%rax)
-;   jg 0xa1
-;   jg 0xa3
-;   jg 0xa5
-;   jg 0xa7
-;   jg 0xa9
-;   jg 0xab
-;   jg 0xad
-;   jg 0xaf
 ;   addb %al, (%rcx)
 ;   addb (%rbx), %al
 ;   addb $5, %al
