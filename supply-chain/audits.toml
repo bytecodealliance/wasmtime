@@ -1353,6 +1353,11 @@ criteria = "safe-to-deploy"
 delta = "0.25.6 -> 0.25.7"
 notes = "This is a minor bug-fix update."
 
+[[audits.tempfile]]
+who = "Pat Hickey <phickey@fastly.com>"
+criteria = "safe-to-deploy"
+delta = "3.3.0 -> 3.5.0"
+
 [[audits.test-log]]
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
