@@ -110,10 +110,16 @@
 (rule 8 (lower (has_type (ty_vec_fits_in_register ty) (iadd x y)))
   (rv_vadd_vv x y ty))
 
-(rule 9 (lower (has_type (ty_vec_fits_in_register ty) (iadd x (replicated_imm5 y))))
+(rule 9 (lower (has_type (ty_vec_fits_in_register ty) (iadd x (splat y))))
+  (rv_vadd_vx x y ty))
+
+(rule 10 (lower (has_type (ty_vec_fits_in_register ty) (iadd (splat x) y)))
+  (rv_vadd_vx y x ty))
+
+(rule 11 (lower (has_type (ty_vec_fits_in_register ty) (iadd x (replicated_imm5 y))))
   (rv_vadd_vi x y ty))
 
-(rule 10 (lower (has_type (ty_vec_fits_in_register ty) (iadd (replicated_imm5 x) y)))
+(rule 12 (lower (has_type (ty_vec_fits_in_register ty) (iadd (replicated_imm5 x) y)))
   (rv_vadd_vi y x ty))
 
 ;;; Rules for `uadd_overflow_trap` ;;;;;;;;;;;;;
@@ -140,11 +146,24 @@
 (rule 3 (lower (has_type (ty_vec_fits_in_register ty) (isub x y)))
   (rv_vsub_vv x y ty))
 
+(rule 4 (lower (has_type (ty_vec_fits_in_register ty) (isub x (splat y))))
+  (rv_vsub_vx x y ty))
+
+(rule 5 (lower (has_type (ty_vec_fits_in_register ty) (isub (splat x) y)))
+  (rv_vrsub_vx y x ty))
+
+(rule 6 (lower (has_type (ty_vec_fits_in_register ty) (isub (replicated_imm5 x) y)))
+  (rv_vrsub_vi y x ty))
+
+
 ;;;; Rules for `ineg` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; `i64` and smaller.
-(rule (lower (has_type ty (ineg val)))
+(rule (lower (has_type (ty_int ty) (ineg val)))
   (neg ty val))
+
+(rule 1 (lower (has_type (ty_vec_fits_in_register ty) (ineg x)))
+  (rv_vneg_v x ty))
+
 
 ;;;; Rules for `imul` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
