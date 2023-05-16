@@ -8,14 +8,14 @@ publish = false
 license = "Apache-2.0 WITH LLVM-exception"
 
 [build-dependencies]
-cfg-if = "1.0"
+cfg-if = { workspace = true }
 cargo_metadata = "0.15.3"
-wit-component = "0.7.4"
-heck = "0.4.0"
+wit-component = { workspace = true }
+heck = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }
-tempfile = "3.1.0"
+tempfile = { workspace = true }
 test-log = { version = "0.2", default-features = false, features = ["trace"] }
 tracing = { workspace = true }
 tracing-subscriber = { version = "0.3.1", default-features = false, features = ['fmt', 'env-filter'] }

@@ -54,8 +54,8 @@ rustix = { workspace = true, features = ["mm", "param"] }
 wasmtime = { workspace = true, features = ['component-model', 'async', 'default', 'winch'] }
 env_logger = { workspace = true }
 log = { workspace = true }
-filecheck = "0.5.0"
-tempfile = "3.1.0"
+filecheck = { workspace = true }
+tempfile = { workspace = true }
 test-programs = { path = "crates/test-programs" }
 wasmtime-runtime = { workspace = true }
 tokio = { version = "1.8.0", features = ["rt", "time", "macros", "rt-multi-thread"] }
@@ -181,8 +181,24 @@ winch-test-macros = { path = "winch/test-macros" }
 wasi-preview1-component-adapter = { path = "crates/wasi-preview1-component-adapter" }
 byte-array-literals = { path = "crates/wasi-preview1-component-adapter/byte-array-literals" }
 
+# Bytecode Alliance maintained dependencies:
+# ---------------------------
+regalloc2 = "0.8.1"
+
+# cap-std family:
 target-lexicon = { version = "0.12.3", default-features = false, features = ["std"] }
-anyhow = "1.0.22"
+cap-std = "1.0.0"
+cap-rand = "1.0.0"
+io-lifetimes = { version = "1.0.0", default-features = false }
+rustix = "0.37.13"
+
+# wit-bindgen:
+wit-bindgen = "0.6.0"
+
+# FIXME: the above wit-bindgen depends on versions ahead of the wasm-tools
+# dependencies below. When the below are updated, remove the exception
+# for duplicate wasm-encoder, wasmparser, and wit-parser from deny.toml
+# wasm-tools family:
 wasmparser = "0.104.0"
 wat = "1.0.63"
 wast = "57.0.0"
@@ -191,20 +207,21 @@ wasm-encoder = "0.26.0"
 wasm-smith = "0.12.7"
 wasm-mutate = "0.2.24"
 wit-parser = "0.7.1"
-windows-sys = "0.48.0"
-env_logger = "0.10"
-rustix = "0.37.13"
-log = { version = "0.4.8", default-features = false }
+wit-component = "0.7.2"
+
+# Non-Bytecode Alliance maintained dependencies:
+# --------------------------
 object = { version = "0.30.3", default-features = false, features = ['read_core', 'elf', 'std'] }
 gimli = { version = "0.27.0", default-features = false, features = ['read', 'std'] }
+anyhow = "1.0.22"
+windows-sys = "0.48.0"
+env_logger = "0.10"
+log = { version = "0.4.8", default-features = false }
 clap = { version = "3.2.0", features = ["color", "suggestions", "derive"] }
 hashbrown = "0.13.2"
-cap-std = "1.0.0"
-cap-rand = "1.0.0"
 capstone = "0.9.0"
 once_cell = "1.12.0"
 smallvec = { version = "1.6.1", features = ["union"] }
-io-lifetimes = { version = "1.0.0", default-features = false }
 tracing = "0.1.26"
 bitflags = "1.2"
 thiserror = "1.0.15"
@@ -216,8 +233,10 @@ serde = "1.0.94"
 serde_json = "1.0.80"
 glob = "0.3.0"
 libfuzzer-sys = "0.4.0"
-regalloc2 = "0.8.1"
 walkdir = "2.3.3"
+cfg-if = "1.0"
+tempfile = "3.1.0"
+filecheck = "0.5.0"
 
 [features]
 default = [

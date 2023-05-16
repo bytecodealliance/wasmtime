@@ -31,7 +31,7 @@ target-lexicon = { workspace = true }
 wasmparser = { workspace = true }
 anyhow = { workspace = true }
 libc = "0.2"
-cfg-if = "1.0"
+cfg-if = { workspace = true }
 log = { workspace = true }
 wat = { workspace = true, optional = true }
 serde = { version = "1.0.94", features = ["derive"] }
