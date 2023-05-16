@@ -72,22 +72,8 @@ user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
 [[publisher.wasm-mutate]]
-version = "0.2.23"
-when = "2023-04-13"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wasm-mutate]]
 version = "0.2.24"
 when = "2023-04-27"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wasm-smith]]
-version = "0.12.6"
-when = "2023-04-13"
 user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
@@ -100,22 +86,8 @@ user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
 [[publisher.wasmparser]]
-version = "0.103.0"
-when = "2023-04-13"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wasmparser]]
 version = "0.104.0"
 when = "2023-04-27"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wasmprinter]]
-version = "0.2.55"
-when = "2023-04-13"
 user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
@@ -128,22 +100,8 @@ user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
 [[publisher.wast]]
-version = "56.0.0"
-when = "2023-04-13"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wast]]
 version = "57.0.0"
 when = "2023-04-27"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
-[[publisher.wat]]
-version = "1.0.62"
-when = "2023-04-13"
 user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"

@@ -497,10 +497,6 @@ criteria = "safe-to-deploy"
 version = "0.4.1"
 criteria = "safe-to-deploy"
 
-[[exemptions.os_pipe]]
-version = "0.9.2"
-criteria = "safe-to-run"
-
 [[exemptions.os_str_bytes]]
 version = "6.0.0"
 criteria = "safe-to-deploy"
