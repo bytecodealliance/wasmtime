@@ -215,6 +215,12 @@ where
             builder.set("probestack_size_log2", &format!("{}", size))?;
         }
 
+        // Generate random basic block padding
+        let bb_padding = self
+            .u
+            .int_in_range(self.config.bb_padding_log2_size.clone())?;
+        builder.set("bb_padding_log2_minus_one", &format!("{}", bb_padding))?;
+
         // Fixed settings
 
         // We need llvm ABI extensions for i128 values on x86, so enable it regardless of
