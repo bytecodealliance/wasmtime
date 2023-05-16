@@ -4,6 +4,8 @@ version = "0.0.0"
 readme = "README.md"
 edition = "2021"
 publish = false
+
+[lib]
 test = false
 
 [dependencies]
