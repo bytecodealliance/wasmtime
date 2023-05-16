@@ -13366,7 +13366,7 @@ fn test_s390x_binemit() {
     let ctrl_plane = &mut Default::default();
     let constants = Default::default();
 
-    let emit_info = EmitInfo::new(flags.clone(), isa_flags);
+    let emit_info = EmitInfo::new(isa_flags);
     for (insn, expected_encoding, expected_printing) in insns {
         println!(
             "S390x: {:?}, {}, {}",
