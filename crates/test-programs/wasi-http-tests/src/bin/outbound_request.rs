@@ -116,6 +116,8 @@ fn main() -> Result<()> {
     assert_eq!(r1.status, 200);
     let method = r1.header("x-wasmtime-test-method").unwrap();
     assert_eq!(method, "GET");
+    let uri = r1.header("x-wasmtime-test-uri").unwrap();
+    assert_eq!(uri, "http://localhost:3000/get?some=arg?goes=here");
     assert_eq!(r1.body, b"");
 
     let r2 = request(

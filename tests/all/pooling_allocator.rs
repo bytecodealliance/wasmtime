@@ -587,7 +587,7 @@ fn drop_externref_global_during_module_init() -> Result<()> {
     )?;
 
     let mut store = Store::new(&engine, Limiter);
-    drop(Instance::new(&mut store, &module, &[])?);
+    Instance::new(&mut store, &module, &[])?;
     drop(store);
 
     let module = Module::new(

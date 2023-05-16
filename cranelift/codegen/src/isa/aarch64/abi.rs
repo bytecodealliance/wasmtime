@@ -1069,7 +1069,11 @@ impl ABIMachineSpec for AArch64MachineDeps {
         insts
     }
 
-    fn get_number_of_spillslots_for_value(rc: RegClass, vector_size: u32) -> u32 {
+    fn get_number_of_spillslots_for_value(
+        rc: RegClass,
+        vector_size: u32,
+        _isa_flags: &Self::F,
+    ) -> u32 {
         assert_eq!(vector_size % 8, 0);
         // We allocate in terms of 8-byte slots.
         match rc {

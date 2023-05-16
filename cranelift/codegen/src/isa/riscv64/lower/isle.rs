@@ -52,37 +52,8 @@ impl<'a, 'b> RV64IsleContext<'a, 'b, MInst, Riscv64Backend> {
         Self {
             lower_ctx,
             backend,
-            min_vec_reg_size: Self::compute_min_vec_reg_size(backend),
+            min_vec_reg_size: backend.isa_flags.min_vec_reg_size(),
         }
-    }
-
-    fn compute_min_vec_reg_size(backend: &Riscv64Backend) -> u64 {
-        let flags = &backend.isa_flags;
-        let entries = [
-            (flags.has_zvl65536b(), 65536),
-            (flags.has_zvl32768b(), 32768),
-            (flags.has_zvl16384b(), 16384),
-            (flags.has_zvl8192b(), 8192),
-            (flags.has_zvl4096b(), 4096),
-            (flags.has_zvl2048b(), 2048),
-            (flags.has_zvl1024b(), 1024),
-            (flags.has_zvl512b(), 512),
-            (flags.has_zvl256b(), 256),
-            // In order to claim the Application Profile V extension, a minimum
-            // register size of 128 is required. i.e. V implies Zvl128b.
-            (flags.has_v(), 128),
-            (flags.has_zvl128b(), 128),
-            (flags.has_zvl64b(), 64),
-            (flags.has_zvl32b(), 32),
-        ];
-
-        for (has_flag, size) in entries.into_iter() {
-            if has_flag {
-                return size;
-            }
-        }
-
-        return 0;
     }
 
     #[inline]

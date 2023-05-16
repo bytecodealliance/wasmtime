@@ -4,6 +4,21 @@ target s390x
 set enable_simd
 target x86_64
 target x86_64 skylake
+target riscv64 has_v
+
+function %ineg_i8x16(i8x16) -> i8x16 {
+block0(v0: i8x16):
+    v1 = ineg v0
+    return v1
+}
+; run: %ineg_i8x16([-1 10 2 4 5 6 7 8 9 10 -11 -12 -13 -14 -15 -16]) == [1 -10 -2 -4 -5 -6 -7 -8 -9 -10 11 12 13 14 15 16]
+
+function %ineg_i16x8(i16x8) -> i16x8 {
+block0(v0: i16x8):
+    v1 = ineg v0
+    return v1
+}
+; run: %ineg_i16x8([1 2 -3 -4 5 6 -7 -8]) == [-1 -2 3 4 -5 -6 7 8]
 
 function %ineg_i32x4(i32x4) -> i32x4 {
 block0(v0: i32x4):
@@ -11,3 +26,11 @@ block0(v0: i32x4):
     return v1
 }
 ; run: %ineg_i32x4([1 1 1 1]) == [-1 -1 -1 -1]
+; run: %ineg_i32x4([1 -9 1 -10]) == [-1 9 -1 10]
+
+function %ineg_i64x2(i64x2) -> i64x2 {
+block0(v0: i64x2):
+    v1 = ineg v0
+    return v1
+}
+; run: %ineg_i64x2([99 -10]) == [-99 10]

@@ -508,7 +508,7 @@ pub fn make_api_calls(api: generators::api::ApiCalls) {
 
             ApiCall::InstanceDrop { id } => {
                 log::trace!("dropping instance {}", id);
-                drop(instances.remove(&id));
+                instances.remove(&id);
             }
 
             ApiCall::CallExportedFunc { instance, nth } => {

@@ -263,7 +263,7 @@ mod tests {
         let b = SetOnDrop(a.clone());
         let fiber =
             Fiber::<(), (), ()>::new(FiberStack::new(1024 * 1024).unwrap(), move |(), _s| {
-                drop(&b);
+                let _ = &b;
                 panic!();
             })
             .unwrap();
