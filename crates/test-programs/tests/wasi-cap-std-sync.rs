@@ -115,6 +115,9 @@ fn run(name: &str, inherit_stdio: bool) -> Result<()> {
     Ok(())
 }
 
+// Below here is mechanical: there should be one test for every binary in
+// wasi-tests. The only differences should be should_panic annotations for
+// tests which fail.
 #[test_log::test]
 fn big_random_buf() {
     run("big_random_buf", true).unwrap()

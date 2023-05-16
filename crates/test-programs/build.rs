@@ -92,7 +92,7 @@ fn modules_rs(meta: &cargo_metadata::Metadata, package: &str, kind: &str, out_di
         format!(
             "
         {decls}\n
-        fn get_module(s: &str) -> wasmtime::Module {{
+        pub fn get_module(s: &str) -> wasmtime::Module {{
             match s {{
                 {cases}
                 _ => panic!(\"no such module: {{}}\", s),
@@ -162,11 +162,11 @@ fn components_rs(
     }
 
     std::fs::write(
-        out_dir.join(&format!("{}_modules.rs", package.to_snake_case())),
+        out_dir.join(&format!("{}_components.rs", package.to_snake_case())),
         format!(
             "
         {decls}\n
-        fn get_component(s: &str) -> wasmtime::component::Component {{
+        pub fn get_component(s: &str) -> wasmtime::component::Component {{
             match s {{
                 {cases}
                 _ => panic!(\"no such component: {{}}\", s),

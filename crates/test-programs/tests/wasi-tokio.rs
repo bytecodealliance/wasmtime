@@ -117,6 +117,9 @@ async fn run(name: &str, inherit_stdio: bool) -> Result<()> {
     Ok(())
 }
 
+// Below here is mechanical: there should be one test for every binary in
+// wasi-tests. The only differences should be should_panic annotations for
+// tests which fail.
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn big_random_buf() {
     run("big_random_buf", true).await.unwrap()
@@ -239,7 +242,7 @@ async fn path_rename_file_trailing_slashes() {
     run("path_rename_file_trailing_slashes", false)
         .await
         .unwrap()
-}(flavor = "multi_thread", worker_threads = 1)
+}
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn path_rename() {
     run("path_rename", true).await.unwrap()

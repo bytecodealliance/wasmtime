@@ -14,18 +14,20 @@ wit-component = "0.9.0"
 heck = "0.4.0"
 
 [dev-dependencies]
+anyhow = { workspace = true }
+tempfile = "3.1.0"
+test-log = { version = "0.2", default-features = false, features = ["trace"] }
+tracing = { workspace = true }
+tracing-subscriber = { version = "0.3.1", default-features = false, features = ['fmt', 'env-filter'] }
+lazy_static = "1"
+wasmtime = { workspace = true, features = ['cranelift', 'component-model'] }
+
 wasi-common = { workspace = true }
 wasi-cap-std-sync = { workspace = true }
-wasmtime = { workspace = true, features = ['cranelift'] }
 wasmtime-wasi = { workspace = true, features = ["tokio"] }
-target-lexicon = { workspace = true }
-tracing-subscriber = { version = "0.3.1", default-features = false, features = ['fmt'] }
-tempfile = "3.1.0"
-os_pipe = "0.9"
-anyhow = { workspace = true }
-wat = { workspace = true }
 cap-std = { workspace = true }
-tokio = { version = "1.8.0", features = ["net", "rt-multi-thread"] }
+tokio = { version = "1.8.0", features = ["net", "rt-multi-thread", "macros"] }
+
 wasmtime-wasi-http = { workspace = true }
 hyper = { version = "1.0.0-rc.3", features = ["full"] }
 http = { version = "0.2.9" }
