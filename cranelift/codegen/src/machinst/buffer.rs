@@ -554,13 +554,11 @@ impl<I: VCodeInst> MachBuffer<I> {
     /// Returns a label that can be used to refer to the `constant` provided.
     ///
     /// This will automatically defer a new constant to be emitted for
-    /// `constant` if it has not been previously emitted. Note that the return
-    /// value of this method may change over time as well. Constants may be
-    /// emitted multiple times at multiple locations.
-    ///
-    /// The label returned is always an "undefined" label and will only get
-    /// defined during island emission which happens if a function gets either
-    /// too long or instead at the end of the function.
+    /// `constant` if it has not been previously emitted. Note that this
+    /// function may return a different label for the same constant at
+    /// different points in time. The label is valid to use only from the
+    /// current location; the MachBuffer takes care to emit the same constant
+    /// multiple times if needed so the constant is always in range.
     pub fn get_label_for_constant(&mut self, constant: VCodeConstant) -> MachLabel {
         let MachBufferConstant {
             align,
