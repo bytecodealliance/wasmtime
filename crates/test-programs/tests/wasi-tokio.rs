@@ -39,7 +39,7 @@ pub fn test_suite_environment() -> &'static [(&'static str, &'static str)] {
             ("NO_FDFLAGS_SYNC_SUPPORT", "1"),
         ]
     }
-    #[cfg(all(unix, not(target_os = "mac_os")))]
+    #[cfg(all(unix, not(target_os = "macos")))]
     {
         &[
             ("ERRNO_MODE_UNIX", "1"),
