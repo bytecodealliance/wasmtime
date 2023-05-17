@@ -78,6 +78,13 @@ user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
+[[publisher.wasm-metadata]]
+version = "0.6.0"
+when = "2023-05-15"
+user-id = 1
+user-login = "alexcrichton"
+user-name = "Alex Crichton"
+
 [[publisher.wasm-mutate]]
 version = "0.2.24"
 when = "2023-04-27"
@@ -207,6 +214,13 @@ user-name = "Nick Fitzgerald"
 [[publisher.wit-component]]
 version = "0.8.2"
 when = "2023-04-27"
+user-id = 1
+user-login = "alexcrichton"
+user-name = "Alex Crichton"
+
+[[publisher.wit-component]]
+version = "0.9.0"
+when = "2023-05-16"
 user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
