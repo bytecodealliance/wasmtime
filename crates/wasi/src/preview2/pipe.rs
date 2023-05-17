@@ -26,7 +26,7 @@ use system_interface::io::ReadReady;
 /// easy to create. For example:
 ///
 /// ```
-/// use wasi_common::{pipe::ReadPipe, WasiCtx};
+/// use wasmtime_wasi::preview2::{pipe::ReadPipe, WasiCtx};
 /// let stdin = ReadPipe::from("hello from stdin!");
 /// let builder = WasiCtx::builder().set_stdin(stdin);
 /// ```
@@ -134,7 +134,7 @@ impl<R: Read + ReadReady + Any + Send + Sync> InputStream for ReadPipe<R> {
 /// A virtual pipe write end.
 ///
 /// ```no_run
-/// use wasi_common::{pipe::WritePipe, WasiCtx, Table};
+/// use wasmtime_wasi::preview2::{pipe::WritePipe, WasiCtx, Table};
 /// let mut table = Table::new();
 /// let stdout = WritePipe::new_in_memory();
 /// let mut ctx = WasiCtx::builder().set_stdout(stdout.clone()).build(&mut table).unwrap();
