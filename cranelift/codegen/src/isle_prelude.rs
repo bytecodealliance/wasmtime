@@ -613,6 +613,16 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
+        fn u32_sub(&mut self, a: u32, b: u32) -> u32 {
+            a.wrapping_sub(b)
+        }
+
+        #[inline]
+        fn u32_and(&mut self, a: u32, b: u32) -> u32 {
+            a & b
+        }
+
+        #[inline]
         fn s32_add_fallible(&mut self, a: u32, b: u32) -> Option<u32> {
             let a = a as i32;
             let b = b as i32;

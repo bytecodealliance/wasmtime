@@ -193,12 +193,79 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
             testname == "simd_f32x4_pmin_pmax" || testname == "simd_f64x2_pmin_pmax"
         }
 
-        // Currently the simd wasm proposal is not implemented in the riscv64
-        // backend so skip all tests which could use simd.
         "riscv64" => {
-            testsuite.contains("simd")
-                || testname.contains("simd")
-                || testname.contains("memory_multi")
+            if testname.contains("memory_multi") || testsuite.contains("relaxed_simd") {
+                return true;
+            }
+
+            // The memory64 testsuite has a single SIMD test that we don't pass yet.
+            if testname == "simd" && testsuite == "memory64" {
+                return true;
+            }
+
+            let known_failure = [
+                "almost_extmul",
+                "canonicalize_nan",
+                "cvt_from_uint",
+                "issue4807",
+                "issue_3327_bnot_lowering",
+                "load_splat_out_of_bounds",
+                "replace_lane_preserve",
+                "simd_align",
+                "simd_bit_shift",
+                "simd_bitwise",
+                "simd_boolean",
+                "simd_conversions",
+                "simd_f32x4",
+                "simd_f32x4_arith",
+                "simd_f32x4_cmp",
+                "simd_f32x4_pmin_pmax",
+                "simd_f32x4_rounding",
+                "simd_f64x2",
+                "simd_f64x2_arith",
+                "simd_f64x2_cmp",
+                "simd_f64x2_pmin_pmax",
+                "simd_f64x2_rounding",
+                "simd_i16x8_arith2",
+                "simd_i16x8_cmp",
+                "simd_i16x8_extadd_pairwise_i8x16",
+                "simd_i16x8_extmul_i8x16",
+                "simd_i16x8_q15mulr_sat_s",
+                "simd_i16x8_sat_arith",
+                "simd_i32x4_arith2",
+                "simd_i32x4_cmp",
+                "simd_i32x4_dot_i16x8",
+                "simd_i32x4_extadd_pairwise_i16x8",
+                "simd_i32x4_extmul_i16x8",
+                "simd_i32x4_trunc_sat_f32x4",
+                "simd_i32x4_trunc_sat_f64x2",
+                "simd_i64x2_arith2",
+                "simd_i64x2_cmp",
+                "simd_i64x2_extmul_i32x4",
+                "simd_i8x16_arith2",
+                "simd_i8x16_cmp",
+                "simd_i8x16_sat_arith",
+                "simd_int_to_int_extend",
+                "simd_lane",
+                "simd_load",
+                "simd_load16_lane",
+                "simd_load32_lane",
+                "simd_load64_lane",
+                "simd_load8_lane",
+                "simd_load_extend",
+                "simd_load_splat",
+                "simd_load_zero",
+                "simd_splat",
+                "simd_store16_lane",
+                "simd_store32_lane",
+                "simd_store64_lane",
+                "simd_store8_lane",
+                "spillslot_size_fuzzbug",
+                "v128_select",
+            ]
+            .contains(&testname);
+
+            known_failure
         }
 
         _ => false,

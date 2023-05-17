@@ -195,19 +195,16 @@ rustix = "0.37.13"
 # wit-bindgen:
 wit-bindgen = "0.6.0"
 
-# FIXME: the above wit-bindgen depends on versions ahead of the wasm-tools
-# dependencies below. When the below are updated, remove the exception
-# for duplicate wasm-encoder, wasmparser, and wit-parser from deny.toml
 # wasm-tools family:
-wasmparser = "0.104.0"
-wat = "1.0.63"
-wast = "57.0.0"
-wasmprinter = "0.2.56"
-wasm-encoder = "0.26.0"
-wasm-smith = "0.12.7"
-wasm-mutate = "0.2.24"
+wasmparser = "0.105.0"
+wat = "1.0.64"
+wast = "58.0.0"
+wasmprinter = "0.2.57"
+wasm-encoder = "0.27.0"
+wasm-smith = "0.12.8"
+wasm-mutate = "0.2.25"
 wit-parser = "0.7.1"
-wit-component = "0.7.2"
+wit-component = "0.9.0"
 
 # Non-Bytecode Alliance maintained dependencies:
 # --------------------------

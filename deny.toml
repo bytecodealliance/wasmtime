@@ -62,12 +62,4 @@ skip-tree = [
     # windows-sys, while the rest of the ecosystem has. This duplicated
     # dependency appears to be benign.
     { name = "windows-sys", depth = 3 },
-
-
-    # TEMPORARY: until @rainy gets some time to pull in the wasm-encoder
-    # changes for core dumps, and bring the whole wasm-tools family up to
-    # their latest release, we have the following duplicates:
-    { name = "wasm-encoder", depth = 3 },
-    { name = "wasmparser", depth = 3 },
-    { name = "wit-parser", depth = 3 },
 ]
