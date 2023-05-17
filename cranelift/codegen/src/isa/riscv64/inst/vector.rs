@@ -1,8 +1,8 @@
 use crate::isa::riscv64::inst::AllocationConsumer;
 use crate::isa::riscv64::inst::EmitState;
 use crate::isa::riscv64::lower::isle::generated_code::{
-    VecAMode, VecAluOpRRImm5, VecAluOpRRR, VecAvl, VecElementWidth, VecLmul, VecMaskMode,
-    VecOpCategory, VecOpMasking, VecTailMode,
+    VecAMode, VecAluOpRImm5, VecAluOpRR, VecAluOpRRImm5, VecAluOpRRR, VecAvl, VecElementWidth,
+    VecLmul, VecMaskMode, VecOpCategory, VecOpMasking, VecTailMode,
 };
 use crate::machinst::RegClass;
 use crate::Reg;
@@ -260,6 +260,7 @@ impl VecAluOpRRR {
             VecAluOpRRR::VandVV => 0b001001,
             VecAluOpRRR::VorVV => 0b001010,
             VecAluOpRRR::VxorVV => 0b001011,
+            VecAluOpRRR::VslidedownVX => 0b001111,
         }
     }
 
@@ -273,9 +274,10 @@ impl VecAluOpRRR {
             VecAluOpRRR::VmulVV | VecAluOpRRR::VmulhVV | VecAluOpRRR::VmulhuVV => {
                 VecOpCategory::OPMVV
             }
-            VecAluOpRRR::VaddVX | VecAluOpRRR::VsubVX | VecAluOpRRR::VrsubVX => {
-                VecOpCategory::OPIVX
-            }
+            VecAluOpRRR::VaddVX
+            | VecAluOpRRR::VsubVX
+            | VecAluOpRRR::VrsubVX
+            | VecAluOpRRR::VslidedownVX => VecOpCategory::OPIVX,
         }
     }
 
@@ -305,13 +307,30 @@ impl VecAluOpRRImm5 {
         0x57
     }
     pub fn funct3(&self) -> u32 {
-        VecOpCategory::OPIVI.encode()
+        self.category().encode()
     }
+
     pub fn funct6(&self) -> u32 {
         // See: https://github.com/riscv/riscv-v-spec/blob/master/inst-table.adoc
         match self {
             VecAluOpRRImm5::VaddVI => 0b000000,
             VecAluOpRRImm5::VrsubVI => 0b000011,
+            VecAluOpRRImm5::VslidedownVI => 0b001111,
+        }
+    }
+
+    pub fn category(&self) -> VecOpCategory {
+        match self {
+            VecAluOpRRImm5::VaddVI | VecAluOpRRImm5::VrsubVI | VecAluOpRRImm5::VslidedownVI => {
+                VecOpCategory::OPIVI
+            }
+        }
+    }
+
+    pub fn imm_is_unsigned(&self) -> bool {
+        match self {
+            VecAluOpRRImm5::VslidedownVI => true,
+            VecAluOpRRImm5::VaddVI | VecAluOpRRImm5::VrsubVI => false,
         }
     }
 }
@@ -322,6 +341,139 @@ impl fmt::Display for VecAluOpRRImm5 {
         s.make_ascii_lowercase();
         let (opcode, category) = s.split_at(s.len() - 2);
         f.write_str(&format!("{}.{}", opcode, category))
+    }
+}
+
+impl VecAluOpRR {
+    pub fn opcode(&self) -> u32 {
+        // Vector Opcode
+        0x57
+    }
+
+    pub fn funct3(&self) -> u32 {
+        self.category().encode()
+    }
+
+    pub fn funct6(&self) -> u32 {
+        // See: https://github.com/riscv/riscv-v-spec/blob/master/inst-table.adoc
+        match self {
+            VecAluOpRR::VmvSX | VecAluOpRR::VmvXS | VecAluOpRR::VfmvSF | VecAluOpRR::VfmvFS => {
+                0b010000
+            }
+            VecAluOpRR::VmvVV | VecAluOpRR::VmvVX | VecAluOpRR::VfmvVF => 0b010111,
+        }
+    }
+
+    pub fn category(&self) -> VecOpCategory {
+        match self {
+            VecAluOpRR::VmvSX => VecOpCategory::OPMVX,
+            VecAluOpRR::VmvXS => VecOpCategory::OPMVV,
+            VecAluOpRR::VfmvSF | VecAluOpRR::VfmvVF => VecOpCategory::OPFVF,
+            VecAluOpRR::VfmvFS => VecOpCategory::OPFVV,
+            VecAluOpRR::VmvVV => VecOpCategory::OPIVV,
+            VecAluOpRR::VmvVX => VecOpCategory::OPIVX,
+        }
+    }
+
+    /// Returns the auxiliary encoding field for the instruction, if any.
+    pub fn aux_encoding(&self) -> u32 {
+        match self {
+            // VRXUNARY0
+            VecAluOpRR::VmvSX => 0b00000,
+            // VWXUNARY0
+            VecAluOpRR::VmvXS => 0b00000,
+            // VRFUNARY0
+            VecAluOpRR::VfmvSF => 0b00000,
+            // VWFUNARY0
+            VecAluOpRR::VfmvFS => 0b00000,
+            // These don't have a explicit encoding table, but Section 11.16 Vector Integer Move Instruction states:
+            // > The first operand specifier (vs2) must contain v0, and any other vector register number in vs2 is reserved.
+            VecAluOpRR::VmvVV | VecAluOpRR::VmvVX | VecAluOpRR::VfmvVF => 0,
+        }
+    }
+
+    /// Most of these opcodes have the source register encoded in the VS2 field and
+    /// the `aux_encoding` field in VS1. However some special snowflakes have it the
+    /// other way around. As far as I can tell only vmv.v.* are backwards.
+    pub fn vs_is_vs2_encoded(&self) -> bool {
+        match self {
+            VecAluOpRR::VmvSX | VecAluOpRR::VmvXS | VecAluOpRR::VfmvSF | VecAluOpRR::VfmvFS => true,
+            VecAluOpRR::VmvVV | VecAluOpRR::VmvVX | VecAluOpRR::VfmvVF => false,
+        }
+    }
+
+    pub fn dst_regclass(&self) -> RegClass {
+        match self {
+            VecAluOpRR::VfmvSF
+            | VecAluOpRR::VmvSX
+            | VecAluOpRR::VmvVV
+            | VecAluOpRR::VmvVX
+            | VecAluOpRR::VfmvVF => RegClass::Vector,
+            VecAluOpRR::VmvXS => RegClass::Int,
+            VecAluOpRR::VfmvFS => RegClass::Float,
+        }
+    }
+
+    pub fn src_regclass(&self) -> RegClass {
+        match self {
+            VecAluOpRR::VmvXS | VecAluOpRR::VfmvFS | VecAluOpRR::VmvVV => RegClass::Vector,
+            VecAluOpRR::VfmvSF | VecAluOpRR::VfmvVF => RegClass::Float,
+            VecAluOpRR::VmvSX | VecAluOpRR::VmvVX => RegClass::Int,
+        }
+    }
+}
+
+impl fmt::Display for VecAluOpRR {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(match self {
+            VecAluOpRR::VmvSX => "vmv.s.x",
+            VecAluOpRR::VmvXS => "vmv.x.s",
+            VecAluOpRR::VfmvSF => "vfmv.s.f",
+            VecAluOpRR::VfmvFS => "vfmv.f.s",
+            VecAluOpRR::VmvVV => "vmv.v.v",
+            VecAluOpRR::VmvVX => "vmv.v.x",
+            VecAluOpRR::VfmvVF => "vfmv.v.f",
+        })
+    }
+}
+
+impl VecAluOpRImm5 {
+    pub fn opcode(&self) -> u32 {
+        // Vector Opcode
+        0x57
+    }
+    pub fn funct3(&self) -> u32 {
+        self.category().encode()
+    }
+
+    pub fn funct6(&self) -> u32 {
+        // See: https://github.com/riscv/riscv-v-spec/blob/master/inst-table.adoc
+        match self {
+            VecAluOpRImm5::VmvVI => 0b010111,
+        }
+    }
+
+    pub fn category(&self) -> VecOpCategory {
+        match self {
+            VecAluOpRImm5::VmvVI => VecOpCategory::OPIVI,
+        }
+    }
+
+    /// Returns the auxiliary encoding field for the instruction, if any.
+    pub fn aux_encoding(&self) -> u32 {
+        match self {
+            // These don't have a explicit encoding table, but Section 11.16 Vector Integer Move Instruction states:
+            // > The first operand specifier (vs2) must contain v0, and any other vector register number in vs2 is reserved.
+            VecAluOpRImm5::VmvVI => 0,
+        }
+    }
+}
+
+impl fmt::Display for VecAluOpRImm5 {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(match self {
+            VecAluOpRImm5::VmvVI => "vmv.v.i",
+        })
     }
 }
 

@@ -642,6 +642,18 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_use(vs2);
             collector.reg_def(vd);
         }
+        &Inst::VecAluRR { op, vd, vs, .. } => {
+            debug_assert_eq!(vd.to_reg().class(), op.dst_regclass());
+            debug_assert_eq!(vs.class(), op.src_regclass());
+
+            collector.reg_use(vs);
+            collector.reg_def(vd);
+        }
+        &Inst::VecAluRImm5 { vd, .. } => {
+            debug_assert_eq!(vd.to_reg().class(), RegClass::Vector);
+
+            collector.reg_def(vd);
+        }
         &Inst::VecSetState { rd, .. } => {
             collector.reg_def(rd);
         }
@@ -1585,7 +1597,36 @@ impl Inst {
                 let vs2_s = format_reg(vs2, allocs);
                 let vd_s = format_reg(vd.to_reg(), allocs);
 
-                format!("{} {},{},{} {}", op, vd_s, vs2_s, imm, vstate)
+                // Some opcodes interpret the immediate as unsigned, lets show the
+                // correct number here.
+                let imm_s = if op.imm_is_unsigned() {
+                    format!("{}", imm.bits())
+                } else {
+                    format!("{}", imm)
+                };
+
+                format!("{} {},{},{} {}", op, vd_s, vs2_s, imm_s, vstate)
+            }
+            &Inst::VecAluRR {
+                op,
+                vd,
+                vs,
+                ref vstate,
+            } => {
+                let vs_s = format_reg(vs, allocs);
+                let vd_s = format_reg(vd.to_reg(), allocs);
+
+                format!("{} {},{} {}", op, vd_s, vs_s, vstate)
+            }
+            &Inst::VecAluRImm5 {
+                op,
+                vd,
+                imm,
+                ref vstate,
+            } => {
+                let vd_s = format_reg(vd.to_reg(), allocs);
+
+                format!("{} {},{} {}", op, vd_s, imm, vstate)
             }
             &Inst::VecSetState { rd, ref vstate } => {
                 let rd_s = format_reg(rd.to_reg(), allocs);

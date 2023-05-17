@@ -1030,3 +1030,23 @@
 
 (rule (lower (call_indirect sig_ref val inputs))
   (gen_call_indirect sig_ref val inputs))
+
+;;;; Rules for `extractlane` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (extractlane x @ (value_type ty) (u8_from_uimm8 idx)))
+  (gen_extractlane ty x idx))
+
+;;;; Rules for `splat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule 0 (lower (has_type ty (splat n @ (value_type (ty_scalar_float _)))))
+  (rv_vfmv_vf n ty))
+
+(rule 1 (lower (has_type ty (splat n @ (value_type (ty_int_ref_scalar_64 _)))))
+  (rv_vmv_vx n ty))
+
+(rule 2 (lower (has_type ty (splat (iconst (u64_from_imm64 (imm5_from_u64 imm))))))
+  (rv_vmv_vi imm ty))
+
+;; TODO: We can splat out more patterns by using for example a vmv.v.i i8x16 for
+;; a i64x2 const with a compatible bit pattern. The AArch64 Backend does something
+;; similar in its splat rules.
