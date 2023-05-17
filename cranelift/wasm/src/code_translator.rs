@@ -2336,7 +2336,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             state.push1(builder.ins().iadd(dot32, c));
         }
 
-        Operator::ReturnCallRef { hty: _ } => {
+        Operator::ReturnCallRef { type_index: _ } => {
             return Err(wasm_unsupported!(
                 "proposed tail-call operator for function references {:?}",
                 op
@@ -2374,15 +2374,11 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             // currently an empty block
             builder.switch_to_block(else_block);
         }
-        Operator::CallRef { hty } => {
+        Operator::CallRef { type_index } => {
             // Get function signature
-            let index = match hty {
-                wasmparser::HeapType::TypedFunc(type_idx) => u32::from(*type_idx),
-                _ => panic!("expected typed func"),
-            };
             // `index` is the index of the function's signature and `table_index` is the index of
             // the table to search the function in.
-            let (sigref, num_args) = state.get_indirect_sig(builder.func, index, environ)?;
+            let (sigref, num_args) = state.get_indirect_sig(builder.func, *type_index, environ)?;
             let callee = state.pop1();
 
             // Bitcast any vector arguments to their default type, I8X16, before calling.
@@ -2406,6 +2402,10 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let is_null = environ.translate_ref_is_null(builder.cursor(), r)?;
             builder.ins().trapnz(is_null, ir::TrapCode::NullReference);
             state.push1(r);
+        }
+
+        Operator::I31New | Operator::I31GetS | Operator::I31GetU => {
+            unimplemented!("GC operators not yet implemented")
         }
     };
     Ok(())

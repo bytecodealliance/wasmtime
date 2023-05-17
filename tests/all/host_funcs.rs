@@ -61,7 +61,7 @@ fn drop_func() -> Result<()> {
 
     let a = A;
     linker.func_wrap("", "", move || {
-        drop(&a);
+        let _ = &a;
     })?;
 
     assert_eq!(HITS.load(SeqCst), 0);
@@ -70,7 +70,7 @@ fn drop_func() -> Result<()> {
 
     let a = A;
     linker.func_wrap("", "", move || {
-        drop(&a);
+        let _ = &a;
     })?;
 
     assert_eq!(HITS.load(SeqCst), 1);
@@ -98,7 +98,9 @@ fn drop_delayed() -> Result<()> {
     let mut linker = Linker::<()>::new(&engine);
 
     let a = A;
-    linker.func_wrap("", "", move || drop(&a))?;
+    linker.func_wrap("", "", move || {
+        let _ = &a;
+    })?;
 
     assert_eq!(HITS.load(SeqCst), 0);
 
@@ -642,7 +644,7 @@ fn call_via_funcref() -> Result<()> {
     let mut linker = Linker::new(&engine);
     let a = A;
     linker.func_wrap("", "", move |x: i32, y: i32| {
-        drop(&a);
+        let _ = &a;
         x + y
     })?;
 

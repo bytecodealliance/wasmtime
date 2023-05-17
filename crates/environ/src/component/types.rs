@@ -12,6 +12,8 @@ use wasmparser::{
 };
 use wasmtime_component_util::{DiscriminantSize, FlagsSize};
 
+pub use wasmtime_types::StaticModuleIndex;
+
 /// Maximum nesting depth of a type allowed in Wasmtime.
 ///
 /// This constant isn't chosen via any scientific means and its main purpose is
@@ -113,11 +115,6 @@ indices! {
 
     /// Same as `ModuleUpvarIndex` but for components.
     pub struct ComponentUpvarIndex(u32);
-
-    /// Index into the global list of modules found within an entire component.
-    /// Module translations are saved on the side to get fully compiled after
-    /// the original component has finished being translated.
-    pub struct StaticModuleIndex(u32);
 
     /// Same as `StaticModuleIndex` but for components.
     pub struct StaticComponentIndex(u32);

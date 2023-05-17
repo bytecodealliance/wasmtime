@@ -834,7 +834,14 @@ fn generate_coredump(err: &anyhow::Error, source_name: &str, coredump_path: &str
     let coredump = wasm_encoder::CoreDumpSection::new(source_name);
     let mut stacksection = wasm_encoder::CoreDumpStackSection::new("main");
     for f in bt.frames() {
+        // We don't have the information at this point to map frames to
+        // individual instances of a module, so we won't be able to create the
+        // "frame ∈ instance ∈ module" hierarchy described in the core dump spec
+        // until we move core dump generation into the runtime. So for now
+        // instanceidx will be 0 for all frames
+        let instanceidx = 0;
         stacksection.frame(
+            instanceidx,
             f.func_index(),
             u32::try_from(f.func_offset().unwrap_or(0)).unwrap(),
             // We don't currently have access to locals/stack values

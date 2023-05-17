@@ -117,6 +117,11 @@ impl Stack {
         }
     }
 
+    /// Insert a new value at the specified index.
+    pub fn insert(&mut self, at: usize, val: Val) {
+        self.inner.insert(at, val);
+    }
+
     /// Get the length of the stack.
     pub fn len(&self) -> usize {
         self.inner.len()

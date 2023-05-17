@@ -9,11 +9,12 @@ mod test {
     use similar::TextDiff;
     use std::str::FromStr;
     use target_lexicon::Triple;
+    use wasmtime_environ::VMOffsets;
     use wasmtime_environ::{
         wasmparser::{Parser as WasmParser, Validator},
         DefinedFuncIndex, FunctionBodyData, ModuleEnvironment, Tunables,
     };
-    use winch_codegen::lookup;
+    use winch_codegen::{lookup, TargetIsa};
     use winch_environ::FuncEnv;
     use winch_test_macros::generate_file_tests;
 
@@ -109,11 +110,12 @@ mod test {
         let body_inputs = std::mem::take(&mut translation.function_body_inputs);
         let module = &translation.module;
         let types = translation.get_types();
-        let env = FuncEnv::new(module, &types, &isa);
+        let env = FuncEnv::new(module, &types);
+        let vmoffsets = VMOffsets::new(isa.pointer_bytes(), module);
 
         let binding = body_inputs
             .into_iter()
-            .map(|func| compile(&env, func).join("\n"))
+            .map(|func| compile(&env, &isa, &vmoffsets, func).join("\n"))
             .collect::<Vec<String>>()
             .join("\n\n");
         let actual = binding.as_str();
@@ -144,7 +146,12 @@ mod test {
         }
     }
 
-    fn compile(env: &FuncEnv, f: (DefinedFuncIndex, FunctionBodyData<'_>)) -> Vec<String> {
+    fn compile(
+        env: &FuncEnv,
+        isa: &Box<dyn TargetIsa>,
+        vmoffsets: &VMOffsets<u8>,
+        f: (DefinedFuncIndex, FunctionBodyData<'_>),
+    ) -> Vec<String> {
         let index = env.module.func_index(f.0);
         let sig = env
             .types
@@ -152,12 +159,10 @@ mod test {
             .expect(&format!("function type at index {:?}", index.as_u32()));
         let FunctionBodyData { body, validator } = f.1;
         let mut validator = validator.into_validator(Default::default());
-
-        let buffer = env
-            .isa
-            .compile_function(&sig, &body, env, &mut validator)
+        let buffer = isa
+            .compile_function(&sig, &body, vmoffsets, env, &mut validator)
             .expect("Couldn't compile function");
 
-        disasm(buffer.data(), env.isa).unwrap()
+        disasm(buffer.data(), isa).unwrap()
     }
 }

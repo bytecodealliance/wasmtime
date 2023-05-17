@@ -5,7 +5,7 @@
 
 use wasmparser::types::Types;
 use wasmtime_environ::{FuncIndex, Module};
-use winch_codegen::{self, Callee, TargetIsa};
+use winch_codegen::{self, Callee};
 
 /// Function environment containing module and runtime specific
 /// information.
@@ -14,8 +14,6 @@ pub struct FuncEnv<'a> {
     pub module: &'a Module,
     /// Type information about a module, once it has been validated.
     pub types: &'a Types,
-    /// The current ISA.
-    pub isa: &'a Box<dyn TargetIsa>,
 }
 
 impl<'a> winch_codegen::FuncEnv for FuncEnv<'a> {
@@ -35,7 +33,7 @@ impl<'a> winch_codegen::FuncEnv for FuncEnv<'a> {
 
 impl<'a> FuncEnv<'a> {
     /// Create a new function environment.
-    pub fn new(module: &'a Module, types: &'a Types, isa: &'a Box<dyn TargetIsa>) -> Self {
-        Self { module, types, isa }
+    pub fn new(module: &'a Module, types: &'a Types) -> Self {
+        Self { module, types }
     }
 }

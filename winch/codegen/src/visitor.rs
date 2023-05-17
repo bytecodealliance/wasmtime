@@ -10,6 +10,7 @@ use crate::masm::{DivKind, MacroAssembler, OperandSize, RegImm, RemKind};
 use crate::stack::Val;
 use wasmparser::ValType;
 use wasmparser::VisitOperator;
+use wasmtime_environ::FuncIndex;
 
 /// A macro to define unsupported WebAssembly operators.
 ///
@@ -25,7 +26,7 @@ macro_rules! def_unsupported {
 		$op
 
 		fn $visit(&mut self $($(,$arg: $argty)*)?) -> Self::Output {
-		    $($(drop($arg);)*)?
+		    $($(let _ = $arg;)*)?
 		    todo!(stringify!($op))
 		}
 	    );
@@ -198,7 +199,7 @@ where
     }
 
     fn visit_call(&mut self, index: u32) {
-        self.emit_call(index);
+        self.emit_call(FuncIndex::from_u32(index));
     }
 
     wasmparser::for_each_operator!(def_unsupported);

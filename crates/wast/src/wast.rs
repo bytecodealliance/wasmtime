@@ -490,5 +490,5 @@ fn is_matching_assert_invalid_error_message(expected: &str, actual: &str) -> boo
         // the spec test suite asserts a different error message than we print
         // for this scenario
         || (expected == "unknown global" && actual.contains("global.get of locally defined global"))
-        || (expected == "immutable global" && actual.contains("failed to compile wasm function 0"))
+        || (expected == "immutable global" && actual.contains("global is immutable: cannot modify it with `global.set`"))
 }

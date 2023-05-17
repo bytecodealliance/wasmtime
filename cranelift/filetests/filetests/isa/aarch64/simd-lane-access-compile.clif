@@ -84,8 +84,8 @@ block0:
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   ldr q2, #0x20
-;   ldr q3, #0x10
+;   ldr q2, #0x10
+;   ldr q3, #0x20
 ;   tbl v0.16b, {v2.16b}, v3.16b
 ;   ret
 ;   .byte 0x00, 0x01, 0x02, 0x03

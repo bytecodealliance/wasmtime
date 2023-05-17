@@ -90,7 +90,7 @@ impl StorePtr {
 pub unsafe trait InstanceAllocator {
     /// Validates that a module is supported by the allocator.
     fn validate(&self, module: &Module, offsets: &VMOffsets<HostPtr>) -> Result<()> {
-        drop((module, offsets));
+        let _ = (module, offsets);
         Ok(())
     }
 
@@ -439,7 +439,7 @@ pub struct OnDemandInstanceAllocator {
 impl OnDemandInstanceAllocator {
     /// Creates a new on-demand instance allocator.
     pub fn new(mem_creator: Option<Arc<dyn RuntimeMemoryCreator>>, stack_size: usize) -> Self {
-        drop(stack_size); // suppress unused warnings w/o async feature
+        let _ = stack_size; // suppress unused warnings w/o async feature
         Self {
             mem_creator,
             #[cfg(feature = "async")]

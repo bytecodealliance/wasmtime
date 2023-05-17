@@ -189,6 +189,7 @@ impl Metadata {
             extended_const,
             memory_control,
             function_references,
+            gc,
 
             // Always on; we don't currently have knobs for these.
             mutable_global: _,
@@ -200,6 +201,7 @@ impl Metadata {
         assert!(!memory_control);
         assert!(!tail_call);
         //assert!(!function_references);
+        assert!(!gc);
 
         Metadata {
             target: engine.compiler().triple().to_string(),

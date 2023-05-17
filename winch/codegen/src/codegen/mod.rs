@@ -1,11 +1,15 @@
 use crate::{
     abi::{ABISig, ABI},
     masm::{MacroAssembler, OperandSize},
+    stack::Val,
     CallingConvention,
 };
 use anyhow::Result;
 use call::FnCall;
-use wasmparser::{BinaryReader, FuncValidator, ValType, ValidatorResources, VisitOperator};
+use wasmparser::{
+    BinaryReader, FuncType, FuncValidator, ValType, ValidatorResources, VisitOperator,
+};
+use wasmtime_environ::{FuncIndex, VMOffsets};
 
 mod context;
 pub(crate) use context::*;
@@ -33,6 +37,9 @@ where
 
     /// A reference to the current ABI.
     pub abi: &'a A,
+
+    /// Offsets used with the VM context pointer.
+    vmoffsets: &'a VMOffsets<u8>,
 }
 
 impl<'a, A, M> CodeGen<'a, A, M>
@@ -46,6 +53,7 @@ where
         context: CodeGenContext<'a>,
         env: &'a dyn FuncEnv,
         sig: ABISig,
+        vmoffsets: &'a VMOffsets<u8>,
     ) -> Self {
         Self {
             sig,
@@ -53,6 +61,7 @@ where
             masm,
             abi,
             env,
+            vmoffsets,
         }
     }
 
@@ -89,6 +98,12 @@ where
             &mut self.context.regalloc,
         );
 
+        // Save the vmctx pointer to its local slot in case we need to reload it
+        // at any point.
+        let vmctx_addr = self.masm.local_address(&self.context.frame.vmctx_slot);
+        self.masm
+            .store(<A as ABI>::vmctx_reg().into(), vmctx_addr, OperandSize::S64);
+
         while !body.eof() {
             let offset = body.original_position();
             body.visit_operator(&mut ValidateThenVisit(validator.visitor(offset), self))??;
@@ -121,16 +136,61 @@ where
     }
 
     /// Emit a direct function call.
-    pub fn emit_call(&mut self, index: u32) {
-        let callee = self.env.callee_from_index(index);
-        if callee.import {
-            // TODO: Only locally defined functions for now.
-            unreachable!()
-        }
+    pub fn emit_call(&mut self, index: FuncIndex) {
+        let callee = self.env.callee_from_index(index.as_u32());
+        let (sig, callee_addr): (ABISig, Option<<M as MacroAssembler>::Address>) = if callee.import
+        {
+            let mut params = vec![ValType::I64, ValType::I64];
+            params.extend_from_slice(&callee.ty.params());
+            let sig = FuncType::new(params, callee.ty.results().to_owned());
 
-        let sig = self.abi.sig(&callee.ty, &CallingConvention::Default);
-        let fncall = FnCall::new(self.abi, &sig, &mut self.context, self.masm);
-        fncall.emit::<M, A>(self.masm, &mut self.context, index);
+            let caller_vmctx = <A as ABI>::vmctx_reg();
+            let callee_vmctx = self.context.any_gpr(self.masm);
+            let callee_vmctx_offset = self.vmoffsets.vmctx_vmfunction_import_vmctx(index);
+            let callee_vmctx_addr = self.masm.address_at_reg(caller_vmctx, callee_vmctx_offset);
+            // FIXME Remove harcoded operand size, this will be needed
+            // once 32-bit architectures are supported.
+            self.masm
+                .load(callee_vmctx_addr, callee_vmctx, OperandSize::S64);
+
+            let callee_body_offset = self.vmoffsets.vmctx_vmfunction_import_wasm_call(index);
+            let callee_addr = self.masm.address_at_reg(caller_vmctx, callee_body_offset);
+
+            // Put the callee / caller vmctx at the start of the
+            // range of the stack so that they are used as first
+            // and second arguments.
+            let stack = &mut self.context.stack;
+            let location = stack.len() - (sig.params().len() - 2);
+            stack.insert(location as usize, Val::reg(caller_vmctx));
+            stack.insert(location as usize, Val::reg(callee_vmctx));
+            (
+                self.abi.sig(&sig, &CallingConvention::Default),
+                Some(callee_addr),
+            )
+        } else {
+            (self.abi.sig(&callee.ty, &CallingConvention::Default), None)
+        };
+
+        let fncall = FnCall::new::<A, M>(&sig, &mut self.context, self.masm);
+        let alignment = self.abi.call_stack_align();
+        let addend = self.abi.arg_base_offset();
+        if let Some(addr) = callee_addr {
+            fncall.indirect::<M, A>(
+                self.masm,
+                &mut self.context,
+                addr,
+                alignment.into(),
+                addend.into(),
+            );
+        } else {
+            fncall.direct::<M, A>(
+                self.masm,
+                &mut self.context,
+                index,
+                alignment.into(),
+                addend.into(),
+            );
+        }
     }
 
     /// Emit the usual function end instruction sequence.
@@ -141,10 +201,6 @@ where
     }
 
     fn spill_register_arguments(&mut self) {
-        // TODO
-        // Revisit this once the implicit VMContext argument is introduced;
-        // when that happens the mapping between local slots and abi args
-        // is not going to be symmetric.
         self.sig
             .params
             .iter()

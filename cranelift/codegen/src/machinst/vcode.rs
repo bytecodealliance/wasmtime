@@ -177,9 +177,9 @@ pub struct VCode<I: VCodeInst> {
 /// The result of `VCode::emit`. Contains all information computed
 /// during emission: actual machine code, optionally a disassembly,
 /// and optionally metadata about the code layout.
-pub struct EmitResult<I: VCodeInst> {
+pub struct EmitResult {
     /// The MachBuffer containing the machine code.
-    pub buffer: MachBuffer<I>,
+    pub buffer: MachBufferFinalized<Stencil>,
 
     /// Offset of each basic block, recorded during emission. Computed
     /// only if `debug_value_labels` is non-empty.
@@ -213,9 +213,6 @@ pub struct EmitResult<I: VCodeInst> {
 
     /// Stack frame size.
     pub frame_size: u32,
-
-    /// The alignment requirement for pc-relative loads.
-    pub alignment: u32,
 }
 
 /// A builder for a VCode function body.
@@ -750,9 +747,9 @@ impl<I: VCodeInst> VCode<I> {
         mut self,
         regalloc: &regalloc2::Output,
         want_disasm: bool,
-        want_metadata: bool,
+        flags: &settings::Flags,
         ctrl_plane: &mut ControlPlane,
-    ) -> EmitResult<I>
+    ) -> EmitResult
     where
         I: VCodeInst,
     {
@@ -763,10 +760,13 @@ impl<I: VCodeInst> VCode<I> {
         let mut buffer = MachBuffer::new();
         let mut bb_starts: Vec<Option<CodeOffset>> = vec![];
 
-        // The first M MachLabels are reserved for block indices, the next N MachLabels for
-        // constants.
+        // The first M MachLabels are reserved for block indices.
         buffer.reserve_labels_for_blocks(self.num_blocks());
-        buffer.reserve_labels_for_constants(&self.constants);
+
+        // Register all allocated constants with the `MachBuffer` to ensure that
+        // any references to the constants during instructions can be handled
+        // correctly.
+        buffer.register_constants(&self.constants);
 
         // Construct the final order we emit code in: cold blocks at the end.
         let mut final_order: SmallVec<[BlockIndex; 16]> = smallvec![];
@@ -827,6 +827,10 @@ impl<I: VCodeInst> VCode<I> {
         }
 
         let is_forward_edge_cfi_enabled = self.abi.is_forward_edge_cfi_enabled();
+        let bb_padding = match flags.bb_padding_log2_minus_one() {
+            0 => Vec::new(),
+            n => vec![0; 1 << (n - 1)],
+        };
 
         for (block_order_idx, &block) in final_order.iter().enumerate() {
             trace!("emitting block {:?}", block);
@@ -874,7 +878,7 @@ impl<I: VCodeInst> VCode<I> {
                 writeln!(&mut disasm, "block{}:", block.index()).unwrap();
             }
 
-            if want_metadata {
+            if flags.machine_code_cfg_info() {
                 // Track BB starts. If we have backed up due to MachBuffer
                 // branch opts, note that the removed blocks were removed.
                 let cur_offset = buffer.cur_offset();
@@ -1026,44 +1030,45 @@ impl<I: VCodeInst> VCode<I> {
                 cur_srcloc = None;
             }
 
-            // Do we need an island? Get the worst-case size of the
-            // next BB and see if, having emitted that many bytes, we
-            // will be beyond the deadline.
-            if block_order_idx < final_order.len() - 1 {
+            // Do we need an island? Get the worst-case size of the next BB, add
+            // it to the optional padding behind the block, and pass this to the
+            // `MachBuffer` to determine if an island is necessary.
+            let worst_case_next_bb = if block_order_idx < final_order.len() - 1 {
                 let next_block = final_order[block_order_idx + 1];
                 let next_block_range = self.block_ranges[next_block.index()];
                 let next_block_size =
                     (next_block_range.1.index() - next_block_range.0.index()) as u32;
                 let next_block_ra_insertions = ra_edits_per_block[next_block.index()];
-                let worst_case_next_bb =
-                    I::worst_case_size() * (next_block_size + next_block_ra_insertions);
-                if buffer.island_needed(worst_case_next_bb) {
-                    buffer.emit_island(worst_case_next_bb, ctrl_plane);
-                }
+                I::worst_case_size() * (next_block_size + next_block_ra_insertions)
+            } else {
+                0
+            };
+            let padding = if bb_padding.is_empty() {
+                0
+            } else {
+                bb_padding.len() as u32 + I::LabelUse::ALIGN - 1
+            };
+            if buffer.island_needed(padding + worst_case_next_bb) {
+                buffer.emit_island(padding + worst_case_next_bb, ctrl_plane);
+            }
+
+            // Insert padding, if configured, to stress the `MachBuffer`'s
+            // relocation and island calculations.
+            if !bb_padding.is_empty() {
+                buffer.put_data(&bb_padding);
+                buffer.align_to(I::LabelUse::ALIGN);
             }
         }
 
         // emission state is not needed anymore, move control plane back out
         *ctrl_plane = state.take_ctrl_plane();
 
-        // Emit the constants used by the function, and additionally collect
-        // this function's alignment at the same time. The alignment start at
-        // the ISA-defined minimum, and can possibly get increased if necessary
-        // for constants.
-        let mut function_alignment = I::function_alignment().minimum;
-        for (constant, data) in self.constants.iter() {
-            function_alignment = data.alignment().max(function_alignment);
-
-            let label = buffer.get_label_for_constant(constant);
-            buffer.defer_constant(label, data.alignment(), data.as_slice(), u32::max_value());
-        }
-
         let func_body_len = buffer.cur_offset();
 
         // Create `bb_edges` and final (filtered) `bb_starts`.
         let mut bb_edges = vec![];
         let mut bb_offsets = vec![];
-        if want_metadata {
+        if flags.machine_code_cfg_info() {
             for block in 0..self.num_blocks() {
                 if bb_starts[block].is_none() {
                     // Block was deleted by MachBuffer; skip.
@@ -1086,7 +1091,7 @@ impl<I: VCodeInst> VCode<I> {
         let frame_size = self.abi.frame_size();
 
         EmitResult {
-            buffer,
+            buffer: buffer.finish(&self.constants, ctrl_plane),
             bb_offsets,
             bb_edges,
             inst_offsets,
@@ -1096,7 +1101,6 @@ impl<I: VCodeInst> VCode<I> {
             dynamic_stackslot_offsets: self.abi.dynamic_stackslot_offsets().clone(),
             value_labels_ranges,
             frame_size,
-            alignment: function_alignment,
         }
     }
 
@@ -1505,6 +1509,11 @@ impl VCodeConstants {
     /// structure.
     pub fn iter(&self) -> impl Iterator<Item = (VCodeConstant, &VCodeConstantData)> {
         self.constants.iter()
+    }
+
+    /// Returns the data associated with the specified constant.
+    pub fn get(&self, c: VCodeConstant) -> &VCodeConstantData {
+        &self.constants[c]
     }
 }
 

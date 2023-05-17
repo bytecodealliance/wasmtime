@@ -143,6 +143,7 @@ impl From<wasmparser::HeapType> for WasmHeapType {
             Func => WasmHeapType::Func,
             Extern => WasmHeapType::Extern,
             TypedFunc(i) => WasmHeapType::Index(i.into()),
+            _ => unimplemented!(),
         }
     }
 }
@@ -314,6 +315,14 @@ entity_impl!(TypeIndex);
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
 pub struct TagIndex(u32);
 entity_impl!(TagIndex);
+
+/// Index into the global list of modules found within an entire component.
+///
+/// Module translations are saved on the side to get fully compiled after
+/// the original component has finished being translated.
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
+pub struct StaticModuleIndex(u32);
+entity_impl!(StaticModuleIndex);
 
 /// An index of an entity.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]

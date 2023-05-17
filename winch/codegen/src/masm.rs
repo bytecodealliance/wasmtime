@@ -39,6 +39,7 @@ pub(crate) enum RegImm {
     Imm(i64),
 }
 
+#[derive(Clone)]
 pub(crate) enum CalleeKind {
     /// A function call to a raw address.
     Indirect(Reg),
@@ -83,7 +84,7 @@ impl From<Reg> for RegImm {
 
 pub(crate) trait MacroAssembler {
     /// The addressing mode.
-    type Address;
+    type Address: Copy;
 
     /// Emit the function prologue.
     fn prologue(&mut self);
@@ -109,11 +110,18 @@ pub(crate) trait MacroAssembler {
     /// current position of the stack pointer (e.g. [sp + offset].
     fn address_at_sp(&self, offset: u32) -> Self::Address;
 
-    /// Construct an address that is relative to the given register.
-    fn address_from_reg(&self, reg: Reg, offset: u32) -> Self::Address;
+    /// Construct an address that is absolute to the current position
+    /// of the given register.
+    fn address_at_reg(&self, reg: Reg, offset: u32) -> Self::Address;
 
     /// Emit a function call to either a local or external function.
-    fn call(&mut self, callee: CalleeKind);
+    fn call(
+        &mut self,
+        alignment: u32,
+        addend: u32,
+        stack_args_size: u32,
+        f: impl FnMut(&mut Self) -> CalleeKind,
+    ) -> u32;
 
     /// Get stack pointer offset.
     fn sp_offset(&self) -> u32;

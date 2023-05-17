@@ -298,7 +298,7 @@ pub(crate) use self::store::ComponentStoreData;
 ///         import foo: package.foo;
 ///     ",
 ///
-///     // Remap interface names to module names, imported from elswhere.
+///     // Remap interface names to module names, imported from elsewhere.
 ///     // Using this option will prevent any code from being generated
 ///     // for the names mentioned in the mapping, assuming instead that the
 ///     // names mentioned come from a previous use of the `bindgen!` macro

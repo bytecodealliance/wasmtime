@@ -416,7 +416,7 @@ fn dtor_runs() {
     let a = A;
     assert_eq!(HITS.load(SeqCst), 0);
     Func::wrap(&mut store, move || {
-        drop(&a);
+        let _ = &a;
     });
     drop(store);
     assert_eq!(HITS.load(SeqCst), 1);
@@ -436,7 +436,9 @@ fn dtor_delayed() -> Result<()> {
 
     let mut store = Store::<()>::default();
     let a = A;
-    let func = Func::wrap(&mut store, move || drop(&a));
+    let func = Func::wrap(&mut store, move || {
+        let _ = &a;
+    });
 
     assert_eq!(HITS.load(SeqCst), 0);
     let wasm = wat::parse_str(r#"(import "" "" (func))"#)?;
@@ -993,7 +995,7 @@ fn trap_doesnt_leak() -> anyhow::Result<()> {
     let canary1 = Canary::default();
     let dtor1_run = canary1.0.clone();
     let f1 = Func::wrap(&mut store, move || -> Result<()> {
-        drop(&canary1);
+        let _ = &canary1;
         bail!("")
     });
     assert!(f1.typed::<(), ()>(&store)?.call(&mut store, ()).is_err());
@@ -1003,7 +1005,7 @@ fn trap_doesnt_leak() -> anyhow::Result<()> {
     let canary2 = Canary::default();
     let dtor2_run = canary2.0.clone();
     let f2 = Func::new(&mut store, FuncType::new(None, None), move |_, _, _| {
-        drop(&canary2);
+        let _ = &canary2;
         bail!("")
     });
     assert!(f2.typed::<(), ()>(&store)?.call(&mut store, ()).is_err());
