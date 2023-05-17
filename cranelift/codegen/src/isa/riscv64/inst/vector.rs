@@ -251,7 +251,10 @@ impl VecAluOpRRR {
     pub fn funct6(&self) -> u32 {
         // See: https://github.com/riscv/riscv-v-spec/blob/master/inst-table.adoc
         match self {
-            VecAluOpRRR::VaddVV | VecAluOpRRR::VaddVX => 0b000000,
+            VecAluOpRRR::VaddVV
+            | VecAluOpRRR::VaddVX
+            | VecAluOpRRR::VfaddVV
+            | VecAluOpRRR::VfaddVF => 0b000000,
             VecAluOpRRR::VsubVV | VecAluOpRRR::VsubVX => 0b000010,
             VecAluOpRRR::VrsubVX => 0b000011,
             VecAluOpRRR::VmulVV => 0b100101,
@@ -278,6 +281,8 @@ impl VecAluOpRRR {
             | VecAluOpRRR::VsubVX
             | VecAluOpRRR::VrsubVX
             | VecAluOpRRR::VslidedownVX => VecOpCategory::OPIVX,
+            VecAluOpRRR::VfaddVV => VecOpCategory::OPFVV,
+            VecAluOpRRR::VfaddVF => VecOpCategory::OPFVF,
         }
     }
 

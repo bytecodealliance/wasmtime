@@ -706,8 +706,18 @@
 
 
 ;;;;;  Rules for for float arithmetic
-(rule (lower (has_type ty (fadd x y)))
+(rule 0 (lower (has_type (ty_scalar_float ty) (fadd x y)))
   (rv_fadd ty x y))
+
+(rule 1 (lower (has_type (ty_vec_fits_in_register ty) (fadd x y)))
+  (rv_vfadd_vv x y ty))
+
+(rule 2 (lower (has_type (ty_vec_fits_in_register ty) (fadd x (splat y))))
+  (rv_vfadd_vf x y ty))
+
+(rule 3 (lower (has_type (ty_vec_fits_in_register ty) (fadd (splat x) y)))
+  (rv_vfadd_vf y x ty))
+
 
 (rule (lower (has_type ty (fsub x y)))
   (rv_fsub ty x y))
