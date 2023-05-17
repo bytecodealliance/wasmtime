@@ -184,5 +184,37 @@ fn main() -> Result<()> {
         "Error::UnexpectedError(\"unsupported scheme WS\")"
     );
 
+    // Delete is not an allowed method in this test.
+    let r6 = request(
+        types::MethodParam::Delete,
+        types::SchemeParam::Http,
+        "localhost:3000",
+        "/",
+        "",
+        &[],
+    );
+
+    let error = r6.unwrap_err();
+    assert_eq!(
+        error.to_string(),
+        "ErrorResult::UnexpectedError(\"Method DELETE is not allowed.\")"
+    );
+
+    // localhost:8080 is not an allowed authority in this test.
+    let r7 = request(
+        types::MethodParam::Get,
+        types::SchemeParam::Http,
+        "localhost:8080",
+        "/",
+        "",
+        &[],
+    );
+
+    let error = r7.unwrap_err();
+    assert_eq!(
+        error.to_string(),
+        "ErrorResult::UnexpectedError(\"Authority localhost:8080 is not allowed.\")"
+    );
+
     Ok(())
 }

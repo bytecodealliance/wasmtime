@@ -43,6 +43,18 @@ fn port_for_scheme(scheme: &Option<Scheme>) -> &str {
     }
 }
 
+fn is_allowed(allow_list: &Vec<String>, value: String) -> bool {
+    for allowed in allow_list.iter() {
+        if allowed == "*" {
+            return true;
+        }
+        if value == *allowed {
+            return true;
+        }
+    }
+    false
+}
+
 impl WasiHttp {
     pub(crate) async fn handle_async(
         &mut self,
@@ -82,19 +94,7 @@ impl WasiHttp {
             crate::wasi::http::types::Method::Other(s) => bail!("unknown method {}", s),
         };
 
-        let mut allowed = false;
-        let method_str = request.method.to_string();
-        for allowed_method in self.allowed_methods.iter() {
-            if allowed_method == "*" {
-                allowed = true;
-                break;
-            }
-            if method_str == *allowed_method {
-                allowed = true;
-                break;
-            }
-        }
-        if !allowed {
+        if !is_allowed(&self.allowed_methods, method.to_string()) {
             bail!("Method {} is not allowed.", method.to_string());
         }
 
@@ -104,20 +104,22 @@ impl WasiHttp {
             Scheme::Other(s) => bail!("unsupported scheme {}", s),
         };
 
-        let mut allowed = false;
-        let scheme_str = request.scheme.to_string();
-        for allowed_scheme in self.allowed_schemes.iter() {
-            if allowed_scheme == "*" {
-                allowed = true;
-                break;
-            }
-            if scheme_str == *allowed_scheme {
-                allowed = true;
-                break;
-            }
-        }
-        if !allowed {
-            bail!("Scheme {} is not allowed.", scheme_str);
+        if !is_allowed(
+            &self.allowed_schemes,
+            request
+                .scheme
+                .as_ref()
+                .unwrap_or(&Scheme::Https)
+                .to_string(),
+        ) {
+            bail!(
+                "Scheme {} is not allowed.",
+                request
+                    .scheme
+                    .as_ref()
+                    .unwrap_or(&Scheme::Https)
+                    .to_string()
+            );
         }
 
         // Largely adapted from https://hyper.rs/guides/1/client/basic/
@@ -125,6 +127,9 @@ impl WasiHttp {
             Some(_) => request.authority.clone(),
             None => request.authority.clone() + port_for_scheme(&request.scheme),
         };
+        if !is_allowed(&self.allowed_authorities, authority.clone()) {
+            bail!("Authority {} is not allowed.", authority);
+        }
         let mut sender = if scheme == "https://" {
             #[cfg(not(any(target_arch = "riscv64", target_arch = "s390x")))]
             {

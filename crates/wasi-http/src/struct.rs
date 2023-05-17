@@ -53,6 +53,7 @@ pub struct WasiHttp {
 
     pub allowed_methods: Vec<String>,
     pub allowed_schemes: Vec<String>,
+    pub allowed_authorities: Vec<String>,
 }
 
 #[derive(Clone)]
@@ -152,8 +153,9 @@ impl WasiHttp {
             fields: HashMap::new(),
             streams: HashMap::new(),
             futures: HashMap::new(),
-            allowed_methods: vec!("*".to_string()),
-            allowed_schemes: vec!("*".to_string()),
+            allowed_methods: vec!["*".to_string()],
+            allowed_schemes: vec!["*".to_string()],
+            allowed_authorities: vec!["*".to_string()],
         }
     }
 }

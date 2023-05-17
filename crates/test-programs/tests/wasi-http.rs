@@ -77,12 +77,15 @@ pub fn run(name: &str) -> anyhow::Result<()> {
 
     // Create our wasi context.
     let builder = WasiCtxBuilder::new().inherit_stdio().arg(name)?;
+    let mut wasi_http = WasiHttp::new();
+    wasi_http.allowed_methods = vec!["GET".to_string(), "POST".to_string(), "PUT".to_string()];
+    wasi_http.allowed_authorities = vec!["localhost:3000".to_string()];
 
     let mut store = Store::new(
         &ENGINE,
         Ctx {
             wasi: builder.build(),
-            http: WasiHttp::new(),
+            http: wasi_http,
         },
     );
 
