@@ -706,6 +706,10 @@
 
 
 ;;;;;  Rules for for float arithmetic
+
+
+;;;; Rules for `fadd` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 (rule 0 (lower (has_type (ty_scalar_float ty) (fadd x y)))
   (rv_fadd ty x y))
 
@@ -719,8 +723,19 @@
   (rv_vfadd_vf y x ty))
 
 
-(rule (lower (has_type ty (fsub x y)))
+;;;; Rules for `fsub` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(rule 0 (lower (has_type (ty_scalar_float ty) (fsub x y)))
   (rv_fsub ty x y))
+
+(rule 1 (lower (has_type (ty_vec_fits_in_register ty) (fsub x y)))
+  (rv_vfsub_vv x y ty))
+
+(rule 2 (lower (has_type (ty_vec_fits_in_register ty) (fsub x (splat y))))
+  (rv_vfsub_vf x y ty))
+
+(rule 3 (lower (has_type (ty_vec_fits_in_register ty) (fsub (splat x) y)))
+  (rv_vfrsub_vf y x ty))
+
 
 (rule (lower (has_type ty (fmul x y)))
   (rv_fmul ty x y))
