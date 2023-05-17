@@ -253,14 +253,8 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
                 "simd_load64_lane",
                 "simd_load8_lane",
                 "simd_load_extend",
-                "simd_load_splat",
                 "simd_load_zero",
                 "simd_splat",
-                "simd_store16_lane",
-                "simd_store32_lane",
-                "simd_store64_lane",
-                "simd_store8_lane",
-                "spillslot_size_fuzzbug",
                 "v128_select",
             ]
             .contains(&testname);
