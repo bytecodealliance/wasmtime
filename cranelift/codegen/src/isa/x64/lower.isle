@@ -3039,13 +3039,13 @@
 
 ;; Rules for `func_addr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (func_addr (func_ref_data _ extname _)))
-      (load_ext_name extname 0))
+(rule (lower (func_addr (func_ref_data _ extname dist)))
+      (load_ext_name extname 0 dist))
 
 ;; Rules for `symbol_value` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (symbol_value (symbol_value_data extname _ offset)))
-      (load_ext_name extname offset))
+(rule (lower (symbol_value (symbol_value_data extname dist offset)))
+      (load_ext_name extname offset dist))
 
 ;; Rules for `atomic_load` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

@@ -551,10 +551,12 @@
        ;; Loads an external symbol in a register, with a relocation:
        ;;
        ;; movq $name@GOTPCREL(%rip), dst    if PIC is enabled, or
+       ;; lea $name($rip), dst              if distance is near, or
        ;; movabsq $name, dst                otherwise.
        (LoadExtName (dst WritableReg)
                     (name BoxExternalName)
-                    (offset i64))
+                    (offset i64)
+                    (distance RelocDistance))
 
        ;; =========================================
        ;; Instructions pertaining to atomic memory accesses.
@@ -1978,10 +1980,10 @@
 ;;;; Helpers for Emitting Loads ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Helper for constructing a LoadExtName instruction.
-(decl load_ext_name (ExternalName i64) Reg)
-(rule (load_ext_name extname offset)
+(decl load_ext_name (ExternalName i64 RelocDistance) Reg)
+(rule (load_ext_name extname offset distance)
       (let ((dst WritableGpr (temp_writable_gpr))
-            (_ Unit (emit (MInst.LoadExtName dst extname offset))))
+            (_ Unit (emit (MInst.LoadExtName dst extname offset distance))))
         dst))
 
 ;; Load a value into a register.

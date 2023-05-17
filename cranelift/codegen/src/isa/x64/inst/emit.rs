@@ -3525,7 +3525,12 @@ pub(crate) fn emit(
             sink.bind_label(done, &mut state.ctrl_plane);
         }
 
-        Inst::LoadExtName { dst, name, offset } => {
+        Inst::LoadExtName {
+            dst,
+            name,
+            offset,
+            distance,
+        } => {
             let dst = allocs.next(dst.to_reg());
 
             if info.flags.is_pic() {
@@ -3551,6 +3556,16 @@ pub(crate) fn emit(
                     sink.put1(0xc0 | (enc_dst & 7));
                     sink.put4(*offset as u32);
                 }
+            } else if distance == &RelocDistance::Near {
+                // If we know the distance to the name is within 2GB (e.g., a module-local function),
+                // we can generate a RIP-relative address, with a relocation.
+                // Generates: lea $name(%rip), $dst
+                let enc_dst = int_reg_enc(dst);
+                sink.put1(0x48 | ((enc_dst >> 3) & 1) << 2);
+                sink.put1(0x8D);
+                sink.put1(0x05 | ((enc_dst & 7) << 3));
+                emit_reloc(sink, Reloc::X86CallPCRel4, name, -4);
+                sink.put4(0);
             } else {
                 // The full address can be encoded in the register, with a relocation.
                 // Generates: movabsq $name, %dst
