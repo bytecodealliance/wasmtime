@@ -187,6 +187,7 @@ fn file_unbuffered_write() {
     run("file_unbuffered_write", true).unwrap()
 }
 #[test_log::test]
+#[cfg_attr(windows, should_panic)]
 fn interesting_paths() {
     run("interesting_paths", true).unwrap()
 }

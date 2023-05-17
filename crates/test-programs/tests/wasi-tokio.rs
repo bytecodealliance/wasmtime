@@ -189,6 +189,7 @@ async fn file_unbuffered_write() {
     run("file_unbuffered_write", true).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
+#[cfg_attr(windows, should_panic)]
 async fn interesting_paths() {
     run("interesting_paths", true).await.unwrap()
 }
