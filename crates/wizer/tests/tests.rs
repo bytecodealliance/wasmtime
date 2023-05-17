@@ -6,7 +6,7 @@ use wizer::Wizer;
 fn run_wat(args: &[wasmtime::Val], expected: i32, wat: &str) -> Result<()> {
     let _ = env_logger::try_init();
     let wasm = wat_to_wasm(wat)?;
-    run_wasm(args, expected, &wasm)
+    wiz_and_run_wasm(args, expected, &wasm, get_wizer())
 }
 
 fn get_wizer() -> Wizer {
@@ -17,7 +17,12 @@ fn get_wizer() -> Wizer {
     wizer
 }
 
-fn run_wasm(args: &[wasmtime::Val], expected: i32, wasm: &[u8]) -> Result<()> {
+fn wiz_and_run_wasm(
+    args: &[wasmtime::Val],
+    expected: i32,
+    wasm: &[u8],
+    wizer: Wizer,
+) -> Result<()> {
     let _ = env_logger::try_init();
 
     log::debug!(
@@ -26,7 +31,7 @@ fn run_wasm(args: &[wasmtime::Val], expected: i32, wasm: &[u8]) -> Result<()> {
       ===========================================================================",
         wasmprinter::print_bytes(&wasm).unwrap()
     );
-    let wasm = get_wizer().run(&wasm)?;
+    let wasm = wizer.run(&wasm)?;
     log::debug!(
         "=== Wizened Wasm ==========================================================\n\
       {}\n\
@@ -348,10 +353,11 @@ fn reject_data_drop() -> Result<()> {
 
 #[test]
 fn rust_regex() -> Result<()> {
-    run_wasm(
+    wiz_and_run_wasm(
         &[wasmtime::Val::I32(13)],
         42,
         &include_bytes!("./regex_test.wasm")[..],
+        get_wizer(),
     )
 }
 
@@ -495,6 +501,30 @@ fn wasi_reactor() -> anyhow::Result<()> {
 }
 
 #[test]
+fn wasi_reactor_initializer_as_init_func() -> anyhow::Result<()> {
+    let wat = r#"
+      (module
+        (global $g (mut i32) i32.const 0)
+        (func (export "_initialize")
+          global.get $g
+          i32.const 1
+          i32.add
+          global.set $g
+        )
+        (func (export "run") (result i32)
+          global.get $g
+        )
+      )"#;
+
+    let _ = env_logger::try_init();
+    let mut wizer = Wizer::new();
+    wizer.init_func("_initialize");
+    let wasm = wat_to_wasm(wat)?;
+    // we expect `_initialize` to be called _exactly_ once
+    wiz_and_run_wasm(&[], 1, &wasm, wizer)
+}
+
+#[test]
 fn call_undefined_import_function_during_init() -> Result<()> {
     fails_wizening(
         r#"
@@ -596,7 +626,7 @@ fn accept_bulk_memory_data_count() -> Result<()> {
     data.active(0, &ConstExpr::i32_const(4), vec![5, 6, 7, 8]);
     module.section(&data);
 
-    run_wasm(&[], 42, &module.finish()).unwrap();
+    wiz_and_run_wasm(&[], 42, &module.finish(), get_wizer()).unwrap();
     Ok(())
 }
 
