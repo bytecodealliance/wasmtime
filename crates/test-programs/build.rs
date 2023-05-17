@@ -1,365 +1,239 @@
-#![allow(dead_code, unused_imports)]
-//! Build program to generate a program which runs all the testsuites.
-//!
-//! By generating a separate `#[test]` test for each file, we allow cargo test
-//! to automatically run the files in parallel.
-use std::fs::{read_dir, File};
-use std::io::{self, Write};
-use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+#![cfg_attr(not(feature = "test_programs"), allow(dead_code))]
+
+use heck::ToSnakeCase;
+use std::env;
+use std::fs;
+use std::path::PathBuf;
+use std::process::Command;
+use wit_component::ComponentEncoder;
 
 fn main() {
     #[cfg(feature = "test_programs")]
-    wasi_tests::build_and_generate_tests();
-    #[cfg(feature = "test_programs_http")]
-    wasi_http_tests::build_and_generate_tests();
+    build_and_generate_tests();
 }
 
-fn build_tests(testsuite: &str, out_dir: &Path) -> io::Result<Vec<String>> {
-    let mut cmd = Command::new("cargo");
-    cmd.env("CARGO_PROFILE_RELEASE_DEBUG", "1");
-    cmd.env_remove("CARGO_ENCODED_RUSTFLAGS");
-    cmd.args(&[
-        "build",
-        "--release",
-        "--target=wasm32-wasi",
-        "--target-dir",
-        out_dir.to_str().unwrap(),
-    ])
-    .stdout(Stdio::inherit())
-    .stderr(Stdio::inherit())
-    .current_dir(testsuite);
-    let output = cmd.output()?;
+fn build_and_generate_tests() {
+    let out_dir = PathBuf::from(env::var_os("OUT_DIR").unwrap());
 
-    let status = output.status;
-    if !status.success() {
-        panic!(
-            "Building tests failed: exit code: {}",
-            status.code().unwrap()
+    // Not needed yet, but will be shortly:
+    //let reactor_adapter = build_adapter("reactor", &[]);
+
+    let command_adapter = build_adapter(
+        &out_dir,
+        "command",
+        &["--no-default-features", "--features=command"],
+    );
+
+    println!("cargo:rerun-if-changed=./wasi-tests");
+    println!("cargo:rerun-if-changed=./wasi-http-tests");
+
+    // Build the test programs:
+    let mut cmd = Command::new("rustup");
+    cmd.arg("run")
+        .arg("stable")
+        .arg("cargo")
+        .arg("build")
+        .arg("--target=wasm32-wasi")
+        .arg("--package=wasi-tests")
+        .arg("--package=wasi-http-tests")
+        .env("CARGO_TARGET_DIR", &out_dir)
+        .env("CARGO_PROFILE_DEV_DEBUG", "1")
+        .env_remove("CARGO_ENCODED_RUSTFLAGS");
+    let status = cmd.status().unwrap();
+    assert!(status.success());
+
+    let meta = cargo_metadata::MetadataCommand::new().exec().unwrap();
+
+    modules_rs(&meta, "wasi-tests", "bin", &out_dir);
+    components_rs(&meta, "wasi-tests", "bin", &command_adapter, &out_dir);
+
+    modules_rs(&meta, "wasi-http-tests", "bin", &out_dir);
+    // FIXME Unsure why this is broken at the moment:
+    //components_rs(&meta, "wasi-http-tests", "bin", &command_adapter, &out_dir);
+}
+
+// Creates an `${out_dir}/${package}_modules.rs` file that exposes a `get_module(&str) -> Module`,
+// and a contains a `use self::{module} as _;` for each module that ensures that the user defines
+// a symbol (ideally a #[test]) corresponding to each module.
+fn modules_rs(meta: &cargo_metadata::Metadata, package: &str, kind: &str, out_dir: &PathBuf) {
+    let modules = targets_in_package(meta, package, kind)
+        .into_iter()
+        .map(|stem| {
+            (
+                stem.clone(),
+                out_dir
+                    .join("wasm32-wasi")
+                    .join("debug")
+                    .join(format!("{stem}.wasm"))
+                    .as_os_str()
+                    .to_str()
+                    .unwrap()
+                    .to_string(),
+            )
+        })
+        .collect::<Vec<_>>();
+
+    let mut decls = String::new();
+    let mut cases = String::new();
+    let mut uses = String::new();
+    for (stem, file) in modules {
+        let global = format!("{}_MODULE", stem.to_uppercase());
+        // Load the module from disk only once, in case it is used many times:
+        decls += &format!(
+            "
+            lazy_static::lazy_static!{{
+                static ref {global}: wasmtime::Module = {{
+                    wasmtime::Module::from_file(&ENGINE, {file:?}).unwrap()
+                }};
+            }}
+        "
         );
+        // Match the stem str literal to the module. Cloning is just a ref count incr.
+        cases += &format!("{stem:?} => {global}.clone(),\n");
+        // Statically ensure that the user defines a function (ideally a #[test]) for each stem.
+        uses += &format!("#[allow(unused_imports)] use self::{stem} as _;\n");
     }
 
-    let meta = cargo_metadata::MetadataCommand::new()
-        .manifest_path(PathBuf::from(testsuite).join("Cargo.toml"))
-        .exec()
-        .expect("cargo metadata");
+    std::fs::write(
+        out_dir.join(&format!("{}_modules.rs", package.to_snake_case())),
+        format!(
+            "
+        {decls}
+        pub fn get_module(s: &str) -> wasmtime::Module {{
+            match s {{
+                {cases}
+                _ => panic!(\"no such module: {{}}\", s),
+            }}
+        }}
+        {uses}
+        "
+        ),
+    )
+    .unwrap();
+}
 
-    Ok(meta
+// Build the WASI Preview 1 adapter, and get the binary:
+fn build_adapter(out_dir: &PathBuf, name: &str, features: &[&str]) -> Vec<u8> {
+    println!("cargo:rerun-if-changed=../wasi-preview1-component-adapter");
+    let mut cmd = Command::new("cargo");
+    cmd.arg("build")
+        .arg("--release")
+        .arg("--package=wasi-preview1-component-adapter")
+        .arg("--target=wasm32-unknown-unknown")
+        .env("CARGO_TARGET_DIR", out_dir)
+        .env_remove("CARGO_ENCODED_RUSTFLAGS");
+    for f in features {
+        cmd.arg(f);
+    }
+    let status = cmd.status().unwrap();
+    assert!(status.success());
+
+    let adapter = out_dir.join(format!("wasi_preview1_component_adapter.{name}.wasm"));
+    std::fs::copy(
+        out_dir
+            .join("wasm32-unknown-unknown")
+            .join("release")
+            .join("wasi_preview1_component_adapter.wasm"),
+        &adapter,
+    )
+    .unwrap();
+    println!("wasi {name} adapter: {:?}", &adapter);
+    fs::read(&adapter).unwrap()
+}
+
+// Builds components out of modules, and creates an `${out_dir}/${package}_component.rs` file that
+// exposes a `get_component(&str) -> Component`
+// and a contains a `use self::{component} as _;` for each module that ensures that the user defines
+// a symbol (ideally a #[test]) corresponding to each component.
+fn components_rs(
+    meta: &cargo_metadata::Metadata,
+    package: &str,
+    kind: &str,
+    adapter: &[u8],
+    out_dir: &PathBuf,
+) {
+    let mut decls = String::new();
+    let mut cases = String::new();
+    let mut uses = String::new();
+    for target_name in targets_in_package(&meta, package, kind) {
+        let stem = target_name.to_snake_case();
+        let file = compile_component(&stem, out_dir, adapter);
+
+        let global = format!("{}_COMPONENT", stem.to_uppercase());
+        decls += &format!(
+            "
+            lazy_static::lazy_static!{{
+                static ref {global}: wasmtime::component::Component = {{
+                    wasmtime::component::Component::from_file(&ENGINE, {file:?}).unwrap()
+                }};
+            }}
+        "
+        );
+        cases += &format!("{stem:?} => {global}.clone(),\n");
+        uses += &format!("use self::{stem} as _;\n");
+    }
+
+    std::fs::write(
+        out_dir.join(&format!("{}_components.rs", package.to_snake_case())),
+        format!(
+            "
+        {decls}
+        pub fn get_component(s: &str) -> wasmtime::component::Component {{
+            match s {{
+                {cases}
+                _ => panic!(\"no such component: {{}}\", s),
+            }}
+        }}
+        {uses}
+        "
+        ),
+    )
+    .unwrap();
+}
+
+// Compile a component, return the path of the binary:
+fn compile_component(stem: &str, out_dir: &PathBuf, adapter: &[u8]) -> PathBuf {
+    let file = out_dir
+        .join("wasm32-wasi")
+        .join("debug")
+        .join(format!("{stem}.wasm"));
+    let module = fs::read(&file).expect("read wasm module");
+    let component = ComponentEncoder::default()
+        .module(module.as_slice())
+        .unwrap()
+        .validate(true)
+        .adapter("wasi_snapshot_preview1", adapter)
+        .unwrap()
+        .encode()
+        .expect(&format!(
+            "module {:?} can be translated to a component",
+            file
+        ));
+    let component_path = out_dir.join(format!("{}.component.wasm", &stem));
+    fs::write(&component_path, component).expect("write component to disk");
+    component_path
+}
+
+// Get all targets in a given package with a given kind
+// kind is "bin" for test program crates that expose a `fn main`, and
+// "cdylib" for crates that implement a reactor.
+fn targets_in_package<'a>(
+    meta: &'a cargo_metadata::Metadata,
+    package: &'a str,
+    kind: &'a str,
+) -> Vec<String> {
+    let targets = meta
         .packages
         .iter()
-        .find(|p| p.name == testsuite)
+        .find(|p| p.name == package)
         .unwrap()
         .targets
         .iter()
-        .filter(|t| t.kind == ["bin"])
-        .map(|t| t.name.clone())
-        .collect::<Vec<String>>())
-}
-
-#[allow(dead_code)]
-fn test_directory(
-    out: &mut File,
-    test_binaries: &[String],
-    testsuite: &str,
-    runtime: &str,
-    out_dir: &Path,
-    mut write_testsuite_tests: impl FnMut(&mut File, &Path, &str) -> io::Result<()>,
-) -> io::Result<()> {
-    writeln!(
-        out,
-        "mod {} {{",
-        Path::new(testsuite)
-            .file_stem()
-            .expect("testsuite filename should have a stem")
-            .to_str()
-            .expect("testsuite filename should be representable as a string")
-            .replace("-", "_")
-    )?;
-    writeln!(
-        out,
-        "    use super::{{runtime::{} as runtime, utils, setup_log}};",
-        runtime
-    )?;
-    for test_binary in test_binaries {
-        let binary_path = out_dir
-            .join("wasm32-wasi")
-            .join("release")
-            .join(format!("{}.wasm", test_binary.replace("-", "_")));
-        write_testsuite_tests(out, &binary_path, testsuite)?;
+        .filter(move |t| t.kind == &[kind])
+        .map(|t| t.name.to_snake_case())
+        .collect::<Vec<_>>();
+    if targets.is_empty() {
+        panic!("no targets for package {package:?} of kind {kind:?}")
     }
-    writeln!(out, "}}")?;
-    Ok(())
-}
-
-#[cfg(feature = "test_programs")]
-mod wasi_tests {
-    use super::*;
-    use std::env;
-
-    pub(super) fn build_and_generate_tests() {
-        // Validate if any of test sources are present and if they changed
-        // This should always work since there is no submodule to init anymore
-        let bin_tests = read_dir("wasi-tests/src/bin").unwrap();
-        for test in bin_tests {
-            if let Ok(test_file) = test {
-                let test_file_path = test_file
-                    .path()
-                    .into_os_string()
-                    .into_string()
-                    .expect("test file path");
-                println!("cargo:rerun-if-changed={}", test_file_path);
-            }
-        }
-        println!("cargo:rerun-if-changed=wasi-tests/Cargo.toml");
-        println!("cargo:rerun-if-changed=wasi-tests/src/lib.rs");
-        // Build tests to OUT_DIR (target/*/build/wasi-common-*/out/wasm32-wasi/release/*.wasm)
-        let out_dir = PathBuf::from(
-            env::var("OUT_DIR").expect("The OUT_DIR environment variable must be set"),
-        );
-        let mut out =
-            File::create(out_dir.join("wasi_tests.rs")).expect("error generating test source file");
-        let test_binaries = build_tests("wasi-tests", &out_dir).expect("building tests");
-        test_directory(
-            &mut out,
-            &test_binaries,
-            "wasi-cap-std-sync",
-            "cap_std_sync",
-            &out_dir,
-            write_testsuite_tests,
-        )
-        .expect("generating wasi-cap-std-sync tests");
-        test_directory(
-            &mut out,
-            &test_binaries,
-            "wasi-tokio",
-            "tokio",
-            &out_dir,
-            write_testsuite_tests,
-        )
-        .expect("generating wasi-tokio tests");
-    }
-
-    fn write_testsuite_tests(out: &mut File, path: &Path, testsuite: &str) -> io::Result<()> {
-        let stemstr = path
-            .file_stem()
-            .expect("file_stem")
-            .to_str()
-            .expect("to_str");
-
-        writeln!(out, "    #[test]")?;
-        let test_fn_name = stemstr.replace("-", "_");
-        if ignore(testsuite, &test_fn_name) {
-            writeln!(out, "    #[ignore]")?;
-        }
-        writeln!(out, "    fn r#{}() -> anyhow::Result<()> {{", test_fn_name,)?;
-        writeln!(out, "        setup_log();")?;
-        writeln!(
-            out,
-            "        let path = std::path::Path::new(r#\"{}\"#);",
-            path.display()
-        )?;
-        writeln!(out, "        let data = wat::parse_file(path)?;")?;
-        writeln!(
-            out,
-            "        let bin_name = utils::extract_exec_name_from_path(path)?;"
-        )?;
-        let workspace = if no_preopens(testsuite, stemstr) {
-            "None"
-        } else {
-            writeln!(
-                out,
-                "        let workspace = utils::prepare_workspace(&bin_name)?;"
-            )?;
-            "Some(workspace.path())"
-        };
-        writeln!(
-            out,
-            "        runtime::{}(&data, &bin_name, {})",
-            if inherit_stdio(testsuite, stemstr) {
-                "instantiate_inherit_stdio"
-            } else {
-                "instantiate"
-            },
-            workspace,
-        )?;
-        writeln!(out, "    }}")?;
-        writeln!(out)?;
-        Ok(())
-    }
-
-    fn ignore(testsuite: &str, name: &str) -> bool {
-        match testsuite {
-            "wasi-cap-std-sync" => cap_std_sync_ignore(name),
-            "wasi-virtfs" => virtfs_ignore(name),
-            "wasi-tokio" => tokio_ignore(name),
-            _ => panic!("unknown test suite: {}", testsuite),
-        }
-    }
-
-    #[cfg(not(windows))]
-    /// Ignore tests that aren't supported yet.
-    fn cap_std_sync_ignore(name: &str) -> bool {
-        [
-            // Trailing slash related bugs:
-            "path_rename_file_trailing_slashes",
-            "remove_directory_trailing_slashes",
-        ]
-        .contains(&name)
-    }
-
-    #[cfg(windows)]
-    /// Ignore tests that aren't supported yet.
-    fn cap_std_sync_ignore(name: &str) -> bool {
-        [
-            // Trailing slash related bugs
-            "interesting_paths",
-            "path_rename_file_trailing_slashes",
-            "remove_directory_trailing_slashes",
-        ]
-        .contains(&name)
-    }
-
-    /// Tokio should support the same things as cap_std_sync
-    fn tokio_ignore(name: &str) -> bool {
-        cap_std_sync_ignore(name)
-    }
-    /// Virtfs barely works at all and is not suitable for any purpose
-    fn virtfs_ignore(name: &str) -> bool {
-        [
-            "dangling_fd",
-            "dangling_symlink",
-            "directory_seek",
-            "fd_advise",
-            "fd_filestat_set",
-            "fd_flags_set",
-            "fd_readdir",
-            "file_allocate",
-            "file_pread_pwrite",
-            "file_seek_tell",
-            "file_truncation",
-            "file_unbuffered_write",
-            "interesting_paths",
-            "isatty",
-            "nofollow_errors",
-            "path_filestat",
-            "path_link",
-            "path_open_create_existing",
-            "path_open_dirfd_not_dir",
-            "path_open_read_without_rights",
-            "path_rename",
-            "path_rename_dir_trailing_slashes",
-            "path_rename_file_trailing_slashes",
-            "path_symlink_trailing_slashes",
-            "poll_oneoff",
-            "poll_oneoff_stdio",
-            "readlink",
-            "remove_directory_trailing_slashes",
-            "remove_nonempty_directory",
-            "renumber",
-            "symlink_create",
-            "symlink_filestat",
-            "symlink_loop",
-            "truncation_rights",
-            "unlink_file_trailing_slashes",
-        ]
-        .contains(&name)
-    }
-
-    /// Mark tests which do not require preopens
-    fn no_preopens(testsuite: &str, name: &str) -> bool {
-        if testsuite.starts_with("wasi-") {
-            match name {
-                "big_random_buf" => true,
-                "clock_time_get" => true,
-                "sched_yield" => true,
-                "poll_oneoff_stdio" => true,
-                _ => false,
-            }
-        } else {
-            panic!("unknown test suite {}", testsuite)
-        }
-    }
-
-    /// Mark tests which require inheriting parent process stdio
-    fn inherit_stdio(testsuite: &str, name: &str) -> bool {
-        match testsuite {
-            "wasi-cap-std-sync" | "wasi-tokio" => match name {
-                "poll_oneoff_stdio" => true,
-                _ => false,
-            },
-            "wasi-virtfs" => false,
-            _ => panic!("unknown test suite {}", testsuite),
-        }
-    }
-}
-
-#[cfg(feature = "test_programs_http")]
-mod wasi_http_tests {
-    use super::*;
-    use std::env;
-
-    pub(super) fn build_and_generate_tests() {
-        // Validate if any of test sources are present and if they changed
-        // This should always work since there is no submodule to init anymore
-        let bin_tests = read_dir("wasi-http-tests/src/bin").unwrap();
-        for test in bin_tests {
-            if let Ok(test_file) = test {
-                let test_file_path = test_file
-                    .path()
-                    .into_os_string()
-                    .into_string()
-                    .expect("test file path");
-                println!("cargo:rerun-if-changed={}", test_file_path);
-            }
-        }
-        println!("cargo:rerun-if-changed=wasi-http-tests/Cargo.toml");
-        println!("cargo:rerun-if-changed=wasi-http-tests/src/lib.rs");
-        // Build tests to OUT_DIR (target/*/build/wasi-common-*/out/wasm32-wasi/release/*.wasm)
-        let out_dir = PathBuf::from(
-            env::var("OUT_DIR").expect("The OUT_DIR environment variable must be set"),
-        );
-        let mut out = File::create(out_dir.join("wasi_http_tests.rs"))
-            .expect("error generating test source file");
-
-        let test_binaries = build_tests("wasi-http-tests", &out_dir).expect("building tests");
-        test_directory(
-            &mut out,
-            &test_binaries,
-            "wasi-http-tests",
-            "wasi_http_tests",
-            &out_dir,
-            write_testsuite_tests,
-        )
-        .expect("generating wasi-cap-std-sync tests");
-    }
-
-    fn write_testsuite_tests(out: &mut File, path: &Path, _testsuite: &str) -> io::Result<()> {
-        let stemstr = path
-            .file_stem()
-            .expect("file_stem")
-            .to_str()
-            .expect("to_str");
-
-        writeln!(out, "    #[test]")?;
-        let test_fn_name = stemstr.replace("-", "_");
-        writeln!(out, "    fn r#{}() -> anyhow::Result<()> {{", test_fn_name,)?;
-        writeln!(out, "        setup_log();")?;
-        writeln!(
-            out,
-            "        let path = std::path::Path::new(r#\"{}\"#);",
-            path.display()
-        )?;
-        writeln!(out, "        let data = wat::parse_file(path)?;")?;
-        writeln!(
-            out,
-            "        let bin_name = utils::extract_exec_name_from_path(path)?;"
-        )?;
-        writeln!(
-            out,
-            "        runtime::instantiate_inherit_stdio(&data, &bin_name, None)",
-        )?;
-        writeln!(out, "    }}")?;
-        writeln!(out)?;
-        Ok(())
-    }
+    targets
 }
