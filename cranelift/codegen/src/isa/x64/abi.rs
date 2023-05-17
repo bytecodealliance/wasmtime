@@ -604,6 +604,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                     dst: tmp,
                     name: Box::new(name.clone()),
                     offset: 0,
+                    distance: RelocDistance::Far,
                 });
                 insts.push(Inst::call_unknown(
                     RegMem::reg(tmp.to_reg()),
@@ -647,6 +648,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             dst: temp2,
             name: Box::new(ExternalName::LibCall(LibCall::Memcpy)),
             offset: 0,
+            distance: RelocDistance::Far,
         });
         insts.push(Inst::call_unknown(
             RegMem::reg(temp2.to_reg()),
