@@ -1,0 +1,106 @@
+;; Rewrites for `band`, `bnot`, `bor`, `bxor`
+
+;; x | 0 == 0 | x == x | x == x.
+(rule (simplify (bor ty
+                     x
+                     (iconst ty (u64_from_imm64 0))))
+      (subsume x))
+(rule (simplify (bor ty
+                     (iconst ty (u64_from_imm64 0))
+                     x))
+      (subsume x))
+(rule (simplify (bor ty x x))
+      (subsume x))
+
+;; x ^ 0 == 0 ^ x == x.
+(rule (simplify (bxor ty
+                     x
+                     (iconst ty (u64_from_imm64 0))))
+      (subsume x))
+(rule (simplify (bxor ty
+                     (iconst ty (u64_from_imm64 0))
+                     x))
+      (subsume x))
+
+;; x ^ x == 0.
+(rule (simplify (bxor (fits_in_64 (ty_int ty)) x x))
+      (subsume (iconst ty (imm64 0))))
+
+;; x ^ not(x) == not(x) ^ x == x | not(x) == not(x) | x == -1.
+;; This identity also holds for non-integer types, vectors, and wider types.
+;; But `iconst` is only valid for integers up to 64 bits wide.
+(rule (simplify (bxor (fits_in_64 (ty_int ty)) x (bnot ty x))) (subsume (iconst ty (imm64 (ty_mask ty)))))
+(rule (simplify (bxor (fits_in_64 (ty_int ty)) (bnot ty x) x)) (subsume (iconst ty (imm64 (ty_mask ty)))))
+(rule (simplify (bor (fits_in_64 (ty_int ty)) x (bnot ty x))) (subsume (iconst ty (imm64 (ty_mask ty)))))
+(rule (simplify (bor (fits_in_64 (ty_int ty)) (bnot ty x) x)) (subsume (iconst ty (imm64 (ty_mask ty)))))
+
+;; x & -1 == -1 & x == x & x == x.
+(rule (simplify (band ty x x)) (subsume x))
+(rule (simplify (band ty x (iconst ty k)))
+      (if-let -1 (i64_sextend_imm64 ty k))
+      (subsume x))
+(rule (simplify (band ty (iconst ty k) x))
+      (if-let -1 (i64_sextend_imm64 ty k))
+      (subsume x))
+
+;; x & 0 == 0 & x == x & not(x) == not(x) & x == 0.
+(rule (simplify (band ty _ zero @ (iconst ty (u64_from_imm64 0)))) (subsume zero))
+(rule (simplify (band ty zero @ (iconst ty (u64_from_imm64 0)) _)) (subsume zero))
+(rule (simplify (band (fits_in_64 (ty_int ty)) x (bnot ty x))) (subsume (iconst ty (imm64 0))))
+(rule (simplify (band (fits_in_64 (ty_int ty)) (bnot ty x) x)) (subsume (iconst ty (imm64 0))))
+
+;; not(not(x)) == x.
+(rule (simplify (bnot ty (bnot ty x))) (subsume x))
+
+;; DeMorgan's rule (two versions):
+;; bnot(bor(x, y)) == band(bnot(x), bnot(y))
+(rule (simplify (bnot ty (bor ty x y)))
+      (band ty (bnot ty x) (bnot ty y)))
+;; bnot(band(x, y)) == bor(bnot(x), bnot(y))
+(rule (simplify (bnot ty (band t x y)))
+      (bor ty (bnot ty x) (bnot ty y)))
+
+;; `or(and(x, y), not(y)) == or(x, not(y))`
+(rule (simplify (bor ty
+                     (band ty x y)
+                     z @ (bnot ty y)))
+      (bor ty x z))
+;; Duplicate the rule but swap the `bor` operands because `bor` is
+;; commutative. We could, of course, add a `simplify` rule to do the commutative
+;; swap for all `bor`s but this will bloat the e-graph with many e-nodes. It is
+;; cheaper to have additional rules, rather than additional e-nodes, because we
+;; amortize their cost via ISLE's smart codegen.
+(rule (simplify (bor ty
+                     z @ (bnot ty y)
+                     (band ty x y)))
+      (bor ty x z))
+
+;; `or(and(x, y), not(y)) == or(x, not(y))` specialized for constants, since
+;; otherwise we may not know that `z == not(y)` since we don't generally expand
+;; constants in the e-graph.
+;;
+;; (No need to duplicate for commutative `bor` for this constant version because
+;; we move constants to the right.)
+(rule (simplify (bor ty
+                     (band ty x (iconst ty (u64_from_imm64 y)))
+                     z @ (iconst ty (u64_from_imm64 zk))))
+      (if-let $true (u64_eq (u64_and (ty_mask ty) zk)
+                            (u64_and (ty_mask ty) (u64_not y))))
+      (bor ty x z))
+
+;; (x ^ -1) can be replaced with the `bnot` instruction
+(rule (simplify (bxor ty x (iconst ty k)))
+  (if-let -1 (i64_sextend_imm64 ty k))
+  (bnot ty x))
+
+;; sshr((x | -x), N) == bmask(x) where N = ty_bits(ty) - 1.
+;;
+;; (x | -x) sets the sign bit to 1 if x is nonzero, and 0 if x is zero. sshr propagates
+;; the sign bit to the rest of the value.
+(rule (simplify (sshr ty (bor ty x (ineg ty x)) (iconst ty (u64_from_imm64 shift_amt))))
+      (if-let $true (u64_eq shift_amt (u64_sub (ty_bits ty) 1)))
+      (bmask ty x))
+
+(rule (simplify (sshr ty (bor ty (ineg ty x) x) (iconst ty (u64_from_imm64 shift_amt))))
+      (if-let $true (u64_eq shift_amt (u64_sub (ty_bits ty) 1)))
+      (bmask ty x))

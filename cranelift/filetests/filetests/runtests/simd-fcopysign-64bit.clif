@@ -1,0 +1,37 @@
+test interpret
+test run
+target aarch64
+; x86_64 and s390x do not support 64-bit vectors in `fcopysign`.
+
+function %fcopysign_f32x2(f32x2, f32x2) -> f32x2 {
+block0(v0: f32x2, v1: f32x2):
+    v2 = fcopysign v0, v1
+    return v2
+}
+; run: %fcopysign_f32x2([0x9.0 -0x9.0], [0x9.0 0x9.0]) == [0x9.0 0x9.0]
+; run: %fcopysign_f32x2([0x9.0 -0x9.0], [-0x9.0 -0x9.0]) == [-0x9.0 -0x9.0]
+; run: %fcopysign_f32x2([0x0.0 -0x0.0], [-0x0.0 0x0.0]) == [-0x0.0 0x0.0]
+
+; F32 Inf
+; run: %fcopysign_f32x2([Inf -Inf], [Inf Inf]) == [Inf Inf]
+; run: %fcopysign_f32x2([Inf -Inf], [-Inf -Inf]) == [-Inf -Inf]
+
+; F32 Epsilon  / Max / Min Positive
+; run: %fcopysign_f32x2([0x1.000000p-23 -0x1.000000p-23], [-0x0.0 0x0.0]) == [-0x1.000000p-23 0x1.000000p-23]
+; run: %fcopysign_f32x2([0x1.fffffep127 -0x1.fffffep127], [-0x0.0 0x0.0]) == [-0x1.fffffep127 0x1.fffffep127]
+; run: %fcopysign_f32x2([0x1.000000p-126 -0x1.000000p-126], [-0x0.0 0x0.0]) == [-0x1.000000p-126 0x1.000000p-126]
+
+; F32 Subnormals
+; run: %fcopysign_f32x2([0x0.800000p-126 -0x0.800000p-126], [-0x0.0 0x0.0]) == [-0x0.800000p-126 0x0.800000p-126]
+; run: %fcopysign_f32x2([0x0.000002p-126 -0x0.000002p-126], [-0x0.0 0x0.0]) == [-0x0.000002p-126 0x0.000002p-126]
+
+; F32 NaN's
+; Unlike with other operations fcopysign is guaranteed to only affect the sign bit
+; run: %fcopysign_f32x2([0x0.0 0x3.0], [-NaN +sNaN:0x1]) == [-0x0.0 0x3.0]
+; run: %fcopysign_f32x2([Inf +NaN], [-NaN -NaN]) == [-Inf -NaN]
+; run: %fcopysign_f32x2([-NaN +NaN:0x0], [+NaN -NaN]) == [+NaN -NaN:0x0]
+; run: %fcopysign_f32x2([+NaN:0x1 +NaN:0x300001], [-NaN -NaN]) == [-NaN:0x1 -NaN:0x300001]
+; run: %fcopysign_f32x2([-NaN:0x0 -NaN:0x1], [+NaN +NaN]) == [+NaN:0x0 +NaN:0x1]
+; run: %fcopysign_f32x2([-NaN:0x300001 +sNaN:0x1], [+NaN -NaN]) == [+NaN:0x300001 -sNaN:0x1]
+; run: %fcopysign_f32x2([-sNaN:0x1 +sNaN:0x200001], [+NaN -NaN]) == [+sNaN:0x1 -sNaN:0x200001]
+; run: %fcopysign_f32x2([-sNaN:0x200001 -sNaN:0x200001], [+NaN +NaN]) == [+sNaN:0x200001 +sNaN:0x200001]

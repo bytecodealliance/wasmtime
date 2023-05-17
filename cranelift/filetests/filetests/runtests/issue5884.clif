@@ -1,0 +1,20 @@
+test run
+target aarch64
+target x86_64
+target riscv64
+target s390x
+
+
+function %a(i64, i16) -> i16 {
+    ss0 = explicit_slot 8
+
+block0(v0: i64, v1: i16):
+    v2 = stack_addr.i64 ss0+0
+    store little v0, v2
+
+    v3 = stack_addr.i64 ss0+6
+    v4 = atomic_rmw.i16 little or v3, v1
+    return v4
+}
+
+; run: %a(8608481011852310776, 0) == 30583

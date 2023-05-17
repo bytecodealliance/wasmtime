@@ -1,0 +1,27 @@
+(use "errno.witx")
+(use "excuse.witx")
+
+(typename $reason
+  (variant (@witx tag $excuse)
+    (case $dog_ate f32)
+    (case $traffic s32)
+    (case $sleeping)))
+
+(typename $reason_mut
+  (variant (@witx tag $excuse)
+    (case $dog_ate (@witx pointer f32))
+    (case $traffic (@witx pointer s32))
+    (case $sleeping)))
+
+(module $variant_example
+  (@interface func (export "get_tag")
+    (param $r $reason)
+    (result $error (expected $excuse (error $errno)))
+  )
+
+  (@interface func (export "reason_mult")
+    (param $r $reason_mut)
+    (param $multiply_by u32)
+    (result $error (expected (error $errno)))
+  )
+)

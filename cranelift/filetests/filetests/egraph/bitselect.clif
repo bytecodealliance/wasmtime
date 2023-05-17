@@ -1,0 +1,129 @@
+test optimize
+set opt_level=speed
+target x86_64
+target aarch64
+target s390x
+
+function %bitselect_sgt_to_smax(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+    v2 = icmp sgt v0, v1
+    v3 = bitselect v2, v0, v1
+    return v3
+}
+
+; check: block0(v0: i32x4, v1: i32x4):
+; check:    v4 = smax v0, v1
+; check:    return v4
+
+
+; This tests an inverted bitselect, where the operands are swapped.
+function %bitselect_sgt_to_smax(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+    v2 = icmp sgt v0, v1
+    v3 = bitselect v2, v1, v0
+    return v3
+}
+
+; check: block0(v0: i32x4, v1: i32x4):
+; check:    v4 = smin v0, v1
+; check:    return v4
+
+
+
+function %bitselect_sge_to_smax(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+    v2 = icmp sge v0, v1
+    v3 = bitselect v2, v0, v1
+    return v3
+}
+
+; check: block0(v0: i32x4, v1: i32x4):
+; check:    v4 = smax v0, v1
+; check:    return v4
+
+
+function %bitselect_ugt_to_umax(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+    v2 = icmp ugt v0, v1
+    v3 = bitselect v2, v0, v1
+    return v3
+}
+
+; check: block0(v0: i32x4, v1: i32x4):
+; check:    v4 = umax v0, v1
+; check:    return v4
+
+
+function %bitselect_uge_to_umax(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+    v2 = icmp uge v0, v1
+    v3 = bitselect v2, v0, v1
+    return v3
+}
+
+; check: block0(v0: i32x4, v1: i32x4):
+; check:    v4 = umax v0, v1
+; check:    return v4
+
+
+
+function %bitselect_slt_to_smin(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+    v2 = icmp slt v0, v1
+    v3 = bitselect v2, v0, v1
+    return v3
+}
+
+; check: block0(v0: i32x4, v1: i32x4):
+; check:    v4 = smin v0, v1
+; check:    return v4
+
+
+function %bitselect_sle_to_smin(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+    v2 = icmp sle v0, v1
+    v3 = bitselect v2, v0, v1
+    return v3
+}
+
+; check: block0(v0: i32x4, v1: i32x4):
+; check:    v4 = smin v0, v1
+; check:    return v4
+
+
+function %bitselect_ult_to_umin(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+    v2 = icmp ult v0, v1
+    v3 = bitselect v2, v0, v1
+    return v3
+}
+
+; check: block0(v0: i32x4, v1: i32x4):
+; check:    v4 = umin v0, v1
+; check:    return v4
+
+
+function %bitselect_ule_to_umin(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+    v2 = icmp ule v0, v1
+    v3 = bitselect v2, v0, v1
+    return v3
+}
+
+; check: block0(v0: i32x4, v1: i32x4):
+; check:    v4 = umin v0, v1
+; check:    return v4
+
+
+
+function %bitselect_with_different_regs_does_not_optimize(i32x4, i32x4, i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4, v2: i32x4, v3: i32x4):
+    v4 = icmp ule v0, v1
+    v5 = bitselect v4, v2, v3
+    return v5
+}
+
+; check: block0(v0: i32x4, v1: i32x4, v2: i32x4, v3: i32x4):
+; check:    v4 = icmp ule v0, v1
+; check:    v5 = bitselect v4, v2, v3
+; check:    return v5

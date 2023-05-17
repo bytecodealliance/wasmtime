@@ -1,0 +1,29 @@
+test interpret
+test run
+set opt_level=speed
+set enable_simd=true
+set enable_safepoints=true
+set unwind_info=false
+set preserve_frame_pointers=true
+set machine_code_cfg_info=true
+set enable_table_access_spectre_mitigation=false
+target aarch64
+target x86_64
+
+function %u1() -> i64 sext, f64, i8, i8 sext, i8 sext system_v {
+block0:
+    v0 = f64const 0x1.8373638ff3738p-124
+    v1 = iconst.i8 53
+    v2 = iconst.i64 0x4445_00ff_ffff_ffff
+    v3 = iconst.i8 0
+    v4 = iconst.i16 0
+    v5 = iconst.i32 0
+    v6 = iconst.i64 0
+    v7 = uextend.i128 v6
+    v8 = ishl v2, v2
+    v9 = rotr v1, v1
+    nop
+    return v8, v0, v9, v9, v9
+}
+
+; run: %u1() == [-9223372036854775808, 0x1.8373638ff3738p-124, -87, -87, -87]

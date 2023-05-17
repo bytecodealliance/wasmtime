@@ -1,0 +1,71 @@
+test compile precise-output
+set unwind_info=false
+target riscv64 has_zbb has_zbs
+
+function %ctz_i8(i8) -> i8 {
+block0(v0: i8):
+    v1 = ctz v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   bseti t2,a0,8
+;   ctzw a0,t2
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x93, 0x13, 0x85, 0x28
+;   .byte 0x1b, 0x95, 0x13, 0x60
+;   ret
+
+function %ctz_i16(i16) -> i16 {
+block0(v0: i16):
+    v1 = ctz v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   bseti t2,a0,16
+;   ctzw a0,t2
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x93, 0x13, 0x05, 0x29
+;   .byte 0x1b, 0x95, 0x13, 0x60
+;   ret
+
+function %ctz_i32(i32) -> i32 {
+block0(v0: i32):
+    v1 = ctz v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   ctzw a0,a0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x1b, 0x15, 0x15, 0x60
+;   ret
+
+function %ctz_i64(i64) -> i64 {
+block0(v0: i64):
+    v1 = ctz v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   ctz a0,a0
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x13, 0x15, 0x15, 0x60
+;   ret

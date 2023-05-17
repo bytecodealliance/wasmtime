@@ -1,0 +1,38 @@
+test compile
+set opt_level=speed
+target x86_64
+target aarch64
+target s390x
+
+function u0:0(i64 vmctx, i64) fast {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned readonly gv0+8
+    gv2 = load.i64 notrap aligned gv1
+    sig0 = (i64 vmctx, i64) fast
+    fn0 = colocated u0:2 sig0
+    stack_limit = gv2
+
+                                block0(v0: i64, v1: i64):
+@0019                               v2 = vconst.i8x16 [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]
+@001b                               v3 = iconst.i32 0
+@001d                               brif v3, block3, block2  ; v3 = 0
+
+                                block3:
+@001f                               trap unreachable
+
+                                block2:
+@0025                               v4 = bitcast.i16x8 little v2  ; v2 = const0
+@0025                               v5 = bitcast.i16x8 little v2  ; v2 = const0
+@0025                               v6 = icmp ult v4, v5
+@0027                               v7 = bitcast.i32x4 little v6
+@0027                               v8 = vhigh_bits.i32 v7
+@002a                               v9 = iconst.i32 0
+@002c                               brif v9, block1, block4  ; v9 = 0
+
+                                block4:
+@002e                               call fn0(v0, v0)
+@0030                               br_table v8, block1, [block1]
+
+                                block1:
+@0036                               return
+}

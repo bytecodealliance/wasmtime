@@ -1,0 +1,37 @@
+test compile precise-output
+set unwind_info=false
+target riscv64
+
+function u0:0() -> i8 system_v {
+
+block0:
+    v0 = iconst.i16 0xddcc
+    v1 = icmp.i16 ne v0, v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   lui a3,14
+;   addi a3,a3,3532
+;   slli t2,a3,48
+;   srli a1,t2,48
+;   slli a3,a3,48
+;   srli a5,a3,48
+;   ne a0,a1,a5##ty=i16
+;   ret
+; 
+; Disassembled:
+; block0: ; offset 0x0
+;   lui a3, 0xe
+;   addi a3, a3, -0x234
+;   slli t2, a3, 0x30
+;   srli a1, t2, 0x30
+;   slli a3, a3, 0x30
+;   srli a5, a3, 0x30
+;   beq a1, a5, 0xc
+;   addi a0, zero, 1
+;   j 8
+;   mv a0, zero
+;   ret
+

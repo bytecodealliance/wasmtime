@@ -1,0 +1,13 @@
+test interpret
+test run
+target s390x
+
+function %iabs_i128(i128) -> i128 {
+block0(v0: i128):
+    v1 = iabs v0
+    return v1
+}
+; run: %iabs_i128(0) == 0
+; run: %iabs_i128(-1) == 1
+; run: %iabs_i128(1) == 1
+; run: %iabs_i128(0x80000000_00000000_00000000_00000000) == 0x80000000_00000000_00000000_00000000

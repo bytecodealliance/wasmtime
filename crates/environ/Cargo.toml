@@ -1,0 +1,44 @@
+[package]
+name = "wasmtime-environ"
+version.workspace = true
+authors.workspace = true
+description = "Standalone environment support for WebAsssembly code in Cranelift"
+license = "Apache-2.0 WITH LLVM-exception"
+repository = "https://github.com/bytecodealliance/wasmtime"
+documentation = "https://docs.rs/wasmtime-environ/"
+categories = ["wasm"]
+keywords = ["webassembly", "wasm"]
+edition.workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+cranelift-entity = { workspace = true }
+wasmtime-types = { workspace = true }
+wasmparser = { workspace = true }
+indexmap = { version = "1.0.2", features = ["serde-1"] }
+thiserror = { workspace = true }
+serde = { version = "1.0.94", features = ["derive"] }
+log = { workspace = true }
+gimli = { workspace = true, features = ["write"] }
+object = { workspace = true, features = ['write_core'] }
+target-lexicon = { workspace = true }
+wasm-encoder = { workspace = true, optional = true }
+wasmprinter = { workspace = true, optional = true }
+wasmtime-component-util = { workspace = true, optional = true }
+
+[dev-dependencies]
+atty = "0.2.14"
+clap = { workspace = true }
+env_logger = { workspace = true }
+wat = { workspace = true }
+
+[[example]]
+name = "factc"
+required-features = ['component-model']
+
+[features]
+component-model = [
+  "dep:wasm-encoder",
+  "dep:wasmprinter",
+  "dep:wasmtime-component-util",
+]

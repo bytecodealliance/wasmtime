@@ -1,0 +1,17 @@
+test verifier
+
+; Using a vmctx global value without declaring it first leads to an error.
+function %vmglobal_err(i64) -> i64 {
+    gv4 = vmctx ; error: undeclared vmctx reference
+block0(v0: i64):
+    v1 = global_value.i64 gv4
+    return v1
+}
+
+; If it is declared, all is fine.
+function %vmglobal_ok(i64 vmctx) -> i64 {
+    gv4 = vmctx
+block0(v0: i64):
+    v1 = global_value.i64 gv4
+    return v1
+}

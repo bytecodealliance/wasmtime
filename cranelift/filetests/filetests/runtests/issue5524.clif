@@ -1,0 +1,11 @@
+test interpret
+test run
+target riscv64
+
+function %a(i128, i8, i8, i8, i32, i32, i8, i8, i64, i8) -> i8, i8, i8, i128 system_v {
+block0(v0: i128, v1: i8, v2: i8, v3: i8, v4: i32, v5: i32, v6: i8, v7: i8, v8: i64, v9: i8):
+    v16 = select v8, v0, v0
+    return v1, v1, v1, v16
+}
+
+; run: %a(65280, 0, 0, 0, 0, 0, 0, 0, 0, 0) == [0, 0, 0, 65280]

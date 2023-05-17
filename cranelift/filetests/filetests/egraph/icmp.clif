@@ -1,0 +1,38 @@
+test optimize precise-output
+set opt_level=speed
+target x86_64
+
+;; Masking the result of a comparison with 1 always results in the comparison
+;; itself (comparisons in wasm may sometimes be hidden behind extensions):
+function %mask_icmp_result(i64, i64) -> i8 {
+block0(v1: i64, v2: i64):
+    v3 = icmp ult v1, v2
+    v4 = iconst.i8 1
+    v5 = band v3, v4
+    return v5
+}
+
+; function %mask_icmp_result(i64, i64) -> i8 fast {
+; block0(v1: i64, v2: i64):
+;     v3 = icmp ult v1, v2
+;     v6 -> v3
+;     return v3
+; }
+
+function %mask_icmp_extend_result(i64, i64) -> i64 {
+block0(v1: i64, v2: i64):
+    v3 = icmp ult v1, v2
+    v4 = uextend.i64 v3
+    v5 = iconst.i64 1
+    v6 = band v4, v5
+    return v6
+}
+
+; function %mask_icmp_extend_result(i64, i64) -> i64 fast {
+; block0(v1: i64, v2: i64):
+;     v3 = icmp ult v1, v2
+;     v4 = uextend.i64 v3
+;     v7 -> v4
+;     return v4
+; }
+
