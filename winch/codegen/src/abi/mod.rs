@@ -64,6 +64,9 @@ pub(crate) trait ABI {
     /// The offset to the argument base, relative to the frame pointer.
     fn arg_base_offset(&self) -> u8;
 
+    /// The offset to the return address, relative to the frame pointer.
+    fn ret_addr_offset() -> u8;
+
     /// Construct the ABI-specific signature from a WebAssembly
     /// function type.
     fn sig(&self, wasm_sig: &FuncType, call_conv: &CallingConvention) -> ABISig;
@@ -81,6 +84,9 @@ pub(crate) trait ABI {
 
     /// Returns the frame pointer register.
     fn fp_reg() -> Reg;
+
+    /// Returns the stack pointer register.
+    fn sp_reg() -> Reg;
 
     /// Returns the pinned register used to hold
     /// the `VMContext`.
