@@ -15,9 +15,7 @@ fn main() {
 fn build_and_generate_tests() {
     let out_dir = PathBuf::from(env::var_os("OUT_DIR").unwrap());
 
-    // Not needed yet, but will be shortly:
-    //let reactor_adapter = build_adapter("reactor", &[]);
-
+    let reactor_adapter = build_adapter(&out_dir, "reactor", &[]);
     let command_adapter = build_adapter(
         &out_dir,
         "command",
@@ -26,6 +24,8 @@ fn build_and_generate_tests() {
 
     println!("cargo:rerun-if-changed=./wasi-tests");
     println!("cargo:rerun-if-changed=./wasi-http-tests");
+    println!("cargo:rerun-if-changed=./command-tests");
+    println!("cargo:rerun-if-changed=./reactor-tests");
 
     // Build the test programs:
     let mut cmd = Command::new("rustup");
@@ -36,6 +36,8 @@ fn build_and_generate_tests() {
         .arg("--target=wasm32-wasi")
         .arg("--package=wasi-tests")
         .arg("--package=wasi-http-tests")
+        .arg("--package=command-tests")
+        .arg("--package=reactor-tests")
         .env("CARGO_TARGET_DIR", &out_dir)
         .env("CARGO_PROFILE_DEV_DEBUG", "1")
         .env_remove("CARGO_ENCODED_RUSTFLAGS");
@@ -48,8 +50,13 @@ fn build_and_generate_tests() {
     components_rs(&meta, "wasi-tests", "bin", &command_adapter, &out_dir);
 
     modules_rs(&meta, "wasi-http-tests", "bin", &out_dir);
-    // FIXME Unsure why this is broken at the moment:
+    // FIXME this is broken at the moment because guest bindgen is embedding the proxy world type,
+    // so wit-component expects the module to contain the proxy's exports. we need a different
+    // world to pass guest bindgen that is just "a command that also can do outbound http"
     //components_rs(&meta, "wasi-http-tests", "bin", &command_adapter, &out_dir);
+
+    components_rs(&meta, "command-tests", "bin", &command_adapter, &out_dir);
+    components_rs(&meta, "reactor-tests", "cdylib", &reactor_adapter, &out_dir);
 }
 
 // Creates an `${out_dir}/${package}_modules.rs` file that exposes a `get_module(&str) -> Module`,

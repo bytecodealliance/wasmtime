@@ -8,4 +8,4 @@ publish = false
 crate-type=["cdylib"]
 
 [dependencies]
-wit-bindgen = "0.4.0"
+wit-bindgen = { workspace = true }
