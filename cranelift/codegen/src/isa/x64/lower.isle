@@ -741,22 +741,66 @@
       (x64_psrad src (mov_rmi_to_xmm (mask_xmm_shift ty amt))))
 
 ;; The `sshr.i64x2` CLIF instruction has no single x86 instruction in the older
-;; feature sets. Newer ones like AVX512VL + AVX512F include `vpsraq`, a 128-bit
-;; instruction that would fit here, but this backend does not currently have
-;; support for EVEX encodings. To remedy this, we extract each 64-bit lane to a
-;; GPR, shift each using a scalar instruction, and insert the shifted values
-;; back in the `dst` XMM register.
+;; feature sets. To remedy this, a small dance is done with an unsigned right
+;; shift plus some extra ops.
 ;;
-;; (TODO: when EVEX support is available, add an alternate lowering here).
+;; TODO: add a lowering for `vpsraq` with AVX512{VL,F}
+(rule 1 (lower (has_type $I64X2 (sshr src (iconst (u64_from_imm64 (u64_as_u32 amt))))))
+        (lower_i64x2_sshr_imm src (u32_and amt 63)))
 (rule (lower (has_type $I64X2 (sshr src amt)))
-      (let ((src_ Xmm (put_in_xmm src))
-            (lo Gpr (x64_pextrq src_ 0))
-            (hi Gpr (x64_pextrq src_ 1))
-            (amt_ Imm8Gpr (put_masked_in_imm8_gpr amt $I64))
-            (shifted_lo Gpr (x64_sar $I64 lo amt_))
-            (shifted_hi Gpr (x64_sar $I64 hi amt_)))
-        (make_i64x2_from_lanes shifted_lo
-                               shifted_hi)))
+      (lower_i64x2_sshr_gpr src (x64_and $I64 amt (RegMemImm.Imm 63))))
+
+(decl lower_i64x2_sshr_imm (Xmm u32) Xmm)
+
+;; If the shift amount is less than 32 then do an sshr with 32-bit lanes to
+;; produce the upper halves of each result, followed by a ushr of 64-bit lanes
+;; to produce the lower halves of each result. Interleave results at the end.
+(rule 2 (lower_i64x2_sshr_imm vec imm)
+        (if-let $true (u64_lt imm 32))
+        (let (
+            (high32 Xmm (x64_psrad vec (xmi_imm imm)))
+            (high32 Xmm (x64_pshufd high32 0b11_10_11_01))
+            (low32  Xmm (x64_psrlq vec (xmi_imm imm)))
+            (low32  Xmm (x64_pshufd low32 0b11_10_10_00))
+          )
+          (x64_punpckldq low32 high32)))
+
+;; If the shift amount is 32 then the `psrlq` from the above rule can be avoided
+(rule 1 (lower_i64x2_sshr_imm vec 32)
+        (let (
+            (low32  Xmm (x64_pshufd vec 0b11_10_11_01))
+            (high32 Xmm (x64_psrad vec (xmi_imm 31)))
+            (high32 Xmm (x64_pshufd high32 0b11_10_11_01))
+          )
+          (x64_punpckldq low32 high32)))
+
+;; Shifts >= 32 use one `psrad` to generate the upper bits and second `psrad` to
+;; generate the lower bits. Everything is then woven back together with
+;; shuffles.
+(rule (lower_i64x2_sshr_imm vec imm)
+      (if-let $true (u64_lt 32 imm))
+      (let (
+          (high32 Xmm (x64_psrad vec (xmi_imm 31)))
+          (high32 Xmm (x64_pshufd high32 0b11_10_11_01))
+          (low32  Xmm (x64_psrad vec (xmi_imm (u32_sub imm 32))))
+          (low32  Xmm (x64_pshufd low32 0b11_10_10_01))
+        )
+        (x64_punpckldq low32 high32)))
+
+;; A variable shift amount is slightly more complicated than the immediate
+;; shift amounts from above. The `Gpr` argument is guaranteed to be <= 63 by
+;; earlier masking. A `ushr` operation is used with some xor/sub math to
+;; generate the sign bits.
+(decl lower_i64x2_sshr_gpr (Xmm Gpr) Xmm)
+(rule (lower_i64x2_sshr_gpr vec val)
+      (let (
+          (val                Xmm (x64_movq_to_xmm val))
+          (mask               Xmm (flip_high_bit_mask $I64X2))
+          (sign_bit_loc       Xmm (x64_psrlq mask val))
+          (ushr               Xmm (x64_psrlq vec val))
+          (ushr_sign_bit_flip Xmm (x64_pxor sign_bit_loc ushr))
+        )
+        (x64_psubq ushr_sign_bit_flip sign_bit_loc)))
 
 ;;;; Rules for `rotl` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
