@@ -96,6 +96,7 @@
   (VfsubVV)
   (VfmulVV)
   (VfdivVV)
+  (VfsgnjnVV)
 
   ;; Vector-Scalar Opcodes
   (VaddVX)
@@ -322,7 +323,7 @@
 (rule (rv_vfadd_vv vs2 vs1 vstate)
   (vec_alu_rrr (VecAluOpRRR.VfaddVV) vs2 vs1 vstate))
 
-;; Helper for emitting the `vfadd.vv` instruction.
+;; Helper for emitting the `vfadd.vf` instruction.
 (decl rv_vfadd_vf (Reg Reg VState) Reg)
 (rule (rv_vfadd_vf vs2 vs1 vstate)
   (vec_alu_rrr (VecAluOpRRR.VfaddVF) vs2 vs1 vstate))
@@ -332,12 +333,12 @@
 (rule (rv_vfsub_vv vs2 vs1 vstate)
   (vec_alu_rrr (VecAluOpRRR.VfsubVV) vs2 vs1 vstate))
 
-;; Helper for emitting the `vfsub.vv` instruction.
+;; Helper for emitting the `vfsub.vf` instruction.
 (decl rv_vfsub_vf (Reg Reg VState) Reg)
 (rule (rv_vfsub_vf vs2 vs1 vstate)
   (vec_alu_rrr (VecAluOpRRR.VfsubVF) vs2 vs1 vstate))
 
-;; Helper for emitting the `vfrsub.vv` instruction.
+;; Helper for emitting the `vfrsub.vf` instruction.
 (decl rv_vfrsub_vf (Reg Reg VState) Reg)
 (rule (rv_vfrsub_vf vs2 vs1 vstate)
   (vec_alu_rrr (VecAluOpRRR.VfrsubVF) vs2 vs1 vstate))
@@ -347,25 +348,36 @@
 (rule (rv_vfmul_vv vs2 vs1 vstate)
   (vec_alu_rrr (VecAluOpRRR.VfmulVV) vs2 vs1 vstate))
 
+;; Helper for emitting the `vfmul.vf` instruction.
+(decl rv_vfmul_vf (Reg Reg VState) Reg)
+(rule (rv_vfmul_vf vs2 vs1 vstate)
+  (vec_alu_rrr (VecAluOpRRR.VfmulVF) vs2 vs1 vstate))
+
 ;; Helper for emitting the `vfdiv.vv` instruction.
 (decl rv_vfdiv_vv (Reg Reg VState) Reg)
 (rule (rv_vfdiv_vv vs2 vs1 vstate)
   (vec_alu_rrr (VecAluOpRRR.VfdivVV) vs2 vs1 vstate))
 
-;; Helper for emitting the `vfdiv.vv` instruction.
+;; Helper for emitting the `vfdiv.vf` instruction.
 (decl rv_vfdiv_vf (Reg Reg VState) Reg)
 (rule (rv_vfdiv_vf vs2 vs1 vstate)
   (vec_alu_rrr (VecAluOpRRR.VfdivVF) vs2 vs1 vstate))
 
-;; Helper for emitting the `vfrdiv.vv` instruction.
+;; Helper for emitting the `vfrdiv.vf` instruction.
 (decl rv_vfrdiv_vf (Reg Reg VState) Reg)
 (rule (rv_vfrdiv_vf vs2 vs1 vstate)
   (vec_alu_rrr (VecAluOpRRR.VfrdivVF) vs2 vs1 vstate))
 
-;; Helper for emitting the `vfmul.vv` instruction.
-(decl rv_vfmul_vf (Reg Reg VState) Reg)
-(rule (rv_vfmul_vf vs2 vs1 vstate)
-  (vec_alu_rrr (VecAluOpRRR.VfmulVF) vs2 vs1 vstate))
+;; Helper for emitting the `vfsgnjn.vv` ("Floating Point Sign Injection Negated") instruction.
+;; The output of this instruction is `vs2` with the negated sign bit from `vs1`
+(decl rv_vfsgnjn_vv (Reg Reg VState) Reg)
+(rule (rv_vfsgnjn_vv vs2 vs1 vstate)
+  (vec_alu_rrr (VecAluOpRRR.VfsgnjnVV) vs2 vs1 vstate))
+
+;; Helper for emitting the `vfneg.v` instruction.
+;; This instruction is a mnemonic for `vfsgnjn.vv vd, vs, vs`
+(decl rv_vfneg_v (Reg VState) Reg)
+(rule (rv_vfneg_v vs vstate) (rv_vfsgnjn_vv vs vs vstate))
 
 ;; Helper for emitting the `vslidedown.vx` instruction.
 ;; `vslidedown` moves all elements in the vector down by n elements.

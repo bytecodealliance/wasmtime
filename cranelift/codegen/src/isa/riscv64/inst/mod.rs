@@ -1580,9 +1580,12 @@ impl Inst {
 
                 // Note: vs2 and vs1 here are opposite to the standard scalar ordering.
                 // This is noted in Section 10.1 of the RISC-V Vector spec.
-                match (op, vs1) {
-                    (VecAluOpRRR::VrsubVX, vs1) if vs1 == zero_reg() => {
+                match (op, vs2, vs1) {
+                    (VecAluOpRRR::VrsubVX, _, vs1) if vs1 == zero_reg() => {
                         format!("vneg.v {},{} {}", vd_s, vs2_s, vstate)
+                    }
+                    (VecAluOpRRR::VfsgnjnVV, vs2, vs1) if vs2 == vs1 => {
+                        format!("vfneg.v {},{} {}", vd_s, vs2_s, vstate)
                     }
                     _ => format!("{} {},{},{} {}", op, vd_s, vs2_s, vs1_s, vstate),
                 }

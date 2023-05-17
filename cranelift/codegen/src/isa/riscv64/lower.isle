@@ -584,8 +584,11 @@
   (rv_fabs ty x))
 
 ;;;; Rules for `fneg` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule (lower (has_type ty (fneg x)))
+(rule 0 (lower (has_type (ty_scalar_float ty) (fneg x)))
   (rv_fneg ty x))
+
+(rule 1 (lower (has_type (ty_vec_fits_in_register ty) (fneg x)))
+  (rv_vfneg_v x ty))
 
 ;;;; Rules for `fcopysign` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type ty (fcopysign x y)))
