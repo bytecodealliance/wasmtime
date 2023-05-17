@@ -600,9 +600,11 @@
 
 
 ;;;; Rules for `sqrt` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule (lower (has_type ty (sqrt x)))
+(rule 0 (lower (has_type (ty_scalar_float ty) (sqrt x)))
   (rv_fsqrt ty x))
 
+(rule 1 (lower (has_type (ty_vec_fits_in_register ty) (sqrt x)))
+  (rv_vfsqrt_v x ty))
 
 ;;;; Rules for `AtomicRMW` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule -1

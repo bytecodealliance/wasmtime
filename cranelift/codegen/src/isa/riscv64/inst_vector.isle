@@ -136,6 +136,7 @@
   (VmvVV)
   (VmvVX)
   (VfmvVF)
+  (VfsqrtV)
 ))
 
 ;; Returns the canonical destination type for a VecAluOpRRImm5.
@@ -378,6 +379,12 @@
 ;; This instruction is a mnemonic for `vfsgnjn.vv vd, vs, vs`
 (decl rv_vfneg_v (Reg VState) Reg)
 (rule (rv_vfneg_v vs vstate) (rv_vfsgnjn_vv vs vs vstate))
+
+;; Helper for emitting the `vfsqrt.v` instruction.
+;; This instruction splats the F regsiter into all elements of the destination vector.
+(decl rv_vfsqrt_v (Reg VState) Reg)
+(rule (rv_vfsqrt_v vs vstate)
+  (vec_alu_rr (VecAluOpRR.VfsqrtV) vs vstate))
 
 ;; Helper for emitting the `vslidedown.vx` instruction.
 ;; `vslidedown` moves all elements in the vector down by n elements.

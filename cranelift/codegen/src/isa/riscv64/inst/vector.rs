@@ -381,6 +381,7 @@ impl VecAluOpRR {
             VecAluOpRR::VmvSX | VecAluOpRR::VmvXS | VecAluOpRR::VfmvSF | VecAluOpRR::VfmvFS => {
                 0b010000
             }
+            VecAluOpRR::VfsqrtV => 0b010011,
             VecAluOpRR::VmvVV | VecAluOpRR::VmvVX | VecAluOpRR::VfmvVF => 0b010111,
         }
     }
@@ -390,7 +391,7 @@ impl VecAluOpRR {
             VecAluOpRR::VmvSX => VecOpCategory::OPMVX,
             VecAluOpRR::VmvXS => VecOpCategory::OPMVV,
             VecAluOpRR::VfmvSF | VecAluOpRR::VfmvVF => VecOpCategory::OPFVF,
-            VecAluOpRR::VfmvFS => VecOpCategory::OPFVV,
+            VecAluOpRR::VfmvFS | VecAluOpRR::VfsqrtV => VecOpCategory::OPFVV,
             VecAluOpRR::VmvVV => VecOpCategory::OPIVV,
             VecAluOpRR::VmvVX => VecOpCategory::OPIVX,
         }
@@ -407,6 +408,8 @@ impl VecAluOpRR {
             VecAluOpRR::VfmvSF => 0b00000,
             // VWFUNARY0
             VecAluOpRR::VfmvFS => 0b00000,
+            // VFUNARY1
+            VecAluOpRR::VfsqrtV => 0b00000,
             // These don't have a explicit encoding table, but Section 11.16 Vector Integer Move Instruction states:
             // > The first operand specifier (vs2) must contain v0, and any other vector register number in vs2 is reserved.
             VecAluOpRR::VmvVV | VecAluOpRR::VmvVX | VecAluOpRR::VfmvVF => 0,
@@ -418,7 +421,11 @@ impl VecAluOpRR {
     /// other way around. As far as I can tell only vmv.v.* are backwards.
     pub fn vs_is_vs2_encoded(&self) -> bool {
         match self {
-            VecAluOpRR::VmvSX | VecAluOpRR::VmvXS | VecAluOpRR::VfmvSF | VecAluOpRR::VfmvFS => true,
+            VecAluOpRR::VmvSX
+            | VecAluOpRR::VmvXS
+            | VecAluOpRR::VfmvSF
+            | VecAluOpRR::VfmvFS
+            | VecAluOpRR::VfsqrtV => true,
             VecAluOpRR::VmvVV | VecAluOpRR::VmvVX | VecAluOpRR::VfmvVF => false,
         }
     }
@@ -429,7 +436,8 @@ impl VecAluOpRR {
             | VecAluOpRR::VmvSX
             | VecAluOpRR::VmvVV
             | VecAluOpRR::VmvVX
-            | VecAluOpRR::VfmvVF => RegClass::Vector,
+            | VecAluOpRR::VfmvVF
+            | VecAluOpRR::VfsqrtV => RegClass::Vector,
             VecAluOpRR::VmvXS => RegClass::Int,
             VecAluOpRR::VfmvFS => RegClass::Float,
         }
@@ -437,7 +445,9 @@ impl VecAluOpRR {
 
     pub fn src_regclass(&self) -> RegClass {
         match self {
-            VecAluOpRR::VmvXS | VecAluOpRR::VfmvFS | VecAluOpRR::VmvVV => RegClass::Vector,
+            VecAluOpRR::VmvXS | VecAluOpRR::VfmvFS | VecAluOpRR::VmvVV | VecAluOpRR::VfsqrtV => {
+                RegClass::Vector
+            }
             VecAluOpRR::VfmvSF | VecAluOpRR::VfmvVF => RegClass::Float,
             VecAluOpRR::VmvSX | VecAluOpRR::VmvVX => RegClass::Int,
         }
@@ -451,6 +461,7 @@ impl fmt::Display for VecAluOpRR {
             VecAluOpRR::VmvXS => "vmv.x.s",
             VecAluOpRR::VfmvSF => "vfmv.s.f",
             VecAluOpRR::VfmvFS => "vfmv.f.s",
+            VecAluOpRR::VfsqrtV => "vfsqrt.v",
             VecAluOpRR::VmvVV => "vmv.v.v",
             VecAluOpRR::VmvVX => "vmv.v.x",
             VecAluOpRR::VfmvVF => "vfmv.v.f",
