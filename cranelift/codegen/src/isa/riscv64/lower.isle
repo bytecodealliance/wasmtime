@@ -736,9 +736,20 @@
 (rule 3 (lower (has_type (ty_vec_fits_in_register ty) (fsub (splat x) y)))
   (rv_vfrsub_vf y x ty))
 
-
-(rule (lower (has_type ty (fmul x y)))
+;;;; Rules for `fmul` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(rule 0 (lower (has_type (ty_scalar_float ty) (fmul x y)))
   (rv_fmul ty x y))
+
+(rule 1 (lower (has_type (ty_vec_fits_in_register ty) (fmul x y)))
+  (rv_vfmul_vv x y ty))
+
+(rule 2 (lower (has_type (ty_vec_fits_in_register ty) (fmul x (splat y))))
+  (rv_vfmul_vf x y ty))
+
+(rule 3 (lower (has_type (ty_vec_fits_in_register ty) (fmul (splat x) y)))
+  (rv_vfmul_vf y x ty))
+
+
 
 (rule (lower (has_type ty (fdiv x y)))
   (rv_fdiv ty x y))

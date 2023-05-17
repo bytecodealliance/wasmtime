@@ -94,6 +94,7 @@
   (VxorVV)
   (VfaddVV)
   (VfsubVV)
+  (VfmulVV)
 
   ;; Vector-Scalar Opcodes
   (VaddVX)
@@ -103,6 +104,7 @@
   (VfaddVF)
   (VfsubVF)
   (VfrsubVF)
+  (VfmulVF)
 ))
 
 ;; Register-Imm ALU Ops
@@ -336,6 +338,16 @@
 (decl rv_vfrsub_vf (Reg Reg VState) Reg)
 (rule (rv_vfrsub_vf vs2 vs1 vstate)
   (vec_alu_rrr (VecAluOpRRR.VfrsubVF) vs2 vs1 vstate))
+
+;; Helper for emitting the `vfmul.vv` instruction.
+(decl rv_vfmul_vv (Reg Reg VState) Reg)
+(rule (rv_vfmul_vv vs2 vs1 vstate)
+  (vec_alu_rrr (VecAluOpRRR.VfmulVV) vs2 vs1 vstate))
+
+;; Helper for emitting the `vfmul.vv` instruction.
+(decl rv_vfmul_vf (Reg Reg VState) Reg)
+(rule (rv_vfmul_vf vs2 vs1 vstate)
+  (vec_alu_rrr (VecAluOpRRR.VfmulVF) vs2 vs1 vstate))
 
 ;; Helper for emitting the `vslidedown.vx` instruction.
 ;; `vslidedown` moves all elements in the vector down by n elements.
