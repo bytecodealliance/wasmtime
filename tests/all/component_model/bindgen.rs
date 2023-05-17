@@ -14,7 +14,9 @@ mod no_imports {
 
     wasmtime::component::bindgen!({
         inline: "
-            default world no-imports {
+            package foo:foo
+
+            world no-imports {
                 export foo: interface {
                     foo: func()
                 }
@@ -59,7 +61,9 @@ mod one_import {
 
     wasmtime::component::bindgen!({
         inline: "
-            default world one-import {
+            package foo:foo
+
+            world one-import {
                 import foo: interface {
                     foo: func()
                 }

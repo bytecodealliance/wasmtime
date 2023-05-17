@@ -495,6 +495,9 @@ impl ComponentTypesBuilder {
                         TypeDef::CoreFunc(self.module_types.wasm_func_type(f.clone().try_into()?));
                     self.push_core_typedef(ty);
                 }
+                wasmparser::ModuleTypeDeclaration::Type(wasmparser::Type::Array(_)) => {
+                    unimplemented!("gc types");
+                }
                 wasmparser::ModuleTypeDeclaration::Export { name, ty } => {
                     let prev = result
                         .exports
@@ -552,17 +555,13 @@ impl ComponentTypesBuilder {
                 ComponentTypeDeclaration::Type(ty) => self.type_declaration_type(ty)?,
                 ComponentTypeDeclaration::CoreType(ty) => self.type_declaration_core_type(ty)?,
                 ComponentTypeDeclaration::Alias(alias) => self.type_declaration_alias(alias)?,
-                ComponentTypeDeclaration::Export { name, url, ty } => {
+                ComponentTypeDeclaration::Export { name, ty } => {
                     let ty = self.type_declaration_define(ty);
-                    result
-                        .exports
-                        .insert(name.to_string(), (url.to_string(), ty));
+                    result.exports.insert(name.as_str().to_string(), ty);
                 }
                 ComponentTypeDeclaration::Import(import) => {
                     let ty = self.type_declaration_define(&import.ty);
-                    result
-                        .imports
-                        .insert(import.name.to_string(), (import.url.to_string(), ty));
+                    result.imports.insert(import.name.as_str().to_string(), ty);
                 }
             }
         }
@@ -584,11 +583,9 @@ impl ComponentTypesBuilder {
                 InstanceTypeDeclaration::Type(ty) => self.type_declaration_type(ty)?,
                 InstanceTypeDeclaration::CoreType(ty) => self.type_declaration_core_type(ty)?,
                 InstanceTypeDeclaration::Alias(alias) => self.type_declaration_alias(alias)?,
-                InstanceTypeDeclaration::Export { name, url, ty } => {
+                InstanceTypeDeclaration::Export { name, ty } => {
                     let ty = self.type_declaration_define(ty);
-                    result
-                        .exports
-                        .insert(name.to_string(), (url.to_string(), ty));
+                    result.exports.insert(name.as_str().to_string(), ty);
                 }
             }
         }
@@ -635,7 +632,7 @@ impl ComponentTypesBuilder {
             } => {
                 let ty = self.type_scopes.last().unwrap().instances
                     [ComponentInstanceIndex::from_u32(*instance_index)];
-                let (_, ty) = self.component_types[ty].exports[*name];
+                let ty = self.component_types[ty].exports[*name];
                 self.push_component_typedef(ty);
             }
             a => unreachable!("invalid alias {a:?}"),
@@ -1018,9 +1015,9 @@ pub struct TypeModule {
 #[derive(Serialize, Deserialize, Default)]
 pub struct TypeComponent {
     /// The named values that this component imports.
-    pub imports: IndexMap<String, (String, TypeDef)>,
+    pub imports: IndexMap<String, TypeDef>,
     /// The named values that this component exports.
-    pub exports: IndexMap<String, (String, TypeDef)>,
+    pub exports: IndexMap<String, TypeDef>,
 }
 
 /// The type of a component instance in the component model, or an instantiated
@@ -1030,7 +1027,7 @@ pub struct TypeComponent {
 #[derive(Serialize, Deserialize, Default)]
 pub struct TypeComponentInstance {
     /// The list of exports that this component has along with their types.
-    pub exports: IndexMap<String, (String, TypeDef)>,
+    pub exports: IndexMap<String, TypeDef>,
 }
 
 /// A component function type in the component model.

@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# TODO: add this flag back in
+#--features "test-programs/test_programs_http" \
+
 cargo test \
     --features "test-programs/test_programs" \
     --features wasi-threads \

@@ -1,9 +1,11 @@
+package foo:foo
+
 interface i {
   type t = u16
 }
 
-default world foo {
-  use self.i.{t as u}
+world foo {
+  use i.{t as u}
 
   type t = u32
 

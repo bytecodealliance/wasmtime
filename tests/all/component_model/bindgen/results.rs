@@ -9,7 +9,8 @@ mod empty_error {
     use super::*;
     wasmtime::component::bindgen!({
         inline: "
-        default world result-playground {
+        package inline:inline
+        world result-playground {
             import imports: interface {
                 empty-error: func(a: float64) -> result<float64>
             }
@@ -109,7 +110,8 @@ mod string_error {
     use super::*;
     wasmtime::component::bindgen!({
         inline: "
-        default world result-playground {
+        package inline:inline
+        world result-playground {
             import imports: interface {
                 string-error: func(a: float64) -> result<float64, string>
             }
@@ -219,14 +221,18 @@ mod string_error {
 
 mod enum_error {
     use super::*;
+    use exports::foo;
+    use inline::inline::imports;
+
     wasmtime::component::bindgen!({
         inline: "
+        package inline:inline
         interface imports {
             enum e1 { a, b, c }
             enum-error: func(a: float64) -> result<float64, e1>
         }
-        default world result-playground {
-            import imports: self.imports
+        world result-playground {
+            import imports
             export foo: interface {
                 enum e1 { a, b, c }
                 enum-error: func(a: float64) -> result<float64, e1>
@@ -244,7 +250,7 @@ mod enum_error {
                 r#"
             (component
                 (type $err' (enum "a" "b" "c"))
-                (import "imports" (instance $i
+                (import (interface "inline:inline/imports") (instance $i
                     (export $err "err" (type (eq $err')))
                     (export "enum-error" (func (param "a" float64) (result (result float64 (error $err)))))
                 ))
@@ -357,7 +363,7 @@ mod enum_error {
             .expect("no trap")
             .err()
             .expect("error returned");
-        assert_eq!(e, enum_error::foo::E1::A);
+        assert_eq!(e, foo::E1::A);
 
         let e = results
             .foo()
@@ -377,14 +383,18 @@ mod enum_error {
 
 mod record_error {
     use super::*;
+    use exports::foo;
+    use inline::inline::imports;
+
     wasmtime::component::bindgen!({
         inline: "
+        package inline:inline
         interface imports {
             record e2 { line: u32, col: u32 }
             record-error: func(a: float64) -> result<float64, e2>
         }
-        default world result-playground {
-            import imports: self.imports
+        world result-playground {
+            import imports
             export foo: interface {
                 record e2 { line: u32, col: u32 }
                 record-error: func(a: float64) -> result<float64, e2>
@@ -407,7 +417,7 @@ mod record_error {
                     (field "line" u32)
                     (field "col" u32)
                 ))
-                (import "imports" (instance $i
+                (import (interface "inline:inline/imports") (instance $i
                     (export $e2 "e2" (type (eq $e2')))
                     (type $result (result float64 (error $e2)))
                     (export "record-error" (func (param "a" float64) (result $result)))
@@ -525,16 +535,20 @@ mod record_error {
 
 mod variant_error {
     use super::*;
+    use exports::foo;
+    use inline::inline::imports;
+
     wasmtime::component::bindgen!({
         inline: "
+        package inline:inline
         interface imports {
             enum e1 { a, b, c }
             record e2 { line: u32, col: u32 }
             variant e3 { E1(e1), E2(e2) }
             variant-error: func(a: float64) -> result<float64, e3>
         }
-        default world result-playground {
-            import imports: self.imports
+        world result-playground {
+            import imports
             export foo: interface {
                 enum e1 { a, b, c }
                 record e2 { line: u32, col: u32 }
@@ -559,7 +573,7 @@ mod variant_error {
                     (case "E1" $e1')
                     (case "E2" $e2')
                 ))
-                (import "imports" (instance $i
+                (import (interface "inline:inline/imports") (instance $i
                     (export $e1 "e1" (type (eq $e1')))
                     (export $e2 "e2" (type (eq $e2')))
                     (type $e3' (variant
@@ -710,7 +724,8 @@ mod with_remapping {
 
     wasmtime::component::bindgen!({
         inline: "
-        default world result-playground {
+        package inline:inline
+        world result-playground {
             import imports: interface {
                 empty-error: func(a: float64) -> result<float64>
             }

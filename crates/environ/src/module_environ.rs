@@ -241,6 +241,9 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                         Type::Func(wasm_func_ty) => {
                             self.declare_type_func(wasm_func_ty.try_into()?)?;
                         }
+                        Type::Array(_) => {
+                            unimplemented!("gc proposal")
+                        }
                     }
                 }
             }

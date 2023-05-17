@@ -7,7 +7,7 @@ use anyhow::{bail, Result};
 use indexmap::IndexMap;
 use std::collections::HashMap;
 use std::mem;
-use wasmparser::{Chunk, Encoding, Parser, Payload, Validator};
+use wasmparser::{Chunk, ComponentExternName, Encoding, Parser, Payload, Validator};
 
 mod adapt;
 pub use self::adapt::*;
@@ -163,7 +163,7 @@ struct Translation<'data> {
 #[allow(missing_docs)]
 enum LocalInitializer<'data> {
     // imports
-    Import(&'data str, TypeDef),
+    Import(ComponentExternName<'data>, TypeDef),
 
     // canonical function sections
     Lower(ComponentFuncIndex, LocalCanonicalOptions),
@@ -623,7 +623,7 @@ impl<'a, 'data> Translator<'a, 'data> {
                 for export in s {
                     let export = export?;
                     let item = self.kind_to_item(export.kind, export.index);
-                    let prev = self.result.exports.insert(export.name, item);
+                    let prev = self.result.exports.insert(export.name.as_str(), item);
                     assert!(prev.is_none());
                     self.result
                         .initializers
@@ -832,9 +832,9 @@ impl<'a, 'data> Translator<'a, 'data> {
                 ComponentItem::Type(ty) => Some(ComponentItemType::Type(ty)),
                 ComponentItem::Module(_) => None,
             };
-            map.insert(export.name, idx);
+            map.insert(export.name.as_str(), idx);
             if let Some(ty) = ty {
-                types.insert(export.name, ty);
+                types.insert(export.name.as_str(), ty);
             }
         }
 
@@ -901,15 +901,15 @@ impl<'a, 'data> Translator<'a, 'data> {
             // An imported component instance is being aliased, so the type of
             // the aliased item is directly available from the instance type.
             ComponentInstanceType::Index(ty) => {
-                let (_url, ty) = &self.types[ty].exports[name];
-                self.push_typedef(*ty);
+                let ty = self.types[ty].exports[name];
+                self.push_typedef(ty);
             }
 
             // An imported component was instantiated so the type of the aliased
             // export is available through the type of the export on the
             // original component.
             ComponentInstanceType::InstantiatedIndex(ty) => {
-                let (_, ty) = self.types[ty].exports[name];
+                let ty = self.types[ty].exports[name];
                 self.push_typedef(ty);
             }
 

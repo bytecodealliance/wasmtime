@@ -1,1 +1,2 @@
-default world empty {}
+package foo:foo
+world empty {}

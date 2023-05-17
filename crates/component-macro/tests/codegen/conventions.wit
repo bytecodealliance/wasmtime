@@ -1,4 +1,5 @@
 // hello 🐱 world
+package foo:foo
 
 interface conventions {
   kebab-case: func()
@@ -32,7 +33,7 @@ interface conventions {
   %bool: func()
 }
 
-default world the-world {
-  import imports: self.conventions
-  export exports: self.conventions
+world the-world {
+  import conventions
+  export conventions
 }

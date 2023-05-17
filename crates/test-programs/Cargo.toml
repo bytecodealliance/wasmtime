@@ -13,6 +13,9 @@ cargo_metadata = "0.15.3"
 wit-component = { workspace = true }
 heck = { workspace = true }
 
+[dependencies]
+wasmtime-wasi-http = { workspace = true, optional = true }
+
 [dev-dependencies]
 anyhow = { workspace = true }
 tempfile = { workspace = true }
@@ -29,7 +32,6 @@ cap-std = { workspace = true }
 cap-rand = { workspace = true }
 tokio = { version = "1.8.0", features = ["net", "rt-multi-thread", "macros"] }
 
-wasmtime-wasi-http = { workspace = true }
 hyper = { version = "1.0.0-rc.3", features = ["full"] }
 http = { version = "0.2.9" }
 http-body = "1.0.0-rc.2"
@@ -37,4 +39,4 @@ http-body-util = "0.1.0-rc.2"
 
 [features]
 test_programs = []
-test_programs_http = [ "wasmtime/component-model" ]
+test_programs_http = [ "wasmtime/component-model", "dep:wasmtime-wasi-http" ]
