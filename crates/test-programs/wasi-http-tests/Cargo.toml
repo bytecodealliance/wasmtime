@@ -5,9 +5,6 @@ readme = "README.md"
 edition = "2021"
 publish = false
 
-[lib]
-test = false
-
 [dependencies]
 anyhow = { workspace = true }
 wit-bindgen = { workspace = true }
