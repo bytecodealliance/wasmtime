@@ -186,34 +186,32 @@ fn main() -> Result<()> {
 
     // Delete is not an allowed method in this test.
     let r6 = request(
-        types::MethodParam::Delete,
-        types::SchemeParam::Http,
+        wasi::http::types::Method::Delete,
+        wasi::http::types::Scheme::Http,
         "localhost:3000",
         "/",
-        "",
         &[],
     );
 
     let error = r6.unwrap_err();
     assert_eq!(
         error.to_string(),
-        "ErrorResult::UnexpectedError(\"Method DELETE is not allowed.\")"
+        "Error::UnexpectedError(\"Method DELETE is not allowed.\")"
     );
 
     // localhost:8080 is not an allowed authority in this test.
     let r7 = request(
-        types::MethodParam::Get,
-        types::SchemeParam::Http,
+        wasi::http::types::Method::Get,
+        wasi::http::types::Scheme::Http,
         "localhost:8080",
         "/",
-        "",
         &[],
     );
 
     let error = r7.unwrap_err();
     assert_eq!(
         error.to_string(),
-        "ErrorResult::UnexpectedError(\"Authority localhost:8080 is not allowed.\")"
+        "Error::UnexpectedError(\"Authority localhost:8080 is not allowed.\")"
     );
 
     Ok(())
