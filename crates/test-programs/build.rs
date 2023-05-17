@@ -177,7 +177,7 @@ fn components_rs(
         "
         );
         cases += &format!("{stem:?} => {global}.clone(),\n");
-        uses += &format!("use self::{stem} as _;\n");
+        uses += &format!("#[allow(unused_imports)] use self::{stem} as _;\n");
     }
 
     std::fs::write(

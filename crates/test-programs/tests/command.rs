@@ -5,16 +5,16 @@ use std::{
     io::{Cursor, Write},
     sync::Mutex,
 };
-use wasi_common::{
+use wasmtime::{
+    component::{Component, Linker},
+    Config, Engine, Store,
+};
+use wasmtime_wasi::preview2::{
     clocks::{WasiMonotonicClock, WasiWallClock},
     pipe::ReadPipe,
     wasi::command::add_to_linker,
     wasi::command::Command,
     DirPerms, FilePerms, Table, WasiCtx, WasiCtxBuilder, WasiView,
-};
-use wasmtime::{
-    component::{Component, Linker},
-    Config, Engine, Store,
 };
 
 lazy_static::lazy_static! {
@@ -29,7 +29,7 @@ lazy_static::lazy_static! {
     };
 }
 // uses ENGINE, creates a fn get_component(&str) -> Component
-test_programs::command_tests_components!();
+include!(concat!(env!("OUT_DIR"), "/command_tests_components.rs"));
 
 struct CommandCtx {
     table: Table,
@@ -334,7 +334,9 @@ async fn exit_success() -> Result<()> {
 
     let r = command.call_run(&mut store).await;
     let err = r.unwrap_err();
-    let status = err.downcast_ref::<wasi_common::I32Exit>().unwrap();
+    let status = err
+        .downcast_ref::<wasmtime_wasi::preview2::I32Exit>()
+        .unwrap();
     assert_eq!(status.0, 0);
     Ok(())
 }
@@ -362,7 +364,9 @@ async fn exit_failure() -> Result<()> {
 
     let r = command.call_run(&mut store).await;
     let err = r.unwrap_err();
-    let status = err.downcast_ref::<wasi_common::I32Exit>().unwrap();
+    let status = err
+        .downcast_ref::<wasmtime_wasi::preview2::I32Exit>()
+        .unwrap();
     assert_eq!(status.0, 1);
     Ok(())
 }
@@ -378,7 +382,9 @@ async fn exit_panic() -> Result<()> {
     let r = command.call_run(&mut store).await;
     let err = r.unwrap_err();
     // The panic should trap.
-    assert!(err.downcast_ref::<wasi_common::I32Exit>().is_none());
+    assert!(err
+        .downcast_ref::<wasmtime_wasi::preview2::I32Exit>()
+        .is_none());
     Ok(())
 }
 

@@ -3130,6 +3130,7 @@ name = "test-programs"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "cap-rand",
  "cap-std",
  "cargo_metadata",
  "cfg-if",

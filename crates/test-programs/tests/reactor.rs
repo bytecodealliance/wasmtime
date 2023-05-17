@@ -1,10 +1,10 @@
 use anyhow::Result;
 use std::sync::{Arc, RwLock};
-use wasi_common::{wasi, Table, WasiCtx, WasiCtxBuilder, WasiView};
 use wasmtime::{
     component::{Component, Linker},
     Config, Engine, Store,
 };
+use wasmtime_wasi::preview2::{wasi, Table, WasiCtx, WasiCtxBuilder, WasiView};
 
 lazy_static::lazy_static! {
     static ref ENGINE: Engine = {
@@ -19,7 +19,7 @@ lazy_static::lazy_static! {
 }
 
 // uses ENGINE, creates a fn get_component(&str) -> Component
-test_programs::reactor_tests_components!();
+include!(concat!(env!("OUT_DIR"), "/reactor_tests_components.rs"));
 
 wasmtime::component::bindgen!({
     path: "../test-programs/reactor-tests/wit",
@@ -115,8 +115,8 @@ async fn reactor_tests() -> Result<()> {
     // Note, this works because of the add_to_linker invocations using the
     // `host` crate for `streams`, not because of `with` in the bindgen macro.
     let write_dest: Arc<RwLock<Vec<u8>>> = Arc::new(RwLock::new(Vec::new()));
-    let writepipe = wasi_common::pipe::WritePipe::from_shared(write_dest.clone());
-    let outputstream: Box<dyn wasi_common::OutputStream> = Box::new(writepipe);
+    let writepipe = wasmtime_wasi::preview2::pipe::WritePipe::from_shared(write_dest.clone());
+    let outputstream: Box<dyn wasmtime_wasi::preview2::OutputStream> = Box::new(writepipe);
     let table_ix = store.data_mut().table_mut().push(Box::new(outputstream))?;
     let r = reactor.call_write_strings_to(&mut store, table_ix).await?;
     assert_eq!(r, Ok(()));
