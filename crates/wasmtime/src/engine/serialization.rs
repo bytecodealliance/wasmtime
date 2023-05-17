@@ -194,6 +194,7 @@ impl Metadata {
             saturating_float_to_int: _,
             sign_extension: _,
             floats: _,
+            gc: _,
         } = engine.config().features;
 
         assert!(!memory_control);

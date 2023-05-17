@@ -2347,6 +2347,9 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 op
             ));
         }
+        Operator::I31New | Operator::I31GetS | Operator::I31GetU => {
+            unimplemented!("GC operators not yet implemented")
+        }
     };
     Ok(())
 }
