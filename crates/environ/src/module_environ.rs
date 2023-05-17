@@ -300,38 +300,36 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                 let cnt = usize::try_from(tables.count()).unwrap();
                 self.result.module.table_plans.reserve_exact(cnt);
 
-                let mut eager = vec![];
-                let mut with_typeful_init = false;
+                let mut segments = vec![];
 
                 for entry in tables {
                     let wasmparser::Table { ty, init } = entry?;
-                    let plan = TablePlan::for_table(ty.into(), &self.tunables);
+                    let table = ty.into();
+                    let plan = TablePlan::for_table(table, &self.tunables);
                     let table_index = self.result.module.table_plans.push(plan);
                     match init {
-                        wasmparser::TableInit::RefNull => {
-                            eager.push(crate::EagerTableInitializer {
-                                table_index,
-                                initializer: crate::EagerTableElementInitializer::Null,
-                            })
-                        }
+                        wasmparser::TableInit::RefNull => (),
                         wasmparser::TableInit::Expr(cexpr) => {
                             let mut init_expr_reader = cexpr.get_binary_reader();
                             match init_expr_reader.read_operator()? {
                                 Operator::RefNull { hty: _ } => {
-                                    eager.push(crate::EagerTableInitializer {
+                                    segments.push(TableInitializer {
                                         table_index,
-                                        initializer: crate::EagerTableElementInitializer::Null,
+                                        base: None,
+                                        offset: 0,
+                                        elements: Box::new([]),
+                                        eager_init: Some(crate::EagerTableElementInitializer::Null),
                                     })
                                 }
                                 Operator::RefFunc { function_index } => {
-                                    with_typeful_init = true;
                                     let index = FuncIndex::from_u32(function_index);
                                     self.flag_func_escaped(index);
-                                    eager.push(crate::EagerTableInitializer {
+                                    segments.push(TableInitializer {
                                         table_index,
-                                        initializer: crate::EagerTableElementInitializer::FuncRef(
-                                            index,
-                                        ),
+                                        base: None,
+                                        offset: 0,
+                                        elements: Box::new([]),
+                                        eager_init: Some(crate::EagerTableElementInitializer::FuncRef(index)),
                                     })
                                 }
                                 s => {
@@ -344,11 +342,8 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                         }
                     }
                 }
-                if with_typeful_init {
-                    self.result.module.table_initialization = TableInitialization::EagerFuncTable {
-                        tables: eager,
-                        segments: vec![],
-                    }
+                self.result.module.table_initialization = TableInitialization::Segments {
+                        segments,
                 }
             }
 
@@ -521,13 +516,13 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                             {
                                 TableInitialization::Segments { segments } => segments,
                                 TableInitialization::FuncTable { .. } => unreachable!(),
-                                TableInitialization::EagerFuncTable { segments, .. } => segments,
                             };
                             table_segments.push(TableInitializer {
                                 table_index,
                                 base,
                                 offset,
                                 elements: elements.into(),
+                                eager_init: None,
                             });
                         }
 

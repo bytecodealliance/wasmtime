@@ -407,9 +407,6 @@ impl ModuleTranslation<'_> {
                 // Already done!
                 return;
             }
-            TableInitialization::EagerFuncTable { .. } => {
-                return;
-            }
         };
 
         // Build the table arrays per-table.
@@ -418,6 +415,12 @@ impl ModuleTranslation<'_> {
         let mut leftovers = vec![];
 
         for segment in segments {
+            // Skip eagerly initialised tables.
+            if segment.eager_init.is_some() {
+                leftovers.push(segment.clone());
+                continue;
+            }
+
             // Skip imported tables: we can't provide a preconstructed
             // table for them, because their values depend on the
             // imported table overlaid with whatever segments we have.
@@ -700,16 +703,10 @@ pub struct TableInitializer {
     pub offset: u32,
     /// The values to write into the table elements.
     pub elements: Box<[FuncIndex]>,
+    /// Whether to enforce eager initialization of the table.
+    pub eager_init: Option<EagerTableElementInitializer>,
 }
 
-/// TODO
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct EagerTableInitializer {
-    /// TODO
-    pub table_index: TableIndex,
-    /// TODO
-    pub initializer: EagerTableElementInitializer,
-}
 /// TODO
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum EagerTableElementInitializer {
@@ -759,14 +756,6 @@ pub enum TableInitialization {
         /// we can't pre-build a full image of the table from this
         /// overlay) or have dynamically (at instantiation time)
         /// determined bases.
-        segments: Vec<TableInitializer>,
-    },
-
-    /// TODO
-    EagerFuncTable {
-        /// TODO
-        tables: Vec<EagerTableInitializer>,
-        /// TODO
         segments: Vec<TableInitializer>,
     },
 }
