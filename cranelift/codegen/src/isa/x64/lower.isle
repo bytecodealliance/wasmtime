@@ -753,12 +753,10 @@
       (x64_psrad src (mov_rmi_to_xmm (mask_xmm_shift ty amt))))
 
 ;; The `sshr.i64x2` CLIF instruction has no single x86 instruction in the older
-;; feature sets. Newer ones like AVX512VL + AVX512F include `vpsraq`, a 128-bit
-;; instruction that would fit here, but this backend does not currently have
-;; support for EVEX encodings. To remedy this, a small dance is done with an
-;; unsigned right shift plus some extra ops.
+;; feature sets. To remedy this, a small dance is done with an unsigned right
+;; shift plus some extra ops.
 ;;
-;; (TODO: when EVEX support is available, add an alternate lowering here).
+;; TODO: add a lowering for `vpsraq` with AVX512{VL,F}
 (rule 1 (lower (has_type $I64X2 (sshr src (iconst (u64_from_imm64 (u64_as_u32 amt))))))
         (lower_i64x2_sshr_imm src (u32_and amt 63)))
 (rule (lower (has_type $I64X2 (sshr src amt)))
