@@ -25,7 +25,7 @@ use crate::{
     isa::{
         unwind::UnwindInst,
         x64::{
-            abi::X64Caller,
+            abi::X64CallSite,
             inst::{args::*, regs, CallInfo},
         },
     },
@@ -77,7 +77,7 @@ pub(crate) fn lower_branch(
 
 impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     isle_lower_prelude_methods!();
-    isle_prelude_caller_methods!(X64ABIMachineSpec, X64Caller);
+    isle_prelude_caller_methods!(X64ABIMachineSpec, X64CallSite);
 
     #[inline]
     fn operand_size_of_type_32_64(&mut self, ty: Type) -> OperandSize {
@@ -1070,7 +1070,7 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
 }
 
 impl IsleContext<'_, '_, MInst, X64Backend> {
-    isle_prelude_method_helpers!(X64Caller);
+    isle_prelude_method_helpers!(X64CallSite);
 
     fn load_xmm_unaligned(&mut self, addr: SyntheticAmode) -> Xmm {
         let tmp = self.lower_ctx.alloc_tmp(types::F32X4).only_reg().unwrap();

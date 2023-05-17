@@ -1987,7 +1987,7 @@ pub type CallArgList = SmallVec<[CallArgPair; 8]>;
 pub type CallRetList = SmallVec<[CallRetPair; 8]>;
 
 /// ABI object for a callsite.
-pub struct Caller<M: ABIMachineSpec> {
+pub struct CallSite<M: ABIMachineSpec> {
     /// The called function's signature.
     sig: Sig,
     /// All register uses for the callsite, i.e., function args, with
@@ -2018,7 +2018,7 @@ pub enum CallDest {
     Reg(Reg),
 }
 
-impl<M: ABIMachineSpec> Caller<M> {
+impl<M: ABIMachineSpec> CallSite<M> {
     /// Create a callsite ABI object for a call directly to the specified function.
     pub fn from_func(
         sigs: &SigSet,
@@ -2027,10 +2027,10 @@ impl<M: ABIMachineSpec> Caller<M> {
         dist: RelocDistance,
         caller_conv: isa::CallConv,
         flags: settings::Flags,
-    ) -> CodegenResult<Caller<M>> {
+    ) -> CodegenResult<CallSite<M>> {
         let sig = sigs.abi_sig_for_sig_ref(sig_ref);
         let clobbers = sigs.call_clobbers::<M>(sig);
-        Ok(Caller {
+        Ok(CallSite {
             sig,
             uses: smallvec![],
             defs: smallvec![],
@@ -2052,10 +2052,10 @@ impl<M: ABIMachineSpec> Caller<M> {
         dist: RelocDistance,
         caller_conv: isa::CallConv,
         flags: settings::Flags,
-    ) -> CodegenResult<Caller<M>> {
+    ) -> CodegenResult<CallSite<M>> {
         let sig = sigs.abi_sig_for_signature(sig);
         let clobbers = sigs.call_clobbers::<M>(sig);
-        Ok(Caller {
+        Ok(CallSite {
             sig,
             uses: smallvec![],
             defs: smallvec![],
@@ -2077,10 +2077,10 @@ impl<M: ABIMachineSpec> Caller<M> {
         opcode: ir::Opcode,
         caller_conv: isa::CallConv,
         flags: settings::Flags,
-    ) -> CodegenResult<Caller<M>> {
+    ) -> CodegenResult<CallSite<M>> {
         let sig = sigs.abi_sig_for_sig_ref(sig_ref);
         let clobbers = sigs.call_clobbers::<M>(sig);
-        Ok(Caller {
+        Ok(CallSite {
             sig,
             uses: smallvec![],
             defs: smallvec![],
@@ -2105,7 +2105,7 @@ fn adjust_stack_and_nominal_sp<M: ABIMachineSpec>(ctx: &mut Lower<M::I>, off: i3
     ctx.emit(M::gen_nominal_sp_adj(-amt));
 }
 
-impl<M: ABIMachineSpec> Caller<M> {
+impl<M: ABIMachineSpec> CallSite<M> {
     /// Get the number of arguments expected.
     pub fn num_args(&self, sigs: &SigSet) -> usize {
         sigs.num_args(self.sig)
@@ -2358,7 +2358,7 @@ impl<M: ABIMachineSpec> Caller<M> {
     /// sense.)
     ///
     /// This function should only be called once, as it is allowed to re-use
-    /// parts of the `Caller` object in emitting instructions.
+    /// parts of the `CallSite` object in emitting instructions.
     pub fn emit_call(&mut self, ctx: &mut Lower<M::I>) {
         let word_type = M::word_type();
         if let Some(i) = ctx.sigs()[self.sig].stack_ret_arg {

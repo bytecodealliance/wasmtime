@@ -24,7 +24,7 @@ static STACK_ARG_RET_SIZE_LIMIT: u32 = 128 * 1024 * 1024;
 pub(crate) type X64Callee = Callee<X64ABIMachineSpec>;
 
 /// Support for the x64 ABI from the caller side (at a callsite).
-pub(crate) type X64Caller = Caller<X64ABIMachineSpec>;
+pub(crate) type X64CallSite = CallSite<X64ABIMachineSpec>;
 
 /// Implementation of ABI primitives for x64.
 pub struct X64ABIMachineSpec;

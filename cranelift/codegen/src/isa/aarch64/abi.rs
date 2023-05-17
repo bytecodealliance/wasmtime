@@ -24,7 +24,7 @@ use smallvec::{smallvec, SmallVec};
 pub(crate) type AArch64Callee = Callee<AArch64MachineDeps>;
 
 /// Support for the AArch64 ABI from the caller side (at a callsite).
-pub(crate) type AArch64Caller = Caller<AArch64MachineDeps>;
+pub(crate) type AArch64CallSite = CallSite<AArch64MachineDeps>;
 
 /// This is the limit for the size of argument and return-value areas on the
 /// stack. We place a reasonable limit here to avoid integer overflow issues

@@ -659,7 +659,7 @@ pub fn shuffle_imm_as_le_lane_idx(size: u8, bytes: &[u8]) -> Option<u8> {
     Some(bytes[0] / size)
 }
 
-/// Helpers specifically for machines that use ABICaller.
+/// Helpers specifically for machines that use `abi::CallSite`.
 #[macro_export]
 #[doc(hidden)]
 macro_rules! isle_prelude_caller_methods {
