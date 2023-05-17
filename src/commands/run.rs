@@ -832,12 +832,8 @@ fn generate_coredump(err: &anyhow::Error, source_name: &str, coredump_path: &str
         .ok_or_else(|| anyhow!("no wasm backtrace found to generate coredump with"))?;
 
     let coredump = wasm_encoder::CoreDumpSection::new(source_name);
-    let mut coremodules = wasm_encoder::CoreDumpModulesSection::new();
     let mut stacksection = wasm_encoder::CoreDumpStackSection::new("main");
-    let mut modulenames = std::collections::HashSet::new();
     for f in bt.frames() {
-        modulenames.insert(f.module_name().unwrap_or("<unknown>"));
-
         // We don't have the information at this point to map frames to
         // individual instances of a module, so we won't be able to create the
         // "frame ∈ instance ∈ module" hierarchy described in the core dump spec
@@ -853,12 +849,8 @@ fn generate_coredump(err: &anyhow::Error, source_name: &str, coredump_path: &str
             [],
         );
     }
-    for name in modulenames {
-        coremodules.module(name);
-    }
     let mut module = wasm_encoder::Module::new();
     module.section(&coredump);
-    module.section(&coremodules);
     module.section(&stacksection);
 
     let mut f = File::create(coredump_path)

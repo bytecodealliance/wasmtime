@@ -188,18 +188,19 @@ impl Metadata {
             extended_const,
             memory_control,
             function_references,
+            gc,
 
             // Always on; we don't currently have knobs for these.
             mutable_global: _,
             saturating_float_to_int: _,
             sign_extension: _,
             floats: _,
-            gc: _,
         } = engine.config().features;
 
         assert!(!memory_control);
         assert!(!tail_call);
         assert!(!function_references);
+        assert!(!gc);
 
         Metadata {
             target: engine.compiler().triple().to_string(),
