@@ -16,8 +16,11 @@ platforms. See the following sections of this book if you're using these
 platforms:
 
 - On Linux, we support [perf](./examples-profiling-perf.md).
+
 - For Intel's x86 CPUs on Linux or Windows, we support
   [VTune](./examples-profiling-vtune.md).
+
+- For everything else, see the cross-platform profiler below.
 
 The native profilers can measure time spent in WebAssembly guest code as well as
 time spent in the Wasmtime host and potentially even time spent in the kernel.
