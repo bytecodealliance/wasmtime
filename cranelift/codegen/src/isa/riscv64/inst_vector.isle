@@ -95,6 +95,7 @@
   (VfaddVV)
   (VfsubVV)
   (VfmulVV)
+  (VfdivVV)
 
   ;; Vector-Scalar Opcodes
   (VaddVX)
@@ -105,6 +106,8 @@
   (VfsubVF)
   (VfrsubVF)
   (VfmulVF)
+  (VfdivVF)
+  (VfrdivVF)
 ))
 
 ;; Register-Imm ALU Ops
@@ -343,6 +346,21 @@
 (decl rv_vfmul_vv (Reg Reg VState) Reg)
 (rule (rv_vfmul_vv vs2 vs1 vstate)
   (vec_alu_rrr (VecAluOpRRR.VfmulVV) vs2 vs1 vstate))
+
+;; Helper for emitting the `vfdiv.vv` instruction.
+(decl rv_vfdiv_vv (Reg Reg VState) Reg)
+(rule (rv_vfdiv_vv vs2 vs1 vstate)
+  (vec_alu_rrr (VecAluOpRRR.VfdivVV) vs2 vs1 vstate))
+
+;; Helper for emitting the `vfdiv.vv` instruction.
+(decl rv_vfdiv_vf (Reg Reg VState) Reg)
+(rule (rv_vfdiv_vf vs2 vs1 vstate)
+  (vec_alu_rrr (VecAluOpRRR.VfdivVF) vs2 vs1 vstate))
+
+;; Helper for emitting the `vfrdiv.vv` instruction.
+(decl rv_vfrdiv_vf (Reg Reg VState) Reg)
+(rule (rv_vfrdiv_vf vs2 vs1 vstate)
+  (vec_alu_rrr (VecAluOpRRR.VfrdivVF) vs2 vs1 vstate))
 
 ;; Helper for emitting the `vfmul.vv` instruction.
 (decl rv_vfmul_vf (Reg Reg VState) Reg)

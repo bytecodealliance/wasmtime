@@ -268,6 +268,8 @@ impl VecAluOpRRR {
             VecAluOpRRR::VxorVV => 0b001011,
             VecAluOpRRR::VslidedownVX => 0b001111,
             VecAluOpRRR::VfrsubVF => 0b100111,
+            VecAluOpRRR::VfdivVV | VecAluOpRRR::VfdivVF => 0b100000,
+            VecAluOpRRR::VfrdivVF => 0b100001,
         }
     }
 
@@ -285,13 +287,16 @@ impl VecAluOpRRR {
             | VecAluOpRRR::VsubVX
             | VecAluOpRRR::VrsubVX
             | VecAluOpRRR::VslidedownVX => VecOpCategory::OPIVX,
-            VecAluOpRRR::VfaddVV | VecAluOpRRR::VfsubVV | VecAluOpRRR::VfmulVV => {
-                VecOpCategory::OPFVV
-            }
+            VecAluOpRRR::VfaddVV
+            | VecAluOpRRR::VfsubVV
+            | VecAluOpRRR::VfmulVV
+            | VecAluOpRRR::VfdivVV => VecOpCategory::OPFVV,
             VecAluOpRRR::VfaddVF
             | VecAluOpRRR::VfsubVF
             | VecAluOpRRR::VfrsubVF
-            | VecAluOpRRR::VfmulVF => VecOpCategory::OPFVF,
+            | VecAluOpRRR::VfmulVF
+            | VecAluOpRRR::VfdivVF
+            | VecAluOpRRR::VfrdivVF => VecOpCategory::OPFVF,
         }
     }
 

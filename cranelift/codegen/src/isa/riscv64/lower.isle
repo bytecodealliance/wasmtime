@@ -750,9 +750,20 @@
   (rv_vfmul_vf y x ty))
 
 
-
-(rule (lower (has_type ty (fdiv x y)))
+;;;; Rules for `fdiv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(rule 0 (lower (has_type (ty_scalar_float ty) (fdiv x y)))
   (rv_fdiv ty x y))
+
+(rule 1 (lower (has_type (ty_vec_fits_in_register ty) (fdiv x y)))
+  (rv_vfdiv_vv x y ty))
+
+(rule 2 (lower (has_type (ty_vec_fits_in_register ty) (fdiv x (splat y))))
+  (rv_vfdiv_vf x y ty))
+
+(rule 3 (lower (has_type (ty_vec_fits_in_register ty) (fdiv (splat x) y)))
+  (rv_vfrdiv_vf y x ty))
+
+;;;; Rules for `fmin/fmax` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule
   (lower (has_type ty (fmin x y)))
