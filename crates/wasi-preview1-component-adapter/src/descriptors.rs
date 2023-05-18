@@ -140,24 +140,26 @@ impl Descriptors {
             preopens: Cell::new(None),
         };
 
-        let stdio = crate::bindings::preopens::get_stdio();
-        unsafe { set_stderr_stream(stdio.stderr) };
+        let stdin = crate::bindings::stdin::get_stdin();
+        let stdout = crate::bindings::stdout::get_stdout();
+        let stderr = crate::bindings::stderr::get_stderr();
+        unsafe { set_stderr_stream(stderr) };
 
         d.push(Descriptor::Streams(Streams {
-            input: Cell::new(Some(stdio.stdin)),
+            input: Cell::new(Some(stdin)),
             output: Cell::new(None),
             type_: StreamType::Stdio,
         }))
         .trapping_unwrap();
         d.push(Descriptor::Streams(Streams {
             input: Cell::new(None),
-            output: Cell::new(Some(stdio.stdout)),
+            output: Cell::new(Some(stdout)),
             type_: StreamType::Stdio,
         }))
         .trapping_unwrap();
         d.push(Descriptor::Streams(Streams {
             input: Cell::new(None),
-            output: Cell::new(Some(stdio.stderr)),
+            output: Cell::new(Some(stderr)),
             type_: StreamType::Stdio,
         }))
         .trapping_unwrap();

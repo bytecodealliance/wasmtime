@@ -70,16 +70,26 @@ impl DerefMut for Descriptors {
 impl Descriptors {
     /// Initializes [Self] using `preopens`
     async fn new(
-        preopens: &mut (impl wasi::preopens::Host + ?Sized),
+        preopens: &mut (impl wasi::preopens::Host
+                  + wasi::stdin::Host
+                  + wasi::stdout::Host
+                  + wasi::stderr::Host
+                  + ?Sized),
     ) -> Result<Self, types::Error> {
-        let wasi::preopens::StdioPreopens {
-            stdin,
-            stdout,
-            stderr,
-        } = preopens
-            .get_stdio()
+        let stdin = preopens
+            .get_stdin()
             .await
-            .context("failed to call `get-stdio`")
+            .context("failed to call `get-stdin`")
+            .map_err(types::Error::trap)?;
+        let stdout = preopens
+            .get_stdout()
+            .await
+            .context("failed to call `get-stdout`")
+            .map_err(types::Error::trap)?;
+        let stderr = preopens
+            .get_stderr()
+            .await
+            .context("failed to call `get-stderr`")
             .map_err(types::Error::trap)?;
         let directories = preopens
             .get_directories()
@@ -259,7 +269,13 @@ impl<T: WasiPreview1View + ?Sized> Transcation<'_, T> {
 }
 
 #[wiggle::async_trait]
-trait WasiPreview1ViewExt: WasiPreview1View + wasi::preopens::Host {
+trait WasiPreview1ViewExt:
+    WasiPreview1View
+    + wasi::preopens::Host
+    + wasi::stdin::Host
+    + wasi::stdout::Host
+    + wasi::stderr::Host
+{
     /// Lazily initializes [`WasiPreview1Adapter`] returned by [`Self::adapter_mut`]
     /// and returns [`Transaction`] on success
     async fn transact(&mut self) -> Result<Transcation<'_, Self>, types::Error> {
@@ -1539,7 +1555,7 @@ impl<
                 path,
                 oflags.into(),
                 flags,
-                wasi::filesystem::Modes::READABLE | wasi::filesystem::Modes::WRITEABLE,
+                wasi::filesystem::Modes::READABLE | wasi::filesystem::Modes::WRITABLE,
             )
             .await
             .map_err(|e| {

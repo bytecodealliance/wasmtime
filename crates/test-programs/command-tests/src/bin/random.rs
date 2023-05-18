@@ -1,6 +1,6 @@
 fn main() {
-    let mut byte = [0_u8];
-    getrandom::getrandom(&mut byte).unwrap();
+    let mut bytes = [0_u8; 256];
+    getrandom::getrandom(&mut bytes).unwrap();
 
-    assert_eq!(42, byte[0]);
+    assert!(bytes.iter().any(|x| *x != 0));
 }

@@ -151,7 +151,7 @@ pub trait OutputStream: Send + Sync {
         Ok(nwritten)
     }
 
-    /// Test whether this stream is writeable.
+    /// Test whether this stream is writable.
     async fn writable(&self) -> Result<(), Error>;
 }
 

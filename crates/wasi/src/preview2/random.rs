@@ -1,6 +1,6 @@
 use cap_rand::RngCore;
 
-/// Implement `WasiRandom` using a deterministic cycle of bytes.
+/// Implement `insecure-random` using a deterministic cycle of bytes.
 pub struct Deterministic {
     cycle: std::iter::Cycle<std::vec::IntoIter<u8>>,
 }
