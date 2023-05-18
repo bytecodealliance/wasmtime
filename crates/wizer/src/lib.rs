@@ -866,6 +866,12 @@ impl Wizer {
                         f.call(&mut *store, ()).map_err(Into::into)
                     })
                     .context("calling the Reactor initialization function")?;
+
+                if self.init_func == "_initialize" && has_wasi_initialize {
+                    // Don't run `_initialize` twice if the it was explicitly
+                    // requested as the init function.
+                    return Ok((instance, has_wasi_initialize));
+                }
             }
         }
 
