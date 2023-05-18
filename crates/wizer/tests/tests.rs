@@ -6,7 +6,7 @@ use wizer::Wizer;
 fn run_wat(args: &[wasmtime::Val], expected: i32, wat: &str) -> Result<()> {
     let _ = env_logger::try_init();
     let wasm = wat_to_wasm(wat)?;
-    wiz_and_run_wasm(args, expected, &wasm, get_wizer())
+    wizen_and_run_wasm(args, expected, &wasm, get_wizer())
 }
 
 fn get_wizer() -> Wizer {
@@ -17,7 +17,7 @@ fn get_wizer() -> Wizer {
     wizer
 }
 
-fn wiz_and_run_wasm(
+fn wizen_and_run_wasm(
     args: &[wasmtime::Val],
     expected: i32,
     wasm: &[u8],
@@ -353,7 +353,7 @@ fn reject_data_drop() -> Result<()> {
 
 #[test]
 fn rust_regex() -> Result<()> {
-    wiz_and_run_wasm(
+    wizen_and_run_wasm(
         &[wasmtime::Val::I32(13)],
         42,
         &include_bytes!("./regex_test.wasm")[..],
@@ -521,7 +521,7 @@ fn wasi_reactor_initializer_as_init_func() -> anyhow::Result<()> {
     wizer.init_func("_initialize");
     let wasm = wat_to_wasm(wat)?;
     // we expect `_initialize` to be called _exactly_ once
-    wiz_and_run_wasm(&[], 1, &wasm, wizer)
+    wizen_and_run_wasm(&[], 1, &wasm, wizer)
 }
 
 #[test]
@@ -626,7 +626,7 @@ fn accept_bulk_memory_data_count() -> Result<()> {
     data.active(0, &ConstExpr::i32_const(4), vec![5, 6, 7, 8]);
     module.section(&data);
 
-    wiz_and_run_wasm(&[], 42, &module.finish(), get_wizer()).unwrap();
+    wizen_and_run_wasm(&[], 42, &module.finish(), get_wizer()).unwrap();
     Ok(())
 }
 
