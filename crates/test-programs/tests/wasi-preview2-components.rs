@@ -28,38 +28,6 @@ pub fn prepare_workspace(exe_name: &str) -> Result<TempDir> {
     Ok(tempdir)
 }
 
-pub fn test_suite_environment() -> &'static [(&'static str, &'static str)] {
-    #[cfg(windows)]
-    {
-        &[
-            ("ERRNO_MODE_WINDOWS", "1"),
-            // Windows does not support dangling links or symlinks in the filesystem.
-            ("NO_DANGLING_FILESYSTEM", "1"),
-            // Windows does not support renaming a directory to an empty directory -
-            // empty directory must be deleted.
-            ("NO_RENAME_DIR_TO_EMPTY_DIR", "1"),
-            // preview2 impl does not support the sync family of fdflags
-            ("NO_FDFLAGS_SYNC_SUPPORT", "1"),
-        ]
-    }
-    #[cfg(all(unix, not(target_os = "macos")))]
-    {
-        &[
-            ("ERRNO_MODE_UNIX", "1"),
-            // cap-std-sync does not support the sync family of fdflags
-            ("NO_FDFLAGS_SYNC_SUPPORT", "1"),
-        ]
-    }
-    #[cfg(target_os = "macos")]
-    {
-        &[
-            ("ERRNO_MODE_MACOS", "1"),
-            // preview2 impl does not support the sync family of fdflags
-            ("NO_FDFLAGS_SYNC_SUPPORT", "1"),
-        ]
-    }
-}
-
 async fn run(name: &str, inherit_stdio: bool) -> Result<()> {
     let workspace = prepare_workspace(name)?;
     let stdout = WritePipe::new_in_memory();
@@ -84,7 +52,7 @@ async fn run(name: &str, inherit_stdio: bool) -> Result<()> {
         let preopen_dir =
             cap_std::fs::Dir::open_ambient_dir(workspace.path(), cap_std::ambient_authority())?;
         builder = builder.push_preopened_dir(preopen_dir, DirPerms::all(), FilePerms::all(), ".");
-        for (var, val) in test_suite_environment() {
+        for (var, val) in test_programs::wasi_tests_environment() {
             builder = builder.push_env(var, val);
         }
 
