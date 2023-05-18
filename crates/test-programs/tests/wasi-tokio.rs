@@ -20,7 +20,7 @@ lazy_static::lazy_static! {
 include!(concat!(env!("OUT_DIR"), "/wasi_tests_modules.rs"));
 
 pub fn prepare_workspace(exe_name: &str) -> Result<TempDir> {
-    let prefix = format!("wasi_cap_std_sync_{}_", exe_name);
+    let prefix = format!("wasi_tokio_{}_", exe_name);
     let tempdir = tempfile::Builder::new().prefix(&prefix).tempdir()?;
     Ok(tempdir)
 }
