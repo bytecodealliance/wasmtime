@@ -1,9 +1,7 @@
 use crate::preview2::{
     clocks::{self, WasiClocks},
     filesystem::{Dir, TableFsExt},
-    pipe, random,
-    sched::{self, WasiSched},
-    stdio,
+    pipe, random, stdio,
     stream::{InputStream, OutputStream, TableStreamExt},
     DirPerms, FilePerms, Table,
 };
@@ -20,14 +18,11 @@ pub struct WasiCtxBuilder {
 
     random: Option<Box<dyn RngCore + Send + Sync>>,
     clocks: Option<WasiClocks>,
-
-    sched: Option<Box<dyn WasiSched>>,
 }
 
 impl WasiCtxBuilder {
     pub fn new() -> Self {
         Self::default()
-            .set_sched(sched::sync::SyncSched)
             .set_clocks(clocks::host::clocks_ctx())
             .set_random(random::thread_rng())
             .set_stdin(pipe::ReadPipe::new(std::io::empty()))
@@ -102,11 +97,6 @@ impl WasiCtxBuilder {
         self
     }
 
-    pub fn set_sched(mut self, sched: impl WasiSched + 'static) -> Self {
-        self.sched = Some(Box::new(sched));
-        self
-    }
-
     pub fn build(self, table: &mut Table) -> Result<WasiCtx, anyhow::Error> {
         use anyhow::Context;
 
@@ -131,7 +121,6 @@ impl WasiCtxBuilder {
         Ok(WasiCtx {
             random: self.random.context("required member random")?,
             clocks: self.clocks.context("required member clocks")?,
-            sched: self.sched.context("required member sched")?,
             env: self.env,
             args: self.args,
             preopens,
@@ -152,7 +141,6 @@ pub trait WasiView: Send {
 pub struct WasiCtx {
     pub random: Box<dyn RngCore + Send + Sync>,
     pub clocks: WasiClocks,
-    pub sched: Box<dyn WasiSched>,
     pub env: Vec<(String, String)>,
     pub args: Vec<String>,
     pub preopens: Vec<(u32, String)>,

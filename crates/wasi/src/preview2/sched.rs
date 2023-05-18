@@ -1,25 +1,26 @@
+#![allow(dead_code)]
 use crate::preview2::{
     clocks::WasiMonotonicClock,
     stream::{InputStream, OutputStream},
 };
 use anyhow::Error;
-pub mod subscription;
-pub mod sync;
+pub(crate) mod subscription;
+pub(crate) mod sync;
 pub use cap_std::time::Duration;
 
-pub use subscription::{
-    MonotonicClockSubscription, RwEventFlags, RwSubscription, Subscription, SubscriptionResult,
+pub(crate) use subscription::{
+    MonotonicClockSubscription, RwSubscription, Subscription, SubscriptionResult,
 };
 
 #[async_trait::async_trait]
-pub trait WasiSched: Send + Sync {
+pub(crate) trait WasiSched: Send + Sync {
     async fn poll_oneoff<'a>(&self, poll: &mut Poll<'a>) -> Result<(), Error>;
     async fn sched_yield(&self) -> Result<(), Error>;
     async fn sleep(&self, duration: Duration) -> Result<(), Error>;
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub struct Userdata(u64);
+pub(crate) struct Userdata(u64);
 impl From<u64> for Userdata {
     fn from(u: u64) -> Userdata {
         Userdata(u)
@@ -32,9 +33,7 @@ impl From<Userdata> for u64 {
     }
 }
 
-pub type PollResults = Vec<(SubscriptionResult, Userdata)>;
-
-pub struct Poll<'a> {
+pub(crate) struct Poll<'a> {
     subs: Vec<(Subscription<'a>, Userdata)>,
 }
 

@@ -8,7 +8,7 @@ use std::time::Duration;
 
 use anyhow::Error;
 
-pub async fn poll_oneoff<'a>(poll: &mut Poll<'a>) -> Result<(), Error> {
+pub(crate) async fn poll_oneoff<'a>(poll: &mut Poll<'a>) -> Result<(), Error> {
     // Collect all stream I/O subscriptions. Clock subscriptions are handled
     // separately below.
     let mut ready = false;
@@ -139,7 +139,7 @@ pub async fn poll_oneoff<'a>(poll: &mut Poll<'a>) -> Result<(), Error> {
 
     Ok(())
 }
-pub struct SyncSched;
+pub(crate) struct SyncSched;
 #[async_trait::async_trait]
 impl WasiSched for SyncSched {
     async fn poll_oneoff<'a>(&self, poll: &mut Poll<'a>) -> Result<(), Error> {
