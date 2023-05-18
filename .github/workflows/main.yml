@@ -132,6 +132,9 @@ jobs:
       env:
         GH_TOKEN: ${{ github.token }}
       run: |
+        # XXX PCH JUST FOR TESTING PR 6391, WHERE prtest:full DOES NOT WORK
+        run_full=true
+        # XXX PCH
         touch commits.log names.log
         # Note that CI doesn't run on pushes to `main`, only pushes to merge
         # queue branches and release branches, so this only runs full CI in
