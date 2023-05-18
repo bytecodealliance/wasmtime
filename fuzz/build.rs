@@ -109,6 +109,7 @@ mod component {
 
             let Declarations {
                 types,
+                type_instantiation_args,
                 params,
                 results,
                 import_and_export,
@@ -121,6 +122,7 @@ mod component {
                 {
                     static DECLS: Declarations = Declarations {
                         types: Cow::Borrowed(#types),
+                        type_instantiation_args: Cow::Borrowed(#type_instantiation_args),
                         params: Cow::Borrowed(#params),
                         results: Cow::Borrowed(#results),
                         import_and_export: Cow::Borrowed(#import_and_export),
