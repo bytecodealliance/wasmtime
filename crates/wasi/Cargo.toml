@@ -38,6 +38,7 @@ rustix = { workspace = true, features = ["fs"] }
 
 [target.'cfg(windows)'.dependencies]
 io-extras = "0.17.1"
+windows-sys = { workspace = true }
 
 [features]
 default = ["sync", "preview2", "preview1-on-preview2"]
