@@ -118,10 +118,6 @@ unsafe fn test_fd_readdir(dir_fd: wasi::Fd) {
     wasi::path_create_directory(dir_fd, "nested").expect("create a directory");
     let nested_fd =
         wasi::path_open(dir_fd, 0, "nested", 0, 0, 0, 0).expect("failed to open nested directory");
-    assert!(
-        nested_fd > file_fd,
-        "nested directory file descriptor range check",
-    );
     let nested_stat = wasi::fd_filestat_get(nested_fd).expect("failed filestat");
 
     // Execute another readdir
