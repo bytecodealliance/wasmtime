@@ -4277,6 +4277,7 @@ dependencies = [
  "wasi-tokio",
  "wasmtime",
  "wiggle",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
