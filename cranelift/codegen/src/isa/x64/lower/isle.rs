@@ -180,42 +180,42 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     }
 
     #[inline]
-    fn avx512vl_enabled(&mut self, _: Type) -> bool {
+    fn use_avx512vl_simd(&mut self) -> bool {
         self.backend.x64_flags.use_avx512vl_simd()
     }
 
     #[inline]
-    fn avx512dq_enabled(&mut self, _: Type) -> bool {
+    fn use_avx512dq_simd(&mut self) -> bool {
         self.backend.x64_flags.use_avx512dq_simd()
     }
 
     #[inline]
-    fn avx512f_enabled(&mut self, _: Type) -> bool {
+    fn use_avx512f_simd(&mut self) -> bool {
         self.backend.x64_flags.use_avx512f_simd()
     }
 
     #[inline]
-    fn avx512bitalg_enabled(&mut self, _: Type) -> bool {
+    fn use_avx512bitalg_simd(&mut self) -> bool {
         self.backend.x64_flags.use_avx512bitalg_simd()
     }
 
     #[inline]
-    fn avx512vbmi_enabled(&mut self, _: Type) -> bool {
+    fn use_avx512vbmi_simd(&mut self) -> bool {
         self.backend.x64_flags.use_avx512vbmi_simd()
     }
 
     #[inline]
-    fn use_lzcnt(&mut self, _: Type) -> bool {
+    fn use_lzcnt(&mut self) -> bool {
         self.backend.x64_flags.use_lzcnt()
     }
 
     #[inline]
-    fn use_bmi1(&mut self, _: Type) -> bool {
+    fn use_bmi1(&mut self) -> bool {
         self.backend.x64_flags.use_bmi1()
     }
 
     #[inline]
-    fn use_popcnt(&mut self, _: Type) -> bool {
+    fn use_popcnt(&mut self) -> bool {
         self.backend.x64_flags.use_popcnt()
     }
 

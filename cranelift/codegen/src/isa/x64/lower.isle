@@ -321,12 +321,14 @@
 (rule 9 (lower (has_type ty @ (multi_lane _bits _lane) (band (bnot y) x)))
       (sse_and_not ty y x))
 
-(rule 10 (lower (has_type ty @ (use_bmi1 $true) (band x (bnot y))))
+(rule 10 (lower (has_type ty (band x (bnot y))))
       (if (ty_int_ref_scalar_64 ty))
+      (if-let $true (use_bmi1))
       ;; the first argument is the one that gets inverted with andn
       (x64_andn ty y x))
-(rule 11 (lower (has_type ty @ (use_bmi1 $true) (band (bnot y) x)))
+(rule 11 (lower (has_type ty (band (bnot y) x)))
       (if (ty_int_ref_scalar_64 ty))
+      (if-let $true (use_bmi1))
       (x64_andn ty y x))
 
 
@@ -967,10 +969,9 @@
 
 ;; With AVX-512 we can implement `i64x2` multiplication with a single
 ;; instruction.
-(rule 3 (lower (has_type (and (avx512vl_enabled $true)
-                            (avx512dq_enabled $true)
-                            (multi_lane 64 2))
-                       (imul x y)))
+(rule 3 (lower (has_type (multi_lane 64 2) (imul x y)))
+      (if-let $true (use_avx512vl_simd))
+      (if-let $true (use_avx512dq_simd))
       (x64_vpmullq x y))
 
 ;; Otherwise, for i64x2 multiplication we describe a lane A as being composed of
@@ -1116,10 +1117,9 @@
       (x64_pabsd x))
 
 ;; When AVX512 is available, we can use a single `vpabsq` instruction.
-(rule 1 (lower (has_type (and (avx512vl_enabled $true)
-                            (avx512f_enabled $true)
-                            $I64X2)
-                       (iabs x)))
+(rule 1 (lower (has_type $I64X2 (iabs x)))
+      (if-let $true (use_avx512vl_simd))
+      (if-let $true (use_avx512f_simd))
       (x64_vpabsq x))
 
 ;; Otherwise, we use a separate register, `neg`, to contain the results of `0 -
@@ -1926,18 +1926,11 @@
 ;; special handling is required for zero inputs, because the machine
 ;; instruction does what the CLIF expects for zero, i.e. it returns
 ;; zero.
-(rule 2 (lower
-         (has_type (and
-                    (ty_32_or_64 ty)
-                    (use_lzcnt $true))
-                   (clz src)))
+(rule 3 (lower (has_type (ty_32_or_64 ty) (clz src)))
+      (if-let $true (use_lzcnt))
       (x64_lzcnt ty src))
 
-(rule 2 (lower
-         (has_type (and
-                    (ty_32_or_64 ty)
-                    (use_lzcnt $false))
-                 (clz src)))
+(rule 2 (lower (has_type (ty_32_or_64 ty) (clz src)))
       (do_clz ty ty src))
 
 (rule 1 (lower
@@ -1970,18 +1963,11 @@
 ;; Analogous to `clz` cases above, but using mirror instructions
 ;; (tzcnt vs lzcnt, bsf vs bsr).
 
-(rule 2 (lower
-         (has_type (and
-                    (ty_32_or_64 ty)
-                    (use_bmi1 $true))
-                   (ctz src)))
+(rule 3 (lower (has_type (ty_32_or_64 ty) (ctz src)))
+      (if-let $true (use_bmi1))
       (x64_tzcnt ty src))
 
-(rule 2 (lower
-          (has_type (and
-                     (ty_32_or_64 ty)
-                     (use_bmi1 $false))
-                 (ctz src)))
+(rule 2 (lower (has_type (ty_32_or_64 ty) (ctz src)))
       (do_ctz ty ty src))
 
 (rule 1 (lower
@@ -2008,25 +1994,16 @@
 
 ;; Rules for `popcnt` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule 3 (lower
-         (has_type (and
-                    (ty_32_or_64 ty)
-                    (use_popcnt $true))
-                   (popcnt src)))
+(rule 3 (lower (has_type (ty_32_or_64 ty) (popcnt src)))
+      (if-let $true (use_popcnt))
       (x64_popcnt ty src))
 
-(rule 2 (lower
-         (has_type (and
-                    (ty_8_or_16 ty)
-                    (use_popcnt $true))
-                   (popcnt src)))
+(rule 2 (lower (has_type (ty_8_or_16 ty) (popcnt src)))
+      (if-let $true (use_popcnt))
       (x64_popcnt $I32 (extend_to_gpr src $I32 (ExtendKind.Zero))))
 
-(rule 1 (lower
-         (has_type (and
-                    $I128
-                    (use_popcnt $true))
-                   (popcnt src)))
+(rule 1 (lower (has_type $I128 (popcnt src)))
+      (if-let $true (use_popcnt))
       (let ((lo_count Gpr (x64_popcnt $I64 (value_regs_get_gpr src 0)))
             (hi_count Gpr (x64_popcnt $I64 (value_regs_get_gpr src 1))))
         (value_regs (x64_add $I64 lo_count hi_count) (imm $I64 0))))
@@ -2114,13 +2091,10 @@
         final))
 
 
-(rule 1 (lower (has_type (and
-                          $I8X16
-                          (avx512vl_enabled $true)
-                          (avx512bitalg_enabled $true))
-                         (popcnt src)))
+(rule 1 (lower (has_type $I8X16 (popcnt src)))
+      (if-let $true (use_avx512vl_simd))
+      (if-let $true (use_avx512bitalg_simd))
       (x64_vpopcntb src))
-
 
 
 ;; For SSE 4.2 we use Mula's algorithm (https://arxiv.org/pdf/1611.07612.pdf):
@@ -3240,8 +3214,9 @@
 
 ;; When AVX512VL and AVX512F are available,
 ;; `fcvt_from_uint` can be lowered to a single instruction.
-(rule 2 (lower (has_type (and (avx512vl_enabled $true) (avx512f_enabled $true) $F32X4)
-                         (fcvt_from_uint src)))
+(rule 2 (lower (has_type $F32X4 (fcvt_from_uint src)))
+      (if-let $true (use_avx512vl_simd))
+      (if-let $true (use_avx512f_simd))
       (x64_vcvtudq2ps src))
 
 ;; Converting packed unsigned integers to packed floats
@@ -4045,15 +4020,16 @@
 ;; For the case where the shuffle mask contains out-of-bounds values (values
 ;; greater than 31) we must mask off those resulting values in the result of
 ;; `vpermi2b`.
-(rule 2 (lower (has_type (and (avx512vl_enabled $true) (avx512vbmi_enabled $true))
-                         (shuffle a b (vec_mask_from_immediate
-                                        (perm_from_mask_with_zeros mask zeros)))))
+(rule 2 (lower (shuffle a b (vec_mask_from_immediate (perm_from_mask_with_zeros mask zeros))))
+      (if-let $true (use_avx512vl_simd))
+      (if-let $true (use_avx512vbmi_simd))
       (x64_andps (x64_vpermi2b b a (x64_xmm_load_const $I8X16 mask)) zeros))
 
 ;; However, if the shuffle mask contains no out-of-bounds values, we can use
 ;; `vpermi2b` without any masking.
-(rule 1 (lower (has_type (and (avx512vl_enabled $true) (avx512vbmi_enabled $true))
-                       (shuffle a b (vec_mask_from_immediate mask))))
+(rule 1 (lower (shuffle a b (vec_mask_from_immediate mask)))
+      (if-let $true (use_avx512vl_simd))
+      (if-let $true (use_avx512vbmi_simd))
       (x64_vpermi2b b a (x64_xmm_load_const $I8X16 (perm_from_mask mask))))
 
 ;; If `lhs` and `rhs` are different, we must shuffle each separately and then OR

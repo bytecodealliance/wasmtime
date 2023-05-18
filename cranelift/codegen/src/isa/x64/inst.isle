@@ -1743,29 +1743,29 @@
 
 ;;;; Helpers for Querying Enabled ISA Extensions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(decl avx512vl_enabled (bool) Type)
-(extern extractor infallible avx512vl_enabled avx512vl_enabled)
+(decl pure use_avx512vl_simd () bool)
+(extern constructor use_avx512vl_simd use_avx512vl_simd)
 
-(decl avx512dq_enabled (bool) Type)
-(extern extractor infallible avx512dq_enabled avx512dq_enabled)
+(decl pure use_avx512dq_simd () bool)
+(extern constructor use_avx512dq_simd use_avx512dq_simd)
 
-(decl avx512f_enabled (bool) Type)
-(extern extractor infallible avx512f_enabled avx512f_enabled)
+(decl pure use_avx512f_simd () bool)
+(extern constructor use_avx512f_simd use_avx512f_simd)
 
-(decl avx512bitalg_enabled (bool) Type)
-(extern extractor infallible avx512bitalg_enabled avx512bitalg_enabled)
+(decl pure use_avx512bitalg_simd () bool)
+(extern constructor use_avx512bitalg_simd use_avx512bitalg_simd)
 
-(decl avx512vbmi_enabled (bool) Type)
-(extern extractor infallible avx512vbmi_enabled avx512vbmi_enabled)
+(decl pure use_avx512vbmi_simd () bool)
+(extern constructor use_avx512vbmi_simd use_avx512vbmi_simd)
 
-(decl use_lzcnt (bool) Type)
-(extern extractor infallible use_lzcnt use_lzcnt)
+(decl pure use_lzcnt () bool)
+(extern constructor use_lzcnt use_lzcnt)
 
-(decl use_bmi1 (bool) Type)
-(extern extractor infallible use_bmi1 use_bmi1)
+(decl pure use_bmi1 () bool)
+(extern constructor use_bmi1 use_bmi1)
 
-(decl use_popcnt (bool) Type)
-(extern extractor infallible use_popcnt use_popcnt)
+(decl pure use_popcnt () bool)
+(extern constructor use_popcnt use_popcnt)
 
 (decl pure use_fma () bool)
 (extern constructor use_fma use_fma)
