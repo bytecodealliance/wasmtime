@@ -1094,14 +1094,14 @@
 ;; We can insert a lane by using a masked splat from an X register.
 ;; Build a mask that is only enabled in the lane we want to insert.
 ;; Then use a masked splat (vmerge) to insert the value.
-(rule 0 (lower (insertlane vec @ (value_type ty)
+(rule 0 (lower (insertlane vec @ (value_type (ty_vec_fits_in_register ty))
                            val @ (value_type (ty_int _))
                            (u8_from_uimm8 lane)))
   (let ((mask Reg (gen_vec_mask (u64_shl 1 lane))))
     (rv_vmerge_vxm vec val mask ty)))
 
 ;; Similar to above, but using the float variants of the instructions.
-(rule 1 (lower (insertlane vec @ (value_type ty)
+(rule 1 (lower (insertlane vec @ (value_type (ty_vec_fits_in_register ty))
                            val @ (value_type (ty_scalar_float _))
                            (u8_from_uimm8 lane)))
   (let ((mask Reg (gen_vec_mask (u64_shl 1 lane))))
@@ -1109,7 +1109,7 @@
 
 ;; If we are inserting from an Imm5 const we can use the immediate
 ;; variant of vmerge.
-(rule 2 (lower (insertlane vec @ (value_type ty)
+(rule 2 (lower (insertlane vec @ (value_type (ty_vec_fits_in_register ty))
                            (iconst (u64_from_imm64 (imm5_from_u64 imm)))
                            (u8_from_uimm8 lane)))
   (let ((mask Reg (gen_vec_mask (u64_shl 1 lane))))
