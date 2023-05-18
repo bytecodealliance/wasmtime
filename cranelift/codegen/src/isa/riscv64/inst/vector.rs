@@ -446,12 +446,12 @@ impl VecAluOpRR {
     /// other way around. As far as I can tell only vmv.v.* are backwards.
     pub fn vs_is_vs2_encoded(&self) -> bool {
         match self {
+            VecAluOpRR::VmvXS | VecAluOpRR::VfmvFS | VecAluOpRR::VfsqrtV => true,
             VecAluOpRR::VmvSX
-            | VecAluOpRR::VmvXS
             | VecAluOpRR::VfmvSF
-            | VecAluOpRR::VfmvFS
-            | VecAluOpRR::VfsqrtV => true,
-            VecAluOpRR::VmvVV | VecAluOpRR::VmvVX | VecAluOpRR::VfmvVF => false,
+            | VecAluOpRR::VmvVV
+            | VecAluOpRR::VmvVX
+            | VecAluOpRR::VfmvVF => false,
         }
     }
 
