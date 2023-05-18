@@ -922,7 +922,7 @@ impl Inst {
 
         let format_mask = |mask: &VecOpMasking, allocs: &mut AllocationConsumer<'_>| -> String {
             match mask {
-                VecOpMasking::Enabled { reg } => format!(", {}.t", format_reg(*reg, allocs)),
+                VecOpMasking::Enabled { reg } => format!(",{}.t", format_reg(*reg, allocs)),
                 VecOpMasking::Disabled => format!(""),
             }
         };
