@@ -378,6 +378,7 @@ jobs:
     env:
       QEMU_BUILD_VERSION: 7.2.0
     strategy:
+      fail-fast: true
       matrix: ${{ fromJson(needs.determine.outputs.test-matrix) }}
     steps:
     - uses: actions/checkout@v3
@@ -469,11 +470,10 @@ jobs:
       env:
         RUST_BACKTRACE: 1
 
-    # common logic to cancel the entire run if this job fails
-    - run: gh run cancel ${{ github.run_id }}
-      if: failure() && github.event_name != 'pull_request'
-      env:
-        GH_TOKEN: ${{ github.token }}
+    # NB: the test job here is explicitly lacking in cancellation of this run if
+    # something goes wrong. These take the longest anyway and otherwise if
+    # Windows fails GitHub Actions will confusingly mark the failed Windows job
+    # as cancelled instead of failed.
 
   # Build and test the wasi-nn module.
   test_wasi_nn:
