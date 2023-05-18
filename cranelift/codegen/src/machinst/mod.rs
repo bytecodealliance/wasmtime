@@ -144,6 +144,12 @@ pub trait MachInst: Clone + Debug {
     /// control flow.
     fn gen_jump(target: MachLabel) -> Self;
 
+    /// TODO document this
+    #[allow(unused)]
+    fn gen_imm(value: u64, dst: Writable<Reg>) -> Option<Self> {
+        None
+    }
+
     /// Generate a NOP. The `preferred_size` parameter allows the caller to
     /// request a NOP of that size, or as close to it as possible. The machine
     /// backend may return a NOP whose binary encoding is smaller than the

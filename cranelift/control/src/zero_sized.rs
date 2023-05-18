@@ -30,6 +30,12 @@ impl ControlPlane {
         false
     }
 
+    /// TODO document this
+    #[inline]
+    pub fn get_arbitrary<T: for<'a> Arbitrary<'a> + Default>(&mut self) -> T {
+        T::default()
+    }
+
     /// Shuffles the items in the slice into a pseudo-random permutation.
     /// This variant is used when chaos mode is disabled. It doesn't do
     /// anything.

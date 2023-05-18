@@ -2557,6 +2557,10 @@ impl MachInst for Inst {
         Inst::jmp_known(label)
     }
 
+    fn gen_imm(value: u64, dst: Writable<Reg>) -> Option<Self> {
+        Some(Inst::imm(OperandSize::Size64, value, dst))
+    }
+
     fn gen_dummy_use(reg: Reg) -> Self {
         Inst::DummyUse { reg }
     }

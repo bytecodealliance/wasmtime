@@ -37,7 +37,7 @@ pub fn compile<B: LowerBackend + TargetIsa>(
         log::debug!("Number of CLIF blocks to lower: {}", f.dfg.num_blocks());
 
         let _tt = timing::vcode_lower();
-        lower.lower(b)?
+        lower.lower(b, ctrl_plane)?
     };
 
     log::debug!(

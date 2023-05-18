@@ -57,6 +57,23 @@ impl ControlPlane {
         self.consume_fuel() && self.data.pop().unwrap_or_default() & 1 == 1
     }
 
+    /// TODO document this
+    pub fn get_arbitrary<T: for<'a> Arbitrary<'a> + Default>(&mut self) -> T {
+        if !self.consume_fuel() || self.data.is_empty() {
+            return T::default();
+        }
+        let mut u = Unstructured::new(&self.data);
+        let res = u.arbitrary().unwrap_or_default();
+
+        // take remaining bytes
+        let rest = u.take_rest();
+        self.tmp.resize(rest.len(), 0); // allocates once per control plane
+        self.tmp.copy_from_slice(rest);
+        std::mem::swap(&mut self.data, &mut self.tmp);
+
+        res
+    }
+
     /// Shuffles the items in the slice into a pseudo-random permutation if
     /// the control plane was constructed with `arbitrary`.
     ///

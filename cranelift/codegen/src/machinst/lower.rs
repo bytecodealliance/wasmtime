@@ -20,6 +20,7 @@ use crate::machinst::{
 };
 use crate::{trace, CodegenResult};
 use alloc::vec::Vec;
+use cranelift_control::ControlPlane;
 use regalloc2::{MachineEnv, PRegSet};
 use smallvec::{smallvec, SmallVec};
 use std::fmt::Debug;
@@ -677,6 +678,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         &mut self,
         backend: &B,
         block: Block,
+        ctrl_plane: &mut ControlPlane,
     ) -> CodegenResult<()> {
         self.cur_scan_entry_color = Some(self.block_end_colors[block]);
         // Lowering loop:
@@ -774,6 +776,14 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 
             let loc = self.srcloc(inst);
             self.finish_ir_inst(loc);
+
+            // TODO maybe insert random instruction
+            if ctrl_plane.get_decision() {
+                let imm: u64 = ctrl_plane.get_arbitrary();
+                let regs = self.alloc_tmp(crate::ir::types::I64);
+                let inst = I::gen_imm(imm, regs.regs()[0]).unwrap();
+                self.emit(inst);
+            }
 
             // Emit value-label markers if needed, to later recover
             // debug mappings. This must happen before the instruction
@@ -966,7 +976,11 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     }
 
     /// Lower the function.
-    pub fn lower<B: LowerBackend<MInst = I>>(mut self, backend: &B) -> CodegenResult<VCode<I>> {
+    pub fn lower<B: LowerBackend<MInst = I>>(
+        mut self,
+        backend: &B,
+        ctrl_plane: &mut ControlPlane,
+    ) -> CodegenResult<VCode<I>> {
         trace!("about to lower function: {:?}", self.f);
 
         // Initialize the ABI object, giving it temps if requested.
@@ -1042,7 +1056,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 
             // Original block body.
             if let Some(bb) = lb.orig_block() {
-                self.lower_clif_block(backend, bb)?;
+                self.lower_clif_block(backend, bb, ctrl_plane)?;
                 self.emit_value_label_markers_for_block_args(bb);
             }
 
