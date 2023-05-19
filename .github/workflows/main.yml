@@ -207,7 +207,7 @@ jobs:
     - run: (cd docs && mdbook build)
     - run: cargo build -p wasmtime-wasi --features wasmtime/wat,wasmtime/cranelift
     - run: (cd docs/rust_wasi_markdown_parser && cargo build)
-    - run: (cd docs && mdbook test -L ../target/debug/deps,./rust_wasi_markdown_parser/target/debug/deps)
+    - run: (cd docs && mdbook test -L ../target/debug/deps)
 
     # Build Rust API documentation.
     # We pass in the `component-model` feature

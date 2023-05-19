@@ -26,6 +26,7 @@ wasi-common = { workspace = true }
 wasi-cap-std-sync = { workspace = true }
 wasmtime-wasi = { workspace = true, features = ["tokio"] }
 cap-std = { workspace = true }
+cap-rand = { workspace = true }
 tokio = { version = "1.8.0", features = ["net", "rt-multi-thread", "macros"] }
 
 wasmtime-wasi-http = { workspace = true }

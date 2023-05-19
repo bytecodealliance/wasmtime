@@ -856,10 +856,6 @@ version = "0.9.0+wasi-snapshot-preview1"
 criteria = "safe-to-deploy"
 
 [[exemptions.wasi]]
-version = "0.10.2+wasi-snapshot-preview1"
-criteria = "safe-to-deploy"
-
-[[exemptions.wasi]]
 version = "0.11.0+wasi-snapshot-preview1"
 criteria = "safe-to-deploy"
 

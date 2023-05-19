@@ -509,6 +509,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "command-tests"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "getrandom 0.2.9",
+ "wit-bindgen",
+]
+
+[[package]]
 name = "component-fuzz-util"
 version = "0.0.0"
 dependencies = [
@@ -1450,13 +1459,13 @@ dependencies = [
 
 [[package]]
 name = "getrandom"
-version = "0.2.6"
+version = "0.2.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9be70c98951c83b8d2f8f60d7065fa6d5146873094452a1008da8c2f1e4205ad"
+checksum = "c85e1d9ab2eadba7e5040d4e09cbd6d072b76a557ad64e797c2cb9d4da21d7e4"
 dependencies = [
  "cfg-if",
  "libc",
- "wasi 0.10.2+wasi-snapshot-preview1",
+ "wasi 0.11.0+wasi-snapshot-preview1",
 ]
 
 [[package]]
@@ -2353,7 +2362,7 @@ checksum = "0127cbc0239f585139a56effd7867921eae3425a000a72dde2b0a156062346b2"
 dependencies = [
  "cc",
  "dunce",
- "getrandom 0.2.6",
+ "getrandom 0.2.9",
  "libc",
 ]
 
@@ -2539,7 +2548,7 @@ version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d34f1408f55294453790c48b2f1ebbb1c5b4b7563eb1f418bcfcfdbb06ebb4e7"
 dependencies = [
- "getrandom 0.2.6",
+ "getrandom 0.2.9",
 ]
 
 [[package]]
@@ -2591,6 +2600,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "reactor-tests"
+version = "0.1.0"
+dependencies = [
+ "wit-bindgen",
+]
+
+[[package]]
 name = "redox_syscall"
 version = "0.2.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2614,7 +2630,7 @@ version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b033d837a7cf162d7993aded9304e30a83213c648b6e389db233191f891e5c2b"
 dependencies = [
- "getrandom 0.2.6",
+ "getrandom 0.2.9",
  "redox_syscall 0.2.13",
  "thiserror",
 ]
@@ -3114,6 +3130,7 @@ name = "test-programs"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "cap-rand",
  "cap-std",
  "cargo_metadata",
  "cfg-if",
@@ -3400,7 +3417,7 @@ version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8cfcd319456c4d6ea10087ed423473267e1a071f3bc0aa89f80d60997843c6f0"
 dependencies = [
- "getrandom 0.2.6",
+ "getrandom 0.2.9",
 ]
 
 [[package]]
@@ -3471,12 +3488,6 @@ name = "wasi"
 version = "0.9.0+wasi-snapshot-preview1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cccddf32554fecc6acb585f82a32a72e28b48f8c4c1883ddfeeeaa96f7d8e519"
-
-[[package]]
-name = "wasi"
-version = "0.10.2+wasi-snapshot-preview1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fd6fbd9a79829dd1ad0cc20627bf1ed606756a7f77edff7b66b7064f9cb327c6"
 
 [[package]]
 name = "wasi"
@@ -4248,12 +4259,25 @@ name = "wasmtime-wasi"
 version = "10.0.0"
 dependencies = [
  "anyhow",
+ "async-trait",
+ "bitflags 1.3.2",
+ "cap-fs-ext",
+ "cap-rand",
+ "cap-std",
+ "cap-time-ext",
+ "fs-set-times",
+ "io-extras",
  "libc",
+ "rustix",
+ "system-interface",
+ "thiserror",
+ "tracing",
  "wasi-cap-std-sync",
  "wasi-common",
  "wasi-tokio",
  "wasmtime",
  "wiggle",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
