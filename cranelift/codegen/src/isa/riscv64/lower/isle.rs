@@ -6,8 +6,9 @@ pub mod generated_code;
 use generated_code::{Context, ExtendOp, MInst};
 
 // Types that the generated ISLE code uses via `use super::*`.
+use self::generated_code::VecAluOpRR;
 use super::{writable_zero_reg, zero_reg};
-use crate::isa::riscv64::abi::Riscv64ABICaller;
+use crate::isa::riscv64::abi::Riscv64ABICallSite;
 use crate::isa::riscv64::Riscv64Backend;
 use crate::machinst::Reg;
 use crate::machinst::{isle::*, MachInst, SmallInstVec};
@@ -46,7 +47,7 @@ where
 }
 
 impl<'a, 'b> RV64IsleContext<'a, 'b, MInst, Riscv64Backend> {
-    isle_prelude_method_helpers!(Riscv64ABICaller);
+    isle_prelude_method_helpers!(Riscv64ABICallSite);
 
     fn new(lower_ctx: &'a mut Lower<'b, MInst>, backend: &'a Riscv64Backend) -> Self {
         Self {
@@ -66,7 +67,7 @@ impl<'a, 'b> RV64IsleContext<'a, 'b, MInst, Riscv64Backend> {
 
 impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> {
     isle_lower_prelude_methods!();
-    isle_prelude_caller_methods!(Riscv64MachineDeps, Riscv64ABICaller);
+    isle_prelude_caller_methods!(Riscv64MachineDeps, Riscv64ABICallSite);
 
     fn vec_writable_to_regs(&mut self, val: &VecWritableReg) -> ValueRegs {
         match val.len() {
@@ -203,6 +204,14 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
     #[inline]
     fn imm5_from_u64(&mut self, arg0: u64) -> Option<Imm5> {
         Imm5::maybe_from_i8(i8::try_from(arg0 as i64).ok()?)
+    }
+    #[inline]
+    fn uimm5_bitcast_to_imm5(&mut self, arg0: UImm5) -> Imm5 {
+        Imm5::from_bits(arg0.bits() as u8)
+    }
+    #[inline]
+    fn uimm5_from_u8(&mut self, arg0: u8) -> Option<UImm5> {
+        UImm5::maybe_from_u8(arg0)
     }
     #[inline]
     fn writable_zero_reg(&mut self) -> WritableReg {
@@ -454,6 +463,10 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         } else {
             None
         }
+    }
+
+    fn vec_alu_rr_dst_type(&mut self, op: &VecAluOpRR) -> Type {
+        MInst::canonical_type_for_rc(op.dst_regclass())
     }
 }
 

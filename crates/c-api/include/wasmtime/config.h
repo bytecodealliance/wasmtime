@@ -266,6 +266,16 @@ WASMTIME_CONFIG_PROP(void, cranelift_opt_level, wasmtime_opt_level_t)
 WASMTIME_CONFIG_PROP(void, profiler, wasmtime_profiling_strategy_t)
 
 /**
+ * \brief Configures the “static” style of memory to always be used.
+ *
+ * This setting is `false` by default.
+ *
+ * For more information see the Rust documentation at
+ * https://bytecodealliance.github.io/wasmtime/api/wasmtime/struct.Config.html#method.static_memory_forced.
+ */
+WASMTIME_CONFIG_PROP(void, static_memory_forced, bool)
+
+/**
  * \brief Configures the maximum size for memory to be considered "static"
  *
  * For more information see the Rust documentation at

@@ -121,6 +121,12 @@
 (decl pure u32_add (u32 u32) u32)
 (extern constructor u32_add u32_add)
 
+(decl pure u32_sub (u32 u32) u32)
+(extern constructor u32_sub u32_sub)
+
+(decl pure u32_and (u32 u32) u32)
+(extern constructor u32_and u32_and)
+
 ;; Pure/fallible constructor that tries to add two `u32`s, interpreted
 ;; as signed values, and fails to match on overflow.
 (decl pure partial s32_add_fallible (u32 u32) u32)
@@ -505,6 +511,10 @@
 (decl pure offset32_to_u32 (Offset32) u32)
 (extern constructor offset32_to_u32 offset32_to_u32)
 
+;; Convert a number to an `Offset32`
+(decl pure u32_to_offset32 (u32) Offset32)
+(extern constructor u32_to_offset32 u32_to_offset32)
+
 ;; This is a direct import of `IntCC::unsigned`.
 ;; Get the corresponding IntCC with the signed component removed.
 ;; For conditions without a signed component, this is a no-op.
@@ -557,3 +567,4 @@
 ;;;; Automatic conversions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (convert Offset32 u32 offset32_to_u32)
+(convert u32 Offset32 u32_to_offset32)

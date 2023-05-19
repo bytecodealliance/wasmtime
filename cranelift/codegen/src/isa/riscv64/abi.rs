@@ -30,7 +30,7 @@ use smallvec::{smallvec, SmallVec};
 pub(crate) type Riscv64Callee = Callee<Riscv64MachineDeps>;
 
 /// Support for the Riscv64 ABI from the caller side (at a callsite).
-pub(crate) type Riscv64ABICaller = Caller<Riscv64MachineDeps>;
+pub(crate) type Riscv64ABICallSite = CallSite<Riscv64MachineDeps>;
 
 /// This is the limit for the size of argument and return-value areas on the
 /// stack. We place a reasonable limit here to avoid integer overflow issues

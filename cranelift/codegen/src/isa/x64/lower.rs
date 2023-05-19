@@ -159,7 +159,7 @@ fn emit_vm_call(
     }
 
     let mut abi =
-        X64Caller::from_libcall(ctx.sigs(), &sig, &extname, dist, caller_conv, flags.clone())?;
+        X64CallSite::from_libcall(ctx.sigs(), &sig, &extname, dist, caller_conv, flags.clone())?;
 
     abi.emit_stack_pre_adjust(ctx);
 

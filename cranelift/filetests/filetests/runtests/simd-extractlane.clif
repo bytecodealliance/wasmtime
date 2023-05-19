@@ -8,6 +8,7 @@ target x86_64
 target x86_64 sse41
 target x86_64 sse42
 target x86_64 sse42 has_avx
+target riscv64 has_v
 
 function %extractlane_4(i8x16) -> i8 {
 block0(v0: i8x16):

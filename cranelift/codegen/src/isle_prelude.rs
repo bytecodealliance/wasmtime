@@ -613,6 +613,16 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
+        fn u32_sub(&mut self, a: u32, b: u32) -> u32 {
+            a.wrapping_sub(b)
+        }
+
+        #[inline]
+        fn u32_and(&mut self, a: u32, b: u32) -> u32 {
+            a & b
+        }
+
+        #[inline]
         fn s32_add_fallible(&mut self, a: u32, b: u32) -> Option<u32> {
             let a = a as i32;
             let b = b as i32;
@@ -709,6 +719,11 @@ macro_rules! isle_common_prelude_methods {
         fn offset32_to_u32(&mut self, offset: Offset32) -> u32 {
             let offset: i32 = offset.into();
             offset as u32
+        }
+
+        #[inline]
+        fn u32_to_offset32(&mut self, offset: u32) -> Offset32 {
+            Offset32::new(offset as i32)
         }
 
         fn range(&mut self, start: usize, end: usize) -> Range {
