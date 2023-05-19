@@ -210,13 +210,6 @@ impl Type {
     }
 }
 
-// impl<'a> Arbitrary<'a> for Type {
-//     fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Type> {
-//         let mut fuel = 500;
-//         Type::generate(u, MAX_TYPE_DEPTH, &mut fuel)
-//     }
-// }
-
 fn lower_record<'a>(types: impl Iterator<Item = &'a Type>, vec: &mut Vec<CoreType>) {
     for ty in types {
         ty.lower(vec);
@@ -712,7 +705,7 @@ impl<'a> TypesBuilder<'a> {
     }
 
     fn write_decl(&mut self, idx: u32, ty: &'a Type) -> String {
-        let mut decl = format!("(type $t{idx} ");
+        let mut decl = format!("(type $t{idx}' ");
         match ty {
             Type::Bool
             | Type::S8
@@ -803,7 +796,8 @@ impl<'a> TypesBuilder<'a> {
                 decl.push_str(")");
             }
         }
-        decl.push_str(")");
+        decl.push_str(")\n");
+        writeln!(decl, "(import \"t{idx}\" (type $t{idx} (eq $t{idx}')))").unwrap();
         decl
     }
 }
@@ -813,6 +807,8 @@ impl<'a> TypesBuilder<'a> {
 pub struct Declarations {
     /// Type declarations (if any) referenced by `params` and/or `result`
     pub types: Cow<'static, str>,
+    /// Types to thread through when instantiating sub-components.
+    pub type_instantiation_args: Cow<'static, str>,
     /// Parameter declarations used for the imported and exported functions
     pub params: Cow<'static, str>,
     /// Result declaration used for the imported and exported functions
@@ -830,6 +826,7 @@ impl Declarations {
     pub fn make_component(&self) -> Box<str> {
         let Self {
             types,
+            type_instantiation_args,
             params,
             results,
             import_and_export,
@@ -840,6 +837,8 @@ impl Declarations {
             format!(
                 r#"
                 (component ${name}
+                    {types}
+                    (type $sig (func {params} {results}))
                     (import "{IMPORT_FUNCTION}" (func $f (type $sig)))
 
                     (core instance $libc (instantiate $libc))
@@ -894,8 +893,14 @@ impl Declarations {
 
                 {c1}
                 {c2}
-                (instance $c1 (instantiate $c1 (with "{IMPORT_FUNCTION}" (func $f))))
-                (instance $c2 (instantiate $c2 (with "{IMPORT_FUNCTION}" (func $c1 "{EXPORT_FUNCTION}"))))
+                (instance $c1 (instantiate $c1
+                    {type_instantiation_args}
+                    (with "{IMPORT_FUNCTION}" (func $f))
+                ))
+                (instance $c2 (instantiate $c2
+                    {type_instantiation_args}
+                    (with "{IMPORT_FUNCTION}" (func $c1 "{EXPORT_FUNCTION}"))
+                ))
                 (export "{EXPORT_FUNCTION}" (func $c2 "{EXPORT_FUNCTION}"))
             )"#,
         )
@@ -915,27 +920,6 @@ pub struct TestCase<'a> {
     /// String encoding to use from component-to-host.
     pub encoding2: StringEncoding,
 }
-
-// impl<'a> Arbitrary<'a> for TestCase {
-//     fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<TestCase> {
-//         let mut params = Vec::new();
-//         let mut results = Vec::new();
-//         let mut fuel = 300;
-//         for _ in 0..u.int_in_range(0..=MAX_ARITY)? {
-//             params.push(Type::generate(u, MAX_TYPE_DEPTH, &mut fuel)?);
-//         }
-//         for _ in 0..u.int_in_range(0..=MAX_ARITY)? {
-//             results.push(Type::generate(u, MAX_TYPE_DEPTH, &mut fuel)?);
-//         }
-
-//         Ok(TestCase {
-//             params,
-//             results,
-//             encoding1: u.arbitrary()?,
-//             encoding2: u.arbitrary()?,
-//         })
-//     }
-// }
 
 impl TestCase<'_> {
     /// Generate a `Declarations` for this `TestCase` which may be used to build a component to execute the case.
@@ -959,8 +943,10 @@ impl TestCase<'_> {
         let import_and_export = make_import_and_export(&self.params, &self.results);
 
         let mut type_decls = Vec::new();
+        let mut type_instantiation_args = String::new();
         while let Some((idx, ty)) = builder.worklist.pop() {
             type_decls.push(builder.write_decl(idx, ty));
+            writeln!(type_instantiation_args, "(with \"t{idx}\" (type $t{idx}))").unwrap();
         }
 
         // Note that types are printed here in reverse order since they were
@@ -974,6 +960,7 @@ impl TestCase<'_> {
 
         Declarations {
             types: types.into(),
+            type_instantiation_args: type_instantiation_args.into(),
             params: params.into(),
             results: results.into(),
             import_and_export: import_and_export.into(),
