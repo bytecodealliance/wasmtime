@@ -357,8 +357,7 @@ pub(crate) fn emit_modrm_sib_disp(
     match *mem_e {
         Amode::ImmReg { simm32, base, .. } => {
             let enc_e = int_reg_enc(base);
-            let mut imm = Imm::new(simm32);
-            imm.handle_evex_scaling(evex_scaling);
+            let mut imm = Imm::new(simm32, evex_scaling);
 
             // Most base registers allow for a single ModRM byte plus an
             // optional immediate. If rsp is the base register, however, then a
@@ -405,8 +404,7 @@ pub(crate) fn emit_modrm_sib_disp(
             // that if the base register's lower three bits are `101` then an
             // offset must be present. This is a special case in the encoding of
             // the SIB byte and requires an explicit displacement with rbp/r13.
-            let mut imm = Imm::new(simm32);
-            imm.handle_evex_scaling(evex_scaling);
+            let mut imm = Imm::new(simm32, evex_scaling);
             if enc_base & 7 == regs::ENC_RBP {
                 imm.force_immediate();
             }
@@ -446,13 +444,34 @@ enum Imm {
 impl Imm {
     /// Classifies the 32-bit immediate `val` as how this can be encoded
     /// with ModRM/SIB bytes.
-    fn new(val: u32) -> Imm {
+    ///
+    /// For `evex_scaling` according to Section 2.7.5 of Intel's manual:
+    ///
+    /// > EVEX-encoded instructions always use a compressed displacement scheme
+    /// > by multiplying disp8 in conjunction with a scaling factor N that is
+    /// > determined based on the vector length, the value of EVEX.b bit
+    /// > (embedded broadcast) and the input element size of the instruction
+    ///
+    /// The `evex_scaling` factor provided here is `Some(N)` for EVEX
+    /// instructions.  This is taken into account where the `Imm` value
+    /// contained is the raw byte offset.
+    fn new(val: u32, evex_scaling: Option<i8>) -> Imm {
         if val == 0 {
-            Imm::None
-        } else if low8_will_sign_extend_to_32(val) {
-            Imm::Imm8(val as i8)
-        } else {
-            Imm::Imm32(val as i32)
+            return Imm::None;
+        }
+        match evex_scaling {
+            Some(scaling) => {
+                let val = val as i32;
+                if val % i32::from(scaling) == 0 {
+                    let scaled = val / i32::from(scaling);
+                    if low8_will_sign_extend_to_32(scaled as u32) {
+                        return Imm::Imm8(scaled as i8);
+                    }
+                }
+                Imm::Imm32(val)
+            }
+            None if low8_will_sign_extend_to_32(val) => Imm::Imm8(val as i8),
+            None => Imm::Imm32(val as i32),
         }
     }
 
@@ -479,46 +498,6 @@ impl Imm {
             Imm::None => {}
             Imm::Imm8(n) => sink.put1(*n as u8),
             Imm::Imm32(n) => sink.put4(*n as u32),
-        }
-    }
-
-    /// According to Section 2.7.5 of Intel's manual:
-    ///
-    /// > EVEX-encoded instructions always use a compressed displacement scheme
-    /// > by multiplying disp8 in conjunction with a scaling factor N that is
-    /// > determined based on the vector length, the value of EVEX.b bit
-    /// > (embedded broadcast) and the input element size of the instruction
-    ///
-    /// The `scaling` factor provided here is `Some(N)` for EVEX instructions.
-    /// This is taken into account where the `Imm` value contained is the raw
-    /// byte offset.
-    fn handle_evex_scaling(&mut self, scaling: Option<i8>) {
-        match (*self, scaling) {
-            // If an `Imm32` is in use but the scaling factor means that it
-            // actually fits in an 8-bit immediate, then demote the offset to
-            // an 8-bit immediate.
-            (Imm::Imm32(a), Some(b)) if a % i32::from(b) == 0 => {
-                let a = a / i32::from(b);
-                if low8_will_sign_extend_to_32(a as u32) {
-                    *self = Imm::Imm8(a as i8);
-                }
-            }
-
-            // If `Imm8` is in use then if it matches the scaling factor it
-            // can be scaled down. Otherwise this must be promoted to a 32-bit
-            // immediate with the same value to have the correct meaning for
-            // EVEX instructions.
-            (Imm::Imm8(a), Some(b)) => {
-                if a % b == 0 {
-                    *self = Imm::Imm8(a / b);
-                } else {
-                    *self = Imm::Imm32(i32::from(a));
-                }
-            }
-
-            // Otherwise no scaling is necessary for `Imm32` or `None`, and the
-            // `Imm8` case was handled above.
-            (Imm::None, _) | (Imm::Imm8(_), None) | (Imm::Imm32(_), _) => {}
         }
     }
 }
