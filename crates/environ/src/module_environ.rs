@@ -312,15 +312,13 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                         wasmparser::TableInit::Expr(cexpr) => {
                             let mut init_expr_reader = cexpr.get_binary_reader();
                             match init_expr_reader.read_operator()? {
-                                Operator::RefNull { hty: _ } => {
-                                    segments.push(TableInitializer {
-                                        table_index,
-                                        base: None,
-                                        offset: 0,
-                                        elements: Box::new([]),
-                                        eager_init: Some(crate::EagerTableElementInitializer::Null),
-                                    })
-                                }
+                                Operator::RefNull { hty: _ } => segments.push(TableInitializer {
+                                    table_index,
+                                    base: None,
+                                    offset: 0,
+                                    elements: Box::new([]),
+                                    eager_init: Some(crate::EagerTableElementInitializer::Null),
+                                }),
                                 Operator::RefFunc { function_index } => {
                                     let index = FuncIndex::from_u32(function_index);
                                     self.flag_func_escaped(index);
@@ -329,7 +327,9 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                                         base: None,
                                         offset: 0,
                                         elements: Box::new([]),
-                                        eager_init: Some(crate::EagerTableElementInitializer::FuncRef(index)),
+                                        eager_init: Some(
+                                            crate::EagerTableElementInitializer::FuncRef(index),
+                                        ),
                                     })
                                 }
                                 s => {
@@ -342,9 +342,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                         }
                     }
                 }
-                self.result.module.table_initialization = TableInitialization::Segments {
-                        segments,
-                }
+                self.result.module.table_initialization = TableInitialization::Segments { segments }
             }
 
             Payload::MemorySection(memories) => {

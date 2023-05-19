@@ -262,19 +262,17 @@ fn initialize_tables(instance: &mut Instance, module: &Module) -> Result<()> {
                     segment.elements.len() as u32,
                 )?;
             }
-            Some(initializer) => {
-                match initializer {
-                    wasmtime_environ::EagerTableElementInitializer::Null => {
-                        let table = unsafe { &mut *instance.get_table(segment.table_index) };
-                        table.init_null()?;
-                    }
-                    wasmtime_environ::EagerTableElementInitializer::FuncRef(func_index) => {
-                        let table = unsafe { &mut *instance.get_table(segment.table_index) };
-                        let funcref = unsafe { &mut *instance.get_func_ref(*func_index).unwrap() };
-                        table.init_func(funcref)?;
-                    }
+            Some(initializer) => match initializer {
+                wasmtime_environ::EagerTableElementInitializer::Null => {
+                    let table = unsafe { &mut *instance.get_table(segment.table_index) };
+                    table.init_null()?;
                 }
-            }
+                wasmtime_environ::EagerTableElementInitializer::FuncRef(func_index) => {
+                    let table = unsafe { &mut *instance.get_table(segment.table_index) };
+                    let funcref = unsafe { &mut *instance.get_func_ref(*func_index).unwrap() };
+                    table.init_func(funcref)?;
+                }
+            },
         }
     }
 
