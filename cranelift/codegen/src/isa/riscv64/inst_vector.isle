@@ -109,6 +109,7 @@
   (VaddVX)
   (VsubVX)
   (VrsubVX)
+  (VxorVX)
   (VslidedownVX)
   (VfaddVF)
   (VfsubVF)
@@ -329,6 +330,11 @@
 (decl rv_vxor_vv (Reg Reg VecOpMasking VState) Reg)
 (rule (rv_vxor_vv vs2 vs1 mask vstate)
   (vec_alu_rrr (VecAluOpRRR.VxorVV) vs2 vs1 mask vstate))
+
+;; Helper for emitting the `vxor.vx` instruction.
+(decl rv_vxor_vx (Reg Reg VecOpMasking VState) Reg)
+(rule (rv_vxor_vx vs2 vs1 mask vstate)
+  (vec_alu_rrr (VecAluOpRRR.VxorVX) vs2 vs1 mask vstate))
 
 ;; Helper for emitting the `vxor.vi` instruction.
 ;; Unlike other `vi` instructions the immediate is zero extended.

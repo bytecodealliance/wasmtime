@@ -376,27 +376,37 @@
   (rv_vor_vv x y (unmasked) ty))
 
 ;;;; Rules for `xor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule -1 (lower (has_type (fits_in_64 (ty_int ty)) (bxor x y)))
+(rule 0 (lower (has_type (fits_in_64 (ty_int ty)) (bxor x y)))
   (rv_xor x y))
 
 ;; Special cases for when one operand is an immediate that fits in 12 bits.
-(rule 2 (lower (has_type (fits_in_64 (ty_int ty)) (bxor x (imm12_from_value y))))
+(rule 1 (lower (has_type (fits_in_64 (ty_int ty)) (bxor x (imm12_from_value y))))
   (rv_xori x y))
 
-(rule 1 (lower (has_type (fits_in_64 (ty_int ty)) (bxor (imm12_from_value x) y)))
+(rule 2 (lower (has_type (fits_in_64 (ty_int ty)) (bxor (imm12_from_value x) y)))
   (rv_xori y x))
 
-(rule (lower (has_type $I128 (bxor x y)))
+(rule 3 (lower (has_type $I128 (bxor x y)))
   (lower_b128_binary (AluOPRRR.Xor) x y))
 
-(rule (lower (has_type $F32 (bxor x y)))
-  (lower_float_binary (AluOPRRR.Xor) x y $F32))
+(rule 4 (lower (has_type (ty_scalar_float ty) (bxor x y)))
+  (lower_float_binary (AluOPRRR.Xor) x y ty))
 
-(rule (lower (has_type $F64 (bxor x y)))
-  (lower_float_binary (AluOPRRR.Xor) x y $F64))
-
-(rule 3 (lower (has_type (ty_vec_fits_in_register ty) (bxor x y)))
+(rule 5 (lower (has_type (ty_vec_fits_in_register ty) (bxor x y)))
   (rv_vxor_vv x y (unmasked) ty))
+
+(rule 6 (lower (has_type (ty_vec_fits_in_register ty) (bxor x (splat y))))
+  (rv_vxor_vx x y (unmasked) ty))
+
+(rule 7 (lower (has_type (ty_vec_fits_in_register ty) (bxor (splat x) y)))
+  (rv_vxor_vx y x (unmasked) ty))
+
+(rule 8 (lower (has_type (ty_vec_fits_in_register ty) (bxor x (replicated_imm5 y))))
+  (rv_vxor_vi x y (unmasked) ty))
+
+(rule 9 (lower (has_type (ty_vec_fits_in_register ty) (bxor (replicated_imm5 x) y)))
+  (rv_vxor_vi y x (unmasked) ty))
+
 
 ;;;; Rules for `bnot` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule 0 (lower (has_type (ty_scalar ty) (bnot x)))
