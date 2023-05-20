@@ -336,7 +336,7 @@ impl fmt::Display for VecAluOpRRR {
         let mut s = format!("{self:?}");
         s.make_ascii_lowercase();
         let (opcode, category) = s.split_at(s.len() - suffix_length);
-        f.write_str(&format!("{}.{}", opcode, category))
+        f.write_str(&format!("{opcode}.{category}"))
     }
 }
 
@@ -386,7 +386,7 @@ impl fmt::Display for VecAluOpRRImm5 {
         let mut s = format!("{self:?}");
         s.make_ascii_lowercase();
         let (opcode, category) = s.split_at(s.len() - suffix_length);
-        f.write_str(&format!("{}.{}", opcode, category))
+        f.write_str(&format!("{opcode}.{category}"))
     }
 }
 

@@ -1635,12 +1635,12 @@ impl Inst {
                 // This is noted in Section 10.1 of the RISC-V Vector spec.
                 match (op, vs2, vs1) {
                     (VecAluOpRRR::VrsubVX, _, vs1) if vs1 == zero_reg() => {
-                        format!("vneg.v {},{}{} {}", vd_s, vs2_s, mask, vstate)
+                        format!("vneg.v {vd_s},{vs2_s}{mask} {vstate}")
                     }
                     (VecAluOpRRR::VfsgnjnVV, vs2, vs1) if vs2 == vs1 => {
-                        format!("vfneg.v {},{}{} {}", vd_s, vs2_s, mask, vstate)
+                        format!("vfneg.v {vd_s},{vs2_s}{mask} {vstate}")
                     }
-                    _ => format!("{} {},{},{}{} {}", op, vd_s, vs2_s, vs1_s, mask, vstate),
+                    _ => format!("{op} {vd_s},{vs2_s},{vs1_s}{mask} {vstate}"),
                 }
             }
             &Inst::VecAluRRImm5 {
@@ -1663,7 +1663,7 @@ impl Inst {
                     format!("{}", imm)
                 };
 
-                format!("{} {},{},{}{} {}", op, vd_s, vs2_s, imm_s, mask, vstate)
+                format!("{op} {vd_s},{vs2_s},{imm_s}{mask} {vstate}")
             }
             &Inst::VecAluRR {
                 op,
@@ -1676,7 +1676,7 @@ impl Inst {
                 let vd_s = format_reg(vd.to_reg(), allocs);
                 let mask = format_mask(mask, allocs);
 
-                format!("{} {},{}{} {}", op, vd_s, vs_s, mask, vstate)
+                format!("{op} {vd_s},{vs_s}{mask} {vstate}")
             }
             &Inst::VecAluRImm5 {
                 op,
@@ -1688,7 +1688,7 @@ impl Inst {
                 let vd_s = format_reg(vd.to_reg(), allocs);
                 let mask = format_mask(mask, allocs);
 
-                format!("{} {},{}{} {}", op, vd_s, imm, mask, vstate)
+                format!("{op} {vd_s},{imm}{mask} {vstate}")
             }
             &Inst::VecSetState { rd, ref vstate } => {
                 let rd_s = format_reg(rd.to_reg(), allocs);
@@ -1707,7 +1707,7 @@ impl Inst {
                 let vd = format_reg(to.to_reg(), allocs);
                 let mask = format_mask(mask, allocs);
 
-                format!("vl{}.v {},{}{} {}", eew, vd, base, mask, vstate)
+                format!("vl{eew}.v {vd},{base}{mask} {vstate}")
             }
             Inst::VecStore {
                 eew,
@@ -1721,7 +1721,7 @@ impl Inst {
                 let vs3 = format_reg(*from, allocs);
                 let mask = format_mask(mask, allocs);
 
-                format!("vs{}.v {},{}{} {}", eew, vs3, dst, mask, vstate)
+                format!("vs{eew}.v {vs3},{dst}{mask} {vstate}")
             }
         }
     }
