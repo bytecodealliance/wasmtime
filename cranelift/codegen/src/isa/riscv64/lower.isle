@@ -817,9 +817,23 @@
 
 ;;;;;  Rules for `bitselect`;;;;;;;;;
 
-(rule
-  (lower (has_type ty (bitselect c x y)))
-  (gen_bitselect ty c x y))
+;; Do a (c & x) | (~c & y) operation.
+(rule 0 (lower (has_type (ty_int_ref_scalar_64 ty) (bitselect c x y)))
+  (let ((tmp_x Reg (rv_and c x))
+        (c_inverse Reg (rv_not c))
+        (tmp_y Reg (rv_and c_inverse y)))
+    (rv_or tmp_x tmp_y)))
+
+;; For vectors, we also do the same operation.
+;; We can technically use any type in the bitwise operations, but prefer
+;; using the type of the inputs so that we avoid emitting unnecessary
+;; `vsetvl` instructions. It's likeley that the vector unit is already
+;; configured for that type.
+(rule 1 (lower (has_type (ty_vec_fits_in_register ty) (bitselect c x y)))
+  (let ((tmp_x Reg (rv_vand_vv c x (unmasked) ty))
+        (c_inverse Reg (rv_vnot_v c (unmasked) ty))
+        (tmp_y Reg (rv_vand_vv c_inverse y (unmasked) ty)))
+    (rv_vor_vv tmp_x tmp_y (unmasked) ty)))
 
 ;;;;;  Rules for `isplit`;;;;;;;;;
 (rule
