@@ -234,8 +234,17 @@ impl VecOpCategory {
 impl VecOpMasking {
     pub fn encode(&self) -> u32 {
         match self {
-            VecOpMasking::Enabled => 0,
+            VecOpMasking::Enabled { .. } => 0,
             VecOpMasking::Disabled => 1,
+        }
+    }
+
+    pub(crate) fn with_allocs(&self, allocs: &mut AllocationConsumer<'_>) -> Self {
+        match self {
+            VecOpMasking::Enabled { reg } => VecOpMasking::Enabled {
+                reg: allocs.next(*reg),
+            },
+            VecOpMasking::Disabled => VecOpMasking::Disabled,
         }
     }
 }
@@ -268,6 +277,7 @@ impl VecAluOpRRR {
             VecAluOpRRR::VxorVV => 0b001011,
             VecAluOpRRR::VslidedownVX => 0b001111,
             VecAluOpRRR::VfrsubVF => 0b100111,
+            VecAluOpRRR::VmergeVVM | VecAluOpRRR::VmergeVXM | VecAluOpRRR::VfmergeVFM => 0b010111,
             VecAluOpRRR::VfdivVV | VecAluOpRRR::VfdivVF => 0b100000,
             VecAluOpRRR::VfrdivVF => 0b100001,
             VecAluOpRRR::VfsgnjnVV => 0b001001,
@@ -280,14 +290,16 @@ impl VecAluOpRRR {
             | VecAluOpRRR::VsubVV
             | VecAluOpRRR::VandVV
             | VecAluOpRRR::VorVV
-            | VecAluOpRRR::VxorVV => VecOpCategory::OPIVV,
+            | VecAluOpRRR::VxorVV
+            | VecAluOpRRR::VmergeVVM => VecOpCategory::OPIVV,
             VecAluOpRRR::VmulVV | VecAluOpRRR::VmulhVV | VecAluOpRRR::VmulhuVV => {
                 VecOpCategory::OPMVV
             }
             VecAluOpRRR::VaddVX
             | VecAluOpRRR::VsubVX
             | VecAluOpRRR::VrsubVX
-            | VecAluOpRRR::VslidedownVX => VecOpCategory::OPIVX,
+            | VecAluOpRRR::VslidedownVX
+            | VecAluOpRRR::VmergeVXM => VecOpCategory::OPIVX,
             VecAluOpRRR::VfaddVV
             | VecAluOpRRR::VfsubVV
             | VecAluOpRRR::VfmulVV
@@ -298,7 +310,8 @@ impl VecAluOpRRR {
             | VecAluOpRRR::VfrsubVF
             | VecAluOpRRR::VfmulVF
             | VecAluOpRRR::VfdivVF
-            | VecAluOpRRR::VfrdivVF => VecOpCategory::OPFVF,
+            | VecAluOpRRR::VfrdivVF
+            | VecAluOpRRR::VfmergeVFM => VecOpCategory::OPFVF,
         }
     }
 
@@ -315,10 +328,15 @@ impl VecAluOpRRR {
 
 impl fmt::Display for VecAluOpRRR {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let suffix_length = match self {
+            VecAluOpRRR::VmergeVVM | VecAluOpRRR::VmergeVXM | VecAluOpRRR::VfmergeVFM => 3,
+            _ => 2,
+        };
+
         let mut s = format!("{self:?}");
         s.make_ascii_lowercase();
-        let (opcode, category) = s.split_at(s.len() - 2);
-        f.write_str(&format!("{}.{}", opcode, category))
+        let (opcode, category) = s.split_at(s.len() - suffix_length);
+        f.write_str(&format!("{opcode}.{category}"))
     }
 }
 
@@ -337,31 +355,38 @@ impl VecAluOpRRImm5 {
             VecAluOpRRImm5::VaddVI => 0b000000,
             VecAluOpRRImm5::VrsubVI => 0b000011,
             VecAluOpRRImm5::VslidedownVI => 0b001111,
+            VecAluOpRRImm5::VmergeVIM => 0b010111,
         }
     }
 
     pub fn category(&self) -> VecOpCategory {
         match self {
-            VecAluOpRRImm5::VaddVI | VecAluOpRRImm5::VrsubVI | VecAluOpRRImm5::VslidedownVI => {
-                VecOpCategory::OPIVI
-            }
+            VecAluOpRRImm5::VaddVI
+            | VecAluOpRRImm5::VrsubVI
+            | VecAluOpRRImm5::VslidedownVI
+            | VecAluOpRRImm5::VmergeVIM => VecOpCategory::OPIVI,
         }
     }
 
     pub fn imm_is_unsigned(&self) -> bool {
         match self {
             VecAluOpRRImm5::VslidedownVI => true,
-            VecAluOpRRImm5::VaddVI | VecAluOpRRImm5::VrsubVI => false,
+            VecAluOpRRImm5::VaddVI | VecAluOpRRImm5::VrsubVI | VecAluOpRRImm5::VmergeVIM => false,
         }
     }
 }
 
 impl fmt::Display for VecAluOpRRImm5 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let suffix_length = match self {
+            VecAluOpRRImm5::VmergeVIM => 3,
+            _ => 2,
+        };
+
         let mut s = format!("{self:?}");
         s.make_ascii_lowercase();
-        let (opcode, category) = s.split_at(s.len() - 2);
-        f.write_str(&format!("{}.{}", opcode, category))
+        let (opcode, category) = s.split_at(s.len() - suffix_length);
+        f.write_str(&format!("{opcode}.{category}"))
     }
 }
 
@@ -421,12 +446,12 @@ impl VecAluOpRR {
     /// other way around. As far as I can tell only vmv.v.* are backwards.
     pub fn vs_is_vs2_encoded(&self) -> bool {
         match self {
+            VecAluOpRR::VmvXS | VecAluOpRR::VfmvFS | VecAluOpRR::VfsqrtV => true,
             VecAluOpRR::VmvSX
-            | VecAluOpRR::VmvXS
             | VecAluOpRR::VfmvSF
-            | VecAluOpRR::VfmvFS
-            | VecAluOpRR::VfsqrtV => true,
-            VecAluOpRR::VmvVV | VecAluOpRR::VmvVX | VecAluOpRR::VfmvVF => false,
+            | VecAluOpRR::VmvVV
+            | VecAluOpRR::VmvVX
+            | VecAluOpRR::VfmvVF => false,
         }
     }
 
