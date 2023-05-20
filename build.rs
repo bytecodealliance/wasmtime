@@ -212,7 +212,6 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
                 "load_splat_out_of_bounds",
                 "simd_align",
                 "simd_bit_shift",
-                "simd_bitwise",
                 "simd_boolean",
                 "simd_conversions",
                 "simd_f32x4",
