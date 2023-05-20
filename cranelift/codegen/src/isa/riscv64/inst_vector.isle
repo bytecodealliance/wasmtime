@@ -522,6 +522,9 @@
 
 
 ;; Build a vector mask from a u64
+;; TODO: We should merge this with the `vconst` rules, and take advantage of
+;; the other existing `vconst` rules. One example is using `vmv.v.i` which
+;; can represent some of these masks.
 (decl gen_vec_mask (u64) Reg)
 
 ;; Materialize the mask into an X register, and move it into the bottom of
