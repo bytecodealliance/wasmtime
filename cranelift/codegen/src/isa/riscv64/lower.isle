@@ -323,9 +323,11 @@
   (rv_vand_vv x y (unmasked) ty))
 
 (rule 9 (lower (has_type (ty_vec_fits_in_register ty) (band x (splat y))))
+  (if (ty_vector_not_float ty))
   (rv_vand_vx x y (unmasked) ty))
 
 (rule 10 (lower (has_type (ty_vec_fits_in_register ty) (band (splat x) y)))
+  (if (ty_vector_not_float ty))
   (rv_vand_vx y x (unmasked) ty))
 
 (rule 11 (lower (has_type (ty_vec_fits_in_register ty) (band x (replicated_imm5 y))))
@@ -377,9 +379,11 @@
   (rv_vor_vv x y (unmasked) ty))
 
 (rule 9 (lower (has_type (ty_vec_fits_in_register ty) (bor x (splat y))))
+  (if (ty_vector_not_float ty))
   (rv_vor_vx x y (unmasked) ty))
 
 (rule 10 (lower (has_type (ty_vec_fits_in_register ty) (bor (splat x) y)))
+  (if (ty_vector_not_float ty))
   (rv_vor_vx y x (unmasked) ty))
 
 (rule 11 (lower (has_type (ty_vec_fits_in_register ty) (bor x (replicated_imm5 y))))
@@ -410,9 +414,11 @@
   (rv_vxor_vv x y (unmasked) ty))
 
 (rule 6 (lower (has_type (ty_vec_fits_in_register ty) (bxor x (splat y))))
+  (if (ty_vector_not_float ty))
   (rv_vxor_vx x y (unmasked) ty))
 
 (rule 7 (lower (has_type (ty_vec_fits_in_register ty) (bxor (splat x) y)))
+  (if (ty_vector_not_float ty))
   (rv_vxor_vx y x (unmasked) ty))
 
 (rule 8 (lower (has_type (ty_vec_fits_in_register ty) (bxor x (replicated_imm5 y))))
