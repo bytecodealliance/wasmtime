@@ -109,6 +109,7 @@
   (VaddVX)
   (VsubVX)
   (VrsubVX)
+  (VandVX)
   (VorVX)
   (VxorVX)
   (VslidedownVX)
@@ -127,6 +128,7 @@
   ;; Regular VI Opcodes
   (VaddVI)
   (VrsubVI)
+  (VandVI)
   (VorVI)
   (VxorVI)
   (VslidedownVI)
@@ -322,6 +324,16 @@
 (decl rv_vand_vv (Reg Reg VecOpMasking VState) Reg)
 (rule (rv_vand_vv vs2 vs1 mask vstate)
   (vec_alu_rrr (VecAluOpRRR.VandVV) vs2 vs1 mask vstate))
+
+;; Helper for emitting the `vand.vx` instruction.
+(decl rv_vand_vx (Reg Reg VecOpMasking VState) Reg)
+(rule (rv_vand_vx vs2 vs1 mask vstate)
+  (vec_alu_rrr (VecAluOpRRR.VandVX) vs2 vs1 mask vstate))
+
+;; Helper for emitting the `vand.vi` instruction.
+(decl rv_vand_vi (Reg Imm5 VecOpMasking VState) Reg)
+(rule (rv_vand_vi vs2 imm mask vstate)
+  (vec_alu_rr_imm5 (VecAluOpRRImm5.VandVI) vs2 imm mask vstate))
 
 ;; Helper for emitting the `vor.vv` instruction.
 (decl rv_vor_vv (Reg Reg VecOpMasking VState) Reg)
