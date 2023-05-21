@@ -156,11 +156,18 @@ fn bench_deserialize_module(c: &mut Criterion, path: &Path) {
     let state = Lazy::new(|| {
         let engine = Engine::default();
         let module = Module::from_file(&engine, path).expect("failed to load WASI example module");
-        std::fs::write(tmpfile.path(), module.serialize().unwrap()).unwrap();
-        (engine, tmpfile.path())
+        let bytes = module.serialize().unwrap();
+        std::fs::write(tmpfile.path(), bytes.clone()).unwrap();
+        (engine, bytes, tmpfile.path())
     });
     group.bench_function(BenchmarkId::new("deserialize", name), |b| {
-        let (engine, path) = &*state;
+        let (engine, bytes, _) = &*state;
+        b.iter(|| unsafe {
+            Module::deserialize(&engine, bytes).unwrap();
+        });
+    });
+    group.bench_function(BenchmarkId::new("deserialize_file", name), |b| {
+        let (engine, _, path) = &*state;
         b.iter(|| unsafe {
             Module::deserialize_file(&engine, path).unwrap();
         });
