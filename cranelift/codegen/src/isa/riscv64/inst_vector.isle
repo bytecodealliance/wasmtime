@@ -91,7 +91,11 @@
 (type VecAluOpRRR (enum
   ;; Vector-Vector Opcodes
   (VaddVV)
+  (VsaddVV)
+  (VsadduVV)
   (VsubVV)
+  (VssubVV)
+  (VssubuVV)
   (VmulVV)
   (VmulhVV)
   (VmulhuVV)
@@ -107,8 +111,12 @@
 
   ;; Vector-Scalar Opcodes
   (VaddVX)
+  (VsaddVX)
+  (VsadduVX)
   (VsubVX)
   (VrsubVX)
+  (VssubVX)
+  (VssubuVX)
   (VandVX)
   (VorVX)
   (VxorVX)
@@ -127,6 +135,8 @@
 (type VecAluOpRRImm5 (enum
   ;; Regular VI Opcodes
   (VaddVI)
+  (VsaddVI)
+  (VsadduVI)
   (VrsubVI)
   (VandVI)
   (VorVI)
@@ -280,6 +290,36 @@
 (rule (rv_vadd_vi vs2 imm mask vstate)
   (vec_alu_rr_imm5 (VecAluOpRRImm5.VaddVI) vs2 imm mask vstate))
 
+;; Helper for emitting the `vsadd.vv` instruction.
+(decl rv_vsadd_vv (Reg Reg VecOpMasking VState) Reg)
+(rule (rv_vsadd_vv vs2 vs1 mask vstate)
+  (vec_alu_rrr (VecAluOpRRR.VsaddVV) vs2 vs1 mask vstate))
+
+;; Helper for emitting the `vsadd.vx` instruction.
+(decl rv_vsadd_vx (Reg Reg VecOpMasking VState) Reg)
+(rule (rv_vsadd_vx vs2 vs1 mask vstate)
+  (vec_alu_rrr (VecAluOpRRR.VsaddVX) vs2 vs1 mask vstate))
+
+;; Helper for emitting the `vsadd.vi` instruction.
+(decl rv_vsadd_vi (Reg Imm5 VecOpMasking VState) Reg)
+(rule (rv_vsadd_vi vs2 imm mask vstate)
+  (vec_alu_rr_imm5 (VecAluOpRRImm5.VsaddVI) vs2 imm mask vstate))
+
+;; Helper for emitting the `vsaddu.vv` instruction.
+(decl rv_vsaddu_vv (Reg Reg VecOpMasking VState) Reg)
+(rule (rv_vsaddu_vv vs2 vs1 mask vstate)
+  (vec_alu_rrr (VecAluOpRRR.VsadduVV) vs2 vs1 mask vstate))
+
+;; Helper for emitting the `vsaddu.vx` instruction.
+(decl rv_vsaddu_vx (Reg Reg VecOpMasking VState) Reg)
+(rule (rv_vsaddu_vx vs2 vs1 mask vstate)
+  (vec_alu_rrr (VecAluOpRRR.VsadduVX) vs2 vs1 mask vstate))
+
+;; Helper for emitting the `vsaddu.vi` instruction.
+(decl rv_vsaddu_vi (Reg Imm5 VecOpMasking VState) Reg)
+(rule (rv_vsaddu_vi vs2 imm mask vstate)
+  (vec_alu_rr_imm5 (VecAluOpRRImm5.VsadduVI) vs2 imm mask vstate))
+
 ;; Helper for emitting the `vsub.vv` instruction.
 (decl rv_vsub_vv (Reg Reg VecOpMasking VState) Reg)
 (rule (rv_vsub_vv vs2 vs1 mask vstate)
@@ -294,6 +334,26 @@
 (decl rv_vrsub_vx (Reg Reg VecOpMasking VState) Reg)
 (rule (rv_vrsub_vx vs2 vs1 mask vstate)
   (vec_alu_rrr (VecAluOpRRR.VrsubVX) vs2 vs1 mask vstate))
+
+;; Helper for emitting the `vssub.vv` instruction.
+(decl rv_vssub_vv (Reg Reg VecOpMasking VState) Reg)
+(rule (rv_vssub_vv vs2 vs1 mask vstate)
+  (vec_alu_rrr (VecAluOpRRR.VssubVV) vs2 vs1 mask vstate))
+
+;; Helper for emitting the `vssub.vx` instruction.
+(decl rv_vssub_vx (Reg Reg VecOpMasking VState) Reg)
+(rule (rv_vssub_vx vs2 vs1 mask vstate)
+  (vec_alu_rrr (VecAluOpRRR.VssubVX) vs2 vs1 mask vstate))
+
+;; Helper for emitting the `vssubu.vv` instruction.
+(decl rv_vssubu_vv (Reg Reg VecOpMasking VState) Reg)
+(rule (rv_vssubu_vv vs2 vs1 mask vstate)
+  (vec_alu_rrr (VecAluOpRRR.VssubuVV) vs2 vs1 mask vstate))
+
+;; Helper for emitting the `vssubu.vx` instruction.
+(decl rv_vssubu_vx (Reg Reg VecOpMasking VState) Reg)
+(rule (rv_vssubu_vx vs2 vs1 mask vstate)
+  (vec_alu_rrr (VecAluOpRRR.VssubuVX) vs2 vs1 mask vstate))
 
 ;; Helper for emitting the `vneg.v` pseudo-instruction.
 (decl rv_vneg_v (Reg VecOpMasking VState) Reg)

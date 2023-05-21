@@ -281,8 +281,13 @@ impl VecAluOpRRR {
             VecAluOpRRR::VslidedownVX => 0b001111,
             VecAluOpRRR::VfrsubVF => 0b100111,
             VecAluOpRRR::VmergeVVM | VecAluOpRRR::VmergeVXM | VecAluOpRRR::VfmergeVFM => 0b010111,
-            VecAluOpRRR::VfdivVV | VecAluOpRRR::VfdivVF => 0b100000,
-            VecAluOpRRR::VfrdivVF => 0b100001,
+            VecAluOpRRR::VfdivVV
+            | VecAluOpRRR::VfdivVF
+            | VecAluOpRRR::VsadduVV
+            | VecAluOpRRR::VsadduVX => 0b100000,
+            VecAluOpRRR::VfrdivVF | VecAluOpRRR::VsaddVV | VecAluOpRRR::VsaddVX => 0b100001,
+            VecAluOpRRR::VssubuVV | VecAluOpRRR::VssubuVX => 0b100010,
+            VecAluOpRRR::VssubVV | VecAluOpRRR::VssubVX => 0b100011,
             VecAluOpRRR::VfsgnjnVV => 0b001001,
         }
     }
@@ -290,7 +295,11 @@ impl VecAluOpRRR {
     pub fn category(&self) -> VecOpCategory {
         match self {
             VecAluOpRRR::VaddVV
+            | VecAluOpRRR::VsaddVV
+            | VecAluOpRRR::VsadduVV
             | VecAluOpRRR::VsubVV
+            | VecAluOpRRR::VssubVV
+            | VecAluOpRRR::VssubuVV
             | VecAluOpRRR::VandVV
             | VecAluOpRRR::VorVV
             | VecAluOpRRR::VxorVV
@@ -299,7 +308,11 @@ impl VecAluOpRRR {
                 VecOpCategory::OPMVV
             }
             VecAluOpRRR::VaddVX
+            | VecAluOpRRR::VsaddVX
+            | VecAluOpRRR::VsadduVX
             | VecAluOpRRR::VsubVX
+            | VecAluOpRRR::VssubVX
+            | VecAluOpRRR::VssubuVX
             | VecAluOpRRR::VrsubVX
             | VecAluOpRRR::VandVX
             | VecAluOpRRR::VorVX
@@ -365,6 +378,8 @@ impl VecAluOpRRImm5 {
             VecAluOpRRImm5::VxorVI => 0b001011,
             VecAluOpRRImm5::VslidedownVI => 0b001111,
             VecAluOpRRImm5::VmergeVIM => 0b010111,
+            VecAluOpRRImm5::VsadduVI => 0b100000,
+            VecAluOpRRImm5::VsaddVI => 0b100001,
         }
     }
 
@@ -376,7 +391,9 @@ impl VecAluOpRRImm5 {
             | VecAluOpRRImm5::VorVI
             | VecAluOpRRImm5::VxorVI
             | VecAluOpRRImm5::VslidedownVI
-            | VecAluOpRRImm5::VmergeVIM => VecOpCategory::OPIVI,
+            | VecAluOpRRImm5::VmergeVIM
+            | VecAluOpRRImm5::VsadduVI
+            | VecAluOpRRImm5::VsaddVI => VecOpCategory::OPIVI,
         }
     }
 
@@ -388,7 +405,9 @@ impl VecAluOpRRImm5 {
             | VecAluOpRRImm5::VandVI
             | VecAluOpRRImm5::VorVI
             | VecAluOpRRImm5::VxorVI
-            | VecAluOpRRImm5::VmergeVIM => false,
+            | VecAluOpRRImm5::VmergeVIM
+            | VecAluOpRRImm5::VsadduVI
+            | VecAluOpRRImm5::VsaddVI => false,
         }
     }
 }
