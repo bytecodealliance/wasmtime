@@ -918,7 +918,7 @@ mod tests {
 
         let mut list = EntityList::from_slice(&[i1, i2, i3, i4], pool);
         assert_eq!(list.as_slice(pool), &[i1, i2, i3, i4]);
-        let mut list2 = EntityList::from_slice(&[i4, i3, i2, i1], pool);
+        let list2 = EntityList::from_slice(&[i4, i3, i2, i1], pool);
         assert_eq!(list2.as_slice(pool), &[i4, i3, i2, i1]);
         list.copy_from(Some(&list2), 0..0, 0, pool);
         assert_eq!(list.as_slice(pool), &[i1, i2, i3, i4]);
