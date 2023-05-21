@@ -482,6 +482,47 @@ impl<T: EntityRef + ReservedValue> EntityList<T> {
         }
     }
 
+    /// Copies a slice from an entity list in the same pool to a position in this one.
+    ///
+    /// If `other` is `None`, this copies from within `self`.
+    pub fn copy_from(
+        &mut self,
+        other: Option<&Self>,
+        slice: impl core::ops::RangeBounds<usize>,
+        index: usize,
+        pool: &mut ListPool<T>,
+    ) {
+        assert!(
+            index <= self.len(pool),
+            "attempted to copy a slice out of bounds of `self`"
+        );
+
+        let (other_index, other_len) = match other {
+            Some(other) => (other.index, other.len(pool)),
+            None => (self.index, self.len(pool)),
+        };
+
+        let start = match slice.start_bound() {
+            core::ops::Bound::Included(&x) => x,
+            core::ops::Bound::Excluded(&x) => x + 1,
+            core::ops::Bound::Unbounded => 0,
+        } + other_index as usize;
+        let end = match slice.end_bound() {
+            core::ops::Bound::Included(&x) => x + 1,
+            core::ops::Bound::Excluded(&x) => x,
+            core::ops::Bound::Unbounded => other_len,
+        } + other_index as usize;
+        let count = end - start;
+        assert!(
+            count <= other_len,
+            "attempted to copy a slice from out of bounds of `other`"
+        );
+
+        self.grow_at(index, count, pool);
+        pool.data
+            .copy_within(start..end, index + self.index as usize);
+    }
+
     /// Inserts an element as position `index` in the list, shifting all elements after it to the
     /// right.
     pub fn insert(&mut self, index: usize, element: T, pool: &mut ListPool<T>) {
@@ -864,5 +905,29 @@ mod tests {
         assert_eq!(list.as_slice(pool), &[i1, i2]);
         list.truncate(0, pool);
         assert!(list.is_empty());
+    }
+
+    #[test]
+    fn copy_from() {
+        let pool = &mut ListPool::<Inst>::new();
+
+        let i1 = Inst::new(1);
+        let i2 = Inst::new(2);
+        let i3 = Inst::new(3);
+        let i4 = Inst::new(4);
+
+        let mut list = EntityList::from_slice(&[i1, i2, i3, i4], pool);
+        assert_eq!(list.as_slice(pool), &[i1, i2, i3, i4]);
+        let mut list2 = EntityList::from_slice(&[i4, i3, i2, i1], pool);
+        assert_eq!(list2.as_slice(pool), &[i4, i3, i2, i1]);
+        list.copy_from(Some(&list2), 0..0, 0, pool);
+        assert_eq!(list.as_slice(pool), &[i1, i2, i3, i4]);
+        list.copy_from(Some(&list2), 0..4, 0, pool);
+        assert_eq!(list.as_slice(pool), &[i4, i3, i2, i1, i1, i2, i3, i4]);
+        list.copy_from(None, 0..=1, 8, pool);
+        assert_eq!(
+            list.as_slice(pool),
+            &[i4, i3, i2, i1, i1, i2, i3, i4, i4, i3]
+        );
     }
 }
