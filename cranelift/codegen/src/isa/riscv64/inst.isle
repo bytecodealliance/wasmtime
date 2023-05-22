@@ -2151,32 +2151,6 @@
       (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 low high)
     )))
 
-
-(decl lower_i128_ushr (ValueRegs ValueRegs) ValueRegs)
-(rule
-  (lower_i128_ushr x y)
-  (let
-    ((tmp ValueRegs (gen_shamt $I128 (value_regs_get y 0)))
-      (shamt XReg (value_regs_get tmp 0))
-      (len_sub_shamt XReg (value_regs_get tmp 1))
-
-      ;; low part.
-      (low_part1 XReg (rv_sll (value_regs_get x 1) len_sub_shamt))
-      (low_part2 XReg (gen_select_reg (IntCC.Equal) shamt (zero_reg) (zero_reg) low_part1))
-      ;;
-      (low_part3 XReg (rv_srl (value_regs_get x 0) shamt))
-      (low XReg (rv_or low_part2 low_part3 ))
-      ;;
-      (const64 XReg (load_u64_constant 64))
-
-      ;;
-      (high XReg (rv_srl (value_regs_get x 1) shamt))
-      (shamt_128 XReg (rv_andi (value_regs_get y 0) (imm12_const 127))))
-    (value_regs
-      (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 high low)
-      (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 (zero_reg) high))))
-
-
 (decl lower_i128_sshr (ValueRegs ValueRegs) ValueRegs)
 (rule
   (lower_i128_sshr x y)
