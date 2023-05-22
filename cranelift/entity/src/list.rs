@@ -483,11 +483,9 @@ impl<T: EntityRef + ReservedValue> EntityList<T> {
     }
 
     /// Copies a slice from an entity list in the same pool to a position in this one.
-    ///
-    /// If `other` is `None`, this copies from within `self`.
     pub fn copy_from(
         &mut self,
-        other: Option<&Self>,
+        other: &Self,
         slice: impl core::ops::RangeBounds<usize>,
         index: usize,
         pool: &mut ListPool<T>,
@@ -496,11 +494,12 @@ impl<T: EntityRef + ReservedValue> EntityList<T> {
             index <= self.len(pool),
             "attempted to copy a slice out of bounds of `self`"
         );
+        assert_ne!(
+            self.index, other.index,
+            "cannot copy within one `EntityList`"
+        );
 
-        let (other_index, other_len) = match other {
-            Some(other) => (other.index, other.len(pool)),
-            None => (self.index, self.len(pool)),
-        };
+        let (other_index, other_len) = (other.index, other.len(pool));
 
         let start = match slice.start_bound() {
             core::ops::Bound::Included(&x) => x,
@@ -920,14 +919,34 @@ mod tests {
         assert_eq!(list.as_slice(pool), &[i1, i2, i3, i4]);
         let list2 = EntityList::from_slice(&[i4, i3, i2, i1], pool);
         assert_eq!(list2.as_slice(pool), &[i4, i3, i2, i1]);
-        list.copy_from(Some(&list2), 0..0, 0, pool);
+        list.copy_from(&list2, 0..0, 0, pool);
         assert_eq!(list.as_slice(pool), &[i1, i2, i3, i4]);
-        list.copy_from(Some(&list2), 0..4, 0, pool);
+        list.copy_from(&list2, 0..4, 0, pool);
         assert_eq!(list.as_slice(pool), &[i4, i3, i2, i1, i1, i2, i3, i4]);
-        list.copy_from(None, 0..=1, 8, pool);
+    }
+
+    #[test]
+    #[should_panic]
+    fn copy_from_self() {
+        let pool = &mut ListPool::<Inst>::new();
+
+        let i1 = Inst::new(1);
+        let i2 = Inst::new(2);
+        let i3 = Inst::new(3);
+        let i4 = Inst::new(4);
+
+        let mut list = EntityList::from_slice(&[i4, i3, i2, i1, i1, i2, i3, i4], pool);
+        let list_again = list;
+        assert_eq!(list.as_slice(pool), &[i4, i3, i2, i1, i1, i2, i3, i4]);
+        list.copy_from(&list_again, 0..=1, 8, pool);
         assert_eq!(
             list.as_slice(pool),
             &[i4, i3, i2, i1, i1, i2, i3, i4, i4, i3]
         );
+        list.copy_from(&list_again, .., 7, pool);
+        assert_eq!(
+            list.as_slice(pool),
+            &[i4, i3, i2, i1, i1, i2, i4, i3, i2, i1, i1, i2, i3, i4, i4, i3, i3, i4, i4, i3]
+        )
     }
 }
