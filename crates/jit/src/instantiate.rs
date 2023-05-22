@@ -568,10 +568,10 @@ impl CompiledModule {
     /// this module, providing both their index and their in-memory body.
     pub fn array_to_wasm_trampolines(
         &self,
-    ) -> impl ExactSizeIterator<Item = (DefinedFuncIndex, &[u8])> + '_ {
+    ) -> impl Iterator<Item = (DefinedFuncIndex, &[u8])> + '_ {
         self.funcs
             .keys()
-            .map(move |i| (i, self.array_to_wasm_trampoline(i).unwrap()))
+            .filter_map(move |i| Some((i, self.array_to_wasm_trampoline(i)?)))
     }
 
     /// Get the native-to-Wasm trampoline for the function `index` points to.
@@ -590,10 +590,10 @@ impl CompiledModule {
     /// this module, providing both their index and their in-memory body.
     pub fn native_to_wasm_trampolines(
         &self,
-    ) -> impl ExactSizeIterator<Item = (DefinedFuncIndex, &[u8])> + '_ {
+    ) -> impl Iterator<Item = (DefinedFuncIndex, &[u8])> + '_ {
         self.funcs
             .keys()
-            .map(move |i| (i, self.native_to_wasm_trampoline(i).unwrap()))
+            .filter_map(move |i| Some((i, self.native_to_wasm_trampoline(i)?)))
     }
 
     /// Get the Wasm-to-native trampoline for the given signature.
