@@ -328,6 +328,7 @@
       (vd WritableReg)
       (vs2 Reg)
       (vs1 Reg)
+      (mask VecOpMasking)
       (vstate VState))
 
     (VecAluRRImm5
@@ -335,18 +336,21 @@
       (vd WritableReg)
       (vs2 Reg)
       (imm Imm5)
+      (mask VecOpMasking)
       (vstate VState))
 
     (VecAluRR
       (op VecAluOpRR)
       (vd WritableReg)
       (vs Reg)
+      (mask VecOpMasking)
       (vstate VState))
 
     (VecAluRImm5
       (op VecAluOpRImm5)
       (vd WritableReg)
       (imm Imm5)
+      (mask VecOpMasking)
       (vstate VState))
 
     (VecSetState
@@ -358,6 +362,7 @@
       (to WritableReg)
       (from VecAMode)
       (flags MemFlags)
+      (mask VecOpMasking)
       (vstate VState))
 
     (VecStore
@@ -365,6 +370,7 @@
       (to VecAMode)
       (from Reg)
       (flags MemFlags)
+      (mask VecOpMasking)
       (vstate VState))
 ))
 
@@ -1359,6 +1365,10 @@
 (decl imm5_from_u64 (Imm5) u64)
 (extern extractor imm5_from_u64 imm5_from_u64)
 
+;; Construct a Imm5 from an i8
+(decl pure partial imm5_from_i8 (i8) Imm5)
+(extern constructor imm5_from_i8 imm5_from_i8)
+
 ;; Extractor that matches a `Value` equivalent to a replicated Imm5 on all lanes.
 ;; TODO: Try matching vconst here as well
 (decl replicated_imm5 (Imm5) Value)
@@ -2208,19 +2218,6 @@
 
 (decl alloc_vec_writable (Type) VecWritableReg)
 (extern constructor alloc_vec_writable alloc_vec_writable)
-
-(decl gen_bitselect (Type Reg Reg Reg) Reg)
-(rule
-  (gen_bitselect ty c x y)
-  (let
-    ((tmp_x Reg (rv_and c x))
-      ;;;inverse condition
-      (c_inverse Reg (rv_not c))
-      ;;;get all y part.
-      (tmp_y Reg (rv_and c_inverse y))
-      ;;;get reuslt.
-      (result Reg (rv_or tmp_x tmp_y)))
-    result))
 
 (decl gen_int_select (Type IntSelectOP ValueRegs ValueRegs) ValueRegs)
 (rule

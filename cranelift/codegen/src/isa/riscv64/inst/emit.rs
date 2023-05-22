@@ -5,7 +5,6 @@ use crate::ir::RelSourceLoc;
 use crate::ir::TrapCode;
 use crate::isa::riscv64::inst::*;
 use crate::isa::riscv64::inst::{zero_reg, AluOPRRR};
-use crate::isa::riscv64::lower::isle::generated_code::VecOpMasking;
 use crate::machinst::{AllocationConsumer, Reg, Writable};
 use cranelift_control::ControlPlane;
 use regalloc2::Allocation;
@@ -2804,32 +2803,58 @@ impl MachInstEmit for Inst {
                 sink.bind_label(label_done, &mut state.ctrl_plane);
             }
             &Inst::VecAluRRR {
-                op, vd, vs1, vs2, ..
+                op,
+                vd,
+                vs1,
+                vs2,
+                ref mask,
+                ..
             } => {
                 let vs1 = allocs.next(vs1);
                 let vs2 = allocs.next(vs2);
                 let vd = allocs.next_writable(vd);
+                let mask = mask.with_allocs(&mut allocs);
 
-                sink.put4(encode_valu(op, vd, vs1, vs2, VecOpMasking::Disabled));
+                sink.put4(encode_valu(op, vd, vs1, vs2, mask));
             }
             &Inst::VecAluRRImm5 {
-                op, vd, imm, vs2, ..
+                op,
+                vd,
+                imm,
+                vs2,
+                ref mask,
+                ..
             } => {
                 let vs2 = allocs.next(vs2);
                 let vd = allocs.next_writable(vd);
+                let mask = mask.with_allocs(&mut allocs);
 
-                sink.put4(encode_valu_imm(op, vd, imm, vs2, VecOpMasking::Disabled));
+                sink.put4(encode_valu_imm(op, vd, imm, vs2, mask));
             }
-            &Inst::VecAluRR { op, vd, vs, .. } => {
+            &Inst::VecAluRR {
+                op,
+                vd,
+                vs,
+                ref mask,
+                ..
+            } => {
                 let vs = allocs.next(vs);
                 let vd = allocs.next_writable(vd);
+                let mask = mask.with_allocs(&mut allocs);
 
-                sink.put4(encode_valu_rr(op, vd, vs, VecOpMasking::Disabled));
+                sink.put4(encode_valu_rr(op, vd, vs, mask));
             }
-            &Inst::VecAluRImm5 { op, vd, imm, .. } => {
+            &Inst::VecAluRImm5 {
+                op,
+                vd,
+                imm,
+                ref mask,
+                ..
+            } => {
                 let vd = allocs.next_writable(vd);
+                let mask = mask.with_allocs(&mut allocs);
 
-                sink.put4(encode_valu_r_imm(op, vd, imm, VecOpMasking::Disabled));
+                sink.put4(encode_valu_r_imm(op, vd, imm, mask));
             }
             &Inst::VecSetState { rd, ref vstate } => {
                 let rd = allocs.next_writable(rd);
@@ -2849,11 +2874,13 @@ impl MachInstEmit for Inst {
                 eew,
                 to,
                 ref from,
+                ref mask,
                 flags,
                 ..
             } => {
                 let from = from.clone().with_allocs(&mut allocs);
                 let to = allocs.next_writable(to);
+                let mask = mask.with_allocs(&mut allocs);
 
                 // Vector Loads don't support immediate offsets, so we need to load it into a register.
                 let addr = match from {
@@ -2889,8 +2916,7 @@ impl MachInstEmit for Inst {
                     eew,
                     addr,
                     from.lumop(),
-                    // We don't implement masking yet.
-                    VecOpMasking::Disabled,
+                    mask,
                     from.mop(),
                     from.nf(),
                 ));
@@ -2900,11 +2926,13 @@ impl MachInstEmit for Inst {
                 eew,
                 ref to,
                 from,
+                ref mask,
                 flags,
                 ..
             } => {
                 let to = to.clone().with_allocs(&mut allocs);
                 let from = allocs.next(from);
+                let mask = mask.with_allocs(&mut allocs);
 
                 // Vector Stores don't support immediate offsets, so we need to load it into a register.
                 let addr = match to {
@@ -2940,8 +2968,7 @@ impl MachInstEmit for Inst {
                     eew,
                     addr,
                     to.sumop(),
-                    // We don't implement masking yet.
-                    VecOpMasking::Disabled,
+                    mask,
                     to.mop(),
                     to.nf(),
                 ));

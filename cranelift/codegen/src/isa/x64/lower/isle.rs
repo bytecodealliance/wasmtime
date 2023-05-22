@@ -25,7 +25,7 @@ use crate::{
     isa::{
         unwind::UnwindInst,
         x64::{
-            abi::X64Caller,
+            abi::X64CallSite,
             inst::{args::*, regs, CallInfo},
         },
     },
@@ -77,7 +77,7 @@ pub(crate) fn lower_branch(
 
 impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     isle_lower_prelude_methods!();
-    isle_prelude_caller_methods!(X64ABIMachineSpec, X64Caller);
+    isle_prelude_caller_methods!(X64ABIMachineSpec, X64CallSite);
 
     #[inline]
     fn operand_size_of_type_32_64(&mut self, ty: Type) -> OperandSize {
@@ -180,42 +180,42 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     }
 
     #[inline]
-    fn avx512vl_enabled(&mut self, _: Type) -> bool {
+    fn use_avx512vl_simd(&mut self) -> bool {
         self.backend.x64_flags.use_avx512vl_simd()
     }
 
     #[inline]
-    fn avx512dq_enabled(&mut self, _: Type) -> bool {
+    fn use_avx512dq_simd(&mut self) -> bool {
         self.backend.x64_flags.use_avx512dq_simd()
     }
 
     #[inline]
-    fn avx512f_enabled(&mut self, _: Type) -> bool {
+    fn use_avx512f_simd(&mut self) -> bool {
         self.backend.x64_flags.use_avx512f_simd()
     }
 
     #[inline]
-    fn avx512bitalg_enabled(&mut self, _: Type) -> bool {
+    fn use_avx512bitalg_simd(&mut self) -> bool {
         self.backend.x64_flags.use_avx512bitalg_simd()
     }
 
     #[inline]
-    fn avx512vbmi_enabled(&mut self, _: Type) -> bool {
+    fn use_avx512vbmi_simd(&mut self) -> bool {
         self.backend.x64_flags.use_avx512vbmi_simd()
     }
 
     #[inline]
-    fn use_lzcnt(&mut self, _: Type) -> bool {
+    fn use_lzcnt(&mut self) -> bool {
         self.backend.x64_flags.use_lzcnt()
     }
 
     #[inline]
-    fn use_bmi1(&mut self, _: Type) -> bool {
+    fn use_bmi1(&mut self) -> bool {
         self.backend.x64_flags.use_bmi1()
     }
 
     #[inline]
-    fn use_popcnt(&mut self, _: Type) -> bool {
+    fn use_popcnt(&mut self) -> bool {
         self.backend.x64_flags.use_popcnt()
     }
 
@@ -341,21 +341,6 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     #[inline]
     fn synthetic_amode_to_reg_mem(&mut self, addr: &SyntheticAmode) -> RegMem {
         RegMem::mem(addr.clone())
-    }
-
-    #[inline]
-    fn amode_imm_reg_reg_shift(&mut self, simm32: u32, base: Gpr, index: Gpr, shift: u8) -> Amode {
-        Amode::imm_reg_reg_shift(simm32, base, index, shift)
-    }
-
-    #[inline]
-    fn amode_imm_reg(&mut self, simm32: u32, base: Gpr) -> Amode {
-        Amode::imm_reg(simm32, base.to_reg())
-    }
-
-    #[inline]
-    fn amode_with_flags(&mut self, amode: &Amode, flags: MemFlags) -> Amode {
-        amode.with_flags(flags)
     }
 
     #[inline]
@@ -1070,7 +1055,7 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
 }
 
 impl IsleContext<'_, '_, MInst, X64Backend> {
-    isle_prelude_method_helpers!(X64Caller);
+    isle_prelude_method_helpers!(X64CallSite);
 
     fn load_xmm_unaligned(&mut self, addr: SyntheticAmode) -> Xmm {
         let tmp = self.lower_ctx.alloc_tmp(types::F32X4).only_reg().unwrap();

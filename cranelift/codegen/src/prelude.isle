@@ -383,6 +383,10 @@
 (decl ty_int (Type) Type)
 (extern extractor ty_int ty_int)
 
+;; An extractor that only matches scalar types, float or int or ref's.
+(decl ty_scalar (Type) Type)
+(extern extractor ty_scalar ty_scalar)
+
 ;; An extractor that only matches scalar floating-point types--F32 or F64.
 (decl ty_scalar_float (Type) Type)
 (extern extractor ty_scalar_float ty_scalar_float)
@@ -511,6 +515,10 @@
 (decl pure offset32_to_u32 (Offset32) u32)
 (extern constructor offset32_to_u32 offset32_to_u32)
 
+;; Convert a number to an `Offset32`
+(decl pure u32_to_offset32 (u32) Offset32)
+(extern constructor u32_to_offset32 u32_to_offset32)
+
 ;; This is a direct import of `IntCC::unsigned`.
 ;; Get the corresponding IntCC with the signed component removed.
 ;; For conditions without a signed component, this is a no-op.
@@ -563,3 +571,4 @@
 ;;;; Automatic conversions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (convert Offset32 u32 offset32_to_u32)
+(convert u32 Offset32 u32_to_offset32)

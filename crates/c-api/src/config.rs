@@ -195,6 +195,11 @@ pub unsafe extern "C" fn wasmtime_config_cache_config_load(
 }
 
 #[no_mangle]
+pub extern "C" fn wasmtime_config_static_memory_forced_set(c: &mut wasm_config_t, enable: bool) {
+    c.config.static_memory_forced(enable);
+}
+
+#[no_mangle]
 pub extern "C" fn wasmtime_config_static_memory_maximum_size_set(c: &mut wasm_config_t, size: u64) {
     c.config.static_memory_maximum_size(size);
 }

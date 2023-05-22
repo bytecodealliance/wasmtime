@@ -221,7 +221,7 @@ WASMTIME_CONFIG_PROP(void, wasm_memory64, bool)
 WASMTIME_CONFIG_PROP(void, strategy, wasmtime_strategy_t)
 
 /**
- * \brief Configure wether wasmtime should compile a module using multiple threads.
+ * \brief Configure whether wasmtime should compile a module using multiple threads.
  *
  * For more information see the Rust documentation at
  * https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.parallel_compilation.
@@ -264,6 +264,16 @@ WASMTIME_CONFIG_PROP(void, cranelift_opt_level, wasmtime_opt_level_t)
  * This setting in #WASMTIME_PROFILING_STRATEGY_NONE by default.
  */
 WASMTIME_CONFIG_PROP(void, profiler, wasmtime_profiling_strategy_t)
+
+/**
+ * \brief Configures the “static” style of memory to always be used.
+ *
+ * This setting is `false` by default.
+ *
+ * For more information see the Rust documentation at
+ * https://bytecodealliance.github.io/wasmtime/api/wasmtime/struct.Config.html#method.static_memory_forced.
+ */
+WASMTIME_CONFIG_PROP(void, static_memory_forced, bool)
 
 /**
  * \brief Configures the maximum size for memory to be considered "static"

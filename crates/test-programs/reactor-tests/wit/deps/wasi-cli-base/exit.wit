@@ -1,0 +1,4 @@
+default interface wasi-exit {
+  /// Exit the curerent instance and any linked instances.
+  exit: func(status: result)
+}

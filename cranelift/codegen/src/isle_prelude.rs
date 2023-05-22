@@ -374,6 +374,15 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
+        fn ty_scalar(&mut self, ty: Type) -> Option<Type> {
+            if ty.lane_count() == 1 {
+                Some(ty)
+            } else {
+                None
+            }
+        }
+
+        #[inline]
         fn ty_scalar_float(&mut self, ty: Type) -> Option<Type> {
             match ty {
                 F32 | F64 => Some(ty),
@@ -719,6 +728,11 @@ macro_rules! isle_common_prelude_methods {
         fn offset32_to_u32(&mut self, offset: Offset32) -> u32 {
             let offset: i32 = offset.into();
             offset as u32
+        }
+
+        #[inline]
+        fn u32_to_offset32(&mut self, offset: u32) -> Offset32 {
+            Offset32::new(offset as i32)
         }
 
         fn range(&mut self, start: usize, end: usize) -> Range {

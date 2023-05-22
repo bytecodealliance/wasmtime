@@ -8,4 +8,6 @@ cargo test \
     --exclude wasi-crypto \
     --exclude wasi-tests \
     --exclude wasi-http-tests \
+    --exclude command-tests \
+    --exclude reactor-tests \
     $@

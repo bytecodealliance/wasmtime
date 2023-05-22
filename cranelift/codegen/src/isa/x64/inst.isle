@@ -155,7 +155,8 @@
 
        ;; Loads the memory address of addr into dst.
        (LoadEffectiveAddress (addr SyntheticAmode)
-                             (dst WritableGpr))
+                             (dst WritableGpr)
+                             (size OperandSize))
 
        ;; Sign-extended loads and moves: movs (bl bq wl wq lq) addr reg.
        (MovsxRmR (ext_mode ExtMode)
@@ -995,25 +996,6 @@
              ;; the given MachLabel.
              (RipRelative (target MachLabel))))
 
-;; Some Amode constructor helpers.
-
-(decl amode_with_flags (Amode MemFlags) Amode)
-(extern constructor amode_with_flags amode_with_flags)
-
-(decl amode_imm_reg (u32 Gpr) Amode)
-(extern constructor amode_imm_reg amode_imm_reg)
-
-(decl amode_imm_reg_flags (u32 Gpr MemFlags) Amode)
-(rule (amode_imm_reg_flags offset base flags)
-      (amode_with_flags (amode_imm_reg offset base) flags))
-
-(decl amode_imm_reg_reg_shift (u32 Gpr Gpr u8) Amode)
-(extern constructor amode_imm_reg_reg_shift amode_imm_reg_reg_shift)
-
-(decl amode_imm_reg_reg_shift_flags (u32 Gpr Gpr u8 MemFlags) Amode)
-(rule (amode_imm_reg_reg_shift_flags offset base index shift flags)
-      (amode_with_flags (amode_imm_reg_reg_shift offset base index shift) flags))
-
 ;; A helper to both check that the `Imm64` and `Offset32` values sum to less
 ;; than 32-bits AND return this summed `u32` value. Also, the `Imm64` will be
 ;; zero-extended from `Type` up to 64 bits. This is useful for `to_amode`.
@@ -1022,168 +1004,59 @@
 
 ;;;; Amode lowering ;;;;
 
-;; To generate an address for a memory access, we can pattern-match
-;; various CLIF sub-trees to x64's complex addressing modes (`Amode`).
-;;
-;; Information about available addressing modes is available in
-;; Intel's Software Developer's Manual, volume 2, section 2.1.5,
-;; "Addressing-Mode Encoding of ModR/M and SIB Bytes."
-;;
-;; The general strategy to build an `Amode` is to traverse over the
-;; input expression's addends, recursively deconstructing a tree of
-;; `iadd` operators that add up parts of the address, updating the
-;; `Amode` in an incremental fashion as we add in each piece.
-;;
-;; We start with an "immediate + register" form that encapsulates the
-;; load/store's built-in `Offset32` and `invalid_reg` as the
-;; register. This is given by `amode_initial`. Then we add `Value`s
-;; one at a time with `amode_add`. (Why start with `invalid_reg` at
-;; all? Because we don't want to special-case the first input and
-;; duplicate rules; this lets us use the "add a value" logic even for
-;; the first value.)
-;;
-;; It is always valid to use `amode_add` to add the one single
-;; `address` input to the load/store (i.e., the `Value` given to
-;; `to_amode`). In the fallback case, this is what we do. Then we get
-;; an `Amode.ImmReg` with the `Offset32` and `Value` below and nothing
-;; else; this always works and is not *that* bad.
-;;
-;; But we can often do better. The toplevel rule for `iadd` below will
-;; turn an `(amode_add amode (iadd a b))` into two invocations of
-;; `amode_add`, for each operand of the `iadd`. This is what allows us
-;; to handle sums of many parts.
-;;
-;; Then we "just" need to work out how we can incorporate a new
-;; component into an existing addressing mode:
-;;
-;; - Case 1: When we have an `ImmReg` and the register is
-;;   `invalid_reg` (the initial `Amode` above), we can put the new
-;;   addend into a register and insert it into the `ImmReg`.
-;;
-;; - Case 2: When we have an `ImmReg` with a valid register already,
-;;   and we have another register to add, we can transition to an
-;;   `ImmRegRegShift`.
-;;
-;; - Case 3: When we're adding an `ishl`, we can refine the above rule
-;;   and use the built-in multiplier of 1, 2, 4, 8 to implement a
-;;   left-shift by 0, 1, 2, 3.
-;;
-;; - Case 4: When we are adding another constant offset, we can fold
-;;   it into the existing offset, as long as the sum still fits into
-;;   the signed 32-bit field.
-;;
-;; - Case 5: And as a general fallback, we can generate a new `add`
-;;   instruction and add the new addend to an existing component of
-;;   the `Amode`.
+;; Converts a `Value` and a static offset into an `Amode` for x64, attempting
+;; to be as fancy as possible with offsets/registers/shifts/etc to make maximal
+;; use of the x64 addressing modes.
 (decl to_amode (MemFlags Value Offset32) Amode)
 
-;; Initial step in amode processing: create an ImmReg with
-;; (invalid_reg) and encapsulating the flags and offset from the
-;; load/store.
-(decl amode_initial (MemFlags Offset32) Amode)
-(rule (amode_initial flags (offset32 off))
-      (Amode.ImmReg off (invalid_reg) flags))
+;; Base case, "just put it in a register"
+(rule (to_amode flags base offset)
+      (Amode.ImmReg offset base flags))
 
-;; One step in amode processing: take an existing amode and add
-;; another value to it.
-(decl amode_add (Amode Value) Amode)
+;; Slightly-more-fancy case, if the address is the addition of two things then
+;; delegate to the `to_amode_add` helper.
+(rule 1 (to_amode flags (iadd x y) offset)
+      (to_amode_add flags x y offset))
 
-;; -- Top-level driver: pull apart the addends.
-;;
-;; Any amode can absorb an `iadd` by absorbing first the LHS of the
-;; add, then the RHS.
-;;
-;; Priority 2 to take this above fallbacks and ensure we traverse the
-;; `iadd` tree fully.
-(rule 2 (amode_add amode (iadd x y))
-      (let ((amode1 Amode (amode_add amode x))
-            (amode2 Amode (amode_add amode1 y)))
-        amode2))
+;; Same as `to_amode`, except that the base address is computed via the addition
+;; of the two `Value` arguments provided.
+(decl to_amode_add (MemFlags Value Value Offset32) Amode)
 
-;; -- Case 1 (adding a register to the initial Amode with invalid_reg).
-;;
-;; An Amode.ImmReg with invalid_reg (initial state) can absorb a
-;; register as the base register.
-(rule (amode_add (Amode.ImmReg off (invalid_reg) flags) value)
-      (Amode.ImmReg off value flags))
+;; Base case, "just put things in registers". Note that the shift value of 0
+;; here  means `x + (y << 0)` which is the same as `x + y`.
+(rule (to_amode_add flags x y offset)
+      (Amode.ImmRegRegShift offset x y 0 flags))
 
-;; -- Case 2 (adding a register to an Amode with a register already).
-;;
-;; An Amode.ImmReg can absorb another register as the index register.
-(rule (amode_add (Amode.ImmReg off (valid_reg base) flags) value)
-      ;; Shift of 0 --> base + 1*value.
-      (Amode.ImmRegRegShift off base value 0 flags))
-
-;; -- Case 3 (adding a shifted value to an Amode).
-;;
-;; An Amode.ImmReg can absorb a shift of another register as the index register.
-;;
-;; Priority 2 to take these rules above generic case.
-(rule 2 (amode_add (Amode.ImmReg off (valid_reg base) flags) (ishl index (iconst (uimm8 shift))))
+;; If the one of the arguments being added is itself a constant shift then
+;; that can be modeled directly so long as the shift is a modestly small amount.
+(rule 1 (to_amode_add flags x (ishl y (iconst (uimm8 shift))) offset)
       (if (u32_lteq (u8_as_u32 shift) 3))
-      (Amode.ImmRegRegShift off base index shift flags))
+      (Amode.ImmRegRegShift offset x y shift flags))
+(rule 2 (to_amode_add flags (ishl y (iconst (uimm8 shift))) x offset)
+      (if (u32_lteq (u8_as_u32 shift) 3))
+      (Amode.ImmRegRegShift offset x y shift flags))
 
-;; -- Case 4 (absorbing constant offsets).
+;; Constant extraction rules.
 ;;
-;; An Amode can absorb a constant (i64, or extended i32) as long as
-;; the sum still fits in the signed-32-bit offset.
+;; These rules attempt to find a constant within one of `x` or `y`, or deeper
+;; within them if they have their own adds. These only succeed if the constant
+;; itself can be represented with 32-bits and can be infallibly added to the
+;; offset that we already have.
 ;;
-;; Priority 3 in order to take this option above the fallback
-;; (immediate in register). Two rules, for imm+reg and
-;; imm+reg+scale*reg cases.
-(rule 3 (amode_add (Amode.ImmReg off base flags)
-                   (iconst (simm32 c)))
-      (if-let sum (s32_add_fallible off c))
-      (Amode.ImmReg sum base flags))
-(rule 3 (amode_add (Amode.ImmRegRegShift off base index shift flags)
-                   (iconst (simm32 c)))
-      (if-let sum (s32_add_fallible off c))
-      (Amode.ImmRegRegShift sum base index shift flags))
-
-;; Likewise for a zero-extended i32 const, as long as the constant
-;; wasn't negative. (Why nonnegative? Because adding a
-;; non-sign-extended negative to a 64-bit address is not the same as
-;; adding in simm32-space.)
-(rule 3 (amode_add (Amode.ImmReg off base flags)
-                   (uextend (iconst (simm32 (u32_nonnegative c)))))
-      (if-let sum (s32_add_fallible off c))
-      (Amode.ImmReg sum base flags))
-(rule 3 (amode_add (Amode.ImmRegRegShift off base index shift flags)
-                   (uextend (iconst (simm32 (u32_nonnegative c)))))
-      (if-let sum (s32_add_fallible off c))
-      (Amode.ImmRegRegShift sum base index shift flags))
-
-;; Likewise for a sign-extended i32 const.
-(rule 3 (amode_add (Amode.ImmReg off base flags)
-                   (sextend (iconst (simm32 c))))
-      (if-let sum (s32_add_fallible off c))
-      (Amode.ImmReg sum base flags))
-(rule 3 (amode_add (Amode.ImmRegRegShift off base index shift flags)
-                   (sextend (iconst (simm32 c))))
-      (if-let sum (s32_add_fallible off c))
-      (Amode.ImmRegRegShift sum base index shift flags))
-
-;; -- Case 5 (fallback to add a new value to an imm+reg+scale*reg).
-;;
-;; An Amode.ImmRegRegShift can absorb any other value by creating a
-;; new add instruction and replacing the base with
-;; (base+value).
-(rule (amode_add (Amode.ImmRegRegShift off base index shift flags) value)
-      (let ((sum Gpr (x64_add $I64 base value)))
-        (Amode.ImmRegRegShift off sum index shift flags)))
-
-;; Finally, define the toplevel `to_amode`.
-(rule (to_amode flags base @ (value_type (ty_addr64 _)) offset)
-      (amode_finalize (amode_add (amode_initial flags offset) base)))
-
-;; If an amode has no registers at all and only offsets (a constant
-;; value), we need to "finalize" it by sticking in a zero'd reg in
-;; place of the (invalid_reg) produced by (amode_initial).
-(decl amode_finalize (Amode) Amode)
-(rule 1 (amode_finalize (Amode.ImmReg off (invalid_reg) flags))
-      (Amode.ImmReg off (imm $I64 0) flags))
-(rule 0 (amode_finalize amode)
-      amode)
+;; Note the recursion here where this rule is defined in terms of itself to
+;; "peel" layers of constants.
+(rule 3 (to_amode_add flags (iadd x (iconst (simm32 c))) y offset)
+      (if-let sum (s32_add_fallible offset c))
+      (to_amode_add flags x y sum))
+(rule 4 (to_amode_add flags x (iadd y (iconst (simm32 c))) offset)
+      (if-let sum (s32_add_fallible offset c))
+      (to_amode_add flags x y sum))
+(rule 5 (to_amode_add flags x (iconst (simm32 c)) offset)
+      (if-let sum (s32_add_fallible offset c))
+      (to_amode flags x sum))
+(rule 6 (to_amode_add flags (iconst (simm32 c)) x offset)
+      (if-let sum (s32_add_fallible offset c))
+      (to_amode flags x sum))
 
 ;; Offsetting an Amode. Used when we need to do consecutive
 ;; loads/stores to adjacent addresses.
@@ -1743,29 +1616,29 @@
 
 ;;;; Helpers for Querying Enabled ISA Extensions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(decl avx512vl_enabled (bool) Type)
-(extern extractor infallible avx512vl_enabled avx512vl_enabled)
+(decl pure use_avx512vl_simd () bool)
+(extern constructor use_avx512vl_simd use_avx512vl_simd)
 
-(decl avx512dq_enabled (bool) Type)
-(extern extractor infallible avx512dq_enabled avx512dq_enabled)
+(decl pure use_avx512dq_simd () bool)
+(extern constructor use_avx512dq_simd use_avx512dq_simd)
 
-(decl avx512f_enabled (bool) Type)
-(extern extractor infallible avx512f_enabled avx512f_enabled)
+(decl pure use_avx512f_simd () bool)
+(extern constructor use_avx512f_simd use_avx512f_simd)
 
-(decl avx512bitalg_enabled (bool) Type)
-(extern extractor infallible avx512bitalg_enabled avx512bitalg_enabled)
+(decl pure use_avx512bitalg_simd () bool)
+(extern constructor use_avx512bitalg_simd use_avx512bitalg_simd)
 
-(decl avx512vbmi_enabled (bool) Type)
-(extern extractor infallible avx512vbmi_enabled avx512vbmi_enabled)
+(decl pure use_avx512vbmi_simd () bool)
+(extern constructor use_avx512vbmi_simd use_avx512vbmi_simd)
 
-(decl use_lzcnt (bool) Type)
-(extern extractor infallible use_lzcnt use_lzcnt)
+(decl pure use_lzcnt () bool)
+(extern constructor use_lzcnt use_lzcnt)
 
-(decl use_bmi1 (bool) Type)
-(extern extractor infallible use_bmi1 use_bmi1)
+(decl pure use_bmi1 () bool)
+(extern constructor use_bmi1 use_bmi1)
 
-(decl use_popcnt (bool) Type)
-(extern extractor infallible use_popcnt use_popcnt)
+(decl pure use_popcnt () bool)
+(extern constructor use_popcnt use_popcnt)
 
 (decl pure use_fma () bool)
 (extern constructor use_fma use_fma)
@@ -3965,10 +3838,10 @@
             (inst MInst (MInst.Neg size src dst)))
         (ProducesFlags.ProducesFlagsReturnsResultWithConsumer inst dst)))
 
-(decl x64_lea (SyntheticAmode) Gpr)
-(rule (x64_lea addr)
+(decl x64_lea (Type SyntheticAmode) Gpr)
+(rule (x64_lea ty addr)
       (let ((dst WritableGpr (temp_writable_gpr))
-            (_ Unit (emit (MInst.LoadEffectiveAddress addr dst))))
+            (_ Unit (emit (MInst.LoadEffectiveAddress addr dst (operand_size_of_type_32_64 ty)))))
         dst))
 
 ;; Helper for creating `ud2` instructions.
