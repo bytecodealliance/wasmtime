@@ -725,10 +725,55 @@
   (rv_sraiw x y))
 
 ;;;; Rules for `popcnt` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule (lower (has_type (fits_in_64 ty) (popcnt x)))
+
+(rule 0 (lower (has_type (ty_int_ref_scalar_64 ty) (popcnt x)))
   (lower_popcnt x ty))
+
 (rule 1 (lower (has_type $I128 (popcnt x)))
   (lower_popcnt_i128 x))
+
+;; Popcount using multiply.
+;; This is popcount64c() from
+;; http://en.wikipedia.org/wiki/Hamming_weight
+;;
+;; Here's the C version for 32 bits:
+;;  x = x - ((x>> 1) & 0x55555555);
+;;  x = (x & 0x33333333) + ((x >> 2) & 0x33333333);
+;;  x = ((x + (x >> 4)) & 0x0F0F0F0F);
+;;  return (x * 0x01010101) >> 24; // Here 24 is the type width - 8.
+;;
+;; TODO: LLVM generates a much better implementation for I8X16. See: https://godbolt.org/z/qr6vf9Gr3
+;; For the other types it seems to be largely the same.
+(rule 2 (lower (has_type (ty_vec_fits_in_register ty) (popcnt x)))
+  (if-let one (u64_to_uimm5 1))
+  (if-let two (u64_to_uimm5 2))
+  (if-let four (u64_to_uimm5 4))
+
+  (let (;; x = x - ((x >> 1) & 0x55555555);
+        (mask_55 XReg (imm (lane_type ty) (u64_and 0x5555555555555555 (ty_mask (lane_type ty)))))
+        (count2_shr VReg (rv_vsrl_vi x one (unmasked) ty))
+        (count2_and VReg (rv_vand_vx count2_shr mask_55 (unmasked) ty))
+        (count2 VReg (rv_vsub_vv x count2_and (unmasked) ty))
+
+        ;; x = (x & 0x33333333) + ((x >> 2) & 0x33333333);
+        (mask_33 XReg (imm (lane_type ty) (u64_and 0x3333333333333333 (ty_mask (lane_type ty)))))
+        (count4_shr VReg (rv_vsrl_vi count2 two (unmasked) ty))
+        (count4_and VReg (rv_vand_vx count4_shr mask_33 (unmasked) ty))
+        (count4_lhs VReg (rv_vand_vx count2 mask_33 (unmasked) ty))
+        (count4 VReg (rv_vadd_vv count4_lhs count4_and (unmasked) ty))
+
+        ;; x = (x + (x >> 4)) & 0x0F0F0F0F;
+        (mask_0f XReg (imm (lane_type ty) (u64_and 0x0f0f0f0f0f0f0f0f (ty_mask (lane_type ty)))))
+        (count8_shr VReg (rv_vsrl_vi count4 four (unmasked) ty))
+        (count8_add VReg (rv_vadd_vv count4 count8_shr (unmasked) ty))
+        (count8 VReg (rv_vand_vx count8_add mask_0f (unmasked) ty))
+
+        ;; (x * 0x01010101) >> (<ty_width> - 8)
+        (mask_01 XReg (imm (lane_type ty) (u64_and 0x0101010101010101 (ty_mask (lane_type ty)))))
+        (mul VReg (rv_vmul_vx count8 mask_01 (unmasked) ty))
+        (shift XReg (imm $I64 (u64_sub (ty_bits (lane_type ty)) 8)))
+        (res VReg (rv_vsrl_vx mul shift (unmasked) ty)))
+    res))
 
 ;;;; Rules for `ishl` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
