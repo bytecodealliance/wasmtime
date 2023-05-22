@@ -78,10 +78,11 @@ fn execute_one(data: &[u8]) -> Result<()> {
     let mut config: Config = u.arbitrary()?;
     config.set_differential_config();
 
+    // When fuzzing Winch, explicitly override the compiler strategy, which by
+    // default its arbitrary implementation unconditionally returns
+    // `Cranelift`.
     if fuzz_winch {
         config.wasmtime.compiler_strategy = CompilerStrategy::Winch;
-    } else {
-        config.wasmtime.compiler_strategy = CompilerStrategy::Cranelift;
     }
 
     // Choose an engine that Wasmtime will be differentially executed against.

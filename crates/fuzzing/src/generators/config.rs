@@ -458,7 +458,7 @@ impl OptLevel {
     }
 }
 
-#[derive(Arbitrary, Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 /// Compiler to use.
 pub enum CompilerStrategy {
     /// Cranelift compiler.
@@ -473,5 +473,15 @@ impl CompilerStrategy {
             CompilerStrategy::Cranelift => wasmtime::Strategy::Cranelift,
             CompilerStrategy::Winch => wasmtime::Strategy::Winch,
         }
+    }
+}
+
+// Unconditionally return `Cranelift` given that Winch is not ready to be
+// enabled by default in all the fuzzing targets. Each fuzzing target is
+// expected to explicitly override the strategy as needed. Currently only the
+// differential target overrides the compiler strategy.
+impl Arbitrary<'_> for CompilerStrategy {
+    fn arbitrary(_: &mut Unstructured<'_>) -> arbitrary::Result<Self> {
+        Ok(Self::Cranelift)
     }
 }
