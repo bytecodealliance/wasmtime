@@ -1556,9 +1556,23 @@
   (load_ra))
 
 ;;; Rules for `iabs` ;;;;;;;;;;;;;
-(rule
-  (lower (has_type (fits_in_64 ty) (iabs x)))
-  (lower_iabs ty x))
+
+;; I64 and lower
+;; Generate the following code:
+;;   sext.{b,h,w} a0, a0
+;;   neg a1, a0
+;;   max a0, a0, a1
+(rule 0 (lower (has_type (ty_int_ref_scalar_64 ty) (iabs x)))
+  (let ((extended XReg (sext x ty $I64))
+        (negated XReg (rv_neg extended)))
+    (max $I64 extended negated)))
+
+;; For vectors we generate the same code, but with vector instructions
+;; we can skip the sign extension, since the vector unit will only process
+;; Element Sized chunks.
+(rule 1 (lower (has_type (ty_vec_fits_in_register ty) (iabs x)))
+  (let ((negated VReg (rv_vneg_v x (unmasked) ty)))
+    (rv_vmax_vv x negated (unmasked) ty)))
 
 ;;;; Rules for calls ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

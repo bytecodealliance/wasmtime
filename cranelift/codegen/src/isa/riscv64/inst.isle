@@ -2673,18 +2673,6 @@
   (gen_select_reg (IntCC.SignedGreaterThan) x y x y))
 
 
-(decl lower_iabs (Type XReg) XReg)
-
-; I64 and lower
-; Generate the following code:
-;   sext.{b,h,w} a0, a0
-;   neg a1, a0
-;   max a0, a0, a1
-(rule (lower_iabs (fits_in_64 ty) val)
-  (let ((extended XReg (sext val ty $I64))
-        (negated XReg (rv_neg extended)))
-    (max $I64 extended negated)))
-
 (decl gen_trapif (XReg TrapCode) InstOutput)
 (rule
   (gen_trapif test trap_code)
