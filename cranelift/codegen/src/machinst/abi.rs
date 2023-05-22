@@ -109,9 +109,9 @@ use crate::ir::{ArgumentExtension, ArgumentPurpose, DynamicStackSlot, Signature,
 use crate::isa::TargetIsa;
 use crate::settings;
 use crate::settings::ProbestackStrategy;
-use crate::CodegenResult;
 use crate::{ir, isa};
 use crate::{machinst::*, trace};
+use crate::{CodegenError, CodegenResult};
 use alloc::vec::Vec;
 use regalloc2::{PReg, PRegSet};
 use smallvec::{smallvec, SmallVec};
@@ -1035,6 +1035,10 @@ fn get_special_purpose_param_register(
     }
 }
 
+fn checked_round_up(val: u32, mask: u32) -> Option<u32> {
+    Some(val.checked_add(mask)? & !mask)
+}
+
 impl<M: ABIMachineSpec> Callee<M> {
     /// Create a new body ABI instance.
     pub fn new<'a>(
@@ -1067,9 +1071,12 @@ impl<M: ABIMachineSpec> Callee<M> {
         let mut sized_stackslots = PrimaryMap::new();
         for (stackslot, data) in f.sized_stack_slots.iter() {
             let off = sized_stack_offset;
-            sized_stack_offset += data.size;
+            sized_stack_offset = sized_stack_offset
+                .checked_add(data.size)
+                .ok_or(CodegenError::ImplLimitExceeded)?;
             let mask = M::word_bytes() - 1;
-            sized_stack_offset = (sized_stack_offset + mask) & !mask;
+            sized_stack_offset = checked_round_up(sized_stack_offset, mask)
+                .ok_or(CodegenError::ImplLimitExceeded)?;
             debug_assert_eq!(stackslot.as_u32() as usize, sized_stackslots.len());
             sized_stackslots.push(off);
         }
@@ -1080,12 +1087,15 @@ impl<M: ABIMachineSpec> Callee<M> {
         for (stackslot, data) in f.dynamic_stack_slots.iter() {
             debug_assert_eq!(stackslot.as_u32() as usize, dynamic_stackslots.len());
             let off = dynamic_stack_offset;
-            let ty = f
-                .get_concrete_dynamic_ty(data.dyn_ty)
-                .unwrap_or_else(|| panic!("invalid dynamic vector type: {}", data.dyn_ty));
-            dynamic_stack_offset += isa.dynamic_vector_bytes(ty);
+            let ty = f.get_concrete_dynamic_ty(data.dyn_ty).ok_or_else(|| {
+                CodegenError::Unsupported(format!("invalid dynamic vector type: {}", data.dyn_ty))
+            })?;
+            dynamic_stack_offset = dynamic_stack_offset
+                .checked_add(isa.dynamic_vector_bytes(ty))
+                .ok_or(CodegenError::ImplLimitExceeded)?;
             let mask = M::word_bytes() - 1;
-            dynamic_stack_offset = (dynamic_stack_offset + mask) & !mask;
+            dynamic_stack_offset = checked_round_up(dynamic_stack_offset, mask)
+                .ok_or(CodegenError::ImplLimitExceeded)?;
             dynamic_stackslots.push(off);
         }
         let stackslots_size = dynamic_stack_offset;
