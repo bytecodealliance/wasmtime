@@ -328,6 +328,7 @@
       (vd WritableReg)
       (vs2 Reg)
       (vs1 Reg)
+      (mask VecOpMasking)
       (vstate VState))
 
     (VecAluRRImm5
@@ -335,18 +336,21 @@
       (vd WritableReg)
       (vs2 Reg)
       (imm Imm5)
+      (mask VecOpMasking)
       (vstate VState))
 
     (VecAluRR
       (op VecAluOpRR)
       (vd WritableReg)
       (vs Reg)
+      (mask VecOpMasking)
       (vstate VState))
 
     (VecAluRImm5
       (op VecAluOpRImm5)
       (vd WritableReg)
       (imm Imm5)
+      (mask VecOpMasking)
       (vstate VState))
 
     (VecSetState
@@ -358,6 +362,7 @@
       (to WritableReg)
       (from VecAMode)
       (flags MemFlags)
+      (mask VecOpMasking)
       (vstate VState))
 
     (VecStore
@@ -365,6 +370,7 @@
       (to VecAMode)
       (from Reg)
       (flags MemFlags)
+      (mask VecOpMasking)
       (vstate VState))
 ))
 
