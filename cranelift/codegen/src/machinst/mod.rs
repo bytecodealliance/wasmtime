@@ -144,9 +144,17 @@ pub trait MachInst: Clone + Debug {
     /// control flow.
     fn gen_jump(target: MachLabel) -> Self;
 
-    /// TODO document this
-    #[allow(unused)]
-    fn gen_imm(value: u64, dst: Writable<Reg>) -> Option<Self> {
+    /// Generate a store of an immediate 64-bit integer to a register. Used by
+    /// the control plane to generate random instructions.
+    #[allow(unused_variables)]
+    fn gen_imm_u64(value: u64, dst: Writable<Reg>) -> Option<Self> {
+        None
+    }
+
+    /// Generate a store of an immediate 64-bit float to a register. Used by the
+    /// control plane to generate random instructions.
+    #[allow(unused_variables)]
+    fn gen_imm_f64(value: f64, dst: Writable<Reg>) -> Option<Self> {
         None
     }
 

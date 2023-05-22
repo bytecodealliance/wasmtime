@@ -777,12 +777,17 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             let loc = self.srcloc(inst);
             self.finish_ir_inst(loc);
 
-            // TODO maybe insert random instruction
+            // maybe insert random instruction
             if ctrl_plane.get_decision() {
-                let imm: u64 = ctrl_plane.get_arbitrary();
-                let regs = self.alloc_tmp(crate::ir::types::I64);
-                let inst = I::gen_imm(imm, regs.regs()[0]).unwrap();
-                self.emit(inst);
+                if ctrl_plane.get_decision() {
+                    let imm: u64 = ctrl_plane.get_arbitrary();
+                    let regs = self.alloc_tmp(crate::ir::types::I64);
+                    I::gen_imm_u64(imm, regs.regs()[0]).map(|inst| self.emit(inst));
+                } else {
+                    let imm: f64 = ctrl_plane.get_arbitrary();
+                    let regs = self.alloc_tmp(crate::ir::types::F64);
+                    I::gen_imm_f64(imm, regs.regs()[0]).map(|inst| self.emit(inst));
+                }
             }
 
             // Emit value-label markers if needed, to later recover

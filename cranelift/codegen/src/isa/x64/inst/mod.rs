@@ -279,6 +279,16 @@ impl Inst {
         }
     }
 
+    pub(crate) fn imm_f64(dst_size: OperandSize, simm64: f64, dst: Writable<Reg>) -> Inst {
+        debug_assert!(dst_size == OperandSize::Size64);
+        debug_assert!(dst.to_reg().class() == RegClass::Float);
+        Inst::Imm {
+            dst_size,
+            simm64: simm64.to_bits(),
+            dst: WritableGpr::from_writable_reg(dst).unwrap(),
+        }
+    }
+
     pub(crate) fn mov_r_r(size: OperandSize, src: Reg, dst: Writable<Reg>) -> Inst {
         debug_assert!(size.is_one_of(&[OperandSize::Size32, OperandSize::Size64]));
         debug_assert!(src.class() == RegClass::Int);
@@ -2558,8 +2568,12 @@ impl MachInst for Inst {
         Inst::jmp_known(label)
     }
 
-    fn gen_imm(value: u64, dst: Writable<Reg>) -> Option<Self> {
+    fn gen_imm_u64(value: u64, dst: Writable<Reg>) -> Option<Self> {
         Some(Inst::imm(OperandSize::Size64, value, dst))
+    }
+
+    fn gen_imm_f64(value: f64, dst: Writable<Reg>) -> Option<Self> {
+        Some(Inst::imm_f64(OperandSize::Size64, value, dst))
     }
 
     fn gen_dummy_use(reg: Reg) -> Self {
