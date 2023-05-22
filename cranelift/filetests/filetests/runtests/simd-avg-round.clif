@@ -4,6 +4,7 @@ target s390x
 set enable_simd
 target x86_64
 target x86_64 skylake
+target riscv64 has_v
 
 function %average_rounding_i8x16(i8x16, i8x16) -> i8x16 {
 block0(v0: i8x16, v1: i8x16):

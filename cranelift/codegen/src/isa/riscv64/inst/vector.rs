@@ -508,6 +508,7 @@ impl VecAluOpRRImm5 {
             VecAluOpRRImm5::VorVI => 0b001010,
             VecAluOpRRImm5::VxorVI => 0b001011,
             VecAluOpRRImm5::VslidedownVI => 0b001111,
+            VecAluOpRRImm5::VssrlVI => 0b101010,
             VecAluOpRRImm5::VmergeVIM => 0b010111,
             VecAluOpRRImm5::VsadduVI => 0b100000,
             VecAluOpRRImm5::VsaddVI => 0b100001,
@@ -526,6 +527,7 @@ impl VecAluOpRRImm5 {
             | VecAluOpRRImm5::VandVI
             | VecAluOpRRImm5::VorVI
             | VecAluOpRRImm5::VxorVI
+            | VecAluOpRRImm5::VssrlVI
             | VecAluOpRRImm5::VslidedownVI
             | VecAluOpRRImm5::VmergeVIM
             | VecAluOpRRImm5::VsadduVI
@@ -539,6 +541,7 @@ impl VecAluOpRRImm5 {
         match self {
             VecAluOpRRImm5::VsllVI
             | VecAluOpRRImm5::VsrlVI
+            | VecAluOpRRImm5::VssrlVI
             | VecAluOpRRImm5::VsraVI
             | VecAluOpRRImm5::VslidedownVI
             | VecAluOpRRImm5::VrgatherVI
