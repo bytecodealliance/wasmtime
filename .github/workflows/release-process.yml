@@ -151,6 +151,7 @@ jobs:
           # commit it, indicating that the commit is what will get tagged and
           # released
           git reset --hard origin/release-$cur
+          git submodule update --init --recursive
           sed -i "s/^Unreleased/Released $(date +'%Y-%m-%d')/" RELEASES.md
           git commit --allow-empty -a -F-<<EOF
           Release Wasmtime $cur
