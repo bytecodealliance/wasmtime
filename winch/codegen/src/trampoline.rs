@@ -9,8 +9,6 @@
 // loading/storing the VM context pointer. The real value of the operand size
 // and VM context type should be derived from the ABI's pointer size. This is
 // going to be relevant once 32-bit architectures are supported.
-//
-// * Save the fp and pc for fast stack walking.
 use crate::{
     abi::{ABIArg, ABIParams, ABIResult, ABISig, ABI},
     isa::CallingConvention,
@@ -107,10 +105,15 @@ where
 
         // Get the VM context pointer and move it to the designated pinned
         // register.
-        let vmctx_ptr = Self::vmctx(&native_sig.params)?;
-        self.masm
-            .mov(vmctx_ptr, <A as ABI>::vmctx_reg().into(), OperandSize::S64);
+        let (vmctx, caller_vmctx) = Self::callee_and_caller_vmctx(&native_sig.params)?;
 
+        self.masm.mov(
+            vmctx.into(),
+            <A as ABI>::vmctx_reg().into(),
+            OperandSize::S64,
+        );
+
+        let vmctx_runtime_limits_addr = self.vmctx_runtime_limits_addr(caller_vmctx);
         let (offsets, spill_size) = self.spill(&native_sig.params);
 
         let val_ptr_offset = offsets[2];
@@ -121,6 +124,19 @@ where
             self.abi.arg_base_offset().into(),
             wasm_sig.stack_bytes,
             |masm| {
+                // Save the SP when entering Wasm.
+                // TODO: Once Winch supports comparison operators,
+                // check that the caller VM context is what we expect.
+                // See [`wasmtime_environ::MAGIC`].
+                Self::save_last_wasm_entry_sp(
+                    masm,
+                    vmctx_runtime_limits_addr,
+                    self.scratch_reg,
+                    &self.pointer_size,
+                );
+
+                // Move the values register to the scratch
+                // register for argument assignment.
                 masm.mov(*val_ptr, self.scratch_reg.into(), OperandSize::S64);
                 Self::assign_args_from_array(
                     masm,
@@ -161,13 +177,17 @@ where
     pub fn emit_native_to_wasm(&mut self, ty: &FuncType, callee_index: FuncIndex) -> Result<()> {
         let native_sig = self.native_sig(&ty);
         let wasm_sig = self.wasm_sig(&ty);
-        let vmctx_ptr = Self::vmctx(&native_sig.params)?;
+        let (vmctx, caller_vmctx) = Self::callee_and_caller_vmctx(&native_sig.params)?;
 
         self.prologue_with_callee_saved();
         // Move the VM context pointer to the designated pinned register.
-        self.masm
-            .mov(vmctx_ptr, <A as ABI>::vmctx_reg().into(), OperandSize::S64);
+        self.masm.mov(
+            vmctx.into(),
+            <A as ABI>::vmctx_reg().into(),
+            OperandSize::S64,
+        );
 
+        let vmctx_runtime_limits_addr = self.vmctx_runtime_limits_addr(caller_vmctx);
         let (offsets, spill_size) = self.spill(&native_sig.params);
 
         let reserved_stack = self.masm.call(
@@ -175,6 +195,16 @@ where
             self.abi.arg_base_offset().into(),
             wasm_sig.stack_bytes,
             |masm| {
+                // Save the SP when entering Wasm.
+                // TODO: Once Winch supports comparison operators,
+                // check that the caller VM context is what we expect.
+                // See [`wasmtime_environ::MAGIC`].
+                Self::save_last_wasm_entry_sp(
+                    masm,
+                    vmctx_runtime_limits_addr,
+                    self.scratch_reg,
+                    &self.pointer_size,
+                );
                 Self::assign_args(
                     masm,
                     &wasm_sig.params,
@@ -195,14 +225,30 @@ where
 
     /// Emit a wasm-to-native trampoline.
     pub fn emit_wasm_to_native(&mut self, ty: &FuncType) -> Result<()> {
-        let mut params = Self::callee_and_caller_vmctx();
+        let mut params = Self::callee_and_caller_vmctx_types();
         params.extend_from_slice(ty.params());
 
         let func_ty = FuncType::new(params, ty.results().to_owned());
         let wasm_sig = self.wasm_sig(&func_ty);
         let native_sig = self.native_sig(ty);
 
+        let (vmctx, caller_vmctx) = Self::callee_and_caller_vmctx(&wasm_sig.params).unwrap();
+        let vmctx_runtime_limits_addr = self.vmctx_runtime_limits_addr(caller_vmctx);
+
         self.prologue();
+
+        // Save the FP and return address when exiting Wasm.
+        // TODO: Once Winch supports comparison operators,
+        // check that the caller VM context is what we expect.
+        // See [`wasmtime_environ::MAGIC`].
+        Self::save_last_wasm_exit_fp_and_pc(
+            self.masm,
+            vmctx_runtime_limits_addr,
+            self.scratch_reg,
+            self.alloc_scratch_reg,
+            &self.pointer_size,
+        );
+
         let (offsets, spill_size) = self.spill(&wasm_sig.params);
 
         let reserved_stack = self.masm.call(
@@ -211,7 +257,6 @@ where
             native_sig.stack_bytes,
             |masm| {
                 // Move the VM context into one of the scratch registers.
-                let vmctx = Self::vmctx(&wasm_sig.params).unwrap();
                 masm.mov(
                     vmctx.into(),
                     self.alloc_scratch_reg.into(),
@@ -304,13 +349,13 @@ where
     }
 
     /// Get the type of the caller and callee VM contexts.
-    fn callee_and_caller_vmctx() -> Vec<ValType> {
+    fn callee_and_caller_vmctx_types() -> Vec<ValType> {
         vec![ValType::I64, ValType::I64]
     }
 
     /// Returns a signature using the system's calling convention.
     fn native_sig(&self, ty: &FuncType) -> ABISig {
-        let mut params = Self::callee_and_caller_vmctx();
+        let mut params = Self::callee_and_caller_vmctx_types();
         params.extend_from_slice(ty.params());
         let native_type = FuncType::new(params, ty.results().to_owned());
 
@@ -322,12 +367,26 @@ where
         self.abi.sig(ty, &CallingConvention::Default)
     }
 
-    /// Returns the register containing the VM context pointer.
-    fn vmctx(params: &ABIParams) -> Result<RegImm> {
-        params[0]
+    /// Returns the register pair containing the callee and caller VM context pointers.
+    fn callee_and_caller_vmctx(params: &ABIParams) -> Result<(Reg, Reg)> {
+        let vmctx = params[0]
             .get_reg()
-            .map(RegImm::reg)
-            .ok_or_else(|| anyhow!("Expected vm context pointer to be in a register"))
+            .ok_or_else(|| anyhow!("Expected vm context pointer to be in a register"))?;
+
+        let caller_vmctx = params[1]
+            .get_reg()
+            .ok_or_else(|| anyhow!("Expected caller vm context pointer to be in a register"))?;
+
+        Ok((vmctx, caller_vmctx))
+    }
+
+    /// Returns the address of the VM context runtime limits
+    /// field.
+    fn vmctx_runtime_limits_addr(&mut self, caller_vmctx: Reg) -> M::Address {
+        self.masm.address_at_reg(
+            caller_vmctx,
+            self.pointer_size.vmcontext_runtime_limits().into(),
+        )
     }
 
     /// Performs a spill of the register params.
@@ -378,6 +437,48 @@ where
                 }
             }
         });
+    }
+
+    fn save_last_wasm_entry_sp(
+        masm: &mut M,
+        vm_runtime_limits_addr: M::Address,
+        scratch: Reg,
+        ptr: &impl PtrSize,
+    ) {
+        let sp = <A as ABI>::sp_reg();
+        masm.load(vm_runtime_limits_addr, scratch, OperandSize::S64);
+        let addr = masm.address_at_reg(scratch, ptr.vmruntime_limits_last_wasm_entry_sp().into());
+        masm.store(sp.into(), addr, OperandSize::S64);
+    }
+
+    fn save_last_wasm_exit_fp_and_pc(
+        masm: &mut M,
+        vm_runtime_limits_addr: M::Address,
+        scratch: Reg,
+        alloc_scratch: Reg,
+        ptr: &impl PtrSize,
+    ) {
+        masm.load(vm_runtime_limits_addr, alloc_scratch, OperandSize::S64);
+        let last_wasm_exit_fp_addr = masm.address_at_reg(
+            alloc_scratch,
+            ptr.vmruntime_limits_last_wasm_exit_fp().into(),
+        );
+        let last_wasm_exit_pc_addr = masm.address_at_reg(
+            alloc_scratch,
+            ptr.vmruntime_limits_last_wasm_exit_pc().into(),
+        );
+
+        // Handle the frame pointer.
+        let fp = <A as ABI>::fp_reg();
+        let fp_addr = masm.address_at_reg(fp, 0);
+        masm.load(fp_addr, scratch, OperandSize::S64);
+        masm.store(scratch.into(), last_wasm_exit_fp_addr, OperandSize::S64);
+
+        // Handle the return address.
+        let ret_addr_offset = <A as ABI>::ret_addr_offset();
+        let ret_addr = masm.address_at_reg(fp, ret_addr_offset.into());
+        masm.load(ret_addr, scratch, OperandSize::S64);
+        masm.store(scratch.into(), last_wasm_exit_pc_addr, OperandSize::S64);
     }
 
     /// The trampoline's prologue.

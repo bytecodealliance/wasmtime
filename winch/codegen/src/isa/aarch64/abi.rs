@@ -55,6 +55,10 @@ impl ABI for Aarch64ABI {
         16
     }
 
+    fn ret_addr_offset() -> u8 {
+        8
+    }
+
     fn word_bits() -> u32 {
         64
     }
@@ -84,6 +88,10 @@ impl ABI for Aarch64ABI {
     }
 
     fn scratch_reg() -> Reg {
+        todo!()
+    }
+
+    fn sp_reg() -> Reg {
         todo!()
     }
 
