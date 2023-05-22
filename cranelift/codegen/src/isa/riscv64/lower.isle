@@ -515,36 +515,54 @@
   (lower_popcnt_i128 x))
 
 ;;;; Rules for `ishl` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule 1 (lower (has_type $I8 (ishl x y)))
-  (rv_sllw x (rv_andi (value_regs_get y 0) (imm12_const 7))))
 
-(rule 2 (lower (has_type $I8 (ishl x (imm12_from_value y))))
-  (rv_slliw x (imm12_and y 7)))
+;; 8/16 bit types need a mask on the shift amount
+(rule 0 (lower (has_type (ty_int (ty_8_or_16 ty)) (ishl x y)))
+  (if-let mask (u64_to_imm12 (shift_mask ty)))
+  (rv_sllw x (rv_andi (value_regs_get y 0) mask)))
 
-(rule 1 (lower (has_type $I16 (ishl x y)))
-  (rv_sllw x (rv_andi (value_regs_get y 0) (imm12_const 15))))
-
-(rule 2 (lower (has_type $I16 (ishl x (imm12_from_value y))))
-  (rv_slliw x (imm12_and y 15)))
-
+;; Using the 32bit version of `sll` automatically masks the shift amount.
 (rule 1 (lower (has_type $I32 (ishl x y)))
   (rv_sllw x (value_regs_get y 0)))
-(rule 2 (lower (has_type $I32 (ishl x (imm12_from_value y))))
-  (rv_slliw x y))
 
-(rule 2 (lower (has_type $I64 (ishl x (imm12_from_value y))))
-  (rv_slli x y))
+;; Similarly, the 64bit version does the right thing.
 (rule 1 (lower (has_type $I64 (ishl x y)))
   (rv_sll x (value_regs_get y 0)))
 
+;; If the shift amount is known. We can mask it and encode it in the instruction.
+(rule 2 (lower (has_type (int_fits_in_32 ty) (ishl x (imm12_from_value y))))
+  (rv_slliw x (imm12_and y (shift_mask ty))))
+
+;; We technically don't need to mask the shift amount here. The instruction
+;; does the right thing. But it's neater when pretty printing it.
+(rule 3 (lower (has_type ty @ $I64 (ishl x (imm12_from_value y))))
+  (rv_slli x (imm12_and y (shift_mask ty))))
+
 ;; With `Zba` we have a shift that zero extends the LHS argument.
-(rule 3 (lower (has_type $I64 (ishl (uextend x @ (value_type $I32)) (maybe_uextend (imm12_from_value y)))))
+(rule 4 (lower (has_type $I64 (ishl (uextend x @ (value_type $I32)) (maybe_uextend (imm12_from_value y)))))
   (if-let $true (has_zba))
   (rv_slliuw x y))
 
 ;; I128 cases
-(rule 0 (lower (has_type $I128 (ishl x y)))
-  (lower_i128_ishl x y))
+(rule 4 (lower (has_type $I128 (ishl x y)))
+  (let ((tmp ValueRegs (gen_shamt $I128 (value_regs_get y 0)))
+        (shamt XReg (value_regs_get tmp 0))
+        (len_sub_shamt XReg (value_regs_get tmp 1))
+        ;;
+        (low XReg (rv_sll (value_regs_get x 0) shamt))
+        ;; high part.
+        (high_part1 XReg (rv_srl (value_regs_get x 0) len_sub_shamt))
+        (high_part2 XReg (gen_select_reg (IntCC.Equal) shamt (zero_reg) (zero_reg) high_part1))
+        ;;
+        (high_part3 XReg (rv_sll (value_regs_get x 1) shamt))
+        (high XReg (rv_or high_part2 high_part3))
+        ;;
+        (const64 XReg (load_u64_constant 64))
+        (shamt_128 XReg (rv_andi (value_regs_get y 0) (imm12_const 127))))
+    (value_regs
+      (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 (zero_reg) low)
+      (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 low high))))
+
 
 ;;;; Rules for `ushr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule 1 (lower (has_type $I8 (ushr x y)))
