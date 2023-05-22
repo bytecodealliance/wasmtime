@@ -282,125 +282,158 @@
     (rv_remu x y)))
 
 ;;;; Rules for `and` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule -1 (lower (has_type (ty_int ty) (band x y)))
+(rule 0 (lower (has_type (ty_int ty) (band x y)))
   (gen_and ty x y))
 
 ;; Special cases for when one operand is an immediate that fits in 12 bits.
-(rule 2 (lower (has_type (fits_in_64 (ty_int ty)) (band x (imm12_from_value y))))
+(rule 1 (lower (has_type (fits_in_64 (ty_int ty)) (band x (imm12_from_value y))))
   (rv_andi x y))
 
-(rule 1 (lower (has_type (fits_in_64 (ty_int ty)) (band (imm12_from_value x) y)))
+(rule 2 (lower (has_type (fits_in_64 (ty_int ty)) (band (imm12_from_value x) y)))
   (rv_andi y x))
 
-(rule (lower (has_type $F32 (band x y)))
-  (lower_float_binary (AluOPRRR.And) x y $F32))
-
-(rule (lower (has_type $F64 (band x y)))
-  (lower_float_binary (AluOPRRR.And) x y $F64))
+(rule 3 (lower (has_type (ty_scalar_float ty) (band x y)))
+  (lower_float_binary (AluOPRRR.And) x y ty))
 
 ;; Specialized lowerings for `(band x (bnot y))` which is additionally produced
 ;; by Cranelift's `band_not` instruction that is legalized into the simpler
 ;; forms early on.
 
-(rule 3 (lower (has_type (fits_in_64 (ty_int ty)) (band x (bnot y))))
+(rule 4 (lower (has_type (fits_in_64 (ty_int ty)) (band x (bnot y))))
   (if-let $true (has_zbb))
   (rv_andn x y))
 
-(rule 4 (lower (has_type (fits_in_64 (ty_int ty)) (band (bnot y) x)))
+(rule 5 (lower (has_type (fits_in_64 (ty_int ty)) (band (bnot y) x)))
   (if-let $true (has_zbb))
   (rv_andn x y))
 
-(rule 5 (lower (has_type $I128 (band x (bnot y))))
+(rule 6 (lower (has_type $I128 (band x (bnot y))))
   (if-let $true (has_zbb))
-  (let
-    ((low Reg (rv_andn (value_regs_get x 0) (value_regs_get y 0)))
-      (high Reg (rv_andn (value_regs_get x 1) (value_regs_get y 1))))
+  (let ((low Reg (rv_andn (value_regs_get x 0) (value_regs_get y 0)))
+        (high Reg (rv_andn (value_regs_get x 1) (value_regs_get y 1))))
     (value_regs low high)))
 
-(rule 6 (lower (has_type $I128 (band (bnot y) x)))
+(rule 7 (lower (has_type $I128 (band (bnot y) x)))
   (if-let $true (has_zbb))
-  (let
-    ((low Reg (rv_andn (value_regs_get x 0) (value_regs_get y 0)))
-      (high Reg (rv_andn (value_regs_get x 1) (value_regs_get y 1))))
+  (let ((low Reg (rv_andn (value_regs_get x 0) (value_regs_get y 0)))
+        (high Reg (rv_andn (value_regs_get x 1) (value_regs_get y 1))))
     (value_regs low high)))
 
-
-(rule 7 (lower (has_type (ty_vec_fits_in_register ty) (band x y)))
+(rule 8 (lower (has_type (ty_vec_fits_in_register ty) (band x y)))
   (rv_vand_vv x y (unmasked) ty))
+
+(rule 9 (lower (has_type (ty_vec_fits_in_register ty) (band x (splat y))))
+  (if (ty_vector_not_float ty))
+  (rv_vand_vx x y (unmasked) ty))
+
+(rule 10 (lower (has_type (ty_vec_fits_in_register ty) (band (splat x) y)))
+  (if (ty_vector_not_float ty))
+  (rv_vand_vx y x (unmasked) ty))
+
+(rule 11 (lower (has_type (ty_vec_fits_in_register ty) (band x (replicated_imm5 y))))
+  (rv_vand_vi x y (unmasked) ty))
+
+(rule 12 (lower (has_type (ty_vec_fits_in_register ty) (band (replicated_imm5 x) y)))
+  (rv_vand_vi y x (unmasked) ty))
 
 
 ;;;; Rules for `or` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule -1 (lower (has_type (ty_int ty) (bor x y)))
+(rule 0 (lower (has_type (ty_int ty) (bor x y)))
   (gen_or ty x y))
 
 ;; Special cases for when one operand is an immediate that fits in 12 bits.
-(rule 2 (lower (has_type (fits_in_64 (ty_int ty)) (bor x (imm12_from_value y))))
+(rule 1 (lower (has_type (fits_in_64 (ty_int ty)) (bor x (imm12_from_value y))))
   (rv_ori x y))
 
-(rule 1 (lower (has_type (fits_in_64 (ty_int ty)) (bor (imm12_from_value x) y)))
+(rule 2 (lower (has_type (fits_in_64 (ty_int ty)) (bor (imm12_from_value x) y)))
   (rv_ori y x))
 
-(rule (lower (has_type $F32 (bor x y)))
-  (lower_float_binary (AluOPRRR.Or) x y $F32))
-
-(rule (lower (has_type $F64 (bor x y)))
-  (lower_float_binary (AluOPRRR.Or) x y $F64))
+(rule 3 (lower (has_type (ty_scalar_float ty) (bor x y)))
+  (lower_float_binary (AluOPRRR.Or) x y ty))
 
 ;; Specialized lowerings for `(bor x (bnot y))` which is additionally produced
 ;; by Cranelift's `bor_not` instruction that is legalized into the simpler
 ;; forms early on.
 
-(rule 3 (lower (has_type (fits_in_64 (ty_int ty)) (bor x (bnot y))))
+(rule 4 (lower (has_type (fits_in_64 (ty_int ty)) (bor x (bnot y))))
   (if-let $true (has_zbb))
   (rv_orn x y))
 
-(rule 4 (lower (has_type (fits_in_64 (ty_int ty)) (bor (bnot y) x)))
+(rule 5 (lower (has_type (fits_in_64 (ty_int ty)) (bor (bnot y) x)))
   (if-let $true (has_zbb))
   (rv_orn x y))
 
-(rule 5 (lower (has_type $I128 (bor x (bnot y))))
+(rule 6 (lower (has_type $I128 (bor x (bnot y))))
   (if-let $true (has_zbb))
-  (let
-    ((low Reg (rv_orn (value_regs_get x 0) (value_regs_get y 0)))
-      (high Reg (rv_orn (value_regs_get x 1) (value_regs_get y 1))))
+  (let ((low Reg (rv_orn (value_regs_get x 0) (value_regs_get y 0)))
+        (high Reg (rv_orn (value_regs_get x 1) (value_regs_get y 1))))
     (value_regs low high)))
 
-(rule 6 (lower (has_type $I128 (bor (bnot y) x)))
+(rule 7 (lower (has_type $I128 (bor (bnot y) x)))
   (if-let $true (has_zbb))
-  (let
-    ((low Reg (rv_orn (value_regs_get x 0) (value_regs_get y 0)))
-      (high Reg (rv_orn (value_regs_get x 1) (value_regs_get y 1))))
+  (let ((low Reg (rv_orn (value_regs_get x 0) (value_regs_get y 0)))
+        (high Reg (rv_orn (value_regs_get x 1) (value_regs_get y 1))))
     (value_regs low high)))
 
-(rule 7 (lower (has_type (ty_vec_fits_in_register ty) (bor x y)))
+(rule 8 (lower (has_type (ty_vec_fits_in_register ty) (bor x y)))
   (rv_vor_vv x y (unmasked) ty))
 
+(rule 9 (lower (has_type (ty_vec_fits_in_register ty) (bor x (splat y))))
+  (if (ty_vector_not_float ty))
+  (rv_vor_vx x y (unmasked) ty))
+
+(rule 10 (lower (has_type (ty_vec_fits_in_register ty) (bor (splat x) y)))
+  (if (ty_vector_not_float ty))
+  (rv_vor_vx y x (unmasked) ty))
+
+(rule 11 (lower (has_type (ty_vec_fits_in_register ty) (bor x (replicated_imm5 y))))
+  (rv_vor_vi x y (unmasked) ty))
+
+(rule 12 (lower (has_type (ty_vec_fits_in_register ty) (bor (replicated_imm5 x) y)))
+  (rv_vor_vi y x (unmasked) ty))
+
+
 ;;;; Rules for `xor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule -1 (lower (has_type (fits_in_64 (ty_int ty)) (bxor x y)))
+(rule 0 (lower (has_type (fits_in_64 (ty_int ty)) (bxor x y)))
   (rv_xor x y))
 
 ;; Special cases for when one operand is an immediate that fits in 12 bits.
-(rule 2 (lower (has_type (fits_in_64 (ty_int ty)) (bxor x (imm12_from_value y))))
+(rule 1 (lower (has_type (fits_in_64 (ty_int ty)) (bxor x (imm12_from_value y))))
   (rv_xori x y))
 
-(rule 1 (lower (has_type (fits_in_64 (ty_int ty)) (bxor (imm12_from_value x) y)))
+(rule 2 (lower (has_type (fits_in_64 (ty_int ty)) (bxor (imm12_from_value x) y)))
   (rv_xori y x))
 
-(rule (lower (has_type $I128 (bxor x y)))
+(rule 3 (lower (has_type $I128 (bxor x y)))
   (lower_b128_binary (AluOPRRR.Xor) x y))
 
-(rule (lower (has_type $F32 (bxor x y)))
-  (lower_float_binary (AluOPRRR.Xor) x y $F32))
+(rule 4 (lower (has_type (ty_scalar_float ty) (bxor x y)))
+  (lower_float_binary (AluOPRRR.Xor) x y ty))
 
-(rule (lower (has_type $F64 (bxor x y)))
-  (lower_float_binary (AluOPRRR.Xor) x y $F64))
-
-(rule 3 (lower (has_type (ty_vec_fits_in_register ty) (bxor x y)))
+(rule 5 (lower (has_type (ty_vec_fits_in_register ty) (bxor x y)))
   (rv_vxor_vv x y (unmasked) ty))
 
+(rule 6 (lower (has_type (ty_vec_fits_in_register ty) (bxor x (splat y))))
+  (if (ty_vector_not_float ty))
+  (rv_vxor_vx x y (unmasked) ty))
+
+(rule 7 (lower (has_type (ty_vec_fits_in_register ty) (bxor (splat x) y)))
+  (if (ty_vector_not_float ty))
+  (rv_vxor_vx y x (unmasked) ty))
+
+(rule 8 (lower (has_type (ty_vec_fits_in_register ty) (bxor x (replicated_imm5 y))))
+  (rv_vxor_vi x y (unmasked) ty))
+
+(rule 9 (lower (has_type (ty_vec_fits_in_register ty) (bxor (replicated_imm5 x) y)))
+  (rv_vxor_vi y x (unmasked) ty))
+
+
 ;;;; Rules for `bnot` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule (lower (has_type ty (bnot x)))
+(rule 0 (lower (has_type (ty_scalar ty) (bnot x)))
   (gen_bnot ty x))
+
+(rule 1 (lower (has_type (ty_vec_fits_in_register ty) (bnot x)))
+  (rv_vnot_v x (unmasked) ty))
 
 ;;;; Rules for `bit_reverse` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_64 (ty_int ty)) (bitrev x)))
@@ -817,9 +850,23 @@
 
 ;;;;;  Rules for `bitselect`;;;;;;;;;
 
-(rule
-  (lower (has_type ty (bitselect c x y)))
-  (gen_bitselect ty c x y))
+;; Do a (c & x) | (~c & y) operation.
+(rule 0 (lower (has_type (ty_int_ref_scalar_64 ty) (bitselect c x y)))
+  (let ((tmp_x Reg (rv_and c x))
+        (c_inverse Reg (rv_not c))
+        (tmp_y Reg (rv_and c_inverse y)))
+    (rv_or tmp_x tmp_y)))
+
+;; For vectors, we also do the same operation.
+;; We can technically use any type in the bitwise operations, but prefer
+;; using the type of the inputs so that we avoid emitting unnecessary
+;; `vsetvl` instructions. It's likeley that the vector unit is already
+;; configured for that type.
+(rule 1 (lower (has_type (ty_vec_fits_in_register ty) (bitselect c x y)))
+  (let ((tmp_x Reg (rv_vand_vv c x (unmasked) ty))
+        (c_inverse Reg (rv_vnot_v c (unmasked) ty))
+        (tmp_y Reg (rv_vand_vv c_inverse y (unmasked) ty)))
+    (rv_vor_vv tmp_x tmp_y (unmasked) ty)))
 
 ;;;;;  Rules for `isplit`;;;;;;;;;
 (rule
@@ -1129,3 +1176,5 @@
 ;; TODO: We can splat out more patterns by using for example a vmv.v.i i8x16 for
 ;; a i64x2 const with a compatible bit pattern. The AArch64 Backend does something
 ;; similar in its splat rules.
+;; TODO: Look through bitcasts when splatting out registers. We can use
+;; `vmv.v.x` in a `(splat.f32x4 (bitcast.f32 val))`. And vice versa for integers.

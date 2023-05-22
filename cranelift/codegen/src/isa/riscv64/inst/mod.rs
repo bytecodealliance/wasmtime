@@ -57,7 +57,7 @@ pub use crate::isa::riscv64::lower::isle::generated_code::{
     AluOPRRI, AluOPRRR, AtomicOP, FClassResult, FFlagsException, FloatRoundOP, FloatSelectOP,
     FpuOPRR, FpuOPRRR, FpuOPRRRR, IntSelectOP, LoadOP, MInst as Inst, StoreOP, FRM,
 };
-use crate::isa::riscv64::lower::isle::generated_code::{MInst, VecAluOpRRR};
+use crate::isa::riscv64::lower::isle::generated_code::{MInst, VecAluOpRRImm5, VecAluOpRRR};
 
 type BoxCallInfo = Box<CallInfo>;
 type BoxCallIndInfo = Box<CallIndInfo>;
@@ -1663,7 +1663,12 @@ impl Inst {
                     format!("{}", imm)
                 };
 
-                format!("{op} {vd_s},{vs2_s},{imm_s}{mask} {vstate}")
+                match (op, imm) {
+                    (VecAluOpRRImm5::VxorVI, imm) if imm == Imm5::maybe_from_i8(-1).unwrap() => {
+                        format!("vnot.v {vd_s},{vs2_s}{mask} {vstate}")
+                    }
+                    _ => format!("{op} {vd_s},{vs2_s},{imm_s}{mask} {vstate}"),
+                }
             }
             &Inst::VecAluRR {
                 op,

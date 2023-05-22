@@ -374,6 +374,15 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
+        fn ty_scalar(&mut self, ty: Type) -> Option<Type> {
+            if ty.lane_count() == 1 {
+                Some(ty)
+            } else {
+                None
+            }
+        }
+
+        #[inline]
         fn ty_scalar_float(&mut self, ty: Type) -> Option<Type> {
             match ty {
                 F32 | F64 => Some(ty),
