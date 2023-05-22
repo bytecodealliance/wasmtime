@@ -6,7 +6,6 @@ edition.workspace = true
 repository = "https://github.com/bytecodealliance/wasmtime"
 license = "Apache-2.0 WITH LLVM-exception"
 description = "Experimental HTTP library for WebAssembly in Wasmtime"
-readme = "readme.md"
 
 [dependencies]
 anyhow = { workspace = true }
