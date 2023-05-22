@@ -33,7 +33,7 @@ impl ControlPlane {
     /// Returns an arbitrary value. This variant is used when chaos mode is
     /// disabled. It always returns the default value.
     #[inline]
-    pub fn get_arbitrary<T: for<'a> Arbitrary<'a> + Default>(&mut self) -> T {
+    pub fn get_arbitrary<T: for<'a> arbitrary::Arbitrary<'a> + Default>(&mut self) -> T {
         T::default()
     }
 
