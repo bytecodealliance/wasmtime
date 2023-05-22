@@ -23,13 +23,6 @@ user-login = "fitzgen"
 user-name = "Nick Fitzgerald"
 
 [[publisher.regalloc2]]
-version = "0.8.1"
-when = "2023-05-01"
-user-id = 3726
-user-login = "cfallin"
-user-name = "Chris Fallin"
-
-[[publisher.regalloc2]]
 version = "0.9.0"
 when = "2023-05-17"
 user-id = 187138
