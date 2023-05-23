@@ -271,19 +271,8 @@ impl Table {
         }
     }
 
-    /// TODO
-    pub fn init_null(&mut self) -> Result<(), Trap> {
-        assert!(self.element_type() == TableElementType::Func);
-        for slot in self.elements_mut().iter_mut() {
-            unsafe {
-                *slot = TableElement::FuncRef(std::ptr::null_mut()).into_table_value();
-            }
-        }
-        Ok(())
-    }
-
-    /// TODO
-    pub fn init_func(&mut self, init: &mut VMFuncRef) -> Result<(), Trap> {
+    /// Initializes the contents of this table to the specified function
+    pub fn init_func(&mut self, init: *mut VMFuncRef) -> Result<(), Trap> {
         assert!(self.element_type() == TableElementType::Func);
         for slot in self.elements_mut().iter_mut() {
             unsafe {

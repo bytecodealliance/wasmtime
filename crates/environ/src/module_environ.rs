@@ -1,11 +1,11 @@
 use crate::module::{
     FuncRefIndex, Initializer, MemoryInitialization, MemoryInitializer, MemoryPlan, Module,
-    ModuleType, TableInitializer, TablePlan,
+    ModuleType, TablePlan, TableSegment,
 };
 use crate::{
     DataIndex, DefinedFuncIndex, ElemIndex, EntityIndex, EntityType, FuncIndex, GlobalIndex,
     GlobalInit, MemoryIndex, ModuleTypesBuilder, PrimaryMap, SignatureIndex, TableIndex,
-    TableInitialization, Tunables, TypeConvert, TypeIndex, WasmError, WasmFuncType, WasmHeapType,
+    TableInitialValue, Tunables, TypeConvert, TypeIndex, WasmError, WasmFuncType, WasmHeapType,
     WasmResult, WasmType,
 };
 use cranelift_entity::packed_option::ReservedValue;
@@ -302,37 +302,25 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                 let cnt = usize::try_from(tables.count()).unwrap();
                 self.result.module.table_plans.reserve_exact(cnt);
 
-                let mut segments = vec![];
-
                 for entry in tables {
                     let wasmparser::Table { ty, init } = entry?;
                     let table = self.convert_table_type(&ty);
                     let plan = TablePlan::for_table(table, &self.tunables);
-                    let table_index = self.result.module.table_plans.push(plan);
-                    match init {
-                        wasmparser::TableInit::RefNull => (),
+                    self.result.module.table_plans.push(plan);
+                    let init = match init {
+                        wasmparser::TableInit::RefNull => TableInitialValue::Null {
+                            precomputed: Vec::new(),
+                        },
                         wasmparser::TableInit::Expr(cexpr) => {
                             let mut init_expr_reader = cexpr.get_binary_reader();
                             match init_expr_reader.read_operator()? {
-                                Operator::RefNull { hty: _ } => segments.push(TableInitializer {
-                                    table_index,
-                                    base: None,
-                                    offset: 0,
-                                    elements: Box::new([]),
-                                    eager_init: Some(crate::EagerTableElementInitializer::Null),
-                                }),
+                                Operator::RefNull { hty: _ } => TableInitialValue::Null {
+                                    precomputed: Vec::new(),
+                                },
                                 Operator::RefFunc { function_index } => {
                                     let index = FuncIndex::from_u32(function_index);
                                     self.flag_func_escaped(index);
-                                    segments.push(TableInitializer {
-                                        table_index,
-                                        base: None,
-                                        offset: 0,
-                                        elements: Box::new([]),
-                                        eager_init: Some(
-                                            crate::EagerTableElementInitializer::FuncRef(index),
-                                        ),
-                                    })
+                                    TableInitialValue::FuncRef(index)
                                 }
                                 s => {
                                     return Err(WasmError::Unsupported(format!(
@@ -342,9 +330,13 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                                 }
                             }
                         }
-                    }
+                    };
+                    self.result
+                        .module
+                        .table_initialization
+                        .initial_values
+                        .push(init);
                 }
-                self.result.module.table_initialization = TableInitialization::Segments { segments }
             }
 
             Payload::MemorySection(memories) => {
@@ -512,18 +504,16 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                                 }
                             };
 
-                            let table_segments = match &mut self.result.module.table_initialization
-                            {
-                                TableInitialization::Segments { segments } => segments,
-                                TableInitialization::FuncTable { .. } => unreachable!(),
-                            };
-                            table_segments.push(TableInitializer {
-                                table_index,
-                                base,
-                                offset,
-                                elements: elements.into(),
-                                eager_init: None,
-                            });
+                            self.result
+                                .module
+                                .table_initialization
+                                .segments
+                                .push(TableSegment {
+                                    table_index,
+                                    base,
+                                    offset,
+                                    elements: elements.into(),
+                                });
                         }
 
                         ElementKind::Passive => {
