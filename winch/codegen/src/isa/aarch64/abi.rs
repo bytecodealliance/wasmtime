@@ -142,9 +142,9 @@ mod tests {
         isa::reg::Reg,
         isa::CallingConvention,
     };
-    use wasmparser::{
-        FuncType,
-        ValType::{self, *},
+    use wasmtime_environ::{
+        WasmFuncType,
+        WasmType::{self, *},
     };
 
     #[test]
@@ -160,7 +160,10 @@ mod tests {
 
     #[test]
     fn xreg_abi_sig() {
-        let wasm_sig = FuncType::new([I32, I64, I32, I64, I32, I32, I64, I32, I64], []);
+        let wasm_sig = WasmFuncType::new(
+            [I32, I64, I32, I64, I32, I32, I64, I32, I64].into(),
+            [].into(),
+        );
 
         let abi = Aarch64ABI::default();
         let sig = abi.sig(&wasm_sig, &CallingConvention::Default);
@@ -179,7 +182,10 @@ mod tests {
 
     #[test]
     fn vreg_abi_sig() {
-        let wasm_sig = FuncType::new([F32, F64, F32, F64, F32, F32, F64, F32, F64], []);
+        let wasm_sig = WasmFuncType::new(
+            [F32, F64, F32, F64, F32, F32, F64, F32, F64].into(),
+            [].into(),
+        );
 
         let abi = Aarch64ABI::default();
         let sig = abi.sig(&wasm_sig, &CallingConvention::Default);
@@ -198,7 +204,10 @@ mod tests {
 
     #[test]
     fn mixed_abi_sig() {
-        let wasm_sig = FuncType::new([F32, I32, I64, F64, I32, F32, F64, F32, F64], []);
+        let wasm_sig = WasmFuncType::new(
+            [F32, I32, I64, F64, I32, F32, F64, F32, F64].into(),
+            [].into(),
+        );
 
         let abi = Aarch64ABI::default();
         let sig = abi.sig(&wasm_sig, &CallingConvention::Default);
@@ -215,7 +224,7 @@ mod tests {
         match_reg_arg(params.get(8).unwrap(), F64, regs::vreg(5));
     }
 
-    fn match_reg_arg(abi_arg: &ABIArg, expected_ty: ValType, expected_reg: Reg) {
+    fn match_reg_arg(abi_arg: &ABIArg, expected_ty: WasmType, expected_reg: Reg) {
         match abi_arg {
             &ABIArg::Reg { reg, ty } => {
                 assert_eq!(reg, expected_reg);
@@ -225,7 +234,7 @@ mod tests {
         }
     }
 
-    fn match_stack_arg(abi_arg: &ABIArg, expected_ty: ValType, expected_offset: u32) {
+    fn match_stack_arg(abi_arg: &ABIArg, expected_ty: WasmType, expected_offset: u32) {
         match abi_arg {
             &ABIArg::Stack { offset, ty } => {
                 assert_eq!(offset, expected_offset);

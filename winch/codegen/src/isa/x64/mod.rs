@@ -8,19 +8,19 @@ use crate::isa::{x64::masm::MacroAssembler as X64Masm, CallingConvention};
 use crate::masm::MacroAssembler;
 use crate::regalloc::RegAlloc;
 use crate::stack::Stack;
+use crate::trampoline::{Trampoline, TrampolineKind};
 use crate::FuncEnv;
 use crate::{
     isa::{Builder, TargetIsa},
     regset::RegSet,
 };
-use crate::{Trampoline, TrampolineKind};
 use anyhow::Result;
 use cranelift_codegen::settings::{self, Flags};
 use cranelift_codegen::{isa::x64::settings as x64_settings, Final, MachBufferFinalized};
 use cranelift_codegen::{MachTextSectionBuilder, TextSectionBuilder};
 use target_lexicon::Triple;
-use wasmparser::{FuncType, FuncValidator, FunctionBody, ValidatorResources};
-use wasmtime_environ::VMOffsets;
+use wasmparser::{FuncValidator, FunctionBody, ValidatorResources};
+use wasmtime_environ::{VMOffsets, WasmFuncType};
 
 use self::regs::ALL_GPR;
 
@@ -89,7 +89,7 @@ impl TargetIsa for X64 {
 
     fn compile_function(
         &self,
-        sig: &FuncType,
+        sig: &WasmFuncType,
         body: &FunctionBody,
         vmoffsets: &VMOffsets<u8>,
         env: &dyn FuncEnv,
@@ -124,7 +124,7 @@ impl TargetIsa for X64 {
 
     fn compile_trampoline(
         &self,
-        ty: &FuncType,
+        ty: &WasmFuncType,
         kind: TrampolineKind,
     ) -> Result<MachBufferFinalized<Final>> {
         use TrampolineKind::*;

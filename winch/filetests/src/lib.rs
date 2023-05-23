@@ -12,7 +12,7 @@ mod test {
     use wasmtime_environ::VMOffsets;
     use wasmtime_environ::{
         wasmparser::{Parser as WasmParser, Validator},
-        DefinedFuncIndex, FunctionBodyData, ModuleEnvironment, Tunables,
+        DefinedFuncIndex, FunctionBodyData, ModuleEnvironment, Tunables, TypeConvert,
     };
     use winch_codegen::{lookup, TargetIsa};
     use winch_environ::FuncEnv;
@@ -157,6 +157,7 @@ mod test {
             .types
             .function_at(index.as_u32())
             .expect(&format!("function type at index {:?}", index.as_u32()));
+        let sig = env.convert_func_type(&sig);
         let FunctionBodyData { body, validator } = f.1;
         let mut validator = validator.into_validator(Default::default());
         let buffer = isa
