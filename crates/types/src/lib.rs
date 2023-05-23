@@ -79,6 +79,16 @@ impl fmt::Display for WasmRefType {
 pub enum WasmHeapType {
     Func,
     Extern,
+    // FIXME: the `SignatureIndex` payload here is not suitable given all the
+    // contexts that this type is used within. For example the Engine in
+    // wasmtime hashes this index which is not appropriate because the index is
+    // not globally unique.
+    //
+    // This probably needs to become `WasmHeapType<T>` where all of translation
+    // uses `WasmHeapType<SignatureIndex>` and all of engine-level "stuff"  uses
+    // `WasmHeapType<VMSharedSignatureIndex>`. This `<T>` would need to be
+    // propagated to quite a few locations though so it's left for a future
+    // refactoring at this time.
     TypedFunc(SignatureIndex),
 }
 
