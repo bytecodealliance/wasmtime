@@ -29,6 +29,18 @@ Unreleased.
 
 --------------------------------------------------------------------------------
 
+## 9.0.1
+
+Released 2023-05-22.
+
+### Fixed
+
+* A panic which happened when enabling support for native platform profilers was
+  fixed.
+  [#6435](https://github.com/bytecodealliance/wasmtime/pull/6435)
+
+--------------------------------------------------------------------------------
+
 ## 9.0.0
 
 Released 2023-05-22.
