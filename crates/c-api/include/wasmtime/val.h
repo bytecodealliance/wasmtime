@@ -212,7 +212,7 @@ typedef struct wasmtime_val {
 } wasmtime_val_t;
 
 /**
- * \brief Delets an owned #wasmtime_val_t.
+ * \brief Deletes an owned #wasmtime_val_t.
  *
  * Note that this only deletes the contents, not the memory that `val` points to
  * itself (which is owned by the caller).

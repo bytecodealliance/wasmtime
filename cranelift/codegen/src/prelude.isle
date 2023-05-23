@@ -383,6 +383,10 @@
 (decl ty_int (Type) Type)
 (extern extractor ty_int ty_int)
 
+;; An extractor that only matches scalar types, float or int or ref's.
+(decl ty_scalar (Type) Type)
+(extern extractor ty_scalar ty_scalar)
+
 ;; An extractor that only matches scalar floating-point types--F32 or F64.
 (decl ty_scalar_float (Type) Type)
 (extern extractor ty_scalar_float ty_scalar_float)

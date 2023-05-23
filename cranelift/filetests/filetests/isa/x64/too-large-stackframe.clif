@@ -1,0 +1,24 @@
+;; See: https://github.com/bytecodealliance/wasmtime/issues/6431
+
+test compile expect-fail
+target x86_64
+
+;; We expect this to fail: the slots add up to beyond the range of a `u32`.
+function u0:0() system_v {
+    ss0 = explicit_slot 1536000000
+    ss1 = explicit_slot 1536000000
+    ss2 = explicit_slot 1536000000
+    ss3 = explicit_slot 1536000000
+
+block0:
+    trap user0
+}
+
+;; We expect this to fail as well: the rounding-up for alignment after
+;; processing the one stackslot will cause overflow.
+function u0:0() system_v {
+    ss0 = explicit_slot 0xffffffff
+
+block0:
+    trap user0
+}

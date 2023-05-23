@@ -221,7 +221,7 @@ WASMTIME_CONFIG_PROP(void, wasm_memory64, bool)
 WASMTIME_CONFIG_PROP(void, strategy, wasmtime_strategy_t)
 
 /**
- * \brief Configure wether wasmtime should compile a module using multiple threads.
+ * \brief Configure whether wasmtime should compile a module using multiple threads.
  *
  * For more information see the Rust documentation at
  * https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.parallel_compilation.

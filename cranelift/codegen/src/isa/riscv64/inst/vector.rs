@@ -31,6 +31,9 @@ impl VecAvl {
 }
 
 // TODO: Can we tell ISLE to derive this?
+impl Copy for VecAvl {}
+
+// TODO: Can we tell ISLE to derive this?
 impl PartialEq for VecAvl {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
@@ -154,7 +157,7 @@ impl fmt::Display for VecMaskMode {
 /// Vector Type (VType)
 ///
 /// vtype provides the default type used to interpret the contents of the vector register file.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct VType {
     pub sew: VecElementWidth,
     pub lmul: VecLmul,
@@ -189,7 +192,7 @@ impl fmt::Display for VType {
 /// VState represents the state of the vector unit that each instruction expects before execution.
 /// Unlike VType or any of the other types here, VState is not a part of the RISC-V ISA. It is
 /// used by our instruction emission code to ensure that the vector unit is in the correct state.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct VState {
     pub avl: VecAvl,
     pub vtype: VType,
@@ -272,9 +275,9 @@ impl VecAluOpRRR {
             VecAluOpRRR::VmulVV => 0b100101,
             VecAluOpRRR::VmulhVV => 0b100111,
             VecAluOpRRR::VmulhuVV | VecAluOpRRR::VfmulVV | VecAluOpRRR::VfmulVF => 0b100100,
-            VecAluOpRRR::VandVV => 0b001001,
-            VecAluOpRRR::VorVV => 0b001010,
-            VecAluOpRRR::VxorVV => 0b001011,
+            VecAluOpRRR::VandVV | VecAluOpRRR::VandVX => 0b001001,
+            VecAluOpRRR::VorVV | VecAluOpRRR::VorVX => 0b001010,
+            VecAluOpRRR::VxorVV | VecAluOpRRR::VxorVX => 0b001011,
             VecAluOpRRR::VslidedownVX => 0b001111,
             VecAluOpRRR::VfrsubVF => 0b100111,
             VecAluOpRRR::VmergeVVM | VecAluOpRRR::VmergeVXM | VecAluOpRRR::VfmergeVFM => 0b010111,
@@ -298,6 +301,9 @@ impl VecAluOpRRR {
             VecAluOpRRR::VaddVX
             | VecAluOpRRR::VsubVX
             | VecAluOpRRR::VrsubVX
+            | VecAluOpRRR::VandVX
+            | VecAluOpRRR::VorVX
+            | VecAluOpRRR::VxorVX
             | VecAluOpRRR::VslidedownVX
             | VecAluOpRRR::VmergeVXM => VecOpCategory::OPIVX,
             VecAluOpRRR::VfaddVV
@@ -354,6 +360,9 @@ impl VecAluOpRRImm5 {
         match self {
             VecAluOpRRImm5::VaddVI => 0b000000,
             VecAluOpRRImm5::VrsubVI => 0b000011,
+            VecAluOpRRImm5::VandVI => 0b001001,
+            VecAluOpRRImm5::VorVI => 0b001010,
+            VecAluOpRRImm5::VxorVI => 0b001011,
             VecAluOpRRImm5::VslidedownVI => 0b001111,
             VecAluOpRRImm5::VmergeVIM => 0b010111,
         }
@@ -363,6 +372,9 @@ impl VecAluOpRRImm5 {
         match self {
             VecAluOpRRImm5::VaddVI
             | VecAluOpRRImm5::VrsubVI
+            | VecAluOpRRImm5::VandVI
+            | VecAluOpRRImm5::VorVI
+            | VecAluOpRRImm5::VxorVI
             | VecAluOpRRImm5::VslidedownVI
             | VecAluOpRRImm5::VmergeVIM => VecOpCategory::OPIVI,
         }
@@ -371,7 +383,12 @@ impl VecAluOpRRImm5 {
     pub fn imm_is_unsigned(&self) -> bool {
         match self {
             VecAluOpRRImm5::VslidedownVI => true,
-            VecAluOpRRImm5::VaddVI | VecAluOpRRImm5::VrsubVI | VecAluOpRRImm5::VmergeVIM => false,
+            VecAluOpRRImm5::VaddVI
+            | VecAluOpRRImm5::VrsubVI
+            | VecAluOpRRImm5::VandVI
+            | VecAluOpRRImm5::VorVI
+            | VecAluOpRRImm5::VxorVI
+            | VecAluOpRRImm5::VmergeVIM => false,
         }
     }
 }
