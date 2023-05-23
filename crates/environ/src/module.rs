@@ -1,6 +1,6 @@
 //! Data structures for representing decoded wasm modules.
 
-use crate::{ModuleTranslation, PrimaryMap, Tunables, WASM_PAGE_SIZE};
+use crate::{ModuleTranslation, PrimaryMap, Tunables, WasmHeapType, WASM_PAGE_SIZE};
 use cranelift_entity::{packed_option::ReservedValue, EntityRef};
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
@@ -1041,6 +1041,14 @@ impl Module {
             signature,
             func_ref,
         })
+    }
+}
+
+impl TypeConvert for Module {
+    fn lookup_heap_type(&self, index: TypeIndex) -> WasmHeapType {
+        match self.types[index] {
+            ModuleType::Function(i) => WasmHeapType::TypedFunc(i),
+        }
     }
 }
 

@@ -4,7 +4,7 @@
 //! `winch_codegen::FuncEnv` trait.
 
 use wasmparser::types::Types;
-use wasmtime_environ::{FuncIndex, Module};
+use wasmtime_environ::{FuncIndex, Module, TypeConvert, TypeIndex, WasmHeapType};
 use winch_codegen::{self, Callee};
 
 /// Function environment containing module and runtime specific
@@ -16,6 +16,12 @@ pub struct FuncEnv<'a> {
     pub types: &'a Types,
 }
 
+impl TypeConvert for FuncEnv<'_> {
+    fn lookup_heap_type(&self, index: TypeIndex) -> WasmHeapType {
+        self.module.lookup_heap_type(index)
+    }
+}
+
 impl<'a> winch_codegen::FuncEnv for FuncEnv<'a> {
     fn callee_from_index(&self, index: u32) -> Callee {
         let func = self
@@ -24,7 +30,7 @@ impl<'a> winch_codegen::FuncEnv for FuncEnv<'a> {
             .unwrap_or_else(|| panic!("function type at index: {}", index));
 
         Callee {
-            ty: func.clone(),
+            ty: self.convert_func_type(func),
             import: self.module.is_imported_function(FuncIndex::from_u32(index)),
             index,
         }

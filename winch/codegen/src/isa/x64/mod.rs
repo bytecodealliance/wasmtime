@@ -101,7 +101,7 @@ impl TargetIsa for X64 {
         let abi = abi::X64ABI::default();
         let abi_sig = abi.sig(sig, &CallingConvention::Default);
 
-        let defined_locals = DefinedLocals::new(&mut body, validator)?;
+        let defined_locals = DefinedLocals::new(env, &mut body, validator)?;
         let frame = Frame::new(&abi_sig, &defined_locals, &abi)?;
         // TODO Add in floating point bitmask
         let regalloc = RegAlloc::new(RegSet::new(ALL_GPR, 0), regs::scratch());

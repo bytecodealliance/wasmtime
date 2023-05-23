@@ -11,9 +11,8 @@ use gimli::{self, LineEncoding};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
-use wasmparser::ValType as WasmType;
 use wasmtime_environ::{
-    DebugInfoData, DefinedFuncIndex, EntityRef, FuncIndex, FunctionMetadata, WasmFileInfo,
+    DebugInfoData, DefinedFuncIndex, EntityRef, FuncIndex, FunctionMetadata, WasmFileInfo, WasmType,
 };
 
 const PRODUCER_NAME: &str = "wasmtime";

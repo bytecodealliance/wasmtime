@@ -1,8 +1,9 @@
 use crate::abi::{align_to, ty_size, ABIArg, ABISig, LocalSlot, ABI};
+use crate::FuncEnv;
 use anyhow::Result;
 use smallvec::SmallVec;
 use std::ops::Range;
-use wasmparser::{BinaryReader, FuncValidator, ValType, ValidatorResources};
+use wasmparser::{BinaryReader, FuncValidator, ValidatorResources};
 
 // TODO:
 // SpiderMonkey's implementation uses 16;
@@ -32,6 +33,7 @@ pub(crate) struct DefinedLocals {
 impl DefinedLocals {
     /// Compute the local slots for a Wasm function.
     pub fn new(
+        env: &dyn FuncEnv,
         reader: &mut BinaryReader<'_>,
         validator: &mut FuncValidator<ValidatorResources>,
     ) -> Result<Self> {
@@ -46,7 +48,7 @@ impl DefinedLocals {
             let ty = reader.read()?;
             validator.define_locals(position, count, ty)?;
 
-            let ty: ValType = ty.try_into()?;
+            let ty = env.convert_valtype(ty);
             for _ in 0..count {
                 let ty_size = ty_size(&ty);
                 next_stack = align_to(next_stack, ty_size) + ty_size;

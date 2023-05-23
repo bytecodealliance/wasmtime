@@ -194,12 +194,16 @@ fn memory_ty(expected: &Memory, actual: &Memory, actual_runtime_size: Option<u64
 
 fn match_heap(expected: WasmHeapType, actual: WasmHeapType, desc: &str) -> Result<()> {
     let result = match (actual, expected) {
-        (WasmHeapType::Index(actual), WasmHeapType::Index(expected)) => {
+        (WasmHeapType::TypedFunc(actual), WasmHeapType::TypedFunc(expected)) => {
             // TODO(dhil): we need either canonicalised types or a context here.
             actual == expected
         }
-        (WasmHeapType::Index(_), WasmHeapType::Func) => true,
-        (actual, expected) => actual == expected,
+        (WasmHeapType::TypedFunc(_), WasmHeapType::Func)
+        | (WasmHeapType::Func, WasmHeapType::Func)
+        | (WasmHeapType::Extern, WasmHeapType::Extern) => true,
+        (WasmHeapType::Func, _) | (WasmHeapType::Extern, _) | (WasmHeapType::TypedFunc(_), _) => {
+            false
+        }
     };
     if result {
         Ok(())

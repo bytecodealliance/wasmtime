@@ -18,7 +18,7 @@ use std::mem;
 use wasmparser::Operator;
 use wasmtime_environ::{
     BuiltinFunctionIndex, MemoryPlan, MemoryStyle, Module, ModuleTranslation, ModuleTypes, PtrSize,
-    TableStyle, Tunables, VMOffsets, WASM_PAGE_SIZE,
+    TableStyle, Tunables, TypeConvert, VMOffsets, WASM_PAGE_SIZE,
 };
 use wasmtime_environ::{FUNCREF_INIT_BIT, FUNCREF_MASK};
 
@@ -860,6 +860,12 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     }
 }
 
+impl TypeConvert for FuncEnvironment<'_> {
+    fn lookup_heap_type(&self, ty: TypeIndex) -> WasmHeapType {
+        self.module.lookup_heap_type(ty)
+    }
+}
+
 impl<'module_environment> TargetEnvironment for FuncEnvironment<'module_environment> {
     fn target_config(&self) -> TargetFrontendConfig {
         self.isa.frontend_config()
@@ -961,7 +967,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     ) -> WasmResult<ir::Value> {
         let (func_idx, func_sig) =
             match self.module.table_plans[table_index].table.wasm_ty.heap_type {
-                WasmHeapType::Func | WasmHeapType::Index(_) => (
+                WasmHeapType::Func | WasmHeapType::TypedFunc(_) => (
                     BuiltinFunctionIndex::table_grow_func_ref(),
                     self.builtin_function_signatures
                         .table_grow_func_ref(&mut pos.func),
@@ -996,7 +1002,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
 
         let plan = &self.module.table_plans[table_index];
         match plan.table.wasm_ty.heap_type {
-            WasmHeapType::Func | WasmHeapType::Index(_) => match plan.style {
+            WasmHeapType::Func | WasmHeapType::TypedFunc(_) => match plan.style {
                 TableStyle::CallerChecksSignature => {
                     Ok(self.get_or_init_func_ref_table_elem(builder, table_index, table, index))
                 }
@@ -1129,10 +1135,9 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         index: ir::Value,
     ) -> WasmResult<()> {
         let pointer_type = self.pointer_type();
-
         let plan = &self.module.table_plans[table_index];
         match plan.table.wasm_ty.heap_type {
-            WasmHeapType::Func | WasmHeapType::Index(_) => match plan.style {
+            WasmHeapType::Func | WasmHeapType::TypedFunc(_) => match plan.style {
                 TableStyle::CallerChecksSignature => {
                     let table_entry_addr = builder.ins().table_addr(pointer_type, table, index, 0);
                     // Set the "initialized bit". See doc-comment on
@@ -1148,6 +1153,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                     Ok(())
                 }
             },
+
             WasmHeapType::Extern => {
                 // Our write barrier for `externref`s being copied out of the
                 // stack and into a table is roughly equivalent to the following
@@ -1291,7 +1297,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     ) -> WasmResult<()> {
         let (builtin_idx, builtin_sig) =
             match self.module.table_plans[table_index].table.wasm_ty.heap_type {
-                WasmHeapType::Func | WasmHeapType::Index(_) => (
+                WasmHeapType::Func | WasmHeapType::TypedFunc(_) => (
                     BuiltinFunctionIndex::table_fill_func_ref(),
                     self.builtin_function_signatures
                         .table_fill_func_ref(&mut pos.func),
@@ -1322,7 +1328,9 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         ht: WasmHeapType,
     ) -> WasmResult<ir::Value> {
         Ok(match ht {
-            WasmHeapType::Func | WasmHeapType::Index(_) => pos.ins().iconst(self.pointer_type(), 0),
+            WasmHeapType::Func | WasmHeapType::TypedFunc(_) => {
+                pos.ins().iconst(self.pointer_type(), 0)
+            }
             WasmHeapType::Extern => pos.ins().null(self.reference_type(ht)),
         })
     }
@@ -1536,26 +1544,38 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         func: &mut ir::Function,
         index: GlobalIndex,
     ) -> WasmResult<GlobalVariable> {
-        // Although `ExternRef`s live at the same memory location as any other
-        // type of global at the same index would, getting or setting them
-        // requires ref counting barriers. Therefore, we need to use
-        // `GlobalVariable::Custom`, as that is the only kind of
-        // `GlobalVariable` for which `cranelift-wasm` supports custom access
-        // translation.
-        match self.module.globals[index].wasm_ty {
+        let ty = self.module.globals[index].wasm_ty;
+        match ty {
+            // Although `ExternRef`s live at the same memory location as any
+            // other type of global at the same index would, getting or setting
+            // them requires ref counting barriers. Therefore, we need to use
+            // `GlobalVariable::Custom`, as that is the only kind of
+            // `GlobalVariable` for which `cranelift-wasm` supports custom
+            // access translation.
             WasmType::Ref(WasmRefType {
                 heap_type: WasmHeapType::Extern,
                 ..
-            }) => Ok(GlobalVariable::Custom),
-            _ => {
-                let (gv, offset) = self.get_global_location(func, index);
-                Ok(GlobalVariable::Memory {
-                    gv,
-                    offset: offset.into(),
-                    ty: super::value_type(self.isa, self.module.globals[index].wasm_ty),
-                })
-            }
+            }) => return Ok(GlobalVariable::Custom),
+
+            // Funcrefs are represented as pointers which survive for the
+            // entire lifetime of the `Store` so there's no need for barriers.
+            // This means that they can fall through to memory as well.
+            WasmType::Ref(WasmRefType {
+                heap_type: WasmHeapType::Func | WasmHeapType::TypedFunc(_),
+                ..
+            }) => {}
+
+            // Value types all live in memory so let them fall through to a
+            // memory-based global.
+            WasmType::I32 | WasmType::I64 | WasmType::F32 | WasmType::F64 | WasmType::V128 => {}
         }
+
+        let (gv, offset) = self.get_global_location(func, index);
+        Ok(GlobalVariable::Memory {
+            gv,
+            offset: offset.into(),
+            ty: super::value_type(self.isa, ty),
+        })
     }
 
     fn make_indirect_sig(

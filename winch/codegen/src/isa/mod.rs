@@ -9,8 +9,8 @@ use std::{
     fmt::{self, Debug, Display},
 };
 use target_lexicon::{Architecture, Triple};
-use wasmparser::{FuncType, FuncValidator, FunctionBody, ValidatorResources};
-use wasmtime_environ::VMOffsets;
+use wasmparser::{FuncValidator, FunctionBody, ValidatorResources};
+use wasmtime_environ::{VMOffsets, WasmFuncType};
 
 #[cfg(feature = "x64")]
 pub(crate) mod x64;
@@ -147,7 +147,7 @@ pub trait TargetIsa: Send + Sync {
     /// Compile a function.
     fn compile_function(
         &self,
-        sig: &FuncType,
+        sig: &WasmFuncType,
         body: &FunctionBody,
         vmoffsets: &VMOffsets<u8>,
         env: &dyn FuncEnv,
@@ -193,7 +193,7 @@ pub trait TargetIsa: Send + Sync {
     /// depending on the `kind` paramter.
     fn compile_trampoline(
         &self,
-        ty: &FuncType,
+        ty: &WasmFuncType,
         kind: TrampolineKind,
     ) -> Result<MachBufferFinalized<Final>>;
 

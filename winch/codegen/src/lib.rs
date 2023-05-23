@@ -18,5 +18,4 @@ mod regset;
 mod stack;
 mod trampoline;
 pub use trampoline::TrampolineKind;
-use trampoline::*;
 mod visitor;

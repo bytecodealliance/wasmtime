@@ -2,7 +2,7 @@ use super::regs;
 use crate::abi::{ABIArg, ABIResult, ABISig, ABI};
 use crate::isa::{reg::Reg, CallingConvention};
 use smallvec::SmallVec;
-use wasmparser::{FuncType, ValType};
+use wasmtime_environ::{WasmFuncType, WasmType};
 
 #[derive(Default)]
 pub(crate) struct Aarch64ABI;
@@ -63,10 +63,10 @@ impl ABI for Aarch64ABI {
         64
     }
 
-    fn sig(&self, wasm_sig: &FuncType, call_conv: &CallingConvention) -> ABISig {
+    fn sig(&self, wasm_sig: &WasmFuncType, call_conv: &CallingConvention) -> ABISig {
         assert!(call_conv.is_apple_aarch64() || call_conv.is_default());
 
-        if wasm_sig.results().len() > 1 {
+        if wasm_sig.returns().len() > 1 {
             panic!("multi-value not supported");
         }
 
@@ -79,7 +79,7 @@ impl ABI for Aarch64ABI {
             .map(|arg| Self::to_abi_arg(arg, &mut stack_offset, &mut index_env))
             .collect();
 
-        let ty = wasm_sig.results().get(0).map(|e| e.clone());
+        let ty = wasm_sig.returns().get(0).map(|e| e.clone());
         // NOTE temporarily defaulting to x0;
         let reg = regs::xreg(0);
         let result = ABIResult::reg(ty, reg);
@@ -110,14 +110,14 @@ impl ABI for Aarch64ABI {
 
 impl Aarch64ABI {
     fn to_abi_arg(
-        wasm_arg: &ValType,
+        wasm_arg: &WasmType,
         stack_offset: &mut u32,
         index_env: &mut RegIndexEnv,
     ) -> ABIArg {
         let (reg, ty) = match wasm_arg {
-            ty @ (ValType::I32 | ValType::I64) => (index_env.next_xreg().map(regs::xreg), ty),
+            ty @ (WasmType::I32 | WasmType::I64) => (index_env.next_xreg().map(regs::xreg), ty),
 
-            ty @ (ValType::F32 | ValType::F64) => (index_env.next_vreg().map(regs::vreg), ty),
+            ty @ (WasmType::F32 | WasmType::F64) => (index_env.next_vreg().map(regs::vreg), ty),
 
             ty => unreachable!("Unsupported argument type {:?}", ty),
         };

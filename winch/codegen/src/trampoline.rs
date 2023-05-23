@@ -18,8 +18,7 @@ use crate::{
 use anyhow::{anyhow, Result};
 use smallvec::SmallVec;
 use std::mem;
-use wasmparser::{FuncType, ValType};
-use wasmtime_environ::{FuncIndex, PtrSize};
+use wasmtime_environ::{FuncIndex, PtrSize, WasmFuncType, WasmType};
 
 /// The supported trampoline kinds.
 /// See https://github.com/bytecodealliance/rfcs/blob/main/accepted/tail-calls.md#new-trampolines-and-vmcallercheckedanyfunc-changes
@@ -87,10 +86,10 @@ where
     }
 
     /// Emit an array-to-wasm trampoline.
-    pub fn emit_array_to_wasm(&mut self, ty: &FuncType, callee_index: FuncIndex) -> Result<()> {
-        let native_ty = FuncType::new(
-            vec![ValType::I64, ValType::I64, ValType::I64, ValType::I64],
-            vec![],
+    pub fn emit_array_to_wasm(&mut self, ty: &WasmFuncType, callee_index: FuncIndex) -> Result<()> {
+        let native_ty = WasmFuncType::new(
+            [WasmType::I64, WasmType::I64, WasmType::I64, WasmType::I64].into(),
+            [].into(),
         );
 
         let native_sig = self.native_sig(&native_ty);
@@ -174,7 +173,11 @@ where
     }
 
     /// Emit a native-to-wasm trampoline.
-    pub fn emit_native_to_wasm(&mut self, ty: &FuncType, callee_index: FuncIndex) -> Result<()> {
+    pub fn emit_native_to_wasm(
+        &mut self,
+        ty: &WasmFuncType,
+        callee_index: FuncIndex,
+    ) -> Result<()> {
         let native_sig = self.native_sig(&ty);
         let wasm_sig = self.wasm_sig(&ty);
         let (vmctx, caller_vmctx) = Self::callee_and_caller_vmctx(&native_sig.params)?;
@@ -224,11 +227,11 @@ where
     }
 
     /// Emit a wasm-to-native trampoline.
-    pub fn emit_wasm_to_native(&mut self, ty: &FuncType) -> Result<()> {
+    pub fn emit_wasm_to_native(&mut self, ty: &WasmFuncType) -> Result<()> {
         let mut params = Self::callee_and_caller_vmctx_types();
         params.extend_from_slice(ty.params());
 
-        let func_ty = FuncType::new(params, ty.results().to_owned());
+        let func_ty = WasmFuncType::new(params.into(), ty.returns().into());
         let wasm_sig = self.wasm_sig(&func_ty);
         let native_sig = self.native_sig(ty);
 
@@ -349,21 +352,21 @@ where
     }
 
     /// Get the type of the caller and callee VM contexts.
-    fn callee_and_caller_vmctx_types() -> Vec<ValType> {
-        vec![ValType::I64, ValType::I64]
+    fn callee_and_caller_vmctx_types() -> Vec<WasmType> {
+        vec![WasmType::I64, WasmType::I64]
     }
 
     /// Returns a signature using the system's calling convention.
-    fn native_sig(&self, ty: &FuncType) -> ABISig {
+    fn native_sig(&self, ty: &WasmFuncType) -> ABISig {
         let mut params = Self::callee_and_caller_vmctx_types();
         params.extend_from_slice(ty.params());
-        let native_type = FuncType::new(params, ty.results().to_owned());
+        let native_type = WasmFuncType::new(params.into(), ty.returns().into());
 
         self.abi.sig(&native_type, self.call_conv)
     }
 
     /// Returns a signature using the Winch's default calling convention.
-    fn wasm_sig(&self, ty: &FuncType) -> ABISig {
+    fn wasm_sig(&self, ty: &WasmFuncType) -> ABISig {
         self.abi.sig(ty, &CallingConvention::Default)
     }
 
