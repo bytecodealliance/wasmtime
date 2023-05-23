@@ -1929,6 +1929,7 @@ pub(crate) fn emit(
                 .map(map)
                 .w(w)
                 .opcode(opcode)
+                .tuple_type(op.tuple_type())
                 .reg(dst.to_real_reg().unwrap().hw_enc())
                 .rm(src)
                 .encode(sink);
@@ -2764,6 +2765,7 @@ pub(crate) fn emit(
                 .map(OpcodeMap::_0F38)
                 .w(w)
                 .opcode(opcode)
+                .tuple_type(op.tuple_type())
                 .reg(dst.to_real_reg().unwrap().hw_enc())
                 .rm(src1)
                 .vvvvv(src2.to_real_reg().unwrap().hw_enc())

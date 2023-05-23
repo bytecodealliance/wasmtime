@@ -16,7 +16,7 @@
 
 use super::rex::{self, LegacyPrefixes, OpcodeMap};
 use crate::ir::TrapCode;
-use crate::isa::x64::args::Amode;
+use crate::isa::x64::args::{Amode, Avx512TupleType};
 use crate::isa::x64::inst::Inst;
 use crate::MachBuffer;
 use core::ops::RangeInclusive;
@@ -29,6 +29,7 @@ pub struct EvexInstruction {
     opcode: u8,
     reg: Register,
     rm: RegisterOrAmode,
+    tuple_type: Option<Avx512TupleType>,
 }
 
 /// Because some of the bit flags in the EVEX prefix are reversed and users of `EvexInstruction` may
@@ -48,6 +49,7 @@ impl Default for EvexInstruction {
             opcode: 0,
             reg: Register::default(),
             rm: RegisterOrAmode::Register(Register::default()),
+            tuple_type: None,
         }
     }
 }
@@ -98,6 +100,14 @@ impl EvexInstruction {
     #[inline(always)]
     pub fn opcode(mut self, opcode: u8) -> Self {
         self.opcode = opcode;
+        self
+    }
+
+    /// Set the "tuple type" which is used for 8-bit scaling when a memory
+    /// operand is used.
+    #[inline(always)]
+    pub fn tuple_type(mut self, tt: Avx512TupleType) -> Self {
+        self.tuple_type = Some(tt);
         self
     }
 
@@ -155,6 +165,7 @@ impl EvexInstruction {
             RegisterOrAmode::Amode(Amode::ImmReg { .. }) => 0,
             RegisterOrAmode::Amode(Amode::RipRelative { .. }) => 0,
         };
+        // The X bit is stored in an inverted format, so invert it here.
         self.write(Self::X, u32::from(!x & 1));
 
         let b = match &self.rm {
@@ -168,16 +179,18 @@ impl EvexInstruction {
             // The 4th bit of %rip is 0
             RegisterOrAmode::Amode(Amode::RipRelative { .. }) => 0,
         };
+        // The B bit is stored in an inverted format, so invert it here.
         self.write(Self::B, u32::from(!b & 1));
         self
     }
 
     /// Emit the EVEX-encoded instruction to the code sink:
-    /// - first, the 4-byte EVEX prefix;
-    /// - then, the opcode byte;
-    /// - finally, the ModR/M byte.
     ///
-    /// Eventually this method should support encodings of more than just the reg-reg addressing mode (TODO).
+    /// - the 4-byte EVEX prefix;
+    /// - the opcode byte;
+    /// - the ModR/M byte
+    /// - SIB bytes, if necessary
+    /// - an optional immediate, if necessary (not currently implemented)
     pub fn encode(&self, sink: &mut MachBuffer<Inst>) {
         if let RegisterOrAmode::Amode(amode) = &self.rm {
             if amode.can_trap() {
@@ -193,22 +206,7 @@ impl EvexInstruction {
                 sink.put1(rex::encode_modrm(3, self.reg.0 & 7, rm & 7));
             }
             RegisterOrAmode::Amode(amode) => {
-                // NB: the `scaling` factor must be passed to
-                // `emit_modrm_sib_disp` because EVEX instructions always use a
-                // scaling factor. Section 2.7.5 in the Intel manual has a lot
-                // of words about this I don't fully understand yet. That being
-                // said for the V128 case the factor is 16 (or so I'm pretty
-                // sure). Assert that that's the "length" of this instruction
-                // (aka the encoding of the default `EvexContext`). If
-                // this assertion trips then the scaling factor probably needs
-                // to be stored on `self` and reassigned whenever the `length`
-                // method is called.
-                let b128 = EvexContext::Other {
-                    length: EvexVectorLength::V128,
-                };
-                let bits = (self.bits >> Self::LL.start()) & ((1 << Self::LL.len()) - 1);
-                assert_eq!(bits, u32::from(b128.bits()));
-                let scaling = 16;
+                let scaling = self.scaling_for_8bit_disp();
 
                 // NB: when `EvexInstruction` supports a trailing 8-bit
                 // immediate this'll conditionally be 0 or 1
@@ -266,6 +264,40 @@ impl EvexInstruction {
         self.bits &= mask_complement; // Clear the bits in `range`; otherwise the OR below may allow previously-set bits to slip through.
         let value = value << *range.start(); // Place the value in the correct location (assumes `value <= mask`).
         self.bits |= value; // Modify the bits in `range`.
+    }
+
+    /// A convenience method for reading given range of bits in `self.bits`
+    /// shifted to the LSB of the returned value..
+    #[inline]
+    fn read(&self, range: RangeInclusive<u8>) -> u32 {
+        (self.bits >> range.start()) & ((1 << range.len()) - 1)
+    }
+
+    fn scaling_for_8bit_disp(&self) -> i8 {
+        use Avx512TupleType::*;
+
+        let vector_size_scaling = || match self.read(Self::LL) {
+            0b00 => 16,
+            0b01 => 32,
+            0b10 => 64,
+            _ => unreachable!(),
+        };
+
+        match self.tuple_type {
+            Some(Full) => {
+                if self.read(Self::B) == 1 {
+                    if self.read(Self::W) == 0 {
+                        4
+                    } else {
+                        8
+                    }
+                } else {
+                    vector_size_scaling()
+                }
+            }
+            Some(FullMem) => vector_size_scaling(),
+            None => panic!("tuple type was not set"),
+        }
     }
 }
 
