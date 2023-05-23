@@ -703,16 +703,18 @@ pub struct TableInitializer {
     pub offset: u32,
     /// The values to write into the table elements.
     pub elements: Box<[FuncIndex]>,
-    /// Whether to enforce eager initialization of the table.
+    /// Table-wide eager initializer (introduced by the
+    /// function-references proposal).
     pub eager_init: Option<EagerTableElementInitializer>,
 }
 
 /// TODO
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum EagerTableElementInitializer {
-    /// TODO
+    /// Initialize each table element to null.
     Null,
-    /// TODO
+    /// Initialize each table element to the function reference given
+    /// by the `FuncIndex`.
     FuncRef(FuncIndex),
 }
 
