@@ -726,6 +726,122 @@
 (type AMO (primitive AMO))
 (type VecMachLabel extern (enum))
 
+
+;;;; Newtypes for Different Register Classes ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(type XReg (primitive XReg))
+(type WritableXReg (primitive WritableXReg))
+(type FReg (primitive FReg))
+(type WritableFReg (primitive WritableFReg))
+(type VReg (primitive VReg))
+(type WritableVReg (primitive WritableVReg))
+
+;; Construct a new `XReg` from a `Reg`.
+;;
+;; Asserts that the register has a Integer RegClass.
+(decl xreg_new (Reg) XReg)
+(extern constructor xreg_new xreg_new)
+(convert Reg XReg xreg_new)
+
+;; Put a value into a XReg.
+;;
+;; Asserts that the value goes into a XReg.
+(decl put_in_xreg (Value) XReg)
+(rule (put_in_xreg val) (xreg_new (put_in_reg val)))
+(convert Value XReg put_in_xreg)
+
+;; Construct an `InstOutput` out of a single XReg register.
+(decl output_xreg (XReg) InstOutput)
+(rule (output_xreg x) (output_reg x))
+(convert XReg InstOutput output_xreg)
+
+;; Convert a `WritableXReg` to an `XReg`.
+(decl pure writable_xreg_to_xreg (WritableXReg) XReg)
+(extern constructor writable_xreg_to_xreg writable_xreg_to_xreg)
+(convert WritableXReg XReg writable_xreg_to_xreg)
+
+;; Convert a `WritableXReg` to an `WritableReg`.
+(decl pure writable_xreg_to_writable_reg (WritableXReg) WritableReg)
+(extern constructor writable_xreg_to_writable_reg writable_xreg_to_writable_reg)
+(convert WritableXReg WritableReg writable_xreg_to_writable_reg)
+
+;; Convert an `XReg` to a `Reg`.
+(decl pure xreg_to_reg (XReg) Reg)
+(extern constructor xreg_to_reg xreg_to_reg)
+(convert XReg Reg xreg_to_reg)
+
+
+;; Construct a new `FReg` from a `Reg`.
+;;
+;; Asserts that the register has a Float RegClass.
+(decl freg_new (Reg) FReg)
+(extern constructor freg_new freg_new)
+(convert Reg FReg freg_new)
+
+;; Put a value into a FReg.
+;;
+;; Asserts that the value goes into a FReg.
+(decl put_in_freg (Value) FReg)
+(rule (put_in_freg val) (freg_new (put_in_reg val)))
+(convert Value FReg put_in_freg)
+
+;; Construct an `InstOutput` out of a single FReg register.
+(decl output_freg (FReg) InstOutput)
+(rule (output_freg x) (output_reg x))
+(convert FReg InstOutput output_freg)
+
+;; Convert a `WritableFReg` to an `FReg`.
+(decl pure writable_freg_to_freg (WritableFReg) FReg)
+(extern constructor writable_freg_to_freg writable_freg_to_freg)
+(convert WritableFReg FReg writable_freg_to_freg)
+
+;; Convert a `WritableFReg` to an `WritableReg`.
+(decl pure writable_freg_to_writable_reg (WritableFReg) WritableReg)
+(extern constructor writable_freg_to_writable_reg writable_freg_to_writable_reg)
+(convert WritableFReg WritableReg writable_freg_to_writable_reg)
+
+;; Convert an `FReg` to a `Reg`.
+(decl pure freg_to_reg (FReg) Reg)
+(extern constructor freg_to_reg freg_to_reg)
+(convert FReg Reg freg_to_reg)
+
+
+;; Construct a new `VReg` from a `Reg`.
+;;
+;; Asserts that the register has a Vector RegClass.
+(decl vreg_new (Reg) VReg)
+(extern constructor vreg_new vreg_new)
+(convert Reg VReg vreg_new)
+
+;; Put a value into a VReg.
+;;
+;; Asserts that the value goes into a VReg.
+(decl put_in_vreg (Value) VReg)
+(rule (put_in_vreg val) (vreg_new (put_in_reg val)))
+(convert Value VReg put_in_vreg)
+
+;; Construct an `InstOutput` out of a single VReg register.
+(decl output_vreg (VReg) InstOutput)
+(rule (output_vreg x) (output_reg x))
+(convert VReg InstOutput output_vreg)
+
+;; Convert a `WritableVReg` to an `VReg`.
+(decl pure writable_vreg_to_vreg (WritableVReg) VReg)
+(extern constructor writable_vreg_to_vreg writable_vreg_to_vreg)
+(convert WritableVReg VReg writable_vreg_to_vreg)
+
+;; Convert a `WritableVReg` to an `WritableReg`.
+(decl pure writable_vreg_to_writable_reg (WritableVReg) WritableReg)
+(extern constructor writable_vreg_to_writable_reg writable_vreg_to_writable_reg)
+(convert WritableVReg WritableReg writable_vreg_to_writable_reg)
+
+;; Convert an `VReg` to a `Reg`.
+(decl pure vreg_to_reg (VReg) Reg)
+(extern constructor vreg_to_reg vreg_to_reg)
+(convert VReg Reg vreg_to_reg)
+
+
+
 ;; Converters
 
 (convert u8 i32 u8_as_i32)

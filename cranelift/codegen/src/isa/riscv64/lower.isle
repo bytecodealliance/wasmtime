@@ -863,9 +863,9 @@
 ;; `vsetvl` instructions. It's likeley that the vector unit is already
 ;; configured for that type.
 (rule 1 (lower (has_type (ty_vec_fits_in_register ty) (bitselect c x y)))
-  (let ((tmp_x Reg (rv_vand_vv c x (unmasked) ty))
-        (c_inverse Reg (rv_vnot_v c (unmasked) ty))
-        (tmp_y Reg (rv_vand_vv c_inverse y (unmasked) ty)))
+  (let ((tmp_x VReg (rv_vand_vv c x (unmasked) ty))
+        (c_inverse VReg (rv_vnot_v c (unmasked) ty))
+        (tmp_y VReg (rv_vand_vv c_inverse y (unmasked) ty)))
     (rv_vor_vv tmp_x tmp_y (unmasked) ty)))
 
 ;;;;;  Rules for `isplit`;;;;;;;;;
@@ -1183,14 +1183,14 @@
 (rule 0 (lower (insertlane vec @ (value_type (ty_vec_fits_in_register ty))
                            val @ (value_type (ty_int _))
                            (u8_from_uimm8 lane)))
-  (let ((mask Reg (gen_vec_mask (u64_shl 1 lane))))
+  (let ((mask VReg (gen_vec_mask (u64_shl 1 lane))))
     (rv_vmerge_vxm vec val mask ty)))
 
 ;; Similar to above, but using the float variants of the instructions.
 (rule 1 (lower (insertlane vec @ (value_type (ty_vec_fits_in_register ty))
                            val @ (value_type (ty_scalar_float _))
                            (u8_from_uimm8 lane)))
-  (let ((mask Reg (gen_vec_mask (u64_shl 1 lane))))
+  (let ((mask VReg (gen_vec_mask (u64_shl 1 lane))))
     (rv_vfmerge_vfm vec val mask ty)))
 
 ;; If we are inserting from an Imm5 const we can use the immediate
@@ -1198,7 +1198,7 @@
 (rule 2 (lower (insertlane vec @ (value_type (ty_vec_fits_in_register ty))
                            (iconst (u64_from_imm64 (imm5_from_u64 imm)))
                            (u8_from_uimm8 lane)))
-  (let ((mask Reg (gen_vec_mask (u64_shl 1 lane))))
+  (let ((mask VReg (gen_vec_mask (u64_shl 1 lane))))
     (rv_vmerge_vim vec imm mask ty)))
 
 ;;;; Rules for `splat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

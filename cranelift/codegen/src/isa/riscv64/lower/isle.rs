@@ -9,6 +9,9 @@ use generated_code::{Context, ExtendOp, MInst};
 use self::generated_code::VecAluOpRR;
 use super::{writable_zero_reg, zero_reg};
 use crate::isa::riscv64::abi::Riscv64ABICallSite;
+use crate::isa::riscv64::lower::args::{
+    FReg, VReg, WritableFReg, WritableVReg, WritableXReg, XReg,
+};
 use crate::isa::riscv64::Riscv64Backend;
 use crate::machinst::Reg;
 use crate::machinst::{isle::*, MachInst, SmallInstVec};
@@ -68,6 +71,43 @@ impl<'a, 'b> RV64IsleContext<'a, 'b, MInst, Riscv64Backend> {
 impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> {
     isle_lower_prelude_methods!();
     isle_prelude_caller_methods!(Riscv64MachineDeps, Riscv64ABICallSite);
+
+    fn vreg_new(&mut self, r: Reg) -> VReg {
+        VReg::new(r).unwrap()
+    }
+    fn writable_vreg_to_vreg(&mut self, arg0: WritableVReg) -> VReg {
+        arg0.to_reg()
+    }
+    fn writable_vreg_to_writable_reg(&mut self, arg0: WritableVReg) -> WritableReg {
+        arg0.map(|vr| vr.to_reg())
+    }
+    fn vreg_to_reg(&mut self, arg0: VReg) -> Reg {
+        *arg0
+    }
+    fn xreg_new(&mut self, r: Reg) -> XReg {
+        XReg::new(r).unwrap()
+    }
+    fn writable_xreg_to_xreg(&mut self, arg0: WritableXReg) -> XReg {
+        arg0.to_reg()
+    }
+    fn writable_xreg_to_writable_reg(&mut self, arg0: WritableXReg) -> WritableReg {
+        arg0.map(|xr| xr.to_reg())
+    }
+    fn xreg_to_reg(&mut self, arg0: XReg) -> Reg {
+        *arg0
+    }
+    fn freg_new(&mut self, r: Reg) -> FReg {
+        FReg::new(r).unwrap()
+    }
+    fn writable_freg_to_freg(&mut self, arg0: WritableFReg) -> FReg {
+        arg0.to_reg()
+    }
+    fn writable_freg_to_writable_reg(&mut self, arg0: WritableFReg) -> WritableReg {
+        arg0.map(|fr| fr.to_reg())
+    }
+    fn freg_to_reg(&mut self, arg0: FReg) -> Reg {
+        *arg0
+    }
 
     fn vec_writable_to_regs(&mut self, val: &VecWritableReg) -> ValueRegs {
         match val.len() {
