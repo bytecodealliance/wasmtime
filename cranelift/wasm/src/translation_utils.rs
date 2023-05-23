@@ -22,8 +22,6 @@ where
     return Ok(match ty {
         wasmparser::BlockType::Empty => {
             let params: &'static [wasmparser::ValType] = &[];
-            // If we care about not allocating, surely we can type munge more.
-            // But, it is midnight
             let results: std::vec::Vec<wasmparser::ValType> = vec![];
             (
                 itertools::Either::Left(params.iter().copied()),
