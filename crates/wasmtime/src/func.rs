@@ -1025,7 +1025,6 @@ impl Func {
                 results.len()
             );
         }
-
         for (ty, arg) in ty.params().zip(params) {
             if arg.ty() != ty {
                 bail!(

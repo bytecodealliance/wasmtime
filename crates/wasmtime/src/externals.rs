@@ -305,7 +305,6 @@ impl Global {
             bail!("immutable global cannot be set");
         }
         let ty = ty.content();
-
         if val.ty() != *ty {
             bail!("global of type {:?} cannot be set to {:?}", ty, val.ty());
         }
@@ -525,8 +524,8 @@ impl Table {
     /// Panics if `store` does not own this table.
     pub fn set(&self, mut store: impl AsContextMut, index: u32, val: Val) -> Result<()> {
         let store = store.as_context_mut().0;
-        let rt = self.ty(&store).element().clone();
-        let val = val.into_table_element(store, rt)?;
+        let ty = self.ty(&store).element().clone();
+        let val = val.into_table_element(store, ty)?;
         let table = self.wasmtime_table(store, std::iter::empty());
         unsafe {
             (*table)
@@ -571,8 +570,8 @@ impl Table {
     /// instead.
     pub fn grow(&self, mut store: impl AsContextMut, delta: u32, init: Val) -> Result<u32> {
         let store = store.as_context_mut().0;
-        let rt = self.ty(&store).element().clone();
-        let init = init.into_table_element(store, rt)?;
+        let ty = self.ty(&store).element().clone();
+        let init = init.into_table_element(store, ty)?;
         let table = self.wasmtime_table(store, std::iter::empty());
         unsafe {
             match (*table).grow(delta, init, store)? {
@@ -665,8 +664,8 @@ impl Table {
     /// Panics if `store` does not own either `dst_table` or `src_table`.
     pub fn fill(&self, mut store: impl AsContextMut, dst: u32, val: Val, len: u32) -> Result<()> {
         let store = store.as_context_mut().0;
-        let rt = self.ty(&store).element().clone();
-        let val = val.into_table_element(store, rt)?;
+        let ty = self.ty(&store).element().clone();
+        let val = val.into_table_element(store, ty)?;
 
         let table = self.wasmtime_table(store, std::iter::empty());
         unsafe {
