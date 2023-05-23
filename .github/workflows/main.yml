@@ -634,7 +634,7 @@ jobs:
   # execution by default to help cut down on the time in CI.
   miri:
     needs: determine
-    if: needs.determine.outputs.run-full
+    if: needs.determine.outputs.run-full && github.repository == 'bytecodealliance/wasmtime'
     name: Miri
     runs-on: ubuntu-latest
     env:
