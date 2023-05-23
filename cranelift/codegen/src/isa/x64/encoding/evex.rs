@@ -244,7 +244,6 @@ impl EvexInstruction {
     // Byte 3:
     const aaa: RangeInclusive<u8> = 24..=26;
     const V_: RangeInclusive<u8> = 27..=27;
-    #[allow(dead_code)] // Will be used once broadcast and rounding controls are exposed.
     const b: RangeInclusive<u8> = 28..=28;
     const LL: RangeInclusive<u8> = 29..=30;
     const z: RangeInclusive<u8> = 31..=31;
@@ -285,7 +284,7 @@ impl EvexInstruction {
 
         match self.tuple_type {
             Some(Full) => {
-                if self.read(Self::B) == 1 {
+                if self.read(Self::b) == 1 {
                     if self.read(Self::W) == 0 {
                         4
                     } else {
@@ -694,6 +693,7 @@ mod tests {
                 .reg(dst.to_real_reg().unwrap().hw_enc())
                 .rm(src.clone())
                 .length(EvexVectorLength::V128)
+                .tuple_type(Avx512TupleType::Full)
                 .encode(&mut sink);
             let bytes0 = sink
                 .finish(&Default::default(), &mut Default::default())
