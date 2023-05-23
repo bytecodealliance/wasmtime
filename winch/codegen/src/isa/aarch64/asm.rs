@@ -205,6 +205,22 @@ impl Assembler {
         }
     }
 
+    /// Sub instruction combinations.
+    pub fn sub(&mut self, opm: Operand, opn: Operand, opd: Operand, size: OperandSize) {
+        match &(opm, opn, opd) {
+            (Operand::Imm(imm), Operand::Reg(rn), Operand::Reg(rd)) => {
+                self.sub_ir(*imm as u64, *rn, *rd, size);
+            }
+            (Operand::Reg(rm), Operand::Reg(rn), Operand::Reg(rd)) => {
+                self.emit_alu_rrr_extend(ALUOp::Sub, *rm, *rn, *rd, size);
+            }
+            (rm, rn, rd) => panic!(
+                "Invalid combination for sub: rm = {:?}, rn = {:?}, rd = {:?}",
+                rm, rn, rd
+            ),
+        }
+    }
+
     /// Subtract immediate and register.
     pub fn sub_ir(&mut self, imm: u64, rn: Reg, rd: Reg, size: OperandSize) {
         let alu_op = ALUOp::Sub;
