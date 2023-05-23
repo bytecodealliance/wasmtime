@@ -1729,9 +1729,13 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         call_args: &[ir::Value],
     ) -> WasmResult<ir::Inst> {
         // Check for whether the callee is null, and trap if so.
-        // This doesn't need to happen when the ref is non-nullable. But, it
-        // may not need to happen ever. So, leave it for now and let smart people
-        // figure that out
+        //
+        // FIXME: the wasm type system tracks enough information to know whether
+        // `callee` is a null reference or not. In some situations it can be
+        // statically known here that `callee` cannot be null in which case this
+        // null check can be elided. This requires feeding type information from
+        // wasmparser's validator into this function, however, which is not
+        // easily done at this time.
         builder.ins().trapz(callee, ir::TrapCode::NullReference);
 
         self.call_function_unchecked(builder, sig_ref, callee, call_args)
