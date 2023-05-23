@@ -938,6 +938,7 @@ mod tests {
         let mut list = EntityList::from_slice(&[i4, i3, i2, i1, i1, i2, i3, i4], pool);
         let list_again = list;
         assert_eq!(list.as_slice(pool), &[i4, i3, i2, i1, i1, i2, i3, i4]);
+        // Panic should occur on the line below because `list.index == other.index`
         list.copy_from(&list_again, 0..=1, 8, pool);
         assert_eq!(
             list.as_slice(pool),
