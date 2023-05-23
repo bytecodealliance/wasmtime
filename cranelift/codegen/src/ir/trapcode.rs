@@ -52,7 +52,7 @@ pub enum TrapCode {
     /// A user-defined trap code.
     User(u16),
 
-    /// Call to a null reference.
+    /// A null reference was encountered which was required to be non-null.
     NullReference,
 }
 
