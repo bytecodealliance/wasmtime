@@ -294,10 +294,20 @@ pub struct TableType {
 impl TableType {
     /// Creates a new table descriptor which will contain the specified
     /// `element` and have the `limits` applied to its length.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `element` type provided is not a reference type.
     pub fn new(element: ValType, min: u32, max: Option<u32>) -> TableType {
         TableType {
             ty: Table {
-                wasm_ty: Self::to_wasm_ref_type(element),
+                // FIXME: the `ValType` API should be redesigned and the
+                // argument to this constructor should be `RefType`.
+                wasm_ty: match element {
+                    ValType::FuncRef => WasmRefType::FUNCREF,
+                    ValType::ExternRef => WasmRefType::EXTERNREF,
+                    _ => panic!("Attempt to convert non-reference type to a reference type"),
+                },
                 minimum: min,
                 maximum: max,
             },
@@ -328,14 +338,6 @@ impl TableType {
 
     pub(crate) fn wasmtime_table(&self) -> &Table {
         &self.ty
-    }
-
-    fn to_wasm_ref_type(element: ValType) -> WasmRefType {
-        match element {
-            ValType::FuncRef => WasmRefType::FUNCREF,
-            ValType::ExternRef => WasmRefType::EXTERNREF,
-            _ => panic!("Attempt to convert non-reference type to a reference type"),
-        }
     }
 }
 
