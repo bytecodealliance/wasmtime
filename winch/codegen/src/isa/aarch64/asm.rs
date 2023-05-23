@@ -7,7 +7,7 @@ use cranelift_codegen::{
     isa::aarch64::inst::{
         self,
         emit::{EmitInfo, EmitState},
-        ALUOp, AMode, ExtendOp, Imm12, Inst, PairAMode,
+        ALUOp, AMode, ExtendOp, Imm12, Inst, PairAMode, ALUOp3,
     },
     settings, Final, MachBuffer, MachBufferFinalized, MachInstEmit, MachInstEmitState, Writable,
 };
@@ -233,6 +233,29 @@ impl Assembler {
         }
     }
 
+    /// Mul instruction combinations.
+    pub fn mul(&mut self, opm: Operand, opn: Operand, opd: Operand, size: OperandSize) {
+        match &(opm, opn, opd) {
+            (Operand::Imm(imm), Operand::Reg(rn), Operand::Reg(rd)) => {
+                self.mul_ir(*imm as u64, *rn, *rd, size);
+            }
+            (Operand::Reg(rm), Operand::Reg(rn), Operand::Reg(rd)) => {
+                self.emit_alu_rrrr(ALUOp3::MAdd, *rm, *rn, *rd, regs::zero(), size);
+            }
+            (rm, rn, rd) => panic!(
+                "Invalid combination for sub: rm = {:?}, rn = {:?}, rd = {:?}",
+                rm, rn, rd
+            ),
+        }
+    }
+
+    /// Mul immediate and register.
+    pub fn mul_ir(&mut self, imm: u64, rn: Reg, rd: Reg, size: OperandSize) {
+        let scratch = regs::scratch();
+        self.load_constant(imm, scratch);
+        self.emit_alu_rrrr(ALUOp3::MAdd, scratch, rn, rd, regs::zero(), size);
+    }
+
     /// Return instruction.
     pub fn ret(&mut self) {
         self.emit(Inst::Ret { rets: vec![] });
@@ -258,6 +281,17 @@ impl Assembler {
             rn: rn.into(),
             rm: rm.into(),
             extendop: ExtendOp::UXTX,
+        });
+    }
+
+    fn emit_alu_rrrr(&mut self, op: ALUOp3, rm: Reg, rn: Reg, rd: Reg, ra: Reg, size: OperandSize) {
+        self.emit(Inst::AluRRRR {
+            alu_op: op,
+            size: size.into(),
+            rd: Writable::from_reg(rd.into()),
+            rn: rn.into(),
+            rm: rm.into(),
+            ra: ra.into(),
         });
     }
 }

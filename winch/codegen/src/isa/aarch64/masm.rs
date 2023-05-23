@@ -174,8 +174,8 @@ impl Masm for MacroAssembler {
         self.asm.sub(rhs.into(), lhs.into(), dst.into(), size);
     }
 
-    fn mul(&mut self, _dst: RegImm, _lhs: RegImm, _rhs: RegImm, _size: OperandSize) {
-        todo!()
+    fn mul(&mut self, dst: RegImm, lhs: RegImm, rhs: RegImm, size: OperandSize) {
+        self.asm.mul(rhs.into(), lhs.into(), dst.into(), size);
     }
 
     fn div(&mut self, _context: &mut CodeGenContext, _kind: DivKind, _size: OperandSize) {
