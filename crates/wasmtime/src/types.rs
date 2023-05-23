@@ -94,6 +94,12 @@ impl ValType {
             WasmType::V128 => Self::V128,
             WasmType::Ref(WasmRefType::FUNCREF) => Self::FuncRef,
             WasmType::Ref(WasmRefType::EXTERNREF) => Self::ExternRef,
+            // FIXME: exposing the full function-references (and beyond)
+            // proposals will require redesigning the embedder API for `ValType`
+            // and types in Wasmtime. That is a large undertaking which is
+            // deferred for later. The intention for now is that
+            // function-references types can't show up in the "public API" of a
+            // core wasm module but it can use everything internally still.
             WasmType::Ref(_) => {
                 unimplemented!("typed function references are not exposed in the public API yet")
             }
