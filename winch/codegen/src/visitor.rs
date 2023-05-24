@@ -10,7 +10,7 @@ use crate::masm::{DivKind, MacroAssembler, OperandSize, RegImm, RemKind};
 use crate::stack::Val;
 use wasmparser::ValType;
 use wasmparser::VisitOperator;
-use wasmtime_environ::FuncIndex;
+use wasmtime_environ::{FuncIndex, PtrSize};
 
 /// A macro to define unsupported WebAssembly operators.
 ///
@@ -57,10 +57,11 @@ macro_rules! def_unsupported {
     (emit $unsupported:tt $($rest:tt)*) => {$($rest)*};
 }
 
-impl<'a, A, M> VisitOperator<'a> for CodeGen<'a, A, M>
+impl<'a, A, M, P> VisitOperator<'a> for CodeGen<'a, A, M, P>
 where
     M: MacroAssembler,
     A: ABI,
+    P: PtrSize,
 {
     type Output = ();
 

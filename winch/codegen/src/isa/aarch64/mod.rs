@@ -1,14 +1,14 @@
 use self::regs::{scratch, ALL_GPR};
 use crate::{
     abi::ABI,
-    codegen::{CodeGen, CodeGenContext},
+    codegen::{CodeGen, CodeGenContext, FuncEnv},
     frame::{DefinedLocals, Frame},
     isa::{Builder, CallingConvention, TargetIsa},
     masm::MacroAssembler,
     regalloc::RegAlloc,
     regset::RegSet,
     stack::Stack,
-    FuncEnv, TrampolineKind,
+    TrampolineKind,
 };
 use anyhow::Result;
 use cranelift_codegen::settings::{self, Flags};
@@ -17,7 +17,7 @@ use cranelift_codegen::{MachTextSectionBuilder, TextSectionBuilder};
 use masm::MacroAssembler as Aarch64Masm;
 use target_lexicon::Triple;
 use wasmparser::{FuncType, FuncValidator, FunctionBody, ValidatorResources};
-use wasmtime_environ::VMOffsets;
+use wasmtime_environ::ModuleTranslation;
 
 mod abi;
 mod address;
@@ -86,8 +86,7 @@ impl TargetIsa for Aarch64 {
         &self,
         sig: &FuncType,
         body: &FunctionBody,
-        vmoffsets: &VMOffsets<u8>,
-        env: &dyn FuncEnv,
+        translation: &ModuleTranslation,
         validator: &mut FuncValidator<ValidatorResources>,
     ) -> Result<MachBufferFinalized<Final>> {
         let mut body = body.get_binary_reader();
@@ -101,7 +100,8 @@ impl TargetIsa for Aarch64 {
         // TODO: Add floating point bitmask
         let regalloc = RegAlloc::new(RegSet::new(ALL_GPR, 0), scratch());
         let codegen_context = CodeGenContext::new(regalloc, stack, &frame);
-        let mut codegen = CodeGen::new(&mut masm, &abi, codegen_context, env, abi_sig, vmoffsets);
+        let env = FuncEnv::new(self.pointer_bytes(), translation);
+        let mut codegen = CodeGen::new(&mut masm, &abi, codegen_context, env, abi_sig);
 
         codegen.emit(&mut body, validator)?;
         Ok(masm.finalize())

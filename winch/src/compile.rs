@@ -5,10 +5,9 @@ use std::{fs, path::PathBuf, str::FromStr};
 use target_lexicon::Triple;
 use wasmtime_environ::{
     wasmparser::{Parser as WasmParser, Validator},
-    DefinedFuncIndex, FunctionBodyData, ModuleEnvironment, Tunables, VMOffsets,
+    DefinedFuncIndex, FunctionBodyData, ModuleEnvironment, ModuleTranslation, Tunables,
 };
 use winch_codegen::{lookup, TargetIsa};
-use winch_environ::FuncEnv;
 use winch_filetests::disasm::disasm;
 
 #[derive(Parser, Debug)]
@@ -36,37 +35,30 @@ pub fn run(opt: &Options) -> Result<()> {
     let mut translation = ModuleEnvironment::new(&tunables, &mut validator, &mut types)
         .translate(parser, &bytes)
         .context("Failed to translate WebAssembly module")?;
-
-    let vmoffsets = VMOffsets::new(isa.pointer_bytes(), &translation.module);
     let _ = types.finish();
-
     let body_inputs = std::mem::take(&mut translation.function_body_inputs);
-    let module = &translation.module;
-    let types = translation.get_types();
-    let env = FuncEnv::new(module, &types);
 
     body_inputs
         .into_iter()
-        .try_for_each(|func| compile(&env, &isa, &vmoffsets, func))?;
+        .try_for_each(|func| compile(&isa, &translation, func))?;
 
     Ok(())
 }
 
 fn compile(
-    env: &FuncEnv,
     isa: &Box<dyn TargetIsa>,
-    vmoffsets: &VMOffsets<u8>,
+    translation: &ModuleTranslation,
     f: (DefinedFuncIndex, FunctionBodyData<'_>),
 ) -> Result<()> {
-    let index = env.module.func_index(f.0);
-    let sig = env
-        .types
+    let index = translation.module.func_index(f.0);
+    let types = &translation.get_types();
+    let sig = types
         .function_at(index.as_u32())
         .expect(&format!("function type at index {:?}", index.as_u32()));
     let FunctionBodyData { body, validator } = f.1;
     let mut validator = validator.into_validator(Default::default());
     let buffer = isa
-        .compile_function(&sig, &body, vmoffsets, env, &mut validator)
+        .compile_function(&sig, &body, &translation, &mut validator)
         .expect("Couldn't compile function");
 
     println!("Disassembly for function: {}", index.as_u32());
