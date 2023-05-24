@@ -180,9 +180,17 @@ impl<T: WasiPreview1View + ?Sized> Drop for Transcation<'_, T> {
 }
 
 impl<T: WasiPreview1View + ?Sized> Transcation<'_, T> {
-    fn get_descriptor(&mut self, fd: types::Fd) -> Option<&Descriptor> {
+    /// Borrows [`Descriptor`] corresponding to `fd`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`types::Errno::Badf`] if no [`Descriptor`] is found
+    fn get_descriptor(&mut self, fd: types::Fd) -> ErrnoResult<&Descriptor> {
         let fd = fd.into();
-        self.descriptors.get_mut().get(&fd)
+        self.descriptors
+            .get_mut()
+            .get(&fd)
+            .ok_or(types::Errno::Badf)
     }
 
     /// Borrows [`File`] corresponding to `fd`
@@ -212,7 +220,7 @@ impl<T: WasiPreview1View + ?Sized> Transcation<'_, T> {
     ///
     /// # Errors
     ///
-    /// Returns `types::Errno::Spipe` if a descriptor corresponds to stdio
+    /// Returns [`types::Errno::Spipe`] if the descriptor corresponds to stdio
     fn get_seekable(&mut self, fd: types::Fd) -> ErrnoResult<&File> {
         let fd = fd.into();
         match self.descriptors.get_mut().get(&fd) {
@@ -229,13 +237,11 @@ impl<T: WasiPreview1View + ?Sized> Transcation<'_, T> {
 
     /// Returns [`wasi::filesystem::Descriptor`] corresponding to `fd`
     fn get_fd(&mut self, fd: types::Fd) -> ErrnoResult<wasi::filesystem::Descriptor> {
-        let fd = fd.into();
-        match self.descriptors.get_mut().get(&fd) {
-            Some(Descriptor::File(File { fd, .. })) => Ok(*fd),
-            Some(Descriptor::PreopenDirectory((fd, _))) => Ok(*fd),
-            Some(Descriptor::Stdin(stream)) => Ok(*stream),
-            Some(Descriptor::Stdout(stream) | Descriptor::Stderr(stream)) => Ok(*stream),
-            None => Err(types::Errno::Badf),
+        match self.get_descriptor(fd)? {
+            Descriptor::File(File { fd, .. }) => Ok(*fd),
+            Descriptor::PreopenDirectory((fd, _)) => Ok(*fd),
+            Descriptor::Stdin(stream) => Ok(*stream),
+            Descriptor::Stdout(stream) | Descriptor::Stderr(stream) => Ok(*stream),
         }
     }
 
@@ -833,8 +839,8 @@ impl<
     /// NOTE: This returns similar flags to `fsync(fd, F_GETFL)` in POSIX, as well as additional fields.
     #[instrument(skip(self))]
     async fn fd_fdstat_get(&mut self, fd: types::Fd) -> Result<types::Fdstat, types::Error> {
-        let (fd, blocking, append) = match self.transact().await?.get_descriptor(fd) {
-            Some(Descriptor::Stdin(..)) => {
+        let (fd, blocking, append) = match self.transact().await?.get_descriptor(fd)? {
+            Descriptor::Stdin(..) => {
                 let fs_rights_base = types::Rights::FD_READ;
                 return Ok(types::Fdstat {
                     fs_filetype: types::Filetype::CharacterDevice,
@@ -843,7 +849,7 @@ impl<
                     fs_rights_inheriting: fs_rights_base,
                 });
             }
-            Some(Descriptor::Stdout(..) | Descriptor::Stderr(..)) => {
+            Descriptor::Stdout(..) | Descriptor::Stderr(..) => {
                 let fs_rights_base = types::Rights::FD_WRITE;
                 return Ok(types::Fdstat {
                     fs_filetype: types::Filetype::CharacterDevice,
@@ -852,14 +858,13 @@ impl<
                     fs_rights_inheriting: fs_rights_base,
                 });
             }
-            Some(Descriptor::PreopenDirectory((fd, _))) => (*fd, false, false),
-            Some(Descriptor::File(File {
+            Descriptor::PreopenDirectory((fd, _)) => (*fd, false, false),
+            Descriptor::File(File {
                 fd,
                 blocking,
                 append,
                 ..
-            })) => (*fd, *blocking, *append),
-            None => return Err(types::Errno::Badf.into()),
+            }) => (*fd, *blocking, *append),
         };
 
         // TODO: use `try_join!` to poll both futures async, unfortunately that is not currently
@@ -935,8 +940,7 @@ impl<
         Ok(())
     }
 
-    /// Adjust the rights associated with a file descriptor.
-    /// This can only be used to remove rights, and returns `errno::notcapable` if called in a way that would attempt to add rights
+    /// Does not do anything if `fd` corresponds to a valid descriptor and returns `[types::Errno::Badf]` error otherwise.
     #[instrument(skip(self))]
     async fn fd_fdstat_set_rights(
         &mut self,
@@ -944,15 +948,16 @@ impl<
         fs_rights_base: types::Rights,
         fs_rights_inheriting: types::Rights,
     ) -> Result<(), types::Error> {
-        todo!()
+        self.get_fd(fd).await?;
+        Ok(())
     }
 
     /// Return the attributes of an open file.
     #[instrument(skip(self))]
     async fn fd_filestat_get(&mut self, fd: types::Fd) -> Result<types::Filestat, types::Error> {
-        let desc = self.transact().await?.get_descriptor(fd).cloned();
+        let desc = self.transact().await?.get_descriptor(fd)?.clone();
         match desc {
-            Some(Descriptor::Stdin(..) | Descriptor::Stdout(..) | Descriptor::Stderr(..)) => {
+            Descriptor::Stdin(..) | Descriptor::Stdout(..) | Descriptor::Stderr(..) => {
                 Ok(types::Filestat {
                     dev: 0,
                     ino: 0,
@@ -964,7 +969,7 @@ impl<
                     ctim: 0,
                 })
             }
-            Some(Descriptor::PreopenDirectory((fd, _)) | Descriptor::File(File { fd, .. })) => {
+            Descriptor::PreopenDirectory((fd, _)) | Descriptor::File(File { fd, .. }) => {
                 let wasi::filesystem::DescriptorStat {
                     device: dev,
                     inode: ino,
@@ -994,7 +999,6 @@ impl<
                     ctim,
                 })
             }
-            None => Err(types::Errno::Badf.into()),
         }
     }
 
@@ -1051,14 +1055,14 @@ impl<
         fd: types::Fd,
         iovs: &types::IovecArray<'a>,
     ) -> Result<types::Size, types::Error> {
-        let desc = self.transact().await?.get_descriptor(fd).cloned();
+        let desc = self.transact().await?.get_descriptor(fd)?.clone();
         let (mut buf, read, end) = match desc {
-            Some(Descriptor::File(File {
+            Descriptor::File(File {
                 fd,
                 blocking,
                 position,
                 ..
-            })) if self.table().is_file(fd) => {
+            }) if self.table().is_file(fd) => {
                 let Some(buf) = first_non_empty_iovec(iovs)? else {
                     return Ok(0)
                 };
@@ -1084,7 +1088,7 @@ impl<
 
                 (buf, read, end)
             }
-            Some(Descriptor::Stdin(stream)) => {
+            Descriptor::Stdin(stream) => {
                 let Some(buf) = first_non_empty_iovec(iovs)? else {
                     return Ok(0)
                 };
@@ -1120,9 +1124,9 @@ impl<
         iovs: &types::IovecArray<'a>,
         offset: types::Filesize,
     ) -> Result<types::Size, types::Error> {
-        let desc = self.transact().await?.get_descriptor(fd).cloned();
+        let desc = self.transact().await?.get_descriptor(fd)?.clone();
         let (mut buf, read, end) = match desc {
-            Some(Descriptor::File(File { fd, blocking, .. })) if self.table().is_file(fd) => {
+            Descriptor::File(File { fd, blocking, .. }) if self.table().is_file(fd) => {
                 let Some(buf) = first_non_empty_iovec(iovs)? else {
                     return Ok(0)
                 };
@@ -1143,7 +1147,7 @@ impl<
 
                 (buf, read, end)
             }
-            Some(Descriptor::Stdin(..)) => {
+            Descriptor::Stdin(..) => {
                 // NOTE: legacy implementation returns SPIPE here
                 return Err(types::Errno::Spipe.into());
             }
@@ -1169,14 +1173,14 @@ impl<
         fd: types::Fd,
         ciovs: &types::CiovecArray<'a>,
     ) -> Result<types::Size, types::Error> {
-        let desc = self.transact().await?.get_descriptor(fd).cloned();
+        let desc = self.transact().await?.get_descriptor(fd)?.clone();
         let n = match desc {
-            Some(Descriptor::File(File {
+            Descriptor::File(File {
                 fd,
                 blocking,
                 append,
                 position,
-            })) if self.table().is_file(fd) => {
+            }) if self.table().is_file(fd) => {
                 let Some(buf) = first_non_empty_ciovec(ciovs)? else {
                     return Ok(0)
                 };
@@ -1209,7 +1213,7 @@ impl<
                 }
                 n
             }
-            Some(Descriptor::Stdout(stream) | Descriptor::Stderr(stream)) => {
+            Descriptor::Stdout(stream) | Descriptor::Stderr(stream) => {
                 let Some(buf) = first_non_empty_ciovec(ciovs)? else {
                     return Ok(0)
                 };
@@ -1233,9 +1237,9 @@ impl<
         ciovs: &types::CiovecArray<'a>,
         offset: types::Filesize,
     ) -> Result<types::Size, types::Error> {
-        let desc = self.transact().await?.get_descriptor(fd).cloned();
+        let desc = self.transact().await?.get_descriptor(fd)?.clone();
         let n = match desc {
-            Some(Descriptor::File(File { fd, blocking, .. })) if self.table().is_file(fd) => {
+            Descriptor::File(File { fd, blocking, .. }) if self.table().is_file(fd) => {
                 let Some(buf) = first_non_empty_ciovec(ciovs)? else {
                     return Ok(0)
                 };
@@ -1252,7 +1256,7 @@ impl<
                 .await
                 .map_err(|_| types::Errno::Io)?
             }
-            Some(Descriptor::Stdout(..) | Descriptor::Stderr(..)) => {
+            Descriptor::Stdout(..) | Descriptor::Stderr(..) => {
                 // NOTE: legacy implementation returns SPIPE here
                 return Err(types::Errno::Spipe.into());
             }
@@ -1266,9 +1270,7 @@ impl<
     /// Return a description of the given preopened file descriptor.
     #[instrument(skip(self))]
     async fn fd_prestat_get(&mut self, fd: types::Fd) -> Result<types::Prestat, types::Error> {
-        if let Some(Descriptor::PreopenDirectory((_, p))) =
-            self.transact().await?.get_descriptor(fd)
-        {
+        if let Descriptor::PreopenDirectory((_, p)) = self.transact().await?.get_descriptor(fd)? {
             let pr_name_len = p.len().try_into().or(Err(types::Errno::Overflow))?;
             return Ok(types::Prestat::Dir(types::PrestatDir { pr_name_len }));
         }
@@ -1284,9 +1286,7 @@ impl<
         path_max_len: types::Size,
     ) -> Result<(), types::Error> {
         let path_max_len = path_max_len.try_into().or(Err(types::Errno::Overflow))?;
-        if let Some(Descriptor::PreopenDirectory((_, p))) =
-            self.transact().await?.get_descriptor(fd)
-        {
+        if let Descriptor::PreopenDirectory((_, p)) = self.transact().await?.get_descriptor(fd)? {
             if p.len() > path_max_len {
                 return Err(types::Errno::Nametoolong.into());
             }
@@ -1522,11 +1522,11 @@ impl<
             flags |= wasi::filesystem::DescriptorFlags::REQUESTED_WRITE_SYNC;
         }
 
-        let desc = self.transact().await?.get_descriptor(dirfd).cloned();
+        let desc = self.transact().await?.get_descriptor(dirfd)?.clone();
         let dirfd = match desc {
-            Some(Descriptor::PreopenDirectory((fd, _))) => fd,
-            Some(Descriptor::File(File { fd, .. })) if self.table().is_dir(fd) => fd,
-            Some(Descriptor::File(File { fd, .. })) if !self.table().is_dir(fd) => {
+            Descriptor::PreopenDirectory((fd, _)) => fd,
+            Descriptor::File(File { fd, .. }) if self.table().is_dir(fd) => fd,
+            Descriptor::File(File { fd, .. }) if !self.table().is_dir(fd) => {
                 // NOTE: Unlike most other methods, legacy implementation returns `NOTDIR` here
                 return Err(types::Errno::Notdir.into());
             }
