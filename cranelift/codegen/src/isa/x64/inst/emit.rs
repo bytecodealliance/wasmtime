@@ -2,13 +2,13 @@ use crate::binemit::{Addend, Reloc};
 use crate::ir::immediates::{Ieee32, Ieee64};
 use crate::ir::TrapCode;
 use crate::ir::{KnownSymbol, LibCall};
-use crate::isa::x64::encoding::evex::{EvexInstruction, EvexVectorLength};
+use crate::isa::x64::encoding::evex::{EvexInstruction, EvexVectorLength, RegisterOrAmode};
 use crate::isa::x64::encoding::rex::{
     emit_simm, emit_std_enc_enc, emit_std_enc_mem, emit_std_reg_mem, emit_std_reg_reg, int_reg_enc,
     low8_will_sign_extend_to_32, low8_will_sign_extend_to_64, reg_enc, LegacyPrefixes, OpcodeMap,
     RexFlags,
 };
-use crate::isa::x64::encoding::vex::{RegisterOrAmode, VexInstruction, VexVectorLength};
+use crate::isa::x64::encoding::vex::{VexInstruction, VexVectorLength};
 use crate::isa::x64::inst::args::*;
 use crate::isa::x64::inst::*;
 use crate::machinst::{inst_common, MachBuffer, MachInstEmit, MachLabel, Reg, Writable};
@@ -1910,7 +1910,12 @@ pub(crate) fn emit(
 
         Inst::XmmUnaryRmREvex { op, src, dst } => {
             let dst = allocs.next(dst.to_reg().to_reg());
-            let src = src.clone().to_reg_mem().with_allocs(allocs);
+            let src = match src.clone().to_reg_mem().with_allocs(allocs) {
+                RegMem::Reg { reg } => {
+                    RegisterOrAmode::Register(reg.to_real_reg().unwrap().hw_enc().into())
+                }
+                RegMem::Mem { addr } => RegisterOrAmode::Amode(addr.finalize(state, sink)),
+            };
 
             let (prefix, map, w, opcode) = match op {
                 Avx512Opcode::Vcvtudq2ps => (LegacyPrefixes::_F2, OpcodeMap::_0F, false, 0x7a),
@@ -1918,18 +1923,16 @@ pub(crate) fn emit(
                 Avx512Opcode::Vpopcntb => (LegacyPrefixes::_66, OpcodeMap::_0F38, false, 0x54),
                 _ => unimplemented!("Opcode {:?} not implemented", op),
             };
-            match src {
-                RegMem::Reg { reg: src } => EvexInstruction::new()
-                    .length(EvexVectorLength::V128)
-                    .prefix(prefix)
-                    .map(map)
-                    .w(w)
-                    .opcode(opcode)
-                    .reg(dst.to_real_reg().unwrap().hw_enc())
-                    .rm(src.to_real_reg().unwrap().hw_enc())
-                    .encode(sink),
-                _ => todo!(),
-            };
+            EvexInstruction::new()
+                .length(EvexVectorLength::V128)
+                .prefix(prefix)
+                .map(map)
+                .w(w)
+                .opcode(opcode)
+                .tuple_type(op.tuple_type())
+                .reg(dst.to_real_reg().unwrap().hw_enc())
+                .rm(src)
+                .encode(sink);
         }
 
         Inst::XmmRmR {
@@ -2744,26 +2747,29 @@ pub(crate) fn emit(
                 let src3 = allocs.next(src3.to_reg());
                 debug_assert_eq!(src3, dst);
             }
-            let src1 = src1.clone().to_reg_mem().with_allocs(allocs);
+            let src1 = match src1.clone().to_reg_mem().with_allocs(allocs) {
+                RegMem::Reg { reg } => {
+                    RegisterOrAmode::Register(reg.to_real_reg().unwrap().hw_enc().into())
+                }
+                RegMem::Mem { addr } => RegisterOrAmode::Amode(addr.finalize(state, sink)),
+            };
 
             let (w, opcode) = match op {
                 Avx512Opcode::Vpermi2b => (false, 0x75),
                 Avx512Opcode::Vpmullq => (true, 0x40),
                 _ => unimplemented!("Opcode {:?} not implemented", op),
             };
-            match src1 {
-                RegMem::Reg { reg: src } => EvexInstruction::new()
-                    .length(EvexVectorLength::V128)
-                    .prefix(LegacyPrefixes::_66)
-                    .map(OpcodeMap::_0F38)
-                    .w(w)
-                    .opcode(opcode)
-                    .reg(dst.to_real_reg().unwrap().hw_enc())
-                    .rm(src.to_real_reg().unwrap().hw_enc())
-                    .vvvvv(src2.to_real_reg().unwrap().hw_enc())
-                    .encode(sink),
-                _ => todo!(),
-            };
+            EvexInstruction::new()
+                .length(EvexVectorLength::V128)
+                .prefix(LegacyPrefixes::_66)
+                .map(OpcodeMap::_0F38)
+                .w(w)
+                .opcode(opcode)
+                .tuple_type(op.tuple_type())
+                .reg(dst.to_real_reg().unwrap().hw_enc())
+                .rm(src1)
+                .vvvvv(src2.to_real_reg().unwrap().hw_enc())
+                .encode(sink);
         }
 
         Inst::XmmMinMaxSeq {

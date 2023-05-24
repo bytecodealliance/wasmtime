@@ -1,7 +1,7 @@
 //! Encodes VEX instructions. These instructions are those added by the Advanced Vector Extensions
 //! (AVX).
 
-use super::evex::Register;
+use super::evex::{Register, RegisterOrAmode};
 use super::rex::{LegacyPrefixes, OpcodeMap};
 use super::ByteSink;
 use crate::ir::TrapCode;
@@ -23,24 +23,6 @@ pub struct VexInstruction {
     rm: RegisterOrAmode,
     vvvv: Option<Register>,
     imm: Option<u8>,
-}
-
-#[allow(missing_docs)]
-pub enum RegisterOrAmode {
-    Register(Register),
-    Amode(Amode),
-}
-
-impl From<u8> for RegisterOrAmode {
-    fn from(reg: u8) -> Self {
-        RegisterOrAmode::Register(reg.into())
-    }
-}
-
-impl From<Amode> for RegisterOrAmode {
-    fn from(amode: Amode) -> Self {
-        RegisterOrAmode::Amode(amode)
-    }
 }
 
 impl Default for VexInstruction {
@@ -296,7 +278,7 @@ impl VexInstruction {
             // encoding.
             RegisterOrAmode::Amode(amode) => {
                 let bytes_at_end = if self.imm.is_some() { 1 } else { 0 };
-                rex::emit_modrm_sib_disp(sink, self.reg & 7, amode, bytes_at_end);
+                rex::emit_modrm_sib_disp(sink, self.reg & 7, amode, bytes_at_end, None);
             }
         }
 
