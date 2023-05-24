@@ -86,7 +86,7 @@ pub(crate) fn instrument(cx: &ModuleContext<'_>) -> Vec<u8> {
             // For the exports section, we need to transitively export internal
             // state so that we can read the initialized state after we call the
             // initialization function.
-            Some(section) if section.id == SectionId::Export.into() => {
+            Some(section) if section.id == u8::from(SectionId::Export) => {
                 let entry = stack.top_mut();
                 let mut exports = wasm_encoder::ExportSection::new();
 

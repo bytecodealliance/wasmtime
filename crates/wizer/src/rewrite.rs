@@ -64,7 +64,7 @@ impl Wizer {
                 // For the memory section, we update the minimum size of each
                 // defined memory to the snapshot's initialized size for that
                 // memory.
-                s if s.id == SectionId::Memory.into() => {
+                s if s.id == u8::from(SectionId::Memory) => {
                     let mut memories = wasm_encoder::MemorySection::new();
                     assert_eq!(module.defined_memories_len(cx), snapshot.memory_mins.len());
                     for ((_, mem), new_min) in module
@@ -80,7 +80,7 @@ impl Wizer {
 
                 // Encode the initialized global values from the snapshot,
                 // rather than the original values.
-                s if s.id == SectionId::Global.into() => {
+                s if s.id == u8::from(SectionId::Global) => {
                     let mut globals = wasm_encoder::GlobalSection::new();
                     for ((_, glob_ty), val) in
                         module.defined_globals(cx).zip(snapshot.globals.iter())
@@ -104,7 +104,7 @@ impl Wizer {
                 // Remove exports for the wizer initialization
                 // function and WASI reactor _initialize function,
                 // then perform any requested renames.
-                s if s.id == SectionId::Export.into() => {
+                s if s.id == u8::from(SectionId::Export) => {
                     let mut exports = wasm_encoder::ExportSection::new();
                     for export in module.exports(cx) {
                         if !self.keep_init_func.unwrap_or(DEFAULT_KEEP_INIT_FUNC)
@@ -134,17 +134,17 @@ impl Wizer {
                 }
 
                 // Skip the `start` function -- it's already been run!
-                s if s.id == SectionId::Start.into() => {
+                s if s.id == u8::from(SectionId::Start) => {
                     continue;
                 }
 
-                s if s.id == SectionId::DataCount.into() => {
+                s if s.id == u8::from(SectionId::DataCount) => {
                     encoder.section(&wasm_encoder::DataCountSection {
                         count: u32::try_from(snapshot.data_segments.len()).unwrap(),
                     });
                 }
 
-                s if s.id == SectionId::Data.into() => {
+                s if s.id == u8::from(SectionId::Data) => {
                     // TODO: supporting bulk memory will require copying over
                     // any passive and declared segments.
                     add_data_section(&mut encoder);
@@ -163,7 +163,7 @@ impl Wizer {
 }
 
 fn is_name_section(s: &wasm_encoder::RawSection) -> bool {
-    s.id == SectionId::Custom.into() && {
+    s.id == u8::from(SectionId::Custom) && {
         let mut reader = wasmparser::BinaryReader::new(s.data);
         matches!(reader.read_string(), Ok("name"))
     }

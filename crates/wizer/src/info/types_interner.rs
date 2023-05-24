@@ -62,6 +62,7 @@ impl TypesInterner {
     pub fn insert_wasmparser(&mut self, ty: wasmparser::Type, _types_space: &[TypeId]) -> TypeId {
         match ty {
             wasmparser::Type::Func(func_ty) => self.insert(Type::Func(func_ty)),
+            wasmparser::Type::Array(_) => todo!(),
         }
     }
 

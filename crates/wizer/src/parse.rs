@@ -136,6 +136,7 @@ fn type_section<'a>(
             ty @ wasmparser::Type::Func(_) => {
                 module.push_type(cx, ty);
             }
+            wasmparser::Type::Array(_) => todo!(),
         }
     }
 

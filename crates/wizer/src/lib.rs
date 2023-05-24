@@ -653,6 +653,7 @@ impl Wizer {
             component_model: false,
             memory_control: false,
             function_references: false,
+            gc: false,
 
             // XXX: Though we don't fully support bulk memory yet, we
             // unconditionally turn it on.
