@@ -43,15 +43,15 @@ impl RegIndexEnv {
 
 impl ABI for Aarch64ABI {
     // TODO change to 16 once SIMD is supported
-    fn stack_align(&self) -> u8 {
+    fn stack_align() -> u8 {
         8
     }
 
-    fn call_stack_align(&self) -> u8 {
+    fn call_stack_align() -> u8 {
         16
     }
 
-    fn arg_base_offset(&self) -> u8 {
+    fn arg_base_offset() -> u8 {
         16
     }
 
@@ -63,7 +63,7 @@ impl ABI for Aarch64ABI {
         64
     }
 
-    fn sig(&self, wasm_sig: &FuncType, call_conv: &CallingConvention) -> ABISig {
+    fn sig(wasm_sig: &FuncType, call_conv: &CallingConvention) -> ABISig {
         assert!(call_conv.is_apple_aarch64() || call_conv.is_default());
 
         if wasm_sig.results().len() > 1 {
@@ -162,8 +162,7 @@ mod tests {
     fn xreg_abi_sig() {
         let wasm_sig = FuncType::new([I32, I64, I32, I64, I32, I32, I64, I32, I64], []);
 
-        let abi = Aarch64ABI::default();
-        let sig = abi.sig(&wasm_sig, &CallingConvention::Default);
+        let sig = Aarch64ABI::sig(&wasm_sig, &CallingConvention::Default);
         let params = sig.params;
 
         match_reg_arg(params.get(0).unwrap(), I32, regs::xreg(0));
@@ -181,8 +180,7 @@ mod tests {
     fn vreg_abi_sig() {
         let wasm_sig = FuncType::new([F32, F64, F32, F64, F32, F32, F64, F32, F64], []);
 
-        let abi = Aarch64ABI::default();
-        let sig = abi.sig(&wasm_sig, &CallingConvention::Default);
+        let sig = Aarch64ABI::sig(&wasm_sig, &CallingConvention::Default);
         let params = sig.params;
 
         match_reg_arg(params.get(0).unwrap(), F32, regs::vreg(0));
@@ -200,8 +198,7 @@ mod tests {
     fn mixed_abi_sig() {
         let wasm_sig = FuncType::new([F32, I32, I64, F64, I32, F32, F64, F32, F64], []);
 
-        let abi = Aarch64ABI::default();
-        let sig = abi.sig(&wasm_sig, &CallingConvention::Default);
+        let sig = Aarch64ABI::sig(&wasm_sig, &CallingConvention::Default);
         let params = sig.params;
 
         match_reg_arg(params.get(0).unwrap(), F32, regs::vreg(0));

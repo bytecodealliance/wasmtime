@@ -1,10 +1,11 @@
 use super::{
+    abi::Aarch64ABI,
     address::Address,
     asm::{Assembler, Operand},
     regs,
 };
 use crate::{
-    abi::local::LocalSlot,
+    abi::{self, local::LocalSlot},
     codegen::CodeGenContext,
     isa::reg::Reg,
     masm::{CalleeKind, DivKind, MacroAssembler as Masm, OperandSize, RegImm, RemKind},
@@ -54,6 +55,8 @@ impl MacroAssembler {
 
 impl Masm for MacroAssembler {
     type Address = Address;
+    type Ptr = u8;
+    type ABI = Aarch64ABI;
 
     fn prologue(&mut self) {
         let lr = regs::lr();
@@ -138,8 +141,6 @@ impl Masm for MacroAssembler {
 
     fn call(
         &mut self,
-        _alignment: u32,
-        _addend: u32,
         _stack_args_size: u32,
         _load_callee: impl FnMut(&mut Self) -> CalleeKind,
     ) -> u32 {
@@ -191,9 +192,7 @@ impl Masm for MacroAssembler {
     }
 
     fn push(&mut self, reg: Reg) -> u32 {
-        // The push is counted as pushing the 64-bit width in
-        // 64-bit architectures.
-        let size = 8u32;
+        let size = <Self::ABI as abi::ABI>::word_bytes();
         self.reserve_stack(size);
         let address = Address::from_shadow_sp(size as i64);
         self.asm.str(reg, address, OperandSize::S64);

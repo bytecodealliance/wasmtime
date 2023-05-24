@@ -9,7 +9,7 @@ use call::FnCall;
 use wasmparser::{
     BinaryReader, FuncType, FuncValidator, ValType, ValidatorResources, VisitOperator,
 };
-use wasmtime_environ::{FuncIndex, PtrSize};
+use wasmtime_environ::FuncIndex;
 
 mod context;
 pub(crate) use context::*;
@@ -18,11 +18,9 @@ pub use env::*;
 pub mod call;
 
 /// The code generation abstraction.
-pub(crate) struct CodeGen<'a, A, M, P>
+pub(crate) struct CodeGen<'a, M>
 where
     M: MacroAssembler,
-    A: ABI,
-    P: PtrSize,
 {
     /// The ABI-specific representation of the function signature, excluding results.
     sig: ABISig,
@@ -31,33 +29,26 @@ where
     pub context: CodeGenContext<'a>,
 
     /// A reference to the function compilation environment.
-    pub env: FuncEnv<'a, P>,
+    pub env: FuncEnv<'a, M::Ptr>,
 
     /// The MacroAssembler.
     pub masm: &'a mut M,
-
-    /// A reference to the current ABI.
-    pub abi: &'a A,
 }
 
-impl<'a, A, M, P> CodeGen<'a, A, M, P>
+impl<'a, M> CodeGen<'a, M>
 where
     M: MacroAssembler,
-    A: ABI,
-    P: PtrSize,
 {
     pub fn new(
         masm: &'a mut M,
-        abi: &'a A,
         context: CodeGenContext<'a>,
-        env: FuncEnv<'a, P>,
+        env: FuncEnv<'a, M::Ptr>,
         sig: ABISig,
     ) -> Self {
         Self {
             sig,
             context,
             masm,
-            abi,
             env,
         }
     }
@@ -89,17 +80,17 @@ where
     ) -> Result<()> {
         self.spill_register_arguments();
         let defined_locals_range = &self.context.frame.defined_locals_range;
-        self.masm.zero_mem_range(
-            defined_locals_range.as_range(),
-            <A as ABI>::word_bytes(),
-            &mut self.context.regalloc,
-        );
+        self.masm
+            .zero_mem_range(defined_locals_range.as_range(), &mut self.context.regalloc);
 
         // Save the vmctx pointer to its local slot in case we need to reload it
         // at any point.
         let vmctx_addr = self.masm.local_address(&self.context.frame.vmctx_slot);
-        self.masm
-            .store(<A as ABI>::vmctx_reg().into(), vmctx_addr, OperandSize::S64);
+        self.masm.store(
+            <M::ABI as ABI>::vmctx_reg().into(),
+            vmctx_addr,
+            OperandSize::S64,
+        );
 
         while !body.eof() {
             let offset = body.original_position();
@@ -141,7 +132,7 @@ where
             params.extend_from_slice(&callee.ty.params());
             let sig = FuncType::new(params, callee.ty.results().to_owned());
 
-            let caller_vmctx = <A as ABI>::vmctx_reg();
+            let caller_vmctx = <M::ABI as ABI>::vmctx_reg();
             let callee_vmctx = self.context.any_gpr(self.masm);
             let callee_vmctx_offset = self.env.vmoffsets.vmctx_vmfunction_import_vmctx(index);
             let callee_vmctx_addr = self.masm.address_at_reg(caller_vmctx, callee_vmctx_offset);
@@ -161,32 +152,21 @@ where
             stack.insert(location as usize, Val::reg(caller_vmctx));
             stack.insert(location as usize, Val::reg(callee_vmctx));
             (
-                self.abi.sig(&sig, &CallingConvention::Default),
+                <M::ABI as ABI>::sig(&sig, &CallingConvention::Default),
                 Some(callee_addr),
             )
         } else {
-            (self.abi.sig(&callee.ty, &CallingConvention::Default), None)
+            (
+                <M::ABI as ABI>::sig(&callee.ty, &CallingConvention::Default),
+                None,
+            )
         };
 
-        let fncall = FnCall::new::<A, M>(&sig, &mut self.context, self.masm);
-        let alignment = self.abi.call_stack_align();
-        let addend = self.abi.arg_base_offset();
+        let fncall = FnCall::new::<M>(&sig, &mut self.context, self.masm);
         if let Some(addr) = callee_addr {
-            fncall.indirect::<M, A>(
-                self.masm,
-                &mut self.context,
-                addr,
-                alignment.into(),
-                addend.into(),
-            );
+            fncall.indirect::<M>(self.masm, &mut self.context, addr);
         } else {
-            fncall.direct::<M, A>(
-                self.masm,
-                &mut self.context,
-                index,
-                alignment.into(),
-                addend.into(),
-            );
+            fncall.direct::<M>(self.masm, &mut self.context, index);
         }
     }
 
