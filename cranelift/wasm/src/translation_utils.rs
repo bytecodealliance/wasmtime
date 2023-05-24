@@ -22,8 +22,6 @@ where
     return Ok(match ty {
         wasmparser::BlockType::Empty => {
             let params: &'static [wasmparser::ValType] = &[];
-            // If we care about not allocating, surely we can type munge more.
-            // But, it is midnight
             let results: std::vec::Vec<wasmparser::ValType> = vec![];
             (
                 itertools::Either::Left(params.iter().copied()),
@@ -73,7 +71,8 @@ pub fn block_with_params<PE: TargetEnvironment + ?Sized>(
                 builder.append_block_param(block, ir::types::F64);
             }
             wasmparser::ValType::Ref(rt) => {
-                builder.append_block_param(block, environ.reference_type(rt.heap_type().into()));
+                let hty = environ.convert_heap_type(rt.heap_type());
+                builder.append_block_param(block, environ.reference_type(hty));
             }
             wasmparser::ValType::V128 => {
                 builder.append_block_param(block, ir::types::I8X16);

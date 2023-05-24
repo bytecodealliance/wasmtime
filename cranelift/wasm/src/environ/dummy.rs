@@ -11,8 +11,8 @@ use crate::state::FuncTranslationState;
 use crate::WasmType;
 use crate::{
     DataIndex, DefinedFuncIndex, ElemIndex, FuncIndex, Global, GlobalIndex, GlobalInit, Heap,
-    HeapData, HeapStyle, Memory, MemoryIndex, Table, TableIndex, TypeIndex, WasmFuncType,
-    WasmResult,
+    HeapData, HeapStyle, Memory, MemoryIndex, Table, TableIndex, TypeConvert, TypeIndex,
+    WasmFuncType, WasmHeapType, WasmResult,
 };
 use core::convert::TryFrom;
 use cranelift_codegen::cursor::FuncCursor;
@@ -248,6 +248,12 @@ impl<'dummy_environment> DummyFuncEnvironment<'dummy_environment> {
             ir::types::I64 => ir::types::R64,
             _ => panic!("unsupported pointer type"),
         }
+    }
+}
+
+impl<'dummy_environment> TypeConvert for DummyFuncEnvironment<'dummy_environment> {
+    fn lookup_heap_type(&self, _index: TypeIndex) -> WasmHeapType {
+        unimplemented!()
     }
 }
 
@@ -665,6 +671,12 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         _count: ir::Value,
     ) -> WasmResult<ir::Value> {
         Ok(pos.ins().iconst(I32, 0))
+    }
+}
+
+impl TypeConvert for DummyEnvironment {
+    fn lookup_heap_type(&self, _index: TypeIndex) -> WasmHeapType {
+        unimplemented!()
     }
 }
 

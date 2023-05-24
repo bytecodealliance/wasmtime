@@ -200,7 +200,6 @@ impl Metadata {
 
         assert!(!memory_control);
         assert!(!tail_call);
-        //assert!(!function_references);
         assert!(!gc);
 
         Metadata {

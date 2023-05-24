@@ -1151,7 +1151,8 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             translate_fcmp(FloatCC::LessThanOrEqual, builder, state)
         }
         Operator::RefNull { hty } => {
-            state.push1(environ.translate_ref_null(builder.cursor(), (*hty).into())?)
+            let hty = environ.convert_heap_type(*hty);
+            state.push1(environ.translate_ref_null(builder.cursor(), hty)?)
         }
         Operator::RefIsNull => {
             let value = state.pop1();

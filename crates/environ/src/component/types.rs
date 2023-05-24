@@ -1,5 +1,8 @@
 use crate::component::{MAX_FLAT_PARAMS, MAX_FLAT_RESULTS};
-use crate::{EntityType, Global, ModuleTypes, ModuleTypesBuilder, PrimaryMap, SignatureIndex};
+use crate::{
+    EntityType, ModuleTypes, ModuleTypesBuilder, PrimaryMap, SignatureIndex, TypeConvert,
+    WasmHeapType,
+};
 use anyhow::{bail, Result};
 use cranelift_entity::EntityRef;
 use indexmap::IndexMap;
@@ -454,7 +457,8 @@ impl ComponentTypesBuilder {
     pub fn intern_core_type(&mut self, ty: &wasmparser::CoreType<'_>) -> Result<TypeDef> {
         Ok(match ty {
             wasmparser::CoreType::Func(ty) => {
-                TypeDef::CoreFunc(self.module_types.wasm_func_type(ty.clone().try_into()?))
+                let ty = self.convert_func_type(ty);
+                TypeDef::CoreFunc(self.module_types.wasm_func_type(ty))
             }
             wasmparser::CoreType::Module(ty) => TypeDef::Module(self.module_type(ty)?),
         })
@@ -491,8 +495,8 @@ impl ComponentTypesBuilder {
         for item in ty {
             match item {
                 wasmparser::ModuleTypeDeclaration::Type(wasmparser::Type::Func(f)) => {
-                    let ty =
-                        TypeDef::CoreFunc(self.module_types.wasm_func_type(f.clone().try_into()?));
+                    let f = self.convert_func_type(f);
+                    let ty = TypeDef::CoreFunc(self.module_types.wasm_func_type(f));
                     self.push_core_typedef(ty);
                 }
                 wasmparser::ModuleTypeDeclaration::Export { name, ty } => {
@@ -533,9 +537,9 @@ impl ComponentTypesBuilder {
                     _ => unreachable!(), // not possible with valid components
                 }
             }
-            wasmparser::TypeRef::Table(ty) => EntityType::Table(ty.clone().try_into()?),
+            wasmparser::TypeRef::Table(ty) => EntityType::Table(self.convert_table_type(ty)),
             wasmparser::TypeRef::Memory(ty) => EntityType::Memory(ty.clone().into()),
-            wasmparser::TypeRef::Global(ty) => EntityType::Global(Global::new(ty.clone())?),
+            wasmparser::TypeRef::Global(ty) => EntityType::Global(self.convert_global_type(ty)),
             wasmparser::TypeRef::Tag(_) => bail!("exceptions proposal not implemented"),
         })
     }
@@ -937,6 +941,15 @@ impl ComponentTypesBuilder {
             InterfaceType::Union(i) => &self.type_info.unions[*i],
             InterfaceType::Option(i) => &self.type_info.options[*i],
             InterfaceType::Result(i) => &self.type_info.results[*i],
+        }
+    }
+}
+
+impl TypeConvert for ComponentTypesBuilder {
+    fn lookup_heap_type(&self, index: TypeIndex) -> WasmHeapType {
+        match self.type_scopes.last().unwrap().core[index] {
+            TypeDef::CoreFunc(i) => WasmHeapType::TypedFunc(i),
+            _ => unreachable!(),
         }
     }
 }

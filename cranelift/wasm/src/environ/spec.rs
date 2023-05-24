@@ -9,8 +9,8 @@
 use crate::state::FuncTranslationState;
 use crate::{
     DataIndex, ElemIndex, FuncIndex, Global, GlobalIndex, GlobalInit, Heap, HeapData, Memory,
-    MemoryIndex, SignatureIndex, Table, TableIndex, Tag, TagIndex, TypeIndex, WasmError,
-    WasmFuncType, WasmHeapType, WasmResult,
+    MemoryIndex, SignatureIndex, Table, TableIndex, Tag, TagIndex, TypeConvert, TypeIndex,
+    WasmError, WasmFuncType, WasmHeapType, WasmResult,
 };
 use core::convert::From;
 use cranelift_codegen::cursor::FuncCursor;
@@ -44,7 +44,7 @@ pub enum GlobalVariable {
 }
 
 /// Environment affecting the translation of a WebAssembly.
-pub trait TargetEnvironment {
+pub trait TargetEnvironment: TypeConvert {
     /// Get the information needed to produce Cranelift IR for the given target.
     fn target_config(&self) -> TargetFrontendConfig;
 
@@ -567,7 +567,7 @@ pub trait FuncEnvironment: TargetEnvironment {
 /// An object satisfying the `ModuleEnvironment` trait can be passed as argument to the
 /// [`translate_module`](fn.translate_module.html) function. These methods should not be called
 /// by the user, they are only for `cranelift-wasm` internal use.
-pub trait ModuleEnvironment<'data> {
+pub trait ModuleEnvironment<'data>: TypeConvert {
     /// Provides the number of types up front. By default this does nothing, but
     /// implementations can use this to preallocate memory if desired.
     fn reserve_types(&mut self, _num: u32) -> WasmResult<()> {
