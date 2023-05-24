@@ -53,6 +53,7 @@ macro_rules! def_unsupported {
     (emit LocalSet $($rest:tt)*) => {};
     (emit Call $($rest:tt)*) => {};
     (emit End $($rest:tt)*) => {};
+    (emit Nop $($rest:tt)*) => {};
 
     (emit $unsupported:tt $($rest:tt)*) => {$($rest)*};
 }
@@ -202,6 +203,8 @@ where
     fn visit_call(&mut self, index: u32) {
         self.emit_call(FuncIndex::from_u32(index));
     }
+
+    fn visit_nop(&mut self) {}
 
     wasmparser::for_each_operator!(def_unsupported);
 }
