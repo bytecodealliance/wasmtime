@@ -1,6 +1,6 @@
 use crate::clocks::WasiClocks;
 use crate::dir::{DirEntry, WasiDir};
-use crate::file::{FileEntry, WasiFile};
+use crate::file::{FileAccessMode, FileEntry, WasiFile};
 use crate::sched::WasiSched;
 use crate::string_array::StringArray;
 use crate::table::Table;
@@ -51,12 +51,18 @@ impl WasiCtx {
         s
     }
 
-    pub fn insert_file(&self, fd: u32, file: Box<dyn WasiFile>) {
-        self.table().insert_at(fd, Arc::new(FileEntry::new(file)));
+    pub fn insert_file(&self, fd: u32, file: Box<dyn WasiFile>, access_mode: FileAccessMode) {
+        self.table()
+            .insert_at(fd, Arc::new(FileEntry::new(file, access_mode)));
     }
 
-    pub fn push_file(&self, file: Box<dyn WasiFile>) -> Result<u32, Error> {
-        self.table().push(Arc::new(FileEntry::new(file)))
+    pub fn push_file(
+        &self,
+        file: Box<dyn WasiFile>,
+        access_mode: FileAccessMode,
+    ) -> Result<u32, Error> {
+        self.table()
+            .push(Arc::new(FileEntry::new(file, access_mode)))
     }
 
     pub fn insert_dir(&self, fd: u32, dir: Box<dyn WasiDir>, path: PathBuf) {
@@ -92,15 +98,15 @@ impl WasiCtx {
     }
 
     pub fn set_stdin(&self, f: Box<dyn WasiFile>) {
-        self.insert_file(0, f);
+        self.insert_file(0, f, FileAccessMode::READ);
     }
 
     pub fn set_stdout(&self, f: Box<dyn WasiFile>) {
-        self.insert_file(1, f);
+        self.insert_file(1, f, FileAccessMode::WRITE);
     }
 
     pub fn set_stderr(&self, f: Box<dyn WasiFile>) {
-        self.insert_file(2, f);
+        self.insert_file(2, f, FileAccessMode::WRITE);
     }
 
     pub fn push_preopened_dir(
