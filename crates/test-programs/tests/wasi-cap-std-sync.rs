@@ -188,6 +188,10 @@ fn path_open_create_existing() {
     run("path_open_create_existing", true).unwrap()
 }
 #[test_log::test]
+fn path_open_read_write() {
+    run("path_open_read_write", true).unwrap()
+}
+#[test_log::test]
 fn path_open_dirfd_not_dir() {
     run("path_open_dirfd_not_dir", true).unwrap()
 }

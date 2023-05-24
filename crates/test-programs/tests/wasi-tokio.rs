@@ -190,6 +190,10 @@ async fn path_open_create_existing() {
     run("path_open_create_existing", true).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn path_open_read_write() {
+    run("path_open_read_write", true).await.unwrap()
+}
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn path_open_dirfd_not_dir() {
     run("path_open_dirfd_not_dir", true).await.unwrap()
 }
