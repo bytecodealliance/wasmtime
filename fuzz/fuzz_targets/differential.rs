@@ -309,6 +309,7 @@ fn winch_supports_module(module: &[u8]) -> bool {
                         | LocalGet { .. }
                         | LocalSet { .. }
                         | Call { .. }
+                        | Nop { .. }
                         | End { .. } => {}
                         _ => {
                             supported = false;
