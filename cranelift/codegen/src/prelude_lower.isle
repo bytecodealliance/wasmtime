@@ -18,7 +18,7 @@
 (type InstOutputBuilder extern (enum))
 
 ;; Type to hold multiple Regs
-(type MultiReg 
+(type MultiReg
       (enum
        (Empty)
        (One (a Reg))
@@ -216,7 +216,7 @@
            (value_list_slice (value_slice_unwrap head1 (value_slice_unwrap head2 tail))))
 
 ;; Turn a `Writable<Reg>` into a `Reg` via `Writable::to_reg`.
-(decl writable_reg_to_reg (WritableReg) Reg)
+(decl pure writable_reg_to_reg (WritableReg) Reg)
 (extern constructor writable_reg_to_reg writable_reg_to_reg)
 
 ;; Extract the result values for the given instruction.

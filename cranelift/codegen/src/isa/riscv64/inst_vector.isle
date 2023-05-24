@@ -238,14 +238,14 @@
 ;; Helper for emitting `MInst.VecAluRRR` instructions.
 (decl vec_alu_rrr (VecAluOpRRR Reg Reg VecOpMasking VState) Reg)
 (rule (vec_alu_rrr op vs2 vs1 mask vstate)
-      (let ((vd WritableReg (temp_writable_reg $I8X16))
+      (let ((vd WritableVReg (temp_writable_vreg))
             (_ Unit (emit (MInst.VecAluRRR op vd vs2 vs1 mask vstate))))
         vd))
 
 ;; Helper for emitting `MInst.VecAluRRImm5` instructions.
 (decl vec_alu_rr_imm5 (VecAluOpRRImm5 Reg Imm5 VecOpMasking  VState) Reg)
 (rule (vec_alu_rr_imm5 op vs2 imm mask vstate)
-      (let ((vd WritableReg (temp_writable_reg $I8X16))
+      (let ((vd WritableVReg (temp_writable_vreg))
             (_ Unit (emit (MInst.VecAluRRImm5 op vd vs2 imm mask vstate))))
         vd))
 
@@ -266,14 +266,14 @@
 ;; Helper for emitting `MInst.VecAluRImm5` instructions.
 (decl vec_alu_r_imm5 (VecAluOpRImm5 Imm5 VecOpMasking VState) Reg)
 (rule (vec_alu_r_imm5 op imm mask vstate)
-      (let ((vd WritableReg (temp_writable_reg $I8X16))
+      (let ((vd WritableVReg (temp_writable_vreg))
             (_ Unit (emit (MInst.VecAluRImm5 op vd imm mask vstate))))
         vd))
 
 ;; Helper for emitting `MInst.VecLoad` instructions.
 (decl vec_load (VecElementWidth VecAMode MemFlags VecOpMasking VState) Reg)
 (rule (vec_load eew from flags mask vstate)
-      (let ((vd WritableReg (temp_writable_reg $I8X16))
+      (let ((vd WritableVReg (temp_writable_vreg))
             (_ Unit (emit (MInst.VecLoad eew vd from flags mask vstate))))
         vd))
 
