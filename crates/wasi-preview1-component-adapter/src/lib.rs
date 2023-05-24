@@ -741,10 +741,10 @@ pub unsafe extern "C" fn fd_prestat_get(fd: Fd, buf: *mut Prestat) -> Errno {
 
 /// Return a description of the given preopened file descriptor.
 #[no_mangle]
-pub unsafe extern "C" fn fd_prestat_dir_name(fd: Fd, path: *mut u8, path_len: Size) -> Errno {
+pub unsafe extern "C" fn fd_prestat_dir_name(fd: Fd, path: *mut u8, path_max_len: Size) -> Errno {
     State::with(|state| {
         if let Some(preopen) = state.descriptors().get_preopen(fd) {
-            if preopen.path.len < path_len as usize {
+            if preopen.path.len > path_max_len as usize {
                 Err(ERRNO_NAMETOOLONG)
             } else {
                 ptr::copy_nonoverlapping(preopen.path.ptr, path, preopen.path.len);
