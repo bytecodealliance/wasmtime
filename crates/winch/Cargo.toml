@@ -9,7 +9,6 @@ repository = "https://github.com/bytecodealliance/wasmtime"
 
 [dependencies]
 winch-codegen = { workspace = true }
-winch-environ = { workspace = true }
 target-lexicon = { workspace = true }
 wasmtime-environ = { workspace = true }
 anyhow = { workspace = true }

@@ -4354,7 +4354,6 @@ dependencies = [
  "wasmtime-cranelift-shared",
  "wasmtime-environ",
  "winch-codegen",
- "winch-environ",
 ]
 
 [[package]]
@@ -4526,15 +4525,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "winch-environ"
-version = "0.8.0"
-dependencies = [
- "wasmparser 0.105.0",
- "wasmtime-environ",
- "winch-codegen",
-]
-
-[[package]]
 name = "winch-filetests"
 version = "0.0.0"
 dependencies = [
@@ -4548,7 +4538,6 @@ dependencies = [
  "wasmtime-environ",
  "wat",
  "winch-codegen",
- "winch-environ",
  "winch-test-macros",
 ]
 
@@ -4579,7 +4568,6 @@ dependencies = [
  "wasmtime-environ",
  "wat",
  "winch-codegen",
- "winch-environ",
  "winch-filetests",
  "winch-test-macros",
 ]

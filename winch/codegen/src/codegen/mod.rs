@@ -9,7 +9,7 @@ use call::FnCall;
 use wasmparser::{
     BinaryReader, FuncType, FuncValidator, ValType, ValidatorResources, VisitOperator,
 };
-use wasmtime_environ::{FuncIndex, VMOffsets};
+use wasmtime_environ::{FuncIndex, PtrSize};
 
 mod context;
 pub(crate) use context::*;
@@ -18,10 +18,11 @@ pub use env::*;
 pub mod call;
 
 /// The code generation abstraction.
-pub(crate) struct CodeGen<'a, A, M>
+pub(crate) struct CodeGen<'a, A, M, P>
 where
     M: MacroAssembler,
     A: ABI,
+    P: PtrSize,
 {
     /// The ABI-specific representation of the function signature, excluding results.
     sig: ABISig,
@@ -29,31 +30,28 @@ where
     /// The code generation context.
     pub context: CodeGenContext<'a>,
 
+    /// A reference to the function compilation environment.
+    pub env: FuncEnv<'a, P>,
+
     /// The MacroAssembler.
     pub masm: &'a mut M,
 
-    /// A reference to the function compilation environment.
-    pub env: &'a dyn env::FuncEnv,
-
     /// A reference to the current ABI.
     pub abi: &'a A,
-
-    /// Offsets used with the VM context pointer.
-    vmoffsets: &'a VMOffsets<u8>,
 }
 
-impl<'a, A, M> CodeGen<'a, A, M>
+impl<'a, A, M, P> CodeGen<'a, A, M, P>
 where
     M: MacroAssembler,
     A: ABI,
+    P: PtrSize,
 {
     pub fn new(
         masm: &'a mut M,
         abi: &'a A,
         context: CodeGenContext<'a>,
-        env: &'a dyn FuncEnv,
+        env: FuncEnv<'a, P>,
         sig: ABISig,
-        vmoffsets: &'a VMOffsets<u8>,
     ) -> Self {
         Self {
             sig,
@@ -61,7 +59,6 @@ where
             masm,
             abi,
             env,
-            vmoffsets,
         }
     }
 
@@ -137,7 +134,7 @@ where
 
     /// Emit a direct function call.
     pub fn emit_call(&mut self, index: FuncIndex) {
-        let callee = self.env.callee_from_index(index.as_u32());
+        let callee = self.env.callee_from_index(index);
         let (sig, callee_addr): (ABISig, Option<<M as MacroAssembler>::Address>) = if callee.import
         {
             let mut params = vec![ValType::I64, ValType::I64];
@@ -146,14 +143,14 @@ where
 
             let caller_vmctx = <A as ABI>::vmctx_reg();
             let callee_vmctx = self.context.any_gpr(self.masm);
-            let callee_vmctx_offset = self.vmoffsets.vmctx_vmfunction_import_vmctx(index);
+            let callee_vmctx_offset = self.env.vmoffsets.vmctx_vmfunction_import_vmctx(index);
             let callee_vmctx_addr = self.masm.address_at_reg(caller_vmctx, callee_vmctx_offset);
             // FIXME Remove harcoded operand size, this will be needed
             // once 32-bit architectures are supported.
             self.masm
                 .load(callee_vmctx_addr, callee_vmctx, OperandSize::S64);
 
-            let callee_body_offset = self.vmoffsets.vmctx_vmfunction_import_wasm_call(index);
+            let callee_body_offset = self.env.vmoffsets.vmctx_vmfunction_import_wasm_call(index);
             let callee_addr = self.masm.address_at_reg(caller_vmctx, callee_body_offset);
 
             // Put the callee / caller vmctx at the start of the

@@ -1,4 +1,4 @@
-use crate::{FuncEnv, TrampolineKind};
+use crate::TrampolineKind;
 use anyhow::{anyhow, Result};
 use core::fmt::Formatter;
 use cranelift_codegen::isa::{CallConv, IsaBuilder};
@@ -10,7 +10,7 @@ use std::{
 };
 use target_lexicon::{Architecture, Triple};
 use wasmparser::{FuncType, FuncValidator, FunctionBody, ValidatorResources};
-use wasmtime_environ::VMOffsets;
+use wasmtime_environ::ModuleTranslation;
 
 #[cfg(feature = "x64")]
 pub(crate) mod x64;
@@ -149,8 +149,7 @@ pub trait TargetIsa: Send + Sync {
         &self,
         sig: &FuncType,
         body: &FunctionBody,
-        vmoffsets: &VMOffsets<u8>,
-        env: &dyn FuncEnv,
+        translation: &ModuleTranslation,
         validator: &mut FuncValidator<ValidatorResources>,
     ) -> Result<MachBufferFinalized<Final>>;
 
