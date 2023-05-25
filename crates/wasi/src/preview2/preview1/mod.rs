@@ -282,7 +282,7 @@ trait WasiPreview1ViewExt:
     + wasi::stdout::Host
     + wasi::stderr::Host
 {
-    /// Lazily initializes [`WasiPreview1Adapter`] returned by [`Self::adapter_mut`]
+    /// Lazily initializes [`WasiPreview1Adapter`] returned by [`WasiPreview1View::adapter_mut`]
     /// and returns [`Transaction`] on success
     async fn transact(&mut self) -> Result<Transaction<'_, Self>, types::Error> {
         let descriptors = if let Some(descriptors) = self.adapter_mut().descriptors.take() {
@@ -297,7 +297,7 @@ trait WasiPreview1ViewExt:
         })
     }
 
-    /// Lazily initializes [`WasiPreview1Adapter`] returned by [`Self::adapter_mut`]
+    /// Lazily initializes [`WasiPreview1Adapter`] returned by [`WasiPreview1View::adapter_mut`]
     /// and returns [`wasi::filesystem::Descriptor`] corresponding to `fd`
     async fn get_fd(
         &mut self,
@@ -308,7 +308,7 @@ trait WasiPreview1ViewExt:
         Ok(fd)
     }
 
-    /// Lazily initializes [`WasiPreview1Adapter`] returned by [`Self::adapter_mut`]
+    /// Lazily initializes [`WasiPreview1Adapter`] returned by [`WasiPreview1View::adapter_mut`]
     /// and returns [`wasi::filesystem::Descriptor`] corresponding to `fd`
     /// if it describes a [`Descriptor::File`] of [`crate::preview2::filesystem::File`] type
     async fn get_file_fd(
@@ -320,7 +320,7 @@ trait WasiPreview1ViewExt:
         Ok(fd)
     }
 
-    /// Lazily initializes [`WasiPreview1Adapter`] returned by [`Self::adapter_mut`]
+    /// Lazily initializes [`WasiPreview1Adapter`] returned by [`WasiPreview1View::adapter_mut`]
     /// and returns [`wasi::filesystem::Descriptor`] corresponding to `fd`
     /// if it describes a [`Descriptor::File`] or [`Descriptor::PreopenDirectory`]
     /// of [`crate::preview2::filesystem::Dir`] type
