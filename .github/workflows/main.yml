@@ -459,6 +459,7 @@ jobs:
     - run: ./ci/run-tests.sh --locked
       env:
         RUST_BACKTRACE: 1
+        RUST_LOG: trace
 
     # Test debug (DWARF) related functionality.
     - run: |
