@@ -173,7 +173,6 @@ async fn fd_flags_set() {
     run("fd_flags_set", true).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-#[should_panic]
 async fn fd_readdir() {
     run("fd_readdir", true).await.unwrap()
 }
