@@ -1,20 +1,28 @@
 #!/usr/bin/env bash
 set -ex
 
+build_adapter="cargo build -p wasi-preview1-component-adapter --target wasm32-unknown-unknown"
+verify="cargo run -p verify-component-adapter --"
+
+debug="target/wasm32-unknown-unknown/debug/wasi_preview1_component_adapter.wasm"
+release="target/wasm32-unknown-unknown/release/wasi_preview1_component_adapter.wasm"
+
 # Debug build, default features (reactor)
-cargo build -p wasi-preview1-component-adapter --target wasm32-unknown-unknown
-cargo run -p verify-component-adapter -- target/wasm32-unknown-unknown/debug/wasi_preview1_component_adapter.wasm
+$build_adapter
+$verify $debug
 
 # Debug build, command
-cargo build -p wasi-preview1-component-adapter --target wasm32-unknown-unknown --no-default-features --features command
-cargo run -p verify-component-adapter -- target/wasm32-unknown-unknown/debug/wasi_preview1_component_adapter.wasm
+$build_adapter --no-default-features --features command
+$verify $debug
 
 # Release build, command
-cargo build -p wasi-preview1-component-adapter --target wasm32-unknown-unknown --release --no-default-features --features command
-cargo run -p verify-component-adapter -- target/wasm32-unknown-unknown/release/wasi_preview1_component_adapter.wasm
-wasm-tools metadata add --name "wasi_preview1_component_adapter.command.adapter:${VERSION}" target/wasm32-unknown-unknown/release/wasi_preview1_component_adapter.wasm -o target/wasm32-unknown-unknown/release/wasi_preview1_component_adapter.command.wasm
+$build_adapter --release --no-default-features --features command
+$verify $release
+wasm-tools metadata add --name "wasi_preview1_component_adapter.command.adapter:${VERSION}" $release \
+  -o target/wasm32-unknown-unknown/release/wasi_snapshot_preview1.command.wasm
 
 # Release build, default features (reactor)
-cargo build -p wasi-preview1-component-adapter --target wasm32-unknown-unknown --release
-cargo run -p verify-component-adapter -- ./target/wasm32-unknown-unknown/release/wasi_preview1_component_adapter.wasm
-wasm-tools metadata add --name "wasi_preview1_component_adapter.reactor.adapter:${VERSION}" target/wasm32-unknown-unknown/release/wasi_preview1_component_adapter.wasm -o target/wasm32-unknown-unknown/release/wasi_preview1_component_adapter.reactor.wasm
+$build_adapter --release
+$verify $release
+wasm-tools metadata add --name "wasi_preview1_component_adapter.reactor.adapter:${VERSION}" $release \
+  -o target/wasm32-unknown-unknown/release/wasi_snapshot_preview1.reactor.wasm
