@@ -926,12 +926,6 @@
 (decl u8_as_i32 (u8) i32)
 (extern constructor u8_as_i32 u8_as_i32)
 
-(decl convert_valueregs_reg (ValueRegs) Reg)
-(rule (convert_valueregs_reg x)
-  (value_regs_get x 0))
-(convert ValueRegs Reg convert_valueregs_reg)
-
-
 ;; ISA Extension helpers
 
 (decl pure has_v () bool)
@@ -2574,9 +2568,9 @@
 (rule (normalize_cmp_value $I64  r _) r)
 (rule (normalize_cmp_value $I128 r _) r)
 
-(decl normalize_fcvt_from_int (ValueRegs Type ExtendOp) ValueRegs)
+(decl normalize_fcvt_from_int (XReg Type ExtendOp) XReg)
 (rule 2 (normalize_fcvt_from_int r (fits_in_16 ty) op)
-  (extend r op ty $I64))
+  (value_regs_get (extend r op ty $I64) 0))
 (rule 1 (normalize_fcvt_from_int r _ _)
   r)
 
