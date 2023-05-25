@@ -121,3 +121,13 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           name: ${{ steps.tagname.outputs.val }}
         continue-on-error: true
+      - name: Update npm packages to latest version
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+        working-directory: ./npm/wizer
+        run: npm install && npm version "${{ steps.tagname.outputs.val }}"
+      - name: Publish npm packages
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+        working-directory: ./npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: for n in *; do (echo $n && cd $n && npm publish); done
