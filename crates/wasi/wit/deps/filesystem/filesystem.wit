@@ -311,7 +311,7 @@ interface filesystem {
     /// Multiple read, write, and append streams may be active on the same open
     /// file and they do not interfere with each other.
     ///
-    /// Note: This allows using `read-stream`, which is similar to `read` in POSIX.
+    /// Note: This allows using `wasi:io/streams.read`, which is similar to `read` in POSIX.
     read-via-stream: func(
         this: descriptor,
         /// The offset within the file at which to start reading.
@@ -320,7 +320,7 @@ interface filesystem {
 
     /// Return a stream for writing to a file.
     ///
-    /// Note: This allows using `write-stream`, which is similar to `write` in
+    /// Note: This allows using `wasi:io/streams.write`, which is similar to `write` in
     /// POSIX.
     write-via-stream: func(
         this: descriptor,
@@ -330,7 +330,7 @@ interface filesystem {
 
     /// Return a stream for appending to a file.
     ///
-    /// Note: This allows using `write-stream`, which is similar to `write` with
+    /// Note: This allows using `wasi:io/streams.write`, which is similar to `write` with
     /// `O_APPEND` in in POSIX.
     append-via-stream: func(
         this: descriptor,
