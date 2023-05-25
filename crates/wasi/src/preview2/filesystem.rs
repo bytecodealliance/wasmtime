@@ -203,7 +203,7 @@ impl OutputStream for FileOutputStream {
         self.file.is_write_vectored_at()
     }
 
-    /// Test whether this stream is writeable.
+    /// Test whether this stream is writable.
     async fn writable(&self) -> anyhow::Result<()> {
         // FIXME perm check?
         Ok(())
@@ -261,7 +261,7 @@ impl OutputStream for FileAppendStream {
         self.file.is_write_vectored_at()
     }
 
-    /// Test whether this stream is writeable.
+    /// Test whether this stream is writable.
     async fn writable(&self) -> anyhow::Result<()> {
         // FIXME perm check?
         Ok(())

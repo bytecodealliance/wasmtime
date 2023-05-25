@@ -1,5 +1,4 @@
 use anyhow::Result;
-use cap_rand::RngCore;
 use cap_std::{ambient_authority, fs::Dir, time::Duration};
 use std::{
     io::{Cursor, Write},
@@ -117,29 +116,8 @@ async fn args() -> Result<()> {
 
 #[test_log::test(tokio::test)]
 async fn random() -> Result<()> {
-    struct FakeRng;
-
-    impl RngCore for FakeRng {
-        fn next_u32(&mut self) -> u32 {
-            42
-        }
-
-        fn next_u64(&mut self) -> u64 {
-            unimplemented!()
-        }
-
-        fn fill_bytes(&mut self, _dest: &mut [u8]) {
-            unimplemented!()
-        }
-
-        fn try_fill_bytes(&mut self, _dest: &mut [u8]) -> Result<(), cap_rand::Error> {
-            unimplemented!()
-        }
-    }
-
     let mut table = Table::new();
-    let mut wasi = WasiCtxBuilder::new().build(&mut table)?;
-    wasi.random = Box::new(FakeRng);
+    let wasi = WasiCtxBuilder::new().build(&mut table)?;
     let (mut store, command) =
         instantiate(get_component("random"), CommandCtx { table, wasi }).await?;
 

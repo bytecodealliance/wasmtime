@@ -11,6 +11,8 @@ default world command-extended {
   import udp-create-socket: sockets.udp-create-socket
   import udp: sockets.udp
   import random: random.random
+  import insecure-random: random.insecure
+  import insecure-random-seed: random.insecure-seed
   import poll: poll.poll
   import streams: io.streams
   import environment: wasi-cli-base.environment

@@ -20,6 +20,9 @@ wasmtime::component::bindgen!({
        "environment": crate::preview2::wasi::environment,
        "exit": crate::preview2::wasi::exit,
        "preopens": crate::preview2::wasi::preopens,
+       "stdin": crate::preview2::wasi::stdin,
+       "stdout": crate::preview2::wasi::stdout,
+       "stderr": crate::preview2::wasi::stderr,
     },
 });
 
@@ -34,5 +37,8 @@ pub fn add_to_linker<T: WasiView>(l: &mut wasmtime::component::Linker<T>) -> any
     crate::preview2::wasi::exit::add_to_linker(l, |t| t)?;
     crate::preview2::wasi::environment::add_to_linker(l, |t| t)?;
     crate::preview2::wasi::preopens::add_to_linker(l, |t| t)?;
+    crate::preview2::wasi::stdin::add_to_linker(l, |t| t)?;
+    crate::preview2::wasi::stdout::add_to_linker(l, |t| t)?;
+    crate::preview2::wasi::stderr::add_to_linker(l, |t| t)?;
     Ok(())
 }
