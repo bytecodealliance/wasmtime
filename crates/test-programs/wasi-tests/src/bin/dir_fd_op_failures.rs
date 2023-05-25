@@ -5,6 +5,22 @@ unsafe fn test_fd_dir_ops(dir_fd: wasi::Fd) {
     let stat = wasi::fd_filestat_get(dir_fd).expect("failed to fdstat");
     assert_eq!(stat.filetype, wasi::FILETYPE_DIRECTORY);
 
+    let (pr_fd, pr_name_len) = (3..)
+        .map_while(|fd| wasi::fd_prestat_get(fd).ok().map(|stat| (fd, stat)))
+        .find_map(|(fd, wasi::Prestat { tag, u })| {
+            (tag == wasi::PREOPENTYPE_DIR.raw()).then_some((fd, u.dir.pr_name_len))
+        })
+        .expect("failed to find preopen directory");
+
+    let mut pr_name = vec![];
+    let r = wasi::fd_prestat_dir_name(pr_fd, pr_name.as_mut_ptr(), 0);
+    assert_eq!(r, Err(wasi::ERRNO_NAMETOOLONG));
+
+    // Test that passing a larger than necessary buffer works correctly
+    let mut pr_name = vec![0; pr_name_len + 1];
+    let r = wasi::fd_prestat_dir_name(pr_fd, pr_name.as_mut_ptr(), pr_name_len + 1);
+    assert_eq!(r, Ok(()));
+
     let mut read_buf = vec![0; 128].into_boxed_slice();
     let iovec = wasi::Iovec {
         buf: read_buf.as_mut_ptr(),

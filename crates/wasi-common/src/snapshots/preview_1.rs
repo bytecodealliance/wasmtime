@@ -509,7 +509,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
                 .ok_or_else(|| Error::not_supported())?
                 .as_bytes();
             let path_len = path_bytes.len();
-            if path_len < path_max_len as usize {
+            if path_len > path_max_len as usize {
                 return Err(Error::name_too_long());
             }
             path.as_array(path_len as u32).copy_from_slice(path_bytes)?;
