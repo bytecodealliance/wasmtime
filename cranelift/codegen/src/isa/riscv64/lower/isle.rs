@@ -290,19 +290,19 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
     fn gen_default_frm(&mut self) -> OptionFloatRoundingMode {
         None
     }
-    fn gen_select_reg(&mut self, cc: &IntCC, a: XReg, b: XReg, rs1: XReg, rs2: XReg) -> XReg {
+    fn gen_select_reg(&mut self, cc: &IntCC, a: XReg, b: XReg, rs1: Reg, rs2: Reg) -> Reg {
         let rd = self.temp_writable_reg(MInst::canonical_type_for_rc(rs1.class()));
         self.emit(&MInst::SelectReg {
             rd,
-            rs1: rs1.to_reg(),
-            rs2: rs2.to_reg(),
+            rs1,
+            rs2,
             condition: IntegerCompare {
                 kind: *cc,
                 rs1: a.to_reg(),
                 rs2: b.to_reg(),
             },
         });
-        self.xreg_new(rd.to_reg())
+        rd.to_reg()
     }
     fn load_u64_constant(&mut self, val: u64) -> Reg {
         let rd = self.temp_writable_reg(I64);

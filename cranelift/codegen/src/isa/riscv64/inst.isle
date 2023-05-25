@@ -2390,7 +2390,7 @@
     (vec_writable_to_regs reuslt)))
 
 ;; Parameters are "intcc compare_a compare_b rs1 rs2".
-(decl gen_select_reg (IntCC XReg XReg XReg XReg) XReg)
+(decl gen_select_reg (IntCC XReg XReg Reg Reg) Reg)
 (extern constructor gen_select_reg gen_select_reg)
 
 ;; load a constant into reg.
