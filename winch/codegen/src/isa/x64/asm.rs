@@ -2,7 +2,7 @@
 
 use crate::{
     isa::reg::Reg,
-    masm::{CalleeKind, DivKind, OperandSize, RemKind},
+    masm::{CalleeKind, CmpKind, DivKind, OperandSize, RemKind},
 };
 use cranelift_codegen::{
     entity::EntityRef,
@@ -73,6 +73,23 @@ impl From<DivKind> for DivSignedness {
         match kind {
             DivKind::Signed => DivSignedness::Signed,
             DivKind::Unsigned => DivSignedness::Unsigned,
+        }
+    }
+}
+
+impl From<CmpKind> for CC {
+    fn from(value: CmpKind) -> Self {
+        match value {
+            CmpKind::Eq => CC::Z,
+            CmpKind::Ne => CC::NZ,
+            CmpKind::LtS => CC::L,
+            CmpKind::LtU => CC::B,
+            CmpKind::GtS => CC::NLE,
+            CmpKind::GtU => CC::NBE,
+            CmpKind::LeS => CC::LE,
+            CmpKind::LeU => CC::BE,
+            CmpKind::GeS => CC::NL,
+            CmpKind::GeU => CC::NB,
         }
     }
 }
@@ -468,6 +485,67 @@ impl Assembler {
             op: AluRmiROpcode::Xor,
             src1: dst.into(),
             src2: src.into(),
+            dst: dst.into(),
+        });
+    }
+
+    /// Compare two operands and set status register flags.
+    pub fn cmp(&mut self, src: Operand, dst: Operand, size: OperandSize) {
+        match &(src, dst) {
+            (Operand::Imm(imm), Operand::Reg(dst)) => {
+                if let Ok(val) = i32::try_from(*imm) {
+                    self.cmp_ir(val, *dst, size)
+                } else {
+                    let scratch = regs::scratch();
+                    self.mov_ir(*imm as u64, scratch, size);
+                    self.cmp_rr(scratch, *dst, size);
+                }
+            }
+            (Operand::Reg(src), Operand::Reg(dst)) => self.cmp_rr(*src, *dst, size),
+            _ => panic!(
+                "Invalid operand combination for cmp; src = {:?} dst = {:?}",
+                src, dst
+            ),
+        }
+    }
+
+    fn cmp_ir(&mut self, imm: i32, dst: Reg, size: OperandSize) {
+        let imm = RegMemImm::imm(imm as u32);
+
+        self.emit(Inst::CmpRmiR {
+            size: size.into(),
+            opcode: CmpOpcode::Cmp,
+            src: GprMemImm::new(imm).expect("valid immediate"),
+            dst: dst.into(),
+        });
+    }
+
+    fn cmp_rr(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+        self.emit(Inst::CmpRmiR {
+            size: size.into(),
+            opcode: CmpOpcode::Cmp,
+            src: src.into(),
+            dst: dst.into(),
+        });
+    }
+
+    /// Set value in dst to `0` or `1` based on flags in status register and
+    /// [`CmpKind`].
+    pub fn setcc(&mut self, kind: CmpKind, dst: Operand) {
+        let dst = match dst {
+            Operand::Reg(r) => r,
+            _ => panic!("Invalid operand for dst"),
+        };
+        // Clear the dst register or bits 1 to 31 may be incorrectly set.
+        // Don't use xor since it updates the status register.
+        self.emit(Inst::Imm {
+            dst_size: args::OperandSize::Size32, // Always going to be an i32 result.
+            simm64: 0,
+            dst: dst.into(),
+        });
+        // Copy correct bit from status register into dst register.
+        self.emit(Inst::Setcc {
+            cc: kind.into(),
             dst: dst.into(),
         });
     }

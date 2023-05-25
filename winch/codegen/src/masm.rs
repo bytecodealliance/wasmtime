@@ -22,6 +22,33 @@ pub(crate) enum RemKind {
     Unsigned,
 }
 
+/// Kinds of binary comparison in WebAssembly. The [`masm`] implementation for
+/// each ISA is responsible for emitting the correct sequence of instructions
+/// when lowering to machine code.
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum CmpKind {
+    /// Equal.
+    Eq,
+    /// Not equal.
+    Ne,
+    /// Signed less than.
+    LtS,
+    /// Unsigned less than.
+    LtU,
+    /// Signed greater than.
+    GtS,
+    /// Unsigned greater than.
+    GtU,
+    /// Signed less than or equal.
+    LeS,
+    /// Unsigned less than or equal.
+    LeU,
+    /// Signed greater than or equal.
+    GeS,
+    /// Unsigned greater than or equal.
+    GeU,
+}
+
 /// Operand size, in bits.
 #[derive(Copy, Debug, Clone, Eq, PartialEq)]
 pub(crate) enum OperandSize {
@@ -164,6 +191,16 @@ pub(crate) trait MacroAssembler {
 
     /// Calculate remainder.
     fn rem(&mut self, context: &mut CodeGenContext, kind: RemKind, size: OperandSize);
+
+    /// Compare two numbers and put result in dst.
+    fn cmp_with_set(
+        &mut self,
+        dst: RegImm,
+        lhs: RegImm,
+        rhs: RegImm,
+        kind: CmpKind,
+        size: OperandSize,
+    );
 
     /// Push the register to the stack, returning the offset.
     fn push(&mut self, src: Reg) -> u32;

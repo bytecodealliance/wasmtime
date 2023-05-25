@@ -5,7 +5,7 @@
 //! machine code emitter.
 
 use crate::codegen::CodeGen;
-use crate::masm::{DivKind, MacroAssembler, OperandSize, RegImm, RemKind};
+use crate::masm::{CmpKind, DivKind, MacroAssembler, OperandSize, RegImm, RemKind};
 use crate::stack::Val;
 use wasmparser::VisitOperator;
 use wasmtime_environ::{FuncIndex, WasmType};
@@ -47,6 +47,26 @@ macro_rules! def_unsupported {
     (emit I32RemS $($rest:tt)*) => {};
     (emit I64Mul $($rest:tt)*) => {};
     (emit I64Sub $($rest:tt)*) => {};
+    (emit I32Eq $($rest:tt)*) => {};
+    (emit I64Eq $($rest:tt)*) => {};
+    (emit I32Ne $($rest:tt)*) => {};
+    (emit I64Ne $($rest:tt)*) => {};
+    (emit I32LtS $($rest:tt)*) => {};
+    (emit I64LtS $($rest:tt)*) => {};
+    (emit I32LtU $($rest:tt)*) => {};
+    (emit I64LtU $($rest:tt)*) => {};
+    (emit I32LeS $($rest:tt)*) => {};
+    (emit I64LeS $($rest:tt)*) => {};
+    (emit I32LeU $($rest:tt)*) => {};
+    (emit I64LeU $($rest:tt)*) => {};
+    (emit I32GtS $($rest:tt)*) => {};
+    (emit I64GtS $($rest:tt)*) => {};
+    (emit I32GtU $($rest:tt)*) => {};
+    (emit I64GtU $($rest:tt)*) => {};
+    (emit I32GeS $($rest:tt)*) => {};
+    (emit I64GeS $($rest:tt)*) => {};
+    (emit I32GeU $($rest:tt)*) => {};
+    (emit I64GeU $($rest:tt)*) => {};
     (emit LocalGet $($rest:tt)*) => {};
     (emit LocalSet $($rest:tt)*) => {};
     (emit Call $($rest:tt)*) => {};
@@ -168,6 +188,86 @@ where
         self.masm.rem(&mut self.context, Unsigned, S64);
     }
 
+    fn visit_i32_eq(&mut self) {
+        self.cmp_i32s(CmpKind::Eq);
+    }
+
+    fn visit_i64_eq(&mut self) {
+        self.cmp_i64s(CmpKind::Eq);
+    }
+
+    fn visit_i32_ne(&mut self) {
+        self.cmp_i32s(CmpKind::Ne);
+    }
+
+    fn visit_i64_ne(&mut self) {
+        self.cmp_i64s(CmpKind::Ne);
+    }
+
+    fn visit_i32_lt_s(&mut self) {
+        self.cmp_i32s(CmpKind::LtS);
+    }
+
+    fn visit_i64_lt_s(&mut self) {
+        self.cmp_i64s(CmpKind::LtS);
+    }
+
+    fn visit_i32_lt_u(&mut self) {
+        self.cmp_i32s(CmpKind::LtU);
+    }
+
+    fn visit_i64_lt_u(&mut self) {
+        self.cmp_i64s(CmpKind::LtU);
+    }
+
+    fn visit_i32_le_s(&mut self) {
+        self.cmp_i32s(CmpKind::LeS);
+    }
+
+    fn visit_i64_le_s(&mut self) {
+        self.cmp_i64s(CmpKind::LeS);
+    }
+
+    fn visit_i32_le_u(&mut self) {
+        self.cmp_i32s(CmpKind::LeU);
+    }
+
+    fn visit_i64_le_u(&mut self) {
+        self.cmp_i64s(CmpKind::LeU);
+    }
+
+    fn visit_i32_gt_s(&mut self) {
+        self.cmp_i32s(CmpKind::GtS);
+    }
+
+    fn visit_i64_gt_s(&mut self) {
+        self.cmp_i64s(CmpKind::GtS);
+    }
+
+    fn visit_i32_gt_u(&mut self) {
+        self.cmp_i32s(CmpKind::GtU);
+    }
+
+    fn visit_i64_gt_u(&mut self) {
+        self.cmp_i64s(CmpKind::GtU);
+    }
+
+    fn visit_i32_ge_s(&mut self) {
+        self.cmp_i32s(CmpKind::GeS);
+    }
+
+    fn visit_i64_ge_s(&mut self) {
+        self.cmp_i64s(CmpKind::GeS);
+    }
+
+    fn visit_i32_ge_u(&mut self) {
+        self.cmp_i32s(CmpKind::GeU);
+    }
+
+    fn visit_i64_ge_u(&mut self) {
+        self.cmp_i64s(CmpKind::GeU);
+    }
+
     fn visit_end(&mut self) {}
 
     fn visit_local_get(&mut self, index: u32) {
@@ -203,6 +303,25 @@ where
     fn visit_nop(&mut self) {}
 
     wasmparser::for_each_operator!(def_unsupported);
+}
+
+impl<'a, M> CodeGen<'a, M>
+where
+    M: MacroAssembler,
+{
+    fn cmp_i32s(&mut self, kind: CmpKind) {
+        self.context
+            .i32_binop(self.masm, &mut |masm, dst, src, size| {
+                masm.cmp_with_set(dst, dst, src, kind, size);
+            });
+    }
+
+    fn cmp_i64s(&mut self, kind: CmpKind) {
+        self.context
+            .i64_binop(self.masm, &mut move |masm, dst, src, size| {
+                masm.cmp_with_set(dst, dst, src, kind, size);
+            });
+    }
 }
 
 impl From<WasmType> for OperandSize {
