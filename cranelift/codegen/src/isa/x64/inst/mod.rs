@@ -2080,9 +2080,9 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             ..
         } => {
             assert_ne!(*op, Avx512Opcode::Vpermi2b);
-            collector.reg_def(dst.to_writable_reg());
             collector.reg_use(src1.to_reg());
             src2.get_operands(collector);
+            collector.reg_def(dst.to_writable_reg());
         }
         Inst::XmmRmREvex3 {
             op,
