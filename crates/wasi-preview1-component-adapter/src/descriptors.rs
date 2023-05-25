@@ -1,5 +1,7 @@
-use crate::bindings::streams::{self, InputStream, OutputStream};
-use crate::bindings::{filesystem, tcp};
+use crate::bindings::wasi::cli_base::preopens;
+use crate::bindings::wasi::filesystem::filesystem;
+use crate::bindings::wasi::io::streams::{self, InputStream, OutputStream};
+use crate::bindings::wasi::sockets::tcp;
 use crate::{set_stderr_stream, BumpArena, File, ImportAlloc, TrappingUnwrap, WasmStr};
 use core::cell::{Cell, UnsafeCell};
 use core::mem::MaybeUninit;
@@ -140,7 +142,7 @@ impl Descriptors {
             preopens: Cell::new(None),
         };
 
-        let stdio = crate::bindings::preopens::get_stdio();
+        let stdio = preopens::get_stdio();
         unsafe { set_stderr_stream(stdio.stderr) };
 
         d.push(Descriptor::Streams(Streams {
@@ -162,7 +164,7 @@ impl Descriptors {
         }))
         .trapping_unwrap();
 
-        #[link(wasm_import_module = "preopens")]
+        #[link(wasm_import_module = "wasi:cli-base/preopens")]
         extern "C" {
             #[link_name = "get-directories"]
             fn get_preopens_import(rval: *mut PreopenList);
@@ -187,8 +189,7 @@ impl Descriptors {
                 output: Cell::new(None),
                 type_: StreamType::File(File {
                     fd: preopen.descriptor,
-                    descriptor_type: crate::bindings::filesystem::get_type(preopen.descriptor)
-                        .trapping_unwrap(),
+                    descriptor_type: filesystem::get_type(preopen.descriptor).trapping_unwrap(),
                     position: Cell::new(0),
                     append: false,
                     blocking: false,
@@ -344,7 +345,7 @@ impl Descriptors {
     }
 
     #[allow(dead_code)] // until Socket is implemented
-    pub fn get_socket(&self, fd: Fd) -> Result<crate::bindings::tcp::TcpSocket, Errno> {
+    pub fn get_socket(&self, fd: Fd) -> Result<tcp::TcpSocket, Errno> {
         match self.get(fd)? {
             Descriptor::Streams(Streams {
                 type_: StreamType::Socket(socket),

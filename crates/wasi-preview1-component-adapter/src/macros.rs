@@ -2,10 +2,13 @@
 //!
 //! We're avoiding static initializers, so we can't have things like string
 //! literals. Replace the standard assert macros with simpler implementations.
+
+use crate::bindings::wasi::io::streams;
+
 #[allow(dead_code)]
 #[doc(hidden)]
 pub fn print(message: &[u8]) {
-    let _ = unsafe { crate::bindings::streams::write(crate::get_stderr_stream(), message) };
+    let _ = unsafe { streams::write(crate::get_stderr_stream(), message) };
 }
 
 /// A minimal `eprint` for debugging.
