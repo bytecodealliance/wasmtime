@@ -450,13 +450,31 @@ impl Amode {
     }
 }
 
+fn pretty_print_amode_ptr(size: u8) -> &'static str {
+    match size {
+        1 => "byte",
+        2 => "word",
+        4 => "dword",
+        8 => "qword",
+        16 => "xmmword",
+        _ => panic!("Unhandled operand size: {}", size),
+    }
+}
+
 impl PrettyPrint for Amode {
-    fn pretty_print(&self, _size: u8, allocs: &mut AllocationConsumer<'_>) -> String {
+    fn pretty_print(&self, size: u8, allocs: &mut AllocationConsumer<'_>) -> String {
         match self {
             Amode::ImmReg { simm32, base, .. } => {
+                let imm32 = *simm32 as i32;
+                let op = if imm32 < 0 { "-" } else { "+" };
                 // Note: size is always 8; the address is 64 bits,
                 // even if the addressed operand is smaller.
-                format!("{}({})", *simm32 as i32, pretty_print_reg(*base, 8, allocs))
+                format!(
+                    "{} ptr [{} {op} {:#x}]",
+                    pretty_print_amode_ptr(size),
+                    pretty_print_reg(*base, 8, allocs),
+                    imm32.abs(),
+                )
             }
             Amode::ImmRegRegShift {
                 simm32,
@@ -464,13 +482,25 @@ impl PrettyPrint for Amode {
                 index,
                 shift,
                 ..
-            } => format!(
-                "{}({},{},{})",
-                *simm32 as i32,
-                pretty_print_reg(base.to_reg(), 8, allocs),
-                pretty_print_reg(index.to_reg(), 8, allocs),
-                1 << shift
-            ),
+            } => {
+                let shift = if *shift == 0 {
+                    "".into()
+                } else {
+                    format!(" * {}", 1 << shift)
+                };
+                let imm32 = *simm32 as i32;
+                let disp = if imm32 == 0 {
+                    "".into()
+                } else {
+                    format!(" {} {}", if imm32 < 0 { "-" } else { "+" }, imm32.abs())
+                };
+                format!(
+                    "{} ptr [{} + {}{shift}{disp}]",
+                    pretty_print_amode_ptr(size),
+                    pretty_print_reg(base.to_reg(), 8, allocs),
+                    pretty_print_reg(index.to_reg(), 8, allocs),
+                )
+            }
             Amode::RipRelative { ref target } => format!("label{}(%rip)", target.get()),
         }
     }
@@ -581,12 +611,22 @@ impl Into<SyntheticAmode> for VCodeConstant {
 }
 
 impl PrettyPrint for SyntheticAmode {
-    fn pretty_print(&self, _size: u8, allocs: &mut AllocationConsumer<'_>) -> String {
+    fn pretty_print(&self, size: u8, allocs: &mut AllocationConsumer<'_>) -> String {
         match self {
             // See note in `Amode` regarding constant size of `8`.
-            SyntheticAmode::Real(addr) => addr.pretty_print(8, allocs),
+            SyntheticAmode::Real(addr) => addr.pretty_print(size, allocs),
             SyntheticAmode::NominalSPOffset { simm32 } => {
-                format!("rsp({} + virtual offset)", *simm32 as i32)
+                if *simm32 == 0 {
+                    format!("{} ptr [rsp]", pretty_print_amode_ptr(size))
+                } else {
+                    let imm32 = *simm32 as i32;
+                    let op = if imm32 < 0 { "-" } else { "+" };
+                    format!(
+                        "{} ptr [rsp {op} {:#x}]",
+                        pretty_print_amode_ptr(size),
+                        imm32.abs()
+                    )
+                }
             }
             SyntheticAmode::ConstantOffset(c) => format!("const({})", c.as_u32()),
         }
@@ -1335,6 +1375,7 @@ impl SseOpcode {
     pub(crate) fn src_size(&self) -> u8 {
         match self {
             SseOpcode::Movd => 4,
+            SseOpcode::Movdqu => 16,
             _ => 8,
         }
     }

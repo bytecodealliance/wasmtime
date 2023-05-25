@@ -636,39 +636,6 @@ impl Inst {
 
 impl PrettyPrint for Inst {
     fn pretty_print(&self, _size: u8, allocs: &mut AllocationConsumer<'_>) -> String {
-        fn ljustify(s: String) -> String {
-            let w = 7;
-            if s.len() >= w {
-                s
-            } else {
-                let need = usize::min(w, w - s.len());
-                s + &format!("{nil: <width$}", nil = "", width = need)
-            }
-        }
-
-        fn ljustify2(s1: String, s2: String) -> String {
-            ljustify(s1 + &s2)
-        }
-
-        fn suffix_lq(size: OperandSize) -> String {
-            match size {
-                OperandSize::Size32 => "l",
-                OperandSize::Size64 => "q",
-                _ => unreachable!(),
-            }
-            .to_string()
-        }
-
-        #[allow(dead_code)]
-        fn suffix_lqb(size: OperandSize) -> String {
-            match size {
-                OperandSize::Size32 => "l",
-                OperandSize::Size64 => "q",
-                _ => unreachable!(),
-            }
-            .to_string()
-        }
-
         fn suffix_bwlq(size: OperandSize) -> String {
             match size {
                 OperandSize::Size8 => "b".to_string(),
@@ -679,7 +646,7 @@ impl PrettyPrint for Inst {
         }
 
         match self {
-            Inst::Nop { len } => format!("{} len={}", ljustify("nop".to_string()), len),
+            Inst::Nop { len } => format!("nop len={len}"),
 
             Inst::AluRmiR {
                 size,
@@ -692,21 +659,12 @@ impl PrettyPrint for Inst {
                 let src1 = pretty_print_reg(src1.to_reg(), size_bytes, allocs);
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), size_bytes, allocs);
                 let src2 = src2.pretty_print(size_bytes, allocs);
-                format!(
-                    "{} {}, {}, {}",
-                    ljustify2(op.to_string(), suffix_bwlq(*size)),
-                    src1,
-                    src2,
-                    dst
-                )
+                format!("{op:#} {dst}, {src1}, {src2}")
             }
             Inst::AluConstOp { op, dst, size } => {
                 let size_bytes = size.to_bytes();
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), size_bytes, allocs);
-                format!(
-                    "{} {dst}, {dst}, {dst}",
-                    ljustify2(op.to_string(), suffix_lqb(*size)),
-                )
+                format!("{op:#} {dst}, {dst}, {dst}")
             }
             Inst::AluRM {
                 size,
@@ -717,12 +675,7 @@ impl PrettyPrint for Inst {
                 let size_bytes = size.to_bytes();
                 let src2 = pretty_print_reg(src2.to_reg(), size_bytes, allocs);
                 let src1_dst = src1_dst.pretty_print(size_bytes, allocs);
-                format!(
-                    "{} {}, {}",
-                    ljustify2(op.to_string(), suffix_bwlq(*size)),
-                    src2,
-                    src1_dst,
-                )
+                format!("{op:#} {src1_dst}, {src2}")
             }
             Inst::AluRmRVex {
                 size,
@@ -735,45 +688,24 @@ impl PrettyPrint for Inst {
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), size.to_bytes(), allocs);
                 let src1 = pretty_print_reg(src1.to_reg(), size_bytes, allocs);
                 let src2 = pretty_print_reg(src2.to_reg(), size_bytes, allocs);
-                format!(
-                    "{} {}, {}, {}",
-                    ljustify2(op.to_string(), String::new()),
-                    src2,
-                    src1,
-                    dst,
-                )
+                format!("{op:#} {dst}, {src1}, {src2}")
             }
             Inst::UnaryRmR { src, dst, op, size } => {
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), size.to_bytes(), allocs);
                 let src = src.pretty_print(size.to_bytes(), allocs);
-                format!(
-                    "{} {}, {}",
-                    ljustify2(op.to_string(), suffix_bwlq(*size)),
-                    src,
-                    dst,
-                )
+                format!("{op:#} {dst}, {src}")
             }
 
             Inst::Not { size, src, dst } => {
                 let src = pretty_print_reg(src.to_reg(), size.to_bytes(), allocs);
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), size.to_bytes(), allocs);
-                format!(
-                    "{} {}, {}",
-                    ljustify2("not".to_string(), suffix_bwlq(*size)),
-                    src,
-                    dst,
-                )
+                format!("not {dst}, {src}")
             }
 
             Inst::Neg { size, src, dst } => {
                 let src = pretty_print_reg(src.to_reg(), size.to_bytes(), allocs);
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), size.to_bytes(), allocs);
-                format!(
-                    "{} {}, {}",
-                    ljustify2("neg".to_string(), suffix_bwlq(*size)),
-                    src,
-                    dst,
-                )
+                format!("neg {dst}, {src}")
             }
 
             Inst::Div {
@@ -795,15 +727,15 @@ impl PrettyPrint for Inst {
                     pretty_print_reg(dst_remainder.to_reg().to_reg(), size.to_bytes(), allocs);
                 format!(
                     "{} {}, {}, {}, {}, {} ; trap={trap}",
-                    ljustify(match sign {
-                        DivSignedness::Signed => "idiv".to_string(),
-                        DivSignedness::Unsigned => "div".to_string(),
-                    }),
+                    match sign {
+                        DivSignedness::Signed => "idiv",
+                        DivSignedness::Unsigned => "div",
+                    },
+                    dst_quotient,
+                    dst_remainder,
                     dividend_lo,
                     dividend_hi,
                     divisor,
-                    dst_quotient,
-                    dst_remainder,
                 )
             }
 
@@ -819,10 +751,10 @@ impl PrettyPrint for Inst {
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 1, allocs);
                 format!(
                     "{} {dividend}, {divisor}, {dst} ; trap={trap}",
-                    ljustify(match sign {
-                        DivSignedness::Signed => "idiv".to_string(),
-                        DivSignedness::Unsigned => "div".to_string(),
-                    }),
+                    match sign {
+                        DivSignedness::Signed => "idiv",
+                        DivSignedness::Unsigned => "div",
+                    },
                 )
             }
 
@@ -839,16 +771,8 @@ impl PrettyPrint for Inst {
                 let dst_hi = pretty_print_reg(dst_hi.to_reg().to_reg(), size.to_bytes(), allocs);
                 let src2 = src2.pretty_print(size.to_bytes(), allocs);
                 format!(
-                    "{} {}, {}, {}, {}",
-                    ljustify(if *signed {
-                        "imul".to_string()
-                    } else {
-                        "mul".to_string()
-                    }),
-                    src1,
-                    src2,
-                    dst_lo,
-                    dst_hi,
+                    "{} {dst_lo}, {dst_hi}, {src1}, {src2}",
+                    if *signed { "imul" } else { "mul" },
                 )
             }
 
@@ -861,13 +785,7 @@ impl PrettyPrint for Inst {
                 let src1 = pretty_print_reg(src1.to_reg(), size.to_bytes(), allocs);
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), size.to_bytes(), allocs);
                 let src2 = src2.pretty_print(size.to_bytes(), allocs);
-                format!(
-                    "{} {}, {}, {}",
-                    ljustify2("mul".to_string(), suffix_bwlq(*size)),
-                    src1,
-                    src2,
-                    dst,
-                )
+                format!("mul {dst}, {src1}, {src2}")
             }
 
             Inst::CheckedSRemSeq {
@@ -886,8 +804,8 @@ impl PrettyPrint for Inst {
                 let dst_remainder =
                     pretty_print_reg(dst_remainder.to_reg().to_reg(), size.to_bytes(), allocs);
                 format!(
-                    "checked_srem_seq {dividend_lo}, {dividend_hi}, \
-                        {divisor}, {dst_quotient}, {dst_remainder}",
+                    "checked_srem_seq {dst_quotient}, {dst_remainder}, \
+                        {dividend_lo}, {dividend_hi}, {divisor}",
                 )
             }
 
@@ -899,35 +817,33 @@ impl PrettyPrint for Inst {
                 let divisor = pretty_print_reg(divisor.to_reg(), 1, allocs);
                 let dividend = pretty_print_reg(dividend.to_reg(), 1, allocs);
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 1, allocs);
-                format!("checked_srem_seq {dividend}, {divisor}, {dst}")
+                format!("checked_srem_seq {dst}, {dividend}, {divisor}")
             }
 
             Inst::SignExtendData { size, src, dst } => {
                 let src = pretty_print_reg(src.to_reg(), size.to_bytes(), allocs);
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), size.to_bytes(), allocs);
                 format!(
-                    "{} {}, {}",
+                    "{} {dst}, {src}",
                     match size {
                         OperandSize::Size8 => "cbw",
                         OperandSize::Size16 => "cwd",
                         OperandSize::Size32 => "cdq",
                         OperandSize::Size64 => "cqo",
-                    },
-                    src,
-                    dst,
+                    }
                 )
             }
 
             Inst::XmmUnaryRmR { op, src, dst, .. } => {
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), op.src_size(), allocs);
                 let src = src.pretty_print(op.src_size(), allocs);
-                format!("{} {}, {}", ljustify(op.to_string()), src, dst)
+                format!("{op:#} {dst}, {src}")
             }
 
             Inst::XmmUnaryRmRUnaligned { op, src, dst, .. } => {
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), op.src_size(), allocs);
                 let src = src.pretty_print(op.src_size(), allocs);
-                format!("{} {}, {}", ljustify(op.to_string()), src, dst)
+                format!("{op:#} {dst}, {src}")
             }
 
             Inst::XmmUnaryRmRImm {
@@ -935,39 +851,39 @@ impl PrettyPrint for Inst {
             } => {
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), op.src_size(), allocs);
                 let src = src.pretty_print(op.src_size(), allocs);
-                format!("{} ${}, {}, {}", ljustify(op.to_string()), imm, src, dst)
+                format!("{op:#} {dst}, {src}, {imm}")
             }
 
             Inst::XmmUnaryRmRVex { op, src, dst, .. } => {
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
-                let src = src.pretty_print(8, allocs);
-                format!("{} {}, {}", ljustify(op.to_string()), src, dst)
+                let src = src.pretty_print(16, allocs);
+                format!("{op:#} {dst}, {src}")
             }
 
             Inst::XmmUnaryRmRImmVex {
                 op, src, dst, imm, ..
             } => {
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
-                let src = src.pretty_print(8, allocs);
-                format!("{} ${imm}, {}, {}", ljustify(op.to_string()), src, dst)
+                let src = src.pretty_print(16, allocs);
+                format!("{op:#} {dst}, {src}, {imm}")
             }
 
             Inst::XmmUnaryRmREvex { op, src, dst, .. } => {
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
-                let src = src.pretty_print(8, allocs);
-                format!("{} {}, {}", ljustify(op.to_string()), src, dst)
+                let src = src.pretty_print(16, allocs);
+                format!("{op:#} {dst}, {src}")
             }
 
             Inst::XmmMovRM { op, src, dst, .. } => {
                 let src = pretty_print_reg(src.to_reg(), 8, allocs);
-                let dst = dst.pretty_print(8, allocs);
-                format!("{} {}, {}", ljustify(op.to_string()), src, dst)
+                let dst = dst.pretty_print(16, allocs);
+                format!("{op:#} {dst}, {src}")
             }
 
             Inst::XmmMovRMVex { op, src, dst, .. } => {
                 let src = pretty_print_reg(src.to_reg(), 8, allocs);
-                let dst = dst.pretty_print(8, allocs);
-                format!("{} {}, {}", ljustify(op.to_string()), src, dst)
+                let dst = dst.pretty_print(16, allocs);
+                format!("{op:#} {dst}, {src}")
             }
 
             Inst::XmmMovRMImm {
@@ -975,7 +891,7 @@ impl PrettyPrint for Inst {
             } => {
                 let src = pretty_print_reg(src.to_reg(), 8, allocs);
                 let dst = dst.pretty_print(8, allocs);
-                format!("{} ${imm}, {}, {}", ljustify(op.to_string()), src, dst)
+                format!("{op:#} {dst}, {src}, {imm:#x}")
             }
 
             Inst::XmmMovRMImmVex {
@@ -983,7 +899,7 @@ impl PrettyPrint for Inst {
             } => {
                 let src = pretty_print_reg(src.to_reg(), 8, allocs);
                 let dst = dst.pretty_print(8, allocs);
-                format!("{} ${imm}, {}, {}", ljustify(op.to_string()), src, dst)
+                format!("{op:#} {dst}, {src}, {imm}")
             }
 
             Inst::XmmRmR {
@@ -996,7 +912,7 @@ impl PrettyPrint for Inst {
                 let src1 = pretty_print_reg(src1.to_reg(), 8, allocs);
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
                 let src2 = src2.pretty_print(8, allocs);
-                format!("{} {}, {}, {}", ljustify(op.to_string()), src1, src2, dst)
+                format!("{op:#} {dst}, {src1}, {src2}")
             }
 
             Inst::XmmRmRUnaligned {
@@ -1008,8 +924,8 @@ impl PrettyPrint for Inst {
             } => {
                 let src1 = pretty_print_reg(src1.to_reg(), 8, allocs);
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
-                let src2 = src2.pretty_print(8, allocs);
-                format!("{} {}, {}, {}", ljustify(op.to_string()), src1, src2, dst)
+                let src2 = src2.pretty_print(16, allocs);
+                format!("{op:#} {dst}, {src1}, {src2}")
             }
 
             Inst::XmmRmRBlend {
@@ -1029,14 +945,7 @@ impl PrettyPrint for Inst {
                 };
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
                 let src2 = src2.pretty_print(8, allocs);
-                format!(
-                    "{} {}, {}, {}{}",
-                    ljustify(op.to_string()),
-                    src1,
-                    src2,
-                    dst,
-                    mask
-                )
+                format!("{op:#} {dst}{mask}, {src1}, {src2}")
             }
 
             Inst::XmmRmiRVex {
@@ -1049,8 +958,7 @@ impl PrettyPrint for Inst {
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
                 let src1 = pretty_print_reg(src1.to_reg(), 8, allocs);
                 let src2 = src2.pretty_print(8, allocs);
-
-                format!("{} {}, {}, {}", ljustify(op.to_string()), src1, src2, dst)
+                format!("{op:#} {dst}, {src1}, {src2}")
             }
 
             Inst::XmmRmRImmVex {
@@ -1065,7 +973,7 @@ impl PrettyPrint for Inst {
                 let src1 = pretty_print_reg(src1.to_reg(), 8, allocs);
                 let src2 = src2.pretty_print(8, allocs);
 
-                format!("{} ${imm}, {src1}, {src2}, {dst}", ljustify(op.to_string()))
+                format!("{op:#} {dst}, {src1}, {src2}, {imm:#x}")
             }
 
             Inst::XmmVexPinsr {
@@ -1080,7 +988,7 @@ impl PrettyPrint for Inst {
                 let src1 = pretty_print_reg(src1.to_reg(), 8, allocs);
                 let src2 = src2.pretty_print(8, allocs);
 
-                format!("{} ${imm}, {src1}, {src2}, {dst}", ljustify(op.to_string()))
+                format!("{op:#} {dst}, {src1}, {src2}, {imm:#x}")
             }
 
             Inst::XmmRmRVex3 {
@@ -1095,15 +1003,7 @@ impl PrettyPrint for Inst {
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
                 let src2 = pretty_print_reg(src2.to_reg(), 8, allocs);
                 let src3 = src3.pretty_print(8, allocs);
-
-                format!(
-                    "{} {}, {}, {}, {}",
-                    ljustify(op.to_string()),
-                    src1,
-                    src2,
-                    src3,
-                    dst
-                )
+                format!("{op:#} {dst}, {src1}, {src2}, {src3}")
             }
 
             Inst::XmmRmRBlendVex {
@@ -1118,8 +1018,7 @@ impl PrettyPrint for Inst {
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
                 let src2 = src2.pretty_print(8, allocs);
                 let mask = pretty_print_reg(mask.to_reg(), 8, allocs);
-
-                format!("{} {src1}, {src2}, {mask}, {dst}", ljustify(op.to_string()))
+                format!("{op:#} {dst}, {src1}, {src2}, {mask}")
             }
 
             Inst::XmmRmREvex {
@@ -1132,7 +1031,7 @@ impl PrettyPrint for Inst {
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
                 let src1 = pretty_print_reg(src1.to_reg(), 8, allocs);
                 let src2 = src2.pretty_print(8, allocs);
-                format!("{} {src1}, {src2}, {dst}", ljustify(op.to_string()))
+                format!("{op:#} {dst}, {src1}, {src2}")
             }
 
             Inst::XmmRmREvex3 {
@@ -1147,7 +1046,7 @@ impl PrettyPrint for Inst {
                 let src2 = pretty_print_reg(src2.to_reg(), 8, allocs);
                 let src3 = src3.pretty_print(8, allocs);
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
-                format!("{} {src1}, {src2}, {src3}, {dst}", ljustify(op.to_string()))
+                format!("{op:#} {dst}, {src1}, {src2}, {src3}")
             }
 
             Inst::XmmMinMaxSeq {
@@ -1161,18 +1060,13 @@ impl PrettyPrint for Inst {
                 let lhs = pretty_print_reg(lhs.to_reg(), 8, allocs);
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
                 format!(
-                    "{} {}, {}, {}",
-                    ljustify2(
-                        if *is_min {
-                            "xmm min seq ".to_string()
-                        } else {
-                            "xmm max seq ".to_string()
-                        },
-                        format!("f{}", size.to_bits())
-                    ),
-                    lhs,
-                    rhs,
-                    dst
+                    "{}f{} {dst}, {lhs}, {rhs}",
+                    if *is_min {
+                        "xmm min seq "
+                    } else {
+                        "xmm max seq "
+                    },
+                    size.to_bits(),
                 )
             }
 
@@ -1189,22 +1083,18 @@ impl PrettyPrint for Inst {
                 let dst = pretty_print_reg(dst.to_reg(), 8, allocs);
                 let src2 = src2.pretty_print(8, allocs);
                 format!(
-                    "{} ${imm}, {src1}, {src2}, {dst}",
-                    ljustify(format!(
-                        "{}{}",
-                        op.to_string(),
-                        if *size == OperandSize::Size64 {
-                            ".w"
-                        } else {
-                            ""
-                        }
-                    )),
+                    "{op:#}{} {dst}, {src1}, {src2}, {imm:#x}",
+                    if *size == OperandSize::Size64 {
+                        ".w"
+                    } else {
+                        ""
+                    },
                 )
             }
 
             Inst::XmmUninitializedValue { dst } => {
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
-                format!("{} {}", ljustify("uninit".into()), dst)
+                format!("uninit {dst}")
             }
 
             Inst::XmmToGpr {
@@ -1216,7 +1106,7 @@ impl PrettyPrint for Inst {
                 let dst_size = dst_size.to_bytes();
                 let src = pretty_print_reg(src.to_reg(), 8, allocs);
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), dst_size, allocs);
-                format!("{} {}, {}", ljustify(op.to_string()), src, dst)
+                format!("{op:#} {dst}, {src}")
             }
 
             Inst::XmmToGprVex {
@@ -1228,19 +1118,19 @@ impl PrettyPrint for Inst {
                 let dst_size = dst_size.to_bytes();
                 let src = pretty_print_reg(src.to_reg(), 8, allocs);
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), dst_size, allocs);
-                format!("{} {src}, {dst}", ljustify(op.to_string()))
+                format!("{op:#} {dst}, {src}")
             }
 
             Inst::XmmToGprImm { op, src, dst, imm } => {
                 let src = pretty_print_reg(src.to_reg(), 8, allocs);
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
-                format!("{} ${imm}, {}, {}", ljustify(op.to_string()), src, dst)
+                format!("{op:#} {dst}, {src}, {imm:#x}")
             }
 
             Inst::XmmToGprImmVex { op, src, dst, imm } => {
                 let src = pretty_print_reg(src.to_reg(), 8, allocs);
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
-                format!("{} ${imm}, {}, {}", ljustify(op.to_string()), src, dst)
+                format!("{op:#} {dst}, {src}, {imm:#x}")
             }
 
             Inst::GprToXmm {
@@ -1251,7 +1141,7 @@ impl PrettyPrint for Inst {
             } => {
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
                 let src = src.pretty_print(src_size.to_bytes(), allocs);
-                format!("{} {}, {}", ljustify(op.to_string()), src, dst)
+                format!("{op:#} {dst}, {src}")
             }
 
             Inst::GprToXmmVex {
@@ -1262,13 +1152,13 @@ impl PrettyPrint for Inst {
             } => {
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
                 let src = src.pretty_print(src_size.to_bytes(), allocs);
-                format!("{} {src}, {dst}", ljustify(op.to_string()))
+                format!("{op:#} {dst}, {src}")
             }
 
             Inst::XmmCmpRmR { op, src, dst } => {
                 let dst = pretty_print_reg(dst.to_reg(), 8, allocs);
                 let src = src.pretty_print(8, allocs);
-                format!("{} {}, {}", ljustify(op.to_string()), src, dst)
+                format!("{op:#} {dst}, {src}")
             }
 
             Inst::CvtUint64ToFloatSeq {
@@ -1284,19 +1174,12 @@ impl PrettyPrint for Inst {
                 let tmp_gpr1 = pretty_print_reg(tmp_gpr1.to_reg().to_reg(), 8, allocs);
                 let tmp_gpr2 = pretty_print_reg(tmp_gpr2.to_reg().to_reg(), 8, allocs);
                 format!(
-                    "{} {}, {}, {}, {}",
-                    ljustify(format!(
-                        "u64_to_{}_seq",
-                        if *dst_size == OperandSize::Size64 {
-                            "f64"
-                        } else {
-                            "f32"
-                        }
-                    )),
-                    src,
-                    dst,
-                    tmp_gpr1,
-                    tmp_gpr2
+                    "u64_to_{}_seq {dst}, {src}, {tmp_gpr1}, {tmp_gpr2}",
+                    if *dst_size == OperandSize::Size64 {
+                        "f64"
+                    } else {
+                        "f32"
+                    },
                 )
             }
 
@@ -1314,17 +1197,10 @@ impl PrettyPrint for Inst {
                 let tmp_gpr = pretty_print_reg(tmp_gpr.to_reg().to_reg(), 8, allocs);
                 let tmp_xmm = pretty_print_reg(tmp_xmm.to_reg().to_reg(), 8, allocs);
                 format!(
-                    "{} {}, {}, {}, {}",
-                    ljustify(format!(
-                        "cvt_float{}_to_sint{}{}_seq",
-                        src_size.to_bits(),
-                        dst_size.to_bits(),
-                        if *is_saturating { "_sat" } else { "" },
-                    )),
-                    src,
-                    dst,
-                    tmp_gpr,
-                    tmp_xmm,
+                    "cvt_float{}_to_sint{}{}_seq {dst}, {src}, {tmp_gpr}, {tmp_xmm}",
+                    src_size.to_bits(),
+                    dst_size.to_bits(),
+                    if *is_saturating { "_sat" } else { "" },
                 )
             }
 
@@ -1344,18 +1220,10 @@ impl PrettyPrint for Inst {
                 let tmp_xmm = pretty_print_reg(tmp_xmm.to_reg().to_reg(), 8, allocs);
                 let tmp_xmm2 = pretty_print_reg(tmp_xmm2.to_reg().to_reg(), 8, allocs);
                 format!(
-                    "{} {}, {}, {}, {}, {}",
-                    ljustify(format!(
-                        "cvt_float{}_to_uint{}{}_seq",
-                        src_size.to_bits(),
-                        dst_size.to_bits(),
-                        if *is_saturating { "_sat" } else { "" },
-                    )),
-                    src,
-                    dst,
-                    tmp_gpr,
-                    tmp_xmm,
-                    tmp_xmm2,
+                    "cvt_float{}_to_uint{}{}_seq {dst}, {src}, {tmp_gpr}, {tmp_xmm}, {tmp_xmm2}",
+                    src_size.to_bits(),
+                    dst_size.to_bits(),
+                    if *is_saturating { "_sat" } else { "" },
                 )
             }
 
@@ -1366,50 +1234,32 @@ impl PrettyPrint for Inst {
             } => {
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), dst_size.to_bytes(), allocs);
                 if *dst_size == OperandSize::Size64 {
-                    format!(
-                        "{} ${}, {}",
-                        ljustify("movabsq".to_string()),
-                        *simm64 as i64,
-                        dst,
-                    )
+                    format!("movabs {dst}, {:#x}", *simm64 as i64,)
                 } else {
-                    format!(
-                        "{} ${}, {}",
-                        ljustify("movl".to_string()),
-                        (*simm64 as u32) as i32,
-                        dst,
-                    )
+                    format!("mov {dst}, {:#x}", (*simm64 as u32) as i32,)
                 }
             }
 
             Inst::MovImmM { size, simm64, dst } => {
                 let dst = dst.pretty_print(size.to_bytes(), allocs);
-                let suffix = suffix_bwlq(*size);
-                let instruction = ljustify2("mov".to_string(), suffix);
-
                 match *size {
                     OperandSize::Size8 => {
-                        format!("{} ${}, {}", instruction, (*simm64 as u8) as i8, dst)
+                        format!("mov {dst}, {:#x}", (*simm64 as u8) as i8)
                     }
                     OperandSize::Size16 => {
-                        format!("{} ${}, {}", instruction, (*simm64 as u16) as i16, dst)
+                        format!("mov {dst}, {:#x}", (*simm64 as u16) as i16)
                     }
                     OperandSize::Size32 => {
-                        format!("{} ${}, {}", instruction, (*simm64 as u32) as i32, dst)
+                        format!("mov {dst}, {:#x}", (*simm64 as u32) as i32)
                     }
-                    OperandSize::Size64 => format!("{} ${}, {}", instruction, *simm64 as i64, dst),
+                    OperandSize::Size64 => format!("mov {dst}, {:#x}", *simm64 as i64),
                 }
             }
 
             Inst::MovRR { size, src, dst } => {
                 let src = pretty_print_reg(src.to_reg(), size.to_bytes(), allocs);
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), size.to_bytes(), allocs);
-                format!(
-                    "{} {}, {}",
-                    ljustify2("mov".to_string(), suffix_lq(*size)),
-                    src,
-                    dst
-                )
+                format!("mov {dst}, {src}")
             }
 
             Inst::MovFromPReg { src, dst } => {
@@ -1417,7 +1267,7 @@ impl PrettyPrint for Inst {
                 let src: Reg = (*src).into();
                 let src = regs::show_ireg_sized(src, 8);
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
-                format!("{} {}, {}", ljustify("movq".to_string()), src, dst)
+                format!("mov {dst}, {src}")
             }
 
             Inst::MovToPReg { src, dst } => {
@@ -1425,7 +1275,7 @@ impl PrettyPrint for Inst {
                 allocs.next_fixed_nonallocatable(*dst);
                 let dst: Reg = (*dst).into();
                 let dst = regs::show_ireg_sized(dst, 8);
-                format!("{} {}, {}", ljustify("movq".to_string()), src, dst)
+                format!("mov {dst}, {src}")
             }
 
             Inst::MovzxRmR {
@@ -1439,27 +1289,22 @@ impl PrettyPrint for Inst {
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), dst_size, allocs);
                 let src = src.pretty_print(ext_mode.src_size(), allocs);
                 if *ext_mode == ExtMode::LQ {
-                    format!("{} {}, {}", ljustify("movl".to_string()), src, dst)
+                    format!("mov {dst}, {src}")
                 } else {
-                    format!(
-                        "{} {}, {}",
-                        ljustify2("movz".to_string(), ext_mode.to_string()),
-                        src,
-                        dst,
-                    )
+                    format!("movzx {dst}, {src}")
                 }
             }
 
             Inst::Mov64MR { src, dst, .. } => {
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
                 let src = src.pretty_print(8, allocs);
-                format!("{} {}, {}", ljustify("movq".to_string()), src, dst)
+                format!("mov {dst}, {src}")
             }
 
             Inst::LoadEffectiveAddress { addr, dst, size } => {
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), size.to_bytes(), allocs);
                 let addr = addr.pretty_print(8, allocs);
-                format!("{} {}, {}", ljustify("lea".to_string()), addr, dst)
+                format!("lea {dst}, {addr}")
             }
 
             Inst::MovsxRmR {
@@ -1467,23 +1312,13 @@ impl PrettyPrint for Inst {
             } => {
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), ext_mode.dst_size(), allocs);
                 let src = src.pretty_print(ext_mode.src_size(), allocs);
-                format!(
-                    "{} {}, {}",
-                    ljustify2("movs".to_string(), ext_mode.to_string()),
-                    src,
-                    dst
-                )
+                format!("movsx {dst}, {src}")
             }
 
             Inst::MovRM { size, src, dst, .. } => {
                 let src = pretty_print_reg(src.to_reg(), size.to_bytes(), allocs);
                 let dst = dst.pretty_print(size.to_bytes(), allocs);
-                format!(
-                    "{} {}, {}",
-                    ljustify2("mov".to_string(), suffix_bwlq(*size)),
-                    src,
-                    dst
-                )
+                format!("mov {dst}, {src}")
             }
 
             Inst::ShiftR {
@@ -1499,22 +1334,12 @@ impl PrettyPrint for Inst {
                 match num_bits.clone().to_imm8_reg() {
                     Imm8Reg::Reg { reg } => {
                         let reg = pretty_print_reg(reg, 1, allocs);
-                        format!(
-                            "{} {}, {}, {}",
-                            ljustify2(kind.to_string(), suffix_bwlq(*size)),
-                            reg,
-                            src,
-                            dst,
-                        )
+                        format!("{kind:#} {dst}, {src}, {reg}")
                     }
 
-                    Imm8Reg::Imm8 { imm: num_bits } => format!(
-                        "{} ${}, {}, {}",
-                        ljustify2(kind.to_string(), suffix_bwlq(*size)),
-                        num_bits,
-                        src,
-                        dst,
-                    ),
+                    Imm8Reg::Imm8 { imm: num_bits } => {
+                        format!("{kind:#} {dst}, {src}, {num_bits:#x}")
+                    }
                 }
             }
 
@@ -1528,13 +1353,7 @@ impl PrettyPrint for Inst {
                 let src1 = pretty_print_reg(src1.to_reg(), 8, allocs);
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
                 let src2 = src2.pretty_print(8, allocs);
-                format!(
-                    "{} {}, {}, {}",
-                    ljustify(opcode.to_string()),
-                    src1,
-                    src2,
-                    dst,
-                )
+                format!("{opcode:#} {dst}, {src1}, {src2}")
             }
 
             Inst::CmpRmiR {
@@ -1549,28 +1368,18 @@ impl PrettyPrint for Inst {
                     CmpOpcode::Cmp => "cmp",
                     CmpOpcode::Test => "test",
                 };
-                format!(
-                    "{} {}, {}",
-                    ljustify2(op.to_string(), suffix_bwlq(*size)),
-                    src,
-                    dst,
-                )
+                format!("{op:#} {dst}, {src}")
             }
 
             Inst::Setcc { cc, dst } => {
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 1, allocs);
-                format!("{} {}", ljustify2("set".to_string(), cc.to_string()), dst)
+                format!("set{cc:#} {dst}")
             }
 
             Inst::Bswap { size, src, dst } => {
                 let src = pretty_print_reg(src.to_reg(), size.to_bytes(), allocs);
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), size.to_bytes(), allocs);
-                format!(
-                    "{} {}, {}",
-                    ljustify2("bswap".to_string(), suffix_bwlq(*size)),
-                    src,
-                    dst
-                )
+                format!("bswap {dst}, {src}")
             }
 
             Inst::Cmove {
@@ -1583,13 +1392,7 @@ impl PrettyPrint for Inst {
                 let alternative = pretty_print_reg(alternative.to_reg(), size.to_bytes(), allocs);
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), size.to_bytes(), allocs);
                 let consequent = consequent.pretty_print(size.to_bytes(), allocs);
-                format!(
-                    "{} {}, {}, {}",
-                    ljustify(format!("cmov{}{}", cc.to_string(), suffix_bwlq(*size))),
-                    consequent,
-                    alternative,
-                    dst,
-                )
+                format!("cmov{cc:#} {dst}, {consequent}, {alternative}",)
             }
 
             Inst::XmmCmove {
@@ -1612,9 +1415,9 @@ impl PrettyPrint for Inst {
                     _ => "dqa",
                 };
                 format!(
-                    "mov{suffix} {alternative}, {dst}; \
+                    "mov{suffix} {dst}, {alternative}; \
                     j{} $next; \
-                    mov{suffix} {consequent}, {dst}; \
+                    mov{suffix} {dst}, {consequent}; \
                     $next:",
                     cc.invert().to_string(),
                 )
@@ -1622,7 +1425,7 @@ impl PrettyPrint for Inst {
 
             Inst::Push64 { src } => {
                 let src = src.pretty_print(8, allocs);
-                format!("{} {}", ljustify("pushq".to_string()), src)
+                format!("push {src}")
             }
 
             Inst::StackProbeLoop {
@@ -1631,27 +1434,21 @@ impl PrettyPrint for Inst {
                 guard_size,
             } => {
                 let tmp = pretty_print_reg(tmp.to_reg(), 8, allocs);
-                format!(
-                    "{} {}, frame_size={}, guard_size={}",
-                    ljustify("stack_probe_loop".to_string()),
-                    tmp,
-                    frame_size,
-                    guard_size
-                )
+                format!("stack_probe_loop {tmp}, frame_size={frame_size}, guard_size={guard_size}",)
             }
 
             Inst::Pop64 { dst } => {
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
-                format!("{} {}", ljustify("popq".to_string()), dst)
+                format!("pop {dst}")
             }
 
             Inst::CallKnown { dest, .. } => {
-                format!("{} {:?}", ljustify("call".to_string()), dest)
+                format!("call {dest:?}")
             }
 
             Inst::CallUnknown { dest, .. } => {
                 let dest = dest.pretty_print(8, allocs);
-                format!("{} *{}", ljustify("call".to_string()), dest)
+                format!("call *{dest}")
             }
 
             Inst::Args { args } => {
@@ -1660,7 +1457,7 @@ impl PrettyPrint for Inst {
                     use std::fmt::Write;
                     let preg = regs::show_reg(arg.preg);
                     let def = pretty_print_reg(arg.vreg.to_reg(), 8, allocs);
-                    write!(&mut s, " {}={}", def, preg).unwrap();
+                    write!(&mut s, " {def}={preg}").unwrap();
                 }
                 s
             }
@@ -1671,31 +1468,22 @@ impl PrettyPrint for Inst {
                     use std::fmt::Write;
                     let preg = regs::show_reg(ret.preg);
                     let vreg = pretty_print_reg(ret.vreg, 8, allocs);
-                    write!(&mut s, " {}={}", vreg, preg).unwrap();
+                    write!(&mut s, " {vreg}={preg}").unwrap();
                 }
                 s
             }
 
             Inst::JmpKnown { dst } => {
-                format!("{} {}", ljustify("jmp".to_string()), dst.to_string())
+                format!("jmp {}", dst.to_string())
             }
 
-            Inst::JmpIf { cc, taken } => format!(
-                "{} {}",
-                ljustify2("j".to_string(), cc.to_string()),
-                taken.to_string(),
-            ),
+            Inst::JmpIf { cc, taken } => format!("j{cc:#} {}", taken.to_string()),
 
             Inst::JmpCond {
                 cc,
                 taken,
                 not_taken,
-            } => format!(
-                "{} {}; j {}",
-                ljustify2("j".to_string(), cc.to_string()),
-                taken.to_string(),
-                not_taken.to_string()
-            ),
+            } => format!("j{cc:#} {}; j {}", taken.to_string(), not_taken.to_string()),
 
             Inst::JmpTableSeq {
                 idx, tmp1, tmp2, ..
@@ -1703,18 +1491,12 @@ impl PrettyPrint for Inst {
                 let idx = pretty_print_reg(*idx, 8, allocs);
                 let tmp1 = pretty_print_reg(tmp1.to_reg(), 8, allocs);
                 let tmp2 = pretty_print_reg(tmp2.to_reg(), 8, allocs);
-                format!(
-                    "{} {}, {}, {}",
-                    ljustify("br_table".into()),
-                    idx,
-                    tmp1,
-                    tmp2
-                )
+                format!("br_table {idx}, {tmp1}, {tmp2}")
             }
 
             Inst::JmpUnknown { target } => {
                 let target = target.pretty_print(8, allocs);
-                format!("{} *{}", ljustify("jmp".to_string()), target)
+                format!("jmp *{target}")
             }
 
             Inst::TrapIf { cc, trap_code, .. } => {
@@ -1726,40 +1508,24 @@ impl PrettyPrint for Inst {
                 cc2,
                 trap_code,
                 ..
-            } => {
-                format!(
-                    "trap_if_and {}, {}, {}",
-                    cc1.invert().to_string(),
-                    cc2.invert().to_string(),
-                    trap_code
-                )
-            }
+            } => format!(
+                "trap_if_and {:#}, {:#}, {trap_code}",
+                cc1.invert(),
+                cc2.invert()
+            ),
 
             Inst::TrapIfOr {
                 cc1,
                 cc2,
                 trap_code,
                 ..
-            } => {
-                format!(
-                    "trap_if_or {}, {}, {}",
-                    cc1.to_string(),
-                    cc2.invert().to_string(),
-                    trap_code
-                )
-            }
+            } => format!("trap_if_or {:#}, {:#}, {trap_code}", cc1, cc2.invert()),
 
             Inst::LoadExtName {
                 dst, name, offset, ..
             } => {
                 let dst = pretty_print_reg(dst.to_reg(), 8, allocs);
-                format!(
-                    "{} {}+{}, {}",
-                    ljustify("load_ext_name".into()),
-                    name.display(None),
-                    offset,
-                    dst,
-                )
+                format!("load_ext_name {dst}, {}+{offset}", name.display(None))
             }
 
             Inst::LockCmpxchg {
@@ -1776,12 +1542,8 @@ impl PrettyPrint for Inst {
                 let dst_old = pretty_print_reg(dst_old.to_reg(), size, allocs);
                 let mem = mem.pretty_print(size, allocs);
                 format!(
-                    "lock cmpxchg{} {}, {}, expected={}, dst_old={}",
+                    "lock cmpxchg{} {replacement}, {mem}, expected={expected}, dst_old={dst_old}",
                     suffix_bwlq(OperandSize::from_bytes(size as u32)),
-                    replacement,
-                    mem,
-                    expected,
-                    dst_old,
                 )
             }
 
@@ -1801,16 +1563,16 @@ impl PrettyPrint for Inst {
 
             Inst::Hlt => "hlt".into(),
 
-            Inst::Ud2 { trap_code } => format!("ud2 {}", trap_code),
+            Inst::Ud2 { trap_code } => format!("ud2 {trap_code}"),
 
             Inst::ElfTlsGetAddr { ref symbol, dst } => {
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
-                format!("{} = elf_tls_get_addr {:?}", dst, symbol)
+                format!("{dst} = elf_tls_get_addr {symbol:?}")
             }
 
             Inst::MachOTlsGetAddr { ref symbol, dst } => {
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
-                format!("{} = macho_tls_get_addr {:?}", dst, symbol)
+                format!("{dst} = macho_tls_get_addr {symbol:?}")
             }
 
             Inst::CoffTlsGetAddr {
@@ -1823,7 +1585,7 @@ impl PrettyPrint for Inst {
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
                 let tmp = allocs.next(tmp.to_reg().to_reg());
 
-                let mut s = format!("{} = coff_tls_get_addr {:?}", dst, symbol);
+                let mut s = format!("{dst} = coff_tls_get_addr {symbol:?}");
                 if tmp.is_virtual() {
                     write!(&mut s, ", {}", show_ireg_sized(tmp, 8)).unwrap();
                 };
@@ -1832,12 +1594,12 @@ impl PrettyPrint for Inst {
             }
 
             Inst::Unwind { inst } => {
-                format!("unwind {:?}", inst)
+                format!("unwind {inst:?}")
             }
 
             Inst::DummyUse { reg } => {
                 let reg = pretty_print_reg(*reg, 8, allocs);
-                format!("dummy_use {}", reg)
+                format!("dummy_use {reg}")
             }
         }
     }
