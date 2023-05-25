@@ -3685,7 +3685,7 @@ dependencies = [
 [[package]]
 name = "wasm-encoder"
 version = "0.29.0"
-source = "git+https://github.com/alexcrichton/wasm-tools?branch=bump#d70cc66ead2b963bae8192a65434cd153ed51acf"
+source = "git+https://github.com/alexcrichton/wasm-tools?branch=bump#dd15b259925b111a9b7f1d4b3d0191e8acbdb356"
 dependencies = [
  "leb128",
 ]
@@ -3706,7 +3706,7 @@ dependencies = [
 [[package]]
 name = "wasm-metadata"
 version = "0.8.0"
-source = "git+https://github.com/alexcrichton/wasm-tools?branch=bump#d70cc66ead2b963bae8192a65434cd153ed51acf"
+source = "git+https://github.com/alexcrichton/wasm-tools?branch=bump#dd15b259925b111a9b7f1d4b3d0191e8acbdb356"
 dependencies = [
  "anyhow",
  "indexmap",
@@ -3718,7 +3718,7 @@ dependencies = [
 [[package]]
 name = "wasm-mutate"
 version = "0.2.27"
-source = "git+https://github.com/alexcrichton/wasm-tools?branch=bump#d70cc66ead2b963bae8192a65434cd153ed51acf"
+source = "git+https://github.com/alexcrichton/wasm-tools?branch=bump#dd15b259925b111a9b7f1d4b3d0191e8acbdb356"
 dependencies = [
  "egg",
  "log",
@@ -3731,7 +3731,7 @@ dependencies = [
 [[package]]
 name = "wasm-smith"
 version = "0.12.10"
-source = "git+https://github.com/alexcrichton/wasm-tools?branch=bump#d70cc66ead2b963bae8192a65434cd153ed51acf"
+source = "git+https://github.com/alexcrichton/wasm-tools?branch=bump#dd15b259925b111a9b7f1d4b3d0191e8acbdb356"
 dependencies = [
  "arbitrary",
  "flagset",
@@ -3801,7 +3801,7 @@ dependencies = [
 [[package]]
 name = "wasmparser"
 version = "0.107.0"
-source = "git+https://github.com/alexcrichton/wasm-tools?branch=bump#d70cc66ead2b963bae8192a65434cd153ed51acf"
+source = "git+https://github.com/alexcrichton/wasm-tools?branch=bump#dd15b259925b111a9b7f1d4b3d0191e8acbdb356"
 dependencies = [
  "indexmap",
  "semver",
@@ -3819,7 +3819,7 @@ dependencies = [
 [[package]]
 name = "wasmprinter"
 version = "0.2.59"
-source = "git+https://github.com/alexcrichton/wasm-tools?branch=bump#d70cc66ead2b963bae8192a65434cd153ed51acf"
+source = "git+https://github.com/alexcrichton/wasm-tools?branch=bump#dd15b259925b111a9b7f1d4b3d0191e8acbdb356"
 dependencies = [
  "anyhow",
  "wasmparser 0.107.0",
@@ -4371,7 +4371,7 @@ dependencies = [
 [[package]]
 name = "wast"
 version = "60.0.0"
-source = "git+https://github.com/alexcrichton/wasm-tools?branch=bump#d70cc66ead2b963bae8192a65434cd153ed51acf"
+source = "git+https://github.com/alexcrichton/wasm-tools?branch=bump#dd15b259925b111a9b7f1d4b3d0191e8acbdb356"
 dependencies = [
  "leb128",
  "memchr",
@@ -4382,7 +4382,7 @@ dependencies = [
 [[package]]
 name = "wat"
 version = "1.0.66"
-source = "git+https://github.com/alexcrichton/wasm-tools?branch=bump#d70cc66ead2b963bae8192a65434cd153ed51acf"
+source = "git+https://github.com/alexcrichton/wasm-tools?branch=bump#dd15b259925b111a9b7f1d4b3d0191e8acbdb356"
 dependencies = [
  "wast 60.0.0",
 ]
@@ -4785,7 +4785,7 @@ dependencies = [
 [[package]]
 name = "wit-component"
 version = "0.11.0"
-source = "git+https://github.com/alexcrichton/wasm-tools?branch=bump#d70cc66ead2b963bae8192a65434cd153ed51acf"
+source = "git+https://github.com/alexcrichton/wasm-tools?branch=bump#dd15b259925b111a9b7f1d4b3d0191e8acbdb356"
 dependencies = [
  "anyhow",
  "bitflags 1.3.2",
@@ -4815,7 +4815,7 @@ dependencies = [
 [[package]]
 name = "wit-parser"
 version = "0.8.0"
-source = "git+https://github.com/alexcrichton/wasm-tools?branch=bump#d70cc66ead2b963bae8192a65434cd153ed51acf"
+source = "git+https://github.com/alexcrichton/wasm-tools?branch=bump#dd15b259925b111a9b7f1d4b3d0191e8acbdb356"
 dependencies = [
  "anyhow",
  "id-arena",

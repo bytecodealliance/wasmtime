@@ -1,6 +1,6 @@
-default interface preopens {
-  use filesystem.filesystem.{descriptor}
-  use io.streams.{input-stream, output-stream}
+interface preopens {
+  use wasi:filesystem/filesystem.{descriptor}
+  use wasi:io/streams.{input-stream, output-stream}
 
   /// Stdio preopens: these are the resources that provide stdin, stdout, and
   /// stderr.

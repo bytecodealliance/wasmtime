@@ -1,9 +1,8 @@
 use crate::preview2::{
     stream::TableStreamExt,
-    wasi,
-    wasi::monotonic_clock::Instant,
-    wasi::poll::Pollable,
-    wasi::streams::{InputStream, OutputStream},
+    wasi::clocks::monotonic_clock::Instant,
+    wasi::io::streams::{InputStream, OutputStream},
+    wasi::poll::poll::{self, Pollable},
     WasiView,
 };
 
@@ -29,7 +28,7 @@ pub(crate) enum PollableEntry {
 // this PR.
 
 #[async_trait::async_trait]
-impl<T: WasiView> wasi::poll::Host for T {
+impl<T: WasiView> poll::Host for T {
     async fn drop_pollable(&mut self, pollable: Pollable) -> anyhow::Result<()> {
         self.table_mut().delete::<PollableEntry>(pollable)?;
         Ok(())

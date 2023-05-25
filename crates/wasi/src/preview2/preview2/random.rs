@@ -1,9 +1,9 @@
+use crate::preview2::wasi::random::random;
+use crate::preview2::WasiView;
 use cap_rand::{distributions::Standard, Rng};
 
-use crate::preview2::{wasi, WasiView};
-
 #[async_trait::async_trait]
-impl<T: WasiView> wasi::random::Host for T {
+impl<T: WasiView> random::Host for T {
     async fn get_random_bytes(&mut self, len: u64) -> anyhow::Result<Vec<u8>> {
         Ok((&mut self.ctx_mut().random)
             .sample_iter(Standard)

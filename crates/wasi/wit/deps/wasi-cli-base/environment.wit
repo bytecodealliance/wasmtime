@@ -1,4 +1,6 @@
-default interface environment {
+package wasi:cli-base
+
+interface environment {
   /// Get the POSIX-style environment variables.
   ///
   /// Each environment variable is provided as a pair of string variable names

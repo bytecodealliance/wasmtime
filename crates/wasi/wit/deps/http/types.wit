@@ -1,10 +1,12 @@
+package wasi:http
+
 // The `wasi:http/types` interface is meant to be imported by components to
 // define the HTTP resource types and operations used by the component's
 // imported and exported interfaces.
-default interface types {
-  use io.streams.{input-stream, output-stream}
-  use poll.poll.{pollable}
-  
+interface types {
+  use wasi:io/streams.{input-stream, output-stream}
+  use wasi:poll/poll.{pollable}
+
   // This type corresponds to HTTP standard Methods.
   variant method {
     get,
