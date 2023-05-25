@@ -1130,9 +1130,9 @@ impl PrettyPrint for Inst {
                 ..
             } => {
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
-                let src2 = pretty_print_reg(src2.to_reg(), 8, allocs);
-                let src1 = src1.pretty_print(8, allocs);
-                format!("{} {}, {}, {}", ljustify(op.to_string()), src1, src2, dst)
+                let src1 = pretty_print_reg(src1.to_reg(), 8, allocs);
+                let src2 = src2.pretty_print(8, allocs);
+                format!("{} {src1}, {src2}, {dst}", ljustify(op.to_string()))
             }
 
             Inst::XmmRmREvex3 {
@@ -1143,18 +1143,11 @@ impl PrettyPrint for Inst {
                 dst,
                 ..
             } => {
-                let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
+                let src1 = pretty_print_reg(src1.to_reg(), 8, allocs);
                 let src2 = pretty_print_reg(src2.to_reg(), 8, allocs);
-                let src3 = pretty_print_reg(src3.to_reg(), 8, allocs);
-                let src1 = src1.pretty_print(8, allocs);
-                format!(
-                    "{} {}, {}, {}, {}",
-                    ljustify(op.to_string()),
-                    src1,
-                    src2,
-                    src3,
-                    dst
-                )
+                let src3 = src3.pretty_print(8, allocs);
+                let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
+                format!("{} {src1}, {src2}, {src3}, {dst}", ljustify(op.to_string()))
             }
 
             Inst::XmmMinMaxSeq {
@@ -2087,9 +2080,9 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             ..
         } => {
             assert_ne!(*op, Avx512Opcode::Vpermi2b);
+            collector.reg_use(src1.to_reg());
+            src2.get_operands(collector);
             collector.reg_def(dst.to_writable_reg());
-            collector.reg_use(src2.to_reg());
-            src1.get_operands(collector);
         }
         Inst::XmmRmREvex3 {
             op,
@@ -2100,10 +2093,10 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             ..
         } => {
             assert_eq!(*op, Avx512Opcode::Vpermi2b);
-            collector.reg_reuse_def(dst.to_writable_reg(), 2); // Reuse `src3`.
+            collector.reg_use(src1.to_reg());
             collector.reg_use(src2.to_reg());
-            collector.reg_use(src3.to_reg());
-            src1.get_operands(collector);
+            src3.get_operands(collector);
+            collector.reg_reuse_def(dst.to_writable_reg(), 0); // Reuse `src1`.
         }
         Inst::XmmRmRImm {
             src1, src2, dst, ..

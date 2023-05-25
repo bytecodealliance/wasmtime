@@ -2735,24 +2735,26 @@ pub(crate) fn emit(
         }
         | Inst::XmmRmREvex3 {
             op,
-            src1,
-            src2,
+            src1: _, // `dst` reuses `src1`.
+            src2: src1,
+            src3: src2,
             dst,
-            // `dst` reuses `src3`.
-            ..
         } => {
-            let dst = allocs.next(dst.to_reg().to_reg());
-            let src2 = allocs.next(src2.to_reg());
-            if let Inst::XmmRmREvex3 { src3, .. } = inst {
-                let src3 = allocs.next(src3.to_reg());
-                debug_assert_eq!(src3, dst);
-            }
-            let src1 = match src1.clone().to_reg_mem().with_allocs(allocs) {
+            let reused_src = match inst {
+                Inst::XmmRmREvex3 { src1, .. } => Some(allocs.next(src1.to_reg())),
+                _ => None,
+            };
+            let src1 = allocs.next(src1.to_reg());
+            let src2 = match src2.clone().to_reg_mem().with_allocs(allocs) {
                 RegMem::Reg { reg } => {
                     RegisterOrAmode::Register(reg.to_real_reg().unwrap().hw_enc().into())
                 }
                 RegMem::Mem { addr } => RegisterOrAmode::Amode(addr.finalize(state, sink)),
             };
+            let dst = allocs.next(dst.to_reg().to_reg());
+            if let Some(src1) = reused_src {
+                debug_assert_eq!(src1, dst);
+            }
 
             let (w, opcode) = match op {
                 Avx512Opcode::Vpermi2b => (false, 0x75),
@@ -2767,8 +2769,8 @@ pub(crate) fn emit(
                 .opcode(opcode)
                 .tuple_type(op.tuple_type())
                 .reg(dst.to_real_reg().unwrap().hw_enc())
-                .rm(src1)
-                .vvvvv(src2.to_real_reg().unwrap().hw_enc())
+                .vvvvv(src1.to_real_reg().unwrap().hw_enc())
+                .rm(src2)
                 .encode(sink);
         }
 
