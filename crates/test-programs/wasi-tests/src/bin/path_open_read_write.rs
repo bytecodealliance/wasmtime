@@ -2,6 +2,24 @@ use std::{env, process};
 use wasi_tests::{assert_errno, create_file, open_scratch_directory};
 
 unsafe fn test_path_open_read_write(dir_fd: wasi::Fd) {
+    let stat = wasi::fd_fdstat_get(dir_fd).expect("get dirfd stat");
+    assert!(
+        stat.fs_rights_base & wasi::RIGHTS_FD_READ == wasi::RIGHTS_FD_READ,
+        "dirfd has base read right"
+    );
+    assert!(
+        stat.fs_rights_inheriting & wasi::RIGHTS_FD_READ == wasi::RIGHTS_FD_READ,
+        "dirfd has inheriting read right"
+    );
+    assert!(
+        stat.fs_rights_base & wasi::RIGHTS_FD_WRITE == wasi::RIGHTS_FD_WRITE,
+        "dirfd has base write right"
+    );
+    assert!(
+        stat.fs_rights_inheriting & wasi::RIGHTS_FD_WRITE == wasi::RIGHTS_FD_WRITE,
+        "dirfd has inheriting write right"
+    );
+
     create_file(dir_fd, "file");
 
     let f_readonly = wasi::path_open(dir_fd, 0, "file", 0, wasi::RIGHTS_FD_READ, 0, 0)
