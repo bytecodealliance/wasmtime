@@ -514,7 +514,7 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "getrandom 0.2.9",
- "wit-bindgen",
+ "wit-bindgen 0.7.0",
 ]
 
 [[package]]
@@ -2603,7 +2603,7 @@ dependencies = [
 name = "reactor-tests"
 version = "0.1.0"
 dependencies = [
- "wit-bindgen",
+ "wit-bindgen 0.7.0",
 ]
 
 [[package]]
@@ -3570,7 +3570,7 @@ name = "wasi-http-tests"
 version = "0.0.0"
 dependencies = [
  "anyhow",
- "wit-bindgen",
+ "wit-bindgen 0.7.0",
 ]
 
 [[package]]
@@ -3581,7 +3581,7 @@ dependencies = [
  "object",
  "wasi 0.11.0+wasi-snapshot-preview1",
  "wasm-encoder 0.25.0",
- "wit-bindgen",
+ "wit-bindgen 0.6.0",
 ]
 
 [[package]]
@@ -4714,7 +4714,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ad22d93d3f55847ac4b3df31607a26f35231754ef472382319de032770d8b5bf"
 dependencies = [
  "bitflags 2.2.1",
- "wit-bindgen-rust-macro",
+ "wit-bindgen-rust-macro 0.6.0",
+]
+
+[[package]]
+name = "wit-bindgen"
+version = "0.7.0"
+source = "git+https://github.com/alexcrichton/witx-bindgen?branch=wit-changes#7d108816e6f5a22ef5d343f4bdd7b32a6afcb275"
+dependencies = [
+ "bitflags 2.2.1",
+ "wit-bindgen-rust-macro 0.7.0",
 ]
 
 [[package]]
@@ -4729,6 +4738,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "wit-bindgen-core"
+version = "0.7.0"
+source = "git+https://github.com/alexcrichton/witx-bindgen?branch=wit-changes#7d108816e6f5a22ef5d343f4bdd7b32a6afcb275"
+dependencies = [
+ "anyhow",
+ "wit-component 0.11.0",
+ "wit-parser 0.8.0",
+]
+
+[[package]]
 name = "wit-bindgen-rust"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4736,9 +4755,21 @@ checksum = "7946a66f1132d3322c29de9d28097bd263f67e1e0909054f91253aa103cdf8be"
 dependencies = [
  "heck",
  "wasm-metadata 0.5.0",
- "wit-bindgen-core",
- "wit-bindgen-rust-lib",
+ "wit-bindgen-core 0.6.0",
+ "wit-bindgen-rust-lib 0.6.0",
  "wit-component 0.8.2",
+]
+
+[[package]]
+name = "wit-bindgen-rust"
+version = "0.7.0"
+source = "git+https://github.com/alexcrichton/witx-bindgen?branch=wit-changes#7d108816e6f5a22ef5d343f4bdd7b32a6afcb275"
+dependencies = [
+ "heck",
+ "wasm-metadata 0.8.0",
+ "wit-bindgen-core 0.7.0",
+ "wit-bindgen-rust-lib 0.7.0",
+ "wit-component 0.11.0",
 ]
 
 [[package]]
@@ -4748,7 +4779,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0baf7325748c5d363ab6ed3ddbd155c241cfe385410c61f2505ec978a61a2d2c"
 dependencies = [
  "heck",
- "wit-bindgen-core",
+ "wit-bindgen-core 0.6.0",
+]
+
+[[package]]
+name = "wit-bindgen-rust-lib"
+version = "0.7.0"
+source = "git+https://github.com/alexcrichton/witx-bindgen?branch=wit-changes#7d108816e6f5a22ef5d343f4bdd7b32a6afcb275"
+dependencies = [
+ "heck",
+ "wit-bindgen-core 0.7.0",
 ]
 
 [[package]]
@@ -4760,9 +4800,22 @@ dependencies = [
  "anyhow",
  "proc-macro2",
  "syn 2.0.16",
- "wit-bindgen-core",
- "wit-bindgen-rust",
+ "wit-bindgen-core 0.6.0",
+ "wit-bindgen-rust 0.6.0",
  "wit-component 0.8.2",
+]
+
+[[package]]
+name = "wit-bindgen-rust-macro"
+version = "0.7.0"
+source = "git+https://github.com/alexcrichton/witx-bindgen?branch=wit-changes#7d108816e6f5a22ef5d343f4bdd7b32a6afcb275"
+dependencies = [
+ "anyhow",
+ "proc-macro2",
+ "syn 2.0.16",
+ "wit-bindgen-core 0.7.0",
+ "wit-bindgen-rust 0.7.0",
+ "wit-component 0.11.0",
 ]
 
 [[package]]
