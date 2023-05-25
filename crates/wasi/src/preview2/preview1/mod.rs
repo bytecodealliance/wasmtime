@@ -2,11 +2,14 @@
 #![allow(unused_variables)]
 
 use crate::preview2::filesystem::TableFsExt;
+use crate::preview2::preview2::filesystem::TableReaddirExt;
 use crate::preview2::{wasi, TableError, WasiView};
 
 use core::borrow::Borrow;
 use core::cell::Cell;
+use core::mem::size_of;
 use core::ops::{Deref, DerefMut};
+use core::slice;
 use core::sync::atomic::{AtomicU64, Ordering};
 
 use std::collections::BTreeMap;
@@ -1389,7 +1392,97 @@ impl<
         buf_len: types::Size,
         cookie: types::Dircookie,
     ) -> Result<types::Size, types::Error> {
-        todo!()
+        let fd = self.get_dir_fd(fd).await?;
+        let stream = self.read_directory(fd).await.map_err(|e| {
+            e.try_into()
+                .context("failed to call `read-directory`")
+                .unwrap_or_else(types::Error::trap)
+        })?;
+        let wasi::filesystem::DescriptorStat {
+            inode: fd_inode, ..
+        } = self.stat(fd).await.map_err(|e| {
+            e.try_into()
+                .context("failed to call `stat`")
+                .unwrap_or_else(types::Error::trap)
+        })?;
+        let cookie = cookie.try_into().map_err(|_| types::Errno::Overflow)?;
+
+        let head = [
+            (
+                types::Dirent {
+                    d_next: 1,
+                    d_ino: fd_inode,
+                    d_type: types::Filetype::Directory,
+                    d_namlen: 1,
+                },
+                ".".into(),
+            ),
+            (
+                types::Dirent {
+                    d_next: 2,
+                    d_ino: fd_inode, // NOTE: legacy implementation returns `fd` inode here
+                    d_type: types::Filetype::Directory,
+                    d_namlen: 2,
+                },
+                "..".into(),
+            ),
+        ]
+        .into_iter()
+        .map(Ok::<_, types::Error>);
+
+        let dir = self
+            .table_mut()
+            .delete_readdir(stream)?
+            .into_iter()
+            .zip(3..)
+            .map(|(entry, d_next)| {
+                let wasi::filesystem::DirectoryEntry { inode, type_, name } =
+                    entry.map_err(|e| {
+                        e.try_into()
+                            .context("failed to inspect `read-directory` entry")
+                            .unwrap_or_else(types::Error::trap)
+                    })?;
+                let d_ino = inode.unwrap_or_default();
+                let d_type = type_.try_into().map_err(types::Error::trap)?;
+                let d_namlen = name.len().try_into().map_err(|_| types::Errno::Overflow)?;
+                Ok((
+                    types::Dirent {
+                        d_next,
+                        d_ino,
+                        d_type,
+                        d_namlen,
+                    },
+                    name,
+                ))
+            });
+
+        // assume that `types::Dirent` size always fits in `u32`
+        const DIRENT_SIZE: u32 = size_of::<types::Dirent>() as _;
+        let mut buf = *buf;
+        let mut cap = buf_len;
+        for entry in head.chain(dir).skip(cookie) {
+            let (ref entry, mut path) = entry?;
+
+            let entry_len = cap.min(DIRENT_SIZE);
+            let entry = entry as *const _ as _;
+            let entry = unsafe { slice::from_raw_parts(entry, entry_len as _) };
+            cap = cap.checked_sub(entry_len).unwrap();
+            buf = write_bytes(buf, entry)?;
+            if cap == 0 {
+                return Ok(buf_len);
+            }
+
+            if let Ok(cap) = cap.try_into() {
+                // `path` cannot be longer than `usize`, only truncate if `cap` fits in `usize`
+                path.truncate(cap);
+            }
+            cap = cap.checked_sub(path.len() as _).unwrap();
+            buf = write_bytes(buf, path)?;
+            if cap == 0 {
+                return Ok(buf_len);
+            }
+        }
+        Ok(buf_len.checked_sub(cap).unwrap())
     }
 
     #[instrument(skip(self))]
