@@ -316,7 +316,7 @@ interface filesystem {
         this: descriptor,
         /// The offset within the file at which to start reading.
         offset: filesize,
-    ) -> input-stream
+    ) -> result<input-stream, error-code>
 
     /// Return a stream for writing to a file.
     ///
@@ -326,7 +326,7 @@ interface filesystem {
         this: descriptor,
         /// The offset within the file at which to start writing.
         offset: filesize,
-    ) -> output-stream
+    ) -> result<output-stream, error-code>
 
     /// Return a stream for appending to a file.
     ///
@@ -334,7 +334,7 @@ interface filesystem {
     /// `O_APPEND` in in POSIX.
     append-via-stream: func(
         this: descriptor,
-    ) -> output-stream
+    ) -> result<output-stream, error-code>
 
     /// Provide file advisory information on a descriptor.
     ///
