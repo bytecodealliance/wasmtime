@@ -89,6 +89,14 @@ jobs:
         with:
           name: bins-x86_64-linux
           path: dist
+      - uses: actions/download-artifact@v1
+        with:
+          name: bins-aarch64-linux
+          path: dist
+      - uses: actions/download-artifact@v1
+        with:
+          name: bins-s390x-linux
+          path: dist
 
       - name: Calculate tag name
         run: |
