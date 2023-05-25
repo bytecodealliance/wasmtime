@@ -177,8 +177,8 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             let _dir_entry: Arc<DirEntry> = table.get(fd)?;
             let dir_fdstat = types::Fdstat {
                 fs_filetype: types::Filetype::Directory,
-                fs_rights_base: types::Rights::empty(),
-                fs_rights_inheriting: types::Rights::empty(),
+                fs_rights_base: types::Rights::all(),
+                fs_rights_inheriting: types::Rights::all(),
                 fs_flags: types::Fdflags::empty(),
             };
             Ok(dir_fdstat)
