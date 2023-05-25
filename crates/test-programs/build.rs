@@ -32,6 +32,8 @@ fn build_and_generate_tests() {
     println!("cargo:rerun-if-changed=./reactor-tests");
     if BUILD_WASI_HTTP_TESTS {
         println!("cargo:rerun-if-changed=./wasi-http-tests");
+    } else {
+        println!("cargo:rustc-cfg=skip_wasi_http_tests");
     }
 
     // Build the test programs:
