@@ -11,7 +11,7 @@ use std::thread;
 use std::time::Duration;
 use wasmtime::{
     AsContextMut, Engine, Func, GuestProfiler, Linker, Module, Store, StoreLimits,
-    StoreLimitsBuilder, Val, ValType,
+    StoreLimitsBuilder, UpdateDeadline, Val, ValType,
 };
 use wasmtime_cli_flags::{CommonOptions, WasiModules};
 use wasmtime_wasi::maybe_exit_on_error;
@@ -467,12 +467,12 @@ impl RunCommand {
                     if timeout == 0 {
                         bail!("timeout exceeded");
                     }
-                    Ok(1)
+                    Ok(UpdateDeadline::Continue(1))
                 });
             } else {
                 store.epoch_deadline_callback(move |mut store| {
                     sample(&mut store);
-                    Ok(1)
+                    Ok(UpdateDeadline::Continue(1))
                 });
             }
 
