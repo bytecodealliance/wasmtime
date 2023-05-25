@@ -176,12 +176,12 @@ pub trait WasiPreview1View: Send + Sync + WasiView {
 // of the [`WasiPreview1View`] to provide means to return mutably and immutably borrowed [`Descriptors`]
 // without having to rely on something like `Arc<Mutex<Descriptors>>`, while also being able to
 // call methods like [`TableFsExt::is_file`] and hiding complexity from preview1 method implementations.
-struct Transcation<'a, T: WasiPreview1View + ?Sized> {
+struct Transaction<'a, T: WasiPreview1View + ?Sized> {
     view: &'a mut T,
     descriptors: Cell<Descriptors>,
 }
 
-impl<T: WasiPreview1View + ?Sized> Drop for Transcation<'_, T> {
+impl<T: WasiPreview1View + ?Sized> Drop for Transaction<'_, T> {
     /// Record changes in the [`WasiPreview1Adapter`] returned by [`WasiPreview1View::adapter_mut`]
     fn drop(&mut self) {
         let descriptors = self.descriptors.take();
@@ -189,7 +189,7 @@ impl<T: WasiPreview1View + ?Sized> Drop for Transcation<'_, T> {
     }
 }
 
-impl<T: WasiPreview1View + ?Sized> Transcation<'_, T> {
+impl<T: WasiPreview1View + ?Sized> Transaction<'_, T> {
     /// Borrows [`Descriptor`] corresponding to `fd`.
     ///
     /// # Errors
@@ -284,14 +284,14 @@ trait WasiPreview1ViewExt:
 {
     /// Lazily initializes [`WasiPreview1Adapter`] returned by [`Self::adapter_mut`]
     /// and returns [`Transaction`] on success
-    async fn transact(&mut self) -> Result<Transcation<'_, Self>, types::Error> {
+    async fn transact(&mut self) -> Result<Transaction<'_, Self>, types::Error> {
         let descriptors = if let Some(descriptors) = self.adapter_mut().descriptors.take() {
             descriptors
         } else {
             Descriptors::new(self).await?
         }
         .into();
-        Ok(Transcation {
+        Ok(Transaction {
             view: self,
             descriptors,
         })
