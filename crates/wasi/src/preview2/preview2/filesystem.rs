@@ -541,7 +541,7 @@ impl<T: WasiView> filesystem::Host for T {
             let set_fd_flags = opened.new_set_fd_flags(FdFlags::NONBLOCK)?;
             opened.set_fd_flags(set_fd_flags)?;
 
-            Ok(table.push_file(File::new(opened, d.file_perms))?)
+            Ok(table.push_file(File::new(opened, mask_file_perms(d.file_perms, flags)))?)
         }
     }
 
@@ -708,6 +708,9 @@ impl<T: WasiView> filesystem::Host for T {
         // Trap if fd lookup fails:
         let f = self.table().get_file(fd)?;
 
+        if !f.perms.contains(FilePerms::READ) {
+            todo!()
+        }
         // Duplicate the file descriptor so that we get an indepenent lifetime.
         let clone = std::sync::Arc::clone(&f.file);
 
@@ -728,6 +731,10 @@ impl<T: WasiView> filesystem::Host for T {
         // Trap if fd lookup fails:
         let f = self.table().get_file(fd)?;
 
+        if !f.perms.contains(FilePerms::WRITE) {
+            todo!()
+        }
+
         // Duplicate the file descriptor so that we get an indepenent lifetime.
         let clone = std::sync::Arc::clone(&f.file);
 
@@ -747,6 +754,9 @@ impl<T: WasiView> filesystem::Host for T {
         // Trap if fd lookup fails:
         let f = self.table().get_file(fd)?;
 
+        if !f.perms.contains(FilePerms::WRITE) {
+            todo!()
+        }
         // Duplicate the file descriptor so that we get an indepenent lifetime.
         let clone = std::sync::Arc::clone(&f.file);
 
@@ -988,6 +998,19 @@ impl TableReaddirExt for Table {
         self.get(fd)
     }
 }
+
+fn mask_file_perms(p: FilePerms, flags: wasi::filesystem::DescriptorFlags) -> FilePerms {
+    use wasi::filesystem::DescriptorFlags;
+    let mut out = FilePerms::empty();
+    if p.contains(FilePerms::READ) && flags.contains(DescriptorFlags::READ) {
+        out |= FilePerms::READ;
+    }
+    if p.contains(FilePerms::WRITE) && flags.contains(DescriptorFlags::WRITE) {
+        out |= FilePerms::WRITE;
+    }
+    out
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
