@@ -130,4 +130,4 @@ jobs:
         working-directory: ./npm
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: for n in *; do (echo $n && cd $n && npm publish); done
+        run: for dir in *; do (echo $dir && cd $dir && npm publish); done
