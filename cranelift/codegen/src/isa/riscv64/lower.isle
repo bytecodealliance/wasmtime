@@ -884,24 +884,63 @@
       (t2 Reg y))
     (value_regs t1 t2)))
 
+
 ;;;;;  Rules for `smax`;;;;;;;;;
-(rule
-  (lower (has_type ty (smax x y)))
+
+(rule 0 (lower (has_type (ty_int ty)  (smax x y)))
   (gen_int_select ty (IntSelectOP.Smax) (ext_int_if_need $true x ty) (ext_int_if_need $true y ty)))
 
+(rule 1 (lower (has_type (ty_vec_fits_in_register ty) (smax x y)))
+  (rv_vmax_vv x y (unmasked) ty))
+
+(rule 2 (lower (has_type (ty_vec_fits_in_register ty) (smax x (splat y))))
+  (rv_vmax_vx x y (unmasked) ty))
+
+(rule 3 (lower (has_type (ty_vec_fits_in_register ty) (smax (splat x) y)))
+  (rv_vmax_vx y x (unmasked) ty))
+
 ;;;;;  Rules for `smin`;;;;;;;;;
-(rule
-  (lower (has_type ty (smin x y)))
+
+(rule 0 (lower (has_type (ty_int ty)  (smin x y)))
   (gen_int_select ty (IntSelectOP.Smin) (ext_int_if_need $true x ty) (ext_int_if_need $true y ty)))
+
+(rule 1 (lower (has_type (ty_vec_fits_in_register ty) (smin x y)))
+  (rv_vmin_vv x y (unmasked) ty))
+
+(rule 2 (lower (has_type (ty_vec_fits_in_register ty) (smin x (splat y))))
+  (rv_vmin_vx x y (unmasked) ty))
+
+(rule 3 (lower (has_type (ty_vec_fits_in_register ty) (smin (splat x) y)))
+  (rv_vmin_vx y x (unmasked) ty))
+
 ;;;;;  Rules for `umax`;;;;;;;;;
-(rule
-  (lower (has_type ty (umax x y)))
+
+(rule 0 (lower (has_type (ty_int ty)  (umax x y)))
   (gen_int_select ty (IntSelectOP.Umax) (ext_int_if_need $false x ty) (ext_int_if_need $false y ty)))
 
+(rule 1 (lower (has_type (ty_vec_fits_in_register ty) (umax x y)))
+  (rv_vmaxu_vv x y (unmasked) ty))
+
+(rule 2 (lower (has_type (ty_vec_fits_in_register ty) (umax x (splat y))))
+  (rv_vmaxu_vx x y (unmasked) ty))
+
+(rule 3 (lower (has_type (ty_vec_fits_in_register ty) (umax (splat x) y)))
+  (rv_vmaxu_vx y x (unmasked) ty))
+
 ;;;;;  Rules for `umin`;;;;;;;;;
-(rule
-  (lower (has_type ty (umin x y)))
+
+(rule 0 (lower (has_type (ty_int ty) (umin x y)))
   (gen_int_select ty (IntSelectOP.Umin) (ext_int_if_need $false x ty) (ext_int_if_need $false y ty)))
+
+(rule 1 (lower (has_type (ty_vec_fits_in_register ty) (umin x y)))
+  (rv_vminu_vv x y (unmasked) ty))
+
+(rule 2 (lower (has_type (ty_vec_fits_in_register ty) (umin x (splat y))))
+  (rv_vminu_vx x y (unmasked) ty))
+
+(rule 3 (lower (has_type (ty_vec_fits_in_register ty) (umin (splat x) y)))
+  (rv_vminu_vx y x (unmasked) ty))
+
 
 ;;;;;  Rules for `debugtrap`;;;;;;;;;
 (rule
@@ -1178,3 +1217,53 @@
 ;; similar in its splat rules.
 ;; TODO: Look through bitcasts when splatting out registers. We can use
 ;; `vmv.v.x` in a `(splat.f32x4 (bitcast.f32 val))`. And vice versa for integers.
+
+;;;; Rules for `uadd_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule 0 (lower (has_type (ty_vec_fits_in_register ty) (uadd_sat x y)))
+  (rv_vsaddu_vv x y (unmasked) ty))
+
+(rule 1 (lower (has_type (ty_vec_fits_in_register ty) (uadd_sat x (splat y))))
+  (rv_vsaddu_vx x y (unmasked) ty))
+
+(rule 2 (lower (has_type (ty_vec_fits_in_register ty) (uadd_sat (splat x) y)))
+  (rv_vsaddu_vx y x (unmasked) ty))
+
+(rule 3 (lower (has_type (ty_vec_fits_in_register ty) (uadd_sat x (replicated_imm5 y))))
+  (rv_vsaddu_vi x y (unmasked) ty))
+
+(rule 4 (lower (has_type (ty_vec_fits_in_register ty) (uadd_sat (replicated_imm5 x) y)))
+  (rv_vsaddu_vi y x (unmasked) ty))
+
+;;;; Rules for `sadd_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule 0 (lower (has_type (ty_vec_fits_in_register ty) (sadd_sat x y)))
+  (rv_vsadd_vv x y (unmasked) ty))
+
+(rule 1 (lower (has_type (ty_vec_fits_in_register ty) (sadd_sat x (splat y))))
+  (rv_vsadd_vx x y (unmasked) ty))
+
+(rule 2 (lower (has_type (ty_vec_fits_in_register ty) (sadd_sat (splat x) y)))
+  (rv_vsadd_vx y x (unmasked) ty))
+
+(rule 3 (lower (has_type (ty_vec_fits_in_register ty) (sadd_sat x (replicated_imm5 y))))
+  (rv_vsadd_vi x y (unmasked) ty))
+
+(rule 4 (lower (has_type (ty_vec_fits_in_register ty) (sadd_sat (replicated_imm5 x) y)))
+  (rv_vsadd_vi y x (unmasked) ty))
+
+;;;; Rules for `usub_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule 0 (lower (has_type (ty_vec_fits_in_register ty) (usub_sat x y)))
+  (rv_vssubu_vv x y (unmasked) ty))
+
+(rule 1 (lower (has_type (ty_vec_fits_in_register ty) (usub_sat x (splat y))))
+  (rv_vssubu_vx x y (unmasked) ty))
+
+;;;; Rules for `ssub_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule 0 (lower (has_type (ty_vec_fits_in_register ty) (ssub_sat x y)))
+  (rv_vssub_vv x y (unmasked) ty))
+
+(rule 1 (lower (has_type (ty_vec_fits_in_register ty) (ssub_sat x (splat y))))
+  (rv_vssub_vx x y (unmasked) ty))

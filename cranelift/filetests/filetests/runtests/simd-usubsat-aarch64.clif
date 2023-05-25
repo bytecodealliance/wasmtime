@@ -1,6 +1,7 @@
 test interpret
 test run
 target aarch64
+target riscv64 has_v
 
 ; i32x4 vectors aren't supported in `usub_sat` outside AArch64 at the moment
 function %usubsat_i32x4(i32x4, i32x4) -> i32x4 {

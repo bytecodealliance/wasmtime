@@ -10,11 +10,15 @@
 //! Byte 3: │ z │ L'│ L │ b │ V'│ a │ a │ a │
 //!         └───┴───┴───┴───┴───┴───┴───┴───┘
 //!
-//! The prefix is then followeded by the opcode byte, the ModR/M byte, and other optional suffixes
+//! The prefix is then followed by the opcode byte, the ModR/M byte, and other optional suffixes
 //! (e.g. SIB byte, displacements, immediates) based on the instruction (see section 2.6, Intel
 //! Software Development Manual, volume 2A).
-use super::rex::{encode_modrm, LegacyPrefixes, OpcodeMap};
-use super::ByteSink;
+
+use super::rex::{self, LegacyPrefixes, OpcodeMap};
+use crate::ir::TrapCode;
+use crate::isa::x64::args::{Amode, Avx512TupleType};
+use crate::isa::x64::inst::Inst;
+use crate::MachBuffer;
 use core::ops::RangeInclusive;
 
 /// Constructs an EVEX-encoded instruction using a builder pattern. This approach makes it visually
@@ -24,7 +28,8 @@ pub struct EvexInstruction {
     bits: u32,
     opcode: u8,
     reg: Register,
-    rm: Register,
+    rm: RegisterOrAmode,
+    tuple_type: Option<Avx512TupleType>,
 }
 
 /// Because some of the bit flags in the EVEX prefix are reversed and users of `EvexInstruction` may
@@ -43,7 +48,8 @@ impl Default for EvexInstruction {
             bits: 0x08_7C_F0_62,
             opcode: 0,
             reg: Register::default(),
-            rm: Register::default(),
+            rm: RegisterOrAmode::Register(Register::default()),
+            tuple_type: None,
         }
     }
 }
@@ -97,6 +103,14 @@ impl EvexInstruction {
         self
     }
 
+    /// Set the "tuple type" which is used for 8-bit scaling when a memory
+    /// operand is used.
+    #[inline(always)]
+    pub fn tuple_type(mut self, tt: Avx512TupleType) -> Self {
+        self.tuple_type = Some(tt);
+        self
+    }
+
     /// Set the register to use for the `reg` bits; many instructions use this as the write operand.
     /// Setting this affects both the ModRM byte (`reg` section) and the EVEX prefix (the extension
     /// bits for register encodings > 8).
@@ -131,30 +145,75 @@ impl EvexInstruction {
         self
     }
 
-    /// Set the register to use for the `rm` bits; many instructions use this as the "read from
-    /// register/memory" operand. Currently this does not support memory addressing (TODO).Setting
-    /// this affects both the ModRM byte (`rm` section) and the EVEX prefix (the extension bits for
-    /// register encodings > 8).
+    /// Set the register to use for the `rm` bits; many instructions use this
+    /// as the "read from register/memory" operand. Setting this affects both
+    /// the ModRM byte (`rm` section) and the EVEX prefix (the extension bits
+    /// for register encodings > 8).
     #[inline(always)]
-    pub fn rm(mut self, reg: impl Into<Register>) -> Self {
+    pub fn rm(mut self, reg: impl Into<RegisterOrAmode>) -> Self {
+        // NB: See Table 2-31. 32-Register Support in 64-bit Mode Using EVEX
+        // with Embedded REX Bits
         self.rm = reg.into();
-        let b = !(self.rm.0 >> 3) & 1;
-        let x = !(self.rm.0 >> 4) & 1;
-        self.write(Self::X, x as u32);
-        self.write(Self::B, b as u32);
+        let x = match &self.rm {
+            RegisterOrAmode::Register(r) => r.0 >> 4,
+            RegisterOrAmode::Amode(Amode::ImmRegRegShift { index, .. }) => {
+                index.to_real_reg().unwrap().hw_enc() >> 3
+            }
+
+            // These two modes technically don't use the X bit, so leave it at
+            // 0.
+            RegisterOrAmode::Amode(Amode::ImmReg { .. }) => 0,
+            RegisterOrAmode::Amode(Amode::RipRelative { .. }) => 0,
+        };
+        // The X bit is stored in an inverted format, so invert it here.
+        self.write(Self::X, u32::from(!x & 1));
+
+        let b = match &self.rm {
+            RegisterOrAmode::Register(r) => r.0 >> 3,
+            RegisterOrAmode::Amode(Amode::ImmReg { base, .. }) => {
+                base.to_real_reg().unwrap().hw_enc() >> 3
+            }
+            RegisterOrAmode::Amode(Amode::ImmRegRegShift { base, .. }) => {
+                base.to_real_reg().unwrap().hw_enc() >> 3
+            }
+            // The 4th bit of %rip is 0
+            RegisterOrAmode::Amode(Amode::RipRelative { .. }) => 0,
+        };
+        // The B bit is stored in an inverted format, so invert it here.
+        self.write(Self::B, u32::from(!b & 1));
         self
     }
 
     /// Emit the EVEX-encoded instruction to the code sink:
-    /// - first, the 4-byte EVEX prefix;
-    /// - then, the opcode byte;
-    /// - finally, the ModR/M byte.
     ///
-    /// Eventually this method should support encodings of more than just the reg-reg addressing mode (TODO).
-    pub fn encode<CS: ByteSink + ?Sized>(&self, sink: &mut CS) {
+    /// - the 4-byte EVEX prefix;
+    /// - the opcode byte;
+    /// - the ModR/M byte
+    /// - SIB bytes, if necessary
+    /// - an optional immediate, if necessary (not currently implemented)
+    pub fn encode(&self, sink: &mut MachBuffer<Inst>) {
+        if let RegisterOrAmode::Amode(amode) = &self.rm {
+            if amode.can_trap() {
+                sink.add_trap(TrapCode::HeapOutOfBounds);
+            }
+        }
         sink.put4(self.bits);
         sink.put1(self.opcode);
-        sink.put1(encode_modrm(3, self.reg.0 & 7, self.rm.0 & 7));
+
+        match &self.rm {
+            RegisterOrAmode::Register(reg) => {
+                let rm: u8 = (*reg).into();
+                sink.put1(rex::encode_modrm(3, self.reg.0 & 7, rm & 7));
+            }
+            RegisterOrAmode::Amode(amode) => {
+                let scaling = self.scaling_for_8bit_disp();
+
+                // NB: when `EvexInstruction` supports a trailing 8-bit
+                // immediate this'll conditionally be 0 or 1
+                let bytes_at_end = 0;
+                rex::emit_modrm_sib_disp(sink, self.reg.0 & 7, amode, bytes_at_end, Some(scaling));
+            }
+        }
     }
 
     // In order to simplify the encoding of the various bit ranges in the prefix, we specify those
@@ -185,7 +244,6 @@ impl EvexInstruction {
     // Byte 3:
     const aaa: RangeInclusive<u8> = 24..=26;
     const V_: RangeInclusive<u8> = 27..=27;
-    #[allow(dead_code)] // Will be used once broadcast and rounding controls are exposed.
     const b: RangeInclusive<u8> = 28..=28;
     const LL: RangeInclusive<u8> = 29..=30;
     const z: RangeInclusive<u8> = 31..=31;
@@ -206,11 +264,45 @@ impl EvexInstruction {
         let value = value << *range.start(); // Place the value in the correct location (assumes `value <= mask`).
         self.bits |= value; // Modify the bits in `range`.
     }
+
+    /// A convenience method for reading given range of bits in `self.bits`
+    /// shifted to the LSB of the returned value..
+    #[inline]
+    fn read(&self, range: RangeInclusive<u8>) -> u32 {
+        (self.bits >> range.start()) & ((1 << range.len()) - 1)
+    }
+
+    fn scaling_for_8bit_disp(&self) -> i8 {
+        use Avx512TupleType::*;
+
+        let vector_size_scaling = || match self.read(Self::LL) {
+            0b00 => 16,
+            0b01 => 32,
+            0b10 => 64,
+            _ => unreachable!(),
+        };
+
+        match self.tuple_type {
+            Some(Full) => {
+                if self.read(Self::b) == 1 {
+                    if self.read(Self::W) == 0 {
+                        4
+                    } else {
+                        8
+                    }
+                } else {
+                    vector_size_scaling()
+                }
+            }
+            Some(FullMem) => vector_size_scaling(),
+            None => panic!("tuple type was not set"),
+        }
+    }
 }
 
 /// Describe the register index to use. This wrapper is a type-safe way to pass
 /// around the registers defined in `inst/regs.rs`.
-#[derive(Copy, Clone, Default)]
+#[derive(Debug, Copy, Clone, Default)]
 pub struct Register(u8);
 impl From<u8> for Register {
     fn from(reg: u8) -> Self {
@@ -221,6 +313,25 @@ impl From<u8> for Register {
 impl Into<u8> for Register {
     fn into(self) -> u8 {
         self.0
+    }
+}
+
+#[allow(missing_docs)]
+#[derive(Debug, Clone)]
+pub enum RegisterOrAmode {
+    Register(Register),
+    Amode(Amode),
+}
+
+impl From<u8> for RegisterOrAmode {
+    fn from(reg: u8) -> Self {
+        RegisterOrAmode::Register(reg.into())
+    }
+}
+
+impl From<Amode> for RegisterOrAmode {
+    fn from(amode: Amode) -> Self {
+        RegisterOrAmode::Amode(amode)
     }
 }
 
@@ -353,6 +464,8 @@ impl EvexMasking {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ir::MemFlags;
+    use crate::isa::x64::args::Gpr;
     use crate::isa::x64::inst::regs;
     use std::vec::Vec;
 
@@ -360,21 +473,237 @@ mod tests {
     // xmm1'` matches this EVEX encoding machinery.
     #[test]
     fn vpabsq() {
-        let dst = regs::xmm0();
-        let src = regs::xmm1();
-        let mut sink0 = Vec::new();
+        let mut tmp = MachBuffer::<Inst>::new();
+        let tests: &[(crate::Reg, RegisterOrAmode, Vec<u8>)] = &[
+            // vpabsq %xmm1, %xmm0
+            (
+                regs::xmm0(),
+                regs::xmm1().to_real_reg().unwrap().hw_enc().into(),
+                vec![0x62, 0xf2, 0xfd, 0x08, 0x1f, 0xc1],
+            ),
+            // vpabsq %xmm8, %xmm10
+            (
+                regs::xmm10(),
+                regs::xmm8().to_real_reg().unwrap().hw_enc().into(),
+                vec![0x62, 0x52, 0xfd, 0x08, 0x1f, 0xd0],
+            ),
+            // vpabsq %xmm15, %xmm3
+            (
+                regs::xmm3(),
+                regs::xmm15().to_real_reg().unwrap().hw_enc().into(),
+                vec![0x62, 0xd2, 0xfd, 0x08, 0x1f, 0xdf],
+            ),
+            // vpabsq (%rsi), %xmm12
+            (
+                regs::xmm12(),
+                Amode::ImmReg {
+                    simm32: 0,
+                    base: regs::rsi(),
+                    flags: MemFlags::trusted(),
+                }
+                .into(),
+                vec![0x62, 0x72, 0xfd, 0x08, 0x1f, 0x26],
+            ),
+            // vpabsq 8(%r15), %xmm14
+            (
+                regs::xmm14(),
+                Amode::ImmReg {
+                    simm32: 8,
+                    base: regs::r15(),
+                    flags: MemFlags::trusted(),
+                }
+                .into(),
+                vec![0x62, 0x52, 0xfd, 0x08, 0x1f, 0xb7, 0x08, 0x00, 0x00, 0x00],
+            ),
+            // vpabsq 16(%r15), %xmm14
+            (
+                regs::xmm14(),
+                Amode::ImmReg {
+                    simm32: 16,
+                    base: regs::r15(),
+                    flags: MemFlags::trusted(),
+                }
+                .into(),
+                vec![0x62, 0x52, 0xfd, 0x08, 0x1f, 0x77, 0x01],
+            ),
+            // vpabsq 17(%rax), %xmm3
+            (
+                regs::xmm3(),
+                Amode::ImmReg {
+                    simm32: 17,
+                    base: regs::rax(),
+                    flags: MemFlags::trusted(),
+                }
+                .into(),
+                vec![0x62, 0xf2, 0xfd, 0x08, 0x1f, 0x98, 0x11, 0x00, 0x00, 0x00],
+            ),
+            // vpabsq (%rbx, %rsi, 8), %xmm9
+            (
+                regs::xmm9(),
+                Amode::ImmRegRegShift {
+                    simm32: 0,
+                    base: Gpr::new(regs::rbx()).unwrap(),
+                    index: Gpr::new(regs::rsi()).unwrap(),
+                    shift: 3,
+                    flags: MemFlags::trusted(),
+                }
+                .into(),
+                vec![0x62, 0x72, 0xfd, 0x08, 0x1f, 0x0c, 0xf3],
+            ),
+            // vpabsq 1(%r11, %rdi, 4), %xmm13
+            (
+                regs::xmm13(),
+                Amode::ImmRegRegShift {
+                    simm32: 1,
+                    base: Gpr::new(regs::r11()).unwrap(),
+                    index: Gpr::new(regs::rdi()).unwrap(),
+                    shift: 2,
+                    flags: MemFlags::trusted(),
+                }
+                .into(),
+                vec![
+                    0x62, 0x52, 0xfd, 0x08, 0x1f, 0xac, 0xbb, 0x01, 0x00, 0x00, 0x00,
+                ],
+            ),
+            // vpabsq 128(%rsp, %r10, 2), %xmm5
+            (
+                regs::xmm5(),
+                Amode::ImmRegRegShift {
+                    simm32: 128,
+                    base: Gpr::new(regs::rsp()).unwrap(),
+                    index: Gpr::new(regs::r10()).unwrap(),
+                    shift: 1,
+                    flags: MemFlags::trusted(),
+                }
+                .into(),
+                vec![0x62, 0xb2, 0xfd, 0x08, 0x1f, 0x6c, 0x54, 0x08],
+            ),
+            // vpabsq 112(%rbp, %r13, 1), %xmm6
+            (
+                regs::xmm6(),
+                Amode::ImmRegRegShift {
+                    simm32: 112,
+                    base: Gpr::new(regs::rbp()).unwrap(),
+                    index: Gpr::new(regs::r13()).unwrap(),
+                    shift: 0,
+                    flags: MemFlags::trusted(),
+                }
+                .into(),
+                vec![0x62, 0xb2, 0xfd, 0x08, 0x1f, 0x74, 0x2d, 0x07],
+            ),
+            // vpabsq (%rbp, %r13, 1), %xmm7
+            (
+                regs::xmm7(),
+                Amode::ImmRegRegShift {
+                    simm32: 0,
+                    base: Gpr::new(regs::rbp()).unwrap(),
+                    index: Gpr::new(regs::r13()).unwrap(),
+                    shift: 0,
+                    flags: MemFlags::trusted(),
+                }
+                .into(),
+                vec![0x62, 0xb2, 0xfd, 0x08, 0x1f, 0x7c, 0x2d, 0x00],
+            ),
+            // vpabsq 2032(%r12), %xmm8
+            (
+                regs::xmm8(),
+                Amode::ImmReg {
+                    simm32: 2032,
+                    base: regs::r12(),
+                    flags: MemFlags::trusted(),
+                }
+                .into(),
+                vec![0x62, 0x52, 0xfd, 0x08, 0x1f, 0x44, 0x24, 0x7f],
+            ),
+            // vpabsq 2048(%r13), %xmm9
+            (
+                regs::xmm9(),
+                Amode::ImmReg {
+                    simm32: 2048,
+                    base: regs::r13(),
+                    flags: MemFlags::trusted(),
+                }
+                .into(),
+                vec![0x62, 0x52, 0xfd, 0x08, 0x1f, 0x8d, 0x00, 0x08, 0x00, 0x00],
+            ),
+            // vpabsq -16(%r14), %xmm10
+            (
+                regs::xmm10(),
+                Amode::ImmReg {
+                    simm32: (-16i32) as u32,
+                    base: regs::r14(),
+                    flags: MemFlags::trusted(),
+                }
+                .into(),
+                vec![0x62, 0x52, 0xfd, 0x08, 0x1f, 0x56, 0xff],
+            ),
+            // vpabsq -5(%r15), %xmm11
+            (
+                regs::xmm11(),
+                Amode::ImmReg {
+                    simm32: (-5i32) as u32,
+                    base: regs::r15(),
+                    flags: MemFlags::trusted(),
+                }
+                .into(),
+                vec![0x62, 0x52, 0xfd, 0x08, 0x1f, 0x9f, 0xfb, 0xff, 0xff, 0xff],
+            ),
+            // vpabsq -2048(%rdx), %xmm12
+            (
+                regs::xmm12(),
+                Amode::ImmReg {
+                    simm32: (-2048i32) as u32,
+                    base: regs::rdx(),
+                    flags: MemFlags::trusted(),
+                }
+                .into(),
+                vec![0x62, 0x72, 0xfd, 0x08, 0x1f, 0x62, 0x80],
+            ),
+            // vpabsq -2064(%rsi), %xmm13
+            (
+                regs::xmm13(),
+                Amode::ImmReg {
+                    simm32: (-2064i32) as u32,
+                    base: regs::rsi(),
+                    flags: MemFlags::trusted(),
+                }
+                .into(),
+                vec![0x62, 0x72, 0xfd, 0x08, 0x1f, 0xae, 0xf0, 0xf7, 0xff, 0xff],
+            ),
+            // a: vpabsq a(%rip), %xmm14
+            (
+                regs::xmm14(),
+                Amode::RipRelative {
+                    target: tmp.get_label(),
+                }
+                .into(),
+                vec![0x62, 0x72, 0xfd, 0x08, 0x1f, 0x35, 0xf6, 0xff, 0xff, 0xff],
+            ),
+        ];
 
-        EvexInstruction::new()
-            .prefix(LegacyPrefixes::_66)
-            .map(OpcodeMap::_0F38)
-            .w(true)
-            .opcode(0x1F)
-            .reg(dst.to_real_reg().unwrap().hw_enc())
-            .rm(src.to_real_reg().unwrap().hw_enc())
-            .length(EvexVectorLength::V128)
-            .encode(&mut sink0);
-
-        assert_eq!(sink0, vec![0x62, 0xf2, 0xfd, 0x08, 0x1f, 0xc1]);
+        for (dst, src, encoding) in tests {
+            let mut sink = MachBuffer::new();
+            let label = sink.get_label();
+            sink.bind_label(label, &mut Default::default());
+            EvexInstruction::new()
+                .prefix(LegacyPrefixes::_66)
+                .map(OpcodeMap::_0F38)
+                .w(true)
+                .opcode(0x1F)
+                .reg(dst.to_real_reg().unwrap().hw_enc())
+                .rm(src.clone())
+                .length(EvexVectorLength::V128)
+                .tuple_type(Avx512TupleType::Full)
+                .encode(&mut sink);
+            let bytes0 = sink
+                .finish(&Default::default(), &mut Default::default())
+                .data;
+            assert_eq!(
+                bytes0.as_slice(),
+                encoding.as_slice(),
+                "dst={dst:?} src={src:?}"
+            );
+        }
     }
 
     /// Verify that the defaults are equivalent to an instruction with a `0x00` opcode using the
@@ -383,10 +712,13 @@ mod tests {
     /// representations (e.g. `vvvvv`) so emitting 0s as a default will not work.
     #[test]
     fn default_emission() {
-        let mut sink0 = Vec::new();
-        EvexInstruction::new().encode(&mut sink0);
+        let mut sink = MachBuffer::new();
+        EvexInstruction::new().encode(&mut sink);
+        let bytes0 = sink
+            .finish(&Default::default(), &mut Default::default())
+            .data;
 
-        let mut sink1 = Vec::new();
+        let mut sink = MachBuffer::new();
         EvexInstruction::new()
             .length(EvexVectorLength::V128)
             .prefix(LegacyPrefixes::None)
@@ -396,8 +728,11 @@ mod tests {
             .reg(regs::rax().to_real_reg().unwrap().hw_enc())
             .rm(regs::rax().to_real_reg().unwrap().hw_enc())
             .mask(EvexMasking::None)
-            .encode(&mut sink1);
+            .encode(&mut sink);
+        let bytes1 = sink
+            .finish(&Default::default(), &mut Default::default())
+            .data;
 
-        assert_eq!(sink0, sink1);
+        assert_eq!(bytes0, bytes1);
     }
 }
