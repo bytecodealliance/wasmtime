@@ -1,7 +1,7 @@
 mod clocks;
 mod env;
 mod exit;
-mod filesystem;
+pub(crate) mod filesystem;
 mod io;
 mod poll;
 mod random;

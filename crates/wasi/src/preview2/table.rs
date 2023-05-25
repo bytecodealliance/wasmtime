@@ -88,14 +88,20 @@ impl Table {
     }
 
     /// Remove a resource at a given index from the table.
-    pub fn delete<T: Any + Sized>(&mut self, key: u32) -> Result<(), TableError> {
-        if !self.contains_key(key) {
-            Err(TableError::NotPresent)?
+    pub fn delete<T: Any + Sized>(&mut self, key: u32) -> Result<T, TableError> {
+        // Optimistically attempt to remove the value stored under key
+        match self
+            .map
+            .remove(&key)
+            .ok_or(TableError::NotPresent)?
+            .downcast::<T>()
+        {
+            Ok(v) => Ok(*v),
+            Err(v) => {
+                // Insert the value back, since the downcast failed
+                self.map.insert(key, v);
+                Err(TableError::WrongType)
+            }
         }
-        if !self.is::<T>(key) {
-            Err(TableError::WrongType)?
-        }
-        let _ = self.map.remove(&key);
-        Ok(())
     }
 }
