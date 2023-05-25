@@ -197,7 +197,7 @@ io-lifetimes = { version = "1.0.0", default-features = false }
 rustix = "0.37.13"
 
 # wit-bindgen:
-wit-bindgen = "0.7.0"
+wit-bindgen = { version = "0.7.0", default-features = false }
 
 # wasm-tools family:
 wasmparser = "0.107.0"

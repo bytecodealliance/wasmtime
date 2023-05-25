@@ -7,7 +7,7 @@ publish = false
 
 [dependencies]
 wasi = { version = "0.11.0", default-features = false }
-wit-bindgen = { version = "0.6.0", default-features = false, features = ["macros"] }
+wit-bindgen = { workspace = true, default-features = false, features = ["macros"] }
 byte-array-literals = { workspace = true }
 
 [build-dependencies]
