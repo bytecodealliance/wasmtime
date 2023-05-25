@@ -81,8 +81,8 @@ pub(crate) struct Frame {
 
 impl Frame {
     /// Allocate a new Frame.
-    pub fn new<A: ABI>(sig: &ABISig, defined_locals: &DefinedLocals, abi: &A) -> Result<Self> {
-        let (mut locals, defined_locals_start) = Self::compute_arg_slots(sig, abi)?;
+    pub fn new<A: ABI>(sig: &ABISig, defined_locals: &DefinedLocals) -> Result<Self> {
+        let (mut locals, defined_locals_start) = Self::compute_arg_slots::<A>(sig)?;
 
         // The defined locals have a zero-based offset by default
         // so we need to add the defined locals start to the offset.
@@ -96,7 +96,7 @@ impl Frame {
         let vmctx_slots_size = <A as ABI>::word_bytes();
         let vmctx_offset = defined_locals_start + defined_locals.stack_size + vmctx_slots_size;
 
-        let locals_size = align_to(vmctx_offset, abi.stack_align().into());
+        let locals_size = align_to(vmctx_offset, <A as ABI>::stack_align().into());
 
         Ok(Self {
             locals,
@@ -113,7 +113,7 @@ impl Frame {
         self.locals.get(index as usize)
     }
 
-    fn compute_arg_slots<A: ABI>(sig: &ABISig, abi: &A) -> Result<(Locals, u32)> {
+    fn compute_arg_slots<A: ABI>(sig: &ABISig) -> Result<(Locals, u32)> {
         // Go over the function ABI-signature and
         // calculate the stack slots.
         //
@@ -142,7 +142,7 @@ impl Frame {
         //      we want positive addressing from the stack pointer
         //      for both locals and stack arguments.
 
-        let arg_base_offset = abi.arg_base_offset().into();
+        let arg_base_offset = <A as ABI>::arg_base_offset().into();
         let mut next_stack = 0u32;
         let slots: Locals = sig
             .params

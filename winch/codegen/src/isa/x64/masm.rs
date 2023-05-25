@@ -1,11 +1,12 @@
 use super::{
+    abi::X64ABI,
     address::Address,
     asm::{Assembler, Operand},
     regs::{self, rbp, rsp},
 };
 use crate::masm::{DivKind, MacroAssembler as Masm, OperandSize, RegImm, RemKind};
 use crate::{
-    abi::{align_to, calculate_frame_adjustment, LocalSlot},
+    abi::{self, align_to, calculate_frame_adjustment, LocalSlot},
     codegen::CodeGenContext,
     stack::Val,
 };
@@ -45,6 +46,8 @@ impl From<Address> for Operand {
 
 impl Masm for MacroAssembler {
     type Address = Address;
+    type Ptr = u8;
+    type ABI = X64ABI;
 
     fn prologue(&mut self) {
         let frame_pointer = rbp();
@@ -57,10 +60,7 @@ impl Masm for MacroAssembler {
 
     fn push(&mut self, reg: Reg) -> u32 {
         self.asm.push_r(reg);
-        // In x64 the push instruction takes either
-        // 2 or 8 bytes; in our case we're always
-        // assuming 8 bytes per push.
-        self.increment_sp(8);
+        self.increment_sp(<Self::ABI as abi::ABI>::word_bytes());
 
         self.sp_offset
     }
@@ -114,17 +114,16 @@ impl Masm for MacroAssembler {
 
     fn pop(&mut self, dst: Reg) {
         self.asm.pop_r(dst);
-        // Similar to the comment in `push`, we assume 8 bytes per pop.
-        self.decrement_sp(8);
+        self.decrement_sp(<Self::ABI as abi::ABI>::word_bytes());
     }
 
     fn call(
         &mut self,
-        alignment: u32,
-        addend: u32,
         stack_args_size: u32,
         mut load_callee: impl FnMut(&mut Self) -> CalleeKind,
     ) -> u32 {
+        let alignment: u32 = <Self::ABI as abi::ABI>::call_stack_align().into();
+        let addend: u32 = <Self::ABI as abi::ABI>::arg_base_offset().into();
         let delta = calculate_frame_adjustment(self.sp_offset(), addend, alignment);
         let aligned_args_size = align_to(stack_args_size, alignment);
         let total_stack = delta + aligned_args_size;

@@ -1,9 +1,10 @@
-use crate::abi::{align_to, LocalSlot};
+use crate::abi::{self, align_to, LocalSlot};
 use crate::codegen::CodeGenContext;
 use crate::isa::reg::Reg;
 use crate::regalloc::RegAlloc;
 use cranelift_codegen::{Final, MachBufferFinalized};
 use std::{fmt::Debug, ops::Range};
+use wasmtime_environ::PtrSize;
 
 #[derive(Eq, PartialEq)]
 pub(crate) enum DivKind {
@@ -86,6 +87,13 @@ pub(crate) trait MacroAssembler {
     /// The addressing mode.
     type Address: Copy;
 
+    /// The pointer representation of the target ISA,
+    /// used to access information from [`VMOffsets`].
+    type Ptr: PtrSize;
+
+    /// The ABI details of the target.
+    type ABI: abi::ABI;
+
     /// Emit the function prologue.
     fn prologue(&mut self);
 
@@ -115,13 +123,7 @@ pub(crate) trait MacroAssembler {
     fn address_at_reg(&self, reg: Reg, offset: u32) -> Self::Address;
 
     /// Emit a function call to either a local or external function.
-    fn call(
-        &mut self,
-        alignment: u32,
-        addend: u32,
-        stack_args_size: u32,
-        f: impl FnMut(&mut Self) -> CalleeKind,
-    ) -> u32;
+    fn call(&mut self, stack_args_size: u32, f: impl FnMut(&mut Self) -> CalleeKind) -> u32;
 
     /// Get stack pointer offset.
     fn sp_offset(&self) -> u32;
@@ -177,7 +179,8 @@ pub(crate) trait MacroAssembler {
     /// The default implementation divides the given memory range
     /// into word-sized slots. Then it unrolls a series of store
     /// instructions, effectively assigning zero to each slot.
-    fn zero_mem_range(&mut self, mem: &Range<u32>, word_size: u32, regalloc: &mut RegAlloc) {
+    fn zero_mem_range(&mut self, mem: &Range<u32>, regalloc: &mut RegAlloc) {
+        let word_size = <Self::ABI as abi::ABI>::word_bytes();
         if mem.is_empty() {
             return;
         }
