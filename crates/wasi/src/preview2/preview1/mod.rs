@@ -830,13 +830,29 @@ impl<
     /// NOTE: This is similar to `close` in POSIX.
     #[instrument(skip(self))]
     async fn fd_close(&mut self, fd: types::Fd) -> Result<(), types::Error> {
-        self.transact()
+        let desc = self
+            .transact()
             .await?
             .descriptors
             .get_mut()
             .remove(fd)
-            .ok_or(types::Errno::Badf)?;
-        Ok(())
+            .ok_or(types::Errno::Badf)?
+            .clone();
+        match desc {
+            Descriptor::Stdin(stream) => self
+                .drop_input_stream(stream)
+                .await
+                .context("failed to call `drop-input-stream`"),
+            Descriptor::Stdout(stream) | Descriptor::Stderr(stream) => self
+                .drop_output_stream(stream)
+                .await
+                .context("failed to call `drop-output-stream`"),
+            Descriptor::File(File { fd, .. }) | Descriptor::PreopenDirectory((fd, _)) => self
+                .drop_descriptor(fd)
+                .await
+                .context("failed to call `drop-descriptor`"),
+        }
+        .map_err(types::Error::trap)
     }
 
     /// Synchronize the data of a file to disk.
