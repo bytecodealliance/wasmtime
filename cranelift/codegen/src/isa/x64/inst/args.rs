@@ -1759,6 +1759,13 @@ pub enum Avx512Opcode {
     Vpopcntb,
 }
 
+#[derive(Copy, Clone, PartialEq)]
+#[allow(missing_docs)]
+pub enum Avx512TupleType {
+    Full,
+    FullMem,
+}
+
 impl Avx512Opcode {
     /// Which `InstructionSet`s support the opcode?
     pub(crate) fn available_from(&self) -> SmallVec<[InstructionSet; 2]> {
@@ -1774,6 +1781,22 @@ impl Avx512Opcode {
             Avx512Opcode::Vpopcntb => {
                 smallvec![InstructionSet::AVX512VL, InstructionSet::AVX512BITALG]
             }
+        }
+    }
+
+    /// What is the "TupleType" of this opcode, which affects the scaling factor
+    /// for 8-bit displacements when this instruction uses memory operands.
+    ///
+    /// This can be found in the encoding table for each instruction and is
+    /// interpreted according to Table 2-34 and 2-35 in the Intel instruction
+    /// manual.
+    pub fn tuple_type(&self) -> Avx512TupleType {
+        use Avx512Opcode::*;
+        use Avx512TupleType::*;
+
+        match self {
+            Vcvtudq2ps | Vpabsq | Vpmullq => Full,
+            Vpermi2b | Vpopcntb => FullMem,
         }
     }
 }

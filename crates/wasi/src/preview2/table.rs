@@ -18,6 +18,7 @@ pub enum TableError {
 ///
 /// The `Table` type is intended to model how the Interface Types concept of Resources is shaping
 /// up. Right now it is just an approximation.
+#[derive(Debug)]
 pub struct Table {
     map: HashMap<u32, Box<dyn Any + Send + Sync>>,
     next_key: u32,

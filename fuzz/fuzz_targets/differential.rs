@@ -5,14 +5,11 @@ use libfuzzer_sys::fuzz_target;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering::SeqCst;
 use std::sync::Once;
-#[cfg(feature = "fuzz-winch")]
 use wasmtime_fuzzing::generators::CompilerStrategy;
 use wasmtime_fuzzing::generators::{Config, DiffValue, DiffValueType, SingleInstModule};
 use wasmtime_fuzzing::oracles::diff_wasmtime::WasmtimeInstance;
 use wasmtime_fuzzing::oracles::engine::{build_allowed_env_list, parse_env_list};
 use wasmtime_fuzzing::oracles::{differential, engine, log_wasm, DiffEqResult};
-#[cfg(feature = "fuzz-winch")]
-use wasmtime_fuzzing::wasm_smith::{InstructionKind, InstructionKinds};
 
 // Upper limit on the number of invocations for each WebAssembly function
 // executed by this fuzz target.
@@ -26,8 +23,10 @@ static SETUP: Once = Once::new();
 // - ALLOWED_ENGINES=wasmi,spec cargo +nightly fuzz run ...
 // - ALLOWED_ENGINES=-v8 cargo +nightly fuzz run ...
 // - ALLOWED_MODULES=single-inst cargo +nightly fuzz run ...
+// - FUZZ_WINCH=1 cargo +nightly fuzz run ...
 static mut ALLOWED_ENGINES: Vec<&str> = vec![];
 static mut ALLOWED_MODULES: Vec<&str> = vec![];
+static mut FUZZ_WINCH: bool = false;
 
 // Statistics about what's actually getting executed during fuzzing
 static STATS: RuntimeStats = RuntimeStats::new();
@@ -38,25 +37,26 @@ fuzz_target!(|data: &[u8]| {
         // `setup_ocaml_runtime`.
         engine::setup_engine_runtimes();
 
-        let (default_engines, default_modules) = if cfg!(feature = "fuzz-winch") {
-            (vec!["wasmi"], vec!["wasm-smith", "single-inst"])
-        } else {
-            (
-                vec!["wasmtime", "wasmi", "spec", "v8"],
-                vec!["wasm-smith", "single-inst"],
-            )
-        };
-
         // Retrieve the configuration for this fuzz target from `ALLOWED_*`
         // environment variables.
-        let allowed_engines =
-            build_allowed_env_list(parse_env_list("ALLOWED_ENGINES"), &default_engines);
-        let allowed_modules =
-            build_allowed_env_list(parse_env_list("ALLOWED_MODULES"), &default_modules);
+        let allowed_engines = build_allowed_env_list(
+            parse_env_list("ALLOWED_ENGINES"),
+            &["wasmtime", "wasmi", "spec", "v8"],
+        );
+        let allowed_modules = build_allowed_env_list(
+            parse_env_list("ALLOWED_MODULES"),
+            &["wasm-smith", "single-inst"],
+        );
+
+        let fuzz_winch = match std::env::var("FUZZ_WINCH").map(|v| v == "1") {
+            Ok(v) => v,
+            _ => false,
+        };
 
         unsafe {
             ALLOWED_ENGINES = allowed_engines;
             ALLOWED_MODULES = allowed_modules;
+            FUZZ_WINCH = fuzz_winch;
         }
     });
 
@@ -69,6 +69,7 @@ fn execute_one(data: &[u8]) -> Result<()> {
     STATS.bump_attempts();
 
     let mut u = Unstructured::new(data);
+    let fuzz_winch = unsafe { FUZZ_WINCH };
 
     // Generate a Wasmtime and module configuration and update its settings
     // initially to be suitable for differential execution where the generated
@@ -77,14 +78,11 @@ fn execute_one(data: &[u8]) -> Result<()> {
     let mut config: Config = u.arbitrary()?;
     config.set_differential_config();
 
-    #[cfg(feature = "fuzz-winch")]
-    {
-        // When fuzzing Winch:
-        // 1. Explicitly override the compiler strategy.
-        // 2. Explicitly set the allowed instructions for `wasm-smith`.
+    // When fuzzing Winch, explicitly override the compiler strategy, which by
+    // default its arbitrary implementation unconditionally returns
+    // `Cranelift`.
+    if fuzz_winch {
         config.wasmtime.compiler_strategy = CompilerStrategy::Winch;
-        config.module_config.config.allowed_instructions =
-            InstructionKinds::new(&[InstructionKind::Numeric, InstructionKind::Variable]);
     }
 
     // Choose an engine that Wasmtime will be differentially executed against.
@@ -120,8 +118,7 @@ fn execute_one(data: &[u8]) -> Result<()> {
         _ => unreachable!(),
     };
 
-    #[cfg(feature = "fuzz-winch")]
-    if !winch_supports_module(&wasm) {
+    if fuzz_winch && !winch_supports_module(&wasm) {
         return Ok(());
     }
 
@@ -277,7 +274,6 @@ impl RuntimeStats {
     }
 }
 
-#[cfg(feature = "fuzz-winch")]
 // Returns true if the module only contains operators supported by
 // Winch. Winch's x86_64 target has broader support for Wasm operators
 // than the aarch64 target. This list assumes fuzzing on the x86_64
@@ -313,6 +309,7 @@ fn winch_supports_module(module: &[u8]) -> bool {
                         | LocalGet { .. }
                         | LocalSet { .. }
                         | Call { .. }
+                        | Nop { .. }
                         | End { .. } => {}
                         _ => {
                             supported = false;

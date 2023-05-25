@@ -1,6 +1,6 @@
 use crate::{
     abi::ABI,
-    codegen::{CodeGen, CodeGenContext},
+    codegen::{CodeGen, CodeGenContext, FuncEnv},
 };
 
 use crate::frame::{DefinedLocals, Frame};
@@ -9,7 +9,6 @@ use crate::masm::MacroAssembler;
 use crate::regalloc::RegAlloc;
 use crate::stack::Stack;
 use crate::trampoline::{Trampoline, TrampolineKind};
-use crate::FuncEnv;
 use crate::{
     isa::{Builder, TargetIsa},
     regset::RegSet,
@@ -20,7 +19,7 @@ use cranelift_codegen::{isa::x64::settings as x64_settings, Final, MachBufferFin
 use cranelift_codegen::{MachTextSectionBuilder, TextSectionBuilder};
 use target_lexicon::Triple;
 use wasmparser::{FuncValidator, FunctionBody, ValidatorResources};
-use wasmtime_environ::{VMOffsets, WasmFuncType};
+use wasmtime_environ::{ModuleTranslation, WasmFuncType};
 
 use self::regs::ALL_GPR;
 
@@ -91,8 +90,7 @@ impl TargetIsa for X64 {
         &self,
         sig: &WasmFuncType,
         body: &FunctionBody,
-        vmoffsets: &VMOffsets<u8>,
-        env: &dyn FuncEnv,
+        translation: &ModuleTranslation,
         validator: &mut FuncValidator<ValidatorResources>,
     ) -> Result<MachBufferFinalized<Final>> {
         let mut body = body.get_binary_reader();
@@ -101,12 +99,13 @@ impl TargetIsa for X64 {
         let abi = abi::X64ABI::default();
         let abi_sig = abi.sig(sig, &CallingConvention::Default);
 
-        let defined_locals = DefinedLocals::new(env, &mut body, validator)?;
+        let defined_locals = DefinedLocals::new(translation, &mut body, validator)?;
         let frame = Frame::new(&abi_sig, &defined_locals, &abi)?;
         // TODO Add in floating point bitmask
         let regalloc = RegAlloc::new(RegSet::new(ALL_GPR, 0), regs::scratch());
         let codegen_context = CodeGenContext::new(regalloc, stack, &frame);
-        let mut codegen = CodeGen::new(&mut masm, &abi, codegen_context, env, abi_sig, vmoffsets);
+        let env = FuncEnv::new(self.pointer_bytes(), translation);
+        let mut codegen = CodeGen::new(&mut masm, &abi, codegen_context, env, abi_sig);
 
         codegen.emit(&mut body, validator)?;
 

@@ -557,15 +557,17 @@ pub unsafe extern "C" fn fd_fdstat_set_flags(fd: Fd, flags: Fdflags) -> Errno {
     })
 }
 
-/// Adjust the rights associated with a file descriptor.
-/// This can only be used to remove rights, and returns `errno::notcapable` if called in a way that would attempt to add rights
+/// Does not do anything if `fd` corresponds to a valid descriptor and returns [`wasi::ERRNO_BADF`] otherwise.
 #[no_mangle]
 pub unsafe extern "C" fn fd_fdstat_set_rights(
     fd: Fd,
     fs_rights_base: Rights,
     fs_rights_inheriting: Rights,
 ) -> Errno {
-    unreachable!()
+    State::with(|state| match state.descriptors().get(fd)? {
+        Descriptor::Streams(..) => Ok(()),
+        Descriptor::Closed(..) => Err(wasi::ERRNO_BADF),
+    })
 }
 
 /// Return the attributes of an open file.

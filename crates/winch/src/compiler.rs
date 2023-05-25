@@ -6,11 +6,9 @@ use wasmparser::FuncValidatorAllocations;
 use wasmtime_cranelift_shared::{CompiledFunction, ModuleTextBuilder};
 use wasmtime_environ::{
     CompileError, DefinedFuncIndex, FilePos, FuncIndex, FunctionBodyData, FunctionLoc,
-    ModuleTranslation, ModuleTypes, PrimaryMap, TrapEncodingBuilder, Tunables, VMOffsets,
-    WasmFunctionInfo,
+    ModuleTranslation, ModuleTypes, PrimaryMap, TrapEncodingBuilder, Tunables, WasmFunctionInfo,
 };
 use winch_codegen::{TargetIsa, TrampolineKind};
-use winch_environ::FuncEnv;
 
 pub(crate) struct Compiler {
     isa: Box<dyn TargetIsa>,
@@ -69,11 +67,9 @@ impl wasmtime_environ::Compiler for Compiler {
                 .unwrap(),
         );
         let mut validator = validator.into_validator(self.take_allocations());
-        let vmoffsets = VMOffsets::new(self.isa.pointer_bytes(), &translation.module);
-        let env = FuncEnv::new(&translation.module, translation.get_types());
         let buffer = self
             .isa
-            .compile_function(ty, &body, &vmoffsets, &env, &mut validator)
+            .compile_function(ty, &body, &translation, &mut validator)
             .map_err(|e| CompileError::Codegen(format!("{e:?}")));
         self.save_allocations(validator.into_allocations());
         let buffer = buffer?;

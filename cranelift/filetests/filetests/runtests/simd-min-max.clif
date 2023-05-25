@@ -8,6 +8,7 @@ target x86_64 sse41
 target x86_64 sse42
 target x86_64 sse42 has_avx
 target s390x
+target riscv64 has_v
 
 function %smin_i8x16(i8x16, i8x16) -> i8x16 {
 block0(v0: i8x16, v1: i8x16):
