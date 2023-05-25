@@ -33,6 +33,9 @@ wasmtime::component::bindgen!({
        "wasi:cli-base/environment": preview2::wasi::cli_base::environment,
        "wasi:cli-base/preopens": preview2::wasi::cli_base::preopens,
        "wasi:cli-base/exit": preview2::wasi::cli_base::exit,
+       "wasi:cli-base/stdin": preview2::wasi::cli_base::stdin,
+       "wasi:cli-base/stdout": preview2::wasi::cli_base::stdout,
+       "wasi:cli-base/stderr": preview2::wasi::cli_base::stderr,
     },
 });
 
@@ -68,6 +71,9 @@ async fn instantiate(
     preview2::wasi::cli_base::environment::add_to_linker(&mut linker, |x| x)?;
     preview2::wasi::cli_base::preopens::add_to_linker(&mut linker, |x| x)?;
     preview2::wasi::cli_base::exit::add_to_linker(&mut linker, |x| x)?;
+    preview2::wasi::cli_base::stdin::add_to_linker(&mut linker, |x| x)?;
+    preview2::wasi::cli_base::stdout::add_to_linker(&mut linker, |x| x)?;
+    preview2::wasi::cli_base::stderr::add_to_linker(&mut linker, |x| x)?;
 
     let mut store = Store::new(&ENGINE, wasi_ctx);
 

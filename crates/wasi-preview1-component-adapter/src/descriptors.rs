@@ -1,4 +1,4 @@
-use crate::bindings::wasi::cli_base::preopens;
+use crate::bindings::wasi::cli_base::{stderr, stdin, stdout};
 use crate::bindings::wasi::filesystem::filesystem;
 use crate::bindings::wasi::io::streams::{self, InputStream, OutputStream};
 use crate::bindings::wasi::sockets::tcp;
@@ -142,24 +142,26 @@ impl Descriptors {
             preopens: Cell::new(None),
         };
 
-        let stdio = preopens::get_stdio();
-        unsafe { set_stderr_stream(stdio.stderr) };
+        let stdin = stdin::get_stdin();
+        let stdout = stdout::get_stdout();
+        let stderr = stderr::get_stderr();
+        unsafe { set_stderr_stream(stderr) };
 
         d.push(Descriptor::Streams(Streams {
-            input: Cell::new(Some(stdio.stdin)),
+            input: Cell::new(Some(stdin)),
             output: Cell::new(None),
             type_: StreamType::Stdio,
         }))
         .trapping_unwrap();
         d.push(Descriptor::Streams(Streams {
             input: Cell::new(None),
-            output: Cell::new(Some(stdio.stdout)),
+            output: Cell::new(Some(stdout)),
             type_: StreamType::Stdio,
         }))
         .trapping_unwrap();
         d.push(Descriptor::Streams(Streams {
             input: Cell::new(None),
-            output: Cell::new(Some(stdio.stderr)),
+            output: Cell::new(Some(stderr)),
             type_: StreamType::Stdio,
         }))
         .trapping_unwrap();

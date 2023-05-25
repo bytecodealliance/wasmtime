@@ -18,4 +18,7 @@ world reactor {
   import wasi:cli-base/environment
   import wasi:cli-base/preopens
   import wasi:cli-base/exit
+  import wasi:cli-base/stdin
+  import wasi:cli-base/stdout
+  import wasi:cli-base/stderr
 }

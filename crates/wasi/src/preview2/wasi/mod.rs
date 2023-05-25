@@ -8,11 +8,16 @@ wasmtime::component::bindgen!({
       import wasi:clocks/timezone
       import wasi:filesystem/filesystem
       import wasi:random/random
+      import wasi:random/insecure
+      import wasi:random/insecure-seed
       import wasi:poll/poll
       import wasi:io/streams
       import wasi:cli-base/environment
       import wasi:cli-base/preopens
       import wasi:cli-base/exit
+      import wasi:cli-base/stdin
+      import wasi:cli-base/stdout
+      import wasi:cli-base/stderr
     ",
     tracing: true,
     async: true,

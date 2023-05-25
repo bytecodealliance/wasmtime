@@ -2,7 +2,7 @@
 #![allow(unused_variables)]
 
 use crate::preview2::filesystem::TableFsExt;
-use crate::preview2::wasi::cli_base::preopens;
+use crate::preview2::wasi::cli_base::{preopens, stderr, stdin, stdout};
 use crate::preview2::wasi::clocks::monotonic_clock;
 use crate::preview2::wasi::clocks::wall_clock;
 use crate::preview2::wasi::filesystem::filesystem;
@@ -71,15 +71,23 @@ impl DerefMut for Descriptors {
 
 impl Descriptors {
     /// Initializes [Self] using `preopens`
-    async fn new(preopens: &mut (impl preopens::Host + ?Sized)) -> Result<Self, types::Error> {
-        let preopens::StdioPreopens {
-            stdin,
-            stdout,
-            stderr,
-        } = preopens
-            .get_stdio()
+    async fn new(
+        preopens: &mut (impl preopens::Host + stdin::Host + stdout::Host + stderr::Host + ?Sized),
+    ) -> Result<Self, types::Error> {
+        let stdin = preopens
+            .get_stdin()
             .await
-            .context("failed to call `get-stdio`")
+            .context("failed to call `get-stdin`")
+            .map_err(types::Error::trap)?;
+        let stdout = preopens
+            .get_stdout()
+            .await
+            .context("failed to call `get-stdout`")
+            .map_err(types::Error::trap)?;
+        let stderr = preopens
+            .get_stderr()
+            .await
+            .context("failed to call `get-stderr`")
             .map_err(types::Error::trap)?;
         let directories = preopens
             .get_directories()
@@ -265,7 +273,9 @@ impl<T: WasiPreview1View + ?Sized> Transcation<'_, T> {
 }
 
 #[wiggle::async_trait]
-trait WasiPreview1ViewExt: WasiPreview1View + preopens::Host {
+trait WasiPreview1ViewExt:
+    WasiPreview1View + preopens::Host + stdin::Host + stdout::Host + stderr::Host
+{
     /// Lazily initializes [`WasiPreview1Adapter`] returned by [`Self::adapter_mut`]
     /// and returns [`Transaction`] on success
     async fn transact(&mut self) -> Result<Transcation<'_, Self>, types::Error> {
@@ -1522,7 +1532,7 @@ impl<
                 path,
                 oflags.into(),
                 flags,
-                filesystem::Modes::READABLE | filesystem::Modes::WRITEABLE,
+                filesystem::Modes::READABLE | filesystem::Modes::WRITABLE,
             )
             .await
             .map_err(|e| {

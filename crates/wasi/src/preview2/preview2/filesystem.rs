@@ -638,6 +638,16 @@ impl<T: WasiView> filesystem::Host for T {
         Ok(())
     }
 
+    async fn access_at(
+        &mut self,
+        _fd: filesystem::Descriptor,
+        _path_flags: filesystem::PathFlags,
+        _path: String,
+        _access: filesystem::AccessType,
+    ) -> Result<(), filesystem::Error> {
+        todo!()
+    }
+
     async fn change_file_permissions_at(
         &mut self,
         _fd: filesystem::Descriptor,
