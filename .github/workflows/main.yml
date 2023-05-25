@@ -775,6 +775,7 @@ jobs:
       - verify-publish
       - determine
       - miri
+      - build-preview1-component-adapter
     if: always()
     steps:
     - name: Dump needs context
