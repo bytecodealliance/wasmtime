@@ -6,7 +6,9 @@ const knownPackages = {
     "win32 x64 LE": "@bytecodealliance/wizer-win32-x64",
     "darwin arm64 LE": "@bytecodealliance/wizer-darwin-arm64",
     "darwin x64 LE": "@bytecodealliance/wizer-darwin-x64",
+    "linux arm64 LE": "@bytecodealliance/wizer-linux-arm64",
     "linux x64 LE": "@bytecodealliance/wizer-linux-x64",
+    "linux s390x BE": "@bytecodealliance/wizer-linux-s390x",
 };
 
 function pkgForCurrentPlatform() {
