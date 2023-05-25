@@ -1,6 +1,3 @@
-// Temporary for scaffolding this module out:
-#![allow(unused_variables)]
-
 use crate::preview2::filesystem::TableFsExt;
 use crate::preview2::preview2::filesystem::TableReaddirExt;
 use crate::preview2::{wasi, TableError, WasiView};
@@ -964,8 +961,8 @@ impl<
     async fn fd_fdstat_set_rights(
         &mut self,
         fd: types::Fd,
-        fs_rights_base: types::Rights,
-        fs_rights_inheriting: types::Rights,
+        _fs_rights_base: types::Rights,
+        _fs_rights_inheriting: types::Rights,
     ) -> Result<(), types::Error> {
         self.get_fd(fd).await?;
         Ok(())
@@ -1768,6 +1765,7 @@ impl<
         })
     }
 
+    #[allow(unused_variables)]
     #[instrument(skip(self))]
     async fn poll_oneoff<'a>(
         &mut self,
@@ -1816,6 +1814,7 @@ impl<
         Ok(())
     }
 
+    #[allow(unused_variables)]
     #[instrument(skip(self))]
     async fn sock_accept(
         &mut self,
@@ -1825,6 +1824,7 @@ impl<
         todo!()
     }
 
+    #[allow(unused_variables)]
     #[instrument(skip(self))]
     async fn sock_recv<'a>(
         &mut self,
@@ -1835,6 +1835,7 @@ impl<
         todo!()
     }
 
+    #[allow(unused_variables)]
     #[instrument(skip(self))]
     async fn sock_send<'a>(
         &mut self,
@@ -1845,6 +1846,7 @@ impl<
         todo!()
     }
 
+    #[allow(unused_variables)]
     #[instrument(skip(self))]
     async fn sock_shutdown(
         &mut self,
