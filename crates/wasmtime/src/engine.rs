@@ -645,7 +645,7 @@ mod tests {
         hash::{Hash, Hasher},
     };
 
-    use crate::{Config, Engine, Module, OptLevel};
+    use crate::{Config, Engine, Module, ModuleVersionStrategy, OptLevel};
 
     use anyhow::Result;
     use tempfile::TempDir;
@@ -726,5 +726,32 @@ mod tests {
         cfg.cranelift_opt_level(OptLevel::Speed);
         let opt_speed_hash = hash_for_config(&cfg);
         assert_ne!(opt_none_hash, opt_speed_hash)
+    }
+
+    #[test]
+    fn precompile_compatibility_key_accounts_for_module_version_strategy() -> Result<()> {
+        fn hash_for_config(cfg: &Config) -> u64 {
+            let engine = Engine::new(cfg).expect("Config should be valid");
+            let mut hasher = DefaultHasher::new();
+            engine.precompile_compatibility_hash().hash(&mut hasher);
+            hasher.finish()
+        }
+        let mut cfg_custom_version = Config::new();
+        cfg_custom_version.module_version(ModuleVersionStrategy::Custom("1.0.1111".to_string()))?;
+        let custom_version_hash = hash_for_config(&cfg_custom_version);
+
+        let mut cfg_default_version = Config::new();
+        cfg_default_version.module_version(ModuleVersionStrategy::WasmtimeVersion)?;
+        let default_version_hash = hash_for_config(&cfg_default_version);
+
+        let mut cfg_none_version = Config::new();
+        cfg_none_version.module_version(ModuleVersionStrategy::None)?;
+        let none_version_hash = hash_for_config(&cfg_none_version);
+
+        assert_ne!(custom_version_hash, default_version_hash);
+        assert_ne!(custom_version_hash, none_version_hash);
+        assert_ne!(default_version_hash, none_version_hash);
+
+        Ok(())
     }
 }
