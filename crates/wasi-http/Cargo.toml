@@ -7,10 +7,6 @@ repository = "https://github.com/bytecodealliance/wasmtime"
 license = "Apache-2.0 WITH LLVM-exception"
 description = "Experimental HTTP library for WebAssembly in Wasmtime"
 
-[lib]
-test = false
-doctest = false
-
 [dependencies]
 anyhow = { workspace = true }
 bytes = "1.1.0"
