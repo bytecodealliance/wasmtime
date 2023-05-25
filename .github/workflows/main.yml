@@ -30,12 +30,6 @@ defaults:
   run:
     shell: bash
 
-# Cancel any in-flight jobs for the same PR/branch so there's only one active
-# at a time
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   # Check Code style quickly by running `rustfmt` over all code
   rustfmt:
@@ -48,12 +42,6 @@ jobs:
     - uses: ./.github/actions/install-rust
     - run: rustup component add rustfmt
     - run: cargo fmt --all -- --check
-
-    # common logic to cancel the entire run if this job fails
-    - run: gh run cancel ${{ github.run_id }}
-      if: failure() && github.event_name != 'pull_request'
-      env:
-        GH_TOKEN: ${{ github.token }}
 
   # Lint dependency graph for security advisories, duplicate versions, and
   # incompatible licences
@@ -73,12 +61,6 @@ jobs:
         mv cargo-deny-*-x86_64-unknown-linux-musl/cargo-deny cargo-deny
         echo `pwd` >> $GITHUB_PATH
     - run: cargo deny check bans licenses
-
-    # common logic to cancel the entire run if this job fails
-    - run: gh run cancel ${{ github.run_id }}
-      if: failure() && github.event_name != 'pull_request'
-      env:
-        GH_TOKEN: ${{ github.token }}
 
   # Ensure dependencies are vetted. See https://mozilla.github.io/cargo-vet/
   cargo_vet:
@@ -100,12 +82,6 @@ jobs:
     - run: echo "${{ runner.tool_cache }}/cargo-vet/bin" >> $GITHUB_PATH
     - run: cargo install --root ${{ runner.tool_cache }}/cargo-vet --version ${{ env.CARGO_VET_VERSION }} cargo-vet
     - run: cargo vet --locked
-
-    # common logic to cancel the entire run if this job fails
-    - run: gh run cancel ${{ github.run_id }}
-      if: failure() && github.event_name != 'pull_request'
-      env:
-        GH_TOKEN: ${{ github.token }}
 
   # This job is a dependency of many of the jobs below. This calculates what's
   # actually being run for this workflow. For example:
@@ -233,12 +209,6 @@ jobs:
         name: gh-pages
         path: gh-pages.tar.gz
 
-    # common logic to cancel the entire run if this job fails
-    - run: gh run cancel ${{ github.run_id }}
-      if: failure() && github.event_name != 'pull_request'
-      env:
-        GH_TOKEN: ${{ github.token }}
-
   # Checks of various feature combinations and whether things
   # compile. The goal here isn't to run tests, mostly just serve as a
   # double-check that Rust code compiles and is likely to work everywhere else.
@@ -305,12 +275,6 @@ jobs:
     - run: cargo install --root ${{ runner.tool_cache }}/cargo-ndk --version ${{ env.CARGO_NDK_VERSION }} cargo-ndk
     - run: cargo ndk -t arm64-v8a check -p wasmtime
 
-    # common logic to cancel the entire run if this job fails
-    - run: gh run cancel ${{ github.run_id }}
-      if: failure() && github.event_name != 'pull_request'
-      env:
-        GH_TOKEN: ${{ github.token }}
-
   # Check whether `wasmtime` cross-compiles to aarch64-pc-windows-msvc
   # We don't build nor test it because it lacks trap handling.
   # Tracking issue: https://github.com/bytecodealliance/wasmtime/issues/4992
@@ -326,12 +290,6 @@ jobs:
     - uses: ./.github/actions/install-rust
     - run: rustup target add aarch64-pc-windows-msvc
     - run: cargo check -p wasmtime --target aarch64-pc-windows-msvc
-
-    # common logic to cancel the entire run if this job fails
-    - run: gh run cancel ${{ github.run_id }}
-      if: failure() && github.event_name != 'pull_request'
-      env:
-        GH_TOKEN: ${{ github.token }}
 
   # Verify all fuzz targets compile successfully
   fuzz_targets:
@@ -357,12 +315,6 @@ jobs:
     - run: cargo fuzz build --dev -s none
     # Check that the ISLE fuzz targets build too.
     - run: cargo fuzz build --dev -s none --fuzz-dir ./cranelift/isle/fuzz
-
-    # common logic to cancel the entire run if this job fails
-    - run: gh run cancel ${{ github.run_id }}
-      if: failure() && github.event_name != 'pull_request'
-      env:
-        GH_TOKEN: ${{ github.token }}
 
   # Perform all tests (debug mode) for `wasmtime`.
   #
@@ -494,12 +446,6 @@ jobs:
         env:
           RUST_BACKTRACE: 1
 
-      # common logic to cancel the entire run if this job fails
-      - run: gh run cancel ${{ github.run_id }}
-        if: failure() && github.event_name != 'pull_request'
-        env:
-          GH_TOKEN: ${{ github.token }}
-
   # Build and test the wasi-crypto module.
   test_wasi_crypto:
     needs: determine
@@ -515,12 +461,6 @@ jobs:
     - run: ./ci/run-wasi-crypto-example.sh
       env:
         RUST_BACKTRACE: 1
-
-    # common logic to cancel the entire run if this job fails
-    - run: gh run cancel ${{ github.run_id }}
-      if: failure() && github.event_name != 'pull_request'
-      env:
-        GH_TOKEN: ${{ github.token }}
 
   build-preview1-component-adapter:
     name: Build wasi-preview1-component-adapter
@@ -552,13 +492,6 @@ jobs:
         path: target/wasm32-unknown-unknown/release/wasi_preview1_component_adapter.*.wasm
 
 
-    # common logic to cancel the entire run if this job fails
-    - run: gh run cancel ${{ github.run_id }}
-      if: failure() && github.event_name != 'pull_request'
-      env:
-        GH_TOKEN: ${{ github.token }}
-
-
   bench:
     needs: determine
     if: needs.determine.outputs.run-full
@@ -571,12 +504,6 @@ jobs:
     - uses: ./.github/actions/install-rust
     - run: rustup target add wasm32-wasi
     - run: cargo test --benches --release
-
-    # common logic to cancel the entire run if this job fails
-    - run: gh run cancel ${{ github.run_id }}
-      if: failure() && github.event_name != 'pull_request'
-      env:
-        GH_TOKEN: ${{ github.token }}
 
   # Verify that cranelift's code generation is deterministic
   meta_deterministic_check:
@@ -591,12 +518,6 @@ jobs:
     - uses: ./.github/actions/install-rust
     - run: cd cranelift/codegen && cargo build --features all-arch
     - run: ci/ensure_deterministic_build.sh
-
-    # common logic to cancel the entire run if this job fails
-    - run: gh run cancel ${{ github.run_id }}
-      if: failure() && github.event_name != 'pull_request'
-      env:
-        GH_TOKEN: ${{ github.token }}
 
   verify-publish:
     needs: determine
@@ -617,12 +538,6 @@ jobs:
     - run: ./publish verify
     # Make sure we can bump version numbers for the next release
     - run: ./publish bump
-
-    # common logic to cancel the entire run if this job fails
-    - run: gh run cancel ${{ github.run_id }}
-      if: failure() && github.event_name != 'pull_request'
-      env:
-        GH_TOKEN: ${{ github.token }}
 
   # Run a subset of tests under MIRI on CI to help check the `unsafe` code in
   # Wasmtime to make sure it's at least not obviously incorrect for basic usage.
@@ -662,12 +577,6 @@ jobs:
           -p wasmtime-environ
       env:
         MIRIFLAGS: -Zmiri-strict-provenance
-
-    # common logic to cancel the entire run if this job fails
-    - run: gh run cancel ${{ github.run_id }}
-      if: failure() && github.event_name != 'pull_request'
-      env:
-        GH_TOKEN: ${{ github.token }}
 
   # Perform release builds of `wasmtime` and `libwasmtime.so`. Builds a variety
   # of platforms and architectures and then uploads the release artifacts to
@@ -732,12 +641,6 @@ jobs:
       with:
         name: bins-${{ matrix.build }}
         path: dist
-
-    # common logic to cancel the entire run if this job fails
-    - run: gh run cancel ${{ github.run_id }}
-      if: failure() && github.event_name != 'pull_request'
-      env:
-        GH_TOKEN: ${{ github.token }}
 
   # This is a "join node" which depends on all prior workflows. The merge queue,
   # for example, gates on this to ensure that everything has executed
