@@ -1,5 +1,6 @@
-use wasmparser::FuncType;
-use wasmtime_environ::{FuncIndex, ModuleTranslation, PtrSize, VMOffsets};
+use wasmtime_environ::{
+    FuncIndex, ModuleTranslation, PtrSize, TypeConvert, VMOffsets, WasmFuncType,
+};
 
 /// The function environment.
 ///
@@ -28,10 +29,11 @@ impl<'a, P: PtrSize> FuncEnv<'a, P> {
         let ty = types
             .function_at(idx.as_u32())
             .unwrap_or_else(|| panic!("function type at index: {}", idx.as_u32()));
+        let ty = self.translation.module.convert_func_type(ty);
         let import = self.translation.module.is_imported_function(idx);
 
         Callee {
-            ty: ty.clone(),
+            ty,
             import,
             index: idx,
         }
@@ -42,7 +44,7 @@ impl<'a, P: PtrSize> FuncEnv<'a, P> {
 /// to emit function calls.
 pub struct Callee {
     /// The function type.
-    pub ty: FuncType,
+    pub ty: WasmFuncType,
     /// A flag to determine if the callee is imported.
     pub import: bool,
     /// The callee index in the WebAssembly function index space.

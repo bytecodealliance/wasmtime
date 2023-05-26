@@ -54,10 +54,11 @@ impl wasmtime_environ::Compiler for Compiler {
         index: DefinedFuncIndex,
         data: FunctionBodyData<'_>,
         _tunables: &Tunables,
-        _types: &ModuleTypes,
+        types: &ModuleTypes,
     ) -> Result<(WasmFunctionInfo, Box<dyn Any + Send>), CompileError> {
         let index = translation.module.func_index(index);
-        let sig = translation.get_types().function_at(index.as_u32()).unwrap();
+        let sig = translation.module.functions[index].signature;
+        let ty = &types[sig];
         let FunctionBodyData { body, validator } = data;
         let start_srcloc = FilePos::new(
             body.get_binary_reader()
@@ -68,7 +69,7 @@ impl wasmtime_environ::Compiler for Compiler {
         let mut validator = validator.into_validator(self.take_allocations());
         let buffer = self
             .isa
-            .compile_function(&sig, &body, &translation, &mut validator)
+            .compile_function(ty, &body, &translation, &mut validator)
             .map_err(|e| CompileError::Codegen(format!("{e:?}")));
         self.save_allocations(validator.into_allocations());
         let buffer = buffer?;
@@ -93,13 +94,9 @@ impl wasmtime_environ::Compiler for Compiler {
         let func_index = translation.module.func_index(index);
         let sig = translation.module.functions[func_index].signature;
         let ty = &types[sig];
-        let wasm_ty = wasmparser::FuncType::new(
-            ty.params().iter().copied().map(Into::into),
-            ty.returns().iter().copied().map(Into::into),
-        );
         let buffer = self
             .isa
-            .compile_trampoline(&wasm_ty, TrampolineKind::ArrayToWasm(func_index))
+            .compile_trampoline(&ty, TrampolineKind::ArrayToWasm(func_index))
             .map_err(|e| CompileError::Codegen(format!("{:?}", e)))?;
         let compiled_function =
             CompiledFunction::new(buffer, CompiledFuncEnv {}, self.isa.function_alignment());
@@ -116,14 +113,10 @@ impl wasmtime_environ::Compiler for Compiler {
         let func_index = translation.module.func_index(index);
         let sig = translation.module.functions[func_index].signature;
         let ty = &types[sig];
-        let wasm_ty = wasmparser::FuncType::new(
-            ty.params().iter().copied().map(Into::into),
-            ty.returns().iter().copied().map(Into::into),
-        );
 
         let buffer = self
             .isa
-            .compile_trampoline(&wasm_ty, TrampolineKind::NativeToWasm(func_index))
+            .compile_trampoline(ty, TrampolineKind::NativeToWasm(func_index))
             .map_err(|e| CompileError::Codegen(format!("{:?}", e)))?;
 
         let compiled_function =
@@ -137,14 +130,9 @@ impl wasmtime_environ::Compiler for Compiler {
         _translation: &ModuleTranslation<'_>,
         wasm_func_ty: &wasmtime_environ::WasmFuncType,
     ) -> Result<Box<dyn Any + Send>, CompileError> {
-        let wasm_ty = wasmparser::FuncType::new(
-            wasm_func_ty.params().iter().copied().map(Into::into),
-            wasm_func_ty.returns().iter().copied().map(Into::into),
-        );
-
         let buffer = self
             .isa
-            .compile_trampoline(&wasm_ty, TrampolineKind::WasmToNative)
+            .compile_trampoline(wasm_func_ty, TrampolineKind::WasmToNative)
             .map_err(|e| CompileError::Codegen(format!("{:?}", e)))?;
 
         let compiled_function =

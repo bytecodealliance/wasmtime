@@ -9,8 +9,8 @@
 use crate::state::FuncTranslationState;
 use crate::{
     DataIndex, ElemIndex, FuncIndex, Global, GlobalIndex, GlobalInit, Heap, HeapData, Memory,
-    MemoryIndex, SignatureIndex, Table, TableIndex, Tag, TagIndex, TypeIndex, WasmError,
-    WasmFuncType, WasmResult, WasmType,
+    MemoryIndex, SignatureIndex, Table, TableIndex, Tag, TagIndex, TypeConvert, TypeIndex,
+    WasmError, WasmFuncType, WasmHeapType, WasmResult,
 };
 use core::convert::From;
 use cranelift_codegen::cursor::FuncCursor;
@@ -44,7 +44,7 @@ pub enum GlobalVariable {
 }
 
 /// Environment affecting the translation of a WebAssembly.
-pub trait TargetEnvironment {
+pub trait TargetEnvironment: TypeConvert {
     /// Get the information needed to produce Cranelift IR for the given target.
     fn target_config(&self) -> TargetFrontendConfig;
 
@@ -70,7 +70,7 @@ pub trait TargetEnvironment {
     /// 32-bit architectures. If you override this, then you should also
     /// override `FuncEnvironment::{translate_ref_null, translate_ref_is_null}`
     /// as well.
-    fn reference_type(&self, ty: WasmType) -> ir::Type {
+    fn reference_type(&self, ty: WasmHeapType) -> ir::Type {
         let _ = ty;
         match self.pointer_type() {
             ir::types::I32 => ir::types::R32,
@@ -207,6 +207,22 @@ pub trait FuncEnvironment: TargetEnvironment {
     ) -> WasmResult<ir::Inst> {
         Ok(pos.ins().call(callee, call_args))
     }
+
+    /// Translate a `call_ref` WebAssembly instruction at `pos`.
+    ///
+    /// Insert instructions at `pos` for an indirect call to the
+    /// function `callee`. The `callee` value will have type `Ref`.
+    ///
+    /// The signature `sig_ref` was previously created by `make_indirect_sig()`.
+    ///
+    /// Return the call instruction whose results are the WebAssembly return values.
+    fn translate_call_ref(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        sig_ref: ir::SigRef,
+        callee: ir::Value,
+        call_args: &[ir::Value],
+    ) -> WasmResult<ir::Inst>;
 
     /// Translate a `memory.grow` WebAssembly instruction.
     ///
@@ -373,7 +389,11 @@ pub trait FuncEnvironment: TargetEnvironment {
     /// null sentinel is not a null reference type pointer for your type. If you
     /// override this method, then you should also override
     /// `translate_ref_is_null` as well.
-    fn translate_ref_null(&mut self, mut pos: FuncCursor, ty: WasmType) -> WasmResult<ir::Value> {
+    fn translate_ref_null(
+        &mut self,
+        mut pos: FuncCursor,
+        ty: WasmHeapType,
+    ) -> WasmResult<ir::Value> {
         let _ = ty;
         Ok(pos.ins().null(self.reference_type(ty)))
     }
@@ -554,7 +574,7 @@ pub trait FuncEnvironment: TargetEnvironment {
 /// An object satisfying the `ModuleEnvironment` trait can be passed as argument to the
 /// [`translate_module`](fn.translate_module.html) function. These methods should not be called
 /// by the user, they are only for `cranelift-wasm` internal use.
-pub trait ModuleEnvironment<'data> {
+pub trait ModuleEnvironment<'data>: TypeConvert {
     /// Provides the number of types up front. By default this does nothing, but
     /// implementations can use this to preallocate memory if desired.
     fn reserve_types(&mut self, _num: u32) -> WasmResult<()> {

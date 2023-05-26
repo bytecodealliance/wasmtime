@@ -11,7 +11,7 @@ use std::ptr;
 use std::sync::Arc;
 use wasmtime_environ::{
     DefinedMemoryIndex, DefinedTableIndex, HostPtr, InitMemory, MemoryInitialization,
-    MemoryInitializer, Module, PrimaryMap, TableInitialization, TableInitializer, Trap, VMOffsets,
+    MemoryInitializer, Module, PrimaryMap, TableInitialValue, TableSegment, Trap, VMOffsets,
     WasmType, WASM_PAGE_SIZE,
 };
 
@@ -200,7 +200,7 @@ pub unsafe trait InstanceAllocator {
     fn purge_module(&self, module: CompiledModuleId);
 }
 
-fn get_table_init_start(init: &TableInitializer, instance: &mut Instance) -> Result<u32> {
+fn get_table_init_start(init: &TableSegment, instance: &mut Instance) -> Result<u32> {
     match init.base {
         Some(base) => {
             let val = unsafe { *(*instance.defined_or_imported_global_ptr(base)).as_u32() };
@@ -214,23 +214,18 @@ fn get_table_init_start(init: &TableInitializer, instance: &mut Instance) -> Res
 }
 
 fn check_table_init_bounds(instance: &mut Instance, module: &Module) -> Result<()> {
-    match &module.table_initialization {
-        TableInitialization::FuncTable { segments, .. }
-        | TableInitialization::Segments { segments } => {
-            for segment in segments {
-                let table = unsafe { &*instance.get_table(segment.table_index) };
-                let start = get_table_init_start(segment, instance)?;
-                let start = usize::try_from(start).unwrap();
-                let end = start.checked_add(segment.elements.len());
+    for segment in module.table_initialization.segments.iter() {
+        let table = unsafe { &*instance.get_table(segment.table_index) };
+        let start = get_table_init_start(segment, instance)?;
+        let start = usize::try_from(start).unwrap();
+        let end = start.checked_add(segment.elements.len());
 
-                match end {
-                    Some(end) if end <= table.size() as usize => {
-                        // Initializer is in bounds
-                    }
-                    _ => {
-                        bail!("table out of bounds: elements segment does not fit")
-                    }
-                }
+        match end {
+            Some(end) if end <= table.size() as usize => {
+                // Initializer is in bounds
+            }
+            _ => {
+                bail!("table out of bounds: elements segment does not fit")
             }
         }
     }
@@ -239,6 +234,19 @@ fn check_table_init_bounds(instance: &mut Instance, module: &Module) -> Result<(
 }
 
 fn initialize_tables(instance: &mut Instance, module: &Module) -> Result<()> {
+    for (table, init) in module.table_initialization.initial_values.iter() {
+        match init {
+            // Tables are always initially null-initialized at this time
+            TableInitialValue::Null { precomputed: _ } => {}
+
+            TableInitialValue::FuncRef(idx) => {
+                let funcref = instance.get_func_ref(*idx).unwrap();
+                let table = unsafe { &mut *instance.get_defined_table(table) };
+                table.init_func(funcref)?;
+            }
+        }
+    }
+
     // Note: if the module's table initializer state is in
     // FuncTable mode, we will lazily initialize tables based on
     // any statically-precomputed image of FuncIndexes, but there
@@ -246,20 +254,15 @@ fn initialize_tables(instance: &mut Instance, module: &Module) -> Result<()> {
     // incorporated. So we have a unified handler here that
     // iterates over all segments (Segments mode) or leftover
     // segments (FuncTable mode) to initialize.
-    match &module.table_initialization {
-        TableInitialization::FuncTable { segments, .. }
-        | TableInitialization::Segments { segments } => {
-            for segment in segments {
-                let start = get_table_init_start(segment, instance)?;
-                instance.table_init_segment(
-                    segment.table_index,
-                    &segment.elements,
-                    start,
-                    0,
-                    segment.elements.len() as u32,
-                )?;
-            }
-        }
+    for segment in module.table_initialization.segments.iter() {
+        let start = get_table_init_start(segment, instance)?;
+        instance.table_init_segment(
+            segment.table_index,
+            &segment.elements,
+            start,
+            0,
+            segment.elements.len() as u32,
+        )?;
     }
 
     Ok(())

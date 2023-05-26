@@ -13,6 +13,7 @@ use cranelift_codegen::{
 };
 use cranelift_wasm::{
     DummyEnvironment, FuncEnvironment, FuncIndex, ModuleEnvironment, TargetEnvironment,
+    TypeConvert, TypeIndex, WasmHeapType,
 };
 
 pub struct ModuleEnv {
@@ -235,6 +236,12 @@ impl<'data> ModuleEnvironment<'data> for ModuleEnv {
     }
 }
 
+impl TypeConvert for ModuleEnv {
+    fn lookup_heap_type(&self, _index: TypeIndex) -> WasmHeapType {
+        todo!()
+    }
+}
+
 pub struct FuncEnv<'a> {
     pub inner: cranelift_wasm::DummyFuncEnvironment<'a>,
     pub config: TestConfig,
@@ -258,6 +265,12 @@ impl<'a> FuncEnv<'a> {
             next_heap: 0,
             heap_access_spectre_mitigation,
         }
+    }
+}
+
+impl TypeConvert for FuncEnv<'_> {
+    fn lookup_heap_type(&self, _index: TypeIndex) -> WasmHeapType {
+        todo!()
     }
 }
 
@@ -621,5 +634,15 @@ impl<'a> FuncEnvironment for FuncEnv<'a> {
 
     fn is_x86(&self) -> bool {
         self.config.target.contains("x86_64")
+    }
+
+    fn translate_call_ref(
+        &mut self,
+        _builder: &mut cranelift_frontend::FunctionBuilder<'_>,
+        _ty: ir::SigRef,
+        _func: ir::Value,
+        _args: &[ir::Value],
+    ) -> cranelift_wasm::WasmResult<ir::Inst> {
+        unimplemented!()
     }
 }

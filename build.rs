@@ -30,6 +30,7 @@ fn main() -> anyhow::Result<()> {
             test_directory_module(out, "tests/misc_testsuite/threads", strategy)?;
             test_directory_module(out, "tests/misc_testsuite/memory64", strategy)?;
             test_directory_module(out, "tests/misc_testsuite/component-model", strategy)?;
+            test_directory_module(out, "tests/misc_testsuite/function-references", strategy)?;
             Ok(())
         })?;
 
@@ -39,6 +40,11 @@ fn main() -> anyhow::Result<()> {
             // out.
             if spec_tests > 0 {
                 test_directory_module(out, "tests/spec_testsuite/proposals/memory64", strategy)?;
+                test_directory_module(
+                    out,
+                    "tests/spec_testsuite/proposals/function-references",
+                    strategy,
+                )?;
                 test_directory_module(
                     out,
                     "tests/spec_testsuite/proposals/multi-memory",
@@ -185,6 +191,30 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
     // This is an empty file right now which the `wast` crate doesn't parse
     if testname.contains("memory_copy1") {
         return true;
+    }
+
+    // Tail calls are not yet implemented.
+    if testname.contains("return_call") {
+        return true;
+    }
+
+    if testsuite == "function_references" {
+        // The following tests fail due to function references not yet
+        // being exposed in the public API.
+        if testname == "ref_null" || testname == "local_init" {
+            return true;
+        }
+        // This test fails due to incomplete support for the various
+        // table/elem syntactic sugar in wasm-tools/wast.
+        if testname == "br_table" {
+            return true;
+        }
+        // This test fails due to the current implementation of type
+        // canonicalisation being broken as a result of
+        // #[derive(hash)] on WasmHeapType.
+        if testname == "type_equivalence" {
+            return true;
+        }
     }
 
     match env::var("CARGO_CFG_TARGET_ARCH").unwrap().as_str() {

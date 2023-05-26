@@ -16,8 +16,8 @@ use cranelift_codegen::{isa::aarch64::settings as aarch64_settings, Final, MachB
 use cranelift_codegen::{MachTextSectionBuilder, TextSectionBuilder};
 use masm::MacroAssembler as Aarch64Masm;
 use target_lexicon::Triple;
-use wasmparser::{FuncType, FuncValidator, FunctionBody, ValidatorResources};
-use wasmtime_environ::ModuleTranslation;
+use wasmparser::{FuncValidator, FunctionBody, ValidatorResources};
+use wasmtime_environ::{ModuleTranslation, WasmFuncType};
 
 mod abi;
 mod address;
@@ -84,7 +84,7 @@ impl TargetIsa for Aarch64 {
 
     fn compile_function(
         &self,
-        sig: &FuncType,
+        sig: &WasmFuncType,
         body: &FunctionBody,
         translation: &ModuleTranslation,
         validator: &mut FuncValidator<ValidatorResources>,
@@ -94,7 +94,7 @@ impl TargetIsa for Aarch64 {
         let stack = Stack::new();
         let abi_sig = abi::Aarch64ABI::sig(sig, &CallingConvention::Default);
 
-        let defined_locals = DefinedLocals::new(&mut body, validator)?;
+        let defined_locals = DefinedLocals::new(translation, &mut body, validator)?;
         let frame = Frame::new::<abi::Aarch64ABI>(&abi_sig, &defined_locals)?;
         // TODO: Add floating point bitmask
         let regalloc = RegAlloc::new(RegSet::new(ALL_GPR, 0), scratch());
@@ -119,7 +119,7 @@ impl TargetIsa for Aarch64 {
 
     fn compile_trampoline(
         &self,
-        _ty: &FuncType,
+        _ty: &WasmFuncType,
         _kind: TrampolineKind,
     ) -> Result<MachBufferFinalized<Final>> {
         todo!()
