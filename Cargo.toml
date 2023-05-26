@@ -313,14 +313,4 @@ debug-assertions = false
 overflow-checks = false
 
 [patch.crates-io]
-wasm-encoder = { git = 'https://github.com/alexcrichton/wasm-tools', branch = 'bump' }
-wasm-metadata = { git = 'https://github.com/alexcrichton/wasm-tools', branch = 'bump' }
-wasm-mutate = { git = 'https://github.com/alexcrichton/wasm-tools', branch = 'bump' }
-wasm-smith = { git = 'https://github.com/alexcrichton/wasm-tools', branch = 'bump' }
-wasmparser = { git = 'https://github.com/alexcrichton/wasm-tools', branch = 'bump' }
-wasmprinter = { git = 'https://github.com/alexcrichton/wasm-tools', branch = 'bump' }
-wast = { git = 'https://github.com/alexcrichton/wasm-tools', branch = 'bump' }
-wat = { git = 'https://github.com/alexcrichton/wasm-tools', branch = 'bump' }
-wit-parser = { git = 'https://github.com/alexcrichton/wasm-tools', branch = 'bump' }
-wit-component = { git = 'https://github.com/alexcrichton/wasm-tools', branch = 'bump' }
 wit-bindgen = { git = 'https://github.com/alexcrichton/witx-bindgen', branch = 'wit-changes' }
