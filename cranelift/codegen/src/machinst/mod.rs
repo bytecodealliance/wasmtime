@@ -144,17 +144,18 @@ pub trait MachInst: Clone + Debug {
     /// control flow.
     fn gen_jump(target: MachLabel) -> Self;
 
-    /// Generate a store of an immediate value to a register. Used by the
-    /// control plane to generate random instructions.
-    fn gen_imm(_value: u64, _dst: Writable<Reg>) -> Option<Self> {
+    /// Generate a store of an immediate 64-bit integer to a register. Used by
+    /// the control plane to generate random instructions.
+    fn gen_imm_u64(_value: u64, _dst: Writable<Reg>) -> Option<Self> {
         None
     }
 
-    /// Move a value from a general purpose register to an xmm one.
-    /// TODO this abstraction is kinda x64 specific...
-    /// but `gen_move` only works if the register types match?
-    fn gen_gpr_to_xmm(_src: Reg, _dst: Writable<Reg>) -> Option<Self> {
-        None
+    /// Generate a store of an immediate 64-bit integer to a register. Used by
+    /// the control plane to generate random instructions. The tmp register may
+    /// be used by architectures which don't support writing immediate values to
+    /// floating point registers directly.
+    fn gen_imm_f64(_value: f64, _tmp: Writable<Reg>, _dst: Writable<Reg>) -> SmallVec<[Self; 2]> {
+        SmallVec::new()
     }
 
     /// Generate a NOP. The `preferred_size` parameter allows the caller to

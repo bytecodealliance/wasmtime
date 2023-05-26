@@ -2558,17 +2558,19 @@ impl MachInst for Inst {
         Inst::jmp_known(label)
     }
 
-    fn gen_imm(value: u64, dst: Writable<Reg>) -> Option<Self> {
+    fn gen_imm_u64(value: u64, dst: Writable<Reg>) -> Option<Self> {
         Some(Inst::imm(OperandSize::Size64, value, dst))
     }
 
-    fn gen_gpr_to_xmm(src: Reg, dst: Writable<Reg>) -> Option<Self> {
-        Some(Self::gpr_to_xmm(
+    fn gen_imm_f64(value: f64, tmp: Writable<Reg>, dst: Writable<Reg>) -> SmallVec<[Self; 2]> {
+        let imm_to_gpr = Inst::imm(OperandSize::Size64, value.to_bits(), tmp);
+        let gpr_to_xmm = Self::gpr_to_xmm(
             SseOpcode::Movd,
-            src.into(),
+            tmp.to_reg().into(),
             OperandSize::Size64,
             dst,
-        ))
+        );
+        smallvec![imm_to_gpr, gpr_to_xmm]
     }
 
     fn gen_dummy_use(reg: Reg) -> Self {

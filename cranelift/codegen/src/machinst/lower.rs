@@ -779,12 +779,17 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 
             // maybe insert random instruction
             if ctrl_plane.get_decision() {
-                let imm: u64 = ctrl_plane.get_arbitrary();
-                let reg = self.alloc_tmp(crate::ir::types::I64).regs()[0];
-                I::gen_imm(imm, reg).map(|inst| self.emit(inst));
                 if ctrl_plane.get_decision() {
-                    let xmm = self.alloc_tmp(crate::ir::types::F64).regs()[0];
-                    I::gen_gpr_to_xmm(reg.to_reg(), xmm).map(|inst| self.emit(inst));
+                    let imm: u64 = ctrl_plane.get_arbitrary();
+                    let reg = self.alloc_tmp(crate::ir::types::I64).regs()[0];
+                    I::gen_imm_u64(imm, reg).map(|inst| self.emit(inst));
+                } else {
+                    let imm: f64 = ctrl_plane.get_arbitrary();
+                    let tmp = self.alloc_tmp(crate::ir::types::I64).regs()[0];
+                    let reg = self.alloc_tmp(crate::ir::types::F64).regs()[0];
+                    for inst in I::gen_imm_f64(imm, tmp, reg) {
+                        self.emit(inst);
+                    }
                 }
             }
 
