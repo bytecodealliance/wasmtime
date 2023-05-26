@@ -38,37 +38,37 @@
     i32.load8_u offset=0))
 
 ;; function u0:0:
-;;   pushq   %rbp
+;;   push rbp
 ;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   movq    %rsp, %rbp
+;;   mov rbp, rsp
 ;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ;; block0:
-;;   movq    %rdi, %r8
-;;   addq    %r8, 0(%rdx), %r8
-;;   xorq    %r9, %r9, %r9
-;;   cmpq    $268435455, %rdi
-;;   cmovnbeq %r9, %r8, %r8
-;;   movb    %sil, 0(%r8)
-;;   jmp     label1
+;;   mov r8, rdi
+;;   add r8, r8, qword ptr [rdx + 0x0]
+;;   xor r9, r9, r9
+;;   cmp rdi, $268435455
+;;   cmovnbe r8, r9, r8
+;;   mov byte ptr [r8 + 0x0], sil
+;;   jmp label1
 ;; block1:
-;;   movq    %rbp, %rsp
-;;   popq    %rbp
+;;   mov rsp, rbp
+;;   pop rbp
 ;;   ret
 ;;
 ;; function u0:1:
-;;   pushq   %rbp
+;;   push rbp
 ;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   movq    %rsp, %rbp
+;;   mov rbp, rsp
 ;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ;; block0:
-;;   movq    %rdi, %rdx
-;;   addq    %rdx, 0(%rsi), %rdx
-;;   xorq    %r9, %r9, %r9
-;;   cmpq    $268435455, %rdi
-;;   cmovnbeq %r9, %rdx, %rdx
-;;   movzbq  0(%rdx), %rax
-;;   jmp     label1
+;;   mov rdx, rdi
+;;   add rdx, rdx, qword ptr [rsi + 0x0]
+;;   xor r9, r9, r9
+;;   cmp rdi, $268435455
+;;   cmovnbe rdx, r9, rdx
+;;   movzx rax, byte ptr [rdx + 0x0]
+;;   jmp label1
 ;; block1:
-;;   movq    %rbp, %rsp
-;;   popq    %rbp
+;;   mov rsp, rbp
+;;   pop rbp
 ;;   ret

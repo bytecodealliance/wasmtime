@@ -9,26 +9,26 @@ block0(v0: i32x4):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   uninit  %xmm3
-;   pcmpeqd %xmm3, %xmm3, %xmm3
-;   pxor    %xmm0, %xmm3, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   uninit xmm3
+;   pcmpeqd xmm3, xmm3, xmm3
+;   pxor xmm0, xmm0, xmm3
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   pcmpeqd %xmm3, %xmm3
-;   pxor %xmm3, %xmm0
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   pcmpeqd xmm3, xmm3
+;   pxor xmm0, xmm3
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %vany_true_i32x4(i32x4) -> i8 {
 block0(v0: i32x4):
@@ -37,25 +37,25 @@ block0(v0: i32x4):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   ptest   %xmm0, %xmm0
-;   setnz   %al
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   ptest xmm0, xmm0
+;   setnz al
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   ptest %xmm0, %xmm0
-;   setne %al
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   ptest xmm0, xmm0
+;   setne al
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %vall_true_i64x2(i64x2) -> i8 {
 block0(v0: i64x2):
@@ -64,30 +64,30 @@ block0(v0: i64x2):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   uninit  %xmm3
-;   pxor    %xmm3, %xmm3, %xmm3
-;   movdqa  %xmm0, %xmm6
-;   pcmpeqq %xmm6, %xmm3, %xmm6
-;   ptest   %xmm6, %xmm6
-;   setz    %al
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   uninit xmm3
+;   pxor xmm3, xmm3, xmm3
+;   movdqa xmm6, xmm0
+;   pcmpeqq xmm6, xmm6, xmm3
+;   ptest xmm6, xmm6
+;   setz al
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   pxor %xmm3, %xmm3
-;   movdqa %xmm0, %xmm6
-;   pcmpeqq %xmm3, %xmm6
-;   ptest %xmm6, %xmm6
-;   sete %al
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   pxor xmm3, xmm3
+;   movdqa xmm6, xmm0
+;   pcmpeqq xmm6, xmm3
+;   ptest xmm6, xmm6
+;   sete al
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 

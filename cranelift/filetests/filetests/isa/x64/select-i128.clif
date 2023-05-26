@@ -11,33 +11,33 @@ block0(v0: i32, v1: i128, v2: i128):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   cmpl    $42, %edi
-;   movq    %rcx, %rax
-;   cmovzq  %rsi, %rax, %rax
-;   movq    %rdx, %rdi
-;   movq    %r8, %rdx
-;   cmovzq  %rdi, %rdx, %rdx
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   cmp edi, $42
+;   mov rax, rcx
+;   cmovz rax, rsi, rax
+;   mov rdi, rdx
+;   mov rdx, r8
+;   cmovz rdx, rdi, rdx
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   cmpl $0x2a, %edi
-;   movq %rcx, %rax
-;   cmoveq %rsi, %rax
-;   movq %rdx, %rdi
-;   movq %r8, %rdx
-;   cmoveq %rdi, %rdx
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   cmp edi, 0x2a
+;   mov rax, rcx
+;   cmove rax, rsi
+;   mov rdi, rdx
+;   mov rdx, r8
+;   cmove rdx, rdi
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %f1(f32, i128, i128) -> i128 {
 block0(v0: f32, v1: i128, v2: i128):
@@ -47,33 +47,33 @@ block0(v0: f32, v1: i128, v2: i128):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   ucomiss %xmm0, %xmm0
-;   movq    %rdi, %rax
-;   cmovpq  %rdx, %rax, %rax
-;   cmovnzq %rdx, %rax, %rax
-;   movq    %rsi, %rdx
-;   cmovpq  %rcx, %rdx, %rdx
-;   cmovnzq %rcx, %rdx, %rdx
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   ucomiss xmm0, xmm0
+;   mov rax, rdi
+;   cmovp rax, rdx, rax
+;   cmovnz rax, rdx, rax
+;   mov rdx, rsi
+;   cmovp rdx, rcx, rdx
+;   cmovnz rdx, rcx, rdx
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   ucomiss %xmm0, %xmm0
-;   movq %rdi, %rax
-;   cmovpq %rdx, %rax
-;   cmovneq %rdx, %rax
-;   movq %rsi, %rdx
-;   cmovpq %rcx, %rdx
-;   cmovneq %rcx, %rdx
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   ucomiss xmm0, xmm0
+;   mov rax, rdi
+;   cmovp rax, rdx
+;   cmovne rax, rdx
+;   mov rdx, rsi
+;   cmovp rdx, rcx
+;   cmovne rdx, rcx
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 

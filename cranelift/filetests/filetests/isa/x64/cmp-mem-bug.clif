@@ -11,35 +11,35 @@ block0(v0: i64, v1: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movq    0(%rsi), %r9
-;   cmpq    %r9, %rdi
-;   setz    %r10b
-;   movzbq  %r10b, %rax
-;   cmpq    %r9, %rdi
-;   movq    %rsi, %rdx
-;   cmovzq  %rdi, %rdx, %rdx
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   mov r9, qword ptr [rsi + 0x0]
+;   cmp rdi, r9
+;   setz r10b
+;   movzx rax, r10b
+;   cmp rdi, r9
+;   mov rdx, rsi
+;   cmovz rdx, rdi, rdx
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movq (%rsi), %r9 ; trap: heap_oob
-;   cmpq %r9, %rdi
-;   sete %r10b
-;   movzbq %r10b, %rax
-;   cmpq %r9, %rdi
-;   movq %rsi, %rdx
-;   cmoveq %rdi, %rdx
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   mov r9, qword ptr [rsi] ; trap: heap_oob
+;   cmp rdi, r9
+;   sete r10b
+;   movzx rax, r10b
+;   cmp rdi, r9
+;   mov rdx, rsi
+;   cmove rdx, rdi
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %f1(f64, i64) -> i64, f64 {
 block0(v0: f64, v1: i64):
@@ -51,41 +51,41 @@ block0(v0: f64, v1: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movsd   0(%rdi), %xmm9
-;   ucomisd %xmm9, %xmm0
-;   setnp   %dil
-;   setz    %al
-;   andl    %edi, %eax, %edi
-;   movzbq  %dil, %rax
-;   ucomisd %xmm9, %xmm0
-;   movdqa  %xmm0, %xmm2
-;   movsd %xmm0, %xmm0; jnp $next; movsd %xmm2, %xmm0; $next:
-;   movsd %xmm0, %xmm0; jz $next; movsd %xmm2, %xmm0; $next:
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   movsd xmm9, qword ptr [rdi + 0x0]
+;   ucomisd xmm0, xmm9
+;   setnp dil
+;   setz al
+;   and edi, edi, eax
+;   movzx rax, dil
+;   ucomisd xmm0, xmm9
+;   movdqa xmm2, xmm0
+;   movsd xmm0, xmm0; jnp $next; movsd xmm0, xmm2; $next:
+;   movsd xmm0, xmm0; jz $next; movsd xmm0, xmm2; $next:
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movsd (%rdi), %xmm9 ; trap: heap_oob
-;   ucomisd %xmm9, %xmm0
-;   setnp %dil
-;   sete %al
-;   andl %eax, %edi
-;   movzbq %dil, %rax
-;   ucomisd %xmm9, %xmm0
-;   movdqa %xmm0, %xmm2
+;   movsd xmm9, qword ptr [rdi] ; trap: heap_oob
+;   ucomisd xmm0, xmm9
+;   setnp dil
+;   sete al
+;   and edi, eax
+;   movzx rax, dil
+;   ucomisd xmm0, xmm9
+;   movdqa xmm2, xmm0
 ;   jnp 0x2f
-;   movsd %xmm2, %xmm0
+;   movsd xmm0, xmm2
 ;   je 0x39
-;   movsd %xmm2, %xmm0
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   movsd xmm0, xmm2
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 

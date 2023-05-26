@@ -11,22 +11,22 @@ block0(v0: i32):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   %rax = elf_tls_get_addr User(userextname0)
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   rax = elf_tls_get_addr User(userextname0)
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   leaq (%rip), %rdi ; reloc_external ElfX86_64TlsGd u1:0 -4
-;   callq 0x14 ; reloc_external CallPLTRel4 %ElfTlsGetAddr -4
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   lea rdi, [rip] ; reloc_external ElfX86_64TlsGd u1:0 -4
+;   call 0x14 ; reloc_external CallPLTRel4 %ElfTlsGetAddr -4
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 

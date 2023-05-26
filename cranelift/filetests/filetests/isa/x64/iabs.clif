@@ -8,27 +8,27 @@ block0(v0: i8):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movq    %rdi, %rax
-;   negb    %al, %al
-;   cmovsl  %edi, %eax, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   mov rax, rdi
+;   neg al, al
+;   cmovs eax, edi, eax
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movq %rdi, %rax
-;   negb %al
-;   cmovsl %edi, %eax
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   mov rax, rdi
+;   neg al
+;   cmovs eax, edi
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %f2(i16) -> i16 {
 block0(v0: i16):
@@ -37,27 +37,27 @@ block0(v0: i16):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movq    %rdi, %rax
-;   negw    %ax, %ax
-;   cmovsl  %edi, %eax, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   mov rax, rdi
+;   neg ax, ax
+;   cmovs eax, edi, eax
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movq %rdi, %rax
-;   negw %ax
-;   cmovsl %edi, %eax
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   mov rax, rdi
+;   neg ax
+;   cmovs eax, edi
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %f3(i32) -> i32 {
 block0(v0: i32):
@@ -66,27 +66,27 @@ block0(v0: i32):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movq    %rdi, %rax
-;   negl    %eax, %eax
-;   cmovsl  %edi, %eax, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   mov rax, rdi
+;   neg eax, eax
+;   cmovs eax, edi, eax
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movq %rdi, %rax
-;   negl %eax
-;   cmovsl %edi, %eax
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   mov rax, rdi
+;   neg eax
+;   cmovs eax, edi
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %f3(i64) -> i64 {
 block0(v0: i64):
@@ -95,25 +95,25 @@ block0(v0: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movq    %rdi, %rax
-;   negq    %rax, %rax
-;   cmovsq  %rdi, %rax, %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   mov rax, rdi
+;   neg rax, rax
+;   cmovs rax, rdi, rax
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movq %rdi, %rax
-;   negq %rax
-;   cmovsq %rdi, %rax
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   mov rax, rdi
+;   neg rax
+;   cmovs rax, rdi
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 

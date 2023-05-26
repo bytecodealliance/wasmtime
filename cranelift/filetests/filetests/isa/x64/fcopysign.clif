@@ -8,35 +8,35 @@ block0(v0: f32, v1: f32):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movl    $-2147483648, %ecx
-;   movd    %ecx, %xmm7
-;   movdqa  %xmm0, %xmm10
-;   movdqa  %xmm7, %xmm0
-;   andnps  %xmm0, %xmm10, %xmm0
-;   andps   %xmm7, %xmm1, %xmm7
-;   orps    %xmm0, %xmm7, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   mov ecx, 0x80000000
+;   movd xmm7, ecx
+;   movdqa xmm10, xmm0
+;   movdqa xmm0, xmm7
+;   andnps xmm0, xmm0, xmm10
+;   andps xmm7, xmm7, xmm1
+;   orps xmm0, xmm0, xmm7
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movl $0x80000000, %ecx
-;   movd %ecx, %xmm7
-;   movdqa %xmm0, %xmm10
-;   movdqa %xmm7, %xmm0
-;   andnps %xmm10, %xmm0
-;   andps %xmm1, %xmm7
-;   orps %xmm7, %xmm0
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   mov ecx, 0x80000000
+;   movd xmm7, ecx
+;   movdqa xmm10, xmm0
+;   movdqa xmm0, xmm7
+;   andnps xmm0, xmm10
+;   andps xmm7, xmm1
+;   orps xmm0, xmm7
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %f1(f64, f64) -> f64 {
 block0(v0: f64, v1: f64):
@@ -45,33 +45,33 @@ block0(v0: f64, v1: f64):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movabsq $-9223372036854775808, %rcx
-;   movq    %rcx, %xmm7
-;   movdqa  %xmm0, %xmm10
-;   movdqa  %xmm7, %xmm0
-;   andnpd  %xmm0, %xmm10, %xmm0
-;   andpd   %xmm7, %xmm1, %xmm7
-;   orpd    %xmm0, %xmm7, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   movabs rcx, 0x8000000000000000
+;   movq xmm7, rcx
+;   movdqa xmm10, xmm0
+;   movdqa xmm0, xmm7
+;   andnpd xmm0, xmm0, xmm10
+;   andpd xmm7, xmm7, xmm1
+;   orpd xmm0, xmm0, xmm7
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movabsq $9223372036854775808, %rcx
-;   movq %rcx, %xmm7
-;   movdqa %xmm0, %xmm10
-;   movdqa %xmm7, %xmm0
-;   andnpd %xmm10, %xmm0
-;   andpd %xmm1, %xmm7
-;   orpd %xmm7, %xmm0
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   movabs rcx, 0x8000000000000000
+;   movq xmm7, rcx
+;   movdqa xmm10, xmm0
+;   movdqa xmm0, xmm7
+;   andnpd xmm0, xmm10
+;   andpd xmm7, xmm1
+;   orpd xmm0, xmm7
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 

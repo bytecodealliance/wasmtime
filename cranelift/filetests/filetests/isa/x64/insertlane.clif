@@ -9,23 +9,23 @@ block0(v0: f64x2, v1: f64):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movsd   %xmm0, %xmm1, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   movsd xmm0, xmm0, xmm1
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movsd %xmm1, %xmm0
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   movsd xmm0, xmm1
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %insertlane_f64x2_one(f64x2, f64) -> f64x2 {
 block0(v0: f64x2, v1: f64):
@@ -34,23 +34,23 @@ block0(v0: f64x2, v1: f64):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movlhps %xmm0, %xmm1, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   movlhps xmm0, xmm0, xmm1
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movlhps %xmm1, %xmm0
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   movlhps xmm0, xmm1
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %insertlane_f64x2_zero_with_load(f64x2, i64) -> f64x2 {
 block0(v0: f64x2, v1: i64):
@@ -60,25 +60,25 @@ block0(v0: f64x2, v1: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movsd   0(%rdi), %xmm3
-;   movsd   %xmm0, %xmm3, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   movsd xmm3, qword ptr [rdi + 0x0]
+;   movsd xmm0, xmm0, xmm3
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movsd (%rdi), %xmm3 ; trap: heap_oob
-;   movsd %xmm3, %xmm0
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   movsd xmm3, qword ptr [rdi] ; trap: heap_oob
+;   movsd xmm0, xmm3
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %insertlane_i8x16_one_load(i8x16, i64) -> i8x16 {
 block0(v0: i8x16, v1: i64):
@@ -88,25 +88,25 @@ block0(v0: i8x16, v1: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movzbq  0(%rdi), %rdx
-;   pinsrb  $1, %xmm0, %rdx, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   movzx rdx, byte ptr [rdi + 0x0]
+;   pinsrb xmm0, xmm0, rdx, 0x1
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movzbq (%rdi), %rdx ; trap: heap_oob
-;   pinsrb $1, %edx, %xmm0
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   movzx rdx, byte ptr [rdi] ; trap: heap_oob
+;   pinsrb xmm0, edx, 1
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %insertlane_i16x8_one_load(i16x8, i64) -> i16x8 {
 block0(v0: i16x8, v1: i64):
@@ -116,25 +116,25 @@ block0(v0: i16x8, v1: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movzwq  0(%rdi), %rdx
-;   pinsrw  $1, %xmm0, %rdx, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   movzx rdx, word ptr [rdi + 0x0]
+;   pinsrw xmm0, xmm0, rdx, 0x1
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movzwq (%rdi), %rdx ; trap: heap_oob
-;   pinsrw $1, %edx, %xmm0
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   movzx rdx, word ptr [rdi] ; trap: heap_oob
+;   pinsrw xmm0, edx, 1
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %insertlane_i32x4_one_load(i32x4, i64) -> i32x4 {
 block0(v0: i32x4, v1: i64):
@@ -144,23 +144,23 @@ block0(v0: i32x4, v1: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   pinsrd  $1, %xmm0, 0(%rdi), %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   pinsrd xmm0, xmm0, qword ptr [rdi + 0x0], 0x1
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   pinsrd $1, (%rdi), %xmm0 ; trap: heap_oob
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   pinsrd xmm0, dword ptr [rdi], 1 ; trap: heap_oob
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %insertlane_i64x2_one_load(i64x2, i64) -> i64x2 {
 block0(v0: i64x2, v1: i64):
@@ -170,21 +170,21 @@ block0(v0: i64x2, v1: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   pinsrd.w $1, %xmm0, 0(%rdi), %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   pinsrd.w xmm0, xmm0, qword ptr [rdi + 0x0], 0x1
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   pinsrq $1, (%rdi), %xmm0 ; trap: heap_oob
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   pinsrq xmm0, qword ptr [rdi], 1 ; trap: heap_oob
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 

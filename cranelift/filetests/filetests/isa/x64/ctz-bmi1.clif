@@ -8,23 +8,23 @@ block0(v0: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   tzcntq  %rdi, %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   tzcnt rax, rdi
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   tzcntq %rdi, %rax
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   tzcnt rax, rdi
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %ctz(i32) -> i32 {
 block0(v0: i32):
@@ -33,21 +33,21 @@ block0(v0: i32):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   tzcntl  %edi, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   tzcnt eax, edi
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   tzcntl %edi, %eax
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   tzcnt eax, edi
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 

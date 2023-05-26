@@ -40,49 +40,49 @@
     i32.load offset=0xffff0000))
 
 ;; function u0:0:
-;;   pushq   %rbp
+;;   push rbp
 ;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   movq    %rsp, %rbp
+;;   mov rbp, rsp
 ;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ;; block0:
-;;   movq    %rdi, %r8
-;;   addq    %r8, const(0), %r8
+;;   mov r8, rdi
+;;   add r8, r8, const(0)
 ;;   jb #trap=heap_oob
-;;   movq    8(%rdx), %rax
-;;   movq    %rdi, %rcx
-;;   addq    %rcx, 0(%rdx), %rcx
-;;   movl    $-65536, %edx
-;;   lea     0(%rcx,%rdx,1), %rcx
-;;   xorq    %rdx, %rdx, %rdx
-;;   cmpq    %rax, %r8
-;;   cmovnbeq %rdx, %rcx, %rcx
-;;   movl    %esi, 0(%rcx)
-;;   jmp     label1
+;;   mov rax, qword ptr [rdx + 0x8]
+;;   mov rcx, rdi
+;;   add rcx, rcx, qword ptr [rdx + 0x0]
+;;   mov edx, 0xffff0000
+;;   lea rcx, qword ptr [rcx + rdx]
+;;   xor rdx, rdx, rdx
+;;   cmp r8, rax
+;;   cmovnbe rcx, rdx, rcx
+;;   mov dword ptr [rcx + 0x0], esi
+;;   jmp label1
 ;; block1:
-;;   movq    %rbp, %rsp
-;;   popq    %rbp
+;;   mov rsp, rbp
+;;   pop rbp
 ;;   ret
 ;;
 ;; function u0:1:
-;;   pushq   %rbp
+;;   push rbp
 ;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   movq    %rsp, %rbp
+;;   mov rbp, rsp
 ;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ;; block0:
-;;   movq    %rdi, %rcx
-;;   addq    %rcx, const(0), %rcx
+;;   mov rcx, rdi
+;;   add rcx, rcx, const(0)
 ;;   jb #trap=heap_oob
-;;   movq    8(%rsi), %rax
-;;   movq    %rdi, %rdx
-;;   addq    %rdx, 0(%rsi), %rdx
-;;   movl    $-65536, %r8d
-;;   lea     0(%rdx,%r8,1), %rsi
-;;   xorq    %rdx, %rdx, %rdx
-;;   cmpq    %rax, %rcx
-;;   cmovnbeq %rdx, %rsi, %rsi
-;;   movl    0(%rsi), %eax
-;;   jmp     label1
+;;   mov rax, qword ptr [rsi + 0x8]
+;;   mov rdx, rdi
+;;   add rdx, rdx, qword ptr [rsi + 0x0]
+;;   mov r8d, 0xffff0000
+;;   lea rsi, qword ptr [rdx + r8]
+;;   xor rdx, rdx, rdx
+;;   cmp rcx, rax
+;;   cmovnbe rsi, rdx, rsi
+;;   mov eax, dword ptr [rsi + 0x0]
+;;   jmp label1
 ;; block1:
-;;   movq    %rbp, %rsp
-;;   popq    %rbp
+;;   mov rsp, rbp
+;;   pop rbp
 ;;   ret

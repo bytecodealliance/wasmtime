@@ -9,23 +9,23 @@ block0(v0: f32):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   cvtss2sd %xmm0, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   cvtss2sd xmm0, xmm0
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   cvtss2sd %xmm0, %xmm0
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   cvtss2sd xmm0, xmm0
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %fpromote_load(i64, f32) -> f64 {
     ss0 = explicit_slot 16
@@ -39,31 +39,31 @@ block0(v1: i64, v2: f32):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
-;   subq    %rsp, $16, %rsp
+;   push rbp
+;   mov rbp, rsp
+;   sub rsp, rsp, $16
 ; block0:
-;   lea     rsp(0 + virtual offset), %rdx
-;   movss   %xmm0, 0(%rdx)
-;   cvtss2sd 0(%rdx), %xmm0
-;   addq    %rsp, $16, %rsp
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   lea rdx, qword ptr [rsp]
+;   movss xmmword ptr [rdx + 0x0], xmm0
+;   cvtss2sd xmm0, qword ptr [rdx + 0x0]
+;   add rsp, rsp, $16
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
-;   subq $0x10, %rsp
+;   push rbp
+;   mov rbp, rsp
+;   sub rsp, 0x10
 ; block1: ; offset 0x8
-;   leaq (%rsp), %rdx
-;   movss %xmm0, (%rdx) ; trap: heap_oob
-;   cvtss2sd (%rdx), %xmm0 ; trap: heap_oob
-;   addq $0x10, %rsp
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   lea rdx, [rsp]
+;   movss dword ptr [rdx], xmm0 ; trap: heap_oob
+;   cvtss2sd xmm0, dword ptr [rdx] ; trap: heap_oob
+;   add rsp, 0x10
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %fdemote(f64) -> f32 {
 block0(v0: f64):
@@ -72,23 +72,23 @@ block0(v0: f64):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   cvtsd2ss %xmm0, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   cvtsd2ss xmm0, xmm0
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   cvtsd2ss %xmm0, %xmm0
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   cvtsd2ss xmm0, xmm0
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %fdemote_load(i64, f64) -> f32 {
     ss0 = explicit_slot 16
@@ -102,29 +102,29 @@ block0(v1: i64, v2: f64):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
-;   subq    %rsp, $16, %rsp
+;   push rbp
+;   mov rbp, rsp
+;   sub rsp, rsp, $16
 ; block0:
-;   lea     rsp(0 + virtual offset), %rdx
-;   movsd   %xmm0, 0(%rdx)
-;   cvtsd2ss 0(%rdx), %xmm0
-;   addq    %rsp, $16, %rsp
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   lea rdx, qword ptr [rsp]
+;   movsd xmmword ptr [rdx + 0x0], xmm0
+;   cvtsd2ss xmm0, qword ptr [rdx + 0x0]
+;   add rsp, rsp, $16
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
-;   subq $0x10, %rsp
+;   push rbp
+;   mov rbp, rsp
+;   sub rsp, 0x10
 ; block1: ; offset 0x8
-;   leaq (%rsp), %rdx
-;   movsd %xmm0, (%rdx) ; trap: heap_oob
-;   cvtsd2ss (%rdx), %xmm0 ; trap: heap_oob
-;   addq $0x10, %rsp
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   lea rdx, [rsp]
+;   movsd qword ptr [rdx], xmm0 ; trap: heap_oob
+;   cvtsd2ss xmm0, qword ptr [rdx] ; trap: heap_oob
+;   add rsp, 0x10
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 

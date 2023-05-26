@@ -9,23 +9,23 @@ block0(v0: i32):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   vcvtsi2ss %edi, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   vcvtsi2ss xmm0, edi
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   vcvtsi2ssl %edi, %xmm0, %xmm0
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   vcvtsi2ss xmm0, xmm0, edi
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %f4(i64) -> f32 {
 block0(v0: i64):
@@ -34,23 +34,23 @@ block0(v0: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   vcvtsi2ss %rdi, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   vcvtsi2ss xmm0, rdi
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   vcvtsi2ssq %rdi, %xmm0, %xmm0
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   vcvtsi2ss xmm0, xmm0, rdi
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %f7(i32) -> f64 {
 block0(v0: i32):
@@ -59,23 +59,23 @@ block0(v0: i32):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   vcvtsi2sd %edi, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   vcvtsi2sd xmm0, edi
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   vcvtsi2sdl %edi, %xmm0, %xmm0
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   vcvtsi2sd xmm0, xmm0, edi
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %f8(i64) -> f64 {
 block0(v0: i64):
@@ -84,21 +84,21 @@ block0(v0: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   vcvtsi2sd %rdi, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   vcvtsi2sd xmm0, rdi
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   vcvtsi2sdq %rdi, %xmm0, %xmm0
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   vcvtsi2sd xmm0, xmm0, rdi
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 

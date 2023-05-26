@@ -8,61 +8,61 @@ block0(v0: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movq    %rdi, %rcx
-;   shrq    $1, %rdi, %rdi
-;   movq    %rcx, %r8
-;   movabsq $8608480567731124087, %rdx
-;   andq    %rdi, %rdx, %rdi
-;   subq    %r8, %rdi, %r8
-;   shrq    $1, %rdi, %rdi
-;   andq    %rdi, %rdx, %rdi
-;   subq    %r8, %rdi, %r8
-;   shrq    $1, %rdi, %rdi
-;   andq    %rdi, %rdx, %rdi
-;   subq    %r8, %rdi, %r8
-;   movq    %r8, %rax
-;   shrq    $4, %rax, %rax
-;   addq    %rax, %r8, %rax
-;   movabsq $1085102592571150095, %r11
-;   andq    %rax, %r11, %rax
-;   movabsq $72340172838076673, %rcx
-;   imulq   %rax, %rcx, %rax
-;   shrq    $56, %rax, %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   mov rcx, rdi
+;   shr rdi, rdi, 0x1
+;   mov r8, rcx
+;   movabs rdx, 0x7777777777777777
+;   and rdi, rdi, rdx
+;   sub r8, r8, rdi
+;   shr rdi, rdi, 0x1
+;   and rdi, rdi, rdx
+;   sub r8, r8, rdi
+;   shr rdi, rdi, 0x1
+;   and rdi, rdi, rdx
+;   sub r8, r8, rdi
+;   mov rax, r8
+;   shr rax, rax, 0x4
+;   add rax, rax, r8
+;   movabs r11, 0xf0f0f0f0f0f0f0f
+;   and rax, rax, r11
+;   movabs rcx, 0x101010101010101
+;   imul rax, rax, rcx
+;   shr rax, rax, 0x38
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movq %rdi, %rcx
-;   shrq $1, %rdi
-;   movq %rcx, %r8
-;   movabsq $0x7777777777777777, %rdx
-;   andq %rdx, %rdi
-;   subq %rdi, %r8
-;   shrq $1, %rdi
-;   andq %rdx, %rdi
-;   subq %rdi, %r8
-;   shrq $1, %rdi
-;   andq %rdx, %rdi
-;   subq %rdi, %r8
-;   movq %r8, %rax
-;   shrq $4, %rax
-;   addq %r8, %rax
-;   movabsq $0xf0f0f0f0f0f0f0f, %r11
-;   andq %r11, %rax
-;   movabsq $0x101010101010101, %rcx
-;   imulq %rcx, %rax
-;   shrq $0x38, %rax
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   mov rcx, rdi
+;   shr rdi, 1
+;   mov r8, rcx
+;   movabs rdx, 0x7777777777777777
+;   and rdi, rdx
+;   sub r8, rdi
+;   shr rdi, 1
+;   and rdi, rdx
+;   sub r8, rdi
+;   shr rdi, 1
+;   and rdi, rdx
+;   sub r8, rdi
+;   mov rax, r8
+;   shr rax, 4
+;   add rax, r8
+;   movabs r11, 0xf0f0f0f0f0f0f0f
+;   and rax, r11
+;   movabs rcx, 0x101010101010101
+;   imul rax, rcx
+;   shr rax, 0x38
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %popcnt64load(i64) -> i64 {
 block0(v0: i64):
@@ -72,61 +72,61 @@ block0(v0: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movq    0(%rdi), %rdx
-;   movq    %rdx, %rcx
-;   shrq    $1, %rcx, %rcx
-;   movabsq $8608480567731124087, %r8
-;   andq    %rcx, %r8, %rcx
-;   subq    %rdx, %rcx, %rdx
-;   shrq    $1, %rcx, %rcx
-;   andq    %rcx, %r8, %rcx
-;   subq    %rdx, %rcx, %rdx
-;   shrq    $1, %rcx, %rcx
-;   andq    %rcx, %r8, %rcx
-;   subq    %rdx, %rcx, %rdx
-;   movq    %rdx, %rax
-;   shrq    $4, %rax, %rax
-;   addq    %rax, %rdx, %rax
-;   movabsq $1085102592571150095, %rsi
-;   andq    %rax, %rsi, %rax
-;   movabsq $72340172838076673, %rdx
-;   imulq   %rax, %rdx, %rax
-;   shrq    $56, %rax, %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   mov rdx, qword ptr [rdi + 0x0]
+;   mov rcx, rdx
+;   shr rcx, rcx, 0x1
+;   movabs r8, 0x7777777777777777
+;   and rcx, rcx, r8
+;   sub rdx, rdx, rcx
+;   shr rcx, rcx, 0x1
+;   and rcx, rcx, r8
+;   sub rdx, rdx, rcx
+;   shr rcx, rcx, 0x1
+;   and rcx, rcx, r8
+;   sub rdx, rdx, rcx
+;   mov rax, rdx
+;   shr rax, rax, 0x4
+;   add rax, rax, rdx
+;   movabs rsi, 0xf0f0f0f0f0f0f0f
+;   and rax, rax, rsi
+;   movabs rdx, 0x101010101010101
+;   imul rax, rax, rdx
+;   shr rax, rax, 0x38
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movq (%rdi), %rdx ; trap: heap_oob
-;   movq %rdx, %rcx
-;   shrq $1, %rcx
-;   movabsq $0x7777777777777777, %r8
-;   andq %r8, %rcx
-;   subq %rcx, %rdx
-;   shrq $1, %rcx
-;   andq %r8, %rcx
-;   subq %rcx, %rdx
-;   shrq $1, %rcx
-;   andq %r8, %rcx
-;   subq %rcx, %rdx
-;   movq %rdx, %rax
-;   shrq $4, %rax
-;   addq %rdx, %rax
-;   movabsq $0xf0f0f0f0f0f0f0f, %rsi
-;   andq %rsi, %rax
-;   movabsq $0x101010101010101, %rdx
-;   imulq %rdx, %rax
-;   shrq $0x38, %rax
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   mov rdx, qword ptr [rdi] ; trap: heap_oob
+;   mov rcx, rdx
+;   shr rcx, 1
+;   movabs r8, 0x7777777777777777
+;   and rcx, r8
+;   sub rdx, rcx
+;   shr rcx, 1
+;   and rcx, r8
+;   sub rdx, rcx
+;   shr rcx, 1
+;   and rcx, r8
+;   sub rdx, rcx
+;   mov rax, rdx
+;   shr rax, 4
+;   add rax, rdx
+;   movabs rsi, 0xf0f0f0f0f0f0f0f
+;   and rax, rsi
+;   movabs rdx, 0x101010101010101
+;   imul rax, rdx
+;   shr rax, 0x38
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %popcnt32(i32) -> i32 {
 block0(v0: i32):
@@ -135,57 +135,57 @@ block0(v0: i32):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movq    %rdi, %rax
-;   shrl    $1, %edi, %edi
-;   movl    $2004318071, %edx
-;   andl    %edi, %edx, %edi
-;   movq    %rax, %r8
-;   subl    %r8d, %edi, %r8d
-;   shrl    $1, %edi, %edi
-;   andl    %edi, %edx, %edi
-;   subl    %r8d, %edi, %r8d
-;   shrl    $1, %edi, %edi
-;   andl    %edi, %edx, %edi
-;   subl    %r8d, %edi, %r8d
-;   movq    %r8, %rax
-;   shrl    $4, %eax, %eax
-;   addl    %eax, %r8d, %eax
-;   andl    %eax, $252645135, %eax
-;   imull   %eax, $16843009, %eax
-;   shrl    $24, %eax, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   mov rax, rdi
+;   shr edi, edi, 0x1
+;   mov edx, 0x77777777
+;   and edi, edi, edx
+;   mov r8, rax
+;   sub r8d, r8d, edi
+;   shr edi, edi, 0x1
+;   and edi, edi, edx
+;   sub r8d, r8d, edi
+;   shr edi, edi, 0x1
+;   and edi, edi, edx
+;   sub r8d, r8d, edi
+;   mov rax, r8
+;   shr eax, eax, 0x4
+;   add eax, eax, r8d
+;   and eax, eax, $252645135
+;   imul eax, eax, $16843009
+;   shr eax, eax, 0x18
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movq %rdi, %rax
-;   shrl $1, %edi
-;   movl $0x77777777, %edx
-;   andl %edx, %edi
-;   movq %rax, %r8
-;   subl %edi, %r8d
-;   shrl $1, %edi
-;   andl %edx, %edi
-;   subl %edi, %r8d
-;   shrl $1, %edi
-;   andl %edx, %edi
-;   subl %edi, %r8d
-;   movq %r8, %rax
-;   shrl $4, %eax
-;   addl %r8d, %eax
-;   andl $0xf0f0f0f, %eax
-;   imull $0x1010101, %eax, %eax
-;   shrl $0x18, %eax
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   mov rax, rdi
+;   shr edi, 1
+;   mov edx, 0x77777777
+;   and edi, edx
+;   mov r8, rax
+;   sub r8d, edi
+;   shr edi, 1
+;   and edi, edx
+;   sub r8d, edi
+;   shr edi, 1
+;   and edi, edx
+;   sub r8d, edi
+;   mov rax, r8
+;   shr eax, 4
+;   add eax, r8d
+;   and eax, 0xf0f0f0f
+;   imul eax, eax, 0x1010101
+;   shr eax, 0x18
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %popcnt32load(i64) -> i32 {
 block0(v0: i64):
@@ -195,55 +195,55 @@ block0(v0: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movl    0(%rdi), %edx
-;   movq    %rdx, %rcx
-;   shrl    $1, %ecx, %ecx
-;   movl    $2004318071, %r8d
-;   andl    %ecx, %r8d, %ecx
-;   subl    %edx, %ecx, %edx
-;   shrl    $1, %ecx, %ecx
-;   andl    %ecx, %r8d, %ecx
-;   subl    %edx, %ecx, %edx
-;   shrl    $1, %ecx, %ecx
-;   andl    %ecx, %r8d, %ecx
-;   subl    %edx, %ecx, %edx
-;   movq    %rdx, %rax
-;   shrl    $4, %eax, %eax
-;   addl    %eax, %edx, %eax
-;   andl    %eax, $252645135, %eax
-;   imull   %eax, $16843009, %eax
-;   shrl    $24, %eax, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   mov edx, dword ptr [rdi + 0x0]
+;   mov rcx, rdx
+;   shr ecx, ecx, 0x1
+;   mov r8d, 0x77777777
+;   and ecx, ecx, r8d
+;   sub edx, edx, ecx
+;   shr ecx, ecx, 0x1
+;   and ecx, ecx, r8d
+;   sub edx, edx, ecx
+;   shr ecx, ecx, 0x1
+;   and ecx, ecx, r8d
+;   sub edx, edx, ecx
+;   mov rax, rdx
+;   shr eax, eax, 0x4
+;   add eax, eax, edx
+;   and eax, eax, $252645135
+;   imul eax, eax, $16843009
+;   shr eax, eax, 0x18
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movl (%rdi), %edx ; trap: heap_oob
-;   movq %rdx, %rcx
-;   shrl $1, %ecx
-;   movl $0x77777777, %r8d
-;   andl %r8d, %ecx
-;   subl %ecx, %edx
-;   shrl $1, %ecx
-;   andl %r8d, %ecx
-;   subl %ecx, %edx
-;   shrl $1, %ecx
-;   andl %r8d, %ecx
-;   subl %ecx, %edx
-;   movq %rdx, %rax
-;   shrl $4, %eax
-;   addl %edx, %eax
-;   andl $0xf0f0f0f, %eax
-;   imull $0x1010101, %eax, %eax
-;   shrl $0x18, %eax
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   mov edx, dword ptr [rdi] ; trap: heap_oob
+;   mov rcx, rdx
+;   shr ecx, 1
+;   mov r8d, 0x77777777
+;   and ecx, r8d
+;   sub edx, ecx
+;   shr ecx, 1
+;   and ecx, r8d
+;   sub edx, ecx
+;   shr ecx, 1
+;   and ecx, r8d
+;   sub edx, ecx
+;   mov rax, rdx
+;   shr eax, 4
+;   add eax, edx
+;   and eax, 0xf0f0f0f
+;   imul eax, eax, 0x1010101
+;   shr eax, 0x18
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 

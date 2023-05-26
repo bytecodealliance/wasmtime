@@ -10,36 +10,36 @@ block0(v0: f64x2):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   uninit  %xmm3
-;   xorpd   %xmm3, %xmm3, %xmm3
-;   movdqa  %xmm0, %xmm7
-;   maxpd   %xmm7, %xmm3, %xmm7
-;   minpd   %xmm7, const(0), %xmm7
-;   roundpd $3, %xmm7, %xmm0
-;   addpd   %xmm0, const(1), %xmm0
-;   shufps  $136, %xmm0, %xmm3, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   uninit xmm3
+;   xorpd xmm3, xmm3, xmm3
+;   movdqa xmm7, xmm0
+;   maxpd xmm7, xmm7, xmm3
+;   minpd xmm7, xmm7, const(0)
+;   roundpd xmm0, xmm7, 3
+;   addpd xmm0, xmm0, const(1)
+;   shufps xmm0, xmm0, xmm3, 0x88
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   xorpd %xmm3, %xmm3
-;   movdqa %xmm0, %xmm7
-;   maxpd %xmm3, %xmm7
-;   minpd 0x18(%rip), %xmm7
-;   roundpd $3, %xmm7, %xmm0
-;   addpd 0x1a(%rip), %xmm0
-;   shufps $0x88, %xmm3, %xmm0
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
-;   addb %al, (%rax)
-;   addb %ah, %al
+;   xorpd xmm3, xmm3
+;   movdqa xmm7, xmm0
+;   maxpd xmm7, xmm3
+;   minpd xmm7, xmmword ptr [rip + 0x18]
+;   roundpd xmm0, xmm7, 3
+;   addpd xmm0, xmmword ptr [rip + 0x1a]
+;   shufps xmm0, xmm3, 0x88
+;   mov rsp, rbp
+;   pop rbp
+;   ret
+;   add byte ptr [rax], al
+;   add al, ah
 

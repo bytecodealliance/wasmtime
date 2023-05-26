@@ -9,23 +9,23 @@ block0(v0: i16x8, v1: i16x8):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   phaddw  %xmm0, %xmm1, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   phaddw xmm0, xmm0, xmm1
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   phaddw %xmm1, %xmm0
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   phaddw xmm0, xmm1
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %iadd_pairwise_i32x4(i32x4, i32x4) -> i32x4 {
 block0(v0: i32x4, v1: i32x4):
@@ -34,21 +34,21 @@ block0(v0: i32x4, v1: i32x4):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   phaddd  %xmm0, %xmm1, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   phaddd xmm0, xmm0, xmm1
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   phaddd %xmm1, %xmm0
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   phaddd xmm0, xmm1
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 

@@ -10,27 +10,27 @@ block0(v0: i32, v1: i32, v2: i64, v3: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   cmpl    %esi, %edi
-;   movq    %rcx, %rax
-;   cmovzq  %rdx, %rax, %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   cmp edi, esi
+;   mov rax, rcx
+;   cmovz rax, rdx, rax
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   cmpl %esi, %edi
-;   movq %rcx, %rax
-;   cmoveq %rdx, %rax
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   cmp edi, esi
+;   mov rax, rcx
+;   cmove rax, rdx
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %f0(f32, f32, i64, i64) -> i64 {
 block0(v0: f32, v1: f32, v2: i64, v3: i64):
@@ -41,27 +41,27 @@ block0(v0: f32, v1: f32, v2: i64, v3: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   ucomiss %xmm1, %xmm0
-;   movq    %rdi, %rax
-;   cmovpq  %rsi, %rax, %rax
-;   cmovnzq %rsi, %rax, %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   ucomiss xmm0, xmm1
+;   mov rax, rdi
+;   cmovp rax, rsi, rax
+;   cmovnz rax, rsi, rax
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   ucomiss %xmm1, %xmm0
-;   movq %rdi, %rax
-;   cmovpq %rsi, %rax
-;   cmovneq %rsi, %rax
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   ucomiss xmm0, xmm1
+;   mov rax, rdi
+;   cmovp rax, rsi
+;   cmovne rax, rsi
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 

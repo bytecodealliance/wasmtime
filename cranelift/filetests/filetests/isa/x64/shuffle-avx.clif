@@ -12,23 +12,23 @@ block0(v0: i32x4, v1: i32x4):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   vpunpckldq %xmm0, %xmm1, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   vpunpckldq xmm0, xmm0, xmm1
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   vpunpckldq %xmm1, %xmm0, %xmm0
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   vpunpckldq xmm0, xmm0, xmm1
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %punpckhdq(i32x4, i32x4) -> i32x4 {
 block0(v0: i32x4, v1: i32x4):
@@ -40,23 +40,23 @@ block0(v0: i32x4, v1: i32x4):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   vpunpckhdq %xmm0, %xmm1, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   vpunpckhdq xmm0, xmm0, xmm1
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   vpunpckhdq %xmm1, %xmm0, %xmm0
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   vpunpckhdq xmm0, xmm0, xmm1
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %punpcklqdq(i64x2, i64x2) -> i64x2 {
 block0(v0: i64x2, v1: i64x2):
@@ -68,23 +68,23 @@ block0(v0: i64x2, v1: i64x2):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   vpunpcklqdq %xmm0, %xmm1, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   vpunpcklqdq xmm0, xmm0, xmm1
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   vpunpcklqdq %xmm1, %xmm0, %xmm0
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   vpunpcklqdq xmm0, xmm0, xmm1
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %punpckhqdq(i64x2, i64x2) -> i64x2 {
 block0(v0: i64x2, v1: i64x2):
@@ -96,23 +96,23 @@ block0(v0: i64x2, v1: i64x2):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   vpunpckhqdq %xmm0, %xmm1, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   vpunpckhqdq xmm0, xmm0, xmm1
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   vpunpckhqdq %xmm1, %xmm0, %xmm0
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   vpunpckhqdq xmm0, xmm0, xmm1
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %pblendw_0b10011001(i16x8, i16x8) -> i16x8 {
 block0(v0: i16x8, v1: i16x8):
@@ -124,21 +124,21 @@ block0(v0: i16x8, v1: i16x8):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   vpblendw $153, %xmm0, %xmm1, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   vpblendw xmm0, xmm0, xmm1, 0x99
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   vpblendw $0x99, %xmm1, %xmm0, %xmm0
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   vpblendw xmm0, xmm0, xmm1, 0x99
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 

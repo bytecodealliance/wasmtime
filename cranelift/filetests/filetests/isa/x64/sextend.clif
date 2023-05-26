@@ -8,21 +8,21 @@ block0(v0: i8):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movsbq  %dil, %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   movsx rax, dil
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movsbq %dil, %rax
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   movsx rax, dil
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 

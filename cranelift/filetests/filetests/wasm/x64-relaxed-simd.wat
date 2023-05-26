@@ -37,107 +37,107 @@
 )
 
 ;; function u0:0:
-;;   pushq   %rbp
+;;   push rbp
 ;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   movq    %rsp, %rbp
+;;   mov rbp, rsp
 ;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ;; block0:
-;;   cvttps2dq %xmm0, %xmm0
-;;   jmp     label1
+;;   cvttps2dq xmm0, xmm0
+;;   jmp label1
 ;; block1:
-;;   movq    %rbp, %rsp
-;;   popq    %rbp
+;;   mov rsp, rbp
+;;   pop rbp
 ;;   ret
 ;;
 ;; function u0:1:
-;;   pushq   %rbp
+;;   push rbp
 ;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   movq    %rsp, %rbp
+;;   mov rbp, rsp
 ;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ;; block0:
-;;   uninit  %xmm7
-;;   xorps   %xmm7, %xmm7, %xmm7
-;;   movdqa  %xmm0, %xmm12
-;;   maxps   %xmm12, %xmm7, %xmm12
-;;   pcmpeqd %xmm7, %xmm7, %xmm7
-;;   psrld   %xmm7, $1, %xmm7
-;;   cvtdq2ps %xmm7, %xmm1
-;;   cvttps2dq %xmm12, %xmm15
-;;   subps   %xmm12, %xmm1, %xmm12
-;;   cmpps   $2, %xmm1, %xmm12, %xmm1
-;;   cvttps2dq %xmm12, %xmm0
-;;   pxor    %xmm0, %xmm1, %xmm0
-;;   uninit  %xmm10
-;;   pxor    %xmm10, %xmm10, %xmm10
-;;   pmaxsd  %xmm0, %xmm10, %xmm0
-;;   paddd   %xmm0, %xmm15, %xmm0
-;;   jmp     label1
+;;   uninit xmm7
+;;   xorps xmm7, xmm7, xmm7
+;;   movdqa xmm12, xmm0
+;;   maxps xmm12, xmm12, xmm7
+;;   pcmpeqd xmm7, xmm7, xmm7
+;;   psrld xmm7, xmm7, $1
+;;   cvtdq2ps xmm1, xmm7
+;;   cvttps2dq xmm15, xmm12
+;;   subps xmm12, xmm12, xmm1
+;;   cmpps xmm1, xmm1, xmm12, 0x2
+;;   cvttps2dq xmm0, xmm12
+;;   pxor xmm0, xmm0, xmm1
+;;   uninit xmm10
+;;   pxor xmm10, xmm10, xmm10
+;;   pmaxsd xmm0, xmm0, xmm10
+;;   paddd xmm0, xmm0, xmm15
+;;   jmp label1
 ;; block1:
-;;   movq    %rbp, %rsp
-;;   popq    %rbp
+;;   mov rsp, rbp
+;;   pop rbp
 ;;   ret
 ;;
 ;; function u0:2:
-;;   pushq   %rbp
+;;   push rbp
 ;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   movq    %rsp, %rbp
+;;   mov rbp, rsp
 ;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ;; block0:
-;;   cvttpd2dq %xmm0, %xmm0
-;;   jmp     label1
+;;   cvttpd2dq xmm0, xmm0
+;;   jmp label1
 ;; block1:
-;;   movq    %rbp, %rsp
-;;   popq    %rbp
+;;   mov rsp, rbp
+;;   pop rbp
 ;;   ret
 ;;
 ;; function u0:3:
-;;   pushq   %rbp
+;;   push rbp
 ;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   movq    %rsp, %rbp
+;;   mov rbp, rsp
 ;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ;; block0:
-;;   uninit  %xmm4
-;;   xorpd   %xmm4, %xmm4, %xmm4
-;;   movdqa  %xmm0, %xmm8
-;;   maxpd   %xmm8, %xmm4, %xmm8
-;;   minpd   %xmm8, const(0), %xmm8
-;;   roundpd $3, %xmm8, %xmm0
-;;   addpd   %xmm0, const(1), %xmm0
-;;   shufps  $136, %xmm0, %xmm4, %xmm0
-;;   jmp     label1
+;;   uninit xmm4
+;;   xorpd xmm4, xmm4, xmm4
+;;   movdqa xmm8, xmm0
+;;   maxpd xmm8, xmm8, xmm4
+;;   minpd xmm8, xmm8, const(0)
+;;   roundpd xmm0, xmm8, 3
+;;   addpd xmm0, xmm0, const(1)
+;;   shufps xmm0, xmm0, xmm4, 0x88
+;;   jmp label1
 ;; block1:
-;;   movq    %rbp, %rsp
-;;   popq    %rbp
+;;   mov rsp, rbp
+;;   pop rbp
 ;;   ret
 ;;
 ;; function u0:4:
-;;   pushq   %rbp
+;;   push rbp
 ;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   movq    %rsp, %rbp
+;;   mov rbp, rsp
 ;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ;; block0:
-;;   movdqa  %xmm1, %xmm4
-;;   pmaddubsw %xmm4, %xmm0, %xmm4
-;;   movdqa  %xmm4, %xmm0
-;;   jmp     label1
+;;   movdqa xmm4, xmm1
+;;   pmaddubsw xmm4, xmm4, xmm0
+;;   movdqa xmm0, xmm4
+;;   jmp label1
 ;; block1:
-;;   movq    %rbp, %rsp
-;;   popq    %rbp
+;;   mov rsp, rbp
+;;   pop rbp
 ;;   ret
 ;;
 ;; function u0:5:
-;;   pushq   %rbp
+;;   push rbp
 ;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   movq    %rsp, %rbp
+;;   mov rbp, rsp
 ;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ;; block0:
-;;   movdqa  %xmm0, %xmm8
-;;   movdqa  %xmm1, %xmm0
-;;   pmaddubsw %xmm0, %xmm8, %xmm0
-;;   pmaddwd %xmm0, const(0), %xmm0
-;;   paddd   %xmm0, %xmm2, %xmm0
-;;   jmp     label1
+;;   movdqa xmm8, xmm0
+;;   movdqa xmm0, xmm1
+;;   pmaddubsw xmm0, xmm0, xmm8
+;;   pmaddwd xmm0, xmm0, const(0)
+;;   paddd xmm0, xmm0, xmm2
+;;   jmp label1
 ;; block1:
-;;   movq    %rbp, %rsp
-;;   popq    %rbp
+;;   mov rsp, rbp
+;;   pop rbp
 ;;   ret

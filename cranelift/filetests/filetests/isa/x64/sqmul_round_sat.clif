@@ -8,30 +8,30 @@ block0(v0: i16x8, v1: i16x8):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   pmulhrsw %xmm0, %xmm1, %xmm0
-;   movdqa  %xmm0, %xmm5
-;   pcmpeqw %xmm5, const(0), %xmm5
-;   pxor    %xmm0, %xmm5, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   pmulhrsw xmm0, xmm0, xmm1
+;   movdqa xmm5, xmm0
+;   pcmpeqw xmm5, xmm5, const(0)
+;   pxor xmm0, xmm0, xmm5
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   pmulhrsw %xmm1, %xmm0
-;   movdqa %xmm0, %xmm5
-;   pcmpeqw 0xb(%rip), %xmm5
-;   pxor %xmm5, %xmm0
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
-;   addb %al, (%rax)
-;   addb %al, -0x7fff8000(%rax)
-;   addb %al, -0x7fff8000(%rax)
+;   pmulhrsw xmm0, xmm1
+;   movdqa xmm5, xmm0
+;   pcmpeqw xmm5, xmmword ptr [rip + 0xb]
+;   pxor xmm0, xmm5
+;   mov rsp, rbp
+;   pop rbp
+;   ret
+;   add byte ptr [rax], al
+;   add byte ptr [rax - 0x7fff8000], al
+;   add byte ptr [rax - 0x7fff8000], al
 

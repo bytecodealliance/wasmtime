@@ -8,27 +8,27 @@ block0(v0: i8, v1: i32, v2: i32):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   testb   %dil, %dil
-;   movq    %rdx, %rax
-;   cmovnzl %esi, %eax, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   test dil, dil
+;   mov rax, rdx
+;   cmovnz eax, esi, eax
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   testb %dil, %dil
-;   movq %rdx, %rax
-;   cmovnel %esi, %eax
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   test dil, dil
+;   mov rax, rdx
+;   cmovne eax, esi
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %f1(i8) -> i32 {
 block0(v0: i8):
@@ -42,39 +42,39 @@ block2:
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   testb   %dil, %dil
-;   jnz     label2; j label1
+;   test dil, dil
+;   jnz label2; j label1
 ; block1:
-;   movl    $2, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   mov eax, 0x2
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; block2:
-;   movl    $1, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   mov eax, 0x1
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   testb %dil, %dil
+;   test dil, dil
 ;   jne 0x17
 ; block2: ; offset 0xd
-;   movl $2, %eax
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   mov eax, 2
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 ; block3: ; offset 0x17
-;   movl $1, %eax
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   mov eax, 1
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %f2(i8) -> i32 {
 block0(v0: i8):
@@ -88,39 +88,39 @@ block2:
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   testb   %dil, %dil
-;   jnz     label2; j label1
+;   test dil, dil
+;   jnz label2; j label1
 ; block1:
-;   movl    $1, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   mov eax, 0x1
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; block2:
-;   movl    $2, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   mov eax, 0x2
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   testb %dil, %dil
+;   test dil, dil
 ;   jne 0x17
 ; block2: ; offset 0xd
-;   movl $1, %eax
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   mov eax, 1
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 ; block3: ; offset 0x17
-;   movl $2, %eax
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   mov eax, 2
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %f3(i64) -> i32 {
 block0(v0: i64):
@@ -137,41 +137,41 @@ block2:
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movl    0(%rdi), %edx
-;   cmpl    $1, %edx
-;   jz      label2; j label1
+;   mov edx, dword ptr [rdi + 0x0]
+;   cmp edx, $1
+;   jz label2; j label1
 ; block1:
-;   movl    $1, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   mov eax, 0x1
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; block2:
-;   movl    $1, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   mov eax, 0x1
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movl (%rdi), %edx ; trap: heap_oob
-;   cmpl $1, %edx
+;   mov edx, dword ptr [rdi] ; trap: heap_oob
+;   cmp edx, 1
 ;   je 0x19
 ; block2: ; offset 0xf
-;   movl $1, %eax
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   mov eax, 1
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 ; block3: ; offset 0x19
-;   movl $1, %eax
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   mov eax, 1
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %f4(i64) -> i32 {
 block0(v0: i64):
@@ -188,41 +188,41 @@ block2:
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movl    0(%rdi), %edx
-;   cmpl    $1, %edx
-;   jz      label2; j label1
+;   mov edx, dword ptr [rdi + 0x0]
+;   cmp edx, $1
+;   jz label2; j label1
 ; block1:
-;   movl    $1, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   mov eax, 0x1
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; block2:
-;   movl    $1, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   mov eax, 0x1
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movl (%rdi), %edx ; trap: heap_oob
-;   cmpl $1, %edx
+;   mov edx, dword ptr [rdi] ; trap: heap_oob
+;   cmp edx, 1
 ;   je 0x19
 ; block2: ; offset 0xf
-;   movl $1, %eax
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   mov eax, 1
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 ; block3: ; offset 0x19
-;   movl $1, %eax
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   mov eax, 1
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %test_x_slt_0_i64(i64) -> i8 {
 block0(v0: i64):
@@ -232,25 +232,25 @@ block0(v0: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movq    %rdi, %rax
-;   shrq    $63, %rax, %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   mov rax, rdi
+;   shr rax, rax, 0x3f
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movq %rdi, %rax
-;   shrq $0x3f, %rax
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   mov rax, rdi
+;   shr rax, 0x3f
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %test_x_slt_0_i32f4(i32) -> i8 {
 block0(v0: i32):
@@ -260,25 +260,25 @@ block0(v0: i32):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movq    %rdi, %rax
-;   shrl    $31, %eax, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   mov rax, rdi
+;   shr eax, eax, 0x1f
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movq %rdi, %rax
-;   shrl $0x1f, %eax
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   mov rax, rdi
+;   shr eax, 0x1f
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %test_0_sgt_x_i64(i64) -> i8 {
 block0(v0: i64):
@@ -288,25 +288,25 @@ block0(v0: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movq    %rdi, %rax
-;   shrq    $63, %rax, %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   mov rax, rdi
+;   shr rax, rax, 0x3f
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movq %rdi, %rax
-;   shrq $0x3f, %rax
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   mov rax, rdi
+;   shr rax, 0x3f
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %test_0_sgt_x_i32f4(i32) -> i8 {
 block0(v0: i32):
@@ -316,25 +316,25 @@ block0(v0: i32):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movq    %rdi, %rax
-;   shrl    $31, %eax, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   mov rax, rdi
+;   shr eax, eax, 0x1f
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movq %rdi, %rax
-;   shrl $0x1f, %eax
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   mov rax, rdi
+;   shr eax, 0x1f
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %test_0_sle_x_i64(i64) -> i8 {
 block0(v0: i64):
@@ -344,27 +344,27 @@ block0(v0: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movq    %rdi, %rax
-;   notq    %rax, %rax
-;   shrq    $63, %rax, %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   mov rax, rdi
+;   not rax, rax
+;   shr rax, rax, 0x3f
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movq %rdi, %rax
-;   notq %rax
-;   shrq $0x3f, %rax
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   mov rax, rdi
+;   not rax
+;   shr rax, 0x3f
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %test_0_sle_x_i32f4(i32) -> i8 {
 block0(v0: i32):
@@ -374,27 +374,27 @@ block0(v0: i32):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movq    %rdi, %rax
-;   notq    %rax, %rax
-;   shrl    $31, %eax, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   mov rax, rdi
+;   not rax, rax
+;   shr eax, eax, 0x1f
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movq %rdi, %rax
-;   notq %rax
-;   shrl $0x1f, %eax
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   mov rax, rdi
+;   not rax
+;   shr eax, 0x1f
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %test_x_sge_x_i64(i64) -> i8 {
 block0(v0: i64):
@@ -404,27 +404,27 @@ block0(v0: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movq    %rdi, %rax
-;   notq    %rax, %rax
-;   shrq    $63, %rax, %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   mov rax, rdi
+;   not rax, rax
+;   shr rax, rax, 0x3f
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movq %rdi, %rax
-;   notq %rax
-;   shrq $0x3f, %rax
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   mov rax, rdi
+;   not rax
+;   shr rax, 0x3f
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %test_x_sge_x_i32f4(i32) -> i8 {
 block0(v0: i32):
@@ -434,25 +434,25 @@ block0(v0: i32):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movq    %rdi, %rax
-;   notq    %rax, %rax
-;   shrl    $31, %eax, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   mov rax, rdi
+;   not rax, rax
+;   shr eax, eax, 0x1f
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movq %rdi, %rax
-;   notq %rax
-;   shrl $0x1f, %eax
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   mov rax, rdi
+;   not rax
+;   shr eax, 0x1f
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 

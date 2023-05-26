@@ -8,23 +8,23 @@ block0(v0: f32):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   roundss $1, %xmm0, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   roundss xmm0, xmm0, 1
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   roundss $1, %xmm0, %xmm0
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   roundss xmm0, xmm0, 1
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %f2(f64) -> f64 {
 block0(v0: f64):
@@ -33,23 +33,23 @@ block0(v0: f64):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   roundsd $1, %xmm0, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   roundsd xmm0, xmm0, 1
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   roundsd $1, %xmm0, %xmm0
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   roundsd xmm0, xmm0, 1
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %f4(f32x4) -> f32x4 {
 block0(v0: f32x4):
@@ -58,23 +58,23 @@ block0(v0: f32x4):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   roundps $1, %xmm0, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   roundps xmm0, xmm0, 1
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   roundps $1, %xmm0, %xmm0
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   roundps xmm0, xmm0, 1
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %f4(f64x2) -> f64x2 {
 block0(v0: f64x2):
@@ -83,21 +83,21 @@ block0(v0: f64x2):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   roundpd $1, %xmm0, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   roundpd xmm0, xmm0, 1
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   roundpd $1, %xmm0, %xmm0
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   roundpd xmm0, xmm0, 1
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 

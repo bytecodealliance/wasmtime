@@ -13,57 +13,57 @@ block0:
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movdqu  const(3), %xmm0
-;   movdqu  const(2), %xmm2
-;   pshufb  %xmm0, const(0), %xmm0
-;   pshufb  %xmm2, const(1), %xmm2
-;   por     %xmm0, %xmm2, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   movdqu xmm0, const(3)
+;   movdqu xmm2, const(2)
+;   pshufb xmm0, xmm0, const(0)
+;   pshufb xmm2, xmm2, const(1)
+;   por xmm0, xmm0, xmm2
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movdqu 0x24(%rip), %xmm0
-;   movdqu 0x2c(%rip), %xmm2
-;   pshufb 0x33(%rip), %xmm0
-;   pshufb 0x3a(%rip), %xmm2
-;   por %xmm2, %xmm0
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rcx)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb $0x80, -0x7f7f7f80(%rax)
-;   addb $0x80, -0x7f7f7f80(%rax)
+;   movdqu xmm0, xmmword ptr [rip + 0x24]
+;   movdqu xmm2, xmmword ptr [rip + 0x2c]
+;   pshufb xmm0, xmmword ptr [rip + 0x33]
+;   pshufb xmm2, xmmword ptr [rip + 0x3a]
+;   por xmm0, xmm2
+;   mov rsp, rbp
+;   pop rbp
+;   ret
+;   add byte ptr [rax], al
+;   add byte ptr [rax], al
+;   add byte ptr [rax], al
+;   add byte ptr [rax], al
+;   add byte ptr [rax], al
+;   add byte ptr [rax], al
+;   add byte ptr [rax], al
+;   add byte ptr [rax], al
+;   add byte ptr [rcx], al
+;   add byte ptr [rax], al
+;   add byte ptr [rax], al
+;   add byte ptr [rax], al
+;   add byte ptr [rax], al
+;   add byte ptr [rax], al
+;   add byte ptr [rax], al
+;   add byte ptr [rax], al
+;   add byte ptr [rax], al
+;   add byte ptr [rax], al
+;   add byte ptr [rax], al
+;   add byte ptr [rax], al
+;   add byte ptr [rax], al
+;   add byte ptr [rax], al
+;   add byte ptr [rax], al
+;   add byte ptr [rax], al
+;   add byte ptr [rax - 0x7f7f7f80], 0x80
+;   add byte ptr [rax - 0x7f7f7f80], 0x80
 
 function %shuffle_same_ssa_value() -> i8x16 {
 block0:
@@ -73,44 +73,44 @@ block0:
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movdqu  const(1), %xmm0
-;   pshufb  %xmm0, const(0), %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   movdqu xmm0, const(1)
+;   pshufb xmm0, xmm0, const(0)
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movdqu 0x14(%rip), %xmm0
-;   pshufb 0x1b(%rip), %xmm0
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addl %eax, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rbx)
+;   movdqu xmm0, xmmword ptr [rip + 0x14]
+;   pshufb xmm0, xmmword ptr [rip + 0x1b]
+;   mov rsp, rbp
+;   pop rbp
+;   ret
+;   add byte ptr [rax], al
+;   add byte ptr [rax], al
+;   add byte ptr [rax], al
+;   add dword ptr [rax], eax
+;   add byte ptr [rax], al
+;   add byte ptr [rax], al
+;   add byte ptr [rax], al
+;   add byte ptr [rax], al
+;   add byte ptr [rax], al
+;   add byte ptr [rax], al
+;   add byte ptr [rax], al
+;   add byte ptr [rax], al
+;   add byte ptr [rax], al
+;   add byte ptr [rax], al
+;   add byte ptr [rax], al
+;   add byte ptr [rax], al
+;   add byte ptr [rax], al
+;   add byte ptr [rax], al
+;   add byte ptr [rbx], al
 
 function %swizzle() -> i8x16 {
 block0:
@@ -121,37 +121,37 @@ block0:
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movdqu  const(1), %xmm0
-;   movdqu  const(1), %xmm1
-;   paddusb %xmm1, const(0), %xmm1
-;   pshufb  %xmm0, %xmm1, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   movdqu xmm0, const(1)
+;   movdqu xmm1, const(1)
+;   paddusb xmm1, xmm1, const(0)
+;   pshufb xmm0, xmm0, xmm1
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movdqu 0x24(%rip), %xmm0
-;   movdqu 0x1c(%rip), %xmm1
-;   paddusb 0x24(%rip), %xmm1
-;   pshufb %xmm1, %xmm0
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rcx)
-;   addb (%rbx), %al
-;   addb $5, %al
+;   movdqu xmm0, xmmword ptr [rip + 0x24]
+;   movdqu xmm1, xmmword ptr [rip + 0x1c]
+;   paddusb xmm1, xmmword ptr [rip + 0x24]
+;   pshufb xmm0, xmm1
+;   mov rsp, rbp
+;   pop rbp
+;   ret
+;   add byte ptr [rax], al
+;   add byte ptr [rax], al
+;   add byte ptr [rax], al
+;   add byte ptr [rax], al
+;   add byte ptr [rax], al
+;   add byte ptr [rcx], al
+;   add al, byte ptr [rbx]
+;   add al, 5
 
 function %splat_i8(i8) -> i8x16 {
 block0(v0: i8):
@@ -160,28 +160,28 @@ block0(v0: i8):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movd    %edi, %xmm0
-;   uninit  %xmm5
-;   pxor    %xmm5, %xmm5, %xmm5
-;   pshufb  %xmm0, %xmm5, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   movd xmm0, edi
+;   uninit xmm5
+;   pxor xmm5, xmm5, xmm5
+;   pshufb xmm0, xmm0, xmm5
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movd %edi, %xmm0
-;   pxor %xmm5, %xmm5
-;   pshufb %xmm5, %xmm0
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   movd xmm0, edi
+;   pxor xmm5, xmm5
+;   pshufb xmm0, xmm5
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %splat_i16() -> i16x8 {
 block0:
@@ -191,29 +191,29 @@ block0:
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movl    $-1, %ecx
-;   movd    %ecx, %xmm1
-;   pshuflw $0, %xmm1, %xmm3
-;   pshufd  $0, %xmm3, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   mov ecx, 0xffffffff
+;   movd xmm1, ecx
+;   pshuflw xmm3, xmm1, 0
+;   pshufd xmm0, xmm3, 0
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movl $0xffffffff, %ecx
-;   movd %ecx, %xmm1
-;   pshuflw $0, %xmm1, %xmm3
-;   pshufd $0, %xmm3, %xmm0
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   mov ecx, 0xffffffff
+;   movd xmm1, ecx
+;   pshuflw xmm3, xmm1, 0
+;   pshufd xmm0, xmm3, 0
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %splat_i32(i32) -> i32x4 {
 block0(v0: i32):
@@ -222,25 +222,25 @@ block0(v0: i32):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movd    %edi, %xmm2
-;   pshufd  $0, %xmm2, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   movd xmm2, edi
+;   pshufd xmm0, xmm2, 0
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movd %edi, %xmm2
-;   pshufd $0, %xmm2, %xmm0
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   movd xmm2, edi
+;   pshufd xmm0, xmm2, 0
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %splat_f64(f64) -> f64x2 {
 block0(v0: f64):
@@ -249,23 +249,23 @@ block0(v0: f64):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movddup %xmm0, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   movddup xmm0, xmm0
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movddup %xmm0, %xmm0
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   movddup xmm0, xmm0
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %load32_zero_coalesced(i64) -> i32x4 {
 block0(v0: i64):
@@ -275,23 +275,23 @@ block0(v0: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movss   0(%rdi), %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   movss xmm0, qword ptr [rdi + 0x0]
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movss (%rdi), %xmm0 ; trap: heap_oob
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   movss xmm0, dword ptr [rdi] ; trap: heap_oob
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %load32_zero_int(i32) -> i32x4 {
 block0(v0: i32):
@@ -300,23 +300,23 @@ block0(v0: i32):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movd    %edi, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   movd xmm0, edi
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movd %edi, %xmm0
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   movd xmm0, edi
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %load32_zero_float(f32) -> f32x4 {
 block0(v0: f32):
@@ -325,19 +325,19 @@ block0(v0: f32):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 

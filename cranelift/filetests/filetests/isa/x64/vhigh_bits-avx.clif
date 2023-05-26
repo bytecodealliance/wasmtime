@@ -9,23 +9,23 @@ block0(v0: i8x16):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   vpmovmskb %xmm0, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   vpmovmskb eax, xmm0
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   vpmovmskb %xmm0, %eax
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   vpmovmskb eax, xmm0
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %f3(i16x8) -> i8 {
 block0(v0: i16x8):
@@ -34,27 +34,27 @@ block0(v0: i16x8):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   vpacksswb %xmm0, %xmm0, %xmm2
-;   vpmovmskb %xmm2, %eax
-;   shrq    $8, %rax, %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   vpacksswb xmm2, xmm0, xmm0
+;   vpmovmskb eax, xmm2
+;   shr rax, rax, 0x8
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   vpacksswb %xmm0, %xmm0, %xmm2
-;   vpmovmskb %xmm2, %eax
-;   shrq $8, %rax
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   vpacksswb xmm2, xmm0, xmm0
+;   vpmovmskb eax, xmm2
+;   shr rax, 8
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %f4(i32x4) -> i8 {
 block0(v0: i32x4):
@@ -63,23 +63,23 @@ block0(v0: i32x4):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   vmovmskps %xmm0, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   vmovmskps eax, xmm0
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   vmovmskps %xmm0, %eax
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   vmovmskps eax, xmm0
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %f5(i64x2) -> i8 {
 block0(v0: i64x2):
@@ -88,21 +88,21 @@ block0(v0: i64x2):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   vmovmskpd %xmm0, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   vmovmskpd eax, xmm0
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   vmovmskpd %xmm0, %eax
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   vmovmskpd eax, xmm0
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 

@@ -8,23 +8,23 @@ block0(v0: f32):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movd    %xmm0, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   movd eax, xmm0
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movd %xmm0, %eax
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   movd eax, xmm0
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %f2(i32) -> f32 {
 block0(v0: i32):
@@ -33,23 +33,23 @@ block0(v0: i32):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movd    %edi, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   movd xmm0, edi
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movd %edi, %xmm0
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   movd xmm0, edi
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %f3(f64) -> i64 {
 block0(v0: f64):
@@ -58,23 +58,23 @@ block0(v0: f64):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movq    %xmm0, %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   movq rax, xmm0
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movq %xmm0, %rax
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   movq rax, xmm0
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %f4(i64) -> f64 {
 block0(v0: i64):
@@ -83,21 +83,21 @@ block0(v0: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movq    %rdi, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   movq xmm0, rdi
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movq %rdi, %xmm0
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   movq xmm0, rdi
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 

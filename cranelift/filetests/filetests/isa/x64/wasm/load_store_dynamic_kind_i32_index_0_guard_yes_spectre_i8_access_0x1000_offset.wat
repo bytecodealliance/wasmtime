@@ -40,45 +40,45 @@
     i32.load8_u offset=0x1000))
 
 ;; function u0:0:
-;;   pushq   %rbp
+;;   push rbp
 ;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   movq    %rsp, %rbp
+;;   mov rbp, rsp
 ;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ;; block0:
-;;   movl    %edi, %edi
-;;   movabsq $-4097, %rax
-;;   addq    %rax, 8(%rdx), %rax
-;;   movq    0(%rdx), %rcx
-;;   lea     4096(%rcx,%rdi,1), %r11
-;;   xorq    %rcx, %rcx, %rcx
-;;   cmpq    %rax, %rdi
-;;   cmovnbeq %rcx, %r11, %r11
-;;   movb    %sil, 0(%r11)
-;;   jmp     label1
+;;   mov edi, edi
+;;   movabs rax, 0xffffffffffffefff
+;;   add rax, rax, qword ptr [rdx + 0x8]
+;;   mov rcx, qword ptr [rdx + 0x0]
+;;   lea r11, qword ptr [rcx + rdi + 4096]
+;;   xor rcx, rcx, rcx
+;;   cmp rdi, rax
+;;   cmovnbe r11, rcx, r11
+;;   mov byte ptr [r11 + 0x0], sil
+;;   jmp label1
 ;; block1:
-;;   movq    %rbp, %rsp
-;;   popq    %rbp
+;;   mov rsp, rbp
+;;   pop rbp
 ;;   ret
 ;;
 ;; function u0:1:
-;;   pushq   %rbp
+;;   push rbp
 ;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   movq    %rsp, %rbp
+;;   mov rbp, rsp
 ;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ;; block0:
-;;   movq    %rsi, %rax
-;;   movl    %edi, %edi
-;;   movabsq $-4097, %rsi
-;;   movq    %rax, %rdx
-;;   addq    %rsi, 8(%rdx), %rsi
-;;   movq    0(%rdx), %rax
-;;   lea     4096(%rax,%rdi,1), %r11
-;;   xorq    %rax, %rax, %rax
-;;   cmpq    %rsi, %rdi
-;;   cmovnbeq %rax, %r11, %r11
-;;   movzbq  0(%r11), %rax
-;;   jmp     label1
+;;   mov rax, rsi
+;;   mov edi, edi
+;;   movabs rsi, 0xffffffffffffefff
+;;   mov rdx, rax
+;;   add rsi, rsi, qword ptr [rdx + 0x8]
+;;   mov rax, qword ptr [rdx + 0x0]
+;;   lea r11, qword ptr [rax + rdi + 4096]
+;;   xor rax, rax, rax
+;;   cmp rdi, rsi
+;;   cmovnbe r11, rax, r11
+;;   movzx rax, byte ptr [r11 + 0x0]
+;;   jmp label1
 ;; block1:
-;;   movq    %rbp, %rsp
-;;   popq    %rbp
+;;   mov rsp, rbp
+;;   pop rbp
 ;;   ret

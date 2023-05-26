@@ -7,15 +7,15 @@ block0:
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
 ;   ud2 user0
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
 ;   ud2 ; trap: user0
 
@@ -26,26 +26,26 @@ block0(v0: i64, v1: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movq    %rdi, %rcx
-;   addq    %rcx, %rsi, %rcx
+;   mov rcx, rdi
+;   add rcx, rcx, rsi
 ;   jb #trap=user0
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movq %rdi, %rcx
-;   addq %rsi, %rcx
+;   mov rcx, rdi
+;   add rcx, rsi
 ;   jb 0x15
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 ;   ud2 ; trap: user0
 

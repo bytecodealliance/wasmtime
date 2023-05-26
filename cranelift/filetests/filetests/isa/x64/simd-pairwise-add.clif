@@ -10,38 +10,38 @@ block0(v0: i8x16):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movdqa  %xmm0, %xmm4
-;   movdqu  const(0), %xmm0
-;   movdqa  %xmm4, %xmm5
-;   pmaddubsw %xmm0, %xmm5, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   movdqa xmm4, xmm0
+;   movdqu xmm0, const(0)
+;   movdqa xmm5, xmm4
+;   pmaddubsw xmm0, xmm0, xmm5
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movdqa %xmm0, %xmm4
-;   movdqu 0x10(%rip), %xmm0
-;   movdqa %xmm4, %xmm5
-;   pmaddubsw %xmm5, %xmm0
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
-;   addb %al, (%rax)
-;   addl %eax, (%rcx)
-;   addl %eax, (%rcx)
-;   addl %eax, (%rcx)
-;   addl %eax, (%rcx)
-;   addl %eax, (%rcx)
-;   addl %eax, (%rcx)
-;   addl %eax, (%rcx)
-;   addl %eax, (%rcx)
+;   movdqa xmm4, xmm0
+;   movdqu xmm0, xmmword ptr [rip + 0x10]
+;   movdqa xmm5, xmm4
+;   pmaddubsw xmm0, xmm5
+;   mov rsp, rbp
+;   pop rbp
+;   ret
+;   add byte ptr [rax], al
+;   add dword ptr [rcx], eax
+;   add dword ptr [rcx], eax
+;   add dword ptr [rcx], eax
+;   add dword ptr [rcx], eax
+;   add dword ptr [rcx], eax
+;   add dword ptr [rcx], eax
+;   add dword ptr [rcx], eax
+;   add dword ptr [rcx], eax
 
 function %fn2(i16x8) -> i32x4 {
 block0(v0: i16x8):
@@ -52,38 +52,38 @@ block0(v0: i16x8):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   pmaddwd %xmm0, const(0), %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   pmaddwd xmm0, xmm0, const(0)
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   pmaddwd 0x14(%rip), %xmm0
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rcx)
-;   addb %al, (%rcx)
-;   addb %al, (%rcx)
-;   addb %al, (%rcx)
-;   addb %al, (%rcx)
-;   addb %al, (%rcx)
-;   addb %al, (%rcx)
-;   addb %al, (%rcx)
+;   pmaddwd xmm0, xmmword ptr [rip + 0x14]
+;   mov rsp, rbp
+;   pop rbp
+;   ret
+;   add byte ptr [rax], al
+;   add byte ptr [rax], al
+;   add byte ptr [rax], al
+;   add byte ptr [rax], al
+;   add byte ptr [rax], al
+;   add byte ptr [rax], al
+;   add byte ptr [rax], al
+;   add byte ptr [rcx], al
+;   add byte ptr [rcx], al
+;   add byte ptr [rcx], al
+;   add byte ptr [rcx], al
+;   add byte ptr [rcx], al
+;   add byte ptr [rcx], al
+;   add byte ptr [rcx], al
+;   add byte ptr [rcx], al
 
 function %fn3(i8x16) -> i16x8 {
 block0(v0: i8x16):
@@ -94,38 +94,38 @@ block0(v0: i8x16):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   pmaddubsw %xmm0, const(0), %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   pmaddubsw xmm0, xmm0, const(0)
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   pmaddubsw 0x13(%rip), %xmm0
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addl %eax, (%rcx)
-;   addl %eax, (%rcx)
-;   addl %eax, (%rcx)
-;   addl %eax, (%rcx)
-;   addl %eax, (%rcx)
-;   addl %eax, (%rcx)
-;   addl %eax, (%rcx)
-;   addl %eax, (%rcx)
+;   pmaddubsw xmm0, xmmword ptr [rip + 0x13]
+;   mov rsp, rbp
+;   pop rbp
+;   ret
+;   add byte ptr [rax], al
+;   add byte ptr [rax], al
+;   add byte ptr [rax], al
+;   add byte ptr [rax], al
+;   add byte ptr [rax], al
+;   add byte ptr [rax], al
+;   add byte ptr [rax], al
+;   add dword ptr [rcx], eax
+;   add dword ptr [rcx], eax
+;   add dword ptr [rcx], eax
+;   add dword ptr [rcx], eax
+;   add dword ptr [rcx], eax
+;   add dword ptr [rcx], eax
+;   add dword ptr [rcx], eax
+;   add dword ptr [rcx], eax
 
 function %fn4(i16x8) -> i32x4 {
 block0(v0: i16x8):
@@ -136,52 +136,52 @@ block0(v0: i16x8):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   pxor    %xmm0, const(0), %xmm0
-;   pmaddwd %xmm0, const(1), %xmm0
-;   paddd   %xmm0, const(2), %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   pxor xmm0, xmm0, const(0)
+;   pmaddwd xmm0, xmm0, const(1)
+;   paddd xmm0, xmm0, const(2)
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   pxor 0x24(%rip), %xmm0
-;   pmaddwd 0x2c(%rip), %xmm0
-;   paddd 0x34(%rip), %xmm0
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb $0x80, (%rax)
-;   addb %al, -0x7fff8000(%rax)
-;   addb %al, -0x7fff8000(%rax)
-;   addl %eax, (%rax)
-;   addl %eax, (%rax)
-;   addl %eax, (%rax)
-;   addl %eax, (%rax)
-;   addl %eax, (%rax)
-;   addl %eax, (%rax)
-;   addl %eax, (%rax)
-;   addl %eax, (%rax)
-;   addb %al, (%rax)
-;   addl %eax, (%rax)
-;   addb %al, (%rax)
-;   addl %eax, (%rax)
-;   addb %al, (%rax)
-;   addl %eax, (%rax)
-;   addb %al, (%rax)
-;   addl %eax, (%rax)
+;   pxor xmm0, xmmword ptr [rip + 0x24]
+;   pmaddwd xmm0, xmmword ptr [rip + 0x2c]
+;   paddd xmm0, xmmword ptr [rip + 0x34]
+;   mov rsp, rbp
+;   pop rbp
+;   ret
+;   add byte ptr [rax], al
+;   add byte ptr [rax], al
+;   add byte ptr [rax], al
+;   add byte ptr [rax], al
+;   add byte ptr [rax], al
+;   add byte ptr [rax], al
+;   add byte ptr [rax], al
+;   add byte ptr [rax], al
+;   add byte ptr [rax], 0x80
+;   add byte ptr [rax - 0x7fff8000], al
+;   add byte ptr [rax - 0x7fff8000], al
+;   add dword ptr [rax], eax
+;   add dword ptr [rax], eax
+;   add dword ptr [rax], eax
+;   add dword ptr [rax], eax
+;   add dword ptr [rax], eax
+;   add dword ptr [rax], eax
+;   add dword ptr [rax], eax
+;   add dword ptr [rax], eax
+;   add byte ptr [rax], al
+;   add dword ptr [rax], eax
+;   add byte ptr [rax], al
+;   add dword ptr [rax], eax
+;   add byte ptr [rax], al
+;   add dword ptr [rax], eax
+;   add byte ptr [rax], al
+;   add dword ptr [rax], eax
 

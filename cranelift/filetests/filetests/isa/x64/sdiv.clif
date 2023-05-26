@@ -8,31 +8,31 @@ block0(v0: i8, v1: i8):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movq    %rdi, %rax
-;   cbw %al, %al
-;   testb   %sil, %sil
+;   mov rax, rdi
+;   cbw al, al
+;   test sil, sil
 ;   jz #trap=int_divz
-;   idiv    %al, %sil, %al ; trap=int_ovf
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   idiv al, sil, al ; trap=int_ovf
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movq %rdi, %rax
-;   cbtw
-;   testb %sil, %sil
+;   mov rax, rdi
+;   cbw
+;   test sil, sil
 ;   je 0x1a
-;   idivb %sil ; trap: int_ovf
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   idiv sil ; trap: int_ovf
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 ;   ud2 ; trap: int_divz
 
 function %f2(i16, i16) -> i16 {
@@ -42,31 +42,31 @@ block0(v0: i16, v1: i16):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movq    %rdi, %rax
-;   cwd %ax, %dx
-;   testw   %si, %si
+;   mov rax, rdi
+;   cwd dx, ax
+;   test si, si
 ;   jz #trap=int_divz
-;   idiv    %ax, %dx, %si, %ax, %dx ; trap=int_ovf
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   idiv ax, dx, ax, dx, si ; trap=int_ovf
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movq %rdi, %rax
-;   cwtd
-;   testw %si, %si
+;   mov rax, rdi
+;   cwd
+;   test si, si
 ;   je 0x1a
-;   idivw %si ; trap: int_ovf
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   idiv si ; trap: int_ovf
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 ;   ud2 ; trap: int_divz
 
 function %f3(i32, i32) -> i32 {
@@ -76,31 +76,31 @@ block0(v0: i32, v1: i32):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movq    %rdi, %rax
-;   cdq %eax, %edx
-;   testl   %esi, %esi
+;   mov rax, rdi
+;   cdq edx, eax
+;   test esi, esi
 ;   jz #trap=int_divz
-;   idiv    %eax, %edx, %esi, %eax, %edx ; trap=int_ovf
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   idiv eax, edx, eax, edx, esi ; trap=int_ovf
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movq %rdi, %rax
-;   cltd
-;   testl %esi, %esi
+;   mov rax, rdi
+;   cdq
+;   test esi, esi
 ;   je 0x17
-;   idivl %esi ; trap: int_ovf
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   idiv esi ; trap: int_ovf
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 ;   ud2 ; trap: int_divz
 
 function %f4(i64, i64) -> i64 {
@@ -110,30 +110,30 @@ block0(v0: i64, v1: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movq    %rdi, %rax
-;   cqo %rax, %rdx
-;   testq   %rsi, %rsi
+;   mov rax, rdi
+;   cqo rdx, rax
+;   test rsi, rsi
 ;   jz #trap=int_divz
-;   idiv    %rax, %rdx, %rsi, %rax, %rdx ; trap=int_ovf
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   idiv rax, rdx, rax, rdx, rsi ; trap=int_ovf
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movq %rdi, %rax
-;   cqto
-;   testq %rsi, %rsi
+;   mov rax, rdi
+;   cqo
+;   test rsi, rsi
 ;   je 0x1a
-;   idivq %rsi ; trap: int_ovf
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   idiv rsi ; trap: int_ovf
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 ;   ud2 ; trap: int_divz
 

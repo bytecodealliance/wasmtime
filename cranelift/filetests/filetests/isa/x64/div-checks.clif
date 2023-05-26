@@ -13,33 +13,33 @@ block0(v0: i8, v1: i8):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movq    %rdi, %rax
-;   cbw %al, %al
-;   checked_srem_seq %al, %sil, %al
-;   shrq    $8, %rax, %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   mov rax, rdi
+;   cbw al, al
+;   checked_srem_seq al, al, sil
+;   shr rax, rax, 0x8
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movq %rdi, %rax
-;   cbtw
-;   cmpb $0xff, %sil
+;   mov rax, rdi
+;   cbw
+;   cmp sil, 0xff
 ;   jne 0x1d
-;   movl $0, %eax
+;   mov eax, 0
 ;   jmp 0x20
-;   idivb %sil ; trap: int_divz
-;   shrq $8, %rax
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   idiv sil ; trap: int_divz
+;   shr rax, 8
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %i16(i16, i16) -> i16 {
 block0(v0: i16, v1: i16):
@@ -49,33 +49,33 @@ block0(v0: i16, v1: i16):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movq    %rdi, %rax
-;   cwd %ax, %dx
-;   checked_srem_seq %ax, %dx, %si, %ax, %dx
-;   movq    %rdx, %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   mov rax, rdi
+;   cwd dx, ax
+;   checked_srem_seq ax, dx, ax, dx, si
+;   mov rax, rdx
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movq %rdi, %rax
-;   cwtd
-;   cmpw $-1, %si
+;   mov rax, rdi
+;   cwd
+;   cmp si, -1
 ;   jne 0x1d
-;   movl $0, %edx
+;   mov edx, 0
 ;   jmp 0x20
-;   idivw %si ; trap: int_divz
-;   movq %rdx, %rax
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   idiv si ; trap: int_divz
+;   mov rax, rdx
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %i32(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
@@ -85,33 +85,33 @@ block0(v0: i32, v1: i32):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movq    %rdi, %rax
-;   cdq %eax, %edx
-;   checked_srem_seq %eax, %edx, %esi, %eax, %edx
-;   movq    %rdx, %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   mov rax, rdi
+;   cdq edx, eax
+;   checked_srem_seq eax, edx, eax, edx, esi
+;   mov rax, rdx
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movq %rdi, %rax
-;   cltd
-;   cmpl $-1, %esi
+;   mov rax, rdi
+;   cdq
+;   cmp esi, -1
 ;   jne 0x1b
-;   movl $0, %edx
+;   mov edx, 0
 ;   jmp 0x1d
-;   idivl %esi ; trap: int_divz
-;   movq %rdx, %rax
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   idiv esi ; trap: int_divz
+;   mov rax, rdx
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %i64(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -121,31 +121,31 @@ block0(v0: i64, v1: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movq    %rdi, %rax
-;   cqo %rax, %rdx
-;   checked_srem_seq %rax, %rdx, %rsi, %rax, %rdx
-;   movq    %rdx, %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   mov rax, rdi
+;   cqo rdx, rax
+;   checked_srem_seq rax, rdx, rax, rdx, rsi
+;   mov rax, rdx
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movq %rdi, %rax
-;   cqto
-;   cmpq $-1, %rsi
+;   mov rax, rdi
+;   cqo
+;   cmp rsi, -1
 ;   jne 0x1d
-;   movl $0, %edx
+;   mov edx, 0
 ;   jmp 0x20
-;   idivq %rsi ; trap: int_divz
-;   movq %rdx, %rax
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   idiv rsi ; trap: int_divz
+;   mov rax, rdx
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 

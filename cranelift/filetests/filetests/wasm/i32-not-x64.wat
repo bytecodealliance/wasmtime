@@ -19,28 +19,28 @@
 )
 
 ;; function u0:0:
-;;   pushq   %rbp
+;;   push rbp
 ;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   movq    %rsp, %rbp
+;;   mov rbp, rsp
 ;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ;; block0:
-;;   jmp     label1
+;;   jmp label1
 ;; block1:
-;;   movq    %rdi, %rax
-;;   notl    %eax, %eax
-;;   movq    %rbp, %rsp
-;;   popq    %rbp
+;;   mov rax, rdi
+;;   not eax, eax
+;;   mov rsp, rbp
+;;   pop rbp
 ;;   ret
 ;;
 ;; function u0:1:
-;;   pushq   %rbp
+;;   push rbp
 ;;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
-;;   movq    %rsp, %rbp
+;;   mov rbp, rsp
 ;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ;; block0:
-;;   jmp     label1
+;;   jmp label1
 ;; block1:
-;;   andn    %edi, %esi, %eax
-;;   movq    %rbp, %rsp
-;;   popq    %rbp
+;;   andn eax, esi, edi
+;;   mov rsp, rbp
+;;   pop rbp
 ;;   ret

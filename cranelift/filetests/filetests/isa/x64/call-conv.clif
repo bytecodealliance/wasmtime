@@ -10,31 +10,31 @@ block0(v0: i32):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movq    %rdi, %rcx
-;   subq    %rsp, $32, %rsp
+;   mov rcx, rdi
+;   sub rsp, rsp, $32
 ;   virtual_sp_offset_adjust 32
-;   call    *%rcx
-;   addq    %rsp, $32, %rsp
+;   call *rcx
+;   add rsp, rsp, $32
 ;   virtual_sp_offset_adjust -32
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movq %rdi, %rcx
-;   subq $0x20, %rsp
-;   callq *%rcx
-;   addq $0x20, %rsp
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   mov rcx, rdi
+;   sub rsp, 0x20
+;   call rcx
+;   add rsp, 0x20
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %two_args(i32, f32) system_v {
     ;; system_v has params in %rdi, %xmm0, fascall in %rcx, %xmm1
@@ -47,39 +47,39 @@ block0(v0: i32, v1: f32):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movdqa  %xmm0, %xmm6
-;   subq    %rsp, $32, %rsp
+;   movdqa xmm6, xmm0
+;   sub rsp, rsp, $32
 ;   virtual_sp_offset_adjust 32
-;   movq    %rdi, %rcx
-;   movdqa  %xmm6, %xmm1
-;   call    *%rdi
-;   addq    %rsp, $32, %rsp
+;   mov rcx, rdi
+;   movdqa xmm1, xmm6
+;   call *rdi
+;   add rsp, rsp, $32
 ;   virtual_sp_offset_adjust -32
-;   movdqa  %xmm6, %xmm0
-;   call    *%rdi
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   movdqa xmm0, xmm6
+;   call *rdi
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movdqa %xmm0, %xmm6
-;   subq $0x20, %rsp
-;   movq %rdi, %rcx
-;   movdqa %xmm6, %xmm1
-;   callq *%rdi
-;   addq $0x20, %rsp
-;   movdqa %xmm6, %xmm0
-;   callq *%rdi
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   movdqa xmm6, xmm0
+;   sub rsp, 0x20
+;   mov rcx, rdi
+;   movdqa xmm1, xmm6
+;   call rdi
+;   add rsp, 0x20
+;   movdqa xmm0, xmm6
+;   call rdi
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %fastcall_to_systemv(i32) windows_fastcall {
     ;; fastcall preserves xmm6+, rbx, rbp, rdi, rsi, r12-r15
@@ -91,75 +91,75 @@ block0(v0: i32):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
-;   subq    %rsp, $176, %rsp
-;   movq    %rsi, 0(%rsp)
-;   movq    %rdi, 8(%rsp)
-;   movdqu  %xmm6, 16(%rsp)
-;   movdqu  %xmm7, 32(%rsp)
-;   movdqu  %xmm8, 48(%rsp)
-;   movdqu  %xmm9, 64(%rsp)
-;   movdqu  %xmm10, 80(%rsp)
-;   movdqu  %xmm11, 96(%rsp)
-;   movdqu  %xmm12, 112(%rsp)
-;   movdqu  %xmm13, 128(%rsp)
-;   movdqu  %xmm14, 144(%rsp)
-;   movdqu  %xmm15, 160(%rsp)
+;   push rbp
+;   mov rbp, rsp
+;   sub rsp, rsp, $176
+;   mov qword ptr [rsp + 0x0], rsi
+;   mov qword ptr [rsp + 0x8], rdi
+;   movdqu xmmword ptr [rsp + 0x10], xmm6
+;   movdqu xmmword ptr [rsp + 0x20], xmm7
+;   movdqu xmmword ptr [rsp + 0x30], xmm8
+;   movdqu xmmword ptr [rsp + 0x40], xmm9
+;   movdqu xmmword ptr [rsp + 0x50], xmm10
+;   movdqu xmmword ptr [rsp + 0x60], xmm11
+;   movdqu xmmword ptr [rsp + 0x70], xmm12
+;   movdqu xmmword ptr [rsp + 0x80], xmm13
+;   movdqu xmmword ptr [rsp + 0x90], xmm14
+;   movdqu xmmword ptr [rsp + 0xa0], xmm15
 ; block0:
-;   call    *%rcx
-;   movq    0(%rsp), %rsi
-;   movq    8(%rsp), %rdi
-;   movdqu  16(%rsp), %xmm6
-;   movdqu  32(%rsp), %xmm7
-;   movdqu  48(%rsp), %xmm8
-;   movdqu  64(%rsp), %xmm9
-;   movdqu  80(%rsp), %xmm10
-;   movdqu  96(%rsp), %xmm11
-;   movdqu  112(%rsp), %xmm12
-;   movdqu  128(%rsp), %xmm13
-;   movdqu  144(%rsp), %xmm14
-;   movdqu  160(%rsp), %xmm15
-;   addq    %rsp, $176, %rsp
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   call *rcx
+;   mov rsi, qword ptr [rsp + 0x0]
+;   mov rdi, qword ptr [rsp + 0x8]
+;   movdqu xmm6, xmmword ptr [rsp + 0x10]
+;   movdqu xmm7, xmmword ptr [rsp + 0x20]
+;   movdqu xmm8, xmmword ptr [rsp + 0x30]
+;   movdqu xmm9, xmmword ptr [rsp + 0x40]
+;   movdqu xmm10, xmmword ptr [rsp + 0x50]
+;   movdqu xmm11, xmmword ptr [rsp + 0x60]
+;   movdqu xmm12, xmmword ptr [rsp + 0x70]
+;   movdqu xmm13, xmmword ptr [rsp + 0x80]
+;   movdqu xmm14, xmmword ptr [rsp + 0x90]
+;   movdqu xmm15, xmmword ptr [rsp + 0xa0]
+;   add rsp, rsp, $176
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
-;   subq $0xb0, %rsp
-;   movq %rsi, (%rsp)
-;   movq %rdi, 8(%rsp)
-;   movdqu %xmm6, 0x10(%rsp)
-;   movdqu %xmm7, 0x20(%rsp)
-;   movdqu %xmm8, 0x30(%rsp)
-;   movdqu %xmm9, 0x40(%rsp)
-;   movdqu %xmm10, 0x50(%rsp)
-;   movdqu %xmm11, 0x60(%rsp)
-;   movdqu %xmm12, 0x70(%rsp)
-;   movdqu %xmm13, 0x80(%rsp)
-;   movdqu %xmm14, 0x90(%rsp)
-;   movdqu %xmm15, 0xa0(%rsp)
+;   push rbp
+;   mov rbp, rsp
+;   sub rsp, 0xb0
+;   mov qword ptr [rsp], rsi
+;   mov qword ptr [rsp + 8], rdi
+;   movdqu xmmword ptr [rsp + 0x10], xmm6
+;   movdqu xmmword ptr [rsp + 0x20], xmm7
+;   movdqu xmmword ptr [rsp + 0x30], xmm8
+;   movdqu xmmword ptr [rsp + 0x40], xmm9
+;   movdqu xmmword ptr [rsp + 0x50], xmm10
+;   movdqu xmmword ptr [rsp + 0x60], xmm11
+;   movdqu xmmword ptr [rsp + 0x70], xmm12
+;   movdqu xmmword ptr [rsp + 0x80], xmm13
+;   movdqu xmmword ptr [rsp + 0x90], xmm14
+;   movdqu xmmword ptr [rsp + 0xa0], xmm15
 ; block1: ; offset 0x61
-;   callq *%rcx
-;   movq (%rsp), %rsi
-;   movq 8(%rsp), %rdi
-;   movdqu 0x10(%rsp), %xmm6
-;   movdqu 0x20(%rsp), %xmm7
-;   movdqu 0x30(%rsp), %xmm8
-;   movdqu 0x40(%rsp), %xmm9
-;   movdqu 0x50(%rsp), %xmm10
-;   movdqu 0x60(%rsp), %xmm11
-;   movdqu 0x70(%rsp), %xmm12
-;   movdqu 0x80(%rsp), %xmm13
-;   movdqu 0x90(%rsp), %xmm14
-;   movdqu 0xa0(%rsp), %xmm15
-;   addq $0xb0, %rsp
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   call rcx
+;   mov rsi, qword ptr [rsp]
+;   mov rdi, qword ptr [rsp + 8]
+;   movdqu xmm6, xmmword ptr [rsp + 0x10]
+;   movdqu xmm7, xmmword ptr [rsp + 0x20]
+;   movdqu xmm8, xmmword ptr [rsp + 0x30]
+;   movdqu xmm9, xmmword ptr [rsp + 0x40]
+;   movdqu xmm10, xmmword ptr [rsp + 0x50]
+;   movdqu xmm11, xmmword ptr [rsp + 0x60]
+;   movdqu xmm12, xmmword ptr [rsp + 0x70]
+;   movdqu xmm13, xmmword ptr [rsp + 0x80]
+;   movdqu xmm14, xmmword ptr [rsp + 0x90]
+;   movdqu xmm15, xmmword ptr [rsp + 0xa0]
+;   add rsp, 0xb0
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %many_args(
     ;; rdi, rsi, rdx, rcx, r8, r9,
@@ -192,81 +192,81 @@ block0(
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movq    %rcx, %rax
-;   movq    %rdx, %rcx
-;   movq    %rsi, %rdx
-;   movq    %rdi, %rsi
-;   movq    %rax, %rdi
-;   movq    16(%rbp), %r10
-;   movq    24(%rbp), %r11
-;   movss   32(%rbp), %xmm9
-;   movsd   40(%rbp), %xmm8
-;   subq    %rsp, $144, %rsp
+;   mov rax, rcx
+;   mov rcx, rdx
+;   mov rdx, rsi
+;   mov rsi, rdi
+;   mov rdi, rax
+;   mov r10, qword ptr [rbp + 0x10]
+;   mov r11, qword ptr [rbp + 0x18]
+;   movss xmm9, qword ptr [rbp + 0x20]
+;   movsd xmm8, qword ptr [rbp + 0x28]
+;   sub rsp, rsp, $144
 ;   virtual_sp_offset_adjust 144
-;   movq    %r8, 32(%rsp)
-;   movq    %r9, 40(%rsp)
-;   movsd   %xmm0, 48(%rsp)
-;   movsd   %xmm1, 56(%rsp)
-;   movsd   %xmm2, 64(%rsp)
-;   movsd   %xmm3, 72(%rsp)
-;   movsd   %xmm4, 80(%rsp)
-;   movsd   %xmm5, 88(%rsp)
-;   movsd   %xmm6, 96(%rsp)
-;   movsd   %xmm7, 104(%rsp)
-;   movq    %r10, 112(%rsp)
-;   movl    %r11d, 120(%rsp)
-;   movss   %xmm9, 128(%rsp)
-;   movsd   %xmm8, 136(%rsp)
-;   movq    %rdi, %r9
-;   movq    %rcx, %r8
-;   movq    %rsi, %rcx
-;   call    *%rcx
-;   addq    %rsp, $144, %rsp
+;   mov qword ptr [rsp + 0x20], r8
+;   mov qword ptr [rsp + 0x28], r9
+;   movsd xmmword ptr [rsp + 0x30], xmm0
+;   movsd xmmword ptr [rsp + 0x38], xmm1
+;   movsd xmmword ptr [rsp + 0x40], xmm2
+;   movsd xmmword ptr [rsp + 0x48], xmm3
+;   movsd xmmword ptr [rsp + 0x50], xmm4
+;   movsd xmmword ptr [rsp + 0x58], xmm5
+;   movsd xmmword ptr [rsp + 0x60], xmm6
+;   movsd xmmword ptr [rsp + 0x68], xmm7
+;   mov qword ptr [rsp + 0x70], r10
+;   mov dword ptr [rsp + 0x78], r11d
+;   movss xmmword ptr [rsp + 0x80], xmm9
+;   movsd xmmword ptr [rsp + 0x88], xmm8
+;   mov r9, rdi
+;   mov r8, rcx
+;   mov rcx, rsi
+;   call *rcx
+;   add rsp, rsp, $144
 ;   virtual_sp_offset_adjust -144
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movq %rcx, %rax
-;   movq %rdx, %rcx
-;   movq %rsi, %rdx
-;   movq %rdi, %rsi
-;   movq %rax, %rdi
-;   movq 0x10(%rbp), %r10
-;   movq 0x18(%rbp), %r11
-;   movss 0x20(%rbp), %xmm9
-;   movsd 0x28(%rbp), %xmm8
-;   subq $0x90, %rsp
-;   movq %r8, 0x20(%rsp)
-;   movq %r9, 0x28(%rsp)
-;   movsd %xmm0, 0x30(%rsp)
-;   movsd %xmm1, 0x38(%rsp)
-;   movsd %xmm2, 0x40(%rsp)
-;   movsd %xmm3, 0x48(%rsp)
-;   movsd %xmm4, 0x50(%rsp)
-;   movsd %xmm5, 0x58(%rsp)
-;   movsd %xmm6, 0x60(%rsp)
-;   movsd %xmm7, 0x68(%rsp)
-;   movq %r10, 0x70(%rsp)
-;   movl %r11d, 0x78(%rsp)
-;   movss %xmm9, 0x80(%rsp)
-;   movsd %xmm8, 0x88(%rsp)
-;   movq %rdi, %r9
-;   movq %rcx, %r8
-;   movq %rsi, %rcx
-;   callq *%rcx
-;   addq $0x90, %rsp
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   mov rax, rcx
+;   mov rcx, rdx
+;   mov rdx, rsi
+;   mov rsi, rdi
+;   mov rdi, rax
+;   mov r10, qword ptr [rbp + 0x10]
+;   mov r11, qword ptr [rbp + 0x18]
+;   movss xmm9, dword ptr [rbp + 0x20]
+;   movsd xmm8, qword ptr [rbp + 0x28]
+;   sub rsp, 0x90
+;   mov qword ptr [rsp + 0x20], r8
+;   mov qword ptr [rsp + 0x28], r9
+;   movsd qword ptr [rsp + 0x30], xmm0
+;   movsd qword ptr [rsp + 0x38], xmm1
+;   movsd qword ptr [rsp + 0x40], xmm2
+;   movsd qword ptr [rsp + 0x48], xmm3
+;   movsd qword ptr [rsp + 0x50], xmm4
+;   movsd qword ptr [rsp + 0x58], xmm5
+;   movsd qword ptr [rsp + 0x60], xmm6
+;   movsd qword ptr [rsp + 0x68], xmm7
+;   mov qword ptr [rsp + 0x70], r10
+;   mov dword ptr [rsp + 0x78], r11d
+;   movss dword ptr [rsp + 0x80], xmm9
+;   movsd qword ptr [rsp + 0x88], xmm8
+;   mov r9, rdi
+;   mov r8, rcx
+;   mov rcx, rsi
+;   call rcx
+;   add rsp, 0x90
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %many_ints(i64, i64, i64, i64, i64) system_v {
     ;; rdi => rcx
@@ -281,41 +281,41 @@ block0(v0: i64, v1:i64, v2:i64, v3:i64, v4:i64):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movq    %rdx, %r11
-;   movq    %rcx, %r9
-;   movq    %rsi, %rdx
-;   movq    %rdi, %rcx
-;   subq    %rsp, $48, %rsp
+;   mov r11, rdx
+;   mov r9, rcx
+;   mov rdx, rsi
+;   mov rcx, rdi
+;   sub rsp, rsp, $48
 ;   virtual_sp_offset_adjust 48
-;   movq    %r8, 32(%rsp)
-;   movq    %r11, %r8
-;   call    *%rcx
-;   addq    %rsp, $48, %rsp
+;   mov qword ptr [rsp + 0x20], r8
+;   mov r8, r11
+;   call *rcx
+;   add rsp, rsp, $48
 ;   virtual_sp_offset_adjust -48
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movq %rdx, %r11
-;   movq %rcx, %r9
-;   movq %rsi, %rdx
-;   movq %rdi, %rcx
-;   subq $0x30, %rsp
-;   movq %r8, 0x20(%rsp)
-;   movq %r11, %r8
-;   callq *%rcx
-;   addq $0x30, %rsp
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   mov r11, rdx
+;   mov r9, rcx
+;   mov rdx, rsi
+;   mov rcx, rdi
+;   sub rsp, 0x30
+;   mov qword ptr [rsp + 0x20], r8
+;   mov r8, r11
+;   call rcx
+;   add rsp, 0x30
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %many_args2(i32, f32, i64, f64, i32, i32, i32, f32, f64, f32, f64) system_v {
     sig0 = (i32, f32, i64, f64, i32, i32, i32, f32, f64, f32, f64) windows_fastcall
@@ -325,57 +325,57 @@ block0(v0: i32, v1: f32, v2: i64, v3: f64, v4: i32, v5: i32, v6: i32, v7: f32, v
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movq    %rsi, %r9
-;   movq    %rdi, %rsi
-;   movdqa  %xmm1, %xmm12
-;   movdqa  %xmm0, %xmm1
-;   subq    %rsp, $96, %rsp
+;   mov r9, rsi
+;   mov rsi, rdi
+;   movdqa xmm12, xmm1
+;   movdqa xmm1, xmm0
+;   sub rsp, rsp, $96
 ;   virtual_sp_offset_adjust 96
-;   movl    %edx, 32(%rsp)
-;   movl    %ecx, 40(%rsp)
-;   movl    %r8d, 48(%rsp)
-;   movss   %xmm2, 56(%rsp)
-;   movsd   %xmm3, 64(%rsp)
-;   movss   %xmm4, 72(%rsp)
-;   movsd   %xmm5, 80(%rsp)
-;   movq    %rsi, %rcx
-;   movq    %r9, %r8
-;   movdqa  %xmm12, %xmm3
-;   call    *%rcx
-;   addq    %rsp, $96, %rsp
+;   mov dword ptr [rsp + 0x20], edx
+;   mov dword ptr [rsp + 0x28], ecx
+;   mov dword ptr [rsp + 0x30], r8d
+;   movss xmmword ptr [rsp + 0x38], xmm2
+;   movsd xmmword ptr [rsp + 0x40], xmm3
+;   movss xmmword ptr [rsp + 0x48], xmm4
+;   movsd xmmword ptr [rsp + 0x50], xmm5
+;   mov rcx, rsi
+;   mov r8, r9
+;   movdqa xmm3, xmm12
+;   call *rcx
+;   add rsp, rsp, $96
 ;   virtual_sp_offset_adjust -96
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movq %rsi, %r9
-;   movq %rdi, %rsi
-;   movdqa %xmm1, %xmm12
-;   movdqa %xmm0, %xmm1
-;   subq $0x60, %rsp
-;   movl %edx, 0x20(%rsp)
-;   movl %ecx, 0x28(%rsp)
-;   movl %r8d, 0x30(%rsp)
-;   movss %xmm2, 0x38(%rsp)
-;   movsd %xmm3, 0x40(%rsp)
-;   movss %xmm4, 0x48(%rsp)
-;   movsd %xmm5, 0x50(%rsp)
-;   movq %rsi, %rcx
-;   movq %r9, %r8
-;   movdqa %xmm12, %xmm3
-;   callq *%rcx
-;   addq $0x60, %rsp
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   mov r9, rsi
+;   mov rsi, rdi
+;   movdqa xmm12, xmm1
+;   movdqa xmm1, xmm0
+;   sub rsp, 0x60
+;   mov dword ptr [rsp + 0x20], edx
+;   mov dword ptr [rsp + 0x28], ecx
+;   mov dword ptr [rsp + 0x30], r8d
+;   movss dword ptr [rsp + 0x38], xmm2
+;   movsd qword ptr [rsp + 0x40], xmm3
+;   movss dword ptr [rsp + 0x48], xmm4
+;   movsd qword ptr [rsp + 0x50], xmm5
+;   mov rcx, rsi
+;   mov r8, r9
+;   movdqa xmm3, xmm12
+;   call rcx
+;   add rsp, 0x60
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %wasmtime_mix1(i32) wasmtime_system_v {
     sig0 = (i32) system_v
@@ -385,23 +385,23 @@ block0(v0: i32):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   call    *%rdi
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   call *rdi
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   callq *%rdi
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   call rdi
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %wasmtime_mix2(i32) system_v {
     sig0 = (i32) wasmtime_system_v
@@ -411,23 +411,23 @@ block0(v0: i32):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   call    *%rdi
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   call *rdi
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   callq *%rdi
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   call rdi
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %wasmtime_mix2() -> i32, i32 system_v {
     sig0 = () -> i32, i32 wasmtime_system_v
@@ -438,35 +438,35 @@ block0:
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movl    $1, %ecx
-;   subq    %rsp, $16, %rsp
+;   mov ecx, 0x1
+;   sub rsp, rsp, $16
 ;   virtual_sp_offset_adjust 16
-;   lea     0(%rsp), %rdi
-;   call    *%rcx
-;   movq    0(%rsp), %rdx
-;   addq    %rsp, $16, %rsp
+;   lea rdi, qword ptr [rsp + 0x0]
+;   call *rcx
+;   mov rdx, qword ptr [rsp + 0x0]
+;   add rsp, rsp, $16
 ;   virtual_sp_offset_adjust -16
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movl $1, %ecx
-;   subq $0x10, %rsp
-;   leaq (%rsp), %rdi
-;   callq *%rcx
-;   movq (%rsp), %rdx
-;   addq $0x10, %rsp
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   mov ecx, 1
+;   sub rsp, 0x10
+;   lea rdi, [rsp]
+;   call rcx
+;   mov rdx, qword ptr [rsp]
+;   add rsp, 0x10
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %wasmtime_mix3() -> i32, i32 wasmtime_system_v {
     sig0 = () -> i32, i32 system_v
@@ -477,39 +477,39 @@ block0:
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
-;   subq    %rsp, $16, %rsp
-;   movq    %rbx, 0(%rsp)
+;   push rbp
+;   mov rbp, rsp
+;   sub rsp, rsp, $16
+;   mov qword ptr [rsp + 0x0], rbx
 ; block0:
-;   movq    %rdi, %rbx
-;   movl    $1, %edx
-;   call    *%rdx
-;   movq    %rbx, %rdi
-;   movl    %edx, 0(%rdi)
-;   movq    0(%rsp), %rbx
-;   addq    %rsp, $16, %rsp
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   mov rbx, rdi
+;   mov edx, 0x1
+;   call *rdx
+;   mov rdi, rbx
+;   mov dword ptr [rdi + 0x0], edx
+;   mov rbx, qword ptr [rsp + 0x0]
+;   add rsp, rsp, $16
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
-;   subq $0x10, %rsp
-;   movq %rbx, (%rsp)
+;   push rbp
+;   mov rbp, rsp
+;   sub rsp, 0x10
+;   mov qword ptr [rsp], rbx
 ; block1: ; offset 0xc
-;   movq %rdi, %rbx
-;   movl $1, %edx
-;   callq *%rdx
-;   movq %rbx, %rdi
-;   movl %edx, (%rdi)
-;   movq (%rsp), %rbx
-;   addq $0x10, %rsp
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   mov rbx, rdi
+;   mov edx, 1
+;   call rdx
+;   mov rdi, rbx
+;   mov dword ptr [rdi], edx
+;   mov rbx, qword ptr [rsp]
+;   add rsp, 0x10
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %wasmtime_mix4() -> i32, i64, i32 wasmtime_system_v {
     sig0 = () -> i32, i64, i32 system_v
@@ -520,51 +520,51 @@ block0:
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
-;   subq    %rsp, $16, %rsp
-;   movq    %r13, 0(%rsp)
+;   push rbp
+;   mov rbp, rsp
+;   sub rsp, rsp, $16
+;   mov qword ptr [rsp + 0x0], r13
 ; block0:
-;   movq    %rdi, %r13
-;   movl    $1, %r9d
-;   subq    %rsp, $16, %rsp
+;   mov r13, rdi
+;   mov r9d, 0x1
+;   sub rsp, rsp, $16
 ;   virtual_sp_offset_adjust 16
-;   lea     0(%rsp), %rdi
-;   call    *%r9
-;   movq    0(%rsp), %rsi
-;   addq    %rsp, $16, %rsp
+;   lea rdi, qword ptr [rsp + 0x0]
+;   call *r9
+;   mov rsi, qword ptr [rsp + 0x0]
+;   add rsp, rsp, $16
 ;   virtual_sp_offset_adjust -16
-;   movq    %r13, %rdi
-;   movq    %rdx, 0(%rdi)
-;   movl    %esi, 8(%rdi)
-;   movq    0(%rsp), %r13
-;   addq    %rsp, $16, %rsp
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   mov rdi, r13
+;   mov qword ptr [rdi + 0x0], rdx
+;   mov dword ptr [rdi + 0x8], esi
+;   mov r13, qword ptr [rsp + 0x0]
+;   add rsp, rsp, $16
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
-;   subq $0x10, %rsp
-;   movq %r13, (%rsp)
+;   push rbp
+;   mov rbp, rsp
+;   sub rsp, 0x10
+;   mov qword ptr [rsp], r13
 ; block1: ; offset 0xc
-;   movq %rdi, %r13
-;   movl $1, %r9d
-;   subq $0x10, %rsp
-;   leaq (%rsp), %rdi
-;   callq *%r9
-;   movq (%rsp), %rsi
-;   addq $0x10, %rsp
-;   movq %r13, %rdi
-;   movq %rdx, (%rdi)
-;   movl %esi, 8(%rdi)
-;   movq (%rsp), %r13
-;   addq $0x10, %rsp
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   mov r13, rdi
+;   mov r9d, 1
+;   sub rsp, 0x10
+;   lea rdi, [rsp]
+;   call r9
+;   mov rsi, qword ptr [rsp]
+;   add rsp, 0x10
+;   mov rdi, r13
+;   mov qword ptr [rdi], rdx
+;   mov dword ptr [rdi + 8], esi
+;   mov r13, qword ptr [rsp]
+;   add rsp, 0x10
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %wasmtime_mix5() -> f32, i64, i32, f32 wasmtime_system_v {
     sig0 = () -> f32, i64, i32, f32 system_v
@@ -575,43 +575,43 @@ block0:
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
-;   subq    %rsp, $16, %rsp
-;   movq    %r13, 0(%rsp)
+;   push rbp
+;   mov rbp, rsp
+;   sub rsp, rsp, $16
+;   mov qword ptr [rsp + 0x0], r13
 ; block0:
-;   movq    %rdi, %r13
-;   movl    $1, %r9d
-;   call    *%r9
-;   movq    %r13, %rdi
-;   movq    %rax, 0(%rdi)
-;   movl    %edx, 8(%rdi)
-;   movss   %xmm1, 12(%rdi)
-;   movq    0(%rsp), %r13
-;   addq    %rsp, $16, %rsp
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   mov r13, rdi
+;   mov r9d, 0x1
+;   call *r9
+;   mov rdi, r13
+;   mov qword ptr [rdi + 0x0], rax
+;   mov dword ptr [rdi + 0x8], edx
+;   movss xmmword ptr [rdi + 0xc], xmm1
+;   mov r13, qword ptr [rsp + 0x0]
+;   add rsp, rsp, $16
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
-;   subq $0x10, %rsp
-;   movq %r13, (%rsp)
+;   push rbp
+;   mov rbp, rsp
+;   sub rsp, 0x10
+;   mov qword ptr [rsp], r13
 ; block1: ; offset 0xc
-;   movq %rdi, %r13
-;   movl $1, %r9d
-;   callq *%r9
-;   movq %r13, %rdi
-;   movq %rax, (%rdi)
-;   movl %edx, 8(%rdi)
-;   movss %xmm1, 0xc(%rdi)
-;   movq (%rsp), %r13
-;   addq $0x10, %rsp
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   mov r13, rdi
+;   mov r9d, 1
+;   call r9
+;   mov rdi, r13
+;   mov qword ptr [rdi], rax
+;   mov dword ptr [rdi + 8], edx
+;   movss dword ptr [rdi + 0xc], xmm1
+;   mov r13, qword ptr [rsp]
+;   add rsp, 0x10
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %wasmtime_mix6(f32, i64, i32, f32) -> f32, i64, i32, f32 wasmtime_system_v {
     sig0 = (f32, i64, i32, f32) -> f32, i64, i32, f32 system_v
@@ -622,41 +622,41 @@ block0(v0: f32, v1: i64, v2: i32, v3: f32):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
-;   subq    %rsp, $16, %rsp
-;   movq    %r12, 0(%rsp)
+;   push rbp
+;   mov rbp, rsp
+;   sub rsp, rsp, $16
+;   mov qword ptr [rsp + 0x0], r12
 ; block0:
-;   movq    %rdx, %r12
-;   movl    $1, %eax
-;   call    *%rax
-;   movq    %r12, %r8
-;   movq    %rax, 0(%r8)
-;   movl    %edx, 8(%r8)
-;   movss   %xmm1, 12(%r8)
-;   movq    0(%rsp), %r12
-;   addq    %rsp, $16, %rsp
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   mov r12, rdx
+;   mov eax, 0x1
+;   call *rax
+;   mov r8, r12
+;   mov qword ptr [r8 + 0x0], rax
+;   mov dword ptr [r8 + 0x8], edx
+;   movss xmmword ptr [r8 + 0xc], xmm1
+;   mov r12, qword ptr [rsp + 0x0]
+;   add rsp, rsp, $16
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
-;   subq $0x10, %rsp
-;   movq %r12, (%rsp)
+;   push rbp
+;   mov rbp, rsp
+;   sub rsp, 0x10
+;   mov qword ptr [rsp], r12
 ; block1: ; offset 0xc
-;   movq %rdx, %r12
-;   movl $1, %eax
-;   callq *%rax
-;   movq %r12, %r8
-;   movq %rax, (%r8)
-;   movl %edx, 8(%r8)
-;   movss %xmm1, 0xc(%r8)
-;   movq (%rsp), %r12
-;   addq $0x10, %rsp
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   mov r12, rdx
+;   mov eax, 1
+;   call rax
+;   mov r8, r12
+;   mov qword ptr [r8], rax
+;   mov dword ptr [r8 + 8], edx
+;   movss dword ptr [r8 + 0xc], xmm1
+;   mov r12, qword ptr [rsp]
+;   add rsp, 0x10
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 

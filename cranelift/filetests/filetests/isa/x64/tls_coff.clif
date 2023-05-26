@@ -12,24 +12,24 @@ block0(v0: i32):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   %rax = coff_tls_get_addr User(userextname0)
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   rax = coff_tls_get_addr User(userextname0)
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movl (%rip), %eax ; reloc_external PCRel4 %CoffTlsIndex -4
-;   movq %gs:0x58, %rcx
-;   movq (%rcx, %rax, 8), %rax
-;   leaq (%rax), %rax ; reloc_external SecRel u1:0 0
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   mov eax, dword ptr [rip] ; reloc_external PCRel4 %CoffTlsIndex -4
+;   mov rcx, qword ptr gs:[0x58]
+;   mov rax, qword ptr [rcx + rax*8]
+;   lea rax, [rax] ; reloc_external SecRel u1:0 0
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 

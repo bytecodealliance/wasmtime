@@ -16,21 +16,21 @@ function u0:359(i64) -> i8, i8 system_v {
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   call    User(userextname0)
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   call User(userextname0)
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   callq 9 ; reloc_external CallPCRel4 u0:521 -4
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   call 9 ; reloc_external CallPCRel4 u0:521 -4
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 

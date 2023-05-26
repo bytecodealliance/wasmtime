@@ -8,25 +8,25 @@ block0(v0: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   lea     16(%rbp), %rsi
-;   movzbq  0(%rsi), %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   lea rsi, qword ptr [rbp + 0x10]
+;   movzx rax, byte ptr [rsi + 0x0]
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   leaq 0x10(%rbp), %rsi
-;   movzbq (%rsi), %rax ; trap: heap_oob
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   lea rsi, [rbp + 0x10]
+;   movzx rax, byte ptr [rsi] ; trap: heap_oob
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function u0:1(i64 sarg(64), i64) -> i8 system_v {
 block0(v0: i64, v1: i64):
@@ -37,29 +37,29 @@ block0(v0: i64, v1: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   lea     16(%rbp), %rcx
-;   movzbq  0(%rdi), %rax
-;   movzbq  0(%rcx), %r9
-;   addl    %eax, %r9d, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   lea rcx, qword ptr [rbp + 0x10]
+;   movzx rax, byte ptr [rdi + 0x0]
+;   movzx r9, byte ptr [rcx + 0x0]
+;   add eax, eax, r9d
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   leaq 0x10(%rbp), %rcx
-;   movzbq (%rdi), %rax ; trap: heap_oob
-;   movzbq (%rcx), %r9 ; trap: heap_oob
-;   addl %r9d, %eax
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   lea rcx, [rbp + 0x10]
+;   movzx rax, byte ptr [rdi] ; trap: heap_oob
+;   movzx r9, byte ptr [rcx] ; trap: heap_oob
+;   add eax, r9d
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function u0:2(i64) -> i8 system_v {
 fn1 = colocated u0:0(i64 sarg(64)) -> i8 system_v
@@ -70,39 +70,39 @@ block0(v0: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movq    %rdi, %rsi
-;   subq    %rsp, $64, %rsp
+;   mov rsi, rdi
+;   sub rsp, rsp, $64
 ;   virtual_sp_offset_adjust 64
-;   lea     0(%rsp), %rdi
-;   movl    $64, %edx
-;   load_ext_name %Memcpy+0, %r11
-;   call    *%r11
-;   call    User(userextname0)
-;   addq    %rsp, $64, %rsp
+;   lea rdi, qword ptr [rsp + 0x0]
+;   mov edx, 0x40
+;   load_ext_name r11, %Memcpy+0
+;   call *r11
+;   call User(userextname0)
+;   add rsp, rsp, $64
 ;   virtual_sp_offset_adjust -64
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movq %rdi, %rsi
-;   subq $0x40, %rsp
-;   leaq (%rsp), %rdi
-;   movl $0x40, %edx
-;   movabsq $0, %r11 ; reloc_external Abs8 %Memcpy 0
-;   callq *%r11
-;   callq 0x26 ; reloc_external CallPCRel4 u0:0 -4
-;   addq $0x40, %rsp
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   mov rsi, rdi
+;   sub rsp, 0x40
+;   lea rdi, [rsp]
+;   mov edx, 0x40
+;   movabs r11, 0 ; reloc_external Abs8 %Memcpy 0
+;   call r11
+;   call 0x26 ; reloc_external CallPCRel4 u0:0 -4
+;   add rsp, 0x40
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function u0:3(i64, i64) -> i8 system_v {
 fn1 = colocated u0:0(i64, i64 sarg(64)) -> i8 system_v
@@ -113,49 +113,49 @@ block0(v0: i64, v1: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
-;   subq    %rsp, $16, %rsp
-;   movq    %r13, 0(%rsp)
+;   push rbp
+;   mov rbp, rsp
+;   sub rsp, rsp, $16
+;   mov qword ptr [rsp + 0x0], r13
 ; block0:
-;   movq    %rdi, %r13
-;   subq    %rsp, $64, %rsp
+;   mov r13, rdi
+;   sub rsp, rsp, $64
 ;   virtual_sp_offset_adjust 64
-;   lea     0(%rsp), %rdi
-;   movl    $64, %edx
-;   load_ext_name %Memcpy+0, %rax
-;   call    *%rax
-;   movq    %r13, %rdi
-;   call    User(userextname0)
-;   addq    %rsp, $64, %rsp
+;   lea rdi, qword ptr [rsp + 0x0]
+;   mov edx, 0x40
+;   load_ext_name rax, %Memcpy+0
+;   call *rax
+;   mov rdi, r13
+;   call User(userextname0)
+;   add rsp, rsp, $64
 ;   virtual_sp_offset_adjust -64
-;   movq    0(%rsp), %r13
-;   addq    %rsp, $16, %rsp
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   mov r13, qword ptr [rsp + 0x0]
+;   add rsp, rsp, $16
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
-;   subq $0x10, %rsp
-;   movq %r13, (%rsp)
+;   push rbp
+;   mov rbp, rsp
+;   sub rsp, 0x10
+;   mov qword ptr [rsp], r13
 ; block1: ; offset 0xc
-;   movq %rdi, %r13
-;   subq $0x40, %rsp
-;   leaq (%rsp), %rdi
-;   movl $0x40, %edx
-;   movabsq $0, %rax ; reloc_external Abs8 %Memcpy 0
-;   callq *%rax
-;   movq %r13, %rdi
-;   callq 0x30 ; reloc_external CallPCRel4 u0:0 -4
-;   addq $0x40, %rsp
-;   movq (%rsp), %r13
-;   addq $0x10, %rsp
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   mov r13, rdi
+;   sub rsp, 0x40
+;   lea rdi, [rsp]
+;   mov edx, 0x40
+;   movabs rax, 0 ; reloc_external Abs8 %Memcpy 0
+;   call rax
+;   mov rdi, r13
+;   call 0x30 ; reloc_external CallPCRel4 u0:0 -4
+;   add rsp, 0x40
+;   mov r13, qword ptr [rsp]
+;   add rsp, 0x10
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function u0:4(i64 sarg(128), i64 sarg(64)) -> i8 system_v {
 block0(v0: i64, v1: i64):
@@ -166,31 +166,31 @@ block0(v0: i64, v1: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   lea     16(%rbp), %rsi
-;   lea     144(%rbp), %rcx
-;   movzbq  0(%rsi), %rax
-;   movzbq  0(%rcx), %r9
-;   addl    %eax, %r9d, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   lea rsi, qword ptr [rbp + 0x10]
+;   lea rcx, qword ptr [rbp + 0x90]
+;   movzx rax, byte ptr [rsi + 0x0]
+;   movzx r9, byte ptr [rcx + 0x0]
+;   add eax, eax, r9d
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   leaq 0x10(%rbp), %rsi
-;   leaq 0x90(%rbp), %rcx
-;   movzbq (%rsi), %rax ; trap: heap_oob
-;   movzbq (%rcx), %r9 ; trap: heap_oob
-;   addl %r9d, %eax
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   lea rsi, [rbp + 0x10]
+;   lea rcx, [rbp + 0x90]
+;   movzx rax, byte ptr [rsi] ; trap: heap_oob
+;   movzx r9, byte ptr [rcx] ; trap: heap_oob
+;   add eax, r9d
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function u0:5(i64, i64, i64) -> i8 system_v {
 fn1 = colocated u0:0(i64, i64 sarg(128), i64 sarg(64)) -> i8 system_v
@@ -201,63 +201,63 @@ block0(v0: i64, v1: i64, v2: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
-;   subq    %rsp, $16, %rsp
-;   movq    %r12, 0(%rsp)
-;   movq    %r14, 8(%rsp)
+;   push rbp
+;   mov rbp, rsp
+;   sub rsp, rsp, $16
+;   mov qword ptr [rsp + 0x0], r12
+;   mov qword ptr [rsp + 0x8], r14
 ; block0:
-;   movq    %rdx, %r14
-;   movq    %rdi, %r12
-;   subq    %rsp, $192, %rsp
+;   mov r14, rdx
+;   mov r12, rdi
+;   sub rsp, rsp, $192
 ;   virtual_sp_offset_adjust 192
-;   lea     0(%rsp), %rdi
-;   movl    $128, %edx
-;   load_ext_name %Memcpy+0, %rax
-;   call    *%rax
-;   lea     128(%rsp), %rdi
-;   movl    $64, %edx
-;   load_ext_name %Memcpy+0, %r11
-;   movq    %r14, %rsi
-;   call    *%r11
-;   movq    %r12, %rdi
-;   call    User(userextname0)
-;   addq    %rsp, $192, %rsp
+;   lea rdi, qword ptr [rsp + 0x0]
+;   mov edx, 0x80
+;   load_ext_name rax, %Memcpy+0
+;   call *rax
+;   lea rdi, qword ptr [rsp + 0x80]
+;   mov edx, 0x40
+;   load_ext_name r11, %Memcpy+0
+;   mov rsi, r14
+;   call *r11
+;   mov rdi, r12
+;   call User(userextname0)
+;   add rsp, rsp, $192
 ;   virtual_sp_offset_adjust -192
-;   movq    0(%rsp), %r12
-;   movq    8(%rsp), %r14
-;   addq    %rsp, $16, %rsp
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   mov r12, qword ptr [rsp + 0x0]
+;   mov r14, qword ptr [rsp + 0x8]
+;   add rsp, rsp, $16
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
-;   subq $0x10, %rsp
-;   movq %r12, (%rsp)
-;   movq %r14, 8(%rsp)
+;   push rbp
+;   mov rbp, rsp
+;   sub rsp, 0x10
+;   mov qword ptr [rsp], r12
+;   mov qword ptr [rsp + 8], r14
 ; block1: ; offset 0x11
-;   movq %rdx, %r14
-;   movq %rdi, %r12
-;   subq $0xc0, %rsp
-;   leaq (%rsp), %rdi
-;   movl $0x80, %edx
-;   movabsq $0, %rax ; reloc_external Abs8 %Memcpy 0
-;   callq *%rax
-;   leaq 0x80(%rsp), %rdi
-;   movl $0x40, %edx
-;   movabsq $0, %r11 ; reloc_external Abs8 %Memcpy 0
-;   movq %r14, %rsi
-;   callq *%r11
-;   movq %r12, %rdi
-;   callq 0x58 ; reloc_external CallPCRel4 u0:0 -4
-;   addq $0xc0, %rsp
-;   movq (%rsp), %r12
-;   movq 8(%rsp), %r14
-;   addq $0x10, %rsp
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   mov r14, rdx
+;   mov r12, rdi
+;   sub rsp, 0xc0
+;   lea rdi, [rsp]
+;   mov edx, 0x80
+;   movabs rax, 0 ; reloc_external Abs8 %Memcpy 0
+;   call rax
+;   lea rdi, [rsp + 0x80]
+;   mov edx, 0x40
+;   movabs r11, 0 ; reloc_external Abs8 %Memcpy 0
+;   mov rsi, r14
+;   call r11
+;   mov rdi, r12
+;   call 0x58 ; reloc_external CallPCRel4 u0:0 -4
+;   add rsp, 0xc0
+;   mov r12, qword ptr [rsp]
+;   mov r14, qword ptr [rsp + 8]
+;   add rsp, 0x10
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 

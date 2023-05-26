@@ -8,21 +8,21 @@ block0(v0: i32, v1: i32):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   lea     0(%rdi,%rsi,1), %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   lea eax, qword ptr [rdi + rsi]
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   leal (%rdi, %rsi), %eax
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   lea eax, [rdi + rsi]
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 

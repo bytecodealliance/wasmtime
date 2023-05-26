@@ -8,25 +8,25 @@ block0(v0: i8, v1: i8):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movzbl  %dil, %eax
-;   div     %al, %sil, %al ; trap=int_divz
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   movzx eax, dil
+;   div al, sil, al ; trap=int_divz
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movzbl %dil, %eax
-;   divb %sil ; trap: int_divz
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   movzx eax, dil
+;   div sil ; trap: int_divz
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %f2(i16, i16) -> i16 {
 block0(v0: i16, v1: i16):
@@ -35,27 +35,27 @@ block0(v0: i16, v1: i16):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movq    %rdi, %rax
-;   xorq    %rdx, %rdx, %rdx
-;   div     %ax, %dx, %si, %ax, %dx ; trap=int_divz
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   mov rax, rdi
+;   xor rdx, rdx, rdx
+;   div ax, dx, ax, dx, si ; trap=int_divz
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movq %rdi, %rax
-;   xorq %rdx, %rdx
-;   divw %si ; trap: int_divz
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   mov rax, rdi
+;   xor rdx, rdx
+;   div si ; trap: int_divz
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %f3(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
@@ -64,27 +64,27 @@ block0(v0: i32, v1: i32):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movq    %rdi, %rax
-;   xorq    %rdx, %rdx, %rdx
-;   div     %eax, %edx, %esi, %eax, %edx ; trap=int_divz
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   mov rax, rdi
+;   xor rdx, rdx, rdx
+;   div eax, edx, eax, edx, esi ; trap=int_divz
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movq %rdi, %rax
-;   xorq %rdx, %rdx
-;   divl %esi ; trap: int_divz
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   mov rax, rdi
+;   xor rdx, rdx
+;   div esi ; trap: int_divz
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %f4(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -93,25 +93,25 @@ block0(v0: i64, v1: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movq    %rdi, %rax
-;   xorq    %rdx, %rdx, %rdx
-;   div     %rax, %rdx, %rsi, %rax, %rdx ; trap=int_divz
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   mov rax, rdi
+;   xor rdx, rdx, rdx
+;   div rax, rdx, rax, rdx, rsi ; trap=int_divz
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movq %rdi, %rax
-;   xorq %rdx, %rdx
-;   divq %rsi ; trap: int_divz
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   mov rax, rdi
+;   xor rdx, rdx
+;   div rsi ; trap: int_divz
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 

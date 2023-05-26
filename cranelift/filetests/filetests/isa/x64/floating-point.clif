@@ -8,27 +8,27 @@ block0(v0: f64):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movabsq $9223372036854775807, %rax
-;   movq    %rax, %xmm4
-;   andpd   %xmm0, %xmm4, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   movabs rax, 0x7fffffffffffffff
+;   movq xmm4, rax
+;   andpd xmm0, xmm0, xmm4
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movabsq $0x7fffffffffffffff, %rax
-;   movq %rax, %xmm4
-;   andpd %xmm4, %xmm0
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   movabs rax, 0x7fffffffffffffff
+;   movq xmm4, rax
+;   andpd xmm0, xmm4
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %f(i64) -> f64 {
 block0(v0: i64):
@@ -38,27 +38,27 @@ block0(v0: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movsd   0(%rdi), %xmm0
-;   movabsq $9223372036854775807, %rcx
-;   movq    %rcx, %xmm5
-;   andpd   %xmm0, %xmm5, %xmm0
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   movsd xmm0, qword ptr [rdi + 0x0]
+;   movabs rcx, 0x7fffffffffffffff
+;   movq xmm5, rcx
+;   andpd xmm0, xmm0, xmm5
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movsd (%rdi), %xmm0 ; trap: heap_oob
-;   movabsq $0x7fffffffffffffff, %rcx
-;   movq %rcx, %xmm5
-;   andpd %xmm5, %xmm0
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   movsd xmm0, qword ptr [rdi] ; trap: heap_oob
+;   movabs rcx, 0x7fffffffffffffff
+;   movq xmm5, rcx
+;   andpd xmm0, xmm5
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 

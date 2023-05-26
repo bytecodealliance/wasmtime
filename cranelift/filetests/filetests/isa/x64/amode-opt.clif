@@ -10,23 +10,23 @@ block0(v0: i64, v1: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movq    0(%rdi,%rsi,1), %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   mov rax, qword ptr [rdi + rsi]
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movq (%rdi, %rsi), %rax ; trap: heap_oob
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   mov rax, qword ptr [rdi + rsi] ; trap: heap_oob
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %amode_add_imm(i64) -> i64 {
 block0(v0: i64):
@@ -37,23 +37,23 @@ block0(v0: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movq    42(%rdi), %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   mov rax, qword ptr [rdi + 0x2a]
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movq 0x2a(%rdi), %rax ; trap: heap_oob
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   mov rax, qword ptr [rdi + 0x2a] ; trap: heap_oob
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %amode_add_imm_order(i64) -> i64 {
 block0(v0: i64):
@@ -64,23 +64,23 @@ block0(v0: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movq    42(%rdi), %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   mov rax, qword ptr [rdi + 0x2a]
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movq 0x2a(%rdi), %rax ; trap: heap_oob
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   mov rax, qword ptr [rdi + 0x2a] ; trap: heap_oob
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %amode_add_uext_imm(i64) -> i64 {
 block0(v0: i64):
@@ -92,23 +92,23 @@ block0(v0: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movq    42(%rdi), %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   mov rax, qword ptr [rdi + 0x2a]
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movq 0x2a(%rdi), %rax ; trap: heap_oob
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   mov rax, qword ptr [rdi + 0x2a] ; trap: heap_oob
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %amode_reg_reg_imm(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -120,23 +120,23 @@ block0(v0: i64, v1: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movq    320(%rdi,%rsi,1), %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   mov rax, qword ptr [rdi + rsi + 320]
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movq 0x140(%rdi, %rsi), %rax ; trap: heap_oob
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   mov rax, qword ptr [rdi + rsi + 0x140] ; trap: heap_oob
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %amode_reg_reg_imm_negative(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -148,23 +148,23 @@ block0(v0: i64, v1: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movq    -1(%rdi,%rsi,1), %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   mov rax, qword ptr [rdi + rsi - 1]
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movq -1(%rdi, %rsi), %rax ; trap: heap_oob
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   mov rax, qword ptr [rdi + rsi - 1] ; trap: heap_oob
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %amode_reg_reg_imm_scaled(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -177,23 +177,23 @@ block0(v0: i64, v1: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movq    -1(%rdi,%rsi,8), %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   mov rax, qword ptr [rdi + rsi * 8 - 1]
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movq -1(%rdi, %rsi, 8), %rax ; trap: heap_oob
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   mov rax, qword ptr [rdi + rsi*8 - 1] ; trap: heap_oob
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %amode_reg_reg_imm_uext_scaled(i64, i32) -> i64 {
 block0(v0: i64, v1: i32):
@@ -207,27 +207,27 @@ block0(v0: i64, v1: i32):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movq    %rsi, %rdx
-;   shll    $3, %edx, %edx
-;   movq    -1(%rdi,%rdx,1), %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   mov rdx, rsi
+;   shl edx, edx, 0x3
+;   mov rax, qword ptr [rdi + rdx - 1]
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movq %rsi, %rdx
-;   shll $3, %edx
-;   movq -1(%rdi, %rdx), %rax ; trap: heap_oob
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   mov rdx, rsi
+;   shl edx, 3
+;   mov rax, qword ptr [rdi + rdx - 1] ; trap: heap_oob
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %amode_reg_reg_imm_uext_scaled_add(i64, i32, i32) -> i64 {
 block0(v0: i64, v1: i32, v2: i32):
@@ -242,25 +242,25 @@ block0(v0: i64, v1: i32, v2: i32):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   lea     0(%rsi,%rdx,1), %r8d
-;   shll    $2, %r8d, %r8d
-;   movq    -1(%rdi,%r8,1), %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   lea r8d, qword ptr [rsi + rdx]
+;   shl r8d, r8d, 0x2
+;   mov rax, qword ptr [rdi + r8 - 1]
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   leal (%rsi, %rdx), %r8d
-;   shll $2, %r8d
-;   movq -1(%rdi, %r8), %rax ; trap: heap_oob
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   lea r8d, [rsi + rdx]
+;   shl r8d, 2
+;   mov rax, qword ptr [rdi + r8 - 1] ; trap: heap_oob
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 

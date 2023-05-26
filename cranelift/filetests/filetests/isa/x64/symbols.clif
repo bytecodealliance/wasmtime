@@ -10,23 +10,23 @@ block0:
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   load_ext_name %func0+0, %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   load_ext_name rax, %func0+0
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movabsq $0, %rax ; reloc_external Abs8 %func0 0
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   movabs rax, 0 ; reloc_external Abs8 %func0 0
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %colocated_func_addr() -> i64 {
     fn0 = colocated %func0(i64) -> i64
@@ -37,23 +37,23 @@ block0:
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   load_ext_name %func0+0, %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   load_ext_name rax, %func0+0
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   leaq (%rip), %rax ; reloc_external CallPCRel4 %func0 -4
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   lea rax, [rip] ; reloc_external CallPCRel4 %func0 -4
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %symbol_value() -> i64 {
     gv0 = symbol %global0
@@ -64,21 +64,21 @@ block0:
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   load_ext_name %global0+0, %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   load_ext_name rax, %global0+0
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movabsq $0, %rax ; reloc_external Abs8 %global0 0
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   movabs rax, 0 ; reloc_external Abs8 %global0 0
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 

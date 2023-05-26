@@ -13,31 +13,31 @@ block0(v0: f32, v1: f32):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movl    $1, %eax
-;   ucomiss %xmm1, %xmm0
-;   cmovpl  const(0), %eax, %eax
-;   cmovnzl const(0), %eax, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   mov eax, 0x1
+;   ucomiss xmm0, xmm1
+;   cmovp eax, const(0), eax
+;   cmovnz eax, const(0), eax
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movl $1, %eax
-;   ucomiss %xmm1, %xmm0
-;   cmovpl 0xd(%rip), %eax
-;   cmovnel 6(%rip), %eax
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
+;   mov eax, 1
+;   ucomiss xmm0, xmm1
+;   cmovp eax, dword ptr [rip + 0xd]
+;   cmovne eax, dword ptr [rip + 6]
+;   mov rsp, rbp
+;   pop rbp
+;   ret
+;   add byte ptr [rax], al
+;   add byte ptr [rax], al
+;   add byte ptr [rax], al
+;   add byte ptr [rax], al
 

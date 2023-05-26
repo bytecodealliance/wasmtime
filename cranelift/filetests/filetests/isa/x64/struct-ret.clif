@@ -9,27 +9,27 @@ block0(v0: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movl    $42, %eax
-;   movq    %rax, 0(%rdi)
-;   movq    %rdi, %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   mov eax, 0x2a
+;   mov qword ptr [rdi + 0x0], rax
+;   mov rax, rdi
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movl $0x2a, %eax
-;   movq %rax, (%rdi) ; trap: heap_oob
-;   movq %rdi, %rax
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   mov eax, 0x2a
+;   mov qword ptr [rdi], rax ; trap: heap_oob
+;   mov rax, rdi
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %f1(i64, i64) -> i64 {
     fn0 = %f2(i64 sret) -> i64
@@ -40,29 +40,29 @@ block0(v0: i64, v1: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movq    %rsi, %rdi
-;   load_ext_name %f2+0, %rdx
-;   call    *%rdx
-;   movq    %rdx, %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   mov rdi, rsi
+;   load_ext_name rdx, %f2+0
+;   call *rdx
+;   mov rax, rdx
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movq %rsi, %rdi
-;   movabsq $0, %rdx ; reloc_external Abs8 %f2 0
-;   callq *%rdx
-;   movq %rdx, %rax
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   mov rdi, rsi
+;   movabs rdx, 0 ; reloc_external Abs8 %f2 0
+;   call rdx
+;   mov rax, rdx
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %f3(i64 sret) {
     fn0 = %f4(i64 sret)
@@ -73,37 +73,37 @@ block0(v0: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
-;   subq    %rsp, $16, %rsp
-;   movq    %r15, 0(%rsp)
+;   push rbp
+;   mov rbp, rsp
+;   sub rsp, rsp, $16
+;   mov qword ptr [rsp + 0x0], r15
 ; block0:
-;   movq    %rdi, %r15
-;   load_ext_name %f4+0, %rax
-;   movq    %r15, %rdi
-;   call    *%rax
-;   movq    %r15, %rax
-;   movq    0(%rsp), %r15
-;   addq    %rsp, $16, %rsp
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   mov r15, rdi
+;   load_ext_name rax, %f4+0
+;   mov rdi, r15
+;   call *rax
+;   mov rax, r15
+;   mov r15, qword ptr [rsp + 0x0]
+;   add rsp, rsp, $16
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
-;   subq $0x10, %rsp
-;   movq %r15, (%rsp)
+;   push rbp
+;   mov rbp, rsp
+;   sub rsp, 0x10
+;   mov qword ptr [rsp], r15
 ; block1: ; offset 0xc
-;   movq %rdi, %r15
-;   movabsq $0, %rax ; reloc_external Abs8 %f4 0
-;   movq %r15, %rdi
-;   callq *%rax
-;   movq %r15, %rax
-;   movq (%rsp), %r15
-;   addq $0x10, %rsp
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   mov r15, rdi
+;   movabs rax, 0 ; reloc_external Abs8 %f4 0
+;   mov rdi, r15
+;   call rax
+;   mov rax, r15
+;   mov r15, qword ptr [rsp]
+;   add rsp, 0x10
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 

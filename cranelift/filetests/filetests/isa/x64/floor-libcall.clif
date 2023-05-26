@@ -8,25 +8,25 @@ block0(v0: f32):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   load_ext_name %FloorF32+0, %rcx
-;   call    *%rcx
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   load_ext_name rcx, %FloorF32+0
+;   call *rcx
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movabsq $0, %rcx ; reloc_external Abs8 %FloorF32 0
-;   callq *%rcx
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   movabs rcx, 0 ; reloc_external Abs8 %FloorF32 0
+;   call rcx
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %f2(f64) -> f64 {
 block0(v0: f64):
@@ -35,23 +35,23 @@ block0(v0: f64):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   load_ext_name %FloorF64+0, %rcx
-;   call    *%rcx
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   load_ext_name rcx, %FloorF64+0
+;   call *rcx
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movabsq $0, %rcx ; reloc_external Abs8 %FloorF64 0
-;   callq *%rcx
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   movabs rcx, 0 ; reloc_external Abs8 %FloorF64 0
+;   call rcx
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 

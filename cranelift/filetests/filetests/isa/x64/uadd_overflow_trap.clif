@@ -9,27 +9,27 @@ block0(v0: i32):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movq    %rdi, %rax
-;   addl    %eax, $127, %eax
+;   mov rax, rdi
+;   add eax, eax, $127
 ;   jb #trap=user0
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movq %rdi, %rax
-;   addl $0x7f, %eax
+;   mov rax, rdi
+;   add eax, 0x7f
 ;   jb 0x15
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 ;   ud2 ; trap: user0
 
 function %f1(i32) -> i32 {
@@ -40,27 +40,27 @@ block0(v0: i32):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movq    %rdi, %rax
-;   addl    %eax, $127, %eax
+;   mov rax, rdi
+;   add eax, eax, $127
 ;   jb #trap=user0
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movq %rdi, %rax
-;   addl $0x7f, %eax
+;   mov rax, rdi
+;   add eax, 0x7f
 ;   jb 0x15
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 ;   ud2 ; trap: user0
 
 function %f2(i32, i32) -> i32 {
@@ -70,27 +70,27 @@ block0(v0: i32, v1: i32):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movq    %rdi, %rax
-;   addl    %eax, %esi, %eax
+;   mov rax, rdi
+;   add eax, eax, esi
 ;   jb #trap=user0
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movq %rdi, %rax
-;   addl %esi, %eax
+;   mov rax, rdi
+;   add eax, esi
 ;   jb 0x14
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 ;   ud2 ; trap: user0
 
 function %f3(i64) -> i64 {
@@ -101,27 +101,27 @@ block0(v0: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movq    %rdi, %rax
-;   addq    %rax, $127, %rax
+;   mov rax, rdi
+;   add rax, rax, $127
 ;   jb #trap=user0
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movq %rdi, %rax
-;   addq $0x7f, %rax
+;   mov rax, rdi
+;   add rax, 0x7f
 ;   jb 0x16
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 ;   ud2 ; trap: user0
 
 function %f3(i64) -> i64 {
@@ -132,27 +132,27 @@ block0(v0: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movq    %rdi, %rax
-;   addq    %rax, $127, %rax
+;   mov rax, rdi
+;   add rax, rax, $127
 ;   jb #trap=user0
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movq %rdi, %rax
-;   addq $0x7f, %rax
+;   mov rax, rdi
+;   add rax, 0x7f
 ;   jb 0x16
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 ;   ud2 ; trap: user0
 
 function %f4(i64, i64) -> i64 {
@@ -162,26 +162,26 @@ block0(v0: i64, v1: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   movq    %rdi, %rax
-;   addq    %rax, %rsi, %rax
+;   mov rax, rdi
+;   add rax, rax, rsi
 ;   jb #trap=user0
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   movq %rdi, %rax
-;   addq %rsi, %rax
+;   mov rax, rdi
+;   add rax, rsi
 ;   jb 0x15
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 ;   ud2 ; trap: user0
 

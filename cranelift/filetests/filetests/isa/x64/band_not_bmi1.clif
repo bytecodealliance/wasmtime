@@ -9,23 +9,23 @@ block0(v0: i8, v1: i8):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   andn    %edi, %esi, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   andn eax, esi, edi
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   andnl %edi, %esi, %eax
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   andn eax, esi, edi
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
 function %reversed_operands(i8, i8) -> i8 {
 block0(v0: i8, v1: i8):
@@ -35,21 +35,21 @@ block0(v0: i8, v1: i8):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block0:
-;   andn    %esi, %edi, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
+;   andn eax, edi, esi
+;   mov rsp, rbp
+;   pop rbp
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   pushq %rbp
-;   movq %rsp, %rbp
+;   push rbp
+;   mov rbp, rsp
 ; block1: ; offset 0x4
-;   andnl %esi, %edi, %eax
-;   movq %rbp, %rsp
-;   popq %rbp
-;   retq
+;   andn eax, edi, esi
+;   mov rsp, rbp
+;   pop rbp
+;   ret
 
