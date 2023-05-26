@@ -8,10 +8,9 @@
 //! Presently, this crate is experimental. We don't yet recommend you use it
 //! in production. Specifically:
 //! * it does not yet support a synchronous rust embedding
-//! * polling and streams need a redesign. IO that currently shoudl be
-//! non-blocking may be blocking. poll probably doesnt work at all.
+//! * polling and streams need a redesign. IO that currently should be
+//! non-blocking may be blocking. poll probably doesn't work at all.
 //! * its internal organization could use some love
-//! * the Preview 1 host support is in its infancy
 //! * the wit files in tree describing preview 2 are not faithful to the
 //! standards repos
 //!
