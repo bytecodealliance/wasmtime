@@ -2243,12 +2243,10 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             // Note that the variable swaps here are intentional due to
             // the difference of the order of the wasm op and the clif
             // op.
-            //
-            // Additionally note that even on x86 the I16X8 type uses the
-            // `bitselect` instruction since x86 has no corresponding
-            // `blendv`-style instruction for 16-bit operands.
             state.push1(
-                if environ.relaxed_simd_deterministic() || !environ.is_x86() || ty == I16X8 {
+                if environ.relaxed_simd_deterministic()
+                    || !environ.use_x86_blendv_for_relaxed_laneselect(ty)
+                {
                     // Deterministic semantics are a `bitselect` along the lines
                     // of the wasm `v128.bitselect` instruction.
                     builder.ins().bitselect(c, a, b)

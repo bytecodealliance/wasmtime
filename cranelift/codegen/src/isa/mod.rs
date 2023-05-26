@@ -47,7 +47,7 @@ use crate::dominator_tree::DominatorTree;
 pub use crate::isa::call_conv::CallConv;
 
 use crate::flowgraph;
-use crate::ir::{self, Function};
+use crate::ir::{self, Function, Type};
 #[cfg(feature = "unwind")]
 use crate::isa::unwind::systemv::RegisterMappingError;
 use crate::machinst::{CompiledCode, CompiledCodeStencil, TextSectionBuilder, UnwindInfoKind};
@@ -340,6 +340,10 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
     /// Currently this only returns false on x86 when some native features are
     /// not detected.
     fn has_native_fma(&self) -> bool;
+
+    /// Returns whether the CLIF `x86_blendv` instruction is implemented for
+    /// this ISA for the specified type.
+    fn has_x86_blendv_lowering(&self, ty: Type) -> bool;
 }
 
 /// Function alignment specifications as required by an ISA, returned by

@@ -15,7 +15,7 @@ use crate::{
 use core::convert::From;
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::immediates::Offset32;
-use cranelift_codegen::ir::{self, InstBuilder};
+use cranelift_codegen::ir::{self, InstBuilder, Type};
 use cranelift_codegen::isa::TargetFrontendConfig;
 use cranelift_entity::PrimaryMap;
 use cranelift_frontend::FunctionBuilder;
@@ -540,6 +540,13 @@ pub trait FuncEnvironment: TargetEnvironment {
     /// Returns whether this is an x86 target, which may alter lowerings of
     /// relaxed simd instructions.
     fn is_x86(&self) -> bool {
+        false
+    }
+
+    /// Returns whether the CLIF `x86_blendv` instruction should be used for the
+    /// relaxed simd `*.relaxed_laneselect` instruction for the specified type.
+    fn use_x86_blendv_for_relaxed_laneselect(&self, ty: Type) -> bool {
+        let _ = ty;
         false
     }
 }

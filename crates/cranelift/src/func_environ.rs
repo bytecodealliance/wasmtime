@@ -2159,4 +2159,8 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     fn is_x86(&self) -> bool {
         self.isa.triple().architecture == target_lexicon::Architecture::X86_64
     }
+
+    fn use_x86_blendv_for_relaxed_laneselect(&self, ty: Type) -> bool {
+        self.isa.has_x86_blendv_lowering(ty)
+    }
 }
