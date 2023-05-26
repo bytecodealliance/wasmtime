@@ -6,9 +6,7 @@ use crate::{
 };
 use anyhow::Result;
 use call::FnCall;
-use wasmparser::{
-    BinaryReader, FuncValidator,ValidatorResources, VisitOperator,
-};
+use wasmparser::{BinaryReader, FuncValidator, ValidatorResources, VisitOperator};
 use wasmtime_environ::{FuncIndex, WasmFuncType, WasmType};
 
 mod context;
