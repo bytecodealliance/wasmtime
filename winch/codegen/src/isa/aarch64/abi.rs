@@ -63,7 +63,7 @@ impl ABI for Aarch64ABI {
         64
     }
 
-    fn sig(&self, wasm_sig: &WasmFuncType, call_conv: &CallingConvention) -> ABISig {
+    fn sig(wasm_sig: &WasmFuncType, call_conv: &CallingConvention) -> ABISig {
         assert!(call_conv.is_apple_aarch64() || call_conv.is_default());
 
         if wasm_sig.returns().len() > 1 {
