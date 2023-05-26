@@ -29,6 +29,9 @@ wasmtime::component::bindgen!({
        "environment": wasi::environment,
        "streams": wasi::streams,
        "preopens": wasi::preopens,
+       "stdin": wasi::stdin,
+       "stdout": wasi::stdout,
+       "stderr": wasi::stderr,
        "filesystem": wasi::filesystem,
        "exit": wasi::exit,
     },
@@ -65,6 +68,9 @@ async fn instantiate(
     wasi::streams::add_to_linker(&mut linker, |x| x)?;
     wasi::environment::add_to_linker(&mut linker, |x| x)?;
     wasi::preopens::add_to_linker(&mut linker, |x| x)?;
+    wasi::stdin::add_to_linker(&mut linker, |x| x)?;
+    wasi::stdout::add_to_linker(&mut linker, |x| x)?;
+    wasi::stderr::add_to_linker(&mut linker, |x| x)?;
     wasi::exit::add_to_linker(&mut linker, |x| x)?;
 
     let mut store = Store::new(&ENGINE, wasi_ctx);

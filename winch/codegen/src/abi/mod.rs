@@ -56,20 +56,20 @@ pub(crate) use local::*;
 /// specific registers, etc.
 pub(crate) trait ABI {
     /// The required stack alignment.
-    fn stack_align(&self) -> u8;
+    fn stack_align() -> u8;
 
     /// The required stack alignment for calls.
-    fn call_stack_align(&self) -> u8;
+    fn call_stack_align() -> u8;
 
     /// The offset to the argument base, relative to the frame pointer.
-    fn arg_base_offset(&self) -> u8;
+    fn arg_base_offset() -> u8;
 
     /// The offset to the return address, relative to the frame pointer.
     fn ret_addr_offset() -> u8;
 
     /// Construct the ABI-specific signature from a WebAssembly
     /// function type.
-    fn sig(&self, wasm_sig: &WasmFuncType, call_conv: &CallingConvention) -> ABISig;
+    fn sig(wasm_sig: &WasmFuncType, call_conv: &CallingConvention) -> ABISig;
 
     /// Returns the number of bits in a word.
     fn word_bits() -> u32;

@@ -751,6 +751,16 @@ impl<T> Store<T> {
         self.inner.fuel_consumed()
     }
 
+    /// Returns remaining fuel in this [`Store`].
+    ///
+    /// If fuel consumption is not enabled via
+    /// [`Config::consume_fuel`](crate::Config::consume_fuel) then this
+    /// function will return `None`. Also note that fuel, if enabled, must be
+    /// originally configured via [`Store::add_fuel`].
+    pub fn fuel_remaining(&mut self) -> Option<u64> {
+        self.inner.fuel_remaining()
+    }
+
     /// Adds fuel to this [`Store`] for wasm to consume while executing.
     ///
     /// For this method to work fuel consumption must be enabled via
@@ -991,6 +1001,13 @@ impl<'a, T> StoreContext<'a, T> {
     pub fn fuel_consumed(&self) -> Option<u64> {
         self.0.fuel_consumed()
     }
+
+    /// Returns remaining fuel in this store.
+    ///
+    /// For more information see [`Store::fuel_remaining`]
+    pub fn fuel_remaining(&mut self) -> Option<u64> {
+        self.0.fuel_remaining()
+    }
 }
 
 impl<'a, T> StoreContextMut<'a, T> {
@@ -1025,6 +1042,13 @@ impl<'a, T> StoreContextMut<'a, T> {
     /// For more information see [`Store::fuel_consumed`].
     pub fn fuel_consumed(&self) -> Option<u64> {
         self.0.fuel_consumed()
+    }
+
+    /// Returns remaining fuel in this store.
+    ///
+    /// For more information see [`Store::fuel_remaining`]
+    pub fn fuel_remaining(&self) -> Option<u64> {
+        self.0.fuel_remaining()
     }
 
     /// Inject more fuel into this store to be consumed when executing wasm code.
@@ -1268,6 +1292,14 @@ impl StoreOpaque {
         }
         let consumed = unsafe { *self.runtime_limits.fuel_consumed.get() };
         Some(u64::try_from(self.fuel_adj + consumed).unwrap())
+    }
+
+    fn fuel_remaining(&self) -> Option<u64> {
+        if !self.engine.config().tunables.consume_fuel {
+            return None;
+        }
+        let consumed = unsafe { *self.runtime_limits.fuel_consumed.get() };
+        Some(u64::try_from(-consumed).unwrap())
     }
 
     fn out_of_fuel_trap(&mut self) {

@@ -21,6 +21,9 @@ const ALLOWED_IMPORT_MODULES: &[&str] = &[
     "preopens",
     "exit",
     "canonical_abi",
+    "stdin",
+    "stdout",
+    "stderr",
     "__main_module__",
 ];
 

@@ -138,12 +138,21 @@ default interface filesystem {
         /// True if the resource is considered readable by the containing
         /// filesystem.
         readable,
-        /// True if the resource is considered writeable by the containing
+        /// True if the resource is considered writable by the containing
         /// filesystem.
-        writeable,
+        writable,
         /// True if the resource is considered executable by the containing
         /// filesystem. This does not apply to directories.
         executable,
+    }
+
+    /// Access type used by `access-at`.
+    variant access-type {
+        /// Test for readability, writeability, or executability.
+        access(modes),
+
+        /// Test whether the path exists.
+        exists,
     }
 
     /// Number of hard links to an inode.
@@ -584,6 +593,26 @@ default interface filesystem {
         old-path: string,
         /// The relative destination path at which to create the symbolic link.
         new-path: string,
+    ) -> result<_, error-code>
+
+    /// Check accessibility of a filesystem path.
+    ///
+    /// Check whether the given filesystem path names an object which is
+    /// readable, writable, or executable, or whether it exists.
+    ///
+    /// This does not a guarantee that subsequent accesses will succeed, as
+    /// filesystem permissions may be modified asynchronously by external
+    /// entities.
+    ///
+    /// Note: This is similar to `faccessat` with the `AT_EACCESS` flag in POSIX.
+    access-at: func(
+        this: descriptor,
+        /// Flags determining the method of how the path is resolved.
+        path-flags: path-flags,
+        /// The relative path to check.
+        path: string,
+        /// The type of check to perform.
+        %type: access-type
     ) -> result<_, error-code>
 
     /// Unlink a filesystem object that is not a directory.

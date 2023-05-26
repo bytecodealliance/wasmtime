@@ -641,6 +641,16 @@ impl<T: WasiView> wasi::filesystem::Host for T {
         Ok(())
     }
 
+    async fn access_at(
+        &mut self,
+        _fd: wasi::filesystem::Descriptor,
+        _path_flags: wasi::filesystem::PathFlags,
+        _path: String,
+        _access: wasi::filesystem::AccessType,
+    ) -> Result<(), wasi::filesystem::Error> {
+        todo!()
+    }
+
     async fn change_file_permissions_at(
         &mut self,
         _fd: wasi::filesystem::Descriptor,

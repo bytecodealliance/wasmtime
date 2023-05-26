@@ -92,16 +92,15 @@ impl TargetIsa for Aarch64 {
         let mut body = body.get_binary_reader();
         let mut masm = Aarch64Masm::new(self.shared_flags.clone());
         let stack = Stack::new();
-        let abi = abi::Aarch64ABI::default();
-        let abi_sig = abi.sig(sig, &CallingConvention::Default);
+        let abi_sig = abi::Aarch64ABI::sig(sig, &CallingConvention::Default);
 
         let defined_locals = DefinedLocals::new(translation, &mut body, validator)?;
-        let frame = Frame::new(&abi_sig, &defined_locals, &abi)?;
+        let frame = Frame::new::<abi::Aarch64ABI>(&abi_sig, &defined_locals)?;
         // TODO: Add floating point bitmask
         let regalloc = RegAlloc::new(RegSet::new(ALL_GPR, 0), scratch());
         let codegen_context = CodeGenContext::new(regalloc, stack, &frame);
         let env = FuncEnv::new(self.pointer_bytes(), translation);
-        let mut codegen = CodeGen::new(&mut masm, &abi, codegen_context, env, abi_sig);
+        let mut codegen = CodeGen::new(&mut masm, codegen_context, env, abi_sig);
 
         codegen.emit(&mut body, validator)?;
         Ok(masm.finalize())

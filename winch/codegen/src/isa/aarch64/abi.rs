@@ -43,15 +43,15 @@ impl RegIndexEnv {
 
 impl ABI for Aarch64ABI {
     // TODO change to 16 once SIMD is supported
-    fn stack_align(&self) -> u8 {
+    fn stack_align() -> u8 {
         8
     }
 
-    fn call_stack_align(&self) -> u8 {
+    fn call_stack_align() -> u8 {
         16
     }
 
-    fn arg_base_offset(&self) -> u8 {
+    fn arg_base_offset() -> u8 {
         16
     }
 
@@ -165,8 +165,7 @@ mod tests {
             [].into(),
         );
 
-        let abi = Aarch64ABI::default();
-        let sig = abi.sig(&wasm_sig, &CallingConvention::Default);
+        let sig = Aarch64ABI::sig(&wasm_sig, &CallingConvention::Default);
         let params = sig.params;
 
         match_reg_arg(params.get(0).unwrap(), I32, regs::xreg(0));
@@ -187,8 +186,7 @@ mod tests {
             [].into(),
         );
 
-        let abi = Aarch64ABI::default();
-        let sig = abi.sig(&wasm_sig, &CallingConvention::Default);
+        let sig = Aarch64ABI::sig(&wasm_sig, &CallingConvention::Default);
         let params = sig.params;
 
         match_reg_arg(params.get(0).unwrap(), F32, regs::vreg(0));
@@ -209,8 +207,7 @@ mod tests {
             [].into(),
         );
 
-        let abi = Aarch64ABI::default();
-        let sig = abi.sig(&wasm_sig, &CallingConvention::Default);
+        let sig = Aarch64ABI::sig(&wasm_sig, &CallingConvention::Default);
         let params = sig.params;
 
         match_reg_arg(params.get(0).unwrap(), F32, regs::vreg(0));

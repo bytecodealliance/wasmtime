@@ -96,16 +96,15 @@ impl TargetIsa for X64 {
         let mut body = body.get_binary_reader();
         let mut masm = X64Masm::new(self.shared_flags.clone(), self.isa_flags.clone());
         let stack = Stack::new();
-        let abi = abi::X64ABI::default();
-        let abi_sig = abi.sig(sig, &CallingConvention::Default);
+        let abi_sig = abi::X64ABI::sig(sig, &CallingConvention::Default);
 
         let defined_locals = DefinedLocals::new(translation, &mut body, validator)?;
-        let frame = Frame::new(&abi_sig, &defined_locals, &abi)?;
+        let frame = Frame::new::<abi::X64ABI>(&abi_sig, &defined_locals)?;
         // TODO Add in floating point bitmask
         let regalloc = RegAlloc::new(RegSet::new(ALL_GPR, 0), regs::scratch());
         let codegen_context = CodeGenContext::new(regalloc, stack, &frame);
         let env = FuncEnv::new(self.pointer_bytes(), translation);
-        let mut codegen = CodeGen::new(&mut masm, &abi, codegen_context, env, abi_sig);
+        let mut codegen = CodeGen::new(&mut masm, codegen_context, env, abi_sig);
 
         codegen.emit(&mut body, validator)?;
 
@@ -128,13 +127,11 @@ impl TargetIsa for X64 {
     ) -> Result<MachBufferFinalized<Final>> {
         use TrampolineKind::*;
 
-        let abi = abi::X64ABI::default();
         let mut masm = X64Masm::new(self.shared_flags.clone(), self.isa_flags.clone());
         let call_conv = self.wasmtime_call_conv();
 
         let mut trampoline = Trampoline::new(
             &mut masm,
-            &abi,
             regs::scratch(),
             regs::argv(),
             &call_conv,

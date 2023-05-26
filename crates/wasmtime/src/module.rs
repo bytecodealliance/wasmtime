@@ -1073,7 +1073,7 @@ impl std::hash::Hash for HashedEngineCompileEnv<'_> {
         config.features.hash(hasher);
 
         // Catch accidental bugs of reusing across crate versions.
-        env!("CARGO_PKG_VERSION").hash(hasher);
+        config.module_version.hash(hasher);
     }
 }
 

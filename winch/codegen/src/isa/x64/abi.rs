@@ -59,15 +59,15 @@ pub(crate) struct X64ABI;
 
 impl ABI for X64ABI {
     // TODO: change to 16 once SIMD is supported
-    fn stack_align(&self) -> u8 {
+    fn stack_align() -> u8 {
         8
     }
 
-    fn call_stack_align(&self) -> u8 {
+    fn call_stack_align() -> u8 {
         16
     }
 
-    fn arg_base_offset(&self) -> u8 {
+    fn arg_base_offset() -> u8 {
         // Two 8-byte slots, one for the return address and another
         // one for the frame pointer.
         // ┌──────────┬───────── Argument base
@@ -96,7 +96,7 @@ impl ABI for X64ABI {
         64
     }
 
-    fn sig(&self, wasm_sig: &WasmFuncType, call_conv: &CallingConvention) -> ABISig {
+    fn sig(wasm_sig: &WasmFuncType, call_conv: &CallingConvention) -> ABISig {
         assert!(call_conv.is_fastcall() || call_conv.is_systemv() || call_conv.is_default());
 
         if wasm_sig.returns().len() > 1 {
@@ -253,8 +253,7 @@ mod tests {
         let wasm_sig =
             WasmFuncType::new([I32, I64, I32, I64, I32, I32, I64, I32].into(), [].into());
 
-        let abi = X64ABI::default();
-        let sig = abi.sig(&wasm_sig, &CallingConvention::Default);
+        let sig = X64ABI::sig(&wasm_sig, &CallingConvention::Default);
         let params = sig.params;
 
         match_reg_arg(params.get(0).unwrap(), I32, regs::rdi());
@@ -274,8 +273,7 @@ mod tests {
             [].into(),
         );
 
-        let abi = X64ABI::default();
-        let sig = abi.sig(&wasm_sig, &CallingConvention::Default);
+        let sig = X64ABI::sig(&wasm_sig, &CallingConvention::Default);
         let params = sig.params;
 
         match_reg_arg(params.get(0).unwrap(), F32, regs::xmm0());
@@ -296,8 +294,7 @@ mod tests {
             [].into(),
         );
 
-        let abi = X64ABI::default();
-        let sig = abi.sig(&wasm_sig, &CallingConvention::Default);
+        let sig = X64ABI::sig(&wasm_sig, &CallingConvention::Default);
         let params = sig.params;
 
         match_reg_arg(params.get(0).unwrap(), F32, regs::xmm0());
@@ -318,8 +315,7 @@ mod tests {
             [].into(),
         );
 
-        let abi = X64ABI::default();
-        let sig = abi.sig(&wasm_sig, &CallingConvention::WasmtimeSystemV);
+        let sig = X64ABI::sig(&wasm_sig, &CallingConvention::WasmtimeSystemV);
         let params = sig.params;
 
         match_reg_arg(params.get(0).unwrap(), F32, regs::xmm0());
@@ -340,8 +336,7 @@ mod tests {
             [].into(),
         );
 
-        let abi = X64ABI::default();
-        let sig = abi.sig(&wasm_sig, &CallingConvention::WasmtimeFastcall);
+        let sig = X64ABI::sig(&wasm_sig, &CallingConvention::WasmtimeFastcall);
         let params = sig.params;
 
         match_reg_arg(params.get(0).unwrap(), F32, regs::xmm0());

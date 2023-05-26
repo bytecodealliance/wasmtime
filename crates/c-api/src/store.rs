@@ -228,6 +228,20 @@ pub extern "C" fn wasmtime_context_fuel_consumed(store: CStoreContext<'_>, fuel:
 }
 
 #[no_mangle]
+pub extern "C" fn wasmtime_context_fuel_remaining(
+    store: CStoreContextMut<'_>,
+    fuel: &mut u64,
+) -> bool {
+    match store.fuel_remaining() {
+        Some(remaining) => {
+            *fuel = remaining;
+            true
+        }
+        None => false,
+    }
+}
+
+#[no_mangle]
 pub extern "C" fn wasmtime_context_consume_fuel(
     mut store: CStoreContextMut<'_>,
     fuel: u64,

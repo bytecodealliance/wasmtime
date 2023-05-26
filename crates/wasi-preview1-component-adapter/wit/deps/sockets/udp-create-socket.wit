@@ -1,6 +1,6 @@
 
 default interface udp-create-socket {
-	use pkg.network.{network, error, ip-address-family}
+	use pkg.network.{network, error-code, ip-address-family}
 	use pkg.udp.{udp-socket}
 
 	/// Create a new UDP socket.
@@ -11,9 +11,17 @@ default interface udp-create-socket {
 	/// at time of creation, the socket is not bound to any `network` yet. Up to the moment `bind`/`connect` is called,
 	/// the socket is effectively an in-memory configuration object, unable to communicate with the outside world.
 	/// 
-	/// References:
+	/// All sockets are non-blocking. Use the wasi-poll interface to block on asynchronous operations.
+	/// 
+	/// # Typical errors
+	/// - `not-supported`:                The host does not support UDP sockets. (EOPNOTSUPP)
+	/// - `address-family-not-supported`: The specified `address-family` is not supported. (EAFNOSUPPORT)
+	/// - `new-socket-limit`:             The new socket resource could not be created because of a system limit. (EMFILE, ENFILE)
+	/// 
+	/// # References:
 	/// - <https://pubs.opengroup.org/onlinepubs/9699919799/functions/socket.html>
 	/// - <https://man7.org/linux/man-pages/man2/socket.2.html>
-	/// 
-	create-udp-socket: func(address-family: ip-address-family) -> result<udp-socket, error>
+	/// - <https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-wsasocketw>
+	/// - <https://man.freebsd.org/cgi/man.cgi?query=socket&sektion=2>
+	create-udp-socket: func(address-family: ip-address-family) -> result<udp-socket, error-code>
 }

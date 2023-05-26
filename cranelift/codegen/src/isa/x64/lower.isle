@@ -4035,14 +4035,14 @@
 (rule 2 (lower (shuffle a b (vec_mask_from_immediate (perm_from_mask_with_zeros mask zeros))))
       (if-let $true (use_avx512vl_simd))
       (if-let $true (use_avx512vbmi_simd))
-      (x64_andps (x64_vpermi2b b a (x64_xmm_load_const $I8X16 mask)) zeros))
+      (x64_andps (x64_vpermi2b (x64_xmm_load_const $I8X16 mask) a b) zeros))
 
 ;; However, if the shuffle mask contains no out-of-bounds values, we can use
 ;; `vpermi2b` without any masking.
 (rule 1 (lower (shuffle a b (vec_mask_from_immediate mask)))
       (if-let $true (use_avx512vl_simd))
       (if-let $true (use_avx512vbmi_simd))
-      (x64_vpermi2b b a (x64_xmm_load_const $I8X16 (perm_from_mask mask))))
+      (x64_vpermi2b (x64_xmm_load_const $I8X16 (perm_from_mask mask)) a b))
 
 ;; If `lhs` and `rhs` are different, we must shuffle each separately and then OR
 ;; them together. This is necessary due to PSHUFB semantics. As in the case
