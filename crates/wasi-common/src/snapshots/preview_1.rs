@@ -172,7 +172,14 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         if table.is::<FileEntry>(fd) {
             let file_entry: Arc<FileEntry> = table.get(fd)?;
             let fdstat = file_entry.get_fdstat().await?;
-            Ok(types::Fdstat::from(&fdstat))
+            let mut fdstat = types::Fdstat::from(&fdstat);
+            if file_entry.access_mode.contains(FileAccessMode::READ) {
+                fdstat.fs_rights_base |= types::Rights::FD_READ;
+            }
+            if file_entry.access_mode.contains(FileAccessMode::WRITE) {
+                fdstat.fs_rights_base |= types::Rights::FD_WRITE;
+            }
+            Ok(fdstat)
         } else if table.is::<DirEntry>(fd) {
             let _dir_entry: Arc<DirEntry> = table.get(fd)?;
             let dir_fdstat = types::Fdstat {
@@ -1240,16 +1247,9 @@ impl From<types::Advice> for Advice {
 
 impl From<&FdStat> for types::Fdstat {
     fn from(fdstat: &FdStat) -> types::Fdstat {
-        let mut fs_rights_base = types::Rights::empty();
-        if fdstat.access_mode.contains(FileAccessMode::READ) {
-            fs_rights_base |= types::Rights::FD_READ;
-        }
-        if fdstat.access_mode.contains(FileAccessMode::WRITE) {
-            fs_rights_base |= types::Rights::FD_WRITE;
-        }
         types::Fdstat {
             fs_filetype: types::Filetype::from(&fdstat.filetype),
-            fs_rights_base,
+            fs_rights_base: types::Rights::empty(),
             fs_rights_inheriting: types::Rights::empty(),
             fs_flags: types::Fdflags::from(fdstat.flags),
         }

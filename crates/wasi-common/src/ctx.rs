@@ -51,18 +51,17 @@ impl WasiCtx {
         s
     }
 
-    pub fn insert_file(&self, fd: u32, file: Box<dyn WasiFile>, access_mode: FileAccessMode) {
+    fn insert_file_(&self, fd: u32, file: Box<dyn WasiFile>, access_mode: FileAccessMode) {
         self.table()
             .insert_at(fd, Arc::new(FileEntry::new(file, access_mode)));
     }
+    pub fn insert_file(&self, fd: u32, file: Box<dyn WasiFile>) {
+        self.insert_file_(fd, file, FileAccessMode::all())
+    }
 
-    pub fn push_file(
-        &self,
-        file: Box<dyn WasiFile>,
-        access_mode: FileAccessMode,
-    ) -> Result<u32, Error> {
+    pub fn push_file(&self, file: Box<dyn WasiFile>) -> Result<u32, Error> {
         self.table()
-            .push(Arc::new(FileEntry::new(file, access_mode)))
+            .push(Arc::new(FileEntry::new(file, FileAccessMode::all())))
     }
 
     pub fn insert_dir(&self, fd: u32, dir: Box<dyn WasiDir>, path: PathBuf) {
@@ -98,15 +97,15 @@ impl WasiCtx {
     }
 
     pub fn set_stdin(&self, f: Box<dyn WasiFile>) {
-        self.insert_file(0, f, FileAccessMode::READ);
+        self.insert_file_(0, f, FileAccessMode::READ);
     }
 
     pub fn set_stdout(&self, f: Box<dyn WasiFile>) {
-        self.insert_file(1, f, FileAccessMode::WRITE);
+        self.insert_file_(1, f, FileAccessMode::WRITE);
     }
 
     pub fn set_stderr(&self, f: Box<dyn WasiFile>) {
-        self.insert_file(2, f, FileAccessMode::WRITE);
+        self.insert_file_(2, f, FileAccessMode::WRITE);
     }
 
     pub fn push_preopened_dir(
