@@ -741,6 +741,11 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
+        fn u8_sub(&mut self, a: u8, b: u8) -> u8 {
+            a.wrapping_sub(b)
+        }
+
+        #[inline]
         fn lane_type(&mut self, ty: Type) -> Type {
             ty.lane_type()
         }

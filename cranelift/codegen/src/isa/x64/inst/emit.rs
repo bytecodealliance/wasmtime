@@ -456,6 +456,36 @@ pub(crate) fn emit(
                 .encode(sink);
         }
 
+        Inst::UnaryRmRImmVex {
+            size,
+            op,
+            src,
+            dst,
+            imm,
+        } => {
+            let dst = allocs.next(dst.to_reg().to_reg());
+            let src = match src.clone().to_reg_mem().with_allocs(allocs) {
+                RegMem::Reg { reg } => {
+                    RegisterOrAmode::Register(reg.to_real_reg().unwrap().hw_enc().into())
+                }
+                RegMem::Mem { addr } => RegisterOrAmode::Amode(addr.finalize(state, sink)),
+            };
+
+            let opcode = match op {
+                UnaryRmRImmVexOpcode::Rorx => 0xF0,
+            };
+
+            VexInstruction::new()
+                .prefix(LegacyPrefixes::_F2)
+                .map(OpcodeMap::_0F3A)
+                .w(*size == OperandSize::Size64)
+                .opcode(opcode)
+                .reg(dst.to_real_reg().unwrap().hw_enc())
+                .rm(src)
+                .imm(*imm)
+                .encode(sink);
+        }
+
         Inst::Not { size, src, dst } => {
             let src = allocs.next(src.to_reg());
             let dst = allocs.next(dst.to_reg().to_reg());

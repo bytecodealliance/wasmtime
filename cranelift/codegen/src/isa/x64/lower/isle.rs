@@ -597,6 +597,13 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
         }
     }
 
+    fn imm8_from_imm8_gpr(&mut self, val: &Imm8Gpr) -> Option<u8> {
+        match val.clone().to_imm8_reg() {
+            Imm8Reg::Imm8 { imm } => Some(imm),
+            Imm8Reg::Reg { .. } => None,
+        }
+    }
+
     #[inline]
     fn type_register_class(&mut self, ty: Type) -> Option<RegisterClass> {
         if is_int_or_ref_ty(ty) || ty == I128 {

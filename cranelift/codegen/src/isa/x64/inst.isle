@@ -53,6 +53,13 @@
                     (src GprMem)
                     (dst WritableGpr))
 
+       ;; Same as `UnaryRmRVex` but with an immediate
+       (UnaryRmRImmVex (size OperandSize)
+                       (op UnaryRmRImmVexOpcode)
+                       (src GprMem)
+                       (dst WritableGpr)
+                       (imm u8))
+
        ;; Bitwise not.
        (Not (size OperandSize) ;; 1, 2, 4, or 8
             (src Gpr)
@@ -764,6 +771,9 @@
             Blsmsk
             Blsr))
 
+(type UnaryRmRImmVexOpcode
+      (enum Rorx))
+
 (type SseOpcode extern
       (enum Addps
             Addpd
@@ -1403,6 +1413,10 @@
 (decl gpr_from_imm8_gpr (Gpr) Imm8Gpr)
 (extern extractor gpr_from_imm8_gpr gpr_from_imm8_gpr)
 
+;; Convert an `Imm8Gpr` into an `Imm8`.
+(decl imm8_from_imm8_gpr (u8) Imm8Gpr)
+(extern extractor imm8_from_imm8_gpr imm8_from_imm8_gpr)
+
 ;; Convert a `WritableGpr` to a `WritableReg`.
 (decl writable_gpr_to_reg (WritableGpr) WritableReg)
 (extern constructor writable_gpr_to_reg writable_gpr_to_reg)
@@ -2033,6 +2047,13 @@
             (_ Unit (emit (MInst.UnaryRmRVex size op src dst))))
         dst))
 
+;; Helper for creating `MInst.UnaryRmRImmVex` instructions.
+(decl unary_rm_r_imm_vex (UnaryRmRImmVexOpcode GprMem OperandSize u8) Gpr)
+(rule (unary_rm_r_imm_vex op src size imm)
+      (let ((dst WritableGpr (temp_writable_gpr))
+            (_ Unit (emit (MInst.UnaryRmRImmVex size op src dst imm))))
+        dst))
+
 (decl cvt_u64_to_float_seq (Type Gpr) Xmm)
 (rule (cvt_u64_to_float_seq ty src)
       (let ((size OperandSize (raw_operand_size_of_type ty))
@@ -2637,11 +2658,17 @@
 (decl x64_rotl (Type Gpr Imm8Gpr) Gpr)
 (rule (x64_rotl ty src1 src2)
       (shift_r ty (ShiftKind.RotateLeft) src1 src2))
+(rule 1 (x64_rotl (ty_32_or_64 ty) src (imm8_from_imm8_gpr imm))
+        (if-let $true (use_bmi2))
+        (x64_rorx ty src (u8_sub (ty_bits ty) imm)))
 
 ;; Helper for creating `rotr` instructions.
 (decl x64_rotr (Type Gpr Imm8Gpr) Gpr)
 (rule (x64_rotr ty src1 src2)
       (shift_r ty (ShiftKind.RotateRight) src1 src2))
+(rule 1 (x64_rotr (ty_32_or_64 ty) src (imm8_from_imm8_gpr imm))
+        (if-let $true (use_bmi2))
+        (x64_rorx ty src imm))
 
 ;; Helper for creating `shl` instructions.
 (decl x64_shl (Type Gpr Imm8Gpr) Gpr)
@@ -4093,6 +4120,14 @@
 (decl x64_shlx (Type GprMem Gpr) Gpr)
 (rule (x64_shlx ty val amt)
       (alu_rm_r_vex ty (AluRmROpcode.Shlx) amt val))
+
+;; Helper for creating `rorx` instructions.
+(decl x64_rorx (Type GprMem u8) Gpr)
+(rule (x64_rorx ty src imm)
+      (unary_rm_r_imm_vex (UnaryRmRImmVexOpcode.Rorx)
+                          src
+                          (operand_size_of_type_32_64 ty)
+                          imm))
 
 ;; Helper for creating `popcnt` instructions.
 (decl x64_popcnt (Type Gpr) Gpr)
