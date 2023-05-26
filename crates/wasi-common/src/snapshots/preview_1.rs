@@ -293,6 +293,10 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         iovs: &types::IovecArray<'a>,
     ) -> Result<types::Size, Error> {
         let f = self.table().get_file(u32::from(fd))?;
+        // Access mode check normalizes error returned (windows would prefer ACCES here)
+        if !f.access_mode.contains(FileAccessMode::READ) {
+            Err(types::Errno::Badf)?
+        }
         let f = &f.file;
 
         let iovs: Vec<wiggle::GuestPtr<[u8]>> = iovs
@@ -364,6 +368,10 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         offset: types::Filesize,
     ) -> Result<types::Size, Error> {
         let f = self.table().get_file(u32::from(fd))?;
+        // Access mode check normalizes error returned (windows would prefer ACCES here)
+        if !f.access_mode.contains(FileAccessMode::READ) {
+            Err(types::Errno::Badf)?
+        }
         let f = &f.file;
 
         let iovs: Vec<wiggle::GuestPtr<[u8]>> = iovs
@@ -436,6 +444,10 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         ciovs: &types::CiovecArray<'a>,
     ) -> Result<types::Size, Error> {
         let f = self.table().get_file(u32::from(fd))?;
+        // Access mode check normalizes error returned (windows would prefer ACCES here)
+        if !f.access_mode.contains(FileAccessMode::WRITE) {
+            Err(types::Errno::Badf)?
+        }
         let f = &f.file;
 
         let guest_slices: Vec<wiggle::GuestCow<u8>> = ciovs
@@ -463,6 +475,10 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         offset: types::Filesize,
     ) -> Result<types::Size, Error> {
         let f = self.table().get_file(u32::from(fd))?;
+        // Access mode check normalizes error returned (windows would prefer ACCES here)
+        if !f.access_mode.contains(FileAccessMode::WRITE) {
+            Err(types::Errno::Badf)?
+        }
         let f = &f.file;
 
         let guest_slices: Vec<wiggle::GuestCow<u8>> = ciovs
