@@ -121,6 +121,7 @@ pub(crate) fn define() -> TargetIsa {
 
     settings.add_predicate("use_popcnt", predicate!(has_popcnt && has_sse42));
     settings.add_predicate("use_bmi1", predicate!(has_bmi1));
+    settings.add_predicate("use_bmi2", predicate!(has_bmi2));
     settings.add_predicate("use_lzcnt", predicate!(has_lzcnt));
 
     let sse3 = settings.add_preset("sse3", "SSE3 and earlier.", preset!(has_sse3));

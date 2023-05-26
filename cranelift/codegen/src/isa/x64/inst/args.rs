@@ -826,33 +826,22 @@ impl fmt::Display for AluRmiROpcode {
     }
 }
 
-/// ALU operations that don't accept intermediates.
-#[derive(Copy, Clone, PartialEq)]
-pub enum AluRmROpcode {
-    /// And with negated second operand.
-    Andn,
-}
+pub use crate::isa::x64::lower::isle::generated_code::AluRmROpcode;
 
 impl AluRmROpcode {
     pub(crate) fn available_from(&self) -> SmallVec<[InstructionSet; 2]> {
         match self {
             AluRmROpcode::Andn => smallvec![InstructionSet::BMI1],
+            AluRmROpcode::Sarx | AluRmROpcode::Shrx | AluRmROpcode::Shlx => {
+                smallvec![InstructionSet::BMI2]
+            }
         }
-    }
-}
-
-impl fmt::Debug for AluRmROpcode {
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        let name = match self {
-            AluRmROpcode::Andn => "andn",
-        };
-        write!(fmt, "{}", name)
     }
 }
 
 impl fmt::Display for AluRmROpcode {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        fmt::Debug::fmt(self, f)
+        f.write_str(&format!("{self:?}").to_lowercase())
     }
 }
 

@@ -767,7 +767,7 @@ impl PrettyPrint for Inst {
                 let size_bytes = size.to_bytes();
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), size.to_bytes(), allocs);
                 let src1 = pretty_print_reg(src1.to_reg(), size_bytes, allocs);
-                let src2 = pretty_print_reg(src2.to_reg(), size_bytes, allocs);
+                let src2 = src2.pretty_print(size_bytes, allocs);
                 let op = ljustify2(op.to_string(), String::new());
                 format!("{op} {src2}, {src1}, {dst}")
             }
@@ -1885,7 +1885,7 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
         } => {
             collector.reg_def(dst.to_writable_reg());
             collector.reg_use(src1.to_reg());
-            collector.reg_use(src2.to_reg());
+            src2.get_operands(collector);
         }
         Inst::Not { src, dst, .. } => {
             collector.reg_use(src.to_reg());

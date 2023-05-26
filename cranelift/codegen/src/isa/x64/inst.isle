@@ -32,7 +32,7 @@
        (AluRmRVex (size OperandSize)
                   (op AluRmROpcode)
                   (src1 Gpr)
-                  (src2 Gpr)
+                  (src2 GprMem)
                   (dst WritableGpr))
 
        ;; Production of a zero value into a register of the specified size.
@@ -746,8 +746,11 @@
             Xor
             Mul))
 
-(type AluRmROpcode extern
-      (enum Andn))
+(type AluRmROpcode
+      (enum Andn
+            Sarx
+            Shrx
+            Shlx))
 
 (type UnaryRmROpcode extern
       (enum Bsr
@@ -1396,6 +1399,10 @@
 (decl imm8_reg_to_imm8_gpr (Imm8Reg) Imm8Gpr)
 (extern constructor imm8_reg_to_imm8_gpr imm8_reg_to_imm8_gpr)
 
+;; Convert an `Imm8Gpr` into a `Gpr`.
+(decl gpr_from_imm8_gpr (Gpr) Imm8Gpr)
+(extern extractor gpr_from_imm8_gpr gpr_from_imm8_gpr)
+
 ;; Convert a `WritableGpr` to a `WritableReg`.
 (decl writable_gpr_to_reg (WritableGpr) WritableReg)
 (extern constructor writable_gpr_to_reg writable_gpr_to_reg)
@@ -1666,6 +1673,9 @@
 (decl pure use_bmi1 () bool)
 (extern constructor use_bmi1 use_bmi1)
 
+(decl pure use_bmi2 () bool)
+(extern constructor use_bmi2 use_bmi2)
+
 (decl pure use_popcnt () bool)
 (extern constructor use_popcnt use_popcnt)
 
@@ -1799,7 +1809,7 @@
         dst))
 
 ;; Helper for emitting `MInst.AluRmRVex` instructions.
-(decl alu_rm_r_vex (Type AluRmROpcode Gpr Gpr) Gpr)
+(decl alu_rm_r_vex (Type AluRmROpcode Gpr GprMem) Gpr)
 (rule (alu_rm_r_vex ty opcode src1 src2)
       (let ((dst WritableGpr (temp_writable_gpr))
             (size OperandSize (operand_size_of_type_32_64 ty))
@@ -2542,7 +2552,7 @@
                  src1
                  src2))
 
-(decl x64_andn (Type Gpr Gpr) Gpr)
+(decl x64_andn (Type Gpr GprMem) Gpr)
 (rule (x64_andn ty src1 src2)
       (alu_rm_r_vex ty (AluRmROpcode.Andn) src1 src2))
 
@@ -2637,16 +2647,31 @@
 (decl x64_shl (Type Gpr Imm8Gpr) Gpr)
 (rule (x64_shl ty src1 src2)
       (shift_r ty (ShiftKind.ShiftLeft) src1 src2))
+;; With BMI2 the `shlx` instruction is also available, and it's unconditionally
+;; used for registers shifted by registers since it provides more freedom
+;; in regalloc since nothing is constrained. Note that the `shlx` instruction
+;; doesn't encode an immediate so any immediate-based shift still uses `shl`.
+(rule 1 (x64_shl (ty_32_or_64 ty) src1 (gpr_from_imm8_gpr src2))
+        (if-let $true (use_bmi2))
+        (x64_shlx ty src1 src2))
 
 ;; Helper for creating logical shift-right instructions.
 (decl x64_shr (Type Gpr Imm8Gpr) Gpr)
 (rule (x64_shr ty src1 src2)
       (shift_r ty (ShiftKind.ShiftRightLogical) src1 src2))
+;; see `x64_shl` for more info about this rule
+(rule 1 (x64_shr (ty_32_or_64 ty) src1 (gpr_from_imm8_gpr src2))
+        (if-let $true (use_bmi2))
+        (x64_shrx ty src1 src2))
 
 ;; Helper for creating arithmetic shift-right instructions.
 (decl x64_sar (Type Gpr Imm8Gpr) Gpr)
 (rule (x64_sar ty src1 src2)
       (shift_r ty (ShiftKind.ShiftRightArithmetic) src1 src2))
+;; see `x64_shl` for more info about this rule
+(rule 1 (x64_sar (ty_32_or_64 ty) src1 (gpr_from_imm8_gpr src2))
+        (if-let $true (use_bmi2))
+        (x64_sarx ty src1 src2))
 
 ;; Helper for creating byteswap instructions.
 ;; In x64, 32- and 64-bit registers use BSWAP instruction, and
@@ -4053,6 +4078,21 @@
 (decl x64_blsr (Type GprMem) Gpr)
 (rule (x64_blsr ty src)
       (unary_rm_r_vex (UnaryRmRVexOpcode.Blsr) src (operand_size_of_type_32_64 ty)))
+
+;; Helper for creating `sarx` instructions.
+(decl x64_sarx (Type GprMem Gpr) Gpr)
+(rule (x64_sarx ty val amt)
+      (alu_rm_r_vex ty (AluRmROpcode.Sarx) amt val))
+
+;; Helper for creating `shrx` instructions.
+(decl x64_shrx (Type GprMem Gpr) Gpr)
+(rule (x64_shrx ty val amt)
+      (alu_rm_r_vex ty (AluRmROpcode.Shrx) amt val))
+
+;; Helper for creating `shlx` instructions.
+(decl x64_shlx (Type GprMem Gpr) Gpr)
+(rule (x64_shlx ty val amt)
+      (alu_rm_r_vex ty (AluRmROpcode.Shlx) amt val))
 
 ;; Helper for creating `popcnt` instructions.
 (decl x64_popcnt (Type Gpr) Gpr)

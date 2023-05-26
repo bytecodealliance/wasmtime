@@ -4,6 +4,7 @@ test interpret
 test run
 target aarch64
 target x86_64
+target x86_64 has_bmi2
 target riscv64
 target s390x
 
