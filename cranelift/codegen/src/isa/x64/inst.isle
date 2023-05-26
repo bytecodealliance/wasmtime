@@ -47,6 +47,12 @@
                  (src GprMem)
                  (dst WritableGpr))
 
+       ;; Same as `UnaryRmR` but with the VEX prefix for BMI1 instructions.
+       (UnaryRmRVex (size OperandSize)
+                    (op UnaryRmRVexOpcode)
+                    (src GprMem)
+                    (dst WritableGpr))
+
        ;; Bitwise not.
        (Not (size OperandSize) ;; 1, 2, 4, or 8
             (src Gpr)
@@ -733,6 +739,11 @@
             Lzcnt
             Tzcnt
             Popcnt))
+
+(type UnaryRmRVexOpcode
+      (enum Blsi
+            Blsmsk
+            Blsr))
 
 (type SseOpcode extern
       (enum Addps
@@ -1975,6 +1986,13 @@
 (rule (unary_rm_r op src size)
       (let ((dst WritableGpr (temp_writable_gpr))
             (_ Unit (emit (MInst.UnaryRmR size op src dst))))
+        dst))
+
+;; Helper for creating `MInst.UnaryRmRVex` instructions.
+(decl unary_rm_r_vex (UnaryRmRVexOpcode GprMem OperandSize) Gpr)
+(rule (unary_rm_r_vex op src size)
+      (let ((dst WritableGpr (temp_writable_gpr))
+            (_ Unit (emit (MInst.UnaryRmRVex size op src dst))))
         dst))
 
 (decl cvt_u64_to_float_seq (Type Gpr) Xmm)
@@ -3988,6 +4006,21 @@
             (bsf_result Gpr (produces_flags_get_reg bsf))
             (cmove ConsumesFlags (cmove ty (CC.Z) alt bsf_result)))
         (with_flags_reg (produces_flags_ignore bsf) cmove)))
+
+;; Helper for creating `blsi` instructions.
+(decl x64_blsi (Type GprMem) Gpr)
+(rule (x64_blsi ty src)
+      (unary_rm_r_vex (UnaryRmRVexOpcode.Blsi) src (operand_size_of_type_32_64 ty)))
+
+;; Helper for creating `blsmsk` instructions.
+(decl x64_blsmsk (Type GprMem) Gpr)
+(rule (x64_blsmsk ty src)
+      (unary_rm_r_vex (UnaryRmRVexOpcode.Blsmsk) src (operand_size_of_type_32_64 ty)))
+
+;; Helper for creating `blsr` instructions.
+(decl x64_blsr (Type GprMem) Gpr)
+(rule (x64_blsr ty src)
+      (unary_rm_r_vex (UnaryRmRVexOpcode.Blsr) src (operand_size_of_type_32_64 ty)))
 
 ;; Helper for creating `popcnt` instructions.
 (decl x64_popcnt (Type Gpr) Gpr)

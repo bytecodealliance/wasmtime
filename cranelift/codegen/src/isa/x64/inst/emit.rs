@@ -419,6 +419,31 @@ pub(crate) fn emit(
             }
         }
 
+        Inst::UnaryRmRVex { size, op, src, dst } => {
+            let dst = allocs.next(dst.to_reg().to_reg());
+            let src = match src.clone().to_reg_mem().with_allocs(allocs) {
+                RegMem::Reg { reg } => {
+                    RegisterOrAmode::Register(reg.to_real_reg().unwrap().hw_enc().into())
+                }
+                RegMem::Mem { addr } => RegisterOrAmode::Amode(addr.finalize(state, sink)),
+            };
+
+            let (opcode, opcode_ext) = match op {
+                UnaryRmRVexOpcode::Blsr => (0xF3, 1),
+                UnaryRmRVexOpcode::Blsmsk => (0xF3, 2),
+                UnaryRmRVexOpcode::Blsi => (0xF3, 3),
+            };
+
+            VexInstruction::new()
+                .map(OpcodeMap::_0F38)
+                .w(*size == OperandSize::Size64)
+                .opcode(opcode)
+                .reg(opcode_ext)
+                .vvvv(dst.to_real_reg().unwrap().hw_enc())
+                .rm(src)
+                .encode(sink);
+        }
+
         Inst::Not { size, src, dst } => {
             let src = allocs.next(src.to_reg());
             let dst = allocs.next(dst.to_reg().to_reg());

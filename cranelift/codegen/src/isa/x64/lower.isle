@@ -341,6 +341,23 @@
       (if-let $true (use_bmi1))
       (x64_andn ty y x))
 
+;; Specialization of `blsr` for BMI1
+
+(rule 12 (lower (has_type (ty_32_or_64 ty) (band (isub x (iconst (u64_from_imm64 1))) x)))
+         (if-let $true (use_bmi1))
+         (x64_blsr ty x))
+(rule 13 (lower (has_type (ty_32_or_64 ty) (band x (isub x (iconst (u64_from_imm64 1))))))
+         (if-let $true (use_bmi1))
+         (x64_blsr ty x))
+
+;; Specialization of `blsi` for BMI1
+
+(rule 12 (lower (has_type (ty_32_or_64 ty) (band (ineg x) x)))
+         (if-let $true (use_bmi1))
+         (x64_blsi ty x))
+(rule 13 (lower (has_type (ty_32_or_64 ty) (band x (ineg x))))
+         (if-let $true (use_bmi1))
+         (x64_blsi ty x))
 
 ;;;; Rules for `bor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -435,6 +452,15 @@
             (y_hi Gpr (value_regs_get_gpr y_regs 1)))
         (value_gprs (x64_xor $I64 x_lo y_lo)
                     (x64_xor $I64 x_hi y_hi))))
+
+;; Specialization of `blsmsk` for BMI1
+
+(rule 8 (lower (has_type (ty_32_or_64 ty) (bxor (isub x (iconst (u64_from_imm64 1))) x)))
+        (if-let $true (use_bmi1))
+        (x64_blsmsk ty x))
+(rule 9 (lower (has_type (ty_32_or_64 ty) (bxor x (isub x (iconst (u64_from_imm64 1))))))
+        (if-let $true (use_bmi1))
+        (x64_blsmsk ty x))
 
 ;;;; Rules for `ishl` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
