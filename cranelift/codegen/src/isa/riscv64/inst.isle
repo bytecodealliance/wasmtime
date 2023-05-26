@@ -726,17 +726,205 @@
 (type AMO (primitive AMO))
 (type VecMachLabel extern (enum))
 
+
+;;;; Newtypes for Different Register Classes ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(type XReg (primitive XReg))
+(type WritableXReg (primitive WritableXReg))
+(type FReg (primitive FReg))
+(type WritableFReg (primitive WritableFReg))
+(type VReg (primitive VReg))
+(type WritableVReg (primitive WritableVReg))
+
+;; Construct a new `XReg` from a `Reg`.
+;;
+;; Asserts that the register has a Integer RegClass.
+(decl xreg_new (Reg) XReg)
+(extern constructor xreg_new xreg_new)
+(convert Reg XReg xreg_new)
+
+;; Construct a new `WritableXReg` from a `WritableReg`.
+;;
+;; Asserts that the register has a Integer RegClass.
+(decl writable_xreg_new (WritableReg) WritableXReg)
+(extern constructor writable_xreg_new writable_xreg_new)
+(convert WritableReg WritableXReg writable_xreg_new)
+
+;; Put a value into a XReg.
+;;
+;; Asserts that the value goes into a XReg.
+(decl put_in_xreg (Value) XReg)
+(rule (put_in_xreg val) (xreg_new (put_in_reg val)))
+(convert Value XReg put_in_xreg)
+
+;; Construct an `InstOutput` out of a single XReg register.
+(decl output_xreg (XReg) InstOutput)
+(rule (output_xreg x) (output_reg x))
+(convert XReg InstOutput output_xreg)
+
+;; Convert a `WritableXReg` to an `XReg`.
+(decl pure writable_xreg_to_xreg (WritableXReg) XReg)
+(extern constructor writable_xreg_to_xreg writable_xreg_to_xreg)
+(convert WritableXReg XReg writable_xreg_to_xreg)
+
+;; Convert a `WritableXReg` to an `WritableReg`.
+(decl pure writable_xreg_to_writable_reg (WritableXReg) WritableReg)
+(extern constructor writable_xreg_to_writable_reg writable_xreg_to_writable_reg)
+(convert WritableXReg WritableReg writable_xreg_to_writable_reg)
+
+;; Convert a `WritableXReg` to an `Reg`.
+(decl pure writable_xreg_to_reg (WritableXReg) Reg)
+(rule (writable_xreg_to_reg x) (writable_xreg_to_writable_reg x))
+(convert WritableXReg Reg writable_xreg_to_reg)
+
+;; Convert an `XReg` to a `Reg`.
+(decl pure xreg_to_reg (XReg) Reg)
+(extern constructor xreg_to_reg xreg_to_reg)
+(convert XReg Reg xreg_to_reg)
+
+;; Convert a `XReg` to a `ValueRegs`.
+(decl xreg_to_value_regs (XReg) ValueRegs)
+(rule (xreg_to_value_regs x) (value_reg x))
+(convert XReg ValueRegs xreg_to_reg)
+
+;; Convert a `WritableXReg` to a `ValueRegs`.
+(decl writable_xreg_to_value_regs (WritableXReg) ValueRegs)
+(rule (writable_xreg_to_value_regs x) (value_reg x))
+(convert WritableXReg ValueRegs writable_xreg_to_value_regs)
+
+;; Allocates a new `WritableXReg`.
+(decl temp_writable_xreg () WritableXReg)
+(rule (temp_writable_xreg) (temp_writable_reg $I64))
+
+
+;; Construct a new `FReg` from a `Reg`.
+;;
+;; Asserts that the register has a Float RegClass.
+(decl freg_new (Reg) FReg)
+(extern constructor freg_new freg_new)
+(convert Reg FReg freg_new)
+
+;; Construct a new `WritableFReg` from a `WritableReg`.
+;;
+;; Asserts that the register has a Float RegClass.
+(decl writable_freg_new (WritableReg) WritableFReg)
+(extern constructor writable_freg_new writable_freg_new)
+(convert WritableReg WritableFReg writable_freg_new)
+
+;; Put a value into a FReg.
+;;
+;; Asserts that the value goes into a FReg.
+(decl put_in_freg (Value) FReg)
+(rule (put_in_freg val) (freg_new (put_in_reg val)))
+(convert Value FReg put_in_freg)
+
+;; Construct an `InstOutput` out of a single FReg register.
+(decl output_freg (FReg) InstOutput)
+(rule (output_freg x) (output_reg x))
+(convert FReg InstOutput output_freg)
+
+;; Convert a `WritableFReg` to an `FReg`.
+(decl pure writable_freg_to_freg (WritableFReg) FReg)
+(extern constructor writable_freg_to_freg writable_freg_to_freg)
+(convert WritableFReg FReg writable_freg_to_freg)
+
+;; Convert a `WritableFReg` to an `WritableReg`.
+(decl pure writable_freg_to_writable_reg (WritableFReg) WritableReg)
+(extern constructor writable_freg_to_writable_reg writable_freg_to_writable_reg)
+(convert WritableFReg WritableReg writable_freg_to_writable_reg)
+
+;; Convert a `WritableFReg` to an `Reg`.
+(decl pure writable_freg_to_reg (WritableFReg) Reg)
+(rule (writable_freg_to_reg x) (writable_freg_to_writable_reg x))
+(convert WritableFReg Reg writable_freg_to_reg)
+
+;; Convert an `FReg` to a `Reg`.
+(decl pure freg_to_reg (FReg) Reg)
+(extern constructor freg_to_reg freg_to_reg)
+(convert FReg Reg freg_to_reg)
+
+;; Convert a `FReg` to a `ValueRegs`.
+(decl freg_to_value_regs (FReg) ValueRegs)
+(rule (freg_to_value_regs x) (value_reg x))
+(convert FReg ValueRegs xreg_to_reg)
+
+;; Convert a `WritableFReg` to a `ValueRegs`.
+(decl writable_freg_to_value_regs (WritableFReg) ValueRegs)
+(rule (writable_freg_to_value_regs x) (value_reg x))
+(convert WritableFReg ValueRegs writable_freg_to_value_regs)
+
+;; Allocates a new `WritableFReg`.
+(decl temp_writable_freg () WritableFReg)
+(rule (temp_writable_freg) (temp_writable_reg $F64))
+
+
+
+;; Construct a new `VReg` from a `Reg`.
+;;
+;; Asserts that the register has a Vector RegClass.
+(decl vreg_new (Reg) VReg)
+(extern constructor vreg_new vreg_new)
+(convert Reg VReg vreg_new)
+
+;; Construct a new `WritableVReg` from a `WritableReg`.
+;;
+;; Asserts that the register has a Vector RegClass.
+(decl writable_vreg_new (WritableReg) WritableVReg)
+(extern constructor writable_vreg_new writable_vreg_new)
+(convert WritableReg WritableVReg writable_vreg_new)
+
+;; Put a value into a VReg.
+;;
+;; Asserts that the value goes into a VReg.
+(decl put_in_vreg (Value) VReg)
+(rule (put_in_vreg val) (vreg_new (put_in_reg val)))
+(convert Value VReg put_in_vreg)
+
+;; Construct an `InstOutput` out of a single VReg register.
+(decl output_vreg (VReg) InstOutput)
+(rule (output_vreg x) (output_reg x))
+(convert VReg InstOutput output_vreg)
+
+;; Convert a `WritableVReg` to an `VReg`.
+(decl pure writable_vreg_to_vreg (WritableVReg) VReg)
+(extern constructor writable_vreg_to_vreg writable_vreg_to_vreg)
+(convert WritableVReg VReg writable_vreg_to_vreg)
+
+;; Convert a `WritableVReg` to an `WritableReg`.
+(decl pure writable_vreg_to_writable_reg (WritableVReg) WritableReg)
+(extern constructor writable_vreg_to_writable_reg writable_vreg_to_writable_reg)
+(convert WritableVReg WritableReg writable_vreg_to_writable_reg)
+
+;; Convert a `WritableVReg` to an `Reg`.
+(decl pure writable_vreg_to_reg (WritableVReg) Reg)
+(rule (writable_vreg_to_reg x) (writable_vreg_to_writable_reg x))
+(convert WritableVReg Reg writable_vreg_to_reg)
+
+;; Convert an `VReg` to a `Reg`.
+(decl pure vreg_to_reg (VReg) Reg)
+(extern constructor vreg_to_reg vreg_to_reg)
+(convert VReg Reg vreg_to_reg)
+
+;; Convert a `VReg` to a `ValueRegs`.
+(decl vreg_to_value_regs (VReg) ValueRegs)
+(rule (vreg_to_value_regs x) (value_reg x))
+(convert VReg ValueRegs xreg_to_reg)
+
+;; Convert a `WritableVReg` to a `ValueRegs`.
+(decl writable_vreg_to_value_regs (WritableVReg) ValueRegs)
+(rule (writable_vreg_to_value_regs x) (value_reg x))
+(convert WritableVReg ValueRegs writable_vreg_to_value_regs)
+
+;; Allocates a new `WritableVReg`.
+(decl temp_writable_vreg () WritableVReg)
+(rule (temp_writable_vreg) (temp_writable_reg $I8X16))
+
+
 ;; Converters
 
 (convert u8 i32 u8_as_i32)
 (decl u8_as_i32 (u8) i32)
 (extern constructor u8_as_i32 u8_as_i32)
-
-(decl convert_valueregs_reg (ValueRegs) Reg)
-(rule (convert_valueregs_reg x)
-  (value_regs_get x 0))
-(convert ValueRegs Reg convert_valueregs_reg)
-
 
 ;; ISA Extension helpers
 
@@ -763,8 +951,8 @@
   (gen_float_round op rs ty)
   (let
     ((rd WritableReg (temp_writable_reg ty))
-      (tmp WritableReg (temp_writable_reg $I64))
-      (tmp2 WritableReg (temp_writable_reg $F64))
+      (tmp WritableXReg (temp_writable_xreg))
+      (tmp2 WritableFReg (temp_writable_freg))
       (_ Unit (emit (MInst.FloatRound op rd tmp tmp2 rs ty))))
     (writable_reg_to_reg rd)))
 
@@ -773,7 +961,7 @@
   (gen_float_select_pseudo op x y ty)
   (let
     ((rd WritableReg (temp_writable_reg ty))
-      (tmp WritableReg (temp_writable_reg $I64))
+      (tmp WritableXReg (temp_writable_xreg))
       (_ Unit (emit (MInst.FloatSelectPseudo op rd tmp x y ty))))
     (writable_reg_to_reg rd)))
 
@@ -782,7 +970,7 @@
   (gen_float_select op x y ty)
   (let
     ((rd WritableReg (temp_writable_reg ty))
-      (tmp WritableReg (temp_writable_reg $I64))
+      (tmp WritableXReg (temp_writable_xreg))
       (_ Unit (emit (MInst.FloatSelect op rd tmp x y ty))))
     (writable_reg_to_reg rd)))
 
@@ -793,127 +981,127 @@
 
 ;; Helper for emitting the `add` instruction.
 ;; rd ← rs1 + rs2
-(decl rv_add (Reg Reg) Reg)
+(decl rv_add (XReg XReg) XReg)
 (rule (rv_add rs1 rs2)
   (alu_rrr (AluOPRRR.Add) rs1 rs2))
 
 ;; Helper for emitting the `addi` ("Add Immediate") instruction.
 ;; rd ← rs1 + sext(imm)
-(decl rv_addi (Reg Imm12) Reg)
+(decl rv_addi (XReg Imm12) XReg)
 (rule (rv_addi rs1 imm)
   (alu_rr_imm12 (AluOPRRI.Addi) rs1 imm))
 
 ;; Helper for emitting the `sub` instruction.
 ;; rd ← rs1 - rs2
-(decl rv_sub (Reg Reg) Reg)
+(decl rv_sub (XReg XReg) XReg)
 (rule (rv_sub rs1 rs2)
   (alu_rrr (AluOPRRR.Sub) rs1 rs2))
 
 ;; Helper for emitting the `neg` instruction.
 ;; This instruction is a mnemonic for `sub rd, zero, rs1`.
-(decl rv_neg (Reg) Reg)
+(decl rv_neg (XReg) XReg)
 (rule (rv_neg rs1)
   (alu_rrr (AluOPRRR.Sub) (zero_reg) rs1))
 
 ;; Helper for emitting the `sll` ("Shift Left Logical") instruction.
 ;; rd ← rs1 << rs2
-(decl rv_sll (Reg Reg) Reg)
+(decl rv_sll (XReg XReg) XReg)
 (rule (rv_sll rs1 rs2)
   (alu_rrr (AluOPRRR.Sll) rs1 rs2))
 
 ;; Helper for emitting the `slli` ("Shift Left Logical Immediate") instruction.
 ;; rd ← rs1 << uext(imm)
-(decl rv_slli (Reg Imm12) Reg)
+(decl rv_slli (XReg Imm12) XReg)
 (rule (rv_slli rs1 imm)
   (alu_rr_imm12 (AluOPRRI.Slli) rs1 imm))
 
 ;; Helper for emitting the `srl` ("Shift Right Logical") instruction.
 ;; rd ← rs1 >> rs2
-(decl rv_srl (Reg Reg) Reg)
+(decl rv_srl (XReg XReg) XReg)
 (rule (rv_srl rs1 rs2)
   (alu_rrr (AluOPRRR.Srl) rs1 rs2))
 
 ;; Helper for emitting the `srli` ("Shift Right Logical Immediate") instruction.
 ;; rd ← rs1 >> uext(imm)
-(decl rv_srli (Reg Imm12) Reg)
+(decl rv_srli (XReg Imm12) XReg)
 (rule (rv_srli rs1 imm)
   (alu_rr_imm12 (AluOPRRI.Srli) rs1 imm))
 
 ;; Helper for emitting the `sra` ("Shift Right Arithmetic") instruction.
 ;; rd ← rs1 >> rs2
-(decl rv_sra (Reg Reg) Reg)
+(decl rv_sra (XReg XReg) XReg)
 (rule (rv_sra rs1 rs2)
   (alu_rrr (AluOPRRR.Sra) rs1 rs2))
 
 ;; Helper for emitting the `srai` ("Shift Right Arithmetic Immediate") instruction.
 ;; rd ← rs1 >> uext(imm)
-(decl rv_srai (Reg Imm12) Reg)
+(decl rv_srai (XReg Imm12) XReg)
 (rule (rv_srai rs1 imm)
   (alu_rr_imm12 (AluOPRRI.Srai) rs1 imm))
 
 ;; Helper for emitting the `or` instruction.
 ;; rd ← rs1 ∨ rs2
-(decl rv_or (Reg Reg) Reg)
+(decl rv_or (XReg XReg) XReg)
 (rule (rv_or rs1 rs2)
   (alu_rrr (AluOPRRR.Or) rs1 rs2))
 
 ;; Helper for emitting the `ori` ("Or Immediate") instruction.
 ;; rd ← rs1 ∨ uext(imm)
-(decl rv_ori (Reg Imm12) Reg)
+(decl rv_ori (XReg Imm12) XReg)
 (rule (rv_ori rs1 imm)
   (alu_rr_imm12 (AluOPRRI.Ori) rs1 imm))
 
 ;; Helper for emitting the `xor` instruction.
 ;; rd ← rs1 ⊕ rs2
-(decl rv_xor (Reg Reg) Reg)
+(decl rv_xor (XReg XReg) XReg)
 (rule (rv_xor rs1 rs2)
   (alu_rrr (AluOPRRR.Xor) rs1 rs2))
 
 ;; Helper for emitting the `xori` ("Exlusive Or Immediate") instruction.
 ;; rd ← rs1 ⊕ uext(imm)
-(decl rv_xori (Reg Imm12) Reg)
+(decl rv_xori (XReg Imm12) XReg)
 (rule (rv_xori rs1 imm)
   (alu_rr_imm12 (AluOPRRI.Xori) rs1 imm))
 
 ;; Helper for emitting the `not` instruction.
 ;; This instruction is a mnemonic for `xori rd, rs1, -1`.
-(decl rv_not (Reg) Reg)
+(decl rv_not (XReg) XReg)
 (rule (rv_not rs1)
   (rv_xori rs1 (imm12_const -1)))
 
 ;; Helper for emitting the `and` instruction.
 ;; rd ← rs1 ∧ rs2
-(decl rv_and (Reg Reg) Reg)
+(decl rv_and (XReg XReg) XReg)
 (rule (rv_and rs1 rs2)
   (alu_rrr (AluOPRRR.And) rs1 rs2))
 
 ;; Helper for emitting the `andi` ("And Immediate") instruction.
 ;; rd ← rs1 ∧ uext(imm)
-(decl rv_andi (Reg Imm12) Reg)
+(decl rv_andi (XReg Imm12) XReg)
 (rule (rv_andi rs1 imm)
   (alu_rr_imm12 (AluOPRRI.Andi) rs1 imm))
 
 ;; Helper for emitting the `sltu` ("Set Less Than Unsigned") instruction.
 ;; rd ← rs1 < rs2
-(decl rv_sltu (Reg Reg) Reg)
+(decl rv_sltu (XReg XReg) XReg)
 (rule (rv_sltu rs1 rs2)
   (alu_rrr (AluOPRRR.SltU) rs1 rs2))
 
 ;; Helper for emitting the `snez` instruction.
 ;; This instruction is a mnemonic for `sltu rd, zero, rs`.
-(decl rv_snez (Reg) Reg)
+(decl rv_snez (XReg) XReg)
 (rule (rv_snez rs1)
   (rv_sltu (zero_reg) rs1))
 
 ;; Helper for emiting the `sltiu` ("Set Less Than Immediate Unsigned") instruction.
 ;; rd ← rs1 < imm
-(decl rv_sltiu (Reg Imm12) Reg)
+(decl rv_sltiu (XReg Imm12) XReg)
 (rule (rv_sltiu rs1 imm)
   (alu_rr_imm12 (AluOPRRI.SltiU) rs1 imm))
 
 ;; Helper for emitting the `seqz` instruction.
 ;; This instruction is a mnemonic for `sltiu rd, rs, 1`.
-(decl rv_seqz (Reg) Reg)
+(decl rv_seqz (XReg) XReg)
 (rule (rv_seqz rs1)
   (rv_sltiu rs1 (imm12_const 1)))
 
@@ -923,61 +1111,61 @@
 
 ;; Helper for emitting the `addw` ("Add Word") instruction.
 ;; rd ← sext32(rs1) + sext32(rs2)
-(decl rv_addw (Reg Reg) Reg)
+(decl rv_addw (XReg XReg) XReg)
 (rule (rv_addw rs1 rs2)
   (alu_rrr (AluOPRRR.Addw) rs1 rs2))
 
 ;; Helper for emitting the `addiw` ("Add Word Immediate") instruction.
 ;; rd ← sext32(rs1) + imm
-(decl rv_addiw (Reg Imm12) Reg)
+(decl rv_addiw (XReg Imm12) XReg)
 (rule (rv_addiw rs1 imm)
   (alu_rr_imm12 (AluOPRRI.Addiw) rs1 imm))
 
 ;; Helper for emitting the `sext.w` ("Sign Extend Word") instruction.
 ;; This instruction is a mnemonic for `addiw rd, rs, zero`.
-(decl rv_sextw (Reg) Reg)
+(decl rv_sextw (XReg) XReg)
 (rule (rv_sextw rs1)
   (rv_addiw rs1 (imm12_const 0)))
 
 ;; Helper for emitting the `subw` ("Subtract Word") instruction.
 ;; rd ← sext32(rs1) - sext32(rs2)
-(decl rv_subw (Reg Reg) Reg)
+(decl rv_subw (XReg XReg) XReg)
 (rule (rv_subw rs1 rs2)
   (alu_rrr (AluOPRRR.Subw) rs1 rs2))
 
 ;; Helper for emitting the `sllw` ("Shift Left Logical Word") instruction.
 ;; rd ← sext32(uext32(rs1) << rs2)
-(decl rv_sllw (Reg Reg) Reg)
+(decl rv_sllw (XReg XReg) XReg)
 (rule (rv_sllw rs1 rs2)
   (alu_rrr (AluOPRRR.Sllw) rs1 rs2))
 
 ;; Helper for emitting the `slliw` ("Shift Left Logical Immediate Word") instruction.
 ;; rd ← sext32(uext32(rs1) << imm)
-(decl rv_slliw (Reg Imm12) Reg)
+(decl rv_slliw (XReg Imm12) XReg)
 (rule (rv_slliw rs1 imm)
   (alu_rr_imm12 (AluOPRRI.Slliw) rs1 imm))
 
 ;; Helper for emitting the `srlw` ("Shift Right Logical Word") instruction.
 ;; rd ← sext32(uext32(rs1) >> rs2)
-(decl rv_srlw (Reg Reg) Reg)
+(decl rv_srlw (XReg XReg) XReg)
 (rule (rv_srlw rs1 rs2)
   (alu_rrr (AluOPRRR.Srlw) rs1 rs2))
 
 ;; Helper for emitting the `srliw` ("Shift Right Logical Immediate Word") instruction.
 ;; rd ← sext32(uext32(rs1) >> imm)
-(decl rv_srliw (Reg Imm12) Reg)
+(decl rv_srliw (XReg Imm12) XReg)
 (rule (rv_srliw rs1 imm)
   (alu_rr_imm12 (AluOPRRI.SrliW) rs1 imm))
 
 ;; Helper for emitting the `sraw` ("Shift Right Arithmetic Word") instruction.
 ;; rd ← sext32(rs1 >> rs2)
-(decl rv_sraw (Reg Reg) Reg)
+(decl rv_sraw (XReg XReg) XReg)
 (rule (rv_sraw rs1 rs2)
   (alu_rrr (AluOPRRR.Sraw) rs1 rs2))
 
 ;; Helper for emitting the `sraiw` ("Shift Right Arithmetic Immediate Word") instruction.
 ;; rd ← sext32(rs1 >> imm)
-(decl rv_sraiw (Reg Imm12) Reg)
+(decl rv_sraiw (XReg Imm12) XReg)
 (rule (rv_sraiw rs1 imm)
   (alu_rr_imm12 (AluOPRRI.Sraiw) rs1 imm))
 
@@ -987,43 +1175,43 @@
 
 ;; Helper for emitting the `mul` instruction.
 ;; rd ← rs1 × rs2
-(decl rv_mul (Reg Reg) Reg)
+(decl rv_mul (XReg XReg) XReg)
 (rule (rv_mul rs1 rs2)
   (alu_rrr (AluOPRRR.Mul) rs1 rs2))
 
 ;; Helper for emitting the `mulh` ("Multiply High Signed Signed") instruction.
 ;; rd ← (sext(rs1) × sext(rs2)) » xlen
-(decl rv_mulh (Reg Reg) Reg)
+(decl rv_mulh (XReg XReg) XReg)
 (rule (rv_mulh rs1 rs2)
   (alu_rrr (AluOPRRR.Mulh) rs1 rs2))
 
 ;; Helper for emitting the `mulhu` ("Multiply High Unsigned Unsigned") instruction.
 ;; rd ← (uext(rs1) × uext(rs2)) » xlen
-(decl rv_mulhu (Reg Reg) Reg)
+(decl rv_mulhu (XReg XReg) XReg)
 (rule (rv_mulhu rs1 rs2)
   (alu_rrr (AluOPRRR.Mulhu) rs1 rs2))
 
 ;; Helper for emitting the `div` instruction.
 ;; rd ← rs1 ÷ rs2
-(decl rv_div (Reg Reg) Reg)
+(decl rv_div (XReg XReg) XReg)
 (rule (rv_div rs1 rs2)
   (alu_rrr (AluOPRRR.Div) rs1 rs2))
 
 ;; Helper for emitting the `divu` ("Divide Unsigned") instruction.
 ;; rd ← rs1 ÷ rs2
-(decl rv_divu (Reg Reg) Reg)
+(decl rv_divu (XReg XReg) XReg)
 (rule (rv_divu rs1 rs2)
   (alu_rrr (AluOPRRR.DivU) rs1 rs2))
 
 ;; Helper for emitting the `rem` instruction.
 ;; rd ← rs1 mod rs2
-(decl rv_rem (Reg Reg) Reg)
+(decl rv_rem (XReg XReg) XReg)
 (rule (rv_rem rs1 rs2)
   (alu_rrr (AluOPRRR.Rem) rs1 rs2))
 
 ;; Helper for emitting the `remu` ("Remainder Unsigned") instruction.
 ;; rd ← rs1 mod rs2
-(decl rv_remu (Reg Reg) Reg)
+(decl rv_remu (XReg XReg) XReg)
 (rule (rv_remu rs1 rs2)
   (alu_rrr (AluOPRRR.RemU) rs1 rs2))
 
@@ -1034,31 +1222,31 @@
 
 ;; Helper for emitting the `mulw` ("Multiply Word") instruction.
 ;; rd ← uext32(rs1) × uext32(rs2)
-(decl rv_mulw (Reg Reg) Reg)
+(decl rv_mulw (XReg XReg) XReg)
 (rule (rv_mulw rs1 rs2)
   (alu_rrr (AluOPRRR.Mulw) rs1 rs2))
 
 ;; Helper for emitting the `divw` ("Divide Word") instruction.
 ;; rd ← sext32(rs1) ÷ sext32(rs2)
-(decl rv_divw (Reg Reg) Reg)
+(decl rv_divw (XReg XReg) XReg)
 (rule (rv_divw rs1 rs2)
   (alu_rrr (AluOPRRR.Divw) rs1 rs2))
 
 ;; Helper for emitting the `divuw` ("Divide Unsigned Word") instruction.
 ;; rd ← uext32(rs1) ÷ uext32(rs2)
-(decl rv_divuw (Reg Reg) Reg)
+(decl rv_divuw (XReg XReg) XReg)
 (rule (rv_divuw rs1 rs2)
   (alu_rrr (AluOPRRR.Divuw) rs1 rs2))
 
 ;; Helper for emitting the `remw` ("Remainder Word") instruction.
 ;; rd ← sext32(rs1) mod sext32(rs2)
-(decl rv_remw (Reg Reg) Reg)
+(decl rv_remw (XReg XReg) XReg)
 (rule (rv_remw rs1 rs2)
   (alu_rrr (AluOPRRR.Remw) rs1 rs2))
 
 ;; Helper for emitting the `remuw` ("Remainder Unsigned Word") instruction.
 ;; rd ← uext32(rs1) mod uext32(rs2)
-(decl rv_remuw (Reg Reg) Reg)
+(decl rv_remuw (XReg XReg) XReg)
 (rule (rv_remuw rs1 rs2)
   (alu_rrr (AluOPRRR.Remuw) rs1 rs2))
 
@@ -1067,113 +1255,113 @@
 ;; TODO: Enable these instructions only when we have the F or D extensions
 
 ;; Helper for emitting the `fadd` instruction.
-(decl rv_fadd (Type Reg Reg) Reg)
+(decl rv_fadd (Type FReg FReg) FReg)
 (rule (rv_fadd $F32 rs1 rs2) (fpu_rrr (FpuOPRRR.FaddS) $F32 rs1 rs2))
 (rule (rv_fadd $F64 rs1 rs2) (fpu_rrr (FpuOPRRR.FaddD) $F64 rs1 rs2))
 
 ;; Helper for emitting the `fsub` instruction.
-(decl rv_fsub (Type Reg Reg) Reg)
+(decl rv_fsub (Type FReg FReg) FReg)
 (rule (rv_fsub $F32 rs1 rs2) (fpu_rrr (FpuOPRRR.FsubS) $F32 rs1 rs2))
 (rule (rv_fsub $F64 rs1 rs2) (fpu_rrr (FpuOPRRR.FsubD) $F64 rs1 rs2))
 
 ;; Helper for emitting the `fmul` instruction.
-(decl rv_fmul (Type Reg Reg) Reg)
+(decl rv_fmul (Type FReg FReg) FReg)
 (rule (rv_fmul $F32 rs1 rs2) (fpu_rrr (FpuOPRRR.FmulS) $F32 rs1 rs2))
 (rule (rv_fmul $F64 rs1 rs2) (fpu_rrr (FpuOPRRR.FmulD) $F64 rs1 rs2))
 
 ;; Helper for emitting the `fdiv` instruction.
-(decl rv_fdiv (Type Reg Reg) Reg)
+(decl rv_fdiv (Type FReg FReg) FReg)
 (rule (rv_fdiv $F32 rs1 rs2) (fpu_rrr (FpuOPRRR.FdivS) $F32 rs1 rs2))
 (rule (rv_fdiv $F64 rs1 rs2) (fpu_rrr (FpuOPRRR.FdivD) $F64 rs1 rs2))
 
 ;; Helper for emitting the `fsqrt` instruction.
-(decl rv_fsqrt (Type Reg) Reg)
+(decl rv_fsqrt (Type FReg) FReg)
 (rule (rv_fsqrt $F32 rs1) (fpu_rr (FpuOPRR.FsqrtS) $F32 rs1))
 (rule (rv_fsqrt $F64 rs1) (fpu_rr (FpuOPRR.FsqrtD) $F64 rs1))
 
 ;; Helper for emitting the `fmadd` instruction.
-(decl rv_fmadd (Type Reg Reg Reg) Reg)
+(decl rv_fmadd (Type FReg FReg FReg) FReg)
 (rule (rv_fmadd $F32 rs1 rs2 rs3) (fpu_rrrr (FpuOPRRRR.FmaddS) $F32 rs1 rs2 rs3))
 (rule (rv_fmadd $F64 rs1 rs2 rs3) (fpu_rrrr (FpuOPRRRR.FmaddD) $F64 rs1 rs2 rs3))
 
 ;; Helper for emitting the `fmv.x.w` instruction.
-(decl rv_fmvxw (Reg) Reg)
+(decl rv_fmvxw (FReg) XReg)
 (rule (rv_fmvxw r) (fpu_rr (FpuOPRR.FmvXW) $I32 r))
 
 ;; Helper for emitting the `fmv.x.d` instruction.
-(decl rv_fmvxd (Reg) Reg)
+(decl rv_fmvxd (FReg) XReg)
 (rule (rv_fmvxd r) (fpu_rr (FpuOPRR.FmvXD) $I64 r))
 
 ;; Helper for emitting the `fmv.w.x` instruction.
-(decl rv_fmvwx (Reg) Reg)
+(decl rv_fmvwx (XReg) FReg)
 (rule (rv_fmvwx r) (fpu_rr (FpuOPRR.FmvWX) $F32 r))
 
 ;; Helper for emitting the `fmv.d.x` instruction.
-(decl rv_fmvdx (Reg) Reg)
+(decl rv_fmvdx (XReg) FReg)
 (rule (rv_fmvdx r) (fpu_rr (FpuOPRR.FmvDX) $F64 r))
 
 ;; Helper for emitting the `fcvt.d.s` ("Float Convert Double to Single") instruction.
-(decl rv_fcvtds (Reg) Reg)
+(decl rv_fcvtds (FReg) FReg)
 (rule (rv_fcvtds rs1) (fpu_rr (FpuOPRR.FcvtDS) $F32 rs1))
 
 ;; Helper for emitting the `fcvt.s.d` ("Float Convert Single to Double") instruction.
-(decl rv_fcvtsd (Reg) Reg)
+(decl rv_fcvtsd (FReg) FReg)
 (rule (rv_fcvtsd rs1) (fpu_rr (FpuOPRR.FcvtSD) $F64 rs1))
 
 ;; Helper for emitting the `fsgnj` ("Floating Point Sign Injection") instruction.
 ;; The output of this instruction is `rs1` with the sign bit from `rs2`
 ;; This implements the `copysign` operation
-(decl rv_fsgnj (Type Reg Reg) Reg)
+(decl rv_fsgnj (Type FReg FReg) FReg)
 (rule (rv_fsgnj $F32 rs1 rs2) (fpu_rrr (FpuOPRRR.FsgnjS) $F32 rs1 rs2))
 (rule (rv_fsgnj $F64 rs1 rs2) (fpu_rrr (FpuOPRRR.FsgnjD) $F64 rs1 rs2))
 
 ;; Helper for emitting the `fsgnjn` ("Floating Point Sign Injection Negated") instruction.
 ;; The output of this instruction is `rs1` with the negated sign bit from `rs2`
 ;; When `rs1 == rs2` this implements the `neg` operation
-(decl rv_fsgnjn (Type Reg Reg) Reg)
+(decl rv_fsgnjn (Type FReg FReg) FReg)
 (rule (rv_fsgnjn $F32 rs1 rs2) (fpu_rrr (FpuOPRRR.FsgnjnS) $F32 rs1 rs2))
 (rule (rv_fsgnjn $F64 rs1 rs2) (fpu_rrr (FpuOPRRR.FsgnjnD) $F64 rs1 rs2))
 
 ;; Helper for emitting the `fneg` ("Floating Point Negate") instruction.
 ;; This instruction is a mnemonic for `fsgnjn rd, rs1, rs1`
-(decl rv_fneg (Type Reg) Reg)
+(decl rv_fneg (Type FReg) FReg)
 (rule (rv_fneg ty rs1) (rv_fsgnjn ty rs1 rs1))
 
 ;; Helper for emitting the `fsgnjx` ("Floating Point Sign Injection Exclusive") instruction.
 ;; The output of this instruction is `rs1` with the XOR of the sign bits from `rs1` and `rs2`.
 ;; When `rs1 == rs2` this implements `fabs`
-(decl rv_fsgnjx (Type Reg Reg) Reg)
+(decl rv_fsgnjx (Type FReg FReg) FReg)
 (rule (rv_fsgnjx $F32 rs1 rs2) (fpu_rrr (FpuOPRRR.FsgnjxS) $F32 rs1 rs2))
 (rule (rv_fsgnjx $F64 rs1 rs2) (fpu_rrr (FpuOPRRR.FsgnjxD) $F64 rs1 rs2))
 
 ;; Helper for emitting the `fabs` ("Floating Point Absolute") instruction.
 ;; This instruction is a mnemonic for `fsgnjx rd, rs1, rs1`
-(decl rv_fabs (Type Reg) Reg)
+(decl rv_fabs (Type FReg) FReg)
 (rule (rv_fabs ty rs1) (rv_fsgnjx ty rs1 rs1))
 
 ;; Helper for emitting the `feq` ("Float Equal") instruction.
-(decl rv_feq (Type Reg Reg) Reg)
+(decl rv_feq (Type FReg FReg) XReg)
 (rule (rv_feq $F32 rs1 rs2) (fpu_rrr (FpuOPRRR.FeqS) $I64 rs1 rs2))
 (rule (rv_feq $F64 rs1 rs2) (fpu_rrr (FpuOPRRR.FeqD) $I64 rs1 rs2))
 
 ;; Helper for emitting the `flt` ("Float Less Than") instruction.
-(decl rv_flt (Type Reg Reg) Reg)
+(decl rv_flt (Type FReg FReg) XReg)
 (rule (rv_flt $F32 rs1 rs2) (fpu_rrr (FpuOPRRR.FltS) $I64 rs1 rs2))
 (rule (rv_flt $F64 rs1 rs2) (fpu_rrr (FpuOPRRR.FltD) $I64 rs1 rs2))
 
 ;; Helper for emitting the `fle` ("Float Less Than or Equal") instruction.
-(decl rv_fle (Type Reg Reg) Reg)
+(decl rv_fle (Type FReg FReg) XReg)
 (rule (rv_fle $F32 rs1 rs2) (fpu_rrr (FpuOPRRR.FleS) $I64 rs1 rs2))
 (rule (rv_fle $F64 rs1 rs2) (fpu_rrr (FpuOPRRR.FleD) $I64 rs1 rs2))
 
 ;; Helper for emitting the `fgt` ("Float Greater Than") instruction.
 ;; Note: The arguments are reversed
-(decl rv_fgt (Type Reg Reg) Reg)
+(decl rv_fgt (Type FReg FReg) XReg)
 (rule (rv_fgt ty rs1 rs2) (rv_flt ty rs2 rs1))
 
 ;; Helper for emitting the `fge` ("Float Greater Than or Equal") instruction.
 ;; Note: The arguments are reversed
-(decl rv_fge (Type Reg Reg) Reg)
+(decl rv_fge (Type FReg FReg) XReg)
 (rule (rv_fge ty rs1 rs2) (rv_fle ty rs2 rs1))
 
 
@@ -1181,20 +1369,20 @@
 
 ;; Helper for emitting the `adduw` ("Add Unsigned Word") instruction.
 ;; rd ← uext32(rs1) + uext32(rs2)
-(decl rv_adduw (Reg Reg) Reg)
+(decl rv_adduw (XReg XReg) XReg)
 (rule (rv_adduw rs1 rs2)
   (alu_rrr (AluOPRRR.Adduw) rs1 rs2))
 
 ;; Helper for emitting the `zext.w` ("Zero Extend Word") instruction.
 ;; This instruction is a mnemonic for `adduw rd, rs1, zero`.
 ;; rd ← uext32(rs1)
-(decl rv_zextw (Reg) Reg)
+(decl rv_zextw (XReg) XReg)
 (rule (rv_zextw rs1)
   (rv_adduw rs1 (zero_reg)))
 
 ;; Helper for emitting the `slli.uw` ("Shift Left Logical Immediate Unsigned Word") instruction.
 ;; rd ← uext32(rs1) << imm
-(decl rv_slliuw (Reg Imm12) Reg)
+(decl rv_slliuw (XReg Imm12) XReg)
 (rule (rv_slliuw rs1 imm)
   (alu_rr_imm12 (AluOPRRI.SlliUw) rs1 imm))
 
@@ -1203,83 +1391,83 @@
 
 ;; Helper for emitting the `andn` ("And Negated") instruction.
 ;; rd ← rs1 ∧ ~(rs2)
-(decl rv_andn (Reg Reg) Reg)
+(decl rv_andn (XReg XReg) XReg)
 (rule (rv_andn rs1 rs2)
   (alu_rrr (AluOPRRR.Andn) rs1 rs2))
 
 ;; Helper for emitting the `orn` ("Or Negated") instruction.
 ;; rd ← rs1 ∨ ~(rs2)
-(decl rv_orn (Reg Reg) Reg)
+(decl rv_orn (XReg XReg) XReg)
 (rule (rv_orn rs1 rs2)
   (alu_rrr (AluOPRRR.Orn) rs1 rs2))
 
 ;; Helper for emitting the `clz` ("Count Leading Zero Bits") instruction.
-(decl rv_clz (Reg) Reg)
+(decl rv_clz (XReg) XReg)
 (rule (rv_clz rs1)
   (alu_rr_funct12 (AluOPRRI.Clz) rs1))
 
 ;; Helper for emitting the `clzw` ("Count Leading Zero Bits in Word") instruction.
-(decl rv_clzw (Reg) Reg)
+(decl rv_clzw (XReg) XReg)
 (rule (rv_clzw rs1)
   (alu_rr_funct12 (AluOPRRI.Clzw) rs1))
 
 ;; Helper for emitting the `ctz` ("Count Trailing Zero Bits") instruction.
-(decl rv_ctz (Reg) Reg)
+(decl rv_ctz (XReg) XReg)
 (rule (rv_ctz rs1)
   (alu_rr_funct12 (AluOPRRI.Ctz) rs1))
 
 ;; Helper for emitting the `ctzw` ("Count Trailing Zero Bits in Word") instruction.
-(decl rv_ctzw (Reg) Reg)
+(decl rv_ctzw (XReg) XReg)
 (rule (rv_ctzw rs1)
   (alu_rr_funct12 (AluOPRRI.Ctzw) rs1))
 
 ;; Helper for emitting the `cpop` ("Count Population") instruction.
-(decl rv_cpop (Reg) Reg)
+(decl rv_cpop (XReg) XReg)
 (rule (rv_cpop rs1)
   (alu_rr_funct12 (AluOPRRI.Cpop) rs1))
 
 ;; Helper for emitting the `max` instruction.
-(decl rv_max (Reg Reg) Reg)
+(decl rv_max (XReg XReg) XReg)
 (rule (rv_max rs1 rs2)
   (alu_rrr (AluOPRRR.Max) rs1 rs2))
 
 ;; Helper for emitting the `sext.b` instruction.
-(decl rv_sextb (Reg) Reg)
+(decl rv_sextb (XReg) XReg)
 (rule (rv_sextb rs1)
   (alu_rr_imm12 (AluOPRRI.Sextb) rs1 (imm12_const 0)))
 
 ;; Helper for emitting the `sext.h` instruction.
-(decl rv_sexth (Reg) Reg)
+(decl rv_sexth (XReg) XReg)
 (rule (rv_sexth rs1)
   (alu_rr_imm12 (AluOPRRI.Sexth) rs1 (imm12_const 0)))
 
 ;; Helper for emitting the `zext.h` instruction.
-(decl rv_zexth (Reg) Reg)
+(decl rv_zexth (XReg) XReg)
 (rule (rv_zexth rs1)
   (alu_rr_imm12 (AluOPRRI.Zexth) rs1 (imm12_const 0)))
 
 ;; Helper for emitting the `rol` ("Rotate Left") instruction.
-(decl rv_rol (Reg Reg) Reg)
+(decl rv_rol (XReg XReg) XReg)
 (rule (rv_rol rs1 rs2)
   (alu_rrr (AluOPRRR.Rol) rs1 rs2))
 
 ;; Helper for emitting the `rolw` ("Rotate Left Word") instruction.
-(decl rv_rolw (Reg Reg) Reg)
+(decl rv_rolw (XReg XReg) XReg)
 (rule (rv_rolw rs1 rs2)
   (alu_rrr (AluOPRRR.Rolw) rs1 rs2))
 
 ;; Helper for emitting the `ror` ("Rotate Right") instruction.
-(decl rv_ror (Reg Reg) Reg)
+(decl rv_ror (XReg XReg) XReg)
 (rule (rv_ror rs1 rs2)
   (alu_rrr (AluOPRRR.Ror) rs1 rs2))
 
 ;; Helper for emitting the `rorw` ("Rotate Right Word") instruction.
-(decl rv_rorw (Reg Reg) Reg)
+(decl rv_rorw (XReg XReg) XReg)
 (rule (rv_rorw rs1 rs2)
   (alu_rrr (AluOPRRR.Rorw) rs1 rs2))
 
 ;; Helper for emitting the `rev8` ("Byte Reverse") instruction.
-(decl rv_rev8 (Reg) Reg)
+(decl rv_rev8 (XReg) XReg)
 (rule (rv_rev8 rs1)
   (alu_rr_funct12 (AluOPRRI.Rev8) rs1))
 
@@ -1287,12 +1475,12 @@
 ;; TODO: This instruction is mentioned in some older versions of the
 ;; spec, but has since disappeared, we should follow up on this.
 ;; It probably was renamed to `rev.b` which seems to be the closest match.
-(decl rv_brev8 (Reg) Reg)
+(decl rv_brev8 (XReg) XReg)
 (rule (rv_brev8 rs1)
   (alu_rr_funct12 (AluOPRRI.Brev8) rs1))
 
 ;; Helper for emitting the `bseti` ("Single-Bit Set Immediate") instruction.
-(decl rv_bseti (Reg Imm12) Reg)
+(decl rv_bseti (XReg Imm12) XReg)
 (rule (rv_bseti rs1 imm)
   (alu_rr_imm12 (AluOPRRI.Bseti) rs1 imm))
 
@@ -1300,12 +1488,12 @@
 ;; `Zbkb` Extension Instructions
 
 ;; Helper for emitting the `pack` ("Pack low halves of registers") instruction.
-(decl rv_pack (Reg Reg) Reg)
+(decl rv_pack (XReg XReg) XReg)
 (rule (rv_pack rs1 rs2)
   (alu_rrr (AluOPRRR.Pack) rs1 rs2))
 
 ;; Helper for emitting the `packw` ("Pack low 16-bits of registers") instruction.
-(decl rv_packw (Reg Reg) Reg)
+(decl rv_packw (XReg XReg) XReg)
 (rule (rv_packw rs1 rs2)
   (alu_rrr (AluOPRRR.Packw) rs1 rs2))
 
@@ -1399,7 +1587,7 @@
 ;; Helper for emitting `MInst.AluRRR` instructions.
 (decl alu_rrr (AluOPRRR Reg Reg) Reg)
 (rule (alu_rrr op src1 src2)
-      (let ((dst WritableReg (temp_writable_reg $I64))
+      (let ((dst WritableXReg (temp_writable_xreg))
             (_ Unit (emit (MInst.AluRRR op dst src1 src2))))
         dst))
 
@@ -1426,7 +1614,7 @@
 ;; Helper for emitting `MInst.AluRRImm12` instructions.
 (decl alu_rr_imm12 (AluOPRRI Reg Imm12) Reg)
 (rule (alu_rr_imm12 op src imm)
-      (let ((dst WritableReg (temp_writable_reg $I64))
+      (let ((dst WritableXReg (temp_writable_xreg))
             (_ Unit (emit (MInst.AluRRImm12 op dst src imm))))
         dst))
 
@@ -1434,7 +1622,7 @@
 ;; so we don't need the imm12 paramter.
 (decl alu_rr_funct12 (AluOPRRI Reg) Reg)
 (rule (alu_rr_funct12 op src)
-      (let ((dst WritableReg (temp_writable_reg $I64))
+      (let ((dst WritableXReg (temp_writable_xreg))
             (_ Unit (emit (MInst.AluRRImm12 op dst src (imm12_zero)))))
         dst))
 
@@ -1445,17 +1633,19 @@
 
 (decl gen_bnot (Type ValueRegs) ValueRegs)
 (rule 2 (gen_bnot (ty_scalar_float ty) x)
-  (let ((tmp Reg (move_f_to_x x ty))
-        (tmp2 Reg (rv_not tmp)))
-    (move_x_to_f tmp2 (float_int_of_same_size ty))))
+  (let ((val FReg (value_regs_get x 0))
+        (x_val XReg (move_f_to_x val ty))
+        (inverted XReg (rv_not x_val))
+        (res FReg (move_x_to_f inverted (float_int_of_same_size ty))))
+    (value_reg res)))
 
 (rule 1 (gen_bnot $I128 x)
-  (let ((lo Reg (rv_not (value_regs_get x 0)))
-        (hi Reg (rv_not (value_regs_get x 1))))
+  (let ((lo XReg (rv_not (value_regs_get x 0)))
+        (hi XReg (rv_not (value_regs_get x 1))))
     (value_regs lo hi)))
 
 (rule 0 (gen_bnot (ty_int_ref_scalar_64 _) x)
-  (rv_not x))
+  (rv_not (value_regs_get x 0)))
 
 
 (decl gen_and (Type ValueRegs ValueRegs) ValueRegs)
@@ -1487,23 +1677,23 @@
 (rule
   (lower_bit_reverse r $I16)
   (let
-    ((tmp Reg (gen_brev8 r $I16))
-      (tmp2 Reg (gen_rev8 tmp))
-      (result Reg (rv_srli tmp2 (imm12_const 48))))
+    ((tmp XReg (gen_brev8 r $I16))
+      (tmp2 XReg (gen_rev8 tmp))
+      (result XReg (rv_srli tmp2 (imm12_const 48))))
     result))
 
 (rule
   (lower_bit_reverse r $I32)
   (let
-    ((tmp Reg (gen_brev8 r $I32))
-      (tmp2 Reg (gen_rev8 tmp))
-      (result Reg (rv_srli tmp2 (imm12_const 32))))
+    ((tmp XReg (gen_brev8 r $I32))
+      (tmp2 XReg (gen_rev8 tmp))
+      (result XReg (rv_srli tmp2 (imm12_const 32))))
     result))
 
 (rule
   (lower_bit_reverse r $I64)
   (let
-    ((tmp Reg (gen_rev8 r)))
+    ((tmp XReg (gen_rev8 r)))
     (gen_brev8 tmp $I64)))
 
 
@@ -1528,26 +1718,26 @@
 ;; We count both halves separately and conditionally add them if it makes sense.
 (decl lower_ctz_128 (ValueRegs) ValueRegs)
 (rule (lower_ctz_128 x)
-  (let ((x_lo Reg (value_regs_get x 0))
-        (x_hi Reg (value_regs_get x 1))
+  (let ((x_lo XReg (value_regs_get x 0))
+        (x_hi XReg (value_regs_get x 1))
         ;; Count both halves
-        (high Reg (lower_ctz $I64 x_hi))
-        (low Reg (lower_ctz $I64 x_lo))
+        (high XReg (lower_ctz $I64 x_hi))
+        (low XReg (lower_ctz $I64 x_lo))
         ;; Only add the top half if the bottom is zero
-        (high Reg (gen_select_reg (IntCC.Equal) x_lo (zero_reg) high (zero_reg)))
-        (result Reg (rv_add low high)))
-    (zext result $I64 $I128)))
+        (high XReg (gen_select_reg (IntCC.Equal) x_lo (zero_reg) high (zero_reg)))
+        (result XReg (rv_add low high)))
+    (extend result (ExtendOp.Zero) $I64 $I128)))
 
-(decl lower_clz (Type Reg) Reg)
+(decl lower_clz (Type XReg) XReg)
 (rule (lower_clz ty rs)
   (gen_cltz $true rs ty))
 
 (rule 1 (lower_clz (fits_in_16 ty) r)
   (if-let $true (has_zbb))
-  (let ((tmp Reg (zext r ty $I64))
-        (count Reg (rv_clz tmp))
+  (let ((tmp XReg (zext r ty $I64))
+        (count XReg (rv_clz tmp))
         ;; We always do the operation on the full 64-bit register, so subtract 64 from the result.
-        (result Reg (rv_addi count (imm12_const_add (ty_bits ty) -64))))
+        (result XReg (rv_addi count (imm12_const_add (ty_bits ty) -64))))
     result))
 
 (rule 2 (lower_clz $I32 r)
@@ -1563,22 +1753,22 @@
 ;; We count both halves separately and conditionally add them if it makes sense.
 (decl lower_clz_i128 (ValueRegs) ValueRegs)
 (rule (lower_clz_i128 x)
-  (let ((x_lo Reg (value_regs_get x 0))
-        (x_hi Reg (value_regs_get x 1))
+  (let ((x_lo XReg (value_regs_get x 0))
+        (x_hi XReg (value_regs_get x 1))
         ;; Count both halves
-        (high Reg (lower_clz $I64 x_hi))
-        (low Reg (lower_clz $I64 x_lo))
+        (high XReg (lower_clz $I64 x_hi))
+        (low XReg (lower_clz $I64 x_lo))
         ;; Only add the bottom zeros if the top half is zero
-        (low Reg (gen_select_reg (IntCC.Equal) x_hi (zero_reg) low (zero_reg)))
-        (result Reg (rv_add high low)))
-    (zext result $I64 $I128)))
+        (low XReg (gen_select_reg (IntCC.Equal) x_hi (zero_reg) low (zero_reg)))
+        (result XReg (rv_add high low)))
+    (extend result (ExtendOp.Zero) $I64 $I128)))
 
 
-(decl lower_cls (Type Reg) Reg)
+(decl lower_cls (Type XReg) XReg)
 (rule (lower_cls ty r)
-  (let ((tmp Reg (ext_int_if_need $true r ty))
-        (tmp2 Reg (gen_select_reg (IntCC.SignedLessThan) tmp (zero_reg) (rv_not tmp) tmp))
-        (tmp3 Reg (lower_clz ty tmp2)))
+  (let ((tmp XReg (sext r ty $I64))
+        (tmp2 XReg (gen_select_reg (IntCC.SignedLessThan) tmp (zero_reg) (rv_not tmp) tmp))
+        (tmp3 XReg (lower_clz ty tmp2)))
     (rv_addi tmp3 (imm12_const -1))))
 
 ;; If the sign bit is set, we count the leading zeros of the inverted value.
@@ -1586,21 +1776,21 @@
 ;; Subtract 1 since the sign bit does not count.
 (decl lower_cls_i128 (ValueRegs) ValueRegs)
 (rule (lower_cls_i128 x)
-  (let ((low Reg (value_regs_get x 0))
-        (high Reg (value_regs_get x 1))
-        (low Reg (gen_select_reg (IntCC.SignedLessThan) high (zero_reg) (rv_not low) low))
-        (high Reg (gen_select_reg (IntCC.SignedLessThan) high (zero_reg) (rv_not high) high))
+  (let ((low XReg (value_regs_get x 0))
+        (high XReg (value_regs_get x 1))
+        (low XReg (gen_select_reg (IntCC.SignedLessThan) high (zero_reg) (rv_not low) low))
+        (high XReg (gen_select_reg (IntCC.SignedLessThan) high (zero_reg) (rv_not high) high))
         (tmp ValueRegs (lower_clz_i128 (value_regs low high)))
-        (count Reg (value_regs_get tmp 0))
-        (result Reg (rv_addi count (imm12_const -1))))
-    (zext result $I64 $I128)))
+        (count XReg (value_regs_get tmp 0))
+        (result XReg (rv_addi count (imm12_const -1))))
+    (extend result (ExtendOp.Zero) $I64 $I128)))
 
 
-(decl gen_cltz (bool Reg Type) Reg)
+(decl gen_cltz (bool XReg Type) XReg)
 (rule (gen_cltz leading rs ty)
-  (let ((tmp WritableReg (temp_writable_reg $I64))
-        (step WritableReg (temp_writable_reg $I64))
-        (sum WritableReg (temp_writable_reg $I64))
+  (let ((tmp WritableXReg (temp_writable_xreg))
+        (step WritableXReg (temp_writable_xreg))
+        (sum WritableXReg (temp_writable_xreg))
         (_ Unit (emit (MInst.Cltz leading sum step tmp rs ty))))
     sum))
 
@@ -1609,21 +1799,21 @@
 (decl ext_int_if_need (bool ValueRegs Type) ValueRegs)
 ;;; For values smaller than 64 bits, we need to extend them to 64 bits
 (rule 0 (ext_int_if_need $true val (fits_in_32 (ty_int ty)))
-  (sext val ty $I64))
+  (extend val (ExtendOp.Signed) ty $I64))
 (rule 0 (ext_int_if_need $false val (fits_in_32 (ty_int ty)))
-  (zext val ty $I64))
+  (extend val (ExtendOp.Zero) ty $I64))
 ;; If the value is larger than one machine register, we don't need to do anything
 (rule 1 (ext_int_if_need _ r $I64) r)
 (rule 2 (ext_int_if_need _ r $I128) r)
 
 
 ;; Performs a zero extension of the given value
-(decl zext (ValueRegs Type Type) ValueRegs)
-(rule (zext val from_ty to_ty) (extend val (ExtendOp.Zero) from_ty to_ty))
+(decl zext (XReg Type Type) XReg)
+(rule (zext val from_ty (fits_in_64 to_ty)) (value_regs_get (extend val (ExtendOp.Zero) from_ty to_ty) 0))
 
 ;; Performs a signed extension of the given value
-(decl sext (ValueRegs Type Type) ValueRegs)
-(rule (sext val from_ty to_ty) (extend val (ExtendOp.Signed) from_ty to_ty))
+(decl sext (XReg Type Type) XReg)
+(rule (sext val from_ty (fits_in_64 to_ty)) (value_regs_get (extend val (ExtendOp.Signed) from_ty to_ty) 0))
 
 (type ExtendOp
   (enum
@@ -1641,22 +1831,22 @@
 ;; In the most generic case, we shift left and then shift right.
 ;; The type of right shift is determined by the extend op.
 (rule 0 (extend val extend_op (fits_in_32 from_ty) (fits_in_64 to_ty))
-  (let ((val Reg (value_regs_get val 0))
+  (let ((val XReg (value_regs_get val 0))
         (shift Imm12 (imm_from_bits (u64_sub 64 (ty_bits from_ty))))
-        (left Reg (rv_slli val shift))
+        (left XReg (rv_slli val shift))
         (shift_op AluOPRRI (extend_shift_op extend_op))
-        (right Reg (alu_rr_imm12 shift_op left shift)))
+        (right XReg (alu_rr_imm12 shift_op left shift)))
     right))
 
 ;; If we are zero extending a U8 we can use a `andi` instruction.
 (rule 1 (extend val (ExtendOp.Zero) $I8 (fits_in_64 to_ty))
-  (let ((val Reg (value_regs_get val 0)))
+  (let ((val XReg (value_regs_get val 0)))
     (rv_andi val (imm12_const 255))))
 
 ;; When signed extending from 32 to 64 bits we can use a
 ;; `addiw val 0`. Also known as a `sext.w`
 (rule 1 (extend val (ExtendOp.Signed) $I32 $I64)
-  (let ((val Reg (value_regs_get val 0)))
+  (let ((val XReg (value_regs_get val 0)))
     (rv_sextw val)))
 
 
@@ -1666,54 +1856,54 @@
 ;; If we have the `zbkb` extension `packw` can be used to zero extend 16 bit values
 (rule 1 (extend val (ExtendOp.Zero) $I16 (fits_in_64 _))
   (if-let $true (has_zbkb))
-  (let ((val Reg (value_regs_get val 0)))
+  (let ((val XReg (value_regs_get val 0)))
     (rv_packw val (zero_reg))))
 
 ;; If we have the `zbkb` extension `pack` can be used to zero extend 32 bit registers
 (rule 1 (extend val (ExtendOp.Zero) $I32 $I64)
   (if-let $true (has_zbkb))
-  (let ((val Reg (value_regs_get val 0)))
+  (let ((val XReg (value_regs_get val 0)))
     (rv_pack val (zero_reg))))
 
 
 ;; If we have the `zbb` extension we can use the dedicated `sext.b` instruction.
 (rule 1 (extend val (ExtendOp.Signed) $I8 (fits_in_64 _))
   (if-let $true (has_zbb))
-  (let ((val Reg (value_regs_get val 0)))
+  (let ((val XReg (value_regs_get val 0)))
     (rv_sextb val)))
 
 ;; If we have the `zbb` extension we can use the dedicated `sext.h` instruction.
 (rule 1 (extend val (ExtendOp.Signed) $I16 (fits_in_64 _))
   (if-let $true (has_zbb))
-  (let ((val Reg (value_regs_get val 0)))
+  (let ((val XReg (value_regs_get val 0)))
     (rv_sexth val)))
 
 ;; If we have the `zbb` extension we can use the dedicated `zext.h` instruction.
 (rule 2 (extend val (ExtendOp.Zero) $I16 (fits_in_64 _))
   (if-let $true (has_zbb))
-  (let ((val Reg (value_regs_get val 0)))
+  (let ((val XReg (value_regs_get val 0)))
     (rv_zexth val)))
 
 ;; With `zba` we have a `zext.w` instruction
 (rule 2 (extend val (ExtendOp.Zero) $I32 $I64)
   (if-let $true (has_zba))
-  (let ((val Reg (value_regs_get val 0)))
+  (let ((val XReg (value_regs_get val 0)))
     (rv_zextw val)))
 
 ;;; Signed rules extending to I128
 ;; Extend the bottom part, and extract the sign bit from the bottom as the top
 (rule 3 (extend val (ExtendOp.Signed) (fits_in_64 from_ty) $I128)
-  (let ((val Reg (value_regs_get val 0))
-        (low Reg (extend val (ExtendOp.Signed) from_ty $I64))
-        (high Reg (rv_srai low (imm12_const 63))))
+  (let ((val XReg (value_regs_get val 0))
+        (low XReg (sext val from_ty $I64))
+        (high XReg (rv_srai low (imm12_const 63))))
     (value_regs low high)))
 
 ;;; Unsigned rules extending to I128
 ;; Extend the bottom register to I64 and then just zero out the top half.
 (rule 3 (extend val (ExtendOp.Zero) (fits_in_64 from_ty) $I128)
-  (let ((val Reg (value_regs_get val 0))
-        (low Reg (extend val (ExtendOp.Zero) from_ty $I64))
-        (high Reg (load_u64_constant 0)))
+  (let ((val XReg (value_regs_get val 0))
+        (low XReg (zext val from_ty $I64))
+        (high XReg (load_u64_constant 0)))
     (value_regs low high)))
 
 ;; Catch all rule for ignoring extensions of the same type.
@@ -1726,23 +1916,21 @@
   (lower_b128_binary op a b)
   (let
     ( ;; low part.
-      (low Reg (alu_rrr op (value_regs_get a 0) (value_regs_get b 0)))
+      (low XReg (alu_rrr op (value_regs_get a 0) (value_regs_get b 0)))
       ;; high part.
-      (high Reg (alu_rrr op (value_regs_get a 1) (value_regs_get b 1))))
+      (high XReg (alu_rrr op (value_regs_get a 1) (value_regs_get b 1))))
     (value_regs low high)))
 
-(decl lower_umlhi (Type Reg Reg) Reg)
-(rule 1
-  (lower_umlhi $I64 rs1 rs2)
+(decl lower_umlhi (Type XReg XReg) XReg)
+(rule 1 (lower_umlhi $I64 rs1 rs2)
   (rv_mulhu rs1 rs2))
 
-(rule
-  (lower_umlhi ty rs1 rs2)
+(rule (lower_umlhi ty rs1 rs2)
   (let
-    ((tmp Reg (rv_mul (ext_int_if_need $false rs1 ty) (ext_int_if_need $false rs2 ty))))
+    ((tmp XReg (rv_mul (zext rs1 ty $I64) (zext rs2 ty $I64))))
     (rv_srli tmp (imm12_const (ty_bits ty)))))
 
-(decl lower_smlhi (Type Reg Reg) Reg)
+(decl lower_smlhi (Type XReg XReg) XReg)
 (rule 1
   (lower_smlhi $I64 rs1 rs2)
   (rv_mulh rs1 rs2))
@@ -1750,11 +1938,11 @@
 (rule
   (lower_smlhi ty rs1 rs2)
   (let
-    ((tmp Reg (rv_mul rs1 rs2)))
+    ((tmp XReg (rv_mul rs1 rs2)))
     (rv_srli tmp (imm12_const (ty_bits ty)))))
 
 
-(decl lower_rotl (Type Reg Reg) Reg)
+(decl lower_rotl (Type XReg XReg) XReg)
 
 (rule 1
   (lower_rotl $I64 rs amount)
@@ -1781,7 +1969,7 @@
   (lower_rotl_shift ty rs amount))
 
 ;;; using shift to implement rotl.
-(decl lower_rotl_shift (Type Reg Reg) Reg)
+(decl lower_rotl_shift (Type XReg XReg) XReg)
 
 ;;; for I8 and I16 ...
 (rule
@@ -1801,10 +1989,10 @@
 ;;;; construct shift amount.rotl on i128 will use shift to implement. So can call this function.
 ;;;; this will return shift amount and (ty_bits - "shift amount")
 ;;;; if ty_bits is greater than 64 like i128, then shmat will fallback to 64.because We are 64 bit platform.
-(decl gen_shamt (Type Reg) ValueRegs)
+(decl gen_shamt (Type XReg) ValueRegs)
 (extern constructor gen_shamt gen_shamt)
 
-(decl lower_rotr (Type Reg Reg) Reg)
+(decl lower_rotr (Type XReg XReg) XReg)
 
 (rule 1
   (lower_rotr $I64 rs amount)
@@ -1829,21 +2017,21 @@
   (lower_rotr ty rs amount)
   (lower_rotr_shift ty rs amount))
 
-(decl lower_rotr_shift (Type Reg Reg) Reg)
+(decl lower_rotr_shift (Type XReg XReg) XReg)
 
 ;;;
 (rule
   (lower_rotr_shift ty rs amount)
   (let
     ((x ValueRegs (gen_shamt ty amount))
-      (shamt Reg (value_regs_get x 0))
-      (len_sub_shamt Reg (value_regs_get x 1))
+      (shamt XReg (value_regs_get x 0))
+      (len_sub_shamt XReg (value_regs_get x 1))
       ;;
-      (part1 Reg (rv_srl rs shamt))
+      (part1 XReg (rv_srl rs shamt))
       ;;
-      (part2 Reg (rv_sll rs len_sub_shamt))
+      (part2 XReg (rv_sll rs len_sub_shamt))
       ;;
-      (part3 Reg (gen_select_reg (IntCC.Equal) shamt (zero_reg) (zero_reg) part2)))
+      (part3 XReg (gen_select_reg (IntCC.Equal) shamt (zero_reg) (zero_reg) part2)))
     (rv_or part1 part3)))
 
 
@@ -1853,7 +2041,7 @@
 (rule (gen_bseti val bit)
   (if-let $false (has_zbs))
   (if-let $false (u64_le bit 12))
-  (let ((const Reg (load_u64_constant (u64_shl 1 bit))))
+  (let ((const XReg (load_u64_constant (u64_shl 1 bit))))
     (rv_or val const)))
 
 (rule (gen_bseti val bit)
@@ -1870,16 +2058,17 @@
 (rule
   (gen_popcnt rs ty)
   (let
-    ((tmp WritableReg (temp_writable_reg $I64))
-      (step WritableReg (temp_writable_reg $I64))
-      (sum WritableReg (temp_writable_reg $I64))
+    ((tmp WritableXReg (temp_writable_xreg))
+      (step WritableXReg (temp_writable_xreg))
+      (sum WritableXReg (temp_writable_xreg))
       (_ Unit (emit (MInst.Popcnt sum step tmp rs ty))))
     (writable_reg_to_reg sum)))
 
-(decl lower_popcnt (Reg Type) Reg)
+(decl lower_popcnt (XReg Type) XReg)
 (rule 1 (lower_popcnt rs ty)
   (if-let $true (has_zbb))
-  (rv_cpop (ext_int_if_need $false rs ty)))
+  (rv_cpop (zext rs ty $I64)))
+
 (rule (lower_popcnt rs ty)
   (if-let $false (has_zbb))
   (gen_popcnt rs ty))
@@ -1889,11 +2078,11 @@
   (lower_popcnt_i128 a)
   (let
     ( ;; low part.
-      (low Reg (lower_popcnt (value_regs_get a 0) $I64))
+      (low XReg (lower_popcnt (value_regs_get a 0) $I64))
       ;; high part.
-      (high Reg (lower_popcnt (value_regs_get a 1) $I64))
+      (high XReg (lower_popcnt (value_regs_get a 1) $I64))
       ;; add toghter.
-      (result Reg (rv_add low high)))
+      (result XReg (rv_add low high)))
     (value_regs result (load_u64_constant 0))))
 
 (decl lower_i128_rotl (ValueRegs ValueRegs) ValueRegs)
@@ -1901,22 +2090,22 @@
   (lower_i128_rotl x y)
   (let
     ((tmp ValueRegs (gen_shamt $I128 (value_regs_get y 0)))
-      (shamt Reg (value_regs_get tmp 0))
-      (len_sub_shamt Reg (value_regs_get tmp 1))
+      (shamt XReg (value_regs_get tmp 0))
+      (len_sub_shamt XReg (value_regs_get tmp 1))
       ;;
-      (low_part1 Reg (rv_sll (value_regs_get x 0) shamt))
-      (low_part2 Reg (rv_srl (value_regs_get x 1) len_sub_shamt))
+      (low_part1 XReg (rv_sll (value_regs_get x 0) shamt))
+      (low_part2 XReg (rv_srl (value_regs_get x 1) len_sub_shamt))
       ;;; if shamt == 0 low_part2 will overflow we should zero instead.
-      (low_part3 Reg (gen_select_reg (IntCC.Equal) shamt (zero_reg) (zero_reg) low_part2))
-      (low Reg (rv_or low_part1 low_part3))
+      (low_part3 XReg (gen_select_reg (IntCC.Equal) shamt (zero_reg) (zero_reg) low_part2))
+      (low XReg (rv_or low_part1 low_part3))
       ;;
-      (high_part1 Reg (rv_sll (value_regs_get x 1) shamt))
-      (high_part2 Reg (rv_srl (value_regs_get x 0) len_sub_shamt))
-      (high_part3 Reg (gen_select_reg (IntCC.Equal) shamt (zero_reg) (zero_reg) high_part2))
-      (high Reg (rv_or high_part1 high_part3))
+      (high_part1 XReg (rv_sll (value_regs_get x 1) shamt))
+      (high_part2 XReg (rv_srl (value_regs_get x 0) len_sub_shamt))
+      (high_part3 XReg (gen_select_reg (IntCC.Equal) shamt (zero_reg) (zero_reg) high_part2))
+      (high XReg (rv_or high_part1 high_part3))
       ;;
-      (const64 Reg (load_u64_constant 64))
-      (shamt_128 Reg (rv_andi (value_regs_get y 0) (imm12_const 127))))
+      (const64 XReg (load_u64_constant 64))
+      (shamt_128 XReg (rv_andi (value_regs_get y 0) (imm12_const 127))))
     ;; right now we only rotate less than 64 bits.
     ;; if shamt is greater than or equal 64 , we should switch low and high.
     (value_regs
@@ -1930,23 +2119,23 @@
   (lower_i128_rotr x y)
   (let
     ((tmp ValueRegs (gen_shamt $I128 (value_regs_get y 0)))
-      (shamt Reg (value_regs_get tmp 0))
-      (len_sub_shamt Reg (value_regs_get tmp 1))
+      (shamt XReg (value_regs_get tmp 0))
+      (len_sub_shamt XReg (value_regs_get tmp 1))
       ;;
-      (low_part1 Reg (rv_srl (value_regs_get x 0) shamt))
-      (low_part2 Reg (rv_sll (value_regs_get x 1) len_sub_shamt))
+      (low_part1 XReg (rv_srl (value_regs_get x 0) shamt))
+      (low_part2 XReg (rv_sll (value_regs_get x 1) len_sub_shamt))
       ;;; if shamt == 0 low_part2 will overflow we should zero instead.
-      (low_part3 Reg (gen_select_reg (IntCC.Equal) shamt (zero_reg) (zero_reg) low_part2))
-      (low Reg (rv_or low_part1 low_part3))
+      (low_part3 XReg (gen_select_reg (IntCC.Equal) shamt (zero_reg) (zero_reg) low_part2))
+      (low XReg (rv_or low_part1 low_part3))
       ;;
-      (high_part1 Reg (rv_srl (value_regs_get x 1) shamt))
-      (high_part2 Reg (rv_sll (value_regs_get x 0) len_sub_shamt))
-      (high_part3 Reg (gen_select_reg (IntCC.Equal) shamt (zero_reg) (zero_reg) high_part2))
-      (high Reg (rv_or high_part1 high_part3))
+      (high_part1 XReg (rv_srl (value_regs_get x 1) shamt))
+      (high_part2 XReg (rv_sll (value_regs_get x 0) len_sub_shamt))
+      (high_part3 XReg (gen_select_reg (IntCC.Equal) shamt (zero_reg) (zero_reg) high_part2))
+      (high XReg (rv_or high_part1 high_part3))
 
       ;;
-      (const64 Reg (load_u64_constant 64))
-      (shamt_128 Reg (rv_andi (value_regs_get y 0) (imm12_const 127))))
+      (const64 XReg (load_u64_constant 64))
+      (shamt_128 XReg (rv_andi (value_regs_get y 0) (imm12_const 127))))
     ;; right now we only rotate less than 64 bits.
     ;; if shamt is greater than or equal 64 , we should switch low and high.
     (value_regs
@@ -1960,19 +2149,19 @@
   (lower_i128_ishl x y)
   (let
     ((tmp ValueRegs (gen_shamt $I128 (value_regs_get y 0)))
-      (shamt Reg (value_regs_get tmp 0))
-      (len_sub_shamt Reg (value_regs_get tmp 1))
+      (shamt XReg (value_regs_get tmp 0))
+      (len_sub_shamt XReg (value_regs_get tmp 1))
       ;;
-      (low Reg (rv_sll (value_regs_get x 0) shamt))
+      (low XReg (rv_sll (value_regs_get x 0) shamt))
       ;; high part.
-      (high_part1 Reg (rv_srl (value_regs_get x 0) len_sub_shamt))
-      (high_part2 Reg (gen_select_reg (IntCC.Equal) shamt (zero_reg) (zero_reg) high_part1))
+      (high_part1 XReg (rv_srl (value_regs_get x 0) len_sub_shamt))
+      (high_part2 XReg (gen_select_reg (IntCC.Equal) shamt (zero_reg) (zero_reg) high_part1))
       ;;
-      (high_part3 Reg (rv_sll (value_regs_get x 1) shamt))
-      (high Reg (rv_or high_part2 high_part3 ))
+      (high_part3 XReg (rv_sll (value_regs_get x 1) shamt))
+      (high XReg (rv_or high_part2 high_part3 ))
       ;;
-      (const64 Reg (load_u64_constant 64))
-      (shamt_128 Reg (rv_andi (value_regs_get y 0) (imm12_const 127))))
+      (const64 XReg (load_u64_constant 64))
+      (shamt_128 XReg (rv_andi (value_regs_get y 0) (imm12_const 127))))
     (value_regs
       (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 (zero_reg) low)
       (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 low high))))
@@ -1982,21 +2171,21 @@
   (lower_i128_ushr x y)
   (let
     ((tmp ValueRegs (gen_shamt $I128 (value_regs_get y 0)))
-      (shamt Reg (value_regs_get tmp 0))
-      (len_sub_shamt Reg (value_regs_get tmp 1))
+      (shamt XReg (value_regs_get tmp 0))
+      (len_sub_shamt XReg (value_regs_get tmp 1))
 
       ;; low part.
-      (low_part1 Reg (rv_sll (value_regs_get x 1) len_sub_shamt))
-      (low_part2 Reg (gen_select_reg (IntCC.Equal) shamt (zero_reg) (zero_reg) low_part1))
+      (low_part1 XReg (rv_sll (value_regs_get x 1) len_sub_shamt))
+      (low_part2 XReg (gen_select_reg (IntCC.Equal) shamt (zero_reg) (zero_reg) low_part1))
       ;;
-      (low_part3 Reg (rv_srl (value_regs_get x 0) shamt))
-      (low Reg (rv_or low_part2 low_part3 ))
+      (low_part3 XReg (rv_srl (value_regs_get x 0) shamt))
+      (low XReg (rv_or low_part2 low_part3 ))
       ;;
-      (const64 Reg (load_u64_constant 64))
+      (const64 XReg (load_u64_constant 64))
 
       ;;
-      (high Reg (rv_srl (value_regs_get x 1) shamt))
-      (shamt_128 Reg (rv_andi (value_regs_get y 0) (imm12_const 127))))
+      (high XReg (rv_srl (value_regs_get x 1) shamt))
+      (shamt_128 XReg (rv_andi (value_regs_get y 0) (imm12_const 127))))
     (value_regs
       (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 high low)
       (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 (zero_reg) high))))
@@ -2007,25 +2196,25 @@
   (lower_i128_sshr x y)
   (let
     ((tmp ValueRegs (gen_shamt $I128 (value_regs_get y 0)))
-      (shamt Reg (value_regs_get tmp 0))
-      (len_sub_shamt Reg (value_regs_get tmp 1))
+      (shamt XReg (value_regs_get tmp 0))
+      (len_sub_shamt XReg (value_regs_get tmp 1))
 
       ;; low part.
-      (low_part1 Reg (rv_sll (value_regs_get x 1) len_sub_shamt))
-      (low_part2 Reg (gen_select_reg (IntCC.Equal) shamt (zero_reg) (zero_reg) low_part1))
+      (low_part1 XReg (rv_sll (value_regs_get x 1) len_sub_shamt))
+      (low_part2 XReg (gen_select_reg (IntCC.Equal) shamt (zero_reg) (zero_reg) low_part1))
       ;;
-      (low_part3 Reg (rv_srl (value_regs_get x 0) shamt))
-      (low Reg (rv_or low_part2 low_part3 ))
+      (low_part3 XReg (rv_srl (value_regs_get x 0) shamt))
+      (low XReg (rv_or low_part2 low_part3 ))
       ;;
-      (const64 Reg (load_u64_constant 64))
+      (const64 XReg (load_u64_constant 64))
       ;;
-      (high Reg (rv_sra (value_regs_get x 1) shamt))
+      (high XReg (rv_sra (value_regs_get x 1) shamt))
       ;;
-      (const_neg_1 Reg (load_imm12 -1))
+      (const_neg_1 XReg (load_imm12 -1))
       ;;
-      (high_replacement Reg (gen_select_reg (IntCC.SignedLessThan) (value_regs_get x 1) (zero_reg) const_neg_1 (zero_reg)))
-      (const64 Reg (load_u64_constant 64))
-      (shamt_128 Reg (rv_andi (value_regs_get y 0) (imm12_const 127))))
+      (high_replacement XReg (gen_select_reg (IntCC.SignedLessThan) (value_regs_get x 1) (zero_reg) const_neg_1 (zero_reg)))
+      (const64 XReg (load_u64_constant 64))
+      (shamt_128 XReg (rv_andi (value_regs_get y 0) (imm12_const 127))))
     (value_regs
       (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 high low)
       (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 high_replacement high))))
@@ -2088,7 +2277,7 @@
 (rule
   (gen_atomic op addr src amo)
   (let
-    ((tmp WritableReg (temp_writable_reg $I64))
+    ((tmp WritableXReg (temp_writable_xreg))
       (_ Unit (emit (MInst.Atomic op tmp addr src amo))))
     tmp))
 
@@ -2174,7 +2363,7 @@
 (rule
   (gen_atomic_load p ty)
   (let
-    ((tmp WritableReg (temp_writable_reg $I64))
+    ((tmp WritableXReg (temp_writable_xreg))
       (_ Unit (emit (MInst.AtomicLoad tmp ty p))))
     (writable_reg_to_reg tmp)))
 
@@ -2186,7 +2375,7 @@
 )
 
 
-(decl gen_stack_addr (StackSlot Offset32) Reg )
+(decl gen_stack_addr (StackSlot Offset32) Reg)
 (extern constructor gen_stack_addr gen_stack_addr)
 
 ;;
@@ -2201,7 +2390,7 @@
     (vec_writable_to_regs reuslt)))
 
 ;; Parameters are "intcc compare_a compare_b rs1 rs2".
-(decl gen_select_reg (IntCC Reg Reg Reg Reg) Reg)
+(decl gen_select_reg (IntCC XReg XReg Reg Reg) Reg)
 (extern constructor gen_select_reg gen_select_reg)
 
 ;; load a constant into reg.
@@ -2275,25 +2464,25 @@
 (extern constructor int_convert_2_float_op int_convert_2_float_op)
 
 ;;;;
-(decl gen_fcvt_int (bool Reg bool Type Type) Reg)
+(decl gen_fcvt_int (bool FReg bool Type Type) XReg)
 (rule
   (gen_fcvt_int is_sat rs is_signed in_type out_type)
   (let
     ((result WritableReg (temp_writable_reg out_type))
-      (tmp WritableReg (temp_writable_reg $F64))
+      (tmp WritableFReg (temp_writable_freg))
       (_ Unit (emit (MInst.FcvtToInt is_sat result tmp rs is_signed in_type out_type))))
-    result))
+    (writable_reg_to_reg result)))
 
 ;;; some float binary operation
 ;;; 1. need move into x reister.
 ;;; 2. do the operation.
 ;;; 3. move back.
-(decl lower_float_binary (AluOPRRR Reg Reg Type) Reg)
+(decl lower_float_binary (AluOPRRR FReg FReg Type) FReg)
 (rule
   (lower_float_binary op rs1 rs2 ty)
-  (let ((x_rs1 Reg (move_f_to_x rs1 ty))
-        (x_rs2 Reg (move_f_to_x rs2 ty))
-        (tmp Reg (alu_rrr op x_rs1 x_rs2)))
+  (let ((x_rs1 XReg (move_f_to_x rs1 ty))
+        (x_rs2 XReg (move_f_to_x rs2 ty))
+        (tmp XReg (alu_rrr op x_rs1 x_rs2)))
     (move_x_to_f tmp (float_int_of_same_size ty))))
 
 
@@ -2311,31 +2500,31 @@
   (i128_sub x y )
   (let
     (;; low part.
-      (low Reg (rv_sub (value_regs_get x 0) (value_regs_get y 0)))
+      (low XReg (rv_sub (value_regs_get x 0) (value_regs_get y 0)))
       ;; compute borrow.
-      (borrow Reg (rv_sltu (value_regs_get x 0) low))
+      (borrow XReg (rv_sltu (value_regs_get x 0) low))
       ;;
-      (high_tmp Reg (rv_sub (value_regs_get x 1) (value_regs_get y 1)))
+      (high_tmp XReg (rv_sub (value_regs_get x 1) (value_regs_get y 1)))
       ;;
-      (high Reg (rv_sub high_tmp borrow)))
+      (high XReg (rv_sub high_tmp borrow)))
     (value_regs low high)))
 
 
 ;;; Returns the sum in the first register, and the overflow test in the second.
-(decl lower_uadd_overflow (Reg Reg Type) ValueRegs)
+(decl lower_uadd_overflow (XReg XReg Type) ValueRegs)
 
 (rule 1
   (lower_uadd_overflow x y $I64)
-  (let ((tmp Reg (rv_add x y))
-        (test Reg (gen_icmp (IntCC.UnsignedLessThan) tmp x $I64)))
+  (let ((tmp XReg (rv_add x y))
+        (test XReg (gen_icmp (IntCC.UnsignedLessThan) tmp x $I64)))
     (value_regs tmp test)))
 
 (rule
   (lower_uadd_overflow x y (fits_in_32 ty))
-  (let ((tmp_x Reg (ext_int_if_need $false x ty))
-        (tmp_y Reg (ext_int_if_need $false y ty))
-        (sum Reg (rv_add tmp_x tmp_y))
-        (test Reg (rv_srli sum (imm12_const (ty_bits ty)))))
+  (let ((tmp_x XReg (zext x ty $I64))
+        (tmp_y XReg (zext y ty $I64))
+        (sum XReg (rv_add tmp_x tmp_y))
+        (test XReg (rv_srli sum (imm12_const (ty_bits ty)))))
     (value_regs sum test)))
 
 (decl label_to_br_target (MachLabel) BranchTarget)
@@ -2379,21 +2568,21 @@
 (rule (normalize_cmp_value $I64  r _) r)
 (rule (normalize_cmp_value $I128 r _) r)
 
-(decl normalize_fcvt_from_int (ValueRegs Type ExtendOp) ValueRegs)
+(decl normalize_fcvt_from_int (XReg Type ExtendOp) XReg)
 (rule 2 (normalize_fcvt_from_int r (fits_in_16 ty) op)
-  (extend r op ty $I64))
+  (value_regs_get (extend r op ty $I64) 0))
 (rule 1 (normalize_fcvt_from_int r _ _)
   r)
 
 ;; Convert a truthy value, possibly of more than one register (an
 ;; I128), to one register. If narrower than 64 bits, must have already
 ;; been masked (e.g. by `normalize_cmp_value`).
-(decl truthy_to_reg (Type ValueRegs) Reg)
+(decl truthy_to_reg (Type ValueRegs) XReg)
 (rule 1 (truthy_to_reg (fits_in_64 _) regs)
       (value_regs_get regs 0))
 (rule 0 (truthy_to_reg $I128 regs)
-      (let ((lo Reg (value_regs_get regs 0))
-            (hi Reg (value_regs_get regs 1)))
+      (let ((lo XReg (value_regs_get regs 0))
+            (hi XReg (value_regs_get regs 1)))
         (rv_or lo hi)))
 
 ;; Default behavior for branching based on an input value.
@@ -2405,7 +2594,7 @@
 (rule 2
   (lower_branch (brif v @ (value_type $I128) _ _) targets)
   (let ((zero ValueRegs (value_regs (zero_reg) (zero_reg)))
-        (cmp Reg (gen_icmp (IntCC.NotEqual) v zero $I128)))
+        (cmp XReg (gen_icmp (IntCC.NotEqual) v zero $I128)))
     (lower_cond_br (IntCC.NotEqual) cmp targets $I64)))
 
 ;; Branching on the result of an icmp
@@ -2449,11 +2638,11 @@
 (rule 1 (gen_bitcast r $I64 $F64) (rv_fmvdx r))
 (rule (gen_bitcast r _ _) r)
 
-(decl move_f_to_x (Reg Type) Reg)
+(decl move_f_to_x (FReg Type) XReg)
 (rule (move_f_to_x r $F32) (gen_bitcast r $F32 $I32))
 (rule (move_f_to_x r $F64) (gen_bitcast r $F64 $I64))
 
-(decl move_x_to_f (Reg Type) Reg)
+(decl move_x_to_f (XReg Type) FReg)
 (rule (move_x_to_f r $I32) (gen_bitcast r $I32 $F32))
 (rule (move_x_to_f r $I64) (gen_bitcast r $I64 $F64))
 
@@ -2462,7 +2651,7 @@
 (rule (float_int_of_same_size $F64) $I64)
 
 
-(decl gen_rev8 (Reg) Reg)
+(decl gen_rev8 (XReg) XReg)
 (rule 1
   (gen_rev8 rs)
   (if-let $true (has_zbb))
@@ -2472,9 +2661,9 @@
   (gen_rev8 rs)
   (if-let $false (has_zbb))
   (let
-    ((rd WritableReg (temp_writable_reg $I64))
-      (tmp WritableReg (temp_writable_reg $I64))
-      (step WritableReg (temp_writable_reg $I64))
+    ((rd WritableXReg (temp_writable_xreg))
+      (tmp WritableXReg (temp_writable_xreg))
+      (step WritableXReg (temp_writable_xreg))
       (_ Unit (emit (MInst.Rev8 rs step tmp rd))))
     (writable_reg_to_reg rd)))
 
@@ -2488,10 +2677,10 @@
   (gen_brev8 rs ty)
   (if-let $false (has_zbkb))
   (let
-    ((tmp WritableReg (temp_writable_reg $I64))
-      (tmp2 WritableReg (temp_writable_reg $I64))
-      (step WritableReg (temp_writable_reg $I64))
-      (rd WritableReg (temp_writable_reg $I64))
+    ((tmp WritableXReg (temp_writable_xreg))
+      (tmp2 WritableXReg (temp_writable_xreg))
+      (step WritableXReg (temp_writable_xreg))
+      (rd WritableXReg (temp_writable_xreg))
       (_ Unit (emit (MInst.Brev8 rs ty step tmp tmp2 rd))))
     (writable_reg_to_reg rd)))
 
@@ -2507,7 +2696,7 @@
 
 
 ;; Selects the greatest of two registers as signed values.
-(decl max (Type Reg Reg) Reg)
+(decl max (Type XReg XReg) XReg)
 (rule (max (fits_in_64 (ty_int ty)) x y)
   (if-let $true (has_zbb))
   (rv_max x y))
@@ -2517,7 +2706,7 @@
   (gen_select_reg (IntCC.SignedGreaterThan) x y x y))
 
 
-(decl lower_iabs (Type Reg) Reg)
+(decl lower_iabs (Type XReg) XReg)
 
 ; I64 and lower
 ; Generate the following code:
@@ -2525,37 +2714,37 @@
 ;   neg a1, a0
 ;   max a0, a0, a1
 (rule (lower_iabs (fits_in_64 ty) val)
-  (let ((extended Reg (ext_int_if_need $true val ty))
-        (negated Reg (neg $I64 extended)))
+  (let ((extended XReg (sext val ty $I64))
+        (negated XReg (rv_neg extended)))
     (max $I64 extended negated)))
 
-(decl gen_trapif (Reg TrapCode) InstOutput)
+(decl gen_trapif (XReg TrapCode) InstOutput)
 (rule
   (gen_trapif test trap_code)
   (side_effect (SideEffectNoResult.Inst (MInst.TrapIf test trap_code))))
 
-(decl gen_trapifc (IntCC Reg Reg TrapCode) InstOutput)
+(decl gen_trapifc (IntCC XReg XReg TrapCode) InstOutput)
 (rule
   (gen_trapifc cc a b trap_code)
   (side_effect (SideEffectNoResult.Inst (MInst.TrapIfC a b cc trap_code))))
 
-(decl shift_int_to_most_significant (Reg Type) Reg)
+(decl shift_int_to_most_significant (XReg Type) XReg)
 (extern constructor shift_int_to_most_significant shift_int_to_most_significant)
 
 ;;; generate div overflow.
-(decl gen_div_overflow (Reg Reg Type) InstOutput)
+(decl gen_div_overflow (XReg XReg Type) InstOutput)
 (rule
   (gen_div_overflow rs1 rs2 ty)
   (let
-    ((r_const_neg_1 Reg (load_imm12 -1))
-      (r_const_min Reg (rv_slli (load_imm12 1) (imm12_const 63)))
-      (tmp_rs1 Reg (shift_int_to_most_significant rs1 ty))
-      (t1 Reg (gen_icmp (IntCC.Equal) r_const_neg_1 rs2 ty))
-      (t2 Reg (gen_icmp (IntCC.Equal) r_const_min tmp_rs1 ty))
-      (test Reg (rv_and t1 t2)))
+    ((r_const_neg_1 XReg (load_imm12 -1))
+      (r_const_min XReg (rv_slli (load_imm12 1) (imm12_const 63)))
+      (tmp_rs1 XReg (shift_int_to_most_significant rs1 ty))
+      (t1 XReg (gen_icmp (IntCC.Equal) r_const_neg_1 rs2 ty))
+      (t2 XReg (gen_icmp (IntCC.Equal) r_const_min tmp_rs1 ty))
+      (test XReg (rv_and t1 t2)))
     (gen_trapif test (TrapCode.IntegerOverflow))))
 
-(decl gen_div_by_zero (Reg) InstOutput)
+(decl gen_div_by_zero (XReg) InstOutput)
 (rule
   (gen_div_by_zero r)
   (gen_trapifc (IntCC.Equal) (zero_reg) r (TrapCode.IntegerDivisionByZero)))
@@ -2569,11 +2758,11 @@
 (extern constructor gen_call_indirect gen_call_indirect)
 
 ;;; this is trying to imitate aarch64 `madd` instruction.
-(decl madd (Reg Reg Reg) Reg)
+(decl madd (XReg XReg XReg) XReg)
 (rule
   (madd n m a)
   (let
-    ((t Reg (rv_mul n m)))
+    ((t XReg (rv_mul n m)))
     (rv_add t a)))
 
 ;;;; Helpers for bmask ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -2586,8 +2775,8 @@
 (rule
   0
   (lower_bmask (fits_in_64 _) (fits_in_64 in_ty) val)
-  (let ((input Reg (normalize_cmp_value in_ty val (ExtendOp.Zero)))
-        (non_zero Reg (rv_snez input)))
+  (let ((input XReg (truthy_to_reg in_ty (normalize_cmp_value in_ty val (ExtendOp.Zero))))
+        (non_zero XReg (rv_snez input)))
     (value_reg (rv_neg non_zero))))
 
 ;; Bitwise-or the two registers that make up the 128-bit value, then recurse as
@@ -2595,9 +2784,9 @@
 (rule
   1
   (lower_bmask (fits_in_64 ty) $I128 val)
-  (let ((lo Reg (value_regs_get val 0))
-        (hi Reg (value_regs_get val 1))
-        (combined Reg (rv_or lo hi)))
+  (let ((lo XReg (value_regs_get val 0))
+        (hi XReg (value_regs_get val 1))
+        (combined XReg (rv_or lo hi)))
     (lower_bmask ty $I64 (value_reg combined))))
 
 ;; Conversion of one 64-bit value to a 128-bit one. Duplicate the result of the
@@ -2624,7 +2813,7 @@
 
 (rule
   (gen_mov_from_preg rm)
-  (let ((rd WritableReg (temp_writable_reg $I64))
+  (let ((rd WritableXReg (temp_writable_xreg))
         (_ Unit (emit (MInst.MovFromPReg rd rm))))
     rd))
 
@@ -2648,28 +2837,28 @@
 
 ;;;; Helpers for floating point comparisons ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(decl not (Reg) Reg)
+(decl not (XReg) XReg)
 (rule (not x) (rv_xori x (imm_from_bits 1)))
 
-(decl is_not_nan (Type Reg) Reg)
+(decl is_not_nan (Type FReg) XReg)
 (rule (is_not_nan ty a) (rv_feq ty a a))
 
-(decl ordered (Type Reg Reg) Reg)
+(decl ordered (Type FReg FReg) XReg)
 (rule (ordered ty a b) (rv_and (is_not_nan ty a) (is_not_nan ty b)))
 
 (type CmpResult (enum
                   (Result
-                    (result Reg)
+                    (result XReg)
                     (invert bool))))
 
 ;; Wrapper for the common case when constructing comparison results. It assumes
 ;; that the result isn't negated.
-(decl cmp_result (Reg) CmpResult)
+(decl cmp_result (XReg) CmpResult)
 (rule (cmp_result result) (CmpResult.Result result $false))
 
 ;; Wrapper for the case where it's more convenient to construct the negated
 ;; version of the comparison.
-(decl cmp_result_invert (Reg) CmpResult)
+(decl cmp_result_invert (XReg) CmpResult)
 (rule (cmp_result_invert result) (CmpResult.Result result $true))
 
 ;; Consume a CmpResult, producing a branch on its result.
@@ -2679,7 +2868,7 @@
         (MInst.CondBr then else (cmp_integer_compare cmp))))
 
 ;; Construct an IntegerCompare value.
-(decl int_compare (IntCC Reg Reg) IntegerCompare)
+(decl int_compare (IntCC XReg XReg) IntegerCompare)
 (extern constructor int_compare int_compare)
 
 ;; Convert a comparison into a branch test.
@@ -2694,12 +2883,12 @@
   (int_compare (IntCC.Equal) res (zero_reg)))
 
 ;; Convert a comparison into a boolean value.
-(decl cmp_value (CmpResult) Reg)
+(decl cmp_value (CmpResult) XReg)
 (rule (cmp_value (CmpResult.Result res $false)) res)
 (rule (cmp_value (CmpResult.Result res $true)) (not res))
 
 ;; Compare two floating point numbers and return a zero/non-zero result.
-(decl emit_fcmp (FloatCC Type Reg Reg) CmpResult)
+(decl emit_fcmp (FloatCC Type FReg FReg) CmpResult)
 
 ;; a is not nan && b is not nan
 (rule

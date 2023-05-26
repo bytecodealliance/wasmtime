@@ -9,6 +9,9 @@ use generated_code::{Context, ExtendOp, MInst};
 use self::generated_code::VecAluOpRR;
 use super::{writable_zero_reg, zero_reg};
 use crate::isa::riscv64::abi::Riscv64ABICallSite;
+use crate::isa::riscv64::lower::args::{
+    FReg, VReg, WritableFReg, WritableVReg, WritableXReg, XReg,
+};
 use crate::isa::riscv64::Riscv64Backend;
 use crate::machinst::Reg;
 use crate::machinst::{isle::*, MachInst, SmallInstVec};
@@ -68,6 +71,52 @@ impl<'a, 'b> RV64IsleContext<'a, 'b, MInst, Riscv64Backend> {
 impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> {
     isle_lower_prelude_methods!();
     isle_prelude_caller_methods!(Riscv64MachineDeps, Riscv64ABICallSite);
+
+    fn vreg_new(&mut self, r: Reg) -> VReg {
+        VReg::new(r).unwrap()
+    }
+    fn writable_vreg_new(&mut self, r: WritableReg) -> WritableVReg {
+        r.map(|wr| VReg::new(wr).unwrap())
+    }
+    fn writable_vreg_to_vreg(&mut self, arg0: WritableVReg) -> VReg {
+        arg0.to_reg()
+    }
+    fn writable_vreg_to_writable_reg(&mut self, arg0: WritableVReg) -> WritableReg {
+        arg0.map(|vr| vr.to_reg())
+    }
+    fn vreg_to_reg(&mut self, arg0: VReg) -> Reg {
+        *arg0
+    }
+    fn xreg_new(&mut self, r: Reg) -> XReg {
+        XReg::new(r).unwrap()
+    }
+    fn writable_xreg_new(&mut self, r: WritableReg) -> WritableXReg {
+        r.map(|wr| XReg::new(wr).unwrap())
+    }
+    fn writable_xreg_to_xreg(&mut self, arg0: WritableXReg) -> XReg {
+        arg0.to_reg()
+    }
+    fn writable_xreg_to_writable_reg(&mut self, arg0: WritableXReg) -> WritableReg {
+        arg0.map(|xr| xr.to_reg())
+    }
+    fn xreg_to_reg(&mut self, arg0: XReg) -> Reg {
+        *arg0
+    }
+    fn freg_new(&mut self, r: Reg) -> FReg {
+        FReg::new(r).unwrap()
+    }
+    fn writable_freg_new(&mut self, r: WritableReg) -> WritableFReg {
+        r.map(|wr| FReg::new(wr).unwrap())
+    }
+    fn writable_freg_to_freg(&mut self, arg0: WritableFReg) -> FReg {
+        arg0.to_reg()
+    }
+    fn writable_freg_to_writable_reg(&mut self, arg0: WritableFReg) -> WritableReg {
+        arg0.map(|fr| fr.to_reg())
+    }
+    fn freg_to_reg(&mut self, arg0: FReg) -> Reg {
+        *arg0
+    }
 
     fn vec_writable_to_regs(&mut self, val: &VecWritableReg) -> ValueRegs {
         match val.len() {
@@ -241,7 +290,7 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
     fn gen_default_frm(&mut self) -> OptionFloatRoundingMode {
         None
     }
-    fn gen_select_reg(&mut self, cc: &IntCC, a: Reg, b: Reg, rs1: Reg, rs2: Reg) -> Reg {
+    fn gen_select_reg(&mut self, cc: &IntCC, a: XReg, b: XReg, rs1: Reg, rs2: Reg) -> Reg {
         let rd = self.temp_writable_reg(MInst::canonical_type_for_rc(rs1.class()));
         self.emit(&MInst::SelectReg {
             rd,
@@ -249,8 +298,8 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
             rs2,
             condition: IntegerCompare {
                 kind: *cc,
-                rs1: a,
-                rs2: b,
+                rs1: a.to_reg(),
+                rs2: b.to_reg(),
             },
         });
         rd.to_reg()
@@ -278,14 +327,14 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
     }
 
     //
-    fn gen_shamt(&mut self, ty: Type, shamt: Reg) -> ValueRegs {
+    fn gen_shamt(&mut self, ty: Type, shamt: XReg) -> ValueRegs {
         let ty_bits = if ty.bits() > 64 { 64 } else { ty.bits() };
         let shamt = {
             let tmp = self.temp_writable_reg(I64);
             self.emit(&MInst::AluRRImm12 {
                 alu_op: AluOPRRI::Andi,
                 rd: tmp,
-                rs: shamt,
+                rs: shamt.to_reg(),
                 imm12: Imm12::from_bits((ty_bits - 1) as i16),
             });
             tmp.to_reg()
@@ -426,7 +475,7 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         px_reg(2)
     }
 
-    fn shift_int_to_most_significant(&mut self, v: Reg, ty: Type) -> Reg {
+    fn shift_int_to_most_significant(&mut self, v: XReg, ty: Type) -> XReg {
         assert!(ty.is_int() && ty.bits() <= 64);
         if ty == I64 {
             return v;
@@ -435,19 +484,19 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         self.emit(&MInst::AluRRImm12 {
             alu_op: AluOPRRI::Slli,
             rd: tmp,
-            rs: v,
+            rs: v.to_reg(),
             imm12: Imm12::from_bits((64 - ty.bits()) as i16),
         });
 
-        tmp.to_reg()
+        self.xreg_new(tmp.to_reg())
     }
 
     #[inline]
-    fn int_compare(&mut self, kind: &IntCC, rs1: Reg, rs2: Reg) -> IntegerCompare {
+    fn int_compare(&mut self, kind: &IntCC, rs1: XReg, rs2: XReg) -> IntegerCompare {
         IntegerCompare {
             kind: *kind,
-            rs1,
-            rs2,
+            rs1: rs1.to_reg(),
+            rs2: rs2.to_reg(),
         }
     }
 
