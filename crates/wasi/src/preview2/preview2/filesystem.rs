@@ -352,16 +352,12 @@ impl<T: WasiView> filesystem::Host for T {
         let table = self.table();
         if table.is_file(fd) {
             let f = table.get_file(fd)?;
-            if !f.perms.contains(FilePerms::READ) {
-                return Err(ErrorCode::NotPermitted.into());
-            }
+            // No permissions check on stat: if opened, allowed to stat it
             let meta = f.file.metadata()?;
             Ok(descriptorstat_from(meta))
         } else if table.is_dir(fd) {
             let d = table.get_dir(fd)?;
-            if !d.perms.contains(DirPerms::READ) {
-                return Err(ErrorCode::NotPermitted.into());
-            }
+            // No permissions check on stat: if opened, allowed to stat it
             let meta = d.dir.dir_metadata()?;
             Ok(descriptorstat_from(meta))
         } else {
