@@ -29,6 +29,19 @@ Unreleased.
 
 --------------------------------------------------------------------------------
 
+## 9.0.2
+
+Released 2023-05-26.
+
+### Fixed
+
+* Fix Wasi rights system to work with wasi-libc. This regression was
+  introduced in the 9.0.0 release.
+  [#6462](https://github.com/bytecodealliance/wasmtime/pull/6462)
+  [#6471](https://github.com/bytecodealliance/wasmtime/pull/6471)
+
+--------------------------------------------------------------------------------
+
 ## 9.0.1
 
 Released 2023-05-22.
