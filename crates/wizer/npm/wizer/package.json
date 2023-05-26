@@ -23,6 +23,8 @@
     "@bytecodealliance/wizer-darwin-arm64": "3.0.0",
     "@bytecodealliance/wizer-darwin-x64": "3.0.0",
     "@bytecodealliance/wizer-linux-x64": "3.0.0",
+    "@bytecodealliance/wizer-linux-arm64": "3.0.0",
+    "@bytecodealliance/wizer-linux-s390x": "3.0.0",
     "@bytecodealliance/wizer-win32-x64": "3.0.0"
   },
   "license": "Apache-2.0",
