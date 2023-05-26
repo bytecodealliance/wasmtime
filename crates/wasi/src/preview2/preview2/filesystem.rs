@@ -701,15 +701,12 @@ impl<T: WasiView> filesystem::Host for T {
         &mut self,
         fd: filesystem::Descriptor,
         offset: filesystem::Filesize,
-    ) -> anyhow::Result<streams::InputStream> {
-        // FIXME: this skips the perm check. We can't return a NotPermitted
-        // error code here. Do we need to change the interface?
-
+    ) -> Result<streams::InputStream, filesystem::Error> {
         // Trap if fd lookup fails:
         let f = self.table().get_file(fd)?;
 
         if !f.perms.contains(FilePerms::READ) {
-            todo!()
+            Err(filesystem::ErrorCode::BadDescriptor)?;
         }
         // Duplicate the file descriptor so that we get an indepenent lifetime.
         let clone = std::sync::Arc::clone(&f.file);
@@ -727,12 +724,12 @@ impl<T: WasiView> filesystem::Host for T {
         &mut self,
         fd: filesystem::Descriptor,
         offset: filesystem::Filesize,
-    ) -> anyhow::Result<streams::OutputStream> {
+    ) -> Result<streams::OutputStream, filesystem::Error> {
         // Trap if fd lookup fails:
         let f = self.table().get_file(fd)?;
 
         if !f.perms.contains(FilePerms::WRITE) {
-            todo!()
+            Err(filesystem::ErrorCode::BadDescriptor)?;
         }
 
         // Duplicate the file descriptor so that we get an indepenent lifetime.
@@ -750,12 +747,12 @@ impl<T: WasiView> filesystem::Host for T {
     async fn append_via_stream(
         &mut self,
         fd: filesystem::Descriptor,
-    ) -> anyhow::Result<streams::OutputStream> {
+    ) -> Result<streams::OutputStream, filesystem::Error> {
         // Trap if fd lookup fails:
         let f = self.table().get_file(fd)?;
 
         if !f.perms.contains(FilePerms::WRITE) {
-            todo!()
+            Err(filesystem::ErrorCode::BadDescriptor)?;
         }
         // Duplicate the file descriptor so that we get an indepenent lifetime.
         let clone = std::sync::Arc::clone(&f.file);
@@ -999,8 +996,8 @@ impl TableReaddirExt for Table {
     }
 }
 
-fn mask_file_perms(p: FilePerms, flags: wasi::filesystem::DescriptorFlags) -> FilePerms {
-    use wasi::filesystem::DescriptorFlags;
+fn mask_file_perms(p: FilePerms, flags: filesystem::DescriptorFlags) -> FilePerms {
+    use filesystem::DescriptorFlags;
     let mut out = FilePerms::empty();
     if p.contains(FilePerms::READ) && flags.contains(DescriptorFlags::READ) {
         out |= FilePerms::READ;

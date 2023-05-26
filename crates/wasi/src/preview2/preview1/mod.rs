@@ -1081,11 +1081,11 @@ impl<
                 };
 
                 let pos = position.load(Ordering::Relaxed);
-                let stream = self
-                    .read_via_stream(fd, pos)
-                    .await
-                    .context("failed to call `read-via-stream`")
-                    .map_err(types::Error::trap)?;
+                let stream = self.read_via_stream(fd, pos).await.map_err(|e| {
+                    e.try_into()
+                        .context("failed to call `read-via-stream`")
+                        .unwrap_or_else(types::Error::trap)
+                })?;
                 let max = buf.len().try_into().unwrap_or(u64::MAX);
                 let (read, end) = if blocking {
                     self.blocking_read(stream, max)
@@ -1141,11 +1141,11 @@ impl<
                     return Ok(0)
                 };
 
-                let stream = self
-                    .read_via_stream(fd, offset)
-                    .await
-                    .context("failed to call `read-via-stream`")
-                    .map_err(types::Error::trap)?;
+                let stream = self.read_via_stream(fd, offset).await.map_err(|e| {
+                    e.try_into()
+                        .context("failed to call `read-via-stream`")
+                        .unwrap_or_else(types::Error::trap)
+                })?;
                 let max = buf.len().try_into().unwrap_or(u64::MAX);
                 let (read, end) = if blocking {
                     self.blocking_read(stream, max)
@@ -1195,19 +1195,19 @@ impl<
                     return Ok(0)
                 };
                 let (stream, pos) = if append {
-                    let stream = self
-                        .append_via_stream(fd)
-                        .await
-                        .context("failed to call `append-via-stream`")
-                        .map_err(types::Error::trap)?;
+                    let stream = self.append_via_stream(fd).await.map_err(|e| {
+                        e.try_into()
+                            .context("failed to call `append-via-stream`")
+                            .unwrap_or_else(types::Error::trap)
+                    })?;
                     (stream, 0)
                 } else {
                     let position = position.load(Ordering::Relaxed);
-                    let stream = self
-                        .write_via_stream(fd, position)
-                        .await
-                        .context("failed to call `write-via-stream`")
-                        .map_err(types::Error::trap)?;
+                    let stream = self.write_via_stream(fd, position).await.map_err(|e| {
+                        e.try_into()
+                            .context("failed to call `write-via-stream`")
+                            .unwrap_or_else(types::Error::trap)
+                    })?;
                     (stream, position)
                 };
                 let n = if blocking {
@@ -1253,11 +1253,11 @@ impl<
                 let Some(buf) = first_non_empty_ciovec(ciovs)? else {
                     return Ok(0)
                 };
-                let stream = self
-                    .write_via_stream(fd, offset)
-                    .await
-                    .context("failed to call `write-via-stream`")
-                    .map_err(types::Error::trap)?;
+                let stream = self.write_via_stream(fd, offset).await.map_err(|e| {
+                    e.try_into()
+                        .context("failed to call `write-via-stream`")
+                        .unwrap_or_else(types::Error::trap)
+                })?;
                 if blocking {
                     self.blocking_write(stream, buf)
                 } else {
