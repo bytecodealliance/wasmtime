@@ -82,9 +82,12 @@ pub(super) fn run(
             LocalInitializer::Import(name, ty) => (name, ty),
             _ => continue,
         };
-        let index = inliner.result.import_types.push((name.to_string(), ty));
+        let index = inliner
+            .result
+            .import_types
+            .push((name.as_str().to_string(), ty));
         let path = ImportPath::root(index);
-        args.insert(name, ComponentItemDef::from_import(path, ty)?);
+        args.insert(name.as_str(), ComponentItemDef::from_import(path, ty)?);
     }
 
     // This will run the inliner to completion after being seeded with the
@@ -376,7 +379,7 @@ impl<'a> Inliner<'a> {
             // but for sub-components this will do resolution to connect what
             // was provided as an import at the instantiation-site to what was
             // needed during the component's instantiation.
-            Import(name, _ty) => match &frame.args[name] {
+            Import(name, _ty) => match &frame.args[name.as_str()] {
                 ComponentItemDef::Module(i) => {
                     frame.modules.push(i.clone());
                 }
@@ -674,7 +677,7 @@ impl<'a> Inliner<'a> {
                     ComponentInstanceDef::Import(path, ty) => {
                         let mut path = path.clone();
                         path.path.push(name);
-                        match self.types[*ty].exports[*name].1 {
+                        match self.types[*ty].exports[*name] {
                             TypeDef::ComponentFunc(_) => {
                                 frame.component_funcs.push(ComponentFuncDef::Import(path));
                             }
@@ -939,7 +942,7 @@ impl<'a> Inliner<'a> {
                     // Note that for now this would only work with
                     // module-exporting instances.
                     ComponentInstanceDef::Import(path, ty) => {
-                        for (name, (_url, ty)) in self.types[ty].exports.iter() {
+                        for (name, ty) in self.types[ty].exports.iter() {
                             let mut path = path.clone();
                             path.path.push(name);
                             let def = ComponentItemDef::from_import(path, *ty)?;

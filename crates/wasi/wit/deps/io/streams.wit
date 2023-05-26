@@ -1,10 +1,12 @@
+package wasi:io
+
 /// WASI I/O is an I/O abstraction API which is currently focused on providing
 /// stream types.
 ///
 /// In the future, the component model is expected to add built-in stream types;
 /// when it does, they are expected to subsume this API.
-default interface streams {
-    use poll.poll.{pollable}
+interface streams {
+    use wasi:poll/poll.{pollable}
 
     /// An error type returned from a stream operation. Currently this
     /// doesn't provide any additional information.

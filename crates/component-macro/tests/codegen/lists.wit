@@ -1,3 +1,5 @@
+package foo:foo
+
 interface lists {
   list-u8-param: func(x: list<u8>)
   list-u16-param: func(x: list<u16>)
@@ -77,7 +79,7 @@ interface lists {
   load-store-everything: func(a: load-store-all-sizes) -> load-store-all-sizes
 }
 
-default world the-lists {
-  import import-lists: self.lists
-  export export-lists: self.lists
+world the-lists {
+  import lists
+  export lists
 }

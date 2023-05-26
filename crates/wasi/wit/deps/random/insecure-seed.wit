@@ -2,7 +2,7 @@
 ///
 /// It is intended to be portable at least between Unix-family platforms and
 /// Windows.
-default interface insecure-seed {
+interface insecure-seed {
     /// Return a 128-bit value that may contain a pseudo-random value.
     ///
     /// The returned value is not required to be computed from a CSPRNG, and may

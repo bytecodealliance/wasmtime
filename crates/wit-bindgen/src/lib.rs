@@ -31,28 +31,35 @@ struct InterfaceName {
     remapped: bool,
 
     /// The string name for this interface.
-    name: String,
+    path: String,
 }
 
 #[derive(Default)]
 struct Wasmtime {
     src: Source,
     opts: Opts,
-    imports: Vec<Import>,
+    import_interfaces: BTreeMap<Option<PackageName>, Vec<ImportInterface>>,
+    import_functions: Vec<ImportFunction>,
     exports: Exports,
     types: Types,
     sizes: SizeAlign,
     interface_names: HashMap<InterfaceId, InterfaceName>,
+    with_name_counter: usize,
 }
 
-enum Import {
-    Interface { snake: String },
-    Function { add_to_linker: String, sig: String },
+struct ImportInterface {
+    snake: String,
+    module: String,
+}
+struct ImportFunction {
+    add_to_linker: String,
+    sig: String,
 }
 
 #[derive(Default)]
 struct Exports {
     fields: BTreeMap<String, (String, String)>,
+    modules: BTreeMap<Option<PackageName>, Vec<String>>,
     funcs: Vec<String>,
 }
 
@@ -111,16 +118,33 @@ impl Opts {
 }
 
 impl Wasmtime {
-    fn name_interface(&mut self, id: InterfaceId, name: String) -> bool {
-        let entry = if let Some(remapped_name) = self.opts.with.get(&name) {
+    fn name_interface(&mut self, resolve: &Resolve, id: InterfaceId, name: &WorldKey) -> bool {
+        let with_name = resolve.name_world_key(name);
+        let entry = if let Some(remapped_path) = self.opts.with.get(&with_name) {
+            let name = format!("__with_name{}", self.with_name_counter);
+            self.with_name_counter += 1;
+            uwriteln!(self.src, "use {remapped_path} as {name};");
             InterfaceName {
                 remapped: true,
-                name: remapped_name.clone(),
+                path: name,
             }
         } else {
+            let path = match name {
+                WorldKey::Name(name) => name.to_snake_case(),
+                WorldKey::Interface(_) => {
+                    let iface = &resolve.interfaces[id];
+                    let pkgname = &resolve.packages[iface.package.unwrap()].name;
+                    format!(
+                        "{}::{}::{}",
+                        pkgname.namespace.to_snake_case(),
+                        pkgname.name.to_snake_case(),
+                        iface.name.as_ref().unwrap().to_snake_case()
+                    )
+                }
+            };
             InterfaceName {
                 remapped: false,
-                name,
+                path,
             }
         };
 
@@ -146,30 +170,38 @@ impl Wasmtime {
         self.finish(resolve, id)
     }
 
-    fn import(&mut self, resolve: &Resolve, name: &str, item: &WorldItem) {
-        let snake = name.to_snake_case();
+    fn import(&mut self, resolve: &Resolve, name: &WorldKey, item: &WorldItem) {
         let mut gen = InterfaceGenerator::new(self, resolve);
-        let import = match item {
+        match item {
             WorldItem::Function(func) => {
                 gen.generate_function_trait_sig(TypeOwner::None, func);
                 let sig = mem::take(&mut gen.src).into();
                 gen.generate_add_function_to_linker(TypeOwner::None, func, "linker");
                 let add_to_linker = gen.src.into();
-                Import::Function { sig, add_to_linker }
+                self.import_functions
+                    .push(ImportFunction { sig, add_to_linker });
             }
             WorldItem::Interface(id) => {
-                if gen.gen.name_interface(*id, snake.clone()) {
+                if gen.gen.name_interface(resolve, *id, name) {
                     return;
                 }
-                gen.current_interface = Some(*id);
+                gen.current_interface = Some((*id, name, false));
                 gen.types(*id);
                 gen.generate_trappable_error_types(TypeOwner::Interface(*id));
-                gen.generate_add_to_linker(*id, name);
+                let key_name = resolve.name_world_key(name);
+                gen.generate_add_to_linker(*id, &key_name);
 
                 let module = &gen.src[..];
 
-                uwriteln!(
-                    self.src,
+                let snake = match name {
+                    WorldKey::Name(s) => s.to_snake_case(),
+                    WorldKey::Interface(id) => resolve.interfaces[*id]
+                        .name
+                        .as_ref()
+                        .unwrap()
+                        .to_snake_case(),
+                };
+                let module = format!(
                     "
                         #[allow(clippy::all)]
                         pub mod {snake} {{
@@ -180,40 +212,55 @@ impl Wasmtime {
                         }}
                     "
                 );
-                Import::Interface { snake }
+                let pkg = resolve.interfaces[*id].package.unwrap();
+                let pkgname = match name {
+                    WorldKey::Name(_) => None,
+                    WorldKey::Interface(_) => Some(resolve.packages[pkg].name.clone()),
+                };
+                self.import_interfaces
+                    .entry(pkgname)
+                    .or_insert(Vec::new())
+                    .push(ImportInterface { snake, module });
             }
             WorldItem::Type(ty) => {
+                let name = match name {
+                    WorldKey::Name(name) => name,
+                    WorldKey::Interface(_) => unreachable!(),
+                };
                 gen.define_type(name, *ty);
                 let body = mem::take(&mut gen.src);
                 self.src.push_str(&body);
-                return;
             }
         };
-
-        self.imports.push(import);
     }
 
-    fn export(&mut self, resolve: &Resolve, name: &str, item: &WorldItem) {
-        let snake = name.to_snake_case();
+    fn export(&mut self, resolve: &Resolve, name: &WorldKey, item: &WorldItem) {
         let mut gen = InterfaceGenerator::new(self, resolve);
-        let (ty, getter) = match item {
+        let (field, ty, getter) = match item {
             WorldItem::Function(func) => {
-                gen.define_rust_guest_export(None, func);
+                gen.define_rust_guest_export(resolve, None, func);
                 let body = mem::take(&mut gen.src).into();
                 let (_name, getter) = gen.extract_typed_function(func);
                 assert!(gen.src.is_empty());
                 self.exports.funcs.push(body);
-                ("wasmtime::component::Func".to_string(), getter)
+                (
+                    func.name.to_snake_case(),
+                    "wasmtime::component::Func".to_string(),
+                    getter,
+                )
             }
             WorldItem::Type(_) => unreachable!(),
             WorldItem::Interface(id) => {
-                gen.gen.name_interface(*id, snake.clone());
-                gen.current_interface = Some(*id);
+                gen.gen.name_interface(resolve, *id, name);
+                gen.current_interface = Some((*id, name, true));
                 gen.types(*id);
                 gen.generate_trappable_error_types(TypeOwner::Interface(*id));
                 let iface = &resolve.interfaces[*id];
-
-                let camel = to_rust_upper_camel_case(name);
+                let iface_name = match name {
+                    WorldKey::Name(name) => name,
+                    WorldKey::Interface(_) => iface.name.as_ref().unwrap(),
+                };
+                let camel = to_rust_upper_camel_case(iface_name);
                 uwriteln!(gen.src, "pub struct {camel} {{");
                 for (_, func) in iface.functions.iter() {
                     uwriteln!(
@@ -246,14 +293,14 @@ impl Wasmtime {
                 uwriteln!(gen.src, "}})");
                 uwriteln!(gen.src, "}}");
                 for (_, func) in iface.functions.iter() {
-                    gen.define_rust_guest_export(Some(name), func);
+                    gen.define_rust_guest_export(resolve, Some(name), func);
                 }
                 uwriteln!(gen.src, "}}");
 
                 let module = &gen.src[..];
+                let snake = iface_name.to_snake_case();
 
-                uwriteln!(
-                    self.src,
+                let module = format!(
                     "
                         #[allow(clippy::all)]
                         pub mod {snake} {{
@@ -264,26 +311,54 @@ impl Wasmtime {
                         }}
                     "
                 );
+                let pkgname = match name {
+                    WorldKey::Name(_) => None,
+                    WorldKey::Interface(_) => {
+                        Some(resolve.packages[iface.package.unwrap()].name.clone())
+                    }
+                };
+                self.exports
+                    .modules
+                    .entry(pkgname.clone())
+                    .or_insert(Vec::new())
+                    .push(module);
 
+                let name = resolve.name_world_key(name);
+                let (path, method_name) = match pkgname {
+                    Some(pkgname) => (
+                        format!(
+                            "exports::{}::{}::{snake}::{camel}",
+                            pkgname.namespace.to_snake_case(),
+                            pkgname.name.to_snake_case(),
+                        ),
+                        format!(
+                            "{}_{}_{snake}",
+                            pkgname.namespace.to_snake_case(),
+                            pkgname.name.to_snake_case()
+                        ),
+                    ),
+                    None => (format!("exports::{snake}::{camel}"), snake.clone()),
+                };
                 let getter = format!(
                     "\
-                        {snake}::{camel}::new(
+                        {path}::new(
                             &mut __exports.instance(\"{name}\")
                                 .ok_or_else(|| anyhow::anyhow!(\"exported instance `{name}` not present\"))?
                         )?\
                     "
                 );
+                let field = format!("interface{}", self.exports.fields.len());
                 self.exports.funcs.push(format!(
                     "
-                        pub fn {snake}(&self) -> &{snake}::{camel} {{
-                            &self.{snake}
+                        pub fn {method_name}(&self) -> &{path} {{
+                            &self.{field}
                         }}
-                    "
+                    ",
                 ));
-                (format!("{snake}::{camel}"), getter)
+                (field, path, getter)
             }
         };
-        let prev = self.exports.fields.insert(snake.clone(), (ty, getter));
+        let prev = self.exports.fields.insert(field, (ty, getter));
         assert!(prev.is_none());
     }
 
@@ -375,6 +450,20 @@ impl Wasmtime {
             self.build_struct(resolve, world)
         }
 
+        let imports = mem::take(&mut self.import_interfaces);
+        self.emit_modules(
+            &imports
+                .into_iter()
+                .map(|(k, v)| (k, v.into_iter().map(|m| m.module).collect()))
+                .collect(),
+        );
+        if !self.exports.modules.is_empty() {
+            uwriteln!(self.src, "pub mod exports {{");
+            let exports = mem::take(&mut self.exports.modules);
+            self.emit_modules(&exports);
+            uwriteln!(self.src, "}}");
+        }
+
         let mut src = mem::take(&mut self.src);
         if self.opts.rustfmt {
             let mut child = Command::new("rustfmt")
@@ -402,21 +491,42 @@ impl Wasmtime {
 
         src.into()
     }
+
+    fn emit_modules(&mut self, modules: &BTreeMap<Option<PackageName>, Vec<String>>) {
+        let mut map = BTreeMap::new();
+        for (pkg, modules) in modules {
+            match pkg {
+                Some(pkg) => {
+                    let prev = map
+                        .entry(&pkg.namespace)
+                        .or_insert(BTreeMap::new())
+                        .insert(&pkg.name, modules);
+                    assert!(prev.is_none());
+                }
+                None => {
+                    for module in modules {
+                        uwriteln!(self.src, "{module}");
+                    }
+                }
+            }
+        }
+        for (ns, pkgs) in map {
+            uwriteln!(self.src, "pub mod {} {{", ns.to_snake_case());
+            for (pkg, modules) in pkgs {
+                uwriteln!(self.src, "pub mod {} {{", pkg.to_snake_case());
+                for module in modules {
+                    uwriteln!(self.src, "{module}");
+                }
+                uwriteln!(self.src, "}}");
+            }
+            uwriteln!(self.src, "}}");
+        }
+    }
 }
 
 impl Wasmtime {
     fn toplevel_import_trait(&mut self, resolve: &Resolve, world: WorldId) {
-        let mut functions = Vec::new();
-        for import in self.imports.iter() {
-            match import {
-                Import::Interface { .. } => continue,
-                Import::Function {
-                    sig,
-                    add_to_linker: _,
-                } => functions.push(sig),
-            }
-        }
-        if functions.is_empty() {
+        if self.import_functions.is_empty() {
             return;
         }
 
@@ -425,26 +535,29 @@ impl Wasmtime {
             uwriteln!(self.src, "#[wasmtime::component::__internal::async_trait]")
         }
         uwriteln!(self.src, "pub trait {world_camel}Imports {{");
-        for sig in functions {
-            self.src.push_str(sig);
+        for f in self.import_functions.iter() {
+            self.src.push_str(&f.sig);
             self.src.push_str("\n");
         }
         uwriteln!(self.src, "}}");
     }
 
     fn toplevel_add_to_linker(&mut self, resolve: &Resolve, world: WorldId) {
-        if self.imports.is_empty() {
+        if self.import_interfaces.is_empty() && self.import_functions.is_empty() {
             return;
         }
-        let mut functions = Vec::new();
         let mut interfaces = Vec::new();
-        for import in self.imports.iter() {
-            match import {
-                Import::Interface { snake } => interfaces.push(snake),
-                Import::Function {
-                    add_to_linker,
-                    sig: _,
-                } => functions.push(add_to_linker),
+        for (pkg, imports) in self.import_interfaces.iter() {
+            for import in imports {
+                let mut path = String::new();
+                if let Some(pkg) = pkg {
+                    path.push_str(&pkg.namespace.to_snake_case());
+                    path.push_str("::");
+                    path.push_str(&pkg.name.to_snake_case());
+                    path.push_str("::");
+                }
+                path.push_str(&import.snake);
+                interfaces.push(path)
             }
         }
 
@@ -463,7 +576,7 @@ impl Wasmtime {
         for (i, name) in interfaces
             .iter()
             .map(|n| format!("{n}::Host"))
-            .chain(if functions.is_empty() {
+            .chain(if self.import_functions.is_empty() {
                 None
             } else {
                 Some(world_trait.clone())
@@ -485,11 +598,11 @@ impl Wasmtime {
         for name in interfaces.iter() {
             uwriteln!(self.src, "{name}::add_to_linker(linker, get)?;");
         }
-        if !functions.is_empty() {
+        if !self.import_functions.is_empty() {
             uwriteln!(self.src, "Self::add_root_to_linker(linker, get)?;");
         }
         uwriteln!(self.src, "Ok(())\n}}");
-        if functions.is_empty() {
+        if self.import_functions.is_empty() {
             return;
         }
 
@@ -505,8 +618,8 @@ impl Wasmtime {
                     let mut linker = linker.root();
             ",
         );
-        for add_to_linker in functions {
-            self.src.push_str(add_to_linker);
+        for f in self.import_functions.iter() {
+            self.src.push_str(&f.add_to_linker);
             self.src.push_str("\n");
         }
         uwriteln!(self.src, "Ok(())\n}}");
@@ -517,7 +630,7 @@ struct InterfaceGenerator<'a> {
     src: Source,
     gen: &'a mut Wasmtime,
     resolve: &'a Resolve,
-    current_interface: Option<InterfaceId>,
+    current_interface: Option<(InterfaceId, &'a WorldKey, bool)>,
 }
 
 impl<'a> InterfaceGenerator<'a> {
@@ -1263,7 +1376,12 @@ impl<'a> InterfaceGenerator<'a> {
         ret
     }
 
-    fn define_rust_guest_export(&mut self, ns: Option<&str>, func: &Function) {
+    fn define_rust_guest_export(
+        &mut self,
+        resolve: &Resolve,
+        ns: Option<&WorldKey>,
+        func: &Function,
+    ) {
         let (async_, async__, await_) = if self.gen.opts.async_ {
             ("async", "_async", ".await")
         } else {
@@ -1292,17 +1410,20 @@ impl<'a> InterfaceGenerator<'a> {
         }
 
         if self.gen.opts.tracing {
+            let ns = match ns {
+                Some(key) => resolve.name_world_key(key),
+                None => "default".to_string(),
+            };
             self.src.push_str(&format!(
                 "
                    let span = tracing::span!(
                        tracing::Level::TRACE,
                        \"wit-bindgen export\",
-                       module = \"{}\",
+                       module = \"{ns}\",
                        function = \"{}\",
                    );
                    let _enter = span.enter();
                ",
-                ns.unwrap_or("default"),
                 func.name,
             ));
         }
@@ -1466,17 +1587,26 @@ impl<'a> RustGenerator<'a> for InterfaceGenerator<'a> {
     }
 
     fn path_to_interface(&self, interface: InterfaceId) -> Option<String> {
-        match self.current_interface {
-            Some(id) if id == interface => None,
-            _ => {
-                let InterfaceName { remapped, name } = &self.gen.interface_names[&interface];
-                Some(if self.current_interface.is_some() && !remapped {
-                    format!("super::{name}")
-                } else {
-                    name.clone()
-                })
+        let mut path_to_root = String::new();
+        if let Some((cur, key, is_export)) = self.current_interface {
+            if cur == interface {
+                return None;
+            }
+            match key {
+                WorldKey::Name(_) => {
+                    path_to_root.push_str("super::");
+                }
+                WorldKey::Interface(_) => {
+                    path_to_root.push_str("super::super::super::");
+                }
+            }
+            if is_export {
+                path_to_root.push_str("super::");
             }
         }
+        let InterfaceName { path, .. } = &self.gen.interface_names[&interface];
+        path_to_root.push_str(path);
+        Some(path_to_root)
     }
 
     fn push_str(&mut self, s: &str) {

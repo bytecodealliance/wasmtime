@@ -1,4 +1,4 @@
-wit_bindgen::generate!("test-reactor");
+wit_bindgen::generate!("test-reactor" in "../../wasi/wit");
 
 export_test_reactor!(T);
 
@@ -26,12 +26,12 @@ impl TestReactor for T {
     fn write_strings_to(o: OutputStream) -> Result<(), ()> {
         unsafe {
             for s in STATE.iter() {
-                streams::write(o, s.as_bytes()).map_err(|_| ())?;
+                wasi::io::streams::write(o, s.as_bytes()).map_err(|_| ())?;
             }
             Ok(())
         }
     }
-    fn pass_an_imported_record(stat: filesystem::DescriptorStat) -> String {
+    fn pass_an_imported_record(stat: wasi::filesystem::filesystem::DescriptorStat) -> String {
         format!("{stat:?}")
     }
 }

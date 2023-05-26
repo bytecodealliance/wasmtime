@@ -1,5 +1,7 @@
-default interface timezone {
-    use pkg.wall-clock.{datetime}
+package wasi:clocks
+
+interface timezone {
+    use wall-clock.{datetime}
 
     /// A timezone.
     ///

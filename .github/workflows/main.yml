@@ -222,6 +222,7 @@ jobs:
         cargo doc --no-deps --workspace \
           --exclude wasmtime-cli \
           --exclude test-programs \
+          --exclude wasi-http-tests \
           --exclude cranelift-codegen-meta \
           --features component-model
     - run: cargo doc --package cranelift-codegen-meta --document-private-items

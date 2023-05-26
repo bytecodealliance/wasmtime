@@ -73,7 +73,9 @@ pub(crate) use self::store::ComponentStoreData;
 /// ```text,ignore
 /// // wit/my-component.wit
 ///
-/// default world hello-world {
+/// package my:project
+///
+/// world hello-world {
 ///     import name: func() -> string
 ///     export greet: func()
 /// }
@@ -150,13 +152,15 @@ pub(crate) use self::store::ComponentStoreData;
 /// ```text,ignore
 /// // wit/my-component.wit
 ///
+/// package my:project
+///
 /// interface host {
 ///     gen-random-integer: func() -> u32
 ///     sha256: func(bytes: list<u8>) -> string
 /// }
 ///
 /// default world hello-world {
-///     import host: self.host
+///     import host
 ///
 ///     export demo: interface {
 ///         run: func()
@@ -169,6 +173,7 @@ pub(crate) use self::store::ComponentStoreData;
 /// ```rust,ignore
 /// use wasmtime::component::*;
 /// use wasmtime::{Config, Engine, Store};
+/// use my::project::host::Host;
 ///
 /// bindgen!();
 ///
@@ -177,7 +182,7 @@ pub(crate) use self::store::ComponentStoreData;
 /// }
 ///
 /// // Note that the trait here is per-interface and within a submodule now.
-/// impl host::Host for MyState {
+/// impl Host for MyState {
 ///     fn gen_random_integer(&mut self) -> wasmtime::Result<u32> {
 ///         Ok(rand::thread_rng().gen())
 ///     }
@@ -228,18 +233,12 @@ pub(crate) use self::store::ComponentStoreData;
 /// bindgen!();
 ///
 /// // Parse the `wit/` folder adjacent to this crate's `Cargo.toml` and look
-/// // for the document `foo`, which must have a `default world` contained
-/// // within it.
+/// // for the world `foo` contained in it.
 /// bindgen!("foo");
-///
-/// // Parse the `wit/` folder adjacent to `Cargo.toml` and look up the document
-/// // `foo` and the world named `bar`.
-/// bindgen!("foo.bar");
 ///
 /// // Parse the folder `other/wit/folder` adjacent to `Cargo.toml`.
 /// bindgen!(in "other/wit/folder");
 /// bindgen!("foo" in "other/wit/folder");
-/// bindgen!("foo.bar" in "other/wit/folder");
 ///
 /// // Parse the file `foo.wit` as a single-file WIT package with no
 /// // dependencies.
@@ -250,8 +249,7 @@ pub(crate) use self::store::ComponentStoreData;
 ///
 /// ```rust,ignore
 /// bindgen!({
-///     world: "foo", // or "foo.bar", same as in `bindgen!("foo")`
-///                   // not needed if `path` has one `default world`
+///     world: "foo", // not needed if `path` has one `world`
 ///
 ///     // same as in `bindgen!(in "other/wit/folder")
 ///     path: "other/wit/folder",
@@ -259,7 +257,9 @@ pub(crate) use self::store::ComponentStoreData;
 ///     // Instead of `path` the WIT document can be provided inline if
 ///     // desired.
 ///     inline: "
-///         default world foo {
+///         package my:inline
+///
+///         world foo {
 ///             // ...
 ///         }
 ///     ",
@@ -295,7 +295,7 @@ pub(crate) use self::store::ComponentStoreData;
 ///     // Restrict the code generated to what's needed for the interface
 ///     // imports in the inlined WIT document fragment.
 ///     interfaces: "
-///         import foo: package.foo;
+///         import package.foo
 ///     ",
 ///
 ///     // Remap interface names to module names, imported from elsewhere.

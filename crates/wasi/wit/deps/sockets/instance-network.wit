@@ -1,7 +1,7 @@
 
 /// This interface provides a value-export of the default network handle..
-default interface instance-network {
-	use pkg.network.{network}
+interface instance-network {
+	use network.{network}
 
 	/// Get a handle to the default network.
 	instance-network: func() -> network

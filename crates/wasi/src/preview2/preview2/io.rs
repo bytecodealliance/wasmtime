@@ -1,8 +1,8 @@
 use crate::preview2::{
     preview2::poll::PollableEntry,
     stream::TableStreamExt,
-    wasi::poll::Pollable,
-    wasi::streams::{self, InputStream, OutputStream, StreamError},
+    wasi::io::streams::{self, InputStream, OutputStream, StreamError},
+    wasi::poll::poll::Pollable,
     TableError, WasiView,
 };
 use anyhow::anyhow;

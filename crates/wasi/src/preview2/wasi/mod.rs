@@ -3,21 +3,21 @@ pub mod command;
 wasmtime::component::bindgen!({
     path: "wit",
     interfaces: "
-      import wall-clock: clocks.wall-clock
-      import monotonic-clock: clocks.monotonic-clock
-      import timezone: clocks.timezone
-      import filesystem: filesystem.filesystem
-      import random: random.random
-      import insecure-random: random.insecure
-      import insecure-random-seed: random.insecure-seed
-      import poll: poll.poll
-      import streams: io.streams
-      import environment: wasi-cli-base.environment
-      import preopens: wasi-cli-base.preopens
-      import stdin: wasi-cli-base.stdio.stdin
-      import stdout: wasi-cli-base.stdio.stdout
-      import stderr: wasi-cli-base.stdio.stderr
-      import exit: wasi-cli-base.exit
+      import wasi:clocks/wall-clock
+      import wasi:clocks/monotonic-clock
+      import wasi:clocks/timezone
+      import wasi:filesystem/filesystem
+      import wasi:random/random
+      import wasi:random/insecure
+      import wasi:random/insecure-seed
+      import wasi:poll/poll
+      import wasi:io/streams
+      import wasi:cli-base/environment
+      import wasi:cli-base/preopens
+      import wasi:cli-base/exit
+      import wasi:cli-base/stdin
+      import wasi:cli-base/stdout
+      import wasi:cli-base/stderr
     ",
     tracing: true,
     async: true,
@@ -26,3 +26,5 @@ wasmtime::component::bindgen!({
         "streams"::"stream-error": Error,
     }
 });
+
+pub use wasi::*;

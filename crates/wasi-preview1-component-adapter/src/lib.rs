@@ -1,8 +1,12 @@
 #![allow(unused_variables)] // TODO: remove this when more things are implemented
 
-use crate::bindings::{
-    exit, filesystem, monotonic_clock, network, poll, random, streams, wall_clock,
-};
+use crate::bindings::wasi::cli_base::exit;
+use crate::bindings::wasi::clocks::{monotonic_clock, wall_clock};
+use crate::bindings::wasi::filesystem::filesystem;
+use crate::bindings::wasi::io::streams;
+use crate::bindings::wasi::poll::poll;
+use crate::bindings::wasi::random::random;
+use crate::bindings::wasi::sockets::network;
 use core::cell::{Cell, RefCell, RefMut, UnsafeCell};
 use core::cmp::min;
 use core::ffi::c_void;
@@ -26,7 +30,8 @@ use crate::descriptors::{Descriptor, Descriptors, StreamType, Streams};
 pub mod bindings {
     #[cfg(feature = "command")]
     wit_bindgen::generate!({
-        world: "command",
+        path: "../wasi/wit",
+        world: "wasi:preview/command",
         std_feature,
         raw_strings,
         // The generated definition of command will pull in std, so we are defining it
@@ -36,7 +41,8 @@ pub mod bindings {
 
     #[cfg(feature = "reactor")]
     wit_bindgen::generate!({
-        world: "reactor",
+        path: "../wasi/wit",
+        world: "wasi:preview/reactor",
         std_feature,
         raw_strings,
         skip: ["get-directories", "get-environment"],
@@ -2335,7 +2341,7 @@ impl State {
 
     fn get_environment(&self) -> &[StrTuple] {
         if self.env_vars.get().is_none() {
-            #[link(wasm_import_module = "environment")]
+            #[link(wasm_import_module = "wasi:cli-base/environment")]
             extern "C" {
                 #[link_name = "get-environment"]
                 fn get_environment_import(rval: *mut StrTupleList);
@@ -2359,7 +2365,7 @@ impl State {
 
     fn get_args(&self) -> &[WasmStr] {
         if self.args.get().is_none() {
-            #[link(wasm_import_module = "environment")]
+            #[link(wasm_import_module = "wasi:cli-base/environment")]
             extern "C" {
                 #[link_name = "get-arguments"]
                 fn get_args_import(rval: *mut WasmStrList);

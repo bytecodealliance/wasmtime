@@ -197,18 +197,18 @@ io-lifetimes = { version = "1.0.0", default-features = false }
 rustix = "0.37.13"
 
 # wit-bindgen:
-wit-bindgen = "0.6.0"
+wit-bindgen = { version = "0.7.0", default-features = false }
 
 # wasm-tools family:
-wasmparser = "0.105.0"
-wat = "1.0.64"
-wast = "58.0.0"
-wasmprinter = "0.2.57"
-wasm-encoder = "0.27.0"
-wasm-smith = "0.12.8"
-wasm-mutate = "0.2.25"
-wit-parser = "0.7.1"
-wit-component = "0.9.0"
+wasmparser = "0.107.0"
+wat = "1.0.66"
+wast = "60.0.0"
+wasmprinter = "0.2.59"
+wasm-encoder = "0.29.0"
+wasm-smith = "0.12.10"
+wasm-mutate = "0.2.27"
+wit-parser = "0.8.0"
+wit-component = "0.11.0"
 
 # Non-Bytecode Alliance maintained dependencies:
 # --------------------------
@@ -248,7 +248,8 @@ default = [
   "vtune",
   "wasi-nn",
   "wasi-threads",
-  "wasi-http",
+  # TODO: the WIT needs to be updated
+  #"wasi-http",
   "pooling-allocator",
 ]
 jitdump = ["wasmtime/jitdump"]
@@ -311,3 +312,5 @@ debug-assertions = false
 # string initializers.
 overflow-checks = false
 
+[patch.crates-io]
+wit-bindgen = { git = 'https://github.com/bytecodealliance/wit-bindgen', branch = 'wasmtime-2023-05-26-wit-changes' }

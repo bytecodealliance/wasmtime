@@ -1,3 +1,5 @@
+package wasi:filesystem
+
 /// WASI filesystem is a filesystem API primarily intended to let users run WASI
 /// programs that access their files on their existing filesystems, without
 /// significant overhead.
@@ -17,9 +19,9 @@
 /// `..` and symbolic link steps, reaches a directory outside of the base
 /// directory, or reaches a symlink to an absolute or rooted path in the
 /// underlying filesystem, the function fails with `error-code::not-permitted`.
-default interface filesystem {
-    use io.streams.{input-stream, output-stream}
-    use clocks.wall-clock.{datetime}
+interface filesystem {
+    use wasi:io/streams.{input-stream, output-stream}
+    use wasi:clocks/wall-clock.{datetime}
 
     /// File size or length of a region within a file.
     type filesize = u64

@@ -1,7 +1,14 @@
-use crate::preview2::{wasi, WasiView};
+use crate::preview2::wasi::cli_base::environment;
+use crate::preview2::wasi::cli_base::preopens;
+use crate::preview2::wasi::cli_base::stderr;
+use crate::preview2::wasi::cli_base::stdin;
+use crate::preview2::wasi::cli_base::stdout;
+use crate::preview2::wasi::filesystem::filesystem;
+use crate::preview2::wasi::io::streams;
+use crate::preview2::WasiView;
 
 #[async_trait::async_trait]
-impl<T: WasiView> wasi::environment::Host for T {
+impl<T: WasiView> environment::Host for T {
     async fn get_environment(&mut self) -> anyhow::Result<Vec<(String, String)>> {
         Ok(self.ctx().env.clone())
     }
@@ -11,31 +18,31 @@ impl<T: WasiView> wasi::environment::Host for T {
 }
 
 #[async_trait::async_trait]
-impl<T: WasiView> wasi::preopens::Host for T {
+impl<T: WasiView> preopens::Host for T {
     async fn get_directories(
         &mut self,
-    ) -> Result<Vec<(wasi::filesystem::Descriptor, String)>, anyhow::Error> {
+    ) -> Result<Vec<(filesystem::Descriptor, String)>, anyhow::Error> {
         Ok(self.ctx().preopens.clone())
     }
 }
 
 #[async_trait::async_trait]
-impl<T: WasiView> wasi::stdin::Host for T {
-    async fn get_stdin(&mut self) -> Result<wasi::streams::InputStream, anyhow::Error> {
+impl<T: WasiView> stdin::Host for T {
+    async fn get_stdin(&mut self) -> Result<streams::InputStream, anyhow::Error> {
         Ok(self.ctx().stdin)
     }
 }
 
 #[async_trait::async_trait]
-impl<T: WasiView> wasi::stdout::Host for T {
-    async fn get_stdout(&mut self) -> Result<wasi::streams::OutputStream, anyhow::Error> {
+impl<T: WasiView> stdout::Host for T {
+    async fn get_stdout(&mut self) -> Result<streams::OutputStream, anyhow::Error> {
         Ok(self.ctx().stdout)
     }
 }
 
 #[async_trait::async_trait]
-impl<T: WasiView> wasi::stderr::Host for T {
-    async fn get_stderr(&mut self) -> Result<wasi::streams::OutputStream, anyhow::Error> {
+impl<T: WasiView> stderr::Host for T {
+    async fn get_stderr(&mut self) -> Result<streams::OutputStream, anyhow::Error> {
         Ok(self.ctx().stderr)
     }
 }

@@ -2,10 +2,10 @@
 
 use crate::preview2::preview2::poll::PollableEntry;
 use crate::preview2::wasi::{
-    monotonic_clock::{self, Instant},
-    poll::Pollable,
-    timezone::{self, Timezone, TimezoneDisplay},
-    wall_clock::{self, Datetime},
+    clocks::monotonic_clock::{self, Instant},
+    clocks::timezone::{self, Timezone, TimezoneDisplay},
+    clocks::wall_clock::{self, Datetime},
+    poll::poll::Pollable,
 };
 use crate::preview2::WasiView;
 use cap_std::time::SystemTime;

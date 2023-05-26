@@ -7,6 +7,11 @@ use std::path::PathBuf;
 use std::process::Command;
 use wit_component::ComponentEncoder;
 
+// NB: this is set to `false` when a breaking change to WIT is made since the
+// wasi-http WIT is currently a submodule and can't be updated atomically with
+// the rest of Wasmtime.
+const BUILD_WASI_HTTP_TESTS: bool = false;
+
 fn main() {
     #[cfg(feature = "test_programs")]
     build_and_generate_tests();
@@ -23,9 +28,13 @@ fn build_and_generate_tests() {
     );
 
     println!("cargo:rerun-if-changed=./wasi-tests");
-    println!("cargo:rerun-if-changed=./wasi-http-tests");
     println!("cargo:rerun-if-changed=./command-tests");
     println!("cargo:rerun-if-changed=./reactor-tests");
+    if BUILD_WASI_HTTP_TESTS {
+        println!("cargo:rerun-if-changed=./wasi-http-tests");
+    } else {
+        println!("cargo:rustc-cfg=skip_wasi_http_tests");
+    }
 
     // Build the test programs:
     let mut cmd = Command::new("rustup");
@@ -35,12 +44,14 @@ fn build_and_generate_tests() {
         .arg("build")
         .arg("--target=wasm32-wasi")
         .arg("--package=wasi-tests")
-        .arg("--package=wasi-http-tests")
         .arg("--package=command-tests")
         .arg("--package=reactor-tests")
         .env("CARGO_TARGET_DIR", &out_dir)
         .env("CARGO_PROFILE_DEV_DEBUG", "1")
         .env_remove("CARGO_ENCODED_RUSTFLAGS");
+    if BUILD_WASI_HTTP_TESTS {
+        cmd.arg("--package=wasi-http-tests");
+    }
     let status = cmd.status().unwrap();
     assert!(status.success());
 
@@ -49,11 +60,13 @@ fn build_and_generate_tests() {
     modules_rs(&meta, "wasi-tests", "bin", &out_dir);
     components_rs(&meta, "wasi-tests", "bin", &command_adapter, &out_dir);
 
-    modules_rs(&meta, "wasi-http-tests", "bin", &out_dir);
-    // FIXME this is broken at the moment because guest bindgen is embedding the proxy world type,
-    // so wit-component expects the module to contain the proxy's exports. we need a different
-    // world to pass guest bindgen that is just "a command that also can do outbound http"
-    //components_rs(&meta, "wasi-http-tests", "bin", &command_adapter, &out_dir);
+    if BUILD_WASI_HTTP_TESTS {
+        modules_rs(&meta, "wasi-http-tests", "bin", &out_dir);
+        // FIXME this is broken at the moment because guest bindgen is embedding the proxy world type,
+        // so wit-component expects the module to contain the proxy's exports. we need a different
+        // world to pass guest bindgen that is just "a command that also can do outbound http"
+        //components_rs(&meta, "wasi-http-tests", "bin", &command_adapter, &out_dir);
+    }
 
     components_rs(&meta, "command-tests", "bin", &command_adapter, &out_dir);
     components_rs(&meta, "reactor-tests", "cdylib", &reactor_adapter, &out_dir);

@@ -4,7 +4,9 @@ use wasmtime::{
     component::{Component, Linker},
     Config, Engine, Store,
 };
-use wasmtime_wasi::preview2::{wasi, Table, WasiCtx, WasiCtxBuilder, WasiView};
+use wasmtime_wasi::preview2::wasi::clocks::wall_clock;
+use wasmtime_wasi::preview2::wasi::filesystem::filesystem;
+use wasmtime_wasi::preview2::{self, Table, WasiCtx, WasiCtxBuilder, WasiView};
 
 lazy_static::lazy_static! {
     static ref ENGINE: Engine = {
@@ -22,18 +24,18 @@ lazy_static::lazy_static! {
 include!(concat!(env!("OUT_DIR"), "/reactor_tests_components.rs"));
 
 wasmtime::component::bindgen!({
-    path: "../test-programs/reactor-tests/wit",
+    path: "../wasi/wit",
     world: "test-reactor",
     async: true,
     with: {
-       "environment": wasi::environment,
-       "streams": wasi::streams,
-       "preopens": wasi::preopens,
-       "stdin": wasi::stdin,
-       "stdout": wasi::stdout,
-       "stderr": wasi::stderr,
-       "filesystem": wasi::filesystem,
-       "exit": wasi::exit,
+       "wasi:io/streams": preview2::wasi::io::streams,
+       "wasi:filesystem/filesystem": preview2::wasi::filesystem::filesystem,
+       "wasi:cli-base/environment": preview2::wasi::cli_base::environment,
+       "wasi:cli-base/preopens": preview2::wasi::cli_base::preopens,
+       "wasi:cli-base/exit": preview2::wasi::cli_base::exit,
+       "wasi:cli-base/stdin": preview2::wasi::cli_base::stdin,
+       "wasi:cli-base/stdout": preview2::wasi::cli_base::stdout,
+       "wasi:cli-base/stderr": preview2::wasi::cli_base::stderr,
     },
 });
 
@@ -64,14 +66,14 @@ async fn instantiate(
     let mut linker = Linker::new(&ENGINE);
 
     // All of the imports available to the world are provided by the wasi-common crate:
-    wasi::filesystem::add_to_linker(&mut linker, |x| x)?;
-    wasi::streams::add_to_linker(&mut linker, |x| x)?;
-    wasi::environment::add_to_linker(&mut linker, |x| x)?;
-    wasi::preopens::add_to_linker(&mut linker, |x| x)?;
-    wasi::stdin::add_to_linker(&mut linker, |x| x)?;
-    wasi::stdout::add_to_linker(&mut linker, |x| x)?;
-    wasi::stderr::add_to_linker(&mut linker, |x| x)?;
-    wasi::exit::add_to_linker(&mut linker, |x| x)?;
+    preview2::wasi::filesystem::filesystem::add_to_linker(&mut linker, |x| x)?;
+    preview2::wasi::io::streams::add_to_linker(&mut linker, |x| x)?;
+    preview2::wasi::cli_base::environment::add_to_linker(&mut linker, |x| x)?;
+    preview2::wasi::cli_base::preopens::add_to_linker(&mut linker, |x| x)?;
+    preview2::wasi::cli_base::exit::add_to_linker(&mut linker, |x| x)?;
+    preview2::wasi::cli_base::stdin::add_to_linker(&mut linker, |x| x)?;
+    preview2::wasi::cli_base::stdout::add_to_linker(&mut linker, |x| x)?;
+    preview2::wasi::cli_base::stderr::add_to_linker(&mut linker, |x| x)?;
 
     let mut store = Store::new(&ENGINE, wasi_ctx);
 
@@ -131,12 +133,12 @@ async fn reactor_tests() -> Result<()> {
 
     // Show that the `with` invocation in the macro means we get to re-use the
     // type definitions from inside the `host` crate for these structures:
-    let ds = wasi::filesystem::DescriptorStat {
-        data_access_timestamp: wasi::wall_clock::Datetime {
+    let ds = filesystem::DescriptorStat {
+        data_access_timestamp: wall_clock::Datetime {
             nanoseconds: 123,
             seconds: 45,
         },
-        data_modification_timestamp: wasi::wall_clock::Datetime {
+        data_modification_timestamp: wall_clock::Datetime {
             nanoseconds: 789,
             seconds: 10,
         },
@@ -144,11 +146,11 @@ async fn reactor_tests() -> Result<()> {
         inode: 0,
         link_count: 0,
         size: 0,
-        status_change_timestamp: wasi::wall_clock::Datetime {
+        status_change_timestamp: wall_clock::Datetime {
             nanoseconds: 0,
             seconds: 1,
         },
-        type_: wasi::filesystem::DescriptorType::Unknown,
+        type_: filesystem::DescriptorType::Unknown,
     };
     let expected = format!("{ds:?}");
     let got = reactor.call_pass_an_imported_record(&mut store, ds).await?;

@@ -2,7 +2,7 @@
 ///
 /// It is intended to be portable at least between Unix-family platforms and
 /// Windows.
-default interface insecure {
+interface insecure {
     /// Return `len` insecure pseudo-random bytes.
     ///
     /// This function is not cryptographically secure. Do not use it for

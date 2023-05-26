@@ -243,6 +243,9 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                             let ty = self.convert_func_type(&wasm_func_ty);
                             self.declare_type_func(ty)?;
                         }
+                        Type::Array(_) => {
+                            unimplemented!("gc proposal")
+                        }
                     }
                 }
             }

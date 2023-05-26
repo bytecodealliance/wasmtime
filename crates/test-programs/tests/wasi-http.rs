@@ -1,4 +1,4 @@
-#![cfg(feature = "test_programs")]
+#![cfg(all(feature = "test_programs", not(skip_wasi_http_tests)))]
 use wasmtime::{Config, Engine, Linker, Store};
 use wasmtime_wasi::{sync::WasiCtxBuilder, WasiCtx};
 use wasmtime_wasi_http::WasiHttp;

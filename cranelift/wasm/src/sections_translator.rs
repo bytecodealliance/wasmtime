@@ -56,6 +56,9 @@ pub fn parse_type_section<'a>(
                 let ty = environ.convert_func_type(&wasm_func_ty);
                 environ.declare_type_func(ty)?;
             }
+            Type::Array(_) => {
+                unimplemented!("gc proposal");
+            }
         }
     }
     Ok(())

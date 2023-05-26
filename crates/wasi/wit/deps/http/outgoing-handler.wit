@@ -5,8 +5,8 @@
 //   `wasi:http/outgoing-handler` into a single `wasi:http/handler` interface
 //   that takes a `request` parameter and returns a `response` result.
 //
-default interface outgoing-handler {
-  use pkg.types.{outgoing-request, request-options, future-incoming-response}
+interface outgoing-handler {
+  use types.{outgoing-request, request-options, future-incoming-response}
 
   // The parameter and result types of the `handle` function allow the caller
   // to concurrently stream the bodies of the outgoing request and the incoming

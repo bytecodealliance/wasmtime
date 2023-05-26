@@ -6,8 +6,8 @@
 //   `wasi:http/outgoing-handler` into a single `wasi:http/handler` interface
 //   that takes a `request` parameter and returns a `response` result.
 //
-default interface incoming-handler {
-  use pkg.types.{incoming-request, response-outparam}
+interface incoming-handler {
+  use types.{incoming-request, response-outparam}
 
   // The `handle` function takes an outparam instead of returning its response
   // so that the component may stream its response while streaming any other

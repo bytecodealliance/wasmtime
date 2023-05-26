@@ -1,29 +1,34 @@
-default world command-extended {
-  import wall-clock: clocks.wall-clock
-  import monotonic-clock: clocks.monotonic-clock
-  import timezone: clocks.timezone
-  import filesystem: filesystem.filesystem
-  import instance-network: sockets.instance-network
-  import ip-name-lookup: sockets.ip-name-lookup
-  import network: sockets.network
-  import tcp-create-socket: sockets.tcp-create-socket
-  import tcp: sockets.tcp
-  import udp-create-socket: sockets.udp-create-socket
-  import udp: sockets.udp
-  import random: random.random
-  import insecure-random: random.insecure
-  import insecure-random-seed: random.insecure-seed
-  import poll: poll.poll
-  import streams: io.streams
-  import environment: wasi-cli-base.environment
-  import preopens: wasi-cli-base.preopens
-  import exit: wasi-cli-base.exit
+package wasi:preview
+
+world command-extended {
+  import wasi:clocks/wall-clock
+  import wasi:clocks/monotonic-clock
+  import wasi:clocks/timezone
+  import wasi:filesystem/filesystem
+  import wasi:sockets/instance-network
+  import wasi:sockets/ip-name-lookup
+  import wasi:sockets/network
+  import wasi:sockets/tcp-create-socket
+  import wasi:sockets/tcp
+  import wasi:sockets/udp-create-socket
+  import wasi:sockets/udp
+  import wasi:random/random
+  import wasi:random/insecure
+  import wasi:random/insecure-seed
+  import wasi:poll/poll
+  import wasi:io/streams
+  import wasi:cli-base/environment
+  import wasi:cli-base/preopens
+  import wasi:cli-base/exit
+  import wasi:cli-base/stdin
+  import wasi:cli-base/stdout
+  import wasi:cli-base/stderr
 
   // We should replace all others with `include self.command`
   // as soon as the unioning of worlds is available:
   // https://github.com/WebAssembly/component-model/issues/169
-  import console: logging.handler
-  import default-outgoing-HTTP: http.outgoing-handler
+  import wasi:logging/handler
+  import wasi:http/outgoing-handler
 
   export run: func(
     args: list<string>,

@@ -1,3 +1,5 @@
+package foo:foo
+
 interface unions {
   /// A union of all of the integral types
   union all-integers {
@@ -58,7 +60,7 @@ interface unions {
   identify-distinguishable-num: func(num: distinguishable-num) -> u8
 }
 
-default world the-unions {
-  import import-unions: self.unions
-  export export-unions: self.unions
+world the-unions {
+  import unions
+  export unions
 }

@@ -1,25 +1,27 @@
 use crate::preview2::filesystem::TableFsExt;
 use crate::preview2::preview2::filesystem::TableReaddirExt;
+use crate::preview2::wasi::cli_base::{preopens, stderr, stdin, stdout};
+use crate::preview2::wasi::clocks::monotonic_clock;
+use crate::preview2::wasi::clocks::wall_clock;
+use crate::preview2::wasi::filesystem::filesystem;
+use crate::preview2::wasi::io::streams;
 use crate::preview2::{wasi, TableError, WasiView};
-
-use core::borrow::Borrow;
-use core::cell::Cell;
-use core::mem::{size_of, size_of_val};
-use core::ops::{Deref, DerefMut};
-use core::slice;
-use core::sync::atomic::{AtomicU64, Ordering};
-
-use std::collections::BTreeMap;
-use std::sync::Arc;
-
 use anyhow::{anyhow, bail, Context};
+use std::borrow::Borrow;
+use std::cell::Cell;
+use std::collections::BTreeMap;
+use std::mem::{size_of, size_of_val};
+use std::ops::{Deref, DerefMut};
+use std::slice;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 use wiggle::tracing::instrument;
 use wiggle::{GuestPtr, GuestSliceMut, GuestStrCow, GuestType};
 
 #[derive(Clone, Debug)]
 struct File {
     /// The handle to the preview2 descriptor that this file is referencing.
-    fd: wasi::filesystem::Descriptor,
+    fd: filesystem::Descriptor,
 
     /// The current-position pointer.
     position: Arc<AtomicU64>,
@@ -35,10 +37,10 @@ struct File {
 
 #[derive(Clone, Debug)]
 enum Descriptor {
-    Stdin(wasi::preopens::InputStream),
-    Stdout(wasi::preopens::OutputStream),
-    Stderr(wasi::preopens::OutputStream),
-    PreopenDirectory((wasi::filesystem::Descriptor, String)),
+    Stdin(preopens::InputStream),
+    Stdout(preopens::OutputStream),
+    Stderr(preopens::OutputStream),
+    PreopenDirectory((filesystem::Descriptor, String)),
     File(File),
 }
 
@@ -70,11 +72,7 @@ impl DerefMut for Descriptors {
 impl Descriptors {
     /// Initializes [Self] using `preopens`
     async fn new(
-        preopens: &mut (impl wasi::preopens::Host
-                  + wasi::stdin::Host
-                  + wasi::stdout::Host
-                  + wasi::stderr::Host
-                  + ?Sized),
+        preopens: &mut (impl preopens::Host + stdin::Host + stdout::Host + stderr::Host + ?Sized),
     ) -> Result<Self, types::Error> {
         let stdin = preopens
             .get_stdin()
@@ -245,8 +243,8 @@ impl<T: WasiPreview1View + ?Sized> Transaction<'_, T> {
         }
     }
 
-    /// Returns [`wasi::filesystem::Descriptor`] corresponding to `fd`
-    fn get_fd(&mut self, fd: types::Fd) -> ErrnoResult<wasi::filesystem::Descriptor> {
+    /// Returns [`filesystem::Descriptor`] corresponding to `fd`
+    fn get_fd(&mut self, fd: types::Fd) -> ErrnoResult<filesystem::Descriptor> {
         match self.get_descriptor(fd)? {
             Descriptor::File(File { fd, .. }) => Ok(*fd),
             Descriptor::PreopenDirectory((fd, _)) => Ok(*fd),
@@ -255,16 +253,16 @@ impl<T: WasiPreview1View + ?Sized> Transaction<'_, T> {
         }
     }
 
-    /// Returns [`wasi::filesystem::Descriptor`] corresponding to `fd`
+    /// Returns [`filesystem::Descriptor`] corresponding to `fd`
     /// if it describes a [`Descriptor::File`] of [`crate::preview2::filesystem::File`] type
-    fn get_file_fd(&mut self, fd: types::Fd) -> ErrnoResult<wasi::filesystem::Descriptor> {
+    fn get_file_fd(&mut self, fd: types::Fd) -> ErrnoResult<filesystem::Descriptor> {
         self.get_file(fd).map(|File { fd, .. }| *fd)
     }
 
-    /// Returns [`wasi::filesystem::Descriptor`] corresponding to `fd`
+    /// Returns [`filesystem::Descriptor`] corresponding to `fd`
     /// if it describes a [`Descriptor::File`] or [`Descriptor::PreopenDirectory`]
     /// of [`crate::preview2::filesystem::Dir`] type
-    fn get_dir_fd(&mut self, fd: types::Fd) -> ErrnoResult<wasi::filesystem::Descriptor> {
+    fn get_dir_fd(&mut self, fd: types::Fd) -> ErrnoResult<filesystem::Descriptor> {
         let fd = fd.into();
         match self.descriptors.get_mut().get(&fd) {
             Some(Descriptor::File(File { fd, .. })) if self.view.table().is_dir(*fd) => Ok(*fd),
@@ -276,11 +274,7 @@ impl<T: WasiPreview1View + ?Sized> Transaction<'_, T> {
 
 #[wiggle::async_trait]
 trait WasiPreview1ViewExt:
-    WasiPreview1View
-    + wasi::preopens::Host
-    + wasi::stdin::Host
-    + wasi::stdout::Host
-    + wasi::stderr::Host
+    WasiPreview1View + preopens::Host + stdin::Host + stdout::Host + stderr::Host
 {
     /// Lazily initializes [`WasiPreview1Adapter`] returned by [`WasiPreview1View::adapter_mut`]
     /// and returns [`Transaction`] on success
@@ -298,55 +292,46 @@ trait WasiPreview1ViewExt:
     }
 
     /// Lazily initializes [`WasiPreview1Adapter`] returned by [`WasiPreview1View::adapter_mut`]
-    /// and returns [`wasi::filesystem::Descriptor`] corresponding to `fd`
-    async fn get_fd(
-        &mut self,
-        fd: types::Fd,
-    ) -> Result<wasi::filesystem::Descriptor, types::Error> {
+    /// and returns [`filesystem::Descriptor`] corresponding to `fd`
+    async fn get_fd(&mut self, fd: types::Fd) -> Result<filesystem::Descriptor, types::Error> {
         let mut st = self.transact().await?;
         let fd = st.get_fd(fd)?;
         Ok(fd)
     }
 
     /// Lazily initializes [`WasiPreview1Adapter`] returned by [`WasiPreview1View::adapter_mut`]
-    /// and returns [`wasi::filesystem::Descriptor`] corresponding to `fd`
+    /// and returns [`filesystem::Descriptor`] corresponding to `fd`
     /// if it describes a [`Descriptor::File`] of [`crate::preview2::filesystem::File`] type
-    async fn get_file_fd(
-        &mut self,
-        fd: types::Fd,
-    ) -> Result<wasi::filesystem::Descriptor, types::Error> {
+    async fn get_file_fd(&mut self, fd: types::Fd) -> Result<filesystem::Descriptor, types::Error> {
         let mut st = self.transact().await?;
         let fd = st.get_file_fd(fd)?;
         Ok(fd)
     }
 
     /// Lazily initializes [`WasiPreview1Adapter`] returned by [`WasiPreview1View::adapter_mut`]
-    /// and returns [`wasi::filesystem::Descriptor`] corresponding to `fd`
+    /// and returns [`filesystem::Descriptor`] corresponding to `fd`
     /// if it describes a [`Descriptor::File`] or [`Descriptor::PreopenDirectory`]
     /// of [`crate::preview2::filesystem::Dir`] type
-    async fn get_dir_fd(
-        &mut self,
-        fd: types::Fd,
-    ) -> Result<wasi::filesystem::Descriptor, types::Error> {
+    async fn get_dir_fd(&mut self, fd: types::Fd) -> Result<filesystem::Descriptor, types::Error> {
         let mut st = self.transact().await?;
         let fd = st.get_dir_fd(fd)?;
         Ok(fd)
     }
 }
 
-impl<T: WasiPreview1View + wasi::preopens::Host> WasiPreview1ViewExt for T {}
+impl<T: WasiPreview1View + preopens::Host> WasiPreview1ViewExt for T {}
 
 pub fn add_to_linker<
     T: WasiPreview1View
-        + wasi::environment::Host
-        + wasi::exit::Host
-        + wasi::filesystem::Host
-        + wasi::monotonic_clock::Host
-        + wasi::poll::Host
-        + wasi::preopens::Host
-        + wasi::random::Host
-        + wasi::streams::Host
-        + wasi::wall_clock::Host,
+        + wasi::cli_base::environment::Host
+        + wasi::cli_base::exit::Host
+        + wasi::cli_base::preopens::Host
+        + wasi::filesystem::filesystem::Host
+        + wasi::poll::poll::Host
+        + wasi::random::random::Host
+        + wasi::io::streams::Host
+        + wasi::clocks::monotonic_clock::Host
+        + wasi::clocks::wall_clock::Host,
 >(
     linker: &mut wasmtime::Linker<T>,
 ) -> anyhow::Result<()> {
@@ -373,31 +358,29 @@ fn systimespec(
     set: bool,
     ts: types::Timestamp,
     now: bool,
-) -> ErrnoResult<wasi::filesystem::NewTimestamp> {
+) -> ErrnoResult<filesystem::NewTimestamp> {
     if set && now {
         Err(types::Errno::Inval)
     } else if set {
-        Ok(wasi::filesystem::NewTimestamp::Timestamp(
-            wasi::filesystem::Datetime {
-                seconds: ts / 1_000_000_000,
-                nanoseconds: (ts % 1_000_000_000) as _,
-            },
-        ))
+        Ok(filesystem::NewTimestamp::Timestamp(filesystem::Datetime {
+            seconds: ts / 1_000_000_000,
+            nanoseconds: (ts % 1_000_000_000) as _,
+        }))
     } else if now {
-        Ok(wasi::filesystem::NewTimestamp::Now)
+        Ok(filesystem::NewTimestamp::Now)
     } else {
-        Ok(wasi::filesystem::NewTimestamp::NoChange)
+        Ok(filesystem::NewTimestamp::NoChange)
     }
 }
 
-impl TryFrom<wasi::wall_clock::Datetime> for types::Timestamp {
+impl TryFrom<wall_clock::Datetime> for types::Timestamp {
     type Error = types::Errno;
 
     fn try_from(
-        wasi::wall_clock::Datetime {
+        wall_clock::Datetime {
             seconds,
             nanoseconds,
-        }: wasi::wall_clock::Datetime,
+        }: wall_clock::Datetime,
     ) -> Result<Self, Self::Error> {
         types::Timestamp::from(seconds)
             .checked_mul(1_000_000_000)
@@ -406,126 +389,124 @@ impl TryFrom<wasi::wall_clock::Datetime> for types::Timestamp {
     }
 }
 
-impl From<types::Lookupflags> for wasi::filesystem::PathFlags {
+impl From<types::Lookupflags> for filesystem::PathFlags {
     fn from(flags: types::Lookupflags) -> Self {
         if flags.contains(types::Lookupflags::SYMLINK_FOLLOW) {
-            wasi::filesystem::PathFlags::SYMLINK_FOLLOW
+            filesystem::PathFlags::SYMLINK_FOLLOW
         } else {
-            wasi::filesystem::PathFlags::empty()
+            filesystem::PathFlags::empty()
         }
     }
 }
 
-impl From<types::Oflags> for wasi::filesystem::OpenFlags {
+impl From<types::Oflags> for filesystem::OpenFlags {
     fn from(flags: types::Oflags) -> Self {
-        let mut out = wasi::filesystem::OpenFlags::empty();
+        let mut out = filesystem::OpenFlags::empty();
         if flags.contains(types::Oflags::CREAT) {
-            out |= wasi::filesystem::OpenFlags::CREATE;
+            out |= filesystem::OpenFlags::CREATE;
         }
         if flags.contains(types::Oflags::DIRECTORY) {
-            out |= wasi::filesystem::OpenFlags::DIRECTORY;
+            out |= filesystem::OpenFlags::DIRECTORY;
         }
         if flags.contains(types::Oflags::EXCL) {
-            out |= wasi::filesystem::OpenFlags::EXCLUSIVE;
+            out |= filesystem::OpenFlags::EXCLUSIVE;
         }
         if flags.contains(types::Oflags::TRUNC) {
-            out |= wasi::filesystem::OpenFlags::TRUNCATE;
+            out |= filesystem::OpenFlags::TRUNCATE;
         }
         out
     }
 }
 
-impl From<types::Advice> for wasi::filesystem::Advice {
+impl From<types::Advice> for filesystem::Advice {
     fn from(advice: types::Advice) -> Self {
         match advice {
-            types::Advice::Normal => wasi::filesystem::Advice::Normal,
-            types::Advice::Sequential => wasi::filesystem::Advice::Sequential,
-            types::Advice::Random => wasi::filesystem::Advice::Random,
-            types::Advice::Willneed => wasi::filesystem::Advice::WillNeed,
-            types::Advice::Dontneed => wasi::filesystem::Advice::DontNeed,
-            types::Advice::Noreuse => wasi::filesystem::Advice::NoReuse,
+            types::Advice::Normal => filesystem::Advice::Normal,
+            types::Advice::Sequential => filesystem::Advice::Sequential,
+            types::Advice::Random => filesystem::Advice::Random,
+            types::Advice::Willneed => filesystem::Advice::WillNeed,
+            types::Advice::Dontneed => filesystem::Advice::DontNeed,
+            types::Advice::Noreuse => filesystem::Advice::NoReuse,
         }
     }
 }
 
-impl TryFrom<wasi::filesystem::DescriptorType> for types::Filetype {
+impl TryFrom<filesystem::DescriptorType> for types::Filetype {
     type Error = anyhow::Error;
 
-    fn try_from(ty: wasi::filesystem::DescriptorType) -> Result<Self, Self::Error> {
+    fn try_from(ty: filesystem::DescriptorType) -> Result<Self, Self::Error> {
         match ty {
-            wasi::filesystem::DescriptorType::RegularFile => Ok(types::Filetype::RegularFile),
-            wasi::filesystem::DescriptorType::Directory => Ok(types::Filetype::Directory),
-            wasi::filesystem::DescriptorType::BlockDevice => Ok(types::Filetype::BlockDevice),
-            wasi::filesystem::DescriptorType::CharacterDevice => {
-                Ok(types::Filetype::CharacterDevice)
-            }
+            filesystem::DescriptorType::RegularFile => Ok(types::Filetype::RegularFile),
+            filesystem::DescriptorType::Directory => Ok(types::Filetype::Directory),
+            filesystem::DescriptorType::BlockDevice => Ok(types::Filetype::BlockDevice),
+            filesystem::DescriptorType::CharacterDevice => Ok(types::Filetype::CharacterDevice),
             // preview1 never had a FIFO code.
-            wasi::filesystem::DescriptorType::Fifo => Ok(types::Filetype::Unknown),
+            filesystem::DescriptorType::Fifo => Ok(types::Filetype::Unknown),
             // TODO: Add a way to disginguish between FILETYPE_SOCKET_STREAM and
             // FILETYPE_SOCKET_DGRAM.
-            wasi::filesystem::DescriptorType::Socket => {
+            filesystem::DescriptorType::Socket => {
                 bail!("sockets are not currently supported")
             }
-            wasi::filesystem::DescriptorType::SymbolicLink => Ok(types::Filetype::SymbolicLink),
-            wasi::filesystem::DescriptorType::Unknown => Ok(types::Filetype::Unknown),
+            filesystem::DescriptorType::SymbolicLink => Ok(types::Filetype::SymbolicLink),
+            filesystem::DescriptorType::Unknown => Ok(types::Filetype::Unknown),
         }
     }
 }
 
-impl From<wasi::filesystem::ErrorCode> for types::Errno {
-    fn from(code: wasi::filesystem::ErrorCode) -> Self {
+impl From<filesystem::ErrorCode> for types::Errno {
+    fn from(code: filesystem::ErrorCode) -> Self {
         match code {
-            wasi::filesystem::ErrorCode::Access => types::Errno::Acces,
-            wasi::filesystem::ErrorCode::WouldBlock => types::Errno::Again,
-            wasi::filesystem::ErrorCode::Already => types::Errno::Already,
-            wasi::filesystem::ErrorCode::BadDescriptor => types::Errno::Badf,
-            wasi::filesystem::ErrorCode::Busy => types::Errno::Busy,
-            wasi::filesystem::ErrorCode::Deadlock => types::Errno::Deadlk,
-            wasi::filesystem::ErrorCode::Quota => types::Errno::Dquot,
-            wasi::filesystem::ErrorCode::Exist => types::Errno::Exist,
-            wasi::filesystem::ErrorCode::FileTooLarge => types::Errno::Fbig,
-            wasi::filesystem::ErrorCode::IllegalByteSequence => types::Errno::Ilseq,
-            wasi::filesystem::ErrorCode::InProgress => types::Errno::Inprogress,
-            wasi::filesystem::ErrorCode::Interrupted => types::Errno::Intr,
-            wasi::filesystem::ErrorCode::Invalid => types::Errno::Inval,
-            wasi::filesystem::ErrorCode::Io => types::Errno::Io,
-            wasi::filesystem::ErrorCode::IsDirectory => types::Errno::Isdir,
-            wasi::filesystem::ErrorCode::Loop => types::Errno::Loop,
-            wasi::filesystem::ErrorCode::TooManyLinks => types::Errno::Mlink,
-            wasi::filesystem::ErrorCode::MessageSize => types::Errno::Msgsize,
-            wasi::filesystem::ErrorCode::NameTooLong => types::Errno::Nametoolong,
-            wasi::filesystem::ErrorCode::NoDevice => types::Errno::Nodev,
-            wasi::filesystem::ErrorCode::NoEntry => types::Errno::Noent,
-            wasi::filesystem::ErrorCode::NoLock => types::Errno::Nolck,
-            wasi::filesystem::ErrorCode::InsufficientMemory => types::Errno::Nomem,
-            wasi::filesystem::ErrorCode::InsufficientSpace => types::Errno::Nospc,
-            wasi::filesystem::ErrorCode::Unsupported => types::Errno::Notsup,
-            wasi::filesystem::ErrorCode::NotDirectory => types::Errno::Notdir,
-            wasi::filesystem::ErrorCode::NotEmpty => types::Errno::Notempty,
-            wasi::filesystem::ErrorCode::NotRecoverable => types::Errno::Notrecoverable,
-            wasi::filesystem::ErrorCode::NoTty => types::Errno::Notty,
-            wasi::filesystem::ErrorCode::NoSuchDevice => types::Errno::Nxio,
-            wasi::filesystem::ErrorCode::Overflow => types::Errno::Overflow,
-            wasi::filesystem::ErrorCode::NotPermitted => types::Errno::Perm,
-            wasi::filesystem::ErrorCode::Pipe => types::Errno::Pipe,
-            wasi::filesystem::ErrorCode::ReadOnly => types::Errno::Rofs,
-            wasi::filesystem::ErrorCode::InvalidSeek => types::Errno::Spipe,
-            wasi::filesystem::ErrorCode::TextFileBusy => types::Errno::Txtbsy,
-            wasi::filesystem::ErrorCode::CrossDevice => types::Errno::Xdev,
+            filesystem::ErrorCode::Access => types::Errno::Acces,
+            filesystem::ErrorCode::WouldBlock => types::Errno::Again,
+            filesystem::ErrorCode::Already => types::Errno::Already,
+            filesystem::ErrorCode::BadDescriptor => types::Errno::Badf,
+            filesystem::ErrorCode::Busy => types::Errno::Busy,
+            filesystem::ErrorCode::Deadlock => types::Errno::Deadlk,
+            filesystem::ErrorCode::Quota => types::Errno::Dquot,
+            filesystem::ErrorCode::Exist => types::Errno::Exist,
+            filesystem::ErrorCode::FileTooLarge => types::Errno::Fbig,
+            filesystem::ErrorCode::IllegalByteSequence => types::Errno::Ilseq,
+            filesystem::ErrorCode::InProgress => types::Errno::Inprogress,
+            filesystem::ErrorCode::Interrupted => types::Errno::Intr,
+            filesystem::ErrorCode::Invalid => types::Errno::Inval,
+            filesystem::ErrorCode::Io => types::Errno::Io,
+            filesystem::ErrorCode::IsDirectory => types::Errno::Isdir,
+            filesystem::ErrorCode::Loop => types::Errno::Loop,
+            filesystem::ErrorCode::TooManyLinks => types::Errno::Mlink,
+            filesystem::ErrorCode::MessageSize => types::Errno::Msgsize,
+            filesystem::ErrorCode::NameTooLong => types::Errno::Nametoolong,
+            filesystem::ErrorCode::NoDevice => types::Errno::Nodev,
+            filesystem::ErrorCode::NoEntry => types::Errno::Noent,
+            filesystem::ErrorCode::NoLock => types::Errno::Nolck,
+            filesystem::ErrorCode::InsufficientMemory => types::Errno::Nomem,
+            filesystem::ErrorCode::InsufficientSpace => types::Errno::Nospc,
+            filesystem::ErrorCode::Unsupported => types::Errno::Notsup,
+            filesystem::ErrorCode::NotDirectory => types::Errno::Notdir,
+            filesystem::ErrorCode::NotEmpty => types::Errno::Notempty,
+            filesystem::ErrorCode::NotRecoverable => types::Errno::Notrecoverable,
+            filesystem::ErrorCode::NoTty => types::Errno::Notty,
+            filesystem::ErrorCode::NoSuchDevice => types::Errno::Nxio,
+            filesystem::ErrorCode::Overflow => types::Errno::Overflow,
+            filesystem::ErrorCode::NotPermitted => types::Errno::Perm,
+            filesystem::ErrorCode::Pipe => types::Errno::Pipe,
+            filesystem::ErrorCode::ReadOnly => types::Errno::Rofs,
+            filesystem::ErrorCode::InvalidSeek => types::Errno::Spipe,
+            filesystem::ErrorCode::TextFileBusy => types::Errno::Txtbsy,
+            filesystem::ErrorCode::CrossDevice => types::Errno::Xdev,
         }
     }
 }
 
-impl From<wasi::filesystem::ErrorCode> for types::Error {
-    fn from(code: wasi::filesystem::ErrorCode) -> Self {
+impl From<filesystem::ErrorCode> for types::Error {
+    fn from(code: filesystem::ErrorCode) -> Self {
         types::Errno::from(code).into()
     }
 }
 
-impl TryFrom<wasi::filesystem::Error> for types::Errno {
+impl TryFrom<filesystem::Error> for types::Errno {
     type Error = anyhow::Error;
 
-    fn try_from(err: wasi::filesystem::Error) -> Result<Self, Self::Error> {
+    fn try_from(err: filesystem::Error) -> Result<Self, Self::Error> {
         match err.downcast() {
             Ok(code) => Ok(code.into()),
             Err(e) => Err(e),
@@ -533,10 +514,10 @@ impl TryFrom<wasi::filesystem::Error> for types::Errno {
     }
 }
 
-impl TryFrom<wasi::filesystem::Error> for types::Error {
+impl TryFrom<filesystem::Error> for types::Error {
     type Error = anyhow::Error;
 
-    fn try_from(err: wasi::filesystem::Error) -> Result<Self, Self::Error> {
+    fn try_from(err: filesystem::Error) -> Result<Self, Self::Error> {
         match err.downcast() {
             Ok(code) => Ok(code.into()),
             Err(e) => Err(e),
@@ -642,15 +623,15 @@ fn first_non_empty_iovec<'a>(
 #[wiggle::async_trait]
 impl<
         T: WasiPreview1View
-            + wasi::environment::Host
-            + wasi::exit::Host
-            + wasi::filesystem::Host
-            + wasi::monotonic_clock::Host
-            + wasi::poll::Host
-            + wasi::preopens::Host
-            + wasi::random::Host
-            + wasi::streams::Host
-            + wasi::wall_clock::Host,
+            + wasi::cli_base::environment::Host
+            + wasi::cli_base::exit::Host
+            + wasi::cli_base::preopens::Host
+            + wasi::filesystem::filesystem::Host
+            + wasi::poll::poll::Host
+            + wasi::random::random::Host
+            + wasi::io::streams::Host
+            + wasi::clocks::monotonic_clock::Host
+            + wasi::clocks::wall_clock::Host,
     > wasi_snapshot_preview1::WasiSnapshotPreview1 for T
 {
     #[instrument(skip(self))]
@@ -756,12 +737,12 @@ impl<
         id: types::Clockid,
     ) -> Result<types::Timestamp, types::Error> {
         let res = match id {
-            types::Clockid::Realtime => wasi::wall_clock::Host::resolution(self)
+            types::Clockid::Realtime => wall_clock::Host::resolution(self)
                 .await
                 .context("failed to call `wall_clock::resolution`")
                 .map_err(types::Error::trap)?
                 .try_into()?,
-            types::Clockid::Monotonic => wasi::monotonic_clock::Host::resolution(self)
+            types::Clockid::Monotonic => monotonic_clock::Host::resolution(self)
                 .await
                 .context("failed to call `monotonic_clock::resolution`")
                 .map_err(types::Error::trap)?,
@@ -779,12 +760,12 @@ impl<
         _precision: types::Timestamp,
     ) -> Result<types::Timestamp, types::Error> {
         let now = match id {
-            types::Clockid::Realtime => wasi::wall_clock::Host::now(self)
+            types::Clockid::Realtime => wall_clock::Host::now(self)
                 .await
                 .context("failed to call `wall_clock::now`")
                 .map_err(types::Error::trap)?
                 .try_into()?,
-            types::Clockid::Monotonic => wasi::monotonic_clock::Host::now(self)
+            types::Clockid::Monotonic => monotonic_clock::Host::now(self)
                 .await
                 .context("failed to call `monotonic_clock::now`")
                 .map_err(types::Error::trap)?,
@@ -918,19 +899,19 @@ impl<
             .map_err(types::Error::trap)?;
         let mut fs_flags = types::Fdflags::empty();
         let mut fs_rights_base = types::Rights::all();
-        if !flags.contains(wasi::filesystem::DescriptorFlags::READ) {
+        if !flags.contains(filesystem::DescriptorFlags::READ) {
             fs_rights_base &= !types::Rights::FD_READ;
         }
-        if !flags.contains(wasi::filesystem::DescriptorFlags::WRITE) {
+        if !flags.contains(filesystem::DescriptorFlags::WRITE) {
             fs_rights_base &= !types::Rights::FD_WRITE;
         }
-        if flags.contains(wasi::filesystem::DescriptorFlags::DATA_INTEGRITY_SYNC) {
+        if flags.contains(filesystem::DescriptorFlags::DATA_INTEGRITY_SYNC) {
             fs_flags |= types::Fdflags::DSYNC;
         }
-        if flags.contains(wasi::filesystem::DescriptorFlags::REQUESTED_WRITE_SYNC) {
+        if flags.contains(filesystem::DescriptorFlags::REQUESTED_WRITE_SYNC) {
             fs_flags |= types::Fdflags::RSYNC;
         }
-        if flags.contains(wasi::filesystem::DescriptorFlags::FILE_INTEGRITY_SYNC) {
+        if flags.contains(filesystem::DescriptorFlags::FILE_INTEGRITY_SYNC) {
             fs_flags |= types::Fdflags::SYNC;
         }
         if append {
@@ -1002,7 +983,7 @@ impl<
                 })
             }
             Descriptor::PreopenDirectory((fd, _)) | Descriptor::File(File { fd, .. }) => {
-                let wasi::filesystem::DescriptorStat {
+                let filesystem::DescriptorStat {
                     device: dev,
                     inode: ino,
                     type_,
@@ -1109,7 +1090,7 @@ impl<
                 let (read, end) = if blocking {
                     self.blocking_read(stream, max)
                 } else {
-                    wasi::streams::Host::read(self, stream, max)
+                    streams::Host::read(self, stream, max)
                 }
                 .await
                 .map_err(|_| types::Errno::Io)?;
@@ -1124,13 +1105,10 @@ impl<
                 let Some(buf) = first_non_empty_iovec(iovs)? else {
                     return Ok(0)
                 };
-                let (read, end) = wasi::streams::Host::read(
-                    self,
-                    stream,
-                    buf.len().try_into().unwrap_or(u64::MAX),
-                )
-                .await
-                .map_err(|_| types::Errno::Io)?;
+                let (read, end) =
+                    streams::Host::read(self, stream, buf.len().try_into().unwrap_or(u64::MAX))
+                        .await
+                        .map_err(|_| types::Errno::Io)?;
                 (buf, read, end)
             }
             _ => return Err(types::Errno::Badf.into()),
@@ -1172,7 +1150,7 @@ impl<
                 let (read, end) = if blocking {
                     self.blocking_read(stream, max)
                 } else {
-                    wasi::streams::Host::read(self, stream, max)
+                    streams::Host::read(self, stream, max)
                 }
                 .await
                 .map_err(|_| types::Errno::Io)?;
@@ -1235,7 +1213,7 @@ impl<
                 let n = if blocking {
                     self.blocking_write(stream, buf)
                 } else {
-                    wasi::streams::Host::write(self, stream, buf)
+                    streams::Host::write(self, stream, buf)
                 }
                 .await
                 .map_err(|_| types::Errno::Io)?;
@@ -1249,7 +1227,7 @@ impl<
                 let Some(buf) = first_non_empty_ciovec(ciovs)? else {
                     return Ok(0)
                 };
-                wasi::streams::Host::write(self, stream, buf)
+                streams::Host::write(self, stream, buf)
                     .await
                     .map_err(|_| types::Errno::Io)?
             }
@@ -1283,7 +1261,7 @@ impl<
                 if blocking {
                     self.blocking_write(stream, buf)
                 } else {
-                    wasi::streams::Host::write(self, stream, buf)
+                    streams::Host::write(self, stream, buf)
                 }
                 .await
                 .map_err(|_| types::Errno::Io)?
@@ -1359,12 +1337,11 @@ impl<
                 .checked_add_signed(offset)
                 .ok_or(types::Errno::Inval)?,
             types::Whence::End => {
-                let wasi::filesystem::DescriptorStat { size, .. } =
-                    self.stat(fd).await.map_err(|e| {
-                        e.try_into()
-                            .context("failed to call `stat`")
-                            .unwrap_or_else(types::Error::trap)
-                    })?;
+                let filesystem::DescriptorStat { size, .. } = self.stat(fd).await.map_err(|e| {
+                    e.try_into()
+                        .context("failed to call `stat`")
+                        .unwrap_or_else(types::Error::trap)
+                })?;
                 size.checked_add_signed(offset).ok_or(types::Errno::Inval)?
             }
             _ => return Err(types::Errno::Inval.into()),
@@ -1411,7 +1388,7 @@ impl<
                 .context("failed to call `read-directory`")
                 .unwrap_or_else(types::Error::trap)
         })?;
-        let wasi::filesystem::DescriptorStat {
+        let filesystem::DescriptorStat {
             inode: fd_inode, ..
         } = self.stat(fd).await.map_err(|e| {
             e.try_into()
@@ -1450,12 +1427,11 @@ impl<
             .into_iter()
             .zip(3u64..)
             .map(|(entry, d_next)| {
-                let wasi::filesystem::DirectoryEntry { inode, type_, name } =
-                    entry.map_err(|e| {
-                        e.try_into()
-                            .context("failed to inspect `read-directory` entry")
-                            .unwrap_or_else(types::Error::trap)
-                    })?;
+                let filesystem::DirectoryEntry { inode, type_, name } = entry.map_err(|e| {
+                    e.try_into()
+                        .context("failed to inspect `read-directory` entry")
+                        .unwrap_or_else(types::Error::trap)
+                })?;
                 let d_type = type_.try_into().map_err(types::Error::trap)?;
                 let d_namlen: u32 = name.len().try_into().map_err(|_| types::Errno::Overflow)?;
                 Ok((
@@ -1534,7 +1510,7 @@ impl<
     ) -> Result<types::Filestat, types::Error> {
         let dirfd = self.get_dir_fd(dirfd).await?;
         let path = read_string(path)?;
-        let wasi::filesystem::DescriptorStat {
+        let filesystem::DescriptorStat {
             device: dev,
             inode: ino,
             type_,
@@ -1637,21 +1613,21 @@ impl<
     ) -> Result<types::Fd, types::Error> {
         let path = read_string(path)?;
 
-        let mut flags = wasi::filesystem::DescriptorFlags::empty();
+        let mut flags = filesystem::DescriptorFlags::empty();
         if fs_rights_base.contains(types::Rights::FD_READ) {
-            flags |= wasi::filesystem::DescriptorFlags::READ;
+            flags |= filesystem::DescriptorFlags::READ;
         }
         if fs_rights_base.contains(types::Rights::FD_WRITE) {
-            flags |= wasi::filesystem::DescriptorFlags::WRITE;
+            flags |= filesystem::DescriptorFlags::WRITE;
         }
         if fdflags.contains(types::Fdflags::SYNC) {
-            flags |= wasi::filesystem::DescriptorFlags::FILE_INTEGRITY_SYNC;
+            flags |= filesystem::DescriptorFlags::FILE_INTEGRITY_SYNC;
         }
         if fdflags.contains(types::Fdflags::DSYNC) {
-            flags |= wasi::filesystem::DescriptorFlags::DATA_INTEGRITY_SYNC;
+            flags |= filesystem::DescriptorFlags::DATA_INTEGRITY_SYNC;
         }
         if fdflags.contains(types::Fdflags::RSYNC) {
-            flags |= wasi::filesystem::DescriptorFlags::REQUESTED_WRITE_SYNC;
+            flags |= filesystem::DescriptorFlags::REQUESTED_WRITE_SYNC;
         }
 
         let desc = self.transact().await?.get_descriptor(dirfd)?.clone();
@@ -1671,7 +1647,7 @@ impl<
                 path,
                 oflags.into(),
                 flags,
-                wasi::filesystem::Modes::READABLE | wasi::filesystem::Modes::WRITABLE,
+                filesystem::Modes::READABLE | filesystem::Modes::WRITABLE,
             )
             .await
             .map_err(|e| {

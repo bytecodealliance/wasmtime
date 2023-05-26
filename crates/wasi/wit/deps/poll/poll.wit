@@ -1,6 +1,8 @@
+package wasi:poll
+
 /// A poll API intended to let users wait for I/O events on multiple handles
 /// at once.
-default interface poll {
+interface poll {
     /// A "pollable" handle.
     ///
     /// This is conceptually represents a `stream<_, _>`, or in other words,

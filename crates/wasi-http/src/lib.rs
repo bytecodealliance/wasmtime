@@ -1,3 +1,7 @@
+// NB: this crate is temporarily disabled for a breaking change to WIT. This can
+// be re-enabled when the WIT in the wasi-http submodule is updated.
+#![cfg(FALSE)]
+
 use crate::component_impl::add_component_to_linker;
 pub use crate::r#struct::WasiHttp;
 
