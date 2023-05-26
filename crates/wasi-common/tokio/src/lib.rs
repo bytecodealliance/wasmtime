@@ -9,7 +9,7 @@ pub mod stdio;
 use std::future::Future;
 use std::path::Path;
 pub use wasi_cap_std_sync::{clocks_ctx, random_ctx};
-use wasi_common::{Error, Table, WasiCtx, WasiFile};
+use wasi_common::{file::FileAccessMode, Error, Table, WasiCtx, WasiFile};
 
 use crate::sched::sched_ctx;
 pub use dir::Dir;
@@ -96,7 +96,8 @@ impl WasiCtxBuilder {
     pub fn preopened_socket(self, fd: u32, socket: impl Into<Socket>) -> Result<Self, Error> {
         let socket: Socket = socket.into();
         let file: Box<dyn WasiFile> = socket.into();
-        self.0.insert_file(fd, file);
+        self.0
+            .insert_file(fd, file, FileAccessMode::READ | FileAccessMode::WRITE);
         Ok(self)
     }
 

@@ -1,8 +1,8 @@
 use crate::{
     dir::{DirEntry, OpenResult, ReaddirCursor, ReaddirEntity, TableDirExt},
     file::{
-        Advice, FdFlags, FdStat, FileEntry, FileType, Filestat, OFlags, RiFlags, RoFlags, SdFlags,
-        SiFlags, TableFileExt, WasiFile,
+        Advice, FdFlags, FdStat, FileAccessMode, FileEntry, FileType, Filestat, OFlags, RiFlags,
+        RoFlags, SdFlags, SiFlags, TableFileExt, WasiFile,
     },
     sched::{
         subscription::{RwEventFlags, SubscriptionResult},
@@ -177,8 +177,8 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             let _dir_entry: Arc<DirEntry> = table.get(fd)?;
             let dir_fdstat = types::Fdstat {
                 fs_filetype: types::Filetype::Directory,
-                fs_rights_base: types::Rights::empty(),
-                fs_rights_inheriting: types::Rights::empty(),
+                fs_rights_base: types::Rights::all(),
+                fs_rights_inheriting: types::Rights::all(),
                 fs_flags: types::Fdflags::empty(),
             };
             Ok(dir_fdstat)
@@ -293,6 +293,10 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         iovs: &types::IovecArray<'a>,
     ) -> Result<types::Size, Error> {
         let f = self.table().get_file(u32::from(fd))?;
+        // Access mode check normalizes error returned (windows would prefer ACCES here)
+        if !f.access_mode.contains(FileAccessMode::READ) {
+            Err(types::Errno::Badf)?
+        }
         let f = &f.file;
 
         let iovs: Vec<wiggle::GuestPtr<[u8]>> = iovs
@@ -364,6 +368,10 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         offset: types::Filesize,
     ) -> Result<types::Size, Error> {
         let f = self.table().get_file(u32::from(fd))?;
+        // Access mode check normalizes error returned (windows would prefer ACCES here)
+        if !f.access_mode.contains(FileAccessMode::READ) {
+            Err(types::Errno::Badf)?
+        }
         let f = &f.file;
 
         let iovs: Vec<wiggle::GuestPtr<[u8]>> = iovs
@@ -436,6 +444,10 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         ciovs: &types::CiovecArray<'a>,
     ) -> Result<types::Size, Error> {
         let f = self.table().get_file(u32::from(fd))?;
+        // Access mode check normalizes error returned (windows would prefer ACCES here)
+        if !f.access_mode.contains(FileAccessMode::WRITE) {
+            Err(types::Errno::Badf)?
+        }
         let f = &f.file;
 
         let guest_slices: Vec<wiggle::GuestCow<u8>> = ciovs
@@ -463,6 +475,10 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         offset: types::Filesize,
     ) -> Result<types::Size, Error> {
         let f = self.table().get_file(u32::from(fd))?;
+        // Access mode check normalizes error returned (windows would prefer ACCES here)
+        if !f.access_mode.contains(FileAccessMode::WRITE) {
+            Err(types::Errno::Badf)?
+        }
         let f = &f.file;
 
         let guest_slices: Vec<wiggle::GuestCow<u8>> = ciovs
@@ -728,6 +744,16 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
 
         let read = fs_rights_base.contains(types::Rights::FD_READ);
         let write = fs_rights_base.contains(types::Rights::FD_WRITE);
+        let access_mode = if read {
+            FileAccessMode::READ
+        } else {
+            FileAccessMode::empty()
+        } | if write {
+            FileAccessMode::WRITE
+        } else {
+            FileAccessMode::empty()
+        };
+
         let file = dir_entry
             .dir
             .open_file(symlink_follow, path.deref(), oflags, read, write, fdflags)
@@ -735,7 +761,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         drop(dir_entry);
 
         let fd = match file {
-            OpenResult::File(file) => table.push(Arc::new(FileEntry::new(file)))?,
+            OpenResult::File(file) => table.push(Arc::new(FileEntry::new(file, access_mode)))?,
             OpenResult::Dir(child_dir) => table.push(Arc::new(DirEntry::new(None, child_dir)))?,
         };
         Ok(types::Fd::from(fd))
@@ -1087,7 +1113,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         let table = self.table();
         let f = table.get_file(u32::from(fd))?;
         let file = f.file.sock_accept(FdFlags::from(flags)).await?;
-        let fd = table.push(Arc::new(FileEntry::new(file)))?;
+        let fd = table.push(Arc::new(FileEntry::new(file, FileAccessMode::all())))?;
         Ok(types::Fd::from(fd))
     }
 
@@ -1214,9 +1240,16 @@ impl From<types::Advice> for Advice {
 
 impl From<&FdStat> for types::Fdstat {
     fn from(fdstat: &FdStat) -> types::Fdstat {
+        let mut fs_rights_base = types::Rights::empty();
+        if fdstat.access_mode.contains(FileAccessMode::READ) {
+            fs_rights_base |= types::Rights::FD_READ;
+        }
+        if fdstat.access_mode.contains(FileAccessMode::WRITE) {
+            fs_rights_base |= types::Rights::FD_WRITE;
+        }
         types::Fdstat {
             fs_filetype: types::Filetype::from(&fdstat.filetype),
-            fs_rights_base: types::Rights::empty(),
+            fs_rights_base,
             fs_rights_inheriting: types::Rights::empty(),
             fs_flags: types::Fdflags::from(fdstat.flags),
         }
