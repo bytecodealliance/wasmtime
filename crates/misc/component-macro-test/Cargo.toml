@@ -8,6 +8,8 @@ publish = false
 
 [lib]
 proc-macro = true
+test = false
+doctest = false
 
 [dependencies]
 proc-macro2 = "1.0"

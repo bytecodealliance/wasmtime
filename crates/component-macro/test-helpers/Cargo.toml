@@ -7,6 +7,8 @@ license = "Apache-2.0 WITH LLVM-exception"
 
 [lib]
 proc-macro = true
+test = false
+doctest = false
 
 [dependencies]
 proc-macro2 = "1.0"
