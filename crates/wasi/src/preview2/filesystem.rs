@@ -24,12 +24,12 @@ impl File {
 }
 pub(crate) trait TableFsExt {
     fn push_file(&mut self, file: File) -> Result<u32, TableError>;
-    fn delete_file(&mut self, fd: u32) -> Result<(), TableError>;
+    fn delete_file(&mut self, fd: u32) -> Result<File, TableError>;
     fn is_file(&self, fd: u32) -> bool;
     fn get_file(&self, fd: u32) -> Result<&File, TableError>;
 
     fn push_dir(&mut self, dir: Dir) -> Result<u32, TableError>;
-    fn delete_dir(&mut self, fd: u32) -> Result<(), TableError>;
+    fn delete_dir(&mut self, fd: u32) -> Result<Dir, TableError>;
     fn is_dir(&self, fd: u32) -> bool;
     fn get_dir(&self, fd: u32) -> Result<&Dir, TableError>;
 }
@@ -38,27 +38,27 @@ impl TableFsExt for Table {
     fn push_file(&mut self, file: File) -> Result<u32, TableError> {
         self.push(Box::new(file))
     }
-    fn delete_file(&mut self, fd: u32) -> Result<(), TableError> {
-        self.delete::<File>(fd)
+    fn delete_file(&mut self, fd: u32) -> Result<File, TableError> {
+        self.delete(fd)
     }
     fn is_file(&self, fd: u32) -> bool {
         self.is::<File>(fd)
     }
     fn get_file(&self, fd: u32) -> Result<&File, TableError> {
-        self.get::<File>(fd)
+        self.get(fd)
     }
 
     fn push_dir(&mut self, dir: Dir) -> Result<u32, TableError> {
         self.push(Box::new(dir))
     }
-    fn delete_dir(&mut self, fd: u32) -> Result<(), TableError> {
-        self.delete::<Dir>(fd)
+    fn delete_dir(&mut self, fd: u32) -> Result<Dir, TableError> {
+        self.delete(fd)
     }
     fn is_dir(&self, fd: u32) -> bool {
         self.is::<Dir>(fd)
     }
     fn get_dir(&self, fd: u32) -> Result<&Dir, TableError> {
-        self.get::<Dir>(fd)
+        self.get(fd)
     }
 }
 

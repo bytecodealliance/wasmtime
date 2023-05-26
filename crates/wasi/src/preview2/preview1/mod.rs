@@ -1,12 +1,12 @@
-// Temporary for scaffolding this module out:
-#![allow(unused_variables)]
-
 use crate::preview2::filesystem::TableFsExt;
+use crate::preview2::preview2::filesystem::TableReaddirExt;
 use crate::preview2::{wasi, TableError, WasiView};
 
 use core::borrow::Borrow;
 use core::cell::Cell;
+use core::mem::{size_of, size_of_val};
 use core::ops::{Deref, DerefMut};
+use core::slice;
 use core::sync::atomic::{AtomicU64, Ordering};
 
 use std::collections::BTreeMap;
@@ -14,7 +14,7 @@ use std::sync::Arc;
 
 use anyhow::{anyhow, bail, Context};
 use wiggle::tracing::instrument;
-use wiggle::{GuestPtr, GuestSliceMut, GuestStrCow};
+use wiggle::{GuestPtr, GuestSliceMut, GuestStrCow, GuestType};
 
 #[derive(Clone, Debug)]
 struct File {
@@ -176,12 +176,12 @@ pub trait WasiPreview1View: Send + Sync + WasiView {
 // of the [`WasiPreview1View`] to provide means to return mutably and immutably borrowed [`Descriptors`]
 // without having to rely on something like `Arc<Mutex<Descriptors>>`, while also being able to
 // call methods like [`TableFsExt::is_file`] and hiding complexity from preview1 method implementations.
-struct Transcation<'a, T: WasiPreview1View + ?Sized> {
+struct Transaction<'a, T: WasiPreview1View + ?Sized> {
     view: &'a mut T,
     descriptors: Cell<Descriptors>,
 }
 
-impl<T: WasiPreview1View + ?Sized> Drop for Transcation<'_, T> {
+impl<T: WasiPreview1View + ?Sized> Drop for Transaction<'_, T> {
     /// Record changes in the [`WasiPreview1Adapter`] returned by [`WasiPreview1View::adapter_mut`]
     fn drop(&mut self) {
         let descriptors = self.descriptors.take();
@@ -189,7 +189,7 @@ impl<T: WasiPreview1View + ?Sized> Drop for Transcation<'_, T> {
     }
 }
 
-impl<T: WasiPreview1View + ?Sized> Transcation<'_, T> {
+impl<T: WasiPreview1View + ?Sized> Transaction<'_, T> {
     /// Borrows [`Descriptor`] corresponding to `fd`.
     ///
     /// # Errors
@@ -282,22 +282,22 @@ trait WasiPreview1ViewExt:
     + wasi::stdout::Host
     + wasi::stderr::Host
 {
-    /// Lazily initializes [`WasiPreview1Adapter`] returned by [`Self::adapter_mut`]
+    /// Lazily initializes [`WasiPreview1Adapter`] returned by [`WasiPreview1View::adapter_mut`]
     /// and returns [`Transaction`] on success
-    async fn transact(&mut self) -> Result<Transcation<'_, Self>, types::Error> {
+    async fn transact(&mut self) -> Result<Transaction<'_, Self>, types::Error> {
         let descriptors = if let Some(descriptors) = self.adapter_mut().descriptors.take() {
             descriptors
         } else {
             Descriptors::new(self).await?
         }
         .into();
-        Ok(Transcation {
+        Ok(Transaction {
             view: self,
             descriptors,
         })
     }
 
-    /// Lazily initializes [`WasiPreview1Adapter`] returned by [`Self::adapter_mut`]
+    /// Lazily initializes [`WasiPreview1Adapter`] returned by [`WasiPreview1View::adapter_mut`]
     /// and returns [`wasi::filesystem::Descriptor`] corresponding to `fd`
     async fn get_fd(
         &mut self,
@@ -308,7 +308,7 @@ trait WasiPreview1ViewExt:
         Ok(fd)
     }
 
-    /// Lazily initializes [`WasiPreview1Adapter`] returned by [`Self::adapter_mut`]
+    /// Lazily initializes [`WasiPreview1Adapter`] returned by [`WasiPreview1View::adapter_mut`]
     /// and returns [`wasi::filesystem::Descriptor`] corresponding to `fd`
     /// if it describes a [`Descriptor::File`] of [`crate::preview2::filesystem::File`] type
     async fn get_file_fd(
@@ -320,7 +320,7 @@ trait WasiPreview1ViewExt:
         Ok(fd)
     }
 
-    /// Lazily initializes [`WasiPreview1Adapter`] returned by [`Self::adapter_mut`]
+    /// Lazily initializes [`WasiPreview1Adapter`] returned by [`WasiPreview1View::adapter_mut`]
     /// and returns [`wasi::filesystem::Descriptor`] corresponding to `fd`
     /// if it describes a [`Descriptor::File`] or [`Descriptor::PreopenDirectory`]
     /// of [`crate::preview2::filesystem::Dir`] type
@@ -830,13 +830,29 @@ impl<
     /// NOTE: This is similar to `close` in POSIX.
     #[instrument(skip(self))]
     async fn fd_close(&mut self, fd: types::Fd) -> Result<(), types::Error> {
-        self.transact()
+        let desc = self
+            .transact()
             .await?
             .descriptors
             .get_mut()
             .remove(fd)
-            .ok_or(types::Errno::Badf)?;
-        Ok(())
+            .ok_or(types::Errno::Badf)?
+            .clone();
+        match desc {
+            Descriptor::Stdin(stream) => self
+                .drop_input_stream(stream)
+                .await
+                .context("failed to call `drop-input-stream`"),
+            Descriptor::Stdout(stream) | Descriptor::Stderr(stream) => self
+                .drop_output_stream(stream)
+                .await
+                .context("failed to call `drop-output-stream`"),
+            Descriptor::File(File { fd, .. }) | Descriptor::PreopenDirectory((fd, _)) => self
+                .drop_descriptor(fd)
+                .await
+                .context("failed to call `drop-descriptor`"),
+        }
+        .map_err(types::Error::trap)
     }
 
     /// Synchronize the data of a file to disk.
@@ -961,8 +977,8 @@ impl<
     async fn fd_fdstat_set_rights(
         &mut self,
         fd: types::Fd,
-        fs_rights_base: types::Rights,
-        fs_rights_inheriting: types::Rights,
+        _fs_rights_base: types::Rights,
+        _fs_rights_inheriting: types::Rights,
     ) -> Result<(), types::Error> {
         self.get_fd(fd).await?;
         Ok(())
@@ -1389,7 +1405,107 @@ impl<
         buf_len: types::Size,
         cookie: types::Dircookie,
     ) -> Result<types::Size, types::Error> {
-        todo!()
+        let fd = self.get_dir_fd(fd).await?;
+        let stream = self.read_directory(fd).await.map_err(|e| {
+            e.try_into()
+                .context("failed to call `read-directory`")
+                .unwrap_or_else(types::Error::trap)
+        })?;
+        let wasi::filesystem::DescriptorStat {
+            inode: fd_inode, ..
+        } = self.stat(fd).await.map_err(|e| {
+            e.try_into()
+                .context("failed to call `stat`")
+                .unwrap_or_else(types::Error::trap)
+        })?;
+        let cookie = cookie.try_into().map_err(|_| types::Errno::Overflow)?;
+
+        let head = [
+            (
+                types::Dirent {
+                    d_next: 1u64.to_le(),
+                    d_ino: fd_inode.to_le(),
+                    d_type: types::Filetype::Directory,
+                    d_namlen: 1u32.to_le(),
+                },
+                ".".into(),
+            ),
+            (
+                types::Dirent {
+                    d_next: 2u64.to_le(),
+                    d_ino: fd_inode.to_le(), // NOTE: incorrect, but legacy implementation returns `fd` inode here
+                    d_type: types::Filetype::Directory,
+                    d_namlen: 2u32.to_le(),
+                },
+                "..".into(),
+            ),
+        ]
+        .into_iter()
+        .map(Ok::<_, types::Error>);
+
+        let dir = self
+            .table_mut()
+            // remove iterator from table and use it directly:
+            .delete_readdir(stream)?
+            .into_iter()
+            .zip(3u64..)
+            .map(|(entry, d_next)| {
+                let wasi::filesystem::DirectoryEntry { inode, type_, name } =
+                    entry.map_err(|e| {
+                        e.try_into()
+                            .context("failed to inspect `read-directory` entry")
+                            .unwrap_or_else(types::Error::trap)
+                    })?;
+                let d_type = type_.try_into().map_err(types::Error::trap)?;
+                let d_namlen: u32 = name.len().try_into().map_err(|_| types::Errno::Overflow)?;
+                Ok((
+                    types::Dirent {
+                        d_next: d_next.to_le(),
+                        d_ino: inode.unwrap_or_default().to_le(),
+                        d_type, // endian-invariant
+                        d_namlen: d_namlen.to_le(),
+                    },
+                    name,
+                ))
+            });
+
+        // assume that `types::Dirent` size always fits in `u32`
+        const DIRENT_SIZE: u32 = size_of::<types::Dirent>() as _;
+        assert_eq!(
+            types::Dirent::guest_size(),
+            DIRENT_SIZE,
+            "Dirent guest repr and host repr should match"
+        );
+        let mut buf = *buf;
+        let mut cap = buf_len;
+        for entry in head.chain(dir).skip(cookie) {
+            let (ref entry, mut path) = entry?;
+
+            assert_eq!(
+                1,
+                size_of_val(&entry.d_type),
+                "Dirent member d_type should be endian-invariant"
+            );
+            let entry_len = cap.min(DIRENT_SIZE);
+            let entry = entry as *const _ as _;
+            let entry = unsafe { slice::from_raw_parts(entry, entry_len as _) };
+            cap = cap.checked_sub(entry_len).unwrap();
+            buf = write_bytes(buf, entry)?;
+            if cap == 0 {
+                return Ok(buf_len);
+            }
+
+            if let Ok(cap) = cap.try_into() {
+                // `path` cannot be longer than `usize`, only truncate if `cap` fits in `usize`
+                path.truncate(cap);
+            }
+            cap = cap.checked_sub(path.len() as _).unwrap();
+            buf = write_bytes(buf, path)?;
+            if cap == 0 {
+                return Ok(buf_len);
+            }
+        }
+        Ok(buf_len.checked_sub(cap).unwrap())
     }
 
     #[instrument(skip(self))]
@@ -1675,6 +1791,7 @@ impl<
         })
     }
 
+    #[allow(unused_variables)]
     #[instrument(skip(self))]
     async fn poll_oneoff<'a>(
         &mut self,
@@ -1723,6 +1840,7 @@ impl<
         Ok(())
     }
 
+    #[allow(unused_variables)]
     #[instrument(skip(self))]
     async fn sock_accept(
         &mut self,
@@ -1732,6 +1850,7 @@ impl<
         todo!()
     }
 
+    #[allow(unused_variables)]
     #[instrument(skip(self))]
     async fn sock_recv<'a>(
         &mut self,
@@ -1742,6 +1861,7 @@ impl<
         todo!()
     }
 
+    #[allow(unused_variables)]
     #[instrument(skip(self))]
     async fn sock_send<'a>(
         &mut self,
@@ -1752,6 +1872,7 @@ impl<
         todo!()
     }
 
+    #[allow(unused_variables)]
     #[instrument(skip(self))]
     async fn sock_shutdown(
         &mut self,
