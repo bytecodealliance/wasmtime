@@ -30,7 +30,7 @@ use wasmtime_environ::{
     packed_option::ReservedValue, DataIndex, DefinedGlobalIndex, DefinedMemoryIndex,
     DefinedTableIndex, ElemIndex, EntityIndex, EntityRef, EntitySet, FuncIndex, GlobalIndex,
     GlobalInit, HostPtr, MemoryIndex, Module, PrimaryMap, SignatureIndex, TableIndex,
-    TableInitialization, Trap, VMOffsets, WasmType, VMCONTEXT_MAGIC,
+    TableInitialValue, Trap, VMOffsets, WasmHeapType, WasmRefType, WasmType, VMCONTEXT_MAGIC,
 };
 
 mod allocator;
@@ -963,37 +963,30 @@ impl Instance {
                         break;
                     }
                 };
-                if value.is_uninit() {
-                    let module = self.module();
-                    let table_init = match &self.module().table_initialization {
-                        // We unfortunately can't borrow `tables` outside the
-                        // loop because we need to call `get_func_ref` (a `&mut`
-                        // method) below; so unwrap it dynamically here.
-                        TableInitialization::FuncTable { tables, .. } => tables,
-                        _ => break,
-                    }
-                    .get(module.table_index(idx));
 
-                    // The TableInitialization::FuncTable elements table may
-                    // be smaller than the current size of the table: it
-                    // always matches the initial table size, if present. We
-                    // want to iterate up through the end of the accessed
-                    // index range so that we set an "initialized null" even
-                    // if there is no initializer. We do a checked `get()` on
-                    // the initializer table below and unwrap to a null if
-                    // we're past its end.
-                    let func_index =
-                        table_init.and_then(|indices| indices.get(i as usize).cloned());
-                    let func_ref = func_index
-                        .and_then(|func_index| self.get_func_ref(func_index))
-                        .unwrap_or(std::ptr::null_mut());
-
-                    let value = TableElement::FuncRef(func_ref);
-
-                    self.tables[idx]
-                        .set(i, value)
-                        .expect("Table type should match and index should be in-bounds");
+                if !value.is_uninit() {
+                    continue;
                 }
+
+                // The table element `i` is uninitialized and is now being
+                // initialized. This must imply that a `precompiled` list of
+                // function indices is available for this table. The precompiled
+                // list is extracted and then it is consulted with `i` to
+                // determine the function that is going to be initialized. Note
+                // that `i` may be outside the limits of the static
+                // initialization so it's a fallible `get` instead of an index.
+                let module = self.module();
+                let precomputed = match &module.table_initialization.initial_values[idx] {
+                    TableInitialValue::Null { precomputed } => precomputed,
+                    TableInitialValue::FuncRef(_) => unreachable!(),
+                };
+                let func_index = precomputed.get(i as usize).cloned();
+                let func_ref = func_index
+                    .and_then(|func_index| self.get_func_ref(func_index))
+                    .unwrap_or(std::ptr::null_mut());
+                self.tables[idx]
+                    .set(i, TableElement::FuncRef(func_ref))
+                    .expect("Table type should match and index should be in-bounds");
             }
         }
 
@@ -1148,9 +1141,10 @@ impl Instance {
                     // count as values move between globals, everything else is just
                     // copy-able bits.
                     match wasm_ty {
-                        WasmType::ExternRef => {
-                            *(*to).as_externref_mut() = from.as_externref().clone()
-                        }
+                        WasmType::Ref(WasmRefType {
+                            heap_type: WasmHeapType::Extern,
+                            ..
+                        }) => *(*to).as_externref_mut() = from.as_externref().clone(),
                         _ => ptr::copy_nonoverlapping(from, to, 1),
                     }
                 }
@@ -1159,8 +1153,7 @@ impl Instance {
                 }
                 GlobalInit::RefNullConst => match wasm_ty {
                     // `VMGlobalDefinition::new()` already zeroed out the bits
-                    WasmType::FuncRef => {}
-                    WasmType::ExternRef => {}
+                    WasmType::Ref(WasmRefType { nullable: true, .. }) => {}
                     ty => panic!("unsupported reference type for global: {:?}", ty),
                 },
             }
@@ -1196,7 +1189,10 @@ impl Drop for Instance {
             };
             match global.wasm_ty {
                 // For now only externref globals need to get destroyed
-                WasmType::ExternRef => {}
+                WasmType::Ref(WasmRefType {
+                    heap_type: WasmHeapType::Extern,
+                    ..
+                }) => {}
                 _ => continue,
             }
             unsafe {

@@ -8,18 +8,18 @@ use crate::isa::{x64::masm::MacroAssembler as X64Masm, CallingConvention};
 use crate::masm::MacroAssembler;
 use crate::regalloc::RegAlloc;
 use crate::stack::Stack;
+use crate::trampoline::{Trampoline, TrampolineKind};
 use crate::{
     isa::{Builder, TargetIsa},
     regset::RegSet,
 };
-use crate::{Trampoline, TrampolineKind};
 use anyhow::Result;
 use cranelift_codegen::settings::{self, Flags};
 use cranelift_codegen::{isa::x64::settings as x64_settings, Final, MachBufferFinalized};
 use cranelift_codegen::{MachTextSectionBuilder, TextSectionBuilder};
 use target_lexicon::Triple;
-use wasmparser::{FuncType, FuncValidator, FunctionBody, ValidatorResources};
-use wasmtime_environ::ModuleTranslation;
+use wasmparser::{FuncValidator, FunctionBody, ValidatorResources};
+use wasmtime_environ::{ModuleTranslation, WasmFuncType};
 
 use self::regs::ALL_GPR;
 
@@ -88,7 +88,7 @@ impl TargetIsa for X64 {
 
     fn compile_function(
         &self,
-        sig: &FuncType,
+        sig: &WasmFuncType,
         body: &FunctionBody,
         translation: &ModuleTranslation,
         validator: &mut FuncValidator<ValidatorResources>,
@@ -98,7 +98,7 @@ impl TargetIsa for X64 {
         let stack = Stack::new();
         let abi_sig = abi::X64ABI::sig(sig, &CallingConvention::Default);
 
-        let defined_locals = DefinedLocals::new(&mut body, validator)?;
+        let defined_locals = DefinedLocals::new(translation, &mut body, validator)?;
         let frame = Frame::new::<abi::X64ABI>(&abi_sig, &defined_locals)?;
         // TODO Add in floating point bitmask
         let regalloc = RegAlloc::new(RegSet::new(ALL_GPR, 0), regs::scratch());
@@ -122,7 +122,7 @@ impl TargetIsa for X64 {
 
     fn compile_trampoline(
         &self,
-        ty: &FuncType,
+        ty: &WasmFuncType,
         kind: TrampolineKind,
     ) -> Result<MachBufferFinalized<Final>> {
         use TrampolineKind::*;

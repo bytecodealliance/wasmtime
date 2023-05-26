@@ -87,7 +87,7 @@ impl PartialEq for FdSource {
                 use rustix::fd::AsRawFd;
                 self.as_file().as_raw_fd() == other.as_file().as_raw_fd()
             } else {
-                drop(other);
+                let _ = other;
                 match *self {}
             }
         }

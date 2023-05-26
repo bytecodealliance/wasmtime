@@ -10,14 +10,15 @@ use cranelift_frontend::FunctionBuilder;
 use cranelift_frontend::Variable;
 use cranelift_wasm::{
     self, FuncIndex, FuncTranslationState, GlobalIndex, GlobalVariable, Heap, HeapData, HeapStyle,
-    MemoryIndex, TableIndex, TargetEnvironment, TypeIndex, WasmError, WasmResult, WasmType,
+    MemoryIndex, TableIndex, TargetEnvironment, TypeIndex, WasmHeapType, WasmRefType, WasmResult,
+    WasmType,
 };
 use std::convert::TryFrom;
 use std::mem;
 use wasmparser::Operator;
 use wasmtime_environ::{
     BuiltinFunctionIndex, MemoryPlan, MemoryStyle, Module, ModuleTranslation, ModuleTypes, PtrSize,
-    TableStyle, Tunables, VMOffsets, WASM_PAGE_SIZE,
+    TableStyle, Tunables, TypeConvert, VMOffsets, WASM_PAGE_SIZE,
 };
 use wasmtime_environ::{FUNCREF_INIT_BIT, FUNCREF_MASK};
 
@@ -289,6 +290,52 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             .load(pointer_type, mem_flags, array_addr, body_offset);
 
         (base, func_addr)
+    }
+
+    /// This calls a function by reference without checking the signature. It
+    /// gets the function address, sets relevant flags, and passes the special
+    /// callee/caller vmctxs. It is used by both call_indirect (which checks the
+    /// signature) and call_ref (which doesn't).
+    fn call_function_unchecked(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        sig_ref: ir::SigRef,
+        callee: ir::Value,
+        call_args: &[ir::Value],
+    ) -> WasmResult<ir::Inst> {
+        let pointer_type = self.pointer_type();
+
+        // Dereference callee pointer to get the function address.
+        let mem_flags = ir::MemFlags::trusted().with_readonly();
+        let func_addr = builder.ins().load(
+            pointer_type,
+            mem_flags,
+            callee,
+            i32::from(self.offsets.ptr.vm_func_ref_wasm_call()),
+        );
+
+        let mut real_call_args = Vec::with_capacity(call_args.len() + 2);
+        let caller_vmctx = builder
+            .func
+            .special_param(ArgumentPurpose::VMContext)
+            .unwrap();
+
+        // First append the callee vmctx address.
+        let vmctx = builder.ins().load(
+            pointer_type,
+            mem_flags,
+            callee,
+            i32::from(self.offsets.ptr.vm_func_ref_vmctx()),
+        );
+        real_call_args.push(vmctx);
+        real_call_args.push(caller_vmctx);
+
+        // Then append the regular call arguments.
+        real_call_args.extend_from_slice(call_args);
+
+        Ok(builder
+            .ins()
+            .call_indirect(sig_ref, func_addr, &real_call_args))
     }
 
     /// Generate code to increment or decrement the given `externref`'s
@@ -813,12 +860,18 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     }
 }
 
+impl TypeConvert for FuncEnvironment<'_> {
+    fn lookup_heap_type(&self, ty: TypeIndex) -> WasmHeapType {
+        self.module.lookup_heap_type(ty)
+    }
+}
+
 impl<'module_environment> TargetEnvironment for FuncEnvironment<'module_environment> {
     fn target_config(&self) -> TargetFrontendConfig {
         self.isa.frontend_config()
     }
 
-    fn reference_type(&self, ty: WasmType) -> ir::Type {
+    fn reference_type(&self, ty: WasmHeapType) -> ir::Type {
         crate::reference_type(ty, self.pointer_type())
     }
 
@@ -891,7 +944,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         });
 
         let element_size = u64::from(
-            self.reference_type(self.module.table_plans[index].table.wasm_ty)
+            self.reference_type(self.module.table_plans[index].table.wasm_ty.heap_type)
                 .bytes(),
         );
 
@@ -913,21 +966,17 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         init_value: ir::Value,
     ) -> WasmResult<ir::Value> {
         let (func_idx, func_sig) =
-            match self.module.table_plans[table_index].table.wasm_ty {
-                WasmType::FuncRef => (
+            match self.module.table_plans[table_index].table.wasm_ty.heap_type {
+                WasmHeapType::Func | WasmHeapType::TypedFunc(_) => (
                     BuiltinFunctionIndex::table_grow_func_ref(),
                     self.builtin_function_signatures
                         .table_grow_func_ref(&mut pos.func),
                 ),
-                WasmType::ExternRef => (
+                WasmHeapType::Extern => (
                     BuiltinFunctionIndex::table_grow_externref(),
                     self.builtin_function_signatures
                         .table_grow_externref(&mut pos.func),
                 ),
-                _ => return Err(WasmError::Unsupported(
-                    "`table.grow` with a table element type that is not `funcref` or `externref`"
-                        .into(),
-                )),
             };
 
         let (vmctx, func_addr) = self.translate_load_builtin_function_address(&mut pos, func_idx);
@@ -952,13 +1001,13 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         let pointer_type = self.pointer_type();
 
         let plan = &self.module.table_plans[table_index];
-        match plan.table.wasm_ty {
-            WasmType::FuncRef => match plan.style {
+        match plan.table.wasm_ty.heap_type {
+            WasmHeapType::Func | WasmHeapType::TypedFunc(_) => match plan.style {
                 TableStyle::CallerChecksSignature => {
                     Ok(self.get_or_init_func_ref_table_elem(builder, table_index, table, index))
                 }
             },
-            WasmType::ExternRef => {
+            WasmHeapType::Extern => {
                 // Our read barrier for `externref` tables is roughly equivalent
                 // to the following pseudocode:
                 //
@@ -979,7 +1028,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 // onto the stack are safely held alive by the
                 // `VMExternRefActivationsTable`.
 
-                let reference_type = self.reference_type(WasmType::ExternRef);
+                let reference_type = self.reference_type(WasmHeapType::Extern);
 
                 builder.ensure_inserted_block();
                 let continue_block = builder.create_block();
@@ -1074,10 +1123,6 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
 
                 Ok(elem)
             }
-            ty => Err(WasmError::Unsupported(format!(
-                "unsupported table type for `table.get` instruction: {:?}",
-                ty
-            ))),
         }
     }
 
@@ -1090,10 +1135,9 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         index: ir::Value,
     ) -> WasmResult<()> {
         let pointer_type = self.pointer_type();
-
         let plan = &self.module.table_plans[table_index];
-        match plan.table.wasm_ty {
-            WasmType::FuncRef => match plan.style {
+        match plan.table.wasm_ty.heap_type {
+            WasmHeapType::Func | WasmHeapType::TypedFunc(_) => match plan.style {
                 TableStyle::CallerChecksSignature => {
                     let table_entry_addr = builder.ins().table_addr(pointer_type, table, index, 0);
                     // Set the "initialized bit". See doc-comment on
@@ -1109,7 +1153,8 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                     Ok(())
                 }
             },
-            WasmType::ExternRef => {
+
+            WasmHeapType::Extern => {
                 // Our write barrier for `externref`s being copied out of the
                 // stack and into a table is roughly equivalent to the following
                 // pseudocode:
@@ -1239,10 +1284,6 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
 
                 Ok(())
             }
-            ty => Err(WasmError::Unsupported(format!(
-                "unsupported table type for `table.set` instruction: {:?}",
-                ty
-            ))),
         }
     }
 
@@ -1255,21 +1296,17 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         len: ir::Value,
     ) -> WasmResult<()> {
         let (builtin_idx, builtin_sig) =
-            match self.module.table_plans[table_index].table.wasm_ty {
-                WasmType::FuncRef => (
+            match self.module.table_plans[table_index].table.wasm_ty.heap_type {
+                WasmHeapType::Func | WasmHeapType::TypedFunc(_) => (
                     BuiltinFunctionIndex::table_fill_func_ref(),
                     self.builtin_function_signatures
                         .table_fill_func_ref(&mut pos.func),
                 ),
-                WasmType::ExternRef => (
+                WasmHeapType::Extern => (
                     BuiltinFunctionIndex::table_fill_externref(),
                     self.builtin_function_signatures
                         .table_fill_externref(&mut pos.func),
                 ),
-                _ => return Err(WasmError::Unsupported(
-                    "`table.fill` with a table element type that is not `funcref` or `externref`"
-                        .into(),
-                )),
             };
 
         let (vmctx, builtin_addr) =
@@ -1288,16 +1325,13 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     fn translate_ref_null(
         &mut self,
         mut pos: cranelift_codegen::cursor::FuncCursor,
-        ty: WasmType,
+        ht: WasmHeapType,
     ) -> WasmResult<ir::Value> {
-        Ok(match ty {
-            WasmType::FuncRef => pos.ins().iconst(self.pointer_type(), 0),
-            WasmType::ExternRef => pos.ins().null(self.reference_type(ty)),
-            _ => {
-                return Err(WasmError::Unsupported(
-                    "`ref.null T` that is not a `funcref` or an `externref`".into(),
-                ));
+        Ok(match ht {
+            WasmHeapType::Func | WasmHeapType::TypedFunc(_) => {
+                pos.ins().iconst(self.pointer_type(), 0)
             }
+            WasmHeapType::Extern => pos.ins().null(self.reference_type(ht)),
         })
     }
 
@@ -1344,7 +1378,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     ) -> WasmResult<ir::Value> {
         debug_assert_eq!(
             self.module.globals[index].wasm_ty,
-            WasmType::ExternRef,
+            WasmType::Ref(WasmRefType::EXTERNREF),
             "We only use GlobalVariable::Custom for externref"
         );
 
@@ -1372,7 +1406,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     ) -> WasmResult<()> {
         debug_assert_eq!(
             self.module.globals[index].wasm_ty,
-            WasmType::ExternRef,
+            WasmType::Ref(WasmRefType::EXTERNREF),
             "We only use GlobalVariable::Custom for externref"
         );
 
@@ -1510,21 +1544,37 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         func: &mut ir::Function,
         index: GlobalIndex,
     ) -> WasmResult<GlobalVariable> {
-        // Although `ExternRef`s live at the same memory location as any other
-        // type of global at the same index would, getting or setting them
-        // requires ref counting barriers. Therefore, we need to use
-        // `GlobalVariable::Custom`, as that is the only kind of
-        // `GlobalVariable` for which `cranelift-wasm` supports custom access
-        // translation.
-        if self.module.globals[index].wasm_ty == WasmType::ExternRef {
-            return Ok(GlobalVariable::Custom);
+        let ty = self.module.globals[index].wasm_ty;
+        match ty {
+            // Although `ExternRef`s live at the same memory location as any
+            // other type of global at the same index would, getting or setting
+            // them requires ref counting barriers. Therefore, we need to use
+            // `GlobalVariable::Custom`, as that is the only kind of
+            // `GlobalVariable` for which `cranelift-wasm` supports custom
+            // access translation.
+            WasmType::Ref(WasmRefType {
+                heap_type: WasmHeapType::Extern,
+                ..
+            }) => return Ok(GlobalVariable::Custom),
+
+            // Funcrefs are represented as pointers which survive for the
+            // entire lifetime of the `Store` so there's no need for barriers.
+            // This means that they can fall through to memory as well.
+            WasmType::Ref(WasmRefType {
+                heap_type: WasmHeapType::Func | WasmHeapType::TypedFunc(_),
+                ..
+            }) => {}
+
+            // Value types all live in memory so let them fall through to a
+            // memory-based global.
+            WasmType::I32 | WasmType::I64 | WasmType::F32 | WasmType::F64 | WasmType::V128 => {}
         }
 
         let (gv, offset) = self.get_global_location(func, index);
         Ok(GlobalVariable::Memory {
             gv,
             offset: offset.into(),
-            ty: super::value_type(self.isa, self.module.globals[index].wasm_ty),
+            ty: super::value_type(self.isa, ty),
         })
     }
 
@@ -1593,15 +1643,6 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             .ins()
             .trapz(funcref_ptr, ir::TrapCode::IndirectCallToNull);
 
-        // Dereference the funcref pointer to get the function address.
-        let mem_flags = ir::MemFlags::trusted().with_readonly();
-        let func_addr = builder.ins().load(
-            pointer_type,
-            mem_flags,
-            funcref_ptr,
-            i32::from(self.offsets.ptr.vm_func_ref_wasm_call()),
-        );
-
         // If necessary, check the signature.
         match self.module.table_plans[table_index].style {
             TableStyle::CallerChecksSignature => {
@@ -1645,28 +1686,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             }
         }
 
-        let mut real_call_args = Vec::with_capacity(call_args.len() + 2);
-        let caller_vmctx = builder
-            .func
-            .special_param(ArgumentPurpose::VMContext)
-            .unwrap();
-
-        // First append the callee vmctx address.
-        let vmctx = builder.ins().load(
-            pointer_type,
-            mem_flags,
-            funcref_ptr,
-            i32::from(self.offsets.ptr.vm_func_ref_vmctx()),
-        );
-        real_call_args.push(vmctx);
-        real_call_args.push(caller_vmctx);
-
-        // Then append the regular call arguments.
-        real_call_args.extend_from_slice(call_args);
-
-        Ok(builder
-            .ins()
-            .call_indirect(sig_ref, func_addr, &real_call_args))
+        self.call_function_unchecked(builder, sig_ref, funcref_ptr, call_args)
     }
 
     fn translate_call(
@@ -1719,6 +1739,26 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         real_call_args.extend_from_slice(call_args);
 
         Ok(pos.ins().call_indirect(sig_ref, func_addr, &real_call_args))
+    }
+
+    fn translate_call_ref(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        sig_ref: ir::SigRef,
+        callee: ir::Value,
+        call_args: &[ir::Value],
+    ) -> WasmResult<ir::Inst> {
+        // Check for whether the callee is null, and trap if so.
+        //
+        // FIXME: the wasm type system tracks enough information to know whether
+        // `callee` is a null reference or not. In some situations it can be
+        // statically known here that `callee` cannot be null in which case this
+        // null check can be elided. This requires feeding type information from
+        // wasmparser's validator into this function, however, which is not
+        // easily done at this time.
+        builder.ins().trapz(callee, ir::TrapCode::NullReference);
+
+        self.call_function_unchecked(builder, sig_ref, callee, call_args)
     }
 
     fn translate_memory_grow(

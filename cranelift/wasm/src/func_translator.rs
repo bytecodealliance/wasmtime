@@ -9,7 +9,6 @@ use crate::environ::FuncEnvironment;
 use crate::state::FuncTranslationState;
 use crate::translation_utils::get_vmctx_value_label;
 use crate::WasmResult;
-use core::convert::TryInto;
 use cranelift_codegen::entity::EntityRef;
 use cranelift_codegen::ir::{self, Block, InstBuilder, ValueLabel};
 use cranelift_codegen::timing;
@@ -193,27 +192,49 @@ fn declare_locals<FE: FuncEnvironment + ?Sized>(
 ) -> WasmResult<()> {
     // All locals are initialized to 0.
     use wasmparser::ValType::*;
-    let zeroval = match wasm_type {
-        I32 => builder.ins().iconst(ir::types::I32, 0),
-        I64 => builder.ins().iconst(ir::types::I64, 0),
-        F32 => builder.ins().f32const(ir::immediates::Ieee32::with_bits(0)),
-        F64 => builder.ins().f64const(ir::immediates::Ieee64::with_bits(0)),
+    let (ty, init) = match wasm_type {
+        I32 => (
+            ir::types::I32,
+            Some(builder.ins().iconst(ir::types::I32, 0)),
+        ),
+        I64 => (
+            ir::types::I64,
+            Some(builder.ins().iconst(ir::types::I64, 0)),
+        ),
+        F32 => (
+            ir::types::F32,
+            Some(builder.ins().f32const(ir::immediates::Ieee32::with_bits(0))),
+        ),
+        F64 => (
+            ir::types::F64,
+            Some(builder.ins().f64const(ir::immediates::Ieee64::with_bits(0))),
+        ),
         V128 => {
             let constant_handle = builder.func.dfg.constants.insert([0; 16].to_vec().into());
-            builder.ins().vconst(ir::types::I8X16, constant_handle)
+            (
+                ir::types::I8X16,
+                Some(builder.ins().vconst(ir::types::I8X16, constant_handle)),
+            )
         }
-        Ref(t) => {
-            assert!(t.is_nullable());
-            environ.translate_ref_null(builder.cursor(), t.heap_type().try_into()?)?
+        Ref(rt) => {
+            let hty = environ.convert_heap_type(rt.heap_type());
+            let ty = environ.reference_type(hty);
+            let init = if rt.is_nullable() {
+                Some(environ.translate_ref_null(builder.cursor(), hty)?)
+            } else {
+                None
+            };
+            (ty, init)
         }
     };
 
-    let ty = builder.func.dfg.value_type(zeroval);
     for _ in 0..count {
         let local = Variable::new(*next_local);
         builder.declare_var(local, ty);
-        builder.def_var(local, zeroval);
-        builder.set_val_label(zeroval, ValueLabel::new(*next_local));
+        if let Some(init) = init {
+            builder.def_var(local, init);
+            builder.set_val_label(init, ValueLabel::new(*next_local));
+        }
         *next_local += 1;
     }
     Ok(())

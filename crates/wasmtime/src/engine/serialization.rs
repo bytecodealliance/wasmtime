@@ -168,6 +168,7 @@ struct WasmFeatures {
     memory64: bool,
     relaxed_simd: bool,
     extended_const: bool,
+    function_references: bool,
 }
 
 impl Metadata {
@@ -199,7 +200,6 @@ impl Metadata {
 
         assert!(!memory_control);
         assert!(!tail_call);
-        assert!(!function_references);
         assert!(!gc);
 
         Metadata {
@@ -219,6 +219,7 @@ impl Metadata {
                 memory64,
                 relaxed_simd,
                 extended_const,
+                function_references,
             },
         }
     }
@@ -389,6 +390,7 @@ impl Metadata {
             memory64,
             relaxed_simd,
             extended_const,
+            function_references,
         } = self.features;
 
         Self::check_bool(
@@ -437,6 +439,11 @@ impl Metadata {
             relaxed_simd,
             other.relaxed_simd,
             "WebAssembly relaxed-simd support",
+        )?;
+        Self::check_bool(
+            function_references,
+            other.function_references,
+            "WebAssembly function-references support",
         )?;
 
         Ok(())

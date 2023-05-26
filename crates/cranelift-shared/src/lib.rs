@@ -77,6 +77,7 @@ pub fn mach_trap_to_trap(trap: &MachTrap) -> Option<TrapInformation> {
             ir::TrapCode::UnreachableCodeReached => Trap::UnreachableCodeReached,
             ir::TrapCode::Interrupt => Trap::Interrupt,
             ir::TrapCode::User(ALWAYS_TRAP_CODE) => Trap::AlwaysTrapAdapter,
+            ir::TrapCode::NullReference => Trap::NullReference,
 
             // These do not get converted to wasmtime traps, since they
             // shouldn't ever be hit in theory. Instead of catching and handling

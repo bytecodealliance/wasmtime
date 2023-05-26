@@ -6,6 +6,7 @@ use target_lexicon::Triple;
 use wasmtime_environ::{
     wasmparser::{Parser as WasmParser, Validator},
     DefinedFuncIndex, FunctionBodyData, ModuleEnvironment, ModuleTranslation, Tunables,
+    TypeConvert,
 };
 use winch_codegen::{lookup, TargetIsa};
 use winch_filetests::disasm::disasm;
@@ -55,6 +56,7 @@ fn compile(
     let sig = types
         .function_at(index.as_u32())
         .expect(&format!("function type at index {:?}", index.as_u32()));
+    let sig = translation.module.convert_func_type(sig);
     let FunctionBodyData { body, validator } = f.1;
     let mut validator = validator.into_validator(Default::default());
     let buffer = isa

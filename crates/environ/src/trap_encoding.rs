@@ -87,7 +87,9 @@ pub enum Trap {
 
     /// Used to indicate that a trap was raised by atomic wait operations on non shared memory.
     AtomicWaitNonSharedMemory,
-    //
+
+    /// Call to a null reference.
+    NullReference,
     // if adding a variant here be sure to update the `check!` macro below
 }
 
@@ -110,6 +112,7 @@ impl fmt::Display for Trap {
             AlwaysTrapAdapter => "degenerate component adapter called",
             OutOfFuel => "all fuel consumed by WebAssembly",
             AtomicWaitNonSharedMemory => "atomic wait on non-shared memory",
+            NullReference => "null reference",
         };
         write!(f, "wasm trap: {desc}")
     }
@@ -224,6 +227,7 @@ pub fn lookup_trap_code(section: &[u8], offset: usize) -> Option<Trap> {
         AlwaysTrapAdapter
         OutOfFuel
         AtomicWaitNonSharedMemory
+        NullReference
     }
 
     if cfg!(debug_assertions) {

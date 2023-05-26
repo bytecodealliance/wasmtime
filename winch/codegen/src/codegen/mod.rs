@@ -6,10 +6,8 @@ use crate::{
 };
 use anyhow::Result;
 use call::FnCall;
-use wasmparser::{
-    BinaryReader, FuncType, FuncValidator, ValType, ValidatorResources, VisitOperator,
-};
-use wasmtime_environ::FuncIndex;
+use wasmparser::{BinaryReader, FuncValidator, ValidatorResources, VisitOperator};
+use wasmtime_environ::{FuncIndex, WasmFuncType, WasmType};
 
 mod context;
 pub(crate) use context::*;
@@ -128,9 +126,9 @@ where
         let callee = self.env.callee_from_index(index);
         let (sig, callee_addr): (ABISig, Option<<M as MacroAssembler>::Address>) = if callee.import
         {
-            let mut params = vec![ValType::I64, ValType::I64];
-            params.extend_from_slice(&callee.ty.params());
-            let sig = FuncType::new(params, callee.ty.results().to_owned());
+            let mut params = vec![WasmType::I64, WasmType::I64];
+            params.extend_from_slice(callee.ty.params());
+            let sig = WasmFuncType::new(params.into(), callee.ty.returns().into());
 
             let caller_vmctx = <M::ABI as ABI>::vmctx_reg();
             let callee_vmctx = self.context.any_gpr(self.masm);
@@ -196,8 +194,8 @@ where
                     .expect("arg should be associated to a register");
 
                 match &ty {
-                    ValType::I32 => self.masm.store(src.into(), addr, OperandSize::S32),
-                    ValType::I64 => self.masm.store(src.into(), addr, OperandSize::S64),
+                    WasmType::I32 => self.masm.store(src.into(), addr, OperandSize::S32),
+                    WasmType::I64 => self.masm.store(src.into(), addr, OperandSize::S64),
                     _ => panic!("Unsupported type {:?}", ty),
                 }
             });

@@ -1,4 +1,5 @@
-use wasmparser::ValType;
+use wasmtime_environ::WasmType;
+
 /// Base register used to address the local slot.
 ///
 /// Slots for stack arguments are addressed from the frame pointer.
@@ -19,7 +20,7 @@ pub(crate) struct LocalSlot {
     /// The offset of the local slot.
     pub offset: u32,
     /// The type contained by this local slot.
-    pub ty: ValType,
+    pub ty: WasmType,
     /// Base register associated to this local slot.
     base: Base,
 }
@@ -27,7 +28,7 @@ pub(crate) struct LocalSlot {
 impl LocalSlot {
     /// Creates a local slot for a function defined local or
     /// for a spilled argument register.
-    pub fn new(ty: ValType, offset: u32) -> Self {
+    pub fn new(ty: WasmType, offset: u32) -> Self {
         Self {
             ty,
             offset,
@@ -38,7 +39,7 @@ impl LocalSlot {
     /// Int32 shortcut for `new`.
     pub fn i32(offset: u32) -> Self {
         Self {
-            ty: ValType::I32,
+            ty: WasmType::I32,
             offset,
             base: Base::SP,
         }
@@ -47,14 +48,14 @@ impl LocalSlot {
     /// Int64 shortcut for `new`.
     pub fn i64(offset: u32) -> Self {
         Self {
-            ty: ValType::I64,
+            ty: WasmType::I64,
             offset,
             base: Base::SP,
         }
     }
 
     /// Creates a local slot for a stack function argument.
-    pub fn stack_arg(ty: ValType, offset: u32) -> Self {
+    pub fn stack_arg(ty: WasmType, offset: u32) -> Self {
         Self {
             ty,
             offset,

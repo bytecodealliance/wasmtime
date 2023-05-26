@@ -4,9 +4,7 @@
 pub use wasmparser;
 
 use cranelift_entity::entity_impl;
-
 use serde::{Deserialize, Serialize};
-use std::convert::{TryFrom, TryInto};
 use std::fmt;
 
 mod error;
@@ -25,68 +23,8 @@ pub enum WasmType {
     F64,
     /// V128 type
     V128,
-    /// FuncRef type
-    FuncRef,
-    /// ExternRef type
-    ExternRef,
-}
-
-impl TryFrom<wasmparser::ValType> for WasmType {
-    type Error = WasmError;
-    fn try_from(ty: wasmparser::ValType) -> Result<Self, Self::Error> {
-        use wasmparser::ValType::*;
-        match ty {
-            I32 => Ok(WasmType::I32),
-            I64 => Ok(WasmType::I64),
-            F32 => Ok(WasmType::F32),
-            F64 => Ok(WasmType::F64),
-            V128 => Ok(WasmType::V128),
-            Ref(r) => r.try_into(),
-        }
-    }
-}
-
-impl TryFrom<wasmparser::RefType> for WasmType {
-    type Error = WasmError;
-    fn try_from(ty: wasmparser::RefType) -> Result<Self, Self::Error> {
-        match ty {
-            wasmparser::RefType::FUNCREF => Ok(WasmType::FuncRef),
-            wasmparser::RefType::EXTERNREF => Ok(WasmType::ExternRef),
-            _ => Err(WasmError::Unsupported(
-                "function references proposal".to_string(),
-            )),
-        }
-    }
-}
-
-impl TryFrom<wasmparser::HeapType> for WasmType {
-    type Error = WasmError;
-    fn try_from(ty: wasmparser::HeapType) -> Result<Self, Self::Error> {
-        match ty {
-            wasmparser::HeapType::Func => Ok(WasmType::FuncRef),
-            wasmparser::HeapType::Extern => Ok(WasmType::ExternRef),
-            // NB: when the function-references proposal is implemented this
-            // entire `impl` should probably go away to remove the need for not
-            // only this `unsupported` but everything.
-            _ => Err(WasmError::Unsupported(
-                "function references proposal".to_string(),
-            )),
-        }
-    }
-}
-
-impl From<WasmType> for wasmparser::ValType {
-    fn from(ty: WasmType) -> wasmparser::ValType {
-        match ty {
-            WasmType::I32 => wasmparser::ValType::I32,
-            WasmType::I64 => wasmparser::ValType::I64,
-            WasmType::F32 => wasmparser::ValType::F32,
-            WasmType::F64 => wasmparser::ValType::F64,
-            WasmType::V128 => wasmparser::ValType::V128,
-            WasmType::FuncRef => wasmparser::ValType::FUNCREF,
-            WasmType::ExternRef => wasmparser::ValType::EXTERNREF,
-        }
-    }
+    /// Reference type
+    Ref(WasmRefType),
 }
 
 impl fmt::Display for WasmType {
@@ -97,8 +35,69 @@ impl fmt::Display for WasmType {
             WasmType::F32 => write!(f, "f32"),
             WasmType::F64 => write!(f, "f64"),
             WasmType::V128 => write!(f, "v128"),
-            WasmType::ExternRef => write!(f, "externref"),
-            WasmType::FuncRef => write!(f, "funcref"),
+            WasmType::Ref(rt) => write!(f, "{rt}"),
+        }
+    }
+}
+
+/// WebAssembly reference type -- equivalent of `wasmparser`'s RefType
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct WasmRefType {
+    pub nullable: bool,
+    pub heap_type: WasmHeapType,
+}
+
+impl WasmRefType {
+    pub const EXTERNREF: WasmRefType = WasmRefType {
+        nullable: true,
+        heap_type: WasmHeapType::Extern,
+    };
+    pub const FUNCREF: WasmRefType = WasmRefType {
+        nullable: true,
+        heap_type: WasmHeapType::Func,
+    };
+}
+
+impl fmt::Display for WasmRefType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            Self::FUNCREF => write!(f, "funcref"),
+            Self::EXTERNREF => write!(f, "externref"),
+            _ => {
+                if self.nullable {
+                    write!(f, "(ref null {})", self.heap_type)
+                } else {
+                    write!(f, "(ref {})", self.heap_type)
+                }
+            }
+        }
+    }
+}
+
+/// WebAssembly heap type -- equivalent of `wasmparser`'s HeapType
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum WasmHeapType {
+    Func,
+    Extern,
+    // FIXME: the `SignatureIndex` payload here is not suitable given all the
+    // contexts that this type is used within. For example the Engine in
+    // wasmtime hashes this index which is not appropriate because the index is
+    // not globally unique.
+    //
+    // This probably needs to become `WasmHeapType<T>` where all of translation
+    // uses `WasmHeapType<SignatureIndex>` and all of engine-level "stuff"  uses
+    // `WasmHeapType<VMSharedSignatureIndex>`. This `<T>` would need to be
+    // propagated to quite a few locations though so it's left for a future
+    // refactoring at this time.
+    TypedFunc(SignatureIndex),
+}
+
+impl fmt::Display for WasmHeapType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::Func => write!(f, "func"),
+            Self::Extern => write!(f, "extern"),
+            Self::TypedFunc(i) => write!(f, "func_sig{}", i.as_u32()),
         }
     }
 }
@@ -115,10 +114,19 @@ pub struct WasmFuncType {
 impl WasmFuncType {
     #[inline]
     pub fn new(params: Box<[WasmType]>, returns: Box<[WasmType]>) -> Self {
-        let externref_params_count = params.iter().filter(|p| **p == WasmType::ExternRef).count();
+        let externref_params_count = params
+            .iter()
+            .filter(|p| match **p {
+                WasmType::Ref(rt) => rt.heap_type == WasmHeapType::Extern,
+                _ => false,
+            })
+            .count();
         let externref_returns_count = returns
             .iter()
-            .filter(|r| **r == WasmType::ExternRef)
+            .filter(|r| match **r {
+                WasmType::Ref(rt) => rt.heap_type == WasmHeapType::Extern,
+                _ => false,
+            })
             .count();
         WasmFuncType {
             params,
@@ -150,25 +158,6 @@ impl WasmFuncType {
     #[inline]
     pub fn externref_returns_count(&self) -> usize {
         self.externref_returns_count
-    }
-}
-
-impl TryFrom<wasmparser::FuncType> for WasmFuncType {
-    type Error = WasmError;
-    fn try_from(ty: wasmparser::FuncType) -> Result<Self, Self::Error> {
-        let params = ty
-            .params()
-            .iter()
-            .copied()
-            .map(WasmType::try_from)
-            .collect::<Result<_, Self::Error>>()?;
-        let returns = ty
-            .results()
-            .iter()
-            .copied()
-            .map(WasmType::try_from)
-            .collect::<Result<_, Self::Error>>()?;
-        Ok(Self::new(params, returns))
     }
 }
 
@@ -341,37 +330,15 @@ pub enum GlobalInit {
     RefFunc(FuncIndex),
 }
 
-impl Global {
-    /// Creates a new `Global` type from wasmparser's representation.
-    pub fn new(ty: wasmparser::GlobalType) -> WasmResult<Global> {
-        Ok(Global {
-            wasm_ty: ty.content_type.try_into()?,
-            mutability: ty.mutable,
-        })
-    }
-}
-
 /// WebAssembly table.
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Table {
     /// The table elements' Wasm type.
-    pub wasm_ty: WasmType,
+    pub wasm_ty: WasmRefType,
     /// The minimum number of elements in the table.
     pub minimum: u32,
     /// The maximum number of elements in the table.
     pub maximum: Option<u32>,
-}
-
-impl TryFrom<wasmparser::TableType> for Table {
-    type Error = WasmError;
-
-    fn try_from(ty: wasmparser::TableType) -> WasmResult<Table> {
-        Ok(Table {
-            wasm_ty: ty.element_type.try_into()?,
-            minimum: ty.initial,
-            maximum: ty.maximum,
-        })
-    }
 }
 
 /// WebAssembly linear memory.
@@ -413,4 +380,83 @@ impl From<wasmparser::TagType> for Tag {
             },
         }
     }
+}
+
+/// Helpers used to convert a `wasmparser` type to a type in this crate.
+pub trait TypeConvert {
+    /// Converts a wasmparser table type into a wasmtime type
+    fn convert_global_type(&self, ty: &wasmparser::GlobalType) -> Global {
+        Global {
+            wasm_ty: self.convert_valtype(ty.content_type),
+            mutability: ty.mutable,
+        }
+    }
+
+    /// Converts a wasmparser table type into a wasmtime type
+    fn convert_table_type(&self, ty: &wasmparser::TableType) -> Table {
+        Table {
+            wasm_ty: self.convert_ref_type(ty.element_type),
+            minimum: ty.initial,
+            maximum: ty.maximum,
+        }
+    }
+
+    /// Converts a wasmparser function type to a wasmtime type
+    fn convert_func_type(&self, ty: &wasmparser::FuncType) -> WasmFuncType {
+        let params = ty
+            .params()
+            .iter()
+            .map(|t| self.convert_valtype(*t))
+            .collect();
+        let results = ty
+            .results()
+            .iter()
+            .map(|t| self.convert_valtype(*t))
+            .collect();
+        WasmFuncType::new(params, results)
+    }
+
+    /// Converts a wasmparser value type to a wasmtime type
+    fn convert_valtype(&self, ty: wasmparser::ValType) -> WasmType {
+        match ty {
+            wasmparser::ValType::I32 => WasmType::I32,
+            wasmparser::ValType::I64 => WasmType::I64,
+            wasmparser::ValType::F32 => WasmType::F32,
+            wasmparser::ValType::F64 => WasmType::F64,
+            wasmparser::ValType::V128 => WasmType::V128,
+            wasmparser::ValType::Ref(t) => WasmType::Ref(self.convert_ref_type(t)),
+        }
+    }
+
+    /// Converts a wasmparser reference type to a wasmtime type
+    fn convert_ref_type(&self, ty: wasmparser::RefType) -> WasmRefType {
+        WasmRefType {
+            nullable: ty.is_nullable(),
+            heap_type: self.convert_heap_type(ty.heap_type()),
+        }
+    }
+
+    /// Converts a wasmparser heap type to a wasmtime type
+    fn convert_heap_type(&self, ty: wasmparser::HeapType) -> WasmHeapType {
+        match ty {
+            wasmparser::HeapType::Func => WasmHeapType::Func,
+            wasmparser::HeapType::Extern => WasmHeapType::Extern,
+            wasmparser::HeapType::TypedFunc(i) => self.lookup_heap_type(TypeIndex::from_u32(i)),
+
+            wasmparser::HeapType::Any
+            | wasmparser::HeapType::None
+            | wasmparser::HeapType::NoExtern
+            | wasmparser::HeapType::NoFunc
+            | wasmparser::HeapType::Eq
+            | wasmparser::HeapType::Struct
+            | wasmparser::HeapType::Array
+            | wasmparser::HeapType::I31 => {
+                unimplemented!("unsupported heap type {ty:?}");
+            }
+        }
+    }
+
+    /// Converts the specified type index from a heap type into a canonicalized
+    /// heap type.
+    fn lookup_heap_type(&self, index: TypeIndex) -> WasmHeapType;
 }

@@ -9,7 +9,9 @@ use sptr::Strict;
 use std::convert::{TryFrom, TryInto};
 use std::ops::Range;
 use std::ptr::{self, NonNull};
-use wasmtime_environ::{TablePlan, Trap, WasmType, FUNCREF_INIT_BIT, FUNCREF_MASK};
+use wasmtime_environ::{
+    TablePlan, Trap, WasmHeapType, WasmRefType, FUNCREF_INIT_BIT, FUNCREF_MASK,
+};
 
 /// An element going into or coming out of a table.
 ///
@@ -27,7 +29,7 @@ pub enum TableElement {
     UninitFunc,
 }
 
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum TableElementType {
     Func,
     Extern,
@@ -172,11 +174,11 @@ pub enum Table {
 
 pub type TableValue = Option<SendSyncPtr<u8>>;
 
-fn wasm_to_table_type(ty: WasmType) -> Result<TableElementType> {
-    match ty {
-        WasmType::FuncRef => Ok(TableElementType::Func),
-        WasmType::ExternRef => Ok(TableElementType::Extern),
-        ty => bail!("invalid table element type {:?}", ty),
+fn wasm_to_table_type(ty: WasmRefType) -> Result<TableElementType> {
+    match ty.heap_type {
+        WasmHeapType::Func => Ok(TableElementType::Func),
+        WasmHeapType::Extern => Ok(TableElementType::Extern),
+        WasmHeapType::TypedFunc(_) => Ok(TableElementType::Func),
     }
 }
 
@@ -267,6 +269,17 @@ impl Table {
             Table::Static { data, .. } => Some(data.len() as u32),
             Table::Dynamic { maximum, .. } => maximum.clone(),
         }
+    }
+
+    /// Initializes the contents of this table to the specified function
+    pub fn init_func(&mut self, init: *mut VMFuncRef) -> Result<(), Trap> {
+        assert!(self.element_type() == TableElementType::Func);
+        for slot in self.elements_mut().iter_mut() {
+            unsafe {
+                *slot = TableElement::FuncRef(init).into_table_value();
+            }
+        }
+        Ok(())
     }
 
     /// Fill `table[dst..]` with values from `items`

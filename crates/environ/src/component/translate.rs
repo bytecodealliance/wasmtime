@@ -2,6 +2,7 @@ use crate::component::*;
 use crate::ScopeVec;
 use crate::{
     EntityIndex, ModuleEnvironment, ModuleTranslation, PrimaryMap, SignatureIndex, Tunables,
+    TypeConvert,
 };
 use anyhow::{bail, Result};
 use indexmap::IndexMap;
@@ -418,10 +419,8 @@ impl<'a, 'data> Translator<'a, 'data> {
                         Some(ty) => ty,
                         None => break,
                     };
-                    let ty = self
-                        .types
-                        .module_types_builder()
-                        .wasm_func_type(lowered_function_type.clone().try_into()?);
+                    let ty = self.types.convert_func_type(lowered_function_type);
+                    let ty = self.types.module_types_builder().wasm_func_type(ty);
                     self.result.funcs.push(ty);
                 }
 
