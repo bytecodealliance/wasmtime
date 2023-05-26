@@ -313,4 +313,4 @@ debug-assertions = false
 overflow-checks = false
 
 [patch.crates-io]
-wit-bindgen = { git = 'https://github.com/alexcrichton/witx-bindgen', branch = 'wit-changes' }
+wit-bindgen = { git = 'https://github.com/bytecodealliance/wit-bindgen', branch = 'wasmtime-2023-05-26-wit-changes' }
