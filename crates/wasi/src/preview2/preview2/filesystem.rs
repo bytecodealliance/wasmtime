@@ -940,7 +940,7 @@ fn symlink_follow(path_flags: filesystem::PathFlags) -> bool {
     path_flags.contains(filesystem::PathFlags::SYMLINK_FOLLOW)
 }
 
-struct ReaddirIterator(
+pub(crate) struct ReaddirIterator(
     std::sync::Mutex<
         Box<
             dyn Iterator<Item = Result<filesystem::DirectoryEntry, filesystem::Error>>
@@ -961,9 +961,18 @@ impl ReaddirIterator {
     }
 }
 
-trait TableReaddirExt {
+impl IntoIterator for ReaddirIterator {
+    type Item = Result<filesystem::DirectoryEntry, filesystem::Error>;
+    type IntoIter = Box<dyn Iterator<Item = Self::Item>>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_inner().unwrap()
+    }
+}
+
+pub(crate) trait TableReaddirExt {
     fn push_readdir(&mut self, readdir: ReaddirIterator) -> Result<u32, TableError>;
-    fn delete_readdir(&mut self, fd: u32) -> Result<(), TableError>;
+    fn delete_readdir(&mut self, fd: u32) -> Result<ReaddirIterator, TableError>;
     fn get_readdir(&self, fd: u32) -> Result<&ReaddirIterator, TableError>;
 }
 
@@ -971,12 +980,12 @@ impl TableReaddirExt for Table {
     fn push_readdir(&mut self, readdir: ReaddirIterator) -> Result<u32, TableError> {
         self.push(Box::new(readdir))
     }
-    fn delete_readdir(&mut self, fd: u32) -> Result<(), TableError> {
-        self.delete::<ReaddirIterator>(fd)
+    fn delete_readdir(&mut self, fd: u32) -> Result<ReaddirIterator, TableError> {
+        self.delete(fd)
     }
 
     fn get_readdir(&self, fd: u32) -> Result<&ReaddirIterator, TableError> {
-        self.get::<ReaddirIterator>(fd)
+        self.get(fd)
     }
 }
 #[cfg(test)]

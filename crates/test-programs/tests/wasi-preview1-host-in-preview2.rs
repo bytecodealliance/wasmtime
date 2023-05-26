@@ -148,7 +148,6 @@ async fn dangling_symlink() {
     run("dangling_symlink", true).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-#[cfg_attr(windows, should_panic)] // TODO: remove
 async fn directory_seek() {
     run("directory_seek", true).await.unwrap()
 }
@@ -173,7 +172,6 @@ async fn fd_flags_set() {
     run("fd_flags_set", true).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-#[should_panic]
 async fn fd_readdir() {
     run("fd_readdir", true).await.unwrap()
 }
@@ -207,7 +205,6 @@ async fn isatty() {
     run("isatty", true).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-#[cfg_attr(windows, should_panic)] // TODO: remove
 async fn nofollow_errors() {
     run("nofollow_errors", true).await.unwrap()
 }
@@ -224,7 +221,6 @@ async fn path_filestat() {
     run("path_filestat", true).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-#[cfg_attr(windows, should_panic)] // TODO: remove
 async fn path_link() {
     run("path_link", true).await.unwrap()
 }
@@ -256,7 +252,6 @@ async fn path_rename_file_trailing_slashes() {
         .unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-#[cfg_attr(windows, should_panic)] // TODO: remove
 async fn path_rename() {
     run("path_rename", true).await.unwrap()
 }
@@ -303,7 +298,6 @@ async fn stdio() {
     run("stdio", true).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-#[cfg_attr(windows, should_panic)] // TODO: remove
 async fn symlink_create() {
     run("symlink_create", true).await.unwrap()
 }

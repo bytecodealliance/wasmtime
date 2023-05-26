@@ -60,10 +60,20 @@ impl WasiCtxBuilder {
         self
     }
 
-    pub fn inherit_stdio(self) -> Self {
+    pub fn inherit_stdin(self) -> Self {
         self.set_stdin(stdio::stdin())
-            .set_stdout(stdio::stdout())
-            .set_stderr(stdio::stderr())
+    }
+
+    pub fn inherit_stdout(self) -> Self {
+        self.set_stdout(stdio::stdout())
+    }
+
+    pub fn inherit_stderr(self) -> Self {
+        self.set_stderr(stdio::stderr())
+    }
+
+    pub fn inherit_stdio(self) -> Self {
+        self.inherit_stdin().inherit_stdout().inherit_stderr()
     }
 
     pub fn set_env(mut self, env: &[(impl AsRef<str>, impl AsRef<str>)]) -> Self {

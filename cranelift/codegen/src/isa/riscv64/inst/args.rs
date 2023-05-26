@@ -10,6 +10,71 @@ use crate::machinst::isle::WritableReg;
 
 use std::fmt::{Display, Formatter, Result};
 
+/// A macro for defining a newtype of `Reg` that enforces some invariant about
+/// the wrapped `Reg` (such as that it is of a particular register class).
+macro_rules! newtype_of_reg {
+    (
+        $newtype_reg:ident,
+        $newtype_writable_reg:ident,
+        |$check_reg:ident| $check:expr
+    ) => {
+        /// A newtype wrapper around `Reg`.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+        pub struct $newtype_reg(Reg);
+
+        impl PartialEq<Reg> for $newtype_reg {
+            fn eq(&self, other: &Reg) -> bool {
+                self.0 == *other
+            }
+        }
+
+        impl From<$newtype_reg> for Reg {
+            fn from(r: $newtype_reg) -> Self {
+                r.0
+            }
+        }
+
+        impl $newtype_reg {
+            /// Create this newtype from the given register, or return `None` if the register
+            /// is not a valid instance of this newtype.
+            pub fn new($check_reg: Reg) -> Option<Self> {
+                if $check {
+                    Some(Self($check_reg))
+                } else {
+                    None
+                }
+            }
+
+            /// Get this newtype's underlying `Reg`.
+            pub fn to_reg(self) -> Reg {
+                self.0
+            }
+        }
+
+        // Convenience impl so that people working with this newtype can use it
+        // "just like" a plain `Reg`.
+        //
+        // NB: We cannot implement `DerefMut` because that would let people do
+        // nasty stuff like `*my_xreg.deref_mut() = some_freg`, breaking the
+        // invariants that `XReg` provides.
+        impl std::ops::Deref for $newtype_reg {
+            type Target = Reg;
+
+            fn deref(&self) -> &Reg {
+                &self.0
+            }
+        }
+
+        /// Writable Reg.
+        pub type $newtype_writable_reg = Writable<$newtype_reg>;
+    };
+}
+
+// Newtypes for registers classes.
+newtype_of_reg!(XReg, WritableXReg, |reg| reg.class() == RegClass::Int);
+newtype_of_reg!(FReg, WritableFReg, |reg| reg.class() == RegClass::Float);
+newtype_of_reg!(VReg, WritableVReg, |reg| reg.class() == RegClass::Vector);
+
 /// An addressing mode specified for a load/store operation.
 #[derive(Clone, Debug, Copy)]
 pub enum AMode {
