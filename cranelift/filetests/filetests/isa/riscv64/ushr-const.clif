@@ -89,20 +89,14 @@ block0(v0: i8):
 
 ; VCode:
 ; block0:
-;   li a3,5
-;   li a4,0
-;   andi a1,a0,255
-;   andi a3,a3,7
-;   srlw a0,a1,a3
+;   andi t2,a0,255
+;   srliw a0,t2,5
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi a3, zero, 5
-;   mv a4, zero
-;   andi a1, a0, 0xff
-;   andi a3, a3, 7
-;   srlw a0, a1, a3
+;   andi t2, a0, 0xff
+;   srliw a0, t2, 5
 ;   ret
 
 function %ushr_i16_const_i8(i16) -> i16 {
@@ -199,22 +193,16 @@ block0(v0: i16):
 
 ; VCode:
 ; block0:
-;   li a4,5
-;   li a5,0
-;   slli a1,a0,48
-;   srli a3,a1,48
-;   andi a5,a4,15
-;   srlw a0,a3,a5
+;   slli t2,a0,48
+;   srli a1,t2,48
+;   srliw a0,a1,5
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi a4, zero, 5
-;   mv a5, zero
-;   slli a1, a0, 0x30
-;   srli a3, a1, 0x30
-;   andi a5, a4, 0xf
-;   srlw a0, a3, a5
+;   slli t2, a0, 0x30
+;   srli a1, t2, 0x30
+;   srliw a0, a1, 5
 ;   ret
 
 function %ushr_i32_const_i8(i32) -> i32 {
@@ -295,16 +283,12 @@ block0(v0: i32):
 
 ; VCode:
 ; block0:
-;   li a1,5
-;   li a2,0
-;   srlw a0,a0,a1
+;   srliw a0,a0,5
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi a1, zero, 5
-;   mv a2, zero
-;   srlw a0, a0, a1
+;   srliw a0, a0, 5
 ;   ret
 
 function %ushr_i64_const_i8(i64) -> i64 {
@@ -385,16 +369,12 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   li a1,5
-;   li a2,0
-;   srl a0,a0,a1
+;   srli a0,a0,5
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi a1, zero, 5
-;   mv a2, zero
-;   srl a0, a0, a1
+;   srli a0, a0, 5
 ;   ret
 
 function %ushr_i128_const_i8(i128) -> i128 {

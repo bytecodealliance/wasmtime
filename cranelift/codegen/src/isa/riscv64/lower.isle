@@ -581,13 +581,13 @@
   (rv_srl x (value_regs_get y 0)))
 
 ;; When the RHS is known we can just encode it in the instruction.
-(rule 3 (lower (has_type (ty_int (fits_in_16 ty)) (ushr x (imm12_from_value y))))
+(rule 3 (lower (has_type (ty_int (fits_in_16 ty)) (ushr x (maybe_uextend (imm12_from_value y)))))
   (rv_srliw (zext x ty $I64) (imm12_and y (shift_mask ty))))
 
-(rule 4 (lower (has_type $I32 (ushr x (imm12_from_value y))))
+(rule 4 (lower (has_type $I32 (ushr x (maybe_uextend (imm12_from_value y)))))
   (rv_srliw x y))
 
-(rule 4 (lower (has_type $I64 (ushr x (imm12_from_value y))))
+(rule 4 (lower (has_type $I64 (ushr x (maybe_uextend (imm12_from_value y)))))
   (rv_srli x y))
 
 (rule 4 (lower (has_type $I128 (ushr x y)))
