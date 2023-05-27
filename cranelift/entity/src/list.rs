@@ -483,6 +483,8 @@ impl<T: EntityRef + ReservedValue> EntityList<T> {
     }
 
     /// Copies a slice from an entity list in the same pool to a position in this one.
+    ///
+    /// Will panic if `self` is the same list as `other`.
     pub fn copy_from(
         &mut self,
         other: &Self,
