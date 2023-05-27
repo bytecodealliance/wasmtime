@@ -99,6 +99,9 @@
   (VmulVV)
   (VmulhVV)
   (VmulhuVV)
+  (VsllVV)
+  (VsrlVV)
+  (VsraVV)
   (VandVV)
   (VorVV)
   (VxorVV)
@@ -121,6 +124,9 @@
   (VrsubVX)
   (VssubVX)
   (VssubuVX)
+  (VsllVX)
+  (VsrlVX)
+  (VsraVX)
   (VandVX)
   (VorVX)
   (VxorVX)
@@ -146,6 +152,9 @@
   (VsaddVI)
   (VsadduVI)
   (VrsubVI)
+  (VsllVI)
+  (VsrlVI)
+  (VsraVI)
   (VandVI)
   (VorVI)
   (VxorVI)
@@ -387,6 +396,51 @@
 (decl rv_vmulhu_vv (VReg VReg VecOpMasking VState) VReg)
 (rule (rv_vmulhu_vv vs2 vs1 mask vstate)
   (vec_alu_rrr (VecAluOpRRR.VmulhuVV) vs2 vs1 mask vstate))
+
+;; Helper for emitting the `sll.vv` instruction.
+(decl rv_vsll_vv (VReg VReg VecOpMasking VState) VReg)
+(rule (rv_vsll_vv vs2 vs1 mask vstate)
+  (vec_alu_rrr (VecAluOpRRR.VsllVV) vs2 vs1 mask vstate))
+
+;; Helper for emitting the `sll.vx` instruction.
+(decl rv_vsll_vx (VReg XReg VecOpMasking VState) VReg)
+(rule (rv_vsll_vx vs2 vs1 mask vstate)
+  (vec_alu_rrr (VecAluOpRRR.VsllVX) vs2 vs1 mask vstate))
+
+;; Helper for emitting the `vsll.vi` instruction.
+(decl rv_vsll_vi (VReg UImm5 VecOpMasking VState) VReg)
+(rule (rv_vsll_vi vs2 imm mask vstate)
+  (vec_alu_rr_uimm5 (VecAluOpRRImm5.VsllVI) vs2 imm mask vstate))
+
+;; Helper for emitting the `srl.vv` instruction.
+(decl rv_vsrl_vv (VReg VReg VecOpMasking VState) VReg)
+(rule (rv_vsrl_vv vs2 vs1 mask vstate)
+  (vec_alu_rrr (VecAluOpRRR.VsrlVV) vs2 vs1 mask vstate))
+
+;; Helper for emitting the `srl.vx` instruction.
+(decl rv_vsrl_vx (VReg XReg VecOpMasking VState) VReg)
+(rule (rv_vsrl_vx vs2 vs1 mask vstate)
+  (vec_alu_rrr (VecAluOpRRR.VsrlVX) vs2 vs1 mask vstate))
+
+;; Helper for emitting the `vsrl.vi` instruction.
+(decl rv_vsrl_vi (VReg UImm5 VecOpMasking VState) VReg)
+(rule (rv_vsrl_vi vs2 imm mask vstate)
+  (vec_alu_rr_uimm5 (VecAluOpRRImm5.VsrlVI) vs2 imm mask vstate))
+
+;; Helper for emitting the `sra.vv` instruction.
+(decl rv_vsra_vv (VReg VReg VecOpMasking VState) VReg)
+(rule (rv_vsra_vv vs2 vs1 mask vstate)
+  (vec_alu_rrr (VecAluOpRRR.VsraVV) vs2 vs1 mask vstate))
+
+;; Helper for emitting the `sra.vx` instruction.
+(decl rv_vsra_vx (VReg XReg VecOpMasking VState) VReg)
+(rule (rv_vsra_vx vs2 vs1 mask vstate)
+  (vec_alu_rrr (VecAluOpRRR.VsraVX) vs2 vs1 mask vstate))
+
+;; Helper for emitting the `vsra.vi` instruction.
+(decl rv_vsra_vi (VReg UImm5 VecOpMasking VState) VReg)
+(rule (rv_vsra_vi vs2 imm mask vstate)
+  (vec_alu_rr_uimm5 (VecAluOpRRImm5.VsraVI) vs2 imm mask vstate))
 
 ;; Helper for emitting the `vand.vv` instruction.
 (decl rv_vand_vv (VReg VReg VecOpMasking VState) VReg)

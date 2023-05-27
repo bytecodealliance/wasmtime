@@ -563,6 +563,14 @@
       (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 (zero_reg) low)
       (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 low high))))
 
+;; SIMD Cases
+;; We don't need to mask anything since it is done by the instruction according to SEW.
+
+(rule 5 (lower (has_type (ty_vec_fits_in_register ty) (ishl x y)))
+  (rv_vsll_vx x (value_regs_get y 0) (unmasked) ty))
+
+(rule 6 (lower (has_type (ty_vec_fits_in_register ty) (ishl x (maybe_uextend (uimm5_from_value y)))))
+  (rv_vsll_vi x y (unmasked) ty))
 
 ;;;; Rules for `ushr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -609,6 +617,14 @@
       (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 high low)
       (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 (zero_reg) high))))
 
+;; SIMD Cases
+;; We don't need to mask or extend anything since it is done by the instruction according to SEW.
+
+(rule 4 (lower (has_type (ty_vec_fits_in_register ty) (ushr x y)))
+  (rv_vsrl_vx x (value_regs_get y 0) (unmasked) ty))
+
+(rule 5 (lower (has_type (ty_vec_fits_in_register ty) (ushr x (maybe_uextend (uimm5_from_value y)))))
+  (rv_vsrl_vi x y (unmasked) ty))
 
 ;;;; Rules for `sshr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -659,6 +675,15 @@
     (value_regs
       (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 high low)
       (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 high_replacement high))))
+
+;; SIMD Cases
+;; We don't need to mask or extend anything since it is done by the instruction according to SEW.
+
+(rule 4 (lower (has_type (ty_vec_fits_in_register ty) (sshr x y)))
+  (rv_vsra_vx x (value_regs_get y 0) (unmasked) ty))
+
+(rule 5 (lower (has_type (ty_vec_fits_in_register ty) (sshr x (maybe_uextend (uimm5_from_value y)))))
+  (rv_vsra_vi x y (unmasked) ty))
 
 
 ;;;; Rules for `rotl` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

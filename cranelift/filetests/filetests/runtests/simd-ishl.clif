@@ -4,6 +4,7 @@ target aarch64
 target s390x
 target x86_64
 target x86_64 skylake
+target riscv64 has_v
 
 
 function %ishl_i8x16(i8x16, i32) -> i8x16 {
