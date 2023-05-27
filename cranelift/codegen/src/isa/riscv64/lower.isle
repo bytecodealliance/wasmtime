@@ -577,20 +577,20 @@
   (rv_srlw x (value_regs_get y 0)))
 
 ;; Similarly, the 64bit version does the right thing.
-(rule 2 (lower (has_type $I64 (ushr x y)))
+(rule 1 (lower (has_type $I64 (ushr x y)))
   (rv_srl x (value_regs_get y 0)))
 
 ;; When the RHS is known we can just encode it in the instruction.
-(rule 3 (lower (has_type (ty_int (fits_in_16 ty)) (ushr x (maybe_uextend (imm12_from_value y)))))
+(rule 2 (lower (has_type (ty_int (fits_in_16 ty)) (ushr x (maybe_uextend (imm12_from_value y)))))
   (rv_srliw (zext x ty $I64) (imm12_and y (shift_mask ty))))
 
-(rule 4 (lower (has_type $I32 (ushr x (maybe_uextend (imm12_from_value y)))))
+(rule 3 (lower (has_type $I32 (ushr x (maybe_uextend (imm12_from_value y)))))
   (rv_srliw x y))
 
-(rule 4 (lower (has_type $I64 (ushr x (maybe_uextend (imm12_from_value y)))))
+(rule 3 (lower (has_type $I64 (ushr x (maybe_uextend (imm12_from_value y)))))
   (rv_srli x y))
 
-(rule 4 (lower (has_type $I128 (ushr x y)))
+(rule 3 (lower (has_type $I128 (ushr x y)))
   (let ((tmp ValueRegs (gen_shamt $I128 (value_regs_get y 0)))
         (shamt XReg (value_regs_get tmp 0))
         (len_sub_shamt XReg (value_regs_get tmp 1))
@@ -623,20 +623,20 @@
   (rv_sraw x (value_regs_get y 0)))
 
 ;; Similarly, the 64bit version does the right thing.
-(rule 2 (lower (has_type $I64 (sshr x y)))
+(rule 1 (lower (has_type $I64 (sshr x y)))
   (rv_sra x (value_regs_get y 0)))
 
 ;; When the RHS is known we can just encode it in the instruction.
-(rule 3 (lower (has_type (ty_int (fits_in_16 ty)) (sshr x (maybe_uextend (imm12_from_value y)))))
+(rule 2 (lower (has_type (ty_int (fits_in_16 ty)) (sshr x (maybe_uextend (imm12_from_value y)))))
   (rv_sraiw (sext x ty $I64) (imm12_and y (shift_mask ty))))
 
-(rule 4 (lower (has_type $I32 (sshr x (maybe_uextend (imm12_from_value y)))))
+(rule 3 (lower (has_type $I32 (sshr x (maybe_uextend (imm12_from_value y)))))
   (rv_sraiw x y))
 
-(rule 4 (lower (has_type $I64 (sshr x (maybe_uextend (imm12_from_value y)))))
+(rule 3 (lower (has_type $I64 (sshr x (maybe_uextend (imm12_from_value y)))))
   (rv_srai x y))
 
-(rule 4 (lower (has_type $I128 (sshr x y)))
+(rule 3 (lower (has_type $I128 (sshr x y)))
   (let ((tmp ValueRegs (gen_shamt $I128 (value_regs_get y 0)))
         (shamt XReg (value_regs_get tmp 0))
         (len_sub_shamt XReg (value_regs_get tmp 1))
