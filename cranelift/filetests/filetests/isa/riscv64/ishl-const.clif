@@ -81,18 +81,12 @@ block0(v0: i8):
 
 ; VCode:
 ; block0:
-;   li a2,5
-;   li a3,0
-;   andi a1,a2,7
-;   sllw a0,a0,a1
+;   slliw a0,a0,5
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi a2, zero, 5
-;   mv a3, zero
-;   andi a1, a2, 7
-;   sllw a0, a0, a1
+;   slliw a0, a0, 5
 ;   ret
 
 function %ishl_i16_const_i8(i16) -> i16 {
@@ -173,18 +167,12 @@ block0(v0: i16):
 
 ; VCode:
 ; block0:
-;   li a2,5
-;   li a3,0
-;   andi a1,a2,15
-;   sllw a0,a0,a1
+;   slliw a0,a0,5
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi a2, zero, 5
-;   mv a3, zero
-;   andi a1, a2, 0xf
-;   sllw a0, a0, a1
+;   slliw a0, a0, 5
 ;   ret
 
 function %ishl_i32_const_i8(i32) -> i32 {
@@ -265,16 +253,12 @@ block0(v0: i32):
 
 ; VCode:
 ; block0:
-;   li a1,5
-;   li a2,0
-;   sllw a0,a0,a1
+;   slliw a0,a0,5
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi a1, zero, 5
-;   mv a2, zero
-;   sllw a0, a0, a1
+;   slliw a0, a0, 5
 ;   ret
 
 function %ishl_i64_const_i8(i64) -> i64 {
@@ -355,16 +339,12 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   li a1,5
-;   li a2,0
-;   sll a0,a0,a1
+;   slli a0,a0,5
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi a1, zero, 5
-;   mv a2, zero
-;   sll a0, a0, a1
+;   slli a0, a0, 5
 ;   ret
 
 function %ishl_i128_const_i8(i128) -> i128 {

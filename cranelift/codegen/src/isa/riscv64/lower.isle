@@ -530,12 +530,12 @@
   (rv_sll x (value_regs_get y 0)))
 
 ;; If the shift amount is known. We can mask it and encode it in the instruction.
-(rule 2 (lower (has_type (int_fits_in_32 ty) (ishl x (imm12_from_value y))))
+(rule 2 (lower (has_type (int_fits_in_32 ty) (ishl x (maybe_uextend (imm12_from_value y)))))
   (rv_slliw x (imm12_and y (shift_mask ty))))
 
 ;; We technically don't need to mask the shift amount here. The instruction
 ;; does the right thing. But it's neater when pretty printing it.
-(rule 3 (lower (has_type ty @ $I64 (ishl x (imm12_from_value y))))
+(rule 3 (lower (has_type ty @ $I64 (ishl x (maybe_uextend (imm12_from_value y)))))
   (rv_slli x (imm12_and y (shift_mask ty))))
 
 ;; With `Zba` we have a shift that zero extends the LHS argument.
