@@ -14,7 +14,7 @@ block0(v0: i8, v1: i8):
 ;   slli a0,a0,56
 ;   srai a2,a0,56
 ;   andi a4,a1,7
-;   sra a0,a2,a4
+;   sraw a0,a2,a4
 ;   ret
 ; 
 ; Disassembled:
@@ -22,7 +22,7 @@ block0(v0: i8, v1: i8):
 ;   slli a0, a0, 0x38
 ;   srai a2, a0, 0x38
 ;   andi a4, a1, 7
-;   sra a0, a2, a4
+;   sraw a0, a2, a4
 ;   ret
 
 function %sshr_i8_i16(i8, i16) -> i8 {
@@ -36,7 +36,7 @@ block0(v0: i8, v1: i16):
 ;   slli a0,a0,56
 ;   srai a2,a0,56
 ;   andi a4,a1,7
-;   sra a0,a2,a4
+;   sraw a0,a2,a4
 ;   ret
 ; 
 ; Disassembled:
@@ -44,7 +44,7 @@ block0(v0: i8, v1: i16):
 ;   slli a0, a0, 0x38
 ;   srai a2, a0, 0x38
 ;   andi a4, a1, 7
-;   sra a0, a2, a4
+;   sraw a0, a2, a4
 ;   ret
 
 function %sshr_i8_i32(i8, i32) -> i8 {
@@ -58,7 +58,7 @@ block0(v0: i8, v1: i32):
 ;   slli a0,a0,56
 ;   srai a2,a0,56
 ;   andi a4,a1,7
-;   sra a0,a2,a4
+;   sraw a0,a2,a4
 ;   ret
 ; 
 ; Disassembled:
@@ -66,7 +66,7 @@ block0(v0: i8, v1: i32):
 ;   slli a0, a0, 0x38
 ;   srai a2, a0, 0x38
 ;   andi a4, a1, 7
-;   sra a0, a2, a4
+;   sraw a0, a2, a4
 ;   ret
 
 function %sshr_i8_i64(i8, i64) -> i8 {
@@ -80,7 +80,7 @@ block0(v0: i8, v1: i64):
 ;   slli a0,a0,56
 ;   srai a2,a0,56
 ;   andi a4,a1,7
-;   sra a0,a2,a4
+;   sraw a0,a2,a4
 ;   ret
 ; 
 ; Disassembled:
@@ -88,7 +88,7 @@ block0(v0: i8, v1: i64):
 ;   slli a0, a0, 0x38
 ;   srai a2, a0, 0x38
 ;   andi a4, a1, 7
-;   sra a0, a2, a4
+;   sraw a0, a2, a4
 ;   ret
 
 function %sshr_i8_i128(i8, i128) -> i8 {
@@ -102,7 +102,7 @@ block0(v0: i8, v1: i128):
 ;   slli a2,a0,56
 ;   srai a3,a2,56
 ;   andi a5,a1,7
-;   sra a0,a3,a5
+;   sraw a0,a3,a5
 ;   ret
 ; 
 ; Disassembled:
@@ -110,7 +110,7 @@ block0(v0: i8, v1: i128):
 ;   slli a2, a0, 0x38
 ;   srai a3, a2, 0x38
 ;   andi a5, a1, 7
-;   sra a0, a3, a5
+;   sraw a0, a3, a5
 ;   ret
 
 function %sshr_i16_i8(i16, i8) -> i16 {
@@ -124,7 +124,7 @@ block0(v0: i16, v1: i8):
 ;   slli a0,a0,48
 ;   srai a2,a0,48
 ;   andi a4,a1,15
-;   sra a0,a2,a4
+;   sraw a0,a2,a4
 ;   ret
 ; 
 ; Disassembled:
@@ -132,7 +132,7 @@ block0(v0: i16, v1: i8):
 ;   slli a0, a0, 0x30
 ;   srai a2, a0, 0x30
 ;   andi a4, a1, 0xf
-;   sra a0, a2, a4
+;   sraw a0, a2, a4
 ;   ret
 
 function %sshr_i16_i16(i16, i16) -> i16 {
@@ -146,7 +146,7 @@ block0(v0: i16, v1: i16):
 ;   slli a0,a0,48
 ;   srai a2,a0,48
 ;   andi a4,a1,15
-;   sra a0,a2,a4
+;   sraw a0,a2,a4
 ;   ret
 ; 
 ; Disassembled:
@@ -154,7 +154,7 @@ block0(v0: i16, v1: i16):
 ;   slli a0, a0, 0x30
 ;   srai a2, a0, 0x30
 ;   andi a4, a1, 0xf
-;   sra a0, a2, a4
+;   sraw a0, a2, a4
 ;   ret
 
 function %sshr_i16_i32(i16, i32) -> i16 {
@@ -168,7 +168,7 @@ block0(v0: i16, v1: i32):
 ;   slli a0,a0,48
 ;   srai a2,a0,48
 ;   andi a4,a1,15
-;   sra a0,a2,a4
+;   sraw a0,a2,a4
 ;   ret
 ; 
 ; Disassembled:
@@ -176,7 +176,7 @@ block0(v0: i16, v1: i32):
 ;   slli a0, a0, 0x30
 ;   srai a2, a0, 0x30
 ;   andi a4, a1, 0xf
-;   sra a0, a2, a4
+;   sraw a0, a2, a4
 ;   ret
 
 function %sshr_i16_i64(i16, i64) -> i16 {
@@ -190,7 +190,7 @@ block0(v0: i16, v1: i64):
 ;   slli a0,a0,48
 ;   srai a2,a0,48
 ;   andi a4,a1,15
-;   sra a0,a2,a4
+;   sraw a0,a2,a4
 ;   ret
 ; 
 ; Disassembled:
@@ -198,7 +198,7 @@ block0(v0: i16, v1: i64):
 ;   slli a0, a0, 0x30
 ;   srai a2, a0, 0x30
 ;   andi a4, a1, 0xf
-;   sra a0, a2, a4
+;   sraw a0, a2, a4
 ;   ret
 
 function %sshr_i16_i128(i16, i128) -> i16 {
@@ -212,7 +212,7 @@ block0(v0: i16, v1: i128):
 ;   slli a2,a0,48
 ;   srai a3,a2,48
 ;   andi a5,a1,15
-;   sra a0,a3,a5
+;   sraw a0,a3,a5
 ;   ret
 ; 
 ; Disassembled:
@@ -220,7 +220,7 @@ block0(v0: i16, v1: i128):
 ;   slli a2, a0, 0x30
 ;   srai a3, a2, 0x30
 ;   andi a5, a1, 0xf
-;   sra a0, a3, a5
+;   sraw a0, a3, a5
 ;   ret
 
 function %sshr_i32_i8(i32, i8) -> i32 {

@@ -611,28 +611,54 @@
 
 
 ;;;; Rules for `sshr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule 1 (lower (has_type $I8 (sshr x y)))
-  (rv_sra (sext x $I8 $I64) (rv_andi (value_regs_get y 0) (imm12_const 7))))
 
-(rule 2 (lower (has_type $I8 (sshr x (imm12_from_value y))))
-  (rv_srai (sext x $I8 $I64) (imm12_and y 7)))
+;; 8/16 bit types need a mask on the shift amount, and the LHS needs to be
+;; zero extended.
+(rule 0 (lower (has_type (ty_int (fits_in_16 ty)) (sshr x y)))
+  (if-let mask (u64_to_imm12 (shift_mask ty)))
+  (rv_sraw (sext x ty $I64) (rv_andi (value_regs_get y 0) mask)))
 
-(rule 1 (lower (has_type $I16 (sshr x y)))
-  (rv_sra (sext x $I16 $I64) (rv_andi (value_regs_get y 0) (imm12_const 15))))
-
-(rule 2 (lower (has_type $I16 (sshr x (imm12_from_value y))))
-  (rv_srai (sext x $I16 $I64) (imm12_and y 15)))
-
+;; Using the 32bit version of `sra` automatically masks the shift amount.
 (rule 1 (lower (has_type $I32 (sshr x y)))
   (rv_sraw x (value_regs_get y 0)))
-(rule 2 (lower (has_type $I32 (sshr x (imm12_from_value y))))
-  (rv_sraiw x y))
-(rule 1 (lower (has_type $I64 (sshr x y)))
+
+;; Similarly, the 64bit version does the right thing.
+(rule 2 (lower (has_type $I64 (sshr x y)))
   (rv_sra x (value_regs_get y 0)))
-(rule 2 (lower (has_type $I64 (sshr x (imm12_from_value y))))
+
+;; When the RHS is known we can just encode it in the instruction.
+(rule 3 (lower (has_type (ty_int (fits_in_16 ty)) (sshr x (maybe_uextend (imm12_from_value y)))))
+  (rv_sraiw (sext x ty $I64) (imm12_and y (shift_mask ty))))
+
+(rule 4 (lower (has_type $I32 (sshr x (maybe_uextend (imm12_from_value y)))))
+  (rv_sraiw x y))
+
+(rule 4 (lower (has_type $I64 (sshr x (maybe_uextend (imm12_from_value y)))))
   (rv_srai x y))
-(rule 0 (lower (has_type $I128 (sshr x y)))
-  (lower_i128_sshr x (value_regs_get y 0)))
+
+(rule 4 (lower (has_type $I128 (sshr x y)))
+  (let ((tmp ValueRegs (gen_shamt $I128 (value_regs_get y 0)))
+        (shamt XReg (value_regs_get tmp 0))
+        (len_sub_shamt XReg (value_regs_get tmp 1))
+        ;; low part.
+        (low_part1 XReg (rv_sll (value_regs_get x 1) len_sub_shamt))
+        (low_part2 XReg (gen_select_reg (IntCC.Equal) shamt (zero_reg) (zero_reg) low_part1))
+        ;;
+        (low_part3 XReg (rv_srl (value_regs_get x 0) shamt))
+        (low XReg (rv_or low_part2 low_part3))
+        ;;
+        (const64 XReg (load_u64_constant 64))
+        ;;
+        (high XReg (rv_sra (value_regs_get x 1) shamt))
+        ;;
+        (const_neg_1 XReg (load_imm12 -1))
+        ;;
+        (high_replacement XReg (gen_select_reg (IntCC.SignedLessThan) (value_regs_get x 1) (zero_reg) const_neg_1 (zero_reg)))
+        (const64 XReg (load_u64_constant 64))
+        (shamt_128 XReg (rv_andi (value_regs_get y 0) (imm12_const 127))))
+    (value_regs
+      (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 high low)
+      (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 high_replacement high))))
 
 
 ;;;; Rules for `rotl` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

@@ -14,14 +14,14 @@ block0(v0: i8):
 ; block0:
 ;   slli t2,a0,56
 ;   srai a1,t2,56
-;   srai a0,a1,5
+;   sraiw a0,a1,5
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   slli t2, a0, 0x38
 ;   srai a1, t2, 0x38
-;   srai a0, a1, 5
+;   sraiw a0, a1, 5
 ;   ret
 
 function %sshr_i8_const_i16(i8) -> i8 {
@@ -35,14 +35,14 @@ block0(v0: i8):
 ; block0:
 ;   slli t2,a0,56
 ;   srai a1,t2,56
-;   srai a0,a1,5
+;   sraiw a0,a1,5
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   slli t2, a0, 0x38
 ;   srai a1, t2, 0x38
-;   srai a0, a1, 5
+;   sraiw a0, a1, 5
 ;   ret
 
 function %sshr_i8_const_i32(i8) -> i8 {
@@ -56,14 +56,14 @@ block0(v0: i8):
 ; block0:
 ;   slli t2,a0,56
 ;   srai a1,t2,56
-;   srai a0,a1,5
+;   sraiw a0,a1,5
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   slli t2, a0, 0x38
 ;   srai a1, t2, 0x38
-;   srai a0, a1, 5
+;   sraiw a0, a1, 5
 ;   ret
 
 function %sshr_i8_const_i64(i8) -> i8 {
@@ -77,14 +77,14 @@ block0(v0: i8):
 ; block0:
 ;   slli t2,a0,56
 ;   srai a1,t2,56
-;   srai a0,a1,5
+;   sraiw a0,a1,5
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   slli t2, a0, 0x38
 ;   srai a1, t2, 0x38
-;   srai a0, a1, 5
+;   sraiw a0, a1, 5
 ;   ret
 
 function %sshr_i8_const_i128(i8) -> i8 {
@@ -97,22 +97,16 @@ block0(v0: i8):
 
 ; VCode:
 ; block0:
-;   li a4,5
-;   li a5,0
-;   slli a1,a0,56
-;   srai a3,a1,56
-;   andi a5,a4,7
-;   sra a0,a3,a5
+;   slli t2,a0,56
+;   srai a1,t2,56
+;   sraiw a0,a1,5
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi a4, zero, 5
-;   mv a5, zero
-;   slli a1, a0, 0x38
-;   srai a3, a1, 0x38
-;   andi a5, a4, 7
-;   sra a0, a3, a5
+;   slli t2, a0, 0x38
+;   srai a1, t2, 0x38
+;   sraiw a0, a1, 5
 ;   ret
 
 function %sshr_i16_const_i8(i16) -> i16 {
@@ -126,14 +120,14 @@ block0(v0: i16):
 ; block0:
 ;   slli t2,a0,48
 ;   srai a1,t2,48
-;   srai a0,a1,5
+;   sraiw a0,a1,5
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   slli t2, a0, 0x30
 ;   srai a1, t2, 0x30
-;   srai a0, a1, 5
+;   sraiw a0, a1, 5
 ;   ret
 
 function %sshr_i16_const_i16(i16) -> i16 {
@@ -147,14 +141,14 @@ block0(v0: i16):
 ; block0:
 ;   slli t2,a0,48
 ;   srai a1,t2,48
-;   srai a0,a1,5
+;   sraiw a0,a1,5
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   slli t2, a0, 0x30
 ;   srai a1, t2, 0x30
-;   srai a0, a1, 5
+;   sraiw a0, a1, 5
 ;   ret
 
 function %sshr_i16_const_i32(i16) -> i16 {
@@ -168,14 +162,14 @@ block0(v0: i16):
 ; block0:
 ;   slli t2,a0,48
 ;   srai a1,t2,48
-;   srai a0,a1,5
+;   sraiw a0,a1,5
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   slli t2, a0, 0x30
 ;   srai a1, t2, 0x30
-;   srai a0, a1, 5
+;   sraiw a0, a1, 5
 ;   ret
 
 function %sshr_i16_const_i64(i16) -> i16 {
@@ -189,14 +183,14 @@ block0(v0: i16):
 ; block0:
 ;   slli t2,a0,48
 ;   srai a1,t2,48
-;   srai a0,a1,5
+;   sraiw a0,a1,5
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   slli t2, a0, 0x30
 ;   srai a1, t2, 0x30
-;   srai a0, a1, 5
+;   sraiw a0, a1, 5
 ;   ret
 
 function %sshr_i16_const_i128(i16) -> i16 {
@@ -209,22 +203,16 @@ block0(v0: i16):
 
 ; VCode:
 ; block0:
-;   li a4,5
-;   li a5,0
-;   slli a1,a0,48
-;   srai a3,a1,48
-;   andi a5,a4,15
-;   sra a0,a3,a5
+;   slli t2,a0,48
+;   srai a1,t2,48
+;   sraiw a0,a1,5
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi a4, zero, 5
-;   mv a5, zero
-;   slli a1, a0, 0x30
-;   srai a3, a1, 0x30
-;   andi a5, a4, 0xf
-;   sra a0, a3, a5
+;   slli t2, a0, 0x30
+;   srai a1, t2, 0x30
+;   sraiw a0, a1, 5
 ;   ret
 
 function %sshr_i32_const_i8(i32) -> i32 {
@@ -305,16 +293,12 @@ block0(v0: i32):
 
 ; VCode:
 ; block0:
-;   li a1,5
-;   li a2,0
-;   sraw a0,a0,a1
+;   sraiw a0,a0,5
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi a1, zero, 5
-;   mv a2, zero
-;   sraw a0, a0, a1
+;   sraiw a0, a0, 5
 ;   ret
 
 function %sshr_i64_const_i8(i64) -> i64 {
@@ -395,16 +379,12 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   li a1,5
-;   li a2,0
-;   sra a0,a0,a1
+;   srai a0,a0,5
 ;   ret
 ; 
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi a1, zero, 5
-;   mv a2, zero
-;   sra a0, a0, a1
+;   srai a0, a0, 5
 ;   ret
 
 function %sshr_i128_const_i8(i128) -> i128 {
