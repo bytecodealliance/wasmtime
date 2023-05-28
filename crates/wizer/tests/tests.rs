@@ -525,6 +525,31 @@ fn wasi_reactor_initializer_as_init_func() -> anyhow::Result<()> {
 }
 
 #[test]
+fn wasi_reactor_initializer_with_keep_init() -> anyhow::Result<()> {
+    let wat = r#"
+      (module
+        (global $g (mut i32) i32.const 0)
+        (func (export "_initialize")
+          i32.const 1
+          global.set $g
+        )
+        (func (export "wizer.initialize")
+          i32.const 2
+          global.set $g)
+        (func (export "run") (result i32)
+          global.get $g
+        )
+      )"#;
+
+    let _ = env_logger::try_init();
+    let mut wizer = Wizer::new();
+    wizer.keep_init_func(true);
+    let wasm = wat_to_wasm(wat)?;
+    // we expect `_initialize` to be un-exported and not called at run
+    wizen_and_run_wasm(&[], 2, &wasm, wizer)
+}
+
+#[test]
 fn call_undefined_import_function_during_init() -> Result<()> {
     fails_wizening(
         r#"
