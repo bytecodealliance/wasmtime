@@ -107,9 +107,9 @@ impl Wizer {
                 s if s.id == u8::from(SectionId::Export) => {
                     let mut exports = wasm_encoder::ExportSection::new();
                     for export in module.exports(cx) {
-                        if !self.keep_init_func.unwrap_or(DEFAULT_KEEP_INIT_FUNC)
-                            && (export.name == self.init_func
-                                || (has_wasi_initialize && export.name == "_initialize"))
+                        if (export.name == self.init_func
+                            && !self.keep_init_func.unwrap_or(DEFAULT_KEEP_INIT_FUNC))
+                            || (has_wasi_initialize && export.name == "_initialize")
                         {
                             continue;
                         }
