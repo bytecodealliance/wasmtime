@@ -296,6 +296,7 @@ impl VecAluOpRRR {
             VecAluOpRRR::VssubuVV | VecAluOpRRR::VssubuVX => 0b100010,
             VecAluOpRRR::VssubVV | VecAluOpRRR::VssubVX => 0b100011,
             VecAluOpRRR::VfsgnjnVV => 0b001001,
+            VecAluOpRRR::VmsltVX => 0b011011,
         }
     }
 
@@ -341,7 +342,8 @@ impl VecAluOpRRR {
             | VecAluOpRRR::VmaxuVX
             | VecAluOpRRR::VmaxVX
             | VecAluOpRRR::VslidedownVX
-            | VecAluOpRRR::VmergeVXM => VecOpCategory::OPIVX,
+            | VecAluOpRRR::VmergeVXM
+            | VecAluOpRRR::VmsltVX => VecOpCategory::OPIVX,
             VecAluOpRRR::VfaddVV
             | VecAluOpRRR::VfsubVV
             | VecAluOpRRR::VfmulVV

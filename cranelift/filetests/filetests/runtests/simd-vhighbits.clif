@@ -5,6 +5,7 @@ target s390x
 set enable_simd
 target x86_64 has_sse3 has_ssse3 has_sse41
 target x86_64 has_sse3 has_ssse3 has_sse41 has_avx
+target riscv64gc has_v
 
 function %vhighbits_i8x16(i8x16) -> i16 {
 block0(v0: i8x16):

@@ -1675,6 +1675,14 @@
   (rv_and (value_regs_get x 0) (value_regs_get y 0)))
 
 
+(decl gen_andi (XReg u64) XReg)
+(rule 1 (gen_andi x (imm12_from_u64 y))
+  (rv_andi x y))
+
+(rule 0 (gen_andi x y)
+  (rv_and x (imm $I64 y)))
+
+
 (decl gen_or (Type ValueRegs ValueRegs) ValueRegs)
 (rule 1 (gen_or $I128 x y)
   (value_regs

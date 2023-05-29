@@ -1386,3 +1386,24 @@
   (let ((max VReg (rv_vredmaxu_vs x x (unmasked) ty))
         (x_max XReg (rv_vmv_xs max ty)))
     (rv_snez x_max)))
+
+
+;;;; Rules for `vhigh_bits` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; To check if the MSB of a lane is set, we do a `vmslt` with zero, this sets
+;; the mask bit to 1 if the value is negative (MSB 1) and 0 if not. We can then
+;; just move that mask to an X Register.
+;;
+;; We must ensure that the move to the X register has a SEW with enough bits
+;; to hold the full mask. Additionally, in some cases (e.g. i64x2) we are going
+;; to read some tail bits. These are undefined, so we need to further mask them
+;; off.
+(rule (lower (vhigh_bits x @ (value_type (ty_vec_fits_in_register ty))))
+  (let ((mask VReg (rv_vmslt_vx x (zero_reg) (unmasked) ty))
+        ;; Here we only need I64X1, but emit an AVL of 2 since it
+        ;; saves one vector state change in the case of I64X2.
+        ;;
+        ;; TODO: For types that have more lanes than element bits, we can
+        ;; use the original type as a VState and avoid a state change.
+        (x_mask XReg (rv_vmv_xs mask (vstate_from_type $I64X2))))
+    (gen_andi x_mask (ty_lane_mask ty))))

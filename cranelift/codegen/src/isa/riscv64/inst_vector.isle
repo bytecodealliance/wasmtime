@@ -145,6 +145,7 @@
   (VfrdivVF)
   (VmergeVXM)
   (VfmergeVFM)
+  (VmsltVX)
 ))
 
 ;; Register-Imm ALU Ops
@@ -716,6 +717,11 @@
 (decl rv_vredmaxu_vs (VReg VReg VecOpMasking VState) VReg)
 (rule (rv_vredmaxu_vs vs2 vs1 mask vstate)
   (vec_alu_rrr (VecAluOpRRR.VredmaxuVS) vs2 vs1 mask vstate))
+
+;; Helper for emitting the `vmslt.vx` (Vector Mask Set Less Than) instruction.
+(decl rv_vmslt_vx (VReg XReg VecOpMasking VState) VReg)
+(rule (rv_vmslt_vx vs2 vs1 mask vstate)
+  (vec_alu_rrr (VecAluOpRRR.VmsltVX) vs2 vs1 mask vstate))
 
 ;;;; Multi-Instruction Helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
