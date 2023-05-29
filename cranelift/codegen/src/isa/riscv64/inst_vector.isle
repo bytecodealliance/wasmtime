@@ -115,6 +115,7 @@
   (VfdivVV)
   (VfsgnjnVV)
   (VmergeVVM)
+  (VredminuVS)
 
   ;; Vector-Scalar Opcodes
   (VaddVX)
@@ -700,6 +701,11 @@
 (rule (rv_vmerge_vim vs2 imm mask vstate)
   (vec_alu_rr_imm5 (VecAluOpRRImm5.VmergeVIM) vs2 imm (masked mask) vstate))
 
+
+;; Helper for emitting the `vredminu.vs` instruction.
+(decl rv_vredminu_vs (VReg VReg VecOpMasking VState) VReg)
+(rule (rv_vredminu_vs vs2 vs1 mask vstate)
+  (vec_alu_rrr (VecAluOpRRR.VredminuVS) vs2 vs1 mask vstate))
 
 ;;;; Multi-Instruction Helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

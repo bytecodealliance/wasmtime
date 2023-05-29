@@ -1359,3 +1359,19 @@
 
 (rule 1 (lower (has_type (ty_vec_fits_in_register ty) (ssub_sat x (splat y))))
   (rv_vssub_vx x y (unmasked) ty))
+
+;;;; Rules for `vall_true` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Here we do a Vector Reduce operation. Get the unsigned minimum value of any
+;; lane in the vector. The fixed input to the reduce operation is a 1.
+;; This way, if any lane is 0, the result will be 0. Otherwise, the result will
+;; be a 1.
+;; The reduce operation leaves the result in the lowest lane, we then move it
+;; into the destination X register.
+(rule (lower (vall_true x @ (value_type (ty_vec_fits_in_register ty))))
+  (if-let one (imm5_from_i8 1))
+  ;; We don't need to broadcast the immediate into all lanes, only into lane 0.
+  ;; I did it this way since it uses one less instruction than with a vmv.s.x.
+  (let ((fixed VReg (rv_vmv_vi one ty))
+        (min VReg (rv_vredminu_vs x fixed (unmasked) ty)))
+    (rv_vmv_xs min ty)))
