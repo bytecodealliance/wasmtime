@@ -1087,6 +1087,51 @@
   (let ((eew VecElementWidth (element_width_from_type ty)))
     (vec_load eew (VecAMode.UnitStride (gen_amode p offset $I64)) flags (unmasked) ty)))
 
+;;;;;  Rules for Load + Extend Combos ;;;;;;;;;
+
+;; These rules cover the special loads that load a 64bit value and do some sort of extension.
+;; We don't have any special instructions to do this, so just load the 64 bits as a vector, and
+;; do a SEW/2 extension. This only reads half width elements from the source vector register
+;; extends it, and writes the back the full register.
+
+(decl gen_load64_extend (Type ExtendOp MemFlags XReg Offset32) VReg)
+
+(rule (gen_load64_extend ty (ExtendOp.Signed) flags addr offset)
+  (let ((eew VecElementWidth (element_width_from_type $I64))
+        (load_state VState (vstate_from_type $I64))
+        (loaded VReg (vec_load eew (VecAMode.UnitStride (gen_amode addr offset $I64)) flags (unmasked) load_state)))
+    (rv_vsext_vf2 loaded (unmasked) ty)))
+
+(rule (gen_load64_extend ty (ExtendOp.Zero) flags addr offset)
+  (let ((eew VecElementWidth (element_width_from_type $I64))
+        (load_state VState (vstate_from_type $I64))
+        (loaded VReg (vec_load eew (VecAMode.UnitStride (gen_amode addr offset $I64)) flags (unmasked) load_state)))
+    (rv_vzext_vf2 loaded (unmasked) ty)))
+
+;;;;;  Rules for `uload8x8`;;;;;;;;;;
+(rule (lower (has_type (ty_vec_fits_in_register ty @ $I16X8) (uload8x8 flags addr @ (value_type (ty_addr64 _)) offset)))
+  (gen_load64_extend ty (ExtendOp.Zero) flags addr offset))
+
+;;;;;  Rules for `uload16x4`;;;;;;;;;
+(rule (lower (has_type (ty_vec_fits_in_register ty @ $I32X4) (uload16x4 flags addr @ (value_type (ty_addr64 _)) offset)))
+  (gen_load64_extend ty (ExtendOp.Zero) flags addr offset))
+
+;;;;;  Rules for `uload32x2`;;;;;;;;;
+(rule (lower (has_type (ty_vec_fits_in_register ty @ $I64X2) (uload32x2 flags addr @ (value_type (ty_addr64 _)) offset)))
+  (gen_load64_extend ty (ExtendOp.Zero) flags addr offset))
+
+;;;;;  Rules for `sload8x8`;;;;;;;;;;
+(rule (lower (has_type (ty_vec_fits_in_register ty @ $I16X8) (sload8x8 flags addr @ (value_type (ty_addr64 _)) offset)))
+  (gen_load64_extend ty (ExtendOp.Signed) flags addr offset))
+
+;;;;;  Rules for `sload16x4`;;;;;;;;;
+(rule (lower (has_type (ty_vec_fits_in_register ty @ $I32X4) (sload16x4 flags addr @ (value_type (ty_addr64 _)) offset)))
+  (gen_load64_extend ty (ExtendOp.Signed) flags addr offset))
+
+;;;;;  Rules for `sload32x2`;;;;;;;;;
+(rule (lower (has_type (ty_vec_fits_in_register ty @ $I64X2) (sload32x2 flags addr @ (value_type (ty_addr64 _)) offset)))
+  (gen_load64_extend ty (ExtendOp.Signed) flags addr offset))
+
 ;;;;;  Rules for `istore8`;;;;;;;;;
 (rule
   (lower (istore8 flags x p @ (value_type (ty_addr64 _)) offset))

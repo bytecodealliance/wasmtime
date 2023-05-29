@@ -186,6 +186,8 @@
   (VmvVX)
   (VfmvVF)
   (VfsqrtV)
+  (VsextVF2)
+  (VzextVF2)
 ))
 
 ;; Returns the canonical destination type for a VecAluOpRRImm5.
@@ -744,6 +746,18 @@
 (decl rv_vmslt_vx (VReg XReg VecOpMasking VState) VReg)
 (rule (rv_vmslt_vx vs2 vs1 mask vstate)
   (vec_alu_rrr (VecAluOpRRR.VmsltVX) vs2 vs1 mask vstate))
+
+;; Helper for emitting the `vzext.vf2` instruction.
+;; Zero-extend SEW/2 source to SEW destination
+(decl rv_vzext_vf2 (VReg VecOpMasking VState) VReg)
+(rule (rv_vzext_vf2 vs mask vstate)
+  (vec_alu_rr (VecAluOpRR.VzextVF2) vs mask vstate))
+
+;; Helper for emitting the `vsext.vf2` instruction.
+;; Sign-extend SEW/2 source to SEW destination
+(decl rv_vsext_vf2 (VReg VecOpMasking VState) VReg)
+(rule (rv_vsext_vf2 vs mask vstate)
+  (vec_alu_rr (VecAluOpRR.VsextVF2) vs mask vstate))
 
 ;;;; Multi-Instruction Helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
