@@ -654,17 +654,39 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
 
             collector.reg_use(vs1);
             collector.reg_use(vs2);
-            collector.reg_def(vd);
+
+            // If the operation forbids source/destination overlap, then we must
+            // register it as an early_def. This encodes the constraint that
+            // these must not overlap.
+            if op.forbids_src_dst_overlaps() {
+                collector.reg_early_def(vd);
+            } else {
+                collector.reg_def(vd);
+            }
+
             vec_mask_operands(mask, collector);
         }
         &Inst::VecAluRRImm5 {
-            vd, vs2, ref mask, ..
+            op,
+            vd,
+            vs2,
+            ref mask,
+            ..
         } => {
             debug_assert_eq!(vd.to_reg().class(), RegClass::Vector);
             debug_assert_eq!(vs2.class(), RegClass::Vector);
 
             collector.reg_use(vs2);
-            collector.reg_def(vd);
+
+            // If the operation forbids source/destination overlap, then we must
+            // register it as an early_def. This encodes the constraint that
+            // these must not overlap.
+            if op.forbids_src_dst_overlaps() {
+                collector.reg_early_def(vd);
+            } else {
+                collector.reg_def(vd);
+            }
+
             vec_mask_operands(mask, collector);
         }
         &Inst::VecAluRR {

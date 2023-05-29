@@ -1573,6 +1573,12 @@
 
 ;; UImm5 Helpers
 
+;; Extractor that matches a `Value` equivalent to a replicated UImm5 on all lanes.
+;; TODO: Try matching vconst here as well
+(decl replicated_uimm5 (UImm5) Value)
+(extractor (replicated_uimm5 n)
+  (def_inst (splat (uimm5_from_value n))))
+
 ;; Helper to go directly from a `Value`, when it's an `iconst`, to an `UImm5`.
 (decl uimm5_from_value (UImm5) Value)
 (extractor (uimm5_from_value n)

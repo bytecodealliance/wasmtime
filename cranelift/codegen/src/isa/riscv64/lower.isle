@@ -1407,3 +1407,14 @@
         ;; use the original type as a VState and avoid a state change.
         (x_mask XReg (rv_vmv_xs mask (vstate_from_type $I64X2))))
     (gen_andi x_mask (ty_lane_mask ty))))
+
+;;;; Rules for `swizzle` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule 0 (lower (has_type (ty_vec_fits_in_register ty) (swizzle x y)))
+  (rv_vrgather_vv x y (unmasked) ty))
+
+(rule 1 (lower (has_type (ty_vec_fits_in_register ty) (swizzle x (splat y))))
+  (rv_vrgather_vx x y (unmasked) ty))
+
+(rule 2 (lower (has_type (ty_vec_fits_in_register ty) (swizzle x (replicated_uimm5 y))))
+  (rv_vrgather_vi x y (unmasked) ty))

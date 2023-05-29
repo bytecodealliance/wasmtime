@@ -1,0 +1,121 @@
+test compile precise-output
+set unwind_info=false
+target riscv64 has_v
+
+function %swizzle_i8x16(i8x16, i8x16) -> i8x16 {
+block0(v0: i8x16, v1: i8x16):
+    v2 = swizzle v0, v1
+    return v2
+}
+
+; VCode:
+;   add sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+; block0:
+;   vle8.v v1,16(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v3,32(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vrgather.vv v6,v1,v3 #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v6,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   add sp,+16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   ori s0, sp, 0
+; block1: ; offset 0x10
+;   .byte 0x57, 0x70, 0x08, 0xcc
+;   addi t6, s0, 0x10
+;   .byte 0x87, 0x80, 0x0f, 0x02
+;   addi t6, s0, 0x20
+;   .byte 0x87, 0x81, 0x0f, 0x02
+;   .byte 0x57, 0x83, 0x11, 0x32
+;   .byte 0x27, 0x03, 0x05, 0x02
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+
+function %swizzle_splat_i8x16(i8x16, i8) -> i8x16 {
+block0(v0: i8x16, v1: i8):
+    v2 = splat.i8x16 v1
+    v3 = swizzle v0, v2
+    return v3
+}
+
+; VCode:
+;   add sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+; block0:
+;   vle8.v v1,16(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vrgather.vx v5,v1,a0 #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v5,0(a1) #avl=16, #vtype=(e8, m1, ta, ma)
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   add sp,+16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   ori s0, sp, 0
+; block1: ; offset 0x10
+;   .byte 0x57, 0x70, 0x08, 0xcc
+;   addi t6, s0, 0x10
+;   .byte 0x87, 0x80, 0x0f, 0x02
+;   .byte 0xd7, 0x42, 0x15, 0x32
+;   .byte 0xa7, 0x82, 0x05, 0x02
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+
+function %swizzle_splat_const_i8x16(i8x16) -> i8x16 {
+block0(v0: i8x16):
+    v1 = iconst.i8 2
+    v2 = splat.i8x16 v1
+    v3 = swizzle v0, v2
+    return v3
+}
+
+; VCode:
+;   add sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+; block0:
+;   vle8.v v1,16(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vrgather.vi v4,v1,2 #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v4,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   add sp,+16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   ori s0, sp, 0
+; block1: ; offset 0x10
+;   .byte 0x57, 0x70, 0x08, 0xcc
+;   addi t6, s0, 0x10
+;   .byte 0x87, 0x80, 0x0f, 0x02
+;   .byte 0x57, 0x32, 0x11, 0x32
+;   .byte 0x27, 0x02, 0x05, 0x02
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+

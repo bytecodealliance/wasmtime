@@ -117,6 +117,7 @@
   (VmergeVVM)
   (VredmaxuVS)
   (VredminuVS)
+  (VrgatherVV)
 
   ;; Vector-Scalar Opcodes
   (VaddVX)
@@ -145,6 +146,7 @@
   (VfrdivVF)
   (VmergeVXM)
   (VfmergeVFM)
+  (VrgatherVX)
   (VmsltVX)
 ))
 
@@ -163,6 +165,7 @@
   (VxorVI)
   (VslidedownVI)
   (VmergeVIM)
+  (VrgatherVI)
 ))
 
 ;; Imm only ALU Ops
@@ -717,6 +720,25 @@
 (decl rv_vredmaxu_vs (VReg VReg VecOpMasking VState) VReg)
 (rule (rv_vredmaxu_vs vs2 vs1 mask vstate)
   (vec_alu_rrr (VecAluOpRRR.VredmaxuVS) vs2 vs1 mask vstate))
+
+;; Helper for emitting the `vrgather.vv` instruction.
+;;
+;; vd[i] = (vs1[i] >= VLMAX) ? 0 : vs2[vs1[i]];
+(decl rv_vrgather_vv (VReg VReg VecOpMasking VState) VReg)
+(rule (rv_vrgather_vv vs2 vs1 mask vstate)
+  (vec_alu_rrr (VecAluOpRRR.VrgatherVV) vs2 vs1 mask vstate))
+
+;; Helper for emitting the `vrgather.vx` instruction.
+;;
+;; vd[i] = (x[rs1] >= VLMAX) ? 0 : vs2[x[rs1]]
+(decl rv_vrgather_vx (VReg XReg VecOpMasking VState) VReg)
+(rule (rv_vrgather_vx vs2 vs1 mask vstate)
+  (vec_alu_rrr (VecAluOpRRR.VrgatherVX) vs2 vs1 mask vstate))
+
+;; Helper for emitting the `vrgather.vi` instruction.
+(decl rv_vrgather_vi (VReg UImm5 VecOpMasking VState) VReg)
+(rule (rv_vrgather_vi vs2 imm mask vstate)
+  (vec_alu_rr_uimm5 (VecAluOpRRImm5.VrgatherVI) vs2 imm mask vstate))
 
 ;; Helper for emitting the `vmslt.vx` (Vector Mask Set Less Than) instruction.
 (decl rv_vmslt_vx (VReg XReg VecOpMasking VState) VReg)
