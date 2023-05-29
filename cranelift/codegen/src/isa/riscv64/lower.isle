@@ -1375,3 +1375,14 @@
   (let ((fixed VReg (rv_vmv_vi one ty))
         (min VReg (rv_vredminu_vs x fixed (unmasked) ty)))
     (rv_vmv_xs min ty)))
+
+
+;;;; Rules for `vany_true` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Here we do a Vector Reduce operation. Get the unsigned maximum value of the
+;; input vector register. Move the max to an X register, and do a `snez` on it
+;; to ensure its either 1 or 0.
+(rule (lower (vany_true x @ (value_type (ty_vec_fits_in_register ty))))
+  (let ((max VReg (rv_vredmaxu_vs x x (unmasked) ty))
+        (x_max XReg (rv_vmv_xs max ty)))
+    (rv_snez x_max)))

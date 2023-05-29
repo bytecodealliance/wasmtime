@@ -115,6 +115,7 @@
   (VfdivVV)
   (VfsgnjnVV)
   (VmergeVVM)
+  (VredmaxuVS)
   (VredminuVS)
 
   ;; Vector-Scalar Opcodes
@@ -703,9 +704,18 @@
 
 
 ;; Helper for emitting the `vredminu.vs` instruction.
+;;
+;; vd[0] = minu( vs1[0] , vs2[*] )
 (decl rv_vredminu_vs (VReg VReg VecOpMasking VState) VReg)
 (rule (rv_vredminu_vs vs2 vs1 mask vstate)
   (vec_alu_rrr (VecAluOpRRR.VredminuVS) vs2 vs1 mask vstate))
+
+;; Helper for emitting the `vredmaxu.vs` instruction.
+;;
+;; vd[0] = maxu( vs1[0] , vs2[*] )
+(decl rv_vredmaxu_vs (VReg VReg VecOpMasking VState) VReg)
+(rule (rv_vredmaxu_vs vs2 vs1 mask vstate)
+  (vec_alu_rrr (VecAluOpRRR.VredmaxuVS) vs2 vs1 mask vstate))
 
 ;;;; Multi-Instruction Helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
