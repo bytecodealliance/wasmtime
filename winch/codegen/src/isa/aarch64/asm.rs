@@ -7,7 +7,7 @@ use cranelift_codegen::{
     isa::aarch64::inst::{
         self,
         emit::{EmitInfo, EmitState},
-        ALUOp, AMode, ExtendOp, Imm12, Inst, PairAMode, ALUOp3,
+        ALUOp, ALUOp3, AMode, ExtendOp, Imm12, Inst, PairAMode,
     },
     settings, Final, MachBuffer, MachBufferFinalized, MachInstEmit, MachInstEmitState, Writable,
 };
