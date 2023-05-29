@@ -343,6 +343,13 @@ macro_rules! isle_lower_prelude_methods {
         }
 
         #[inline]
+        fn vconst_from_immediate(&mut self, imm: Immediate) -> Option<VCodeConstant> {
+            Some(self.lower_ctx.use_constant(VCodeConstantData::Generated(
+                self.lower_ctx.get_immediate_data(imm).clone(),
+            )))
+        }
+
+        #[inline]
         fn vec_mask_from_immediate(&mut self, imm: Immediate) -> Option<VecMask> {
             let data = self.lower_ctx.get_immediate_data(imm);
             if data.len() == 16 {

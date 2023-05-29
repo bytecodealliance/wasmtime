@@ -854,6 +854,11 @@
 (decl u128_from_immediate (u128) Immediate)
 (extern extractor u128_from_immediate u128_from_immediate)
 
+;; Extracts an `Immediate` as a `VCodeConstant`.
+
+(decl vconst_from_immediate (VCodeConstant) Immediate)
+(extern extractor vconst_from_immediate vconst_from_immediate)
+
 ;; Accessor for `Constant` as u128.
 
 (decl u128_from_constant (u128) Constant)

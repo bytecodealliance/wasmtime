@@ -780,3 +780,19 @@
 ;; the vector register.
 (rule (gen_vec_mask mask)
   (rv_vmv_sx (imm $I64 mask) (vstate_from_type $I64X2)))
+
+
+;; Loads a `VCodeConstant` value into a vector register. For some special `VCodeConstant`s
+;; we can use a dedicated instruction, otherwise we load the value from the pool.
+;;
+;; Type is the preferred type to use when loading the constant.
+(decl gen_constant (Type VCodeConstant) VReg)
+
+;; The fallback case is to load the constant from the pool.
+(rule (gen_constant ty n)
+  (vec_load
+    (element_width_from_type ty)
+    (VecAMode.UnitStride (gen_const_amode n))
+    (mem_flags_trusted)
+    (unmasked)
+    ty))
