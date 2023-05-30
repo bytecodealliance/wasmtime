@@ -124,6 +124,17 @@ impl<'a> CodeGenContext<'a> {
         };
     }
 
+    /// Prepares arguments for emitting a unary operation.
+    pub fn unop<F, M>(&mut self, masm: &mut M, size: OperandSize, emit: &mut F)
+    where
+        F: FnMut(&mut M, RegImm, OperandSize),
+        M: MacroAssembler,
+    {
+        let reg = self.pop_to_reg(masm, None, size);
+        emit(masm, reg.into(), size);
+        self.stack.push(Val::reg(reg));
+    }
+
     /// Prepares arguments for emitting an i32 binary operation.
     pub fn i32_binop<F, M>(&mut self, masm: &mut M, emit: &mut F)
     where
