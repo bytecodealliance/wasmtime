@@ -20,6 +20,7 @@ use alloc::vec::Vec;
 use regalloc2::{PRegSet, RegClass, VReg};
 use smallvec::{smallvec, SmallVec};
 use std::boxed::Box;
+use std::fmt::Write;
 use std::string::{String, ToString};
 
 pub mod regs;
@@ -397,7 +398,7 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
                 collector.reg_fixed_def(arg.vreg, arg.preg);
             }
         }
-        &Inst::Ret { ref rets } => {
+        &Inst::Ret { ref rets, .. } => {
             for ret in rets {
                 collector.reg_fixed_use(ret.vreg, ret.preg);
             }
@@ -1288,8 +1289,6 @@ impl Inst {
                 format!("{} {},{}", "lui", format_reg(rd.to_reg(), allocs), imm.bits)
             }
             &Inst::LoadConst32 { rd, imm } => {
-                use std::fmt::Write;
-
                 let rd = format_reg(rd.to_reg(), allocs);
                 let mut buf = String::new();
                 write!(&mut buf, "auipc {},0; ", rd).unwrap();
@@ -1299,8 +1298,6 @@ impl Inst {
                 buf
             }
             &Inst::LoadConst64 { rd, imm } => {
-                use std::fmt::Write;
-
                 let rd = format_reg(rd.to_reg(), allocs);
                 let mut buf = String::new();
                 write!(&mut buf, "auipc {},0; ", rd).unwrap();
@@ -1459,21 +1456,27 @@ impl Inst {
                 let mut s = "args".to_string();
                 let mut empty_allocs = AllocationConsumer::default();
                 for arg in args {
-                    use std::fmt::Write;
                     let preg = format_reg(arg.preg, &mut empty_allocs);
                     let def = format_reg(arg.vreg.to_reg(), allocs);
                     write!(&mut s, " {}={}", def, preg).unwrap();
                 }
                 s
             }
-            &Inst::Ret { ref rets } => {
-                let mut s = "ret".to_string();
+            &Inst::Ret {
+                ref rets,
+                stack_bytes_to_pop,
+            } => {
+                let mut s = if stack_bytes_to_pop == 0 {
+                    "ret".to_string()
+                } else {
+                    format!("add sp, sp, #{stack_bytes_to_pop} ; ret")
+                };
+
                 let mut empty_allocs = AllocationConsumer::default();
                 for ret in rets {
-                    use std::fmt::Write;
                     let preg = format_reg(ret.preg, &mut empty_allocs);
                     let vreg = format_reg(ret.vreg, allocs);
-                    write!(&mut s, " {}={}", vreg, preg).unwrap();
+                    write!(&mut s, " {vreg}={preg}").unwrap();
                 }
                 s
             }

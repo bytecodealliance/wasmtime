@@ -301,8 +301,9 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         _setup_frame: bool,
         _isa_flags: &x64_settings::Flags,
         rets: Vec<RetPair>,
+        stack_bytes_to_pop: u32,
     ) -> Self::I {
-        Inst::ret(rets)
+        Inst::ret(rets, stack_bytes_to_pop)
     }
 
     fn gen_add_imm(into_reg: Writable<Reg>, from_reg: Reg, imm: u32) -> SmallInstVec<Self::I> {

@@ -456,10 +456,16 @@ impl ABIMachineSpec for S390xMachineDeps {
         Inst::Args { args }
     }
 
-    fn gen_ret(_setup_frame: bool, _isa_flags: &s390x_settings::Flags, rets: Vec<RetPair>) -> Inst {
+    fn gen_ret(
+        _setup_frame: bool,
+        _isa_flags: &s390x_settings::Flags,
+        rets: Vec<RetPair>,
+        stack_bytes_to_pop: u32,
+    ) -> Inst {
         Inst::Ret {
             link: gpr(14),
             rets,
+            stack_bytes_to_pop,
         }
     }
 

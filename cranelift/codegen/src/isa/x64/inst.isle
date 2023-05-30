@@ -486,7 +486,8 @@
         (args VecArgPair))
 
        ;; Return.
-       (Ret (rets VecRetPair))
+       (Ret (rets VecRetPair)
+            (stack_bytes_to_pop u32))
 
        ;; Jump to a known target: jmp simm32.
        (JmpKnown (dst MachLabel))

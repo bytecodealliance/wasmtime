@@ -431,7 +431,18 @@ pub trait ABIMachineSpec {
     fn gen_args(isa_flags: &Self::F, args: Vec<ArgPair>) -> Self::I;
 
     /// Generate a return instruction.
-    fn gen_ret(setup_frame: bool, isa_flags: &Self::F, rets: Vec<RetPair>) -> Self::I;
+    ///
+    /// Optionally given non-zero number of additional stack bytes to pop after
+    /// popping the return address from the stack, if any, and just before the
+    /// actual return. This is used by the "tail" calling convention to clean up
+    /// stack arguments in the callee because we cannot rely on the caller to do
+    /// it.
+    fn gen_ret(
+        setup_frame: bool,
+        isa_flags: &Self::F,
+        rets: Vec<RetPair>,
+        stack_bytes_to_pop: u32,
+    ) -> Self::I;
 
     /// Generate an add-with-immediate. Note that even if this uses a scratch
     /// register, it must satisfy two requirements:
@@ -1670,8 +1681,22 @@ impl<M: ABIMachineSpec> Callee<M> {
     }
 
     /// Generate a return instruction.
-    pub fn gen_ret(&self, rets: Vec<RetPair>) -> M::I {
-        M::gen_ret(self.setup_frame, &self.isa_flags, rets)
+    pub fn gen_ret(&self, sigs: &SigSet, rets: Vec<RetPair>) -> M::I {
+        M::gen_ret(
+            self.setup_frame,
+            &self.isa_flags,
+            rets,
+            self.stack_bytes_to_pop(sigs),
+        )
+    }
+
+    fn stack_bytes_to_pop(&self, sigs: &SigSet) -> u32 {
+        let sig = &sigs[self.sig];
+        if sig.call_conv == isa::CallConv::Tail {
+            sig.sized_stack_arg_space
+        } else {
+            0
+        }
     }
 
     /// Produce an instruction that computes a sized stackslot address.
@@ -1893,7 +1918,7 @@ impl<M: ABIMachineSpec> Callee<M> {
     /// Note that this must generate the actual return instruction (rather than
     /// emitting this in the lowering logic), because the epilogue code comes
     /// before the return and the two are likely closely related.
-    pub fn gen_epilogue(&self) -> SmallInstVec<M::I> {
+    pub fn gen_epilogue(&self, sigs: &SigSet) -> SmallInstVec<M::I> {
         let mut insts = smallvec![];
 
         // Restore clobbered registers.
@@ -1919,7 +1944,12 @@ impl<M: ABIMachineSpec> Callee<M> {
         // This `ret` doesn't need any return registers attached
         // because we are post-regalloc and don't need to
         // represent the implicit uses anymore.
-        insts.push(M::gen_ret(self.setup_frame, &self.isa_flags, vec![]));
+        insts.push(M::gen_ret(
+            self.setup_frame,
+            &self.isa_flags,
+            vec![],
+            self.stack_bytes_to_pop(sigs),
+        ));
 
         trace!("Epilogue: {:?}", insts);
         insts
@@ -2129,10 +2159,10 @@ impl<M: ABIMachineSpec> CallSite<M> {
     pub fn emit_stack_pre_adjust(&self, ctx: &mut Lower<M::I>) {
         let off =
             ctx.sigs()[self.sig].sized_stack_arg_space + ctx.sigs()[self.sig].sized_stack_ret_space;
-        adjust_stack_and_nominal_sp::<M>(ctx, off as i32, /* is_sub = */ true)
+        adjust_stack_and_nominal_sp::<M>(ctx, off as i32, /* is_sub = */ true);
     }
 
-    /// Emit code to post-adjust the satck, after call return and return-value copies.
+    /// Emit code to post-adjust the stack, after call return and return-value copies.
     pub fn emit_stack_post_adjust(&self, ctx: &mut Lower<M::I>) {
         let off =
             ctx.sigs()[self.sig].sized_stack_arg_space + ctx.sigs()[self.sig].sized_stack_ret_space;

@@ -4400,4 +4400,3 @@
 
 (rule (lower (nop))
       (invalid_reg))
-

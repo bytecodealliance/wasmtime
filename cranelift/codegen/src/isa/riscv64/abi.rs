@@ -269,8 +269,16 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         Inst::Args { args }
     }
 
-    fn gen_ret(_setup_frame: bool, _isa_flags: &Self::F, rets: Vec<RetPair>) -> Inst {
-        Inst::Ret { rets }
+    fn gen_ret(
+        _setup_frame: bool,
+        _isa_flags: &Self::F,
+        rets: Vec<RetPair>,
+        stack_bytes_to_pop: u32,
+    ) -> Inst {
+        Inst::Ret {
+            rets,
+            stack_bytes_to_pop,
+        }
     }
 
     fn get_stacklimit_reg() -> Reg {

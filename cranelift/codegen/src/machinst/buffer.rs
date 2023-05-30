@@ -2144,7 +2144,10 @@ mod test {
         inst.emit(&[], &mut buf, &info, &mut state);
 
         buf.bind_label(label(7), state.ctrl_plane_mut());
-        let inst = Inst::Ret { rets: vec![] };
+        let inst = Inst::Ret {
+            rets: vec![],
+            stack_bytes_to_pop: 0,
+        };
         inst.emit(&[], &mut buf, &info, &mut state);
 
         let buf = buf.finish(&constants, state.ctrl_plane_mut());

@@ -975,7 +975,7 @@ impl<I: VCodeInst> VCode<I> {
                         // (and don't emit the return; the actual
                         // epilogue will contain it).
                         if self.insts[iix.index()].is_term() == MachTerminator::Ret {
-                            for inst in self.abi.gen_epilogue() {
+                            for inst in self.abi.gen_epilogue(&self.sigs) {
                                 do_emit(&inst, &[], &mut disasm, &mut buffer, &mut state);
                             }
                         } else {

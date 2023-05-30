@@ -654,7 +654,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             }
         }
 
-        let inst = self.abi().gen_ret(out_rets);
+        let inst = self.abi().gen_ret(&self.sigs(), out_rets);
         self.emit(inst);
     }
 
