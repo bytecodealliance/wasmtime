@@ -238,6 +238,11 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
+        fn ty_lane_count(&mut self, ty: Type) -> u64 {
+            ty.lane_count() as u64
+        }
+
+        #[inline]
         fn ty_umin(&mut self, _ty: Type) -> u64 {
             0
         }

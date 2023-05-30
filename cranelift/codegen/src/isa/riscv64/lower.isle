@@ -1473,3 +1473,29 @@
         (y_mask VReg (rv_vadd_vi x_mask neg16 (unmasked) ty))
         (y_lanes VReg (rv_vrgather_vv y y_mask (unmasked) ty)))
     (rv_vor_vv x_lanes y_lanes (unmasked) ty)))
+
+;;;; Rules for `swiden_high` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Slide down half the vector, and do a signed extension.
+(rule (lower (has_type (ty_vec_fits_in_register out_ty) (swiden_high x @ (value_type in_ty))))
+  (if-let slide_amt (u64_to_uimm5 (u64_udiv (ty_lane_count in_ty) 2)))
+  (let ((half VReg (rv_vslidedown_vi x slide_amt (unmasked) in_ty)))
+    (rv_vsext_vf2 half (unmasked) out_ty)))
+
+;;;; Rules for `uwiden_high` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Slide down half the vector, and do a zero extension.
+(rule (lower (has_type (ty_vec_fits_in_register out_ty) (uwiden_high x @ (value_type in_ty))))
+  (if-let slide_amt (u64_to_uimm5 (u64_udiv (ty_lane_count in_ty) 2)))
+  (let ((half VReg (rv_vslidedown_vi x slide_amt (unmasked) in_ty)))
+    (rv_vzext_vf2 half (unmasked) out_ty)))
+
+;;;; Rules for `swiden_low` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type (ty_vec_fits_in_register out_ty) (swiden_low x)))
+    (rv_vsext_vf2 x (unmasked) out_ty))
+
+;;;; Rules for `uwiden_low` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type (ty_vec_fits_in_register out_ty) (uwiden_low x)))
+    (rv_vzext_vf2 x (unmasked) out_ty))

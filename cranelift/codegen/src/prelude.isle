@@ -265,6 +265,10 @@
 (decl pure ty_lane_mask (Type) u64)
 (extern constructor ty_lane_mask ty_lane_mask)
 
+;; Get the number of lanes for a given type.
+(decl pure ty_lane_count (Type) u64)
+(extern constructor ty_lane_count ty_lane_count)
+
 ;; Get the byte width of a given type.
 (decl pure ty_bytes (Type) u16)
 (extern constructor ty_bytes ty_bytes)
