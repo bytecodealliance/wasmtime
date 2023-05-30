@@ -12,7 +12,7 @@
 ;;    4:	 4883ec08             	sub	rsp, 8
 ;;    8:	 4c893424             	mov	qword ptr [rsp], r14
 ;;    c:	 48c7c001000000       	mov	rax, 1
-;;   13:	 4883c000             	add	rax, 0
+;;   13:	 4883e800             	sub	rax, 0
 ;;   17:	 4883c408             	add	rsp, 8
 ;;   1b:	 5d                   	pop	rbp
 ;;   1c:	 c3                   	ret	
