@@ -52,23 +52,37 @@ unsafe fn path_open_preopen() {
     )
     .expect("open with O_DIRECTORY and read right");
 
-    // Open OFLAGS_DIRECTORY and read/write rights should fail with isdir:
-    let err = wasi::path_open(
-        FIRST_PREOPEN,
-        0,
-        ".",
-        wasi::OFLAGS_DIRECTORY,
-        wasi::RIGHTS_FD_READ | wasi::RIGHTS_FD_WRITE,
-        0,
-        0,
-    )
-    .err()
-    .expect("open with O_DIRECTORY and read/write should fail");
-    assert_eq!(
-        err,
-        wasi::ERRNO_ISDIR,
-        "opening directory read/write should fail with ISDIR"
-    );
+    if !wasi_tests::TESTCONFIG.errno_expect_windows() {
+        // Open OFLAGS_DIRECTORY and read/write rights should fail with isdir:
+        let err = wasi::path_open(
+            FIRST_PREOPEN,
+            0,
+            ".",
+            wasi::OFLAGS_DIRECTORY,
+            wasi::RIGHTS_FD_READ | wasi::RIGHTS_FD_WRITE,
+            0,
+            0,
+        )
+        .err()
+        .expect("open with O_DIRECTORY and read/write should fail");
+        assert_eq!(
+            err,
+            wasi::ERRNO_ISDIR,
+            "opening directory read/write should fail with ISDIR"
+        );
+    } else {
+        // Open OFLAGS_DIRECTORY and read/write rights will succeed, only on windows:
+        let _ = wasi::path_open(
+            FIRST_PREOPEN,
+            0,
+            ".",
+            wasi::OFLAGS_DIRECTORY,
+            wasi::RIGHTS_FD_READ | wasi::RIGHTS_FD_WRITE,
+            0,
+            0,
+        )
+        .expect("open with O_DIRECTORY and read/write should succeed on windows");
+    }
 }
 
 fn main() {
