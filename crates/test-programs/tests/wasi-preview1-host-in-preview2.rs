@@ -317,3 +317,7 @@ async fn symlink_loop() {
 async fn unlink_file_trailing_slashes() {
     run("unlink_file_trailing_slashes", true).await.unwrap()
 }
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn path_open_preopen() {
+    run("path_open_preopen", true).await.unwrap()
+}

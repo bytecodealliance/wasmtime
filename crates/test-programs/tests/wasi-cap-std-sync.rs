@@ -269,3 +269,7 @@ fn symlink_loop() {
 fn unlink_file_trailing_slashes() {
     run("unlink_file_trailing_slashes", true).unwrap()
 }
+#[test_log::test]
+fn path_open_preopen() {
+    run("path_open_preopen", true).unwrap()
+}
