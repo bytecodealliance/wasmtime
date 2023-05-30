@@ -2437,7 +2437,7 @@ dependencies = [
 
 [[package]]
 name = "wizer"
-version = "2.0.0"
+version = "3.0.0"
 dependencies = [
  "anyhow",
  "cap-std 0.24.4",

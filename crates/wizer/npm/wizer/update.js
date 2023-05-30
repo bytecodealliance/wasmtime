@@ -33,6 +33,20 @@ let packages = {
         os: 'linux',
         cpu: 'x64',
     },
+    'wizer-linux-arm64': {
+        releaseAsset: `wizer-${tag}-arm64-linux.tar.xz`,
+        binaryAsset: 'wizer',
+        description : 'The Linux 64-bit binary for Wizer, the WebAssembly Pre-Initializer',
+        os: 'linux',
+        cpu: 'arm64',
+    },
+    'wizer-linux-s390x': {
+        releaseAsset: `wizer-${tag}-s390x-linux.tar.xz`,
+        binaryAsset: 'wizer',
+        description: 'The Linux S390X binary for Wizer, the WebAssembly Pre-Initializer',
+        os: 'linux',
+        cpu: 's390x',
+    },
     'wizer-win32-x64': {
         releaseAsset: `wizer-${tag}-x86_64-windows.zip`,
         binaryAsset: 'wizer.exe',
