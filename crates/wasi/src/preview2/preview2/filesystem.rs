@@ -352,16 +352,12 @@ impl<T: WasiView> filesystem::Host for T {
         let table = self.table();
         if table.is_file(fd) {
             let f = table.get_file(fd)?;
-            if !f.perms.contains(FilePerms::READ) {
-                return Err(ErrorCode::NotPermitted.into());
-            }
+            // No permissions check on stat: if opened, allowed to stat it
             let meta = f.file.metadata()?;
             Ok(descriptorstat_from(meta))
         } else if table.is_dir(fd) {
             let d = table.get_dir(fd)?;
-            if !d.perms.contains(DirPerms::READ) {
-                return Err(ErrorCode::NotPermitted.into());
-            }
+            // No permissions check on stat: if opened, allowed to stat it
             let meta = d.dir.dir_metadata()?;
             Ok(descriptorstat_from(meta))
         } else {
@@ -541,7 +537,7 @@ impl<T: WasiView> filesystem::Host for T {
             let set_fd_flags = opened.new_set_fd_flags(FdFlags::NONBLOCK)?;
             opened.set_fd_flags(set_fd_flags)?;
 
-            Ok(table.push_file(File::new(opened, d.file_perms))?)
+            Ok(table.push_file(File::new(opened, mask_file_perms(d.file_perms, flags)))?)
         }
     }
 
@@ -701,13 +697,13 @@ impl<T: WasiView> filesystem::Host for T {
         &mut self,
         fd: filesystem::Descriptor,
         offset: filesystem::Filesize,
-    ) -> anyhow::Result<streams::InputStream> {
-        // FIXME: this skips the perm check. We can't return a NotPermitted
-        // error code here. Do we need to change the interface?
-
+    ) -> Result<streams::InputStream, filesystem::Error> {
         // Trap if fd lookup fails:
         let f = self.table().get_file(fd)?;
 
+        if !f.perms.contains(FilePerms::READ) {
+            Err(filesystem::ErrorCode::BadDescriptor)?;
+        }
         // Duplicate the file descriptor so that we get an indepenent lifetime.
         let clone = std::sync::Arc::clone(&f.file);
 
@@ -724,9 +720,13 @@ impl<T: WasiView> filesystem::Host for T {
         &mut self,
         fd: filesystem::Descriptor,
         offset: filesystem::Filesize,
-    ) -> anyhow::Result<streams::OutputStream> {
+    ) -> Result<streams::OutputStream, filesystem::Error> {
         // Trap if fd lookup fails:
         let f = self.table().get_file(fd)?;
+
+        if !f.perms.contains(FilePerms::WRITE) {
+            Err(filesystem::ErrorCode::BadDescriptor)?;
+        }
 
         // Duplicate the file descriptor so that we get an indepenent lifetime.
         let clone = std::sync::Arc::clone(&f.file);
@@ -743,10 +743,13 @@ impl<T: WasiView> filesystem::Host for T {
     async fn append_via_stream(
         &mut self,
         fd: filesystem::Descriptor,
-    ) -> anyhow::Result<streams::OutputStream> {
+    ) -> Result<streams::OutputStream, filesystem::Error> {
         // Trap if fd lookup fails:
         let f = self.table().get_file(fd)?;
 
+        if !f.perms.contains(FilePerms::WRITE) {
+            Err(filesystem::ErrorCode::BadDescriptor)?;
+        }
         // Duplicate the file descriptor so that we get an indepenent lifetime.
         let clone = std::sync::Arc::clone(&f.file);
 
@@ -988,6 +991,19 @@ impl TableReaddirExt for Table {
         self.get(fd)
     }
 }
+
+fn mask_file_perms(p: FilePerms, flags: filesystem::DescriptorFlags) -> FilePerms {
+    use filesystem::DescriptorFlags;
+    let mut out = FilePerms::empty();
+    if p.contains(FilePerms::READ) && flags.contains(DescriptorFlags::READ) {
+        out |= FilePerms::READ;
+    }
+    if p.contains(FilePerms::WRITE) && flags.contains(DescriptorFlags::WRITE) {
+        out |= FilePerms::WRITE;
+    }
+    out
+}
+
 #[cfg(test)]
 mod test {
     use super::*;

@@ -69,7 +69,7 @@ impl Streams {
                 // For files, we may have adjusted the position for seeking, so
                 // create a new stream.
                 StreamType::File(file) => {
-                    let input = filesystem::read_via_stream(file.fd, file.position.get());
+                    let input = filesystem::read_via_stream(file.fd, file.position.get())?;
                     self.input.set(Some(input));
                     Ok(input)
                 }
@@ -93,9 +93,9 @@ impl Streams {
                 // create a new stream.
                 StreamType::File(file) => {
                     let output = if file.append {
-                        filesystem::append_via_stream(file.fd)
+                        filesystem::append_via_stream(file.fd)?
                     } else {
-                        filesystem::write_via_stream(file.fd, file.position.get())
+                        filesystem::write_via_stream(file.fd, file.position.get())?
                     };
                     self.output.set(Some(output));
                     Ok(output)

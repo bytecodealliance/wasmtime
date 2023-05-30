@@ -188,6 +188,10 @@ fn path_open_create_existing() {
     run("path_open_create_existing", true).unwrap()
 }
 #[test_log::test]
+fn path_open_read_write() {
+    run("path_open_read_write", true).unwrap()
+}
+#[test_log::test]
 fn path_open_dirfd_not_dir() {
     run("path_open_dirfd_not_dir", true).unwrap()
 }
@@ -264,4 +268,8 @@ fn symlink_loop() {
 #[test_log::test]
 fn unlink_file_trailing_slashes() {
     run("unlink_file_trailing_slashes", true).unwrap()
+}
+#[test_log::test]
+fn path_open_preopen() {
+    run("path_open_preopen", true).unwrap()
 }
