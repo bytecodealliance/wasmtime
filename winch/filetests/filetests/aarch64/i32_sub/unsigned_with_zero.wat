@@ -4,7 +4,7 @@
     (func (result i32)
         (i32.const 1)
      	(i32.const 0)
-    	(i32.add)
+    	(i32.sub)
     )
 )
 ;;    0:	 fd7bbfa9             	stp	x29, x30, [sp, #-0x10]!

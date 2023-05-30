@@ -4,7 +4,7 @@
     (func (result i64)
         (i64.const 1)
      	(i64.const 0)
-    	(i64.add)
+    	(i64.sub)
     )
 )
 ;;    0:	 fd7bbfa9             	stp	x29, x30, [sp, #-0x10]!
