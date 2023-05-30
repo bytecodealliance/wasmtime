@@ -706,6 +706,12 @@ jobs:
         - build: riscv64gc-linux
           os: ubuntu-latest
           target: riscv64gc-unknown-linux-gnu
+        - build: aarch64-android
+          os: ubuntu-latest
+          target: aarch64-linux-android
+        - build: x86_64-android
+          os: ubuntu-latest
+          target: x86_64-linux-android
     steps:
     - uses: actions/checkout@v3
       with:
