@@ -29,6 +29,13 @@ user-id = 187138
 user-login = "elliottt"
 user-name = "Trevor Elliott"
 
+[[publisher.regalloc2]]
+version = "0.9.1"
+when = "2023-05-31"
+user-id = 187138
+user-login = "elliottt"
+user-name = "Trevor Elliott"
+
 [[publisher.unicode-segmentation]]
 version = "1.10.1"
 when = "2023-01-31"
