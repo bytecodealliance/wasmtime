@@ -30,6 +30,7 @@ pub struct EvexInstruction {
     reg: Register,
     rm: RegisterOrAmode,
     tuple_type: Option<Avx512TupleType>,
+    imm: Option<u8>,
 }
 
 /// Because some of the bit flags in the EVEX prefix are reversed and users of `EvexInstruction` may
@@ -50,6 +51,7 @@ impl Default for EvexInstruction {
             reg: Register::default(),
             rm: RegisterOrAmode::Register(Register::default()),
             tuple_type: None,
+            imm: None,
         }
     }
 }
@@ -184,6 +186,13 @@ impl EvexInstruction {
         self
     }
 
+    /// Set the imm byte.
+    #[inline(always)]
+    pub fn imm(mut self, imm: u8) -> Self {
+        self.imm = Some(imm);
+        self
+    }
+
     /// Emit the EVEX-encoded instruction to the code sink:
     ///
     /// - the 4-byte EVEX prefix;
@@ -208,11 +217,12 @@ impl EvexInstruction {
             RegisterOrAmode::Amode(amode) => {
                 let scaling = self.scaling_for_8bit_disp();
 
-                // NB: when `EvexInstruction` supports a trailing 8-bit
-                // immediate this'll conditionally be 0 or 1
-                let bytes_at_end = 0;
+                let bytes_at_end = if self.imm.is_some() { 1 } else { 0 };
                 rex::emit_modrm_sib_disp(sink, self.reg.0 & 7, amode, bytes_at_end, Some(scaling));
             }
+        }
+        if let Some(imm) = self.imm {
+            sink.put1(imm);
         }
     }
 
@@ -295,6 +305,7 @@ impl EvexInstruction {
                 }
             }
             Some(FullMem) => vector_size_scaling(),
+            Some(Mem128) => 16,
             None => panic!("tuple type was not set"),
         }
     }

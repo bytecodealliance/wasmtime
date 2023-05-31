@@ -1767,31 +1767,26 @@ impl fmt::Display for AvxOpcode {
     }
 }
 
-#[derive(Clone, PartialEq)]
-#[allow(missing_docs)]
-pub enum Avx512Opcode {
-    Vcvtudq2ps,
-    Vpabsq,
-    Vpermi2b,
-    Vpmullq,
-    Vpopcntb,
-}
-
 #[derive(Copy, Clone, PartialEq)]
 #[allow(missing_docs)]
 pub enum Avx512TupleType {
     Full,
     FullMem,
+    Mem128,
 }
+
+pub use crate::isa::x64::lower::isle::generated_code::Avx512Opcode;
 
 impl Avx512Opcode {
     /// Which `InstructionSet`s support the opcode?
     pub(crate) fn available_from(&self) -> SmallVec<[InstructionSet; 2]> {
         match self {
-            Avx512Opcode::Vcvtudq2ps => {
+            Avx512Opcode::Vcvtudq2ps
+            | Avx512Opcode::Vpabsq
+            | Avx512Opcode::Vpsraq
+            | Avx512Opcode::VpsraqImm => {
                 smallvec![InstructionSet::AVX512F, InstructionSet::AVX512VL]
             }
-            Avx512Opcode::Vpabsq => smallvec![InstructionSet::AVX512F, InstructionSet::AVX512VL],
             Avx512Opcode::Vpermi2b => {
                 smallvec![InstructionSet::AVX512VL, InstructionSet::AVX512VBMI]
             }
@@ -1813,28 +1808,17 @@ impl Avx512Opcode {
         use Avx512TupleType::*;
 
         match self {
-            Vcvtudq2ps | Vpabsq | Vpmullq => Full,
+            Vcvtudq2ps | Vpabsq | Vpmullq | VpsraqImm => Full,
             Vpermi2b | Vpopcntb => FullMem,
+            Vpsraq => Mem128,
         }
-    }
-}
-
-impl fmt::Debug for Avx512Opcode {
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        let name = match self {
-            Avx512Opcode::Vcvtudq2ps => "vcvtudq2ps",
-            Avx512Opcode::Vpabsq => "vpabsq",
-            Avx512Opcode::Vpermi2b => "vpermi2b",
-            Avx512Opcode::Vpmullq => "vpmullq",
-            Avx512Opcode::Vpopcntb => "vpopcntb",
-        };
-        write!(fmt, "{}", name)
     }
 }
 
 impl fmt::Display for Avx512Opcode {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        fmt::Debug::fmt(self, f)
+        let s = format!("{self:?}");
+        f.write_str(&s.to_lowercase())
     }
 }
 

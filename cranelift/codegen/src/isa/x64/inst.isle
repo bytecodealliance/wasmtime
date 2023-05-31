@@ -354,6 +354,12 @@
                    (src2 XmmMem)
                    (dst WritableXmm))
 
+       ;; Same as `XmmRmREvex` but for unary operations.
+       (XmmUnaryRmRImmEvex (op Avx512Opcode)
+                           (src XmmMem)
+                           (dst WritableXmm)
+                           (imm u8))
+
        ;; XMM (scalar or vector) binary op that relies on the EVEX
        ;; prefix. Takes three inputs.
        (XmmRmREvex3 (op Avx512Opcode)
@@ -1328,12 +1334,14 @@
             Vroundsd
           ))
 
-(type Avx512Opcode extern
+(type Avx512Opcode
       (enum Vcvtudq2ps
             Vpabsq
             Vpermi2b
             Vpmullq
-            Vpopcntb))
+            Vpopcntb
+            Vpsraq
+            VpsraqImm))
 
 (type FcmpImm extern
       (enum Equal
@@ -1680,11 +1688,11 @@
 (extern constructor const_to_type_masked_imm8 const_to_type_masked_imm8)
 
 ;; Generate a mask for the bit-width of the given type
-(decl shift_mask (Type) u32)
+(decl shift_mask (Type) u8)
 (extern constructor shift_mask shift_mask)
 
 ;; Mask a constant with the type's shift mask
-(decl shift_amount_masked (Type Imm64) u32)
+(decl shift_amount_masked (Type Imm64) u8)
 (extern constructor shift_amount_masked shift_amount_masked)
 
 ;; Extract a constant `GprMemImm.Imm` from a value operand.
@@ -1882,6 +1890,13 @@
                                             src1
                                             src2
                                             dst))))
+        dst))
+
+;; Helper for creating `MInst.XmmUnaryRmRImmEvex` instructions.
+(decl xmm_unary_rm_r_imm_evex (Avx512Opcode XmmMem u8) Xmm)
+(rule (xmm_unary_rm_r_imm_evex op src imm)
+      (let ((dst WritableXmm (temp_writable_xmm))
+            (_ Unit (emit (MInst.XmmUnaryRmRImmEvex op src dst imm))))
         dst))
 
 ;; Helper for creating `MInst.XmmRmiXmm` instructions.
@@ -3832,6 +3847,16 @@
 (rule 1 (x64_psrad src1 src2)
       (if-let $true (use_avx_simd))
       (xmm_rmir_vex (AvxOpcode.Vpsrad) src1 src2))
+
+;; Helper for creating `vpsraq` instructions.
+(decl x64_vpsraq (Xmm XmmMem) Xmm)
+(rule (x64_vpsraq src1 src2)
+      (xmm_rm_r_evex (Avx512Opcode.Vpsraq) src1 src2))
+
+;; Helper for creating `vpsraq` instructions.
+(decl x64_vpsraq_imm (XmmMem u8) Xmm)
+(rule (x64_vpsraq_imm src imm)
+      (xmm_unary_rm_r_imm_evex (Avx512Opcode.VpsraqImm) src imm))
 
 ;; Helper for creating `pextrb` instructions.
 (decl x64_pextrb (Xmm u8) Gpr)

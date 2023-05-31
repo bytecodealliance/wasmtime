@@ -252,14 +252,14 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     }
 
     #[inline]
-    fn shift_mask(&mut self, ty: Type) -> u32 {
+    fn shift_mask(&mut self, ty: Type) -> u8 {
         debug_assert!(ty.lane_bits().is_power_of_two());
 
-        ty.lane_bits() - 1
+        (ty.lane_bits() - 1) as u8
     }
 
-    fn shift_amount_masked(&mut self, ty: Type, val: Imm64) -> u32 {
-        (val.bits() as u32) & self.shift_mask(ty)
+    fn shift_amount_masked(&mut self, ty: Type, val: Imm64) -> u8 {
+        (val.bits() as u8) & self.shift_mask(ty)
     }
 
     #[inline]
