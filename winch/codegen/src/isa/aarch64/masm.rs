@@ -8,7 +8,7 @@ use crate::{
     abi::{self, local::LocalSlot},
     codegen::CodeGenContext,
     isa::reg::Reg,
-    masm::{CalleeKind, DivKind, MacroAssembler as Masm, OperandSize, RegImm, RemKind},
+    masm::{CalleeKind, CmpKind, DivKind, MacroAssembler as Masm, OperandSize, RegImm, RemKind},
 };
 use cranelift_codegen::{settings, Final, MachBufferFinalized};
 
@@ -202,6 +202,17 @@ impl Masm for MacroAssembler {
 
     fn address_at_reg(&self, reg: Reg, offset: u32) -> Self::Address {
         Address::offset(reg, offset as i64)
+    }
+
+    fn cmp_with_set(
+        &mut self,
+        _dst: RegImm,
+        _lhs: RegImm,
+        _rhs: RegImm,
+        _kind: CmpKind,
+        _size: OperandSize,
+    ) {
+        todo!()
     }
 }
 
