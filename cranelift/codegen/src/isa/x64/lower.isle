@@ -757,10 +757,20 @@
 ;; The `sshr.i64x2` CLIF instruction has no single x86 instruction in the older
 ;; feature sets. To remedy this, a small dance is done with an unsigned right
 ;; shift plus some extra ops.
-;;
-;; TODO: add a lowering for `vpsraq` with AVX512{VL,F}
+(rule 3 (lower (has_type ty @ $I64X2 (sshr src (iconst n))))
+        (if-let $true (use_avx512vl_simd))
+        (if-let $true (use_avx512f_simd))
+        (x64_vpsraq_imm src (shift_amount_masked ty n)))
+
+(rule 2 (lower (has_type ty @ $I64X2 (sshr src amt)))
+        (if-let $true (use_avx512vl_simd))
+        (if-let $true (use_avx512f_simd))
+        (let ((masked Gpr (x64_and $I64 amt (RegMemImm.Imm (shift_mask ty)))))
+          (x64_vpsraq src (x64_movd_to_xmm masked))))
+
 (rule 1 (lower (has_type $I64X2 (sshr src (iconst (u64_from_imm64 (u64_as_u32 amt))))))
         (lower_i64x2_sshr_imm src (u32_and amt 63)))
+
 (rule (lower (has_type $I64X2 (sshr src amt)))
       (lower_i64x2_sshr_gpr src (x64_and $I64 amt (RegMemImm.Imm 63))))
 

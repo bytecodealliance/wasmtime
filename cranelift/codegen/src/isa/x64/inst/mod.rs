@@ -149,7 +149,8 @@ impl Inst {
 
             Inst::XmmUnaryRmREvex { op, .. }
             | Inst::XmmRmREvex { op, .. }
-            | Inst::XmmRmREvex3 { op, .. } => op.available_from(),
+            | Inst::XmmRmREvex3 { op, .. }
+            | Inst::XmmUnaryRmRImmEvex { op, .. } => op.available_from(),
 
             Inst::XmmRmiRVex { op, .. }
             | Inst::XmmRmRVex3 { op, .. }
@@ -912,6 +913,15 @@ impl PrettyPrint for Inst {
                 let src = src.pretty_print(8, allocs);
                 let op = ljustify(op.to_string());
                 format!("{op} {src}, {dst}")
+            }
+
+            Inst::XmmUnaryRmRImmEvex {
+                op, src, dst, imm, ..
+            } => {
+                let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
+                let src = src.pretty_print(8, allocs);
+                let op = ljustify(op.to_string());
+                format!("{op} ${imm}, {src}, {dst}")
             }
 
             Inst::XmmMovRM { op, src, dst, .. } => {
@@ -1858,6 +1868,7 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             src.get_operands(collector);
         }
         Inst::XmmUnaryRmREvex { src, dst, .. }
+        | Inst::XmmUnaryRmRImmEvex { src, dst, .. }
         | Inst::XmmUnaryRmRUnaligned { src, dst, .. }
         | Inst::XmmUnaryRmRVex { src, dst, .. }
         | Inst::XmmUnaryRmRImmVex { src, dst, .. } => {
