@@ -193,6 +193,7 @@ pub(crate) trait MacroAssembler {
     fn rem(&mut self, context: &mut CodeGenContext, kind: RemKind, size: OperandSize);
 
     /// Compare two operands and put the result in dst.
+    /// This function will potentially emit a series of instructions.
     fn cmp_with_set(
         &mut self,
         dst: RegImm,
