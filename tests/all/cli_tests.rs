@@ -528,3 +528,26 @@ fn run_threads() -> Result<()> {
     );
     Ok(())
 }
+
+#[cfg(feature = "wasi-threads")]
+#[test]
+fn run_simple_with_wasi_threads() -> Result<()> {
+    // We expect to be able to run Wasm modules that do not have correct
+    // wasi-thread entry points or imported shared memory as long as no threads
+    // are spawned.
+    let wasm = build_wasm("tests/all/cli_tests/simple.wat")?;
+    let stdout = run_wasmtime(&[
+        "run",
+        wasm.path().to_str().unwrap(),
+        "--wasi-modules",
+        "experimental-wasi-threads",
+        "--wasm-features",
+        "threads",
+        "--disable-cache",
+        "--invoke",
+        "simple",
+        "4",
+    ])?;
+    assert_eq!(stdout, "4\n");
+    Ok(())
+}
