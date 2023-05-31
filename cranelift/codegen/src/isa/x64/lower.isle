@@ -1573,11 +1573,15 @@
 
 ;; SSE `smax`.
 
-(rule 1 (lower (has_type (ty_vec128 ty) (smax x y)))
+(rule (lower (has_type (ty_vec128 ty) (smax x y)))
+      (lower_vec_smax ty x y))
+
+(decl lower_vec_smax (Type Xmm Xmm) Xmm)
+(rule 1 (lower_vec_smax ty x y)
         (if-let $true (has_pmaxs ty))
         (x64_pmaxs ty x y))
 
-(rule (lower (has_type (ty_vec128 ty) (smax x y)))
+(rule (lower_vec_smax ty x y)
       (let (
           (x Xmm x)
           (y Xmm y)
@@ -3452,7 +3456,7 @@
             ;; to 0x7FFFFFFF
             (tmp1 Xmm (x64_pxor tmp1 tmp2))
             (tmp2 Xmm (xmm_zero $I32X4))
-            (tmp1 Xmm (x64_pmaxsd tmp1 tmp2)))
+            (tmp1 Xmm (lower_vec_smax $I32X4 tmp1 tmp2)))
 
         ;; Add this second set of converted lanes to the original to properly handle
         ;; values greater than max signed int.
@@ -3659,8 +3663,47 @@
 (rule (lower (has_type $I8X16 (unarrow a @ (value_type $I16X8) b)))
       (x64_packuswb a b))
 
+(rule 1 (lower (has_type $I16X8 (unarrow a @ (value_type $I32X4) b)))
+        (if-let $true (use_sse41))
+        (x64_packusdw a b))
+
+;; For each input `a` and `b` take the four 32-bit lanes and compress them to
+;; the low 64-bits of the vector as four 16-bit lanes. Then these are woven
+;; into one final vector with a `punpcklqdq`.
+;;
+;; If this is performance sensitive then it's probably best to upgrade the CPU
+;; to get the above single-instruction lowering.
 (rule (lower (has_type $I16X8 (unarrow a @ (value_type $I32X4) b)))
-      (x64_packusdw a b))
+      (let (
+          (a Xmm (unarrow_i32x4_lanes_to_low_u16_lanes a))
+          (b Xmm (unarrow_i32x4_lanes_to_low_u16_lanes b))
+        )
+        (x64_punpcklqdq a b)))
+
+(decl unarrow_i32x4_lanes_to_low_u16_lanes (Xmm) Xmm)
+(rule (unarrow_i32x4_lanes_to_low_u16_lanes val)
+      (let (
+          ;; First convert all negative values in `val` to zero lanes.
+          (val_gt_zero Xmm (x64_pcmpgtd val (xmm_zero $I32X4)))
+          (val Xmm (x64_pand val val_gt_zero))
+
+          ;; Next clamp all larger-than-u16-max lanes to u16::MAX.
+          (max Xmm (x64_movdqu_load (emit_u128_le_const 0x0000ffff_0000ffff_0000ffff_0000ffff)))
+          (cmp Xmm (x64_pcmpgtd max val))
+          (valid_lanes Xmm (x64_pand val cmp))
+          (clamped_lanes Xmm (x64_pandn cmp max))
+          (val Xmm (x64_por valid_lanes clamped_lanes))
+
+          ;; Within each 64-bit half of the 32x4 vector move the first 16 bits
+          ;; and the third 16 bits to the bottom of the half. Afterwards
+          ;; for the 32x4 vector move the first and third lanes to the bottom
+          ;; lanes, which finishes up the conversion here as all the lanes
+          ;; are now converted to 16-bit values in the low 4 lanes.
+          (val Xmm (x64_pshuflw val 0b00_00_10_00))
+          (val Xmm (x64_pshufhw val 0b00_00_10_00))
+        )
+        (x64_pshufd val 0b00_00_10_00)))
+
 
 ;; We're missing a `unarrow` case for $I64X2
 ;; https://github.com/bytecodealliance/wasmtime/issues/4734
@@ -3705,7 +3748,7 @@
 
 ;; Emits either a `round{ss,sd,ps,pd}` instruction, as appropriate, or generates
 ;; the appropriate libcall and sequence to call that.
-(decl x64_round (Type Value RoundImm) Xmm)
+(decl x64_round (Type RegMem RoundImm) Xmm)
 (rule 1 (x64_round $F32 a imm)
         (if-let $true (use_sse41))
         (x64_roundss a imm))
@@ -3719,11 +3762,10 @@
         (if-let $true (use_sse41))
         (x64_roundpd a imm))
 
-(rule (x64_round $F32 a imm) (libcall_1 (round_libcall $F32 imm) a))
-(rule (x64_round $F64 a imm) (libcall_1 (round_libcall $F64 imm) a))
-(rule (x64_round $F32X4 a imm)
+(rule (x64_round $F32 (RegMem.Reg a) imm) (libcall_1 (round_libcall $F32 imm) a))
+(rule (x64_round $F64 (RegMem.Reg a) imm) (libcall_1 (round_libcall $F64 imm) a))
+(rule (x64_round $F32X4 (RegMem.Reg a) imm)
       (let (
-          (a Xmm a)
           (libcall LibCall (round_libcall $F32 imm))
           (result Xmm (libcall_1 libcall a))
           (a1 Xmm (libcall_1 libcall (x64_pshufd a 1)))
@@ -3734,15 +3776,16 @@
           (result Xmm (vec_insert_lane $F32X4 result a3 3))
         )
         result))
-(rule (x64_round $F64X2 a imm)
+(rule (x64_round $F64X2 (RegMem.Reg a) imm)
       (let (
-          (a Xmm a)
           (libcall LibCall (round_libcall $F64 imm))
           (result Xmm (libcall_1 libcall a))
           (a1 Xmm (libcall_1 libcall (x64_pshufd a 0b00_00_11_10)))
           (result Xmm (vec_insert_lane $F64X2 result a1 1))
         )
         result))
+(rule (x64_round ty (RegMem.Mem addr) imm)
+      (x64_round ty (RegMem.Reg (x64_load ty addr (ExtKind.ZeroExtend))) imm))
 
 (decl round_libcall (Type RoundImm) LibCall)
 (rule (round_libcall $F32 (RoundImm.RoundUp)) (LibCall.CeilF32))
@@ -4423,7 +4466,7 @@
             (dst Xmm (x64_minpd dst umax_mask))
 
             ;; ROUNDPD xmm_y, xmm_y, 0x0B
-            (dst Xmm (x64_roundpd dst (RoundImm.RoundZero)))
+            (dst Xmm (x64_round $F64X2 dst (RoundImm.RoundZero)))
 
             ;; ADDPD xmm_y, [wasm_f64x2_splat(0x1.0p+52)]
             (uint_mask XmmMem (uunarrow_uint_mask))
