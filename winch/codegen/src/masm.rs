@@ -192,7 +192,7 @@ pub(crate) trait MacroAssembler {
     /// Calculate remainder.
     fn rem(&mut self, context: &mut CodeGenContext, kind: RemKind, size: OperandSize);
 
-    /// Compare two numbers and put result in dst.
+    /// Compare two operands and put the result in dst.
     fn cmp_with_set(
         &mut self,
         dst: RegImm,
