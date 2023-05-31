@@ -22,7 +22,7 @@ block0(v0: i64):
 ;   ld fp,0(sp)
 ;   add sp,+16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi sp, sp, -0x10
@@ -62,7 +62,7 @@ block0(v0: i32):
 ;   ld fp,0(sp)
 ;   add sp,+16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi sp, sp, -0x10
@@ -92,7 +92,7 @@ block0(v0: i32):
 ; block0:
 ;   slli a0,a0,32; srli a0,a0,32
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   slli a0, a0, 0x20
@@ -120,7 +120,7 @@ block0(v0: i32):
 ;   ld fp,0(sp)
 ;   add sp,+16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi sp, sp, -0x10
@@ -150,7 +150,7 @@ block0(v0: i32):
 ; block0:
 ;   slli a0,a0,32; srai a0,a0,32
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   slli a0, a0, 0x20
@@ -192,7 +192,7 @@ block0(v0: i8):
 ;   ld fp,0(sp)
 ;   add sp,+16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi sp, sp, -0x10
@@ -245,7 +245,7 @@ block0(v0: i8):
 ;   sd a0,48(a3)
 ;   mv a0,a1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ori a2, a1, 0
@@ -319,7 +319,7 @@ block0:
 ;   ld fp,0(sp)
 ;   add sp,+16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi sp, sp, -0x10
@@ -398,7 +398,7 @@ block0(v0: i128, v1: i64):
 ; block0:
 ;   mv a0,a1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ori a0, a1, 0
@@ -429,7 +429,7 @@ block0(v0: i64):
 ;   ld fp,0(sp)
 ;   add sp,+16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi sp, sp, -0x10
@@ -461,7 +461,7 @@ block0(v0: i64, v1: i128):
 ; block0:
 ;   mv a0,a1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ori a0, a1, 0
@@ -492,7 +492,7 @@ block0(v0: i64):
 ;   ld fp,0(sp)
 ;   add sp,+16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi sp, sp, -0x10
@@ -524,7 +524,7 @@ block0(v0: i64, v1: i128):
 ; block0:
 ;   mv a0,a1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ori a0, a1, 0
@@ -555,7 +555,7 @@ block0(v0: i64):
 ;   ld fp,0(sp)
 ;   add sp,+16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi sp, sp, -0x10
@@ -594,7 +594,7 @@ block0(v0: i128, v1: i128, v2: i128, v3: i64, v4: i128):
 ;   ld fp,0(sp)
 ;   add sp,+16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi sp, sp, -0x10
@@ -642,7 +642,7 @@ block0(v0: i128, v1: i64):
 ;   ld fp,0(sp)
 ;   add sp,+16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi sp, sp, -0x10
@@ -689,7 +689,7 @@ block0(v0: i128, v1: i128, v2: i128, v3: i64, v4: i128):
 ;   ld fp,0(sp)
 ;   add sp,+16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi sp, sp, -0x10
@@ -737,7 +737,7 @@ block0(v0: i128, v1: i64):
 ;   ld fp,0(sp)
 ;   add sp,+16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi sp, sp, -0x10
@@ -779,14 +779,12 @@ block0:
 ;   li a0,0
 ;   li a1,1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mv a0, zero
 ;   addi a1, zero, 1
 ;   ret
-
-
 
 function %call_colocated(i16) -> i16 {
     sig0 = () system_v
@@ -814,7 +812,7 @@ block0(v0: i16):
 ;   ld fp,0(sp)
 ;   add sp,+16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi sp, sp, -0x10

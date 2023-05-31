@@ -18,7 +18,7 @@ block0(v0: i8, v1: f32, v2: f32):
 ;   andi a4,a4,255
 ;   select_reg fa0,fa0,fa1##condition=(a2 eq a4)
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi a4, zero, 0x2a
@@ -43,7 +43,7 @@ block0(v0: i8, v1: f64, v2: f64):
 ;   andi a4,a4,255
 ;   select_reg fa0,fa0,fa1##condition=(a2 eq a4)
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi a4, zero, 0x2a
@@ -70,7 +70,7 @@ block0(v0: i16, v1: f32, v2: f32):
 ;   srli t3,a6,48
 ;   select_reg fa0,fa0,fa1##condition=(a4 eq t3)
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi a6, zero, 0x2a
@@ -99,7 +99,7 @@ block0(v0: i16, v1: f64, v2: f64):
 ;   srli t3,a6,48
 ;   select_reg fa0,fa0,fa1##condition=(a4 eq t3)
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi a6, zero, 0x2a
@@ -128,7 +128,7 @@ block0(v0: i32, v1: f32, v2: f32):
 ;   srli t3,a6,32
 ;   select_reg fa0,fa0,fa1##condition=(a4 eq t3)
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi a6, zero, 0x2a
@@ -157,7 +157,7 @@ block0(v0: i32, v1: f64, v2: f64):
 ;   srli t3,a6,32
 ;   select_reg fa0,fa0,fa1##condition=(a4 eq t3)
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi a6, zero, 0x2a
@@ -182,7 +182,7 @@ block0(v0: i64, v1: f32, v2: f32):
 ;   li a2,42
 ;   select_reg fa0,fa0,fa1##condition=(a0 eq a2)
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi a2, zero, 0x2a
@@ -203,7 +203,7 @@ block0(v0: i64, v1: f64, v2: f64):
 ;   li a2,42
 ;   select_reg fa0,fa0,fa1##condition=(a0 eq a2)
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi a2, zero, 0x2a
@@ -229,7 +229,7 @@ block0(v0: i128, v1: f32, v2: f32):
 ;   andi a5,a6,255
 ;   select_f32 fa0,fa6,fa1##condition=a5
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fmv.d fa6, fa0
@@ -265,7 +265,7 @@ block0(v0: i128, v1: f64, v2: f64):
 ;   andi a5,a6,255
 ;   select_f64 fa0,fa6,fa1##condition=a5
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fmv.d fa6, fa0

@@ -10,7 +10,7 @@ block0(v0: r64):
 ; VCode:
 ; block0:
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ret
@@ -26,7 +26,7 @@ block0(v0: r64):
 ;   subs xzr, x0, #0
 ;   cset x0, eq
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   cmp x0, #0
@@ -44,7 +44,7 @@ block0(v0: r64):
 ;   adds xzr, x0, #1
 ;   cset x0, eq
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   cmn x0, #1
@@ -61,7 +61,7 @@ block0:
 ; block0:
 ;   movz x0, #0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov x0, #0
@@ -120,7 +120,7 @@ block3(v7: r64, v8: r64):
 ;   ldr x24, [sp], #16
 ;   ldp fp, lr, [sp], #16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!

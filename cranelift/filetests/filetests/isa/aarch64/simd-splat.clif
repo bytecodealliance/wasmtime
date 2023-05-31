@@ -13,7 +13,7 @@ block0(v0: i64):
 ; block0:
 ;   ld1r { v0.2d }, [x0]
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ld1r {v0.2d}, [x0]
@@ -31,7 +31,7 @@ block0(v0: i64):
 ;   add x2, x0, #100
 ;   ld1r { v0.2d }, [x2]
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   add x2, x0, #0x64
@@ -51,7 +51,7 @@ block0(v0: i64):
 ;   add x4, x0, x2
 ;   ld1r { v0.2d }, [x4]
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov x2, #0xfff0000
@@ -72,7 +72,7 @@ block0(v0: i64, v1: i64):
 ;   add x4, x0, x1
 ;   ld1r { v0.2d }, [x4]
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   add x4, x0, x1
@@ -93,7 +93,7 @@ block0(v0: i64, v1: i64):
 ;   add x4, x5, #100
 ;   ld1r { v0.2d }, [x4]
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   add x5, x0, x1
@@ -117,7 +117,7 @@ block0(v0: i64, v1: i64):
 ;   add x5, x6, #100
 ;   ld1r { v0.2d }, [x5]
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov x6, #2

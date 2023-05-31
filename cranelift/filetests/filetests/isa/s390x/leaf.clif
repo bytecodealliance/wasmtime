@@ -13,7 +13,7 @@ block0(v0: i64):
 ; VCode:
 ; block0:
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   br %r14

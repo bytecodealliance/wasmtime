@@ -12,7 +12,7 @@ block0(v0: i32, v1: i32):
 ; block0:
 ;   add w0, w0, w1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   add w0, w0, w1

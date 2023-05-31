@@ -20,7 +20,7 @@ block0:
 ;   srli a5,a3,48
 ;   ne a0,a1,a5##ty=i16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lui a3, 0xe

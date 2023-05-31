@@ -19,7 +19,7 @@ block0(v0: i32):
 ;   srli t0,a0,32
 ;   trap_if t0,user0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi a5, zero, 0x7f
@@ -51,7 +51,7 @@ block0(v0: i32):
 ;   srli t0,a0,32
 ;   trap_if t0,user0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi a5, zero, 0x7f
@@ -81,7 +81,7 @@ block0(v0: i32, v1: i32):
 ;   srli t0,a0,32
 ;   trap_if t0,user0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   slli a0, a0, 0x20
@@ -109,7 +109,7 @@ block0(v0: i64):
 ;   ult a2,a0,a4##ty=i64
 ;   trap_if a2,user0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ori a4, a0, 0
@@ -137,7 +137,7 @@ block0(v0: i64):
 ;   ult a2,a0,a1##ty=i64
 ;   trap_if a2,user0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi a1, zero, 0x7f
@@ -164,7 +164,7 @@ block0(v0: i64, v1: i64):
 ;   mv a0,a3
 ;   trap_if a2,user0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   add a1, a0, a1

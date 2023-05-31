@@ -15,7 +15,7 @@ block0:
 ;   movk x2, x2, #1, LSL #48
 ;   fmov d0, x2
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov x2, #1
@@ -35,7 +35,7 @@ block0:
 ;   movz w1, #42679
 ;   fmov s0, w1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov w1, #0xa6b7
@@ -54,7 +54,7 @@ block0:
 ;   fmov s1, #1
 ;   fmov s0, s1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fmov s1, #1.00000000
@@ -73,7 +73,7 @@ block0:
 ;   fmov d1, #1
 ;   fmov d0, d1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fmov d1, #1.00000000

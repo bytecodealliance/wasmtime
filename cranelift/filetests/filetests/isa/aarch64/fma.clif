@@ -11,7 +11,7 @@ block0(v0: f32, v1: f32, v2: f32):
 ; block0:
 ;   fmadd s0, s0, s1, s2
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fmadd s0, s0, s1, s2
@@ -27,7 +27,7 @@ block0(v0: f64, v1: f64, v2: f64):
 ; block0:
 ;   fmadd d0, d0, d1, d2
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fmadd d0, d0, d1, d2
@@ -45,7 +45,7 @@ block0(v0: f32x4, v1: f32x4, v2: f32x4):
 ;   mov v0.16b, v2.16b
 ;   fmla v0.4s, v0.4s, v5.4s, v1.4s
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov v5.16b, v0.16b
@@ -65,7 +65,7 @@ block0(v0: f64x2, v1: f64x2, v2: f64x2):
 ;   mov v0.16b, v2.16b
 ;   fmla v0.2d, v0.2d, v5.2d, v1.2d
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov v5.16b, v0.16b
@@ -86,7 +86,7 @@ block0(v0: f32x4, v1: f32x4, v2: f32x4):
 ;   mov v0.16b, v2.16b
 ;   fmls v0.4s, v0.4s, v5.4s, v1.4s
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov v5.16b, v0.16b
@@ -107,7 +107,7 @@ block0(v0: f64x2, v1: f64x2, v2: f64x2):
 ;   mov v0.16b, v2.16b
 ;   fmls v0.2d, v0.2d, v5.2d, v1.2d
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov v5.16b, v0.16b
@@ -128,7 +128,7 @@ block0(v0: f32x4, v1: f32x4, v2: f32x4):
 ;   mov v0.16b, v2.16b
 ;   fmls v0.4s, v0.4s, v5.4s, v1.4s
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov v5.16b, v0.16b
@@ -149,7 +149,7 @@ block0(v0: f64x2, v1: f64x2, v2: f64x2):
 ;   mov v0.16b, v2.16b
 ;   fmls v0.2d, v0.2d, v5.2d, v1.2d
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov v5.16b, v0.16b
@@ -170,7 +170,7 @@ block0(v0: f32, v1: f32x4, v2: f32x4):
 ;   mov v0.16b, v2.16b
 ;   fmla v0.4s, v0.4s, v1.4s, v5.s[0]
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov v5.16b, v0.16b
@@ -192,7 +192,7 @@ block0(v0: f32x4, v1: f32, v2: f32x4):
 ;   mov v0.16b, v2.16b
 ;   fmls v0.4s, v0.4s, v5.4s, v1.s[0]
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov v5.16b, v0.16b
@@ -215,7 +215,7 @@ block0(v0: f32x4, v1: f32x4, v2: f32x4):
 ;   mov v0.16b, v2.16b
 ;   fmla v0.4s, v0.4s, v1.4s, v5.s[1]
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov v5.16b, v0.16b
@@ -239,7 +239,7 @@ block0(v0: f32x4, v1: f32x4, v2: f32x4):
 ;   mov v0.16b, v2.16b
 ;   fmls v0.4s, v0.4s, v5.4s, v1.s[3]
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov v5.16b, v0.16b
@@ -268,7 +268,7 @@ block0(v0: f32x4, v1: f32x4, v2: f32x4):
 ;   mov v0.16b, v2.16b
 ;   fmla v0.4s, v0.4s, v23.4s, v19.4s
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov v31.16b, v1.16b
@@ -298,7 +298,7 @@ block0(v0: f64x2, v1: f64x2, v2: f64x2):
 ;   mov v0.16b, v2.16b
 ;   fmls v0.2d, v0.2d, v5.2d, v1.d[1]
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov v5.16b, v0.16b

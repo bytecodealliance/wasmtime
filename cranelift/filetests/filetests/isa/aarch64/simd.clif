@@ -15,7 +15,7 @@ block0:
 ;   movk x1, x1, #1, LSL #48
 ;   dup v0.2d, x1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov x1, #1
@@ -36,7 +36,7 @@ block0:
 ;   movz x0, #42679
 ;   dup v0.8h, w0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov x0, #0xa6b7
@@ -54,7 +54,7 @@ block0(v0: i32, v1: i8x16, v2: i8x16):
 ;   subs wzr, w0, wzr
 ;   vcsel v0.16b, v0.16b, v1.16b, ne (if-then-else diamond)
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   cmp w0, wzr
@@ -75,7 +75,7 @@ block0(v0: i64):
 ; block0:
 ;   ld1r { v0.16b }, [x0]
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ld1r {v0.16b}, [x0]
@@ -95,7 +95,7 @@ block0(v0: i64, v1: i64):
 ;   ld1r { v0.16b }, [x0]
 ;   ld1r { v1.16b }, [x1]
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ld1r {v0.16b}, [x0]
@@ -117,7 +117,7 @@ block0(v0: i64, v1: i64):
 ;   ld1r { v0.16b }, [x1]
 ;   dup v1.16b, w5
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ldrb w5, [x0]
@@ -139,7 +139,7 @@ block0(v0: i64, v1: i64):
 ;   dup v0.16b, w5
 ;   dup v1.16b, w5
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ldrb w5, [x0]
@@ -159,7 +159,7 @@ block0:
 ;   movi v0.2d, #18374687579166474495
 ;   fmov d0, d0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   movi v0.2d, #0xff0000ffff0000ff
@@ -177,7 +177,7 @@ block0:
 ; block0:
 ;   mvni v0.4s, #15, MSL #16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mvni v0.4s, #0xf, msl #16
@@ -194,7 +194,7 @@ block0:
 ; block0:
 ;   fmov v0.4s, #1.3125
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fmov v0.4s, #1.31250000

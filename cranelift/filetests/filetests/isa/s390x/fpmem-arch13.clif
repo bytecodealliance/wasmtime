@@ -11,7 +11,7 @@ block0(v0: i64):
 ; block0:
 ;   vlebrg %v0, 0(%r2), 0
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0xe6, 0x00
@@ -29,7 +29,7 @@ block0(v0: i64):
 ; block0:
 ;   vlebrf %v0, 0(%r2), 0
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0xe6, 0x00
@@ -47,7 +47,7 @@ block0(v0: f64, v1: i64):
 ; block0:
 ;   vstebrg %v0, 0(%r2), 0
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0xe6, 0x00
@@ -65,7 +65,7 @@ block0(v0: f32, v1: i64):
 ; block0:
 ;   vstebrf %v0, 0(%r2), 0
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0xe6, 0x00

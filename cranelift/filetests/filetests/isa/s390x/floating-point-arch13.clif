@@ -20,7 +20,7 @@ block0(v0: f32):
 ;   wclfeb %v20, %f0, 0, 5
 ;   vlgvf %r2, %v20, 0
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   cebr %f0, %f0
@@ -58,7 +58,7 @@ block0(v0: f32):
 ;   wcfeb %v20, %f0, 0, 5
 ;   vlgvf %r2, %v20, 0
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   cebr %f0, %f0
@@ -97,7 +97,7 @@ block0(v0: f32):
 ;   wclfeb %v20, %f0, 0, 5
 ;   vlgvf %r2, %v20, 0
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   cebr %f0, %f0
@@ -135,7 +135,7 @@ block0(v0: f32):
 ;   wcfeb %v20, %f0, 0, 5
 ;   vlgvf %r2, %v20, 0
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   cebr %f0, %f0
@@ -174,7 +174,7 @@ block0(v0: f32):
 ;   wclfeb %v20, %f0, 0, 5
 ;   vlgvf %r2, %v20, 0
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   cebr %f0, %f0
@@ -212,7 +212,7 @@ block0(v0: f32):
 ;   wcfeb %v20, %f0, 0, 5
 ;   vlgvf %r2, %v20, 0
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   cebr %f0, %f0
@@ -252,7 +252,7 @@ block0(v0: f32):
 ;   wclgdb %v22, %v20, 0, 5
 ;   vlgvg %r2, %v22, 0
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   cebr %f0, %f0
@@ -292,7 +292,7 @@ block0(v0: f32):
 ;   wcgdb %v22, %v20, 0, 5
 ;   vlgvg %r2, %v22, 0
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   cebr %f0, %f0
@@ -332,7 +332,7 @@ block0(v0: f64):
 ;   wclgdb %v20, %f0, 0, 5
 ;   vlgvg %r2, %v20, 0
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   cdbr %f0, %f0
@@ -374,7 +374,7 @@ block0(v0: f64):
 ;   wcgdb %v20, %f0, 0, 5
 ;   vlgvg %r2, %v20, 0
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   cdbr %f0, %f0
@@ -415,7 +415,7 @@ block0(v0: f64):
 ;   wclgdb %v20, %f0, 0, 5
 ;   vlgvg %r2, %v20, 0
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   cdbr %f0, %f0
@@ -457,7 +457,7 @@ block0(v0: f64):
 ;   wcgdb %v20, %f0, 0, 5
 ;   vlgvg %r2, %v20, 0
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   cdbr %f0, %f0
@@ -498,7 +498,7 @@ block0(v0: f64):
 ;   wclgdb %v20, %f0, 0, 5
 ;   vlgvg %r2, %v20, 0
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   cdbr %f0, %f0
@@ -540,7 +540,7 @@ block0(v0: f64):
 ;   wcgdb %v20, %f0, 0, 5
 ;   vlgvg %r2, %v20, 0
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   cdbr %f0, %f0
@@ -583,7 +583,7 @@ block0(v0: f64):
 ;   wclgdb %v20, %f0, 0, 5
 ;   vlgvg %r2, %v20, 0
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   cdbr %f0, %f0
@@ -625,7 +625,7 @@ block0(v0: f64):
 ;   wcgdb %v20, %f0, 0, 5
 ;   vlgvg %r2, %v20, 0
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   cdbr %f0, %f0
@@ -661,7 +661,7 @@ block0(v0: i8):
 ;   vlvgf %v4, %r4, 0
 ;   wcelfb %f0, %f4, 0, 4
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   llcr %r4, %r2
@@ -681,7 +681,7 @@ block0(v0: i8):
 ;   vlvgf %v4, %r4, 0
 ;   wcefb %f0, %f4, 0, 4
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lbr %r4, %r2
@@ -701,7 +701,7 @@ block0(v0: i16):
 ;   vlvgf %v4, %r4, 0
 ;   wcelfb %f0, %f4, 0, 4
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   llhr %r4, %r2
@@ -721,7 +721,7 @@ block0(v0: i16):
 ;   vlvgf %v4, %r4, 0
 ;   wcefb %f0, %f4, 0, 4
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lhr %r4, %r2
@@ -740,7 +740,7 @@ block0(v0: i32):
 ;   vlvgf %v2, %r2, 0
 ;   wcelfb %f0, %f2, 0, 4
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vlvgf %v2, %r2, 0
@@ -758,7 +758,7 @@ block0(v0: i32):
 ;   vlvgf %v2, %r2, 0
 ;   wcefb %f0, %f2, 0, 4
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vlvgf %v2, %r2, 0
@@ -777,7 +777,7 @@ block0(v0: i64):
 ;   wcdlgb %f4, %f2, 0, 3
 ;   ledbra %f0, 4, %f4, 0
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ldgr %f2, %r2
@@ -797,7 +797,7 @@ block0(v0: i64):
 ;   wcdgb %f4, %f2, 0, 3
 ;   ledbra %f0, 4, %f4, 0
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ldgr %f2, %r2
@@ -817,7 +817,7 @@ block0(v0: i8):
 ;   ldgr %f4, %r4
 ;   wcdlgb %f0, %f4, 0, 4
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   llgcr %r4, %r2
@@ -837,7 +837,7 @@ block0(v0: i8):
 ;   ldgr %f4, %r4
 ;   wcdgb %f0, %f4, 0, 4
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lgbr %r4, %r2
@@ -857,7 +857,7 @@ block0(v0: i16):
 ;   ldgr %f4, %r4
 ;   wcdlgb %f0, %f4, 0, 4
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   llghr %r4, %r2
@@ -877,7 +877,7 @@ block0(v0: i16):
 ;   ldgr %f4, %r4
 ;   wcdgb %f0, %f4, 0, 4
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lghr %r4, %r2
@@ -897,7 +897,7 @@ block0(v0: i32):
 ;   ldgr %f4, %r4
 ;   wcdlgb %f0, %f4, 0, 4
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   llgfr %r4, %r2
@@ -917,7 +917,7 @@ block0(v0: i32):
 ;   ldgr %f4, %r4
 ;   wcdgb %f0, %f4, 0, 4
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lgfr %r4, %r2
@@ -936,7 +936,7 @@ block0(v0: i64):
 ;   ldgr %f2, %r2
 ;   wcdlgb %f0, %f2, 0, 4
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ldgr %f2, %r2
@@ -954,7 +954,7 @@ block0(v0: i64):
 ;   ldgr %f2, %r2
 ;   wcdgb %f0, %f2, 0, 4
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ldgr %f2, %r2
@@ -974,7 +974,7 @@ block0(v0: f32):
 ;   clfi %r2, 256
 ;   lochih %r2, 255
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vclgd %v2, %v0, 2, 8, 5
@@ -1000,7 +1000,7 @@ block0(v0: f32):
 ;   chi %r2, -128
 ;   lochil %r2, -128
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vcgd %v2, %v0, 2, 8, 5
@@ -1026,7 +1026,7 @@ block0(v0: f32):
 ;   clfi %r2, 65535
 ;   lochih %r2, -1
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vclgd %v2, %v0, 2, 8, 5
@@ -1052,7 +1052,7 @@ block0(v0: f32):
 ;   chi %r2, -32768
 ;   lochil %r2, -32768
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vcgd %v2, %v0, 2, 8, 5
@@ -1076,7 +1076,7 @@ block0(v0: f32):
 ;   wclfeb %f2, %f0, 0, 5
 ;   vlgvf %r2, %v2, 0
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vclgd %v2, %v0, 2, 8, 5
@@ -1096,7 +1096,7 @@ block0(v0: f32):
 ;   cebr %f0, %f0
 ;   lochio %r2, 0
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vcgd %v2, %v0, 2, 8, 5
@@ -1117,7 +1117,7 @@ block0(v0: f32):
 ;   wclgdb %f4, %f2, 0, 5
 ;   lgdr %r2, %f4
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ldebr %f2, %f0
@@ -1139,7 +1139,7 @@ block0(v0: f32):
 ;   cebr %f0, %f0
 ;   locghio %r2, 0
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ldebr %f2, %f0
@@ -1162,7 +1162,7 @@ block0(v0: f64):
 ;   clgfi %r2, 256
 ;   locghih %r2, 255
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   wclgdb %f2, %f0, 0, 5
@@ -1188,7 +1188,7 @@ block0(v0: f64):
 ;   cghi %r2, -128
 ;   locghil %r2, -128
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   wcgdb %f2, %f0, 0, 5
@@ -1214,7 +1214,7 @@ block0(v0: f64):
 ;   clgfi %r2, 65535
 ;   locghih %r2, -1
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   wclgdb %f2, %f0, 0, 5
@@ -1240,7 +1240,7 @@ block0(v0: f64):
 ;   cghi %r2, -32768
 ;   locghil %r2, -32768
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   wcgdb %f2, %f0, 0, 5
@@ -1267,7 +1267,7 @@ block0(v0: f64):
 ;   clgr %r2, %r4
 ;   locgrh %r2, %r4
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   wclgdb %f2, %f0, 0, 5
@@ -1296,7 +1296,7 @@ block0(v0: f64):
 ;   cgr %r2, %r4
 ;   locgrl %r2, %r4
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   wcgdb %f2, %f0, 0, 5
@@ -1322,7 +1322,7 @@ block0(v0: f64):
 ;   wclgdb %f2, %f0, 0, 5
 ;   lgdr %r2, %f2
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   wclgdb %f2, %f0, 0, 5
@@ -1342,7 +1342,7 @@ block0(v0: f64):
 ;   cdbr %f0, %f0
 ;   locghio %r2, 0
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   wcgdb %f2, %f0, 0, 5

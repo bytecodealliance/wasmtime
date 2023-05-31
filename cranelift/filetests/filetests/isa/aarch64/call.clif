@@ -19,7 +19,7 @@ block0(v0: i64):
 ;   blr x3
 ;   ldp fp, lr, [sp], #16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
@@ -49,7 +49,7 @@ block0(v0: i32):
 ;   blr x3
 ;   ldp fp, lr, [sp], #16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
@@ -71,7 +71,7 @@ block0(v0: i32):
 ; VCode:
 ; block0:
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ret
@@ -92,7 +92,7 @@ block0(v0: i32):
 ;   blr x3
 ;   ldp fp, lr, [sp], #16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
@@ -114,7 +114,7 @@ block0(v0: i32):
 ; VCode:
 ; block0:
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ret
@@ -149,7 +149,7 @@ block0(v0: i8):
 ;   virtual_sp_offset_adjust -16
 ;   ldp fp, lr, [sp], #16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
@@ -192,7 +192,7 @@ block0(v0: i8):
 ;   mov x5, x7
 ;   mov x6, x7
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov w7, #0x2a
@@ -252,7 +252,7 @@ block0:
 ;   add sp, sp, #48
 ;   ldp fp, lr, [sp], #16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
@@ -348,7 +348,7 @@ block0:
 ;   add sp, sp, #48
 ;   ldp fp, lr, [sp], #16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
@@ -448,7 +448,7 @@ block0:
 ;   add sp, sp, #48
 ;   ldp fp, lr, [sp], #16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
@@ -510,7 +510,7 @@ block0(v0: i128, v1: i64):
 ; block0:
 ;   mov x0, x1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov x0, x1
@@ -537,7 +537,7 @@ block0(v0: i64):
 ;   blr x4
 ;   ldp fp, lr, [sp], #16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
@@ -564,7 +564,7 @@ block0(v0: i64, v1: i128):
 ; block0:
 ;   mov x0, x2
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov x0, x2
@@ -591,7 +591,7 @@ block0(v0: i64):
 ;   blr x4
 ;   ldp fp, lr, [sp], #16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
@@ -618,7 +618,7 @@ block0(v0: i64, v1: i128):
 ; block0:
 ;   mov x0, x1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov x0, x1
@@ -645,7 +645,7 @@ block0(v0: i64):
 ;   blr x4
 ;   ldp fp, lr, [sp], #16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
@@ -675,7 +675,7 @@ block0(v0: i128, v1: i128, v2: i128, v3: i64, v4: i128):
 ;   ldr x1, [fp, #24]
 ;   ldp fp, lr, [sp], #16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
@@ -715,7 +715,7 @@ block0(v0: i128, v1: i64):
 ;   virtual_sp_offset_adjust -16
 ;   ldp fp, lr, [sp], #16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
@@ -753,7 +753,7 @@ block0(v0: i128, v1: i128, v2: i128, v3: i64, v4: i128):
 ;   ldr x1, [fp, #24]
 ;   ldp fp, lr, [sp], #16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
@@ -793,7 +793,7 @@ block0(v0: i128, v1: i64):
 ;   virtual_sp_offset_adjust -16
 ;   ldp fp, lr, [sp], #16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
@@ -832,7 +832,7 @@ block0:
 ;   movz w3, #1
 ;   str w3, [x6]
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov x6, x0
@@ -853,7 +853,7 @@ block0(v0: i64):
 ;   movz x2, #42
 ;   str x2, [x8]
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov x2, #0x2a
@@ -877,7 +877,7 @@ block0(v0: i64):
 ;   blr x3
 ;   ldp fp, lr, [sp], #16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
@@ -913,7 +913,7 @@ block0(v0: i64):
 ;   ldr x23, [sp], #16
 ;   ldp fp, lr, [sp], #16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
@@ -948,7 +948,7 @@ block0:
 ;   blr x0
 ;   ldp fp, lr, [sp], #16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!

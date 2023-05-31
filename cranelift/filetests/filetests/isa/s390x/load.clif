@@ -11,7 +11,7 @@ block0(v0: i64):
 ; block0:
 ;   lg %r2, 0(%r2)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lg %r2, 0(%r2)
@@ -29,7 +29,7 @@ block0:
 ; block0:
 ;   lgrl %r2, %sym + 0
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lgrl %r2, 0 ; reloc_external PCRel32Dbl %sym 2
@@ -45,7 +45,7 @@ block0(v0: i64):
 ; block0:
 ;   llgc %r2, 0(%r2)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   llgc %r2, 0(%r2)
@@ -61,7 +61,7 @@ block0(v0: i64):
 ; block0:
 ;   lgb %r2, 0(%r2)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lgb %r2, 0(%r2)
@@ -77,7 +77,7 @@ block0(v0: i64):
 ; block0:
 ;   llgh %r2, 0(%r2)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   llgh %r2, 0(%r2)
@@ -95,7 +95,7 @@ block0:
 ; block0:
 ;   llghrl %r2, %sym + 0
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   llghrl %r2, 0 ; reloc_external PCRel32Dbl %sym 2
@@ -111,7 +111,7 @@ block0(v0: i64):
 ; block0:
 ;   lgh %r2, 0(%r2)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lgh %r2, 0(%r2)
@@ -129,7 +129,7 @@ block0:
 ; block0:
 ;   lghrl %r2, %sym + 0
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lghrl %r2, 0 ; reloc_external PCRel32Dbl %sym 2
@@ -145,7 +145,7 @@ block0(v0: i64):
 ; block0:
 ;   llgf %r2, 0(%r2)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   llgf %r2, 0(%r2)
@@ -163,7 +163,7 @@ block0:
 ; block0:
 ;   llgfrl %r2, %sym + 0
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   llgfrl %r2, 0 ; reloc_external PCRel32Dbl %sym 2
@@ -179,7 +179,7 @@ block0(v0: i64):
 ; block0:
 ;   lgf %r2, 0(%r2)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lgf %r2, 0(%r2)
@@ -197,7 +197,7 @@ block0:
 ; block0:
 ;   lgfrl %r2, %sym + 0
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lgfrl %r2, 0 ; reloc_external PCRel32Dbl %sym 2
@@ -213,7 +213,7 @@ block0(v0: i64):
 ; block0:
 ;   l %r2, 0(%r2)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   l %r2, 0(%r2)
@@ -231,7 +231,7 @@ block0:
 ; block0:
 ;   lrl %r2, %sym + 0
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lrl %r2, 0 ; reloc_external PCRel32Dbl %sym 2
@@ -247,7 +247,7 @@ block0(v0: i64):
 ; block0:
 ;   ly %r2, 4096(%r2)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ly %r2, 0x1000(%r2)
@@ -263,7 +263,7 @@ block0(v0: i64):
 ; block0:
 ;   llc %r2, 0(%r2)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   llc %r2, 0(%r2)
@@ -279,7 +279,7 @@ block0(v0: i64):
 ; block0:
 ;   lb %r2, 0(%r2)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lb %r2, 0(%r2)
@@ -295,7 +295,7 @@ block0(v0: i64):
 ; block0:
 ;   llh %r2, 0(%r2)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   llh %r2, 0(%r2)
@@ -313,7 +313,7 @@ block0:
 ; block0:
 ;   llhrl %r2, %sym + 0
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   llhrl %r2, 0 ; reloc_external PCRel32Dbl %sym 2
@@ -329,7 +329,7 @@ block0(v0: i64):
 ; block0:
 ;   lh %r2, 0(%r2)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lh %r2, 0(%r2)
@@ -345,7 +345,7 @@ block0(v0: i64):
 ; block0:
 ;   lhy %r2, 4096(%r2)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lhy %r2, 0x1000(%r2)
@@ -363,7 +363,7 @@ block0:
 ; block0:
 ;   lhrl %r2, %sym + 0
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lhrl %r2, 0 ; reloc_external PCRel32Dbl %sym 2
@@ -379,7 +379,7 @@ block0(v0: i64):
 ; block0:
 ;   llh %r2, 0(%r2)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   llh %r2, 0(%r2)
@@ -397,7 +397,7 @@ block0:
 ; block0:
 ;   llhrl %r2, %sym + 0
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   llhrl %r2, 0 ; reloc_external PCRel32Dbl %sym 2
@@ -413,7 +413,7 @@ block0(v0: i64):
 ; block0:
 ;   llc %r2, 0(%r2)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   llc %r2, 0(%r2)
@@ -429,7 +429,7 @@ block0(v0: i64):
 ; block0:
 ;   lb %r2, 0(%r2)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lb %r2, 0(%r2)
@@ -445,7 +445,7 @@ block0(v0: i64):
 ; block0:
 ;   llc %r2, 0(%r2)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   llc %r2, 0(%r2)

@@ -20,7 +20,7 @@ block0:
 ;   ldr q3, [const(0)]
 ;   tbl v0.16b, { v30.16b, v31.16b }, v3.16b
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   movi v30.16b, #0
@@ -51,7 +51,7 @@ block0:
 ;   mov v30.16b, v31.16b
 ;   tbl v0.16b, { v30.16b, v31.16b }, v2.16b
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov w2, #1
@@ -81,7 +81,7 @@ block0:
 ;   ldr q3, [const(0)]
 ;   tbl v0.16b, { v2.16b }, v3.16b
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ldr q2, #0x10
@@ -107,7 +107,7 @@ block0(v0: i8):
 ; block0:
 ;   dup v0.16b, w0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   dup v0.16b, w0
@@ -124,7 +124,7 @@ block0:
 ; block0:
 ;   movi v0.16b, #255
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   movi v0.16b, #0xff
@@ -140,7 +140,7 @@ block0(v0: i32):
 ; block0:
 ;   dup v0.4s, w0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   dup v0.4s, w0
@@ -156,7 +156,7 @@ block0(v0: f64):
 ; block0:
 ;   dup v0.2d, v0.d[0]
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   dup v0.2d, v0.d[0]
@@ -174,7 +174,7 @@ block0(v0: i64):
 ;   ldr w3, [x0]
 ;   fmov s0, w3
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ldr w3, [x0]
@@ -191,7 +191,7 @@ block0(v0: i32):
 ; block0:
 ;   fmov s0, w0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fmov s0, w0
@@ -207,7 +207,7 @@ block0(v0: f32):
 ; block0:
 ;   fmov s0, s0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fmov s0, s0

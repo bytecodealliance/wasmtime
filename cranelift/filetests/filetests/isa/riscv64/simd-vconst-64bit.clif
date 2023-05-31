@@ -13,7 +13,7 @@ block0:
 ;   vle8.v v2,[const(0)] #avl=8, #vtype=(e8, m1, ta, ma)
 ;   vse8.v v2,0(a0) #avl=8, #vtype=(e8, m1, ta, ma)
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0x57, 0x70, 0x04, 0xcc
@@ -36,7 +36,7 @@ block0:
 ;   vle8.v v2,[const(0)] #avl=8, #vtype=(e8, m1, ta, ma)
 ;   vse8.v v2,0(a0) #avl=8, #vtype=(e8, m1, ta, ma)
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0x57, 0x70, 0x04, 0xcc
@@ -59,7 +59,7 @@ block0:
 ;   vle8.v v2,[const(0)] #avl=8, #vtype=(e8, m1, ta, ma)
 ;   vse8.v v2,0(a0) #avl=8, #vtype=(e8, m1, ta, ma)
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0x57, 0x70, 0x04, 0xcc
@@ -82,7 +82,7 @@ block0:
 ;   vle16.v v2,[const(0)] #avl=4, #vtype=(e16, m1, ta, ma)
 ;   vse8.v v2,0(a0) #avl=8, #vtype=(e8, m1, ta, ma)
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0x57, 0x70, 0x82, 0xcc
@@ -107,7 +107,7 @@ block0:
 ;   vle32.v v2,[const(0)] #avl=2, #vtype=(e32, m1, ta, ma)
 ;   vse8.v v2,0(a0) #avl=8, #vtype=(e8, m1, ta, ma)
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0x57, 0x70, 0x01, 0xcd

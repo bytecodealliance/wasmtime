@@ -12,7 +12,7 @@ block0(v0: i64, v1: i64):
 ; block0:
 ;   eq a0,a0,a1##ty=i64
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   bne a0, a1, 0xc
@@ -31,7 +31,7 @@ block0(v0: i128, v1: i128):
 ; block0:
 ;   eq a0,[a0,a1],[a2,a3]##ty=i128
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   bne a1, a3, 0x10
@@ -51,7 +51,7 @@ block0(v0: i128, v1: i128):
 ; block0:
 ;   ne a0,[a0,a1],[a2,a3]##ty=i128
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   bne a1, a3, 8
@@ -71,7 +71,7 @@ block0(v0: i128, v1: i128):
 ; block0:
 ;   slt a0,[a0,a1],[a2,a3]##ty=i128
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   blt a1, a3, 0xc
@@ -92,7 +92,7 @@ block0(v0: i128, v1: i128):
 ; block0:
 ;   ult a0,[a0,a1],[a2,a3]##ty=i128
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   bltu a1, a3, 0xc
@@ -113,7 +113,7 @@ block0(v0: i128, v1: i128):
 ; block0:
 ;   sle a0,[a0,a1],[a2,a3]##ty=i128
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   blt a1, a3, 0xc
@@ -134,7 +134,7 @@ block0(v0: i128, v1: i128):
 ; block0:
 ;   ule a0,[a0,a1],[a2,a3]##ty=i128
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   bltu a1, a3, 0xc
@@ -155,7 +155,7 @@ block0(v0: i128, v1: i128):
 ; block0:
 ;   sgt a0,[a0,a1],[a2,a3]##ty=i128
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   blt a3, a1, 0xc
@@ -176,7 +176,7 @@ block0(v0: i128, v1: i128):
 ; block0:
 ;   ugt a0,[a0,a1],[a2,a3]##ty=i128
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   bltu a3, a1, 0xc
@@ -197,7 +197,7 @@ block0(v0: i128, v1: i128):
 ; block0:
 ;   sge a0,[a0,a1],[a2,a3]##ty=i128
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   blt a3, a1, 0xc
@@ -218,7 +218,7 @@ block0(v0: i128, v1: i128):
 ; block0:
 ;   uge a0,[a0,a1],[a2,a3]##ty=i128
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   bltu a3, a1, 0xc
@@ -253,7 +253,7 @@ block2:
 ; block2:
 ;   li a0,1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   bne a0, a1, 0xc
@@ -289,7 +289,7 @@ block1:
 ; block3:
 ;   li a0,1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   bne a0, a1, 0xc
@@ -319,7 +319,7 @@ block1:
 ;   j label3
 ; block3:
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   bnez a1, 8
@@ -349,7 +349,7 @@ block1:
 ;   j label3
 ; block3:
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   bne a1, a3, 0x10
@@ -379,7 +379,7 @@ block1:
 ;   j label3
 ; block3:
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   bne a1, a3, 8
@@ -409,7 +409,7 @@ block1:
 ;   j label3
 ; block3:
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   blt a1, a3, 0xc
@@ -440,7 +440,7 @@ block1:
 ;   j label3
 ; block3:
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   bltu a1, a3, 0xc
@@ -471,7 +471,7 @@ block1:
 ;   j label3
 ; block3:
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   blt a1, a3, 0xc
@@ -502,7 +502,7 @@ block1:
 ;   j label3
 ; block3:
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   bltu a1, a3, 0xc
@@ -533,7 +533,7 @@ block1:
 ;   j label3
 ; block3:
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   blt a3, a1, 0xc
@@ -564,7 +564,7 @@ block1:
 ;   j label3
 ; block3:
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   bltu a3, a1, 0xc
@@ -595,7 +595,7 @@ block1:
 ;   j label3
 ; block3:
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   blt a3, a1, 0xc
@@ -626,7 +626,7 @@ block1:
 ;   j label3
 ; block3:
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   bltu a3, a1, 0xc
@@ -657,7 +657,7 @@ block1:
 ;   j label3
 ; block3:
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   andi t2, a0, 0xff
@@ -684,7 +684,7 @@ block1:
 ;   j label3
 ; block3:
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   slli t2, a0, 0x30
@@ -712,7 +712,7 @@ block1:
 ;   j label3
 ; block3:
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   slli t2, a0, 0x20
@@ -738,7 +738,7 @@ block1:
 ;   j label3
 ; block3:
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ret

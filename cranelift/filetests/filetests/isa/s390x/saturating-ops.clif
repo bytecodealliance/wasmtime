@@ -14,7 +14,7 @@ block0(v0: i64, v1: i64):
 ; block0:
 ;   lghi %r2, 0
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lghi %r2, 0

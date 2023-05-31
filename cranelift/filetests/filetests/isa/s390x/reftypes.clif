@@ -10,7 +10,7 @@ block0(v0: r64, v1: r64):
 ; block0:
 ;   lgr %r2, %r3
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lgr %r2, %r3
@@ -28,7 +28,7 @@ block0(v0: r64):
 ;   lhi %r2, 0
 ;   lochie %r2, 1
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   cghi %r2, 0
@@ -48,7 +48,7 @@ block0(v0: r64):
 ;   lhi %r2, 0
 ;   lochie %r2, 1
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   cghi %r2, -1
@@ -66,7 +66,7 @@ block0:
 ; block0:
 ;   lghi %r2, 0
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lghi %r2, 0
@@ -123,7 +123,7 @@ block3(v7: r64, v8: r64):
 ;   lg %r4, 0(%r4)
 ;   lmg %r11, %r15, 272(%r15)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   stmg %r11, %r15, 0x58(%r15)

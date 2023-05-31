@@ -16,7 +16,7 @@ block0(v0: i64, v1: i32):
 ;   add a2,a0,a2
 ;   lw a0,0(a2)
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   sext.w a2, a1
@@ -38,7 +38,7 @@ block0(v0: i64, v1: i32):
 ;   add a2,a2,a0
 ;   lw a0,0(a2)
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   sext.w a2, a1
@@ -64,7 +64,7 @@ block0(v0: i32, v1: i32):
 ;   add a5,a6,a7
 ;   lw a0,0(a5)
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   slli a4, a0, 0x20
@@ -94,7 +94,7 @@ block0(v0: i64, v1: i32):
 ;   add a4,a4,a4
 ;   lw a0,4(a4)
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   sext.w a4, a1
@@ -121,7 +121,7 @@ block0(v0: i64, v1: i64, v2: i64):
 ;   addi a4,a4,48
 ;   lw a0,0(a4)
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   add a4, a0, a1
@@ -149,7 +149,7 @@ block0(v0: i64, v1: i64, v2: i64):
 ;   add a6,a7,a6
 ;   lw a0,0(a6)
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lui a6, 1
@@ -172,7 +172,7 @@ block0:
 ;   li t1,1234
 ;   lw a0,0(t1)
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi t1, zero, 0x4d2
@@ -193,7 +193,7 @@ block0(v0: i64):
 ;   add a1,a0,a1
 ;   lw a0,0(a1)
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lui a1, 0x800
@@ -214,7 +214,7 @@ block0(v0: i64):
 ;   addi a0,a0,-4
 ;   lw a0,0(a0)
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi a0, a0, -4
@@ -236,7 +236,7 @@ block0(v0: i64):
 ;   add a2,a0,a2
 ;   lw a0,0(a2)
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lui a2, 0x3b9ad
@@ -257,7 +257,7 @@ block0(v0: i32):
 ;   sext.w a0,a0
 ;   lw a0,0(a0)
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   sext.w a0, a0
@@ -280,7 +280,7 @@ block0(v0: i32, v1: i32):
 ;   add a3,a3,a4
 ;   lw a0,0(a3)
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   sext.w a3, a0
@@ -305,7 +305,7 @@ block0(v0: i64, v1: i64, v2: i64):
 ;   srli a6,a4,32
 ;   lh a0,0(a6)
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lui a5, 0xfffff
@@ -331,7 +331,7 @@ block0(v0: i64, v1: i64, v2: i64):
 ;   srli a6,a4,32
 ;   lh a0,0(a6)
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lui a5, 1
@@ -356,7 +356,7 @@ block0(v0: i64, v1: i64, v2: i64):
 ;   sext.w a4,a4
 ;   lh a0,0(a4)
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lui a4, 0xfffff
@@ -380,7 +380,7 @@ block0(v0: i64, v1: i64, v2: i64):
 ;   sext.w a4,a4
 ;   lh a0,0(a4)
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lui a4, 1
@@ -406,7 +406,7 @@ block0(v0: i64):
 ;   sd a1,8(a0)
 ;   mv a0,a2
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ld t2, 0(a0)
@@ -435,7 +435,7 @@ block0(v0: i64):
 ;   sd a1,24(a0)
 ;   mv a0,a2
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ld t2, 0x10(a0)
@@ -464,7 +464,7 @@ block0(v0: i64):
 ;   sd a1,512(a0)
 ;   mv a0,a2
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ld t2, 0x1f8(a0)
@@ -493,7 +493,7 @@ block0(v0: i64):
 ;   sd a1,-504(a0)
 ;   mv a0,a2
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ld t2, -0x200(a0)
@@ -521,7 +521,7 @@ block0(v0: i64):
 ;   sd a0,0(a2)
 ;   sd a1,8(a2)
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi a2, a0, 0x20
@@ -547,7 +547,7 @@ block0(v0: i32):
 ;   sd a0,0(a2)
 ;   sd a1,8(a2)
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   sext.w a2, a0
@@ -577,7 +577,7 @@ block0(v0: i64, v1: i32):
 ;   sd a0,0(a4)
 ;   sd a1,8(a4)
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   sext.w a4, a1

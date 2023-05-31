@@ -30,7 +30,7 @@ block2:
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -76,7 +76,7 @@ block2 cold:
 ; block2:
 ;   movl    $97, %eax
 ;   jmp     label3
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp

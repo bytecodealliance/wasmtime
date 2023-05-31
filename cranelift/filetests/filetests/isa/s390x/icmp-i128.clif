@@ -15,7 +15,7 @@ block0(v0: i128, v1: i128):
 ;   lhi %r2, 0
 ;   lochie %r2, 1
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vl %v1, 0(%r2)
@@ -39,7 +39,7 @@ block0(v0: i128, v1: i128):
 ;   lhi %r2, 0
 ;   lochine %r2, 1
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vl %v1, 0(%r2)
@@ -63,7 +63,7 @@ block0(v0: i128, v1: i128):
 ;   lhi %r2, 0
 ;   lochil %r2, 1
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vl %v1, 0(%r2)
@@ -89,7 +89,7 @@ block0(v0: i128, v1: i128):
 ;   lhi %r2, 0
 ;   lochil %r2, 1
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vl %v1, 0(%r2)
@@ -115,7 +115,7 @@ block0(v0: i128, v1: i128):
 ;   lhi %r2, 0
 ;   lochinl %r2, 1
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vl %v1, 0(%r2)
@@ -141,7 +141,7 @@ block0(v0: i128, v1: i128):
 ;   lhi %r2, 0
 ;   lochinl %r2, 1
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vl %v1, 0(%r2)
@@ -167,7 +167,7 @@ block0(v0: i128, v1: i128):
 ;   lhi %r2, 0
 ;   lochil %r2, 1
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vl %v1, 0(%r2)
@@ -193,7 +193,7 @@ block0(v0: i128, v1: i128):
 ;   lhi %r2, 0
 ;   lochil %r2, 1
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vl %v1, 0(%r2)
@@ -219,7 +219,7 @@ block0(v0: i128, v1: i128):
 ;   lhi %r2, 0
 ;   lochinl %r2, 1
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vl %v1, 0(%r2)
@@ -245,7 +245,7 @@ block0(v0: i128, v1: i128):
 ;   lhi %r2, 0
 ;   lochinl %r2, 1
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vl %v1, 0(%r2)
