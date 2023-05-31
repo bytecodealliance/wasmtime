@@ -199,7 +199,7 @@
 /**
  * \brief Wasmtime version string.
  */
-#define WASMTIME_VERSION "9.0.2"
+#define WASMTIME_VERSION "9.0.3"
 /**
  * \brief Wasmtime major version number.
  */
@@ -211,7 +211,7 @@
 /**
  * \brief Wasmtime patch version number.
  */
-#define WASMTIME_VERSION_PATCH 2
+#define WASMTIME_VERSION_PATCH 3
 
 #ifdef __cplusplus
 extern "C" {
