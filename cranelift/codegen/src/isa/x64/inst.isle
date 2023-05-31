@@ -1729,6 +1729,293 @@
 (decl sink_load_to_reg_mem_imm (SinkableLoad) RegMemImm)
 (rule (sink_load_to_reg_mem_imm load) (RegMemImm.Mem load))
 
+;;;; Helpers for constructing and emitting an `MInst` ;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; These helpers are intended to assist in emitting instructions by taking
+;; source operands and automatically creating output operands which are then
+;; returned. These are additionally deisgned to assist with SSA-like
+;; construction where the writable version of a register is only present in
+;; an `MInst` and every other reference to it is a readonly version.
+
+;; Helper for creating XmmUninitializedValue instructions.
+(decl xmm_uninit_value () Xmm)
+(rule (xmm_uninit_value)
+      (let ((dst WritableXmm (temp_writable_xmm))
+            (_ Unit (emit (MInst.XmmUninitializedValue dst))))
+        dst))
+
+;; Helper for constructing a LoadExtName instruction.
+(decl load_ext_name (ExternalName i64 RelocDistance) Reg)
+(rule (load_ext_name extname offset distance)
+      (let ((dst WritableGpr (temp_writable_gpr))
+            (_ Unit (emit (MInst.LoadExtName dst extname offset distance))))
+        dst))
+
+;; Helper for constructing a Mov64MR instruction.
+(decl mov64_mr (SyntheticAmode) Reg)
+(rule (mov64_mr addr)
+      (let ((dst WritableGpr (temp_writable_gpr))
+            (_ Unit (emit (MInst.Mov64MR addr dst))))
+        dst))
+
+;; Helper for emitting `MInst.AluRmiR` instructions.
+(decl alu_rmi_r (Type AluRmiROpcode Gpr GprMemImm) Gpr)
+(rule (alu_rmi_r ty opcode src1 src2)
+      (let ((dst WritableGpr (temp_writable_gpr))
+            (size OperandSize (operand_size_of_type_32_64 ty))
+            (_ Unit (emit (MInst.AluRmiR size opcode src1 src2 dst))))
+        dst))
+
+;; Helper for emitting `MInst.AluRmRVex` instructions.
+(decl alu_rm_r_vex (Type AluRmROpcode Gpr Gpr) Gpr)
+(rule (alu_rm_r_vex ty opcode src1 src2)
+      (let ((dst WritableGpr (temp_writable_gpr))
+            (size OperandSize (operand_size_of_type_32_64 ty))
+            (_ Unit (emit (MInst.AluRmRVex size opcode src1 src2 dst))))
+        dst))
+
+;; Helper for creating `MInst.XmmRmR` instructions.
+(decl xmm_rm_r (SseOpcode Xmm XmmMemAligned) Xmm)
+(rule (xmm_rm_r op src1 src2)
+      (let ((dst WritableXmm (temp_writable_xmm))
+            (_ Unit (emit (MInst.XmmRmR op src1 src2 dst))))
+        dst))
+
+;; Helper for creating `MInst.XmmRmRUnaligned` instructions.
+(decl xmm_rm_r_unaligned (SseOpcode Xmm XmmMem) Xmm)
+(rule (xmm_rm_r_unaligned op src1 src2)
+      (let ((dst WritableXmm (temp_writable_xmm))
+            (_ Unit (emit (MInst.XmmRmRUnaligned op src1 src2 dst))))
+        dst))
+
+;; Helper for creating `XmmRmRBlend` instructions
+(decl xmm_rm_r_blend (SseOpcode Xmm XmmMemAligned Xmm) Xmm)
+(rule (xmm_rm_r_blend op src1 src2 mask)
+      (let ((dst WritableXmm (temp_writable_xmm))
+            (_ Unit (emit (MInst.XmmRmRBlend op src1 src2 mask dst))))
+        dst))
+
+;; Helper for creating `XmmRmRBlendVex` instructions
+(decl xmm_rmr_blend_vex (AvxOpcode Xmm XmmMem Xmm) Xmm)
+(rule (xmm_rmr_blend_vex op src1 src2 mask)
+      (let ((dst WritableXmm (temp_writable_xmm))
+            (_ Unit (emit (MInst.XmmRmRBlendVex op src1 src2 mask dst))))
+        dst))
+
+;; Helper for creating `XmmUnaryRmRVex` instructions
+(decl xmm_unary_rm_r_vex (AvxOpcode XmmMem) Xmm)
+(rule (xmm_unary_rm_r_vex op src)
+      (let ((dst WritableXmm (temp_writable_xmm))
+            (_ Unit (emit (MInst.XmmUnaryRmRVex op src dst))))
+        dst))
+
+;; Helper for creating `XmmUnaryRmRImmVex` instructions
+(decl xmm_unary_rm_r_imm_vex (AvxOpcode XmmMem u8) Xmm)
+(rule (xmm_unary_rm_r_imm_vex op src imm)
+      (let ((dst WritableXmm (temp_writable_xmm))
+            (_ Unit (emit (MInst.XmmUnaryRmRImmVex op src dst imm))))
+        dst))
+
+;; Helper for creating `MInst.XmmRmRImm` instructions.
+(decl xmm_rm_r_imm (SseOpcode Reg RegMem u8 OperandSize) Xmm)
+(rule (xmm_rm_r_imm op src1 src2 imm size)
+      (let ((dst WritableXmm (temp_writable_xmm))
+            (_ Unit (emit (MInst.XmmRmRImm op
+                                           src1
+                                           src2
+                                           dst
+                                           imm
+                                           size))))
+        dst))
+
+;; Helper for constructing `XmmVexPinsr` instructions.
+(decl xmm_vex_pinsr (AvxOpcode Xmm GprMem u8) Xmm)
+(rule (xmm_vex_pinsr op src1 src2 imm)
+      (let ((dst WritableXmm (temp_writable_xmm))
+            (_ Unit (emit (MInst.XmmVexPinsr op src1 src2 dst imm))))
+        dst))
+
+;; Helper for constructing `XmmUnaryRmRImm` instructions.
+(decl xmm_unary_rm_r_imm (SseOpcode XmmMemAligned u8) Xmm)
+(rule (xmm_unary_rm_r_imm op src1 imm)
+      (let ((dst WritableXmm (temp_writable_xmm))
+            (_ Unit (emit (MInst.XmmUnaryRmRImm op src1 imm dst))))
+        dst))
+
+;; Helper for creating `MInst.XmmUnaryRmR` instructions.
+(decl xmm_unary_rm_r (SseOpcode XmmMemAligned) Xmm)
+(rule (xmm_unary_rm_r op src)
+      (let ((dst WritableXmm (temp_writable_xmm))
+            (_ Unit (emit (MInst.XmmUnaryRmR op src dst))))
+        dst))
+
+;; Helper for creating `MInst.XmmUnaryRmRUnaligned` instructions.
+(decl xmm_unary_rm_r_unaligned (SseOpcode XmmMem) Xmm)
+(rule (xmm_unary_rm_r_unaligned op src)
+      (let ((dst WritableXmm (temp_writable_xmm))
+            (_ Unit (emit (MInst.XmmUnaryRmRUnaligned op src dst))))
+        dst))
+
+;; Helper for creating `MInst.XmmUnaryRmREvex` instructions.
+(decl xmm_unary_rm_r_evex (Avx512Opcode XmmMem) Xmm)
+(rule (xmm_unary_rm_r_evex op src)
+      (let ((dst WritableXmm (temp_writable_xmm))
+            (_ Unit (emit (MInst.XmmUnaryRmREvex op src dst))))
+        dst))
+
+;; Helper for creating `MInst.XmmRmREvex` instructions.
+(decl xmm_rm_r_evex (Avx512Opcode Xmm XmmMem) Xmm)
+(rule (xmm_rm_r_evex op src1 src2)
+      (let ((dst WritableXmm (temp_writable_xmm))
+            (_ Unit (emit (MInst.XmmRmREvex op
+                                            src1
+                                            src2
+                                            dst))))
+        dst))
+
+;; Helper for creating `MInst.XmmRmiXmm` instructions.
+(decl xmm_rmi_xmm (SseOpcode Xmm XmmMemAlignedImm) Xmm)
+(rule (xmm_rmi_xmm op src1 src2)
+      (let ((dst WritableXmm (temp_writable_xmm))
+            (_ Unit (emit (MInst.XmmRmiReg op
+                                           src1
+                                           src2
+                                           dst))))
+        dst))
+
+;; Helper for creating `MInst.XmmToGprImm` instructions.
+(decl xmm_to_gpr_imm (SseOpcode Xmm u8) Gpr)
+(rule (xmm_to_gpr_imm op src imm)
+      (let ((dst WritableGpr (temp_writable_gpr))
+            (_ Unit (emit (MInst.XmmToGprImm op src dst imm))))
+        dst))
+
+;; Helper for creating `MInst.XmmToGprImmVex` instructions.
+(decl xmm_to_gpr_imm_vex (AvxOpcode Xmm u8) Gpr)
+(rule (xmm_to_gpr_imm_vex op src imm)
+      (let ((dst WritableGpr (temp_writable_gpr))
+            (_ Unit (emit (MInst.XmmToGprImmVex op src dst imm))))
+        dst))
+
+;; Helper for creating `MInst.GprToXmm` instructions.
+(decl gpr_to_xmm (SseOpcode GprMem OperandSize) Xmm)
+(rule (gpr_to_xmm op src size)
+      (let ((dst WritableXmm (temp_writable_xmm))
+            (_ Unit (emit (MInst.GprToXmm op src dst size))))
+        dst))
+
+;; Helper for creating `MInst.GprToXmmVex` instructions.
+(decl gpr_to_xmm_vex (AvxOpcode GprMem OperandSize) Xmm)
+(rule (gpr_to_xmm_vex op src size)
+      (let ((dst WritableXmm (temp_writable_xmm))
+            (_ Unit (emit (MInst.GprToXmmVex op src dst size))))
+        dst))
+
+;; Helper for creating `MInst.XmmToGpr` instructions.
+(decl xmm_to_gpr (SseOpcode Xmm OperandSize) Gpr)
+(rule (xmm_to_gpr op src size)
+      (let ((dst WritableGpr (temp_writable_gpr))
+            (_ Unit (emit (MInst.XmmToGpr op src dst size))))
+        dst))
+
+;; Helper for creating `MInst.XmmToGprVex` instructions.
+(decl xmm_to_gpr_vex (AvxOpcode Xmm OperandSize) Gpr)
+(rule (xmm_to_gpr_vex op src size)
+      (let ((dst WritableGpr (temp_writable_gpr))
+            (_ Unit (emit (MInst.XmmToGprVex op src dst size))))
+        dst))
+
+;; Helper for creating `xmm_min_max_seq` psuedo-instructions.
+(decl xmm_min_max_seq (Type bool Xmm Xmm) Xmm)
+(rule (xmm_min_max_seq ty is_min lhs rhs)
+      (let ((dst WritableXmm (temp_writable_xmm))
+            (size OperandSize (operand_size_of_type_32_64 ty))
+            (_ Unit (emit (MInst.XmmMinMaxSeq size is_min lhs rhs dst))))
+        dst))
+
+;; Helper for creating `MInst.XmmRmiRVex` instructions.
+(decl xmm_rmir_vex (AvxOpcode Xmm XmmMemImm) Xmm)
+(rule (xmm_rmir_vex op src1 src2)
+      (let ((dst WritableXmm (temp_writable_xmm))
+            (_ Unit (emit (MInst.XmmRmiRVex op src1 src2 dst))))
+        dst))
+
+;; Helper for creating `MInst.XmmRmRImmVex` instructions.
+(decl xmm_rmr_imm_vex (AvxOpcode Xmm XmmMem u8) Xmm)
+(rule (xmm_rmr_imm_vex op src1 src2 imm)
+      (let ((dst WritableXmm (temp_writable_xmm))
+            (_ Unit (emit (MInst.XmmRmRImmVex op src1 src2 dst imm))))
+        dst))
+
+;; Helper for creating `MInst.XmmRmRVex3` instructions.
+(decl xmm_rmr_vex3 (AvxOpcode Xmm Xmm XmmMem) Xmm)
+(rule (xmm_rmr_vex3 op src1 src2 src3)
+      (let ((dst WritableXmm (temp_writable_xmm))
+            (_ Unit (emit (MInst.XmmRmRVex3 op src1 src2 src3 dst))))
+        dst))
+
+;; Helper for creating `MInst.MulHi` instructions.
+;;
+;; Returns the (lo, hi) register halves of the multiplication.
+(decl mul_hi (Type bool Gpr GprMem) ValueRegs)
+(rule (mul_hi ty signed src1 src2)
+      (let ((dst_lo WritableGpr (temp_writable_gpr))
+            (dst_hi WritableGpr (temp_writable_gpr))
+            (size OperandSize (raw_operand_size_of_type ty))
+            (_ Unit (emit (MInst.MulHi size
+                                       signed
+                                       src1
+                                       src2
+                                       dst_lo
+                                       dst_hi))))
+        (value_gprs dst_lo dst_hi)))
+
+;; Helper for creating `MInst.UnaryRmR` instructions.
+(decl unary_rm_r (UnaryRmROpcode Gpr OperandSize) Gpr)
+(rule (unary_rm_r op src size)
+      (let ((dst WritableGpr (temp_writable_gpr))
+            (_ Unit (emit (MInst.UnaryRmR size op src dst))))
+        dst))
+
+(decl cvt_u64_to_float_seq (Type Gpr) Xmm)
+(rule (cvt_u64_to_float_seq ty src)
+      (let ((size OperandSize (raw_operand_size_of_type ty))
+            (dst WritableXmm (temp_writable_xmm))
+            (tmp_gpr1 WritableGpr (temp_writable_gpr))
+            (tmp_gpr2 WritableGpr (temp_writable_gpr))
+            (_ Unit (emit (MInst.CvtUint64ToFloatSeq size src dst tmp_gpr1 tmp_gpr2))))
+        dst))
+
+(decl cvt_float_to_uint_seq (Type Value bool) Gpr)
+(rule (cvt_float_to_uint_seq out_ty src @ (value_type src_ty) is_saturating)
+      (let ((out_size OperandSize (raw_operand_size_of_type out_ty))
+            (src_size OperandSize (raw_operand_size_of_type src_ty))
+
+            (dst WritableGpr (temp_writable_gpr))
+            (tmp_xmm WritableXmm (temp_writable_xmm))
+            (tmp_xmm2 WritableXmm (temp_writable_xmm))
+            (tmp_gpr WritableGpr (temp_writable_gpr))
+            (_ Unit (emit (MInst.CvtFloatToUintSeq out_size src_size is_saturating src dst tmp_gpr tmp_xmm tmp_xmm2))))
+        dst))
+
+(decl cvt_float_to_sint_seq (Type Value bool) Gpr)
+(rule (cvt_float_to_sint_seq out_ty src @ (value_type src_ty) is_saturating)
+      (let ((out_size OperandSize (raw_operand_size_of_type out_ty))
+            (src_size OperandSize (raw_operand_size_of_type src_ty))
+
+            (dst WritableGpr (temp_writable_gpr))
+            (tmp_xmm WritableXmm (temp_writable_xmm))
+            (tmp_gpr WritableGpr (temp_writable_gpr))
+            (_ Unit (emit (MInst.CvtFloatToSintSeq out_size src_size is_saturating src dst tmp_gpr tmp_xmm))))
+        dst))
+
+;; Helper for creating `MovFromPReg` instructions.
+(decl mov_from_preg (PReg) Reg)
+(rule (mov_from_preg preg)
+      (let ((dst WritableGpr (temp_writable_gpr))
+            (_ Unit (emit (MInst.MovFromPReg preg dst))))
+        dst))
+
 ;;;; Helpers for Sign/Zero Extending ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (type ExtKind extern
@@ -1829,13 +2116,6 @@
       (let ((tmp Xmm (xmm_uninit_value)))
         (x64_pcmpeqd tmp tmp)))
 
-;; Helper for creating XmmUninitializedValue instructions.
-(decl xmm_uninit_value () Xmm)
-(rule (xmm_uninit_value)
-      (let ((dst WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.XmmUninitializedValue dst))))
-        dst))
-
 ;; Move a `RegMemImm.Reg` operand to an XMM register, if necessary.
 (decl mov_rmi_to_xmm (RegMemImm) XmmMemImm)
 (rule (mov_rmi_to_xmm rmi @ (RegMemImm.Mem _)) (xmm_mem_imm_new rmi))
@@ -1852,13 +2132,6 @@
 
 ;;;; Helpers for Emitting Loads ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; Helper for constructing a LoadExtName instruction.
-(decl load_ext_name (ExternalName i64 RelocDistance) Reg)
-(rule (load_ext_name extname offset distance)
-      (let ((dst WritableGpr (temp_writable_gpr))
-            (_ Unit (emit (MInst.LoadExtName dst extname offset distance))))
-        dst))
-
 ;; Load a value into a register.
 (decl x64_load (Type SyntheticAmode ExtKind) Reg)
 
@@ -1867,9 +2140,7 @@
              addr))
 
 (rule 2 (x64_load $I64 addr _ext_kind)
-      (let ((dst WritableGpr (temp_writable_gpr))
-            (_ Unit (emit (MInst.Mov64MR addr dst))))
-        dst))
+      (mov64_mr addr))
 
 (rule 2 (x64_load $F32 addr _ext_kind)
       (x64_movss_load addr))
@@ -1888,9 +2159,7 @@
 
 (decl x64_mov (Amode) Reg)
 (rule (x64_mov addr)
-      (let ((dst WritableGpr (temp_writable_gpr))
-            (_ Unit (emit (MInst.Mov64MR addr dst))))
-        dst))
+      (mov64_mr addr))
 
 (decl x64_movzx (ExtMode GprMem) Gpr)
 (rule (x64_movzx mode src)
@@ -2080,14 +2349,6 @@
 ;; maintain the invariant that each temporary register they allocate and define
 ;; only gets defined the once.
 
-;; Helper for emitting `MInst.AluRmiR` instructions.
-(decl alu_rmi_r (Type AluRmiROpcode Gpr GprMemImm) Gpr)
-(rule (alu_rmi_r ty opcode src1 src2)
-      (let ((dst WritableGpr (temp_writable_gpr))
-            (size OperandSize (operand_size_of_type_32_64 ty))
-            (_ Unit (emit (MInst.AluRmiR size opcode src1 src2 dst))))
-        dst))
-
 ;; Helper for emitting `add` instructions.
 (decl x64_add (Type Gpr GprMemImm) Gpr)
 (rule (x64_add ty src1 src2)
@@ -2234,14 +2495,6 @@
                  (AluRmiROpcode.Xor)
                  src1
                  src2))
-
-;; Helper for emitting `MInst.AluRmRVex` instructions.
-(decl alu_rm_r_vex (Type AluRmROpcode Gpr Gpr) Gpr)
-(rule (alu_rm_r_vex ty opcode src1 src2)
-      (let ((dst WritableGpr (temp_writable_gpr))
-            (size OperandSize (operand_size_of_type_32_64 ty))
-            (_ Unit (emit (MInst.AluRmRVex size opcode src1 src2 dst))))
-        dst))
 
 (decl x64_andn (Type Gpr Gpr) Gpr)
 (rule (x64_andn ty src1 src2)
@@ -2523,20 +2776,6 @@
         (ConsumesFlags.ConsumesFlagsReturnsResultWithProducer
          (MInst.Setcc cc dst)
          dst)))
-
-;; Helper for creating `MInst.XmmRmR` instructions.
-(decl xmm_rm_r (SseOpcode Xmm XmmMemAligned) Xmm)
-(rule (xmm_rm_r op src1 src2)
-      (let ((dst WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.XmmRmR op src1 src2 dst))))
-        dst))
-
-;; Helper for creating `MInst.XmmRmRUnaligned` instructions.
-(decl xmm_rm_r_unaligned (SseOpcode Xmm XmmMem) Xmm)
-(rule (xmm_rm_r_unaligned op src1 src2)
-      (let ((dst WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.XmmRmRUnaligned op src1 src2 dst))))
-        dst))
 
 ;; Helper for creating `paddb` instructions.
 (decl x64_paddb (Xmm XmmMem) Xmm)
@@ -3042,34 +3281,6 @@
       (if-let $true (use_avx_simd))
       (xmm_rmir_vex (AvxOpcode.Vdivpd) src1 src2))
 
-;; Helper for creating `XmmRmRBlend` instructions
-(decl xmm_rm_r_blend (SseOpcode Xmm XmmMemAligned Xmm) Xmm)
-(rule (xmm_rm_r_blend op src1 src2 mask)
-      (let ((dst WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.XmmRmRBlend op src1 src2 mask dst))))
-        dst))
-
-;; Helper for creating `XmmRmRBlendVex` instructions
-(decl xmm_rmr_blend_vex (AvxOpcode Xmm XmmMem Xmm) Xmm)
-(rule (xmm_rmr_blend_vex op src1 src2 mask)
-      (let ((dst WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.XmmRmRBlendVex op src1 src2 mask dst))))
-        dst))
-
-;; Helper for creating `XmmUnaryRmRVex` instructions
-(decl xmm_unary_rm_r_vex (AvxOpcode XmmMem) Xmm)
-(rule (xmm_unary_rm_r_vex op src)
-      (let ((dst WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.XmmUnaryRmRVex op src dst))))
-        dst))
-
-;; Helper for creating `XmmUnaryRmRImmVex` instructions
-(decl xmm_unary_rm_r_imm_vex (AvxOpcode XmmMem u8) Xmm)
-(rule (xmm_unary_rm_r_imm_vex op src imm)
-      (let ((dst WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.XmmUnaryRmRImmVex op src dst imm))))
-        dst))
-
 ;; Helper for creating `blendvp{d,s}` and `pblendvb` instructions.
 (decl x64_blend (Type Xmm XmmMem Xmm) Xmm)
 (rule 1 (x64_blend $F32X4 mask src1 src2) (x64_blendvps src2 src1 mask))
@@ -3274,18 +3485,6 @@
         (if-let $true (use_avx_simd))
         (xmm_rmir_vex (AvxOpcode.Vpackusdw) src1 src2))
 
-;; Helper for creating `MInst.XmmRmRImm` instructions.
-(decl xmm_rm_r_imm (SseOpcode Reg RegMem u8 OperandSize) Xmm)
-(rule (xmm_rm_r_imm op src1 src2 imm size)
-      (let ((dst WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.XmmRmRImm op
-                                           src1
-                                           src2
-                                           dst
-                                           imm
-                                           size))))
-        dst))
-
 ;; Helper for creating `palignr` instructions.
 (decl x64_palignr (Xmm XmmMem u8) Xmm)
 (rule 0 (x64_palignr src1 src2 imm)
@@ -3381,20 +3580,6 @@
 (rule 1 (x64_pinsrq src1 src2 lane)
       (if-let $true (use_avx_simd))
       (xmm_vex_pinsr (AvxOpcode.Vpinsrq) src1 src2 lane))
-
-;; Helper for constructing `XmmVexPinsr` instructions.
-(decl xmm_vex_pinsr (AvxOpcode Xmm GprMem u8) Xmm)
-(rule (xmm_vex_pinsr op src1 src2 imm)
-      (let ((dst WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.XmmVexPinsr op src1 src2 dst imm))))
-        dst))
-
-;; Helper for constructing `XmmUnaryRmRImm` instructions.
-(decl xmm_unary_rm_r_imm (SseOpcode XmmMemAligned u8) Xmm)
-(rule (xmm_unary_rm_r_imm op src1 imm)
-      (let ((dst WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.XmmUnaryRmRImm op src1 imm dst))))
-        dst))
 
 ;; Helper for creating `roundss` instructions.
 (decl x64_roundss (XmmMem RoundImm) Xmm)
@@ -3499,20 +3684,6 @@
       (if-let $true (use_avx_simd))
       (xmm_rmr_imm_vex (AvxOpcode.Vshufps) src1 src2 byte))
 
-;; Helper for creating `MInst.XmmUnaryRmR` instructions.
-(decl xmm_unary_rm_r (SseOpcode XmmMemAligned) Xmm)
-(rule (xmm_unary_rm_r op src)
-      (let ((dst WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.XmmUnaryRmR op src dst))))
-        dst))
-
-;; Helper for creating `MInst.XmmUnaryRmRUnaligned` instructions.
-(decl xmm_unary_rm_r_unaligned (SseOpcode XmmMem) Xmm)
-(rule (xmm_unary_rm_r_unaligned op src)
-      (let ((dst WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.XmmUnaryRmRUnaligned op src dst))))
-        dst))
-
 ;; Helper for creating `pabsb` instructions.
 (decl x64_pabsb (XmmMem) Xmm)
 (rule (x64_pabsb src)
@@ -3537,13 +3708,6 @@
       (if-let $true (use_avx_simd))
       (xmm_unary_rm_r_vex (AvxOpcode.Vpabsd) src))
 
-;; Helper for creating `MInst.XmmUnaryRmREvex` instructions.
-(decl xmm_unary_rm_r_evex (Avx512Opcode XmmMem) Xmm)
-(rule (xmm_unary_rm_r_evex op src)
-      (let ((dst WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.XmmUnaryRmREvex op src dst))))
-        dst))
-
 ;; Helper for creating `vcvtudq2ps` instructions.
 (decl x64_vcvtudq2ps (XmmMem) Xmm)
 (rule (x64_vcvtudq2ps src)
@@ -3558,16 +3722,6 @@
 (decl x64_vpopcntb (XmmMem) Xmm)
 (rule (x64_vpopcntb src)
       (xmm_unary_rm_r_evex (Avx512Opcode.Vpopcntb) src))
-
-;; Helper for creating `MInst.XmmRmREvex` instructions.
-(decl xmm_rm_r_evex (Avx512Opcode Xmm XmmMem) Xmm)
-(rule (xmm_rm_r_evex op src1 src2)
-      (let ((dst WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.XmmRmREvex op
-                                            src1
-                                            src2
-                                            dst))))
-        dst))
 
 ;; Helper for creating `vpmullq` instructions.
 ;;
@@ -3591,37 +3745,11 @@
                                              dst))))
         dst))
 
-;; Helper for creating `MInst.MulHi` instructions.
-;;
-;; Returns the (lo, hi) register halves of the multiplication.
-(decl mul_hi (Type bool Gpr GprMem) ValueRegs)
-(rule (mul_hi ty signed src1 src2)
-      (let ((dst_lo WritableGpr (temp_writable_gpr))
-            (dst_hi WritableGpr (temp_writable_gpr))
-            (size OperandSize (raw_operand_size_of_type ty))
-            (_ Unit (emit (MInst.MulHi size
-                                       signed
-                                       src1
-                                       src2
-                                       dst_lo
-                                       dst_hi))))
-        (value_gprs dst_lo dst_hi)))
-
 ;; Helper for creating `mul` instructions that return both the lower and
 ;; (unsigned) higher halves of the result.
 (decl mulhi_u (Type Gpr GprMem) ValueRegs)
 (rule (mulhi_u ty src1 src2)
       (mul_hi ty $false src1 src2))
-
-;; Helper for creating `MInst.XmmRmiXmm` instructions.
-(decl xmm_rmi_xmm (SseOpcode Xmm XmmMemAlignedImm) Xmm)
-(rule (xmm_rmi_xmm op src1 src2)
-      (let ((dst WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.XmmRmiReg op
-                                           src1
-                                           src2
-                                           dst))))
-        dst))
 
 ;; Helper for creating `psllw` instructions.
 (decl x64_psllw (Xmm XmmMemImm) Xmm)
@@ -3747,42 +3875,6 @@
         (if-let $true (use_avx_simd))
         (xmm_movrm_imm_vex (AvxOpcode.Vpextrq) addr src lane))
 
-;; Helper for creating `MInst.XmmToGpr` instructions.
-(decl xmm_to_gpr (SseOpcode Xmm OperandSize) Gpr)
-(rule (xmm_to_gpr op src size)
-      (let ((dst WritableGpr (temp_writable_gpr))
-            (_ Unit (emit (MInst.XmmToGpr op src dst size))))
-        dst))
-
-;; Helper for creating `MInst.XmmToGprImm` instructions.
-(decl xmm_to_gpr_imm (SseOpcode Xmm u8) Gpr)
-(rule (xmm_to_gpr_imm op src imm)
-      (let ((dst WritableGpr (temp_writable_gpr))
-            (_ Unit (emit (MInst.XmmToGprImm op src dst imm))))
-        dst))
-
-;; Helper for creating `MInst.XmmToGprImmVex` instructions.
-(decl xmm_to_gpr_imm_vex (AvxOpcode Xmm u8) Gpr)
-(rule (xmm_to_gpr_imm_vex op src imm)
-      (let ((dst WritableGpr (temp_writable_gpr))
-            (_ Unit (emit (MInst.XmmToGprImmVex op src dst imm))))
-        dst))
-
-;; Helper for creating `MInst.XmmToGprVex` instructions.
-(decl xmm_to_gpr_vex (AvxOpcode Xmm OperandSize) Gpr)
-(rule (xmm_to_gpr_vex op src size)
-      (let ((dst WritableGpr (temp_writable_gpr))
-            (_ Unit (emit (MInst.XmmToGprVex op src dst size))))
-        dst))
-
-;; Helper for creating `MInst.GprToXmmVex` instructions.
-(decl gpr_to_xmm_vex (AvxOpcode GprMem OperandSize) Xmm)
-(rule (gpr_to_xmm_vex op src size)
-      (let ((dst WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.GprToXmmVex op src dst size))))
-        dst))
-
-
 ;; Helper for creating `pmovmskb` instructions.
 (decl x64_pmovmskb (OperandSize Xmm) Gpr)
 (rule (x64_pmovmskb size src)
@@ -3806,13 +3898,6 @@
 (rule 1 (x64_movmskpd size src)
         (if-let $true (use_avx_simd))
         (xmm_to_gpr_vex (AvxOpcode.Vmovmskpd) src size))
-
-;; Helper for creating `MInst.GprToXmm` instructions.
-(decl gpr_to_xmm (SseOpcode GprMem OperandSize) Xmm)
-(rule (gpr_to_xmm op src size)
-      (let ((dst WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.GprToXmm op src dst size))))
-        dst))
 
 ;; Helper for creating `not` instructions.
 (decl x64_not (Type Gpr) Gpr)
@@ -3857,18 +3942,12 @@
 ;; Helper for creating `lzcnt` instructions.
 (decl x64_lzcnt (Type Gpr) Gpr)
 (rule (x64_lzcnt ty src)
-      (let ((dst WritableGpr (temp_writable_gpr))
-            (size OperandSize (operand_size_of_type_32_64 ty))
-            (_ Unit (emit (MInst.UnaryRmR size (UnaryRmROpcode.Lzcnt) src dst))))
-        dst))
+      (unary_rm_r (UnaryRmROpcode.Lzcnt) src (operand_size_of_type_32_64 ty)))
 
 ;; Helper for creating `tzcnt` instructions.
 (decl x64_tzcnt (Type Gpr) Gpr)
 (rule (x64_tzcnt ty src)
-      (let ((dst WritableGpr (temp_writable_gpr))
-            (size OperandSize (operand_size_of_type_32_64 ty))
-            (_ Unit (emit (MInst.UnaryRmR size (UnaryRmROpcode.Tzcnt) src dst))))
-        dst))
+      (unary_rm_r (UnaryRmROpcode.Tzcnt) src (operand_size_of_type_32_64 ty)))
 
 ;; Helper for creating `bsr` instructions.
 (decl x64_bsr (Type Gpr) ProducesFlags)
@@ -3913,18 +3992,7 @@
 ;; Helper for creating `popcnt` instructions.
 (decl x64_popcnt (Type Gpr) Gpr)
 (rule (x64_popcnt ty src)
-      (let ((dst WritableGpr (temp_writable_gpr))
-            (size OperandSize (operand_size_of_type_32_64 ty))
-            (_ Unit (emit (MInst.UnaryRmR size (UnaryRmROpcode.Popcnt) src dst))))
-        dst))
-
-;; Helper for creating `xmm_min_max_seq` psuedo-instructions.
-(decl xmm_min_max_seq (Type bool Xmm Xmm) Xmm)
-(rule (xmm_min_max_seq ty is_min lhs rhs)
-      (let ((dst WritableXmm (temp_writable_xmm))
-            (size OperandSize (operand_size_of_type_32_64 ty))
-            (_ Unit (emit (MInst.XmmMinMaxSeq size is_min lhs rhs dst))))
-        dst))
+      (unary_rm_r (UnaryRmROpcode.Popcnt) src (operand_size_of_type_32_64 ty)))
 
 ;; Helper for creating `minss` instructions.
 (decl x64_minss (Xmm XmmMem) Xmm)
@@ -3989,28 +4057,6 @@
 (rule 1 (x64_maxpd x y)
       (if-let $true (use_avx_simd))
       (xmm_rmir_vex (AvxOpcode.Vmaxpd) x y))
-
-
-;; Helper for creating `MInst.XmmRmiRVex` instructions.
-(decl xmm_rmir_vex (AvxOpcode Xmm XmmMemImm) Xmm)
-(rule (xmm_rmir_vex op src1 src2)
-      (let ((dst WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.XmmRmiRVex op src1 src2 dst))))
-        dst))
-
-;; Helper for creating `MInst.XmmRmRImmVex` instructions.
-(decl xmm_rmr_imm_vex (AvxOpcode Xmm XmmMem u8) Xmm)
-(rule (xmm_rmr_imm_vex op src1 src2 imm)
-      (let ((dst WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.XmmRmRImmVex op src1 src2 dst imm))))
-        dst))
-
-;; Helper for creating `MInst.XmmRmRVex3` instructions.
-(decl xmm_rmr_vex3 (AvxOpcode Xmm Xmm XmmMem) Xmm)
-(rule (xmm_rmr_vex3 op src1 src2 src3)
-      (let ((dst WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.XmmRmRVex3 op src1 src2 src3 dst))))
-        dst))
 
 ;; Helper for creating `vfmadd213*` instructions
 (decl x64_vfmadd213 (Type Xmm Xmm XmmMem) Xmm)
@@ -4141,38 +4187,6 @@
 (rule 1 (x64_cvttpd2dq x)
         (if-let $true (use_avx_simd))
         (xmm_unary_rm_r_vex (AvxOpcode.Vcvttpd2dq) x))
-
-(decl cvt_u64_to_float_seq (Type Gpr) Xmm)
-(rule (cvt_u64_to_float_seq ty src)
-      (let ((size OperandSize (raw_operand_size_of_type ty))
-            (dst WritableXmm (temp_writable_xmm))
-            (tmp_gpr1 WritableGpr (temp_writable_gpr))
-            (tmp_gpr2 WritableGpr (temp_writable_gpr))
-            (_ Unit (emit (MInst.CvtUint64ToFloatSeq size src dst tmp_gpr1 tmp_gpr2))))
-        dst))
-
-(decl cvt_float_to_uint_seq (Type Value bool) Gpr)
-(rule (cvt_float_to_uint_seq out_ty src @ (value_type src_ty) is_saturating)
-      (let ((out_size OperandSize (raw_operand_size_of_type out_ty))
-            (src_size OperandSize (raw_operand_size_of_type src_ty))
-
-            (dst WritableGpr (temp_writable_gpr))
-            (tmp_xmm WritableXmm (temp_writable_xmm))
-            (tmp_xmm2 WritableXmm (temp_writable_xmm))
-            (tmp_gpr WritableGpr (temp_writable_gpr))
-            (_ Unit (emit (MInst.CvtFloatToUintSeq out_size src_size is_saturating src dst tmp_gpr tmp_xmm tmp_xmm2))))
-        dst))
-
-(decl cvt_float_to_sint_seq (Type Value bool) Gpr)
-(rule (cvt_float_to_sint_seq out_ty src @ (value_type src_ty) is_saturating)
-      (let ((out_size OperandSize (raw_operand_size_of_type out_ty))
-            (src_size OperandSize (raw_operand_size_of_type src_ty))
-
-            (dst WritableGpr (temp_writable_gpr))
-            (tmp_xmm WritableXmm (temp_writable_xmm))
-            (tmp_gpr WritableGpr (temp_writable_gpr))
-            (_ Unit (emit (MInst.CvtFloatToSintSeq out_size src_size is_saturating src dst tmp_gpr tmp_xmm))))
-        dst))
 
 (decl fcvt_uint_mask_const () VCodeConstant)
 (extern constructor fcvt_uint_mask_const fcvt_uint_mask_const)
@@ -4987,13 +5001,6 @@
 (rule (synthetic_amode_to_xmm_mem_aligned mode) (synthetic_amode_to_xmm_mem mode))
 (decl put_in_xmm_mem_aligned (Value) XmmMemAligned)
 (rule (put_in_xmm_mem_aligned val) (put_in_xmm_mem val))
-
-;; Helper for creating `MovFromPReg` instructions.
-(decl mov_from_preg (PReg) Reg)
-(rule (mov_from_preg preg)
-      (let ((dst WritableGpr (temp_writable_gpr))
-            (_ Unit (emit (MInst.MovFromPReg preg dst))))
-        dst))
 
 (decl mov_to_preg (PReg Gpr) SideEffectNoResult)
 (rule (mov_to_preg dst src)
