@@ -34,7 +34,7 @@ let packages = {
         cpu: 'x64',
     },
     'wizer-linux-arm64': {
-        releaseAsset: `wizer-${tag}-arm64-linux.tar.xz`,
+        releaseAsset: `wizer-${tag}-aarch64-linux.tar.xz`,
         binaryAsset: 'wizer',
         description : 'The Linux 64-bit binary for Wizer, the WebAssembly Pre-Initializer',
         os: 'linux',
