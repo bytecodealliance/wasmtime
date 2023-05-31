@@ -184,8 +184,8 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             let _dir_entry: Arc<DirEntry> = table.get(fd)?;
             let dir_fdstat = types::Fdstat {
                 fs_filetype: types::Filetype::Directory,
-                fs_rights_base: types::Rights::all(),
-                fs_rights_inheriting: types::Rights::all(),
+                fs_rights_base: directory_base_rights(),
+                fs_rights_inheriting: directory_inheriting_rights(),
                 fs_flags: types::Fdflags::empty(),
             };
             Ok(dir_fdstat)
@@ -1445,4 +1445,46 @@ fn systimespec(
     } else {
         Ok(None)
     }
+}
+
+// This is the default subset of base Rights reported for directories prior to
+// https://github.com/bytecodealliance/wasmtime/pull/6265. Some
+// implementations still expect this set of rights to be reported.
+pub(crate) fn directory_base_rights() -> types::Rights {
+    types::Rights::PATH_CREATE_DIRECTORY
+        | types::Rights::PATH_CREATE_FILE
+        | types::Rights::PATH_LINK_SOURCE
+        | types::Rights::PATH_LINK_TARGET
+        | types::Rights::PATH_OPEN
+        | types::Rights::FD_READDIR
+        | types::Rights::PATH_READLINK
+        | types::Rights::PATH_RENAME_SOURCE
+        | types::Rights::PATH_RENAME_TARGET
+        | types::Rights::PATH_SYMLINK
+        | types::Rights::PATH_REMOVE_DIRECTORY
+        | types::Rights::PATH_UNLINK_FILE
+        | types::Rights::PATH_FILESTAT_GET
+        | types::Rights::PATH_FILESTAT_SET_TIMES
+        | types::Rights::FD_FILESTAT_GET
+        | types::Rights::FD_FILESTAT_SET_TIMES
+}
+
+// This is the default subset of inheriting Rights reported for directories
+// prior to https://github.com/bytecodealliance/wasmtime/pull/6265. Some
+// implementations still expect this set of rights to be reported.
+pub(crate) fn directory_inheriting_rights() -> types::Rights {
+    types::Rights::FD_DATASYNC
+        | types::Rights::FD_READ
+        | types::Rights::FD_SEEK
+        | types::Rights::FD_FDSTAT_SET_FLAGS
+        | types::Rights::FD_SYNC
+        | types::Rights::FD_TELL
+        | types::Rights::FD_WRITE
+        | types::Rights::FD_ADVISE
+        | types::Rights::FD_ALLOCATE
+        | types::Rights::FD_FILESTAT_GET
+        | types::Rights::FD_FILESTAT_SET_SIZE
+        | types::Rights::FD_FILESTAT_SET_TIMES
+        | types::Rights::POLL_FD_READWRITE
+        | directory_base_rights()
 }
