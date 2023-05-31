@@ -1,5 +1,5 @@
 ;; Test our lowerings that try to fit negated iconst values in immediates, like
-;; `x + -1 => sub x 0x1`. Currently, not working as expected for i32 and i16. 
+;; `x + -1 => sub x 0x1`. Currently, not working as expected for i32 and i16.
 
 test compile precise-output
 set unwind_info=false
@@ -26,7 +26,7 @@ block0(v0: i64):
 ;; 4294967295 is zero-extended i32 -1
 function %b(i32) -> i32 {
 block0(v0: i32):
-    v1 = iconst.i32 4294967295 
+    v1 = iconst.i32 4294967295
     v3 = iadd v0, v1
     return v3
 }
@@ -81,7 +81,7 @@ block0(v0: i64):
 ;; 4294967295 is zero-extended i32 -1
 function %b(i32) -> i32 {
 block0(v0: i32):
-    v1 = iconst.i32 4294967295 
+    v1 = iconst.i32 4294967295
     v3 = iadd v1, v0
     return v3
 }
@@ -137,7 +137,7 @@ block0(v0: i64):
 ;; 4294967295 is zero-extended i32 -1
 function %b(i32) -> i32 {
 block0(v0: i32):
-    v1 = iconst.i32 4294967295 
+    v1 = iconst.i32 4294967295
     v3 = isub v0, v1
     return v3
 }
