@@ -5,7 +5,7 @@
 //! machine code emitter.
 
 use crate::codegen::CodeGen;
-use crate::masm::{CmpKind, DivKind, MacroAssembler, OperandSize, RegImm, RemKind};
+use crate::masm::{CmpKind, DivKind, MacroAssembler, OperandSize, RegImm, RemKind, ShiftKind};
 use crate::stack::Val;
 use wasmparser::VisitOperator;
 use wasmtime_environ::{FuncIndex, WasmType};
@@ -69,6 +69,22 @@ macro_rules! def_unsupported {
     (emit I64GeU $($rest:tt)*) => {};
     (emit I32Eqz $($rest:tt)*) => {};
     (emit I64Eqz $($rest:tt)*) => {};
+    (emit I32And $($rest:tt)*) => {};
+    (emit I64And $($rest:tt)*) => {};
+    (emit I32Or $($rest:tt)*) => {};
+    (emit I64Or $($rest:tt)*) => {};
+    (emit I32Xor $($rest:tt)*) => {};
+    (emit I64Xor $($rest:tt)*) => {};
+    (emit I32Shl $($rest:tt)*) => {};
+    (emit I64Shl $($rest:tt)*) => {};
+    (emit I32ShrS $($rest:tt)*) => {};
+    (emit I64ShrS $($rest:tt)*) => {};
+    (emit I32ShrU $($rest:tt)*) => {};
+    (emit I64ShrU $($rest:tt)*) => {};
+    (emit I32Rotl $($rest:tt)*) => {};
+    (emit I64Rotl $($rest:tt)*) => {};
+    (emit I32Rotr $($rest:tt)*) => {};
+    (emit I64Rotr $($rest:tt)*) => {};
     (emit LocalGet $($rest:tt)*) => {};
     (emit LocalSet $($rest:tt)*) => {};
     (emit Call $($rest:tt)*) => {};
@@ -278,6 +294,112 @@ where
         self.context.unop(self.masm, S64, &mut |masm, reg, size| {
             masm.cmp_with_set(RegImm::imm(0), reg, CmpKind::Eq, size);
         });
+    }
+
+    fn visit_i32_and(&mut self) {
+        self.context.i32_binop(self.masm, |masm, dst, src, size| {
+            masm.and(dst, dst, src, size);
+        });
+    }
+
+    fn visit_i64_and(&mut self) {
+        self.context.i64_binop(self.masm, |masm, dst, src, size| {
+            masm.and(dst, dst, src, size);
+        });
+    }
+
+    fn visit_i32_or(&mut self) {
+        self.context.i32_binop(self.masm, |masm, dst, src, size| {
+            masm.or(dst, dst, src, size);
+        });
+    }
+
+    fn visit_i64_or(&mut self) {
+        self.context.i64_binop(self.masm, |masm, dst, src, size| {
+            masm.or(dst, dst, src, size);
+        });
+    }
+
+    fn visit_i32_xor(&mut self) {
+        self.context.i32_binop(self.masm, |masm, dst, src, size| {
+            masm.xor(dst, dst, src, size);
+        });
+    }
+
+    fn visit_i64_xor(&mut self) {
+        self.context.i64_binop(self.masm, |masm, dst, src, size| {
+            masm.xor(dst, dst, src, size);
+        });
+    }
+
+    fn visit_i32_shl(&mut self) {
+        use OperandSize::*;
+        use ShiftKind::*;
+
+        self.masm.shift(&mut self.context, Shl, S32);
+    }
+
+    fn visit_i64_shl(&mut self) {
+        use OperandSize::*;
+        use ShiftKind::*;
+
+        self.masm.shift(&mut self.context, Shl, S64);
+    }
+
+    fn visit_i32_shr_s(&mut self) {
+        use OperandSize::*;
+        use ShiftKind::*;
+
+        self.masm.shift(&mut self.context, ShrS, S32);
+    }
+
+    fn visit_i64_shr_s(&mut self) {
+        use OperandSize::*;
+        use ShiftKind::*;
+
+        self.masm.shift(&mut self.context, ShrS, S64);
+    }
+
+    fn visit_i32_shr_u(&mut self) {
+        use OperandSize::*;
+        use ShiftKind::*;
+
+        self.masm.shift(&mut self.context, ShrU, S32);
+    }
+
+    fn visit_i64_shr_u(&mut self) {
+        use OperandSize::*;
+        use ShiftKind::*;
+
+        self.masm.shift(&mut self.context, ShrU, S64);
+    }
+
+    fn visit_i32_rotl(&mut self) {
+        use OperandSize::*;
+        use ShiftKind::*;
+
+        self.masm.shift(&mut self.context, Rotl, S32);
+    }
+
+    fn visit_i64_rotl(&mut self) {
+        use OperandSize::*;
+        use ShiftKind::*;
+
+        self.masm.shift(&mut self.context, Rotl, S64);
+    }
+
+    fn visit_i32_rotr(&mut self) {
+        use OperandSize::*;
+        use ShiftKind::*;
+
+        self.masm.shift(&mut self.context, Rotr, S32);
+    }
+
+    fn visit_i64_rotr(&mut self) {
+        use OperandSize::*;
+        use ShiftKind::*;
+
+        self.masm.shift(&mut self.context, Rotr, S64);
     }
 
     fn visit_end(&mut self) {}

@@ -4,7 +4,9 @@ use super::{
     asm::{Assembler, Operand},
     regs::{self, rbp, rsp},
 };
-use crate::masm::{CmpKind, DivKind, MacroAssembler as Masm, OperandSize, RegImm, RemKind};
+use crate::masm::{
+    CmpKind, DivKind, MacroAssembler as Masm, OperandSize, RegImm, RemKind, ShiftKind,
+};
 use crate::{
     abi::{self, align_to, calculate_frame_adjustment, LocalSlot},
     codegen::CodeGenContext,
@@ -191,6 +193,80 @@ impl Masm for MacroAssembler {
         };
 
         self.asm.mul(src, dst, size);
+    }
+
+    fn and(&mut self, dst: RegImm, lhs: RegImm, rhs: RegImm, size: OperandSize) {
+        let (src, dst): (Operand, Operand) = if dst == lhs {
+            (rhs.into(), dst.into())
+        } else {
+            panic!(
+                "the destination and first source argument must be the same, dst={:?}, lhs={:?}",
+                dst, lhs
+            );
+        };
+
+        self.asm.and(src, dst, size);
+    }
+
+    fn or(&mut self, dst: RegImm, lhs: RegImm, rhs: RegImm, size: OperandSize) {
+        let (src, dst): (Operand, Operand) = if dst == lhs {
+            (rhs.into(), dst.into())
+        } else {
+            panic!(
+                "the destination and first source argument must be the same, dst={:?}, lhs={:?}",
+                dst, lhs
+            );
+        };
+
+        self.asm.or(src, dst, size);
+    }
+
+    fn xor(&mut self, dst: RegImm, lhs: RegImm, rhs: RegImm, size: OperandSize) {
+        let (src, dst): (Operand, Operand) = if dst == lhs {
+            (rhs.into(), dst.into())
+        } else {
+            panic!(
+                "the destination and first source argument must be the same, dst={:?}, lhs={:?}",
+                dst, lhs
+            );
+        };
+
+        self.asm.xor(src, dst, size);
+    }
+
+    fn shift(&mut self, context: &mut CodeGenContext, kind: ShiftKind, size: OperandSize) {
+        let top = context.stack.peek().expect("value at stack top");
+
+        if size == OperandSize::S32 && top.is_i32_const() {
+            let val = context
+                .stack
+                .pop_i32_const()
+                .expect("i32 const value at stack top");
+            let reg = context.pop_to_reg(self, None, size);
+
+            self.asm.shift_ir(val as u8, reg, kind, size);
+
+            context.stack.push(Val::reg(reg));
+        } else if size == OperandSize::S64 && top.is_i64_const() {
+            let val = context
+                .stack
+                .pop_i64_const()
+                .expect("i64 const value at stack top");
+            let reg = context.pop_to_reg(self, None, size);
+
+            self.asm.shift_ir(val as u8, reg, kind, size);
+
+            context.stack.push(Val::reg(reg));
+        } else {
+            // Number of bits to shift must be in the CL register.
+            let src = context.pop_to_reg(self, Some(regs::rcx()), size);
+            let dst = context.pop_to_reg(self, None, size);
+
+            self.asm.shift_rr(src.into(), dst.into(), kind, size);
+
+            context.regalloc.free_gpr(src);
+            context.stack.push(Val::reg(dst));
+        }
     }
 
     fn div(&mut self, context: &mut CodeGenContext, kind: DivKind, size: OperandSize) {
