@@ -372,7 +372,10 @@ impl RunCommand {
             .unwrap_or(WasiModules::default())
             .wasi_http_server
         {
+            #[cfg(feature = "wasi-http")]
             run_http(&engine, &self.module);
+            #[cfg(not(feature = "wasi-http"))]
+            panic!("Requesting HTTP server, but wasi-http feature is not enabled.");
         } else {
             // Load the main wasm module.
             match self
