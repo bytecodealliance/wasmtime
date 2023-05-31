@@ -29,6 +29,18 @@ Unreleased.
 
 --------------------------------------------------------------------------------
 
+## 9.0.3
+
+Released 2023-05-31.
+
+### Fixed
+
+* Fix Wasi rights system to work with wasi-testsuite, which exposed a corner case
+  that was missed by the fixes in the 9.0.2 release.
+  [#6479](https://github.com/bytecodealliance/wasmtime/pull/6479)
+
+--------------------------------------------------------------------------------
+
 ## 9.0.2
 
 Released 2023-05-26.
