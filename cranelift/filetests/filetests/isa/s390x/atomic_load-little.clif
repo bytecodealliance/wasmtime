@@ -11,7 +11,7 @@ block0(v0: i64):
 ; block0:
 ;   lrvg %r2, 0(%r2)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lrvg %r2, 0(%r2)
@@ -29,7 +29,7 @@ block0:
 ; block0:
 ;   larl %r1, %sym + 0 ; lrvg %r2, 0(%r1)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   larl %r1, 0 ; reloc_external PCRel32Dbl %sym 2
@@ -46,7 +46,7 @@ block0(v0: i64):
 ; block0:
 ;   lrv %r2, 0(%r2)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lrv %r2, 0(%r2)
@@ -64,7 +64,7 @@ block0:
 ; block0:
 ;   larl %r1, %sym + 0 ; lrv %r2, 0(%r1)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   larl %r1, 0 ; reloc_external PCRel32Dbl %sym 2
@@ -81,7 +81,7 @@ block0(v0: i64):
 ; block0:
 ;   lrvh %r2, 0(%r2)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lrvh %r2, 0(%r2)
@@ -99,7 +99,7 @@ block0:
 ; block0:
 ;   larl %r1, %sym + 0 ; lrvh %r2, 0(%r1)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   larl %r1, 0 ; reloc_external PCRel32Dbl %sym 2
@@ -116,7 +116,7 @@ block0(v0: i64):
 ; block0:
 ;   llc %r2, 0(%r2)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   llc %r2, 0(%r2)

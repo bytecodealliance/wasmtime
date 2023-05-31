@@ -13,7 +13,7 @@ block0(v0: i16):
 ; block0:
 ;   packw a0,a0,zero
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0x3b, 0x45, 0x05, 0x08
@@ -29,7 +29,7 @@ block0(v0: i16):
 ; block0:
 ;   packw a0,a0,zero
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0x3b, 0x45, 0x05, 0x08
@@ -45,7 +45,7 @@ block0(v0: i32):
 ; block0:
 ;   pack a0,a0,zero
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0x33, 0x45, 0x05, 0x08

@@ -11,7 +11,7 @@ block0(v0: i128):
 ; VCode:
 ; block0:
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ret
@@ -25,7 +25,7 @@ block0(v0: i128):
 ; VCode:
 ; block0:
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ret
@@ -39,7 +39,7 @@ block0(v0: i128):
 ; VCode:
 ; block0:
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ret
@@ -53,7 +53,7 @@ block0(v0: i128):
 ; VCode:
 ; block0:
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ret

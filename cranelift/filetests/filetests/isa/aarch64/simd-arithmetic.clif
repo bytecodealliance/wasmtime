@@ -12,7 +12,7 @@ block0(v0: i8x8, v1: i8x8):
 ; block0:
 ;   urhadd v0.8b, v0.8b, v1.8b
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   urhadd v0.8b, v0.8b, v1.8b
@@ -28,7 +28,7 @@ block0(v0: i8x16, v1: i8x16):
 ; block0:
 ;   urhadd v0.16b, v0.16b, v1.16b
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   urhadd v0.16b, v0.16b, v1.16b
@@ -44,7 +44,7 @@ block0(v0: i16x4, v1: i16x4):
 ; block0:
 ;   urhadd v0.4h, v0.4h, v1.4h
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   urhadd v0.4h, v0.4h, v1.4h
@@ -60,7 +60,7 @@ block0(v0: i16x8, v1: i16x8):
 ; block0:
 ;   urhadd v0.8h, v0.8h, v1.8h
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   urhadd v0.8h, v0.8h, v1.8h
@@ -76,7 +76,7 @@ block0(v0: i32x2, v1: i32x2):
 ; block0:
 ;   urhadd v0.2s, v0.2s, v1.2s
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   urhadd v0.2s, v0.2s, v1.2s
@@ -92,7 +92,7 @@ block0(v0: i32x4, v1: i32x4):
 ; block0:
 ;   urhadd v0.4s, v0.4s, v1.4s
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   urhadd v0.4s, v0.4s, v1.4s
@@ -115,7 +115,7 @@ block0(v0: i64x2, v1: i64x2):
 ;   add v23.2d, v19.2d, v21.2d
 ;   add v0.2d, v17.2d, v23.2d
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov x3, #1
@@ -139,7 +139,7 @@ block0(v0: i8x16):
 ; block0:
 ;   shl v0.16b, v0.16b, #1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   shl v0.16b, v0.16b, #1
@@ -156,7 +156,7 @@ block0(v0: i16x8):
 ; block0:
 ;   shl v0.8h, v0.8h, #15
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   shl v0.8h, v0.8h, #0xf
@@ -173,7 +173,7 @@ block0(v0: i32x4):
 ; block0:
 ;   shl v0.4s, v0.4s, #22
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   shl v0.4s, v0.4s, #0x16
@@ -190,7 +190,7 @@ block0(v0: i64x2):
 ; block0:
 ;   shl v0.2d, v0.2d, #55
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   shl v0.2d, v0.2d, #0x37
@@ -207,7 +207,7 @@ block0(v0: i8x16):
 ; block0:
 ;   sshr v0.16b, v0.16b, #1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   sshr v0.16b, v0.16b, #1
@@ -224,7 +224,7 @@ block0(v0: i16x8):
 ; block0:
 ;   sshr v0.8h, v0.8h, #15
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   sshr v0.8h, v0.8h, #0xf
@@ -241,7 +241,7 @@ block0(v0: i32x4):
 ; block0:
 ;   sshr v0.4s, v0.4s, #22
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   sshr v0.4s, v0.4s, #0x16
@@ -258,7 +258,7 @@ block0(v0: i64x2):
 ; block0:
 ;   sshr v0.2d, v0.2d, #55
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   sshr v0.2d, v0.2d, #0x37
@@ -275,7 +275,7 @@ block0(v0: i8x16):
 ; block0:
 ;   ushr v0.16b, v0.16b, #1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ushr v0.16b, v0.16b, #1
@@ -292,7 +292,7 @@ block0(v0: i16x8):
 ; block0:
 ;   ushr v0.8h, v0.8h, #15
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ushr v0.8h, v0.8h, #0xf
@@ -309,7 +309,7 @@ block0(v0: i32x4):
 ; block0:
 ;   ushr v0.4s, v0.4s, #22
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ushr v0.4s, v0.4s, #0x16
@@ -326,7 +326,7 @@ block0(v0: i64x2):
 ; block0:
 ;   ushr v0.2d, v0.2d, #55
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ushr v0.2d, v0.2d, #0x37
@@ -343,7 +343,7 @@ block0(v0: i8x16):
 ; block0:
 ;   shl v0.16b, v0.16b, #0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   shl v0.16b, v0.16b, #0
@@ -360,7 +360,7 @@ block0(v0: i16x8):
 ; block0:
 ;   shl v0.8h, v0.8h, #0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   shl v0.8h, v0.8h, #0
@@ -377,7 +377,7 @@ block0(v0: i32x4):
 ; block0:
 ;   shl v0.4s, v0.4s, #0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   shl v0.4s, v0.4s, #0
@@ -394,7 +394,7 @@ block0(v0: i64x2):
 ; block0:
 ;   shl v0.2d, v0.2d, #0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   shl v0.2d, v0.2d, #0
@@ -410,7 +410,7 @@ block0(v0: i8x16):
 ; VCode:
 ; block0:
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ret
@@ -425,7 +425,7 @@ block0(v0: i16x8):
 ; VCode:
 ; block0:
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ret
@@ -440,7 +440,7 @@ block0(v0: i32x4):
 ; VCode:
 ; block0:
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ret
@@ -455,7 +455,7 @@ block0(v0: i64x2):
 ; VCode:
 ; block0:
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ret
@@ -470,7 +470,7 @@ block0(v0: i8x16):
 ; VCode:
 ; block0:
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ret
@@ -485,7 +485,7 @@ block0(v0: i16x8):
 ; VCode:
 ; block0:
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ret
@@ -500,7 +500,7 @@ block0(v0: i32x4):
 ; VCode:
 ; block0:
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ret
@@ -515,7 +515,7 @@ block0(v0: i64x2):
 ; VCode:
 ; block0:
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ret

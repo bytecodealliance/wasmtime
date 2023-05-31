@@ -18,7 +18,7 @@ block0:
 ;   lg %r2, 0(%r15)
 ;   lmg %r14, %r15, 272(%r15)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   stmg %r14, %r15, 0x70(%r15)
@@ -46,7 +46,7 @@ block0:
 ;   lgr %r2, %r15
 ;   lmg %r14, %r15, 272(%r15)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   stmg %r14, %r15, 0x70(%r15)
@@ -74,7 +74,7 @@ block0:
 ;   lg %r2, 272(%r15)
 ;   lmg %r14, %r15, 272(%r15)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   stmg %r14, %r15, 0x70(%r15)

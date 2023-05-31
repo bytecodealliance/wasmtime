@@ -11,7 +11,7 @@ block0:
 ; block0:
 ;   vgbm %v24, 0
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vzero %v24
@@ -27,7 +27,7 @@ block0:
 ; block0:
 ;   vrepig %v24, 32767
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vrepig %v24, 0x7fff
@@ -43,7 +43,7 @@ block0:
 ; block0:
 ;   vrepig %v24, -32768
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vrepig %v24, -0x8000
@@ -59,7 +59,7 @@ block0:
 ; block0:
 ;   bras %r1, 12 ; data.u64 0x0000000000008000 ; vlrepg %v24, 0(%r1)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   bras %r1, 0xc
@@ -81,7 +81,7 @@ block0:
 ; block0:
 ;   bras %r1, 12 ; data.u64 0xffffffffffff7fff ; vlrepg %v24, 0(%r1)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   bras %r1, 0xc
@@ -103,7 +103,7 @@ block0:
 ; block0:
 ;   bras %r1, 20 ; data.u128 0x00000000000000020000000000000001 ; vl %v24, 0(%r1)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   bras %r1, 0x14
@@ -128,7 +128,7 @@ block0:
 ; block0:
 ;   vgbm %v24, 0
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vzero %v24
@@ -144,7 +144,7 @@ block0:
 ; block0:
 ;   vrepif %v24, 32767
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vrepif %v24, 0x7fff
@@ -160,7 +160,7 @@ block0:
 ; block0:
 ;   vrepif %v24, -32768
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vrepif %v24, -0x8000
@@ -176,7 +176,7 @@ block0:
 ; block0:
 ;   bras %r1, 8 ; data.u32 0x00008000 ; vlrepf %v24, 0(%r1)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   bras %r1, 8
@@ -196,7 +196,7 @@ block0:
 ; block0:
 ;   bras %r1, 8 ; data.u32 0xffff7fff ; vlrepf %v24, 0(%r1)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   bras %r1, 8
@@ -216,7 +216,7 @@ block0:
 ; block0:
 ;   bras %r1, 12 ; data.u64 0x0000000200000001 ; vlrepg %v24, 0(%r1)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   bras %r1, 0xc
@@ -237,7 +237,7 @@ block0:
 ; block0:
 ;   bras %r1, 20 ; data.u128 0x00000004000000030000000200000001 ; vl %v24, 0(%r1)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   bras %r1, 0x14
@@ -262,7 +262,7 @@ block0:
 ; block0:
 ;   vgbm %v24, 0
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vzero %v24
@@ -278,7 +278,7 @@ block0:
 ; block0:
 ;   vrepih %v24, 32767
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vrepih %v24, 0x7fff
@@ -294,7 +294,7 @@ block0:
 ; block0:
 ;   vrepih %v24, -32768
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vrepih %v24, -0x8000
@@ -310,7 +310,7 @@ block0:
 ; block0:
 ;   bras %r1, 20 ; data.u128 0x00080007000600050004000300020001 ; vl %v24, 0(%r1)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   bras %r1, 0x14
@@ -335,7 +335,7 @@ block0:
 ; block0:
 ;   vgbm %v24, 0
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vzero %v24
@@ -351,7 +351,7 @@ block0:
 ; block0:
 ;   vrepib %v24, 127
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vrepib %v24, 0x7f
@@ -367,7 +367,7 @@ block0:
 ; block0:
 ;   vrepib %v24, 128
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vrepib %v24, 0x80
@@ -383,7 +383,7 @@ block0:
 ; block0:
 ;   bras %r1, 20 ; data.u128 0x100f0e0d0c0b0a090807060504030201 ; vl %v24, 0(%r1)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   bras %r1, 0x14

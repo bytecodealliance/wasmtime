@@ -17,7 +17,7 @@ block1:
 ;   lghi %r4, 3
 ;   lghi %r5, 4
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lghi %r2, 1
@@ -52,7 +52,7 @@ block1:
 ;   lgr %r2, %r6
 ;   lmg %r6, %r15, 48(%r15)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   stmg %r6, %r15, 0x30(%r15)
@@ -86,7 +86,7 @@ block1:
 ;   bras %r1, 12 ; data.f64 2 ; ld %f4, 0(%r1)
 ;   bras %r1, 12 ; data.f64 3 ; ld %f6, 0(%r1)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   bras %r1, 0xc
@@ -135,7 +135,7 @@ block1:
 ;   std %f7, 0(%r2)
 ;   vsteg %v16, 8(%r2), 0
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   bras %r1, 0xc

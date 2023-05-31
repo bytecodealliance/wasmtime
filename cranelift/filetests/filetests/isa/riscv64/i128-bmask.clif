@@ -15,7 +15,7 @@ block0(v0: i128):
 ;   sub a1,zero,a2
 ;   mv a0,a1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   or a0, a0, a1
@@ -36,7 +36,7 @@ block0(v0: i128):
 ;   sltu a2,zero,a0
 ;   sub a0,zero,a2
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   or a0, a0, a1
@@ -56,7 +56,7 @@ block0(v0: i128):
 ;   sltu a2,zero,a0
 ;   sub a0,zero,a2
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   or a0, a0, a1
@@ -76,7 +76,7 @@ block0(v0: i128):
 ;   sltu a2,zero,a0
 ;   sub a0,zero,a2
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   or a0, a0, a1
@@ -96,7 +96,7 @@ block0(v0: i128):
 ;   sltu a2,zero,a0
 ;   sub a0,zero,a2
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   or a0, a0, a1
@@ -116,7 +116,7 @@ block0(v0: i64):
 ;   sub a1,zero,t2
 ;   mv a0,a1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   snez t2, a0
@@ -138,7 +138,7 @@ block0(v0: i32):
 ;   sub a1,zero,a3
 ;   mv a0,a1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   slli t2, a0, 0x20
@@ -162,7 +162,7 @@ block0(v0: i16):
 ;   sub a1,zero,a3
 ;   mv a0,a1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   slli t2, a0, 0x30
@@ -185,7 +185,7 @@ block0(v0: i8):
 ;   sub a1,zero,a1
 ;   mv a0,a1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   andi t2, a0, 0xff

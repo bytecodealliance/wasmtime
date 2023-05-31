@@ -91,7 +91,7 @@ block30:
 block40:
     trap user4
 block50:
-    trap user1    
+    trap user1
 }
 ; sameln: function %jumptable(i32) fast {
 ; check:  block10(v3: i32):

@@ -12,7 +12,7 @@ block0(v0: i8):
 ; VCode:
 ; block0:
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   br %r14
@@ -26,7 +26,7 @@ block0(v0: i16):
 ; VCode:
 ; block0:
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   br %r14
@@ -40,7 +40,7 @@ block0(v0: i32):
 ; VCode:
 ; block0:
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   br %r14
@@ -54,7 +54,7 @@ block0(v0: i64):
 ; VCode:
 ; block0:
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   br %r14
@@ -70,7 +70,7 @@ block0(v0: i128):
 ;   vl %v1, 0(%r3)
 ;   vst %v1, 0(%r2)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vl %v1, 0(%r3)
@@ -86,7 +86,7 @@ block0(v0: r64):
 ; VCode:
 ; block0:
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   br %r14
@@ -100,7 +100,7 @@ block0(v0: i64):
 ; VCode:
 ; block0:
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   br %r14
@@ -114,7 +114,7 @@ block0(v0: r64):
 ; VCode:
 ; block0:
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   br %r14

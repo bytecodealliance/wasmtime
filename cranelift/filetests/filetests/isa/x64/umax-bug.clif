@@ -1,8 +1,8 @@
 test compile precise-output
 target x86_64
 
-function u0:0(i32, i64) -> i32 fast { 
-block0(v1: i32, v2: i64): 
+function u0:0(i32, i64) -> i32 fast {
+block0(v1: i32, v2: i64):
     v3 = load.i32 notrap aligned v2
     v4 = umax v1, v3
     return v4
@@ -19,7 +19,7 @@ block0(v1: i32, v2: i64):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp

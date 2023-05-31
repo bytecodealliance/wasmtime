@@ -13,7 +13,7 @@ block0(v0: i8):
 ;   sub a1,zero,t2
 ;   max a0,t2,a1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0x93, 0x13, 0x45, 0x60
@@ -33,7 +33,7 @@ block0(v0: i16):
 ;   sub a1,zero,t2
 ;   max a0,t2,a1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0x93, 0x13, 0x55, 0x60
@@ -53,7 +53,7 @@ block0(v0: i32):
 ;   sub a1,zero,t2
 ;   max a0,t2,a1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   sext.w t2, a0
@@ -72,7 +72,7 @@ block0(v0: i64):
 ;   sub t2,zero,a0
 ;   max a0,a0,t2
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   neg t2, a0

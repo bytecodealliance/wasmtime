@@ -12,7 +12,7 @@ block0(v0: i64, v1: i64):
 ; block0:
 ;   atomic_store.i64 a0,(a1)
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fence rw, w
@@ -32,7 +32,7 @@ block0(v0: i64):
 ;   load_sym t2,%sym+0
 ;   atomic_store.i64 a0,(t2)
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   auipc t2, 0
@@ -57,7 +57,7 @@ block0(v0: i64):
 ;   addi a1,a1,57
 ;   atomic_store.i64 a1,(a0)
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lui a1, 3
@@ -76,7 +76,7 @@ block0(v0: i32, v1: i64):
 ; block0:
 ;   atomic_store.i32 a0,(a1)
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fence rw, w
@@ -96,7 +96,7 @@ block0(v0: i32):
 ;   load_sym t2,%sym+0
 ;   atomic_store.i32 a0,(t2)
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   auipc t2, 0
@@ -121,7 +121,7 @@ block0(v0: i64):
 ;   addi a1,a1,57
 ;   atomic_store.i32 a1,(a0)
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lui a1, 3

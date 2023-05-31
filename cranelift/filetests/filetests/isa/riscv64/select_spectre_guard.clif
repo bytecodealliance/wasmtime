@@ -24,7 +24,7 @@ block0(v0: i8, v1: i8, v2: i8):
 ;   and a2,a2,a0
 ;   or a0,t1,a2
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi t1, zero, 0x2a
@@ -65,7 +65,7 @@ block0(v0: i8, v1: i16, v2: i16):
 ;   and a2,a2,a0
 ;   or a0,t1,a2
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi t1, zero, 0x2a
@@ -106,7 +106,7 @@ block0(v0: i8, v1: i32, v2: i32):
 ;   and a2,a2,a0
 ;   or a0,t1,a2
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi t1, zero, 0x2a
@@ -147,7 +147,7 @@ block0(v0: i8, v1: i64, v2: i64):
 ;   and a2,a2,a0
 ;   or a0,t1,a2
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi t1, zero, 0x2a
@@ -192,7 +192,7 @@ block0(v0: i8, v1: i128, v2: i128):
 ;   or a0,a0,t3
 ;   or a1,a2,t0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi a5, zero, 0x2a
@@ -239,7 +239,7 @@ block0(v0: i16, v1: i8, v2: i8):
 ;   and a4,a2,a3
 ;   or a0,a0,a4
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi a3, zero, 0x2a
@@ -284,7 +284,7 @@ block0(v0: i16, v1: i16, v2: i16):
 ;   and a4,a2,a3
 ;   or a0,a0,a4
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi a3, zero, 0x2a
@@ -329,7 +329,7 @@ block0(v0: i16, v1: i32, v2: i32):
 ;   and a4,a2,a3
 ;   or a0,a0,a4
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi a3, zero, 0x2a
@@ -374,7 +374,7 @@ block0(v0: i16, v1: i64, v2: i64):
 ;   and a4,a2,a3
 ;   or a0,a0,a4
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi a3, zero, 0x2a
@@ -423,7 +423,7 @@ block0(v0: i16, v1: i128, v2: i128):
 ;   or a0,a6,t0
 ;   or a1,a5,t2
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi a6, zero, 0x2a
@@ -472,7 +472,7 @@ block0(v0: i32, v1: i8, v2: i8):
 ;   and a4,a2,a3
 ;   or a0,a0,a4
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi a3, zero, 0x2a
@@ -517,7 +517,7 @@ block0(v0: i32, v1: i16, v2: i16):
 ;   and a4,a2,a3
 ;   or a0,a0,a4
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi a3, zero, 0x2a
@@ -562,7 +562,7 @@ block0(v0: i32, v1: i32, v2: i32):
 ;   and a4,a2,a3
 ;   or a0,a0,a4
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi a3, zero, 0x2a
@@ -607,7 +607,7 @@ block0(v0: i32, v1: i64, v2: i64):
 ;   and a4,a2,a3
 ;   or a0,a0,a4
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi a3, zero, 0x2a
@@ -656,7 +656,7 @@ block0(v0: i32, v1: i128, v2: i128):
 ;   or a0,a6,t0
 ;   or a1,a5,t2
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi a6, zero, 0x2a
@@ -701,7 +701,7 @@ block0(v0: i64, v1: i8, v2: i8):
 ;   and a0,a2,t1
 ;   or a0,t4,a0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi t4, zero, 0x2a
@@ -738,7 +738,7 @@ block0(v0: i64, v1: i16, v2: i16):
 ;   and a0,a2,t1
 ;   or a0,t4,a0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi t4, zero, 0x2a
@@ -775,7 +775,7 @@ block0(v0: i64, v1: i32, v2: i32):
 ;   and a0,a2,t1
 ;   or a0,t4,a0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi t4, zero, 0x2a
@@ -812,7 +812,7 @@ block0(v0: i64, v1: i64, v2: i64):
 ;   and a0,a2,t1
 ;   or a0,t4,a0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi t4, zero, 0x2a
@@ -853,7 +853,7 @@ block0(v0: i64, v1: i128, v2: i128):
 ;   or a0,t1,a6
 ;   or a1,a1,t3
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi a5, zero, 0x2a
@@ -896,7 +896,7 @@ block0(v0: i128, v1: i8, v2: i8):
 ;   and a2,a3,a0
 ;   or a0,t1,a2
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi t1, zero, 0x2a
@@ -937,7 +937,7 @@ block0(v0: i128, v1: i16, v2: i16):
 ;   and a2,a3,a0
 ;   or a0,t1,a2
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi t1, zero, 0x2a
@@ -978,7 +978,7 @@ block0(v0: i128, v1: i32, v2: i32):
 ;   and a2,a3,a0
 ;   or a0,t1,a2
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi t1, zero, 0x2a
@@ -1019,7 +1019,7 @@ block0(v0: i128, v1: i64, v2: i64):
 ;   and a2,a3,a0
 ;   or a0,t1,a2
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi t1, zero, 0x2a
@@ -1064,7 +1064,7 @@ block0(v0: i128, v1: i128, v2: i128):
 ;   or a0,a0,t3
 ;   or a1,a2,t0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi a6, zero, 0x2a

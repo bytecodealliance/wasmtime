@@ -18,7 +18,7 @@ block0(v0: i64, v1: i64, v2: i64):
 ;   csg %r5, %r2, 0(%r4)
 ;   lrvgr %r2, %r5
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lrvgr %r5, %r2
@@ -40,7 +40,7 @@ block0(v0: i32, v1: i32, v2: i64):
 ;   cs %r5, %r2, 0(%r4)
 ;   lrvr %r2, %r5
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lrvr %r5, %r2
@@ -68,7 +68,7 @@ block0(v0: i64, v1: i16, v2: i16, v3: i64):
 ;   lrvr %r2, %r5
 ;   lmg %r11, %r15, 88(%r15)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   stmg %r11, %r15, 0x58(%r15)
@@ -108,7 +108,7 @@ block0(v0: i64, v1: i8, v2: i8, v3: i64):
 ;   rll %r2, %r0, 8(%r3)
 ;   lmg %r10, %r15, 80(%r15)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   stmg %r10, %r15, 0x50(%r15)

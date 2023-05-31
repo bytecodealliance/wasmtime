@@ -23,7 +23,7 @@ block0(v0: i8x16, v1: i8x16):
 ;   ld fp,0(sp)
 ;   add sp,+16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi sp, sp, -0x10
@@ -63,7 +63,7 @@ block0(v0: i16x8, v1: i16x8):
 ;   ld fp,0(sp)
 ;   add sp,+16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi sp, sp, -0x10
@@ -105,7 +105,7 @@ block0(v0: i32x4, v1: i32x4):
 ;   ld fp,0(sp)
 ;   add sp,+16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi sp, sp, -0x10
@@ -147,7 +147,7 @@ block0(v0: i64x2, v1: i64x2):
 ;   ld fp,0(sp)
 ;   add sp,+16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi sp, sp, -0x10
@@ -190,7 +190,7 @@ block0(v0: i8x16):
 ;   ld fp,0(sp)
 ;   add sp,+16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi sp, sp, -0x10
@@ -229,7 +229,7 @@ block0(v0: i16x8):
 ;   ld fp,0(sp)
 ;   add sp,+16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi sp, sp, -0x10
@@ -270,7 +270,7 @@ block0(v0: i32x4):
 ;   ld fp,0(sp)
 ;   add sp,+16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi sp, sp, -0x10
@@ -311,7 +311,7 @@ block0(v0: i64x2):
 ;   ld fp,0(sp)
 ;   add sp,+16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi sp, sp, -0x10
@@ -351,7 +351,7 @@ block0(v0: i8x16, v1: i8):
 ;   ld fp,0(sp)
 ;   add sp,+16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi sp, sp, -0x10
@@ -389,7 +389,7 @@ block0(v0: i16x8, v1: i16):
 ;   ld fp,0(sp)
 ;   add sp,+16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi sp, sp, -0x10
@@ -429,7 +429,7 @@ block0(v0: i32x4, v1: i32):
 ;   ld fp,0(sp)
 ;   add sp,+16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi sp, sp, -0x10
@@ -469,7 +469,7 @@ block0(v0: i64x2, v1: i64):
 ;   ld fp,0(sp)
 ;   add sp,+16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi sp, sp, -0x10

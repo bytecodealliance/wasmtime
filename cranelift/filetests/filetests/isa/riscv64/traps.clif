@@ -10,7 +10,7 @@ block0:
 ; VCode:
 ; block0:
 ;   udf##trap_code=user0
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; trap: user0
@@ -32,7 +32,7 @@ block0(v0: i64):
 ;   ret
 ; block2:
 ;   udf##trap_code=user0
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi a1, zero, 0x2a
@@ -56,7 +56,7 @@ block0:
 ; block0:
 ;   ebreak
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ebreak

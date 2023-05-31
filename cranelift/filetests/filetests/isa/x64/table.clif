@@ -35,7 +35,7 @@ block0(v0: i32, v1: r64, v2: i64):
 ;   ret
 ; block2:
 ;   ud2 table_oob
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
