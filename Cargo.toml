@@ -139,6 +139,7 @@ wasmtime-runtime = { path = "crates/runtime", version = "=10.0.0" }
 wasmtime-wast = { path = "crates/wast", version = "=10.0.0" }
 wasmtime-wasi = { path = "crates/wasi", version = "10.0.0" }
 wasmtime-wasi-crypto = { path = "crates/wasi-crypto", version = "10.0.0" }
+wasmtime-wasi-http = { path = "crates/wasi-http", version = "=10.0.0" }
 wasmtime-wasi-nn = { path = "crates/wasi-nn", version = "10.0.0" }
 wasmtime-wasi-threads = { path = "crates/wasi-threads", version = "10.0.0" }
 wasmtime-component-util = { path = "crates/component-util", version = "=10.0.0" }
@@ -171,8 +172,6 @@ cranelift-fuzzgen = { path = "cranelift/fuzzgen" }
 cranelift-bforest = { path = "cranelift/bforest", version = "0.97.0" }
 cranelift-control = { path = "cranelift/control", version = "0.97.0" }
 cranelift = { path = "cranelift/umbrella", version = "0.97.0" }
-
-wasmtime-wasi-http = { path = "crates/wasi-http", version = "=10.0.0" }
 
 winch-codegen = { path = "winch/codegen", version = "=0.8.0" }
 winch-filetests = { path = "winch/filetests" }
@@ -248,8 +247,7 @@ default = [
   "vtune",
   "wasi-nn",
   "wasi-threads",
-  # TODO: the WIT needs to be updated
-  #"wasi-http",
+  "wasi-http",
   "pooling-allocator",
 ]
 jitdump = ["wasmtime/jitdump"]

@@ -1,7 +1,7 @@
-use crate::default_outgoing_http::Host;
 pub use crate::r#struct::WasiHttp;
-use crate::streams::Host as StreamsHost;
-use crate::types::{Host as TypesHost, RequestOptions, Scheme};
+use crate::wasi::http::outgoing_handler::Host;
+use crate::wasi::http::types::{Error, Host as TypesHost, Method, RequestOptions, Scheme};
+use crate::wasi::io::streams::Host as StreamsHost;
 use anyhow::anyhow;
 use std::str;
 use std::vec::Vec;
@@ -67,6 +67,20 @@ fn string_from_memory(
     Ok(std::str::from_utf8(&slice)?.to_string())
 }
 
+fn read_option_string(
+    memory: &Memory,
+    ctx: impl AsContextMut,
+    is_some: i32,
+    ptr: u32,
+    len: u32,
+) -> Result<Option<String>, HttpError> {
+    if is_some == 1 {
+        Ok(Some(string_from_memory(&memory, ctx, ptr, len)?))
+    } else {
+        Ok(None)
+    }
+}
+
 fn allocate_guest_pointer<T>(caller: &mut Caller<'_, T>, size: u32) -> anyhow::Result<u32> {
     let realloc = caller
         .get_export("cabi_realloc")
@@ -94,7 +108,7 @@ pub fn add_component_to_linker<T>(
     get_cx: impl Fn(&mut T) -> &mut WasiHttp + Send + Sync + Copy + 'static,
 ) -> anyhow::Result<()> {
     linker.func_wrap(
-        "default-outgoing-HTTP",
+        "wasi:http/outgoing-handler",
         "handle",
         move |mut caller: Caller<'_, T>,
               request: u32,
@@ -132,30 +146,36 @@ pub fn add_component_to_linker<T>(
         },
     )?;
     linker.func_wrap(
-        "types",
+        "wasi:http/types",
         "new-outgoing-request",
         move |mut caller: Caller<'_, T>,
               method: i32,
               method_ptr: i32,
               method_len: i32,
+              path_is_some: i32,
               path_ptr: u32,
               path_len: u32,
-              query_ptr: u32,
-              query_len: u32,
               scheme_is_some: i32,
               scheme: i32,
               scheme_ptr: i32,
               scheme_len: i32,
+              authority_is_some: i32,
               authority_ptr: u32,
               authority_len: u32,
               headers: u32|
               -> anyhow::Result<u32> {
             let memory = memory_get(&mut caller)?;
-            let path = string_from_memory(&memory, caller.as_context_mut(), path_ptr, path_len)?;
-            let query = string_from_memory(&memory, caller.as_context_mut(), query_ptr, query_len)?;
-            let authority = string_from_memory(
+            let path = read_option_string(
                 &memory,
                 caller.as_context_mut(),
+                path_is_some,
+                path_ptr,
+                path_len,
+            )?;
+            let authority = read_option_string(
+                &memory,
+                caller.as_context_mut(),
+                authority_is_some,
                 authority_ptr,
                 authority_len,
             )?;
@@ -177,15 +197,15 @@ pub fn add_component_to_linker<T>(
                 };
             }
             let m = match method {
-                0 => crate::types::Method::Get,
-                1 => crate::types::Method::Head,
-                2 => crate::types::Method::Post,
-                3 => crate::types::Method::Put,
-                4 => crate::types::Method::Delete,
-                5 => crate::types::Method::Connect,
-                6 => crate::types::Method::Options,
-                7 => crate::types::Method::Trace,
-                8 => crate::types::Method::Patch,
+                0 => Method::Get,
+                1 => Method::Head,
+                2 => Method::Post,
+                3 => Method::Put,
+                4 => Method::Delete,
+                5 => Method::Connect,
+                6 => Method::Options,
+                7 => Method::Trace,
+                8 => Method::Patch,
                 _ => {
                     let value = string_from_memory(
                         &memory,
@@ -193,16 +213,16 @@ pub fn add_component_to_linker<T>(
                         method_ptr.try_into()?,
                         method_len.try_into()?,
                     )?;
-                    crate::types::Method::Other(value)
+                    Method::Other(value)
                 }
             };
 
             let ctx = get_cx(caller.data_mut());
-            Ok(ctx.new_outgoing_request(m, path, query, Some(s), authority, headers)?)
+            Ok(ctx.new_outgoing_request(m, path, Some(s), authority, headers)?)
         },
     )?;
     linker.func_wrap(
-        "types",
+        "wasi:http/types",
         "incoming-response-status",
         move |mut caller: Caller<'_, T>, id: u32| -> anyhow::Result<u32> {
             let ctx = get_cx(caller.data_mut());
@@ -210,7 +230,7 @@ pub fn add_component_to_linker<T>(
         },
     )?;
     linker.func_wrap(
-        "types",
+        "wasi:http/types",
         "drop-future-incoming-response",
         move |mut caller: Caller<'_, T>, future: u32| -> anyhow::Result<()> {
             let ctx = get_cx(caller.data_mut());
@@ -219,7 +239,7 @@ pub fn add_component_to_linker<T>(
         },
     )?;
     linker.func_wrap(
-        "types",
+        "wasi:http/types",
         "future-incoming-response-get",
         move |mut caller: Caller<'_, T>, future: u32, ptr: i32| -> anyhow::Result<()> {
             let ctx = get_cx(caller.data_mut());
@@ -236,10 +256,10 @@ pub fn add_component_to_linker<T>(
                 Ok(value) => [1, 0, value, 0, 0],
                 Err(error) => {
                     let (tag, err_string) = match error {
-                        crate::types::Error::InvalidUrl(e) => (0u32, e),
-                        crate::types::Error::TimeoutError(e) => (1u32, e),
-                        crate::types::Error::ProtocolError(e) => (2u32, e),
-                        crate::types::Error::UnexpectedError(e) => (3u32, e),
+                        Error::InvalidUrl(e) => (0u32, e),
+                        Error::TimeoutError(e) => (1u32, e),
+                        Error::ProtocolError(e) => (2u32, e),
+                        Error::UnexpectedError(e) => (3u32, e),
                     };
                     let bytes = err_string.as_bytes();
                     let len = bytes.len().try_into().unwrap();
@@ -255,7 +275,7 @@ pub fn add_component_to_linker<T>(
         },
     )?;
     linker.func_wrap(
-        "types",
+        "wasi:http/types",
         "incoming-response-consume",
         move |mut caller: Caller<'_, T>, response: u32, ptr: i32| -> anyhow::Result<()> {
             let ctx = get_cx(caller.data_mut());
@@ -273,14 +293,14 @@ pub fn add_component_to_linker<T>(
         },
     )?;
     linker.func_wrap(
-        "poll",
+        "wasi:io/poll",
         "drop-pollable",
         move |_caller: Caller<'_, T>, _a: i32| -> anyhow::Result<()> {
             anyhow::bail!("unimplemented")
         },
     )?;
     linker.func_wrap(
-        "types",
+        "wasi:http/types",
         "drop-fields",
         move |mut caller: Caller<'_, T>, ptr: u32| -> anyhow::Result<()> {
             let ctx = get_cx(caller.data_mut());
@@ -289,7 +309,7 @@ pub fn add_component_to_linker<T>(
         },
     )?;
     linker.func_wrap(
-        "streams",
+        "wasi:io/streams",
         "drop-input-stream",
         move |mut caller: Caller<'_, T>, id: u32| -> anyhow::Result<()> {
             let ctx = get_cx(caller.data_mut());
@@ -298,7 +318,7 @@ pub fn add_component_to_linker<T>(
         },
     )?;
     linker.func_wrap(
-        "streams",
+        "wasi:io/streams",
         "drop-output-stream",
         move |mut caller: Caller<'_, T>, id: u32| -> anyhow::Result<()> {
             let ctx = get_cx(caller.data_mut());
@@ -307,7 +327,7 @@ pub fn add_component_to_linker<T>(
         },
     )?;
     linker.func_wrap(
-        "types",
+        "wasi:http/types",
         "outgoing-request-write",
         move |mut caller: Caller<'_, T>, request: u32, ptr: u32| -> anyhow::Result<()> {
             let ctx = get_cx(caller.data_mut());
@@ -326,7 +346,7 @@ pub fn add_component_to_linker<T>(
         },
     )?;
     linker.func_wrap(
-        "types",
+        "wasi:http/types",
         "drop-outgoing-request",
         move |mut caller: Caller<'_, T>, id: u32| -> anyhow::Result<()> {
             let ctx = get_cx(caller.data_mut());
@@ -335,7 +355,7 @@ pub fn add_component_to_linker<T>(
         },
     )?;
     linker.func_wrap(
-        "types",
+        "wasi:http/types",
         "drop-incoming-response",
         move |mut caller: Caller<'_, T>, id: u32| -> anyhow::Result<()> {
             let ctx = get_cx(caller.data_mut());
@@ -344,7 +364,7 @@ pub fn add_component_to_linker<T>(
         },
     )?;
     linker.func_wrap(
-        "types",
+        "wasi:http/types",
         "new-fields",
         move |mut caller: Caller<'_, T>, base_ptr: u32, len: u32| -> anyhow::Result<u32> {
             let memory = memory_get(&mut caller)?;
@@ -373,7 +393,7 @@ pub fn add_component_to_linker<T>(
         },
     )?;
     linker.func_wrap(
-        "streams",
+        "wasi:io/streams",
         "read",
         move |mut caller: Caller<'_, T>, stream: u32, len: u64, ptr: u32| -> anyhow::Result<()> {
             let ctx = get_cx(caller.data_mut());
@@ -395,7 +415,7 @@ pub fn add_component_to_linker<T>(
         },
     )?;
     linker.func_wrap(
-        "streams",
+        "wasi:io/streams",
         "write",
         move |mut caller: Caller<'_, T>,
               stream: u32,
@@ -418,7 +438,7 @@ pub fn add_component_to_linker<T>(
         },
     )?;
     linker.func_wrap(
-        "types",
+        "wasi:http/types",
         "fields-entries",
         move |mut caller: Caller<'_, T>, fields: u32, out_ptr: u32| -> anyhow::Result<()> {
             let ctx = get_cx(caller.data_mut());
@@ -438,7 +458,7 @@ pub fn add_component_to_linker<T>(
 
                 let memory = memory_get(&mut caller)?;
                 memory.write(caller.as_context_mut(), name_ptr as _, &name.as_bytes())?;
-                memory.write(caller.as_context_mut(), value_ptr as _, &value.as_bytes())?;
+                memory.write(caller.as_context_mut(), value_ptr as _, value)?;
 
                 let pair: [u32; 4] = [name_ptr, name_len, value_ptr, value_len];
                 let raw_pair = u32_array_to_u8(&pair);
@@ -455,7 +475,7 @@ pub fn add_component_to_linker<T>(
         },
     )?;
     linker.func_wrap(
-        "types",
+        "wasi:http/types",
         "incoming-response-headers",
         move |mut caller: Caller<'_, T>, handle: u32| -> anyhow::Result<u32> {
             let ctx = get_cx(caller.data_mut());

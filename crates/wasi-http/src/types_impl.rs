@@ -1,16 +1,16 @@
-use crate::poll::Pollable;
 use crate::r#struct::{ActiveRequest, Stream};
-use crate::types::{
-    Error, Fields, FutureIncomingResponse, Headers, IncomingRequest, IncomingResponse,
+use crate::wasi::http::types::{
+    Error, Fields, FutureIncomingResponse, Headers, Host, IncomingRequest, IncomingResponse,
     IncomingStream, Method, OutgoingRequest, OutgoingResponse, OutgoingStream, ResponseOutparam,
     Scheme, StatusCode, Trailers,
 };
+use crate::wasi::poll::poll::Pollable;
 use crate::WasiHttp;
 use anyhow::{anyhow, bail};
 use std::collections::{hash_map::Entry, HashMap};
 use tokio::runtime::{Handle, Runtime};
 
-impl crate::types::Host for WasiHttp {
+impl Host for WasiHttp {
     fn drop_fields(&mut self, fields: Fields) -> wasmtime::Result<()> {
         self.fields.remove(&fields);
         Ok(())
@@ -19,7 +19,7 @@ impl crate::types::Host for WasiHttp {
         let mut map = HashMap::new();
         for item in entries.iter() {
             let mut vec = std::vec::Vec::new();
-            vec.push(item.1.clone());
+            vec.push(item.1.clone().into_bytes());
             map.insert(item.0.clone(), vec);
         }
 
@@ -29,7 +29,7 @@ impl crate::types::Host for WasiHttp {
 
         Ok(id)
     }
-    fn fields_get(&mut self, fields: Fields, name: String) -> wasmtime::Result<Vec<String>> {
+    fn fields_get(&mut self, fields: Fields, name: String) -> wasmtime::Result<Vec<Vec<u8>>> {
         let res = self
             .fields
             .get(&fields)
@@ -43,7 +43,7 @@ impl crate::types::Host for WasiHttp {
         &mut self,
         fields: Fields,
         name: String,
-        value: Vec<String>,
+        value: Vec<Vec<u8>>,
     ) -> wasmtime::Result<()> {
         match self.fields.get_mut(&fields) {
             Some(m) => {
@@ -64,7 +64,7 @@ impl crate::types::Host for WasiHttp {
         &mut self,
         fields: Fields,
         name: String,
-        value: String,
+        value: Vec<u8>,
     ) -> wasmtime::Result<()> {
         let m = self
             .fields
@@ -80,7 +80,7 @@ impl crate::types::Host for WasiHttp {
         };
         Ok(())
     }
-    fn fields_entries(&mut self, fields: Fields) -> wasmtime::Result<Vec<(String, String)>> {
+    fn fields_entries(&mut self, fields: Fields) -> wasmtime::Result<Vec<(String, Vec<u8>)>> {
         let field_map = match self.fields.get(&fields) {
             Some(m) => m,
             None => bail!("fields not found."),
@@ -133,7 +133,10 @@ impl crate::types::Host for WasiHttp {
     fn incoming_request_method(&mut self, _request: IncomingRequest) -> wasmtime::Result<Method> {
         bail!("unimplemented: incoming_request_method")
     }
-    fn incoming_request_path(&mut self, _request: IncomingRequest) -> wasmtime::Result<String> {
+    fn incoming_request_path_with_query(
+        &mut self,
+        _request: IncomingRequest,
+    ) -> wasmtime::Result<Option<String>> {
         bail!("unimplemented: incoming_request_path")
     }
     fn incoming_request_scheme(
@@ -145,7 +148,7 @@ impl crate::types::Host for WasiHttp {
     fn incoming_request_authority(
         &mut self,
         _request: IncomingRequest,
-    ) -> wasmtime::Result<String> {
+    ) -> wasmtime::Result<Option<String>> {
         bail!("unimplemented: incoming_request_authority")
     }
     fn incoming_request_headers(&mut self, _request: IncomingRequest) -> wasmtime::Result<Headers> {
@@ -157,25 +160,20 @@ impl crate::types::Host for WasiHttp {
     ) -> wasmtime::Result<Result<IncomingStream, ()>> {
         bail!("unimplemented: incoming_request_consume")
     }
-    fn incoming_request_query(&mut self, _request: IncomingRequest) -> wasmtime::Result<String> {
-        bail!("unimplemented: incoming_request_query")
-    }
     fn new_outgoing_request(
         &mut self,
         method: Method,
-        path: String,
-        query: String,
+        path_with_query: Option<String>,
         scheme: Option<Scheme>,
-        authority: String,
+        authority: Option<String>,
         headers: Headers,
     ) -> wasmtime::Result<OutgoingRequest> {
         let id = self.request_id_base;
         self.request_id_base = self.request_id_base + 1;
 
         let mut req = ActiveRequest::new(id);
-        req.path = path;
-        req.query = query;
-        req.authority = authority;
+        req.path_with_query = path_with_query.unwrap_or("".to_string());
+        req.authority = authority.unwrap_or("".to_string());
         req.method = method;
         req.headers = match self.fields.get(&headers) {
             Some(h) => h.clone(),
@@ -294,7 +292,7 @@ impl crate::types::Host for WasiHttp {
         };
         let response = handle
             .block_on(self.handle_async(f.request_id, f.options))
-            .map_err(|e| crate::types::Error::UnexpectedError(e.to_string()));
+            .map_err(|e| Error::UnexpectedError(e.to_string()));
         Ok(Some(response))
     }
     fn listen_to_future_incoming_response(
