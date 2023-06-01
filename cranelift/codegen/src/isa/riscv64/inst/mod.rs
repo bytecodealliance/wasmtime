@@ -408,7 +408,7 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             collector.reg_use(rn);
             collector.reg_def(rd);
         }
-        &Inst::AjustSp { .. } => {}
+        &Inst::AdjustSp { .. } => {}
         &Inst::Call { ref info } => {
             for u in &info.uses {
                 collector.reg_fixed_use(u.vreg, u.preg);
@@ -1498,7 +1498,7 @@ impl Inst {
                     format!("slli {rd},{rn},{shift_bits}; {op} {rd},{rd},{shift_bits}")
                 };
             }
-            &MInst::AjustSp { amount } => {
+            &MInst::AdjustSp { amount } => {
                 format!("{} sp,{:+}", "add", amount)
             }
             &MInst::Call { ref info } => format!("call {}", info.dest.display(None)),

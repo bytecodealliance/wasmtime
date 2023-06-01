@@ -422,7 +422,7 @@ impl Inst {
             | Inst::Args { .. }
             | Inst::Ret { .. }
             | Inst::Extend { .. }
-            | Inst::AjustSp { .. }
+            | Inst::AdjustSp { .. }
             | Inst::Call { .. }
             | Inst::CallInd { .. }
             | Inst::TrapIf { .. }
@@ -726,7 +726,7 @@ impl MachInstEmit for Inst {
                 stack_bytes_to_pop, ..
             } => {
                 if stack_bytes_to_pop != 0 {
-                    Inst::AjustSp {
+                    Inst::AdjustSp {
                         amount: i64::from(stack_bytes_to_pop),
                     }
                     .emit(&[], sink, emit_info, state);
@@ -778,7 +778,7 @@ impl MachInstEmit for Inst {
                     .into_iter()
                     .for_each(|i| i.emit(&[], sink, emit_info, state));
             }
-            &Inst::AjustSp { amount } => {
+            &Inst::AdjustSp { amount } => {
                 if let Some(imm) = Imm12::maybe_from_u64(amount as u64) {
                     Inst::AluRRImm12 {
                         alu_op: AluOPRRI::Addi,
