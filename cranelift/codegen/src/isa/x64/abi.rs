@@ -718,8 +718,11 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         regs: &[Writable<RealReg>],
     ) -> Vec<Writable<RealReg>> {
         let mut regs: Vec<Writable<RealReg>> = match call_conv {
-            CallConv::Tail => unimplemented!(),
-            CallConv::Fast | CallConv::Cold | CallConv::SystemV | CallConv::WasmtimeSystemV => regs
+            CallConv::Tail
+            | CallConv::Fast
+            | CallConv::Cold
+            | CallConv::SystemV
+            | CallConv::WasmtimeSystemV => regs
                 .iter()
                 .cloned()
                 .filter(|r| is_callee_save_systemv(r.to_reg(), flags.enable_pinned_reg()))
@@ -834,8 +837,7 @@ fn get_intreg_for_retval(
     retval_idx: usize,
 ) -> Option<Reg> {
     match call_conv {
-        CallConv::Tail => unimplemented!(),
-        CallConv::Fast | CallConv::Cold | CallConv::SystemV => match intreg_idx {
+        CallConv::Tail | CallConv::Fast | CallConv::Cold | CallConv::SystemV => match intreg_idx {
             0 => Some(regs::rax()),
             1 => Some(regs::rdx()),
             _ => None,
@@ -863,8 +865,7 @@ fn get_fltreg_for_retval(
     retval_idx: usize,
 ) -> Option<Reg> {
     match call_conv {
-        CallConv::Tail => unimplemented!(),
-        CallConv::Fast | CallConv::Cold | CallConv::SystemV => match fltreg_idx {
+        CallConv::Tail | CallConv::Fast | CallConv::Cold | CallConv::SystemV => match fltreg_idx {
             0 => Some(regs::xmm0()),
             1 => Some(regs::xmm1()),
             _ => None,
