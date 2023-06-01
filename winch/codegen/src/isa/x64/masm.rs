@@ -256,24 +256,9 @@ impl Masm for MacroAssembler {
         Address::offset(reg, offset)
     }
 
-    fn cmp_with_set(
-        &mut self,
-        dst: RegImm,
-        lhs: RegImm,
-        rhs: RegImm,
-        kind: CmpKind,
-        size: OperandSize,
-    ) {
-        let (src, dst): (Operand, Operand) = if dst == lhs {
-            (rhs.into(), dst.into())
-        } else {
-            panic!(
-                "the destination and first source argument must be the same, dst={:?}, lhs={:?}",
-                dst, lhs
-            );
-        };
-
-        self.asm.cmp(src, dst, size);
+    fn cmp_with_set(&mut self, src: RegImm, dst: RegImm, kind: CmpKind, size: OperandSize) {
+        let dst = dst.into();
+        self.asm.cmp(src.into(), dst, size);
         self.asm.setcc(kind, dst);
     }
 }
