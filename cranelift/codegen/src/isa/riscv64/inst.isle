@@ -79,7 +79,8 @@
     (Args
       (args VecArgPair))
 
-    (Ret (rets VecRetPair))
+    (Ret (rets VecRetPair)
+         (stack_bytes_to_pop u32))
 
      (Extend
       (rd WritableReg)

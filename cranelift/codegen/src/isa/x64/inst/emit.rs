@@ -1627,7 +1627,17 @@ pub(crate) fn emit(
 
         Inst::Args { .. } => {}
 
-        Inst::Ret { .. } => sink.put1(0xC3),
+        Inst::Ret {
+            stack_bytes_to_pop: 0,
+            ..
+        } => sink.put1(0xC3),
+
+        Inst::Ret {
+            stack_bytes_to_pop, ..
+        } => {
+            sink.put1(0xC2);
+            sink.put2(u16::try_from(*stack_bytes_to_pop).unwrap());
+        }
 
         Inst::JmpKnown { dst } => {
             let br_start = sink.cur_offset();

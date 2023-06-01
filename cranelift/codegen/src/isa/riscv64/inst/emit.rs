@@ -722,7 +722,15 @@ impl MachInstEmit for Inst {
                 // Nothing: this is a pseudoinstruction that serves
                 // only to constrain registers at a certain point.
             }
-            &Inst::Ret { .. } => {
+            &Inst::Ret {
+                stack_bytes_to_pop, ..
+            } => {
+                if stack_bytes_to_pop != 0 {
+                    Inst::AjustSp {
+                        amount: i64::from(stack_bytes_to_pop),
+                    }
+                    .emit(&[], sink, emit_info, state);
+                }
                 //jalr x0, x1, 0
                 let x: u32 = (0b1100111) | (1 << 15);
                 sink.put4(x);

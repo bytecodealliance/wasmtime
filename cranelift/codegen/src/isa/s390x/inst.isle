@@ -906,7 +906,8 @@
     ;; A machine return instruction.
     (Ret
       (link Reg)
-      (rets VecRetPair))
+      (rets VecRetPair)
+      (stack_bytes_to_pop u32))
 
     ;; An unconditional branch.
     (Jump

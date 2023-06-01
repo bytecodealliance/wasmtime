@@ -12,6 +12,7 @@ use crate::machinst::{PrettyPrint, Reg, RegClass, Writable};
 use alloc::vec::Vec;
 use regalloc2::{PRegSet, VReg};
 use smallvec::{smallvec, SmallVec};
+use std::fmt::Write;
 use std::string::{String, ToString};
 
 pub(crate) mod regs;
@@ -833,7 +834,7 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
                 collector.reg_fixed_def(arg.vreg, arg.preg);
             }
         }
-        &Inst::Ret { ref rets } | &Inst::AuthenticatedRet { ref rets, .. } => {
+        &Inst::Ret { ref rets, .. } | &Inst::AuthenticatedRet { ref rets, .. } => {
             for ret in rets {
                 collector.reg_fixed_use(ret.vreg, ret.preg);
             }
@@ -2510,34 +2511,54 @@ impl Inst {
             &Inst::Args { ref args } => {
                 let mut s = "args".to_string();
                 for arg in args {
-                    use std::fmt::Write;
                     let preg = pretty_print_reg(arg.preg, &mut empty_allocs);
                     let def = pretty_print_reg(arg.vreg.to_reg(), allocs);
                     write!(&mut s, " {}={}", def, preg).unwrap();
                 }
                 s
             }
-            &Inst::Ret { ref rets } => {
-                let mut s = "ret".to_string();
+            &Inst::Ret {
+                ref rets,
+                stack_bytes_to_pop,
+            } => {
+                let mut s = if stack_bytes_to_pop == 0 {
+                    "ret".to_string()
+                } else {
+                    format!("add sp, sp, #{} ; ret", stack_bytes_to_pop)
+                };
                 for ret in rets {
-                    use std::fmt::Write;
                     let preg = pretty_print_reg(ret.preg, &mut empty_allocs);
                     let vreg = pretty_print_reg(ret.vreg, allocs);
-                    write!(&mut s, " {}={}", vreg, preg).unwrap();
+                    write!(&mut s, " {vreg}={preg}").unwrap();
                 }
                 s
             }
-            &Inst::AuthenticatedRet { key, is_hint, .. } => {
+            &Inst::AuthenticatedRet {
+                key,
+                is_hint,
+                stack_bytes_to_pop,
+                ref rets,
+            } => {
                 let key = match key {
                     APIKey::A => "a",
                     APIKey::B => "b",
                 };
-
-                if is_hint {
-                    "auti".to_string() + key + "sp ; ret"
-                } else {
-                    "reta".to_string() + key
+                let mut s = match (is_hint, stack_bytes_to_pop) {
+                    (false, 0) => format!("reta{key}"),
+                    (false, n) => {
+                        format!("add sp, sp, #{n} ; reta{key}")
+                    }
+                    (true, 0) => format!("auti{key}sp ; ret"),
+                    (true, n) => {
+                        format!("add sp, sp, #{n} ; auti{key} ; ret")
+                    }
+                };
+                for ret in rets {
+                    let preg = pretty_print_reg(ret.preg, &mut empty_allocs);
+                    let vreg = pretty_print_reg(ret.vreg, allocs);
+                    write!(&mut s, " {vreg}={preg}").unwrap();
                 }
+                s
             }
             &Inst::Jump { ref dest } => {
                 let dest = dest.pretty_print(0, allocs);

@@ -13,7 +13,7 @@ use alloc::vec::Vec;
 use cranelift_control::ControlPlane;
 use regalloc2::{Allocation, PRegSet, VReg};
 use smallvec::{smallvec, SmallVec};
-use std::fmt;
+use std::fmt::{self, Write};
 use std::string::{String, ToString};
 
 pub mod args;
@@ -546,8 +546,11 @@ impl Inst {
         }
     }
 
-    pub(crate) fn ret(rets: Vec<RetPair>) -> Inst {
-        Inst::Ret { rets }
+    pub(crate) fn ret(rets: Vec<RetPair>, stack_bytes_to_pop: u32) -> Inst {
+        Inst::Ret {
+            rets,
+            stack_bytes_to_pop,
+        }
     }
 
     pub(crate) fn jmp_known(dst: MachLabel) -> Inst {
@@ -1560,7 +1563,6 @@ impl PrettyPrint for Inst {
             Inst::Args { args } => {
                 let mut s = "args".to_string();
                 for arg in args {
-                    use std::fmt::Write;
                     let preg = regs::show_reg(arg.preg);
                     let def = pretty_print_reg(arg.vreg.to_reg(), 8, allocs);
                     write!(&mut s, " {def}={preg}").unwrap();
@@ -1568,10 +1570,15 @@ impl PrettyPrint for Inst {
                 s
             }
 
-            Inst::Ret { rets } => {
+            Inst::Ret {
+                rets,
+                stack_bytes_to_pop,
+            } => {
                 let mut s = "ret".to_string();
+                if *stack_bytes_to_pop != 0 {
+                    write!(&mut s, " {stack_bytes_to_pop}").unwrap();
+                }
                 for ret in rets {
-                    use std::fmt::Write;
                     let preg = regs::show_reg(ret.preg);
                     let vreg = pretty_print_reg(ret.vreg, 8, allocs);
                     write!(&mut s, " {vreg}={preg}").unwrap();
@@ -1705,8 +1712,6 @@ impl PrettyPrint for Inst {
                 dst,
                 tmp,
             } => {
-                use std::fmt::Write;
-
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 8, allocs);
                 let tmp = allocs.next(tmp.to_reg().to_reg());
 
@@ -2240,7 +2245,10 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             }
         }
 
-        Inst::Ret { rets } => {
+        Inst::Ret {
+            rets,
+            stack_bytes_to_pop: _,
+        } => {
             // The return value(s) are live-out; we represent this
             // with register uses on the return instruction.
             for ret in rets.iter() {

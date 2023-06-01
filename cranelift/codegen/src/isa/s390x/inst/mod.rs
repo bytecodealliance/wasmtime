@@ -10,6 +10,7 @@ use alloc::boxed::Box;
 use alloc::vec::Vec;
 use regalloc2::{PRegSet, VReg};
 use smallvec::SmallVec;
+use std::fmt::Write;
 use std::string::{String, ToString};
 pub mod regs;
 pub use self::regs::*;
@@ -64,7 +65,15 @@ pub struct CallIndInfo {
 fn inst_size_test() {
     // This test will help with unintentionally growing the size
     // of the Inst enum.
-    assert_eq!(32, std::mem::size_of::<Inst>());
+    //
+    // TODO(#5879): see if we can make `VecRetPair` a box slice to get back to
+    // 32 here.
+    let expected_size = if cfg!(target_arch = "aarch64") || cfg!(target_arch = "riscv64") {
+        48
+    } else {
+        40
+    };
+    assert_eq!(expected_size, std::mem::size_of::<Inst>());
 }
 
 /// A register pair. Enum so it can be destructured in ISLE.
@@ -3152,18 +3161,26 @@ impl Inst {
             &Inst::Args { ref args } => {
                 let mut s = "args".to_string();
                 for arg in args {
-                    use std::fmt::Write;
                     let preg = pretty_print_reg(arg.preg, &mut empty_allocs);
                     let def = pretty_print_reg(arg.vreg.to_reg(), allocs);
                     write!(&mut s, " {}={}", def, preg).unwrap();
                 }
                 s
             }
-            &Inst::Ret { link, ref rets } => {
+            &Inst::Ret {
+                link,
+                ref rets,
+                stack_bytes_to_pop,
+            } => {
                 debug_assert_eq!(link, gpr(14));
-                let mut s = format!("br {}", show_reg(link));
+                let link = show_reg(link);
+                let mut s = if stack_bytes_to_pop == 0 {
+                    format!("br {link}")
+                } else {
+                    let stack_reg = show_reg(stack_reg());
+                    format!("aghi {stack_reg}, {stack_bytes_to_pop} ; br {link}")
+                };
                 for ret in rets {
-                    use std::fmt::Write;
                     let preg = pretty_print_reg(ret.preg, &mut empty_allocs);
                     let vreg = pretty_print_reg(ret.vreg, allocs);
                     write!(&mut s, " {}={}", vreg, preg).unwrap();

@@ -400,7 +400,12 @@ impl ABIMachineSpec for AArch64MachineDeps {
         Inst::Args { args }
     }
 
-    fn gen_ret(setup_frame: bool, isa_flags: &aarch64_settings::Flags, rets: Vec<RetPair>) -> Inst {
+    fn gen_ret(
+        setup_frame: bool,
+        isa_flags: &aarch64_settings::Flags,
+        rets: Vec<RetPair>,
+        stack_bytes_to_pop: u32,
+    ) -> Inst {
         if isa_flags.sign_return_address() && (setup_frame || isa_flags.sign_return_address_all()) {
             let key = if isa_flags.sign_return_address_with_bkey() {
                 APIKey::B
@@ -412,9 +417,13 @@ impl ABIMachineSpec for AArch64MachineDeps {
                 key,
                 is_hint: !isa_flags.has_pauth(),
                 rets,
+                stack_bytes_to_pop,
             }
         } else {
-            Inst::Ret { rets }
+            Inst::Ret {
+                rets,
+                stack_bytes_to_pop,
+            }
         }
     }
 
