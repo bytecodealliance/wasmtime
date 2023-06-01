@@ -31,8 +31,7 @@ fn define_settings(shared: &SettingGroup) -> SettingGroup {
         "has_sse41",
         "Has support for SSE4.1.",
         "SSE4.1: CPUID.01H:ECX.SSE4_1[bit 19]",
-        // Needed for default `enable_simd` setting.
-        true,
+        false,
     );
     let has_sse42 = settings.add_bool(
         "has_sse42",

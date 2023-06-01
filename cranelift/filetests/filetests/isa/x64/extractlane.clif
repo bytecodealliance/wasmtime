@@ -1,5 +1,5 @@
 test compile precise-output
-target x86_64
+target x86_64 sse41
 
 function %f1(i8x16) -> i8 {
 block0(v0: i8x16):

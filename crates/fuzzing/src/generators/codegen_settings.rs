@@ -57,7 +57,7 @@ impl CodegenSettings {
             // to have test case failures unrelated to codegen setting input
             // that fail on one architecture to fail on other architectures as
             // well.
-            let new_flags = ["has_sse3", "has_ssse3", "has_sse41"]
+            let new_flags = ["has_sse3", "has_ssse3"]
                 .into_iter()
                 .map(|name| Ok((name, u.arbitrary()?)))
                 .collect::<arbitrary::Result<HashMap<_, bool>>>()?;
@@ -146,8 +146,8 @@ impl<'a> Arbitrary<'a> for CodegenSettings {
                     // `maybe_disable_more_features`.
                     std:"sse3" => clif:"has_sse3" ratio: 1 in 1,
                     std:"ssse3" => clif:"has_ssse3" ratio: 1 in 1,
-                    std:"sse4.1" => clif:"has_sse41" ratio: 1 in 1,
 
+                    std:"sse4.1" => clif:"has_sse41",
                     std:"sse4.2" => clif:"has_sse42",
                     std:"popcnt" => clif:"has_popcnt",
                     std:"avx" => clif:"has_avx",

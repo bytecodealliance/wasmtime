@@ -215,11 +215,11 @@ fn isa_constructor(
     let isa_flags = x64_settings::Flags::new(&shared_flags, builder);
 
     // Check for compatibility between flags and ISA level
-    // requested. In particular, SIMD support requires SSE4.2.
+    // requested. In particular, SIMD support requires SSSE3.
     if !cfg!(miri) && shared_flags.enable_simd() {
-        if !isa_flags.has_sse3() || !isa_flags.has_ssse3() || !isa_flags.has_sse41() {
+        if !isa_flags.has_sse3() || !isa_flags.has_ssse3() {
             return Err(CodegenError::Unsupported(
-                "SIMD support requires SSE3, SSSE3, and SSE4.1 on x86_64.".into(),
+                "SIMD support requires SSE3 and SSSE3 on x86_64.".into(),
             ));
         }
     }
@@ -243,7 +243,6 @@ mod test {
         let mut isa_builder = crate::isa::lookup_by_name("x86_64").unwrap();
         isa_builder.set("has_sse3", "false").unwrap();
         isa_builder.set("has_ssse3", "false").unwrap();
-        isa_builder.set("has_sse41", "false").unwrap();
         assert!(matches!(
             isa_builder.finish(shared_flags),
             Err(CodegenError::Unsupported(_)),
