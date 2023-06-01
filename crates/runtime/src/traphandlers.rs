@@ -12,7 +12,7 @@ use std::ptr;
 use std::sync::Once;
 
 pub use self::backtrace::{Backtrace, Frame};
-pub use self::tls::{assert_tls_not_in_range, tls_eager_initialize, TlsRestore};
+pub use self::tls::{assert_tls_not_in_range, tls_eager_initialize, TlsState};
 
 cfg_if::cfg_if! {
     if #[cfg(miri)] {
@@ -297,7 +297,7 @@ mod call_thread_state {
 
         pub(crate) limits: *const VMRuntimeLimits,
 
-        prev: Cell<tls::Ptr>,
+        pub(super) prev: Cell<tls::Ptr>,
 
         // The values of `VMRuntimeLimits::last_wasm_{exit_{pc,fp},entry_sp}`
         // for the *previous* `CallThreadState` for this same store/limits. Our
@@ -517,6 +517,7 @@ impl<T: Copy> Drop for ResetCell<'_, T> {
 // the caller to the trap site.
 mod tls {
     use super::CallThreadState;
+    use std::mem;
     use std::ops::Range;
 
     pub use raw::Ptr;
@@ -591,44 +592,85 @@ mod tls {
 
     /// Opaque state used to help control TLS state across stack switches for
     /// async support.
-    pub struct TlsRestore {
+    pub struct TlsState {
+        // The head of a linked list, similar to the TLS state. Note though that
+        // this list is stored in reverse order to assist with `push` and `pop`
+        // below.
+        //
+        // After a `push` call this stores the previous head for the current
+        // thread so we know when to stop popping during a `pop`.
         state: raw::Ptr,
     }
 
-    impl TlsRestore {
-        /// Takes the TLS state that is currently configured and returns a
-        /// token that is used to replace it later.
-        ///
-        /// This is not a safe operation since it's intended to only be used
-        /// with stack switching found with fibers and async wasmtime.
-        pub unsafe fn take() -> TlsRestore {
-            // Our tls pointer must be set at this time, and it must not be
-            // null. We need to restore the previous pointer since we're
-            // removing ourselves from the call-stack, and in the process we
-            // null out our own previous field for safety in case it's
-            // accidentally used later.
-            let state = raw::get();
-            if let Some(state) = state.as_ref() {
-                state.pop();
-            } else {
-                // Null case: we aren't in a wasm context, so theres no tls to
-                // save for restoration.
+    impl TlsState {
+        /// Creates new state that initially starts as null.
+        pub fn new() -> TlsState {
+            TlsState {
+                state: std::ptr::null_mut(),
             }
-
-            TlsRestore { state }
         }
 
-        /// Restores a previous tls state back into this thread's TLS.
+        /// Pushes the list stored in this state onto the current thread's
+        /// state.
         ///
-        /// This is unsafe because it's intended to only be used within the
-        /// context of stack switching within wasmtime.
-        pub unsafe fn replace(self) {
-            if let Some(state) = self.state.as_ref() {
+        /// This will iterate over the linked list of states stored within
+        /// `self` and push them sequentially onto the current thread's
+        /// activation list.
+        ///
+        /// # Unsafety
+        ///
+        /// Must be carefully coordinated with `pop` and fiber switches to
+        /// ensure that this doesn't push stale data and the data is popped
+        /// appropriately.
+        pub unsafe fn push(&mut self) {
+            // Replace `self.state` with the current TLS state to get reused
+            // later during a `pop`. Afterwards iterate over the linked list
+            // stored in `TlsState` and push everything onto the current
+            // thread's list of activations.
+            let mut ptr = mem::replace(&mut self.state, raw::get());
+            while let Some(state) = ptr.as_ref() {
+                ptr = state.prev.replace(std::ptr::null_mut());
                 state.push();
-            } else {
-                // Null case: we aren't in a wasm context, so theres no tls
-                // to restore.
             }
+        }
+
+        /// Pops a fiber's linked list of activations and stores them in
+        /// `TlsState`.
+        ///
+        /// This will pop the top activation of this current thread continuously
+        /// until it reaches whatever the current activation was when `push` was
+        /// originally called.
+        ///
+        /// # Unsafety
+        ///
+        /// Must be paired with a `push` and only performed at a time when a
+        /// fiber is being suspended.
+        pub unsafe fn pop(&mut self) {
+            let thread_head = mem::replace(&mut self.state, std::ptr::null_mut());
+            loop {
+                // If the current TLS state is as we originally found it, then
+                // this loop is finished.
+                let ptr = raw::get();
+                if ptr == thread_head {
+                    break;
+                }
+
+                // Pop this activation from the current thread's TLS state, and
+                // then afterwards push it onto our own linked list within this
+                // `TlsState`. Note that the linked list in `TlsState` is stored
+                // in reverse order so a subsequent `push` later on pushes
+                // everything in the right order.
+                (*ptr).pop();
+                if let Some(state) = self.state.as_ref() {
+                    (*ptr).prev.set(state);
+                }
+                self.state = ptr;
+            }
+        }
+
+        /// Performs a runtime check that this state is indeed null.
+        pub fn assert_null(&self) {
+            assert!(self.state.is_null());
         }
     }
 

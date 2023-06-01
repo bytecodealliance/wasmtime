@@ -1593,6 +1593,7 @@ impl<T> StoreContextMut<'_, T> {
                 fiber,
                 current_poll_cx,
                 engine,
+                tls: wasmtime_runtime::TlsState::new(),
             }
         };
         future.await?;
@@ -1603,6 +1604,8 @@ impl<T> StoreContextMut<'_, T> {
             fiber: wasmtime_fiber::Fiber<'a, Result<()>, (), Result<()>>,
             current_poll_cx: *mut *mut Context<'static>,
             engine: Engine,
+            // See comments in `FiberFuture::resume` for this
+            tls: wasmtime_runtime::TlsState,
         }
 
         // This is surely the most dangerous `unsafe impl Send` in the entire
@@ -1668,6 +1671,35 @@ impl<T> StoreContextMut<'_, T> {
         // correct. That's what `unsafe` in Rust is all about, though, right?
         unsafe impl Send for FiberFuture<'_> {}
 
+        impl FiberFuture<'_> {
+            /// This is a helper function to call `resume` on the underlying
+            /// fiber while correctly managing Wasmtime's thread-local data.
+            ///
+            /// Wasmtime's implementation of traps leverages thread-local data
+            /// to get access to metadata during a signal. This thread-local
+            /// data is a linked list of "activations" where the nodes of the
+            /// linked list are stored on the stack. It would be invalid as a
+            /// result to suspend a computation with the head of the linked list
+            /// on this stack then move the stack to another thread and resume
+            /// it. That means that a different thread would point to our stack
+            /// and our thread doesn't point to our stack at all!
+            ///
+            /// Basically management of TLS is required here one way or another.
+            /// The strategy currently settled on is to manage the list of
+            /// activations created by this fiber as a unit. When a fiber
+            /// resumes the linked list is prepended to the current thread's
+            /// list. When the fiber is suspended then the fiber's list of
+            /// activations are all removed en-masse and saved within the fiber.
+            fn resume(&mut self, val: Result<()>) -> Result<Result<()>, ()> {
+                unsafe {
+                    self.tls.push();
+                    let result = self.fiber.resume(val);
+                    self.tls.pop();
+                    result
+                }
+            }
+        }
+
         impl Future for FiberFuture<'_> {
             type Output = Result<()>;
 
@@ -1697,7 +1729,7 @@ impl<T> StoreContextMut<'_, T> {
                     // returns `Ok` saying the fiber finished (yay!) or it
                     // returns `Err` with the payload passed to `suspend`, which
                     // in our case is `()`.
-                    match self.fiber.resume(Ok(())) {
+                    match self.resume(Ok(())) {
                         Ok(result) => Poll::Ready(result),
 
                         // If `Err` is returned that means the fiber polled a
@@ -1745,13 +1777,15 @@ impl<T> StoreContextMut<'_, T> {
         impl Drop for FiberFuture<'_> {
             fn drop(&mut self) {
                 if !self.fiber.done() {
-                    let result = self.fiber.resume(Err(anyhow!("future dropped")));
+                    let result = self.resume(Err(anyhow!("future dropped")));
                     // This resumption with an error should always complete the
                     // fiber. While it's technically possible for host code to catch
                     // the trap and re-resume, we'd ideally like to signal that to
                     // callers that they shouldn't be doing that.
                     debug_assert!(result.is_ok());
                 }
+
+                self.tls.assert_null();
 
                 unsafe {
                     self.engine
@@ -1827,10 +1861,7 @@ impl AsyncCx {
                 Poll::Pending => {}
             }
 
-            let before = wasmtime_runtime::TlsRestore::take();
-            let res = (*suspend).suspend(());
-            before.replace();
-            res?;
+            (*suspend).suspend(())?;
         }
     }
 }

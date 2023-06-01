@@ -860,3 +860,60 @@ async fn non_stacky_async_activations() -> Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+async fn gc_preserves_externref_on_historical_async_stacks() -> Result<()> {
+    let mut config = Config::new();
+    config.async_support(true);
+    let engine = Engine::new(&config)?;
+
+    let module = Module::new(
+        &engine,
+        r#"
+            (module $m1
+                (import "" "gc" (func $gc))
+                (import "" "recurse" (func $recurse (param i32)))
+                (import "" "test" (func $test (param i32 externref)))
+                (func (export "run") (param i32 externref)
+                    local.get 0
+                    if
+                        local.get 0
+                        i32.const -1
+                        i32.add
+                        call $recurse
+                    else
+                        call $gc
+                    end
+
+                    local.get 0
+                    local.get 1
+                    call $test
+                )
+            )
+        "#,
+    )?;
+
+    type F = TypedFunc<(i32, Option<ExternRef>), ()>;
+
+    let mut store = Store::new(&engine, None);
+    let mut linker = Linker::<Option<F>>::new(&engine);
+    linker.func_wrap("", "gc", |mut cx: Caller<'_, _>| cx.gc())?;
+    linker.func_wrap("", "test", |val: i32, handle: Option<ExternRef>| {
+        assert_eq!(handle.unwrap().data().downcast_ref(), Some(&val));
+    })?;
+    linker.func_wrap1_async("", "recurse", |mut cx: Caller<'_, _>, val: i32| {
+        let func = cx.data().unwrap();
+        Box::new(async move {
+            func.call_async(&mut cx, (val, Some(ExternRef::new(val))))
+                .await
+        })
+    })?;
+    let instance = linker.instantiate_async(&mut store, &module).await?;
+    let func: F = instance.get_typed_func(&mut store, "run")?;
+    *store.data_mut() = Some(func);
+
+    func.call_async(&mut store, (5, Some(ExternRef::new(5))))
+        .await?;
+
+    Ok(())
+}
