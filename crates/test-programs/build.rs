@@ -37,11 +37,8 @@ fn build_and_generate_tests() {
     }
 
     // Build the test programs:
-    let mut cmd = Command::new("rustup");
-    cmd.arg("run")
-        .arg("stable")
-        .arg("cargo")
-        .arg("build")
+    let mut cmd = Command::new("cargo");
+    cmd.arg("build")
         .arg("--target=wasm32-wasi")
         .arg("--package=wasi-tests")
         .arg("--package=command-tests")
