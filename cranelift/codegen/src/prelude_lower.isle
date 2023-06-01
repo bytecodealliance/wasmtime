@@ -986,8 +986,8 @@
 (extern constructor gen_move gen_move)
 
 ;; Generate a return instruction
-(decl lower_return (Range ValueSlice) InstOutput)
-(rule (lower_return _ vals)
+(decl lower_return (ValueSlice) InstOutput)
+(rule (lower_return vals)
       (let ((_ Unit (gen_return vals)))
         (output_none)))
 
