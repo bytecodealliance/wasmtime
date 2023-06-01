@@ -2,7 +2,7 @@ use crate::abi::{self, align_to, LocalSlot};
 use crate::codegen::CodeGenContext;
 use crate::isa::reg::Reg;
 use crate::regalloc::RegAlloc;
-use cranelift_codegen::{Final, MachBufferFinalized};
+use cranelift_codegen::{Final, MachBufferFinalized, MachLabel};
 use std::{fmt::Debug, ops::Range};
 use wasmtime_environ::PtrSize;
 
@@ -25,7 +25,7 @@ pub(crate) enum RemKind {
 /// Kinds of binary comparison in WebAssembly. The [`masm`] implementation for
 /// each ISA is responsible for emitting the correct sequence of instructions
 /// when lowering to machine code.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub(crate) enum CmpKind {
     /// Equal.
     Eq,
@@ -313,4 +313,27 @@ pub(crate) trait MacroAssembler {
             }
         }
     }
+
+    /// Generate a label.
+    fn get_label(&mut self) -> MachLabel;
+
+    /// Bind the given label at the current code offset.
+    fn bind(&mut self, label: MachLabel);
+
+    /// Conditional branch.
+    ///
+    /// Performs a comparison between the two operands,
+    /// and immediately after emits a jump to the given
+    /// label destination if the condition is met.
+    fn branch(
+        &mut self,
+        kind: CmpKind,
+        lhs: RegImm,
+        rhs: RegImm,
+        taken: MachLabel,
+        size: OperandSize,
+    );
+
+    /// Emits and unconditional jump to the given label.
+    fn jmp(&mut self, target: MachLabel);
 }

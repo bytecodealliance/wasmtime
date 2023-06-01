@@ -13,7 +13,7 @@ use crate::{
         ShiftKind,
     },
 };
-use cranelift_codegen::{settings, Final, MachBufferFinalized};
+use cranelift_codegen::{settings, Final, MachBufferFinalized, MachLabel};
 
 /// Aarch64 MacroAssembler.
 pub(crate) struct MacroAssembler {
@@ -226,12 +226,36 @@ impl Masm for MacroAssembler {
     fn cmp_with_set(&mut self, _src: RegImm, _dst: RegImm, _kind: CmpKind, _size: OperandSize) {
         todo!()
     }
+<<<<<<< HEAD
 
     fn clz(&mut self, _src: Reg, _dst: Reg, _size: OperandSize) {
         todo!()
     }
 
     fn ctz(&mut self, _src: Reg, _dst: Reg, _size: OperandSize) {
+        todo!()
+    }
+
+    fn get_label(&mut self) -> MachLabel {
+        self.asm.get_label()
+    }
+
+    fn bind(&mut self, _label: MachLabel) {
+        todo!()
+    }
+
+    fn branch(
+        &mut self,
+        _kind: CmpKind,
+        _lhs: RegImm,
+        _rhs: RegImm,
+        _taken: MachLabel,
+        _size: OperandSize,
+    ) {
+        todo!()
+    }
+
+    fn jmp(&mut self, _target: MachLabel) {
         todo!()
     }
 }

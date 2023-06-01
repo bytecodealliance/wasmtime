@@ -6,6 +6,7 @@ use crate::{
 };
 use anyhow::Result;
 use call::FnCall;
+use smallvec::SmallVec;
 use wasmparser::{BinaryReader, FuncValidator, ValidatorResources, VisitOperator};
 use wasmtime_environ::{FuncIndex, WasmFuncType, WasmType};
 
@@ -14,6 +15,8 @@ pub(crate) use context::*;
 mod env;
 pub use env::*;
 pub mod call;
+mod control;
+pub(crate) use control::*;
 
 /// The code generation abstraction.
 pub(crate) struct CodeGen<'a, M>
@@ -31,6 +34,11 @@ where
 
     /// The MacroAssembler.
     pub masm: &'a mut M,
+
+    /// Stack frames for control flow.
+    // NB The 6 is set arbitrarily, we can adjust it as
+    // we see fit.
+    pub control_frames: SmallVec<[ControlStackFrame; 6]>,
 }
 
 impl<'a, M> CodeGen<'a, M>
@@ -48,6 +56,7 @@ where
             context,
             masm,
             env,
+            control_frames: Default::default(),
         }
     }
 
@@ -170,7 +179,8 @@ where
 
     /// Emit the usual function end instruction sequence.
     fn emit_end(&mut self) -> Result<()> {
-        self.handle_abi_result();
+        self.context.pop_abi_results(&self.sig.result, self.masm);
+        assert!(self.context.stack.len() == 0);
         self.masm.epilogue(self.context.frame.locals_size);
         Ok(())
     }
@@ -199,16 +209,5 @@ where
                     _ => panic!("Unsupported type {:?}", ty),
                 }
             });
-    }
-
-    pub fn handle_abi_result(&mut self) {
-        if self.sig.result.is_void() {
-            return;
-        }
-        let named_reg = self.sig.result.result_reg();
-        let reg = self
-            .context
-            .pop_to_reg(self.masm, Some(named_reg), OperandSize::S64);
-        self.context.regalloc.free_gpr(reg);
     }
 }
