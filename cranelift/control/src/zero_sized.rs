@@ -30,6 +30,13 @@ impl ControlPlane {
         false
     }
 
+    /// Returns an arbitrary value. This variant is used when chaos mode is
+    /// disabled. It always returns the default value.
+    #[inline]
+    pub fn get_arbitrary<T: for<'a> arbitrary::Arbitrary<'a> + Default>(&mut self) -> T {
+        T::default()
+    }
+
     /// Shuffles the items in the slice into a pseudo-random permutation.
     /// This variant is used when chaos mode is disabled. It doesn't do
     /// anything.

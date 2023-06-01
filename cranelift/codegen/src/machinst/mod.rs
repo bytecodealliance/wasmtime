@@ -144,6 +144,20 @@ pub trait MachInst: Clone + Debug {
     /// control flow.
     fn gen_jump(target: MachLabel) -> Self;
 
+    /// Generate a store of an immediate 64-bit integer to a register. Used by
+    /// the control plane to generate random instructions.
+    fn gen_imm_u64(_value: u64, _dst: Writable<Reg>) -> Option<Self> {
+        None
+    }
+
+    /// Generate a store of an immediate 64-bit integer to a register. Used by
+    /// the control plane to generate random instructions. The tmp register may
+    /// be used by architectures which don't support writing immediate values to
+    /// floating point registers directly.
+    fn gen_imm_f64(_value: f64, _tmp: Writable<Reg>, _dst: Writable<Reg>) -> SmallVec<[Self; 2]> {
+        SmallVec::new()
+    }
+
     /// Generate a NOP. The `preferred_size` parameter allows the caller to
     /// request a NOP of that size, or as close to it as possible. The machine
     /// backend may return a NOP whose binary encoding is smaller than the
