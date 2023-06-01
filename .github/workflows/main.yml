@@ -729,8 +729,6 @@ jobs:
         rustup target add ${{ matrix.target }}
       if: matrix.target != ''
 
-    - run: rustup target add aarch64-linux-android
-    - run: rustup target add x86_64-linux-android
     - name: Setup Android SDK
       uses: android-actions/setup-android@v2
     - uses: actions/cache@v3
