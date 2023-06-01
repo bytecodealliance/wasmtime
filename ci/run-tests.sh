@@ -2,7 +2,6 @@
 
 cargo test \
     --features "test-programs/test_programs" \
-    --features "test-programs/test_programs_http" \
     --features wasi-threads \
     --features wasi-http \
     --workspace \
