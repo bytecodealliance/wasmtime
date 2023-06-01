@@ -1694,13 +1694,34 @@ impl<T> StoreContextMut<'_, T> {
 
                     // After that's set up we resume execution of the fiber, which
                     // may also start the fiber for the first time. This either
-                    // returns `Ok` saying the fiber finished (yay!) or it returns
-                    // `Err` with the payload passed to `suspend`, which in our case
-                    // is `()`. If `Err` is returned that means the fiber polled a
-                    // future but it said "Pending", so we propagate that here.
+                    // returns `Ok` saying the fiber finished (yay!) or it
+                    // returns `Err` with the payload passed to `suspend`, which
+                    // in our case is `()`.
                     match self.fiber.resume(Ok(())) {
                         Ok(result) => Poll::Ready(result),
-                        Err(()) => Poll::Pending,
+
+                        // If `Err` is returned that means the fiber polled a
+                        // future but it said "Pending", so we propagate that
+                        // here.
+                        //
+                        // An additional safety check is performed when leaving
+                        // this function to help bolster the guarantees of
+                        // `unsafe impl Send` above. Notably this future may get
+                        // re-polled on a different thread. Wasmtime's
+                        // thread-local state points to the stack, however,
+                        // meaning that it would be incorrect to leave a pointer
+                        // in TLS when this function returns. This function
+                        // performs a runtime assert to verify that this is the
+                        // case, notably that the one TLS pointer Wasmtime uses
+                        // is not pointing anywhere within the stack. If it is
+                        // then that's a bug indicating that TLS management in
+                        // Wasmtime is incorrect.
+                        Err(()) => {
+                            if let Some(range) = self.fiber.stack().range() {
+                                wasmtime_runtime::assert_tls_not_in_range(range);
+                            }
+                            Poll::Pending
+                        }
                     }
                 }
             }

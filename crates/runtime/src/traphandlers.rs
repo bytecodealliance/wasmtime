@@ -12,7 +12,7 @@ use std::ptr;
 use std::sync::Once;
 
 pub use self::backtrace::{Backtrace, Frame};
-pub use self::tls::{tls_eager_initialize, TlsRestore};
+pub use self::tls::{assert_tls_not_in_range, tls_eager_initialize, TlsRestore};
 
 cfg_if::cfg_if! {
     if #[cfg(miri)] {
@@ -517,6 +517,7 @@ impl<T: Copy> Drop for ResetCell<'_, T> {
 // the caller to the trap site.
 mod tls {
     use super::CallThreadState;
+    use std::ops::Range;
 
     pub use raw::Ptr;
 
@@ -660,5 +661,15 @@ mod tls {
     pub fn with<R>(closure: impl FnOnce(Option<&CallThreadState>) -> R) -> R {
         let p = raw::get();
         unsafe { closure(if p.is_null() { None } else { Some(&*p) }) }
+    }
+
+    /// Asserts that the current TLS pointer is not in the `range` specified.
+    ///
+    /// This is used when exiting a future in Wasmtime to assert that the
+    /// current TLS pointer does not point within the stack we're leaving (e.g.
+    /// allocated for a fiber).
+    pub fn assert_tls_not_in_range(range: Range<usize>) {
+        let p = raw::get() as usize;
+        assert!(p < range.start || range.end < p);
     }
 }
