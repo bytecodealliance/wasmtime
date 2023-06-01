@@ -412,16 +412,25 @@ async fn async_host_func_with_pooling_stacks() -> Result<()> {
     Ok(())
 }
 
-async fn execute_across_threads<F>(future: F) -> F::Output
+/// This will execute the `future` provided to completion and each invocation of
+/// `poll` for the future will be executed on a separate thread.
+pub async fn execute_across_threads<F>(future: F) -> F::Output
 where
     F: Future + Send + 'static,
     F::Output: Send,
 {
-    let future = PollOnce::new(Box::pin(future)).await;
-
-    tokio::task::spawn_blocking(move || tokio::runtime::Handle::current().block_on(future))
-        .await
-        .expect("shouldn't panic")
+    let mut future = Box::pin(future);
+    loop {
+        let once = PollOnce::new(future);
+        let handle = tokio::runtime::Handle::current();
+        let result = std::thread::spawn(move || handle.block_on(once))
+            .join()
+            .unwrap();
+        match result {
+            Ok(val) => break val,
+            Err(f) => future = f,
+        }
+    }
 }
 
 #[tokio::test]
@@ -696,13 +705,13 @@ impl<F> Future for PollOnce<F>
 where
     F: Future + Unpin,
 {
-    type Output = F;
+    type Output = Result<F::Output, F>;
 
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<F> {
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let mut future = self.0.take().unwrap();
         match Pin::new(&mut future).poll(cx) {
-            Poll::Pending => Poll::Ready(future),
-            Poll::Ready(_) => panic!("should not be ready"),
+            Poll::Pending => Poll::Ready(Err(future)),
+            Poll::Ready(val) => Poll::Ready(Ok(val)),
         }
     }
 }
@@ -806,7 +815,9 @@ async fn non_stacky_async_activations() -> Result<()> {
                         Ok(())
                     }
                 }) as _)
-                .await;
+                .await
+                .err()
+                .unwrap();
                 capture_stack(&stacks, &caller);
                 *caller.data_mut() = Some(future);
                 Ok(())
