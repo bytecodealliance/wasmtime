@@ -731,9 +731,9 @@ jobs:
 
     - name: Setup Android SDK
       uses: android-actions/setup-android@v2
-      if: contains("android", matrix.target)
+      if: contains('android', matrix.target)
     - uses: actions/cache@v3
-      if: contains("android", matrix.target)
+      if: contains('android', matrix.target)
       with:
         path: ${{ runner.tool_cache }}/cargo-ndk
         key: cargo-ndk-bin-${{ env.CARGO_NDK_VERSION }}
