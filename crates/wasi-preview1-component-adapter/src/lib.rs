@@ -36,7 +36,7 @@ pub mod bindings {
         raw_strings,
         // The generated definition of command will pull in std, so we are defining it
         // manually below instead
-        skip: ["run", "get-directories", "get-environment"],
+        skip: ["run", "get-environment", "poll-oneoff"],
     });
 
     #[cfg(feature = "reactor")]
@@ -45,7 +45,7 @@ pub mod bindings {
         world: "wasi:preview/reactor",
         std_feature,
         raw_strings,
-        skip: ["get-directories", "get-environment"],
+        skip: ["get-environment", "poll-oneoff"],
     });
 }
 
@@ -1686,24 +1686,39 @@ pub unsafe extern "C" fn poll_oneoff(
             });
         }
 
-        let vec = state.import_alloc.with_buffer(
+        #[link(wasm_import_module = "wasi:poll/poll")]
+        extern "C" {
+            #[link_name = "poll-oneoff"]
+            fn poll_oneoff_import(pollables: *const Pollable, len: usize, rval: *mut BoolList);
+        }
+        let mut ready_list = BoolList {
+            base: std::ptr::null(),
+            len: 0,
+        };
+
+        state.import_alloc.with_buffer(
             results,
             nsubscriptions
                 .checked_mul(size_of::<bool>())
                 .trapping_unwrap(),
-            || poll::poll_oneoff(slice::from_raw_parts(pollables.pointer, pollables.length)),
+            || {
+                poll_oneoff_import(
+                    pollables.pointer,
+                    pollables.length,
+                    &mut ready_list as *mut _,
+                )
+            },
         );
 
-        assert_eq!(vec.len(), nsubscriptions);
-        assert_eq!(vec.as_ptr(), results as *const bool);
-        forget(vec);
+        assert_eq!(ready_list.len, nsubscriptions);
+        assert_eq!(ready_list.base, results as *const bool);
 
         drop(pollables);
 
         let ready = subscriptions
             .iter()
             .enumerate()
-            .filter_map(|(i, s)| (*results.add(i) != 0).then_some(s));
+            .filter_map(|(i, s)| (*ready_list.base.add(i)).then_some(s));
 
         let mut count = 0;
 
@@ -2173,6 +2188,13 @@ pub struct StrTuple {
 #[repr(C)]
 pub struct StrTupleList {
     base: *const StrTuple,
+    len: usize,
+}
+
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct BoolList {
+    base: *const bool,
     len: usize,
 }
 
