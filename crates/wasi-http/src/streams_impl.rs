@@ -1,10 +1,9 @@
-use crate::poll::Pollable;
-use crate::streams::{InputStream, OutputStream, StreamError};
+use crate::wasi::io::streams::{Host, InputStream, OutputStream, Pollable, StreamError};
 use crate::WasiHttp;
 use anyhow::{anyhow, bail};
 use std::vec::Vec;
 
-impl crate::streams::Host for WasiHttp {
+impl Host for WasiHttp {
     fn read(
         &mut self,
         stream: InputStream,
@@ -123,5 +122,46 @@ impl crate::streams::Host for WasiHttp {
             .ok_or_else(|| anyhow!("stream not found: {stream}"))?;
         st.closed = true;
         Ok(())
+    }
+
+    fn blocking_read(
+        &mut self,
+        _: InputStream,
+        _: u64,
+    ) -> wasmtime::Result<Result<(Vec<u8>, bool), StreamError>> {
+        bail!("unimplemented")
+    }
+
+    fn blocking_skip(
+        &mut self,
+        _: InputStream,
+        _: u64,
+    ) -> wasmtime::Result<Result<(u64, bool), StreamError>> {
+        bail!("unimplemented")
+    }
+
+    fn blocking_write(
+        &mut self,
+        _: OutputStream,
+        _: Vec<u8>,
+    ) -> wasmtime::Result<Result<u64, StreamError>> {
+        bail!("unimplemented")
+    }
+
+    fn blocking_write_zeroes(
+        &mut self,
+        _: OutputStream,
+        _: u64,
+    ) -> wasmtime::Result<Result<u64, StreamError>> {
+        bail!("unimplemented")
+    }
+
+    fn blocking_splice(
+        &mut self,
+        _: OutputStream,
+        _: InputStream,
+        _: u64,
+    ) -> wasmtime::Result<Result<(u64, bool), StreamError>> {
+        bail!("unimplemented")
     }
 }
