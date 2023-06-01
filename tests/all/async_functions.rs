@@ -412,12 +412,16 @@ async fn async_host_func_with_pooling_stacks() -> Result<()> {
     Ok(())
 }
 
-async fn execute_across_threads<F: Future + Send + 'static>(future: F) {
+async fn execute_across_threads<F>(future: F) -> F::Output
+where
+    F: Future + Send + 'static,
+    F::Output: Send,
+{
     let future = PollOnce::new(Box::pin(future)).await;
 
-    tokio::task::spawn_blocking(move || future)
+    tokio::task::spawn_blocking(move || tokio::runtime::Handle::current().block_on(future))
         .await
-        .expect("shouldn't panic");
+        .expect("shouldn't panic")
 }
 
 #[tokio::test]
