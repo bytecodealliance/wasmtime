@@ -707,7 +707,7 @@ jobs:
           os: ubuntu-latest
           target: riscv64gc-unknown-linux-gnu
         - build: aarch64-android
-          os: ubuntu-latest
+          os: aarch64-linux
           target: aarch64-linux-android
         - build: x86_64-android
           os: ubuntu-latest
