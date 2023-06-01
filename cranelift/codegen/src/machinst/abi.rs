@@ -2138,15 +2138,14 @@ impl<M: ABIMachineSpec> CallSite<M> {
     }
 }
 
-fn adjust_stack_and_nominal_sp<M: ABIMachineSpec>(ctx: &mut Lower<M::I>, off: i32, is_sub: bool) {
-    if off == 0 {
+fn adjust_stack_and_nominal_sp<M: ABIMachineSpec>(ctx: &mut Lower<M::I>, amount: i32) {
+    if amount == 0 {
         return;
     }
-    let amt = if is_sub { -off } else { off };
-    for inst in M::gen_sp_reg_adjust(amt) {
+    for inst in M::gen_sp_reg_adjust(amount) {
         ctx.emit(inst);
     }
-    ctx.emit(M::gen_nominal_sp_adj(-amt));
+    ctx.emit(M::gen_nominal_sp_adj(-amount));
 }
 
 impl<M: ABIMachineSpec> CallSite<M> {
@@ -2157,16 +2156,18 @@ impl<M: ABIMachineSpec> CallSite<M> {
 
     /// Emit code to pre-adjust the stack, prior to argument copies and call.
     pub fn emit_stack_pre_adjust(&self, ctx: &mut Lower<M::I>) {
-        let off =
-            ctx.sigs()[self.sig].sized_stack_arg_space + ctx.sigs()[self.sig].sized_stack_ret_space;
-        adjust_stack_and_nominal_sp::<M>(ctx, off as i32, /* is_sub = */ true);
+        let sig = &ctx.sigs()[self.sig];
+        let stack_space = sig.sized_stack_arg_space + sig.sized_stack_ret_space;
+        let stack_space = i32::try_from(stack_space).unwrap();
+        adjust_stack_and_nominal_sp::<M>(ctx, -stack_space);
     }
 
     /// Emit code to post-adjust the stack, after call return and return-value copies.
     pub fn emit_stack_post_adjust(&self, ctx: &mut Lower<M::I>) {
-        let off =
-            ctx.sigs()[self.sig].sized_stack_arg_space + ctx.sigs()[self.sig].sized_stack_ret_space;
-        adjust_stack_and_nominal_sp::<M>(ctx, off as i32, /* is_sub = */ false)
+        let sig = &ctx.sigs()[self.sig];
+        let stack_space = sig.sized_stack_arg_space + sig.sized_stack_ret_space;
+        let stack_space = i32::try_from(stack_space).unwrap();
+        adjust_stack_and_nominal_sp::<M>(ctx, stack_space)
     }
 
     /// Emit a copy of a large argument into its associated stack buffer, if any.
