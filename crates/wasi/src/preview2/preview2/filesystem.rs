@@ -16,9 +16,8 @@ impl From<TableError> for filesystem::Error {
     }
 }
 
-#[async_trait::async_trait]
 impl<T: WasiView> filesystem::Host for T {
-    async fn advise(
+    fn advise(
         &mut self,
         fd: filesystem::Descriptor,
         offset: filesystem::Filesize,
@@ -42,7 +41,7 @@ impl<T: WasiView> filesystem::Host for T {
         Ok(())
     }
 
-    async fn sync_data(&mut self, fd: filesystem::Descriptor) -> Result<(), filesystem::Error> {
+    fn sync_data(&mut self, fd: filesystem::Descriptor) -> Result<(), filesystem::Error> {
         let table = self.table();
         if table.is_file(fd) {
             match table.get_file(fd)?.file.sync_data() {
@@ -70,7 +69,7 @@ impl<T: WasiView> filesystem::Host for T {
         }
     }
 
-    async fn get_flags(
+    fn get_flags(
         &mut self,
         fd: filesystem::Descriptor,
     ) -> Result<filesystem::DescriptorFlags, filesystem::Error> {
@@ -119,7 +118,7 @@ impl<T: WasiView> filesystem::Host for T {
         }
     }
 
-    async fn get_type(
+    fn get_type(
         &mut self,
         fd: filesystem::Descriptor,
     ) -> Result<filesystem::DescriptorType, filesystem::Error> {
@@ -135,7 +134,7 @@ impl<T: WasiView> filesystem::Host for T {
         }
     }
 
-    async fn set_size(
+    fn set_size(
         &mut self,
         fd: filesystem::Descriptor,
         size: filesystem::Filesize,
@@ -148,7 +147,7 @@ impl<T: WasiView> filesystem::Host for T {
         Ok(())
     }
 
-    async fn set_times(
+    fn set_times(
         &mut self,
         fd: filesystem::Descriptor,
         atim: filesystem::NewTimestamp,
@@ -180,7 +179,7 @@ impl<T: WasiView> filesystem::Host for T {
         }
     }
 
-    async fn read(
+    fn read(
         &mut self,
         fd: filesystem::Descriptor,
         len: filesystem::Filesize,
@@ -211,7 +210,7 @@ impl<T: WasiView> filesystem::Host for T {
         Ok((buffer, end))
     }
 
-    async fn write(
+    fn write(
         &mut self,
         fd: filesystem::Descriptor,
         buf: Vec<u8>,
@@ -231,7 +230,7 @@ impl<T: WasiView> filesystem::Host for T {
         Ok(filesystem::Filesize::try_from(bytes_written).expect("usize fits in Filesize"))
     }
 
-    async fn read_directory(
+    fn read_directory(
         &mut self,
         fd: filesystem::Descriptor,
     ) -> Result<filesystem::DirectoryEntryStream, filesystem::Error> {
@@ -286,7 +285,7 @@ impl<T: WasiView> filesystem::Host for T {
         Ok(table.push_readdir(ReaddirIterator::new(entries))?)
     }
 
-    async fn read_directory_entry(
+    fn read_directory_entry(
         &mut self,
         stream: filesystem::DirectoryEntryStream,
     ) -> Result<Option<filesystem::DirectoryEntry>, filesystem::Error> {
@@ -295,7 +294,7 @@ impl<T: WasiView> filesystem::Host for T {
         readdir.next()
     }
 
-    async fn drop_directory_entry_stream(
+    fn drop_directory_entry_stream(
         &mut self,
         stream: filesystem::DirectoryEntryStream,
     ) -> anyhow::Result<()> {
@@ -303,7 +302,7 @@ impl<T: WasiView> filesystem::Host for T {
         Ok(())
     }
 
-    async fn sync(&mut self, fd: filesystem::Descriptor) -> Result<(), filesystem::Error> {
+    fn sync(&mut self, fd: filesystem::Descriptor) -> Result<(), filesystem::Error> {
         let table = self.table();
         if table.is_file(fd) {
             match table.get_file(fd)?.file.sync_all() {
@@ -331,7 +330,7 @@ impl<T: WasiView> filesystem::Host for T {
         }
     }
 
-    async fn create_directory_at(
+    fn create_directory_at(
         &mut self,
         fd: filesystem::Descriptor,
         path: String,
@@ -345,7 +344,7 @@ impl<T: WasiView> filesystem::Host for T {
         Ok(())
     }
 
-    async fn stat(
+    fn stat(
         &mut self,
         fd: filesystem::Descriptor,
     ) -> Result<filesystem::DescriptorStat, filesystem::Error> {
@@ -365,7 +364,7 @@ impl<T: WasiView> filesystem::Host for T {
         }
     }
 
-    async fn stat_at(
+    fn stat_at(
         &mut self,
         fd: filesystem::Descriptor,
         path_flags: filesystem::PathFlags,
@@ -385,7 +384,7 @@ impl<T: WasiView> filesystem::Host for T {
         Ok(descriptorstat_from(meta))
     }
 
-    async fn set_times_at(
+    fn set_times_at(
         &mut self,
         fd: filesystem::Descriptor,
         path_flags: filesystem::PathFlags,
@@ -418,7 +417,7 @@ impl<T: WasiView> filesystem::Host for T {
         Ok(())
     }
 
-    async fn link_at(
+    fn link_at(
         &mut self,
         fd: filesystem::Descriptor,
         // TODO delete the path flags from this function
@@ -443,7 +442,7 @@ impl<T: WasiView> filesystem::Host for T {
         Ok(())
     }
 
-    async fn open_at(
+    fn open_at(
         &mut self,
         fd: filesystem::Descriptor,
         path_flags: filesystem::PathFlags,
@@ -541,7 +540,7 @@ impl<T: WasiView> filesystem::Host for T {
         }
     }
 
-    async fn drop_descriptor(&mut self, fd: filesystem::Descriptor) -> anyhow::Result<()> {
+    fn drop_descriptor(&mut self, fd: filesystem::Descriptor) -> anyhow::Result<()> {
         let table = self.table_mut();
         if table.delete_file(fd).is_err() {
             table.delete_dir(fd)?;
@@ -549,7 +548,7 @@ impl<T: WasiView> filesystem::Host for T {
         Ok(())
     }
 
-    async fn readlink_at(
+    fn readlink_at(
         &mut self,
         fd: filesystem::Descriptor,
         path: String,
@@ -566,7 +565,7 @@ impl<T: WasiView> filesystem::Host for T {
             .map_err(|_| ErrorCode::IllegalByteSequence)?)
     }
 
-    async fn remove_directory_at(
+    fn remove_directory_at(
         &mut self,
         fd: filesystem::Descriptor,
         path: String,
@@ -579,7 +578,7 @@ impl<T: WasiView> filesystem::Host for T {
         Ok(d.dir.remove_dir(&path)?)
     }
 
-    async fn rename_at(
+    fn rename_at(
         &mut self,
         fd: filesystem::Descriptor,
         old_path: String,
@@ -599,7 +598,7 @@ impl<T: WasiView> filesystem::Host for T {
         Ok(())
     }
 
-    async fn symlink_at(
+    fn symlink_at(
         &mut self,
         fd: filesystem::Descriptor,
         src_path: String,
@@ -618,7 +617,7 @@ impl<T: WasiView> filesystem::Host for T {
         Ok(())
     }
 
-    async fn unlink_file_at(
+    fn unlink_file_at(
         &mut self,
         fd: filesystem::Descriptor,
         path: String,
@@ -634,7 +633,7 @@ impl<T: WasiView> filesystem::Host for T {
         Ok(())
     }
 
-    async fn access_at(
+    fn access_at(
         &mut self,
         _fd: filesystem::Descriptor,
         _path_flags: filesystem::PathFlags,
@@ -644,7 +643,7 @@ impl<T: WasiView> filesystem::Host for T {
         todo!()
     }
 
-    async fn change_file_permissions_at(
+    fn change_file_permissions_at(
         &mut self,
         _fd: filesystem::Descriptor,
         _path_flags: filesystem::PathFlags,
@@ -654,7 +653,7 @@ impl<T: WasiView> filesystem::Host for T {
         todo!()
     }
 
-    async fn change_directory_permissions_at(
+    fn change_directory_permissions_at(
         &mut self,
         _fd: filesystem::Descriptor,
         _path_flags: filesystem::PathFlags,
@@ -664,36 +663,27 @@ impl<T: WasiView> filesystem::Host for T {
         todo!()
     }
 
-    async fn lock_shared(&mut self, _fd: filesystem::Descriptor) -> Result<(), filesystem::Error> {
+    fn lock_shared(&mut self, _fd: filesystem::Descriptor) -> Result<(), filesystem::Error> {
         todo!()
     }
 
-    async fn lock_exclusive(
-        &mut self,
-        _fd: filesystem::Descriptor,
-    ) -> Result<(), filesystem::Error> {
+    fn lock_exclusive(&mut self, _fd: filesystem::Descriptor) -> Result<(), filesystem::Error> {
         todo!()
     }
 
-    async fn try_lock_shared(
-        &mut self,
-        _fd: filesystem::Descriptor,
-    ) -> Result<(), filesystem::Error> {
+    fn try_lock_shared(&mut self, _fd: filesystem::Descriptor) -> Result<(), filesystem::Error> {
         todo!()
     }
 
-    async fn try_lock_exclusive(
-        &mut self,
-        _fd: filesystem::Descriptor,
-    ) -> Result<(), filesystem::Error> {
+    fn try_lock_exclusive(&mut self, _fd: filesystem::Descriptor) -> Result<(), filesystem::Error> {
         todo!()
     }
 
-    async fn unlock(&mut self, _fd: filesystem::Descriptor) -> Result<(), filesystem::Error> {
+    fn unlock(&mut self, _fd: filesystem::Descriptor) -> Result<(), filesystem::Error> {
         todo!()
     }
 
-    async fn read_via_stream(
+    fn read_via_stream(
         &mut self,
         fd: filesystem::Descriptor,
         offset: filesystem::Filesize,
@@ -716,7 +706,7 @@ impl<T: WasiView> filesystem::Host for T {
         Ok(index)
     }
 
-    async fn write_via_stream(
+    fn write_via_stream(
         &mut self,
         fd: filesystem::Descriptor,
         offset: filesystem::Filesize,
@@ -740,7 +730,7 @@ impl<T: WasiView> filesystem::Host for T {
         Ok(index)
     }
 
-    async fn append_via_stream(
+    fn append_via_stream(
         &mut self,
         fd: filesystem::Descriptor,
     ) -> Result<streams::OutputStream, filesystem::Error> {
