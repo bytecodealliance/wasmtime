@@ -28,7 +28,6 @@ pub mod pipe;
 pub mod preview1;
 pub mod preview2;
 pub mod random;
-mod sched;
 pub mod stdio;
 pub mod stream;
 pub mod table;

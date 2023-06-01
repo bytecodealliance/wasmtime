@@ -101,10 +101,6 @@ impl From<&str> for ReadPipe<io::Cursor<String>> {
 
 #[async_trait::async_trait]
 impl<R: Read + ReadReady + Any + Send + Sync> InputStream for ReadPipe<R> {
-    async fn num_ready_bytes(&self) -> Result<u64, Error> {
-        Ok(self.borrow().num_ready_bytes()?)
-    }
-
     async fn read(&mut self, buf: &mut [u8]) -> Result<(u64, bool), Error> {
         match self.borrow().read(buf) {
             Ok(0) => Ok((0, true)),

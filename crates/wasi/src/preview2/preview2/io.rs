@@ -1,5 +1,4 @@
 use crate::preview2::{
-    preview2::poll::PollableEntry,
     stream::TableStreamExt,
     wasi::io::streams::{self, InputStream, OutputStream, StreamError},
     wasi::poll::poll::Pollable,
@@ -201,7 +200,7 @@ impl<T: WasiView> streams::Host for T {
     async fn subscribe_to_input_stream(&mut self, stream: InputStream) -> anyhow::Result<Pollable> {
         Ok(self
             .table_mut()
-            .push(Box::new(PollableEntry::Read(stream)))?)
+            .push(todo!("FIXME integrate HostPollable here"))?)
     }
 
     async fn subscribe_to_output_stream(
@@ -210,6 +209,6 @@ impl<T: WasiView> streams::Host for T {
     ) -> anyhow::Result<Pollable> {
         Ok(self
             .table_mut()
-            .push(Box::new(PollableEntry::Write(stream)))?)
+            .push(todo!("FIXME integrate HostPollable here"))?)
     }
 }

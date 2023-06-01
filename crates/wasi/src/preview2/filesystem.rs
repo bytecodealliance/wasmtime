@@ -96,16 +96,6 @@ impl FileInputStream {
 
 #[async_trait::async_trait]
 impl InputStream for FileInputStream {
-    #[cfg(unix)]
-    fn pollable_read(&self) -> Option<rustix::fd::BorrowedFd> {
-        use cap_std::io_lifetimes::AsFd;
-        Some(self.file.as_fd())
-    }
-    #[cfg(windows)]
-    fn pollable_read(&self) -> Option<io_extras::os::windows::BorrowedHandleOrSocket> {
-        use io_extras::os::windows::AsHandleOrSocket;
-        Some(self.file.as_handle_or_socket())
-    }
     async fn read(&mut self, buf: &mut [u8]) -> anyhow::Result<(u64, bool)> {
         use system_interface::fs::FileIoExt;
         let (n, end) = read_result(self.file.read_at(buf, self.position))?;
@@ -125,12 +115,7 @@ impl InputStream for FileInputStream {
         use system_interface::fs::FileIoExt;
         self.file.is_read_vectored_at()
     }
-    async fn num_ready_bytes(&self) -> anyhow::Result<u64> {
-        // FIXME we ought to be able to do better than this
-        Ok(0)
-    }
     async fn readable(&self) -> anyhow::Result<()> {
-        // FIXME is this the spot to perform the permission check?
         Ok(())
     }
 }
@@ -156,22 +141,6 @@ impl FileOutputStream {
 
 #[async_trait::async_trait]
 impl OutputStream for FileOutputStream {
-    /// If this stream is writing from a host file descriptor, return it so
-    /// that it can be polled with a host poll.
-    #[cfg(unix)]
-    fn pollable_write(&self) -> Option<rustix::fd::BorrowedFd> {
-        use cap_std::io_lifetimes::AsFd;
-        Some(self.file.as_fd())
-    }
-
-    /// If this stream is writing from a host file descriptor, return it so
-    /// that it can be polled with a host poll.
-    #[cfg(windows)]
-    fn pollable_write(&self) -> Option<io_extras::os::windows::BorrowedHandleOrSocket> {
-        use io_extras::os::windows::AsHandleOrSocket;
-        Some(self.file.as_handle_or_socket())
-    }
-
     /// Write bytes. On success, returns the number of bytes written.
     async fn write(&mut self, buf: &[u8]) -> anyhow::Result<u64> {
         use system_interface::fs::FileIoExt;
@@ -197,7 +166,6 @@ impl OutputStream for FileOutputStream {
 
     /// Test whether this stream is writable.
     async fn writable(&self) -> anyhow::Result<()> {
-        // FIXME perm check?
         Ok(())
     }
 }
@@ -213,22 +181,6 @@ impl FileAppendStream {
 
 #[async_trait::async_trait]
 impl OutputStream for FileAppendStream {
-    /// If this stream is writing from a host file descriptor, return it so
-    /// that it can be polled with a host poll.
-    #[cfg(unix)]
-    fn pollable_write(&self) -> Option<rustix::fd::BorrowedFd> {
-        use cap_std::io_lifetimes::AsFd;
-        Some(self.file.as_fd())
-    }
-
-    /// If this stream is writing from a host file descriptor, return it so
-    /// that it can be polled with a host poll.
-    #[cfg(windows)]
-    fn pollable_write(&self) -> Option<io_extras::os::windows::BorrowedHandleOrSocket> {
-        use io_extras::os::windows::AsHandleOrSocket;
-        Some(self.file.as_handle_or_socket())
-    }
-
     /// Write bytes. On success, returns the number of bytes written.
     async fn write(&mut self, buf: &[u8]) -> anyhow::Result<u64> {
         use system_interface::fs::FileIoExt;
@@ -251,7 +203,6 @@ impl OutputStream for FileAppendStream {
 
     /// Test whether this stream is writable.
     async fn writable(&self) -> anyhow::Result<()> {
-        // FIXME perm check?
         Ok(())
     }
 }

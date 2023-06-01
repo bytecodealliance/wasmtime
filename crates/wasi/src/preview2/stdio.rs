@@ -1,15 +1,8 @@
 use anyhow::Error;
 use std::convert::TryInto;
 use std::io::{self, Read, Write};
-use system_interface::io::ReadReady;
 
 use crate::preview2::{InputStream, OutputStream};
-#[cfg(unix)]
-use cap_std::io_lifetimes::{AsFd, BorrowedFd};
-#[cfg(windows)]
-use cap_std::io_lifetimes::{AsHandle, BorrowedHandle};
-#[cfg(windows)]
-use io_extras::os::windows::{AsHandleOrSocket, BorrowedHandleOrSocket};
 
 pub struct Stdin(std::io::Stdin);
 
@@ -19,16 +12,6 @@ pub fn stdin() -> Stdin {
 
 #[async_trait::async_trait]
 impl InputStream for Stdin {
-    #[cfg(unix)]
-    fn pollable_read(&self) -> Option<rustix::fd::BorrowedFd> {
-        Some(self.0.as_fd())
-    }
-
-    #[cfg(windows)]
-    fn pollable_read(&self) -> Option<io_extras::os::windows::BorrowedHandleOrSocket> {
-        Some(self.0.as_handle_or_socket())
-    }
-
     async fn read(&mut self, buf: &mut [u8]) -> Result<(u64, bool), Error> {
         match Read::read(&mut self.0, buf) {
             Ok(0) => Ok((0, true)),
@@ -58,31 +41,8 @@ impl InputStream for Stdin {
         Ok((num, num < nelem))
     }
 
-    async fn num_ready_bytes(&self) -> Result<u64, Error> {
-        Ok(self.0.num_ready_bytes()?)
-    }
-
     async fn readable(&self) -> Result<(), Error> {
         Err(anyhow::anyhow!("idk"))
-    }
-}
-#[cfg(windows)]
-impl AsHandle for Stdin {
-    fn as_handle(&self) -> BorrowedHandle<'_> {
-        self.0.as_handle()
-    }
-}
-#[cfg(windows)]
-impl AsHandleOrSocket for Stdin {
-    #[inline]
-    fn as_handle_or_socket(&self) -> BorrowedHandleOrSocket {
-        self.0.as_handle_or_socket()
-    }
-}
-#[cfg(unix)]
-impl AsFd for Stdin {
-    fn as_fd(&self) -> BorrowedFd<'_> {
-        self.0.as_fd()
     }
 }
 
@@ -90,15 +50,6 @@ macro_rules! wasi_output_stream_impl {
     ($ty:ty, $ident:ident) => {
         #[async_trait::async_trait]
         impl OutputStream for $ty {
-            #[cfg(unix)]
-            fn pollable_write(&self) -> Option<rustix::fd::BorrowedFd> {
-                Some(self.0.as_fd())
-            }
-            #[cfg(windows)]
-            fn pollable_write(&self) -> Option<io_extras::os::windows::BorrowedHandleOrSocket> {
-                Some(self.0.as_handle_or_socket())
-            }
-
             async fn write(&mut self, buf: &[u8]) -> Result<u64, Error> {
                 let n = Write::write(&mut self.0, buf)?;
                 Ok(n.try_into()?)
@@ -129,25 +80,6 @@ macro_rules! wasi_output_stream_impl {
 
             async fn writable(&self) -> Result<(), Error> {
                 Ok(())
-            }
-        }
-        #[cfg(windows)]
-        impl AsHandle for $ty {
-            fn as_handle(&self) -> BorrowedHandle<'_> {
-                self.0.as_handle()
-            }
-        }
-        #[cfg(unix)]
-        impl AsFd for $ty {
-            fn as_fd(&self) -> BorrowedFd<'_> {
-                self.0.as_fd()
-            }
-        }
-        #[cfg(windows)]
-        impl AsHandleOrSocket for $ty {
-            #[inline]
-            fn as_handle_or_socket(&self) -> BorrowedHandleOrSocket {
-                self.0.as_handle_or_socket()
             }
         }
     };

@@ -1,6 +1,6 @@
 #![allow(unused_variables)]
 
-use crate::preview2::preview2::poll::PollableEntry;
+use crate::preview2::preview2::poll::HostPollable;
 use crate::preview2::wasi::{
     clocks::monotonic_clock::{self, Instant},
     clocks::timezone::{self, Timezone, TimezoneDisplay},
@@ -54,7 +54,7 @@ impl<T: WasiView> monotonic_clock::Host for T {
     fn subscribe(&mut self, when: Instant, absolute: bool) -> anyhow::Result<Pollable> {
         Ok(self
             .table_mut()
-            .push(Box::new(PollableEntry::MonotonicClock(when, absolute)))?)
+            .push(todo!("FIXME integrate HostPollable here!"))?)
     }
 }
 

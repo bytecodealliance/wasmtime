@@ -8,32 +8,20 @@ use anyhow::Error;
 /// This pseudo-stream abstraction is synchronous and only supports bytes.
 #[async_trait::async_trait]
 pub trait InputStream: Send + Sync {
-    /// If this stream is reading from a host file descriptor, return it so
-    /// that it can be polled with a host poll.
-    #[cfg(unix)]
-    fn pollable_read(&self) -> Option<rustix::fd::BorrowedFd> {
-        None
-    }
-
-    /// If this stream is reading from a host file descriptor, return it so
-    /// that it can be polled with a host poll.
-    #[cfg(windows)]
-    fn pollable_read(&self) -> Option<io_extras::os::windows::BorrowedHandleOrSocket> {
-        None
-    }
-
     /// Read bytes. On success, returns a pair holding the number of bytes read
     /// and a flag indicating whether the end of the stream was reached.
-    async fn read(&mut self, _buf: &mut [u8]) -> Result<(u64, bool), Error> {
-        Err(anyhow::anyhow!("badf"))
-    }
+    async fn read(&mut self, buf: &mut [u8]) -> Result<(u64, bool), Error>;
 
     /// Vectored-I/O form of `read`.
     async fn read_vectored<'a>(
         &mut self,
-        _bufs: &mut [std::io::IoSliceMut<'a>],
+        bufs: &mut [std::io::IoSliceMut<'a>],
     ) -> Result<(u64, bool), Error> {
-        Err(anyhow::anyhow!("badf"))
+        if bufs.len() > 0 {
+            self.read(bufs.get_mut(0).unwrap()).await
+        } else {
+            self.read(&mut []).await
+        }
     }
 
     /// Test whether vectored I/O reads are known to be optimized in the
@@ -60,11 +48,6 @@ pub trait InputStream: Send + Sync {
         Ok((nread, saw_end))
     }
 
-    /// Return the number of bytes that may be read without blocking.
-    async fn num_ready_bytes(&self) -> Result<u64, Error> {
-        Ok(0)
-    }
-
     /// Test whether this stream is readable.
     async fn readable(&self) -> Result<(), Error>;
 }
@@ -76,28 +59,16 @@ pub trait InputStream: Send + Sync {
 /// This pseudo-stream abstraction is synchronous and only supports bytes.
 #[async_trait::async_trait]
 pub trait OutputStream: Send + Sync {
-    /// If this stream is writing from a host file descriptor, return it so
-    /// that it can be polled with a host poll.
-    #[cfg(unix)]
-    fn pollable_write(&self) -> Option<rustix::fd::BorrowedFd> {
-        None
-    }
-
-    /// If this stream is writing from a host file descriptor, return it so
-    /// that it can be polled with a host poll.
-    #[cfg(windows)]
-    fn pollable_write(&self) -> Option<io_extras::os::windows::BorrowedHandleOrSocket> {
-        None
-    }
-
     /// Write bytes. On success, returns the number of bytes written.
-    async fn write(&mut self, _buf: &[u8]) -> Result<u64, Error> {
-        Err(anyhow::anyhow!("badf"))
-    }
+    async fn write(&mut self, _buf: &[u8]) -> Result<u64, Error>;
 
     /// Vectored-I/O form of `write`.
-    async fn write_vectored<'a>(&mut self, _bufs: &[std::io::IoSlice<'a>]) -> Result<u64, Error> {
-        Err(anyhow::anyhow!("badf"))
+    async fn write_vectored<'a>(&mut self, bufs: &[std::io::IoSlice<'a>]) -> Result<u64, Error> {
+        if bufs.len() > 0 {
+            self.write(bufs.get(0).unwrap()).await
+        } else {
+            Ok(0)
+        }
     }
 
     /// Test whether vectored I/O writes are known to be optimized in the
