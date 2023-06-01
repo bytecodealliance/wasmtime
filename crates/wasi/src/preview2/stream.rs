@@ -1,6 +1,5 @@
 use crate::preview2::{Table, TableError};
 use anyhow::Error;
-use std::any::Any;
 
 /// An input bytestream.
 ///
@@ -9,8 +8,6 @@ use std::any::Any;
 /// This pseudo-stream abstraction is synchronous and only supports bytes.
 #[async_trait::async_trait]
 pub trait InputStream: Send + Sync {
-    fn as_any(&self) -> &dyn Any;
-
     /// If this stream is reading from a host file descriptor, return it so
     /// that it can be polled with a host poll.
     #[cfg(unix)]
@@ -79,8 +76,6 @@ pub trait InputStream: Send + Sync {
 /// This pseudo-stream abstraction is synchronous and only supports bytes.
 #[async_trait::async_trait]
 pub trait OutputStream: Send + Sync {
-    fn as_any(&self) -> &dyn Any;
-
     /// If this stream is writing from a host file descriptor, return it so
     /// that it can be polled with a host poll.
     #[cfg(unix)]

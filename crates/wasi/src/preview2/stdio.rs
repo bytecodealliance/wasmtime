@@ -1,5 +1,4 @@
 use anyhow::Error;
-use std::any::Any;
 use std::convert::TryInto;
 use std::io::{self, Read, Write};
 use system_interface::io::ReadReady;
@@ -20,9 +19,6 @@ pub fn stdin() -> Stdin {
 
 #[async_trait::async_trait]
 impl InputStream for Stdin {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
     #[cfg(unix)]
     fn pollable_read(&self) -> Option<rustix::fd::BorrowedFd> {
         Some(self.0.as_fd())
@@ -94,10 +90,6 @@ macro_rules! wasi_output_stream_impl {
     ($ty:ty, $ident:ident) => {
         #[async_trait::async_trait]
         impl OutputStream for $ty {
-            fn as_any(&self) -> &dyn Any {
-                self
-            }
-
             #[cfg(unix)]
             fn pollable_write(&self) -> Option<rustix::fd::BorrowedFd> {
                 Some(self.0.as_fd())

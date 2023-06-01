@@ -101,10 +101,6 @@ impl From<&str> for ReadPipe<io::Cursor<String>> {
 
 #[async_trait::async_trait]
 impl<R: Read + ReadReady + Any + Send + Sync> InputStream for ReadPipe<R> {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
     async fn num_ready_bytes(&self) -> Result<u64, Error> {
         Ok(self.borrow().num_ready_bytes()?)
     }
@@ -199,10 +195,6 @@ impl WritePipe<io::Cursor<Vec<u8>>> {
 
 #[async_trait::async_trait]
 impl<W: Write + Any + Send + Sync> OutputStream for WritePipe<W> {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
     async fn write(&mut self, buf: &[u8]) -> Result<u64, Error> {
         let n = self.borrow().write(buf)?;
         Ok(n.try_into()?)

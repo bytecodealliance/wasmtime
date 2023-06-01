@@ -1,5 +1,4 @@
 use crate::preview2::{InputStream, OutputStream, Table, TableError};
-use std::any::Any;
 use std::sync::Arc;
 
 bitflags::bitflags! {
@@ -97,9 +96,6 @@ impl FileInputStream {
 
 #[async_trait::async_trait]
 impl InputStream for FileInputStream {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
     #[cfg(unix)]
     fn pollable_read(&self) -> Option<rustix::fd::BorrowedFd> {
         use cap_std::io_lifetimes::AsFd;
@@ -160,10 +156,6 @@ impl FileOutputStream {
 
 #[async_trait::async_trait]
 impl OutputStream for FileOutputStream {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
     /// If this stream is writing from a host file descriptor, return it so
     /// that it can be polled with a host poll.
     #[cfg(unix)]
@@ -221,10 +213,6 @@ impl FileAppendStream {
 
 #[async_trait::async_trait]
 impl OutputStream for FileAppendStream {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
     /// If this stream is writing from a host file descriptor, return it so
     /// that it can be polled with a host poll.
     #[cfg(unix)]
