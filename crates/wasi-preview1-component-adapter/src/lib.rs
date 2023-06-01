@@ -1695,7 +1695,7 @@ pub unsafe extern "C" fn poll_oneoff(
         );
 
         assert_eq!(vec.len(), nsubscriptions);
-        assert_eq!(vec.as_ptr(), results);
+        assert_eq!(vec.as_ptr(), results as *const bool);
         forget(vec);
 
         drop(pollables);
