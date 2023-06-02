@@ -67,6 +67,8 @@ macro_rules! def_unsupported {
     (emit I64GeS $($rest:tt)*) => {};
     (emit I32GeU $($rest:tt)*) => {};
     (emit I64GeU $($rest:tt)*) => {};
+    (emit I32Eqz $($rest:tt)*) => {};
+    (emit I64Eqz $($rest:tt)*) => {};
     (emit LocalGet $($rest:tt)*) => {};
     (emit LocalSet $($rest:tt)*) => {};
     (emit Call $($rest:tt)*) => {};
@@ -266,6 +268,22 @@ where
 
     fn visit_i64_ge_u(&mut self) {
         self.cmp_i64s(CmpKind::GeU);
+    }
+
+    fn visit_i32_eqz(&mut self) {
+        use OperandSize::*;
+
+        self.context.unop(self.masm, S32, &mut |masm, reg, size| {
+            masm.cmp_with_set(reg, reg, RegImm::imm(0), CmpKind::Eq, size);
+        });
+    }
+
+    fn visit_i64_eqz(&mut self) {
+        use OperandSize::*;
+
+        self.context.unop(self.masm, S64, &mut |masm, reg, size| {
+            masm.cmp_with_set(reg, reg, RegImm::imm(0), CmpKind::Eq, size);
+        });
     }
 
     fn visit_end(&mut self) {}
