@@ -1598,6 +1598,7 @@ impl<T> StoreContextMut<'_, T> {
                 fiber,
                 current_poll_cx,
                 engine,
+                state: Some(wasmtime_runtime::AsyncWasmCallState::new()),
             }
         };
         future.await?;
@@ -1608,6 +1609,8 @@ impl<T> StoreContextMut<'_, T> {
             fiber: wasmtime_fiber::Fiber<'a, Result<()>, (), Result<()>>,
             current_poll_cx: *mut *mut Context<'static>,
             engine: Engine,
+            // See comments in `FiberFuture::resume` for this
+            state: Option<wasmtime_runtime::AsyncWasmCallState>,
         }
 
         // This is surely the most dangerous `unsafe impl Send` in the entire
@@ -1673,6 +1676,50 @@ impl<T> StoreContextMut<'_, T> {
         // correct. That's what `unsafe` in Rust is all about, though, right?
         unsafe impl Send for FiberFuture<'_> {}
 
+        impl FiberFuture<'_> {
+            /// This is a helper function to call `resume` on the underlying
+            /// fiber while correctly managing Wasmtime's thread-local data.
+            ///
+            /// Wasmtime's implementation of traps leverages thread-local data
+            /// to get access to metadata during a signal. This thread-local
+            /// data is a linked list of "activations" where the nodes of the
+            /// linked list are stored on the stack. It would be invalid as a
+            /// result to suspend a computation with the head of the linked list
+            /// on this stack then move the stack to another thread and resume
+            /// it. That means that a different thread would point to our stack
+            /// and our thread doesn't point to our stack at all!
+            ///
+            /// Basically management of TLS is required here one way or another.
+            /// The strategy currently settled on is to manage the list of
+            /// activations created by this fiber as a unit. When a fiber
+            /// resumes the linked list is prepended to the current thread's
+            /// list. When the fiber is suspended then the fiber's list of
+            /// activations are all removed en-masse and saved within the fiber.
+            fn resume(&mut self, val: Result<()>) -> Result<Result<()>, ()> {
+                unsafe {
+                    let prev = self.state.take().unwrap().push();
+                    let restore = Restore {
+                        fiber: self,
+                        state: Some(prev),
+                    };
+                    return restore.fiber.fiber.resume(val);
+                }
+
+                struct Restore<'a, 'b> {
+                    fiber: &'a mut FiberFuture<'b>,
+                    state: Option<wasmtime_runtime::PreviousAsyncWasmCallState>,
+                }
+
+                impl Drop for Restore<'_, '_> {
+                    fn drop(&mut self) {
+                        unsafe {
+                            self.fiber.state = Some(self.state.take().unwrap().restore());
+                        }
+                    }
+                }
+            }
+        }
+
         impl Future for FiberFuture<'_> {
             type Output = Result<()>;
 
@@ -1699,13 +1746,34 @@ impl<T> StoreContextMut<'_, T> {
 
                     // After that's set up we resume execution of the fiber, which
                     // may also start the fiber for the first time. This either
-                    // returns `Ok` saying the fiber finished (yay!) or it returns
-                    // `Err` with the payload passed to `suspend`, which in our case
-                    // is `()`. If `Err` is returned that means the fiber polled a
-                    // future but it said "Pending", so we propagate that here.
-                    match self.fiber.resume(Ok(())) {
+                    // returns `Ok` saying the fiber finished (yay!) or it
+                    // returns `Err` with the payload passed to `suspend`, which
+                    // in our case is `()`.
+                    match self.resume(Ok(())) {
                         Ok(result) => Poll::Ready(result),
-                        Err(()) => Poll::Pending,
+
+                        // If `Err` is returned that means the fiber polled a
+                        // future but it said "Pending", so we propagate that
+                        // here.
+                        //
+                        // An additional safety check is performed when leaving
+                        // this function to help bolster the guarantees of
+                        // `unsafe impl Send` above. Notably this future may get
+                        // re-polled on a different thread. Wasmtime's
+                        // thread-local state points to the stack, however,
+                        // meaning that it would be incorrect to leave a pointer
+                        // in TLS when this function returns. This function
+                        // performs a runtime assert to verify that this is the
+                        // case, notably that the one TLS pointer Wasmtime uses
+                        // is not pointing anywhere within the stack. If it is
+                        // then that's a bug indicating that TLS management in
+                        // Wasmtime is incorrect.
+                        Err(()) => {
+                            if let Some(range) = self.fiber.stack().range() {
+                                wasmtime_runtime::AsyncWasmCallState::assert_current_state_not_in_range(range);
+                            }
+                            Poll::Pending
+                        }
                     }
                 }
             }
@@ -1729,13 +1797,15 @@ impl<T> StoreContextMut<'_, T> {
         impl Drop for FiberFuture<'_> {
             fn drop(&mut self) {
                 if !self.fiber.done() {
-                    let result = self.fiber.resume(Err(anyhow!("future dropped")));
+                    let result = self.resume(Err(anyhow!("future dropped")));
                     // This resumption with an error should always complete the
                     // fiber. While it's technically possible for host code to catch
                     // the trap and re-resume, we'd ideally like to signal that to
                     // callers that they shouldn't be doing that.
                     debug_assert!(result.is_ok());
                 }
+
+                self.state.take().unwrap().assert_null();
 
                 unsafe {
                     self.engine
@@ -1811,10 +1881,7 @@ impl AsyncCx {
                 Poll::Pending => {}
             }
 
-            let before = wasmtime_runtime::TlsRestore::take();
-            let res = (*suspend).suspend(());
-            before.replace();
-            res?;
+            (*suspend).suspend(())?;
         }
     }
 }

@@ -462,7 +462,7 @@ impl StackPool {
             commit_stack_pages(bottom_of_stack, size_without_guard)?;
 
             let stack =
-                wasmtime_fiber::FiberStack::from_top_ptr(bottom_of_stack.add(size_without_guard))?;
+                wasmtime_fiber::FiberStack::from_raw_parts(bottom_of_stack, size_without_guard)?;
             Ok(stack)
         }
     }

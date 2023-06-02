@@ -69,10 +69,7 @@ pub use crate::mmap::Mmap;
 pub use crate::mmap_vec::MmapVec;
 pub use crate::store_box::*;
 pub use crate::table::{Table, TableElement};
-pub use crate::traphandlers::{
-    catch_traps, init_traps, raise_lib_trap, raise_user_trap, resume_panic, tls_eager_initialize,
-    Backtrace, Frame, SignalHandler, TlsRestore, Trap, TrapReason,
-};
+pub use crate::traphandlers::*;
 pub use crate::vmcontext::{
     VMArrayCallFunction, VMArrayCallHostFuncContext, VMContext, VMFuncRef, VMFunctionBody,
     VMFunctionImport, VMGlobalDefinition, VMGlobalImport, VMInvokeArgument, VMMemoryDefinition,

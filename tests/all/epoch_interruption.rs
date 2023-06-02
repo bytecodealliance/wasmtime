@@ -444,7 +444,7 @@ async fn drop_future_on_epoch_yield() {
 
     let instance = linker.instantiate_async(&mut store, &module).await.unwrap();
     let f = instance.get_func(&mut store, "run").unwrap();
-    PollOnce::new(Box::pin(f.call_async(&mut store, &[], &mut []))).await;
+    let _ = PollOnce::new(Box::pin(f.call_async(&mut store, &[], &mut []))).await;
 
     assert_eq!(true, alive_flag.load(Ordering::Acquire));
 }
