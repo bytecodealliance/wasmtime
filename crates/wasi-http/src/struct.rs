@@ -8,7 +8,7 @@ pub struct Stream {
     pub data: BytesMut,
 }
 
-impl crate::types::Method {
+impl crate::wasi::http::types::Method {
     pub fn new(m: &hyper::Method) -> Self {
         match m {
             &hyper::Method::GET => Method::Get,
@@ -25,18 +25,18 @@ impl crate::types::Method {
     }
 }
 
-impl From<&http::uri::Scheme> for crate::types::Scheme {
-    fn from(s: &http::uri::Scheme) -> crate::types::Scheme {
+impl From<&http::uri::Scheme> for crate::wasi::http::types::Scheme {
+    fn from(s: &http::uri::Scheme) -> crate::wasi::http::types::Scheme {
         match s.as_str() {
-            "http" => crate::types::Scheme::Http,
-            "https" => crate::types::Scheme::Https,
+            "http" => crate::wasi::http::types::Scheme::Http,
+            "https" => crate::wasi::http::types::Scheme::Https,
             _ => panic!("unsupported scheme!"),
         }
     }
 }
 
-impl From<crate::types::Method> for u32 {
-    fn from(e: crate::types::Method) -> u32 {
+impl From<crate::wasi::http::types::Method> for u32 {
+    fn from(e: crate::wasi::http::types::Method) -> u32 {
         match e {
             Method::Get => 0,
             Method::Head => 1,

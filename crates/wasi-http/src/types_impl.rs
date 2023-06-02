@@ -151,7 +151,7 @@ impl Host for WasiHttp {
             .requests
             .get(&request)
             .ok_or_else(|| anyhow!("unknown request: {request}"))?;
-        Ok(r.path.clone())
+        Ok(Some(r.path_with_query.clone()))
     }
     fn incoming_request_scheme(
         &mut self,
@@ -171,7 +171,7 @@ impl Host for WasiHttp {
             .requests
             .get(&request)
             .ok_or_else(|| anyhow!("unknown request: {request}"))?;
-        Ok(r.authority.clone())
+        Ok(Some(r.authority.clone()))
     }
     fn incoming_request_headers(&mut self, request: IncomingRequest) -> wasmtime::Result<Headers> {
         let r = self
@@ -193,13 +193,6 @@ impl Host for WasiHttp {
             .get(&request)
             .ok_or_else(|| anyhow!("unknown request: {request}"))?;
         Ok(Ok(r.body))
-    }
-    fn incoming_request_query(&mut self, request: IncomingRequest) -> wasmtime::Result<String> {
-        let r = self
-            .requests
-            .get(&request)
-            .ok_or_else(|| anyhow!("unknown request: {request}"))?;
-        Ok(r.query.clone())
     }
     fn new_outgoing_request(
         &mut self,

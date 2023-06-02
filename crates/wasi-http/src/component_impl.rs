@@ -565,7 +565,7 @@ pub fn add_component_to_linker<T: Send>(
 
                         let memory = memory_get(&mut caller)?;
                         memory.write(caller.as_context_mut(), name_ptr as _, &name.as_bytes())?;
-                        memory.write(caller.as_context_mut(), value_ptr as _, &value.as_bytes())?;
+                        memory.write(caller.as_context_mut(), value_ptr as _, value)?;
 
                         let pair: [u32; 4] = [name_ptr, name_len, value_ptr, value_len];
                         let raw_pair = u32_array_to_u8(&pair);
@@ -604,7 +604,7 @@ pub fn add_component_to_linker<T: Send>(
 
                     let memory = memory_get(&mut caller)?;
                     memory.write(caller.as_context_mut(), name_ptr as _, &name.as_bytes())?;
-                    memory.write(caller.as_context_mut(), value_ptr as _, &value.as_bytes())?;
+                    memory.write(caller.as_context_mut(), value_ptr as _, value)?;
 
                     let pair: [u32; 4] = [name_ptr, name_len, value_ptr, value_len];
                     let raw_pair = u32_array_to_u8(&pair);
@@ -649,22 +649,24 @@ pub fn add_component_to_linker<T: Send>(
                 Box::new(async move {
                     let ctx = get_cx(caller.data_mut());
                     let authority = ctx.incoming_request_authority(request)?;
-                    write_string_to_memory_async(&mut caller, ptr, &authority).await?;
+                    let authority_str = authority.unwrap_or("".to_string());
+                    write_string_to_memory_async(&mut caller, ptr, &authority_str).await?;
                     Ok(())
                 })
             },
         )?;
         linker.func_wrap2_async(
             "wasi:http/types",
-            "incoming-request-path",
+            "incoming-request-path-with-query",
             move |mut caller: Caller<'_, T>,
                   request: u32,
                   ptr: u32|
                   -> Box<dyn std::future::Future<Output = anyhow::Result<()>> + Send> {
                 Box::new(async move {
                     let ctx = get_cx(caller.data_mut());
-                    let path = ctx.incoming_request_path(request)?;
-                    write_string_to_memory_async(&mut caller, ptr, &path).await?;
+                    let path = ctx.incoming_request_path_with_query(request)?;
+                    let path_str = path.unwrap_or("".to_string());
+                    write_string_to_memory_async(&mut caller, ptr, &path_str).await?;
                     Ok(())
                 })
             },
@@ -675,7 +677,9 @@ pub fn add_component_to_linker<T: Send>(
             "incoming-request-authority",
             move |mut caller: Caller<'_, T>, request: u32, ptr: u32| -> anyhow::Result<()> {
                 let ctx = get_cx(caller.data_mut());
-                let authority = ctx.incoming_request_authority(request)?;
+                let authority = ctx
+                    .incoming_request_authority(request)?
+                    .unwrap_or("".to_string());
                 write_string_to_memory(&mut caller, ptr, &authority)?;
                 Ok(())
             },
@@ -685,7 +689,9 @@ pub fn add_component_to_linker<T: Send>(
             "incoming-request-path",
             move |mut caller: Caller<'_, T>, request: u32, ptr: u32| -> anyhow::Result<()> {
                 let ctx = get_cx(caller.data_mut());
-                let path = ctx.incoming_request_path(request)?;
+                let path = ctx
+                    .incoming_request_path_with_query(request)?
+                    .unwrap_or("".to_string());
                 write_string_to_memory(&mut caller, ptr, &path)?;
                 Ok(())
             },

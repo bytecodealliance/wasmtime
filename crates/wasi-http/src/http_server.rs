@@ -1,4 +1,4 @@
-use crate::types::Method;
+use crate::wasi::http::types::Method;
 use crate::WasiHttp;
 use http::{Request, Response, StatusCode};
 use http_body_util::Full;
@@ -56,16 +56,17 @@ impl hyper::service::Service<Request<Incoming>> for HttpHandler<'_> {
             Some(s) => s.to_string(),
             None => "".to_string(),
         };
-        request.path = req.uri().path().to_string();
+        request.path_with_query =
+            req.uri().path().to_string() + "?" + req.uri().query().unwrap_or("");
 
         for (name, value) in req.headers().iter() {
             let val = value.to_str().unwrap().to_string();
             let key = name.to_string();
             match request.headers.get_mut(&key) {
-                Some(vec) => vec.push(val),
+                Some(vec) => vec.push(val.into()),
                 None => {
                     let mut vec = std::vec::Vec::new();
-                    vec.push(val);
+                    vec.push(val.into_bytes());
                     request.headers.insert(key.to_string(), vec);
                 }
             }
@@ -85,7 +86,9 @@ impl hyper::service::Service<Request<Incoming>> for HttpHandler<'_> {
 
             let module = wasmtime::Module::from_file(&store.engine(), path).unwrap();
             let instance = linker.instantiate_async(&mut store, &module).await.unwrap();
-            let func = instance.get_func(&mut store, "HTTP#handle").unwrap();
+            let func = instance
+                .get_func(&mut store, "wasi:http/incoming-handler#handle")
+                .unwrap();
             let typed = func.typed::<(u32, u32), ()>(store.as_context()).unwrap();
             typed
                 .call_async(store.as_context_mut(), (ptr, outparam_id))
