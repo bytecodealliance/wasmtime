@@ -1,4 +1,4 @@
-use crate::preview2::{InputStream, OutputStream, Table, TableError};
+use crate::preview2::{HostInputStream, HostOutputStream, Table, TableError};
 use std::sync::Arc;
 
 bitflags::bitflags! {
@@ -95,7 +95,7 @@ impl FileInputStream {
 }
 
 #[async_trait::async_trait]
-impl InputStream for FileInputStream {
+impl HostInputStream for FileInputStream {
     async fn read(&mut self, buf: &mut [u8]) -> anyhow::Result<(u64, bool)> {
         use system_interface::fs::FileIoExt;
         let (n, end) = read_result(self.file.read_at(buf, self.position))?;
@@ -140,7 +140,7 @@ impl FileOutputStream {
 }
 
 #[async_trait::async_trait]
-impl OutputStream for FileOutputStream {
+impl HostOutputStream for FileOutputStream {
     /// Write bytes. On success, returns the number of bytes written.
     async fn write(&mut self, buf: &[u8]) -> anyhow::Result<u64> {
         use system_interface::fs::FileIoExt;
@@ -180,7 +180,7 @@ impl FileAppendStream {
 }
 
 #[async_trait::async_trait]
-impl OutputStream for FileAppendStream {
+impl HostOutputStream for FileAppendStream {
     /// Write bytes. On success, returns the number of bytes written.
     async fn write(&mut self, buf: &[u8]) -> anyhow::Result<u64> {
         use system_interface::fs::FileIoExt;

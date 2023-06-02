@@ -2,16 +2,16 @@ use crate::preview2::{
     clocks::{self, WasiClocks},
     filesystem::{Dir, TableFsExt},
     pipe, random, stdio,
-    stream::{InputStream, OutputStream, TableStreamExt},
+    stream::{HostInputStream, HostOutputStream, TableStreamExt},
     DirPerms, FilePerms, Table,
 };
 use cap_rand::{Rng, RngCore, SeedableRng};
 
 #[derive(Default)]
 pub struct WasiCtxBuilder {
-    stdin: Option<Box<dyn InputStream>>,
-    stdout: Option<Box<dyn OutputStream>>,
-    stderr: Option<Box<dyn OutputStream>>,
+    stdin: Option<Box<dyn HostInputStream>>,
+    stdout: Option<Box<dyn HostOutputStream>>,
+    stderr: Option<Box<dyn HostOutputStream>>,
     env: Vec<(String, String)>,
     args: Vec<String>,
     preopens: Vec<(Dir, String)>,
@@ -45,17 +45,17 @@ impl WasiCtxBuilder {
         result
     }
 
-    pub fn set_stdin(mut self, stdin: impl InputStream + 'static) -> Self {
+    pub fn set_stdin(mut self, stdin: impl HostInputStream + 'static) -> Self {
         self.stdin = Some(Box::new(stdin));
         self
     }
 
-    pub fn set_stdout(mut self, stdout: impl OutputStream + 'static) -> Self {
+    pub fn set_stdout(mut self, stdout: impl HostOutputStream + 'static) -> Self {
         self.stdout = Some(Box::new(stdout));
         self
     }
 
-    pub fn set_stderr(mut self, stderr: impl OutputStream + 'static) -> Self {
+    pub fn set_stderr(mut self, stderr: impl HostOutputStream + 'static) -> Self {
         self.stderr = Some(Box::new(stderr));
         self
     }

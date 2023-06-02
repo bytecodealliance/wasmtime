@@ -2,7 +2,7 @@ use anyhow::Error;
 use std::convert::TryInto;
 use std::io::{self, Read, Write};
 
-use crate::preview2::{InputStream, OutputStream};
+use crate::preview2::{HostInputStream, HostOutputStream};
 
 pub struct Stdin(std::io::Stdin);
 
@@ -11,7 +11,7 @@ pub fn stdin() -> Stdin {
 }
 
 #[async_trait::async_trait]
-impl InputStream for Stdin {
+impl HostInputStream for Stdin {
     async fn read(&mut self, buf: &mut [u8]) -> Result<(u64, bool), Error> {
         match Read::read(&mut self.0, buf) {
             Ok(0) => Ok((0, true)),
@@ -49,7 +49,7 @@ impl InputStream for Stdin {
 macro_rules! wasi_output_stream_impl {
     ($ty:ty, $ident:ident) => {
         #[async_trait::async_trait]
-        impl OutputStream for $ty {
+        impl HostOutputStream for $ty {
             async fn write(&mut self, buf: &[u8]) -> Result<u64, Error> {
                 let n = Write::write(&mut self.0, buf)?;
                 Ok(n.try_into()?)

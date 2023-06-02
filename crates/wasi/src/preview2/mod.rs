@@ -24,6 +24,7 @@ mod ctx;
 mod error;
 pub(crate) mod filesystem;
 pub mod pipe;
+mod poll;
 #[cfg(feature = "preview1-on-preview2")]
 pub mod preview1;
 pub mod preview2;
@@ -33,11 +34,12 @@ pub mod stream;
 pub mod table;
 pub mod wasi;
 
+pub use self::clocks::{WasiClocks, WasiMonotonicClock, WasiWallClock};
+pub use self::ctx::{WasiCtx, WasiCtxBuilder, WasiView};
+pub use self::error::I32Exit;
+pub use self::filesystem::{DirPerms, FilePerms};
+pub use self::poll::HostPollable;
+pub use self::stream::{HostInputStream, HostOutputStream};
+pub use self::table::{Table, TableError};
 pub use cap_fs_ext::SystemTimeSpec;
 pub use cap_rand::RngCore;
-pub use clocks::{WasiClocks, WasiMonotonicClock, WasiWallClock};
-pub use ctx::{WasiCtx, WasiCtxBuilder, WasiView};
-pub use error::I32Exit;
-pub use filesystem::{DirPerms, FilePerms};
-pub use stream::{InputStream, OutputStream};
-pub use table::{Table, TableError};

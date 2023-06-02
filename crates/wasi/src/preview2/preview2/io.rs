@@ -1,5 +1,5 @@
 use crate::preview2::{
-    stream::TableStreamExt,
+    stream::{HostInputStream, HostOutputStream, TableStreamExt},
     wasi::io::streams::{self, InputStream, OutputStream, StreamError},
     wasi::poll::poll::Pollable,
     TableError, WasiView,
@@ -31,13 +31,13 @@ impl From<TableError> for streams::Error {
 impl<T: WasiView> streams::Host for T {
     async fn drop_input_stream(&mut self, stream: InputStream) -> anyhow::Result<()> {
         self.table_mut()
-            .delete::<Box<dyn crate::preview2::InputStream>>(stream)?;
+            .delete::<Box<dyn HostInputStream>>(stream)?;
         Ok(())
     }
 
     async fn drop_output_stream(&mut self, stream: OutputStream) -> anyhow::Result<()> {
         self.table_mut()
-            .delete::<Box<dyn crate::preview2::OutputStream>>(stream)?;
+            .delete::<Box<dyn HostOutputStream>>(stream)?;
         Ok(())
     }
 
@@ -46,8 +46,7 @@ impl<T: WasiView> streams::Host for T {
         stream: InputStream,
         len: u64,
     ) -> Result<(Vec<u8>, bool), streams::Error> {
-        let s: &mut Box<dyn crate::preview2::InputStream> =
-            self.table_mut().get_input_stream_mut(stream)?;
+        let s = self.table_mut().get_input_stream_mut(stream)?;
 
         // Len could be any `u64` value, but we don't want to
         // allocate too much up front, so make a wild guess
@@ -72,8 +71,7 @@ impl<T: WasiView> streams::Host for T {
     }
 
     async fn write(&mut self, stream: OutputStream, bytes: Vec<u8>) -> Result<u64, streams::Error> {
-        let s: &mut Box<dyn crate::preview2::OutputStream> =
-            self.table_mut().get_output_stream_mut(stream)?;
+        let s = self.table_mut().get_output_stream_mut(stream)?;
 
         let bytes_written: u64 = s.write(&bytes).await?;
 
@@ -90,8 +88,7 @@ impl<T: WasiView> streams::Host for T {
     }
 
     async fn skip(&mut self, stream: InputStream, len: u64) -> Result<(u64, bool), streams::Error> {
-        let s: &mut Box<dyn crate::preview2::InputStream> =
-            self.table_mut().get_input_stream_mut(stream)?;
+        let s = self.table_mut().get_input_stream_mut(stream)?;
 
         let (bytes_skipped, end) = s.skip(len).await?;
 
@@ -112,8 +109,7 @@ impl<T: WasiView> streams::Host for T {
         stream: OutputStream,
         len: u64,
     ) -> Result<u64, streams::Error> {
-        let s: &mut Box<dyn crate::preview2::OutputStream> =
-            self.table_mut().get_output_stream_mut(stream)?;
+        let s = self.table_mut().get_output_stream_mut(stream)?;
 
         let bytes_written: u64 = s.write_zeroes(len).await?;
 

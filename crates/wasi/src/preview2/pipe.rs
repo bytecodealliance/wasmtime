@@ -7,7 +7,7 @@
 //! Some convenience constructors are included for common backing types like `Vec<u8>` and `String`,
 //! but the virtual pipes can be instantiated with any `Read` or `Write` type.
 //!
-use crate::preview2::stream::{InputStream, OutputStream};
+use crate::preview2::stream::{HostInputStream, HostOutputStream};
 use anyhow::Error;
 use std::any::Any;
 use std::convert::TryInto;
@@ -100,7 +100,7 @@ impl From<&str> for ReadPipe<io::Cursor<String>> {
 }
 
 #[async_trait::async_trait]
-impl<R: Read + ReadReady + Any + Send + Sync> InputStream for ReadPipe<R> {
+impl<R: Read + ReadReady + Any + Send + Sync> HostInputStream for ReadPipe<R> {
     async fn read(&mut self, buf: &mut [u8]) -> Result<(u64, bool), Error> {
         match self.borrow().read(buf) {
             Ok(0) => Ok((0, true)),
@@ -190,7 +190,7 @@ impl WritePipe<io::Cursor<Vec<u8>>> {
 }
 
 #[async_trait::async_trait]
-impl<W: Write + Any + Send + Sync> OutputStream for WritePipe<W> {
+impl<W: Write + Any + Send + Sync> HostOutputStream for WritePipe<W> {
     async fn write(&mut self, buf: &[u8]) -> Result<u64, Error> {
         let n = self.borrow().write(buf)?;
         Ok(n.try_into()?)

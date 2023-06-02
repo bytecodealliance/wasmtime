@@ -7,7 +7,7 @@ use anyhow::Error;
 /// built into the wit bindings, and will support async and type parameters.
 /// This pseudo-stream abstraction is synchronous and only supports bytes.
 #[async_trait::async_trait]
-pub trait InputStream: Send + Sync {
+pub trait HostInputStream: Send + Sync {
     /// Read bytes. On success, returns a pair holding the number of bytes read
     /// and a flag indicating whether the end of the stream was reached.
     async fn read(&mut self, buf: &mut [u8]) -> Result<(u64, bool), Error>;
@@ -58,7 +58,7 @@ pub trait InputStream: Send + Sync {
 /// built into the wit bindings, and will support async and type parameters.
 /// This pseudo-stream abstraction is synchronous and only supports bytes.
 #[async_trait::async_trait]
-pub trait OutputStream: Send + Sync {
+pub trait HostOutputStream: Send + Sync {
     /// Write bytes. On success, returns the number of bytes written.
     async fn write(&mut self, _buf: &[u8]) -> Result<u64, Error>;
 
@@ -80,7 +80,7 @@ pub trait OutputStream: Send + Sync {
     /// Transfer bytes directly from an input stream to an output stream.
     async fn splice(
         &mut self,
-        src: &mut dyn InputStream,
+        src: &mut dyn HostInputStream,
         nelem: u64,
     ) -> Result<(u64, bool), Error> {
         let mut nspliced = 0;
@@ -122,33 +122,50 @@ pub trait OutputStream: Send + Sync {
 }
 
 pub trait TableStreamExt {
-    fn push_input_stream(&mut self, istream: Box<dyn InputStream>) -> Result<u32, TableError>;
-    fn get_input_stream(&self, fd: u32) -> Result<&dyn InputStream, TableError>;
-    fn get_input_stream_mut(&mut self, fd: u32) -> Result<&mut Box<dyn InputStream>, TableError>;
+    fn push_input_stream(&mut self, istream: Box<dyn HostInputStream>) -> Result<u32, TableError>;
+    fn get_input_stream(&self, fd: u32) -> Result<&dyn HostInputStream, TableError>;
+    fn get_input_stream_mut(
+        &mut self,
+        fd: u32,
+    ) -> Result<&mut Box<dyn HostInputStream>, TableError>;
 
-    fn push_output_stream(&mut self, ostream: Box<dyn OutputStream>) -> Result<u32, TableError>;
-    fn get_output_stream(&self, fd: u32) -> Result<&dyn OutputStream, TableError>;
-    fn get_output_stream_mut(&mut self, fd: u32) -> Result<&mut Box<dyn OutputStream>, TableError>;
+    fn push_output_stream(&mut self, ostream: Box<dyn HostOutputStream>)
+        -> Result<u32, TableError>;
+    fn get_output_stream(&self, fd: u32) -> Result<&dyn HostOutputStream, TableError>;
+    fn get_output_stream_mut(
+        &mut self,
+        fd: u32,
+    ) -> Result<&mut Box<dyn HostOutputStream>, TableError>;
 }
 impl TableStreamExt for Table {
-    fn push_input_stream(&mut self, istream: Box<dyn InputStream>) -> Result<u32, TableError> {
+    fn push_input_stream(&mut self, istream: Box<dyn HostInputStream>) -> Result<u32, TableError> {
         self.push(Box::new(istream))
     }
-    fn get_input_stream(&self, fd: u32) -> Result<&dyn InputStream, TableError> {
-        self.get::<Box<dyn InputStream>>(fd).map(|f| f.as_ref())
+    fn get_input_stream(&self, fd: u32) -> Result<&dyn HostInputStream, TableError> {
+        self.get::<Box<dyn HostInputStream>>(fd).map(|f| f.as_ref())
     }
-    fn get_input_stream_mut(&mut self, fd: u32) -> Result<&mut Box<dyn InputStream>, TableError> {
-        self.get_mut::<Box<dyn InputStream>>(fd)
+    fn get_input_stream_mut(
+        &mut self,
+        fd: u32,
+    ) -> Result<&mut Box<dyn HostInputStream>, TableError> {
+        self.get_mut::<Box<dyn HostInputStream>>(fd)
     }
 
-    fn push_output_stream(&mut self, ostream: Box<dyn OutputStream>) -> Result<u32, TableError> {
+    fn push_output_stream(
+        &mut self,
+        ostream: Box<dyn HostOutputStream>,
+    ) -> Result<u32, TableError> {
         self.push(Box::new(ostream))
     }
-    fn get_output_stream(&self, fd: u32) -> Result<&dyn OutputStream, TableError> {
-        self.get::<Box<dyn OutputStream>>(fd).map(|f| f.as_ref())
+    fn get_output_stream(&self, fd: u32) -> Result<&dyn HostOutputStream, TableError> {
+        self.get::<Box<dyn HostOutputStream>>(fd)
+            .map(|f| f.as_ref())
     }
-    fn get_output_stream_mut(&mut self, fd: u32) -> Result<&mut Box<dyn OutputStream>, TableError> {
-        self.get_mut::<Box<dyn OutputStream>>(fd)
+    fn get_output_stream_mut(
+        &mut self,
+        fd: u32,
+    ) -> Result<&mut Box<dyn HostOutputStream>, TableError> {
+        self.get_mut::<Box<dyn HostOutputStream>>(fd)
     }
 }
 
