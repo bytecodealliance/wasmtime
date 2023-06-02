@@ -1363,6 +1363,7 @@ pub(crate) fn invoke_wasm_and_catch_traps<T>(
         let result = wasmtime_runtime::catch_traps(
             store.0.signal_handler(),
             store.0.engine().config().wasm_backtrace,
+            store.0.engine().config().coredump_on_trap,
             store.0.default_caller(),
             closure,
         );

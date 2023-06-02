@@ -76,10 +76,12 @@
 //! contents of `StoreOpaque`. This is an invariant that we, as the authors of
 //! `wasmtime`, must uphold for the public interface to be safe.
 
+use crate::instance::{InstanceData, PrePatchedFuncRef};
 use crate::linker::Definition;
 use crate::module::BareModuleInfo;
 use crate::trampoline::VMHostGlobalContext;
 use crate::{module::ModuleRegistry, Engine, Module, Trap, Val, ValRaw};
+use crate::{Global, Instance, Memory};
 use anyhow::{anyhow, bail, Result};
 use std::cell::UnsafeCell;
 use std::convert::TryFrom;
@@ -94,9 +96,10 @@ use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 use wasmtime_runtime::{
-    InstanceAllocationRequest, InstanceAllocator, InstanceHandle, ModuleInfo,
+    ExportGlobal, InstanceAllocationRequest, InstanceAllocator, InstanceHandle, ModuleInfo,
     OnDemandInstanceAllocator, SignalHandler, StoreBox, StorePtr, VMContext, VMExternRef,
-    VMExternRefActivationsTable, VMFuncRef, VMRuntimeLimits, WasmFault,
+    VMExternRefActivationsTable, VMExternRefActivationsTable, VMFuncRef, VMRuntimeLimits,
+    WasmFault,
 };
 
 mod context;
@@ -1248,6 +1251,24 @@ impl StoreOpaque {
 
     pub fn instance_mut(&mut self, id: InstanceId) -> &mut InstanceHandle {
         &mut self.instances[id.0].handle
+    }
+
+    pub fn all_instances(&self) -> impl ExactSizeIterator<Item = Instance> {
+        self.store_data()
+            .iter::<InstanceData>()
+            .map(Instance::from_stored)
+    }
+
+    pub fn all_memories(&self) -> impl ExactSizeIterator<Item = Memory> {
+        self.store_data()
+            .iter::<ExportMemory>()
+            .map(Memory::from_stored)
+    }
+
+    pub fn all_globals(&self) -> impl ExactSizeIterator<Item = Global> {
+        self.store_data()
+            .iter::<ExportGlobal>()
+            .map(Global::from_stored)
     }
 
     #[cfg_attr(not(target_os = "linux"), allow(dead_code))] // not used on all platforms

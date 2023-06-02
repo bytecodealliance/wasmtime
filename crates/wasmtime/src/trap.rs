@@ -1,3 +1,4 @@
+use crate::coredump::WasmCoreDump;
 use crate::store::StoreOpaque;
 use crate::{AsContext, Module};
 use anyhow::Error;
@@ -79,7 +80,11 @@ pub(crate) fn from_runtime_box(
     store: &StoreOpaque,
     runtime_trap: Box<wasmtime_runtime::Trap>,
 ) -> Error {
-    let wasmtime_runtime::Trap { reason, backtrace } = *runtime_trap;
+    let wasmtime_runtime::Trap {
+        reason,
+        backtrace,
+        coredumpstack,
+    } = *runtime_trap;
     let (error, pc) = match reason {
         // For user-defined errors they're already an `anyhow::Error` so no
         // conversion is really necessary here, but a `backtrace` may have
@@ -121,16 +126,22 @@ pub(crate) fn from_runtime_box(
         }
         wasmtime_runtime::TrapReason::Wasm(trap_code) => (trap_code.into(), None),
     };
-    match backtrace {
-        Some(bt) => {
+
+    match (coredumpstack, backtrace) {
+        (None, None) => error,
+        (None, Some(bt)) => {
             let bt = WasmBacktrace::from_captured(store, bt, pc);
-            if bt.wasm_trace.is_empty() {
-                error
-            } else {
+            if !bt.wasm_trace.is_empty() {
                 error.context(bt)
+            } else {
+                error
             }
         }
-        None => error,
+        (Some(coredump), _) => {
+            let bt = WasmBacktrace::from_captured(store, coredump.bt, pc);
+            let cd = WasmCoreDump::new(store, bt);
+            error.context(cd)
+        }
     }
 }
 

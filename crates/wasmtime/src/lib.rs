@@ -395,6 +395,7 @@ mod compiler;
 
 mod code;
 mod config;
+mod coredump;
 mod engine;
 mod externals;
 mod instance;
