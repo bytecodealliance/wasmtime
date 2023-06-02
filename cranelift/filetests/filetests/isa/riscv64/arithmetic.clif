@@ -568,7 +568,7 @@ block0(v0: i32, v1: i32):
 
 ; VCode:
 ; block0:
-;   slliw a2,a0,53
+;   slliw a2,a0,21
 ;   subw a0,a1,a2
 ;   ret
 ;
