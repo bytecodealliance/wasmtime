@@ -34,7 +34,7 @@ fn make_env<T>(engine: &Engine) -> Linker<T> {
 
 enum InterruptMode {
     Trap,
-    Callback(fn(StoreContextMut<usize>) -> Result<u64>),
+    Callback(fn(StoreContextMut<usize>) -> Result<UpdateDeadline>),
     Yield(u64),
 }
 
@@ -339,7 +339,32 @@ async fn epoch_callback_continue() {
             InterruptMode::Callback(|mut cx| {
                 let s = cx.data_mut();
                 *s += 1;
-                Ok(1)
+                Ok(UpdateDeadline::Continue(1))
+            }),
+            |_| {},
+        )
+        .await
+    );
+}
+
+#[tokio::test]
+async fn epoch_callback_yield() {
+    assert_eq!(
+        Some((1, 1)),
+        run_and_count_yields_or_trap(
+            "
+            (module
+                (import \"\" \"bump_epoch\" (func $bump))
+                (func (export \"run\")
+                    call $bump  ;; bump epoch
+                    call $subfunc) ;; call func; will notice new epoch and yield
+                (func $subfunc))
+            ",
+            1,
+            InterruptMode::Callback(|mut cx| {
+                let s = cx.data_mut();
+                *s += 1;
+                Ok(UpdateDeadline::Yield(1))
             }),
             |_| {},
         )

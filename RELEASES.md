@@ -12,6 +12,10 @@ Unreleased.
 
 ### Changed
 
+* An `epoch_deadline_callback` now returns an `UpdateDeadline` enum to allow
+  optionally yielding to the async executor after the callback runs.
+  [#6464](https://github.com/bytecodealliance/wasmtime/pull/6464)
+
 * The "raw" representation of `funcref` and `externref` in the embedding API has
   been updated from a `usize` to a `*mut u8` to be compatible with Rust's
   proposed strict provenance rules. This change is additionally reflected into

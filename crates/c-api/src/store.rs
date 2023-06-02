@@ -4,7 +4,7 @@ use std::ffi::c_void;
 use std::sync::Arc;
 use wasmtime::{
     AsContext, AsContextMut, Store, StoreContext, StoreContextMut, StoreLimits, StoreLimitsBuilder,
-    Val,
+    UpdateDeadline, Val,
 };
 
 /// This representation of a `Store` is used to implement the `wasm.h` API.
@@ -143,7 +143,7 @@ pub extern "C" fn wasmtime_store_epoch_deadline_callback(
             Some(err) => Err(wasmtime::Error::from(<wasmtime_error_t as Into<
                 anyhow::Error,
             >>::into(*err))),
-            None => Ok(delta),
+            None => Ok(UpdateDeadline::Continue(delta)),
         }
     });
 }
