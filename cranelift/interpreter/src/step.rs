@@ -7,7 +7,7 @@ use crate::value::{DataValueExt, ValueConversionKind, ValueError, ValueResult};
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::{
-    types, AbiParam, AtomicRmwOp, Block, BlockCall, ExternalName, FuncRef, Function,
+    types, AbiParam, AtomicRmwOp, Block, BlockCall, Endianness, ExternalName, FuncRef, Function,
     InstructionData, MemFlags, Opcode, TrapCode, Type, Value as ValueRef,
 };
 use log::trace;
@@ -904,11 +904,21 @@ where
         Opcode::IsInvalid => unimplemented!("IsInvalid"),
         Opcode::Bitcast | Opcode::ScalarToVector => {
             let input_ty = inst_context.type_of(inst_context.args()[0]).unwrap();
-            let arg0 = extractlanes(&arg(0), input_ty)?;
-            let lanes = &arg0
-                .into_iter()
-                .map(|x| DataValue::convert(x, ValueConversionKind::Exact(ctrl_ty.lane_type())))
-                .collect::<ValueResult<SimdVec<DataValue>>>()?;
+            let lanes = &if input_ty.is_vector() {
+                assert_eq!(
+                    inst.memflags()
+                        .expect("byte order flag to be set")
+                        .endianness(Endianness::Little),
+                    Endianness::Little,
+                    "Only little endian bitcasts on vectors are supported"
+                );
+                extractlanes(&arg(0), ctrl_ty)?
+            } else {
+                extractlanes(&arg(0), input_ty)?
+                    .into_iter()
+                    .map(|x| DataValue::convert(x, ValueConversionKind::Exact(ctrl_ty.lane_type())))
+                    .collect::<ValueResult<SimdVec<DataValue>>>()?
+            };
             assign(match inst.opcode() {
                 Opcode::Bitcast => vectorizelanes(lanes, ctrl_ty)?,
                 Opcode::ScalarToVector => vectorizelanes_all(lanes, ctrl_ty)?,
