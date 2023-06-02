@@ -98,11 +98,9 @@ fn modules_rs(meta: &cargo_metadata::Metadata, package: &str, kind: &str, out_di
         // Load the module from disk only once, in case it is used many times:
         decls += &format!(
             "
-            lazy_static::lazy_static!{{
-                static ref {global}: wasmtime::Module = {{
-                    wasmtime::Module::from_file(&ENGINE, {file:?}).unwrap()
-                }};
-            }}
+            static {global}: std::sync::LazyLock<wasmtime::Module> = std::sync::LazyLock::new(|| {{
+                wasmtime::Module::from_file(&ENGINE, {file:?}).unwrap()
+            }});
         "
         );
         // Match the stem str literal to the module. Cloning is just a ref count incr.
@@ -179,11 +177,9 @@ fn components_rs(
         let global = format!("{}_COMPONENT", stem.to_uppercase());
         decls += &format!(
             "
-            lazy_static::lazy_static!{{
-                static ref {global}: wasmtime::component::Component = {{
-                    wasmtime::component::Component::from_file(&ENGINE, {file:?}).unwrap()
-                }};
-            }}
+            static {global}: std::sync::LazyLock<wasmtime::component::Component> = std::sync::LazyLock::new(|| {{
+                wasmtime::component::Component::from_file(&ENGINE, {file:?}).unwrap()
+            }});
         "
         );
         cases += &format!("{stem:?} => {global}.clone(),\n");

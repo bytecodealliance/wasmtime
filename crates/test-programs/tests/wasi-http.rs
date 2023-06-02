@@ -7,17 +7,16 @@ use http_body_util::combinators::BoxBody;
 use http_body_util::BodyExt;
 use hyper::server::conn::http1;
 use hyper::{body::Bytes, service::service_fn, Request, Response};
-use std::{error::Error, net::SocketAddr};
+use std::{error::Error, net::SocketAddr, sync::LazyLock};
 use tokio::net::TcpListener;
 
-lazy_static::lazy_static! {
-    static ref ENGINE: Engine = {
-        let mut config = Config::new();
-        config.wasm_backtrace_details(wasmtime::WasmBacktraceDetails::Enable);
-        let engine = Engine::new(&config).unwrap();
-        engine
-    };
-}
+static ENGINE: LazyLock<Engine> = LazyLock::new(|| {
+    let mut config = Config::new();
+    config.wasm_backtrace_details(wasmtime::WasmBacktraceDetails::Enable);
+    let engine = Engine::new(&config).unwrap();
+    engine
+});
+
 // uses ENGINE, creates a fn get_module(&str) -> Module
 include!(concat!(env!("OUT_DIR"), "/wasi_http_tests_modules.rs"));
 

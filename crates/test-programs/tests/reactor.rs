@@ -1,5 +1,5 @@
 use anyhow::Result;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, LazyLock, RwLock};
 use wasmtime::{
     component::{Component, Linker},
     Config, Engine, Store,
@@ -8,17 +8,15 @@ use wasmtime_wasi::preview2::wasi::clocks::wall_clock;
 use wasmtime_wasi::preview2::wasi::filesystem::filesystem;
 use wasmtime_wasi::preview2::{self, Table, WasiCtx, WasiCtxBuilder, WasiView};
 
-lazy_static::lazy_static! {
-    static ref ENGINE: Engine = {
-        let mut config = Config::new();
-        config.wasm_backtrace_details(wasmtime::WasmBacktraceDetails::Enable);
-        config.wasm_component_model(true);
-        config.async_support(true);
+static ENGINE: LazyLock<Engine> = LazyLock::new(|| {
+    let mut config = Config::new();
+    config.wasm_backtrace_details(wasmtime::WasmBacktraceDetails::Enable);
+    config.wasm_component_model(true);
+    config.async_support(true);
 
-        let engine = Engine::new(&config).unwrap();
-        engine
-    };
-}
+    let engine = Engine::new(&config).unwrap();
+    engine
+});
 
 // uses ENGINE, creates a fn get_component(&str) -> Component
 include!(concat!(env!("OUT_DIR"), "/reactor_tests_components.rs"));

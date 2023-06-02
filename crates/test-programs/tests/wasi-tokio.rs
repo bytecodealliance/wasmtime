@@ -1,21 +1,21 @@
 #![cfg(feature = "test_programs")]
 use anyhow::Result;
+use std::sync::LazyLock;
 use tempfile::TempDir;
 use wasi_common::pipe::WritePipe;
 use wasmtime::{Config, Engine, Linker, Store};
 use wasmtime_wasi::tokio::{add_to_linker, WasiCtxBuilder};
 
-lazy_static::lazy_static! {
-    static ref ENGINE: Engine = {
-        let mut config = Config::new();
-        config.wasm_backtrace_details(wasmtime::WasmBacktraceDetails::Enable);
-        config.wasm_component_model(false);
-        config.async_support(true);
+static ENGINE: LazyLock<Engine> = LazyLock::new(|| {
+    let mut config = Config::new();
+    config.wasm_backtrace_details(wasmtime::WasmBacktraceDetails::Enable);
+    config.wasm_component_model(false);
+    config.async_support(true);
 
-        let engine = Engine::new(&config).unwrap();
-        engine
-    };
-}
+    let engine = Engine::new(&config).unwrap();
+    engine
+});
+
 // uses ENGINE, creates a fn get_module(&str) -> Module
 include!(concat!(env!("OUT_DIR"), "/wasi_tests_modules.rs"));
 

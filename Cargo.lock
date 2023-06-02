@@ -3253,7 +3253,6 @@ dependencies = [
  "http-body",
  "http-body-util",
  "hyper",
- "lazy_static",
  "tempfile",
  "test-log",
  "tokio",
