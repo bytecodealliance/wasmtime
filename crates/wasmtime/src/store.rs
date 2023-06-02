@@ -1693,9 +1693,24 @@ impl<T> StoreContextMut<'_, T> {
             fn resume(&mut self, val: Result<()>) -> Result<Result<()>, ()> {
                 unsafe {
                     let prev = self.state.take().unwrap().push();
-                    let result = self.fiber.resume(val);
-                    self.state = Some(prev.restore());
-                    result
+                    let restore = Restore {
+                        fiber: self,
+                        state: Some(prev),
+                    };
+                    return restore.fiber.fiber.resume(val);
+                }
+
+                struct Restore<'a, 'b> {
+                    fiber: &'a mut FiberFuture<'b>,
+                    state: Option<wasmtime_runtime::PreviousAsyncWasmCallState>,
+                }
+
+                impl Drop for Restore<'_, '_> {
+                    fn drop(&mut self) {
+                        unsafe {
+                            self.fiber.state = Some(self.state.take().unwrap().restore());
+                        }
+                    }
                 }
             }
         }
