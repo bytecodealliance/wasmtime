@@ -166,10 +166,7 @@ impl Assembler {
                 Address::Offset { base, offset: imm } => self.mov_mr(*base, *imm, *reg, size),
             },
 
-            _ => panic!(
-                "Invalid operand combination for mov; src={:?}, dst={:?}",
-                src, dst
-            ),
+            _ => Self::handle_invalid_operand_combination(src, dst),
         }
     }
 
@@ -245,15 +242,12 @@ impl Assembler {
                     self.sub_ir(val, *dst, size)
                 } else {
                     let scratch = regs::scratch();
-                    self.mov_ir(*imm as u64, scratch, size);
+                    self.load_constant(imm, scratch, size);
                     self.sub_rr(scratch, *dst, size);
                 }
             }
             (Operand::Reg(src), Operand::Reg(dst)) => self.sub_rr(*src, *dst, size),
-            _ => panic!(
-                "Invalid operand combination for sub; src = {:?} dst = {:?}",
-                src, dst
-            ),
+            _ => Self::handle_invalid_operand_combination(src, dst),
         }
     }
 
@@ -289,15 +283,12 @@ impl Assembler {
                     self.mul_ir(val, *dst, size);
                 } else {
                     let scratch = regs::scratch();
-                    self.mov_ir(*imm as u64, scratch, size);
+                    self.load_constant(imm, scratch, size);
                     self.mul_rr(scratch, *dst, size);
                 }
             }
             (Operand::Reg(src), Operand::Reg(dst)) => self.mul_rr(*src, *dst, size),
-            _ => panic!(
-                "Invalid operand combination for mul; src = {:?} dst = {:?}",
-                src, dst
-            ),
+            _ => Self::handle_invalid_operand_combination(src, dst),
         }
     }
 
@@ -445,15 +436,12 @@ impl Assembler {
                     self.add_ir(val, *dst, size)
                 } else {
                     let scratch = regs::scratch();
-                    self.mov_ir(*imm as u64, scratch, size);
+                    self.load_constant(imm, scratch, size);
                     self.add_rr(scratch, *dst, size);
                 }
             }
             (Operand::Reg(src), Operand::Reg(dst)) => self.add_rr(*src, *dst, size),
-            _ => panic!(
-                "Invalid operand combination for add; src = {:?} dst = {:?}",
-                src, dst
-            ),
+            _ => Self::handle_invalid_operand_combination(src, dst),
         }
     }
 
@@ -500,15 +488,12 @@ impl Assembler {
                     self.cmp_ir(val, *dst, size)
                 } else {
                     let scratch = regs::scratch();
-                    self.mov_ir(*imm as u64, scratch, size);
+                    self.load_constant(imm, scratch, size);
                     self.cmp_rr(scratch, *dst, size);
                 }
             }
             (Operand::Reg(src), Operand::Reg(dst)) => self.cmp_rr(*src, *dst, size),
-            _ => panic!(
-                "Invalid operand combination for cmp; src = {:?} dst = {:?}",
-                src, dst
-            ),
+            _ => Self::handle_invalid_operand_combination(src, dst),
         }
     }
 
@@ -579,5 +564,13 @@ impl Assembler {
                 });
             }
         }
+    }
+
+    fn load_constant(&mut self, imm: &i64, dst: Reg, size: OperandSize) {
+        self.mov_ir(*imm as u64, dst, size);
+    }
+
+    fn handle_invalid_operand_combination(src: Operand, dst: Operand) {
+        panic!("Invalid operand combination; src={:?}, dst={:?}", src, dst);
     }
 }
