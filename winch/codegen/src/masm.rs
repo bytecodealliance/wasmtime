@@ -192,16 +192,9 @@ pub(crate) trait MacroAssembler {
     /// Calculate remainder.
     fn rem(&mut self, context: &mut CodeGenContext, kind: RemKind, size: OperandSize);
 
-    /// Compare two operands and put the result in dst.
+    /// Compare src and dst and put the result in dst.
     /// This function will potentially emit a series of instructions.
-    fn cmp_with_set(
-        &mut self,
-        dst: RegImm,
-        lhs: RegImm,
-        rhs: RegImm,
-        kind: CmpKind,
-        size: OperandSize,
-    );
+    fn cmp_with_set(&mut self, src: RegImm, dst: RegImm, kind: CmpKind, size: OperandSize);
 
     /// Push the register to the stack, returning the offset.
     fn push(&mut self, src: Reg) -> u32;

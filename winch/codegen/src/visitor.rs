@@ -274,7 +274,7 @@ where
         use OperandSize::*;
 
         self.context.unop(self.masm, S32, &mut |masm, reg, size| {
-            masm.cmp_with_set(reg, reg, RegImm::imm(0), CmpKind::Eq, size);
+            masm.cmp_with_set(RegImm::imm(0), reg, CmpKind::Eq, size);
         });
     }
 
@@ -282,7 +282,7 @@ where
         use OperandSize::*;
 
         self.context.unop(self.masm, S64, &mut |masm, reg, size| {
-            masm.cmp_with_set(reg, reg, RegImm::imm(0), CmpKind::Eq, size);
+            masm.cmp_with_set(RegImm::imm(0), reg, CmpKind::Eq, size);
         });
     }
 
@@ -330,14 +330,14 @@ where
     fn cmp_i32s(&mut self, kind: CmpKind) {
         self.context
             .i32_binop(self.masm, &mut |masm, dst, src, size| {
-                masm.cmp_with_set(dst, dst, src, kind, size);
+                masm.cmp_with_set(src, dst, kind, size);
             });
     }
 
     fn cmp_i64s(&mut self, kind: CmpKind) {
         self.context
             .i64_binop(self.masm, &mut move |masm, dst, src, size| {
-                masm.cmp_with_set(dst, dst, src, kind, size);
+                masm.cmp_with_set(src, dst, kind, size);
             });
     }
 }

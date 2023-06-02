@@ -204,14 +204,7 @@ impl Masm for MacroAssembler {
         Address::offset(reg, offset as i64)
     }
 
-    fn cmp_with_set(
-        &mut self,
-        _dst: RegImm,
-        _lhs: RegImm,
-        _rhs: RegImm,
-        _kind: CmpKind,
-        _size: OperandSize,
-    ) {
+    fn cmp_with_set(&mut self, _src: RegImm, _dst: RegImm, _kind: CmpKind, _size: OperandSize) {
         todo!()
     }
 }
