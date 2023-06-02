@@ -12,7 +12,7 @@ use std::ptr;
 use std::sync::Once;
 
 pub use self::backtrace::{Backtrace, Frame};
-pub use self::tls::{assert_tls_not_in_range, tls_eager_initialize, TlsState};
+pub use self::tls::{tls_eager_initialize, AsyncWasmCallState, PreviousAsyncWasmCallState};
 
 cfg_if::cfg_if! {
     if #[cfg(miri)] {
@@ -590,9 +590,79 @@ mod tls {
 
     pub use raw::initialize as tls_eager_initialize;
 
+    /// Opaque state used to persist the state of the `CallThreadState`
+    /// activations associated with a fiber stack that's used as part of an
+    /// async wasm call.
+    pub struct AsyncWasmCallState {
+        // The head of a linked list of activations that are currently present
+        // on an async call's fiber stack. This pointer points to the oldest
+        // activation frame where the `prev` links internally link to younger
+        // activation frames.
+        //
+        // When pushed onto a thread this linked list is traversed to get pushed
+        // onto the current thread at the time.
+        state: raw::Ptr,
+    }
+
+    impl AsyncWasmCallState {
+        /// Creates new state that initially starts as null.
+        pub fn new() -> AsyncWasmCallState {
+            AsyncWasmCallState {
+                state: std::ptr::null_mut(),
+            }
+        }
+
+        /// Pushes the saved state of this wasm's call onto the current thread's
+        /// state.
+        ///
+        /// This will iterate over the linked list of states stored within
+        /// `self` and push them sequentially onto the current thread's
+        /// activation list.
+        ///
+        /// The returned `PreviousAsyncWasmCallState` captures the state of this
+        /// thread just before this operation, and it must have its `restore`
+        /// method called to restore the state when the async wasm is suspended
+        /// from.
+        ///
+        /// # Unsafety
+        ///
+        /// Must be carefully coordinated with
+        /// `PreviousAsyncWasmCallState::restore` and fiber switches to ensure
+        /// that this doesn't push stale data and the data is popped
+        /// appropriately.
+        pub unsafe fn push(self) -> PreviousAsyncWasmCallState {
+            // Our `state` pointer is a linked list of oldest-to-youngest so by
+            // pushing in order of the list we restore the youngest-to-oldest
+            // list as stored in the state of this current thread.
+            let ret = PreviousAsyncWasmCallState { state: raw::get() };
+            let mut ptr = self.state;
+            while let Some(state) = ptr.as_ref() {
+                ptr = state.prev.replace(std::ptr::null_mut());
+                state.push();
+            }
+            ret
+        }
+
+        /// Performs a runtime check that this state is indeed null.
+        pub fn assert_null(&self) {
+            assert!(self.state.is_null());
+        }
+
+        /// Asserts that the current CallThreadState pointer, if present, is not
+        /// in the `range` specified.
+        ///
+        /// This is used when exiting a future in Wasmtime to assert that the
+        /// current CallThreadState pointer does not point within the stack
+        /// we're leaving (e.g.  allocated for a fiber).
+        pub fn assert_current_state_not_in_range(range: Range<usize>) {
+            let p = raw::get() as usize;
+            assert!(p < range.start || range.end < p);
+        }
+    }
+
     /// Opaque state used to help control TLS state across stack switches for
     /// async support.
-    pub struct TlsState {
+    pub struct PreviousAsyncWasmCallState {
         // The head of a linked list, similar to the TLS state. Note though that
         // this list is stored in reverse order to assist with `push` and `pop`
         // below.
@@ -602,40 +672,9 @@ mod tls {
         state: raw::Ptr,
     }
 
-    impl TlsState {
-        /// Creates new state that initially starts as null.
-        pub fn new() -> TlsState {
-            TlsState {
-                state: std::ptr::null_mut(),
-            }
-        }
-
-        /// Pushes the list stored in this state onto the current thread's
-        /// state.
-        ///
-        /// This will iterate over the linked list of states stored within
-        /// `self` and push them sequentially onto the current thread's
-        /// activation list.
-        ///
-        /// # Unsafety
-        ///
-        /// Must be carefully coordinated with `pop` and fiber switches to
-        /// ensure that this doesn't push stale data and the data is popped
-        /// appropriately.
-        pub unsafe fn push(&mut self) {
-            // Replace `self.state` with the current TLS state to get reused
-            // later during a `pop`. Afterwards iterate over the linked list
-            // stored in `TlsState` and push everything onto the current
-            // thread's list of activations.
-            let mut ptr = mem::replace(&mut self.state, raw::get());
-            while let Some(state) = ptr.as_ref() {
-                ptr = state.prev.replace(std::ptr::null_mut());
-                state.push();
-            }
-        }
-
+    impl PreviousAsyncWasmCallState {
         /// Pops a fiber's linked list of activations and stores them in
-        /// `TlsState`.
+        /// `AsyncWasmCallState`.
         ///
         /// This will pop the top activation of this current thread continuously
         /// until it reaches whatever the current activation was when `push` was
@@ -645,32 +684,35 @@ mod tls {
         ///
         /// Must be paired with a `push` and only performed at a time when a
         /// fiber is being suspended.
-        pub unsafe fn pop(&mut self) {
-            let thread_head = mem::replace(&mut self.state, std::ptr::null_mut());
+        pub unsafe fn restore(self) -> AsyncWasmCallState {
+            let thread_head = self.state;
+            mem::forget(self);
+            let mut ret = AsyncWasmCallState::new();
             loop {
                 // If the current TLS state is as we originally found it, then
                 // this loop is finished.
                 let ptr = raw::get();
                 if ptr == thread_head {
-                    break;
+                    break ret;
                 }
 
                 // Pop this activation from the current thread's TLS state, and
                 // then afterwards push it onto our own linked list within this
-                // `TlsState`. Note that the linked list in `TlsState` is stored
+                // `AsyncWasmCallState`. Note that the linked list in `AsyncWasmCallState` is stored
                 // in reverse order so a subsequent `push` later on pushes
                 // everything in the right order.
                 (*ptr).pop();
-                if let Some(state) = self.state.as_ref() {
+                if let Some(state) = ret.state.as_ref() {
                     (*ptr).prev.set(state);
                 }
-                self.state = ptr;
+                ret.state = ptr;
             }
         }
+    }
 
-        /// Performs a runtime check that this state is indeed null.
-        pub fn assert_null(&self) {
-            assert!(self.state.is_null());
+    impl Drop for PreviousAsyncWasmCallState {
+        fn drop(&mut self) {
+            panic!("must be consumed with `restore`");
         }
     }
 
@@ -703,15 +745,5 @@ mod tls {
     pub fn with<R>(closure: impl FnOnce(Option<&CallThreadState>) -> R) -> R {
         let p = raw::get();
         unsafe { closure(if p.is_null() { None } else { Some(&*p) }) }
-    }
-
-    /// Asserts that the current TLS pointer is not in the `range` specified.
-    ///
-    /// This is used when exiting a future in Wasmtime to assert that the
-    /// current TLS pointer does not point within the stack we're leaving (e.g.
-    /// allocated for a fiber).
-    pub fn assert_tls_not_in_range(range: Range<usize>) {
-        let p = raw::get() as usize;
-        assert!(p < range.start || range.end < p);
     }
 }

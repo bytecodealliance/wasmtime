@@ -1593,7 +1593,7 @@ impl<T> StoreContextMut<'_, T> {
                 fiber,
                 current_poll_cx,
                 engine,
-                tls: wasmtime_runtime::TlsState::new(),
+                state: Some(wasmtime_runtime::AsyncWasmCallState::new()),
             }
         };
         future.await?;
@@ -1605,7 +1605,7 @@ impl<T> StoreContextMut<'_, T> {
             current_poll_cx: *mut *mut Context<'static>,
             engine: Engine,
             // See comments in `FiberFuture::resume` for this
-            tls: wasmtime_runtime::TlsState,
+            state: Option<wasmtime_runtime::AsyncWasmCallState>,
         }
 
         // This is surely the most dangerous `unsafe impl Send` in the entire
@@ -1692,9 +1692,9 @@ impl<T> StoreContextMut<'_, T> {
             /// activations are all removed en-masse and saved within the fiber.
             fn resume(&mut self, val: Result<()>) -> Result<Result<()>, ()> {
                 unsafe {
-                    self.tls.push();
+                    let prev = self.state.take().unwrap().push();
                     let result = self.fiber.resume(val);
-                    self.tls.pop();
+                    self.state = Some(prev.restore());
                     result
                 }
             }
@@ -1750,7 +1750,7 @@ impl<T> StoreContextMut<'_, T> {
                         // Wasmtime is incorrect.
                         Err(()) => {
                             if let Some(range) = self.fiber.stack().range() {
-                                wasmtime_runtime::assert_tls_not_in_range(range);
+                                wasmtime_runtime::AsyncWasmCallState::assert_current_state_not_in_range(range);
                             }
                             Poll::Pending
                         }
@@ -1785,7 +1785,7 @@ impl<T> StoreContextMut<'_, T> {
                     debug_assert!(result.is_ok());
                 }
 
-                self.tls.assert_null();
+                self.state.take().unwrap().assert_null();
 
                 unsafe {
                     self.engine
