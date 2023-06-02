@@ -722,6 +722,12 @@ only does its stated purpose.
 """
 
 [[audits.file-per-thread-logger]]
+who = "Benjamin Bouvier <public@benj.me>"
+criteria = "safe-to-deploy"
+version = "0.2.0"
+notes = "Simple version bump."
+
+[[audits.file-per-thread-logger]]
 who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
 delta = "0.1.5 -> 0.1.6"
