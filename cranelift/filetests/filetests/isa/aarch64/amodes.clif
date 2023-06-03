@@ -175,6 +175,26 @@ block0(v0: i64):
 ;   ldr w0, [x2]
 ;   ret
 
+function %add_imm12_max_shifted(i64) -> i32 {
+block0(v0: i64):
+  v1 = iconst.i64 0xFFF000
+  v2 = iadd.i64 v0, v1
+  v3 = load.i32 v2
+  return v3
+}
+
+; VCode:
+; block0:
+;   add x2, x0, #16773120
+;   ldr w0, [x2]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   add x2, x0, #0xfff, lsl #12
+;   ldr w0, [x2]
+;   ret
+
 function %f12(i64) -> i32 {
 block0(v0: i64):
   v1 = iconst.i64 -4
