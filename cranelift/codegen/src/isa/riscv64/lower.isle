@@ -563,6 +563,14 @@
       (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 (zero_reg) low)
       (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 low high))))
 
+;; SIMD Cases
+;; We don't need to mask anything since it is done by the instruction according to SEW.
+
+(rule 5 (lower (has_type (ty_vec_fits_in_register ty) (ishl x y)))
+  (rv_vsll_vx x (value_regs_get y 0) (unmasked) ty))
+
+(rule 6 (lower (has_type (ty_vec_fits_in_register ty) (ishl x (maybe_uextend (uimm5_from_value y)))))
+  (rv_vsll_vi x y (unmasked) ty))
 
 ;;;; Rules for `ushr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -609,6 +617,14 @@
       (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 high low)
       (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 (zero_reg) high))))
 
+;; SIMD Cases
+;; We don't need to mask or extend anything since it is done by the instruction according to SEW.
+
+(rule 4 (lower (has_type (ty_vec_fits_in_register ty) (ushr x y)))
+  (rv_vsrl_vx x (value_regs_get y 0) (unmasked) ty))
+
+(rule 5 (lower (has_type (ty_vec_fits_in_register ty) (ushr x (maybe_uextend (uimm5_from_value y)))))
+  (rv_vsrl_vi x y (unmasked) ty))
 
 ;;;; Rules for `sshr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -659,6 +675,15 @@
     (value_regs
       (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 high low)
       (gen_select_reg (IntCC.UnsignedGreaterThanOrEqual) shamt_128 const64 high_replacement high))))
+
+;; SIMD Cases
+;; We don't need to mask or extend anything since it is done by the instruction according to SEW.
+
+(rule 4 (lower (has_type (ty_vec_fits_in_register ty) (sshr x y)))
+  (rv_vsra_vx x (value_regs_get y 0) (unmasked) ty))
+
+(rule 5 (lower (has_type (ty_vec_fits_in_register ty) (sshr x (maybe_uextend (uimm5_from_value y)))))
+  (rv_vsra_vi x y (unmasked) ty))
 
 
 ;;;; Rules for `rotl` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1334,3 +1359,51 @@
 
 (rule 1 (lower (has_type (ty_vec_fits_in_register ty) (ssub_sat x (splat y))))
   (rv_vssub_vx x y (unmasked) ty))
+
+;;;; Rules for `vall_true` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Here we do a Vector Reduce operation. Get the unsigned minimum value of any
+;; lane in the vector. The fixed input to the reduce operation is a 1.
+;; This way, if any lane is 0, the result will be 0. Otherwise, the result will
+;; be a 1.
+;; The reduce operation leaves the result in the lowest lane, we then move it
+;; into the destination X register.
+(rule (lower (vall_true x @ (value_type (ty_vec_fits_in_register ty))))
+  (if-let one (imm5_from_i8 1))
+  ;; We don't need to broadcast the immediate into all lanes, only into lane 0.
+  ;; I did it this way since it uses one less instruction than with a vmv.s.x.
+  (let ((fixed VReg (rv_vmv_vi one ty))
+        (min VReg (rv_vredminu_vs x fixed (unmasked) ty)))
+    (rv_vmv_xs min ty)))
+
+
+;;;; Rules for `vany_true` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Here we do a Vector Reduce operation. Get the unsigned maximum value of the
+;; input vector register. Move the max to an X register, and do a `snez` on it
+;; to ensure its either 1 or 0.
+(rule (lower (vany_true x @ (value_type (ty_vec_fits_in_register ty))))
+  (let ((max VReg (rv_vredmaxu_vs x x (unmasked) ty))
+        (x_max XReg (rv_vmv_xs max ty)))
+    (rv_snez x_max)))
+
+
+;;;; Rules for `vhigh_bits` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; To check if the MSB of a lane is set, we do a `vmslt` with zero, this sets
+;; the mask bit to 1 if the value is negative (MSB 1) and 0 if not. We can then
+;; just move that mask to an X Register.
+;;
+;; We must ensure that the move to the X register has a SEW with enough bits
+;; to hold the full mask. Additionally, in some cases (e.g. i64x2) we are going
+;; to read some tail bits. These are undefined, so we need to further mask them
+;; off.
+(rule (lower (vhigh_bits x @ (value_type (ty_vec_fits_in_register ty))))
+  (let ((mask VReg (rv_vmslt_vx x (zero_reg) (unmasked) ty))
+        ;; Here we only need I64X1, but emit an AVL of 2 since it
+        ;; saves one vector state change in the case of I64X2.
+        ;;
+        ;; TODO: For types that have more lanes than element bits, we can
+        ;; use the original type as a VState and avoid a state change.
+        (x_mask XReg (rv_vmv_xs mask (vstate_from_type $I64X2))))
+    (gen_andi x_mask (ty_lane_mask ty))))

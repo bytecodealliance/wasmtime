@@ -228,6 +228,16 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
+        fn ty_lane_mask(&mut self, ty: Type) -> u64 {
+            let ty_lane_count = ty.lane_count();
+            debug_assert_ne!(ty_lane_count, 0);
+            let shift = 64_u64
+                .checked_sub(ty_lane_count.into())
+                .expect("unimplemented for > 64 bits");
+            u64::MAX >> shift
+        }
+
+        #[inline]
         fn ty_umin(&mut self, _ty: Type) -> u64 {
             0
         }

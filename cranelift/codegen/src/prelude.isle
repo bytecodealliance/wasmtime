@@ -261,6 +261,10 @@
 (decl pure ty_mask (Type) u64)
 (extern constructor ty_mask ty_mask)
 
+;; Get a mask that is set for each lane in a given type.
+(decl pure ty_lane_mask (Type) u64)
+(extern constructor ty_lane_mask ty_lane_mask)
+
 ;; Get the byte width of a given type.
 (decl pure ty_bytes (Type) u16)
 (extern constructor ty_bytes ty_bytes)
