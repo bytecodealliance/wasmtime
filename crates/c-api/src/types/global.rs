@@ -1,5 +1,5 @@
 use crate::{wasm_externtype_t, wasm_valtype_t, CExternType};
-use once_cell::unsync::OnceCell;
+use std::cell::OnceCell;
 use wasmtime::GlobalType;
 
 pub type wasm_mutability_t = u8;

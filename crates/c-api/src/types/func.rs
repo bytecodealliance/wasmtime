@@ -1,5 +1,5 @@
 use crate::{wasm_externtype_t, wasm_valtype_t, wasm_valtype_vec_t, CExternType};
-use once_cell::unsync::OnceCell;
+use std::cell::OnceCell;
 use wasmtime::FuncType;
 
 #[repr(transparent)]

@@ -3,12 +3,12 @@ use crate::Config;
 use anyhow::{Context, Result};
 use object::write::{Object, StandardSegment};
 use object::SectionKind;
-use once_cell::sync::OnceCell;
 #[cfg(feature = "parallel-compilation")]
 use rayon::prelude::*;
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::OnceLock;
 #[cfg(feature = "cache")]
 use wasmtime_cache::CacheConfig;
 use wasmtime_environ::obj;
@@ -57,7 +57,7 @@ struct EngineInner {
 
     // One-time check of whether the compiler's settings, if present, are
     // compatible with the native host.
-    compatible_with_native_host: OnceCell<Result<(), String>>,
+    compatible_with_native_host: OnceLock<Result<(), String>>,
 }
 
 impl Engine {
@@ -100,7 +100,7 @@ impl Engine {
                 signatures: registry,
                 epoch: AtomicU64::new(0),
                 unique_id_allocator: CompiledModuleIdAllocator::new(),
-                compatible_with_native_host: OnceCell::new(),
+                compatible_with_native_host: OnceLock::new(),
             }),
         })
     }

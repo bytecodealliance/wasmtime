@@ -5,13 +5,13 @@ use crate::{
     Engine,
 };
 use anyhow::{bail, Context, Result};
-use once_cell::sync::OnceCell;
 use std::fs;
 use std::mem;
 use std::ops::Range;
 use std::path::Path;
 use std::ptr::NonNull;
 use std::sync::Arc;
+use std::sync::OnceLock;
 use wasmparser::{Parser, ValidPayload, Validator};
 use wasmtime_environ::{
     DefinedFuncIndex, DefinedMemoryIndex, HostPtr, ModuleEnvironment, ModuleTypes, ObjectKind,
@@ -115,12 +115,12 @@ struct ModuleInner {
 
     /// A set of initialization images for memories, if any.
     ///
-    /// Note that this is behind a `OnceCell` to lazily create this image. On
+    /// Note that this is behind a `OnceLock` to lazily create this image. On
     /// Linux where `memfd_create` may be used to create the backing memory
     /// image this is a pretty expensive operation, so by deferring it this
     /// improves memory usage for modules that are created but may not ever be
     /// instantiated.
-    memory_images: OnceCell<Option<ModuleMemoryImages>>,
+    memory_images: OnceLock<Option<ModuleMemoryImages>>,
 
     /// Flag indicating whether this module can be serialized or not.
     serializable: bool,
@@ -586,7 +586,7 @@ impl Module {
             inner: Arc::new(ModuleInner {
                 engine: engine.clone(),
                 code,
-                memory_images: OnceCell::new(),
+                memory_images: OnceLock::new(),
                 module,
                 serializable,
                 offsets,
@@ -1026,7 +1026,10 @@ impl ModuleInner {
     fn memory_images(&self) -> Result<Option<&ModuleMemoryImages>> {
         let images = self
             .memory_images
-            .get_or_try_init(|| memory_images(&self.engine, &self.module))?
+            .get_or_init(|| match memory_images(&self.engine, &self.module) {
+                Ok(v) => v,
+                Err(_e) => None,
+            })
             .as_ref();
         Ok(images)
     }
