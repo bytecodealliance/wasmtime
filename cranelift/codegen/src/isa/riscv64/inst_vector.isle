@@ -126,6 +126,7 @@
   (VredmaxuVS)
   (VredminuVS)
   (VrgatherVV)
+  (VcompressVM)
 
   ;; Vector-Scalar Opcodes
   (VaddVX)
@@ -910,6 +911,17 @@
 (decl rv_vrgather_vi (VReg UImm5 VecOpMasking VState) VReg)
 (rule (rv_vrgather_vi vs2 imm mask vstate)
   (vec_alu_rr_uimm5 (VecAluOpRRImm5.VrgatherVI) vs2 imm mask vstate))
+
+;; Helper for emitting the `vcompress.vm` instruction.
+;;
+;; The vector compress instruction allows elements selected by a vector mask
+;; register from a source vector register group to be packed into contiguous
+;; elements at the start of the destination vector register group.
+;;
+;; The mask register is specified through vs1
+(decl rv_vcompress_vm (VReg VReg VState) VReg)
+(rule (rv_vcompress_vm vs2 vs1 vstate)
+  (vec_alu_rrr (VecAluOpRRR.VcompressVM) vs2 vs1 (unmasked) vstate))
 
 ;; Helper for emitting the `vmslt.vx` (Vector Mask Set Less Than) instruction.
 (decl rv_vmslt_vx (VReg XReg VecOpMasking VState) VReg)

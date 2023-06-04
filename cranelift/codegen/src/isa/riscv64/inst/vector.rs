@@ -332,7 +332,10 @@ impl VecAluOpRRR {
             VecAluOpRRR::VmaxVV | VecAluOpRRR::VmaxVX => 0b000111,
             VecAluOpRRR::VslidedownVX => 0b001111,
             VecAluOpRRR::VfrsubVF => 0b100111,
-            VecAluOpRRR::VmergeVVM | VecAluOpRRR::VmergeVXM | VecAluOpRRR::VfmergeVFM => 0b010111,
+            VecAluOpRRR::VmergeVVM
+            | VecAluOpRRR::VmergeVXM
+            | VecAluOpRRR::VfmergeVFM
+            | VecAluOpRRR::VcompressVM => 0b010111,
             VecAluOpRRR::VfdivVV
             | VecAluOpRRR::VfdivVF
             | VecAluOpRRR::VsadduVV
@@ -386,7 +389,8 @@ impl VecAluOpRRR {
             | VecAluOpRRR::VmulhVV
             | VecAluOpRRR::VmulhuVV
             | VecAluOpRRR::VredmaxuVS
-            | VecAluOpRRR::VredminuVS => VecOpCategory::OPMVV,
+            | VecAluOpRRR::VredminuVS
+            | VecAluOpRRR::VcompressVM => VecOpCategory::OPMVV,
             VecAluOpRRR::VwaddVX
             | VecAluOpRRR::VwadduVX
             | VecAluOpRRR::VwadduWX
@@ -446,6 +450,7 @@ impl VecAluOpRRR {
         match self {
             VecAluOpRRR::VrgatherVV
             | VecAluOpRRR::VrgatherVX
+            | VecAluOpRRR::VcompressVM
             | VecAluOpRRR::VwadduVV
             | VecAluOpRRR::VwadduVX
             | VecAluOpRRR::VwaddVV
