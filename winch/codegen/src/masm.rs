@@ -74,6 +74,24 @@ pub(crate) enum OperandSize {
     S64,
 }
 
+impl OperandSize {
+    /// The number of bits in the operand.
+    pub fn num_bits(&self) -> i32 {
+        match self {
+            OperandSize::S32 => 32,
+            OperandSize::S64 => 64,
+        }
+    }
+
+    /// The binary logarithm of the number of bits in the operand.
+    pub fn log2(&self) -> u8 {
+        match self {
+            OperandSize::S32 => 5,
+            OperandSize::S64 => 6,
+        }
+    }
+}
+
 /// An abstraction over a register or immediate.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub(crate) enum RegImm {
@@ -228,6 +246,16 @@ pub(crate) trait MacroAssembler {
     /// Compare src and dst and put the result in dst.
     /// This function will potentially emit a series of instructions.
     fn cmp_with_set(&mut self, src: RegImm, dst: RegImm, kind: CmpKind, size: OperandSize);
+
+    /// Count the number of leading zeroes in src and put the result in dst.
+    /// In x64, this will emit multiple instructions if the `has_lzcnt` flag is
+    /// false.
+    fn clz(&mut self, src: Reg, dst: Reg, size: OperandSize);
+
+    /// Count the number of trailing zeroes in src and put the result in dst.
+    /// In x64, this will emit multiple instructions if the `has_tzcnt` flag is
+    /// false.
+    fn ctz(&mut self, src: Reg, dst: Reg, size: OperandSize);
 
     /// Push the register to the stack, returning the offset.
     fn push(&mut self, src: Reg) -> u32;

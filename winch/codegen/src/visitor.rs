@@ -85,6 +85,10 @@ macro_rules! def_unsupported {
     (emit I64Rotl $($rest:tt)*) => {};
     (emit I32Rotr $($rest:tt)*) => {};
     (emit I64Rotr $($rest:tt)*) => {};
+    (emit I32Clz $($rest:tt)*) => {};
+    (emit I64Clz $($rest:tt)*) => {};
+    (emit I32Ctz $($rest:tt)*) => {};
+    (emit I64Ctz $($rest:tt)*) => {};
     (emit LocalGet $($rest:tt)*) => {};
     (emit LocalSet $($rest:tt)*) => {};
     (emit Call $($rest:tt)*) => {};
@@ -284,7 +288,7 @@ where
         use OperandSize::*;
 
         self.context.unop(self.masm, S32, &mut |masm, reg, size| {
-            masm.cmp_with_set(RegImm::imm(0), reg, CmpKind::Eq, size);
+            masm.cmp_with_set(RegImm::imm(0), reg.into(), CmpKind::Eq, size);
         });
     }
 
@@ -292,7 +296,39 @@ where
         use OperandSize::*;
 
         self.context.unop(self.masm, S64, &mut |masm, reg, size| {
-            masm.cmp_with_set(RegImm::imm(0), reg, CmpKind::Eq, size);
+            masm.cmp_with_set(RegImm::imm(0), reg.into(), CmpKind::Eq, size);
+        });
+    }
+
+    fn visit_i32_clz(&mut self) {
+        use OperandSize::*;
+
+        self.context.unop(self.masm, S32, &mut |masm, reg, size| {
+            masm.clz(reg, reg, size);
+        });
+    }
+
+    fn visit_i64_clz(&mut self) {
+        use OperandSize::*;
+
+        self.context.unop(self.masm, S64, &mut |masm, reg, size| {
+            masm.clz(reg, reg, size);
+        });
+    }
+
+    fn visit_i32_ctz(&mut self) {
+        use OperandSize::*;
+
+        self.context.unop(self.masm, S32, &mut |masm, reg, size| {
+            masm.ctz(reg, reg, size);
+        });
+    }
+
+    fn visit_i64_ctz(&mut self) {
+        use OperandSize::*;
+
+        self.context.unop(self.masm, S64, &mut |masm, reg, size| {
+            masm.ctz(reg, reg, size);
         });
     }
 

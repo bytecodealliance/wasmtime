@@ -226,6 +226,14 @@ impl Masm for MacroAssembler {
     fn cmp_with_set(&mut self, _src: RegImm, _dst: RegImm, _kind: CmpKind, _size: OperandSize) {
         todo!()
     }
+
+    fn clz(&mut self, _src: Reg, _dst: Reg, _size: OperandSize) {
+        todo!()
+    }
+
+    fn ctz(&mut self, _src: Reg, _dst: Reg, _size: OperandSize) {
+        todo!()
+    }
 }
 
 impl MacroAssembler {
