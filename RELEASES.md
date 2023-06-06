@@ -16,14 +16,15 @@ Unreleased.
   [#6391](https://github.com/bytecodealliance/wasmtime/pull/6391)
 
 * The wasi-preview2 component adapter has been pulled into the main wasmtime
-  repository
+  repository. It is available for the first time as part of this release, but should be
+  treated as as a beta at this time. Patch releases will not be made for bug fixes.
   [#6374](https://github.com/bytecodealliance/wasmtime/pull/6374)
 
 * A callback invoked when an epoch deadline is reached can now be configured via
   the C API.
   [#6359](https://github.com/bytecodealliance/wasmtime/pull/6359)
 
-* PR auto-assignment policies have been documented, to clarify the expectiosn of
+* PR auto-assignment policies have been documented, to clarify the expectations of
   reviewers.
   [#6346](https://github.com/bytecodealliance/wasmtime/pull/6346)
 
