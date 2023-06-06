@@ -210,6 +210,10 @@ impl Masm for MacroAssembler {
         self.asm.load_constant(0, reg);
     }
 
+    fn popcnt(&mut self, _reg: Reg, _size: OperandSize) {
+        todo!()
+    }
+
     fn push(&mut self, reg: Reg) -> u32 {
         let size = <Self::ABI as abi::ABI>::word_bytes();
         self.reserve_stack(size);

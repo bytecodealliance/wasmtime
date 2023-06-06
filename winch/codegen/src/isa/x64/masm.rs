@@ -418,6 +418,10 @@ impl Masm for MacroAssembler {
     fn jmp(&mut self, target: MachLabel) {
         self.asm.jmp(target);
     }
+
+    fn popcnt(&mut self, reg: Reg, size: OperandSize) {
+        self.asm.popcnt(reg, size)
+    }
 }
 
 impl MacroAssembler {

@@ -266,6 +266,8 @@ pub(crate) trait MacroAssembler {
     /// Zero a particular register.
     fn zero(&mut self, reg: Reg);
 
+    fn popcnt(&mut self, reg: Reg, size: OperandSize);
+
     /// Zero a given memory range.
     ///
     /// The default implementation divides the given memory range

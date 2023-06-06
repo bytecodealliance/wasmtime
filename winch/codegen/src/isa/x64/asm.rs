@@ -689,6 +689,19 @@ impl Assembler {
         });
     }
 
+    pub fn popcnt(&mut self, reg: Reg, size: OperandSize) {
+        assert!(
+            self.isa_flags.has_popcnt(),
+            "has_popcnt isa flag required for winch"
+        );
+        self.emit(Inst::UnaryRmR {
+            size: size.into(),
+            op: args::UnaryRmROpcode::Popcnt,
+            src: Gpr::new(reg.into()).unwrap().into(),
+            dst: Writable::from_reg(Gpr::new(reg.into()).unwrap()),
+        });
+    }
+
     /// Emit a test instruction with two register operands.
     pub fn test_rr(&mut self, src: Reg, dst: Reg, size: OperandSize) {
         self.emit(Inst::CmpRmiR {

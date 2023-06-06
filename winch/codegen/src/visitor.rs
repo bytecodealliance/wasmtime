@@ -91,6 +91,8 @@ macro_rules! def_unsupported {
     (emit I64Clz $($rest:tt)*) => {};
     (emit I32Ctz $($rest:tt)*) => {};
     (emit I64Ctz $($rest:tt)*) => {};
+    (emit I32Popcnt $($rest:tt)*) => {};
+    (emit I64Popcnt $($rest:tt)*) => {};
     (emit LocalGet $($rest:tt)*) => {};
     (emit LocalSet $($rest:tt)*) => {};
     (emit Call $($rest:tt)*) => {};
@@ -448,6 +450,22 @@ where
             // Pop control frame.
             self.control_frames.truncate(self.control_frames.len() - 1);
         }
+    }
+
+    fn visit_i32_popcnt(&mut self) {
+        use OperandSize::*;
+
+        self.context.unop(self.masm, S32, &mut |masm, reg, size| {
+            masm.popcnt(reg, size);
+        })
+    }
+
+    fn visit_i64_popcnt(&mut self) {
+        use OperandSize::*;
+
+        self.context.unop(self.masm, S64, &mut |masm, reg, size| {
+            masm.popcnt(reg, size);
+        })
     }
 
     fn visit_local_get(&mut self, index: u32) {
