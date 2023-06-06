@@ -30,7 +30,6 @@ use crate::descriptors::{Descriptor, Descriptors, StreamType, Streams};
 pub mod bindings {
     #[cfg(feature = "command")]
     wit_bindgen::generate!({
-        path: "../wasi/wit",
         world: "wasi:preview/command",
         std_feature,
         raw_strings,
@@ -41,7 +40,6 @@ pub mod bindings {
 
     #[cfg(feature = "reactor")]
     wit_bindgen::generate!({
-        path: "../wasi/wit",
         world: "wasi:preview/reactor",
         std_feature,
         raw_strings,
