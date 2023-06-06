@@ -133,10 +133,14 @@ enum RunResult {
 
 impl PartialEq for RunResult {
     fn eq(&self, other: &Self) -> bool {
-        if let (RunResult::Success(l), RunResult::Success(r)) = (self, other) {
-            l.len() == r.len() && l.iter().zip(r).all(|(l, r)| l.bitwise_eq(r))
-        } else {
-            false
+        match (self, other) {
+            (RunResult::Success(l), RunResult::Success(r)) => {
+                l.len() == r.len() && l.iter().zip(r).all(|(l, r)| l.bitwise_eq(r))
+            }
+            (RunResult::Trap(l), RunResult::Trap(r)) => l == r,
+            (RunResult::Timeout, RunResult::Timeout) => true,
+            (RunResult::Error(_), RunResult::Error(_)) => unimplemented!(),
+            _ => false,
         }
     }
 }
@@ -350,6 +354,15 @@ fn run_test_inputs(testcase: &TestCase, run: impl Fn(&[DataValue]) -> RunResult)
         }
 
         let res = run(args);
+
+        // This situation can happen when we are comparing the interpreter against the interpreter, and
+        // one of the optimization passes has increased the number of instructions in the function.
+        // This can cause the interpreter to run out of fuel in the second run, but not the first.
+        // We should ignore these cases.
+        // Running in the host should never return a timeout, so that should be ok.
+        if res == RunResult::Timeout {
+            return;
+        }
 
         assert_eq!(int_res, res);
     }
