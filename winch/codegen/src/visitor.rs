@@ -19,15 +19,15 @@ use wasmtime_environ::{FuncIndex, WasmType};
 macro_rules! def_unsupported {
     ($( @$proposal:ident $op:ident $({ $($arg:ident: $argty:ty),* })? => $visit:ident)*) => {
         $(
-	    def_unsupported!(
-		emit
-		$op
+            def_unsupported!(
+                emit
+                    $op
 
-		fn $visit(&mut self $($(,$arg: $argty)*)?) -> Self::Output {
-		    $($(let _ = $arg;)*)?
-		    todo!(stringify!($op))
-		}
-	    );
+                fn $visit(&mut self $($(,$arg: $argty)*)?) -> Self::Output {
+                    $($(let _ = $arg;)*)?
+                        todo!(stringify!($op))
+                }
+            );
         )*
     };
 
