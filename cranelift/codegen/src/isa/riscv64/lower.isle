@@ -12,12 +12,7 @@
 ;; ;;;; Rules for `vconst` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type (ty_vec_fits_in_register ty) (vconst n)))
-  (vec_load
-    (element_width_from_type ty)
-    (VecAMode.UnitStride (gen_const_amode (const_to_vconst n)))
-    (mem_flags_trusted)
-    (unmasked)
-    ty))
+  (gen_constant ty (const_to_vconst n)))
 
 ;;;; Rules for `f32const` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1407,3 +1402,29 @@
         ;; use the original type as a VState and avoid a state change.
         (x_mask XReg (rv_vmv_xs mask (vstate_from_type $I64X2))))
     (gen_andi x_mask (ty_lane_mask ty))))
+
+;;;; Rules for `swizzle` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule 0 (lower (has_type (ty_vec_fits_in_register ty) (swizzle x y)))
+  (rv_vrgather_vv x y (unmasked) ty))
+
+(rule 1 (lower (has_type (ty_vec_fits_in_register ty) (swizzle x (splat y))))
+  (rv_vrgather_vx x y (unmasked) ty))
+
+(rule 2 (lower (has_type (ty_vec_fits_in_register ty) (swizzle x (replicated_uimm5 y))))
+  (rv_vrgather_vi x y (unmasked) ty))
+
+;;;; Rules for `shuffle` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Use a vrgather to load all 0-15 lanes from x. And then modify the mask to load all
+;; 16-31 lanes from y. Finally, use a vor to combine the two vectors.
+;;
+;; vrgather will insert a 0 for lanes that are out of bounds, so we can let it load
+;; negative and out of bounds indexes.
+(rule (lower (has_type (ty_vec_fits_in_register ty @ $I8X16) (shuffle x y (vconst_from_immediate mask))))
+  (if-let neg16 (imm5_from_i8 -16))
+  (let ((x_mask VReg (gen_constant ty mask))
+        (x_lanes VReg (rv_vrgather_vv x x_mask (unmasked) ty))
+        (y_mask VReg (rv_vadd_vi x_mask neg16 (unmasked) ty))
+        (y_lanes VReg (rv_vrgather_vv y y_mask (unmasked) ty)))
+    (rv_vor_vv x_lanes y_lanes (unmasked) ty)))

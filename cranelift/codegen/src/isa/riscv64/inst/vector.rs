@@ -296,6 +296,7 @@ impl VecAluOpRRR {
             VecAluOpRRR::VssubuVV | VecAluOpRRR::VssubuVX => 0b100010,
             VecAluOpRRR::VssubVV | VecAluOpRRR::VssubVX => 0b100011,
             VecAluOpRRR::VfsgnjnVV => 0b001001,
+            VecAluOpRRR::VrgatherVV | VecAluOpRRR::VrgatherVX => 0b001100,
             VecAluOpRRR::VmsltVX => 0b011011,
         }
     }
@@ -318,7 +319,8 @@ impl VecAluOpRRR {
             | VecAluOpRRR::VminVV
             | VecAluOpRRR::VmaxuVV
             | VecAluOpRRR::VmaxVV
-            | VecAluOpRRR::VmergeVVM => VecOpCategory::OPIVV,
+            | VecAluOpRRR::VmergeVVM
+            | VecAluOpRRR::VrgatherVV => VecOpCategory::OPIVV,
             VecAluOpRRR::VmulVV
             | VecAluOpRRR::VmulhVV
             | VecAluOpRRR::VmulhuVV
@@ -343,7 +345,8 @@ impl VecAluOpRRR {
             | VecAluOpRRR::VmaxVX
             | VecAluOpRRR::VslidedownVX
             | VecAluOpRRR::VmergeVXM
-            | VecAluOpRRR::VmsltVX => VecOpCategory::OPIVX,
+            | VecAluOpRRR::VmsltVX
+            | VecAluOpRRR::VrgatherVX => VecOpCategory::OPIVX,
             VecAluOpRRR::VfaddVV
             | VecAluOpRRR::VfsubVV
             | VecAluOpRRR::VfmulVV
@@ -366,6 +369,14 @@ impl VecAluOpRRR {
             VecOpCategory::OPIVX | VecOpCategory::OPMVX => RegClass::Int,
             VecOpCategory::OPFVF => RegClass::Float,
             _ => unreachable!(),
+        }
+    }
+
+    /// Some instructions do not allow the source and destination registers to overlap.
+    pub fn forbids_src_dst_overlaps(&self) -> bool {
+        match self {
+            VecAluOpRRR::VrgatherVV | VecAluOpRRR::VrgatherVX => true,
+            _ => false,
         }
     }
 }
@@ -408,6 +419,7 @@ impl VecAluOpRRImm5 {
             VecAluOpRRImm5::VmergeVIM => 0b010111,
             VecAluOpRRImm5::VsadduVI => 0b100000,
             VecAluOpRRImm5::VsaddVI => 0b100001,
+            VecAluOpRRImm5::VrgatherVI => 0b001100,
         }
     }
 
@@ -424,7 +436,8 @@ impl VecAluOpRRImm5 {
             | VecAluOpRRImm5::VslidedownVI
             | VecAluOpRRImm5::VmergeVIM
             | VecAluOpRRImm5::VsadduVI
-            | VecAluOpRRImm5::VsaddVI => VecOpCategory::OPIVI,
+            | VecAluOpRRImm5::VsaddVI
+            | VecAluOpRRImm5::VrgatherVI => VecOpCategory::OPIVI,
         }
     }
 
@@ -433,7 +446,8 @@ impl VecAluOpRRImm5 {
             VecAluOpRRImm5::VsllVI
             | VecAluOpRRImm5::VsrlVI
             | VecAluOpRRImm5::VsraVI
-            | VecAluOpRRImm5::VslidedownVI => true,
+            | VecAluOpRRImm5::VslidedownVI
+            | VecAluOpRRImm5::VrgatherVI => true,
             VecAluOpRRImm5::VaddVI
             | VecAluOpRRImm5::VrsubVI
             | VecAluOpRRImm5::VandVI
@@ -442,6 +456,14 @@ impl VecAluOpRRImm5 {
             | VecAluOpRRImm5::VmergeVIM
             | VecAluOpRRImm5::VsadduVI
             | VecAluOpRRImm5::VsaddVI => false,
+        }
+    }
+
+    /// Some instructions do not allow the source and destination registers to overlap.
+    pub fn forbids_src_dst_overlaps(&self) -> bool {
+        match self {
+            VecAluOpRRImm5::VrgatherVI => true,
+            _ => false,
         }
     }
 }

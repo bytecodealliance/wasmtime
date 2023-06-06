@@ -266,7 +266,6 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
                 "simd_i8x16_arith2",
                 "simd_i8x16_cmp",
                 "simd_int_to_int_extend",
-                "simd_lane",
                 "simd_load",
                 "simd_load_extend",
                 "simd_load_zero",
