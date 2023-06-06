@@ -1705,11 +1705,13 @@ impl MachInstEmit for Inst {
                 let rd = allocs.next_writable(rd);
                 let label_true = sink.get_label();
                 let label_jump_over = sink.get_label();
+                let ty = Inst::canonical_type_for_rc(rs1.class());
+
                 sink.use_label_at_offset(sink.cur_offset(), label_true, LabelUse::B12);
                 let x = condition.emit();
                 sink.put4(x);
                 // here is false , use rs2
-                Inst::gen_move(rd, rs2, I64).emit(&[], sink, emit_info, state);
+                Inst::gen_move(rd, rs2, ty).emit(&[], sink, emit_info, state);
                 // and jump over
                 Inst::Jal {
                     dest: BranchTarget::Label(label_jump_over),
@@ -1717,7 +1719,7 @@ impl MachInstEmit for Inst {
                 .emit(&[], sink, emit_info, state);
                 // here condition is true , use rs1
                 sink.bind_label(label_true, &mut state.ctrl_plane);
-                Inst::gen_move(rd, rs1, I64).emit(&[], sink, emit_info, state);
+                Inst::gen_move(rd, rs1, ty).emit(&[], sink, emit_info, state);
                 sink.bind_label(label_jump_over, &mut state.ctrl_plane);
             }
             &Inst::FcvtToInt {
