@@ -19,15 +19,15 @@ use wasmtime_environ::{FuncIndex, WasmType};
 macro_rules! def_unsupported {
     ($( @$proposal:ident $op:ident $({ $($arg:ident: $argty:ty),* })? => $visit:ident)*) => {
         $(
-	    def_unsupported!(
-		emit
-		$op
+            def_unsupported!(
+                emit
+                    $op
 
-		fn $visit(&mut self $($(,$arg: $argty)*)?) -> Self::Output {
-		    $($(let _ = $arg;)*)?
-		    todo!(stringify!($op))
-		}
-	    );
+                fn $visit(&mut self $($(,$arg: $argty)*)?) -> Self::Output {
+                    $($(let _ = $arg;)*)?
+                        todo!(stringify!($op))
+                }
+            );
         )*
     };
 
@@ -93,45 +93,39 @@ where
     }
 
     fn visit_i32_add(&mut self) {
-        self.context
-            .i32_binop(self.masm, &mut |masm, dst, src, size| {
-                masm.add(dst, dst, src, size);
-            });
+        self.context.i32_binop(self.masm, |masm, dst, src, size| {
+            masm.add(dst, dst, src, size);
+        });
     }
 
     fn visit_i64_add(&mut self) {
-        self.context
-            .i64_binop(self.masm, &mut |masm, dst, src, size| {
-                masm.add(dst, dst, src, size);
-            });
+        self.context.i64_binop(self.masm, |masm, dst, src, size| {
+            masm.add(dst, dst, src, size);
+        });
     }
 
     fn visit_i32_sub(&mut self) {
-        self.context
-            .i32_binop(self.masm, &mut |masm, dst, src, size| {
-                masm.sub(dst, dst, src, size);
-            });
+        self.context.i32_binop(self.masm, |masm, dst, src, size| {
+            masm.sub(dst, dst, src, size);
+        });
     }
 
     fn visit_i64_sub(&mut self) {
-        self.context
-            .i64_binop(self.masm, &mut |masm, dst, src, size| {
-                masm.sub(dst, dst, src, size);
-            });
+        self.context.i64_binop(self.masm, |masm, dst, src, size| {
+            masm.sub(dst, dst, src, size);
+        });
     }
 
     fn visit_i32_mul(&mut self) {
-        self.context
-            .i32_binop(self.masm, &mut |masm, dst, src, size| {
-                masm.mul(dst, dst, src, size);
-            });
+        self.context.i32_binop(self.masm, |masm, dst, src, size| {
+            masm.mul(dst, dst, src, size);
+        });
     }
 
     fn visit_i64_mul(&mut self) {
-        self.context
-            .i64_binop(self.masm, &mut |masm, dst, src, size| {
-                masm.mul(dst, dst, src, size);
-            });
+        self.context.i64_binop(self.masm, |masm, dst, src, size| {
+            masm.mul(dst, dst, src, size);
+        });
     }
 
     fn visit_i32_div_s(&mut self) {
@@ -328,15 +322,14 @@ where
     M: MacroAssembler,
 {
     fn cmp_i32s(&mut self, kind: CmpKind) {
-        self.context
-            .i32_binop(self.masm, &mut |masm, dst, src, size| {
-                masm.cmp_with_set(src, dst, kind, size);
-            });
+        self.context.i32_binop(self.masm, |masm, dst, src, size| {
+            masm.cmp_with_set(src, dst, kind, size);
+        });
     }
 
     fn cmp_i64s(&mut self, kind: CmpKind) {
         self.context
-            .i64_binop(self.masm, &mut move |masm, dst, src, size| {
+            .i64_binop(self.masm, move |masm, dst, src, size| {
                 masm.cmp_with_set(src, dst, kind, size);
             });
     }

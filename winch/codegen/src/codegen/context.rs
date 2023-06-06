@@ -136,7 +136,7 @@ impl<'a> CodeGenContext<'a> {
     }
 
     /// Prepares arguments for emitting an i32 binary operation.
-    pub fn i32_binop<F, M>(&mut self, masm: &mut M, emit: &mut F)
+    pub fn i32_binop<F, M>(&mut self, masm: &mut M, mut emit: F)
     where
         F: FnMut(&mut M, RegImm, RegImm, OperandSize),
         M: MacroAssembler,
@@ -166,7 +166,7 @@ impl<'a> CodeGenContext<'a> {
     }
 
     /// Prepares arguments for emitting an i64 binary operation.
-    pub fn i64_binop<F, M>(&mut self, masm: &mut M, emit: &mut F)
+    pub fn i64_binop<F, M>(&mut self, masm: &mut M, mut emit: F)
     where
         F: FnMut(&mut M, RegImm, RegImm, OperandSize),
         M: MacroAssembler,
