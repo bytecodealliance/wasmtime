@@ -93,6 +93,10 @@
   (VaddVV)
   (VsaddVV)
   (VsadduVV)
+  (VwaddVV)
+  (VwaddWV)
+  (VwadduVV)
+  (VwadduWV)
   (VsubVV)
   (VssubVV)
   (VssubuVV)
@@ -123,6 +127,10 @@
   (VaddVX)
   (VsaddVX)
   (VsadduVX)
+  (VwaddVX)
+  (VwaddWX)
+  (VwadduVX)
+  (VwadduWX)
   (VsubVX)
   (VrsubVX)
   (VssubVX)
@@ -219,6 +227,10 @@
 (decl pure vstate_from_type (Type) VState)
 (extern constructor vstate_from_type vstate_from_type)
 (convert Type VState vstate_from_type)
+
+;; Alters the LMUL of a VState to mf2
+(decl pure vstate_mf2 (VState) VState)
+(extern constructor vstate_mf2 vstate_mf2)
 
 ;; Extracts an element width from a SIMD type.
 (decl pure element_width_from_type (Type) VecElementWidth)
@@ -348,6 +360,62 @@
 (decl rv_vsaddu_vi (VReg Imm5 VecOpMasking VState) VReg)
 (rule (rv_vsaddu_vi vs2 imm mask vstate)
   (vec_alu_rr_imm5 (VecAluOpRRImm5.VsadduVI) vs2 imm mask vstate))
+
+;; Helper for emitting the `vwadd.vv` instruction.
+;;
+;;  Widening integer add, 2*SEW = SEW + SEW
+(decl rv_vwadd_vv (VReg VReg VecOpMasking VState) VReg)
+(rule (rv_vwadd_vv vs2 vs1 mask vstate)
+  (vec_alu_rrr (VecAluOpRRR.VwaddVV) vs2 vs1 mask vstate))
+
+;; Helper for emitting the `vwadd.vx` instruction.
+;;
+;;  Widening integer add, 2*SEW = SEW + SEW
+(decl rv_vwadd_vx (VReg XReg VecOpMasking VState) VReg)
+(rule (rv_vwadd_vx vs2 vs1 mask vstate)
+  (vec_alu_rrr (VecAluOpRRR.VwaddVX) vs2 vs1 mask vstate))
+
+;; Helper for emitting the `vwadd.wv` instruction.
+;;
+;;  Widening integer add, 2*SEW = 2*SEW + SEW
+(decl rv_vwadd_wv (VReg VReg VecOpMasking VState) VReg)
+(rule (rv_vwadd_wv vs2 vs1 mask vstate)
+  (vec_alu_rrr (VecAluOpRRR.VwaddWV) vs2 vs1 mask vstate))
+
+;; Helper for emitting the `vwadd.wx` instruction.
+;;
+;;  Widening integer add, 2*SEW = 2*SEW + SEW
+(decl rv_vwadd_wx (VReg XReg VecOpMasking VState) VReg)
+(rule (rv_vwadd_wx vs2 vs1 mask vstate)
+  (vec_alu_rrr (VecAluOpRRR.VwaddWX) vs2 vs1 mask vstate))
+
+;; Helper for emitting the `vwaddu.vv` instruction.
+;;
+;; Widening unsigned integer add, 2*SEW = SEW + SEW
+(decl rv_vwaddu_vv (VReg VReg VecOpMasking VState) VReg)
+(rule (rv_vwaddu_vv vs2 vs1 mask vstate)
+  (vec_alu_rrr (VecAluOpRRR.VwadduVV) vs2 vs1 mask vstate))
+
+;; Helper for emitting the `vwaddu.vv` instruction.
+;;
+;; Widening unsigned integer add, 2*SEW = SEW + SEW
+(decl rv_vwaddu_vx (VReg XReg VecOpMasking VState) VReg)
+(rule (rv_vwaddu_vx vs2 vs1 mask vstate)
+  (vec_alu_rrr (VecAluOpRRR.VwadduVX) vs2 vs1 mask vstate))
+
+;; Helper for emitting the `vwaddu.wv` instruction.
+;;
+;;  Widening integer add, 2*SEW = 2*SEW + SEW
+(decl rv_vwaddu_wv (VReg VReg VecOpMasking VState) VReg)
+(rule (rv_vwaddu_wv vs2 vs1 mask vstate)
+  (vec_alu_rrr (VecAluOpRRR.VwadduWV) vs2 vs1 mask vstate))
+
+;; Helper for emitting the `vwaddu.wx` instruction.
+;;
+;;  Widening integer add, 2*SEW = 2*SEW + SEW
+(decl rv_vwaddu_wx (VReg XReg VecOpMasking VState) VReg)
+(rule (rv_vwaddu_wx vs2 vs1 mask vstate)
+  (vec_alu_rrr (VecAluOpRRR.VwadduWX) vs2 vs1 mask vstate))
 
 ;; Helper for emitting the `vsub.vv` instruction.
 (decl rv_vsub_vv (VReg VReg VecOpMasking VState) VReg)

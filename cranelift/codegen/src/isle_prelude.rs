@@ -740,6 +740,33 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
+        fn ty_half_lanes(&mut self, ty: Type) -> Option<Type> {
+            if ty.lane_count() == 1 {
+                None
+            } else {
+                ty.lane_type().by(ty.lane_count() / 2)
+            }
+        }
+
+        #[inline]
+        fn ty_half_width(&mut self, ty: Type) -> Option<Type> {
+            let new_lane = match ty.lane_type() {
+                I16 => I8,
+                I32 => I16,
+                I64 => I32,
+                F64 => F32,
+                _ => return None,
+            };
+
+            new_lane.by(ty.lane_count())
+        }
+
+        #[inline]
+        fn ty_equal(&mut self, lhs: Type, rhs: Type) -> bool {
+            lhs == rhs
+        }
+
+        #[inline]
         fn offset32_to_u32(&mut self, offset: Offset32) -> u32 {
             let offset: i32 = offset.into();
             offset as u32

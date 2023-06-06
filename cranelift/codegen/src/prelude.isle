@@ -277,6 +277,18 @@
 (decl pure lane_type (Type) Type)
 (extern constructor lane_type lane_type)
 
+;; Get a type with the same element type, but half the number of lanes.
+(decl pure partial ty_half_lanes (Type) Type)
+(extern constructor ty_half_lanes ty_half_lanes)
+
+;; Get a type with the same number of lanes but a lane type that is half as small.
+(decl pure partial ty_half_width (Type) Type)
+(extern constructor ty_half_width ty_half_width)
+
+;; Compare two types for equality.
+(decl pure ty_equal (Type Type) bool)
+(extern constructor ty_equal ty_equal)
+
 ;;;; `cranelift_codegen::ir::MemFlags ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; `MemFlags::trusted`

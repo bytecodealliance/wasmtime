@@ -297,6 +297,10 @@ impl VecAluOpRRR {
             VecAluOpRRR::VssubVV | VecAluOpRRR::VssubVX => 0b100011,
             VecAluOpRRR::VfsgnjnVV => 0b001001,
             VecAluOpRRR::VrgatherVV | VecAluOpRRR::VrgatherVX => 0b001100,
+            VecAluOpRRR::VwadduVV | VecAluOpRRR::VwadduVX => 0b110000,
+            VecAluOpRRR::VwaddVV | VecAluOpRRR::VwaddVX => 0b110001,
+            VecAluOpRRR::VwadduWV | VecAluOpRRR::VwadduWX => 0b110100,
+            VecAluOpRRR::VwaddWV | VecAluOpRRR::VwaddWX => 0b110101,
             VecAluOpRRR::VmsltVX => 0b011011,
         }
     }
@@ -321,11 +325,19 @@ impl VecAluOpRRR {
             | VecAluOpRRR::VmaxVV
             | VecAluOpRRR::VmergeVVM
             | VecAluOpRRR::VrgatherVV => VecOpCategory::OPIVV,
-            VecAluOpRRR::VmulVV
+            VecAluOpRRR::VwaddVV
+            | VecAluOpRRR::VwaddWV
+            | VecAluOpRRR::VwadduVV
+            | VecAluOpRRR::VwadduWV
+            | VecAluOpRRR::VmulVV
             | VecAluOpRRR::VmulhVV
             | VecAluOpRRR::VmulhuVV
             | VecAluOpRRR::VredmaxuVS
             | VecAluOpRRR::VredminuVS => VecOpCategory::OPMVV,
+            VecAluOpRRR::VwaddVX
+            | VecAluOpRRR::VwadduVX
+            | VecAluOpRRR::VwadduWX
+            | VecAluOpRRR::VwaddWX => VecOpCategory::OPMVX,
             VecAluOpRRR::VaddVX
             | VecAluOpRRR::VsaddVX
             | VecAluOpRRR::VsadduVX
@@ -375,7 +387,16 @@ impl VecAluOpRRR {
     /// Some instructions do not allow the source and destination registers to overlap.
     pub fn forbids_src_dst_overlaps(&self) -> bool {
         match self {
-            VecAluOpRRR::VrgatherVV | VecAluOpRRR::VrgatherVX => true,
+            VecAluOpRRR::VrgatherVV
+            | VecAluOpRRR::VrgatherVX
+            | VecAluOpRRR::VwadduVV
+            | VecAluOpRRR::VwadduVX
+            | VecAluOpRRR::VwaddVV
+            | VecAluOpRRR::VwaddVX
+            | VecAluOpRRR::VwadduWV
+            | VecAluOpRRR::VwadduWX
+            | VecAluOpRRR::VwaddWV
+            | VecAluOpRRR::VwaddWX => true,
             _ => false,
         }
     }
