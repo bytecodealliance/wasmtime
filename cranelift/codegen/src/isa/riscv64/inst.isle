@@ -1566,7 +1566,7 @@
 (extern constructor imm5_from_i8 imm5_from_i8)
 
 ;; Extractor that matches a `Value` equivalent to a replicated Imm5 on all lanes.
-;; TODO: Try matching vconst here as well
+;; TODO(#6527): Try matching vconst here as well
 (decl replicated_imm5 (Imm5) Value)
 (extractor (replicated_imm5 n)
   (def_inst (splat (iconst (u64_from_imm64 (imm5_from_u64 n))))))
@@ -1574,7 +1574,7 @@
 ;; UImm5 Helpers
 
 ;; Extractor that matches a `Value` equivalent to a replicated UImm5 on all lanes.
-;; TODO: Try matching vconst here as well
+;; TODO(#6527): Try matching vconst here as well
 (decl replicated_uimm5 (UImm5) Value)
 (extractor (replicated_uimm5 n)
   (def_inst (splat (uimm5_from_value n))))
