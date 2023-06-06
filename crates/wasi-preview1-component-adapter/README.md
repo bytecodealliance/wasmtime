@@ -22,10 +22,10 @@ $ cargo build --target wasm32-unknown-unknown --release
 
 And the artifact will be located at
 `target/wasm32-unknown-unknown/release/wasi_snapshot_preview1.wasm`.
-Alternatively the latest copy of this can be [downloaded from the releases
-page][latest-release]
+Alternatively the latest copy of this can be [downloaded from the `dev` tag
+assets ][dev-tag]
 
-[latest-release]: https://github.com/bytecodealliance/preview2-prototyping/releases/tag/latest
+[dev-tag]: https://github.com/bytecodealliance/wasmtime/releases/tag/dev
 
 ## Using
 
