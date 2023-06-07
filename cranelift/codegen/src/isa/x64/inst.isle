@@ -1663,6 +1663,9 @@
 (decl pure use_fma () bool)
 (extern constructor use_fma use_fma)
 
+(decl pure use_ssse3 () bool)
+(extern constructor use_ssse3 use_ssse3)
+
 (decl pure use_sse41 () bool)
 (extern constructor use_sse41 use_sse41)
 

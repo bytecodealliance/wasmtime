@@ -3,9 +3,10 @@ test run
 target aarch64
 target s390x
 set enable_simd
-target x86_64 has_sse3 has_ssse3 has_sse41
-target x86_64 has_sse3 has_ssse3 has_sse41 has_avx
-target x86_64 has_sse3 has_ssse3 has_sse41 has_avx has_avx2
+target x86_64
+target x86_64 sse41
+target x86_64 sse41 has_avx
+target x86_64 sse41 has_avx has_avx2
 target riscv64 has_v
 
 function %splat_i8x16(i8) -> i8x16 {
