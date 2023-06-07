@@ -319,15 +319,12 @@ impl Assembler {
                     self.and_ir(val, *dst, size);
                 } else {
                     let scratch = regs::scratch();
-                    self.mov_ir(*imm as u64, scratch, size);
+                    self.load_constant(imm, scratch, size);
                     self.and_rr(scratch, *dst, size);
                 }
             }
             (Operand::Reg(src), Operand::Reg(dst)) => self.and_rr(*src, *dst, size),
-            _ => panic!(
-                "Invalid operand combination for and; src = {:?} dst = {:?}",
-                src, dst
-            ),
+            _ => Self::handle_invalid_operand_combination(src, dst),
         }
     }
 
@@ -361,15 +358,12 @@ impl Assembler {
                     self.or_ir(val, *dst, size);
                 } else {
                     let scratch = regs::scratch();
-                    self.mov_ir(*imm as u64, scratch, size);
+                    self.load_constant(imm, scratch, size);
                     self.or_rr(scratch, *dst, size);
                 }
             }
             (Operand::Reg(src), Operand::Reg(dst)) => self.or_rr(*src, *dst, size),
-            _ => panic!(
-                "Invalid operand combination for or; src = {:?} dst = {:?}",
-                src, dst
-            ),
+            _ => Self::handle_invalid_operand_combination(src, dst),
         }
     }
 
@@ -403,15 +397,12 @@ impl Assembler {
                     self.xor_ir(val, *dst, size);
                 } else {
                     let scratch = regs::scratch();
-                    self.mov_ir(*imm as u64, scratch, size);
+                    self.load_constant(imm, scratch, size);
                     self.xor_rr(scratch, *dst, size);
                 }
             }
             (Operand::Reg(src), Operand::Reg(dst)) => self.xor_rr(*src, *dst, size),
-            _ => panic!(
-                "Invalid operand combination for xor; src = {:?} dst = {:?}",
-                src, dst
-            ),
+            _ => Self::handle_invalid_operand_combination(src, dst),
         }
     }
 
