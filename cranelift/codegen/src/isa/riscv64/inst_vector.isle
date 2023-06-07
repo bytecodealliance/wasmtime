@@ -187,7 +187,11 @@
   (VfmvVF)
   (VfsqrtV)
   (VsextVF2)
+  (VsextVF4)
+  (VsextVF8)
   (VzextVF2)
+  (VzextVF4)
+  (VzextVF8)
 ))
 
 ;; Returns the canonical destination type for a VecAluOpRRImm5.
@@ -753,11 +757,35 @@
 (rule (rv_vzext_vf2 vs mask vstate)
   (vec_alu_rr (VecAluOpRR.VzextVF2) vs mask vstate))
 
+;; Helper for emitting the `vzext.vf4` instruction.
+;; Zero-extend SEW/4 source to SEW destination
+(decl rv_vzext_vf4 (VReg VecOpMasking VState) VReg)
+(rule (rv_vzext_vf4 vs mask vstate)
+  (vec_alu_rr (VecAluOpRR.VzextVF4) vs mask vstate))
+
+;; Helper for emitting the `vzext.vf8` instruction.
+;; Zero-extend SEW/8 source to SEW destination
+(decl rv_vzext_vf8 (VReg VecOpMasking VState) VReg)
+(rule (rv_vzext_vf8 vs mask vstate)
+  (vec_alu_rr (VecAluOpRR.VzextVF8) vs mask vstate))
+
 ;; Helper for emitting the `vsext.vf2` instruction.
 ;; Sign-extend SEW/2 source to SEW destination
 (decl rv_vsext_vf2 (VReg VecOpMasking VState) VReg)
 (rule (rv_vsext_vf2 vs mask vstate)
   (vec_alu_rr (VecAluOpRR.VsextVF2) vs mask vstate))
+
+;; Helper for emitting the `vsext.vf4` instruction.
+;; Sign-extend SEW/4 source to SEW destination
+(decl rv_vsext_vf4 (VReg VecOpMasking VState) VReg)
+(rule (rv_vsext_vf4 vs mask vstate)
+  (vec_alu_rr (VecAluOpRR.VsextVF4) vs mask vstate))
+
+;; Helper for emitting the `vsext.vf8` instruction.
+;; Sign-extend SEW/8 source to SEW destination
+(decl rv_vsext_vf8 (VReg VecOpMasking VState) VReg)
+(rule (rv_vsext_vf8 vs mask vstate)
+  (vec_alu_rr (VecAluOpRR.VsextVF8) vs mask vstate))
 
 ;;;; Multi-Instruction Helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

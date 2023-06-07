@@ -1477,21 +1477,49 @@
 ;;;; Rules for `swiden_high` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Slide down half the vector, and do a signed extension.
-(rule (lower (has_type (ty_vec_fits_in_register out_ty) (swiden_high x @ (value_type in_ty))))
+(rule 0 (lower (has_type (ty_vec_fits_in_register out_ty) (swiden_high x @ (value_type in_ty))))
   (rv_vsext_vf2 (gen_slidedown_half in_ty x) (unmasked) out_ty))
+
+(rule 1 (lower (has_type (ty_vec_fits_in_register out_ty) (swiden_high (swiden_high x @ (value_type in_ty)))))
+  (if-let (uimm5_from_u64 amt) (u64_sub (ty_lane_count in_ty) (ty_lane_count out_ty)))
+  (rv_vsext_vf4 (rv_vslidedown_vi x amt (unmasked) in_ty) (unmasked) out_ty))
+
+(rule 2 (lower (has_type (ty_vec_fits_in_register out_ty) (swiden_high (swiden_high (swiden_high x @ (value_type in_ty))))))
+  (if-let (uimm5_from_u64 amt) (u64_sub (ty_lane_count in_ty) (ty_lane_count out_ty)))
+  (rv_vsext_vf8 (rv_vslidedown_vi x amt (unmasked) in_ty) (unmasked) out_ty))
 
 ;;;; Rules for `uwiden_high` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Slide down half the vector, and do a zero extension.
-(rule (lower (has_type (ty_vec_fits_in_register out_ty) (uwiden_high x @ (value_type in_ty))))
+(rule 0 (lower (has_type (ty_vec_fits_in_register out_ty) (uwiden_high x @ (value_type in_ty))))
   (rv_vzext_vf2 (gen_slidedown_half in_ty x) (unmasked) out_ty))
+
+(rule 1 (lower (has_type (ty_vec_fits_in_register out_ty) (uwiden_high (uwiden_high x @ (value_type in_ty)))))
+  (if-let (uimm5_from_u64 amt) (u64_sub (ty_lane_count in_ty) (ty_lane_count out_ty)))
+  (rv_vzext_vf4 (rv_vslidedown_vi x amt (unmasked) in_ty) (unmasked) out_ty))
+
+(rule 2 (lower (has_type (ty_vec_fits_in_register out_ty) (uwiden_high (uwiden_high (uwiden_high x @ (value_type in_ty))))))
+  (if-let (uimm5_from_u64 amt) (u64_sub (ty_lane_count in_ty) (ty_lane_count out_ty)))
+  (rv_vzext_vf8 (rv_vslidedown_vi x amt (unmasked) in_ty) (unmasked) out_ty))
 
 ;;;; Rules for `swiden_low` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type (ty_vec_fits_in_register out_ty) (swiden_low x)))
+(rule 0 (lower (has_type (ty_vec_fits_in_register out_ty) (swiden_low x)))
   (rv_vsext_vf2 x (unmasked) out_ty))
+
+(rule 1 (lower (has_type (ty_vec_fits_in_register out_ty) (swiden_low (swiden_low x))))
+  (rv_vsext_vf4 x (unmasked) out_ty))
+
+(rule 2 (lower (has_type (ty_vec_fits_in_register out_ty) (swiden_low (swiden_low (swiden_low x)))))
+  (rv_vsext_vf8 x (unmasked) out_ty))
 
 ;;;; Rules for `uwiden_low` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type (ty_vec_fits_in_register out_ty) (uwiden_low x)))
+(rule 0 (lower (has_type (ty_vec_fits_in_register out_ty) (uwiden_low x)))
   (rv_vzext_vf2 x (unmasked) out_ty))
+
+(rule 1 (lower (has_type (ty_vec_fits_in_register out_ty) (uwiden_low (uwiden_low x))))
+  (rv_vzext_vf4 x (unmasked) out_ty))
+
+(rule 2 (lower (has_type (ty_vec_fits_in_register out_ty) (uwiden_low (uwiden_low (uwiden_low x)))))
+  (rv_vzext_vf8 x (unmasked) out_ty))
