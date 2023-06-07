@@ -6,9 +6,30 @@ Unreleased.
 
 ### Added
 
+* Expose the `Config::static_memory_forced` option through the C api
+  [#6413](https://github.com/bytecodealliance/wasmtime/pull/6413)
+
+* Basic guest-profiler documentation for the book
+  [#6394](https://github.com/bytecodealliance/wasmtime/pull/6394)
+
+* Merge the initial wasi-preview2 implementation
+  [#6391](https://github.com/bytecodealliance/wasmtime/pull/6391)
+
+* The wasi-preview2 component adapter has been pulled into the main wasmtime
+  repository. It is available for the first time as part of this release, but should be
+  treated as as a beta at this time. Patch releases will not be made for bug fixes.
+  [#6374](https://github.com/bytecodealliance/wasmtime/pull/6374)
+
 * A callback invoked when an epoch deadline is reached can now be configured via
   the C API.
   [#6359](https://github.com/bytecodealliance/wasmtime/pull/6359)
+
+* PR auto-assignment policies have been documented, to clarify the expectations of
+  reviewers.
+  [#6346](https://github.com/bytecodealliance/wasmtime/pull/6346)
+
+* Support for the function references has been added
+  [#5288](https://github.com/bytecodealliance/wasmtime/pull/5288)
 
 ### Changed
 
@@ -16,20 +37,49 @@ Unreleased.
   optionally yielding to the async executor after the callback runs.
   [#6464](https://github.com/bytecodealliance/wasmtime/pull/6464)
 
+* The `--profile-guest` flag has now been folded into `--profile=guest`
+  [#6352](https://github.com/bytecodealliance/wasmtime/pull/6352)
+
+* Initializers are no longer tracked in the type information for globals, and
+  instead are provided when creating the global.
+  [#6349](https://github.com/bytecodealliance/wasmtime/pull/6349)
+
 * The "raw" representation of `funcref` and `externref` in the embedding API has
   been updated from a `usize` to a `*mut u8` to be compatible with Rust's
   proposed strict provenance rules. This change is additionally reflected into
   the C API as well.
   [#6338](https://github.com/bytecodealliance/wasmtime/pull/6338)
 
-* The `--profile-guest` flag has now been folded into `--profile=guest`
-  [#6352](https://github.com/bytecodealliance/wasmtime/pull/6352)
-
 ### Fixed
+
+* Fixed a soundness issue with the component model and async
+  [#6509](https://github.com/bytecodealliance/wasmtime/pull/6509)
 
 * Opening directories with WASI on Windows with `NONBLOCK` in flags has been
   fixed.
   [#6348](https://github.com/bytecodealliance/wasmtime/pull/6348)
+
+### Cranelift changes
+
+* Performance improvements in regalloc2 have landed, and compilation time has
+  improved
+  [#6483](https://github.com/bytecodealliance/wasmtime/pull/6483)
+  [#6398](https://github.com/bytecodealliance/wasmtime/pull/6398)
+
+* Renamed `abi::Caller` to `abi::CallSite`
+  [#6414](https://github.com/bytecodealliance/wasmtime/pull/6414)
+
+* Work has begun on SIMD support for the riscv64 backend
+  [#6324](https://github.com/bytecodealliance/wasmtime/pull/6324)
+  [#6366](https://github.com/bytecodealliance/wasmtime/pull/6366)
+  [#6367](https://github.com/bytecodealliance/wasmtime/pull/6367)
+  [#6392](https://github.com/bytecodealliance/wasmtime/pull/6392)
+  [#6397](https://github.com/bytecodealliance/wasmtime/pull/6397)
+  [#6403](https://github.com/bytecodealliance/wasmtime/pull/6403)
+  [#6408](https://github.com/bytecodealliance/wasmtime/pull/6408)
+  [#6419](https://github.com/bytecodealliance/wasmtime/pull/6419)
+  [#6430](https://github.com/bytecodealliance/wasmtime/pull/6430)
+  [#6507](https://github.com/bytecodealliance/wasmtime/pull/6507)
 
 --------------------------------------------------------------------------------
 
