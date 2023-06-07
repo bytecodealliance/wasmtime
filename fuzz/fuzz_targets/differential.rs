@@ -328,6 +328,22 @@ fn winch_supports_module(module: &[u8]) -> bool {
                         | I64GeU { .. }
                         | I32Eqz { .. }
                         | I64Eqz { .. }
+                        | I32And { .. }
+                        | I64And { .. }
+                        | I32Or { .. }
+                        | I64Or { .. }
+                        | I32Xor { .. }
+                        | I64Xor { .. }
+                        | I32Shl { .. }
+                        | I64Shl { .. }
+                        | I32ShrS { .. }
+                        | I64ShrS { .. }
+                        | I32ShrU { .. }
+                        | I64ShrU { .. }
+                        | I32Rotl { .. }
+                        | I64Rotl { .. }
+                        | I32Rotr { .. }
+                        | I64Rotr { .. }
                         | LocalGet { .. }
                         | LocalSet { .. }
                         | Call { .. }

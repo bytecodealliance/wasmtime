@@ -49,6 +49,22 @@ pub(crate) enum CmpKind {
     GeU,
 }
 
+/// Kinds of shifts in WebAssembly.The [`masm`] implementation for each ISA is
+/// responsible for emitting the correct sequence of instructions when
+/// lowering to machine code.
+pub(crate) enum ShiftKind {
+    /// Left shift.
+    Shl,
+    /// Signed right shift.
+    ShrS,
+    /// Unsigned right shift.
+    ShrU,
+    /// Left rotate.
+    Rotl,
+    /// Right rotate.
+    Rotr,
+}
+
 /// Operand size, in bits.
 #[derive(Copy, Debug, Clone, Eq, PartialEq)]
 pub(crate) enum OperandSize {
@@ -175,6 +191,23 @@ pub(crate) trait MacroAssembler {
 
     /// Perform multiplication operation.
     fn mul(&mut self, dst: RegImm, lhs: RegImm, rhs: RegImm, size: OperandSize);
+
+    /// Perform logical and operation.
+    fn and(&mut self, dst: RegImm, lhs: RegImm, rhs: RegImm, size: OperandSize);
+
+    /// Perform logical or operation.
+    fn or(&mut self, dst: RegImm, lhs: RegImm, rhs: RegImm, size: OperandSize);
+
+    /// Perform logical exclusive or operation.
+    fn xor(&mut self, dst: RegImm, lhs: RegImm, rhs: RegImm, size: OperandSize);
+
+    /// Perform a shift operation.
+    /// Shift is special in that some architectures have specific expectations
+    /// regarding the location of the instruction arguments. To free the
+    /// caller from having to deal with the architecture specific constraints
+    /// we give this function access to the code generation context, allowing
+    /// each implementation to decide the lowering path.
+    fn shift(&mut self, context: &mut CodeGenContext, kind: ShiftKind, size: OperandSize);
 
     /// Perform division operation.
     /// Division is special in that some architectures have specific

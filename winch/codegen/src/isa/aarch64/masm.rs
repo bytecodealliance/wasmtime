@@ -8,7 +8,10 @@ use crate::{
     abi::{self, local::LocalSlot},
     codegen::CodeGenContext,
     isa::reg::Reg,
-    masm::{CalleeKind, CmpKind, DivKind, MacroAssembler as Masm, OperandSize, RegImm, RemKind},
+    masm::{
+        CalleeKind, CmpKind, DivKind, MacroAssembler as Masm, OperandSize, RegImm, RemKind,
+        ShiftKind,
+    },
 };
 use cranelift_codegen::{settings, Final, MachBufferFinalized};
 
@@ -177,6 +180,22 @@ impl Masm for MacroAssembler {
 
     fn mul(&mut self, dst: RegImm, lhs: RegImm, rhs: RegImm, size: OperandSize) {
         self.asm.mul(rhs.into(), lhs.into(), dst.into(), size);
+    }
+
+    fn and(&mut self, _dst: RegImm, _lhs: RegImm, _rhs: RegImm, _size: OperandSize) {
+        todo!()
+    }
+
+    fn or(&mut self, _dst: RegImm, _lhs: RegImm, _rhs: RegImm, _size: OperandSize) {
+        todo!()
+    }
+
+    fn xor(&mut self, _dst: RegImm, _lhs: RegImm, _rhs: RegImm, _size: OperandSize) {
+        todo!()
+    }
+
+    fn shift(&mut self, _context: &mut CodeGenContext, _kind: ShiftKind, _size: OperandSize) {
+        todo!()
     }
 
     fn div(&mut self, _context: &mut CodeGenContext, _kind: DivKind, _size: OperandSize) {
