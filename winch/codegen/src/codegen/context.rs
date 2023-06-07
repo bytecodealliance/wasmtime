@@ -65,6 +65,9 @@ impl<'a> CodeGenContext<'a> {
     /// it isn't already one; spilling if there are no registers
     /// available.  Optionally the caller may specify a specific
     /// destination register.
+    /// When a named register is requested and it's not at the top of the
+    /// stack a move from register to register might happen, in which case
+    /// the source register will be freed.
     pub fn pop_to_reg<M: MacroAssembler>(
         &mut self,
         masm: &mut M,
@@ -92,6 +95,10 @@ impl<'a> CodeGenContext<'a> {
             masm.pop(dst);
         } else {
             self.move_val_to_reg(&val, dst, masm, size);
+            // Free the source value if it is a register.
+            if val.is_reg() {
+                self.regalloc.free_gpr(val.get_reg());
+            }
         }
 
         dst
