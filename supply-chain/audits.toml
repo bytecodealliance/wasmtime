@@ -693,6 +693,12 @@ criteria = "safe-to-deploy"
 delta = "0.3.0 -> 0.3.1"
 notes = "Just a dependency version bump and a bug fix for redox"
 
+[[audits.errno-dragonfly]]
+who = "Jamey Sharp <jsharp@fastly.com>"
+criteria = "safe-to-deploy"
+version = "0.1.2"
+notes = "This should be portable to any POSIX system and seems like it should be part of the libc crate, but at any rate it's safe as is."
+
 [[audits.fd-lock]]
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
@@ -826,6 +832,11 @@ This is a standard update to gimli for more DWARF support for more platforms,
 more features, etc. Some minor `unsafe` code was added that does not appear
 incorrect. Otherwise looks like someone probably ran clippy and/or rustfmt.
 """
+
+[[audits.glob]]
+who = "Jamey Sharp <jsharp@fastly.com>"
+criteria = "safe-to-deploy"
+delta = "0.3.1 -> 0.3.0"
 
 [[audits.hashbrown]]
 who = "Chris Fallin <chris@cfallin.org>"

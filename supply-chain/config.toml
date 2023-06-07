@@ -257,10 +257,6 @@ criteria = "safe-to-deploy"
 version = "0.9.0"
 criteria = "safe-to-deploy"
 
-[[exemptions.errno-dragonfly]]
-version = "0.1.2"
-criteria = "safe-to-deploy"
-
 [[exemptions.fallible-iterator]]
 version = "0.2.0"
 criteria = "safe-to-deploy"
@@ -309,10 +305,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.gimli]]
 version = "0.26.1"
-criteria = "safe-to-deploy"
-
-[[exemptions.glob]]
-version = "0.3.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.group]]
