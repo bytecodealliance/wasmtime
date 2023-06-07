@@ -35,6 +35,8 @@ jobs:
       uses: JamesIves/github-pages-deploy-action@v4
       with:
         folder: ./gh-pages/gh-pages
+        single-commit: true
+        clean: true
       if: github.ref == 'refs/heads/main'
 
     - run: npm install --production
