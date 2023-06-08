@@ -151,7 +151,7 @@ impl<T: WasiView> streams::Host for T {
 
         Ok(bytes_spliced)
         */
-        todo!()
+        todo!("stream splice is not implemented")
     }
 
     async fn blocking_splice(
@@ -190,7 +190,7 @@ impl<T: WasiView> streams::Host for T {
         Ok(bytes_spliced)
         */
 
-        todo!()
+        todo!("stream forward is not implemented")
     }
 
     async fn subscribe_to_input_stream(&mut self, stream: InputStream) -> anyhow::Result<Pollable> {

@@ -640,7 +640,7 @@ impl<T: WasiView> filesystem::Host for T {
         _path: String,
         _access: filesystem::AccessType,
     ) -> Result<(), filesystem::Error> {
-        todo!()
+        todo!("filesystem access_at is not implemented")
     }
 
     fn change_file_permissions_at(
@@ -650,7 +650,7 @@ impl<T: WasiView> filesystem::Host for T {
         _path: String,
         _mode: filesystem::Modes,
     ) -> Result<(), filesystem::Error> {
-        todo!()
+        todo!("filesystem change_file_permissions_at is not implemented")
     }
 
     fn change_directory_permissions_at(
@@ -660,27 +660,27 @@ impl<T: WasiView> filesystem::Host for T {
         _path: String,
         _mode: filesystem::Modes,
     ) -> Result<(), filesystem::Error> {
-        todo!()
+        todo!("filesystem change_directory_permissions_at is not implemented")
     }
 
     fn lock_shared(&mut self, _fd: filesystem::Descriptor) -> Result<(), filesystem::Error> {
-        todo!()
+        todo!("filesystem lock_shared is not implemented")
     }
 
     fn lock_exclusive(&mut self, _fd: filesystem::Descriptor) -> Result<(), filesystem::Error> {
-        todo!()
+        todo!("filesystem lock_exclusive is not implemented")
     }
 
     fn try_lock_shared(&mut self, _fd: filesystem::Descriptor) -> Result<(), filesystem::Error> {
-        todo!()
+        todo!("filesystem try_lock_shared is not implemented")
     }
 
     fn try_lock_exclusive(&mut self, _fd: filesystem::Descriptor) -> Result<(), filesystem::Error> {
-        todo!()
+        todo!("filesystem try_lock_exclusive is not implemented")
     }
 
     fn unlock(&mut self, _fd: filesystem::Descriptor) -> Result<(), filesystem::Error> {
-        todo!()
+        todo!("filesystem unlock is not implemented")
     }
 
     fn read_via_stream(

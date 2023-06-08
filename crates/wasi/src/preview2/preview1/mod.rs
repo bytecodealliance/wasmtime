@@ -1731,7 +1731,7 @@ impl<
         events: &GuestPtr<'a, types::Event>,
         nsubscriptions: types::Size,
     ) -> Result<types::Size, types::Error> {
-        todo!()
+        todo!("preview1 poll_oneoff is not implemented")
     }
 
     #[instrument(skip(self))]
@@ -1778,7 +1778,7 @@ impl<
         fd: types::Fd,
         flags: types::Fdflags,
     ) -> Result<types::Fd, types::Error> {
-        todo!()
+        todo!("preview1 sock_accept is not implemented")
     }
 
     #[allow(unused_variables)]
@@ -1789,7 +1789,7 @@ impl<
         ri_data: &types::IovecArray<'a>,
         ri_flags: types::Riflags,
     ) -> Result<(types::Size, types::Roflags), types::Error> {
-        todo!()
+        todo!("preview1 sock_recv is not implemented")
     }
 
     #[allow(unused_variables)]
@@ -1800,12 +1800,12 @@ impl<
         si_data: &types::CiovecArray<'a>,
         _si_flags: types::Siflags,
     ) -> Result<types::Size, types::Error> {
-        todo!()
+        todo!("preview1 sock_send is not implemented")
     }
 
     #[allow(unused_variables)]
     #[instrument(skip(self))]
     fn sock_shutdown(&mut self, fd: types::Fd, how: types::Sdflags) -> Result<(), types::Error> {
-        todo!()
+        todo!("preview1 sock_shutdown is not implemented")
     }
 }

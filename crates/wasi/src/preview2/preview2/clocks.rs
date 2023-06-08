@@ -80,14 +80,14 @@ impl<T: WasiView> monotonic_clock::Host for T {
 
 impl<T: WasiView> timezone::Host for T {
     fn display(&mut self, timezone: Timezone, when: Datetime) -> anyhow::Result<TimezoneDisplay> {
-        todo!()
+        todo!("timezone display is not implemented")
     }
 
     fn utc_offset(&mut self, timezone: Timezone, when: Datetime) -> anyhow::Result<i32> {
-        todo!()
+        todo!("timezone utc_offset is not implemented")
     }
 
     fn drop_timezone(&mut self, timezone: Timezone) -> anyhow::Result<()> {
-        todo!()
+        todo!("timezone drop is not implemented")
     }
 }
