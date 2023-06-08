@@ -293,6 +293,12 @@ that the RNG here is not cryptographically secure.
 """
 aggregated-from = "https://chromium.googlesource.com/chromiumos/third_party/rust_crates/+/main/cargo-vet/audits.toml?format=TEXT"
 
+[[audits.google.audits.glob]]
+who = "George Burgess IV <gbiv@google.com>"
+criteria = "safe-to-deploy"
+version = "0.3.1"
+aggregated-from = "https://chromium.googlesource.com/chromiumos/third_party/rust_crates/+/main/cargo-vet/audits.toml?format=TEXT"
+
 [[audits.google.audits.libfuzzer-sys]]
 who = "ChromeOS"
 criteria = "safe-to-run"
