@@ -9,7 +9,7 @@
 // Import module that allows colors in the console as long as supported by WASI.
 import { rainbow } from "as-rainbow/assembly";
 
-// Call console.log which is overriden to use WASI syscalls by @assemblyscript/wasi-shim.
+// Call console.log which is overridden to use WASI syscalls by @assemblyscript/wasi-shim.
 console.log(rainbow.blue(rainbow.boldMk("Hello from WasmTime WASI through AssemblyScript!")));
 
 console.log(rainbow.boldMk("Press ctrl+c to exit this demo at any time."));
@@ -32,7 +32,7 @@ console.log(rainbow.red("You said: " + String.UTF8.decode(buffer)))
 
 waitForUserEnter("\nPlease press return to continue");
 
-// Demonstrate retriving cryptographically-safe random numbers through WASI.
+// Demonstrate the retrieval of cryptographically-safe random numbers through WASI.
 console.log("WASI can fetch cryptographically-safe random numbers from the runtime\nSeries of random numbers:");
 
 for (let i = 0; i < 5; i++) {
