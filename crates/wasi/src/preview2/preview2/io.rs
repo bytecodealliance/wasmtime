@@ -2,7 +2,7 @@ use crate::preview2::{
     stream::{HostInputStream, HostOutputStream, TableStreamExt},
     wasi::io::streams::{self, InputStream, OutputStream, StreamError},
     wasi::poll::poll::Pollable,
-    HostPollable, TableError, TablePollableExt, WasiView,
+    TableError, TablePollableExt, WasiView,
 };
 use anyhow::anyhow;
 
@@ -194,17 +194,15 @@ impl<T: WasiView> streams::Host for T {
     }
 
     async fn subscribe_to_input_stream(&mut self, stream: InputStream) -> anyhow::Result<Pollable> {
-        Ok(self
-            .table_mut()
-            .push_host_pollable(HostPollable::new(async {}))?) // FIXME
+        let pollable = self.table().get_input_stream(stream)?.pollable();
+        Ok(self.table_mut().push_host_pollable(pollable)?)
     }
 
     async fn subscribe_to_output_stream(
         &mut self,
         stream: OutputStream,
     ) -> anyhow::Result<Pollable> {
-        Ok(self
-            .table_mut()
-            .push_host_pollable(HostPollable::new(async {}))?) // FIXME
+        let pollable = self.table().get_output_stream(stream)?.pollable();
+        Ok(self.table_mut().push_host_pollable(pollable)?)
     }
 }

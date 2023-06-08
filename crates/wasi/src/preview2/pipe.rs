@@ -119,7 +119,8 @@ impl<R: Read + ReadReady + Any + Send + Sync> HostInputStream for ReadPipe<R> {
     }
 
     fn pollable(&self) -> HostPollable {
-        HostPollable::new(async {}) // FIXME
+        HostPollable::new(async { todo!("pollable on a ReadPipe") })
+        // FIXME
     }
 }
 
@@ -195,18 +196,6 @@ impl<W: Write + Any + Send + Sync> HostOutputStream for WritePipe<W> {
         let n = self.borrow().write(buf)?;
         Ok(n.try_into()?)
     }
-
-    // TODO: Optimize for pipes.
-    /*
-    async fn splice(
-        &mut self,
-        src: &mut dyn InputStream,
-        nelem: u64,
-    ) -> Result<u64, Error> {
-        todo!()
-    }
-    */
-
     async fn write_zeroes(&mut self, nelem: u64) -> Result<u64, Error> {
         let num = io::copy(
             &mut io::Read::take(io::repeat(0), nelem),
@@ -216,6 +205,6 @@ impl<W: Write + Any + Send + Sync> HostOutputStream for WritePipe<W> {
     }
 
     fn pollable(&self) -> HostPollable {
-        HostPollable::new(async {}) // FIXME
+        HostPollable::new(async { todo!("pollable on a WritePipe") }) // FIXME
     }
 }

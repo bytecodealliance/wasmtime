@@ -31,10 +31,11 @@ impl HostInputStream for Stdin {
             Err(err) => Err(err.into()),
         }
     }
-    #[cfg(can_vector)]
-    fn is_read_vectored(&self) {
+    /* this method can be implemented once `can_vector` stabilizes in std:
+    fn is_read_vectored(&self) -> bool {
         Read::is_read_vectored(&mut self.0)
     }
+    */
 
     async fn skip(&mut self, nelem: u64) -> Result<(u64, bool), Error> {
         let num = io::copy(&mut io::Read::take(&mut self.0, nelem), &mut io::sink())?;
@@ -42,8 +43,7 @@ impl HostInputStream for Stdin {
     }
 
     fn pollable(&self) -> HostPollable {
-        // Always ready immediately:
-        HostPollable::new(async {})
+        HostPollable::new(async { todo!("pollable on stdin") })
     }
 }
 
@@ -59,29 +59,18 @@ macro_rules! wasi_output_stream_impl {
                 let n = Write::write_vectored(&mut self.0, bufs)?;
                 Ok(n.try_into()?)
             }
-            #[cfg(can_vector)]
-            fn is_write_vectored(&self) {
+            /* this method can be implemented once `can_vector` stablizes in std
+            fn is_write_vectored(&self) -> bool {
                 Write::is_write_vectored(&mut self.0)
             }
-            // TODO: Optimize for stdio streams.
-            /*
-            async fn splice(
-                &mut self,
-                src: &mut dyn InputStream,
-                nelem: u64,
-            ) -> Result<u64, Error> {
-                todo!()
-            }
             */
-
             async fn write_zeroes(&mut self, nelem: u64) -> Result<u64, Error> {
                 let num = io::copy(&mut io::Read::take(io::repeat(0), nelem), &mut self.0)?;
                 Ok(num)
             }
 
             fn pollable(&self) -> HostPollable {
-                // Always ready immediately:
-                HostPollable::new(async {})
+                HostPollable::new(async { todo!("pollable on stdio, stderr writes") })
             }
         }
     };

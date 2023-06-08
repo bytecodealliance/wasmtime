@@ -116,7 +116,7 @@ impl HostInputStream for FileInputStream {
         self.file.is_read_vectored_at()
     }
     fn pollable(&self) -> HostPollable {
-        HostPollable::new(async {}) // FIXME
+        HostPollable::new(async {}) // Always immediately ready - file reads cannot block
     }
 }
 
@@ -165,7 +165,7 @@ impl HostOutputStream for FileOutputStream {
     }
 
     fn pollable(&self) -> HostPollable {
-        HostPollable::new(async {}) // FIXME
+        HostPollable::new(async {}) // Always immediately ready - file writes cannot block
     }
 }
 
@@ -201,6 +201,6 @@ impl HostOutputStream for FileAppendStream {
     }
 
     fn pollable(&self) -> HostPollable {
-        HostPollable::new(async {}) // FIXME
+        HostPollable::new(async {}) // Always immediately ready - file appends cannot block
     }
 }
