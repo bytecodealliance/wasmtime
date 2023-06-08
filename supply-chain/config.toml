@@ -2,7 +2,7 @@
 # cargo-vet config file
 
 [cargo-vet]
-version = "0.6"
+version = "0.7"
 
 [imports.embark-studios]
 url = "https://raw.githubusercontent.com/EmbarkStudios/rust-ecosystem/main/audits.toml"
@@ -19,20 +19,170 @@ url = "https://raw.githubusercontent.com/divviup/libprio-rs/main/supply-chain/au
 [imports.mozilla]
 url = "https://raw.githubusercontent.com/mozilla/supply-chain/main/audits.toml"
 
+[policy.cranelift]
+audit-as-crates-io = false
+
+[policy.cranelift-bforest]
+audit-as-crates-io = false
+
+[policy.cranelift-codegen]
+audit-as-crates-io = false
+
+[policy.cranelift-codegen-meta]
+audit-as-crates-io = false
+
+[policy.cranelift-codegen-shared]
+audit-as-crates-io = false
+
+[policy.cranelift-control]
+audit-as-crates-io = false
+
+[policy.cranelift-entity]
+audit-as-crates-io = false
+
+[policy.cranelift-frontend]
+audit-as-crates-io = false
+
+[policy.cranelift-interpreter]
+audit-as-crates-io = false
+
+[policy.cranelift-isle]
+audit-as-crates-io = false
+
+[policy.cranelift-jit]
+audit-as-crates-io = false
+
+[policy.cranelift-module]
+audit-as-crates-io = false
+
+[policy.cranelift-native]
+audit-as-crates-io = false
+
+[policy.cranelift-object]
+audit-as-crates-io = false
+
+[policy.cranelift-reader]
+audit-as-crates-io = false
+
+[policy.cranelift-serde]
+audit-as-crates-io = false
+
+[policy.cranelift-wasm]
+audit-as-crates-io = false
+
 [policy.isle-fuzz]
 criteria = "safe-to-run"
+
+[policy.wasi-cap-std-sync]
+audit-as-crates-io = false
+
+[policy.wasi-common]
+audit-as-crates-io = false
 
 [policy.wasi-crypto]
 audit-as-crates-io = false
 
+[policy.wasi-tokio]
+audit-as-crates-io = false
+
+[policy.wasmtime]
+audit-as-crates-io = false
+
+[policy.wasmtime-asm-macros]
+audit-as-crates-io = false
+
+[policy.wasmtime-cache]
+audit-as-crates-io = false
+
+[policy.wasmtime-cli]
+audit-as-crates-io = false
+
+[policy.wasmtime-cli-flags]
+audit-as-crates-io = false
+
+[policy.wasmtime-component-macro]
+audit-as-crates-io = false
+
+[policy.wasmtime-component-util]
+audit-as-crates-io = false
+
+[policy.wasmtime-cranelift]
+audit-as-crates-io = false
+
+[policy.wasmtime-cranelift-shared]
+audit-as-crates-io = false
+
+[policy.wasmtime-environ]
+audit-as-crates-io = false
+
 [policy.wasmtime-environ-fuzz]
 criteria = "safe-to-run"
+
+[policy.wasmtime-explorer]
+audit-as-crates-io = false
+
+[policy.wasmtime-fiber]
+audit-as-crates-io = false
 
 [policy.wasmtime-fuzz]
 criteria = "safe-to-run"
 
 [policy.wasmtime-fuzzing]
 criteria = "safe-to-run"
+
+[policy.wasmtime-jit]
+audit-as-crates-io = false
+
+[policy.wasmtime-jit-debug]
+audit-as-crates-io = false
+
+[policy.wasmtime-jit-icache-coherence]
+audit-as-crates-io = false
+
+[policy.wasmtime-runtime]
+audit-as-crates-io = false
+
+[policy.wasmtime-types]
+audit-as-crates-io = false
+
+[policy.wasmtime-wasi]
+audit-as-crates-io = false
+
+[policy.wasmtime-wasi-crypto]
+audit-as-crates-io = false
+
+[policy.wasmtime-wasi-http]
+audit-as-crates-io = false
+
+[policy.wasmtime-wasi-nn]
+audit-as-crates-io = false
+
+[policy.wasmtime-wasi-threads]
+audit-as-crates-io = false
+
+[policy.wasmtime-wast]
+audit-as-crates-io = false
+
+[policy.wasmtime-winch]
+audit-as-crates-io = false
+
+[policy.wasmtime-wit-bindgen]
+audit-as-crates-io = false
+
+[policy.wiggle]
+audit-as-crates-io = false
+
+[policy.wiggle-generate]
+audit-as-crates-io = false
+
+[policy.wiggle-macro]
+audit-as-crates-io = false
+
+[policy.wiggle-test]
+audit-as-crates-io = false
+
+[policy.winch-codegen]
+audit-as-crates-io = false
 
 [policy.witx]
 audit-as-crates-io = false

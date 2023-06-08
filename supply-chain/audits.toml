@@ -4,7 +4,7 @@
 [[wildcard-audits.arbitrary]]
 who = "Nick Fitzgerald <fitzgen@gmail.com>"
 criteria = "safe-to-deploy"
-user-id = 696
+user-id = 696 # Nick Fitzgerald (fitzgen)
 start = "2020-01-14"
 end = "2024-04-21"
 notes = "I am an author of this crate."
@@ -12,14 +12,14 @@ notes = "I am an author of this crate."
 [[wildcard-audits.bumpalo]]
 who = "Nick Fitzgerald <fitzgen@gmail.com>"
 criteria = "safe-to-deploy"
-user-id = 696
+user-id = 696 # Nick Fitzgerald (fitzgen)
 start = "2019-03-16"
 end = "2024-03-10"
 
 [[wildcard-audits.derive_arbitrary]]
 who = "Nick Fitzgerald <fitzgen@gmail.com>"
 criteria = "safe-to-deploy"
-user-id = 696
+user-id = 696 # Nick Fitzgerald (fitzgen)
 start = "2020-01-14"
 end = "2024-04-27"
 notes = "I am an author of this crate"
@@ -35,7 +35,7 @@ notes = "We (Bytecode Alliance) are the primary authors of regalloc2 and co-deve
 [[wildcard-audits.regalloc2]]
 who = "Trevor Elliott <telliott@fastly.com>"
 criteria = "safe-to-deploy"
-user-id = 187138
+user-id = 187138 # Trevor Elliott (elliottt)
 start = "2022-11-29"
 end = "2024-05-02"
 notes = """
@@ -48,7 +48,7 @@ actively maintain this crate over time.
 [[wildcard-audits.wasm-encoder]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
-user-id = 1
+user-id = 1 # Alex Crichton (alexcrichton)
 start = "2020-12-11"
 end = "2024-04-14"
 notes = """
@@ -61,7 +61,7 @@ so and will actively maintain this crate over time.
 [[wildcard-audits.wasm-metadata]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
-user-id = 1
+user-id = 1 # Alex Crichton (alexcrichton)
 start = "2020-12-11"
 end = "2024-04-14"
 notes = """
@@ -74,14 +74,14 @@ so and will actively maintain this crate over time.
 [[wildcard-audits.wasm-mutate]]
 who = "Nick Fitzgerald <fitzgen@gmail.com>"
 criteria = "safe-to-deploy"
-user-id = 696
+user-id = 696 # Nick Fitzgerald (fitzgen)
 start = "2022-02-17"
 end = "2024-03-10"
 
 [[wildcard-audits.wasm-mutate]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
-user-id = 1
+user-id = 1 # Alex Crichton (alexcrichton)
 start = "2022-01-05"
 end = "2024-04-14"
 notes = """
@@ -94,7 +94,7 @@ so and will actively maintain this crate over time.
 [[wildcard-audits.wasm-smith]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
-user-id = 1
+user-id = 1 # Alex Crichton (alexcrichton)
 start = "2020-09-03"
 end = "2024-04-14"
 notes = """
@@ -107,7 +107,7 @@ so and will actively maintain this crate over time.
 [[wildcard-audits.wasmparser]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
-user-id = 1
+user-id = 1 # Alex Crichton (alexcrichton)
 start = "2020-07-13"
 end = "2024-04-14"
 notes = """
@@ -120,14 +120,14 @@ so and will actively maintain this crate over time.
 [[wildcard-audits.wasmprinter]]
 who = "Nick Fitzgerald <fitzgen@gmail.com>"
 criteria = "safe-to-deploy"
-user-id = 696
+user-id = 696 # Nick Fitzgerald (fitzgen)
 start = "2021-04-28"
 end = "2024-03-10"
 
 [[wildcard-audits.wasmprinter]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
-user-id = 1
+user-id = 1 # Alex Crichton (alexcrichton)
 start = "2019-11-18"
 end = "2024-04-14"
 notes = """
@@ -140,7 +140,7 @@ so and will actively maintain this crate over time.
 [[wildcard-audits.wast]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
-user-id = 1
+user-id = 1 # Alex Crichton (alexcrichton)
 start = "2019-10-16"
 end = "2024-04-14"
 notes = """
@@ -153,7 +153,7 @@ so and will actively maintain this crate over time.
 [[wildcard-audits.wat]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
-user-id = 1
+user-id = 1 # Alex Crichton (alexcrichton)
 start = "2019-10-18"
 end = "2024-04-14"
 notes = """
@@ -166,7 +166,7 @@ so and will actively maintain this crate over time.
 [[wildcard-audits.wit-bindgen]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
-user-id = 1
+user-id = 1 # Alex Crichton (alexcrichton)
 start = "2020-12-11"
 end = "2024-04-14"
 notes = """
@@ -179,7 +179,7 @@ so and will actively maintain this crate over time.
 [[wildcard-audits.wit-bindgen-core]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
-user-id = 1
+user-id = 1 # Alex Crichton (alexcrichton)
 start = "2020-12-11"
 end = "2024-04-14"
 notes = """
@@ -192,7 +192,7 @@ so and will actively maintain this crate over time.
 [[wildcard-audits.wit-bindgen-rust]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
-user-id = 1
+user-id = 1 # Alex Crichton (alexcrichton)
 start = "2020-12-11"
 end = "2024-04-14"
 notes = """
@@ -205,7 +205,7 @@ so and will actively maintain this crate over time.
 [[wildcard-audits.wit-bindgen-rust-lib]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
-user-id = 1
+user-id = 1 # Alex Crichton (alexcrichton)
 start = "2020-12-11"
 end = "2024-04-14"
 notes = """
@@ -218,7 +218,7 @@ so and will actively maintain this crate over time.
 [[wildcard-audits.wit-bindgen-rust-macro]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
-user-id = 1
+user-id = 1 # Alex Crichton (alexcrichton)
 start = "2020-12-11"
 end = "2024-04-14"
 notes = """
@@ -231,7 +231,7 @@ so and will actively maintain this crate over time.
 [[wildcard-audits.wit-component]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
-user-id = 1
+user-id = 1 # Alex Crichton (alexcrichton)
 start = "2020-12-11"
 end = "2024-04-14"
 notes = """
@@ -244,14 +244,14 @@ so and will actively maintain this crate over time.
 [[wildcard-audits.wit-component]]
 who = "Nick Fitzgerald <fitzgen@gmail.com>"
 criteria = "safe-to-deploy"
-user-id = 696
+user-id = 696 # Nick Fitzgerald (fitzgen)
 start = "2019-03-16"
 end = "2024-03-10"
 
 [[wildcard-audits.wit-parser]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
-user-id = 1
+user-id = 1 # Alex Crichton (alexcrichton)
 start = "2019-12-02"
 end = "2024-04-14"
 notes = """
