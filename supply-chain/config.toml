@@ -529,14 +529,6 @@ criteria = "safe-to-deploy"
 version = "1.0.1"
 criteria = "safe-to-deploy"
 
-[[exemptions.ittapi]]
-version = "0.3.1"
-criteria = "safe-to-deploy"
-
-[[exemptions.ittapi-sys]]
-version = "0.3.1"
-criteria = "safe-to-deploy"
-
 [[exemptions.jobserver]]
 version = "0.1.24"
 criteria = "safe-to-deploy"
@@ -980,10 +972,6 @@ criteria = "safe-to-deploy"
 [[exemptions.v8]]
 version = "0.44.3"
 criteria = "safe-to-run"
-
-[[exemptions.valuable]]
-version = "0.1.0"
-criteria = "safe-to-deploy"
 
 [[exemptions.wait-timeout]]
 version = "0.2.0"
