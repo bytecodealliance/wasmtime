@@ -1592,6 +1592,10 @@
 (decl pure partial uimm5_from_u64 (UImm5) u64)
 (extern extractor uimm5_from_u64 uimm5_from_u64)
 
+;; Convert a `u64` into an `UImm5`
+(decl pure partial u64_to_uimm5 (u64) UImm5)
+(rule (u64_to_uimm5 (uimm5_from_u64 n)) n)
+
 (decl uimm5_bitcast_to_imm5 (UImm5) Imm5)
 (extern constructor uimm5_bitcast_to_imm5 uimm5_bitcast_to_imm5)
 
