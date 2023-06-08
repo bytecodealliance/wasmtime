@@ -51,11 +51,30 @@ impl<T: WasiView> monotonic_clock::Host for T {
     }
 
     fn subscribe(&mut self, when: Instant, absolute: bool) -> anyhow::Result<Pollable> {
-        Ok(self
-            .table_mut()
-            .push_host_pollable(HostPollable::new(tokio::time::sleep(
-                std::time::Duration::from_millis(1000),
-            )))?)
+        use std::time::Duration;
+        // Calculate time relative to clock object, which may not have the same zero
+        // point as tokio Inst::now()
+        let clock_now = self.ctx().clocks.monotonic.now();
+        if absolute && when < clock_now {
+            // Deadline is in the past, so pollable is always ready:
+            Ok(self
+                .table_mut()
+                .push_host_pollable(HostPollable::new(async { Ok(()) }))?)
+        } else {
+            let duration = if absolute {
+                Duration::from_micros(clock_now - when)
+            } else {
+                Duration::from_micros(when)
+            };
+            let deadline = tokio::time::Instant::now()
+                .checked_add(duration)
+                .ok_or_else(|| anyhow::anyhow!("time overflow: duration {duration:?}"))?;
+            Ok(self
+                .table_mut()
+                .push_host_pollable(HostPollable::new(async move {
+                    Ok(tokio::time::sleep_until(deadline).await)
+                }))?)
+        }
     }
 }
 

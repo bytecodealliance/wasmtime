@@ -7,10 +7,10 @@ use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
-pub struct HostPollable(Pin<Box<dyn Future<Output = ()> + Send + Sync>>);
+pub struct HostPollable(Pin<Box<dyn Future<Output = Result<()>> + Send + Sync>>);
 
 impl HostPollable {
-    pub fn new(future: impl Future<Output = ()> + Send + Sync + 'static) -> HostPollable {
+    pub fn new(future: impl Future<Output = Result<()>> + Send + Sync + 'static) -> HostPollable {
         HostPollable(Box::pin(future))
     }
 }
@@ -34,8 +34,8 @@ impl TablePollableExt for Table {
 }
 
 impl Future for HostPollable {
-    type Output = ();
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
+    type Output = Result<()>;
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
         unsafe { self.map_unchecked_mut(|s| &mut s.0).poll(cx) }
     }
 }
@@ -59,12 +59,18 @@ impl<T: WasiView> poll::Host for T {
                 let mut results = vec![false; self.elems.len()];
                 for (ix, pollable) in self.elems.iter().enumerate() {
                     match self.table.get_host_pollable_mut(*pollable) {
-                        Ok(f) => {
-                            if let Poll::Ready(_) = Pin::new(f).poll(cx) {
+                        Ok(f) => match Pin::new(f).poll(cx) {
+                            Poll::Ready(Ok(())) => {
                                 results[ix] = true;
                                 any_ready = true;
                             }
-                        }
+                            Poll::Ready(Err(e)) => {
+                                return Poll::Ready(Err(
+                                    e.context(format!("poll_oneoff[{ix}]: {pollable}"))
+                                ));
+                            }
+                            Poll::Pending => {}
+                        },
                         Err(e) => {
                             return Poll::Ready(Err(
                                 anyhow!(e).context(format!("poll_oneoff[{ix}]: {pollable}"))
