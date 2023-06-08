@@ -6,7 +6,7 @@ pub mod generated_code;
 use generated_code::{Context, ExtendOp, MInst};
 
 // Types that the generated ISLE code uses via `use super::*`.
-use self::generated_code::VecAluOpRR;
+use self::generated_code::{VecAluOpRR, VecLmul};
 use super::{writable_zero_reg, zero_reg};
 use crate::isa::riscv64::abi::Riscv64ABICallSite;
 use crate::isa::riscv64::lower::args::{
@@ -507,6 +507,17 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
     #[inline]
     fn vstate_from_type(&mut self, ty: Type) -> VState {
         VState::from_type(ty)
+    }
+
+    #[inline]
+    fn vstate_mf2(&mut self, vs: VState) -> VState {
+        VState {
+            vtype: VType {
+                lmul: VecLmul::LmulF2,
+                ..vs.vtype
+            },
+            ..vs
+        }
     }
 
     fn min_vec_reg_size(&mut self) -> u64 {
