@@ -2,7 +2,7 @@ use anyhow::Error;
 use std::convert::TryInto;
 use std::io::{self, Read, Write};
 
-use crate::preview2::{HostInputStream, HostOutputStream};
+use crate::preview2::{HostInputStream, HostOutputStream, HostPollable};
 
 pub struct Stdin(std::io::Stdin);
 
@@ -41,8 +41,9 @@ impl HostInputStream for Stdin {
         Ok((num, num < nelem))
     }
 
-    async fn readable(&self) -> Result<(), Error> {
-        Err(anyhow::anyhow!("idk"))
+    fn pollable(&self) -> HostPollable {
+        // Always ready immediately:
+        HostPollable::new(async {})
     }
 }
 
@@ -78,8 +79,9 @@ macro_rules! wasi_output_stream_impl {
                 Ok(num)
             }
 
-            async fn writable(&self) -> Result<(), Error> {
-                Ok(())
+            fn pollable(&self) -> HostPollable {
+                // Always ready immediately:
+                HostPollable::new(async {})
             }
         }
     };

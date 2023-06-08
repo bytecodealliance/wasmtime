@@ -1,4 +1,4 @@
-use crate::preview2::{HostInputStream, HostOutputStream, Table, TableError};
+use crate::preview2::{HostInputStream, HostOutputStream, HostPollable, Table, TableError};
 use std::sync::Arc;
 
 bitflags::bitflags! {
@@ -115,8 +115,8 @@ impl HostInputStream for FileInputStream {
         use system_interface::fs::FileIoExt;
         self.file.is_read_vectored_at()
     }
-    async fn readable(&self) -> anyhow::Result<()> {
-        Ok(())
+    fn pollable(&self) -> HostPollable {
+        HostPollable::new(async {}) // FIXME
     }
 }
 
@@ -164,9 +164,8 @@ impl HostOutputStream for FileOutputStream {
         self.file.is_write_vectored_at()
     }
 
-    /// Test whether this stream is writable.
-    async fn writable(&self) -> anyhow::Result<()> {
-        Ok(())
+    fn pollable(&self) -> HostPollable {
+        HostPollable::new(async {}) // FIXME
     }
 }
 
@@ -201,8 +200,7 @@ impl HostOutputStream for FileAppendStream {
         self.file.is_write_vectored_at()
     }
 
-    /// Test whether this stream is writable.
-    async fn writable(&self) -> anyhow::Result<()> {
-        Ok(())
+    fn pollable(&self) -> HostPollable {
+        HostPollable::new(async {}) // FIXME
     }
 }

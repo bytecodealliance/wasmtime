@@ -7,7 +7,7 @@
 //! Some convenience constructors are included for common backing types like `Vec<u8>` and `String`,
 //! but the virtual pipes can be instantiated with any `Read` or `Write` type.
 //!
-use crate::preview2::stream::{HostInputStream, HostOutputStream};
+use crate::preview2::{HostInputStream, HostOutputStream, HostPollable};
 use anyhow::Error;
 use std::any::Any;
 use std::convert::TryInto;
@@ -118,8 +118,8 @@ impl<R: Read + ReadReady + Any + Send + Sync> HostInputStream for ReadPipe<R> {
         Ok((num, num < nelem))
     }
 
-    async fn readable(&self) -> Result<(), Error> {
-        Ok(())
+    fn pollable(&self) -> HostPollable {
+        HostPollable::new(async {}) // FIXME
     }
 }
 
@@ -215,7 +215,7 @@ impl<W: Write + Any + Send + Sync> HostOutputStream for WritePipe<W> {
         Ok(num)
     }
 
-    async fn writable(&self) -> Result<(), Error> {
-        Ok(())
+    fn pollable(&self) -> HostPollable {
+        HostPollable::new(async {}) // FIXME
     }
 }

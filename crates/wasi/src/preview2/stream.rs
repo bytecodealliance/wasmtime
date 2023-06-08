@@ -1,4 +1,4 @@
-use crate::preview2::{Table, TableError};
+use crate::preview2::{HostPollable, Table, TableError};
 use anyhow::Error;
 
 /// An input bytestream.
@@ -48,8 +48,8 @@ pub trait HostInputStream: Send + Sync {
         Ok((nread, saw_end))
     }
 
-    /// Test whether this stream is readable.
-    async fn readable(&self) -> Result<(), Error>;
+    /// Get the Pollable implementation for read readiness.
+    fn pollable(&self) -> HostPollable;
 }
 
 /// An output bytestream.
@@ -117,8 +117,8 @@ pub trait HostOutputStream: Send + Sync {
         Ok(nwritten)
     }
 
-    /// Test whether this stream is writable.
-    async fn writable(&self) -> Result<(), Error>;
+    /// Get the Pollable implementation for write readiness.
+    fn pollable(&self) -> HostPollable;
 }
 
 pub trait TableStreamExt {

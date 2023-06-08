@@ -6,7 +6,7 @@ use crate::preview2::wasi::{
     clocks::wall_clock::{self, Datetime},
     poll::poll::Pollable,
 };
-use crate::preview2::{HostPollable, WasiView};
+use crate::preview2::{HostPollable, TablePollableExt, WasiView};
 use cap_std::time::SystemTime;
 
 impl TryFrom<SystemTime> for Datetime {
@@ -53,7 +53,9 @@ impl<T: WasiView> monotonic_clock::Host for T {
     fn subscribe(&mut self, when: Instant, absolute: bool) -> anyhow::Result<Pollable> {
         Ok(self
             .table_mut()
-            .push(todo!("FIXME integrate HostPollable here!"))?)
+            .push_host_pollable(HostPollable::new(tokio::time::sleep(
+                std::time::Duration::from_millis(1000),
+            )))?)
     }
 }
 
