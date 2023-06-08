@@ -49,6 +49,9 @@ similar = { workspace = true }
 toml = { workspace = true }
 serde = { workspace = true }
 fxhash = "0.2.1"
+# Note that this just enables `trace-log` for `clif-util` and doesn't turn it on
+# for all of Cranelift, which would be bad.
+regalloc2 = { workspace = true, features = ["trace-log"] }
 
 [features]
 default = ["disas", "wasm", "cranelift-codegen/all-arch", "cranelift-codegen/trace-log", "souper-harvest"]
