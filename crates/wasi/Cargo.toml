@@ -21,6 +21,7 @@ wasi-tokio = { workspace = true, optional = true }
 wiggle = { workspace = true, optional = true }
 libc = { workspace = true }
 
+tokio = { workspace = true, optional = true, features = ["time"] }
 thiserror = { workspace = true, optional = true }
 tracing = { workspace = true, optional = true }
 cap-std = { workspace = true, optional = true }
@@ -59,6 +60,7 @@ preview2 = [
     'dep:async-trait',
     'dep:system-interface',
     'dep:rustix',
+    'dep:tokio',
 ]
 preview1-on-preview2 = [
     "preview2",

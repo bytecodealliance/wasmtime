@@ -4239,6 +4239,7 @@ dependencies = [
  "rustix",
  "system-interface",
  "thiserror",
+ "tokio",
  "tracing",
  "wasi-cap-std-sync",
  "wasi-common",
