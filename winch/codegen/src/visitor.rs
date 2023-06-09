@@ -8,9 +8,8 @@ use crate::codegen::CodeGen;
 use crate::codegen::ControlStackFrame;
 use crate::masm::{CmpKind, DivKind, MacroAssembler, OperandSize, RegImm, RemKind, ShiftKind};
 use crate::stack::Val;
-use smallvec::{smallvec, SmallVec};
 use wasmparser::{BlockType, VisitOperator};
-use wasmtime_environ::{FuncIndex, TypeConvert, WasmType};
+use wasmtime_environ::{FuncIndex, WasmType};
 
 /// A macro to define unsupported WebAssembly operators.
 ///
@@ -98,6 +97,7 @@ macro_rules! def_unsupported {
     (emit Nop $($rest:tt)*) => {};
     (emit If $($rest:tt)*) => {};
     (emit Else $($rest:tt)*) => {};
+    (emit Block $($rest:tt)*) => {};
 
     (emit $unsupported:tt $($rest:tt)*) => {$($rest)*};
 }
@@ -483,15 +483,8 @@ where
     fn visit_nop(&mut self) {}
 
     fn visit_if(&mut self, blockty: BlockType) {
-        use BlockType::*;
-        let env = &self.env;
-        let returns: SmallVec<[WasmType; 1]> = match blockty {
-            Empty => smallvec![],
-            Type(ty) => smallvec![env.translation.module.convert_valtype(ty)],
-            _ => unimplemented!("multi-value"),
-        };
         self.control_frames.push(ControlStackFrame::if_(
-            &returns,
+            &self.env.resolve_block_type(blockty),
             self.masm,
             &mut self.context,
         ));
@@ -504,6 +497,14 @@ where
             .unwrap_or_else(|| panic!("Expected active control stack frame for else"));
 
         control.emit_else(self.masm, &mut self.context);
+    }
+
+    fn visit_block(&mut self, blockty: BlockType) {
+        self.control_frames.push(ControlStackFrame::block(
+            &self.env.resolve_block_type(blockty),
+            self.masm,
+            &mut self.context,
+        ));
     }
 
     wasmparser::for_each_operator!(def_unsupported);

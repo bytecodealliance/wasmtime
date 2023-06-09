@@ -1,5 +1,7 @@
+use smallvec::{smallvec, SmallVec};
+use wasmparser::BlockType;
 use wasmtime_environ::{
-    FuncIndex, ModuleTranslation, PtrSize, TypeConvert, VMOffsets, WasmFuncType,
+    FuncIndex, ModuleTranslation, PtrSize, TypeConvert, VMOffsets, WasmFuncType, WasmType,
 };
 
 /// The function environment.
@@ -36,6 +38,16 @@ impl<'a, P: PtrSize> FuncEnv<'a, P> {
             ty,
             import,
             index: idx,
+        }
+    }
+
+    /// Resolves the type of the block in terms of [`wastime_environ::WasmType`].
+    pub fn resolve_block_type(&self, blockty: BlockType) -> SmallVec<[WasmType; 1]> {
+        use BlockType::*;
+        match blockty {
+            Empty => smallvec![],
+            Type(ty) => smallvec![self.translation.module.convert_valtype(ty)],
+            _ => unimplemented!("multi-value"),
         }
     }
 }
