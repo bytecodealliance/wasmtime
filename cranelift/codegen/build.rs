@@ -28,7 +28,7 @@ fn main() {
     let out_dir = env::var("OUT_DIR").expect("The OUT_DIR environment variable must be set");
     let target_triple = env::var("TARGET").expect("The TARGET environment variable must be set");
 
-    let isa_targets = meta::isa::Isa::all()
+    let mut isas = meta::isa::Isa::all()
         .iter()
         .cloned()
         .filter(|isa| {
@@ -37,15 +37,15 @@ fn main() {
         })
         .collect::<Vec<_>>();
 
-    let isas = if isa_targets.is_empty() {
+    let host_isa = env::var("CARGO_FEATURE_HOST_ARCH").is_ok();
+
+    if isas.is_empty() || host_isa {
         // Try to match native target.
         let target_name = target_triple.split('-').next().unwrap();
         let isa = meta::isa_from_arch(&target_name).expect("error when identifying target");
         println!("cargo:rustc-cfg=feature=\"{}\"", isa);
-        vec![isa]
-    } else {
-        isa_targets
-    };
+        isas.push(isa);
+    }
 
     let cur_dir = env::current_dir().expect("Can't access current working directory");
     let crate_dir = cur_dir.as_path();
