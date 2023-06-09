@@ -4236,6 +4236,7 @@ dependencies = [
  "fs-set-times",
  "io-extras",
  "libc",
+ "once_cell",
  "rustix",
  "system-interface",
  "thiserror",

@@ -62,17 +62,29 @@ impl<T: WasiView> monotonic_clock::Host for T {
                 .push_host_pollable(HostPollable::new(|| Box::pin(async { Ok(()) })))?)
         } else {
             let duration = if absolute {
-                Duration::from_micros(clock_now - when)
+                Duration::from_nanos(clock_now - when)
             } else {
-                Duration::from_micros(when)
+                Duration::from_nanos(when)
             };
             let deadline = tokio::time::Instant::now()
                 .checked_add(duration)
                 .ok_or_else(|| anyhow::anyhow!("time overflow: duration {duration:?}"))?;
+            tracing::trace!(
+                "deadline = {:?}, now = {:?}",
+                deadline,
+                tokio::time::Instant::now()
+            );
             Ok(self
                 .table_mut()
                 .push_host_pollable(HostPollable::new(move || {
-                    Box::pin(async move { Ok(tokio::time::sleep_until(deadline).await) })
+                    Box::pin(async move {
+                        tracing::trace!(
+                            "mkf: deadline = {:?}, now = {:?}",
+                            deadline,
+                            tokio::time::Instant::now()
+                        );
+                        Ok(tokio::time::sleep_until(deadline).await)
+                    })
                 }))?)
         }
     }

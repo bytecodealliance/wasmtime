@@ -20,6 +20,7 @@ wasi-cap-std-sync = { workspace = true, optional = true }
 wasi-tokio = { workspace = true, optional = true }
 wiggle = { workspace = true, optional = true }
 libc = { workspace = true }
+once_cell = { workspace = true }
 
 tokio = { workspace = true, optional = true, features = ["time"] }
 thiserror = { workspace = true, optional = true }

@@ -206,3 +206,131 @@ impl<T: WasiView> streams::Host for T {
         Ok(self.table_mut().push_host_pollable(pollable)?)
     }
 }
+
+pub mod sync {
+    use crate::preview2::{
+        poll::sync::with_tokio,
+        stream::{HostInputStream, HostOutputStream, TableStreamExt},
+        wasi::io::streams::{Host as AsyncHost, StreamError as AsyncStreamError},
+        wasi::sync_io::io::streams::{self, InputStream, OutputStream, StreamError},
+        wasi::sync_io::poll::poll::Pollable,
+        TableError, TablePollableExt, WasiView,
+    };
+    use anyhow::anyhow;
+
+    impl<T: WasiView> streams::Host for T {
+        fn drop_input_stream(&mut self, stream: InputStream) -> anyhow::Result<()> {
+            with_tokio().block_on(async { AsyncHost::drop_input_stream(self, stream).await })
+        }
+
+        fn drop_output_stream(&mut self, stream: OutputStream) -> anyhow::Result<()> {
+            with_tokio().block_on(async { AsyncHost::drop_output_stream(self, stream).await })
+        }
+
+        fn read(
+            &mut self,
+            stream: InputStream,
+            len: u64,
+        ) -> Result<(Vec<u8>, bool), streams::Error> {
+            with_tokio()
+                .block_on(async { AsyncHost::read(self, stream, len).await })
+                .map_err(streams::Error::from)
+        }
+
+        fn blocking_read(
+            &mut self,
+            stream: InputStream,
+            len: u64,
+        ) -> Result<(Vec<u8>, bool), streams::Error> {
+            with_tokio()
+                .block_on(async { AsyncHost::blocking_read(self, stream, len).await })
+                .map_err(streams::Error::from)
+        }
+
+        fn write(&mut self, stream: OutputStream, bytes: Vec<u8>) -> Result<u64, streams::Error> {
+            with_tokio()
+                .block_on(async { AsyncHost::write(self, stream, bytes).await })
+                .map_err(streams::Error::from)
+        }
+
+        fn blocking_write(
+            &mut self,
+            stream: OutputStream,
+            bytes: Vec<u8>,
+        ) -> Result<u64, streams::Error> {
+            with_tokio()
+                .block_on(async { AsyncHost::write(self, stream, bytes).await })
+                .map_err(streams::Error::from)
+        }
+
+        fn skip(&mut self, stream: InputStream, len: u64) -> Result<(u64, bool), streams::Error> {
+            with_tokio()
+                .block_on(async { AsyncHost::skip(self, stream, len).await })
+                .map_err(streams::Error::from)
+        }
+
+        fn blocking_skip(
+            &mut self,
+            stream: InputStream,
+            len: u64,
+        ) -> Result<(u64, bool), streams::Error> {
+            with_tokio()
+                .block_on(async { AsyncHost::blocking_skip(self, stream, len).await })
+                .map_err(streams::Error::from)
+        }
+
+        fn write_zeroes(&mut self, stream: OutputStream, len: u64) -> Result<u64, streams::Error> {
+            with_tokio()
+                .block_on(async { AsyncHost::write_zeroes(self, stream, len).await })
+                .map_err(streams::Error::from)
+        }
+
+        fn blocking_write_zeroes(
+            &mut self,
+            stream: OutputStream,
+            len: u64,
+        ) -> Result<u64, streams::Error> {
+            with_tokio()
+                .block_on(async { AsyncHost::blocking_write_zeroes(self, stream, len).await })
+                .map_err(streams::Error::from)
+        }
+
+        fn splice(
+            &mut self,
+            src: InputStream,
+            dst: OutputStream,
+            len: u64,
+        ) -> Result<(u64, bool), streams::Error> {
+            with_tokio()
+                .block_on(async { AsyncHost::splice(self, src, dst, len).await })
+                .map_err(streams::Error::from)
+        }
+
+        fn blocking_splice(
+            &mut self,
+            src: InputStream,
+            dst: OutputStream,
+            len: u64,
+        ) -> Result<(u64, bool), streams::Error> {
+            with_tokio()
+                .block_on(async { AsyncHost::blocking_splice(self, src, dst, len).await })
+                .map_err(streams::Error::from)
+        }
+
+        fn forward(&mut self, src: InputStream, dst: OutputStream) -> Result<u64, streams::Error> {
+            with_tokio()
+                .block_on(async { AsyncHost::forward(self, src, dst).await })
+                .map_err(streams::Error::from)
+        }
+
+        fn subscribe_to_input_stream(&mut self, stream: InputStream) -> anyhow::Result<Pollable> {
+            with_tokio()
+                .block_on(async { AsyncHost::subscribe_to_input_stream(self, stream).await })
+        }
+
+        fn subscribe_to_output_stream(&mut self, stream: OutputStream) -> anyhow::Result<Pollable> {
+            with_tokio()
+                .block_on(async { AsyncHost::subscribe_to_output_stream(self, stream).await })
+        }
+    }
+}

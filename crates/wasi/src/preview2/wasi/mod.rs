@@ -15,6 +15,22 @@ pub mod sync_io {
         });
     }
     pub use self::_internal::wasi::{io, poll};
+
+    impl From<super::io::streams::StreamError> for io::streams::StreamError {
+        fn from(other: super::io::streams::StreamError) -> Self {
+            // There are no cases for this record.
+            Self {}
+        }
+    }
+
+    impl From<super::io::streams::Error> for io::streams::Error {
+        fn from(other: super::io::streams::Error) -> Self {
+            match other.downcast() {
+                Ok(se) => io::streams::Error::from(io::streams::StreamError::from(se)),
+                Err(e) => io::streams::Error::trap(e),
+            }
+        }
+    }
 }
 
 pub(crate) mod _internal_io {

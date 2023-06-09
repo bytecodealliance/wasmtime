@@ -119,6 +119,9 @@ impl<R: Read + ReadReady + Any + Send + Sync> HostInputStream for ReadPipe<R> {
     }
 
     fn pollable(&self) -> HostPollable {
+        // TODO(elliottt): this should probably be:
+        // 1. take the lock
+        // 2. check if there's anything inside of it to be read
         HostPollable::new(|| Box::pin(async { todo!("pollable on a ReadPipe") }))
         // FIXME
     }
@@ -191,6 +194,7 @@ impl WritePipe<io::Cursor<Vec<u8>>> {
 }
 
 #[async_trait::async_trait]
+// TODO: can we remove the `Any` constraint here?
 impl<W: Write + Any + Send + Sync> HostOutputStream for WritePipe<W> {
     async fn write(&mut self, buf: &[u8]) -> Result<u64, Error> {
         let n = self.borrow().write(buf)?;
@@ -205,6 +209,9 @@ impl<W: Write + Any + Send + Sync> HostOutputStream for WritePipe<W> {
     }
 
     fn pollable(&self) -> HostPollable {
+        // TODO(elliottt): because this is using only a `Write` constraint, and that trait doesn't
+        // provide a way to check if there's space available, this should trivially return that
+        // there's space to write.
         HostPollable::new(|| Box::pin(async { todo!("pollable on a WritePipe") }))
         // FIXME
     }

@@ -8,4 +8,4 @@ publish = false
 crate-type=["cdylib"]
 
 [dependencies]
-wit-bindgen = { workspace = true }
+wit-bindgen = { workspace = true, features = ["macros", "realloc"] }
