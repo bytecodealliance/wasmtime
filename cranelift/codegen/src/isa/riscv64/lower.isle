@@ -420,6 +420,12 @@
 (rule 3 (lower (has_type (ty_vec_fits_in_register ty) (imul x y)))
   (rv_vmul_vv x y (unmasked) ty))
 
+(rule 4 (lower (has_type (ty_vec_fits_in_register ty) (imul (splat x) y)))
+  (rv_vmul_vx y x (unmasked) ty))
+
+(rule 5 (lower (has_type (ty_vec_fits_in_register ty) (imul x (splat y))))
+  (rv_vmul_vx x y (unmasked) ty))
+
 ;;;; Rules for `smulhi` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule 0 (lower (has_type (ty_int_ref_scalar_64 ty) (smulhi x y)))
   (lower_smlhi ty (sext x ty $I64) (sext y ty $I64)))
@@ -427,12 +433,24 @@
 (rule 1 (lower (has_type (ty_vec_fits_in_register ty) (smulhi x y)))
   (rv_vmulh_vv x y (unmasked) ty))
 
+(rule 2 (lower (has_type (ty_vec_fits_in_register ty) (smulhi (splat x) y)))
+  (rv_vmulh_vx y x (unmasked) ty))
+
+(rule 3 (lower (has_type (ty_vec_fits_in_register ty) (smulhi x (splat y))))
+  (rv_vmulh_vx x y (unmasked) ty))
+
 ;;;; Rules for `umulhi` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule 0 (lower (has_type (ty_int_ref_scalar_64 ty) (umulhi x y)))
   (lower_umlhi ty (zext x ty $I64) (zext y ty $I64)))
 
 (rule 1 (lower (has_type (ty_vec_fits_in_register ty) (umulhi x y)))
   (rv_vmulhu_vv x y (unmasked) ty))
+
+(rule 2 (lower (has_type (ty_vec_fits_in_register ty) (umulhi (splat x) y)))
+  (rv_vmulhu_vx y x (unmasked) ty))
+
+(rule 3 (lower (has_type (ty_vec_fits_in_register ty) (umulhi x (splat y))))
+  (rv_vmulhu_vx x y (unmasked) ty))
 
 ;;;; Rules for `div` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

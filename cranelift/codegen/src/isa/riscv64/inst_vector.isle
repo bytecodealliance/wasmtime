@@ -145,6 +145,8 @@
   (VssubVX)
   (VssubuVX)
   (VmulVX)
+  (VmulhVX)
+  (VmulhuVX)
   (VsllVX)
   (VsrlVX)
   (VsraVX)
@@ -569,10 +571,20 @@
 (rule (rv_vmulh_vv vs2 vs1 mask vstate)
   (vec_alu_rrr (VecAluOpRRR.VmulhVV) vs2 vs1 mask vstate))
 
+;; Helper for emitting the `vmulh.vx` instruction.
+(decl rv_vmulh_vx (VReg XReg VecOpMasking VState) VReg)
+(rule (rv_vmulh_vx vs2 vs1 mask vstate)
+  (vec_alu_rrr (VecAluOpRRR.VmulhVX) vs2 vs1 mask vstate))
+
 ;; Helper for emitting the `vmulhu.vv` instruction.
 (decl rv_vmulhu_vv (VReg VReg VecOpMasking VState) VReg)
 (rule (rv_vmulhu_vv vs2 vs1 mask vstate)
   (vec_alu_rrr (VecAluOpRRR.VmulhuVV) vs2 vs1 mask vstate))
+
+;; Helper for emitting the `vmulhu.vx` instruction.
+(decl rv_vmulhu_vx (VReg XReg VecOpMasking VState) VReg)
+(rule (rv_vmulhu_vx vs2 vs1 mask vstate)
+  (vec_alu_rrr (VecAluOpRRR.VmulhuVX) vs2 vs1 mask vstate))
 
 ;; Helper for emitting the `sll.vv` instruction.
 (decl rv_vsll_vv (VReg VReg VecOpMasking VState) VReg)
