@@ -1067,6 +1067,7 @@ impl<M: ABIMachineSpec> Callee<M> {
         // Only these calling conventions are supported.
         debug_assert!(
             call_conv == isa::CallConv::SystemV
+                || call_conv == isa::CallConv::Tail
                 || call_conv == isa::CallConv::Fast
                 || call_conv == isa::CallConv::Cold
                 || call_conv.extends_windows_fastcall()
@@ -2165,8 +2166,17 @@ impl<M: ABIMachineSpec> CallSite<M> {
     /// Emit code to post-adjust the stack, after call return and return-value copies.
     pub fn emit_stack_post_adjust(&self, ctx: &mut Lower<M::I>) {
         let sig = &ctx.sigs()[self.sig];
-        let stack_space = sig.sized_stack_arg_space + sig.sized_stack_ret_space;
+
+        let stack_space = if sig.call_conv() == isa::CallConv::Tail {
+            // The "tail" calling convention has callees clean up stack
+            // arguments, not callers. It still cleans up any stack return
+            // space, however.
+            sig.sized_stack_ret_space
+        } else {
+            sig.sized_stack_arg_space + sig.sized_stack_ret_space
+        };
         let stack_space = i32::try_from(stack_space).unwrap();
+
         adjust_stack_and_nominal_sp::<M>(ctx, stack_space)
     }
 
