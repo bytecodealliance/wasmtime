@@ -59,7 +59,7 @@ impl<T: WasiView> monotonic_clock::Host for T {
             // Deadline is in the past, so pollable is always ready:
             Ok(self
                 .table_mut()
-                .push_host_pollable(HostPollable::new(async { Ok(()) }))?)
+                .push_host_pollable(HostPollable::new(|| Box::pin(async { Ok(()) })))?)
         } else {
             let duration = if absolute {
                 Duration::from_micros(clock_now - when)
@@ -71,8 +71,8 @@ impl<T: WasiView> monotonic_clock::Host for T {
                 .ok_or_else(|| anyhow::anyhow!("time overflow: duration {duration:?}"))?;
             Ok(self
                 .table_mut()
-                .push_host_pollable(HostPollable::new(async move {
-                    Ok(tokio::time::sleep_until(deadline).await)
+                .push_host_pollable(HostPollable::new(move || {
+                    Box::pin(async move { Ok(tokio::time::sleep_until(deadline).await) })
                 }))?)
         }
     }

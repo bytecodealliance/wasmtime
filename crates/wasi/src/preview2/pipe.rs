@@ -119,7 +119,7 @@ impl<R: Read + ReadReady + Any + Send + Sync> HostInputStream for ReadPipe<R> {
     }
 
     fn pollable(&self) -> HostPollable {
-        HostPollable::new(async { todo!("pollable on a ReadPipe") })
+        HostPollable::new(|| Box::pin(async { todo!("pollable on a ReadPipe") }))
         // FIXME
     }
 }
@@ -205,6 +205,7 @@ impl<W: Write + Any + Send + Sync> HostOutputStream for WritePipe<W> {
     }
 
     fn pollable(&self) -> HostPollable {
-        HostPollable::new(async { todo!("pollable on a WritePipe") }) // FIXME
+        HostPollable::new(|| Box::pin(async { todo!("pollable on a WritePipe") }))
+        // FIXME
     }
 }

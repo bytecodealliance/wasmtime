@@ -43,7 +43,7 @@ impl HostInputStream for Stdin {
     }
 
     fn pollable(&self) -> HostPollable {
-        HostPollable::new(async { todo!("pollable on stdin") })
+        HostPollable::new(|| Box::pin(async { todo!("pollable on stdin") }))
     }
 }
 
@@ -70,7 +70,7 @@ macro_rules! wasi_output_stream_impl {
             }
 
             fn pollable(&self) -> HostPollable {
-                HostPollable::new(async { todo!("pollable on stdio, stderr writes") })
+                HostPollable::new(|| Box::pin(async { todo!("pollable on stdio, stderr writes") }))
             }
         }
     };
