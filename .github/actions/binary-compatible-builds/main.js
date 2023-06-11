@@ -21,6 +21,11 @@ if (process.platform == 'win32') {
   return;
 }
 
+// On Android skip the fancy things with containers
+if (process.env.INPUT_NAME.indexOf("android") >= 0) {
+  return;
+}
+
 // ... and on Linux we do fancy things with containers. We'll spawn an old
 // CentOS container in the background with a super old glibc, and then we'll run
 // commands in there with the `$CENTOS` env var.
