@@ -209,7 +209,7 @@ pub(crate) use self::store::ComponentStoreData;
 ///
 ///     // Note that the `demo` method returns a `&Demo` through which we can
 ///     // run the methods on that interface.
-///     bindings.demo().run(&mut store)?;
+///     bindings.demo().call_run(&mut store)?;
 ///     Ok(())
 /// }
 /// ```
