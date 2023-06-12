@@ -2831,13 +2831,6 @@
 (rule (lower (has_type (tls_model (TlsModel.Macho)) (tls_value (symbol_value_data name _ _))))
       (macho_tls_get_addr name))
 
-;;; Rules for `fcvt_low_from_sint` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(rule (lower (has_type $F64X2 (fcvt_low_from_sint val)))
-      (let ((extended Reg (vec_extend (VecExtendOp.Sxtl) val $false (ScalarSize.Size64)))
-            (converted Reg (vec_misc (VecMisc2.Scvtf) extended (VectorSize.Size64x2))))
-        converted))
-
 ;;; Rules for `fvpromote_low` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (fvpromote_low val))

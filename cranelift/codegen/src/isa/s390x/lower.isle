@@ -1584,14 +1584,6 @@
       (fcvt_from_sint_reg $F64X2 (FpuRoundMode.ToNearestTiesToEven) x))
 
 
-;;;; Rules for `fcvt_low_from_sint` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; Convert the low half of a $I32X4 to a $F64X2.
-(rule (lower (has_type $F64X2 (fcvt_low_from_sint x @ (value_type $I32X4))))
-      (fcvt_from_sint_reg $F64X2 (FpuRoundMode.ToNearestTiesToEven)
-                          (vec_unpacks_low_lane_order $I32X4 x)))
-
-
 ;;;; Rules for `fcvt_to_uint` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Convert a scalar floating-point value in a register to an unsigned integer.

@@ -3253,9 +3253,7 @@
 (rule 0 (lower (fcvt_from_sint a @ (value_type $I32X4)))
       (x64_cvtdq2ps a))
 
-;; Rules for `fcvt_low_from_sint` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(rule (lower (fcvt_low_from_sint a))
+(rule 1 (lower (has_type $F64X2 (fcvt_from_sint (swiden_low a @ (value_type $I32X4)))))
       (x64_cvtdq2pd a))
 
 ;; Rules for `fcvt_from_uint` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
