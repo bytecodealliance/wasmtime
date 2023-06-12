@@ -4,7 +4,7 @@ pub mod disasm;
 mod test {
     use super::disasm::disasm;
     use anyhow::Context;
-    use cranelift_codegen::settings;
+    use cranelift_codegen::settings::{self, Configurable};
     use serde::{Deserialize, Serialize};
     use similar::TextDiff;
     use std::str::FromStr;
@@ -20,6 +20,7 @@ mod test {
     #[derive(Clone, Debug, Serialize, Deserialize)]
     struct TestConfig {
         target: String,
+        flags: Option<Vec<String>>,
     }
 
     /// A helper function to parse the test configuration from the top of the file.
@@ -93,7 +94,10 @@ mod test {
         let expected = binding.as_str();
 
         let shared_flags = settings::Flags::new(settings::builder());
-        let isa_builder = lookup(triple).unwrap();
+        let mut isa_builder = lookup(triple).unwrap();
+        for flag in config.flags.iter().flat_map(|f| f) {
+            isa_builder.set(&flag, "true").unwrap();
+        }
         let isa = isa_builder.finish(shared_flags).unwrap();
 
         let mut validator = Validator::new();

@@ -41,6 +41,12 @@ impl From<Reg> for RegMemImm {
     }
 }
 
+impl From<Reg> for RegMem {
+    fn from(value: Reg) -> Self {
+        RegMem::Reg { reg: value.into() }
+    }
+}
+
 impl From<Reg> for WritableGpr {
     fn from(reg: Reg) -> Self {
         let writable = Writable::from_reg(reg.into());
@@ -51,6 +57,12 @@ impl From<Reg> for WritableGpr {
 impl From<Reg> for Gpr {
     fn from(reg: Reg) -> Self {
         Gpr::new(reg.into()).expect("valid gpr")
+    }
+}
+
+impl From<Reg> for GprMem {
+    fn from(value: Reg) -> Self {
+        GprMem::new(value.into()).expect("valid gpr")
     }
 }
 
@@ -121,6 +133,8 @@ pub(crate) struct Assembler {
     emit_info: EmitInfo,
     /// Emission state.
     emit_state: EmitState,
+    /// x64 flags.
+    isa_flags: x64_settings::Flags,
 }
 
 impl Assembler {
@@ -129,7 +143,8 @@ impl Assembler {
         Self {
             buffer: MachBuffer::<Inst>::new(),
             emit_state: Default::default(),
-            emit_info: EmitInfo::new(shared_flags, isa_flags),
+            emit_info: EmitInfo::new(shared_flags, isa_flags.clone()),
+            isa_flags,
         }
     }
 
@@ -684,6 +699,61 @@ impl Assembler {
         // Copy correct bit from status register into dst register.
         self.emit(Inst::Setcc {
             cc: kind.into(),
+            dst: dst.into(),
+        });
+    }
+
+    /// Store the count of leading zeroes in src in dst.
+    /// Requires `has_lzcnt` flag.
+    pub fn lzcnt(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+        assert!(self.isa_flags.has_lzcnt(), "Requires has_lzcnt flag");
+        self.emit(Inst::UnaryRmR {
+            size: size.into(),
+            op: args::UnaryRmROpcode::Lzcnt,
+            src: src.into(),
+            dst: dst.into(),
+        });
+    }
+
+    /// Store the count of trailing zeroes in src in dst.
+    /// Requires `has_bmi1` flag.
+    pub fn tzcnt(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+        assert!(self.isa_flags.has_bmi1(), "Requires has_bmi1 flag");
+        self.emit(Inst::UnaryRmR {
+            size: size.into(),
+            op: args::UnaryRmROpcode::Tzcnt,
+            src: src.into(),
+            dst: dst.into(),
+        });
+    }
+
+    /// Stores position of the most significant bit set in src in dst.
+    /// Zero flag is set if src is equal to 0.
+    pub fn bsr(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+        self.emit(Inst::UnaryRmR {
+            size: size.into(),
+            op: args::UnaryRmROpcode::Bsr,
+            src: src.into(),
+            dst: dst.into(),
+        });
+    }
+
+    /// Performs integer negation on src and places result in dst.
+    pub fn neg(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+        self.emit(Inst::Neg {
+            size: size.into(),
+            src: src.into(),
+            dst: dst.into(),
+        });
+    }
+
+    /// Stores position of the least significant bit set in src in dst.
+    /// Zero flag is set if src is equal to 0.
+    pub fn bsf(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+        self.emit(Inst::UnaryRmR {
+            size: size.into(),
+            op: args::UnaryRmROpcode::Bsf,
+            src: src.into(),
             dst: dst.into(),
         });
     }

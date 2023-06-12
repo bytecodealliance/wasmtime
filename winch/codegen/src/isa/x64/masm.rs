@@ -21,6 +21,8 @@ pub(crate) struct MacroAssembler {
     sp_offset: u32,
     /// Low level assembler.
     asm: Assembler,
+    /// ISA flags.
+    flags: x64_settings::Flags,
 }
 
 // Conversions between generic masm arguments and x64 operands.
@@ -337,6 +339,43 @@ impl Masm for MacroAssembler {
         self.asm.cmp(src.into(), dst, size);
         self.asm.setcc(kind, dst);
     }
+
+    fn clz(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+        if self.flags.has_lzcnt() {
+            self.asm.lzcnt(src, dst, size);
+        } else {
+            let scratch = regs::scratch();
+
+            // Use the following approach:
+            // dst = size.num_bits() - bsr(src) - is_not_zero
+            //     = size.num.bits() + -bsr(src) - is_not_zero.
+            self.asm.bsr(src.into(), dst.into(), size);
+            self.asm.setcc(CmpKind::Ne, scratch.into());
+            self.asm.neg(dst, dst, size);
+            self.asm.add_ir(size.num_bits(), dst, size);
+            self.asm.sub_rr(scratch, dst, size);
+        }
+    }
+
+    fn ctz(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+        if self.flags.has_bmi1() {
+            self.asm.tzcnt(src, dst, size);
+        } else {
+            let scratch = regs::scratch();
+
+            // Use the following approach:
+            // dst = bsf(src) + (is_zero * size.num_bits())
+            //     = bsf(src) + (is_zero << size.log2()).
+            // BSF outputs the correct value for every value except 0.
+            // When the value is 0, BSF outputs 0, correct output for ctz is
+            // the number of bits.
+            self.asm.bsf(src.into(), dst.into(), size);
+            self.asm.setcc(CmpKind::Eq, scratch.into());
+            self.asm
+                .shift_ir(size.log2(), scratch, ShiftKind::Shl, size);
+            self.asm.add_rr(scratch, dst, size);
+        }
+    }
 }
 
 impl MacroAssembler {
@@ -344,7 +383,8 @@ impl MacroAssembler {
     pub fn new(shared_flags: settings::Flags, isa_flags: x64_settings::Flags) -> Self {
         Self {
             sp_offset: 0,
-            asm: Assembler::new(shared_flags, isa_flags),
+            asm: Assembler::new(shared_flags, isa_flags.clone()),
+            flags: isa_flags,
         }
     }
 

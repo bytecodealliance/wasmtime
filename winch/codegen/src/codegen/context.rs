@@ -134,11 +134,11 @@ impl<'a> CodeGenContext<'a> {
     /// Prepares arguments for emitting a unary operation.
     pub fn unop<F, M>(&mut self, masm: &mut M, size: OperandSize, emit: &mut F)
     where
-        F: FnMut(&mut M, RegImm, OperandSize),
+        F: FnMut(&mut M, Reg, OperandSize),
         M: MacroAssembler,
     {
         let reg = self.pop_to_reg(masm, None, size);
-        emit(masm, reg.into(), size);
+        emit(masm, reg, size);
         self.stack.push(Val::reg(reg));
     }
 
