@@ -1,5 +1,5 @@
 test compile precise-output
-target x86_64
+target x86_64 sse41
 
 function %f1(f64x2) -> i32x4 {
 block0(v0: f64x2):
@@ -24,7 +24,7 @@ block0(v0: f64x2):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp

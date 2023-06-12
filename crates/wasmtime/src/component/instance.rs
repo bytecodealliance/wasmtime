@@ -13,8 +13,10 @@ use wasmtime_environ::component::{
     ExtractPostReturn, ExtractRealloc, GlobalInitializer, InstantiateModule, LowerImport,
     RuntimeImportIndex, RuntimeInstanceIndex, RuntimeModuleIndex, Transcoder,
 };
-use wasmtime_environ::{EntityIndex, EntityType, Global, GlobalInit, PrimaryMap, WasmType};
+use wasmtime_environ::{EntityIndex, EntityType, Global, PrimaryMap, WasmType};
 use wasmtime_runtime::component::{ComponentInstance, OwnedComponentInstance};
+
+use super::component::AllCallFuncPointers;
 
 /// An instantiated component.
 ///
@@ -124,12 +126,12 @@ impl InstanceData {
             CoreDef::Export(e) => self.lookup_export(store, e),
             CoreDef::Lowered(idx) => {
                 wasmtime_runtime::Export::Function(wasmtime_runtime::ExportFunction {
-                    anyfunc: self.state.lowering_anyfunc(*idx),
+                    func_ref: self.state.lowering_func_ref(*idx),
                 })
             }
             CoreDef::AlwaysTrap(idx) => {
                 wasmtime_runtime::Export::Function(wasmtime_runtime::ExportFunction {
-                    anyfunc: self.state.always_trap_anyfunc(*idx),
+                    func_ref: self.state.always_trap_func_ref(*idx),
                 })
             }
             CoreDef::InstanceFlags(idx) => {
@@ -138,13 +140,12 @@ impl InstanceData {
                     global: Global {
                         wasm_ty: WasmType::I32,
                         mutability: true,
-                        initializer: GlobalInit::I32Const(0),
                     },
                 })
             }
             CoreDef::Transcoder(idx) => {
                 wasmtime_runtime::Export::Function(wasmtime_runtime::ExportFunction {
-                    anyfunc: self.state.transcoder_anyfunc(*idx),
+                    func_ref: self.state.transcoder_func_ref(*idx),
                 })
             }
         }
@@ -311,14 +312,23 @@ impl<'a> Instantiator<'a> {
             RuntimeImport::Func(func) => func,
             _ => unreachable!(),
         };
+        let AllCallFuncPointers {
+            wasm_call,
+            array_call,
+            native_call,
+        } = self.component.lowering_ptrs(import.index);
+        let type_index = self
+            .component
+            .signatures()
+            .shared_signature(import.canonical_abi)
+            .expect("found unregistered signature");
         self.data.state.set_lowering(
             import.index,
             func.lowering(),
-            self.component.lowering_ptr(import.index),
-            self.component
-                .signatures()
-                .shared_signature(import.canonical_abi)
-                .expect("found unregistered signature"),
+            wasm_call,
+            native_call,
+            array_call,
+            type_index,
         );
 
         // The `func` provided here must be retained within the `Store` itself
@@ -332,24 +342,38 @@ impl<'a> Instantiator<'a> {
     }
 
     fn always_trap(&mut self, trap: &AlwaysTrap) {
-        self.data.state.set_always_trap(
-            trap.index,
-            self.component.always_trap_ptr(trap.index),
-            self.component
-                .signatures()
-                .shared_signature(trap.canonical_abi)
-                .expect("found unregistered signature"),
-        );
+        let AllCallFuncPointers {
+            wasm_call,
+            array_call,
+            native_call,
+        } = self.component.always_trap_ptrs(trap.index);
+        let signature = self
+            .component
+            .signatures()
+            .shared_signature(trap.canonical_abi)
+            .expect("found unregistered signature");
+        self.data
+            .state
+            .set_always_trap(trap.index, wasm_call, native_call, array_call, signature);
     }
 
     fn transcoder(&mut self, transcoder: &Transcoder) {
+        let AllCallFuncPointers {
+            wasm_call,
+            array_call,
+            native_call,
+        } = self.component.transcoder_ptrs(transcoder.index);
+        let signature = self
+            .component
+            .signatures()
+            .shared_signature(transcoder.signature)
+            .expect("found unregistered signature");
         self.data.state.set_transcoder(
             transcoder.index,
-            self.component.transcoder_ptr(transcoder.index),
-            self.component
-                .signatures()
-                .shared_signature(transcoder.signature)
-                .expect("found unregistered signature"),
+            wasm_call,
+            native_call,
+            array_call,
+            signature,
         );
     }
 
@@ -364,21 +388,21 @@ impl<'a> Instantiator<'a> {
     }
 
     fn extract_realloc(&mut self, store: &mut StoreOpaque, realloc: &ExtractRealloc) {
-        let anyfunc = match self.data.lookup_def(store, &realloc.def) {
-            wasmtime_runtime::Export::Function(f) => f.anyfunc,
+        let func_ref = match self.data.lookup_def(store, &realloc.def) {
+            wasmtime_runtime::Export::Function(f) => f.func_ref,
             _ => unreachable!(),
         };
-        self.data.state.set_runtime_realloc(realloc.index, anyfunc);
+        self.data.state.set_runtime_realloc(realloc.index, func_ref);
     }
 
     fn extract_post_return(&mut self, store: &mut StoreOpaque, post_return: &ExtractPostReturn) {
-        let anyfunc = match self.data.lookup_def(store, &post_return.def) {
-            wasmtime_runtime::Export::Function(f) => f.anyfunc,
+        let func_ref = match self.data.lookup_def(store, &post_return.def) {
+            wasmtime_runtime::Export::Function(f) => f.func_ref,
             _ => unreachable!(),
         };
         self.data
             .state
-            .set_runtime_post_return(post_return.index, anyfunc);
+            .set_runtime_post_return(post_return.index, func_ref);
     }
 
     fn build_imports<'b>(
@@ -431,7 +455,7 @@ impl<'a> Instantiator<'a> {
         if let wasmtime_runtime::Export::Function(f) = &export {
             match expected {
                 EntityType::Function(expected) => {
-                    let actual = unsafe { f.anyfunc.as_ref().type_index };
+                    let actual = unsafe { f.func_ref.as_ref().type_index };
                     assert_eq!(module.signatures().shared_signature(expected), Some(actual));
                     return;
                 }

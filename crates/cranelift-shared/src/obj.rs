@@ -13,7 +13,7 @@
 //! function body, the imported wasm function do not. The trampolines symbol
 //! names have format "_trampoline_N", where N is `SignatureIndex`.
 
-use crate::{Relocation, RelocationTarget};
+use crate::{CompiledFuncEnv, CompiledFunction, RelocationTarget};
 use anyhow::Result;
 use cranelift_codegen::binemit::Reloc;
 use cranelift_codegen::ir::LibCall;
@@ -108,19 +108,15 @@ impl<'a> ModuleTextBuilder<'a> {
     pub fn append_func(
         &mut self,
         name: &str,
-        body: &[u8],
-        alignment: u32,
-        unwind_info: Option<&'a UnwindInfo>,
-        relocations: &[Relocation],
+        compiled_func: &'a CompiledFunction<impl CompiledFuncEnv>,
         resolve_reloc_target: impl Fn(FuncIndex) -> usize,
     ) -> (SymbolId, Range<u64>) {
+        let body = compiled_func.buffer.data();
+        let alignment = compiled_func.alignment;
         let body_len = body.len() as u64;
-        let off = self.text.append(
-            true,
-            &body,
-            self.compiler.function_alignment().max(alignment),
-            &mut self.ctrl_plane,
-        );
+        let off = self
+            .text
+            .append(true, &body, alignment, &mut self.ctrl_plane);
 
         let symbol_id = self.obj.add_symbol(Symbol {
             name: name.as_bytes().to_vec(),
@@ -133,11 +129,11 @@ impl<'a> ModuleTextBuilder<'a> {
             flags: SymbolFlags::None,
         });
 
-        if let Some(info) = unwind_info {
+        if let Some(info) = compiled_func.unwind_info() {
             self.unwind_info.push(off, body_len, info);
         }
 
-        for r in relocations {
+        for r in compiled_func.relocations() {
             match r.reloc_target {
                 // Relocations against user-defined functions means that this is
                 // a relocation against a module-local function, typically a
@@ -161,7 +157,7 @@ impl<'a> ModuleTextBuilder<'a> {
                     // loop could also be updated to forward the relocation to
                     // the final object file as well.
                     panic!(
-                        "unresolved relocation could not be procesed against \
+                        "unresolved relocation could not be processed against \
                          {index:?}: {r:?}"
                     );
                 }

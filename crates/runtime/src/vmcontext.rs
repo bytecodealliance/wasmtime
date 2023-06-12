@@ -4,31 +4,79 @@
 mod vm_host_func_context;
 
 use crate::externref::VMExternRef;
-use crate::instance::Instance;
-use std::any::Any;
+use sptr::Strict;
 use std::cell::UnsafeCell;
+use std::ffi::c_void;
 use std::marker;
 use std::ptr::NonNull;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::u32;
-pub use vm_host_func_context::VMHostFuncContext;
-use wasmtime_environ::DefinedMemoryIndex;
+pub use vm_host_func_context::{VMArrayCallHostFuncContext, VMNativeCallHostFuncContext};
+use wasmtime_environ::{DefinedMemoryIndex, VMCONTEXT_MAGIC};
 
-pub const VMCONTEXT_MAGIC: u32 = u32::from_le_bytes(*b"core");
+/// A function pointer that exposes the array calling convention.
+///
+/// Regardless of the underlying Wasm function type, all functions using the
+/// array calling convention have the same Rust signature.
+///
+/// Arguments:
+///
+/// * Callee `vmctx` for the function itself.
+///
+/// * Caller's `vmctx` (so that host functions can access the linear memory of
+///   their Wasm callers).
+///
+/// * A pointer to a buffer of `ValRaw`s where both arguments are passed into
+///   this function, and where results are returned from this function.
+///
+/// * The capacity of the `ValRaw` buffer. Must always be at least
+///   `max(len(wasm_params), len(wasm_results))`.
+pub type VMArrayCallFunction =
+    unsafe extern "C" fn(*mut VMOpaqueContext, *mut VMOpaqueContext, *mut ValRaw, usize);
+
+/// A function pointer that exposes the native calling convention.
+///
+/// Different Wasm function types end up mapping to different Rust function
+/// types, so this isn't simply a type alias the way that `VMArrayCallFunction`
+/// is.
+///
+/// This is the default calling convention for the target (e.g. System-V or
+/// fast-call) except multiple return values are handled by returning the first
+/// return value in a register and everything else through a return-pointer.
+#[repr(transparent)]
+pub struct VMNativeCallFunction(VMFunctionBody);
+
+/// A function pointer that exposes the Wasm calling convention.
+///
+/// In practice, different Wasm function types end up mapping to different Rust
+/// function types, so this isn't simply a type alias the way that
+/// `VMArrayCallFunction` is. However, the exact details of the calling
+/// convention are left to the Wasm compiler (e.g. Cranelift or Winch). Runtime
+/// code never does anything with these function pointers except shuffle them
+/// around and pass them back to Wasm.
+#[repr(transparent)]
+pub struct VMWasmCallFunction(VMFunctionBody);
 
 /// An imported function.
 #[derive(Debug, Copy, Clone)]
 #[repr(C)]
 pub struct VMFunctionImport {
-    /// A pointer to the imported function body.
-    pub body: NonNull<VMFunctionBody>,
+    /// Function pointer to use when calling this imported function from Wasm.
+    pub wasm_call: NonNull<VMWasmCallFunction>,
+
+    /// Function pointer to use when calling this imported function from native code.
+    pub native_call: NonNull<VMNativeCallFunction>,
+
+    /// Function pointer to use when calling this imported function with the
+    /// "array" calling convention that `Func::new` et al use.
+    pub array_call: VMArrayCallFunction,
 
     /// The VM state associated with this function.
     ///
-    /// For core wasm instances this will be `*mut VMContext` but for the
-    /// upcoming implementation of the component model this will be something
-    /// else. The actual definition of what this pointer points to depends on
-    /// the definition of `func_ptr` and what compiled it.
+    /// For Wasm functions defined by core wasm instances this will be `*mut
+    /// VMContext`, but for lifted/lowered component model functions this will
+    /// be a `VMComponentContext`, and for a host function it will be a
+    /// `VMHostFuncContext`, etc.
     pub vmctx: *mut VMOpaqueContext,
 }
 
@@ -53,8 +101,16 @@ mod test_vmfunction_import {
             usize::from(offsets.size_of_vmfunction_import())
         );
         assert_eq!(
-            offset_of!(VMFunctionImport, body),
-            usize::from(offsets.vmfunction_import_body())
+            offset_of!(VMFunctionImport, wasm_call),
+            usize::from(offsets.vmfunction_import_wasm_call())
+        );
+        assert_eq!(
+            offset_of!(VMFunctionImport, native_call),
+            usize::from(offsets.vmfunction_import_native_call())
+        );
+        assert_eq!(
+            offset_of!(VMFunctionImport, array_call),
+            usize::from(offsets.vmfunction_import_array_call())
         );
         assert_eq!(
             offset_of!(VMFunctionImport, vmctx),
@@ -512,24 +568,16 @@ impl VMGlobalDefinition {
             .cast::<Option<VMExternRef>>())
     }
 
-    /// Return a reference to the value as an anyfunc.
+    /// Return a reference to the value as a `VMFuncRef`.
     #[allow(clippy::cast_ptr_alignment)]
-    pub unsafe fn as_anyfunc(&self) -> *const VMCallerCheckedFuncRef {
-        *(self
-            .storage
-            .as_ref()
-            .as_ptr()
-            .cast::<*const VMCallerCheckedFuncRef>())
+    pub unsafe fn as_func_ref(&self) -> *mut VMFuncRef {
+        *(self.storage.as_ref().as_ptr().cast::<*mut VMFuncRef>())
     }
 
-    /// Return a mutable reference to the value as an anyfunc.
+    /// Return a mutable reference to the value as a `VMFuncRef`.
     #[allow(clippy::cast_ptr_alignment)]
-    pub unsafe fn as_anyfunc_mut(&mut self) -> &mut *const VMCallerCheckedFuncRef {
-        &mut *(self
-            .storage
-            .as_mut()
-            .as_mut_ptr()
-            .cast::<*const VMCallerCheckedFuncRef>())
+    pub unsafe fn as_func_ref_mut(&mut self) -> &mut *mut VMFuncRef {
+        &mut *(self.storage.as_mut().as_mut_ptr().cast::<*mut VMFuncRef>())
     }
 }
 
@@ -577,55 +625,91 @@ impl Default for VMSharedSignatureIndex {
     }
 }
 
-/// The VM caller-checked "anyfunc" record, for caller-side signature checking.
-/// It consists of the actual function pointer and a signature id to be checked
-/// by the caller.
+/// The VM caller-checked "funcref" record, for caller-side signature checking.
+///
+/// It consists of function pointer(s), a signature id to be checked by the
+/// caller, and the vmctx closure associated with this function.
 #[derive(Debug, Clone)]
 #[repr(C)]
-pub struct VMCallerCheckedFuncRef {
-    /// Function body.
-    pub func_ptr: NonNull<VMFunctionBody>,
+pub struct VMFuncRef {
+    /// Function pointer for this funcref if being called via the native calling
+    /// convention.
+    pub native_call: NonNull<VMNativeCallFunction>,
+
+    /// Function pointer for this funcref if being called via the "array"
+    /// calling convention that `Func::new` et al use.
+    pub array_call: VMArrayCallFunction,
+
+    /// Function pointer for this funcref if being called via the calling
+    /// convention we use when compiling Wasm.
+    ///
+    /// Most functions come with a function pointer that we can use when they
+    /// are called from Wasm. The notable exception is when we `Func::wrap` a
+    /// host function, and we don't have a Wasm compiler on hand to compile a
+    /// Wasm-to-native trampoline for the function. In this case, we leave
+    /// `wasm_call` empty until the function is passed as an import to Wasm (or
+    /// otherwise exposed to Wasm via tables/globals). At this point, we look up
+    /// a Wasm-to-native trampoline for the function in the the Wasm's compiled
+    /// module and use that fill in `VMFunctionImport::wasm_call`. **However**
+    /// there is no guarantee that the Wasm module has a trampoline for this
+    /// function's signature. The Wasm module only has trampolines for its
+    /// types, and if this function isn't of one of those types, then the Wasm
+    /// module will not have a trampoline for it. This is actually okay, because
+    /// it means that the Wasm cannot actually call this function. But it does
+    /// mean that this field needs to be an `Option` even though it is non-null
+    /// the vast vast vast majority of the time.
+    pub wasm_call: Option<NonNull<VMWasmCallFunction>>,
+
     /// Function signature id.
     pub type_index: VMSharedSignatureIndex,
+
     /// The VM state associated with this function.
     ///
-    /// For core wasm instances this will be `*mut VMContext` but for the
-    /// upcoming implementation of the component model this will be something
-    /// else. The actual definition of what this pointer points to depends on
-    /// the definition of `func_ptr` and what compiled it.
+    /// The actual definition of what this pointer points to depends on the
+    /// function being referenced: for core Wasm functions, this is a `*mut
+    /// VMContext`, for host functions it is a `*mut VMHostFuncContext`, and for
+    /// component functions it is a `*mut VMComponentContext`.
     pub vmctx: *mut VMOpaqueContext,
     // If more elements are added here, remember to add offset_of tests below!
 }
 
-unsafe impl Send for VMCallerCheckedFuncRef {}
-unsafe impl Sync for VMCallerCheckedFuncRef {}
+unsafe impl Send for VMFuncRef {}
+unsafe impl Sync for VMFuncRef {}
 
 #[cfg(test)]
-mod test_vmcaller_checked_anyfunc {
-    use super::VMCallerCheckedFuncRef;
+mod test_vm_func_ref {
+    use super::VMFuncRef;
     use memoffset::offset_of;
     use std::mem::size_of;
     use wasmtime_environ::{Module, PtrSize, VMOffsets};
 
     #[test]
-    fn check_vmcaller_checked_anyfunc_offsets() {
+    fn check_vm_func_ref_offsets() {
         let module = Module::new();
         let offsets = VMOffsets::new(size_of::<*mut u8>() as u8, &module);
         assert_eq!(
-            size_of::<VMCallerCheckedFuncRef>(),
-            usize::from(offsets.ptr.size_of_vmcaller_checked_func_ref())
+            size_of::<VMFuncRef>(),
+            usize::from(offsets.ptr.size_of_vm_func_ref())
         );
         assert_eq!(
-            offset_of!(VMCallerCheckedFuncRef, func_ptr),
-            usize::from(offsets.ptr.vmcaller_checked_func_ref_func_ptr())
+            offset_of!(VMFuncRef, native_call),
+            usize::from(offsets.ptr.vm_func_ref_native_call())
         );
         assert_eq!(
-            offset_of!(VMCallerCheckedFuncRef, type_index),
-            usize::from(offsets.ptr.vmcaller_checked_func_ref_type_index())
+            offset_of!(VMFuncRef, array_call),
+            usize::from(offsets.ptr.vm_func_ref_array_call())
         );
         assert_eq!(
-            offset_of!(VMCallerCheckedFuncRef, vmctx),
-            usize::from(offsets.ptr.vmcaller_checked_func_ref_vmctx())
+            offset_of!(VMFuncRef, wasm_call),
+            usize::from(offsets.ptr.vm_func_ref_wasm_call())
+        );
+        assert_eq!(
+            offset_of!(VMFuncRef, type_index),
+            usize::from(offsets.ptr.vm_func_ref_type_index())
+        );
+        assert_eq!(
+            offset_of!(VMFuncRef, vmctx),
+            usize::from(offsets.ptr.vm_func_ref_vmctx())
         );
     }
 }
@@ -794,6 +878,16 @@ mod test_vmruntime_limits {
     use wasmtime_environ::{Module, PtrSize, VMOffsets};
 
     #[test]
+    fn vmctx_runtime_limits_offset() {
+        let module = Module::new();
+        let offsets = VMOffsets::new(size_of::<*mut u8>() as u8, &module);
+        assert_eq!(
+            offsets.vmctx_runtime_limits(),
+            offsets.ptr.vmcontext_runtime_limits().into()
+        );
+    }
+
+    #[test]
     fn field_offsets() {
         let module = Module::new();
         let offsets = VMOffsets::new(size_of::<*mut u8>() as u8, &module);
@@ -868,32 +962,6 @@ impl VMContext {
         debug_assert_eq!((*opaque).magic, VMCONTEXT_MAGIC);
         opaque.cast()
     }
-
-    /// Return a mutable reference to the associated `Instance`.
-    ///
-    /// # Safety
-    /// This is unsafe because it doesn't work on just any `VMContext`, it must
-    /// be a `VMContext` allocated as part of an `Instance`.
-    #[allow(clippy::cast_ptr_alignment)]
-    #[inline]
-    pub(crate) unsafe fn instance(&self) -> &Instance {
-        &*((self as *const Self as *mut u8).offset(-Instance::vmctx_offset()) as *const Instance)
-    }
-
-    #[inline]
-    pub(crate) unsafe fn instance_mut(&mut self) -> &mut Instance {
-        &mut *((self as *const Self as *mut u8).offset(-Instance::vmctx_offset()) as *mut Instance)
-    }
-
-    /// Return a reference to the host state associated with this `Instance`.
-    ///
-    /// # Safety
-    /// This is unsafe because it doesn't work on just any `VMContext`, it must
-    /// be a `VMContext` allocated as part of an `Instance`.
-    #[inline]
-    pub unsafe fn host_state(&self) -> &dyn Any {
-        self.instance().host_state()
-    }
 }
 
 /// A "raw" and unsafe representation of a WebAssembly value.
@@ -966,7 +1034,7 @@ pub union ValRaw {
     /// carefully calling the correct functions throughout the runtime.
     ///
     /// This value is always stored in a little-endian format.
-    funcref: usize,
+    funcref: *mut c_void,
 
     /// A WebAssembly `externref` value.
     ///
@@ -976,8 +1044,13 @@ pub union ValRaw {
     /// carefully calling the correct functions throughout the runtime.
     ///
     /// This value is always stored in a little-endian format.
-    externref: usize,
+    externref: *mut c_void,
 }
+
+// This type is just a bag-of-bits so it's up to the caller to figure out how
+// to safely deal with threading concerns and safely access interior bits.
+unsafe impl Send for ValRaw {}
+unsafe impl Sync for ValRaw {}
 
 impl ValRaw {
     /// Creates a WebAssembly `i32` value
@@ -1034,15 +1107,17 @@ impl ValRaw {
 
     /// Creates a WebAssembly `funcref` value
     #[inline]
-    pub fn funcref(i: usize) -> ValRaw {
-        ValRaw { funcref: i.to_le() }
+    pub fn funcref(i: *mut c_void) -> ValRaw {
+        ValRaw {
+            funcref: Strict::map_addr(i, |i| i.to_le()),
+        }
     }
 
     /// Creates a WebAssembly `externref` value
     #[inline]
-    pub fn externref(i: usize) -> ValRaw {
+    pub fn externref(i: *mut c_void) -> ValRaw {
         ValRaw {
-            externref: i.to_le(),
+            externref: Strict::map_addr(i, |i| i.to_le()),
         }
     }
 
@@ -1090,65 +1165,26 @@ impl ValRaw {
 
     /// Gets the WebAssembly `funcref` value
     #[inline]
-    pub fn get_funcref(&self) -> usize {
-        unsafe { usize::from_le(self.funcref) }
+    pub fn get_funcref(&self) -> *mut c_void {
+        unsafe { Strict::map_addr(self.funcref, |i| usize::from_le(i)) }
     }
 
     /// Gets the WebAssembly `externref` value
     #[inline]
-    pub fn get_externref(&self) -> usize {
-        unsafe { usize::from_le(self.externref) }
+    pub fn get_externref(&self) -> *mut c_void {
+        unsafe { Strict::map_addr(self.externref, |i| usize::from_le(i)) }
     }
 }
-
-/// Type definition of the trampoline used to enter WebAssembly from the host.
-///
-/// This function type is what's generated for the entry trampolines that are
-/// compiled into a WebAssembly module's image. Note that trampolines are not
-/// always used by Wasmtime since the `TypedFunc` API allows bypassing the
-/// trampoline and directly calling the underlying wasm function (at the time of
-/// this writing).
-///
-/// The trampoline's arguments here are:
-///
-/// * `*mut VMOpaqueContext` - this a contextual pointer defined within the
-///   context of the receiving function pointer. For now this is always `*mut
-///   VMContext` but with the component model it may be the case that this is a
-///   different type of pointer.
-///
-/// * `*mut VMContext` - this is the "caller" context, which at this time is
-///   always unconditionally core wasm (even in the component model). This
-///   contextual pointer cannot be `NULL` and provides information necessary to
-///   resolve the caller's context for the `Caller` API in Wasmtime.
-///
-/// * `*const VMFunctionBody` - this is the indirect function pointer which is
-///   the actual target function to invoke. This function uses the System-V ABI
-///   for its argumenst and a semi-custom ABI for the return values (one return
-///   value is returned directly, multiple return values have the first one
-///   returned directly and remaining ones returned indirectly through a
-///   stack pointer). This function pointer may be Cranelift-compiled code or it
-///   may also be a host-compiled trampoline (e.g. when a host function calls a
-///   host function through the `wasmtime::Func` wrapper). The definition of the
-///   first argument of this function depends on what this receiving function
-///   pointer desires.
-///
-/// * `*mut ValRaw` - this is storage space for both arguments and results of
-///   the function. The trampoline will read the arguments from this array to
-///   pass to the function pointer provided. The results are then written to the
-///   array afterwards (both reads and writes start at index 0). It's the
-///   caller's responsibility to make sure this array is appropriately sized.
-pub type VMTrampoline =
-    unsafe extern "C" fn(*mut VMOpaqueContext, *mut VMContext, *const VMFunctionBody, *mut ValRaw);
 
 /// An "opaque" version of `VMContext` which must be explicitly casted to a
 /// target context.
 ///
 /// This context is used to represent that contexts specified in
-/// `VMCallerCheckedFuncRef` can have any type and don't have an implicit
+/// `VMFuncRef` can have any type and don't have an implicit
 /// structure. Neither wasmtime nor cranelift-generated code can rely on the
 /// structure of an opaque context in general and only the code which configured
 /// the context is able to rely on a particular structure. This is because the
-/// context pointer configured for `VMCallerCheckedFuncRef` is guaranteed to be
+/// context pointer configured for `VMFuncRef` is guaranteed to be
 /// the first parameter passed.
 ///
 /// Note that Wasmtime currently has a layout where all contexts that are casted
@@ -1169,7 +1205,17 @@ impl VMOpaqueContext {
 
     /// Helper function to clearly indicate that casts are desired.
     #[inline]
-    pub fn from_vm_host_func_context(ptr: *mut VMHostFuncContext) -> *mut VMOpaqueContext {
+    pub fn from_vm_array_call_host_func_context(
+        ptr: *mut VMArrayCallHostFuncContext,
+    ) -> *mut VMOpaqueContext {
+        ptr.cast()
+    }
+
+    /// Helper function to clearly indicate that casts are desired.
+    #[inline]
+    pub fn from_vm_native_call_host_func_context(
+        ptr: *mut VMNativeCallHostFuncContext,
+    ) -> *mut VMOpaqueContext {
         ptr.cast()
     }
 }

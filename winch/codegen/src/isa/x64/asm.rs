@@ -2,7 +2,7 @@
 
 use crate::{
     isa::reg::Reg,
-    masm::{CalleeKind, DivKind, OperandSize, RemKind},
+    masm::{CalleeKind, CmpKind, DivKind, OperandSize, RemKind, ShiftKind},
 };
 use cranelift_codegen::{
     entity::EntityRef,
@@ -11,7 +11,8 @@ use cranelift_codegen::{
     isa::x64::{
         args::{
             self, AluRmiROpcode, Amode, CmpOpcode, DivSignedness, ExtMode, FromWritableReg, Gpr,
-            GprMem, GprMemImm, RegMem, RegMemImm, SyntheticAmode, WritableGpr, CC,
+            GprMem, GprMemImm, Imm8Gpr, Imm8Reg, RegMem, RegMemImm,
+            ShiftKind as CraneliftShiftKind, SyntheticAmode, WritableGpr, CC,
         },
         settings as x64_settings, CallInfo, EmitInfo, EmitState, Inst,
     },
@@ -40,6 +41,12 @@ impl From<Reg> for RegMemImm {
     }
 }
 
+impl From<Reg> for RegMem {
+    fn from(value: Reg) -> Self {
+        RegMem::Reg { reg: value.into() }
+    }
+}
+
 impl From<Reg> for WritableGpr {
     fn from(reg: Reg) -> Self {
         let writable = Writable::from_reg(reg.into());
@@ -53,9 +60,21 @@ impl From<Reg> for Gpr {
     }
 }
 
+impl From<Reg> for GprMem {
+    fn from(value: Reg) -> Self {
+        GprMem::new(value.into()).expect("valid gpr")
+    }
+}
+
 impl From<Reg> for GprMemImm {
     fn from(reg: Reg) -> Self {
         GprMemImm::new(reg.into()).expect("valid gpr")
+    }
+}
+
+impl From<Reg> for Imm8Gpr {
+    fn from(value: Reg) -> Self {
+        Imm8Gpr::new(Imm8Reg::Reg { reg: value.into() }).expect("valid Imm8Gpr")
     }
 }
 
@@ -77,6 +96,35 @@ impl From<DivKind> for DivSignedness {
     }
 }
 
+impl From<CmpKind> for CC {
+    fn from(value: CmpKind) -> Self {
+        match value {
+            CmpKind::Eq => CC::Z,
+            CmpKind::Ne => CC::NZ,
+            CmpKind::LtS => CC::L,
+            CmpKind::LtU => CC::B,
+            CmpKind::GtS => CC::NLE,
+            CmpKind::GtU => CC::NBE,
+            CmpKind::LeS => CC::LE,
+            CmpKind::LeU => CC::BE,
+            CmpKind::GeS => CC::NL,
+            CmpKind::GeU => CC::NB,
+        }
+    }
+}
+
+impl From<ShiftKind> for CraneliftShiftKind {
+    fn from(value: ShiftKind) -> Self {
+        match value {
+            ShiftKind::Shl => CraneliftShiftKind::ShiftLeft,
+            ShiftKind::ShrS => CraneliftShiftKind::ShiftRightArithmetic,
+            ShiftKind::ShrU => CraneliftShiftKind::ShiftRightLogical,
+            ShiftKind::Rotl => CraneliftShiftKind::RotateLeft,
+            ShiftKind::Rotr => CraneliftShiftKind::RotateRight,
+        }
+    }
+}
+
 /// Low level assembler implementation for x64.
 pub(crate) struct Assembler {
     /// The machine instruction buffer.
@@ -85,6 +133,8 @@ pub(crate) struct Assembler {
     emit_info: EmitInfo,
     /// Emission state.
     emit_state: EmitState,
+    /// x64 flags.
+    isa_flags: x64_settings::Flags,
 }
 
 impl Assembler {
@@ -93,13 +143,17 @@ impl Assembler {
         Self {
             buffer: MachBuffer::<Inst>::new(),
             emit_state: Default::default(),
-            emit_info: EmitInfo::new(shared_flags, isa_flags),
+            emit_info: EmitInfo::new(shared_flags, isa_flags.clone()),
+            isa_flags,
         }
     }
 
     /// Return the emitted code.
     pub fn finalize(mut self) -> MachBufferFinalized<Final> {
-        let stencil = self.buffer.finish(self.emit_state.ctrl_plane_mut());
+        let constants = Default::default();
+        let stencil = self
+            .buffer
+            .finish(&constants, self.emit_state.ctrl_plane_mut());
         stencil.apply_base_srcloc(Default::default())
     }
 
@@ -121,7 +175,10 @@ impl Assembler {
 
     /// Return instruction.
     pub fn ret(&mut self) {
-        self.emit(Inst::Ret { rets: vec![] });
+        self.emit(Inst::Ret {
+            rets: vec![],
+            stack_bytes_to_pop: 0,
+        });
     }
 
     /// Move instruction variants.
@@ -143,10 +200,7 @@ impl Assembler {
                 Address::Offset { base, offset: imm } => self.mov_mr(*base, *imm, *reg, size),
             },
 
-            _ => panic!(
-                "Invalid operand combination for mov; src={:?}, dst={:?}",
-                src, dst
-            ),
+            _ => Self::handle_invalid_operand_combination(src, dst),
         }
     }
 
@@ -222,15 +276,12 @@ impl Assembler {
                     self.sub_ir(val, *dst, size)
                 } else {
                     let scratch = regs::scratch();
-                    self.mov_ir(*imm as u64, scratch, size);
+                    self.load_constant(imm, scratch, size);
                     self.sub_rr(scratch, *dst, size);
                 }
             }
             (Operand::Reg(src), Operand::Reg(dst)) => self.sub_rr(*src, *dst, size),
-            _ => panic!(
-                "Invalid operand combination for sub; src = {:?} dst = {:?}",
-                src, dst
-            ),
+            _ => Self::handle_invalid_operand_combination(src, dst),
         }
     }
 
@@ -266,16 +317,155 @@ impl Assembler {
                     self.mul_ir(val, *dst, size);
                 } else {
                     let scratch = regs::scratch();
-                    self.mov_ir(*imm as u64, scratch, size);
+                    self.load_constant(imm, scratch, size);
                     self.mul_rr(scratch, *dst, size);
                 }
             }
             (Operand::Reg(src), Operand::Reg(dst)) => self.mul_rr(*src, *dst, size),
-            _ => panic!(
-                "Invalid operand combination for mul; src = {:?} dst = {:?}",
-                src, dst
-            ),
+            _ => Self::handle_invalid_operand_combination(src, dst),
         }
+    }
+
+    /// Logical and instruction variants.
+    pub fn and(&mut self, src: Operand, dst: Operand, size: OperandSize) {
+        match &(src, dst) {
+            (Operand::Imm(imm), Operand::Reg(dst)) => {
+                if let Ok(val) = i32::try_from(*imm) {
+                    self.and_ir(val, *dst, size);
+                } else {
+                    let scratch = regs::scratch();
+                    self.load_constant(imm, scratch, size);
+                    self.and_rr(scratch, *dst, size);
+                }
+            }
+            (Operand::Reg(src), Operand::Reg(dst)) => self.and_rr(*src, *dst, size),
+            _ => Self::handle_invalid_operand_combination(src, dst),
+        }
+    }
+
+    fn and_rr(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+        self.emit(Inst::AluRmiR {
+            size: size.into(),
+            op: AluRmiROpcode::And,
+            src1: dst.into(),
+            src2: src.into(),
+            dst: dst.into(),
+        });
+    }
+
+    fn and_ir(&mut self, imm: i32, dst: Reg, size: OperandSize) {
+        let imm = RegMemImm::imm(imm as u32);
+
+        self.emit(Inst::AluRmiR {
+            size: size.into(),
+            op: AluRmiROpcode::And,
+            src1: dst.into(),
+            src2: GprMemImm::new(imm).expect("valid immediate"),
+            dst: dst.into(),
+        });
+    }
+
+    /// Logical or instruction variants.
+    pub fn or(&mut self, src: Operand, dst: Operand, size: OperandSize) {
+        match &(src, dst) {
+            (Operand::Imm(imm), Operand::Reg(dst)) => {
+                if let Ok(val) = i32::try_from(*imm) {
+                    self.or_ir(val, *dst, size);
+                } else {
+                    let scratch = regs::scratch();
+                    self.load_constant(imm, scratch, size);
+                    self.or_rr(scratch, *dst, size);
+                }
+            }
+            (Operand::Reg(src), Operand::Reg(dst)) => self.or_rr(*src, *dst, size),
+            _ => Self::handle_invalid_operand_combination(src, dst),
+        }
+    }
+
+    fn or_rr(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+        self.emit(Inst::AluRmiR {
+            size: size.into(),
+            op: AluRmiROpcode::Or,
+            src1: dst.into(),
+            src2: src.into(),
+            dst: dst.into(),
+        });
+    }
+
+    fn or_ir(&mut self, imm: i32, dst: Reg, size: OperandSize) {
+        let imm = RegMemImm::imm(imm as u32);
+
+        self.emit(Inst::AluRmiR {
+            size: size.into(),
+            op: AluRmiROpcode::Or,
+            src1: dst.into(),
+            src2: GprMemImm::new(imm).expect("valid immediate"),
+            dst: dst.into(),
+        });
+    }
+
+    /// Logical exclusive or instruction variants.
+    pub fn xor(&mut self, src: Operand, dst: Operand, size: OperandSize) {
+        match &(src, dst) {
+            (Operand::Imm(imm), Operand::Reg(dst)) => {
+                if let Ok(val) = i32::try_from(*imm) {
+                    self.xor_ir(val, *dst, size);
+                } else {
+                    let scratch = regs::scratch();
+                    self.load_constant(imm, scratch, size);
+                    self.xor_rr(scratch, *dst, size);
+                }
+            }
+            (Operand::Reg(src), Operand::Reg(dst)) => self.xor_rr(*src, *dst, size),
+            _ => Self::handle_invalid_operand_combination(src, dst),
+        }
+    }
+
+    /// Logical exclusive or with registers.
+    pub fn xor_rr(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+        self.emit(Inst::AluRmiR {
+            size: size.into(),
+            op: AluRmiROpcode::Xor,
+            src1: dst.into(),
+            src2: src.into(),
+            dst: dst.into(),
+        });
+    }
+
+    fn xor_ir(&mut self, imm: i32, dst: Reg, size: OperandSize) {
+        let imm = RegMemImm::imm(imm as u32);
+
+        self.emit(Inst::AluRmiR {
+            size: size.into(),
+            op: AluRmiROpcode::Xor,
+            src1: dst.into(),
+            src2: GprMemImm::new(imm).expect("valid immediate"),
+            dst: dst.into(),
+        });
+    }
+
+    /// Shift with register and register.
+    pub fn shift_rr(&mut self, src: Reg, dst: Reg, kind: ShiftKind, size: OperandSize) {
+        self.emit(Inst::ShiftR {
+            size: size.into(),
+            kind: kind.into(),
+            src: dst.into(),
+            num_bits: src.into(),
+            dst: dst.into(),
+        });
+    }
+
+    /// Shift with immediate and register.
+    pub fn shift_ir(&mut self, imm: u8, dst: Reg, kind: ShiftKind, size: OperandSize) {
+        let imm = imm.into();
+
+        self.emit(Inst::ShiftR {
+            size: size.into(),
+            kind: kind.into(),
+            src: dst.into(),
+            num_bits: Imm8Gpr::new(imm).expect("valid immediate"),
+            dst: dst.into(),
+        });
     }
 
     /// Signed/unsigned division.
@@ -422,15 +612,12 @@ impl Assembler {
                     self.add_ir(val, *dst, size)
                 } else {
                     let scratch = regs::scratch();
-                    self.mov_ir(*imm as u64, scratch, size);
+                    self.load_constant(imm, scratch, size);
                     self.add_rr(scratch, *dst, size);
                 }
             }
             (Operand::Reg(src), Operand::Reg(dst)) => self.add_rr(*src, *dst, size),
-            _ => panic!(
-                "Invalid operand combination for add; src = {:?} dst = {:?}",
-                src, dst
-            ),
+            _ => Self::handle_invalid_operand_combination(src, dst),
         }
     }
 
@@ -458,13 +645,115 @@ impl Assembler {
         });
     }
 
-    /// Logical exclusive or with registers.
-    pub fn xor_rr(&mut self, src: Reg, dst: Reg, size: OperandSize) {
-        self.emit(Inst::AluRmiR {
+    /// Compare two operands and set status register flags.
+    pub fn cmp(&mut self, src: Operand, dst: Operand, size: OperandSize) {
+        match &(src, dst) {
+            (Operand::Imm(imm), Operand::Reg(dst)) => {
+                if let Ok(val) = i32::try_from(*imm) {
+                    self.cmp_ir(val, *dst, size)
+                } else {
+                    let scratch = regs::scratch();
+                    self.load_constant(imm, scratch, size);
+                    self.cmp_rr(scratch, *dst, size);
+                }
+            }
+            (Operand::Reg(src), Operand::Reg(dst)) => self.cmp_rr(*src, *dst, size),
+            _ => Self::handle_invalid_operand_combination(src, dst),
+        }
+    }
+
+    fn cmp_ir(&mut self, imm: i32, dst: Reg, size: OperandSize) {
+        let imm = RegMemImm::imm(imm as u32);
+
+        self.emit(Inst::CmpRmiR {
             size: size.into(),
-            op: AluRmiROpcode::Xor,
-            src1: dst.into(),
-            src2: src.into(),
+            opcode: CmpOpcode::Cmp,
+            src: GprMemImm::new(imm).expect("valid immediate"),
+            dst: dst.into(),
+        });
+    }
+
+    fn cmp_rr(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+        self.emit(Inst::CmpRmiR {
+            size: size.into(),
+            opcode: CmpOpcode::Cmp,
+            src: src.into(),
+            dst: dst.into(),
+        });
+    }
+
+    /// Set value in dst to `0` or `1` based on flags in status register and
+    /// [`CmpKind`].
+    pub fn setcc(&mut self, kind: CmpKind, dst: Operand) {
+        let dst = match dst {
+            Operand::Reg(r) => r,
+            _ => panic!("Invalid operand for dst"),
+        };
+        // Clear the dst register or bits 1 to 31 may be incorrectly set.
+        // Don't use xor since it updates the status register.
+        self.emit(Inst::Imm {
+            dst_size: args::OperandSize::Size32, // Always going to be an i32 result.
+            simm64: 0,
+            dst: dst.into(),
+        });
+        // Copy correct bit from status register into dst register.
+        self.emit(Inst::Setcc {
+            cc: kind.into(),
+            dst: dst.into(),
+        });
+    }
+
+    /// Store the count of leading zeroes in src in dst.
+    /// Requires `has_lzcnt` flag.
+    pub fn lzcnt(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+        assert!(self.isa_flags.has_lzcnt(), "Requires has_lzcnt flag");
+        self.emit(Inst::UnaryRmR {
+            size: size.into(),
+            op: args::UnaryRmROpcode::Lzcnt,
+            src: src.into(),
+            dst: dst.into(),
+        });
+    }
+
+    /// Store the count of trailing zeroes in src in dst.
+    /// Requires `has_bmi1` flag.
+    pub fn tzcnt(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+        assert!(self.isa_flags.has_bmi1(), "Requires has_bmi1 flag");
+        self.emit(Inst::UnaryRmR {
+            size: size.into(),
+            op: args::UnaryRmROpcode::Tzcnt,
+            src: src.into(),
+            dst: dst.into(),
+        });
+    }
+
+    /// Stores position of the most significant bit set in src in dst.
+    /// Zero flag is set if src is equal to 0.
+    pub fn bsr(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+        self.emit(Inst::UnaryRmR {
+            size: size.into(),
+            op: args::UnaryRmROpcode::Bsr,
+            src: src.into(),
+            dst: dst.into(),
+        });
+    }
+
+    /// Performs integer negation on src and places result in dst.
+    pub fn neg(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+        self.emit(Inst::Neg {
+            size: size.into(),
+            src: src.into(),
+            dst: dst.into(),
+        });
+    }
+
+    /// Stores position of the least significant bit set in src in dst.
+    /// Zero flag is set if src is equal to 0.
+    pub fn bsf(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+        self.emit(Inst::UnaryRmR {
+            size: size.into(),
+            op: args::UnaryRmROpcode::Bsf,
+            src: src.into(),
             dst: dst.into(),
         });
     }
@@ -495,5 +784,13 @@ impl Assembler {
                 });
             }
         }
+    }
+
+    fn load_constant(&mut self, imm: &i64, dst: Reg, size: OperandSize) {
+        self.mov_ir(*imm as u64, dst, size);
+    }
+
+    fn handle_invalid_operand_combination(src: Operand, dst: Operand) {
+        panic!("Invalid operand combination; src={:?}, dst={:?}", src, dst);
     }
 }

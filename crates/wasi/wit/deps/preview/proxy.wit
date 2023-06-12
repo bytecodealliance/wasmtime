@@ -1,0 +1,9 @@
+world proxy {
+  import wasi:random/random
+  import wasi:random/insecure
+  import wasi:random/insecure-seed
+  import wasi:logging/handler
+  import wasi:http/outgoing-handler
+
+  export wasi:http/incoming-handler
+}

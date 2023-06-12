@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 
 fn decommit(addr: *mut u8, len: usize) -> Result<()> {
     if len == 0 {
@@ -7,13 +7,14 @@ fn decommit(addr: *mut u8, len: usize) -> Result<()> {
 
     unsafe {
         cfg_if::cfg_if! {
-            if #[cfg(target_os = "linux")] {
+            if #[cfg(miri)] {
+                std::ptr::write_bytes(addr, 0, len);
+            } else if #[cfg(target_os = "linux")] {
                 use rustix::mm::{madvise, Advice};
 
                 // On Linux, this is enough to cause the kernel to initialize
                 // the pages to 0 on next access
-                madvise(addr as _, len, Advice::LinuxDontNeed)
-                    .context("madvise failed to decommit: {}")?;
+                madvise(addr as _, len, Advice::LinuxDontNeed)?;
             } else {
                 use rustix::mm::{mmap_anonymous, ProtFlags, MapFlags};
 
@@ -26,8 +27,7 @@ fn decommit(addr: *mut u8, len: usize) -> Result<()> {
                     len,
                     ProtFlags::READ | ProtFlags::WRITE,
                     MapFlags::PRIVATE | MapFlags::FIXED,
-                )
-                .context("mmap failed to remap pages: {}")?;
+                )?;
             }
         }
     }
@@ -44,13 +44,13 @@ pub fn decommit_table_pages(addr: *mut u8, len: usize) -> Result<()> {
     decommit(addr, len)
 }
 
-#[cfg(feature = "async")]
+#[cfg(all(feature = "async", not(miri)))]
 pub fn commit_stack_pages(_addr: *mut u8, _len: usize) -> Result<()> {
     // A no-op as stack pages remain READ|WRITE
     Ok(())
 }
 
-#[cfg(feature = "async")]
+#[cfg(all(feature = "async", not(miri)))]
 pub fn reset_stack_pages_to_zero(addr: *mut u8, len: usize) -> Result<()> {
     decommit(addr, len)
 }

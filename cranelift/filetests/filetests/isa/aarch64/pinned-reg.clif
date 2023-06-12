@@ -16,7 +16,7 @@ block0:
 ;   add x1, x1, #1
 ;   mov x21, x1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov x1, x21

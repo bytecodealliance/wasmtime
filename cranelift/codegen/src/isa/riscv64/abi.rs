@@ -30,7 +30,7 @@ use smallvec::{smallvec, SmallVec};
 pub(crate) type Riscv64Callee = Callee<Riscv64MachineDeps>;
 
 /// Support for the Riscv64 ABI from the caller side (at a callsite).
-pub(crate) type Riscv64ABICaller = Caller<Riscv64MachineDeps>;
+pub(crate) type Riscv64ABICallSite = CallSite<Riscv64MachineDeps>;
 
 /// This is the limit for the size of argument and return-value areas on the
 /// stack. We place a reasonable limit here to avoid integer overflow issues
@@ -42,6 +42,40 @@ static STACK_ARG_RET_SIZE_LIMIT: u32 = 128 * 1024 * 1024;
 pub struct Riscv64MachineDeps;
 
 impl IsaFlags for RiscvFlags {}
+
+impl RiscvFlags {
+    pub(crate) fn min_vec_reg_size(&self) -> u64 {
+        let entries = [
+            (self.has_zvl65536b(), 65536),
+            (self.has_zvl32768b(), 32768),
+            (self.has_zvl16384b(), 16384),
+            (self.has_zvl8192b(), 8192),
+            (self.has_zvl4096b(), 4096),
+            (self.has_zvl2048b(), 2048),
+            (self.has_zvl1024b(), 1024),
+            (self.has_zvl512b(), 512),
+            (self.has_zvl256b(), 256),
+            // In order to claim the Application Profile V extension, a minimum
+            // register size of 128 is required. i.e. V implies Zvl128b.
+            (self.has_v(), 128),
+            (self.has_zvl128b(), 128),
+            (self.has_zvl64b(), 64),
+            (self.has_zvl32b(), 32),
+        ];
+
+        for (has_flag, size) in entries.into_iter() {
+            if !has_flag {
+                continue;
+            }
+
+            // Due to a limitation in regalloc2, we can't support types
+            // larger than 1024 bytes. So limit that here.
+            return std::cmp::min(size, 1024);
+        }
+
+        return 0;
+    }
+}
 
 impl ABIMachineSpec for Riscv64MachineDeps {
     type I = Inst;
@@ -235,8 +269,16 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         Inst::Args { args }
     }
 
-    fn gen_ret(_setup_frame: bool, _isa_flags: &Self::F, rets: Vec<RetPair>) -> Inst {
-        Inst::Ret { rets }
+    fn gen_ret(
+        _setup_frame: bool,
+        _isa_flags: &Self::F,
+        rets: Vec<RetPair>,
+        stack_bytes_to_pop: u32,
+    ) -> Inst {
+        Inst::Ret {
+            rets,
+            stack_bytes_to_pop,
+        }
     }
 
     fn get_stacklimit_reg() -> Reg {
@@ -301,7 +343,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         if amount == 0 {
             return insts;
         }
-        insts.push(Inst::AjustSp {
+        insts.push(Inst::AdjustSp {
             amount: amount as i64,
         });
         insts
@@ -319,7 +361,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         // sd   fp,0(sp)     ;; store old fp.
         // mv   fp,sp        ;; set fp to sp.
         let mut insts = SmallVec::new();
-        insts.push(Inst::AjustSp { amount: -16 });
+        insts.push(Inst::AdjustSp { amount: -16 });
         insts.push(Self::gen_store_stack(
             StackAMode::SPOffset(8, I64),
             link_reg(),
@@ -357,7 +399,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
             writable_fp_reg(),
             I64,
         ));
-        insts.push(Inst::AjustSp { amount: 16 });
+        insts.push(Inst::AdjustSp { amount: 16 });
         insts
     }
 
@@ -415,8 +457,9 @@ impl ABIMachineSpec for Riscv64MachineDeps {
             for reg in clobbered_callee_saves {
                 let r_reg = reg.to_reg();
                 let ty = match r_reg.class() {
-                    regalloc2::RegClass::Int => I64,
-                    regalloc2::RegClass::Float => F64,
+                    RegClass::Int => I64,
+                    RegClass::Float => F64,
+                    RegClass::Vector => unimplemented!("Vector Clobber Saves"),
                 };
                 if flags.unwind_info() {
                     insts.push(Inst::Unwind {
@@ -433,7 +476,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                 ));
                 cur_offset += 8
             }
-            insts.push(Inst::AjustSp {
+            insts.push(Inst::AdjustSp {
                 amount: -(stack_size as i64),
             });
         }
@@ -453,7 +496,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
             Self::get_clobbered_callee_saves(call_conv, _flags, sig, clobbers);
         let stack_size = fixed_frame_storage_size + compute_clobber_size(&clobbered_callee_saves);
         if stack_size > 0 {
-            insts.push(Inst::AjustSp {
+            insts.push(Inst::AdjustSp {
                 amount: stack_size as i64,
             });
         }
@@ -461,8 +504,9 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         for reg in &clobbered_callee_saves {
             let rreg = reg.to_reg();
             let ty = match rreg.class() {
-                regalloc2::RegClass::Int => I64,
-                regalloc2::RegClass::Float => F64,
+                RegClass::Int => I64,
+                RegClass::Float => F64,
+                RegClass::Vector => unimplemented!("Vector Clobber Restores"),
             };
             insts.push(Self::gen_load_stack(
                 StackAMode::SPOffset(-cur_offset, ty),
@@ -570,11 +614,16 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         insts
     }
 
-    fn get_number_of_spillslots_for_value(rc: RegClass, _target_vector_bytes: u32) -> u32 {
+    fn get_number_of_spillslots_for_value(
+        rc: RegClass,
+        _target_vector_bytes: u32,
+        isa_flags: &RiscvFlags,
+    ) -> u32 {
         // We allocate in terms of 8-byte slots.
         match rc {
             RegClass::Int => 1,
             RegClass::Float => 1,
+            RegClass::Vector => (isa_flags.min_vec_reg_size() / 8) as u32,
         }
     }
 
@@ -589,20 +638,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
     }
 
     fn get_regs_clobbered_by_call(_call_conv_of_callee: isa::CallConv) -> PRegSet {
-        let mut v = PRegSet::empty();
-        for (k, need_save) in CALLER_SAVE_X_REG.iter().enumerate() {
-            if !*need_save {
-                continue;
-            }
-            v.add(px_reg(k));
-        }
-        for (k, need_save) in CALLER_SAVE_F_REG.iter().enumerate() {
-            if !*need_save {
-                continue;
-            }
-            v.add(pf_reg(k));
-        }
-        v
+        CLOBBERS
     }
 
     fn get_clobbered_callee_saves(
@@ -649,23 +685,11 @@ impl ABIMachineSpec for Riscv64MachineDeps {
     }
 }
 
-const CALLER_SAVE_X_REG: [bool; 32] = [
-    false, true, false, false, false, true, true, true, // 0-7
-    false, false, true, true, true, true, true, true, // 8-15
-    true, true, false, false, false, false, false, false, // 16-23
-    false, false, false, false, true, true, true, true, // 24-31
-];
 const CALLEE_SAVE_X_REG: [bool; 32] = [
     false, false, true, false, false, false, false, false, // 0-7
     true, true, false, false, false, false, false, false, // 8-15
     false, false, true, true, true, true, true, true, // 16-23
     true, true, true, true, false, false, false, false, // 24-31
-];
-const CALLER_SAVE_F_REG: [bool; 32] = [
-    true, true, true, true, true, true, true, true, // 0-7
-    false, true, true, true, true, true, true, true, // 8-15
-    true, true, false, false, false, false, false, false, // 16-23
-    false, false, false, false, true, true, true, true, // 24-31
 ];
 const CALLEE_SAVE_F_REG: [bool; 32] = [
     false, false, false, false, false, false, false, false, // 0-7
@@ -677,10 +701,11 @@ const CALLEE_SAVE_F_REG: [bool; 32] = [
 /// This should be the registers that must be saved by callee.
 #[inline]
 fn is_reg_saved_in_prologue(_conv: CallConv, reg: RealReg) -> bool {
-    if reg.class() == RegClass::Int {
-        CALLEE_SAVE_X_REG[reg.hw_enc() as usize]
-    } else {
-        CALLEE_SAVE_F_REG[reg.hw_enc() as usize]
+    match reg.class() {
+        RegClass::Int => CALLEE_SAVE_X_REG[reg.hw_enc() as usize],
+        RegClass::Float => CALLEE_SAVE_F_REG[reg.hw_enc() as usize],
+        // All vector registers are caller saved.
+        RegClass::Vector => false,
     }
 }
 
@@ -694,10 +719,88 @@ fn compute_clobber_size(clobbers: &[Writable<RealReg>]) -> u32 {
             RegClass::Float => {
                 clobbered_size += 8;
             }
+            RegClass::Vector => unimplemented!("Vector Size Clobbered"),
         }
     }
     align_to(clobbered_size, 16)
 }
+
+const fn clobbers() -> PRegSet {
+    PRegSet::empty()
+        .with(px_reg(1))
+        .with(px_reg(5))
+        .with(px_reg(6))
+        .with(px_reg(7))
+        .with(px_reg(10))
+        .with(px_reg(11))
+        .with(px_reg(12))
+        .with(px_reg(13))
+        .with(px_reg(14))
+        .with(px_reg(15))
+        .with(px_reg(16))
+        .with(px_reg(17))
+        .with(px_reg(28))
+        .with(px_reg(29))
+        .with(px_reg(30))
+        .with(px_reg(31))
+        // F Regs
+        .with(pf_reg(0))
+        .with(pf_reg(1))
+        .with(pf_reg(2))
+        .with(pf_reg(3))
+        .with(pf_reg(4))
+        .with(pf_reg(5))
+        .with(pf_reg(6))
+        .with(pf_reg(7))
+        .with(pf_reg(9))
+        .with(pf_reg(10))
+        .with(pf_reg(11))
+        .with(pf_reg(12))
+        .with(pf_reg(13))
+        .with(pf_reg(14))
+        .with(pf_reg(15))
+        .with(pf_reg(16))
+        .with(pf_reg(17))
+        .with(pf_reg(28))
+        .with(pf_reg(29))
+        .with(pf_reg(30))
+        .with(pf_reg(31))
+        // V Regs - All vector regs get clobbered
+        .with(pv_reg(0))
+        .with(pv_reg(1))
+        .with(pv_reg(2))
+        .with(pv_reg(3))
+        .with(pv_reg(4))
+        .with(pv_reg(5))
+        .with(pv_reg(6))
+        .with(pv_reg(7))
+        .with(pv_reg(8))
+        .with(pv_reg(9))
+        .with(pv_reg(10))
+        .with(pv_reg(11))
+        .with(pv_reg(12))
+        .with(pv_reg(13))
+        .with(pv_reg(14))
+        .with(pv_reg(15))
+        .with(pv_reg(16))
+        .with(pv_reg(17))
+        .with(pv_reg(18))
+        .with(pv_reg(19))
+        .with(pv_reg(20))
+        .with(pv_reg(21))
+        .with(pv_reg(22))
+        .with(pv_reg(23))
+        .with(pv_reg(24))
+        .with(pv_reg(25))
+        .with(pv_reg(26))
+        .with(pv_reg(27))
+        .with(pv_reg(28))
+        .with(pv_reg(29))
+        .with(pv_reg(30))
+        .with(pv_reg(31))
+}
+
+const CLOBBERS: PRegSet = clobbers();
 
 impl Riscv64MachineDeps {
     fn gen_probestack_unroll(insts: &mut SmallInstVec<Inst>, guard_size: u32, probe_count: u32) {

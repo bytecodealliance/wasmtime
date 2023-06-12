@@ -13,9 +13,9 @@ pub fn add_to_component_linker<T>(
     linker: &mut wasmtime::component::Linker<T>,
     get_cx: impl Fn(&mut T) -> &mut WasiHttp + Send + Sync + Copy + 'static,
 ) -> anyhow::Result<()> {
-    default_outgoing_http::add_to_linker(linker, get_cx)?;
-    types::add_to_linker(linker, get_cx)?;
-    streams::add_to_linker(linker, get_cx)?;
+    crate::wasi::http::outgoing_handler::add_to_linker(linker, get_cx)?;
+    crate::wasi::http::types::add_to_linker(linker, get_cx)?;
+    crate::wasi::io::streams::add_to_linker(linker, get_cx)?;
     Ok(())
 }
 

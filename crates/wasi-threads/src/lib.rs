@@ -2,12 +2,12 @@
 //!
 //! [`wasi-threads`]: https://github.com/WebAssembly/wasi-threads
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, Result};
 use rand::Rng;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::Arc;
 use std::thread;
-use wasmtime::{Caller, Linker, Module, SharedMemory, Store, ValType};
+use wasmtime::{Caller, ExternType, InstancePre, Linker, Module, SharedMemory, Store, ValType};
 use wasmtime_wasi::maybe_exit_on_error;
 
 // This name is a function export designated by the wasi-threads specification:
@@ -15,24 +15,35 @@ use wasmtime_wasi::maybe_exit_on_error;
 const WASI_ENTRY_POINT: &str = "wasi_thread_start";
 
 pub struct WasiThreadsCtx<T> {
-    module: Module,
-    linker: Arc<Linker<T>>,
+    instance_pre: Arc<InstancePre<T>>,
 }
 
 impl<T: Clone + Send + 'static> WasiThreadsCtx<T> {
     pub fn new(module: Module, linker: Arc<Linker<T>>) -> Result<Self> {
-        if !has_wasi_entry_point(&module) {
-            bail!(
-                "failed to find wasi-threads entry point function: {}",
-                WASI_ENTRY_POINT
-            );
-        }
-        Ok(Self { module, linker })
+        let instance_pre = Arc::new(linker.instantiate_pre(&module)?);
+        Ok(Self { instance_pre })
     }
 
     pub fn spawn(&self, host: T, thread_start_arg: i32) -> Result<i32> {
-        let module = self.module.clone();
-        let linker = self.linker.clone();
+        let instance_pre = self.instance_pre.clone();
+
+        // Check that the thread entry point is present. Why here? If we check
+        // for this too early, then we cannot accept modules that do not have an
+        // entry point but never spawn a thread. As pointed out in
+        // https://github.com/bytecodealliance/wasmtime/issues/6153, checking
+        // the entry point here allows wasi-threads to be compatible with more
+        // modules.
+        //
+        // As defined in the wasi-threads specification, returning a negative
+        // result here indicates to the guest module that the spawn failed.
+        if !has_entry_point(instance_pre.module()) {
+            log::error!("failed to find a wasi-threads entry point function; expected an export with name: {WASI_ENTRY_POINT}");
+            return Ok(-1);
+        }
+        if !has_correct_signature(instance_pre.module()) {
+            log::error!("the exported entry point function has an incorrect signature: expected `(i32, i32) -> ()`");
+            return Ok(-1);
+        }
 
         // Start a Rust thread running a new instance of the current module.
         let wasi_thread_id = random_thread_id();
@@ -42,26 +53,17 @@ impl<T: Clone + Send + 'static> WasiThreadsCtx<T> {
             // were to crash, we want all threads to exit, not just this one.
             let result = catch_unwind(AssertUnwindSafe(|| {
                 // Each new instance is created in its own store.
-                let mut store = Store::new(&module.engine(), host);
-
-                // Ideally, we would have already checked much earlier (e.g.,
-                // `new`) whether the module can be instantiated. Because
-                // `Linker::instantiate_pre` requires a `Store` and that is only
-                // available now. TODO:
-                // https://github.com/bytecodealliance/wasmtime/issues/5675.
-                let instance = linker.instantiate(&mut store, &module).expect(&format!(
-                    "wasi-thread-{} exited unsuccessfully: failed to instantiate",
-                    wasi_thread_id
-                ));
+                let mut store = Store::new(&instance_pre.module().engine(), host);
+                let instance = instance_pre.instantiate(&mut store).unwrap();
                 let thread_entry_point = instance
                     .get_typed_func::<(i32, i32), ()>(&mut store, WASI_ENTRY_POINT)
                     .unwrap();
 
                 // Start the thread's entry point. Any traps or calls to
                 // `proc_exit`, by specification, should end execution for all
-                // threads. This code uses `process::exit` to do so, which is what
-                // the user expects from the CLI but probably not in a Wasmtime
-                // embedding.
+                // threads. This code uses `process::exit` to do so, which is
+                // what the user expects from the CLI but probably not in a
+                // Wasmtime embedding.
                 log::trace!(
                     "spawned thread id = {}; calling start function `{}` with: {}",
                     wasi_thread_id,
@@ -109,7 +111,7 @@ pub fn add_to_linker<T: Clone + Send + 'static>(
     store: &wasmtime::Store<T>,
     module: &Module,
     get_cx: impl Fn(&mut T) -> &WasiThreadsCtx<T> + Send + Sync + Copy + 'static,
-) -> anyhow::Result<SharedMemory> {
+) -> anyhow::Result<()> {
     linker.func_wrap(
         "wasi",
         "thread-spawn",
@@ -131,29 +133,33 @@ pub fn add_to_linker<T: Clone + Send + 'static>(
     )?;
 
     // Find the shared memory import and satisfy it with a newly-created shared
-    // memory import. This currently does not handle multiple memories (TODO).
+    // memory import.
     for import in module.imports() {
         if let Some(m) = import.ty().memory() {
             if m.is_shared() {
                 let mem = SharedMemory::new(module.engine(), m.clone())?;
                 linker.define(store, import.module(), import.name(), mem.clone())?;
-                return Ok(mem);
+            } else {
+                return Err(anyhow!(
+                    "memory was not shared; a `wasi-threads` must import \
+                     a shared memory as \"memory\""
+                ));
             }
         }
     }
-    Err(anyhow!(
-        "unable to link a shared memory import to the module; a `wasi-threads` \
-         module should import a single shared memory as \"memory\""
-    ))
+    Ok(())
 }
 
-fn has_wasi_entry_point(module: &Module) -> bool {
-    module
-        .get_export(WASI_ENTRY_POINT)
-        .and_then(|t| t.func().cloned())
-        .and_then(|t| {
-            let params: Vec<ValType> = t.params().collect();
-            Some(params == [ValType::I32, ValType::I32] && t.results().len() == 0)
-        })
-        .unwrap_or(false)
+/// Check if wasi-threads' `wasi_thread_start` export is present.
+fn has_entry_point(module: &Module) -> bool {
+    module.get_export(WASI_ENTRY_POINT).is_some()
+}
+
+/// Check if the entry function has the correct signature `(i32, i32) -> ()`.
+fn has_correct_signature(module: &Module) -> bool {
+    use ValType::*;
+    match module.get_export(WASI_ENTRY_POINT) {
+        Some(ExternType::Func(ty)) => ty.params().eq([I32, I32]) && ty.results().len() == 0,
+        _ => false,
+    }
 }

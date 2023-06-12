@@ -13,11 +13,6 @@ include = ["src/**/*", "LICENSE"]
 [lib]
 proc-macro = true
 test = false
-
-# This has been added to make testing of the experimental_x64 feature possible,
-# working around a Cargo nightly bug: once
-# https://github.com/rust-lang/cargo/issues/8563 has been fixed, we should be
-# able to revert it.
 doctest = false
 
 [dependencies]

@@ -88,12 +88,6 @@ impl Dir {
         }
 
         let mut f = self.0.open_with(Path::new(path), &opts)?;
-        // NONBLOCK does not have an OpenOption either, but we can patch that on with set_fd_flags:
-        if fdflags.contains(wasi_common::file::FdFlags::NONBLOCK) {
-            let set_fd_flags = f.new_set_fd_flags(system_interface::fs::FdFlags::NONBLOCK)?;
-            f.set_fd_flags(set_fd_flags)?;
-        }
-
         if f.metadata()?.is_dir() {
             Ok(OpenResult::Dir(Dir::from_cap_std(fs::Dir::from_std_file(
                 f.into_std(),
@@ -101,6 +95,11 @@ impl Dir {
         } else if oflags.contains(OFlags::DIRECTORY) {
             Err(Error::not_dir().context("expected directory but got file"))
         } else {
+            // NONBLOCK does not have an OpenOption either, but we can patch that on with set_fd_flags:
+            if fdflags.contains(wasi_common::file::FdFlags::NONBLOCK) {
+                let set_fd_flags = f.new_set_fd_flags(system_interface::fs::FdFlags::NONBLOCK)?;
+                f.set_fd_flags(set_fd_flags)?;
+            }
             Ok(OpenResult::File(File::from_cap_std(f)))
         }
     }

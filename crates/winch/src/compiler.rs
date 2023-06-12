@@ -1,23 +1,30 @@
 use anyhow::Result;
-use cranelift_codegen::{Final, MachBufferFinalized};
 use object::write::{Object, SymbolId};
 use std::any::Any;
 use std::sync::Mutex;
 use wasmparser::FuncValidatorAllocations;
-use wasmtime_cranelift_shared::obj::ModuleTextBuilder;
+use wasmtime_cranelift_shared::{CompiledFunction, ModuleTextBuilder};
 use wasmtime_environ::{
     CompileError, DefinedFuncIndex, FilePos, FuncIndex, FunctionBodyData, FunctionLoc,
-    ModuleTranslation, ModuleTypes, PrimaryMap, Tunables, WasmFunctionInfo,
+    ModuleTranslation, ModuleTypes, PrimaryMap, TrapEncodingBuilder, Tunables, WasmFunctionInfo,
 };
-use winch_codegen::TargetIsa;
-use winch_environ::FuncEnv;
+use winch_codegen::{TargetIsa, TrampolineKind};
 
 pub(crate) struct Compiler {
     isa: Box<dyn TargetIsa>,
     allocations: Mutex<Vec<FuncValidatorAllocations>>,
 }
 
-struct CompiledFunction(MachBufferFinalized<Final>);
+/// The compiled function environment.
+pub struct CompiledFuncEnv;
+impl wasmtime_cranelift_shared::CompiledFuncEnv for CompiledFuncEnv {
+    fn resolve_user_external_name_ref(
+        &self,
+        external: cranelift_codegen::ir::UserExternalNameRef,
+    ) -> (u32, u32) {
+        (0, external.as_u32())
+    }
+}
 
 impl Compiler {
     pub fn new(isa: Box<dyn TargetIsa>) -> Self {
@@ -47,10 +54,11 @@ impl wasmtime_environ::Compiler for Compiler {
         index: DefinedFuncIndex,
         data: FunctionBodyData<'_>,
         _tunables: &Tunables,
-        _types: &ModuleTypes,
+        types: &ModuleTypes,
     ) -> Result<(WasmFunctionInfo, Box<dyn Any + Send>), CompileError> {
         let index = translation.module.func_index(index);
-        let sig = translation.get_types().function_at(index.as_u32()).unwrap();
+        let sig = translation.module.functions[index].signature;
+        let ty = &types[sig];
         let FunctionBodyData { body, validator } = data;
         let start_srcloc = FilePos::new(
             body.get_binary_reader()
@@ -59,38 +67,78 @@ impl wasmtime_environ::Compiler for Compiler {
                 .unwrap(),
         );
         let mut validator = validator.into_validator(self.take_allocations());
-        let env = FuncEnv::new(&translation.module, translation.get_types(), &self.isa);
         let buffer = self
             .isa
-            .compile_function(&sig, &body, &env, &mut validator)
+            .compile_function(ty, &body, &translation, &mut validator)
             .map_err(|e| CompileError::Codegen(format!("{e:?}")));
         self.save_allocations(validator.into_allocations());
         let buffer = buffer?;
+        let compiled_function =
+            CompiledFunction::new(buffer, CompiledFuncEnv {}, self.isa.function_alignment());
 
         Ok((
             WasmFunctionInfo {
                 start_srcloc,
                 stack_maps: Box::new([]),
             },
-            Box::new(CompiledFunction(buffer)),
+            Box::new(compiled_function),
         ))
     }
 
-    fn compile_host_to_wasm_trampoline(
+    fn compile_array_to_wasm_trampoline(
         &self,
-        ty: &wasmtime_environ::WasmFuncType,
+        translation: &ModuleTranslation<'_>,
+        types: &ModuleTypes,
+        index: DefinedFuncIndex,
     ) -> Result<Box<dyn Any + Send>, CompileError> {
-        let wasm_ty = wasmparser::FuncType::new(
-            ty.params().iter().copied().map(Into::into),
-            ty.returns().iter().copied().map(Into::into),
-        );
+        let func_index = translation.module.func_index(index);
+        let sig = translation.module.functions[func_index].signature;
+        let ty = &types[sig];
+        let buffer = self
+            .isa
+            .compile_trampoline(&ty, TrampolineKind::ArrayToWasm(func_index))
+            .map_err(|e| CompileError::Codegen(format!("{:?}", e)))?;
+        let compiled_function =
+            CompiledFunction::new(buffer, CompiledFuncEnv {}, self.isa.function_alignment());
+
+        Ok(Box::new(compiled_function))
+    }
+
+    fn compile_native_to_wasm_trampoline(
+        &self,
+        translation: &ModuleTranslation<'_>,
+        types: &ModuleTypes,
+        index: DefinedFuncIndex,
+    ) -> Result<Box<dyn Any + Send>, CompileError> {
+        let func_index = translation.module.func_index(index);
+        let sig = translation.module.functions[func_index].signature;
+        let ty = &types[sig];
 
         let buffer = self
             .isa
-            .host_to_wasm_trampoline(&wasm_ty)
+            .compile_trampoline(ty, TrampolineKind::NativeToWasm(func_index))
             .map_err(|e| CompileError::Codegen(format!("{:?}", e)))?;
 
-        Ok(Box::new(CompiledFunction(buffer)))
+        let compiled_function =
+            CompiledFunction::new(buffer, CompiledFuncEnv {}, self.isa.function_alignment());
+
+        Ok(Box::new(compiled_function))
+    }
+
+    fn compile_wasm_to_native_trampoline(
+        &self,
+        _translation: &ModuleTranslation<'_>,
+        wasm_func_ty: &wasmtime_environ::WasmFuncType,
+    ) -> Result<Box<dyn Any + Send>, CompileError> {
+        let buffer = self
+            .isa
+            .compile_trampoline(wasm_func_ty, TrampolineKind::WasmToNative)
+            .map_err(|e| CompileError::Codegen(format!("{:?}", e)))?;
+
+        let compiled_function =
+            CompiledFunction::new(buffer, CompiledFuncEnv {}, self.isa.function_alignment());
+
+        Ok(Box::new(compiled_function))
     }
 
     fn append_code(
@@ -102,26 +150,16 @@ impl wasmtime_environ::Compiler for Compiler {
     ) -> Result<Vec<(SymbolId, FunctionLoc)>> {
         let mut builder =
             ModuleTextBuilder::new(obj, self, self.isa.text_section_builder(funcs.len()));
+        let mut traps = TrapEncodingBuilder::default();
 
         let mut ret = Vec::with_capacity(funcs.len());
         for (i, (sym, func)) in funcs.iter().enumerate() {
-            let func = &func.downcast_ref::<CompiledFunction>().unwrap().0;
+            let func = func
+                .downcast_ref::<CompiledFunction<CompiledFuncEnv>>()
+                .unwrap();
 
-            // TODO: Implement copying over this data into the
-            // `ModuleTextBuilder` type. Note that this should probably be
-            // deduplicated with the cranelift implementation in the long run.
-            assert!(func.relocs().is_empty());
-            assert!(func.traps().is_empty());
-            assert!(func.stack_maps().is_empty());
-
-            let (sym, range) = builder.append_func(
-                &sym,
-                func.data(),
-                self.function_alignment(),
-                None,
-                &[],
-                |idx| resolve_reloc(i, idx),
-            );
+            let (sym, range) = builder.append_func(&sym, func, |idx| resolve_reloc(i, idx));
+            traps.push(range.clone(), &func.traps().collect::<Vec<_>>());
 
             let info = FunctionLoc {
                 start: u32::try_from(range.start).unwrap(),
@@ -130,15 +168,19 @@ impl wasmtime_environ::Compiler for Compiler {
             ret.push((sym, info));
         }
         builder.finish();
+        traps.append_to(obj);
         Ok(ret)
     }
 
-    fn emit_trampoline_obj(
+    fn emit_trampolines_for_array_call_host_func(
         &self,
-        _ty: &wasmtime_environ::WasmFuncType,
-        _host_fn: usize,
-        _obj: &mut wasmtime_environ::object::write::Object<'static>,
+        ty: &wasmtime_environ::WasmFuncType,
+        // Actually `host_fn: VMArrayCallFunction` but that type is not
+        // available in `wasmtime-environ`.
+        host_fn: usize,
+        obj: &mut Object<'static>,
     ) -> Result<(FunctionLoc, FunctionLoc)> {
+        drop((ty, host_fn, obj));
         todo!()
     }
 
@@ -170,10 +212,6 @@ impl wasmtime_environ::Compiler for Compiler {
         _funcs: &PrimaryMap<DefinedFuncIndex, (SymbolId, &(dyn Any + Send))>,
     ) -> Result<()> {
         todo!()
-    }
-
-    fn function_alignment(&self) -> u32 {
-        self.isa.function_alignment()
     }
 
     fn create_systemv_cie(&self) -> Option<gimli::write::CommonInformationEntry> {

@@ -1,6 +1,7 @@
 use crate::component::{MAX_FLAT_PARAMS, MAX_FLAT_RESULTS};
 use crate::{
-    EntityType, Global, GlobalInit, ModuleTypes, ModuleTypesBuilder, PrimaryMap, SignatureIndex,
+    EntityType, ModuleTypes, ModuleTypesBuilder, PrimaryMap, SignatureIndex, TypeConvert,
+    WasmHeapType,
 };
 use anyhow::{bail, Result};
 use cranelift_entity::EntityRef;
@@ -13,6 +14,8 @@ use wasmparser::{
     ComponentAlias, ComponentOuterAliasKind, ComponentTypeDeclaration, InstanceTypeDeclaration,
 };
 use wasmtime_component_util::{DiscriminantSize, FlagsSize};
+
+pub use wasmtime_types::StaticModuleIndex;
 
 /// Maximum nesting depth of a type allowed in Wasmtime.
 ///
@@ -116,11 +119,6 @@ indices! {
     /// Same as `ModuleUpvarIndex` but for components.
     pub struct ComponentUpvarIndex(u32);
 
-    /// Index into the global list of modules found within an entire component.
-    /// Module translations are saved on the side to get fully compiled after
-    /// the original component has finished being translated.
-    pub struct StaticModuleIndex(u32);
-
     /// Same as `StaticModuleIndex` but for components.
     pub struct StaticComponentIndex(u32);
 
@@ -181,9 +179,8 @@ indices! {
 
     /// Index into the list of transcoders identified during compilation.
     ///
-    /// This is used to index the `VMCallerCheckedFuncRef` slots reserved for
-    /// string encoders which reference linear memories defined within a
-    /// component.
+    /// This is used to index the `VMFuncRef` slots reserved for string encoders
+    /// which reference linear memories defined within a component.
     pub struct RuntimeTranscoderIndex(u32);
 }
 
@@ -449,6 +446,9 @@ impl ComponentTypesBuilder {
             wasmparser::ComponentType::Instance(ty) => {
                 TypeDef::ComponentInstance(self.component_instance_type(ty)?)
             }
+            wasmparser::ComponentType::Resource { .. } => {
+                unimplemented!("resource types")
+            }
         })
     }
 
@@ -457,7 +457,8 @@ impl ComponentTypesBuilder {
     pub fn intern_core_type(&mut self, ty: &wasmparser::CoreType<'_>) -> Result<TypeDef> {
         Ok(match ty {
             wasmparser::CoreType::Func(ty) => {
-                TypeDef::CoreFunc(self.module_types.wasm_func_type(ty.clone().try_into()?))
+                let ty = self.convert_func_type(ty);
+                TypeDef::CoreFunc(self.module_types.wasm_func_type(ty))
             }
             wasmparser::CoreType::Module(ty) => TypeDef::Module(self.module_type(ty)?),
         })
@@ -470,13 +471,16 @@ impl ComponentTypesBuilder {
                 self.core_outer_type(0, TypeIndex::from_u32(*ty))
             }
             wasmparser::ComponentTypeRef::Func(ty)
-            | wasmparser::ComponentTypeRef::Type(wasmparser::TypeBounds::Eq, ty)
+            | wasmparser::ComponentTypeRef::Type(wasmparser::TypeBounds::Eq(ty))
             | wasmparser::ComponentTypeRef::Instance(ty)
             | wasmparser::ComponentTypeRef::Component(ty) => {
                 self.component_outer_type(0, ComponentTypeIndex::from_u32(*ty))
             }
             wasmparser::ComponentTypeRef::Value(..) => {
                 unimplemented!("references to value types");
+            }
+            wasmparser::ComponentTypeRef::Type(wasmparser::TypeBounds::SubResource) => {
+                unimplemented!("resource types");
             }
         }
     }
@@ -491,9 +495,12 @@ impl ComponentTypesBuilder {
         for item in ty {
             match item {
                 wasmparser::ModuleTypeDeclaration::Type(wasmparser::Type::Func(f)) => {
-                    let ty =
-                        TypeDef::CoreFunc(self.module_types.wasm_func_type(f.clone().try_into()?));
+                    let f = self.convert_func_type(f);
+                    let ty = TypeDef::CoreFunc(self.module_types.wasm_func_type(f));
                     self.push_core_typedef(ty);
+                }
+                wasmparser::ModuleTypeDeclaration::Type(wasmparser::Type::Array(_)) => {
+                    unimplemented!("gc types");
                 }
                 wasmparser::ModuleTypeDeclaration::Export { name, ty } => {
                     let prev = result
@@ -533,11 +540,9 @@ impl ComponentTypesBuilder {
                     _ => unreachable!(), // not possible with valid components
                 }
             }
-            wasmparser::TypeRef::Table(ty) => EntityType::Table(ty.clone().try_into()?),
+            wasmparser::TypeRef::Table(ty) => EntityType::Table(self.convert_table_type(ty)),
             wasmparser::TypeRef::Memory(ty) => EntityType::Memory(ty.clone().into()),
-            wasmparser::TypeRef::Global(ty) => {
-                EntityType::Global(Global::new(ty.clone(), GlobalInit::Import)?)
-            }
+            wasmparser::TypeRef::Global(ty) => EntityType::Global(self.convert_global_type(ty)),
             wasmparser::TypeRef::Tag(_) => bail!("exceptions proposal not implemented"),
         })
     }
@@ -554,17 +559,13 @@ impl ComponentTypesBuilder {
                 ComponentTypeDeclaration::Type(ty) => self.type_declaration_type(ty)?,
                 ComponentTypeDeclaration::CoreType(ty) => self.type_declaration_core_type(ty)?,
                 ComponentTypeDeclaration::Alias(alias) => self.type_declaration_alias(alias)?,
-                ComponentTypeDeclaration::Export { name, url, ty } => {
+                ComponentTypeDeclaration::Export { name, ty } => {
                     let ty = self.type_declaration_define(ty);
-                    result
-                        .exports
-                        .insert(name.to_string(), (url.to_string(), ty));
+                    result.exports.insert(name.as_str().to_string(), ty);
                 }
                 ComponentTypeDeclaration::Import(import) => {
                     let ty = self.type_declaration_define(&import.ty);
-                    result
-                        .imports
-                        .insert(import.name.to_string(), (import.url.to_string(), ty));
+                    result.imports.insert(import.name.as_str().to_string(), ty);
                 }
             }
         }
@@ -586,11 +587,9 @@ impl ComponentTypesBuilder {
                 InstanceTypeDeclaration::Type(ty) => self.type_declaration_type(ty)?,
                 InstanceTypeDeclaration::CoreType(ty) => self.type_declaration_core_type(ty)?,
                 InstanceTypeDeclaration::Alias(alias) => self.type_declaration_alias(alias)?,
-                InstanceTypeDeclaration::Export { name, url, ty } => {
+                InstanceTypeDeclaration::Export { name, ty } => {
                     let ty = self.type_declaration_define(ty);
-                    result
-                        .exports
-                        .insert(name.to_string(), (url.to_string(), ty));
+                    result.exports.insert(name.as_str().to_string(), ty);
                 }
             }
         }
@@ -637,7 +636,7 @@ impl ComponentTypesBuilder {
             } => {
                 let ty = self.type_scopes.last().unwrap().instances
                     [ComponentInstanceIndex::from_u32(*instance_index)];
-                let (_, ty) = self.component_types[ty].exports[*name];
+                let ty = self.component_types[ty].exports[*name];
                 self.push_component_typedef(ty);
             }
             a => unreachable!("invalid alias {a:?}"),
@@ -708,6 +707,10 @@ impl ComponentTypesBuilder {
             }
             wasmparser::ComponentDefinedType::Result { ok, err } => {
                 InterfaceType::Result(self.result_type(ok, err))
+            }
+            wasmparser::ComponentDefinedType::Own(_)
+            | wasmparser::ComponentDefinedType::Borrow(_) => {
+                unimplemented!("resource types")
             }
         };
         let info = self.type_information(&result);
@@ -939,6 +942,15 @@ impl ComponentTypesBuilder {
     }
 }
 
+impl TypeConvert for ComponentTypesBuilder {
+    fn lookup_heap_type(&self, index: TypeIndex) -> WasmHeapType {
+        match self.type_scopes.last().unwrap().core[index] {
+            TypeDef::CoreFunc(i) => WasmHeapType::TypedFunc(i),
+            _ => unreachable!(),
+        }
+    }
+}
+
 // Forward the indexing impl to the internal `TypeTables`
 impl<T> Index<T> for ComponentTypesBuilder
 where
@@ -1016,9 +1028,9 @@ pub struct TypeModule {
 #[derive(Serialize, Deserialize, Default)]
 pub struct TypeComponent {
     /// The named values that this component imports.
-    pub imports: IndexMap<String, (String, TypeDef)>,
+    pub imports: IndexMap<String, TypeDef>,
     /// The named values that this component exports.
-    pub exports: IndexMap<String, (String, TypeDef)>,
+    pub exports: IndexMap<String, TypeDef>,
 }
 
 /// The type of a component instance in the component model, or an instantiated
@@ -1028,7 +1040,7 @@ pub struct TypeComponent {
 #[derive(Serialize, Deserialize, Default)]
 pub struct TypeComponentInstance {
     /// The list of exports that this component has along with their types.
-    pub exports: IndexMap<String, (String, TypeDef)>,
+    pub exports: IndexMap<String, TypeDef>,
 }
 
 /// A component function type in the component model.

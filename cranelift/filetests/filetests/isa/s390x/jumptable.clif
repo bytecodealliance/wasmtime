@@ -48,7 +48,7 @@ block5(v5: i32):
 ; block5:
 ;   ar %r2, %r5
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   llgfr %r3, %r2

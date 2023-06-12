@@ -9,7 +9,7 @@
 //! cd to the top of your wasmtime tree, then:
 //!
 //! RUST_BACKTRACE=1 cargo test --features test-programs/test_programs \
-//!   --features experimental_x64 --all --exclude wasmtime-wasi-nn \
+//!   --all --exclude wasmtime-wasi-nn \
 //!   -- isa::x64::inst::emit_tests::test_x64_emit
 
 use super::*;
@@ -87,14 +87,14 @@ impl Inst {
         }
     }
 
-    fn xmm_rm_r_evex(op: Avx512Opcode, src1: RegMem, src2: Reg, dst: Writable<Reg>) -> Self {
-        src1.assert_regclass_is(RegClass::Float);
-        debug_assert!(src2.class() == RegClass::Float);
+    fn xmm_rm_r_evex(op: Avx512Opcode, src1: Reg, src2: RegMem, dst: Writable<Reg>) -> Self {
+        src2.assert_regclass_is(RegClass::Float);
+        debug_assert!(src1.class() == RegClass::Float);
         debug_assert!(dst.to_reg().class() == RegClass::Float);
         Inst::XmmRmREvex {
             op,
-            src1: XmmMem::new(src1).unwrap(),
-            src2: Xmm::new(src2).unwrap(),
+            src1: Xmm::new(src1).unwrap(),
+            src2: XmmMem::new(src2).unwrap(),
             dst: WritableXmm::from_writable_reg(dst).unwrap(),
         }
     }
@@ -4383,6 +4383,7 @@ fn test_x64_emit() {
             dst: Writable::from_reg(r11),
             name: Box::new(ExternalName::User(UserExternalNameRef::new(0))),
             offset: 0,
+            distance: RelocDistance::Far,
         },
         "4C8B1D00000000",
         "load_ext_name userextname0+0, %r11",
@@ -4392,6 +4393,7 @@ fn test_x64_emit() {
             dst: Writable::from_reg(r11),
             name: Box::new(ExternalName::User(UserExternalNameRef::new(0))),
             offset: 0x12345678,
+            distance: RelocDistance::Far,
         },
         "4C8B1D000000004981C378563412",
         "load_ext_name userextname0+305419896, %r11",
@@ -4401,6 +4403,7 @@ fn test_x64_emit() {
             dst: Writable::from_reg(r11),
             name: Box::new(ExternalName::User(UserExternalNameRef::new(0))),
             offset: -0x12345678,
+            distance: RelocDistance::Far,
         },
         "4C8B1D000000004981EB78563412",
         "load_ext_name userextname0+-305419896, %r11",
@@ -4408,7 +4411,8 @@ fn test_x64_emit() {
 
     // ========================================================
     // Ret
-    insns.push((Inst::ret(vec![]), "C3", "ret"));
+    insns.push((Inst::ret(vec![], 0), "C3", "ret"));
+    insns.push((Inst::ret(vec![], 8), "C20800", "ret 8"));
 
     // ========================================================
     // JmpKnown skipped for now
@@ -4773,21 +4777,21 @@ fn test_x64_emit() {
     ));
 
     insns.push((
-        Inst::xmm_rm_r_evex(Avx512Opcode::Vpmullq, RegMem::reg(xmm14), xmm10, w_xmm1),
+        Inst::xmm_rm_r_evex(Avx512Opcode::Vpmullq, xmm10, RegMem::reg(xmm14), w_xmm1),
         "62D2AD0840CE",
-        "vpmullq %xmm14, %xmm10, %xmm1",
+        "vpmullq %xmm10, %xmm14, %xmm1",
     ));
 
     insns.push((
-        Inst::xmm_rm_r_evex(Avx512Opcode::Vpermi2b, RegMem::reg(xmm14), xmm10, w_xmm1),
+        Inst::xmm_rm_r_evex(Avx512Opcode::Vpermi2b, xmm10, RegMem::reg(xmm14), w_xmm1),
         "62D22D0875CE",
-        "vpermi2b %xmm14, %xmm10, %xmm1",
+        "vpermi2b %xmm10, %xmm14, %xmm1",
     ));
 
     insns.push((
-        Inst::xmm_rm_r_evex(Avx512Opcode::Vpermi2b, RegMem::reg(xmm1), xmm0, w_xmm2),
+        Inst::xmm_rm_r_evex(Avx512Opcode::Vpermi2b, xmm0, RegMem::reg(xmm1), w_xmm2),
         "62F27D0875D1",
-        "vpermi2b %xmm1, %xmm0, %xmm2",
+        "vpermi2b %xmm0, %xmm1, %xmm2",
     ));
 
     insns.push((
@@ -5632,6 +5636,7 @@ fn test_x64_emit() {
     // ========================================================
     // Actually run the tests!
     let ctrl_plane = &mut Default::default();
+    let constants = Default::default();
     let mut flag_builder = settings::builder();
     flag_builder.enable("is_pic").unwrap();
     let flags = settings::Flags::new(flag_builder);
@@ -5662,7 +5667,7 @@ fn test_x64_emit() {
         let label = buffer.get_label();
         buffer.bind_label(label, ctrl_plane);
 
-        let buffer = buffer.finish(ctrl_plane);
+        let buffer = buffer.finish(&constants, ctrl_plane);
         let actual_encoding = &buffer.stringify_code_bytes();
         assert_eq!(expected_encoding, actual_encoding, "{}", expected_printing);
     }

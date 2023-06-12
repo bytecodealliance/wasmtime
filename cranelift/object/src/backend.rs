@@ -316,7 +316,7 @@ impl Module for ObjectModule {
         let mut code: Vec<u8> = Vec::new();
 
         let res = ctx.compile_and_emit(self.isa(), &mut code, ctrl_plane)?;
-        let alignment = res.alignment as u64;
+        let alignment = res.buffer.alignment as u64;
 
         self.define_function_bytes(
             func_id,
@@ -352,7 +352,7 @@ impl Module for ObjectModule {
         *defined = true;
 
         let align = alignment
-            .max(self.isa.function_alignment() as u64)
+            .max(self.isa.function_alignment().minimum.into())
             .max(self.isa.symbol_alignment());
         let (section, offset) = if self.per_function_section {
             let symbol_name = self.object.symbol(symbol).name.clone();

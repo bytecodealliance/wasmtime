@@ -18,10 +18,11 @@ cranelift-interpreter = { workspace = true }
 cranelift-fuzzgen = { workspace = true }
 cranelift-native = { workspace = true }
 cranelift-control = { workspace = true }
-libfuzzer-sys = { version = "0.4.0", features = ["arbitrary-derive"] }
+libfuzzer-sys = { workspace = true, features = ["arbitrary-derive"] }
 target-lexicon = { workspace = true }
 smallvec = { workspace = true }
-wasmtime = { workspace = true }
+wasmparser = { workspace = true }
+wasmtime = { workspace = true, features = ["winch"] }
 wasmtime-fuzzing = { workspace = true }
 component-test-util = { workspace = true }
 component-fuzz-util = { workspace = true }

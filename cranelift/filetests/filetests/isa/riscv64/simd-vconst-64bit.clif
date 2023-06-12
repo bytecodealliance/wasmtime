@@ -1,0 +1,123 @@
+test compile precise-output
+set unwind_info=false
+target riscv64 has_v
+
+function %vconst_zeroes() -> i8x8 {
+block0:
+    v0 = vconst.i8x8 0x00
+    return v0
+}
+
+; VCode:
+; block0:
+;   vle8.v v2,[const(0)] #avl=8, #vtype=(e8, m1, ta, ma)
+;   vse8.v v2,0(a0) #avl=8, #vtype=(e8, m1, ta, ma)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x57, 0x70, 0x04, 0xcc
+;   auipc t6, 0
+;   addi t6, t6, 0x14
+;   .byte 0x07, 0x81, 0x0f, 0x02
+;   .byte 0x27, 0x01, 0x05, 0x02
+;   ret
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   .byte 0x00, 0x00, 0x00, 0x00
+
+function %vconst_ones() -> i8x8 {
+block0:
+    v0 = vconst.i8x8 0xffffffffffffffff
+    return v0
+}
+
+; VCode:
+; block0:
+;   vle8.v v2,[const(0)] #avl=8, #vtype=(e8, m1, ta, ma)
+;   vse8.v v2,0(a0) #avl=8, #vtype=(e8, m1, ta, ma)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x57, 0x70, 0x04, 0xcc
+;   auipc t6, 0
+;   addi t6, t6, 0x14
+;   .byte 0x07, 0x81, 0x0f, 0x02
+;   .byte 0x27, 0x01, 0x05, 0x02
+;   ret
+;   .byte 0xff, 0xff, 0xff, 0xff
+;   .byte 0xff, 0xff, 0xff, 0xff
+
+function %vconst_i8x8() -> i8x8 {
+block0:
+    v0 = vconst.i8x8 [0 31 63 95 127 159 191 255]
+    return v0
+}
+
+; VCode:
+; block0:
+;   vle8.v v2,[const(0)] #avl=8, #vtype=(e8, m1, ta, ma)
+;   vse8.v v2,0(a0) #avl=8, #vtype=(e8, m1, ta, ma)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x57, 0x70, 0x04, 0xcc
+;   auipc t6, 0
+;   addi t6, t6, 0x14
+;   .byte 0x07, 0x81, 0x0f, 0x02
+;   .byte 0x27, 0x01, 0x05, 0x02
+;   ret
+;   .byte 0x00, 0x1f, 0x3f, 0x5f
+;   .byte 0x7f, 0x9f, 0xbf, 0xff
+
+function %vconst_i16x4() -> i16x4 {
+block0:
+    v0 = vconst.i16x4 [0 255 32767 65535]
+    return v0
+}
+
+; VCode:
+; block0:
+;   vle16.v v2,[const(0)] #avl=4, #vtype=(e16, m1, ta, ma)
+;   vse8.v v2,0(a0) #avl=8, #vtype=(e8, m1, ta, ma)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x57, 0x70, 0x82, 0xcc
+;   auipc t6, 0
+;   addi t6, t6, 0x1c
+;   .byte 0x07, 0xd1, 0x0f, 0x02
+;   .byte 0x57, 0x70, 0x04, 0xcc
+;   .byte 0x27, 0x01, 0x05, 0x02
+;   ret
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   .byte 0x00, 0x00, 0xff, 0x00
+;   .byte 0xff, 0x7f, 0xff, 0xff
+
+function %vconst_i32x2() -> i32x2 {
+block0:
+    v0 = vconst.i32x2 [0 4294967295]
+    return v0
+}
+
+; VCode:
+; block0:
+;   vle32.v v2,[const(0)] #avl=2, #vtype=(e32, m1, ta, ma)
+;   vse8.v v2,0(a0) #avl=8, #vtype=(e8, m1, ta, ma)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x57, 0x70, 0x01, 0xcd
+;   auipc t6, 0
+;   addi t6, t6, 0x1c
+;   .byte 0x07, 0xe1, 0x0f, 0x02
+;   .byte 0x57, 0x70, 0x04, 0xcc
+;   .byte 0x27, 0x01, 0x05, 0x02
+;   ret
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   .byte 0xff, 0xff, 0xff, 0xff
+

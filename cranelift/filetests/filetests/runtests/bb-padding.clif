@@ -1,0 +1,25 @@
+test interpret
+test run
+set bb_padding_log2_minus_one=21
+target aarch64
+target s390x
+target x86_64
+target riscv64 has_v
+
+function %ret_big_number() -> i64x2 {
+block0:
+    v0 = vconst.i64x2 [0 1]
+    return v0
+}
+; run: %ret_big_number() == [0 1]
+
+function %ret_two_big_numbers() -> i64x2 {
+block0:
+    v0 = vconst.i64x2 [0 1]
+    jump block1
+block1:
+    v1 = vconst.i64x2 [0 1]
+    v2 = iadd v0, v1
+    return v2
+}
+; run: %ret_two_big_numbers() == [0 2]

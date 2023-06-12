@@ -13,7 +13,7 @@ block0(v0: i8):
 ;   uxtb w2, w0
 ;   ucvtf s0, w2
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   uxtb w2, w0
@@ -31,7 +31,7 @@ block0(v0: i8):
 ;   uxtb w2, w0
 ;   ucvtf d0, w2
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   uxtb w2, w0
@@ -49,7 +49,7 @@ block0(v0: i16):
 ;   uxth w2, w0
 ;   ucvtf s0, w2
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   uxth w2, w0
@@ -67,7 +67,7 @@ block0(v0: i16):
 ;   uxth w2, w0
 ;   ucvtf d0, w2
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   uxth w2, w0
@@ -93,7 +93,7 @@ block0(v0: f32):
 ;   b.ge #trap=int_ovf
 ;   fcvtzu w0, s0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fcmp s0, s0
@@ -130,7 +130,7 @@ block0(v0: f64):
 ;   b.ge #trap=int_ovf
 ;   fcvtzu w0, d0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fcmp d0, d0
@@ -167,7 +167,7 @@ block0(v0: f32):
 ;   b.ge #trap=int_ovf
 ;   fcvtzu w0, s0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fcmp s0, s0
@@ -204,7 +204,7 @@ block0(v0: f64):
 ;   b.ge #trap=int_ovf
 ;   fcvtzu w0, d0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fcmp d0, d0

@@ -12,7 +12,7 @@ block0(v0: f32, v1: f32):
 ; block0:
 ;   fadd s0, s0, s1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fadd s0, s0, s1
@@ -28,7 +28,7 @@ block0(v0: f64, v1: f64):
 ; block0:
 ;   fadd d0, d0, d1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fadd d0, d0, d1
@@ -44,7 +44,7 @@ block0(v0: f32, v1: f32):
 ; block0:
 ;   fsub s0, s0, s1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fsub s0, s0, s1
@@ -60,7 +60,7 @@ block0(v0: f64, v1: f64):
 ; block0:
 ;   fsub d0, d0, d1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fsub d0, d0, d1
@@ -76,7 +76,7 @@ block0(v0: f32, v1: f32):
 ; block0:
 ;   fmul s0, s0, s1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fmul s0, s0, s1
@@ -92,7 +92,7 @@ block0(v0: f64, v1: f64):
 ; block0:
 ;   fmul d0, d0, d1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fmul d0, d0, d1
@@ -108,7 +108,7 @@ block0(v0: f32, v1: f32):
 ; block0:
 ;   fdiv s0, s0, s1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fdiv s0, s0, s1
@@ -124,7 +124,7 @@ block0(v0: f64, v1: f64):
 ; block0:
 ;   fdiv d0, d0, d1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fdiv d0, d0, d1
@@ -140,7 +140,7 @@ block0(v0: f32, v1: f32):
 ; block0:
 ;   fmin s0, s0, s1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fmin s0, s0, s1
@@ -156,7 +156,7 @@ block0(v0: f64, v1: f64):
 ; block0:
 ;   fmin d0, d0, d1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fmin d0, d0, d1
@@ -172,7 +172,7 @@ block0(v0: f32, v1: f32):
 ; block0:
 ;   fmax s0, s0, s1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fmax s0, s0, s1
@@ -188,7 +188,7 @@ block0(v0: f64, v1: f64):
 ; block0:
 ;   fmax d0, d0, d1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fmax d0, d0, d1
@@ -204,7 +204,7 @@ block0(v0: f32):
 ; block0:
 ;   fsqrt s0, s0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fsqrt s0, s0
@@ -220,7 +220,7 @@ block0(v0: f64):
 ; block0:
 ;   fsqrt d0, d0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fsqrt d0, d0
@@ -236,7 +236,7 @@ block0(v0: f32):
 ; block0:
 ;   fabs s0, s0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fabs s0, s0
@@ -252,7 +252,7 @@ block0(v0: f64):
 ; block0:
 ;   fabs d0, d0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fabs d0, d0
@@ -268,7 +268,7 @@ block0(v0: f32):
 ; block0:
 ;   fneg s0, s0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fneg s0, s0
@@ -284,7 +284,7 @@ block0(v0: f64):
 ; block0:
 ;   fneg d0, d0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fneg d0, d0
@@ -300,7 +300,7 @@ block0(v0: f32):
 ; block0:
 ;   fcvt d0, s0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fcvt d0, s0
@@ -316,7 +316,7 @@ block0(v0: f64):
 ; block0:
 ;   fcvt s0, d0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fcvt s0, d0
@@ -332,7 +332,7 @@ block0(v0: f32):
 ; block0:
 ;   frintp s0, s0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   frintp s0, s0
@@ -348,7 +348,7 @@ block0(v0: f64):
 ; block0:
 ;   frintp d0, d0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   frintp d0, d0
@@ -364,7 +364,7 @@ block0(v0: f32):
 ; block0:
 ;   frintm s0, s0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   frintm s0, s0
@@ -380,7 +380,7 @@ block0(v0: f64):
 ; block0:
 ;   frintm d0, d0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   frintm d0, d0
@@ -396,7 +396,7 @@ block0(v0: f32):
 ; block0:
 ;   frintz s0, s0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   frintz s0, s0
@@ -412,7 +412,7 @@ block0(v0: f64):
 ; block0:
 ;   frintz d0, d0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   frintz d0, d0
@@ -428,7 +428,7 @@ block0(v0: f32):
 ; block0:
 ;   frintn s0, s0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   frintn s0, s0
@@ -444,7 +444,7 @@ block0(v0: f64):
 ; block0:
 ;   frintn d0, d0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   frintn d0, d0
@@ -460,7 +460,7 @@ block0(v0: f32, v1: f32, v2: f32):
 ; block0:
 ;   fmadd s0, s0, s1, s2
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fmadd s0, s0, s1, s2
@@ -476,7 +476,7 @@ block0(v0: f64, v1: f64, v2: f64):
 ; block0:
 ;   fmadd d0, d0, d1, d2
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fmadd d0, d0, d1, d2
@@ -493,7 +493,7 @@ block0(v0: f32, v1: f32):
 ;   ushr v4.2s, v1.2s, #31
 ;   sli v0.2s, v0.2s, v4.2s, #31
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ushr v4.2s, v1.2s, #0x1f
@@ -511,7 +511,7 @@ block0(v0: f64, v1: f64):
 ;   ushr d4, d1, #63
 ;   sli d0, d0, d4, #63
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ushr d4, d1, #0x3f
@@ -537,7 +537,7 @@ block0(v0: f32):
 ;   b.ge #trap=int_ovf
 ;   fcvtzu w0, s0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fcmp s0, s0
@@ -575,7 +575,7 @@ block0(v0: f32):
 ;   b.ge #trap=int_ovf
 ;   fcvtzs w0, s0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fcmp s0, s0
@@ -613,7 +613,7 @@ block0(v0: f32):
 ;   b.ge #trap=int_ovf
 ;   fcvtzu x0, s0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fcmp s0, s0
@@ -651,7 +651,7 @@ block0(v0: f32):
 ;   b.ge #trap=int_ovf
 ;   fcvtzs x0, s0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fcmp s0, s0
@@ -689,7 +689,7 @@ block0(v0: f64):
 ;   b.ge #trap=int_ovf
 ;   fcvtzu w0, d0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fcmp d0, d0
@@ -726,7 +726,7 @@ block0(v0: f64):
 ;   b.ge #trap=int_ovf
 ;   fcvtzs w0, d0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fcmp d0, d0
@@ -765,7 +765,7 @@ block0(v0: f64):
 ;   b.ge #trap=int_ovf
 ;   fcvtzu x0, d0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fcmp d0, d0
@@ -803,7 +803,7 @@ block0(v0: f64):
 ;   b.ge #trap=int_ovf
 ;   fcvtzs x0, d0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fcmp d0, d0
@@ -832,7 +832,7 @@ block0(v0: i32):
 ; block0:
 ;   ucvtf s0, w0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ucvtf s0, w0
@@ -848,7 +848,7 @@ block0(v0: i32):
 ; block0:
 ;   scvtf s0, w0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   scvtf s0, w0
@@ -864,7 +864,7 @@ block0(v0: i64):
 ; block0:
 ;   ucvtf s0, x0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ucvtf s0, x0
@@ -880,7 +880,7 @@ block0(v0: i64):
 ; block0:
 ;   scvtf s0, x0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   scvtf s0, x0
@@ -896,7 +896,7 @@ block0(v0: i32):
 ; block0:
 ;   ucvtf d0, w0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ucvtf d0, w0
@@ -912,7 +912,7 @@ block0(v0: i32):
 ; block0:
 ;   scvtf d0, w0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   scvtf d0, w0
@@ -928,7 +928,7 @@ block0(v0: i64):
 ; block0:
 ;   ucvtf d0, x0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ucvtf d0, x0
@@ -944,7 +944,7 @@ block0(v0: i64):
 ; block0:
 ;   scvtf d0, x0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   scvtf d0, x0
@@ -960,7 +960,7 @@ block0(v0: f32x2):
 ; block0:
 ;   fsqrt v0.2s, v0.2s
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fsqrt v0.2s, v0.2s
@@ -976,7 +976,7 @@ block0(v0: f32x4):
 ; block0:
 ;   fsqrt v0.4s, v0.4s
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fsqrt v0.4s, v0.4s
@@ -992,7 +992,7 @@ block0(v0: f64x2):
 ; block0:
 ;   fsqrt v0.2d, v0.2d
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fsqrt v0.2d, v0.2d
@@ -1008,7 +1008,7 @@ block0(v0: f32x2):
 ; block0:
 ;   fneg v0.2s, v0.2s
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fneg v0.2s, v0.2s
@@ -1024,7 +1024,7 @@ block0(v0: f32x4):
 ; block0:
 ;   fneg v0.4s, v0.4s
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fneg v0.4s, v0.4s
@@ -1040,7 +1040,7 @@ block0(v0: f64x2):
 ; block0:
 ;   fneg v0.2d, v0.2d
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fneg v0.2d, v0.2d
@@ -1056,7 +1056,7 @@ block0(v0: f32x2):
 ; block0:
 ;   fabs v0.2s, v0.2s
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fabs v0.2s, v0.2s
@@ -1072,7 +1072,7 @@ block0(v0: f32x4):
 ; block0:
 ;   fabs v0.4s, v0.4s
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fabs v0.4s, v0.4s
@@ -1088,7 +1088,7 @@ block0(v0: f64x2):
 ; block0:
 ;   fabs v0.2d, v0.2d
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fabs v0.2d, v0.2d
@@ -1104,7 +1104,7 @@ block0(v0: f32x2):
 ; block0:
 ;   frintp v0.2s, v0.2s
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   frintp v0.2s, v0.2s
@@ -1120,7 +1120,7 @@ block0(v0: f32x4):
 ; block0:
 ;   frintp v0.4s, v0.4s
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   frintp v0.4s, v0.4s
@@ -1136,7 +1136,7 @@ block0(v0: f64x2):
 ; block0:
 ;   frintp v0.2d, v0.2d
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   frintp v0.2d, v0.2d
@@ -1152,7 +1152,7 @@ block0(v0: f32x2):
 ; block0:
 ;   frintm v0.2s, v0.2s
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   frintm v0.2s, v0.2s
@@ -1168,7 +1168,7 @@ block0(v0: f32x4):
 ; block0:
 ;   frintm v0.4s, v0.4s
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   frintm v0.4s, v0.4s
@@ -1184,7 +1184,7 @@ block0(v0: f64x2):
 ; block0:
 ;   frintm v0.2d, v0.2d
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   frintm v0.2d, v0.2d
@@ -1200,7 +1200,7 @@ block0(v0: f32x2):
 ; block0:
 ;   frintz v0.2s, v0.2s
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   frintz v0.2s, v0.2s
@@ -1216,7 +1216,7 @@ block0(v0: f32x4):
 ; block0:
 ;   frintz v0.4s, v0.4s
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   frintz v0.4s, v0.4s
@@ -1232,7 +1232,7 @@ block0(v0: f64x2):
 ; block0:
 ;   frintz v0.2d, v0.2d
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   frintz v0.2d, v0.2d
@@ -1248,7 +1248,7 @@ block0(v0: f32x2):
 ; block0:
 ;   frintn v0.2s, v0.2s
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   frintn v0.2s, v0.2s
@@ -1264,7 +1264,7 @@ block0(v0: f32x4):
 ; block0:
 ;   frintn v0.4s, v0.4s
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   frintn v0.4s, v0.4s
@@ -1280,7 +1280,7 @@ block0(v0: f64x2):
 ; block0:
 ;   frintn v0.2d, v0.2d
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   frintn v0.2d, v0.2d
@@ -1298,7 +1298,7 @@ block0(v0: f32x4, v1: f32x4, v2: f32x4):
 ;   mov v0.16b, v2.16b
 ;   fmla v0.4s, v0.4s, v5.4s, v1.4s
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov v5.16b, v0.16b
@@ -1318,7 +1318,7 @@ block0(v0: f32x2, v1: f32x2, v2: f32x2):
 ;   mov v0.16b, v2.16b
 ;   fmla v0.2s, v0.2s, v5.2s, v1.2s
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov v5.16b, v0.16b
@@ -1338,7 +1338,7 @@ block0(v0: f64x2, v1: f64x2, v2: f64x2):
 ;   mov v0.16b, v2.16b
 ;   fmla v0.2d, v0.2d, v5.2d, v1.2d
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov v5.16b, v0.16b
@@ -1357,7 +1357,7 @@ block0(v0: f32x2, v1: f32x2):
 ;   ushr v4.2s, v1.2s, #31
 ;   sli v0.2s, v0.2s, v4.2s, #31
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ushr v4.2s, v1.2s, #0x1f
@@ -1375,7 +1375,7 @@ block0(v0: f32x4, v1: f32x4):
 ;   ushr v4.4s, v1.4s, #31
 ;   sli v0.4s, v0.4s, v4.4s, #31
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ushr v4.4s, v1.4s, #0x1f
@@ -1393,7 +1393,7 @@ block0(v0: f64x2, v1: f64x2):
 ;   ushr v4.2d, v1.2d, #63
 ;   sli v0.2d, v0.2d, v4.2d, #63
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ushr v4.2d, v1.2d, #0x3f

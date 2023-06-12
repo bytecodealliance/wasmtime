@@ -37,12 +37,28 @@ fn test_aarch64_binemit() {
     // Then:
     //
     //      $ echo "mov x1, x2" | aarch64inst.sh
-    insns.push((Inst::Ret { rets: vec![] }, "C0035FD6", "ret"));
+    insns.push((
+        Inst::Ret {
+            rets: vec![],
+            stack_bytes_to_pop: 0,
+        },
+        "C0035FD6",
+        "ret",
+    ));
+    insns.push((
+        Inst::Ret {
+            rets: vec![],
+            stack_bytes_to_pop: 16,
+        },
+        "FF430091C0035FD6",
+        "add sp, sp, #16 ; ret",
+    ));
     insns.push((
         Inst::AuthenticatedRet {
             key: APIKey::A,
             is_hint: true,
             rets: vec![],
+            stack_bytes_to_pop: 0,
         },
         "BF2303D5C0035FD6",
         "autiasp ; ret",
@@ -52,9 +68,20 @@ fn test_aarch64_binemit() {
             key: APIKey::B,
             is_hint: false,
             rets: vec![],
+            stack_bytes_to_pop: 0,
         },
         "FF0F5FD6",
         "retab",
+    ));
+    insns.push((
+        Inst::AuthenticatedRet {
+            key: APIKey::A,
+            is_hint: false,
+            rets: vec![],
+            stack_bytes_to_pop: 16,
+        },
+        "FF0B5FD6",
+        "add sp, sp, #16 ; retaa",
     ));
     insns.push((Inst::Pacisp { key: APIKey::B }, "7F2303D5", "pacibsp"));
     insns.push((Inst::Xpaclri, "FF2003D5", "xpaclri"));
@@ -7835,7 +7862,7 @@ fn test_aarch64_binemit() {
 
         let mut buffer = MachBuffer::new();
         insn.emit(&[], &mut buffer, &emit_info, &mut Default::default());
-        let buffer = buffer.finish(&mut Default::default());
+        let buffer = buffer.finish(&Default::default(), &mut Default::default());
         let actual_encoding = &buffer.stringify_code_bytes();
         assert_eq!(expected_encoding, actual_encoding);
     }

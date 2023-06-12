@@ -3,6 +3,7 @@ set enable_simd
 target aarch64
 target s390x
 target x86_64 skylake
+target riscv64 has_v
 
 
 function %ushr_i8x16(i8x16, i32) -> i8x16 {
@@ -39,17 +40,13 @@ block0(v0: i64x2, v1: i32):
 ; run: %ushr_i64x2([1 2], 65) == [0 1]
 
 
-function %sshr_imm_i16x8() -> i8 {
+function %ushr_imm_i16x8() -> i16x8 {
 block0:
     v1 = vconst.i16x8 [1 2 4 -8 0 0 0 0]
     v2 = ushr_imm v1, 1
-
-    v3 = vconst.i16x8 [0 1 2 32764 0 0 0 0] ; -4 with MSB unset == 32764
-    v4 = icmp eq v2, v3
-    v5 = vall_true v4
-    return v5
+    return v2
 }
-; run
+; run: %ushr_imm_i16x8() == [0 1 2 32764 0 0 0 0]
 
 
 function %i8x16_ushr_const(i8x16) -> i8x16 {

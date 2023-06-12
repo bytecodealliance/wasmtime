@@ -1,0 +1,159 @@
+package wasi:http
+
+// The `wasi:http/types` interface is meant to be imported by components to
+// define the HTTP resource types and operations used by the component's
+// imported and exported interfaces.
+interface types {
+  use wasi:io/streams.{input-stream, output-stream}
+  use wasi:poll/poll.{pollable}
+
+  // This type corresponds to HTTP standard Methods.
+  variant method {
+    get,
+    head,
+    post,
+    put,
+    delete,
+    connect,
+    options,
+    trace,
+    patch,
+    other(string)
+  }
+
+  // This type corresponds to HTTP standard Related Schemes.
+  variant scheme {
+    HTTP,
+    HTTPS,
+    other(string)
+  }
+
+  // TODO: perhaps better align with HTTP semantics?
+  // This type enumerates the different kinds of errors that may occur when
+  // initially returning a response.
+  variant error {
+      invalid-url(string),
+      timeout-error(string),
+      protocol-error(string),
+      unexpected-error(string)
+  }
+
+  // This following block defines the `fields` resource which corresponds to
+  // HTTP standard Fields. Soon, when resource types are added, the `type
+  // fields = u32` type alias can be replaced by a proper `resource fields`
+  // definition containing all the functions using the method syntactic sugar.
+  type fields = u32
+  drop-fields: func(fields: fields)
+  new-fields: func(entries: list<tuple<string,string>>) -> fields
+  fields-get: func(fields: fields, name: string) -> list<string>
+  fields-set: func(fields: fields, name: string, value: list<string>)
+  fields-delete: func(fields: fields, name: string)
+  fields-append: func(fields: fields, name: string, value: string)
+  fields-entries: func(fields: fields) -> list<tuple<string,string>>
+  fields-clone: func(fields: fields) -> fields
+
+  type headers = fields
+  type trailers = fields
+
+  // The following block defines stream types which corresponds to the HTTP
+  // standard Contents and Trailers. With Preview3, all of these fields can be
+  // replaced by a stream<u8, option<trailers>>. In the interim, we need to
+  // build on separate resource types defined by `wasi:io/streams`. The
+  // `finish-` functions emulate the stream's result value and MUST be called
+  // exactly once after the final read/write from/to the stream before dropping
+  // the stream.
+  type incoming-stream = input-stream
+  type outgoing-stream = output-stream
+  finish-incoming-stream: func(s: incoming-stream) -> option<trailers>
+  finish-outgoing-stream: func(s: outgoing-stream, trailers: option<trailers>)
+
+  // The following block defines the `incoming-request` and `outgoing-request`
+  // resource types that correspond to HTTP standard Requests. Soon, when
+  // resource types are added, the `u32` type aliases can be replaced by
+  // proper `resource` type definitions containing all the functions as
+  // methods. Later, Preview2 will allow both types to be merged together into
+  // a single `request` type (that uses the single `stream` type mentioned
+  // above). The `consume` and `write` methods may only be called once (and
+  // return failure thereafter).
+  type incoming-request = u32
+  type outgoing-request = u32
+  drop-incoming-request: func(request: incoming-request)
+  drop-outgoing-request: func(request: outgoing-request)
+  incoming-request-method: func(request: incoming-request) -> method
+  incoming-request-path: func(request: incoming-request) -> string
+  incoming-request-query: func(request: incoming-request) -> string
+  incoming-request-scheme: func(request: incoming-request) -> option<scheme>
+  incoming-request-authority: func(request: incoming-request) -> string
+  incoming-request-headers: func(request: incoming-request) -> headers
+  incoming-request-consume: func(request: incoming-request) -> result<incoming-stream>
+  new-outgoing-request: func(
+    method: method,
+    path: string,
+    query: string,
+    scheme: option<scheme>,
+    authority: string,
+    headers: headers
+  ) -> outgoing-request
+  outgoing-request-write: func(request: outgoing-request) -> result<outgoing-stream>
+
+  // Additional optional parameters that can be set when making a request.
+  record request-options {
+    // The following timeouts are specific to the HTTP protocol and work
+    // independently of the overall timeouts passed to `io.poll.poll-oneoff`.
+
+    // The timeout for the initial connect.
+    connect-timeout-ms: option<u32>,
+
+    // The timeout for receiving the first byte of the response body.
+    first-byte-timeout-ms: option<u32>,
+
+    // The timeout for receiving the next chunk of bytes in the response body
+    // stream.
+    between-bytes-timeout-ms: option<u32>
+  }
+
+  // The following block defines a special resource type used by the
+  // `wasi:http/incoming-handler` interface. When resource types are added, this
+  // block can be replaced by a proper `resource response-outparam { ... }`
+  // definition. Later, with Preview3, the need for an outparam goes away entirely
+  // (the `wasi:http/handler` interface used for both incoming and outgoing can
+  // simply return a `stream`).
+  type response-outparam = u32
+  drop-response-outparam: func(response: response-outparam)
+  set-response-outparam: func(response: result<outgoing-response, error>) -> result
+
+  // This type corresponds to the HTTP standard Status Code.
+  type status-code = u16
+
+  // The following block defines the `incoming-response` and `outgoing-response`
+  // resource types that correspond to HTTP standard Responses. Soon, when
+  // resource types are added, the `u32` type aliases can be replaced by proper
+  // `resource` type definitions containing all the functions as methods. Later,
+  // Preview2 will allow both types to be merged together into a single `response`
+  // type (that uses the single `stream` type mentioned above). The `consume` and
+  // `write` methods may only be called once (and return failure thereafter).
+  type incoming-response = u32
+  type outgoing-response = u32
+  drop-incoming-response: func(response: incoming-response)
+  drop-outgoing-response: func(response: outgoing-response)
+  incoming-response-status: func(response: incoming-response) -> status-code
+  incoming-response-headers: func(response: incoming-response) -> headers
+  incoming-response-consume: func(response: incoming-response) -> result<incoming-stream>
+  new-outgoing-response: func(
+    status-code: status-code,
+    headers: headers
+  ) -> outgoing-response
+  outgoing-response-write: func(response: outgoing-response) -> result<outgoing-stream>
+
+  // The following block defines a special resource type used by the
+  // `wasi:http/outgoing-handler` interface to emulate
+  // `future<result<response, error>>` in advance of Preview3. Given a
+  // `future-incoming-response`, the client can call the non-blocking `get`
+  // method to get the result if it is available. If the result is not available,
+  // the client can call `listen` to get a `pollable` that can be passed to
+  // `io.poll.poll-oneoff`.
+  type future-incoming-response = u32
+  drop-future-incoming-response: func(f: future-incoming-response)
+  future-incoming-response-get: func(f: future-incoming-response) -> option<result<incoming-response, error>>
+  listen-to-future-incoming-response: func(f: future-incoming-response) -> pollable
+}

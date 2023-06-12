@@ -1,6 +1,6 @@
 #![doc(hidden)]
 
-use crate::instance::InstanceHandle;
+use crate::instance::Instance;
 use crate::vmcontext::VMContext;
 use wasmtime_environ::{EntityRef, MemoryIndex};
 
@@ -8,14 +8,15 @@ static mut VMCTX_AND_MEMORY: (*mut VMContext, usize) = (std::ptr::null_mut(), 0)
 
 #[no_mangle]
 pub unsafe extern "C" fn resolve_vmctx_memory(ptr: usize) -> *const u8 {
-    let handle = InstanceHandle::from_vmctx(VMCTX_AND_MEMORY.0);
-    assert!(
-        VMCTX_AND_MEMORY.1 < handle.module().memory_plans.len(),
-        "memory index for debugger is out of bounds"
-    );
-    let index = MemoryIndex::new(VMCTX_AND_MEMORY.1);
-    let mem = handle.instance().get_memory(index);
-    mem.base.add(ptr)
+    Instance::from_vmctx(VMCTX_AND_MEMORY.0, |handle| {
+        assert!(
+            VMCTX_AND_MEMORY.1 < handle.module().memory_plans.len(),
+            "memory index for debugger is out of bounds"
+        );
+        let index = MemoryIndex::new(VMCTX_AND_MEMORY.1);
+        let mem = handle.get_memory(index);
+        mem.base.add(ptr)
+    })
 }
 
 #[no_mangle]
@@ -25,14 +26,15 @@ pub unsafe extern "C" fn resolve_vmctx_memory_ptr(p: *const u32) -> *const u8 {
         !VMCTX_AND_MEMORY.0.is_null(),
         "must call `__vmctx->set()` before resolving Wasm pointers"
     );
-    let handle = InstanceHandle::from_vmctx(VMCTX_AND_MEMORY.0);
-    assert!(
-        VMCTX_AND_MEMORY.1 < handle.module().memory_plans.len(),
-        "memory index for debugger is out of bounds"
-    );
-    let index = MemoryIndex::new(VMCTX_AND_MEMORY.1);
-    let mem = handle.instance().get_memory(index);
-    mem.base.add(ptr as usize)
+    Instance::from_vmctx(VMCTX_AND_MEMORY.0, |handle| {
+        assert!(
+            VMCTX_AND_MEMORY.1 < handle.module().memory_plans.len(),
+            "memory index for debugger is out of bounds"
+        );
+        let index = MemoryIndex::new(VMCTX_AND_MEMORY.1);
+        let mem = handle.get_memory(index);
+        mem.base.add(ptr as usize)
+    })
 }
 
 #[no_mangle]
@@ -45,6 +47,9 @@ pub unsafe extern "C" fn set_vmctx_memory(vmctx_ptr: *mut VMContext) {
 // exported as symbols. It is a workaround: the executable normally ignores
 // `pub extern "C"`, see rust-lang/rust#25057.
 pub fn ensure_exported() {
+    if cfg!(miri) {
+        return;
+    }
     unsafe {
         std::ptr::read_volatile(resolve_vmctx_memory_ptr as *const u8);
         std::ptr::read_volatile(set_vmctx_memory as *const u8);

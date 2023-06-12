@@ -1,3 +1,5 @@
+package foo:foo
+
 interface manyarg {
   many-args: func(
     a1: u64,
@@ -44,7 +46,7 @@ interface manyarg {
   big-argument: func(x: big-struct)
 }
 
-default world the-world {
-  import imports: self.manyarg
-  export exports: self.manyarg
+world the-world {
+  import manyarg
+  export manyarg
 }

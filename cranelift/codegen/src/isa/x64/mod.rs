@@ -4,13 +4,13 @@ pub use self::inst::{args, CallInfo, EmitInfo, EmitState, Inst};
 
 use super::{OwnedTargetIsa, TargetIsa};
 use crate::dominator_tree::DominatorTree;
-use crate::ir::{Function, Type};
+use crate::ir::{types, Function, Type};
 #[cfg(feature = "unwind")]
 use crate::isa::unwind::systemv;
 use crate::isa::x64::{inst::regs::create_reg_env_systemv, settings as x64_settings};
-use crate::isa::Builder as IsaBuilder;
+use crate::isa::{Builder as IsaBuilder, FunctionAlignment};
 use crate::machinst::{
-    compile, CompiledCode, CompiledCodeStencil, MachTextSectionBuilder, Reg, SigSet,
+    compile, CompiledCode, CompiledCodeStencil, MachInst, MachTextSectionBuilder, Reg, SigSet,
     TextSectionBuilder, VCode,
 };
 use crate::result::{CodegenError, CodegenResult};
@@ -51,13 +51,14 @@ impl X64Backend {
         &self,
         func: &Function,
         domtree: &DominatorTree,
+        ctrl_plane: &mut ControlPlane,
     ) -> CodegenResult<(VCode<inst::Inst>, regalloc2::Output)> {
         // This performs lowering to VCode, register-allocates the code, computes
         // block layout and finalizes branches. The result is ready for binary emission.
         let emit_info = EmitInfo::new(self.flags.clone(), self.x64_flags.clone());
         let sigs = SigSet::new::<abi::X64ABIMachineSpec>(func, &self.flags)?;
         let abi = abi::X64Callee::new(func, self, &self.x64_flags, &sigs)?;
-        compile::compile::<Self>(func, domtree, self, abi, emit_info, sigs)
+        compile::compile::<Self>(func, domtree, self, abi, emit_info, sigs, ctrl_plane)
     }
 }
 
@@ -69,17 +70,12 @@ impl TargetIsa for X64Backend {
         want_disasm: bool,
         ctrl_plane: &mut ControlPlane,
     ) -> CodegenResult<CompiledCodeStencil> {
-        let (vcode, regalloc_result) = self.compile_vcode(func, domtree)?;
+        let (vcode, regalloc_result) = self.compile_vcode(func, domtree, ctrl_plane)?;
 
-        let emit_result = vcode.emit(
-            &regalloc_result,
-            want_disasm,
-            self.flags.machine_code_cfg_info(),
-            ctrl_plane,
-        );
+        let emit_result = vcode.emit(&regalloc_result, want_disasm, &self.flags, ctrl_plane);
         let frame_size = emit_result.frame_size;
         let value_labels_ranges = emit_result.value_labels_ranges;
-        let buffer = emit_result.buffer.finish(ctrl_plane);
+        let buffer = emit_result.buffer;
         let sized_stackslot_offsets = emit_result.sized_stackslot_offsets;
         let dynamic_stackslot_offsets = emit_result.dynamic_stackslot_offsets;
 
@@ -96,7 +92,6 @@ impl TargetIsa for X64Backend {
             dynamic_stackslot_offsets,
             bb_starts: emit_result.bb_offsets,
             bb_edges: emit_result.bb_edges,
-            alignment: emit_result.alignment,
         })
     }
 
@@ -166,10 +161,8 @@ impl TargetIsa for X64Backend {
         Box::new(MachTextSectionBuilder::<inst::Inst>::new(num_funcs))
     }
 
-    /// Align functions on x86 to 16 bytes, ensuring that rip-relative loads to SSE registers are
-    /// always from aligned memory.
-    fn function_alignment(&self) -> u32 {
-        16
+    fn function_alignment(&self) -> FunctionAlignment {
+        Inst::function_alignment()
     }
 
     #[cfg(feature = "disas")]
@@ -184,6 +177,14 @@ impl TargetIsa for X64Backend {
 
     fn has_native_fma(&self) -> bool {
         self.x64_flags.use_fma()
+    }
+
+    fn has_x86_blendv_lowering(&self, ty: Type) -> bool {
+        // The `blendvpd`, `blendvps`, and `pblendvb` instructions are all only
+        // available from SSE 4.1 and onwards. Otherwise the i16x8 type has no
+        // equivalent instruction which only looks at the top bit for a select
+        // operation, so that always returns `false`
+        self.x64_flags.use_sse41() && ty != types::I16X8
     }
 }
 
@@ -214,11 +215,11 @@ fn isa_constructor(
     let isa_flags = x64_settings::Flags::new(&shared_flags, builder);
 
     // Check for compatibility between flags and ISA level
-    // requested. In particular, SIMD support requires SSE4.2.
-    if shared_flags.enable_simd() {
-        if !isa_flags.has_sse3() || !isa_flags.has_ssse3() || !isa_flags.has_sse41() {
+    // requested. In particular, SIMD support requires SSSE3.
+    if !cfg!(miri) && shared_flags.enable_simd() {
+        if !isa_flags.has_sse3() || !isa_flags.has_ssse3() {
             return Err(CodegenError::Unsupported(
-                "SIMD support requires SSE3, SSSE3, and SSE4.1 on x86_64.".into(),
+                "SIMD support requires SSE3 and SSSE3 on x86_64.".into(),
             ));
         }
     }
@@ -242,7 +243,6 @@ mod test {
         let mut isa_builder = crate::isa::lookup_by_name("x86_64").unwrap();
         isa_builder.set("has_sse3", "false").unwrap();
         isa_builder.set("has_ssse3", "false").unwrap();
-        isa_builder.set("has_sse41", "false").unwrap();
         assert!(matches!(
             isa_builder.finish(shared_flags),
             Err(CodegenError::Unsupported(_)),

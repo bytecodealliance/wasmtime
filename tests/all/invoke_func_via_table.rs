@@ -1,3 +1,5 @@
+#![cfg(not(miri))]
+
 use anyhow::{Context as _, Result};
 use wasmtime::*;
 

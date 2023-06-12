@@ -14,7 +14,7 @@ block0(v0: i64):
 ; block0:
 ;   add x0, x0, x0, LSL 3
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   add x0, x0, x0, lsl #3
@@ -31,7 +31,7 @@ block0(v0: i32):
 ; block0:
 ;   lsl w0, w0, #21
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lsl w0, w0, #0x15

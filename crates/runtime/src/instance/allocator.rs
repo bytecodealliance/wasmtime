@@ -11,7 +11,7 @@ use std::ptr;
 use std::sync::Arc;
 use wasmtime_environ::{
     DefinedMemoryIndex, DefinedTableIndex, HostPtr, InitMemory, MemoryInitialization,
-    MemoryInitializer, Module, PrimaryMap, TableInitialization, TableInitializer, Trap, VMOffsets,
+    MemoryInitializer, Module, PrimaryMap, TableInitialValue, TableSegment, Trap, VMOffsets,
     WasmType, WASM_PAGE_SIZE,
 };
 
@@ -90,7 +90,7 @@ impl StorePtr {
 pub unsafe trait InstanceAllocator {
     /// Validates that a module is supported by the allocator.
     fn validate(&self, module: &Module, offsets: &VMOffsets<HostPtr>) -> Result<()> {
-        drop((module, offsets));
+        let _ = (module, offsets);
         Ok(())
     }
 
@@ -133,9 +133,9 @@ pub unsafe trait InstanceAllocator {
         self.deallocate_tables(index, &mut handle.instance_mut().tables);
         unsafe {
             let layout = Instance::alloc_layout(handle.instance().offsets());
-            ptr::drop_in_place(handle.instance);
-            alloc::dealloc(handle.instance.cast(), layout);
-            handle.instance = std::ptr::null_mut();
+            let ptr = handle.instance.take().unwrap();
+            ptr::drop_in_place(ptr.as_ptr());
+            alloc::dealloc(ptr.as_ptr().cast(), layout);
         }
         self.deallocate_index(index);
     }
@@ -200,16 +200,10 @@ pub unsafe trait InstanceAllocator {
     fn purge_module(&self, module: CompiledModuleId);
 }
 
-fn get_table_init_start(init: &TableInitializer, instance: &Instance) -> Result<u32> {
+fn get_table_init_start(init: &TableSegment, instance: &mut Instance) -> Result<u32> {
     match init.base {
         Some(base) => {
-            let val = unsafe {
-                if let Some(def_index) = instance.module().defined_global_index(base) {
-                    *instance.global(def_index).as_u32()
-                } else {
-                    *(*instance.imported_global(base).from).as_u32()
-                }
-            };
+            let val = unsafe { *(*instance.defined_or_imported_global_ptr(base)).as_u32() };
 
             init.offset
                 .checked_add(val)
@@ -220,23 +214,18 @@ fn get_table_init_start(init: &TableInitializer, instance: &Instance) -> Result<
 }
 
 fn check_table_init_bounds(instance: &mut Instance, module: &Module) -> Result<()> {
-    match &module.table_initialization {
-        TableInitialization::FuncTable { segments, .. }
-        | TableInitialization::Segments { segments } => {
-            for segment in segments {
-                let table = unsafe { &*instance.get_table(segment.table_index) };
-                let start = get_table_init_start(segment, instance)?;
-                let start = usize::try_from(start).unwrap();
-                let end = start.checked_add(segment.elements.len());
+    for segment in module.table_initialization.segments.iter() {
+        let table = unsafe { &*instance.get_table(segment.table_index) };
+        let start = get_table_init_start(segment, instance)?;
+        let start = usize::try_from(start).unwrap();
+        let end = start.checked_add(segment.elements.len());
 
-                match end {
-                    Some(end) if end <= table.size() as usize => {
-                        // Initializer is in bounds
-                    }
-                    _ => {
-                        bail!("table out of bounds: elements segment does not fit")
-                    }
-                }
+        match end {
+            Some(end) if end <= table.size() as usize => {
+                // Initializer is in bounds
+            }
+            _ => {
+                bail!("table out of bounds: elements segment does not fit")
             }
         }
     }
@@ -245,6 +234,19 @@ fn check_table_init_bounds(instance: &mut Instance, module: &Module) -> Result<(
 }
 
 fn initialize_tables(instance: &mut Instance, module: &Module) -> Result<()> {
+    for (table, init) in module.table_initialization.initial_values.iter() {
+        match init {
+            // Tables are always initially null-initialized at this time
+            TableInitialValue::Null { precomputed: _ } => {}
+
+            TableInitialValue::FuncRef(idx) => {
+                let funcref = instance.get_func_ref(*idx).unwrap();
+                let table = unsafe { &mut *instance.get_defined_table(table) };
+                table.init_func(funcref)?;
+            }
+        }
+    }
+
     // Note: if the module's table initializer state is in
     // FuncTable mode, we will lazily initialize tables based on
     // any statically-precomputed image of FuncIndexes, but there
@@ -252,40 +254,32 @@ fn initialize_tables(instance: &mut Instance, module: &Module) -> Result<()> {
     // incorporated. So we have a unified handler here that
     // iterates over all segments (Segments mode) or leftover
     // segments (FuncTable mode) to initialize.
-    match &module.table_initialization {
-        TableInitialization::FuncTable { segments, .. }
-        | TableInitialization::Segments { segments } => {
-            for segment in segments {
-                instance.table_init_segment(
-                    segment.table_index,
-                    &segment.elements,
-                    get_table_init_start(segment, instance)?,
-                    0,
-                    segment.elements.len() as u32,
-                )?;
-            }
-        }
+    for segment in module.table_initialization.segments.iter() {
+        let start = get_table_init_start(segment, instance)?;
+        instance.table_init_segment(
+            segment.table_index,
+            &segment.elements,
+            start,
+            0,
+            segment.elements.len() as u32,
+        )?;
     }
 
     Ok(())
 }
 
-fn get_memory_init_start(init: &MemoryInitializer, instance: &Instance) -> Result<u64> {
+fn get_memory_init_start(init: &MemoryInitializer, instance: &mut Instance) -> Result<u64> {
     match init.base {
         Some(base) => {
             let mem64 = instance.module().memory_plans[init.memory_index]
                 .memory
                 .memory64;
             let val = unsafe {
-                let global = if let Some(def_index) = instance.module().defined_global_index(base) {
-                    instance.global(def_index)
-                } else {
-                    &*instance.imported_global(base).from
-                };
+                let global = instance.defined_or_imported_global_ptr(base);
                 if mem64 {
-                    *global.as_u64()
+                    *(*global).as_u64()
                 } else {
-                    u64::from(*global.as_u32())
+                    u64::from(*(*global).as_u32())
                 }
             };
 
@@ -297,7 +291,10 @@ fn get_memory_init_start(init: &MemoryInitializer, instance: &Instance) -> Resul
     }
 }
 
-fn check_memory_init_bounds(instance: &Instance, initializers: &[MemoryInitializer]) -> Result<()> {
+fn check_memory_init_bounds(
+    instance: &mut Instance,
+    initializers: &[MemoryInitializer],
+) -> Result<()> {
     for init in initializers {
         let memory = instance.get_memory(init.memory_index);
         let start = get_memory_init_start(init, instance)?;
@@ -319,21 +316,18 @@ fn check_memory_init_bounds(instance: &Instance, initializers: &[MemoryInitializ
 }
 
 fn initialize_memories(instance: &mut Instance, module: &Module) -> Result<()> {
-    let memory_size_in_pages =
-        &|memory| (instance.get_memory(memory).current_length() as u64) / u64::from(WASM_PAGE_SIZE);
+    let memory_size_in_pages = &|instance: &mut Instance, memory| {
+        (instance.get_memory(memory).current_length() as u64) / u64::from(WASM_PAGE_SIZE)
+    };
 
     // Loads the `global` value and returns it as a `u64`, but sign-extends
     // 32-bit globals which can be used as the base for 32-bit memories.
-    let get_global_as_u64 = &|global| unsafe {
-        let def = if let Some(def_index) = instance.module().defined_global_index(global) {
-            instance.global(def_index)
-        } else {
-            &*instance.imported_global(global).from
-        };
+    let get_global_as_u64 = &mut |instance: &mut Instance, global| unsafe {
+        let def = instance.defined_or_imported_global_ptr(global);
         if module.globals[global].wasm_ty == WasmType::I64 {
-            *def.as_u64()
+            *(*def).as_u64()
         } else {
-            u64::from(*def.as_u32())
+            u64::from(*(*def).as_u32())
         }
     };
 
@@ -346,11 +340,12 @@ fn initialize_memories(instance: &mut Instance, module: &Module) -> Result<()> {
     // so errors only happen if an out-of-bounds segment is found, in which case
     // a trap is returned.
     let ok = module.memory_initialization.init_memory(
+        instance,
         InitMemory::Runtime {
             memory_size_in_pages,
             get_global_as_u64,
         },
-        &mut |memory_index, init| {
+        |instance, memory_index, init| {
             // If this initializer applies to a defined memory but that memory
             // doesn't need initialization, due to something like copy-on-write
             // pre-initializing it via mmap magic, then this initializer can be
@@ -383,7 +378,7 @@ fn initialize_memories(instance: &mut Instance, module: &Module) -> Result<()> {
 fn check_init_bounds(instance: &mut Instance, module: &Module) -> Result<()> {
     check_table_init_bounds(instance, module)?;
 
-    match &instance.module().memory_initialization {
+    match &module.memory_initialization {
         MemoryInitialization::Segmented(initializers) => {
             check_memory_init_bounds(instance, initializers)?;
         }
@@ -427,7 +422,7 @@ pub struct OnDemandInstanceAllocator {
 impl OnDemandInstanceAllocator {
     /// Creates a new on-demand instance allocator.
     pub fn new(mem_creator: Option<Arc<dyn RuntimeMemoryCreator>>, stack_size: usize) -> Self {
-        drop(stack_size); // suppress unused warnings w/o async feature
+        let _ = stack_size; // suppress unused warnings w/o async feature
         Self {
             mem_creator,
             #[cfg(feature = "async")]

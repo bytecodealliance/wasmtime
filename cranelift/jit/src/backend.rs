@@ -255,7 +255,7 @@ impl JITModule {
                 std::mem::size_of::<[u8; 16]>(),
                 self.isa
                     .symbol_alignment()
-                    .max(self.isa.function_alignment() as u64),
+                    .max(self.isa.function_alignment().minimum as u64),
             )
             .unwrap()
             .cast::<[u8; 16]>();
@@ -687,12 +687,12 @@ impl Module for JITModule {
 
         // work around borrow-checker to allow reuse of ctx below
         let res = ctx.compile(self.isa(), ctrl_plane)?;
-        let alignment = res.alignment as u64;
+        let alignment = res.buffer.alignment as u64;
         let compiled_code = ctx.compiled_code().unwrap();
 
         let size = compiled_code.code_info().total_size as usize;
         let align = alignment
-            .max(self.isa.function_alignment() as u64)
+            .max(self.isa.function_alignment().minimum as u64)
             .max(self.isa.symbol_alignment());
         let ptr = self
             .memory
@@ -776,7 +776,7 @@ impl Module for JITModule {
 
         let size = bytes.len();
         let align = alignment
-            .max(self.isa.function_alignment() as u64)
+            .max(self.isa.function_alignment().minimum as u64)
             .max(self.isa.symbol_alignment());
         let ptr = self
             .memory

@@ -365,9 +365,10 @@ pub unsafe extern "C" fn wasmtime_func_call_unchecked(
     store: CStoreContextMut<'_>,
     func: &Func,
     args_and_results: *mut ValRaw,
+    args_and_results_len: usize,
     trap_ret: &mut *mut wasm_trap_t,
 ) -> Option<Box<wasmtime_error_t>> {
-    match func.call_unchecked(store, args_and_results) {
+    match func.call_unchecked(store, args_and_results, args_and_results_len) {
         Ok(()) => None,
         Err(trap) => store_err(trap, trap_ret),
     }
@@ -419,13 +420,16 @@ pub unsafe extern "C" fn wasmtime_caller_export_get(
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_func_from_raw(
     store: CStoreContextMut<'_>,
-    raw: usize,
+    raw: *mut c_void,
     func: &mut Func,
 ) {
     *func = Func::from_raw(store, raw).unwrap();
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn wasmtime_func_to_raw(store: CStoreContextMut<'_>, func: &Func) -> usize {
+pub unsafe extern "C" fn wasmtime_func_to_raw(
+    store: CStoreContextMut<'_>,
+    func: &Func,
+) -> *mut c_void {
     func.to_raw(store)
 }

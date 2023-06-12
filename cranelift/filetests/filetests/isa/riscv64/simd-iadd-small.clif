@@ -1,0 +1,129 @@
+test compile precise-output
+set unwind_info=false
+target riscv64 has_v
+
+
+function %iadd_i8x8(i8x8, i8x8) -> i8x8 {
+block0(v0:i8x8, v1:i8x8):
+    v2 = iadd v0, v1
+    return v2
+}
+
+; VCode:
+;   add sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+; block0:
+;   vle8.v v1,16(fp) #avl=8, #vtype=(e8, m1, ta, ma)
+;   vle8.v v3,24(fp) #avl=8, #vtype=(e8, m1, ta, ma)
+;   vadd.vv v6,v1,v3 #avl=8, #vtype=(e8, m1, ta, ma)
+;   vse8.v v6,0(a0) #avl=8, #vtype=(e8, m1, ta, ma)
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   add sp,+16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   ori s0, sp, 0
+; block1: ; offset 0x10
+;   .byte 0x57, 0x70, 0x04, 0xcc
+;   addi t6, s0, 0x10
+;   .byte 0x87, 0x80, 0x0f, 0x02
+;   addi t6, s0, 0x18
+;   .byte 0x87, 0x81, 0x0f, 0x02
+;   .byte 0x57, 0x83, 0x11, 0x02
+;   .byte 0x27, 0x03, 0x05, 0x02
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+
+function %iadd_i16x4(i16x4, i16x4) -> i16x4 {
+block0(v0:i16x4, v1:i16x4):
+    v2 = iadd v0, v1
+    return v2
+}
+
+; VCode:
+;   add sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+; block0:
+;   vle8.v v1,16(fp) #avl=8, #vtype=(e8, m1, ta, ma)
+;   vle8.v v3,24(fp) #avl=8, #vtype=(e8, m1, ta, ma)
+;   vadd.vv v6,v1,v3 #avl=4, #vtype=(e16, m1, ta, ma)
+;   vse8.v v6,0(a0) #avl=8, #vtype=(e8, m1, ta, ma)
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   add sp,+16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   ori s0, sp, 0
+; block1: ; offset 0x10
+;   .byte 0x57, 0x70, 0x04, 0xcc
+;   addi t6, s0, 0x10
+;   .byte 0x87, 0x80, 0x0f, 0x02
+;   addi t6, s0, 0x18
+;   .byte 0x87, 0x81, 0x0f, 0x02
+;   .byte 0x57, 0x70, 0x82, 0xcc
+;   .byte 0x57, 0x83, 0x11, 0x02
+;   .byte 0x57, 0x70, 0x04, 0xcc
+;   .byte 0x27, 0x03, 0x05, 0x02
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+
+function %iadd_i32x2(i32x2, i32x2) -> i32x2 {
+block0(v0:i32x2, v1:i32x2):
+    v2 = iadd v0, v1
+    return v2
+}
+
+; VCode:
+;   add sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+; block0:
+;   vle8.v v1,16(fp) #avl=8, #vtype=(e8, m1, ta, ma)
+;   vle8.v v3,24(fp) #avl=8, #vtype=(e8, m1, ta, ma)
+;   vadd.vv v6,v1,v3 #avl=2, #vtype=(e32, m1, ta, ma)
+;   vse8.v v6,0(a0) #avl=8, #vtype=(e8, m1, ta, ma)
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   add sp,+16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   ori s0, sp, 0
+; block1: ; offset 0x10
+;   .byte 0x57, 0x70, 0x04, 0xcc
+;   addi t6, s0, 0x10
+;   .byte 0x87, 0x80, 0x0f, 0x02
+;   addi t6, s0, 0x18
+;   .byte 0x87, 0x81, 0x0f, 0x02
+;   .byte 0x57, 0x70, 0x01, 0xcd
+;   .byte 0x57, 0x83, 0x11, 0x02
+;   .byte 0x57, 0x70, 0x04, 0xcc
+;   .byte 0x27, 0x03, 0x05, 0x02
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+

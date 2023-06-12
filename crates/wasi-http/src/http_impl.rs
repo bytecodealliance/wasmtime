@@ -1,6 +1,6 @@
-use crate::r#struct::ActiveResponse;
+use crate::r#struct::{ActiveFuture, ActiveResponse};
 use crate::r#struct::{Stream, WasiHttp};
-use crate::types::{RequestOptions, Scheme};
+use crate::wasi::http::types::{FutureIncomingResponse, OutgoingRequest, RequestOptions, Scheme};
 #[cfg(not(any(target_arch = "riscv64", target_arch = "s390x")))]
 use anyhow::anyhow;
 use anyhow::bail;
@@ -13,32 +13,21 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::net::TcpStream;
-use tokio::runtime::Runtime;
 use tokio::time::timeout;
 #[cfg(not(any(target_arch = "riscv64", target_arch = "s390x")))]
 use tokio_rustls::rustls::{self, OwnedTrustAnchor};
 
-impl crate::default_outgoing_http::Host for WasiHttp {
+impl crate::wasi::http::outgoing_handler::Host for WasiHttp {
     fn handle(
         &mut self,
-        request_id: crate::default_outgoing_http::OutgoingRequest,
-        options: Option<crate::default_outgoing_http::RequestOptions>,
-    ) -> wasmtime::Result<crate::default_outgoing_http::FutureIncomingResponse> {
-        // TODO: Initialize this once?
-        let rt = Runtime::new().unwrap();
-        let _enter = rt.enter();
-
-        let f = self.handle_async(request_id, options);
-        match rt.block_on(f) {
-            Ok(r) => {
-                println!("{} OK", r);
-                Ok(r)
-            }
-            Err(e) => {
-                println!("{} ERR", e);
-                Err(e)
-            }
-        }
+        request_id: OutgoingRequest,
+        options: Option<RequestOptions>,
+    ) -> wasmtime::Result<FutureIncomingResponse> {
+        let future_id = self.future_id_base;
+        self.future_id_base = self.future_id_base + 1;
+        let future = ActiveFuture::new(future_id, request_id, options);
+        self.futures.insert(future_id, future);
+        Ok(future_id)
     }
 }
 
@@ -55,11 +44,11 @@ fn port_for_scheme(scheme: &Option<Scheme>) -> &str {
 }
 
 impl WasiHttp {
-    async fn handle_async(
+    pub(crate) async fn handle_async(
         &mut self,
-        request_id: crate::default_outgoing_http::OutgoingRequest,
-        options: Option<crate::default_outgoing_http::RequestOptions>,
-    ) -> wasmtime::Result<crate::default_outgoing_http::FutureIncomingResponse> {
+        request_id: OutgoingRequest,
+        options: Option<RequestOptions>,
+    ) -> wasmtime::Result<FutureIncomingResponse> {
         let opts = options.unwrap_or(
             // TODO: Configurable defaults here?
             RequestOptions {
@@ -80,24 +69,23 @@ impl WasiHttp {
             None => bail!("not found!"),
         };
 
-        let method = match request.method {
-            crate::types::Method::Get => Method::GET,
-            crate::types::Method::Head => Method::HEAD,
-            crate::types::Method::Post => Method::POST,
-            crate::types::Method::Put => Method::PUT,
-            crate::types::Method::Delete => Method::DELETE,
-            crate::types::Method::Connect => Method::CONNECT,
-            crate::types::Method::Options => Method::OPTIONS,
-            crate::types::Method::Trace => Method::TRACE,
-            crate::types::Method::Patch => Method::PATCH,
-            _ => bail!("unknown method!"),
+        let method = match &request.method {
+            crate::wasi::http::types::Method::Get => Method::GET,
+            crate::wasi::http::types::Method::Head => Method::HEAD,
+            crate::wasi::http::types::Method::Post => Method::POST,
+            crate::wasi::http::types::Method::Put => Method::PUT,
+            crate::wasi::http::types::Method::Delete => Method::DELETE,
+            crate::wasi::http::types::Method::Connect => Method::CONNECT,
+            crate::wasi::http::types::Method::Options => Method::OPTIONS,
+            crate::wasi::http::types::Method::Trace => Method::TRACE,
+            crate::wasi::http::types::Method::Patch => Method::PATCH,
+            crate::wasi::http::types::Method::Other(s) => bail!("unknown method {}", s),
         };
 
         let scheme = match request.scheme.as_ref().unwrap_or(&Scheme::Https) {
             Scheme::Http => "http://",
             Scheme::Https => "https://",
-            // TODO: this is wrong, fix this.
-            _ => panic!("Unsupported scheme!"),
+            Scheme::Other(s) => bail!("unsupported scheme {}", s),
         };
 
         // Largely adapted from https://hyper.rs/guides/1/client/basic/
@@ -164,7 +152,7 @@ impl WasiHttp {
             s
         };
 
-        let url = scheme.to_owned() + &request.authority + &request.path + &request.query;
+        let url = scheme.to_owned() + &request.authority + &request.path_with_query;
 
         let mut call = Request::builder()
             .method(method)
@@ -193,7 +181,7 @@ impl WasiHttp {
         response.status = res.status().try_into()?;
         for (key, value) in res.headers().iter() {
             let mut vec = std::vec::Vec::new();
-            vec.push(value.to_str()?.to_string());
+            vec.push(value.as_bytes().to_vec());
             response
                 .response_headers
                 .insert(key.as_str().to_string(), vec);
@@ -207,14 +195,14 @@ impl WasiHttp {
             if let Some(trailers) = frame.trailers_ref() {
                 response.trailers = self.fields_id_base;
                 self.fields_id_base += 1;
-                let mut map: HashMap<String, Vec<String>> = HashMap::new();
+                let mut map: HashMap<String, Vec<Vec<u8>>> = HashMap::new();
                 for (name, value) in trailers.iter() {
                     let key = name.to_string();
                     match map.get_mut(&key) {
-                        Some(vec) => vec.push(value.to_str()?.to_string()),
+                        Some(vec) => vec.push(value.as_bytes().to_vec()),
                         None => {
                             let mut vec = Vec::new();
-                            vec.push(value.to_str()?.to_string());
+                            vec.push(value.as_bytes().to_vec());
                             map.insert(key, vec);
                         }
                     };

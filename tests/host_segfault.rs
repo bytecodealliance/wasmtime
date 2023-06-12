@@ -80,6 +80,9 @@ fn dummy_waker() -> Waker {
 }
 
 fn main() {
+    if cfg!(miri) {
+        return;
+    }
     // Skip this tests if it looks like we're in a cross-compiled situation and
     // we're emulating this test for a different platform. In that scenario
     // emulators (like QEMU) tend to not report signals the same way and such.

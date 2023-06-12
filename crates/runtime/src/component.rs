@@ -7,10 +7,11 @@
 //! cranelift-compiled adapters, will use this `VMComponentContext` as well.
 
 use crate::{
-    Store, VMCallerCheckedFuncRef, VMFunctionBody, VMGlobalDefinition, VMMemoryDefinition,
-    VMOpaqueContext, VMSharedSignatureIndex, ValRaw,
+    SendSyncPtr, Store, VMArrayCallFunction, VMFuncRef, VMGlobalDefinition, VMMemoryDefinition,
+    VMNativeCallFunction, VMOpaqueContext, VMSharedSignatureIndex, VMWasmCallFunction, ValRaw,
 };
 use memoffset::offset_of;
+use sptr::Strict;
 use std::alloc::{self, Layout};
 use std::marker;
 use std::mem;
@@ -39,6 +40,10 @@ mod transcode;
 pub struct ComponentInstance {
     /// Size and offset information for the trailing `VMComponentContext`.
     offsets: VMComponentOffsets<HostPtr>,
+
+    /// For more information about this see the documentation on
+    /// `Instance::vmctx_self_reference`.
+    vmctx_self_reference: SendSyncPtr<VMComponentContext>,
 
     /// A zero-sized field which represents the end of the struct for the actual
     /// `VMComponentContext` to be allocated behind.
@@ -79,7 +84,7 @@ pub type VMLoweringCallee = extern "C" fn(
     data: *mut u8,
     flags: InstanceFlags,
     opt_memory: *mut VMMemoryDefinition,
-    opt_realloc: *mut VMCallerCheckedFuncRef,
+    opt_realloc: *mut VMFuncRef,
     string_encoding: StringEncoding,
     args_and_results: *mut ValRaw,
     nargs_and_results: usize,
@@ -108,9 +113,8 @@ pub struct VMLowering {
 /// `ComponentInstance`.
 #[repr(C)]
 // Set an appropriate alignment for this structure where the most-aligned value
-// internally right now is a pointer.
-#[cfg_attr(target_pointer_width = "32", repr(align(4)))]
-#[cfg_attr(target_pointer_width = "64", repr(align(8)))]
+// internally right now `VMGlobalDefinition` which has an alignment of 16 bytes.
+#[repr(align(16))]
 pub struct VMComponentContext {
     /// For more information about this see the equivalent field in `VMContext`
     _marker: marker::PhantomPinned,
@@ -138,7 +142,7 @@ impl ComponentInstance {
     /// the shape of the component being instantiated and `store` is a pointer
     /// back to the Wasmtime store for host functions to have access to.
     unsafe fn new_at(
-        ptr: *mut ComponentInstance,
+        ptr: NonNull<ComponentInstance>,
         alloc_size: usize,
         offsets: VMComponentOffsets<HostPtr>,
         store: *mut dyn Store,
@@ -146,23 +150,40 @@ impl ComponentInstance {
         assert!(alloc_size >= Self::alloc_layout(&offsets).size());
 
         ptr::write(
-            ptr,
+            ptr.as_ptr(),
             ComponentInstance {
                 offsets,
+                vmctx_self_reference: SendSyncPtr::new(
+                    NonNull::new(
+                        ptr.as_ptr()
+                            .cast::<u8>()
+                            .add(mem::size_of::<ComponentInstance>())
+                            .cast(),
+                    )
+                    .unwrap(),
+                ),
                 vmctx: VMComponentContext {
                     _marker: marker::PhantomPinned,
                 },
             },
         );
 
-        (*ptr).initialize_vmctx(store);
+        (*ptr.as_ptr()).initialize_vmctx(store);
     }
 
     fn vmctx(&self) -> *mut VMComponentContext {
-        &self.vmctx as *const VMComponentContext as *mut VMComponentContext
+        let addr = std::ptr::addr_of!(self.vmctx);
+        Strict::with_addr(self.vmctx_self_reference.as_ptr(), Strict::addr(addr))
     }
 
-    unsafe fn vmctx_plus_offset<T>(&self, offset: u32) -> *mut T {
+    unsafe fn vmctx_plus_offset<T>(&self, offset: u32) -> *const T {
+        self.vmctx()
+            .cast::<u8>()
+            .add(usize::try_from(offset).unwrap())
+            .cast()
+    }
+
+    unsafe fn vmctx_plus_offset_mut<T>(&mut self, offset: u32) -> *mut T {
         self.vmctx()
             .cast::<u8>()
             .add(usize::try_from(offset).unwrap())
@@ -172,7 +193,12 @@ impl ComponentInstance {
     /// Returns a pointer to the "may leave" flag for this instance specified
     /// for canonical lowering and lifting operations.
     pub fn instance_flags(&self, instance: RuntimeComponentInstanceIndex) -> InstanceFlags {
-        unsafe { InstanceFlags(self.vmctx_plus_offset(self.offsets.instance_flags(instance))) }
+        unsafe {
+            InstanceFlags(
+                self.vmctx_plus_offset::<VMGlobalDefinition>(self.offsets.instance_flags(instance))
+                    .cast_mut(),
+            )
+        }
     }
 
     /// Returns the store that this component was created with.
@@ -201,7 +227,7 @@ impl ComponentInstance {
     ///
     /// This can only be called after `idx` has been initialized at runtime
     /// during the instantiation process of a component.
-    pub fn runtime_realloc(&self, idx: RuntimeReallocIndex) -> NonNull<VMCallerCheckedFuncRef> {
+    pub fn runtime_realloc(&self, idx: RuntimeReallocIndex) -> NonNull<VMFuncRef> {
         unsafe {
             let ret = *self.vmctx_plus_offset::<NonNull<_>>(self.offsets.runtime_realloc(idx));
             debug_assert!(ret.as_ptr() as usize != INVALID_PTR);
@@ -213,10 +239,7 @@ impl ComponentInstance {
     ///
     /// This can only be called after `idx` has been initialized at runtime
     /// during the instantiation process of a component.
-    pub fn runtime_post_return(
-        &self,
-        idx: RuntimePostReturnIndex,
-    ) -> NonNull<VMCallerCheckedFuncRef> {
+    pub fn runtime_post_return(&self, idx: RuntimePostReturnIndex) -> NonNull<VMFuncRef> {
         unsafe {
             let ret = *self.vmctx_plus_offset::<NonNull<_>>(self.offsets.runtime_post_return(idx));
             debug_assert!(ret.as_ptr() as usize != INVALID_PTR);
@@ -246,31 +269,28 @@ impl ComponentInstance {
     ///
     /// This can only be called after `idx` has been initialized at runtime
     /// during the instantiation process of a component.
-    pub fn lowering_anyfunc(&self, idx: LoweredIndex) -> NonNull<VMCallerCheckedFuncRef> {
-        unsafe { self.anyfunc(self.offsets.lowering_anyfunc(idx)) }
+    pub fn lowering_func_ref(&self, idx: LoweredIndex) -> NonNull<VMFuncRef> {
+        unsafe { self.func_ref(self.offsets.lowering_func_ref(idx)) }
     }
 
-    /// Same as `lowering_anyfunc` except for the functions that always trap.
-    pub fn always_trap_anyfunc(
-        &self,
-        idx: RuntimeAlwaysTrapIndex,
-    ) -> NonNull<VMCallerCheckedFuncRef> {
-        unsafe { self.anyfunc(self.offsets.always_trap_anyfunc(idx)) }
+    /// Same as `lowering_func_ref` except for the functions that always trap.
+    pub fn always_trap_func_ref(&self, idx: RuntimeAlwaysTrapIndex) -> NonNull<VMFuncRef> {
+        unsafe { self.func_ref(self.offsets.always_trap_func_ref(idx)) }
     }
 
-    /// Same as `lowering_anyfunc` except for the transcoding functions.
-    pub fn transcoder_anyfunc(
-        &self,
-        idx: RuntimeTranscoderIndex,
-    ) -> NonNull<VMCallerCheckedFuncRef> {
-        unsafe { self.anyfunc(self.offsets.transcoder_anyfunc(idx)) }
+    /// Same as `lowering_func_ref` except for the transcoding functions.
+    pub fn transcoder_func_ref(&self, idx: RuntimeTranscoderIndex) -> NonNull<VMFuncRef> {
+        unsafe { self.func_ref(self.offsets.transcoder_func_ref(idx)) }
     }
 
-    unsafe fn anyfunc(&self, offset: u32) -> NonNull<VMCallerCheckedFuncRef> {
-        let ret = self.vmctx_plus_offset::<VMCallerCheckedFuncRef>(offset);
-        debug_assert!((*ret).func_ptr.as_ptr() as usize != INVALID_PTR);
+    unsafe fn func_ref(&self, offset: u32) -> NonNull<VMFuncRef> {
+        let ret = self.vmctx_plus_offset::<VMFuncRef>(offset);
+        debug_assert!(
+            mem::transmute::<Option<NonNull<VMWasmCallFunction>>, usize>((*ret).wasm_call)
+                != INVALID_PTR
+        );
         debug_assert!((*ret).vmctx as usize != INVALID_PTR);
-        NonNull::new(ret).unwrap()
+        NonNull::new(ret.cast_mut()).unwrap()
     }
 
     /// Stores the runtime memory pointer at the index specified.
@@ -284,20 +304,16 @@ impl ComponentInstance {
     pub fn set_runtime_memory(&mut self, idx: RuntimeMemoryIndex, ptr: *mut VMMemoryDefinition) {
         unsafe {
             debug_assert!(!ptr.is_null());
-            let storage = self.vmctx_plus_offset(self.offsets.runtime_memory(idx));
+            let storage = self.vmctx_plus_offset_mut(self.offsets.runtime_memory(idx));
             debug_assert!(*storage as usize == INVALID_PTR);
             *storage = ptr;
         }
     }
 
     /// Same as `set_runtime_memory` but for realloc function pointers.
-    pub fn set_runtime_realloc(
-        &mut self,
-        idx: RuntimeReallocIndex,
-        ptr: NonNull<VMCallerCheckedFuncRef>,
-    ) {
+    pub fn set_runtime_realloc(&mut self, idx: RuntimeReallocIndex, ptr: NonNull<VMFuncRef>) {
         unsafe {
-            let storage = self.vmctx_plus_offset(self.offsets.runtime_realloc(idx));
+            let storage = self.vmctx_plus_offset_mut(self.offsets.runtime_realloc(idx));
             debug_assert!(*storage as usize == INVALID_PTR);
             *storage = ptr.as_ptr();
         }
@@ -307,10 +323,10 @@ impl ComponentInstance {
     pub fn set_runtime_post_return(
         &mut self,
         idx: RuntimePostReturnIndex,
-        ptr: NonNull<VMCallerCheckedFuncRef>,
+        ptr: NonNull<VMFuncRef>,
     ) {
         unsafe {
-            let storage = self.vmctx_plus_offset(self.offsets.runtime_post_return(idx));
+            let storage = self.vmctx_plus_offset_mut(self.offsets.runtime_post_return(idx));
             debug_assert!(*storage as usize == INVALID_PTR);
             *storage = ptr.as_ptr();
         }
@@ -321,18 +337,18 @@ impl ComponentInstance {
     /// * `idx` - the index that's being configured
     /// * `lowering` - the host-related closure information to get invoked when
     ///   the lowering is called.
-    /// * `anyfunc_func_ptr` - the cranelift-compiled trampoline which will
-    ///   read the `VMComponentContext` and invoke `lowering` provided. This
-    ///   function pointer will be passed to wasm if wasm needs to instantiate
-    ///   something.
-    /// * `anyfunc_type_index` - the signature index for the core wasm type
+    /// * `{wasm,native,array}_call` - the cranelift-compiled trampolines which will
+    ///   read the `VMComponentContext` and invoke `lowering` provided.
+    /// * `type_index` - the signature index for the core wasm type
     ///   registered within the engine already.
     pub fn set_lowering(
         &mut self,
         idx: LoweredIndex,
         lowering: VMLowering,
-        anyfunc_func_ptr: NonNull<VMFunctionBody>,
-        anyfunc_type_index: VMSharedSignatureIndex,
+        wasm_call: NonNull<VMWasmCallFunction>,
+        native_call: NonNull<VMNativeCallFunction>,
+        array_call: VMArrayCallFunction,
+        type_index: VMSharedSignatureIndex,
     ) {
         unsafe {
             debug_assert!(
@@ -341,11 +357,13 @@ impl ComponentInstance {
             debug_assert!(
                 *self.vmctx_plus_offset::<usize>(self.offsets.lowering_data(idx)) == INVALID_PTR
             );
-            *self.vmctx_plus_offset(self.offsets.lowering(idx)) = lowering;
-            self.set_anyfunc(
-                self.offsets.lowering_anyfunc(idx),
-                anyfunc_func_ptr,
-                anyfunc_type_index,
+            *self.vmctx_plus_offset_mut(self.offsets.lowering(idx)) = lowering;
+            self.set_func_ref(
+                self.offsets.lowering_func_ref(idx),
+                wasm_call,
+                native_call,
+                array_call,
+                type_index,
             );
         }
     }
@@ -354,43 +372,67 @@ impl ComponentInstance {
     pub fn set_always_trap(
         &mut self,
         idx: RuntimeAlwaysTrapIndex,
-        func_ptr: NonNull<VMFunctionBody>,
+        wasm_call: NonNull<VMWasmCallFunction>,
+        native_call: NonNull<VMNativeCallFunction>,
+        array_call: VMArrayCallFunction,
         type_index: VMSharedSignatureIndex,
     ) {
-        unsafe { self.set_anyfunc(self.offsets.always_trap_anyfunc(idx), func_ptr, type_index) }
+        unsafe {
+            self.set_func_ref(
+                self.offsets.always_trap_func_ref(idx),
+                wasm_call,
+                native_call,
+                array_call,
+                type_index,
+            );
+        }
     }
 
     /// Same as `set_lowering` but for the transcoder functions.
     pub fn set_transcoder(
         &mut self,
         idx: RuntimeTranscoderIndex,
-        func_ptr: NonNull<VMFunctionBody>,
+        wasm_call: NonNull<VMWasmCallFunction>,
+        native_call: NonNull<VMNativeCallFunction>,
+        array_call: VMArrayCallFunction,
         type_index: VMSharedSignatureIndex,
     ) {
-        unsafe { self.set_anyfunc(self.offsets.transcoder_anyfunc(idx), func_ptr, type_index) }
+        unsafe {
+            self.set_func_ref(
+                self.offsets.transcoder_func_ref(idx),
+                wasm_call,
+                native_call,
+                array_call,
+                type_index,
+            );
+        }
     }
 
-    unsafe fn set_anyfunc(
+    unsafe fn set_func_ref(
         &mut self,
         offset: u32,
-        func_ptr: NonNull<VMFunctionBody>,
+        wasm_call: NonNull<VMWasmCallFunction>,
+        native_call: NonNull<VMNativeCallFunction>,
+        array_call: VMArrayCallFunction,
         type_index: VMSharedSignatureIndex,
     ) {
         debug_assert!(*self.vmctx_plus_offset::<usize>(offset) == INVALID_PTR);
-        let vmctx = self.vmctx();
-        *self.vmctx_plus_offset(offset) = VMCallerCheckedFuncRef {
-            func_ptr,
+        let vmctx = VMOpaqueContext::from_vmcomponent(self.vmctx());
+        *self.vmctx_plus_offset_mut(offset) = VMFuncRef {
+            wasm_call: Some(wasm_call),
+            native_call,
+            array_call,
             type_index,
-            vmctx: VMOpaqueContext::from_vmcomponent(vmctx),
+            vmctx,
         };
     }
 
     unsafe fn initialize_vmctx(&mut self, store: *mut dyn Store) {
-        *self.vmctx_plus_offset(self.offsets.magic()) = VMCOMPONENT_MAGIC;
-        *self.vmctx_plus_offset(self.offsets.transcode_libcalls()) =
+        *self.vmctx_plus_offset_mut(self.offsets.magic()) = VMCOMPONENT_MAGIC;
+        *self.vmctx_plus_offset_mut(self.offsets.transcode_libcalls()) =
             &transcode::VMBuiltinTranscodeArray::INIT;
-        *self.vmctx_plus_offset(self.offsets.store()) = store;
-        *self.vmctx_plus_offset(self.offsets.limits()) = (*store).vmruntime_limits();
+        *self.vmctx_plus_offset_mut(self.offsets.store()) = store;
+        *self.vmctx_plus_offset_mut(self.offsets.limits()) = (*store).vmruntime_limits();
 
         for i in 0..self.offsets.num_runtime_component_instances {
             let i = RuntimeComponentInstanceIndex::from_u32(i);
@@ -407,36 +449,36 @@ impl ComponentInstance {
             for i in 0..self.offsets.num_lowerings {
                 let i = LoweredIndex::from_u32(i);
                 let offset = self.offsets.lowering_callee(i);
-                *self.vmctx_plus_offset(offset) = INVALID_PTR;
+                *self.vmctx_plus_offset_mut(offset) = INVALID_PTR;
                 let offset = self.offsets.lowering_data(i);
-                *self.vmctx_plus_offset(offset) = INVALID_PTR;
-                let offset = self.offsets.lowering_anyfunc(i);
-                *self.vmctx_plus_offset(offset) = INVALID_PTR;
+                *self.vmctx_plus_offset_mut(offset) = INVALID_PTR;
+                let offset = self.offsets.lowering_func_ref(i);
+                *self.vmctx_plus_offset_mut(offset) = INVALID_PTR;
             }
             for i in 0..self.offsets.num_always_trap {
                 let i = RuntimeAlwaysTrapIndex::from_u32(i);
-                let offset = self.offsets.always_trap_anyfunc(i);
-                *self.vmctx_plus_offset(offset) = INVALID_PTR;
+                let offset = self.offsets.always_trap_func_ref(i);
+                *self.vmctx_plus_offset_mut(offset) = INVALID_PTR;
             }
             for i in 0..self.offsets.num_transcoders {
                 let i = RuntimeTranscoderIndex::from_u32(i);
-                let offset = self.offsets.transcoder_anyfunc(i);
-                *self.vmctx_plus_offset(offset) = INVALID_PTR;
+                let offset = self.offsets.transcoder_func_ref(i);
+                *self.vmctx_plus_offset_mut(offset) = INVALID_PTR;
             }
             for i in 0..self.offsets.num_runtime_memories {
                 let i = RuntimeMemoryIndex::from_u32(i);
                 let offset = self.offsets.runtime_memory(i);
-                *self.vmctx_plus_offset(offset) = INVALID_PTR;
+                *self.vmctx_plus_offset_mut(offset) = INVALID_PTR;
             }
             for i in 0..self.offsets.num_runtime_reallocs {
                 let i = RuntimeReallocIndex::from_u32(i);
                 let offset = self.offsets.runtime_realloc(i);
-                *self.vmctx_plus_offset(offset) = INVALID_PTR;
+                *self.vmctx_plus_offset_mut(offset) = INVALID_PTR;
             }
             for i in 0..self.offsets.num_runtime_post_returns {
                 let i = RuntimePostReturnIndex::from_u32(i);
                 let offset = self.offsets.runtime_post_return(i);
-                *self.vmctx_plus_offset(offset) = INVALID_PTR;
+                *self.vmctx_plus_offset_mut(offset) = INVALID_PTR;
             }
         }
     }
@@ -460,14 +502,8 @@ impl VMComponentContext {
 /// This type can be dereferenced to `ComponentInstance` to access the
 /// underlying methods.
 pub struct OwnedComponentInstance {
-    ptr: ptr::NonNull<ComponentInstance>,
+    ptr: SendSyncPtr<ComponentInstance>,
 }
-
-// Using `NonNull` turns off auto-derivation of these traits but the owned usage
-// here enables these trait impls so long as `ComponentInstance` itself
-// implements these traits.
-unsafe impl Send for OwnedComponentInstance where ComponentInstance: Send {}
-unsafe impl Sync for OwnedComponentInstance where ComponentInstance: Sync {}
 
 impl OwnedComponentInstance {
     /// Allocates a new `ComponentInstance + VMComponentContext` pair on the
@@ -485,10 +521,11 @@ impl OwnedComponentInstance {
             // zeroed allocation is done here to try to contain
             // use-before-initialized issues.
             let ptr = alloc::alloc_zeroed(layout) as *mut ComponentInstance;
-            let ptr = ptr::NonNull::new(ptr).unwrap();
+            let ptr = NonNull::new(ptr).unwrap();
 
-            ComponentInstance::new_at(ptr.as_ptr(), layout.size(), offsets, store);
+            ComponentInstance::new_at(ptr, layout.size(), offsets, store);
 
+            let ptr = SendSyncPtr::new(ptr);
             OwnedComponentInstance { ptr }
         }
     }
@@ -507,11 +544,7 @@ impl OwnedComponentInstance {
     }
 
     /// See `ComponentInstance::set_runtime_realloc`
-    pub fn set_runtime_realloc(
-        &mut self,
-        idx: RuntimeReallocIndex,
-        ptr: NonNull<VMCallerCheckedFuncRef>,
-    ) {
+    pub fn set_runtime_realloc(&mut self, idx: RuntimeReallocIndex, ptr: NonNull<VMFuncRef>) {
         unsafe { self.instance_mut().set_runtime_realloc(idx, ptr) }
     }
 
@@ -519,7 +552,7 @@ impl OwnedComponentInstance {
     pub fn set_runtime_post_return(
         &mut self,
         idx: RuntimePostReturnIndex,
-        ptr: NonNull<VMCallerCheckedFuncRef>,
+        ptr: NonNull<VMFuncRef>,
     ) {
         unsafe { self.instance_mut().set_runtime_post_return(idx, ptr) }
     }
@@ -529,12 +562,20 @@ impl OwnedComponentInstance {
         &mut self,
         idx: LoweredIndex,
         lowering: VMLowering,
-        anyfunc_func_ptr: NonNull<VMFunctionBody>,
-        anyfunc_type_index: VMSharedSignatureIndex,
+        wasm_call: NonNull<VMWasmCallFunction>,
+        native_call: NonNull<VMNativeCallFunction>,
+        array_call: VMArrayCallFunction,
+        type_index: VMSharedSignatureIndex,
     ) {
         unsafe {
-            self.instance_mut()
-                .set_lowering(idx, lowering, anyfunc_func_ptr, anyfunc_type_index)
+            self.instance_mut().set_lowering(
+                idx,
+                lowering,
+                wasm_call,
+                native_call,
+                array_call,
+                type_index,
+            )
         }
     }
 
@@ -542,12 +583,14 @@ impl OwnedComponentInstance {
     pub fn set_always_trap(
         &mut self,
         idx: RuntimeAlwaysTrapIndex,
-        func_ptr: NonNull<VMFunctionBody>,
+        wasm_call: NonNull<VMWasmCallFunction>,
+        native_call: NonNull<VMNativeCallFunction>,
+        array_call: VMArrayCallFunction,
         type_index: VMSharedSignatureIndex,
     ) {
         unsafe {
             self.instance_mut()
-                .set_always_trap(idx, func_ptr, type_index)
+                .set_always_trap(idx, wasm_call, native_call, array_call, type_index)
         }
     }
 
@@ -555,12 +598,14 @@ impl OwnedComponentInstance {
     pub fn set_transcoder(
         &mut self,
         idx: RuntimeTranscoderIndex,
-        func_ptr: NonNull<VMFunctionBody>,
+        wasm_call: NonNull<VMWasmCallFunction>,
+        native_call: NonNull<VMNativeCallFunction>,
+        array_call: VMArrayCallFunction,
         type_index: VMSharedSignatureIndex,
     ) {
         unsafe {
             self.instance_mut()
-                .set_transcoder(idx, func_ptr, type_index)
+                .set_transcoder(idx, wasm_call, native_call, array_call, type_index)
         }
     }
 }

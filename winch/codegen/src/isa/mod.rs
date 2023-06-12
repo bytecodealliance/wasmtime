@@ -1,3 +1,4 @@
+use crate::TrampolineKind;
 use anyhow::{anyhow, Result};
 use core::fmt::Formatter;
 use cranelift_codegen::isa::{CallConv, IsaBuilder};
@@ -8,9 +9,8 @@ use std::{
     fmt::{self, Debug, Display},
 };
 use target_lexicon::{Architecture, Triple};
-use wasmparser::{FuncType, FuncValidator, FunctionBody, ValidatorResources};
-
-use crate::FuncEnv;
+use wasmparser::{FuncValidator, FunctionBody, ValidatorResources};
+use wasmtime_environ::{ModuleTranslation, WasmFuncType};
 
 #[cfg(feature = "x64")]
 pub(crate) mod x64;
@@ -147,9 +147,9 @@ pub trait TargetIsa: Send + Sync {
     /// Compile a function.
     fn compile_function(
         &self,
-        sig: &FuncType,
+        sig: &WasmFuncType,
         body: &FunctionBody,
-        env: &dyn FuncEnv,
+        translation: &ModuleTranslation,
         validator: &mut FuncValidator<ValidatorResources>,
     ) -> Result<MachBufferFinalized<Final>>;
 
@@ -186,8 +186,21 @@ pub trait TargetIsa: Send + Sync {
     /// See `cranelift_codegen::isa::TargetIsa::function_alignment`.
     fn function_alignment(&self) -> u32;
 
-    /// Generate a trampoline that can be used to call a wasm function from wasmtime.
-    fn host_to_wasm_trampoline(&self, ty: &FuncType) -> Result<MachBufferFinalized<Final>>;
+    /// Compile a trampoline kind.
+    ///
+    /// This function, internally dispatches to the right trampoline to emit
+    /// depending on the `kind` paramter.
+    fn compile_trampoline(
+        &self,
+        ty: &WasmFuncType,
+        kind: TrampolineKind,
+    ) -> Result<MachBufferFinalized<Final>>;
+
+    /// Returns the pointer width of the ISA in bytes.
+    fn pointer_bytes(&self) -> u8 {
+        let width = self.triple().pointer_width().unwrap();
+        width.bytes()
+    }
 }
 
 impl Debug for &dyn TargetIsa {

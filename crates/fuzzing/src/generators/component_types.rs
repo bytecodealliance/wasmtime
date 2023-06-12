@@ -129,80 +129,57 @@ pub fn arbitrary_val(ty: &component::Type, input: &mut Unstructured) -> arbitrar
     })
 }
 
-macro_rules! define_static_api_test {
-    ($name:ident $(($param:ident $param_name:ident $param_expected_name:ident))*) => {
-        #[allow(unused_parens)]
-        /// Generate zero or more sets of arbitrary argument and result values and execute the test using those
-        /// values, asserting that they flow from host-to-guest and guest-to-host unchanged.
-        pub fn $name<'a, $($param,)* R>(
-            input: &mut Unstructured<'a>,
-            declarations: &Declarations,
-        ) -> arbitrary::Result<()>
-        where
-            $($param: Lift + Lower + Clone + PartialEq + Debug + Arbitrary<'a> + 'static,)*
-            R: ComponentNamedList + Lift + Lower + Clone + PartialEq + Debug + Arbitrary<'a> + 'static
-        {
-            crate::init_fuzzing();
+/// Generate zero or more sets of arbitrary argument and result values and execute the test using those
+/// values, asserting that they flow from host-to-guest and guest-to-host unchanged.
+pub fn static_api_test<'a, P, R>(
+    input: &mut Unstructured<'a>,
+    declarations: &Declarations,
+) -> arbitrary::Result<()>
+where
+    P: ComponentNamedList + Lift + Lower + Clone + PartialEq + Debug + Arbitrary<'a> + 'static,
+    R: ComponentNamedList + Lift + Lower + Clone + PartialEq + Debug + Arbitrary<'a> + 'static,
+{
+    crate::init_fuzzing();
 
-            let mut config = Config::new();
-            config.wasm_component_model(true);
-            config.debug_adapter_modules(input.arbitrary()?);
-            let engine = Engine::new(&config).unwrap();
-            let wat = declarations.make_component();
-            let wat = wat.as_bytes();
-            crate::oracles::log_wasm(wat);
-            let component = Component::new(&engine, wat).unwrap();
-            let mut linker = Linker::new(&engine);
-            linker
-                .root()
-                .func_wrap(
-                    IMPORT_FUNCTION,
-                    |cx: StoreContextMut<'_, Box<dyn Any>>,
-                    ($($param_name,)*): ($($param,)*)|
-                    {
-                        log::trace!("received parameters {:?}", ($(&$param_name,)*));
-                        let data: &($($param,)* R,) =
-                            cx.data().downcast_ref().unwrap();
-                        let ($($param_expected_name,)* result,) = data;
-                        $(assert_eq!($param_name, *$param_expected_name);)*
-                        log::trace!("returning result {:?}", result);
-                        Ok(result.clone())
-                    },
-                )
-                .unwrap();
-            let mut store: Store<Box<dyn Any>> = Store::new(&engine, Box::new(()));
-            let instance = linker.instantiate(&mut store, &component).unwrap();
-            let func = instance
-                .get_typed_func::<($($param,)*), R>(&mut store, EXPORT_FUNCTION)
-                .unwrap();
+    let mut config = Config::new();
+    config.wasm_component_model(true);
+    config.debug_adapter_modules(input.arbitrary()?);
+    let engine = Engine::new(&config).unwrap();
+    let wat = declarations.make_component();
+    let wat = wat.as_bytes();
+    crate::oracles::log_wasm(wat);
+    let component = Component::new(&engine, wat).unwrap();
+    let mut linker = Linker::new(&engine);
+    linker
+        .root()
+        .func_wrap(
+            IMPORT_FUNCTION,
+            |cx: StoreContextMut<'_, Box<dyn Any>>, params: P| {
+                log::trace!("received parameters {params:?}");
+                let data: &(P, R) = cx.data().downcast_ref().unwrap();
+                let (expected_params, result) = data;
+                assert_eq!(params, *expected_params);
+                log::trace!("returning result {:?}", result);
+                Ok(result.clone())
+            },
+        )
+        .unwrap();
+    let mut store: Store<Box<dyn Any>> = Store::new(&engine, Box::new(()));
+    let instance = linker.instantiate(&mut store, &component).unwrap();
+    let func = instance
+        .get_typed_func::<P, R>(&mut store, EXPORT_FUNCTION)
+        .unwrap();
 
-            while input.arbitrary()? {
-                $(let $param_name = input.arbitrary::<$param>()?;)*
-                let result = input.arbitrary::<R>()?;
-                *store.data_mut() = Box::new((
-                    $($param_name.clone(),)*
-                    result.clone(),
-                ));
-                log::trace!(
-                    "passing in parameters {:?}",
-                    ($(&$param_name,)*),
-                );
-                let actual = func.call(&mut store, ($($param_name,)*)).unwrap();
-                log::trace!("got result {:?}", actual);
-                assert_eq!(actual, result);
-                func.post_return(&mut store).unwrap();
-            }
-
-            Ok(())
-        }
+    while input.arbitrary()? {
+        let params = input.arbitrary::<P>()?;
+        let result = input.arbitrary::<R>()?;
+        *store.data_mut() = Box::new((params.clone(), result.clone()));
+        log::trace!("passing in parameters {params:?}");
+        let actual = func.call(&mut store, params).unwrap();
+        log::trace!("got result {:?}", actual);
+        assert_eq!(actual, result);
+        func.post_return(&mut store).unwrap();
     }
-}
 
-define_static_api_test!(static_api_test0);
-define_static_api_test!(static_api_test1 (P0 p0 p0_expected));
-define_static_api_test!(static_api_test2 (P0 p0 p0_expected) (P1 p1 p1_expected));
-define_static_api_test!(static_api_test3 (P0 p0 p0_expected) (P1 p1 p1_expected) (P2 p2 p2_expected));
-define_static_api_test!(static_api_test4 (P0 p0 p0_expected) (P1 p1 p1_expected) (P2 p2 p2_expected)
-                        (P3 p3 p3_expected));
-define_static_api_test!(static_api_test5 (P0 p0 p0_expected) (P1 p1 p1_expected) (P2 p2 p2_expected)
-                        (P3 p3 p3_expected) (P4 p4 p4_expected));
+    Ok(())
+}

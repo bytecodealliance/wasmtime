@@ -18,12 +18,20 @@ fn bad_globals() {
 }
 
 #[test]
-fn bad_tables() {
-    let mut store = Store::<()>::default();
+#[should_panic]
+fn bad_tables_i32() {
+    // NOTE(dhil): The below test does not make sense after the
+    // implementation of the function-references proposal, since the
+    // type component of a TableType is now a reference type (I32 is
+    // not a reference type constructor).
 
     // i32 not supported yet
-    let ty = TableType::new(ValType::I32, 0, Some(1));
-    assert!(Table::new(&mut store, ty.clone(), Val::I32(0)).is_err());
+    TableType::new(ValType::I32, 0, Some(1));
+}
+
+#[test]
+fn bad_tables() {
+    let mut store = Store::<()>::default();
 
     // mismatched initializer
     let ty = TableType::new(ValType::FuncRef, 0, Some(1));
@@ -57,6 +65,7 @@ fn bad_tables() {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn cross_store() -> anyhow::Result<()> {
     let mut cfg = Config::new();
     cfg.wasm_reference_types(true);

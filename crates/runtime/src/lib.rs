@@ -22,6 +22,7 @@
 
 use anyhow::Error;
 use std::fmt;
+use std::ptr::NonNull;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
 use wasmtime_environ::{DefinedFuncIndex, DefinedMemoryIndex, HostPtr, VMOffsets};
@@ -39,6 +40,8 @@ mod memory;
 mod mmap;
 mod mmap_vec;
 mod parking_spot;
+mod send_sync_ptr;
+mod store_box;
 mod table;
 mod traphandlers;
 mod vmcontext;
@@ -52,8 +55,8 @@ pub use crate::export::*;
 pub use crate::externref::*;
 pub use crate::imports::Imports;
 pub use crate::instance::{
-    InstanceAllocationRequest, InstanceAllocator, InstanceHandle, OnDemandInstanceAllocator,
-    StorePtr,
+    Instance, InstanceAllocationRequest, InstanceAllocator, InstanceHandle,
+    OnDemandInstanceAllocator, StorePtr,
 };
 #[cfg(feature = "pooling-allocator")]
 pub use crate::instance::{
@@ -64,18 +67,17 @@ pub use crate::memory::{
 };
 pub use crate::mmap::Mmap;
 pub use crate::mmap_vec::MmapVec;
+pub use crate::store_box::*;
 pub use crate::table::{Table, TableElement};
-pub use crate::trampolines::prepare_host_to_wasm_trampoline;
-pub use crate::traphandlers::{
-    catch_traps, init_traps, raise_lib_trap, raise_user_trap, resume_panic, tls_eager_initialize,
-    Backtrace, SignalHandler, TlsRestore, Trap, TrapReason,
-};
+pub use crate::traphandlers::*;
 pub use crate::vmcontext::{
-    VMCallerCheckedFuncRef, VMContext, VMFunctionBody, VMFunctionImport, VMGlobalDefinition,
-    VMGlobalImport, VMHostFuncContext, VMInvokeArgument, VMMemoryDefinition, VMMemoryImport,
-    VMOpaqueContext, VMRuntimeLimits, VMSharedSignatureIndex, VMTableDefinition, VMTableImport,
-    VMTrampoline, ValRaw,
+    VMArrayCallFunction, VMArrayCallHostFuncContext, VMContext, VMFuncRef, VMFunctionBody,
+    VMFunctionImport, VMGlobalDefinition, VMGlobalImport, VMInvokeArgument, VMMemoryDefinition,
+    VMMemoryImport, VMNativeCallFunction, VMNativeCallHostFuncContext, VMOpaqueContext,
+    VMRuntimeLimits, VMSharedSignatureIndex, VMTableDefinition, VMTableImport, VMWasmCallFunction,
+    ValRaw,
 };
+pub use send_sync_ptr::SendSyncPtr;
 
 mod module_id;
 pub use module_id::{CompiledModuleId, CompiledModuleIdAllocator};
@@ -170,7 +172,31 @@ pub trait ModuleRuntimeInfo: Send + Sync + 'static {
     fn module(&self) -> &Arc<wasmtime_environ::Module>;
 
     /// Returns the address, in memory, that the function `index` resides at.
-    fn function(&self, index: DefinedFuncIndex) -> *mut VMFunctionBody;
+    fn function(&self, index: DefinedFuncIndex) -> NonNull<VMWasmCallFunction>;
+
+    /// Returns the address, in memory, of the trampoline that allows the given
+    /// defined Wasm function to be called by the native calling convention.
+    ///
+    /// Returns `None` for Wasm functions which do not escape, and therefore are
+    /// not callable from outside the Wasm module itself.
+    fn native_to_wasm_trampoline(
+        &self,
+        index: DefinedFuncIndex,
+    ) -> Option<NonNull<VMNativeCallFunction>>;
+
+    /// Returns the address, in memory, of the trampoline that allows the given
+    /// defined Wasm function to be called by the array calling convention.
+    ///
+    /// Returns `None` for Wasm functions which do not escape, and therefore are
+    /// not callable from outside the Wasm module itself.
+    fn array_to_wasm_trampoline(&self, index: DefinedFuncIndex) -> Option<VMArrayCallFunction>;
+
+    /// Return the addres, in memory, of the trampoline that allows Wasm to call
+    /// a native function of the given signature.
+    fn wasm_to_native_trampoline(
+        &self,
+        signature: VMSharedSignatureIndex,
+    ) -> Option<NonNull<VMWasmCallFunction>>;
 
     /// Returns the `MemoryImage` structure used for copy-on-write
     /// initialization of the memory, if it's applicable.

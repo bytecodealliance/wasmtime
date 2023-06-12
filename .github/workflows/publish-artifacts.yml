@@ -18,7 +18,7 @@ jobs:
         sha=${{ github.sha }}
         run_id=$(
           gh api -H 'Accept: application/vnd.github+json' \
-              /repos/${{ github.repository }}/actions/workflows/main.yml/runs\?event=push\&exclude_pull_requests=true \
+              /repos/${{ github.repository }}/actions/workflows/main.yml/runs\?exclude_pull_requests=true \
               | jq '.workflow_runs' \
               | jq "map(select(.head_commit.id == \"$sha\"))[0].id" \
         )
@@ -35,6 +35,8 @@ jobs:
       uses: JamesIves/github-pages-deploy-action@v4
       with:
         folder: ./gh-pages/gh-pages
+        single-commit: true
+        clean: true
       if: github.ref == 'refs/heads/main'
 
     - run: npm install --production
@@ -42,7 +44,7 @@ jobs:
     - run: |
         mkdir dist
         mv -t dist bins-*/*.tar.*
-        mv -t dist bins-*/*.{zip,msi}
+        mv -t dist bins-*/*.{zip,msi,wasm}
     - name: Publish Release
       uses: ./.github/actions/github-release
       with:

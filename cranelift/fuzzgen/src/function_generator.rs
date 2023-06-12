@@ -699,26 +699,21 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                 (Opcode::Bswap),
                 // https://github.com/bytecodealliance/wasmtime/issues/5528
                 (
-                    Opcode::FcvtToUint
-                        | Opcode::FcvtToUintSat
-                        | Opcode::FcvtToSint
-                        | Opcode::FcvtToSintSat,
+                    Opcode::FcvtToUint | Opcode::FcvtToSint,
+                    [F32 | F64],
+                    &[I128]
+                ),
+                (
+                    Opcode::FcvtToUintSat | Opcode::FcvtToSintSat,
                     &[F32 | F64],
                     &[I8 | I16 | I128]
                 ),
                 // https://github.com/bytecodealliance/wasmtime/issues/5528
                 (
                     Opcode::FcvtFromUint | Opcode::FcvtFromSint,
-                    &[I8 | I16 | I128],
+                    &[I128],
                     &[F32 | F64]
                 ),
-                // TODO
-                (
-                    Opcode::BandNot | Opcode::BorNot | Opcode::BxorNot,
-                    &([F32, F32] | [F64, F64])
-                ),
-                // https://github.com/bytecodealliance/wasmtime/issues/5884
-                (Opcode::AtomicRmw),
             )
         }
 

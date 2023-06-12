@@ -130,6 +130,11 @@ impl WasmtimeInstance {
             })
             .collect()
     }
+
+    /// Returns whether or not this instance has hit its OOM condition yet.
+    pub fn is_oom(&self) -> bool {
+        self.store.data().is_oom()
+    }
 }
 
 impl DiffInstance for WasmtimeInstance {

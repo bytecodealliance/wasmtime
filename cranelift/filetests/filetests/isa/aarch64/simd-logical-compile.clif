@@ -12,7 +12,7 @@ block0(v0: i32x4):
 ; block0:
 ;   mvn v0.16b, v0.16b
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mvn v0.16b, v0.16b
@@ -31,7 +31,7 @@ block0(v0: i32x4):
 ;   subs xzr, x4, #0
 ;   cset x0, ne
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   umaxp v2.4s, v0.4s, v0.4s
@@ -53,7 +53,7 @@ block0(v0: i64x2):
 ;   fcmp d4, d4
 ;   cset x0, eq
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   cmeq v2.2d, v0.2d, #0

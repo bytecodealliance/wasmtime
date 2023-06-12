@@ -100,7 +100,7 @@ command may not install the target for the correct copy of Rust.)
   standards process all along the way too.
 
 [Wasmtime]: https://github.com/bytecodealliance/wasmtime
-[Cranelift]: https://github.com/bytecodealliance/wasmtime/blob/main/cranelift/README.md
+[Cranelift]: https://cranelift.dev/
 [Google's OSS Fuzz]: https://google.github.io/oss-fuzz/
 [security policy]: https://bytecodealliance.org/security
 [RFC process]: https://github.com/bytecodealliance/rfcs

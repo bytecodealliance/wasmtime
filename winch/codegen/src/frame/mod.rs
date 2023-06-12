@@ -2,7 +2,8 @@ use crate::abi::{align_to, ty_size, ABIArg, ABISig, LocalSlot, ABI};
 use anyhow::Result;
 use smallvec::SmallVec;
 use std::ops::Range;
-use wasmparser::{BinaryReader, FuncValidator, ValType, ValidatorResources};
+use wasmparser::{BinaryReader, FuncValidator, ValidatorResources};
+use wasmtime_environ::{ModuleTranslation, TypeConvert};
 
 // TODO:
 // SpiderMonkey's implementation uses 16;
@@ -20,7 +21,7 @@ impl DefinedLocalsRange {
     }
 }
 
-/// An abstraction to read the defined locals from the WASM binary for a function.
+/// An abstraction to read the defined locals from the Wasm binary for a function.
 #[derive(Default)]
 pub(crate) struct DefinedLocals {
     /// The defined locals for a function.
@@ -30,13 +31,14 @@ pub(crate) struct DefinedLocals {
 }
 
 impl DefinedLocals {
-    /// Compute the local slots for a WASM function.
+    /// Compute the local slots for a Wasm function.
     pub fn new(
+        translation: &ModuleTranslation<'_>,
         reader: &mut BinaryReader<'_>,
         validator: &mut FuncValidator<ValidatorResources>,
     ) -> Result<Self> {
         let mut next_stack = 0;
-        // The first 32 bits of a WASM binary function describe the number of locals
+        // The first 32 bits of a Wasm binary function describe the number of locals.
         let local_count = reader.read_var_u32()?;
         let mut slots: Locals = Default::default();
 
@@ -46,7 +48,7 @@ impl DefinedLocals {
             let ty = reader.read()?;
             validator.define_locals(position, count, ty)?;
 
-            let ty: ValType = ty.try_into()?;
+            let ty = translation.module.convert_valtype(ty);
             for _ in 0..count {
                 let ty_size = ty_size(&ty);
                 next_stack = align_to(next_stack, ty_size) + ty_size;
@@ -74,12 +76,15 @@ pub(crate) struct Frame {
     /// Locals get calculated when allocating a frame and are readonly
     /// through the function compilation lifetime.
     pub locals: Locals,
+
+    /// The offset to the slot containing the `VMContext`.
+    pub vmctx_slot: LocalSlot,
 }
 
 impl Frame {
     /// Allocate a new Frame.
-    pub fn new<A: ABI>(sig: &ABISig, defined_locals: &DefinedLocals, abi: &A) -> Result<Self> {
-        let (mut locals, defined_locals_start) = Self::compute_arg_slots(sig, abi)?;
+    pub fn new<A: ABI>(sig: &ABISig, defined_locals: &DefinedLocals) -> Result<Self> {
+        let (mut locals, defined_locals_start) = Self::compute_arg_slots::<A>(sig)?;
 
         // The defined locals have a zero-based offset by default
         // so we need to add the defined locals start to the offset.
@@ -90,14 +95,15 @@ impl Frame {
                 .map(|l| LocalSlot::new(l.ty, l.offset + defined_locals_start)),
         );
 
-        let locals_size = align_to(
-            defined_locals_start + defined_locals.stack_size,
-            abi.stack_align().into(),
-        );
+        let vmctx_slots_size = <A as ABI>::word_bytes();
+        let vmctx_offset = defined_locals_start + defined_locals.stack_size + vmctx_slots_size;
+
+        let locals_size = align_to(vmctx_offset, <A as ABI>::stack_align().into());
 
         Ok(Self {
             locals,
             locals_size,
+            vmctx_slot: LocalSlot::i64(vmctx_offset),
             defined_locals_range: DefinedLocalsRange(
                 defined_locals_start..defined_locals.stack_size,
             ),
@@ -109,7 +115,7 @@ impl Frame {
         self.locals.get(index as usize)
     }
 
-    fn compute_arg_slots<A: ABI>(sig: &ABISig, abi: &A) -> Result<(Locals, u32)> {
+    fn compute_arg_slots<A: ABI>(sig: &ABISig) -> Result<(Locals, u32)> {
         // Go over the function ABI-signature and
         // calculate the stack slots.
         //
@@ -138,7 +144,7 @@ impl Frame {
         //      we want positive addressing from the stack pointer
         //      for both locals and stack arguments.
 
-        let arg_base_offset = abi.arg_base_offset().into();
+        let arg_base_offset = <A as ABI>::arg_base_offset().into();
         let mut next_stack = 0u32;
         let slots: Locals = sig
             .params

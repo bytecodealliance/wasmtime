@@ -390,6 +390,9 @@
 #[macro_use]
 mod func;
 
+#[cfg(any(feature = "cranelift", feature = "winch"))]
+mod compiler;
+
 mod code;
 mod config;
 mod engine;
@@ -399,6 +402,7 @@ mod limits;
 mod linker;
 mod memory;
 mod module;
+mod profiling;
 mod r#ref;
 mod signatures;
 mod store;
@@ -416,10 +420,13 @@ pub use crate::limits::*;
 pub use crate::linker::*;
 pub use crate::memory::*;
 pub use crate::module::Module;
+pub use crate::profiling::GuestProfiler;
 pub use crate::r#ref::ExternRef;
 #[cfg(feature = "async")]
 pub use crate::store::CallHookHandler;
-pub use crate::store::{AsContext, AsContextMut, CallHook, Store, StoreContext, StoreContextMut};
+pub use crate::store::{
+    AsContext, AsContextMut, CallHook, Store, StoreContext, StoreContextMut, UpdateDeadline,
+};
 pub use crate::trap::*;
 pub use crate::types::*;
 pub use crate::values::*;

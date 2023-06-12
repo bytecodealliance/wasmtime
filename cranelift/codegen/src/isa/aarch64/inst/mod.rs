@@ -3,7 +3,7 @@
 use crate::binemit::{Addend, CodeOffset, Reloc};
 use crate::ir::types::{F32, F64, I128, I16, I32, I64, I8, I8X16, R32, R64};
 use crate::ir::{types, ExternalName, MemFlags, Opcode, Type};
-use crate::isa::CallConv;
+use crate::isa::{CallConv, FunctionAlignment};
 use crate::machinst::*;
 use crate::{settings, CodegenError, CodegenResult};
 
@@ -12,6 +12,7 @@ use crate::machinst::{PrettyPrint, Reg, RegClass, Writable};
 use alloc::vec::Vec;
 use regalloc2::{PRegSet, VReg};
 use smallvec::{smallvec, SmallVec};
+use std::fmt::Write;
 use std::string::{String, ToString};
 
 pub(crate) mod regs;
@@ -833,7 +834,7 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
                 collector.reg_fixed_def(arg.vreg, arg.preg);
             }
         }
-        &Inst::Ret { ref rets } | &Inst::AuthenticatedRet { ref rets, .. } => {
+        &Inst::Ret { ref rets, .. } | &Inst::AuthenticatedRet { ref rets, .. } => {
             for ret in rets {
                 collector.reg_fixed_use(ret.vreg, ret.preg);
             }
@@ -955,22 +956,30 @@ impl MachInst for Inst {
     }
 
     fn is_included_in_clobbers(&self) -> bool {
+        let (caller_callconv, callee_callconv) = match self {
+            Inst::Args { .. } => return false,
+            Inst::Call { info } => (info.caller_callconv, info.callee_callconv),
+            Inst::CallInd { info } => (info.caller_callconv, info.callee_callconv),
+            _ => return true,
+        };
+
         // We exclude call instructions from the clobber-set when they are calls
-        // from caller to callee with the same ABI. Such calls cannot possibly
-        // force any new registers to be saved in the prologue, because anything
-        // that the callee clobbers, the caller is also allowed to clobber. This
-        // both saves work and enables us to more precisely follow the
+        // from caller to callee that both clobber the same register (such as
+        // using the same or similar ABIs). Such calls cannot possibly force any
+        // new registers to be saved in the prologue, because anything that the
+        // callee clobbers, the caller is also allowed to clobber. This both
+        // saves work and enables us to more precisely follow the
         // half-caller-save, half-callee-save SysV ABI for some vector
         // registers.
         //
         // See the note in [crate::isa::aarch64::abi::is_caller_save_reg] for
         // more information on this ABI-implementation hack.
-        match self {
-            &Inst::Args { .. } => false,
-            &Inst::Call { ref info } => info.caller_callconv != info.callee_callconv,
-            &Inst::CallInd { ref info } => info.caller_callconv != info.callee_callconv,
-            _ => true,
-        }
+        let caller_clobbers = AArch64MachineDeps::get_regs_clobbered_by_call(caller_callconv);
+        let callee_clobbers = AArch64MachineDeps::get_regs_clobbered_by_call(callee_callconv);
+
+        let mut all_clobbers = caller_clobbers;
+        all_clobbers.union_from(callee_clobbers);
+        all_clobbers != caller_clobbers
     }
 
     fn is_trap(&self) -> bool {
@@ -1022,6 +1031,7 @@ impl MachInst for Inst {
                     }
                 }
             }
+            RegClass::Vector => unreachable!(),
         }
     }
 
@@ -1075,6 +1085,7 @@ impl MachInst for Inst {
         match rc {
             RegClass::Float => types::I8X16,
             RegClass::Int => types::I64,
+            RegClass::Vector => unreachable!(),
         }
     }
 
@@ -1109,6 +1120,15 @@ impl MachInst for Inst {
             })
         } else {
             None
+        }
+    }
+
+    fn function_alignment() -> FunctionAlignment {
+        // We use 32-byte alignment for performance reasons, but for correctness
+        // we would only need 4-byte alignment.
+        FunctionAlignment {
+            minimum: 4,
+            preferred: 32,
         }
     }
 }
@@ -2491,34 +2511,54 @@ impl Inst {
             &Inst::Args { ref args } => {
                 let mut s = "args".to_string();
                 for arg in args {
-                    use std::fmt::Write;
                     let preg = pretty_print_reg(arg.preg, &mut empty_allocs);
                     let def = pretty_print_reg(arg.vreg.to_reg(), allocs);
                     write!(&mut s, " {}={}", def, preg).unwrap();
                 }
                 s
             }
-            &Inst::Ret { ref rets } => {
-                let mut s = "ret".to_string();
+            &Inst::Ret {
+                ref rets,
+                stack_bytes_to_pop,
+            } => {
+                let mut s = if stack_bytes_to_pop == 0 {
+                    "ret".to_string()
+                } else {
+                    format!("add sp, sp, #{} ; ret", stack_bytes_to_pop)
+                };
                 for ret in rets {
-                    use std::fmt::Write;
                     let preg = pretty_print_reg(ret.preg, &mut empty_allocs);
                     let vreg = pretty_print_reg(ret.vreg, allocs);
-                    write!(&mut s, " {}={}", vreg, preg).unwrap();
+                    write!(&mut s, " {vreg}={preg}").unwrap();
                 }
                 s
             }
-            &Inst::AuthenticatedRet { key, is_hint, .. } => {
+            &Inst::AuthenticatedRet {
+                key,
+                is_hint,
+                stack_bytes_to_pop,
+                ref rets,
+            } => {
                 let key = match key {
                     APIKey::A => "a",
                     APIKey::B => "b",
                 };
-
-                if is_hint {
-                    "auti".to_string() + key + "sp ; ret"
-                } else {
-                    "reta".to_string() + key
+                let mut s = match (is_hint, stack_bytes_to_pop) {
+                    (false, 0) => format!("reta{key}"),
+                    (false, n) => {
+                        format!("add sp, sp, #{n} ; reta{key}")
+                    }
+                    (true, 0) => format!("auti{key}sp ; ret"),
+                    (true, n) => {
+                        format!("add sp, sp, #{n} ; auti{key} ; ret")
+                    }
+                };
+                for ret in rets {
+                    let preg = pretty_print_reg(ret.preg, &mut empty_allocs);
+                    let vreg = pretty_print_reg(ret.vreg, allocs);
+                    write!(&mut s, " {vreg}={preg}").unwrap();
                 }
+                s
             }
             &Inst::Jump { ref dest } => {
                 let dest = dest.pretty_print(0, allocs);

@@ -1,9 +1,10 @@
-use crate::abi::{align_to, LocalSlot};
+use crate::abi::{self, align_to, LocalSlot};
 use crate::codegen::CodeGenContext;
 use crate::isa::reg::Reg;
 use crate::regalloc::RegAlloc;
 use cranelift_codegen::{Final, MachBufferFinalized};
 use std::{fmt::Debug, ops::Range};
+use wasmtime_environ::PtrSize;
 
 #[derive(Eq, PartialEq)]
 pub(crate) enum DivKind {
@@ -21,6 +22,49 @@ pub(crate) enum RemKind {
     Unsigned,
 }
 
+/// Kinds of binary comparison in WebAssembly. The [`masm`] implementation for
+/// each ISA is responsible for emitting the correct sequence of instructions
+/// when lowering to machine code.
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum CmpKind {
+    /// Equal.
+    Eq,
+    /// Not equal.
+    Ne,
+    /// Signed less than.
+    LtS,
+    /// Unsigned less than.
+    LtU,
+    /// Signed greater than.
+    GtS,
+    /// Unsigned greater than.
+    GtU,
+    /// Signed less than or equal.
+    LeS,
+    /// Unsigned less than or equal.
+    LeU,
+    /// Signed greater than or equal.
+    GeS,
+    /// Unsigned greater than or equal.
+    GeU,
+}
+
+/// Kinds of shifts in WebAssembly.The [`masm`] implementation for each ISA is
+/// responsible for emitting the correct sequence of instructions when
+/// lowering to machine code.
+pub(crate) enum ShiftKind {
+    /// Left shift.
+    Shl,
+    /// Signed right shift.
+    ShrS,
+    /// Unsigned right shift.
+    ShrU,
+    /// Left rotate.
+    Rotl,
+    /// Right rotate.
+    Rotr,
+}
+
 /// Operand size, in bits.
 #[derive(Copy, Debug, Clone, Eq, PartialEq)]
 pub(crate) enum OperandSize {
@@ -28,6 +72,24 @@ pub(crate) enum OperandSize {
     S32,
     /// 64 bits.
     S64,
+}
+
+impl OperandSize {
+    /// The number of bits in the operand.
+    pub fn num_bits(&self) -> i32 {
+        match self {
+            OperandSize::S32 => 32,
+            OperandSize::S64 => 64,
+        }
+    }
+
+    /// The binary logarithm of the number of bits in the operand.
+    pub fn log2(&self) -> u8 {
+        match self {
+            OperandSize::S32 => 5,
+            OperandSize::S64 => 6,
+        }
+    }
 }
 
 /// An abstraction over a register or immediate.
@@ -39,6 +101,7 @@ pub(crate) enum RegImm {
     Imm(i64),
 }
 
+#[derive(Clone)]
 pub(crate) enum CalleeKind {
     /// A function call to a raw address.
     Indirect(Reg),
@@ -83,7 +146,14 @@ impl From<Reg> for RegImm {
 
 pub(crate) trait MacroAssembler {
     /// The addressing mode.
-    type Address;
+    type Address: Copy;
+
+    /// The pointer representation of the target ISA,
+    /// used to access information from [`VMOffsets`].
+    type Ptr: PtrSize;
+
+    /// The ABI details of the target.
+    type ABI: abi::ABI;
 
     /// Emit the function prologue.
     fn prologue(&mut self);
@@ -109,11 +179,12 @@ pub(crate) trait MacroAssembler {
     /// current position of the stack pointer (e.g. [sp + offset].
     fn address_at_sp(&self, offset: u32) -> Self::Address;
 
-    /// Construct an address that is relative to the given register.
-    fn address_from_reg(&self, reg: Reg, offset: u32) -> Self::Address;
+    /// Construct an address that is absolute to the current position
+    /// of the given register.
+    fn address_at_reg(&self, reg: Reg, offset: u32) -> Self::Address;
 
     /// Emit a function call to either a local or external function.
-    fn call(&mut self, callee: CalleeKind);
+    fn call(&mut self, stack_args_size: u32, f: impl FnMut(&mut Self) -> CalleeKind) -> u32;
 
     /// Get stack pointer offset.
     fn sp_offset(&self) -> u32;
@@ -139,6 +210,23 @@ pub(crate) trait MacroAssembler {
     /// Perform multiplication operation.
     fn mul(&mut self, dst: RegImm, lhs: RegImm, rhs: RegImm, size: OperandSize);
 
+    /// Perform logical and operation.
+    fn and(&mut self, dst: RegImm, lhs: RegImm, rhs: RegImm, size: OperandSize);
+
+    /// Perform logical or operation.
+    fn or(&mut self, dst: RegImm, lhs: RegImm, rhs: RegImm, size: OperandSize);
+
+    /// Perform logical exclusive or operation.
+    fn xor(&mut self, dst: RegImm, lhs: RegImm, rhs: RegImm, size: OperandSize);
+
+    /// Perform a shift operation.
+    /// Shift is special in that some architectures have specific expectations
+    /// regarding the location of the instruction arguments. To free the
+    /// caller from having to deal with the architecture specific constraints
+    /// we give this function access to the code generation context, allowing
+    /// each implementation to decide the lowering path.
+    fn shift(&mut self, context: &mut CodeGenContext, kind: ShiftKind, size: OperandSize);
+
     /// Perform division operation.
     /// Division is special in that some architectures have specific
     /// expectations regarding the location of the instruction
@@ -155,6 +243,20 @@ pub(crate) trait MacroAssembler {
     /// Calculate remainder.
     fn rem(&mut self, context: &mut CodeGenContext, kind: RemKind, size: OperandSize);
 
+    /// Compare src and dst and put the result in dst.
+    /// This function will potentially emit a series of instructions.
+    fn cmp_with_set(&mut self, src: RegImm, dst: RegImm, kind: CmpKind, size: OperandSize);
+
+    /// Count the number of leading zeroes in src and put the result in dst.
+    /// In x64, this will emit multiple instructions if the `has_lzcnt` flag is
+    /// false.
+    fn clz(&mut self, src: Reg, dst: Reg, size: OperandSize);
+
+    /// Count the number of trailing zeroes in src and put the result in dst.
+    /// In x64, this will emit multiple instructions if the `has_tzcnt` flag is
+    /// false.
+    fn ctz(&mut self, src: Reg, dst: Reg, size: OperandSize);
+
     /// Push the register to the stack, returning the offset.
     fn push(&mut self, src: Reg) -> u32;
 
@@ -169,7 +271,8 @@ pub(crate) trait MacroAssembler {
     /// The default implementation divides the given memory range
     /// into word-sized slots. Then it unrolls a series of store
     /// instructions, effectively assigning zero to each slot.
-    fn zero_mem_range(&mut self, mem: &Range<u32>, word_size: u32, regalloc: &mut RegAlloc) {
+    fn zero_mem_range(&mut self, mem: &Range<u32>, regalloc: &mut RegAlloc) {
+        let word_size = <Self::ABI as abi::ABI>::word_bytes();
         if mem.is_empty() {
             return;
         }

@@ -78,7 +78,16 @@ impl Parse for Config {
                         if inline.is_some() {
                             return Err(Error::new(s.span(), "cannot specify a second source"));
                         }
-                        inline = Some(format!("default world interfaces {{ {} }}", s.value()));
+                        inline = Some(format!(
+                            "
+                                package wasmtime:component-macro-synthesized
+
+                                world interfaces {{
+                                    {}
+                                }}
+                            ",
+                            s.value()
+                        ));
 
                         if world.is_some() {
                             return Err(Error::new(
@@ -86,7 +95,7 @@ impl Parse for Config {
                                 "cannot specify a world with `interfaces`",
                             ));
                         }
-                        world = Some("macro-input.interfaces".to_string());
+                        world = Some("interfaces".to_string());
 
                         opts.only_interfaces = true;
                     }
@@ -130,7 +139,7 @@ fn parse_source(
         } else {
             let pkg = UnresolvedPackage::parse_file(path)?;
             files.extend(pkg.source_files().map(|s| s.to_owned()));
-            resolve.push(pkg, &Default::default())
+            resolve.push(pkg)
         }
     };
 
@@ -141,16 +150,7 @@ fn parse_source(
     };
 
     let inline_pkg = if let Some(inline) = inline {
-        let deps = resolve
-            .packages
-            .iter()
-            .map(|(id, p)| (p.name.clone(), id))
-            .collect();
-
-        Some(resolve.push(
-            UnresolvedPackage::parse("macro-input".as_ref(), &inline)?,
-            &deps,
-        )?)
+        Some(resolve.push(UnresolvedPackage::parse("macro-input".as_ref(), &inline)?)?)
     } else {
         None
     };

@@ -1,3 +1,5 @@
-default world foo {
+package foo:foo
+
+world foo {
   import foo: func()
 }

@@ -73,7 +73,6 @@ fn use_after_drop() -> anyhow::Result<()> {
     let g = instance.get_global(&mut store, "foo").unwrap();
     assert_eq!(g.get(&mut store).i32(), Some(100));
     g.set(&mut store, 101.into())?;
-    drop(instance);
     assert_eq!(g.get(&mut store).i32(), Some(101));
     Instance::new(&mut store, &module, &[])?;
     assert_eq!(g.get(&mut store).i32(), Some(101));

@@ -2,7 +2,7 @@ use crate::store::{Store, StoreInner};
 
 /// A temporary handle to a [`&Store<T>`][`Store`].
 ///
-/// This type is sutable for [`AsContext`] trait bounds on methods if desired.
+/// This type is suitable for [`AsContext`] trait bounds on methods if desired.
 /// For more information, see [`Store`].
 // NB the repr(transparent) here is for the C API and it's important that the
 // representation of this `struct` is a pointer for now. If the representation
@@ -12,7 +12,7 @@ pub struct StoreContext<'a, T>(pub(crate) &'a StoreInner<T>);
 
 /// A temporary handle to a [`&mut Store<T>`][`Store`].
 ///
-/// This type is sutable for [`AsContextMut`] or [`AsContext`] trait bounds on
+/// This type is suitable for [`AsContextMut`] or [`AsContext`] trait bounds on
 /// methods if desired.  For more information, see [`Store`].
 // NB the repr(transparent) here is for the same reason as above.
 #[repr(transparent)]

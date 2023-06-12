@@ -133,10 +133,14 @@ enum RunResult {
 
 impl PartialEq for RunResult {
     fn eq(&self, other: &Self) -> bool {
-        if let (RunResult::Success(l), RunResult::Success(r)) = (self, other) {
-            l.len() == r.len() && l.iter().zip(r).all(|(l, r)| l.bitwise_eq(r))
-        } else {
-            false
+        match (self, other) {
+            (RunResult::Success(l), RunResult::Success(r)) => {
+                l.len() == r.len() && l.iter().zip(r).all(|(l, r)| l.bitwise_eq(r))
+            }
+            (RunResult::Trap(l), RunResult::Trap(r)) => l == r,
+            (RunResult::Timeout, RunResult::Timeout) => true,
+            (RunResult::Error(_), RunResult::Error(_)) => unimplemented!(),
+            _ => false,
         }
     }
 }
@@ -351,11 +355,30 @@ fn run_test_inputs(testcase: &TestCase, run: impl Fn(&[DataValue]) -> RunResult)
 
         let res = run(args);
 
+        // This situation can happen when we are comparing the interpreter against the interpreter, and
+        // one of the optimization passes has increased the number of instructions in the function.
+        // This can cause the interpreter to run out of fuel in the second run, but not the first.
+        // We should ignore these cases.
+        // Running in the host should never return a timeout, so that should be ok.
+        if res == RunResult::Timeout {
+            return;
+        }
+
         assert_eq!(int_res, res);
     }
 }
 
 fuzz_target!(|testcase: TestCase| {
+    let mut testcase = testcase;
+    let fuel: u8 = std::env::args()
+        .find_map(|arg| arg.strip_prefix("--fuel=").map(|s| s.to_owned()))
+        .map(|fuel| fuel.parse().expect("fuel should be a valid integer"))
+        .unwrap_or_default();
+    for i in 0..testcase.ctrl_planes.len() {
+        testcase.ctrl_planes[i].set_fuel(fuel)
+    }
+    let testcase = testcase;
+
     // This is the default, but we should ensure that it wasn't accidentally turned off anywhere.
     assert!(testcase.isa.flags().enable_verifier());
 

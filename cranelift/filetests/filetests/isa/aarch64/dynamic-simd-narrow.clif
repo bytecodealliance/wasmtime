@@ -20,7 +20,7 @@ block0(v0: i16):
 ;   mov v2.d[1], v2.d[1], v2.d[0]
 ;   sqxtn v0.8b, v2.8h
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   dup v2.4h, w0
@@ -47,7 +47,7 @@ block0(v0: i16):
 ;   sqxtn v0.8b, v4.8h
 ;   sqxtn2 v0.16b, v0.16b, v4.8h
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   dup v4.8h, w0
@@ -74,7 +74,7 @@ block0(v0: i32):
 ;   mov v2.d[1], v2.d[1], v2.d[0]
 ;   sqxtn v0.4h, v2.4s
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   dup v2.2s, w0
@@ -101,7 +101,7 @@ block0(v0: i32):
 ;   sqxtn v0.4h, v4.4s
 ;   sqxtn2 v0.8h, v0.8h, v4.4s
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   dup v4.4s, w0
@@ -128,7 +128,7 @@ block0(v0: i64):
 ;   sqxtn v0.2s, v4.2d
 ;   sqxtn2 v0.4s, v0.4s, v4.2d
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   dup v4.2d, x0
@@ -155,7 +155,7 @@ block0(v0: i16):
 ;   mov v2.d[1], v2.d[1], v2.d[0]
 ;   sqxtun v0.8b, v2.8h
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   dup v2.4h, w0
@@ -182,7 +182,7 @@ block0(v0: i16):
 ;   sqxtun v0.8b, v4.8h
 ;   sqxtun2 v0.16b, v0.16b, v4.8h
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   dup v4.8h, w0
@@ -209,7 +209,7 @@ block0(v0: i32):
 ;   mov v2.d[1], v2.d[1], v2.d[0]
 ;   sqxtun v0.4h, v2.4s
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   dup v2.2s, w0
@@ -236,7 +236,7 @@ block0(v0: i32):
 ;   sqxtun v0.4h, v4.4s
 ;   sqxtun2 v0.8h, v0.8h, v4.4s
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   dup v4.4s, w0
@@ -263,7 +263,7 @@ block0(v0: i64):
 ;   sqxtun v0.2s, v4.2d
 ;   sqxtun2 v0.4s, v0.4s, v4.2d
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   dup v4.2d, x0
@@ -290,7 +290,7 @@ block0(v0: i16):
 ;   mov v2.d[1], v2.d[1], v2.d[0]
 ;   uqxtn v0.8b, v2.8h
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   dup v2.4h, w0
@@ -317,7 +317,7 @@ block0(v0: i16):
 ;   uqxtn v0.8b, v4.8h
 ;   uqxtn2 v0.16b, v0.16b, v4.8h
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   dup v4.8h, w0
@@ -344,7 +344,7 @@ block0(v0: i32):
 ;   mov v2.d[1], v2.d[1], v2.d[0]
 ;   uqxtn v0.4h, v2.4s
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   dup v2.2s, w0
@@ -371,7 +371,7 @@ block0(v0: i32):
 ;   uqxtn v0.4h, v4.4s
 ;   uqxtn2 v0.8h, v0.8h, v4.4s
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   dup v4.4s, w0
@@ -398,7 +398,7 @@ block0(v0: i64):
 ;   uqxtn v0.2s, v4.2d
 ;   uqxtn2 v0.4s, v0.4s, v4.2d
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   dup v4.2d, x0

@@ -43,6 +43,7 @@ fn test_version_mismatch() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn test_module_serialize_simple() -> Result<()> {
     let buffer = serialize(
         &Engine::default(),
@@ -59,6 +60,7 @@ fn test_module_serialize_simple() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn test_module_serialize_fail() -> Result<()> {
     let buffer = serialize(
         &Engine::default(),
@@ -76,6 +78,7 @@ fn test_module_serialize_fail() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn test_deserialize_from_file() -> Result<()> {
     serialize_and_call("(module (func (export \"run\") (result i32) i32.const 42))")?;
     serialize_and_call(
@@ -105,6 +108,7 @@ fn test_deserialize_from_file() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn deserialize_from_serialized() -> Result<()> {
     let engine = Engine::default();
     let buffer1 = serialize(

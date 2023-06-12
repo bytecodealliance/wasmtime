@@ -1,5 +1,5 @@
 test compile precise-output
-target x86_64
+target x86_64 sse41
 
 function u0:0(i64 vmctx, i8x16) -> i16x8 fast {
 block0(v0: i64, v2: i8x16):
@@ -12,21 +12,22 @@ block0(v0: i64, v2: i8x16):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movdqu  80(%rdi), %xmm3
-;   palignr $8, %xmm3, %xmm3, %xmm3
-;   pmovzxbw %xmm3, %xmm0
+;   movdqu  80(%rdi), %xmm0
+;   uninit  %xmm5
+;   pxor    %xmm5, %xmm5, %xmm5
+;   punpckhbw %xmm0, %xmm5, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movdqu 0x50(%rdi), %xmm3
-;   palignr $8, %xmm3, %xmm3
-;   pmovzxbw %xmm3, %xmm0
+;   movdqu 0x50(%rdi), %xmm0
+;   pxor %xmm5, %xmm5
+;   punpckhbw %xmm5, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

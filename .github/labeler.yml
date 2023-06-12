@@ -52,8 +52,9 @@
 "isle":
   - "cranelift/isle/**"
   - "**.isle"
-  - "cranelift/codegen/src/isa/x64/lower/isle.rs"
-  - "cranelift/codegen/src/isa/x64/lower/isle/**"
+  - "cranelift/codegen/src/isa/*/lower/isle.rs"
+  - "cranelift/codegen/src/isa/*/lower/isle/**"
+  - "cranelift/codegen/src/opts/*"
 
 "wasi":
   - "crates/wasi/**"

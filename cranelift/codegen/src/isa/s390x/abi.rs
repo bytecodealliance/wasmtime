@@ -232,6 +232,12 @@ impl ABIMachineSpec for S390xMachineDeps {
     where
         I: IntoIterator<Item = &'a ir::AbiParam>,
     {
+        assert_ne!(
+            call_conv,
+            isa::CallConv::Tail,
+            "s390x does not support the 'tail' calling convention yet"
+        );
+
         let mut next_gpr = 0;
         let mut next_fpr = 0;
         let mut next_vr = 0;
@@ -456,10 +462,16 @@ impl ABIMachineSpec for S390xMachineDeps {
         Inst::Args { args }
     }
 
-    fn gen_ret(_setup_frame: bool, _isa_flags: &s390x_settings::Flags, rets: Vec<RetPair>) -> Inst {
+    fn gen_ret(
+        _setup_frame: bool,
+        _isa_flags: &s390x_settings::Flags,
+        rets: Vec<RetPair>,
+        stack_bytes_to_pop: u32,
+    ) -> Inst {
         Inst::Ret {
             link: gpr(14),
             rets,
+            stack_bytes_to_pop,
         }
     }
 
@@ -761,11 +773,16 @@ impl ABIMachineSpec for S390xMachineDeps {
         unimplemented!("StructArgs not implemented for S390X yet");
     }
 
-    fn get_number_of_spillslots_for_value(rc: RegClass, _vector_scale: u32) -> u32 {
+    fn get_number_of_spillslots_for_value(
+        rc: RegClass,
+        _vector_scale: u32,
+        _isa_flags: &Self::F,
+    ) -> u32 {
         // We allocate in terms of 8-byte slots.
         match rc {
             RegClass::Int => 1,
             RegClass::Float => 2,
+            RegClass::Vector => unreachable!(),
         }
     }
 
@@ -834,6 +851,7 @@ fn is_reg_saved_in_prologue(_call_conv: isa::CallConv, r: RealReg) -> bool {
             // f8 - f15 inclusive are callee-saves.
             r.hw_enc() >= 8 && r.hw_enc() <= 15
         }
+        RegClass::Vector => unreachable!(),
     }
 }
 
@@ -878,6 +896,7 @@ fn get_clobbered_gpr_fpr(
                 }
             }
             RegClass::Float => clobbered_fpr.push(reg),
+            RegClass::Vector => unreachable!(),
         }
     }
 

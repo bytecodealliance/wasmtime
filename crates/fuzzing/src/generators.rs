@@ -23,6 +23,7 @@ pub mod table_ops;
 mod value;
 
 pub use codegen_settings::CodegenSettings;
+pub use config::CompilerStrategy;
 pub use config::{Config, WasmtimeConfig};
 pub use instance_allocation_strategy::InstanceAllocationStrategy;
 pub use memory::{MemoryConfig, NormalMemoryConfig, UnalignedMemory, UnalignedMemoryCreator};

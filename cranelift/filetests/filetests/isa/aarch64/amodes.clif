@@ -14,7 +14,7 @@ block0(v0: i64, v1: i32):
 ; block0:
 ;   ldr w0, [x0, w1, SXTW]
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ldr w0, [x0, w1, sxtw]
@@ -32,7 +32,7 @@ block0(v0: i64, v1: i32):
 ; block0:
 ;   ldr w0, [x0, w1, SXTW]
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ldr w0, [x0, w1, sxtw]
@@ -52,7 +52,7 @@ block0(v0: i32, v1: i32):
 ;   mov w3, w0
 ;   ldr w0, [x3, w1, UXTW]
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov w3, w0
@@ -77,7 +77,7 @@ block0(v0: i64, v1: i32):
 ;   add x7, x5, x1, SXTW
 ;   ldr w0, [x7, w1, SXTW]
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   add x3, x0, #0x44
@@ -102,7 +102,7 @@ block0(v0: i64, v1: i64, v2: i64):
 ;   add x6, x4, x1
 ;   ldr w0, [x6, #48]
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   add x4, x0, x2
@@ -127,7 +127,7 @@ block0(v0: i64, v1: i64, v2: i64):
 ;   add x8, x5, x2
 ;   ldr w0, [x8, x0]
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov x5, #0x1004
@@ -148,7 +148,7 @@ block0:
 ;   movz x0, #1234
 ;   ldr w0, [x0]
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov x0, #0x4d2
@@ -168,10 +168,30 @@ block0(v0: i64):
 ;   add x2, x0, #8388608
 ;   ldr w0, [x2]
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   add x2, x0, #0x800, lsl #12
+;   ldr w0, [x2]
+;   ret
+
+function %add_imm12_max_shifted(i64) -> i32 {
+block0(v0: i64):
+  v1 = iconst.i64 0xFFF000
+  v2 = iadd.i64 v0, v1
+  v3 = load.i32 v2
+  return v3
+}
+
+; VCode:
+; block0:
+;   add x2, x0, #16773120
+;   ldr w0, [x2]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   add x2, x0, #0xfff, lsl #12
 ;   ldr w0, [x2]
 ;   ret
 
@@ -188,7 +208,7 @@ block0(v0: i64):
 ;   sub x2, x0, #4
 ;   ldr w0, [x2]
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   sub x2, x0, #4
@@ -210,7 +230,7 @@ block0(v0: i64):
 ;   add x4, x3, x0
 ;   ldr w0, [x4]
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov w3, #0xca00
@@ -231,7 +251,7 @@ block0(v0: i32):
 ;   sxtw x2, w0
 ;   ldr w0, [x2]
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   sxtw x2, w0
@@ -252,7 +272,7 @@ block0(v0: i32, v1: i32):
 ;   sxtw x3, w0
 ;   ldr w0, [x3, w1, SXTW]
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   sxtw x3, w0
@@ -272,7 +292,7 @@ block0(v0: i64, v1: i64, v2: i64):
 ;   movn w4, #4097
 ;   ldrsh x0, [x4]
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov w4, #-0x1002
@@ -292,7 +312,7 @@ block0(v0: i64, v1: i64, v2: i64):
 ;   movz x4, #4098
 ;   ldrsh x0, [x4]
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov x4, #0x1002
@@ -313,7 +333,7 @@ block0(v0: i64, v1: i64, v2: i64):
 ;   sxtw x6, w4
 ;   ldrsh x0, [x6]
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov w4, #-0x1002
@@ -335,7 +355,7 @@ block0(v0: i64, v1: i64, v2: i64):
 ;   sxtw x6, w4
 ;   ldrsh x0, [x6]
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov x4, #0x1002
@@ -356,7 +376,7 @@ block0(v0: i64):
 ;   ldp x0, x1, [x5]
 ;   stp x0, x1, [x5]
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov x5, x0
@@ -377,7 +397,7 @@ block0(v0: i64):
 ;   ldp x0, x1, [x5, #16]
 ;   stp x0, x1, [x5, #16]
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov x5, x0
@@ -398,7 +418,7 @@ block0(v0: i64):
 ;   ldp x0, x1, [x5, #504]
 ;   stp x0, x1, [x5, #504]
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov x5, x0
@@ -419,7 +439,7 @@ block0(v0: i64):
 ;   ldp x0, x1, [x5, #-512]
 ;   stp x0, x1, [x5, #-512]
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov x5, x0
@@ -441,7 +461,7 @@ block0(v0: i64):
 ;   ldp x0, x1, [x5, #32]
 ;   stp x0, x1, [x5, #32]
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov x5, x0
@@ -465,7 +485,7 @@ block0(v0: i32):
 ;   sxtw x4, w8
 ;   stp x0, x1, [x4]
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   sxtw x3, w0
@@ -494,7 +514,7 @@ block0(v0: i64, v1: i32):
 ;   add x5, x11, x9, SXTW
 ;   stp x0, x1, [x5, #24]
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   add x4, x0, w1, sxtw

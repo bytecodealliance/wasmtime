@@ -13,7 +13,7 @@ use std::sync::Arc;
 use wasmtime_cache::CacheConfig;
 use wasmtime_environ::obj;
 use wasmtime_environ::{FlagValue, ObjectKind};
-use wasmtime_jit::{CodeMemory, ProfilingAgent};
+use wasmtime_jit::{profiling::ProfilingAgent, CodeMemory};
 use wasmtime_runtime::{debug_builtins, CompiledModuleIdAllocator, InstanceAllocator, MmapVec};
 
 mod serialization;
@@ -47,7 +47,7 @@ pub struct Engine {
 
 struct EngineInner {
     config: Config,
-    #[cfg(compiler)]
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
     compiler: Box<dyn wasmtime_environ::Compiler>,
     allocator: Box<dyn InstanceAllocator + Send + Sync>,
     profiler: Box<dyn ProfilingAgent>,
@@ -81,19 +81,18 @@ impl Engine {
         debug_builtins::ensure_exported();
 
         let registry = SignatureRegistry::new();
-        let mut config = config.clone();
+        let config = config.clone();
         config.validate()?;
 
-        #[cfg(compiler)]
-        let compiler = config.build_compiler()?;
-        drop(&mut config); // silence warnings without `cfg(compiler)`
+        #[cfg(any(feature = "cranelift", feature = "winch"))]
+        let (config, compiler) = config.build_compiler()?;
 
         let allocator = config.build_allocator()?;
         let profiler = config.build_profiler()?;
 
         Ok(Engine {
             inner: Arc::new(EngineInner {
-                #[cfg(compiler)]
+                #[cfg(any(feature = "cranelift", feature = "winch"))]
                 compiler,
                 config,
                 allocator,
@@ -133,7 +132,7 @@ impl Engine {
         &self.inner.config
     }
 
-    #[cfg(compiler)]
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub(crate) fn compiler(&self) -> &dyn wasmtime_environ::Compiler {
         &*self.inner.compiler
     }
@@ -217,8 +216,8 @@ impl Engine {
     ///
     /// [binary]: https://webassembly.github.io/spec/core/binary/index.html
     /// [text]: https://webassembly.github.io/spec/core/text/index.html
-    #[cfg(compiler)]
-    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))] // see build.rs
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
+    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn precompile_module(&self, bytes: &[u8]) -> Result<Vec<u8>> {
         #[cfg(feature = "wat")]
         let bytes = wat::parse_bytes(&bytes)?;
@@ -228,8 +227,8 @@ impl Engine {
 
     /// Same as [`Engine::precompile_module`] except for a
     /// [`Component`](crate::component::Component)
-    #[cfg(compiler)]
-    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))] // see build.rs
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
+    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     #[cfg(feature = "component-model")]
     #[cfg_attr(nightlydoc, doc(cfg(feature = "component-model")))]
     pub fn precompile_component(&self, bytes: &[u8]) -> Result<Vec<u8>> {
@@ -245,7 +244,7 @@ impl Engine {
     /// are compatible with a different [`Engine`] instance only if the two engines use
     /// compatible [`Config`]s. If this Hash matches between two [`Engine`]s then binaries
     /// from one are guaranteed to deserialize in the other.
-    #[cfg(compiler)]
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
     #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
     pub fn precompile_compatibility_hash(&self) -> impl std::hash::Hash + '_ {
         crate::module::HashedEngineCompileEnv(self)
@@ -300,11 +299,11 @@ impl Engine {
     /// and/or running code for.
     pub(crate) fn target(&self) -> target_lexicon::Triple {
         // If a compiler is configured, use that target.
-        #[cfg(compiler)]
+        #[cfg(any(feature = "cranelift", feature = "winch"))]
         return self.compiler().triple().clone();
 
         // ... otherwise it's the native target
-        #[cfg(not(compiler))]
+        #[cfg(not(any(feature = "cranelift", feature = "winch")))]
         return target_lexicon::Triple::host();
     }
 
@@ -324,7 +323,7 @@ impl Engine {
     }
 
     fn _check_compatible_with_native_host(&self) -> Result<(), String> {
-        #[cfg(compiler)]
+        #[cfg(any(feature = "cranelift", feature = "winch"))]
         {
             let compiler = self.compiler();
 
@@ -421,6 +420,7 @@ impl Engine {
             | "regalloc_checker"
             | "regalloc_verbose_logs"
             | "is_pic"
+            | "bb_padding_log2_minus_one"
             | "machine_code_cfg_info"
             | "tls_model" // wasmtime doesn't use tls right now
             | "opt_level" // opt level doesn't change semantics
@@ -577,12 +577,12 @@ impl Engine {
         ))
     }
 
-    #[cfg(compiler)]
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub(crate) fn append_compiler_info(&self, obj: &mut Object<'_>) {
         serialization::append_compiler_info(self, obj);
     }
 
-    #[cfg(compiler)]
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub(crate) fn append_bti(&self, obj: &mut Object<'_>) {
         let section = obj.add_section(
             obj.segment_name(StandardSegment::Data).to_vec(),
@@ -645,12 +645,13 @@ mod tests {
         hash::{Hash, Hasher},
     };
 
-    use crate::{Config, Engine, Module, OptLevel};
+    use crate::{Config, Engine, Module, ModuleVersionStrategy, OptLevel};
 
     use anyhow::Result;
     use tempfile::TempDir;
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn cache_accounts_for_opt_level() -> Result<()> {
         let td = TempDir::new()?;
         let config_path = td.path().join("config.toml");
@@ -725,5 +726,32 @@ mod tests {
         cfg.cranelift_opt_level(OptLevel::Speed);
         let opt_speed_hash = hash_for_config(&cfg);
         assert_ne!(opt_none_hash, opt_speed_hash)
+    }
+
+    #[test]
+    fn precompile_compatibility_key_accounts_for_module_version_strategy() -> Result<()> {
+        fn hash_for_config(cfg: &Config) -> u64 {
+            let engine = Engine::new(cfg).expect("Config should be valid");
+            let mut hasher = DefaultHasher::new();
+            engine.precompile_compatibility_hash().hash(&mut hasher);
+            hasher.finish()
+        }
+        let mut cfg_custom_version = Config::new();
+        cfg_custom_version.module_version(ModuleVersionStrategy::Custom("1.0.1111".to_string()))?;
+        let custom_version_hash = hash_for_config(&cfg_custom_version);
+
+        let mut cfg_default_version = Config::new();
+        cfg_default_version.module_version(ModuleVersionStrategy::WasmtimeVersion)?;
+        let default_version_hash = hash_for_config(&cfg_default_version);
+
+        let mut cfg_none_version = Config::new();
+        cfg_none_version.module_version(ModuleVersionStrategy::None)?;
+        let none_version_hash = hash_for_config(&cfg_none_version);
+
+        assert_ne!(custom_version_hash, default_version_hash);
+        assert_ne!(custom_version_hash, none_version_hash);
+        assert_ne!(default_version_hash, none_version_hash);
+
+        Ok(())
     }
 }

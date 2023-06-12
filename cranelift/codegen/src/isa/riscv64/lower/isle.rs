@@ -6,8 +6,12 @@ pub mod generated_code;
 use generated_code::{Context, ExtendOp, MInst};
 
 // Types that the generated ISLE code uses via `use super::*`.
+use self::generated_code::{VecAluOpRR, VecLmul};
 use super::{writable_zero_reg, zero_reg};
-use crate::isa::riscv64::abi::Riscv64ABICaller;
+use crate::isa::riscv64::abi::Riscv64ABICallSite;
+use crate::isa::riscv64::lower::args::{
+    FReg, VReg, WritableFReg, WritableVReg, WritableXReg, XReg,
+};
 use crate::isa::riscv64::Riscv64Backend;
 use crate::machinst::Reg;
 use crate::machinst::{isle::*, MachInst, SmallInstVec};
@@ -33,25 +37,86 @@ type VecMachLabel = Vec<MachLabel>;
 type VecArgPair = Vec<ArgPair>;
 use crate::machinst::valueregs;
 
-/// The main entry point for lowering with ISLE.
-pub(crate) fn lower(
-    lower_ctx: &mut Lower<MInst>,
-    backend: &Riscv64Backend,
-    inst: Inst,
-) -> Option<InstOutput> {
-    // TODO: reuse the ISLE context across lowerings so we can reuse its
-    // internal heap allocations.
-    let mut isle_ctx = IsleContext { lower_ctx, backend };
-    generated_code::constructor_lower(&mut isle_ctx, inst)
+pub(crate) struct RV64IsleContext<'a, 'b, I, B>
+where
+    I: VCodeInst,
+    B: LowerBackend,
+{
+    pub lower_ctx: &'a mut Lower<'b, I>,
+    pub backend: &'a B,
+    /// Precalucated value for the minimum vector register size. Will be 0 if
+    /// vectors are not supported.
+    min_vec_reg_size: u64,
 }
 
-impl IsleContext<'_, '_, MInst, Riscv64Backend> {
-    isle_prelude_method_helpers!(Riscv64ABICaller);
+impl<'a, 'b> RV64IsleContext<'a, 'b, MInst, Riscv64Backend> {
+    isle_prelude_method_helpers!(Riscv64ABICallSite);
+
+    fn new(lower_ctx: &'a mut Lower<'b, MInst>, backend: &'a Riscv64Backend) -> Self {
+        Self {
+            lower_ctx,
+            backend,
+            min_vec_reg_size: backend.isa_flags.min_vec_reg_size(),
+        }
+    }
+
+    #[inline]
+    fn emit_list(&mut self, list: &SmallInstVec<MInst>) {
+        for i in list {
+            self.lower_ctx.emit(i.clone());
+        }
+    }
 }
 
-impl generated_code::Context for IsleContext<'_, '_, MInst, Riscv64Backend> {
+impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> {
     isle_lower_prelude_methods!();
-    isle_prelude_caller_methods!(Riscv64MachineDeps, Riscv64ABICaller);
+    isle_prelude_caller_methods!(Riscv64MachineDeps, Riscv64ABICallSite);
+
+    fn vreg_new(&mut self, r: Reg) -> VReg {
+        VReg::new(r).unwrap()
+    }
+    fn writable_vreg_new(&mut self, r: WritableReg) -> WritableVReg {
+        r.map(|wr| VReg::new(wr).unwrap())
+    }
+    fn writable_vreg_to_vreg(&mut self, arg0: WritableVReg) -> VReg {
+        arg0.to_reg()
+    }
+    fn writable_vreg_to_writable_reg(&mut self, arg0: WritableVReg) -> WritableReg {
+        arg0.map(|vr| vr.to_reg())
+    }
+    fn vreg_to_reg(&mut self, arg0: VReg) -> Reg {
+        *arg0
+    }
+    fn xreg_new(&mut self, r: Reg) -> XReg {
+        XReg::new(r).unwrap()
+    }
+    fn writable_xreg_new(&mut self, r: WritableReg) -> WritableXReg {
+        r.map(|wr| XReg::new(wr).unwrap())
+    }
+    fn writable_xreg_to_xreg(&mut self, arg0: WritableXReg) -> XReg {
+        arg0.to_reg()
+    }
+    fn writable_xreg_to_writable_reg(&mut self, arg0: WritableXReg) -> WritableReg {
+        arg0.map(|xr| xr.to_reg())
+    }
+    fn xreg_to_reg(&mut self, arg0: XReg) -> Reg {
+        *arg0
+    }
+    fn freg_new(&mut self, r: Reg) -> FReg {
+        FReg::new(r).unwrap()
+    }
+    fn writable_freg_new(&mut self, r: WritableReg) -> WritableFReg {
+        r.map(|wr| FReg::new(wr).unwrap())
+    }
+    fn writable_freg_to_freg(&mut self, arg0: WritableFReg) -> FReg {
+        arg0.to_reg()
+    }
+    fn writable_freg_to_writable_reg(&mut self, arg0: WritableFReg) -> WritableReg {
+        arg0.map(|fr| fr.to_reg())
+    }
+    fn freg_to_reg(&mut self, arg0: FReg) -> Reg {
+        *arg0
+    }
 
     fn vec_writable_to_regs(&mut self, val: &VecWritableReg) -> ValueRegs {
         match val.len() {
@@ -115,18 +180,18 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Riscv64Backend> {
         });
     }
     fn load_ra(&mut self) -> Reg {
-        let tmp = self.temp_writable_reg(I64);
         if self.backend.flags.preserve_frame_pointers() {
+            let tmp = self.temp_writable_reg(I64);
             self.emit(&MInst::Load {
                 rd: tmp,
                 op: LoadOP::Ld,
                 flags: MemFlags::trusted(),
                 from: AMode::FPOffset(8, I64),
             });
+            tmp.to_reg()
         } else {
-            self.emit(&gen_move(tmp, I64, link_reg(), I64));
+            link_reg()
         }
-        tmp.to_reg()
     }
     fn int_zero_reg(&mut self, ty: Type) -> ValueRegs {
         assert!(ty.is_int(), "{:?}", ty);
@@ -149,20 +214,10 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Riscv64Backend> {
         v.clone()
     }
 
-    fn gen_moves(&mut self, rs: ValueRegs, in_ty: Type, out_ty: Type) -> ValueRegs {
-        let tmp = construct_dest(|ty| self.temp_writable_reg(ty), out_ty);
-        if in_ty.bits() < 64 {
-            self.emit(&gen_move(tmp.regs()[0], out_ty, rs.regs()[0], in_ty));
-        } else {
-            gen_moves(tmp.regs(), rs.regs())
-                .iter()
-                .for_each(|i| self.emit(i));
-        }
-        tmp.map(|r| r.to_reg())
-    }
-    fn imm12_and(&mut self, imm: Imm12, x: i32) -> Imm12 {
+    fn imm12_and(&mut self, imm: Imm12, x: u64) -> Imm12 {
         Imm12::from_bits(imm.as_i16() & (x as i16))
     }
+
     fn alloc_vec_writable(&mut self, ty: Type) -> VecWritableReg {
         if ty.is_int() || ty == R32 || ty == R64 {
             if ty.bits() <= 64 {
@@ -197,6 +252,26 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Riscv64Backend> {
         Imm12::maybe_from_u64(arg0)
     }
     #[inline]
+    fn imm5_from_u64(&mut self, arg0: u64) -> Option<Imm5> {
+        Imm5::maybe_from_i8(i8::try_from(arg0 as i64).ok()?)
+    }
+    #[inline]
+    fn imm5_from_i8(&mut self, arg0: i8) -> Option<Imm5> {
+        Imm5::maybe_from_i8(arg0)
+    }
+    #[inline]
+    fn uimm5_bitcast_to_imm5(&mut self, arg0: UImm5) -> Imm5 {
+        Imm5::from_bits(arg0.bits() as u8)
+    }
+    #[inline]
+    fn uimm5_from_u8(&mut self, arg0: u8) -> Option<UImm5> {
+        UImm5::maybe_from_u8(arg0)
+    }
+    #[inline]
+    fn uimm5_from_u64(&mut self, arg0: u64) -> Option<UImm5> {
+        arg0.try_into().ok().and_then(UImm5::maybe_from_u8)
+    }
+    #[inline]
     fn writable_zero_reg(&mut self) -> WritableReg {
         writable_zero_reg()
     }
@@ -220,7 +295,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Riscv64Backend> {
     fn gen_default_frm(&mut self) -> OptionFloatRoundingMode {
         None
     }
-    fn gen_select_reg(&mut self, cc: &IntCC, a: Reg, b: Reg, rs1: Reg, rs2: Reg) -> Reg {
+    fn gen_select_reg(&mut self, cc: &IntCC, a: XReg, b: XReg, rs1: Reg, rs2: Reg) -> Reg {
         let rd = self.temp_writable_reg(MInst::canonical_type_for_rc(rs1.class()));
         self.emit(&MInst::SelectReg {
             rd,
@@ -228,8 +303,8 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Riscv64Backend> {
             rs2,
             condition: IntegerCompare {
                 kind: *cc,
-                rs1: a,
-                rs2: b,
+                rs1: a.to_reg(),
+                rs2: b.to_reg(),
             },
         });
         rd.to_reg()
@@ -298,14 +373,14 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Riscv64Backend> {
     }
 
     //
-    fn gen_shamt(&mut self, ty: Type, shamt: Reg) -> ValueRegs {
+    fn gen_shamt(&mut self, ty: Type, shamt: XReg) -> ValueRegs {
         let ty_bits = if ty.bits() > 64 { 64 } else { ty.bits() };
         let shamt = {
             let tmp = self.temp_writable_reg(I64);
             self.emit(&MInst::AluRRImm12 {
                 alu_op: AluOPRRI::Andi,
                 rd: tmp,
-                rs: shamt,
+                rs: shamt.to_reg(),
                 imm12: Imm12::from_bits((ty_bits - 1) as i16),
             });
             tmp.to_reg()
@@ -349,21 +424,11 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Riscv64Backend> {
         self.backend.isa_flags.has_zbs()
     }
 
-    fn move_f_to_x(&mut self, r: Reg, ty: Type) -> Reg {
-        let result = self.temp_writable_reg(I64);
-        self.emit(&gen_move(result, I64, r, ty));
-        result.to_reg()
-    }
     fn offset32_imm(&mut self, offset: i32) -> Offset32 {
         Offset32::new(offset)
     }
     fn default_memflags(&mut self) -> MemFlags {
         MemFlags::new()
-    }
-    fn move_x_to_f(&mut self, r: Reg, ty: Type) -> Reg {
-        let result = self.temp_writable_reg(ty);
-        self.emit(&gen_move(result, ty, r, I64));
-        result.to_reg()
     }
 
     fn pack_float_rounding_mode(&mut self, f: &FRM) -> OptionFloatRoundingMode {
@@ -373,9 +438,15 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Riscv64Backend> {
     fn int_convert_2_float_op(&mut self, from: Type, is_signed: bool, to: Type) -> FpuOPRR {
         FpuOPRR::int_convert_2_float_op(from, is_signed, to)
     }
+
     fn gen_amode(&mut self, base: Reg, offset: Offset32, ty: Type) -> AMode {
         AMode::RegOffset(base, i64::from(offset), ty)
     }
+
+    fn gen_const_amode(&mut self, c: VCodeConstant) -> AMode {
+        AMode::Const(c)
+    }
+
     fn valid_atomic_transaction(&mut self, ty: Type) -> Option<Type> {
         if ty.is_int() && ty.bits() <= 64 {
             Some(ty)
@@ -450,7 +521,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Riscv64Backend> {
         px_reg(2)
     }
 
-    fn shift_int_to_most_significant(&mut self, v: Reg, ty: Type) -> Reg {
+    fn shift_int_to_most_significant(&mut self, v: XReg, ty: Type) -> XReg {
         assert!(ty.is_int() && ty.bits() <= 64);
         if ty == I64 {
             return v;
@@ -459,19 +530,19 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Riscv64Backend> {
         self.emit(&MInst::AluRRImm12 {
             alu_op: AluOPRRI::Slli,
             rd: tmp,
-            rs: v,
+            rs: v.to_reg(),
             imm12: Imm12::from_bits((64 - ty.bits()) as i16),
         });
 
-        tmp.to_reg()
+        self.xreg_new(tmp.to_reg())
     }
 
     #[inline]
-    fn int_compare(&mut self, kind: &IntCC, rs1: Reg, rs2: Reg) -> IntegerCompare {
+    fn int_compare(&mut self, kind: &IntCC, rs1: XReg, rs2: XReg) -> IntegerCompare {
         IntegerCompare {
             kind: *kind,
-            rs1,
-            rs2,
+            rs1: rs1.to_reg(),
+            rs2: rs2.to_reg(),
         }
     }
 
@@ -479,15 +550,46 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, Riscv64Backend> {
     fn vstate_from_type(&mut self, ty: Type) -> VState {
         VState::from_type(ty)
     }
-}
 
-impl IsleContext<'_, '_, MInst, Riscv64Backend> {
     #[inline]
-    fn emit_list(&mut self, list: &SmallInstVec<MInst>) {
-        for i in list {
-            self.lower_ctx.emit(i.clone());
+    fn vstate_mf2(&mut self, vs: VState) -> VState {
+        VState {
+            vtype: VType {
+                lmul: VecLmul::LmulF2,
+                ..vs.vtype
+            },
+            ..vs
         }
     }
+
+    fn min_vec_reg_size(&mut self) -> u64 {
+        self.min_vec_reg_size
+    }
+
+    #[inline]
+    fn ty_vec_fits_in_register(&mut self, ty: Type) -> Option<Type> {
+        if ty.is_vector() && (ty.bits() as u64) <= self.min_vec_reg_size() {
+            Some(ty)
+        } else {
+            None
+        }
+    }
+
+    fn vec_alu_rr_dst_type(&mut self, op: &VecAluOpRR) -> Type {
+        MInst::canonical_type_for_rc(op.dst_regclass())
+    }
+}
+
+/// The main entry point for lowering with ISLE.
+pub(crate) fn lower(
+    lower_ctx: &mut Lower<MInst>,
+    backend: &Riscv64Backend,
+    inst: Inst,
+) -> Option<InstOutput> {
+    // TODO: reuse the ISLE context across lowerings so we can reuse its
+    // internal heap allocations.
+    let mut isle_ctx = RV64IsleContext::new(lower_ctx, backend);
+    generated_code::constructor_lower(&mut isle_ctx, inst)
 }
 
 /// The main entry point for branch lowering with ISLE.
@@ -499,24 +601,6 @@ pub(crate) fn lower_branch(
 ) -> Option<()> {
     // TODO: reuse the ISLE context across lowerings so we can reuse its
     // internal heap allocations.
-    let mut isle_ctx = IsleContext { lower_ctx, backend };
+    let mut isle_ctx = RV64IsleContext::new(lower_ctx, backend);
     generated_code::constructor_lower_branch(&mut isle_ctx, branch, &targets.to_vec())
-}
-
-/// construct destination according to ty.
-fn construct_dest<F: std::ops::FnMut(Type) -> WritableReg>(
-    mut alloc: F,
-    ty: Type,
-) -> WritableValueRegs {
-    if ty.is_int() || ty.is_ref() {
-        if ty.bits() == 128 {
-            WritableValueRegs::two(alloc(I64), alloc(I64))
-        } else {
-            WritableValueRegs::one(alloc(I64))
-        }
-    } else if ty.is_float() {
-        WritableValueRegs::one(alloc(F64))
-    } else {
-        unimplemented!("vector type not implemented.");
-    }
 }

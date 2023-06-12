@@ -19,7 +19,7 @@ block0(v0: i8):
 ;   dup v3.16b, w0
 ;   sxtl2 v0.8h, v3.16b
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   dup v3.16b, w0
@@ -44,7 +44,7 @@ block0(v0: i16):
 ;   dup v3.8h, w0
 ;   sxtl2 v0.4s, v3.8h
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   dup v3.8h, w0
@@ -69,7 +69,7 @@ block0(v0: i32):
 ;   dup v3.4s, w0
 ;   sxtl2 v0.2d, v3.4s
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   dup v3.4s, w0
@@ -94,7 +94,7 @@ block0(v0: i8):
 ;   dup v3.16b, w0
 ;   sxtl v0.8h, v3.8b
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   dup v3.16b, w0
@@ -119,7 +119,7 @@ block0(v0: i16):
 ;   dup v3.8h, w0
 ;   sxtl v0.4s, v3.4h
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   dup v3.8h, w0
@@ -144,7 +144,7 @@ block0(v0: i32):
 ;   dup v3.4s, w0
 ;   sxtl v0.2d, v3.2s
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   dup v3.4s, w0

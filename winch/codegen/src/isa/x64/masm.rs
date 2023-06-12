@@ -1,10 +1,17 @@
 use super::{
+    abi::X64ABI,
     address::Address,
     asm::{Assembler, Operand},
     regs::{self, rbp, rsp},
 };
-use crate::masm::{DivKind, MacroAssembler as Masm, OperandSize, RegImm, RemKind};
-use crate::{abi::LocalSlot, codegen::CodeGenContext, stack::Val};
+use crate::masm::{
+    CmpKind, DivKind, MacroAssembler as Masm, OperandSize, RegImm, RemKind, ShiftKind,
+};
+use crate::{
+    abi::{self, align_to, calculate_frame_adjustment, LocalSlot},
+    codegen::CodeGenContext,
+    stack::Val,
+};
 use crate::{isa::reg::Reg, masm::CalleeKind};
 use cranelift_codegen::{isa::x64::settings as x64_settings, settings, Final, MachBufferFinalized};
 
@@ -14,6 +21,8 @@ pub(crate) struct MacroAssembler {
     sp_offset: u32,
     /// Low level assembler.
     asm: Assembler,
+    /// ISA flags.
+    flags: x64_settings::Flags,
 }
 
 // Conversions between generic masm arguments and x64 operands.
@@ -41,6 +50,8 @@ impl From<Address> for Operand {
 
 impl Masm for MacroAssembler {
     type Address = Address;
+    type Ptr = u8;
+    type ABI = X64ABI;
 
     fn prologue(&mut self) {
         let frame_pointer = rbp();
@@ -53,10 +64,7 @@ impl Masm for MacroAssembler {
 
     fn push(&mut self, reg: Reg) -> u32 {
         self.asm.push_r(reg);
-        // In x64 the push instruction takes either
-        // 2 or 8 bytes; in our case we're always
-        // assuming 8 bytes per push.
-        self.increment_sp(8);
+        self.increment_sp(<Self::ABI as abi::ABI>::word_bytes());
 
         self.sp_offset
     }
@@ -110,12 +118,23 @@ impl Masm for MacroAssembler {
 
     fn pop(&mut self, dst: Reg) {
         self.asm.pop_r(dst);
-        // Similar to the comment in `push`, we assume 8 bytes per pop.
-        self.decrement_sp(8);
+        self.decrement_sp(<Self::ABI as abi::ABI>::word_bytes());
     }
 
-    fn call(&mut self, callee: CalleeKind) {
+    fn call(
+        &mut self,
+        stack_args_size: u32,
+        mut load_callee: impl FnMut(&mut Self) -> CalleeKind,
+    ) -> u32 {
+        let alignment: u32 = <Self::ABI as abi::ABI>::call_stack_align().into();
+        let addend: u32 = <Self::ABI as abi::ABI>::arg_base_offset().into();
+        let delta = calculate_frame_adjustment(self.sp_offset(), addend, alignment);
+        let aligned_args_size = align_to(stack_args_size, alignment);
+        let total_stack = delta + aligned_args_size;
+        self.reserve_stack(total_stack);
+        let callee = load_callee(self);
         self.asm.call(callee);
+        total_stack
     }
 
     fn load(&mut self, src: Address, dst: Reg, size: OperandSize) {
@@ -178,6 +197,80 @@ impl Masm for MacroAssembler {
         self.asm.mul(src, dst, size);
     }
 
+    fn and(&mut self, dst: RegImm, lhs: RegImm, rhs: RegImm, size: OperandSize) {
+        let (src, dst): (Operand, Operand) = if dst == lhs {
+            (rhs.into(), dst.into())
+        } else {
+            panic!(
+                "the destination and first source argument must be the same, dst={:?}, lhs={:?}",
+                dst, lhs
+            );
+        };
+
+        self.asm.and(src, dst, size);
+    }
+
+    fn or(&mut self, dst: RegImm, lhs: RegImm, rhs: RegImm, size: OperandSize) {
+        let (src, dst): (Operand, Operand) = if dst == lhs {
+            (rhs.into(), dst.into())
+        } else {
+            panic!(
+                "the destination and first source argument must be the same, dst={:?}, lhs={:?}",
+                dst, lhs
+            );
+        };
+
+        self.asm.or(src, dst, size);
+    }
+
+    fn xor(&mut self, dst: RegImm, lhs: RegImm, rhs: RegImm, size: OperandSize) {
+        let (src, dst): (Operand, Operand) = if dst == lhs {
+            (rhs.into(), dst.into())
+        } else {
+            panic!(
+                "the destination and first source argument must be the same, dst={:?}, lhs={:?}",
+                dst, lhs
+            );
+        };
+
+        self.asm.xor(src, dst, size);
+    }
+
+    fn shift(&mut self, context: &mut CodeGenContext, kind: ShiftKind, size: OperandSize) {
+        let top = context.stack.peek().expect("value at stack top");
+
+        if size == OperandSize::S32 && top.is_i32_const() {
+            let val = context
+                .stack
+                .pop_i32_const()
+                .expect("i32 const value at stack top");
+            let reg = context.pop_to_reg(self, None, size);
+
+            self.asm.shift_ir(val as u8, reg, kind, size);
+
+            context.stack.push(Val::reg(reg));
+        } else if size == OperandSize::S64 && top.is_i64_const() {
+            let val = context
+                .stack
+                .pop_i64_const()
+                .expect("i64 const value at stack top");
+            let reg = context.pop_to_reg(self, None, size);
+
+            self.asm.shift_ir(val as u8, reg, kind, size);
+
+            context.stack.push(Val::reg(reg));
+        } else {
+            // Number of bits to shift must be in the CL register.
+            let src = context.pop_to_reg(self, Some(regs::rcx()), size);
+            let dst = context.pop_to_reg(self, None, size);
+
+            self.asm.shift_rr(src.into(), dst.into(), kind, size);
+
+            context.regalloc.free_gpr(src);
+            context.stack.push(Val::reg(dst));
+        }
+    }
+
     fn div(&mut self, context: &mut CodeGenContext, kind: DivKind, size: OperandSize) {
         // Allocate rdx:rax.
         let rdx = context.gpr(regs::rdx(), self);
@@ -237,8 +330,51 @@ impl Masm for MacroAssembler {
         self.asm.finalize()
     }
 
-    fn address_from_reg(&self, reg: Reg, offset: u32) -> Self::Address {
+    fn address_at_reg(&self, reg: Reg, offset: u32) -> Self::Address {
         Address::offset(reg, offset)
+    }
+
+    fn cmp_with_set(&mut self, src: RegImm, dst: RegImm, kind: CmpKind, size: OperandSize) {
+        let dst = dst.into();
+        self.asm.cmp(src.into(), dst, size);
+        self.asm.setcc(kind, dst);
+    }
+
+    fn clz(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+        if self.flags.has_lzcnt() {
+            self.asm.lzcnt(src, dst, size);
+        } else {
+            let scratch = regs::scratch();
+
+            // Use the following approach:
+            // dst = size.num_bits() - bsr(src) - is_not_zero
+            //     = size.num.bits() + -bsr(src) - is_not_zero.
+            self.asm.bsr(src.into(), dst.into(), size);
+            self.asm.setcc(CmpKind::Ne, scratch.into());
+            self.asm.neg(dst, dst, size);
+            self.asm.add_ir(size.num_bits(), dst, size);
+            self.asm.sub_rr(scratch, dst, size);
+        }
+    }
+
+    fn ctz(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+        if self.flags.has_bmi1() {
+            self.asm.tzcnt(src, dst, size);
+        } else {
+            let scratch = regs::scratch();
+
+            // Use the following approach:
+            // dst = bsf(src) + (is_zero * size.num_bits())
+            //     = bsf(src) + (is_zero << size.log2()).
+            // BSF outputs the correct value for every value except 0.
+            // When the value is 0, BSF outputs 0, correct output for ctz is
+            // the number of bits.
+            self.asm.bsf(src.into(), dst.into(), size);
+            self.asm.setcc(CmpKind::Eq, scratch.into());
+            self.asm
+                .shift_ir(size.log2(), scratch, ShiftKind::Shl, size);
+            self.asm.add_rr(scratch, dst, size);
+        }
     }
 }
 
@@ -247,7 +383,8 @@ impl MacroAssembler {
     pub fn new(shared_flags: settings::Flags, isa_flags: x64_settings::Flags) -> Self {
         Self {
             sp_offset: 0,
-            asm: Assembler::new(shared_flags, isa_flags),
+            asm: Assembler::new(shared_flags, isa_flags.clone()),
+            flags: isa_flags,
         }
     }
 

@@ -15,6 +15,10 @@ pub enum CallConv {
     /// Smallest caller code size, not ABI-stable.
     Cold,
     /// Supports tail calls, not ABI-stable.
+    //
+    // Currently, this is basically sys-v except that callees pop stack
+    // arguments, rather than callers. Expected to change even more in the
+    // future, however!
     Tail,
     /// System V-style convention used on many platforms.
     SystemV,

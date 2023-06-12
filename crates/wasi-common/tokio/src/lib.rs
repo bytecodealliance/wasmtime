@@ -9,15 +9,13 @@ pub mod stdio;
 use std::future::Future;
 use std::path::Path;
 pub use wasi_cap_std_sync::{clocks_ctx, random_ctx};
-use wasi_common::{Error, Table, WasiCtx, WasiFile};
+use wasi_common::{file::FileAccessMode, Error, Table, WasiCtx, WasiFile};
 
+use crate::sched::sched_ctx;
 pub use dir::Dir;
 pub use file::File;
 pub use net::*;
 use wasi_cap_std_sync::net::Socket;
-use wasi_common::file::FileCaps;
-
-use crate::sched::sched_ctx;
 
 pub struct WasiCtxBuilder(WasiCtx);
 
@@ -98,13 +96,8 @@ impl WasiCtxBuilder {
     pub fn preopened_socket(self, fd: u32, socket: impl Into<Socket>) -> Result<Self, Error> {
         let socket: Socket = socket.into();
         let file: Box<dyn WasiFile> = socket.into();
-
-        let caps = FileCaps::FDSTAT_SET_FLAGS
-            | FileCaps::FILESTAT_GET
-            | FileCaps::READ
-            | FileCaps::POLL_READWRITE;
-
-        self.0.insert_file(fd, file, caps);
+        self.0
+            .insert_file(fd, file, FileAccessMode::READ | FileAccessMode::WRITE);
         Ok(self)
     }
 

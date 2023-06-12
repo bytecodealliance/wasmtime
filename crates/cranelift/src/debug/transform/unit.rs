@@ -7,7 +7,7 @@ use super::refs::{PendingDebugInfoRefs, PendingUnitRefs, UnitRefsMap};
 use super::utils::{add_internal_types, append_vmctx_info, get_function_frame_info};
 use super::{DebugInputContext, Reader, TransformError};
 use crate::debug::ModuleMemoryOffset;
-use crate::CompiledFunctions;
+use crate::CompiledFunctionsMetadata;
 use anyhow::{Context, Error};
 use cranelift_codegen::ir::Endianness;
 use cranelift_codegen::isa::TargetIsa;
@@ -258,7 +258,7 @@ pub(crate) fn clone_unit<'a, R>(
     unit: Unit<R, R::Offset>,
     context: &DebugInputContext<R>,
     addr_tr: &'a AddressTransform,
-    funcs: &'a CompiledFunctions,
+    funcs: &'a CompiledFunctionsMetadata,
     memory_offset: &ModuleMemoryOffset,
     out_encoding: gimli::Encoding,
     out_units: &mut write::UnitTable,

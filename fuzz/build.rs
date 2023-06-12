@@ -6,10 +6,10 @@ fn main() -> anyhow::Result<()> {
 
 mod component {
     use anyhow::{anyhow, Context, Error, Result};
-    use arbitrary::{Arbitrary, Unstructured};
-    use component_fuzz_util::{self, Declarations, TestCase};
+    use arbitrary::Unstructured;
+    use component_fuzz_util::{self, Declarations, TestCase, Type, MAX_TYPE_DEPTH};
     use proc_macro2::TokenStream;
-    use quote::{format_ident, quote};
+    use quote::quote;
     use rand::rngs::StdRng;
     use rand::{Rng, SeedableRng};
     use std::env;
@@ -50,30 +50,66 @@ mod component {
 
         let mut rng = StdRng::seed_from_u64(seed);
 
+        const TYPE_COUNT: usize = 50;
+        const MAX_ARITY: u32 = 5;
         const TEST_CASE_COUNT: usize = 100;
 
+        let mut type_fuel = 1000;
+        let mut types = Vec::new();
+        let name_counter = &mut 0;
+        let mut declarations = TokenStream::new();
         let mut tests = TokenStream::new();
 
-        let name_counter = &mut 0;
-
-        let mut declarations = TokenStream::new();
-
-        for index in 0..TEST_CASE_COUNT {
-            let mut bytes = Vec::new();
-
-            let case = loop {
-                let count = rng.gen_range(1000..2000);
-                bytes.extend(iter::repeat_with(|| rng.gen::<u8>()).take(count));
-
-                match TestCase::arbitrary(&mut Unstructured::new(&bytes)) {
-                    Ok(case) => break case,
-                    Err(arbitrary::Error::NotEnoughData) => (),
-                    Err(error) => return Err(Error::from(error)),
+        // First generate a set of type to select from.
+        for _ in 0..TYPE_COUNT {
+            let ty = gen(&mut rng, |u| {
+                // Only discount fuel if the generation was successful,
+                // otherwise we'll get more random data and try again.
+                let mut fuel = type_fuel;
+                let ret = Type::generate(u, MAX_TYPE_DEPTH, &mut fuel);
+                if ret.is_ok() {
+                    type_fuel = fuel;
                 }
-            };
+                ret
+            })?;
+
+            let name = component_fuzz_util::rust_type(&ty, name_counter, &mut declarations);
+            types.push((name, ty));
+        }
+
+        // Next generate a set of static API test cases driven by the above
+        // types.
+        for index in 0..TEST_CASE_COUNT {
+            let (case, rust_params, rust_results) = gen(&mut rng, |u| {
+                let mut params = Vec::new();
+                let mut results = Vec::new();
+                let mut rust_params = TokenStream::new();
+                let mut rust_results = TokenStream::new();
+                for _ in 0..u.int_in_range(0..=MAX_ARITY)? {
+                    let (name, ty) = u.choose(&types)?;
+                    params.push(ty);
+                    rust_params.extend(name.clone());
+                    rust_params.extend(quote!(,));
+                }
+                for _ in 0..u.int_in_range(0..=MAX_ARITY)? {
+                    let (name, ty) = u.choose(&types)?;
+                    results.push(ty);
+                    rust_results.extend(name.clone());
+                    rust_results.extend(quote!(,));
+                }
+
+                let case = TestCase {
+                    params,
+                    results,
+                    encoding1: u.arbitrary()?,
+                    encoding2: u.arbitrary()?,
+                };
+                Ok((case, rust_params, rust_results))
+            })?;
 
             let Declarations {
                 types,
+                type_instantiation_args,
                 params,
                 results,
                 import_and_export,
@@ -81,31 +117,12 @@ mod component {
                 encoding2,
             } = case.declarations();
 
-            let test = format_ident!("static_api_test{}", case.params.len());
-
-            let rust_params = case
-                .params
-                .iter()
-                .map(|ty| {
-                    let ty = component_fuzz_util::rust_type(&ty, name_counter, &mut declarations);
-                    quote!(#ty,)
-                })
-                .collect::<TokenStream>();
-
-            let rust_results = case
-                .results
-                .iter()
-                .map(|ty| {
-                    let ty = component_fuzz_util::rust_type(&ty, name_counter, &mut declarations);
-                    quote!(#ty,)
-                })
-                .collect::<TokenStream>();
-
-            let test = quote!(#index => component_types::#test::<#rust_params (#rust_results)>(
+            let test = quote!(#index => component_types::static_api_test::<(#rust_params), (#rust_results)>(
                 input,
                 {
                     static DECLS: Declarations = Declarations {
                         types: Cow::Borrowed(#types),
+                        type_instantiation_args: Cow::Borrowed(#type_instantiation_args),
                         params: Cow::Borrowed(#params),
                         results: Cow::Borrowed(#results),
                         import_and_export: Cow::Borrowed(#import_and_export),
@@ -154,5 +171,22 @@ mod component {
         write!(out, "{module}")?;
 
         Ok(())
+    }
+
+    fn gen<T>(
+        rng: &mut StdRng,
+        mut f: impl FnMut(&mut Unstructured<'_>) -> arbitrary::Result<T>,
+    ) -> Result<T> {
+        let mut bytes = Vec::new();
+        loop {
+            let count = rng.gen_range(1000..2000);
+            bytes.extend(iter::repeat_with(|| rng.gen::<u8>()).take(count));
+
+            match f(&mut Unstructured::new(&bytes)) {
+                Ok(ret) => break Ok(ret),
+                Err(arbitrary::Error::NotEnoughData) => (),
+                Err(error) => break Err(Error::from(error)),
+            }
+        }
     }
 }

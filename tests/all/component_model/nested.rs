@@ -1,3 +1,5 @@
+#![cfg(not(miri))]
+
 use super::REALLOC_AND_FREE;
 use anyhow::Result;
 use wasmtime::component::*;

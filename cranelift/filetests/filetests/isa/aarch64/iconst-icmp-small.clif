@@ -20,7 +20,7 @@ block0:
 ;   subs wzr, w1, w2, UXTH
 ;   cset x0, ne
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov w2, #0xddcc

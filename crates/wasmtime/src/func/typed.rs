@@ -4,9 +4,9 @@ use crate::{AsContextMut, ExternRef, Func, FuncType, StoreContextMut, ValRaw, Va
 use anyhow::{bail, Result};
 use std::marker;
 use std::mem::{self, MaybeUninit};
-use std::ptr;
+use std::ptr::{self, NonNull};
 use wasmtime_runtime::{
-    VMCallerCheckedFuncRef, VMContext, VMFunctionBody, VMOpaqueContext, VMSharedSignatureIndex,
+    VMContext, VMFuncRef, VMNativeCallFunction, VMOpaqueContext, VMSharedSignatureIndex,
 };
 
 /// A statically typed WebAssembly function.
@@ -84,7 +84,7 @@ where
             !store.0.async_support(),
             "must use `call_async` with async stores"
         );
-        let func = self.func.caller_checked_anyfunc(store.0);
+        let func = self.func.caller_checked_func_ref(store.0);
         unsafe { Self::call_raw(&mut store, func, params) }
     }
 
@@ -122,7 +122,7 @@ where
         );
         store
             .on_fiber(|store| {
-                let func = self.func.caller_checked_anyfunc(store.0);
+                let func = self.func.caller_checked_func_ref(store.0);
                 unsafe { Self::call_raw(store, func, params) }
             })
             .await?
@@ -130,7 +130,7 @@ where
 
     pub(crate) unsafe fn call_raw<T>(
         store: &mut StoreContextMut<'_, T>,
-        func: ptr::NonNull<VMCallerCheckedFuncRef>,
+        func: ptr::NonNull<VMFuncRef>,
         params: Params,
     ) -> Result<Results> {
         // double-check that params/results match for this function's type in
@@ -175,14 +175,10 @@ where
         let mut captures = (func, MaybeUninit::uninit(), params, false);
 
         let result = invoke_wasm_and_catch_traps(store, |caller| {
-            let (anyfunc, ret, params, returned) = &mut captures;
-            let anyfunc = anyfunc.as_ref();
-            let result = Params::invoke::<Results>(
-                anyfunc.func_ptr.as_ptr(),
-                anyfunc.vmctx,
-                caller,
-                *params,
-            );
+            let (func_ref, ret, params, returned) = &mut captures;
+            let func_ref = func_ref.as_ref();
+            let result =
+                Params::invoke::<Results>(func_ref.native_call, func_ref.vmctx, caller, *params);
             ptr::write(ret.as_mut_ptr(), result);
             *returned = true
         });
@@ -351,7 +347,7 @@ unsafe impl WasmTy for Option<ExternRef> {
 
     #[inline]
     unsafe fn abi_into_raw(abi: *mut u8, raw: *mut ValRaw) {
-        *raw = ValRaw::externref(abi as usize);
+        *raw = ValRaw::externref(abi.cast());
     }
 
     #[inline]
@@ -409,7 +405,7 @@ unsafe impl WasmTy for Option<ExternRef> {
 }
 
 unsafe impl WasmTy for Option<Func> {
-    type Abi = *mut wasmtime_runtime::VMCallerCheckedFuncRef;
+    type Abi = *mut wasmtime_runtime::VMFuncRef;
 
     #[inline]
     fn valtype() -> ValType {
@@ -437,13 +433,13 @@ unsafe impl WasmTy for Option<Func> {
 
     #[inline]
     unsafe fn abi_into_raw(abi: Self::Abi, raw: *mut ValRaw) {
-        *raw = ValRaw::funcref(abi as usize);
+        *raw = ValRaw::funcref(abi.cast());
     }
 
     #[inline]
     fn into_abi(self, store: &mut StoreOpaque) -> Self::Abi {
         if let Some(f) = self {
-            f.caller_checked_anyfunc(store).as_ptr()
+            f.caller_checked_func_ref(store).as_ptr()
         } else {
             ptr::null_mut()
         }
@@ -451,7 +447,7 @@ unsafe impl WasmTy for Option<Func> {
 
     #[inline]
     unsafe fn from_abi(abi: Self::Abi, store: &mut StoreOpaque) -> Self {
-        Func::from_caller_checked_anyfunc(store, abi)
+        Func::from_caller_checked_func_ref(store, abi)
     }
 }
 
@@ -475,7 +471,7 @@ pub unsafe trait WasmParams: Send {
 
     #[doc(hidden)]
     unsafe fn invoke<R: WasmResults>(
-        func: *const VMFunctionBody,
+        func: NonNull<VMNativeCallFunction>,
         vmctx1: *mut VMOpaqueContext,
         vmctx2: *mut VMContext,
         abi: Self::Abi,
@@ -505,7 +501,7 @@ where
     }
 
     unsafe fn invoke<R: WasmResults>(
-        func: *const VMFunctionBody,
+        func: NonNull<VMNativeCallFunction>,
         vmctx1: *mut VMOpaqueContext,
         vmctx2: *mut VMContext,
         abi: Self::Abi,
@@ -565,13 +561,13 @@ macro_rules! impl_wasm_params {
             }
 
             unsafe fn invoke<R: WasmResults>(
-                func: *const VMFunctionBody,
+                func: NonNull<VMNativeCallFunction>,
                 vmctx1: *mut VMOpaqueContext,
                 vmctx2: *mut VMContext,
                 abi: Self::Abi,
             ) -> R::ResultAbi {
                 let fnptr = mem::transmute::<
-                    *const VMFunctionBody,
+                    NonNull<VMNativeCallFunction>,
                     unsafe extern "C" fn(
                         *mut VMOpaqueContext,
                         *mut VMContext,
@@ -588,7 +584,6 @@ macro_rules! impl_wasm_params {
                 // Upon returning `R::call` will convert all the returns back
                 // into `R`.
                 <R::ResultAbi as HostAbi>::call(|retptr| {
-                    let fnptr = wasmtime_runtime::prepare_host_to_wasm_trampoline(vmctx2, fnptr);
                     fnptr(vmctx1, vmctx2, $($t,)* retptr)
                 })
             }

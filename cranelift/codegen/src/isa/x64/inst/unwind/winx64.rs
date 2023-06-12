@@ -10,6 +10,7 @@ impl crate::isa::unwind::winx64::RegisterMapper<Reg> for RegisterMapper {
         match reg.class() {
             RegClass::Int => MappedRegister::Int(reg.to_real_reg().unwrap().hw_enc()),
             RegClass::Float => MappedRegister::Xmm(reg.to_real_reg().unwrap().hw_enc()),
+            RegClass::Vector => unreachable!(),
         }
     }
 }

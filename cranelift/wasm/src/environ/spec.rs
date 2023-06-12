@@ -8,14 +8,14 @@
 
 use crate::state::FuncTranslationState;
 use crate::{
-    DataIndex, ElemIndex, FuncIndex, Global, GlobalIndex, Heap, HeapData, Memory, MemoryIndex,
-    SignatureIndex, Table, TableIndex, Tag, TagIndex, TypeIndex, WasmError, WasmFuncType,
-    WasmResult, WasmType,
+    DataIndex, ElemIndex, FuncIndex, Global, GlobalIndex, GlobalInit, Heap, HeapData, Memory,
+    MemoryIndex, SignatureIndex, Table, TableIndex, Tag, TagIndex, TypeConvert, TypeIndex,
+    WasmError, WasmFuncType, WasmHeapType, WasmResult,
 };
 use core::convert::From;
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::immediates::Offset32;
-use cranelift_codegen::ir::{self, InstBuilder};
+use cranelift_codegen::ir::{self, InstBuilder, Type};
 use cranelift_codegen::isa::TargetFrontendConfig;
 use cranelift_entity::PrimaryMap;
 use cranelift_frontend::FunctionBuilder;
@@ -44,7 +44,7 @@ pub enum GlobalVariable {
 }
 
 /// Environment affecting the translation of a WebAssembly.
-pub trait TargetEnvironment {
+pub trait TargetEnvironment: TypeConvert {
     /// Get the information needed to produce Cranelift IR for the given target.
     fn target_config(&self) -> TargetFrontendConfig;
 
@@ -70,7 +70,7 @@ pub trait TargetEnvironment {
     /// 32-bit architectures. If you override this, then you should also
     /// override `FuncEnvironment::{translate_ref_null, translate_ref_is_null}`
     /// as well.
-    fn reference_type(&self, ty: WasmType) -> ir::Type {
+    fn reference_type(&self, ty: WasmHeapType) -> ir::Type {
         let _ = ty;
         match self.pointer_type() {
             ir::types::I32 => ir::types::R32,
@@ -101,7 +101,7 @@ pub trait FuncEnvironment: TargetEnvironment {
     /// Called after the locals for a function have been parsed, and the number
     /// of variables defined by this function is provided.
     fn after_locals(&mut self, num_locals_defined: usize) {
-        drop(num_locals_defined);
+        let _ = num_locals_defined;
     }
 
     /// Set up the necessary preamble definitions in `func` to access the global variable
@@ -207,6 +207,22 @@ pub trait FuncEnvironment: TargetEnvironment {
     ) -> WasmResult<ir::Inst> {
         Ok(pos.ins().call(callee, call_args))
     }
+
+    /// Translate a `call_ref` WebAssembly instruction at `pos`.
+    ///
+    /// Insert instructions at `pos` for an indirect call to the
+    /// function `callee`. The `callee` value will have type `Ref`.
+    ///
+    /// The signature `sig_ref` was previously created by `make_indirect_sig()`.
+    ///
+    /// Return the call instruction whose results are the WebAssembly return values.
+    fn translate_call_ref(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        sig_ref: ir::SigRef,
+        callee: ir::Value,
+        call_args: &[ir::Value],
+    ) -> WasmResult<ir::Inst>;
 
     /// Translate a `memory.grow` WebAssembly instruction.
     ///
@@ -373,7 +389,11 @@ pub trait FuncEnvironment: TargetEnvironment {
     /// null sentinel is not a null reference type pointer for your type. If you
     /// override this method, then you should also override
     /// `translate_ref_is_null` as well.
-    fn translate_ref_null(&mut self, mut pos: FuncCursor, ty: WasmType) -> WasmResult<ir::Value> {
+    fn translate_ref_null(
+        &mut self,
+        mut pos: FuncCursor,
+        ty: WasmHeapType,
+    ) -> WasmResult<ir::Value> {
         let _ = ty;
         Ok(pos.ins().null(self.reference_type(ty)))
     }
@@ -542,12 +562,19 @@ pub trait FuncEnvironment: TargetEnvironment {
     fn is_x86(&self) -> bool {
         false
     }
+
+    /// Returns whether the CLIF `x86_blendv` instruction should be used for the
+    /// relaxed simd `*.relaxed_laneselect` instruction for the specified type.
+    fn use_x86_blendv_for_relaxed_laneselect(&self, ty: Type) -> bool {
+        let _ = ty;
+        false
+    }
 }
 
 /// An object satisfying the `ModuleEnvironment` trait can be passed as argument to the
 /// [`translate_module`](fn.translate_module.html) function. These methods should not be called
 /// by the user, they are only for `cranelift-wasm` internal use.
-pub trait ModuleEnvironment<'data> {
+pub trait ModuleEnvironment<'data>: TypeConvert {
     /// Provides the number of types up front. By default this does nothing, but
     /// implementations can use this to preallocate memory if desired.
     fn reserve_types(&mut self, _num: u32) -> WasmResult<()> {
@@ -560,7 +587,7 @@ pub trait ModuleEnvironment<'data> {
     /// Translates a type index to its signature index, only called for type
     /// indices which point to functions.
     fn type_to_signature(&self, index: TypeIndex) -> WasmResult<SignatureIndex> {
-        drop(index);
+        let _ = index;
         Err(WasmError::Unsupported("module linking".to_string()))
     }
 
@@ -601,7 +628,7 @@ pub trait ModuleEnvironment<'data> {
         module: &'data str,
         field: &'data str,
     ) -> WasmResult<()> {
-        drop((tag, module, field));
+        let _ = (tag, module, field);
         Err(WasmError::Unsupported("wasm tags".to_string()))
     }
 
@@ -653,7 +680,7 @@ pub trait ModuleEnvironment<'data> {
 
     /// Declares an tag to the environment
     fn declare_tag(&mut self, tag: Tag) -> WasmResult<()> {
-        drop(tag);
+        let _ = tag;
         Err(WasmError::Unsupported("wasm tags".to_string()))
     }
 
@@ -664,7 +691,7 @@ pub trait ModuleEnvironment<'data> {
     }
 
     /// Declares a global to the environment.
-    fn declare_global(&mut self, global: Global) -> WasmResult<()>;
+    fn declare_global(&mut self, global: Global, init: GlobalInit) -> WasmResult<()>;
 
     /// Provides the number of exports up front. By default this does nothing, but
     /// implementations can use this to preallocate memory if desired.
@@ -688,7 +715,7 @@ pub trait ModuleEnvironment<'data> {
 
     /// Declares an tag export to the environment.
     fn declare_tag_export(&mut self, tag_index: TagIndex, name: &'data str) -> WasmResult<()> {
-        drop((tag_index, name));
+        let _ = (tag_index, name);
         Err(WasmError::Unsupported("wasm tags".to_string()))
     }
 
@@ -732,7 +759,7 @@ pub trait ModuleEnvironment<'data> {
     /// Indicates that a declarative element segment was seen in the wasm
     /// module.
     fn declare_elements(&mut self, elements: Box<[FuncIndex]>) -> WasmResult<()> {
-        drop(elements);
+        let _ = elements;
         Ok(())
     }
 
@@ -751,7 +778,7 @@ pub trait ModuleEnvironment<'data> {
     /// Indicates how many functions the code section reports and the byte
     /// offset of where the code sections starts.
     fn reserve_function_bodies(&mut self, bodies: u32, code_section_offset: u64) {
-        drop((bodies, code_section_offset));
+        let _ = (bodies, code_section_offset);
     }
 
     /// Provides the contents of a function body.

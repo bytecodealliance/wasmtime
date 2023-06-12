@@ -1,0 +1,24 @@
+world reactor {
+  import wasi:clocks/wall-clock
+  import wasi:clocks/monotonic-clock
+  import wasi:clocks/timezone
+  import wasi:filesystem/filesystem
+  import wasi:sockets/instance-network
+  import wasi:sockets/ip-name-lookup
+  import wasi:sockets/network
+  import wasi:sockets/tcp-create-socket
+  import wasi:sockets/tcp
+  import wasi:sockets/udp-create-socket
+  import wasi:sockets/udp
+  import wasi:random/random
+  import wasi:poll/poll
+  import wasi:io/streams
+  import wasi:logging/handler
+  import wasi:http/outgoing-handler
+  import wasi:cli-base/environment
+  import wasi:cli-base/preopens
+  import wasi:cli-base/exit
+  import wasi:cli-base/stdin
+  import wasi:cli-base/stdout
+  import wasi:cli-base/stderr
+}

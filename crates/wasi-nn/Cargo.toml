@@ -21,7 +21,4 @@ openvino = { version = "0.5.0", features = ["runtime-linking"] }
 thiserror = { workspace = true }
 
 [build-dependencies]
-walkdir = "2.3"
-
-[badges]
-maintenance = { status = "experimental" }
+walkdir = { workspace = true }

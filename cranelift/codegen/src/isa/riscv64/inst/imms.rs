@@ -127,6 +127,40 @@ impl Display for UImm5 {
     }
 }
 
+/// A Signed 5-bit immediate.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Imm5 {
+    value: i8,
+}
+
+impl Imm5 {
+    /// Create an signed 5-bit immediate from an i8.
+    pub fn maybe_from_i8(value: i8) -> Option<Imm5> {
+        if value >= -16 && value <= 15 {
+            Some(Imm5 { value })
+        } else {
+            None
+        }
+    }
+
+    pub fn from_bits(value: u8) -> Imm5 {
+        assert_eq!(value & 0x1f, value);
+        let signed = ((value << 3) as i8) >> 3;
+        Imm5 { value: signed }
+    }
+
+    /// Bits for encoding.
+    pub fn bits(&self) -> u8 {
+        self.value as u8 & 0x1f
+    }
+}
+
+impl Display for Imm5 {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        write!(f, "{}", self.value)
+    }
+}
+
 impl Inst {
     pub(crate) fn imm_min() -> i64 {
         let imm20_max: i64 = (1 << 19) << 12;

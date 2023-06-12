@@ -24,7 +24,7 @@ use smallvec::{smallvec, SmallVec};
 pub(crate) type AArch64Callee = Callee<AArch64MachineDeps>;
 
 /// Support for the AArch64 ABI from the caller side (at a callsite).
-pub(crate) type AArch64Caller = Caller<AArch64MachineDeps>;
+pub(crate) type AArch64CallSite = CallSite<AArch64MachineDeps>;
 
 /// This is the limit for the size of argument and return-value areas on the
 /// stack. We place a reasonable limit here to avoid integer overflow issues
@@ -254,12 +254,14 @@ impl ABIMachineSpec for AArch64MachineDeps {
                 let next_reg = match rc {
                     RegClass::Int => &mut next_xreg,
                     RegClass::Float => &mut next_vreg,
+                    RegClass::Vector => unreachable!(),
                 };
 
                 if *next_reg < max_per_class_reg_vals && remaining_reg_vals > 0 {
                     let reg = match rc {
                         RegClass::Int => xreg(*next_reg),
                         RegClass::Float => vreg(*next_reg),
+                        RegClass::Vector => unreachable!(),
                     };
                     // Overlay Z-regs on V-regs for parameter passing.
                     let ty = if param.value_type.is_dynamic_vector() {
@@ -398,7 +400,12 @@ impl ABIMachineSpec for AArch64MachineDeps {
         Inst::Args { args }
     }
 
-    fn gen_ret(setup_frame: bool, isa_flags: &aarch64_settings::Flags, rets: Vec<RetPair>) -> Inst {
+    fn gen_ret(
+        setup_frame: bool,
+        isa_flags: &aarch64_settings::Flags,
+        rets: Vec<RetPair>,
+        stack_bytes_to_pop: u32,
+    ) -> Inst {
         if isa_flags.sign_return_address() && (setup_frame || isa_flags.sign_return_address_all()) {
             let key = if isa_flags.sign_return_address_with_bkey() {
                 APIKey::B
@@ -410,9 +417,13 @@ impl ABIMachineSpec for AArch64MachineDeps {
                 key,
                 is_hint: !isa_flags.has_pauth(),
                 rets,
+                stack_bytes_to_pop,
             }
         } else {
-            Inst::Ret { rets }
+            Inst::Ret {
+                rets,
+                stack_bytes_to_pop,
+            }
         }
     }
 
@@ -707,6 +718,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
             match reg.to_reg().class() {
                 RegClass::Int => clobbered_int.push(reg),
                 RegClass::Float => clobbered_vec.push(reg),
+                RegClass::Vector => unreachable!(),
             }
         }
 
@@ -1066,12 +1078,17 @@ impl ABIMachineSpec for AArch64MachineDeps {
         insts
     }
 
-    fn get_number_of_spillslots_for_value(rc: RegClass, vector_size: u32) -> u32 {
+    fn get_number_of_spillslots_for_value(
+        rc: RegClass,
+        vector_size: u32,
+        _isa_flags: &Self::F,
+    ) -> u32 {
         assert_eq!(vector_size % 8, 0);
         // We allocate in terms of 8-byte slots.
         match rc {
             RegClass::Int => 1,
             RegClass::Float => vector_size / 8,
+            RegClass::Vector => unreachable!(),
         }
     }
 
@@ -1174,6 +1191,7 @@ fn is_reg_saved_in_prologue(enable_pinned_reg: bool, sig: &Signature, r: RealReg
                 r.hw_enc() >= 8 && r.hw_enc() <= 15
             }
         }
+        RegClass::Vector => unreachable!(),
     }
 }
 
@@ -1192,6 +1210,7 @@ fn get_regs_restored_in_epilogue(
             match reg.to_reg().class() {
                 RegClass::Int => int_saves.push(reg),
                 RegClass::Float => vec_saves.push(reg),
+                RegClass::Vector => unreachable!(),
             }
         }
     }

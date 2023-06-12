@@ -20,7 +20,7 @@ use anyhow::{bail, Result};
 use clap::Parser;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use wasmtime::{Config, ProfilingStrategy, Strategy};
+use wasmtime::{Config, Strategy};
 
 pub const SUPPORTED_WASM_FEATURES: &[(&str, &str)] = &[
     ("all", "enables all supported WebAssembly features"),
@@ -43,6 +43,10 @@ pub const SUPPORTED_WASM_FEATURES: &[(&str, &str)] = &[
     ("memory64", "enables support for 64-bit memories"),
     #[cfg(feature = "component-model")]
     ("component-model", "enables support for the component model"),
+    (
+        "function-references",
+        "enables support for typed function references",
+    ),
 ];
 
 pub const SUPPORTED_WASI_MODULES: &[(&str, &str)] = &[
@@ -133,10 +137,6 @@ pub struct CommonOptions {
     /// Enable or disable WASI modules
     #[clap(long, value_name = "MODULE,MODULE,...", parse(try_from_str = parse_wasi_modules))]
     pub wasi_modules: Option<WasiModules>,
-
-    /// Profiling strategy (valid options are: perfmap, jitdump, vtune)
-    #[clap(long)]
-    pub profile: Option<ProfilingStrategy>,
 
     /// Generate jitdump file (supported on --features=profiling build)
     /// Run optimization passes on translated functions, on by default
@@ -285,7 +285,6 @@ impl CommonOptions {
             .cranelift_debug_verifier(self.enable_cranelift_debug_verifier)
             .debug_info(self.debug_info)
             .cranelift_opt_level(self.opt_level())
-            .profiler(self.profile.unwrap_or(ProfilingStrategy::None))
             .cranelift_nan_canonicalization(self.enable_cranelift_nan_canonicalization);
 
         self.enable_wasm_features(&mut config);
@@ -371,6 +370,7 @@ impl CommonOptions {
             memory64,
             #[cfg(feature = "component-model")]
             component_model,
+            function_references,
         } = self.wasm_features.unwrap_or_default();
 
         if let Some(enable) = simd {
@@ -384,6 +384,9 @@ impl CommonOptions {
         }
         if let Some(enable) = reference_types {
             config.wasm_reference_types(enable);
+        }
+        if let Some(enable) = function_references {
+            config.wasm_function_references(enable);
         }
         if let Some(enable) = multi_value {
             config.wasm_multi_value(enable);
@@ -437,6 +440,7 @@ pub struct WasmFeatures {
     pub memory64: Option<bool>,
     #[cfg(feature = "component-model")]
     pub component_model: Option<bool>,
+    pub function_references: Option<bool>,
 }
 
 fn parse_wasm_features(features: &str) -> Result<WasmFeatures> {
@@ -488,6 +492,7 @@ fn parse_wasm_features(features: &str) -> Result<WasmFeatures> {
         memory64: all.or(values["memory64"]),
         #[cfg(feature = "component-model")]
         component_model: all.or(values["component-model"]),
+        function_references: all.or(values["function-references"]),
     })
 }
 
@@ -603,6 +608,7 @@ mod test {
             threads,
             multi_memory,
             memory64,
+            function_references,
         } = options.wasm_features.unwrap();
 
         assert_eq!(reference_types, Some(true));
@@ -612,6 +618,7 @@ mod test {
         assert_eq!(threads, Some(true));
         assert_eq!(multi_memory, Some(true));
         assert_eq!(memory64, Some(true));
+        assert_eq!(function_references, Some(true));
         assert_eq!(relaxed_simd, Some(true));
 
         Ok(())
@@ -630,6 +637,7 @@ mod test {
             threads,
             multi_memory,
             memory64,
+            function_references,
         } = options.wasm_features.unwrap();
 
         assert_eq!(reference_types, Some(false));
@@ -639,6 +647,7 @@ mod test {
         assert_eq!(threads, Some(false));
         assert_eq!(multi_memory, Some(false));
         assert_eq!(memory64, Some(false));
+        assert_eq!(function_references, Some(false));
         assert_eq!(relaxed_simd, Some(false));
 
         Ok(())
@@ -660,6 +669,7 @@ mod test {
             threads,
             multi_memory,
             memory64,
+            function_references,
         } = options.wasm_features.unwrap();
 
         assert_eq!(reference_types, Some(false));
@@ -669,6 +679,7 @@ mod test {
         assert_eq!(threads, None);
         assert_eq!(multi_memory, Some(true));
         assert_eq!(memory64, Some(true));
+        assert_eq!(function_references, None);
         assert_eq!(relaxed_simd, None);
 
         Ok(())

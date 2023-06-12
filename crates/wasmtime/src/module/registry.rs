@@ -8,10 +8,11 @@ use once_cell::sync::Lazy;
 use std::collections::btree_map::Entry;
 use std::{
     collections::BTreeMap,
+    ptr::NonNull,
     sync::{Arc, RwLock},
 };
 use wasmtime_jit::CodeMemory;
-use wasmtime_runtime::{ModuleInfo, VMCallerCheckedFuncRef, VMTrampoline};
+use wasmtime_runtime::{ModuleInfo, VMSharedSignatureIndex, VMWasmCallFunction};
 
 /// Used for registering modules with a store.
 ///
@@ -124,12 +125,6 @@ impl ModuleRegistry {
         assert!(prev.is_none());
     }
 
-    /// Looks up a trampoline from an anyfunc.
-    pub fn lookup_trampoline(&self, anyfunc: &VMCallerCheckedFuncRef) -> Option<VMTrampoline> {
-        let (code, _offset) = self.code(anyfunc.func_ptr.as_ptr() as usize)?;
-        code.code.signatures().trampoline(anyfunc.type_index)
-    }
-
     /// Fetches trap information about a program counter in a backtrace.
     pub fn lookup_trap_code(&self, pc: usize) -> Option<Trap> {
         let (code, offset) = self.code(pc)?;
@@ -148,6 +143,27 @@ impl ModuleRegistry {
         let (module, offset) = self.module(pc)?;
         let info = FrameInfo::new(module, offset)?;
         Some((info, module))
+    }
+
+    pub fn wasm_to_native_trampoline(
+        &self,
+        sig: VMSharedSignatureIndex,
+    ) -> Option<NonNull<VMWasmCallFunction>> {
+        // TODO: We are doing a linear search over each module. This is fine for
+        // now because we typically have very few modules per store (almost
+        // always one, in fact). If this linear search ever becomes a
+        // bottleneck, we could avoid it by incrementally and lazily building a
+        // `VMSharedSignatureIndex` to `SignatureIndex` map.
+        //
+        // See also the comment in `ModuleInner::wasm_to_native_trampoline`.
+        for (_, code) in self.loaded_code.values() {
+            for module in code.modules.values() {
+                if let Some(trampoline) = module.runtime_info().wasm_to_native_trampoline(sig) {
+                    return Some(trampoline);
+                }
+            }
+        }
+        None
     }
 }
 
@@ -258,6 +274,7 @@ pub fn unregister_code(code: &Arc<CodeMemory>) {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn test_frame_info() -> Result<(), anyhow::Error> {
     use crate::*;
     let mut store = Store::<()>::default();

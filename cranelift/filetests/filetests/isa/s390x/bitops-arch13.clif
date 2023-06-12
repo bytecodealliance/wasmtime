@@ -15,7 +15,7 @@ block0(v0: i64):
 ; block0:
 ;   popcnt %r2, %r2, 8
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0xb9, 0xe1
@@ -33,7 +33,7 @@ block0(v0: i32):
 ;   llgfr %r4, %r2
 ;   popcnt %r2, %r4, 8
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   llgfr %r4, %r2
@@ -52,7 +52,7 @@ block0(v0: i16):
 ;   llghr %r4, %r2
 ;   popcnt %r2, %r4, 8
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   llghr %r4, %r2
@@ -70,7 +70,7 @@ block0(v0: i8):
 ; block0:
 ;   popcnt %r2, %r2
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   popcnt %r2, %r2

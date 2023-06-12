@@ -168,35 +168,54 @@ impl Config {
             .allocation_strategy(self.wasmtime.strategy.to_wasmtime())
             .generate_address_map(self.wasmtime.generate_address_map);
 
+        let compiler_strategy = &self.wasmtime.compiler_strategy;
+        let cranelift_strategy = *compiler_strategy == CompilerStrategy::Cranelift;
+        cfg.strategy(self.wasmtime.compiler_strategy.to_wasmtime());
+
         self.wasmtime.codegen.configure(&mut cfg);
 
-        // If the wasm-smith-generated module use nan canonicalization then we
-        // don't need to enable it, but if it doesn't enable it already then we
-        // enable this codegen option.
-        cfg.cranelift_nan_canonicalization(!self.module_config.config.canonicalize_nans);
+        // Only set cranelift specific flags when the Cranelift strategy is
+        // chosen.
+        if cranelift_strategy {
+            // If the wasm-smith-generated module use nan canonicalization then we
+            // don't need to enable it, but if it doesn't enable it already then we
+            // enable this codegen option.
+            cfg.cranelift_nan_canonicalization(!self.module_config.config.canonicalize_nans);
 
-        // Enabling the verifier will at-least-double compilation time, which
-        // with a 20-30x slowdown in fuzzing can cause issues related to
-        // timeouts. If generated modules can have more than a small handful of
-        // functions then disable the verifier when fuzzing to try to lessen the
-        // impact of timeouts.
-        if self.module_config.config.max_funcs > 10 {
-            cfg.cranelift_debug_verifier(false);
-        }
+            // Enabling the verifier will at-least-double compilation time, which
+            // with a 20-30x slowdown in fuzzing can cause issues related to
+            // timeouts. If generated modules can have more than a small handful of
+            // functions then disable the verifier when fuzzing to try to lessen the
+            // impact of timeouts.
+            if self.module_config.config.max_funcs > 10 {
+                cfg.cranelift_debug_verifier(false);
+            }
 
-        if self.wasmtime.force_jump_veneers {
-            unsafe {
-                cfg.cranelift_flag_set("wasmtime_linkopt_force_jump_veneer", "true");
+            if self.wasmtime.force_jump_veneers {
+                unsafe {
+                    cfg.cranelift_flag_set("wasmtime_linkopt_force_jump_veneer", "true");
+                }
+            }
+
+            if let Some(pad) = self.wasmtime.padding_between_functions {
+                unsafe {
+                    cfg.cranelift_flag_set(
+                        "wasmtime_linkopt_padding_between_functions",
+                        &pad.to_string(),
+                    );
+                }
             }
         }
 
-        if let Some(pad) = self.wasmtime.padding_between_functions {
-            unsafe {
-                cfg.cranelift_flag_set(
-                    "wasmtime_linkopt_padding_between_functions",
-                    &pad.to_string(),
-                );
-            }
+        // Allow at most 1<<16 == 64k of padding between basic blocks. If this
+        // gets too large then functions actually grow to 4G+ sizes which is not
+        // really that interesting to test as it's pretty unrealistic at this
+        // time.
+        unsafe {
+            cfg.cranelift_flag_set(
+                "bb_padding_log2_minus_one",
+                &(self.wasmtime.bb_padding_log2 & 0xf).to_string(),
+            );
         }
 
         // Vary the memory configuration, but only if threads are not enabled.
@@ -264,7 +283,7 @@ impl Config {
     /// Generates an arbitrary method of timing out an instance, ensuring that
     /// this configuration supports the returned timeout.
     pub fn generate_timeout(&mut self, u: &mut Unstructured<'_>) -> arbitrary::Result<Timeout> {
-        let time_duration = Duration::from_secs(20);
+        let time_duration = Duration::from_millis(100);
         let timeout = u
             .choose(&[Timeout::Fuel(100_000), Timeout::Epoch(time_duration)])?
             .clone();
@@ -392,6 +411,9 @@ pub struct WasmtimeConfig {
     padding_between_functions: Option<u16>,
     generate_address_map: bool,
     native_unwind_info: bool,
+    /// Configuration for the compiler to use.
+    pub compiler_strategy: CompilerStrategy,
+    bb_padding_log2: u8,
 }
 
 impl WasmtimeConfig {
@@ -433,5 +455,33 @@ impl OptLevel {
             OptLevel::Speed => wasmtime::OptLevel::Speed,
             OptLevel::SpeedAndSize => wasmtime::OptLevel::SpeedAndSize,
         }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+/// Compiler to use.
+pub enum CompilerStrategy {
+    /// Cranelift compiler.
+    Cranelift,
+    /// Winch compiler.
+    Winch,
+}
+
+impl CompilerStrategy {
+    fn to_wasmtime(&self) -> wasmtime::Strategy {
+        match self {
+            CompilerStrategy::Cranelift => wasmtime::Strategy::Cranelift,
+            CompilerStrategy::Winch => wasmtime::Strategy::Winch,
+        }
+    }
+}
+
+// Unconditionally return `Cranelift` given that Winch is not ready to be
+// enabled by default in all the fuzzing targets. Each fuzzing target is
+// expected to explicitly override the strategy as needed. Currently only the
+// differential target overrides the compiler strategy.
+impl Arbitrary<'_> for CompilerStrategy {
+    fn arbitrary(_: &mut Unstructured<'_>) -> arbitrary::Result<Self> {
+        Ok(Self::Cranelift)
     }
 }

@@ -509,7 +509,8 @@ mod test {
         let mut last_id = vec![None; 1000];
 
         let mut hits = 0;
-        for _ in 0..100_000 {
+        let amt = if cfg!(miri) { 100 } else { 100_000 };
+        for _ in 0..amt {
             loop {
                 if !allocated.is_empty() && rng.gen_bool(0.5) {
                     let i = rng.gen_range(0..allocated.len());
@@ -535,7 +536,7 @@ mod test {
         // IDs). Check for at least double that to ensure some sort of
         // affinity is occurring.
         assert!(
-            hits > 20000,
+            hits > (amt / 5),
             "expected at least 20000 (20%) ID-reuses but got {}",
             hits
         );

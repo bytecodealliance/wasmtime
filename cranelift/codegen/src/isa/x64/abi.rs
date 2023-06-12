@@ -24,7 +24,7 @@ static STACK_ARG_RET_SIZE_LIMIT: u32 = 128 * 1024 * 1024;
 pub(crate) type X64Callee = Callee<X64ABIMachineSpec>;
 
 /// Support for the x64 ABI from the caller side (at a callsite).
-pub(crate) type X64Caller = Caller<X64ABIMachineSpec>;
+pub(crate) type X64CallSite = CallSite<X64ABIMachineSpec>;
 
 /// Implementation of ABI primitives for x64.
 pub struct X64ABIMachineSpec;
@@ -301,8 +301,9 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         _setup_frame: bool,
         _isa_flags: &x64_settings::Flags,
         rets: Vec<RetPair>,
+        stack_bytes_to_pop: u32,
     ) -> Self::I {
-        Inst::ret(rets)
+        Inst::ret(rets, stack_bytes_to_pop)
     }
 
     fn gen_add_imm(into_reg: Writable<Reg>, from_reg: Reg, imm: u32) -> SmallInstVec<Self::I> {
@@ -514,6 +515,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                     ));
                     cur_offset += 16;
                 }
+                RegClass::Vector => unreachable!(),
             };
             if flags.unwind_info() {
                 insts.push(Inst::Unwind {
@@ -566,6 +568,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                     ));
                     cur_offset += 16;
                 }
+                RegClass::Vector => unreachable!(),
             }
         }
         // Adjust RSP back upward.
@@ -602,6 +605,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                     dst: tmp,
                     name: Box::new(name.clone()),
                     offset: 0,
+                    distance: RelocDistance::Far,
                 });
                 insts.push(Inst::call_unknown(
                     RegMem::reg(tmp.to_reg()),
@@ -645,6 +649,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             dst: temp2,
             name: Box::new(ExternalName::LibCall(LibCall::Memcpy)),
             offset: 0,
+            distance: RelocDistance::Far,
         });
         insts.push(Inst::call_unknown(
             RegMem::reg(temp2.to_reg()),
@@ -670,11 +675,16 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         insts
     }
 
-    fn get_number_of_spillslots_for_value(rc: RegClass, vector_scale: u32) -> u32 {
+    fn get_number_of_spillslots_for_value(
+        rc: RegClass,
+        vector_scale: u32,
+        _isa_flags: &Self::F,
+    ) -> u32 {
         // We allocate in terms of 8-byte slots.
         match rc {
             RegClass::Int => 1,
             RegClass::Float => vector_scale / 8,
+            RegClass::Vector => unreachable!(),
         }
     }
 
@@ -708,8 +718,11 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         regs: &[Writable<RealReg>],
     ) -> Vec<Writable<RealReg>> {
         let mut regs: Vec<Writable<RealReg>> = match call_conv {
-            CallConv::Tail => unimplemented!(),
-            CallConv::Fast | CallConv::Cold | CallConv::SystemV | CallConv::WasmtimeSystemV => regs
+            CallConv::Tail
+            | CallConv::Fast
+            | CallConv::Cold
+            | CallConv::SystemV
+            | CallConv::WasmtimeSystemV => regs
                 .iter()
                 .cloned()
                 .filter(|r| is_callee_save_systemv(r.to_reg(), flags.enable_pinned_reg()))
@@ -824,8 +837,7 @@ fn get_intreg_for_retval(
     retval_idx: usize,
 ) -> Option<Reg> {
     match call_conv {
-        CallConv::Tail => unimplemented!(),
-        CallConv::Fast | CallConv::Cold | CallConv::SystemV => match intreg_idx {
+        CallConv::Tail | CallConv::Fast | CallConv::Cold | CallConv::SystemV => match intreg_idx {
             0 => Some(regs::rax()),
             1 => Some(regs::rdx()),
             _ => None,
@@ -853,8 +865,7 @@ fn get_fltreg_for_retval(
     retval_idx: usize,
 ) -> Option<Reg> {
     match call_conv {
-        CallConv::Tail => unimplemented!(),
-        CallConv::Fast | CallConv::Cold | CallConv::SystemV => match fltreg_idx {
+        CallConv::Tail | CallConv::Fast | CallConv::Cold | CallConv::SystemV => match fltreg_idx {
             0 => Some(regs::xmm0()),
             1 => Some(regs::xmm1()),
             _ => None,
@@ -887,6 +898,7 @@ fn is_callee_save_systemv(r: RealReg, enable_pinned_reg: bool) -> bool {
             _ => false,
         },
         RegClass::Float => false,
+        RegClass::Vector => unreachable!(),
     }
 }
 
@@ -903,6 +915,7 @@ fn is_callee_save_fastcall(r: RealReg, enable_pinned_reg: bool) -> bool {
             6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 => true,
             _ => false,
         },
+        RegClass::Vector => unreachable!(),
     }
 }
 
@@ -917,6 +930,7 @@ fn compute_clobber_size(clobbers: &[Writable<RealReg>]) -> u32 {
                 clobbered_size = align_to(clobbered_size, 16);
                 clobbered_size += 16;
             }
+            RegClass::Vector => unreachable!(),
         }
     }
     align_to(clobbered_size, 16)

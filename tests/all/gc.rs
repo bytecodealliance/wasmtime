@@ -13,11 +13,13 @@ impl Drop for SetFlagOnDrop {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn smoke_test_gc() -> anyhow::Result<()> {
     smoke_test_gc_impl(false)
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn smoke_test_gc_epochs() -> anyhow::Result<()> {
     smoke_test_gc_impl(true)
 }
@@ -77,6 +79,7 @@ fn smoke_test_gc_impl(use_epochs: bool) -> anyhow::Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn wasm_dropping_refs() -> anyhow::Result<()> {
     let (mut store, module) = ref_types_module(
         false,
@@ -120,6 +123,7 @@ fn wasm_dropping_refs() -> anyhow::Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn many_live_refs() -> anyhow::Result<()> {
     let mut wat = r#"
         (module
@@ -200,6 +204,7 @@ fn many_live_refs() -> anyhow::Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn drop_externref_via_table_set() -> anyhow::Result<()> {
     let (mut store, module) = ref_types_module(
         false,
@@ -247,6 +252,7 @@ fn drop_externref_via_table_set() -> anyhow::Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn global_drops_externref() -> anyhow::Result<()> {
     test_engine(&Engine::default())?;
 
@@ -296,6 +302,7 @@ fn global_drops_externref() -> anyhow::Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn table_drops_externref() -> anyhow::Result<()> {
     test_engine(&Engine::default())?;
 
@@ -346,6 +353,7 @@ fn table_drops_externref() -> anyhow::Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn gee_i_sure_hope_refcounting_is_atomic() -> anyhow::Result<()> {
     let mut config = Config::new();
     config.wasm_reference_types(true);
@@ -435,6 +443,7 @@ fn global_init_no_leak() -> anyhow::Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn no_gc_middle_of_args() -> anyhow::Result<()> {
     let (mut store, module) = ref_types_module(
         false,

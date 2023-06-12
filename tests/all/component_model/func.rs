@@ -1,3 +1,5 @@
+#![cfg(not(miri))]
+
 use super::{TypedFuncExt, REALLOC_AND_FREE};
 use anyhow::Result;
 use std::rc::Rc;
