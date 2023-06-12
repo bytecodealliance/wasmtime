@@ -229,6 +229,7 @@ fn get_isle_compilations(
                     src_opts.join("remat.isle"),
                     src_opts.join("selects.isle"),
                     src_opts.join("shifts.isle"),
+                    src_opts.join("vector.isle"),
                 ],
                 untracked_inputs: vec![clif_opt_isle],
             },
