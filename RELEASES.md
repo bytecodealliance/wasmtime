@@ -1,4 +1,15 @@
 --------------------------------------------------------------------------------
+## 9.0.4
+
+Released 2023-06-12.
+
+### Fixed
+
+* Remove the `trace-log` feature from cranelift-codegen's default features, to
+  fix a performance regression when compiling large WebAssembly modules.
+  [#6553](https://github.com/bytecodealliance/wasmtime/pull/6553)
+
+--------------------------------------------------------------------------------
 ## 9.0.3
 
 Released 2023-05-31.
