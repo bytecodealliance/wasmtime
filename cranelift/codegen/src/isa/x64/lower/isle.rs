@@ -404,16 +404,6 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
         SyntheticAmode::ConstantOffset(mask_table)
     }
 
-    fn popcount_4bit_table(&mut self) -> VCodeConstant {
-        self.lower_ctx
-            .use_constant(VCodeConstantData::WellKnown(&POPCOUNT_4BIT_TABLE))
-    }
-
-    fn popcount_low_mask(&mut self) -> VCodeConstant {
-        self.lower_ctx
-            .use_constant(VCodeConstantData::WellKnown(&POPCOUNT_LOW_MASK))
-    }
-
     #[inline]
     fn writable_reg_to_xmm(&mut self, r: WritableReg) -> WritableXmm {
         Writable::from_reg(Xmm::new(r.to_reg()).unwrap())
@@ -720,53 +710,6 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     }
 
     #[inline]
-    fn fcvt_uint_mask_const(&mut self) -> VCodeConstant {
-        self.lower_ctx
-            .use_constant(VCodeConstantData::WellKnown(&UINT_MASK))
-    }
-
-    #[inline]
-    fn fcvt_uint_mask_high_const(&mut self) -> VCodeConstant {
-        self.lower_ctx
-            .use_constant(VCodeConstantData::WellKnown(&UINT_MASK_HIGH))
-    }
-
-    #[inline]
-    fn iadd_pairwise_mul_const_16(&mut self) -> VCodeConstant {
-        self.lower_ctx
-            .use_constant(VCodeConstantData::WellKnown(&IADD_PAIRWISE_MUL_CONST_16))
-    }
-
-    #[inline]
-    fn iadd_pairwise_mul_const_32(&mut self) -> VCodeConstant {
-        self.lower_ctx
-            .use_constant(VCodeConstantData::WellKnown(&IADD_PAIRWISE_MUL_CONST_32))
-    }
-
-    #[inline]
-    fn iadd_pairwise_xor_const_32(&mut self) -> VCodeConstant {
-        self.lower_ctx
-            .use_constant(VCodeConstantData::WellKnown(&IADD_PAIRWISE_XOR_CONST_32))
-    }
-
-    #[inline]
-    fn iadd_pairwise_addd_const_32(&mut self) -> VCodeConstant {
-        self.lower_ctx
-            .use_constant(VCodeConstantData::WellKnown(&IADD_PAIRWISE_ADDD_CONST_32))
-    }
-
-    #[inline]
-    fn snarrow_umax_mask(&mut self) -> VCodeConstant {
-        // 2147483647.0 is equivalent to 0x41DFFFFFFFC00000
-        static UMAX_MASK: [u8; 16] = [
-            0x00, 0x00, 0xC0, 0xFF, 0xFF, 0xFF, 0xDF, 0x41, 0x00, 0x00, 0xC0, 0xFF, 0xFF, 0xFF,
-            0xDF, 0x41,
-        ];
-        self.lower_ctx
-            .use_constant(VCodeConstantData::WellKnown(&UMAX_MASK))
-    }
-
-    #[inline]
     fn shuffle_0_31_mask(&mut self, mask: &VecMask) -> VCodeConstant {
         let mask = mask
             .iter()
@@ -824,46 +767,6 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
         let mask = mask.iter().cloned().collect();
         self.lower_ctx
             .use_constant(VCodeConstantData::Generated(mask))
-    }
-
-    #[inline]
-    fn swizzle_zero_mask(&mut self) -> VCodeConstant {
-        static ZERO_MASK_VALUE: [u8; 16] = [0x70; 16];
-        self.lower_ctx
-            .use_constant(VCodeConstantData::WellKnown(&ZERO_MASK_VALUE))
-    }
-
-    #[inline]
-    fn sqmul_round_sat_mask(&mut self) -> VCodeConstant {
-        static SAT_MASK: [u8; 16] = [
-            0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80,
-            0x00, 0x80,
-        ];
-        self.lower_ctx
-            .use_constant(VCodeConstantData::WellKnown(&SAT_MASK))
-    }
-
-    #[inline]
-    fn uunarrow_umax_mask(&mut self) -> VCodeConstant {
-        // 4294967295.0 is equivalent to 0x41EFFFFFFFE00000
-        static UMAX_MASK: [u8; 16] = [
-            0x00, 0x00, 0xE0, 0xFF, 0xFF, 0xFF, 0xEF, 0x41, 0x00, 0x00, 0xE0, 0xFF, 0xFF, 0xFF,
-            0xEF, 0x41,
-        ];
-
-        self.lower_ctx
-            .use_constant(VCodeConstantData::WellKnown(&UMAX_MASK))
-    }
-
-    #[inline]
-    fn uunarrow_uint_mask(&mut self) -> VCodeConstant {
-        static UINT_MASK: [u8; 16] = [
-            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x30, 0x43, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-            0x30, 0x43,
-        ];
-
-        self.lower_ctx
-            .use_constant(VCodeConstantData::WellKnown(&UINT_MASK))
     }
 
     fn xmm_mem_to_xmm_mem_aligned(&mut self, arg: &XmmMem) -> XmmMemAligned {
@@ -1104,18 +1007,6 @@ const I8X16_USHR_MASKS: [u8; 128] = [
     0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
 ];
 
-/// Number of bits set in a given nibble (4-bit value). Used in the
-/// vector implementation of popcount.
-#[rustfmt::skip] // Preserve 4x4 layout.
-const POPCOUNT_4BIT_TABLE: [u8; 16] = [
-    0x00, 0x01, 0x01, 0x02,
-    0x01, 0x02, 0x02, 0x03,
-    0x01, 0x02, 0x02, 0x03,
-    0x02, 0x03, 0x03, 0x04,
-];
-
-const POPCOUNT_LOW_MASK: [u8; 16] = [0x0f; 16];
-
 #[inline]
 fn to_simm32(constant: i64) -> Option<GprMemImm> {
     if constant == ((constant << 32) >> 32) {
@@ -1129,25 +1020,3 @@ fn to_simm32(constant: i64) -> Option<GprMemImm> {
         None
     }
 }
-
-const UINT_MASK: [u8; 16] = [
-    0x00, 0x00, 0x30, 0x43, 0x00, 0x00, 0x30, 0x43, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-];
-
-const UINT_MASK_HIGH: [u8; 16] = [
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x30, 0x43, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x30, 0x43,
-];
-
-const IADD_PAIRWISE_MUL_CONST_16: [u8; 16] = [0x01; 16];
-
-const IADD_PAIRWISE_MUL_CONST_32: [u8; 16] = [
-    0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00,
-];
-
-const IADD_PAIRWISE_XOR_CONST_32: [u8; 16] = [
-    0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80,
-];
-
-const IADD_PAIRWISE_ADDD_CONST_32: [u8; 16] = [
-    0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00,
-];

@@ -4250,12 +4250,6 @@
         (if-let $true (use_avx_simd))
         (xmm_unary_rm_r_vex (AvxOpcode.Vcvttpd2dq) x))
 
-(decl fcvt_uint_mask_const () VCodeConstant)
-(extern constructor fcvt_uint_mask_const fcvt_uint_mask_const)
-
-(decl fcvt_uint_mask_high_const () VCodeConstant)
-(extern constructor fcvt_uint_mask_high_const fcvt_uint_mask_high_const)
-
 ;; Helpers for creating `pcmpeq*` instructions.
 (decl x64_pcmpeq (Type Xmm XmmMem) Xmm)
 (rule (x64_pcmpeq $I8X16 x y) (x64_pcmpeqb x y))
@@ -4512,25 +4506,6 @@
 
           (SideEffectNoResult.Inst
             (MInst.JmpTableSeq idx tmp1 tmp2 default_target jt_targets))))
-
-;;;; iadd_pairwise constants ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(decl iadd_pairwise_mul_const_16 () VCodeConstant)
-(extern constructor iadd_pairwise_mul_const_16 iadd_pairwise_mul_const_16)
-
-(decl iadd_pairwise_mul_const_32 () VCodeConstant)
-(extern constructor iadd_pairwise_mul_const_32 iadd_pairwise_mul_const_32)
-
-(decl iadd_pairwise_xor_const_32 () VCodeConstant)
-(extern constructor iadd_pairwise_xor_const_32 iadd_pairwise_xor_const_32)
-
-(decl iadd_pairwise_addd_const_32 () VCodeConstant)
-(extern constructor iadd_pairwise_addd_const_32 iadd_pairwise_addd_const_32)
-
-;;;; snarrow constants ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(decl snarrow_umax_mask () VCodeConstant)
-(extern constructor snarrow_umax_mask snarrow_umax_mask)
 
 ;;;; Comparisons ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -4890,12 +4865,6 @@
 (decl perm_from_mask_with_zeros (VCodeConstant VCodeConstant) VecMask)
 (extern extractor perm_from_mask_with_zeros perm_from_mask_with_zeros)
 
-;;;; Swizzle ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; Create a mask for zeroing out-of-bounds lanes of the swizzle mask.
-(decl swizzle_zero_mask () VCodeConstant)
-(extern constructor swizzle_zero_mask swizzle_zero_mask)
-
 ;;;; TLS Values ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Helper for emitting ElfTlsGetAddr.
@@ -4919,19 +4888,6 @@
             (tmp WritableGpr (temp_writable_gpr))
             (_ Unit (emit (MInst.CoffTlsGetAddr name dst tmp))))
         dst))
-
-;;;; sqmul_round_sat ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(decl sqmul_round_sat_mask () VCodeConstant)
-(extern constructor sqmul_round_sat_mask sqmul_round_sat_mask)
-
-;;;; uunarrow ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(decl uunarrow_umax_mask () VCodeConstant)
-(extern constructor uunarrow_umax_mask uunarrow_umax_mask)
-
-(decl uunarrow_uint_mask () VCodeConstant)
-(extern constructor uunarrow_uint_mask uunarrow_uint_mask)
 
 ;;;; Automatic conversions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
