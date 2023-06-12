@@ -419,8 +419,55 @@ impl Masm for MacroAssembler {
         self.asm.jmp(target);
     }
 
-    fn popcnt(&mut self, reg: Reg, size: OperandSize) {
-        self.asm.popcnt(reg, size)
+    fn popcnt(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+        if self.flags.has_popcnt() {
+            self.asm.popcnt(src, dst, size)
+        } else {
+            let (masks, shift_amt) = match size {
+                OperandSize::S64 => (
+                    [
+                        0x5555555555555555, // m1
+                        0x3333333333333333, // m2
+                        0x0f0f0f0f0f0f0f0f, // m4
+                        0x0101010101010101, // h01
+                    ],
+                    56u8,
+                ),
+                // 32-bit popcount is the same, except the masks are half as
+                // wide and we shift by 24 at the end rather than 56
+                OperandSize::S32 => (
+                    [0x55555555i64, 0x33333333i64, 0x0f0f0f0fi64, 0x01010101i64],
+                    24u8,
+                ),
+            };
+            let tmp = regs::scratch();
+            self.asm.mov_rr(src, tmp, size);
+            if src != dst {
+                self.asm.mov_rr(src, dst, size);
+            }
+
+            // x -= (x >> 1) & m1;
+            self.asm.shift_ir(1u8, dst, ShiftKind::ShrU, size);
+            self.asm.and(RegImm::imm(masks[0]).into(), dst.into(), size);
+            self.asm.sub(dst.into(), tmp.into(), size);
+
+            // x = (x & m2) + ((x >> 2) & m2);
+            self.asm.mov(tmp.into(), dst.into(), size);
+            self.asm.and(RegImm::imm(masks[1]).into(), dst.into(), size);
+            self.asm.shift_ir(2u8, tmp, ShiftKind::ShrU, size);
+            self.asm.and(RegImm::imm(masks[1]).into(), tmp.into(), size);
+            self.asm.add(dst.into(), tmp.into(), size);
+
+            // x = (x + (x >> 4)) & m4;
+            self.asm.mov(tmp.into(), dst.into(), size);
+            self.asm.shift_ir(4u8, dst, ShiftKind::ShrU, size);
+            self.asm.add_rr(tmp, dst, size);
+            self.asm.and(RegImm::imm(masks[2]).into(), dst.into(), size);
+
+            // (x * h01) >> shift_amt
+            self.asm.mul(RegImm::imm(masks[3]).into(), dst.into(), size);
+            self.asm.shift_ir(shift_amt, dst, ShiftKind::ShrU, size);
+        }
     }
 }
 

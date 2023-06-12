@@ -456,7 +456,7 @@ where
         use OperandSize::*;
 
         self.context.unop(self.masm, S32, &mut |masm, reg, size| {
-            masm.popcnt(reg, size);
+            masm.popcnt(reg, reg, size);
         })
     }
 
@@ -464,7 +464,7 @@ where
         use OperandSize::*;
 
         self.context.unop(self.masm, S64, &mut |masm, reg, size| {
-            masm.popcnt(reg, size);
+            masm.popcnt(reg, reg, size);
         })
     }
 
