@@ -1157,29 +1157,6 @@ where
                 ctrl_ty,
             )?)
         }
-        Opcode::FcvtLowFromSint => {
-            let in_ty = inst_context.type_of(inst_context.args()[0]).unwrap();
-            let x = extractlanes(&arg(0), in_ty)?;
-
-            assign(vectorizelanes(
-                &(x[..(ctrl_ty.lane_count() as usize)]
-                    .into_iter()
-                    .map(|x| {
-                        DataValue::float(
-                            match ctrl_ty.lane_type() {
-                                types::F32 => {
-                                    (x.to_owned().into_int_signed()? as f32).to_bits() as u64
-                                }
-                                types::F64 => (x.to_owned().into_int_signed()? as f64).to_bits(),
-                                _ => unimplemented!("unexpected promotion to {:?}", ctrl_ty),
-                            },
-                            ctrl_ty.lane_type(),
-                        )
-                    })
-                    .collect::<ValueResult<SimdVec<DataValue>>>()?),
-                ctrl_ty,
-            )?)
-        }
         Opcode::FvpromoteLow => {
             let in_ty = inst_context.type_of(inst_context.args()[0]).unwrap();
             assert_eq!(in_ty, types::F32X4);
