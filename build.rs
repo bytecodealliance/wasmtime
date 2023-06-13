@@ -228,11 +228,6 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
                 return true;
             }
 
-            // The memory64 testsuite has a single SIMD test that we don't pass yet.
-            if testname == "simd" && testsuite == "memory64" {
-                return true;
-            }
-
             let known_failure = [
                 "canonicalize_nan",
                 "cvt_from_uint",
