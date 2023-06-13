@@ -4,7 +4,7 @@ name = "winch-environ"
 description = "Implementation of Winch's function compilation environment"
 license = "Apache-2.0 WITH LLVM-exception"
 repository = "https://github.com/bytecodealliance/wasmtime"
-version = "0.7.3"
+version = "0.7.4"
 edition.workspace = true
 
 
