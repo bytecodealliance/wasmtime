@@ -13,7 +13,9 @@ use crate::{
     stack::Val,
 };
 use crate::{isa::reg::Reg, masm::CalleeKind};
-use cranelift_codegen::{isa::x64::settings as x64_settings, settings, Final, MachBufferFinalized};
+use cranelift_codegen::{
+    isa::x64::settings as x64_settings, settings, Final, MachBufferFinalized, MachLabel,
+};
 
 /// x64 MacroAssembler.
 pub(crate) struct MacroAssembler {
@@ -375,6 +377,46 @@ impl Masm for MacroAssembler {
                 .shift_ir(size.log2(), scratch, ShiftKind::Shl, size);
             self.asm.add_rr(scratch, dst, size);
         }
+    }
+
+    fn get_label(&mut self) -> MachLabel {
+        let buffer = self.asm.buffer_mut();
+        buffer.get_label()
+    }
+
+    fn bind(&mut self, label: MachLabel) {
+        let buffer = self.asm.buffer_mut();
+        buffer.bind_label(label, &mut Default::default());
+    }
+
+    fn branch(
+        &mut self,
+        kind: CmpKind,
+        lhs: RegImm,
+        rhs: RegImm,
+        taken: MachLabel,
+        size: OperandSize,
+    ) {
+        use CmpKind::*;
+
+        match &(lhs, rhs) {
+            (RegImm::Reg(rlhs), RegImm::Reg(rrhs)) => {
+                // If the comparision kind is zero or not zero and both operands
+                // are the same register, emit a test instruction. Else we emit
+                // a normal comparison.
+                if (kind == Eq || kind == Ne) && (rlhs == rrhs) {
+                    self.asm.test_rr(*rrhs, *rlhs, size);
+                } else {
+                    self.asm.cmp(lhs.into(), rhs.into(), size);
+                }
+            }
+            _ => self.asm.cmp(lhs.into(), rhs.into(), size),
+        }
+        self.asm.jmp_if(kind, taken);
+    }
+
+    fn jmp(&mut self, target: MachLabel) {
+        self.asm.jmp(target);
     }
 }
 

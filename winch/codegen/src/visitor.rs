@@ -5,10 +5,12 @@
 //! machine code emitter.
 
 use crate::codegen::CodeGen;
+use crate::codegen::ControlStackFrame;
 use crate::masm::{CmpKind, DivKind, MacroAssembler, OperandSize, RegImm, RemKind, ShiftKind};
 use crate::stack::Val;
-use wasmparser::VisitOperator;
-use wasmtime_environ::{FuncIndex, WasmType};
+use smallvec::{smallvec, SmallVec};
+use wasmparser::{BlockType, VisitOperator};
+use wasmtime_environ::{FuncIndex, TypeConvert, WasmType};
 
 /// A macro to define unsupported WebAssembly operators.
 ///
@@ -94,6 +96,8 @@ macro_rules! def_unsupported {
     (emit Call $($rest:tt)*) => {};
     (emit End $($rest:tt)*) => {};
     (emit Nop $($rest:tt)*) => {};
+    (emit If $($rest:tt)*) => {};
+    (emit Else $($rest:tt)*) => {};
 
     (emit $unsupported:tt $($rest:tt)*) => {$($rest)*};
 }
@@ -438,7 +442,13 @@ where
         self.masm.shift(&mut self.context, Rotr, S64);
     }
 
-    fn visit_end(&mut self) {}
+    fn visit_end(&mut self) {
+        if let Some(control) = self.control_frames.last_mut() {
+            control.emit_end(self.masm, &mut self.context);
+            // Pop control frame.
+            self.control_frames.truncate(self.control_frames.len() - 1);
+        }
+    }
 
     fn visit_local_get(&mut self, index: u32) {
         let context = &mut self.context;
@@ -471,6 +481,30 @@ where
     }
 
     fn visit_nop(&mut self) {}
+
+    fn visit_if(&mut self, blockty: BlockType) {
+        use BlockType::*;
+        let env = &self.env;
+        let returns: SmallVec<[WasmType; 1]> = match blockty {
+            Empty => smallvec![],
+            Type(ty) => smallvec![env.translation.module.convert_valtype(ty)],
+            _ => unimplemented!("multi-value"),
+        };
+        self.control_frames.push(ControlStackFrame::if_(
+            &returns,
+            self.masm,
+            &mut self.context,
+        ));
+    }
+
+    fn visit_else(&mut self) {
+        let control = self
+            .control_frames
+            .last_mut()
+            .unwrap_or_else(|| panic!("Expected active control stack frame for else"));
+
+        control.emit_else(self.masm, &mut self.context);
+    }
 
     wasmparser::for_each_operator!(def_unsupported);
 }

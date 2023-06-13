@@ -79,12 +79,19 @@ impl ABI for Aarch64ABI {
             .map(|arg| Self::to_abi_arg(arg, &mut stack_offset, &mut index_env))
             .collect();
 
-        let ty = wasm_sig.returns().get(0).map(|e| e.clone());
+        let result = Self::result(wasm_sig.returns(), call_conv);
+        ABISig::new(params, result, stack_offset)
+    }
+
+    fn result(returns: &[WasmType], _call_conv: &CallingConvention) -> ABIResult {
         // NOTE temporarily defaulting to x0;
         let reg = regs::xreg(0);
-        let result = ABIResult::reg(ty, reg);
 
-        ABISig::new(params, result, stack_offset)
+        // This invariant will be lifted once support for multi-value is added.
+        assert!(returns.len() <= 1, "multi-value not supported");
+
+        let ty = returns.get(0).copied();
+        ABIResult::reg(ty, reg)
     }
 
     fn scratch_reg() -> Reg {

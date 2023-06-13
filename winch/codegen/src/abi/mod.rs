@@ -71,6 +71,10 @@ pub(crate) trait ABI {
     /// function type.
     fn sig(wasm_sig: &WasmFuncType, call_conv: &CallingConvention) -> ABISig;
 
+    /// Construct the ABI-specific result from a slice of
+    /// [`wasmtime_environ::WasmtType`].
+    fn result(returns: &[WasmType], call_conv: &CallingConvention) -> ABIResult;
+
     /// Returns the number of bits in a word.
     fn word_bits() -> u32;
 
@@ -152,6 +156,7 @@ impl ABIArg {
 }
 
 /// ABI-specific representation of the function result.
+#[derive(Copy, Clone)]
 pub(crate) enum ABIResult {
     Reg {
         /// Type of the result.
@@ -178,6 +183,15 @@ impl ABIResult {
     pub fn is_void(&self) -> bool {
         match self {
             Self::Reg { ty, .. } => ty.is_none(),
+        }
+    }
+
+    /// Returns result's length.
+    pub fn len(&self) -> usize {
+        if self.is_void() {
+            0
+        } else {
+            1
         }
     }
 }

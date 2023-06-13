@@ -120,13 +120,19 @@ impl ABI for X64ABI {
             .map(|arg| Self::to_abi_arg(arg, &mut stack_offset, &mut index_env, is_fastcall))
             .collect();
 
-        let ty = wasm_sig.returns().get(0).map(|e| e.clone());
+        let result = Self::result(wasm_sig.returns(), call_conv);
+        ABISig::new(params, result, stack_offset)
+    }
+
+    fn result(returns: &[WasmType], _call_conv: &CallingConvention) -> ABIResult {
         // The `Default`, `WasmtimeFastcall` and `WasmtimeSystemV use `rax`.
         // NOTE This should be updated when supporting multi-value.
         let reg = regs::rax();
-        let result = ABIResult::reg(ty, reg);
+        // This invariant will be lifted once support for multi-value is added.
+        assert!(returns.len() <= 1, "multi-value not supported");
 
-        ABISig::new(params, result, stack_offset)
+        let ty = returns.get(0).copied();
+        ABIResult::reg(ty, reg)
     }
 
     fn scratch_reg() -> Reg {

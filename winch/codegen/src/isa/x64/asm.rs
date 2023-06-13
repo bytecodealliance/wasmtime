@@ -16,7 +16,8 @@ use cranelift_codegen::{
         },
         settings as x64_settings, CallInfo, EmitInfo, EmitState, Inst,
     },
-    settings, Final, MachBuffer, MachBufferFinalized, MachInstEmit, MachInstEmitState, Writable,
+    settings, Final, MachBuffer, MachBufferFinalized, MachInstEmit, MachInstEmitState, MachLabel,
+    Writable,
 };
 
 use super::{address::Address, regs};
@@ -146,6 +147,12 @@ impl Assembler {
             emit_info: EmitInfo::new(shared_flags, isa_flags.clone()),
             isa_flags,
         }
+    }
+
+    /// Get a mutable reference to underlying
+    /// machine buffer.
+    pub fn buffer_mut(&mut self) -> &mut MachBuffer<Inst> {
+        &mut self.buffer
     }
 
     /// Return the emitted code.
@@ -682,6 +689,16 @@ impl Assembler {
         });
     }
 
+    /// Emit a test instruction with two register operands.
+    pub fn test_rr(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+        self.emit(Inst::CmpRmiR {
+            size: size.into(),
+            opcode: CmpOpcode::Test,
+            src: src.into(),
+            dst: dst.into(),
+        })
+    }
+
     /// Set value in dst to `0` or `1` based on flags in status register and
     /// [`CmpKind`].
     pub fn setcc(&mut self, kind: CmpKind, dst: Operand) {
@@ -758,6 +775,11 @@ impl Assembler {
         });
     }
 
+    /// Emit a function call to a known or unknown location.
+    ///
+    /// A known location is a locally defined function index.
+    /// An unknown location is an address whose value is located
+    /// ina register.
     pub fn call(&mut self, callee: CalleeKind) {
         match callee {
             CalleeKind::Indirect(reg) => {
@@ -792,5 +814,18 @@ impl Assembler {
 
     fn handle_invalid_operand_combination(src: Operand, dst: Operand) {
         panic!("Invalid operand combination; src={:?}, dst={:?}", src, dst);
+    }
+
+    /// Emits a conditional jump to the given label.
+    pub fn jmp_if(&mut self, cc: impl Into<CC>, taken: MachLabel) {
+        self.emit(Inst::JmpIf {
+            cc: cc.into(),
+            taken,
+        });
+    }
+
+    /// Performs an unconditional jump to the given label.
+    pub fn jmp(&mut self, target: MachLabel) {
+        self.emit(Inst::JmpKnown { dst: target });
     }
 }

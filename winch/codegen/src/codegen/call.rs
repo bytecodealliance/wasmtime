@@ -2,10 +2,9 @@
 //! calling convention, see [ABI].
 use super::CodeGenContext;
 use crate::{
-    abi::{ABIArg, ABIResult, ABISig, ABI},
+    abi::{ABIArg, ABISig, ABI},
     masm::{CalleeKind, MacroAssembler, OperandSize},
     reg::Reg,
-    stack::Val,
 };
 use wasmtime_environ::FuncIndex;
 
@@ -178,7 +177,7 @@ impl<'a> FnCall<'a> {
         // cannot be less than what it was when starting the
         // function call.
         assert!(self.sp_offset_at_callsite >= masm.sp_offset());
-        self.handle_result(context, masm);
+        context.push_abi_results(&self.abi_sig.result, masm);
     }
 
     fn assign_args<M: MacroAssembler>(
@@ -204,21 +203,6 @@ impl<'a> FnCall<'a> {
                     context.move_val_to_reg(val, scratch, masm, size);
                     masm.store(scratch.into(), addr, size);
                 }
-            }
-        }
-    }
-
-    fn handle_result<M: MacroAssembler>(&self, context: &mut CodeGenContext, masm: &mut M) {
-        let result = &self.abi_sig.result;
-        if result.is_void() {
-            return;
-        }
-
-        match result {
-            &ABIResult::Reg { ty: _, reg } => {
-                assert!(context.regalloc.gpr_available(reg));
-                let result_reg = Val::reg(context.gpr(reg, masm));
-                context.stack.push(result_reg);
             }
         }
     }

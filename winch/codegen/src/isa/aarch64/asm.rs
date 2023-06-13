@@ -9,7 +9,8 @@ use cranelift_codegen::{
         emit::{EmitInfo, EmitState},
         ALUOp, ALUOp3, AMode, ExtendOp, Imm12, Inst, PairAMode,
     },
-    settings, Final, MachBuffer, MachBufferFinalized, MachInstEmit, MachInstEmitState, Writable,
+    settings, Final, MachBuffer, MachBufferFinalized, MachInstEmit, MachInstEmitState, MachLabel,
+    Writable,
 };
 
 /// An Aarch64 instruction operand.
@@ -296,5 +297,10 @@ impl Assembler {
             rm: rm.into(),
             ra: ra.into(),
         });
+    }
+
+    /// Get a label from the underlying machine code buffer.
+    pub fn get_label(&mut self) -> MachLabel {
+        self.buffer.get_label()
     }
 }
