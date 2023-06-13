@@ -681,6 +681,8 @@ jobs:
     needs: determine
     if: needs.determine.outputs.run-full
     name: Release build for ${{ matrix.build }}
+    env:
+      CARGO_NDK_VERSION: 2.12.2
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
