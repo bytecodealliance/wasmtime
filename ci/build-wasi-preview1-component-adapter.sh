@@ -4,8 +4,8 @@ set -ex
 build_adapter="cargo build -p wasi-preview1-component-adapter --target wasm32-unknown-unknown"
 verify="cargo run -p verify-component-adapter --"
 
-debug="target/wasm32-unknown-unknown/debug/wasi_preview1_component_adapter.wasm"
-release="target/wasm32-unknown-unknown/release/wasi_preview1_component_adapter.wasm"
+debug="target/wasm32-unknown-unknown/debug/wasi_snapshot_preview1.wasm"
+release="target/wasm32-unknown-unknown/release/wasi_snapshot_preview1.wasm"
 
 # Debug build, default features (reactor)
 $build_adapter

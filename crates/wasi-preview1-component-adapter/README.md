@@ -17,13 +17,20 @@ instead.
 This adapter can be built with:
 
 ```sh
-$ cargo build --target wasm32-unknown-unknown --release
+$ cargo build -p wasi-preview1-component-adapter --target wasm32-unknown-unknown --release
 ```
 
 And the artifact will be located at
 `target/wasm32-unknown-unknown/release/wasi_snapshot_preview1.wasm`.
-Alternatively the latest copy of this can be [downloaded from the `dev` tag
-assets ][dev-tag]
+
+This by default builds a "reactor" adapter which means that it only provides
+adaptation from preview1 to preview2. Alternatively you can also build a
+"command" adapter by passing `--features command --no-default-features` which
+will additionally export a `run` function entrypoint. This is suitable for use
+with preview1 binaries that export a `_start` function.
+
+Alternatively the latest copy of the command and reactor adapters can be
+[downloaded from the `dev` tag assets][dev-tag]
 
 [dev-tag]: https://github.com/bytecodealliance/wasmtime/releases/tag/dev
 
