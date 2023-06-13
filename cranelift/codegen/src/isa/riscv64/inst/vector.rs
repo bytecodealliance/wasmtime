@@ -299,8 +299,12 @@ impl VecAluOpRRR {
             VecAluOpRRR::VrgatherVV | VecAluOpRRR::VrgatherVX => 0b001100,
             VecAluOpRRR::VwadduVV | VecAluOpRRR::VwadduVX => 0b110000,
             VecAluOpRRR::VwaddVV | VecAluOpRRR::VwaddVX => 0b110001,
+            VecAluOpRRR::VwsubuVV | VecAluOpRRR::VwsubuVX => 0b110010,
+            VecAluOpRRR::VwsubVV | VecAluOpRRR::VwsubVX => 0b110011,
             VecAluOpRRR::VwadduWV | VecAluOpRRR::VwadduWX => 0b110100,
             VecAluOpRRR::VwaddWV | VecAluOpRRR::VwaddWX => 0b110101,
+            VecAluOpRRR::VwsubuWV | VecAluOpRRR::VwsubuWX => 0b110110,
+            VecAluOpRRR::VwsubWV | VecAluOpRRR::VwsubWX => 0b110111,
             VecAluOpRRR::VmsltVX => 0b011011,
         }
     }
@@ -329,6 +333,10 @@ impl VecAluOpRRR {
             | VecAluOpRRR::VwaddWV
             | VecAluOpRRR::VwadduVV
             | VecAluOpRRR::VwadduWV
+            | VecAluOpRRR::VwsubVV
+            | VecAluOpRRR::VwsubWV
+            | VecAluOpRRR::VwsubuVV
+            | VecAluOpRRR::VwsubuWV
             | VecAluOpRRR::VmulVV
             | VecAluOpRRR::VmulhVV
             | VecAluOpRRR::VmulhuVV
@@ -337,7 +345,11 @@ impl VecAluOpRRR {
             VecAluOpRRR::VwaddVX
             | VecAluOpRRR::VwadduVX
             | VecAluOpRRR::VwadduWX
-            | VecAluOpRRR::VwaddWX => VecOpCategory::OPMVX,
+            | VecAluOpRRR::VwaddWX
+            | VecAluOpRRR::VwsubVX
+            | VecAluOpRRR::VwsubuVX
+            | VecAluOpRRR::VwsubuWX
+            | VecAluOpRRR::VwsubWX => VecOpCategory::OPMVX,
             VecAluOpRRR::VaddVX
             | VecAluOpRRR::VsaddVX
             | VecAluOpRRR::VsadduVX
@@ -396,7 +408,15 @@ impl VecAluOpRRR {
             | VecAluOpRRR::VwadduWV
             | VecAluOpRRR::VwadduWX
             | VecAluOpRRR::VwaddWV
-            | VecAluOpRRR::VwaddWX => true,
+            | VecAluOpRRR::VwaddWX
+            | VecAluOpRRR::VwsubuVV
+            | VecAluOpRRR::VwsubuVX
+            | VecAluOpRRR::VwsubVV
+            | VecAluOpRRR::VwsubVX
+            | VecAluOpRRR::VwsubuWV
+            | VecAluOpRRR::VwsubuWX
+            | VecAluOpRRR::VwsubWV
+            | VecAluOpRRR::VwsubWX => true,
             _ => false,
         }
     }

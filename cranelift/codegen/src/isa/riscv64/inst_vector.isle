@@ -98,6 +98,10 @@
   (VwadduVV)
   (VwadduWV)
   (VsubVV)
+  (VwsubVV)
+  (VwsubWV)
+  (VwsubuVV)
+  (VwsubuWV)
   (VssubVV)
   (VssubuVV)
   (VmulVV)
@@ -133,6 +137,10 @@
   (VwadduWX)
   (VsubVX)
   (VrsubVX)
+  (VwsubVX)
+  (VwsubWX)
+  (VwsubuVX)
+  (VwsubuWX)
   (VssubVX)
   (VssubuVX)
   (VsllVX)
@@ -431,6 +439,62 @@
 (decl rv_vrsub_vx (VReg XReg VecOpMasking VState) VReg)
 (rule (rv_vrsub_vx vs2 vs1 mask vstate)
   (vec_alu_rrr (VecAluOpRRR.VrsubVX) vs2 vs1 mask vstate))
+
+;; Helper for emitting the `vwsub.vv` instruction.
+;;
+;;  Widening integer sub, 2*SEW = SEW + SEW
+(decl rv_vwsub_vv (VReg VReg VecOpMasking VState) VReg)
+(rule (rv_vwsub_vv vs2 vs1 mask vstate)
+  (vec_alu_rrr (VecAluOpRRR.VwsubVV) vs2 vs1 mask vstate))
+
+;; Helper for emitting the `vwsub.vx` instruction.
+;;
+;;  Widening integer sub, 2*SEW = SEW + SEW
+(decl rv_vwsub_vx (VReg XReg VecOpMasking VState) VReg)
+(rule (rv_vwsub_vx vs2 vs1 mask vstate)
+  (vec_alu_rrr (VecAluOpRRR.VwsubVX) vs2 vs1 mask vstate))
+
+;; Helper for emitting the `vwsub.wv` instruction.
+;;
+;;  Widening integer sub, 2*SEW = 2*SEW + SEW
+(decl rv_vwsub_wv (VReg VReg VecOpMasking VState) VReg)
+(rule (rv_vwsub_wv vs2 vs1 mask vstate)
+  (vec_alu_rrr (VecAluOpRRR.VwsubWV) vs2 vs1 mask vstate))
+
+;; Helper for emitting the `vwsub.wx` instruction.
+;;
+;;  Widening integer sub, 2*SEW = 2*SEW + SEW
+(decl rv_vwsub_wx (VReg XReg VecOpMasking VState) VReg)
+(rule (rv_vwsub_wx vs2 vs1 mask vstate)
+  (vec_alu_rrr (VecAluOpRRR.VwsubWX) vs2 vs1 mask vstate))
+
+;; Helper for emitting the `vwsubu.vv` instruction.
+;;
+;; Widening unsigned integer sub, 2*SEW = SEW + SEW
+(decl rv_vwsubu_vv (VReg VReg VecOpMasking VState) VReg)
+(rule (rv_vwsubu_vv vs2 vs1 mask vstate)
+  (vec_alu_rrr (VecAluOpRRR.VwsubuVV) vs2 vs1 mask vstate))
+
+;; Helper for emitting the `vwsubu.vv` instruction.
+;;
+;; Widening unsigned integer sub, 2*SEW = SEW + SEW
+(decl rv_vwsubu_vx (VReg XReg VecOpMasking VState) VReg)
+(rule (rv_vwsubu_vx vs2 vs1 mask vstate)
+  (vec_alu_rrr (VecAluOpRRR.VwsubuVX) vs2 vs1 mask vstate))
+
+;; Helper for emitting the `vwsubu.wv` instruction.
+;;
+;;  Widening integer sub, 2*SEW = 2*SEW + SEW
+(decl rv_vwsubu_wv (VReg VReg VecOpMasking VState) VReg)
+(rule (rv_vwsubu_wv vs2 vs1 mask vstate)
+  (vec_alu_rrr (VecAluOpRRR.VwsubuWV) vs2 vs1 mask vstate))
+
+;; Helper for emitting the `vwsubu.wx` instruction.
+;;
+;;  Widening integer sub, 2*SEW = 2*SEW + SEW
+(decl rv_vwsubu_wx (VReg XReg VecOpMasking VState) VReg)
+(rule (rv_vwsubu_wx vs2 vs1 mask vstate)
+  (vec_alu_rrr (VecAluOpRRR.VwsubuWX) vs2 vs1 mask vstate))
 
 ;; Helper for emitting the `vssub.vv` instruction.
 (decl rv_vssub_vv (VReg VReg VecOpMasking VState) VReg)
