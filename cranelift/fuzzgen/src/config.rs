@@ -63,6 +63,10 @@ pub struct Config {
     /// them, but probably at a lower rate, so that overall execution time isn't
     /// impacted as much
     pub compile_flag_ratio: HashMap<&'static str, (usize, usize)>,
+
+    /// Range of values for the padding between basic blocks. Larger values will
+    /// generate larger functions.
+    pub bb_padding_log2_size: RangeInclusive<usize>,
 }
 
 impl Default for Config {
@@ -101,6 +105,11 @@ impl Default for Config {
             allowed_int_divz_ratio: (1, 1_000_000),
             allowed_fcvt_traps_ratio: (1, 1_000_000),
             compile_flag_ratio: [("regalloc_checker", (1usize, 1000))].into_iter().collect(),
+            // Generate up to 4KiB of padding between basic blocks. Although we only
+            // explicitly generate up to 16 blocks, after SSA construction we can
+            // end up with way more blocks than that (Seeing 400 blocks is not uncommon).
+            // At 4KiB we end up at around 1.5MiB of padding per function, which seems reasonable.
+            bb_padding_log2_size: 0..=12,
         }
     }
 }
