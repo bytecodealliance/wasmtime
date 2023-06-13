@@ -145,12 +145,12 @@ fn build_adapter(out_dir: &PathBuf, name: &str, features: &[&str]) -> Vec<u8> {
     let status = cmd.status().unwrap();
     assert!(status.success());
 
-    let adapter = out_dir.join(format!("wasi_preview1_component_adapter.{name}.wasm"));
+    let adapter = out_dir.join(format!("wasi_snapshot_preview1.{name}.wasm"));
     std::fs::copy(
         out_dir
             .join("wasm32-unknown-unknown")
             .join("release")
-            .join("wasi_preview1_component_adapter.wasm"),
+            .join("wasi_snapshot_preview1.wasm"),
         &adapter,
     )
     .unwrap();
