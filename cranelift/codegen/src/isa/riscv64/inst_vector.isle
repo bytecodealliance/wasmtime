@@ -1006,14 +1006,17 @@
 
 
 ;; Build a vector mask from a u64
-;; TODO: We should merge this with the `vconst` rules, and take advantage of
-;; the other existing `vconst` rules. One example is using `vmv.v.i` which
-;; can represent some of these masks.
+;; TODO(#6571): We should merge this with the `vconst` rules, and take advantage of
+;; the other existing `vconst` rules.
 (decl gen_vec_mask (u64) VReg)
+
+;; When the immediate fits in a 5-bit immediate, we can use `vmv.v.i` directly.
+(rule 1 (gen_vec_mask (imm5_from_u64 imm))
+  (rv_vmv_vi imm (vstate_from_type $I64X2)))
 
 ;; Materialize the mask into an X register, and move it into the bottom of
 ;; the vector register.
-(rule (gen_vec_mask mask)
+(rule 0 (gen_vec_mask mask)
   (rv_vmv_sx (imm $I64 mask) (vstate_from_type $I64X2)))
 
 
