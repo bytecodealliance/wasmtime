@@ -350,6 +350,18 @@ fn vec_mask_operands<F: Fn(VReg) -> VReg>(
         VecOpMasking::Disabled => {}
     }
 }
+fn vec_mask_late_operands<F: Fn(VReg) -> VReg>(
+    mask: &VecOpMasking,
+    collector: &mut OperandCollector<'_, F>,
+) {
+    match mask {
+        VecOpMasking::Enabled { reg } => {
+            collector.reg_fixed_use(*reg, pv_reg(0).into());
+            collector.reg_late_use(*reg);
+        }
+        VecOpMasking::Disabled => {}
+    }
+}
 
 fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCollector<'_, F>) {
     match inst {
@@ -652,19 +664,19 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             debug_assert_eq!(vd.to_reg().class(), RegClass::Vector);
             debug_assert_eq!(vs2.class(), RegClass::Vector);
 
-            collector.reg_use(vs2);
-
-            // If the operation forbids source/destination overlap. In other
-            // instructions we use `early_def`, but that doesen't seem available
-            // for reuse. Use `late_use` instead which seems to do the right thing.
+            // If the operation forbids source/destination overlap we need to
+            // ensure that the source and destination registers are different.
             if op.forbids_src_dst_overlaps() {
-                collector.reg_late_use(vd_src);
-            } else {
+                collector.reg_late_use(vs2);
                 collector.reg_use(vd_src);
+                collector.reg_reuse_def(vd, 1); // `vd` == `vd_src`.
+                vec_mask_late_operands(mask, collector);
+            } else {
+                collector.reg_use(vs2);
+                collector.reg_use(vd_src);
+                collector.reg_reuse_def(vd, 1); // `vd` == `vd_src`.
+                vec_mask_operands(mask, collector);
             }
-
-            collector.reg_reuse_def(vd, 1); // `vd` == `vd_src`.
-            vec_mask_operands(mask, collector);
         }
         &Inst::VecAluRRR {
             op,
