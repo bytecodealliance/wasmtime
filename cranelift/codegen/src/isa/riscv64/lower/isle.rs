@@ -224,7 +224,7 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
             } else {
                 vec![self.temp_writable_reg(I64), self.temp_writable_reg(I64)]
             }
-        } else if ty.is_float() {
+        } else if ty.is_float() || ty.is_vector() {
             vec![self.temp_writable_reg(ty)]
         } else {
             unimplemented!("ty:{:?}", ty)

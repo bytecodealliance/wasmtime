@@ -259,7 +259,6 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
                 "simd_i8x16_cmp",
                 "simd_load",
                 "simd_splat",
-                "v128_select",
             ]
             .contains(&testname);
 
