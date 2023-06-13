@@ -46,16 +46,15 @@ impl<'a> CodeGenContext<'a> {
     /// spilling if not available.
     pub fn gpr<M: MacroAssembler>(&mut self, named: Reg, masm: &mut M) -> Reg {
         self.regalloc.gpr(named, &mut |regalloc| {
-            Self::spill_callback(&mut self.stack, regalloc, &self.frame, masm)
+            Self::spill_impl(&mut self.stack, regalloc, &self.frame, masm)
         })
     }
 
     /// Request the next avaiable general purpose register to the register allocator,
     /// spilling if no registers are available.
     pub fn any_gpr<M: MacroAssembler>(&mut self, masm: &mut M) -> Reg {
-        self.regalloc.any_gpr(&mut |regalloc| {
-            Self::spill_callback(&mut self.stack, regalloc, &self.frame, masm)
-        })
+        self.regalloc
+            .any_gpr(&mut |regalloc| Self::spill_impl(&mut self.stack, regalloc, &self.frame, masm))
     }
 
     /// Free the given general purpose register.
@@ -249,7 +248,7 @@ impl<'a> CodeGenContext<'a> {
     /// This function exists for cases in which triggering an unconditional
     /// spill is needed, like before entering control flow.
     pub fn spill<M: MacroAssembler>(&mut self, masm: &mut M) {
-        Self::spill_callback(&mut self.stack, &mut self.regalloc, &mut self.frame, masm);
+        Self::spill_impl(&mut self.stack, &mut self.regalloc, &mut self.frame, masm);
     }
 
     /// Handles the emission of the ABI result. This function is used at the end
@@ -289,7 +288,7 @@ impl<'a> CodeGenContext<'a> {
     // we could effectively ignore that range;
     // only focusing on the range that contains
     // spillable values.
-    fn spill_callback<M: MacroAssembler>(
+    fn spill_impl<M: MacroAssembler>(
         stack: &mut Stack,
         regalloc: &mut RegAlloc,
         frame: &Frame,

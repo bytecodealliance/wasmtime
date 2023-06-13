@@ -1,6 +1,6 @@
 //! Data structures for control flow emission.
 //!
-//! As of the current implementation, Winch doesnt offer support for the
+//! As of the current implementation, Winch doesn't offer support for the
 //! multi-value proposal, which in the context of control flow constructs it
 //! means that blocks don't take any params and produce 0 or 1 return. The
 //! intention is to implement support for multi-value across the compiler, when
@@ -41,15 +41,16 @@ use wasmtime_environ::WasmType;
 /// of control flow instructions.
 pub(crate) enum ControlStackFrame {
     If {
-        /// The continuation label.
-        ///
-        /// This could be either the else branch if
-        /// the if instruction has an else or the end
-        /// label otherwise.
+        /// The if continuation label.
         cont: MachLabel,
-        /// The exit label, only present if there's an else
-        /// branch.
-        end: Option<MachLabel>,
+        /// The return values of the block.
+        result: ABIResult,
+        /// The size of the value stack at the beginning of the If.
+        original_stack_size: usize,
+    },
+    Else {
+        /// The else continuation label.
+        cont: MachLabel,
         /// The return values of the block.
         result: ABIResult,
         /// The size of the value stack at the beginning of the If.
@@ -67,7 +68,6 @@ impl ControlStackFrame {
         let result = <M::ABI as ABI>::result(&returns, &CallingConvention::Default);
         let mut control = Self::If {
             cont: masm.get_label(),
-            end: None,
             result,
             original_stack_size: 0,
         };
@@ -93,6 +93,7 @@ impl ControlStackFrame {
                 masm.branch(CmpKind::Eq, top.into(), top.into(), *cont, OperandSize::S32);
                 context.free_gpr(top);
             }
+            _ => unreachable!(),
         }
     }
 
@@ -101,26 +102,30 @@ impl ControlStackFrame {
     pub fn emit_else<M: MacroAssembler>(&mut self, masm: &mut M, context: &mut CodeGenContext) {
         match self {
             ControlStackFrame::If {
-                cont,
-                end,
                 result,
                 original_stack_size,
+                cont,
                 ..
             } => {
                 assert!((*original_stack_size + result.len()) == context.stack.len());
-                // Before emitting an unconditional jump to the end branch,
+                // Before emitting an unconditional jump to the exit branch,
                 // we handle the result of the if-then block.
                 context.pop_abi_results(&result, masm);
                 // Before binding the else branch, we emit the jump to the end
                 // label.
-                let end_label = masm.get_label();
-                masm.jmp(end_label);
-                // Update the stack control frame with the
-                // end branch.
-                *end = Some(end_label);
-                // Bind the continuation branch.
+                let exit_label = masm.get_label();
+                masm.jmp(exit_label);
+                // Bind the else branch.
                 masm.bind(*cont);
+
+                // Update the stack control frame with an else control frame.
+                *self = ControlStackFrame::Else {
+                    cont: exit_label,
+                    original_stack_size: *original_stack_size,
+                    result: *result,
+                };
             }
+            _ => unreachable!(),
         }
     }
 
@@ -129,7 +134,12 @@ impl ControlStackFrame {
         match self {
             ControlStackFrame::If {
                 cont,
-                end,
+                result,
+                original_stack_size,
+                ..
+            }
+            | ControlStackFrame::Else {
+                cont,
                 result,
                 original_stack_size,
                 ..
@@ -139,15 +149,8 @@ impl ControlStackFrame {
                 context.pop_abi_results(&result, masm);
                 // Then we push the block results ino the value stack.
                 context.push_abi_results(&result, masm);
-                // If an end label is present, it means that
-                // there's an else branch present, and we bind the end
-                // label; else no else branch is present and
-                // we bind the if's exit label.
-                if let Some(end) = end {
-                    masm.bind(*end);
-                } else {
-                    masm.bind(*cont);
-                }
+                // Bind the exit label.
+                masm.bind(*cont)
             }
         }
     }

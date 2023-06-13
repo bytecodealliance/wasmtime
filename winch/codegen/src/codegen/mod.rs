@@ -36,9 +36,9 @@ where
     pub masm: &'a mut M,
 
     /// Stack frames for control flow.
-    // NB The 6 is set arbitrarily, we can adjust it as
+    // NB The 64 is set arbitrarily, we can adjust it as
     // we see fit.
-    pub control_frames: SmallVec<[ControlStackFrame; 6]>,
+    pub control_frames: SmallVec<[ControlStackFrame; 64]>,
 }
 
 impl<'a, M> CodeGen<'a, M>

@@ -156,6 +156,7 @@ impl ABIArg {
 }
 
 /// ABI-specific representation of the function result.
+#[derive(Copy, Clone)]
 pub(crate) enum ABIResult {
     Reg {
         /// Type of the result.
