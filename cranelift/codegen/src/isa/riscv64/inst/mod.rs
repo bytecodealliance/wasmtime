@@ -356,8 +356,7 @@ fn vec_mask_late_operands<F: Fn(VReg) -> VReg>(
 ) {
     match mask {
         VecOpMasking::Enabled { reg } => {
-            collector.reg_fixed_use(*reg, pv_reg(0).into());
-            collector.reg_late_use(*reg);
+            collector.reg_fixed_late_use(*reg, pv_reg(0).into());
         }
         VecOpMasking::Disabled => {}
     }
