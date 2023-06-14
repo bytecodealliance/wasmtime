@@ -41,7 +41,7 @@ impl<'a, P: PtrSize> FuncEnv<'a, P> {
         }
     }
 
-    /// Resolves the type of the block in terms of [`wastime_environ::WasmType`].
+    /// Resolves the type of the block in terms of [`wasmtime_environ::WasmType`].
     pub fn resolve_block_type(&self, blockty: BlockType) -> SmallVec<[WasmType; 1]> {
         use BlockType::*;
         match blockty {
