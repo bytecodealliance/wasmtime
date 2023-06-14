@@ -425,6 +425,9 @@ impl Masm for MacroAssembler {
             self.asm.popcnt(src, size);
             context.stack.push(Val::reg(src));
         } else {
+            // The fallback functionality here is based on `MacroAssembler::popcnt64` in:
+            // https://searchfox.org/mozilla-central/source/js/src/jit/x64/MacroAssembler-x64-inl.h#495
+
             let tmp = context.any_gpr(self);
             let dst = src;
             let (masks, shift_amt) = match size {
@@ -453,9 +456,13 @@ impl Masm for MacroAssembler {
 
             // x = (x & m2) + ((x >> 2) & m2);
             self.asm.mov_rr(tmp, dst, size);
-            self.asm.and(RegImm::imm(masks[1]).into(), dst.into(), size);
+            // Load `0x3333...` into the scratch reg once, allowing us to use
+            // `and_rr` and avoid inadvertently loading it twice as with `and`
+            let scratch = regs::scratch();
+            self.asm.load_constant(&masks[1], scratch, size);
+            self.asm.and_rr(scratch, dst.into(), size);
             self.asm.shift_ir(2u8, tmp, ShiftKind::ShrU, size);
-            self.asm.and(RegImm::imm(masks[1]).into(), tmp.into(), size);
+            self.asm.and_rr(scratch, tmp, size);
             self.asm.add_rr(dst, tmp, size);
 
             // x = (x + (x >> 4)) & m4;

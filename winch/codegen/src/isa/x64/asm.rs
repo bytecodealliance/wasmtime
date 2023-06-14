@@ -350,7 +350,8 @@ impl Assembler {
         }
     }
 
-    fn and_rr(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+    /// "and" two registers.
+    pub fn and_rr(&mut self, src: Reg, dst: Reg, size: OperandSize) {
         self.emit(Inst::AluRmiR {
             size: size.into(),
             op: AluRmiROpcode::And,
@@ -694,8 +695,8 @@ impl Assembler {
         self.emit(Inst::UnaryRmR {
             size: size.into(),
             op: args::UnaryRmROpcode::Popcnt,
-            src: Gpr::new(src.into()).unwrap().into(),
-            dst: Writable::from_reg(Gpr::new(src.into()).unwrap()),
+            src: src.into(),
+            dst: src.into(),
         });
     }
 
@@ -818,7 +819,8 @@ impl Assembler {
         }
     }
 
-    fn load_constant(&mut self, imm: &i64, dst: Reg, size: OperandSize) {
+    /// Load an imm constant into a register
+    pub fn load_constant(&mut self, imm: &i64, dst: Reg, size: OperandSize) {
         self.mov_ir(*imm as u64, dst, size);
     }
 
