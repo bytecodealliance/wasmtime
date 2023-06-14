@@ -52,7 +52,7 @@ impl<'a> CraneliftArbitrary for &mut Unstructured<'a> {
         // These are implemented and should work on all backends
         let mut allowed_callconvs = vec![CallConv::Fast, CallConv::Cold, CallConv::SystemV];
 
-        // Fastcall is suposed to work on x86 and aarch64
+        // Fastcall is supposed to work on x86 and aarch64
         if matches!(
             architecture,
             Architecture::X86_64 | Architecture::Aarch64(_)
