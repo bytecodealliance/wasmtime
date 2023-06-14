@@ -356,7 +356,8 @@ fn winch_supports_module(module: &[u8]) -> bool {
                         | Nop { .. }
                         | End { .. }
                         | If { .. }
-                        | Else { .. } => {}
+                        | Else { .. }
+                        | Block { .. } => {}
                         _ => {
                             supported = false;
                             break 'main;

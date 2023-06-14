@@ -56,6 +56,14 @@ pub(crate) enum ControlStackFrame {
         /// The size of the value stack at the beginning of the If.
         original_stack_size: usize,
     },
+    Block {
+        /// The block exit label.
+        exit: MachLabel,
+        /// The size of the value stack at the beginning of the block.
+        original_stack_size: usize,
+        /// The return values of the block.
+        result: ABIResult,
+    },
 }
 
 impl ControlStackFrame {
@@ -76,9 +84,27 @@ impl ControlStackFrame {
         control
     }
 
+    /// Returns [`ControlStackFrame`] for a block.
+    pub fn block<M: MacroAssembler>(
+        returns: &[WasmType],
+        masm: &mut M,
+        context: &mut CodeGenContext,
+    ) -> Self {
+        let result = <M::ABI as ABI>::result(&returns, &CallingConvention::Default);
+        let mut control = Self::Block {
+            original_stack_size: 0,
+            result,
+            exit: masm.get_label(),
+        };
+
+        control.emit(masm, context);
+        control
+    }
+
     fn emit<M: MacroAssembler>(&mut self, masm: &mut M, context: &mut CodeGenContext) {
+        use ControlStackFrame::*;
         match self {
-            ControlStackFrame::If {
+            If {
                 cont,
                 original_stack_size,
                 ..
@@ -93,6 +119,16 @@ impl ControlStackFrame {
                 masm.branch(CmpKind::Eq, top.into(), top.into(), *cont, OperandSize::S32);
                 context.free_gpr(top);
             }
+            Block {
+                original_stack_size,
+                ..
+            } => {
+                // Unconditional spill before entering the block.
+                // We assume that there are no live registers when
+                // exiting the block.
+                context.spill(masm);
+                *original_stack_size = context.stack.len();
+            }
             _ => unreachable!(),
         }
     }
@@ -100,11 +136,12 @@ impl ControlStackFrame {
     /// Handles the else branch if the current control stack frame is
     /// [`ControlStackFrame::If`].
     pub fn emit_else<M: MacroAssembler>(&mut self, masm: &mut M, context: &mut CodeGenContext) {
+        use ControlStackFrame::*;
         match self {
-            ControlStackFrame::If {
+            If {
+                cont,
                 result,
                 original_stack_size,
-                cont,
                 ..
             } => {
                 assert!((*original_stack_size + result.len()) == context.stack.len());
@@ -131,14 +168,15 @@ impl ControlStackFrame {
 
     /// Handles the end of a control stack frame.
     pub fn emit_end<M: MacroAssembler>(&mut self, masm: &mut M, context: &mut CodeGenContext) {
+        use ControlStackFrame::*;
         match self {
-            ControlStackFrame::If {
+            If {
                 cont,
                 result,
                 original_stack_size,
                 ..
             }
-            | ControlStackFrame::Else {
+            | Else {
                 cont,
                 result,
                 original_stack_size,
@@ -151,6 +189,18 @@ impl ControlStackFrame {
                 context.push_abi_results(&result, masm);
                 // Bind the exit label.
                 masm.bind(*cont)
+            }
+            Block {
+                original_stack_size,
+                result,
+                exit,
+            } => {
+                assert!((*original_stack_size + result.len()) == context.stack.len());
+                // Before exiting, handle block results.
+                context.pop_abi_results(&result, masm);
+                // Then, push the results to the value stack.
+                context.push_abi_results(&result, masm);
+                masm.bind(*exit);
             }
         }
     }
