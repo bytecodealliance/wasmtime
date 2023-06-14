@@ -1135,7 +1135,7 @@ impl<'a> Parser<'a> {
         let mut list = Vec::new();
         while self.token() == Some(Token::Identifier("feature")) {
             self.consume();
-            let has = !self.optional(Token::Not);
+            let has = !self.optional(Token::Bang);
             match (self.token(), has) {
                 (Some(Token::String(flag)), true) => list.push(Feature::With(flag)),
                 (Some(Token::String(flag)), false) => list.push(Feature::Without(flag)),
@@ -1993,16 +1993,23 @@ impl<'a> Parser<'a> {
 
     // Parse a single block parameter declaration, and append it to `block`.
     //
-    // block-param ::= * Value(v) ":" Type(t) arg-loc?
+    // block-param ::= * Value(v) [ "!" fact ]  ":" Type(t) arg-loc?
     // arg-loc ::= "[" value-location "]"
     //
     fn parse_block_param(&mut self, ctx: &mut Context, block: Block) -> ParseResult<()> {
-        // block-param ::= * Value(v) ":" Type(t) arg-loc?
+        // block-param ::= * Value(v) [ "!" fact ] ":" Type(t) arg-loc?
         let v = self.match_value("block argument must be a value")?;
         let v_location = self.loc;
-        // block-param ::= Value(v) * ":" Type(t) arg-loc?
+        // block-param ::= Value(v) * [ "!" fact ]  ":" Type(t) arg-loc?
+        let fact = if self.token() == Some(Token::Bang) {
+            self.consume();
+            // block-param ::= Value(v) [ "!" * fact ]  ":" Type(t) arg-loc?
+            Some(self.parse_fact(ctx)?)
+        } else {
+            None
+        };
         self.match_token(Token::Colon, "expected ':' after block argument")?;
-        // block-param ::= Value(v) ":" * Type(t) arg-loc?
+        // block-param ::= Value(v) [ "!" fact ] ":" * Type(t) arg-loc?
 
         while ctx.function.dfg.num_values() <= v.index() {
             ctx.function.dfg.make_invalid_value_for_parser();
@@ -2012,8 +2019,48 @@ impl<'a> Parser<'a> {
         // Allocate the block argument.
         ctx.function.dfg.append_block_param_for_parser(block, t, v);
         ctx.map.def_value(v, v_location)?;
+        ctx.function.dfg.facts[v] = fact;
 
         Ok(())
+    }
+
+    fn parse_fact(&mut self, ctx: &mut Context) -> ParseResult<Fact> {
+        match self.token() {
+            Some(Token::Identifier("max")) => {
+                self.consume();
+                self.match_token(Token::LPar, "`max` fact needs an opening `(`")?;
+                let bit_width = self.match_uimm64("expected a bit width for `max` fact")?;
+                self.match_token(Token::Comma, "expected a comma")?;
+                let max = self.match_uimm64("expected a max value for `max` fact")?;
+                self.match_token(Token::RPar, "`max` fact needs a closing `)`")?;
+                Ok(Fact::ValueMax {
+                    bit_width: match u8::try_from(bit_width) {
+                        Ok(bw) => bw,
+                        Err(e) => return Err(self.error(format!("bit width is out of range: {e}"))),
+                    },
+                    max: max.into(),
+                })
+            }
+            Some(Token::Identifier("points_to")) => {
+                self.consume();
+                self.match_token(Token::LPar, "expected a `(`")?;
+                let pointer_bit_width =
+                    self.match_uimm64("expected a bit width for `points_to` fact")?;
+                self.match_token(Token::Comma, "expected a comma")?;
+                let bound = self.match_uimm64("expected a region for `points_to` fact")?;
+                self.match_token(Token::RPar, "expected a `)`")?;
+                Ok(Fact::PointsTo {
+                    pointer_bit_width: match u8::try_from(bit_width) {
+                        Ok(bw) => bw,
+                        Err(e) => return Err(self.error(&format!("bit width is out of range: {e}"))),
+                    },
+                    region: MemoryRegion {
+                        bound: bound.into(),
+                    },
+                })
+            }
+            _ => Err(self.error("expected a `max` or `points_to` fact")),
+        }
     }
 
     // Parse instruction results and return them.
@@ -2368,7 +2415,7 @@ impl<'a> Parser<'a> {
         if self.optional(Token::Equal) {
             self.match_token(Token::Equal, "expected another =")?;
             Ok(Comparison::Equals)
-        } else if self.optional(Token::Not) {
+        } else if self.optional(Token::Bang) {
             self.match_token(Token::Equal, "expected a =")?;
             Ok(Comparison::NotEquals)
         } else {

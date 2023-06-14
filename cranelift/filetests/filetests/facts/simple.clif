@@ -1,0 +1,11 @@
+test compile
+
+; set verify_facts=true
+
+function %simple(i64 vmctx, i32) -> i8 {
+block0(v0 ! points_to(64, 0x1_0000_0000): i64, v1: i32):
+    v2 ! max(64, 0xffff_ffff) = zextend.i64 v1
+    v3 ! points_to(64, 0x1) = iadd.i64 v0, v2
+    v4 = load.i8 v3
+    return v4
+}

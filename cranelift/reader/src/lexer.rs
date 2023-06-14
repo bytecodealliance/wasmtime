@@ -28,7 +28,7 @@ pub enum Token<'a> {
     Dot,                   // '.'
     Colon,                 // ':'
     Equal,                 // '='
-    Not,                   // '!'
+    Bang,                  // '!'
     Arrow,                 // '->'
     Float(&'a str),        // Floating point immediate
     Integer(&'a str),      // Integer immediate
@@ -474,7 +474,7 @@ impl<'a> Lexer<'a> {
                 Some('.') => Some(self.scan_char(Token::Dot)),
                 Some(':') => Some(self.scan_char(Token::Colon)),
                 Some('=') => Some(self.scan_char(Token::Equal)),
-                Some('!') => Some(self.scan_char(Token::Not)),
+                Some('!') => Some(self.scan_char(Token::Bang)),
                 Some('+') => Some(self.scan_number()),
                 Some('*') => Some(self.scan_char(Token::Multiply)),
                 Some('-') => {

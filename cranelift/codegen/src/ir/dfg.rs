@@ -1,6 +1,7 @@
 //! Data flow graph tracking Instructions, Values, and blocks.
 
 use crate::entity::{self, PrimaryMap, SecondaryMap};
+use crate::facts::Fact;
 use crate::ir;
 use crate::ir::builder::ReplaceBuilder;
 use crate::ir::dynamic_type::{DynamicTypeData, DynamicTypes};
@@ -125,6 +126,9 @@ pub struct DataFlowGraph {
     /// Primary value table with entries for all values.
     values: PrimaryMap<Value, ValueDataPacked>,
 
+    /// TODO FITZGEN
+    pub facts: SecondaryMap<Value, Option<Fact>>,
+
     /// Function signature table. These signatures are referenced by indirect call instructions as
     /// well as the external function references.
     pub signatures: PrimaryMap<SigRef, Signature>,
@@ -158,6 +162,7 @@ impl DataFlowGraph {
             dynamic_types: DynamicTypes::new(),
             value_lists: ValueListPool::new(),
             values: PrimaryMap::new(),
+            facts: SecondaryMap::new(),
             signatures: PrimaryMap::new(),
             old_signatures: SecondaryMap::new(),
             ext_funcs: PrimaryMap::new(),
