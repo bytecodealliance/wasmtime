@@ -350,7 +350,8 @@ impl Assembler {
         }
     }
 
-    fn and_rr(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+    /// "and" two registers.
+    pub fn and_rr(&mut self, src: Reg, dst: Reg, size: OperandSize) {
         self.emit(Inst::AluRmiR {
             size: size.into(),
             op: AluRmiROpcode::And,
@@ -689,6 +690,16 @@ impl Assembler {
         });
     }
 
+    pub fn popcnt(&mut self, src: Reg, size: OperandSize) {
+        assert!(self.isa_flags.has_popcnt(), "Requires has_popcnt flag");
+        self.emit(Inst::UnaryRmR {
+            size: size.into(),
+            op: args::UnaryRmROpcode::Popcnt,
+            src: src.into(),
+            dst: src.into(),
+        });
+    }
+
     /// Emit a test instruction with two register operands.
     pub fn test_rr(&mut self, src: Reg, dst: Reg, size: OperandSize) {
         self.emit(Inst::CmpRmiR {
@@ -808,7 +819,8 @@ impl Assembler {
         }
     }
 
-    fn load_constant(&mut self, imm: &i64, dst: Reg, size: OperandSize) {
+    /// Load an imm constant into a register
+    pub fn load_constant(&mut self, imm: &i64, dst: Reg, size: OperandSize) {
         self.mov_ir(*imm as u64, dst, size);
     }
 

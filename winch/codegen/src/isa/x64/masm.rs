@@ -418,6 +418,67 @@ impl Masm for MacroAssembler {
     fn jmp(&mut self, target: MachLabel) {
         self.asm.jmp(target);
     }
+
+    fn popcnt(&mut self, context: &mut CodeGenContext, size: OperandSize) {
+        let src = context.pop_to_reg(self, None, size);
+        if self.flags.has_popcnt() {
+            self.asm.popcnt(src, size);
+            context.stack.push(Val::reg(src));
+        } else {
+            // The fallback functionality here is based on `MacroAssembler::popcnt64` in:
+            // https://searchfox.org/mozilla-central/source/js/src/jit/x64/MacroAssembler-x64-inl.h#495
+
+            let tmp = context.any_gpr(self);
+            let dst = src;
+            let (masks, shift_amt) = match size {
+                OperandSize::S64 => (
+                    [
+                        0x5555555555555555, // m1
+                        0x3333333333333333, // m2
+                        0x0f0f0f0f0f0f0f0f, // m4
+                        0x0101010101010101, // h01
+                    ],
+                    56u8,
+                ),
+                // 32-bit popcount is the same, except the masks are half as
+                // wide and we shift by 24 at the end rather than 56
+                OperandSize::S32 => (
+                    [0x55555555i64, 0x33333333i64, 0x0f0f0f0fi64, 0x01010101i64],
+                    24u8,
+                ),
+            };
+            self.asm.mov_rr(src, tmp, size);
+
+            // x -= (x >> 1) & m1;
+            self.asm.shift_ir(1u8, dst, ShiftKind::ShrU, size);
+            self.asm.and(RegImm::imm(masks[0]).into(), dst.into(), size);
+            self.asm.sub_rr(dst, tmp, size);
+
+            // x = (x & m2) + ((x >> 2) & m2);
+            self.asm.mov_rr(tmp, dst, size);
+            // Load `0x3333...` into the scratch reg once, allowing us to use
+            // `and_rr` and avoid inadvertently loading it twice as with `and`
+            let scratch = regs::scratch();
+            self.asm.load_constant(&masks[1], scratch, size);
+            self.asm.and_rr(scratch, dst.into(), size);
+            self.asm.shift_ir(2u8, tmp, ShiftKind::ShrU, size);
+            self.asm.and_rr(scratch, tmp, size);
+            self.asm.add_rr(dst, tmp, size);
+
+            // x = (x + (x >> 4)) & m4;
+            self.asm.mov(tmp.into(), dst.into(), size);
+            self.asm.shift_ir(4u8, dst, ShiftKind::ShrU, size);
+            self.asm.add_rr(tmp, dst, size);
+            self.asm.and(RegImm::imm(masks[2]).into(), dst.into(), size);
+
+            // (x * h01) >> shift_amt
+            self.asm.mul(RegImm::imm(masks[3]).into(), dst.into(), size);
+            self.asm.shift_ir(shift_amt, dst, ShiftKind::ShrU, size);
+
+            context.stack.push(Val::reg(dst));
+            context.free_gpr(tmp);
+        }
+    }
 }
 
 impl MacroAssembler {

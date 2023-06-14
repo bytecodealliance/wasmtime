@@ -350,6 +350,8 @@ fn winch_supports_module(module: &[u8]) -> bool {
                         | I64Clz { .. }
                         | I32Ctz { .. }
                         | I64Ctz { .. }
+                        | I32Popcnt { .. }
+                        | I64Popcnt { .. }
                         | LocalGet { .. }
                         | LocalSet { .. }
                         | Call { .. }
