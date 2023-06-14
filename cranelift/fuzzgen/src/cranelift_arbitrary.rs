@@ -47,7 +47,7 @@ impl<'a> CraneliftArbitrary for &mut Unstructured<'a> {
 
     fn callconv(&mut self, architecture: Architecture) -> Result<CallConv> {
         // We are missing Wasmtime* calling conventions since they do not support i128 values.
-        // TODO: Enable Tail Calls
+        // TODO(#6581, #6582): Enable Tail Calls
 
         // These are implemented and should work on all backends
         let mut allowed_callconvs = vec![CallConv::Fast, CallConv::Cold, CallConv::SystemV];
