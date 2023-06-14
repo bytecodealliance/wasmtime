@@ -419,10 +419,14 @@ impl Masm for MacroAssembler {
         self.asm.jmp(target);
     }
 
-    fn popcnt(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+    fn popcnt(&mut self, context: &mut CodeGenContext, size: OperandSize) {
+        let src = context.pop_to_reg(self, None, size);
         if self.flags.has_popcnt() {
-            self.asm.popcnt(src, dst, size)
+            self.asm.popcnt(src, size);
+            context.stack.push(Val::reg(src));
         } else {
+            let tmp = context.any_gpr(self);
+            let dst = src;
             let (masks, shift_amt) = match size {
                 OperandSize::S64 => (
                     [
@@ -440,11 +444,7 @@ impl Masm for MacroAssembler {
                     24u8,
                 ),
             };
-            let tmp = regs::scratch();
             self.asm.mov_rr(src, tmp, size);
-            if src != dst {
-                self.asm.mov_rr(src, dst, size);
-            }
 
             // x -= (x >> 1) & m1;
             self.asm.shift_ir(1u8, dst, ShiftKind::ShrU, size);
@@ -467,6 +467,9 @@ impl Masm for MacroAssembler {
             // (x * h01) >> shift_amt
             self.asm.mul(RegImm::imm(masks[3]).into(), dst.into(), size);
             self.asm.shift_ir(shift_amt, dst, ShiftKind::ShrU, size);
+
+            context.stack.push(Val::reg(dst));
+            context.free_gpr(tmp);
         }
     }
 }

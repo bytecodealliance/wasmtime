@@ -454,18 +454,13 @@ where
 
     fn visit_i32_popcnt(&mut self) {
         use OperandSize::*;
-
-        self.context.unop(self.masm, S32, &mut |masm, reg, size| {
-            masm.popcnt(reg, reg, size);
-        })
+        self.masm.popcnt(&mut self.context, S32);
     }
 
     fn visit_i64_popcnt(&mut self) {
         use OperandSize::*;
 
-        self.context.unop(self.masm, S64, &mut |masm, reg, size| {
-            masm.popcnt(reg, reg, size);
-        })
+        self.masm.popcnt(&mut self.context, S64);
     }
 
     fn visit_local_get(&mut self, index: u32) {

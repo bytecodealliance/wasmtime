@@ -210,7 +210,7 @@ impl Masm for MacroAssembler {
         self.asm.load_constant(0, reg);
     }
 
-    fn popcnt(&mut self, _src: Reg, _dst: Reg, _size: OperandSize) {
+    fn popcnt(&mut self, _context: &mut CodeGenContext, _size: OperandSize) {
         todo!()
     }
 

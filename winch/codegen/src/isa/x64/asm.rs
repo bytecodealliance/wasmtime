@@ -689,13 +689,13 @@ impl Assembler {
         });
     }
 
-    pub fn popcnt(&mut self, src: Reg, dst: Reg, size: OperandSize) {
+    pub fn popcnt(&mut self, src: Reg, size: OperandSize) {
         assert!(self.isa_flags.has_popcnt(), "Requires has_popcnt flag");
         self.emit(Inst::UnaryRmR {
             size: size.into(),
             op: args::UnaryRmROpcode::Popcnt,
             src: Gpr::new(src.into()).unwrap().into(),
-            dst: Writable::from_reg(Gpr::new(dst.into()).unwrap()),
+            dst: Writable::from_reg(Gpr::new(src.into()).unwrap()),
         });
     }
 

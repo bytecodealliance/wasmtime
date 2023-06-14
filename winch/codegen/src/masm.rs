@@ -268,7 +268,7 @@ pub(crate) trait MacroAssembler {
 
     /// Count the number of 1 bits in src and put the result in dst. In x64,
     /// this will emit multiple instructions if the `has_popcnt` flag is false.
-    fn popcnt(&mut self, src: Reg, dst: Reg, size: OperandSize);
+    fn popcnt(&mut self, context: &mut CodeGenContext, size: OperandSize);
 
     /// Zero a given memory range.
     ///
