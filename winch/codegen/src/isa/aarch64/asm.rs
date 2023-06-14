@@ -303,4 +303,10 @@ impl Assembler {
     pub fn get_label(&mut self) -> MachLabel {
         self.buffer.get_label()
     }
+
+    /// Get a mutable reference to underlying
+    /// machine buffer.
+    pub fn buffer_mut(&mut self) -> &mut MachBuffer<Inst> {
+        &mut self.buffer
+    }
 }

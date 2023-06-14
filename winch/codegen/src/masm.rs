@@ -167,6 +167,12 @@ pub(crate) trait MacroAssembler {
     /// Free stack space.
     fn free_stack(&mut self, bytes: u32);
 
+    /// Reset the stack pointer to the given offset;
+    ///
+    /// Used to reset the stack pointer to a given offset
+    /// when dealing with unreachable code.
+    fn reset_stack_pointer(&mut self, offset: u32);
+
     /// Get the address of a local slot.
     fn local_address(&mut self, local: &LocalSlot) -> Self::Address;
 

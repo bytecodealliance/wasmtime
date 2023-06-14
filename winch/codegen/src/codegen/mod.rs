@@ -7,7 +7,7 @@ use crate::{
 use anyhow::Result;
 use call::FnCall;
 use smallvec::SmallVec;
-use wasmparser::{BinaryReader, FuncValidator, ValidatorResources, VisitOperator};
+use wasmparser::{BinaryReader, FuncValidator, Operator, ValidatorResources, VisitOperator};
 use wasmtime_environ::{FuncIndex, WasmFuncType, WasmType};
 
 mod context;
@@ -77,7 +77,70 @@ where
     fn emit_start(&mut self) -> Result<()> {
         self.masm.prologue();
         self.masm.reserve_stack(self.context.frame.locals_size);
+
+        // Once we have emitted the epilogue and reserved stack space for the locals, we push the
+        // base control flow block.
+        self.control_frames
+            .push(ControlStackFrame::function_body_block(
+                self.sig.result,
+                self.masm,
+                &mut self.context,
+            ));
         Ok(())
+    }
+
+    /// The following two helpers, handle else or end instructions when the
+    /// compiler has entered into an unreachable code state. These instructions
+    /// must be observed to determine if the reachability state should be
+    /// restored.
+    ///
+    /// When the compiler is in an unreachable state, all the other instructions
+    /// are not visited.
+    pub fn handle_unreachable_else(&mut self) {
+        let frame = self.control_frames.last_mut().unwrap();
+        match frame {
+            ControlStackFrame::If {
+                reachable,
+                original_sp_offset,
+                original_stack_len,
+                ..
+            } => {
+                if *reachable {
+                    // We entered an unreachable state when compiling the
+                    // if-then branch, but if the `if` was reachable at
+                    // entry, the if-else branch will be reachable.
+                    self.context.reachable = true;
+                    // Reset the stack to the original length and offset.
+                    self.context
+                        .reset_stack(self.masm, *original_stack_len, *original_sp_offset);
+                    frame.bind_else(self.masm, None, self.context.reachable);
+                }
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    pub fn handle_unreachable_end(&mut self) {
+        let frame = self.control_frames.pop().unwrap();
+        // We just popped the outermost block.
+        let is_outermost = self.control_frames.len() == 0;
+        if frame.is_next_sequence_reachable() {
+            self.context.reachable = true;
+
+            let (value_stack_len, sp_offset) = frame.original_stack_len_and_sp_offset();
+            // Reset the stack to the original length and offset.
+            self.context
+                .reset_stack(self.masm, value_stack_len, sp_offset);
+            // If the current frame is the outermost frame, which corresponds to the
+            // current function's body, only bind the exit label as we don't need to
+            // push any more values to the value stack, else perform the entire `bind_end`
+            // process, which involves pushing results to the value stack.
+            if is_outermost {
+                frame.bind_exit_label(self.masm);
+            } else {
+                frame.bind_end(self.masm, &mut self.context);
+            }
+        }
     }
 
     fn emit_body(
@@ -113,16 +176,47 @@ where
                 $(
                     fn $visit(&mut self $($(,$arg: $argty)*)?) -> Self::Output {
                         self.0.$visit($($($arg.clone()),*)?)?;
-                        Ok(self.1.$visit($($($arg),*)?))
+                        // Only visit operators if the compiler is in a reachable code state. If
+                        // the compiler is in an unrechable code state, most of the operators are
+                        // ignored except for If, Block, Loop, Else and End. These operators need
+                        // to be observed in order to keep the control stack frames balanced and to
+                        // determine if reachability should be restored.
+                        let visit_when_unreachable = visit_op_when_unreachable(Operator::$op $({ $($arg: $arg.clone()),* })?);
+                        if self.1.is_reachable() || visit_when_unreachable  {
+                            Ok(self.1.$visit($($($arg),*)?))
+                        } else {
+                            Ok(U::Output::default())
+                        }
                     }
                 )*
             };
         }
 
+        fn visit_op_when_unreachable(op: Operator) -> bool {
+            use Operator::*;
+            match op {
+                If { .. } | Block { .. } | Loop { .. } | Else | End => true,
+                _ => false,
+            }
+        }
+
+        /// Trait to handle reachability state.
+        trait ReachableState {
+            /// Returns true if the current state of the program is reachable.
+            fn is_reachable(&self) -> bool;
+        }
+
+        impl<'a, M: MacroAssembler> ReachableState for CodeGen<'a, M> {
+            fn is_reachable(&self) -> bool {
+                self.context.reachable
+            }
+        }
+
         impl<'a, T, U> VisitOperator<'a> for ValidateThenVisit<'_, T, U>
         where
             T: VisitOperator<'a, Output = wasmparser::Result<()>>,
-            U: VisitOperator<'a>,
+            U: VisitOperator<'a> + ReachableState,
+            U::Output: Default,
         {
             type Output = Result<U::Output>;
 
@@ -179,10 +273,22 @@ where
 
     /// Emit the usual function end instruction sequence.
     fn emit_end(&mut self) -> Result<()> {
-        self.context.pop_abi_results(&self.sig.result, self.masm);
         assert!(self.context.stack.len() == 0);
         self.masm.epilogue(self.context.frame.locals_size);
         Ok(())
+    }
+
+    /// Returns the control stack frame at the given depth.
+    ///
+    /// # Panics
+    /// This function panics if the given depth cannot be associated
+    /// with a control stack frame.
+    pub fn control_at(frames: &mut [ControlStackFrame], depth: u32) -> &mut ControlStackFrame {
+        let index = (frames.len() - 1)
+            .checked_sub(depth as usize)
+            .unwrap_or_else(|| panic!("expected valid control stack frame at index: {}", depth));
+
+        &mut frames[index]
     }
 
     fn spill_register_arguments(&mut self) {
