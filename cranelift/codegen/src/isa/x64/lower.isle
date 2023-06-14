@@ -3462,14 +3462,69 @@
 
 ;; Rules for `iadd_pairwise` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(rule (lower (has_type $I8X16 (iadd_pairwise x y)))
+      (let (
+          ;; Shuffle all the even lanes of `x` and `y` into one register
+          (even_lane_mask Xmm (x64_movdqu_load (emit_u128_le_const 0x00ff_00ff_00ff_00ff_00ff_00ff_00ff_00ff)))
+          (x_evens Xmm (x64_pand x even_lane_mask))
+          (y_evens Xmm (x64_pand y even_lane_mask))
+          (evens Xmm (x64_packuswb x_evens y_evens))
+
+          ;; Shuffle all the odd lanes of `x` and `y` into one register
+          (x_odds Xmm (x64_psrlw x (xmi_imm 8)))
+          (y_odds Xmm (x64_psrlw y (xmi_imm 8)))
+          (odds Xmm (x64_packuswb x_odds y_odds))
+        )
+        (x64_paddb evens odds)))
+
+
+(rule 1 (lower (has_type $I16X8 (iadd_pairwise x y)))
+        (if-let $true (use_ssse3))
+        (x64_phaddw x y))
+
 (rule (lower (has_type $I16X8 (iadd_pairwise x y)))
-      (x64_phaddw x y))
+      (let (
+          (x Xmm x)
+          (y Xmm y)
+
+          ;; Shuffle the even-numbered 16-bit lanes into low four lanes of each
+          ;; vector by shuffling 16-bit lanes then shuffling 32-bit lanes.
+          ;; With these in place generate a new vector from the two low 64-bits
+          ;; of each vector (the low four 16-bit lanes).
+          ;;
+          ;; 0xe8 == 0b11_10_10_00
+          (x_evens Xmm (x64_pshufd (x64_pshufhw (x64_pshuflw x 0xe8) 0xe8) 0xe8))
+          (y_evens Xmm (x64_pshufd (x64_pshufhw (x64_pshuflw y 0xe8) 0xe8) 0xe8))
+          (evens Xmm (x64_punpcklqdq x_evens y_evens))
+
+          ;; Shuffle the odd-numbered 16-bit lanes into the low 8 lanes by
+          ;; performing `sshr` operation on 32-bit lanes, effectively moving the
+          ;; odd lanes into even lanes while leaving their sign bits in the
+          ;; odd lanes. The `packssdw` instruction then conveniently will
+          ;; put everything into one vector for us.
+          (x_shifted Xmm (x64_psrad x (xmi_imm 16)))
+          (y_shifted Xmm (x64_psrad y (xmi_imm 16)))
+          (odds Xmm (x64_packssdw x_shifted y_shifted))
+        )
+      (x64_paddw evens odds)))
+
+(rule 1 (lower (has_type $I32X4 (iadd_pairwise x y)))
+        (if-let $true (use_ssse3))
+        (x64_phaddd x y))
 
 (rule (lower (has_type $I32X4 (iadd_pairwise x y)))
-      (x64_phaddd x y))
+      (let (
+          (x Xmm x)
+          (y Xmm y)
+          ;; evens = [ x[0] x[2] y[0] y[2] ]
+          (evens Xmm (x64_shufps x y 0b10_00_10_00))
+          ;; odds  = [ x[1] x[3] y[1] y[3] ]
+          (odds  Xmm (x64_shufps x y 0b11_01_11_01))
+        )
+      (x64_paddd evens odds)))
 
 ;; special case for the `i16x8.extadd_pairwise_i8x16_s` wasm instruction
-(rule 1 (lower
+(rule 2 (lower
         (has_type $I16X8 (iadd_pairwise
                            (swiden_low val @ (value_type $I8X16))
                            (swiden_high val))))
@@ -3478,7 +3533,7 @@
         (x64_pmaddubsw mul_const val)))
 
 ;; special case for the `i32x4.extadd_pairwise_i16x8_s` wasm instruction
-(rule 1 (lower
+(rule 2 (lower
         (has_type $I32X4 (iadd_pairwise
                            (swiden_low val @ (value_type $I16X8))
                            (swiden_high val))))
@@ -3486,7 +3541,7 @@
         (x64_pmaddwd val mul_const)))
 
 ;; special case for the `i16x8.extadd_pairwise_i8x16_u` wasm instruction
-(rule 1 (lower
+(rule 2 (lower
         (has_type $I16X8 (iadd_pairwise
                            (uwiden_low val @ (value_type $I8X16))
                            (uwiden_high val))))
@@ -3494,7 +3549,7 @@
         (x64_pmaddubsw val mul_const)))
 
 ;; special case for the `i32x4.extadd_pairwise_i16x8_u` wasm instruction
-(rule 1 (lower
+(rule 2 (lower
         (has_type $I32X4 (iadd_pairwise
                            (uwiden_low val @ (value_type $I16X8))
                            (uwiden_high val))))
@@ -3508,7 +3563,7 @@
         (x64_paddd dst addd_const)))
 
 ;; special case for the `i32x4.dot_i16x8_s` wasm instruction
-(rule 1 (lower
+(rule 2 (lower
         (has_type $I32X4 (iadd_pairwise
                            (imul (swiden_low x) (swiden_low y))
                            (imul (swiden_high x) (swiden_high y)))))
