@@ -16,9 +16,10 @@
 ;;   16:	 81e055555555         	and	eax, 0x55555555
 ;;   1c:	 29c1                 	sub	ecx, eax
 ;;   1e:	 89c8                 	mov	eax, ecx
-;;   20:	 81e033333333         	and	eax, 0x33333333
-;;   26:	 c1e902               	shr	ecx, 2
-;;   29:	 81e133333333         	and	ecx, 0x33333333
+;;   20:	 41bb33333333         	mov	r11d, 0x33333333
+;;   26:	 4421d8               	and	eax, r11d
+;;   29:	 c1e902               	shr	ecx, 2
+;;   2c:	 4421d9               	and	ecx, r11d
 ;;   2f:	 01c1                 	add	ecx, eax
 ;;   31:	 89c8                 	mov	eax, ecx
 ;;   33:	 c1e804               	shr	eax, 4

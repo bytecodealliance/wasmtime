@@ -22,20 +22,18 @@
 ;; 				movabs	r11, 0x3333333333333333
 ;;   37:	 4c21d8               	and	rax, r11
 ;;   3a:	 48c1e902             	shr	rcx, 2
-;;   3e:	 49bb3333333333333333 	
-;; 				movabs	r11, 0x3333333333333333
-;;   48:	 4c21d9               	and	rcx, r11
-;;   4b:	 4801c1               	add	rcx, rax
-;;   4e:	 4889c8               	mov	rax, rcx
-;;   51:	 48c1e804             	shr	rax, 4
-;;   55:	 4801c8               	add	rax, rcx
-;;   58:	 49bb0f0f0f0f0f0f0f0f 	
+;;   3e:	 4c21d9               	and	rcx, r11
+;;   41:	 4801c1               	add	rcx, rax
+;;   44:	 4889c8               	mov	rax, rcx
+;;   47:	 48c1e804             	shr	rax, 4
+;;   4b:	 4801c8               	add	rax, rcx
+;;   4e:	 49bb0f0f0f0f0f0f0f0f 	
 ;; 				movabs	r11, 0xf0f0f0f0f0f0f0f
-;;   62:	 4c21d8               	and	rax, r11
-;;   65:	 49bb0101010101010101 	
+;;   58:	 4c21d8               	and	rax, r11
+;;   5b:	 49bb0101010101010101 	
 ;; 				movabs	r11, 0x101010101010101
-;;   6f:	 490fafc3             	imul	rax, r11
-;;   73:	 48c1e838             	shr	rax, 0x38
-;;   77:	 4883c408             	add	rsp, 8
-;;   7b:	 5d                   	pop	rbp
-;;   7c:	 c3                   	ret	
+;;   65:	 490fafc3             	imul	rax, r11
+;;   69:	 48c1e838             	shr	rax, 0x38
+;;   6d:	 4883c408             	add	rsp, 8
+;;   71:	 5d                   	pop	rbp
+;;   72:	 c3                   	ret	
