@@ -449,14 +449,14 @@ impl Masm for MacroAssembler {
             // x -= (x >> 1) & m1;
             self.asm.shift_ir(1u8, dst, ShiftKind::ShrU, size);
             self.asm.and(RegImm::imm(masks[0]).into(), dst.into(), size);
-            self.asm.sub(dst.into(), tmp.into(), size);
+            self.asm.sub_rr(dst, tmp, size);
 
             // x = (x & m2) + ((x >> 2) & m2);
-            self.asm.mov(tmp.into(), dst.into(), size);
+            self.asm.mov_rr(tmp, dst, size);
             self.asm.and(RegImm::imm(masks[1]).into(), dst.into(), size);
             self.asm.shift_ir(2u8, tmp, ShiftKind::ShrU, size);
             self.asm.and(RegImm::imm(masks[1]).into(), tmp.into(), size);
-            self.asm.add(dst.into(), tmp.into(), size);
+            self.asm.add_rr(dst, tmp, size);
 
             // x = (x + (x >> 4)) & m4;
             self.asm.mov(tmp.into(), dst.into(), size);
