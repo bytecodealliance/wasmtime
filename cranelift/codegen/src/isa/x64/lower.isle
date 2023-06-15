@@ -1155,14 +1155,48 @@
 
 ;;;; Rules for `iabs` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(rule 1 (lower (has_type $I8X16 (iabs x)))
+        (if-let $true (use_ssse3))
+        (x64_pabsb x))
+
+;; Note the use of `pminub` with signed inputs will produce the positive signed
+;; result which is what is desired here. The `pmaxub` isn't available until
+;; SSE4.1 in which case the single-instruction above lowering would apply.
 (rule (lower (has_type $I8X16 (iabs x)))
-      (x64_pabsb x))
+      (let (
+          (x Xmm x)
+          (negated Xmm (x64_psubb (xmm_zero $I8X16) x))
+        )
+        (x64_pminub x negated)))
+
+(rule 1 (lower (has_type $I16X8 (iabs x)))
+        (if-let $true (use_ssse3))
+        (x64_pabsw x))
 
 (rule (lower (has_type $I16X8 (iabs x)))
-      (x64_pabsw x))
+      (let (
+          (x Xmm x)
+          (negated Xmm (x64_psubw (xmm_zero $I16X8) x))
+        )
+        (x64_pmaxsw x negated)))
 
+(rule 1 (lower (has_type $I32X4 (iabs x)))
+        (if-let $true (use_ssse3))
+        (x64_pabsd x))
+
+;; Generate a `negative_mask` which is either numerically -1 or 0 depending on
+;; if the lane is negative. If the lane is positive then the xor operation
+;; won't change the lane but otherwise it'll bit-flip everything. By then
+;; subtracting the mask this subtracts 0 for positive lanes (does nothing) or
+;; ends up adding one for negative lanes. This means that for a negative lane
+;; `x` the result is `!x + 1` which is the result of negating it.
 (rule (lower (has_type $I32X4 (iabs x)))
-      (x64_pabsd x))
+      (let (
+          (x Xmm x)
+          (negative_mask Xmm (x64_psrad x (xmi_imm 31)))
+          (flipped_if_negative Xmm (x64_pxor x negative_mask))
+        )
+        (x64_psubd flipped_if_negative negative_mask)))
 
 ;; When AVX512 is available, we can use a single `vpabsq` instruction.
 (rule 2 (lower (has_type $I64X2 (iabs x)))
