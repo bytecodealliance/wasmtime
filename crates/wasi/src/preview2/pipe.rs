@@ -8,7 +8,7 @@
 //! but the virtual pipes can be instantiated with any `Read` or `Write` type.
 //!
 use crate::preview2::{HostInputStream, HostOutputStream, HostPollable};
-use anyhow::Error;
+use anyhow::{anyhow, Error};
 use std::any::Any;
 use std::convert::TryInto;
 use std::io::{self, Read, Write};
@@ -119,11 +119,28 @@ impl<R: Read + ReadReady + Any + Send + Sync> HostInputStream for ReadPipe<R> {
     }
 
     fn pollable(&self) -> HostPollable {
-        // TODO(elliottt): this should probably be:
-        // 1. take the lock
-        // 2. check if there's anything inside of it to be read
-        HostPollable::new(|| Box::pin(async { todo!("pollable on a ReadPipe") }))
-        // FIXME
+        let reader = Arc::clone(&self.reader);
+        HostPollable::new(move || {
+            let reader = Arc::clone(&reader);
+            Box::pin(async move {
+                loop {
+                    let amount = match reader.read() {
+                        Ok(g) => g.num_ready_bytes()?,
+                        Err(_) => {
+                            // TODO(elliottt): are there any circumstances where we want to clear
+                            // the poisoned state of the pipe?
+                            return Err(anyhow!("pipe has been poisoned"));
+                        }
+                    };
+                    if amount > 0 {
+                        return Ok(());
+                    }
+
+                    // TODO(elliottt): is there a better way to wait on the pipe to become ready?
+                    tokio::time::sleep(tokio::time::Duration::from_millis(1)).await;
+                }
+            })
+        })
     }
 }
 
