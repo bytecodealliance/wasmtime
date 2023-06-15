@@ -575,6 +575,7 @@ pub trait ABIMachineSpec {
         tmp: Writable<Reg>,
         callee_conv: isa::CallConv,
         caller_conv: isa::CallConv,
+        callee_pop_size: u32,
     ) -> SmallVec<[Self::I; 2]>;
 
     /// Generate a memcpy invocation. Used to set up struct
@@ -2169,7 +2170,7 @@ impl<M: ABIMachineSpec> CallSite<M> {
 
         let stack_space = if sig.call_conv() == isa::CallConv::Tail {
             // The "tail" calling convention has callees clean up stack
-            // arguments, not callers. It still cleans up any stack return
+            // arguments, not callers. Callers still clean up any stack return
             // space, however.
             sig.sized_stack_ret_space
         } else {
@@ -2177,7 +2178,7 @@ impl<M: ABIMachineSpec> CallSite<M> {
         };
         let stack_space = i32::try_from(stack_space).unwrap();
 
-        adjust_stack_and_nominal_sp::<M>(ctx, stack_space)
+        adjust_stack_and_nominal_sp::<M>(ctx, stack_space);
     }
 
     /// Emit a copy of a large argument into its associated stack buffer, if any.
@@ -2381,7 +2382,17 @@ impl<M: ABIMachineSpec> CallSite<M> {
                             });
                         }
                         &ABIArgSlot::Stack { offset, ty, .. } => {
-                            let ret_area_base = ctx.sigs()[self.sig].sized_stack_arg_space();
+                            let sig_data = &ctx.sigs()[self.sig];
+                            let ret_area_base = if sig_data.call_conv() == isa::CallConv::Tail {
+                                // The callee already popped the stack argument
+                                // space for us, so the return area is on top of
+                                // the stack.
+                                0
+                            } else {
+                                // The return area is just below the stack
+                                // argument area on the stack.
+                                sig_data.sized_stack_arg_space()
+                            };
                             insts.push(M::gen_load_stack(
                                 StackAMode::SPOffset(offset + ret_area_base, ty),
                                 *into_reg,
@@ -2434,6 +2445,14 @@ impl<M: ABIMachineSpec> CallSite<M> {
             mem::replace(&mut self.defs, Default::default()),
         );
 
+        let sig = &ctx.sigs()[self.sig];
+        let callee_pop_size = if sig.call_conv() == isa::CallConv::Tail {
+            // The tail calling convention has callees pop stack arguments.
+            sig.sized_stack_arg_space
+        } else {
+            0
+        };
+
         let tmp = ctx.alloc_tmp(word_type).only_reg().unwrap();
         for inst in M::gen_call(
             &self.dest,
@@ -2444,6 +2463,7 @@ impl<M: ABIMachineSpec> CallSite<M> {
             tmp,
             ctx.sigs()[self.sig].call_conv,
             self.caller_conv,
+            callee_pop_size,
         )
         .into_iter()
         {

@@ -4335,6 +4335,7 @@ fn test_x64_emit() {
             smallvec![],
             PRegSet::default(),
             Opcode::Call,
+            0,
         ),
         "E800000000",
         "call    User(userextname0)",
@@ -4349,6 +4350,7 @@ fn test_x64_emit() {
             smallvec![],
             PRegSet::default(),
             Opcode::CallIndirect,
+            0,
         )
     }
 

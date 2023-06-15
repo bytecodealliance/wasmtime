@@ -435,6 +435,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                 defs: smallvec![],
                 clobbers: PRegSet::empty(),
                 opcode: Opcode::Call,
+                callee_pop_size: 0,
             }),
         });
     }
@@ -594,11 +595,19 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         tmp: Writable<Reg>,
         _callee_conv: isa::CallConv,
         _caller_conv: isa::CallConv,
+        callee_pop_size: u32,
     ) -> SmallVec<[Self::I; 2]> {
         let mut insts = SmallVec::new();
         match dest {
             &CallDest::ExtName(ref name, RelocDistance::Near) => {
-                insts.push(Inst::call_known(name.clone(), uses, defs, clobbers, opcode));
+                insts.push(Inst::call_known(
+                    name.clone(),
+                    uses,
+                    defs,
+                    clobbers,
+                    opcode,
+                    callee_pop_size,
+                ));
             }
             &CallDest::ExtName(ref name, RelocDistance::Far) => {
                 insts.push(Inst::LoadExtName {
@@ -613,6 +622,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                     defs,
                     clobbers,
                     opcode,
+                    callee_pop_size,
                 ));
             }
             &CallDest::Reg(reg) => {
@@ -622,6 +632,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                     defs,
                     clobbers,
                     opcode,
+                    callee_pop_size,
                 ));
             }
         }
@@ -651,6 +662,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             offset: 0,
             distance: RelocDistance::Far,
         });
+        let callee_pop_size = 0;
         insts.push(Inst::call_unknown(
             RegMem::reg(temp2.to_reg()),
             /* uses = */
@@ -671,6 +683,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             /* defs = */ smallvec![],
             /* clobbers = */ Self::get_regs_clobbered_by_call(call_conv),
             Opcode::Call,
+            callee_pop_size,
         ));
         insts
     }

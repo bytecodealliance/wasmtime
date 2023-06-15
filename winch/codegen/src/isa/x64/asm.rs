@@ -801,6 +801,7 @@ impl Assembler {
                         defs: smallvec![],
                         clobbers: Default::default(),
                         opcode: Opcode::Call,
+                        callee_pop_size: 0,
                     }),
                 });
             }
@@ -813,6 +814,7 @@ impl Assembler {
                         defs: smallvec![],
                         clobbers: Default::default(),
                         opcode: Opcode::Call,
+                        callee_pop_size: 0,
                     }),
                 });
             }

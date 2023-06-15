@@ -990,6 +990,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
         tmp: Writable<Reg>,
         callee_conv: isa::CallConv,
         caller_conv: isa::CallConv,
+        callee_pop_size: u32,
     ) -> SmallVec<[Inst; 2]> {
         let mut insts = SmallVec::new();
         match &dest {
@@ -1002,6 +1003,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
                     opcode,
                     caller_callconv: caller_conv,
                     callee_callconv: callee_conv,
+                    callee_pop_size,
                 }),
             }),
             &CallDest::ExtName(ref name, RelocDistance::Far) => {
@@ -1019,6 +1021,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
                         opcode,
                         caller_callconv: caller_conv,
                         callee_callconv: callee_conv,
+                        callee_pop_size,
                     }),
                 });
             }
@@ -1031,6 +1034,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
                     opcode,
                     caller_callconv: caller_conv,
                     callee_callconv: callee_conv,
+                    callee_pop_size,
                 }),
             }),
         }
@@ -1073,6 +1077,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
                 opcode: Opcode::Call,
                 caller_callconv: call_conv,
                 callee_callconv: call_conv,
+                callee_pop_size: 0,
             }),
         });
         insts

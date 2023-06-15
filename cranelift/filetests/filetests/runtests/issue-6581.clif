@@ -1,0 +1,16 @@
+test interpret
+test run
+
+set enable_llvm_abi_extensions=true
+
+target x86_64
+target aarch64
+target aarch64 sign_return_address
+target aarch64 has_pauth sign_return_address
+target riscv64
+
+function %b(f64, i128, i128, i128, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8) -> i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8 tail {
+block0(v0: f64, v1: i128, v2: i128, v3: i128, v4: i8, v5: i8, v6: i8, v7: i8, v8: i8, v9: i8, v10: i8, v11: i8, v12: i8, v13: i8, v14: i8, v15: i8):
+    return v4, v4, v4, v4, v4, v4, v4, v4, v4, v4, v4, v4, v4, v4, v4, v4
+}
+; run: %b(0.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0) == [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]

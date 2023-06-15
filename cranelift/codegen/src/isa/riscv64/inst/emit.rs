@@ -6,6 +6,7 @@ use crate::ir::TrapCode;
 use crate::isa::riscv64::inst::*;
 use crate::isa::riscv64::inst::{zero_reg, AluOPRRR};
 use crate::machinst::{AllocationConsumer, Reg, Writable};
+use crate::trace;
 use cranelift_control::ControlPlane;
 use regalloc2::Allocation;
 
@@ -847,6 +848,13 @@ impl MachInstEmit for Inst {
                         .emit(&[], sink, emit_info, state);
                     }
                 }
+
+                let callee_pop_size = i64::from(info.callee_pop_size);
+                state.virtual_sp_offset -= callee_pop_size;
+                trace!(
+                    "call adjusts virtual sp offset by {callee_pop_size} -> {}",
+                    state.virtual_sp_offset
+                );
             }
             &Inst::CallInd { ref info } => {
                 let rn = allocs.next(info.rn);
@@ -863,6 +871,13 @@ impl MachInstEmit for Inst {
                     offset: Imm12::zero(),
                 }
                 .emit(&[], sink, emit_info, state);
+
+                let callee_pop_size = i64::from(info.callee_pop_size);
+                state.virtual_sp_offset -= callee_pop_size;
+                trace!(
+                    "call adjusts virtual sp offset by {callee_pop_size} -> {}",
+                    state.virtual_sp_offset
+                );
             }
 
             &Inst::Jal { dest } => {

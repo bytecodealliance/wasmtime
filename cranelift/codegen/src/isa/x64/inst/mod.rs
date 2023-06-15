@@ -42,6 +42,10 @@ pub struct CallInfo {
     pub clobbers: PRegSet,
     /// The opcode of this call.
     pub opcode: Opcode,
+    /// The number of bytes that the callee will pop from the stack for the
+    /// caller, if any. (Used for popping stack arguments with the `tail`
+    /// calling convention.)
+    pub callee_pop_size: u32,
 }
 
 #[test]
@@ -515,6 +519,7 @@ impl Inst {
         defs: CallRetList,
         clobbers: PRegSet,
         opcode: Opcode,
+        callee_pop_size: u32,
     ) -> Inst {
         Inst::CallKnown {
             dest,
@@ -523,6 +528,7 @@ impl Inst {
                 defs,
                 clobbers,
                 opcode,
+                callee_pop_size,
             }),
         }
     }
@@ -533,6 +539,7 @@ impl Inst {
         defs: CallRetList,
         clobbers: PRegSet,
         opcode: Opcode,
+        callee_pop_size: u32,
     ) -> Inst {
         dest.assert_regclass_is(RegClass::Int);
         Inst::CallUnknown {
@@ -542,6 +549,7 @@ impl Inst {
                 defs,
                 clobbers,
                 opcode,
+                callee_pop_size,
             }),
         }
     }
