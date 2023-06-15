@@ -108,6 +108,7 @@ impl<T: WasiView> poll::Host for T {
 }
 
 pub mod sync {
+    use std::future::Future;
     use crate::preview2::{
         wasi::poll::poll::Host as AsyncHost,
         wasi::sync_io::poll::poll::{self, Pollable},
@@ -116,26 +117,26 @@ pub mod sync {
     use anyhow::Result;
     use tokio::runtime::{Builder, Handle, Runtime};
 
-    pub fn with_tokio() -> Handle {
+    pub fn block_on<F: Future>(f: F) -> F::Output {
         match Handle::try_current() {
-            Ok(h) => h,
+            Ok(h) => h.block_on(f),
             Err(_) => {
                 use once_cell::sync::Lazy;
                 static RUNTIME: Lazy<Runtime> =
                     Lazy::new(|| Builder::new_current_thread().enable_time().build().unwrap());
                 let _enter = RUNTIME.enter();
-                RUNTIME.handle().clone()
+                RUNTIME.block_on(f)
             }
         }
     }
 
     impl<T: WasiView> poll::Host for T {
         fn drop_pollable(&mut self, pollable: Pollable) -> Result<()> {
-            with_tokio().block_on(async { AsyncHost::drop_pollable(self, pollable).await })
+            block_on(async { AsyncHost::drop_pollable(self, pollable).await })
         }
 
         fn poll_oneoff(&mut self, pollables: Vec<Pollable>) -> Result<Vec<u8>> {
-            with_tokio().block_on(async { AsyncHost::poll_oneoff(self, pollables).await })
+            block_on(async { AsyncHost::poll_oneoff(self, pollables).await })
         }
     }
 }
