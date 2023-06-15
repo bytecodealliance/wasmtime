@@ -7,17 +7,12 @@ use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
-pub struct HostPollable(
-    Box<dyn Fn() -> Pin<Box<dyn Future<Output = Result<()>> + Send + Sync>> + Send + Sync>,
-);
+type ReadynessFuture = Pin<Box<dyn Future<Output = Result<()>> + Send + Sync>>;
+
+pub struct HostPollable(Box<dyn Fn() -> ReadynessFuture + Send + Sync>);
 
 impl HostPollable {
-    pub fn new(
-        mkfuture: impl Fn() -> Pin<Box<dyn Future<Output = Result<()>> + Send + Sync + 'static>>
-            + Send
-            + Sync
-            + 'static,
-    ) -> HostPollable {
+    pub fn new(mkfuture: impl Fn() -> ReadynessFuture + Send + Sync + 'static) -> HostPollable {
         HostPollable(Box::new(mkfuture))
     }
 }
@@ -48,73 +43,64 @@ impl<T: WasiView> poll::Host for T {
     }
 
     async fn poll_oneoff(&mut self, pollables: Vec<Pollable>) -> Result<Vec<u8>> {
-        struct PollOneoff<'a> {
-            table: &'a mut Table,
-            elems: &'a [Pollable],
+        struct PollOneoff {
+            elems: Vec<(u32, ReadynessFuture)>,
         }
-        impl<'a> Future for PollOneoff<'a> {
-            type Output = Result<Vec<bool>>;
+        impl Future for PollOneoff {
+            type Output = Result<Vec<u8>>;
+
             fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-
-                // TODO(elliottt): why do we never re-enter the poll function?
-
                 let mut any_ready = false;
-                let mut results = vec![false; self.elems.len()];
-                for (ix, pollable) in self.elems.iter().enumerate() {
-                    tracing::trace!("polling!");
-
-                    match self.table.get_host_pollable_mut(*pollable) {
-                        Ok(mkf) => {
-                            let mut f = mkf.0();
-                            match Pin::new(&mut f).poll(cx) {
-                                Poll::Ready(Ok(())) => {
-                                    results[ix] = true;
-                                    any_ready = true;
-                                }
-                                Poll::Ready(Err(e)) => {
-                                    return Poll::Ready(Err(
-                                        e.context(format!("poll_oneoff[{ix}]: {pollable}"))
-                                    ));
-                                }
-                                Poll::Pending => {
-                                    tracing::trace!("pending!");
-                                }
-                            }
+                let mut results = vec![0; self.elems.len()];
+                for (ix, (pollable, f)) in self.elems.iter_mut().enumerate() {
+                    // NOTE: we don't need to guard against polling any of the elems more than
+                    // once, as a single one becoming ready will cause the whole PollOneoff future
+                    // to become ready.
+                    match f.as_mut().poll(cx) {
+                        Poll::Ready(Ok(())) => {
+                            results[ix] = 1;
+                            any_ready = true;
                         }
-                        Err(e) => {
+                        Poll::Ready(Err(e)) => {
                             return Poll::Ready(Err(
-                                anyhow!(e).context(format!("poll_oneoff[{ix}]: {pollable}"))
-                            ))
+                                e.context(format!("poll_oneoff[{ix}]: {pollable}"))
+                            ));
                         }
+                        Poll::Pending => {}
                     }
                 }
                 if any_ready {
                     Poll::Ready(Ok(results))
                 } else {
-                    tracing::trace!("overall, we're pending!");
                     Poll::Pending
                 }
             }
         }
 
-        let bs = Pin::new(&mut PollOneoff {
-            table: self.table_mut(),
-            elems: &pollables,
-        })
-        // TODO: why does poll only get called once?
-        .await?;
-        Ok(bs.into_iter().map(|b| if b { 1 } else { 0 }).collect())
+        Ok(PollOneoff {
+            elems: pollables
+                .iter()
+                .enumerate()
+                .map(
+                    |(ix, pollable)| match self.table_mut().get_host_pollable_mut(*pollable) {
+                        Ok(mkf) => Ok((*pollable, mkf.0())),
+                        Err(e) => Err(anyhow!(e).context(format!("poll_oneoff[{ix}]: {pollable}"))),
+                    },
+                )
+                .collect::<Result<Vec<_>>>()?,
+        }
+        .await?)
     }
 }
 
 pub mod sync {
-    use std::future::Future;
     use crate::preview2::{
         wasi::poll::poll::Host as AsyncHost,
         wasi::sync_io::poll::poll::{self, Pollable},
         WasiView,
     };
     use anyhow::Result;
+    use std::future::Future;
     use tokio::runtime::{Builder, Handle, Runtime};
 
     pub fn block_on<F: Future>(f: F) -> F::Output {
