@@ -1,8 +1,9 @@
-default world proxy {
-  import random: random.random
-  import insecure-random: random.insecure
-  import insecure-random-seed: random.insecure-seed
-  import console: logging.handler
-  import default-outgoing-HTTP: http.outgoing-handler
-  export HTTP: http.incoming-handler
+world proxy {
+  import wasi:random/random
+  import wasi:random/insecure
+  import wasi:random/insecure-seed
+  import wasi:logging/handler
+  import wasi:http/outgoing-handler
+
+  export wasi:http/incoming-handler
 }

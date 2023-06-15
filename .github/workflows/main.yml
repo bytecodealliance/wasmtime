@@ -55,6 +55,31 @@ jobs:
       env:
         GH_TOKEN: ${{ github.token }}
 
+  # Ensure WIT dependencies are in-sync.
+  wit_deps:
+    name: WIT dependencies
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: true
+
+    - name: ensure `crates/wasi-preview1-component-adapter/wit/deps` are in sync
+      working-directory: ./crates/wasi-preview1-component-adapter
+      run: |
+        curl -Lo 'wit-deps' https://github.com/bytecodealliance/wit-deps/releases/download/v0.3.2/wit-deps-x86_64-unknown-linux-musl
+        chmod +x ./wit-deps
+        rm -rf wit/deps
+        ./wit-deps lock
+        git add -N wit/deps
+        git diff --exit-code
+
+    # common logic to cancel the entire run if this job fails
+    - run: gh run cancel ${{ github.run_id }}
+      if: failure() && github.event_name != 'pull_request'
+      env:
+        GH_TOKEN: ${{ github.token }}
+
   # Lint dependency graph for security advisories, duplicate versions, and
   # incompatible licences
   cargo_deny:

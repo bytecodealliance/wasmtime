@@ -20,3 +20,4 @@ foo
 publish
 vendor
 examples/build
+deps.lock

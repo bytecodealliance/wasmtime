@@ -1,17 +1,17 @@
 interface stdin {
-  use io.streams.{input-stream}
+  use wasi:io/streams.{input-stream}
 
   get-stdin: func() -> input-stream
 }
 
 interface stdout {
-  use io.streams.{output-stream}
+  use wasi:io/streams.{output-stream}
 
   get-stdout: func() -> output-stream
 }
 
 interface stderr {
-  use io.streams.{output-stream}
+  use wasi:io/streams.{output-stream}
 
   get-stderr: func() -> output-stream
 }

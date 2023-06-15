@@ -1,3 +1,5 @@
+package wasi:filesystem
+
 /// WASI filesystem is a filesystem API primarily intended to let users run WASI
 /// programs that access their files on their existing filesystems, without
 /// significant overhead.
@@ -17,9 +19,9 @@
 /// `..` and symbolic link steps, reaches a directory outside of the base
 /// directory, or reaches a symlink to an absolute or rooted path in the
 /// underlying filesystem, the function fails with `error-code::not-permitted`.
-default interface filesystem {
-    use io.streams.{input-stream, output-stream}
-    use clocks.wall-clock.{datetime}
+interface filesystem {
+    use wasi:io/streams.{input-stream, output-stream}
+    use wasi:clocks/wall-clock.{datetime}
 
     /// File size or length of a region within a file.
     type filesize = u64
@@ -309,30 +311,30 @@ default interface filesystem {
     /// Multiple read, write, and append streams may be active on the same open
     /// file and they do not interfere with each other.
     ///
-    /// Note: This allows using `read-stream`, which is similar to `read` in POSIX.
+    /// Note: This allows using `wasi:io/streams.read`, which is similar to `read` in POSIX.
     read-via-stream: func(
         this: descriptor,
         /// The offset within the file at which to start reading.
         offset: filesize,
-    ) -> input-stream
+    ) -> result<input-stream, error-code>
 
     /// Return a stream for writing to a file.
     ///
-    /// Note: This allows using `write-stream`, which is similar to `write` in
+    /// Note: This allows using `wasi:io/streams.write`, which is similar to `write` in
     /// POSIX.
     write-via-stream: func(
         this: descriptor,
         /// The offset within the file at which to start writing.
         offset: filesize,
-    ) -> output-stream
+    ) -> result<output-stream, error-code>
 
     /// Return a stream for appending to a file.
     ///
-    /// Note: This allows using `write-stream`, which is similar to `write` with
+    /// Note: This allows using `wasi:io/streams.write`, which is similar to `write` with
     /// `O_APPEND` in in POSIX.
     append-via-stream: func(
         this: descriptor,
-    ) -> output-stream
+    ) -> result<output-stream, error-code>
 
     /// Provide file advisory information on a descriptor.
     ///
