@@ -46,9 +46,6 @@ impl<'a> CraneliftArbitrary for &mut Unstructured<'a> {
     }
 
     fn callconv(&mut self, architecture: Architecture) -> Result<CallConv> {
-        // We are missing Wasmtime* calling conventions since they do not support i128 values.
-        // TODO(#6581, #6582): Enable Tail Calls
-
         // These are implemented and should work on all backends
         let mut allowed_callconvs = vec![CallConv::Fast, CallConv::Cold, CallConv::SystemV];
 
@@ -63,6 +60,12 @@ impl<'a> CraneliftArbitrary for &mut Unstructured<'a> {
         // AArch64 has a few Apple specific calling conventions
         if matches!(architecture, Architecture::Aarch64(_)) {
             allowed_callconvs.push(CallConv::AppleAarch64);
+        }
+
+        // TODO(#6530): The `tail` calling convention is not supported on s390x
+        // yet.
+        if !matches!(architecture, Architecture::S390x) {
+            allowed_callconvs.push(CallConv::Tail);
         }
 
         Ok(*self.choose(&allowed_callconvs[..])?)
