@@ -209,10 +209,9 @@ impl<W: Write + Any + Send + Sync> HostOutputStream for WritePipe<W> {
     }
 
     fn pollable(&self) -> HostPollable {
-        // TODO(elliottt): because this is using only a `Write` constraint, and that trait doesn't
-        // provide a way to check if there's space available, this should trivially return that
-        // there's space to write.
-        HostPollable::new(|| Box::pin(async { todo!("pollable on a WritePipe") }))
-        // FIXME
+        // NOTE: as we only really know that W is Write, there's no way to determine what space is
+        // available for writing. Thus we indicate that there's space available by returning
+        // immediately.
+        HostPollable::new(|| Box::pin(async { Ok(()) }))
     }
 }
