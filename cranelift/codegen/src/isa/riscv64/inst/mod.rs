@@ -74,6 +74,7 @@ pub struct CallInfo {
     pub caller_callconv: CallConv,
     pub callee_callconv: CallConv,
     pub clobbers: PRegSet,
+    pub callee_pop_size: u32,
 }
 
 /// Additional information for CallInd instructions, left out of line to lower the size of the Inst
@@ -87,6 +88,7 @@ pub struct CallIndInfo {
     pub caller_callconv: CallConv,
     pub callee_callconv: CallConv,
     pub clobbers: PRegSet,
+    pub callee_pop_size: u32,
 }
 
 /// A branch target. Either unresolved (basic-block index) or resolved (offset

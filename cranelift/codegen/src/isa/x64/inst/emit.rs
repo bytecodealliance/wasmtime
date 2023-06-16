@@ -1579,6 +1579,13 @@ pub(crate) fn emit(
             if call_info.opcode.is_call() {
                 sink.add_call_site(call_info.opcode);
             }
+
+            let callee_pop_size = i64::from(call_info.callee_pop_size);
+            state.virtual_sp_offset -= callee_pop_size;
+            trace!(
+                "call adjusts virtual sp offset by {callee_pop_size} -> {}",
+                state.virtual_sp_offset
+            );
         }
 
         Inst::CallUnknown {
@@ -1623,6 +1630,13 @@ pub(crate) fn emit(
             if call_info.opcode.is_call() {
                 sink.add_call_site(call_info.opcode);
             }
+
+            let callee_pop_size = i64::from(call_info.callee_pop_size);
+            state.virtual_sp_offset -= callee_pop_size;
+            trace!(
+                "call adjusts virtual sp offset by {callee_pop_size} -> {}",
+                state.virtual_sp_offset
+            );
         }
 
         Inst::Args { .. } => {}

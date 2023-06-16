@@ -92,6 +92,10 @@ pub struct CallInfo {
     pub caller_callconv: CallConv,
     /// Callee calling convention.
     pub callee_callconv: CallConv,
+    /// The number of bytes that the callee will pop from the stack for the
+    /// caller, if any. (Used for popping stack arguments with the `tail`
+    /// calling convention.)
+    pub callee_pop_size: u32,
 }
 
 /// Additional information for CallInd instructions, left out of line to lower the size of the Inst
@@ -112,6 +116,10 @@ pub struct CallIndInfo {
     pub caller_callconv: CallConv,
     /// Callee calling convention.
     pub callee_callconv: CallConv,
+    /// The number of bytes that the callee will pop from the stack for the
+    /// caller, if any. (Used for popping stack arguments with the `tail`
+    /// calling convention.)
+    pub callee_pop_size: u32,
 }
 
 /// Additional information for JTSequence instructions, left out of line to lower the size of the Inst

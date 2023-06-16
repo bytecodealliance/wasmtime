@@ -759,6 +759,7 @@ impl ABIMachineSpec for S390xMachineDeps {
         _tmp: Writable<Reg>,
         _callee_conv: isa::CallConv,
         _caller_conv: isa::CallConv,
+        _callee_pop_size: u32,
     ) -> SmallVec<[Inst; 2]> {
         unreachable!();
     }

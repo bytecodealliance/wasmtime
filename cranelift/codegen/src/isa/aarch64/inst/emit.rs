@@ -3165,6 +3165,13 @@ impl MachInstEmit for Inst {
                 if info.opcode.is_call() {
                     sink.add_call_site(info.opcode);
                 }
+
+                let callee_pop_size = i64::from(info.callee_pop_size);
+                state.virtual_sp_offset -= callee_pop_size;
+                trace!(
+                    "call adjusts virtual sp offset by {callee_pop_size} -> {}",
+                    state.virtual_sp_offset
+                );
             }
             &Inst::CallInd { ref info } => {
                 if let Some(s) = state.take_stack_map() {
@@ -3175,6 +3182,13 @@ impl MachInstEmit for Inst {
                 if info.opcode.is_call() {
                     sink.add_call_site(info.opcode);
                 }
+
+                let callee_pop_size = i64::from(info.callee_pop_size);
+                state.virtual_sp_offset -= callee_pop_size;
+                trace!(
+                    "call adjusts virtual sp offset by {callee_pop_size} -> {}",
+                    state.virtual_sp_offset
+                );
             }
             &Inst::CondBr {
                 taken,
@@ -3587,6 +3601,7 @@ impl MachInstEmit for Inst {
                         opcode: Opcode::CallIndirect,
                         caller_callconv: CallConv::AppleAarch64,
                         callee_callconv: CallConv::AppleAarch64,
+                        callee_pop_size: 0,
                     }),
                 }
                 .emit(&[], sink, emit_info, state);
