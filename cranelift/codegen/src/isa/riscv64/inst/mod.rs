@@ -352,6 +352,17 @@ fn vec_mask_operands<F: Fn(VReg) -> VReg>(
         VecOpMasking::Disabled => {}
     }
 }
+fn vec_mask_late_operands<F: Fn(VReg) -> VReg>(
+    mask: &VecOpMasking,
+    collector: &mut OperandCollector<'_, F>,
+) {
+    match mask {
+        VecOpMasking::Enabled { reg } => {
+            collector.reg_fixed_late_use(*reg, pv_reg(0).into());
+        }
+        VecOpMasking::Disabled => {}
+    }
+}
 
 fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCollector<'_, F>) {
     match inst {
@@ -641,6 +652,32 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             // t3 will do the job. (t3 is caller-save register and not used directly by compiler like writable_spilltmp_reg)
             // gen_prologue is called at emit stage.
             // no need let reg alloc know.
+        }
+        &Inst::VecAluRRRImm5 {
+            op,
+            vd,
+            vd_src,
+            vs2,
+            ref mask,
+            ..
+        } => {
+            debug_assert_eq!(vd_src.class(), RegClass::Vector);
+            debug_assert_eq!(vd.to_reg().class(), RegClass::Vector);
+            debug_assert_eq!(vs2.class(), RegClass::Vector);
+
+            // If the operation forbids source/destination overlap we need to
+            // ensure that the source and destination registers are different.
+            if op.forbids_src_dst_overlaps() {
+                collector.reg_late_use(vs2);
+                collector.reg_use(vd_src);
+                collector.reg_reuse_def(vd, 1); // `vd` == `vd_src`.
+                vec_mask_late_operands(mask, collector);
+            } else {
+                collector.reg_use(vs2);
+                collector.reg_use(vd_src);
+                collector.reg_reuse_def(vd, 1); // `vd` == `vd_src`.
+                vec_mask_operands(mask, collector);
+            }
         }
         &Inst::VecAluRRR {
             op,
@@ -1614,14 +1651,15 @@ impl Inst {
             &MInst::Mov { rd, rm, ty } => {
                 let rd = format_reg(rd.to_reg(), allocs);
                 let rm = format_reg(rm, allocs);
-                let v = if ty == F32 {
-                    "fmv.s"
-                } else if ty == F64 {
-                    "fmv.d"
-                } else {
-                    "mv"
+
+                let op = match ty {
+                    F32 => "fmv.s",
+                    F64 => "fmv.d",
+                    ty if ty.is_vector() => "vmv1r.v",
+                    _ => "mv",
                 };
-                format!("{} {},{}", v, rd, rm)
+
+                format!("{op} {rd},{rm}")
             }
             &MInst::MovFromPReg { rd, rm } => {
                 let rd = format_reg(rd.to_reg(), allocs);
@@ -1654,6 +1692,29 @@ impl Inst {
             &MInst::Udf { trap_code } => format!("udf##trap_code={}", trap_code),
             &MInst::EBreak {} => String::from("ebreak"),
             &MInst::ECall {} => String::from("ecall"),
+            &Inst::VecAluRRRImm5 {
+                op,
+                vd,
+                imm,
+                vs2,
+                ref mask,
+                ref vstate,
+                ..
+            } => {
+                let vs2_s = format_reg(vs2, allocs);
+                let vd_s = format_reg(vd.to_reg(), allocs);
+                let mask = format_mask(mask, allocs);
+
+                // Some opcodes interpret the immediate as unsigned, lets show the
+                // correct number here.
+                let imm_s = if op.imm_is_unsigned() {
+                    format!("{}", imm.bits())
+                } else {
+                    format!("{}", imm)
+                };
+
+                format!("{op} {vd_s},{vs2_s},{imm_s}{mask} {vstate}")
+            }
             &Inst::VecAluRRR {
                 op,
                 vd,

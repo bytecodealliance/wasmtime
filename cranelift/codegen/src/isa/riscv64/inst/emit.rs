@@ -464,13 +464,18 @@ impl Inst {
             | Inst::Cltz { .. }
             | Inst::Brev8 { .. }
             | Inst::StackProbeLoop { .. } => None,
+
             // VecSetState does not expect any vstate, rather it updates it.
             Inst::VecSetState { .. } => None,
+
+            // `vmv` instructions copy a set of registers and ignore vstate.
+            Inst::VecAluRRImm5 { op: VecAluOpRRImm5::VmvrV, .. } => None,
 
             Inst::VecAluRR { vstate, .. } |
             Inst::VecAluRRR { vstate, .. } |
             Inst::VecAluRImm5 { vstate, .. } |
             Inst::VecAluRRImm5 { vstate, .. } |
+            Inst::VecAluRRRImm5 { vstate, .. } |
             // TODO: Unit-stride loads and stores only need the AVL to be correct, not
             // the full vtype. A future optimization could be to decouple these two when
             // updating vstate. This would allow us to avoid emitting a VecSetState in
@@ -951,34 +956,44 @@ impl MachInstEmit for Inst {
             }
 
             &Inst::Mov { rd, rm, ty } => {
-                debug_assert_ne!(rd.to_reg().class(), RegClass::Vector);
-                debug_assert_ne!(rm.class(), RegClass::Vector);
-                if rd.to_reg() != rm {
-                    let rm = allocs.next(rm);
-                    let rd = allocs.next_writable(rd);
-                    if ty.is_float() {
-                        Inst::FpuRRR {
-                            alu_op: if ty == F32 {
-                                FpuOPRRR::FsgnjS
-                            } else {
-                                FpuOPRRR::FsgnjD
-                            },
-                            frm: None,
-                            rd: rd,
-                            rs1: rm,
-                            rs2: rm,
-                        }
-                        .emit(&[], sink, emit_info, state);
-                    } else {
-                        let x = Inst::AluRRImm12 {
-                            alu_op: AluOPRRI::Ori,
-                            rd: rd,
-                            rs: rm,
-                            imm12: Imm12::zero(),
-                        };
-                        x.emit(&[], sink, emit_info, state);
-                    }
+                debug_assert_eq!(rd.to_reg().class(), rm.class());
+                if rd.to_reg() == rm {
+                    return;
                 }
+
+                let rm = allocs.next(rm);
+                let rd = allocs.next_writable(rd);
+
+                match rm.class() {
+                    RegClass::Int => Inst::AluRRImm12 {
+                        alu_op: AluOPRRI::Ori,
+                        rd: rd,
+                        rs: rm,
+                        imm12: Imm12::zero(),
+                    },
+                    RegClass::Float => Inst::FpuRRR {
+                        alu_op: if ty == F32 {
+                            FpuOPRRR::FsgnjS
+                        } else {
+                            FpuOPRRR::FsgnjD
+                        },
+                        frm: None,
+                        rd: rd,
+                        rs1: rm,
+                        rs2: rm,
+                    },
+                    RegClass::Vector => Inst::VecAluRRImm5 {
+                        op: VecAluOpRRImm5::VmvrV,
+                        vd: rd,
+                        vs2: rm,
+                        // Imm 0 means copy 1 register.
+                        imm: Imm5::maybe_from_i8(0).unwrap(),
+                        mask: VecOpMasking::Disabled,
+                        // Vstate for this instruction is ignored.
+                        vstate: VState::from_type(ty),
+                    },
+                }
+                .emit(&[], sink, emit_info, state);
             }
 
             &Inst::MovFromPReg { rd, rm } => {
@@ -2827,6 +2842,24 @@ impl MachInstEmit for Inst {
                 .emit(&[], sink, emit_info, state);
                 sink.bind_label(label_done, &mut state.ctrl_plane);
             }
+            &Inst::VecAluRRRImm5 {
+                op,
+                vd,
+                vd_src,
+                imm,
+                vs2,
+                ref mask,
+                ..
+            } => {
+                let vs2 = allocs.next(vs2);
+                let vd_src = allocs.next(vd_src);
+                let vd = allocs.next_writable(vd);
+                let mask = mask.with_allocs(&mut allocs);
+
+                debug_assert_eq!(vd.to_reg(), vd_src);
+
+                sink.put4(encode_valu_rrr_imm(op, vd, imm, vs2, mask));
+            }
             &Inst::VecAluRRR {
                 op,
                 vd,
@@ -2854,7 +2887,7 @@ impl MachInstEmit for Inst {
                 let vd = allocs.next_writable(vd);
                 let mask = mask.with_allocs(&mut allocs);
 
-                sink.put4(encode_valu_imm(op, vd, imm, vs2, mask));
+                sink.put4(encode_valu_rr_imm(op, vd, imm, vs2, mask));
             }
             &Inst::VecAluRR {
                 op,

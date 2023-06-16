@@ -324,6 +324,15 @@
       (probe_count u32)
       (tmp WritableReg))
 
+    (VecAluRRRImm5
+      (op VecAluOpRRRImm5)
+      (vd WritableReg)
+      (vd_src Reg)
+      (vs2 Reg)
+      (imm Imm5)
+      (mask VecOpMasking)
+      (vstate VState))
+
     (VecAluRRR
       (op VecAluOpRRR)
       (vd WritableReg)

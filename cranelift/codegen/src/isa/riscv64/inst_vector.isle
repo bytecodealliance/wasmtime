@@ -126,6 +126,7 @@
   (VredmaxuVS)
   (VredminuVS)
   (VrgatherVV)
+  (VcompressVM)
 
   ;; Vector-Scalar Opcodes
   (VaddVX)
@@ -166,6 +167,13 @@
   (VmsltVX)
 ))
 
+
+
+;; Register-Imm ALU Ops that modify the destination register
+(type VecAluOpRRRImm5 (enum
+  (VslideupVI)
+))
+
 ;; Register-Imm ALU Ops
 (type VecAluOpRRImm5 (enum
   ;; Regular VI Opcodes
@@ -182,6 +190,9 @@
   (VslidedownVI)
   (VmergeVIM)
   (VrgatherVI)
+  ;; This opcode represents multiple instructions `vmv1r`/`vmv2r`/`vmv4r`/etc...
+  ;; The immediate field specifies how many registers should be copied.
+  (VmvrV)
 ))
 
 ;; Imm only ALU Ops
@@ -275,6 +286,21 @@
 ;; source register and rs1 is the second source register. This is the opposite
 ;; of the usual RISC-V register order.
 ;; See Section 10.1 of the RISC-V Vector Extension Specification.
+
+
+;; Helper for emitting `MInst.VecAluRRRImm5` instructions.
+;; These instructions modify the destination register.
+(decl vec_alu_rrr_imm5 (VecAluOpRRRImm5 VReg VReg Imm5 VecOpMasking  VState) VReg)
+(rule (vec_alu_rrr_imm5 op vd_src vs2 imm mask vstate)
+      (let ((vd WritableVReg (temp_writable_vreg))
+            (_ Unit (emit (MInst.VecAluRRRImm5 op vd vd_src vs2 imm mask vstate))))
+        vd))
+
+;; Helper for emitting `MInst.VecAluRRRImm5` instructions where the immediate
+;; is zero extended instead of sign extended.
+(decl vec_alu_rrr_uimm5 (VecAluOpRRRImm5 VReg VReg UImm5 VecOpMasking VState) VReg)
+(rule (vec_alu_rrr_uimm5 op vd_src vs2 imm mask vstate)
+      (vec_alu_rrr_imm5 op vd_src vs2 (uimm5_bitcast_to_imm5 imm) mask vstate))
 
 ;; Helper for emitting `MInst.VecAluRRR` instructions.
 (decl vec_alu_rrr (VecAluOpRRR Reg Reg VecOpMasking VState) Reg)
@@ -758,6 +784,14 @@
 (rule (rv_vslidedown_vi vs2 imm mask vstate)
   (vec_alu_rr_uimm5 (VecAluOpRRImm5.VslidedownVI) vs2 imm mask vstate))
 
+;; Helper for emitting the `vslideup.vi` instruction.
+;; Unlike other `vi` instructions the immediate is zero extended.
+;; This is implemented as a 2 source operand instruction, since it only
+;; partially modifies the destination register.
+(decl rv_vslideup_vvi (VReg VReg UImm5 VecOpMasking VState) VReg)
+(rule (rv_vslideup_vvi vd vs2 imm mask vstate)
+  (vec_alu_rrr_uimm5 (VecAluOpRRRImm5.VslideupVI) vd vs2 imm mask vstate))
+
 ;; Helper for emitting the `vmv.x.s` instruction.
 ;; This instruction copies the first element of the source vector to the destination X register.
 ;; Masked versions of this instuction are not supported.
@@ -877,6 +911,17 @@
 (decl rv_vrgather_vi (VReg UImm5 VecOpMasking VState) VReg)
 (rule (rv_vrgather_vi vs2 imm mask vstate)
   (vec_alu_rr_uimm5 (VecAluOpRRImm5.VrgatherVI) vs2 imm mask vstate))
+
+;; Helper for emitting the `vcompress.vm` instruction.
+;;
+;; The vector compress instruction allows elements selected by a vector mask
+;; register from a source vector register group to be packed into contiguous
+;; elements at the start of the destination vector register group.
+;;
+;; The mask register is specified through vs1
+(decl rv_vcompress_vm (VReg VReg VState) VReg)
+(rule (rv_vcompress_vm vs2 vs1 vstate)
+  (vec_alu_rrr (VecAluOpRRR.VcompressVM) vs2 vs1 (unmasked) vstate))
 
 ;; Helper for emitting the `vmslt.vx` (Vector Mask Set Less Than) instruction.
 (decl rv_vmslt_vx (VReg XReg VecOpMasking VState) VReg)

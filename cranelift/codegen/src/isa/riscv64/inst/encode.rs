@@ -9,8 +9,8 @@
 use super::{Imm12, Imm5, UImm5, VType};
 use crate::isa::riscv64::inst::reg_to_gpr_num;
 use crate::isa::riscv64::lower::isle::generated_code::{
-    VecAluOpRImm5, VecAluOpRR, VecAluOpRRImm5, VecAluOpRRR, VecElementWidth, VecOpCategory,
-    VecOpMasking,
+    VecAluOpRImm5, VecAluOpRR, VecAluOpRRImm5, VecAluOpRRR, VecAluOpRRRImm5, VecElementWidth,
+    VecOpCategory, VecOpMasking,
 };
 use crate::machinst::isle::WritableReg;
 use crate::Reg;
@@ -127,8 +127,27 @@ pub fn encode_valu(
 /// - funct6 (6 bits)
 ///
 /// See: https://github.com/riscv/riscv-v-spec/blob/master/valu-format.adoc
-pub fn encode_valu_imm(
+pub fn encode_valu_rr_imm(
     op: VecAluOpRRImm5,
+    vd: WritableReg,
+    imm: Imm5,
+    vs2: Reg,
+    masking: VecOpMasking,
+) -> u32 {
+    let funct7 = (op.funct6() << 1) | masking.encode();
+    let imm = imm.bits() as u32;
+    encode_r_type_bits(
+        op.opcode(),
+        reg_to_gpr_num(vd.to_reg()),
+        op.funct3(),
+        imm,
+        reg_to_gpr_num(vs2),
+        funct7,
+    )
+}
+
+pub fn encode_valu_rrr_imm(
+    op: VecAluOpRRRImm5,
     vd: WritableReg,
     imm: Imm5,
     vs2: Reg,

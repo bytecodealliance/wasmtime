@@ -1744,3 +1744,31 @@
 
 (rule 2 (lower (has_type (ty_vec_fits_in_register out_ty) (uwiden_low (uwiden_low (uwiden_low x)))))
   (rv_vzext_vf8 x (unmasked) out_ty))
+
+;;;; Rules for `iadd_pairwise` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; We don't have a dedicated instruction for this, rearrange the register elements
+;; and use a vadd.
+;;
+;; We do this by building two masks, one for the even elements and one for the odd
+;; elements. Using vcompress we can extract the elements and group them together.
+;;
+;; This is likely not the optimal way of doing this. LLVM does this using a bunch
+;; of vrgathers (See: https://godbolt.org/z/jq8Wj8WG4), that doesen't seem to be
+;; too much better than this.
+;;
+;; However V8 does something better. They use 2 vcompresses using LMUL2, that means
+;; that they can do the whole thing in 3 instructions (2 vcompress + vadd). We don't
+;; support LMUL > 1, so we can't do that.
+(rule (lower (has_type (ty_vec_fits_in_register ty) (iadd_pairwise x y)))
+  (if-let half_size (u64_to_uimm5 (u64_udiv (ty_lane_count ty) 2)))
+  (let ((odd_mask  VReg (gen_vec_mask 0x5555555555555555))
+        (lhs_lo VReg (rv_vcompress_vm x odd_mask ty))
+        (lhs_hi VReg (rv_vcompress_vm y odd_mask ty))
+        (lhs VReg (rv_vslideup_vvi lhs_lo lhs_hi half_size (unmasked) ty))
+
+        (even_mask VReg (gen_vec_mask 0xAAAAAAAAAAAAAAAA))
+        (rhs_lo VReg (rv_vcompress_vm x even_mask ty))
+        (rhs_hi VReg (rv_vcompress_vm y even_mask ty))
+        (rhs VReg (rv_vslideup_vvi rhs_lo rhs_hi half_size (unmasked) ty)))
+    (rv_vadd_vv lhs rhs (unmasked) ty)))
