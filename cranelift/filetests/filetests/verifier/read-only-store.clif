@@ -1,0 +1,10 @@
+test verifier
+
+function %ro_store() {
+block0:
+    v0 = iconst.i64 0
+    v1 = iconst.i64 0
+    store.i64 readonly v0, v1 ; error: A store instruction cannot have the `readonly` MemFlag
+    return
+}
+
