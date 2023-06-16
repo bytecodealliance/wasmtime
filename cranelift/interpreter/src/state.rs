@@ -132,6 +132,4 @@ pub enum MemoryError {
     MisalignedLoad { addr: Address, load_size: usize },
     #[error("Store of {store_size} bytes is misaligned at address {addr:?}")]
     MisalignedStore { addr: Address, store_size: usize },
-    #[error("Attempt to store with readonly flag set")]
-    ReadOnlyStore,
 }
