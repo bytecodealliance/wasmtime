@@ -357,6 +357,10 @@ impl<'a> State<'a> for InterpreterState<'a> {
         v: DataValue,
         mem_flags: MemFlags,
     ) -> Result<(), MemoryError> {
+        if mem_flags.readonly() {
+            return Err(MemoryError::ReadOnlyStore)
+        }
+
         let store_size = v.ty().bytes() as usize;
         let addr_start = addr.offset as usize;
         let addr_end = addr_start + store_size;
