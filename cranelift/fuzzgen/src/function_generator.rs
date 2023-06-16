@@ -20,7 +20,7 @@ use cranelift::prelude::{
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::ops::RangeInclusive;
-use target_lexicon::{Aarch64Architecture, Architecture, Environment, OperatingSystem, Triple};
+use target_lexicon::{Architecture, OperatingSystem, Triple};
 
 type BlockSignature = Vec<Type>;
 
