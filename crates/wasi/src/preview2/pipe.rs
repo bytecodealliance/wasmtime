@@ -32,12 +32,14 @@ use system_interface::io::ReadReady;
 /// ```
 #[derive(Debug)]
 pub struct ReadPipe<R: Read + ReadReady> {
+    notify: Arc<tokio::sync::Notify>,
     reader: Arc<RwLock<R>>,
 }
 
 impl<R: Read + ReadReady> Clone for ReadPipe<R> {
     fn clone(&self) -> Self {
         Self {
+            notify: self.notify.clone(),
             reader: self.reader.clone(),
         }
     }
@@ -55,7 +57,11 @@ impl<R: Read + ReadReady> ReadPipe<R> {
     ///
     /// All `Handle` read operations delegate to reading from this underlying reader.
     pub fn from_shared(reader: Arc<RwLock<R>>) -> Self {
-        Self { reader }
+        Self {
+            // TODO(elliottt): should the shared notify be an argument as well?
+            notify: Arc::new(tokio::sync::Notify::new()),
+            reader,
+        }
     }
 
     /// Try to convert this `ReadPipe<R>` back to the underlying `R` type.
@@ -119,25 +125,50 @@ impl<R: Read + ReadReady + Any + Send + Sync> HostInputStream for ReadPipe<R> {
     }
 
     fn pollable(&self) -> HostPollable {
+        // This is a standalone function because RwLockReadGuard does not implement Send -- calling
+        // `reader.read()` from within the async closure below is just not possible.
+        fn ready<T: Read + ReadReady + Any + Send + Sync>(reader: &RwLock<T>) -> bool {
+            if let Ok(g) = reader.read() {
+                if let Ok(n) = g.num_ready_bytes() {
+                    return n > 0;
+                }
+            }
+
+            // If either read or num_ready_bytes raised an error, we want to consider the pipe
+            // ready for reading.
+            true
+        }
+
+        let notify = Arc::clone(&self.notify);
         let reader = Arc::clone(&self.reader);
         HostPollable::new(move || {
+            // TODO(elliottt): is it possible to avoid these clones? They're needed because `Arc`
+            // isn't copy, and we need to move values into the async closure.
+            let notify = Arc::clone(&notify);
             let reader = Arc::clone(&reader);
             Box::pin(async move {
-                loop {
-                    let amount = match reader.read() {
-                        Ok(g) => g.num_ready_bytes()?,
-                        Err(_) => {
-                            // TODO(elliottt): are there any circumstances where we want to clear
-                            // the poisoned state of the pipe?
-                            return Err(anyhow!("pipe has been poisoned"));
+                {
+                    let reader = reader.clone();
+                    let sender = notify.clone();
+                    tokio::spawn(async move {
+                        while !ready(&reader) {
+                            tokio::task::yield_now().await;
                         }
-                    };
-                    if amount > 0 {
-                        return Ok(());
-                    }
 
-                    // TODO(elliottt): is there a better way to wait on the pipe to become ready?
-                    tokio::time::sleep(tokio::time::Duration::from_millis(1)).await;
+                        sender.notify_one();
+                    });
+                }
+
+                notify.notified().await;
+
+                let g = match reader.read() {
+                    Ok(g) => g,
+                    Err(_) => return Err(anyhow!("pipe has been poisoned")),
+                };
+
+                match g.num_ready_bytes() {
+                    Ok(_) => Ok(()),
+                    Err(e) => Err(anyhow!(e)),
                 }
             })
         })
