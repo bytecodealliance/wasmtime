@@ -2,6 +2,7 @@ test run
 test interpret
 target aarch64
 target s390x
+target riscv64 has_v
 ; i8 and i16 are invalid source sizes for x86_64
 
 function %scalartovector_i8(i8) -> i8x16 {
