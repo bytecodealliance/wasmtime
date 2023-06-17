@@ -34,14 +34,14 @@ impl WasiCtxBuilder {
         let insecure_random_seed =
             cap_rand::thread_rng(cap_rand::ambient_authority()).gen::<u128>();
 
-        let mut result = Self::default()
+        let result = Self::default()
             .set_clocks(clocks::host::clocks_ctx())
             .set_insecure_random(insecure_random)
             .set_insecure_random_seed(insecure_random_seed)
             .set_stdin(pipe::ReadPipe::new(std::io::empty()))
             .set_stdout(pipe::WritePipe::new(std::io::sink()))
-            .set_stderr(pipe::WritePipe::new(std::io::sink()));
-        result.random = Some(random::thread_rng());
+            .set_stderr(pipe::WritePipe::new(std::io::sink()))
+            .set_random();
         result
     }
 
@@ -113,11 +113,20 @@ impl WasiCtxBuilder {
         self
     }
 
+    /// Set the generator for the secure random number generator.
+    ///
+    /// This initializes the random number generator using
+    /// [`rand::thread_rng`].
+    pub fn set_random(mut self) -> Self {
+        self.random = Some(random::thread_rng());
+        self
+    }
+
     /// Set the generator for the secure random number generator. This
     /// is only avalabile under `cfg(test)` as it's only intended for use
     /// by tests.
     #[cfg(test)]
-    pub fn set_random(mut self, random: impl RngCore + Send + Sync + 'static) -> Self {
+    pub fn set_random_for_testing(mut self, random: impl RngCore + Send + Sync + 'static) -> Self {
         self.random = Some(Box::new(random));
         self
     }
