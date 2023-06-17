@@ -1889,3 +1889,14 @@
         (elem VReg (rv_vfmv_sf x ty))
         (mask VReg (gen_vec_mask 1)))
     (rv_vmerge_vvm zero elem mask ty)))
+
+;;;; Rules for `sqmul_round_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule 0 (lower (has_type (ty_vec_fits_in_register ty) (sqmul_round_sat x y)))
+  (rv_vsmul_vv x y (unmasked) ty))
+
+(rule 1 (lower (has_type (ty_vec_fits_in_register ty) (sqmul_round_sat x (splat y))))
+  (rv_vsmul_vx x y (unmasked) ty))
+
+(rule 2 (lower (has_type (ty_vec_fits_in_register ty) (sqmul_round_sat (splat x) y)))
+  (rv_vsmul_vx y x (unmasked) ty))

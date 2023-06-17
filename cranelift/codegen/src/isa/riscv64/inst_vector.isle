@@ -107,6 +107,7 @@
   (VmulVV)
   (VmulhVV)
   (VmulhuVV)
+  (VsmulVV)
   (VsllVV)
   (VsrlVV)
   (VsraVV)
@@ -147,6 +148,7 @@
   (VmulVX)
   (VmulhVX)
   (VmulhuVX)
+  (VsmulVX)
   (VsllVX)
   (VsrlVX)
   (VsraVX)
@@ -585,6 +587,22 @@
 (decl rv_vmulhu_vx (VReg XReg VecOpMasking VState) VReg)
 (rule (rv_vmulhu_vx vs2 vs1 mask vstate)
   (vec_alu_rrr (VecAluOpRRR.VmulhuVX) vs2 vs1 mask vstate))
+
+;; Helper for emitting the `vsmul.vv` instruction.
+;;
+;; Signed saturating and rounding fractional multiply
+;; # vd[i] = clip(roundoff_signed(vs2[i]*vs1[i], SEW-1))
+(decl rv_vsmul_vv (VReg VReg VecOpMasking VState) VReg)
+(rule (rv_vsmul_vv vs2 vs1 mask vstate)
+  (vec_alu_rrr (VecAluOpRRR.VsmulVV) vs2 vs1 mask vstate))
+
+;; Helper for emitting the `vsmul.vx` instruction.
+;;
+;; Signed saturating and rounding fractional multiply
+;; # vd[i] = clip(roundoff_signed(vs2[i]*x[rs1], SEW-1))
+(decl rv_vsmul_vx (VReg XReg VecOpMasking VState) VReg)
+(rule (rv_vsmul_vx vs2 vs1 mask vstate)
+  (vec_alu_rrr (VecAluOpRRR.VsmulVX) vs2 vs1 mask vstate))
 
 ;; Helper for emitting the `sll.vv` instruction.
 (decl rv_vsll_vv (VReg VReg VecOpMasking VState) VReg)
