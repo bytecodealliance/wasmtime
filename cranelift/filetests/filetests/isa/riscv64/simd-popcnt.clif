@@ -1,0 +1,316 @@
+test compile precise-output
+set unwind_info=false
+target riscv64 has_v
+
+function %popcnt_i8x16(i8x16) -> i8x16 {
+block0(v0: i8x16):
+    v1 = popcnt v0
+    return v1
+}
+
+; VCode:
+;   add sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+; block0:
+;   vle8.v v1,16(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   li a1,85
+;   vsrl.vi v6,v1,1 #avl=16, #vtype=(e8, m1, ta, ma)
+;   vand.vx v8,v6,a1 #avl=16, #vtype=(e8, m1, ta, ma)
+;   vsub.vv v10,v1,v8 #avl=16, #vtype=(e8, m1, ta, ma)
+;   li t4,51
+;   vsrl.vi v14,v10,2 #avl=16, #vtype=(e8, m1, ta, ma)
+;   vand.vx v16,v14,t4 #avl=16, #vtype=(e8, m1, ta, ma)
+;   vand.vx v18,v10,t4 #avl=16, #vtype=(e8, m1, ta, ma)
+;   vadd.vv v20,v18,v16 #avl=16, #vtype=(e8, m1, ta, ma)
+;   li a6,15
+;   vsrl.vi v24,v20,4 #avl=16, #vtype=(e8, m1, ta, ma)
+;   vadd.vv v26,v20,v24 #avl=16, #vtype=(e8, m1, ta, ma)
+;   vand.vx v28,v26,a6 #avl=16, #vtype=(e8, m1, ta, ma)
+;   li a1,1
+;   vmul.vx v0,v28,a1 #avl=16, #vtype=(e8, m1, ta, ma)
+;   li a5,0
+;   vsrl.vx v4,v0,a5 #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v4,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   add sp,+16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   ori s0, sp, 0
+; block1: ; offset 0x10
+;   .byte 0x57, 0x70, 0x08, 0xcc
+;   addi t6, s0, 0x10
+;   .byte 0x87, 0x80, 0x0f, 0x02
+;   addi a1, zero, 0x55
+;   .byte 0x57, 0xb3, 0x10, 0xa2
+;   .byte 0x57, 0xc4, 0x65, 0x26
+;   .byte 0x57, 0x05, 0x14, 0x0a
+;   addi t4, zero, 0x33
+;   .byte 0x57, 0x37, 0xa1, 0xa2
+;   .byte 0x57, 0xc8, 0xee, 0x26
+;   .byte 0x57, 0xc9, 0xae, 0x26
+;   .byte 0x57, 0x0a, 0x28, 0x03
+;   addi a6, zero, 0xf
+;   .byte 0x57, 0x3c, 0x42, 0xa3
+;   .byte 0x57, 0x0d, 0x4c, 0x03
+;   .byte 0x57, 0x4e, 0xa8, 0x27
+;   addi a1, zero, 1
+;   .byte 0x57, 0xe0, 0xc5, 0x97
+;   mv a5, zero
+;   .byte 0x57, 0xc2, 0x07, 0xa2
+;   .byte 0x27, 0x02, 0x05, 0x02
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+
+function %popcnt_i16x8(i16x8) -> i16x8 {
+block0(v0: i16x8):
+    v1 = popcnt v0
+    return v1
+}
+
+; VCode:
+;   add sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+; block0:
+;   vle8.v v1,16(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   lui a2,5
+;   addi a2,a2,1365
+;   vsrl.vi v8,v1,1 #avl=8, #vtype=(e16, m1, ta, ma)
+;   vand.vx v10,v8,a2 #avl=8, #vtype=(e16, m1, ta, ma)
+;   vsub.vv v12,v1,v10 #avl=8, #vtype=(e16, m1, ta, ma)
+;   lui t2,3
+;   addi t2,t2,819
+;   vsrl.vi v18,v12,2 #avl=8, #vtype=(e16, m1, ta, ma)
+;   vand.vx v20,v18,t2 #avl=8, #vtype=(e16, m1, ta, ma)
+;   vand.vx v22,v12,t2 #avl=8, #vtype=(e16, m1, ta, ma)
+;   vadd.vv v24,v22,v20 #avl=8, #vtype=(e16, m1, ta, ma)
+;   lui t1,1
+;   addi t1,t1,3855
+;   vsrl.vi v30,v24,4 #avl=8, #vtype=(e16, m1, ta, ma)
+;   vadd.vv v0,v24,v30 #avl=8, #vtype=(e16, m1, ta, ma)
+;   vand.vx v2,v0,t1 #avl=8, #vtype=(e16, m1, ta, ma)
+;   li a7,257
+;   vmul.vx v6,v2,a7 #avl=8, #vtype=(e16, m1, ta, ma)
+;   li t1,8
+;   vsrl.vx v10,v6,t1 #avl=8, #vtype=(e16, m1, ta, ma)
+;   vse8.v v10,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   add sp,+16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   ori s0, sp, 0
+; block1: ; offset 0x10
+;   .byte 0x57, 0x70, 0x08, 0xcc
+;   addi t6, s0, 0x10
+;   .byte 0x87, 0x80, 0x0f, 0x02
+;   lui a2, 5
+;   addi a2, a2, 0x555
+;   .byte 0x57, 0x70, 0x84, 0xcc
+;   .byte 0x57, 0xb4, 0x10, 0xa2
+;   .byte 0x57, 0x45, 0x86, 0x26
+;   .byte 0x57, 0x06, 0x15, 0x0a
+;   lui t2, 3
+;   addi t2, t2, 0x333
+;   .byte 0x57, 0x39, 0xc1, 0xa2
+;   .byte 0x57, 0xca, 0x23, 0x27
+;   .byte 0x57, 0xcb, 0xc3, 0x26
+;   .byte 0x57, 0x0c, 0x6a, 0x03
+;   lui t1, 1
+;   addi t1, t1, -0xf1
+;   .byte 0x57, 0x3f, 0x82, 0xa3
+;   .byte 0x57, 0x00, 0x8f, 0x03
+;   .byte 0x57, 0x41, 0x03, 0x26
+;   addi a7, zero, 0x101
+;   .byte 0x57, 0xe3, 0x28, 0x96
+;   addi t1, zero, 8
+;   .byte 0x57, 0x45, 0x63, 0xa2
+;   .byte 0x57, 0x70, 0x08, 0xcc
+;   .byte 0x27, 0x05, 0x05, 0x02
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+
+function %popcnt_i32x4(i32x4) -> i32x4 {
+block0(v0: i32x4):
+    v1 = popcnt v0
+    return v1
+}
+
+; VCode:
+;   add sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+; block0:
+;   vle8.v v1,16(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   lui a2,349525
+;   addi a2,a2,1365
+;   vsrl.vi v8,v1,1 #avl=4, #vtype=(e32, m1, ta, ma)
+;   vand.vx v10,v8,a2 #avl=4, #vtype=(e32, m1, ta, ma)
+;   vsub.vv v12,v1,v10 #avl=4, #vtype=(e32, m1, ta, ma)
+;   lui t2,209715
+;   addi t2,t2,819
+;   vsrl.vi v18,v12,2 #avl=4, #vtype=(e32, m1, ta, ma)
+;   vand.vx v20,v18,t2 #avl=4, #vtype=(e32, m1, ta, ma)
+;   vand.vx v22,v12,t2 #avl=4, #vtype=(e32, m1, ta, ma)
+;   vadd.vv v24,v22,v20 #avl=4, #vtype=(e32, m1, ta, ma)
+;   lui t1,61681
+;   addi t1,t1,3855
+;   vsrl.vi v30,v24,4 #avl=4, #vtype=(e32, m1, ta, ma)
+;   vadd.vv v0,v24,v30 #avl=4, #vtype=(e32, m1, ta, ma)
+;   vand.vx v2,v0,t1 #avl=4, #vtype=(e32, m1, ta, ma)
+;   lui t3,4112
+;   addi t3,t3,257
+;   vmul.vx v8,v2,t3 #avl=4, #vtype=(e32, m1, ta, ma)
+;   li a1,24
+;   vsrl.vx v12,v8,a1 #avl=4, #vtype=(e32, m1, ta, ma)
+;   vse8.v v12,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   add sp,+16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   ori s0, sp, 0
+; block1: ; offset 0x10
+;   .byte 0x57, 0x70, 0x08, 0xcc
+;   addi t6, s0, 0x10
+;   .byte 0x87, 0x80, 0x0f, 0x02
+;   lui a2, 0x55555
+;   addi a2, a2, 0x555
+;   .byte 0x57, 0x70, 0x02, 0xcd
+;   .byte 0x57, 0xb4, 0x10, 0xa2
+;   .byte 0x57, 0x45, 0x86, 0x26
+;   .byte 0x57, 0x06, 0x15, 0x0a
+;   lui t2, 0x33333
+;   addi t2, t2, 0x333
+;   .byte 0x57, 0x39, 0xc1, 0xa2
+;   .byte 0x57, 0xca, 0x23, 0x27
+;   .byte 0x57, 0xcb, 0xc3, 0x26
+;   .byte 0x57, 0x0c, 0x6a, 0x03
+;   lui t1, 0xf0f1
+;   addi t1, t1, -0xf1
+;   .byte 0x57, 0x3f, 0x82, 0xa3
+;   .byte 0x57, 0x00, 0x8f, 0x03
+;   .byte 0x57, 0x41, 0x03, 0x26
+;   lui t3, 0x1010
+;   addi t3, t3, 0x101
+;   .byte 0x57, 0x64, 0x2e, 0x96
+;   addi a1, zero, 0x18
+;   .byte 0x57, 0xc6, 0x85, 0xa2
+;   .byte 0x57, 0x70, 0x08, 0xcc
+;   .byte 0x27, 0x06, 0x05, 0x02
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+
+function %popcnt_i64x2(i64x2) -> i64x2 {
+block0(v0: i64x2):
+    v1 = popcnt v0
+    return v1
+}
+
+; VCode:
+;   add sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+; block0:
+;   vle8.v v1,16(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   auipc a1,0; ld a1,12(a1); j 12; .8byte 0x5555555555555555
+;   vsrl.vi v6,v1,1 #avl=2, #vtype=(e64, m1, ta, ma)
+;   vand.vx v8,v6,a1 #avl=2, #vtype=(e64, m1, ta, ma)
+;   vsub.vv v10,v1,v8 #avl=2, #vtype=(e64, m1, ta, ma)
+;   auipc t4,0; ld t4,12(t4); j 12; .8byte 0x3333333333333333
+;   vsrl.vi v14,v10,2 #avl=2, #vtype=(e64, m1, ta, ma)
+;   vand.vx v16,v14,t4 #avl=2, #vtype=(e64, m1, ta, ma)
+;   vand.vx v18,v10,t4 #avl=2, #vtype=(e64, m1, ta, ma)
+;   vadd.vv v20,v18,v16 #avl=2, #vtype=(e64, m1, ta, ma)
+;   auipc a6,0; ld a6,12(a6); j 12; .8byte 0xf0f0f0f0f0f0f0f
+;   vsrl.vi v24,v20,4 #avl=2, #vtype=(e64, m1, ta, ma)
+;   vadd.vv v26,v20,v24 #avl=2, #vtype=(e64, m1, ta, ma)
+;   vand.vx v28,v26,a6 #avl=2, #vtype=(e64, m1, ta, ma)
+;   auipc a1,0; ld a1,12(a1); j 12; .8byte 0x101010101010101
+;   vmul.vx v0,v28,a1 #avl=2, #vtype=(e64, m1, ta, ma)
+;   li a5,56
+;   vsrl.vx v4,v0,a5 #avl=2, #vtype=(e64, m1, ta, ma)
+;   vse8.v v4,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   add sp,+16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   ori s0, sp, 0
+; block1: ; offset 0x10
+;   .byte 0x57, 0x70, 0x08, 0xcc
+;   addi t6, s0, 0x10
+;   .byte 0x87, 0x80, 0x0f, 0x02
+;   auipc a1, 0
+;   ld a1, 0xc(a1)
+;   j 0xc
+;   .byte 0x55, 0x55, 0x55, 0x55
+;   .byte 0x55, 0x55, 0x55, 0x55
+;   .byte 0x57, 0x70, 0x81, 0xcd
+;   .byte 0x57, 0xb3, 0x10, 0xa2
+;   .byte 0x57, 0xc4, 0x65, 0x26
+;   .byte 0x57, 0x05, 0x14, 0x0a
+;   auipc t4, 0
+;   ld t4, 0xc(t4)
+;   j 0xc
+;   .byte 0x33, 0x33, 0x33, 0x33
+;   .byte 0x33, 0x33, 0x33, 0x33
+;   .byte 0x57, 0x37, 0xa1, 0xa2
+;   .byte 0x57, 0xc8, 0xee, 0x26
+;   .byte 0x57, 0xc9, 0xae, 0x26
+;   .byte 0x57, 0x0a, 0x28, 0x03
+;   auipc a6, 0
+;   ld a6, 0xc(a6)
+;   j 0xc
+;   .byte 0x0f, 0x0f, 0x0f, 0x0f
+;   .byte 0x0f, 0x0f, 0x0f, 0x0f
+;   .byte 0x57, 0x3c, 0x42, 0xa3
+;   .byte 0x57, 0x0d, 0x4c, 0x03
+;   .byte 0x57, 0x4e, 0xa8, 0x27
+;   auipc a1, 0
+;   ld a1, 0xc(a1)
+;   j 0xc
+;   .byte 0x01, 0x01, 0x01, 0x01
+;   .byte 0x01, 0x01, 0x01, 0x01
+;   .byte 0x57, 0xe0, 0xc5, 0x97
+;   addi a5, zero, 0x38
+;   .byte 0x57, 0xc2, 0x07, 0xa2
+;   .byte 0x57, 0x70, 0x08, 0xcc
+;   .byte 0x27, 0x02, 0x05, 0x02
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+
