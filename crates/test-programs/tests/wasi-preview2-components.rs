@@ -256,8 +256,6 @@ async fn poll_oneoff_files() {
     run("poll_oneoff_files", false).await.unwrap()
 }
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-// This is a known bug with the preview 2 implementation:
-#[should_panic]
 async fn poll_oneoff_stdio() {
     run("poll_oneoff_stdio", true).await.unwrap()
 }

@@ -62,7 +62,7 @@ impl<'a> RwSubscription<'a> {
 
 pub struct MonotonicClockSubscription<'a> {
     pub clock: &'a dyn WasiMonotonicClock,
-    pub deadline: u64,
+    pub absolute_deadline: u64,
 }
 
 impl<'a> MonotonicClockSubscription<'a> {
@@ -70,10 +70,10 @@ impl<'a> MonotonicClockSubscription<'a> {
         self.clock.now()
     }
     pub fn duration_until(&self) -> Option<u64> {
-        self.deadline.checked_sub(self.now())
+        self.absolute_deadline.checked_sub(self.now())
     }
     pub fn result(&self) -> Option<Result<(), Error>> {
-        if self.now().checked_sub(self.deadline).is_some() {
+        if self.now() >= self.absolute_deadline {
             Some(Ok(()))
         } else {
             None
