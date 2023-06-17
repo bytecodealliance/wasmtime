@@ -1817,3 +1817,28 @@
         (rhs_hi VReg (rv_vcompress_vm y even_mask ty))
         (rhs VReg (rv_vslideup_vvi rhs_lo rhs_hi half_size (unmasked) ty)))
     (rv_vadd_vv lhs rhs (unmasked) ty)))
+
+;;;; Rules for `avg_round` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; `avg_round` computes the unsigned average with rounding: a := (x + y + 1) // 2
+;;
+;; See Section "2–5 Average of Two Integers" of the Hacker's Delight book
+;;
+;; The floor average of two integers without overflow can be computed as:
+;;     t = (x & y) + ((x ^ y) >> 1)
+;;
+;; The right shift should be a logical shift if the integers are unsigned.
+;;
+;; We are however interested in the ceiling average (x + y + 1). For that
+;; we use a special rounding mode in the right shift instruction.
+;;
+;; For the right shift instruction we use `vssrl` which is a Scaling Shift
+;; Right Logical instruction using the `vxrm` fixed-point rouding mode. The
+;; default rounding mode is `rnu` (round-to-nearest-up (add +0.5 LSB)).
+;; Which is coincidentally the rounding mode we want for `avg_round`.
+(rule (lower (has_type (ty_vec_fits_in_register ty) (avg_round x y)))
+  (if-let one (u64_to_uimm5 1))
+  (let ((lhs VReg (rv_vand_vv x y (unmasked) ty))
+        (xor  VReg (rv_vxor_vv x y (unmasked) ty))
+        (rhs VReg (rv_vssrl_vi xor one (unmasked) ty)))
+    (rv_vadd_vv lhs rhs (unmasked) ty)))

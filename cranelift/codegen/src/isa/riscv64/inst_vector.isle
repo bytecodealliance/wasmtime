@@ -188,6 +188,7 @@
   (VandVI)
   (VorVI)
   (VxorVI)
+  (VssrlVI)
   (VslidedownVI)
   (VmergeVIM)
   (VrgatherVI)
@@ -662,6 +663,15 @@
 (decl rv_vxor_vi (VReg Imm5 VecOpMasking VState) VReg)
 (rule (rv_vxor_vi vs2 imm mask vstate)
   (vec_alu_rr_imm5 (VecAluOpRRImm5.VxorVI) vs2 imm mask vstate))
+
+;; Helper for emitting the `vssrl.vi` instruction.
+;;
+;; vd[i] = (unsigned(vs2[i]) >> imm) + r
+;;
+;; `r` here is the rounding mode currently selected.
+(decl rv_vssrl_vi (VReg UImm5 VecOpMasking VState) VReg)
+(rule (rv_vssrl_vi vs2 imm mask vstate)
+  (vec_alu_rr_uimm5 (VecAluOpRRImm5.VssrlVI) vs2 imm mask vstate))
 
 ;; Helper for emitting the `vnot.v` instruction.
 ;; This is just a mnemonic for `vxor.vi vd, vs, -1`
