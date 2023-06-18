@@ -542,6 +542,8 @@ impl VecAluOpRRImm5 {
             VecAluOpRRImm5::VsaddVI => 0b100001,
             VecAluOpRRImm5::VrgatherVI => 0b001100,
             VecAluOpRRImm5::VmvrV => 0b100111,
+            VecAluOpRRImm5::VnclipWI => 0b101111,
+            VecAluOpRRImm5::VnclipuWI => 0b101110,
             VecAluOpRRImm5::VmseqVI => 0b011000,
             VecAluOpRRImm5::VmsneVI => 0b011001,
             VecAluOpRRImm5::VmsleuVI => 0b011100,
@@ -568,6 +570,8 @@ impl VecAluOpRRImm5 {
             | VecAluOpRRImm5::VsaddVI
             | VecAluOpRRImm5::VrgatherVI
             | VecAluOpRRImm5::VmvrV
+            | VecAluOpRRImm5::VnclipWI
+            | VecAluOpRRImm5::VnclipuWI
             | VecAluOpRRImm5::VmseqVI
             | VecAluOpRRImm5::VmsneVI
             | VecAluOpRRImm5::VmsleuVI
@@ -585,7 +589,9 @@ impl VecAluOpRRImm5 {
             | VecAluOpRRImm5::VsraVI
             | VecAluOpRRImm5::VslidedownVI
             | VecAluOpRRImm5::VrgatherVI
-            | VecAluOpRRImm5::VmvrV => true,
+            | VecAluOpRRImm5::VmvrV
+            | VecAluOpRRImm5::VnclipWI
+            | VecAluOpRRImm5::VnclipuWI => true,
             VecAluOpRRImm5::VaddVI
             | VecAluOpRRImm5::VrsubVI
             | VecAluOpRRImm5::VandVI
