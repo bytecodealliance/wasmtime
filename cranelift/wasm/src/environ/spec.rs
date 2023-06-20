@@ -569,6 +569,12 @@ pub trait FuncEnvironment: TargetEnvironment {
         let _ = ty;
         false
     }
+
+    /// Returns whether the CLIF `x86_pshufb` instruction should be used for the
+    /// `i8x16.relaxed_swizzle` instruction.
+    fn use_x86_pshufb_for_relaxed_swizzle(&self) -> bool {
+        false
+    }
 }
 
 /// An object satisfying the `ModuleEnvironment` trait can be passed as argument to the

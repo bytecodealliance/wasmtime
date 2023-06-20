@@ -211,6 +211,10 @@ impl TargetIsa for AArch64Backend {
     fn has_x86_blendv_lowering(&self, _: Type) -> bool {
         false
     }
+
+    fn has_x86_pshufb_lowering(&self) -> bool {
+        false
+    }
 }
 
 impl fmt::Display for AArch64Backend {

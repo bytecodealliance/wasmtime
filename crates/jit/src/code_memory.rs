@@ -284,6 +284,10 @@ impl CodeMemory {
                 obj::LibCall::TruncF64 => libcalls::relocs::truncf64 as usize,
                 obj::LibCall::FmaF32 => libcalls::relocs::fmaf32 as usize,
                 obj::LibCall::FmaF64 => libcalls::relocs::fmaf64 as usize,
+                #[cfg(target_arch = "x86_64")]
+                obj::LibCall::X86Pshufb => libcalls::relocs::x86_pshufb as usize,
+                #[cfg(not(target_arch = "x86_64"))]
+                obj::LibCall::X86Pshufb => unreachable!(),
             };
             self.mmap
                 .as_mut_ptr()

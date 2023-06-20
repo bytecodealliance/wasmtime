@@ -2193,7 +2193,7 @@ impl<M: ABIMachineSpec> CallSite<M> {
         from_regs: ValueRegs<Reg>,
     ) {
         match &ctx.sigs().args(self.sig)[idx] {
-            &ABIArg::Slots { .. } => {}
+            &ABIArg::Slots { .. } | &ABIArg::ImplicitPtrArg { .. } => {}
             &ABIArg::StructArg { offset, size, .. } => {
                 let src_ptr = from_regs.only_reg().unwrap();
                 let dst_ptr = ctx.alloc_tmp(M::word_type()).only_reg().unwrap();
@@ -2220,7 +2220,6 @@ impl<M: ABIMachineSpec> CallSite<M> {
                     ctx.emit(insn);
                 }
             }
-            &ABIArg::ImplicitPtrArg { .. } => unimplemented!(), // Only supported via ISLE.
         }
     }
 
@@ -2260,6 +2259,7 @@ impl<M: ABIMachineSpec> CallSite<M> {
                     &ABIArgSlot::Stack { .. } => 0,
                 })
                 .sum(),
+            ABIArg::ImplicitPtrArg { .. } => 1,
             _ => 0,
         };
         let mut temps: SmallVec<[Writable<Reg>; 16]> = (0..needed_tmps)
@@ -2355,7 +2355,36 @@ impl<M: ABIMachineSpec> CallSite<M> {
             &ABIArg::StructArg { pointer, .. } => {
                 assert!(pointer.is_none()); // Only supported via ISLE.
             }
-            &ABIArg::ImplicitPtrArg { .. } => unimplemented!(), // Only supported via ISLE.
+            &ABIArg::ImplicitPtrArg {
+                offset,
+                pointer,
+                ty,
+                purpose: _,
+            } => {
+                assert_eq!(from_regs.len(), 1);
+                let vreg = from_regs.regs()[0];
+                let amode = StackAMode::SPOffset(offset, ty);
+                let tmp = temps[0];
+                insts.push(M::gen_get_stack_addr(amode, tmp, ty));
+                let tmp = tmp.to_reg();
+                insts.push(M::gen_store_base_offset(tmp, 0, vreg, ty));
+                match pointer {
+                    ABIArgSlot::Reg { reg, .. } => {
+                        self.uses.push(CallArgPair {
+                            vreg: tmp,
+                            preg: reg.into(),
+                        });
+                    }
+                    ABIArgSlot::Stack { offset, .. } => {
+                        let ty = M::word_type();
+                        insts.push(M::gen_store_stack(
+                            StackAMode::SPOffset(offset, ty),
+                            tmp,
+                            ty,
+                        ));
+                    }
+                };
+            }
         }
         insts
     }

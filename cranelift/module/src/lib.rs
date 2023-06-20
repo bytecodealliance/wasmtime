@@ -72,5 +72,6 @@ pub fn default_libcall_names() -> Box<dyn Fn(ir::LibCall) -> String + Send + Syn
 
         ir::LibCall::ElfTlsGetAddr => "__tls_get_addr".to_owned(),
         ir::LibCall::ElfTlsGetOffset => "__tls_get_offset".to_owned(),
+        ir::LibCall::X86Pshufb => "__cranelift_x86_pshufb".to_owned(),
     })
 }

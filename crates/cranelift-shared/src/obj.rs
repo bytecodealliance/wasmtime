@@ -558,6 +558,7 @@ fn libcall_name(call: LibCall) -> &'static str {
         LibCall::TruncF64 => LC::TruncF64,
         LibCall::FmaF32 => LC::FmaF32,
         LibCall::FmaF64 => LC::FmaF64,
+        LibCall::X86Pshufb => LC::X86Pshufb,
         _ => panic!("unknown libcall to give a name to: {call:?}"),
     };
     other.symbol()

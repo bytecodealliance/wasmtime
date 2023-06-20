@@ -2197,7 +2197,9 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::I8x16RelaxedSwizzle => {
             let (a, b) = pop2_with_bitcast(state, I8X16, builder);
             state.push1(
-                if environ.relaxed_simd_deterministic() || !environ.is_x86() {
+                if environ.relaxed_simd_deterministic()
+                    || !environ.use_x86_pshufb_for_relaxed_swizzle()
+                {
                     // Deterministic semantics match the `i8x16.swizzle`
                     // instruction which is the CLIF `swizzle`.
                     builder.ins().swizzle(a, b)

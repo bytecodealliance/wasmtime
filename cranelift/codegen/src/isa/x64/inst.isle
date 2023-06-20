@@ -4957,6 +4957,7 @@
 (convert SyntheticAmode XmmMemAligned synthetic_amode_to_xmm_mem_aligned)
 (convert VCodeConstant SyntheticAmode const_to_synthetic_amode)
 (convert VCodeConstant XmmMem const_to_xmm_mem)
+(convert VCodeConstant RegMem const_to_reg_mem)
 
 (convert IntCC CC intcc_to_cc)
 (convert AtomicRmwOp MachAtomicRmwOp atomic_rmw_op_to_mach_atomic_rmw_op)
@@ -5010,6 +5011,8 @@
 (extern constructor const_to_synthetic_amode const_to_synthetic_amode)
 (decl const_to_xmm_mem (VCodeConstant) XmmMem)
 (rule (const_to_xmm_mem c) (const_to_synthetic_amode c))
+(decl const_to_reg_mem (VCodeConstant) RegMem)
+(rule (const_to_reg_mem c) (RegMem.Mem (const_to_synthetic_amode c)))
 
 (decl xmm_to_xmm_mem_aligned (Xmm) XmmMemAligned)
 (rule (xmm_to_xmm_mem_aligned reg) (xmm_mem_to_xmm_mem_aligned reg))
@@ -5054,10 +5057,14 @@
         NearestF32
         NearestF64
         TruncF32
-        TruncF64))
+        TruncF64
+        X86Pshufb))
 
 (decl libcall_1 (LibCall Reg) Reg)
 (extern constructor libcall_1 libcall_1)
+
+(decl libcall_2 (LibCall Reg Reg) Reg)
+(extern constructor libcall_2 libcall_2)
 
 (decl libcall_3 (LibCall Reg Reg Reg) Reg)
 (extern constructor libcall_3 libcall_3)
