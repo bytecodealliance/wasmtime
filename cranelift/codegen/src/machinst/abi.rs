@@ -402,7 +402,7 @@ pub trait ABIMachineSpec {
         args: ArgsAccumulator<'_>,
     ) -> CodegenResult<(u32, Option<usize>)>
     where
-        I: IntoIterator<Item = &'a ir::AbiParam> + Clone;
+        I: IntoIterator<Item = &'a ir::AbiParam>;
 
     /// Returns the offset from FP to the argument area, i.e., jumping over the saved FP, return
     /// address, and maybe other standard elements depending on ABI (e.g. Wasm TLS reg).

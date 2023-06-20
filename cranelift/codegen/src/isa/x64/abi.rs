@@ -89,7 +89,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         mut args: ArgsAccumulator<'_>,
     ) -> CodegenResult<(u32, Option<usize>)>
     where
-        I: IntoIterator<Item = &'a ir::AbiParam> + Clone,
+        I: IntoIterator<Item = &'a ir::AbiParam>,
     {
         let is_fastcall = call_conv.extends_windows_fastcall();
 
