@@ -402,7 +402,7 @@ pub trait ABIMachineSpec {
         args: ArgsAccumulator<'_>,
     ) -> CodegenResult<(u32, Option<usize>)>
     where
-        I: IntoIterator<Item = &'a ir::AbiParam>;
+        I: IntoIterator<Item = &'a ir::AbiParam> + Clone;
 
     /// Returns the offset from FP to the argument area, i.e., jumping over the saved FP, return
     /// address, and maybe other standard elements depending on ABI (e.g. Wasm TLS reg).
@@ -2375,10 +2375,14 @@ impl<M: ABIMachineSpec> CallSite<M> {
                             preg: reg.into(),
                         });
                     }
-                    // FIXME: this is implementable but isn't used at this
-                    // time, so it's left as part of a future refactoring to
-                    // fill this out as necessary.
-                    _ => unimplemented!(),
+                    ABIArgSlot::Stack { offset, .. } => {
+                        let ty = M::word_type();
+                        insts.push(M::gen_store_stack(
+                            StackAMode::SPOffset(offset, ty),
+                            tmp,
+                            ty,
+                        ));
+                    }
                 };
             }
         }

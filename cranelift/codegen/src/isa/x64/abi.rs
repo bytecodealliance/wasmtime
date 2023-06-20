@@ -89,7 +89,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         mut args: ArgsAccumulator<'_>,
     ) -> CodegenResult<(u32, Option<usize>)>
     where
-        I: IntoIterator<Item = &'a ir::AbiParam>,
+        I: IntoIterator<Item = &'a ir::AbiParam> + Clone,
     {
         let is_fastcall = call_conv.extends_windows_fastcall();
 
@@ -172,17 +172,19 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                         }
                     }
 
-                    // FIXME: this is implementable but is left for a future
-                    // commit. The pointer needs to become a stack argument, but
-                    // all the stack reservation for the actual values probably
-                    // needs to come before all the argument stack area, so
-                    // that refactoring is left for later.
-                    None => unimplemented!(),
+                    None => {
+                        next_stack = align_to(next_stack, 8) + 8;
+                        ABIArgSlot::Stack {
+                            offset: (next_stack - 8) as i64,
+                            ty: ir::types::I64,
+                            extension: param.extension,
+                        }
+                    }
                 };
                 next_param_idx += 1;
-                next_stack = align_to(next_stack, 16) + 16;
                 args.push(ABIArg::ImplicitPtrArg {
-                    offset: (next_stack - 16) as i64,
+                    // NB: this is filled in after this loop
+                    offset: 0,
                     pointer,
                     ty: param.value_type,
                     purpose: param.purpose,
@@ -255,6 +257,20 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                 slots,
                 purpose: param.purpose,
             });
+        }
+
+        // Fastcall's indirect 128+ bit vector arguments are all located on the
+        // stack, and stack space is reserved after all paramters are passed,
+        // so allocate from the space now.
+        if args_or_rets == ArgsOrRets::Args && is_fastcall {
+            for arg in args.args_mut() {
+                if let ABIArg::ImplicitPtrArg { offset, .. } = arg {
+                    assert_eq!(*offset, 0);
+                    next_stack = align_to(next_stack, 16);
+                    *offset = next_stack as i64;
+                    next_stack += 16;
+                }
+            }
         }
 
         let extra_arg = if add_ret_area_ptr {
