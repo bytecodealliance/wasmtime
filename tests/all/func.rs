@@ -1422,3 +1422,178 @@ fn calls_with_funcref_and_externref() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn typed_v128() -> anyhow::Result<()> {
+    let mut store = Store::<()>::default();
+    let module = Module::new(
+        store.engine(),
+        r#"
+            (module
+                (func (export "a") (param v128) (result v128)
+                    local.get 0)
+                (func (export "b") (param v128 v128) (result v128 v128)
+                    local.get 0
+                    local.get 1)
+                (func (export "c") (param v128 v128 v128 v128 v128 v128 v128 v128) (result v128)
+                    local.get 0
+                    local.get 1
+                    local.get 2
+                    local.get 3
+                    local.get 4
+                    local.get 5
+                    local.get 6
+                    local.get 7
+                    i64x2.add
+                    i64x2.add
+                    i64x2.add
+                    i64x2.add
+                    i64x2.add
+                    i64x2.add
+                    i64x2.add)
+            )
+
+        "#,
+    )?;
+    let instance = Instance::new(&mut store, &module, &[])?;
+
+    let a = instance.get_typed_func::<V128, V128>(&mut store, "a")?;
+    assert_eq!(a.call(&mut store, V128::from(1))?, V128::from(1));
+    assert_eq!(a.call(&mut store, V128::from(2))?, V128::from(2));
+
+    let b = instance.get_typed_func::<(V128, V128), (V128, V128)>(&mut store, "b")?;
+    assert_eq!(
+        b.call(&mut store, (V128::from(1), V128::from(2)))?,
+        (V128::from(1), V128::from(2))
+    );
+
+    let c = instance.get_typed_func::<(V128, V128, V128, V128, V128, V128, V128, V128), V128>(
+        &mut store, "c",
+    )?;
+    assert_eq!(
+        c.call(
+            &mut store,
+            (
+                V128::from(1),
+                V128::from(2),
+                V128::from(3),
+                V128::from(4),
+                V128::from(5),
+                V128::from(6),
+                V128::from(7),
+                V128::from(8),
+            )
+        )?,
+        V128::from(1 + 2 + 3 + 4 + 5 + 6 + 7 + 8),
+    );
+
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn typed_v128_imports() -> anyhow::Result<()> {
+    let mut store = Store::<()>::default();
+    let module = Module::new(
+        store.engine(),
+        r#"
+            (module
+                (import "" "a" (func $a (param v128) (result i32)))
+                (import "" "b" (func $b (param i32) (result v128)))
+                (import "" "c" (func $c (param v128 f64 v128) (result v128 i32 v128)))
+                (import "" "d" (func $d (param v128 v128 v128 v128 v128 v128 v128 v128) (result i32)))
+
+                (func (export "a") (param v128) (result i32)
+                    local.get 0
+                    call $a)
+
+                (func (export "b") (param i32) (result v128)
+                    local.get 0
+                    call $b)
+
+                (func (export "c") (param v128 f64 v128) (result v128 i32 v128)
+                    local.get 0
+                    local.get 1
+                    local.get 2
+                    call $c)
+
+                (func (export "d") (param v128 v128 v128 v128 v128 v128 v128 v128) (result i32)
+                    local.get 0
+                    local.get 1
+                    local.get 2
+                    local.get 3
+                    local.get 4
+                    local.get 5
+                    local.get 6
+                    local.get 7
+                    call $d)
+            )
+
+        "#,
+    )?;
+
+    let mut l = Linker::new(store.engine());
+    l.func_wrap("", "a", |x: V128| {
+        let x = x.as_u128();
+        (x >> 0) as u32 + (x >> 32) as u32 + (x >> 64) as u32 + (x >> 96) as u32
+    })?;
+    l.func_wrap("", "b", |x: u32| {
+        let x = u128::from(x);
+        V128::from(x | ((x + 1) << 32) | ((x + 2) << 64) | ((x + 3) << 96))
+    })?;
+    l.func_wrap("", "c", |x: V128, y: f64, z: V128| (x, y as i32, z))?;
+    l.func_wrap(
+        "",
+        "d",
+        |a0: V128, a1: V128, a2: V128, a3: V128, a4: V128, a5: V128, a6: V128, a7: V128| {
+            let tmp = a0.as_u128()
+                + a1.as_u128()
+                + a2.as_u128()
+                + a3.as_u128()
+                + a4.as_u128()
+                + a5.as_u128()
+                + a6.as_u128()
+                + a7.as_u128();
+            (tmp >> 0) as u32 + (tmp >> 32) as u32 + (tmp >> 64) as u32 + (tmp >> 96) as u32
+        },
+    )?;
+
+    let i = l.instantiate(&mut store, &module)?;
+    let a = i.get_typed_func::<V128, i32>(&mut store, "a")?;
+    let b = i.get_typed_func::<i32, V128>(&mut store, "b")?;
+    let c = i.get_typed_func::<(V128, f64, V128), (V128, i32, V128)>(&mut store, "c")?;
+    let d =
+        i.get_typed_func::<(V128, V128, V128, V128, V128, V128, V128, V128), i32>(&mut store, "d")?;
+
+    assert_eq!(
+        a.call(&mut store, 0x00000004_00000003_00000002_00000001.into())?,
+        1 + 2 + 3 + 4
+    );
+    assert_eq!(
+        b.call(&mut store, 0x10)?,
+        V128::from(0x00000013_00000012_00000011_00000010),
+    );
+    assert_eq!(
+        c.call(&mut store, (1.into(), 2., 3.into()))?,
+        (V128::from(1), 2, V128::from(3)),
+    );
+    assert_eq!(
+        d.call(
+            &mut store,
+            (
+                1.into(),
+                2.into(),
+                3.into(),
+                4.into(),
+                5.into(),
+                6.into(),
+                7.into(),
+                8.into(),
+            )
+        )?,
+        1 + 2 + 3 + 4 + 5 + 6 + 7 + 8
+    );
+
+    Ok(())
+}
