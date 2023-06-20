@@ -384,8 +384,9 @@ impl ABIMachineSpec for X64ABIMachineSpec {
     }
 
     fn gen_load_base_offset(into_reg: Writable<Reg>, base: Reg, offset: i32, ty: Type) -> Self::I {
-        // Only ever used for I64s; if that changes, see if the ExtKind below needs to be changed.
-        assert_eq!(ty, I64);
+        // Only ever used for I64s and vectors; if that changes, see if the
+        // ExtKind below needs to be changed.
+        assert!(ty == I64 || ty.is_vector());
         let simm32 = offset as u32;
         let mem = Amode::imm_reg(simm32, base);
         Inst::load(ty, mem, into_reg, ExtKind::None)
