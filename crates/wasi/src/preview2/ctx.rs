@@ -133,7 +133,10 @@ impl WasiCtxBuilder {
     /// unpredictable random data in order to maintain its security invariants,
     /// and ideally should use the insecure random API otherwise, so using any
     /// prerecorded or otherwise predictable data may compromise security.
-    pub fn set_secure_random_to_custom_generator(mut self, random: impl RngCore + Send + Sync + 'static) -> Self {
+    pub fn set_secure_random_to_custom_generator(
+        mut self,
+        random: impl RngCore + Send + Sync + 'static,
+    ) -> Self {
         self.random = Some(Box::new(random));
         self
     }
