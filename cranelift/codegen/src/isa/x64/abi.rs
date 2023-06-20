@@ -154,6 +154,42 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                 );
             }
 
+            // Windows fastcall dictates that `__m128i` paramters to a function
+            // are passed indirectly as pointers, so handle that as a special
+            // case before the loop below.
+            if param.value_type.is_vector()
+                && param.value_type.bits() >= 128
+                && args_or_rets == ArgsOrRets::Args
+                && is_fastcall
+            {
+                let pointer = match get_intreg_for_arg(&call_conv, next_gpr, next_param_idx) {
+                    Some(reg) => {
+                        next_gpr += 1;
+                        ABIArgSlot::Reg {
+                            reg: reg.to_real_reg().unwrap(),
+                            ty: ir::types::I64,
+                            extension: ir::ArgumentExtension::None,
+                        }
+                    }
+
+                    // FIXME: this is implementable but is left for a future
+                    // commit. The pointer needs to become a stack argument, but
+                    // all the stack reservation for the actual values probably
+                    // needs to come before all the argument stack area, so
+                    // that refactoring is left for later.
+                    None => unimplemented!(),
+                };
+                next_param_idx += 1;
+                next_stack = align_to(next_stack, 16) + 16;
+                args.push(ABIArg::ImplicitPtrArg {
+                    offset: (next_stack - 16) as i64,
+                    pointer,
+                    ty: param.value_type,
+                    purpose: param.purpose,
+                });
+                continue;
+            }
+
             let mut slots = ABIArgSlotVec::new();
             for (rc, reg_ty) in rcs.iter().zip(reg_tys.iter()) {
                 let intreg = *rc == RegClass::Int;

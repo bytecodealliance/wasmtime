@@ -660,3 +660,86 @@ block0(v0: f32, v1: i64, v2: i32, v3: f32):
 ;   popq %rbp
 ;   retq
 
+function %fastcall_m128i_param(i32, i8x16) system_v {
+    sig0 = (i8x16) windows_fastcall
+block0(v0: i32, v1: i8x16):
+    call_indirect sig0, v0(v1)
+    return
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   subq    %rsp, $48, %rsp
+;   virtual_sp_offset_adjust 48
+;   lea     32(%rsp), %rcx
+;   movdqu  %xmm0, 0(%rcx)
+;   call    *%rdi
+;   addq    %rsp, $48, %rsp
+;   virtual_sp_offset_adjust -48
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   subq $0x30, %rsp
+;   leaq 0x20(%rsp), %rcx
+;   movdqu %xmm0, (%rcx)
+;   callq *%rdi
+;   addq $0x30, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %fastcall_m128i_params_and_results(i32, i32, i8x16, i64, i8x16) -> i8x16 system_v {
+    sig0 = (i32, i8x16, i64, i8x16) -> i8x16 windows_fastcall
+block0(v0: i32, v1: i32, v2: i8x16, v3: i64, v4: i8x16):
+    v5 = call_indirect sig0, v0(v1, v2, v3, v4)
+    v6 = iadd v5, v5
+    return v6
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdx, %r8
+;   movq    %rsi, %rcx
+;   subq    %rsp, $64, %rsp
+;   virtual_sp_offset_adjust 64
+;   lea     32(%rsp), %rdx
+;   movdqu  %xmm0, 0(%rdx)
+;   lea     48(%rsp), %r9
+;   movdqu  %xmm1, 0(%r9)
+;   call    *%rdi
+;   addq    %rsp, $64, %rsp
+;   virtual_sp_offset_adjust -64
+;   paddb   %xmm0, %xmm0, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rdx, %r8
+;   movq %rsi, %rcx
+;   subq $0x40, %rsp
+;   leaq 0x20(%rsp), %rdx
+;   movdqu %xmm0, (%rdx)
+;   leaq 0x30(%rsp), %r9
+;   movdqu %xmm1, (%r9)
+;   callq *%rdi
+;   addq $0x40, %rsp
+;   paddb %xmm0, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
