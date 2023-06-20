@@ -12,7 +12,7 @@ Unreleased.
 
 ## 10.0.0
 
-Unreleased.
+Released 2023-06-20
 
 ### Added
 
