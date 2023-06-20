@@ -2095,11 +2095,11 @@
 
 ;; Rules for `popcnt` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule 3 (lower (has_type (ty_32_or_64 ty) (popcnt src)))
+(rule 4 (lower (has_type (ty_32_or_64 ty) (popcnt src)))
       (if-let $true (use_popcnt))
       (x64_popcnt ty src))
 
-(rule 2 (lower (has_type (ty_8_or_16 ty) (popcnt src)))
+(rule 3 (lower (has_type (ty_8_or_16 ty) (popcnt src)))
       (if-let $true (use_popcnt))
       (x64_popcnt $I32 (extend_to_gpr src $I32 (ExtendKind.Zero))))
 
@@ -2192,7 +2192,7 @@
         final))
 
 
-(rule 1 (lower (has_type $I8X16 (popcnt src)))
+(rule 2 (lower (has_type $I8X16 (popcnt src)))
       (if-let $true (use_avx512vl_simd))
       (if-let $true (use_avx512bitalg_simd))
       (x64_vpopcntb src))
@@ -2218,8 +2218,8 @@
 ;; __m128i lookup = _mm_setr_epi8(0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4);
 
 
-(rule (lower (has_type $I8X16
-                       (popcnt src)))
+(rule 1 (lower (has_type $I8X16 (popcnt src)))
+      (if-let $true (use_ssse3))
       (let ((low_mask XmmMem (emit_u128_le_const 0x0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f))
             (low_nibbles Xmm (sse_and $I8X16 src low_mask))
             ;; Note that this is a 16x8 shift, but that's OK; we mask
@@ -2229,9 +2229,22 @@
             (high_nibbles Xmm (sse_and $I8X16 shifted_src low_mask))
             (lookup Xmm (x64_xmm_load_const $I8X16
               (emit_u128_le_const 0x04030302_03020201_03020201_02010100)))
-            (bit_counts_low Xmm (lower_pshufb lookup low_nibbles))
-            (bit_counts_high Xmm (lower_pshufb lookup high_nibbles)))
+            (bit_counts_low Xmm (x64_pshufb lookup low_nibbles))
+            (bit_counts_high Xmm (x64_pshufb lookup high_nibbles)))
         (x64_paddb bit_counts_low bit_counts_high)))
+
+;; A modified version of the popcnt method from Hacker's Delight.
+(rule (lower (has_type $I8X16 (popcnt src)))
+      (let ((mask1 XmmMem (emit_u128_le_const 0x77777777777777777777777777777777))
+            (src Xmm src)
+            (shifted Xmm (x64_pand (x64_psrlq src (xmi_imm 1)) mask1))
+            (src Xmm (x64_psubb src shifted))
+            (shifted Xmm (x64_pand (x64_psrlq shifted (xmi_imm 1)) mask1))
+            (src Xmm (x64_psubb src shifted))
+            (shifted Xmm (x64_pand (x64_psrlq shifted (xmi_imm 1)) mask1))
+            (src Xmm (x64_psubb src shifted))
+            (src Xmm (x64_paddb src (x64_psrlw src (xmi_imm 4)))))
+        (x64_pand src (emit_u128_le_const 0x0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f))))
 
 ;; Rules for `bitrev` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
