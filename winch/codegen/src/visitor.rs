@@ -100,6 +100,9 @@ macro_rules! def_unsupported {
     (emit If $($rest:tt)*) => {};
     (emit Else $($rest:tt)*) => {};
     (emit Block $($rest:tt)*) => {};
+    (emit Loop $($rest:tt)*) => {};
+    (emit Br $($rest:tt)*) => {};
+    (emit BrIf $($rest:tt)*) => {};
 
     (emit $unsupported:tt $($rest:tt)*) => {$($rest)*};
 }
@@ -445,10 +448,21 @@ where
     }
 
     fn visit_end(&mut self) {
-        if let Some(control) = self.control_frames.last_mut() {
-            control.emit_end(self.masm, &mut self.context);
-            // Pop control frame.
-            self.control_frames.truncate(self.control_frames.len() - 1);
+        if !self.context.reachable {
+            self.handle_unreachable_end();
+        } else {
+            let mut control = self.control_frames.pop().unwrap();
+            let is_outermost = self.control_frames.len() == 0;
+            // If it's not the outermost control stack frame, emit the the full "end" sequence,
+            // which involves, popping results from the value stack, pushing results back to the
+            // value stack and binding the exit label.
+            // Else, pop values from the value stack and bind the exit label.
+            if !is_outermost {
+                control.emit_end(self.masm, &mut self.context);
+            } else {
+                self.context.pop_abi_results(control.result(), self.masm);
+                control.bind_exit_label(self.masm);
+            }
         }
     }
 
@@ -504,12 +518,15 @@ where
     }
 
     fn visit_else(&mut self) {
-        let control = self
-            .control_frames
-            .last_mut()
-            .unwrap_or_else(|| panic!("Expected active control stack frame for else"));
-
-        control.emit_else(self.masm, &mut self.context);
+        if !self.context.reachable {
+            self.handle_unreachable_else();
+        } else {
+            let control = self
+                .control_frames
+                .last_mut()
+                .unwrap_or_else(|| panic!("Expected active control stack frame for else"));
+            control.emit_else(self.masm, &mut self.context);
+        }
     }
 
     fn visit_block(&mut self, blockty: BlockType) {
@@ -518,6 +535,41 @@ where
             self.masm,
             &mut self.context,
         ));
+    }
+
+    fn visit_loop(&mut self, blockty: BlockType) {
+        self.control_frames.push(ControlStackFrame::loop_(
+            &self.env.resolve_block_type(blockty),
+            self.masm,
+            &mut self.context,
+        ));
+    }
+
+    fn visit_br(&mut self, depth: u32) {
+        let frame = Self::control_at(&mut self.control_frames, depth);
+        self.context.pop_abi_results(frame.result(), self.masm);
+        self.masm.jmp(*frame.label());
+        frame.set_as_target();
+        self.context.reachable = false;
+    }
+
+    fn visit_br_if(&mut self, depth: u32) {
+        let frame = Self::control_at(&mut self.control_frames, depth);
+        frame.set_as_target();
+        let result = frame.result();
+        let result_reg = self.context.gpr(result.result_reg(), self.masm);
+        let top = self.context.pop_to_reg(self.masm, None, OperandSize::S32);
+        self.context.free_gpr(result_reg);
+        self.context.pop_abi_results(result, self.masm);
+        self.context.push_abi_results(result, self.masm);
+        self.masm.branch(
+            CmpKind::Ne,
+            top.into(),
+            top.into(),
+            *frame.label(),
+            OperandSize::S32,
+        );
+        self.context.free_gpr(top);
     }
 
     wasmparser::for_each_operator!(def_unsupported);

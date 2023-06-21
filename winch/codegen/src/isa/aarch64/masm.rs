@@ -106,6 +106,10 @@ impl Masm for MacroAssembler {
         todo!()
     }
 
+    fn reset_stack_pointer(&mut self, offset: u32) {
+        self.sp_offset = offset;
+    }
+
     fn local_address(&mut self, local: &LocalSlot) -> Address {
         let (reg, offset) = local
             .addressed_from_sp()
@@ -243,8 +247,9 @@ impl Masm for MacroAssembler {
         self.asm.get_label()
     }
 
-    fn bind(&mut self, _label: MachLabel) {
-        todo!()
+    fn bind(&mut self, label: MachLabel) {
+        let buffer = self.asm.buffer_mut();
+        buffer.bind_label(label, &mut Default::default());
     }
 
     fn branch(

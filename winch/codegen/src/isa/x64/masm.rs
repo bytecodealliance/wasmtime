@@ -88,6 +88,10 @@ impl Masm for MacroAssembler {
         self.decrement_sp(bytes);
     }
 
+    fn reset_stack_pointer(&mut self, offset: u32) {
+        self.sp_offset = offset;
+    }
+
     fn local_address(&mut self, local: &LocalSlot) -> Address {
         let (reg, offset) = local
             .addressed_from_sp()
