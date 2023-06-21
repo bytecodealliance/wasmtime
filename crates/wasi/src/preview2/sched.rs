@@ -48,14 +48,19 @@ impl<'a> Poll<'a> {
         absolute: bool,
         ud: Userdata,
     ) {
-        let deadline = if absolute {
-            // Convert an absolute deadline to a relative one.
-            deadline.saturating_sub(clock.now())
-        } else {
+        let absolute_deadline: u64 = if absolute {
             deadline
+        } else {
+            // Convert a relative deadline to an absolute one. Use a saturating
+            // add because there are no meaningful timeouts after the monotonic
+            // clock overflows.
+            clock.now().saturating_add(deadline)
         };
         self.subs.push((
-            Subscription::MonotonicClock(MonotonicClockSubscription { clock, deadline }),
+            Subscription::MonotonicClock(MonotonicClockSubscription {
+                clock,
+                absolute_deadline,
+            }),
             ud,
         ));
     }
@@ -94,7 +99,7 @@ impl<'a> Poll<'a> {
                 Subscription::MonotonicClock(t) => Some(t),
                 _ => None,
             })
-            .min_by(|a, b| a.deadline.cmp(&b.deadline))
+            .min_by(|a, b| a.absolute_deadline.cmp(&b.absolute_deadline))
     }
     pub fn rw_subscriptions<'b>(&'b mut self) -> impl Iterator<Item = &'b mut RwSubscription<'a>> {
         self.subs.iter_mut().filter_map(|sub| match &mut sub.0 {
