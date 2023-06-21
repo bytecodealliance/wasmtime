@@ -7,6 +7,7 @@
 //! Individual snapshots are available through
 //! `wasmtime_wasi::snapshots::preview_{0, 1}::Wasi::new(&Store, Rc<RefCell<WasiCtx>>)`.
 
+#[cfg(feature = "preview2")]
 pub mod preview2;
 
 pub use wasi_common::{Error, I32Exit, WasiCtx, WasiDir, WasiFile};
