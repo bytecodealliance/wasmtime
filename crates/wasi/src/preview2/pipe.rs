@@ -24,6 +24,28 @@ pub fn pipe(bound: usize) -> (InputPipe, OutputPipe) {
     )
 }
 
+pub async fn empty_output() -> OutputPipe {
+    let (writer, reader) = pipe(1);
+
+    tokio::spawn(async move {
+        let mut i = writer.0.lock().await;
+        while let Some(_) = i.channel.recv().await {}
+    });
+
+    reader
+}
+
+pub async fn sink_input() -> InputPipe {
+    let (writer, reader) = pipe(1);
+
+    tokio::spawn(async move {
+        let mut i = reader.0.lock().await;
+        while !i.blocking_send(Vec::new()).await.is_err() {}
+    });
+
+    writer
+}
+
 struct InnerInputPipe {
     state: StreamState,
     buffer: Vec<u8>,
