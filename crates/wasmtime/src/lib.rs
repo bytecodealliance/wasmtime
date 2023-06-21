@@ -413,6 +413,7 @@ mod types;
 mod values;
 
 pub use crate::config::*;
+pub use crate::coredump::*;
 pub use crate::engine::*;
 pub use crate::externals::*;
 pub use crate::func::*;

@@ -17,10 +17,10 @@ use crate::{store::StoreOpaque, Global, Instance, Memory, Module, WasmBacktrace}
 /// coredump.
 ///
 /// Capturing of wasm coredumps can be configured through the
-/// [`Config::coredump_on_trap`](crate::Config::coredump_on_trap) method.
+/// [`Config::coredump_on_trap`][crate::Config::coredump_on_trap] method.
 ///
 /// For more information about errors in wasmtime see the documentation of the
-/// [`Trap`] type.
+/// [`Trap`][crate::Trap] type.
 ///
 /// [`Func::call`]: crate::Func::call
 /// [`Instance::new`]: crate::Instance::new
