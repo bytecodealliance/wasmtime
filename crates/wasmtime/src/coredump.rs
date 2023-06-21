@@ -4,16 +4,17 @@ use crate::{store::StoreOpaque, Global, Instance, Memory, Module, WasmBacktrace}
 
 /// Representation of a core dump of a WebAssembly module
 ///
-/// This structure is attached to the [`anyhow::Error`] returned from many
-/// Wasmtime functions that execute WebAssembly such as [`Instance::new`] or
-/// [`Func::call`]. This can be acquired with the [`anyhow::Error::downcast`]
-/// family of methods to programmatically inspect the coredump. Otherwise since
-/// it's part of the error returned this will get printed along with the rest of
-/// the error when the error is logged.
+/// When the Config::coredump_on_trap option is enabled this structure is
+/// attached to the [`anyhow::Error`] returned from many Wasmtime functions that
+/// execute WebAssembly such as [`Instance::new`] or [`Func::call`]. This can be
+/// acquired with the [`anyhow::Error::downcast`] family of methods to
+/// programmatically inspect the coredump. Otherwise since it's part of the
+/// error returned this will get printed along with the rest of the error when
+/// the error is logged.
 ///
-/// TODO: Notably absent from this structure at the moment are any locals or
-/// operand values for the stack frames. More work is needed to be able to
-/// recover those when a trap occurs, at which point they will be added here.
+/// Note that some state, such as Wasm locals or values on the operand stack,
+/// may be optimized away by the compiler or otherwise not recovered in the
+/// coredump.
 ///
 /// Capturing of wasm coredumps can be configured through the
 /// [`Config::coredump_on_trap`](crate::Config::coredump_on_trap) method.

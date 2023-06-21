@@ -85,7 +85,7 @@ pub(crate) fn from_runtime_box(
         backtrace,
         coredumpstack,
     } = *runtime_trap;
-    let (error, pc) = match reason {
+    let (mut error, pc) = match reason {
         // For user-defined errors they're already an `anyhow::Error` so no
         // conversion is really necessary here, but a `backtrace` may have
         // been captured so it's attempted to get inserted here.
@@ -127,22 +127,19 @@ pub(crate) fn from_runtime_box(
         wasmtime_runtime::TrapReason::Wasm(trap_code) => (trap_code.into(), None),
     };
 
-    match (coredumpstack, backtrace) {
-        (None, None) => error,
-        (None, Some(bt)) => {
-            let bt = WasmBacktrace::from_captured(store, bt, pc);
-            if !bt.wasm_trace.is_empty() {
-                error.context(bt)
-            } else {
-                error
-            }
-        }
-        (Some(coredump), _) => {
-            let bt = WasmBacktrace::from_captured(store, coredump.bt, pc);
-            let cd = WasmCoreDump::new(store, bt);
-            error.context(cd)
+    if let Some(bt) = backtrace {
+        let bt = WasmBacktrace::from_captured(store, bt, pc);
+        if !bt.wasm_trace.is_empty() {
+            error = error.context(bt);
         }
     }
+
+    if let Some(coredump) = coredumpstack {
+        let bt = WasmBacktrace::from_captured(store, coredump.bt, pc);
+        let cd = WasmCoreDump::new(store, bt);
+        error = error.context(cd);
+    }
+    error
 }
 
 /// Representation of a backtrace of function frames in a WebAssembly module for

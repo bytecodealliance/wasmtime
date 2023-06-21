@@ -1453,10 +1453,7 @@ impl Config {
     }
 
     /// Configures whether or not a coredump should be generated and attached to
-    /// the anyhow::Error when a trap is raised. Because a coredump is a
-    /// superset of a backtrace, setting this to true will override the setting
-    /// for `wasm_backtrace`, resulting in a WasmCoreDump being attached to the
-    /// raised error rather than a WasmBacktrace.
+    /// the anyhow::Error when a trap is raised.
     ///
     /// This option is disabled by default.
     pub fn coredump_on_trap(&mut self, enable: bool) -> &mut Self {
