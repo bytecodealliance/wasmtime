@@ -1269,6 +1269,10 @@
 (rule 1 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.UnsignedLessThan) x (splat y))
   (rv_vmsltu_vx x y (unmasked) ty))
 
+(rule 2 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.UnsignedLessThan) (splat x) y)
+  (rv_vmsgtu_vx y x (unmasked) ty))
+
+
 ;; IntCC.SignedLessThan
 
 (rule 0 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.SignedLessThan) x y)
@@ -1276,6 +1280,9 @@
 
 (rule 1 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.SignedLessThan) x (splat y))
   (rv_vmslt_vx x y (unmasked) ty))
+
+(rule 2 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.SignedLessThan) (splat x) y)
+  (rv_vmsgt_vx y x (unmasked) ty))
 
 ;; IntCC.UnsignedLessThanOrEqual
 
@@ -1307,6 +1314,9 @@
 (rule 1 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.UnsignedGreaterThan) x (splat y))
   (rv_vmsgtu_vx x y (unmasked) ty))
 
+(rule 2 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.UnsignedGreaterThan) (splat x) y)
+  (rv_vmsltu_vx y x (unmasked) ty))
+
 (rule 3 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.UnsignedGreaterThan) x (replicated_imm5 y))
   (rv_vmsgtu_vi x y (unmasked) ty))
 
@@ -1318,6 +1328,9 @@
 (rule 1 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.SignedGreaterThan) x (splat y))
   (rv_vmsgt_vx x y (unmasked) ty))
 
+(rule 2 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.SignedGreaterThan) (splat x) y)
+  (rv_vmslt_vx y x (unmasked) ty))
+
 (rule 3 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.SignedGreaterThan) x (replicated_imm5 y))
   (rv_vmsgt_vi x y (unmasked) ty))
 
@@ -1326,7 +1339,13 @@
 (rule 0 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.UnsignedGreaterThanOrEqual) x y)
   (rv_vmsgeu_vv x y (unmasked) ty))
 
+(rule 2 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.UnsignedGreaterThanOrEqual) (splat x) y)
+  (rv_vmsleu_vx y x (unmasked) ty))
+
 ;; IntCC.SignedGreaterThanOrEqual
 
 (rule 0 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.SignedGreaterThanOrEqual) x y)
   (rv_vmsge_vv x y (unmasked) ty))
+
+(rule 2 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.SignedGreaterThanOrEqual) (splat x) y)
+  (rv_vmsle_vx y x (unmasked) ty))
