@@ -8,7 +8,7 @@
 //! but the virtual pipes can be instantiated with any `Read` or `Write` type.
 //!
 use crate::preview2::{HostInputStream, HostOutputStream, HostPollable};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 pub fn pipe(bound: usize) -> (InputPipe, OutputPipe) {
     let (writer, reader) = tokio::sync::mpsc::channel(bound);
@@ -20,13 +20,12 @@ pub fn pipe(bound: usize) -> (InputPipe, OutputPipe) {
     };
 
     let output = InnerOutputPipe {
-        buffer: Vec::new(),
-        channel: writer,
+        channel: SenderState::Channel(writer),
     };
 
     (
-        InputPipe(Arc::new(Mutex::new(input))),
-        OutputPipe(Arc::new(Mutex::new(output))),
+        InputPipe(Arc::new(tokio::sync::Mutex::new(input))),
+        OutputPipe(Arc::new(tokio::sync::Mutex::new(output))),
     )
 }
 
@@ -36,11 +35,12 @@ struct InnerInputPipe {
     channel: tokio::sync::mpsc::Receiver<Vec<u8>>,
 }
 
-pub struct InputPipe(Arc<Mutex<InnerInputPipe>>);
+pub struct InputPipe(Arc<tokio::sync::Mutex<InnerInputPipe>>);
 
+#[async_trait::async_trait]
 impl HostInputStream for InputPipe {
-    fn read(&mut self, dest: &mut [u8]) -> Result<(u64, StreamState), Error> {
-        let mut i = self.0.lock().unwrap();
+    async fn read(&mut self, dest: &mut [u8]) -> Result<(u64, StreamState), Error> {
+        let mut i = self.0.lock().await;
         let l = i.buffer.len().min(dest.len());
         let dest = &mut dest[..l];
         dest.copy_from_slice(&i.buffer[..l]);
@@ -53,11 +53,12 @@ impl HostInputStream for InputPipe {
         HostPollable::new(move || {
             let i = Arc::clone(&i);
             Box::pin(async move {
-                let mut i = i.lock().unwrap();
+                let mut i = i.lock().await;
                 match i.channel.recv().await {
                     None => i.state = StreamState::Closed,
                     Some(mut buf) => i.buffer.append(&mut buf),
                 }
+                Ok(())
             })
         })
     }
@@ -65,13 +66,52 @@ impl HostInputStream for InputPipe {
 
 impl tokio::io::AsyncRead for InputPipe {}
 
-struct InnerOutputPipe {
-    buffer: Vec<u8>,
-    channel: tokio::sync::mpsc::Sender<Vec<u8>>,
+enum SenderState {
+    Writable(tokio::sync::OwnedPermit<Vec<u8>>),
+    Channel(tokio::sync::mpsc::Sender<Vec<u8>>),
 }
 
-pub struct OutputPipe(Arc<Mutex<InnerOutputPipe>>);
+struct InnerOutputPipe {
+    channel: SenderState,
+}
 
-impl HostOutputStream for OutputPipe {}
+pub struct OutputPipe(Arc<tokio::sync::Mutex<InnerOutputPipe>>);
+
+#[async_trait::async_trait]
+impl HostOutputStream for OutputPipe {
+    async fn write(&mut self, buf: &[u8]) -> Result<u64, Error> {
+        let mut i = self.0.lock().await;
+        let bytes = Vec::from_iter(buf);
+        match i.channel {
+            SenderState::Writable(p) => {
+                let s = p.send(bytes).await;
+                i.channel = SenderState::Channel(s);
+            }
+
+            SenderState::Channel(s) => {
+                s.send(bytes).await;
+            }
+        }
+
+        Ok(buf.len() as u64)
+    }
+
+    fn pollable(&self) -> HostPollable {
+        let i = Arc::clone(&self.0);
+        HostPollable::new(move || {
+            let i = Arc::clone(&i);
+            Box::pin(async move {
+                let mut i = i.lock().await;
+                match i.channel.reserve_owned() {
+                    Ok(p) => {
+                        i.channel = SenderState::Writable(p);
+                        Ok(())
+                    }
+                    Err(e) => Err(anyhow!(e)),
+                }
+            })
+        })
+    }
+}
 
 impl tokio::io::AsyncWrite for OutputPipe {}

@@ -17,20 +17,21 @@ pub enum StreamState {
 /// This is "pseudo" because the real streams will be a type in wit, and
 /// built into the wit bindings, and will support async and type parameters.
 /// This pseudo-stream abstraction is synchronous and only supports bytes.
+#[async_trait::async_trait]
 pub trait HostInputStream: Send + Sync {
     /// Read bytes. On success, returns a pair holding the number of bytes read
     /// and a flag indicating whether the end of the stream was reached.
-    fn read(&mut self, buf: &mut [u8]) -> Result<(u64, StreamState), Error>;
+    async fn read(&mut self, buf: &mut [u8]) -> Result<(u64, StreamState), Error>;
 
     /// Vectored-I/O form of `read`.
-    fn read_vectored<'a>(
+    async fn read_vectored<'a>(
         &mut self,
         bufs: &mut [std::io::IoSliceMut<'a>],
     ) -> Result<(u64, StreamState), Error> {
         if bufs.len() > 0 {
-            self.read(bufs.get_mut(0).unwrap())
+            self.read(bufs.get_mut(0).unwrap()).await
         } else {
-            self.read(&mut [])
+            self.read(&mut []).await
         }
     }
 
@@ -41,13 +42,13 @@ pub trait HostInputStream: Send + Sync {
     }
 
     /// Read bytes from a stream and discard them.
-    fn skip(&mut self, nelem: u64) -> Result<(u64, StreamState), Error> {
+    async fn skip(&mut self, nelem: u64) -> Result<(u64, StreamState), Error> {
         let mut nread = 0;
         let mut saw_end = false;
 
         // TODO: Optimize by reading more than one byte at a time.
         for _ in 0..nelem {
-            let (num, end) = self.read(&mut [0])?;
+            let (num, end) = self.read(&mut [0]).await?;
             nread += num;
             if end {
                 saw_end = true;
@@ -67,14 +68,15 @@ pub trait HostInputStream: Send + Sync {
 /// This is "pseudo" because the real streams will be a type in wit, and
 /// built into the wit bindings, and will support async and type parameters.
 /// This pseudo-stream abstraction is synchronous and only supports bytes.
+#[async_trait::async_trait]
 pub trait HostOutputStream: Send + Sync {
     /// Write bytes. On success, returns the number of bytes written.
-    fn write(&mut self, _buf: &[u8]) -> Result<u64, Error>;
+    async fn write(&mut self, _buf: &[u8]) -> Result<u64, Error>;
 
     /// Vectored-I/O form of `write`.
-    fn write_vectored<'a>(&mut self, bufs: &[std::io::IoSlice<'a>]) -> Result<u64, Error> {
+    async fn write_vectored<'a>(&mut self, bufs: &[std::io::IoSlice<'a>]) -> Result<u64, Error> {
         if bufs.len() > 0 {
-            self.write(bufs.get(0).unwrap())
+            self.write(bufs.get(0).unwrap()).await
         } else {
             Ok(0)
         }
@@ -87,7 +89,7 @@ pub trait HostOutputStream: Send + Sync {
     }
 
     /// Transfer bytes directly from an input stream to an output stream.
-    fn splice(
+    async fn splice(
         &mut self,
         src: &mut dyn HostInputStream,
         nelem: u64,
@@ -98,8 +100,8 @@ pub trait HostOutputStream: Send + Sync {
         // TODO: Optimize by splicing more than one byte at a time.
         for _ in 0..nelem {
             let mut buf = [0u8];
-            let (num, end) = src.read(&mut buf)?;
-            self.write(&buf)?;
+            let (num, end) = src.read(&mut buf).await?;
+            self.write(&buf).await?;
             nspliced += num;
             if end {
                 saw_end = true;
@@ -111,12 +113,12 @@ pub trait HostOutputStream: Send + Sync {
     }
 
     /// Repeatedly write a byte to a stream.
-    fn write_zeroes(&mut self, nelem: u64) -> Result<u64, Error> {
+    async fn write_zeroes(&mut self, nelem: u64) -> Result<u64, Error> {
         let mut nwritten = 0;
 
         // TODO: Optimize by writing more than one byte at a time.
         for _ in 0..nelem {
-            let num = self.write(&[0])?;
+            let num = self.write(&[0]).await?;
             if num == 0 {
                 break;
             }
