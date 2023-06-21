@@ -511,13 +511,17 @@ impl ABIMachineSpec for X64ABIMachineSpec {
     }
 
     fn gen_clobber_save(
-        _call_conv: isa::CallConv,
+        call_conv: isa::CallConv,
         setup_frame: bool,
         flags: &settings::Flags,
         clobbered_callee_saves: &[Writable<RealReg>],
         fixed_frame_storage_size: u32,
         _outgoing_args_size: u32,
     ) -> (u64, SmallVec<[Self::I; 16]>) {
+        if call_conv == isa::CallConv::Tail {
+            assert!(clobbered_callee_saves.is_empty());
+        }
+
         let mut insts = SmallVec::new();
         let clobbered_size = compute_clobber_size(&clobbered_callee_saves);
 
@@ -763,7 +767,9 @@ impl ABIMachineSpec for X64ABIMachineSpec {
     }
 
     fn get_regs_clobbered_by_call(call_conv_of_callee: isa::CallConv) -> PRegSet {
-        if call_conv_of_callee.extends_windows_fastcall() {
+        if call_conv_of_callee == isa::CallConv::Tail {
+            TAIL_CLOBBERS
+        } else if call_conv_of_callee.extends_windows_fastcall() {
             WINDOWS_CLOBBERS
         } else {
             SYSV_CLOBBERS
@@ -784,11 +790,10 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         regs: &[Writable<RealReg>],
     ) -> Vec<Writable<RealReg>> {
         let mut regs: Vec<Writable<RealReg>> = match call_conv {
-            CallConv::Tail
-            | CallConv::Fast
-            | CallConv::Cold
-            | CallConv::SystemV
-            | CallConv::WasmtimeSystemV => regs
+            // The `tail` calling convention doesn't have any callee-save
+            // registers.
+            CallConv::Tail => vec![],
+            CallConv::Fast | CallConv::Cold | CallConv::SystemV | CallConv::WasmtimeSystemV => regs
                 .iter()
                 .cloned()
                 .filter(|r| is_callee_save_systemv(r.to_reg(), flags.enable_pinned_reg()))
@@ -856,6 +861,26 @@ impl From<StackAMode> for SyntheticAmode {
 fn get_intreg_for_arg(call_conv: &CallConv, idx: usize, arg_idx: usize) -> Option<Reg> {
     let is_fastcall = call_conv.extends_windows_fastcall();
 
+    if *call_conv == isa::CallConv::Tail {
+        return match idx {
+            0 => Some(regs::rax()),
+            1 => Some(regs::rcx()),
+            2 => Some(regs::rdx()),
+            3 => Some(regs::rbx()),
+            4 => Some(regs::rsi()),
+            5 => Some(regs::rdi()),
+            6 => Some(regs::r8()),
+            7 => Some(regs::r9()),
+            8 => Some(regs::r10()),
+            9 => Some(regs::r11()),
+            10 => Some(regs::r12()),
+            11 => Some(regs::r13()),
+            12 => Some(regs::r14()),
+            // NB: `r15` is reserved as a scratch register.
+            _ => None,
+        };
+    }
+
     // Fastcall counts by absolute argument number; SysV counts by argument of
     // this (integer) class.
     let i = if is_fastcall { arg_idx } else { idx };
@@ -903,7 +928,24 @@ fn get_intreg_for_retval(
     retval_idx: usize,
 ) -> Option<Reg> {
     match call_conv {
-        CallConv::Tail | CallConv::Fast | CallConv::Cold | CallConv::SystemV => match intreg_idx {
+        CallConv::Tail => match intreg_idx {
+            0 => Some(regs::rax()),
+            1 => Some(regs::rcx()),
+            2 => Some(regs::rdx()),
+            3 => Some(regs::rbx()),
+            4 => Some(regs::rsi()),
+            5 => Some(regs::rdi()),
+            6 => Some(regs::r8()),
+            7 => Some(regs::r9()),
+            8 => Some(regs::r10()),
+            9 => Some(regs::r11()),
+            10 => Some(regs::r12()),
+            11 => Some(regs::r13()),
+            12 => Some(regs::r14()),
+            // NB: `r15` is reserved as a scratch register.
+            _ => None,
+        },
+        CallConv::Fast | CallConv::Cold | CallConv::SystemV => match intreg_idx {
             0 => Some(regs::rax()),
             1 => Some(regs::rdx()),
             _ => None,
@@ -931,7 +973,18 @@ fn get_fltreg_for_retval(
     retval_idx: usize,
 ) -> Option<Reg> {
     match call_conv {
-        CallConv::Tail | CallConv::Fast | CallConv::Cold | CallConv::SystemV => match fltreg_idx {
+        CallConv::Tail => match fltreg_idx {
+            0 => Some(regs::xmm0()),
+            1 => Some(regs::xmm1()),
+            2 => Some(regs::xmm2()),
+            3 => Some(regs::xmm3()),
+            4 => Some(regs::xmm4()),
+            5 => Some(regs::xmm5()),
+            6 => Some(regs::xmm6()),
+            7 => Some(regs::xmm7()),
+            _ => None,
+        },
+        CallConv::Fast | CallConv::Cold | CallConv::SystemV => match fltreg_idx {
             0 => Some(regs::xmm0()),
             1 => Some(regs::xmm1()),
             _ => None,
@@ -1004,6 +1057,7 @@ fn compute_clobber_size(clobbers: &[Writable<RealReg>]) -> u32 {
 
 const WINDOWS_CLOBBERS: PRegSet = windows_clobbers();
 const SYSV_CLOBBERS: PRegSet = sysv_clobbers();
+const TAIL_CLOBBERS: PRegSet = tail_clobbers();
 
 const fn windows_clobbers() -> PRegSet {
     PRegSet::empty()
@@ -1033,6 +1087,40 @@ const fn sysv_clobbers() -> PRegSet {
         .with(regs::gpr_preg(regs::ENC_R9))
         .with(regs::gpr_preg(regs::ENC_R10))
         .with(regs::gpr_preg(regs::ENC_R11))
+        .with(regs::fpr_preg(0))
+        .with(regs::fpr_preg(1))
+        .with(regs::fpr_preg(2))
+        .with(regs::fpr_preg(3))
+        .with(regs::fpr_preg(4))
+        .with(regs::fpr_preg(5))
+        .with(regs::fpr_preg(6))
+        .with(regs::fpr_preg(7))
+        .with(regs::fpr_preg(8))
+        .with(regs::fpr_preg(9))
+        .with(regs::fpr_preg(10))
+        .with(regs::fpr_preg(11))
+        .with(regs::fpr_preg(12))
+        .with(regs::fpr_preg(13))
+        .with(regs::fpr_preg(14))
+        .with(regs::fpr_preg(15))
+}
+
+const fn tail_clobbers() -> PRegSet {
+    PRegSet::empty()
+        .with(regs::gpr_preg(regs::ENC_RAX))
+        .with(regs::gpr_preg(regs::ENC_RCX))
+        .with(regs::gpr_preg(regs::ENC_RDX))
+        .with(regs::gpr_preg(regs::ENC_RBX))
+        .with(regs::gpr_preg(regs::ENC_RSI))
+        .with(regs::gpr_preg(regs::ENC_RDI))
+        .with(regs::gpr_preg(regs::ENC_R8))
+        .with(regs::gpr_preg(regs::ENC_R9))
+        .with(regs::gpr_preg(regs::ENC_R10))
+        .with(regs::gpr_preg(regs::ENC_R11))
+        .with(regs::gpr_preg(regs::ENC_R12))
+        .with(regs::gpr_preg(regs::ENC_R13))
+        .with(regs::gpr_preg(regs::ENC_R14))
+        .with(regs::gpr_preg(regs::ENC_R15))
         .with(regs::fpr_preg(0))
         .with(regs::fpr_preg(1))
         .with(regs::fpr_preg(2))
