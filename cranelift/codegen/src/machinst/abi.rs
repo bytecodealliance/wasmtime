@@ -322,7 +322,7 @@ pub trait IsaFlags: Clone {
 pub struct ArgsAccumulator<'a> {
     sig_set_abi_args: &'a mut Vec<ABIArg>,
     start: usize,
-    non_formal_flag: bool
+    non_formal_flag: bool,
 }
 
 impl<'a> ArgsAccumulator<'a> {
