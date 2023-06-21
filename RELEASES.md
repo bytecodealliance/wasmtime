@@ -8,6 +8,22 @@ Unreleased.
 
 ### Changed
 
+### Fixed
+
+* Only export the top-level preview2 module from wasmtime-wasi when the
+  `preview2` feature is enabled.
+  [#6615](https://github.com/bytecodealliance/wasmtime/pull/6615)
+
+--------------------------------------------------------------------------------
+
+## 10.0.1
+
+### Fixed
+
+* Only export the top-level preview2 module from wasmtime-wasi when the
+  `preview2` feature is enabled.
+  [#6615](https://github.com/bytecodealliance/wasmtime/pull/6615)
+
 --------------------------------------------------------------------------------
 
 ## 10.0.0
