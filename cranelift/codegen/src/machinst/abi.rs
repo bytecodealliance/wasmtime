@@ -331,7 +331,7 @@ impl<'a> ArgsAccumulator<'a> {
         ArgsAccumulator {
             sig_set_abi_args,
             start,
-            non_formal_flag: false
+            non_formal_flag: false,
         }
     }
 
