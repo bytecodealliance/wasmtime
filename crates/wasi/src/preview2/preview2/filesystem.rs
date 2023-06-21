@@ -196,7 +196,7 @@ impl<T: WasiView> filesystem::Host for T {
         }
 
         let mut buffer = vec![0; len.try_into().unwrap_or(usize::MAX)];
-        let (bytes_read, end) = crate::preview2::filesystem::read_result(
+        let (bytes_read, state) = crate::preview2::filesystem::read_result(
             f.file
                 .read_vectored_at(&mut [IoSliceMut::new(&mut buffer)], offset),
         )?;
@@ -207,7 +207,7 @@ impl<T: WasiView> filesystem::Host for T {
                 .expect("bytes read into memory as u64 fits in usize"),
         );
 
-        Ok((buffer, end))
+        Ok((buffer, state.is_closed()))
     }
 
     fn write(

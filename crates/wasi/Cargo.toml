@@ -22,7 +22,7 @@ wiggle = { workspace = true, optional = true }
 libc = { workspace = true }
 once_cell = { workspace = true }
 
-tokio = { workspace = true, optional = true, features = ["time"] }
+tokio = { workspace = true, optional = true, features = ["time", "sync", "io-std", "rt"] }
 thiserror = { workspace = true, optional = true }
 tracing = { workspace = true, optional = true }
 cap-std = { workspace = true, optional = true }

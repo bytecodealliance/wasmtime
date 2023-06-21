@@ -39,7 +39,7 @@ pub use self::ctx::{WasiCtx, WasiCtxBuilder, WasiView};
 pub use self::error::I32Exit;
 pub use self::filesystem::{DirPerms, FilePerms};
 pub use self::poll::{HostPollable, TablePollableExt};
-pub use self::stream::{HostInputStream, HostOutputStream, TableStreamExt};
+pub use self::stream::{HostInputStream, HostOutputStream, StreamState, TableStreamExt};
 pub use self::table::{Table, TableError};
 pub use cap_fs_ext::SystemTimeSpec;
 pub use cap_rand::RngCore;

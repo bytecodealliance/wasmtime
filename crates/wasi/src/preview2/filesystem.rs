@@ -1,4 +1,6 @@
-use crate::preview2::{HostInputStream, HostOutputStream, HostPollable, Table, TableError};
+use crate::preview2::{
+    HostInputStream, HostOutputStream, HostPollable, StreamState, Table, TableError,
+};
 use std::sync::Arc;
 
 bitflags::bitflags! {
@@ -96,7 +98,7 @@ impl FileInputStream {
 
 #[async_trait::async_trait]
 impl HostInputStream for FileInputStream {
-    async fn read(&mut self, buf: &mut [u8]) -> anyhow::Result<(u64, bool)> {
+    async fn read(&mut self, buf: &mut [u8]) -> anyhow::Result<(u64, StreamState)> {
         use system_interface::fs::FileIoExt;
         let (n, end) = read_result(self.file.read_at(buf, self.position))?;
         self.position = self.position.wrapping_add(n);
@@ -105,7 +107,7 @@ impl HostInputStream for FileInputStream {
     async fn read_vectored<'a>(
         &mut self,
         bufs: &mut [std::io::IoSliceMut<'a>],
-    ) -> anyhow::Result<(u64, bool)> {
+    ) -> anyhow::Result<(u64, StreamState)> {
         use system_interface::fs::FileIoExt;
         let (n, end) = read_result(self.file.read_vectored_at(bufs, self.position))?;
         self.position = self.position.wrapping_add(n);
@@ -120,11 +122,13 @@ impl HostInputStream for FileInputStream {
     }
 }
 
-pub(crate) fn read_result(r: Result<usize, std::io::Error>) -> Result<(u64, bool), std::io::Error> {
+pub(crate) fn read_result(
+    r: Result<usize, std::io::Error>,
+) -> Result<(u64, StreamState), std::io::Error> {
     match r {
-        Ok(0) => Ok((0, true)),
-        Ok(n) => Ok((n as u64, false)),
-        Err(e) if e.kind() == std::io::ErrorKind::Interrupted => Ok((0, false)),
+        Ok(0) => Ok((0, StreamState::Closed)),
+        Ok(n) => Ok((n as u64, StreamState::Open)),
+        Err(e) if e.kind() == std::io::ErrorKind::Interrupted => Ok((0, StreamState::Open)),
         Err(e) => Err(e),
     }
 }

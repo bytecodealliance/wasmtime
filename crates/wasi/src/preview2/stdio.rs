@@ -2,7 +2,7 @@ use anyhow::Error;
 use std::convert::TryInto;
 use std::io::{self, Read, Write};
 
-use crate::preview2::{HostInputStream, HostOutputStream, HostPollable};
+use crate::preview2::{HostInputStream, HostOutputStream, HostPollable, StreamState};
 
 pub struct Stdin(std::io::Stdin);
 
@@ -12,22 +12,22 @@ pub fn stdin() -> Stdin {
 
 #[async_trait::async_trait]
 impl HostInputStream for Stdin {
-    async fn read(&mut self, buf: &mut [u8]) -> Result<(u64, bool), Error> {
+    async fn read(&mut self, buf: &mut [u8]) -> Result<(u64, StreamState), Error> {
         match Read::read(&mut self.0, buf) {
-            Ok(0) => Ok((0, true)),
-            Ok(n) => Ok((n as u64, false)),
-            Err(err) if err.kind() == io::ErrorKind::Interrupted => Ok((0, false)),
+            Ok(0) => Ok((0, StreamState::Closed)),
+            Ok(n) => Ok((n as u64, StreamState::Open)),
+            Err(err) if err.kind() == io::ErrorKind::Interrupted => Ok((0, StreamState::Open)),
             Err(err) => Err(err.into()),
         }
     }
     async fn read_vectored<'a>(
         &mut self,
         bufs: &mut [io::IoSliceMut<'a>],
-    ) -> Result<(u64, bool), Error> {
+    ) -> Result<(u64, StreamState), Error> {
         match Read::read_vectored(&mut self.0, bufs) {
-            Ok(0) => Ok((0, true)),
-            Ok(n) => Ok((n as u64, false)),
-            Err(err) if err.kind() == io::ErrorKind::Interrupted => Ok((0, false)),
+            Ok(0) => Ok((0, StreamState::Closed)),
+            Ok(n) => Ok((n as u64, StreamState::Open)),
+            Err(err) if err.kind() == io::ErrorKind::Interrupted => Ok((0, StreamState::Open)),
             Err(err) => Err(err.into()),
         }
     }
@@ -37,9 +37,16 @@ impl HostInputStream for Stdin {
     }
     */
 
-    async fn skip(&mut self, nelem: u64) -> Result<(u64, bool), Error> {
+    async fn skip(&mut self, nelem: u64) -> Result<(u64, StreamState), Error> {
         let num = io::copy(&mut io::Read::take(&mut self.0, nelem), &mut io::sink())?;
-        Ok((num, num < nelem))
+        Ok((
+            num,
+            if num < nelem {
+                StreamState::Closed
+            } else {
+                StreamState::Open
+            },
+        ))
     }
 
     fn pollable(&self) -> HostPollable {

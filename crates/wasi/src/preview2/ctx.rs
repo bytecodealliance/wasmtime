@@ -37,10 +37,11 @@ impl WasiCtxBuilder {
         let mut result = Self::default()
             .set_clocks(clocks::host::clocks_ctx())
             .set_insecure_random(insecure_random)
-            .set_insecure_random_seed(insecure_random_seed)
-            .set_stdin(pipe::ReadPipe::new(std::io::empty()))
-            .set_stdout(pipe::WritePipe::new(std::io::sink()))
-            .set_stderr(pipe::WritePipe::new(std::io::sink()));
+            .set_insecure_random_seed(insecure_random_seed);
+        // TODO: fix these
+        // .set_stdin(pipe::ReadPipe::new(std::io::empty()))
+        // .set_stdout(pipe::WritePipe::new(std::io::sink()))
+        // .set_stderr(pipe::WritePipe::new(std::io::sink()));
         result.random = Some(random::thread_rng());
         result
     }

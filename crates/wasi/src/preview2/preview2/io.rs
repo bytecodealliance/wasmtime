@@ -54,11 +54,11 @@ impl<T: WasiView> streams::Host for T {
         let buffer_len = std::cmp::min(len, 0x400000) as _;
         let mut buffer = vec![0; buffer_len];
 
-        let (bytes_read, end) = s.read(&mut buffer).await?;
+        let (bytes_read, state) = s.read(&mut buffer).await?;
 
         buffer.truncate(bytes_read as usize);
 
-        Ok((buffer, end))
+        Ok((buffer, state.is_closed()))
     }
 
     async fn blocking_read(
@@ -92,7 +92,7 @@ impl<T: WasiView> streams::Host for T {
 
         let (bytes_skipped, end) = s.skip(len).await?;
 
-        Ok((bytes_skipped, end))
+        Ok((bytes_skipped, end.is_closed()))
     }
 
     async fn blocking_skip(

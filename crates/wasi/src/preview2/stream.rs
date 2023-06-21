@@ -12,6 +12,12 @@ pub enum StreamState {
     Closed,
 }
 
+impl StreamState {
+    pub fn is_closed(&self) -> bool {
+        *self == Self::Closed
+    }
+}
+
 /// An input bytestream.
 ///
 /// This is "pseudo" because the real streams will be a type in wit, and
@@ -44,19 +50,19 @@ pub trait HostInputStream: Send + Sync {
     /// Read bytes from a stream and discard them.
     async fn skip(&mut self, nelem: u64) -> Result<(u64, StreamState), Error> {
         let mut nread = 0;
-        let mut saw_end = false;
+        let mut state = StreamState::Open;
 
         // TODO: Optimize by reading more than one byte at a time.
         for _ in 0..nelem {
-            let (num, end) = self.read(&mut [0]).await?;
+            let (num, read_state) = self.read(&mut [0]).await?;
             nread += num;
-            if end {
-                saw_end = true;
+            if read_state.is_closed() {
+                state = read_state;
                 break;
             }
         }
 
-        Ok((nread, saw_end))
+        Ok((nread, state))
     }
 
     /// Get the Pollable implementation for read readiness.
@@ -93,23 +99,23 @@ pub trait HostOutputStream: Send + Sync {
         &mut self,
         src: &mut dyn HostInputStream,
         nelem: u64,
-    ) -> Result<(u64, bool), Error> {
+    ) -> Result<(u64, StreamState), Error> {
         let mut nspliced = 0;
-        let mut saw_end = false;
+        let mut state = StreamState::Open;
 
         // TODO: Optimize by splicing more than one byte at a time.
         for _ in 0..nelem {
             let mut buf = [0u8];
-            let (num, end) = src.read(&mut buf).await?;
+            let (num, read_state) = src.read(&mut buf).await?;
             self.write(&buf).await?;
             nspliced += num;
-            if end {
-                saw_end = true;
+            if read_state.is_closed() {
+                state = read_state;
                 break;
             }
         }
 
-        Ok((nspliced, saw_end))
+        Ok((nspliced, state))
     }
 
     /// Repeatedly write a byte to a stream.
