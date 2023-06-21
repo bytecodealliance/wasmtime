@@ -322,6 +322,7 @@ pub trait IsaFlags: Clone {
 pub struct ArgsAccumulator<'a> {
     sig_set_abi_args: &'a mut Vec<ABIArg>,
     start: usize,
+    non_formal_flag: bool
 }
 
 impl<'a> ArgsAccumulator<'a> {
@@ -330,11 +331,19 @@ impl<'a> ArgsAccumulator<'a> {
         ArgsAccumulator {
             sig_set_abi_args,
             start,
+            non_formal_flag: false
         }
     }
 
     #[inline]
     pub fn push(&mut self, arg: ABIArg) {
+        debug_assert!(!self.non_formal_flag);
+        self.sig_set_abi_args.push(arg)
+    }
+
+    #[inline]
+    pub fn push_non_formal(&mut self, arg: ABIArg) {
+        self.non_formal_flag = true;
         self.sig_set_abi_args.push(arg)
     }
 
