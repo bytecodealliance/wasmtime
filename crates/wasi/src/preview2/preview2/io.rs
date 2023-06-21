@@ -210,13 +210,11 @@ impl<T: WasiView> streams::Host for T {
 pub mod sync {
     use crate::preview2::{
         poll::sync::block_on,
-        stream::{HostInputStream, HostOutputStream, TableStreamExt},
-        wasi::io::streams::{Host as AsyncHost, StreamError as AsyncStreamError},
-        wasi::sync_io::io::streams::{self, InputStream, OutputStream, StreamError},
+        wasi::io::streams::Host as AsyncHost,
+        wasi::sync_io::io::streams::{self, InputStream, OutputStream},
         wasi::sync_io::poll::poll::Pollable,
-        TableError, TablePollableExt, WasiView,
+        WasiView,
     };
-    use anyhow::anyhow;
 
     impl<T: WasiView> streams::Host for T {
         fn drop_input_stream(&mut self, stream: InputStream) -> anyhow::Result<()> {

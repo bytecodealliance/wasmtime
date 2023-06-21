@@ -17,7 +17,7 @@ pub mod sync_io {
     pub use self::_internal::wasi::{io, poll};
 
     impl From<super::io::streams::StreamError> for io::streams::StreamError {
-        fn from(other: super::io::streams::StreamError) -> Self {
+        fn from(_other: super::io::streams::StreamError) -> Self {
             // There are no cases for this record.
             Self {}
         }

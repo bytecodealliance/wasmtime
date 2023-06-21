@@ -103,3 +103,41 @@ pub fn stderr() -> Stderr {
     Stderr(std::io::stderr())
 }
 wasi_output_stream_impl!(Stderr, Stderr);
+
+pub struct EmptyStream;
+
+#[async_trait::async_trait]
+impl HostInputStream for EmptyStream {
+    async fn read(&mut self, _buf: &mut [u8]) -> Result<(u64, StreamState), Error> {
+        Ok((0, StreamState::Open))
+    }
+
+    fn pollable(&self) -> HostPollable {
+        struct Never;
+
+        impl std::future::Future for Never {
+            type Output = anyhow::Result<()>;
+            fn poll(
+                self: std::pin::Pin<&mut Self>,
+                _ctx: &mut std::task::Context<'_>,
+            ) -> std::task::Poll<Self::Output> {
+                std::task::Poll::Pending
+            }
+        }
+
+        // This stream is never ready for reading.
+        HostPollable::new(|| Box::pin(Never))
+    }
+}
+
+#[async_trait::async_trait]
+impl HostOutputStream for EmptyStream {
+    async fn write(&mut self, buf: &[u8]) -> Result<u64, Error> {
+        Ok(buf.len() as u64)
+    }
+
+    fn pollable(&self) -> HostPollable {
+        // This stream is always ready for writing.
+        HostPollable::new(|| Box::pin(async { Ok(()) }))
+    }
+}
