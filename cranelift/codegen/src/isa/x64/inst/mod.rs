@@ -1,5 +1,7 @@
 //! This module defines x86_64-specific machine instruction types.
 
+pub use emit_state::EmitState;
+
 use crate::binemit::{Addend, CodeOffset, Reloc, StackMap};
 use crate::ir::{types, ExternalName, LibCall, Opcode, RelSourceLoc, TrapCode, Type};
 use crate::isa::x64::abi::X64ABIMachineSpec;
@@ -10,7 +12,6 @@ use crate::{machinst::*, trace};
 use crate::{settings, CodegenError, CodegenResult};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
-use cranelift_control::ControlPlane;
 use regalloc2::{Allocation, PRegSet, VReg};
 use smallvec::{smallvec, SmallVec};
 use std::fmt::{self, Write};
@@ -18,6 +19,7 @@ use std::string::{String, ToString};
 
 pub mod args;
 mod emit;
+mod emit_state;
 #[cfg(test)]
 mod emit_tests;
 pub mod regs;
@@ -2505,23 +2507,6 @@ impl MachInst for Inst {
     const TRAP_OPCODE: &'static [u8] = &[0x0f, 0x0b];
 }
 
-/// State carried between emissions of a sequence of instructions.
-#[derive(Default, Clone, Debug)]
-pub struct EmitState {
-    /// Addend to convert nominal-SP offsets to real-SP offsets at the current
-    /// program point.
-    pub(crate) virtual_sp_offset: i64,
-    /// Offset of FP from nominal-SP.
-    pub(crate) nominal_sp_to_fp: i64,
-    /// Safepoint stack map for upcoming instruction, as provided to `pre_safepoint()`.
-    stack_map: Option<StackMap>,
-    /// Current source location.
-    cur_srcloc: RelSourceLoc,
-    /// Only used during fuzz-testing. Otherwise, it is a zero-sized struct and
-    /// optimized away at compiletime. See [cranelift_control].
-    ctrl_plane: ControlPlane,
-}
-
 /// Constant state used during emissions of a sequence of instructions.
 pub struct EmitInfo {
     pub(super) flags: settings::Flags,
@@ -2552,44 +2537,6 @@ impl MachInstEmit for Inst {
 
     fn pretty_print_inst(&self, allocs: &[Allocation], _: &mut Self::State) -> String {
         PrettyPrint::pretty_print(self, 0, &mut AllocationConsumer::new(allocs))
-    }
-}
-
-impl MachInstEmitState<Inst> for EmitState {
-    fn new(abi: &Callee<X64ABIMachineSpec>, ctrl_plane: ControlPlane) -> Self {
-        EmitState {
-            virtual_sp_offset: 0,
-            nominal_sp_to_fp: abi.frame_size() as i64,
-            stack_map: None,
-            cur_srcloc: Default::default(),
-            ctrl_plane,
-        }
-    }
-
-    fn pre_safepoint(&mut self, stack_map: StackMap) {
-        self.stack_map = Some(stack_map);
-    }
-
-    fn pre_sourceloc(&mut self, srcloc: RelSourceLoc) {
-        self.cur_srcloc = srcloc;
-    }
-
-    fn ctrl_plane_mut(&mut self) -> &mut ControlPlane {
-        &mut self.ctrl_plane
-    }
-
-    fn take_ctrl_plane(self) -> ControlPlane {
-        self.ctrl_plane
-    }
-}
-
-impl EmitState {
-    fn take_stack_map(&mut self) -> Option<StackMap> {
-        self.stack_map.take()
-    }
-
-    fn clear_post_insn(&mut self) {
-        self.stack_map = None;
     }
 }
 
