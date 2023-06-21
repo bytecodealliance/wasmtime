@@ -1225,6 +1225,7 @@
 
 
 ;; Builds a vector mask corresponding to the IntCC operation.
+;; TODO: We are still missing some rules here for immediates. See #6623
 (decl gen_icmp_mask (Type IntCC Value Value) VReg)
 
 ;; IntCC.Equal
@@ -1272,6 +1273,8 @@
 (rule 2 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.UnsignedLessThan) (splat x) y)
   (rv_vmsgtu_vx y x (unmasked) ty))
 
+(rule 4 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.UnsignedLessThan) (replicated_imm5 x) y)
+  (rv_vmsgtu_vi y x (unmasked) ty))
 
 ;; IntCC.SignedLessThan
 
@@ -1283,6 +1286,9 @@
 
 (rule 2 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.SignedLessThan) (splat x) y)
   (rv_vmsgt_vx y x (unmasked) ty))
+
+(rule 4 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.SignedLessThan) (replicated_imm5 x) y)
+  (rv_vmsgt_vi y x (unmasked) ty))
 
 ;; IntCC.UnsignedLessThanOrEqual
 
@@ -1342,6 +1348,9 @@
 (rule 2 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.UnsignedGreaterThanOrEqual) (splat x) y)
   (rv_vmsleu_vx y x (unmasked) ty))
 
+(rule 4 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.UnsignedGreaterThanOrEqual) (replicated_imm5 x) y)
+  (rv_vmsleu_vi y x (unmasked) ty))
+
 ;; IntCC.SignedGreaterThanOrEqual
 
 (rule 0 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.SignedGreaterThanOrEqual) x y)
@@ -1349,3 +1358,6 @@
 
 (rule 2 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.SignedGreaterThanOrEqual) (splat x) y)
   (rv_vmsle_vx y x (unmasked) ty))
+
+(rule 4 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.SignedGreaterThanOrEqual) (replicated_imm5 x) y)
+  (rv_vmsle_vi y x (unmasked) ty))
