@@ -241,12 +241,8 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
                 "simd_f64x2_cmp",
                 "simd_f64x2_pmin_pmax",
                 "simd_f64x2_rounding",
-                "simd_i16x8_cmp",
-                "simd_i32x4_cmp",
                 "simd_i32x4_trunc_sat_f32x4",
                 "simd_i32x4_trunc_sat_f64x2",
-                "simd_i64x2_cmp",
-                "simd_i8x16_cmp",
                 "simd_load",
                 "simd_splat",
             ]

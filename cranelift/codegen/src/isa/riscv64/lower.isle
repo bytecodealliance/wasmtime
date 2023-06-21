@@ -1454,9 +1454,12 @@
     result))
 
 ;;;;;  Rules for `icmp`;;;;;;;;;
-(rule
-  (lower (icmp cc x @ (value_type ty) y))
+(rule 0 (lower (icmp cc x @ (value_type (ty_int ty)) y))
   (lower_icmp cc x y ty))
+
+(rule 1 (lower (icmp cc x @ (value_type (ty_vec_fits_in_register ty)) y))
+  (gen_expand_mask ty (gen_icmp_mask ty cc x y)))
+
 
 ;;;;;  Rules for `fcmp`;;;;;;;;;
 (rule
