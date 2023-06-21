@@ -842,4 +842,9 @@ impl Assembler {
     pub fn jmp(&mut self, target: MachLabel) {
         self.emit(Inst::JmpKnown { dst: target });
     }
+
+    /// Emit a trap instruction.
+    pub fn trap(&mut self, code: TrapCode) {
+        self.emit(Inst::Ud2 { trap_code: code })
+    }
 }

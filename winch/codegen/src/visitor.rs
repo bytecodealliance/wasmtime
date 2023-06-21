@@ -103,6 +103,8 @@ macro_rules! def_unsupported {
     (emit Loop $($rest:tt)*) => {};
     (emit Br $($rest:tt)*) => {};
     (emit BrIf $($rest:tt)*) => {};
+    (emit Return $($rest:tt)*) => {};
+    (emit Unreachable $($rest:tt)*) => {};
 
     (emit $unsupported:tt $($rest:tt)*) => {$($rest)*};
 }
@@ -570,6 +572,30 @@ where
             OperandSize::S32,
         );
         self.context.free_gpr(top);
+    }
+
+    fn visit_return(&mut self) {
+        // Grab the outermost frame, which is the function's body frame. We
+        // don't rely on `Self::control_at` since this frame is implicit and we
+        // know that it should exist at index 0.
+        let outermost = &mut self.control_frames[0];
+        self.context.pop_abi_results(outermost.result(), self.masm);
+        // The outermost should always be a block and therefore,
+        // should always have an exit label.
+        self.masm.jmp(*outermost.exit_label().unwrap());
+        // Set the frame as branch target so that
+        // we can bind the function's exit label.
+        outermost.set_as_target();
+        self.context.reachable = false;
+    }
+
+    fn visit_unreachable(&mut self) {
+        self.masm.unreachable();
+        self.context.reachable = false;
+        // Set the implicit outermost frame as target to perform the necessary
+        // stack clean up.
+        let outermost = &mut self.control_frames[0];
+        outermost.set_as_target();
     }
 
     wasmparser::for_each_operator!(def_unsupported);

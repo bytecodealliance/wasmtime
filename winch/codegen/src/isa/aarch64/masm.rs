@@ -266,6 +266,10 @@ impl Masm for MacroAssembler {
     fn jmp(&mut self, _target: MachLabel) {
         todo!()
     }
+
+    fn unreachable(&mut self) {
+        todo!()
+    }
 }
 
 impl MacroAssembler {

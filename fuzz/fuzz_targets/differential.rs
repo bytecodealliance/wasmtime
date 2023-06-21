@@ -362,7 +362,9 @@ fn winch_supports_module(module: &[u8]) -> bool {
                         | Block { .. }
                         | Loop { .. }
                         | Br { .. }
-                        | BrIf { .. } => {}
+                        | BrIf { .. }
+                        | Unreachable { .. }
+                        | Return { .. } => {}
                         _ => {
                             supported = false;
                             break 'main;

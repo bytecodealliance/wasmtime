@@ -346,4 +346,7 @@ pub(crate) trait MacroAssembler {
 
     /// Emits and unconditional jump to the given label.
     fn jmp(&mut self, target: MachLabel);
+
+    /// Emit an unreachable code trap.
+    fn unreachable(&mut self);
 }
