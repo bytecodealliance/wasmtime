@@ -351,7 +351,7 @@ impl ControlStackFrame {
     /// Returns the exit label of the current control stack frame. Note that
     /// this is similar to [`ControlStackFrame::label`], with the only difference that it
     /// returns `None` for `Loop` since its label doesn't represent an exit.
-    fn exit_label(&self) -> Option<&MachLabel> {
+    pub fn exit_label(&self) -> Option<&MachLabel> {
         use ControlStackFrame::*;
 
         match self {

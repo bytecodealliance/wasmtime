@@ -14,7 +14,8 @@ use crate::{
 };
 use crate::{isa::reg::Reg, masm::CalleeKind};
 use cranelift_codegen::{
-    isa::x64::settings as x64_settings, settings, Final, MachBufferFinalized, MachLabel,
+    ir::TrapCode, isa::x64::settings as x64_settings, settings, Final, MachBufferFinalized,
+    MachLabel,
 };
 
 /// x64 MacroAssembler.
@@ -482,6 +483,10 @@ impl Masm for MacroAssembler {
             context.stack.push(Val::reg(dst));
             context.free_gpr(tmp);
         }
+    }
+
+    fn unreachable(&mut self) {
+        self.asm.trap(TrapCode::UnreachableCodeReached)
     }
 }
 
