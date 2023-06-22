@@ -636,6 +636,10 @@ impl<'a> FuncEnvironment for FuncEnv<'a> {
         self.config.target.contains("x86_64")
     }
 
+    fn use_x86_pmaddubsw_for_dot(&self) -> bool {
+        self.config.target.contains("x86_64")
+    }
+
     fn translate_call_ref(
         &mut self,
         _builder: &mut cranelift_frontend::FunctionBuilder<'_>,

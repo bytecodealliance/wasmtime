@@ -219,6 +219,10 @@ impl TargetIsa for AArch64Backend {
     fn has_x86_pmulhrsw_lowering(&self) -> bool {
         false
     }
+
+    fn has_x86_pmaddubsw_lowering(&self) -> bool {
+        false
+    }
 }
 
 impl fmt::Display for AArch64Backend {

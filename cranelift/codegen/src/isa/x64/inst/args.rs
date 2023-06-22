@@ -1248,7 +1248,6 @@ impl SseOpcode {
             | SseOpcode::Pcmpgtd
             | SseOpcode::Pextrw
             | SseOpcode::Pinsrw
-            | SseOpcode::Pmaddubsw
             | SseOpcode::Pmaddwd
             | SseOpcode::Pmaxsw
             | SseOpcode::Pmaxub
@@ -1303,6 +1302,7 @@ impl SseOpcode {
             | SseOpcode::Pshufb
             | SseOpcode::Phaddw
             | SseOpcode::Phaddd
+            | SseOpcode::Pmaddubsw
             | SseOpcode::Movddup => SSSE3,
 
             SseOpcode::Blendvpd
