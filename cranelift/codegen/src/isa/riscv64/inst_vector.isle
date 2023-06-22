@@ -134,6 +134,10 @@
   (VmsltVV)
   (VmsleuVV)
   (VmsleVV)
+  (VmfeqVV)
+  (VmfneVV)
+  (VmfltVV)
+  (VmfleVV)
 
 
   ;; Vector-Scalar Opcodes
@@ -184,6 +188,12 @@
   (VmsleVX)
   (VmsgtuVX)
   (VmsgtVX)
+  (VmfeqVF)
+  (VmfneVF)
+  (VmfltVF)
+  (VmfleVF)
+  (VmfgtVF)
+  (VmfgeVF)
 ))
 
 
@@ -1110,6 +1120,66 @@
 ;; This is an alias for `vmsle.vv` with the operands inverted.
 (decl rv_vmsge_vv (VReg VReg VecOpMasking VState) VReg)
 (rule (rv_vmsge_vv vs2 vs1 mask vstate) (rv_vmsle_vv vs1 vs2 mask vstate))
+
+;; Helper for emitting the `vmfeq.vv` (Vector Mask Set If Float Equal) instruction.
+(decl rv_vmfeq_vv (VReg VReg VecOpMasking VState) VReg)
+(rule (rv_vmfeq_vv vs2 vs1 mask vstate)
+  (vec_alu_rrr (VecAluOpRRR.VmfeqVV) vs2 vs1 mask vstate))
+
+;; Helper for emitting the `vmfeq.vf` (Vector Mask Set If Float Equal) instruction.
+(decl rv_vmfeq_vf (VReg FReg VecOpMasking VState) VReg)
+(rule (rv_vmfeq_vf vs2 vs1 mask vstate)
+  (vec_alu_rrr (VecAluOpRRR.VmfeqVF) vs2 vs1 mask vstate))
+
+;; Helper for emitting the `vmfne.vv` (Vector Mask Set If Float Not Equal) instruction.
+(decl rv_vmfne_vv (VReg VReg VecOpMasking VState) VReg)
+(rule (rv_vmfne_vv vs2 vs1 mask vstate)
+  (vec_alu_rrr (VecAluOpRRR.VmfneVV) vs2 vs1 mask vstate))
+
+;; Helper for emitting the `vmfne.vf` (Vector Mask Set If Float Not Equal) instruction.
+(decl rv_vmfne_vf (VReg FReg VecOpMasking VState) VReg)
+(rule (rv_vmfne_vf vs2 vs1 mask vstate)
+  (vec_alu_rrr (VecAluOpRRR.VmfneVF) vs2 vs1 mask vstate))
+
+;; Helper for emitting the `vmflt.vv` (Vector Mask Set If Float Less Than) instruction.
+(decl rv_vmflt_vv (VReg VReg VecOpMasking VState) VReg)
+(rule (rv_vmflt_vv vs2 vs1 mask vstate)
+  (vec_alu_rrr (VecAluOpRRR.VmfltVV) vs2 vs1 mask vstate))
+
+;; Helper for emitting the `vmflt.vf` (Vector Mask Set If Float Less Than) instruction.
+(decl rv_vmflt_vf (VReg FReg VecOpMasking VState) VReg)
+(rule (rv_vmflt_vf vs2 vs1 mask vstate)
+  (vec_alu_rrr (VecAluOpRRR.VmfltVF) vs2 vs1 mask vstate))
+
+;; Helper for emitting the `vmfle.vv` (Vector Mask Set If Float Less Than Or Equal) instruction.
+(decl rv_vmfle_vv (VReg VReg VecOpMasking VState) VReg)
+(rule (rv_vmfle_vv vs2 vs1 mask vstate)
+  (vec_alu_rrr (VecAluOpRRR.VmfleVV) vs2 vs1 mask vstate))
+
+;; Helper for emitting the `vmfle.vf` (Vector Mask Set If Float Less Than Or Equal) instruction.
+(decl rv_vmfle_vf (VReg FReg VecOpMasking VState) VReg)
+(rule (rv_vmfle_vf vs2 vs1 mask vstate)
+  (vec_alu_rrr (VecAluOpRRR.VmfleVF) vs2 vs1 mask vstate))
+
+;; Helper for emitting the `vmfgt.vv` (Vector Mask Set If Float Greater Than) instruction.
+;; This is an alias for `vmflt.vv` with the operands inverted.
+(decl rv_vmfgt_vv (VReg VReg VecOpMasking VState) VReg)
+(rule (rv_vmfgt_vv vs2 vs1 mask vstate) (rv_vmflt_vv vs1 vs2 mask vstate))
+
+;; Helper for emitting the `vmfgt.vf` (Vector Mask Set If Float Greater Than) instruction.
+(decl rv_vmfgt_vf (VReg FReg VecOpMasking VState) VReg)
+(rule (rv_vmfgt_vf vs2 vs1 mask vstate)
+  (vec_alu_rrr (VecAluOpRRR.VmfgtVF) vs2 vs1 mask vstate))
+
+;; Helper for emitting the `vmfge.vv` (Vector Mask Set If Float Greater Than Or Equal) instruction.
+;; This is an alias for `vmfle.vv` with the operands inverted.
+(decl rv_vmfge_vv (VReg VReg VecOpMasking VState) VReg)
+(rule (rv_vmfge_vv vs2 vs1 mask vstate) (rv_vmfle_vv vs1 vs2 mask vstate))
+
+;; Helper for emitting the `vmfge.vf` (Vector Mask Set If Float Greater Than Or Equal) instruction.
+(decl rv_vmfge_vf (VReg FReg VecOpMasking VState) VReg)
+(rule (rv_vmfge_vf vs2 vs1 mask vstate)
+  (vec_alu_rrr (VecAluOpRRR.VmfgeVF) vs2 vs1 mask vstate))
 
 ;; Helper for emitting the `vzext.vf2` instruction.
 ;; Zero-extend SEW/2 source to SEW destination
