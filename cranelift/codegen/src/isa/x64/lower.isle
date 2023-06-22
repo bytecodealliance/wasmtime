@@ -2413,6 +2413,7 @@
 ;; Rules for `x86_pmaddubsw` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type $I16X8 (x86_pmaddubsw x y)))
+      (if-let $true (use_ssse3))
       (x64_pmaddubsw y x))
 
 ;; Rules for `fadd` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -3575,6 +3576,7 @@
         (has_type $I16X8 (iadd_pairwise
                            (swiden_low val @ (value_type $I8X16))
                            (swiden_high val))))
+      (if-let $true (use_ssse3))
       (let ((mul_const Xmm (x64_xmm_load_const $I8X16
               (emit_u128_le_const 0x01010101010101010101010101010101))))
         (x64_pmaddubsw mul_const val)))
@@ -3592,6 +3594,7 @@
         (has_type $I16X8 (iadd_pairwise
                            (uwiden_low val @ (value_type $I8X16))
                            (uwiden_high val))))
+      (if-let $true (use_ssse3))
       (let ((mul_const XmmMem (emit_u128_le_const 0x01010101010101010101010101010101)))
         (x64_pmaddubsw val mul_const)))
 

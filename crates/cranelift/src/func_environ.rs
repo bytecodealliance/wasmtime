@@ -2211,4 +2211,8 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     fn use_x86_pmulhrsw_for_relaxed_q15mul(&self) -> bool {
         self.isa.has_x86_pmulhrsw_lowering()
     }
+
+    fn use_x86_pmaddubsw_for_dot(&self) -> bool {
+        self.isa.has_x86_pmaddubsw_lowering()
+    }
 }

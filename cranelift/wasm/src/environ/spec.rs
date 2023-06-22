@@ -581,6 +581,12 @@ pub trait FuncEnvironment: TargetEnvironment {
     fn use_x86_pmulhrsw_for_relaxed_q15mul(&self) -> bool {
         false
     }
+
+    /// Returns whether the CLIF `x86_pmaddubsw` instruction should be used for
+    /// the relaxed-simd dot-product instructions instruction.
+    fn use_x86_pmaddubsw_for_dot(&self) -> bool {
+        false
+    }
 }
 
 /// An object satisfying the `ModuleEnvironment` trait can be passed as argument to the
