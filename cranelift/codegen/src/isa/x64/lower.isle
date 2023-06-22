@@ -784,13 +784,13 @@
 ;; feature sets. To remedy this, a small dance is done with an unsigned right
 ;; shift plus some extra ops.
 (rule 3 (lower (has_type ty @ $I64X2 (sshr src (iconst n))))
-        (if-let $true (use_avx512vl_simd))
-        (if-let $true (use_avx512f_simd))
+        (if-let $true (use_avx512vl))
+        (if-let $true (use_avx512f))
         (x64_vpsraq_imm src (shift_amount_masked ty n)))
 
 (rule 2 (lower (has_type ty @ $I64X2 (sshr src amt)))
-        (if-let $true (use_avx512vl_simd))
-        (if-let $true (use_avx512f_simd))
+        (if-let $true (use_avx512vl))
+        (if-let $true (use_avx512f))
         (let ((masked Gpr (x64_and $I64 amt (RegMemImm.Imm (shift_mask ty)))))
           (x64_vpsraq src (x64_movd_to_xmm masked))))
 
@@ -1018,8 +1018,8 @@
 ;; With AVX-512 we can implement `i64x2` multiplication with a single
 ;; instruction.
 (rule 3 (lower (has_type (multi_lane 64 2) (imul x y)))
-      (if-let $true (use_avx512vl_simd))
-      (if-let $true (use_avx512dq_simd))
+      (if-let $true (use_avx512vl))
+      (if-let $true (use_avx512dq))
       (x64_vpmullq x y))
 
 ;; Otherwise, for i64x2 multiplication we describe a lane A as being composed of
@@ -1200,8 +1200,8 @@
 
 ;; When AVX512 is available, we can use a single `vpabsq` instruction.
 (rule 2 (lower (has_type $I64X2 (iabs x)))
-      (if-let $true (use_avx512vl_simd))
-      (if-let $true (use_avx512f_simd))
+      (if-let $true (use_avx512vl))
+      (if-let $true (use_avx512f))
       (x64_vpabsq x))
 
 ;; Otherwise, we use a separate register, `neg`, to contain the results of `0 -
@@ -2193,8 +2193,8 @@
 
 
 (rule 2 (lower (has_type $I8X16 (popcnt src)))
-      (if-let $true (use_avx512vl_simd))
-      (if-let $true (use_avx512bitalg_simd))
+      (if-let $true (use_avx512vl))
+      (if-let $true (use_avx512bitalg))
       (x64_vpopcntb src))
 
 
@@ -3322,8 +3322,8 @@
 ;; When AVX512VL and AVX512F are available,
 ;; `fcvt_from_uint` can be lowered to a single instruction.
 (rule 2 (lower (has_type $F32X4 (fcvt_from_uint src)))
-      (if-let $true (use_avx512vl_simd))
-      (if-let $true (use_avx512f_simd))
+      (if-let $true (use_avx512vl))
+      (if-let $true (use_avx512f))
       (x64_vcvtudq2ps src))
 
 ;; Converting packed unsigned integers to packed floats
@@ -4230,15 +4230,15 @@
 ;; greater than 31) we must mask off those resulting values in the result of
 ;; `vpermi2b`.
 (rule 2 (lower (shuffle a b (vec_mask_from_immediate (perm_from_mask_with_zeros mask zeros))))
-      (if-let $true (use_avx512vl_simd))
-      (if-let $true (use_avx512vbmi_simd))
+      (if-let $true (use_avx512vl))
+      (if-let $true (use_avx512vbmi))
       (x64_andps (x64_vpermi2b (x64_xmm_load_const $I8X16 mask) a b) zeros))
 
 ;; However, if the shuffle mask contains no out-of-bounds values, we can use
 ;; `vpermi2b` without any masking.
 (rule 1 (lower (shuffle a b (vec_mask_from_immediate mask)))
-      (if-let $true (use_avx512vl_simd))
-      (if-let $true (use_avx512vbmi_simd))
+      (if-let $true (use_avx512vl))
+      (if-let $true (use_avx512vbmi))
       (x64_vpermi2b (x64_xmm_load_const $I8X16 (perm_from_mask mask)) a b))
 
 ;; If `lhs` and `rhs` are different, we must shuffle each separately and then OR
@@ -4379,13 +4379,13 @@
         (if-let $true (use_ssse3))
         (x64_pshufb (bitcast_gpr_to_xmm $I32 src) (xmm_zero $I8X16)))
 (rule 2 (lower (has_type $I8X16 (splat src)))
-        (if-let $true (use_avx2_simd))
+        (if-let $true (use_avx2))
         (x64_vpbroadcastb (bitcast_gpr_to_xmm $I32 src)))
 (rule 3 (lower (has_type $I8X16 (splat (sinkable_load_exact addr))))
         (if-let $true (use_sse41))
         (x64_pshufb (x64_pinsrb (xmm_uninit_value) addr 0) (xmm_zero $I8X16)))
 (rule 4 (lower (has_type $I8X16 (splat (sinkable_load_exact addr))))
-        (if-let $true (use_avx2_simd))
+        (if-let $true (use_avx2))
         (x64_vpbroadcastb addr))
 
 ;; i16x8 splats: use `vpbroadcastw` on AVX2 and otherwise a 16-bit value is
@@ -4396,12 +4396,12 @@
 (rule 0 (lower (has_type $I16X8 (splat src)))
         (x64_pshufd (x64_pshuflw (bitcast_gpr_to_xmm $I32 src) 0) 0))
 (rule 1 (lower (has_type $I16X8 (splat src)))
-        (if-let $true (use_avx2_simd))
+        (if-let $true (use_avx2))
         (x64_vpbroadcastw (bitcast_gpr_to_xmm $I32 src)))
 (rule 2 (lower (has_type $I16X8 (splat (sinkable_load_exact addr))))
         (x64_pshufd (x64_pshuflw (x64_pinsrw (xmm_uninit_value) addr 0) 0) 0))
 (rule 3 (lower (has_type $I16X8 (splat (sinkable_load_exact addr))))
-        (if-let $true (use_avx2_simd))
+        (if-let $true (use_avx2))
         (x64_vpbroadcastw addr))
 
 ;; i32x4.splat - use `vpbroadcastd` on AVX2 and otherwise `pshufd` can be
@@ -4411,7 +4411,7 @@
 (rule 0 (lower (has_type $I32X4 (splat src)))
         (x64_pshufd (bitcast_gpr_to_xmm $I32 src) 0))
 (rule 1 (lower (has_type $I32X4 (splat src)))
-        (if-let $true (use_avx2_simd))
+        (if-let $true (use_avx2))
         (x64_vpbroadcastd (bitcast_gpr_to_xmm $I32 src)))
 
 ;; f32x4.splat - the source is already in an xmm register so `shufps` is all
@@ -4421,7 +4421,7 @@
         (let ((tmp Xmm src))
           (x64_shufps src src 0)))
 (rule 1 (lower (has_type $F32X4 (splat src)))
-        (if-let $true (use_avx2_simd))
+        (if-let $true (use_avx2))
         (x64_vbroadcastss src))
 
 ;; t32x4.splat of a load - use a `movss` to load into an xmm register and then
@@ -4432,12 +4432,12 @@
 ;; that the memory-operand encoding of `vbroadcastss` is usable with AVX, but
 ;; the register-based encoding is only available with AVX2. With the
 ;; `sinkable_load` extractor this should be guaranteed to use the memory-based
-;; encoding hence the `use_avx_simd` test.
+;; encoding hence the `use_avx` test.
 (rule 5 (lower (has_type (multi_lane 32 4) (splat (sinkable_load addr))))
         (let ((tmp Xmm (x64_movss_load addr)))
           (x64_shufps tmp tmp 0)))
 (rule 6 (lower (has_type (multi_lane 32 4) (splat (sinkable_load addr))))
-        (if-let $true (use_avx_simd))
+        (if-let $true (use_avx))
         (x64_vbroadcastss addr))
 
 ;; t64x2.splat - use `pshufd` to broadcast the lower 64-bit lane to the upper

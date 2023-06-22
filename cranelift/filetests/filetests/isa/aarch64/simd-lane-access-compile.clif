@@ -1,5 +1,4 @@
 test compile precise-output
-set enable_simd
 target aarch64
 
 ;; shuffle
