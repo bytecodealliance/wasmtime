@@ -759,11 +759,11 @@ impl ABIMachineSpec for X64ABIMachineSpec {
     }
 
     fn get_virtual_sp_offset_from_state(s: &<Self::I as MachInstEmit>::State) -> i64 {
-        s.virtual_sp_offset
+        s.virtual_sp_offset()
     }
 
     fn get_nominal_sp_to_fp(s: &<Self::I as MachInstEmit>::State) -> i64 {
-        s.nominal_sp_to_fp
+        s.nominal_sp_to_fp()
     }
 
     fn get_regs_clobbered_by_call(call_conv_of_callee: isa::CallConv) -> PRegSet {

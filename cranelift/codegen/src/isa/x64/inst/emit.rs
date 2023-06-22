@@ -737,7 +737,7 @@ pub(crate) fn emit(
 
             // Here the `idiv` is executed, which is different depending on the
             // size
-            sink.bind_label(do_op, &mut state.ctrl_plane);
+            sink.bind_label(do_op, state.ctrl_plane_mut());
             let inst = match size {
                 OperandSize::Size8 => Inst::div8(
                     DivSignedness::Signed,
@@ -759,7 +759,7 @@ pub(crate) fn emit(
             };
             inst.emit(&[], sink, info, state);
 
-            sink.bind_label(done_label, &mut state.ctrl_plane);
+            sink.bind_label(done_label, state.ctrl_plane_mut());
         }
 
         Inst::Imm {
@@ -1408,7 +1408,7 @@ pub(crate) fn emit(
             let inst = Inst::xmm_unary_rm_r(op, consequent, Writable::from_reg(dst));
             inst.emit(&[], sink, info, state);
 
-            sink.bind_label(next, &mut state.ctrl_plane);
+            sink.bind_label(next, state.ctrl_plane_mut());
         }
 
         Inst::Push64 { src } => {
@@ -1512,7 +1512,7 @@ pub(crate) fn emit(
 
             // Emit the main loop!
             let loop_start = sink.get_label();
-            sink.bind_label(loop_start, &mut state.ctrl_plane);
+            sink.bind_label(loop_start, state.ctrl_plane_mut());
 
             // sub  rsp, GUARD_SIZE
             let inst = Inst::alu_rmi_r(
@@ -1581,11 +1581,7 @@ pub(crate) fn emit(
             }
 
             let callee_pop_size = i64::from(call_info.callee_pop_size);
-            state.virtual_sp_offset -= callee_pop_size;
-            trace!(
-                "call adjusts virtual sp offset by {callee_pop_size} -> {}",
-                state.virtual_sp_offset
-            );
+            state.adjust_virtual_sp_offset(-callee_pop_size);
         }
 
         Inst::CallUnknown {
@@ -1632,11 +1628,7 @@ pub(crate) fn emit(
             }
 
             let callee_pop_size = i64::from(call_info.callee_pop_size);
-            state.virtual_sp_offset -= callee_pop_size;
-            trace!(
-                "call adjusts virtual sp offset by {callee_pop_size} -> {}",
-                state.virtual_sp_offset
-            );
+            state.adjust_virtual_sp_offset(-callee_pop_size);
         }
 
         Inst::Args { .. } => {}
@@ -1807,7 +1799,7 @@ pub(crate) fn emit(
             inst.emit(&[], sink, info, state);
 
             // Emit jump table (table of 32-bit offsets).
-            sink.bind_label(start_of_jumptable, &mut state.ctrl_plane);
+            sink.bind_label(start_of_jumptable, state.ctrl_plane_mut());
             let jt_off = sink.cur_offset();
             for &target in targets.iter().chain(std::iter::once(default_target)) {
                 let word_off = sink.cur_offset();
@@ -1839,7 +1831,7 @@ pub(crate) fn emit(
             one_way_jmp(sink, cc1.invert(), else_label);
             one_way_jmp(sink, *cc2, trap_label);
 
-            sink.bind_label(else_label, &mut state.ctrl_plane);
+            sink.bind_label(else_label, state.ctrl_plane_mut());
         }
 
         Inst::TrapIfOr {
@@ -2931,18 +2923,18 @@ pub(crate) fn emit(
             // x86's min/max are not symmetric; if either operand is a NaN, they return the
             // read-only operand: perform an addition between the two operands, which has the
             // desired NaN propagation effects.
-            sink.bind_label(propagate_nan, &mut state.ctrl_plane);
+            sink.bind_label(propagate_nan, state.ctrl_plane_mut());
             let inst = Inst::xmm_rm_r(add_op, RegMem::reg(lhs), Writable::from_reg(dst));
             inst.emit(&[], sink, info, state);
 
             one_way_jmp(sink, CC::P, done);
 
-            sink.bind_label(do_min_max, &mut state.ctrl_plane);
+            sink.bind_label(do_min_max, state.ctrl_plane_mut());
 
             let inst = Inst::xmm_rm_r(min_max_op, RegMem::reg(lhs), Writable::from_reg(dst));
             inst.emit(&[], sink, info, state);
 
-            sink.bind_label(done, &mut state.ctrl_plane);
+            sink.bind_label(done, state.ctrl_plane_mut());
         }
 
         Inst::XmmRmRImm {
@@ -3209,7 +3201,7 @@ pub(crate) fn emit(
             let inst = Inst::jmp_known(done);
             inst.emit(&[], sink, info, state);
 
-            sink.bind_label(handle_negative, &mut state.ctrl_plane);
+            sink.bind_label(handle_negative, state.ctrl_plane_mut());
 
             // Divide x by two to get it in range for the signed conversion, keep the LSB, and
             // scale it back up on the FP side.
@@ -3262,7 +3254,7 @@ pub(crate) fn emit(
             let inst = Inst::xmm_rm_r(add_op, RegMem::reg(dst), Writable::from_reg(dst));
             inst.emit(&[], sink, info, state);
 
-            sink.bind_label(done, &mut state.ctrl_plane);
+            sink.bind_label(done, state.ctrl_plane_mut());
         }
 
         Inst::CvtFloatToSintSeq {
@@ -3364,7 +3356,7 @@ pub(crate) fn emit(
                 let inst = Inst::jmp_known(done);
                 inst.emit(&[], sink, info, state);
 
-                sink.bind_label(not_nan, &mut state.ctrl_plane);
+                sink.bind_label(not_nan, state.ctrl_plane_mut());
 
                 // If the input was positive, saturate to INT_MAX.
 
@@ -3462,7 +3454,7 @@ pub(crate) fn emit(
                 inst.emit(&[], sink, info, state);
             }
 
-            sink.bind_label(done, &mut state.ctrl_plane);
+            sink.bind_label(done, state.ctrl_plane_mut());
         }
 
         Inst::CvtFloatToUintSeq {
@@ -3572,7 +3564,7 @@ pub(crate) fn emit(
 
                 let inst = Inst::jmp_known(done);
                 inst.emit(&[], sink, info, state);
-                sink.bind_label(not_nan, &mut state.ctrl_plane);
+                sink.bind_label(not_nan, state.ctrl_plane_mut());
             } else {
                 // Trap.
                 let inst = Inst::trap_if(CC::P, TrapCode::BadConversionToInteger);
@@ -3611,7 +3603,7 @@ pub(crate) fn emit(
 
             // Now handle large inputs.
 
-            sink.bind_label(handle_large, &mut state.ctrl_plane);
+            sink.bind_label(handle_large, state.ctrl_plane_mut());
 
             let inst = Inst::gen_move(Writable::from_reg(tmp_xmm2), src, types::F64);
             inst.emit(&[], sink, info, state);
@@ -3644,7 +3636,7 @@ pub(crate) fn emit(
 
                 let inst = Inst::jmp_known(done);
                 inst.emit(&[], sink, info, state);
-                sink.bind_label(next_is_large, &mut state.ctrl_plane);
+                sink.bind_label(next_is_large, state.ctrl_plane_mut());
             } else {
                 let inst = Inst::trap_if(CC::L, TrapCode::IntegerOverflow);
                 inst.emit(&[], sink, info, state);
@@ -3671,7 +3663,7 @@ pub(crate) fn emit(
                 inst.emit(&[], sink, info, state);
             }
 
-            sink.bind_label(done, &mut state.ctrl_plane);
+            sink.bind_label(done, state.ctrl_plane_mut());
         }
 
         Inst::LoadExtName {
@@ -3796,7 +3788,7 @@ pub(crate) fn emit(
             i1.emit(&[], sink, info, state);
 
             // again:
-            sink.bind_label(again_label, &mut state.ctrl_plane);
+            sink.bind_label(again_label, state.ctrl_plane_mut());
 
             // movq %rax, %r_temp
             let i2 = Inst::mov_r_r(OperandSize::Size64, dst_old.to_reg(), temp);
@@ -3898,12 +3890,7 @@ pub(crate) fn emit(
         }
 
         Inst::VirtualSPOffsetAdj { offset } => {
-            trace!(
-                "virtual sp offset adjusted by {} -> {}",
-                offset,
-                state.virtual_sp_offset + offset
-            );
-            state.virtual_sp_offset += offset;
+            state.adjust_virtual_sp_offset(*offset);
         }
 
         Inst::Nop { len } => {
