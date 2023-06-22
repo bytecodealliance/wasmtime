@@ -213,6 +213,8 @@
   ;; This opcode represents multiple instructions `vmv1r`/`vmv2r`/`vmv4r`/etc...
   ;; The immediate field specifies how many registers should be copied.
   (VmvrV)
+  (VnclipWI)
+  (VnclipuWI)
   (VmseqVI)
   (VmsneVI)
   (VmsleuVI)
@@ -1144,6 +1146,21 @@
 (decl rv_vsext_vf8 (VReg VecOpMasking VState) VReg)
 (rule (rv_vsext_vf8 vs mask vstate)
   (vec_alu_rr (VecAluOpRR.VsextVF8) vs mask vstate))
+
+;; Helper for emitting the `vnclip.wi` instruction.
+;;
+;; vd[i] = clip(roundoff_signed(vs2[i], uimm))
+(decl rv_vnclip_wi (VReg UImm5 VecOpMasking VState) VReg)
+(rule (rv_vnclip_wi vs2 imm mask vstate)
+  (vec_alu_rr_uimm5 (VecAluOpRRImm5.VnclipWI) vs2 imm mask vstate))
+
+;; Helper for emitting the `vnclipu.wi` instruction.
+;;
+;; vd[i] = clip(roundoff_unsigned(vs2[i], uimm))
+(decl rv_vnclipu_wi (VReg UImm5 VecOpMasking VState) VReg)
+(rule (rv_vnclipu_wi vs2 imm mask vstate)
+  (vec_alu_rr_uimm5 (VecAluOpRRImm5.VnclipuWI) vs2 imm mask vstate))
+
 
 ;;;; Multi-Instruction Helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

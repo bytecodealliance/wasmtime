@@ -1903,3 +1903,36 @@
 
 (rule 2 (lower (has_type (ty_vec_fits_in_register ty) (sqmul_round_sat (splat x) y)))
   (rv_vsmul_vx y x (unmasked) ty))
+
+;;;; Rules for `snarrow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type (ty_vec_fits_in_register out_ty) (snarrow x @ (value_type in_ty) y)))
+  (if-let lane_diff (u64_to_uimm5 (u64_udiv (ty_lane_count out_ty) 2)))
+  (if-let zero (u64_to_uimm5 0))
+  (let ((x_clip VReg (rv_vnclip_wi x zero (unmasked) (vstate_mf2 (ty_half_lanes out_ty))))
+        (y_clip VReg (rv_vnclip_wi y zero (unmasked) (vstate_mf2 (ty_half_lanes out_ty)))))
+    (rv_vslideup_vvi x_clip y_clip lane_diff (unmasked) out_ty)))
+
+;;;; Rules for `uunarrow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type (ty_vec_fits_in_register out_ty) (uunarrow x @ (value_type in_ty) y)))
+  (if-let lane_diff (u64_to_uimm5 (u64_udiv (ty_lane_count out_ty) 2)))
+  (if-let zero (u64_to_uimm5 0))
+  (let ((x_clip VReg (rv_vnclipu_wi x zero (unmasked) (vstate_mf2 (ty_half_lanes out_ty))))
+        (y_clip VReg (rv_vnclipu_wi y zero (unmasked) (vstate_mf2 (ty_half_lanes out_ty)))))
+    (rv_vslideup_vvi x_clip y_clip lane_diff (unmasked) out_ty)))
+
+;;;; Rules for `unarrow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; We don't have a instruction that saturates a signed source into an unsigned destination.
+;; To correct for this we just remove negative values using `vmax` and then use the normal
+;; unsigned to unsigned narrowing instruction.
+
+(rule (lower (has_type (ty_vec_fits_in_register out_ty) (unarrow x @ (value_type in_ty) y)))
+  (if-let lane_diff (u64_to_uimm5 (u64_udiv (ty_lane_count out_ty) 2)))
+  (if-let zero (u64_to_uimm5 0))
+  (let ((x_pos VReg (rv_vmax_vx x (zero_reg) (unmasked) in_ty))
+        (y_pos VReg (rv_vmax_vx y (zero_reg) (unmasked) in_ty))
+        (x_clip VReg (rv_vnclipu_wi x_pos zero (unmasked) (vstate_mf2 (ty_half_lanes out_ty))))
+        (y_clip VReg (rv_vnclipu_wi y_pos zero (unmasked) (vstate_mf2 (ty_half_lanes out_ty)))))
+    (rv_vslideup_vvi x_clip y_clip lane_diff (unmasked) out_ty)))
