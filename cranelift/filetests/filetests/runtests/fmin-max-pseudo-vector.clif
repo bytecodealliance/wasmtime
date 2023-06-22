@@ -1,5 +1,4 @@
 test run
-set enable_simd
 target aarch64
 ; target s390x FIXME: This currently fails under qemu due to a qemu bug
 target x86_64

@@ -1,5 +1,4 @@
 test compile precise-output
-set enable_simd
 target x86_64 ssse3
 
 function %iadd_pairwise_i16x8(i16x8, i16x8) -> i16x8 {

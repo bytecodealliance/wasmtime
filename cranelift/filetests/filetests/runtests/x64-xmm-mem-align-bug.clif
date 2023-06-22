@@ -1,6 +1,5 @@
 test run
 set enable_llvm_abi_extensions
-set enable_simd
 target x86_64
 target x86_64 has_avx
 

@@ -142,17 +142,6 @@ impl SettingGroup {
         let num_predicates = self.num_bool_settings() + (self.predicates.len() as u8);
         self.bool_start_byte_offset + (num_predicates + 7) / 8
     }
-
-    pub fn get_bool(&self, name: &'static str) -> (BoolSettingIndex, &Self) {
-        for (i, s) in self.settings.iter().enumerate() {
-            if let SpecificSetting::Bool(_) = s.specific {
-                if s.name == name {
-                    return (BoolSettingIndex(i), self);
-                }
-            }
-        }
-        panic!("Should have found bool setting by name.");
-    }
 }
 
 /// This is the basic information needed to track the specific parts of a setting when building

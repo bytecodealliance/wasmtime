@@ -1,6 +1,5 @@
 test run
 test interpret
-set enable_simd
 target aarch64
 target x86_64
 target x86_64 ssse3

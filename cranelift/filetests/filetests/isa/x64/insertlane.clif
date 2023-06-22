@@ -1,5 +1,4 @@
 test compile precise-output
-set enable_simd
 target x86_64 sse41
 
 function %insertlane_f64x2_zero(f64x2, f64) -> f64x2 {

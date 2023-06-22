@@ -1,5 +1,4 @@
 test run
-set enable_simd
 target aarch64
 target s390x
 target x86_64

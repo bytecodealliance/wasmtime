@@ -415,7 +415,6 @@ impl Engine {
             | "enable_nan_canonicalization"
             | "enable_jump_tables"
             | "enable_float"
-            | "enable_simd"
             | "enable_verifier"
             | "regalloc_checker"
             | "regalloc_verbose_logs"

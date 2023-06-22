@@ -1,5 +1,4 @@
 test compile precise-output
-set enable_simd
 target x86_64 has_avx512vl has_avx512vbmi
 
 function %shuffle_in_bounds(i8x16, i8x16) -> i8x16 {

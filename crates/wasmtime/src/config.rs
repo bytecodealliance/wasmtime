@@ -1620,14 +1620,6 @@ impl Config {
                 bail!("compiler option 'enable_safepoints' must be enabled when 'reference types' is enabled");
             }
         }
-        if self.features.simd {
-            if !self
-                .compiler_config
-                .ensure_setting_unset_or_given("enable_simd", "true")
-            {
-                bail!("compiler option 'enable_simd' must be enabled when 'simd' is enabled");
-            }
-        }
 
         if self.features.relaxed_simd && !self.features.simd {
             bail!("cannot disable the simd proposal but enable the relaxed simd proposal");

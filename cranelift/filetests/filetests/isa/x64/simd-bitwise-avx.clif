@@ -1,5 +1,4 @@
 test compile precise-output
-set enable_simd
 target x86_64 sse42 has_avx
 
 function %or_from_memory(f32x4, i64) -> f32x4 {

@@ -1,5 +1,4 @@
 test verifier
-set enable_simd
 
 function %incorrect_constant_size() {
 const13 = 0x0102030405  ; this constant has 5 bytes

@@ -236,7 +236,6 @@ where
         // so they aren't very interesting to be automatically generated.
         builder.enable("enable_atomics")?;
         builder.enable("enable_float")?;
-        builder.enable("enable_simd")?;
 
         // `machine_code_cfg_info` generates additional metadata for the embedder but this doesn't feed back
         // into compilation anywhere, we leave it on unconditionally to make sure the generation doesn't panic.
