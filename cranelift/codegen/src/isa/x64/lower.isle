@@ -2970,6 +2970,7 @@
                     (has_type $I16 (extractlane value (u8_from_uimm8 n)))
                     address
                     offset))
+      (if-let $true (use_sse41))
       (side_effect
        (x64_pextrw_store (to_amode flags address offset) value n)))
 (rule 2 (lower (store flags
