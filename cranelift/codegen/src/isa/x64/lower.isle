@@ -4546,18 +4546,50 @@
 
 ;; Rules for `sqmul_round_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (sqmul_round_sat qx @ (value_type $I16X8) qy))
-      (let ((src1 Xmm qx)
-            (src2 Xmm qy)
+(rule 1 (lower (sqmul_round_sat qx @ (value_type $I16X8) qy))
+        (if-let $true (use_ssse3))
+        (let ((src1 Xmm qx)
+              (src2 Xmm qy)
 
-            (mask XmmMem (emit_u128_le_const 0x8000_8000_8000_8000_8000_8000_8000_8000))
-            (dst Xmm (x64_pmulhrsw src1 src2))
-            (cmp Xmm (x64_pcmpeqw dst mask)))
-        (x64_pxor dst cmp)))
+              (mask XmmMem (emit_u128_le_const 0x8000_8000_8000_8000_8000_8000_8000_8000))
+              (dst Xmm (x64_pmulhrsw src1 src2))
+              (cmp Xmm (x64_pcmpeqw dst mask)))
+          (x64_pxor dst cmp)))
+
+;; This operation is defined in wasm as:
+;;
+;;    S.SignedSaturate((x * y + 0x4000) >> 15)
+;;
+;; so perform all those operations here manually with a lack of the native
+;; instruction.
+(rule (lower (sqmul_round_sat qx @ (value_type $I16X8) qy))
+      (let (
+          (qx Xmm qx)
+          (qy Xmm qy)
+          ;; Multiply `qx` and `qy` generating 32-bit intermediate results. The
+          ;; 32-bit results have their low-halves stored in `mul_lsb` and the
+          ;; high halves are stored in `mul_msb`. These are then shuffled into
+          ;; `mul_lo` and `mul_hi` which represent the low 4 multiplications
+          ;; and the upper 4 multiplications.
+          (mul_lsb Xmm (x64_pmullw qx qy))
+          (mul_msb Xmm (x64_pmulhw qx qy))
+          (mul_lo Xmm (x64_punpcklwd mul_lsb mul_msb))
+          (mul_hi Xmm (x64_punpckhwd mul_lsb mul_msb))
+          ;; Add the 0x4000 constant to all multiplications
+          (val Xmm (x64_movdqu_load (emit_u128_le_const 0x00004000_00004000_00004000_00004000)))
+          (mul_lo Xmm (x64_paddd mul_lo val))
+          (mul_hi Xmm (x64_paddd mul_hi val))
+          ;; Perform the right-shift by 15 to all multiplications
+          (lo Xmm (x64_psrad mul_lo (xmi_imm 15)))
+          (hi Xmm (x64_psrad mul_hi (xmi_imm 15)))
+        )
+        ;; And finally perform a saturating 32-to-16-bit conversion.
+        (x64_packssdw lo hi)))
 
 ;; Rules for `x86_pmulhrsw` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (x86_pmulhrsw qx @ (value_type $I16X8) qy))
+      (if-let $true (use_ssse3))
       (x64_pmulhrsw qx qy))
 
 ;; Rules for `uunarrow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

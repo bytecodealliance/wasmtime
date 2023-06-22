@@ -190,6 +190,10 @@ impl TargetIsa for Riscv64Backend {
     fn has_x86_pshufb_lowering(&self) -> bool {
         false
     }
+
+    fn has_x86_pmulhrsw_lowering(&self) -> bool {
+        false
+    }
 }
 
 impl fmt::Display for Riscv64Backend {

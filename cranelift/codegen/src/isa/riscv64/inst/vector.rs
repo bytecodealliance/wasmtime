@@ -357,7 +357,14 @@ impl VecAluOpRRR {
             VecAluOpRRR::VwaddWV | VecAluOpRRR::VwaddWX => 0b110101,
             VecAluOpRRR::VwsubuWV | VecAluOpRRR::VwsubuWX => 0b110110,
             VecAluOpRRR::VwsubWV | VecAluOpRRR::VwsubWX => 0b110111,
-            VecAluOpRRR::VmsltVX => 0b011011,
+            VecAluOpRRR::VmseqVV | VecAluOpRRR::VmseqVX => 0b011000,
+            VecAluOpRRR::VmsneVV | VecAluOpRRR::VmsneVX => 0b011001,
+            VecAluOpRRR::VmsltuVV | VecAluOpRRR::VmsltuVX => 0b011010,
+            VecAluOpRRR::VmsltVV | VecAluOpRRR::VmsltVX => 0b011011,
+            VecAluOpRRR::VmsleuVV | VecAluOpRRR::VmsleuVX => 0b011100,
+            VecAluOpRRR::VmsleVV | VecAluOpRRR::VmsleVX => 0b011101,
+            VecAluOpRRR::VmsgtuVX => 0b011110,
+            VecAluOpRRR::VmsgtVX => 0b011111,
         }
     }
 
@@ -381,7 +388,13 @@ impl VecAluOpRRR {
             | VecAluOpRRR::VmaxuVV
             | VecAluOpRRR::VmaxVV
             | VecAluOpRRR::VmergeVVM
-            | VecAluOpRRR::VrgatherVV => VecOpCategory::OPIVV,
+            | VecAluOpRRR::VrgatherVV
+            | VecAluOpRRR::VmseqVV
+            | VecAluOpRRR::VmsneVV
+            | VecAluOpRRR::VmsltuVV
+            | VecAluOpRRR::VmsltVV
+            | VecAluOpRRR::VmsleuVV
+            | VecAluOpRRR::VmsleVV => VecOpCategory::OPIVV,
             VecAluOpRRR::VwaddVV
             | VecAluOpRRR::VwaddWV
             | VecAluOpRRR::VwadduVV
@@ -427,8 +440,15 @@ impl VecAluOpRRR {
             | VecAluOpRRR::VmaxVX
             | VecAluOpRRR::VslidedownVX
             | VecAluOpRRR::VmergeVXM
+            | VecAluOpRRR::VrgatherVX
+            | VecAluOpRRR::VmseqVX
+            | VecAluOpRRR::VmsneVX
+            | VecAluOpRRR::VmsltuVX
             | VecAluOpRRR::VmsltVX
-            | VecAluOpRRR::VrgatherVX => VecOpCategory::OPIVX,
+            | VecAluOpRRR::VmsleuVX
+            | VecAluOpRRR::VmsleVX
+            | VecAluOpRRR::VmsgtuVX
+            | VecAluOpRRR::VmsgtVX => VecOpCategory::OPIVX,
             VecAluOpRRR::VfaddVV
             | VecAluOpRRR::VfsubVV
             | VecAluOpRRR::VfmulVV
@@ -522,6 +542,14 @@ impl VecAluOpRRImm5 {
             VecAluOpRRImm5::VsaddVI => 0b100001,
             VecAluOpRRImm5::VrgatherVI => 0b001100,
             VecAluOpRRImm5::VmvrV => 0b100111,
+            VecAluOpRRImm5::VnclipWI => 0b101111,
+            VecAluOpRRImm5::VnclipuWI => 0b101110,
+            VecAluOpRRImm5::VmseqVI => 0b011000,
+            VecAluOpRRImm5::VmsneVI => 0b011001,
+            VecAluOpRRImm5::VmsleuVI => 0b011100,
+            VecAluOpRRImm5::VmsleVI => 0b011101,
+            VecAluOpRRImm5::VmsgtuVI => 0b011110,
+            VecAluOpRRImm5::VmsgtVI => 0b011111,
         }
     }
 
@@ -541,7 +569,15 @@ impl VecAluOpRRImm5 {
             | VecAluOpRRImm5::VsadduVI
             | VecAluOpRRImm5::VsaddVI
             | VecAluOpRRImm5::VrgatherVI
-            | VecAluOpRRImm5::VmvrV => VecOpCategory::OPIVI,
+            | VecAluOpRRImm5::VmvrV
+            | VecAluOpRRImm5::VnclipWI
+            | VecAluOpRRImm5::VnclipuWI
+            | VecAluOpRRImm5::VmseqVI
+            | VecAluOpRRImm5::VmsneVI
+            | VecAluOpRRImm5::VmsleuVI
+            | VecAluOpRRImm5::VmsleVI
+            | VecAluOpRRImm5::VmsgtuVI
+            | VecAluOpRRImm5::VmsgtVI => VecOpCategory::OPIVI,
         }
     }
 
@@ -553,7 +589,9 @@ impl VecAluOpRRImm5 {
             | VecAluOpRRImm5::VsraVI
             | VecAluOpRRImm5::VslidedownVI
             | VecAluOpRRImm5::VrgatherVI
-            | VecAluOpRRImm5::VmvrV => true,
+            | VecAluOpRRImm5::VmvrV
+            | VecAluOpRRImm5::VnclipWI
+            | VecAluOpRRImm5::VnclipuWI => true,
             VecAluOpRRImm5::VaddVI
             | VecAluOpRRImm5::VrsubVI
             | VecAluOpRRImm5::VandVI
@@ -561,7 +599,13 @@ impl VecAluOpRRImm5 {
             | VecAluOpRRImm5::VxorVI
             | VecAluOpRRImm5::VmergeVIM
             | VecAluOpRRImm5::VsadduVI
-            | VecAluOpRRImm5::VsaddVI => false,
+            | VecAluOpRRImm5::VsaddVI
+            | VecAluOpRRImm5::VmseqVI
+            | VecAluOpRRImm5::VmsneVI
+            | VecAluOpRRImm5::VmsleuVI
+            | VecAluOpRRImm5::VmsleVI
+            | VecAluOpRRImm5::VmsgtuVI
+            | VecAluOpRRImm5::VmsgtVI => false,
         }
     }
 

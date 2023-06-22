@@ -839,6 +839,7 @@ dependencies = [
  "log",
  "pretty_env_logger",
  "rayon",
+ "regalloc2",
  "serde",
  "similar",
  "target-lexicon",

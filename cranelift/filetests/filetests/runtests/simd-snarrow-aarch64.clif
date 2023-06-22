@@ -2,6 +2,7 @@ test interpret
 test run
 target aarch64
 ; x86_64 considers the case `i64x2` -> `i32x4` to be 'unreachable'
+target riscv64 has_v
 
 function %snarrow_i64x2(i64x2, i64x2) -> i32x4 {
 block0(v0: i64x2, v1: i64x2):

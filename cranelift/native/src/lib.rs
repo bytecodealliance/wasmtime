@@ -69,17 +69,6 @@ pub fn infer_native_flags(isa_builder: &mut dyn Configurable) -> Result<(), &'st
             return Err("x86 support requires SSE2");
         }
 
-        // These are temporarily enabled by default (see #3810 for
-        // more) so that a default-constructed `Flags` can work with
-        // default Wasmtime features. Otherwise, the user must
-        // explicitly use native flags or turn these on when on x86-64
-        // platforms to avoid a configuration panic. In order for the
-        // "enable if detected" logic below to work, we must turn them
-        // *off* (differing from the default) and then re-enable below
-        // if present.
-        isa_builder.set("has_sse3", "false").unwrap();
-        isa_builder.set("has_ssse3", "false").unwrap();
-
         if std::is_x86_feature_detected!("sse3") {
             isa_builder.enable("has_sse3").unwrap();
         }

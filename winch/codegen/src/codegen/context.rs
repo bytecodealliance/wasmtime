@@ -30,6 +30,8 @@ pub(crate) struct CodeGenContext<'a> {
     pub stack: Stack,
     /// The current function's frame.
     pub frame: &'a Frame,
+    /// Reachability state.
+    pub reachable: bool,
 }
 
 impl<'a> CodeGenContext<'a> {
@@ -39,6 +41,7 @@ impl<'a> CodeGenContext<'a> {
             regalloc,
             stack,
             frame,
+            reachable: true,
         }
     }
 
@@ -241,6 +244,18 @@ impl<'a> CodeGenContext<'a> {
             }
         });
         self.stack.inner_mut().truncate(truncate);
+    }
+
+    /// Reset value and stack pointer to the given length
+    /// and stack pointer offset respectively.
+    pub fn reset_stack<M: MacroAssembler>(
+        &mut self,
+        masm: &mut M,
+        stack_len: usize,
+        sp_offset: u32,
+    ) {
+        masm.reset_stack_pointer(sp_offset);
+        self.drop_last(self.stack.len() - stack_len);
     }
 
     /// Convenience wrapper around [`Self::spill_callback`].

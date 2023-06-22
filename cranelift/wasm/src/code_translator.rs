@@ -2288,7 +2288,9 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::I16x8RelaxedQ15mulrS => {
             let (a, b) = pop2_with_bitcast(state, I16X8, builder);
             state.push1(
-                if environ.relaxed_simd_deterministic() || !environ.is_x86() {
+                if environ.relaxed_simd_deterministic()
+                    || !environ.use_x86_pmulhrsw_for_relaxed_q15mul()
+                {
                     // Deterministic semantics are to match the
                     // `i16x8.q15mulr_sat_s` instruction.
                     builder.ins().sqmul_round_sat(a, b)

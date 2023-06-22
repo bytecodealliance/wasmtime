@@ -322,6 +322,7 @@ pub trait IsaFlags: Clone {
 pub struct ArgsAccumulator<'a> {
     sig_set_abi_args: &'a mut Vec<ABIArg>,
     start: usize,
+    non_formal_flag: bool,
 }
 
 impl<'a> ArgsAccumulator<'a> {
@@ -330,11 +331,19 @@ impl<'a> ArgsAccumulator<'a> {
         ArgsAccumulator {
             sig_set_abi_args,
             start,
+            non_formal_flag: false,
         }
     }
 
     #[inline]
     pub fn push(&mut self, arg: ABIArg) {
+        debug_assert!(!self.non_formal_flag);
+        self.sig_set_abi_args.push(arg)
+    }
+
+    #[inline]
+    pub fn push_non_formal(&mut self, arg: ABIArg) {
+        self.non_formal_flag = true;
         self.sig_set_abi_args.push(arg)
     }
 
@@ -388,7 +397,9 @@ pub trait ABIMachineSpec {
     /// and stack slots.
     ///
     /// The argument locations should be pushed onto the given `ArgsAccumulator`
-    /// in order.
+    /// in order. Any extra arguments added (such as return area pointers)
+    /// should come at the end of the list so that the first N lowered
+    /// parameters align with the N clif parameters.
     ///
     /// Returns the stack-space used (rounded up to as alignment requires), and
     /// if `add_ret_area_ptr` was passed, the index of the extra synthetic arg
