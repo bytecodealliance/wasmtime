@@ -1,11 +1,6 @@
 use crate::preview2::{HostPollable, Table, TableError};
 use anyhow::Error;
 
-// TODO(elliottt): wrapper of (Box<dyn tokio::io::AsyncRead>, buffering), then impl HostInputStream
-// for that type, then do the same for a dyn AsyncWrite with buffering for HostOutputStream.
-// Testing could be to send the guest a timestamp and have them check that it's 100ms in the past?
-// Try putting this in the command tests.
-
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum StreamState {
     Open,
