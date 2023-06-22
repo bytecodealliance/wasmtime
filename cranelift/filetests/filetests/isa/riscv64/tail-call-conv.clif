@@ -335,8 +335,8 @@ block0:
 ;   add sp,-48
 ;   virtual_sp_offset_adj +48
 ;   load_addr s1,0(sp)
-;   load_sym a1,%tail_callee_stack_rets+0
-;   callind a1
+;   load_sym t0,%tail_callee_stack_rets+0
+;   callind t0
 ;   ld t0,0(sp)
 ;   ld t2,8(sp)
 ;   ld a1,16(sp)
@@ -358,12 +358,12 @@ block0:
 ; block1: ; offset 0x10
 ;   addi sp, sp, -0x30
 ;   mv s1, sp
-;   auipc a1, 0
-;   ld a1, 0xc(a1)
+;   auipc t0, 0
+;   ld t0, 0xc(t0)
 ;   j 0xc
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %tail_callee_stack_rets 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
-;   jalr a1
+;   jalr t0
 ;   ld t0, 0(sp)
 ;   ld t2, 8(sp)
 ;   ld a1, 0x10(sp)

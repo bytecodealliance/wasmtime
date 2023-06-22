@@ -489,6 +489,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                 clobbers: PRegSet::empty(),
                 opcode: Opcode::Call,
                 callee_pop_size: 0,
+                callee_conv: CallConv::Probestack,
             }),
         });
     }
@@ -650,7 +651,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         clobbers: PRegSet,
         opcode: ir::Opcode,
         tmp: Writable<Reg>,
-        _callee_conv: isa::CallConv,
+        callee_conv: isa::CallConv,
         _caller_conv: isa::CallConv,
         callee_pop_size: u32,
     ) -> SmallVec<[Self::I; 2]> {
@@ -664,6 +665,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                     clobbers,
                     opcode,
                     callee_pop_size,
+                    callee_conv,
                 ));
             }
             &CallDest::ExtName(ref name, RelocDistance::Far) => {
@@ -680,6 +682,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                     clobbers,
                     opcode,
                     callee_pop_size,
+                    callee_conv,
                 ));
             }
             &CallDest::Reg(reg) => {
@@ -690,6 +693,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                     clobbers,
                     opcode,
                     callee_pop_size,
+                    callee_conv,
                 ));
             }
         }
@@ -741,6 +745,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             /* clobbers = */ Self::get_regs_clobbered_by_call(call_conv),
             Opcode::Call,
             callee_pop_size,
+            call_conv,
         ));
         insts
     }
