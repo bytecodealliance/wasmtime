@@ -49,6 +49,16 @@ impl HostInputStream for Stdin {
         ))
     }
 
+    #[cfg(not(windows))]
+    fn pollable(&self) -> HostPollable {
+        // TODO(elliottt): this can be a read with an empty buffer to check for ready, but on
+        // windows there is a special function that needs to be called in a worker thread, as stdin
+        // is special. There is already code in wasi-common for creating the worker thread, copy
+        // that.
+        HostPollable::new(|| Box::pin(async { todo!("pollable on stdin") }))
+    }
+
+    #[cfg(windows)]
     fn pollable(&self) -> HostPollable {
         // TODO(elliottt): this can be a read with an empty buffer to check for ready, but on
         // windows there is a special function that needs to be called in a worker thread, as stdin

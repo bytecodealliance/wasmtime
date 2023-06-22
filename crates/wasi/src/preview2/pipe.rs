@@ -10,6 +10,7 @@
 use crate::preview2::{HostInputStream, HostOutputStream, HostPollable, StreamState};
 use anyhow::{anyhow, Error};
 use std::sync::Arc;
+use tokio::sync::Mutex;
 
 pub fn pipe(bound: usize) -> (InputPipe, OutputPipe) {
     let (writer, reader) = tokio::sync::mpsc::channel(bound);
@@ -69,7 +70,89 @@ impl HostInputStream for InputPipe {
     }
 }
 
-// impl tokio::io::AsyncRead for InputPipe {}
+struct InnerWrappedRead<T> {
+    state: StreamState,
+    buffer: Vec<u8>,
+    reader: T,
+}
+
+pub struct WrappedRead<T>(Arc<Mutex<InnerWrappedRead<T>>>);
+
+impl<T> WrappedRead<T> {
+    pub fn new(reader: T) -> Self {
+        Self(Arc::new(Mutex::new(InnerWrappedRead {
+            state: StreamState::Open,
+            buffer: Vec::new(),
+            reader,
+        })))
+    }
+}
+
+#[async_trait::async_trait]
+impl<T: tokio::io::AsyncRead + Send + Sync + Unpin + 'static> HostInputStream for WrappedRead<T> {
+    async fn read(&mut self, mut dest: &mut [u8]) -> Result<(u64, StreamState), Error> {
+        use std::io::Write;
+        use tokio::io::AsyncReadExt;
+        let mut i = self.0.lock().await;
+        let l = dest.write(&i.buffer)?;
+
+        i.buffer.drain(..l);
+        if !i.buffer.is_empty() {
+            return Ok((l as u64, StreamState::Open));
+        }
+
+        if i.state.is_closed() {
+            return Ok((l as u64, StreamState::Closed));
+        }
+
+        let mut dest = &mut dest[l..];
+        let rest = if !dest.is_empty() {
+            let written = i.reader.read_buf(&mut dest).await?;
+            if written == 0 {
+                i.state = StreamState::Closed;
+            }
+            written
+        } else {
+            0
+        };
+
+        // TODO: figure out how we're tracking the stream state. Maybe mutate it when handling the
+        // result of `read_buf`?
+        Ok(((l + rest) as u64, i.state))
+    }
+
+    fn pollable(&self) -> HostPollable {
+        use tokio::io::AsyncReadExt;
+        let i = Arc::clone(&self.0);
+        HostPollable::new(move || {
+            let i = Arc::clone(&i);
+            Box::pin(async move {
+                let mut i = i.lock().await;
+
+                if i.state.is_closed() {
+                    return Ok(());
+                }
+
+                let mut bytes = core::mem::take(&mut i.buffer);
+                let start = bytes.len();
+                bytes.resize(start + 1024, 0);
+                let l = i.reader.read_buf(&mut &mut bytes[start..]).await?;
+
+                // Reading 0 bytes means either there wasn't enough space in the buffer (which we
+                // know there is because we just resized) or that the stream has closed. Thus, we
+                // know the stream has closed here.
+                if l == 0 {
+                    i.state = StreamState::Closed;
+                }
+
+                bytes.drain(start + l..);
+                i.buffer = bytes;
+
+                Ok(())
+            })
+        })
+    }
+}
 
 enum SenderState {
     Writable(tokio::sync::mpsc::OwnedPermit<Vec<u8>>),
@@ -177,4 +260,50 @@ impl HostOutputStream for OutputPipe {
     }
 }
 
-// impl tokio::io::AsyncWrite for OutputPipe {}
+struct InnerWrappedWrite<T> {
+    buffer: Vec<u8>,
+    writer: T,
+}
+
+pub struct WrappedWrite<T>(Arc<Mutex<InnerWrappedWrite<T>>>);
+
+impl<T> WrappedWrite<T> {
+    pub fn new(writer: T) -> Self {
+        WrappedWrite(Arc::new(Mutex::new(InnerWrappedWrite {
+            buffer: Vec::new(),
+            writer,
+        })))
+    }
+}
+
+#[async_trait::async_trait]
+impl<T: tokio::io::AsyncWrite + Send + Sync + Unpin + 'static> HostOutputStream
+    for WrappedWrite<T>
+{
+    async fn write(&mut self, buf: &[u8]) -> Result<u64, anyhow::Error> {
+        use tokio::io::AsyncWriteExt;
+        let mut i = self.0.lock().await;
+        let mut bytes = core::mem::take(&mut i.buffer);
+        bytes.extend(buf);
+        let written = i.writer.write_buf(&mut bytes.as_slice()).await?;
+        bytes.drain(..written);
+        i.buffer = bytes;
+        Ok(written as u64)
+    }
+
+    fn pollable(&self) -> HostPollable {
+        use tokio::io::AsyncWriteExt;
+        let i = Arc::clone(&self.0);
+        HostPollable::new(move || {
+            let i = Arc::clone(&i);
+            Box::pin(async move {
+                let mut i = i.lock().await;
+                let bytes = core::mem::take(&mut i.buffer);
+                if !bytes.is_empty() {
+                    i.writer.write_all(bytes.as_slice()).await?;
+                }
+                Ok(())
+            })
+        })
+    }
+}
