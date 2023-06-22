@@ -138,6 +138,10 @@
   (VmfneVV)
   (VmfltVV)
   (VmfleVV)
+  (VmandMM)
+  (VmorMM)
+  (VmnandMM)
+  (VmnorMM)
 
 
   ;; Vector-Scalar Opcodes
@@ -1231,6 +1235,40 @@
 (rule (rv_vnclipu_wi vs2 imm mask vstate)
   (vec_alu_rr_uimm5 (VecAluOpRRImm5.VnclipuWI) vs2 imm mask vstate))
 
+;; Helper for emitting the `vmand.mm` (Mask Bitwise AND) instruction.
+;;
+;; vd.mask[i] = vs2.mask[i] &&  vs1.mask[i]
+(decl rv_vmand_mm (VReg VReg VState) VReg)
+(rule (rv_vmand_mm vs2 vs1 vstate)
+  (vec_alu_rrr (VecAluOpRRR.VmandMM) vs2 vs1 (unmasked) vstate))
+
+;; Helper for emitting the `vmor.mm` (Mask Bitwise OR) instruction.
+;;
+;; vd.mask[i] = vs2.mask[i] ||  vs1.mask[i]
+(decl rv_vmor_mm (VReg VReg VState) VReg)
+(rule (rv_vmor_mm vs2 vs1 vstate)
+  (vec_alu_rrr (VecAluOpRRR.VmorMM) vs2 vs1 (unmasked) vstate))
+
+;; Helper for emitting the `vmnand.mm` (Mask Bitwise NAND) instruction.
+;;
+;; vd.mask[i] = !(vs2.mask[i] &&  vs1.mask[i])
+(decl rv_vmnand_mm (VReg VReg VState) VReg)
+(rule (rv_vmnand_mm vs2 vs1 vstate)
+  (vec_alu_rrr (VecAluOpRRR.VmnandMM) vs2 vs1 (unmasked) vstate))
+
+;; Helper for emitting the `vmnot.m` (Mask Bitwise NOT) instruction.
+;; This is an alias for `vmnand.mm vd, vs, vs`
+;;
+;; vd.mask[i] = !vs.mask[i]
+(decl rv_vmnot_m (VReg VState) VReg)
+(rule (rv_vmnot_m vs vstate) (rv_vmnand_mm vs vs vstate))
+
+;; Helper for emitting the `vmnor.mm` (Mask Bitwise NOR) instruction.
+;;
+;; vd.mask[i] = !(vs2.mask[i] ||  vs1.mask[i])
+(decl rv_vmnor_mm (VReg VReg VState) VReg)
+(rule (rv_vmnor_mm vs2 vs1 vstate)
+  (vec_alu_rrr (VecAluOpRRR.VmnorMM) vs2 vs1 (unmasked) vstate))
 
 ;;;; Multi-Instruction Helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
