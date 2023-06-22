@@ -116,7 +116,7 @@ impl WasiCtxBuilder {
     /// Set the generator for the secure random number generator.
     ///
     /// This initializes the random number generator using
-    /// [`rand::thread_rng`].
+    /// [`cap_rand::thread_rng`].
     pub fn set_secure_random(mut self) -> Self {
         self.random = Some(random::thread_rng());
         self
@@ -133,6 +133,8 @@ impl WasiCtxBuilder {
     /// unpredictable random data in order to maintain its security invariants,
     /// and ideally should use the insecure random API otherwise, so using any
     /// prerecorded or otherwise predictable data may compromise security.
+    ///
+    /// [`set_secure_random`]: Self::set_secure_random
     pub fn set_secure_random_to_custom_generator(
         mut self,
         random: impl RngCore + Send + Sync + 'static,
