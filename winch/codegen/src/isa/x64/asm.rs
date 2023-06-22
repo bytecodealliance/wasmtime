@@ -8,13 +8,16 @@ use cranelift_codegen::{
     entity::EntityRef,
     ir::TrapCode,
     ir::{ExternalName, Opcode, UserExternalNameRef},
-    isa::x64::{
-        args::{
-            self, AluRmiROpcode, Amode, CmpOpcode, DivSignedness, ExtMode, FromWritableReg, Gpr,
-            GprMem, GprMemImm, Imm8Gpr, Imm8Reg, RegMem, RegMemImm,
-            ShiftKind as CraneliftShiftKind, SyntheticAmode, WritableGpr, CC,
+    isa::{
+        x64::{
+            args::{
+                self, AluRmiROpcode, Amode, CmpOpcode, DivSignedness, ExtMode, FromWritableReg,
+                Gpr, GprMem, GprMemImm, Imm8Gpr, Imm8Reg, RegMem, RegMemImm,
+                ShiftKind as CraneliftShiftKind, SyntheticAmode, WritableGpr, CC,
+            },
+            settings as x64_settings, CallInfo, EmitInfo, EmitState, Inst,
         },
-        settings as x64_settings, CallInfo, EmitInfo, EmitState, Inst,
+        CallConv,
     },
     settings, Final, MachBuffer, MachBufferFinalized, MachInstEmit, MachInstEmitState, MachLabel,
     Writable,
@@ -802,6 +805,7 @@ impl Assembler {
                         clobbers: Default::default(),
                         opcode: Opcode::Call,
                         callee_pop_size: 0,
+                        callee_conv: CallConv::SystemV,
                     }),
                 });
             }
@@ -815,6 +819,7 @@ impl Assembler {
                         clobbers: Default::default(),
                         opcode: Opcode::Call,
                         callee_pop_size: 0,
+                        callee_conv: CallConv::SystemV,
                     }),
                 });
             }

@@ -96,8 +96,8 @@ block0:
 ;   virtual_sp_offset_adjust 16
 ;   str x0, [sp]
 ;   str x1, [sp, #8]
-;   load_ext_name x0, TestCase(%tail_callee_stack_args)+0
-;   blr x0
+;   load_ext_name x1, TestCase(%tail_callee_stack_args)+0
+;   blr x1
 ;   ldp fp, lr, [sp], #16
 ;   ret
 ;
@@ -135,11 +135,11 @@ block0:
 ;   sub sp, sp, #0x10
 ;   stur x0, [sp]
 ;   stur x1, [sp, #8]
-;   ldr x0, #0x84
+;   ldr x1, #0x84
 ;   b #0x8c
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %tail_callee_stack_args 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
-;   blr x0
+;   blr x1
 ;   ldp x29, x30, [sp], #0x10
 ;   ret
 
@@ -270,8 +270,8 @@ block0:
 ;   sub sp, sp, #16
 ;   virtual_sp_offset_adjust 16
 ;   mov x0, sp
-;   load_ext_name x14, TestCase(%tail_callee_stack_rets)+0
-;   blr x14
+;   load_ext_name x1, TestCase(%tail_callee_stack_rets)+0
+;   blr x1
 ;   ldr x13, [sp]
 ;   ldr x2, [sp, #8]
 ;   add sp, sp, #16
@@ -286,11 +286,11 @@ block0:
 ; block1: ; offset 0x8
 ;   sub sp, sp, #0x10
 ;   mov x0, sp
-;   ldr x14, #0x18
+;   ldr x1, #0x18
 ;   b #0x20
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %tail_callee_stack_rets 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
-;   blr x14
+;   blr x1
 ;   ldur x13, [sp]
 ;   ldur x2, [sp, #8]
 ;   add sp, sp, #0x10

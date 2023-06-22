@@ -4336,6 +4336,7 @@ fn test_x64_emit() {
             PRegSet::default(),
             Opcode::Call,
             0,
+            CallConv::SystemV,
         ),
         "E800000000",
         "call    User(userextname0)",
@@ -4351,6 +4352,7 @@ fn test_x64_emit() {
             PRegSet::default(),
             Opcode::CallIndirect,
             0,
+            CallConv::SystemV,
         )
     }
 

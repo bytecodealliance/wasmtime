@@ -48,6 +48,8 @@ pub struct CallInfo {
     /// caller, if any. (Used for popping stack arguments with the `tail`
     /// calling convention.)
     pub callee_pop_size: u32,
+    /// The calling convention of the callee.
+    pub callee_conv: CallConv,
 }
 
 #[test]
@@ -522,6 +524,7 @@ impl Inst {
         clobbers: PRegSet,
         opcode: Opcode,
         callee_pop_size: u32,
+        callee_conv: CallConv,
     ) -> Inst {
         Inst::CallKnown {
             dest,
@@ -531,6 +534,7 @@ impl Inst {
                 clobbers,
                 opcode,
                 callee_pop_size,
+                callee_conv,
             }),
         }
     }
@@ -542,6 +546,7 @@ impl Inst {
         clobbers: PRegSet,
         opcode: Opcode,
         callee_pop_size: u32,
+        callee_conv: CallConv,
     ) -> Inst {
         dest.assert_regclass_is(RegClass::Int);
         Inst::CallUnknown {
@@ -552,6 +557,7 @@ impl Inst {
                 clobbers,
                 opcode,
                 callee_pop_size,
+                callee_conv,
             }),
         }
     }
@@ -2189,7 +2195,14 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
         }
 
         Inst::CallUnknown { ref info, dest, .. } => {
-            dest.get_operands(collector);
+            match dest {
+                RegMem::Reg { reg } if info.callee_conv == CallConv::Tail => {
+                    // TODO(https://github.com/bytecodealliance/regalloc2/issues/145):
+                    // This shouldn't be a fixed register constraint.
+                    collector.reg_fixed_use(*reg, regs::r15())
+                }
+                _ => dest.get_operands(collector),
+            }
             for u in &info.uses {
                 collector.reg_fixed_use(u.vreg, u.preg);
             }
