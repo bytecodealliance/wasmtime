@@ -41,6 +41,7 @@ impl InnerInputPipe {
     }
 }
 
+#[derive(Clone)]
 pub struct InputPipe(Arc<tokio::sync::Mutex<InnerInputPipe>>);
 
 #[async_trait::async_trait]
@@ -76,6 +77,7 @@ struct InnerWrappedRead<T> {
     reader: T,
 }
 
+#[derive(Clone)]
 pub struct WrappedRead<T>(Arc<Mutex<InnerWrappedRead<T>>>);
 
 impl<T> WrappedRead<T> {
@@ -207,6 +209,7 @@ impl InnerOutputPipe {
     }
 }
 
+#[derive(Clone)]
 pub struct OutputPipe(Arc<tokio::sync::Mutex<InnerOutputPipe>>);
 
 #[async_trait::async_trait]
@@ -265,6 +268,7 @@ struct InnerWrappedWrite<T> {
     writer: T,
 }
 
+#[derive(Clone)]
 pub struct WrappedWrite<T>(Arc<Mutex<InnerWrappedWrite<T>>>);
 
 impl<T> WrappedWrite<T> {
@@ -305,5 +309,42 @@ impl<T: tokio::io::AsyncWrite + Send + Sync + Unpin + 'static> HostOutputStream
                 Ok(())
             })
         })
+    }
+}
+
+#[derive(Debug)]
+struct InnerMemoryOutputPipe {
+    buffer: Vec<u8>,
+}
+
+#[derive(Clone)]
+pub struct MemoryOutputPipe(Arc<Mutex<InnerMemoryOutputPipe>>);
+
+impl MemoryOutputPipe {
+    pub fn new() -> Self {
+        Self(Arc::new(Mutex::new(InnerMemoryOutputPipe {
+            buffer: Vec::new(),
+        })))
+    }
+
+    pub fn finalize(self) -> Vec<u8> {
+        Arc::try_unwrap(self.0)
+            .expect("finalizing MemoryOutputPipe")
+            .into_inner()
+            .buffer
+    }
+}
+
+#[async_trait::async_trait]
+impl HostOutputStream for MemoryOutputPipe {
+    async fn write(&mut self, buf: &[u8]) -> Result<u64, anyhow::Error> {
+        let mut i = self.0.lock().await;
+        i.buffer.extend(buf);
+        Ok(buf.len() as u64)
+    }
+
+    fn pollable(&self) -> HostPollable {
+        // This stream is always ready for writing.
+        HostPollable::new(|| Box::pin(async { Ok(()) }))
     }
 }

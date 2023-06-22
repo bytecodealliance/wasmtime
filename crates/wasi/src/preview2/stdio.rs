@@ -1,7 +1,7 @@
 use anyhow::Error;
 
-use crate::preview2::{HostInputStream, HostOutputStream, HostPollable, StreamState};
 use crate::preview2::pipe::{WrappedRead, WrappedWrite};
+use crate::preview2::{HostInputStream, HostOutputStream, HostPollable, StreamState};
 
 // TODO: different cfg for windows here
 pub type Stdin = WrappedRead<tokio::io::Stdin>;
