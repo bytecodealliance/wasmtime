@@ -1,4 +1,4 @@
-use crate::preview2::{HostPollable, Table, TableError};
+use crate::preview2::{Table, TableError};
 use anyhow::Error;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -22,17 +22,17 @@ impl StreamState {
 pub trait HostInputStream: Send + Sync {
     /// Read bytes. On success, returns a pair holding the number of bytes read
     /// and a flag indicating whether the end of the stream was reached.
-    async fn read(&mut self, buf: &mut [u8]) -> Result<(u64, StreamState), Error>;
+    fn read(&mut self, buf: &mut [u8]) -> Result<(u64, StreamState), Error>;
 
     /// Vectored-I/O form of `read`.
-    async fn read_vectored<'a>(
+    fn read_vectored<'a>(
         &mut self,
         bufs: &mut [std::io::IoSliceMut<'a>],
     ) -> Result<(u64, StreamState), Error> {
         if bufs.len() > 0 {
-            self.read(bufs.get_mut(0).unwrap()).await
+            self.read(bufs.get_mut(0).unwrap())
         } else {
-            self.read(&mut []).await
+            self.read(&mut [])
         }
     }
 
@@ -43,13 +43,13 @@ pub trait HostInputStream: Send + Sync {
     }
 
     /// Read bytes from a stream and discard them.
-    async fn skip(&mut self, nelem: u64) -> Result<(u64, StreamState), Error> {
+    fn skip(&mut self, nelem: u64) -> Result<(u64, StreamState), Error> {
         let mut nread = 0;
         let mut state = StreamState::Open;
 
         // TODO: Optimize by reading more than one byte at a time.
         for _ in 0..nelem {
-            let (num, read_state) = self.read(&mut [0]).await?;
+            let (num, read_state) = self.read(&mut [0])?;
             nread += num;
             if read_state.is_closed() {
                 state = read_state;
@@ -60,8 +60,8 @@ pub trait HostInputStream: Send + Sync {
         Ok((nread, state))
     }
 
-    /// Get the Pollable implementation for read readiness.
-    fn pollable(&self) -> HostPollable;
+    /// An async method to check read readiness.
+    async fn ready(&mut self) -> Result<(), Error>;
 }
 
 /// An output bytestream.
@@ -72,12 +72,12 @@ pub trait HostInputStream: Send + Sync {
 #[async_trait::async_trait]
 pub trait HostOutputStream: Send + Sync {
     /// Write bytes. On success, returns the number of bytes written.
-    async fn write(&mut self, _buf: &[u8]) -> Result<u64, Error>;
+    fn write(&mut self, _buf: &[u8]) -> Result<u64, Error>;
 
     /// Vectored-I/O form of `write`.
-    async fn write_vectored<'a>(&mut self, bufs: &[std::io::IoSlice<'a>]) -> Result<u64, Error> {
+    fn write_vectored<'a>(&mut self, bufs: &[std::io::IoSlice<'a>]) -> Result<u64, Error> {
         if bufs.len() > 0 {
-            self.write(bufs.get(0).unwrap()).await
+            self.write(bufs.get(0).unwrap())
         } else {
             Ok(0)
         }
@@ -90,7 +90,7 @@ pub trait HostOutputStream: Send + Sync {
     }
 
     /// Transfer bytes directly from an input stream to an output stream.
-    async fn splice(
+    fn splice(
         &mut self,
         src: &mut dyn HostInputStream,
         nelem: u64,
@@ -101,8 +101,8 @@ pub trait HostOutputStream: Send + Sync {
         // TODO: Optimize by splicing more than one byte at a time.
         for _ in 0..nelem {
             let mut buf = [0u8];
-            let (num, read_state) = src.read(&mut buf).await?;
-            self.write(&buf).await?;
+            let (num, read_state) = src.read(&mut buf)?;
+            self.write(&buf)?;
             nspliced += num;
             if read_state.is_closed() {
                 state = read_state;
@@ -114,12 +114,12 @@ pub trait HostOutputStream: Send + Sync {
     }
 
     /// Repeatedly write a byte to a stream.
-    async fn write_zeroes(&mut self, nelem: u64) -> Result<u64, Error> {
+    fn write_zeroes(&mut self, nelem: u64) -> Result<u64, Error> {
         let mut nwritten = 0;
 
         // TODO: Optimize by writing more than one byte at a time.
         for _ in 0..nelem {
-            let num = self.write(&[0]).await?;
+            let num = self.write(&[0])?;
             if num == 0 {
                 break;
             }
@@ -129,8 +129,8 @@ pub trait HostOutputStream: Send + Sync {
         Ok(nwritten)
     }
 
-    /// Get the Pollable implementation for write readiness.
-    fn pollable(&self) -> HostPollable;
+    /// An async method to check write readiness.
+    async fn ready(&mut self) -> Result<(), Error>;
 }
 
 pub trait TableStreamExt {

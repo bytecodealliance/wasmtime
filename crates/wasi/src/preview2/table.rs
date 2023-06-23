@@ -20,7 +20,7 @@ pub enum TableError {
 /// up. Right now it is just an approximation.
 #[derive(Debug)]
 pub struct Table {
-    map: HashMap<u32, Box<dyn Any + Send + Sync>>,
+    pub(crate) map: HashMap<u32, Box<dyn Any + Send + Sync>>,
     next_key: u32,
 }
 

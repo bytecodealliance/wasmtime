@@ -1,10 +1,12 @@
 use crate::preview2::{
+    poll::PollableFuture,
     stream::{HostInputStream, HostOutputStream, TableStreamExt},
     wasi::io::streams::{self, InputStream, OutputStream, StreamError},
     wasi::poll::poll::Pollable,
-    TableError, TablePollableExt, WasiView,
+    HostPollable, TableError, TablePollableExt, WasiView,
 };
 use anyhow::anyhow;
+use std::any::Any;
 
 impl From<anyhow::Error> for streams::Error {
     fn from(error: anyhow::Error) -> streams::Error {
@@ -54,7 +56,7 @@ impl<T: WasiView> streams::Host for T {
         let buffer_len = std::cmp::min(len, 0x400000) as _;
         let mut buffer = vec![0; buffer_len];
 
-        let (bytes_read, state) = s.read(&mut buffer).await?;
+        let (bytes_read, state) = HostInputStream::read(s.as_mut(), &mut buffer)?;
 
         buffer.truncate(bytes_read as usize);
 
@@ -66,14 +68,17 @@ impl<T: WasiView> streams::Host for T {
         stream: InputStream,
         len: u64,
     ) -> Result<(Vec<u8>, bool), streams::Error> {
-        // TODO: When this is really async make this block.
+        self.table_mut()
+            .get_input_stream_mut(stream)?
+            .ready()
+            .await?;
         self.read(stream, len).await
     }
 
     async fn write(&mut self, stream: OutputStream, bytes: Vec<u8>) -> Result<u64, streams::Error> {
         let s = self.table_mut().get_output_stream_mut(stream)?;
 
-        let bytes_written: u64 = s.write(&bytes).await?;
+        let bytes_written: u64 = HostOutputStream::write(s.as_mut(), &bytes)?;
 
         Ok(u64::try_from(bytes_written).unwrap())
     }
@@ -83,14 +88,18 @@ impl<T: WasiView> streams::Host for T {
         stream: OutputStream,
         bytes: Vec<u8>,
     ) -> Result<u64, streams::Error> {
-        // TODO: When this is really async make this block.
-        self.write(stream, bytes).await
+        let written = self.write(stream, bytes).await?;
+        self.table_mut()
+            .get_output_stream_mut(stream)?
+            .ready()
+            .await?;
+        Ok(written)
     }
 
     async fn skip(&mut self, stream: InputStream, len: u64) -> Result<(u64, bool), streams::Error> {
         let s = self.table_mut().get_input_stream_mut(stream)?;
 
-        let (bytes_skipped, end) = s.skip(len).await?;
+        let (bytes_skipped, end) = s.skip(len)?;
 
         Ok((bytes_skipped, end.is_closed()))
     }
@@ -100,8 +109,12 @@ impl<T: WasiView> streams::Host for T {
         stream: InputStream,
         len: u64,
     ) -> Result<(u64, bool), streams::Error> {
-        // TODO: When this is really async make this block.
-        self.skip(stream, len).await
+        let r = self.skip(stream, len).await?;
+        self.table_mut()
+            .get_input_stream_mut(stream)?
+            .ready()
+            .await?;
+        Ok(r)
     }
 
     async fn write_zeroes(
@@ -111,7 +124,7 @@ impl<T: WasiView> streams::Host for T {
     ) -> Result<u64, streams::Error> {
         let s = self.table_mut().get_output_stream_mut(stream)?;
 
-        let bytes_written: u64 = s.write_zeroes(len).await?;
+        let bytes_written: u64 = s.write_zeroes(len)?;
 
         Ok(bytes_written)
     }
@@ -121,8 +134,12 @@ impl<T: WasiView> streams::Host for T {
         stream: OutputStream,
         len: u64,
     ) -> Result<u64, streams::Error> {
-        // TODO: When this is really async make this block.
-        self.write_zeroes(stream, len).await
+        let r = self.write_zeroes(stream, len).await?;
+        self.table_mut()
+            .get_output_stream_mut(stream)?
+            .ready()
+            .await?;
+        Ok(r)
     }
 
     async fn splice(
@@ -160,8 +177,10 @@ impl<T: WasiView> streams::Host for T {
         dst: OutputStream,
         len: u64,
     ) -> Result<(u64, bool), streams::Error> {
-        // TODO: When this is really async make this block.
-        self.splice(src, dst, len).await
+        // TODO: once splice is implemented, figure out what the blocking semantics are for waiting
+        // on src and dest here. probably just delete these blocking_ funcs altogether and defer
+        // that decision to userland, though.
+        todo!("stream splice is not implemented")
     }
 
     async fn forward(
@@ -194,7 +213,21 @@ impl<T: WasiView> streams::Host for T {
     }
 
     async fn subscribe_to_input_stream(&mut self, stream: InputStream) -> anyhow::Result<Pollable> {
-        let pollable = self.table().get_input_stream(stream)?.pollable();
+        let _ = self.table().get_input_stream(stream)?;
+
+        fn input_stream_ready<'a>(stream: &'a mut dyn Any) -> PollableFuture<'a> {
+            let stream = stream
+                .downcast_mut::<Box<dyn HostInputStream>>()
+                // Should be impossible because we made sure this will downcast to a
+                // HostImputStream with table check above.
+                .expect("downcast to HostInputStream failed");
+            stream.ready()
+        }
+
+        let pollable = HostPollable::TableEntry {
+            index: stream,
+            make_future: input_stream_ready,
+        };
         Ok(self.table_mut().push_host_pollable(pollable)?)
     }
 
@@ -202,7 +235,22 @@ impl<T: WasiView> streams::Host for T {
         &mut self,
         stream: OutputStream,
     ) -> anyhow::Result<Pollable> {
-        let pollable = self.table().get_output_stream(stream)?.pollable();
+        let _ = self.table().get_output_stream(stream)?;
+
+        fn output_stream_ready<'a>(stream: &'a mut dyn Any) -> PollableFuture<'a> {
+            let stream = stream
+                .downcast_mut::<Box<dyn HostOutputStream>>()
+                // Should be impossible because we made sure this will downcast to a
+                // HostOutputStream with table check above.
+                .expect("downcast to HostOutputStream failed");
+            stream.ready()
+        }
+
+        let pollable = HostPollable::TableEntry {
+            index: stream,
+            make_future: output_stream_ready,
+        };
+
         Ok(self.table_mut().push_host_pollable(pollable)?)
     }
 }

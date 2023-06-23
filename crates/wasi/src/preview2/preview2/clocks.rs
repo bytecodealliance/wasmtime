@@ -59,7 +59,9 @@ impl<T: WasiView> monotonic_clock::Host for T {
             // Deadline is in the past, so pollable is always ready:
             Ok(self
                 .table_mut()
-                .push_host_pollable(HostPollable::new(|| Box::pin(async { Ok(()) })))?)
+                .push_host_pollable(HostPollable::Closure(Box::new(|| {
+                    Box::pin(async { Ok(()) })
+                })))?)
         } else {
             let duration = if absolute {
                 Duration::from_nanos(clock_now - when)
@@ -76,7 +78,7 @@ impl<T: WasiView> monotonic_clock::Host for T {
             );
             Ok(self
                 .table_mut()
-                .push_host_pollable(HostPollable::new(move || {
+                .push_host_pollable(HostPollable::Closure(Box::new(move || {
                     Box::pin(async move {
                         tracing::trace!(
                             "mkf: deadline = {:?}, now = {:?}",
@@ -85,7 +87,7 @@ impl<T: WasiView> monotonic_clock::Host for T {
                         );
                         Ok(tokio::time::sleep_until(deadline).await)
                     })
-                }))?)
+                })))?)
         }
     }
 }

@@ -1,6 +1,4 @@
-use crate::preview2::{
-    HostInputStream, HostOutputStream, HostPollable, StreamState, Table, TableError,
-};
+use crate::preview2::{HostInputStream, HostOutputStream, StreamState, Table, TableError};
 use std::sync::Arc;
 
 bitflags::bitflags! {
@@ -98,13 +96,13 @@ impl FileInputStream {
 
 #[async_trait::async_trait]
 impl HostInputStream for FileInputStream {
-    async fn read(&mut self, buf: &mut [u8]) -> anyhow::Result<(u64, StreamState)> {
+    fn read(&mut self, buf: &mut [u8]) -> anyhow::Result<(u64, StreamState)> {
         use system_interface::fs::FileIoExt;
         let (n, end) = read_result(self.file.read_at(buf, self.position))?;
         self.position = self.position.wrapping_add(n);
         Ok((n, end))
     }
-    async fn read_vectored<'a>(
+    fn read_vectored<'a>(
         &mut self,
         bufs: &mut [std::io::IoSliceMut<'a>],
     ) -> anyhow::Result<(u64, StreamState)> {
@@ -117,8 +115,8 @@ impl HostInputStream for FileInputStream {
         use system_interface::fs::FileIoExt;
         self.file.is_read_vectored_at()
     }
-    fn pollable(&self) -> HostPollable {
-        HostPollable::new(|| Box::pin(async { Ok(()) })) // Always immediately ready - file reads cannot block
+    async fn ready(&mut self) -> anyhow::Result<()> {
+        Ok(()) // Always immediately ready - file reads cannot block
     }
 }
 
@@ -146,7 +144,7 @@ impl FileOutputStream {
 #[async_trait::async_trait]
 impl HostOutputStream for FileOutputStream {
     /// Write bytes. On success, returns the number of bytes written.
-    async fn write(&mut self, buf: &[u8]) -> anyhow::Result<u64> {
+    fn write(&mut self, buf: &[u8]) -> anyhow::Result<u64> {
         use system_interface::fs::FileIoExt;
         let n = self.file.write_at(buf, self.position)? as i64 as u64;
         self.position = self.position.wrapping_add(n);
@@ -154,7 +152,7 @@ impl HostOutputStream for FileOutputStream {
     }
 
     /// Vectored-I/O form of `write`.
-    async fn write_vectored<'a>(&mut self, bufs: &[std::io::IoSlice<'a>]) -> anyhow::Result<u64> {
+    fn write_vectored<'a>(&mut self, bufs: &[std::io::IoSlice<'a>]) -> anyhow::Result<u64> {
         use system_interface::fs::FileIoExt;
         let n = self.file.write_vectored_at(bufs, self.position)? as i64 as u64;
         self.position = self.position.wrapping_add(n);
@@ -168,8 +166,8 @@ impl HostOutputStream for FileOutputStream {
         self.file.is_write_vectored_at()
     }
 
-    fn pollable(&self) -> HostPollable {
-        HostPollable::new(|| Box::pin(async { Ok(()) })) // Always immediately ready - file writes cannot block
+    async fn ready(&mut self) -> anyhow::Result<()> {
+        Ok(()) // Always immediately ready - file writes cannot block
     }
 }
 
@@ -185,13 +183,13 @@ impl FileAppendStream {
 #[async_trait::async_trait]
 impl HostOutputStream for FileAppendStream {
     /// Write bytes. On success, returns the number of bytes written.
-    async fn write(&mut self, buf: &[u8]) -> anyhow::Result<u64> {
+    fn write(&mut self, buf: &[u8]) -> anyhow::Result<u64> {
         use system_interface::fs::FileIoExt;
         Ok(self.file.append(buf)? as i64 as u64)
     }
 
     /// Vectored-I/O form of `write`.
-    async fn write_vectored<'a>(&mut self, bufs: &[std::io::IoSlice<'a>]) -> anyhow::Result<u64> {
+    fn write_vectored<'a>(&mut self, bufs: &[std::io::IoSlice<'a>]) -> anyhow::Result<u64> {
         use system_interface::fs::FileIoExt;
         let n = self.file.append_vectored(bufs)? as i64 as u64;
         Ok(n)
@@ -204,7 +202,7 @@ impl HostOutputStream for FileAppendStream {
         self.file.is_write_vectored_at()
     }
 
-    fn pollable(&self) -> HostPollable {
-        HostPollable::new(|| Box::pin(async { Ok(()) })) // Always immediately ready - file appends cannot block
+    async fn ready(&mut self) -> anyhow::Result<()> {
+        Ok(()) // Always immediately ready - file appends cannot block
     }
 }

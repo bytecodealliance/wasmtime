@@ -3,18 +3,19 @@ use crate::preview2::{
     Table, TableError, WasiView,
 };
 use anyhow::{anyhow, Result};
+use std::any::Any;
+use std::collections::{hash_map::Entry, HashMap};
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
-type ReadynessFuture = Pin<Box<dyn Future<Output = Result<()>> + Send + Sync>>;
+pub type PollableFuture<'a> = Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>>;
+pub type MakeFuture = for<'a> fn(&'a mut dyn Any) -> PollableFuture<'a>;
+pub type ClosureFuture = Box<dyn Fn() -> PollableFuture<'static> + Send + Sync + 'static>;
 
-pub struct HostPollable(Box<dyn Fn() -> ReadynessFuture + Send + Sync>);
-
-impl HostPollable {
-    pub fn new(mkfuture: impl Fn() -> ReadynessFuture + Send + Sync + 'static) -> HostPollable {
-        HostPollable(Box::new(mkfuture))
-    }
+pub enum HostPollable {
+    TableEntry { index: u32, make_future: MakeFuture },
+    Closure(ClosureFuture),
 }
 
 pub trait TablePollableExt {
@@ -43,27 +44,68 @@ impl<T: WasiView> poll::Host for T {
     }
 
     async fn poll_oneoff(&mut self, pollables: Vec<Pollable>) -> Result<Vec<u8>> {
-        struct PollOneoff {
-            elems: Vec<(u32, ReadynessFuture)>,
+        type ReadylistIndex = usize;
+
+        let mut table = self.table_mut();
+
+        let mut table_futures: HashMap<u32, (MakeFuture, Vec<ReadylistIndex>)> = HashMap::new();
+        let mut closure_futures: Vec<(PollableFuture<'_>, Vec<ReadylistIndex>)> = Vec::new();
+
+        for (ix, p) in pollables.iter().enumerate() {
+            match table.get_host_pollable_mut(*p)? {
+                HostPollable::Closure(f) => closure_futures.push((f(), vec![ix])),
+                HostPollable::TableEntry { index, make_future } => {
+                    match table_futures.entry(*index) {
+                        Entry::Vacant(v) => {
+                            v.insert((*make_future, vec![ix]));
+                        }
+                        Entry::Occupied(mut o) => {
+                            let (_, v) = o.get_mut();
+                            v.push(ix);
+                        }
+                    }
+                }
+            }
         }
-        impl Future for PollOneoff {
+
+        for (table_ix, (make_future, readylist_indicies)) in table_futures {
+            let a_mut = unsafe {
+                let a = table
+                    .map
+                    .get(&table_ix)
+                    .ok_or(TableError::NotPresent)?
+                    .as_ref();
+                // This is safe because we have made sure that table_ix is
+                // unique, so we are only ever going to have one mut ref to
+                // this table element.
+                // We also are not going to use the table for anything else
+                // for the lifetime of these mut references.
+                #[allow(mutable_transmutes)]
+                std::mem::transmute::<&dyn Any, &mut dyn Any>(a)
+            };
+            closure_futures.push((make_future(a_mut), readylist_indicies));
+        }
+
+        struct PollOneoff<'a> {
+            elems: Vec<(PollableFuture<'a>, Vec<ReadylistIndex>)>,
+        }
+        impl<'a> Future for PollOneoff<'a> {
             type Output = Result<Vec<u8>>;
 
             fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
                 let mut any_ready = false;
                 let mut results = vec![0; self.elems.len()];
-                for (ix, (pollable, f)) in self.elems.iter_mut().enumerate() {
-                    // NOTE: we don't need to guard against polling any of the elems more than
-                    // once, as a single one becoming ready will cause the whole PollOneoff future
-                    // to become ready.
-                    match f.as_mut().poll(cx) {
+                for (fut, readylist_indicies) in self.elems.iter_mut() {
+                    match fut.as_mut().poll(cx) {
                         Poll::Ready(Ok(())) => {
-                            results[ix] = 1;
+                            for r in readylist_indicies {
+                                results[*r] = 1;
+                            }
                             any_ready = true;
                         }
                         Poll::Ready(Err(e)) => {
                             return Poll::Ready(Err(
-                                e.context(format!("poll_oneoff[{ix}]: {pollable}"))
+                                e.context(format!("poll_oneoff {readylist_indicies:?}"))
                             ));
                         }
                         Poll::Pending => {}
@@ -78,16 +120,7 @@ impl<T: WasiView> poll::Host for T {
         }
 
         Ok(PollOneoff {
-            elems: pollables
-                .iter()
-                .enumerate()
-                .map(
-                    |(ix, pollable)| match self.table_mut().get_host_pollable_mut(*pollable) {
-                        Ok(mkf) => Ok((*pollable, mkf.0())),
-                        Err(e) => Err(anyhow!(e).context(format!("poll_oneoff[{ix}]: {pollable}"))),
-                    },
-                )
-                .collect::<Result<Vec<_>>>()?,
+            elems: closure_futures,
         }
         .await?)
     }
