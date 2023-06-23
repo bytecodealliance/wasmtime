@@ -1,6 +1,6 @@
 use anyhow::Error;
 
-use crate::preview2::pipe::{WrappedRead, WrappedWrite};
+use crate::preview2::pipe::{AsyncReadStream, AsyncWriteStream};
 use crate::preview2::{HostInputStream, HostOutputStream, StreamState};
 
 pub use self::stdin::*;
@@ -8,7 +8,7 @@ pub use self::stdin::*;
 // TODO: different cfg for windows here
 #[cfg(unix)]
 mod stdin {
-    use crate::preview2::pipe::{AsyncFdStream, WrappedRead, WrappedWrite};
+    use crate::preview2::pipe::{AsyncReadStream, AsyncWriteStream, AsyncFdStream};
 
     pub type Stdin = AsyncFdStream<std::io::Stdin>;
 
@@ -17,15 +17,15 @@ mod stdin {
     }
 }
 
-pub type Stdout = WrappedWrite<tokio::io::Stdout>;
+pub type Stdout = AsyncWriteStream<tokio::io::Stdout>;
 
 pub fn stdout() -> Stdout {
-    WrappedWrite::new(tokio::io::stdout())
+    AsyncWriteStream::new(tokio::io::stdout())
 }
-pub type Stderr = WrappedWrite<tokio::io::Stderr>;
+pub type Stderr = AsyncWriteStream<tokio::io::Stderr>;
 
 pub fn stderr() -> Stderr {
-    WrappedWrite::new(tokio::io::stderr())
+    AsyncWriteStream::new(tokio::io::stderr())
 }
 
 pub struct EmptyStream;

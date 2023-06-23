@@ -154,15 +154,15 @@ mod async_fd_stream {
     }
 }
 
-pub struct WrappedRead<T> {
+pub struct AsyncReadStream<T> {
     state: StreamState,
     buffer: Vec<u8>,
     reader: T,
 }
 
-impl<T> WrappedRead<T> {
+impl<T> AsyncReadStream<T> {
     pub fn new(reader: T) -> Self {
-        WrappedRead {
+        AsyncReadStream {
             state: StreamState::Open,
             buffer: Vec::new(),
             reader,
@@ -171,7 +171,7 @@ impl<T> WrappedRead<T> {
 }
 
 #[async_trait::async_trait]
-impl<T: tokio::io::AsyncRead + Send + Sync + Unpin + 'static> HostInputStream for WrappedRead<T> {
+impl<T: tokio::io::AsyncRead + Send + Sync + Unpin + 'static> HostInputStream for AsyncReadStream<T> {
     fn read(&mut self, mut dest: &mut [u8]) -> Result<(u64, StreamState), Error> {
         use std::io::Write;
         let l = dest.write(&self.buffer)?;
@@ -331,14 +331,14 @@ impl HostOutputStream for OutputPipe {
     }
 }
 
-pub struct WrappedWrite<T> {
+pub struct AsyncWriteStream<T> {
     buffer: Vec<u8>,
     writer: T,
 }
 
-impl<T> WrappedWrite<T> {
+impl<T> AsyncWriteStream<T> {
     pub fn new(writer: T) -> Self {
-        WrappedWrite {
+        AsyncWriteStream {
             buffer: Vec::new(),
             writer,
         }
@@ -347,7 +347,7 @@ impl<T> WrappedWrite<T> {
 
 #[async_trait::async_trait]
 impl<T: tokio::io::AsyncWrite + Send + Sync + Unpin + 'static> HostOutputStream
-    for WrappedWrite<T>
+    for AsyncWriteStream<T>
 {
     // I can get rid of the `async` here once the lock is no longer a tokio lock:
     fn write(&mut self, buf: &[u8]) -> Result<u64, anyhow::Error> {
