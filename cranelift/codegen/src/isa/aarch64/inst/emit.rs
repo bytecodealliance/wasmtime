@@ -3145,7 +3145,7 @@ impl MachInstEmit for Inst {
                     APIKey::B => 0b1,
                 };
 
-                if is_hint {
+                if is_hint || stack_bytes_to_pop > 0 {
                     sink.put4(0xd50323bf | key << 6); // autiasp / autibsp
                     Inst::Ret {
                         rets: vec![],
