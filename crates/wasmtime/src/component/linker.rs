@@ -342,7 +342,8 @@ impl<T> LinkerInstance<'_, T> {
             .collect::<IndexMap<_, _>>();
 
         while let Some(name) = names.pop() {
-            if let Some(ty) = map.get(self.strings.strings[name].deref()) {
+            let name = self.strings.strings[name].deref();
+            if let Some(ty) = map.get(name) {
                 if let TypeDef::ComponentInstance(index) = ty {
                     map = &component.types()[*index].exports;
                 } else {
