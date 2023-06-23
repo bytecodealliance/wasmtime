@@ -4,10 +4,13 @@ use crate::component::matching::TypeChecker;
 use crate::component::{Component, ComponentNamedList, Instance, InstancePre, Lift, Lower, Val};
 use crate::{AsContextMut, Engine, Module, StoreContextMut};
 use anyhow::{anyhow, bail, Context, Result};
+use indexmap::IndexMap;
 use std::collections::hash_map::{Entry, HashMap};
 use std::future::Future;
 use std::marker;
+use std::ops::Deref;
 use std::pin::Pin;
+use std::rc::Rc;
 use std::sync::Arc;
 use wasmtime_environ::component::TypeDef;
 use wasmtime_environ::PrimaryMap;
@@ -32,6 +35,17 @@ pub struct Strings {
     strings: Vec<Arc<str>>,
 }
 
+struct PathCell {
+    name: usize,
+    next: Path,
+}
+
+#[derive(Clone)]
+enum Path {
+    Nil,
+    Cell(Rc<PathCell>),
+}
+
 /// Structure representing an "instance" being defined within a linker.
 ///
 /// Instances do not need to be actual [`Instance`]s and instead are defined by
@@ -39,6 +53,7 @@ pub struct Strings {
 /// internally.
 pub struct LinkerInstance<'a, T> {
     engine: Engine,
+    path: Path,
     strings: &'a mut Strings,
     map: &'a mut NameMap,
     allow_shadowing: bool,
@@ -86,6 +101,7 @@ impl<T> Linker<T> {
     pub fn root(&mut self) -> LinkerInstance<'_, T> {
         LinkerInstance {
             engine: self.engine.clone(),
+            path: Path::Nil,
             strings: &mut self.strings,
             map: &mut self.map,
             allow_shadowing: self.allow_shadowing,
@@ -231,6 +247,7 @@ impl<T> LinkerInstance<'_, T> {
     fn as_mut(&mut self) -> LinkerInstance<'_, T> {
         LinkerInstance {
             engine: self.engine.clone(),
+            path: self.path.clone(),
             strings: self.strings,
             map: self.map,
             allow_shadowing: self.allow_shadowing,
@@ -310,21 +327,45 @@ impl<T> LinkerInstance<'_, T> {
         name: &str,
         func: F,
     ) -> Result<()> {
-        for (import_name, ty) in component.env_component().import_types.values() {
-            if name == import_name {
-                if let TypeDef::ComponentFunc(index) = ty {
-                    let name = self.strings.intern(name);
-                    return self.insert(
-                        name,
-                        Definition::Func(HostFunc::new_dynamic(func, *index, component.types())),
-                    );
+        let mut names = Vec::new();
+        let mut path = &self.path;
+        while let Path::Cell(cell) = path {
+            names.push(cell.name);
+            path = &cell.next;
+        }
+
+        let mut map = &component
+            .env_component()
+            .import_types
+            .values()
+            .map(|(k, v)| (k.clone(), *v))
+            .collect::<IndexMap<_, _>>();
+
+        while let Some(name) = names.pop() {
+            if let Some(ty) = map.get(self.strings.strings[name].deref()) {
+                if let TypeDef::ComponentInstance(index) = ty {
+                    map = &component.types()[*index].exports;
                 } else {
-                    bail!("import `{name}` has the wrong type (expected a function)");
+                    bail!("import `{name}` has the wrong type (expected a component instance)");
                 }
+            } else {
+                bail!("import `{name}` not found");
             }
         }
 
-        Err(anyhow!("import `{name}` not found"))
+        if let Some(ty) = map.get(name) {
+            if let TypeDef::ComponentFunc(index) = ty {
+                let name = self.strings.intern(name);
+                return self.insert(
+                    name,
+                    Definition::Func(HostFunc::new_dynamic(func, *index, component.types())),
+                );
+            } else {
+                bail!("import `{name}` has the wrong type (expected a function)");
+            }
+        } else {
+            Err(anyhow!("import `{name}` not found"))
+        }
     }
 
     // TODO: define func_new_async
@@ -367,6 +408,10 @@ impl<T> LinkerInstance<'_, T> {
             Definition::Instance(map) => map,
             _ => unreachable!(),
         };
+        self.path = Path::Cell(Rc::new(PathCell {
+            name,
+            next: self.path,
+        }));
         Ok(self)
     }
 
