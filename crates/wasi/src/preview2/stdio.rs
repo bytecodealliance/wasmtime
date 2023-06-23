@@ -1,14 +1,13 @@
 use anyhow::Error;
 
-use crate::preview2::pipe::{AsyncReadStream, AsyncWriteStream};
-use crate::preview2::{HostInputStream, HostOutputStream, StreamState};
+use crate::preview2::{AsyncWriteStream, HostInputStream, HostOutputStream, StreamState};
 
 pub use self::stdin::*;
 
 // TODO: different cfg for windows here
 #[cfg(unix)]
 mod stdin {
-    use crate::preview2::pipe::{AsyncReadStream, AsyncWriteStream, AsyncFdStream};
+    use crate::preview2::AsyncFdStream;
 
     pub type Stdin = AsyncFdStream<std::io::Stdin>;
 

@@ -2,7 +2,7 @@ use crate::preview2::{
     wasi::poll::poll::{self, Pollable},
     Table, TableError, WasiView,
 };
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use std::any::Any;
 use std::collections::{hash_map::Entry, HashMap};
 use std::future::Future;
@@ -46,7 +46,7 @@ impl<T: WasiView> poll::Host for T {
     async fn poll_oneoff(&mut self, pollables: Vec<Pollable>) -> Result<Vec<u8>> {
         type ReadylistIndex = usize;
 
-        let mut table = self.table_mut();
+        let table = self.table_mut();
 
         let mut table_futures: HashMap<u32, (MakeFuture, Vec<ReadylistIndex>)> = HashMap::new();
         let mut closure_futures: Vec<(PollableFuture<'_>, Vec<ReadylistIndex>)> = Vec::new();

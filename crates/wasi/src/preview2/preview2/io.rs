@@ -173,9 +173,9 @@ impl<T: WasiView> streams::Host for T {
 
     async fn blocking_splice(
         &mut self,
-        src: InputStream,
-        dst: OutputStream,
-        len: u64,
+        _src: InputStream,
+        _dst: OutputStream,
+        _len: u64,
     ) -> Result<(u64, bool), streams::Error> {
         // TODO: once splice is implemented, figure out what the blocking semantics are for waiting
         // on src and dest here. probably just delete these blocking_ funcs altogether and defer
