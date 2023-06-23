@@ -303,21 +303,31 @@ impl<T: tokio::io::AsyncWrite + Send + Sync + Unpin + 'static> HostOutputStream
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MemoryOutputPipe {
-    buffer: Vec<u8>,
+    buffer: std::sync::Arc<std::sync::Mutex<Vec<u8>>>,
 }
 
 impl MemoryOutputPipe {
     pub fn new() -> Self {
-        MemoryOutputPipe { buffer: Vec::new() }
+        MemoryOutputPipe {
+            buffer: std::sync::Arc::new(std::sync::Mutex::new(Vec::new())),
+        }
+    }
+    pub fn finalize(self) -> Vec<u8> {
+        std::sync::Arc::try_unwrap(self.buffer)
+            .map_err(|_| ())
+            .expect("more than one outstanding reference")
+            .into_inner()
+            .map_err(|_| ())
+            .expect("mutex poisioned")
     }
 }
 
 #[async_trait::async_trait]
 impl HostOutputStream for MemoryOutputPipe {
     fn write(&mut self, buf: &[u8]) -> Result<u64, anyhow::Error> {
-        self.buffer.extend(buf);
+        self.buffer.lock().unwrap().extend(buf);
         Ok(buf.len() as u64)
     }
 
