@@ -9,6 +9,8 @@
 //!
 use crate::preview2::{HostInputStream, HostOutputStream, StreamState};
 use anyhow::{anyhow, Error};
+use std::pin::Pin;
+use std::task::{Context, Poll, Waker};
 
 pub fn pipe(bound: usize) -> (InputPipe, OutputPipe) {
     let (writer, reader) = tokio::sync::mpsc::channel(bound);
@@ -35,31 +37,42 @@ impl InputPipe {
 #[async_trait::async_trait]
 impl HostInputStream for InputPipe {
     fn read(&mut self, dest: &mut [u8]) -> Result<(u64, StreamState), Error> {
-        let l = self.buffer.len().min(dest.len());
-        let dest = &mut dest[..l];
-        dest.copy_from_slice(&self.buffer[..l]);
-        self.buffer = self.buffer.split_off(l);
-        Ok((l as u64, self.state))
+        use tokio::sync::mpsc::error::TryRecvError;
+        let read_from_buffer = self.buffer.len().min(dest.len());
+        let buffer_dest = &mut dest[..read_from_buffer];
+        buffer_dest.copy_from_slice(&self.buffer[..read_from_buffer]);
+        // Keep remaining contents in buffer
+        self.buffer = self.buffer.split_off(read_from_buffer);
+        if read_from_buffer < dest.len() {
+            match self.channel.try_recv() {
+                Ok(msg) => {
+                    let recv_dest = &mut dest[read_from_buffer..];
+                    if msg.len() < recv_dest.len() {
+                        recv_dest[..msg.len()].copy_from_slice(&msg);
+                        Ok(((read_from_buffer + msg.len()) as u64, self.state))
+                    } else {
+                        recv_dest.copy_from_slice(&msg[..recv_dest.len()]);
+                        self.buffer.extend_from_slice(&msg[recv_dest.len()..]);
+                        Ok((dest.len() as u64, self.state))
+                    }
+                }
+                Err(TryRecvError::Empty) => Ok((read_from_buffer as u64, self.state)),
+                Err(TryRecvError::Disconnected) => {
+                    self.state = StreamState::Closed;
+                    Ok((read_from_buffer as u64, self.state))
+                }
+            }
+        } else {
+            Ok((read_from_buffer as u64, self.state))
+        }
     }
 
-    /*
-    fn pollable(&self) -> HostPollable {
-        let i = Arc::clone(&self.0);
-        HostPollable::new(move || {
-            let i = Arc::clone(&i);
-            Box::pin(async move {
-                let mut i = i.lock().await;
-                match i.channel.recv().await {
-                    None => i.state = StreamState::Closed,
-                    Some(mut buf) => i.buffer.append(&mut buf),
-                }
-                Ok(())
-            })
-        })
-    }
-    */
     async fn ready(&mut self) -> Result<(), Error> {
-        todo!() // FIXME
+        match self.channel.recv().await {
+            None => self.state = StreamState::Closed,
+            Some(mut buf) => self.buffer.append(&mut buf),
+        }
+        Ok(())
     }
 }
 
@@ -96,56 +109,51 @@ impl<T: tokio::io::AsyncRead + Send + Sync + Unpin + 'static> HostInputStream fo
 
         let mut dest = &mut dest[l..];
         let rest = if !dest.is_empty() {
-            let written = todo!() /* self.reader.read_buf(&mut dest).await? */ ; // FIXME we want to poll_read
-                                                                                 // here
-            if written == 0 {
+            let mut readbuf = tokio::io::ReadBuf::new(dest);
+
+            let noop_waker = noop_waker();
+            let mut cx: Context<'_> = Context::from_waker(&noop_waker);
+            // Make a synchronous, non-blocking call attempt to read. We are not
+            // going to poll this more than once, so the noop waker is appropriate.
+            match Pin::new(&mut self.reader).poll_read(&mut cx, &mut readbuf) {
+                Poll::Pending => {}             // Nothing was read
+                Poll::Ready(result) => result?, // Maybe an error occured
+            };
+            let bytes_read = readbuf.filled().len();
+
+            if bytes_read == 0 {
                 self.state = StreamState::Closed;
             }
-            written
+            bytes_read
         } else {
             0
         };
 
-        // TODO: figure out how we're tracking the stream state. Maybe mutate it when handling the
-        // result of `read_buf`?
         Ok(((l + rest) as u64, self.state))
     }
 
-    /*
-    fn pollable(&self) -> HostPollable {
-        use tokio::io::AsyncReadExt;
-        let i = Arc::clone(&self.0);
-        HostPollable::new(move || {
-            let i = Arc::clone(&i);
-            Box::pin(async move {
-                let mut i = i.lock().await;
-
-                if i.state.is_closed() {
-                    return Ok(());
-                }
-
-                let mut bytes = core::mem::take(&mut i.buffer);
-                let start = bytes.len();
-                bytes.resize(start + 1024, 0);
-                let l = i.reader.read_buf(&mut &mut bytes[start..]).await?;
-
-                // Reading 0 bytes means either there wasn't enough space in the buffer (which we
-                // know there is because we just resized) or that the stream has closed. Thus, we
-                // know the stream has closed here.
-                if l == 0 {
-                    i.state = StreamState::Closed;
-                }
-
-                bytes.drain(start + l..);
-                i.buffer = bytes;
-
-                Ok(())
-            })
-        })
-    }
-    */
     async fn ready(&mut self) -> Result<(), Error> {
-        todo!()
+        if self.state.is_closed() {
+            return Ok(());
+        }
+
+        let mut bytes = core::mem::take(&mut self.buffer);
+        let start = bytes.len();
+        bytes.resize(start + 1024, 0);
+        let l =
+            tokio::io::AsyncReadExt::read_buf(&mut self.reader, &mut &mut bytes[start..]).await?;
+
+        // Reading 0 bytes means either there wasn't enough space in the buffer (which we
+        // know there is because we just resized) or that the stream has closed. Thus, we
+        // know the stream has closed here.
+        if l == 0 {
+            self.state = StreamState::Closed;
+        }
+
+        bytes.drain(start + l..);
+        self.buffer = bytes;
+
+        Ok(())
     }
 }
 
@@ -232,28 +240,16 @@ impl HostOutputStream for OutputPipe {
         Ok(buf.len() as u64)
     }
 
-    /*
-    fn pollable(&self) -> HostPollable {
-        let i = Arc::clone(&self.0);
-        HostPollable::new(move || {
-            let i = Arc::clone(&i);
-            Box::pin(async move {
-                let mut i = i.lock().await;
-                i.flush().await;
-                let p = match i.channel.take().expect("Missing sender channel state") {
-                    SenderState::Writable(p) => p,
-                    SenderState::Channel(s) => s.reserve_owned().await?,
-                };
-
-                i.channel = Some(SenderState::Writable(p));
-
-                Ok(())
-            })
-        })
-    }
-    */
     async fn ready(&mut self) -> Result<(), Error> {
-        todo!() // FIXME
+        self.flush().await;
+        let p = match self.channel.take().expect("Missing sender channel state") {
+            SenderState::Writable(p) => p,
+            SenderState::Channel(s) => s.reserve_owned().await?,
+        };
+
+        self.channel = Some(SenderState::Writable(p));
+
+        Ok(())
     }
 }
 
@@ -277,16 +273,14 @@ impl<T: tokio::io::AsyncWrite + Send + Sync + Unpin + 'static> HostOutputStream
 {
     // I can get rid of the `async` here once the lock is no longer a tokio lock:
     fn write(&mut self, buf: &[u8]) -> Result<u64, anyhow::Error> {
-        use std::pin::Pin;
-        use std::task::{Context, Poll};
         let mut bytes = core::mem::take(&mut self.buffer);
         bytes.extend(buf);
 
-        // FIXME: either Waker::noop is stable, or its something trivial to implement,
-        // and we can use it here.
-        let mut no_op_context: Context<'_> = todo!();
-        // This is a true non-blocking call to the writer
-        match Pin::new(&mut self.writer).poll_write(&mut no_op_context, &mut bytes.as_slice()) {
+        let noop_waker = noop_waker();
+        let mut cx: Context<'_> = Context::from_waker(&noop_waker);
+        // Make a synchronous, non-blocking call attempt to write. We are not
+        // going to poll this more than once, so the noop waker is appropriate.
+        match Pin::new(&mut self.writer).poll_write(&mut cx, &mut bytes.as_slice()) {
             Poll::Pending => {
                 // Nothing was written: buffer all of it below.
             }
@@ -331,4 +325,24 @@ impl HostOutputStream for MemoryOutputPipe {
         // This stream is always ready for writing.
         Ok(())
     }
+}
+
+// This implementation is basically copy-pasted out of `std` because the
+// implementation there has not yet stabilized. When the `noop_waker` feature
+// stabilizes, replace this with std::task::Waker::noop().
+fn noop_waker() -> Waker {
+    use std::task::{RawWaker, RawWakerVTable};
+    const VTABLE: RawWakerVTable = RawWakerVTable::new(
+        // Cloning just returns a new no-op raw waker
+        |_| RAW,
+        // `wake` does nothing
+        |_| {},
+        // `wake_by_ref` does nothing
+        |_| {},
+        // Dropping does nothing as we don't allocate anything
+        |_| {},
+    );
+    const RAW: RawWaker = RawWaker::new(std::ptr::null(), &VTABLE);
+
+    unsafe { Waker::from_raw(RAW) }
 }
