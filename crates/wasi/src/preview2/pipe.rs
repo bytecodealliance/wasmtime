@@ -304,7 +304,7 @@ impl<T: tokio::io::AsyncWrite + Send + Sync + Unpin + 'static> HostOutputStream
 }
 
 #[derive(Debug)]
-struct MemoryOutputPipe {
+pub struct MemoryOutputPipe {
     buffer: Vec<u8>,
 }
 
