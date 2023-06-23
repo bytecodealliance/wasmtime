@@ -3,11 +3,18 @@ use anyhow::Error;
 use crate::preview2::pipe::{WrappedRead, WrappedWrite};
 use crate::preview2::{HostInputStream, HostOutputStream, StreamState};
 
-// TODO: different cfg for windows here
-pub type Stdin = WrappedRead<tokio::io::Stdin>;
+pub use self::stdin::*;
 
-pub fn stdin() -> Stdin {
-    WrappedRead::new(tokio::io::stdin())
+// TODO: different cfg for windows here
+#[cfg(unix)]
+mod stdin {
+    use crate::preview2::pipe::{AsyncFdStream, WrappedRead, WrappedWrite};
+
+    pub type Stdin = AsyncFdStream<std::io::Stdin>;
+
+    pub fn stdin() -> Stdin {
+        AsyncFdStream::new(std::io::stdin())
+    }
 }
 
 pub type Stdout = WrappedWrite<tokio::io::Stdout>;

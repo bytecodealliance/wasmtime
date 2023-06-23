@@ -76,6 +76,84 @@ impl HostInputStream for InputPipe {
     }
 }
 
+#[cfg(unix)]
+pub use async_fd_stream::*;
+
+#[cfg(unix)]
+mod async_fd_stream {
+    use super::{HostInputStream, HostOutputStream, StreamState};
+    use anyhow::Error;
+    use std::io::{Read, Write};
+    use std::os::fd::{AsFd, AsRawFd, FromRawFd, IntoRawFd};
+    use tokio::io::unix::AsyncFd;
+
+    pub struct AsyncFdStream<T: AsRawFd> {
+        fd: AsyncFd<T>,
+    }
+
+    impl<T: AsRawFd> AsyncFdStream<T> {
+        pub fn new(fd: T) -> Self {
+            Self {
+                fd: AsyncFd::new(fd).unwrap(),
+            }
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl<T: AsRawFd + Send + Sync + Unpin + 'static> HostInputStream for AsyncFdStream<T> {
+        fn read(&mut self, mut dest: &mut [u8]) -> Result<(u64, StreamState), Error> {
+            // Safety: we're the only one accessing this fd, and we turn it back into a raw fd when
+            // we're done.
+            let mut file = unsafe { std::fs::File::from_raw_fd(self.fd.as_raw_fd()) };
+
+            // TODO: how sure are we that this is non-blocking?
+            let read_res = file.read(dest);
+
+            // Make sure that the file doesn't close the fd when it's dropped.
+            file.into_raw_fd();
+
+            let n = read_res?;
+
+            // TODO: figure out when the stream should be considered closed
+            // TODO: figure out how to handle the error conditions from the read call above
+
+            Ok((n as u64, StreamState::Open))
+        }
+
+        async fn ready(&mut self) -> Result<(), Error> {
+            self.fd.readable().await?;
+            Ok(())
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl<T: AsRawFd + Send + Sync + Unpin + 'static> HostOutputStream for AsyncFdStream<T> {
+        fn write(&mut self, buf: &[u8]) -> Result<u64, Error> {
+            // Safety: we're the only one accessing this fd, and we turn it back into a raw fd when
+            // we're done.
+            let mut file = unsafe { std::fs::File::from_raw_fd(self.fd.as_raw_fd()) };
+
+            // TODO: how sure are we that this is non-blocking?
+            let write_res = file.write(buf);
+
+            // Make sure that the file doesn't close the fd when it's dropped.
+            file.into_raw_fd();
+
+            let n = write_res?;
+
+            // TODO: figure out when the stream should be considered closed
+            // TODO: figure out how to handle the error conditions from the write call above
+
+            Ok(n as u64)
+        }
+
+        async fn ready(&mut self) -> Result<(), Error> {
+            self.fd.writable().await?;
+            Ok(())
+        }
+    }
+}
+
 pub struct WrappedRead<T> {
     state: StreamState,
     buffer: Vec<u8>,
