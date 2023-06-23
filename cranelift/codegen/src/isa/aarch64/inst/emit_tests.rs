@@ -80,7 +80,7 @@ fn test_aarch64_binemit() {
             rets: vec![],
             stack_bytes_to_pop: 16,
         },
-        "FF0B5FD6",
+        "FF430091FF0B5FD6",
         "add sp, sp, #16 ; retaa",
     ));
     insns.push((Inst::Pacisp { key: APIKey::B }, "7F2303D5", "pacibsp"));
