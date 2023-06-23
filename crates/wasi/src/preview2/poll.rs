@@ -68,22 +68,9 @@ impl<T: WasiView> poll::Host for T {
             }
         }
 
-        for (table_ix, (make_future, readylist_indicies)) in table_futures {
-            let a_mut = unsafe {
-                let a = table
-                    .map
-                    .get(&table_ix)
-                    .ok_or(TableError::NotPresent)?
-                    .as_ref();
-                // This is safe because we have made sure that table_ix is
-                // unique, so we are only ever going to have one mut ref to
-                // this table element.
-                // We also are not going to use the table for anything else
-                // for the lifetime of these mut references.
-                #[allow(mutable_transmutes)]
-                std::mem::transmute::<&dyn Any, &mut dyn Any>(a)
-            };
-            closure_futures.push((make_future(a_mut), readylist_indicies));
+        for (entry, (make_future, readylist_indices)) in table.iter_entries(table_futures) {
+            let entry = entry?;
+            closure_futures.push((make_future(entry), readylist_indices));
         }
 
         struct PollOneoff<'a> {

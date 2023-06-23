@@ -104,4 +104,23 @@ impl Table {
             }
         }
     }
+
+    /// Zip the values of the map with mutable references to table entries corresponding to each
+    /// key. As the keys in the [HashMap] are unique, this iterator can give mutable references
+    /// with the same lifetime as the mutable reference to the [Table].
+    pub fn iter_entries<'a, T>(
+        &'a mut self,
+        map: HashMap<u32, T>,
+    ) -> impl Iterator<Item = (Result<&'a mut dyn Any, TableError>, T)> {
+        map.into_iter().map(move |(k, v)| {
+            let item = self
+                .map
+                .get_mut(&k)
+                .map(Box::as_mut)
+                // Safety: extending the lifetime of the mutable reference.
+                .map(|item| unsafe { &mut *(item as *mut dyn Any) })
+                .ok_or(TableError::NotPresent);
+            (item, v)
+        })
+    }
 }
