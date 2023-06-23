@@ -1486,3 +1486,127 @@
 
 (rule 4 (gen_icmp_mask (ty_vec_fits_in_register ty) (IntCC.SignedGreaterThanOrEqual) (replicated_imm5 x) y)
   (rv_vmsle_vi y x (unmasked) ty))
+
+
+
+;; Builds a vector mask corresponding to the FloatCC operation.
+(decl gen_fcmp_mask (Type FloatCC Value Value) VReg)
+
+;; FloatCC.Equal
+
+(rule 0 (gen_fcmp_mask (ty_vec_fits_in_register ty) (FloatCC.Equal) x y)
+  (rv_vmfeq_vv x y (unmasked) ty))
+
+(rule 1 (gen_fcmp_mask (ty_vec_fits_in_register ty) (FloatCC.Equal) x (splat y))
+  (rv_vmfeq_vf x y (unmasked) ty))
+
+(rule 2 (gen_fcmp_mask (ty_vec_fits_in_register ty) (FloatCC.Equal) (splat x) y)
+  (rv_vmfeq_vf y x (unmasked) ty))
+
+;; FloatCC.NotEqual
+;; Note: This is UnorderedNotEqual. It is the only unoredered comparison that is not named as such.
+
+(rule 0 (gen_fcmp_mask (ty_vec_fits_in_register ty) (FloatCC.NotEqual) x y)
+  (rv_vmfne_vv x y (unmasked) ty))
+
+(rule 1 (gen_fcmp_mask (ty_vec_fits_in_register ty) (FloatCC.NotEqual) x (splat y))
+  (rv_vmfne_vf x y (unmasked) ty))
+
+(rule 2 (gen_fcmp_mask (ty_vec_fits_in_register ty) (FloatCC.NotEqual) (splat x) y)
+  (rv_vmfne_vf y x (unmasked) ty))
+
+;; FloatCC.LessThan
+
+(rule 0 (gen_fcmp_mask (ty_vec_fits_in_register ty) (FloatCC.LessThan) x y)
+  (rv_vmflt_vv x y (unmasked) ty))
+
+(rule 1 (gen_fcmp_mask (ty_vec_fits_in_register ty) (FloatCC.LessThan) x (splat y))
+  (rv_vmflt_vf x y (unmasked) ty))
+
+(rule 2 (gen_fcmp_mask (ty_vec_fits_in_register ty) (FloatCC.LessThan) (splat x) y)
+  (rv_vmfgt_vf y x (unmasked) ty))
+
+;; FloatCC.LessThanOrEqual
+
+(rule 0 (gen_fcmp_mask (ty_vec_fits_in_register ty) (FloatCC.LessThanOrEqual) x y)
+  (rv_vmfle_vv x y (unmasked) ty))
+
+(rule 1 (gen_fcmp_mask (ty_vec_fits_in_register ty) (FloatCC.LessThanOrEqual) x (splat y))
+  (rv_vmfle_vf x y (unmasked) ty))
+
+(rule 2 (gen_fcmp_mask (ty_vec_fits_in_register ty) (FloatCC.LessThanOrEqual) (splat x) y)
+  (rv_vmfge_vf y x (unmasked) ty))
+
+;; FloatCC.GreaterThan
+
+(rule 0 (gen_fcmp_mask (ty_vec_fits_in_register ty) (FloatCC.GreaterThan) x y)
+  (rv_vmfgt_vv x y (unmasked) ty))
+
+(rule 1 (gen_fcmp_mask (ty_vec_fits_in_register ty) (FloatCC.GreaterThan) x (splat y))
+  (rv_vmfgt_vf x y (unmasked) ty))
+
+(rule 2 (gen_fcmp_mask (ty_vec_fits_in_register ty) (FloatCC.GreaterThan) (splat x) y)
+  (rv_vmflt_vf y x (unmasked) ty))
+
+;; FloatCC.GreaterThanOrEqual
+
+(rule 0 (gen_fcmp_mask (ty_vec_fits_in_register ty) (FloatCC.GreaterThanOrEqual) x y)
+  (rv_vmfge_vv x y (unmasked) ty))
+
+(rule 1 (gen_fcmp_mask (ty_vec_fits_in_register ty) (FloatCC.GreaterThanOrEqual) x (splat y))
+  (rv_vmfge_vf x y (unmasked) ty))
+
+(rule 2 (gen_fcmp_mask (ty_vec_fits_in_register ty) (FloatCC.GreaterThanOrEqual) (splat x) y)
+  (rv_vmfle_vf y x (unmasked) ty))
+
+;; FloatCC.Ordered
+
+(rule 0 (gen_fcmp_mask (ty_vec_fits_in_register ty) (FloatCC.Ordered) x y)
+  (rv_vmand_mm
+    (gen_fcmp_mask ty (FloatCC.Equal) x x)
+    (gen_fcmp_mask ty (FloatCC.Equal) y y)
+    ty))
+
+;; FloatCC.Unordered
+
+(rule 0 (gen_fcmp_mask (ty_vec_fits_in_register ty) (FloatCC.Unordered) x y)
+  (rv_vmor_mm
+    (gen_fcmp_mask ty (FloatCC.NotEqual) x x)
+    (gen_fcmp_mask ty (FloatCC.NotEqual) y y)
+    ty))
+
+;; FloatCC.OrderedNotEqual
+
+(rule 0 (gen_fcmp_mask (ty_vec_fits_in_register ty) (FloatCC.OrderedNotEqual) x y)
+  (rv_vmor_mm
+    (gen_fcmp_mask ty (FloatCC.LessThan) x y)
+    (gen_fcmp_mask ty (FloatCC.LessThan) y x)
+    ty))
+
+;; FloatCC.UnorderedOrEqual
+
+(rule 0 (gen_fcmp_mask (ty_vec_fits_in_register ty) (FloatCC.UnorderedOrEqual) x y)
+  (rv_vmnor_mm
+    (gen_fcmp_mask ty (FloatCC.LessThan) x y)
+    (gen_fcmp_mask ty (FloatCC.LessThan) y x)
+    ty))
+
+;; FloatCC.UnorderedOrGreaterThan
+
+(rule 0 (gen_fcmp_mask (ty_vec_fits_in_register ty) (FloatCC.UnorderedOrGreaterThan) x y)
+  (rv_vmnot_m (gen_fcmp_mask ty (FloatCC.LessThanOrEqual) x y) ty))
+
+;; FloatCC.UnorderedOrGreaterThanOrEqual
+
+(rule 0 (gen_fcmp_mask (ty_vec_fits_in_register ty) (FloatCC.UnorderedOrGreaterThanOrEqual) x y)
+  (rv_vmnot_m (gen_fcmp_mask ty (FloatCC.LessThan) x y) ty))
+
+;; FloatCC.UnorderedOrLessThan
+
+(rule 0 (gen_fcmp_mask (ty_vec_fits_in_register ty) (FloatCC.UnorderedOrLessThan) x y)
+  (rv_vmnot_m (gen_fcmp_mask ty (FloatCC.GreaterThanOrEqual) x y) ty))
+
+;; FloatCC.UnorderedOrLessThanOrEqual
+
+(rule 0 (gen_fcmp_mask (ty_vec_fits_in_register ty) (FloatCC.UnorderedOrLessThanOrEqual) x y)
+  (rv_vmnot_m (gen_fcmp_mask ty (FloatCC.GreaterThan) x y) ty))
