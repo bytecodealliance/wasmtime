@@ -401,10 +401,12 @@ impl<'a> Inliner<'a> {
             // recording the lowering.
             //
             // NB: at this time only lowered imported functions are supported.
-            Lower(func, options) => {
-                let canonical_abi = frame.translation.funcs[frame.funcs.next_key()];
-                let lower_ty = frame.translation.component_funcs[*func];
-
+            Lower {
+                func,
+                options,
+                canonical_abi,
+                lower_ty,
+            } => {
                 let options_lower = self.adapter_options(frame, options);
                 let func = match &frame.component_funcs[*func] {
                     // If this component function was originally a host import
@@ -415,7 +417,7 @@ impl<'a> Inliner<'a> {
                         let import = self.runtime_import(path);
                         let options = self.canonical_options(options_lower);
                         let index = self.result.lowerings.push_uniq(dfg::LowerImport {
-                            canonical_abi,
+                            canonical_abi: *canonical_abi,
                             import,
                             options,
                         });
@@ -451,7 +453,7 @@ impl<'a> Inliner<'a> {
                         options: options_lift,
                         ..
                     } if options_lift.instance == options_lower.instance => {
-                        let index = self.result.always_trap.push_uniq(canonical_abi);
+                        let index = self.result.always_trap.push_uniq(*canonical_abi);
                         dfg::CoreDef::AlwaysTrap(index)
                     }
 
@@ -491,7 +493,7 @@ impl<'a> Inliner<'a> {
                         let adapter_idx = self.result.adapters.push_uniq(Adapter {
                             lift_ty: *lift_ty,
                             lift_options: options_lift.clone(),
-                            lower_ty,
+                            lower_ty: *lower_ty,
                             lower_options: options_lower,
                             func: func.clone(),
                         });
