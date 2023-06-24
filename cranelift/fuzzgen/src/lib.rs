@@ -8,11 +8,12 @@ use cranelift::codegen::ir::{types::*, UserExternalName, UserFuncName};
 use cranelift::codegen::ir::{Function, LibCall};
 use cranelift::codegen::isa::{self, Builder};
 use cranelift::codegen::Context;
+use cranelift::prelude::isa::OwnedTargetIsa;
 use cranelift::prelude::settings::SettingKind;
 use cranelift::prelude::*;
 use cranelift_arbitrary::CraneliftArbitrary;
 use cranelift_native::builder_with_options;
-use target_lexicon::{Architecture, Triple};
+use target_lexicon::Architecture;
 
 mod config;
 mod cranelift_arbitrary;
@@ -139,16 +140,16 @@ where
     pub fn generate_func(
         &mut self,
         name: UserFuncName,
-        target_triple: Triple,
+        isa: OwnedTargetIsa,
         usercalls: Vec<(UserExternalName, Signature)>,
         libcalls: Vec<LibCall>,
     ) -> Result<Function> {
-        let sig = self.generate_signature(target_triple.architecture)?;
+        let sig = self.generate_signature(isa.triple().architecture)?;
 
         let func = FunctionGenerator::new(
             &mut self.u,
             &self.config,
-            target_triple,
+            isa,
             name,
             sig,
             usercalls,
