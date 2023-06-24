@@ -10,7 +10,6 @@ use std::future::Future;
 use std::marker;
 use std::ops::Deref;
 use std::pin::Pin;
-use std::rc::Rc;
 use std::sync::Arc;
 use wasmtime_environ::component::TypeDef;
 use wasmtime_environ::PrimaryMap;
@@ -25,6 +24,7 @@ pub struct Linker<T> {
     engine: Engine,
     strings: Strings,
     map: NameMap,
+    path: Vec<usize>,
     allow_shadowing: bool,
     _marker: marker::PhantomData<fn() -> T>,
 }
@@ -35,25 +35,15 @@ pub struct Strings {
     strings: Vec<Arc<str>>,
 }
 
-struct PathCell {
-    name: usize,
-    next: Path,
-}
-
-#[derive(Clone)]
-enum Path {
-    Nil,
-    Cell(Rc<PathCell>),
-}
-
 /// Structure representing an "instance" being defined within a linker.
 ///
 /// Instances do not need to be actual [`Instance`]s and instead are defined by
 /// a "bag of named items", so each [`LinkerInstance`] can further define items
 /// internally.
 pub struct LinkerInstance<'a, T> {
-    engine: Engine,
-    path: Path,
+    engine: &'a Engine,
+    path: &'a mut Vec<usize>,
+    path_len: usize,
     strings: &'a mut Strings,
     map: &'a mut NameMap,
     allow_shadowing: bool,
@@ -78,6 +68,7 @@ impl<T> Linker<T> {
             strings: Strings::default(),
             map: NameMap::default(),
             allow_shadowing: false,
+            path: Vec::new(),
             _marker: marker::PhantomData,
         }
     }
@@ -100,8 +91,9 @@ impl<T> Linker<T> {
     /// the root namespace.
     pub fn root(&mut self) -> LinkerInstance<'_, T> {
         LinkerInstance {
-            engine: self.engine.clone(),
-            path: Path::Nil,
+            engine: &self.engine,
+            path: &mut self.path,
+            path_len: 0,
             strings: &mut self.strings,
             map: &mut self.map,
             allow_shadowing: self.allow_shadowing,
@@ -246,8 +238,9 @@ impl<T> Linker<T> {
 impl<T> LinkerInstance<'_, T> {
     fn as_mut(&mut self) -> LinkerInstance<'_, T> {
         LinkerInstance {
-            engine: self.engine.clone(),
-            path: self.path.clone(),
+            engine: self.engine,
+            path: self.path,
+            path_len: self.path_len,
             strings: self.strings,
             map: self.map,
             allow_shadowing: self.allow_shadowing,
@@ -327,13 +320,6 @@ impl<T> LinkerInstance<'_, T> {
         name: &str,
         func: F,
     ) -> Result<()> {
-        let mut names = Vec::new();
-        let mut path = &self.path;
-        while let Path::Cell(cell) = path {
-            names.push(cell.name);
-            path = &cell.next;
-        }
-
         let mut map = &component
             .env_component()
             .import_types
@@ -341,7 +327,7 @@ impl<T> LinkerInstance<'_, T> {
             .map(|(k, v)| (k.clone(), *v))
             .collect::<IndexMap<_, _>>();
 
-        while let Some(name) = names.pop() {
+        for name in self.path.iter().copied().take(self.path_len) {
             let name = self.strings.strings[name].deref();
             if let Some(ty) = map.get(name) {
                 if let TypeDef::ComponentInstance(index) = ty {
@@ -409,10 +395,9 @@ impl<T> LinkerInstance<'_, T> {
             Definition::Instance(map) => map,
             _ => unreachable!(),
         };
-        self.path = Path::Cell(Rc::new(PathCell {
-            name,
-            next: self.path,
-        }));
+        self.path.truncate(self.path_len);
+        self.path.push(name);
+        self.path_len += 1;
         Ok(self)
     }
 
