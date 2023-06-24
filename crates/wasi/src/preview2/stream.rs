@@ -354,7 +354,7 @@ mod async_fd_stream {
     impl<T: AsRawFd> AsyncFdStream<T> {
         pub fn new(fd: T) -> Self {
             Self {
-                fd: AsyncFd::new(fd).unwrap(),
+                fd: crate::preview2::poll::sync::block_on(async { AsyncFd::new(fd).unwrap() }),
             }
         }
     }

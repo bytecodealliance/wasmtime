@@ -128,8 +128,13 @@ pub mod sync {
             Ok(h) => h.block_on(f),
             Err(_) => {
                 use once_cell::sync::Lazy;
-                static RUNTIME: Lazy<Runtime> =
-                    Lazy::new(|| Builder::new_current_thread().enable_time().build().unwrap());
+                static RUNTIME: Lazy<Runtime> = Lazy::new(|| {
+                    Builder::new_current_thread()
+                        .enable_time()
+                        .enable_io()
+                        .build()
+                        .unwrap()
+                });
                 let _enter = RUNTIME.enter();
                 RUNTIME.block_on(f)
             }

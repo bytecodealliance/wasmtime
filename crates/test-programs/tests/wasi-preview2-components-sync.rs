@@ -108,124 +108,124 @@ fn run(name: &str, inherit_stdio: bool) -> Result<()> {
 // tests which fail.
 #[test_log::test]
 fn big_random_buf() {
-    run("big_random_buf", true).unwrap()
+    run("big_random_buf", false).unwrap()
 }
 #[test_log::test]
 fn clock_time_get() {
-    run("clock_time_get", true).unwrap()
+    run("clock_time_get", false).unwrap()
 }
 #[test_log::test]
 fn close_preopen() {
-    run("close_preopen", true).unwrap()
+    run("close_preopen", false).unwrap()
 }
 #[test_log::test]
 fn dangling_fd() {
-    run("dangling_fd", true).unwrap()
+    run("dangling_fd", false).unwrap()
 }
 #[test_log::test]
 fn dangling_symlink() {
-    run("dangling_symlink", true).unwrap()
+    run("dangling_symlink", false).unwrap()
 }
 #[test_log::test]
 fn directory_seek() {
-    run("directory_seek", true).unwrap()
+    run("directory_seek", false).unwrap()
 }
 #[test_log::test]
 fn dir_fd_op_failures() {
-    run("dir_fd_op_failures", true).unwrap()
+    run("dir_fd_op_failures", false).unwrap()
 }
 #[test_log::test]
 fn fd_advise() {
-    run("fd_advise", true).unwrap()
+    run("fd_advise", false).unwrap()
 }
 #[test_log::test]
 fn fd_filestat_get() {
-    run("fd_filestat_get", true).unwrap()
+    run("fd_filestat_get", false).unwrap()
 }
 #[test_log::test]
 fn fd_filestat_set() {
-    run("fd_filestat_set", true).unwrap()
+    run("fd_filestat_set", false).unwrap()
 }
 #[test_log::test]
 fn fd_flags_set() {
-    run("fd_flags_set", true).unwrap()
+    run("fd_flags_set", false).unwrap()
 }
 #[test_log::test]
 fn fd_readdir() {
-    run("fd_readdir", true).unwrap()
+    run("fd_readdir", false).unwrap()
 }
 #[test_log::test]
 fn file_allocate() {
-    run("file_allocate", true).unwrap()
+    run("file_allocate", false).unwrap()
 }
 #[test_log::test]
 fn file_pread_pwrite() {
-    run("file_pread_pwrite", true).unwrap()
+    run("file_pread_pwrite", false).unwrap()
 }
 #[test_log::test]
 fn file_seek_tell() {
-    run("file_seek_tell", true).unwrap()
+    run("file_seek_tell", false).unwrap()
 }
 #[test_log::test]
 fn file_truncation() {
-    run("file_truncation", true).unwrap()
+    run("file_truncation", false).unwrap()
 }
 #[test_log::test]
 fn file_unbuffered_write() {
-    run("file_unbuffered_write", true).unwrap()
+    run("file_unbuffered_write", false).unwrap()
 }
 #[test_log::test]
 #[cfg_attr(windows, should_panic)]
 fn interesting_paths() {
-    run("interesting_paths", true).unwrap()
+    run("interesting_paths", false).unwrap()
 }
 #[test_log::test]
 fn isatty() {
-    run("isatty", true).unwrap()
+    run("isatty", false).unwrap()
 }
 #[test_log::test]
 fn nofollow_errors() {
-    run("nofollow_errors", true).unwrap()
+    run("nofollow_errors", false).unwrap()
 }
 #[test_log::test]
 fn overwrite_preopen() {
-    run("overwrite_preopen", true).unwrap()
+    run("overwrite_preopen", false).unwrap()
 }
 #[test_log::test]
 fn path_exists() {
-    run("path_exists", true).unwrap()
+    run("path_exists", false).unwrap()
 }
 #[test_log::test]
 fn path_filestat() {
-    run("path_filestat", true).unwrap()
+    run("path_filestat", false).unwrap()
 }
 #[test_log::test]
 fn path_link() {
-    run("path_link", true).unwrap()
+    run("path_link", false).unwrap()
 }
 #[test_log::test]
 fn path_open_create_existing() {
-    run("path_open_create_existing", true).unwrap()
+    run("path_open_create_existing", false).unwrap()
 }
 #[test_log::test]
 fn path_open_read_write() {
-    run("path_open_read_write", true).unwrap()
+    run("path_open_read_write", false).unwrap()
 }
 #[test_log::test]
 fn path_open_dirfd_not_dir() {
-    run("path_open_dirfd_not_dir", true).unwrap()
+    run("path_open_dirfd_not_dir", false).unwrap()
 }
 #[test_log::test]
 fn path_open_missing() {
-    run("path_open_missing", true).unwrap()
+    run("path_open_missing", false).unwrap()
 }
 #[test_log::test]
 fn path_open_nonblock() {
-    run("path_open_nonblock", true).unwrap()
+    run("path_open_nonblock", false).unwrap()
 }
 #[test_log::test]
 fn path_rename_dir_trailing_slashes() {
-    run("path_rename_dir_trailing_slashes", true).unwrap()
+    run("path_rename_dir_trailing_slashes", false).unwrap()
 }
 #[test_log::test]
 #[should_panic]
@@ -234,11 +234,11 @@ fn path_rename_file_trailing_slashes() {
 }
 #[test_log::test]
 fn path_rename() {
-    run("path_rename", true).unwrap()
+    run("path_rename", false).unwrap()
 }
 #[test_log::test]
 fn path_symlink_trailing_slashes() {
-    run("path_symlink_trailing_slashes", true).unwrap()
+    run("path_symlink_trailing_slashes", false).unwrap()
 }
 #[test_log::test]
 #[cfg_attr(windows, should_panic)]
@@ -247,11 +247,13 @@ fn poll_oneoff_files() {
 }
 #[test_log::test]
 fn poll_oneoff_stdio() {
+    // This is the only test that should inherit stdio, or else the parallel test runner will die
+    // when multiple AsyncFd values are created from std::io::stdin.
     run("poll_oneoff_stdio", true).unwrap()
 }
 #[test_log::test]
 fn readlink() {
-    run("readlink", true).unwrap()
+    run("readlink", false).unwrap()
 }
 #[test_log::test]
 #[should_panic]
@@ -260,37 +262,37 @@ fn remove_directory_trailing_slashes() {
 }
 #[test_log::test]
 fn remove_nonempty_directory() {
-    run("remove_nonempty_directory", true).unwrap()
+    run("remove_nonempty_directory", false).unwrap()
 }
 #[test_log::test]
 fn renumber() {
-    run("renumber", true).unwrap()
+    run("renumber", false).unwrap()
 }
 #[test_log::test]
 fn sched_yield() {
-    run("sched_yield", true).unwrap()
+    run("sched_yield", false).unwrap()
 }
 #[test_log::test]
 fn stdio() {
-    run("stdio", true).unwrap()
+    run("stdio", false).unwrap()
 }
 #[test_log::test]
 fn symlink_create() {
-    run("symlink_create", true).unwrap()
+    run("symlink_create", false).unwrap()
 }
 #[test_log::test]
 fn symlink_filestat() {
-    run("symlink_filestat", true).unwrap()
+    run("symlink_filestat", false).unwrap()
 }
 #[test_log::test]
 fn symlink_loop() {
-    run("symlink_loop", true).unwrap()
+    run("symlink_loop", false).unwrap()
 }
 #[test_log::test]
 fn unlink_file_trailing_slashes() {
-    run("unlink_file_trailing_slashes", true).unwrap()
+    run("unlink_file_trailing_slashes", false).unwrap()
 }
 #[test_log::test]
 fn path_open_preopen() {
-    run("path_open_preopen", true).unwrap()
+    run("path_open_preopen", false).unwrap()
 }
