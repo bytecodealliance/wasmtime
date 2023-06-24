@@ -851,7 +851,7 @@ impl ComponentTypesBuilder {
 }
 
 impl TypeConvert for ComponentTypesBuilder {
-    fn lookup_heap_type(&self, index: TypeIndex) -> WasmHeapType {
+    fn lookup_heap_type(&self, _index: TypeIndex) -> WasmHeapType {
         panic!("heap types are not supported yet")
     }
 }
