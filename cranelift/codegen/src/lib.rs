@@ -77,6 +77,7 @@ pub mod cfg_printer;
 pub mod cursor;
 pub mod data_value;
 pub mod dbg;
+pub mod default_profiler;
 pub mod dominator_tree;
 pub mod flowgraph;
 pub mod ir;

@@ -222,7 +222,7 @@ impl wasmtime_environ::Compiler for Compiler {
 
         let (info, func) = compiler.finish_with_info(Some((&body, tunables)))?;
 
-        let timing = cranelift_codegen::timing::take_current();
+        let timing = cranelift_codegen::default_profiler::take_current();
         log::debug!("{:?} translated in {:?}", func_index, timing.total());
         log::trace!("{:?} timing info\n{}", func_index, timing);
 
