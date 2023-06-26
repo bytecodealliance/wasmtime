@@ -1,0 +1,24 @@
+test run
+target aarch64
+target s390x
+target x86_64
+target riscv64 has_v
+
+function %fabs_f32x4(f32x4) -> f32x4 {
+block0(v0: f32x4):
+    v1 = fabs v0
+    return v1
+}
+; run: %fabs_f32x4([0x0.5 -0x1.5 0x1.1p10 -0x1.4cccccp0]) == [0x0.5 0x1.5 0x1.1p10 0x1.4cccccp0]
+; run: %fabs_f32x4([0x0.0 -0x0.0 Inf -Inf]) == [0x0.0 0x0.0 Inf Inf]
+; run: %fabs_f32x4([NaN -NaN Inf -Inf]) == [NaN NaN Inf Inf]
+
+function %fabs_f64x2(f64x2) -> f64x2 {
+block0(v0: f64x2):
+    v1 = fabs v0
+    return v1
+}
+; run: %fabs_f64x2([0x0.5 -0x1.5]) == [0x0.5 0x1.5]
+; run: %fabs_f64x2([0x0.0 -0x0.0]) == [0x0.0 0x0.0]
+; run: %fabs_f64x2([Inf -Inf]) == [Inf Inf]
+; run: %fabs_f64x2([NaN -NaN]) == [NaN NaN]

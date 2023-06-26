@@ -981,8 +981,11 @@
 
 
 ;;;; Rules for `fabs` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule (lower (has_type ty (fabs x)))
+(rule 0 (lower (has_type (ty_scalar_float ty) (fabs x)))
   (rv_fabs ty x))
+
+(rule 1 (lower (has_type (ty_vec_fits_in_register ty) (fabs x)))
+  (rv_vfabs_v x (unmasked) ty))
 
 ;;;; Rules for `fneg` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule 0 (lower (has_type (ty_scalar_float ty) (fneg x)))

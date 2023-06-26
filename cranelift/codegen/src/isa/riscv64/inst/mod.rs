@@ -1744,6 +1744,9 @@ impl Inst {
                     (VecAluOpRRR::VfsgnjnVV, vs2, vs1) if vs2 == vs1 => {
                         format!("vfneg.v {vd_s},{vs2_s}{mask} {vstate}")
                     }
+                    (VecAluOpRRR::VfsgnjxVV, vs2, vs1) if vs2 == vs1 => {
+                        format!("vfabs.v {vd_s},{vs2_s}{mask} {vstate}")
+                    }
                     (VecAluOpRRR::VmnandMM, vs2, vs1) if vs2 == vs1 => {
                         format!("vmnot.m {vd_s},{vs2_s}{mask} {vstate}")
                     }
