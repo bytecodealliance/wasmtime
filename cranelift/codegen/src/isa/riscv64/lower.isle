@@ -995,8 +995,14 @@
   (rv_vfneg_v x (unmasked) ty))
 
 ;;;; Rules for `fcopysign` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(rule (lower (has_type ty (fcopysign x y)))
+(rule 0 (lower (has_type (ty_scalar_float ty) (fcopysign x y)))
   (rv_fsgnj ty x y))
+
+(rule 1 (lower (has_type (ty_vec_fits_in_register ty) (fcopysign x y)))
+  (rv_vfsgnj_vv x y (unmasked) ty))
+
+(rule 2 (lower (has_type (ty_vec_fits_in_register ty) (fcopysign x (splat y))))
+  (rv_vfsgnj_vf x y (unmasked) ty))
 
 ;;;; Rules for `fma` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type ty (fma x y z)))

@@ -122,6 +122,7 @@
   (VfsubVV)
   (VfmulVV)
   (VfdivVV)
+  (VfsgnjVV)
   (VfsgnjnVV)
   (VfsgnjxVV)
   (VmergeVVM)
@@ -181,6 +182,7 @@
   (VfrsubVF)
   (VfmulVF)
   (VfdivVF)
+  (VfsgnjVF)
   (VfrdivVF)
   (VmergeVXM)
   (VfmergeVFM)
@@ -836,6 +838,17 @@
 (decl rv_vfrdiv_vf (VReg FReg VecOpMasking VState) VReg)
 (rule (rv_vfrdiv_vf vs2 vs1 mask vstate)
   (vec_alu_rrr (VecAluOpRRR.VfrdivVF) vs2 vs1 mask vstate))
+
+;; Helper for emitting the `vfsgnj.vv` ("Floating Point Sign Injection") instruction.
+;; The output of this instruction is `vs2` with the sign bit from `vs1`
+(decl rv_vfsgnj_vv (VReg VReg VecOpMasking VState) VReg)
+(rule (rv_vfsgnj_vv vs2 vs1 mask vstate)
+  (vec_alu_rrr (VecAluOpRRR.VfsgnjVV) vs2 vs1 mask vstate))
+
+;; Helper for emitting the `vfsgnj.vf` ("Floating Point Sign Injection") instruction.
+(decl rv_vfsgnj_vf (VReg FReg VecOpMasking VState) VReg)
+(rule (rv_vfsgnj_vf vs2 vs1 mask vstate)
+  (vec_alu_rrr (VecAluOpRRR.VfsgnjVF) vs2 vs1 mask vstate))
 
 ;; Helper for emitting the `vfsgnjn.vv` ("Floating Point Sign Injection Negated") instruction.
 ;; The output of this instruction is `vs2` with the negated sign bit from `vs1`
