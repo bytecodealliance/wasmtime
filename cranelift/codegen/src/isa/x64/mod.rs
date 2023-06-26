@@ -194,6 +194,10 @@ impl TargetIsa for X64Backend {
     fn has_x86_pmulhrsw_lowering(&self) -> bool {
         self.x64_flags.use_ssse3()
     }
+
+    fn has_x86_pmaddubsw_lowering(&self) -> bool {
+        self.x64_flags.use_ssse3()
+    }
 }
 
 impl fmt::Display for X64Backend {

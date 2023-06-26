@@ -3153,6 +3153,21 @@ impl MachInstEmit for Inst {
                     }
                     .emit(&[], sink, emit_info, state);
                 } else {
+                    if stack_bytes_to_pop != 0 {
+                        // The requirement that `stack_bytes_to_pop` fit in an
+                        // `Imm12` isn't fundamental, but lifting it is left for
+                        // future PRs.
+                        let imm12 = Imm12::maybe_from_u64(u64::from(stack_bytes_to_pop))
+                            .expect("stack bytes to pop must fit in Imm12");
+                        Inst::AluRRImm12 {
+                            alu_op: ALUOp::Add,
+                            size: OperandSize::Size64,
+                            rd: writable_stack_reg(),
+                            rn: stack_reg(),
+                            imm12,
+                        }
+                        .emit(&[], sink, emit_info, state);
+                    }
                     sink.put4(0xd65f0bff | key << 10); // retaa / retab
                 }
             }

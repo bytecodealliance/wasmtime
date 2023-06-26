@@ -1,7 +1,6 @@
 test interpret
 test run
 set opt_level=speed
-set enable_simd=true
 set enable_safepoints=true
 set unwind_info=false
 set preserve_frame_pointers=true

@@ -1,5 +1,4 @@
 test compile precise-output
-set enable_simd
 target x86_64 sse41
 
 function %splat_i8(i8) -> i8x16 {

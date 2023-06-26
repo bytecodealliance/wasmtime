@@ -170,38 +170,38 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     }
 
     #[inline]
-    fn use_avx_simd(&mut self) -> bool {
-        self.backend.x64_flags.use_avx_simd()
+    fn use_avx(&mut self) -> bool {
+        self.backend.x64_flags.use_avx()
     }
 
     #[inline]
-    fn use_avx2_simd(&mut self) -> bool {
-        self.backend.x64_flags.use_avx2_simd()
+    fn use_avx2(&mut self) -> bool {
+        self.backend.x64_flags.use_avx2()
     }
 
     #[inline]
-    fn use_avx512vl_simd(&mut self) -> bool {
-        self.backend.x64_flags.use_avx512vl_simd()
+    fn use_avx512vl(&mut self) -> bool {
+        self.backend.x64_flags.use_avx512vl()
     }
 
     #[inline]
-    fn use_avx512dq_simd(&mut self) -> bool {
-        self.backend.x64_flags.use_avx512dq_simd()
+    fn use_avx512dq(&mut self) -> bool {
+        self.backend.x64_flags.use_avx512dq()
     }
 
     #[inline]
-    fn use_avx512f_simd(&mut self) -> bool {
-        self.backend.x64_flags.use_avx512f_simd()
+    fn use_avx512f(&mut self) -> bool {
+        self.backend.x64_flags.use_avx512f()
     }
 
     #[inline]
-    fn use_avx512bitalg_simd(&mut self) -> bool {
-        self.backend.x64_flags.use_avx512bitalg_simd()
+    fn use_avx512bitalg(&mut self) -> bool {
+        self.backend.x64_flags.use_avx512bitalg()
     }
 
     #[inline]
-    fn use_avx512vbmi_simd(&mut self) -> bool {
-        self.backend.x64_flags.use_avx512vbmi_simd()
+    fn use_avx512vbmi(&mut self) -> bool {
+        self.backend.x64_flags.use_avx512vbmi()
     }
 
     #[inline]

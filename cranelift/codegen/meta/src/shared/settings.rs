@@ -116,13 +116,6 @@ pub(crate) fn define() -> SettingGroup {
     );
 
     settings.add_bool(
-        "enable_simd",
-        "Enable the use of SIMD instructions.",
-        "",
-        false,
-    );
-
-    settings.add_bool(
         "enable_atomics",
         "Enable the use of atomic instructions",
         "",

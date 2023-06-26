@@ -2,7 +2,6 @@
 ; If you change this file, you should most likely update
 ; simd-arithmetic-nondeterministic*.clif as well.
 test run
-set enable_simd
 target x86_64
 target x86_64 skylake
 

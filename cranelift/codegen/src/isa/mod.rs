@@ -352,6 +352,10 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
     /// Returns whether the CLIF `x86_pmulhrsw` instruction is implemented for
     /// this ISA.
     fn has_x86_pmulhrsw_lowering(&self) -> bool;
+
+    /// Returns whether the CLIF `x86_pmaddubsw` instruction is implemented for
+    /// this ISA.
+    fn has_x86_pmaddubsw_lowering(&self) -> bool;
 }
 
 /// Function alignment specifications as required by an ISA, returned by

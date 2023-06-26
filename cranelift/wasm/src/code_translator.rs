@@ -2302,7 +2302,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::I16x8RelaxedDotI8x16I7x16S => {
             let (a, b) = pop2_with_bitcast(state, I8X16, builder);
             state.push1(
-                if environ.relaxed_simd_deterministic() || !environ.is_x86() {
+                if environ.relaxed_simd_deterministic() || !environ.use_x86_pmaddubsw_for_dot() {
                     // Deterministic semantics are to treat both operands as
                     // signed integers and perform the dot product.
                     let alo = builder.ins().swiden_low(a);
@@ -2321,19 +2321,20 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::I32x4RelaxedDotI8x16I7x16AddS => {
             let c = pop1_with_bitcast(state, I32X4, builder);
             let (a, b) = pop2_with_bitcast(state, I8X16, builder);
-            let dot = if environ.relaxed_simd_deterministic() || !environ.is_x86() {
-                // Deterministic semantics are to treat both operands as
-                // signed integers and perform the dot product.
-                let alo = builder.ins().swiden_low(a);
-                let blo = builder.ins().swiden_low(b);
-                let lo = builder.ins().imul(alo, blo);
-                let ahi = builder.ins().swiden_high(a);
-                let bhi = builder.ins().swiden_high(b);
-                let hi = builder.ins().imul(ahi, bhi);
-                builder.ins().iadd_pairwise(lo, hi)
-            } else {
-                builder.ins().x86_pmaddubsw(a, b)
-            };
+            let dot =
+                if environ.relaxed_simd_deterministic() || !environ.use_x86_pmaddubsw_for_dot() {
+                    // Deterministic semantics are to treat both operands as
+                    // signed integers and perform the dot product.
+                    let alo = builder.ins().swiden_low(a);
+                    let blo = builder.ins().swiden_low(b);
+                    let lo = builder.ins().imul(alo, blo);
+                    let ahi = builder.ins().swiden_high(a);
+                    let bhi = builder.ins().swiden_high(b);
+                    let hi = builder.ins().imul(ahi, bhi);
+                    builder.ins().iadd_pairwise(lo, hi)
+                } else {
+                    builder.ins().x86_pmaddubsw(a, b)
+                };
             let dotlo = builder.ins().swiden_low(dot);
             let dothi = builder.ins().swiden_high(dot);
             let dot32 = builder.ins().iadd_pairwise(dotlo, dothi);
