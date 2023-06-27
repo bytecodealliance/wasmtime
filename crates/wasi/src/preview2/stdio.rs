@@ -8,6 +8,11 @@ mod unix;
 #[cfg(unix)]
 pub use self::unix::{stdin, Stdin};
 
+#[cfg(windows)]
+mod windows;
+#[cfg(windows)]
+pub use self::windows::{stdin, Stdin};
+
 pub type Stdout = AsyncWriteStream<tokio::io::Stdout>;
 
 pub fn stdout() -> Stdout {
