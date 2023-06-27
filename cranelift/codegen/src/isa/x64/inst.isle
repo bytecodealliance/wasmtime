@@ -493,6 +493,14 @@
        (CallUnknown (dest RegMem)
                     (info BoxCallInfo))
 
+       ;; Tail call to a direct destination.
+       (ReturnCallKnown (callee ExternalName)
+                        (info BoxReturnCallInfo))
+
+       ;; Tail call to an indirect destination.
+       (ReturnCallUnknown (callee RegMem)
+                          (info BoxReturnCallInfo))
+
        ;; A pseudo-instruction that captures register arguments in vregs.
        (Args
         (args VecArgPair))
@@ -691,6 +699,7 @@
             SFence))
 
 (type BoxCallInfo extern (enum))
+(type BoxReturnCallInfo extern (enum))
 
 (type BoxVecMachLabel extern (enum))
 

@@ -72,6 +72,27 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
     isle_lower_prelude_methods!();
     isle_prelude_caller_methods!(Riscv64MachineDeps, Riscv64ABICallSite);
 
+    fn gen_return_call(
+        &mut self,
+        callee_sig: SigRef,
+        callee: ExternalName,
+        distance: RelocDistance,
+        args: ValueSlice,
+    ) -> InstOutput {
+        let _ = (callee_sig, callee, distance, args);
+        todo!()
+    }
+
+    fn gen_return_call_indirect(
+        &mut self,
+        callee_sig: SigRef,
+        callee: Value,
+        args: ValueSlice,
+    ) -> InstOutput {
+        let _ = (callee_sig, callee, args);
+        todo!()
+    }
+
     fn vreg_new(&mut self, r: Reg) -> VReg {
         VReg::new(r).unwrap()
     }

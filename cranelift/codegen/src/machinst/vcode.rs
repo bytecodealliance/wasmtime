@@ -1255,8 +1255,8 @@ impl<I: VCodeInst> RegallocFunction for VCode<I> {
         match self.insts[insn.index()].is_term() {
             // We treat blocks terminated by an unconditional trap like a return for regalloc.
             MachTerminator::None => self.insts[insn.index()].is_trap(),
-            MachTerminator::Ret => true,
-            _ => false,
+            MachTerminator::Ret | MachTerminator::RetCall => true,
+            MachTerminator::Uncond | MachTerminator::Cond | MachTerminator::Indirect => false,
         }
     }
 

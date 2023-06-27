@@ -589,6 +589,17 @@ pub trait ABIMachineSpec {
         callee_pop_size: u32,
     ) -> SmallVec<[Self::I; 2]>;
 
+    fn gen_return_call(
+        callee: CallDest,
+        new_stack_arg_size: u32,
+        old_stack_arg_size: u32,
+        ret_addr: Reg,
+        fp: Reg,
+        tmp: Writable<Reg>,
+        tmp2: Writable<Reg>,
+        uses: abi::CallArgList,
+    ) -> SmallVec<[Self::I; 2]>;
+
     /// Generate a memcpy invocation. Used to set up struct
     /// args. Takes `src`, `dst` as read-only inputs and passes a temporary
     /// allocator.
@@ -2167,6 +2178,27 @@ impl<M: ABIMachineSpec> CallSite<M> {
         sigs.num_args(self.sig)
     }
 
+    /// Allocate space for building a `return_call`'s temporary frame before we
+    /// copy it over the current frame.
+    pub fn emit_allocate_tail_call_frame(&self, ctx: &mut Lower<M::I>) -> u32 {
+        // The necessary stack space is:
+        //
+        //     sizeof(callee_sig.stack_args)
+        //
+        // Note that any stack return space conceptually belongs to our caller
+        // and the function we are tail calling to has the same return type and
+        // will reuse that stack return space.
+        //
+        // The return address is pushed later on, after the stack arguments are
+        // filled in.
+        let frame_size = ctx.sigs()[self.sig].sized_stack_arg_space;
+
+        let adjustment = -i32::try_from(frame_size).unwrap();
+        adjust_stack_and_nominal_sp::<M>(ctx, adjustment);
+
+        frame_size
+    }
+
     /// Emit code to pre-adjust the stack, prior to argument copies and call.
     pub fn emit_stack_pre_adjust(&self, ctx: &mut Lower<M::I>) {
         let sig = &ctx.sigs()[self.sig];
@@ -2192,11 +2224,12 @@ impl<M: ABIMachineSpec> CallSite<M> {
         adjust_stack_and_nominal_sp::<M>(ctx, stack_space);
     }
 
-    /// Emit a copy of a large argument into its associated stack buffer, if any.
-    /// We must be careful to perform all these copies (as necessary) before setting
-    /// up the argument registers, since we may have to invoke memcpy(), which could
-    /// clobber any registers already set up.  The back-end should call this routine
-    /// for all arguments before calling emit_copy_regs_to_arg for all arguments.
+    /// Emit a copy of a large argument into its associated stack buffer, if
+    /// any.  We must be careful to perform all these copies (as necessary)
+    /// before setting up the argument registers, since we may have to invoke
+    /// memcpy(), which could clobber any registers already set up.  The
+    /// back-end should call this routine for all arguments before calling
+    /// `gen_arg` for all arguments.
     pub fn emit_copy_regs_to_buffer(
         &self,
         ctx: &mut Lower<M::I>,
@@ -2507,6 +2540,45 @@ impl<M: ABIMachineSpec> CallSite<M> {
         )
         .into_iter()
         {
+            ctx.emit(inst);
+        }
+    }
+
+    /// Emit a tail call sequence.
+    ///
+    /// The returned instruction should have a proper use-set (arg registers are
+    /// uses) according to the argument registers this function signature in
+    /// this ABI.
+    pub fn emit_return_call(
+        mut self,
+        ctx: &mut Lower<M::I>,
+        new_stack_arg_size: u32,
+        old_stack_arg_size: u32,
+        ret_addr: Reg,
+        fp: Reg,
+        tmp: Writable<Reg>,
+        tmp2: Writable<Reg>,
+    ) {
+        if let Some(i) = ctx.sigs()[self.sig].stack_ret_arg {
+            let ret_area_ptr = ctx.abi().ret_area_ptr.expect(
+                "if the tail callee has a return pointer, then the tail caller \
+                 must as well",
+            );
+            for inst in self.gen_arg(ctx, i.into(), ValueRegs::one(ret_area_ptr.to_reg())) {
+                ctx.emit(inst);
+            }
+        }
+
+        for inst in M::gen_return_call(
+            self.dest,
+            new_stack_arg_size,
+            old_stack_arg_size,
+            ret_addr,
+            fp,
+            tmp,
+            tmp2,
+            self.uses,
+        ) {
             ctx.emit(inst);
         }
     }

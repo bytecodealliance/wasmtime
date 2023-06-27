@@ -1566,7 +1566,6 @@
 (rule (lower (return args))
       (lower_return args))
 
-
 ;;; Rules for `get_{frame,stack}_pointer` and `get_return_address` ;;;;;;;;;;;;;
 
 (rule (lower (get_frame_pointer))
