@@ -1,10 +1,9 @@
 use crate::preview2::filesystem::TableFsExt;
 use crate::preview2::preview2::filesystem::TableReaddirExt;
 use crate::preview2::wasi::cli_base::{preopens, stderr, stdin, stdout};
-use crate::preview2::wasi::clocks::monotonic_clock;
-use crate::preview2::wasi::clocks::wall_clock;
+use crate::preview2::wasi::clocks::{monotonic_clock, wall_clock};
 use crate::preview2::wasi::filesystem::filesystem;
-use crate::preview2::wasi::sync_io::io::streams;
+use crate::preview2::wasi::io::streams;
 use crate::preview2::{wasi, TableError, WasiView};
 use anyhow::{anyhow, bail, Context};
 use std::borrow::Borrow;
@@ -324,7 +323,7 @@ pub fn add_to_linker<
         + wasi::filesystem::filesystem::Host
         + wasi::sync_io::poll::poll::Host
         + wasi::random::random::Host
-        + wasi::sync_io::io::streams::Host
+        + wasi::io::streams::Host
         + wasi::clocks::monotonic_clock::Host
         + wasi::clocks::wall_clock::Host,
 >(
@@ -339,6 +338,7 @@ pub fn add_to_linker<
 // to this module.
 wiggle::from_witx!({
     witx: ["$CARGO_MANIFEST_DIR/witx/wasi_snapshot_preview1.witx"],
+    async: { wasi_snapshot_preview1::{fd_close, fd_read, fd_pread, fd_write, fd_pwrite, poll_oneoff} },
     errors: { errno => trappable Error },
 });
 
@@ -611,6 +611,7 @@ fn first_non_empty_iovec<'a>(
         .transpose()
 }
 
+#[async_trait::async_trait]
 // Implement the WasiSnapshotPreview1 trait using only the traits that are
 // required for T, i.e., in terms of the preview 2 wit interface, and state
 // stored in the WasiPreview1Adapter struct.
@@ -622,7 +623,7 @@ impl<
             + wasi::filesystem::filesystem::Host
             + wasi::sync_io::poll::poll::Host
             + wasi::random::random::Host
-            + wasi::sync_io::io::streams::Host
+            + wasi::io::streams::Host
             + wasi::clocks::monotonic_clock::Host
             + wasi::clocks::wall_clock::Host,
     > wasi_snapshot_preview1::WasiSnapshotPreview1 for T
@@ -790,7 +791,7 @@ impl<
     /// Close a file descriptor.
     /// NOTE: This is similar to `close` in POSIX.
     #[instrument(skip(self))]
-    fn fd_close(&mut self, fd: types::Fd) -> Result<(), types::Error> {
+    async fn fd_close(&mut self, fd: types::Fd) -> Result<(), types::Error> {
         let desc = self
             .transact()?
             .descriptors
@@ -800,9 +801,11 @@ impl<
             .clone();
         match desc {
             Descriptor::Stdin(stream) => streams::Host::drop_input_stream(self, stream)
+                .await
                 .context("failed to call `drop-input-stream`"),
             Descriptor::Stdout(stream) | Descriptor::Stderr(stream) => {
                 streams::Host::drop_output_stream(self, stream)
+                    .await
                     .context("failed to call `drop-output-stream`")
             }
             Descriptor::File(File { fd, .. }) | Descriptor::PreopenDirectory((fd, _)) => self
@@ -1038,7 +1041,7 @@ impl<
     /// Read from a file descriptor.
     /// NOTE: This is similar to `readv` in POSIX.
     #[instrument(skip(self))]
-    fn fd_read<'a>(
+    async fn fd_read<'a>(
         &mut self,
         fd: types::Fd,
         iovs: &types::IovecArray<'a>,
@@ -1063,9 +1066,9 @@ impl<
                 })?;
                 let max = buf.len().try_into().unwrap_or(u64::MAX);
                 let (read, end) = if blocking {
-                    streams::Host::blocking_read(self, stream, max)
+                    streams::Host::blocking_read(self, stream, max).await
                 } else {
-                    streams::Host::read(self, stream, max)
+                    streams::Host::read(self, stream, max).await
                 }
                 .map_err(|_| types::Errno::Io)?;
 
@@ -1081,6 +1084,7 @@ impl<
                 };
                 let (read, end) =
                     streams::Host::read(self, stream, buf.len().try_into().unwrap_or(u64::MAX))
+                        .await
                         .map_err(|_| types::Errno::Io)?;
                 (buf, read, end)
             }
@@ -1101,7 +1105,7 @@ impl<
     /// Read from a file descriptor, without using and updating the file descriptor's offset.
     /// NOTE: This is similar to `preadv` in POSIX.
     #[instrument(skip(self))]
-    fn fd_pread<'a>(
+    async fn fd_pread<'a>(
         &mut self,
         fd: types::Fd,
         iovs: &types::IovecArray<'a>,
@@ -1121,9 +1125,9 @@ impl<
                 })?;
                 let max = buf.len().try_into().unwrap_or(u64::MAX);
                 let (read, end) = if blocking {
-                    streams::Host::blocking_read(self, stream, max)
+                    streams::Host::blocking_read(self, stream, max).await
                 } else {
-                    streams::Host::read(self, stream, max)
+                    streams::Host::read(self, stream, max).await
                 }
                 .map_err(|_| types::Errno::Io)?;
 
@@ -1150,7 +1154,7 @@ impl<
     /// Write to a file descriptor.
     /// NOTE: This is similar to `writev` in POSIX.
     #[instrument(skip(self))]
-    fn fd_write<'a>(
+    async fn fd_write<'a>(
         &mut self,
         fd: types::Fd,
         ciovs: &types::CiovecArray<'a>,
@@ -1183,9 +1187,9 @@ impl<
                     (stream, position)
                 };
                 let n = if blocking {
-                    streams::Host::blocking_write(self, stream, buf)
+                    streams::Host::blocking_write(self, stream, buf).await
                 } else {
-                    streams::Host::write(self, stream, buf)
+                    streams::Host::write(self, stream, buf).await
                 }
                 .map_err(|_| types::Errno::Io)?;
                 if !append {
@@ -1198,7 +1202,9 @@ impl<
                 let Some(buf) = first_non_empty_ciovec(ciovs)? else {
                     return Ok(0)
                 };
-                streams::Host::write(self, stream, buf).map_err(|_| types::Errno::Io)?
+                streams::Host::write(self, stream, buf)
+                    .await
+                    .map_err(|_| types::Errno::Io)?
             }
             _ => return Err(types::Errno::Badf.into()),
         }
@@ -1210,7 +1216,7 @@ impl<
     /// Write to a file descriptor, without using and updating the file descriptor's offset.
     /// NOTE: This is similar to `pwritev` in POSIX.
     #[instrument(skip(self))]
-    fn fd_pwrite<'a>(
+    async fn fd_pwrite<'a>(
         &mut self,
         fd: types::Fd,
         ciovs: &types::CiovecArray<'a>,
@@ -1228,9 +1234,9 @@ impl<
                         .unwrap_or_else(types::Error::trap)
                 })?;
                 if blocking {
-                    streams::Host::blocking_write(self, stream, buf)
+                    streams::Host::blocking_write(self, stream, buf).await
                 } else {
-                    streams::Host::write(self, stream, buf)
+                    streams::Host::write(self, stream, buf).await
                 }
                 .map_err(|_| types::Errno::Io)?
             }
@@ -1725,7 +1731,7 @@ impl<
 
     #[allow(unused_variables)]
     #[instrument(skip(self))]
-    fn poll_oneoff<'a>(
+    async fn poll_oneoff<'a>(
         &mut self,
         subs: &GuestPtr<'a, types::Subscription>,
         events: &GuestPtr<'a, types::Event>,
