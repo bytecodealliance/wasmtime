@@ -657,7 +657,12 @@ impl ABIMachineSpec for AArch64MachineDeps {
         unimplemented!("Stack probing is unimplemented on AArch64");
     }
 
-    fn gen_inline_probestack(insts: &mut SmallInstVec<Self::I>, frame_size: u32, guard_size: u32) {
+    fn gen_inline_probestack(
+        insts: &mut SmallInstVec<Self::I>,
+        _call_conv: isa::CallConv,
+        frame_size: u32,
+        guard_size: u32,
+    ) {
         // The stack probe loop currently takes 6 instructions and each inline
         // probe takes 2 (ish, these numbers sort of depend on the constants).
         // Set this to 3 to keep the max size of the probe to 6 instructions.

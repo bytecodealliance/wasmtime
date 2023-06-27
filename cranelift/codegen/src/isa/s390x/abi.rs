@@ -588,6 +588,7 @@ impl ABIMachineSpec for S390xMachineDeps {
 
     fn gen_inline_probestack(
         _insts: &mut SmallInstVec<Self::I>,
+        _call_conv: isa::CallConv,
         _frame_size: u32,
         _guard_size: u32,
     ) {

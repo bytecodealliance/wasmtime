@@ -525,7 +525,12 @@ pub trait ABIMachineSpec {
     fn gen_probestack(insts: &mut SmallInstVec<Self::I>, frame_size: u32);
 
     /// Generate a inline stack probe.
-    fn gen_inline_probestack(insts: &mut SmallInstVec<Self::I>, frame_size: u32, guard_size: u32);
+    fn gen_inline_probestack(
+        insts: &mut SmallInstVec<Self::I>,
+        call_conv: isa::CallConv,
+        frame_size: u32,
+        guard_size: u32,
+    );
 
     /// Get all clobbered registers that are callee-saved according to the ABI; the result
     /// contains the registers in a sorted order.
@@ -1904,7 +1909,12 @@ impl<M: ABIMachineSpec> Callee<M> {
                 match self.flags.probestack_strategy() {
                     ProbestackStrategy::Inline => {
                         let guard_size = 1 << self.flags.probestack_size_log2();
-                        M::gen_inline_probestack(&mut insts, total_stacksize, guard_size)
+                        M::gen_inline_probestack(
+                            &mut insts,
+                            self.call_conv,
+                            total_stacksize,
+                            guard_size,
+                        )
                     }
                     ProbestackStrategy::Outline => M::gen_probestack(&mut insts, total_stacksize),
                 }
