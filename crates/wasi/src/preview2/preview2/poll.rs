@@ -34,7 +34,7 @@ impl<T: WasiView> poll::Host for T {
         Ok(())
     }
 
-    async fn poll_oneoff(&mut self, futures: Vec<Pollable>) -> anyhow::Result<Vec<u8>> {
+    async fn poll_oneoff(&mut self, futures: Vec<Pollable>) -> anyhow::Result<Vec<bool>> {
         use crate::preview2::sched::{sync::SyncSched, Poll, Userdata, WasiSched};
 
         // Convert `futures` into `Poll` subscriptions.
@@ -74,10 +74,9 @@ impl<T: WasiView> poll::Host for T {
         // Do the poll.
         SyncSched.poll_oneoff(&mut poll).await?;
 
-        // Convert the results into a list of `u8` to return.
-        let mut results = vec![0_u8; len];
+        let mut results = vec![false; len];
         for (_result, data) in poll.results() {
-            results[u64::from(data) as usize] = u8::from(true);
+            results[u64::from(data) as usize] = true;
         }
         Ok(results)
     }
