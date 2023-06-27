@@ -261,7 +261,7 @@ impl Compiler {
                 vmctx,
                 i32::try_from(offsets.limits()).unwrap(),
             );
-            super::save_last_wasm_exit_fp_and_pc(builder, pointer_type, offsets.ptr, limits);
+            super::save_last_wasm_exit_fp_and_pc(builder, pointer_type, &offsets.ptr, limits);
         }
     }
 }
