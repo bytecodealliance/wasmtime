@@ -170,6 +170,39 @@ impl HostOutputStream for OutputPipe {
     }
 }
 
+#[derive(Debug)]
+pub struct MemoryInputPipe {
+    buffer: std::io::Cursor<Vec<u8>>,
+}
+
+impl MemoryInputPipe {
+    pub fn new(bytes: impl AsRef<[u8]>) -> Self {
+        Self {
+            buffer: std::io::Cursor::new(Vec::from(bytes.as_ref())),
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl HostInputStream for MemoryInputPipe {
+    fn read(&mut self, dest: &mut [u8]) -> Result<(u64, StreamState), Error> {
+        let nbytes = std::io::Read::read(&mut self.buffer, dest)?;
+        let state = if self.buffer.get_ref().len() as u64 == self.buffer.position() {
+            StreamState::Closed
+        } else {
+            StreamState::Open
+        };
+        Ok((nbytes as u64, state))
+    }
+    async fn ready(&mut self) -> Result<(), Error> {
+        if self.buffer.get_ref().len() as u64 > self.buffer.position() {
+            Ok(())
+        } else {
+            loop {}
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct MemoryOutputPipe {
     buffer: std::sync::Arc<std::sync::Mutex<Vec<u8>>>,
@@ -181,13 +214,14 @@ impl MemoryOutputPipe {
             buffer: std::sync::Arc::new(std::sync::Mutex::new(Vec::new())),
         }
     }
-    pub fn finalize(self) -> Vec<u8> {
-        std::sync::Arc::try_unwrap(self.buffer)
-            .map_err(|_| ())
-            .expect("more than one outstanding reference")
-            .into_inner()
-            .map_err(|_| ())
-            .expect("mutex poisioned")
+    pub fn contents(&self) -> Vec<u8> {
+        self.buffer.lock().unwrap().clone()
+    }
+    pub fn try_into_inner(self) -> Result<Vec<u8>, Self> {
+        match std::sync::Arc::try_unwrap(self.buffer) {
+            Ok(m) => Ok(m.into_inner().map_err(|_| ()).expect("mutex poisioned")),
+            Err(buffer) => Err(Self { buffer }),
+        }
     }
 }
 

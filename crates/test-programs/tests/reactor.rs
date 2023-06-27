@@ -1,5 +1,4 @@
 use anyhow::Result;
-use std::sync::{Arc, RwLock};
 use wasmtime::{
     component::{Component, Linker},
     Config, Engine, Store,
@@ -122,14 +121,15 @@ async fn reactor_tests() -> Result<()> {
     // `host` and `wasi-common` crate.
     // Note, this works because of the add_to_linker invocations using the
     // `host` crate for `streams`, not because of `with` in the bindgen macro.
-    let write_dest: Arc<RwLock<Vec<u8>>> = Arc::new(RwLock::new(Vec::new()));
-    let writepipe = wasmtime_wasi::preview2::pipe::WritePipe::from_shared(write_dest.clone());
-    let outputstream: Box<dyn wasmtime_wasi::preview2::OutputStream> = Box::new(writepipe);
-    let table_ix = store.data_mut().table_mut().push(Box::new(outputstream))?;
+    let writepipe = preview2::pipe::MemoryOutputPipe::new();
+    let table_ix = preview2::TableStreamExt::push_output_stream(
+        store.data_mut().table_mut(),
+        Box::new(writepipe.clone()),
+    )?;
     let r = reactor.call_write_strings_to(&mut store, table_ix).await?;
     assert_eq!(r, Ok(()));
 
-    assert_eq!(*write_dest.read().unwrap(), b"hellogussiehello againgussie");
+    assert_eq!(writepipe.contents(), b"hellogussiehello againgussie");
 
     // Show that the `with` invocation in the macro means we get to re-use the
     // type definitions from inside the `host` crate for these structures:

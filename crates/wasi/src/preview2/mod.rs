@@ -19,11 +19,12 @@
 //! `pub mod legacy` with an off-by-default feature flag, and after 2
 //! releases, retire and remove that code from our tree.
 
+// TODO: make all of these mods private
 pub mod clocks;
 mod ctx;
 mod error;
 pub(crate) mod filesystem;
-pub mod pipe;
+pub mod pipe; // pipe can remain a module
 mod poll;
 #[cfg(feature = "preview1-on-preview2")]
 pub mod preview1;

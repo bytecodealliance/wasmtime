@@ -87,11 +87,11 @@ fn run(name: &str, inherit_stdio: bool) -> Result<()> {
     };
 
     r.map_err(move |trap: anyhow::Error| {
-        let stdout = stdout.finalize();
+        let stdout = stdout.try_into_inner().expect("single ref to stdout");
         if !stdout.is_empty() {
             println!("guest stdout:\n{}\n===", String::from_utf8_lossy(&stdout));
         }
-        let stderr = stderr.finalize();
+        let stderr = stderr.try_into_inner().expect("single ref to stderr");
         if !stderr.is_empty() {
             println!("guest stderr:\n{}\n===", String::from_utf8_lossy(&stderr));
         }

@@ -125,7 +125,10 @@ pub mod sync {
 
     pub fn block_on<F: Future>(f: F) -> F::Output {
         match Handle::try_current() {
-            Ok(h) => h.block_on(f),
+            Ok(h) => {
+                let _enter = h.enter();
+                h.block_on(f)
+            }
             Err(_) => {
                 use once_cell::sync::Lazy;
                 static RUNTIME: Lazy<Runtime> = Lazy::new(|| {

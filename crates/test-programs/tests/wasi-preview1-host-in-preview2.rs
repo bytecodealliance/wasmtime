@@ -3,7 +3,7 @@ use anyhow::Result;
 use tempfile::TempDir;
 use wasmtime::{Config, Engine, Linker, Store};
 use wasmtime_wasi::preview2::{
-    pipe::WritePipe,
+    pipe::MemoryOutputPipe,
     preview1::{add_to_linker, WasiPreview1Adapter, WasiPreview1View},
     DirPerms, FilePerms, Table, WasiCtx, WasiCtxBuilder, WasiView,
 };
@@ -30,8 +30,8 @@ pub fn prepare_workspace(exe_name: &str) -> Result<TempDir> {
 
 async fn run(name: &str, inherit_stdio: bool) -> Result<()> {
     let workspace = prepare_workspace(name)?;
-    let stdout = WritePipe::new_in_memory();
-    let stderr = WritePipe::new_in_memory();
+    let stdout = MemoryOutputPipe::new();
+    let stderr = MemoryOutputPipe::new();
     let r = {
         let mut linker = Linker::new(&ENGINE);
         add_to_linker(&mut linker)?;
@@ -102,17 +102,11 @@ async fn run(name: &str, inherit_stdio: bool) -> Result<()> {
     };
 
     r.map_err(move |trap: anyhow::Error| {
-        let stdout = stdout
-            .try_into_inner()
-            .expect("sole ref to stdout")
-            .into_inner();
+        let stdout = stdout.try_into_inner().expect("sole ref to stdout");
         if !stdout.is_empty() {
             println!("guest stdout:\n{}\n===", String::from_utf8_lossy(&stdout));
         }
-        let stderr = stderr
-            .try_into_inner()
-            .expect("sole ref to stderr")
-            .into_inner();
+        let stderr = stderr.try_into_inner().expect("sole ref to stderr");
         if !stderr.is_empty() {
             println!("guest stderr:\n{}\n===", String::from_utf8_lossy(&stderr));
         }

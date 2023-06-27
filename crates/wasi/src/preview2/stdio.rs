@@ -11,8 +11,19 @@ mod stdin {
 
     pub type Stdin = AsyncFdStream<std::io::Stdin>;
 
+    // FIXME this will still die if more than one is alive per process
     pub fn stdin() -> Stdin {
-        AsyncFdStream::new(std::io::stdin())
+        // Must be running in a tokio context to succeed.
+        fn create() -> anyhow::Result<Stdin> {
+            AsyncFdStream::new(std::io::stdin())
+        }
+
+        match tokio::runtime::Handle::try_current() {
+            Ok(_) => create().expect("already running in a tokio context"),
+            Err(_) => crate::preview2::poll::sync::block_on(async {
+                create().expect("created a tokio context to run in")
+            }),
+        }
     }
 }
 

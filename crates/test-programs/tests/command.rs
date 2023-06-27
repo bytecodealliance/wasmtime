@@ -1,16 +1,13 @@
 use anyhow::Result;
 use cap_std::{ambient_authority, fs::Dir, time::Duration};
-use std::{
-    io::{Cursor, Write},
-    sync::Mutex,
-};
+use std::{io::Write, sync::Mutex};
 use wasmtime::{
     component::{Component, Linker},
     Config, Engine, Store,
 };
 use wasmtime_wasi::preview2::{
     clocks::{WasiMonotonicClock, WasiWallClock},
-    pipe::ReadPipe,
+    pipe::MemoryInputPipe,
     wasi::command::add_to_linker,
     wasi::command::Command,
     DirPerms, FilePerms, Table, WasiCtx, WasiCtxBuilder, WasiView,
@@ -176,9 +173,7 @@ async fn time() -> Result<()> {
 async fn stdin() -> Result<()> {
     let mut table = Table::new();
     let wasi = WasiCtxBuilder::new()
-        .set_stdin(ReadPipe::new(Cursor::new(
-            "So rested he by the Tumtum tree",
-        )))
+        .set_stdin(MemoryInputPipe::new("So rested he by the Tumtum tree"))
         .build(&mut table)?;
 
     let (mut store, command) =
@@ -194,9 +189,7 @@ async fn stdin() -> Result<()> {
 async fn poll_stdin() -> Result<()> {
     let mut table = Table::new();
     let wasi = WasiCtxBuilder::new()
-        .set_stdin(ReadPipe::new(Cursor::new(
-            "So rested he by the Tumtum tree",
-        )))
+        .set_stdin(MemoryInputPipe::new("So rested he by the Tumtum tree"))
         .build(&mut table)?;
 
     let (mut store, command) =
