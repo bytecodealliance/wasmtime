@@ -951,7 +951,7 @@ impl SigSet {
                 for slot in slots {
                     match slot {
                         &ABIArgSlot::Reg { reg, .. } => {
-                            log::trace!("call_clobbers: retval reg {:?}", reg);
+                            crate::trace!("call_clobbers: retval reg {:?}", reg);
                             clobbers.remove(PReg::from(reg));
                         }
                         _ => {}
