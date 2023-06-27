@@ -34,8 +34,12 @@ pub mod bindings {
         world: "wasi:preview/command",
         std_feature,
         raw_strings,
-        // The generated definition of command will pull in std, so we are defining it
-        // manually below instead
+        // Automatically generated bindings for these functions will allocate
+        // Vecs, which in turn pulls in the panic machinery from std, which
+        // creates vtables that end up in the wasm elem section, which we
+        // can't support in these special core-wasm adapters.
+        // Instead, we manually define the bindings for these functions in
+        // terms of raw pointers.
         skip: ["run", "get-environment", "poll-oneoff"],
     });
 
@@ -45,6 +49,12 @@ pub mod bindings {
         world: "wasi:preview/reactor",
         std_feature,
         raw_strings,
+        // Automatically generated bindings for these functions will allocate
+        // Vecs, which in turn pulls in the panic machinery from std, which
+        // creates vtables that end up in the wasm elem section, which we
+        // can't support in these special core-wasm adapters.
+        // Instead, we manually define the bindings for these functions in
+        // terms of raw pointers.
         skip: ["get-environment", "poll-oneoff"],
     });
 }
