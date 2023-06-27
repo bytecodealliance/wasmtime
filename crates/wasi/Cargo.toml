@@ -34,6 +34,7 @@ bitflags = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }
 system-interface = { workspace = true, optional = true}
 rustix = { workspace = true, features = ["net"], optional = true}
+futures-util = { workspace = true, optional = true }
 
 [target.'cfg(unix)'.dependencies]
 rustix = { workspace = true, features = ["fs"] }
@@ -62,6 +63,7 @@ preview2 = [
     'dep:system-interface',
     'dep:rustix',
     'dep:tokio',
+    'dep:futures-util',
 ]
 preview1-on-preview2 = [
     "preview2",

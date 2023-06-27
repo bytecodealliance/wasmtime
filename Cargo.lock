@@ -4235,6 +4235,7 @@ dependencies = [
  "cap-std",
  "cap-time-ext",
  "fs-set-times",
+ "futures-util",
  "io-extras",
  "libc",
  "once_cell",

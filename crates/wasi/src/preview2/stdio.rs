@@ -14,7 +14,7 @@ mod stdin {
     // FIXME this will still die if more than one is alive per process
     pub fn stdin() -> Stdin {
         // Must be running in a tokio context to succeed.
-        fn create() -> anyhow::Result<Stdin> {
+        fn create() -> anyhow::Result<AsyncFdStream<std::io::Stdin>> {
             AsyncFdStream::new(std::io::stdin())
         }
 
@@ -47,20 +47,7 @@ impl HostInputStream for EmptyStream {
     }
 
     async fn ready(&mut self) -> Result<(), Error> {
-        struct Never;
-
-        impl std::future::Future for Never {
-            type Output = anyhow::Result<()>;
-            fn poll(
-                self: std::pin::Pin<&mut Self>,
-                _ctx: &mut std::task::Context<'_>,
-            ) -> std::task::Poll<Self::Output> {
-                std::task::Poll::Pending
-            }
-        }
-
-        // This stream is never ready for reading.
-        Never.await
+        futures_util::future::pending().await
     }
 }
 
