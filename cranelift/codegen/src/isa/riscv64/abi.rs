@@ -588,7 +588,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         _callee: CallDest,
         _new_stack_arg_size: u32,
         _old_stack_arg_size: u32,
-        _ret_addr: Reg,
+        _ret_addr: Option<Reg>,
         _fp: Reg,
         _tmp: Writable<Reg>,
         _tmp2: Writable<Reg>,
