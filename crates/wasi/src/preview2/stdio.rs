@@ -2,7 +2,6 @@ use anyhow::Error;
 
 use crate::preview2::{AsyncWriteStream, HostInputStream, HostOutputStream, StreamState};
 
-// TODO: different cfg for windows support
 #[cfg(unix)]
 mod unix;
 #[cfg(unix)]
