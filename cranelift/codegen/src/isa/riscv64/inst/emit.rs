@@ -1159,7 +1159,7 @@ impl MachInstEmit for Inst {
             }
 
             &Inst::VirtualSPOffsetAdj { amount } => {
-                log::trace!(
+                crate::trace!(
                     "virtual sp offset adjusted by {} -> {}",
                     amount,
                     state.virtual_sp_offset + amount

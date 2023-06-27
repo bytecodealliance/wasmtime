@@ -180,6 +180,7 @@
 (type RelocDistance (primitive RelocDistance))
 (type VecArgPair extern (enum))
 (type VecRetPair extern (enum))
+(type CallArgList extern (enum))
 
 ;;;; Helper Clif Extractors ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -998,6 +999,12 @@
 
 (decl gen_return (ValueSlice) Unit)
 (extern constructor gen_return gen_return)
+
+(decl gen_return_call (SigRef ExternalName RelocDistance ValueSlice) InstOutput)
+(extern constructor gen_return_call gen_return_call)
+
+(decl gen_return_call_indirect (SigRef Value ValueSlice) InstOutput)
+(extern constructor gen_return_call_indirect gen_return_call_indirect)
 
 ;; Helper for extracting an immediate that's not 0 and not -1 from an imm64.
 (decl pure partial safe_divisor_from_imm64 (Type Imm64) u64)

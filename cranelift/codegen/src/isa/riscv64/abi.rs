@@ -584,6 +584,19 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         insts
     }
 
+    fn gen_return_call(
+        _callee: CallDest,
+        _new_stack_arg_size: u32,
+        _old_stack_arg_size: u32,
+        _ret_addr: Option<Reg>,
+        _fp: Reg,
+        _tmp: Writable<Reg>,
+        _tmp2: Writable<Reg>,
+        _uses: abi::CallArgList,
+    ) -> SmallVec<[Self::I; 2]> {
+        todo!();
+    }
+
     fn gen_memcpy<F: FnMut(Type) -> Writable<Reg>>(
         call_conv: isa::CallConv,
         dst: Reg,
@@ -686,7 +699,12 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         || fixed_frame_storage_size > 0
     }
 
-    fn gen_inline_probestack(insts: &mut SmallInstVec<Self::I>, frame_size: u32, guard_size: u32) {
+    fn gen_inline_probestack(
+        insts: &mut SmallInstVec<Self::I>,
+        call_conv: isa::CallConv,
+        frame_size: u32,
+        guard_size: u32,
+    ) {
         // Unroll at most n consecutive probes, before falling back to using a loop
         const PROBE_MAX_UNROLL: u32 = 3;
         // Number of probes that we need to perform
@@ -695,7 +713,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         if probe_count <= PROBE_MAX_UNROLL {
             Self::gen_probestack_unroll(insts, guard_size, probe_count)
         } else {
-            Self::gen_probestack_loop(insts, guard_size, probe_count)
+            Self::gen_probestack_loop(insts, call_conv, guard_size, probe_count)
         }
     }
 }
@@ -940,11 +958,21 @@ impl Riscv64MachineDeps {
         }
     }
 
-    fn gen_probestack_loop(insts: &mut SmallInstVec<Inst>, guard_size: u32, probe_count: u32) {
+    fn gen_probestack_loop(
+        insts: &mut SmallInstVec<Inst>,
+        call_conv: isa::CallConv,
+        guard_size: u32,
+        probe_count: u32,
+    ) {
+        // Must be a caller-saved register that is not an argument.
+        let tmp = match call_conv {
+            isa::CallConv::Tail => Writable::from_reg(x_reg(1)),
+            _ => Writable::from_reg(x_reg(28)), // t3
+        };
         insts.push(Inst::StackProbeLoop {
             guard_size,
             probe_count,
-            tmp: Writable::from_reg(x_reg(28)), // t3
+            tmp,
         });
     }
 }

@@ -263,6 +263,8 @@ pub enum MachTerminator {
     None,
     /// A return instruction.
     Ret,
+    /// A tail call.
+    RetCall,
     /// An unconditional branch to another block.
     Uncond,
     /// A conditional branch to one of two other blocks.

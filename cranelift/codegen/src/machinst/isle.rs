@@ -737,16 +737,8 @@ macro_rules! isle_prelude_caller_methods {
 #[doc(hidden)]
 macro_rules! isle_prelude_method_helpers {
     ($abicaller:ty) => {
-        fn gen_call_common(
-            &mut self,
-            abi: Sig,
-            num_rets: usize,
-            mut caller: $abicaller,
-            (inputs, off): ValueSlice,
-        ) -> InstOutput {
-            caller.emit_stack_pre_adjust(self.lower_ctx);
-
-            let num_args = self.lower_ctx.sigs().num_args(abi);
+        fn gen_call_common_args(&mut self, call_site: &mut $abicaller, (inputs, off): ValueSlice) {
+            let num_args = call_site.num_args(self.lower_ctx.sigs());
 
             assert_eq!(
                 inputs.len(&self.lower_ctx.dfg().value_lists) - off,
@@ -760,13 +752,25 @@ macro_rules! isle_prelude_method_helpers {
                 arg_regs.push(self.put_in_regs(input));
             }
             for (i, arg_regs) in arg_regs.iter().enumerate() {
-                caller.emit_copy_regs_to_buffer(self.lower_ctx, i, *arg_regs);
+                call_site.emit_copy_regs_to_buffer(self.lower_ctx, i, *arg_regs);
             }
             for (i, arg_regs) in arg_regs.iter().enumerate() {
-                for inst in caller.gen_arg(self.lower_ctx, i, *arg_regs) {
+                for inst in call_site.gen_arg(self.lower_ctx, i, *arg_regs) {
                     self.lower_ctx.emit(inst);
                 }
             }
+        }
+
+        fn gen_call_common(
+            &mut self,
+            abi: Sig,
+            num_rets: usize,
+            mut caller: $abicaller,
+            args: ValueSlice,
+        ) -> InstOutput {
+            caller.emit_stack_pre_adjust(self.lower_ctx);
+
+            self.gen_call_common_args(&mut caller, args);
 
             // Handle retvals prior to emitting call, so the
             // constraints are on the call instruction; but buffer the

@@ -1,6 +1,9 @@
 test interpret
-;; test run
-;; target x86_64
+test run
+
+set preserve_frame_pointers=true
+
+target x86_64
 ;; target aarch64
 ;; target aarch64 sign_return_address
 ;; target aarch64 has_pauth sign_return_address

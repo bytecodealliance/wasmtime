@@ -406,7 +406,6 @@ impl<I: VCodeInst> MachBuffer<I> {
 
     /// Add a byte.
     pub fn put1(&mut self, value: u8) {
-        trace!("MachBuffer: put byte @ {}: {:x}", self.cur_offset(), value);
         self.data.push(value);
 
         // Post-invariant: conceptual-labels_at_tail contains a complete and
@@ -421,11 +420,6 @@ impl<I: VCodeInst> MachBuffer<I> {
 
     /// Add 2 bytes.
     pub fn put2(&mut self, value: u16) {
-        trace!(
-            "MachBuffer: put 16-bit word @ {}: {:x}",
-            self.cur_offset(),
-            value
-        );
         let bytes = value.to_le_bytes();
         self.data.extend_from_slice(&bytes[..]);
 
@@ -434,11 +428,6 @@ impl<I: VCodeInst> MachBuffer<I> {
 
     /// Add 4 bytes.
     pub fn put4(&mut self, value: u32) {
-        trace!(
-            "MachBuffer: put 32-bit word @ {}: {:x}",
-            self.cur_offset(),
-            value
-        );
         let bytes = value.to_le_bytes();
         self.data.extend_from_slice(&bytes[..]);
 
@@ -447,11 +436,6 @@ impl<I: VCodeInst> MachBuffer<I> {
 
     /// Add 8 bytes.
     pub fn put8(&mut self, value: u64) {
-        trace!(
-            "MachBuffer: put 64-bit word @ {}: {:x}",
-            self.cur_offset(),
-            value
-        );
         let bytes = value.to_le_bytes();
         self.data.extend_from_slice(&bytes[..]);
 
@@ -460,11 +444,6 @@ impl<I: VCodeInst> MachBuffer<I> {
 
     /// Add a slice of bytes.
     pub fn put_data(&mut self, data: &[u8]) {
-        trace!(
-            "MachBuffer: put data @ {}: len {}",
-            self.cur_offset(),
-            data.len()
-        );
         self.data.extend_from_slice(data);
 
         // Post-invariant: as for `put1()`.
@@ -472,7 +451,6 @@ impl<I: VCodeInst> MachBuffer<I> {
 
     /// Reserve appended space and return a mutable slice referring to it.
     pub fn get_appended_space(&mut self, len: usize) -> &mut [u8] {
-        trace!("MachBuffer: put data @ {}: len {}", self.cur_offset(), len);
         let off = self.data.len();
         let new_len = self.data.len() + len;
         self.data.resize(new_len, 0);

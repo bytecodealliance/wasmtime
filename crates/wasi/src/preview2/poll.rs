@@ -43,7 +43,7 @@ impl<T: WasiView> poll::Host for T {
         Ok(())
     }
 
-    async fn poll_oneoff(&mut self, pollables: Vec<Pollable>) -> Result<Vec<u8>> {
+    async fn poll_oneoff(&mut self, pollables: Vec<Pollable>) -> Result<Vec<bool>> {
         type ReadylistIndex = usize;
 
         let table = self.table_mut();
@@ -77,16 +77,16 @@ impl<T: WasiView> poll::Host for T {
             elems: Vec<(PollableFuture<'a>, Vec<ReadylistIndex>)>,
         }
         impl<'a> Future for PollOneoff<'a> {
-            type Output = Result<Vec<u8>>;
+            type Output = Result<Vec<bool>>;
 
             fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
                 let mut any_ready = false;
-                let mut results = vec![0; self.elems.len()];
+                let mut results = vec![false; self.elems.len()];
                 for (fut, readylist_indicies) in self.elems.iter_mut() {
                     match fut.as_mut().poll(cx) {
                         Poll::Ready(Ok(())) => {
                             for r in readylist_indicies {
-                                results[*r] = 1;
+                                results[*r] = true;
                             }
                             any_ready = true;
                         }
@@ -149,7 +149,7 @@ pub mod sync {
             block_on(async { AsyncHost::drop_pollable(self, pollable).await })
         }
 
-        fn poll_oneoff(&mut self, pollables: Vec<Pollable>) -> Result<Vec<u8>> {
+        fn poll_oneoff(&mut self, pollables: Vec<Pollable>) -> Result<Vec<bool>> {
             block_on(async { AsyncHost::poll_oneoff(self, pollables).await })
         }
     }

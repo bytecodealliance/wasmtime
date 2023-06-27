@@ -1,0 +1,75 @@
+test run
+target s390x
+target x86_64 has_sse3 has_ssse3 has_sse41
+target x86_64 has_sse3 has_ssse3 has_sse41 has_avx
+target riscv64 has_v
+
+function %simd_fcmp_ult_f32(f32x4, f32x4) -> i32x4 {
+block0(v0: f32x4, v1: f32x4):
+    v2 = fcmp ult v0, v1
+    return v2
+}
+; run: %simd_fcmp_ult_f32([0x0.5 0x1.5 0x1.1p10 0x1.4cccccp0], [0x0.5 0x2.9 0x1.400000p1 0x1.800000p0]) == [0 -1 0 -1]
+; run: %simd_fcmp_ult_f32([0x0.0 -0x0.0 -0x0.0 0x0.0], [-0x0.0 0x0.0 +Inf -Inf]) == [0 0 -1 0]
+; run: %simd_fcmp_ult_f32([-0x0.0 0x0.0 +Inf +Inf], [-0x0.0 0x0.0 -Inf +Inf]) == [0 0 0 0]
+; run: %simd_fcmp_ult_f32([-NaN NaN -NaN NaN], [NaN NaN -NaN NaN]) == [-1 -1 -1 -1]
+; run: %simd_fcmp_ult_f32([NaN -0x0.0 -Inf 0x1.0], [-NaN 0x0.0 +Inf -0x1.0]) == [-1 0 -1 0]
+
+function %simd_fcmp_splat_rhs_ult_f32(f32x4, f32) -> i32x4 {
+block0(v0: f32x4, v1: f32):
+    v2 = splat.f32x4 v1
+    v3 = fcmp ult v0, v2
+    return v3
+}
+; run: %simd_fcmp_splat_rhs_ult_f32([0x0.5 0x1.5 0x1.1p10 0x1.4cccccp0], 0x0.5) == [0 0 0 0]
+; run: %simd_fcmp_splat_rhs_ult_f32([0x0.0 -0x0.0 -0x0.0 0x0.0], -0x0.0) == [0 0 0 0]
+; run: %simd_fcmp_splat_rhs_ult_f32([-0x0.0 0x0.0 +Inf +Inf], -Inf) == [0 0 0 0]
+; run: %simd_fcmp_splat_rhs_ult_f32([-NaN NaN -NaN NaN], NaN) == [-1 -1 -1 -1]
+; run: %simd_fcmp_splat_rhs_ult_f32([NaN -0x0.0 -Inf 0x1.0], -NaN) == [-1 -1 -1 -1]
+
+function %simd_fcmp_splat_lhs_ult_f32(f32x4, f32) -> i32x4 {
+block0(v0: f32x4, v1: f32):
+    v2 = splat.f32x4 v1
+    v3 = fcmp ult v2, v0
+    return v3
+}
+; run: %simd_fcmp_splat_lhs_ult_f32([0x0.5 0x1.5 0x1.1p10 0x1.4cccccp0], 0x0.5) == [0 -1 -1 -1]
+; run: %simd_fcmp_splat_lhs_ult_f32([0x0.0 -0x0.0 -0x0.0 0x0.0], -0x0.0) == [0 0 0 0]
+; run: %simd_fcmp_splat_lhs_ult_f32([-0x0.0 0x0.0 +Inf +Inf], -Inf) == [-1 -1 -1 -1]
+; run: %simd_fcmp_splat_lhs_ult_f32([-NaN NaN -NaN NaN], NaN) == [-1 -1 -1 -1]
+; run: %simd_fcmp_splat_lhs_ult_f32([NaN -0x0.0 -Inf 0x1.0], -NaN) == [-1 -1 -1 -1]
+
+function %simd_fcmp_ult_f64(f64x2, f64x2) -> i64x2 {
+block0(v0: f64x2, v1: f64x2):
+    v2 = fcmp ult v0, v1
+    return v2
+}
+; run: %simd_fcmp_ult_f64([0x0.5 0x1.5], [0x0.5 0x2.9]) == [0 -1]
+; run: %simd_fcmp_ult_f64([0x0.0 -0x0.0], [-0x0.0 0x0.0]) == [0 0]
+; run: %simd_fcmp_ult_f64([+Inf +Inf], [-Inf +Inf]) == [0 0]
+; run: %simd_fcmp_ult_f64([-NaN NaN], [NaN NaN]) == [-1 -1]
+; run: %simd_fcmp_ult_f64([NaN -0x0.0], [-NaN 0x0.0]) == [-1 0]
+
+function %simd_fcmp_splat_rhs_ult_f64(f64x2, f64) -> i64x2 {
+block0(v0: f64x2, v1: f64):
+    v2 = splat.f64x2 v1
+    v3 = fcmp ult v0, v2
+    return v3
+}
+; run: %simd_fcmp_splat_rhs_ult_f64([0x0.5 0x1.5], 0x0.5) == [0 0]
+; run: %simd_fcmp_splat_rhs_ult_f64([0x0.0 -0x0.0], -0x0.0) == [0 0]
+; run: %simd_fcmp_splat_rhs_ult_f64([+Inf +Inf], -Inf) == [0 0]
+; run: %simd_fcmp_splat_rhs_ult_f64([-NaN NaN], NaN) == [-1 -1]
+; run: %simd_fcmp_splat_rhs_ult_f64([NaN -0x0.0], -NaN) == [-1 -1]
+
+function %simd_fcmp_splat_lhs_ult_f64(f64x2, f64) -> i64x2 {
+block0(v0: f64x2, v1: f64):
+    v2 = splat.f64x2 v1
+    v3 = fcmp ult v2, v0
+    return v3
+}
+; run: %simd_fcmp_splat_lhs_ult_f64([0x0.5 0x1.5], 0x0.5) == [0 -1]
+; run: %simd_fcmp_splat_lhs_ult_f64([0x0.0 -0x0.0], -0x0.0) == [0 0]
+; run: %simd_fcmp_splat_lhs_ult_f64([+Inf +Inf], -Inf) == [-1 -1]
+; run: %simd_fcmp_splat_lhs_ult_f64([-NaN NaN], NaN) == [-1 -1]
+; run: %simd_fcmp_splat_lhs_ult_f64([NaN -0x0.0], -NaN) == [-1 -1]

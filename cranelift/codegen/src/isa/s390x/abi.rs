@@ -588,6 +588,7 @@ impl ABIMachineSpec for S390xMachineDeps {
 
     fn gen_inline_probestack(
         _insts: &mut SmallInstVec<Self::I>,
+        _call_conv: isa::CallConv,
         _frame_size: u32,
         _guard_size: u32,
     ) {
@@ -762,6 +763,19 @@ impl ABIMachineSpec for S390xMachineDeps {
         _callee_pop_size: u32,
     ) -> SmallVec<[Inst; 2]> {
         unreachable!();
+    }
+
+    fn gen_return_call(
+        _callee: CallDest,
+        _new_stack_arg_size: u32,
+        _old_stack_arg_size: u32,
+        _ret_addr: Option<Reg>,
+        _fp: Reg,
+        _tmp: Writable<Reg>,
+        _tmp2: Writable<Reg>,
+        _uses: abi::CallArgList,
+    ) -> SmallVec<[Self::I; 2]> {
+        todo!();
     }
 
     fn gen_memcpy<F: FnMut(Type) -> Writable<Reg>>(

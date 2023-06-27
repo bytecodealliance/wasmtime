@@ -52,6 +52,27 @@ pub struct CallInfo {
     pub callee_conv: CallConv,
 }
 
+/// Out-of-line data for return-calls, to keep the size of `Inst` down.
+#[derive(Clone, Debug)]
+pub struct ReturnCallInfo {
+    /// The size of the new stack frame's stack arguments. This is necessary
+    /// for copying the frame over our current frame. It must already be
+    /// allocated on the stack.
+    pub new_stack_arg_size: u32,
+    /// The size of the current/old stack frame's stack arguments.
+    pub old_stack_arg_size: u32,
+    /// The return address. Needs to be written into the correct stack slot
+    /// after the new stack frame is copied into place.
+    pub ret_addr: Option<Gpr>,
+    /// A copy of the frame pointer, because we will overwrite the current
+    /// `rbp`.
+    pub fp: Gpr,
+    /// A temporary register.
+    pub tmp: WritableGpr,
+    /// The in-register arguments and their constraints.
+    pub uses: CallArgList,
+}
+
 #[test]
 #[cfg(target_pointer_width = "64")]
 fn inst_size_test() {
@@ -80,6 +101,8 @@ impl Inst {
             | Inst::Bswap { .. }
             | Inst::CallKnown { .. }
             | Inst::CallUnknown { .. }
+            | Inst::ReturnCallKnown { .. }
+            | Inst::ReturnCallUnknown { .. }
             | Inst::CheckedSRemSeq { .. }
             | Inst::CheckedSRemSeq8 { .. }
             | Inst::Cmove { .. }
@@ -1576,6 +1599,65 @@ impl PrettyPrint for Inst {
                 format!("{op} *{dest}")
             }
 
+            Inst::ReturnCallKnown { callee, info } => {
+                let ReturnCallInfo {
+                    new_stack_arg_size,
+                    old_stack_arg_size,
+                    ret_addr,
+                    fp,
+                    tmp,
+                    uses,
+                } = &**info;
+                let ret_addr = ret_addr.map(|r| regs::show_reg(*r));
+                let fp = regs::show_reg(fp.to_reg());
+                let tmp = regs::show_reg(tmp.to_reg().to_reg());
+                let mut s = format!(
+                    "return_call_known \
+                     {callee:?} \
+                     new_stack_arg_size:{new_stack_arg_size} \
+                     old_stack_arg_size:{old_stack_arg_size} \
+                     ret_addr:{ret_addr:?} \
+                     fp:{fp} \
+                     tmp:{tmp}"
+                );
+                for ret in uses {
+                    let preg = regs::show_reg(ret.preg);
+                    let vreg = pretty_print_reg(ret.vreg, 8, allocs);
+                    write!(&mut s, " {vreg}={preg}").unwrap();
+                }
+                s
+            }
+
+            Inst::ReturnCallUnknown { callee, info } => {
+                let ReturnCallInfo {
+                    new_stack_arg_size,
+                    old_stack_arg_size,
+                    ret_addr,
+                    fp,
+                    tmp,
+                    uses,
+                } = &**info;
+                let callee = callee.pretty_print(8, allocs);
+                let ret_addr = ret_addr.map(|r| regs::show_reg(*r));
+                let fp = regs::show_reg(fp.to_reg());
+                let tmp = regs::show_reg(tmp.to_reg().to_reg());
+                let mut s = format!(
+                    "return_call_unknown \
+                     {callee} \
+                     new_stack_arg_size:{new_stack_arg_size} \
+                     old_stack_arg_size:{old_stack_arg_size} \
+                     ret_addr:{ret_addr:?} \
+                     fp:{fp} \
+                     tmp:{tmp}"
+                );
+                for ret in uses {
+                    let preg = regs::show_reg(ret.preg);
+                    let vreg = pretty_print_reg(ret.vreg, 8, allocs);
+                    write!(&mut s, " {vreg}={preg}").unwrap();
+                }
+                s
+            }
+
             Inst::Args { args } => {
                 let mut s = "args".to_string();
                 for arg in args {
@@ -2212,6 +2294,45 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             collector.reg_clobbers(info.clobbers);
         }
 
+        Inst::ReturnCallKnown { callee, info } => {
+            let ReturnCallInfo {
+                ret_addr,
+                fp,
+                tmp,
+                uses,
+                ..
+            } = &**info;
+            // Same as in the `Inst::CallKnown` branch.
+            debug_assert_ne!(*callee, ExternalName::LibCall(LibCall::Probestack));
+            for u in uses {
+                collector.reg_fixed_use(u.vreg, u.preg);
+            }
+            if let Some(ret_addr) = ret_addr {
+                collector.reg_use(**ret_addr);
+            }
+            collector.reg_use(**fp);
+            collector.reg_early_def(tmp.to_writable_reg());
+        }
+
+        Inst::ReturnCallUnknown { callee, info } => {
+            let ReturnCallInfo {
+                ret_addr,
+                fp,
+                tmp,
+                uses,
+                ..
+            } = &**info;
+            callee.get_operands(collector);
+            for u in uses {
+                collector.reg_fixed_use(u.vreg, u.preg);
+            }
+            if let Some(ret_addr) = ret_addr {
+                collector.reg_use(**ret_addr);
+            }
+            collector.reg_use(**fp);
+            collector.reg_early_def(tmp.to_writable_reg());
+        }
+
         Inst::JmpTableSeq {
             ref idx,
             ref tmp1,
@@ -2393,6 +2514,9 @@ impl MachInst for Inst {
         match self {
             // Interesting cases.
             &Self::Ret { .. } => MachTerminator::Ret,
+            &Self::ReturnCallKnown { .. } | &Self::ReturnCallUnknown { .. } => {
+                MachTerminator::RetCall
+            }
             &Self::JmpKnown { .. } => MachTerminator::Uncond,
             &Self::JmpCond { .. } => MachTerminator::Cond,
             &Self::JmpTableSeq { .. } => MachTerminator::Indirect,

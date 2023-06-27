@@ -44,17 +44,32 @@ impl X64ABIMachineSpec {
             ));
         }
     }
-    fn gen_probestack_loop(insts: &mut SmallInstVec<Inst>, frame_size: u32, guard_size: u32) {
-        // We have to use a caller saved register since clobbering only happens
-        // after stack probing.
-        //
-        // R11 is caller saved on both Fastcall and SystemV, and not used for argument
-        // passing, so it's pretty much free. It is also not used by the stacklimit mechanism.
-        let tmp = regs::r11();
-        debug_assert!({
-            let real_reg = tmp.to_real_reg().unwrap();
-            !is_callee_save_systemv(real_reg, false) && !is_callee_save_fastcall(real_reg, false)
-        });
+
+    fn gen_probestack_loop(
+        insts: &mut SmallInstVec<Inst>,
+        call_conv: isa::CallConv,
+        frame_size: u32,
+        guard_size: u32,
+    ) {
+        // We have to use a caller-saved register since clobbering only
+        // happens after stack probing.
+        let tmp = match call_conv {
+            // All registers are caller-saved on the `tail` calling convention,
+            // and `r15` is not used to pass arguments.
+            isa::CallConv::Tail => regs::r15(),
+            // `r11` is caller saved on both Fastcall and SystemV, and not used
+            // for argument passing, so it's pretty much free. It is also not
+            // used by the stacklimit mechanism.
+            _ => {
+                let tmp = regs::r11();
+                debug_assert!({
+                    let real_reg = tmp.to_real_reg().unwrap();
+                    !is_callee_save_systemv(real_reg, false)
+                        && !is_callee_save_fastcall(real_reg, false)
+                });
+                tmp
+            }
+        };
 
         insts.push(Inst::StackProbeLoop {
             tmp: Writable::from_reg(tmp),
@@ -494,7 +509,12 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         });
     }
 
-    fn gen_inline_probestack(insts: &mut SmallInstVec<Self::I>, frame_size: u32, guard_size: u32) {
+    fn gen_inline_probestack(
+        insts: &mut SmallInstVec<Self::I>,
+        call_conv: isa::CallConv,
+        frame_size: u32,
+        guard_size: u32,
+    ) {
         // Unroll at most n consecutive probes, before falling back to using a loop
         //
         // This was number was picked because the loop version is 38 bytes long. We can fit
@@ -507,7 +527,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         if probe_count <= PROBE_MAX_UNROLL {
             Self::gen_probestack_unroll(insts, guard_size, probe_count)
         } else {
-            Self::gen_probestack_loop(insts, frame_size, guard_size)
+            Self::gen_probestack_loop(insts, call_conv, frame_size, guard_size)
         }
     }
 
@@ -700,6 +720,52 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         insts
     }
 
+    fn gen_return_call(
+        callee: CallDest,
+        new_stack_arg_size: u32,
+        old_stack_arg_size: u32,
+        ret_addr: Option<Reg>,
+        fp: Reg,
+        tmp: Writable<Reg>,
+        tmp2: Writable<Reg>,
+        uses: abi::CallArgList,
+    ) -> SmallVec<[Self::I; 2]> {
+        let ret_addr = ret_addr.map(|r| Gpr::new(r).unwrap());
+        let fp = Gpr::new(fp).unwrap();
+        let tmp = WritableGpr::from_writable_reg(tmp).unwrap();
+        let info = Box::new(ReturnCallInfo {
+            new_stack_arg_size,
+            old_stack_arg_size,
+            ret_addr,
+            fp,
+            tmp,
+            uses,
+        });
+        match callee {
+            CallDest::ExtName(callee, RelocDistance::Near) => {
+                smallvec![Inst::ReturnCallKnown { callee, info }]
+            }
+            CallDest::ExtName(callee, RelocDistance::Far) => {
+                smallvec![
+                    Inst::LoadExtName {
+                        dst: tmp2,
+                        name: Box::new(callee.clone()),
+                        offset: 0,
+                        distance: RelocDistance::Far,
+                    },
+                    Inst::ReturnCallUnknown {
+                        callee: tmp2.into(),
+                        info,
+                    }
+                ]
+            }
+            CallDest::Reg(callee) => smallvec![Inst::ReturnCallUnknown {
+                callee: callee.into(),
+                info,
+            }],
+        }
+    }
+
     fn gen_memcpy<F: FnMut(Type) -> Writable<Reg>>(
         call_conv: isa::CallConv,
         dst: Reg,
@@ -878,10 +944,9 @@ fn get_intreg_for_arg(call_conv: &CallConv, idx: usize, arg_idx: usize) -> Optio
             7 => Some(regs::r9()),
             8 => Some(regs::r10()),
             9 => Some(regs::r11()),
-            10 => Some(regs::r12()),
-            11 => Some(regs::r13()),
-            12 => Some(regs::r14()),
-            // NB: `r15` is reserved as a scratch register.
+            // NB: `r12`, `r13`, `r14` and `r15` are reserved for indirect
+            // callee addresses and temporaries required for our tail call
+            // sequence (fp, ret_addr, tmp).
             _ => None,
         };
     }

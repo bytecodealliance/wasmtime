@@ -357,14 +357,30 @@ impl VecAluOpRRR {
             VecAluOpRRR::VwaddWV | VecAluOpRRR::VwaddWX => 0b110101,
             VecAluOpRRR::VwsubuWV | VecAluOpRRR::VwsubuWX => 0b110110,
             VecAluOpRRR::VwsubWV | VecAluOpRRR::VwsubWX => 0b110111,
-            VecAluOpRRR::VmseqVV | VecAluOpRRR::VmseqVX => 0b011000,
-            VecAluOpRRR::VmsneVV | VecAluOpRRR::VmsneVX => 0b011001,
-            VecAluOpRRR::VmsltuVV | VecAluOpRRR::VmsltuVX => 0b011010,
-            VecAluOpRRR::VmsltVV | VecAluOpRRR::VmsltVX => 0b011011,
-            VecAluOpRRR::VmsleuVV | VecAluOpRRR::VmsleuVX => 0b011100,
-            VecAluOpRRR::VmsleVV | VecAluOpRRR::VmsleVX => 0b011101,
-            VecAluOpRRR::VmsgtuVX => 0b011110,
-            VecAluOpRRR::VmsgtVX => 0b011111,
+            VecAluOpRRR::VmseqVV
+            | VecAluOpRRR::VmseqVX
+            | VecAluOpRRR::VmfeqVV
+            | VecAluOpRRR::VmfeqVF => 0b011000,
+            VecAluOpRRR::VmsneVV
+            | VecAluOpRRR::VmsneVX
+            | VecAluOpRRR::VmfleVV
+            | VecAluOpRRR::VmfleVF
+            | VecAluOpRRR::VmandMM => 0b011001,
+            VecAluOpRRR::VmsltuVV | VecAluOpRRR::VmsltuVX | VecAluOpRRR::VmorMM => 0b011010,
+            VecAluOpRRR::VmsltVV
+            | VecAluOpRRR::VmsltVX
+            | VecAluOpRRR::VmfltVV
+            | VecAluOpRRR::VmfltVF => 0b011011,
+            VecAluOpRRR::VmsleuVV
+            | VecAluOpRRR::VmsleuVX
+            | VecAluOpRRR::VmfneVV
+            | VecAluOpRRR::VmfneVF => 0b011100,
+            VecAluOpRRR::VmsleVV
+            | VecAluOpRRR::VmsleVX
+            | VecAluOpRRR::VmfgtVF
+            | VecAluOpRRR::VmnandMM => 0b011101,
+            VecAluOpRRR::VmsgtuVX | VecAluOpRRR::VmnorMM => 0b011110,
+            VecAluOpRRR::VmsgtVX | VecAluOpRRR::VmfgeVF => 0b011111,
         }
     }
 
@@ -408,7 +424,11 @@ impl VecAluOpRRR {
             | VecAluOpRRR::VmulhuVV
             | VecAluOpRRR::VredmaxuVS
             | VecAluOpRRR::VredminuVS
-            | VecAluOpRRR::VcompressVM => VecOpCategory::OPMVV,
+            | VecAluOpRRR::VcompressVM
+            | VecAluOpRRR::VmandMM
+            | VecAluOpRRR::VmorMM
+            | VecAluOpRRR::VmnandMM
+            | VecAluOpRRR::VmnorMM => VecOpCategory::OPMVV,
             VecAluOpRRR::VwaddVX
             | VecAluOpRRR::VwadduVX
             | VecAluOpRRR::VwadduWX
@@ -453,14 +473,24 @@ impl VecAluOpRRR {
             | VecAluOpRRR::VfsubVV
             | VecAluOpRRR::VfmulVV
             | VecAluOpRRR::VfdivVV
-            | VecAluOpRRR::VfsgnjnVV => VecOpCategory::OPFVV,
+            | VecAluOpRRR::VfsgnjnVV
+            | VecAluOpRRR::VmfeqVV
+            | VecAluOpRRR::VmfneVV
+            | VecAluOpRRR::VmfltVV
+            | VecAluOpRRR::VmfleVV => VecOpCategory::OPFVV,
             VecAluOpRRR::VfaddVF
             | VecAluOpRRR::VfsubVF
             | VecAluOpRRR::VfrsubVF
             | VecAluOpRRR::VfmulVF
             | VecAluOpRRR::VfdivVF
             | VecAluOpRRR::VfrdivVF
-            | VecAluOpRRR::VfmergeVFM => VecOpCategory::OPFVF,
+            | VecAluOpRRR::VfmergeVFM
+            | VecAluOpRRR::VmfeqVF
+            | VecAluOpRRR::VmfneVF
+            | VecAluOpRRR::VmfltVF
+            | VecAluOpRRR::VmfleVF
+            | VecAluOpRRR::VmfgtVF
+            | VecAluOpRRR::VmfgeVF => VecOpCategory::OPFVF,
         }
     }
 
