@@ -28,6 +28,11 @@ pub enum CallConv {
     AppleAarch64,
     /// Specialized convention for the probestack function.
     Probestack,
+    /// Wasmtime equivalent of SystemV, not ABI-stable.
+    ///
+    /// FIXME: remove this when Wasmtime uses the "tail" calling convention for
+    /// all wasm functions.
+    WasmtimeSystemV,
 }
 
 impl CallConv {
@@ -91,6 +96,7 @@ impl fmt::Display for CallConv {
             Self::WindowsFastcall => "windows_fastcall",
             Self::AppleAarch64 => "apple_aarch64",
             Self::Probestack => "probestack",
+            Self::WasmtimeSystemV => "wasmtime_system_v",
         })
     }
 }
@@ -106,6 +112,7 @@ impl str::FromStr for CallConv {
             "windows_fastcall" => Ok(Self::WindowsFastcall),
             "apple_aarch64" => Ok(Self::AppleAarch64),
             "probestack" => Ok(Self::Probestack),
+            "wasmtime_system_v" => Ok(Self::WasmtimeSystemV),
             _ => Err(()),
         }
     }
