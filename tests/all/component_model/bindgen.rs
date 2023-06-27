@@ -7,6 +7,7 @@ use wasmtime::{
     Store,
 };
 
+mod ownership;
 mod results;
 
 mod no_imports {

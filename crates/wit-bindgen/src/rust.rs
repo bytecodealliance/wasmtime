@@ -1,4 +1,4 @@
-use crate::types::TypeInfo;
+use crate::{types::TypeInfo, Ownership};
 use heck::*;
 use std::collections::HashMap;
 use std::fmt::Write;
@@ -17,15 +17,16 @@ pub trait RustGenerator<'a> {
     fn info(&self, ty: TypeId) -> TypeInfo;
     fn path_to_interface(&self, interface: InterfaceId) -> Option<String>;
 
-    /// This, if enabled, will possibly cause types to get duplicate copies to
-    /// get generated of each other. For example a record containing a string
-    /// used both in the import and export context would get one variant
-    /// generated for both.
+    /// This determines whether we generate owning types or (where appopriate)
+    /// borrowing types.
     ///
-    /// If this is disabled then the import context would require the same type
-    /// used for the export context, which has an owned string that might not
-    /// otherwise be necessary.
-    fn duplicate_if_necessary(&self) -> bool;
+    /// For example, when generating a type which is only used as a parameter to
+    /// a guest-exported function, there is no need for it to own its fields.
+    /// However, constructing deeply-nested borrows (e.g. `&[&[&[&str]]]]` for
+    /// `list<list<list<string>>>`) can be very awkward, so by default we
+    /// generate owning types and use only shallow borrowing at the top level
+    /// inside function signatures.
+    fn ownership(&self) -> Ownership;
 
     fn print_ty(&mut self, ty: &Type, mode: TypeMode) {
         match ty {
@@ -188,6 +189,11 @@ pub trait RustGenerator<'a> {
     }
 
     fn print_list(&mut self, ty: &Type, mode: TypeMode) {
+        let next_mode = if matches!(self.ownership(), Ownership::Owning) {
+            TypeMode::Owned
+        } else {
+            mode
+        };
         match mode {
             TypeMode::AllBorrowed(lt) => {
                 self.push_str("&");
@@ -196,12 +202,12 @@ pub trait RustGenerator<'a> {
                     self.push_str(" ");
                 }
                 self.push_str("[");
-                self.print_ty(ty, mode);
+                self.print_ty(ty, next_mode);
                 self.push_str("]");
             }
             TypeMode::Owned => {
                 self.push_str("Vec<");
-                self.print_ty(ty, mode);
+                self.print_ty(ty, next_mode);
                 self.push_str(">");
             }
         }
@@ -225,12 +231,13 @@ pub trait RustGenerator<'a> {
             return Vec::new();
         }
         let mut result = Vec::new();
-        let first_mode = if info.owned || !info.borrowed {
-            TypeMode::Owned
-        } else {
-            assert!(!self.uses_two_names(&info));
-            TypeMode::AllBorrowed("'a")
-        };
+        let first_mode =
+            if info.owned || !info.borrowed || matches!(self.ownership(), Ownership::Owning) {
+                TypeMode::Owned
+            } else {
+                assert!(!self.uses_two_names(&info));
+                TypeMode::AllBorrowed("'a")
+            };
         result.push((self.result_name(ty), first_mode));
         if self.uses_two_names(&info) {
             result.push((self.param_name(ty), TypeMode::AllBorrowed("'a")));
@@ -378,10 +385,21 @@ pub trait RustGenerator<'a> {
     }
 
     fn uses_two_names(&self, info: &TypeInfo) -> bool {
-        info.has_list && info.borrowed && info.owned && self.duplicate_if_necessary()
+        info.has_list
+            && info.borrowed
+            && info.owned
+            && matches!(
+                self.ownership(),
+                Ownership::Borrowing {
+                    duplicate_if_necessary: true
+                }
+            )
     }
 
     fn lifetime_for(&self, info: &TypeInfo, mode: TypeMode) -> Option<&'static str> {
+        if matches!(self.ownership(), Ownership::Owning) {
+            return None;
+        }
         let lt = match mode {
             TypeMode::AllBorrowed(s) => s,
             _ => return None,
