@@ -1,6 +1,206 @@
 
 # cargo-vet imports lock
 
+[[unpublished.cranelift]]
+version = "0.98.0"
+audited_as = "0.97.1"
+
+[[unpublished.cranelift-bforest]]
+version = "0.98.0"
+audited_as = "0.97.1"
+
+[[unpublished.cranelift-codegen]]
+version = "0.98.0"
+audited_as = "0.97.1"
+
+[[unpublished.cranelift-codegen-meta]]
+version = "0.98.0"
+audited_as = "0.97.1"
+
+[[unpublished.cranelift-codegen-shared]]
+version = "0.98.0"
+audited_as = "0.97.1"
+
+[[unpublished.cranelift-control]]
+version = "0.98.0"
+audited_as = "0.97.1"
+
+[[unpublished.cranelift-entity]]
+version = "0.98.0"
+audited_as = "0.97.1"
+
+[[unpublished.cranelift-frontend]]
+version = "0.98.0"
+audited_as = "0.97.1"
+
+[[unpublished.cranelift-interpreter]]
+version = "0.98.0"
+audited_as = "0.97.1"
+
+[[unpublished.cranelift-isle]]
+version = "0.98.0"
+audited_as = "0.97.1"
+
+[[unpublished.cranelift-jit]]
+version = "0.98.0"
+audited_as = "0.97.1"
+
+[[unpublished.cranelift-module]]
+version = "0.98.0"
+audited_as = "0.97.1"
+
+[[unpublished.cranelift-native]]
+version = "0.98.0"
+audited_as = "0.97.1"
+
+[[unpublished.cranelift-object]]
+version = "0.98.0"
+audited_as = "0.97.1"
+
+[[unpublished.cranelift-reader]]
+version = "0.98.0"
+audited_as = "0.97.1"
+
+[[unpublished.cranelift-serde]]
+version = "0.98.0"
+audited_as = "0.97.1"
+
+[[unpublished.cranelift-wasm]]
+version = "0.98.0"
+audited_as = "0.97.1"
+
+[[unpublished.wasi-cap-std-sync]]
+version = "11.0.0"
+audited_as = "10.0.1"
+
+[[unpublished.wasi-common]]
+version = "11.0.0"
+audited_as = "10.0.1"
+
+[[unpublished.wasi-tokio]]
+version = "11.0.0"
+audited_as = "10.0.1"
+
+[[unpublished.wasmtime]]
+version = "11.0.0"
+audited_as = "10.0.1"
+
+[[unpublished.wasmtime-asm-macros]]
+version = "11.0.0"
+audited_as = "10.0.1"
+
+[[unpublished.wasmtime-cache]]
+version = "11.0.0"
+audited_as = "10.0.1"
+
+[[unpublished.wasmtime-cli]]
+version = "11.0.0"
+audited_as = "10.0.1"
+
+[[unpublished.wasmtime-cli-flags]]
+version = "11.0.0"
+audited_as = "10.0.1"
+
+[[unpublished.wasmtime-component-macro]]
+version = "11.0.0"
+audited_as = "10.0.1"
+
+[[unpublished.wasmtime-component-util]]
+version = "11.0.0"
+audited_as = "10.0.1"
+
+[[unpublished.wasmtime-cranelift]]
+version = "11.0.0"
+audited_as = "10.0.1"
+
+[[unpublished.wasmtime-cranelift-shared]]
+version = "11.0.0"
+audited_as = "10.0.1"
+
+[[unpublished.wasmtime-environ]]
+version = "11.0.0"
+audited_as = "10.0.1"
+
+[[unpublished.wasmtime-explorer]]
+version = "11.0.0"
+audited_as = "10.0.1"
+
+[[unpublished.wasmtime-fiber]]
+version = "11.0.0"
+audited_as = "10.0.1"
+
+[[unpublished.wasmtime-jit]]
+version = "11.0.0"
+audited_as = "10.0.1"
+
+[[unpublished.wasmtime-jit-debug]]
+version = "11.0.0"
+audited_as = "10.0.1"
+
+[[unpublished.wasmtime-jit-icache-coherence]]
+version = "11.0.0"
+audited_as = "10.0.1"
+
+[[unpublished.wasmtime-runtime]]
+version = "11.0.0"
+audited_as = "10.0.1"
+
+[[unpublished.wasmtime-types]]
+version = "11.0.0"
+audited_as = "10.0.1"
+
+[[unpublished.wasmtime-wasi]]
+version = "11.0.0"
+audited_as = "10.0.1"
+
+[[unpublished.wasmtime-wasi-crypto]]
+version = "11.0.0"
+audited_as = "10.0.1"
+
+[[unpublished.wasmtime-wasi-http]]
+version = "11.0.0"
+audited_as = "10.0.1"
+
+[[unpublished.wasmtime-wasi-nn]]
+version = "11.0.0"
+audited_as = "10.0.1"
+
+[[unpublished.wasmtime-wasi-threads]]
+version = "11.0.0"
+audited_as = "10.0.1"
+
+[[unpublished.wasmtime-wast]]
+version = "11.0.0"
+audited_as = "10.0.1"
+
+[[unpublished.wasmtime-winch]]
+version = "11.0.0"
+audited_as = "10.0.1"
+
+[[unpublished.wasmtime-wit-bindgen]]
+version = "11.0.0"
+audited_as = "10.0.1"
+
+[[unpublished.wiggle]]
+version = "11.0.0"
+audited_as = "10.0.1"
+
+[[unpublished.wiggle-generate]]
+version = "11.0.0"
+audited_as = "10.0.1"
+
+[[unpublished.wiggle-macro]]
+version = "11.0.0"
+audited_as = "10.0.1"
+
+[[unpublished.wiggle-test]]
+version = "0.0.0"
+audited_as = "0.1.0"
+
+[[unpublished.winch-codegen]]
+version = "0.9.0"
+audited_as = "0.8.1"
+
 [[publisher.arbitrary]]
 version = "1.3.0"
 when = "2023-03-13"
@@ -14,6 +214,108 @@ when = "2023-01-17"
 user-id = 696
 user-login = "fitzgen"
 user-name = "Nick Fitzgerald"
+
+[[publisher.cranelift]]
+version = "0.97.1"
+when = "2023-06-21"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.cranelift-bforest]]
+version = "0.97.1"
+when = "2023-06-21"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.cranelift-codegen]]
+version = "0.97.1"
+when = "2023-06-21"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.cranelift-codegen-meta]]
+version = "0.97.1"
+when = "2023-06-21"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.cranelift-codegen-shared]]
+version = "0.97.1"
+when = "2023-06-21"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.cranelift-control]]
+version = "0.97.1"
+when = "2023-06-21"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.cranelift-entity]]
+version = "0.97.1"
+when = "2023-06-21"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.cranelift-frontend]]
+version = "0.97.1"
+when = "2023-06-21"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.cranelift-interpreter]]
+version = "0.97.1"
+when = "2023-06-21"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.cranelift-isle]]
+version = "0.97.1"
+when = "2023-06-21"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.cranelift-jit]]
+version = "0.97.1"
+when = "2023-06-21"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.cranelift-module]]
+version = "0.97.1"
+when = "2023-06-21"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.cranelift-native]]
+version = "0.97.1"
+when = "2023-06-21"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.cranelift-object]]
+version = "0.97.1"
+when = "2023-06-21"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.cranelift-reader]]
+version = "0.97.1"
+when = "2023-06-21"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.cranelift-serde]]
+version = "0.97.1"
+when = "2023-06-21"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.cranelift-wasm]]
+version = "0.97.1"
+when = "2023-06-21"
+user-id = 73222
+user-login = "wasmtime-publish"
 
 [[publisher.derive_arbitrary]]
 version = "1.3.0"
@@ -49,6 +351,24 @@ when = "2022-05-02"
 user-id = 1139
 user-login = "Manishearth"
 user-name = "Manish Goregaokar"
+
+[[publisher.wasi-cap-std-sync]]
+version = "10.0.1"
+when = "2023-06-21"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wasi-common]]
+version = "10.0.1"
+when = "2023-06-21"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wasi-tokio]]
+version = "10.0.1"
+when = "2023-06-21"
+user-id = 73222
+user-login = "wasmtime-publish"
 
 [[publisher.wasm-encoder]]
 version = "0.29.0"
@@ -92,6 +412,156 @@ user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
+[[publisher.wasmtime]]
+version = "10.0.1"
+when = "2023-06-21"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wasmtime-asm-macros]]
+version = "10.0.1"
+when = "2023-06-21"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wasmtime-cache]]
+version = "10.0.1"
+when = "2023-06-21"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wasmtime-cli]]
+version = "10.0.1"
+when = "2023-06-21"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wasmtime-cli-flags]]
+version = "10.0.1"
+when = "2023-06-21"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wasmtime-component-macro]]
+version = "10.0.1"
+when = "2023-06-21"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wasmtime-component-util]]
+version = "10.0.1"
+when = "2023-06-21"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wasmtime-cranelift]]
+version = "10.0.1"
+when = "2023-06-21"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wasmtime-cranelift-shared]]
+version = "10.0.1"
+when = "2023-06-21"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wasmtime-environ]]
+version = "10.0.1"
+when = "2023-06-21"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wasmtime-explorer]]
+version = "10.0.1"
+when = "2023-06-21"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wasmtime-fiber]]
+version = "10.0.1"
+when = "2023-06-21"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wasmtime-jit]]
+version = "10.0.1"
+when = "2023-06-21"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wasmtime-jit-debug]]
+version = "10.0.1"
+when = "2023-06-21"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wasmtime-jit-icache-coherence]]
+version = "10.0.1"
+when = "2023-06-21"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wasmtime-runtime]]
+version = "10.0.1"
+when = "2023-06-21"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wasmtime-types]]
+version = "10.0.1"
+when = "2023-06-21"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wasmtime-wasi]]
+version = "10.0.1"
+when = "2023-06-21"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wasmtime-wasi-crypto]]
+version = "10.0.1"
+when = "2023-06-21"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wasmtime-wasi-http]]
+version = "10.0.1"
+when = "2023-06-21"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wasmtime-wasi-nn]]
+version = "10.0.1"
+when = "2023-06-21"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wasmtime-wasi-threads]]
+version = "10.0.1"
+when = "2023-06-21"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wasmtime-wast]]
+version = "10.0.1"
+when = "2023-06-21"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wasmtime-winch]]
+version = "10.0.1"
+when = "2023-06-21"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wasmtime-wit-bindgen]]
+version = "10.0.1"
+when = "2023-06-21"
+user-id = 73222
+user-login = "wasmtime-publish"
+
 [[publisher.wast]]
 version = "60.0.0"
 when = "2023-05-26"
@@ -105,6 +575,37 @@ when = "2023-05-26"
 user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
+
+[[publisher.wiggle]]
+version = "10.0.1"
+when = "2023-06-21"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wiggle-generate]]
+version = "10.0.1"
+when = "2023-06-21"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wiggle-macro]]
+version = "10.0.1"
+when = "2023-06-21"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wiggle-test]]
+version = "0.1.0"
+when = "2020-03-12"
+user-id = 18162
+user-login = "pchickey"
+user-name = "Pat Hickey"
+
+[[publisher.winch-codegen]]
+version = "0.8.1"
+when = "2023-06-21"
+user-id = 73222
+user-login = "wasmtime-publish"
 
 [[publisher.windows-sys]]
 version = "0.45.0"
@@ -291,12 +792,6 @@ who = "Johan Andersson <opensource@embark-studios.com>"
 criteria = "safe-to-deploy"
 version = "0.2.2"
 notes = "Inspected it and is a tiny crate with just type definitions"
-
-[[audits.embark-studios.audits.epaint]]
-who = "Johan Andersson <opensource@embark-studios.com>"
-criteria = "safe-to-deploy"
-violation = "<0.20.0"
-notes = "Specified crate license does not include licenses of embedded fonts if using default features or the `default_fonts` feature. Tracked in: https://github.com/emilk/egui/issues/2321"
 
 [[audits.embark-studios.audits.ittapi]]
 who = "Johan Andersson <opensource@embark-studios.com>"
