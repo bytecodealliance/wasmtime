@@ -63,6 +63,25 @@ struct Exports {
     funcs: Vec<String>,
 }
 
+#[derive(Default, Debug, Clone, Copy)]
+pub enum Ownership {
+    /// Generated types will be composed entirely of owning fields, regardless
+    /// of whether they are used as parameters to guest exports or not.
+    #[default]
+    Owning,
+
+    /// Generated types used as parameters to guest exports will be "deeply
+    /// borrowing", i.e. contain references rather than owned values when
+    /// applicable.
+    Borrowing {
+        /// Whether or not to generate "duplicate" type definitions for a single
+        /// WIT type if necessary, for example if it's used as both an import
+        /// and an export, or if it's used both as a parameter to an export and
+        /// a return value from an export.
+        duplicate_if_necessary: bool,
+    },
+}
+
 #[derive(Default, Debug, Clone)]
 pub struct Opts {
     /// Whether or not `rustfmt` is executed to format generated code.
@@ -78,10 +97,8 @@ pub struct Opts {
     /// `result<T, E>` found in WIT.
     pub trappable_error_type: Vec<TrappableError>,
 
-    /// Whether or not to generate "duplicate" type definitions for a single
-    /// WIT type if necessary, for example if it's used as both an import and an
-    /// export.
-    pub duplicate_if_necessary: bool,
+    /// Whether to generate owning or borrowing type definitions.
+    pub ownership: Ownership,
 
     /// Whether or not to generate code for only the interfaces of this wit file or not.
     pub only_interfaces: bool,
@@ -1582,8 +1599,8 @@ impl<'a> RustGenerator<'a> for InterfaceGenerator<'a> {
         self.resolve
     }
 
-    fn duplicate_if_necessary(&self) -> bool {
-        self.gen.opts.duplicate_if_necessary
+    fn ownership(&self) -> Ownership {
+        self.gen.opts.ownership
     }
 
     fn path_to_interface(&self, interface: InterfaceId) -> Option<String> {
