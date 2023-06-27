@@ -37,6 +37,9 @@ wasmtime::component::bindgen!({
        "wasi:cli-base/stdout": preview2::wasi::cli_base::stdout,
        "wasi:cli-base/stderr": preview2::wasi::cli_base::stderr,
     },
+    ownership: Borrowing {
+        duplicate_if_necessary: false
+    }
 });
 
 struct ReactorCtx {
