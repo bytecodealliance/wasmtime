@@ -32,7 +32,7 @@ mod random;
 mod stdio;
 mod stream;
 mod table;
-pub mod wasi;
+pub mod wasi; // TODO: i can move the wasi mod out to this level.
 
 pub use self::clocks::{WasiClocks, WasiMonotonicClock, WasiWallClock};
 pub use self::ctx::{WasiCtx, WasiCtxBuilder, WasiView};

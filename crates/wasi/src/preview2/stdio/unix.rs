@@ -1,6 +1,10 @@
 use crate::preview2::{AsyncFdStream, HostInputStream, StreamState};
 use anyhow::Error;
-use std::sync::OnceLock;
+
+// wasmtime cant use std::sync::OnceLock yet because of a llvm regression in
+// 1.70. when 1.71 is released, we can switch to using std here.
+use once_cell::sync::OnceCell as OnceLock;
+
 // We use a tokio Mutex because, in ready(), the mutex needs to be held
 // across an await.
 use tokio::sync::Mutex;
