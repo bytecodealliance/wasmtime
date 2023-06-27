@@ -153,6 +153,22 @@ pub struct Component {
     pub num_transcoders: u32,
 }
 
+impl Component {
+    /// Returns the type of the specified import
+    pub fn type_of_import(&self, import: RuntimeImportIndex, types: &ComponentTypes) -> TypeDef {
+        let (index, path) = &self.imports[import];
+        let (_, mut ty) = self.import_types[*index];
+        for entry in path {
+            let instance_ty = match ty {
+                TypeDef::ComponentInstance(ty) => ty,
+                _ => unreachable!(),
+            };
+            ty = types[instance_ty].exports[entry];
+        }
+        ty
+    }
+}
+
 /// GlobalInitializer instructions to get processed when instantiating a component
 ///
 /// The variants of this enum are processed during the instantiation phase of

@@ -2,7 +2,8 @@ use crate::store::{StoreId, StoreOpaque};
 use crate::StoreContextMut;
 use anyhow::{bail, Result};
 use std::ptr::NonNull;
-use wasmtime_environ::component::StringEncoding;
+use std::sync::Arc;
+use wasmtime_environ::component::{ComponentTypes, StringEncoding};
 use wasmtime_runtime::{VMFuncRef, VMMemoryDefinition};
 
 /// Runtime representation of canonical ABI options in the component model.
@@ -150,6 +151,8 @@ impl Options {
     }
 }
 
+/// TODO: update
+///
 /// A helper structure to package up proof-of-memory. This holds a store pointer
 /// and a `Func` pointer where the function has the pointers to memory.
 ///
@@ -158,16 +161,18 @@ impl Options {
 /// that, though, because I couldn't get `lower_list::<u8>` to vectorize. I've
 /// left this in for convenience in the hope that this can be updated in the
 /// future.
-pub struct MemoryMut<'a, T> {
-    store: StoreContextMut<'a, T>,
-    options: &'a Options,
+#[doc(hidden)]
+pub struct LowerContext<'a, T> {
+    pub store: StoreContextMut<'a, T>,
+    pub options: &'a Options,
+    pub types: &'a ComponentTypes,
 }
 
 #[doc(hidden)]
-impl<'a, T> MemoryMut<'a, T> {
-    pub fn new(store: StoreContextMut<'a, T>, options: &'a Options) -> MemoryMut<'a, T> {
-        MemoryMut { options, store }
-    }
+impl<'a, T> LowerContext<'a, T> {
+    // pub fn new(store: StoreContextMut<'a, T>, options: &'a Options) -> MemoryMut<'a, T> {
+    //     MemoryMut { options, store }
+    // }
 
     pub fn string_encoding(&self) -> StringEncoding {
         self.options.string_encoding()
@@ -211,19 +216,21 @@ impl<'a, T> MemoryMut<'a, T> {
     }
 }
 
-/// Like `MemoryMut` but for a read-only version that's used during lifting.
-pub struct Memory<'a> {
-    pub(crate) store: &'a StoreOpaque,
-    options: &'a Options,
+/// TODO
+#[doc(hidden)]
+pub struct LiftContext<'a> {
+    pub store: &'a StoreOpaque,
+    pub options: &'a Options,
+    pub types: &'a Arc<ComponentTypes>,
 }
 
 #[doc(hidden)]
-impl<'a> Memory<'a> {
-    pub fn new(store: &'a StoreOpaque, options: &'a Options) -> Memory<'a> {
-        Memory { store, options }
-    }
+impl<'a> LiftContext<'a> {
+    // pub fn new(store: &'a StoreOpaque, options: &'a Options) -> Memory<'a> {
+    //     Memory { store, options }
+    // }
 
-    pub fn as_slice(&self) -> &'a [u8] {
+    pub fn memory(&self) -> &'a [u8] {
         self.options.memory(self.store)
     }
 

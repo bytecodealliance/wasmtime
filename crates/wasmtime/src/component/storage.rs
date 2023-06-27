@@ -29,7 +29,7 @@ pub unsafe fn storage_as_slice_mut<T>(storage: &mut T) -> &mut [ValRaw] {
 }
 
 /// Same as `storage_as_slice`, but in reverse and mutable.
-pub unsafe fn slice_to_storage_mut<T>(slice: &mut [ValRaw]) -> &mut MaybeUninit<T> {
+pub unsafe fn slice_to_storage_mut<T>(slice: &mut [MaybeUninit<ValRaw>]) -> &mut MaybeUninit<T> {
     assert_raw_slice_compat::<T>();
 
     // This is an actual runtime assertion which if performance calls for we may

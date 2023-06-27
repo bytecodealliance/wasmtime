@@ -312,10 +312,18 @@ impl Compiler<'_, '_> {
     }
 
     fn translate_params(&mut self, adapter: &AdapterData, param_locals: &[(u32, ValType)]) {
-        let src_tys = &self.types[adapter.lower.ty].params;
-        let src_tys = src_tys.iter().copied().collect::<Vec<_>>();
-        let dst_tys = &self.types[adapter.lift.ty].params;
-        let dst_tys = dst_tys.iter().copied().collect::<Vec<_>>();
+        let src_tys = self.types[adapter.lower.ty].params;
+        let src_tys = self.types[src_tys]
+            .types
+            .iter()
+            .copied()
+            .collect::<Vec<_>>();
+        let dst_tys = self.types[adapter.lift.ty].params;
+        let dst_tys = self.types[dst_tys]
+            .types
+            .iter()
+            .copied()
+            .collect::<Vec<_>>();
         let lift_opts = &adapter.lift.options;
         let lower_opts = &adapter.lower.options;
 
@@ -388,10 +396,18 @@ impl Compiler<'_, '_> {
         param_locals: &[(u32, ValType)],
         result_locals: &[(u32, ValType)],
     ) {
-        let src_tys = &self.types[adapter.lift.ty].results;
-        let src_tys = src_tys.iter().map(|ty| *ty).collect::<Vec<_>>();
-        let dst_tys = &self.types[adapter.lower.ty].results;
-        let dst_tys = dst_tys.iter().map(|ty| *ty).collect::<Vec<_>>();
+        let src_tys = self.types[adapter.lift.ty].results;
+        let src_tys = self.types[src_tys]
+            .types
+            .iter()
+            .map(|ty| *ty)
+            .collect::<Vec<_>>();
+        let dst_tys = self.types[adapter.lower.ty].results;
+        let dst_tys = self.types[dst_tys]
+            .types
+            .iter()
+            .map(|ty| *ty)
+            .collect::<Vec<_>>();
         let lift_opts = &adapter.lift.options;
         let lower_opts = &adapter.lower.options;
 
