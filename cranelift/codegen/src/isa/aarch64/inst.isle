@@ -3312,17 +3312,6 @@
 (rule (splat_const n size)
       (vec_dup (imm $I64 (ImmExtend.Zero) n) size))
 
-;; Each of these extractors tests whether the upper half of the input equals the
-;; lower half of the input
-(decl u128_replicated_u64 (u64) u128)
-(extern extractor u128_replicated_u64 u128_replicated_u64)
-(decl u64_replicated_u32 (u64) u64)
-(extern extractor u64_replicated_u32 u64_replicated_u32)
-(decl u32_replicated_u16 (u64) u64)
-(extern extractor u32_replicated_u16 u32_replicated_u16)
-(decl u16_replicated_u8 (u64) u64)
-(extern extractor u16_replicated_u8 u16_replicated_u8)
-
 ;; Lower a FloatCC to a Cond.
 (decl fp_cond_code (FloatCC) Cond)
 ;; TODO: Port lower_fp_condcode() to ISLE.

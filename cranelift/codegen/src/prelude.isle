@@ -77,6 +77,9 @@
 
 ;;;; Primitive Type Conversions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(decl pure u8_as_i8 (u8) i8)
+(extern constructor u8_as_i8 u8_as_i8)
+
 (decl pure u8_as_u32 (u8) u32)
 (extern constructor u8_as_u32 u8_as_u32)
 (convert u8 u32 u8_as_u32)
@@ -218,6 +221,17 @@
 
 (decl pure u64_is_odd (u64) bool)
 (extern constructor u64_is_odd u64_is_odd)
+
+;; Each of these extractors tests whether the upper half of the input equals the
+;; lower half of the input
+(decl u128_replicated_u64 (u64) u128)
+(extern extractor u128_replicated_u64 u128_replicated_u64)
+(decl u64_replicated_u32 (u64) u64)
+(extern extractor u64_replicated_u32 u64_replicated_u32)
+(decl u32_replicated_u16 (u64) u64)
+(extern extractor u32_replicated_u16 u32_replicated_u16)
+(decl u16_replicated_u8 (u8) u64)
+(extern extractor u16_replicated_u8 u16_replicated_u8)
 
 ;;;; `cranelift_codegen::ir::Type` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

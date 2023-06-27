@@ -1839,19 +1839,29 @@
 (decl pure partial i8_to_imm5 (i8) Imm5)
 (extern constructor i8_to_imm5 i8_to_imm5)
 
-;; Extractor that matches a `Value` equivalent to a replicated Imm5 on all lanes.
-;; TODO(#6527): Try matching vconst here as well
-(decl replicated_imm5 (Imm5) Value)
-(extractor (replicated_imm5 n)
-  (def_inst (splat (i64_from_iconst (imm5_from_i64 n)))))
+;; Constructor that matches a `Value` equivalent to a replicated Imm5 on all lanes.
+(decl pure partial replicated_imm5 (Value) Imm5)
+(rule (replicated_imm5 (splat (i64_from_iconst (imm5_from_i64 n)))) n)
+(rule (replicated_imm5 (vconst (u128_from_constant n128)))
+  (if-let (u128_replicated_u64 n64) n128)
+  (if-let (u64_replicated_u32 n32) n64)
+  (if-let (u32_replicated_u16 n16) n32)
+  (if-let (u16_replicated_u8 n8) n16)
+  (if-let n (i8_to_imm5 (u8_as_i8 n8)))
+  n)
 
 ;; UImm5 Helpers
 
-;; Extractor that matches a `Value` equivalent to a replicated UImm5 on all lanes.
-;; TODO(#6527): Try matching vconst here as well
-(decl replicated_uimm5 (UImm5) Value)
-(extractor (replicated_uimm5 n)
-  (def_inst (splat (uimm5_from_value n))))
+;; Constructor that matches a `Value` equivalent to a replicated UImm5 on all lanes.
+(decl pure partial replicated_uimm5 (Value) UImm5)
+(rule (replicated_uimm5 (splat (uimm5_from_value n))) n)
+(rule 1 (replicated_uimm5 (vconst (u128_from_constant n128)))
+  (if-let (u128_replicated_u64 n64) n128)
+  (if-let (u64_replicated_u32 n32) n64)
+  (if-let (u32_replicated_u16 n16) n32)
+  (if-let (u16_replicated_u8 n8) n16)
+  (if-let (uimm5_from_u8 n) n8)
+  n)
 
 ;; Helper to go directly from a `Value`, when it's an `iconst`, to an `UImm5`.
 (decl uimm5_from_value (UImm5) Value)
