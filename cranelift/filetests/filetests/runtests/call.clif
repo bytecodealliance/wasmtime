@@ -74,14 +74,14 @@ block0(v0: i8):
 
 ; Tests calling across different calling conventions
 
-function %callee_wasm_i64(i64) -> i64 wasmtime_system_v {
+function %callee_wasm_i64(i64) -> i64 windows_fastcall {
 block0(v0: i64):
     v1 = iadd_imm.i64 v0, 10
     return v1
 }
 
 function %call_sysv_i64(i64) -> i64 system_v {
-    fn0 = %callee_wasm_i64(i64) -> i64 wasmtime_system_v
+    fn0 = %callee_wasm_i64(i64) -> i64 windows_fastcall
 
 block0(v0: i64):
     v1 = call fn0(v0)
