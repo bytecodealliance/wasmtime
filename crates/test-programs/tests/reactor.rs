@@ -88,38 +88,22 @@ async fn instantiate(
 #[test_log::test(tokio::test)]
 async fn reactor_tests() -> Result<()> {
     let mut table = Table::new();
-    let wasi = WasiCtxBuilder::new().build(&mut table)?;
+    let wasi = WasiCtxBuilder::new()
+        .push_env("GOOD_DOG", "gussie")
+        .build(&mut table)?;
 
     let (mut store, reactor) =
         instantiate(get_component("reactor_tests"), ReactorCtx { table, wasi }).await?;
 
-    store
-        .data_mut()
-        .wasi
-        .env
-        .push(("GOOD_DOG".to_owned(), "gussie".to_owned()));
-
+    // Show that integration with the WASI context is working - the guest will
+    // interpolate $GOOD_DOG to gussie here using the environment:
     let r = reactor
         .call_add_strings(&mut store, &["hello", "$GOOD_DOG"])
         .await?;
     assert_eq!(r, 2);
 
-    // Redefine the env, show that the adapter only fetches it once
-    // even if the libc ctors copy it in multiple times:
-    store.data_mut().wasi.env.clear();
-    store
-        .data_mut()
-        .wasi
-        .env
-        .push(("GOOD_DOG".to_owned(), "cody".to_owned()));
-    // Cody is indeed good but this should be "hello again" "gussie"
-    let r = reactor
-        .call_add_strings(&mut store, &["hello again", "$GOOD_DOG"])
-        .await?;
-    assert_eq!(r, 4);
-
     let contents = reactor.call_get_strings(&mut store).await?;
-    assert_eq!(contents, &["hello", "gussie", "hello again", "gussie"]);
+    assert_eq!(contents, &["hello", "gussie"]);
 
     // Show that we can pass in a resource type whose impls are defined in the
     // `host` and `wasi-common` crate.
@@ -132,7 +116,7 @@ async fn reactor_tests() -> Result<()> {
     let r = reactor.call_write_strings_to(&mut store, table_ix).await?;
     assert_eq!(r, Ok(()));
 
-    assert_eq!(*write_dest.read().unwrap(), b"hellogussiehello againgussie");
+    assert_eq!(*write_dest.read().unwrap(), b"hellogussie");
 
     // Show that the `with` invocation in the macro means we get to re-use the
     // type definitions from inside the `host` crate for these structures:

@@ -26,9 +26,9 @@ use system_interface::io::ReadReady;
 /// easy to create. For example:
 ///
 /// ```
-/// use wasmtime_wasi::preview2::{pipe::ReadPipe, WasiCtx};
+/// use wasmtime_wasi::preview2::{pipe::ReadPipe, WasiCtxBuilder};
 /// let stdin = ReadPipe::from("hello from stdin!");
-/// let builder = WasiCtx::builder().set_stdin(stdin);
+/// let builder = WasiCtxBuilder::new().set_stdin(stdin);
 /// ```
 #[derive(Debug)]
 pub struct ReadPipe<R: Read + ReadReady> {
@@ -134,10 +134,10 @@ impl<R: Read + ReadReady + Any + Send + Sync> InputStream for ReadPipe<R> {
 /// A virtual pipe write end.
 ///
 /// ```no_run
-/// use wasmtime_wasi::preview2::{pipe::WritePipe, WasiCtx, Table};
+/// use wasmtime_wasi::preview2::{pipe::WritePipe, WasiCtxBuilder, Table};
 /// let mut table = Table::new();
 /// let stdout = WritePipe::new_in_memory();
-/// let mut ctx = WasiCtx::builder().set_stdout(stdout.clone()).build(&mut table).unwrap();
+/// let mut ctx = WasiCtxBuilder::new().set_stdout(stdout.clone()).build(&mut table).unwrap();
 /// // use ctx and table in an instance, then make sure it is dropped:
 /// drop(ctx);
 /// drop(table);
