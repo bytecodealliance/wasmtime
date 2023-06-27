@@ -1180,21 +1180,29 @@
 
 ;;;; Rules for `fmin/fmax` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule
-  (lower (has_type ty (fmin x y)))
+(rule 0 (lower (has_type (ty_scalar_float ty) (fmin x y)))
   (gen_float_select (FloatSelectOP.Min) x y ty))
 
-(rule
-  (lower (has_type ty (fmin_pseudo x y)))
-  (gen_float_select_pseudo (FloatSelectOP.Min) x y ty))
-
-(rule
-  (lower (has_type ty (fmax x y)))
+(rule 0 (lower (has_type (ty_scalar_float ty) (fmax x y)))
   (gen_float_select (FloatSelectOP.Max) x y ty))
 
-(rule
-  (lower (has_type ty (fmax_pseudo x y)))
+;;;; Rules for `fmin_pseudo` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule 0 (lower (has_type (ty_scalar_float ty) (fmin_pseudo x y)))
+  (gen_float_select_pseudo (FloatSelectOP.Min) x y ty))
+
+(rule 1 (lower (has_type (ty_vec_fits_in_register ty) (fmin_pseudo x y)))
+  (let ((mask VReg (gen_fcmp_mask ty (FloatCC.LessThan) y x)))
+    (rv_vmerge_vvm x y mask ty)))
+
+;;;; Rules for `fmax_pseudo` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule 0 (lower (has_type (ty_scalar_float ty) (fmax_pseudo x y)))
   (gen_float_select_pseudo (FloatSelectOP.Max) x y ty))
+
+(rule 1 (lower (has_type (ty_vec_fits_in_register ty) (fmax_pseudo x y)))
+  (let ((mask VReg (gen_fcmp_mask ty (FloatCC.LessThan) x y)))
+    (rv_vmerge_vvm x y mask ty)))
 
 ;;;;;  Rules for `stack_addr`;;;;;;;;;
 (rule
