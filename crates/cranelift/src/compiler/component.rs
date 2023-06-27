@@ -12,6 +12,7 @@ use wasmtime_environ::component::{
 };
 use wasmtime_environ::{PtrSize, WasmFuncType};
 
+#[derive(Copy, Clone)]
 enum Abi {
     Wasm,
     Native,
@@ -33,14 +34,7 @@ impl Compiler {
 
         let mut compiler = self.function_compiler();
 
-        let func = ir::Function::with_name_signature(
-            ir::UserFuncName::user(0, 0),
-            match abi {
-                Abi::Wasm => crate::wasm_call_signature(isa, wasm_func_ty),
-                Abi::Native => crate::native_call_signature(isa, wasm_func_ty),
-                Abi::Array => crate::array_call_signature(isa),
-            },
-        );
+        let func = self.func(wasm_func_ty, abi);
         let (mut builder, block0) = compiler.builder(func);
 
         // Start off by spilling all the wasm arguments into a stack slot to be
@@ -59,26 +53,7 @@ impl Compiler {
         };
         let vmctx = builder.func.dfg.block_params(block0)[0];
 
-        // If we are crossing the Wasm-to-native boundary, we need to save the
-        // exit FP and return address for stack walking purposes. However, we
-        // always debug assert that our vmctx is a component context, regardless
-        // whether we are actually crossing that boundary because it should
-        // always hold.
-        super::debug_assert_vmctx_kind(
-            isa,
-            &mut builder,
-            vmctx,
-            wasmtime_environ::component::VMCOMPONENT_MAGIC,
-        );
-        if let Abi::Wasm = abi {
-            let limits = builder.ins().load(
-                pointer_type,
-                MemFlags::trusted(),
-                vmctx,
-                i32::try_from(offsets.limits()).unwrap(),
-            );
-            super::save_last_wasm_exit_fp_and_pc(&mut builder, pointer_type, &offsets.ptr, limits);
-        }
+        self.abi_preamble(&mut builder, &offsets, vmctx, abi);
 
         // Below this will incrementally build both the signature of the host
         // function we're calling as well as the list of arguments since the
@@ -197,16 +172,8 @@ impl Compiler {
         ty: &WasmFuncType,
         abi: Abi,
     ) -> Result<Box<dyn Any + Send>> {
-        let isa = &*self.isa;
         let mut compiler = self.function_compiler();
-        let func = ir::Function::with_name_signature(
-            ir::UserFuncName::user(0, 0),
-            match abi {
-                Abi::Wasm => crate::wasm_call_signature(isa, ty),
-                Abi::Native => crate::native_call_signature(isa, ty),
-                Abi::Array => crate::array_call_signature(isa),
-            },
-        );
+        let func = self.func(ty, abi);
         let (mut builder, _block0) = compiler.builder(func);
         builder.ins().trap(ir::TrapCode::User(ALWAYS_TRAP_CODE));
         builder.finalize();
@@ -225,14 +192,7 @@ impl Compiler {
         let isa = &*self.isa;
         let offsets = VMComponentOffsets::new(isa.pointer_bytes(), component);
         let mut compiler = self.function_compiler();
-        let func = ir::Function::with_name_signature(
-            ir::UserFuncName::user(0, 0),
-            match abi {
-                Abi::Wasm => crate::wasm_call_signature(isa, ty),
-                Abi::Native => crate::native_call_signature(isa, ty),
-                Abi::Array => crate::array_call_signature(isa),
-            },
-        );
+        let func = self.func(ty, abi);
         let (mut builder, block0) = compiler.builder(func);
 
         match abi {
@@ -251,6 +211,59 @@ impl Compiler {
         builder.finalize();
         Ok(Box::new(compiler.finish()?))
     }
+
+    fn func(&self, ty: &WasmFuncType, abi: Abi) -> ir::Function {
+        let isa = &*self.isa;
+        ir::Function::with_name_signature(
+            ir::UserFuncName::user(0, 0),
+            match abi {
+                Abi::Wasm => crate::wasm_call_signature(isa, ty),
+                Abi::Native => crate::native_call_signature(isa, ty),
+                Abi::Array => crate::array_call_signature(isa),
+            },
+        )
+    }
+
+    fn compile_func_ref(
+        &self,
+        compile: impl Fn(Abi) -> Result<Box<dyn Any + Send>>,
+    ) -> Result<AllCallFunc<Box<dyn Any + Send>>> {
+        Ok(AllCallFunc {
+            wasm_call: compile(Abi::Wasm)?,
+            array_call: compile(Abi::Array)?,
+            native_call: compile(Abi::Native)?,
+        })
+    }
+
+    fn abi_preamble(
+        &self,
+        builder: &mut FunctionBuilder<'_>,
+        offsets: &VMComponentOffsets<u8>,
+        vmctx: ir::Value,
+        abi: Abi,
+    ) {
+        let pointer_type = self.isa.pointer_type();
+        // If we are crossing the Wasm-to-native boundary, we need to save the
+        // exit FP and return address for stack walking purposes. However, we
+        // always debug assert that our vmctx is a component context, regardless
+        // whether we are actually crossing that boundary because it should
+        // always hold.
+        super::debug_assert_vmctx_kind(
+            &*self.isa,
+            builder,
+            vmctx,
+            wasmtime_environ::component::VMCOMPONENT_MAGIC,
+        );
+        if let Abi::Wasm = abi {
+            let limits = builder.ins().load(
+                pointer_type,
+                MemFlags::trusted(),
+                vmctx,
+                i32::try_from(offsets.limits()).unwrap(),
+            );
+            super::save_last_wasm_exit_fp_and_pc(builder, pointer_type, offsets.ptr, limits);
+        }
+    }
 }
 
 impl ComponentCompiler for Compiler {
@@ -260,34 +273,13 @@ impl ComponentCompiler for Compiler {
         lowering: &LowerImport,
         types: &ComponentTypes,
     ) -> Result<AllCallFunc<Box<dyn Any + Send>>> {
-        Ok(AllCallFunc {
-            wasm_call: self.compile_lowered_trampoline_for_abi(
-                component,
-                lowering,
-                types,
-                Abi::Wasm,
-            )?,
-            array_call: self.compile_lowered_trampoline_for_abi(
-                component,
-                lowering,
-                types,
-                Abi::Array,
-            )?,
-            native_call: self.compile_lowered_trampoline_for_abi(
-                component,
-                lowering,
-                types,
-                Abi::Native,
-            )?,
+        self.compile_func_ref(|abi| {
+            self.compile_lowered_trampoline_for_abi(component, lowering, types, abi)
         })
     }
 
     fn compile_always_trap(&self, ty: &WasmFuncType) -> Result<AllCallFunc<Box<dyn Any + Send>>> {
-        Ok(AllCallFunc {
-            wasm_call: self.compile_always_trap_for_abi(ty, Abi::Wasm)?,
-            array_call: self.compile_always_trap_for_abi(ty, Abi::Array)?,
-            native_call: self.compile_always_trap_for_abi(ty, Abi::Native)?,
-        })
+        self.compile_func_ref(|abi| self.compile_always_trap_for_abi(ty, abi))
     }
 
     fn compile_transcoder(
@@ -296,20 +288,8 @@ impl ComponentCompiler for Compiler {
         transcoder: &Transcoder,
         types: &ComponentTypes,
     ) -> Result<AllCallFunc<Box<dyn Any + Send>>> {
-        Ok(AllCallFunc {
-            wasm_call: self.compile_transcoder_for_abi(component, transcoder, types, Abi::Wasm)?,
-            array_call: self.compile_transcoder_for_abi(
-                component,
-                transcoder,
-                types,
-                Abi::Array,
-            )?,
-            native_call: self.compile_transcoder_for_abi(
-                component,
-                transcoder,
-                types,
-                Abi::Native,
-            )?,
+        self.compile_func_ref(|abi| {
+            self.compile_transcoder_for_abi(component, transcoder, types, abi)
         })
     }
 }
@@ -325,15 +305,7 @@ impl Compiler {
         let pointer_type = self.isa.pointer_type();
         let vmctx = builder.func.dfg.block_params(block)[0];
 
-        // Save the exit FP and return address for stack walking purposes. This
-        // is used when an invalid encoding is encountered and a trap is raised.
-        let limits = builder.ins().load(
-            pointer_type,
-            MemFlags::trusted(),
-            vmctx,
-            i32::try_from(offsets.limits()).unwrap(),
-        );
-        super::save_last_wasm_exit_fp_and_pc(builder, pointer_type, &offsets.ptr, limits);
+        self.abi_preamble(builder, offsets, vmctx, Abi::Wasm);
 
         // Determine the static signature of the host libcall for this transcode
         // operation and additionally calculate the static offset within the
