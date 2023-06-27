@@ -7,26 +7,25 @@ use crate::preview2::{
 };
 use cap_rand::{Rng, RngCore, SeedableRng};
 
-#[derive(Default)]
 pub struct WasiCtxBuilder {
-    stdin: Option<Box<dyn InputStream>>,
-    stdout: Option<Box<dyn OutputStream>>,
-    stderr: Option<Box<dyn OutputStream>>,
+    stdin: Box<dyn InputStream>,
+    stdout: Box<dyn OutputStream>,
+    stderr: Box<dyn OutputStream>,
     env: Vec<(String, String)>,
     args: Vec<String>,
     preopens: Vec<(Dir, String)>,
 
-    random: Option<Box<dyn RngCore + Send + Sync>>,
-    insecure_random: Option<Box<dyn RngCore + Send + Sync>>,
-    insecure_random_seed: Option<u128>,
-    clocks: Option<WasiClocks>,
+    random: Box<dyn RngCore + Send + Sync>,
+    insecure_random: Box<dyn RngCore + Send + Sync>,
+    insecure_random_seed: u128,
+    clocks: WasiClocks,
 }
 
 impl WasiCtxBuilder {
     pub fn new() -> Self {
         // For the insecure random API, use `SmallRng`, which is fast. It's
         // also insecure, but that's the deal here.
-        let insecure_random = cap_rand::rngs::SmallRng::from_entropy();
+        let insecure_random = Box::new(cap_rand::rngs::SmallRng::from_entropy());
 
         // For the insecure random seed, use a `u128` generated from
         // `thread_rng()`, so that it's not guessable from the insecure_random
@@ -34,29 +33,32 @@ impl WasiCtxBuilder {
         let insecure_random_seed =
             cap_rand::thread_rng(cap_rand::ambient_authority()).gen::<u128>();
 
-        let result = Self::default()
-            .set_clocks(clocks::host::clocks_ctx())
-            .set_insecure_random(insecure_random)
-            .set_insecure_random_seed(insecure_random_seed)
-            .set_stdin(pipe::ReadPipe::new(std::io::empty()))
-            .set_stdout(pipe::WritePipe::new(std::io::sink()))
-            .set_stderr(pipe::WritePipe::new(std::io::sink()))
-            .set_secure_random();
-        result
+        Self {
+            stdin: Box::new(pipe::ReadPipe::new(std::io::empty())),
+            stdout: Box::new(pipe::WritePipe::new(std::io::sink())),
+            stderr: Box::new(pipe::WritePipe::new(std::io::sink())),
+            env: Vec::new(),
+            args: Vec::new(),
+            preopens: Vec::new(),
+            random: random::thread_rng(),
+            insecure_random,
+            insecure_random_seed,
+            clocks: clocks::host::clocks_ctx(),
+        }
     }
 
     pub fn set_stdin(mut self, stdin: impl InputStream + 'static) -> Self {
-        self.stdin = Some(Box::new(stdin));
+        self.stdin = Box::new(stdin);
         self
     }
 
     pub fn set_stdout(mut self, stdout: impl OutputStream + 'static) -> Self {
-        self.stdout = Some(Box::new(stdout));
+        self.stdout = Box::new(stdout);
         self
     }
 
     pub fn set_stderr(mut self, stderr: impl OutputStream + 'static) -> Self {
-        self.stderr = Some(Box::new(stderr));
+        self.stderr = Box::new(stderr);
         self
     }
 
@@ -100,7 +102,6 @@ impl WasiCtxBuilder {
         self
     }
 
-    // TODO: optionally read-only
     pub fn push_preopened_dir(
         mut self,
         dir: cap_std::fs::Dir,
@@ -118,7 +119,7 @@ impl WasiCtxBuilder {
     /// This initializes the random number generator using
     /// [`cap_rand::thread_rng`].
     pub fn set_secure_random(mut self) -> Self {
-        self.random = Some(random::thread_rng());
+        self.random = random::thread_rng();
         self
     }
 
@@ -139,7 +140,7 @@ impl WasiCtxBuilder {
         mut self,
         random: impl RngCore + Send + Sync + 'static,
     ) -> Self {
-        self.random = Some(Box::new(random));
+        self.random = Box::new(random);
         self
     }
 
@@ -147,54 +148,58 @@ impl WasiCtxBuilder {
         mut self,
         insecure_random: impl RngCore + Send + Sync + 'static,
     ) -> Self {
-        self.insecure_random = Some(Box::new(insecure_random));
+        self.insecure_random = Box::new(insecure_random);
         self
     }
     pub fn set_insecure_random_seed(mut self, insecure_random_seed: u128) -> Self {
-        self.insecure_random_seed = Some(insecure_random_seed);
+        self.insecure_random_seed = insecure_random_seed;
         self
     }
     pub fn set_clocks(mut self, clocks: WasiClocks) -> Self {
-        self.clocks = Some(clocks);
+        self.clocks = clocks;
         self
     }
 
     pub fn build(self, table: &mut Table) -> Result<WasiCtx, anyhow::Error> {
         use anyhow::Context;
-
-        let stdin = table
-            .push_input_stream(self.stdin.context("required member stdin")?)
-            .context("stdin")?;
-        let stdout = table
-            .push_output_stream(self.stdout.context("required member stdout")?)
-            .context("stdout")?;
-        let stderr = table
-            .push_output_stream(self.stderr.context("required member stderr")?)
-            .context("stderr")?;
-
-        let mut preopens = Vec::new();
-        for (dir, path) in self.preopens {
-            let dirfd = table
-                .push_dir(dir)
-                .with_context(|| format!("preopen {path:?}"))?;
-            preopens.push((dirfd, path));
-        }
-
-        Ok(WasiCtx {
-            random: self.random.context("required member random")?,
-            insecure_random: self
-                .insecure_random
-                .context("required member insecure_random")?,
-            insecure_random_seed: self
-                .insecure_random_seed
-                .context("required member insecure_random_seed")?,
-            clocks: self.clocks.context("required member clocks")?,
-            env: self.env,
-            args: self.args,
-            preopens,
+        let Self {
             stdin,
             stdout,
             stderr,
+            env,
+            args,
+            preopens,
+            random,
+            insecure_random,
+            insecure_random_seed,
+            clocks,
+        } = self;
+
+        let stdin = table.push_input_stream(stdin).context("stdin")?;
+        let stdout = table.push_output_stream(stdout).context("stdout")?;
+        let stderr = table.push_output_stream(stderr).context("stderr")?;
+
+        let preopens = preopens
+            .into_iter()
+            .map(|(dir, path)| {
+                let dirfd = table
+                    .push_dir(dir)
+                    .with_context(|| format!("preopen {path:?}"))?;
+                Ok((dirfd, path))
+            })
+            .collect::<anyhow::Result<Vec<_>>>()?;
+
+        Ok(WasiCtx {
+            stdin,
+            stdout,
+            stderr,
+            env,
+            args,
+            preopens,
+            random,
+            insecure_random,
+            insecure_random_seed,
+            clocks,
         })
     }
 }
@@ -208,20 +213,13 @@ pub trait WasiView: Send {
 
 pub struct WasiCtx {
     pub(crate) random: Box<dyn RngCore + Send + Sync>,
-    pub insecure_random: Box<dyn RngCore + Send + Sync>,
-    pub insecure_random_seed: u128,
-    pub clocks: WasiClocks,
-    pub env: Vec<(String, String)>,
-    pub args: Vec<String>,
-    pub preopens: Vec<(u32, String)>,
-    pub stdin: u32,
-    pub stdout: u32,
-    pub stderr: u32,
-}
-
-impl WasiCtx {
-    /// Create an empty `WasiCtxBuilder`
-    pub fn builder() -> WasiCtxBuilder {
-        WasiCtxBuilder::default()
-    }
+    pub(crate) insecure_random: Box<dyn RngCore + Send + Sync>,
+    pub(crate) insecure_random_seed: u128,
+    pub(crate) clocks: WasiClocks,
+    pub(crate) env: Vec<(String, String)>,
+    pub(crate) args: Vec<String>,
+    pub(crate) preopens: Vec<(u32, String)>,
+    pub(crate) stdin: u32,
+    pub(crate) stdout: u32,
+    pub(crate) stderr: u32,
 }
