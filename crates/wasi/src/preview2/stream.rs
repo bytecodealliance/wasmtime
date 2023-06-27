@@ -353,6 +353,8 @@ mod async_fd_stream {
 
     impl<T: AsRawFd> AsyncFdStream<T> {
         pub fn new(fd: T) -> anyhow::Result<Self> {
+            // FIXME: Use fcntl to make sure O_NONBLOCKING is set for this fd,
+            // otherwise the implementations below will not be correct.
             Ok(Self {
                 fd: AsyncFd::new(fd)?,
             })
@@ -366,7 +368,7 @@ mod async_fd_stream {
             // we're done.
             let mut file = unsafe { std::fs::File::from_raw_fd(self.fd.as_raw_fd()) };
 
-            // TODO: how sure are we that this is non-blocking?
+            // Ensured this is nonblocking at construction of AsyncFdStream.
             let read_res = file.read(dest);
 
             // Make sure that the file doesn't close the fd when it's dropped.
@@ -393,7 +395,7 @@ mod async_fd_stream {
             // we're done.
             let mut file = unsafe { std::fs::File::from_raw_fd(self.fd.as_raw_fd()) };
 
-            // TODO: how sure are we that this is non-blocking?
+            // Ensured this is nonblocking at construction of AsyncFdStream.
             let write_res = file.write(buf);
 
             // Make sure that the file doesn't close the fd when it's dropped.
@@ -401,7 +403,6 @@ mod async_fd_stream {
 
             let n = write_res?;
 
-            // TODO: figure out when the stream should be considered closed
             // TODO: figure out how to handle the error conditions from the write call above
 
             Ok(n as u64)

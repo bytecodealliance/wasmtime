@@ -98,6 +98,7 @@ impl FileInputStream {
 impl HostInputStream for FileInputStream {
     fn read(&mut self, buf: &mut [u8]) -> anyhow::Result<(u64, StreamState)> {
         use system_interface::fs::FileIoExt;
+        // FIXME spawn_blocking to put this on a tokio worker thread
         let (n, end) = read_result(self.file.read_at(buf, self.position))?;
         self.position = self.position.wrapping_add(n);
         Ok((n, end))
@@ -107,6 +108,7 @@ impl HostInputStream for FileInputStream {
         bufs: &mut [std::io::IoSliceMut<'a>],
     ) -> anyhow::Result<(u64, StreamState)> {
         use system_interface::fs::FileIoExt;
+        // FIXME spawn_blocking to put this on a tokio worker thread
         let (n, end) = read_result(self.file.read_vectored_at(bufs, self.position))?;
         self.position = self.position.wrapping_add(n);
         Ok((n, end))
@@ -146,6 +148,7 @@ impl HostOutputStream for FileOutputStream {
     /// Write bytes. On success, returns the number of bytes written.
     fn write(&mut self, buf: &[u8]) -> anyhow::Result<u64> {
         use system_interface::fs::FileIoExt;
+        // FIXME spawn_blocking to put this on a tokio worker thread
         let n = self.file.write_at(buf, self.position)? as i64 as u64;
         self.position = self.position.wrapping_add(n);
         Ok(n)
@@ -154,6 +157,7 @@ impl HostOutputStream for FileOutputStream {
     /// Vectored-I/O form of `write`.
     fn write_vectored<'a>(&mut self, bufs: &[std::io::IoSlice<'a>]) -> anyhow::Result<u64> {
         use system_interface::fs::FileIoExt;
+        // FIXME spawn_blocking to put this on a tokio worker thread
         let n = self.file.write_vectored_at(bufs, self.position)? as i64 as u64;
         self.position = self.position.wrapping_add(n);
         Ok(n)
@@ -185,12 +189,14 @@ impl HostOutputStream for FileAppendStream {
     /// Write bytes. On success, returns the number of bytes written.
     fn write(&mut self, buf: &[u8]) -> anyhow::Result<u64> {
         use system_interface::fs::FileIoExt;
+        // FIXME spawn_blocking to put this on a tokio worker thread
         Ok(self.file.append(buf)? as i64 as u64)
     }
 
     /// Vectored-I/O form of `write`.
     fn write_vectored<'a>(&mut self, bufs: &[std::io::IoSlice<'a>]) -> anyhow::Result<u64> {
         use system_interface::fs::FileIoExt;
+        // FIXME spawn_blocking to put this on a tokio worker thread
         let n = self.file.append_vectored(bufs)? as i64 as u64;
         Ok(n)
     }
