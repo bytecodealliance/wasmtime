@@ -238,7 +238,7 @@ impl Profiler for DefaultProfiler {
 impl Drop for DefaultTimingToken {
     fn drop(&mut self) {
         let duration = self.start.elapsed();
-        log::debug!("timing: Ending {}", self.pass);
+        log::debug!("timing: Ending {}: {}ms", self.pass, duration.as_millis());
         let old_cur = CURRENT_PASS.with(|p| p.replace(self.prev));
         debug_assert_eq!(self.pass, old_cur, "Timing tokens dropped out of order");
         PASS_TIME.with(|rc| {
