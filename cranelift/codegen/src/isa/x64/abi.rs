@@ -200,18 +200,14 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                         ArgsOrRets::Args => {
                             get_intreg_for_arg(&call_conv, next_gpr, next_param_idx)
                         }
-                        ArgsOrRets::Rets => {
-                            get_intreg_for_retval(&call_conv, next_gpr, next_param_idx)
-                        }
+                        ArgsOrRets::Rets => get_intreg_for_retval(&call_conv, next_gpr),
                     }
                 } else {
                     match args_or_rets {
                         ArgsOrRets::Args => {
                             get_fltreg_for_arg(&call_conv, next_vreg, next_param_idx)
                         }
-                        ArgsOrRets::Rets => {
-                            get_fltreg_for_retval(&call_conv, next_vreg, next_param_idx)
-                        }
+                        ArgsOrRets::Rets => get_fltreg_for_retval(&call_conv, next_vreg),
                     }
                 };
                 next_param_idx += 1;
@@ -227,20 +223,8 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                         extension: param.extension,
                     });
                 } else {
-                    // Compute size. For the wasmtime ABI it differs from native
-                    // ABIs in how multiple values are returned, so we take a
-                    // leaf out of arm64's book by not rounding everything up to
-                    // 8 bytes. For all ABI arguments, and other ABI returns,
-                    // though, each slot takes a minimum of 8 bytes.
-                    //
-                    // Note that in all cases 16-byte stack alignment happens
-                    // separately after all args.
                     let size = reg_ty.bits() / 8;
-                    let size = if args_or_rets == ArgsOrRets::Rets && call_conv.extends_wasmtime() {
-                        size
-                    } else {
-                        std::cmp::max(size, 8)
-                    };
+                    let size = std::cmp::max(size, 8);
                     // Align.
                     debug_assert!(size.is_power_of_two());
                     next_stack = align_to(next_stack, size);
@@ -798,18 +782,18 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             // The `tail` calling convention doesn't have any callee-save
             // registers.
             CallConv::Tail => vec![],
-            CallConv::Fast | CallConv::Cold | CallConv::SystemV | CallConv::WasmtimeSystemV => regs
+            CallConv::Fast | CallConv::Cold | CallConv::SystemV => regs
                 .iter()
                 .cloned()
                 .filter(|r| is_callee_save_systemv(r.to_reg(), flags.enable_pinned_reg()))
                 .collect(),
-            CallConv::WindowsFastcall | CallConv::WasmtimeFastcall => regs
+            CallConv::WindowsFastcall => regs
                 .iter()
                 .cloned()
                 .filter(|r| is_callee_save_fastcall(r.to_reg(), flags.enable_pinned_reg()))
                 .collect(),
             CallConv::Probestack => todo!("probestack?"),
-            CallConv::AppleAarch64 | CallConv::WasmtimeAppleAarch64 => unreachable!(),
+            CallConv::AppleAarch64 => unreachable!(),
         };
         // Sort registers for deterministic code output. We can do an unstable sort because the
         // registers will be unique (there are no dups).
@@ -927,11 +911,7 @@ fn get_fltreg_for_arg(call_conv: &CallConv, idx: usize, arg_idx: usize) -> Optio
     }
 }
 
-fn get_intreg_for_retval(
-    call_conv: &CallConv,
-    intreg_idx: usize,
-    retval_idx: usize,
-) -> Option<Reg> {
+fn get_intreg_for_retval(call_conv: &CallConv, intreg_idx: usize) -> Option<Reg> {
     match call_conv {
         CallConv::Tail => match intreg_idx {
             0 => Some(regs::rax()),
@@ -955,28 +935,17 @@ fn get_intreg_for_retval(
             1 => Some(regs::rdx()),
             _ => None,
         },
-        CallConv::WasmtimeSystemV | CallConv::WasmtimeFastcall => {
-            if intreg_idx == 0 && retval_idx == 0 {
-                Some(regs::rax())
-            } else {
-                None
-            }
-        }
         CallConv::WindowsFastcall => match intreg_idx {
             0 => Some(regs::rax()),
             1 => Some(regs::rdx()), // The Rust ABI for i128s needs this.
             _ => None,
         },
         CallConv::Probestack => todo!(),
-        CallConv::AppleAarch64 | CallConv::WasmtimeAppleAarch64 => unreachable!(),
+        CallConv::AppleAarch64 => unreachable!(),
     }
 }
 
-fn get_fltreg_for_retval(
-    call_conv: &CallConv,
-    fltreg_idx: usize,
-    retval_idx: usize,
-) -> Option<Reg> {
+fn get_fltreg_for_retval(call_conv: &CallConv, fltreg_idx: usize) -> Option<Reg> {
     match call_conv {
         CallConv::Tail => match fltreg_idx {
             0 => Some(regs::xmm0()),
@@ -994,19 +963,12 @@ fn get_fltreg_for_retval(
             1 => Some(regs::xmm1()),
             _ => None,
         },
-        CallConv::WasmtimeFastcall | CallConv::WasmtimeSystemV => {
-            if fltreg_idx == 0 && retval_idx == 0 {
-                Some(regs::xmm0())
-            } else {
-                None
-            }
-        }
         CallConv::WindowsFastcall => match fltreg_idx {
             0 => Some(regs::xmm0()),
             _ => None,
         },
         CallConv::Probestack => todo!(),
-        CallConv::AppleAarch64 | CallConv::WasmtimeAppleAarch64 => unreachable!(),
+        CallConv::AppleAarch64 => unreachable!(),
     }
 }
 

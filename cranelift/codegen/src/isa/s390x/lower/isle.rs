@@ -967,12 +967,8 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
 
 /// Lane order to be used for a given calling convention.
 #[inline]
-fn lane_order_for_call_conv(call_conv: CallConv) -> LaneOrder {
-    if call_conv.extends_wasmtime() {
-        LaneOrder::LittleEndian
-    } else {
-        LaneOrder::BigEndian
-    }
+fn lane_order_for_call_conv(_call_conv: CallConv) -> LaneOrder {
+    LaneOrder::BigEndian
 }
 
 /// Zero-extend the low `from_bits` bits of `value` to a full u64.
