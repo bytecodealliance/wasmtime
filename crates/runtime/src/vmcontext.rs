@@ -746,7 +746,7 @@ macro_rules! define_builtin_array {
     (@ty vmctx) => (*mut VMContext);
 }
 
-wasmtime_environ::foreach_builtin_function!(define_builtin_array);
+wasmtime_environ::foreach_builtin_function!(define_builtin_array, exported = true);
 
 /// The storage for a WebAssembly invocation argument
 ///

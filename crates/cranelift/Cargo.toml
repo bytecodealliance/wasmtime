@@ -21,6 +21,7 @@ cranelift-entity = { workspace = true }
 cranelift-native = { workspace = true }
 cranelift-control = { workspace = true }
 wasmtime-cranelift-shared = { workspace = true }
+wasmtime-versioned-export-macros = { workspace = true }
 wasmparser = { workspace = true }
 target-lexicon = { workspace = true }
 gimli = { workspace = true }
@@ -31,3 +32,4 @@ thiserror = { workspace = true }
 all-arch = ["cranelift-codegen/all-arch"]
 component-model = ["wasmtime-environ/component-model"]
 incremental-cache = ["cranelift-codegen/incremental-cache"]
+versioned-exports = ["wasmtime-versioned-export-macros/enabled", "wasmtime-environ/versioned-exports"]

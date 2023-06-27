@@ -4010,6 +4010,7 @@ dependencies = [
  "wasmparser 0.107.0",
  "wasmtime-cranelift-shared",
  "wasmtime-environ",
+ "wasmtime-versioned-export-macros",
 ]
 
 [[package]]
@@ -4047,6 +4048,7 @@ dependencies = [
  "wasmprinter",
  "wasmtime-component-util",
  "wasmtime-types",
+ "wasmtime-versioned-export-macros",
  "wat",
 ]
 
@@ -4209,6 +4211,7 @@ dependencies = [
  "wasmtime-environ",
  "wasmtime-fiber",
  "wasmtime-jit-debug",
+ "wasmtime-versioned-export-macros",
  "windows-sys 0.48.0",
 ]
 
@@ -4220,6 +4223,15 @@ dependencies = [
  "serde",
  "thiserror",
  "wasmparser 0.107.0",
+]
+
+[[package]]
+name = "wasmtime-versioned-export-macros"
+version = "12.0.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.16",
 ]
 
 [[package]]

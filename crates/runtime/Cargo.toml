@@ -15,6 +15,7 @@ wasmtime-asm-macros = { workspace = true }
 wasmtime-environ = { workspace = true }
 wasmtime-fiber = { workspace = true, optional = true }
 wasmtime-jit-debug = { workspace = true, features = ["gdb_jit_int"] }
+wasmtime-versioned-export-macros = { workspace = true }
 libc = { version = "0.2.112", default-features = false }
 log = { workspace = true }
 memoffset = "0.8.0"
@@ -66,3 +67,5 @@ component-model = [
   "wasmtime-environ/component-model",
   "dep:encoding_rs",
 ]
+
+versioned-exports = ["wasmtime-versioned-export-macros/enabled"]
