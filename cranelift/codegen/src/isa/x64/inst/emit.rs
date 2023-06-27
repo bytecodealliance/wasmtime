@@ -4162,7 +4162,7 @@ fn emit_return_call_common_sequence(
     state: &mut EmitState,
     new_stack_arg_size: u32,
     old_stack_arg_size: u32,
-    ret_addr: Gpr,
+    ret_addr: Option<Gpr>,
     fp: Gpr,
     tmp: WritableGpr,
     uses: &CallArgList,
@@ -4177,8 +4177,7 @@ fn emit_return_call_common_sequence(
         let _ = allocs.next(u.vreg);
     }
 
-    let ret_addr = allocs.next(*ret_addr);
-    let ret_addr = Gpr::new(ret_addr).unwrap();
+    let ret_addr = ret_addr.map(|r| Gpr::new(allocs.next(*r)).unwrap());
 
     let fp = allocs.next(*fp);
 
@@ -4284,14 +4283,16 @@ fn emit_return_call_common_sequence(
     state.adjust_virtual_sp_offset(-i64::from(new_stack_arg_size));
 
     // Write the return address into the correct stack slot.
-    Inst::MovRM {
-        size: OperandSize::Size64,
-        src: ret_addr,
-        dst: SyntheticAmode::Real(Amode::ImmReg {
-            simm32: 0,
-            base: regs::rsp(),
-            flags: MemFlags::trusted(),
-        }),
+    if let Some(ret_addr) = ret_addr {
+        Inst::MovRM {
+            size: OperandSize::Size64,
+            src: ret_addr,
+            dst: SyntheticAmode::Real(Amode::ImmReg {
+                simm32: 0,
+                base: regs::rsp(),
+                flags: MemFlags::trusted(),
+            }),
+        }
+        .emit(&[], sink, info, state);
     }
-    .emit(&[], sink, info, state);
 }

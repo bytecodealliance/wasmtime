@@ -105,28 +105,39 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
         )
         .unwrap();
 
-        // First, load the return address, because copying our new stack frame
-        // over our current stack frame might overwrite it, and we'll need to
-        // place it in the correct location after we do that copy.
+        // Allocate additional stack space for the new stack frame. We will
+        // build it in the newly allocated space, but then copy it over our
+        // current frame at the last moment.
+        let new_stack_arg_size = call_site.emit_allocate_tail_call_frame(self.lower_ctx);
+        let old_stack_arg_size = self.lower_ctx.abi().stack_args_size(self.lower_ctx.sigs());
+
+        // Make a copy of the frame pointer, since we use it when copying down
+        // the new stack frame.
         let fp = self.temp_writable_gpr();
         let rbp = self.preg_rbp();
         self.lower_ctx
             .emit(MInst::MovFromPReg { src: rbp, dst: fp });
-        let ret_addr = self.temp_writable_gpr();
-        self.lower_ctx.emit(MInst::Mov64MR {
-            src: SyntheticAmode::Real(Amode::ImmReg {
-                simm32: 8,
-                base: fp.to_reg().to_reg(),
-                flags: MemFlags::trusted(),
-            }),
-            dst: ret_addr,
-        });
 
-        // Next, allocate additional stack space for the new stack frame. We
-        // will build it in the newly allocated space, but then copy it over our
-        // current frame at the last moment.
-        let new_stack_arg_size = call_site.emit_allocate_tail_call_frame(self.lower_ctx);
-        let old_stack_arg_size = self.lower_ctx.abi().stack_args_size(self.lower_ctx.sigs());
+        // Load the return address, because copying our new stack frame
+        // over our current stack frame might overwrite it, and we'll need to
+        // place it in the correct location after we do that copy.
+        //
+        // But we only need to actually move the return address if the size of
+        // stack arguments changes.
+        let ret_addr = if new_stack_arg_size != old_stack_arg_size {
+            let ret_addr = self.temp_writable_gpr();
+            self.lower_ctx.emit(MInst::Mov64MR {
+                src: SyntheticAmode::Real(Amode::ImmReg {
+                    simm32: 8,
+                    base: fp.to_reg().to_reg(),
+                    flags: MemFlags::trusted(),
+                }),
+                dst: ret_addr,
+            });
+            Some(ret_addr)
+        } else {
+            None
+        };
 
         // Put all arguments in registers and stack slots (within that newly
         // allocated stack space).
@@ -140,7 +151,7 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
             self.lower_ctx,
             new_stack_arg_size,
             old_stack_arg_size,
-            ret_addr.to_reg().to_reg(),
+            ret_addr.map(|r| r.to_reg().to_reg()),
             fp.to_reg().to_reg(),
             tmp.to_writable_reg(),
             tmp2.to_writable_reg(),
@@ -173,28 +184,39 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
         )
         .unwrap();
 
-        // First, load the return address, because copying our new stack frame
-        // over our current stack frame might overwrite it, and we'll need to
-        // place it in the correct location after we do that copy.
+        // Allocate additional stack space for the new stack frame. We will
+        // build it in the newly allocated space, but then copy it over our
+        // current frame at the last moment.
+        let new_stack_arg_size = call_site.emit_allocate_tail_call_frame(self.lower_ctx);
+        let old_stack_arg_size = self.lower_ctx.abi().stack_args_size(self.lower_ctx.sigs());
+
+        // Make a copy of the frame pointer, since we use it when copying down
+        // the new stack frame.
         let fp = self.temp_writable_gpr();
         let rbp = self.preg_rbp();
         self.lower_ctx
             .emit(MInst::MovFromPReg { src: rbp, dst: fp });
-        let ret_addr = self.temp_writable_gpr();
-        self.lower_ctx.emit(MInst::Mov64MR {
-            src: SyntheticAmode::Real(Amode::ImmReg {
-                simm32: 8,
-                base: fp.to_reg().to_reg(),
-                flags: MemFlags::trusted(),
-            }),
-            dst: ret_addr,
-        });
 
-        // Next, allocate additional stack space for the new stack frame. We
-        // will build it in the newly allocated space, but then copy it over our
-        // current frame at the last moment.
-        let new_stack_arg_size = call_site.emit_allocate_tail_call_frame(self.lower_ctx);
-        let old_stack_arg_size = self.lower_ctx.abi().stack_args_size(self.lower_ctx.sigs());
+        // Load the return address, because copying our new stack frame
+        // over our current stack frame might overwrite it, and we'll need to
+        // place it in the correct location after we do that copy.
+        //
+        // But we only need to actually move the return address if the size of
+        // stack arguments changes.
+        let ret_addr = if new_stack_arg_size != old_stack_arg_size {
+            let ret_addr = self.temp_writable_gpr();
+            self.lower_ctx.emit(MInst::Mov64MR {
+                src: SyntheticAmode::Real(Amode::ImmReg {
+                    simm32: 8,
+                    base: fp.to_reg().to_reg(),
+                    flags: MemFlags::trusted(),
+                }),
+                dst: ret_addr,
+            });
+            Some(ret_addr)
+        } else {
+            None
+        };
 
         // Put all arguments in registers and stack slots (within that newly
         // allocated stack space).
@@ -208,7 +230,7 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
             self.lower_ctx,
             new_stack_arg_size,
             old_stack_arg_size,
-            ret_addr.to_reg().to_reg(),
+            ret_addr.map(|r| r.to_reg().to_reg()),
             fp.to_reg().to_reg(),
             tmp.to_writable_reg(),
             tmp2.to_writable_reg(),

@@ -63,7 +63,7 @@ pub struct ReturnCallInfo {
     pub old_stack_arg_size: u32,
     /// The return address. Needs to be written into the correct stack slot
     /// after the new stack frame is copied into place.
-    pub ret_addr: Gpr,
+    pub ret_addr: Option<Gpr>,
     /// A copy of the frame pointer, because we will overwrite the current
     /// `rbp`.
     pub fp: Gpr,
@@ -1608,7 +1608,7 @@ impl PrettyPrint for Inst {
                     tmp,
                     uses,
                 } = &**info;
-                let ret_addr = regs::show_reg(ret_addr.to_reg());
+                let ret_addr = ret_addr.map(|r| regs::show_reg(*r));
                 let fp = regs::show_reg(fp.to_reg());
                 let tmp = regs::show_reg(tmp.to_reg().to_reg());
                 let mut s = format!(
@@ -1616,7 +1616,7 @@ impl PrettyPrint for Inst {
                      {callee:?} \
                      new_stack_arg_size:{new_stack_arg_size} \
                      old_stack_arg_size:{old_stack_arg_size} \
-                     ret_addr:{ret_addr} \
+                     ret_addr:{ret_addr:?} \
                      fp:{fp} \
                      tmp:{tmp}"
                 );
@@ -1638,7 +1638,7 @@ impl PrettyPrint for Inst {
                     uses,
                 } = &**info;
                 let callee = callee.pretty_print(8, allocs);
-                let ret_addr = regs::show_reg(ret_addr.to_reg());
+                let ret_addr = ret_addr.map(|r| regs::show_reg(*r));
                 let fp = regs::show_reg(fp.to_reg());
                 let tmp = regs::show_reg(tmp.to_reg().to_reg());
                 let mut s = format!(
@@ -1646,7 +1646,7 @@ impl PrettyPrint for Inst {
                      {callee} \
                      new_stack_arg_size:{new_stack_arg_size} \
                      old_stack_arg_size:{old_stack_arg_size} \
-                     ret_addr:{ret_addr} \
+                     ret_addr:{ret_addr:?} \
                      fp:{fp} \
                      tmp:{tmp}"
                 );
@@ -2307,7 +2307,9 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             for u in uses {
                 collector.reg_fixed_use(u.vreg, u.preg);
             }
-            collector.reg_use(**ret_addr);
+            if let Some(ret_addr) = ret_addr {
+                collector.reg_use(**ret_addr);
+            }
             collector.reg_use(**fp);
             collector.reg_early_def(tmp.to_writable_reg());
         }
@@ -2324,7 +2326,9 @@ fn x64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut OperandCol
             for u in uses {
                 collector.reg_fixed_use(u.vreg, u.preg);
             }
-            collector.reg_use(**ret_addr);
+            if let Some(ret_addr) = ret_addr {
+                collector.reg_use(**ret_addr);
+            }
             collector.reg_use(**fp);
             collector.reg_early_def(tmp.to_writable_reg());
         }

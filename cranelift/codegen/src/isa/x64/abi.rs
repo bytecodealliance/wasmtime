@@ -704,13 +704,13 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         callee: CallDest,
         new_stack_arg_size: u32,
         old_stack_arg_size: u32,
-        ret_addr: Reg,
+        ret_addr: Option<Reg>,
         fp: Reg,
         tmp: Writable<Reg>,
         tmp2: Writable<Reg>,
         uses: abi::CallArgList,
     ) -> SmallVec<[Self::I; 2]> {
-        let ret_addr = Gpr::new(ret_addr).unwrap();
+        let ret_addr = ret_addr.map(|r| Gpr::new(r).unwrap());
         let fp = Gpr::new(fp).unwrap();
         let tmp = WritableGpr::from_writable_reg(tmp).unwrap();
         let info = Box::new(ReturnCallInfo {
