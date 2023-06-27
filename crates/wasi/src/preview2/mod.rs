@@ -19,20 +19,19 @@
 //! `pub mod legacy` with an off-by-default feature flag, and after 2
 //! releases, retire and remove that code from our tree.
 
-// TODO: make all of these mods private
-pub mod clocks;
+mod clocks;
 mod ctx;
 mod error;
-pub(crate) mod filesystem;
-pub mod pipe; // pipe can remain a module
+mod filesystem;
+pub mod pipe;
 mod poll;
 #[cfg(feature = "preview1-on-preview2")]
 pub mod preview1;
-pub mod preview2;
-pub mod random;
-pub mod stdio;
-pub mod stream;
-pub mod table;
+mod preview2;
+mod random;
+mod stdio;
+mod stream;
+mod table;
 pub mod wasi;
 
 pub use self::clocks::{WasiClocks, WasiMonotonicClock, WasiWallClock};
@@ -40,6 +39,7 @@ pub use self::ctx::{WasiCtx, WasiCtxBuilder, WasiView};
 pub use self::error::I32Exit;
 pub use self::filesystem::{DirPerms, FilePerms};
 pub use self::poll::{HostPollable, TablePollableExt};
+pub use self::random::{thread_rng, Deterministic};
 #[cfg(unix)]
 pub use self::stream::AsyncFdStream;
 pub use self::stream::{
