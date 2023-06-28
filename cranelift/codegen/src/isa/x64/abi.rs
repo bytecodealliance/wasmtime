@@ -373,7 +373,12 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         Inst::ret(rets, stack_bytes_to_pop)
     }
 
-    fn gen_add_imm(into_reg: Writable<Reg>, from_reg: Reg, imm: u32) -> SmallInstVec<Self::I> {
+    fn gen_add_imm(
+        _call_conv: isa::CallConv,
+        into_reg: Writable<Reg>,
+        from_reg: Reg,
+        imm: u32,
+    ) -> SmallInstVec<Self::I> {
         let mut ret = SmallVec::new();
         if from_reg != into_reg.to_reg() {
             ret.push(Inst::gen_move(into_reg, from_reg, I64));
@@ -403,15 +408,19 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         Inst::lea(mem, into_reg)
     }
 
-    fn get_stacklimit_reg() -> Reg {
-        debug_assert!(!is_callee_save_systemv(
-            regs::r10().to_real_reg().unwrap(),
-            false
-        ));
-
+    fn get_stacklimit_reg(call_conv: isa::CallConv) -> Reg {
         // As per comment on trait definition, we must return a caller-save
-        // register here.
-        regs::r10()
+        // register that is not used as an argument here.
+        match call_conv {
+            isa::CallConv::Tail => regs::r14(),
+            _ => {
+                debug_assert!(!is_callee_save_systemv(
+                    regs::r10().to_real_reg().unwrap(),
+                    false
+                ));
+                regs::r10()
+            }
+        }
     }
 
     fn gen_load_base_offset(into_reg: Writable<Reg>, base: Reg, offset: i32, ty: Type) -> Self::I {

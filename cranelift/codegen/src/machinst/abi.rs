@@ -458,13 +458,18 @@ pub trait ABIMachineSpec {
     /// Generate an add-with-immediate. Note that even if this uses a scratch
     /// register, it must satisfy two requirements:
     ///
-    /// - The add-imm sequence must only clobber caller-save registers, because
-    ///   it will be placed in the prologue before the clobbered callee-save
-    ///   registers are saved.
+    /// - The add-imm sequence must only clobber caller-save registers that are
+    ///   not used for arguments, because it will be placed in the prologue
+    ///   before the clobbered callee-save registers are saved.
     ///
     /// - The add-imm sequence must work correctly when `from_reg` and/or
     ///   `into_reg` are the register returned by `get_stacklimit_reg()`.
-    fn gen_add_imm(into_reg: Writable<Reg>, from_reg: Reg, imm: u32) -> SmallInstVec<Self::I>;
+    fn gen_add_imm(
+        call_conv: isa::CallConv,
+        into_reg: Writable<Reg>,
+        from_reg: Reg,
+        imm: u32,
+    ) -> SmallInstVec<Self::I>;
 
     /// Generate a sequence that traps with a `TrapCode::StackOverflow` code if
     /// the stack pointer is less than the given limit register (assuming the
@@ -479,14 +484,15 @@ pub trait ABIMachineSpec {
     /// certain sequences generated after the register allocator has already
     /// run. This must satisfy two requirements:
     ///
-    /// - It must be a caller-save register, because it will be clobbered in the
-    ///   prologue before the clobbered callee-save registers are saved.
+    /// - It must be a caller-save register that is not used for arguments,
+    ///   because it will be clobbered in the prologue before the clobbered
+    ///   callee-save registers are saved.
     ///
     /// - It must be safe to pass as an argument and/or destination to
     ///   `gen_add_imm()`. This is relevant when an addition with a large
     ///   immediate needs its own temporary; it cannot use the same fixed
     ///   temporary as this one.
-    fn get_stacklimit_reg() -> Reg;
+    fn get_stacklimit_reg(call_conv: isa::CallConv) -> Reg;
 
     /// Generate a store to the given [base+offset] address.
     fn gen_load_base_offset(into_reg: Writable<Reg>, base: Reg, offset: i32, ty: Type) -> Self::I;
@@ -1251,8 +1257,8 @@ impl<M: ABIMachineSpec> Callee<M> {
         // `scratch`. If our stack size doesn't fit into an immediate this
         // means we need a second scratch register for loading the stack size
         // into a register.
-        let scratch = Writable::from_reg(M::get_stacklimit_reg());
-        insts.extend(M::gen_add_imm(scratch, stack_limit, stack_size).into_iter());
+        let scratch = Writable::from_reg(M::get_stacklimit_reg(self.call_conv));
+        insts.extend(M::gen_add_imm(self.call_conv, scratch, stack_limit, stack_size).into_iter());
         insts.extend(M::gen_stack_lower_bound_trap(scratch.to_reg()));
     }
 }
@@ -1309,7 +1315,7 @@ fn generate_gv<M: ABIMachineSpec>(
             readonly: _,
         } => {
             let base = generate_gv::<M>(f, sigs, sig, base, insts);
-            let into_reg = Writable::from_reg(M::get_stacklimit_reg());
+            let into_reg = Writable::from_reg(M::get_stacklimit_reg(f.stencil.signature.call_conv));
             insts.push(M::gen_load_base_offset(
                 into_reg,
                 base,
