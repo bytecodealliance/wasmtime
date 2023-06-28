@@ -1,5 +1,5 @@
 use crate::preview2::{
-    wasi::poll::poll::{self, Pollable},
+    bindings::poll::poll::{self, Pollable},
     Table, TableError, WasiView,
 };
 use anyhow::Result;
@@ -115,8 +115,8 @@ impl<T: WasiView> poll::Host for T {
 
 pub mod sync {
     use crate::preview2::{
-        wasi::poll::poll::Host as AsyncHost,
-        wasi::sync_io::poll::poll::{self, Pollable},
+        bindings::poll::poll::Host as AsyncHost,
+        bindings::sync_io::poll::poll::{self, Pollable},
         WasiView,
     };
     use anyhow::Result;

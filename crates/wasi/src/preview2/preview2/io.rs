@@ -1,8 +1,8 @@
 use crate::preview2::{
+    bindings::io::streams::{self, InputStream, OutputStream, StreamError},
+    bindings::poll::poll::Pollable,
     poll::PollableFuture,
     stream::{HostInputStream, HostOutputStream, TableStreamExt},
-    wasi::io::streams::{self, InputStream, OutputStream, StreamError},
-    wasi::poll::poll::Pollable,
     HostPollable, TableError, TablePollableExt, WasiView,
 };
 use anyhow::anyhow;
@@ -257,10 +257,10 @@ impl<T: WasiView> streams::Host for T {
 
 pub mod sync {
     use crate::preview2::{
+        bindings::io::streams::Host as AsyncHost,
+        bindings::sync_io::io::streams::{self, InputStream, OutputStream},
+        bindings::sync_io::poll::poll::Pollable,
         poll::sync::block_on,
-        wasi::io::streams::Host as AsyncHost,
-        wasi::sync_io::io::streams::{self, InputStream, OutputStream},
-        wasi::sync_io::poll::poll::Pollable,
         WasiView,
     };
 

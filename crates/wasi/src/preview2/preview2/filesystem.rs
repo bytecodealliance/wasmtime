@@ -1,9 +1,8 @@
+use crate::preview2::bindings::clocks::wall_clock;
+use crate::preview2::bindings::filesystem::filesystem;
+use crate::preview2::bindings::io::streams;
 use crate::preview2::filesystem::{Dir, File, TableFsExt};
-use crate::preview2::stream::TableStreamExt;
-use crate::preview2::wasi::clocks::wall_clock;
-use crate::preview2::wasi::filesystem::filesystem;
-use crate::preview2::wasi::io::streams;
-use crate::preview2::{DirPerms, FilePerms, Table, TableError, WasiView};
+use crate::preview2::{DirPerms, FilePerms, Table, TableError, TableStreamExt, WasiView};
 
 use filesystem::ErrorCode;
 

@@ -1,10 +1,10 @@
+use crate::preview2::bindings::cli_base::{preopens, stderr, stdin, stdout};
+use crate::preview2::bindings::clocks::{monotonic_clock, wall_clock};
+use crate::preview2::bindings::filesystem::filesystem;
+use crate::preview2::bindings::io::streams;
 use crate::preview2::filesystem::TableFsExt;
 use crate::preview2::preview2::filesystem::TableReaddirExt;
-use crate::preview2::wasi::cli_base::{preopens, stderr, stdin, stdout};
-use crate::preview2::wasi::clocks::{monotonic_clock, wall_clock};
-use crate::preview2::wasi::filesystem::filesystem;
-use crate::preview2::wasi::io::streams;
-use crate::preview2::{wasi, TableError, WasiView};
+use crate::preview2::{bindings, TableError, WasiView};
 use anyhow::{anyhow, bail, Context};
 use std::borrow::Borrow;
 use std::cell::Cell;
@@ -317,15 +317,15 @@ impl<T: WasiPreview1View + preopens::Host> WasiPreview1ViewExt for T {}
 
 pub fn add_to_linker<
     T: WasiPreview1View
-        + wasi::cli_base::environment::Host
-        + wasi::cli_base::exit::Host
-        + wasi::cli_base::preopens::Host
-        + wasi::filesystem::filesystem::Host
-        + wasi::sync_io::poll::poll::Host
-        + wasi::random::random::Host
-        + wasi::io::streams::Host
-        + wasi::clocks::monotonic_clock::Host
-        + wasi::clocks::wall_clock::Host,
+        + bindings::cli_base::environment::Host
+        + bindings::cli_base::exit::Host
+        + bindings::cli_base::preopens::Host
+        + bindings::filesystem::filesystem::Host
+        + bindings::sync_io::poll::poll::Host
+        + bindings::random::random::Host
+        + bindings::io::streams::Host
+        + bindings::clocks::monotonic_clock::Host
+        + bindings::clocks::wall_clock::Host,
 >(
     linker: &mut wasmtime::Linker<T>,
 ) -> anyhow::Result<()> {
@@ -617,15 +617,15 @@ fn first_non_empty_iovec<'a>(
 // stored in the WasiPreview1Adapter struct.
 impl<
         T: WasiPreview1View
-            + wasi::cli_base::environment::Host
-            + wasi::cli_base::exit::Host
-            + wasi::cli_base::preopens::Host
-            + wasi::filesystem::filesystem::Host
-            + wasi::sync_io::poll::poll::Host
-            + wasi::random::random::Host
-            + wasi::io::streams::Host
-            + wasi::clocks::monotonic_clock::Host
-            + wasi::clocks::wall_clock::Host,
+            + bindings::cli_base::environment::Host
+            + bindings::cli_base::exit::Host
+            + bindings::cli_base::preopens::Host
+            + bindings::filesystem::filesystem::Host
+            + bindings::sync_io::poll::poll::Host
+            + bindings::random::random::Host
+            + bindings::io::streams::Host
+            + bindings::clocks::monotonic_clock::Host
+            + bindings::clocks::wall_clock::Host,
     > wasi_snapshot_preview1::WasiSnapshotPreview1 for T
 {
     #[instrument(skip(self))]

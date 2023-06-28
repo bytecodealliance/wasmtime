@@ -1,6 +1,4 @@
-use crate::preview2::wasi::random::insecure;
-use crate::preview2::wasi::random::insecure_seed;
-use crate::preview2::wasi::random::random;
+use crate::preview2::bindings::random::{insecure, insecure_seed, random};
 use crate::preview2::WasiView;
 use cap_rand::{distributions::Standard, Rng};
 

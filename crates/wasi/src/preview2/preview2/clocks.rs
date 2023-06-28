@@ -1,6 +1,6 @@
 #![allow(unused_variables)]
 
-use crate::preview2::wasi::{
+use crate::preview2::bindings::{
     clocks::monotonic_clock::{self, Instant},
     clocks::timezone::{self, Timezone, TimezoneDisplay},
     clocks::wall_clock::{self, Datetime},

@@ -1,10 +1,6 @@
-use crate::preview2::wasi::cli_base::environment;
-use crate::preview2::wasi::cli_base::preopens;
-use crate::preview2::wasi::cli_base::stderr;
-use crate::preview2::wasi::cli_base::stdin;
-use crate::preview2::wasi::cli_base::stdout;
-use crate::preview2::wasi::filesystem::filesystem;
-use crate::preview2::wasi::io::streams;
+use crate::preview2::bindings::cli_base::{environment, preopens, stderr, stdin, stdout};
+use crate::preview2::bindings::filesystem::filesystem;
+use crate::preview2::bindings::io::streams;
 use crate::preview2::WasiView;
 
 impl<T: WasiView> environment::Host for T {
