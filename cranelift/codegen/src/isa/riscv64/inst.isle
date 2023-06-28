@@ -1610,6 +1610,11 @@
 
 ;; Float Helpers
 
+;; Returns the bitpattern of the Canonical NaN for the given type.
+(decl pure canonical_nan_u64 (Type) u64)
+(rule (canonical_nan_u64 $F32) 0x7fc00000)
+(rule (canonical_nan_u64 $F64) 0x7ff8000000000000)
+
 (decl gen_default_frm () OptionFloatRoundingMode)
 (extern constructor gen_default_frm gen_default_frm)
 
