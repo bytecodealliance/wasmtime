@@ -1,0 +1,38 @@
+test run
+test interpret
+
+set preserve_frame_pointers=true
+set enable_llvm_abi_extensions=true
+
+target x86_64
+;; target aarch64
+;; target riscv64
+;; target s390x
+
+function %a(i64 vmctx, i8, i8, i8, i8, i8, i8, i8, i128) -> i128 tail {
+    gv0 = vmctx
+    stack_limit = gv0
+
+    ;; Need a stack slot to actually emit the stack-limit checking code.
+    ss0 = explicit_slot 8
+
+block0(v0: i64, v1: i8, v2: i8, v3: i8, v4: i8, v5: i8, v6: i8, v7: i8, v8: i128):
+    return v8
+}
+
+function %b(i8, i8, i8, i8, i8, i8, i8, i128) -> i128 tail {
+    fn0 = colocated %a(i64 vmctx, i8, i8, i8, i8, i8, i8, i8, i128) -> i128 tail
+    ;; This is our "vmctx" struct.
+    ss0 = explicit_slot 8
+
+block0(v1: i8, v2: i8, v3: i8, v4: i8, v5: i8, v6: i8, v7: i8, v8: i128):
+    ;; Store a 0 in the vmctx struct.
+    v9 = iconst.i64 0
+    stack_store.i64 v9, ss0
+
+    ;; Call %a with our vmctx.
+    v10 = stack_addr.i64 ss0
+    return_call fn0(v10, v1, v2, v3, v4, v5, v6, v7, v8)
+}
+
+; run: %b(1, 2, 3, 4, 5, 6, 7, 0x12345678123456781234567812345678) == 0x12345678123456781234567812345678

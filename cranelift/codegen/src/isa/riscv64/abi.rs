@@ -286,11 +286,16 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         }
     }
 
-    fn get_stacklimit_reg() -> Reg {
+    fn get_stacklimit_reg(_call_conv: isa::CallConv) -> Reg {
         spilltmp_reg()
     }
 
-    fn gen_add_imm(into_reg: Writable<Reg>, from_reg: Reg, imm: u32) -> SmallInstVec<Inst> {
+    fn gen_add_imm(
+        _call_conv: isa::CallConv,
+        into_reg: Writable<Reg>,
+        from_reg: Reg,
+        imm: u32,
+    ) -> SmallInstVec<Inst> {
         let mut insts = SmallInstVec::new();
         if let Some(imm12) = Imm12::maybe_from_u64(imm as u64) {
             insts.push(Inst::AluRRImm12 {
