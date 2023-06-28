@@ -492,7 +492,7 @@ impl ComponentInstance {
         }
     }
 
-    /// TODO
+    /// Returns the type information that this instance is instantiated with.
     pub fn component_types(&self) -> &Arc<ComponentTypes> {
         self.runtime_info.component_types()
     }
