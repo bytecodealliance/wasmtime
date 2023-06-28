@@ -748,19 +748,6 @@ impl ABIMachineSpec for S390xMachineDeps {
         unreachable!();
     }
 
-    fn gen_return_call(
-        _callee: CallDest,
-        _new_stack_arg_size: u32,
-        _old_stack_arg_size: u32,
-        _ret_addr: Option<Reg>,
-        _fp: Reg,
-        _tmp: Writable<Reg>,
-        _tmp2: Writable<Reg>,
-        _uses: abi::CallArgList,
-    ) -> SmallVec<[Self::I; 2]> {
-        todo!();
-    }
-
     fn gen_memcpy<F: FnMut(Type) -> Writable<Reg>>(
         _call_conv: isa::CallConv,
         _dst: Reg,

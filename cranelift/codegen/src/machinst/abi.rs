@@ -600,17 +600,6 @@ pub trait ABIMachineSpec {
         callee_pop_size: u32,
     ) -> SmallVec<[Self::I; 2]>;
 
-    fn gen_return_call(
-        callee: CallDest,
-        new_stack_arg_size: u32,
-        old_stack_arg_size: u32,
-        ret_addr: Option<Reg>,
-        fp: Reg,
-        tmp: Writable<Reg>,
-        tmp2: Writable<Reg>,
-        uses: abi::CallArgList,
-    ) -> SmallVec<[Self::I; 2]>;
-
     /// Generate a memcpy invocation. Used to set up struct
     /// args. Takes `src`, `dst` as read-only inputs and passes a temporary
     /// allocator.
@@ -721,6 +710,11 @@ impl SigData {
     /// Get calling convention used.
     pub fn call_conv(&self) -> isa::CallConv {
         self.call_conv
+    }
+
+    /// The index of the stack-return-value-area argument, if any.
+    pub fn stack_ret_arg(&self) -> Option<u16> {
+        self.stack_ret_arg
     }
 }
 
@@ -1259,6 +1253,11 @@ impl<M: ABIMachineSpec> Callee<M> {
         let scratch = Writable::from_reg(M::get_stacklimit_reg(self.call_conv));
         insts.extend(M::gen_add_imm(self.call_conv, scratch, stack_limit, stack_size).into_iter());
         insts.extend(M::gen_stack_lower_bound_trap(scratch.to_reg()));
+    }
+
+    /// Get the register holding the return-area pointer, if any.
+    pub(crate) fn ret_area_ptr(&self) -> Option<Writable<Reg>> {
+        self.ret_area_ptr
     }
 }
 
@@ -2175,6 +2174,18 @@ impl<M: ABIMachineSpec> CallSite<M> {
             _mach: PhantomData,
         }
     }
+
+    pub(crate) fn sig(&self) -> Sig {
+        self.sig
+    }
+
+    pub(crate) fn dest(&self) -> &CallDest {
+        &self.dest
+    }
+
+    pub(crate) fn take_uses(self) -> CallArgList {
+        self.uses
+    }
 }
 
 fn adjust_stack_and_nominal_sp<M: ABIMachineSpec>(ctx: &mut Lower<M::I>, amount: i32) {
@@ -2448,6 +2459,27 @@ impl<M: ABIMachineSpec> CallSite<M> {
         insts
     }
 
+    /// Call `gen_arg` for each non-hidden argument and emit all instructions
+    /// generated.
+    pub fn emit_args(&mut self, ctx: &mut Lower<M::I>, (inputs, off): isle::ValueSlice) {
+        let num_args = self.num_args(ctx.sigs());
+        assert_eq!(inputs.len(&ctx.dfg().value_lists) - off, num_args);
+
+        let mut arg_value_regs: SmallVec<[_; 16]> = smallvec![];
+        for i in 0..num_args {
+            let input = inputs.get(off + i, &ctx.dfg().value_lists).unwrap();
+            arg_value_regs.push(ctx.put_value_in_regs(input));
+        }
+        for (i, arg_regs) in arg_value_regs.iter().enumerate() {
+            self.emit_copy_regs_to_buffer(ctx, i, *arg_regs);
+        }
+        for (i, value_regs) in arg_value_regs.iter().enumerate() {
+            for inst in self.gen_arg(ctx, i, *value_regs) {
+                ctx.emit(inst);
+            }
+        }
+    }
+
     /// Define a return value after the call returns.
     pub fn gen_retval(
         &mut self,
@@ -2555,45 +2587,6 @@ impl<M: ABIMachineSpec> CallSite<M> {
         )
         .into_iter()
         {
-            ctx.emit(inst);
-        }
-    }
-
-    /// Emit a tail call sequence.
-    ///
-    /// The returned instruction should have a proper use-set (arg registers are
-    /// uses) according to the argument registers this function signature in
-    /// this ABI.
-    pub fn emit_return_call(
-        mut self,
-        ctx: &mut Lower<M::I>,
-        new_stack_arg_size: u32,
-        old_stack_arg_size: u32,
-        ret_addr: Option<Reg>,
-        fp: Reg,
-        tmp: Writable<Reg>,
-        tmp2: Writable<Reg>,
-    ) {
-        if let Some(i) = ctx.sigs()[self.sig].stack_ret_arg {
-            let ret_area_ptr = ctx.abi().ret_area_ptr.expect(
-                "if the tail callee has a return pointer, then the tail caller \
-                 must as well",
-            );
-            for inst in self.gen_arg(ctx, i.into(), ValueRegs::one(ret_area_ptr.to_reg())) {
-                ctx.emit(inst);
-            }
-        }
-
-        for inst in M::gen_return_call(
-            self.dest,
-            new_stack_arg_size,
-            old_stack_arg_size,
-            ret_addr,
-            fp,
-            tmp,
-            tmp2,
-            self.uses,
-        ) {
             ctx.emit(inst);
         }
     }
