@@ -21,7 +21,7 @@ use std::mem;
 use wasmtime_environ::{FuncIndex, PtrSize, WasmFuncType, WasmType};
 
 /// The supported trampoline kinds.
-/// See https://github.com/bytecodealliance/rfcs/blob/main/accepted/tail-calls.md#new-trampolines-and-vmcallercheckedanyfunc-changes
+/// See <https://github.com/bytecodealliance/rfcs/blob/main/accepted/tail-calls.md#new-trampolines-and-vmcallercheckedanyfunc-changes>
 /// for more details.
 pub enum TrampolineKind {
     /// Calling from native to Wasm, using the array calling convention.

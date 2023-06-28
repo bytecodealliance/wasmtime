@@ -342,7 +342,7 @@ mod tests {
             [].into(),
         );
 
-        let sig = X64ABI::sig(&wasm_sig, &CallingConvention::WasmtimeFastcall);
+        let sig = X64ABI::sig(&wasm_sig, &CallingConvention::WindowsFastcall);
         let params = sig.params;
 
         match_reg_arg(params.get(0).unwrap(), F32, regs::xmm0());
