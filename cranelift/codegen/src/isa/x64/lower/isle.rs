@@ -102,8 +102,7 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
             Opcode::ReturnCallIndirect,
             caller_conv,
             self.backend.flags().clone(),
-        )
-        .unwrap();
+        );
 
         // Allocate additional stack space for the new stack frame. We will
         // build it in the newly allocated space, but then copy it over our
@@ -181,8 +180,7 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
             distance,
             caller_conv,
             self.backend.flags().clone(),
-        )
-        .unwrap();
+        );
 
         // Allocate additional stack space for the new stack frame. We will
         // build it in the newly allocated space, but then copy it over our
