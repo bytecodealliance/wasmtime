@@ -453,14 +453,19 @@ pub unsafe trait ComponentVariant: ComponentType {
 pub unsafe trait Lower: ComponentType {
     /// Performs the "lower" function in the canonical ABI.
     ///
-    /// This method will lower the given value into wasm linear memory. The
-    /// `store` and `func` are provided in case memory is needed (e.g. for
-    /// strings/lists) so `realloc` can be called. The `dst` is the destination
-    /// to store the lowered results.
+    /// This method will lower the current value into a component. The `lower`
+    /// function performs a "flat" lowering into the `dst` specified which is
+    /// allowed to be uninitialized entering this method but is guaranteed to be
+    /// fully initialized if the method returns `Ok(())`.
     ///
-    /// Note that `dst` is a pointer to uninitialized memory. It's expected
-    /// that `dst` is fully initialized by the time this function returns, hence
-    /// the `unsafe` on the trait implementation.
+    /// The `cx` context provided is the context within which this lowering is
+    /// happening. This contains information such as canonical options specified
+    /// (e.g. string encodings, memories, etc), the store itself, along with
+    /// type information.
+    ///
+    /// The `ty` parameter is the destination type that is being lowered into.
+    /// For example this is the component's "view" of the type that is being
+    /// lowered. This is guaranteed to have passed a `typecheck` earlier.
     ///
     /// This will only be called if `typecheck` passes for `Op::Lower`.
     #[doc(hidden)]
@@ -474,7 +479,7 @@ pub unsafe trait Lower: ComponentType {
     /// Performs the "store" operation in the canonical ABI.
     ///
     /// This function will store `self` into the linear memory described by
-    /// `memory` at the `offset` provided.
+    /// `cx` at the `offset` provided.
     ///
     /// It is expected that `offset` is a valid offset in memory for
     /// `Self::SIZE32` bytes. At this time that's not an unsafe contract as it's
@@ -482,6 +487,10 @@ pub unsafe trait Lower: ComponentType {
     /// be improved in the future to remove extra bounds checks. For now this
     /// function will panic if there's a bug and `offset` isn't valid within
     /// memory.
+    ///
+    /// The `ty` type information passed here is the same as the type
+    /// information passed to `lower` above, and is the component's own view of
+    /// what the resulting type should be.
     ///
     /// This will only be called if `typecheck` passes for `Op::Lower`.
     #[doc(hidden)]
@@ -500,9 +509,16 @@ pub unsafe trait Lower: ComponentType {
 pub unsafe trait Lift: Sized + ComponentType {
     /// Performs the "lift" operation in the canonical ABI.
     ///
-    /// This will read the core wasm values from `src` and use the memory
-    /// specified by `func` and `store` optionally if necessary. An instance of
-    /// `Self` is then created from the values, assuming validation succeeds.
+    /// This function performs a "flat" lift operation from the `src` specified
+    /// which is a sequence of core wasm values. The lifting operation will
+    /// validate core wasm values and produce a `Self` on success.
+    ///
+    /// The `cx` provided contains contextual information such as the store
+    /// that's being loaded from, canonical options, and type information.
+    ///
+    /// The `ty` parameter is the origin component's specification for what the
+    /// type that is being lifted is. For example this is the record type or the
+    /// resource type that is being lifted.
     ///
     /// Note that this has a default implementation but if `typecheck` passes
     /// for `Op::Lift` this needs to be overridden.
@@ -511,10 +527,14 @@ pub unsafe trait Lift: Sized + ComponentType {
 
     /// Performs the "load" operation in the canonical ABI.
     ///
-    /// This is given the linear-memory representation of `Self` in the `bytes`
-    /// array provided which is guaranteed to be `Self::SIZE32` bytes large. All
-    /// of memory is then also described with `Memory` for bounds-checks and
-    /// such as necessary for strings/lists.
+    /// This will read the `bytes` provided, which are a sub-slice into the
+    /// linear memory described by `cx`. The `bytes` array provided is
+    /// guaranteed to be `Self::SIZE32` bytes large. All of memory is then also
+    /// available through `cx` for bounds-checks and such as necessary for
+    /// strings/lists.
+    ///
+    /// The `ty` argument is the type that's being loaded, as described by the
+    /// original component.
     ///
     /// Note that this has a default implementation but if `typecheck` passes
     /// for `Op::Lift` this needs to be overridden.
@@ -952,7 +972,7 @@ fn lower_string<T>(cx: &mut LowerContext<'_, T>, string: &str) -> Result<(usize,
     // to simd-accelerated helpers in the `encoding_rs` crate. This is ok though
     // because we can fake that the host string was already stored in latin1
     // format and follow that copy pattern instead.
-    match cx.string_encoding() {
+    match cx.options.string_encoding() {
         // This corresponds to `store_string_copy` in the canonical ABI where
         // the host's representation is utf-8 and the wasm module wants utf-8 so
         // a copy is all that's needed (and the `realloc` can be precise for the
@@ -1072,7 +1092,7 @@ pub struct WasmStr {
 
 impl WasmStr {
     fn new(ptr: usize, len: usize, cx: &LiftContext<'_>) -> Result<WasmStr> {
-        let byte_len = match cx.string_encoding() {
+        let byte_len = match cx.options.string_encoding() {
             StringEncoding::Utf8 => Some(len),
             StringEncoding::Utf16 => len.checked_mul(2),
             StringEncoding::CompactUtf16 => {
@@ -1090,7 +1110,7 @@ impl WasmStr {
         Ok(WasmStr {
             ptr,
             len,
-            options: *cx.options(),
+            options: *cx.options,
         })
     }
 
@@ -1333,7 +1353,7 @@ impl<T: Lift> WasmList<T> {
         Ok(WasmList {
             ptr,
             len,
-            options: *cx.options(),
+            options: *cx.options,
             elem,
             types: cx.types.clone(),
             _marker: marker::PhantomData,
