@@ -418,21 +418,44 @@ mod async_fd_stream {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::preview2::pipe::{ReadPipe, WritePipe};
     #[test]
     fn input_stream_in_table() {
-        let empty_pipe = ReadPipe::new(std::io::empty());
+        struct DummyInputStream;
+        #[async_trait::async_trait]
+        impl HostInputStream for DummyInputStream {
+            fn read(&mut self, _: &mut [u8]) -> Result<(u64, StreamState), Error> {
+                unimplemented!();
+            }
+            async fn ready(&mut self) -> Result<(), Error> {
+                unimplemented!();
+            }
+        }
+
+        let dummy = DummyInputStream;
         let mut table = Table::new();
-        let ix = table.push_input_stream(Box::new(empty_pipe)).unwrap();
+        // Show that we can put an input stream in the table, and both retrieval functions work:
+        let ix = table.push_input_stream(Box::new(dummy)).unwrap();
         let _ = table.get_input_stream(ix).unwrap();
         let _ = table.get_input_stream_mut(ix).unwrap();
     }
 
     #[test]
     fn output_stream_in_table() {
-        let dev_null = WritePipe::new(std::io::sink());
+        struct DummyOutputStream;
+        #[async_trait::async_trait]
+        impl HostOutputStream for DummyOutputStream {
+            fn write(&mut self, _: &[u8]) -> Result<u64, Error> {
+                unimplemented!();
+            }
+            async fn ready(&mut self) -> Result<(), Error> {
+                unimplemented!();
+            }
+        }
+
+        let dummy = DummyOutputStream;
         let mut table = Table::new();
-        let ix = table.push_output_stream(Box::new(dev_null)).unwrap();
+        // Show that we can put an output stream in the table, and both retrieval functions work:
+        let ix = table.push_output_stream(Box::new(dummy)).unwrap();
         let _ = table.get_output_stream(ix).unwrap();
         let _ = table.get_output_stream_mut(ix).unwrap();
     }
