@@ -224,7 +224,7 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
         }
 
         "riscv64" => {
-            if testname.contains("memory_multi") || testsuite.contains("relaxed_simd") {
+            if testsuite.contains("relaxed_simd") {
                 return true;
             }
 
