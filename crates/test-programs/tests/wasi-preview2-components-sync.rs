@@ -241,14 +241,11 @@ fn path_symlink_trailing_slashes() {
     run("path_symlink_trailing_slashes", false).unwrap()
 }
 #[test_log::test]
-#[cfg_attr(windows, should_panic)]
 fn poll_oneoff_files() {
     run("poll_oneoff_files", false).unwrap()
 }
 #[test_log::test]
 fn poll_oneoff_stdio() {
-    // This is the only test that should inherit stdio, or else the parallel test runner will die
-    // when multiple AsyncFd values are created from std::io::stdin.
     run("poll_oneoff_stdio", true).unwrap()
 }
 #[test_log::test]
