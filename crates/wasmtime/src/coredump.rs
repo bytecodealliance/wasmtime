@@ -24,9 +24,10 @@ use crate::{store::StoreOpaque, Global, Instance, Memory, Module, WasmBacktrace}
 ///
 /// [`Func::call`]: crate::Func::call
 /// [`Instance::new`]: crate::Instance::new
+#[derive(Debug)]
 pub struct WasmCoreDump {
     name: String,
-    modules: Vec<Module>,
+    modules: Vec<String>,
     instances: Vec<Instance>,
     memories: Vec<Memory>,
     globals: Vec<Global>,
@@ -35,7 +36,12 @@ pub struct WasmCoreDump {
 
 impl WasmCoreDump {
     pub(crate) fn new(store: &StoreOpaque, backtrace: WasmBacktrace) -> WasmCoreDump {
-        let modules: Vec<_> = store.modules().all_modules().cloned().collect();
+        let modules: Vec<_> = store
+            .modules()
+            .all_modules()
+            .cloned()
+            .map(|m| String::from(m.name().unwrap_or_default()))
+            .collect();
         let instances: Vec<Instance> = store.all_instances().collect();
         let memories: Vec<Memory> = store.all_memories().collect();
         let globals: Vec<Global> = store.all_globals().collect();
@@ -55,7 +61,7 @@ impl fmt::Display for WasmCoreDump {
         writeln!(f, "wasm coredump generated while executing {}:", self.name)?;
         writeln!(f, "modules:")?;
         for module in self.modules.iter() {
-            writeln!(f, "  {}", module.name().unwrap_or_default())?;
+            writeln!(f, "  {}", module)?;
         }
 
         writeln!(f, "instances:")?;
