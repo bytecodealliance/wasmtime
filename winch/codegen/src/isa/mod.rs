@@ -80,7 +80,7 @@ pub(crate) enum LookupError {
 pub enum CallingConvention {
     /// See [cranelift_codegen::isa::CallConv::WasmtimeSystemV]
     WasmtimeSystemV,
-    /// See [cranelift_codegen::isa::CallConv::Fastcall]
+    /// See [cranelift_codegen::isa::CallConv::WindowsFastcall]
     WindowsFastcall,
     /// See [cranelift_codegen::isa::CallConv::AppleAarch64]
     AppleAarch64,
