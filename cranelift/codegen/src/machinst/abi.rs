@@ -2111,10 +2111,10 @@ impl<M: ABIMachineSpec> CallSite<M> {
         dist: RelocDistance,
         caller_conv: isa::CallConv,
         flags: settings::Flags,
-    ) -> CodegenResult<CallSite<M>> {
+    ) -> CallSite<M> {
         let sig = sigs.abi_sig_for_sig_ref(sig_ref);
         let clobbers = sigs.call_clobbers::<M>(sig);
-        Ok(CallSite {
+        CallSite {
             sig,
             uses: smallvec![],
             defs: smallvec![],
@@ -2124,7 +2124,7 @@ impl<M: ABIMachineSpec> CallSite<M> {
             caller_conv,
             flags,
             _mach: PhantomData,
-        })
+        }
     }
 
     /// Create a callsite ABI object for a call directly to the specified
@@ -2136,10 +2136,10 @@ impl<M: ABIMachineSpec> CallSite<M> {
         dist: RelocDistance,
         caller_conv: isa::CallConv,
         flags: settings::Flags,
-    ) -> CodegenResult<CallSite<M>> {
+    ) -> CallSite<M> {
         let sig = sigs.abi_sig_for_signature(sig);
         let clobbers = sigs.call_clobbers::<M>(sig);
-        Ok(CallSite {
+        CallSite {
             sig,
             uses: smallvec![],
             defs: smallvec![],
@@ -2149,7 +2149,7 @@ impl<M: ABIMachineSpec> CallSite<M> {
             caller_conv,
             flags,
             _mach: PhantomData,
-        })
+        }
     }
 
     /// Create a callsite ABI object for a call to a function pointer with the
@@ -2161,10 +2161,10 @@ impl<M: ABIMachineSpec> CallSite<M> {
         opcode: ir::Opcode,
         caller_conv: isa::CallConv,
         flags: settings::Flags,
-    ) -> CodegenResult<CallSite<M>> {
+    ) -> CallSite<M> {
         let sig = sigs.abi_sig_for_sig_ref(sig_ref);
         let clobbers = sigs.call_clobbers::<M>(sig);
-        Ok(CallSite {
+        CallSite {
             sig,
             uses: smallvec![],
             defs: smallvec![],
@@ -2174,7 +2174,7 @@ impl<M: ABIMachineSpec> CallSite<M> {
             caller_conv,
             flags,
             _mach: PhantomData,
-        })
+        }
     }
 }
 

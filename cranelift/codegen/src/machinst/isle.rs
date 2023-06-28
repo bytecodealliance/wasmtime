@@ -689,8 +689,7 @@ macro_rules! isle_prelude_caller_methods {
                 dist,
                 caller_conv,
                 self.backend.flags().clone(),
-            )
-            .unwrap();
+            );
 
             assert_eq!(
                 inputs.len(&self.lower_ctx.dfg().value_lists) - off,
@@ -718,8 +717,7 @@ macro_rules! isle_prelude_caller_methods {
                 Opcode::CallIndirect,
                 caller_conv,
                 self.backend.flags().clone(),
-            )
-            .unwrap();
+            );
 
             assert_eq!(
                 inputs.len(&self.lower_ctx.dfg().value_lists) - off,
