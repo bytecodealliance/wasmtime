@@ -248,13 +248,12 @@ impl ABIMachineSpec for S390xMachineDeps {
         }
 
         // In the SystemV ABI, the return area pointer is the first argument,
-        // so we need to leave room for it if required.  (In the Wasmtime ABI,
-        // the return area pointer is the last argument and is handled below.)
-        if add_ret_area_ptr && !call_conv.extends_wasmtime() {
+        // so we need to leave room for it if required.
+        if add_ret_area_ptr {
             next_gpr += 1;
         }
 
-        for (i, mut param) in params.into_iter().copied().enumerate() {
+        for mut param in params.into_iter().copied() {
             let intreg = in_int_reg(param.value_type);
             let fltreg = in_flt_reg(param.value_type);
             let vecreg = in_vec_reg(param.value_type);
@@ -278,8 +277,6 @@ impl ABIMachineSpec for S390xMachineDeps {
                     ArgsOrRets::Rets => get_vecreg_for_ret(next_vr),
                 };
                 (&mut next_vr, candidate, None)
-            } else if call_conv.extends_wasmtime() {
-                panic!("i128 args/return values not supported in the Wasmtime ABI");
             } else {
                 // We must pass this by implicit reference.
                 if args_or_rets == ArgsOrRets::Rets {
@@ -294,14 +291,6 @@ impl ABIMachineSpec for S390xMachineDeps {
                 }
             };
 
-            // In the Wasmtime ABI only the first return value can be in a register.
-            let candidate =
-                if call_conv.extends_wasmtime() && args_or_rets == ArgsOrRets::Rets && i > 0 {
-                    None
-                } else {
-                    candidate
-                };
-
             let slot = if let Some(reg) = candidate {
                 *next_reg += 1;
                 ABIArgSlot::Reg {
@@ -311,14 +300,9 @@ impl ABIMachineSpec for S390xMachineDeps {
                 }
             } else {
                 // Compute size. Every argument or return value takes a slot of
-                // at least 8 bytes, except for return values in the Wasmtime ABI.
+                // at least 8 bytes.
                 let size = (ty_bits(param.value_type) / 8) as u32;
-                let slot_size = if call_conv.extends_wasmtime() && args_or_rets == ArgsOrRets::Rets
-                {
-                    size
-                } else {
-                    std::cmp::max(size, 8)
-                };
+                let slot_size = std::cmp::max(size, 8);
 
                 // Align the stack slot.
                 debug_assert!(slot_size.is_power_of_two());
@@ -372,14 +356,8 @@ impl ABIMachineSpec for S390xMachineDeps {
 
         let extra_arg = if add_ret_area_ptr {
             debug_assert!(args_or_rets == ArgsOrRets::Args);
-            // The return pointer is passed either as first argument
-            // (in the SystemV ABI) or as last argument (Wasmtime ABI).
-            let next_gpr = if call_conv.extends_wasmtime() {
-                next_gpr
-            } else {
-                0
-            };
-            if let Some(reg) = get_intreg_for_arg(next_gpr) {
+            // The return pointer is passed as first argument.
+            if let Some(reg) = get_intreg_for_arg(0) {
                 args.push(ABIArg::reg(
                     reg.to_real_reg().unwrap(),
                     types::I64,

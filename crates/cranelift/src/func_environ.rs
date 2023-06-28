@@ -4,7 +4,7 @@ use cranelift_codegen::ir::condcodes::*;
 use cranelift_codegen::ir::immediates::{Imm64, Offset32, Uimm64};
 use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{AbiParam, ArgumentPurpose, Function, InstBuilder, Signature};
-use cranelift_codegen::isa::{self, TargetFrontendConfig, TargetIsa};
+use cranelift_codegen::isa::{self, CallConv, TargetFrontendConfig, TargetIsa};
 use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_frontend::FunctionBuilder;
 use cranelift_frontend::Variable;
@@ -166,7 +166,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
                 ir::types::I64 => ir::types::R64,
                 _ => panic!(),
             },
-            crate::wasmtime_call_conv(isa),
+            CallConv::triple_default(isa.triple()),
         );
         Self {
             isa,

@@ -130,17 +130,8 @@ impl ABIMachineSpec for AArch64MachineDeps {
             // number of register values returned in the other class. That is,
             // we can return values in up to 8 integer and
             // 8 vector registers at once.
-            //
-            // In Wasmtime, we can only use one register for return
-            // value for all the register classes. That is, we can't
-            // return values in both one integer and one vector
-            // register; only one return value may be in a register.
             ArgsOrRets::Rets => {
-                if call_conv.extends_wasmtime() {
-                    (1, 1) // x0 or v0, but not both
-                } else {
-                    (8, 16) // x0-x7 and v0-v7
-                }
+                (8, 16) // x0-x7 and v0-v7
             }
         };
 
@@ -290,10 +281,8 @@ impl ABIMachineSpec for AArch64MachineDeps {
             // Compute the stack slot's size.
             let size = (ty_bits(param.value_type) / 8) as u32;
 
-            let size = if is_apple_cc
-                || (call_conv.extends_wasmtime() && args_or_rets == ArgsOrRets::Rets)
-            {
-                // MacOS aarch64 and Wasmtime allow stack slots with
+            let size = if is_apple_cc {
+                // MacOS aarch64 allows stack slots with
                 // sizes less than 8 bytes. They still need to be
                 // properly aligned on their natural data alignment,
                 // though.

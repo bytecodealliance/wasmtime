@@ -184,7 +184,7 @@ pub(crate) fn callee_saved(call_conv: &CallingConvention) -> SmallVec<[Reg; 9]> 
         }
         // TODO: Once float registers are supported,
         // account for callee-saved float registers.
-        WasmtimeFastcall => {
+        WindowsFastcall => {
             smallvec![rbx(), rdi(), rsi(), r12(), r13(), r14(), r15(),]
         }
         _ => unreachable!(),

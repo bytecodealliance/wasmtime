@@ -1,8 +1,9 @@
 //! Compilation support for the component model.
 
-use crate::compiler::Compiler;
+use crate::compiler::{Compiler, NativeRet};
 use anyhow::Result;
 use cranelift_codegen::ir::{self, InstBuilder, MemFlags};
+use cranelift_codegen::isa::CallConv;
 use cranelift_frontend::FunctionBuilder;
 use std::any::Any;
 use wasmtime_cranelift_shared::ALWAYS_TRAP_CODE;
@@ -36,13 +37,24 @@ impl Compiler {
 
         let func = self.func(wasm_func_ty, abi);
         let (mut builder, block0) = compiler.builder(func);
+        let args = builder.func.dfg.block_params(block0).to_vec();
+        let vmctx = args[0];
+
+        // More handling is necessary here if this changes
+        assert!(matches!(
+            NativeRet::classify(pointer_type, wasm_func_ty),
+            NativeRet::Bare
+        ));
 
         // Start off by spilling all the wasm arguments into a stack slot to be
         // passed to the host function.
         let (values_vec_ptr, values_vec_len) = match abi {
             Abi::Wasm | Abi::Native => {
-                let (ptr, len) =
-                    self.allocate_stack_array_and_spill_args(wasm_func_ty, &mut builder, block0);
+                let (ptr, len) = self.allocate_stack_array_and_spill_args(
+                    wasm_func_ty,
+                    &mut builder,
+                    &args[2..],
+                );
                 let len = builder.ins().iconst(pointer_type, i64::from(len));
                 (ptr, len)
             }
@@ -51,7 +63,6 @@ impl Compiler {
                 (params[2], params[3])
             }
         };
-        let vmctx = builder.func.dfg.block_params(block0)[0];
 
         self.abi_preamble(&mut builder, &offsets, vmctx, abi);
 
@@ -59,7 +70,7 @@ impl Compiler {
         // function we're calling as well as the list of arguments since the
         // list is somewhat long.
         let mut callee_args = Vec::new();
-        let mut host_sig = ir::Signature::new(crate::wasmtime_call_conv(isa));
+        let mut host_sig = ir::Signature::new(CallConv::triple_default(isa.triple()));
 
         let CanonicalOptions {
             instance,
@@ -383,6 +394,14 @@ impl Compiler {
         let Transcoder { to64, from64, .. } = *transcoder;
         let mut args = Vec::new();
 
+        let uses_retptr = match transcoder.op {
+            Transcode::Utf16ToUtf8
+            | Transcode::Latin1ToUtf8
+            | Transcode::Utf8ToLatin1
+            | Transcode::Utf16ToLatin1 => true,
+            _ => false,
+        };
+
         // Most transcoders share roughly the same signature despite doing very
         // different things internally, so most libcalls are lumped together
         // here.
@@ -413,8 +432,23 @@ impl Compiler {
                 args.push(len_param(builder, 4, to64));
             }
         };
+        if uses_retptr {
+            let slot = builder.func.create_sized_stack_slot(ir::StackSlotData::new(
+                ir::StackSlotKind::ExplicitSlot,
+                pointer_type.bytes(),
+            ));
+            args.push(builder.ins().stack_addr(pointer_type, slot, 0));
+        }
         let call = builder.ins().call_indirect(sig, transcode_libcall, &args);
-        let results = builder.func.dfg.inst_results(call).to_vec();
+        let mut results = builder.func.dfg.inst_results(call).to_vec();
+        if uses_retptr {
+            results.push(builder.ins().load(
+                pointer_type,
+                ir::MemFlags::trusted(),
+                *args.last().unwrap(),
+                0,
+            ));
+        }
         let mut raw_results = Vec::new();
 
         // Helper to cast a host pointer integer type to the destination type.
@@ -487,6 +521,7 @@ impl Compiler {
 mod host {
     use crate::compiler::Compiler;
     use cranelift_codegen::ir::{self, AbiParam};
+    use cranelift_codegen::isa::CallConv;
 
     macro_rules! host_transcode {
         (
@@ -498,7 +533,7 @@ mod host {
             $(
                 pub(super) fn $name(compiler: &Compiler, func: &mut ir::Function) -> (ir::SigRef, u32) {
                     let pointer_type = compiler.isa.pointer_type();
-                    let params = vec![
+                    let mut params = vec![
                         $( AbiParam::new(host_transcode!(@ty pointer_type $param)) ),*
                     ];
                     let mut returns = Vec::new();
@@ -506,7 +541,7 @@ mod host {
                     let sig = func.import_signature(ir::Signature {
                         params,
                         returns,
-                        call_conv: crate::wasmtime_call_conv(&*compiler.isa),
+                        call_conv: CallConv::triple_default(compiler.isa.triple()),
                     });
 
                     (sig, offsets::$name)
@@ -520,7 +555,7 @@ mod host {
 
         (@push_return $ptr:ident $params:ident $returns:ident size) => ($returns.push(AbiParam::new($ptr)););
         (@push_return $ptr:ident $params:ident $returns:ident size_pair) => ({
-            $returns.push(AbiParam::new($ptr));
+            $params.push(AbiParam::new($ptr));
             $returns.push(AbiParam::new($ptr));
         });
     }

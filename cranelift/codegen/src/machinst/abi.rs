@@ -1105,9 +1105,8 @@ impl<M: ABIMachineSpec> Callee<M> {
                 || call_conv == isa::CallConv::Fast
                 || call_conv == isa::CallConv::Cold
                 || call_conv.extends_windows_fastcall()
-                || call_conv == isa::CallConv::AppleAarch64
                 || call_conv == isa::CallConv::WasmtimeSystemV
-                || call_conv == isa::CallConv::WasmtimeAppleAarch64,
+                || call_conv == isa::CallConv::AppleAarch64,
             "Unsupported calling convention: {:?}",
             call_conv
         );

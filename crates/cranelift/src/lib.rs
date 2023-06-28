@@ -7,7 +7,7 @@ use cranelift_codegen::ir;
 use cranelift_codegen::isa::{CallConv, TargetIsa};
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{DefinedFuncIndex, WasmFuncType, WasmType};
-use target_lexicon::{Architecture, CallingConvention};
+use target_lexicon::CallingConvention;
 use wasmtime_cranelift_shared::CompiledFunctionMetadata;
 
 pub use builder::builder;
@@ -36,29 +36,6 @@ fn blank_sig(isa: &dyn TargetIsa, call_conv: CallConv) -> ir::Signature {
     ));
     sig.params.push(ir::AbiParam::new(pointer_type));
     return sig;
-}
-
-/// Returns the default calling convention for the `isa` provided.
-///
-/// Note that this calling convention is used for exported functions.
-fn wasmtime_call_conv(isa: &dyn TargetIsa) -> CallConv {
-    match isa.triple().default_calling_convention() {
-        Ok(CallingConvention::AppleAarch64) => CallConv::WasmtimeAppleAarch64,
-        Ok(CallingConvention::SystemV) | Err(()) => CallConv::WasmtimeSystemV,
-        Ok(CallingConvention::WindowsFastcall) => CallConv::WasmtimeFastcall,
-        Ok(unimp) => unimplemented!("calling convention: {:?}", unimp),
-    }
-}
-
-/// Appends the types of the `wasm` function signature into the `sig` signature
-/// provided.
-///
-/// Typically the `sig` signature will have been created from [`blank_sig`]
-/// above.
-fn push_types(isa: &dyn TargetIsa, sig: &mut ir::Signature, wasm: &WasmFuncType) {
-    let cvt = |ty: &WasmType| ir::AbiParam::new(value_type(isa, *ty));
-    sig.params.extend(wasm.params().iter().map(&cvt));
-    sig.returns.extend(wasm.returns().iter().map(&cvt));
 }
 
 /// Returns the corresponding cranelift type for the provided wasm type.
@@ -110,8 +87,15 @@ fn value_type(isa: &dyn TargetIsa, ty: WasmType) -> ir::types::Type {
 /// where the first result is returned directly and the rest via the return
 /// pointer.
 fn native_call_signature(isa: &dyn TargetIsa, wasm: &WasmFuncType) -> ir::Signature {
-    let mut sig = blank_sig(isa, wasmtime_call_conv(isa));
-    push_types(isa, &mut sig, wasm);
+    let mut sig = blank_sig(isa, CallConv::triple_default(isa.triple()));
+    let cvt = |ty: &WasmType| ir::AbiParam::new(value_type(isa, *ty));
+    sig.params.extend(wasm.params().iter().map(&cvt));
+    if let Some(first_ret) = wasm.returns().get(0) {
+        sig.returns.push(cvt(first_ret));
+    }
+    if wasm.returns().len() > 1 {
+        sig.params.push(ir::AbiParam::new(isa.pointer_type()));
+    }
     sig
 }
 
@@ -149,17 +133,15 @@ fn wasm_call_signature(isa: &dyn TargetIsa, wasm_func_ty: &WasmFuncType) -> ir::
         // Cranelift's ABI implementation generates unwinding directives
         // about pointer authentication usage, so we can't just use
         // `CallConv::Fast`.
-        CallConv::WasmtimeAppleAarch64
-    } else if isa.triple().architecture == Architecture::S390x {
-        // On S390x we need a Wasmtime calling convention to ensure
-        // we're using little-endian vector lane order.
-        wasmtime_call_conv(isa)
+        CallConv::AppleAarch64
     } else {
         CallConv::Fast
     };
 
     let mut sig = blank_sig(isa, call_conv);
-    push_types(isa, &mut sig, wasm_func_ty);
+    let cvt = |ty: &WasmType| ir::AbiParam::new(value_type(isa, *ty));
+    sig.params.extend(wasm_func_ty.params().iter().map(&cvt));
+    sig.returns.extend(wasm_func_ty.returns().iter().map(&cvt));
     sig
 }
 
