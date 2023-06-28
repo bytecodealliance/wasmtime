@@ -122,7 +122,11 @@
   (VfsubVV)
   (VfmulVV)
   (VfdivVV)
+  (VfminVV)
+  (VfmaxVV)
+  (VfsgnjVV)
   (VfsgnjnVV)
+  (VfsgnjxVV)
   (VmergeVVM)
   (VredmaxuVS)
   (VredminuVS)
@@ -180,6 +184,7 @@
   (VfrsubVF)
   (VfmulVF)
   (VfdivVF)
+  (VfsgnjVF)
   (VfrdivVF)
   (VmergeVXM)
   (VfmergeVFM)
@@ -836,6 +841,27 @@
 (rule (rv_vfrdiv_vf vs2 vs1 mask vstate)
   (vec_alu_rrr (VecAluOpRRR.VfrdivVF) vs2 vs1 mask vstate))
 
+;; Helper for emitting the `vfmin.vv` instruction.
+(decl rv_vfmin_vv (VReg VReg VecOpMasking VState) VReg)
+(rule (rv_vfmin_vv vs2 vs1 mask vstate)
+  (vec_alu_rrr (VecAluOpRRR.VfminVV) vs2 vs1 mask vstate))
+
+;; Helper for emitting the `vfmax.vv` instruction.
+(decl rv_vfmax_vv (VReg VReg VecOpMasking VState) VReg)
+(rule (rv_vfmax_vv vs2 vs1 mask vstate)
+  (vec_alu_rrr (VecAluOpRRR.VfmaxVV) vs2 vs1 mask vstate))
+
+;; Helper for emitting the `vfsgnj.vv` ("Floating Point Sign Injection") instruction.
+;; The output of this instruction is `vs2` with the sign bit from `vs1`
+(decl rv_vfsgnj_vv (VReg VReg VecOpMasking VState) VReg)
+(rule (rv_vfsgnj_vv vs2 vs1 mask vstate)
+  (vec_alu_rrr (VecAluOpRRR.VfsgnjVV) vs2 vs1 mask vstate))
+
+;; Helper for emitting the `vfsgnj.vf` ("Floating Point Sign Injection") instruction.
+(decl rv_vfsgnj_vf (VReg FReg VecOpMasking VState) VReg)
+(rule (rv_vfsgnj_vf vs2 vs1 mask vstate)
+  (vec_alu_rrr (VecAluOpRRR.VfsgnjVF) vs2 vs1 mask vstate))
+
 ;; Helper for emitting the `vfsgnjn.vv` ("Floating Point Sign Injection Negated") instruction.
 ;; The output of this instruction is `vs2` with the negated sign bit from `vs1`
 (decl rv_vfsgnjn_vv (VReg VReg VecOpMasking VState) VReg)
@@ -846,6 +872,18 @@
 ;; This instruction is a mnemonic for `vfsgnjn.vv vd, vs, vs`
 (decl rv_vfneg_v (VReg VecOpMasking VState) VReg)
 (rule (rv_vfneg_v vs mask vstate) (rv_vfsgnjn_vv vs vs mask vstate))
+
+;; Helper for emitting the `vfsgnjx.vv` ("Floating Point Sign Injection Exclusive") instruction.
+;; The output of this instruction is `vs2` with the XOR of the sign bits from `vs2` and `vs1`.
+;; When `vs2 == vs1` this implements `fabs`
+(decl rv_vfsgnjx_vv (VReg VReg VecOpMasking VState) VReg)
+(rule (rv_vfsgnjx_vv vs2 vs1 mask vstate)
+  (vec_alu_rrr (VecAluOpRRR.VfsgnjxVV) vs2 vs1 mask vstate))
+
+;; Helper for emitting the `vfabs.v` instruction.
+;; This instruction is a mnemonic for `vfsgnjx.vv vd, vs, vs`
+(decl rv_vfabs_v (VReg VecOpMasking VState) VReg)
+(rule (rv_vfabs_v vs mask vstate) (rv_vfsgnjx_vv vs vs mask vstate))
 
 ;; Helper for emitting the `vfsqrt.v` instruction.
 ;; This instruction splats the F regsiter into all elements of the destination vector.
