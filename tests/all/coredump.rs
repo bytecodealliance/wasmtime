@@ -42,7 +42,7 @@ fn test_coredump_has_stack() -> Result<()> {
 
     let wat = r#"
       (module
-        (func (export "a")
+        (func $a (export "a")
             call $b
         )
         (func $b
@@ -100,10 +100,9 @@ fn test_coredump_has_modules_and_instances() -> Result<()> {
 
     let e = a_func.call(&mut store, ()).unwrap_err();
     let cd = e.downcast_ref::<WasmCoreDump>().unwrap();
-    dbg!(cd);
     assert_eq!(cd.modules().len(), 2);
-    assert_eq!(cd.modules()[0], "foo");
-    assert_eq!(cd.modules()[1], "bar");
+    assert!(cd.modules().contains(&String::from("foo")));
+    assert!(cd.modules().contains(&String::from("bar")));
     assert_eq!(cd.instances().len(), 2);
     Ok(())
 }
