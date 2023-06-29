@@ -1,6 +1,6 @@
 use std::fmt;
 
-use crate::{store::StoreOpaque, Global, Instance, Memory, Module, WasmBacktrace};
+use crate::{store::StoreOpaque, FrameInfo, Global, Instance, Memory, WasmBacktrace};
 
 /// Representation of a core dump of a WebAssembly module
 ///
@@ -53,6 +53,31 @@ impl WasmCoreDump {
             globals,
             backtrace,
         }
+    }
+
+    /// The stack frames for the CoreDump
+    pub fn frames(&self) -> &[FrameInfo] {
+        self.backtrace.frames()
+    }
+
+    /// The names of the modules involved in the CoreDump
+    pub fn modules(&self) -> &[String] {
+        self.modules.as_ref()
+    }
+
+    /// The instances involved in the CoreDump
+    pub fn instances(&self) -> &[Instance] {
+        self.instances.as_ref()
+    }
+
+    /// The globals involved in the CoreDump
+    pub fn globals(&self) -> &[Global] {
+        self.globals.as_ref()
+    }
+
+    /// The memories involve din the CoreDump
+    pub fn memories(&self) -> &[Memory] {
+        self.memories.as_ref()
     }
 }
 
