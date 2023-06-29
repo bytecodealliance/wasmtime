@@ -160,6 +160,16 @@ impl WasiCtxBuilder {
         self
     }
 
+    pub fn set_wall_clock(mut self, clock: impl clocks::WasiWallClock + 'static) -> Self {
+        self.clocks.wall = Box::new(clock);
+        self
+    }
+
+    pub fn set_monotonic_clock(mut self, clock: impl clocks::WasiMonotonicClock + 'static) -> Self {
+        self.clocks.monotonic = Box::new(clock);
+        self
+    }
+
     pub fn build(self, table: &mut Table) -> Result<WasiCtx, anyhow::Error> {
         use anyhow::Context;
         let Self {
