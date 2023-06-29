@@ -213,7 +213,8 @@ impl<T: WasiView> streams::Host for T {
     }
 
     async fn subscribe_to_input_stream(&mut self, stream: InputStream) -> anyhow::Result<Pollable> {
-        let _ = self.table().get_input_stream(stream)?;
+        // Ensure that table element is an input-stream:
+        let _ = self.table_mut().get_input_stream_mut(stream)?;
 
         fn input_stream_ready<'a>(stream: &'a mut dyn Any) -> PollableFuture<'a> {
             let stream = stream
@@ -235,7 +236,8 @@ impl<T: WasiView> streams::Host for T {
         &mut self,
         stream: OutputStream,
     ) -> anyhow::Result<Pollable> {
-        let _ = self.table().get_output_stream(stream)?;
+        // Ensure that table element is an output-stream:
+        let _ = self.table_mut().get_output_stream_mut(stream)?;
 
         fn output_stream_ready<'a>(stream: &'a mut dyn Any) -> PollableFuture<'a> {
             let stream = stream

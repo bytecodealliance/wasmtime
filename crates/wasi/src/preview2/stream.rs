@@ -15,11 +15,8 @@ impl StreamState {
     }
 }
 
-/// An input bytestream.
-///
-/// This is "pseudo" because the real streams will be a type in wit, and
-/// built into the wit bindings, and will support async and type parameters.
-/// This pseudo-stream abstraction is synchronous and only supports bytes.
+/// Host trait for implementing the `wasi:io/streams.input-stream` resource: A
+/// bytestream which can be read from.
 #[async_trait::async_trait]
 pub trait HostInputStream: Send + Sync {
     /// Read bytes. On success, returns a pair holding the number of bytes read
@@ -66,11 +63,8 @@ pub trait HostInputStream: Send + Sync {
     async fn ready(&mut self) -> Result<(), Error>;
 }
 
-/// An output bytestream.
-///
-/// This is "pseudo" because the real streams will be a type in wit, and
-/// built into the wit bindings, and will support async and type parameters.
-/// This pseudo-stream abstraction is synchronous and only supports bytes.
+/// Host trait for implementing the `wasi:io/streams.output-stream` resource:
+/// A bytestream which can be written to.
 #[async_trait::async_trait]
 pub trait HostOutputStream: Send + Sync {
     /// Write bytes. On success, returns the number of bytes written.
@@ -137,7 +131,6 @@ pub trait HostOutputStream: Send + Sync {
 
 pub trait TableStreamExt {
     fn push_input_stream(&mut self, istream: Box<dyn HostInputStream>) -> Result<u32, TableError>;
-    fn get_input_stream(&self, fd: u32) -> Result<&dyn HostInputStream, TableError>;
     fn get_input_stream_mut(
         &mut self,
         fd: u32,
@@ -145,7 +138,6 @@ pub trait TableStreamExt {
 
     fn push_output_stream(&mut self, ostream: Box<dyn HostOutputStream>)
         -> Result<u32, TableError>;
-    fn get_output_stream(&self, fd: u32) -> Result<&dyn HostOutputStream, TableError>;
     fn get_output_stream_mut(
         &mut self,
         fd: u32,
@@ -154,9 +146,6 @@ pub trait TableStreamExt {
 impl TableStreamExt for Table {
     fn push_input_stream(&mut self, istream: Box<dyn HostInputStream>) -> Result<u32, TableError> {
         self.push(Box::new(istream))
-    }
-    fn get_input_stream(&self, fd: u32) -> Result<&dyn HostInputStream, TableError> {
-        self.get::<Box<dyn HostInputStream>>(fd).map(|f| f.as_ref())
     }
     fn get_input_stream_mut(
         &mut self,
@@ -171,10 +160,6 @@ impl TableStreamExt for Table {
     ) -> Result<u32, TableError> {
         self.push(Box::new(ostream))
     }
-    fn get_output_stream(&self, fd: u32) -> Result<&dyn HostOutputStream, TableError> {
-        self.get::<Box<dyn HostOutputStream>>(fd)
-            .map(|f| f.as_ref())
-    }
     fn get_output_stream_mut(
         &mut self,
         fd: u32,
@@ -183,6 +168,7 @@ impl TableStreamExt for Table {
     }
 }
 
+/// Provides a [`HostInputStream`] impl from a [`tokio::io::AsyncRead`] impl
 pub struct AsyncReadStream<T> {
     state: StreamState,
     buffer: Vec<u8>,
@@ -266,6 +252,7 @@ impl<T: tokio::io::AsyncRead + Send + Sync + Unpin + 'static> HostInputStream
     }
 }
 
+/// Provides a [`HostOutputStream`] impl from a [`tokio::io::AsyncWrite`] impl
 pub struct AsyncWriteStream<T> {
     buffer: Vec<u8>,
     writer: T,
@@ -347,6 +334,8 @@ mod async_fd_stream {
     use std::os::fd::{AsRawFd, FromRawFd, IntoRawFd};
     use tokio::io::unix::AsyncFd;
 
+    /// Provides a [`HostInputStream`] and [`HostOutputStream`] impl from an
+    /// [`std::os::fd::AsRawFd`] impl, using [`tokio::io::unix::AsyncFd`]
     pub struct AsyncFdStream<T: AsRawFd> {
         fd: AsyncFd<T>,
     }
@@ -440,9 +429,9 @@ mod test {
 
         let dummy = DummyInputStream;
         let mut table = Table::new();
-        // Show that we can put an input stream in the table, and both retrieval functions work:
+        // Show that we can put an input stream in the table, and get a mut
+        // ref back out:
         let ix = table.push_input_stream(Box::new(dummy)).unwrap();
-        let _ = table.get_input_stream(ix).unwrap();
         let _ = table.get_input_stream_mut(ix).unwrap();
     }
 
@@ -461,9 +450,9 @@ mod test {
 
         let dummy = DummyOutputStream;
         let mut table = Table::new();
-        // Show that we can put an output stream in the table, and both retrieval functions work:
+        // Show that we can put an output stream in the table, and get a mut
+        // ref back out:
         let ix = table.push_output_stream(Box::new(dummy)).unwrap();
-        let _ = table.get_output_stream(ix).unwrap();
         let _ = table.get_output_stream_mut(ix).unwrap();
     }
 }
