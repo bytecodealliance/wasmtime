@@ -9,7 +9,7 @@ use std::sync::Arc;
 use wasmtime_environ::component::{
     CanonicalAbiInfo, ComponentTypes, InterfaceType, TypeEnumIndex, TypeFlagsIndex, TypeListIndex,
     TypeOptionIndex, TypeRecordIndex, TypeResultIndex, TypeTupleIndex, TypeUnionIndex,
-    TypeVariantIndex, VariantInfo,
+    TypeVariantIndex,
 };
 
 #[derive(Clone)]
@@ -47,6 +47,13 @@ impl List {
         Ok(Val::List(values::List::new(self, values)?))
     }
 
+    pub(crate) fn from(index: TypeListIndex, types: &Arc<ComponentTypes>) -> Self {
+        List(Handle {
+            index,
+            types: types.clone(),
+        })
+    }
+
     /// Retreive the element type of this `list`.
     pub fn ty(&self) -> Type {
         Type::from(&self.0.types[self.0.index].element, &self.0.types)
@@ -71,16 +78,19 @@ impl Record {
         Ok(Val::Record(values::Record::new(self, values)?))
     }
 
+    pub(crate) fn from(index: TypeRecordIndex, types: &Arc<ComponentTypes>) -> Self {
+        Record(Handle {
+            index,
+            types: types.clone(),
+        })
+    }
+
     /// Retrieve the fields of this `record` in declaration order.
     pub fn fields(&self) -> impl ExactSizeIterator<Item = Field<'_>> {
         self.0.types[self.0.index].fields.iter().map(|field| Field {
             name: &field.name,
             ty: Type::from(&field.ty, &self.0.types),
         })
-    }
-
-    pub(crate) fn canonical_abi(&self) -> &CanonicalAbiInfo {
-        &self.0.types[self.0.index].abi
     }
 }
 
@@ -94,16 +104,19 @@ impl Tuple {
         Ok(Val::Tuple(values::Tuple::new(self, values)?))
     }
 
+    pub(crate) fn from(index: TypeTupleIndex, types: &Arc<ComponentTypes>) -> Self {
+        Tuple(Handle {
+            index,
+            types: types.clone(),
+        })
+    }
+
     /// Retrieve the types of the fields of this `tuple` in declaration order.
     pub fn types(&self) -> impl ExactSizeIterator<Item = Type> + '_ {
         self.0.types[self.0.index]
             .types
             .iter()
             .map(|ty| Type::from(ty, &self.0.types))
-    }
-
-    pub(crate) fn canonical_abi(&self) -> &CanonicalAbiInfo {
-        &self.0.types[self.0.index].abi
     }
 }
 
@@ -125,20 +138,19 @@ impl Variant {
         Ok(Val::Variant(values::Variant::new(self, name, value)?))
     }
 
+    pub(crate) fn from(index: TypeVariantIndex, types: &Arc<ComponentTypes>) -> Self {
+        Variant(Handle {
+            index,
+            types: types.clone(),
+        })
+    }
+
     /// Retrieve the cases of this `variant` in declaration order.
     pub fn cases(&self) -> impl ExactSizeIterator<Item = Case> {
         self.0.types[self.0.index].cases.iter().map(|case| Case {
             name: &case.name,
             ty: case.ty.as_ref().map(|ty| Type::from(ty, &self.0.types)),
         })
-    }
-
-    pub(crate) fn variant_info(&self) -> &VariantInfo {
-        &self.0.types[self.0.index].info
-    }
-
-    pub(crate) fn canonical_abi(&self) -> &CanonicalAbiInfo {
-        &self.0.types[self.0.index].abi
     }
 }
 
@@ -152,20 +164,19 @@ impl Enum {
         Ok(Val::Enum(values::Enum::new(self, name)?))
     }
 
+    pub(crate) fn from(index: TypeEnumIndex, types: &Arc<ComponentTypes>) -> Self {
+        Enum(Handle {
+            index,
+            types: types.clone(),
+        })
+    }
+
     /// Retrieve the names of the cases of this `enum` in declaration order.
     pub fn names(&self) -> impl ExactSizeIterator<Item = &str> {
         self.0.types[self.0.index]
             .names
             .iter()
             .map(|name| name.deref())
-    }
-
-    pub(crate) fn variant_info(&self) -> &VariantInfo {
-        &self.0.types[self.0.index].info
-    }
-
-    pub(crate) fn canonical_abi(&self) -> &CanonicalAbiInfo {
-        &self.0.types[self.0.index].abi
     }
 }
 
@@ -179,20 +190,19 @@ impl Union {
         Ok(Val::Union(values::Union::new(self, discriminant, value)?))
     }
 
+    pub(crate) fn from(index: TypeUnionIndex, types: &Arc<ComponentTypes>) -> Self {
+        Union(Handle {
+            index,
+            types: types.clone(),
+        })
+    }
+
     /// Retrieve the types of the cases of this `union` in declaration order.
     pub fn types(&self) -> impl ExactSizeIterator<Item = Type> + '_ {
         self.0.types[self.0.index]
             .types
             .iter()
             .map(|ty| Type::from(ty, &self.0.types))
-    }
-
-    pub(crate) fn variant_info(&self) -> &VariantInfo {
-        &self.0.types[self.0.index].info
-    }
-
-    pub(crate) fn canonical_abi(&self) -> &CanonicalAbiInfo {
-        &self.0.types[self.0.index].abi
     }
 }
 
@@ -206,17 +216,16 @@ impl OptionType {
         Ok(Val::Option(values::OptionVal::new(self, value)?))
     }
 
+    pub(crate) fn from(index: TypeOptionIndex, types: &Arc<ComponentTypes>) -> Self {
+        OptionType(Handle {
+            index,
+            types: types.clone(),
+        })
+    }
+
     /// Retrieve the type parameter for this `option`.
     pub fn ty(&self) -> Type {
         Type::from(&self.0.types[self.0.index].ty, &self.0.types)
-    }
-
-    pub(crate) fn variant_info(&self) -> &VariantInfo {
-        &self.0.types[self.0.index].info
-    }
-
-    pub(crate) fn canonical_abi(&self) -> &CanonicalAbiInfo {
-        &self.0.types[self.0.index].abi
     }
 }
 
@@ -228,6 +237,13 @@ impl ResultType {
     /// Instantiate this type with the specified `value`.
     pub fn new_val(&self, value: Result<Option<Val>, Option<Val>>) -> Result<Val> {
         Ok(Val::Result(values::ResultVal::new(self, value)?))
+    }
+
+    pub(crate) fn from(index: TypeResultIndex, types: &Arc<ComponentTypes>) -> Self {
+        ResultType(Handle {
+            index,
+            types: types.clone(),
+        })
     }
 
     /// Retrieve the `ok` type parameter for this `option`.
@@ -245,14 +261,6 @@ impl ResultType {
             &self.0.types,
         ))
     }
-
-    pub(crate) fn variant_info(&self) -> &VariantInfo {
-        &self.0.types[self.0.index].info
-    }
-
-    pub(crate) fn canonical_abi(&self) -> &CanonicalAbiInfo {
-        &self.0.types[self.0.index].abi
-    }
 }
 
 /// A `flags` interface type
@@ -263,6 +271,13 @@ impl Flags {
     /// Instantiate this type with the specified flag `names`.
     pub fn new_val(&self, names: &[&str]) -> Result<Val> {
         Ok(Val::Flags(values::Flags::new(self, names)?))
+    }
+
+    pub(crate) fn from(index: TypeFlagsIndex, types: &Arc<ComponentTypes>) -> Self {
+        Flags(Handle {
+            index,
+            types: types.clone(),
+        })
     }
 
     /// Retrieve the names of the flags of this `flags` type in declaration order.
@@ -458,42 +473,15 @@ impl Type {
             InterfaceType::Float64 => Type::Float64,
             InterfaceType::Char => Type::Char,
             InterfaceType::String => Type::String,
-            InterfaceType::List(index) => Type::List(List(Handle {
-                index: *index,
-                types: types.clone(),
-            })),
-            InterfaceType::Record(index) => Type::Record(Record(Handle {
-                index: *index,
-                types: types.clone(),
-            })),
-            InterfaceType::Tuple(index) => Type::Tuple(Tuple(Handle {
-                index: *index,
-                types: types.clone(),
-            })),
-            InterfaceType::Variant(index) => Type::Variant(Variant(Handle {
-                index: *index,
-                types: types.clone(),
-            })),
-            InterfaceType::Enum(index) => Type::Enum(Enum(Handle {
-                index: *index,
-                types: types.clone(),
-            })),
-            InterfaceType::Union(index) => Type::Union(Union(Handle {
-                index: *index,
-                types: types.clone(),
-            })),
-            InterfaceType::Option(index) => Type::Option(OptionType(Handle {
-                index: *index,
-                types: types.clone(),
-            })),
-            InterfaceType::Result(index) => Type::Result(ResultType(Handle {
-                index: *index,
-                types: types.clone(),
-            })),
-            InterfaceType::Flags(index) => Type::Flags(Flags(Handle {
-                index: *index,
-                types: types.clone(),
-            })),
+            InterfaceType::List(index) => Type::List(List::from(*index, types)),
+            InterfaceType::Record(index) => Type::Record(Record::from(*index, types)),
+            InterfaceType::Tuple(index) => Type::Tuple(Tuple::from(*index, types)),
+            InterfaceType::Variant(index) => Type::Variant(Variant::from(*index, types)),
+            InterfaceType::Enum(index) => Type::Enum(Enum::from(*index, types)),
+            InterfaceType::Union(index) => Type::Union(Union::from(*index, types)),
+            InterfaceType::Option(index) => Type::Option(OptionType::from(*index, types)),
+            InterfaceType::Result(index) => Type::Result(ResultType::from(*index, types)),
+            InterfaceType::Flags(index) => Type::Flags(Flags::from(*index, types)),
         }
     }
 
@@ -521,25 +509,6 @@ impl Type {
             Type::Option(_) => "option",
             Type::Result(_) => "result",
             Type::Flags(_) => "flags",
-        }
-    }
-
-    /// Calculate the size and alignment requirements for the specified type.
-    pub(crate) fn canonical_abi(&self) -> &CanonicalAbiInfo {
-        match self {
-            Type::Bool | Type::S8 | Type::U8 => &CanonicalAbiInfo::SCALAR1,
-            Type::S16 | Type::U16 => &CanonicalAbiInfo::SCALAR2,
-            Type::S32 | Type::U32 | Type::Char | Type::Float32 => &CanonicalAbiInfo::SCALAR4,
-            Type::S64 | Type::U64 | Type::Float64 => &CanonicalAbiInfo::SCALAR8,
-            Type::String | Type::List(_) => &CanonicalAbiInfo::POINTER_PAIR,
-            Type::Record(handle) => handle.canonical_abi(),
-            Type::Tuple(handle) => handle.canonical_abi(),
-            Type::Variant(handle) => handle.canonical_abi(),
-            Type::Enum(handle) => handle.canonical_abi(),
-            Type::Union(handle) => handle.canonical_abi(),
-            Type::Option(handle) => handle.canonical_abi(),
-            Type::Result(handle) => handle.canonical_abi(),
-            Type::Flags(handle) => handle.canonical_abi(),
         }
     }
 }

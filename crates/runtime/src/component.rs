@@ -17,11 +17,12 @@ use std::marker;
 use std::mem;
 use std::ops::Deref;
 use std::ptr::{self, NonNull};
+use std::sync::Arc;
 use wasmtime_environ::component::{
-    Component, LoweredIndex, RuntimeAlwaysTrapIndex, RuntimeComponentInstanceIndex,
+    Component, ComponentTypes, LoweredIndex, RuntimeAlwaysTrapIndex, RuntimeComponentInstanceIndex,
     RuntimeMemoryIndex, RuntimePostReturnIndex, RuntimeReallocIndex, RuntimeTranscoderIndex,
-    StringEncoding, VMComponentOffsets, FLAG_MAY_ENTER, FLAG_MAY_LEAVE, FLAG_NEEDS_POST_RETURN,
-    VMCOMPONENT_MAGIC,
+    StringEncoding, TypeFuncIndex, VMComponentOffsets, FLAG_MAY_ENTER, FLAG_MAY_LEAVE,
+    FLAG_NEEDS_POST_RETURN, VMCOMPONENT_MAGIC,
 };
 use wasmtime_environ::HostPtr;
 
@@ -45,6 +46,9 @@ pub struct ComponentInstance {
     /// `Instance::vmctx_self_reference`.
     vmctx_self_reference: SendSyncPtr<VMComponentContext>,
 
+    /// Runtime type information about this component.
+    runtime_info: Arc<dyn ComponentRuntimeInfo>,
+
     /// A zero-sized field which represents the end of the struct for the actual
     /// `VMComponentContext` to be allocated behind.
     vmctx: VMComponentContext,
@@ -60,6 +64,8 @@ pub struct ComponentInstance {
 ///   end up being a `VMComponentContext`.
 /// * `data` - this is the data pointer associated with the `VMLowering` for
 ///   which this function pointer was registered.
+/// * `ty` - the type index, relative to the tables in `vmctx`, that is the
+///   type of the function being called.
 /// * `flags` - the component flags for may_enter/leave corresponding to the
 ///   component instance that the lowering happened within.
 /// * `opt_memory` - this nullable pointer represents the memory configuration
@@ -75,18 +81,19 @@ pub struct ComponentInstance {
 /// * `nargs_and_results` - the size, in units of `ValRaw`, of
 ///   `args_and_results`.
 //
-// FIXME: 8 arguments is probably too many. The `data` through `string-encoding`
+// FIXME: 9 arguments is probably too many. The `data` through `string-encoding`
 // parameters should probably get packaged up into the `VMComponentContext`.
 // Needs benchmarking one way or another though to figure out what the best
 // balance is here.
 pub type VMLoweringCallee = extern "C" fn(
     vmctx: *mut VMOpaqueContext,
     data: *mut u8,
+    ty: TypeFuncIndex,
     flags: InstanceFlags,
     opt_memory: *mut VMMemoryDefinition,
     opt_realloc: *mut VMFuncRef,
     string_encoding: StringEncoding,
-    args_and_results: *mut ValRaw,
+    args_and_results: *mut mem::MaybeUninit<ValRaw>,
     nargs_and_results: usize,
 );
 
@@ -145,6 +152,7 @@ impl ComponentInstance {
         ptr: NonNull<ComponentInstance>,
         alloc_size: usize,
         offsets: VMComponentOffsets<HostPtr>,
+        runtime_info: Arc<dyn ComponentRuntimeInfo>,
         store: *mut dyn Store,
     ) {
         assert!(alloc_size >= Self::alloc_layout(&offsets).size());
@@ -162,6 +170,7 @@ impl ComponentInstance {
                     )
                     .unwrap(),
                 ),
+                runtime_info,
                 vmctx: VMComponentContext {
                     _marker: marker::PhantomPinned,
                 },
@@ -482,6 +491,11 @@ impl ComponentInstance {
             }
         }
     }
+
+    /// Returns the type information that this instance is instantiated with.
+    pub fn component_types(&self) -> &Arc<ComponentTypes> {
+        self.runtime_info.component_types()
+    }
 }
 
 impl VMComponentContext {
@@ -508,7 +522,11 @@ pub struct OwnedComponentInstance {
 impl OwnedComponentInstance {
     /// Allocates a new `ComponentInstance + VMComponentContext` pair on the
     /// heap with `malloc` and configures it for the `component` specified.
-    pub fn new(component: &Component, store: *mut dyn Store) -> OwnedComponentInstance {
+    pub fn new(
+        runtime_info: Arc<dyn ComponentRuntimeInfo>,
+        store: *mut dyn Store,
+    ) -> OwnedComponentInstance {
+        let component = runtime_info.component();
         let offsets = VMComponentOffsets::new(HostPtr, component);
         let layout = ComponentInstance::alloc_layout(&offsets);
         unsafe {
@@ -523,7 +541,7 @@ impl OwnedComponentInstance {
             let ptr = alloc::alloc_zeroed(layout) as *mut ComponentInstance;
             let ptr = NonNull::new(ptr).unwrap();
 
-            ComponentInstance::new_at(ptr, layout.size(), offsets, store);
+            ComponentInstance::new_at(ptr, layout.size(), offsets, runtime_info, store);
 
             let ptr = SendSyncPtr::new(ptr);
             OwnedComponentInstance { ptr }
@@ -698,4 +716,12 @@ impl InstanceFlags {
     pub fn as_raw(&self) -> *mut VMGlobalDefinition {
         self.0
     }
+}
+
+/// Runtime information about a component stored locally for reflection.
+pub trait ComponentRuntimeInfo: Send + Sync + 'static {
+    /// Returns the type information about the compiled component.
+    fn component(&self) -> &Component;
+    /// Returns a handle to the tables of type information for this component.
+    fn component_types(&self) -> &Arc<ComponentTypes>;
 }

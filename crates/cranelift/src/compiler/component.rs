@@ -9,7 +9,7 @@ use std::any::Any;
 use wasmtime_cranelift_shared::ALWAYS_TRAP_CODE;
 use wasmtime_environ::component::{
     AllCallFunc, CanonicalOptions, Component, ComponentCompiler, ComponentTypes, FixedEncoding,
-    LowerImport, RuntimeMemoryIndex, Transcode, Transcoder, VMComponentOffsets,
+    LowerImport, RuntimeMemoryIndex, Transcode, Transcoder, TypeDef, VMComponentOffsets,
 };
 use wasmtime_environ::{PtrSize, WasmFuncType};
 
@@ -92,6 +92,14 @@ impl Compiler {
             vmctx,
             i32::try_from(offsets.lowering_data(lowering.index)).unwrap(),
         ));
+
+        // ty: TypeFuncIndex,
+        let ty = match component.type_of_import(lowering.import, types) {
+            TypeDef::ComponentFunc(func) => func,
+            _ => unreachable!(),
+        };
+        host_sig.params.push(ir::AbiParam::new(ir::types::I32));
+        callee_args.push(builder.ins().iconst(ir::types::I32, i64::from(ty.as_u32())));
 
         // flags: *mut VMGlobalDefinition
         host_sig.params.push(ir::AbiParam::new(pointer_type));

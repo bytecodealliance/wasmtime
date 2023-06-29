@@ -219,7 +219,7 @@ impl<'a> Instantiator<'a> {
                 exported_modules: PrimaryMap::with_capacity(
                     env_component.num_runtime_modules as usize,
                 ),
-                state: OwnedComponentInstance::new(env_component, store.traitobj()),
+                state: OwnedComponentInstance::new(component.runtime_info(), store.traitobj()),
                 funcs: Vec::new(),
             },
         }
