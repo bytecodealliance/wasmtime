@@ -82,7 +82,7 @@ fn insert_call_to_function(
         sig.params.iter().map(|abi_param| abi_param.value_type),
     )?;
 
-    let addr_ty = I64;
+    let addr_ty = fgen.isa.pointer_type();
     let call = match call_opcode {
         Opcode::Call => builder.ins().call(func_ref, &actuals),
         Opcode::ReturnCall => builder.ins().return_call(func_ref, &actuals),
