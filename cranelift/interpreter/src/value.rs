@@ -484,9 +484,15 @@ impl DataValueExt for DataValue {
 
     fn is_zero(&self) -> ValueResult<bool> {
         match self {
+            DataValue::I8(f) => Ok(*f == 0),
+            DataValue::I16(f) => Ok(*f == 0),
+            DataValue::I32(f) => Ok(*f == 0),
+            DataValue::I64(f) => Ok(*f == 0),
+            DataValue::I128(f) => Ok(*f == 0),
             DataValue::F32(f) => Ok(f.is_zero()),
             DataValue::F64(f) => Ok(f.is_zero()),
-            _ => Err(ValueError::InvalidType(ValueTypeClass::Float, self.ty())),
+            DataValue::V64(f) => Ok(f.iter().any(|e| *e == 0)),
+            DataValue::V128(f) => Ok(f.iter().any(|e| *e == 0)),
         }
     }
 
