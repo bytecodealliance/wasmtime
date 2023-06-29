@@ -137,7 +137,7 @@ pub(crate) fn block_on<F: std::future::Future>(f: F) -> F::Output {
         Err(_) => {
             use once_cell::sync::Lazy;
             static RUNTIME: Lazy<Runtime> = Lazy::new(|| {
-                Builder::new_current_thread()
+                Builder::new_multi_thread()
                     .enable_time()
                     .enable_io()
                     .build()
