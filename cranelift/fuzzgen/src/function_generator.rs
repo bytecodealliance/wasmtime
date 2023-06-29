@@ -2045,12 +2045,16 @@ where
                     .next()
                     .is_some();
                 let is_tail_caller = self.signature.call_conv == CallConv::Tail;
-                // TODO: This is currently only supported on x86
-                let supports_tail_calls = self.isa.triple().architecture == Architecture::X86_64;
-                // TODO: We currently require frame pointers for tail calls
-                let has_frame_pointers = self.isa.flags().preserve_frame_pointers();
 
-                if is_tail_caller && has_tail_callees && supports_tail_calls & has_frame_pointers {
+                let supports_tail_calls = match self.isa.triple().architecture {
+                    // TODO: x64 currently requires frame pointers for tail calls.
+                    Architecture::X86_64 => self.isa.flags().preserve_frame_pointers(),
+                    Architecture::Aarch64(target_lexicon::Aarch64Architecture::Aarch64) => true,
+                    // TODO: Other platforms do not support tail calls yet.
+                    _ => false,
+                };
+
+                if is_tail_caller && has_tail_callees && supports_tail_calls {
                     valid_terminators.extend([
                         BlockTerminatorKind::TailCall,
                         BlockTerminatorKind::TailCallIndirect,

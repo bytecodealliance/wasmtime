@@ -1161,6 +1161,43 @@ impl ABIMachineSpec for AArch64MachineDeps {
     }
 }
 
+impl AArch64CallSite {
+    pub fn emit_return_call(mut self, ctx: &mut Lower<Inst>, args: isle::ValueSlice) {
+        let (new_stack_arg_size, old_stack_arg_size) =
+            self.emit_temporary_tail_call_frame(ctx, args);
+
+        let dest = self.dest().clone();
+        let opcode = self.opcode();
+        let uses = self.take_uses();
+        let info = Box::new(ReturnCallInfo {
+            uses,
+            opcode,
+            old_stack_arg_size,
+            new_stack_arg_size,
+        });
+
+        match dest {
+            CallDest::ExtName(callee, RelocDistance::Near) => {
+                let callee = Box::new(callee);
+                ctx.emit(Inst::ReturnCall { callee, info });
+            }
+            CallDest::ExtName(name, RelocDistance::Far) => {
+                let callee = ctx.alloc_tmp(types::I64).only_reg().unwrap();
+                ctx.emit(Inst::LoadExtName {
+                    rd: callee,
+                    name: Box::new(name),
+                    offset: 0,
+                });
+                ctx.emit(Inst::ReturnCallInd {
+                    callee: callee.to_reg(),
+                    info,
+                });
+            }
+            CallDest::Reg(callee) => ctx.emit(Inst::ReturnCallInd { callee, info }),
+        }
+    }
+}
+
 fn compute_arg_locs_tail<'a, I>(
     params: I,
     add_ret_area_ptr: bool,
