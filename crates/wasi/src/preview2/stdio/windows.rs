@@ -49,9 +49,7 @@ impl Stdin {
         // Creation must be running in a tokio context to succeed.
         match tokio::runtime::Handle::try_current() {
             Ok(_) => STDIN.get_or_init(|| create()),
-            Err(_) => {
-                STDIN.get_or_init(|| crate::preview2::poll::sync::block_on(async { create() }))
-            }
+            Err(_) => STDIN.get_or_init(|| crate::preview2::block_on(async { create() })),
         }
     }
 }
