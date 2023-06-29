@@ -17,8 +17,8 @@ file-per-thread-logger = { workspace = true }
 log = { workspace = true }
 serde = { version = "1.0.94", features = ["derive"] }
 sha2 = "0.10.2"
-toml = "0.5.5"
-zstd = { version = "0.11.1", default-features = false }
+toml = { workspace = true }
+zstd = { version = "0.12", default-features = false }
 
 [target.'cfg(target_os = "windows")'.dependencies.windows-sys]
 workspace = true
