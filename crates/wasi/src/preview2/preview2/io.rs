@@ -260,8 +260,7 @@ pub mod sync {
         bindings::io::streams::Host as AsyncHost,
         bindings::sync_io::io::streams::{self, InputStream, OutputStream},
         bindings::sync_io::poll::poll::Pollable,
-        poll::sync::block_on,
-        WasiView,
+        block_on, WasiView,
     };
 
     impl<T: WasiView> streams::Host for T {

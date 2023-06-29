@@ -117,32 +117,9 @@ pub mod sync {
     use crate::preview2::{
         bindings::poll::poll::Host as AsyncHost,
         bindings::sync_io::poll::poll::{self, Pollable},
-        WasiView,
+        block_on, WasiView,
     };
     use anyhow::Result;
-    use std::future::Future;
-    use tokio::runtime::{Builder, Handle, Runtime};
-
-    pub fn block_on<F: Future>(f: F) -> F::Output {
-        match Handle::try_current() {
-            Ok(h) => {
-                let _enter = h.enter();
-                h.block_on(f)
-            }
-            Err(_) => {
-                use once_cell::sync::Lazy;
-                static RUNTIME: Lazy<Runtime> = Lazy::new(|| {
-                    Builder::new_current_thread()
-                        .enable_time()
-                        .enable_io()
-                        .build()
-                        .unwrap()
-                });
-                let _enter = RUNTIME.enter();
-                RUNTIME.block_on(f)
-            }
-        }
-    }
 
     impl<T: WasiView> poll::Host for T {
         fn drop_pollable(&mut self, pollable: Pollable) -> Result<()> {

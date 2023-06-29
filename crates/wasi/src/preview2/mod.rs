@@ -126,3 +126,36 @@ pub mod bindings {
     }
     pub use self::_internal_rest::wasi::*;
 }
+
+pub(crate) fn block_on<F: std::future::Future>(f: F) -> F::Output {
+    use tokio::runtime::{Builder, Handle, Runtime};
+    match Handle::try_current() {
+        Ok(h) => {
+            let _enter = h.enter();
+            h.block_on(f)
+        }
+        Err(_) => {
+            use once_cell::sync::Lazy;
+            static RUNTIME: Lazy<Runtime> = Lazy::new(|| {
+                Builder::new_current_thread()
+                    .enable_time()
+                    .enable_io()
+                    .build()
+                    .unwrap()
+            });
+            let _enter = RUNTIME.enter();
+            RUNTIME.block_on(f)
+        }
+    }
+}
+
+pub(crate) fn block_in_place<F, R>(f: F) -> R
+where
+    F: FnOnce() -> R,
+{
+    if tokio::runtime::Handle::try_current().is_ok() {
+        tokio::task::block_in_place(f)
+    } else {
+        f()
+    }
+}

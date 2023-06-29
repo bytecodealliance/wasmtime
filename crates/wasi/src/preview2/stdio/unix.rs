@@ -28,7 +28,7 @@ impl Stdin {
                 create().expect("creating AsyncFd for stdin in existing tokio context")
             }),
             Err(_) => STDIN.get_or_init(|| {
-                crate::preview2::poll::sync::block_on(async {
+                crate::preview2::block_on(async {
                     create().expect("creating AsyncFd for stdin in internal tokio context")
                 })
             }),
