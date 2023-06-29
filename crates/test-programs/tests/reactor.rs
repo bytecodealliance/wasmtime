@@ -3,8 +3,8 @@ use wasmtime::{
     component::{Component, Linker},
     Config, Engine, Store,
 };
-use wasmtime_wasi::preview2::wasi::clocks::wall_clock;
-use wasmtime_wasi::preview2::wasi::filesystem::filesystem;
+use wasmtime_wasi::preview2::bindings::clocks::wall_clock;
+use wasmtime_wasi::preview2::bindings::filesystem::filesystem;
 use wasmtime_wasi::preview2::{self, Table, WasiCtx, WasiCtxBuilder, WasiView};
 
 lazy_static::lazy_static! {
@@ -27,14 +27,14 @@ wasmtime::component::bindgen!({
     world: "test-reactor",
     async: true,
     with: {
-       "wasi:io/streams": preview2::wasi::io::streams,
-       "wasi:filesystem/filesystem": preview2::wasi::filesystem::filesystem,
-       "wasi:cli-base/environment": preview2::wasi::cli_base::environment,
-       "wasi:cli-base/preopens": preview2::wasi::cli_base::preopens,
-       "wasi:cli-base/exit": preview2::wasi::cli_base::exit,
-       "wasi:cli-base/stdin": preview2::wasi::cli_base::stdin,
-       "wasi:cli-base/stdout": preview2::wasi::cli_base::stdout,
-       "wasi:cli-base/stderr": preview2::wasi::cli_base::stderr,
+       "wasi:io/streams": preview2::bindings::io::streams,
+       "wasi:filesystem/filesystem": preview2::bindings::filesystem::filesystem,
+       "wasi:cli-base/environment": preview2::bindings::cli_base::environment,
+       "wasi:cli-base/preopens": preview2::bindings::cli_base::preopens,
+       "wasi:cli-base/exit": preview2::bindings::cli_base::exit,
+       "wasi:cli-base/stdin": preview2::bindings::cli_base::stdin,
+       "wasi:cli-base/stdout": preview2::bindings::cli_base::stdout,
+       "wasi:cli-base/stderr": preview2::bindings::cli_base::stderr,
     },
     ownership: Borrowing {
         duplicate_if_necessary: false
@@ -68,14 +68,14 @@ async fn instantiate(
     let mut linker = Linker::new(&ENGINE);
 
     // All of the imports available to the world are provided by the wasi-common crate:
-    preview2::wasi::filesystem::filesystem::add_to_linker(&mut linker, |x| x)?;
-    preview2::wasi::io::streams::add_to_linker(&mut linker, |x| x)?;
-    preview2::wasi::cli_base::environment::add_to_linker(&mut linker, |x| x)?;
-    preview2::wasi::cli_base::preopens::add_to_linker(&mut linker, |x| x)?;
-    preview2::wasi::cli_base::exit::add_to_linker(&mut linker, |x| x)?;
-    preview2::wasi::cli_base::stdin::add_to_linker(&mut linker, |x| x)?;
-    preview2::wasi::cli_base::stdout::add_to_linker(&mut linker, |x| x)?;
-    preview2::wasi::cli_base::stderr::add_to_linker(&mut linker, |x| x)?;
+    preview2::bindings::filesystem::filesystem::add_to_linker(&mut linker, |x| x)?;
+    preview2::bindings::io::streams::add_to_linker(&mut linker, |x| x)?;
+    preview2::bindings::cli_base::environment::add_to_linker(&mut linker, |x| x)?;
+    preview2::bindings::cli_base::preopens::add_to_linker(&mut linker, |x| x)?;
+    preview2::bindings::cli_base::exit::add_to_linker(&mut linker, |x| x)?;
+    preview2::bindings::cli_base::stdin::add_to_linker(&mut linker, |x| x)?;
+    preview2::bindings::cli_base::stdout::add_to_linker(&mut linker, |x| x)?;
+    preview2::bindings::cli_base::stderr::add_to_linker(&mut linker, |x| x)?;
 
     let mut store = Store::new(&ENGINE, wasi_ctx);
 

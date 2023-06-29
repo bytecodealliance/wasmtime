@@ -6,8 +6,9 @@ use wasmtime::{
     Config, Engine, Store,
 };
 use wasmtime_wasi::preview2::{
-    pipe::MemoryInputPipe, wasi::command::add_to_linker, wasi::command::Command, DirPerms,
-    FilePerms, Table, WasiClocks, WasiCtx, WasiCtxBuilder, WasiMonotonicClock, WasiView,
+    command::{add_to_linker, Command},
+    pipe::MemoryInputPipe,
+    DirPerms, FilePerms, Table, WasiClocks, WasiCtx, WasiCtxBuilder, WasiMonotonicClock, WasiView,
     WasiWallClock,
 };
 

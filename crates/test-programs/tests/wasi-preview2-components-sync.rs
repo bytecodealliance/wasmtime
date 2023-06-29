@@ -3,8 +3,8 @@ use anyhow::Result;
 use tempfile::TempDir;
 use wasmtime::{component::Linker, Config, Engine, Store};
 use wasmtime_wasi::preview2::{
+    command::sync::{add_to_linker, Command},
     pipe::MemoryOutputPipe,
-    wasi::command::sync::{add_to_linker, Command},
     DirPerms, FilePerms, Table, WasiCtx, WasiCtxBuilder, WasiView,
 };
 
