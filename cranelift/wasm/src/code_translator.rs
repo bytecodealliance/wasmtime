@@ -591,6 +591,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 bitcast_wasm_returns(environ, return_args, builder);
                 builder.ins().return_(return_args);
             }
+            handle_before_return(return_args);
             state.popn(return_count);
             state.reachable = false;
         }

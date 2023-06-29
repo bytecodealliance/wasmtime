@@ -650,6 +650,51 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         self.epoch_check(builder);
     }
 
+    // * is this the right place to define this hook? if so should it be
+    //   added to builtin.rs?
+    //
+    // * what is the type for retvals supposed to be? is there a generic
+    //   type that can be used?
+    //
+    // * if the valgrind libcalls are made right before returning, doesn't 
+    //   that mean that the metadata for the "real" memory is updated before
+    //   there's a check for whether that allocation/free is ok or not? or
+    //   is this a non-issue because of arena allocation?
+    fn handle_before_return(&mut self, retvals: &[value]) {
+        // strings are psuedocode
+        if "the function is malloc" {
+            builder
+                .ins()
+                .call_indirect(check_malloc_exit, &[vmctx]); 
+                // * how to get vmctx from here?
+                //
+                // * is check_malloc_exit the right argument? I'm still a bit
+                //   confused as to how & why this works?
+        }
+    }
+
+    fn check_malloc_exit(&mut self, builder: &mut FunctionBuilder) {
+        let check_malloc_sig = self.builtin_function_signatures.check_malloc(builder.func);
+        let (vmctx, check_malloc) = self.translate_load_builtin_function_address(
+            &mut builder.cursor(),
+            BuiltinFunctionIndex::check_malloc(),
+        );
+        builder
+            .ins()
+            .call_indirect(check_malloc_sig, check_malloc, &[vmctx, usize, usize]);
+    }
+
+    fn check_free_exit(&mut self, builder: &mut FunctionBuilder) {
+        let check_free_sig = self.builtin_function_signatures.check_free(builder.func);
+        let (vmctx, check_free) = self.translate_load_builtin_function_address(
+            &mut builder.cursor(),
+            BuiltinFunctionIndex::check_free(),
+        );
+        builder
+            .ins()
+            .call_indirect(check_free_sig, check_free, &[vmctx, usize]);
+    }
+
     fn epoch_ptr(&mut self, builder: &mut FunctionBuilder<'_>) -> ir::Value {
         let vmctx = self.vmctx(builder.func);
         let pointer_type = self.pointer_type();
@@ -2173,6 +2218,10 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         // Initialize `epoch_var` with the current epoch.
         if self.tunables.epoch_interruption {
             self.epoch_function_entry(builder);
+        }
+        //
+        if self.func == "malloc" { //psuedocode
+            self.check_malloc_entry();
         }
         Ok(())
     }

@@ -32,6 +32,7 @@ use wasmtime_environ::{
     GlobalInit, HostPtr, MemoryIndex, Module, PrimaryMap, SignatureIndex, TableIndex,
     TableInitialValue, Trap, VMOffsets, WasmHeapType, WasmRefType, WasmType, VMCONTEXT_MAGIC,
 };
+use crate::wasm_valgrind::Valgrind;
 
 mod allocator;
 
@@ -144,6 +145,8 @@ pub struct Instance {
     /// represents a dynamically-sized array that extends beyond the nominal
     /// end of the struct (similar to a flexible array member).
     vmctx: VMContext,
+
+    valgrind_state: Valgrind,
 }
 
 #[allow(clippy::cast_ptr_alignment)]

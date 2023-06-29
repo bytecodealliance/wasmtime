@@ -9,6 +9,8 @@
 //!
 //! * They must only contain basic, raw i32/i64/f32/f64/pointer parameters that
 //!   are safe to pass across the system ABI.
+/// is the above something that should be taken into account? check_malloc 
+/// takes usize as the type for its len arg
 //!
 //! * If any nested function propagates an `Err(trap)` out to the library
 //!   function frame, we need to raise it. This involves some nasty and quite
@@ -65,6 +67,7 @@ use std::time::{Duration, Instant};
 use wasmtime_environ::{
     DataIndex, ElemIndex, FuncIndex, GlobalIndex, MemoryIndex, TableIndex, Trap,
 };
+use crate::wasm_valgrind::Valgrind;
 
 /// Actually public trampolines which are used by the runtime as the entrypoint
 /// for libcalls.
@@ -485,6 +488,16 @@ unsafe fn out_of_gas(instance: &mut Instance) -> Result<()> {
 // Hook for when an instance observes that the epoch has changed.
 unsafe fn new_epoch(instance: &mut Instance) -> Result<u64> {
     (*instance.store()).new_epoch()
+}
+
+//
+unsafe fn check_malloc(instance: &mut Instance, addr: usine, len: usize) -> Result<(), AccessError> {
+	instance.valgrind_state::malloc(addr, len)
+}
+
+//
+unsafe fn check_free(instance: &mut Instance, addr: usize) -> Result<(), AccessError> {
+    instance.valgrind_state::free(addr)
 }
 
 /// This module contains functions which are used for resolving relocations at
