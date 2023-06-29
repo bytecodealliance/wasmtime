@@ -19,11 +19,13 @@ impl StreamState {
 /// bytestream which can be read from.
 #[async_trait::async_trait]
 pub trait HostInputStream: Send + Sync {
-    /// Read bytes. On success, returns a pair holding the number of bytes read
-    /// and a flag indicating whether the end of the stream was reached.
+    /// Read bytes. On success, returns a pair holding the number of bytes
+    /// read and a flag indicating whether the end of the stream was reached.
+    /// Important: this read must be non-blocking!
     fn read(&mut self, buf: &mut [u8]) -> Result<(u64, StreamState), Error>;
 
-    /// Vectored-I/O form of `read`.
+    /// Vectored-I/O form of `read`. Important: this read must be
+    /// non-blocking!
     fn read_vectored<'a>(
         &mut self,
         bufs: &mut [std::io::IoSliceMut<'a>],
@@ -41,7 +43,8 @@ pub trait HostInputStream: Send + Sync {
         false
     }
 
-    /// Read bytes from a stream and discard them.
+    /// Read bytes from a stream and discard them. Important: this method must
+    /// be non-blocking!
     fn skip(&mut self, nelem: u64) -> Result<(u64, StreamState), Error> {
         let mut nread = 0;
         let mut state = StreamState::Open;
@@ -59,7 +62,8 @@ pub trait HostInputStream: Send + Sync {
         Ok((nread, state))
     }
 
-    /// An async method to check read readiness.
+    /// Check for read readiness: this method blocks until the stream is ready
+    /// for reading.
     async fn ready(&mut self) -> Result<(), Error>;
 }
 
@@ -68,9 +72,11 @@ pub trait HostInputStream: Send + Sync {
 #[async_trait::async_trait]
 pub trait HostOutputStream: Send + Sync {
     /// Write bytes. On success, returns the number of bytes written.
+    /// Important: this write must be non-blocking!
     fn write(&mut self, _buf: &[u8]) -> Result<u64, Error>;
 
-    /// Vectored-I/O form of `write`.
+    /// Vectored-I/O form of `write`. Important: this write must be
+    /// non-blocking!
     fn write_vectored<'a>(&mut self, bufs: &[std::io::IoSlice<'a>]) -> Result<u64, Error> {
         if bufs.len() > 0 {
             self.write(bufs.get(0).unwrap())
@@ -86,6 +92,7 @@ pub trait HostOutputStream: Send + Sync {
     }
 
     /// Transfer bytes directly from an input stream to an output stream.
+    /// Important: this splice must be non-blocking!
     fn splice(
         &mut self,
         src: &mut dyn HostInputStream,
@@ -109,7 +116,8 @@ pub trait HostOutputStream: Send + Sync {
         Ok((nspliced, state))
     }
 
-    /// Repeatedly write a byte to a stream.
+    /// Repeatedly write a byte to a stream. Important: this write must be
+    /// non-blocking!
     fn write_zeroes(&mut self, nelem: u64) -> Result<u64, Error> {
         let mut nwritten = 0;
 
@@ -125,19 +133,25 @@ pub trait HostOutputStream: Send + Sync {
         Ok(nwritten)
     }
 
-    /// An async method to check write readiness.
+    /// Check for write readiness: this method blocks until the stream is
+    /// ready for writing.
     async fn ready(&mut self) -> Result<(), Error>;
 }
 
+/// Extension trait for managing [`HostInputStream`]s and [`HostOutputStream`]s in the [`Table`].
 pub trait TableStreamExt {
+    /// Push a [`HostInputStream`] into a [`Table`], returning the table index.
     fn push_input_stream(&mut self, istream: Box<dyn HostInputStream>) -> Result<u32, TableError>;
+    /// Get a mutable reference to a [`HostInputStream`] in a [`Table`].
     fn get_input_stream_mut(
         &mut self,
         fd: u32,
     ) -> Result<&mut Box<dyn HostInputStream>, TableError>;
 
+    /// Push a [`HostOutputStream`] into a [`Table`], returning the table index.
     fn push_output_stream(&mut self, ostream: Box<dyn HostOutputStream>)
         -> Result<u32, TableError>;
+    /// Get a mutable reference to a [`HostOutputStream`] in a [`Table`].
     fn get_output_stream_mut(
         &mut self,
         fd: u32,
@@ -176,6 +190,8 @@ pub struct AsyncReadStream<T> {
 }
 
 impl<T> AsyncReadStream<T> {
+    /// Create a [`AsyncReadStream`]. In order to use the [`HostInputStream`] impl
+    /// provided by this struct, the argument must impl [`tokio::io::AsyncRead`].
     pub fn new(reader: T) -> Self {
         AsyncReadStream {
             state: StreamState::Open,
@@ -259,6 +275,8 @@ pub struct AsyncWriteStream<T> {
 }
 
 impl<T> AsyncWriteStream<T> {
+    /// Create a [`AsyncWriteStream`]. In order to use the [`HostOutputStream`] impl
+    /// provided by this struct, the argument must impl [`tokio::io::AsyncWrite`].
     pub fn new(writer: T) -> Self {
         AsyncWriteStream {
             buffer: Vec::new(),
@@ -341,6 +359,16 @@ mod async_fd_stream {
     }
 
     impl<T: AsRawFd> AsyncFdStream<T> {
+        /// Create a [`AsyncFdStream`] from a type which implements [`AsRawFd`].
+        /// This constructor will use `fcntl(2)` to set the `O_NONBLOCK` flag
+        /// if it is not already set.
+        /// The implementation of this constructor creates an
+        /// [`tokio::io::unix::AsyncFd`]. It will return an error unless
+        /// called from inside a tokio context. Additionally, tokio (via mio)
+        /// will register the fd inside with `epoll(7)` (or equiv on
+        /// macos). The process may only make one registration of an fd at a
+        /// time. If another registration exists, this constructor will return
+        /// an error.
         pub fn new(fd: T) -> anyhow::Result<Self> {
             use rustix::fs::OFlags;
             let borrowed_fd = unsafe { rustix::fd::BorrowedFd::borrow_raw(fd.as_raw_fd()) };

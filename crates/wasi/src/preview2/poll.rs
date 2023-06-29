@@ -13,8 +13,20 @@ pub type PollableFuture<'a> = Pin<Box<dyn Future<Output = Result<()>> + Send + '
 pub type MakeFuture = for<'a> fn(&'a mut dyn Any) -> PollableFuture<'a>;
 pub type ClosureFuture = Box<dyn Fn() -> PollableFuture<'static> + Send + Sync + 'static>;
 
+/// A host representation of the `wasi:poll/poll.pollable` resource.
+///
+/// A pollable is not the same thing as a Rust Future: the same pollable may be used to
+/// repeatedly check for readiness of a given condition, e.g. if a stream is readable
+/// or writable. So, rather than containing a Future, which can only become Ready once, a
+/// HostPollable contains a way to create a Future in each call to poll_oneoff.
 pub enum HostPollable {
+    /// Create a Future by calling a fn on another resource in the table. This
+    /// indirection means the created Future can use a mut borrow of another
+    /// resource in the Table (e.g. a stream)
     TableEntry { index: u32, make_future: MakeFuture },
+    /// Create a future by calling an owned, static closure. This is used for
+    /// pollables which do not share state with another resource in the Table
+    /// (e.g. a timer)
     Closure(ClosureFuture),
 }
 
