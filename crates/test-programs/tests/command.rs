@@ -59,7 +59,7 @@ async fn instantiate(
     Ok((store, command))
 }
 
-#[test_log::test(tokio::test)]
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn hello_stdout() -> Result<()> {
     let mut table = Table::new();
     let wasi = WasiCtxBuilder::new()
@@ -73,7 +73,7 @@ async fn hello_stdout() -> Result<()> {
         .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))
 }
 
-#[test_log::test(tokio::test)]
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn panic() -> Result<()> {
     let mut table = Table::new();
     let wasi = WasiCtxBuilder::new()
@@ -96,7 +96,7 @@ async fn panic() -> Result<()> {
     Ok(())
 }
 
-#[test_log::test(tokio::test)]
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn args() -> Result<()> {
     let mut table = Table::new();
     let wasi = WasiCtxBuilder::new()
@@ -110,7 +110,7 @@ async fn args() -> Result<()> {
         .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))
 }
 
-#[test_log::test(tokio::test)]
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn random() -> Result<()> {
     let mut table = Table::new();
     let wasi = WasiCtxBuilder::new().build(&mut table)?;
@@ -123,7 +123,7 @@ async fn random() -> Result<()> {
         .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))
 }
 
-#[test_log::test(tokio::test)]
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn time() -> Result<()> {
     struct FakeWallClock;
 
@@ -171,7 +171,7 @@ async fn time() -> Result<()> {
         .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))
 }
 
-#[test_log::test(tokio::test)]
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn stdin() -> Result<()> {
     let mut table = Table::new();
     let wasi = WasiCtxBuilder::new()
@@ -187,7 +187,7 @@ async fn stdin() -> Result<()> {
         .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))
 }
 
-#[test_log::test(tokio::test)]
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn poll_stdin() -> Result<()> {
     let mut table = Table::new();
     let wasi = WasiCtxBuilder::new()
@@ -203,7 +203,7 @@ async fn poll_stdin() -> Result<()> {
         .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))
 }
 
-#[test_log::test(tokio::test)]
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn env() -> Result<()> {
     let mut table = Table::new();
     let wasi = WasiCtxBuilder::new()
@@ -220,7 +220,7 @@ async fn env() -> Result<()> {
         .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))
 }
 
-#[test_log::test(tokio::test)]
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn file_read() -> Result<()> {
     let dir = tempfile::tempdir()?;
 
@@ -242,7 +242,7 @@ async fn file_read() -> Result<()> {
         .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))
 }
 
-#[test_log::test(tokio::test)]
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn file_append() -> Result<()> {
     let dir = tempfile::tempdir()?;
 
@@ -274,7 +274,7 @@ async fn file_append() -> Result<()> {
     Ok(())
 }
 
-#[test_log::test(tokio::test)]
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn file_dir_sync() -> Result<()> {
     let dir = tempfile::tempdir()?;
 
@@ -297,7 +297,7 @@ async fn file_dir_sync() -> Result<()> {
         .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))
 }
 
-#[test_log::test(tokio::test)]
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn exit_success() -> Result<()> {
     let mut table = Table::new();
     let wasi = WasiCtxBuilder::new().build(&mut table)?;
@@ -314,7 +314,7 @@ async fn exit_success() -> Result<()> {
     Ok(())
 }
 
-#[test_log::test(tokio::test)]
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn exit_default() -> Result<()> {
     let mut table = Table::new();
     let wasi = WasiCtxBuilder::new().build(&mut table)?;
@@ -327,7 +327,7 @@ async fn exit_default() -> Result<()> {
     Ok(())
 }
 
-#[test_log::test(tokio::test)]
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn exit_failure() -> Result<()> {
     let mut table = Table::new();
     let wasi = WasiCtxBuilder::new().build(&mut table)?;
@@ -344,7 +344,7 @@ async fn exit_failure() -> Result<()> {
     Ok(())
 }
 
-#[test_log::test(tokio::test)]
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn exit_panic() -> Result<()> {
     let mut table = Table::new();
     let wasi = WasiCtxBuilder::new().build(&mut table)?;
@@ -361,7 +361,7 @@ async fn exit_panic() -> Result<()> {
     Ok(())
 }
 
-#[test_log::test(tokio::test)]
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn directory_list() -> Result<()> {
     let dir = tempfile::tempdir()?;
 
@@ -389,7 +389,7 @@ async fn directory_list() -> Result<()> {
         .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))
 }
 
-#[test_log::test(tokio::test)]
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn default_clocks() -> Result<()> {
     let mut table = Table::new();
     let wasi = WasiCtxBuilder::new().build(&mut table)?;
@@ -403,7 +403,7 @@ async fn default_clocks() -> Result<()> {
         .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))
 }
 
-#[test_log::test(tokio::test)]
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn export_cabi_realloc() -> Result<()> {
     let mut table = Table::new();
     let wasi = WasiCtxBuilder::new().build(&mut table)?;
@@ -419,7 +419,7 @@ async fn export_cabi_realloc() -> Result<()> {
         .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))
 }
 
-#[test_log::test(tokio::test)]
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn read_only() -> Result<()> {
     let dir = tempfile::tempdir()?;
 
