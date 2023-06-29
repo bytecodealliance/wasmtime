@@ -342,7 +342,7 @@ pub use async_fd_stream::*;
 #[cfg(unix)]
 mod async_fd_stream {
     use super::{HostInputStream, HostOutputStream, StreamState};
-    use anyhow::Error;
+    use anyhow::{bail, Error};
     use std::io::{Read, Write};
     use std::os::fd::{AsRawFd, FromRawFd, IntoRawFd};
     use tokio::io::unix::AsyncFd;
@@ -353,8 +353,12 @@ mod async_fd_stream {
 
     impl<T: AsRawFd> AsyncFdStream<T> {
         pub fn new(fd: T) -> anyhow::Result<Self> {
-            // FIXME: Use fcntl to make sure O_NONBLOCKING is set for this fd,
-            // otherwise the implementations below will not be correct.
+            let flags = rustix::fs::fcntl_getfl(unsafe {
+                rustix::fd::BorrowedFd::borrow_raw(fd.as_raw_fd())
+            })?;
+            if !flags.contains(rustix::fs::OFlags::NONBLOCK) {
+                bail!("AsyncFdStream::new requires a nonblocking file");
+            }
             Ok(Self {
                 fd: AsyncFd::new(fd)?,
             })
