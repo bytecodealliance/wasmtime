@@ -214,12 +214,8 @@ impl TestCase {
                 })
                 .collect();
 
-            let func = gen.generate_func(
-                fname,
-                isa.triple().clone(),
-                usercalls,
-                ALLOWED_LIBCALLS.to_vec(),
-            )?;
+            let func =
+                gen.generate_func(fname, isa.clone(), usercalls, ALLOWED_LIBCALLS.to_vec())?;
             functions.push(func);
 
             ctrl_planes.push(ControlPlane::arbitrary(gen.u)?);
