@@ -1,11 +1,13 @@
 use crate::preview2::{
-    clocks::{self, WasiClocks},
+    clocks::{self, WasiMonotonicClock, WasiWallClock},
     filesystem::{Dir, TableFsExt},
     pipe, random, stdio,
     stream::{InputStream, OutputStream, TableStreamExt},
     DirPerms, FilePerms, Table,
 };
 use cap_rand::{Rng, RngCore, SeedableRng};
+
+use super::clocks::host::{monotonic_clock_ctx, wall_clock_ctx};
 
 pub struct WasiCtxBuilder {
     stdin: Box<dyn InputStream>,
@@ -18,7 +20,8 @@ pub struct WasiCtxBuilder {
     random: Box<dyn RngCore + Send + Sync>,
     insecure_random: Box<dyn RngCore + Send + Sync>,
     insecure_random_seed: u128,
-    clocks: WasiClocks,
+    wall_clock: Box<dyn WasiWallClock + Send + Sync>,
+    monotonic_clock: Box<dyn WasiMonotonicClock + Send + Sync>,
 }
 
 impl WasiCtxBuilder {
@@ -43,7 +46,8 @@ impl WasiCtxBuilder {
             random: random::thread_rng(),
             insecure_random,
             insecure_random_seed,
-            clocks: clocks::host::clocks_ctx(),
+            wall_clock: wall_clock_ctx(),
+            monotonic_clock: monotonic_clock_ctx(),
         }
     }
 
@@ -155,18 +159,14 @@ impl WasiCtxBuilder {
         self.insecure_random_seed = insecure_random_seed;
         self
     }
-    pub fn set_clocks(mut self, clocks: WasiClocks) -> Self {
-        self.clocks = clocks;
-        self
-    }
 
     pub fn set_wall_clock(mut self, clock: impl clocks::WasiWallClock + 'static) -> Self {
-        self.clocks.wall = Box::new(clock);
+        self.wall_clock = Box::new(clock);
         self
     }
 
     pub fn set_monotonic_clock(mut self, clock: impl clocks::WasiMonotonicClock + 'static) -> Self {
-        self.clocks.monotonic = Box::new(clock);
+        self.monotonic_clock = Box::new(clock);
         self
     }
 
@@ -182,7 +182,8 @@ impl WasiCtxBuilder {
             random,
             insecure_random,
             insecure_random_seed,
-            clocks,
+            wall_clock,
+            monotonic_clock,
         } = self;
 
         let stdin = table.push_input_stream(stdin).context("stdin")?;
@@ -209,7 +210,8 @@ impl WasiCtxBuilder {
             random,
             insecure_random,
             insecure_random_seed,
-            clocks,
+            wall_clock,
+            monotonic_clock,
         })
     }
 }
@@ -225,7 +227,8 @@ pub struct WasiCtx {
     pub(crate) random: Box<dyn RngCore + Send + Sync>,
     pub(crate) insecure_random: Box<dyn RngCore + Send + Sync>,
     pub(crate) insecure_random_seed: u128,
-    pub(crate) clocks: WasiClocks,
+    pub(crate) wall_clock: Box<dyn WasiWallClock + Send + Sync>,
+    pub(crate) monotonic_clock: Box<dyn WasiMonotonicClock + Send + Sync>,
     pub(crate) env: Vec<(String, String)>,
     pub(crate) args: Vec<String>,
     pub(crate) preopens: Vec<(u32, String)>,

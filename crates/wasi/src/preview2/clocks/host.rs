@@ -1,4 +1,4 @@
-use super::{WasiClocks, WasiMonotonicClock, WasiWallClock};
+use super::{WasiMonotonicClock, WasiWallClock};
 use cap_std::time::{Duration, Instant, SystemClock};
 use cap_std::{ambient_authority, AmbientAuthority};
 use cap_time_ext::{MonotonicClockExt, SystemClockExt};
@@ -64,10 +64,10 @@ impl WasiMonotonicClock for MonotonicClock {
     }
 }
 
-pub fn clocks_ctx() -> WasiClocks {
-    // Create the per-instance clock resources.
-    let monotonic = Box::new(MonotonicClock::new(ambient_authority()));
-    let wall = Box::new(WallClock::new(ambient_authority()));
+pub fn monotonic_clock_ctx() -> Box<dyn WasiMonotonicClock + Send + Sync> {
+    Box::new(MonotonicClock::new(ambient_authority()))
+}
 
-    WasiClocks { monotonic, wall }
+pub fn wall_clock_ctx() -> Box<dyn WasiWallClock + Send + Sync> {
+    Box::new(WallClock::new(ambient_authority()))
 }
