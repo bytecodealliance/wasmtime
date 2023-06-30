@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 use crate::preview2::{
-    clocks::WasiMonotonicClock,
+    clocks::HostMonotonicClock,
     stream::{InputStream, OutputStream},
 };
 use anyhow::Error;
@@ -43,7 +43,7 @@ impl<'a> Poll<'a> {
     }
     pub fn subscribe_monotonic_clock(
         &mut self,
-        clock: &'a dyn WasiMonotonicClock,
+        clock: &'a dyn HostMonotonicClock,
         deadline: u64,
         absolute: bool,
         ud: Userdata,
