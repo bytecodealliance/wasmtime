@@ -7,7 +7,7 @@ use cranelift_codegen::ir;
 use cranelift_codegen::isa::{CallConv, TargetIsa};
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{DefinedFuncIndex, WasmFuncType, WasmType};
-use target_lexicon::CallingConvention;
+use target_lexicon::Architecture;
 use wasmtime_cranelift_shared::CompiledFunctionMetadata;
 
 pub use builder::builder;
