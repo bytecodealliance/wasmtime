@@ -134,5 +134,3 @@ component-model = [
   "dep:wasmtime-component-util",
   "dep:encoding_rs",
 ]
-
-versioned-exports = ["wasmtime-cranelift?/versioned-exports", "wasmtime-runtime/versioned-exports"]

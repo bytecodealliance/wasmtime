@@ -39,7 +39,7 @@ cfg_if::cfg_if! {
 
 // fn(top_of_stack(%x0): *mut u8)
 asm_func!(
-    "wasmtime_fiber_switch",
+    wasmtime_versioned_export_macros::versioned_stringify_ident!(wasmtime_fiber_switch),
     concat!(
         "
             .cfi_startproc
@@ -114,7 +114,7 @@ asm_func!(
 // wasmtime_fiber_start(), and provides wider coverage.
 #[rustfmt::skip]
 asm_func!(
-    "wasmtime_fiber_init",
+    wasmtime_versioned_export_macros::versioned_stringify_ident!(wasmtime_fiber_init),
     concat!(
         "
             .cfi_startproc
@@ -144,7 +144,7 @@ asm_func!(
 // doing. Like over there note that the relative offsets to registers here
 // match the frame layout in `wasmtime_fiber_switch`.
 asm_func!(
-    "wasmtime_fiber_start",
+    wasmtime_versioned_export_macros::versioned_stringify_ident!(wasmtime_fiber_start),
     "
         .cfi_startproc simple
         .cfi_def_cfa_offset 0

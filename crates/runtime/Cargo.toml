@@ -67,5 +67,3 @@ component-model = [
   "wasmtime-environ/component-model",
   "dep:encoding_rs",
 ]
-
-versioned-exports = ["wasmtime-versioned-export-macros/enabled"]

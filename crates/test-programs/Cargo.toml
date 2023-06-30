@@ -21,7 +21,7 @@ test-log = { version = "0.2", default-features = false, features = ["trace"] }
 tracing = { workspace = true }
 tracing-subscriber = { version = "0.3.1", default-features = false, features = ['fmt', 'env-filter'] }
 lazy_static = "1"
-wasmtime = { workspace = true, features = ['cranelift', 'component-model', 'versioned-exports'] }
+wasmtime = { workspace = true, features = ['cranelift', 'component-model'] }
 
 wasi-common = { workspace = true }
 wasi-cap-std-sync = { workspace = true }
