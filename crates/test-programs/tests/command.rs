@@ -13,7 +13,7 @@ use wasmtime_wasi::preview2::{
     pipe::ReadPipe,
     wasi::command::add_to_linker,
     wasi::command::Command,
-    DirPerms, FilePerms, Table, WasiClocks, WasiCtx, WasiCtxBuilder, WasiView,
+    DirPerms, FilePerms, Table, WasiCtx, WasiCtxBuilder, WasiView,
 };
 
 lazy_static::lazy_static! {
@@ -160,10 +160,8 @@ async fn time() -> Result<()> {
 
     let mut table = Table::new();
     let wasi = WasiCtxBuilder::new()
-        .set_clocks(WasiClocks {
-            wall: Box::new(FakeWallClock),
-            monotonic: Box::new(FakeMonotonicClock { now: Mutex::new(0) }),
-        })
+        .set_monotonic_clock(FakeMonotonicClock { now: Mutex::new(0) })
+        .set_wall_clock(FakeWallClock)
         .build(&mut table)?;
 
     let (mut store, command) =
