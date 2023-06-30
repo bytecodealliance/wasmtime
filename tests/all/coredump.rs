@@ -108,16 +108,17 @@ fn test_coredump_has_modules_and_instances() -> Result<()> {
 }
 
 #[test]
-fn test_coredump_has_globals_and_memory() -> Result<()> {
+fn test_coredump_has_import_globals_and_memory() -> Result<()> {
     let mut config = Config::default();
     config.coredump_on_trap(true);
     let engine = Engine::new(&config).unwrap();
     let mut store = Store::<()>::new(&engine, ());
+    let mut linker = Linker::new(&engine);
 
     let wat = r#"
       (module
-        (memory (export "memory") 2)
-        (global (export "myglobal") i32 (i32.const 65536))
+        (import "memory" "memory" (memory 1))
+        (global $myglobal (import "js" "global") (mut i32))
         (func (export "a") (result i32)
           unreachable
         )
@@ -125,12 +126,20 @@ fn test_coredump_has_globals_and_memory() -> Result<()> {
     "#;
 
     let module = Module::new(store.engine(), wat)?;
-    let instance = Instance::new(&mut store, &module, &[])?;
+    let m = wasmtime::Memory::new(&mut store, MemoryType::new(1, None))?;
+    linker.define(&mut store, "memory", "memory", m)?;
+    let g = wasmtime::Global::new(
+        &mut store,
+        GlobalType::new(ValType::I32, Mutability::Var),
+        Val::I32(0),
+    )?;
+    linker.define(&mut store, "js", "global", g)?;
+    let instance = linker.instantiate(&mut store, &module)?;
     let a_func = instance.get_typed_func::<(), i32>(&mut store, "a")?;
     let e = a_func.call(&mut store, ()).unwrap_err();
     let cd = e.downcast_ref::<WasmCoreDump>().unwrap();
-    assert_eq!(cd.globals().len(), 1);
-    assert_eq!(cd.memories().len(), 1);
+    assert_eq!(cd.store_globals().len(), 1);
+    assert_eq!(cd.store_memories().len(), 1);
 
     Ok(())
 }

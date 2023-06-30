@@ -29,8 +29,8 @@ pub struct WasmCoreDump {
     name: String,
     modules: Vec<String>,
     instances: Vec<Instance>,
-    memories: Vec<Memory>,
-    globals: Vec<Global>,
+    store_memories: Vec<Memory>,
+    store_globals: Vec<Global>,
     backtrace: WasmBacktrace,
 }
 
@@ -43,14 +43,15 @@ impl WasmCoreDump {
             .map(|m| String::from(m.name().unwrap_or_default()))
             .collect();
         let instances: Vec<Instance> = store.all_instances().collect();
-        let memories: Vec<Memory> = store.all_memories().collect();
-        let globals: Vec<Global> = store.all_globals().collect();
+        let store_memories: Vec<Memory> = store.all_memories().collect();
+        let store_globals: Vec<Global> = store.all_globals().collect();
+
         WasmCoreDump {
             name: String::from("store_name"),
             modules,
             instances,
-            memories,
-            globals,
+            store_memories,
+            store_globals,
             backtrace,
         }
     }
@@ -70,14 +71,16 @@ impl WasmCoreDump {
         self.instances.as_ref()
     }
 
-    /// The globals involved in the CoreDump
-    pub fn globals(&self) -> &[Global] {
-        self.globals.as_ref()
+    /// The imported globals that belong to the store, rather than a specific
+    /// instance
+    pub fn store_globals(&self) -> &[Global] {
+        self.store_globals.as_ref()
     }
 
-    /// The memories involve din the CoreDump
-    pub fn memories(&self) -> &[Memory] {
-        self.memories.as_ref()
+    /// The imported memories that belong to the store, rather than a specific
+    /// instance.
+    pub fn store_memories(&self) -> &[Memory] {
+        self.store_memories.as_ref()
     }
 }
 
@@ -95,12 +98,12 @@ impl fmt::Display for WasmCoreDump {
         }
 
         writeln!(f, "memories:")?;
-        for memory in self.memories.iter() {
+        for memory in self.store_memories.iter() {
             writeln!(f, "  {:?}", memory)?;
         }
 
         writeln!(f, "globals:")?;
-        for global in self.globals.iter() {
+        for global in self.store_globals.iter() {
             writeln!(f, "  {:?}", global)?;
         }
 
