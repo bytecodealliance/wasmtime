@@ -283,8 +283,3 @@ impl fmt::Display for WasmFault {
         )
     }
 }
-
-#[cfg(all(target_arch = "s390x", feature = "versioned-exports"))]
-compile_error!(
-    "Feature `versioned-exports` is not currently supported for the `s390x` architecture"
-);

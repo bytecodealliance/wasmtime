@@ -51,6 +51,7 @@ once_cell = { workspace = true }
 
 [build-dependencies]
 cc = "1.0"
+wasmtime-versioned-export-macros = { workspace = true }
 
 [features]
 async = ["wasmtime-fiber"]

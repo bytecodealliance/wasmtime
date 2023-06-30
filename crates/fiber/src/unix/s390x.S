@@ -10,11 +10,12 @@
 
 .text
 
-#define GLOBL(fnname) .globl fnname
-#define HIDDEN(fnname) .hidden fnname
-#define TYPE(fnname) .type fnname,@function
-#define FUNCTION(fnname) fnname
-#define SIZE(fnname) .size fnname,.-fnname
+#define VERSIONED_SYMBOL(a) a ## VERSIONED_SUFFIX
+#define GLOBL(fnname) .globl VERSIONED_SYMBOL(fnname)
+#define HIDDEN(fnname) .hidden VERSIONED_SYMBOL(fnname)
+#define TYPE(fnname) .type VERSIONED_SYMBOL(fnname),@function
+#define FUNCTION(fnname) VERSIONED_SYMBOL(fnname)
+#define SIZE(fnname) .size VERSIONED_SYMBOL(fnname),.-VERSIONED_SYMBOL(fnname)
 
 // fn(top_of_stack(%x0): *mut u8)
 HIDDEN(wasmtime_fiber_switch)

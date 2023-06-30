@@ -54,3 +54,19 @@ pub fn versioned_stringify_ident(item: proc_macro::TokenStream) -> proc_macro::T
         .to_token_stream()
         .into()
 }
+
+#[proc_macro]
+pub fn versioned_suffix(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    if !item.is_empty() {
+        return syn::Error::new(
+            proc_macro2::Span::call_site(),
+            "`versioned_suffix!` accepts no input",
+        )
+        .to_compile_error()
+        .into();
+    };
+
+    syn::LitStr::new(version("").as_str(), proc_macro2::Span::call_site())
+        .to_token_stream()
+        .into()
+}

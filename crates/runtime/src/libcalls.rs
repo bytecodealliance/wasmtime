@@ -110,7 +110,6 @@ pub mod trampolines {
                 // the `sym` operator to get the symbol here, but other targets
                 // like s390x need to use outlined assembly files which requires
                 // `no_mangle`.
-                #[cfg_attr(target_arch = "s390x", no_mangle)]
                 #[cfg_attr(target_arch = "s390x", wasmtime_versioned_export_macros::versioned_export)]
                 unsafe extern "C" fn [<impl_ $name>](
                     vmctx: *mut VMContext,

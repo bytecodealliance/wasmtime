@@ -9,11 +9,11 @@ edition.workspace = true
 
 [dependencies]
 cfg-if = { workspace = true }
-wasmtime-versioned-export-macros = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
 rustix = { workspace = true, features = ["mm", "param"] }
 wasmtime-asm-macros = { workspace = true }
+wasmtime-versioned-export-macros = { workspace = true }
 
 [target.'cfg(windows)'.dependencies.windows-sys]
 workspace = true
@@ -24,6 +24,7 @@ features = [
 
 [build-dependencies]
 cc = "1.0"
+wasmtime-versioned-export-macros = { workspace = true }
 
 [dev-dependencies]
 backtrace = "0.3.61"
