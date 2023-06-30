@@ -15,7 +15,7 @@ fn test_cache_init() {
 
     let mut value = String::new();
     serde::Serialize::serialize(&cache_dir, toml::ser::ValueSerializer::new(&mut value)).unwrap();
-    
+
     let config_content = format!(
         "[cache]\n\
          enabled = true\n\

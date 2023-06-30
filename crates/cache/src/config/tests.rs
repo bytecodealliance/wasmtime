@@ -20,11 +20,9 @@ macro_rules! load_config {
     ($config_path:ident, $content_fmt:expr, $cache_dir:ident) => {{
         let config_path = &$config_path;
         let mut cache_dir = String::new();
-        serde::Serialize::serialize(&$cache_dir, toml::ser::ValueSerializer::new(&mut cache_dir)).unwrap();
-        let content = format!(
-            $content_fmt,
-            cache_dir = cache_dir
-        );
+        serde::Serialize::serialize(&$cache_dir, toml::ser::ValueSerializer::new(&mut cache_dir))
+            .unwrap();
+        let content = format!($content_fmt, cache_dir = cache_dir);
         fs::write(config_path, content).expect("Failed to write test config file");
         CacheConfig::from_file(Some(config_path)).unwrap()
     }};
@@ -34,11 +32,9 @@ macro_rules! bad_config {
     ($config_path:ident, $content_fmt:expr, $cache_dir:ident) => {{
         let config_path = &$config_path;
         let mut cache_dir = String::new();
-        serde::Serialize::serialize(&$cache_dir, toml::ser::ValueSerializer::new(&mut cache_dir)).unwrap();
-        let content = format!(
-            $content_fmt,
-            cache_dir = cache_dir
-        );
+        serde::Serialize::serialize(&$cache_dir, toml::ser::ValueSerializer::new(&mut cache_dir))
+            .unwrap();
+        let content = format!($content_fmt, cache_dir = cache_dir);
         fs::write(config_path, content).expect("Failed to write test config file");
         assert!(CacheConfig::from_file(Some(config_path)).is_err());
     }};
