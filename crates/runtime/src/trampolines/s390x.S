@@ -12,11 +12,11 @@
 #define VERSIONED_SYMBOL(a) a ## VERSIONED_SUFFIX
 
 #define LIBCALL_TRAMPOLINE(libcall, libcall_impl)                                 \
-        .hidden VERSIONED_SYMBOL(libcall) ;                                                         \
-        .globl VERSIONED_SYMBOL(libcall) ;                                                          \
-        .type VERSIONED_SYMBOL(libcall),@function ;                                                 \
+        .hidden VERSIONED_SYMBOL(libcall) ;                                       \
+        .globl VERSIONED_SYMBOL(libcall) ;                                        \
+        .type VERSIONED_SYMBOL(libcall),@function ;                               \
         .p2align 2 ;                                                              \
-VERSIONED_SYMBOL(libcall): ;                                                                        \
+VERSIONED_SYMBOL(libcall): ;                                                      \
         .cfi_startproc ;                                                          \
                                                                                   \
         /* Load the pointer to `VMRuntimeLimits` in `%r1`.  */                    \
@@ -30,7 +30,7 @@ VERSIONED_SYMBOL(libcall): ;                                                    
         stg %r14, 32(%r1) ;                                                       \
                                                                                   \
         /* Tail call to the actual implementation of this libcall.  */            \
-        jg VERSIONED_SYMBOL(libcall_impl) ;                                                         \
+        jg VERSIONED_SYMBOL(libcall_impl) ;                                       \
                                                                                   \
         .cfi_endproc ;                                                            \
         .size VERSIONED_SYMBOL(libcall),.-VERSIONED_SYMBOL(libcall)
