@@ -1,8 +1,7 @@
 /// Helper macro to iterate over all builtin functions and their signatures.
 #[macro_export]
 macro_rules! foreach_builtin_function {
-    ($mac:ident, exported = $exported:literal) => {
-        #[wasmtime_versioned_export_macros::versioned_foreach_builtin_function($exported)]
+    ($mac:ident) => {
         $mac! {
             /// Returns an index for wasm's `memory.grow` builtin function.
             memory32_grow(vmctx: vmctx, delta: i64, index: i32) -> pointer;
@@ -125,4 +124,4 @@ macro_rules! declare_indexes {
     }
 }
 
-foreach_builtin_function!(declare_indexes, exported = false);
+foreach_builtin_function!(declare_indexes);

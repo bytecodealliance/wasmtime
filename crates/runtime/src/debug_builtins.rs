@@ -3,12 +3,11 @@
 use crate::instance::Instance;
 use crate::vmcontext::VMContext;
 use wasmtime_environ::{EntityRef, MemoryIndex};
-use wasmtime_versioned_export_macros::{versioned_fn, versioned_ident};
+use wasmtime_versioned_export_macros::versioned_export;
 
 static mut VMCTX_AND_MEMORY: (*mut VMContext, usize) = (std::ptr::null_mut(), 0);
 
-#[versioned_fn]
-#[no_mangle]
+#[versioned_export]
 pub unsafe extern "C" fn resolve_vmctx_memory(ptr: usize) -> *const u8 {
     Instance::from_vmctx(VMCTX_AND_MEMORY.0, |handle| {
         assert!(
@@ -21,8 +20,7 @@ pub unsafe extern "C" fn resolve_vmctx_memory(ptr: usize) -> *const u8 {
     })
 }
 
-#[versioned_fn]
-#[no_mangle]
+#[versioned_export]
 pub unsafe extern "C" fn resolve_vmctx_memory_ptr(p: *const u32) -> *const u8 {
     let ptr = std::ptr::read(p);
     assert!(
@@ -40,8 +38,7 @@ pub unsafe extern "C" fn resolve_vmctx_memory_ptr(p: *const u32) -> *const u8 {
     })
 }
 
-#[versioned_fn]
-#[no_mangle]
+#[versioned_export]
 pub unsafe extern "C" fn set_vmctx_memory(vmctx_ptr: *mut VMContext) {
     // TODO multi-memory
     VMCTX_AND_MEMORY = (vmctx_ptr, 0);
@@ -55,8 +52,8 @@ pub fn ensure_exported() {
         return;
     }
     unsafe {
-        std::ptr::read_volatile(versioned_ident!(resolve_vmctx_memory_ptr) as *const u8);
-        std::ptr::read_volatile(versioned_ident!(set_vmctx_memory) as *const u8);
-        std::ptr::read_volatile(versioned_ident!(resolve_vmctx_memory) as *const u8);
+        std::ptr::read_volatile(resolve_vmctx_memory_ptr as *const u8);
+        std::ptr::read_volatile(set_vmctx_memory as *const u8);
+        std::ptr::read_volatile(resolve_vmctx_memory as *const u8);
     }
 }

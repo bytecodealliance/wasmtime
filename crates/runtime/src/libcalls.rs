@@ -65,7 +65,6 @@ use std::time::{Duration, Instant};
 use wasmtime_environ::{
     DataIndex, ElemIndex, FuncIndex, GlobalIndex, MemoryIndex, TableIndex, Trap,
 };
-use wasmtime_versioned_export_macros::{versioned_fn, versioned_use};
 
 /// Actually public trampolines which are used by the runtime as the entrypoint
 /// for libcalls.
@@ -92,6 +91,7 @@ pub mod trampolines {
                 extern "C" {
                     #[allow(missing_docs)]
                     #[allow(improper_ctypes)]
+                    #[wasmtime_versioned_export_macros::versioned_link]
                     pub fn $name(
                         vmctx: *mut VMContext,
                         $( $pname: libcall!(@ty $param), )*
@@ -111,6 +111,7 @@ pub mod trampolines {
                 // like s390x need to use outlined assembly files which requires
                 // `no_mangle`.
                 #[cfg_attr(target_arch = "s390x", no_mangle)]
+                #[wasmtime_versioned_export_macros::versioned_export]
                 unsafe extern "C" fn [<impl_ $name>](
                     vmctx: *mut VMContext,
                     $( $pname : libcall!(@ty $param), )*
@@ -146,7 +147,7 @@ pub mod trampolines {
         (@ty vmctx) => (*mut VMContext);
     }
 
-    wasmtime_environ::foreach_builtin_function!(libcall, exported = true);
+    wasmtime_environ::foreach_builtin_function!(libcall);
 
     // Helper trait to convert results of libcalls below into the ABI of what
     // the libcall expects.
@@ -184,7 +185,7 @@ pub mod trampolines {
     }
 }
 
-#[versioned_fn]
+#[wasmtime_versioned_export_macros::versioned_export]
 fn memory32_grow(
     instance: &mut Instance,
     delta: u64,
@@ -205,7 +206,7 @@ fn memory32_grow(
 }
 
 // Implementation of `table.grow`.
-#[versioned_fn]
+#[wasmtime_versioned_export_macros::versioned_export(aliases = [table_grow_func_ref, table_grow_externref])]
 unsafe fn table_grow(
     instance: &mut Instance,
     table_index: u32,
@@ -232,15 +233,8 @@ unsafe fn table_grow(
     })
 }
 
-versioned_use!(
-    use table_grow as table_grow_func_ref;
-);
-versioned_use!(
-    use table_grow as table_grow_externref;
-);
-
 // Implementation of `table.fill`.
-#[versioned_fn]
+#[wasmtime_versioned_export_macros::versioned_export(aliases = [table_fill_func_ref, table_fill_externref])]
 unsafe fn table_fill(
     instance: &mut Instance,
     table_index: u32,
@@ -268,15 +262,8 @@ unsafe fn table_fill(
     }
 }
 
-versioned_use!(
-    use table_fill as table_fill_func_ref;
-);
-versioned_use!(
-    use table_fill as table_fill_externref;
-);
-
 // Implementation of `table.copy`.
-#[versioned_fn]
+#[wasmtime_versioned_export_macros::versioned_export]
 unsafe fn table_copy(
     instance: &mut Instance,
     dst_table_index: u32,
@@ -295,7 +282,7 @@ unsafe fn table_copy(
 }
 
 // Implementation of `table.init`.
-#[versioned_fn]
+#[wasmtime_versioned_export_macros::versioned_export]
 fn table_init(
     instance: &mut Instance,
     table_index: u32,
@@ -310,14 +297,14 @@ fn table_init(
 }
 
 // Implementation of `elem.drop`.
-#[versioned_fn]
+#[wasmtime_versioned_export_macros::versioned_export]
 fn elem_drop(instance: &mut Instance, elem_index: u32) {
     let elem_index = ElemIndex::from_u32(elem_index);
     instance.elem_drop(elem_index)
 }
 
 // Implementation of `memory.copy`.
-#[versioned_fn]
+#[wasmtime_versioned_export_macros::versioned_export]
 fn memory_copy(
     instance: &mut Instance,
     dst_index: u32,
@@ -332,7 +319,7 @@ fn memory_copy(
 }
 
 // Implementation of `memory.fill` for locally defined memories.
-#[versioned_fn]
+#[wasmtime_versioned_export_macros::versioned_export]
 fn memory_fill(
     instance: &mut Instance,
     memory_index: u32,
@@ -345,7 +332,7 @@ fn memory_fill(
 }
 
 // Implementation of `memory.init`.
-#[versioned_fn]
+#[wasmtime_versioned_export_macros::versioned_export]
 fn memory_init(
     instance: &mut Instance,
     memory_index: u32,
@@ -360,7 +347,7 @@ fn memory_init(
 }
 
 // Implementation of `ref.func`.
-#[versioned_fn]
+#[wasmtime_versioned_export_macros::versioned_export]
 fn ref_func(instance: &mut Instance, func_index: u32) -> *mut u8 {
     instance
         .get_func_ref(FuncIndex::from_u32(func_index))
@@ -369,14 +356,14 @@ fn ref_func(instance: &mut Instance, func_index: u32) -> *mut u8 {
 }
 
 // Implementation of `data.drop`.
-#[versioned_fn]
+#[wasmtime_versioned_export_macros::versioned_export]
 fn data_drop(instance: &mut Instance, data_index: u32) {
     let data_index = DataIndex::from_u32(data_index);
     instance.data_drop(data_index)
 }
 
 // Returns a table entry after lazily initializing it.
-#[versioned_fn]
+#[wasmtime_versioned_export_macros::versioned_export]
 unsafe fn table_get_lazy_init_func_ref(
     instance: &mut Instance,
     table_index: u32,
@@ -392,7 +379,7 @@ unsafe fn table_get_lazy_init_func_ref(
 }
 
 // Drop a `VMExternRef`.
-#[versioned_fn]
+#[wasmtime_versioned_export_macros::versioned_export]
 unsafe fn drop_externref(_instance: &mut Instance, externref: *mut u8) {
     let externref = externref as *mut crate::externref::VMExternData;
     let externref = NonNull::new(externref).unwrap().into();
@@ -401,7 +388,7 @@ unsafe fn drop_externref(_instance: &mut Instance, externref: *mut u8) {
 
 // Do a GC and insert the given `externref` into the
 // `VMExternRefActivationsTable`.
-#[versioned_fn]
+#[wasmtime_versioned_export_macros::versioned_export]
 unsafe fn activations_table_insert_with_gc(instance: &mut Instance, externref: *mut u8) {
     let externref = VMExternRef::clone_from_raw(externref);
     let limits = *instance.runtime_limits();
@@ -420,7 +407,7 @@ unsafe fn activations_table_insert_with_gc(instance: &mut Instance, externref: *
 }
 
 // Perform a Wasm `global.get` for `externref` globals.
-#[versioned_fn]
+#[wasmtime_versioned_export_macros::versioned_export]
 unsafe fn externref_global_get(instance: &mut Instance, index: u32) -> *mut u8 {
     let index = GlobalIndex::from_u32(index);
     let limits = *instance.runtime_limits();
@@ -438,7 +425,7 @@ unsafe fn externref_global_get(instance: &mut Instance, index: u32) -> *mut u8 {
 }
 
 // Perform a Wasm `global.set` for `externref` globals.
-#[versioned_fn]
+#[wasmtime_versioned_export_macros::versioned_export]
 unsafe fn externref_global_set(instance: &mut Instance, index: u32, externref: *mut u8) {
     let externref = if externref.is_null() {
         None
@@ -458,7 +445,7 @@ unsafe fn externref_global_set(instance: &mut Instance, index: u32, externref: *
 }
 
 // Implementation of `memory.atomic.notify` for locally defined memories.
-#[versioned_fn]
+#[wasmtime_versioned_export_macros::versioned_export]
 fn memory_atomic_notify(
     instance: &mut Instance,
     memory_index: u32,
@@ -472,7 +459,7 @@ fn memory_atomic_notify(
 }
 
 // Implementation of `memory.atomic.wait32` for locally defined memories.
-#[versioned_fn]
+#[wasmtime_versioned_export_macros::versioned_export]
 fn memory_atomic_wait32(
     instance: &mut Instance,
     memory_index: u32,
@@ -489,7 +476,7 @@ fn memory_atomic_wait32(
 }
 
 // Implementation of `memory.atomic.wait64` for locally defined memories.
-#[versioned_fn]
+#[wasmtime_versioned_export_macros::versioned_export]
 fn memory_atomic_wait64(
     instance: &mut Instance,
     memory_index: u32,
@@ -506,13 +493,13 @@ fn memory_atomic_wait64(
 }
 
 // Hook for when an instance runs out of fuel.
-#[versioned_fn]
+#[wasmtime_versioned_export_macros::versioned_export]
 unsafe fn out_of_gas(instance: &mut Instance) -> Result<()> {
     (*instance.store()).out_of_gas()
 }
 
 // Hook for when an instance observes that the epoch has changed.
-#[versioned_fn]
+#[wasmtime_versioned_export_macros::versioned_export]
 unsafe fn new_epoch(instance: &mut Instance) -> Result<u64> {
     (*instance.store()).new_epoch()
 }

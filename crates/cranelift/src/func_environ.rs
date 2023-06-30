@@ -102,7 +102,7 @@ macro_rules! declare_function_signatures {
     };
 }
 
-wasmtime_environ::foreach_builtin_function!(declare_function_signatures, exported = false);
+wasmtime_environ::foreach_builtin_function!(declare_function_signatures);
 
 /// The `FuncEnvironment` implementation for use by the `ModuleEnvironment`.
 pub struct FuncEnvironment<'module_environment> {
