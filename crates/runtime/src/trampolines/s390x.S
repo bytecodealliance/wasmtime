@@ -9,7 +9,9 @@
         .type host_to_wasm_trampoline,@function
         .p2align 2
 
-#define VERSIONED_SYMBOL(a) a ## VERSIONED_SUFFIX
+#define CONCAT2(a, b) a ## b
+#define CONCAT(a, b) CONCAT2(a , b)
+#define VERSIONED_SYMBOL(a) CONCAT(a, VERSIONED_SUFFIX)
 
 #define LIBCALL_TRAMPOLINE(libcall, libcall_impl)                                 \
         .hidden VERSIONED_SYMBOL(libcall) ;                                       \

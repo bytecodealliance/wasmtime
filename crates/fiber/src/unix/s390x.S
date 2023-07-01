@@ -10,7 +10,9 @@
 
 .text
 
-#define VERSIONED_SYMBOL(a) a ## VERSIONED_SUFFIX
+#define CONCAT2(a, b) a ## b
+#define CONCAT(a, b) CONCAT2(a , b)
+#define VERSIONED_SYMBOL(a) CONCAT(a, VERSIONED_SUFFIX)
 #define GLOBL(fnname) .globl VERSIONED_SYMBOL(fnname)
 #define HIDDEN(fnname) .hidden VERSIONED_SYMBOL(fnname)
 #define TYPE(fnname) .type VERSIONED_SYMBOL(fnname),@function
