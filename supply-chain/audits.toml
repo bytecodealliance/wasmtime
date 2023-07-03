@@ -1607,6 +1607,15 @@ who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
 delta = "1.0.51 -> 1.0.57"
 
+[[audits.proc-macro2]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "1.0.59 -> 1.0.63"
+notes = """
+This is a routine update for new nightly features and new syntax popping up on
+nightly, nothing out of the ordinary.
+"""
+
 [[audits.pulldown-cmark]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
