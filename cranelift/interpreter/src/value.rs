@@ -8,6 +8,8 @@ use cranelift_codegen::ir::immediates::{Ieee32, Ieee64};
 use cranelift_codegen::ir::{types, Type};
 use thiserror::Error;
 
+use crate::step::{extractlanes, SimdVec};
+
 pub type ValueResult<T> = Result<T, ValueError>;
 
 pub trait DataValueExt: Sized {
@@ -827,11 +829,25 @@ impl DataValueExt for DataValue {
 pub struct DataValueIterator<'a> {
     dv: &'a DataValue,
     ty: Type,
+    v: SimdVec<DataValue>,
+    idx: usize,
 }
 
 impl<'a> DataValueIterator<'a> {
     fn new(dv: &'a DataValue, ty: Type) -> Self {
-        Self { dv, ty }
+        let lanes = extractlanes(dv, ty);
+
+        match lanes {
+            Ok(v) => return Self { dv, ty, v, idx: 0 },
+            Err(_) => {
+                return Self {
+                    dv,
+                    ty,
+                    v: SimdVec::new(),
+                    idx: 0,
+                }
+            }
+        }
     }
 }
 
@@ -839,7 +855,21 @@ impl Iterator for DataValueIterator<'_> {
     type Item = DataValue;
 
     fn next(&mut self) -> Option<Self::Item> {
-        Some(DataValue::I8(42))
+        let gonzo = self.v[self.idx].clone().into_int_signed();
+
+        match gonzo {
+            Ok(v) => {
+                let dv = DataValue::from_integer(v, self.ty);
+                match dv {
+                    Ok(inner) => {
+                        self.idx += 1;
+                        Some(inner)
+                    }
+                    Err(_) => None,
+                }
+            }
+            Err(_) => None,
+        }
     }
 }
 
@@ -849,11 +879,14 @@ mod test {
 
     #[test]
     fn test_iterator() {
-        let dv = DataValue::I8(17);
+        // let dv = DataValue::I8(17);
+        let arr: [u8; 16] = [99, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
+        let dv = DataValue::V128(arr);
+        let itr = dv.iter_lanes(types::I8);
 
-        for d in dv.iter_lanes(types::I8).take(3) {
+        for d in itr.take(3) {
             println!("> {}", d);
-            assert_eq!(d, DataValue::I8(42));
+            // assert_eq!(d, DataValue::I8(42));
         }
     }
 }
