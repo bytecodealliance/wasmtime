@@ -89,6 +89,9 @@ pub trait DataValueExt: Sized {
     fn trailing_zeros(self) -> ValueResult<Self>;
     fn reverse_bits(self) -> ValueResult<Self>;
     fn swap_bytes(self) -> ValueResult<Self>;
+
+    // iteraor
+    fn iter_lanes(&self, ty: Type) -> DataValueIterator;
 }
 
 #[derive(Error, Debug, PartialEq)]
@@ -813,5 +816,44 @@ impl DataValueExt for DataValue {
 
     fn swap_bytes(self) -> ValueResult<Self> {
         unary_match!(swap_bytes(&self); [I16, I32, I64, I128])
+    }
+
+    fn iter_lanes(&self, ty: Type) -> DataValueIterator {
+        DataValueIterator::new(self, ty)
+    }
+}
+
+/// Iterator for DataValue's
+pub struct DataValueIterator<'a> {
+    dv: &'a DataValue,
+    ty: Type,
+}
+
+impl<'a> DataValueIterator<'a> {
+    fn new(dv: &'a DataValue, ty: Type) -> Self {
+        Self { dv, ty }
+    }
+}
+
+impl Iterator for DataValueIterator<'_> {
+    type Item = DataValue;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        Some(DataValue::I8(42))
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_iterator() {
+        let dv = DataValue::I8(17);
+
+        for d in dv.iter_lanes(types::I8).take(3) {
+            println!("> {}", d);
+            assert_eq!(d, DataValue::I8(42));
+        }
     }
 }
