@@ -19,11 +19,6 @@ fn run_wast(wast: &str, strategy: Strategy, pooling: bool) -> anyhow::Result<()>
 
     let wast_bytes = std::fs::read(wast).with_context(|| format!("failed to read `{}`", wast))?;
 
-    match strategy {
-        Strategy::Cranelift => {}
-        _ => unimplemented!(),
-    }
-
     let wast = Path::new(wast);
 
     let memory64 = feature_found(wast, "memory64");
@@ -40,6 +35,11 @@ fn run_wast(wast: &str, strategy: Strategy, pooling: bool) -> anyhow::Result<()>
         return Ok(());
     }
 
+    let is_cranelift = match strategy {
+        Strategy::Cranelift => true,
+        _ => false,
+    };
+
     let mut cfg = Config::new();
     cfg.wasm_multi_memory(multi_memory)
         .wasm_threads(threads)
@@ -47,11 +47,15 @@ fn run_wast(wast: &str, strategy: Strategy, pooling: bool) -> anyhow::Result<()>
         .wasm_function_references(function_references)
         .wasm_reference_types(reference_types)
         .wasm_relaxed_simd(relaxed_simd)
-        .cranelift_debug_verifier(true);
+        .strategy(strategy);
+
+    if is_cranelift {
+        cfg.cranelift_debug_verifier(true);
+    }
 
     cfg.wasm_component_model(feature_found(wast, "component-model"));
 
-    if feature_found(wast, "canonicalize-nan") {
+    if feature_found(wast, "canonicalize-nan") && is_cranelift {
         cfg.cranelift_nan_canonicalization(true);
     }
     let test_allocates_lots_of_memory = wast.ends_with("more-than-4gb.wast");
