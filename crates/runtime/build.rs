@@ -8,10 +8,10 @@ fn main() {
     let os = env::var("CARGO_CFG_TARGET_OS").unwrap();
     build.define(&format!("CFG_TARGET_OS_{}", os), None);
     build.define(&format!("CFG_TARGET_ARCH_{}", arch), None);
+    build.define("VERSIONED_SUFFIX", Some(versioned_suffix!()));
     if arch == "s390x" {
         println!("cargo:rerun-if-changed=src/trampolines/s390x.S");
         build.file("src/trampolines/s390x.S");
-        build.define("VERSIONED_SUFFIX", Some(versioned_suffix!()));
     }
     println!("cargo:rerun-if-changed=src/helpers.c");
     build.file("src/helpers.c");

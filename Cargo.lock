@@ -4176,6 +4176,7 @@ dependencies = [
  "object",
  "once_cell",
  "rustix",
+ "wasmtime-versioned-export-macros",
 ]
 
 [[package]]
