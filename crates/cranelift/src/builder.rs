@@ -22,8 +22,8 @@ pub struct Builder {
     clif_dir: Option<path::PathBuf>,
 }
 
-impl From<IsaBuilder> for Builder {
-    fn from(inner: IsaBuilder) -> Self {
+impl From<IsaBuilder<CodegenResult<OwnedTargetIsa>>> for Builder {
+    fn from(inner: IsaBuilder<CodegenResult<OwnedTargetIsa>>) -> Self {
         Self {
             inner,
             linkopts: LinkOptions::default(),
@@ -37,6 +37,7 @@ impl Builder {
     /// Set the link options for the compiler.
     pub fn linkopts(&mut self, linkopts: LinkOptions) -> &mut Self {
         self.linkopts = linkopts;
+        self
     }
 
     /// Set the cache store for the compiler.
