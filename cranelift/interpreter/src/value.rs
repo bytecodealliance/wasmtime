@@ -855,19 +855,10 @@ impl Iterator for DataValueIterator {
             return None;
         }
 
-        match self.v[self.idx].clone().into_int_signed() {
-            Ok(v) => {
-                let dv = DataValue::from_integer(v, self.ty.lane_type());
-                match dv {
-                    Ok(inner) => {
-                        self.idx += 1;
-                        Some(inner)
-                    }
-                    Err(_) => None,
-                }
-            }
-            Err(_) => None,
-        }
+        let integer = self.v[self.idx].clone().into_int_signed().ok()?;
+        let dv = DataValue::from_integer(integer, self.ty.lane_type()).ok()?;
+        self.idx += 1;
+        Some(dv)
     }
 }
 
@@ -876,21 +867,49 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_iterator() {
-        let arr: [u8; 16] = [99, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
-        let dv = DataValue::V128(arr);
-        let itr = dv.iter_lanes(types::I8X16);
+    fn test_iterator_v128() {
+        let dv = DataValue::V128([99, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]);
+        assert_eq!(simd_sum(dv, types::I8X16), 219);
+    }
 
-        let result: i128 = itr
-            .map(|e| {
-                if let Some(v) = e.into_int_signed().ok() {
-                    v
-                } else {
-                    0
-                }
-            })
-            .sum();
+    #[test]
+    fn test_iterator_v128_empty() {
+        let dv = DataValue::V128([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+        assert_eq!(simd_sum(dv, types::I8X16), 0);
+    }
 
-        assert_eq!(result, 219);
+    #[test]
+    fn test_iterator_v128_ones() {
+        let dv = DataValue::V128([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]);
+        assert_eq!(simd_sum(dv, types::I8X16), 16);
+    }
+
+    #[test]
+    fn test_iterator_v64_empty() {
+        let dv = DataValue::V64([0, 0, 0, 0, 0, 0, 0, 0]);
+        assert_eq!(simd_sum(dv, types::I8X8), 0);
+    }
+    #[test]
+    fn test_iterator_v64_ones() {
+        let dv = DataValue::V64([1, 1, 1, 1, 1, 1, 1, 1]);
+        assert_eq!(simd_sum(dv, types::I8X8), 8);
+    }
+    #[test]
+    fn test_iterator_v64() {
+        let dv = DataValue::V64([10, 20, 30, 40, 50, 60, 70, 80]);
+        assert_eq!(simd_sum(dv, types::I8X8), 360);
+    }
+
+    fn simd_sum(dv: DataValue, ty: types::Type) -> i128 {
+        let itr = dv.iter_lanes(ty);
+
+        itr.map(|e| {
+            if let Some(v) = e.into_int_signed().ok() {
+                v
+            } else {
+                0
+            }
+        })
+        .sum()
     }
 }
