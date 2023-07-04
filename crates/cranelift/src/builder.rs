@@ -14,11 +14,42 @@ use std::sync::Arc;
 use wasmtime_cranelift_shared::isa_builder::IsaBuilder;
 use wasmtime_environ::{CacheStore, CompilerBuilder, Setting};
 
-struct Builder {
+/// A builder object for a Cranelift-based `Compiler`.
+pub struct Builder {
     inner: IsaBuilder<CodegenResult<OwnedTargetIsa>>,
     linkopts: LinkOptions,
     cache_store: Option<Arc<dyn CacheStore>>,
     clif_dir: Option<path::PathBuf>,
+}
+
+impl From<IsaBuilder> for Builder {
+    fn from(inner: IsaBuilder) -> Self {
+        Self {
+            inner,
+            linkopts: LinkOptions::default(),
+            cache_store: None,
+            clif_dir: None,
+        }
+    }
+}
+
+impl Builder {
+    /// Set the link options for the compiler.
+    pub fn linkopts(&mut self, linkopts: LinkOptions) -> &mut Self {
+        self.linkopts = linkopts;
+    }
+
+    /// Set the cache store for the compiler.
+    pub fn cache_store(&mut self, cache_store: Arc<dyn CacheStore>) -> &mut Self {
+        self.cache_store = Some(cache_store);
+        self
+    }
+
+    /// Set the directory where the compiler will emit clif files.
+    pub fn clif_dir(&mut self, path: &path::Path) -> &mut Self {
+        self.clif_dir = Some(path.to_path_buf());
+        self
+    }
 }
 
 #[derive(Clone, Default)]

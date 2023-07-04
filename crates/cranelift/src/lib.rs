@@ -10,7 +10,7 @@ use cranelift_wasm::{DefinedFuncIndex, WasmFuncType, WasmType};
 use target_lexicon::CallingConvention;
 use wasmtime_cranelift_shared::CompiledFunctionMetadata;
 
-pub use builder::builder;
+pub use builder::{builder, Builder, LinkOptions};
 
 mod builder;
 mod compiler;
