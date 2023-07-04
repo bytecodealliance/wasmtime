@@ -881,8 +881,16 @@ mod test {
         let dv = DataValue::V128(arr);
         let itr = dv.iter_lanes(types::I8X16);
 
-        for d in itr {
-            println!("> {}", d);
-        }
+        let result: i128 = itr
+            .map(|e| {
+                if let Some(v) = e.into_int_signed().ok() {
+                    v
+                } else {
+                    0
+                }
+            })
+            .sum();
+
+        assert_eq!(result, 219);
     }
 }
