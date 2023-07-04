@@ -1,3 +1,4 @@
+use super::ControlStackFrame;
 use crate::{
     abi::ABIResult,
     frame::Frame,
@@ -246,16 +247,23 @@ impl<'a> CodeGenContext<'a> {
         self.stack.inner_mut().truncate(truncate);
     }
 
-    /// Reset value and stack pointer to the given length
-    /// and stack pointer offset respectively.
-    pub fn reset_stack<M: MacroAssembler>(
+    /// Pops the stack pointer to ensure that it is correctly placed according
+    /// to the expectations of the destination branch.
+    ///
+    /// This function must be used when performing unconditional jumps, as the
+    /// machine stack might be left unbalanced at the jump site (e.g. due to
+    /// register spills).
+    pub fn pop_sp_for_branch<M: MacroAssembler>(
         &mut self,
+        destination: &ControlStackFrame,
         masm: &mut M,
-        stack_len: usize,
-        sp_offset: u32,
     ) {
-        masm.reset_stack_pointer(sp_offset);
-        self.drop_last(self.stack.len() - stack_len);
+        let (_, original_sp_offset) = destination.original_stack_len_and_sp_offset();
+        let current_sp_offset = masm.sp_offset();
+
+        if current_sp_offset > original_sp_offset {
+            masm.free_stack(current_sp_offset - original_sp_offset);
+        }
     }
 
     /// Convenience wrapper around [`Self::spill_callback`].

@@ -111,9 +111,13 @@ where
                     // entry, the if-else branch will be reachable.
                     self.context.reachable = true;
                     // Reset the stack to the original length and offset.
-                    self.context
-                        .reset_stack(self.masm, *original_stack_len, *original_sp_offset);
-                    frame.bind_else(self.masm, None, self.context.reachable);
+                    Self::reset_stack(
+                        &mut self.context,
+                        self.masm,
+                        *original_stack_len,
+                        *original_sp_offset,
+                    );
+                    frame.bind_else(self.masm, self.context.reachable);
                 }
             }
             _ => unreachable!(),
@@ -129,8 +133,7 @@ where
 
             let (value_stack_len, sp_offset) = frame.original_stack_len_and_sp_offset();
             // Reset the stack to the original length and offset.
-            self.context
-                .reset_stack(self.masm, value_stack_len, sp_offset);
+            Self::reset_stack(&mut self.context, self.masm, value_stack_len, sp_offset);
             // If the current frame is the outermost frame, which corresponds to the
             // current function's body, only bind the exit label as we don't need to
             // push any more values to the value stack, else perform the entire `bind_end`
@@ -141,6 +144,14 @@ where
                 frame.bind_end(self.masm, &mut self.context);
             }
         }
+    }
+
+    /// Helper function to reset value and stack pointer to the given length and stack pointer
+    /// offset respectively. This function is only used when restoring the code generation's
+    /// reachabiliy state when handling an unreachable `end` or `else`.
+    fn reset_stack(context: &mut CodeGenContext, masm: &mut M, stack_len: usize, sp_offset: u32) {
+        masm.reset_stack_pointer(sp_offset);
+        context.drop_last(context.stack.len() - stack_len);
     }
 
     fn emit_body(
