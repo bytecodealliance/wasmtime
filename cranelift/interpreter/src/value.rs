@@ -826,22 +826,18 @@ impl DataValueExt for DataValue {
 }
 
 /// Iterator for DataValue's
-pub struct DataValueIterator<'a> {
-    dv: &'a DataValue,
+pub struct DataValueIterator {
     ty: Type,
     v: SimdVec<DataValue>,
     idx: usize,
 }
 
-impl<'a> DataValueIterator<'a> {
-    fn new(dv: &'a DataValue, ty: Type) -> Self {
-        let lanes = extractlanes(dv, ty);
-
-        match lanes {
-            Ok(v) => return Self { dv, ty, v, idx: 0 },
+impl DataValueIterator {
+    fn new(dv: &DataValue, ty: Type) -> Self {
+        match extractlanes(dv, ty) {
+            Ok(v) => return Self { ty, v, idx: 0 },
             Err(_) => {
                 return Self {
-                    dv,
                     ty,
                     v: SimdVec::new(),
                     idx: 0,
@@ -851,15 +847,17 @@ impl<'a> DataValueIterator<'a> {
     }
 }
 
-impl Iterator for DataValueIterator<'_> {
+impl Iterator for DataValueIterator {
     type Item = DataValue;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let gonzo = self.v[self.idx].clone().into_int_signed();
+        if self.idx >= self.ty.lane_count() as usize {
+            return None;
+        }
 
-        match gonzo {
+        match self.v[self.idx].clone().into_int_signed() {
             Ok(v) => {
-                let dv = DataValue::from_integer(v, self.ty);
+                let dv = DataValue::from_integer(v, self.ty.lane_type());
                 match dv {
                     Ok(inner) => {
                         self.idx += 1;
@@ -879,14 +877,12 @@ mod test {
 
     #[test]
     fn test_iterator() {
-        // let dv = DataValue::I8(17);
         let arr: [u8; 16] = [99, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
         let dv = DataValue::V128(arr);
-        let itr = dv.iter_lanes(types::I8);
+        let itr = dv.iter_lanes(types::I8X16);
 
-        for d in itr.take(3) {
+        for d in itr {
             println!("> {}", d);
-            // assert_eq!(d, DataValue::I8(42));
         }
     }
 }
