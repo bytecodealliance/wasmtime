@@ -714,8 +714,6 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                 (Opcode::Iabs, &[I128]),
                 // TODO
                 (Opcode::Bitselect, &[I128, I128, I128]),
-                // TODO
-                (Opcode::Bswap),
                 // https://github.com/bytecodealliance/wasmtime/issues/5528
                 (
                     Opcode::FcvtToUint | Opcode::FcvtToSint,
