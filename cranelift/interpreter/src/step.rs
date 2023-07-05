@@ -1040,12 +1040,21 @@ where
             let any = fold_vector(arg(0), ctrl_ty, init.clone(), |acc, lane| acc.or(lane))?;
             assign(DataValue::bool(any != init, false, types::I8)?)
         }
-        Opcode::VallTrue => {
-            let lane_ty = ctrl_ty.lane_type();
-            let init = DataValue::bool(true, true, lane_ty)?;
-            let all = fold_vector(arg(0), ctrl_ty, init.clone(), |acc, lane| acc.and(lane))?;
-            assign(DataValue::bool(all == init, false, types::I8)?)
-        }
+        Opcode::VallTrue => assign(DataValue::bool(
+            !(arg(0).iter_lanes(ctrl_ty).any(|lane| {
+                if let Ok(v) = lane.is_zero() {
+                    if v {
+                        true
+                    } else {
+                        false
+                    }
+                } else {
+                    true // TODO: is this the right decision?
+                }
+            })),
+            false,
+            types::I8,
+        )?),
         Opcode::SwidenLow | Opcode::SwidenHigh | Opcode::UwidenLow | Opcode::UwidenHigh => {
             let new_type = ctrl_ty.merge_lanes().unwrap();
             let conv_type = match inst.opcode() {
