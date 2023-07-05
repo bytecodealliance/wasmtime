@@ -404,7 +404,21 @@ impl<'a> Inliner<'a> {
             //
             // TODO: update comment
             Import(name, ty) => {
-                let arg = &frame.args[name.as_str()];
+                let arg = match frame.args.get(name.as_str()) {
+                    Some(arg) => arg,
+                    None => {
+                        match ty {
+                            ComponentEntityType::Type { created, .. } => {
+                                match frame.translation.types_ref().type_from_id(*created) {
+                                    Some(wasmparser::types::Type::Resource(_)) => unreachable!(),
+                                    _ => {}
+                                }
+                            }
+                            _ => unreachable!(),
+                        }
+                        return Ok(None);
+                    }
+                };
                 let mut path = Vec::new();
 
                 let (resources, types) = types.resources_mut_and_types();
