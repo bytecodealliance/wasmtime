@@ -10,6 +10,10 @@ fn version(value: impl std::fmt::Display) -> String {
     format!("{}_{}", value, VERSION.replace('.', "_"))
 }
 
+fn versioned_lit_str(value: impl std::fmt::Display) -> syn::LitStr {
+    syn::LitStr::new(version(value).as_str(), proc_macro2::Span::call_site())
+}
+
 #[proc_macro_attribute]
 pub fn versioned_export(
     _attr: proc_macro::TokenStream,
@@ -17,10 +21,7 @@ pub fn versioned_export(
 ) -> proc_macro::TokenStream {
     let mut function = syn::parse_macro_input!(item as syn::ItemFn);
 
-    let export_name = syn::LitStr::new(
-        version(&function.sig.ident).as_str(),
-        proc_macro2::Span::call_site(),
-    );
+    let export_name = versioned_lit_str(&function.sig.ident);
     function
         .attrs
         .push(syn::parse_quote! { #[export_name = #export_name] });
@@ -35,10 +36,7 @@ pub fn versioned_link(
 ) -> proc_macro::TokenStream {
     let mut function = syn::parse_macro_input!(item as syn::ForeignItemFn);
 
-    let link_name = syn::LitStr::new(
-        version(&function.sig.ident).as_str(),
-        proc_macro2::Span::call_site(),
-    );
+    let link_name = versioned_lit_str(&function.sig.ident);
     function
         .attrs
         .push(syn::parse_quote! { #[link_name = #link_name] });
@@ -50,9 +48,7 @@ pub fn versioned_link(
 pub fn versioned_stringify_ident(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let ident = syn::parse_macro_input!(item as syn::Ident);
 
-    syn::LitStr::new(version(ident).as_str(), proc_macro2::Span::call_site())
-        .to_token_stream()
-        .into()
+    versioned_lit_str(ident).to_token_stream().into()
 }
 
 #[proc_macro]
@@ -66,7 +62,5 @@ pub fn versioned_suffix(item: proc_macro::TokenStream) -> proc_macro::TokenStrea
         .into();
     };
 
-    syn::LitStr::new(version("").as_str(), proc_macro2::Span::call_site())
-        .to_token_stream()
-        .into()
+    versioned_lit_str("").to_token_stream().into()
 }
