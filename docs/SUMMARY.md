@@ -38,6 +38,7 @@
 - [Using the `wasmtime` CLI](./cli.md)
   - [Installation](./cli-install.md)
   - [CLI Options](./cli-options.md)
+  - [CLI Logging](./cli-logging.md)
   - [Cache Configuration](./cli-cache.md)
 - [Writing WebAssembly](./wasm.md)
   - [Rust](./wasm-rust.md)
