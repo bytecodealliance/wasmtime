@@ -86,19 +86,12 @@ jobs:
     needs: determine
     if: needs.determine.outputs.audit
     runs-on: ubuntu-latest
-    env:
-      CARGO_VET_VERSION: 0.8.0
     steps:
     - uses: actions/checkout@v3
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
-    - uses: actions/cache@v3
-      with:
-        path: ${{ runner.tool_cache }}/cargo-vet
-        key: cargo-vet-bin-${{ env.CARGO_VET_VERSION }}
-    - run: echo "${{ runner.tool_cache }}/cargo-vet/bin" >> $GITHUB_PATH
-    - run: cargo install --root ${{ runner.tool_cache }}/cargo-vet --version ${{ env.CARGO_VET_VERSION }} cargo-vet
+    - uses: ./.github/actions/install-cargo-vet
     - run: cargo vet --locked
 
     # common logic to cancel the entire run if this job fails
