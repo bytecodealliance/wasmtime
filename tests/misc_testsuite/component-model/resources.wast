@@ -661,3 +661,139 @@
   (func (export "f") (canon lift (core func $i "f")))
 )
 (assert_trap (invoke "f") "unknown handle index")
+
+;; Test behavior of running a destructor for local resources
+(component
+  (core module $m1
+    (global $drops (mut i32) i32.const 0)
+    (global $last_drop (mut i32) i32.const -1)
+
+    (func (export "dtor") (param i32)
+      (global.set $drops (i32.add (global.get $drops) (i32.const 1)))
+      (global.set $last_drop (local.get 0))
+    )
+    (func (export "drops") (result i32) global.get $drops)
+    (func (export "last-drop") (result i32) global.get $last_drop)
+  )
+  (core instance $i1 (instantiate $m1))
+
+  (type $r1 (resource (rep i32)))
+  (type $r2 (resource (rep i32) (dtor (func $i1 "dtor"))))
+
+  (core func $drop1 (canon resource.drop (own $r1)))
+  (core func $drop2 (canon resource.drop (own $r2)))
+  (core func $new1 (canon resource.new $r1))
+  (core func $new2 (canon resource.new $r2))
+
+  (core module $m2
+    (import "" "drop1" (func $drop1 (param i32)))
+    (import "" "drop2" (func $drop2 (param i32)))
+    (import "" "new1" (func $new1 (param i32) (result i32)))
+    (import "" "new2" (func $new2 (param i32) (result i32)))
+    (import "i1" "drops" (func $drops (result i32)))
+    (import "i1" "last-drop" (func $last-drop (result i32)))
+
+    (func $start
+      (local $r1 i32)
+      (local $r2 i32)
+
+      (local.set $r1 (call $new1 (i32.const 100)))
+      (local.set $r2 (call $new2 (i32.const 200)))
+
+      ;; both should be index 0
+      (if (i32.ne (local.get $r1) (i32.const 0)) (unreachable))
+      (if (i32.ne (local.get $r2) (i32.const 0)) (unreachable))
+
+      ;; nothing should be dropped yet
+      (if (i32.ne (call $drops) (i32.const 0)) (unreachable))
+      (if (i32.ne (call $last-drop) (i32.const -1)) (unreachable))
+
+      ;; dropping a resource without a destructor is ok, but shouldn't tamper
+      ;; with anything.
+      (call $drop1 (local.get $r1))
+      (if (i32.ne (call $drops) (i32.const 0)) (unreachable))
+      (if (i32.ne (call $last-drop) (i32.const -1)) (unreachable))
+
+      ;; drop r2 which should record a drop and additionally record the private
+      ;; representation value which was dropped
+      (call $drop2 (local.get $r2))
+      (if (i32.ne (call $drops) (i32.const 1)) (unreachable))
+      (if (i32.ne (call $last-drop) (i32.const 200)) (unreachable))
+
+      ;; do it all over again
+      (local.set $r2 (call $new2 (i32.const 300)))
+      (call $drop2 (local.get $r2))
+      (if (i32.ne (call $drops) (i32.const 2)) (unreachable))
+      (if (i32.ne (call $last-drop) (i32.const 300)) (unreachable))
+    )
+
+    (start $start)
+  )
+
+  (core instance $i2 (instantiate $m2
+    (with "" (instance
+      (export "drop1" (func $drop1))
+      (export "drop2" (func $drop2))
+      (export "new1" (func $new1))
+      (export "new2" (func $new2))
+    ))
+    (with "i1" (instance $i1))
+  ))
+)
+
+;; Test dropping a host resource
+(component
+  (import "host" (instance $host
+    (export $r "resource1" (type (sub resource)))
+    (export "[constructor]resource1" (func (param "r" u32) (result (own $r))))
+    (export "[static]resource1.last-drop" (func (result u32)))
+    (export "[static]resource1.drops" (func (result u32)))
+  ))
+
+  (alias export $host "resource1" (type $r))
+  (alias export $host "[constructor]resource1" (func $ctor))
+  (alias export $host "[static]resource1.last-drop" (func $last-drop))
+  (alias export $host "[static]resource1.drops" (func $drops))
+
+  (core func $drop (canon resource.drop (own $r)))
+  (core func $ctor (canon lower (func $ctor)))
+  (core func $last-drop (canon lower (func $last-drop)))
+  (core func $drops (canon lower (func $drops)))
+
+  (core module $m
+    (import "" "drop" (func $drop (param i32)))
+    (import "" "ctor" (func $ctor (param i32) (result i32)))
+    (import "" "last-drop" (func $last-drop (result i32)))
+    (import "" "drops" (func $raw-drops (result i32)))
+
+    (global $init-drop-cnt (mut i32) i32.const 0)
+
+    (func $drops (result i32)
+      (i32.sub (call $raw-drops) (global.get $init-drop-cnt))
+    )
+
+    (func $start
+      (local $r1 i32)
+      (global.set $init-drop-cnt (call $raw-drops))
+
+      (local.set $r1 (call $ctor (i32.const 100)))
+
+      ;; should be no drops yet
+      (if (i32.ne (call $drops) (i32.const 0)) (unreachable))
+
+      ;; should count a drop
+      (call $drop (local.get $r1))
+      (if (i32.ne (call $drops) (i32.const 1)) (unreachable))
+    )
+
+    (start $start)
+  )
+  (core instance (instantiate $m
+    (with "" (instance
+      (export "drop" (func $drop))
+      (export "ctor" (func $ctor))
+      (export "last-drop" (func $last-drop))
+      (export "drops" (func $drops))
+    ))
+  ))
+)

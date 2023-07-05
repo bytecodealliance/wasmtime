@@ -57,6 +57,8 @@ pub fn link_spectest<T>(
 
 #[cfg(feature = "component-model")]
 pub fn link_component_spectest<T>(linker: &mut component::Linker<T>) -> Result<()> {
+    use std::sync::atomic::{AtomicU32, Ordering::SeqCst};
+    use std::sync::Arc;
     use wasmtime::component::Resource;
 
     let engine = linker.engine().clone();
@@ -82,11 +84,27 @@ pub fn link_component_spectest<T>(linker: &mut component::Linker<T>) -> Result<(
     struct Resource1;
     struct Resource2;
 
+    #[derive(Default)]
+    struct ResourceState {
+        drops: AtomicU32,
+        last_drop: AtomicU32,
+    }
+
+    let state = Arc::new(ResourceState::default());
+
     // TODO: this is specifying two different destructors for `Resource1`, that
     // seems bad.
-    i.resource::<Resource1>("resource1", |_, _| {})?;
+    i.resource::<Resource1>("resource1", {
+        let state = state.clone();
+        move |_, rep| {
+            state.drops.fetch_add(1, SeqCst);
+            state.last_drop.store(rep, SeqCst);
+        }
+    })?;
     i.resource::<Resource2>("resource2", |_, _| {})?;
-    i.resource::<Resource1>("resource1-again", |_, _| {})?;
+    i.resource::<Resource1>("resource1-again", |_, _| {
+        panic!("TODO: shouldn't have to specify dtor twice");
+    })?;
 
     i.func_wrap("[constructor]resource1", |_, (rep,): (u32,)| {
         Ok((Resource::<Resource1>::new(rep),))
@@ -98,5 +116,13 @@ pub fn link_component_spectest<T>(linker: &mut component::Linker<T>) -> Result<(
             Ok(())
         },
     )?;
+    i.func_wrap("[static]resource1.last-drop", {
+        let state = state.clone();
+        move |_, (): ()| Ok((state.last_drop.load(SeqCst),))
+    })?;
+    i.func_wrap("[static]resource1.drops", {
+        let state = state.clone();
+        move |_, (): ()| Ok((state.drops.load(SeqCst),))
+    })?;
     Ok(())
 }

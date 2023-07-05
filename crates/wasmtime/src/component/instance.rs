@@ -276,18 +276,20 @@ impl<'a> Instantiator<'a> {
 
     fn run<T>(&mut self, store: &mut StoreContextMut<'_, T>) -> Result<()> {
         let env_component = self.component.env_component();
-        let imported_resources = self
-            .data
-            .state
-            .imported_resources_mut()
-            .downcast_mut::<ImportedResources>()
-            .unwrap();
         for (idx, import) in env_component.imported_resources.iter() {
+            let imported_resources = self
+                .data
+                .state
+                .imported_resources_mut()
+                .downcast_mut::<ImportedResources>()
+                .unwrap();
             let i = imported_resources.push(match &self.imports[*import] {
                 RuntimeImport::Resource(ty, _dtor) => *ty,
                 _ => unreachable!(),
             });
             assert_eq!(i, idx);
+            // TODO: this should be `Some`
+            self.data.state.set_resource_destructor(idx, None);
         }
         for initializer in env_component.initializers.iter() {
             match initializer {
