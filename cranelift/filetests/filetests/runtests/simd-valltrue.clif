@@ -51,3 +51,4 @@ block0(v0: i64x2):
 ; run: %vall_true_i64x2([0 0]) == 0
 ; run: %vall_true_i64x2([-1 0]) == 0
 ; run: %vall_true_i64x2([-1 -1]) == 1
+; run: %vall_true_i64x2([0xffffffff_00000000 -1]) == 1
