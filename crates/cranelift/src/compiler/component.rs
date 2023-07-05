@@ -357,88 +357,98 @@ impl Compiler {
         let call = builder.ins().call_indirect(host_sig, host_fn, &host_args);
         let should_run_destructor = builder.func.dfg.inst_results(call)[0];
 
-        // Synthesize the following:
-        //
-        //      ...
-        //      brif should_run_destructor, run_destructor_block, return_block
-        //
-        //    run_destructor_block:
-        //      rep = ushr.i64 rep, 1
-        //      rep = ireduce.i32 rep
-        //      dtor = load.ptr vmctx+$offset
-        //      brif dtor call_func_ref_block, return_block
-        //
-        //    call_func_ref_block:
-        //      func_addr = load.ptr dtor+$offset
-        //      callee_vmctx = load.ptr dtor+$offset
-        //      call_indirect func_addr, callee_vmctx, vmctx, rep
-        //      jump return_block
-        //
-        //    return_block:
-        //      return
-        //
-        // This will decode `should_run_destructor` and run the destructor
-        // funcref if one is specified for this resource. Note that not all
-        // resources have destructors, hence the null check.
-        builder.ensure_inserted_block();
-        let current_block = builder.current_block().unwrap();
-        let run_destructor_block = builder.create_block();
-        builder.insert_block_after(run_destructor_block, current_block);
-        let call_func_ref_block = builder.create_block();
-        builder.insert_block_after(call_func_ref_block, run_destructor_block);
-        let return_block = builder.create_block();
-        builder.insert_block_after(return_block, call_func_ref_block);
+        let resource_ty = types[resource.resource].ty;
+        let has_destructor = match component.defined_resource_index(resource_ty) {
+            Some(idx) => component.initializers.iter().any(|i| match i {
+                GlobalInitializer::Resource(r) => r.index == idx && r.dtor.is_some(),
+                _ => false,
+            }),
+            None => true,
+        };
+        if has_destructor {
+            // Synthesize the following:
+            //
+            //      ...
+            //      brif should_run_destructor, run_destructor_block, return_block
+            //
+            //    run_destructor_block:
+            //      rep = ushr.i64 rep, 1
+            //      rep = ireduce.i32 rep
+            //      dtor = load.ptr vmctx+$offset
+            //      func_addr = load.ptr dtor+$offset
+            //      callee_vmctx = load.ptr dtor+$offset
+            //      call_indirect func_addr, callee_vmctx, vmctx, rep
+            //      jump return_block
+            //
+            //    return_block:
+            //      return
+            //
+            // This will decode `should_run_destructor` and run the destructor
+            // funcref if one is specified for this resource. Note that not all
+            // resources have destructors, hence the null check.
+            builder.ensure_inserted_block();
+            let current_block = builder.current_block().unwrap();
+            let run_destructor_block = builder.create_block();
+            builder.insert_block_after(run_destructor_block, current_block);
+            let return_block = builder.create_block();
+            builder.insert_block_after(return_block, run_destructor_block);
 
-        builder.ins().brif(
-            should_run_destructor,
-            run_destructor_block,
-            &[],
-            return_block,
-            &[],
-        );
+            builder.ins().brif(
+                should_run_destructor,
+                run_destructor_block,
+                &[],
+                return_block,
+                &[],
+            );
 
-        let trusted = ir::MemFlags::trusted().with_readonly();
+            let trusted = ir::MemFlags::trusted().with_readonly();
 
-        builder.switch_to_block(run_destructor_block);
-        let rep = builder.ins().ushr_imm(should_run_destructor, 1);
-        let rep = builder.ins().ireduce(ir::types::I32, rep);
-        let index = types[resource.resource].ty;
-        let dtor_func_ref = builder.ins().load(
-            pointer_type,
-            trusted,
-            vmctx,
-            i32::try_from(offsets.resource_destructor(index)).unwrap(),
-        );
-        builder
-            .ins()
-            .brif(dtor_func_ref, call_func_ref_block, &[], return_block, &[]);
-        builder.seal_block(run_destructor_block);
+            builder.switch_to_block(run_destructor_block);
+            let rep = builder.ins().ushr_imm(should_run_destructor, 1);
+            let rep = builder.ins().ireduce(ir::types::I32, rep);
+            let index = types[resource.resource].ty;
+            // NB: despite the vmcontext storing nullable funcrefs for function
+            // pointers we know this is statically never null due to the
+            // `has_destructor` check above.
+            let dtor_func_ref = builder.ins().load(
+                pointer_type,
+                trusted,
+                vmctx,
+                i32::try_from(offsets.resource_destructor(index)).unwrap(),
+            );
+            let func_addr = builder.ins().load(
+                pointer_type,
+                trusted,
+                dtor_func_ref,
+                i32::from(offsets.ptr.vm_func_ref_wasm_call()),
+            );
+            let callee_vmctx = builder.ins().load(
+                pointer_type,
+                trusted,
+                dtor_func_ref,
+                i32::from(offsets.ptr.vm_func_ref_vmctx()),
+            );
+            let sig = crate::wasm_call_signature(isa, &types[resource.signature]);
+            let sig_ref = builder.import_signature(sig);
+            // NB: note that the "caller" vmctx here is the caller of this
+            // intrinsic itself, not the `VMComponentContext`. This effectively
+            // takes ourselves out of the chain here but that's ok since the
+            // caller is only used for store/limits and that same info is
+            // stored, but elsewhere, in the component context.
+            builder
+                .ins()
+                .call_indirect(sig_ref, func_addr, &[callee_vmctx, caller_vmctx, rep]);
+            builder.ins().jump(return_block, &[]);
+            builder.seal_block(run_destructor_block);
 
-        builder.switch_to_block(call_func_ref_block);
-        let func_addr = builder.ins().load(
-            pointer_type,
-            trusted,
-            dtor_func_ref,
-            i32::from(offsets.ptr.vm_func_ref_wasm_call()),
-        );
-        let callee_vmctx = builder.ins().load(
-            pointer_type,
-            trusted,
-            dtor_func_ref,
-            i32::from(offsets.ptr.vm_func_ref_vmctx()),
-        );
-        let sig = crate::wasm_call_signature(isa, &types[resource.signature]);
-        let sig_ref = builder.import_signature(sig);
-        // NB: note that the "caller" vmctx here is the ... TODO fill this out
-        builder
-            .ins()
-            .call_indirect(sig_ref, func_addr, &[callee_vmctx, caller_vmctx, rep]);
-        builder.ins().jump(return_block, &[]);
-        builder.seal_block(call_func_ref_block);
-
-        builder.switch_to_block(return_block);
-        builder.ins().return_(&[]);
-        builder.seal_block(return_block);
+            builder.switch_to_block(return_block);
+            builder.ins().return_(&[]);
+            builder.seal_block(return_block);
+        } else {
+            // If this resource has no destructor, then after the table is
+            // updated there's nothing to do, so we can return.
+            builder.ins().return_(&[]);
+        }
 
         builder.finalize();
         Ok(Box::new(compiler.finish()?))
