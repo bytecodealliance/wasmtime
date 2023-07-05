@@ -76,7 +76,6 @@
 //! contents of `StoreOpaque`. This is an invariant that we, as the authors of
 //! `wasmtime`, must uphold for the public interface to be safe.
 
-use crate::instance::PrePatchedFuncRef;
 use crate::linker::Definition;
 use crate::module::BareModuleInfo;
 use crate::trampoline::VMHostGlobalContext;
@@ -97,7 +96,7 @@ use std::task::{Context, Poll};
 use wasmtime_runtime::{
     InstanceAllocationRequest, InstanceAllocator, InstanceHandle, ModuleInfo,
     OnDemandInstanceAllocator, SignalHandler, StoreBox, StorePtr, VMContext, VMExternRef,
-    VMExternRefActivationsTable, VMRuntimeLimits, WasmFault,
+    VMExternRefActivationsTable, VMFuncRef, VMRuntimeLimits, WasmFault,
 };
 
 mod context;
@@ -1215,7 +1214,7 @@ impl StoreOpaque {
         self.func_refs.fill(&mut self.modules);
     }
 
-    pub(crate) fn push_instance_pre_func_refs(&mut self, func_refs: Arc<[PrePatchedFuncRef]>) {
+    pub(crate) fn push_instance_pre_func_refs(&mut self, func_refs: Arc<[VMFuncRef]>) {
         self.func_refs.push_instance_pre_func_refs(func_refs);
     }
 

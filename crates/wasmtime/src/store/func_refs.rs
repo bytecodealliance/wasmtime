@@ -1,4 +1,4 @@
-use crate::{instance::PrePatchedFuncRef, module::ModuleRegistry};
+use crate::module::ModuleRegistry;
 use std::{ptr::NonNull, sync::Arc};
 use wasmtime_runtime::{SendSyncPtr, VMFuncRef, VMNativeCallHostFuncContext};
 
@@ -20,7 +20,7 @@ pub struct FuncRefs {
     /// Pinned `VMFuncRef`s that had their `wasm_call` field
     /// pre-patched when constructing an `InstancePre`, and which we need to
     /// keep alive for our owning store's lifetime.
-    instance_pre_func_refs: Vec<Arc<[PrePatchedFuncRef]>>,
+    instance_pre_func_refs: Vec<Arc<[VMFuncRef]>>,
 }
 
 use send_sync_bump::SendSyncBump;
@@ -79,7 +79,7 @@ impl FuncRefs {
     }
 
     /// Push pre-patched `VMFuncRef`s from an `InstancePre`.
-    pub fn push_instance_pre_func_refs(&mut self, func_refs: Arc<[PrePatchedFuncRef]>) {
+    pub fn push_instance_pre_func_refs(&mut self, func_refs: Arc<[VMFuncRef]>) {
         self.instance_pre_func_refs.push(func_refs);
     }
 }
