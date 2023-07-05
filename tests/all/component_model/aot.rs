@@ -98,3 +98,24 @@ fn cannot_serialize_exported_module() -> Result<()> {
     assert!(module.serialize().is_err());
     Ok(())
 }
+
+#[test]
+fn usable_exported_modules() -> Result<()> {
+    let engine = super::engine();
+    let component = Component::new(
+        &engine,
+        r#"(component
+            (core module $m)
+            (core module $m1 (export "a")
+                (import "" "" (func (param i32)))
+            )
+        )"#,
+    )?;
+    let mut store = Store::new(&engine, ());
+    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
+    let module = instance.get_module(&mut store, "a").unwrap();
+    let mut core_linker = wasmtime::Linker::new(&engine);
+    core_linker.func_wrap("", "", |_: u32| {})?;
+    core_linker.instantiate(&mut store, &module)?;
+    Ok(())
+}
