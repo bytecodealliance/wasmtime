@@ -969,7 +969,7 @@ version = "1.0.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.v8]]
-version = "0.44.3"
+version = "0.74.1"
 criteria = "safe-to-run"
 
 [[exemptions.wait-timeout]]
