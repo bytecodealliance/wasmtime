@@ -140,10 +140,6 @@ pub struct Component {
     /// instantiate this component.
     pub num_lowerings: u32,
 
-    /// The number of modules that are required to be saved within an instance
-    /// at runtime, or effectively the number of exported modules.
-    pub num_runtime_modules: u32,
-
     /// The number of functions which "always trap" used to implement
     /// `canon.lower` of `canon.lift`'d functions within the same component.
     pub num_always_trap: u32,
@@ -220,13 +216,6 @@ pub enum GlobalInitializer {
     /// Same as `ExtractMemory`, except it's extracting a function pointer to be
     /// used as a `post-return` function.
     ExtractPostReturn(ExtractPostReturn),
-
-    /// The `module` specified is saved into the runtime state at the next
-    /// `RuntimeModuleIndex`, referred to later by `Export` definitions.
-    SaveStaticModule(StaticModuleIndex),
-
-    /// Same as `SaveModuleUpvar`, but for imports.
-    SaveModuleImport(RuntimeImportIndex),
 
     /// Similar to `ExtractMemory` and friends and indicates that a `VMFuncRef`
     /// needs to be initialized for a transcoder function and this will later be
@@ -434,10 +423,9 @@ pub enum Export {
         options: CanonicalOptions,
     },
     /// A module defined within this component is exported.
-    ///
-    /// The module index here indexes a module recorded with
-    /// `GlobalInitializer::SaveModule` above.
-    Module(RuntimeModuleIndex),
+    ModuleStatic(StaticModuleIndex),
+    /// A module imported into this component is exported.
+    ModuleImport(RuntimeImportIndex),
     /// A nested instance is being exported which has recursively defined
     /// `Export` items.
     Instance(IndexMap<String, Export>),

@@ -173,10 +173,6 @@ indices! {
     /// Same as `RuntimeMemoryIndex` except for the `post-return` function.
     pub struct RuntimePostReturnIndex(u32);
 
-    /// Index that represents an exported module from a component since that's
-    /// currently the only use for saving the entire module state at runtime.
-    pub struct RuntimeModuleIndex(u32);
-
     /// Index into the list of transcoders identified during compilation.
     ///
     /// This is used to index the `VMFuncRef` slots reserved for string encoders

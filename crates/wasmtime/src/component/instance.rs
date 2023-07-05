@@ -11,7 +11,7 @@ use std::sync::Arc;
 use wasmtime_environ::component::{
     AlwaysTrap, ComponentTypes, CoreDef, CoreExport, Export, ExportItem, ExtractMemory,
     ExtractPostReturn, ExtractRealloc, GlobalInitializer, InstantiateModule, LowerImport,
-    RuntimeImportIndex, RuntimeInstanceIndex, RuntimeModuleIndex, Transcoder,
+    RuntimeImportIndex, RuntimeInstanceIndex, Transcoder,
 };
 use wasmtime_environ::{EntityIndex, EntityType, Global, PrimaryMap, WasmType};
 use wasmtime_runtime::component::{ComponentInstance, OwnedComponentInstance};
@@ -30,20 +30,35 @@ pub struct Instance(pub(crate) Stored<Option<Box<InstanceData>>>);
 
 pub(crate) struct InstanceData {
     instances: PrimaryMap<RuntimeInstanceIndex, crate::Instance>,
-    // FIXME: shouldn't store the entire component here which keeps upvars
-    // alive and things like that, instead only the bare minimum necessary
-    // should be kept alive here (mostly just `wasmtime_environ::Component`).
+
+    // NB: in the future if necessary it would be possible to avoid storing an
+    // entire `Component` here and instead storing only information such as:
+    //
+    // * Some reference to `Arc<ComponentTypes>`
+    // * Necessary references to closed-over modules which are exported from the
+    //   component itself.
+    //
+    // Otherwise the full guts of this component should only ever be used during
+    // the instantiation of this instance, meaning that after instantiation much
+    // of the component can be thrown away (theoretically).
     component: Component,
-    exported_modules: PrimaryMap<RuntimeModuleIndex, Module>,
 
     state: OwnedComponentInstance,
 
-    /// Functions that this instance used during instantiation.
+    /// Arguments that this instance used to be instantiated.
     ///
-    /// Strong references are stored to these functions since pointers are saved
-    /// into the functions within the `OwnedComponentInstance` but it's our job
-    /// to keep them alive.
-    funcs: Vec<Arc<HostFunc>>,
+    /// Strong references are stored to these arguments since pointers are saved
+    /// into the structures such as functions within the
+    /// `OwnedComponentInstance` but it's our job to keep them alive.
+    ///
+    /// One purpose of this storage is to enable embedders to drop a `Linker`,
+    /// for example, after a component is instantiated. In that situation if the
+    /// arguments weren't held here then they might be dropped, and structures
+    /// such as `.lowering()` which point back into the original function would
+    /// become stale and use-after-free conditions when used. By preserving the
+    /// entire list here though we're guaranteed that nothing is lost for the
+    /// duration of the lifetime of this instance.
+    imports: Arc<PrimaryMap<RuntimeImportIndex, RuntimeImport>>,
 }
 
 impl Instance {
@@ -205,7 +220,7 @@ impl<'a> Instantiator<'a> {
     fn new(
         component: &'a Component,
         store: &mut StoreOpaque,
-        imports: &'a PrimaryMap<RuntimeImportIndex, RuntimeImport>,
+        imports: &'a Arc<PrimaryMap<RuntimeImportIndex, RuntimeImport>>,
     ) -> Instantiator<'a> {
         let env_component = component.env_component();
         store.modules_mut().register_component(component);
@@ -216,11 +231,8 @@ impl<'a> Instantiator<'a> {
             data: InstanceData {
                 instances: PrimaryMap::with_capacity(env_component.num_runtime_instances as usize),
                 component: component.clone(),
-                exported_modules: PrimaryMap::with_capacity(
-                    env_component.num_runtime_modules as usize,
-                ),
                 state: OwnedComponentInstance::new(component.runtime_info(), store.traitobj()),
-                funcs: Vec::new(),
+                imports: imports.clone(),
             },
         }
     }
@@ -288,19 +300,6 @@ impl<'a> Instantiator<'a> {
                     self.extract_post_return(store.0, post_return)
                 }
 
-                GlobalInitializer::SaveStaticModule(idx) => {
-                    self.data
-                        .exported_modules
-                        .push(self.component.static_module(*idx).clone());
-                }
-
-                GlobalInitializer::SaveModuleImport(idx) => {
-                    self.data.exported_modules.push(match &self.imports[*idx] {
-                        RuntimeImport::Module(m) => m.clone(),
-                        _ => unreachable!(),
-                    });
-                }
-
                 GlobalInitializer::Transcoder(e) => self.transcoder(e),
             }
         }
@@ -330,15 +329,6 @@ impl<'a> Instantiator<'a> {
             array_call,
             type_index,
         );
-
-        // The `func` provided here must be retained within the `Store` itself
-        // after instantiation. Otherwise it might be possible to drop the
-        // `Arc<HostFunc>` and possibly result in a use-after-free. This comes
-        // about because the `.lowering()` method returns a structure that
-        // points to an interior pointer within the `func`. By saving the list
-        // of host functions used we can ensure that the function lives long
-        // enough for the whole duration of this instance.
-        self.data.funcs.push(func.clone());
     }
 
     fn always_trap(&mut self, trap: &AlwaysTrap) {
@@ -440,7 +430,7 @@ impl<'a> Instantiator<'a> {
     }
 
     fn assert_type_matches(
-        &mut self,
+        &self,
         store: &mut StoreOpaque,
         module: &Module,
         arg: &CoreDef,
@@ -485,7 +475,7 @@ impl<'a> Instantiator<'a> {
 /// method.
 pub struct InstancePre<T> {
     component: Component,
-    imports: PrimaryMap<RuntimeImportIndex, RuntimeImport>,
+    imports: Arc<PrimaryMap<RuntimeImportIndex, RuntimeImport>>,
     _marker: marker::PhantomData<fn() -> T>,
 }
 
@@ -513,7 +503,7 @@ impl<T> InstancePre<T> {
     ) -> InstancePre<T> {
         InstancePre {
             component,
-            imports,
+            imports: Arc::new(imports),
             _marker: marker::PhantomData,
         }
     }
@@ -649,7 +639,10 @@ impl<'a, 'store> ExportInstance<'a, 'store> {
                 func,
                 options,
             )),
-            Export::Module(_) | Export::Instance(_) | Export::Type(_) => None,
+            Export::ModuleStatic(_)
+            | Export::ModuleImport(_)
+            | Export::Instance(_)
+            | Export::Type(_) => None,
         }
     }
 
@@ -670,7 +663,11 @@ impl<'a, 'store> ExportInstance<'a, 'store> {
     /// Same as [`Instance::get_module`]
     pub fn module(&mut self, name: &str) -> Option<&'a Module> {
         match self.exports.get(name)? {
-            Export::Module(idx) => Some(&self.data.exported_modules[*idx]),
+            Export::ModuleStatic(idx) => Some(&self.data.component.static_module(*idx)),
+            Export::ModuleImport(idx) => Some(match &self.data.imports[*idx] {
+                RuntimeImport::Module(m) => m,
+                _ => unreachable!(),
+            }),
             _ => None,
         }
     }
@@ -688,12 +685,17 @@ impl<'a, 'store> ExportInstance<'a, 'store> {
     // For now this is just quick-and-dirty to get wast support for iterating
     // over exported modules to work.
     pub fn modules(&self) -> impl Iterator<Item = (&'a str, &'a Module)> + '_ {
-        self.exports
-            .iter()
-            .filter_map(|(name, export)| match *export {
-                Export::Module(idx) => Some((name.as_str(), &self.data.exported_modules[idx])),
-                _ => None,
-            })
+        self.exports.iter().filter_map(|(name, export)| {
+            let module = match *export {
+                Export::ModuleStatic(idx) => self.data.component.static_module(idx),
+                Export::ModuleImport(idx) => match &self.data.imports[idx] {
+                    RuntimeImport::Module(m) => m,
+                    _ => unreachable!(),
+                },
+                _ => return None,
+            };
+            Some((name.as_str(), module))
+        })
     }
 
     fn as_mut(&mut self) -> ExportInstance<'a, '_> {

@@ -258,9 +258,7 @@ impl<'a> CompileInputs<'a> {
                 wasmtime_environ::component::GlobalInitializer::InstantiateModule(_)
                 | wasmtime_environ::component::GlobalInitializer::ExtractMemory(_)
                 | wasmtime_environ::component::GlobalInitializer::ExtractRealloc(_)
-                | wasmtime_environ::component::GlobalInitializer::ExtractPostReturn(_)
-                | wasmtime_environ::component::GlobalInitializer::SaveStaticModule(_)
-                | wasmtime_environ::component::GlobalInitializer::SaveModuleImport(_) => {
+                | wasmtime_environ::component::GlobalInitializer::ExtractPostReturn(_) => {
                     // Nothing to compile for these.
                 }
             }
