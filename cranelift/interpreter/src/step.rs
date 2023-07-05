@@ -1042,8 +1042,7 @@ where
         }
         Opcode::VallTrue => assign(DataValue::bool(
             !(arg(0).iter_lanes(ctrl_ty).try_fold(false, |acc, lane| {
-                let v = lane.is_zero()?;
-                Ok::<bool, ValueError>(acc | v)
+                Ok::<bool, ValueError>(acc | lane.is_zero()?)
             })?),
             false,
             types::I8,
