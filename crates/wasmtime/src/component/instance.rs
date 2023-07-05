@@ -796,7 +796,8 @@ impl<'a, 'store> ExportInstance<'a, 'store> {
             }
             Export::Type(_)
             | Export::LiftedFunction { .. }
-            | Export::Module(_)
+            | Export::ModuleStatic(_)
+            | Export::ModuleImport(_)
             | Export::Instance(_) => None,
         }
     }
