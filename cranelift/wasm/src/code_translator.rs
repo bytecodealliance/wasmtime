@@ -696,7 +696,11 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
          * Wasm specifies an integer alignment flag but we drop it in Cranelift.
          * The memory base address is provided by the environment.
          ************************************************************************************/
-        Operator::I32Load8U { memarg } => {
+        
+         // there's quite a few different types loads loads; should each of them be individually
+         // wrapped in an if statement checking if the valgrind flag is on?
+         // If so, how would the Instance be accessed from here?
+         Operator::I32Load8U { memarg } => {
             unwrap_or_return_unreachable_state!(
                 state,
                 translate_load(memarg, ir::Opcode::Uload8, I32, builder, state, environ)?

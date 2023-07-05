@@ -650,27 +650,34 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         self.epoch_check(builder);
     }
 
-    // * is this the right place to define this hook? if so should it be
-    //   added to builtin.rs?
+    // * I'm not sure if it's correct to pass instance as an argument
+    //   here, as I've only seen Instance used in libcalls.rs; however,
+    //   I wasn't sure how else to access the Valgrind state
+    fn handle_after_entry(&mut self, instance: &mut Instance) {
+        if "the function is malloc" {
+            instance::valgrind_state::flag = true;
+        }
+    }
+
+    // * is self.vmctx already initialized by the time this function
+    //   is called? or does fn vmctx() need to be called?
     //
-    // * what is the type for retvals supposed to be? is there a generic
-    //   type that can be used?
-    //
-    // * if the valgrind libcalls are made right before returning, doesn't 
-    //   that mean that the metadata for the "real" memory is updated before
-    //   there's a check for whether that allocation/free is ok or not? or
-    //   is this a non-issue because of arena allocation?
-    fn handle_before_return(&mut self, retvals: &[value]) {
-        // strings are psuedocode
+    // * is it correct to use builder as an argument here?
+    fn handle_before_return(&mut self, retvals: &[value], instance: &mut Instance, builder: &mut FunctionBuilder) {
+        let block = builder.func.entry_block().unwrap();
+        let args = builder.func.dfg.block_params(block, 0);
+        // * I'm still not sure how to check if the functions are malloc/free? iirc from last week's
+        //   discussion there would have to be some pretty involved changes (something about bitcasting)?
         if "the function is malloc" {
             builder
                 .ins()
-                .call_indirect(check_malloc_exit, &[vmctx]); 
-                // * how to get vmctx from here?
-                //
-                // * is check_malloc_exit the right argument? I'm still a bit
-                //   confused as to how & why this works?
+                .call_indirect(check_malloc_exit, &[self.vmctx, retvals[0], args[0]])
+        } else if "the function is free" {
+            builder
+                .ins()
+                .call_indirect(check_free_exit, &[self.vmctx])
         }
+        instance::valgrind_state::flag = false;
     }
 
     fn check_malloc_exit(&mut self, builder: &mut FunctionBuilder) {
@@ -681,7 +688,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         );
         builder
             .ins()
-            .call_indirect(check_malloc_sig, check_malloc, &[vmctx, usize, usize]);
+            .call_indirect(check_malloc_sig, check_malloc, &[vmctx, pointer, usize]);
     }
 
     fn check_free_exit(&mut self, builder: &mut FunctionBuilder) {
@@ -692,7 +699,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         );
         builder
             .ins()
-            .call_indirect(check_free_sig, check_free, &[vmctx, usize]);
+            .call_indirect(check_free_sig, check_free, &[vmctx, pointer]);
     }
 
     fn epoch_ptr(&mut self, builder: &mut FunctionBuilder<'_>) -> ir::Value {

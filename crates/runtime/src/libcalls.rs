@@ -490,14 +490,16 @@ unsafe fn new_epoch(instance: &mut Instance) -> Result<u64> {
     (*instance.store()).new_epoch()
 }
 
-//
-unsafe fn check_malloc(instance: &mut Instance, addr: usine, len: usize) -> Result<(), AccessError> {
-	instance.valgrind_state::malloc(addr, len)
+// * is there a good way to cast a pointer to usize? or should the library be modified to take pointer
+//   arguments instead?
+unsafe fn check_malloc(instance: &mut Instance, addr: pointer, len: usize) -> Result<(), AccessError> {
+    let addr_usize;
+	instance::valgrind_state::malloc(addr_usize, len)
 }
 
-//
-unsafe fn check_free(instance: &mut Instance, addr: usize) -> Result<(), AccessError> {
-    instance.valgrind_state::free(addr)
+unsafe fn check_free(instance: &mut Instance, addr: pointer) -> Result<(), AccessError> {
+    let addr_usize;
+    instance::valgrind_state::free(addr_usize)
 }
 
 /// This module contains functions which are used for resolving relocations at

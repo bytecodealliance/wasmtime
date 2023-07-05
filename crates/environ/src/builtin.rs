@@ -52,10 +52,9 @@ macro_rules! foreach_builtin_function {
             /// Invoked when we reach a new epoch.
             new_epoch(vmctx: vmctx) -> i64;
             /// Memcheck invoked when malloc is called.
-            // should the datatype for "addr" be "pointer" instead?
-            check_malloc(vmctx: vmctx, addr: usize, len: usize) -> Result<(), AccessError>;
+            check_malloc(vmctx: vmctx, addr: pointer, len: usize) -> Result<(), AccessError>;
             /// Memcheck invoked when free is called.
-            check_free(vmctx: vmctx, addr: usize) -> -> Result<(), AccessError>;
+            check_free(vmctx: vmctx, addr: pointer) -> -> Result<(), AccessError>;
         }
     };
 }
