@@ -546,6 +546,9 @@ impl<'a> Inliner<'a> {
                     rep: *rep,
                     dtor: dtor.map(|i| frame.funcs[i].clone()),
                 });
+                self.result
+                    .side_effects
+                    .push(dfg::SideEffect::Resource(idx));
                 let idx = self.result.resource_index(idx);
                 types
                     .resources_mut()
@@ -610,6 +613,9 @@ impl<'a> Inliner<'a> {
                 };
 
                 let idx = self.result.instances.push(init);
+                self.result
+                    .side_effects
+                    .push(dfg::SideEffect::Instance(idx));
                 let idx2 = self.runtime_instances.push(instance_module);
                 assert_eq!(idx, idx2);
                 frame

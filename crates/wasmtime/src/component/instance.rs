@@ -239,10 +239,10 @@ struct Instantiator<'a> {
 }
 
 #[derive(Clone)]
-pub enum RuntimeImport {
+pub(crate) enum RuntimeImport {
     Func(Arc<HostFunc>),
     Module(Module),
-    Resource(ResourceType, Arc<dyn Fn(*mut u8, u32) + Send + Sync>),
+    Resource(ResourceType, Arc<crate::func::HostFunc>),
 }
 
 pub type ImportedResources = PrimaryMap<ResourceIndex, ResourceType>;
@@ -352,7 +352,7 @@ impl<'a> Instantiator<'a> {
 
                 GlobalInitializer::Transcoder(e) => self.transcoder(e),
 
-                GlobalInitializer::Resource(r) => self.resource(r),
+                GlobalInitializer::Resource(r) => self.resource(store.0, r),
                 GlobalInitializer::ResourceNew(r) => self.resource_new(r),
                 GlobalInitializer::ResourceRep(r) => self.resource_rep(r),
                 GlobalInitializer::ResourceDrop(r) => self.resource_drop(r),
@@ -438,8 +438,20 @@ impl<'a> Instantiator<'a> {
         )
     }
 
-    fn resource(&mut self, resource: &Resource) {
-        // TODO
+    fn resource(&mut self, store: &mut StoreOpaque, resource: &Resource) {
+        let dtor = resource
+            .dtor
+            .as_ref()
+            .map(|dtor| self.data.lookup_def(store, dtor));
+        let dtor = dtor.map(|export| match export {
+            wasmtime_runtime::Export::Function(f) => f.func_ref,
+            _ => unreachable!(),
+        });
+        let index = self
+            .component
+            .env_component()
+            .resource_index(resource.index);
+        self.data.state.set_resource_destructor(index, dtor);
     }
 
     fn resource_new(&mut self, resource: &ResourceNew) {

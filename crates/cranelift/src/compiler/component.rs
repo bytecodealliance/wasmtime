@@ -324,6 +324,7 @@ impl Compiler {
         types: &ComponentTypes,
         abi: Abi,
     ) -> Result<Box<dyn Any + Send>> {
+        let pointer_type = self.isa.pointer_type();
         let ty = &types[resource.signature];
         let isa = &*self.isa;
         let offsets = VMComponentOffsets::new(isa.pointer_bytes(), component);
@@ -353,8 +354,89 @@ impl Compiler {
         let (host_sig, offset) = host::resource_drop(self, &mut builder.func);
         let host_fn = self.load_libcall(&mut builder, &offsets, vmctx, offset);
         let call = builder.ins().call_indirect(host_sig, host_fn, &host_args);
-        builder.func.dfg.inst_results(call);
-        self.abi_store_results(&mut builder, ty, block0, &[], abi);
+        let should_run_destructor = builder.func.dfg.inst_results(call)[0];
+
+        // Synthesize the following:
+        //
+        //      ...
+        //      brif should_run_destructor, run_destructor_block, return_block
+        //
+        //    run_destructor_block:
+        //      rep = ushr.i64 rep, 1
+        //      rep = ireduce.i32 rep
+        //      dtor = load.ptr vmctx+$offset
+        //      brif dtor call_func_ref_block, return_block
+        //
+        //    call_func_ref_block:
+        //      func_addr = load.ptr dtor+$offset
+        //      callee_vmctx = load.ptr dtor+$offset
+        //      call_indirect func_addr, callee_vmctx, vmctx, rep
+        //      jump return_block
+        //
+        //    return_block:
+        //      return
+        //
+        // This will decode `should_run_destructor` and run the destructor
+        // funcref if one is specified for this resource. Note that not all
+        // resources have destructors, hence the null check.
+        builder.ensure_inserted_block();
+        let current_block = builder.current_block().unwrap();
+        let run_destructor_block = builder.create_block();
+        builder.insert_block_after(run_destructor_block, current_block);
+        let call_func_ref_block = builder.create_block();
+        builder.insert_block_after(call_func_ref_block, run_destructor_block);
+        let return_block = builder.create_block();
+        builder.insert_block_after(return_block, call_func_ref_block);
+
+        builder.ins().brif(
+            should_run_destructor,
+            run_destructor_block,
+            &[],
+            return_block,
+            &[],
+        );
+
+        let trusted = ir::MemFlags::trusted().with_readonly();
+
+        builder.switch_to_block(run_destructor_block);
+        let rep = builder.ins().ushr_imm(should_run_destructor, 1);
+        let rep = builder.ins().ireduce(ir::types::I32, rep);
+        let index = types[resource.resource].ty;
+        let dtor_func_ref = builder.ins().load(
+            pointer_type,
+            trusted,
+            vmctx,
+            i32::try_from(offsets.resource_destructor(index)).unwrap(),
+        );
+        builder
+            .ins()
+            .brif(dtor_func_ref, call_func_ref_block, &[], return_block, &[]);
+        builder.seal_block(run_destructor_block);
+
+        builder.switch_to_block(call_func_ref_block);
+        let func_addr = builder.ins().load(
+            pointer_type,
+            trusted,
+            dtor_func_ref,
+            i32::from(offsets.ptr.vm_func_ref_wasm_call()),
+        );
+        let callee_vmctx = builder.ins().load(
+            pointer_type,
+            trusted,
+            dtor_func_ref,
+            i32::from(offsets.ptr.vm_func_ref_vmctx()),
+        );
+        let sig = crate::wasm_call_signature(isa, &types[resource.signature]);
+        let sig_ref = builder.import_signature(sig);
+        builder
+            .ins()
+            .call_indirect(sig_ref, func_addr, &[callee_vmctx, vmctx, rep]);
+        builder.ins().jump(return_block, &[]);
+        builder.seal_block(call_func_ref_block);
+
+        builder.switch_to_block(return_block);
+        builder.ins().return_(&[]);
+        builder.seal_block(return_block);
 
         builder.finalize();
         Ok(Box::new(compiler.finish()?))
@@ -792,6 +874,7 @@ mod host {
 
         (@push_return $ptr:ident $params:ident $returns:ident size) => ($returns.push(AbiParam::new($ptr)););
         (@push_return $ptr:ident $params:ident $returns:ident u32) => ($returns.push(AbiParam::new(ir::types::I32)););
+        (@push_return $ptr:ident $params:ident $returns:ident u64) => ($returns.push(AbiParam::new(ir::types::I64)););
         (@push_return $ptr:ident $params:ident $returns:ident size_pair) => ({
             $params.push(AbiParam::new($ptr));
             $returns.push(AbiParam::new($ptr));

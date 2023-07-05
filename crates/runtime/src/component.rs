@@ -532,6 +532,19 @@ impl ComponentInstance {
         };
     }
 
+    /// See `ComponentInstance::set_resource_destructor`
+    pub fn set_resource_destructor(
+        &mut self,
+        idx: ResourceIndex,
+        dtor: Option<NonNull<VMFuncRef>>,
+    ) {
+        unsafe {
+            let offset = self.offsets.resource_destructor(idx);
+            debug_assert!(*self.vmctx_plus_offset::<usize>(offset) == INVALID_PTR);
+            *self.vmctx_plus_offset_mut(offset) = dtor;
+        }
+    }
+
     unsafe fn initialize_vmctx(&mut self, store: *mut dyn Store) {
         *self.vmctx_plus_offset_mut(self.offsets.magic()) = VMCOMPONENT_MAGIC;
         *self.vmctx_plus_offset_mut(self.offsets.libcalls()) =
@@ -600,6 +613,11 @@ impl ComponentInstance {
                 let offset = self.offsets.runtime_post_return(i);
                 *self.vmctx_plus_offset_mut(offset) = INVALID_PTR;
             }
+            for i in 0..self.offsets.num_resources {
+                let i = ResourceIndex::from_u32(i);
+                let offset = self.offsets.resource_destructor(i);
+                *self.vmctx_plus_offset_mut(offset) = INVALID_PTR;
+            }
         }
     }
 
@@ -639,7 +657,11 @@ impl ComponentInstance {
     }
 
     /// TODO
-    pub fn resource_drop(&mut self, resource: TypeResourceTableIndex, idx: u32) -> Result<()> {
+    pub fn resource_drop(
+        &mut self,
+        resource: TypeResourceTableIndex,
+        idx: u32,
+    ) -> Result<Option<u32>> {
         self.resource_tables.resource_drop(resource, idx)
     }
 }
@@ -844,6 +866,15 @@ impl OwnedComponentInstance {
                 type_index,
             )
         }
+    }
+
+    /// See `ComponentInstance::set_resource_destructor`
+    pub fn set_resource_destructor(
+        &mut self,
+        idx: ResourceIndex,
+        dtor: Option<NonNull<VMFuncRef>>,
+    ) {
+        unsafe { self.instance_mut().set_resource_destructor(idx, dtor) }
     }
 
     /// TODO

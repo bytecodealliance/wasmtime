@@ -16,6 +16,7 @@
 //      memories: [*mut VMMemoryDefinition; component.num_memories],
 //      reallocs: [*mut VMFuncRef; component.num_reallocs],
 //      post_returns: [*mut VMFuncRef; component.num_post_returns],
+//      resource_destructors: [*mut VMFuncRef; component.num_resources],
 // }
 
 use crate::component::*;
@@ -67,6 +68,8 @@ pub struct VMComponentOffsets<P> {
     pub num_resource_rep: u32,
     /// TODO
     pub num_resource_drop: u32,
+    /// TODO
+    pub num_resources: u32,
 
     // precalculated offsets of various member fields
     magic: u32,
@@ -84,6 +87,7 @@ pub struct VMComponentOffsets<P> {
     memories: u32,
     reallocs: u32,
     post_returns: u32,
+    resource_destructors: u32,
     size: u32,
 }
 
@@ -112,6 +116,7 @@ impl<P: PtrSize> VMComponentOffsets<P> {
             num_resource_new: component.num_resource_new,
             num_resource_rep: component.num_resource_rep,
             num_resource_drop: component.num_resource_drop,
+            num_resources: component.num_resources,
             magic: 0,
             libcalls: 0,
             store: 0,
@@ -127,6 +132,7 @@ impl<P: PtrSize> VMComponentOffsets<P> {
             memories: 0,
             reallocs: 0,
             post_returns: 0,
+            resource_destructors: 0,
             size: 0,
         };
 
@@ -173,6 +179,7 @@ impl<P: PtrSize> VMComponentOffsets<P> {
             size(memories) = cmul(ret.num_runtime_memories, ret.ptr.size()),
             size(reallocs) = cmul(ret.num_runtime_reallocs, ret.ptr.size()),
             size(post_returns) = cmul(ret.num_runtime_post_returns, ret.ptr.size()),
+            size(resource_destructors) = cmul(ret.num_resources, ret.ptr.size()),
         }
 
         ret.size = next_field_offset;
@@ -383,6 +390,20 @@ impl<P: PtrSize> VMComponentOffsets<P> {
     pub fn runtime_post_return(&self, index: RuntimePostReturnIndex) -> u32 {
         assert!(index.as_u32() < self.num_runtime_post_returns);
         self.runtime_post_returns() + index.as_u32() * u32::from(self.ptr.size())
+    }
+
+    /// The offset of the base of the `resource_destructors` field
+    #[inline]
+    pub fn resource_destructors(&self) -> u32 {
+        self.resource_destructors
+    }
+
+    /// The offset of the `*mut VMFuncRef` for the runtime index
+    /// provided.
+    #[inline]
+    pub fn resource_destructor(&self, index: ResourceIndex) -> u32 {
+        assert!(index.as_u32() < self.num_resources);
+        self.resource_destructors() + index.as_u32() * u32::from(self.ptr.size())
     }
 
     /// Return the size of the `VMComponentContext` allocation.

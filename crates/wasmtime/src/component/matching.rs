@@ -30,7 +30,11 @@ pub struct InstanceType<'a> {
 }
 
 impl TypeChecker<'_> {
-    pub fn definition(&mut self, expected: &TypeDef, actual: Option<&Definition>) -> Result<()> {
+    pub(crate) fn definition(
+        &mut self,
+        expected: &TypeDef,
+        actual: Option<&Definition>,
+    ) -> Result<()> {
         match *expected {
             TypeDef::Module(t) => match actual {
                 Some(Definition::Module(actual)) => self.module(&self.types[t], actual),

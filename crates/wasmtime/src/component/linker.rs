@@ -52,14 +52,14 @@ pub struct LinkerInstance<'a, T> {
     _marker: marker::PhantomData<fn() -> T>,
 }
 
-pub type NameMap = HashMap<usize, Definition>;
+pub(crate) type NameMap = HashMap<usize, Definition>;
 
 #[derive(Clone)]
-pub enum Definition {
+pub(crate) enum Definition {
     Instance(NameMap),
     Func(Arc<HostFunc>),
     Module(Module),
-    Resource(ResourceType, Arc<dyn Fn(*mut u8, u32) + Send + Sync>),
+    Resource(ResourceType, Arc<crate::func::HostFunc>),
 }
 
 impl<T> Linker<T> {
@@ -377,10 +377,15 @@ impl<T> LinkerInstance<'_, T> {
     pub fn resource<U: 'static>(
         &mut self,
         name: &str,
-        dtor: impl Fn(&mut T, u32) + Send + Sync + 'static,
+        dtor: impl Fn(StoreContextMut<'_, T>, u32) + Send + Sync + 'static,
     ) -> Result<()> {
         let name = self.strings.intern(name);
-        let dtor = Arc::new(move |ptr: *mut u8, val| unsafe { dtor(&mut *ptr.cast(), val) });
+        let dtor = Arc::new(crate::func::HostFunc::wrap(
+            &self.engine,
+            move |mut cx: crate::Caller<'_, T>, param: u32| {
+                dtor(cx.as_context_mut(), param);
+            },
+        ));
         self.insert(name, Definition::Resource(ResourceType::host::<U>(), dtor))
     }
 

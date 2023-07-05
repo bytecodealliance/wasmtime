@@ -27,11 +27,11 @@ macro_rules! signature {
     (@ty ptr_u8) => (*mut u8);
     (@ty ptr_u16) => (*mut u16);
     (@ty u32) => (u32);
+    (@ty u64) => (u64);
     (@ty vmctx) => (*mut VMComponentContext);
 
     (@retptr size_pair) => (*mut usize);
-    (@retptr size) => (());
-    (@retptr u32) => (());
+    (@retptr $other:ident) => (());
 }
 
 /// TODO
@@ -156,6 +156,7 @@ mod trampolines {
         (@convert_ret $ret:ident $retptr:ident) => ($ret);
         (@convert_ret $ret:ident $retptr:ident size) => ($ret);
         (@convert_ret $ret:ident $retptr:ident u32) => ($ret);
+        (@convert_ret $ret:ident $retptr:ident u64) => ($ret);
         (@convert_ret $ret:ident $retptr:ident size_pair) => ({
             let (a, b) = $ret;
             *$retptr = b;
@@ -519,7 +520,12 @@ unsafe fn resource_rep32(vmctx: *mut VMComponentContext, resource: u32, idx: u32
     ComponentInstance::from_vmctx(vmctx, |instance| instance.resource_rep32(resource, idx))
 }
 
-unsafe fn resource_drop(vmctx: *mut VMComponentContext, resource: u32, idx: u32) -> Result<()> {
+unsafe fn resource_drop(vmctx: *mut VMComponentContext, resource: u32, idx: u32) -> Result<u64> {
     let resource = TypeResourceTableIndex::from_u32(resource);
-    ComponentInstance::from_vmctx(vmctx, |instance| instance.resource_drop(resource, idx))
+    ComponentInstance::from_vmctx(vmctx, |instance| {
+        Ok(match instance.resource_drop(resource, idx)? {
+            Some(rep) => (u64::from(rep) << 1) | 1,
+            None => 0,
+        })
+    })
 }

@@ -117,6 +117,16 @@ pub struct ComponentDfg {
 
     /// TODO
     pub num_resource_tables: usize,
+
+    pub side_effects: Vec<SideEffect>,
+}
+
+/// TODO
+pub enum SideEffect {
+    /// TODO
+    Instance(InstanceId),
+    /// TODO
+    Resource(DefinedResourceIndex),
 }
 
 macro_rules! id {
@@ -331,21 +341,20 @@ impl ComponentDfg {
             runtime_always_trap: Default::default(),
             runtime_lowerings: Default::default(),
             runtime_transcoders: Default::default(),
-            // runtime_resources: Default::default(),
             runtime_resource_new: Default::default(),
             runtime_resource_rep: Default::default(),
             runtime_resource_drop: Default::default(),
         };
 
-        // First the instances are all processed for instantiation. This will,
-        // recursively, handle any arguments necessary for each instance such as
-        // instantiation of adapter modules.
-        for (id, instance) in linearize.dfg.instances.key_map.iter() {
-            linearize.instantiate(id, instance);
+        // Handle all side effects of this component in the order that they're
+        // defined. This will, for example, process all instantiations necessary
+        // of core wasm modules.
+        for item in linearize.dfg.side_effects.iter() {
+            linearize.side_effect(item);
         }
 
-        // Second the exports of the instance are handled which will likely end
-        // up creating some lowered imports, perhaps some saved modules, etc.
+        // Next the exports of the instance are handled which will likely end up
+        // creating some lowered imports, perhaps some saved modules, etc.
         let exports = self
             .exports
             .iter()
@@ -371,25 +380,11 @@ impl ComponentDfg {
             num_resource_rep: linearize.runtime_resource_rep.len() as u32,
             num_resource_drop: linearize.runtime_resource_drop.len() as u32,
 
-            // runtime_resources: {
-            //     let mut list = linearize
-            //         .runtime_resources
-            //         .iter()
-            //         .map(|(id, idx)| (*idx, *id))
-            //         .collect::<Vec<_>>();
-            //     list.sort_by_key(|(idx, _)| *idx);
-            //     let mut runtime_resources = PrimaryMap::new();
-            //     for (idx, id) in list {
-            //         let ty = self.resources[id].ty;
-            //         let idx2 = runtime_resources.push(ty);
-            //         assert_eq!(idx, idx2);
-            //     }
-            //     runtime_resources
-            // },
             imports: self.imports,
             import_types: self.import_types,
             num_runtime_component_instances: self.num_runtime_component_instances,
             num_resource_tables: self.num_resource_tables,
+            num_resources: (self.resources.len() + self.imported_resources.len()) as u32,
             imported_resources: self.imported_resources,
         }
     }
@@ -423,6 +418,17 @@ enum RuntimeInstance {
 }
 
 impl LinearizeDfg<'_> {
+    fn side_effect(&mut self, effect: &SideEffect) {
+        match effect {
+            SideEffect::Instance(i) => {
+                self.instantiate(*i, &self.dfg.instances[*i]);
+            }
+            SideEffect::Resource(i) => {
+                self.resource(*i, &self.dfg.resources[*i]);
+            }
+        }
+    }
+
     fn instantiate(&mut self, instance: InstanceId, args: &Instance) {
         log::trace!("creating instance {instance:?}");
         let instantiation = match args {
@@ -450,6 +456,16 @@ impl LinearizeDfg<'_> {
             .runtime_instances
             .insert(RuntimeInstance::Normal(instance), index);
         assert!(prev.is_none());
+    }
+
+    fn resource(&mut self, index: DefinedResourceIndex, resource: &Resource) {
+        let dtor = resource.dtor.as_ref().map(|dtor| self.core_def(dtor));
+        self.initializers
+            .push(GlobalInitializer::Resource(info::Resource {
+                dtor,
+                index,
+                rep: resource.rep,
+            }));
     }
 
     fn export(&mut self, export: &Export) -> info::Export {
@@ -650,36 +666,6 @@ impl LinearizeDfg<'_> {
             },
         )
     }
-
-    // fn resource(&mut self, id: TypeResourceTableIndex) -> TypeResourceTableIndex {
-    //     if self.runtime_resources.insert(id) {
-    //         let dtor =
-    //         self.initializers
-    //             .push(GlobalInitializer::Resource(info::Resource {
-    //                 index,
-    //                 dtor,
-    //                 rep,
-    //                 // ty,
-    //             }));
-    //     }
-    //     id
-    //     // let ret = self.intern(
-    //     //     id,
-    //     //     |me| &mut me.runtime_resources,
-    //     //     |me, id| {
-    //     //         let info = &me.dfg.resources[id];
-    //     //         (
-    //     //             info.dtor.as_ref().map(|i| me.core_def(i)),
-    //     //             info.rep,
-    //     //             info.ty,
-    //     //         )
-    //     //     },
-    //     //     |index, (dtor, rep, ty)| {
-    //     //     },
-    //     // );
-    //     // assert_eq!(id, ret);
-    //     // ret
-    // }
 
     fn core_export<T>(&mut self, export: &CoreExport<T>) -> info::CoreExport<T>
     where

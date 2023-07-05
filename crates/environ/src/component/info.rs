@@ -157,9 +157,9 @@ pub struct Component {
     /// TODO
     pub num_resource_tables: usize,
     /// TODO
+    pub num_resources: u32,
+    /// TODO
     pub imported_resources: PrimaryMap<ResourceIndex, RuntimeImportIndex>,
-    // /// TODO
-    // pub runtime_resources: PrimaryMap<RuntimeResourceIndex, TypeResourceIndex>,
 }
 
 impl Component {
@@ -169,6 +169,11 @@ impl Component {
             .as_u32()
             .checked_sub(self.imported_resources.len() as u32)?;
         Some(DefinedResourceIndex::from_u32(idx))
+    }
+
+    /// TODO
+    pub fn resource_index(&self, idx: DefinedResourceIndex) -> ResourceIndex {
+        ResourceIndex::from_u32(self.imported_resources.len() as u32 + idx.as_u32())
     }
 }
 
@@ -553,8 +558,6 @@ pub struct Resource {
     pub rep: WasmType,
     /// TODO
     pub dtor: Option<CoreDef>,
-    // /// TODO
-    // pub ty: TypeResourceIndex,
 }
 
 /// TODO

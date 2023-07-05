@@ -35,10 +35,9 @@ impl ResourceTables {
         self.tables[ty].get(idx)
     }
 
-    pub fn resource_drop(&mut self, ty: TypeResourceTableIndex, idx: u32) -> Result<()> {
+    pub fn resource_drop(&mut self, ty: TypeResourceTableIndex, idx: u32) -> Result<Option<u32>> {
         let rep = self.tables[ty].remove(idx)?;
-        Ok(())
-        // TODO: how to run the dtor for `rep`?
+        Ok(Some(rep))
     }
 
     pub fn resource_lower_own(&mut self, ty: TypeResourceTableIndex, rep: u32) -> u32 {
