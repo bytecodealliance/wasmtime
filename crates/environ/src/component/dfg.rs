@@ -303,7 +303,6 @@ impl ComponentDfg {
         let mut linearize = LinearizeDfg {
             dfg: &self,
             initializers: Vec::new(),
-            num_runtime_modules: 0,
             runtime_memories: Default::default(),
             runtime_post_return: Default::default(),
             runtime_reallocs: Default::default(),
@@ -336,7 +335,6 @@ impl ComponentDfg {
             exports,
             initializers: linearize.initializers,
 
-            num_runtime_modules: linearize.num_runtime_modules,
             num_runtime_memories: linearize.runtime_memories.len() as u32,
             num_runtime_post_returns: linearize.runtime_post_return.len() as u32,
             num_runtime_reallocs: linearize.runtime_reallocs.len() as u32,
@@ -355,7 +353,6 @@ impl ComponentDfg {
 struct LinearizeDfg<'a> {
     dfg: &'a ComponentDfg,
     initializers: Vec<GlobalInitializer>,
-    num_runtime_modules: u32,
     runtime_memories: HashMap<MemoryId, RuntimeMemoryIndex>,
     runtime_reallocs: HashMap<ReallocId, RuntimeReallocIndex>,
     runtime_post_return: HashMap<PostReturnId, RuntimePostReturnIndex>,
@@ -412,20 +409,8 @@ impl LinearizeDfg<'_> {
                     options,
                 }
             }
-            Export::ModuleStatic(i) => {
-                let index = RuntimeModuleIndex::from_u32(self.num_runtime_modules);
-                self.num_runtime_modules += 1;
-                self.initializers
-                    .push(GlobalInitializer::SaveStaticModule(*i));
-                info::Export::Module(index)
-            }
-            Export::ModuleImport(i) => {
-                let index = RuntimeModuleIndex::from_u32(self.num_runtime_modules);
-                self.num_runtime_modules += 1;
-                self.initializers
-                    .push(GlobalInitializer::SaveModuleImport(*i));
-                info::Export::Module(index)
-            }
+            Export::ModuleStatic(i) => info::Export::ModuleStatic(*i),
+            Export::ModuleImport(i) => info::Export::ModuleImport(*i),
             Export::Instance(map) => info::Export::Instance(
                 map.iter()
                     .map(|(name, export)| (name.clone(), self.export(export)))
