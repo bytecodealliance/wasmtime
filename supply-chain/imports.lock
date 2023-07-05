@@ -5,192 +5,384 @@
 version = "0.98.0"
 audited_as = "0.97.1"
 
+[[unpublished.cranelift]]
+version = "0.99.0"
+audited_as = "0.97.1"
+
 [[unpublished.cranelift-bforest]]
 version = "0.98.0"
+audited_as = "0.97.1"
+
+[[unpublished.cranelift-bforest]]
+version = "0.99.0"
 audited_as = "0.97.1"
 
 [[unpublished.cranelift-codegen]]
 version = "0.98.0"
 audited_as = "0.97.1"
 
+[[unpublished.cranelift-codegen]]
+version = "0.99.0"
+audited_as = "0.97.1"
+
 [[unpublished.cranelift-codegen-meta]]
 version = "0.98.0"
+audited_as = "0.97.1"
+
+[[unpublished.cranelift-codegen-meta]]
+version = "0.99.0"
 audited_as = "0.97.1"
 
 [[unpublished.cranelift-codegen-shared]]
 version = "0.98.0"
 audited_as = "0.97.1"
 
+[[unpublished.cranelift-codegen-shared]]
+version = "0.99.0"
+audited_as = "0.97.1"
+
 [[unpublished.cranelift-control]]
 version = "0.98.0"
+audited_as = "0.97.1"
+
+[[unpublished.cranelift-control]]
+version = "0.99.0"
 audited_as = "0.97.1"
 
 [[unpublished.cranelift-entity]]
 version = "0.98.0"
 audited_as = "0.97.1"
 
+[[unpublished.cranelift-entity]]
+version = "0.99.0"
+audited_as = "0.97.1"
+
 [[unpublished.cranelift-frontend]]
 version = "0.98.0"
+audited_as = "0.97.1"
+
+[[unpublished.cranelift-frontend]]
+version = "0.99.0"
 audited_as = "0.97.1"
 
 [[unpublished.cranelift-interpreter]]
 version = "0.98.0"
 audited_as = "0.97.1"
 
+[[unpublished.cranelift-interpreter]]
+version = "0.99.0"
+audited_as = "0.97.1"
+
 [[unpublished.cranelift-isle]]
 version = "0.98.0"
+audited_as = "0.97.1"
+
+[[unpublished.cranelift-isle]]
+version = "0.99.0"
 audited_as = "0.97.1"
 
 [[unpublished.cranelift-jit]]
 version = "0.98.0"
 audited_as = "0.97.1"
 
+[[unpublished.cranelift-jit]]
+version = "0.99.0"
+audited_as = "0.97.1"
+
 [[unpublished.cranelift-module]]
 version = "0.98.0"
+audited_as = "0.97.1"
+
+[[unpublished.cranelift-module]]
+version = "0.99.0"
 audited_as = "0.97.1"
 
 [[unpublished.cranelift-native]]
 version = "0.98.0"
 audited_as = "0.97.1"
 
+[[unpublished.cranelift-native]]
+version = "0.99.0"
+audited_as = "0.97.1"
+
 [[unpublished.cranelift-object]]
 version = "0.98.0"
+audited_as = "0.97.1"
+
+[[unpublished.cranelift-object]]
+version = "0.99.0"
 audited_as = "0.97.1"
 
 [[unpublished.cranelift-reader]]
 version = "0.98.0"
 audited_as = "0.97.1"
 
+[[unpublished.cranelift-reader]]
+version = "0.99.0"
+audited_as = "0.97.1"
+
 [[unpublished.cranelift-serde]]
 version = "0.98.0"
+audited_as = "0.97.1"
+
+[[unpublished.cranelift-serde]]
+version = "0.99.0"
 audited_as = "0.97.1"
 
 [[unpublished.cranelift-wasm]]
 version = "0.98.0"
 audited_as = "0.97.1"
 
+[[unpublished.cranelift-wasm]]
+version = "0.99.0"
+audited_as = "0.97.1"
+
 [[unpublished.wasi-cap-std-sync]]
 version = "11.0.0"
+audited_as = "10.0.1"
+
+[[unpublished.wasi-cap-std-sync]]
+version = "12.0.0"
 audited_as = "10.0.1"
 
 [[unpublished.wasi-common]]
 version = "11.0.0"
 audited_as = "10.0.1"
 
+[[unpublished.wasi-common]]
+version = "12.0.0"
+audited_as = "10.0.1"
+
 [[unpublished.wasi-tokio]]
 version = "11.0.0"
+audited_as = "10.0.1"
+
+[[unpublished.wasi-tokio]]
+version = "12.0.0"
 audited_as = "10.0.1"
 
 [[unpublished.wasmtime]]
 version = "11.0.0"
 audited_as = "10.0.1"
 
+[[unpublished.wasmtime]]
+version = "12.0.0"
+audited_as = "10.0.1"
+
 [[unpublished.wasmtime-asm-macros]]
 version = "11.0.0"
+audited_as = "10.0.1"
+
+[[unpublished.wasmtime-asm-macros]]
+version = "12.0.0"
 audited_as = "10.0.1"
 
 [[unpublished.wasmtime-cache]]
 version = "11.0.0"
 audited_as = "10.0.1"
 
+[[unpublished.wasmtime-cache]]
+version = "12.0.0"
+audited_as = "10.0.1"
+
 [[unpublished.wasmtime-cli]]
 version = "11.0.0"
+audited_as = "10.0.1"
+
+[[unpublished.wasmtime-cli]]
+version = "12.0.0"
 audited_as = "10.0.1"
 
 [[unpublished.wasmtime-cli-flags]]
 version = "11.0.0"
 audited_as = "10.0.1"
 
+[[unpublished.wasmtime-cli-flags]]
+version = "12.0.0"
+audited_as = "10.0.1"
+
 [[unpublished.wasmtime-component-macro]]
 version = "11.0.0"
+audited_as = "10.0.1"
+
+[[unpublished.wasmtime-component-macro]]
+version = "12.0.0"
 audited_as = "10.0.1"
 
 [[unpublished.wasmtime-component-util]]
 version = "11.0.0"
 audited_as = "10.0.1"
 
+[[unpublished.wasmtime-component-util]]
+version = "12.0.0"
+audited_as = "10.0.1"
+
 [[unpublished.wasmtime-cranelift]]
 version = "11.0.0"
+audited_as = "10.0.1"
+
+[[unpublished.wasmtime-cranelift]]
+version = "12.0.0"
 audited_as = "10.0.1"
 
 [[unpublished.wasmtime-cranelift-shared]]
 version = "11.0.0"
 audited_as = "10.0.1"
 
+[[unpublished.wasmtime-cranelift-shared]]
+version = "12.0.0"
+audited_as = "10.0.1"
+
 [[unpublished.wasmtime-environ]]
 version = "11.0.0"
+audited_as = "10.0.1"
+
+[[unpublished.wasmtime-environ]]
+version = "12.0.0"
 audited_as = "10.0.1"
 
 [[unpublished.wasmtime-explorer]]
 version = "11.0.0"
 audited_as = "10.0.1"
 
+[[unpublished.wasmtime-explorer]]
+version = "12.0.0"
+audited_as = "10.0.1"
+
 [[unpublished.wasmtime-fiber]]
 version = "11.0.0"
+audited_as = "10.0.1"
+
+[[unpublished.wasmtime-fiber]]
+version = "12.0.0"
 audited_as = "10.0.1"
 
 [[unpublished.wasmtime-jit]]
 version = "11.0.0"
 audited_as = "10.0.1"
 
+[[unpublished.wasmtime-jit]]
+version = "12.0.0"
+audited_as = "10.0.1"
+
 [[unpublished.wasmtime-jit-debug]]
 version = "11.0.0"
+audited_as = "10.0.1"
+
+[[unpublished.wasmtime-jit-debug]]
+version = "12.0.0"
 audited_as = "10.0.1"
 
 [[unpublished.wasmtime-jit-icache-coherence]]
 version = "11.0.0"
 audited_as = "10.0.1"
 
+[[unpublished.wasmtime-jit-icache-coherence]]
+version = "12.0.0"
+audited_as = "10.0.1"
+
 [[unpublished.wasmtime-runtime]]
 version = "11.0.0"
+audited_as = "10.0.1"
+
+[[unpublished.wasmtime-runtime]]
+version = "12.0.0"
 audited_as = "10.0.1"
 
 [[unpublished.wasmtime-types]]
 version = "11.0.0"
 audited_as = "10.0.1"
 
+[[unpublished.wasmtime-types]]
+version = "12.0.0"
+audited_as = "10.0.1"
+
 [[unpublished.wasmtime-wasi]]
 version = "11.0.0"
+audited_as = "10.0.1"
+
+[[unpublished.wasmtime-wasi]]
+version = "12.0.0"
 audited_as = "10.0.1"
 
 [[unpublished.wasmtime-wasi-crypto]]
 version = "11.0.0"
 audited_as = "10.0.1"
 
+[[unpublished.wasmtime-wasi-crypto]]
+version = "12.0.0"
+audited_as = "10.0.1"
+
 [[unpublished.wasmtime-wasi-http]]
 version = "11.0.0"
+audited_as = "10.0.1"
+
+[[unpublished.wasmtime-wasi-http]]
+version = "12.0.0"
 audited_as = "10.0.1"
 
 [[unpublished.wasmtime-wasi-nn]]
 version = "11.0.0"
 audited_as = "10.0.1"
 
+[[unpublished.wasmtime-wasi-nn]]
+version = "12.0.0"
+audited_as = "10.0.1"
+
 [[unpublished.wasmtime-wasi-threads]]
 version = "11.0.0"
+audited_as = "10.0.1"
+
+[[unpublished.wasmtime-wasi-threads]]
+version = "12.0.0"
 audited_as = "10.0.1"
 
 [[unpublished.wasmtime-wast]]
 version = "11.0.0"
 audited_as = "10.0.1"
 
+[[unpublished.wasmtime-wast]]
+version = "12.0.0"
+audited_as = "10.0.1"
+
 [[unpublished.wasmtime-winch]]
 version = "11.0.0"
+audited_as = "10.0.1"
+
+[[unpublished.wasmtime-winch]]
+version = "12.0.0"
 audited_as = "10.0.1"
 
 [[unpublished.wasmtime-wit-bindgen]]
 version = "11.0.0"
 audited_as = "10.0.1"
 
+[[unpublished.wasmtime-wit-bindgen]]
+version = "12.0.0"
+audited_as = "10.0.1"
+
 [[unpublished.wiggle]]
 version = "11.0.0"
+audited_as = "10.0.1"
+
+[[unpublished.wiggle]]
+version = "12.0.0"
 audited_as = "10.0.1"
 
 [[unpublished.wiggle-generate]]
 version = "11.0.0"
 audited_as = "10.0.1"
 
+[[unpublished.wiggle-generate]]
+version = "12.0.0"
+audited_as = "10.0.1"
+
 [[unpublished.wiggle-macro]]
 version = "11.0.0"
+audited_as = "10.0.1"
+
+[[unpublished.wiggle-macro]]
+version = "12.0.0"
 audited_as = "10.0.1"
 
 [[unpublished.wiggle-test]]
@@ -199,6 +391,10 @@ audited_as = "0.1.0"
 
 [[unpublished.winch-codegen]]
 version = "0.9.0"
+audited_as = "0.8.1"
+
+[[unpublished.winch-codegen]]
+version = "0.10.0"
 audited_as = "0.8.1"
 
 [[publisher.arbitrary]]
