@@ -77,7 +77,7 @@ __declspec(dllexport)
   // `asm` statement.
 __attribute__((weak, noinline))
 #endif
-void VERSIONED_SYMBOL(__jit_debug_register_code)() {
+void __jit_debug_register_code() {
 #ifndef CFG_TARGET_OS_windows
   __asm__("");
 #endif

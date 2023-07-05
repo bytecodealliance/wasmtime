@@ -31,7 +31,6 @@ struct JITDescriptor {
 extern "C" {
     #[versioned_link]
     fn wasmtime_jit_debug_descriptor() -> *mut JITDescriptor;
-    #[versioned_link]
     fn __jit_debug_register_code();
 }
 
