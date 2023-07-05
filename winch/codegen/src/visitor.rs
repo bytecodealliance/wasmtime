@@ -550,6 +550,7 @@ where
     fn visit_br(&mut self, depth: u32) {
         let frame = Self::control_at(&mut self.control_frames, depth);
         self.context.pop_abi_results(frame.result(), self.masm);
+        self.context.pop_sp_for_branch(&frame, self.masm);
         self.masm.jmp(*frame.label());
         frame.set_as_target();
         self.context.reachable = false;
@@ -580,6 +581,8 @@ where
         // know that it should exist at index 0.
         let outermost = &mut self.control_frames[0];
         self.context.pop_abi_results(outermost.result(), self.masm);
+        // Ensure that the stack pointer is correctly balanced.
+        self.context.pop_sp_for_branch(&outermost, self.masm);
         // The outermost should always be a block and therefore,
         // should always have an exit label.
         self.masm.jmp(*outermost.exit_label().unwrap());
