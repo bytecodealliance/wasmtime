@@ -334,6 +334,7 @@ impl Compiler {
 
         let args = self.abi_load_params(&mut builder, ty, block0, abi);
         let vmctx = args[0];
+        let caller_vmctx = args[1];
 
         self.abi_preamble(&mut builder, &offsets, vmctx, abi);
 
@@ -428,9 +429,10 @@ impl Compiler {
         );
         let sig = crate::wasm_call_signature(isa, &types[resource.signature]);
         let sig_ref = builder.import_signature(sig);
+        // NB: note that the "caller" vmctx here is the ... TODO fill this out
         builder
             .ins()
-            .call_indirect(sig_ref, func_addr, &[callee_vmctx, vmctx, rep]);
+            .call_indirect(sig_ref, func_addr, &[callee_vmctx, caller_vmctx, rep]);
         builder.ins().jump(return_block, &[]);
         builder.seal_block(call_func_ref_block);
 

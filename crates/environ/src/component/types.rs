@@ -1,7 +1,7 @@
 use crate::component::{MAX_FLAT_PARAMS, MAX_FLAT_RESULTS};
 use crate::{
     EntityType, ModuleTypes, ModuleTypesBuilder, PrimaryMap, SignatureIndex, TypeConvert,
-    WasmHeapType,
+    WasmHeapType, WasmType,
 };
 use anyhow::{bail, Result};
 use cranelift_entity::EntityRef;
@@ -279,6 +279,18 @@ impl ComponentTypes {
             InterfaceType::Option(i) => &self[*i].abi,
             InterfaceType::Result(i) => &self[*i].abi,
         }
+    }
+
+    /// TODO
+    pub fn find_resource_drop_signature(&self) -> Option<SignatureIndex> {
+        self.module_types
+            .wasm_signatures()
+            .find(|(_, sig)| {
+                sig.params().len() == 1
+                    && sig.returns().len() == 0
+                    && sig.params()[0] == WasmType::I32
+            })
+            .map(|(i, _)| i)
     }
 }
 

@@ -784,6 +784,13 @@
       ;; should count a drop
       (call $drop (local.get $r1))
       (if (i32.ne (call $drops) (i32.const 1)) (unreachable))
+      (if (i32.ne (call $last-drop) (i32.const 100)) (unreachable))
+
+      ;; do it again to be sure
+      (local.set $r1 (call $ctor (i32.const 200)))
+      (call $drop (local.get $r1))
+      (if (i32.ne (call $drops) (i32.const 2)) (unreachable))
+      (if (i32.ne (call $last-drop) (i32.const 200)) (unreachable))
     )
 
     (start $start)

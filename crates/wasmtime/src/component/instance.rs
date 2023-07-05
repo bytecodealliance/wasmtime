@@ -15,7 +15,8 @@ use wasmtime_environ::component::*;
 use wasmtime_environ::{EntityIndex, EntityType, Global, PrimaryMap, SignatureIndex, WasmType};
 use wasmtime_runtime::component::{ComponentInstance, OwnedComponentInstance};
 use wasmtime_runtime::{
-    VMArrayCallFunction, VMNativeCallFunction, VMSharedSignatureIndex, VMWasmCallFunction,
+    VMArrayCallFunction, VMFuncRef, VMNativeCallFunction, VMSharedSignatureIndex,
+    VMWasmCallFunction,
 };
 
 /// An instantiated component.
@@ -238,11 +239,14 @@ struct Instantiator<'a> {
     imports: &'a PrimaryMap<RuntimeImportIndex, RuntimeImport>,
 }
 
-#[derive(Clone)]
 pub(crate) enum RuntimeImport {
     Func(Arc<HostFunc>),
     Module(Module),
-    Resource(ResourceType, Arc<crate::func::HostFunc>),
+    Resource {
+        ty: ResourceType,
+        dtor: Arc<crate::func::HostFunc>,
+        dtor_funcref: VMFuncRef,
+    },
 }
 
 pub type ImportedResources = PrimaryMap<ResourceIndex, ResourceType>;
@@ -283,13 +287,16 @@ impl<'a> Instantiator<'a> {
                 .imported_resources_mut()
                 .downcast_mut::<ImportedResources>()
                 .unwrap();
-            let i = imported_resources.push(match &self.imports[*import] {
-                RuntimeImport::Resource(ty, _dtor) => *ty,
+            let (ty, func_ref) = match &self.imports[*import] {
+                RuntimeImport::Resource {
+                    ty, dtor_funcref, ..
+                } => (*ty, NonNull::from(dtor_funcref)),
                 _ => unreachable!(),
-            });
+            };
+            let i = imported_resources.push(ty);
             assert_eq!(i, idx);
             // TODO: this should be `Some`
-            self.data.state.set_resource_destructor(idx, None);
+            self.data.state.set_resource_destructor(idx, Some(func_ref));
         }
         for initializer in env_component.initializers.iter() {
             match initializer {

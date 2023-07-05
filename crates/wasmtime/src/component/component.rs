@@ -17,7 +17,8 @@ use wasmtime_environ::{FunctionLoc, ObjectKind, PrimaryMap, ScopeVec};
 use wasmtime_jit::{CodeMemory, CompiledModuleInfo};
 use wasmtime_runtime::component::ComponentRuntimeInfo;
 use wasmtime_runtime::{
-    MmapVec, VMArrayCallFunction, VMFunctionBody, VMNativeCallFunction, VMWasmCallFunction,
+    MmapVec, VMArrayCallFunction, VMFuncRef, VMFunctionBody, VMNativeCallFunction,
+    VMWasmCallFunction,
 };
 
 /// A compiled WebAssembly Component.
@@ -81,6 +82,8 @@ struct CompiledComponentInfo {
     resource_rep: PrimaryMap<RuntimeResourceRepIndex, AllCallFunc<FunctionLoc>>,
     /// TODO
     resource_drop: PrimaryMap<RuntimeResourceDropIndex, AllCallFunc<FunctionLoc>>,
+
+    resource_drop_wasm_to_native_trampoline: Option<FunctionLoc>,
 }
 
 pub(crate) struct AllCallFuncPointers {
@@ -236,6 +239,8 @@ impl Component {
             resource_new: compilation_artifacts.resource_new,
             resource_rep: compilation_artifacts.resource_rep,
             resource_drop: compilation_artifacts.resource_drop,
+            resource_drop_wasm_to_native_trampoline: compilation_artifacts
+                .resource_drop_wasm_to_native_trampoline,
         };
         let artifacts = ComponentArtifacts {
             info,
@@ -382,6 +387,28 @@ impl Component {
 
     pub(crate) fn runtime_info(&self) -> Arc<dyn ComponentRuntimeInfo> {
         self.inner.clone()
+    }
+
+    pub(crate) fn resource_drop_func_ref(&self, dtor: &crate::func::HostFunc) -> VMFuncRef {
+        // Host functions never have their `wasm_call` filled in at this time.
+        assert!(dtor.func_ref().wasm_call.is_none());
+
+        // TODO
+        let wasm_call = self
+            .inner
+            .info
+            .resource_drop_wasm_to_native_trampoline
+            .as_ref()
+            .map(|i| {
+                let ptr = self.func(i);
+                unsafe {
+                    mem::transmute::<NonNull<VMFunctionBody>, NonNull<VMWasmCallFunction>>(ptr)
+                }
+            });
+        VMFuncRef {
+            wasm_call,
+            ..*dtor.func_ref()
+        }
     }
 }
 

@@ -351,7 +351,6 @@ impl wasmtime_environ::Compiler for Compiler {
 
     fn compile_wasm_to_native_trampoline(
         &self,
-        translation: &ModuleTranslation,
         wasm_func_ty: &WasmFuncType,
     ) -> Result<Box<dyn Any + Send>, CompileError> {
         let isa = &*self.isa;
@@ -379,14 +378,15 @@ impl wasmtime_environ::Compiler for Compiler {
             caller_vmctx,
             wasmtime_environ::VMCONTEXT_MAGIC,
         );
-        let offsets = VMOffsets::new(isa.pointer_bytes(), &translation.module);
+        // let offsets = VMOffsets::new(isa.pointer_bytes(), &translation.module);
+        let ptr = isa.pointer_bytes();
         let limits = builder.ins().load(
             pointer_type,
             MemFlags::trusted(),
             caller_vmctx,
-            i32::try_from(offsets.vmctx_runtime_limits()).unwrap(),
+            i32::try_from(ptr.vmcontext_runtime_limits()).unwrap(),
         );
-        save_last_wasm_exit_fp_and_pc(&mut builder, pointer_type, &offsets.ptr, limits);
+        save_last_wasm_exit_fp_and_pc(&mut builder, pointer_type, &ptr, limits);
 
         // If the native call signature for this function uses a return pointer
         // then allocate the return pointer here on the stack and pass it as the
