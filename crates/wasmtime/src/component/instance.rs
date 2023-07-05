@@ -47,9 +47,17 @@ pub(crate) struct InstanceData {
 
     /// Arguments that this instance used to be instantiated.
     ///
-    /// Strong references are stored to these argumentssince pointers are saved
+    /// Strong references are stored to these arguments since pointers are saved
     /// into the structures such as functions within the
     /// `OwnedComponentInstance` but it's our job to keep them alive.
+    ///
+    /// One purpose of this storage is to enable embedders to drop a `Linker`,
+    /// for example, after a component is instantiated. In that situation if the
+    /// arguments weren't held here then they might be dropped, and structures
+    /// such as `.lowering()` which point back into the original function would
+    /// become stale and use-after-free conditions when used. By preserving the
+    /// entire list here though we're guaranteed that nothing is lost for the
+    /// duration of the lifetime of this instance.
     imports: Arc<PrimaryMap<RuntimeImportIndex, RuntimeImport>>,
 }
 
