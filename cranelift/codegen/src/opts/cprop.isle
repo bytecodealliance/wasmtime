@@ -70,6 +70,9 @@
                       (iconst _ k2)))
       (subsume (iconst ty (imm64_sshr ty k1 k2))))
 
+(rule (simplify (ireduce narrow (iconst (fits_in_64 _) (u64_from_imm64 imm))))
+      (subsume (iconst narrow (imm64_masked narrow imm))))
+
 (rule (simplify (uextend (fits_in_64 wide) (iconst narrow imm)))
       (subsume (iconst wide (imm64 (u64_uextend_imm64 narrow imm)))))
 
