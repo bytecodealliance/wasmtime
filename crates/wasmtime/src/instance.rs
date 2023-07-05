@@ -692,8 +692,8 @@ mod pre_patched_func_ref {
     }
 
     // Safety: This is upheld by `PrePatchedFuncRef::new` callers.
-    unsafe impl<T> Send for InstancePre<T> {}
-    unsafe impl<T> Sync for InstancePre<T> {}
+    unsafe impl Send for PrePatchedFuncRef {}
+    unsafe impl Sync for PrePatchedFuncRef {}
 }
 
 /// InstancePre's clone does not require T: Clone
