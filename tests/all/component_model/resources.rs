@@ -515,3 +515,65 @@ fn dynamic_type() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn dynamic_val() -> Result<()> {
+    let engine = super::engine();
+    let c = Component::new(
+        &engine,
+        r#"
+            (component
+                (import "t1" (type $t1 (sub resource)))
+                (type $t2' (resource (rep i32)))
+                (export $t2 "t2" (type $t2'))
+                (core func $f (canon resource.new $t2))
+
+                (core module $m
+                    (func (export "pass") (param i32) (result i32)
+                        (local.get 0)))
+                (core instance $i (instantiate $m))
+
+                (func (export "a") (param "x" (own $t1)) (result (own $t1))
+                    (canon lift (core func $i "pass")))
+                (func (export "b") (param "x" u32) (result (own $t2))
+                    (canon lift (core func $f)))
+            )
+        "#,
+    )?;
+
+    struct MyType;
+
+    let mut store = Store::new(&engine, ());
+    let mut linker = Linker::new(&engine);
+    linker.root().resource::<MyType>("t1", |_, _| {})?;
+    let i = linker.instantiate(&mut store, &c)?;
+
+    let a = i.get_func(&mut store, "a").unwrap();
+    let a_typed = i.get_typed_func::<(Resource<MyType>,), (ResourceAny,)>(&mut store, "a")?;
+    let b = i.get_func(&mut store, "b").unwrap();
+    let t2 = i.get_resource(&mut store, "t2").unwrap();
+
+    let (t1,) = a_typed.call(&mut store, (Resource::new(100),))?;
+    a_typed.post_return(&mut store)?;
+    assert_eq!(t1.ty(), ResourceType::host::<MyType>());
+
+    let mut results = [Val::Bool(false)];
+    a.call(&mut store, &[Val::Own(t1)], &mut results)?;
+    a.post_return(&mut store)?;
+    match &results[0] {
+        Val::Own(resource) => {
+            assert_eq!(resource.ty(), ResourceType::host::<MyType>());
+        }
+        _ => unreachable!(),
+    }
+
+    b.call(&mut store, &[Val::U32(200)], &mut results)?;
+    match &results[0] {
+        Val::Own(resource) => {
+            assert_eq!(resource.ty(), t2);
+        }
+        _ => unreachable!(),
+    }
+
+    Ok(())
+}

@@ -5,9 +5,9 @@ use crate::store::StoreId;
 use crate::{AsContextMut, StoreContextMut};
 use anyhow::{bail, Result};
 use std::any::TypeId;
-use std::cell::Cell;
 use std::marker;
 use std::mem::MaybeUninit;
+use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
 use wasmtime_environ::component::{CanonicalAbiInfo, DefinedResourceIndex, InterfaceType};
 use wasmtime_runtime::component::ComponentInstance;
 use wasmtime_runtime::{SendSyncPtr, VMFuncRef, ValRaw};
@@ -55,7 +55,7 @@ enum ResourceTypeKind {
 
 /// TODO
 pub struct Resource<T> {
-    rep: Cell<Option<u32>>,
+    rep: ResourceRep,
     _marker: marker::PhantomData<fn() -> T>,
 }
 
@@ -63,7 +63,7 @@ impl<T> Resource<T> {
     /// TODO
     pub fn new(rep: u32) -> Resource<T> {
         Resource {
-            rep: Cell::new(Some(rep)),
+            rep: ResourceRep::new(rep),
             _marker: marker::PhantomData,
         }
     }
@@ -81,10 +81,7 @@ impl<T> Resource<T> {
             InterfaceType::Own(t) => t,
             _ => bad_type_info(),
         };
-        let rep = match self.rep.replace(None) {
-            Some(rep) => rep,
-            None => bail!("resource already consumed"),
-        };
+        let rep = self.rep.take()?;
         Ok(cx.resource_lower_own(resource, rep))
     }
 
@@ -156,7 +153,7 @@ unsafe impl<T: 'static> Lift for Resource<T> {
 #[derive(Debug)]
 pub struct ResourceAny {
     store: StoreId,
-    rep: Cell<Option<u32>>,
+    rep: ResourceRep,
     ty: ResourceType,
     dtor: Option<SendSyncPtr<VMFuncRef>>,
 }
@@ -194,10 +191,7 @@ impl ResourceAny {
 
     fn resource_drop_impl<T>(self, store: &mut StoreContextMut<'_, T>) -> Result<()> {
         assert_eq!(store.0.id(), self.store);
-        let rep = match self.rep.replace(None) {
-            Some(rep) => rep,
-            None => bail!("resource already consumed"),
-        };
+        let rep = self.rep.take()?;
         let dtor = match self.dtor {
             Some(dtor) => dtor.as_non_null(),
             None => return Ok(()),
@@ -215,10 +209,7 @@ impl ResourceAny {
         if cx.resource_type(resource) != self.ty {
             bail!("mismatched resource types")
         }
-        let rep = match self.rep.replace(None) {
-            Some(rep) => rep,
-            None => bail!("resource already consumed"),
-        };
+        let rep = self.rep.take()?;
         Ok(cx.resource_lower_own(resource, rep))
     }
 
@@ -231,10 +222,25 @@ impl ResourceAny {
         let ty = cx.resource_type(resource);
         Ok(ResourceAny {
             store: cx.store.id(),
-            rep: Cell::new(Some(rep)),
+            rep: ResourceRep::new(rep),
             ty,
             dtor: dtor.map(SendSyncPtr::new),
         })
+    }
+
+    /// TODO
+    pub(crate) fn partial_eq_for_val(&self, other: &ResourceAny) -> bool {
+        self.store == other.store && self.ty == other.ty && self.rep.get() == other.rep.get()
+    }
+
+    /// TODO
+    pub(crate) fn clone_for_val(&self) -> ResourceAny {
+        ResourceAny {
+            store: self.store,
+            ty: self.ty,
+            rep: ResourceRep::empty(),
+            dtor: None,
+        }
     }
 }
 
@@ -282,5 +288,33 @@ unsafe impl Lift for ResourceAny {
     fn load(cx: &LiftContext<'_>, ty: InterfaceType, bytes: &[u8]) -> Result<Self> {
         let index = u32::load(cx, InterfaceType::U32, bytes)?;
         ResourceAny::lift_from_index(cx, ty, index)
+    }
+}
+
+/// TODO
+#[derive(Debug)]
+struct ResourceRep(AtomicU64);
+
+impl ResourceRep {
+    fn new(rep: u32) -> ResourceRep {
+        ResourceRep(AtomicU64::new((u64::from(rep) << 1) | 1))
+    }
+
+    fn empty() -> ResourceRep {
+        ResourceRep(AtomicU64::new(0))
+    }
+
+    fn take(&self) -> Result<u32> {
+        match self.0.swap(0, Relaxed) {
+            0 => bail!("resource already consumed"),
+            n => Ok((n >> 1) as u32),
+        }
+    }
+
+    fn get(&self) -> Option<u32> {
+        match self.0.load(Relaxed) {
+            0 => None,
+            n => Some((n >> 1) as u32),
+        }
     }
 }
