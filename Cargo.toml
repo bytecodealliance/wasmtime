@@ -199,15 +199,15 @@ rustix = "0.37.13"
 wit-bindgen = { version = "0.7.0", default-features = false }
 
 # wasm-tools family:
-wasmparser = "0.107.0"
-wat = "1.0.66"
-wast = "60.0.0"
+wasmparser = "0.108.0"
+wat = "1.0.67"
+wast = "60.0.1"
 wasmprinter = "0.2.59"
-wasm-encoder = "0.29.0"
-wasm-smith = "0.12.10"
-wasm-mutate = "0.2.27"
-wit-parser = "0.8.0"
-wit-component = "0.11.0"
+wasm-encoder = "0.29.1"
+wasm-smith = "0.12.11"
+wasm-mutate = "0.2.28"
+wit-parser = "0.9.0"
+wit-component = "0.12.0"
 
 # Non-Bytecode Alliance maintained dependencies:
 # --------------------------
@@ -313,9 +313,13 @@ debug-assertions = false
 overflow-checks = false
 
 [patch.crates-io]
+wat = { git = 'https://github.com/alexcrichton/wasm-tools', branch = 'wasmtime-resources' }
+wast = { git = 'https://github.com/alexcrichton/wasm-tools', branch = 'wasmtime-resources' }
 wasmparser = { git = 'https://github.com/alexcrichton/wasm-tools', branch = 'wasmtime-resources' }
 wasmprinter = { git = 'https://github.com/alexcrichton/wasm-tools', branch = 'wasmtime-resources' }
+wasm-mutate = { git = 'https://github.com/alexcrichton/wasm-tools', branch = 'wasmtime-resources' }
+wasm-smith = { git = 'https://github.com/alexcrichton/wasm-tools', branch = 'wasmtime-resources' }
+wasm-encoder = { git = 'https://github.com/alexcrichton/wasm-tools', branch = 'wasmtime-resources' }
+wasm-metadata = { git = 'https://github.com/alexcrichton/wasm-tools', branch = 'wasmtime-resources' }
 wit-component = { git = 'https://github.com/alexcrichton/wasm-tools', branch = 'wasmtime-resources' }
-# wasmparser = { path = '../wasm-tools/crates/wasmparser' }
-# wasmprinter = { path = '../wasm-tools/crates/wasmprinter' }
-# wit-component = { path = '../wasm-tools/crates/wit-component' }
+wit-parser = { git = 'https://github.com/alexcrichton/wasm-tools', branch = 'wasmtime-resources' }

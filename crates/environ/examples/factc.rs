@@ -133,11 +133,7 @@ impl Factc {
                 Some(ty) => ty,
                 None => break,
             };
-            let wasm_ty = wasm_types.type_from_id(ty).unwrap();
-            let ty = match wasm_ty.as_component_func_type() {
-                Some(ty) => types.convert_component_func_type(wasm_types, ty)?,
-                None => continue,
-            };
+            let ty = types.convert_component_func_type(wasm_types, ty)?;
             adapters.push(Adapter {
                 lift_ty: ty,
                 lower_ty: ty,

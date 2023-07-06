@@ -681,6 +681,8 @@ impl<'a> InterfaceGenerator<'a> {
             TypeDefKind::Type(t) => self.type_alias(id, name, t, &ty.docs),
             TypeDefKind::Future(_) => todo!("generate for future"),
             TypeDefKind::Stream(_) => todo!("generate for stream"),
+            TypeDefKind::Handle(_) => todo!("generate for handle"),
+            TypeDefKind::Resource => todo!("generate for resource"),
             TypeDefKind::Unknown => unreachable!(),
         }
     }
