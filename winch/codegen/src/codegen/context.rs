@@ -320,6 +320,21 @@ impl<'a> CodeGenContext<'a> {
         }
     }
 
+    /// Pops the value at the stack top and assigns it to the local at the given
+    /// index, returning the register holding the source value.
+    pub fn set_local<M: MacroAssembler>(&mut self, masm: &mut M, index: u32) -> Reg {
+        let slot = self
+            .frame
+            .get_local(index)
+            .unwrap_or_else(|| panic!("valid local at slot = {}", index));
+        let size: OperandSize = slot.ty.into();
+        let src = self.pop_to_reg(masm, None, size);
+        let addr = masm.local_address(&slot);
+        masm.store(RegImm::reg(src), addr, size);
+
+        src
+    }
+
     /// Spill locals and registers to memory.
     // TODO optimize the spill range;
     //

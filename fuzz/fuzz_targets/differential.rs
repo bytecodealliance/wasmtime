@@ -354,6 +354,7 @@ fn winch_supports_module(module: &[u8]) -> bool {
                         | I64Popcnt { .. }
                         | LocalGet { .. }
                         | LocalSet { .. }
+                        | LocalTee { .. }
                         | Call { .. }
                         | Nop { .. }
                         | End { .. }

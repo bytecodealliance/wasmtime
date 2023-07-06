@@ -105,6 +105,7 @@ macro_rules! def_unsupported {
     (emit BrIf $($rest:tt)*) => {};
     (emit Return $($rest:tt)*) => {};
     (emit Unreachable $($rest:tt)*) => {};
+    (emit LocalTee $($rest:tt)*) => {};
 
     (emit $unsupported:tt $($rest:tt)*) => {$($rest)*};
 }
@@ -493,15 +494,7 @@ where
 
     // TODO verify the case where the target local is on the stack.
     fn visit_local_set(&mut self, index: u32) {
-        let context = &mut self.context;
-        let frame = context.frame;
-        let slot = frame
-            .get_local(index)
-            .expect(&format!("vald local at slot = {}", index));
-        let size: OperandSize = slot.ty.into();
-        let src = self.context.pop_to_reg(self.masm, None, size);
-        let addr = self.masm.local_address(&slot);
-        self.masm.store(RegImm::reg(src), addr, size);
+        let src = self.context.set_local(self.masm, index);
         self.context.regalloc.free_gpr(src);
     }
 
@@ -599,6 +592,11 @@ where
         // stack clean up.
         let outermost = &mut self.control_frames[0];
         outermost.set_as_target();
+    }
+
+    fn visit_local_tee(&mut self, index: u32) {
+        let src = self.context.set_local(self.masm, index);
+        self.context.stack.push(Val::reg(src));
     }
 
     wasmparser::for_each_operator!(def_unsupported);
