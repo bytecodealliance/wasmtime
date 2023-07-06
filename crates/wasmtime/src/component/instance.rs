@@ -244,7 +244,21 @@ pub(crate) enum RuntimeImport {
     Module(Module),
     Resource {
         ty: ResourceType,
-        dtor: Arc<crate::func::HostFunc>,
+
+        // A strong reference to the host function that represents the
+        // destructor for this resource. At this time all resources here are
+        // host-defined resources. Note that this is itself never read because
+        // the funcref below points to it.
+        //
+        // Also note that the `Arc` here is used to support the same host
+        // function being used across multiple instances simultaneously. Or
+        // otherwise this makes `InstancePre::instantiate` possible to create
+        // separate instances all sharing the same host function.
+        _dtor: Arc<crate::func::HostFunc>,
+
+        // A raw function which is filled out (including `wasm_call`) which
+        // points to the internals of the `_dtor` field. This is read and
+        // possibly executed by wasm.
         dtor_funcref: VMFuncRef,
     },
 }
