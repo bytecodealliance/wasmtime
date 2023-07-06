@@ -18,8 +18,8 @@
 use crate::component::{
     CanonicalAbiInfo, ComponentTypesBuilder, FlatType, InterfaceType, StringEncoding,
     TypeEnumIndex, TypeFlagsIndex, TypeListIndex, TypeOptionIndex, TypeRecordIndex,
-    TypeResultIndex, TypeTupleIndex, TypeUnionIndex, TypeVariantIndex, VariantInfo, FLAG_MAY_ENTER,
-    FLAG_MAY_LEAVE, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
+    TypeResourceTableIndex, TypeResultIndex, TypeTupleIndex, TypeUnionIndex, TypeVariantIndex,
+    VariantInfo, FLAG_MAY_ENTER, FLAG_MAY_LEAVE, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
 };
 use crate::fact::signature::Signature;
 use crate::fact::transcode::{FixedEncoding as FE, Transcode, Transcoder};
@@ -590,10 +590,8 @@ impl Compiler<'_, '_> {
                     InterfaceType::Enum(t) => self.translate_enum(*t, src, dst_ty, dst),
                     InterfaceType::Option(t) => self.translate_option(*t, src, dst_ty, dst),
                     InterfaceType::Result(t) => self.translate_result(*t, src, dst_ty, dst),
-                    // InterfaceType::Own(t) => self.translate_own(*t, src, dst_ty, dst),
-                    // InterfaceType::Borrow(t) => self.translate_borrow(*t, src, dst_ty, dst),
-                    InterfaceType::Own(t) => todo!(),
-                    InterfaceType::Borrow(t) => todo!(),
+                    InterfaceType::Own(t) => self.translate_own(*t, src, dst_ty, dst),
+                    InterfaceType::Borrow(t) => self.translate_borrow(*t, src, dst_ty, dst),
                 }
             }
 
@@ -2454,37 +2452,37 @@ impl Compiler<'_, '_> {
         }
     }
 
-    // fn translate_own(
-    //     &mut self,
-    //     src_ty: ResourceId,
-    //     src: &Source<'_>,
-    //     dst_ty: &InterfaceType,
-    //     dst: &Destination,
-    // ) {
-    //     let dst_ty = match dst_ty {
-    //         InterfaceType::Own(t) => t,
-    //         _ => panic!("expected an `Own`"),
-    //     };
+    fn translate_own(
+        &mut self,
+        src_ty: TypeResourceTableIndex,
+        src: &Source<'_>,
+        dst_ty: &InterfaceType,
+        dst: &Destination,
+    ) {
+        let dst_ty = match dst_ty {
+            InterfaceType::Own(t) => t,
+            _ => panic!("expected an `Own`"),
+        };
 
-    //     drop((src_ty, src, dst_ty, dst));
-    //     todo!();
-    // }
+        drop((src_ty, src, dst_ty, dst));
+        todo!("TODO: #6696");
+    }
 
-    // fn translate_borrow(
-    //     &mut self,
-    //     src_ty: ResourceId,
-    //     src: &Source<'_>,
-    //     dst_ty: &InterfaceType,
-    //     dst: &Destination,
-    // ) {
-    //     let dst_ty = match dst_ty {
-    //         InterfaceType::Borrow(t) => t,
-    //         _ => panic!("expected an `Borrow`"),
-    //     };
+    fn translate_borrow(
+        &mut self,
+        src_ty: TypeResourceTableIndex,
+        src: &Source<'_>,
+        dst_ty: &InterfaceType,
+        dst: &Destination,
+    ) {
+        let dst_ty = match dst_ty {
+            InterfaceType::Borrow(t) => t,
+            _ => panic!("expected an `Borrow`"),
+        };
 
-    //     drop((src_ty, src, dst_ty, dst));
-    //     todo!();
-    // }
+        drop((src_ty, src, dst_ty, dst));
+        todo!("TODO: #6696");
+    }
 
     fn trap_if_not_flag(&mut self, flags_global: GlobalIndex, flag_to_test: i32, trap: Trap) {
         self.instruction(GlobalGet(flags_global.as_u32()));
