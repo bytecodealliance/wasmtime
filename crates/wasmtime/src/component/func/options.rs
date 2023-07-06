@@ -329,7 +329,11 @@ impl<'a> LiftContext<'a> {
     }
 
     /// TODO
-    pub fn resource_lift_own(&self, ty: TypeResourceTableIndex, idx: u32) -> Result<u32> {
+    pub fn resource_lift_own(
+        &self,
+        ty: TypeResourceTableIndex,
+        idx: u32,
+    ) -> Result<(u32, Option<NonNull<VMFuncRef>>)> {
         // TODO: document unsafe
         unsafe { (*self.instance).resource_lift_own(ty, idx) }
     }

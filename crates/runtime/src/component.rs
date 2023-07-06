@@ -532,7 +532,7 @@ impl ComponentInstance {
         };
     }
 
-    /// See `ComponentInstance::set_resource_destructor`
+    /// TODO
     pub fn set_resource_destructor(
         &mut self,
         idx: ResourceIndex,
@@ -542,6 +542,15 @@ impl ComponentInstance {
             let offset = self.offsets.resource_destructor(idx);
             debug_assert!(*self.vmctx_plus_offset::<usize>(offset) == INVALID_PTR);
             *self.vmctx_plus_offset_mut(offset) = dtor;
+        }
+    }
+
+    /// TODO
+    pub fn resource_destructor(&mut self, idx: ResourceIndex) -> Option<NonNull<VMFuncRef>> {
+        unsafe {
+            let offset = self.offsets.resource_destructor(idx);
+            debug_assert!(*self.vmctx_plus_offset::<usize>(offset) != INVALID_PTR);
+            *self.vmctx_plus_offset(offset)
         }
     }
 
@@ -647,8 +656,15 @@ impl ComponentInstance {
     }
 
     /// TODO
-    pub fn resource_lift_own(&mut self, ty: TypeResourceTableIndex, idx: u32) -> Result<u32> {
-        self.resource_tables.resource_lift_own(ty, idx)
+    pub fn resource_lift_own(
+        &mut self,
+        ty: TypeResourceTableIndex,
+        idx: u32,
+    ) -> Result<(u32, Option<NonNull<VMFuncRef>>)> {
+        let rep = self.resource_tables.resource_lift_own(ty, idx)?;
+        let resource = self.component_types()[ty].ty;
+        let dtor = self.resource_destructor(resource);
+        Ok((rep, dtor))
     }
 
     /// TODO

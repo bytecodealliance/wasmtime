@@ -380,3 +380,92 @@ fn drop_host_twice() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn manually_destroy() -> Result<()> {
+    let engine = super::engine();
+    let c = Component::new(
+        &engine,
+        r#"
+            (component
+                (import "t1" (type $t1 (sub resource)))
+
+                (core module $m
+                  (global $drops (mut i32) i32.const 0)
+                  (global $last-drop (mut i32) i32.const 0)
+
+                  (func (export "dtor") (param i32)
+                    (global.set $drops (i32.add (global.get $drops) (i32.const 1)))
+                    (global.set $last-drop (local.get 0))
+                  )
+                  (func (export "drops") (result i32) global.get $drops)
+                  (func (export "last-drop") (result i32) global.get $last-drop)
+                  (func (export "pass") (param i32) (result i32) local.get 0)
+                )
+                (core instance $i (instantiate $m))
+                (type $t2' (resource (rep i32) (dtor (func $i "dtor"))))
+                (export $t2 "t2" (type $t2'))
+                (core func $ctor (canon resource.new $t2))
+                (func (export "[constructor]t2") (param "rep" u32) (result (own $t2))
+                  (canon lift (core func $ctor)))
+                (func (export "[static]t2.drops") (result u32)
+                  (canon lift (core func $i "drops")))
+                (func (export "[static]t2.last-drop") (result u32)
+                  (canon lift (core func $i "last-drop")))
+
+                (func (export "t1-pass") (param "t" (own $t1)) (result (own $t1))
+                  (canon lift (core func $i "pass")))
+            )
+        "#,
+    )?;
+
+    struct MyType;
+
+    #[derive(Default)]
+    struct Data {
+        drops: u32,
+        last_drop: Option<u32>,
+    }
+
+    let mut store = Store::new(&engine, Data::default());
+    let mut linker = Linker::new(&engine);
+    linker.root().resource::<MyType>("t1", |mut cx, rep| {
+        let data: &mut Data = cx.data_mut();
+        data.drops += 1;
+        data.last_drop = Some(rep);
+    })?;
+    let i = linker.instantiate(&mut store, &c)?;
+    let t2_ctor = i.get_typed_func::<(u32,), (ResourceAny,)>(&mut store, "[constructor]t2")?;
+    let t2_drops = i.get_typed_func::<(), (u32,)>(&mut store, "[static]t2.drops")?;
+    let t2_last_drop = i.get_typed_func::<(), (u32,)>(&mut store, "[static]t2.last-drop")?;
+    let t1_pass = i.get_typed_func::<(Resource<MyType>,), (ResourceAny,)>(&mut store, "t1-pass")?;
+
+    // Host resources can be destroyed through `resource_drop`
+    let t1 = Resource::<MyType>::new(100);
+    let (t1,) = t1_pass.call(&mut store, (t1,))?;
+    t1_pass.post_return(&mut store)?;
+    assert_eq!(store.data().drops, 0);
+    assert_eq!(store.data().last_drop, None);
+    t1.resource_drop(&mut store)?;
+    assert_eq!(store.data().drops, 1);
+    assert_eq!(store.data().last_drop, Some(100));
+
+    // Guest resources can be destroyed through `resource_drop`
+    let (t2,) = t2_ctor.call(&mut store, (200,))?;
+    t2_ctor.post_return(&mut store)?;
+    assert_eq!(t2_drops.call(&mut store, ())?, (0,));
+    t2_drops.post_return(&mut store)?;
+    assert_eq!(t2_last_drop.call(&mut store, ())?, (0,));
+    t2_last_drop.post_return(&mut store)?;
+    t2.resource_drop(&mut store)?;
+    assert_eq!(t2_drops.call(&mut store, ())?, (1,));
+    t2_drops.post_return(&mut store)?;
+    assert_eq!(t2_last_drop.call(&mut store, ())?, (200,));
+    t2_last_drop.post_return(&mut store)?;
+
+    // Wires weren't crossed to drop more resources
+    assert_eq!(store.data().drops, 1);
+    assert_eq!(store.data().last_drop, Some(100));
+
+    Ok(())
+}

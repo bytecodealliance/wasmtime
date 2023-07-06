@@ -2,6 +2,7 @@ use crate::component::func::{bad_type_info, desc, LiftContext, LowerContext};
 use crate::component::matching::InstanceType;
 use crate::component::{ComponentType, Lift, Lower};
 use crate::store::StoreId;
+use crate::{AsContextMut, StoreContextMut};
 use anyhow::{bail, Result};
 use std::any::TypeId;
 use std::cell::Cell;
@@ -9,6 +10,7 @@ use std::marker;
 use std::mem::MaybeUninit;
 use wasmtime_environ::component::{CanonicalAbiInfo, DefinedResourceIndex, InterfaceType};
 use wasmtime_runtime::component::ComponentInstance;
+use wasmtime_runtime::{SendSyncPtr, VMFuncRef, ValRaw};
 
 /// TODO
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -91,7 +93,7 @@ impl<T> Resource<T> {
             InterfaceType::Own(t) => t,
             _ => bad_type_info(),
         };
-        let rep = cx.resource_lift_own(resource, index)?;
+        let (rep, _dtor) = cx.resource_lift_own(resource, index)?;
         // TODO: should debug assert types match here
         Ok(Resource::new(rep))
     }
@@ -153,14 +155,56 @@ unsafe impl<T: 'static> Lift for Resource<T> {
 /// TODO
 #[derive(Debug)]
 pub struct ResourceAny {
+    store: StoreId,
     rep: Cell<Option<u32>>,
     ty: ResourceType,
+    dtor: Option<SendSyncPtr<VMFuncRef>>,
 }
 
 impl ResourceAny {
     /// TODO
     pub fn ty(&self) -> ResourceType {
         self.ty
+    }
+
+    /// TODO
+    pub fn resource_drop(self, mut store: impl AsContextMut) -> Result<()> {
+        let mut store = store.as_context_mut();
+        assert!(
+            !store.0.async_support(),
+            "must use `resource_drop_async` when async support is enabled on the config"
+        );
+        self.resource_drop_impl(&mut store.as_context_mut())
+    }
+
+    /// TODO
+    pub async fn resource_drop_async<T>(self, mut store: impl AsContextMut<Data = T>) -> Result<()>
+    where
+        T: Send,
+    {
+        let mut store = store.as_context_mut();
+        assert!(
+            store.0.async_support(),
+            "cannot use `resource_drop_async` without enabling async support in the config"
+        );
+        store
+            .on_fiber(|store| self.resource_drop_impl(store))
+            .await?
+    }
+
+    fn resource_drop_impl<T>(self, store: &mut StoreContextMut<'_, T>) -> Result<()> {
+        assert_eq!(store.0.id(), self.store);
+        let rep = match self.rep.replace(None) {
+            Some(rep) => rep,
+            None => bail!("resource already consumed"),
+        };
+        let dtor = match self.dtor {
+            Some(dtor) => dtor.as_non_null(),
+            None => return Ok(()),
+        };
+        let mut args = [ValRaw::u32(rep)];
+        // TODO: unsafe call
+        unsafe { crate::Func::call_unchecked_raw(store, dtor, args.as_mut_ptr(), args.len()) }
     }
 
     fn lower_to_index<U>(&self, cx: &mut LowerContext<'_, U>, ty: InterfaceType) -> Result<u32> {
@@ -183,11 +227,13 @@ impl ResourceAny {
             InterfaceType::Own(t) => t,
             _ => bad_type_info(),
         };
-        let rep = cx.resource_lift_own(resource, index)?;
+        let (rep, dtor) = cx.resource_lift_own(resource, index)?;
         let ty = cx.resource_type(resource);
         Ok(ResourceAny {
+            store: cx.store.id(),
             rep: Cell::new(Some(rep)),
             ty,
+            dtor: dtor.map(SendSyncPtr::new),
         })
     }
 }
