@@ -6,7 +6,7 @@ use anyhow::{bail, Result};
 use std::ptr::NonNull;
 use std::sync::Arc;
 use wasmtime_environ::component::{ComponentTypes, StringEncoding, TypeResourceTableIndex};
-use wasmtime_runtime::component::ComponentInstance;
+use wasmtime_runtime::component::{ComponentInstance, InstanceFlags};
 use wasmtime_runtime::{VMFuncRef, VMMemoryDefinition};
 
 /// Runtime representation of canonical ABI options in the component model.
@@ -339,7 +339,7 @@ impl<'a> LiftContext<'a> {
         &self,
         ty: TypeResourceTableIndex,
         idx: u32,
-    ) -> Result<(u32, Option<NonNull<VMFuncRef>>)> {
+    ) -> Result<(u32, Option<NonNull<VMFuncRef>>, Option<InstanceFlags>)> {
         // TODO: document unsafe
         unsafe { (*self.instance).resource_lift_own(ty, idx) }
     }

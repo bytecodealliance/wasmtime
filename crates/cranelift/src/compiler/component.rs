@@ -6,7 +6,7 @@ use cranelift_codegen::ir::{self, InstBuilder, MemFlags};
 use cranelift_codegen::isa::CallConv;
 use cranelift_frontend::FunctionBuilder;
 use std::any::Any;
-use wasmtime_cranelift_shared::ALWAYS_TRAP_CODE;
+use wasmtime_cranelift_shared::{ALWAYS_TRAP_CODE, CANNOT_ENTER_CODE};
 use wasmtime_environ::component::*;
 use wasmtime_environ::{PtrSize, WasmFuncType, WasmType};
 
@@ -358,11 +358,19 @@ impl Compiler {
         let should_run_destructor = builder.func.dfg.inst_results(call)[0];
 
         let resource_ty = types[resource.resource].ty;
-        let has_destructor = match component.defined_resource_index(resource_ty) {
-            Some(idx) => component.initializers.iter().any(|i| match i {
-                GlobalInitializer::Resource(r) => r.index == idx && r.dtor.is_some(),
-                _ => false,
-            }),
+        let resource_def = component.defined_resource_index(resource_ty).map(|idx| {
+            component
+                .initializers
+                .iter()
+                .filter_map(|i| match i {
+                    GlobalInitializer::Resource(r) if r.index == idx => Some(r),
+                    _ => None,
+                })
+                .next()
+                .unwrap()
+        });
+        let has_destructor = match resource_def {
+            Some(def) => def.dtor.is_some(),
             None => true,
         };
         if has_destructor {
@@ -372,6 +380,12 @@ impl Compiler {
             //      brif should_run_destructor, run_destructor_block, return_block
             //
             //    run_destructor_block:
+            //      ;; test may_enter, but only if the component instances
+            //      ;; differ
+            //      flags = load.i32 vmctx+$offset
+            //      masked = band flags, $FLAG_MAY_ENTER
+            //      trapz masked, CANNOT_ENTER_CODE
+            //
             //      rep = ushr.i64 rep, 1
             //      rep = ireduce.i32 rep
             //      dtor = load.ptr vmctx+$offset
@@ -404,6 +418,26 @@ impl Compiler {
             let trusted = ir::MemFlags::trusted().with_readonly();
 
             builder.switch_to_block(run_destructor_block);
+
+            // If this is a defined resource within the component itself then a
+            // check needs to be emitted for the `may_enter` flag. Note though
+            // that this check can be elided if the resource table resides in
+            // the same component instance that defined the resource as the
+            // component is calling itself.
+            if let Some(def) = resource_def {
+                if types[resource.resource].instance != def.instance {
+                    let flags = builder.ins().load(
+                        ir::types::I32,
+                        trusted,
+                        vmctx,
+                        i32::try_from(offsets.instance_flags(def.instance)).unwrap(),
+                    );
+                    let masked = builder.ins().band_imm(flags, i64::from(FLAG_MAY_ENTER));
+                    builder
+                        .ins()
+                        .trapz(masked, ir::TrapCode::User(CANNOT_ENTER_CODE));
+                }
+            }
             let rep = builder.ins().ushr_imm(should_run_destructor, 1);
             let rep = builder.ins().ireduce(ir::types::I32, rep);
             let index = types[resource.resource].ty;

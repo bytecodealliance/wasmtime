@@ -160,6 +160,8 @@ pub struct Component {
     pub num_resources: u32,
     /// TODO
     pub imported_resources: PrimaryMap<ResourceIndex, RuntimeImportIndex>,
+    /// TODO
+    pub defined_resource_instances: PrimaryMap<DefinedResourceIndex, RuntimeComponentInstanceIndex>,
 }
 
 impl Component {
@@ -558,6 +560,8 @@ pub struct Resource {
     pub rep: WasmType,
     /// TODO
     pub dtor: Option<CoreDef>,
+    /// TODO
+    pub instance: RuntimeComponentInstanceIndex,
 }
 
 /// TODO

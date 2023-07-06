@@ -2384,11 +2384,10 @@ fn errors_that_poison_instance() -> Result<()> {
             Ok(_) => panic!("expected an error"),
             Err(e) => e,
         };
-        assert!(
-            err.to_string()
-                .contains("cannot reenter component instance"),
-            "{}",
-            err,
+        assert_eq!(
+            err.downcast_ref::<Trap>(),
+            Some(&Trap::CannotEnterComponent),
+            "{err}",
         );
     }
 }

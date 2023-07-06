@@ -1,4 +1,7 @@
-use crate::component::{ComponentTypes, ResourceIndex, TypeResourceTable, TypeResourceTableIndex};
+use crate::component::{
+    ComponentTypes, ResourceIndex, RuntimeComponentInstanceIndex, TypeResourceTable,
+    TypeResourceTableIndex,
+};
 use std::collections::HashMap;
 use wasmparser::types;
 
@@ -8,6 +11,7 @@ use wasmparser::types;
 pub struct ResourcesBuilder {
     resource_id_to_table_index: HashMap<types::ResourceId, TypeResourceTableIndex>,
     resource_id_to_resource_index: HashMap<types::ResourceId, ResourceIndex>,
+    current_instance: Option<RuntimeComponentInstanceIndex>,
 }
 
 impl ResourcesBuilder {
@@ -22,7 +26,10 @@ impl ResourcesBuilder {
             .entry(id)
             .or_insert_with(|| {
                 let ty = self.resource_id_to_resource_index[&id];
-                types.resource_tables.push(TypeResourceTable { ty })
+                let instance = self.current_instance.expect("current instance not set");
+                types
+                    .resource_tables
+                    .push(TypeResourceTable { ty, instance })
             })
     }
 
@@ -78,5 +85,10 @@ impl ResourcesBuilder {
         };
         let prev = self.resource_id_to_resource_index.insert(id, ty);
         assert!(prev.is_none());
+    }
+
+    /// TODO
+    pub fn set_current_instance(&mut self, instance: RuntimeComponentInstanceIndex) {
+        self.current_instance = Some(instance);
     }
 }

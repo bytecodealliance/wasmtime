@@ -267,6 +267,7 @@ pub struct Transcoder {
 pub struct Resource {
     pub rep: WasmType,
     pub dtor: Option<CoreDef>,
+    pub instance: RuntimeComponentInstanceIndex,
 }
 
 /// A helper structure to "intern" and deduplicate values of type `V` with an
@@ -386,6 +387,7 @@ impl ComponentDfg {
             num_resource_tables: self.num_resource_tables,
             num_resources: (self.resources.len() + self.imported_resources.len()) as u32,
             imported_resources: self.imported_resources,
+            defined_resource_instances: self.resources.iter().map(|(_, r)| r.instance).collect(),
         }
     }
 
@@ -465,6 +467,7 @@ impl LinearizeDfg<'_> {
                 dtor,
                 index,
                 rep: resource.rep,
+                instance: resource.instance,
             }));
     }
 

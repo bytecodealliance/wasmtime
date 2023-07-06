@@ -1,6 +1,6 @@
 use anyhow::Result;
 use wasmtime::component::*;
-use wasmtime::Store;
+use wasmtime::{Store, Trap};
 
 #[test]
 fn host_resource_types() -> Result<()> {
@@ -574,6 +574,65 @@ fn dynamic_val() -> Result<()> {
         }
         _ => unreachable!(),
     }
+
+    Ok(())
+}
+
+#[test]
+fn cannot_reenter_during_import() -> Result<()> {
+    let engine = super::engine();
+    let c = Component::new(
+        &engine,
+        r#"
+            (component
+                (import "f" (func $f))
+
+                (core func $f (canon lower (func $f)))
+
+                (core module $m
+                    (import "" "f" (func $f))
+                    (func (export "call") call $f)
+                    (func (export "dtor") (param i32) unreachable)
+                )
+
+                (core instance $i (instantiate $m
+                    (with "" (instance
+                        (export "f" (func $f))
+                    ))
+                ))
+
+                (type $t2' (resource (rep i32) (dtor (func $i "dtor"))))
+                (export $t2 "t" (type $t2'))
+                (core func $ctor (canon resource.new $t2))
+                (func (export "ctor") (param "x" u32) (result (own $t2))
+                    (canon lift (core func $ctor)))
+
+                (func (export "call") (canon lift (core func $i "call")))
+            )
+        "#,
+    )?;
+
+    let mut store = Store::new(&engine, None);
+    let mut linker = Linker::new(&engine);
+    linker.root().func_wrap("f", |mut cx, ()| {
+        let data: &mut Option<ResourceAny> = cx.data_mut();
+        let err = data.take().unwrap().resource_drop(cx).unwrap_err();
+        assert_eq!(
+            err.downcast_ref(),
+            Some(&Trap::CannotEnterComponent),
+            "bad error: {err:?}"
+        );
+        Ok(())
+    })?;
+    let i = linker.instantiate(&mut store, &c)?;
+
+    let ctor = i.get_typed_func::<(u32,), (ResourceAny,)>(&mut store, "ctor")?;
+    let call = i.get_typed_func::<(), ()>(&mut store, "call")?;
+
+    let (resource,) = ctor.call(&mut store, (100,))?;
+    ctor.post_return(&mut store)?;
+    *store.data_mut() = Some(resource);
+    call.call(&mut store, ())?;
 
     Ok(())
 }

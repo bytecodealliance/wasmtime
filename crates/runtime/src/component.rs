@@ -224,10 +224,10 @@ impl ComponentInstance {
     /// for canonical lowering and lifting operations.
     pub fn instance_flags(&self, instance: RuntimeComponentInstanceIndex) -> InstanceFlags {
         unsafe {
-            InstanceFlags(
-                self.vmctx_plus_offset::<VMGlobalDefinition>(self.offsets.instance_flags(instance))
-                    .cast_mut(),
-            )
+            let ptr = self
+                .vmctx_plus_offset::<VMGlobalDefinition>(self.offsets.instance_flags(instance))
+                .cast_mut();
+            InstanceFlags(SendSyncPtr::new(NonNull::new(ptr).unwrap()))
         }
     }
 
@@ -565,7 +565,7 @@ impl ComponentInstance {
             let i = RuntimeComponentInstanceIndex::from_u32(i);
             let mut def = VMGlobalDefinition::new();
             *def.as_i32_mut() = FLAG_MAY_ENTER | FLAG_MAY_LEAVE;
-            *self.instance_flags(i).0 = def;
+            *self.instance_flags(i).as_raw() = def;
         }
 
         // In debug mode set non-null bad values to all "pointer looking" bits
@@ -660,11 +660,16 @@ impl ComponentInstance {
         &mut self,
         ty: TypeResourceTableIndex,
         idx: u32,
-    ) -> Result<(u32, Option<NonNull<VMFuncRef>>)> {
+    ) -> Result<(u32, Option<NonNull<VMFuncRef>>, Option<InstanceFlags>)> {
         let rep = self.resource_tables.resource_lift_own(ty, idx)?;
         let resource = self.component_types()[ty].ty;
         let dtor = self.resource_destructor(resource);
-        Ok((rep, dtor))
+        let component = self.component();
+        let flags = component.defined_resource_index(resource).map(|i| {
+            let instance = component.defined_resource_instances[i];
+            self.instance_flags(instance)
+        });
+        Ok((rep, dtor, flags))
     }
 
     /// TODO
@@ -937,55 +942,55 @@ impl VMOpaqueContext {
 
 #[allow(missing_docs)]
 #[repr(transparent)]
-pub struct InstanceFlags(*mut VMGlobalDefinition);
+pub struct InstanceFlags(SendSyncPtr<VMGlobalDefinition>);
 
 #[allow(missing_docs)]
 impl InstanceFlags {
     #[inline]
     pub unsafe fn may_leave(&self) -> bool {
-        *(*self.0).as_i32() & FLAG_MAY_LEAVE != 0
+        *(*self.as_raw()).as_i32() & FLAG_MAY_LEAVE != 0
     }
 
     #[inline]
     pub unsafe fn set_may_leave(&mut self, val: bool) {
         if val {
-            *(*self.0).as_i32_mut() |= FLAG_MAY_LEAVE;
+            *(*self.as_raw()).as_i32_mut() |= FLAG_MAY_LEAVE;
         } else {
-            *(*self.0).as_i32_mut() &= !FLAG_MAY_LEAVE;
+            *(*self.as_raw()).as_i32_mut() &= !FLAG_MAY_LEAVE;
         }
     }
 
     #[inline]
     pub unsafe fn may_enter(&self) -> bool {
-        *(*self.0).as_i32() & FLAG_MAY_ENTER != 0
+        *(*self.as_raw()).as_i32() & FLAG_MAY_ENTER != 0
     }
 
     #[inline]
     pub unsafe fn set_may_enter(&mut self, val: bool) {
         if val {
-            *(*self.0).as_i32_mut() |= FLAG_MAY_ENTER;
+            *(*self.as_raw()).as_i32_mut() |= FLAG_MAY_ENTER;
         } else {
-            *(*self.0).as_i32_mut() &= !FLAG_MAY_ENTER;
+            *(*self.as_raw()).as_i32_mut() &= !FLAG_MAY_ENTER;
         }
     }
 
     #[inline]
     pub unsafe fn needs_post_return(&self) -> bool {
-        *(*self.0).as_i32() & FLAG_NEEDS_POST_RETURN != 0
+        *(*self.as_raw()).as_i32() & FLAG_NEEDS_POST_RETURN != 0
     }
 
     #[inline]
     pub unsafe fn set_needs_post_return(&mut self, val: bool) {
         if val {
-            *(*self.0).as_i32_mut() |= FLAG_NEEDS_POST_RETURN;
+            *(*self.as_raw()).as_i32_mut() |= FLAG_NEEDS_POST_RETURN;
         } else {
-            *(*self.0).as_i32_mut() &= !FLAG_NEEDS_POST_RETURN;
+            *(*self.as_raw()).as_i32_mut() &= !FLAG_NEEDS_POST_RETURN;
         }
     }
 
     #[inline]
     pub fn as_raw(&self) -> *mut VMGlobalDefinition {
-        self.0
+        self.0.as_ptr()
     }
 }
 

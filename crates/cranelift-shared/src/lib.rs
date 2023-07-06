@@ -58,6 +58,8 @@ const DEBUG_ASSERT_TRAP_CODE: u16 = u16::MAX;
 
 /// Code used as the user-defined trap code.
 pub const ALWAYS_TRAP_CODE: u16 = 100;
+/// Code used as the user-defined trap code.
+pub const CANNOT_ENTER_CODE: u16 = 101;
 
 /// Converts machine traps to trap information.
 pub fn mach_trap_to_trap(trap: &MachTrap) -> Option<TrapInformation> {
@@ -77,6 +79,7 @@ pub fn mach_trap_to_trap(trap: &MachTrap) -> Option<TrapInformation> {
             ir::TrapCode::UnreachableCodeReached => Trap::UnreachableCodeReached,
             ir::TrapCode::Interrupt => Trap::Interrupt,
             ir::TrapCode::User(ALWAYS_TRAP_CODE) => Trap::AlwaysTrapAdapter,
+            ir::TrapCode::User(CANNOT_ENTER_CODE) => Trap::CannotEnterComponent,
             ir::TrapCode::NullReference => Trap::NullReference,
 
             // These do not get converted to wasmtime traps, since they

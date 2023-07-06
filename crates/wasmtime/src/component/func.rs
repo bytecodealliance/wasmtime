@@ -467,7 +467,7 @@ impl Func {
             // never be entered again. The only time this flag is set to `true`
             // again is after post-return logic has completed successfully.
             if !flags.may_enter() {
-                bail!("cannot reenter component instance");
+                bail!(crate::Trap::CannotEnterComponent);
             }
             flags.set_may_enter(false);
 

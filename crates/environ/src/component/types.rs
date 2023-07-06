@@ -1530,6 +1530,8 @@ pub struct TypeResult {
 pub struct TypeResourceTable {
     /// TODO
     pub ty: ResourceIndex,
+    /// TODO
+    pub instance: RuntimeComponentInstanceIndex,
 }
 
 /// Shape of a "list" interface type.

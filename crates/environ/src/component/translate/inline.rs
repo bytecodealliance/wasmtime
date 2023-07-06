@@ -65,6 +65,8 @@ pub(super) fn run(
         runtime_instances: PrimaryMap::default(),
     };
 
+    let index = RuntimeComponentInstanceIndex::from_u32(0);
+
     // The initial arguments to the root component are all host imports. This
     // means that they're all using the `ComponentItemDef::Host` variant. Here
     // an `ImportIndex` is allocated for each item and then the argument is
@@ -74,6 +76,7 @@ pub(super) fn run(
     // item since we don't know the precise structure of the host import.
     let mut args = HashMap::with_capacity(result.exports.len());
     let mut path = Vec::new();
+    types.resources_mut().set_current_instance(index);
     for init in result.initializers.iter() {
         let (name, ty) = match *init {
             LocalInitializer::Import(name, ty) => (name, ty),
@@ -115,7 +118,6 @@ pub(super) fn run(
     // initial frame. When the inliner finishes it will return the exports of
     // the root frame which are then used for recording the exports of the
     // component.
-    let index = RuntimeComponentInstanceIndex::from_u32(0);
     inliner.result.num_runtime_component_instances += 1;
     let frame = InlinerFrame::new(index, result, ComponentClosure::default(), args, None);
     let resources_snapshot = types.resources_mut().clone();
@@ -340,6 +342,7 @@ impl<'a> Inliner<'a> {
         // TODO: comments about resources_cache
         loop {
             let (frame, _) = frames.last_mut().unwrap();
+            types.resources_mut().set_current_instance(frame.instance);
             match frame.initializers.next() {
                 // Process the initializer and if it started the instantiation
                 // of another component then we push that frame on the stack to
@@ -559,6 +562,7 @@ impl<'a> Inliner<'a> {
                 let idx = self.result.resources.push(dfg::Resource {
                     rep: *rep,
                     dtor: dtor.map(|i| frame.funcs[i].clone()),
+                    instance: frame.instance,
                 });
                 self.result
                     .side_effects

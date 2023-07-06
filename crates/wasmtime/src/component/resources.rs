@@ -2,14 +2,15 @@ use crate::component::func::{bad_type_info, desc, LiftContext, LowerContext};
 use crate::component::matching::InstanceType;
 use crate::component::{ComponentType, Lift, Lower};
 use crate::store::StoreId;
-use crate::{AsContextMut, StoreContextMut};
+use crate::{AsContextMut, StoreContextMut, Trap};
 use anyhow::{bail, Result};
 use std::any::TypeId;
+use std::fmt;
 use std::marker;
 use std::mem::MaybeUninit;
 use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
 use wasmtime_environ::component::{CanonicalAbiInfo, DefinedResourceIndex, InterfaceType};
-use wasmtime_runtime::component::ComponentInstance;
+use wasmtime_runtime::component::{ComponentInstance, InstanceFlags};
 use wasmtime_runtime::{SendSyncPtr, VMFuncRef, ValRaw};
 
 /// TODO
@@ -90,7 +91,9 @@ impl<T> Resource<T> {
             InterfaceType::Own(t) => t,
             _ => bad_type_info(),
         };
-        let (rep, _dtor) = cx.resource_lift_own(resource, index)?;
+        let (rep, dtor, flags) = cx.resource_lift_own(resource, index)?;
+        debug_assert!(flags.is_none());
+        debug_assert!(dtor.is_some());
         // TODO: should debug assert types match here
         Ok(Resource::new(rep))
     }
@@ -150,12 +153,12 @@ unsafe impl<T: 'static> Lift for Resource<T> {
 }
 
 /// TODO
-#[derive(Debug)]
 pub struct ResourceAny {
     store: StoreId,
     rep: ResourceRep,
     ty: ResourceType,
     dtor: Option<SendSyncPtr<VMFuncRef>>,
+    flags: Option<InstanceFlags>,
 }
 
 impl ResourceAny {
@@ -192,6 +195,16 @@ impl ResourceAny {
     fn resource_drop_impl<T>(self, store: &mut StoreContextMut<'_, T>) -> Result<()> {
         assert_eq!(store.0.id(), self.store);
         let rep = self.rep.take()?;
+
+        // TODO
+        if let Some(flags) = &self.flags {
+            unsafe {
+                if !flags.may_enter() {
+                    bail!(Trap::CannotEnterComponent);
+                }
+            }
+        }
+
         let dtor = match self.dtor {
             Some(dtor) => dtor.as_non_null(),
             None => return Ok(()),
@@ -218,13 +231,14 @@ impl ResourceAny {
             InterfaceType::Own(t) => t,
             _ => bad_type_info(),
         };
-        let (rep, dtor) = cx.resource_lift_own(resource, index)?;
+        let (rep, dtor, flags) = cx.resource_lift_own(resource, index)?;
         let ty = cx.resource_type(resource);
         Ok(ResourceAny {
             store: cx.store.id(),
             rep: ResourceRep::new(rep),
             ty,
             dtor: dtor.map(SendSyncPtr::new),
+            flags,
         })
     }
 
@@ -240,6 +254,7 @@ impl ResourceAny {
             ty: self.ty,
             rep: ResourceRep::empty(),
             dtor: None,
+            flags: None,
         }
     }
 }
@@ -292,7 +307,6 @@ unsafe impl Lift for ResourceAny {
 }
 
 /// TODO
-#[derive(Debug)]
 struct ResourceRep(AtomicU64);
 
 impl ResourceRep {
@@ -316,5 +330,13 @@ impl ResourceRep {
             0 => None,
             n => Some((n >> 1) as u32),
         }
+    }
+}
+
+impl fmt::Debug for ResourceAny {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ResourceAny")
+            .field("rep", &self.rep.get())
+            .finish()
     }
 }
