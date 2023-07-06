@@ -53,7 +53,7 @@ pub struct ComponentInstance {
 
     /// TODO:
     /// TODO: Any is bad
-    imported_resources: Box<dyn Any + Send + Sync>,
+    resource_types: Arc<dyn Any + Send + Sync>,
 
     /// A zero-sized field which represents the end of the struct for the actual
     /// `VMComponentContext` to be allocated behind.
@@ -171,7 +171,7 @@ impl ComponentInstance {
         alloc_size: usize,
         offsets: VMComponentOffsets<HostPtr>,
         runtime_info: Arc<dyn ComponentRuntimeInfo>,
-        imported_resources: Box<dyn Any + Send + Sync>,
+        resource_types: Arc<dyn Any + Send + Sync>,
         store: *mut dyn Store,
     ) {
         assert!(alloc_size >= Self::alloc_layout(&offsets).size());
@@ -191,7 +191,7 @@ impl ComponentInstance {
                 ),
                 resource_tables: ResourceTables::new(runtime_info.component().num_resource_tables),
                 runtime_info,
-                imported_resources,
+                resource_types,
                 vmctx: VMComponentContext {
                     _marker: marker::PhantomPinned,
                 },
@@ -641,8 +641,8 @@ impl ComponentInstance {
     }
 
     /// TODO
-    pub fn imported_resources(&self) -> &dyn Any {
-        &*self.imported_resources
+    pub fn resource_types(&self) -> &Arc<dyn Any + Send + Sync> {
+        &self.resource_types
     }
 
     /// TODO
@@ -708,7 +708,7 @@ impl OwnedComponentInstance {
     /// heap with `malloc` and configures it for the `component` specified.
     pub fn new(
         runtime_info: Arc<dyn ComponentRuntimeInfo>,
-        imported_resources: Box<dyn Any + Send + Sync>,
+        resource_types: Arc<dyn Any + Send + Sync>,
         store: *mut dyn Store,
     ) -> OwnedComponentInstance {
         let component = runtime_info.component();
@@ -731,7 +731,7 @@ impl OwnedComponentInstance {
                 layout.size(),
                 offsets,
                 runtime_info,
-                imported_resources,
+                resource_types,
                 store,
             );
 
@@ -894,8 +894,8 @@ impl OwnedComponentInstance {
     }
 
     /// TODO
-    pub fn imported_resources_mut(&mut self) -> &mut dyn Any {
-        unsafe { &mut *(*self.ptr.as_ptr()).imported_resources }
+    pub fn resource_types_mut(&mut self) -> &mut Arc<dyn Any + Send + Sync> {
+        unsafe { &mut (*self.ptr.as_ptr()).resource_types }
     }
 }
 

@@ -266,8 +266,14 @@ impl<'a, T> LowerContext<'a, T> {
         unsafe { (*self.instance).resource_lower_own(ty, rep) }
     }
 
+    /// TODO
     pub fn resource_type(&self, ty: TypeResourceTableIndex) -> ResourceType {
-        InstanceType::new(self.store.0, unsafe { &*self.instance }).resource_type(ty)
+        self.instance_type().resource_type(ty)
+    }
+
+    /// TODO
+    pub fn instance_type(&self) -> InstanceType<'_> {
+        InstanceType::new(self.store.0, unsafe { &*self.instance })
     }
 }
 
@@ -338,7 +344,13 @@ impl<'a> LiftContext<'a> {
         unsafe { (*self.instance).resource_lift_own(ty, idx) }
     }
 
+    /// TODO
     pub fn resource_type(&self, ty: TypeResourceTableIndex) -> ResourceType {
-        InstanceType::new(self.store, unsafe { &*self.instance }).resource_type(ty)
+        self.instance_type().resource_type(ty)
+    }
+
+    /// TODO
+    pub fn instance_type(&self) -> InstanceType<'_> {
+        InstanceType::new(self.store, unsafe { &*self.instance })
     }
 }

@@ -1,5 +1,6 @@
 //! This module defines the `Type` type, representing the dynamic form of a component interface type.
 
+use crate::component::matching::InstanceType;
 use crate::component::values::{self, Val};
 use anyhow::{anyhow, Result};
 use std::fmt;
@@ -7,10 +8,11 @@ use std::mem;
 use std::ops::Deref;
 use std::sync::Arc;
 use wasmtime_environ::component::{
-    CanonicalAbiInfo, ComponentTypes, InterfaceType, TypeEnumIndex, TypeFlagsIndex, TypeListIndex,
-    TypeOptionIndex, TypeRecordIndex, TypeResultIndex, TypeTupleIndex, TypeUnionIndex,
-    TypeVariantIndex,
+    CanonicalAbiInfo, ComponentTypes, InterfaceType, ResourceIndex, TypeEnumIndex, TypeFlagsIndex,
+    TypeListIndex, TypeOptionIndex, TypeRecordIndex, TypeResultIndex, TypeTupleIndex,
+    TypeUnionIndex, TypeVariantIndex,
 };
+use wasmtime_environ::PrimaryMap;
 
 pub use crate::component::resources::ResourceType;
 
@@ -18,6 +20,24 @@ pub use crate::component::resources::ResourceType;
 struct Handle<T> {
     index: T,
     types: Arc<ComponentTypes>,
+    resources: Arc<PrimaryMap<ResourceIndex, ResourceType>>,
+}
+
+impl<T> Handle<T> {
+    fn new(index: T, ty: &InstanceType<'_>) -> Handle<T> {
+        Handle {
+            index,
+            types: ty.types.clone(),
+            resources: ty.resources.clone(),
+        }
+    }
+
+    fn instance(&self) -> InstanceType<'_> {
+        InstanceType {
+            types: &self.types,
+            resources: &self.resources,
+        }
+    }
 }
 
 impl<T: fmt::Debug> fmt::Debug for Handle<T> {
@@ -33,7 +53,9 @@ impl<T: PartialEq> PartialEq for Handle<T> {
         // FIXME: This is an overly-restrictive definition of equality in that it doesn't consider types to be
         // equal unless they refer to the same declaration in the same component.  It's a good shortcut for the
         // common case, but we should also do a recursive structural equality test if the shortcut test fails.
-        self.index == other.index && Arc::ptr_eq(&self.types, &other.types)
+        self.index == other.index
+            && Arc::ptr_eq(&self.types, &other.types)
+            && Arc::ptr_eq(&self.resources, &other.resources)
     }
 }
 
@@ -49,16 +71,13 @@ impl List {
         Ok(Val::List(values::List::new(self, values)?))
     }
 
-    pub(crate) fn from(index: TypeListIndex, types: &Arc<ComponentTypes>) -> Self {
-        List(Handle {
-            index,
-            types: types.clone(),
-        })
+    pub(crate) fn from(index: TypeListIndex, ty: &InstanceType<'_>) -> Self {
+        List(Handle::new(index, ty))
     }
 
     /// Retreive the element type of this `list`.
     pub fn ty(&self) -> Type {
-        Type::from(&self.0.types[self.0.index].element, &self.0.types)
+        Type::from(&self.0.types[self.0.index].element, &self.0.instance())
     }
 }
 
@@ -80,18 +99,15 @@ impl Record {
         Ok(Val::Record(values::Record::new(self, values)?))
     }
 
-    pub(crate) fn from(index: TypeRecordIndex, types: &Arc<ComponentTypes>) -> Self {
-        Record(Handle {
-            index,
-            types: types.clone(),
-        })
+    pub(crate) fn from(index: TypeRecordIndex, ty: &InstanceType<'_>) -> Self {
+        Record(Handle::new(index, ty))
     }
 
     /// Retrieve the fields of this `record` in declaration order.
     pub fn fields(&self) -> impl ExactSizeIterator<Item = Field<'_>> {
         self.0.types[self.0.index].fields.iter().map(|field| Field {
             name: &field.name,
-            ty: Type::from(&field.ty, &self.0.types),
+            ty: Type::from(&field.ty, &self.0.instance()),
         })
     }
 }
@@ -106,11 +122,8 @@ impl Tuple {
         Ok(Val::Tuple(values::Tuple::new(self, values)?))
     }
 
-    pub(crate) fn from(index: TypeTupleIndex, types: &Arc<ComponentTypes>) -> Self {
-        Tuple(Handle {
-            index,
-            types: types.clone(),
-        })
+    pub(crate) fn from(index: TypeTupleIndex, ty: &InstanceType<'_>) -> Self {
+        Tuple(Handle::new(index, ty))
     }
 
     /// Retrieve the types of the fields of this `tuple` in declaration order.
@@ -118,7 +131,7 @@ impl Tuple {
         self.0.types[self.0.index]
             .types
             .iter()
-            .map(|ty| Type::from(ty, &self.0.types))
+            .map(|ty| Type::from(ty, &self.0.instance()))
     }
 }
 
@@ -140,18 +153,18 @@ impl Variant {
         Ok(Val::Variant(values::Variant::new(self, name, value)?))
     }
 
-    pub(crate) fn from(index: TypeVariantIndex, types: &Arc<ComponentTypes>) -> Self {
-        Variant(Handle {
-            index,
-            types: types.clone(),
-        })
+    pub(crate) fn from(index: TypeVariantIndex, ty: &InstanceType<'_>) -> Self {
+        Variant(Handle::new(index, ty))
     }
 
     /// Retrieve the cases of this `variant` in declaration order.
     pub fn cases(&self) -> impl ExactSizeIterator<Item = Case> {
         self.0.types[self.0.index].cases.iter().map(|case| Case {
             name: &case.name,
-            ty: case.ty.as_ref().map(|ty| Type::from(ty, &self.0.types)),
+            ty: case
+                .ty
+                .as_ref()
+                .map(|ty| Type::from(ty, &self.0.instance())),
         })
     }
 }
@@ -166,11 +179,8 @@ impl Enum {
         Ok(Val::Enum(values::Enum::new(self, name)?))
     }
 
-    pub(crate) fn from(index: TypeEnumIndex, types: &Arc<ComponentTypes>) -> Self {
-        Enum(Handle {
-            index,
-            types: types.clone(),
-        })
+    pub(crate) fn from(index: TypeEnumIndex, ty: &InstanceType<'_>) -> Self {
+        Enum(Handle::new(index, ty))
     }
 
     /// Retrieve the names of the cases of this `enum` in declaration order.
@@ -192,11 +202,8 @@ impl Union {
         Ok(Val::Union(values::Union::new(self, discriminant, value)?))
     }
 
-    pub(crate) fn from(index: TypeUnionIndex, types: &Arc<ComponentTypes>) -> Self {
-        Union(Handle {
-            index,
-            types: types.clone(),
-        })
+    pub(crate) fn from(index: TypeUnionIndex, ty: &InstanceType<'_>) -> Self {
+        Union(Handle::new(index, ty))
     }
 
     /// Retrieve the types of the cases of this `union` in declaration order.
@@ -204,7 +211,7 @@ impl Union {
         self.0.types[self.0.index]
             .types
             .iter()
-            .map(|ty| Type::from(ty, &self.0.types))
+            .map(|ty| Type::from(ty, &self.0.instance()))
     }
 }
 
@@ -218,16 +225,13 @@ impl OptionType {
         Ok(Val::Option(values::OptionVal::new(self, value)?))
     }
 
-    pub(crate) fn from(index: TypeOptionIndex, types: &Arc<ComponentTypes>) -> Self {
-        OptionType(Handle {
-            index,
-            types: types.clone(),
-        })
+    pub(crate) fn from(index: TypeOptionIndex, ty: &InstanceType<'_>) -> Self {
+        OptionType(Handle::new(index, ty))
     }
 
     /// Retrieve the type parameter for this `option`.
     pub fn ty(&self) -> Type {
-        Type::from(&self.0.types[self.0.index].ty, &self.0.types)
+        Type::from(&self.0.types[self.0.index].ty, &self.0.instance())
     }
 }
 
@@ -241,18 +245,15 @@ impl ResultType {
         Ok(Val::Result(values::ResultVal::new(self, value)?))
     }
 
-    pub(crate) fn from(index: TypeResultIndex, types: &Arc<ComponentTypes>) -> Self {
-        ResultType(Handle {
-            index,
-            types: types.clone(),
-        })
+    pub(crate) fn from(index: TypeResultIndex, ty: &InstanceType<'_>) -> Self {
+        ResultType(Handle::new(index, ty))
     }
 
     /// Retrieve the `ok` type parameter for this `option`.
     pub fn ok(&self) -> Option<Type> {
         Some(Type::from(
             self.0.types[self.0.index].ok.as_ref()?,
-            &self.0.types,
+            &self.0.instance(),
         ))
     }
 
@@ -260,7 +261,7 @@ impl ResultType {
     pub fn err(&self) -> Option<Type> {
         Some(Type::from(
             self.0.types[self.0.index].err.as_ref()?,
-            &self.0.types,
+            &self.0.instance(),
         ))
     }
 }
@@ -275,11 +276,8 @@ impl Flags {
         Ok(Val::Flags(values::Flags::new(self, names)?))
     }
 
-    pub(crate) fn from(index: TypeFlagsIndex, types: &Arc<ComponentTypes>) -> Self {
-        Flags(Handle {
-            index,
-            types: types.clone(),
-        })
+    pub(crate) fn from(index: TypeFlagsIndex, ty: &InstanceType<'_>) -> Self {
+        Flags(Handle::new(index, ty))
     }
 
     /// Retrieve the names of the flags of this `flags` type in declaration order.
@@ -321,6 +319,8 @@ pub enum Type {
     Option(OptionType),
     Result(ResultType),
     Flags(Flags),
+    Own(ResourceType),
+    Borrow(ResourceType),
 }
 
 impl Type {
@@ -441,6 +441,30 @@ impl Type {
         }
     }
 
+    /// Retrieve the inner [`ResourceType`] of a [`Type::Own`].
+    ///
+    /// # Panics
+    ///
+    /// This will panic if `self` is not a [`Type::Own`].
+    pub fn unwrap_own(&self) -> &ResourceType {
+        match self {
+            Type::Own(ty) => ty,
+            _ => panic!("attempted to unwrap a {} as a own", self.desc()),
+        }
+    }
+
+    /// Retrieve the inner [`ResourceType`] of a [`Type::Borrow`].
+    ///
+    /// # Panics
+    ///
+    /// This will panic if `self` is not a [`Type::Borrow`].
+    pub fn unwrap_borrow(&self) -> &ResourceType {
+        match self {
+            Type::Borrow(ty) => ty,
+            _ => panic!("attempted to unwrap a {} as a own", self.desc()),
+        }
+    }
+
     pub(crate) fn check(&self, value: &Val) -> Result<()> {
         let other = &value.ty();
         if self == other {
@@ -460,7 +484,7 @@ impl Type {
     }
 
     /// Convert the specified `InterfaceType` to a `Type`.
-    pub(crate) fn from(ty: &InterfaceType, types: &Arc<ComponentTypes>) -> Self {
+    pub(crate) fn from(ty: &InterfaceType, instance: &InstanceType<'_>) -> Self {
         match ty {
             InterfaceType::Bool => Type::Bool,
             InterfaceType::S8 => Type::S8,
@@ -475,18 +499,17 @@ impl Type {
             InterfaceType::Float64 => Type::Float64,
             InterfaceType::Char => Type::Char,
             InterfaceType::String => Type::String,
-            InterfaceType::List(index) => Type::List(List::from(*index, types)),
-            InterfaceType::Record(index) => Type::Record(Record::from(*index, types)),
-            InterfaceType::Tuple(index) => Type::Tuple(Tuple::from(*index, types)),
-            InterfaceType::Variant(index) => Type::Variant(Variant::from(*index, types)),
-            InterfaceType::Enum(index) => Type::Enum(Enum::from(*index, types)),
-            InterfaceType::Union(index) => Type::Union(Union::from(*index, types)),
-            InterfaceType::Option(index) => Type::Option(OptionType::from(*index, types)),
-            InterfaceType::Result(index) => Type::Result(ResultType::from(*index, types)),
-            InterfaceType::Flags(index) => Type::Flags(Flags::from(*index, types)),
-
-            InterfaceType::Own(id) => todo!(),
-            InterfaceType::Borrow(id) => todo!(),
+            InterfaceType::List(index) => Type::List(List::from(*index, instance)),
+            InterfaceType::Record(index) => Type::Record(Record::from(*index, instance)),
+            InterfaceType::Tuple(index) => Type::Tuple(Tuple::from(*index, instance)),
+            InterfaceType::Variant(index) => Type::Variant(Variant::from(*index, instance)),
+            InterfaceType::Enum(index) => Type::Enum(Enum::from(*index, instance)),
+            InterfaceType::Union(index) => Type::Union(Union::from(*index, instance)),
+            InterfaceType::Option(index) => Type::Option(OptionType::from(*index, instance)),
+            InterfaceType::Result(index) => Type::Result(ResultType::from(*index, instance)),
+            InterfaceType::Flags(index) => Type::Flags(Flags::from(*index, instance)),
+            InterfaceType::Own(index) => Type::Own(instance.resource_type(*index)),
+            InterfaceType::Borrow(index) => Type::Borrow(instance.resource_type(*index)),
         }
     }
 
@@ -514,6 +537,8 @@ impl Type {
             Type::Option(_) => "option",
             Type::Result(_) => "result",
             Type::Flags(_) => "flags",
+            Type::Own(_) => "own",
+            Type::Borrow(_) => "borrow",
         }
     }
 }

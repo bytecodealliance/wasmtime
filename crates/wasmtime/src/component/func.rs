@@ -259,21 +259,25 @@ impl Func {
 
     /// Get the parameter types for this function.
     pub fn params(&self, store: impl AsContext) -> Box<[Type]> {
-        let data = &store.as_context()[self.0];
+        let store = store.as_context();
+        let data = &store[self.0];
+        let instance = store[data.instance.0].as_ref().unwrap();
         data.types[data.types[data.ty].params]
             .types
             .iter()
-            .map(|ty| Type::from(ty, &data.types))
+            .map(|ty| Type::from(ty, &instance.ty(store.0)))
             .collect()
     }
 
     /// Get the result types for this function.
     pub fn results(&self, store: impl AsContext) -> Box<[Type]> {
-        let data = &store.as_context()[self.0];
+        let store = store.as_context();
+        let data = &store[self.0];
+        let instance = store[data.instance.0].as_ref().unwrap();
         data.types[data.types[data.ty].results]
             .types
             .iter()
-            .map(|ty| Type::from(ty, &data.types))
+            .map(|ty| Type::from(ty, &instance.ty(store.0)))
             .collect()
     }
 

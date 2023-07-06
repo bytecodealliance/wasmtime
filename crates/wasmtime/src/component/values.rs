@@ -677,7 +677,7 @@ impl Val {
                 load_list(cx, i, ptr, len)?
             }
             InterfaceType::Record(i) => Val::Record(Record {
-                ty: types::Record::from(i, cx.types),
+                ty: types::Record::from(i, &cx.instance_type()),
                 values: cx.types[i]
                     .fields
                     .iter()
@@ -685,7 +685,7 @@ impl Val {
                     .collect::<Result<_>>()?,
             }),
             InterfaceType::Tuple(i) => Val::Tuple(Tuple {
-                ty: types::Tuple::from(i, cx.types),
+                ty: types::Tuple::from(i, &cx.instance_type()),
                 values: cx.types[i]
                     .types
                     .iter()
@@ -701,7 +701,7 @@ impl Val {
                 )?;
 
                 Val::Variant(Variant {
-                    ty: types::Variant::from(i, cx.types),
+                    ty: types::Variant::from(i, &cx.instance_type()),
                     discriminant,
                     value,
                 })
@@ -715,7 +715,7 @@ impl Val {
                 )?;
 
                 Val::Enum(Enum {
-                    ty: types::Enum::from(i, cx.types),
+                    ty: types::Enum::from(i, &cx.instance_type()),
                     discriminant,
                 })
             }
@@ -728,7 +728,7 @@ impl Val {
                 )?;
 
                 Val::Union(Union {
-                    ty: types::Union::from(i, cx.types),
+                    ty: types::Union::from(i, &cx.instance_type()),
                     discriminant,
                     value,
                 })
@@ -742,7 +742,7 @@ impl Val {
                 )?;
 
                 Val::Option(OptionVal {
-                    ty: types::OptionType::from(i, cx.types),
+                    ty: types::OptionType::from(i, &cx.instance_type()),
                     discriminant,
                     value,
                 })
@@ -757,7 +757,7 @@ impl Val {
                 )?;
 
                 Val::Result(ResultVal {
-                    ty: types::ResultType::from(i, cx.types),
+                    ty: types::ResultType::from(i, &cx.instance_type()),
                     discriminant,
                     value,
                 })
@@ -770,7 +770,7 @@ impl Val {
                     .collect::<Result<_>>()?;
 
                 Val::Flags(Flags {
-                    ty: types::Flags::from(i, cx.types),
+                    ty: types::Flags::from(i, &cx.instance_type()),
                     count,
                     value,
                 })
@@ -805,11 +805,11 @@ impl Val {
             }
 
             InterfaceType::Record(i) => Val::Record(Record {
-                ty: types::Record::from(i, cx.types),
+                ty: types::Record::from(i, &cx.instance_type()),
                 values: load_record(cx, cx.types[i].fields.iter().map(|field| field.ty), bytes)?,
             }),
             InterfaceType::Tuple(i) => Val::Tuple(Tuple {
-                ty: types::Tuple::from(i, cx.types),
+                ty: types::Tuple::from(i, &cx.instance_type()),
                 values: load_record(cx, cx.types[i].types.iter().copied(), bytes)?,
             }),
             InterfaceType::Variant(i) => {
@@ -818,7 +818,7 @@ impl Val {
                     load_variant(cx, &ty.info, ty.cases.iter().map(|case| case.ty), bytes)?;
 
                 Val::Variant(Variant {
-                    ty: types::Variant::from(i, cx.types),
+                    ty: types::Variant::from(i, &cx.instance_type()),
                     discriminant,
                     value,
                 })
@@ -829,7 +829,7 @@ impl Val {
                     load_variant(cx, &ty.info, ty.names.iter().map(|_| None), bytes)?;
 
                 Val::Enum(Enum {
-                    ty: types::Enum::from(i, cx.types),
+                    ty: types::Enum::from(i, &cx.instance_type()),
                     discriminant,
                 })
             }
@@ -839,7 +839,7 @@ impl Val {
                     load_variant(cx, &ty.info, ty.types.iter().copied().map(Some), bytes)?;
 
                 Val::Union(Union {
-                    ty: types::Union::from(i, cx.types),
+                    ty: types::Union::from(i, &cx.instance_type()),
                     discriminant,
                     value,
                 })
@@ -850,7 +850,7 @@ impl Val {
                     load_variant(cx, &ty.info, [None, Some(ty.ty)].into_iter(), bytes)?;
 
                 Val::Option(OptionVal {
-                    ty: types::OptionType::from(i, cx.types),
+                    ty: types::OptionType::from(i, &cx.instance_type()),
                     discriminant,
                     value,
                 })
@@ -861,13 +861,13 @@ impl Val {
                     load_variant(cx, &ty.info, [ty.ok, ty.err].into_iter(), bytes)?;
 
                 Val::Result(ResultVal {
-                    ty: types::ResultType::from(i, cx.types),
+                    ty: types::ResultType::from(i, &cx.instance_type()),
                     discriminant,
                     value,
                 })
             }
             InterfaceType::Flags(i) => Val::Flags(Flags {
-                ty: types::Flags::from(i, cx.types),
+                ty: types::Flags::from(i, &cx.instance_type()),
                 count: u32::try_from(cx.types[i].names.len())?,
                 value: match FlagsSize::from_count(cx.types[i].names.len()) {
                     FlagsSize::Size0 => Box::new([]),
@@ -1204,7 +1204,7 @@ fn load_list(cx: &LiftContext<'_>, ty: TypeListIndex, ptr: usize, len: usize) ->
     }
 
     Ok(Val::List(List {
-        ty: types::List::from(ty, cx.types),
+        ty: types::List::from(ty, &cx.instance_type()),
         values: (0..len)
             .map(|index| {
                 Val::load(

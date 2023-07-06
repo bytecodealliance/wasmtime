@@ -85,7 +85,7 @@ impl HostFunc {
                 let types = types.clone();
 
                 move |expected_index, expected_types| {
-                    if index == expected_index && std::ptr::eq(&*types, expected_types.types) {
+                    if index == expected_index && std::ptr::eq(&*types, &**expected_types.types) {
                         Ok(())
                     } else {
                         Err(anyhow!("function type mismatch"))
@@ -385,11 +385,12 @@ where
     }
     closure(store.as_context_mut(), &args, &mut result_vals)?;
     flags.set_may_leave(false);
-    for (val, ty) in result_vals.iter().zip(result_tys.types.iter()) {
-        Type::from(ty, types).check(val)?;
-    }
 
     let mut cx = LowerContext::new(store, &options, types, instance);
+    let instance = cx.instance_type();
+    for (val, ty) in result_vals.iter().zip(result_tys.types.iter()) {
+        Type::from(ty, &instance).check(val)?;
+    }
     if let Some(cnt) = result_tys.abi.flat_count(MAX_FLAT_RESULTS) {
         let mut dst = storage[..cnt].iter_mut();
         for (val, ty) in result_vals.iter().zip(result_tys.types.iter()) {

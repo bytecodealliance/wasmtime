@@ -1,11 +1,11 @@
 use crate::component::func::HostFunc;
-use crate::component::instance::ImportedResources;
 use crate::component::linker::{Definition, NameMap, Strings};
 use crate::component::ResourceType;
-use crate::store::{StoreId, StoreOpaque};
+use crate::store::StoreOpaque;
 use crate::types::matching;
 use crate::Module;
 use anyhow::{anyhow, bail, Context, Result};
+use std::any::Any;
 use std::sync::Arc;
 use wasmtime_environ::component::{
     ComponentTypes, ResourceIndex, TypeComponentInstance, TypeDef, TypeFuncIndex, TypeModule,
@@ -18,15 +18,14 @@ pub struct TypeChecker<'a> {
     pub types: &'a Arc<ComponentTypes>,
     pub component: &'a wasmtime_environ::component::Component,
     pub strings: &'a Strings,
-    pub imported_resources: PrimaryMap<ResourceIndex, ResourceType>,
+    pub imported_resources: Arc<PrimaryMap<ResourceIndex, ResourceType>>,
 }
 
 #[derive(Copy, Clone)]
 #[doc(hidden)]
 pub struct InstanceType<'a> {
-    pub instance: Option<(StoreId, &'a ComponentInstance)>,
-    pub types: &'a ComponentTypes,
-    pub imported_resources: &'a ImportedResources,
+    pub types: &'a Arc<ComponentTypes>,
+    pub resources: &'a Arc<PrimaryMap<ResourceIndex, ResourceType>>,
 }
 
 impl TypeChecker<'_> {
@@ -65,7 +64,9 @@ impl TypeChecker<'_> {
                             // checked in the same order they were assigned into the
                             // `Component` type.
                             None => {
-                                let id = self.imported_resources.push(*actual);
+                                // TODO comment unwrap/get_mut
+                                let resources = Arc::get_mut(&mut self.imported_resources).unwrap();
+                                let id = resources.push(*actual);
                                 assert_eq!(id, i);
                             }
 
@@ -159,8 +160,7 @@ impl TypeChecker<'_> {
     fn func(&self, expected: TypeFuncIndex, actual: &HostFunc) -> Result<()> {
         let instance_type = InstanceType {
             types: self.types,
-            imported_resources: &self.imported_resources,
-            instance: None,
+            resources: &self.imported_resources,
         };
         actual.typecheck(expected, &instance_type)
     }
@@ -185,21 +185,29 @@ impl Definition {
 }
 
 impl<'a> InstanceType<'a> {
-    pub fn new(store: &StoreOpaque, instance: &'a ComponentInstance) -> InstanceType<'a> {
+    pub fn new(_store: &StoreOpaque, instance: &'a ComponentInstance) -> InstanceType<'a> {
         InstanceType {
-            instance: Some((store.id(), instance)),
             types: instance.component_types(),
-            imported_resources: instance.imported_resources().downcast_ref().unwrap(),
+            resources: downcast_arc_ref(instance.resource_types()),
         }
     }
 
     pub fn resource_type(&self, index: TypeResourceTableIndex) -> ResourceType {
         let index = self.types[index].ty;
-        if let Some((store, instance)) = self.instance {
-            if let Some(index) = instance.component().defined_resource_index(index) {
-                return ResourceType::guest(store, instance, index);
-            }
-        }
-        self.imported_resources[index]
+        self.resources[index]
     }
+}
+
+/// Small helper method to downcast an `Arc` borrow into a borrow of a concrete
+/// type within the `Arc`.
+///
+/// Note that this is differnet than `downcast_ref` which projects out `&T`
+/// where here we want `&Arc<T>`.
+fn downcast_arc_ref<T: 'static>(arc: &Arc<dyn Any + Send + Sync>) -> &Arc<T> {
+    // First assert that the payload of the `Any` is indeed a `T`
+    let _ = arc.downcast_ref::<T>();
+
+    // Next do an unsafe pointer cast to convert the `Any` into `T` which should
+    // be safe given the above check.
+    unsafe { &*(arc as *const Arc<dyn Any + Send + Sync> as *const Arc<T>) }
 }

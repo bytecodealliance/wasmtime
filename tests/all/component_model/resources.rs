@@ -469,3 +469,49 @@ fn manually_destroy() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn dynamic_type() -> Result<()> {
+    let engine = super::engine();
+    let c = Component::new(
+        &engine,
+        r#"
+            (component
+                (import "t1" (type $t1 (sub resource)))
+                (type $t2' (resource (rep i32)))
+                (export $t2 "t2" (type $t2'))
+                (core func $f (canon resource.drop (own $t2)))
+
+                (func (export "a") (param "x" (own $t1))
+                    (canon lift (core func $f)))
+                (func (export "b") (param "x" (tuple (own $t2)))
+                    (canon lift (core func $f)))
+            )
+        "#,
+    )?;
+
+    struct MyType;
+
+    let mut store = Store::new(&engine, ());
+    let mut linker = Linker::new(&engine);
+    linker.root().resource::<MyType>("t1", |_, _| {})?;
+    let i = linker.instantiate(&mut store, &c)?;
+
+    let a = i.get_func(&mut store, "a").unwrap();
+    let b = i.get_func(&mut store, "b").unwrap();
+    let t2 = i.get_resource(&mut store, "t2").unwrap();
+
+    let a_params = a.params(&store);
+    assert_eq!(a_params[0], Type::Own(ResourceType::host::<MyType>()));
+    let b_params = b.params(&store);
+    match &b_params[0] {
+        Type::Tuple(t) => {
+            assert_eq!(t.types().len(), 1);
+            let t0 = t.types().next().unwrap();
+            assert_eq!(t0, Type::Own(t2));
+        }
+        _ => unreachable!(),
+    }
+
+    Ok(())
+}

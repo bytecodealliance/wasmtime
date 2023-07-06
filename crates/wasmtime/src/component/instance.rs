@@ -230,6 +230,14 @@ impl InstanceData {
     pub fn ty(&self, store: &StoreOpaque) -> InstanceType<'_> {
         InstanceType::new(store, self.instance())
     }
+
+    // TODO: NB: only during creation
+    fn resource_types_mut(&mut self) -> &mut PrimaryMap<ResourceIndex, ResourceType> {
+        Arc::get_mut(self.state.resource_types_mut())
+            .unwrap()
+            .downcast_mut()
+            .unwrap()
+    }
 }
 
 struct Instantiator<'a> {
@@ -284,7 +292,7 @@ impl<'a> Instantiator<'a> {
                 component: component.clone(),
                 state: OwnedComponentInstance::new(
                     component.runtime_info(),
-                    Box::new(imported_resources),
+                    Arc::new(imported_resources),
                     store.traitobj(),
                 ),
                 imports: imports.clone(),
@@ -295,19 +303,13 @@ impl<'a> Instantiator<'a> {
     fn run<T>(&mut self, store: &mut StoreContextMut<'_, T>) -> Result<()> {
         let env_component = self.component.env_component();
         for (idx, import) in env_component.imported_resources.iter() {
-            let imported_resources = self
-                .data
-                .state
-                .imported_resources_mut()
-                .downcast_mut::<ImportedResources>()
-                .unwrap();
             let (ty, func_ref) = match &self.imports[*import] {
                 RuntimeImport::Resource {
                     ty, dtor_funcref, ..
                 } => (*ty, NonNull::from(dtor_funcref)),
                 _ => unreachable!(),
             };
-            let i = imported_resources.push(ty);
+            let i = self.data.resource_types_mut().push(ty);
             assert_eq!(i, idx);
             // TODO: this should be `Some`
             self.data.state.set_resource_destructor(idx, Some(func_ref));
@@ -475,6 +477,9 @@ impl<'a> Instantiator<'a> {
             .env_component()
             .resource_index(resource.index);
         self.data.state.set_resource_destructor(index, dtor);
+        let ty = ResourceType::guest(store.id(), &self.data.state, resource.index);
+        let i = self.data.resource_types_mut().push(ty);
+        debug_assert_eq!(i, index);
     }
 
     fn resource_new(&mut self, resource: &ResourceNew) {
