@@ -55,5 +55,7 @@ pub fn versioned_stringify_ident(item: proc_macro::TokenStream) -> proc_macro::T
 pub fn versioned_str(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let lit_str = syn::parse_macro_input!(item as syn::LitStr);
 
-    versioned_lit_str(lit_str.value().as_str()).to_token_stream().into()
+    versioned_lit_str(lit_str.value().as_str())
+        .to_token_stream()
+        .into()
 }
