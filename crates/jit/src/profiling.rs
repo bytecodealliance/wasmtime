@@ -20,7 +20,7 @@ cfg_if::cfg_if! {
 }
 
 cfg_if::cfg_if! {
-    if #[cfg(target_os = "linux")] {
+    if #[cfg(unix)] {
         mod perfmap;
         pub use perfmap::new as new_perfmap;
     } else {
