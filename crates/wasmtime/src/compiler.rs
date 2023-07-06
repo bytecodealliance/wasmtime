@@ -27,9 +27,8 @@ use anyhow::Result;
 use std::collections::{btree_map, BTreeMap, BTreeSet};
 use std::{any::Any, collections::HashMap};
 use wasmtime_environ::{
-    Compiler, DefinedFuncIndex, FuncIndex, FunctionBodyData, FunctionLoc, ModuleTranslation,
-    ModuleType, ModuleTypes, PrimaryMap, SignatureIndex, StaticModuleIndex, Tunables,
-    WasmFunctionInfo,
+    Compiler, DefinedFuncIndex, FuncIndex, FunctionBodyData, ModuleTranslation, ModuleType,
+    ModuleTypes, PrimaryMap, SignatureIndex, StaticModuleIndex, Tunables, WasmFunctionInfo,
 };
 use wasmtime_jit::{CompiledFunctionInfo, CompiledModuleInfo};
 
@@ -691,17 +690,17 @@ pub struct Artifacts {
     #[cfg(feature = "component-model")]
     pub lowerings: PrimaryMap<
         wasmtime_environ::component::LoweredIndex,
-        wasmtime_environ::component::AllCallFunc<FunctionLoc>,
+        wasmtime_environ::component::AllCallFunc<wasmtime_environ::FunctionLoc>,
     >,
     #[cfg(feature = "component-model")]
     pub always_traps: PrimaryMap<
         wasmtime_environ::component::RuntimeAlwaysTrapIndex,
-        wasmtime_environ::component::AllCallFunc<FunctionLoc>,
+        wasmtime_environ::component::AllCallFunc<wasmtime_environ::FunctionLoc>,
     >,
     #[cfg(feature = "component-model")]
     pub transcoders: PrimaryMap<
         wasmtime_environ::component::RuntimeTranscoderIndex,
-        wasmtime_environ::component::AllCallFunc<FunctionLoc>,
+        wasmtime_environ::component::AllCallFunc<wasmtime_environ::FunctionLoc>,
     >,
 }
 
