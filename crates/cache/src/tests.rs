@@ -12,13 +12,16 @@ use std::fs;
 fn test_cache_init() {
     let (_tempdir, cache_dir, config_path) = test_prolog();
     let baseline_compression_level = 4;
+
+    let mut value = String::new();
+    serde::Serialize::serialize(&cache_dir, toml::ser::ValueSerializer::new(&mut value)).unwrap();
+
     let config_content = format!(
         "[cache]\n\
          enabled = true\n\
          directory = {}\n\
          baseline-compression-level = {}\n",
-        toml::to_string_pretty(&format!("{}", cache_dir.display())).unwrap(),
-        baseline_compression_level,
+        value, baseline_compression_level,
     );
     fs::write(&config_path, config_content).expect("Failed to write test config file");
 
