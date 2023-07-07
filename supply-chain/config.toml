@@ -148,6 +148,9 @@ audit-as-crates-io = true
 [policy.wasmtime-types]
 audit-as-crates-io = true
 
+[policy.wasmtime-versioned-export-macros]
+audit-as-crates-io = false
+
 [policy.wasmtime-wasi]
 audit-as-crates-io = true
 

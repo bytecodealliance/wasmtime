@@ -15,6 +15,7 @@ wasmtime-asm-macros = { workspace = true }
 wasmtime-environ = { workspace = true }
 wasmtime-fiber = { workspace = true, optional = true }
 wasmtime-jit-debug = { workspace = true, features = ["gdb_jit_int"] }
+wasmtime-versioned-export-macros = { workspace = true }
 libc = { version = "0.2.112", default-features = false }
 log = { workspace = true }
 memoffset = "0.8.0"
@@ -50,6 +51,7 @@ once_cell = { workspace = true }
 
 [build-dependencies]
 cc = "1.0"
+wasmtime-versioned-export-macros = { workspace = true }
 
 [features]
 async = ["wasmtime-fiber"]
