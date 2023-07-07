@@ -41,7 +41,6 @@ macro_rules! define_transcoders {
     };
 
     (@ty size) => (usize);
-    (@ty size_pair) => (usize);
     (@ty ptr_u8) => (*mut u8);
     (@ty ptr_u16) => (*mut u16);
     (@ty ptr_size) => (*mut usize);

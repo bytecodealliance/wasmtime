@@ -544,7 +544,7 @@ mod host {
                         $( AbiParam::new(host_transcode!(@ty pointer_type $param)) ),*
                     ];
                     let returns = vec![
-                        $( AbiParam::new(host_transcode!(@ty pointer_type $result)) ),*
+                        $( AbiParam::new(host_transcode!(@ty pointer_type $result)) )?
                     ];
                     let sig = func.import_signature(ir::Signature {
                         params,
