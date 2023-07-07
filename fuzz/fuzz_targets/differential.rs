@@ -355,6 +355,8 @@ fn winch_supports_module(module: &[u8]) -> bool {
                         | LocalGet { .. }
                         | LocalSet { .. }
                         | LocalTee { .. }
+                        | GlobalGet { .. }
+                        | GlobalSet { .. }
                         | Call { .. }
                         | Nop { .. }
                         | End { .. }

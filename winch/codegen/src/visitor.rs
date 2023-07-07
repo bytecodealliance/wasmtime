@@ -4,12 +4,13 @@
 //! which validates and dispatches to the corresponding
 //! machine code emitter.
 
+use crate::abi::ABI;
 use crate::codegen::CodeGen;
 use crate::codegen::ControlStackFrame;
 use crate::masm::{CmpKind, DivKind, MacroAssembler, OperandSize, RegImm, RemKind, ShiftKind};
 use crate::stack::Val;
 use wasmparser::{BlockType, VisitOperator};
-use wasmtime_environ::{FuncIndex, WasmType};
+use wasmtime_environ::{FuncIndex, GlobalIndex, WasmType};
 
 /// A macro to define unsupported WebAssembly operators.
 ///
@@ -106,6 +107,8 @@ macro_rules! def_unsupported {
     (emit Return $($rest:tt)*) => {};
     (emit Unreachable $($rest:tt)*) => {};
     (emit LocalTee $($rest:tt)*) => {};
+    (emit GlobalGet $($rest:tt)*) => {};
+    (emit GlobalSet $($rest:tt)*) => {};
 
     (emit $unsupported:tt $($rest:tt)*) => {$($rest)*};
 }
@@ -597,6 +600,28 @@ where
     fn visit_local_tee(&mut self, index: u32) {
         let src = self.context.set_local(self.masm, index);
         self.context.stack.push(Val::reg(src));
+    }
+
+    fn visit_global_get(&mut self, global_index: u32) {
+        let index = GlobalIndex::from_u32(global_index);
+        let (ty, offset) = self.env.resolve_global_type_and_offset(index);
+        let addr = self
+            .masm
+            .address_at_reg(<M::ABI as ABI>::vmctx_reg(), offset);
+        let dst = self.context.any_gpr(self.masm);
+        self.masm.load(addr, dst, ty.into());
+        self.context.stack.push(Val::reg(dst));
+    }
+
+    fn visit_global_set(&mut self, global_index: u32) {
+        let index = GlobalIndex::from_u32(global_index);
+        let (ty, offset) = self.env.resolve_global_type_and_offset(index);
+        let addr = self
+            .masm
+            .address_at_reg(<M::ABI as ABI>::vmctx_reg(), offset);
+        let reg = self.context.pop_to_reg(self.masm, None, ty.into());
+        self.context.free_gpr(reg);
+        self.masm.store(reg.into(), addr, ty.into());
     }
 
     wasmparser::for_each_operator!(def_unsupported);
