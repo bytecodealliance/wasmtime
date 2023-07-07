@@ -525,7 +525,6 @@ impl Compiler {
 ///
 /// Note that a macro is used here to keep this in sync with the actual
 /// transcoder functions themselves which are also defined via a macro.
-#[allow(unused_mut)]
 mod host {
     use crate::compiler::Compiler;
     use cranelift_codegen::ir::{self, AbiParam};
@@ -541,11 +540,12 @@ mod host {
             $(
                 pub(super) fn $name(compiler: &Compiler, func: &mut ir::Function) -> (ir::SigRef, u32) {
                     let pointer_type = compiler.isa.pointer_type();
-                    let mut params = vec![
+                    let params = vec![
                         $( AbiParam::new(host_transcode!(@ty pointer_type $param)) ),*
                     ];
-                    let mut returns = Vec::new();
-                    $(host_transcode!(@push_return pointer_type params returns $result);)?
+                    let returns = vec![
+                        $( AbiParam::new(host_transcode!(@ty pointer_type $result)) )?
+                    ];
                     let sig = func.import_signature(ir::Signature {
                         params,
                         returns,
@@ -560,12 +560,7 @@ mod host {
         (@ty $ptr:ident size) => ($ptr);
         (@ty $ptr:ident ptr_u8) => ($ptr);
         (@ty $ptr:ident ptr_u16) => ($ptr);
-
-        (@push_return $ptr:ident $params:ident $returns:ident size) => ($returns.push(AbiParam::new($ptr)););
-        (@push_return $ptr:ident $params:ident $returns:ident size_pair) => ({
-            $params.push(AbiParam::new($ptr));
-            $returns.push(AbiParam::new($ptr));
-        });
+        (@ty $ptr:ident ptr_size) => ($ptr);
     }
 
     wasmtime_environ::foreach_transcoder!(host_transcode);
