@@ -1,6 +1,6 @@
 use std::fmt;
 
-use crate::{store::StoreOpaque, FrameInfo, Global, Instance, Memory, WasmBacktrace};
+use crate::{store::StoreOpaque, FrameInfo, Global, Instance, Memory, Module, WasmBacktrace};
 
 /// Representation of a core dump of a WebAssembly module
 ///
@@ -24,10 +24,9 @@ use crate::{store::StoreOpaque, FrameInfo, Global, Instance, Memory, WasmBacktra
 ///
 /// [`Func::call`]: crate::Func::call
 /// [`Instance::new`]: crate::Instance::new
-#[derive(Debug)]
 pub struct WasmCoreDump {
     name: String,
-    modules: Vec<String>,
+    modules: Vec<Module>,
     instances: Vec<Instance>,
     store_memories: Vec<Memory>,
     store_globals: Vec<Global>,
@@ -36,12 +35,7 @@ pub struct WasmCoreDump {
 
 impl WasmCoreDump {
     pub(crate) fn new(store: &StoreOpaque, backtrace: WasmBacktrace) -> WasmCoreDump {
-        let modules: Vec<_> = store
-            .modules()
-            .all_modules()
-            .cloned()
-            .map(|m| String::from(m.name().unwrap_or_default()))
-            .collect();
+        let modules: Vec<_> = store.modules().all_modules().cloned().collect();
         let instances: Vec<Instance> = store.all_instances().collect();
         let store_memories: Vec<Memory> = store.all_memories().collect();
         let store_globals: Vec<Global> = store.all_globals().collect();
@@ -62,7 +56,7 @@ impl WasmCoreDump {
     }
 
     /// The names of the modules involved in the CoreDump
-    pub fn modules(&self) -> &[String] {
+    pub fn modules(&self) -> &[Module] {
         self.modules.as_ref()
     }
 
@@ -89,7 +83,7 @@ impl fmt::Display for WasmCoreDump {
         writeln!(f, "wasm coredump generated while executing {}:", self.name)?;
         writeln!(f, "modules:")?;
         for module in self.modules.iter() {
-            writeln!(f, "  {}", module)?;
+            writeln!(f, "  {}", module.name().unwrap_or("<module>"))?;
         }
 
         writeln!(f, "instances:")?;
@@ -111,5 +105,11 @@ impl fmt::Display for WasmCoreDump {
         write!(f, "{}", self.backtrace)?;
 
         Ok(())
+    }
+}
+
+impl fmt::Debug for WasmCoreDump {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "<wasm core dump>")
     }
 }

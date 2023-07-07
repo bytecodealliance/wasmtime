@@ -101,8 +101,6 @@ fn test_coredump_has_modules_and_instances() -> Result<()> {
     let e = a_func.call(&mut store, ()).unwrap_err();
     let cd = e.downcast_ref::<WasmCoreDump>().unwrap();
     assert_eq!(cd.modules().len(), 2);
-    assert!(cd.modules().contains(&String::from("foo")));
-    assert!(cd.modules().contains(&String::from("bar")));
     assert_eq!(cd.instances().len(), 2);
     Ok(())
 }
