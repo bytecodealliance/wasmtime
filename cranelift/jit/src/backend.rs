@@ -434,7 +434,7 @@ impl JITModule {
         // are profiling with perf and saving binaries to PERF_BUILDID_DIR
         // for post-profile analysis, write information about each function
         // we define.
-        if cfg!(target_os = "linux") && ::std::env::var_os("PERF_BUILDID_DIR").is_some() {
+        if cfg!(unix) && ::std::env::var_os("PERF_BUILDID_DIR").is_some() {
             let mut map_file = ::std::fs::OpenOptions::new()
                 .create(true)
                 .append(true)
