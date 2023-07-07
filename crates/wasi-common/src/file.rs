@@ -1,7 +1,7 @@
 use crate::{Error, ErrorExt, SystemTimeSpec};
 use bitflags::bitflags;
 use std::any::Any;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
 #[wiggle::async_trait]
 pub trait WasiFile: Send + Sync {
@@ -80,10 +80,6 @@ pub trait WasiFile: Send + Sync {
     }
 
     async fn advise(&self, _offset: u64, _len: u64, _advice: Advice) -> Result<(), Error> {
-        Err(Error::badf())
-    }
-
-    async fn allocate(&self, _offset: u64, _len: u64) -> Result<(), Error> {
         Err(Error::badf())
     }
 
@@ -223,90 +219,36 @@ impl TableFileExt for crate::table::Table {
 }
 
 pub(crate) struct FileEntry {
-    caps: RwLock<FileCaps>,
-    file: Box<dyn WasiFile>,
-}
-
-impl FileEntry {
-    pub fn new(caps: FileCaps, file: Box<dyn WasiFile>) -> Self {
-        FileEntry {
-            caps: RwLock::new(caps),
-            file,
-        }
-    }
-
-    pub fn capable_of(&self, caps: FileCaps) -> Result<(), Error> {
-        if self.caps.read().unwrap().contains(caps) {
-            Ok(())
-        } else {
-            let missing = caps & !(*self.caps.read().unwrap());
-            let err = if missing.intersects(FileCaps::READ | FileCaps::WRITE) {
-                // `EBADF` is a little surprising here because it's also used
-                // for unknown-file-descriptor errors, but it's what POSIX uses
-                // in this situation.
-                Error::badf()
-            } else {
-                Error::perm()
-            };
-            Err(err.context(format!("desired rights {:?}, has {:?}", caps, self.caps)))
-        }
-    }
-
-    pub fn drop_caps_to(&self, caps: FileCaps) -> Result<(), Error> {
-        self.capable_of(caps)?;
-        *self.caps.write().unwrap() = caps;
-        Ok(())
-    }
-
-    pub async fn get_fdstat(&self) -> Result<FdStat, Error> {
-        let caps = self.caps.read().unwrap().clone();
-        Ok(FdStat {
-            filetype: self.file.get_filetype().await?,
-            caps,
-            flags: self.file.get_fdflags().await?,
-        })
-    }
-}
-
-pub trait FileEntryExt {
-    fn get_cap(&self, caps: FileCaps) -> Result<&dyn WasiFile, Error>;
-    fn get_cap_mut(&mut self, caps: FileCaps) -> Result<&mut dyn WasiFile, Error>;
-}
-
-impl FileEntryExt for FileEntry {
-    fn get_cap(&self, caps: FileCaps) -> Result<&dyn WasiFile, Error> {
-        self.capable_of(caps)?;
-        Ok(&*self.file)
-    }
-    fn get_cap_mut(&mut self, caps: FileCaps) -> Result<&mut dyn WasiFile, Error> {
-        self.capable_of(caps)?;
-        Ok(&mut *self.file)
-    }
+    pub file: Box<dyn WasiFile>,
+    pub access_mode: FileAccessMode,
 }
 
 bitflags! {
-    pub struct FileCaps : u32 {
-        const DATASYNC           = 0b1;
-        const READ               = 0b10;
-        const SEEK               = 0b100;
-        const FDSTAT_SET_FLAGS   = 0b1000;
-        const SYNC               = 0b10000;
-        const TELL               = 0b100000;
-        const WRITE              = 0b1000000;
-        const ADVISE             = 0b10000000;
-        const ALLOCATE           = 0b100000000;
-        const FILESTAT_GET       = 0b1000000000;
-        const FILESTAT_SET_SIZE  = 0b10000000000;
-        const FILESTAT_SET_TIMES = 0b100000000000;
-        const POLL_READWRITE     = 0b1000000000000;
+    pub struct FileAccessMode : u32 {
+        const READ = 0b1;
+        const WRITE= 0b10;
+    }
+}
+
+impl FileEntry {
+    pub fn new(file: Box<dyn WasiFile>, access_mode: FileAccessMode) -> Self {
+        FileEntry { file, access_mode }
+    }
+
+    pub async fn get_fdstat(&self) -> Result<FdStat, Error> {
+        Ok(FdStat {
+            filetype: self.file.get_filetype().await?,
+            flags: self.file.get_fdflags().await?,
+            access_mode: self.access_mode,
+        })
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct FdStat {
     pub filetype: FileType,
-    pub caps: FileCaps,
     pub flags: FdFlags,
+    pub access_mode: FileAccessMode,
 }
 
 #[derive(Debug, Clone)]

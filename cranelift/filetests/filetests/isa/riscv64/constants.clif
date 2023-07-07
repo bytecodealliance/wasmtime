@@ -12,7 +12,7 @@ block0:
 ; block0:
 ;   li a0,-1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi a0, zero, -1
@@ -28,7 +28,7 @@ block0:
 ; block0:
 ;   li a0,0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mv a0, zero
@@ -44,7 +44,7 @@ block0:
 ; block0:
 ;   li a0,0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mv a0, zero
@@ -61,7 +61,7 @@ block0:
 ;   lui t1,16
 ;   addi a0,t1,4095
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lui t1, 0x10
@@ -78,7 +78,7 @@ block0:
 ; block0:
 ;   auipc a0,0; ld a0,12(a0); j 12; .8byte 0xffff0000
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   auipc a0, 0
@@ -98,7 +98,7 @@ block0:
 ; block0:
 ;   auipc a0,0; ld a0,12(a0); j 12; .8byte 0xffff00000000
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   auipc a0, 0
@@ -118,7 +118,7 @@ block0:
 ; block0:
 ;   auipc a0,0; ld a0,12(a0); j 12; .8byte 0xffff000000000000
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   auipc a0, 0
@@ -138,7 +138,7 @@ block0:
 ; block0:
 ;   li a0,-1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi a0, zero, -1
@@ -154,7 +154,7 @@ block0:
 ; block0:
 ;   lui a0,1048560
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lui a0, 0xffff0
@@ -170,7 +170,7 @@ block0:
 ; block0:
 ;   auipc a0,0; ld a0,12(a0); j 12; .8byte 0xffffffff0000ffff
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   auipc a0, 0
@@ -190,7 +190,7 @@ block0:
 ; block0:
 ;   auipc a0,0; ld a0,12(a0); j 12; .8byte 0xffff0000ffffffff
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   auipc a0, 0
@@ -210,7 +210,7 @@ block0:
 ; block0:
 ;   auipc a0,0; ld a0,12(a0); j 12; .8byte 0xffffffffffff
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   auipc a0, 0
@@ -230,7 +230,7 @@ block0:
 ; block0:
 ;   auipc a0,0; ld a0,12(a0); j 12; .8byte 0xf34bf0a31212003a
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   auipc a0, 0
@@ -250,7 +250,7 @@ block0:
 ; block0:
 ;   auipc a0,0; ld a0,12(a0); j 12; .8byte 0x12e900001ef40000
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   auipc a0, 0
@@ -270,7 +270,7 @@ block0:
 ; block0:
 ;   auipc a0,0; ld a0,12(a0); j 12; .8byte 0x12e9ffff1ef4ffff
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   auipc a0, 0
@@ -290,7 +290,7 @@ block0:
 ; block0:
 ;   li a0,-1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi a0, zero, -1
@@ -306,7 +306,7 @@ block0:
 ; block0:
 ;   auipc a0,0; ld a0,12(a0); j 12; .8byte 0xfffffff7
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   auipc a0, 0
@@ -326,7 +326,7 @@ block0:
 ; block0:
 ;   auipc a0,0; ld a0,12(a0); j 12; .8byte 0xfffffff7
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   auipc a0, 0
@@ -346,7 +346,7 @@ block0:
 ; block0:
 ;   li a0,-9
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi a0, zero, -9
@@ -363,7 +363,7 @@ block0:
 ;   auipc t1,0; ld t1,12(t1); j 12; .8byte 0x3ff0000000000000
 ;   fmv.d.x fa0,t1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   auipc t1, 0
@@ -385,7 +385,7 @@ block0:
 ;   lui t1,264704
 ;   fmv.w.x fa0,t1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lui t1, 0x40a00
@@ -403,7 +403,7 @@ block0:
 ;   auipc t1,0; ld t1,12(t1); j 12; .8byte 0x4049000000000000
 ;   fmv.d.x fa0,t1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   auipc t1, 0
@@ -425,7 +425,7 @@ block0:
 ;   lui t1,271488
 ;   fmv.w.x fa0,t1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lui t1, 0x42480
@@ -443,7 +443,7 @@ block0:
 ;   li t1,0
 ;   fmv.d.x fa0,t1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mv t1, zero
@@ -461,7 +461,7 @@ block0:
 ;   li t1,0
 ;   fmv.w.x fa0,t1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mv t1, zero
@@ -479,7 +479,7 @@ block0:
 ;   auipc t1,0; ld t1,12(t1); j 12; .8byte 0xc030000000000000
 ;   fmv.d.x fa0,t1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   auipc t1, 0
@@ -501,7 +501,7 @@ block0:
 ;   auipc t1,0; ld t1,12(t1); j 8; .4byte 0xc1800000
 ;   fmv.w.x fa0,t1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   auipc t1, 0

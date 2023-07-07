@@ -1,0 +1,64 @@
+test interpret
+test run
+target aarch64
+target s390x
+target x86_64
+target x86_64 sse41
+target x86_64 sse41 has_avx
+target riscv64gc has_v
+
+
+function %iadd_swiden_high_low_i32x4(i32x4, i32x4) -> i64x2 {
+block0(v0: i32x4, v1: i32x4):
+    v2 = swiden_high v0
+    v3 = swiden_low v1
+    v4 = iadd v2, v3
+    return v4
+}
+; run: %iadd_swiden_high_low_i32x4([1 2 3 4], [-1 2 3 4]) == [2 6]
+
+function %iadd_swiden_high_low_i16x8(i16x8, i16x8) -> i32x4 {
+block0(v0: i16x8, v1: i16x8):
+    v2 = swiden_high v0
+    v3 = swiden_low v1
+    v4 = iadd v2, v3
+    return v4
+}
+; run: %iadd_swiden_high_low_i16x8([1 2 3 4 5 6 7 8], [-1 2 3 4 5 6 7 8]) == [4 8 10 12]
+
+function %iadd_swiden_high_low_i8x16(i8x16, i8x16) -> i16x8 {
+block0(v0: i8x16, v1: i8x16):
+    v2 = swiden_high v0
+    v3 = swiden_low v1
+    v4 = iadd v2, v3
+    return v4
+}
+; run: %iadd_swiden_high_low_i8x16([1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16], [8 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16]) == [17 12 14 16 18 20 22 24]
+
+
+function %iadd_swiden_low_high_i32x4(i32x4, i32x4) -> i64x2 {
+block0(v0: i32x4, v1: i32x4):
+    v2 = swiden_low v0
+    v3 = swiden_high v1
+    v4 = iadd v2, v3
+    return v4
+}
+; run: %iadd_swiden_low_high_i32x4([-1 2 3 4], [1 2 3 4]) == [2 6]
+
+function %iadd_swiden_low_high_i16x8(i16x8, i16x8) -> i32x4 {
+block0(v0: i16x8, v1:i16x8):
+    v2 = swiden_low v0
+    v3 = swiden_high v1
+    v4 = iadd v2, v3
+    return v4
+}
+; run: %iadd_swiden_low_high_i16x8([-1 2 3 4 5 6 7 8], [1 2 3 4 5 6 7 8]) == [4 8 10 12]
+
+function %iadd_swiden_low_high_i8x16(i8x16, i8x16) -> i16x8 {
+block0(v0: i8x16, v1:i8x16):
+    v2 = swiden_low v0
+    v3 = swiden_high v1
+    v4 = iadd v2, v3
+    return v4
+}
+; run: %iadd_swiden_low_high_i8x16([-1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16], [1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16]) == [8 12 14 16 18 20 22 24]

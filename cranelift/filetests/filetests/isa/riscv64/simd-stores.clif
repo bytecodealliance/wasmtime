@@ -1,0 +1,148 @@
+test compile precise-output
+set unwind_info=false
+target riscv64 has_v
+
+
+function %store_i8x16(i64, i8x16) {
+block0(v0: i64, v1: i8x16):
+    store.i8x16 v1, v0
+    return
+}
+
+; VCode:
+;   add sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+; block0:
+;   vle8.v v2,16(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v2,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   add sp,+16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   ori s0, sp, 0
+; block1: ; offset 0x10
+;   .byte 0x57, 0x70, 0x08, 0xcc
+;   addi t6, s0, 0x10
+;   .byte 0x07, 0x81, 0x0f, 0x02
+;   .byte 0x27, 0x01, 0x05, 0x02
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+
+function %store_i16x8(i64, i16x8) {
+block0(v0: i64, v1: i16x8):
+    store.i16x8 v1, v0
+    return
+}
+
+; VCode:
+;   add sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+; block0:
+;   vle8.v v2,16(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse16.v v2,0(a0) #avl=8, #vtype=(e16, m1, ta, ma)
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   add sp,+16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   ori s0, sp, 0
+; block1: ; offset 0x10
+;   .byte 0x57, 0x70, 0x08, 0xcc
+;   addi t6, s0, 0x10
+;   .byte 0x07, 0x81, 0x0f, 0x02
+;   .byte 0x57, 0x70, 0x84, 0xcc
+;   .byte 0x27, 0x51, 0x05, 0x02
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+
+function %store_i32x4(i64, i32x4) {
+block0(v0: i64, v1: i32x4):
+    store.i32x4 v1, v0
+    return
+}
+
+; VCode:
+;   add sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+; block0:
+;   vle8.v v2,16(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse32.v v2,0(a0) #avl=4, #vtype=(e32, m1, ta, ma)
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   add sp,+16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   ori s0, sp, 0
+; block1: ; offset 0x10
+;   .byte 0x57, 0x70, 0x08, 0xcc
+;   addi t6, s0, 0x10
+;   .byte 0x07, 0x81, 0x0f, 0x02
+;   .byte 0x57, 0x70, 0x02, 0xcd
+;   .byte 0x27, 0x61, 0x05, 0x02
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+
+function %store_i64x2(i64, i64x2) {
+block0(v0: i64, v1: i64x2):
+    store.i64x2 v1, v0
+    return
+}
+
+; VCode:
+;   add sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+; block0:
+;   vle8.v v2,16(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse64.v v2,0(a0) #avl=2, #vtype=(e64, m1, ta, ma)
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   add sp,+16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   ori s0, sp, 0
+; block1: ; offset 0x10
+;   .byte 0x57, 0x70, 0x08, 0xcc
+;   addi t6, s0, 0x10
+;   .byte 0x07, 0x81, 0x0f, 0x02
+;   .byte 0x57, 0x70, 0x81, 0xcd
+;   .byte 0x27, 0x71, 0x05, 0x02
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+

@@ -44,11 +44,11 @@
 ;;   llgfr %r2, %r2
 ;;   lgr %r5, %r2
 ;;   ag %r5, 0(%r4)
-;;   aghi %r5, 4096
-;;   lghi %r4, 0
+;;   aghik %r4, %r5, 4096
+;;   lghi %r5, 0
 ;;   clgfi %r2, 268431359
-;;   locgrh %r5, %r4
-;;   stc %r3, 0(%r5)
+;;   locgrh %r4, %r5
+;;   stc %r3, 0(%r4)
 ;;   jg label1
 ;; block1:
 ;;   br %r14
@@ -60,11 +60,11 @@
 ;;   llgfr %r2, %r2
 ;;   lgr %r4, %r2
 ;;   ag %r4, 0(%r3)
-;;   aghik %r5, %r4, 4096
+;;   aghi %r4, 4096
 ;;   lghi %r3, 0
 ;;   clgfi %r2, 268431359
-;;   locgrh %r5, %r3
-;;   llc %r2, 0(%r5)
+;;   locgrh %r4, %r3
+;;   llc %r2, 0(%r4)
 ;;   jg label1
 ;; block1:
 ;;   br %r14

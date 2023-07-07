@@ -15,7 +15,7 @@ block0(v0: i8):
 ; block0:
 ;   andi a0,a0,255
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   andi a0, a0, 0xff
@@ -31,7 +31,7 @@ block0(v0: i8):
 ; block0:
 ;   andi a0,a0,255
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   andi a0, a0, 0xff
@@ -48,7 +48,7 @@ block0(v0: i16):
 ;   slli t2,a0,48
 ;   srli a0,t2,48
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   slli t2, a0, 0x30
@@ -65,7 +65,7 @@ block0(v0: i8):
 ; block0:
 ;   andi a0,a0,255
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   andi a0, a0, 0xff
@@ -82,7 +82,7 @@ block0(v0: i16):
 ;   slli t2,a0,48
 ;   srli a0,t2,48
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   slli t2, a0, 0x30
@@ -100,7 +100,7 @@ block0(v0: i32):
 ;   slli t2,a0,32
 ;   srli a0,t2,32
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   slli t2, a0, 0x20
@@ -120,7 +120,7 @@ block0(v0: i8):
 ;   slli t2,a0,56
 ;   srai a0,t2,56
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   slli t2, a0, 0x38
@@ -138,7 +138,7 @@ block0(v0: i8):
 ;   slli t2,a0,56
 ;   srai a0,t2,56
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   slli t2, a0, 0x38
@@ -156,7 +156,7 @@ block0(v0: i16):
 ;   slli t2,a0,48
 ;   srai a0,t2,48
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   slli t2, a0, 0x30
@@ -174,7 +174,7 @@ block0(v0: i8):
 ;   slli t2,a0,56
 ;   srai a0,t2,56
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   slli t2, a0, 0x38
@@ -192,7 +192,7 @@ block0(v0: i16):
 ;   slli t2,a0,48
 ;   srai a0,t2,48
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   slli t2, a0, 0x30
@@ -209,7 +209,7 @@ block0(v0: i32):
 ; block0:
 ;   sext.w a0,a0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   sext.w a0, a0
@@ -229,7 +229,7 @@ block0(v0: i8):
 ;   srai a2,a0,56
 ;   addi a0,a2,42
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   slli a0, a0, 0x38
@@ -250,7 +250,7 @@ block0(v0: i8, v1: i64):
 ;   srai a3,a2,56
 ;   add a0,a3,a1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   slli a2, a0, 0x38

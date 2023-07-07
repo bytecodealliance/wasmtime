@@ -16,7 +16,7 @@ block0(v0: i64, v1: i64):
 ;   blr x1
 ;   ldp fp, lr, [sp], #16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!

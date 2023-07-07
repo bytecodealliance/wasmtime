@@ -1,0 +1,68 @@
+test interpret
+test run
+target x86_64
+target aarch64
+
+function %umulof_i64(i64, i64) -> i64, i8 {
+block0(v0: i64, v1: i64):
+    v2, v3 = umul_overflow v0, v1
+    return v2, v3
+}
+
+; run: %umulof_i64(0, 1) == [0, 0]
+; run: %umulof_i64(1, 1) == [1, 0]
+; run: %umulof_i64(0xFFFFFFFF_FFFFFFFF, 2) == [0xFFFFFFFF_FFFFFFFE, 1]
+; run: %umulof_i64(1, -1) == [-1, 0]
+; run: %umulof_i64(2, 2) == [4, 0]
+; run: %umulof_i64(0x7FFFFFFF_FFFFFFFF, 0x7FFFFFFF_FFFFFFFF) == [1, 1]
+; run: %umulof_i64(0x80000000_00000000, 0x7FFFFFFF_FFFFFFFF) == [0x80000000_00000000, 1]
+; run: %umulof_i64(0x01234567_89ABCDEF, 0xFEDCBA98_76543210) == [0x2236D88F_E5618CF0, 1]
+; run: %umulof_i64(0xC0FFEEEE_C0FFEEEE, 0xDECAFFFF_DECAFFFF) == [0xDB6B1E48_19BA1112, 1]
+
+function %umulof_i32(i32, i32) -> i32, i8 {
+block0(v0: i32, v1: i32):
+    v2, v3 = umul_overflow v0, v1
+    return v2, v3
+}
+
+; run: %umulof_i32(0, 1) == [0, 0]
+; run: %umulof_i32(1, 1) == [1, 0]
+; run: %umulof_i32(0xFFFFFFFF, 2) == [0xFFFFFFFE, 1]
+; run: %umulof_i32(1, -1) == [-1, 0]
+; run: %umulof_i32(2, 2) == [4, 0]
+; run: %umulof_i32(0x7FFFFFFF, 0x7FFFFFFF) == [1, 1]
+; run: %umulof_i32(0x80000000, 0x7FFFFFFF) == [0x80000000, 1]
+; run: %umulof_i32(0x01234567, 0xFEDCBA98) == [0x23E20B28, 1]
+; run: %umulof_i32(0xC0FFEEEE, 0xDECAFFFF) == [0x19BA1112, 1]
+
+function %umulof_i16(i16, i16) -> i16, i8 {
+block0(v0: i16, v1: i16):
+    v2, v3 = umul_overflow v0, v1
+    return v2, v3
+}
+
+; run: %umulof_i16(0, 1) == [0, 0]
+; run: %umulof_i16(1, 1) == [1, 0]
+; run: %umulof_i16(0xFFFF, 2) == [0xFFFE, 1]
+; run: %umulof_i16(1, -1) == [-1, 0]
+; run: %umulof_i16(2, 2) == [4, 0]
+; run: %umulof_i16(0x7FFF, 0x7FFF) == [1, 1]
+; run: %umulof_i16(0x8000, 0x7FFF) == [0x8000, 1]
+; run: %umulof_i16(0x0123, 0xFEDC) == [0xB414, 1]
+; run: %umulof_i16(0xC0FF, 0xDECA) == [0x6B36, 1]
+
+function %umulof_i8(i8, i8) -> i8, i8 {
+block0(v0: i8, v1: i8):
+    v2, v3 = umul_overflow v0, v1
+    return v2, v3
+}
+
+; run: %umulof_i8(0, 1) == [0, 0]
+; run: %umulof_i8(1, 1) == [1, 0]
+; run: %umulof_i8(0xFF, 2) == [0xFE, 1]
+; run: %umulof_i8(1, -1) == [-1, 0]
+; run: %umulof_i8(2, 2) == [4, 0]
+; run: %umulof_i8(0x7F, 0x7F) == [1, 1]
+; run: %umulof_i8(0x80, 0x7F) == [0x80, 1]
+; run: %umulof_i8(0x01, 0xFE) == [0xFE, 0]
+; run: %umulof_i8(0xC0, 0xDE) == [0x80, 1]

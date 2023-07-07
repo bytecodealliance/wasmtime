@@ -1,10 +1,23 @@
 test optimize
 set opt_level=speed
-set use_egraphs=true
 target x86_64
 target aarch64
 target s390x
 target riscv64
+
+function %select_self(i8, i32) -> i32 {
+block0(v0: i8, v1: i32):
+    v2 = select v0, v1, v1
+    return v2
+    ; check: return v1
+}
+
+function %bitselect_self(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = bitselect v0, v1, v1
+    return v2
+    ; check: return v1
+}
 
 function %select_sgt_to_smax(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):

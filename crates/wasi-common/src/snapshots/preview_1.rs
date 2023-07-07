@@ -1,8 +1,8 @@
 use crate::{
-    dir::{DirCaps, DirEntry, DirEntryExt, DirFdStat, ReaddirCursor, ReaddirEntity, TableDirExt},
+    dir::{DirEntry, OpenResult, ReaddirCursor, ReaddirEntity, TableDirExt},
     file::{
-        Advice, FdFlags, FdStat, FileCaps, FileEntry, FileEntryExt, FileType, Filestat, OFlags,
-        RiFlags, RoFlags, SdFlags, SiFlags, TableFileExt, WasiFile,
+        Advice, FdFlags, FdStat, FileAccessMode, FileEntry, FileType, Filestat, OFlags, RiFlags,
+        RoFlags, SdFlags, SiFlags, TableFileExt, WasiFile,
     },
     sched::{
         subscription::{RwEventFlags, SubscriptionResult},
@@ -114,7 +114,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
     ) -> Result<(), Error> {
         self.table()
             .get_file(u32::from(fd))?
-            .get_cap(FileCaps::ADVISE)?
+            .file
             .advise(offset, len, advice.into())
             .await?;
         Ok(())
@@ -123,15 +123,18 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
     async fn fd_allocate(
         &mut self,
         fd: types::Fd,
-        offset: types::Filesize,
-        len: types::Filesize,
+        _offset: types::Filesize,
+        _len: types::Filesize,
     ) -> Result<(), Error> {
-        self.table()
-            .get_file(u32::from(fd))?
-            .get_cap(FileCaps::ALLOCATE)?
-            .allocate(offset, len)
-            .await?;
-        Ok(())
+        // Check if fd is a file, and has rights, just to reject those cases
+        // with the errors expected:
+        let _ = self.table().get_file(u32::from(fd))?;
+        // This operation from cloudabi is linux-specific, isn't even
+        // supported across all linux filesystems, and has no support on macos
+        // or windows. Rather than ship spotty support, it has been removed
+        // from preview 2, and we are no longer supporting it in preview 1 as
+        // well.
+        Err(Error::not_supported())
     }
 
     async fn fd_close(&mut self, fd: types::Fd) -> Result<(), Error> {
@@ -157,7 +160,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
     async fn fd_datasync(&mut self, fd: types::Fd) -> Result<(), Error> {
         self.table()
             .get_file(u32::from(fd))?
-            .get_cap(FileCaps::DATASYNC)?
+            .file
             .datasync()
             .await?;
         Ok(())
@@ -171,9 +174,14 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             let fdstat = file_entry.get_fdstat().await?;
             Ok(types::Fdstat::from(&fdstat))
         } else if table.is::<DirEntry>(fd) {
-            let dir_entry: Arc<DirEntry> = table.get(fd)?;
-            let dir_fdstat = dir_entry.get_dir_fdstat();
-            Ok(types::Fdstat::from(&dir_fdstat))
+            let _dir_entry: Arc<DirEntry> = table.get(fd)?;
+            let dir_fdstat = types::Fdstat {
+                fs_filetype: types::Filetype::Directory,
+                fs_rights_base: directory_base_rights(),
+                fs_rights_inheriting: directory_inheriting_rights(),
+                fs_flags: types::Fdflags::empty(),
+            };
+            Ok(dir_fdstat)
         } else {
             Err(Error::badf())
         }
@@ -187,7 +195,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         if let Some(table) = self.table_mut() {
             table
                 .get_file_mut(u32::from(fd))?
-                .get_cap_mut(FileCaps::FDSTAT_SET_FLAGS)?
+                .file
                 .set_fdflags(FdFlags::from(flags))
                 .await
         } else {
@@ -199,20 +207,17 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
     async fn fd_fdstat_set_rights(
         &mut self,
         fd: types::Fd,
-        fs_rights_base: types::Rights,
-        fs_rights_inheriting: types::Rights,
+        _fs_rights_base: types::Rights,
+        _fs_rights_inheriting: types::Rights,
     ) -> Result<(), Error> {
         let table = self.table();
         let fd = u32::from(fd);
         if table.is::<FileEntry>(fd) {
-            let file_entry: Arc<FileEntry> = table.get(fd)?;
-            let file_caps = FileCaps::from(&fs_rights_base);
-            file_entry.drop_caps_to(file_caps)
+            let _file_entry: Arc<FileEntry> = table.get(fd)?;
+            Ok(())
         } else if table.is::<DirEntry>(fd) {
-            let dir_entry: Arc<DirEntry> = table.get(fd)?;
-            let dir_caps = DirCaps::from(&fs_rights_base);
-            let file_caps = FileCaps::from(&fs_rights_inheriting);
-            dir_entry.drop_caps_to(dir_caps, file_caps)
+            let _dir_entry: Arc<DirEntry> = table.get(fd)?;
+            Ok(())
         } else {
             Err(Error::badf())
         }
@@ -222,18 +227,10 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         let table = self.table();
         let fd = u32::from(fd);
         if table.is::<FileEntry>(fd) {
-            let filestat = table
-                .get_file(fd)?
-                .get_cap(FileCaps::FILESTAT_GET)?
-                .get_filestat()
-                .await?;
+            let filestat = table.get_file(fd)?.file.get_filestat().await?;
             Ok(filestat.into())
         } else if table.is::<DirEntry>(fd) {
-            let filestat = table
-                .get_dir(fd)?
-                .get_cap(DirCaps::FILESTAT_GET)?
-                .get_filestat()
-                .await?;
+            let filestat = table.get_dir(fd)?.dir.get_filestat().await?;
             Ok(filestat.into())
         } else {
             Err(Error::badf())
@@ -247,7 +244,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
     ) -> Result<(), Error> {
         self.table()
             .get_file(u32::from(fd))?
-            .get_cap(FileCaps::FILESTAT_SET_SIZE)?
+            .file
             .set_filestat_size(size)
             .await?;
         Ok(())
@@ -275,14 +272,14 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             table
                 .get_file(fd)
                 .expect("checked that entry is file")
-                .get_cap(FileCaps::FILESTAT_SET_TIMES)?
+                .file
                 .set_times(atim, mtim)
                 .await
         } else if table.is::<DirEntry>(fd) {
             table
                 .get_dir(fd)
                 .expect("checked that entry is dir")
-                .get_cap(DirCaps::FILESTAT_SET_TIMES)?
+                .dir
                 .set_times(".", atim, mtim, false)
                 .await
         } else {
@@ -296,7 +293,11 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         iovs: &types::IovecArray<'a>,
     ) -> Result<types::Size, Error> {
         let f = self.table().get_file(u32::from(fd))?;
-        let f = f.get_cap(FileCaps::READ)?;
+        // Access mode check normalizes error returned (windows would prefer ACCES here)
+        if !f.access_mode.contains(FileAccessMode::READ) {
+            Err(types::Errno::Badf)?
+        }
+        let f = &f.file;
 
         let iovs: Vec<wiggle::GuestPtr<[u8]>> = iovs
             .iter()
@@ -367,7 +368,11 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         offset: types::Filesize,
     ) -> Result<types::Size, Error> {
         let f = self.table().get_file(u32::from(fd))?;
-        let f = f.get_cap(FileCaps::READ | FileCaps::SEEK)?;
+        // Access mode check normalizes error returned (windows would prefer ACCES here)
+        if !f.access_mode.contains(FileAccessMode::READ) {
+            Err(types::Errno::Badf)?
+        }
+        let f = &f.file;
 
         let iovs: Vec<wiggle::GuestPtr<[u8]>> = iovs
             .iter()
@@ -439,7 +444,11 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         ciovs: &types::CiovecArray<'a>,
     ) -> Result<types::Size, Error> {
         let f = self.table().get_file(u32::from(fd))?;
-        let f = f.get_cap(FileCaps::WRITE)?;
+        // Access mode check normalizes error returned (windows would prefer ACCES here)
+        if !f.access_mode.contains(FileAccessMode::WRITE) {
+            Err(types::Errno::Badf)?
+        }
+        let f = &f.file;
 
         let guest_slices: Vec<wiggle::GuestCow<u8>> = ciovs
             .iter()
@@ -466,7 +475,11 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         offset: types::Filesize,
     ) -> Result<types::Size, Error> {
         let f = self.table().get_file(u32::from(fd))?;
-        let f = f.get_cap(FileCaps::WRITE | FileCaps::SEEK)?;
+        // Access mode check normalizes error returned (windows would prefer ACCES here)
+        if !f.access_mode.contains(FileAccessMode::WRITE) {
+            Err(types::Errno::Badf)?
+        }
+        let f = &f.file;
 
         let guest_slices: Vec<wiggle::GuestCow<u8>> = ciovs
             .iter()
@@ -512,7 +525,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
                 .ok_or_else(|| Error::not_supported())?
                 .as_bytes();
             let path_len = path_bytes.len();
-            if path_len < path_max_len as usize {
+            if path_len > path_max_len as usize {
                 return Err(Error::name_too_long());
             }
             path.as_array(path_len as u32).copy_from_slice(path_bytes)?;
@@ -538,13 +551,6 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         whence: types::Whence,
     ) -> Result<types::Filesize, Error> {
         use std::io::SeekFrom;
-
-        let required_caps = if offset == 0 && whence == types::Whence::Cur {
-            FileCaps::TELL
-        } else {
-            FileCaps::TELL | FileCaps::SEEK
-        };
-
         let whence = match whence {
             types::Whence::Cur => SeekFrom::Current(offset),
             types::Whence::End => SeekFrom::End(offset),
@@ -553,27 +559,22 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         let newoffset = self
             .table()
             .get_file(u32::from(fd))?
-            .get_cap(required_caps)?
+            .file
             .seek(whence)
             .await?;
         Ok(newoffset)
     }
 
     async fn fd_sync(&mut self, fd: types::Fd) -> Result<(), Error> {
-        self.table()
-            .get_file(u32::from(fd))?
-            .get_cap(FileCaps::SYNC)?
-            .sync()
-            .await?;
+        self.table().get_file(u32::from(fd))?.file.sync().await?;
         Ok(())
     }
 
     async fn fd_tell(&mut self, fd: types::Fd) -> Result<types::Filesize, Error> {
-        // XXX should this be stream_position?
         let offset = self
             .table()
             .get_file(u32::from(fd))?
-            .get_cap(FileCaps::TELL)?
+            .file
             .seek(std::io::SeekFrom::Current(0))
             .await?;
         Ok(offset)
@@ -591,7 +592,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         for entity in self
             .table()
             .get_dir(u32::from(fd))?
-            .get_cap(DirCaps::READDIR)?
+            .dir
             .readdir(ReaddirCursor::from(cookie))
             .await?
         {
@@ -640,7 +641,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
     ) -> Result<(), Error> {
         self.table()
             .get_dir(u32::from(dirfd))?
-            .get_cap(DirCaps::CREATE_DIRECTORY)?
+            .dir
             .create_dir(path.as_cow()?.deref())
             .await
     }
@@ -654,7 +655,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         let filestat = self
             .table()
             .get_dir(u32::from(dirfd))?
-            .get_cap(DirCaps::PATH_FILESTAT_GET)?
+            .dir
             .get_path_filestat(
                 path.as_cow()?.deref(),
                 flags.contains(types::Lookupflags::SYMLINK_FOLLOW),
@@ -681,7 +682,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         let mtim = systimespec(set_mtim, mtim, set_mtim_now).map_err(|e| e.context("mtim"))?;
         self.table()
             .get_dir(u32::from(dirfd))?
-            .get_cap(DirCaps::PATH_FILESTAT_SET_TIMES)?
+            .dir
             .set_times(
                 path.as_cow()?.deref(),
                 atim,
@@ -701,9 +702,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
     ) -> Result<(), Error> {
         let table = self.table();
         let src_dir = table.get_dir(u32::from(src_fd))?;
-        let src_dir = src_dir.get_cap(DirCaps::LINK_SOURCE)?;
         let target_dir = table.get_dir(u32::from(target_fd))?;
-        let target_dir = target_dir.get_cap(DirCaps::LINK_TARGET)?;
         let symlink_follow = src_flags.contains(types::Lookupflags::SYMLINK_FOLLOW);
         if symlink_follow {
             return Err(Error::invalid_argument()
@@ -711,9 +710,10 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         }
 
         src_dir
+            .dir
             .hard_link(
                 src_path.as_cow()?.deref(),
-                target_dir.deref(),
+                target_dir.dir.deref(),
                 target_path.as_cow()?.deref(),
             )
             .await
@@ -726,7 +726,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         path: &GuestPtr<'a, str>,
         oflags: types::Oflags,
         fs_rights_base: types::Rights,
-        fs_rights_inheriting: types::Rights,
+        _fs_rights_inheriting: types::Rights,
         fdflags: types::Fdflags,
     ) -> Result<types::Fd, Error> {
         let table = self.table();
@@ -741,41 +741,30 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         let oflags = OFlags::from(&oflags);
         let fdflags = FdFlags::from(fdflags);
         let path = path.as_cow()?;
-        if oflags.contains(OFlags::DIRECTORY) {
-            if oflags.contains(OFlags::CREATE)
-                || oflags.contains(OFlags::EXCLUSIVE)
-                || oflags.contains(OFlags::TRUNCATE)
-            {
-                return Err(Error::invalid_argument().context("directory oflags"));
-            }
-            let dir_caps = dir_entry.child_dir_caps(DirCaps::from(&fs_rights_base));
-            let file_caps = dir_entry.child_file_caps(FileCaps::from(&fs_rights_inheriting));
-            let dir = dir_entry.get_cap(DirCaps::OPEN)?;
-            let child_dir = dir.open_dir(symlink_follow, path.deref()).await?;
-            drop(dir);
-            let fd = table.push(Arc::new(DirEntry::new(
-                dir_caps, file_caps, None, child_dir,
-            )))?;
-            Ok(types::Fd::from(fd))
-        } else {
-            let mut required_caps = DirCaps::OPEN;
-            if oflags.contains(OFlags::CREATE) {
-                required_caps = required_caps | DirCaps::CREATE_FILE;
-            }
 
-            let file_caps = dir_entry.child_file_caps(FileCaps::from(&fs_rights_base));
-            let dir = dir_entry.get_cap(required_caps)?;
-            let read = file_caps.contains(FileCaps::READ);
-            let write = file_caps.contains(FileCaps::WRITE)
-                || file_caps.contains(FileCaps::ALLOCATE)
-                || file_caps.contains(FileCaps::FILESTAT_SET_SIZE);
-            let file = dir
-                .open_file(symlink_follow, path.deref(), oflags, read, write, fdflags)
-                .await?;
-            drop(dir);
-            let fd = table.push(Arc::new(FileEntry::new(file_caps, file)))?;
-            Ok(types::Fd::from(fd))
-        }
+        let read = fs_rights_base.contains(types::Rights::FD_READ);
+        let write = fs_rights_base.contains(types::Rights::FD_WRITE);
+        let access_mode = if read {
+            FileAccessMode::READ
+        } else {
+            FileAccessMode::empty()
+        } | if write {
+            FileAccessMode::WRITE
+        } else {
+            FileAccessMode::empty()
+        };
+
+        let file = dir_entry
+            .dir
+            .open_file(symlink_follow, path.deref(), oflags, read, write, fdflags)
+            .await?;
+        drop(dir_entry);
+
+        let fd = match file {
+            OpenResult::File(file) => table.push(Arc::new(FileEntry::new(file, access_mode)))?,
+            OpenResult::Dir(child_dir) => table.push(Arc::new(DirEntry::new(None, child_dir)))?,
+        };
+        Ok(types::Fd::from(fd))
     }
 
     async fn path_readlink<'a>(
@@ -788,18 +777,18 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         let link = self
             .table()
             .get_dir(u32::from(dirfd))?
-            .get_cap(DirCaps::READLINK)?
+            .dir
             .read_link(path.as_cow()?.deref())
             .await?
             .into_os_string()
             .into_string()
             .map_err(|_| Error::illegal_byte_sequence().context("link contents"))?;
         let link_bytes = link.as_bytes();
-        let link_len = link_bytes.len();
-        if link_len > buf_len as usize {
-            return Err(Error::range());
-        }
-        buf.as_array(link_len as u32).copy_from_slice(link_bytes)?;
+        // Like posix readlink(2), silently truncate links when they are larger than the
+        // destination buffer:
+        let link_len = std::cmp::min(link_bytes.len(), buf_len as usize);
+        buf.as_array(link_len as u32)
+            .copy_from_slice(&link_bytes[..link_len])?;
         Ok(link_len as types::Size)
     }
 
@@ -810,7 +799,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
     ) -> Result<(), Error> {
         self.table()
             .get_dir(u32::from(dirfd))?
-            .get_cap(DirCaps::REMOVE_DIRECTORY)?
+            .dir
             .remove_dir(path.as_cow()?.deref())
             .await
     }
@@ -824,13 +813,12 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
     ) -> Result<(), Error> {
         let table = self.table();
         let src_dir = table.get_dir(u32::from(src_fd))?;
-        let src_dir = src_dir.get_cap(DirCaps::RENAME_SOURCE)?;
         let dest_dir = table.get_dir(u32::from(dest_fd))?;
-        let dest_dir = dest_dir.get_cap(DirCaps::RENAME_TARGET)?;
         src_dir
+            .dir
             .rename(
                 src_path.as_cow()?.deref(),
-                dest_dir.deref(),
+                dest_dir.dir.deref(),
                 dest_path.as_cow()?.deref(),
             )
             .await
@@ -844,7 +832,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
     ) -> Result<(), Error> {
         self.table()
             .get_dir(u32::from(dirfd))?
-            .get_cap(DirCaps::SYMLINK)?
+            .dir
             .symlink(src_path.as_cow()?.deref(), dest_path.as_cow()?.deref())
             .await
     }
@@ -856,7 +844,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
     ) -> Result<(), Error> {
         self.table()
             .get_dir(u32::from(dirfd))?
-            .get_cap(DirCaps::UNLINK_FILE)?
+            .dir
             .unlink_file(path.as_cow()?.deref())
             .await
     }
@@ -965,14 +953,11 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
                 types::SubscriptionU::FdRead(readsub) => {
                     let fd = readsub.file_descriptor;
                     let file_ref = table.get_file(u32::from(fd))?;
-                    let _file = file_ref.get_cap(FileCaps::POLL_READWRITE)?;
-
                     read_refs.push((file_ref, Some(sub.userdata.into())));
                 }
                 types::SubscriptionU::FdWrite(writesub) => {
                     let fd = writesub.file_descriptor;
                     let file_ref = table.get_file(u32::from(fd))?;
-                    let _file = file_ref.get_cap(FileCaps::POLL_READWRITE)?;
                     write_refs.push((file_ref, Some(sub.userdata.into())));
                 }
             }
@@ -980,8 +965,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
 
         let mut read_mut_refs: Vec<(&dyn WasiFile, Userdata)> = Vec::new();
         for (file_lock, userdata) in read_refs.iter_mut() {
-            let file = file_lock.get_cap(FileCaps::POLL_READWRITE)?;
-            read_mut_refs.push((file, userdata.take().unwrap()));
+            read_mut_refs.push((file_lock.file.deref(), userdata.take().unwrap()));
         }
 
         for (f, ud) in read_mut_refs.iter_mut() {
@@ -990,8 +974,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
 
         let mut write_mut_refs: Vec<(&dyn WasiFile, Userdata)> = Vec::new();
         for (file_lock, userdata) in write_refs.iter_mut() {
-            let file = file_lock.get_cap(FileCaps::POLL_READWRITE)?;
-            write_mut_refs.push((file, userdata.take().unwrap()));
+            write_mut_refs.push((file_lock.file.deref(), userdata.take().unwrap()));
         }
 
         for (f, ud) in write_mut_refs.iter_mut() {
@@ -1129,16 +1112,8 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
     ) -> Result<types::Fd, Error> {
         let table = self.table();
         let f = table.get_file(u32::from(fd))?;
-        let f = f.get_cap(FileCaps::READ)?;
-
-        let file = f.sock_accept(FdFlags::from(flags)).await?;
-        let file_caps = FileCaps::READ
-            | FileCaps::WRITE
-            | FileCaps::FDSTAT_SET_FLAGS
-            | FileCaps::POLL_READWRITE
-            | FileCaps::FILESTAT_GET;
-
-        let fd = table.push(Arc::new(FileEntry::new(file_caps, file)))?;
+        let file = f.file.sock_accept(FdFlags::from(flags)).await?;
+        let fd = table.push(Arc::new(FileEntry::new(file, FileAccessMode::all())))?;
         Ok(types::Fd::from(fd))
     }
 
@@ -1149,7 +1124,6 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         ri_flags: types::Riflags,
     ) -> Result<(types::Size, types::Roflags), Error> {
         let f = self.table().get_file(u32::from(fd))?;
-        let f = f.get_cap(FileCaps::READ)?;
 
         let iovs: Vec<wiggle::GuestPtr<[u8]>> = ri_data
             .iter()
@@ -1185,6 +1159,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             if let Some(iov) = iov {
                 let mut buffer = vec![0; (iov.len() as usize).min(MAX_SHARED_BUFFER_SIZE)];
                 let (bytes_read, ro_flags) = f
+                    .file
                     .sock_recv(&mut [IoSliceMut::new(&mut buffer)], RiFlags::from(ri_flags))
                     .await?;
                 iov.get_range(0..bytes_read.try_into()?)
@@ -1209,7 +1184,9 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
                 .iter_mut()
                 .map(|s| IoSliceMut::new(&mut *s))
                 .collect();
-            f.sock_recv(&mut ioslices, RiFlags::from(ri_flags)).await?
+            f.file
+                .sock_recv(&mut ioslices, RiFlags::from(ri_flags))
+                .await?
         };
 
         Ok((types::Size::try_from(bytes_read)?, ro_flags.into()))
@@ -1222,7 +1199,6 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         _si_flags: types::Siflags,
     ) -> Result<types::Size, Error> {
         let f = self.table().get_file(u32::from(fd))?;
-        let f = f.get_cap(FileCaps::WRITE)?;
 
         let guest_slices: Vec<wiggle::GuestCow<u8>> = si_data
             .iter()
@@ -1237,16 +1213,15 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             .iter()
             .map(|s| IoSlice::new(s.deref()))
             .collect();
-        let bytes_written = f.sock_send(&ioslices, SiFlags::empty()).await?;
+        let bytes_written = f.file.sock_send(&ioslices, SiFlags::empty()).await?;
 
         Ok(types::Size::try_from(bytes_written)?)
     }
 
     async fn sock_shutdown(&mut self, fd: types::Fd, how: types::Sdflags) -> Result<(), Error> {
         let f = self.table().get_file(u32::from(fd))?;
-        let f = f.get_cap(FileCaps::FDSTAT_SET_FLAGS)?;
 
-        f.sock_shutdown(SdFlags::from(how)).await
+        f.file.sock_shutdown(SdFlags::from(how)).await
     }
 }
 
@@ -1265,231 +1240,19 @@ impl From<types::Advice> for Advice {
 
 impl From<&FdStat> for types::Fdstat {
     fn from(fdstat: &FdStat) -> types::Fdstat {
+        let mut fs_rights_base = types::Rights::empty();
+        if fdstat.access_mode.contains(FileAccessMode::READ) {
+            fs_rights_base |= types::Rights::FD_READ;
+        }
+        if fdstat.access_mode.contains(FileAccessMode::WRITE) {
+            fs_rights_base |= types::Rights::FD_WRITE;
+        }
         types::Fdstat {
             fs_filetype: types::Filetype::from(&fdstat.filetype),
-            fs_rights_base: types::Rights::from(&fdstat.caps),
+            fs_rights_base,
             fs_rights_inheriting: types::Rights::empty(),
             fs_flags: types::Fdflags::from(fdstat.flags),
         }
-    }
-}
-
-impl From<&DirFdStat> for types::Fdstat {
-    fn from(dirstat: &DirFdStat) -> types::Fdstat {
-        let fs_rights_base = types::Rights::from(&dirstat.dir_caps);
-        let fs_rights_inheriting = types::Rights::from(&dirstat.file_caps) | fs_rights_base;
-        types::Fdstat {
-            fs_filetype: types::Filetype::Directory,
-            fs_rights_base,
-            fs_rights_inheriting,
-            fs_flags: types::Fdflags::empty(),
-        }
-    }
-}
-
-// FileCaps can always be represented as wasi Rights
-impl From<&FileCaps> for types::Rights {
-    fn from(caps: &FileCaps) -> types::Rights {
-        let mut rights = types::Rights::empty();
-        if caps.contains(FileCaps::DATASYNC) {
-            rights = rights | types::Rights::FD_DATASYNC;
-        }
-        if caps.contains(FileCaps::READ) {
-            rights = rights | types::Rights::FD_READ;
-        }
-        if caps.contains(FileCaps::SEEK) {
-            rights = rights | types::Rights::FD_SEEK;
-        }
-        if caps.contains(FileCaps::FDSTAT_SET_FLAGS) {
-            rights = rights | types::Rights::FD_FDSTAT_SET_FLAGS;
-        }
-        if caps.contains(FileCaps::SYNC) {
-            rights = rights | types::Rights::FD_SYNC;
-        }
-        if caps.contains(FileCaps::TELL) {
-            rights = rights | types::Rights::FD_TELL;
-        }
-        if caps.contains(FileCaps::WRITE) {
-            rights = rights | types::Rights::FD_WRITE;
-        }
-        if caps.contains(FileCaps::ADVISE) {
-            rights = rights | types::Rights::FD_ADVISE;
-        }
-        if caps.contains(FileCaps::ALLOCATE) {
-            rights = rights | types::Rights::FD_ALLOCATE;
-        }
-        if caps.contains(FileCaps::FILESTAT_GET) {
-            rights = rights | types::Rights::FD_FILESTAT_GET;
-        }
-        if caps.contains(FileCaps::FILESTAT_SET_SIZE) {
-            rights = rights | types::Rights::FD_FILESTAT_SET_SIZE;
-        }
-        if caps.contains(FileCaps::FILESTAT_SET_TIMES) {
-            rights = rights | types::Rights::FD_FILESTAT_SET_TIMES;
-        }
-        if caps.contains(FileCaps::POLL_READWRITE) {
-            rights = rights | types::Rights::POLL_FD_READWRITE;
-        }
-        rights
-    }
-}
-
-// FileCaps are a subset of wasi Rights - not all Rights have a valid representation as FileCaps
-impl From<&types::Rights> for FileCaps {
-    fn from(rights: &types::Rights) -> FileCaps {
-        let mut caps = FileCaps::empty();
-        if rights.contains(types::Rights::FD_DATASYNC) {
-            caps = caps | FileCaps::DATASYNC;
-        }
-        if rights.contains(types::Rights::FD_READ) {
-            caps = caps | FileCaps::READ;
-        }
-        if rights.contains(types::Rights::FD_SEEK) {
-            caps = caps | FileCaps::SEEK;
-        }
-        if rights.contains(types::Rights::FD_FDSTAT_SET_FLAGS) {
-            caps = caps | FileCaps::FDSTAT_SET_FLAGS;
-        }
-        if rights.contains(types::Rights::FD_SYNC) {
-            caps = caps | FileCaps::SYNC;
-        }
-        if rights.contains(types::Rights::FD_TELL) {
-            caps = caps | FileCaps::TELL;
-        }
-        if rights.contains(types::Rights::FD_WRITE) {
-            caps = caps | FileCaps::WRITE;
-        }
-        if rights.contains(types::Rights::FD_ADVISE) {
-            caps = caps | FileCaps::ADVISE;
-        }
-        if rights.contains(types::Rights::FD_ALLOCATE) {
-            caps = caps | FileCaps::ALLOCATE;
-        }
-        if rights.contains(types::Rights::FD_FILESTAT_GET) {
-            caps = caps | FileCaps::FILESTAT_GET;
-        }
-        if rights.contains(types::Rights::FD_FILESTAT_SET_SIZE) {
-            caps = caps | FileCaps::FILESTAT_SET_SIZE;
-        }
-        if rights.contains(types::Rights::FD_FILESTAT_SET_TIMES) {
-            caps = caps | FileCaps::FILESTAT_SET_TIMES;
-        }
-        if rights.contains(types::Rights::POLL_FD_READWRITE) {
-            caps = caps | FileCaps::POLL_READWRITE;
-        }
-        caps
-    }
-}
-
-// DirCaps can always be represented as wasi Rights
-impl From<&DirCaps> for types::Rights {
-    fn from(caps: &DirCaps) -> types::Rights {
-        let mut rights = types::Rights::empty();
-        if caps.contains(DirCaps::CREATE_DIRECTORY) {
-            rights = rights | types::Rights::PATH_CREATE_DIRECTORY;
-        }
-        if caps.contains(DirCaps::CREATE_FILE) {
-            rights = rights | types::Rights::PATH_CREATE_FILE;
-        }
-        if caps.contains(DirCaps::LINK_SOURCE) {
-            rights = rights | types::Rights::PATH_LINK_SOURCE;
-        }
-        if caps.contains(DirCaps::LINK_TARGET) {
-            rights = rights | types::Rights::PATH_LINK_TARGET;
-        }
-        if caps.contains(DirCaps::OPEN) {
-            rights = rights | types::Rights::PATH_OPEN;
-        }
-        if caps.contains(DirCaps::READDIR) {
-            rights = rights | types::Rights::FD_READDIR;
-        }
-        if caps.contains(DirCaps::READLINK) {
-            rights = rights | types::Rights::PATH_READLINK;
-        }
-        if caps.contains(DirCaps::RENAME_SOURCE) {
-            rights = rights | types::Rights::PATH_RENAME_SOURCE;
-        }
-        if caps.contains(DirCaps::RENAME_TARGET) {
-            rights = rights | types::Rights::PATH_RENAME_TARGET;
-        }
-        if caps.contains(DirCaps::SYMLINK) {
-            rights = rights | types::Rights::PATH_SYMLINK;
-        }
-        if caps.contains(DirCaps::REMOVE_DIRECTORY) {
-            rights = rights | types::Rights::PATH_REMOVE_DIRECTORY;
-        }
-        if caps.contains(DirCaps::UNLINK_FILE) {
-            rights = rights | types::Rights::PATH_UNLINK_FILE;
-        }
-        if caps.contains(DirCaps::PATH_FILESTAT_GET) {
-            rights = rights | types::Rights::PATH_FILESTAT_GET;
-        }
-        if caps.contains(DirCaps::PATH_FILESTAT_SET_TIMES) {
-            rights = rights | types::Rights::PATH_FILESTAT_SET_TIMES;
-        }
-        if caps.contains(DirCaps::FILESTAT_GET) {
-            rights = rights | types::Rights::FD_FILESTAT_GET;
-        }
-        if caps.contains(DirCaps::FILESTAT_SET_TIMES) {
-            rights = rights | types::Rights::FD_FILESTAT_SET_TIMES;
-        }
-        rights
-    }
-}
-
-// DirCaps are a subset of wasi Rights - not all Rights have a valid representation as DirCaps
-impl From<&types::Rights> for DirCaps {
-    fn from(rights: &types::Rights) -> DirCaps {
-        let mut caps = DirCaps::empty();
-        if rights.contains(types::Rights::PATH_CREATE_DIRECTORY) {
-            caps = caps | DirCaps::CREATE_DIRECTORY;
-        }
-        if rights.contains(types::Rights::PATH_CREATE_FILE) {
-            caps = caps | DirCaps::CREATE_FILE;
-        }
-        if rights.contains(types::Rights::PATH_LINK_SOURCE) {
-            caps = caps | DirCaps::LINK_SOURCE;
-        }
-        if rights.contains(types::Rights::PATH_LINK_TARGET) {
-            caps = caps | DirCaps::LINK_TARGET;
-        }
-        if rights.contains(types::Rights::PATH_OPEN) {
-            caps = caps | DirCaps::OPEN;
-        }
-        if rights.contains(types::Rights::FD_READDIR) {
-            caps = caps | DirCaps::READDIR;
-        }
-        if rights.contains(types::Rights::PATH_READLINK) {
-            caps = caps | DirCaps::READLINK;
-        }
-        if rights.contains(types::Rights::PATH_RENAME_SOURCE) {
-            caps = caps | DirCaps::RENAME_SOURCE;
-        }
-        if rights.contains(types::Rights::PATH_RENAME_TARGET) {
-            caps = caps | DirCaps::RENAME_TARGET;
-        }
-        if rights.contains(types::Rights::PATH_SYMLINK) {
-            caps = caps | DirCaps::SYMLINK;
-        }
-        if rights.contains(types::Rights::PATH_REMOVE_DIRECTORY) {
-            caps = caps | DirCaps::REMOVE_DIRECTORY;
-        }
-        if rights.contains(types::Rights::PATH_UNLINK_FILE) {
-            caps = caps | DirCaps::UNLINK_FILE;
-        }
-        if rights.contains(types::Rights::PATH_FILESTAT_GET) {
-            caps = caps | DirCaps::PATH_FILESTAT_GET;
-        }
-        if rights.contains(types::Rights::PATH_FILESTAT_SET_TIMES) {
-            caps = caps | DirCaps::PATH_FILESTAT_SET_TIMES;
-        }
-        if rights.contains(types::Rights::FD_FILESTAT_GET) {
-            caps = caps | DirCaps::FILESTAT_GET;
-        }
-        if rights.contains(types::Rights::FD_FILESTAT_SET_TIMES) {
-            caps = caps | DirCaps::FILESTAT_SET_TIMES;
-        }
-        caps
     }
 }
 
@@ -1625,7 +1388,7 @@ fn dirent_bytes(dirent: types::Dirent) -> Vec<u8> {
     use wiggle::GuestType;
     assert_eq!(
         types::Dirent::guest_size(),
-        std::mem::size_of::<types::Dirent>() as _,
+        std::mem::size_of::<types::Dirent>() as u32,
         "Dirent guest repr and host repr should match"
     );
     assert_eq!(
@@ -1682,4 +1445,46 @@ fn systimespec(
     } else {
         Ok(None)
     }
+}
+
+// This is the default subset of base Rights reported for directories prior to
+// https://github.com/bytecodealliance/wasmtime/pull/6265. Some
+// implementations still expect this set of rights to be reported.
+pub(crate) fn directory_base_rights() -> types::Rights {
+    types::Rights::PATH_CREATE_DIRECTORY
+        | types::Rights::PATH_CREATE_FILE
+        | types::Rights::PATH_LINK_SOURCE
+        | types::Rights::PATH_LINK_TARGET
+        | types::Rights::PATH_OPEN
+        | types::Rights::FD_READDIR
+        | types::Rights::PATH_READLINK
+        | types::Rights::PATH_RENAME_SOURCE
+        | types::Rights::PATH_RENAME_TARGET
+        | types::Rights::PATH_SYMLINK
+        | types::Rights::PATH_REMOVE_DIRECTORY
+        | types::Rights::PATH_UNLINK_FILE
+        | types::Rights::PATH_FILESTAT_GET
+        | types::Rights::PATH_FILESTAT_SET_TIMES
+        | types::Rights::FD_FILESTAT_GET
+        | types::Rights::FD_FILESTAT_SET_TIMES
+}
+
+// This is the default subset of inheriting Rights reported for directories
+// prior to https://github.com/bytecodealliance/wasmtime/pull/6265. Some
+// implementations still expect this set of rights to be reported.
+pub(crate) fn directory_inheriting_rights() -> types::Rights {
+    types::Rights::FD_DATASYNC
+        | types::Rights::FD_READ
+        | types::Rights::FD_SEEK
+        | types::Rights::FD_FDSTAT_SET_FLAGS
+        | types::Rights::FD_SYNC
+        | types::Rights::FD_TELL
+        | types::Rights::FD_WRITE
+        | types::Rights::FD_ADVISE
+        | types::Rights::FD_ALLOCATE
+        | types::Rights::FD_FILESTAT_GET
+        | types::Rights::FD_FILESTAT_SET_SIZE
+        | types::Rights::FD_FILESTAT_SET_TIMES
+        | types::Rights::POLL_FD_READWRITE
+        | directory_base_rights()
 }

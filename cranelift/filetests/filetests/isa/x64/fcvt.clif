@@ -1,5 +1,5 @@
 test compile precise-output
-target x86_64
+target x86_64 sse41
 
 function %f1(i8) -> f32 {
 block0(v0: i8):
@@ -16,7 +16,7 @@ block0(v0: i8):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -43,7 +43,7 @@ block0(v0: i16):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -69,7 +69,7 @@ block0(v0: i32):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -94,7 +94,7 @@ block0(v0: i64):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -120,7 +120,7 @@ block0(v0: i8):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -147,7 +147,7 @@ block0(v0: i16):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -173,7 +173,7 @@ block0(v0: i32):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -198,7 +198,7 @@ block0(v0: i64):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -211,8 +211,9 @@ block0(v0: i64):
 
 function %f9(i32x4) -> f64x2 {
 block0(v0: i32x4):
-  v1 = fcvt_low_from_sint.f64x2 v0
-  return v1
+  v1 = swiden_low v0
+  v2 = fcvt_from_sint.f64x2 v1
+  return v2
 }
 
 ; VCode:
@@ -223,7 +224,7 @@ block0(v0: i32x4):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -263,7 +264,7 @@ block0(v0: i8, v1: i16, v2: i32, v3: i64):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -309,7 +310,7 @@ block0(v0: i32x4):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -362,7 +363,7 @@ block0(v0: i32x4):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -396,7 +397,7 @@ block0(v0: f32):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -437,7 +438,7 @@ block0(v0: f32):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -479,7 +480,7 @@ block0(v0: f64):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -520,7 +521,7 @@ block0(v0: f64):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -562,7 +563,7 @@ block0(v0: f32):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -606,7 +607,7 @@ block0(v0: f32):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -651,7 +652,7 @@ block0(v0: f64):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -695,7 +696,7 @@ block0(v0: f64):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -740,7 +741,7 @@ block0(v0: f32):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -779,7 +780,7 @@ block0(v0: f32):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -818,7 +819,7 @@ block0(v0: f64):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -857,7 +858,7 @@ block0(v0: f64):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -896,7 +897,7 @@ block0(v0: f32):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -931,7 +932,7 @@ block0(v0: f32):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -966,7 +967,7 @@ block0(v0: f64):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -1001,7 +1002,7 @@ block0(v0: f64):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -1051,7 +1052,7 @@ block0(v0: f32x4):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -1098,7 +1099,7 @@ block0(v0: f32x4):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp

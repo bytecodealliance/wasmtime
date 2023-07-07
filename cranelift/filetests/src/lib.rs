@@ -41,13 +41,10 @@ mod test_dce;
 mod test_domtree;
 mod test_interpret;
 mod test_legalizer;
-mod test_licm;
 mod test_optimize;
 mod test_print_cfg;
 mod test_run;
 mod test_safepoint;
-mod test_simple_gvn;
-mod test_simple_preopt;
 mod test_unwind;
 mod test_verifier;
 mod test_wasm;
@@ -114,13 +111,10 @@ fn new_subtest(parsed: &TestCommand) -> anyhow::Result<Box<dyn subtest::SubTest>
         "domtree" => test_domtree::subtest(parsed),
         "interpret" => test_interpret::subtest(parsed),
         "legalizer" => test_legalizer::subtest(parsed),
-        "licm" => test_licm::subtest(parsed),
         "optimize" => test_optimize::subtest(parsed),
         "print-cfg" => test_print_cfg::subtest(parsed),
         "run" => test_run::subtest(parsed),
         "safepoint" => test_safepoint::subtest(parsed),
-        "simple-gvn" => test_simple_gvn::subtest(parsed),
-        "simple_preopt" => test_simple_preopt::subtest(parsed),
         "unwind" => test_unwind::subtest(parsed),
         "verifier" => test_verifier::subtest(parsed),
         _ => anyhow::bail!("unknown test command '{}'", parsed.command),

@@ -1,0 +1,61 @@
+test compile precise-output
+set unwind_info=false
+target riscv64 has_v
+
+function %shuffle_i8x16(i8x16, i8x16) -> i8x16 {
+block0(v0: i8x16, v1: i8x16):
+    v2 = shuffle v0, v1, [3 0 31 26 4 6 12 11 23 13 24 4 2 15 17 5]
+    return v2
+}
+
+; VCode:
+;   add sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+; block0:
+;   vle8.v v1,16(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v3,32(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v6,[const(0)] #avl=16, #vtype=(e8, m1, ta, ma)
+;   vrgather.vv v8,v1,v6 #avl=16, #vtype=(e8, m1, ta, ma)
+;   vadd.vi v10,v6,-16 #avl=16, #vtype=(e8, m1, ta, ma)
+;   vrgather.vv v12,v3,v10 #avl=16, #vtype=(e8, m1, ta, ma)
+;   vor.vv v14,v8,v12 #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v14,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   add sp,+16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   ori s0, sp, 0
+; block1: ; offset 0x10
+;   .byte 0x57, 0x70, 0x08, 0xcc
+;   addi t6, s0, 0x10
+;   .byte 0x87, 0x80, 0x0f, 0x02
+;   addi t6, s0, 0x20
+;   .byte 0x87, 0x81, 0x0f, 0x02
+;   auipc t6, 0
+;   addi t6, t6, 0x3c
+;   .byte 0x07, 0x83, 0x0f, 0x02
+;   .byte 0x57, 0x04, 0x13, 0x32
+;   .byte 0x57, 0x35, 0x68, 0x02
+;   .byte 0x57, 0x06, 0x35, 0x32
+;   .byte 0x57, 0x07, 0x86, 0x2a
+;   .byte 0x27, 0x07, 0x05, 0x02
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   lb zero, 0x1a1(t5)
+;   .byte 0x04, 0x06, 0x0c, 0x0b
+;   auipc s10, 0x4180
+;   .byte 0x02, 0x0f, 0x11, 0x05
+

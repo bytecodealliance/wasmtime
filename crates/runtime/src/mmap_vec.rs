@@ -128,7 +128,9 @@ impl Deref for MmapVec {
     type Target = [u8];
 
     fn deref(&self) -> &[u8] {
-        &self.mmap.as_slice()[self.range.clone()]
+        // SAFETY: this mmap owns its own range of the underlying mmap so it
+        // should be all good-to-read.
+        unsafe { self.mmap.slice(self.range.clone()) }
     }
 }
 
@@ -142,7 +144,8 @@ impl DerefMut for MmapVec {
         // specified in `self.range`. This should allow us to safely hand out
         // mutable access to these bytes if so desired.
         unsafe {
-            let slice = std::slice::from_raw_parts_mut(self.mmap.as_mut_ptr(), self.mmap.len());
+            let slice =
+                std::slice::from_raw_parts_mut(self.mmap.as_ptr().cast_mut(), self.mmap.len());
             &mut slice[self.range.clone()]
         }
     }

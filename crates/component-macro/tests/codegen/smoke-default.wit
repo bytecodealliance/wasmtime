@@ -1,3 +1,5 @@
-default world the-world {
+package foo:foo
+
+world the-world {
   export y: func()
 }

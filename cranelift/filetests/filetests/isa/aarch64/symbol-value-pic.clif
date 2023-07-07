@@ -15,7 +15,7 @@ block0:
 ; block0:
 ;   load_ext_name x0, TestCase(%my_global)+0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   adrp x0, #0 ; reloc_external Aarch64AdrGotPage21 %my_global 0

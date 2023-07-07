@@ -182,7 +182,7 @@ Ok, this program needs some command-line arguments. So let's give it some:
 ```
 $ echo hello world > test.txt
 $ wasmtime demo.wasm test.txt /tmp/somewhere.txt
-error opening input test.txt: Capabilities insufficient
+error opening input test.txt: failed to find a pre-opened file descriptor through which "test.txt" could be opened
 ```
 
 Aha, now we're seeing the sandboxing in action. This program is attempting to

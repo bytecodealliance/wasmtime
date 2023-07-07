@@ -1,5 +1,6 @@
 ;;! target = "x86_64"
 ;;! compile = true
+;;! settings = ["sse41"]
 
 (module
   (func (param v128) (result v128)

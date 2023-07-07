@@ -8,21 +8,34 @@ publish = false
 license = "Apache-2.0 WITH LLVM-exception"
 
 [build-dependencies]
-cfg-if = "1.0"
+cfg-if = { workspace = true }
+cargo_metadata = "0.15.3"
+wit-component = { workspace = true }
+heck = { workspace = true }
+
 
 [dev-dependencies]
+anyhow = { workspace = true }
+tempfile = { workspace = true }
+test-log = { version = "0.2", default-features = false, features = ["trace"] }
+tracing = { workspace = true }
+tracing-subscriber = { version = "0.3.1", default-features = false, features = ['fmt', 'env-filter'] }
+lazy_static = "1"
+wasmtime = { workspace = true, features = ['cranelift', 'component-model'] }
+
 wasi-common = { workspace = true }
 wasi-cap-std-sync = { workspace = true }
-wasmtime = { workspace = true, features = ['cranelift'] }
 wasmtime-wasi = { workspace = true, features = ["tokio"] }
-target-lexicon = { workspace = true }
-tracing-subscriber = { version = "0.3.1", default-features = false, features = ['fmt'] }
-tempfile = "3.1.0"
-os_pipe = "0.9"
-anyhow = { workspace = true }
-wat = { workspace = true }
 cap-std = { workspace = true }
-tokio = { version = "1.8.0", features = ["rt-multi-thread"] }
+cap-rand = { workspace = true }
+tokio = { version = "1.8.0", features = ["net", "rt-multi-thread", "macros"] }
+
+wasmtime-wasi-http = { workspace = true }
+hyper = { version = "1.0.0-rc.3", features = ["full"] }
+http = { version = "0.2.9" }
+http-body = "1.0.0-rc.2"
+http-body-util = "0.1.0-rc.2"
 
 [features]
 test_programs = []
+test_programs_http = [ "wasmtime/component-model" ]

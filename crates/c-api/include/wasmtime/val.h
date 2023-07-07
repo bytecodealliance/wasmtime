@@ -70,7 +70,7 @@ WASM_API_EXTERN void wasmtime_externref_delete(wasmtime_externref_t *ref);
  * Note that the returned #wasmtime_externref_t is an owned value that must be
  * deleted via #wasmtime_externref_delete by the caller if it is non-null.
  */
-WASM_API_EXTERN wasmtime_externref_t *wasmtime_externref_from_raw(wasmtime_context_t *context, size_t raw);
+WASM_API_EXTERN wasmtime_externref_t *wasmtime_externref_from_raw(wasmtime_context_t *context, void *raw);
 
 /**
  * \brief Converts a #wasmtime_externref_t to a raw value suitable for storing
@@ -82,7 +82,7 @@ WASM_API_EXTERN wasmtime_externref_t *wasmtime_externref_from_raw(wasmtime_conte
  * context of the store. Do not perform a GC between calling this function and
  * passing it to WebAssembly.
  */
-WASM_API_EXTERN size_t wasmtime_externref_to_raw(
+WASM_API_EXTERN void *wasmtime_externref_to_raw(
     wasmtime_context_t *context,
     const wasmtime_externref_t *ref);
 
@@ -180,7 +180,7 @@ typedef union wasmtime_val_raw {
   /// passed to `wasmtime_func_from_raw` to determine the `wasmtime_func_t`.
   ///
   /// Note that this field is always stored in a little-endian format.
-  size_t funcref;
+  void *funcref;
   /// Field for when this val is a WebAssembly `externref` value.
   ///
   /// If this is set to 0 then it's a null externref, otherwise this must be
@@ -188,7 +188,7 @@ typedef union wasmtime_val_raw {
   /// `wasmtime_externref_t`.
   ///
   /// Note that this field is always stored in a little-endian format.
-  size_t externref;
+  void *externref;
 } wasmtime_val_raw_t;
 
 /**
@@ -212,7 +212,7 @@ typedef struct wasmtime_val {
 } wasmtime_val_t;
 
 /**
- * \brief Delets an owned #wasmtime_val_t.
+ * \brief Deletes an owned #wasmtime_val_t.
  *
  * Note that this only deletes the contents, not the memory that `val` points to
  * itself (which is owned by the caller).

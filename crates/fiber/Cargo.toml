@@ -14,7 +14,7 @@ edition.workspace = true
 links = "wasmtime-fiber-shims"
 
 [dependencies]
-cfg-if = "1.0"
+cfg-if = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
 rustix = { workspace = true, features = ["mm", "param"] }

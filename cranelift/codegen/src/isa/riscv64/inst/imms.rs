@@ -99,33 +99,65 @@ impl Display for Imm20 {
     }
 }
 
-#[derive(Clone, Copy)]
-pub struct Uimm5 {
-    bits: u8,
+/// An unsigned 5-bit immediate.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct UImm5 {
+    value: u8,
 }
 
-impl Uimm5 {
-    pub fn from_bits(bits: u8) -> Self {
-        Self { bits }
+impl UImm5 {
+    /// Create an unsigned 5-bit immediate from u8.
+    pub fn maybe_from_u8(value: u8) -> Option<UImm5> {
+        if value < 32 {
+            Some(UImm5 { value })
+        } else {
+            None
+        }
     }
-    /// Create a zero immediate of this format.
-    pub fn zero() -> Self {
-        Self { bits: 0 }
-    }
-    pub fn as_u32(&self) -> u32 {
-        (self.bits as u32) & 0b1_1111
+
+    /// Bits for encoding.
+    pub fn bits(&self) -> u32 {
+        u32::from(self.value)
     }
 }
 
-impl Debug for Uimm5 {
+impl Display for UImm5 {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-        write!(f, "{}", self.bits)
+        write!(f, "{}", self.value)
     }
 }
 
-impl Display for Uimm5 {
+/// A Signed 5-bit immediate.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Imm5 {
+    value: i8,
+}
+
+impl Imm5 {
+    /// Create an signed 5-bit immediate from an i8.
+    pub fn maybe_from_i8(value: i8) -> Option<Imm5> {
+        if value >= -16 && value <= 15 {
+            Some(Imm5 { value })
+        } else {
+            None
+        }
+    }
+
+    pub fn from_bits(value: u8) -> Imm5 {
+        assert_eq!(value & 0x1f, value);
+        let signed = ((value << 3) as i8) >> 3;
+        Imm5 { value: signed }
+    }
+
+    /// Bits for encoding.
+    pub fn bits(&self) -> u8 {
+        self.value as u8 & 0x1f
+    }
+}
+
+impl Display for Imm5 {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-        write!(f, "{}", self.bits)
+        write!(f, "{}", self.value)
     }
 }
 

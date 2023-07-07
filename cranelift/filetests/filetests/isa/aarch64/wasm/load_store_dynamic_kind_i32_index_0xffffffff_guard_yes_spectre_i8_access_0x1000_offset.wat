@@ -46,11 +46,11 @@
 ;;   ldr x12, [x2]
 ;;   add x12, x12, x0, UXTW
 ;;   add x12, x12, #4096
-;;   movz x9, #0
+;;   movz x13, #0
 ;;   subs xzr, x10, x11
-;;   csel x12, x9, x12, hi
+;;   csel x11, x13, x12, hi
 ;;   csdb
-;;   strb w1, [x12]
+;;   strb w1, [x11]
 ;;   b label1
 ;; block1:
 ;;   ret
@@ -62,11 +62,11 @@
 ;;   ldr x12, [x1]
 ;;   add x12, x12, x0, UXTW
 ;;   add x12, x12, #4096
-;;   movz x9, #0
+;;   movz x13, #0
 ;;   subs xzr, x10, x11
-;;   csel x12, x9, x12, hi
+;;   csel x11, x13, x12, hi
 ;;   csdb
-;;   ldrb w0, [x12]
+;;   ldrb w0, [x11]
 ;;   b label1
 ;; block1:
 ;;   ret

@@ -15,8 +15,5 @@ wasmtime = { workspace = true, features = ['cranelift'] }
 wast = { workspace = true }
 log = { workspace = true }
 
-[badges]
-maintenance = { status = "actively-developed" }
-
 [features]
 component-model = ['wasmtime/component-model']

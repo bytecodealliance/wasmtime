@@ -1,3 +1,5 @@
+package foo:foo
+
 interface chars {
   /// A function that accepts a character
   take-char: func(x: char)
@@ -5,7 +7,7 @@ interface chars {
   return-char: func() -> char
 }
 
-default world the-world {
-  import imports: self.chars
-  export exports: self.chars
+world the-world {
+  import chars
+  export chars
 }

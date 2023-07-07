@@ -4,22 +4,23 @@ pub mod disasm;
 mod test {
     use super::disasm::disasm;
     use anyhow::Context;
-    use cranelift_codegen::settings;
+    use cranelift_codegen::settings::{self, Configurable};
     use serde::{Deserialize, Serialize};
     use similar::TextDiff;
     use std::str::FromStr;
     use target_lexicon::Triple;
+    use wasmtime_environ::ModuleTranslation;
     use wasmtime_environ::{
         wasmparser::{Parser as WasmParser, Validator},
-        DefinedFuncIndex, FunctionBodyData, ModuleEnvironment, Tunables,
+        DefinedFuncIndex, FunctionBodyData, ModuleEnvironment, Tunables, TypeConvert,
     };
-    use winch_codegen::lookup;
-    use winch_environ::FuncEnv;
+    use winch_codegen::{lookup, TargetIsa};
     use winch_test_macros::generate_file_tests;
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
     struct TestConfig {
         target: String,
+        flags: Option<Vec<String>>,
     }
 
     /// A helper function to parse the test configuration from the top of the file.
@@ -93,7 +94,10 @@ mod test {
         let expected = binding.as_str();
 
         let shared_flags = settings::Flags::new(settings::builder());
-        let isa_builder = lookup(triple).unwrap();
+        let mut isa_builder = lookup(triple).unwrap();
+        for flag in config.flags.iter().flat_map(|f| f) {
+            isa_builder.set(&flag, "true").unwrap();
+        }
         let isa = isa_builder.finish(shared_flags).unwrap();
 
         let mut validator = Validator::new();
@@ -107,13 +111,10 @@ mod test {
         let _ = types.finish();
 
         let body_inputs = std::mem::take(&mut translation.function_body_inputs);
-        let module = &translation.module;
-        let types = translation.get_types();
-        let env = FuncEnv::new(module, &types, &*isa);
 
         let binding = body_inputs
             .into_iter()
-            .map(|func| compile(&env, func).join("\n"))
+            .map(|func| compile(&isa, &translation, func).join("\n"))
             .collect::<Vec<String>>()
             .join("\n\n");
         let actual = binding.as_str();
@@ -144,20 +145,26 @@ mod test {
         }
     }
 
-    fn compile(env: &FuncEnv, f: (DefinedFuncIndex, FunctionBodyData<'_>)) -> Vec<String> {
-        let index = env.module.func_index(f.0);
-        let sig = env
-            .types
+    fn compile(
+        isa: &Box<dyn TargetIsa>,
+        translation: &ModuleTranslation,
+        f: (DefinedFuncIndex, FunctionBodyData<'_>),
+    ) -> Vec<String> {
+        let module = &translation.module;
+        let types = &translation.get_types();
+
+        let index = module.func_index(f.0);
+        let sig = types
             .function_at(index.as_u32())
             .expect(&format!("function type at index {:?}", index.as_u32()));
-        let FunctionBodyData { body, validator } = f.1;
-        let validator = validator.into_validator(Default::default());
+        let sig = translation.module.convert_func_type(&sig);
 
-        let buffer = env
-            .isa
-            .compile_function(&sig, &body, env, validator)
+        let FunctionBodyData { body, validator } = f.1;
+        let mut validator = validator.into_validator(Default::default());
+        let buffer = isa
+            .compile_function(&sig, &body, &translation, &mut validator)
             .expect("Couldn't compile function");
 
-        disasm(buffer.data(), env.isa).unwrap()
+        disasm(buffer.data(), isa).unwrap()
     }
 }

@@ -189,7 +189,7 @@ fn _indent(s: &str) -> Option<usize> {
 fn parse_multiline(s: &str) -> Vec<String> {
     // Convert tabs into spaces.
     let expanded_tab = format!("{:-1$}", " ", SHIFTWIDTH);
-    let lines: Vec<String> = s.lines().map(|l| l.replace("\t", &expanded_tab)).collect();
+    let lines: Vec<String> = s.lines().map(|l| l.replace('\t', &expanded_tab)).collect();
 
     // Determine minimum indentation, ignoring the first line and empty lines.
     let indent = lines

@@ -48,6 +48,9 @@ jobs:
           git config user.email 'wasmtime-publish@users.noreply.github.com'
           git remote set-url origin https://git:${{ secrets.PERSONAL_ACCESS_TOKEN }}@github.com/${{ github.repository }}
 
+      - uses: ./.github/actions/install-rust
+      - uses: ./.github/actions/install-cargo-vet
+
       - name: Bump major version number
         run: |
           set -ex
@@ -65,6 +68,9 @@ jobs:
           sed "s/VERSION/$num/" ci/RELEASES-template.md > RELEASES.md
           cat backup-releases >> RELEASES.md
           rm backup-releases
+
+          # Update `cargo vet` entries for all the new crate versions
+          cargo vet
 
           # Commit all of the above changes.
           git commit -am "Bump Wasmtime to $num"
@@ -151,6 +157,7 @@ jobs:
           # commit it, indicating that the commit is what will get tagged and
           # released
           git reset --hard origin/release-$cur
+          git submodule update --init --recursive
           sed -i "s/^Unreleased/Released $(date +'%Y-%m-%d')/" RELEASES.md
           git commit --allow-empty -a -F-<<EOF
           Release Wasmtime $cur

@@ -53,6 +53,7 @@ fn copy_wrong() {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn null_elem_segment_works_with_imported_table() -> Result<()> {
     let mut store = Store::<()>::default();
     let ty = TableType::new(ValType::FuncRef, 1, None);

@@ -9,6 +9,7 @@ use cranelift_codegen::{
     CodegenResult,
 };
 use std::fmt;
+use std::path;
 use std::sync::Arc;
 use wasmtime_cranelift_shared::isa_builder::IsaBuilder;
 use wasmtime_environ::{CacheStore, CompilerBuilder, Setting};
@@ -17,6 +18,7 @@ struct Builder {
     inner: IsaBuilder<CodegenResult<OwnedTargetIsa>>,
     linkopts: LinkOptions,
     cache_store: Option<Arc<dyn CacheStore>>,
+    clif_dir: Option<path::PathBuf>,
 }
 
 #[derive(Clone, Default)]
@@ -37,12 +39,18 @@ pub fn builder() -> Box<dyn CompilerBuilder> {
         inner: IsaBuilder::new(|triple| isa::lookup(triple).map_err(|e| e.into())),
         linkopts: LinkOptions::default(),
         cache_store: None,
+        clif_dir: None,
     })
 }
 
 impl CompilerBuilder for Builder {
     fn triple(&self) -> &target_lexicon::Triple {
         self.inner.triple()
+    }
+
+    fn clif_dir(&mut self, path: &path::Path) -> Result<()> {
+        self.clif_dir = Some(path.to_path_buf());
+        Ok(())
     }
 
     fn target(&mut self, target: target_lexicon::Triple) -> Result<()> {
@@ -74,6 +82,7 @@ impl CompilerBuilder for Builder {
             isa,
             self.cache_store.clone(),
             self.linkopts.clone(),
+            self.clif_dir.clone(),
         )))
     }
 

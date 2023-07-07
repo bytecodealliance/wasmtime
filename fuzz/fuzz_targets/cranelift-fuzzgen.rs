@@ -5,6 +5,7 @@ use cranelift_codegen::ir::Signature;
 use cranelift_codegen::ir::UserExternalName;
 use cranelift_codegen::ir::UserFuncName;
 use cranelift_codegen::Context;
+use cranelift_control::ControlPlane;
 use libfuzzer_sys::arbitrary;
 use libfuzzer_sys::arbitrary::Arbitrary;
 use libfuzzer_sys::arbitrary::Unstructured;
@@ -132,10 +133,14 @@ enum RunResult {
 
 impl PartialEq for RunResult {
     fn eq(&self, other: &Self) -> bool {
-        if let (RunResult::Success(l), RunResult::Success(r)) = (self, other) {
-            l.len() == r.len() && l.iter().zip(r).all(|(l, r)| l.bitwise_eq(r))
-        } else {
-            false
+        match (self, other) {
+            (RunResult::Success(l), RunResult::Success(r)) => {
+                l.len() == r.len() && l.iter().zip(r).all(|(l, r)| l.bitwise_eq(r))
+            }
+            (RunResult::Trap(l), RunResult::Trap(r)) => l == r,
+            (RunResult::Timeout, RunResult::Timeout) => true,
+            (RunResult::Error(_), RunResult::Error(_)) => unimplemented!(),
+            _ => false,
         }
     }
 }
@@ -146,6 +151,9 @@ pub struct TestCase {
     /// Functions under test
     /// By convention the first function is the main function.
     pub functions: Vec<Function>,
+    /// Control planes for function compilation.
+    /// There should be an equal amount as functions to compile.
+    pub ctrl_planes: Vec<ControlPlane>,
     /// Generate multiple test inputs for each test case.
     /// This allows us to get more coverage per compilation, which may be somewhat expensive.
     pub inputs: Vec<TestCaseInput>,
@@ -191,6 +199,7 @@ impl TestCase {
         // the start.
         let func_count = gen.u.int_in_range(gen.config.testcase_funcs.clone())?;
         let mut functions: Vec<Function> = Vec::with_capacity(func_count);
+        let mut ctrl_planes: Vec<ControlPlane> = Vec::with_capacity(func_count);
         for i in (0..func_count).rev() {
             // Function name must be in a different namespace than TESTFILE_NAMESPACE (0)
             let fname = UserFuncName::user(1, i as u32);
@@ -205,13 +214,11 @@ impl TestCase {
                 })
                 .collect();
 
-            let func = gen.generate_func(
-                fname,
-                isa.triple().clone(),
-                usercalls,
-                ALLOWED_LIBCALLS.to_vec(),
-            )?;
+            let func =
+                gen.generate_func(fname, isa.clone(), usercalls, ALLOWED_LIBCALLS.to_vec())?;
             functions.push(func);
+
+            ctrl_planes.push(ControlPlane::arbitrary(gen.u)?);
         }
         // Now reverse the functions so that the main function is at the start.
         functions.reverse();
@@ -222,6 +229,7 @@ impl TestCase {
         Ok(TestCase {
             isa,
             functions,
+            ctrl_planes,
             inputs,
             compare_against_host,
         })
@@ -241,6 +249,7 @@ impl TestCase {
         TestCase {
             isa: self.isa.clone(),
             functions: optimized_functions,
+            ctrl_planes: self.ctrl_planes.clone(),
             inputs: self.inputs.clone(),
             compare_against_host: false,
         }
@@ -289,7 +298,7 @@ fn build_interpreter(testcase: &TestCase) -> Interpreter {
 
     let state = InterpreterState::default()
         .with_function_store(env)
-        .with_libcall_handler(|libcall: LibCall, args: LibCallValues<DataValue>| {
+        .with_libcall_handler(|libcall: LibCall, args: LibCallValues| {
             use LibCall::*;
             Ok(smallvec![match (libcall, &args[..]) {
                 (CeilF32, [DataValue::F32(a)]) => DataValue::F32(a.ceil()),
@@ -342,11 +351,30 @@ fn run_test_inputs(testcase: &TestCase, run: impl Fn(&[DataValue]) -> RunResult)
 
         let res = run(args);
 
+        // This situation can happen when we are comparing the interpreter against the interpreter, and
+        // one of the optimization passes has increased the number of instructions in the function.
+        // This can cause the interpreter to run out of fuel in the second run, but not the first.
+        // We should ignore these cases.
+        // Running in the host should never return a timeout, so that should be ok.
+        if res == RunResult::Timeout {
+            return;
+        }
+
         assert_eq!(int_res, res);
     }
 }
 
 fuzz_target!(|testcase: TestCase| {
+    let mut testcase = testcase;
+    let fuel: u8 = std::env::args()
+        .find_map(|arg| arg.strip_prefix("--fuel=").map(|s| s.to_owned()))
+        .map(|fuel| fuel.parse().expect("fuel should be a valid integer"))
+        .unwrap_or_default();
+    for i in 0..testcase.ctrl_planes.len() {
+        testcase.ctrl_planes[i].set_fuel(fuel)
+    }
+    let testcase = testcase;
+
     // This is the default, but we should ensure that it wasn't accidentally turned off anywhere.
     assert!(testcase.isa.flags().enable_verifier());
 
@@ -368,7 +396,9 @@ fuzz_target!(|testcase: TestCase| {
         });
     } else {
         let mut compiler = TestFileCompiler::new(testcase.isa.clone());
-        compiler.add_functions(&testcase.functions[..]).unwrap();
+        compiler
+            .add_functions(&testcase.functions[..], testcase.ctrl_planes.clone())
+            .unwrap();
         let compiled = compiler.compile().unwrap();
         let trampoline = compiled.get_trampoline(testcase.main()).unwrap();
 

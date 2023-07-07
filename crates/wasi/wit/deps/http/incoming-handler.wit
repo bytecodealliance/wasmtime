@@ -1,0 +1,24 @@
+// The `wasi:http/incoming-handler` interface is meant to be exported by
+// components and called by the host in response to a new incoming HTTP
+// response.
+//
+//   NOTE: in Preview3, this interface will be merged with
+//   `wasi:http/outgoing-handler` into a single `wasi:http/handler` interface
+//   that takes a `request` parameter and returns a `response` result.
+//
+interface incoming-handler {
+  use types.{incoming-request, response-outparam}
+
+  // The `handle` function takes an outparam instead of returning its response
+  // so that the component may stream its response while streaming any other
+  // request or response bodies. The callee MUST write a response to the
+  // `response-out` and then finish the response before returning. The `handle`
+  // function is allowed to continue execution after finishing the response's
+  // output stream. While this post-response execution is taken off the
+  // critical path, since there is no return value, there is no way to report
+  // its success or failure.
+  handle: func(
+    request: incoming-request,
+    response-out: response-outparam
+  )
+}

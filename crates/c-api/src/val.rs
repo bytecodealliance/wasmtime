@@ -296,17 +296,17 @@ pub extern "C" fn wasmtime_externref_delete(_val: Option<ExternRef>) {}
 pub unsafe extern "C" fn wasmtime_externref_to_raw(
     cx: CStoreContextMut<'_>,
     val: Option<ManuallyDrop<ExternRef>>,
-) -> usize {
+) -> *mut c_void {
     match val {
         Some(ptr) => ptr.to_raw(cx),
-        None => 0,
+        None => ptr::null_mut(),
     }
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_externref_from_raw(
     _cx: CStoreContextMut<'_>,
-    val: usize,
+    val: *mut c_void,
 ) -> Option<ExternRef> {
     ExternRef::from_raw(val)
 }

@@ -1,3 +1,5 @@
+package foo:foo
+
 interface simple-lists {
   simple-list1: func(l: list<u32>)
   simple-list2: func() -> list<u32>
@@ -5,7 +7,7 @@ interface simple-lists {
   simple-list4: func(l: list<list<u32>>) -> list<list<u32>>
 }
 
-default world my-world {
-  import imports: self.simple-lists
-  export exports: self.simple-lists
+world my-world {
+  import simple-lists
+  export simple-lists
 }

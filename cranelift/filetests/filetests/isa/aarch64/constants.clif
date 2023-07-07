@@ -12,7 +12,7 @@ block0:
 ; block0:
 ;   movz w0, #255
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov w0, #0xff
@@ -28,7 +28,7 @@ block0:
 ; block0:
 ;   movz w0, #0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov w0, #0
@@ -44,7 +44,7 @@ block0:
 ; block0:
 ;   movz x0, #0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov x0, #0
@@ -60,7 +60,7 @@ block0:
 ; block0:
 ;   movz x0, #65535
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov x0, #0xffff
@@ -76,7 +76,7 @@ block0:
 ; block0:
 ;   movz x0, #65535, LSL #16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov x0, #0xffff0000
@@ -92,7 +92,7 @@ block0:
 ; block0:
 ;   movz x0, #65535, LSL #32
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov x0, #0xffff00000000
@@ -108,7 +108,7 @@ block0:
 ; block0:
 ;   movz x0, #65535, LSL #48
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov x0, #-0x1000000000000
@@ -124,7 +124,7 @@ block0:
 ; block0:
 ;   movn x0, #0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov x0, #-1
@@ -140,7 +140,7 @@ block0:
 ; block0:
 ;   movn x0, #65535
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov x0, #-0x10000
@@ -156,7 +156,7 @@ block0:
 ; block0:
 ;   movn x0, #65535, LSL #16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov x0, #-0xffff0001
@@ -172,7 +172,7 @@ block0:
 ; block0:
 ;   movn x0, #65535, LSL #32
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov x0, #-0xffff00000001
@@ -188,7 +188,7 @@ block0:
 ; block0:
 ;   movn x0, #65535, LSL #48
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov x0, #0xffffffffffff
@@ -207,7 +207,7 @@ block0:
 ;   movk x0, x0, #61603, LSL #32
 ;   movk x0, x0, #62283, LSL #48
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov x0, #0x3a
@@ -227,7 +227,7 @@ block0:
 ;   movz x0, #7924, LSL #16
 ;   movk x0, x0, #4841, LSL #48
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov x0, #0x1ef40000
@@ -245,7 +245,7 @@ block0:
 ;   movn x0, #57611, LSL #16
 ;   movk x0, x0, #4841, LSL #48
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov x0, #-0xe10b0001
@@ -262,7 +262,7 @@ block0:
 ; block0:
 ;   movn w0, #0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov w0, #-1
@@ -278,7 +278,7 @@ block0:
 ; block0:
 ;   movn w0, #8
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov w0, #-9
@@ -294,7 +294,7 @@ block0:
 ; block0:
 ;   movn w0, #8
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov w0, #-9
@@ -310,7 +310,7 @@ block0:
 ; block0:
 ;   movn x0, #8
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov x0, #-9
@@ -326,7 +326,7 @@ block0:
 ; block0:
 ;   fmov d0, #1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fmov d0, #1.00000000
@@ -342,7 +342,7 @@ block0:
 ; block0:
 ;   fmov s0, #5
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fmov s0, #5.00000000
@@ -359,7 +359,7 @@ block0:
 ;   movz x0, #16457, LSL #48
 ;   fmov d0, x0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov x0, #0x4049000000000000
@@ -377,7 +377,7 @@ block0:
 ;   movz w0, #16968, LSL #16
 ;   fmov s0, w0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov w0, #0x42480000
@@ -394,7 +394,7 @@ block0:
 ; block0:
 ;   movi v0.2s, #0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   movi v0.2s, #0
@@ -410,7 +410,7 @@ block0:
 ; block0:
 ;   movi v0.2s, #0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   movi v0.2s, #0
@@ -426,7 +426,7 @@ block0:
 ; block0:
 ;   fmov d0, #-16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fmov d0, #-16.00000000
@@ -442,7 +442,7 @@ block0:
 ; block0:
 ;   fmov s0, #-16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fmov s0, #-16.00000000

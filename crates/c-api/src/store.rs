@@ -4,7 +4,7 @@ use std::ffi::c_void;
 use std::sync::Arc;
 use wasmtime::{
     AsContext, AsContextMut, Store, StoreContext, StoreContextMut, StoreLimits, StoreLimitsBuilder,
-    Val,
+    UpdateDeadline, Val,
 };
 
 /// This representation of a `Store` is used to implement the `wasm.h` API.
@@ -106,6 +106,48 @@ pub extern "C" fn wasmtime_store_new(
     })
 }
 
+// Internal structure to add Send/Sync to the c_void member.
+#[derive(Debug)]
+pub struct CallbackDataPtr {
+    pub ptr: *mut c_void,
+}
+
+impl CallbackDataPtr {
+    fn as_mut_ptr(&self) -> *mut c_void {
+        self.ptr
+    }
+}
+
+unsafe impl Send for CallbackDataPtr {}
+unsafe impl Sync for CallbackDataPtr {}
+
+#[no_mangle]
+pub extern "C" fn wasmtime_store_epoch_deadline_callback(
+    store: &mut wasmtime_store_t,
+    func: extern "C" fn(
+        CStoreContextMut<'_>,
+        *mut c_void,
+        *mut u64,
+    ) -> Option<Box<wasmtime_error_t>>,
+    data: *mut c_void,
+) {
+    let sendable = CallbackDataPtr { ptr: data };
+    store.store.epoch_deadline_callback(move |mut store_ctx| {
+        let mut delta: u64 = 0;
+        let result = (func)(
+            store_ctx.as_context_mut(),
+            sendable.as_mut_ptr(),
+            &mut delta as *mut u64,
+        );
+        match result {
+            Some(err) => Err(wasmtime::Error::from(<wasmtime_error_t as Into<
+                anyhow::Error,
+            >>::into(*err))),
+            None => Ok(UpdateDeadline::Continue(delta)),
+        }
+    });
+}
+
 #[no_mangle]
 pub extern "C" fn wasmtime_store_context(store: &mut wasmtime_store_t) -> CStoreContextMut<'_> {
     store.store.as_context_mut()
@@ -179,6 +221,20 @@ pub extern "C" fn wasmtime_context_fuel_consumed(store: CStoreContext<'_>, fuel:
     match store.fuel_consumed() {
         Some(amt) => {
             *fuel = amt;
+            true
+        }
+        None => false,
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn wasmtime_context_fuel_remaining(
+    store: CStoreContextMut<'_>,
+    fuel: &mut u64,
+) -> bool {
+    match store.fuel_remaining() {
+        Some(remaining) => {
+            *fuel = remaining;
             true
         }
         None => false,

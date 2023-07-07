@@ -2,6 +2,7 @@ use crate::RunResult;
 use std::cell::Cell;
 use std::ffi::c_void;
 use std::io;
+use std::ops::Range;
 use std::ptr;
 use windows_sys::Win32::Foundation::*;
 use windows_sys::Win32::System::Threading::*;
@@ -14,11 +15,15 @@ impl FiberStack {
         Ok(Self(size))
     }
 
-    pub unsafe fn from_top_ptr(_top: *mut u8) -> io::Result<Self> {
+    pub unsafe fn from_raw_parts(_base: *mut u8, _len: usize) -> io::Result<Self> {
         Err(io::Error::from_raw_os_error(ERROR_NOT_SUPPORTED as i32))
     }
 
     pub fn top(&self) -> Option<*mut u8> {
+        None
+    }
+
+    pub fn range(&self) -> Option<Range<usize>> {
         None
     }
 }

@@ -1,0 +1,86 @@
+test interpret
+test run
+target aarch64
+target s390x
+target x86_64
+target x86_64 has_bmi1
+target riscv64
+
+function %blsi32(i32) -> i32 {
+block0(v0: i32):
+    v1 = ineg v0
+    v2 = band v0, v1
+    return v2
+}
+; run: %blsi32(0) == 0
+; run: %blsi32(1) == 1
+; run: %blsi32(0x80) == 0x80
+; run: %blsi32(0xf80) == 0x80
+; run: %blsi32(0xffff0000) == 0x10000
+
+function %blsi64(i64) -> i64 {
+block0(v0: i64):
+    v1 = ineg v0
+    v2 = band v0, v1
+    return v2
+}
+; run: %blsi64(0) == 0
+; run: %blsi64(1) == 1
+; run: %blsi64(0x80) == 0x80
+; run: %blsi64(0xf80) == 0x80
+; run: %blsi64(0xffff0000) == 0x10000
+; run: %blsi64(0xffff000000000000) == 0x1000000000000
+
+function %blsr32(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 1
+    v2 = isub v0, v1
+    v3 = band v0, v2
+    return v3
+}
+; run: %blsr32(0) == 0
+; run: %blsr32(1) == 0
+; run: %blsr32(0x3) == 0x2
+; run: %blsr32(0xff) == 0xfe
+; run: %blsr32(0x10001000) == 0x10000000
+
+function %blsr64(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 1
+    v2 = isub v0, v1
+    v3 = band v0, v2
+    return v3
+}
+; run: %blsr64(0) == 0
+; run: %blsr64(1) == 0
+; run: %blsr64(0x3) == 0x2
+; run: %blsr64(0xff) == 0xfe
+; run: %blsr64(0x10001000) == 0x10000000
+; run: %blsr64(0x1000100010001000) == 0x1000100010000000
+
+function %blsmsk32(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 1
+    v2 = isub v0, v1
+    v3 = bxor v0, v2
+    return v3
+}
+; run: %blsmsk32(0) == -1
+; run: %blsmsk32(1) == 1
+; run: %blsmsk32(0x80) == 0xff
+; run: %blsmsk32(0x8080) == 0xff
+; run: %blsmsk32(0xffffffff) == 1
+
+function %blsmsk64(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 1
+    v2 = isub v0, v1
+    v3 = bxor v0, v2
+    return v3
+}
+; run: %blsmsk64(0) == -1
+; run: %blsmsk64(1) == 1
+; run: %blsmsk64(0x80) == 0xff
+; run: %blsmsk64(0x8080) == 0xff
+; run: %blsmsk64(0xffffffff) == 1
+; run: %blsmsk64(0xffffffff00000000) == 0x1ffffffff

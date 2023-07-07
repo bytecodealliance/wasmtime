@@ -1,6 +1,6 @@
 pub use crate::debug::transform::transform_dwarf;
 use crate::debug::ModuleMemoryOffset;
-use crate::CompiledFunctions;
+use crate::CompiledFunctionsMetadata;
 use cranelift_codegen::ir::Endianness;
 use cranelift_codegen::isa::{unwind::UnwindInfo, TargetIsa};
 use cranelift_entity::EntityRef;
@@ -137,13 +137,16 @@ impl Writer for WriterRelocate {
     }
 }
 
-fn create_frame_table<'a>(isa: &dyn TargetIsa, funcs: &CompiledFunctions) -> Option<FrameTable> {
+fn create_frame_table<'a>(
+    isa: &dyn TargetIsa,
+    funcs: &CompiledFunctionsMetadata,
+) -> Option<FrameTable> {
     let mut table = FrameTable::default();
 
     let cie_id = table.add_cie(isa.create_systemv_cie()?);
 
-    for (i, f) in funcs {
-        if let Some(UnwindInfo::SystemV(info)) = &f.unwind_info {
+    for (i, metadata) in funcs {
+        if let Some(UnwindInfo::SystemV(info)) = &metadata.unwind_info {
             table.add_fde(
                 cie_id,
                 info.to_fde(Address::Symbol {
@@ -160,7 +163,7 @@ fn create_frame_table<'a>(isa: &dyn TargetIsa, funcs: &CompiledFunctions) -> Opt
 pub fn emit_dwarf<'a>(
     isa: &dyn TargetIsa,
     debuginfo_data: &DebugInfoData,
-    funcs: &CompiledFunctions,
+    funcs: &CompiledFunctionsMetadata,
     memory_offset: &ModuleMemoryOffset,
 ) -> anyhow::Result<Vec<DwarfSection>> {
     let dwarf = transform_dwarf(isa, debuginfo_data, funcs, memory_offset)?;

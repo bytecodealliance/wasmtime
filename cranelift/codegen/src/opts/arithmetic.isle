@@ -1,0 +1,128 @@
+;; rewrites for integer and floating-point arithmetic
+;; eg: `iadd`, `isub`, `ineg`, `imul`, `fadd`, `fsub`, `fmul`
+
+;; x+0 == 0+x == x.
+(rule (simplify (iadd ty
+                      x
+                      (iconst ty (u64_from_imm64 0))))
+      (subsume x))
+(rule (simplify (iadd ty
+                      (iconst ty (u64_from_imm64 0))
+                      x))
+      (subsume x))
+;; x-0 == x.
+(rule (simplify (isub ty
+                      x
+                      (iconst ty (u64_from_imm64 0))))
+      (subsume x))
+;; 0-x == (ineg x).
+(rule (simplify (isub ty
+                      (iconst ty (u64_from_imm64 0))
+                      x))
+      (ineg ty x))
+
+;; ineg(ineg(x)) == x.
+(rule (simplify (ineg ty (ineg ty x))) (subsume x))
+
+;; ineg(x) * ineg(y) == x*y.
+(rule (simplify (imul ty (ineg ty x) (ineg ty y)))
+      (subsume (imul ty x y)))
+
+;; iabs(ineg(x)) == iabs(x).
+(rule (simplify (iabs ty (ineg ty x)))
+      (iabs ty x))
+
+;; iabs(iabs(x)) == iabs(x).
+(rule (simplify (iabs ty inner @ (iabs ty x)))
+      (subsume inner))
+
+;; x-x == 0.
+(rule (simplify (isub (fits_in_64 (ty_int ty)) x x)) (subsume (iconst ty (imm64 0))))
+
+;; x*1 == 1*x == x.
+(rule (simplify (imul ty
+                      x
+                      (iconst ty (u64_from_imm64 1))))
+      (subsume x))
+(rule (simplify (imul ty
+                      (iconst ty (u64_from_imm64 1))
+                      x))
+      (subsume x))
+
+;; x*0 == 0*x == 0.
+(rule (simplify (imul ty
+                      _
+                      zero @ (iconst ty (u64_from_imm64 0))))
+      (subsume zero))
+(rule (simplify (imul ty
+                      zero @ (iconst ty (u64_from_imm64 0))
+                      _))
+      (subsume zero))
+
+;; x*-1 == -1*x == ineg(x).
+(rule (simplify (imul ty x (iconst ty c)))
+      (if-let -1 (i64_sextend_imm64 ty c))
+      (ineg ty x))
+(rule (simplify (imul ty (iconst ty c) x))
+      (if-let -1 (i64_sextend_imm64 ty c))
+      (ineg ty x))
+
+;; (!x) + 1 == 1 + (!x) == !(x) - (-1) == ineg(x)
+(rule (simplify (iadd ty (bnot ty x) (iconst ty (u64_from_imm64 1))))
+      (ineg ty x))
+(rule (simplify (iadd ty (iconst ty (u64_from_imm64 1)) (bnot ty x)))
+      (ineg ty x))
+(rule (simplify (isub ty (bnot ty x) (iconst ty c)))
+      (if-let -1 (i64_sextend_imm64 ty c))
+      (ineg ty x))
+
+;; !(x - 1) == !(x + (-1)) == !((-1) + x) == ineg(x)
+(rule (simplify (bnot ty (isub ty x (iconst ty (u64_from_imm64 1)))))
+      (ineg ty x))
+(rule (simplify (bnot ty (iadd ty x (iconst ty c))))
+      (if-let -1 (i64_sextend_imm64 ty c))
+      (ineg ty x))
+(rule (simplify (bnot ty (iadd ty (iconst ty c) x)))
+      (if-let -1 (i64_sextend_imm64 ty c))
+      (ineg ty x))
+
+;; x/1 == x.
+(rule (simplify (sdiv ty
+                      x
+                      (iconst ty (u64_from_imm64 1))))
+      (subsume x))
+(rule (simplify (udiv ty
+                      x
+                      (iconst ty (u64_from_imm64 1))))
+      (subsume x))
+
+;; TODO: strength reduction: div to shifts
+;; TODO: div/rem by constants -> magic multiplications
+
+;; x*2 == 2*x == x+x.
+(rule (simplify (imul ty x (iconst _ (simm32 2))))
+      (iadd ty x x))
+(rule (simplify (imul ty (iconst _ (simm32 2)) x))
+      (iadd ty x x))
+
+;; x*c == x<<log2(c) when c is a power of two.
+;; Note that the type of `iconst` must be the same as the type of `imul`,
+;; so these rules can only fire in situations where it's safe to construct an
+;; `iconst` of that type.
+(rule (simplify (imul ty x (iconst _ (imm64_power_of_two c))))
+      (ishl ty x (iconst ty (imm64 c))))
+(rule (simplify (imul ty (iconst _ (imm64_power_of_two c)) x))
+      (ishl ty x (iconst ty (imm64 c))))
+
+;; fneg(fneg(x)) == x.
+(rule (simplify (fneg ty (fneg ty x))) (subsume x))
+
+;; If both of the multiplied arguments to an `fma` are negated then remove
+;; both of them since they cancel out.
+(rule (simplify (fma ty (fneg ty x) (fneg ty y) z))
+      (fma ty x y z))
+
+;; If both of the multiplied arguments to an `fmul` are negated then remove
+;; both of them since they cancel out.
+(rule (simplify (fmul ty (fneg ty x) (fneg ty y)))
+      (fmul ty x y))

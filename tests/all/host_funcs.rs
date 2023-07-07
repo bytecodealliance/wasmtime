@@ -61,7 +61,7 @@ fn drop_func() -> Result<()> {
 
     let a = A;
     linker.func_wrap("", "", move || {
-        drop(&a);
+        let _ = &a;
     })?;
 
     assert_eq!(HITS.load(SeqCst), 0);
@@ -70,7 +70,7 @@ fn drop_func() -> Result<()> {
 
     let a = A;
     linker.func_wrap("", "", move || {
-        drop(&a);
+        let _ = &a;
     })?;
 
     assert_eq!(HITS.load(SeqCst), 1);
@@ -98,7 +98,9 @@ fn drop_delayed() -> Result<()> {
     let mut linker = Linker::<()>::new(&engine);
 
     let a = A;
-    linker.func_wrap("", "", move || drop(&a))?;
+    linker.func_wrap("", "", move || {
+        let _ = &a;
+    })?;
 
     assert_eq!(HITS.load(SeqCst), 0);
 
@@ -210,6 +212,7 @@ fn signatures_match() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn import_works() -> Result<()> {
     static HITS: AtomicUsize = AtomicUsize::new(0);
 
@@ -311,6 +314,7 @@ fn import_works() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn call_import_many_args() -> Result<()> {
     let wasm = wat::parse_str(
         r#"
@@ -370,6 +374,7 @@ fn call_import_many_args() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn call_wasm_many_args() -> Result<()> {
     let wasm = wat::parse_str(
         r#"
@@ -459,6 +464,7 @@ fn trap_smoke() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn trap_import() -> Result<()> {
     let wasm = wat::parse_str(
         r#"
@@ -482,6 +488,7 @@ fn trap_import() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn new_from_signature() -> Result<()> {
     let engine = Engine::default();
     let mut linker = Linker::new(&engine);
@@ -592,6 +599,7 @@ fn call_wrapped_func() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn func_return_nothing() -> Result<()> {
     let engine = Engine::default();
     let mut linker = Linker::new(&engine);
@@ -608,6 +616,7 @@ fn func_return_nothing() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn call_via_funcref() -> Result<()> {
     static HITS: AtomicUsize = AtomicUsize::new(0);
 
@@ -635,7 +644,7 @@ fn call_via_funcref() -> Result<()> {
     let mut linker = Linker::new(&engine);
     let a = A;
     linker.func_wrap("", "", move |x: i32, y: i32| {
-        drop(&a);
+        let _ = &a;
         x + y
     })?;
 
@@ -695,6 +704,7 @@ fn store_with_context() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn wasi_imports() -> Result<()> {
     let engine = Engine::default();
     let mut linker = Linker::new(&engine);

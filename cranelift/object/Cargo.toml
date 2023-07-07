@@ -1,6 +1,6 @@
 [package]
 name = "cranelift-object"
-version = "0.95.0"
+version = "0.99.0"
 authors = ["The Cranelift Project Developers"]
 description = "Emit Cranelift output to native object files with `object`"
 repository = "https://github.com/bytecodealliance/wasmtime"
@@ -12,6 +12,7 @@ edition.workspace = true
 [dependencies]
 cranelift-module = { workspace = true }
 cranelift-codegen = { workspace = true, features = ["std"] }
+cranelift-control = { workspace = true }
 object = { workspace = true, features = ["write"] }
 target-lexicon = { workspace = true }
 anyhow = { workspace = true }
@@ -20,6 +21,3 @@ log = { workspace = true }
 [dev-dependencies]
 cranelift-frontend = { workspace = true }
 cranelift-entity = { workspace = true }
-
-[badges]
-maintenance = { status = "experimental" }

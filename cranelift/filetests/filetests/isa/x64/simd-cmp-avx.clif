@@ -1,6 +1,5 @@
 test compile precise-output
-set enable_simd
-target x86_64 has_avx
+target x86_64 sse42 has_avx
 
 function %i8x16_eq(i8x16, i8x16) -> i8x16 {
 block0(v0: i8x16, v1: i8x16):
@@ -16,7 +15,7 @@ block0(v0: i8x16, v1: i8x16):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -41,7 +40,7 @@ block0(v0: i16x8, v1: i16x8):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -66,7 +65,7 @@ block0(v0: i32x4, v1: i32x4):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -91,7 +90,7 @@ block0(v0: i64x2, v1: i64x2):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -116,7 +115,7 @@ block0(v0: i8x16, v1: i8x16):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -141,7 +140,7 @@ block0(v0: i16x8, v1: i16x8):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -166,7 +165,7 @@ block0(v0: i32x4, v1: i32x4):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -191,7 +190,7 @@ block0(v0: i64x2, v1: i64x2):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -222,7 +221,7 @@ block0(v0: f32x4, v1: f32x4):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -259,7 +258,7 @@ block0(v0: f64x2, v1: f64x2):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -297,7 +296,7 @@ block0(v0: f32x4, v1: f32x4):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -336,7 +335,7 @@ block0(v0: f64x2, v1: f64x2):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -368,7 +367,7 @@ block0(v0: i8x16, v1: i8x16):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -393,7 +392,7 @@ block0(v0: i8x16, v1: i8x16):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -418,7 +417,7 @@ block0(v0: i16x8, v1: i16x8):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -443,7 +442,7 @@ block0(v0: i16x8, v1: i16x8):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -468,7 +467,7 @@ block0(v0: i32x4, v1: i32x4):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -493,7 +492,7 @@ block0(v0: i32x4, v1: i32x4):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -518,7 +517,7 @@ block0(v0: i8x16, v1: i8x16):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -543,7 +542,7 @@ block0(v0: i8x16, v1: i8x16):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -568,7 +567,7 @@ block0(v0: i16x8, v1: i16x8):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -593,7 +592,7 @@ block0(v0: i16x8, v1: i16x8):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -618,7 +617,7 @@ block0(v0: i32x4, v1: i32x4):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -643,7 +642,7 @@ block0(v0: i32x4, v1: i32x4):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp

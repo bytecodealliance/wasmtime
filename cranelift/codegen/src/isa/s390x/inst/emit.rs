@@ -5,9 +5,10 @@ use crate::ir::{MemFlags, RelSourceLoc, TrapCode};
 use crate::isa::s390x::abi::S390xMachineDeps;
 use crate::isa::s390x::inst::*;
 use crate::isa::s390x::settings as s390x_settings;
-use crate::machinst::{Reg, RegClass};
+use crate::machinst::{ABIMachineSpec, Reg, RegClass};
 use crate::trace;
 use core::convert::TryFrom;
+use cranelift_control::ControlPlane;
 use regalloc2::Allocation;
 
 /// Debug macro for testing that a regpair is valid: that the high register is even, and the low
@@ -1347,15 +1348,19 @@ pub struct EmitState {
     stack_map: Option<StackMap>,
     /// Current source-code location corresponding to instruction to be emitted.
     cur_srcloc: RelSourceLoc,
+    /// Only used during fuzz-testing. Otherwise, it is a zero-sized struct and
+    /// optimized away at compiletime. See [cranelift_control].
+    ctrl_plane: ControlPlane,
 }
 
 impl MachInstEmitState<Inst> for EmitState {
-    fn new(abi: &Callee<S390xMachineDeps>) -> Self {
+    fn new(abi: &Callee<S390xMachineDeps>, ctrl_plane: ControlPlane) -> Self {
         EmitState {
             virtual_sp_offset: 0,
             initial_sp_offset: abi.frame_size() as i64,
             stack_map: None,
             cur_srcloc: Default::default(),
+            ctrl_plane,
         }
     }
 
@@ -1365,6 +1370,14 @@ impl MachInstEmitState<Inst> for EmitState {
 
     fn pre_sourceloc(&mut self, srcloc: RelSourceLoc) {
         self.cur_srcloc = srcloc;
+    }
+
+    fn ctrl_plane_mut(&mut self) -> &mut ControlPlane {
+        &mut self.ctrl_plane
+    }
+
+    fn take_ctrl_plane(self) -> ControlPlane {
+        self.ctrl_plane
     }
 }
 
@@ -2137,7 +2150,7 @@ impl Inst {
                 let done_label = sink.get_label();
 
                 // Emit label at the start of the loop.
-                sink.bind_label(loop_label);
+                sink.bind_label(loop_label, &mut state.ctrl_plane);
 
                 for inst in (&body).into_iter() {
                     match &inst {
@@ -2160,7 +2173,7 @@ impl Inst {
                 inst.emit(&[], sink, emit_info, state);
 
                 // Emit label at the end of the loop.
-                sink.bind_label(done_label);
+                sink.bind_label(done_label, &mut state.ctrl_plane);
             }
             &Inst::CondBreak { .. } => unreachable!(), // Only valid inside a Loop.
             &Inst::AtomicCas32 {
@@ -3532,8 +3545,18 @@ impl Inst {
                 }
             }
             &Inst::Args { .. } => {}
-            &Inst::Ret { link, .. } => {
+            &Inst::Ret {
+                link,
+                stack_bytes_to_pop,
+                ..
+            } => {
                 debug_assert_eq!(link, gpr(14));
+
+                for inst in
+                    S390xMachineDeps::gen_sp_reg_adjust(i32::try_from(stack_bytes_to_pop).unwrap())
+                {
+                    inst.emit(&[], sink, emit_info, state);
+                }
 
                 let opcode = 0x07; // BCR
                 put(sink, &enc_rr(opcode, gpr(15), link));
@@ -3646,7 +3669,7 @@ impl Inst {
                 // The first entry is the default target, which is not emitted
                 // into the jump table, so we skip it here.  It is only in the
                 // list so MachTerminator will see the potential target.
-                sink.bind_label(table_label);
+                sink.bind_label(table_label, &mut state.ctrl_plane);
                 let jt_off = sink.cur_offset();
                 for &target in targets.iter().skip(1) {
                     let word_off = sink.cur_offset();

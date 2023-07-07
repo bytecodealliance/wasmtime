@@ -5,7 +5,6 @@
 ;;! settings = [
 ;;!   "enable_heap_access_spectre_mitigation=false",
 ;;!   "opt_level=speed_and_size",
-;;!   "use_egraphs=true"
 ;;! ]
 ;;!
 ;;! [globals.vmctx]

@@ -47,9 +47,9 @@
 ;; block1:
 ;;   ld a7,0(a2)
 ;;   add a7,a7,a0
-;;   auipc a6,0; ld a6,12(a6); j 12; .8byte 0xffff0000
-;;   add t3,a7,a6
-;;   sb a1,0(t3)
+;;   auipc t3,0; ld t3,12(t3); j 12; .8byte 0xffff0000
+;;   add a7,a7,t3
+;;   sb a1,0(a7)
 ;;   j label2
 ;; block2:
 ;;   ret
@@ -64,9 +64,9 @@
 ;; block1:
 ;;   ld a7,0(a1)
 ;;   add a7,a7,a0
-;;   auipc a6,0; ld a6,12(a6); j 12; .8byte 0xffff0000
-;;   add t3,a7,a6
-;;   lbu a0,0(t3)
+;;   auipc t3,0; ld t3,12(t3); j 12; .8byte 0xffff0000
+;;   add a7,a7,t3
+;;   lbu a0,0(a7)
 ;;   j label2
 ;; block2:
 ;;   ret

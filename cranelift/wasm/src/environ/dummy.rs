@@ -10,8 +10,9 @@ use crate::func_translator::FuncTranslator;
 use crate::state::FuncTranslationState;
 use crate::WasmType;
 use crate::{
-    DataIndex, DefinedFuncIndex, ElemIndex, FuncIndex, Global, GlobalIndex, Heap, HeapData,
-    HeapStyle, Memory, MemoryIndex, Table, TableIndex, TypeIndex, WasmFuncType, WasmResult,
+    DataIndex, DefinedFuncIndex, ElemIndex, FuncIndex, Global, GlobalIndex, GlobalInit, Heap,
+    HeapData, HeapStyle, Memory, MemoryIndex, Table, TableIndex, TypeConvert, TypeIndex,
+    WasmFuncType, WasmHeapType, WasmResult,
 };
 use core::convert::TryFrom;
 use cranelift_codegen::cursor::FuncCursor;
@@ -250,6 +251,12 @@ impl<'dummy_environment> DummyFuncEnvironment<'dummy_environment> {
     }
 }
 
+impl<'dummy_environment> TypeConvert for DummyFuncEnvironment<'dummy_environment> {
+    fn lookup_heap_type(&self, _index: TypeIndex) -> WasmHeapType {
+        unimplemented!()
+    }
+}
+
 impl<'dummy_environment> TargetEnvironment for DummyFuncEnvironment<'dummy_environment> {
     fn target_config(&self) -> TargetFrontendConfig {
         self.mod_info.config
@@ -278,7 +285,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
                 WasmType::F32 => ir::types::F32,
                 WasmType::F64 => ir::types::F64,
                 WasmType::V128 => ir::types::I8X16,
-                WasmType::FuncRef | WasmType::ExternRef => ir::types::R64,
+                WasmType::Ref(_) => ir::types::R64,
             },
         })
     }
@@ -461,6 +468,16 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         args.push(vmctx, &mut pos.func.dfg.value_lists);
 
         Ok(pos.ins().Call(ir::Opcode::Call, INVALID, callee, args).0)
+    }
+
+    fn translate_call_ref(
+        &mut self,
+        _builder: &mut FunctionBuilder,
+        _sig_ref: ir::SigRef,
+        _callee: ir::Value,
+        _call_args: &[ir::Value],
+    ) -> WasmResult<ir::Inst> {
+        todo!("Implement dummy translate_call_ref")
     }
 
     fn translate_memory_grow(
@@ -655,8 +672,10 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
     ) -> WasmResult<ir::Value> {
         Ok(pos.ins().iconst(I32, 0))
     }
+}
 
-    fn unsigned_add_overflow_condition(&self) -> ir::condcodes::IntCC {
+impl TypeConvert for DummyEnvironment {
+    fn lookup_heap_type(&self, _index: TypeIndex) -> WasmHeapType {
         unimplemented!()
     }
 }
@@ -686,7 +705,7 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
                 WasmType::F32 => ir::types::F32,
                 WasmType::F64 => ir::types::F64,
                 WasmType::V128 => ir::types::I8X16,
-                WasmType::FuncRef | WasmType::ExternRef => reference_type,
+                WasmType::Ref(_) => reference_type,
             })
         };
         sig.params.extend(wasm.params().iter().map(&mut cvt));
@@ -718,7 +737,7 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
         Ok(())
     }
 
-    fn declare_global(&mut self, global: Global) -> WasmResult<()> {
+    fn declare_global(&mut self, global: Global, _init: GlobalInit) -> WasmResult<()> {
         self.info.globals.push(Exportable::new(global));
         Ok(())
     }

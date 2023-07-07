@@ -17,7 +17,7 @@ block0(v0: i32):
 ;   subs wzr, w0, #1118208
 ;   cset x0, hi
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   cmp w0, #0x111, lsl #12
@@ -36,7 +36,7 @@ block0(v0: i32):
 ;   subs wzr, w0, #1118208
 ;   cset x0, hs
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   cmp w0, #0x111, lsl #12
@@ -57,7 +57,7 @@ block0(v0: i32):
 ;   subs wzr, w0, w3
 ;   cset x0, hs
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov w3, #0x1111
@@ -80,7 +80,7 @@ block0(v0: i32):
 ;   subs wzr, w0, w3
 ;   cset x0, hs
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov w3, #0x1110
@@ -101,7 +101,7 @@ block0(v0: i32):
 ;   subs wzr, w0, #1118208
 ;   cset x0, gt
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   cmp w0, #0x111, lsl #12
@@ -120,7 +120,7 @@ block0(v0: i32):
 ;   subs wzr, w0, #1118208
 ;   cset x0, ge
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   cmp w0, #0x111, lsl #12
@@ -141,7 +141,7 @@ block0(v0: i32):
 ;   subs wzr, w0, w3
 ;   cset x0, ge
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov w3, #0x1111
@@ -164,7 +164,7 @@ block0(v0: i32):
 ;   subs wzr, w0, w3
 ;   cset x0, ge
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov w3, #0x1110

@@ -33,6 +33,7 @@
 //! |                               |
 //! |                               |
 //! |        Stack slots            |
+//! |        + `VMContext` slot     |
 //! |        + dynamic space        |
 //! |                               |
 //! |                               |
@@ -42,10 +43,10 @@
 //! |        + arguments            |
 //! |                               | ----> Space allocated for calls
 //! |                               |
-use crate::isa::reg::Reg;
+use crate::isa::{reg::Reg, CallingConvention};
 use smallvec::SmallVec;
 use std::ops::{Add, BitAnd, Not, Sub};
-use wasmparser::{FuncType, ValType};
+use wasmtime_environ::{WasmFuncType, WasmType};
 
 pub(crate) mod local;
 pub(crate) use local::*;
@@ -55,17 +56,24 @@ pub(crate) use local::*;
 /// specific registers, etc.
 pub(crate) trait ABI {
     /// The required stack alignment.
-    fn stack_align(&self) -> u8;
+    fn stack_align() -> u8;
 
     /// The required stack alignment for calls.
-    fn call_stack_align(&self) -> u8;
+    fn call_stack_align() -> u8;
 
     /// The offset to the argument base, relative to the frame pointer.
-    fn arg_base_offset(&self) -> u8;
+    fn arg_base_offset() -> u8;
+
+    /// The offset to the return address, relative to the frame pointer.
+    fn ret_addr_offset() -> u8;
 
     /// Construct the ABI-specific signature from a WebAssembly
     /// function type.
-    fn sig(&self, wasm_sig: &FuncType) -> ABISig;
+    fn sig(wasm_sig: &WasmFuncType, call_conv: &CallingConvention) -> ABISig;
+
+    /// Construct the ABI-specific result from a slice of
+    /// [`wasmtime_environ::WasmtType`].
+    fn result(returns: &[WasmType], call_conv: &CallingConvention) -> ABIResult;
 
     /// Returns the number of bits in a word.
     fn word_bits() -> u32;
@@ -77,6 +85,20 @@ pub(crate) trait ABI {
 
     /// Returns the designated scratch register.
     fn scratch_reg() -> Reg;
+
+    /// Returns the frame pointer register.
+    fn fp_reg() -> Reg;
+
+    /// Returns the stack pointer register.
+    fn sp_reg() -> Reg;
+
+    /// Returns the pinned register used to hold
+    /// the `VMContext`.
+    fn vmctx_reg() -> Reg;
+
+    /// Returns the callee-saved registers for the given
+    /// calling convention.
+    fn callee_saved_regs(call_conv: &CallingConvention) -> SmallVec<[Reg; 9]>;
 }
 
 /// ABI-specific representation of a function argument.
@@ -85,14 +107,14 @@ pub(crate) enum ABIArg {
     /// A register argument.
     Reg {
         /// Type of the argument.
-        ty: ValType,
+        ty: WasmType,
         /// Register holding the argument.
         reg: Reg,
     },
     /// A stack argument.
     Stack {
         /// The type of the argument.
-        ty: ValType,
+        ty: WasmType,
         /// Offset of the argument relative to the frame pointer.
         offset: u32,
     },
@@ -100,12 +122,12 @@ pub(crate) enum ABIArg {
 
 impl ABIArg {
     /// Allocate a new register abi arg.
-    pub fn reg(reg: Reg, ty: ValType) -> Self {
+    pub fn reg(reg: Reg, ty: WasmType) -> Self {
         Self::Reg { reg, ty }
     }
 
     /// Allocate a new stack abi arg.
-    pub fn stack_offset(offset: u32, ty: ValType) -> Self {
+    pub fn stack_offset(offset: u32, ty: WasmType) -> Self {
         Self::Stack { ty, offset }
     }
 
@@ -126,7 +148,7 @@ impl ABIArg {
     }
 
     /// Get the type associated to this arg.
-    pub fn ty(&self) -> ValType {
+    pub fn ty(&self) -> WasmType {
         match *self {
             ABIArg::Reg { ty, .. } | ABIArg::Stack { ty, .. } => ty,
         }
@@ -134,10 +156,11 @@ impl ABIArg {
 }
 
 /// ABI-specific representation of the function result.
+#[derive(Copy, Clone, Debug)]
 pub(crate) enum ABIResult {
     Reg {
         /// Type of the result.
-        ty: Option<ValType>,
+        ty: Option<WasmType>,
         /// Register to hold the result.
         reg: Reg,
     },
@@ -145,7 +168,7 @@ pub(crate) enum ABIResult {
 
 impl ABIResult {
     /// Create a register ABI result.
-    pub fn reg(ty: Option<ValType>, reg: Reg) -> Self {
+    pub fn reg(ty: Option<WasmType>, reg: Reg) -> Self {
         Self::Reg { ty, reg }
     }
 
@@ -160,6 +183,15 @@ impl ABIResult {
     pub fn is_void(&self) -> bool {
         match self {
             Self::Reg { ty, .. } => ty.is_none(),
+        }
+    }
+
+    /// Returns result's length.
+    pub fn len(&self) -> usize {
+        if self.is_void() {
+            0
+        } else {
+            1
         }
     }
 }
@@ -188,10 +220,10 @@ impl ABISig {
 }
 
 /// Returns the size in bytes of a given WebAssembly type.
-pub(crate) fn ty_size(ty: &ValType) -> u32 {
+pub(crate) fn ty_size(ty: &WasmType) -> u32 {
     match *ty {
-        ValType::I32 | ValType::F32 => 4,
-        ValType::I64 | ValType::F64 => 8,
+        WasmType::I32 | WasmType::F32 => 4,
+        WasmType::I64 | WasmType::F64 => 8,
         _ => panic!(),
     }
 }
@@ -209,4 +241,11 @@ where
 {
     let alignment_mask = alignment - 1.into();
     (value + alignment_mask) & !alignment_mask
+}
+
+/// Calculates the delta needed to adjust a function's frame plus some
+/// addend to a given alignment.
+pub(crate) fn calculate_frame_adjustment(frame_size: u32, addend: u32, alignment: u32) -> u32 {
+    let total = frame_size + addend;
+    (alignment - (total % alignment)) % alignment
 }

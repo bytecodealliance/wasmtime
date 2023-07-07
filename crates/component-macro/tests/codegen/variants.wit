@@ -1,3 +1,5 @@
+package foo:foo
+
 interface variants {
   enum e1 {
       a,
@@ -139,7 +141,7 @@ interface variants {
   return-named-result: func() -> (a: result<u8, my-errno>)
 }
 
-default world my-world {
-  import imports: self.variants
-  export exports: self.variants
+world my-world {
+  import variants
+  export variants
 }

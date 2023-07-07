@@ -1,0 +1,180 @@
+test optimize precise-output
+set opt_level=speed
+target x86_64
+
+function %i8x16_1() -> i8x16 {
+block0:
+    v1 = iconst.i8 0x33
+    v2 = splat.i8x16 v1
+    return v2
+}
+
+; function %i8x16_1() -> i8x16 fast {
+;     const0 = 0x33333333333333333333333333333333
+;
+; block0:
+;     v3 = vconst.i8x16 const0
+;     v4 -> v3
+;     return v3  ; v3 = const0
+; }
+
+function %i8x16_2() -> i8x16 {
+block0:
+    v1 = iconst.i8 0x80
+    v2 = splat.i8x16 v1
+    return v2
+}
+
+; function %i8x16_2() -> i8x16 fast {
+;     const0 = 0x80808080808080808080808080808080
+;
+; block0:
+;     v3 = vconst.i8x16 const0
+;     v4 -> v3
+;     return v3  ; v3 = const0
+; }
+
+function %i16x8_1() -> i16x8 {
+block0:
+    v1 = iconst.i16 0x1234
+    v2 = splat.i16x8 v1
+    return v2
+}
+
+; function %i16x8_1() -> i16x8 fast {
+;     const0 = 0x12341234123412341234123412341234
+;
+; block0:
+;     v3 = vconst.i16x8 const0
+;     v4 -> v3
+;     return v3  ; v3 = const0
+; }
+
+function %i16x8_2() -> i16x8 {
+block0:
+    v1 = iconst.i16 0x8765
+    v2 = splat.i16x8 v1
+    return v2
+}
+
+; function %i16x8_2() -> i16x8 fast {
+;     const0 = 0x87658765876587658765876587658765
+;
+; block0:
+;     v3 = vconst.i16x8 const0
+;     v4 -> v3
+;     return v3  ; v3 = const0
+; }
+
+function %i32x4_1() -> i32x4 {
+block0:
+    v1 = iconst.i32 0x12345678
+    v2 = splat.i32x4 v1
+    return v2
+}
+
+; function %i32x4_1() -> i32x4 fast {
+;     const0 = 0x12345678123456781234567812345678
+;
+; block0:
+;     v3 = vconst.i32x4 const0
+;     v4 -> v3
+;     return v3  ; v3 = const0
+; }
+
+function %i32x4_2() -> i32x4 {
+block0:
+    v1 = iconst.i32 0x87654321
+    v2 = splat.i32x4 v1
+    return v2
+}
+
+; function %i32x4_2() -> i32x4 fast {
+;     const0 = 0x87654321876543218765432187654321
+;
+; block0:
+;     v3 = vconst.i32x4 const0
+;     v4 -> v3
+;     return v3  ; v3 = const0
+; }
+
+function %i64x2_1() -> i64x2 {
+block0:
+    v1 = iconst.i64 0x0123456789abcdef
+    v2 = splat.i64x2 v1
+    return v2
+}
+
+; function %i64x2_1() -> i64x2 fast {
+;     const0 = 0x0123456789abcdef0123456789abcdef
+;
+; block0:
+;     v3 = vconst.i64x2 const0
+;     v4 -> v3
+;     return v3  ; v3 = const0
+; }
+
+function %i64x2_2() -> i64x2 {
+block0:
+    v1 = iconst.i64 0xfedcba9876543210
+    v2 = splat.i64x2 v1
+    return v2
+}
+
+; function %i64x2_2() -> i64x2 fast {
+;     const0 = 0xfedcba9876543210fedcba9876543210
+;
+; block0:
+;     v3 = vconst.i64x2 const0
+;     v4 -> v3
+;     return v3  ; v3 = const0
+; }
+
+function %i8x16_3() -> i8x16 {
+block0:
+    v1 = iconst.i8 -2
+    v2 = splat.i8x16 v1
+    return v2
+}
+
+; function %i8x16_3() -> i8x16 fast {
+;     const0 = 0xfefefefefefefefefefefefefefefefe
+;
+; block0:
+;     v3 = vconst.i8x16 const0
+;     v4 -> v3
+;     return v3  ; v3 = const0
+; }
+
+function %f32x4() -> f32x4 {
+block0:
+    v1 = f32const 0x3.0
+    v2 = splat.f32x4 v1
+    return v2
+}
+
+; function %f32x4() -> f32x4 fast {
+;     const0 = 0x40400000404000004040000040400000
+;
+; block0:
+;     v3 = vconst.f32x4 const0
+;     v4 -> v3
+;     return v3  ; v3 = const0
+; }
+
+function %f64x2() -> f64x2 {
+block0:
+    v1 = f64const 0x4.0
+    v2 = splat.f64x2 v1
+    return v2
+}
+
+; function %f64x2() -> f64x2 fast {
+;     const0 = 0x40100000000000004010000000000000
+;
+; block0:
+;     v3 = vconst.f64x2 const0
+;     v4 -> v3
+;     return v3  ; v3 = const0
+; }
+

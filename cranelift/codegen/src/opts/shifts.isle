@@ -1,0 +1,104 @@
+;; rewrites for shifts and rotates: `ishl, `ushr`, `sshr`, `rotl, `rotr`
+
+;; x>>0 == x<<0 == x rotr 0 == x rotl 0 == x.
+(rule (simplify (ishl ty
+                      x
+                      (iconst ty (u64_from_imm64 0))))
+      (subsume x))
+(rule (simplify (ushr ty
+                      x
+                      (iconst ty (u64_from_imm64 0))))
+      (subsume x))
+(rule (simplify (sshr ty
+                      x
+                      (iconst ty (u64_from_imm64 0))))
+      (subsume x))
+(rule (simplify (rotr ty
+                      x
+                      (iconst ty (u64_from_imm64 0))))
+      (subsume x))
+(rule (simplify (rotl ty
+                      x
+                      (iconst ty (u64_from_imm64 0))))
+      (subsume x))
+
+;; `(x >> k) << k` is the same as masking off the bottom `k` bits (regardless if
+;; this is a signed or unsigned shift right).
+(rule (simplify (ishl (fits_in_64 ty)
+                      (ushr ty x (iconst _ k))
+                      (iconst _ k)))
+      (let ((mask Imm64 (imm64_shl ty (imm64 0xFFFF_FFFF_FFFF_FFFF) k)))
+        (band ty x (iconst ty mask))))
+(rule (simplify (ishl (fits_in_64 ty)
+                      (sshr ty x (iconst _ k))
+                      (iconst _ k)))
+      (let ((mask Imm64 (imm64_shl ty (imm64 0xFFFF_FFFF_FFFF_FFFF) k)))
+        (band ty x (iconst ty mask))))
+
+;; For unsigned shifts, `(x << k) >> k` is the same as masking out the top
+;; `k` bits. A similar rule is valid for vectors but this `iconst` mask only
+;; works for scalar integers.
+(rule (simplify (ushr (fits_in_64 (ty_int ty))
+                      (ishl ty x (iconst _ k))
+                      (iconst _ k)))
+      (band ty x (iconst ty (imm64_ushr ty (imm64 (ty_mask ty)) k))))
+
+;; For signed shifts, `(x << k) >> k` does sign-extension from `n` bits to
+;; `n+k` bits. In the special case where `x` is the result of either `sextend`
+;; or `uextend` from `n` bits to `n+k` bits, we can implement this using
+;; `sextend`.
+(rule (simplify (sshr wide
+                 (ishl wide
+                  (uextend wide x @ (value_type narrow))
+                  (iconst _ shift))
+                 (iconst _ shift)))
+      (if-let (u64_from_imm64 shift_u64) shift)
+      (if-let $true (u64_eq shift_u64 (u64_sub (ty_bits_u64 wide) (ty_bits_u64 narrow))))
+      (sextend wide x))
+
+;; If `k` is smaller than the difference in bit widths of the two types, then
+;; the intermediate sign bit comes from the extend op, so the final result is
+;; the same as the original extend op.
+(rule (simplify (sshr wide
+                 (ishl wide
+                  x @ (uextend wide (value_type narrow))
+                  (iconst _ shift))
+                 (iconst _ shift)))
+      (if-let (u64_from_imm64 shift_u64) shift)
+      (if-let $true (u64_lt shift_u64 (u64_sub (ty_bits_u64 wide) (ty_bits_u64 narrow))))
+      x)
+
+;; If the original extend op was `sextend`, then both of the above cases say
+;; the result should also be `sextend`.
+(rule (simplify (sshr wide
+                 (ishl wide
+                  x @ (sextend wide (value_type narrow))
+                  (iconst _ shift))
+                 (iconst _ shift)))
+      (if-let (u64_from_imm64 shift_u64) shift)
+      (if-let $true (u64_le shift_u64 (u64_sub (ty_bits_u64 wide) (ty_bits_u64 narrow))))
+      x)
+
+;; (x << N) >> N == x as T_SMALL as T_LARGE
+;; if N == bytesizeof(T_LARGE) - bytesizeof(T_SMALL)
+;;
+;; Note that the shift is required to be >0 to ensure this doesn't accidentally
+;; try to `ireduce` a type to itself, which isn't a valid use of `ireduce`.
+(rule (simplify (sshr ty (ishl ty x (iconst _ shift)) (iconst _ shift)))
+      (if-let (u64_from_imm64 (u64_nonzero shift_u64)) shift)
+      (if-let ty_small (shift_amt_to_type (u64_sub (ty_bits ty) shift_u64)))
+      (sextend ty (ireduce ty_small x)))
+(rule (simplify (ushr ty (ishl ty x (iconst _ shift)) (iconst _ shift)))
+      (if-let (u64_from_imm64 (u64_nonzero shift_u64)) shift)
+      (if-let ty_small (shift_amt_to_type (u64_sub (ty_bits ty) shift_u64)))
+      (uextend ty (ireduce ty_small x)))
+
+(decl pure partial shift_amt_to_type (u64) Type)
+(rule (shift_amt_to_type 8) $I8)
+(rule (shift_amt_to_type 16) $I16)
+(rule (shift_amt_to_type 32) $I32)
+
+;; ineg(ushr(x, k)) == sshr(x, k) when k == ty_bits - 1.
+(rule (simplify (ineg ty (ushr ty x sconst @ (iconst ty (u64_from_imm64 shift_amt)))))
+      (if-let $true (u64_eq shift_amt (u64_sub (ty_bits ty) 1)))
+      (sshr ty x sconst))

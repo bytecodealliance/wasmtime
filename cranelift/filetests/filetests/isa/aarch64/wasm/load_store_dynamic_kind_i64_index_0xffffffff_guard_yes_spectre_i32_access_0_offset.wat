@@ -44,11 +44,11 @@
 ;;   ldr x8, [x2, #8]
 ;;   ldr x9, [x2]
 ;;   add x9, x9, x0
-;;   movz x7, #0
+;;   movz x10, #0
 ;;   subs xzr, x0, x8
-;;   csel x10, x7, x9, hi
+;;   csel x9, x10, x9, hi
 ;;   csdb
-;;   str w1, [x10]
+;;   str w1, [x9]
 ;;   b label1
 ;; block1:
 ;;   ret
@@ -58,11 +58,11 @@
 ;;   ldr x8, [x1, #8]
 ;;   ldr x9, [x1]
 ;;   add x9, x9, x0
-;;   movz x7, #0
+;;   movz x10, #0
 ;;   subs xzr, x0, x8
-;;   csel x10, x7, x9, hi
+;;   csel x9, x10, x9, hi
 ;;   csdb
-;;   ldr w0, [x10]
+;;   ldr w0, [x9]
 ;;   b label1
 ;; block1:
 ;;   ret

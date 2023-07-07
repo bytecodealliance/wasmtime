@@ -4,9 +4,6 @@ macro_rules! gentest {
             mod sugar {
                 wasmtime::component::bindgen!(in $path);
             }
-            mod normal {
-                wasmtime::component::bindgen!($name in $path);
-            }
             mod async_ {
                 wasmtime::component::bindgen!({
                     path: $path,
@@ -16,12 +13,13 @@ macro_rules! gentest {
             mod tracing {
                 wasmtime::component::bindgen!({
                     path: $path,
-                    world: $name,
                     tracing: true,
+                    ownership: Borrowing {
+                        duplicate_if_necessary: true
+                    }
                 });
             }
         }
-        // ...
     };
 }
 

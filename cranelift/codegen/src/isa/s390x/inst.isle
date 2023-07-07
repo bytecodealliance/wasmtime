@@ -906,7 +906,8 @@
     ;; A machine return instruction.
     (Ret
       (link Reg)
-      (rets VecRetPair))
+      (rets VecRetPair)
+      (stack_bytes_to_pop u32))
 
     ;; An unconditional branch.
     (Jump
@@ -3516,9 +3517,6 @@
 
 
 ;; Helpers for generating `call` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; List of argument registers for a call instruction.
-(type CallArgList extern (enum))
 
 ;; Partial (mutable) argument list in the process of being created.
 (type CallArgListBuilder extern (enum))

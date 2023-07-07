@@ -5,10 +5,10 @@ use std::{fs, path::PathBuf, str::FromStr};
 use target_lexicon::Triple;
 use wasmtime_environ::{
     wasmparser::{Parser as WasmParser, Validator},
-    DefinedFuncIndex, FunctionBodyData, ModuleEnvironment, Tunables,
+    DefinedFuncIndex, FunctionBodyData, ModuleEnvironment, ModuleTranslation, Tunables,
+    TypeConvert,
 };
-use winch_codegen::lookup;
-use winch_environ::FuncEnv;
+use winch_codegen::{lookup, TargetIsa};
 use winch_filetests::disasm::disasm;
 
 #[derive(Parser, Debug)]
@@ -37,34 +37,34 @@ pub fn run(opt: &Options) -> Result<()> {
         .translate(parser, &bytes)
         .context("Failed to translate WebAssembly module")?;
     let _ = types.finish();
-
     let body_inputs = std::mem::take(&mut translation.function_body_inputs);
-    let module = &translation.module;
-    let types = translation.get_types();
-    let env = FuncEnv::new(module, &types, &*isa);
 
     body_inputs
         .into_iter()
-        .try_for_each(|func| compile(&env, func))?;
+        .try_for_each(|func| compile(&isa, &translation, func))?;
 
     Ok(())
 }
 
-fn compile(env: &FuncEnv, f: (DefinedFuncIndex, FunctionBodyData<'_>)) -> Result<()> {
-    let index = env.module.func_index(f.0);
-    let sig = env
-        .types
+fn compile(
+    isa: &Box<dyn TargetIsa>,
+    translation: &ModuleTranslation,
+    f: (DefinedFuncIndex, FunctionBodyData<'_>),
+) -> Result<()> {
+    let index = translation.module.func_index(f.0);
+    let types = &translation.get_types();
+    let sig = types
         .function_at(index.as_u32())
         .expect(&format!("function type at index {:?}", index.as_u32()));
+    let sig = translation.module.convert_func_type(sig);
     let FunctionBodyData { body, validator } = f.1;
-    let validator = validator.into_validator(Default::default());
-    let buffer = env
-        .isa
-        .compile_function(&sig, &body, env, validator)
+    let mut validator = validator.into_validator(Default::default());
+    let buffer = isa
+        .compile_function(&sig, &body, &translation, &mut validator)
         .expect("Couldn't compile function");
 
     println!("Disassembly for function: {}", index.as_u32());
-    disasm(buffer.data(), env.isa)?
+    disasm(buffer.data(), isa)?
         .iter()
         .for_each(|s| println!("{}", s));
 

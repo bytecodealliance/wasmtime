@@ -2,7 +2,7 @@ test interpret
 test run
 target aarch64
 target x86_64
-target riscv64 
+target riscv64
 target s390x
 
 function %icmp_eq_i8(i8, i8) -> i8 {

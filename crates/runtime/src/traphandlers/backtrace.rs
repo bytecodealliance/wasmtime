@@ -20,7 +20,10 @@
 //! exit FP and stopping once we reach the entry SP (meaning that the next older
 //! frame is a host frame).
 
-use crate::traphandlers::{tls, CallThreadState};
+use crate::{
+    traphandlers::{tls, CallThreadState},
+    VMRuntimeLimits,
+};
 use cfg_if::cfg_if;
 use std::ops::ControlFlow;
 
@@ -80,9 +83,9 @@ impl Backtrace {
     }
 
     /// Capture the current Wasm stack in a backtrace.
-    pub fn new() -> Backtrace {
+    pub fn new(limits: *const VMRuntimeLimits) -> Backtrace {
         tls::with(|state| match state {
-            Some(state) => unsafe { Self::new_with_trap_state(state, None) },
+            Some(state) => unsafe { Self::new_with_trap_state(limits, state, None) },
             None => Backtrace(vec![]),
         })
     }
@@ -93,11 +96,12 @@ impl Backtrace {
     /// Wasm exit trampoline didn't run, and we use the provided PC and FP
     /// instead of looking them up in `VMRuntimeLimits`.
     pub(crate) unsafe fn new_with_trap_state(
+        limits: *const VMRuntimeLimits,
         state: &CallThreadState,
         trap_pc_and_fp: Option<(usize, usize)>,
     ) -> Backtrace {
         let mut frames = vec![];
-        Self::trace_with_trap_state(state, trap_pc_and_fp, |frame| {
+        Self::trace_with_trap_state(limits, state, trap_pc_and_fp, |frame| {
             frames.push(frame);
             ControlFlow::Continue(())
         });
@@ -105,9 +109,9 @@ impl Backtrace {
     }
 
     /// Walk the current Wasm stack, calling `f` for each frame we walk.
-    pub fn trace(f: impl FnMut(Frame) -> ControlFlow<()>) {
+    pub fn trace(limits: *const VMRuntimeLimits, f: impl FnMut(Frame) -> ControlFlow<()>) {
         tls::with(|state| match state {
-            Some(state) => unsafe { Self::trace_with_trap_state(state, None, f) },
+            Some(state) => unsafe { Self::trace_with_trap_state(limits, state, None, f) },
             None => {}
         });
     }
@@ -118,123 +122,97 @@ impl Backtrace {
     /// Wasm exit trampoline didn't run, and we use the provided PC and FP
     /// instead of looking them up in `VMRuntimeLimits`.
     pub(crate) unsafe fn trace_with_trap_state(
+        limits: *const VMRuntimeLimits,
         state: &CallThreadState,
         trap_pc_and_fp: Option<(usize, usize)>,
         mut f: impl FnMut(Frame) -> ControlFlow<()>,
     ) {
         log::trace!("====== Capturing Backtrace ======");
+
         let (last_wasm_exit_pc, last_wasm_exit_fp) = match trap_pc_and_fp {
             // If we exited Wasm by catching a trap, then the Wasm-to-host
             // trampoline did not get a chance to save the last Wasm PC and FP,
             // and we need to use the plumbed-through values instead.
-            Some((pc, fp)) => (pc, fp),
+            Some((pc, fp)) => {
+                assert!(std::ptr::eq(limits, state.limits));
+                (pc, fp)
+            }
             // Either there is no Wasm currently on the stack, or we exited Wasm
             // through the Wasm-to-host trampoline.
             None => {
-                let pc = *(*state.limits).last_wasm_exit_pc.get();
-                let fp = *(*state.limits).last_wasm_exit_fp.get();
-                assert_ne!(pc, 0);
+                let pc = *(*limits).last_wasm_exit_pc.get();
+                let fp = *(*limits).last_wasm_exit_fp.get();
                 (pc, fp)
             }
         };
 
-        // Trace through the first contiguous sequence of Wasm frames on the
-        // stack.
-        if let ControlFlow::Break(()) = Self::trace_through_wasm(
+        let activations = std::iter::once((
             last_wasm_exit_pc,
             last_wasm_exit_fp,
-            *(*state.limits).last_wasm_entry_sp.get(),
-            &mut f,
-        ) {
-            log::trace!("====== Done Capturing Backtrace ======");
-            return;
-        }
-
-        // And then trace through each of the older contiguous sequences of Wasm
-        // frames on the stack.
-        for state in state.iter() {
-            // If there is no previous call state, then there is nothing more to
-            // trace through (since each `CallTheadState` saves the *previous*
-            // call into Wasm's saved registers, and the youngest call into
-            // Wasm's registers are saved in the `VMRuntimeLimits`)
-            if state.prev().is_null() {
-                debug_assert_eq!(state.old_last_wasm_exit_pc(), 0);
-                debug_assert_eq!(state.old_last_wasm_exit_fp(), 0);
-                debug_assert_eq!(state.old_last_wasm_entry_sp(), 0);
-                log::trace!("====== Done Capturing Backtrace ======");
-                return;
+            *(*limits).last_wasm_entry_sp.get(),
+        ))
+        .chain(
+            state
+                .iter()
+                .filter(|state| std::ptr::eq(limits, state.limits))
+                .map(|state| {
+                    (
+                        state.old_last_wasm_exit_pc(),
+                        state.old_last_wasm_exit_fp(),
+                        state.old_last_wasm_entry_sp(),
+                    )
+                }),
+        )
+        .take_while(|&(pc, fp, sp)| {
+            if pc == 0 {
+                debug_assert_eq!(fp, 0);
+                debug_assert_eq!(sp, 0);
             }
+            pc != 0
+        });
 
-            if let ControlFlow::Break(()) = Self::trace_through_wasm(
-                state.old_last_wasm_exit_pc(),
-                state.old_last_wasm_exit_fp(),
-                state.old_last_wasm_entry_sp(),
-                &mut f,
-            ) {
-                log::trace!("====== Done Capturing Backtrace ======");
+        for (pc, fp, sp) in activations {
+            if let ControlFlow::Break(()) = Self::trace_through_wasm(pc, fp, sp, &mut f) {
+                log::trace!("====== Done Capturing Backtrace (closure break) ======");
                 return;
             }
         }
 
-        unreachable!()
+        log::trace!("====== Done Capturing Backtrace (reached end of activations) ======");
     }
 
     /// Walk through a contiguous sequence of Wasm frames starting with the
-    /// frame at the given PC and FP and ending at `first_wasm_sp`.
+    /// frame at the given PC and FP and ending at `trampoline_sp`.
     unsafe fn trace_through_wasm(
         mut pc: usize,
         mut fp: usize,
-        first_wasm_sp: usize,
+        trampoline_sp: usize,
         mut f: impl FnMut(Frame) -> ControlFlow<()>,
     ) -> ControlFlow<()> {
         log::trace!("=== Tracing through contiguous sequence of Wasm frames ===");
-        log::trace!("first_wasm_sp = 0x{:016x}", first_wasm_sp);
+        log::trace!("trampoline_sp = 0x{:016x}", trampoline_sp);
         log::trace!("   initial pc = 0x{:016x}", pc);
         log::trace!("   initial fp = 0x{:016x}", fp);
 
-        // In our host-to-Wasm trampoline, we save `-1` as a sentinal SP
-        // value for when the callee is not actually a core Wasm
-        // function (as determined by looking at the callee `vmctx`). If
-        // we encounter `-1`, this is an empty sequence of Wasm frames
-        // where a host called a host function so the following
-        // happened:
-        //
-        // * We entered the host-to-wasm-trampoline, saved (an invalid
-        //   sentinal for) entry SP, and tail called to the "Wasm"
-        //   callee,
-        //
-        // * entered the Wasm-to-host trampoline, saved the exit FP and
-        //   PC, and tail called to the host callee,
-        //
-        // * and are now in host code.
-        //
-        // Ultimately, this means that there are 0 Wasm frames in this
-        // contiguous sequence of Wasm frames, and we have nothing to
-        // walk through here.
-        if first_wasm_sp == -1_isize as usize {
-            log::trace!("=== Done tracing (empty sequence of Wasm frames) ===");
-            return ControlFlow::Continue(());
-        }
-
-        // We use `0` as a sentinal value for when there is not any Wasm
-        // on the stack and these values are non-existant. If we
-        // actually entered Wasm (see above guard for `-1`) then, then
-        // by the time we got here we should have either exited Wasm
-        // through the Wasm-to-host trampoline and properly set these
-        // values, or we should have caught a trap in a signal handler
-        // and also properly recovered these values in that case.
+        // We already checked for this case in the `trace_with_trap_state`
+        // caller.
         assert_ne!(pc, 0);
         assert_ne!(fp, 0);
-        assert_ne!(first_wasm_sp, 0);
+        assert_ne!(trampoline_sp, 0);
 
-        // The stack grows down, and therefore any frame pointer we are
-        // dealing with should be less than the stack pointer on entry
-        // to Wasm.
-        assert!(first_wasm_sp >= fp, "{first_wasm_sp:#x} >= {fp:#x}");
-
-        arch::assert_entry_sp_is_aligned(first_wasm_sp);
+        arch::assert_entry_sp_is_aligned(trampoline_sp);
 
         loop {
+            // At the start of each iteration of the loop, we know that `fp` is
+            // a frame pointer from Wasm code. Therefore, we know it is not
+            // being used as an extra general-purpose register, and it is safe
+            // dereference to get the PC and the next older frame pointer.
+
+            // The stack grows down, and therefore any frame pointer we are
+            // dealing with should be less than the stack pointer on entry
+            // to Wasm.
+            assert!(trampoline_sp >= fp, "{trampoline_sp:#x} >= {fp:#x}");
+
             arch::assert_fp_is_aligned(fp);
 
             log::trace!("--- Tracing through one Wasm frame ---");
@@ -242,20 +220,6 @@ impl Backtrace {
             log::trace!("fp = {:p}", fp as *const ());
 
             f(Frame { pc, fp })?;
-
-            // If our FP has reached the SP upon entry to Wasm from the
-            // host, then we've successfully walked all the Wasm frames,
-            // and have now reached a host frame. We're done iterating
-            // through this contiguous sequence of Wasm frames.
-            if arch::reached_entry_sp(fp, first_wasm_sp) {
-                log::trace!("=== Done tracing contiguous sequence of Wasm frames ===");
-                return ControlFlow::Continue(());
-            }
-
-            // If we didn't return above, then we know we are still in a
-            // Wasm frame, and since Cranelift maintains frame pointers,
-            // we know that the FP isn't an arbitrary value and it is
-            // safe to dereference it to read the next PC/FP.
 
             pc = arch::get_next_older_pc_from_fp(fp);
 
@@ -265,7 +229,52 @@ impl Backtrace {
             // code as well!
             assert_eq!(arch::NEXT_OLDER_FP_FROM_FP_OFFSET, 0);
 
+            // Get the next older frame pointer from the current Wasm frame
+            // pointer.
+            //
+            // The next older frame pointer may or may not be a Wasm frame's
+            // frame pointer, but it is trusted either way (i.e. is actually a
+            // frame pointer and not being used as a general-purpose register)
+            // because we always enter Wasm from the host via a trampoline, and
+            // this trampoline maintains a proper frame pointer.
+            //
+            // We want to detect when we've reached the trampoline, and break
+            // out of this stack-walking loop. All of our architectures' stacks
+            // grow down and look something vaguely like this:
+            //
+            //     | ...               |
+            //     | Native Frames     |
+            //     | ...               |
+            //     |-------------------|
+            //     | ...               | <-- Trampoline FP            |
+            //     | Trampoline Frame  |                              |
+            //     | ...               | <-- Trampoline SP            |
+            //     |-------------------|                            Stack
+            //     | Return Address    |                            Grows
+            //     | Previous FP       | <-- Wasm FP                Down
+            //     | ...               |                              |
+            //     | Wasm Frames       |                              |
+            //     | ...               |                              V
+            //
+            // The trampoline records its own stack pointer (`trampoline_sp`),
+            // which is guaranteed to be above all Wasm frame pointers but at or
+            // below its own frame pointer. It is usually two words above the
+            // Wasm frame pointer (at least on x86-64, exact details vary across
+            // architectures) but not always: if the first Wasm function called
+            // by the host has many arguments, some of them could be passed on
+            // the stack in between the return address and the trampoline's
+            // frame.
+            //
+            // To check when we've reached the trampoline frame, it is therefore
+            // sufficient to check when the next frame pointer is greater than
+            // or equal to `trampoline_sp` (except s390x, where it needs to be
+            // strictly greater than).
             let next_older_fp = *(fp as *mut usize).add(arch::NEXT_OLDER_FP_FROM_FP_OFFSET);
+            if arch::reached_entry_sp(next_older_fp, trampoline_sp) {
+                log::trace!("=== Done tracing contiguous sequence of Wasm frames ===");
+                return ControlFlow::Continue(());
+            }
+
             // Because the stack always grows down, the older FP must be greater
             // than the current FP.
             assert!(next_older_fp > fp, "{next_older_fp:#x} > {fp:#x}");
@@ -274,7 +283,9 @@ impl Backtrace {
     }
 
     /// Iterate over the frames inside this backtrace.
-    pub fn frames<'a>(&'a self) -> impl ExactSizeIterator<Item = &'a Frame> + 'a {
+    pub fn frames<'a>(
+        &'a self,
+    ) -> impl ExactSizeIterator<Item = &'a Frame> + DoubleEndedIterator + 'a {
         self.0.iter()
     }
 }

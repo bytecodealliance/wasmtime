@@ -13,7 +13,7 @@ anyhow = { workspace = true }
 base64 = "0.21.0"
 bincode = "1.1.4"
 directories-next = "2.0"
-file-per-thread-logger = "0.1.1"
+file-per-thread-logger = { workspace = true }
 log = { workspace = true }
 serde = { version = "1.0.94", features = ["derive"] }
 sha2 = "0.10.2"

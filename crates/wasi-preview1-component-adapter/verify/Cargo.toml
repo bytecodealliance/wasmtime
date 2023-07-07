@@ -1,0 +1,11 @@
+[package]
+name = "verify-component-adapter"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+publish = false
+
+[dependencies]
+wasmparser = "0.92.0"
+wat = "1.0.62"
+anyhow = "1"

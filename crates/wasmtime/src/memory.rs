@@ -548,8 +548,9 @@ impl Memory {
     fn wasmtime_memory(&self, store: &mut StoreOpaque) -> *mut wasmtime_runtime::Memory {
         unsafe {
             let export = &store[self.0];
-            let mut handle = wasmtime_runtime::InstanceHandle::from_vmctx(export.vmctx);
-            handle.get_defined_memory(export.index)
+            wasmtime_runtime::Instance::from_vmctx(export.vmctx, |handle| {
+                handle.get_defined_memory(export.index)
+            })
         }
     }
 
@@ -769,7 +770,7 @@ impl SharedMemory {
     pub fn data(&self) -> &[UnsafeCell<u8>] {
         unsafe {
             let definition = &*self.0.vmmemory_ptr();
-            slice::from_raw_parts_mut(definition.base.cast(), definition.current_length())
+            slice::from_raw_parts(definition.base.cast(), definition.current_length())
         }
     }
 
@@ -905,16 +906,17 @@ impl SharedMemory {
         wasmtime_export: wasmtime_runtime::ExportMemory,
         store: &mut StoreOpaque,
     ) -> Self {
-        let mut handle = wasmtime_runtime::InstanceHandle::from_vmctx(wasmtime_export.vmctx);
-        let memory = handle
-            .get_defined_memory(wasmtime_export.index)
-            .as_mut()
-            .unwrap();
-        let shared_memory = memory
-            .as_shared_memory()
-            .expect("unable to convert from a shared memory")
-            .clone();
-        Self(shared_memory, store.engine().clone())
+        wasmtime_runtime::Instance::from_vmctx(wasmtime_export.vmctx, |handle| {
+            let memory = handle
+                .get_defined_memory(wasmtime_export.index)
+                .as_mut()
+                .unwrap();
+            let shared_memory = memory
+                .as_shared_memory()
+                .expect("unable to convert from a shared memory")
+                .clone();
+            Self(shared_memory, store.engine().clone())
+        })
     }
 }
 

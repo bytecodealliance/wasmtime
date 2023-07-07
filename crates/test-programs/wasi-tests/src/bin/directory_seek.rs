@@ -6,16 +6,8 @@ unsafe fn test_directory_seek(dir_fd: wasi::Fd) {
     wasi::path_create_directory(dir_fd, "dir").expect("failed to make directory");
 
     // Open the directory and attempt to request rights for seeking.
-    let fd = wasi::path_open(
-        dir_fd,
-        0,
-        "dir",
-        wasi::OFLAGS_DIRECTORY,
-        wasi::RIGHTS_FD_SEEK,
-        0,
-        0,
-    )
-    .expect("failed to open file");
+    let fd = wasi::path_open(dir_fd, 0, "dir", wasi::OFLAGS_DIRECTORY, 0, 0, 0)
+        .expect("failed to open file");
     assert!(
         fd > libc::STDERR_FILENO as wasi::Fd,
         "file descriptor range check",
@@ -25,19 +17,6 @@ unsafe fn test_directory_seek(dir_fd: wasi::Fd) {
     assert_errno!(
         wasi::fd_seek(fd, 0, wasi::WHENCE_CUR).expect_err("seek on a directory"),
         wasi::ERRNO_BADF
-    );
-
-    // Check if we obtained the right to seek.
-    let fdstat = wasi::fd_fdstat_get(fd).expect("failed to fdstat");
-    assert_eq!(
-        fdstat.fs_filetype,
-        wasi::FILETYPE_DIRECTORY,
-        "expected the scratch directory to be a directory",
-    );
-    assert_eq!(
-        (fdstat.fs_rights_base & wasi::RIGHTS_FD_SEEK),
-        0,
-        "directory does NOT have the seek right",
     );
 
     // Clean up.

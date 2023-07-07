@@ -41,30 +41,42 @@
 
 ;; function u0:0:
 ;; block0:
-;;   ld t3,8(a2)
-;;   ld t4,0(a2)
-;;   add t4,t4,a0
-;;   auipc a7,0; ld a7,12(a7); j 12; .8byte 0xffff0000
-;;   add t4,t4,a7
-;;   ugt a7,a0,t3##ty=i64
-;;   li t0,0
-;;   selectif_spectre_guard t3,t0,t4##test=a7
-;;   sw a1,0(t3)
+;;   ld a3,8(a2)
+;;   ugt a3,a0,a3##ty=i64
+;;   ld a2,0(a2)
+;;   add a2,a2,a0
+;;   auipc a4,0; ld a4,12(a4); j 12; .8byte 0xffff0000
+;;   add a2,a2,a4
+;;   li a4,0
+;;   andi t3,a3,255
+;;   sltu t0,zero,t3
+;;   sub t2,zero,t0
+;;   and a3,a4,t2
+;;   not a4,t2
+;;   and a5,a2,a4
+;;   or a7,a3,a5
+;;   sw a1,0(a7)
 ;;   j label1
 ;; block1:
 ;;   ret
 ;;
 ;; function u0:1:
 ;; block0:
-;;   ld t3,8(a1)
-;;   ld t4,0(a1)
-;;   add t4,t4,a0
-;;   auipc a7,0; ld a7,12(a7); j 12; .8byte 0xffff0000
-;;   add t4,t4,a7
-;;   ugt a7,a0,t3##ty=i64
-;;   li t0,0
-;;   selectif_spectre_guard t3,t0,t4##test=a7
-;;   lw a0,0(t3)
+;;   ld a2,8(a1)
+;;   ugt a2,a0,a2##ty=i64
+;;   ld a1,0(a1)
+;;   add a1,a1,a0
+;;   auipc a3,0; ld a3,12(a3); j 12; .8byte 0xffff0000
+;;   add a1,a1,a3
+;;   li a3,0
+;;   andi t3,a2,255
+;;   sltu t0,zero,t3
+;;   sub t2,zero,t0
+;;   and a2,a3,t2
+;;   not a3,t2
+;;   and a5,a1,a3
+;;   or a7,a2,a5
+;;   lw a0,0(a7)
 ;;   j label1
 ;; block1:
 ;;   ret

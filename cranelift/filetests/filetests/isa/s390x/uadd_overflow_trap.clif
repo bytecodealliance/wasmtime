@@ -13,7 +13,7 @@ block0(v0: i32):
 ;   alfi %r2, 127
 ;   jgnle .+2 # trap=user0
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   alfi %r2, 0x7f
@@ -32,7 +32,7 @@ block0(v0: i32):
 ;   alfi %r2, 127
 ;   jgnle .+2 # trap=user0
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   alfi %r2, 0x7f
@@ -50,7 +50,7 @@ block0(v0: i32, v1: i32):
 ;   alr %r2, %r3
 ;   jgnle .+2 # trap=user0
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   alr %r2, %r3
@@ -69,7 +69,7 @@ block0(v0: i64):
 ;   algfi %r2, 127
 ;   jgnle .+2 # trap=user0
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   algfi %r2, 0x7f
@@ -88,7 +88,7 @@ block0(v0: i64):
 ;   algfi %r2, 127
 ;   jgnle .+2 # trap=user0
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   algfi %r2, 0x7f
@@ -106,7 +106,7 @@ block0(v0: i64, v1: i64):
 ;   algr %r2, %r3
 ;   jgnle .+2 # trap=user0
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   algr %r2, %r3
@@ -125,7 +125,7 @@ block0(v0: i64, v1: i32):
 ;   algfr %r2, %r3
 ;   jgnle .+2 # trap=user0
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   algfr %r2, %r3

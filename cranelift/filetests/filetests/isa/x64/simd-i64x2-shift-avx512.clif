@@ -1,0 +1,139 @@
+test compile precise-output
+target x86_64 sse42 has_avx has_avx2 has_avx512f has_avx512vl
+
+function %sshr(i64x2, i64) -> i64x2 {
+block0(v0: i64x2, v1: i64):
+  v2 = sshr v0, v1
+  return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdi, %rcx
+;   andq    %rcx, $63, %rcx
+;   vmovd   %ecx, %xmm5
+;   vpsraq  %xmm5, %xmm0, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rdi, %rcx
+;   andq $0x3f, %rcx
+;   vmovd %ecx, %xmm5
+;   vpsraq %xmm5, %xmm0, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %sshr_imm(i64x2) -> i64x2 {
+block0(v0: i64x2):
+  v1 = sshr_imm v0, 31
+  return v1
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   vpsraqimm $31, %xmm0, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   vpsraq $0x1f, %xmm0, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+
+function %sshr_load_imm(i64) -> i64x2 {
+block0(v0: i64):
+  v1 = load.i64x2 v0
+  v2 = sshr_imm v1, 31
+  return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   vpsraqimm $31, 0(%rdi), %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   vpsraq $0x1f, (%rdi), %xmm0 ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+
+function %sshr_load2_imm(i64) -> i64x2 {
+block0(v0: i64):
+  v1 = load.i64x2 v0+7
+  v2 = sshr_imm v1, 31
+  return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   vpsraqimm $31, 7(%rdi), %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   vpsraq $0x1f, 7(%rdi), %xmm0 ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %sshr_load3_imm(i64) -> i64x2 {
+block0(v0: i64):
+  v1 = load.i64x2 v0+16
+  v2 = sshr_imm v1, 31
+  return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   vpsraqimm $31, 16(%rdi), %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   vpsraq $0x1f, 0x10(%rdi), %xmm0 ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+

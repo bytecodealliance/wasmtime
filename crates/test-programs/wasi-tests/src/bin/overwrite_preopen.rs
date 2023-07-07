@@ -9,8 +9,7 @@ unsafe fn test_overwrite_preopen(dir_fd: wasi::Fd) {
     let old_dir_filestat = wasi::fd_filestat_get(dir_fd).expect("failed fd_filestat_get");
 
     // Try to renumber over a preopened directory handle.
-    wasi::fd_renumber(dir_fd, pre_fd)
-            .expect("renumbering over a preopened file descriptor");
+    wasi::fd_renumber(dir_fd, pre_fd).expect("renumbering over a preopened file descriptor");
 
     // Ensure that pre_fd is still open.
     let new_dir_filestat = wasi::fd_filestat_get(pre_fd).expect("failed fd_filestat_get");

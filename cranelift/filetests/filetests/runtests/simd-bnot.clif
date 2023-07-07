@@ -1,0 +1,70 @@
+test interpret
+test run
+target aarch64
+target s390x
+target x86_64
+target x86_64 ssse3
+target x86_64 sse42
+target x86_64 sse42 has_avx
+target riscv64 has_v
+
+
+function %bnot_i8x16(i8x16) -> i8x16 {
+block0(v0: i8x16):
+    v1 = bnot v0
+    return v1
+}
+; run: %bnot_i8x16(0x00000000000000000000000000000000) == 0xffffffffffffffffffffffffffffffff
+; run: %bnot_i8x16(0x11111111111111111111111111111111) == 0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+; run: %bnot_i8x16(0x01010011000011110000000011111111) == 0xfefeffeeffffeeeeffffffffeeeeeeee
+; run: %bnot_i8x16(0x00000000000000001111111111111111) == 0xffffffffffffffffeeeeeeeeeeeeeeee
+
+function %bnot_i16x8(i16x8) -> i16x8 {
+block0(v0: i16x8):
+    v1 = bnot v0
+    return v1
+}
+; run: %bnot_i16x8(0x00000000000000000000000000000000) == 0xffffffffffffffffffffffffffffffff
+; run: %bnot_i16x8(0x11111111111111111111111111111111) == 0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+; run: %bnot_i16x8(0x01010011000011110000000011111111) == 0xfefeffeeffffeeeeffffffffeeeeeeee
+; run: %bnot_i16x8(0x00000000000000001111111111111111) == 0xffffffffffffffffeeeeeeeeeeeeeeee
+
+function %bnot_i32x4(i32x4) -> i32x4 {
+block0(v0: i32x4):
+    v1 = bnot v0
+    return v1
+}
+; run: %bnot_i32x4(0x00000000000000000000000000000000) == 0xffffffffffffffffffffffffffffffff
+; run: %bnot_i32x4(0x11111111111111111111111111111111) == 0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+; run: %bnot_i32x4(0x01010011000011110000000011111111) == 0xfefeffeeffffeeeeffffffffeeeeeeee
+; run: %bnot_i32x4(0x00000000000000001111111111111111) == 0xffffffffffffffffeeeeeeeeeeeeeeee
+
+function %bnot_i64x2(i64x2) -> i64x2 {
+block0(v0: i64x2):
+    v1 = bnot v0
+    return v1
+}
+; run: %bnot_i64x2(0x00000000000000000000000000000000) == 0xffffffffffffffffffffffffffffffff
+; run: %bnot_i64x2(0x11111111111111111111111111111111) == 0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+; run: %bnot_i64x2(0x01010011000011110000000011111111) == 0xfefeffeeffffeeeeffffffffeeeeeeee
+; run: %bnot_i64x2(0x00000000000000001111111111111111) == 0xffffffffffffffffeeeeeeeeeeeeeeee
+
+function %bnot_f32x4(f32x4) -> f32x4 {
+block0(v0: f32x4):
+    v1 = bnot v0
+    return v1
+}
+; run: %bnot_f32x4(0x00000000000000000000000000000000) == 0xffffffffffffffffffffffffffffffff
+; run: %bnot_f32x4(0x11111111111111111111111111111111) == 0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+; run: %bnot_f32x4(0x01010011000011110000000011111111) == 0xfefeffeeffffeeeeffffffffeeeeeeee
+; run: %bnot_f32x4(0x00000000000000001111111111111111) == 0xffffffffffffffffeeeeeeeeeeeeeeee
+
+function %bnot_f64x2(f32x4) -> f32x4 {
+block0(v0: f32x4):
+    v1 = bnot v0
+    return v1
+}
+; run: %bnot_f64x2(0x00000000000000000000000000000000) == 0xffffffffffffffffffffffffffffffff
+; run: %bnot_f64x2(0x11111111111111111111111111111111) == 0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+; run: %bnot_f64x2(0x01010011000011110000000011111111) == 0xfefeffeeffffeeeeffffffffeeeeeeee
+; run: %bnot_f64x2(0x00000000000000001111111111111111) == 0xffffffffffffffffeeeeeeeeeeeeeeee

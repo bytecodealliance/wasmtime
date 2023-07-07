@@ -21,7 +21,7 @@ block0(v0: i8x16):
 ;   addv h28, v26.8h
 ;   umov w0, v28.h[0]
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   sshr v2.16b, v0.16b, #7
@@ -57,7 +57,7 @@ block0(v0: i8x16):
 ;   addv h28, v26.8h
 ;   umov w0, v28.h[0]
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   sshr v2.16b, v0.16b, #7
@@ -87,7 +87,7 @@ block0(v0: i16x8):
 ;   addv h16, v6.8h
 ;   umov w0, v16.h[0]
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   sshr v2.8h, v0.8h, #0xf
@@ -117,7 +117,7 @@ block0(v0: i32x4):
 ;   addv s16, v6.4s
 ;   mov w0, v16.s[0]
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   sshr v2.4s, v0.4s, #0x1f
@@ -147,7 +147,7 @@ block0(v0: i64x2):
 ;   lsr x8, x4, #63
 ;   add x0, x8, x6, LSL 1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov x2, v0.d[1]

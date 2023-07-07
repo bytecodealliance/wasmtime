@@ -20,7 +20,7 @@ use anyhow::{bail, Result};
 use clap::Parser;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use wasmtime::{Config, ProfilingStrategy};
+use wasmtime::{Config, Strategy};
 
 pub const SUPPORTED_WASM_FEATURES: &[(&str, &str)] = &[
     ("all", "enables all supported WebAssembly features"),
@@ -43,6 +43,10 @@ pub const SUPPORTED_WASM_FEATURES: &[(&str, &str)] = &[
     ("memory64", "enables support for 64-bit memories"),
     #[cfg(feature = "component-model")]
     ("component-model", "enables support for the component model"),
+    (
+        "function-references",
+        "enables support for typed function references",
+    ),
 ];
 
 pub const SUPPORTED_WASI_MODULES: &[(&str, &str)] = &[
@@ -65,6 +69,10 @@ pub const SUPPORTED_WASI_MODULES: &[(&str, &str)] = &[
     (
         "experimental-wasi-threads",
         "enables support for the WASI threading API (experimental), see https://github.com/WebAssembly/wasi-threads",
+    ),
+    (
+        "experimental-wasi-http",
+        "enables support for the WASI HTTP APIs (experimental), see https://github.com/WebAssembly/wasi-http",
     ),
 ];
 
@@ -129,10 +137,6 @@ pub struct CommonOptions {
     /// Enable or disable WASI modules
     #[clap(long, value_name = "MODULE,MODULE,...", parse(try_from_str = parse_wasi_modules))]
     pub wasi_modules: Option<WasiModules>,
-
-    /// Profiling strategy (valid options are: perfmap, jitdump, vtune)
-    #[clap(long)]
-    pub profile: Option<ProfilingStrategy>,
 
     /// Generate jitdump file (supported on --features=profiling build)
     /// Run optimization passes on translated functions, on by default
@@ -240,6 +244,12 @@ pub struct CommonOptions {
     /// performance cost.
     #[clap(long)]
     pub relaxed_simd_deterministic: bool,
+    /// Explicitly specify the name of the compiler to use for WebAssembly.
+    ///
+    /// Currently only `cranelift` and `winch` are supported, but not all builds
+    /// of Wasmtime have both built in.
+    #[clap(long)]
+    pub compiler: Option<String>,
 }
 
 impl CommonOptions {
@@ -258,6 +268,13 @@ impl CommonOptions {
     pub fn config(&self, target: Option<&str>) -> Result<Config> {
         let mut config = Config::new();
 
+        config.strategy(match self.compiler.as_deref() {
+            None => Strategy::Auto,
+            Some("cranelift") => Strategy::Cranelift,
+            Some("winch") => Strategy::Winch,
+            Some(s) => bail!("unknown compiler: {s}"),
+        });
+
         // Set the target before setting any cranelift options, since the
         // target will reset any target-specific options.
         if let Some(target) = target {
@@ -268,7 +285,6 @@ impl CommonOptions {
             .cranelift_debug_verifier(self.enable_cranelift_debug_verifier)
             .debug_info(self.debug_info)
             .cranelift_opt_level(self.opt_level())
-            .profiler(self.profile.unwrap_or(ProfilingStrategy::None))
             .cranelift_nan_canonicalization(self.enable_cranelift_nan_canonicalization);
 
         self.enable_wasm_features(&mut config);
@@ -354,6 +370,7 @@ impl CommonOptions {
             memory64,
             #[cfg(feature = "component-model")]
             component_model,
+            function_references,
         } = self.wasm_features.unwrap_or_default();
 
         if let Some(enable) = simd {
@@ -367,6 +384,9 @@ impl CommonOptions {
         }
         if let Some(enable) = reference_types {
             config.wasm_reference_types(enable);
+        }
+        if let Some(enable) = function_references {
+            config.wasm_function_references(enable);
         }
         if let Some(enable) = multi_value {
             config.wasm_multi_value(enable);
@@ -420,6 +440,7 @@ pub struct WasmFeatures {
     pub memory64: Option<bool>,
     #[cfg(feature = "component-model")]
     pub component_model: Option<bool>,
+    pub function_references: Option<bool>,
 }
 
 fn parse_wasm_features(features: &str) -> Result<WasmFeatures> {
@@ -471,6 +492,7 @@ fn parse_wasm_features(features: &str) -> Result<WasmFeatures> {
         memory64: all.or(values["memory64"]),
         #[cfg(feature = "component-model")]
         component_model: all.or(values["component-model"]),
+        function_references: all.or(values["function-references"]),
     })
 }
 
@@ -489,6 +511,7 @@ fn parse_wasi_modules(modules: &str) -> Result<WasiModules> {
                 "experimental-wasi-crypto" => Ok(wasi_modules.wasi_crypto = enable),
                 "experimental-wasi-nn" => Ok(wasi_modules.wasi_nn = enable),
                 "experimental-wasi-threads" => Ok(wasi_modules.wasi_threads = enable),
+                "experimental-wasi-http" => Ok(wasi_modules.wasi_http = enable),
                 "default" => bail!("'default' cannot be specified with other WASI modules"),
                 _ => bail!("unsupported WASI module '{}'", module),
             };
@@ -523,6 +546,9 @@ pub struct WasiModules {
 
     /// Enable the experimental wasi-threads implementation.
     pub wasi_threads: bool,
+
+    /// Enable the experimental wasi-http implementation
+    pub wasi_http: bool,
 }
 
 impl Default for WasiModules {
@@ -532,6 +558,7 @@ impl Default for WasiModules {
             wasi_crypto: false,
             wasi_nn: false,
             wasi_threads: false,
+            wasi_http: false,
         }
     }
 }
@@ -544,6 +571,7 @@ impl WasiModules {
             wasi_nn: false,
             wasi_crypto: false,
             wasi_threads: false,
+            wasi_http: false,
         }
     }
 }
@@ -580,6 +608,7 @@ mod test {
             threads,
             multi_memory,
             memory64,
+            function_references,
         } = options.wasm_features.unwrap();
 
         assert_eq!(reference_types, Some(true));
@@ -589,6 +618,7 @@ mod test {
         assert_eq!(threads, Some(true));
         assert_eq!(multi_memory, Some(true));
         assert_eq!(memory64, Some(true));
+        assert_eq!(function_references, Some(true));
         assert_eq!(relaxed_simd, Some(true));
 
         Ok(())
@@ -607,6 +637,7 @@ mod test {
             threads,
             multi_memory,
             memory64,
+            function_references,
         } = options.wasm_features.unwrap();
 
         assert_eq!(reference_types, Some(false));
@@ -616,6 +647,7 @@ mod test {
         assert_eq!(threads, Some(false));
         assert_eq!(multi_memory, Some(false));
         assert_eq!(memory64, Some(false));
+        assert_eq!(function_references, Some(false));
         assert_eq!(relaxed_simd, Some(false));
 
         Ok(())
@@ -637,6 +669,7 @@ mod test {
             threads,
             multi_memory,
             memory64,
+            function_references,
         } = options.wasm_features.unwrap();
 
         assert_eq!(reference_types, Some(false));
@@ -646,6 +679,7 @@ mod test {
         assert_eq!(threads, None);
         assert_eq!(multi_memory, Some(true));
         assert_eq!(memory64, Some(true));
+        assert_eq!(function_references, None);
         assert_eq!(relaxed_simd, None);
 
         Ok(())
@@ -698,7 +732,8 @@ mod test {
                 wasi_common: true,
                 wasi_crypto: false,
                 wasi_nn: false,
-                wasi_threads: false
+                wasi_threads: false,
+                wasi_http: false,
             }
         );
     }
@@ -712,7 +747,8 @@ mod test {
                 wasi_common: true,
                 wasi_crypto: false,
                 wasi_nn: false,
-                wasi_threads: false
+                wasi_threads: false,
+                wasi_http: false
             }
         );
     }
@@ -730,7 +766,8 @@ mod test {
                 wasi_common: false,
                 wasi_crypto: false,
                 wasi_nn: true,
-                wasi_threads: false
+                wasi_threads: false,
+                wasi_http: false,
             }
         );
     }
@@ -745,7 +782,8 @@ mod test {
                 wasi_common: false,
                 wasi_crypto: false,
                 wasi_nn: false,
-                wasi_threads: false
+                wasi_threads: false,
+                wasi_http: false,
             }
         );
     }

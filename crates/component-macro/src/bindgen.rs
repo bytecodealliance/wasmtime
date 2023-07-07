@@ -1,9 +1,10 @@
 use proc_macro2::{Span, TokenStream};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use syn::parse::{Error, Parse, ParseStream, Result};
 use syn::punctuated::Punctuated;
 use syn::{braced, token, Ident, Token};
-use wasmtime_wit_bindgen::{Opts, TrappableError};
+use wasmtime_wit_bindgen::{Opts, Ownership, TrappableError};
 use wit_parser::{PackageId, Resolve, UnresolvedPackage, WorldId};
 
 pub struct Config {
@@ -37,17 +38,13 @@ pub fn expand(input: &Config) -> Result<TokenStream> {
     Ok(contents)
 }
 
-enum Source {
-    Path(String),
-    Inline(String),
-}
-
 impl Parse for Config {
     fn parse(input: ParseStream<'_>) -> Result<Self> {
         let call_site = Span::call_site();
         let mut opts = Opts::default();
-        let mut source = None;
         let mut world = None;
+        let mut inline = None;
+        let mut path = None;
 
         if input.peek(token::Brace) {
             let content;
@@ -56,10 +53,10 @@ impl Parse for Config {
             for field in fields.into_pairs() {
                 match field.into_value() {
                     Opt::Path(s) => {
-                        if source.is_some() {
-                            return Err(Error::new(s.span(), "cannot specify second source"));
+                        if path.is_some() {
+                            return Err(Error::new(s.span(), "cannot specify second path"));
                         }
-                        source = Some(Source::Path(s.value()));
+                        path = Some(s.value());
                     }
                     Opt::World(s) => {
                         if world.is_some() {
@@ -68,24 +65,52 @@ impl Parse for Config {
                         world = Some(s.value());
                     }
                     Opt::Inline(s) => {
-                        if source.is_some() {
+                        if inline.is_some() {
                             return Err(Error::new(s.span(), "cannot specify second source"));
                         }
-                        source = Some(Source::Inline(s.value()));
+                        inline = Some(s.value());
                     }
                     Opt::Tracing(val) => opts.tracing = val,
                     Opt::Async(val) => opts.async_ = val,
                     Opt::TrappableErrorType(val) => opts.trappable_error_type = val,
+                    Opt::Ownership(val) => opts.ownership = val,
+                    Opt::Interfaces(s) => {
+                        if inline.is_some() {
+                            return Err(Error::new(s.span(), "cannot specify a second source"));
+                        }
+                        inline = Some(format!(
+                            "
+                                package wasmtime:component-macro-synthesized
+
+                                world interfaces {{
+                                    {}
+                                }}
+                            ",
+                            s.value()
+                        ));
+
+                        if world.is_some() {
+                            return Err(Error::new(
+                                s.span(),
+                                "cannot specify a world with `interfaces`",
+                            ));
+                        }
+                        world = Some("interfaces".to_string());
+
+                        opts.only_interfaces = true;
+                    }
+                    Opt::With(val) => opts.with.extend(val),
                 }
             }
         } else {
             world = input.parse::<Option<syn::LitStr>>()?.map(|s| s.value());
             if input.parse::<Option<syn::token::In>>()?.is_some() {
-                source = Some(Source::Path(input.parse::<syn::LitStr>()?.value()));
+                path = Some(input.parse::<syn::LitStr>()?.value());
             }
         }
-        let (resolve, pkg, files) =
-            parse_source(&source).map_err(|err| Error::new(call_site, format!("{err:?}")))?;
+        let (resolve, pkg, files) = parse_source(&path, &inline)
+            .map_err(|err| Error::new(call_site, format!("{err:?}")))?;
+
         let world = resolve
             .select_world(pkg, world.as_deref())
             .map_err(|e| Error::new(call_site, format!("{e:?}")))?;
@@ -98,29 +123,41 @@ impl Parse for Config {
     }
 }
 
-fn parse_source(source: &Option<Source>) -> anyhow::Result<(Resolve, PackageId, Vec<PathBuf>)> {
+fn parse_source(
+    path: &Option<String>,
+    inline: &Option<String>,
+) -> anyhow::Result<(Resolve, PackageId, Vec<PathBuf>)> {
     let mut resolve = Resolve::default();
     let mut files = Vec::new();
     let root = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
-    let mut parse = |path: &Path| -> anyhow::Result<_> {
+
+    let mut parse = |resolve: &mut Resolve, path: &Path| -> anyhow::Result<_> {
         if path.is_dir() {
-            let (pkg, sources) = resolve.push_dir(&path)?;
+            let (pkg, sources) = resolve.push_dir(path)?;
             files = sources;
             Ok(pkg)
         } else {
             let pkg = UnresolvedPackage::parse_file(path)?;
             files.extend(pkg.source_files().map(|s| s.to_owned()));
-            resolve.push(pkg, &Default::default())
+            resolve.push(pkg)
         }
     };
-    let pkg = match source {
-        Some(Source::Inline(s)) => resolve.push(
-            UnresolvedPackage::parse("macro-input".as_ref(), &s)?,
-            &Default::default(),
-        )?,
-        Some(Source::Path(s)) => parse(&root.join(&s))?,
-        None => parse(&root.join("wit"))?,
+
+    let path_pkg = if let Some(path) = path {
+        Some(parse(&mut resolve, &root.join(&path))?)
+    } else {
+        None
     };
+
+    let inline_pkg = if let Some(inline) = inline {
+        Some(resolve.push(UnresolvedPackage::parse("macro-input".as_ref(), &inline)?)?)
+    } else {
+        None
+    };
+
+    let pkg = inline_pkg
+        .or(path_pkg)
+        .map_or_else(|| parse(&mut resolve, &root.join("wit")), Ok)?;
 
     Ok((resolve, pkg, files))
 }
@@ -131,6 +168,9 @@ mod kw {
     syn::custom_keyword!(tracing);
     syn::custom_keyword!(trappable_error_type);
     syn::custom_keyword!(world);
+    syn::custom_keyword!(ownership);
+    syn::custom_keyword!(interfaces);
+    syn::custom_keyword!(with);
 }
 
 enum Opt {
@@ -140,6 +180,9 @@ enum Opt {
     Tracing(bool),
     Async(bool),
     TrappableErrorType(Vec<TrappableError>),
+    Ownership(Ownership),
+    Interfaces(syn::LitStr),
+    With(HashMap<String, String>),
 }
 
 impl Parse for Opt {
@@ -165,6 +208,44 @@ impl Parse for Opt {
             input.parse::<Token![async]>()?;
             input.parse::<Token![:]>()?;
             Ok(Opt::Async(input.parse::<syn::LitBool>()?.value))
+        } else if l.peek(kw::ownership) {
+            input.parse::<kw::ownership>()?;
+            input.parse::<Token![:]>()?;
+            let ownership = input.parse::<syn::Ident>()?;
+            Ok(Opt::Ownership(match ownership.to_string().as_str() {
+                "Owning" => Ownership::Owning,
+                "Borrowing" => Ownership::Borrowing {
+                    duplicate_if_necessary: {
+                        let contents;
+                        braced!(contents in input);
+                        let field = contents.parse::<syn::Ident>()?;
+                        match field.to_string().as_str() {
+                            "duplicate_if_necessary" => {
+                                contents.parse::<Token![:]>()?;
+                                contents.parse::<syn::LitBool>()?.value
+                            }
+                            name => {
+                                return Err(Error::new(
+                                    field.span(),
+                                    format!(
+                                        "unrecognized `Ownership::Borrowing` field: `{name}`; \
+                                         expected `duplicate_if_necessary`"
+                                    ),
+                                ));
+                            }
+                        }
+                    },
+                },
+                name => {
+                    return Err(Error::new(
+                        ownership.span(),
+                        format!(
+                            "unrecognized ownership: `{name}`; \
+                             expected `Owning` or `Borrowing`"
+                        ),
+                    ));
+                }
+            }))
         } else if l.peek(kw::trappable_error_type) {
             input.parse::<kw::trappable_error_type>()?;
             input.parse::<Token![:]>()?;
@@ -182,6 +263,18 @@ impl Parse for Opt {
                     })
                     .collect(),
             ))
+        } else if l.peek(kw::interfaces) {
+            input.parse::<kw::interfaces>()?;
+            input.parse::<Token![:]>()?;
+            Ok(Opt::Interfaces(input.parse::<syn::LitStr>()?))
+        } else if l.peek(kw::with) {
+            input.parse::<kw::with>()?;
+            input.parse::<Token![:]>()?;
+            let contents;
+            let _lbrace = braced!(contents in input);
+            let fields: Punctuated<(String, String), Token![,]> =
+                contents.parse_terminated(with_field_parse)?;
+            Ok(Opt::With(HashMap::from_iter(fields.into_iter())))
         } else {
             Err(l.error())
         }
@@ -209,4 +302,47 @@ fn trappable_error_field_parse(input: ParseStream<'_>) -> Result<(String, String
     input.parse::<Token![:]>()?;
     let rust_type = input.parse::<Ident>()?.to_string();
     Ok((interface, type_, rust_type))
+}
+
+fn with_field_parse(input: ParseStream<'_>) -> Result<(String, String)> {
+    let interface = input.parse::<syn::LitStr>()?.value();
+    input.parse::<Token![:]>()?;
+    let start = input.span();
+    let path = input.parse::<syn::Path>()?;
+
+    // It's not possible for the segments of a path to be empty
+    let span = start
+        .join(path.segments.last().unwrap().ident.span())
+        .unwrap_or(start);
+
+    let mut buf = String::new();
+    let append = |buf: &mut String, segment: syn::PathSegment| -> Result<()> {
+        if segment.arguments != syn::PathArguments::None {
+            return Err(Error::new(
+                span,
+                "Module path must not contain angles or parens",
+            ));
+        }
+
+        buf.push_str(&segment.ident.to_string());
+
+        Ok(())
+    };
+
+    if path.leading_colon.is_some() {
+        buf.push_str("::");
+    }
+
+    let mut segments = path.segments.into_iter();
+
+    if let Some(segment) = segments.next() {
+        append(&mut buf, segment)?;
+    }
+
+    for segment in segments {
+        buf.push_str("::");
+        append(&mut buf, segment)?;
+    }
+
+    Ok((interface, buf))
 }

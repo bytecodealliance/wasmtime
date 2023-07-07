@@ -2,13 +2,6 @@ use std::{env, process};
 use wasi_tests::{assert_errno, open_scratch_directory, TESTCONFIG};
 
 unsafe fn test_path_filestat(dir_fd: wasi::Fd) {
-    let mut fdstat = wasi::fd_fdstat_get(dir_fd).expect("fd_fdstat_get");
-    assert_ne!(
-        fdstat.fs_rights_base & wasi::RIGHTS_PATH_FILESTAT_GET,
-        0,
-        "the scratch directory should have RIGHT_PATH_FILESTAT_GET as base right",
-    );
-
     let fdflags = if TESTCONFIG.support_fdflags_sync() {
         wasi::FDFLAGS_APPEND | wasi::FDFLAGS_SYNC
     } else {
@@ -21,7 +14,7 @@ unsafe fn test_path_filestat(dir_fd: wasi::Fd) {
         0,
         "file",
         wasi::OFLAGS_CREAT,
-        wasi::RIGHTS_FD_READ | wasi::RIGHTS_FD_WRITE | wasi::RIGHTS_PATH_FILESTAT_GET,
+        wasi::RIGHTS_FD_READ | wasi::RIGHTS_FD_WRITE,
         0,
         // Pass some flags for later retrieval
         fdflags,
@@ -32,17 +25,7 @@ unsafe fn test_path_filestat(dir_fd: wasi::Fd) {
         "file descriptor range check",
     );
 
-    fdstat = wasi::fd_fdstat_get(file_fd).expect("fd_fdstat_get");
-    assert_eq!(
-        fdstat.fs_rights_base & wasi::RIGHTS_PATH_FILESTAT_GET,
-        0,
-        "files shouldn't have rights for path_* syscalls even if manually given",
-    );
-    assert_eq!(
-        fdstat.fs_rights_inheriting & wasi::RIGHTS_PATH_FILESTAT_GET,
-        0,
-        "files shouldn't have rights for path_* syscalls even if manually given",
-    );
+    let fdstat = wasi::fd_fdstat_get(file_fd).expect("fd_fdstat_get");
     assert_eq!(
         fdstat.fs_flags & wasi::FDFLAGS_APPEND,
         wasi::FDFLAGS_APPEND,
@@ -63,7 +46,7 @@ unsafe fn test_path_filestat(dir_fd: wasi::Fd) {
                 0,
                 "file",
                 0,
-                wasi::RIGHTS_FD_READ | wasi::RIGHTS_FD_WRITE | wasi::RIGHTS_PATH_FILESTAT_GET,
+                wasi::RIGHTS_FD_READ | wasi::RIGHTS_FD_WRITE,
                 0,
                 wasi::FDFLAGS_SYNC,
             )

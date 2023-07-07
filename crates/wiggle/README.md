@@ -10,7 +10,7 @@ in at least Wasmtime and Lucet.
 
 Read the docs on [docs.rs](https://docs.rs/wiggle/).
 
-There are child crates for [integrating with Wasmtime](https://github.com/bytecodealliance/wasmtime/tree/main/crates/wiggle/wasmtime) and [Lucet](https://github.com/bytecodealliance/lucet/tree/main/lucet-wiggle).
+There are child crates for [integrating with Wasmtime](https://github.com/bytecodealliance/wasmtime/tree/main/crates/wiggle) (this crate), and [Lucet](https://github.com/bytecodealliance/lucet/tree/main/lucet-wiggle).
 
 The [wasi-common crate](https://github.com/bytecodealliance/wasmtime/tree/main/crates/wasi-common) is implemented using Wiggle and the [wasmtime-wasi
 crate](https://github.com/bytecodealliance/wasmtime/tree/main/crates/wasi) integrates wasi-common with the Wasmtime engine.

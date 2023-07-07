@@ -16,22 +16,22 @@ block0:
 ;   mov fp, sp
 ;   sub sp, sp, #16
 ; block0:
-;   mov x1, sp
-;   movz x2, #1
-;   str x2, [x1]
+;   movz x1, #1
+;   mov x2, sp
+;   str x1, [x2]
 ;   add sp, sp, #16
 ;   ldp fp, lr, [sp], #16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
 ;   sub sp, sp, #0x10
 ; block1: ; offset 0xc
-;   mov x1, sp
-;   mov x2, #1
-;   str x2, [x1]
+;   mov x1, #1
+;   mov x2, sp
+;   str x1, [x2]
 ;   add sp, sp, #0x10
 ;   ldp x29, x30, [sp], #0x10
 ;   ret
@@ -51,22 +51,22 @@ block0:
 ;   mov fp, sp
 ;   sub sp, sp, #16
 ; block0:
-;   mov x1, sp
-;   movz x2, #1
-;   str x2, [x1]
+;   movz x1, #1
+;   mov x2, sp
+;   str x1, [x2]
 ;   add sp, sp, #16
 ;   ldp fp, lr, [sp], #16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
 ;   sub sp, sp, #0x10
 ; block1: ; offset 0xc
-;   mov x1, sp
-;   mov x2, #1
-;   str x2, [x1]
+;   mov x1, #1
+;   mov x2, sp
+;   str x1, [x2]
 ;   add sp, sp, #0x10
 ;   ldp x29, x30, [sp], #0x10
 ;   ret
@@ -93,7 +93,7 @@ block0(v0: i32):
 ;   add sp, sp, #16
 ;   ldp fp, lr, [sp], #16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
@@ -123,20 +123,20 @@ block0:
 ;   mov fp, sp
 ;   sub sp, sp, #16
 ; block0:
-;   mov x2, sp
-;   ldr q0, [x2]
+;   mov x1, sp
+;   ldr q0, [x1]
 ;   add sp, sp, #16
 ;   ldp fp, lr, [sp], #16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
 ;   sub sp, sp, #0x10
 ; block1: ; offset 0xc
-;   mov x2, sp
-;   ldr q0, [x2]
+;   mov x1, sp
+;   ldr q0, [x1]
 ;   add sp, sp, #0x10
 ;   ldp x29, x30, [sp], #0x10
 ;   ret
@@ -163,7 +163,7 @@ block0(v0: i32):
 ;   add sp, sp, #16
 ;   ldp fp, lr, [sp], #16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
@@ -196,7 +196,7 @@ block0:
 ;   add sp, sp, #16
 ;   ldp fp, lr, [sp], #16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!

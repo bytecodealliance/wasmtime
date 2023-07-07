@@ -2,6 +2,7 @@
     target_os = "linux",
     all(target_os = "macos", feature = "posix-signals-on-macos")
 ))]
+#[cfg(not(miri))]
 mod tests {
     use anyhow::Result;
     use rustix::mm::{mprotect, MprotectFlags};

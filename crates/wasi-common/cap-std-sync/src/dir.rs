@@ -1,18 +1,24 @@
 use crate::file::{filetype_from, File};
-use cap_fs_ext::{DirEntryExt, DirExt, MetadataExt, SystemTimeSpec};
+use cap_fs_ext::{DirEntryExt, DirExt, MetadataExt, OpenOptionsMaybeDirExt, SystemTimeSpec};
+use cap_std::fs;
 use std::any::Any;
 use std::path::{Path, PathBuf};
 use system_interface::fs::GetSetFdFlags;
 use wasi_common::{
     dir::{ReaddirCursor, ReaddirEntity, WasiDir},
-    file::{FdFlags, FileType, Filestat, OFlags, WasiFile},
+    file::{FdFlags, FileType, Filestat, OFlags},
     Error, ErrorExt,
 };
 
-pub struct Dir(cap_std::fs::Dir);
+pub struct Dir(fs::Dir);
+
+pub enum OpenResult {
+    File(File),
+    Dir(Dir),
+}
 
 impl Dir {
-    pub fn from_cap_std(dir: cap_std::fs::Dir) -> Self {
+    pub fn from_cap_std(dir: fs::Dir) -> Self {
         Dir(dir)
     }
 
@@ -24,10 +30,11 @@ impl Dir {
         read: bool,
         write: bool,
         fdflags: FdFlags,
-    ) -> Result<File, Error> {
+    ) -> Result<OpenResult, Error> {
         use cap_fs_ext::{FollowSymlinks, OpenOptionsFollowExt};
 
-        let mut opts = cap_std::fs::OpenOptions::new();
+        let mut opts = fs::OpenOptions::new();
+        opts.maybe_dir(true);
 
         if oflags.contains(OFlags::CREATE | OFlags::EXCLUSIVE) {
             opts.create_new(true);
@@ -71,22 +78,30 @@ impl Dir {
             return Err(Error::not_supported().context("SYNC family of FdFlags"));
         }
 
-        let mut f = self.0.open_with(Path::new(path), &opts)?;
-        // NONBLOCK does not have an OpenOption either, but we can patch that on with set_fd_flags:
-        if fdflags.contains(wasi_common::file::FdFlags::NONBLOCK) {
-            let set_fd_flags = f.new_set_fd_flags(system_interface::fs::FdFlags::NONBLOCK)?;
-            f.set_fd_flags(set_fd_flags)?;
+        if oflags.contains(OFlags::DIRECTORY) {
+            if oflags.contains(OFlags::CREATE)
+                || oflags.contains(OFlags::EXCLUSIVE)
+                || oflags.contains(OFlags::TRUNCATE)
+            {
+                return Err(Error::invalid_argument().context("directory oflags"));
+            }
         }
-        Ok(File::from_cap_std(f))
-    }
 
-    pub fn open_dir_(&self, symlink_follow: bool, path: &str) -> Result<Self, Error> {
-        let d = if symlink_follow {
-            self.0.open_dir(Path::new(path))?
+        let mut f = self.0.open_with(Path::new(path), &opts)?;
+        if f.metadata()?.is_dir() {
+            Ok(OpenResult::Dir(Dir::from_cap_std(fs::Dir::from_std_file(
+                f.into_std(),
+            ))))
+        } else if oflags.contains(OFlags::DIRECTORY) {
+            Err(Error::not_dir().context("expected directory but got file"))
         } else {
-            self.0.open_dir_nofollow(Path::new(path))?
-        };
-        Ok(Dir::from_cap_std(d))
+            // NONBLOCK does not have an OpenOption either, but we can patch that on with set_fd_flags:
+            if fdflags.contains(wasi_common::file::FdFlags::NONBLOCK) {
+                let set_fd_flags = f.new_set_fd_flags(system_interface::fs::FdFlags::NONBLOCK)?;
+                f.set_fd_flags(set_fd_flags)?;
+            }
+            Ok(OpenResult::File(File::from_cap_std(f)))
+        }
     }
 
     pub fn rename_(&self, src_path: &str, dest_dir: &Self, dest_path: &str) -> Result<(), Error> {
@@ -120,14 +135,12 @@ impl WasiDir for Dir {
         read: bool,
         write: bool,
         fdflags: FdFlags,
-    ) -> Result<Box<dyn WasiFile>, Error> {
+    ) -> Result<wasi_common::dir::OpenResult, Error> {
         let f = self.open_file_(symlink_follow, path, oflags, read, write, fdflags)?;
-        Ok(Box::new(f))
-    }
-
-    async fn open_dir(&self, symlink_follow: bool, path: &str) -> Result<Box<dyn WasiDir>, Error> {
-        let d = self.open_dir_(symlink_follow, path)?;
-        Ok(Box::new(d))
+        match f {
+            OpenResult::File(f) => Ok(wasi_common::dir::OpenResult::File(Box::new(f))),
+            OpenResult::Dir(d) => Ok(wasi_common::dir::OpenResult::Dir(Box::new(d))),
+        }
     }
 
     async fn create_dir(&self, path: &str) -> Result<(), Error> {
@@ -327,6 +340,7 @@ fn convert_systimespec(t: Option<wasi_common::SystemTimeSpec>) -> Option<SystemT
 mod test {
     use super::Dir;
     use cap_std::ambient_authority;
+    use wasi_common::file::{FdFlags, OFlags};
     #[test]
     fn scratch_dir() {
         let tempdir = tempfile::Builder::new()
@@ -336,8 +350,16 @@ mod test {
         let preopen_dir = cap_std::fs::Dir::open_ambient_dir(tempdir.path(), ambient_authority())
             .expect("open ambient temporary dir");
         let preopen_dir = Dir::from_cap_std(preopen_dir);
-        run(wasi_common::WasiDir::open_dir(&preopen_dir, false, "."))
-            .expect("open the same directory via WasiDir abstraction");
+        run(wasi_common::WasiDir::open_file(
+            &preopen_dir,
+            false,
+            ".",
+            OFlags::empty(),
+            false,
+            false,
+            FdFlags::empty(),
+        ))
+        .expect("open the same directory via WasiDir abstraction");
     }
 
     // Readdir does not work on windows, so we won't test it there.

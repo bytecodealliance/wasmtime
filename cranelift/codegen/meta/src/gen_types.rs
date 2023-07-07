@@ -60,7 +60,7 @@ fn emit_types(fmt: &mut srcgen::Formatter) {
 
     // Emit vector definitions for common SIMD sizes.
     // Emit dynamic vector definitions.
-    for vec_size in &[64_u64, 128, 256, 512] {
+    for vec_size in &[16_u64, 32, 64, 128, 256, 512] {
         emit_vectors(*vec_size, fmt);
         emit_dynamic_vectors(*vec_size, fmt);
     }

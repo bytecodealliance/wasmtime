@@ -204,6 +204,8 @@ pub fn create_reg_env(flags: &settings::Flags) -> MachineEnv {
                 preg(vreg(30)),
                 preg(vreg(31)),
             ],
+            // Vector Regclass is unused
+            vec![],
         ],
         non_preferred_regs_by_class: [
             vec![
@@ -228,8 +230,11 @@ pub fn create_reg_env(flags: &settings::Flags) -> MachineEnv {
                 preg(vreg(14)),
                 preg(vreg(15)),
             ],
+            // Vector Regclass is unused
+            vec![],
         ],
         fixed_stack_slots: vec![],
+        scratch_by_class: [None, None, None],
     };
 
     if !flags.enable_pinned_reg() {
@@ -266,6 +271,7 @@ fn show_reg(reg: Reg) -> String {
         match rreg.class() {
             RegClass::Int => show_ireg(rreg),
             RegClass::Float => show_vreg(rreg),
+            RegClass::Vector => unreachable!(),
         }
     } else {
         format!("%{:?}", reg)

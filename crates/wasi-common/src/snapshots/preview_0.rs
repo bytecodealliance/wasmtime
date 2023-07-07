@@ -1,4 +1,4 @@
-use crate::file::{FileCaps, FileEntryExt, TableFileExt};
+use crate::file::TableFileExt;
 use crate::sched::{
     subscription::{RwEventFlags, SubscriptionResult},
     Poll, Userdata,
@@ -529,78 +529,6 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
         iovs: &types::IovecArray<'a>,
     ) -> Result<types::Size, Error> {
         let f = self.table().get_file(u32::from(fd))?;
-        let f = f.get_cap(FileCaps::READ)?;
-
-        let iovs: Vec<wiggle::GuestPtr<[u8]>> = iovs
-            .iter()
-            .map(|iov_ptr| {
-                let iov_ptr = iov_ptr?;
-                let iov: types::Iovec = iov_ptr.read()?;
-                Ok(iov.buf.as_array(iov.buf_len))
-            })
-            .collect::<Result<_, Error>>()?;
-
-        // If the first iov structure is from shared memory we can safely assume
-        // all the rest will be. We then read into memory based on the memory's
-        // shared-ness:
-        // - if not shared, we copy directly into the Wasm memory
-        // - if shared, we use an intermediate buffer; this avoids Rust unsafety
-        //   due to holding on to a `&mut [u8]` of Wasm memory when we cannot
-        //   guarantee the `&mut` exclusivity--other threads could be modifying
-        //   the data as this functions writes to it. Though likely there is no
-        //   issue with OS writing to io structs in multi-threaded scenarios,
-        //   since we do not know here if `&dyn WasiFile` does anything else
-        //   (e.g., read), we cautiously incur some performance overhead by
-        //   copying twice.
-        let is_shared_memory = iovs
-            .iter()
-            .next()
-            .and_then(|s| Some(s.is_shared_memory()))
-            .unwrap_or(false);
-        let bytes_read: u64 = if is_shared_memory {
-            // For shared memory, read into an intermediate buffer. Only the
-            // first iov will be filled and even then the read is capped by the
-            // `MAX_SHARED_BUFFER_SIZE`, so users are expected to re-call.
-            let iov = iovs.into_iter().next();
-            if let Some(iov) = iov {
-                let mut buffer = vec![0; (iov.len() as usize).min(MAX_SHARED_BUFFER_SIZE)];
-                let bytes_read = f.read_vectored(&mut [IoSliceMut::new(&mut buffer)]).await?;
-                iov.get_range(0..bytes_read.try_into()?)
-                    .expect("it should always be possible to slice the iov smaller")
-                    .copy_from_slice(&buffer[0..bytes_read.try_into()?])?;
-                bytes_read
-            } else {
-                return Ok(0);
-            }
-        } else {
-            // Convert all of the unsafe guest slices to safe ones--this uses
-            // Wiggle's internal borrow checker to ensure no overlaps. We assume
-            // here that, because the memory is not shared, there are no other
-            // threads to access it while it is written to.
-            let mut guest_slices: Vec<wiggle::GuestSliceMut<u8>> = iovs
-                .into_iter()
-                .map(|iov| Ok(iov.as_slice_mut()?.unwrap()))
-                .collect::<Result<_, Error>>()?;
-
-            // Read directly into the Wasm memory.
-            let mut ioslices: Vec<IoSliceMut> = guest_slices
-                .iter_mut()
-                .map(|s| IoSliceMut::new(&mut *s))
-                .collect();
-            f.read_vectored(&mut ioslices).await?
-        };
-
-        Ok(types::Size::try_from(bytes_read)?)
-    }
-
-    async fn fd_pread<'a>(
-        &mut self,
-        fd: types::Fd,
-        iovs: &types::IovecArray<'a>,
-        offset: types::Filesize,
-    ) -> Result<types::Size, Error> {
-        let f = self.table().get_file(u32::from(fd))?;
-        let f = f.get_cap(FileCaps::READ | FileCaps::SEEK)?;
 
         let iovs: Vec<wiggle::GuestPtr<[u8]>> = iovs
             .iter()
@@ -636,6 +564,80 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
             if let Some(iov) = iov {
                 let mut buffer = vec![0; (iov.len() as usize).min(MAX_SHARED_BUFFER_SIZE)];
                 let bytes_read = f
+                    .file
+                    .read_vectored(&mut [IoSliceMut::new(&mut buffer)])
+                    .await?;
+                iov.get_range(0..bytes_read.try_into()?)
+                    .expect("it should always be possible to slice the iov smaller")
+                    .copy_from_slice(&buffer[0..bytes_read.try_into()?])?;
+                bytes_read
+            } else {
+                return Ok(0);
+            }
+        } else {
+            // Convert all of the unsafe guest slices to safe ones--this uses
+            // Wiggle's internal borrow checker to ensure no overlaps. We assume
+            // here that, because the memory is not shared, there are no other
+            // threads to access it while it is written to.
+            let mut guest_slices: Vec<wiggle::GuestSliceMut<u8>> = iovs
+                .into_iter()
+                .map(|iov| Ok(iov.as_slice_mut()?.unwrap()))
+                .collect::<Result<_, Error>>()?;
+
+            // Read directly into the Wasm memory.
+            let mut ioslices: Vec<IoSliceMut> = guest_slices
+                .iter_mut()
+                .map(|s| IoSliceMut::new(&mut *s))
+                .collect();
+            f.file.read_vectored(&mut ioslices).await?
+        };
+
+        Ok(types::Size::try_from(bytes_read)?)
+    }
+
+    async fn fd_pread<'a>(
+        &mut self,
+        fd: types::Fd,
+        iovs: &types::IovecArray<'a>,
+        offset: types::Filesize,
+    ) -> Result<types::Size, Error> {
+        let f = self.table().get_file(u32::from(fd))?;
+
+        let iovs: Vec<wiggle::GuestPtr<[u8]>> = iovs
+            .iter()
+            .map(|iov_ptr| {
+                let iov_ptr = iov_ptr?;
+                let iov: types::Iovec = iov_ptr.read()?;
+                Ok(iov.buf.as_array(iov.buf_len))
+            })
+            .collect::<Result<_, Error>>()?;
+
+        // If the first iov structure is from shared memory we can safely assume
+        // all the rest will be. We then read into memory based on the memory's
+        // shared-ness:
+        // - if not shared, we copy directly into the Wasm memory
+        // - if shared, we use an intermediate buffer; this avoids Rust unsafety
+        //   due to holding on to a `&mut [u8]` of Wasm memory when we cannot
+        //   guarantee the `&mut` exclusivity--other threads could be modifying
+        //   the data as this functions writes to it. Though likely there is no
+        //   issue with OS writing to io structs in multi-threaded scenarios,
+        //   since we do not know here if `&dyn WasiFile` does anything else
+        //   (e.g., read), we cautiously incur some performance overhead by
+        //   copying twice.
+        let is_shared_memory = iovs
+            .iter()
+            .next()
+            .and_then(|s| Some(s.is_shared_memory()))
+            .unwrap_or(false);
+        let bytes_read: u64 = if is_shared_memory {
+            // For shared memory, read into an intermediate buffer. Only the
+            // first iov will be filled and even then the read is capped by the
+            // `MAX_SHARED_BUFFER_SIZE`, so users are expected to re-call.
+            let iov = iovs.into_iter().next();
+            if let Some(iov) = iov {
+                let mut buffer = vec![0; (iov.len() as usize).min(MAX_SHARED_BUFFER_SIZE)];
+                let bytes_read = f
+                    .file
                     .read_vectored_at(&mut [IoSliceMut::new(&mut buffer)], offset)
                     .await?;
                 iov.get_range(0..bytes_read.try_into()?)
@@ -660,7 +662,7 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
                 .iter_mut()
                 .map(|s| IoSliceMut::new(&mut *s))
                 .collect();
-            f.read_vectored_at(&mut ioslices, offset).await?
+            f.file.read_vectored_at(&mut ioslices, offset).await?
         };
 
         Ok(types::Size::try_from(bytes_read)?)
@@ -672,7 +674,6 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
         ciovs: &types::CiovecArray<'a>,
     ) -> Result<types::Size, Error> {
         let f = self.table().get_file(u32::from(fd))?;
-        let f = f.get_cap(FileCaps::WRITE)?;
 
         let guest_slices: Vec<wiggle::GuestCow<u8>> = ciovs
             .iter()
@@ -687,7 +688,7 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
             .iter()
             .map(|s| IoSlice::new(s.deref()))
             .collect();
-        let bytes_written = f.write_vectored(&ioslices).await?;
+        let bytes_written = f.file.write_vectored(&ioslices).await?;
 
         Ok(types::Size::try_from(bytes_written)?)
     }
@@ -699,7 +700,6 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
         offset: types::Filesize,
     ) -> Result<types::Size, Error> {
         let f = self.table().get_file(u32::from(fd))?;
-        let f = f.get_cap(FileCaps::WRITE | FileCaps::SEEK)?;
 
         let guest_slices: Vec<wiggle::GuestCow<u8>> = ciovs
             .iter()
@@ -714,7 +714,7 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
             .iter()
             .map(|s| IoSlice::new(s.deref()))
             .collect();
-        let bytes_written = f.write_vectored_at(&ioslices, offset).await?;
+        let bytes_written = f.file.write_vectored_at(&ioslices, offset).await?;
 
         Ok(types::Size::try_from(bytes_written)?)
     }
@@ -991,9 +991,7 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
                     } else {
                         sub_fds.insert(fd);
                     }
-                    table
-                        .get_file(u32::from(fd))?
-                        .get_cap(FileCaps::POLL_READWRITE)?;
+                    table.get_file(u32::from(fd))?;
                     reads.push((u32::from(fd), sub.userdata.into()));
                 }
                 types::SubscriptionU::FdWrite(writesub) => {
@@ -1004,9 +1002,7 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
                     } else {
                         sub_fds.insert(fd);
                     }
-                    table
-                        .get_file(u32::from(fd))?
-                        .get_cap(FileCaps::POLL_READWRITE)?;
+                    table.get_file(u32::from(fd))?;
                     writes.push((u32::from(fd), sub.userdata.into()));
                 }
             }

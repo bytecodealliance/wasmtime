@@ -52,6 +52,7 @@ fn test_export_shared_memory() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn test_sharing_of_shared_memory() -> Result<()> {
     let wat = r#"(module
         (import "env" "memory" (memory 1 5 shared))
@@ -95,6 +96,7 @@ fn test_sharing_of_shared_memory() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn test_probe_shared_memory_size() -> Result<()> {
     let wat = r#"(module
         (memory (export "memory") 1 2 shared)
@@ -157,6 +159,7 @@ fn test_multi_memory() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn test_grow_memory_in_multiple_threads() -> Result<()> {
     const NUM_THREADS: usize = 4;
     const NUM_GROW_OPS: usize = 1000;
@@ -226,6 +229,7 @@ fn is_sorted(data: &[u32]) -> bool {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn test_memory_size_accessibility() -> Result<()> {
     const NUM_GROW_OPS: usize = 1000;
     let wat = r#"(module

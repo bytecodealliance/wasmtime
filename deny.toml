@@ -17,7 +17,17 @@ allow = [
     "BSD-3-Clause",
     "ISC",
     "MIT",
+    "MPL-2.0",
+    "OpenSSL",
+    "Unicode-DFS-2016",
     "Zlib",
+]
+
+[[licenses.clarify]]
+name = "ring"
+expression = "MIT AND ISC AND OpenSSL"
+license-files = [
+    { path = "LICENSE", hash = 0xbd0eed23 }
 ]
 
 # https://embarkstudios.github.io/cargo-deny/checks/bans/cfg.html
@@ -27,6 +37,13 @@ wildcards = "allow"
 deny = []
 
 skip-tree = [
+    # wit-bindgen and wasmtime both depend on the wasm-tools crates, and
+    # wit-bindgen's latest release may sometimes lag behind when we bump
+    # wasmtime's dependencies on wasm-tools. wit-bindgen is only used for
+    # building component-based test programs, so we are going to ignore
+    # the multiple-versions errors it will introduce.
+    { name = "wit-bindgen", depth = 20 },
+
     # Criterion 0.3 is pretty old at this point and has had an upcoming 0.4 for
     # a long time. This is a dev-dependency so we don't really mind its
     # dependency tree, so skip it entirely.
@@ -51,5 +68,5 @@ skip-tree = [
     # The native-tls crate hasn't kept up with updates to the underlying
     # windows-sys, while the rest of the ecosystem has. This duplicated
     # dependency appears to be benign.
-    { name = "windows-sys", depth = 2 },
+    { name = "windows-sys", depth = 3 },
 ]

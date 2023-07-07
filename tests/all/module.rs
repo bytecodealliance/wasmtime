@@ -51,6 +51,7 @@ fn caches_across_engines() {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn aot_compiles() -> Result<()> {
     let engine = Engine::default();
     let bytes = engine.precompile_module(
@@ -69,6 +70,7 @@ fn aot_compiles() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn serialize_deterministic() {
     let engine = Engine::default();
 
@@ -177,7 +179,7 @@ fn serialize_not_overly_massive() -> Result<()> {
 // This test then also tests that loading modules through various means, e.g.
 // through precompiled artifacts, all works.
 #[test]
-#[cfg_attr(not(target_arch = "x86_64"), ignore)]
+#[cfg_attr(any(not(target_arch = "x86_64"), miri), ignore)]
 fn missing_sse_and_floats_still_works() -> Result<()> {
     let mut config = Config::new();
     config.wasm_simd(false);

@@ -31,6 +31,11 @@ extern "C" {
 typedef struct wasmtime_error wasmtime_error_t;
 
 /**
+ * \brief Creates a new error with the provided message.
+ */
+WASM_API_EXTERN wasmtime_error_t *wasmtime_error_new(const char*);
+
+/**
  * \brief Deletes an error.
  */
 WASM_API_EXTERN void wasmtime_error_delete(wasmtime_error_t *error);

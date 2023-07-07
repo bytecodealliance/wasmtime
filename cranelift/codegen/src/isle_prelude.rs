@@ -228,6 +228,21 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
+        fn ty_lane_mask(&mut self, ty: Type) -> u64 {
+            let ty_lane_count = ty.lane_count();
+            debug_assert_ne!(ty_lane_count, 0);
+            let shift = 64_u64
+                .checked_sub(ty_lane_count.into())
+                .expect("unimplemented for > 64 bits");
+            u64::MAX >> shift
+        }
+
+        #[inline]
+        fn ty_lane_count(&mut self, ty: Type) -> u64 {
+            ty.lane_count() as u64
+        }
+
+        #[inline]
         fn ty_umin(&mut self, _ty: Type) -> u64 {
             0
         }
@@ -304,6 +319,11 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
+        fn ty_int_ref_scalar_64_extract(&mut self, ty: Type) -> Option<Type> {
+            self.ty_int_ref_scalar_64(ty)
+        }
+
+        #[inline]
         fn ty_32(&mut self, ty: Type) -> Option<Type> {
             if ty.bits() == 32 {
                 Some(ty)
@@ -356,8 +376,25 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
+        fn ty_int_ref_16_to_64(&mut self, ty: Type) -> Option<Type> {
+            match ty {
+                I16 | I32 | I64 | R64 => Some(ty),
+                _ => None,
+            }
+        }
+
+        #[inline]
         fn ty_int(&mut self, ty: Type) -> Option<Type> {
             ty.is_int().then(|| ty)
+        }
+
+        #[inline]
+        fn ty_scalar(&mut self, ty: Type) -> Option<Type> {
+            if ty.lane_count() == 1 {
+                Some(ty)
+            } else {
+                None
+            }
         }
 
         #[inline]
@@ -600,6 +637,16 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
+        fn u32_sub(&mut self, a: u32, b: u32) -> u32 {
+            a.wrapping_sub(b)
+        }
+
+        #[inline]
+        fn u32_and(&mut self, a: u32, b: u32) -> u32 {
+            a & b
+        }
+
+        #[inline]
         fn s32_add_fallible(&mut self, a: u32, b: u32) -> Option<u32> {
             let a = a as i32;
             let b = b as i32;
@@ -678,8 +725,45 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
+        fn u8_shl(&mut self, a: u8, b: u8) -> u8 {
+            a << b
+        }
+
+        #[inline]
+        fn u8_shr(&mut self, a: u8, b: u8) -> u8 {
+            a >> b
+        }
+
+        #[inline]
         fn lane_type(&mut self, ty: Type) -> Type {
             ty.lane_type()
+        }
+
+        #[inline]
+        fn ty_half_lanes(&mut self, ty: Type) -> Option<Type> {
+            if ty.lane_count() == 1 {
+                None
+            } else {
+                ty.lane_type().by(ty.lane_count() / 2)
+            }
+        }
+
+        #[inline]
+        fn ty_half_width(&mut self, ty: Type) -> Option<Type> {
+            let new_lane = match ty.lane_type() {
+                I16 => I8,
+                I32 => I16,
+                I64 => I32,
+                F64 => F32,
+                _ => return None,
+            };
+
+            new_lane.by(ty.lane_count())
+        }
+
+        #[inline]
+        fn ty_equal(&mut self, lhs: Type, rhs: Type) -> bool {
+            lhs == rhs
         }
 
         #[inline]

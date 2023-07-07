@@ -102,7 +102,7 @@ fn handle_module(
 
         // Compile and encode the result to machine code.
         let compiled_code = context
-            .compile_and_emit(isa, &mut mem)
+            .compile_and_emit(isa, &mut mem, &mut Default::default())
             .map_err(|err| anyhow::anyhow!("{}", pretty_error(&err.func, err.inner)))?;
         let code_info = compiled_code.code_info();
 
@@ -113,7 +113,11 @@ fn handle_module(
                 cranelift_module::Linkage::Export,
                 &context.func.signature,
             )?;
-            module.define_function(fid, &mut context)?;
+            module.define_function_with_control_plane(
+                fid,
+                &mut context,
+                &mut Default::default(),
+            )?;
         }
 
         if options.print {

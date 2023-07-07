@@ -6,21 +6,21 @@ use crate::{
 };
 use anyhow::{bail, Context, Result};
 use once_cell::sync::OnceCell;
-use std::any::Any;
 use std::fs;
 use std::mem;
 use std::ops::Range;
 use std::path::Path;
+use std::ptr::NonNull;
 use std::sync::Arc;
 use wasmparser::{Parser, ValidPayload, Validator};
 use wasmtime_environ::{
-    DefinedFuncIndex, DefinedMemoryIndex, HostPtr, ModuleEnvironment, ModuleTranslation,
-    ModuleTypes, ObjectKind, PrimaryMap, VMOffsets, WasmFunctionInfo,
+    DefinedFuncIndex, DefinedMemoryIndex, HostPtr, ModuleEnvironment, ModuleTypes, ObjectKind,
+    VMOffsets,
 };
 use wasmtime_jit::{CodeMemory, CompiledModule, CompiledModuleInfo};
 use wasmtime_runtime::{
-    CompiledModuleId, MemoryImage, MmapVec, ModuleMemoryImages, VMFunctionBody,
-    VMSharedSignatureIndex,
+    CompiledModuleId, MemoryImage, MmapVec, ModuleMemoryImages, VMArrayCallFunction,
+    VMNativeCallFunction, VMSharedSignatureIndex, VMWasmCallFunction,
 };
 
 mod registry;
@@ -195,8 +195,8 @@ impl Module {
     /// # Ok(())
     /// # }
     /// ```
-    #[cfg(compiler)]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
+    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn new(engine: &Engine, bytes: impl AsRef<[u8]>) -> Result<Module> {
         let bytes = bytes.as_ref();
         #[cfg(feature = "wat")]
@@ -232,8 +232,8 @@ impl Module {
     /// # Ok(())
     /// # }
     /// ```
-    #[cfg(compiler)]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
+    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn from_file(engine: &Engine, file: impl AsRef<Path>) -> Result<Module> {
         match Self::new(
             engine,
@@ -285,8 +285,8 @@ impl Module {
     /// # Ok(())
     /// # }
     /// ```
-    #[cfg(compiler)]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
+    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn from_binary(engine: &Engine, binary: &[u8]) -> Result<Module> {
         engine
             .check_compatible_with_native_host()
@@ -357,8 +357,8 @@ impl Module {
     /// This is because the file is mapped into memory and lazily loaded pages
     /// reflect the current state of the file, not necessarily the origianl
     /// state of the file.
-    #[cfg(compiler)]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
+    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub unsafe fn from_trusted_file(engine: &Engine, file: impl AsRef<Path>) -> Result<Module> {
         let mmap = MmapVec::from_file(file.as_ref())?;
         if &mmap[0..4] == b"\x7fELF" {
@@ -381,11 +381,13 @@ impl Module {
     /// Additionally compilation returns an `Option` here which is always
     /// `Some`, notably compiled metadata about the module in addition to the
     /// type information found within.
-    #[cfg(compiler)]
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub(crate) fn build_artifacts(
         engine: &Engine,
         wasm: &[u8],
     ) -> Result<(MmapVec, Option<(CompiledModuleInfo, ModuleTypes)>)> {
+        use crate::compiler::CompileInputs;
+
         let tunables = &engine.config().tunables;
         let compiler = engine.compiler();
 
@@ -400,81 +402,16 @@ impl Module {
         let mut translation = ModuleEnvironment::new(tunables, &mut validator, &mut types)
             .translate(parser, wasm)
             .context("failed to parse WebAssembly module")?;
+        let functions = mem::take(&mut translation.function_body_inputs);
         let types = types.finish();
 
-        // Afterwards compile all functions and trampolines required by the
-        // module.
-        let signatures = translation.exported_signatures.clone();
-        let (funcs, trampolines) = engine.join_maybe_parallel(
-            // In one (possibly) parallel task all wasm functions are compiled
-            // in parallel. Note that this is also where the actual validation
-            // of all function bodies happens as well.
-            || Self::compile_functions(engine, &mut translation, &types),
-            // In another (possibly) parallel task all trampolines necessary
-            // for untyped host-to-wasm entry are compiled. Note that this
-            // isn't really expected to take all that long, it's moreso "well
-            // if we're using rayon why not use it here too".
-            || -> Result<_> {
-                engine.run_maybe_parallel(signatures, |sig| {
-                    let ty = &types[sig];
-                    Ok(compiler.compile_host_to_wasm_trampoline(ty)?)
-                })
-            },
-        );
-
-        // Weave the separate list of compiled functions into one list, storing
-        // the other metadata off to the side for now.
-        let funcs = funcs?;
-        let trampolines = trampolines?;
-        let mut func_infos = PrimaryMap::with_capacity(funcs.len());
-        let mut compiled_funcs = Vec::with_capacity(funcs.len() + trampolines.len());
-        for (info, func) in funcs {
-            let idx = func_infos.push(info);
-            let sym = format!(
-                "_wasm_function_{}",
-                translation.module.func_index(idx).as_u32()
-            );
-            compiled_funcs.push((sym, func));
-        }
-        for (sig, func) in translation.exported_signatures.iter().zip(trampolines) {
-            let sym = format!("_trampoline_{}", sig.as_u32());
-            compiled_funcs.push((sym, func));
-        }
+        let compile_inputs = CompileInputs::for_module(&types, &translation, functions);
+        let unlinked_compile_outputs = compile_inputs.compile(engine)?;
+        let (compiled_funcs, function_indices) = unlinked_compile_outputs.pre_link();
 
         // Emplace all compiled functions into the object file with any other
         // sections associated with code as well.
-        let mut obj = engine.compiler().object(ObjectKind::Module)?;
-        let locs = compiler.append_code(&mut obj, &compiled_funcs, tunables, &|i, idx| {
-            assert!(i < func_infos.len());
-            let defined = translation.module.defined_func_index(idx).unwrap();
-            defined.as_u32() as usize
-        })?;
-
-        // If requested, generate and add dwarf information.
-        if tunables.generate_native_debuginfo && !func_infos.is_empty() {
-            let mut locs = locs.iter();
-            let mut funcs = compiled_funcs.iter();
-            let funcs = (0..func_infos.len())
-                .map(|_| (locs.next().unwrap().0, &*funcs.next().unwrap().1))
-                .collect();
-            compiler.append_dwarf(&mut obj, &translation, &funcs)?;
-        }
-
-        // Process all the results of compilation into a final state for our
-        // internal representation.
-        let mut locs = locs.into_iter();
-        let funcs = func_infos
-            .into_iter()
-            .map(|(_, info)| (info, locs.next().unwrap().1))
-            .collect();
-        let trampolines = translation
-            .exported_signatures
-            .iter()
-            .cloned()
-            .map(|i| (i, locs.next().unwrap().1))
-            .collect();
-        assert!(locs.next().is_none());
-
+        let mut object = engine.compiler().object(ObjectKind::Module)?;
         // Insert `Engine` and type-level information into the compiled
         // artifact so if this module is deserialized later it contains all
         // information necessary.
@@ -484,40 +421,8 @@ impl Module {
         // They're only used during deserialization and not during runtime for
         // the module itself. Currently there's no need for that, however, so
         // it's left as an exercise for later.
-        engine.append_compiler_info(&mut obj);
-        engine.append_bti(&mut obj);
-
-        let mut obj = wasmtime_jit::ObjectBuilder::new(obj, tunables);
-        let info = obj.append(translation, funcs, trampolines)?;
-        obj.serialize_info(&(&info, &types));
-        let mmap = obj.finish()?;
-
-        Ok((mmap, Some((info, types))))
-    }
-
-    #[cfg(compiler)]
-    pub(crate) fn compile_functions(
-        engine: &Engine,
-        translation: &mut ModuleTranslation<'_>,
-        types: &ModuleTypes,
-    ) -> Result<Vec<(WasmFunctionInfo, Box<dyn Any + Send>)>> {
-        let tunables = &engine.config().tunables;
-        let functions = mem::take(&mut translation.function_body_inputs);
-        let functions = functions.into_iter().collect::<Vec<_>>();
-        let compiler = engine.compiler();
-        let funcs = engine.run_maybe_parallel(functions, |(index, func)| {
-            let offset = func.body.range().start;
-            let result = compiler.compile_function(&translation, index, func, tunables, types);
-            result.with_context(|| {
-                let index = translation.module.func_index(index);
-                let name = match translation.debuginfo.name_section.func_names.get(&index) {
-                    Some(name) => format!(" (`{}`)", name),
-                    None => String::new(),
-                };
-                let index = index.as_u32();
-                format!("failed to compile wasm function {index}{name} at offset {offset:#x}")
-            })
-        })?;
+        engine.append_compiler_info(&mut object);
+        engine.append_bti(&mut object);
 
         // If configured attempt to use static memory initialization which
         // can either at runtime be implemented as a single memcpy to
@@ -534,7 +439,19 @@ impl Module {
         // table lazy init.
         translation.try_func_table_init();
 
-        Ok(funcs)
+        let (mut object, compilation_artifacts) = function_indices.link_and_append_code(
+            object,
+            tunables,
+            compiler,
+            compiled_funcs,
+            std::iter::once(translation).collect(),
+        )?;
+
+        let info = compilation_artifacts.unwrap_as_module_info();
+        object.serialize_info(&(&info, &types));
+        let mmap = object.finish()?;
+
+        Ok((mmap, Some((info, types))))
     }
 
     /// Deserializes an in-memory compiled module previously created with
@@ -640,13 +557,7 @@ impl Module {
         // Note that the unsafety here should be ok since the `trampolines`
         // field should only point to valid trampoline function pointers
         // within the text section.
-        let signatures = SignatureCollection::new_for_module(
-            engine.signatures(),
-            &types,
-            info.trampolines
-                .iter()
-                .map(|(idx, f)| (*idx, unsafe { code_memory.vmtrampoline(*f) })),
-        );
+        let signatures = SignatureCollection::new_for_module(engine.signatures(), &types);
 
         // Package up all our data into a `CodeObject` and delegate to the final
         // step of module compilation.
@@ -737,8 +648,8 @@ impl Module {
     /// this method, but if a module is both instantiated and serialized then
     /// this method can be useful to get the serialized version without
     /// compiling twice.
-    #[cfg(compiler)]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
+    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn serialize(&self) -> Result<Vec<u8>> {
         // The current representation of compiled modules within a compiled
         // component means that it cannot be serialized. The mmap returned here
@@ -1144,10 +1055,10 @@ fn _assert_send_sync() {
 /// The hash computed for this structure is used to key the global wasmtime
 /// cache and dictates whether artifacts are reused. Consequently the contents
 /// of this hash dictate when artifacts are or aren't re-used.
-#[cfg(all(feature = "cache", compiler))]
-struct HashedEngineCompileEnv<'a>(&'a Engine);
+#[cfg(any(feature = "cranelift", feature = "winch"))]
+pub(crate) struct HashedEngineCompileEnv<'a>(pub &'a Engine);
 
-#[cfg(all(feature = "cache", compiler))]
+#[cfg(any(feature = "cranelift", feature = "winch"))]
 impl std::hash::Hash for HashedEngineCompileEnv<'_> {
     fn hash<H: std::hash::Hasher>(&self, hasher: &mut H) {
         // Hash the compiler's state based on its target and configuration.
@@ -1162,7 +1073,7 @@ impl std::hash::Hash for HashedEngineCompileEnv<'_> {
         config.features.hash(hasher);
 
         // Catch accidental bugs of reusing across crate versions.
-        env!("CARGO_PKG_VERSION").hash(hasher);
+        config.module_version.hash(hasher);
     }
 }
 
@@ -1171,12 +1082,46 @@ impl wasmtime_runtime::ModuleRuntimeInfo for ModuleInner {
         self.module.module()
     }
 
-    fn function(&self, index: DefinedFuncIndex) -> *mut VMFunctionBody {
-        self.module
+    fn function(&self, index: DefinedFuncIndex) -> NonNull<VMWasmCallFunction> {
+        let ptr = self
+            .module
             .finished_function(index)
             .as_ptr()
-            .cast::<VMFunctionBody>()
-            .cast_mut()
+            .cast::<VMWasmCallFunction>()
+            .cast_mut();
+        NonNull::new(ptr).unwrap()
+    }
+
+    fn native_to_wasm_trampoline(
+        &self,
+        index: DefinedFuncIndex,
+    ) -> Option<NonNull<VMNativeCallFunction>> {
+        let ptr = self
+            .module
+            .native_to_wasm_trampoline(index)?
+            .as_ptr()
+            .cast::<VMNativeCallFunction>()
+            .cast_mut();
+        Some(NonNull::new(ptr).unwrap())
+    }
+
+    fn array_to_wasm_trampoline(&self, index: DefinedFuncIndex) -> Option<VMArrayCallFunction> {
+        let ptr = self.module.array_to_wasm_trampoline(index)?.as_ptr();
+        Some(unsafe { mem::transmute::<*const u8, VMArrayCallFunction>(ptr) })
+    }
+
+    fn wasm_to_native_trampoline(
+        &self,
+        signature: VMSharedSignatureIndex,
+    ) -> Option<NonNull<VMWasmCallFunction>> {
+        let sig = self.code.signatures().local_signature(signature)?;
+        let ptr = self
+            .module
+            .wasm_to_native_trampoline(sig)
+            .as_ptr()
+            .cast::<VMWasmCallFunction>()
+            .cast_mut();
+        Some(NonNull::new(ptr).unwrap())
     }
 
     fn memory_image(&self, memory: DefinedMemoryIndex) -> Result<Option<&Arc<MemoryImage>>> {
@@ -1263,7 +1208,25 @@ impl wasmtime_runtime::ModuleRuntimeInfo for BareModuleInfo {
         &self.module
     }
 
-    fn function(&self, _index: DefinedFuncIndex) -> *mut VMFunctionBody {
+    fn function(&self, _index: DefinedFuncIndex) -> NonNull<VMWasmCallFunction> {
+        unreachable!()
+    }
+
+    fn array_to_wasm_trampoline(&self, _index: DefinedFuncIndex) -> Option<VMArrayCallFunction> {
+        unreachable!()
+    }
+
+    fn native_to_wasm_trampoline(
+        &self,
+        _index: DefinedFuncIndex,
+    ) -> Option<NonNull<VMNativeCallFunction>> {
+        unreachable!()
+    }
+
+    fn wasm_to_native_trampoline(
+        &self,
+        _signature: VMSharedSignatureIndex,
+    ) -> Option<NonNull<VMWasmCallFunction>> {
         unreachable!()
     }
 

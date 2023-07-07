@@ -4,6 +4,7 @@ target aarch64
 target s390x
 ; x86_64 panics: `Did not match fcvt input!
 ; thread 'worker #0' panicked at 'register allocation: Analysis(EntryLiveinValues([v2V]))', cranelift/codegen/src/machinst/compile.rs:96:10`
+target riscv64 has_v
 
 function %uunarrow_i16x8(i16x8, i16x8) -> i8x16 {
 block0(v0: i16x8, v1: i16x8):

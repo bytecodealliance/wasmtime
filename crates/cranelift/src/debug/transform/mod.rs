@@ -3,7 +3,7 @@ use self::simulate::generate_simulated_dwarf;
 use self::unit::clone_unit;
 use crate::debug::gc::build_dependencies;
 use crate::debug::ModuleMemoryOffset;
-use crate::CompiledFunctions;
+use crate::CompiledFunctionsMetadata;
 use anyhow::Error;
 use cranelift_codegen::isa::TargetIsa;
 use gimli::{
@@ -51,7 +51,7 @@ where
 pub fn transform_dwarf(
     isa: &dyn TargetIsa,
     di: &DebugInfoData,
-    funcs: &CompiledFunctions,
+    funcs: &CompiledFunctionsMetadata,
     memory_offset: &ModuleMemoryOffset,
 ) -> Result<write::Dwarf, Error> {
     let addr_tr = AddressTransform::new(funcs, &di.wasm_file);

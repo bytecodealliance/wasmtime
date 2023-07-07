@@ -1,6 +1,7 @@
 test interpret
 test run
 target aarch64
+target riscv64 has_v
 
 ; i32x4 vectors aren't supported in `uadd_sat` outside AArch64 at the moment
 function %uaddsat_i32x4(i32x4, i32x4) -> i32x4 {

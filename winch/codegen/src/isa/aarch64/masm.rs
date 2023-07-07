@@ -1,15 +1,19 @@
 use super::{
+    abi::Aarch64ABI,
     address::Address,
     asm::{Assembler, Operand},
     regs,
 };
 use crate::{
-    abi::local::LocalSlot,
+    abi::{self, local::LocalSlot},
     codegen::CodeGenContext,
     isa::reg::Reg,
-    masm::{DivKind, MacroAssembler as Masm, OperandSize, RegImm, RemKind},
+    masm::{
+        CalleeKind, CmpKind, DivKind, MacroAssembler as Masm, OperandSize, RegImm, RemKind,
+        ShiftKind,
+    },
 };
-use cranelift_codegen::{settings, Final, MachBufferFinalized};
+use cranelift_codegen::{settings, Final, MachBufferFinalized, MachLabel};
 
 /// Aarch64 MacroAssembler.
 pub(crate) struct MacroAssembler {
@@ -54,6 +58,8 @@ impl MacroAssembler {
 
 impl Masm for MacroAssembler {
     type Address = Address;
+    type Ptr = u8;
+    type ABI = Aarch64ABI;
 
     fn prologue(&mut self) {
         let lr = regs::lr();
@@ -100,6 +106,10 @@ impl Masm for MacroAssembler {
         todo!()
     }
 
+    fn reset_stack_pointer(&mut self, offset: u32) {
+        self.sp_offset = offset;
+    }
+
     fn local_address(&mut self, local: &LocalSlot) -> Address {
         let (reg, offset) = local
             .addressed_from_sp()
@@ -136,7 +146,11 @@ impl Masm for MacroAssembler {
         self.asm.str(src, dst, size);
     }
 
-    fn call(&mut self, _callee: u32) {
+    fn call(
+        &mut self,
+        _stack_args_size: u32,
+        _load_callee: impl FnMut(&mut Self) -> CalleeKind,
+    ) -> u32 {
         todo!()
     }
 
@@ -148,7 +162,7 @@ impl Masm for MacroAssembler {
         todo!()
     }
 
-    fn sp_offset(&mut self) -> u32 {
+    fn sp_offset(&self) -> u32 {
         self.sp_offset
     }
 
@@ -164,11 +178,27 @@ impl Masm for MacroAssembler {
         self.asm.add(rhs.into(), lhs.into(), dst.into(), size);
     }
 
-    fn sub(&mut self, _dst: RegImm, _lhs: RegImm, _rhs: RegImm, _size: OperandSize) {
+    fn sub(&mut self, dst: RegImm, lhs: RegImm, rhs: RegImm, size: OperandSize) {
+        self.asm.sub(rhs.into(), lhs.into(), dst.into(), size);
+    }
+
+    fn mul(&mut self, dst: RegImm, lhs: RegImm, rhs: RegImm, size: OperandSize) {
+        self.asm.mul(rhs.into(), lhs.into(), dst.into(), size);
+    }
+
+    fn and(&mut self, _dst: RegImm, _lhs: RegImm, _rhs: RegImm, _size: OperandSize) {
         todo!()
     }
 
-    fn mul(&mut self, _dst: RegImm, _lhs: RegImm, _rhs: RegImm, _size: OperandSize) {
+    fn or(&mut self, _dst: RegImm, _lhs: RegImm, _rhs: RegImm, _size: OperandSize) {
+        todo!()
+    }
+
+    fn xor(&mut self, _dst: RegImm, _lhs: RegImm, _rhs: RegImm, _size: OperandSize) {
+        todo!()
+    }
+
+    fn shift(&mut self, _context: &mut CodeGenContext, _kind: ShiftKind, _size: OperandSize) {
         todo!()
     }
 
@@ -184,15 +214,61 @@ impl Masm for MacroAssembler {
         self.asm.load_constant(0, reg);
     }
 
+    fn popcnt(&mut self, _context: &mut CodeGenContext, _size: OperandSize) {
+        todo!()
+    }
+
     fn push(&mut self, reg: Reg) -> u32 {
-        // The push is counted as pushing the 64-bit width in
-        // 64-bit architectures.
-        let size = 8u32;
+        let size = <Self::ABI as abi::ABI>::word_bytes();
         self.reserve_stack(size);
         let address = Address::from_shadow_sp(size as i64);
         self.asm.str(reg, address, OperandSize::S64);
 
         self.sp_offset
+    }
+
+    fn address_at_reg(&self, reg: Reg, offset: u32) -> Self::Address {
+        Address::offset(reg, offset as i64)
+    }
+
+    fn cmp_with_set(&mut self, _src: RegImm, _dst: RegImm, _kind: CmpKind, _size: OperandSize) {
+        todo!()
+    }
+
+    fn clz(&mut self, _src: Reg, _dst: Reg, _size: OperandSize) {
+        todo!()
+    }
+
+    fn ctz(&mut self, _src: Reg, _dst: Reg, _size: OperandSize) {
+        todo!()
+    }
+
+    fn get_label(&mut self) -> MachLabel {
+        self.asm.get_label()
+    }
+
+    fn bind(&mut self, label: MachLabel) {
+        let buffer = self.asm.buffer_mut();
+        buffer.bind_label(label, &mut Default::default());
+    }
+
+    fn branch(
+        &mut self,
+        _kind: CmpKind,
+        _lhs: RegImm,
+        _rhs: RegImm,
+        _taken: MachLabel,
+        _size: OperandSize,
+    ) {
+        todo!()
+    }
+
+    fn jmp(&mut self, _target: MachLabel) {
+        todo!()
+    }
+
+    fn unreachable(&mut self) {
+        todo!()
     }
 }
 

@@ -1,7 +1,7 @@
 use super::address_transform::AddressTransform;
 use super::expression::{CompiledExpression, FunctionFrameInfo};
 use crate::debug::ModuleMemoryOffset;
-use crate::CompiledFunctions;
+use crate::CompiledFunctionsMetadata;
 use anyhow::Error;
 use cranelift_codegen::isa::TargetIsa;
 use gimli::write;
@@ -167,7 +167,7 @@ pub(crate) fn append_vmctx_info(
 
 pub(crate) fn get_function_frame_info<'a, 'b, 'c>(
     memory_offset: &ModuleMemoryOffset,
-    funcs: &'b CompiledFunctions,
+    funcs: &'b CompiledFunctionsMetadata,
     func_index: DefinedFuncIndex,
 ) -> Option<FunctionFrameInfo<'a>>
 where

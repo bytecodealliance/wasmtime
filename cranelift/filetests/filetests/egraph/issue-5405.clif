@@ -1,7 +1,6 @@
 test interpret
 test run
 set opt_level=speed
-set use_egraphs=true
 target aarch64
 
 function %a(i64) -> i8 system_v {

@@ -10,7 +10,7 @@ block0(v0: r64):
 ; VCode:
 ; block0:
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ret
@@ -25,7 +25,7 @@ block0(v0: r64):
 ; block0:
 ;   seqz a0,a0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   seqz a0, a0
@@ -42,7 +42,7 @@ block0(v0: r64):
 ;   addi t2,a0,1
 ;   seqz a0,t2
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi t2, a0, 1
@@ -59,7 +59,7 @@ block0:
 ; block0:
 ;   li a0,0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mv a0, zero
@@ -91,38 +91,43 @@ block3(v7: r64, v8: r64):
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ;   sd s3,-8(sp)
+;   sd s7,-16(sp)
 ;   add sp,-48
 ; block0:
-;   sd a0,8(nominal_sp)
+;   mv t3,a0
 ;   sd a1,16(nominal_sp)
 ;   mv s3,a2
+;   mv t3,a0
+;   mv s7,t3
 ;   load_sym t0,%f+0
+;   sd s7,8(nominal_sp)
 ;   callind t0
-;   load_addr t4,nsp+0
-;   ld a5,8(nominal_sp)
-;   sd a5,0(t4)
+;   load_addr t4,0(nominal_sp)
+;   mv t3,s7
+;   sd t3,0(t4)
 ;   andi t0,a0,255
 ;   bne t0,zero,taken(label2),not_taken(label1)
 ; block1:
-;   mv a1,a5
+;   mv a1,s7
 ;   ld a0,16(nominal_sp)
 ;   j label3
 ; block2:
-;   mv a0,a5
+;   mv a0,s7
 ;   ld a1,16(nominal_sp)
 ;   j label3
 ; block3:
-;   load_addr a2,nsp+0
+;   load_addr a2,0(nominal_sp)
 ;   ld a2,0(a2)
 ;   mv t3,s3
 ;   sd a2,0(t3)
 ;   add sp,+48
 ;   ld s3,-8(sp)
+;   ld s7,-16(sp)
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   add sp,+16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi sp, sp, -0x10
@@ -130,36 +135,41 @@ block3(v7: r64, v8: r64):
 ;   sd s0, 0(sp)
 ;   ori s0, sp, 0
 ;   sd s3, -8(sp)
+;   sd s7, -0x10(sp)
 ;   addi sp, sp, -0x30
-; block1: ; offset 0x18
-;   sd a0, 8(sp)
+; block1: ; offset 0x1c
+;   ori t3, a0, 0
 ;   sd a1, 0x10(sp)
 ;   ori s3, a2, 0
+;   ori a0, t3, 0
+;   ori s7, t3, 0
 ;   auipc t0, 0
 ;   ld t0, 0xc(t0)
 ;   j 0xc
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %f 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
+;   sd s7, 8(sp)
 ;   jalr t0
 ;   mv t4, sp
-;   ld a5, 8(sp)
-;   sd a5, 0(t4)
+;   ori t3, s7, 0
+;   sd t3, 0(t4)
 ;   andi t0, a0, 0xff
 ;   bnez t0, 0x10
-; block2: ; offset 0x50
-;   ori a1, a5, 0
+; block2: ; offset 0x60
+;   ori a1, s7, 0
 ;   ld a0, 0x10(sp)
 ;   j 0xc
-; block3: ; offset 0x5c
-;   ori a0, a5, 0
+; block3: ; offset 0x6c
+;   ori a0, s7, 0
 ;   ld a1, 0x10(sp)
-; block4: ; offset 0x64
+; block4: ; offset 0x74
 ;   mv a2, sp
 ;   ld a2, 0(a2)
 ;   ori t3, s3, 0
 ;   sd a2, 0(t3)
 ;   addi sp, sp, 0x30
 ;   ld s3, -8(sp)
+;   ld s7, -0x10(sp)
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
 ;   addi sp, sp, 0x10

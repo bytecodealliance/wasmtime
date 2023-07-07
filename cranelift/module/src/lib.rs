@@ -40,11 +40,10 @@ mod data_context;
 mod module;
 mod traps;
 
-pub use crate::data_context::{DataContext, DataDescription, Init};
+pub use crate::data_context::{DataDescription, Init};
 pub use crate::module::{
     DataDeclaration, DataId, FuncId, FuncOrDataId, FunctionDeclaration, Linkage, Module,
-    ModuleCompiledFunction, ModuleDeclarations, ModuleError, ModuleExtName, ModuleReloc,
-    ModuleResult,
+    ModuleDeclarations, ModuleError, ModuleExtName, ModuleReloc, ModuleResult,
 };
 pub use crate::traps::TrapSite;
 
@@ -73,5 +72,6 @@ pub fn default_libcall_names() -> Box<dyn Fn(ir::LibCall) -> String + Send + Syn
 
         ir::LibCall::ElfTlsGetAddr => "__tls_get_addr".to_owned(),
         ir::LibCall::ElfTlsGetOffset => "__tls_get_offset".to_owned(),
+        ir::LibCall::X86Pshufb => "__cranelift_x86_pshufb".to_owned(),
     })
 }

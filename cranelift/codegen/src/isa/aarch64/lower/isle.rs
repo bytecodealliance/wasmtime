@@ -26,7 +26,7 @@ use crate::{
         immediates::*, types::*, AtomicRmwOp, BlockCall, ExternalName, Inst, InstructionData,
         MemFlags, TrapCode, Value, ValueList,
     },
-    isa::aarch64::abi::AArch64Caller,
+    isa::aarch64::abi::AArch64CallSite,
     isa::aarch64::inst::args::{ShiftOp, ShiftOpShiftImm},
     isa::unwind::UnwindInst,
     machinst::{
@@ -76,12 +76,36 @@ pub struct ExtendedValue {
 }
 
 impl IsleContext<'_, '_, MInst, AArch64Backend> {
-    isle_prelude_method_helpers!(AArch64Caller);
+    isle_prelude_method_helpers!(AArch64CallSite);
 }
 
 impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
     isle_lower_prelude_methods!();
-    isle_prelude_caller_methods!(crate::isa::aarch64::abi::AArch64MachineDeps, AArch64Caller);
+    isle_prelude_caller_methods!(
+        crate::isa::aarch64::abi::AArch64MachineDeps,
+        AArch64CallSite
+    );
+
+    fn gen_return_call(
+        &mut self,
+        callee_sig: SigRef,
+        callee: ExternalName,
+        distance: RelocDistance,
+        args: ValueSlice,
+    ) -> InstOutput {
+        let _ = (callee_sig, callee, distance, args);
+        todo!()
+    }
+
+    fn gen_return_call_indirect(
+        &mut self,
+        callee_sig: SigRef,
+        callee: Value,
+        args: ValueSlice,
+    ) -> InstOutput {
+        let _ = (callee_sig, callee, args);
+        todo!()
+    }
 
     fn sign_return_address_disabled(&mut self) -> Option<()> {
         if self.backend.isa_flags.sign_return_address() {
@@ -150,6 +174,17 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
         if shiftee_bits <= std::u8::MAX as usize {
             let shiftimm = shiftimm.mask(shiftee_bits as u8);
             Some(ShiftOpAndAmt::new(ShiftOp::LSL, shiftimm))
+        } else {
+            None
+        }
+    }
+
+    fn ashr_from_u64(&mut self, ty: Type, n: u64) -> Option<ShiftOpAndAmt> {
+        let shiftimm = ShiftOpShiftImm::maybe_from_shift(n)?;
+        let shiftee_bits = ty_bits(ty);
+        if shiftee_bits <= std::u8::MAX as usize {
+            let shiftimm = shiftimm.mask(shiftee_bits as u8);
+            Some(ShiftOpAndAmt::new(ShiftOp::ASR, shiftimm))
         } else {
             None
         }

@@ -12,18 +12,18 @@ block0(v0: i8, v1: i64, v2: i64):
 
 ; VCode:
 ; block0:
-;   andi a3,a0,255
 ;   li a4,42
-;   andi a5,a4,255
-;   select_reg a0,a1,a2##condition=(a3 eq a5)
+;   andi a3,a0,255
+;   andi a4,a4,255
+;   select_reg a0,a1,a2##condition=(a3 eq a4)
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   andi a3, a0, 0xff
 ;   addi a4, zero, 0x2a
-;   andi a5, a4, 0xff
-;   beq a3, a5, 0xc
+;   andi a3, a0, 0xff
+;   andi a4, a4, 0xff
+;   beq a3, a4, 0xc
 ;   ori a0, a2, 0
 ;   j 8
 ;   ori a0, a1, 0
@@ -38,18 +38,18 @@ block0(v0: i8):
 
 ; VCode:
 ; block0:
-;   li t2,42
-;   andi a1,a0,255
-;   andi a3,t2,255
-;   eq a0,a1,a3##ty=i8
+;   li a2,42
+;   andi a0,a0,255
+;   andi a2,a2,255
+;   eq a0,a0,a2##ty=i8
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   addi t2, zero, 0x2a
-;   andi a1, a0, 0xff
-;   andi a3, t2, 0xff
-;   bne a1, a3, 0xc
+;   addi a2, zero, 0x2a
+;   andi a0, a0, 0xff
+;   andi a2, a2, 0xff
+;   bne a0, a2, 0xc
 ;   addi a0, zero, 1
 ;   j 8
 ;   mv a0, zero
@@ -68,7 +68,7 @@ block0(v0: i8, v1: i8, v2: i8):
 ;   and a5,a3,a2
 ;   or a0,a1,a5
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   and a1, a0, a1
@@ -88,7 +88,7 @@ block0(v0: i8, v1: i8, v2: i8):
 ;   andi a3,a0,255
 ;   select_i8 a0,a1,a2##condition=a3
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   andi a3, a0, 0xff
@@ -108,22 +108,22 @@ block0(v0: i32, v1: i8, v2: i8):
 
 ; VCode:
 ; block0:
+;   li a6,42
 ;   slli a3,a0,32
-;   srli a3,a3,32
-;   li a5,42
-;   slli a7,a5,32
-;   srli t4,a7,32
-;   select_reg a0,a1,a2##condition=(a3 eq t4)
+;   srli a4,a3,32
+;   slli a6,a6,32
+;   srli t3,a6,32
+;   select_reg a0,a1,a2##condition=(a4 eq t3)
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
+;   addi a6, zero, 0x2a
 ;   slli a3, a0, 0x20
-;   srli a3, a3, 0x20
-;   addi a5, zero, 0x2a
-;   slli a7, a5, 0x20
-;   srli t4, a7, 0x20
-;   beq a3, t4, 0xc
+;   srli a4, a3, 0x20
+;   slli a6, a6, 0x20
+;   srli t3, a6, 0x20
+;   beq a4, t3, 0xc
 ;   ori a0, a2, 0
 ;   j 8
 ;   ori a0, a1, 0
@@ -141,7 +141,7 @@ block0(v0: i8, v1: i128, v2: i128):
 ;   andi a5,a0,255
 ;   select_i128 [a0,a1],[a7,a2],[a3,a4]##condition=a5
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ori a7, a1, 0

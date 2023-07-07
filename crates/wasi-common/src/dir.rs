@@ -1,9 +1,13 @@
-use crate::file::{FdFlags, FileCaps, FileType, Filestat, OFlags, WasiFile};
+use crate::file::{FdFlags, FileType, Filestat, OFlags, WasiFile};
 use crate::{Error, ErrorExt, SystemTimeSpec};
-use bitflags::bitflags;
 use std::any::Any;
 use std::path::PathBuf;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
+
+pub enum OpenResult {
+    File(Box<dyn WasiFile>),
+    Dir(Box<dyn WasiDir>),
+}
 
 #[wiggle::async_trait]
 pub trait WasiDir: Send + Sync {
@@ -17,15 +21,7 @@ pub trait WasiDir: Send + Sync {
         _read: bool,
         _write: bool,
         _fdflags: FdFlags,
-    ) -> Result<Box<dyn WasiFile>, Error> {
-        Err(Error::not_supported())
-    }
-
-    async fn open_dir(
-        &self,
-        _symlink_follow: bool,
-        _path: &str,
-    ) -> Result<Box<dyn WasiDir>, Error> {
+    ) -> Result<OpenResult, Error> {
         Err(Error::not_supported())
     }
 
@@ -99,120 +95,16 @@ pub trait WasiDir: Send + Sync {
 }
 
 pub(crate) struct DirEntry {
-    caps: RwLock<DirFdStat>,
     preopen_path: Option<PathBuf>, // precondition: PathBuf is valid unicode
-    dir: Box<dyn WasiDir>,
+    pub dir: Box<dyn WasiDir>,
 }
 
 impl DirEntry {
-    pub fn new(
-        dir_caps: DirCaps,
-        file_caps: FileCaps,
-        preopen_path: Option<PathBuf>,
-        dir: Box<dyn WasiDir>,
-    ) -> Self {
-        DirEntry {
-            caps: RwLock::new(DirFdStat {
-                dir_caps,
-                file_caps,
-            }),
-            preopen_path,
-            dir,
-        }
-    }
-    pub fn capable_of_dir(&self, caps: DirCaps) -> Result<(), Error> {
-        let fdstat = self.caps.read().unwrap();
-        fdstat.capable_of_dir(caps)
-    }
-
-    pub fn drop_caps_to(&self, dir_caps: DirCaps, file_caps: FileCaps) -> Result<(), Error> {
-        let mut fdstat = self.caps.write().unwrap();
-        fdstat.capable_of_dir(dir_caps)?;
-        fdstat.capable_of_file(file_caps)?;
-        *fdstat = DirFdStat {
-            dir_caps,
-            file_caps,
-        };
-        Ok(())
-    }
-    pub fn child_dir_caps(&self, desired_caps: DirCaps) -> DirCaps {
-        self.caps.read().unwrap().dir_caps & desired_caps
-    }
-    pub fn child_file_caps(&self, desired_caps: FileCaps) -> FileCaps {
-        self.caps.read().unwrap().file_caps & desired_caps
-    }
-    pub fn get_dir_fdstat(&self) -> DirFdStat {
-        self.caps.read().unwrap().clone()
+    pub fn new(preopen_path: Option<PathBuf>, dir: Box<dyn WasiDir>) -> Self {
+        DirEntry { preopen_path, dir }
     }
     pub fn preopen_path(&self) -> &Option<PathBuf> {
         &self.preopen_path
-    }
-}
-
-pub trait DirEntryExt {
-    fn get_cap(&self, caps: DirCaps) -> Result<&dyn WasiDir, Error>;
-}
-
-impl DirEntryExt for DirEntry {
-    fn get_cap(&self, caps: DirCaps) -> Result<&dyn WasiDir, Error> {
-        self.capable_of_dir(caps)?;
-        Ok(&*self.dir)
-    }
-}
-
-bitflags! {
-    pub struct DirCaps: u32 {
-        const CREATE_DIRECTORY        = 0b1;
-        const CREATE_FILE             = 0b10;
-        const LINK_SOURCE             = 0b100;
-        const LINK_TARGET             = 0b1000;
-        const OPEN                    = 0b10000;
-        const READDIR                 = 0b100000;
-        const READLINK                = 0b1000000;
-        const RENAME_SOURCE           = 0b10000000;
-        const RENAME_TARGET           = 0b100000000;
-        const SYMLINK                 = 0b1000000000;
-        const REMOVE_DIRECTORY        = 0b10000000000;
-        const UNLINK_FILE             = 0b100000000000;
-        const PATH_FILESTAT_GET       = 0b1000000000000;
-        const PATH_FILESTAT_SET_TIMES = 0b10000000000000;
-        const FILESTAT_GET            = 0b100000000000000;
-        const FILESTAT_SET_TIMES      = 0b1000000000000000;
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct DirFdStat {
-    pub file_caps: FileCaps,
-    pub dir_caps: DirCaps,
-}
-
-impl DirFdStat {
-    pub fn capable_of_dir(&self, caps: DirCaps) -> Result<(), Error> {
-        if self.dir_caps.contains(caps) {
-            Ok(())
-        } else {
-            let missing = caps & !self.dir_caps;
-            let err = if missing.intersects(DirCaps::READDIR) {
-                Error::not_dir()
-            } else {
-                Error::perm()
-            };
-            Err(err.context(format!(
-                "desired rights {:?}, has {:?}",
-                caps, self.dir_caps
-            )))
-        }
-    }
-    pub fn capable_of_file(&self, caps: FileCaps) -> Result<(), Error> {
-        if self.file_caps.contains(caps) {
-            Ok(())
-        } else {
-            Err(Error::perm().context(format!(
-                "desired rights {:?}, has {:?}",
-                caps, self.file_caps
-            )))
-        }
     }
 }
 

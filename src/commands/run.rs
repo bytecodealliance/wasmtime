@@ -9,12 +9,20 @@ use std::io::Write;
 use std::path::{Component, Path, PathBuf};
 use std::thread;
 use std::time::Duration;
-use wasmtime::{Engine, Func, Linker, Module, Store, Val, ValType};
+use wasmtime::{
+    AsContextMut, Engine, Func, GuestProfiler, Linker, Module, Store, StoreLimits,
+    StoreLimitsBuilder, UpdateDeadline, Val, ValType,
+};
 use wasmtime_cli_flags::{CommonOptions, WasiModules};
 use wasmtime_wasi::maybe_exit_on_error;
 use wasmtime_wasi::sync::{ambient_authority, Dir, TcpListener, WasiCtxBuilder};
 
-#[cfg(any(feature = "wasi-crypto", feature = "wasi-nn", feature = "wasi-threads"))]
+#[cfg(any(
+    feature = "wasi-crypto",
+    feature = "wasi-nn",
+    feature = "wasi-threads",
+    feature = "wasi-http"
+))]
 use std::sync::Arc;
 
 #[cfg(feature = "wasi-nn")]
@@ -25,6 +33,9 @@ use wasmtime_wasi_crypto::WasiCryptoCtx;
 
 #[cfg(feature = "wasi-threads")]
 use wasmtime_wasi_threads::WasiThreadsCtx;
+
+#[cfg(feature = "wasi-http")]
+use wasmtime_wasi_http::WasiHttp;
 
 fn parse_module(s: &OsStr) -> anyhow::Result<PathBuf> {
     // Do not accept wasmtime subcommand names as the module name
@@ -70,6 +81,28 @@ fn parse_preloads(s: &str) -> Result<(String, PathBuf)> {
         bail!("must contain exactly one equals character ('=')");
     }
     Ok((parts[0].into(), parts[1].into()))
+}
+
+fn parse_profile(s: &str) -> Result<Profile> {
+    let parts = s.split(',').collect::<Vec<_>>();
+    match &parts[..] {
+        ["perfmap"] => Ok(Profile::Native(wasmtime::ProfilingStrategy::PerfMap)),
+        ["jitdump"] => Ok(Profile::Native(wasmtime::ProfilingStrategy::JitDump)),
+        ["vtune"] => Ok(Profile::Native(wasmtime::ProfilingStrategy::VTune)),
+        ["guest"] => Ok(Profile::Guest {
+            path: "wasmtime-guest-profile.json".to_string(),
+            interval: Duration::from_millis(10),
+        }),
+        ["guest", path] => Ok(Profile::Guest {
+            path: path.to_string(),
+            interval: Duration::from_millis(10),
+        }),
+        ["guest", path, dur] => Ok(Profile::Guest {
+            path: path.to_string(),
+            interval: parse_dur(dur)?,
+        }),
+        _ => bail!("unknown profiling strategy: {s}"),
+    }
 }
 
 static AFTER_HELP: Lazy<String> = Lazy::new(|| crate::FLAG_EXPLANATIONS.to_string());
@@ -158,6 +191,28 @@ pub struct RunCommand {
     )]
     wasm_timeout: Option<Duration>,
 
+    /// Profiling strategy (valid options are: perfmap, jitdump, vtune, guest)
+    ///
+    /// The perfmap, jitdump, and vtune profiling strategies integrate Wasmtime
+    /// with external profilers such as `perf`. The guest profiling strategy
+    /// enables in-process sampling and will write the captured profile to
+    /// `wasmtime-guest-profile.json` by default which can be viewed at
+    /// https://profiler.firefox.com/.
+    ///
+    /// The `guest` option can be additionally configured as:
+    ///
+    ///     --profile=guest[,path[,interval]]
+    ///
+    /// where `path` is where to write the profile and `interval` is the
+    /// duration between samples. When used with `--wasm-timeout` the timeout
+    /// will be rounded up to the nearest multiple of this interval.
+    #[clap(
+        long,
+        value_name = "STRATEGY",
+        parse(try_from_str = parse_profile),
+    )]
+    profile: Option<Profile>,
+
     /// Enable coredump generation after a WebAssembly trap.
     #[clap(long = "coredump-on-trap", value_name = "PATH")]
     coredump_on_trap: Option<String>,
@@ -166,6 +221,43 @@ pub struct RunCommand {
     /// The arguments to pass to the module
     #[clap(value_name = "ARGS")]
     module_args: Vec<String>,
+
+    /// Maximum size, in bytes, that a linear memory is allowed to reach.
+    ///
+    /// Growth beyond this limit will cause `memory.grow` instructions in
+    /// WebAssembly modules to return -1 and fail.
+    #[clap(long, value_name = "BYTES")]
+    max_memory_size: Option<usize>,
+
+    /// Maximum size, in table elements, that a table is allowed to reach.
+    #[clap(long)]
+    max_table_elements: Option<u32>,
+
+    /// Maximum number of WebAssembly instances allowed to be created.
+    #[clap(long)]
+    max_instances: Option<usize>,
+
+    /// Maximum number of WebAssembly tables allowed to be created.
+    #[clap(long)]
+    max_tables: Option<usize>,
+
+    /// Maximum number of WebAssembly linear memories allowed to be created.
+    #[clap(long)]
+    max_memories: Option<usize>,
+
+    /// Force a trap to be raised on `memory.grow` and `table.grow` failure
+    /// instead of returning -1 from these instructions.
+    ///
+    /// This is not necessarily a spec-compliant option to enable but can be
+    /// useful for tracking down a backtrace of what is requesting so much
+    /// memory, for example.
+    #[clap(long)]
+    trap_on_grow_failure: bool,
+}
+
+enum Profile {
+    Native(wasmtime::ProfilingStrategy),
+    Guest { path: String, interval: Duration },
 }
 
 impl RunCommand {
@@ -174,9 +266,21 @@ impl RunCommand {
         self.common.init_logging();
 
         let mut config = self.common.config(None)?;
+
         if self.wasm_timeout.is_some() {
             config.epoch_interruption(true);
         }
+        match self.profile {
+            Some(Profile::Native(s)) => {
+                config.profiler(s);
+            }
+            Some(Profile::Guest { .. }) => {
+                // Further configured down below as well.
+                config.epoch_interruption(true);
+            }
+            None => {}
+        }
+
         let engine = Engine::new(&config)?;
 
         let preopen_sockets = self.compute_preopen_sockets()?;
@@ -197,6 +301,7 @@ impl RunCommand {
 
         // Read the wasm module binary either as `*.wat` or a raw binary.
         let module = self.load_module(linker.engine(), &self.module)?;
+        let mut modules = vec![(String::new(), module.clone())];
 
         let host = Host::default();
         let mut store = Store::new(&engine, host);
@@ -212,6 +317,27 @@ impl RunCommand {
             preopen_sockets,
         )?;
 
+        let mut limits = StoreLimitsBuilder::new();
+        if let Some(max) = self.max_memory_size {
+            limits = limits.memory_size(max);
+        }
+        if let Some(max) = self.max_table_elements {
+            limits = limits.table_elements(max);
+        }
+        if let Some(max) = self.max_instances {
+            limits = limits.instances(max);
+        }
+        if let Some(max) = self.max_tables {
+            limits = limits.tables(max);
+        }
+        if let Some(max) = self.max_memories {
+            limits = limits.memories(max);
+        }
+        store.data_mut().limits = limits
+            .trap_on_grow_failure(self.trap_on_grow_failure)
+            .build();
+        store.limiter(|t| &mut t.limits);
+
         // If fuel has been configured, we want to add the configured
         // fuel amount to this store.
         if let Some(fuel) = self.common.fuel {
@@ -222,6 +348,7 @@ impl RunCommand {
         for (name, path) in self.preloads.iter() {
             // Read the wasm module binary either as `*.wat` or a raw binary
             let module = self.load_module(&engine, path)?;
+            modules.push((name.clone(), module.clone()));
 
             // Add the module's functions to the linker.
             linker.module(&mut store, name, &module).context(format!(
@@ -233,7 +360,7 @@ impl RunCommand {
 
         // Load the main wasm module.
         match self
-            .load_main_module(&mut store, &mut linker, module)
+            .load_main_module(&mut store, &mut linker, module, modules, &argv[0])
             .with_context(|| format!("failed to run main module `{}`", self.module.display()))
         {
             Ok(()) => (),
@@ -307,12 +434,72 @@ impl RunCommand {
         result
     }
 
-    fn load_main_module(
+    fn setup_epoch_handler(
         &self,
         store: &mut Store<Host>,
-        linker: &mut Linker<Host>,
-        module: Module,
-    ) -> Result<()> {
+        module_name: &str,
+        modules: Vec<(String, Module)>,
+    ) -> Box<dyn FnOnce(&mut Store<Host>)> {
+        if let Some(Profile::Guest { path, interval }) = &self.profile {
+            let interval = *interval;
+            store.data_mut().guest_profiler =
+                Some(Arc::new(GuestProfiler::new(module_name, interval, modules)));
+
+            fn sample(mut store: impl AsContextMut<Data = Host>) {
+                let mut profiler = store
+                    .as_context_mut()
+                    .data_mut()
+                    .guest_profiler
+                    .take()
+                    .unwrap();
+                Arc::get_mut(&mut profiler)
+                    .expect("profiling doesn't support threads yet")
+                    .sample(&store);
+                store.as_context_mut().data_mut().guest_profiler = Some(profiler);
+            }
+
+            if let Some(timeout) = self.wasm_timeout {
+                let mut timeout = (timeout.as_secs_f64() / interval.as_secs_f64()).ceil() as u64;
+                assert!(timeout > 0);
+                store.epoch_deadline_callback(move |mut store| {
+                    sample(&mut store);
+                    timeout -= 1;
+                    if timeout == 0 {
+                        bail!("timeout exceeded");
+                    }
+                    Ok(UpdateDeadline::Continue(1))
+                });
+            } else {
+                store.epoch_deadline_callback(move |mut store| {
+                    sample(&mut store);
+                    Ok(UpdateDeadline::Continue(1))
+                });
+            }
+
+            store.set_epoch_deadline(1);
+            let engine = store.engine().clone();
+            thread::spawn(move || loop {
+                thread::sleep(interval);
+                engine.increment_epoch();
+            });
+
+            let path = path.clone();
+            return Box::new(move |store| {
+                let profiler = Arc::try_unwrap(store.data_mut().guest_profiler.take().unwrap())
+                    .expect("profiling doesn't support threads yet");
+                if let Err(e) = std::fs::File::create(&path)
+                    .map_err(anyhow::Error::new)
+                    .and_then(|output| profiler.finish(std::io::BufWriter::new(output)))
+                {
+                    eprintln!("failed writing profile at {path}: {e:#}");
+                } else {
+                    eprintln!();
+                    eprintln!("Profile written to: {path}");
+                    eprintln!("View this profile at https://profiler.firefox.com/.");
+                }
+            });
+        }
+
         if let Some(timeout) = self.wasm_timeout {
             store.set_epoch_deadline(1);
             let engine = store.engine().clone();
@@ -322,6 +509,17 @@ impl RunCommand {
             });
         }
 
+        Box::new(|_store| {})
+    }
+
+    fn load_main_module(
+        &self,
+        store: &mut Store<Host>,
+        linker: &mut Linker<Host>,
+        module: Module,
+        modules: Vec<(String, Module)>,
+        module_name: &str,
+    ) -> Result<()> {
         // The main module might be allowed to have unknown imports, which
         // should be defined as traps:
         if self.trap_unknown_imports {
@@ -339,20 +537,25 @@ impl RunCommand {
             .context(format!("failed to instantiate {:?}", self.module))?;
 
         // If a function to invoke was given, invoke it.
-        if let Some(name) = self.invoke.as_ref() {
-            self.invoke_export(store, linker, name)
+        let func = if let Some(name) = &self.invoke {
+            self.find_export(store, linker, name)?
         } else {
-            let func = linker.get_default(&mut *store, "")?;
-            self.invoke_func(store, func, None)
-        }
+            linker.get_default(&mut *store, "")?
+        };
+
+        // Finish all lookups before starting any epoch timers.
+        let finish_epoch_handler = self.setup_epoch_handler(store, module_name, modules);
+        let result = self.invoke_func(store, func);
+        finish_epoch_handler(store);
+        result
     }
 
-    fn invoke_export(
+    fn find_export(
         &self,
         store: &mut Store<Host>,
         linker: &Linker<Host>,
         name: &str,
-    ) -> Result<()> {
+    ) -> Result<Func> {
         let func = match linker
             .get(&mut *store, "", name)
             .ok_or_else(|| anyhow!("no export named `{}` found", name))?
@@ -361,10 +564,10 @@ impl RunCommand {
             Some(func) => func,
             None => bail!("export of `{}` wasn't a function", name),
         };
-        self.invoke_func(store, func, Some(name))
+        Ok(func)
     }
 
-    fn invoke_func(&self, store: &mut Store<Host>, func: Func, name: Option<&str>) -> Result<()> {
+    fn invoke_func(&self, store: &mut Store<Host>, func: Func) -> Result<()> {
         let ty = func.ty(&store);
         if ty.params().len() > 0 {
             eprintln!(
@@ -378,7 +581,7 @@ impl RunCommand {
             let val = match args.next() {
                 Some(s) => s,
                 None => {
-                    if let Some(name) = name {
+                    if let Some(name) = &self.invoke {
                         bail!("not enough arguments for `{}`", name)
                     } else {
                         bail!("not enough arguments for command default")
@@ -401,7 +604,7 @@ impl RunCommand {
         // out, if there are any.
         let mut results = vec![Val::null(); ty.results().len()];
         let invoke_res = func.call(store, &values, &mut results).with_context(|| {
-            if let Some(name) = name {
+            if let Some(name) = &self.invoke {
                 format!("failed to invoke `{}`", name)
             } else {
                 format!("failed to invoke command default")
@@ -470,6 +673,10 @@ struct Host {
     wasi_nn: Option<Arc<WasiNnCtx>>,
     #[cfg(feature = "wasi-threads")]
     wasi_threads: Option<Arc<WasiThreadsCtx<Host>>>,
+    #[cfg(feature = "wasi-http")]
+    wasi_http: Option<WasiHttp>,
+    limits: StoreLimits,
+    guest_profiler: Option<Arc<GuestProfiler>>,
 }
 
 /// Populates the given `Linker` with WASI APIs.
@@ -569,6 +776,21 @@ fn populate_with_wasi(
         }
     }
 
+    if wasi_modules.wasi_http {
+        #[cfg(not(feature = "wasi-http"))]
+        {
+            bail!("Cannot enable wasi-http when the binary is not compiled with this feature.");
+        }
+        #[cfg(feature = "wasi-http")]
+        {
+            let w_http = WasiHttp::new();
+            wasmtime_wasi_http::add_to_linker(linker, |host: &mut Host| {
+                host.wasi_http.as_mut().unwrap()
+            })?;
+            store.data_mut().wasi_http = Some(w_http);
+        }
+    }
+
     Ok(())
 }
 
@@ -609,31 +831,31 @@ fn generate_coredump(err: &anyhow::Error, source_name: &str, coredump_path: &str
         .downcast_ref::<wasmtime::WasmBacktrace>()
         .ok_or_else(|| anyhow!("no wasm backtrace found to generate coredump with"))?;
 
-    let mut coredump_builder =
-        wasm_coredump_builder::CoredumpBuilder::new().executable_name(source_name);
-
-    {
-        let mut thread_builder = wasm_coredump_builder::ThreadBuilder::new().thread_name("main");
-
-        for frame in bt.frames() {
-            let coredump_frame = wasm_coredump_builder::FrameBuilder::new()
-                .codeoffset(frame.func_offset().unwrap_or(0) as u32)
-                .funcidx(frame.func_index())
-                .build();
-            thread_builder.add_frame(coredump_frame);
-        }
-
-        coredump_builder.add_thread(thread_builder.build());
+    let coredump = wasm_encoder::CoreDumpSection::new(source_name);
+    let mut stacksection = wasm_encoder::CoreDumpStackSection::new("main");
+    for f in bt.frames() {
+        // We don't have the information at this point to map frames to
+        // individual instances of a module, so we won't be able to create the
+        // "frame ∈ instance ∈ module" hierarchy described in the core dump spec
+        // until we move core dump generation into the runtime. So for now
+        // instanceidx will be 0 for all frames
+        let instanceidx = 0;
+        stacksection.frame(
+            instanceidx,
+            f.func_index(),
+            u32::try_from(f.func_offset().unwrap_or(0)).unwrap(),
+            // We don't currently have access to locals/stack values
+            [],
+            [],
+        );
     }
-
-    let coredump = coredump_builder
-        .serialize()
-        .map_err(|err| anyhow!("failed to serialize coredump: {}", err))?;
+    let mut module = wasm_encoder::Module::new();
+    module.section(&coredump);
+    module.section(&stacksection);
 
     let mut f = File::create(coredump_path)
         .context(format!("failed to create file at `{}`", coredump_path))?;
-    f.write_all(&coredump)
+    f.write_all(module.as_slice())
         .with_context(|| format!("failed to write coredump file at `{}`", coredump_path))?;
-
     Ok(())
 }

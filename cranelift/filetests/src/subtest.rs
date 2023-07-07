@@ -160,7 +160,12 @@ pub fn check_precise_output(actual: &[&str], context: &Context) -> Result<()> {
         .comments
         .iter()
         .filter(|c| !c.text.starts_with(";;"))
-        .map(|c| c.text.strip_prefix("; ").unwrap_or(c.text))
+        .map(|c| {
+            c.text
+                .strip_prefix("; ")
+                .or_else(|| c.text.strip_prefix(";"))
+                .unwrap_or(c.text)
+        })
         .collect::<Vec<_>>();
 
     // If the expectation matches what we got, then there's nothing to do.
@@ -199,8 +204,11 @@ fn update_test(output: &[&str], context: &Context) -> Result<()> {
 
             // Splice in the test output
             for output in output {
-                new_test.push_str("; ");
-                new_test.push_str(output);
+                new_test.push(';');
+                if !output.is_empty() {
+                    new_test.push(' ');
+                    new_test.push_str(output);
+                }
                 new_test.push_str("\n");
             }
 

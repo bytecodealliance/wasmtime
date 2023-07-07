@@ -47,11 +47,14 @@
 use crate::binemit::{Addend, CodeInfo, CodeOffset, Reloc, StackMap};
 use crate::ir::function::FunctionParameters;
 use crate::ir::{DynamicStackSlot, RelSourceLoc, StackSlot, Type};
+use crate::isa::FunctionAlignment;
 use crate::result::CodegenResult;
+use crate::settings;
 use crate::settings::Flags;
 use crate::value_label::ValueLabelsRanges;
 use alloc::vec::Vec;
 use core::fmt::Debug;
+use cranelift_control::ControlPlane;
 use cranelift_entity::PrimaryMap;
 use regalloc2::{Allocation, VReg};
 use smallvec::{smallvec, SmallVec};
@@ -141,6 +144,20 @@ pub trait MachInst: Clone + Debug {
     /// control flow.
     fn gen_jump(target: MachLabel) -> Self;
 
+    /// Generate a store of an immediate 64-bit integer to a register. Used by
+    /// the control plane to generate random instructions.
+    fn gen_imm_u64(_value: u64, _dst: Writable<Reg>) -> Option<Self> {
+        None
+    }
+
+    /// Generate a store of an immediate 64-bit integer to a register. Used by
+    /// the control plane to generate random instructions. The tmp register may
+    /// be used by architectures which don't support writing immediate values to
+    /// floating point registers directly.
+    fn gen_imm_f64(_value: f64, _tmp: Writable<Reg>, _dst: Writable<Reg>) -> SmallVec<[Self; 2]> {
+        SmallVec::new()
+    }
+
     /// Generate a NOP. The `preferred_size` parameter allows the caller to
     /// request a NOP of that size, or as close to it as possible. The machine
     /// backend may return a NOP whose binary encoding is smaller than the
@@ -173,6 +190,10 @@ pub trait MachInst: Clone + Debug {
     ) -> Option<Self> {
         None
     }
+
+    /// Returns a description of the alignment required for functions for this
+    /// architecture.
+    fn function_alignment() -> FunctionAlignment;
 
     /// A label-use kind: a type that describes the types of label references that
     /// can occur in an instruction.
@@ -242,6 +263,8 @@ pub enum MachTerminator {
     None,
     /// A return instruction.
     Ret,
+    /// A tail call.
+    RetCall,
     /// An unconditional branch to another block.
     Uncond,
     /// A conditional branch to one of two other blocks.
@@ -272,13 +295,24 @@ pub trait MachInstEmit: MachInst {
 /// emitting a function body.
 pub trait MachInstEmitState<I: VCodeInst>: Default + Clone + Debug {
     /// Create a new emission state given the ABI object.
-    fn new(abi: &Callee<I::ABIMachineSpec>) -> Self;
+    fn new(abi: &Callee<I::ABIMachineSpec>, ctrl_plane: ControlPlane) -> Self;
     /// Update the emission state before emitting an instruction that is a
     /// safepoint.
     fn pre_safepoint(&mut self, _stack_map: StackMap) {}
     /// Update the emission state to indicate instructions are associated with a
     /// particular RelSourceLoc.
     fn pre_sourceloc(&mut self, _srcloc: RelSourceLoc) {}
+    /// The emission state holds ownership of a control plane, so it doesn't
+    /// have to be passed around explicitly too much. `ctrl_plane_mut` may
+    /// be used if temporary access to the control plane is needed by some
+    /// other function that doesn't have access to the emission state.
+    fn ctrl_plane_mut(&mut self) -> &mut ControlPlane;
+    /// Used to continue using a control plane after the emission state is
+    /// not needed anymore.
+    fn take_ctrl_plane(self) -> ControlPlane;
+    /// A hook that triggers when first emitting a new block.
+    /// It is guaranteed to be called before any instructions are emitted.
+    fn on_new_block(&mut self) {}
 }
 
 /// The result of a `MachBackend::compile_function()` call. Contains machine
@@ -310,9 +344,6 @@ pub struct CompiledCodeBase<T: CompilePhase> {
     /// This info is generated only if the `machine_code_cfg_info`
     /// flag is set.
     pub bb_edges: Vec<(CodeOffset, CodeOffset)>,
-    /// Minimum alignment for the function, derived from the use of any
-    /// pc-relative loads.
-    pub alignment: u32,
 }
 
 impl CompiledCodeStencil {
@@ -327,7 +358,6 @@ impl CompiledCodeStencil {
             dynamic_stackslot_offsets: self.dynamic_stackslot_offsets,
             bb_starts: self.bb_starts,
             bb_edges: self.bb_edges,
-            alignment: self.alignment,
         }
     }
 }
@@ -474,7 +504,13 @@ pub trait TextSectionBuilder {
     ///
     /// This function returns the offset at which the data was placed in the
     /// text section.
-    fn append(&mut self, labeled: bool, data: &[u8], align: u32) -> u64;
+    fn append(
+        &mut self,
+        labeled: bool,
+        data: &[u8],
+        align: u32,
+        ctrl_plane: &mut ControlPlane,
+    ) -> u64;
 
     /// Attempts to resolve a relocation for this function.
     ///
@@ -497,7 +533,7 @@ pub trait TextSectionBuilder {
 
     /// Completes this text section, filling out any final details, and returns
     /// the bytes of the text section.
-    fn finish(&mut self) -> Vec<u8>;
+    fn finish(&mut self, ctrl_plane: &mut ControlPlane) -> Vec<u8>;
 }
 
 /// Expected unwind info type.

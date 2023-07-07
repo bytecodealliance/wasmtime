@@ -86,10 +86,10 @@ Then follows the [function preamble] which declares a number of entities
 that can be referenced inside the function. In the example above, the preamble
 declares a single explicit stack slot, `ss0`.
 
-After the preamble follows the [function body] which consists of
-[extended basic block]s (EBBs), the first of which is the
-[entry block]. Every EBB ends with a [terminator instruction], so
-execution can never fall through to the next EBB without an explicit branch.
+After the preamble follows the [function body] which consists of [basic block]s
+(BBs), the first of which is the [entry block]. Every BB ends with a
+[terminator instruction], so execution can never fall through to the next BB
+without an explicit branch.
 
 A `.clif` file consists of a sequence of independent function definitions:
 
@@ -97,7 +97,7 @@ A `.clif` file consists of a sequence of independent function definitions:
 function_list : { function }
 function      : "function" function_name signature "{" preamble function_body "}"
 preamble      : { preamble_decl }
-function_body : { extended_basic_block }
+function_body : { basic_block }
 ```
 
 ### Static single assignment form
@@ -106,18 +106,18 @@ The instructions in the function body use and produce *values* in SSA form. This
 means that every value is defined exactly once, and every use of a value must be
 dominated by the definition.
 
-Cranelift does not have phi instructions but uses [EBB parameter]s
-instead. An EBB can be defined with a list of typed parameters. Whenever control
-is transferred to the EBB, argument values for the parameters must be provided.
+Cranelift does not have phi instructions but uses [BB parameter]s
+instead. A BB can be defined with a list of typed parameters. Whenever control
+is transferred to the BB, argument values for the parameters must be provided.
 When entering a function, the incoming function parameters are passed as
-arguments to the entry EBB's parameters.
+arguments to the entry BB's parameters.
 
 Instructions define zero, one, or more result values. All SSA values are either
-EBB parameters or instruction results.
+BB parameters or instruction results.
 
 In the example above, the loop induction variable `i` is represented
 as three SSA values: In `block2`, `v3` is the initial value. In the
-loop block `block3`, the EBB parameter `v4` represents the value of the
+loop block `block3`, the BB parameter `v4` represents the value of the
 induction variable during each iteration. Finally, `v11` is computed
 as the induction variable value for the next iteration.
 
@@ -142,12 +142,22 @@ Integer values have a fixed size and can be interpreted as either signed or
 unsigned. Some instructions will interpret an operand as a signed or unsigned
 number, others don't care.
 
-The support for i8 and i16 arithmetic is incomplete and use could lead to bugs.
-
 - i8
 - i16
 - i32
 - i64
+- i128
+
+Of these types, i32 and i64 are the most heavily-tested because of their use by 
+Wasmtime. There are no known bugs in i8, i16, and i128, but their use may not 
+be supported by all instructions in all backends (that is, they may cause 
+the compiler to crash during code generation with an error that an instruction
+is unsupported). 
+
+The function `valid_for_target` within the [fuzzgen function generator][fungen] 
+contains information about which instructions support which types. 
+
+[fungen]: https://github.com/bytecodealliance/wasmtime/blob/main/cranelift/fuzzgen/src/function_generator.rs
 
 ### Floating point types
 
@@ -238,7 +248,7 @@ Mem
     Any type that can be stored in memory: `Int` or `Float`.
 
 Testable
-    Either `b1` or `iN`.
+    `iN`
 
 ### Immediate operand types
 
@@ -311,24 +321,14 @@ Signaling NaNs
 
 ## Control flow
 
-Branches transfer control to a new EBB and provide values for the target EBB's
-arguments, if it has any. Conditional branches only take the branch if their
-condition is satisfied, otherwise execution continues at the following
-instruction in the EBB.
+Branches transfer control to a new BB and provide values for the target BB's
+arguments, if it has any. Conditional branches terminate a BB, and transfer to
+the first BB if the condition is satisfied, and the second otherwise.
 
-JT = jump_table [EBB0, EBB1, ..., EBBn]
-    Declare a jump table in the [function preamble].
-
-    This declares a jump table for use by the `br_table` indirect branch
-    instruction. Entries in the table are EBB names.
-
-    The EBBs listed must belong to the current function, and they can't have
-    any arguments.
-
-    :arg EBB0: Target EBB when `x = 0`.
-    :arg EBB1: Target EBB when `x = 1`.
-    :arg EBBn: Target EBB when `x = n`.
-    :result: A jump table identifier. (Not an SSA value).
+The `br_table v, BB(args), [BB1(args)...BBn(args)]` looks up the index `v` in
+the inline jump table given as the third argument, and jumps to that BB. If `v`
+is out of bounds for the jump table, the default BB (second argument) is used
+instead.
 
 Traps stop the program because something went wrong. The exact behavior depends
 on the target instruction set architecture and operating system. There are
@@ -701,10 +701,10 @@ implementation will panic.
 Number of instructions in a function
     At most :math:`2^{31} - 1`.
 
-Number of EBBs in a function
+Number of BBs in a function
     At most :math:`2^{31} - 1`.
 
-    Every EBB needs at least a terminator instruction anyway.
+    Every BB needs at least a terminator instruction anyway.
 
 Number of secondary values in a function
     At most :math:`2^{31} - 1`.
@@ -718,13 +718,13 @@ Other entities declared in the preamble
     This covers things like stack slots, jump tables, external functions, and
     function signatures, etc.
 
-Number of arguments to an EBB
+Number of arguments to a BB
     At most :math:`2^{16}`.
 
 Number of arguments to a function
     At most :math:`2^{16}`.
 
-    This follows from the limit on arguments to the entry EBB. Note that
+    This follows from the limit on arguments to the entry BB. Note that
     Cranelift may add a handful of ABI register arguments as function signatures
     are lowered. This is for representing things like the link register, the
     incoming frame pointer, and callee-saved registers that are saved in the
@@ -757,37 +757,21 @@ Size of function call arguments on the stack
         the last instruction.
 
     entry block
-        The [EBB] that is executed first in a function. Currently, a
+        The [BB] that is executed first in a function. Currently, a
         Cranelift function must have exactly one entry block which must be the
         first block in the function. The types of the entry block arguments must
         match the types of arguments in the function signature.
 
-    extended basic block
-    EBB
-        A maximal sequence of instructions that can only be entered from the
-        top, and that contains no [terminator instruction]s except for
-        the last one. An EBB can contain conditional branches that can fall
-        through to the following instructions in the block, but only the first
-        instruction in the EBB can be a branch target.
+    BB parameter
+        A formal parameter for a BB is an SSA value that dominates everything
+        in the BB. For each parameter declared by a BB, a corresponding
+        argument value must be passed when branching to the BB. The function's
+        entry BB has parameters that correspond to the function's parameters.
 
-        The last instruction in an EBB must be a [terminator instruction],
-        so execution cannot flow through to the next EBB in the function. (But
-        there may be a branch to the next EBB.)
-
-        Note that some textbooks define an EBB as a maximal *subtree* in the
-        control flow graph where only the root can be a join node. This
-        definition is not equivalent to Cranelift EBBs.
-
-    EBB parameter
-        A formal parameter for an EBB is an SSA value that dominates everything
-        in the EBB. For each parameter declared by an EBB, a corresponding
-        argument value must be passed when branching to the EBB. The function's
-        entry EBB has parameters that correspond to the function's parameters.
-
-    EBB argument
-        Similar to function arguments, EBB arguments must be provided when
-        branching to an EBB that declares formal parameters. When execution
-        begins at the top of an EBB, the formal parameters have the values of
+    BB argument
+        Similar to function arguments, BB arguments must be provided when
+        branching to a BB that declares formal parameters. When execution
+        begins at the top of a BB, the formal parameters have the values of
         the arguments passed in the branch.
 
     function signature
@@ -814,8 +798,8 @@ Size of function call arguments on the stack
         - Function flags and attributes that are not part of the signature.
 
     function body
-        The extended basic blocks which contain all the executable code in a
-        function. The function body follows the function preamble.
+        The basic blocks which contain all the executable code in a function.
+        The function body follows the function preamble.
 
     intermediate representation
     IR

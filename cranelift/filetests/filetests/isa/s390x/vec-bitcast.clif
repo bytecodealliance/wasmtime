@@ -14,7 +14,7 @@ block0(v0: i64x2):
 ; VCode:
 ; block0:
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   br %r14
@@ -31,7 +31,7 @@ block0(v0: i64x2):
 ;   vpdi %v4, %v2, %v2, 4
 ;   verllg %v24, %v4, 32
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vpdi %v2, %v24, %v24, 4
@@ -51,7 +51,7 @@ block0(v0: i64x2):
 ;   vpdi %v4, %v2, %v2, 4
 ;   verllg %v24, %v4, 32
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vpdi %v2, %v24, %v24, 4
@@ -68,7 +68,7 @@ block0(v0: i64x2):
 ; VCode:
 ; block0:
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   br %r14
@@ -82,7 +82,7 @@ block0(v0: i64x2):
 ; VCode:
 ; block0:
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   br %r14
@@ -96,7 +96,7 @@ block0(v0: i64x2):
 ; VCode:
 ; block0:
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   br %r14
@@ -110,7 +110,7 @@ block0(v0: i64x2):
 ; VCode:
 ; block0:
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   br %r14

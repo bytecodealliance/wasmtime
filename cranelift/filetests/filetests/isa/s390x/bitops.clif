@@ -29,7 +29,7 @@ block0(v0: i128):
 ;   vperm %v20, %v16, %v16, %v18
 ;   vst %v20, 0(%r2)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vl %v1, 0(%r3)
@@ -101,7 +101,7 @@ block0(v0: i64):
 ;   ogr %r4, %r2
 ;   lrvgr %r2, %r4
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lgr %r4, %r2
@@ -167,7 +167,7 @@ block0(v0: i32):
 ;   ork %r4, %r2, %r3
 ;   lrvr %r2, %r4
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   iilf %r4, 0xaaaaaaaa
@@ -226,7 +226,7 @@ block0(v0: i16):
 ;   lrvr %r2, %r4
 ;   srlk %r2, %r2, 16
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lhi %r4, -0x5556
@@ -284,7 +284,7 @@ block0(v0: i8):
 ;   nrk %r3, %r5, %r4
 ;   or %r2, %r3
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lhi %r4, -0x5556
@@ -329,7 +329,7 @@ block0(v0: i128):
 ;   vsel %v26, %v20, %v16, %v24
 ;   vst %v26, 0(%r2)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vl %v1, 0(%r3)
@@ -354,7 +354,7 @@ block0(v0: i64):
 ; block0:
 ;   flogr %r2, %r2
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   flogr %r2, %r2
@@ -372,7 +372,7 @@ block0(v0: i32):
 ;   flogr %r2, %r4
 ;   ahi %r2, -32
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   llgfr %r4, %r2
@@ -392,7 +392,7 @@ block0(v0: i16):
 ;   flogr %r2, %r4
 ;   ahi %r2, -48
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   llghr %r4, %r2
@@ -412,7 +412,7 @@ block0(v0: i8):
 ;   flogr %r2, %r4
 ;   ahi %r2, -56
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   llgcr %r4, %r2
@@ -444,7 +444,7 @@ block0(v0: i128):
 ;   vaq %v4, %v2, %v4
 ;   vst %v4, 0(%r2)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vl %v1, 0(%r3)
@@ -477,7 +477,7 @@ block0(v0: i64):
 ;   flogr %r2, %r2
 ;   aghi %r2, -1
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   srag %r4, %r2, 0x3f
@@ -500,7 +500,7 @@ block0(v0: i32):
 ;   flogr %r2, %r4
 ;   ahi %r2, -33
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lgfr %r4, %r2
@@ -524,7 +524,7 @@ block0(v0: i16):
 ;   flogr %r2, %r4
 ;   ahi %r2, -49
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lghr %r4, %r2
@@ -548,7 +548,7 @@ block0(v0: i8):
 ;   flogr %r2, %r4
 ;   ahi %r2, -57
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lgbr %r4, %r2
@@ -577,7 +577,7 @@ block0(v0: i128):
 ;   vsel %v26, %v20, %v18, %v24
 ;   vst %v26, 0(%r2)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vl %v1, 0(%r3)
@@ -608,7 +608,7 @@ block0(v0: i64):
 ;   lghi %r5, 63
 ;   sgrk %r2, %r5, %r3
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lcgr %r4, %r2
@@ -636,7 +636,7 @@ block0(v0: i32):
 ;   lhi %r5, 63
 ;   srk %r2, %r5, %r2
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lgr %r4, %r2
@@ -664,7 +664,7 @@ block0(v0: i16):
 ;   lhi %r5, 63
 ;   srk %r2, %r5, %r2
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lgr %r4, %r2
@@ -692,7 +692,7 @@ block0(v0: i8):
 ;   lhi %r5, 63
 ;   srk %r2, %r5, %r2
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lgr %r4, %r2
@@ -720,7 +720,7 @@ block0(v0: i128):
 ;   vag %v20, %v16, %v18
 ;   vst %v20, 0(%r2)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vl %v1, 0(%r3)
@@ -749,7 +749,7 @@ block0(v0: i64):
 ;   agr %r4, %r2
 ;   srlg %r2, %r4, 56
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   popcnt %r4, %r2
@@ -777,7 +777,7 @@ block0(v0: i32):
 ;   ar %r4, %r2
 ;   srlk %r2, %r4, 24
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   popcnt %r4, %r2
@@ -801,7 +801,7 @@ block0(v0: i16):
 ;   ark %r2, %r4, %r2
 ;   nill %r2, 255
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   popcnt %r4, %r2
@@ -820,7 +820,7 @@ block0(v0: i8):
 ; block0:
 ;   popcnt %r2, %r2
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   popcnt %r2, %r2

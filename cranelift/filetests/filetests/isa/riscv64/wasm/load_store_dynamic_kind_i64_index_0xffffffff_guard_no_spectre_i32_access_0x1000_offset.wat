@@ -47,9 +47,9 @@
 ;; block1:
 ;;   ld a7,0(a2)
 ;;   add a7,a7,a0
-;;   lui a6,1
-;;   add t3,a7,a6
-;;   sw a1,0(t3)
+;;   lui t3,1
+;;   add a7,a7,t3
+;;   sw a1,0(a7)
 ;;   j label2
 ;; block2:
 ;;   ret
@@ -64,9 +64,9 @@
 ;; block1:
 ;;   ld a7,0(a1)
 ;;   add a7,a7,a0
-;;   lui a6,1
-;;   add t3,a7,a6
-;;   lw a0,0(t3)
+;;   lui t3,1
+;;   add a7,a7,t3
+;;   lw a0,0(a7)
 ;;   j label2
 ;; block2:
 ;;   ret

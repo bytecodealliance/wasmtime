@@ -19,7 +19,7 @@ block0(v0: i64):
 ;   blr x3
 ;   ldp fp, lr, [sp], #16
 ;   autiasp ; ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   paciasp
@@ -45,7 +45,7 @@ block0(v0: i64, v1: i64):
 ; block0:
 ;   add x0, x0, x1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   add x0, x0, x1

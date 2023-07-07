@@ -1,10 +1,13 @@
 test interpret
 test run
 target x86_64
-target x86_64 has_sse41=false
+target x86_64 sse41
+target x86_64 sse42
+target x86_64 sse42 has_avx
 target aarch64
 target s390x
-target riscv64
+;; FIXME: needs support for vectors
+;;target riscv64
 
 function %trunc_f32(f32) -> f32 {
 block0(v0: f32):
@@ -147,3 +150,19 @@ block0(v0: f64):
 ; run: %trunc_is_nan_f64(-sNaN:0x1) == 1
 ; run: %trunc_is_nan_f64(+sNaN:0x4000000000001) == 1
 ; run: %trunc_is_nan_f64(-sNaN:0x4000000000001) == 1
+
+function %trunc_f32x4(f32x4) -> f32x4 {
+block0(v0: f32x4):
+  v1 = trunc v0
+  return v1
+}
+; run: %trunc_f32x4([0x0.5 0x1.0 0x1.5 0x2.9]) == [0x0.0 0x1.0 0x1.0 0x1.0p1]
+; run: %trunc_f32x4([-0x0.5 -0x1.0 -0x1.5 -0x2.9]) == [-0x0.0 -0x1.0 -0x1.0 -0x1.0p1]
+
+function %trunc_f64x2(f64x2) -> f64x2 {
+block0(v0: f64x2):
+  v1 = trunc v0
+  return v1
+}
+; run: %trunc_f64x2([0x0.5 0x1.0]) == [0x0.0 0x1.0]
+; run: %trunc_f64x2([-0x0.5 -0x1.0]) == [-0x0.0 -0x1.0]

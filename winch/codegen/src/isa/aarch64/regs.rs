@@ -2,6 +2,7 @@
 
 use crate::isa::reg::Reg;
 use regalloc2::{PReg, RegClass};
+use smallvec::{smallvec, SmallVec};
 
 /// Construct a X-register from an index.
 pub(crate) const fn xreg(num: u8) -> Reg {
@@ -50,6 +51,11 @@ pub(crate) const fn lr() -> Reg {
 /// Zero register.
 pub(crate) const fn zero() -> Reg {
     xreg(31)
+}
+
+/// The VM context register.
+pub(crate) const fn vmctx() -> Reg {
+    xreg(9)
 }
 
 /// Stack pointer register.
@@ -131,7 +137,30 @@ const NON_ALLOCATABLE_GPR: u32 = (1 << ip0().hw_enc())
     | (1 << fp().hw_enc())
     | (1 << lr().hw_enc())
     | (1 << zero().hw_enc())
-    | (1 << shadow_sp().hw_enc());
+    | (1 << shadow_sp().hw_enc())
+    | (1 << vmctx().hw_enc());
 
 /// Bitmask to represent the available general purpose registers.
 pub(crate) const ALL_GPR: u32 = u32::MAX & !NON_ALLOCATABLE_GPR;
+
+/// Returns the callee-saved registers.
+///
+/// This function will return the set of registers that need to be saved
+/// according to the system ABI and that are known not to be saved during the
+/// prologue emission.
+// TODO: Once float registers are supported,
+// account for callee-saved float registers.
+pub(crate) fn callee_saved() -> SmallVec<[Reg; 9]> {
+    smallvec![
+        xreg(19),
+        xreg(20),
+        xreg(21),
+        xreg(22),
+        xreg(23),
+        xreg(24),
+        xreg(25),
+        xreg(26),
+        xreg(27),
+        xreg(28),
+    ]
+}

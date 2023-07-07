@@ -11,7 +11,7 @@ block0(v0: f32, v1: f32, v2: f32):
 ; block0:
 ;   fmadd s0, s0, s1, s2
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fmadd s0, s0, s1, s2
@@ -27,7 +27,7 @@ block0(v0: f64, v1: f64, v2: f64):
 ; block0:
 ;   fmadd d0, d0, d1, d2
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fmadd d0, d0, d1, d2
@@ -45,7 +45,7 @@ block0(v0: f32x4, v1: f32x4, v2: f32x4):
 ;   mov v0.16b, v2.16b
 ;   fmla v0.4s, v0.4s, v5.4s, v1.4s
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov v5.16b, v0.16b
@@ -65,7 +65,7 @@ block0(v0: f64x2, v1: f64x2, v2: f64x2):
 ;   mov v0.16b, v2.16b
 ;   fmla v0.2d, v0.2d, v5.2d, v1.2d
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov v5.16b, v0.16b
@@ -86,7 +86,7 @@ block0(v0: f32x4, v1: f32x4, v2: f32x4):
 ;   mov v0.16b, v2.16b
 ;   fmls v0.4s, v0.4s, v5.4s, v1.4s
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov v5.16b, v0.16b
@@ -107,7 +107,7 @@ block0(v0: f64x2, v1: f64x2, v2: f64x2):
 ;   mov v0.16b, v2.16b
 ;   fmls v0.2d, v0.2d, v5.2d, v1.2d
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov v5.16b, v0.16b
@@ -128,7 +128,7 @@ block0(v0: f32x4, v1: f32x4, v2: f32x4):
 ;   mov v0.16b, v2.16b
 ;   fmls v0.4s, v0.4s, v5.4s, v1.4s
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov v5.16b, v0.16b
@@ -149,11 +149,160 @@ block0(v0: f64x2, v1: f64x2, v2: f64x2):
 ;   mov v0.16b, v2.16b
 ;   fmls v0.2d, v0.2d, v5.2d, v1.2d
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov v5.16b, v0.16b
 ;   mov v0.16b, v2.16b
 ;   fmls v0.2d, v5.2d, v1.2d
+;   ret
+
+function %f32x4_splat0(f32, f32x4, f32x4) -> f32x4 {
+block0(v0: f32, v1: f32x4, v2: f32x4):
+    v3 = splat.f32x4 v0
+    v4 = fma v3, v1, v2
+    return v4
+}
+
+; VCode:
+; block0:
+;   mov v5.16b, v0.16b
+;   mov v0.16b, v2.16b
+;   fmla v0.4s, v0.4s, v1.4s, v5.s[0]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov v5.16b, v0.16b
+;   mov v0.16b, v2.16b
+;   fmla v0.4s, v1.4s, v5.s[0]
+;   ret
+
+function %f32x4_splat1(f32x4, f32, f32x4) -> f32x4 {
+block0(v0: f32x4, v1: f32, v2: f32x4):
+    v3 = splat.f32x4 v1
+    v4 = fneg v0
+    v5 = fma v4, v3, v2
+    return v5
+}
+
+; VCode:
+; block0:
+;   mov v5.16b, v0.16b
+;   mov v0.16b, v2.16b
+;   fmls v0.4s, v0.4s, v5.4s, v1.s[0]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov v5.16b, v0.16b
+;   mov v0.16b, v2.16b
+;   fmls v0.4s, v5.4s, v1.s[0]
+;   ret
+
+function %f32x4_splat2(f32x4, f32x4, f32x4) -> f32x4 {
+block0(v0: f32x4, v1: f32x4, v2: f32x4):
+    v3 = bitcast.i8x16 little v0
+    v4 = shuffle v3, v3, 0x07060504_07060504_07060504_07060504
+    v5 = bitcast.f32x4 little v4
+    v6 = fma v5, v1, v2
+    return v6
+}
+
+; VCode:
+; block0:
+;   mov v5.16b, v0.16b
+;   mov v0.16b, v2.16b
+;   fmla v0.4s, v0.4s, v1.4s, v5.s[1]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov v5.16b, v0.16b
+;   mov v0.16b, v2.16b
+;   fmla v0.4s, v1.4s, v5.s[1]
+;   ret
+
+function %f32x4_splat3(f32x4, f32x4, f32x4) -> f32x4 {
+block0(v0: f32x4, v1: f32x4, v2: f32x4):
+    v3 = bitcast.i8x16 little v1
+    v4 = shuffle v3, v3, 0x0f0e0d0c_0f0e0d0c_0f0e0d0c_0f0e0d0c
+    v5 = bitcast.f32x4 little v4
+    v6 = fneg v5
+    v7 = fma v0, v6, v2
+    return v7
+}
+
+; VCode:
+; block0:
+;   mov v5.16b, v0.16b
+;   mov v0.16b, v2.16b
+;   fmls v0.4s, v0.4s, v5.4s, v1.s[3]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov v5.16b, v0.16b
+;   mov v0.16b, v2.16b
+;   fmls v0.4s, v5.4s, v1.s[3]
+;   ret
+
+function %f32x4_splat4(f32x4, f32x4, f32x4) -> f32x4 {
+block0(v0: f32x4, v1: f32x4, v2: f32x4):
+    v3 = bitcast.i8x16 little v1
+    v4 = shuffle v3, v3, 0x1f1e1d1c_1f1e1d1c_1f1e1d1c_1f1e1d1c
+    v5 = bitcast.f32x4 little v4
+    v6 = fma v0, v5, v2
+    return v6
+}
+
+; VCode:
+; block0:
+;   mov v31.16b, v1.16b
+;   movz w6, #7452
+;   movk w6, w6, #7966, LSL #16
+;   dup v17.4s, w6
+;   mov v30.16b, v31.16b
+;   tbl v19.16b, { v30.16b, v31.16b }, v17.16b
+;   mov v23.16b, v0.16b
+;   mov v0.16b, v2.16b
+;   fmla v0.4s, v0.4s, v23.4s, v19.4s
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov v31.16b, v1.16b
+;   mov w6, #0x1d1c
+;   movk w6, #0x1f1e, lsl #16
+;   dup v17.4s, w6
+;   mov v30.16b, v31.16b
+;   tbl v19.16b, {v30.16b, v31.16b}, v17.16b
+;   mov v23.16b, v0.16b
+;   mov v0.16b, v2.16b
+;   fmla v0.4s, v23.4s, v19.4s
+;   ret
+
+function %f64x2_splat0(f64x2, f64x2, f64x2) -> f64x2 {
+block0(v0: f64x2, v1: f64x2, v2: f64x2):
+    v3 = bitcast.i8x16 little v1
+    v4 = shuffle v3, v3, 0x0f0e0d0c0b0a0908_0f0e0d0c0b0a0908
+    v5 = bitcast.f64x2 little v4
+    v6 = fneg v5
+    v7 = fma v0, v6, v2
+    return v7
+}
+
+; VCode:
+; block0:
+;   mov v5.16b, v0.16b
+;   mov v0.16b, v2.16b
+;   fmls v0.2d, v0.2d, v5.2d, v1.d[1]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov v5.16b, v0.16b
+;   mov v0.16b, v2.16b
+;   fmls v0.2d, v5.2d, v1.d[1]
 ;   ret
 

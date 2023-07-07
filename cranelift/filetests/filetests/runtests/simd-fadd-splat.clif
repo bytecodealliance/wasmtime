@@ -1,0 +1,26 @@
+test run
+target aarch64
+target s390x
+target x86_64
+target x86_64 sse41
+target x86_64 sse42
+target x86_64 sse42 has_avx
+target riscv64 has_v
+
+function %splat_f32x4_2(f32x4) -> f32x4 {
+block0(v0: f32x4):
+  v1 = f32const 0x1.5
+  v2 = splat.f32x4 v1
+  v3 = fadd v0, v2
+  return v3
+}
+; run: %splat_f32x4_2([0x0.0 NaN 0x1.0 0x2.0]) == [0x1.5 NaN 0x2.5 0x3.5]
+
+function %splat_f64x2_2(f64x2) -> f64x2 {
+block0(v0: f64x2):
+  v1 = f64const 0x7.5
+  v2 = splat.f64x2 v1
+  v3 = fadd v0, v2
+  return v3
+}
+; run: %splat_f64x2_2([0x0.0 0x1.0]) == [0x7.5 0x8.5]

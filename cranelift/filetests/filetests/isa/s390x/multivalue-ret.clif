@@ -17,7 +17,7 @@ block1:
 ;   lghi %r4, 3
 ;   lghi %r5, 4
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lghi %r2, 1
@@ -38,36 +38,36 @@ block1:
 }
 
 ; VCode:
-;   stmg %r7, %r15, 56(%r15)
+;   stmg %r6, %r15, 48(%r15)
 ; block0:
-;   lghi %r4, 1
-;   lgr %r14, %r4
+;   lghi %r5, 1
+;   lgr %r6, %r5
 ;   lghi %r3, 2
 ;   lghi %r4, 3
 ;   lghi %r5, 4
-;   lghi %r7, 5
-;   lghi %r9, 6
-;   stg %r7, 0(%r2)
-;   stg %r9, 8(%r2)
-;   lgr %r2, %r14
-;   lmg %r7, %r15, 56(%r15)
+;   lghi %r13, 5
+;   lghi %r14, 6
+;   stg %r13, 0(%r2)
+;   stg %r14, 8(%r2)
+;   lgr %r2, %r6
+;   lmg %r6, %r15, 48(%r15)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   stmg %r7, %r15, 0x38(%r15)
+;   stmg %r6, %r15, 0x30(%r15)
 ; block1: ; offset 0x6
-;   lghi %r4, 1
-;   lgr %r14, %r4
+;   lghi %r5, 1
+;   lgr %r6, %r5
 ;   lghi %r3, 2
 ;   lghi %r4, 3
 ;   lghi %r5, 4
-;   lghi %r7, 5
-;   lghi %r9, 6
-;   stg %r7, 0(%r2)
-;   stg %r9, 8(%r2)
-;   lgr %r2, %r14
-;   lmg %r7, %r15, 0x38(%r15)
+;   lghi %r13, 5
+;   lghi %r14, 6
+;   stg %r13, 0(%r2)
+;   stg %r14, 8(%r2)
+;   lgr %r2, %r6
+;   lmg %r6, %r15, 0x30(%r15)
 ;   br %r14
 
 function %f3() -> f64, f64, f64, f64 {
@@ -86,7 +86,7 @@ block1:
 ;   bras %r1, 12 ; data.f64 2 ; ld %f4, 0(%r1)
 ;   bras %r1, 12 ; data.f64 3 ; ld %f6, 0(%r1)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   bras %r1, 0xc
@@ -130,12 +130,12 @@ block1:
 ;   bras %r1, 12 ; data.f64 1 ; ld %f2, 0(%r1)
 ;   bras %r1, 12 ; data.f64 2 ; ld %f4, 0(%r1)
 ;   bras %r1, 12 ; data.f64 3 ; ld %f6, 0(%r1)
-;   bras %r1, 12 ; data.f64 4 ; vleg %v18, 0(%r1), 0
-;   bras %r1, 12 ; data.f64 5 ; vleg %v20, 0(%r1), 0
-;   vsteg %v18, 0(%r2), 0
-;   vsteg %v20, 8(%r2), 0
+;   bras %r1, 12 ; data.f64 4 ; ld %f7, 0(%r1)
+;   bras %r1, 12 ; data.f64 5 ; vleg %v16, 0(%r1), 0
+;   std %f7, 0(%r2)
+;   vsteg %v16, 8(%r2), 0
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   bras %r1, 0xc
@@ -164,13 +164,13 @@ block1:
 ;   sth %r1, 0
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
-;   vleg %v18, 0(%r1), 0
-;   bras %r1, 0x5e
+;   ld %f7, 0(%r1)
+;   bras %r1, 0x5c
 ;   sth %r1, 0(%r4)
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
-;   vleg %v20, 0(%r1), 0
-;   vsteg %v18, 0(%r2), 0
-;   vsteg %v20, 8(%r2), 0
+;   vleg %v16, 0(%r1), 0
+;   std %f7, 0(%r2)
+;   vsteg %v16, 8(%r2), 0
 ;   br %r14
 

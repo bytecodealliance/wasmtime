@@ -65,10 +65,9 @@ unsafe fn exec_fd_readdir(fd: wasi::Fd, cookie: wasi::Dircookie) -> (Vec<DirEntr
     (dirs, eof)
 }
 
-unsafe fn test_fd_readdir(dir_fd: wasi::Fd) {
+unsafe fn assert_empty_dir(dir_fd: wasi::Fd) {
     let stat = wasi::fd_filestat_get(dir_fd).expect("failed filestat");
 
-    // Check the behavior in an empty directory
     let (mut dirs, eof) = exec_fd_readdir(dir_fd, 0);
     assert!(eof, "expected to read the entire directory");
     dirs.sort_by_key(|d| d.name.clone());
@@ -91,6 +90,11 @@ unsafe fn test_fd_readdir(dir_fd: wasi::Fd) {
         dirs.next().is_none(),
         "the directory should be seen as empty"
     );
+}
+
+unsafe fn test_fd_readdir(dir_fd: wasi::Fd) {
+    // Check the behavior in an empty directory
+    assert_empty_dir(dir_fd);
 
     // Add a file and check the behavior
     let file_fd = wasi::path_open(
@@ -98,10 +102,7 @@ unsafe fn test_fd_readdir(dir_fd: wasi::Fd) {
         0,
         "file",
         wasi::OFLAGS_CREAT,
-        wasi::RIGHTS_FD_READ
-            | wasi::RIGHTS_FD_WRITE
-            | wasi::RIGHTS_FD_READDIR
-            | wasi::RIGHTS_FD_FILESTAT_GET,
+        wasi::RIGHTS_FD_READ | wasi::RIGHTS_FD_WRITE,
         0,
         0,
     )
@@ -111,16 +112,21 @@ unsafe fn test_fd_readdir(dir_fd: wasi::Fd) {
         "file descriptor range check",
     );
 
-    let stat = wasi::fd_filestat_get(file_fd).expect("failed filestat");
+    let file_stat = wasi::fd_filestat_get(file_fd).expect("failed filestat");
     wasi::fd_close(file_fd).expect("closing a file");
+
+    wasi::path_create_directory(dir_fd, "nested").expect("create a directory");
+    let nested_fd =
+        wasi::path_open(dir_fd, 0, "nested", 0, 0, 0, 0).expect("failed to open nested directory");
+    let nested_stat = wasi::fd_filestat_get(nested_fd).expect("failed filestat");
 
     // Execute another readdir
     let (mut dirs, eof) = exec_fd_readdir(dir_fd, 0);
     assert!(eof, "expected to read the entire directory");
-    assert_eq!(dirs.len(), 3, "expected three entries");
+    assert_eq!(dirs.len(), 4, "expected four entries");
     // Save the data about the last entry. We need to do it before sorting.
-    let lastfile_cookie = dirs[1].dirent.d_next;
-    let lastfile_name = dirs[2].name.clone();
+    let lastfile_cookie = dirs[2].dirent.d_next;
+    let lastfile_name = dirs[3].name.clone();
     dirs.sort_by_key(|d| d.name.clone());
     let mut dirs = dirs.into_iter();
 
@@ -136,7 +142,16 @@ unsafe fn test_fd_readdir(dir_fd: wasi::Fd) {
         wasi::FILETYPE_REGULAR_FILE,
         "type for the real file"
     );
-    assert_eq!(dir.dirent.d_ino, stat.ino);
+    assert_eq!(dir.dirent.d_ino, file_stat.ino);
+    let dir = dirs.next().expect("fourth entry is None");
+    // check the directory info
+    assert_eq!(dir.name, "nested", "nested directory name doesn't match");
+    assert_eq!(
+        dir.dirent.d_type,
+        wasi::FILETYPE_DIRECTORY,
+        "type for the nested directory"
+    );
+    assert_eq!(dir.dirent.d_ino, nested_stat.ino);
 
     // check if cookie works as expected
     let (dirs, eof) = exec_fd_readdir(dir_fd, lastfile_cookie);
@@ -144,7 +159,12 @@ unsafe fn test_fd_readdir(dir_fd: wasi::Fd) {
     assert_eq!(dirs.len(), 1, "expected one entry");
     assert_eq!(dirs[0].name, lastfile_name, "name of the only entry");
 
+    // check if nested directory shows up as empty
+    assert_empty_dir(nested_fd);
+    wasi::fd_close(nested_fd).expect("closing a nested directory");
+
     wasi::path_unlink_file(dir_fd, "file").expect("removing a file");
+    wasi::path_remove_directory(dir_fd, "nested").expect("removing a nested directory");
 }
 
 unsafe fn test_fd_readdir_lots(dir_fd: wasi::Fd) {
@@ -155,10 +175,7 @@ unsafe fn test_fd_readdir_lots(dir_fd: wasi::Fd) {
             0,
             &format!("file.{}", count),
             wasi::OFLAGS_CREAT,
-            wasi::RIGHTS_FD_READ
-                | wasi::RIGHTS_FD_WRITE
-                | wasi::RIGHTS_FD_READDIR
-                | wasi::RIGHTS_FD_FILESTAT_GET,
+            wasi::RIGHTS_FD_READ | wasi::RIGHTS_FD_WRITE,
             0,
             0,
         )

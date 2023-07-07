@@ -145,7 +145,11 @@ impl LoweredBlock {
 
 impl BlockLoweringOrder {
     /// Compute and return a lowered block order for `f`.
-    pub fn new(f: &Function, domtree: &DominatorTree) -> BlockLoweringOrder {
+    pub fn new(
+        f: &Function,
+        domtree: &DominatorTree,
+        ctrl_plane: &mut ControlPlane,
+    ) -> BlockLoweringOrder {
         trace!("BlockLoweringOrder: function body {:?}", f);
 
         // Step 1: compute the in-edge and out-edge count of every block.
@@ -188,18 +192,22 @@ impl BlockLoweringOrder {
         // Step 2: walk the postorder from the domtree in reverse to produce our desired node
         // lowering order, identifying critical edges to split along the way.
 
-        let mut lb_to_bindex = FxHashMap::default();
         let mut lowered_order = Vec::new();
 
         for &block in domtree.cfg_postorder().iter().rev() {
-            let lb = LoweredBlock::Orig { block };
-            let bindex = BlockIndex::new(lowered_order.len());
-            lb_to_bindex.insert(lb.clone(), bindex);
-            lowered_order.push(lb);
+            lowered_order.push(LoweredBlock::Orig { block });
 
             if block_out_count[block] > 1 {
                 let range = block_succ_range[block].clone();
-                for (succ_ix, lb) in block_succs[range].iter_mut().enumerate() {
+
+                // If chaos-mode is enabled in the control plane, iterate over
+                // the successors in an arbtirary order, which should have no
+                // impact on correctness. The order of the blocks is generally
+                // relevant: Uses must be seen before defs for dead-code
+                // elimination.
+                let succs = ctrl_plane.shuffled(block_succs[range].iter_mut().enumerate());
+
+                for (succ_ix, lb) in succs {
                     let succ = lb.orig_block().unwrap();
                     if block_in_count[succ] > 1 {
                         // Mutate the successor to be a critical edge, as `block` has multiple
@@ -209,13 +217,18 @@ impl BlockLoweringOrder {
                             succ,
                             succ_idx: succ_ix as u32,
                         };
-                        let bindex = BlockIndex::new(lowered_order.len());
-                        lb_to_bindex.insert(*lb, bindex);
                         lowered_order.push(*lb);
                     }
                 }
             }
         }
+
+        let lb_to_bindex = FxHashMap::from_iter(
+            lowered_order
+                .iter()
+                .enumerate()
+                .map(|(i, &lb)| (lb, BlockIndex::new(i))),
+        );
 
         // Step 3: build the successor tables given the lowering order. We can't perform this step
         // during the creation of `lowering_order`, as we need `lb_to_bindex` to be fully populated
@@ -363,7 +376,7 @@ mod test {
         cfg.compute(&func);
         let dom_tree = DominatorTree::with_function(&func, &cfg);
 
-        BlockLoweringOrder::new(&func, &dom_tree)
+        BlockLoweringOrder::new(&func, &dom_tree, &mut Default::default())
     }
 
     #[test]

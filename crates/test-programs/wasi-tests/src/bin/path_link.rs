@@ -1,15 +1,8 @@
 use std::{env, process};
 use wasi_tests::{assert_errno, create_file, open_scratch_directory, TESTCONFIG};
 
-const TEST_RIGHTS: wasi::Rights = wasi::RIGHTS_FD_READ
-    | wasi::RIGHTS_PATH_LINK_SOURCE
-    | wasi::RIGHTS_PATH_LINK_TARGET
-    | wasi::RIGHTS_FD_FILESTAT_GET
-    | wasi::RIGHTS_PATH_OPEN
-    | wasi::RIGHTS_PATH_UNLINK_FILE;
-
 unsafe fn create_or_open(dir_fd: wasi::Fd, name: &str, flags: wasi::Oflags) -> wasi::Fd {
-    let file_fd = wasi::path_open(dir_fd, 0, name, flags, TEST_RIGHTS, TEST_RIGHTS, 0)
+    let file_fd = wasi::path_open(dir_fd, 0, name, flags, 0, 0, 0)
         .unwrap_or_else(|_| panic!("opening '{}'", name));
     assert!(
         file_fd > libc::STDERR_FILENO as wasi::Fd,
@@ -19,7 +12,7 @@ unsafe fn create_or_open(dir_fd: wasi::Fd, name: &str, flags: wasi::Oflags) -> w
 }
 
 unsafe fn open_link(dir_fd: wasi::Fd, name: &str) -> wasi::Fd {
-    let file_fd = wasi::path_open(dir_fd, 0, name, 0, TEST_RIGHTS, TEST_RIGHTS, 0)
+    let file_fd = wasi::path_open(dir_fd, 0, name, 0, 0, 0, 0)
         .unwrap_or_else(|_| panic!("opening a link '{}'", name));
     assert!(
         file_fd > libc::STDERR_FILENO as wasi::Fd,
@@ -91,9 +84,9 @@ unsafe fn test_path_link(dir_fd: wasi::Fd) {
     wasi::path_link(dir_fd, 0, "file", subdir_fd, "link").expect("creating a link in subdirectory");
     let link_fd = open_link(subdir_fd, "link");
     check_rights(file_fd, link_fd);
+    wasi::fd_close(link_fd).expect("Closing link_fd"); // needed for Windows
     wasi::path_unlink_file(subdir_fd, "link").expect("removing a link");
     wasi::fd_close(subdir_fd).expect("Closing subdir_fd"); // needed for Windows
-    wasi::fd_close(link_fd).expect("Closing link_fd"); // needed for Windows
     wasi::path_remove_directory(dir_fd, "subdir").expect("removing a subdirectory");
 
     // Create a link to a path that already exists

@@ -4,6 +4,380 @@ use std::sync::Arc;
 use wasmtime::*;
 
 #[test]
+#[cfg_attr(miri, ignore)]
+fn call_wasm_to_wasm() -> Result<()> {
+    let wasm = wat::parse_str(
+        r#"
+          (module
+            (func (result i32 i32 i32)
+              i32.const 1
+              i32.const 2
+              i32.const 3
+            )
+            (func (export "run") (result i32 i32 i32)
+                call 0
+            )
+          )
+        "#,
+    )?;
+    let mut store = Store::<()>::default();
+    let module = Module::new(store.engine(), &wasm)?;
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let func = instance
+        .get_typed_func::<(), (i32, i32, i32)>(&mut store, "run")
+        .unwrap();
+    let results = func.call(&mut store, ())?;
+    assert_eq!(results, (1, 2, 3));
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn call_wasm_to_native() -> Result<()> {
+    let wasm = wat::parse_str(
+        r#"
+          (module
+            (import "" "" (func (result i32 i32 i32)))
+            (func (export "run") (result i32 i32 i32)
+                call 0
+            )
+          )
+        "#,
+    )?;
+    let mut store = Store::<()>::default();
+    let module = Module::new(store.engine(), &wasm)?;
+    let import_func = Func::wrap(&mut store, || (1_i32, 2_i32, 3_i32));
+    let instance = Instance::new(&mut store, &module, &[import_func.into()])?;
+    let func = instance
+        .get_typed_func::<(), (i32, i32, i32)>(&mut store, "run")
+        .unwrap();
+    let results = func.call(&mut store, ())?;
+    assert_eq!(results, (1, 2, 3));
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn call_wasm_to_array() -> Result<()> {
+    let wasm = wat::parse_str(
+        r#"
+          (module
+            (import "" "" (func (result i32 i32 i32)))
+            (func (export "run") (result i32 i32 i32)
+                call 0
+            )
+          )
+        "#,
+    )?;
+    let mut store = Store::<()>::default();
+    let module = Module::new(store.engine(), &wasm)?;
+    let import_func = Func::new(
+        &mut store,
+        FuncType::new(vec![], vec![ValType::I32, ValType::I32, ValType::I32]),
+        |_, _params, results| {
+            results[0] = Val::I32(1);
+            results[1] = Val::I32(2);
+            results[2] = Val::I32(3);
+            Ok(())
+        },
+    );
+    let instance = Instance::new(&mut store, &module, &[import_func.into()])?;
+    let func = instance
+        .get_typed_func::<(), (i32, i32, i32)>(&mut store, "run")
+        .unwrap();
+    let results = func.call(&mut store, ())?;
+    assert_eq!(results, (1, 2, 3));
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn call_native_to_wasm() -> Result<()> {
+    let wasm = wat::parse_str(
+        r#"
+          (module
+            (func (export "run") (result i32 i32 i32)
+                i32.const 42
+                i32.const 420
+                i32.const 4200
+            )
+          )
+        "#,
+    )?;
+    let mut store = Store::<()>::default();
+    let module = Module::new(store.engine(), &wasm)?;
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let func = instance
+        .get_typed_func::<(), (i32, i32, i32)>(&mut store, "run")
+        .unwrap();
+    let results = func.call(&mut store, ())?;
+    assert_eq!(results, (42, 420, 4200));
+    Ok(())
+}
+
+#[test]
+fn call_native_to_native() -> Result<()> {
+    let mut store = Store::<()>::default();
+
+    let func = Func::wrap(&mut store, |a: i32, b: i32, c: i32| -> (i32, i32, i32) {
+        (b, c, a)
+    });
+    let func = func.typed::<(i32, i32, i32), (i32, i32, i32)>(&store)?;
+    let results = func.call(&mut store, (1, 2, 3))?;
+    assert_eq!(results, (2, 3, 1));
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn call_native_to_array() -> Result<()> {
+    let mut store = Store::<()>::default();
+
+    let func = Func::new(
+        &mut store,
+        FuncType::new(
+            [ValType::I32, ValType::I32, ValType::I32],
+            [ValType::I32, ValType::I32, ValType::I32],
+        ),
+        |_caller, params, results| {
+            results[0] = params[2].clone();
+            results[1] = params[0].clone();
+            results[2] = params[1].clone();
+            Ok(())
+        },
+    );
+    let func = func.typed::<(i32, i32, i32), (i32, i32, i32)>(&store)?;
+    let results = func.call(&mut store, (1, 2, 3))?;
+    assert_eq!(results, (3, 1, 2));
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn call_array_to_wasm() -> Result<()> {
+    let wasm = wat::parse_str(
+        r#"
+          (module
+            (func (export "run") (param i32 i32 i32) (result i32 i32 i32)
+              local.get 1
+              local.get 2
+              local.get 0
+            )
+          )
+        "#,
+    )?;
+    let mut store = Store::<()>::default();
+    let module = Module::new(store.engine(), &wasm)?;
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let func = instance.get_func(&mut store, "run").unwrap();
+    let mut results = [Val::I32(0), Val::I32(0), Val::I32(0)];
+    func.call(
+        &mut store,
+        &[Val::I32(10), Val::I32(20), Val::I32(30)],
+        &mut results,
+    )?;
+    assert_eq!(results[0].i32(), Some(20));
+    assert_eq!(results[1].i32(), Some(30));
+    assert_eq!(results[2].i32(), Some(10));
+    Ok(())
+}
+
+#[test]
+fn call_array_to_native() -> Result<()> {
+    let mut store = Store::<()>::default();
+    let func = Func::wrap(&mut store, |a: i32, b: i32, c: i32| -> (i32, i32, i32) {
+        (a * 10, b * 10, c * 10)
+    });
+    let mut results = [Val::I32(0), Val::I32(0), Val::I32(0)];
+    func.call(
+        &mut store,
+        &[Val::I32(10), Val::I32(20), Val::I32(30)],
+        &mut results,
+    )?;
+    assert_eq!(results[0].i32(), Some(100));
+    assert_eq!(results[1].i32(), Some(200));
+    assert_eq!(results[2].i32(), Some(300));
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn call_array_to_array() -> Result<()> {
+    let mut store = Store::<()>::default();
+    let func = Func::new(
+        &mut store,
+        FuncType::new(
+            [ValType::I32, ValType::I32, ValType::I32],
+            [ValType::I32, ValType::I32, ValType::I32],
+        ),
+        |_caller, params, results| {
+            results[0] = params[2].clone();
+            results[1] = params[0].clone();
+            results[2] = params[1].clone();
+            Ok(())
+        },
+    );
+    let mut results = [Val::I32(0), Val::I32(0), Val::I32(0)];
+    func.call(
+        &mut store,
+        &[Val::I32(10), Val::I32(20), Val::I32(30)],
+        &mut results,
+    )?;
+    assert_eq!(results[0].i32(), Some(30));
+    assert_eq!(results[1].i32(), Some(10));
+    assert_eq!(results[2].i32(), Some(20));
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn call_indirect_native_from_wasm_import_global() -> Result<()> {
+    let wasm = wat::parse_str(
+        r#"
+          (module
+            (import "" "" (global funcref))
+            (table 1 1 funcref)
+            (func (export "run") (result i32 i32 i32)
+                i32.const 0
+                global.get 0
+                table.set
+                i32.const 0
+                call_indirect (result i32 i32 i32)
+            )
+          )
+        "#,
+    )?;
+    let mut store = Store::<()>::default();
+    let module = Module::new(store.engine(), &wasm)?;
+    let func = Func::wrap(&mut store, || -> (i32, i32, i32) { (10, 20, 30) });
+    let global = Global::new(
+        &mut store,
+        GlobalType::new(ValType::FuncRef, Mutability::Const),
+        Val::FuncRef(Some(func)),
+    )?;
+    let instance = Instance::new(&mut store, &module, &[global.into()])?;
+    let func = instance.get_typed_func::<(), (i32, i32, i32)>(&mut store, "run")?;
+    let results = func.call(&mut store, ())?;
+    assert_eq!(results, (10, 20, 30));
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn call_indirect_native_from_wasm_import_table() -> Result<()> {
+    let wasm = wat::parse_str(
+        r#"
+          (module
+            (import "" "" (table 1 1 funcref))
+            (func (export "run") (result i32 i32 i32)
+                i32.const 0
+                call_indirect (result i32 i32 i32)
+            )
+          )
+        "#,
+    )?;
+    let mut store = Store::<()>::default();
+    let module = Module::new(store.engine(), &wasm)?;
+    let func = Func::wrap(&mut store, || -> (i32, i32, i32) { (10, 20, 30) });
+    let table = Table::new(
+        &mut store,
+        TableType::new(ValType::FuncRef, 1, Some(1)),
+        Val::FuncRef(Some(func)),
+    )?;
+    let instance = Instance::new(&mut store, &module, &[table.into()])?;
+    let func = instance.get_typed_func::<(), (i32, i32, i32)>(&mut store, "run")?;
+    let results = func.call(&mut store, ())?;
+    assert_eq!(results, (10, 20, 30));
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn call_indirect_native_from_wasm_import_func_returns_funcref() -> Result<()> {
+    let wasm = wat::parse_str(
+        r#"
+          (module
+            (import "" "" (func (result funcref)))
+            (table 1 1 funcref)
+            (func (export "run") (result i32 i32 i32)
+                i32.const 0
+                call 0
+                table.set
+                i32.const 0
+                call_indirect (result i32 i32 i32)
+            )
+          )
+        "#,
+    )?;
+    let mut store = Store::<()>::default();
+    let module = Module::new(store.engine(), &wasm)?;
+    let func = Func::wrap(&mut store, || -> (i32, i32, i32) { (10, 20, 30) });
+    let get_func = Func::wrap(&mut store, move || -> Option<Func> { Some(func) });
+    let instance = Instance::new(&mut store, &module, &[get_func.into()])?;
+    let func = instance.get_typed_func::<(), (i32, i32, i32)>(&mut store, "run")?;
+    let results = func.call(&mut store, ())?;
+    assert_eq!(results, (10, 20, 30));
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn call_indirect_native_from_exported_table() -> Result<()> {
+    let wasm = wat::parse_str(
+        r#"
+          (module
+            (table (export "table") 1 1 funcref)
+            (func (export "run") (result i32 i32 i32)
+                i32.const 0
+                call_indirect (result i32 i32 i32)
+            )
+          )
+        "#,
+    )?;
+    let mut store = Store::<()>::default();
+    let module = Module::new(store.engine(), &wasm)?;
+    let func = Func::wrap(&mut store, || -> (i32, i32, i32) { (10, 20, 30) });
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let table = instance.get_table(&mut store, "table").unwrap();
+    table.set(&mut store, 0, func.into())?;
+    let run = instance.get_typed_func::<(), (i32, i32, i32)>(&mut store, "run")?;
+    let results = run.call(&mut store, ())?;
+    assert_eq!(results, (10, 20, 30));
+    Ok(())
+}
+
+// wasm exports global, host puts native-call funcref in global, wasm calls funcref
+#[test]
+#[cfg_attr(miri, ignore)]
+fn call_indirect_native_from_exported_global() -> Result<()> {
+    let wasm = wat::parse_str(
+        r#"
+          (module
+            (global (export "global") (mut funcref) (ref.null func))
+            (table 1 1 funcref)
+            (func (export "run") (result i32 i32 i32)
+                i32.const 0
+                global.get 0
+                table.set
+                i32.const 0
+                call_indirect (result i32 i32 i32)
+            )
+          )
+        "#,
+    )?;
+    let mut store = Store::<()>::default();
+    let module = Module::new(store.engine(), &wasm)?;
+    let func = Func::wrap(&mut store, || -> (i32, i32, i32) { (10, 20, 30) });
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let global = instance.get_global(&mut store, "global").unwrap();
+    global.set(&mut store, func.into())?;
+    let run = instance.get_typed_func::<(), (i32, i32, i32)>(&mut store, "run")?;
+    let results = run.call(&mut store, ())?;
+    assert_eq!(results, (10, 20, 30));
+    Ok(())
+}
+
+#[test]
 fn func_constructors() {
     let mut store = Store::<()>::default();
     Func::wrap(&mut store, || {});
@@ -42,7 +416,7 @@ fn dtor_runs() {
     let a = A;
     assert_eq!(HITS.load(SeqCst), 0);
     Func::wrap(&mut store, move || {
-        drop(&a);
+        let _ = &a;
     });
     drop(store);
     assert_eq!(HITS.load(SeqCst), 1);
@@ -62,7 +436,9 @@ fn dtor_delayed() -> Result<()> {
 
     let mut store = Store::<()>::default();
     let a = A;
-    let func = Func::wrap(&mut store, move || drop(&a));
+    let func = Func::wrap(&mut store, move || {
+        let _ = &a;
+    });
 
     assert_eq!(HITS.load(SeqCst), 0);
     let wasm = wat::parse_str(r#"(import "" "" (func))"#)?;
@@ -120,6 +496,7 @@ fn signatures_match() {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn import_works() -> Result<()> {
     static HITS: AtomicUsize = AtomicUsize::new(0);
 
@@ -227,6 +604,7 @@ fn trap_smoke() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn trap_import() -> Result<()> {
     let wasm = wat::parse_str(
         r#"
@@ -283,6 +661,7 @@ fn get_from_wrapper() {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn get_from_signature() {
     let mut store = Store::<()>::default();
     let ty = FuncType::new(None, None);
@@ -300,6 +679,7 @@ fn get_from_signature() {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn get_from_module() -> anyhow::Result<()> {
     let mut store = Store::<()>::default();
     let module = Module::new(
@@ -371,6 +751,7 @@ fn call_wrapped_func() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn caller_memory() -> anyhow::Result<()> {
     let mut store = Store::<()>::default();
     let f = Func::wrap(&mut store, |mut c: Caller<'_, ()>| {
@@ -436,6 +817,7 @@ fn caller_memory() -> anyhow::Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn func_write_nothing() -> anyhow::Result<()> {
     let mut store = Store::<()>::default();
     let ty = FuncType::new(None, Some(ValType::I32));
@@ -448,7 +830,10 @@ fn func_write_nothing() -> anyhow::Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn return_cross_store_value() -> anyhow::Result<()> {
+    let _ = env_logger::try_init();
+
     let wasm = wat::parse_str(
         r#"
             (import "" "" (func (result funcref)))
@@ -511,6 +896,7 @@ fn pass_cross_store_arg() -> anyhow::Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn externref_signature_no_reference_types() -> anyhow::Result<()> {
     let mut config = Config::new();
     config.wasm_reference_types(false);
@@ -528,6 +914,7 @@ fn externref_signature_no_reference_types() -> anyhow::Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn trampolines_always_valid() -> anyhow::Result<()> {
     // Compile two modules up front
     let mut store = Store::<()>::default();
@@ -554,6 +941,7 @@ fn trampolines_always_valid() -> anyhow::Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn typed_multiple_results() -> anyhow::Result<()> {
     let mut store = Store::<()>::default();
     let module = Module::new(
@@ -590,6 +978,7 @@ fn typed_multiple_results() -> anyhow::Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn trap_doesnt_leak() -> anyhow::Result<()> {
     #[derive(Default)]
     struct Canary(Arc<AtomicBool>);
@@ -606,7 +995,7 @@ fn trap_doesnt_leak() -> anyhow::Result<()> {
     let canary1 = Canary::default();
     let dtor1_run = canary1.0.clone();
     let f1 = Func::wrap(&mut store, move || -> Result<()> {
-        drop(&canary1);
+        let _ = &canary1;
         bail!("")
     });
     assert!(f1.typed::<(), ()>(&store)?.call(&mut store, ()).is_err());
@@ -616,7 +1005,7 @@ fn trap_doesnt_leak() -> anyhow::Result<()> {
     let canary2 = Canary::default();
     let dtor2_run = canary2.0.clone();
     let f2 = Func::new(&mut store, FuncType::new(None, None), move |_, _, _| {
-        drop(&canary2);
+        let _ = &canary2;
         bail!("")
     });
     assert!(f2.typed::<(), ()>(&store)?.call(&mut store, ()).is_err());
@@ -630,6 +1019,7 @@ fn trap_doesnt_leak() -> anyhow::Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn wrap_multiple_results() -> anyhow::Result<()> {
     fn test<T>(store: &mut Store<()>, t: T) -> anyhow::Result<()>
     where
@@ -794,6 +1184,7 @@ fn wrap_multiple_results() -> anyhow::Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn trampoline_for_declared_elem() -> anyhow::Result<()> {
     let engine = Engine::default();
 
@@ -821,6 +1212,7 @@ fn trampoline_for_declared_elem() -> anyhow::Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn wasm_ty_roundtrip() -> Result<(), anyhow::Error> {
     let mut store = Store::<()>::default();
     let debug = Func::wrap(
@@ -876,6 +1268,7 @@ fn wasm_ty_roundtrip() -> Result<(), anyhow::Error> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn typed_funcs_count_params_correctly_in_error_messages() -> anyhow::Result<()> {
     let mut store = Store::<()>::default();
     let module = Module::new(
@@ -913,6 +1306,119 @@ fn typed_funcs_count_params_correctly_in_error_messages() -> anyhow::Result<()> 
             assert!(dbg!(msg).contains("expected 3 types, found 2"))
         }
     }
+
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn calls_with_funcref_and_externref() -> anyhow::Result<()> {
+    let mut store = Store::<()>::default();
+    let module = Module::new(
+        store.engine(),
+        r#"
+            (module
+                (import "" "witness" (func $witness (param funcref externref)))
+                (func (export "f") (param funcref externref) (result externref funcref)
+                    local.get 0
+                    local.get 1
+                    call $witness
+                    local.get 1
+                    local.get 0
+                )
+            )
+
+        "#,
+    )?;
+    let mut linker = Linker::new(store.engine());
+    linker.func_wrap(
+        "",
+        "witness",
+        |mut caller: Caller<'_, ()>, func: Option<Func>, externref: Option<ExternRef>| {
+            if func.is_some() {
+                assert_my_funcref(&mut caller, func.as_ref())?;
+            }
+            if externref.is_some() {
+                assert_my_externref(externref.as_ref());
+            }
+            Ok(())
+        },
+    )?;
+    let instance = linker.instantiate(&mut store, &module)?;
+
+    let typed = instance
+        .get_typed_func::<(Option<Func>, Option<ExternRef>), (Option<ExternRef>, Option<Func>)>(
+            &mut store, "f",
+        )?;
+    let untyped = typed.func();
+
+    let my_funcref = Func::wrap(&mut store, || 100u32);
+    let my_externref = ExternRef::new(99u32);
+    let mut results = [Val::I32(0), Val::I32(0)];
+
+    fn assert_my_funcref(mut store: impl AsContextMut, func: Option<&Func>) -> Result<()> {
+        let mut store = store.as_context_mut();
+        let func = func.unwrap();
+        assert_eq!(func.typed::<(), u32>(&store)?.call(&mut store, ())?, 100);
+        Ok(())
+    }
+    fn assert_my_externref(externref: Option<&ExternRef>) {
+        assert_eq!(externref.unwrap().data().downcast_ref(), Some(&99u32));
+    }
+
+    // funcref=null, externref=null
+    let (a, b) = typed.call(&mut store, (None, None))?;
+    assert!(a.is_none());
+    assert!(b.is_none());
+    untyped.call(
+        &mut store,
+        &[Val::FuncRef(None), Val::ExternRef(None)],
+        &mut results,
+    )?;
+    assert!(results[0].unwrap_externref().is_none());
+    assert!(results[1].unwrap_funcref().is_none());
+
+    // funcref=Some, externref=null
+    let (a, b) = typed.call(&mut store, (Some(my_funcref), None))?;
+    assert!(a.is_none());
+    assert_my_funcref(&mut store, b.as_ref())?;
+    untyped.call(
+        &mut store,
+        &[Val::FuncRef(Some(my_funcref)), Val::ExternRef(None)],
+        &mut results,
+    )?;
+    assert!(results[0].unwrap_externref().is_none());
+    assert_my_funcref(&mut store, results[1].unwrap_funcref())?;
+
+    // funcref=null, externref=Some
+    let (a, b) = typed.call(&mut store, (None, Some(my_externref.clone())))?;
+    assert_my_externref(a.as_ref());
+    assert!(b.is_none());
+    untyped.call(
+        &mut store,
+        &[
+            Val::FuncRef(None),
+            Val::ExternRef(Some(my_externref.clone())),
+        ],
+        &mut results,
+    )?;
+    assert_my_externref(results[0].unwrap_externref().as_ref());
+    assert!(results[1].unwrap_funcref().is_none());
+
+    // funcref=Some, externref=Some
+    let (a, b) = typed.call(&mut store, (Some(my_funcref), Some(my_externref.clone())))?;
+    assert_my_externref(a.as_ref());
+    assert_my_funcref(&mut store, b.as_ref())?;
+    untyped.call(
+        &mut store,
+        &[
+            Val::FuncRef(Some(my_funcref)),
+            Val::ExternRef(Some(my_externref.clone())),
+        ],
+        &mut results,
+    )?;
+    assert_my_externref(results[0].unwrap_externref().as_ref());
+    assert_my_funcref(&mut store, results[1].unwrap_funcref())?;
 
     Ok(())
 }

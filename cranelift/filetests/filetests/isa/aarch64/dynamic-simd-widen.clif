@@ -16,14 +16,14 @@ block0(v0: i8):
 
 ; VCode:
 ; block0:
-;   dup v4.16b, w0
-;   sxtl2 v0.8h, v4.16b
+;   dup v3.16b, w0
+;   sxtl2 v0.8h, v3.16b
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   dup v4.16b, w0
-;   sshll2 v0.8h, v4.16b, #0
+;   dup v3.16b, w0
+;   sshll2 v0.8h, v3.16b, #0
 ;   ret
 
 function %swidenhigh_i16x8(i16) -> i32x4 {
@@ -41,14 +41,14 @@ block0(v0: i16):
 
 ; VCode:
 ; block0:
-;   dup v4.8h, w0
-;   sxtl2 v0.4s, v4.8h
+;   dup v3.8h, w0
+;   sxtl2 v0.4s, v3.8h
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   dup v4.8h, w0
-;   sshll2 v0.4s, v4.8h, #0
+;   dup v3.8h, w0
+;   sshll2 v0.4s, v3.8h, #0
 ;   ret
 
 function %swidenhigh_i32x4(i32) -> i64x2 {
@@ -66,14 +66,14 @@ block0(v0: i32):
 
 ; VCode:
 ; block0:
-;   dup v4.4s, w0
-;   sxtl2 v0.2d, v4.4s
+;   dup v3.4s, w0
+;   sxtl2 v0.2d, v3.4s
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   dup v4.4s, w0
-;   sshll2 v0.2d, v4.4s, #0
+;   dup v3.4s, w0
+;   sshll2 v0.2d, v3.4s, #0
 ;   ret
 
 function %swidenlow_i8x16(i8) -> i16x8 {
@@ -91,14 +91,14 @@ block0(v0: i8):
 
 ; VCode:
 ; block0:
-;   dup v4.16b, w0
-;   sxtl v0.8h, v4.8b
+;   dup v3.16b, w0
+;   sxtl v0.8h, v3.8b
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   dup v4.16b, w0
-;   sshll v0.8h, v4.8b, #0
+;   dup v3.16b, w0
+;   sshll v0.8h, v3.8b, #0
 ;   ret
 
 function %swidenlow_i16x8(i16) -> i32x4 {
@@ -116,14 +116,14 @@ block0(v0: i16):
 
 ; VCode:
 ; block0:
-;   dup v4.8h, w0
-;   sxtl v0.4s, v4.4h
+;   dup v3.8h, w0
+;   sxtl v0.4s, v3.4h
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   dup v4.8h, w0
-;   sshll v0.4s, v4.4h, #0
+;   dup v3.8h, w0
+;   sshll v0.4s, v3.4h, #0
 ;   ret
 
 function %swidenlow_i32x4(i32) -> i64x2 {
@@ -141,13 +141,13 @@ block0(v0: i32):
 
 ; VCode:
 ; block0:
-;   dup v4.4s, w0
-;   sxtl v0.2d, v4.2s
+;   dup v3.4s, w0
+;   sxtl v0.2d, v3.2s
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   dup v4.4s, w0
-;   sshll v0.2d, v4.2s, #0
+;   dup v3.4s, w0
+;   sshll v0.2d, v3.2s, #0
 ;   ret
 

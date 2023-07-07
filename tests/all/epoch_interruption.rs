@@ -1,3 +1,5 @@
+#![cfg(not(miri))]
+
 use crate::async_functions::{CountPending, PollOnce};
 use anyhow::{anyhow, Result};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -32,7 +34,7 @@ fn make_env<T>(engine: &Engine) -> Linker<T> {
 
 enum InterruptMode {
     Trap,
-    Callback(fn(StoreContextMut<usize>) -> Result<u64>),
+    Callback(fn(StoreContextMut<usize>) -> Result<UpdateDeadline>),
     Yield(u64),
 }
 
@@ -337,7 +339,32 @@ async fn epoch_callback_continue() {
             InterruptMode::Callback(|mut cx| {
                 let s = cx.data_mut();
                 *s += 1;
-                Ok(1)
+                Ok(UpdateDeadline::Continue(1))
+            }),
+            |_| {},
+        )
+        .await
+    );
+}
+
+#[tokio::test]
+async fn epoch_callback_yield() {
+    assert_eq!(
+        Some((1, 1)),
+        run_and_count_yields_or_trap(
+            "
+            (module
+                (import \"\" \"bump_epoch\" (func $bump))
+                (func (export \"run\")
+                    call $bump  ;; bump epoch
+                    call $subfunc) ;; call func; will notice new epoch and yield
+                (func $subfunc))
+            ",
+            1,
+            InterruptMode::Callback(|mut cx| {
+                let s = cx.data_mut();
+                *s += 1;
+                Ok(UpdateDeadline::Yield(1))
             }),
             |_| {},
         )
@@ -417,7 +444,7 @@ async fn drop_future_on_epoch_yield() {
 
     let instance = linker.instantiate_async(&mut store, &module).await.unwrap();
     let f = instance.get_func(&mut store, "run").unwrap();
-    PollOnce::new(Box::pin(f.call_async(&mut store, &[], &mut []))).await;
+    let _ = PollOnce::new(Box::pin(f.call_async(&mut store, &[], &mut []))).await;
 
     assert_eq!(true, alive_flag.load(Ordering::Acquire));
 }

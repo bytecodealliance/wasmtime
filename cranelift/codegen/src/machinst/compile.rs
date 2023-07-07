@@ -18,11 +18,12 @@ pub fn compile<B: LowerBackend + TargetIsa>(
     abi: Callee<<<B as LowerBackend>::MInst as MachInst>::ABIMachineSpec>,
     emit_info: <B::MInst as MachInstEmit>::Info,
     sigs: SigSet,
+    ctrl_plane: &mut ControlPlane,
 ) -> CodegenResult<(VCode<B::MInst>, regalloc2::Output)> {
     let machine_env = b.machine_env();
 
     // Compute lowered block order.
-    let block_order = BlockLoweringOrder::new(f, domtree);
+    let block_order = BlockLoweringOrder::new(f, domtree, ctrl_plane);
 
     // Build the lowering context.
     let lower = crate::machinst::Lower::new(f, machine_env, abi, emit_info, block_order, sigs)?;
@@ -36,7 +37,7 @@ pub fn compile<B: LowerBackend + TargetIsa>(
         log::debug!("Number of CLIF blocks to lower: {}", f.dfg.num_blocks());
 
         let _tt = timing::vcode_lower();
-        lower.lower(b)?
+        lower.lower(b, ctrl_plane)?
     };
 
     log::debug!(

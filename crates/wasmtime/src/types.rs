@@ -1,5 +1,7 @@
 use std::fmt;
-use wasmtime_environ::{EntityType, Global, Memory, ModuleTypes, Table, WasmFuncType, WasmType};
+use wasmtime_environ::{
+    EntityType, Global, Memory, ModuleTypes, Table, WasmFuncType, WasmRefType, WasmType,
+};
 
 pub(crate) mod matching;
 
@@ -78,8 +80,8 @@ impl ValType {
             Self::F32 => WasmType::F32,
             Self::F64 => WasmType::F64,
             Self::V128 => WasmType::V128,
-            Self::FuncRef => WasmType::FuncRef,
-            Self::ExternRef => WasmType::ExternRef,
+            Self::FuncRef => WasmType::Ref(WasmRefType::FUNCREF),
+            Self::ExternRef => WasmType::Ref(WasmRefType::EXTERNREF),
         }
     }
 
@@ -90,8 +92,17 @@ impl ValType {
             WasmType::F32 => Self::F32,
             WasmType::F64 => Self::F64,
             WasmType::V128 => Self::V128,
-            WasmType::FuncRef => Self::FuncRef,
-            WasmType::ExternRef => Self::ExternRef,
+            WasmType::Ref(WasmRefType::FUNCREF) => Self::FuncRef,
+            WasmType::Ref(WasmRefType::EXTERNREF) => Self::ExternRef,
+            // FIXME: exposing the full function-references (and beyond)
+            // proposals will require redesigning the embedder API for `ValType`
+            // and types in Wasmtime. That is a large undertaking which is
+            // deferred for later. The intention for now is that
+            // function-references types can't show up in the "public API" of a
+            // core wasm module but it can use everything internally still.
+            WasmType::Ref(_) => {
+                unimplemented!("typed function references are not exposed in the public API yet")
+            }
         }
     }
 }
@@ -289,10 +300,20 @@ pub struct TableType {
 impl TableType {
     /// Creates a new table descriptor which will contain the specified
     /// `element` and have the `limits` applied to its length.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `element` type provided is not a reference type.
     pub fn new(element: ValType, min: u32, max: Option<u32>) -> TableType {
         TableType {
             ty: Table {
-                wasm_ty: element.to_wasm_type(),
+                // FIXME: the `ValType` API should be redesigned and the
+                // argument to this constructor should be `RefType`.
+                wasm_ty: match element {
+                    ValType::FuncRef => WasmRefType::FUNCREF,
+                    ValType::ExternRef => WasmRefType::EXTERNREF,
+                    _ => panic!("Attempt to convert non-reference type to a reference type"),
+                },
                 minimum: min,
                 maximum: max,
             },
@@ -301,7 +322,7 @@ impl TableType {
 
     /// Returns the element value type of this table.
     pub fn element(&self) -> ValType {
-        ValType::from_wasm_type(&self.ty.wasm_ty)
+        ValType::from_wasm_type(&WasmType::Ref(self.ty.wasm_ty))
     }
 
     /// Returns minimum number of elements this table must have

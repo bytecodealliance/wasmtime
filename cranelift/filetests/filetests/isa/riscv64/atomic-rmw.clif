@@ -12,7 +12,7 @@ block0(v0: i64, v1: i64):
 ; block0:
 ;   amoadd.d.aqrl a0,a1,(a0)
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   amoadd.d.aqrl a0, a1, (a0)
@@ -28,7 +28,7 @@ block0(v0: i64, v1: i32):
 ; block0:
 ;   amoadd.w.aqrl a0,a1,(a0)
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   amoadd.w.aqrl a0, a1, (a0)
@@ -45,7 +45,7 @@ block0(v0: i64, v1: i64):
 ;   sub a1,zero,a1
 ;   amoadd.d.aqrl a2,a1,(a0)
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   neg a1, a1
@@ -63,7 +63,7 @@ block0(v0: i64, v1: i32):
 ;   sub a1,zero,a1
 ;   amoadd.w.aqrl a2,a1,(a0)
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   neg a1, a1
@@ -80,7 +80,7 @@ block0(v0: i64, v1: i64):
 ; block0:
 ;   amoand.d.aqrl a0,a1,(a0)
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   amoand.d.aqrl a0, a1, (a0)
@@ -96,7 +96,7 @@ block0(v0: i64, v1: i32):
 ; block0:
 ;   amoand.w.aqrl a0,a1,(a0)
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   amoand.w.aqrl a0, a1, (a0)
@@ -114,7 +114,7 @@ block0(v0: i64, v1: i64):
 ;   mv a2,a1
 ;   atomic_rmw.i64 nand a0,a2,(a3)##t0=a1 offset=zero
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ori a3, a0, 0
@@ -138,7 +138,7 @@ block0(v0: i64, v1: i32):
 ;   mv a2,a1
 ;   atomic_rmw.i32 nand a0,a2,(a3)##t0=a1 offset=zero
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ori a3, a0, 0
@@ -160,7 +160,7 @@ block0(v0: i64, v1: i64):
 ; block0:
 ;   amoor.d.aqrl a0,a1,(a0)
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   amoor.d.aqrl a0, a1, (a0)
@@ -176,7 +176,7 @@ block0(v0: i64, v1: i32):
 ; block0:
 ;   amoor.w.aqrl a0,a1,(a0)
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   amoor.w.aqrl a0, a1, (a0)
@@ -192,7 +192,7 @@ block0(v0: i64, v1: i64):
 ; block0:
 ;   amoxor.d.aqrl a0,a1,(a0)
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   amoxor.d.aqrl a0, a1, (a0)
@@ -208,7 +208,7 @@ block0(v0: i64, v1: i32):
 ; block0:
 ;   amoxor.w.aqrl a0,a1,(a0)
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   amoxor.w.aqrl a0, a1, (a0)
@@ -224,7 +224,7 @@ block0(v0: i64, v1: i64):
 ; block0:
 ;   amomax.d.aqrl a0,a1,(a0)
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   amomax.d.aqrl a0, a1, (a0)
@@ -240,7 +240,7 @@ block0(v0: i64, v1: i32):
 ; block0:
 ;   amomax.w.aqrl a0,a1,(a0)
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   amomax.w.aqrl a0, a1, (a0)
@@ -256,7 +256,7 @@ block0(v0: i64, v1: i64):
 ; block0:
 ;   amomaxu.d.aqrl a0,a1,(a0)
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   amomaxu.d.aqrl a0, a1, (a0)
@@ -272,7 +272,7 @@ block0(v0: i64, v1: i32):
 ; block0:
 ;   amomaxu.w.aqrl a0,a1,(a0)
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   amomaxu.w.aqrl a0, a1, (a0)
@@ -288,7 +288,7 @@ block0(v0: i64, v1: i64):
 ; block0:
 ;   amomin.d.aqrl a0,a1,(a0)
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   amomin.d.aqrl a0, a1, (a0)
@@ -304,7 +304,7 @@ block0(v0: i64, v1: i32):
 ; block0:
 ;   amomin.w.aqrl a0,a1,(a0)
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   amomin.w.aqrl a0, a1, (a0)
@@ -320,7 +320,7 @@ block0(v0: i64, v1: i64):
 ; block0:
 ;   amominu.d.aqrl a0,a1,(a0)
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   amominu.d.aqrl a0, a1, (a0)
@@ -336,7 +336,7 @@ block0(v0: i64, v1: i32):
 ; block0:
 ;   amominu.w.aqrl a0,a1,(a0)
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   amominu.w.aqrl a0, a1, (a0)

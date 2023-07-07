@@ -12,7 +12,7 @@ use target_lexicon::Architecture;
 /// A trait for generating random Cranelift datastructures.
 pub trait CraneliftArbitrary {
     fn _type(&mut self, architecture: Architecture) -> Result<Type>;
-    fn callconv(&mut self) -> Result<CallConv>;
+    fn callconv(&mut self, architecture: Architecture) -> Result<CallConv>;
     fn abi_param(&mut self, architecture: Architecture) -> Result<AbiParam>;
     fn signature(
         &mut self,
@@ -45,9 +45,30 @@ impl<'a> CraneliftArbitrary for &mut Unstructured<'a> {
         Ok(*self.choose(types_for_architecture(architecture))?)
     }
 
-    fn callconv(&mut self) -> Result<CallConv> {
-        // TODO: Generate random CallConvs per target
-        Ok(CallConv::SystemV)
+    fn callconv(&mut self, architecture: Architecture) -> Result<CallConv> {
+        // These are implemented and should work on all backends
+        let mut allowed_callconvs = vec![CallConv::Fast, CallConv::Cold, CallConv::SystemV];
+
+        // Fastcall is supposed to work on x86 and aarch64
+        if matches!(
+            architecture,
+            Architecture::X86_64 | Architecture::Aarch64(_)
+        ) {
+            allowed_callconvs.push(CallConv::WindowsFastcall);
+        }
+
+        // AArch64 has a few Apple specific calling conventions
+        if matches!(architecture, Architecture::Aarch64(_)) {
+            allowed_callconvs.push(CallConv::AppleAarch64);
+        }
+
+        // TODO(#6530): The `tail` calling convention is not supported on s390x
+        // yet.
+        if !matches!(architecture, Architecture::S390x) {
+            allowed_callconvs.push(CallConv::Tail);
+        }
+
+        Ok(*self.choose(&allowed_callconvs[..])?)
     }
 
     fn abi_param(&mut self, architecture: Architecture) -> Result<AbiParam> {
@@ -77,7 +98,7 @@ impl<'a> CraneliftArbitrary for &mut Unstructured<'a> {
         max_params: usize,
         max_rets: usize,
     ) -> Result<Signature> {
-        let callconv = self.callconv()?;
+        let callconv = self.callconv(architecture)?;
         let mut sig = Signature::new(callconv);
 
         for _ in 0..max_params {

@@ -257,7 +257,7 @@ fn handle_module(options: &Options, path: &Path, name: &str, fisa: FlagsOrIsa) -
             (vec![], vec![], vec![])
         } else {
             let compiled_code = context
-                .compile_and_emit(isa, &mut mem)
+                .compile_and_emit(isa, &mut mem, &mut Default::default())
                 .map_err(|err| anyhow::anyhow!("{}", pretty_error(&err.func, err.inner)))?;
             let code_info = compiled_code.code_info();
 

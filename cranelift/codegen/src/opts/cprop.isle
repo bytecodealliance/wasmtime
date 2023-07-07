@@ -70,6 +70,9 @@
                       (iconst _ k2)))
       (subsume (iconst ty (imm64_sshr ty k1 k2))))
 
+(rule (simplify (ireduce narrow (iconst (fits_in_64 _) (u64_from_imm64 imm))))
+      (subsume (iconst narrow (imm64_masked narrow imm))))
+
 (rule (simplify (uextend (fits_in_64 wide) (iconst narrow imm)))
       (subsume (iconst wide (imm64 (u64_uextend_imm64 narrow imm)))))
 
@@ -171,3 +174,27 @@
       y)
 
 ;; TODO: fadd, fsub, fmul, fdiv, fneg, fabs
+
+;; A splat of a constant can become a direct `vconst` with the appropriate bit
+;; pattern.
+(rule (simplify (splat dst (iconst $I8 n)))
+      (vconst dst (splat8 (u64_uextend_imm64 $I8 n))))
+(rule (simplify (splat dst (iconst $I16 n)))
+      (vconst dst (splat16 (u64_uextend_imm64 $I16 n))))
+(rule (simplify (splat dst (iconst $I32 n)))
+      (vconst dst (splat32 (u64_uextend_imm64 $I32 n))))
+(rule (simplify (splat dst (iconst $I64 n)))
+      (vconst dst (splat64 (u64_uextend_imm64 $I64 n))))
+(rule (simplify (splat dst (f32const _ (u32_from_ieee32 n))))
+      (vconst dst (splat32 n)))
+(rule (simplify (splat dst (f64const _ (u64_from_ieee64 n))))
+      (vconst dst (splat64 n)))
+
+(decl splat8 (u64) Constant)
+(rule (splat8 n) (splat16 (u64_or n (u64_shl n 8))))
+(decl splat16 (u64) Constant)
+(rule (splat16 n) (splat32 (u64_or n (u64_shl n 16))))
+(decl splat32 (u64) Constant)
+(rule (splat32 n) (splat64 (u64_or n (u64_shl n 32))))
+(decl splat64 (u64) Constant)
+(extern constructor splat64 splat64)

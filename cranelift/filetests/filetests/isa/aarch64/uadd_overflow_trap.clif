@@ -10,15 +10,15 @@ block0(v0: i32):
 
 ; VCode:
 ; block0:
-;   movz w2, #127
-;   adds w0, w0, w2
+;   movz w3, #127
+;   adds w0, w0, w3
 ;   b.hs #trap=user0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mov w2, #0x7f
-;   adds w0, w0, w2
+;   mov w3, #0x7f
+;   adds w0, w0, w3
 ;   b.hs #0x10
 ;   ret
 ;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user0
@@ -32,15 +32,15 @@ block0(v0: i32):
 
 ; VCode:
 ; block0:
-;   movz w2, #127
-;   adds w0, w2, w0
+;   movz w3, #127
+;   adds w0, w3, w0
 ;   b.hs #trap=user0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mov w2, #0x7f
-;   adds w0, w2, w0
+;   mov w3, #0x7f
+;   adds w0, w3, w0
 ;   b.hs #0x10
 ;   ret
 ;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user0
@@ -56,7 +56,7 @@ block0(v0: i32, v1: i32):
 ;   adds w0, w0, w1
 ;   b.hs #trap=user0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   adds w0, w0, w1
@@ -73,15 +73,15 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   movz x2, #127
-;   adds x0, x0, x2
+;   movz x3, #127
+;   adds x0, x0, x3
 ;   b.hs #trap=user0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mov x2, #0x7f
-;   adds x0, x0, x2
+;   mov x3, #0x7f
+;   adds x0, x0, x3
 ;   b.hs #0x10
 ;   ret
 ;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user0
@@ -95,15 +95,15 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   movz x2, #127
-;   adds x0, x2, x0
+;   movz x3, #127
+;   adds x0, x3, x0
 ;   b.hs #trap=user0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mov x2, #0x7f
-;   adds x0, x2, x0
+;   mov x3, #0x7f
+;   adds x0, x3, x0
 ;   b.hs #0x10
 ;   ret
 ;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user0
@@ -119,7 +119,7 @@ block0(v0: i64, v1: i64):
 ;   adds x0, x0, x1
 ;   b.hs #trap=user0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   adds x0, x0, x1

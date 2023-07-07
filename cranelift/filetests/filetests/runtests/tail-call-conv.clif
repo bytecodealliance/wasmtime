@@ -1,0 +1,126 @@
+test interpret
+test run
+target x86_64
+target aarch64
+target aarch64 sign_return_address
+target aarch64 has_pauth sign_return_address
+target riscv64
+
+;; TODO(#6530): s390x doesn't support the `tail` calling convention yet.
+;;
+;; target s390x
+
+;; Test the `tail` calling convention with non-tail calls.
+
+function %tail_callee(i8, i16, i32, i64, f32, f64) -> f64, f32, i64, i32, i16, i8 tail {
+block0(v0: i8, v1: i16, v2: i32, v3: i64, v4: f32, v5: f64):
+    v6 = iadd_imm v0, 1
+    v7 = iadd_imm v1, 1
+    v8 = iadd_imm v2, 1
+    v9 = iadd_imm v3, 1
+    v10 = fadd v4, v4
+    v11 = fadd v5, v5
+    return v11, v10, v9, v8, v7, v6
+}
+
+function %tail_caller() -> f64, f32, i64, i32, i16, i8 tail {
+    fn0 = %tail_callee(i8, i16, i32, i64, f32, f64) -> f64, f32, i64, i32, i16, i8 tail
+
+block0:
+    v0 = iconst.i8 10
+    v1 = iconst.i16 20
+    v2 = iconst.i32 30
+    v3 = iconst.i64 40
+    v4 = f32const 0x2.0
+    v5 = f64const 0x4.0
+    v6, v7, v8, v9, v10, v11 = call fn0(v0, v1, v2, v3, v4, v5)
+    return v6, v7, v8, v9, v10, v11
+}
+
+; run: %tail_caller() == [0x8.0, 0x4.0, 41, 31, 21, 11]
+
+;; Test the `tail` calling convention with non-tail calls and stack arguments.
+
+function %tail_callee_stack_args(i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64) -> i64 tail {
+block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64, v8: i64, v9: i64, v10: i64, v11: i64, v12: i64, v13: i64, v14: i64, v15: i64, v16: i64, v17: i64, v18: i64, v19: i64, v20: i64, v21: i64, v22: i64, v23: i64, v24: i64, v25: i64):
+    return v25
+}
+
+function %tail_caller_stack_args() -> i64 tail {
+    fn0 = %tail_callee_stack_args(i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64) -> i64 tail
+
+block0:
+    v0 = iconst.i64 10
+    v1 = iconst.i64 15
+    v2 = iconst.i64 20
+    v3 = iconst.i64 25
+    v4 = iconst.i64 30
+    v5 = iconst.i64 35
+    v6 = iconst.i64 40
+    v7 = iconst.i64 45
+    v8 = iconst.i64 50
+    v9 = iconst.i64 55
+    v10 = iconst.i64 60
+    v11 = iconst.i64 65
+    v12 = iconst.i64 70
+    v13 = iconst.i64 75
+    v14 = iconst.i64 80
+    v15 = iconst.i64 85
+    v16 = iconst.i64 90
+    v17 = iconst.i64 95
+    v18 = iconst.i64 100
+    v19 = iconst.i64 105
+    v20 = iconst.i64 110
+    v21 = iconst.i64 115
+    v22 = iconst.i64 120
+    v23 = iconst.i64 125
+    v24 = iconst.i64 130
+    v25 = iconst.i64 135
+    v26 = call fn0(v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16, v17, v18, v19, v20, v21, v22, v23, v24, v25)
+    return v26
+}
+
+; run: %tail_caller_stack_args() == 135
+
+;; Test the `tail` calling convention with non-tail calls and stack returns.
+
+function %tail_callee_stack_rets() -> i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64 tail {
+block0:
+    v0 = iconst.i64 10
+    v1 = iconst.i64 15
+    v2 = iconst.i64 20
+    v3 = iconst.i64 25
+    v4 = iconst.i64 30
+    v5 = iconst.i64 35
+    v6 = iconst.i64 40
+    v7 = iconst.i64 45
+    v8 = iconst.i64 50
+    v9 = iconst.i64 55
+    v10 = iconst.i64 60
+    v11 = iconst.i64 65
+    v12 = iconst.i64 70
+    v13 = iconst.i64 75
+    v14 = iconst.i64 80
+    v15 = iconst.i64 85
+    v16 = iconst.i64 90
+    v17 = iconst.i64 95
+    v18 = iconst.i64 100
+    v19 = iconst.i64 105
+    v20 = iconst.i64 110
+    v21 = iconst.i64 115
+    v22 = iconst.i64 120
+    v23 = iconst.i64 125
+    v24 = iconst.i64 130
+    v25 = iconst.i64 135
+    return v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16, v17, v18, v19, v20, v21, v22, v23, v24, v25
+}
+
+function %tail_caller_stack_rets() -> i64 tail {
+    fn0 = colocated %tail_callee_stack_rets() -> i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64 tail
+
+block0:
+    v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16, v17, v18, v19, v20, v21, v22, v23, v24, v25 = call fn0()
+    return v25
+}
+
+; run: %tail_caller_stack_rets() == 135

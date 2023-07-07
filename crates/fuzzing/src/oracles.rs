@@ -83,6 +83,7 @@ impl StoreLimits {
     }
 
     fn alloc(&mut self, amt: usize) -> bool {
+        log::trace!("alloc {amt:#x} bytes");
         match self.0.remaining_memory.get().checked_sub(amt) {
             Some(mem) => {
                 self.0.remaining_memory.set(mem);
@@ -90,20 +91,30 @@ impl StoreLimits {
             }
             None => {
                 self.0.oom.set(true);
+                log::debug!("OOM hit");
                 false
             }
         }
     }
+
+    fn is_oom(&self) -> bool {
+        self.0.oom.get()
+    }
 }
 
 impl ResourceLimiter for StoreLimits {
-    fn memory_growing(&mut self, current: usize, desired: usize, _maximum: Option<usize>) -> bool {
-        self.alloc(desired - current)
+    fn memory_growing(
+        &mut self,
+        current: usize,
+        desired: usize,
+        _maximum: Option<usize>,
+    ) -> Result<bool> {
+        Ok(self.alloc(desired - current))
     }
 
-    fn table_growing(&mut self, current: u32, desired: u32, _maximum: Option<u32>) -> bool {
+    fn table_growing(&mut self, current: u32, desired: u32, _maximum: Option<u32>) -> Result<bool> {
         let delta = (desired - current) as usize * std::mem::size_of::<usize>();
-        self.alloc(delta)
+        Ok(self.alloc(delta))
     }
 }
 
@@ -128,6 +139,11 @@ pub enum Timeout {
 pub fn instantiate(wasm: &[u8], known_valid: bool, config: &generators::Config, timeout: Timeout) {
     let mut store = config.to_store();
 
+    let module = match compile_module(store.engine(), wasm, known_valid, config) {
+        Some(module) => module,
+        None => return,
+    };
+
     let mut timeout_state = SignalOnDrop::default();
     match timeout {
         Timeout::Fuel(fuel) => set_fuel(&mut store, fuel),
@@ -148,9 +164,7 @@ pub fn instantiate(wasm: &[u8], known_valid: bool, config: &generators::Config, 
         Timeout::None => {}
     }
 
-    if let Some(module) = compile_module(store.engine(), wasm, known_valid, config) {
-        instantiate_with_dummy(&mut store, &module);
-    }
+    instantiate_with_dummy(&mut store, &module);
 }
 
 /// Represents supported commands to the `instantiate_many` function.
@@ -293,7 +307,7 @@ pub fn instantiate_with_dummy(store: &mut Store<StoreLimits>, module: &Module) -
     // If the instantiation hit OOM for some reason then that's ok, it's
     // expected that fuzz-generated programs try to allocate lots of
     // stuff.
-    if store.data().0.oom.get() {
+    if store.data().is_oom() {
         log::debug!("failed to instantiate: OOM");
         return None;
     }
@@ -358,30 +372,21 @@ pub fn differential(
         .map(|results| results.unwrap());
     log::debug!(" -> results on {}: {:?}", rhs.name(), &rhs_results);
 
-    match (lhs_results, rhs_results) {
-        // If the evaluation succeeds, we compare the results.
-        (Ok(lhs_results), Ok(rhs_results)) => assert_eq!(lhs_results, rhs_results),
+    // If Wasmtime hit its OOM condition, which is possible since it's set
+    // somewhat low while fuzzing, then don't return an error but return
+    // `false` indicating that differential fuzzing must stop. There's no
+    // guarantee the other engine has the same OOM limits as Wasmtime, and
+    // it's assumed that Wasmtime is configured to have a more conservative
+    // limit than the other engine.
+    if rhs.is_oom() {
+        return Ok(false);
+    }
 
-        // Both sides failed. If either one hits a stack overflow then that's an
-        // engine defined limit which means we can no longer compare the state
-        // of the two instances, so `false` is returned and nothing else is
-        // compared.
-        //
-        // Otherwise, though, the same error should have popped out and this
-        // falls through to checking the intermediate state otherwise.
-        (Err(lhs), Err(rhs)) => {
-            let err = rhs.downcast::<Trap>().expect("not a trap");
-            let poisoned = err == Trap::StackOverflow || lhs_engine.is_stack_overflow(&lhs);
-
-            if poisoned {
-                return Ok(false);
-            }
-            lhs_engine.assert_error_match(&err, &lhs);
-        }
-        // A real bug is found if only one side fails.
-        (Ok(_), Err(_)) => panic!("only the `rhs` ({}) failed for this input", rhs.name()),
-        (Err(_), Ok(_)) => panic!("only the `lhs` ({}) failed for this input", lhs.name()),
-    };
+    match DiffEqResult::new(lhs_engine, lhs_results, rhs_results) {
+        DiffEqResult::Success(lhs, rhs) => assert_eq!(lhs, rhs),
+        DiffEqResult::Poisoned => return Ok(false),
+        DiffEqResult::Failed => {}
+    }
 
     for (global, ty) in rhs.exported_globals() {
         log::debug!("Comparing global `{global}`");
@@ -402,10 +407,57 @@ pub fn differential(
         if lhs == rhs {
             continue;
         }
+        eprintln!("differential memory is {} bytes long", lhs.len());
+        eprintln!("wasmtime memory is     {} bytes long", rhs.len());
         panic!("memories have differing values");
     }
 
     Ok(true)
+}
+
+/// Result of comparing the result of two operations during differential
+/// execution.
+pub enum DiffEqResult<T, U> {
+    /// Both engines succeeded.
+    Success(T, U),
+    /// The result has reached the state where engines may have diverged and
+    /// results can no longer be compared.
+    Poisoned,
+    /// Both engines failed with the same error message, and internal state
+    /// should still match between the two engines.
+    Failed,
+}
+
+impl<T, U> DiffEqResult<T, U> {
+    /// Computes the differential result from executing in two different
+    /// engines.
+    pub fn new(
+        lhs_engine: &dyn DiffEngine,
+        lhs_result: Result<T>,
+        rhs_result: Result<U>,
+    ) -> DiffEqResult<T, U> {
+        match (lhs_result, rhs_result) {
+            (Ok(lhs_result), Ok(rhs_result)) => DiffEqResult::Success(lhs_result, rhs_result),
+
+            // Both sides failed. If either one hits a stack overflow then that's an
+            // engine defined limit which means we can no longer compare the state
+            // of the two instances, so `None` is returned and nothing else is
+            // compared.
+            (Err(lhs), Err(rhs)) => {
+                let err = rhs.downcast::<Trap>().expect("not a trap");
+                let poisoned = err == Trap::StackOverflow || lhs_engine.is_stack_overflow(&lhs);
+
+                if poisoned {
+                    return DiffEqResult::Poisoned;
+                }
+                lhs_engine.assert_error_match(&err, &lhs);
+                DiffEqResult::Failed
+            }
+            // A real bug is found if only one side fails.
+            (Ok(_), Err(_)) => panic!("only the `rhs` failed for this input"),
+            (Err(_), Ok(_)) => panic!("only the `lhs` failed for this input"),
+        }
+    }
 }
 
 /// Invoke the given API calls.
@@ -456,7 +508,7 @@ pub fn make_api_calls(api: generators::api::ApiCalls) {
 
             ApiCall::InstanceDrop { id } => {
                 log::trace!("dropping instance {}", id);
-                drop(instances.remove(&id));
+                instances.remove(&id);
             }
 
             ApiCall::CallExportedFunc { instance, nth } => {
@@ -785,13 +837,31 @@ pub fn set_fuel<T>(store: &mut Store<T>, fuel: u64) {
 /// arbitrary types and values.
 pub fn dynamic_component_api_target(input: &mut arbitrary::Unstructured) -> arbitrary::Result<()> {
     use crate::generators::component_types;
-    use component_fuzz_util::{TestCase, EXPORT_FUNCTION, IMPORT_FUNCTION};
+    use component_fuzz_util::{TestCase, Type, EXPORT_FUNCTION, IMPORT_FUNCTION, MAX_TYPE_DEPTH};
     use component_test_util::FuncExt;
     use wasmtime::component::{Component, Linker, Val};
 
     crate::init_fuzzing();
 
-    let case = input.arbitrary::<TestCase>()?;
+    let mut types = Vec::new();
+    let mut type_fuel = 500;
+
+    for _ in 0..5 {
+        types.push(Type::generate(input, MAX_TYPE_DEPTH, &mut type_fuel)?);
+    }
+    let params = (0..input.int_in_range(0..=5)?)
+        .map(|_| input.choose(&types))
+        .collect::<arbitrary::Result<Vec<_>>>()?;
+    let results = (0..input.int_in_range(0..=5)?)
+        .map(|_| input.choose(&types))
+        .collect::<arbitrary::Result<Vec<_>>>()?;
+
+    let case = TestCase {
+        params,
+        results,
+        encoding1: input.arbitrary()?,
+        encoding2: input.arbitrary()?,
+    };
 
     let mut config = component_test_util::config();
     config.debug_adapter_modules(input.arbitrary()?);

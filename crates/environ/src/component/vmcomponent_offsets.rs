@@ -6,13 +6,13 @@
 //      store: *mut dyn Store,
 //      limits: *const VMRuntimeLimits,
 //      flags: [VMGlobalDefinition; component.num_runtime_component_instances],
-//      lowering_anyfuncs: [VMCallerCheckedFuncRef; component.num_lowerings],
-//      always_trap_anyfuncs: [VMCallerCheckedFuncRef; component.num_always_trap],
-//      transcoder_anyfuncs: [VMCallerCheckedFuncRef; component.num_transcoders],
+//      lowering_func_refs: [VMFuncRef; component.num_lowerings],
+//      always_trap_func_refs: [VMFuncRef; component.num_always_trap],
+//      transcoder_func_refs: [VMFuncRef; component.num_transcoders],
 //      lowerings: [VMLowering; component.num_lowerings],
 //      memories: [*mut VMMemoryDefinition; component.num_memories],
-//      reallocs: [*mut VMCallerCheckedFuncRef; component.num_reallocs],
-//      post_returns: [*mut VMCallerCheckedFuncRef; component.num_post_returns],
+//      reallocs: [*mut VMFuncRef; component.num_reallocs],
+//      post_returns: [*mut VMFuncRef; component.num_post_returns],
 // }
 
 use crate::component::{
@@ -57,7 +57,7 @@ pub struct VMComponentOffsets<P> {
     /// least 1).
     pub num_runtime_component_instances: u32,
     /// Number of "always trap" functions which have their
-    /// `VMCallerCheckedFuncRef` stored inline in the `VMComponentContext`.
+    /// `VMFuncRef` stored inline in the `VMComponentContext`.
     pub num_always_trap: u32,
     /// Number of transcoders needed for string conversion.
     pub num_transcoders: u32,
@@ -68,9 +68,9 @@ pub struct VMComponentOffsets<P> {
     store: u32,
     limits: u32,
     flags: u32,
-    lowering_anyfuncs: u32,
-    always_trap_anyfuncs: u32,
-    transcoder_anyfuncs: u32,
+    lowering_func_refs: u32,
+    always_trap_func_refs: u32,
+    transcoder_func_refs: u32,
     lowerings: u32,
     memories: u32,
     reallocs: u32,
@@ -105,9 +105,9 @@ impl<P: PtrSize> VMComponentOffsets<P> {
             store: 0,
             limits: 0,
             flags: 0,
-            lowering_anyfuncs: 0,
-            always_trap_anyfuncs: 0,
-            transcoder_anyfuncs: 0,
+            lowering_func_refs: 0,
+            always_trap_func_refs: 0,
+            transcoder_func_refs: 0,
             lowerings: 0,
             memories: 0,
             reallocs: 0,
@@ -148,9 +148,9 @@ impl<P: PtrSize> VMComponentOffsets<P> {
             align(16),
             size(flags) = cmul(ret.num_runtime_component_instances, ret.ptr.size_of_vmglobal_definition()),
             align(u32::from(ret.ptr.size())),
-            size(lowering_anyfuncs) = cmul(ret.num_lowerings, ret.ptr.size_of_vmcaller_checked_func_ref()),
-            size(always_trap_anyfuncs) = cmul(ret.num_always_trap, ret.ptr.size_of_vmcaller_checked_func_ref()),
-            size(transcoder_anyfuncs) = cmul(ret.num_transcoders, ret.ptr.size_of_vmcaller_checked_func_ref()),
+            size(lowering_func_refs) = cmul(ret.num_lowerings, ret.ptr.size_of_vm_func_ref()),
+            size(always_trap_func_refs) = cmul(ret.num_always_trap, ret.ptr.size_of_vm_func_ref()),
+            size(transcoder_func_refs) = cmul(ret.num_transcoders, ret.ptr.size_of_vm_func_ref()),
             size(lowerings) = cmul(ret.num_lowerings, ret.ptr.size() * 2),
             size(memories) = cmul(ret.num_runtime_memories, ret.ptr.size()),
             size(reallocs) = cmul(ret.num_runtime_reallocs, ret.ptr.size()),
@@ -204,46 +204,43 @@ impl<P: PtrSize> VMComponentOffsets<P> {
         self.limits
     }
 
-    /// The offset of the `lowering_anyfuncs` field.
+    /// The offset of the `lowering_func_refs` field.
     #[inline]
-    pub fn lowering_anyfuncs(&self) -> u32 {
-        self.lowering_anyfuncs
+    pub fn lowering_func_refs(&self) -> u32 {
+        self.lowering_func_refs
     }
 
-    /// The offset of `VMCallerCheckedFuncRef` for the `index` specified.
+    /// The offset of `VMFuncRef` for the `index` specified.
     #[inline]
-    pub fn lowering_anyfunc(&self, index: LoweredIndex) -> u32 {
+    pub fn lowering_func_ref(&self, index: LoweredIndex) -> u32 {
         assert!(index.as_u32() < self.num_lowerings);
-        self.lowering_anyfuncs()
-            + index.as_u32() * u32::from(self.ptr.size_of_vmcaller_checked_func_ref())
+        self.lowering_func_refs() + index.as_u32() * u32::from(self.ptr.size_of_vm_func_ref())
     }
 
-    /// The offset of the `always_trap_anyfuncs` field.
+    /// The offset of the `always_trap_func_refs` field.
     #[inline]
-    pub fn always_trap_anyfuncs(&self) -> u32 {
-        self.always_trap_anyfuncs
+    pub fn always_trap_func_refs(&self) -> u32 {
+        self.always_trap_func_refs
     }
 
-    /// The offset of `VMCallerCheckedFuncRef` for the `index` specified.
+    /// The offset of `VMFuncRef` for the `index` specified.
     #[inline]
-    pub fn always_trap_anyfunc(&self, index: RuntimeAlwaysTrapIndex) -> u32 {
+    pub fn always_trap_func_ref(&self, index: RuntimeAlwaysTrapIndex) -> u32 {
         assert!(index.as_u32() < self.num_always_trap);
-        self.always_trap_anyfuncs()
-            + index.as_u32() * u32::from(self.ptr.size_of_vmcaller_checked_func_ref())
+        self.always_trap_func_refs() + index.as_u32() * u32::from(self.ptr.size_of_vm_func_ref())
     }
 
-    /// The offset of the `transcoder_anyfuncs` field.
+    /// The offset of the `transcoder_func_refs` field.
     #[inline]
-    pub fn transcoder_anyfuncs(&self) -> u32 {
-        self.transcoder_anyfuncs
+    pub fn transcoder_func_refs(&self) -> u32 {
+        self.transcoder_func_refs
     }
 
-    /// The offset of `VMCallerCheckedFuncRef` for the `index` specified.
+    /// The offset of `VMFuncRef` for the `index` specified.
     #[inline]
-    pub fn transcoder_anyfunc(&self, index: RuntimeTranscoderIndex) -> u32 {
+    pub fn transcoder_func_ref(&self, index: RuntimeTranscoderIndex) -> u32 {
         assert!(index.as_u32() < self.num_transcoders);
-        self.transcoder_anyfuncs()
-            + index.as_u32() * u32::from(self.ptr.size_of_vmcaller_checked_func_ref())
+        self.transcoder_func_refs() + index.as_u32() * u32::from(self.ptr.size_of_vm_func_ref())
     }
 
     /// The offset of the `lowerings` field.
@@ -309,7 +306,7 @@ impl<P: PtrSize> VMComponentOffsets<P> {
         self.reallocs
     }
 
-    /// The offset of the `*mut VMCallerCheckedFuncRef` for the runtime index
+    /// The offset of the `*mut VMFuncRef` for the runtime index
     /// provided.
     #[inline]
     pub fn runtime_realloc(&self, index: RuntimeReallocIndex) -> u32 {
@@ -323,7 +320,7 @@ impl<P: PtrSize> VMComponentOffsets<P> {
         self.post_returns
     }
 
-    /// The offset of the `*mut VMCallerCheckedFuncRef` for the runtime index
+    /// The offset of the `*mut VMFuncRef` for the runtime index
     /// provided.
     #[inline]
     pub fn runtime_post_return(&self, index: RuntimePostReturnIndex) -> u32 {

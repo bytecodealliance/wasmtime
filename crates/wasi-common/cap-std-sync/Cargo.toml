@@ -19,7 +19,7 @@ cap-std = { workspace = true }
 cap-fs-ext = "1.0.0"
 cap-time-ext = "1.0.0"
 cap-rand = { workspace = true }
-fs-set-times = "0.18.0"
+fs-set-times = "0.19.0"
 system-interface = { version = "0.25.0", features = ["cap_std_impls"] }
 tracing = { workspace = true }
 io-lifetimes = { workspace = true }

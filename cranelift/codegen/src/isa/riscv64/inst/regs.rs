@@ -136,52 +136,45 @@ pub fn writable_spilltmp_reg2() -> Writable<Reg> {
 }
 
 pub fn crate_reg_eviroment(_flags: &settings::Flags) -> MachineEnv {
-    let preferred_regs_by_class: [Vec<PReg>; 2] = {
-        let mut x_register: Vec<PReg> = vec![];
-        x_register.push(PReg::new(5, RegClass::Int));
-        for i in 6..=7 {
-            x_register.push(PReg::new(i, RegClass::Int));
-        }
-        for i in 10..=17 {
-            x_register.push(PReg::new(i, RegClass::Int));
-        }
-        for i in 28..=29 {
-            x_register.push(PReg::new(i, RegClass::Int));
-        }
+    let preferred_regs_by_class: [Vec<PReg>; 3] = {
+        let x_registers: Vec<PReg> = (5..=7)
+            .chain(10..=17)
+            .chain(28..=29)
+            .map(|i| PReg::new(i, RegClass::Int))
+            .collect();
 
-        let mut f_register: Vec<PReg> = vec![];
-        for i in 0..=7 {
-            f_register.push(PReg::new(i, RegClass::Float));
-        }
-        for i in 10..=17 {
-            f_register.push(PReg::new(i, RegClass::Float));
-        }
-        for i in 28..=31 {
-            f_register.push(PReg::new(i, RegClass::Float));
-        }
-        [x_register, f_register]
+        let f_registers: Vec<PReg> = (0..=7)
+            .chain(10..=17)
+            .chain(28..=31)
+            .map(|i| PReg::new(i, RegClass::Float))
+            .collect();
+
+        let v_registers: Vec<PReg> = (0..=31).map(|i| PReg::new(i, RegClass::Vector)).collect();
+
+        [x_registers, f_registers, v_registers]
     };
 
-    let non_preferred_regs_by_class: [Vec<PReg>; 2] = {
-        let mut x_register: Vec<PReg> = vec![];
-        x_register.push(PReg::new(9, RegClass::Int));
-        for i in 18..=27 {
-            x_register.push(PReg::new(i, RegClass::Int));
-        }
-        let mut f_register: Vec<PReg> = vec![];
-        for i in 8..=9 {
-            f_register.push(PReg::new(i, RegClass::Float));
-        }
-        for i in 18..=27 {
-            f_register.push(PReg::new(i, RegClass::Float));
-        }
-        [x_register, f_register]
+    let non_preferred_regs_by_class: [Vec<PReg>; 3] = {
+        let x_registers: Vec<PReg> = (9..=9)
+            .chain(18..=27)
+            .map(|i| PReg::new(i, RegClass::Int))
+            .collect();
+
+        let f_registers: Vec<PReg> = (8..=9)
+            .chain(18..=27)
+            .map(|i| PReg::new(i, RegClass::Float))
+            .collect();
+
+        let v_registers = vec![];
+
+        [x_registers, f_registers, v_registers]
     };
 
     MachineEnv {
         preferred_regs_by_class,
         non_preferred_regs_by_class,
         fixed_stack_slots: vec![],
+        scratch_by_class: [None, None, None],
     }
 }
 
@@ -191,7 +184,7 @@ pub fn x_reg(enc: usize) -> Reg {
     let v_reg = VReg::new(p_reg.index(), p_reg.class());
     Reg::from(v_reg)
 }
-pub fn px_reg(enc: usize) -> PReg {
+pub const fn px_reg(enc: usize) -> PReg {
     PReg::new(enc, RegClass::Int)
 }
 
@@ -217,4 +210,14 @@ pub(crate) fn x_reg_range(start: usize, end: usize) -> Vec<Writable<Reg>> {
         regs.push(Writable::from_reg(x_reg(i)));
     }
     regs
+}
+
+#[inline]
+pub fn v_reg(enc: usize) -> Reg {
+    let p_reg = PReg::new(enc, RegClass::Vector);
+    let v_reg = VReg::new(p_reg.index(), p_reg.class());
+    Reg::from(v_reg)
+}
+pub const fn pv_reg(enc: usize) -> PReg {
+    PReg::new(enc, RegClass::Vector)
 }

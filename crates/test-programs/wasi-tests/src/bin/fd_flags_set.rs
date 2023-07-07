@@ -10,11 +10,7 @@ unsafe fn test_fd_fdstat_set_flags(dir_fd: wasi::Fd) {
         0,
         FILE_NAME,
         wasi::OFLAGS_CREAT,
-        wasi::RIGHTS_FD_READ
-            | wasi::RIGHTS_FD_WRITE
-            | wasi::RIGHTS_FD_SEEK
-            | wasi::RIGHTS_FD_TELL
-            | wasi::RIGHTS_FD_FDSTAT_SET_FLAGS,
+        wasi::RIGHTS_FD_READ | wasi::RIGHTS_FD_WRITE,
         0,
         wasi::FDFLAGS_APPEND,
     )

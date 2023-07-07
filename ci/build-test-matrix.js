@@ -82,7 +82,7 @@ const array = [
     "target": "riscv64gc-unknown-linux-gnu",
     "gcc_package": "gcc-riscv64-linux-gnu",
     "gcc": "riscv64-linux-gnu-gcc",
-    "qemu": "qemu-riscv64 -L /usr/riscv64-linux-gnu",
+    "qemu": "qemu-riscv64 -cpu rv64,v=true,vlen=256,vext_spec=v1.0,zba=true,zbb=true,zbc=true,zbs=true,zbkb=true -L /usr/riscv64-linux-gnu",
     "qemu_target": "riscv64-linux-user",
     "name": "Test Linux riscv64",
     "filter": "linux-riscv64",

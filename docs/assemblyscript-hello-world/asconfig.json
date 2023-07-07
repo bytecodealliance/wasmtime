@@ -1,9 +1,13 @@
 {
     "targets": {
-        "helloworld": {
-            "outFile": "build/wasi-hello-world.wasm",
-            "textFile": "build/wasi-hello-world.wat"
+        "wasi-hello": {
+            "outFile": "build/wasi-hello.wasm",
+            "textFile": "build/wasi-hello.wat",
+            "optimizeLevel": 0,
+            "shrinkLevel": 0,
+            "converge": false,
+            "noAssert": false
         }
     },
-    "options": {}
+    "extends": "./node_modules/@assemblyscript/wasi-shim/asconfig.json"
 }

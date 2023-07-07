@@ -49,7 +49,11 @@ macro_rules! match_imm {
                 let text = text.replace("_", "");
                 // Parse it in hexadecimal form.
                 <$unsigned>::from_str_radix(&text[2..], 16).map_err(|_| {
-                    $parser.error("unable to parse value as a hexadecimal immediate")
+                    $parser.error(&format!(
+                        "unable to parse '{}' value as a hexadecimal {} immediate",
+                        &text[2..],
+                        stringify!($unsigned),
+                    ))
                 })?
             } else {
                 // Parse it as a signed type to check for overflow and other issues.
@@ -2346,17 +2350,7 @@ impl<'a> Parser<'a> {
             let arg_types = sig
                 .params
                 .iter()
-                .enumerate()
-                .filter_map(|(i, p)| {
-                    // The first argument being VMCtx indicates that this is a argument that is going
-                    // to be passed in with info about the test environment, and should not be passed
-                    // in the run params.
-                    if p.purpose == ir::ArgumentPurpose::VMContext && i == 0 {
-                        None
-                    } else {
-                        Some(p.value_type)
-                    }
-                })
+                .map(|abi| abi.value_type)
                 .collect::<Vec<_>>();
             let args = self.parse_data_value_list(&arg_types)?;
 
@@ -2731,7 +2725,6 @@ impl<'a> Parser<'a> {
                 ctx.check_table(table, self.loc)?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
                 let arg = self.match_value("expected SSA value table address")?;
-                self.match_token(Token::Comma, "expected ',' between operands")?;
                 let offset = self.optional_offset32()?;
                 InstructionData::TableAddr {
                     opcode,

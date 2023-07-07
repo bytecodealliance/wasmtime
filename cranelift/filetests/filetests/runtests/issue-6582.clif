@@ -1,0 +1,34 @@
+test interpret
+test run
+target x86_64
+target aarch64
+target aarch64 sign_return_address
+target aarch64 has_pauth sign_return_address
+target riscv64
+
+function %a(i8, i8, i8, i8, i8, i8, i8, i8) -> i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8 tail {
+block0(v0: i8, v1: i8, v2: i8, v3: i8, v4: i8, v5: i8, v6: i8, v7: i8):
+    return v0, v0, v0, v0, v0, v0, v0, v0, v0, v0, v0, v0, v0, v0, v0
+}
+
+; run: %a(0, 0, 0, 0, 0, 0, 0, 0) == [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+
+function %b() -> i8 tail {
+    fn0 = %a(i8, i8, i8, i8, i8, i8, i8, i8) -> i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8 tail
+block0:
+    v0 = iconst.i8 42
+    v15, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14 = call fn0(v0, v0, v0, v0, v0, v0, v0, v0)
+    return v14
+}
+
+; run: %b() == 42
+
+function %c() -> i8 tail {
+    fn0 = colocated %a(i8, i8, i8, i8, i8, i8, i8, i8) -> i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8, i8 tail
+block0:
+    v0 = iconst.i8 96
+    v15, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14 = call fn0(v0, v0, v0, v0, v0, v0, v0, v0)
+    return v14
+}
+
+; run: %c() == 96

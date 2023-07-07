@@ -60,7 +60,7 @@ pub fn is_pure_for_egraph(func: &Function, inst: Inst) -> bool {
     };
     // Multi-value results do not play nicely with much of the egraph
     // infrastructure. They are in practice used only for multi-return
-    // calls and some other odd instructions (e.g. iadd_cout) which,
+    // calls and some other odd instructions (e.g. uadd_overflow) which,
     // for now, we can afford to leave in place as opaque
     // side-effecting ops. So if more than one result, then the inst
     // is "not pure". Similarly, ops with zero results can be used

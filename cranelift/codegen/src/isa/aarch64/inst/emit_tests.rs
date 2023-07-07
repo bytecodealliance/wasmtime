@@ -37,12 +37,28 @@ fn test_aarch64_binemit() {
     // Then:
     //
     //      $ echo "mov x1, x2" | aarch64inst.sh
-    insns.push((Inst::Ret { rets: vec![] }, "C0035FD6", "ret"));
+    insns.push((
+        Inst::Ret {
+            rets: vec![],
+            stack_bytes_to_pop: 0,
+        },
+        "C0035FD6",
+        "ret",
+    ));
+    insns.push((
+        Inst::Ret {
+            rets: vec![],
+            stack_bytes_to_pop: 16,
+        },
+        "FF430091C0035FD6",
+        "add sp, sp, #16 ; ret",
+    ));
     insns.push((
         Inst::AuthenticatedRet {
             key: APIKey::A,
             is_hint: true,
             rets: vec![],
+            stack_bytes_to_pop: 0,
         },
         "BF2303D5C0035FD6",
         "autiasp ; ret",
@@ -52,9 +68,20 @@ fn test_aarch64_binemit() {
             key: APIKey::B,
             is_hint: false,
             rets: vec![],
+            stack_bytes_to_pop: 0,
         },
         "FF0F5FD6",
         "retab",
+    ));
+    insns.push((
+        Inst::AuthenticatedRet {
+            key: APIKey::A,
+            is_hint: false,
+            rets: vec![],
+            stack_bytes_to_pop: 16,
+        },
+        "FF430091FF0B5FD6",
+        "add sp, sp, #16 ; retaa",
     ));
     insns.push((Inst::Pacisp { key: APIKey::B }, "7F2303D5", "pacibsp"));
     insns.push((Inst::Xpaclri, "FF2003D5", "xpaclri"));
@@ -1085,6 +1112,30 @@ fn test_aarch64_binemit() {
         },
         "4190039B",
         "msub x1, x2, x3, x4",
+    ));
+    insns.push((
+        Inst::AluRRRR {
+            alu_op: ALUOp3::UMAddL,
+            size: OperandSize::Size32,
+            rd: writable_xreg(1),
+            rn: xreg(2),
+            rm: xreg(3),
+            ra: xreg(4),
+        },
+        "4110A39B",
+        "umaddl x1, w2, w3, x4",
+    ));
+    insns.push((
+        Inst::AluRRRR {
+            alu_op: ALUOp3::SMAddL,
+            size: OperandSize::Size32,
+            rd: writable_xreg(1),
+            rn: xreg(2),
+            rm: xreg(3),
+            ra: xreg(4),
+        },
+        "4110239B",
+        "smaddl x1, w2, w3, x4",
     ));
     insns.push((
         Inst::AluRRR {
@@ -6033,6 +6084,7 @@ fn test_aarch64_binemit() {
                 opcode: Opcode::Call,
                 caller_callconv: CallConv::SystemV,
                 callee_callconv: CallConv::SystemV,
+                callee_pop_size: 0,
             }),
         },
         "00000094",
@@ -6049,6 +6101,7 @@ fn test_aarch64_binemit() {
                 opcode: Opcode::CallIndirect,
                 caller_callconv: CallConv::SystemV,
                 callee_callconv: CallConv::SystemV,
+                callee_pop_size: 0,
             }),
         },
         "40013FD6",
@@ -7811,7 +7864,7 @@ fn test_aarch64_binemit() {
 
         let mut buffer = MachBuffer::new();
         insn.emit(&[], &mut buffer, &emit_info, &mut Default::default());
-        let buffer = buffer.finish();
+        let buffer = buffer.finish(&Default::default(), &mut Default::default());
         let actual_encoding = &buffer.stringify_code_bytes();
         assert_eq!(expected_encoding, actual_encoding);
     }

@@ -1,5 +1,6 @@
 //! AArch64 ISA: binary code emission.
 
+use cranelift_control::ControlPlane;
 use regalloc2::Allocation;
 
 use crate::binemit::{Reloc, StackMap};
@@ -638,15 +639,19 @@ pub struct EmitState {
     stack_map: Option<StackMap>,
     /// Current source-code location corresponding to instruction to be emitted.
     cur_srcloc: RelSourceLoc,
+    /// Only used during fuzz-testing. Otherwise, it is a zero-sized struct and
+    /// optimized away at compiletime. See [cranelift_control].
+    ctrl_plane: ControlPlane,
 }
 
 impl MachInstEmitState<Inst> for EmitState {
-    fn new(abi: &Callee<AArch64MachineDeps>) -> Self {
+    fn new(abi: &Callee<AArch64MachineDeps>, ctrl_plane: ControlPlane) -> Self {
         EmitState {
             virtual_sp_offset: 0,
             nominal_sp_to_fp: abi.frame_size() as i64,
             stack_map: None,
             cur_srcloc: Default::default(),
+            ctrl_plane,
         }
     }
 
@@ -656,6 +661,14 @@ impl MachInstEmitState<Inst> for EmitState {
 
     fn pre_sourceloc(&mut self, srcloc: RelSourceLoc) {
         self.cur_srcloc = srcloc;
+    }
+
+    fn ctrl_plane_mut(&mut self) -> &mut ControlPlane {
+        &mut self.ctrl_plane
+    }
+
+    fn take_ctrl_plane(self) -> ControlPlane {
+        self.ctrl_plane
     }
 }
 
@@ -776,6 +789,14 @@ impl MachInstEmit for Inst {
                 let (top11, bit15) = match alu_op {
                     ALUOp3::MAdd => (0b0_00_11011_000, 0),
                     ALUOp3::MSub => (0b0_00_11011_000, 1),
+                    ALUOp3::UMAddL => {
+                        debug_assert!(size == OperandSize::Size32);
+                        (0b1_00_11011_1_01, 0)
+                    }
+                    ALUOp3::SMAddL => {
+                        debug_assert!(size == OperandSize::Size32);
+                        (0b1_00_11011_0_01, 0)
+                    }
                 };
                 let top11 = top11 | size.sf_bit() << 10;
                 sink.put4(enc_arith_rrrr(top11, rm, bit15, ra, rn, rd));
@@ -1511,7 +1532,7 @@ impl MachInstEmit for Inst {
                 let again_label = sink.get_label();
 
                 // again:
-                sink.bind_label(again_label);
+                sink.bind_label(again_label, &mut state.ctrl_plane);
 
                 let srcloc = state.cur_srcloc();
                 if !srcloc.is_default() && !flags.notrap() {
@@ -1713,7 +1734,7 @@ impl MachInstEmit for Inst {
                 let out_label = sink.get_label();
 
                 // again:
-                sink.bind_label(again_label);
+                sink.bind_label(again_label, &mut state.ctrl_plane);
 
                 let srcloc = state.cur_srcloc();
                 if !srcloc.is_default() && !flags.notrap() {
@@ -1762,7 +1783,7 @@ impl MachInstEmit for Inst {
                 sink.use_label_at_offset(br_again_offset, again_label, LabelUse::Branch19);
 
                 // out:
-                sink.bind_label(out_label);
+                sink.bind_label(out_label, &mut state.ctrl_plane);
             }
             &Inst::LoadAcquire {
                 access_ty,
@@ -2914,6 +2935,45 @@ impl MachInstEmit for Inst {
                 };
                 sink.put4(enc_vec_rrr(top11 | q << 9, rm, bit15_10, rn, rd));
             }
+            &Inst::VecFmlaElem {
+                rd,
+                ri,
+                rn,
+                rm,
+                alu_op,
+                size,
+                idx,
+            } => {
+                let rd = allocs.next_writable(rd);
+                let ri = allocs.next(ri);
+                debug_assert_eq!(rd.to_reg(), ri);
+                let rn = allocs.next(rn);
+                let rm = allocs.next(rm);
+                let idx = u32::from(idx);
+
+                let (q, _size) = size.enc_size();
+                let o2 = match alu_op {
+                    VecALUModOp::Fmla => 0b0,
+                    VecALUModOp::Fmls => 0b1,
+                    _ => unreachable!(),
+                };
+
+                let (h, l) = match size {
+                    VectorSize::Size32x4 => {
+                        assert!(idx < 4);
+                        (idx >> 1, idx & 1)
+                    }
+                    VectorSize::Size64x2 => {
+                        assert!(idx < 2);
+                        (idx, 0)
+                    }
+                    _ => unreachable!(),
+                };
+
+                let top11 = 0b000_011111_00 | (q << 9) | (size.enc_float_size() << 1) | l;
+                let bit15_10 = 0b000100 | (o2 << 4) | (h << 1);
+                sink.put4(enc_vec_rrr(top11, rm, bit15_10, rn, rd));
+            }
             &Inst::VecLoadReplicate {
                 rd,
                 rn,
@@ -2968,13 +3028,13 @@ impl MachInstEmit for Inst {
                 sink.put4(enc_jump26(0b000101, 0 /* will be fixed up later */));
 
                 // else:
-                sink.bind_label(else_label);
+                sink.bind_label(else_label, &mut state.ctrl_plane);
 
                 // mov rd, rn
                 sink.put4(enc_vecmov(/* 16b = */ true, rd, rn));
 
                 // out:
-                sink.bind_label(out_label);
+                sink.bind_label(out_label, &mut state.ctrl_plane);
             }
             &Inst::MovToNZCV { rn } => {
                 let rn = allocs.next(rn);
@@ -3054,10 +3114,32 @@ impl MachInstEmit for Inst {
                 // Nothing: this is a pseudoinstruction that serves
                 // only to constrain registers at a certain point.
             }
-            &Inst::Ret { .. } => {
+            &Inst::Ret {
+                stack_bytes_to_pop, ..
+            } => {
+                if stack_bytes_to_pop != 0 {
+                    // The requirement that `stack_bytes_to_pop` fit in an
+                    // `Imm12` isn't fundamental, but lifting it is left for
+                    // future PRs.
+                    let imm12 = Imm12::maybe_from_u64(u64::from(stack_bytes_to_pop))
+                        .expect("stack bytes to pop must fit in Imm12");
+                    Inst::AluRRImm12 {
+                        alu_op: ALUOp::Add,
+                        size: OperandSize::Size64,
+                        rd: writable_stack_reg(),
+                        rn: stack_reg(),
+                        imm12,
+                    }
+                    .emit(&[], sink, emit_info, state);
+                }
                 sink.put4(0xd65f03c0);
             }
-            &Inst::AuthenticatedRet { key, is_hint, .. } => {
+            &Inst::AuthenticatedRet {
+                key,
+                is_hint,
+                stack_bytes_to_pop,
+                ..
+            } => {
                 let key = match key {
                     APIKey::A => 0b0,
                     APIKey::B => 0b1,
@@ -3065,8 +3147,27 @@ impl MachInstEmit for Inst {
 
                 if is_hint {
                     sink.put4(0xd50323bf | key << 6); // autiasp / autibsp
-                    Inst::Ret { rets: vec![] }.emit(&[], sink, emit_info, state);
+                    Inst::Ret {
+                        rets: vec![],
+                        stack_bytes_to_pop,
+                    }
+                    .emit(&[], sink, emit_info, state);
                 } else {
+                    if stack_bytes_to_pop != 0 {
+                        // The requirement that `stack_bytes_to_pop` fit in an
+                        // `Imm12` isn't fundamental, but lifting it is left for
+                        // future PRs.
+                        let imm12 = Imm12::maybe_from_u64(u64::from(stack_bytes_to_pop))
+                            .expect("stack bytes to pop must fit in Imm12");
+                        Inst::AluRRImm12 {
+                            alu_op: ALUOp::Add,
+                            size: OperandSize::Size64,
+                            rd: writable_stack_reg(),
+                            rn: stack_reg(),
+                            imm12,
+                        }
+                        .emit(&[], sink, emit_info, state);
+                    }
                     sink.put4(0xd65f0bff | key << 10); // retaa / retab
                 }
             }
@@ -3079,6 +3180,13 @@ impl MachInstEmit for Inst {
                 if info.opcode.is_call() {
                     sink.add_call_site(info.opcode);
                 }
+
+                let callee_pop_size = i64::from(info.callee_pop_size);
+                state.virtual_sp_offset -= callee_pop_size;
+                trace!(
+                    "call adjusts virtual sp offset by {callee_pop_size} -> {}",
+                    state.virtual_sp_offset
+                );
             }
             &Inst::CallInd { ref info } => {
                 if let Some(s) = state.take_stack_map() {
@@ -3089,6 +3197,13 @@ impl MachInstEmit for Inst {
                 if info.opcode.is_call() {
                     sink.add_call_site(info.opcode);
                 }
+
+                let callee_pop_size = i64::from(info.callee_pop_size);
+                state.virtual_sp_offset -= callee_pop_size;
+                trace!(
+                    "call adjusts virtual sp offset by {callee_pop_size} -> {}",
+                    state.virtual_sp_offset
+                );
             }
             &Inst::CondBr {
                 taken,
@@ -3425,8 +3540,8 @@ impl MachInstEmit for Inst {
                         dest: BranchTarget::Label(jump_around_label),
                     };
                     jmp.emit(&[], sink, emit_info, state);
-                    sink.emit_island(needed_space + 4);
-                    sink.bind_label(jump_around_label);
+                    sink.emit_island(needed_space + 4, &mut state.ctrl_plane);
+                    sink.bind_label(jump_around_label, &mut state.ctrl_plane);
                 }
             }
 
@@ -3501,6 +3616,7 @@ impl MachInstEmit for Inst {
                         opcode: Opcode::CallIndirect,
                         caller_callconv: CallConv::AppleAarch64,
                         callee_callconv: CallConv::AppleAarch64,
+                        callee_pop_size: 0,
                     }),
                 }
                 .emit(&[], sink, emit_info, state);
@@ -3540,7 +3656,7 @@ impl MachInstEmit for Inst {
                 // out at this time.
 
                 let loop_start = sink.get_label();
-                sink.bind_label(loop_start);
+                sink.bind_label(loop_start, &mut state.ctrl_plane);
 
                 Inst::AluRRImm12 {
                     alu_op: ALUOp::Sub,
@@ -3575,7 +3691,7 @@ impl MachInstEmit for Inst {
                     kind: CondBrKind::Cond(Cond::Gt),
                 }
                 .emit(&[], sink, emit_info, state);
-                sink.bind_label(loop_end);
+                sink.bind_label(loop_end, &mut state.ctrl_plane);
             }
         }
 

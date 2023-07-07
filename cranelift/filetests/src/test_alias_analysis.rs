@@ -36,9 +36,6 @@ impl SubTest for TestAliasAnalysis {
 
         comp_ctx.flowgraph();
         comp_ctx
-            .simple_gvn(context.flags_or_isa())
-            .map_err(|e| crate::pretty_anyhow_error(&comp_ctx.func, Into::into(e)))?;
-        comp_ctx
             .replace_redundant_loads()
             .map_err(|e| crate::pretty_anyhow_error(&comp_ctx.func, Into::into(e)))?;
 

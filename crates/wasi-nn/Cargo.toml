@@ -17,12 +17,9 @@ anyhow = { workspace = true }
 wiggle = { workspace = true }
 
 # These dependencies are necessary for the wasi-nn implementation:
-openvino = { version = "0.4.2", features = ["runtime-linking"] }
+openvino = { version = "0.5.0", features = ["runtime-linking"] }
 thiserror = { workspace = true }
 dashmap = "5.4.0"
 
 [build-dependencies]
-walkdir = "2.3"
-
-[badges]
-maintenance = { status = "experimental" }
+walkdir = { workspace = true }

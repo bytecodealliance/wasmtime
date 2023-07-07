@@ -700,7 +700,7 @@ fn get_constraint<'entries, 'table>(
     if let Some(free_typevar) = type_var.free_typevar() {
         if ctrl_typevar.is_some() && free_typevar != *ctrl_typevar.unwrap() {
             assert!(type_var.base.is_none());
-            return format!("Free({})", type_sets.add(&type_var.get_raw_typeset()));
+            return format!("Free({})", type_sets.add(type_var.get_raw_typeset()));
         }
     }
 
@@ -809,7 +809,7 @@ fn gen_type_constraints(all_inst: &AllInstructions, fmt: &mut Formatter) {
     fmt.indent(|fmt| {
         for inst in all_inst.iter() {
             let (ctrl_typevar, ctrl_typeset) = if let Some(poly) = &inst.polymorphic_info {
-                let index = type_sets.add(&*poly.ctrl_typevar.get_raw_typeset());
+                let index = type_sets.add(poly.ctrl_typevar.get_raw_typeset());
                 (Some(&poly.ctrl_typevar), index)
             } else {
                 (None, TYPESET_LIMIT)
@@ -857,7 +857,7 @@ fn gen_type_constraints(all_inst: &AllInstructions, fmt: &mut Formatter) {
                 .collect::<Vec<_>>()
                 .join(", ")));
             if let Some(poly) = &inst.polymorphic_info {
-                fmt.comment(format!("Polymorphic over {}", typeset_to_string(&poly.ctrl_typevar.get_raw_typeset())));
+                fmt.comment(format!("Polymorphic over {}", typeset_to_string(poly.ctrl_typevar.get_raw_typeset())));
             }
 
             // Compute the bit field encoding, c.f. instructions.rs.
@@ -1730,7 +1730,7 @@ fn gen_builder(
     fmt.line("pub trait InstBuilder<'f>: InstBuilderBase<'f> {");
     fmt.indent(|fmt| {
         for inst in instructions.iter() {
-            gen_inst_builder(inst, &*inst.format, fmt);
+            gen_inst_builder(inst, &inst.format, fmt);
             fmt.empty_line();
         }
         for (i, format) in formats.iter().enumerate() {

@@ -2,19 +2,18 @@
 
 use crate::dominator_tree::DominatorTree;
 use crate::ir;
-use crate::ir::condcodes::IntCC;
-use crate::ir::Function;
-
+use crate::ir::{Function, Type};
 use crate::isa::riscv64::settings as riscv_settings;
-use crate::isa::{Builder as IsaBuilder, TargetIsa};
+use crate::isa::{Builder as IsaBuilder, FunctionAlignment, TargetIsa};
 use crate::machinst::{
-    compile, CompiledCode, CompiledCodeStencil, MachTextSectionBuilder, Reg, SigSet,
+    compile, CompiledCode, CompiledCodeStencil, MachInst, MachTextSectionBuilder, Reg, SigSet,
     TextSectionBuilder, VCode,
 };
 use crate::result::CodegenResult;
 use crate::settings as shared_settings;
 use alloc::{boxed::Box, vec::Vec};
 use core::fmt;
+use cranelift_control::ControlPlane;
 use regalloc2::MachineEnv;
 use target_lexicon::{Architecture, Triple};
 mod abi;
@@ -58,11 +57,12 @@ impl Riscv64Backend {
         &self,
         func: &Function,
         domtree: &DominatorTree,
+        ctrl_plane: &mut ControlPlane,
     ) -> CodegenResult<(VCode<inst::Inst>, regalloc2::Output)> {
         let emit_info = EmitInfo::new(self.flags.clone(), self.isa_flags.clone());
         let sigs = SigSet::new::<abi::Riscv64MachineDeps>(func, &self.flags)?;
         let abi = abi::Riscv64Callee::new(func, self, &self.isa_flags, &sigs)?;
-        compile::compile::<Riscv64Backend>(func, domtree, self, abi, emit_info, sigs)
+        compile::compile::<Riscv64Backend>(func, domtree, self, abi, emit_info, sigs, ctrl_plane)
     }
 }
 
@@ -72,18 +72,15 @@ impl TargetIsa for Riscv64Backend {
         func: &Function,
         domtree: &DominatorTree,
         want_disasm: bool,
+        ctrl_plane: &mut ControlPlane,
     ) -> CodegenResult<CompiledCodeStencil> {
-        let (vcode, regalloc_result) = self.compile_vcode(func, domtree)?;
+        let (vcode, regalloc_result) = self.compile_vcode(func, domtree, ctrl_plane)?;
 
         let want_disasm = want_disasm || log::log_enabled!(log::Level::Debug);
-        let emit_result = vcode.emit(
-            &regalloc_result,
-            want_disasm,
-            self.flags.machine_code_cfg_info(),
-        );
+        let emit_result = vcode.emit(&regalloc_result, want_disasm, &self.flags, ctrl_plane);
         let frame_size = emit_result.frame_size;
         let value_labels_ranges = emit_result.value_labels_ranges;
-        let buffer = emit_result.buffer.finish();
+        let buffer = emit_result.buffer;
         let sized_stackslot_offsets = emit_result.sized_stackslot_offsets;
         let dynamic_stackslot_offsets = emit_result.dynamic_stackslot_offsets;
 
@@ -100,7 +97,6 @@ impl TargetIsa for Riscv64Backend {
             dynamic_stackslot_offsets,
             bb_starts: emit_result.bb_offsets,
             bb_edges: emit_result.bb_edges,
-            alignment: emit_result.alignment,
         })
     }
 
@@ -125,10 +121,6 @@ impl TargetIsa for Riscv64Backend {
 
     fn isa_flags(&self) -> Vec<shared_settings::Value> {
         self.isa_flags.iter().collect()
-    }
-
-    fn unsigned_add_overflow_condition(&self) -> IntCC {
-        IntCC::UnsignedGreaterThanOrEqual
     }
 
     #[cfg(feature = "unwind")]
@@ -169,8 +161,8 @@ impl TargetIsa for Riscv64Backend {
         inst::unwind::systemv::map_reg(reg).map(|reg| reg.0)
     }
 
-    fn function_alignment(&self) -> u32 {
-        4
+    fn function_alignment(&self) -> FunctionAlignment {
+        inst::Inst::function_alignment()
     }
 
     #[cfg(feature = "disas")]
@@ -189,6 +181,22 @@ impl TargetIsa for Riscv64Backend {
 
     fn has_native_fma(&self) -> bool {
         true
+    }
+
+    fn has_x86_blendv_lowering(&self, _: Type) -> bool {
+        false
+    }
+
+    fn has_x86_pshufb_lowering(&self) -> bool {
+        false
+    }
+
+    fn has_x86_pmulhrsw_lowering(&self) -> bool {
+        false
+    }
+
+    fn has_x86_pmaddubsw_lowering(&self) -> bool {
+        false
     }
 }
 

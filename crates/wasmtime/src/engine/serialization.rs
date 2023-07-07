@@ -40,7 +40,7 @@ const VERSION: u8 = 0;
 ///
 /// The blob of bytes is inserted into the object file specified to become part
 /// of the final compiled artifact.
-#[cfg(compiler)]
+#[cfg(any(feature = "cranelift", feature = "winch"))]
 pub fn append_compiler_info(engine: &Engine, obj: &mut Object<'_>) {
     let section = obj.add_section(
         obj.segment_name(StandardSegment::Data).to_vec(),
@@ -168,10 +168,11 @@ struct WasmFeatures {
     memory64: bool,
     relaxed_simd: bool,
     extended_const: bool,
+    function_references: bool,
 }
 
 impl Metadata {
-    #[cfg(compiler)]
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
     fn new(engine: &Engine) -> Metadata {
         let wasmparser::WasmFeatures {
             reference_types,
@@ -188,6 +189,7 @@ impl Metadata {
             extended_const,
             memory_control,
             function_references,
+            gc,
 
             // Always on; we don't currently have knobs for these.
             mutable_global: _,
@@ -198,7 +200,7 @@ impl Metadata {
 
         assert!(!memory_control);
         assert!(!tail_call);
-        assert!(!function_references);
+        assert!(!gc);
 
         Metadata {
             target: engine.compiler().triple().to_string(),
@@ -217,6 +219,7 @@ impl Metadata {
                 memory64,
                 relaxed_simd,
                 extended_const,
+                function_references,
             },
         }
     }
@@ -387,6 +390,7 @@ impl Metadata {
             memory64,
             relaxed_simd,
             extended_const,
+            function_references,
         } = self.features;
 
         Self::check_bool(
@@ -435,6 +439,11 @@ impl Metadata {
             relaxed_simd,
             other.relaxed_simd,
             "WebAssembly relaxed-simd support",
+        )?;
+        Self::check_bool(
+            function_references,
+            other.function_references,
+            "WebAssembly function-references support",
         )?;
 
         Ok(())
@@ -532,6 +541,7 @@ Caused by:
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn test_tunables_int_mismatch() -> Result<()> {
         let engine = Engine::default();
         let mut metadata = Metadata::new(&engine);

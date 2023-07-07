@@ -84,10 +84,6 @@ impl WasiFile for File {
         self.0.advise(offset, len, convert_advice(advice))?;
         Ok(())
     }
-    async fn allocate(&self, offset: u64, len: u64) -> Result<(), Error> {
-        self.0.allocate(offset, len)?;
-        Ok(())
-    }
     async fn set_times(
         &self,
         atime: Option<wasi_common::SystemTimeSpec>,

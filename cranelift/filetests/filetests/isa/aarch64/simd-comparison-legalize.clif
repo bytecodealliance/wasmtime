@@ -1,5 +1,4 @@
 test compile precise-output
-set enable_simd
 target aarch64
 
 function %icmp_ne_32x4(i32x4, i32x4) -> i32x4 {
@@ -13,7 +12,7 @@ block0(v0: i32x4, v1: i32x4):
 ;   cmeq v3.4s, v0.4s, v1.4s
 ;   mvn v0.16b, v3.16b
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   cmeq v3.4s, v0.4s, v1.4s
@@ -30,7 +29,7 @@ block0(v0: i32x4, v1: i32x4):
 ; block0:
 ;   cmhi v0.4s, v0.4s, v1.4s
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   cmhi v0.4s, v0.4s, v1.4s
@@ -46,7 +45,7 @@ block0(v0: i16x8, v1: i16x8):
 ; block0:
 ;   cmge v0.8h, v0.8h, v1.8h
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   cmge v0.8h, v0.8h, v1.8h
@@ -62,7 +61,7 @@ block0(v0: i8x16, v1: i8x16):
 ; block0:
 ;   cmhs v0.16b, v0.16b, v1.16b
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   cmhs v0.16b, v0.16b, v1.16b

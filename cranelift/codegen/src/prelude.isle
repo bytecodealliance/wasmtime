@@ -79,9 +79,11 @@
 
 (decl pure u8_as_u32 (u8) u32)
 (extern constructor u8_as_u32 u8_as_u32)
+(convert u8 u32 u8_as_u32)
 
 (decl pure u8_as_u64 (u8) u64)
 (extern constructor u8_as_u64 u8_as_u64)
+(convert u8 u64 u8_as_u64)
 
 (decl pure u16_as_u64 (u16) u64)
 (extern constructor u16_as_u64 u16_as_u64)
@@ -110,8 +112,20 @@
 (decl pure u8_and (u8 u8) u8)
 (extern constructor u8_and u8_and)
 
+(decl pure u8_shl (u8 u8) u8)
+(extern constructor u8_shl u8_shl)
+
+(decl pure u8_shr (u8 u8) u8)
+(extern constructor u8_shr u8_shr)
+
 (decl pure u32_add (u32 u32) u32)
 (extern constructor u32_add u32_add)
+
+(decl pure u32_sub (u32 u32) u32)
+(extern constructor u32_sub u32_sub)
+
+(decl pure u32_and (u32 u32) u32)
+(extern constructor u32_and u32_and)
 
 ;; Pure/fallible constructor that tries to add two `u32`s, interpreted
 ;; as signed values, and fails to match on overflow.
@@ -247,6 +261,14 @@
 (decl pure ty_mask (Type) u64)
 (extern constructor ty_mask ty_mask)
 
+;; Get a mask that is set for each lane in a given type.
+(decl pure ty_lane_mask (Type) u64)
+(extern constructor ty_lane_mask ty_lane_mask)
+
+;; Get the number of lanes for a given type.
+(decl pure ty_lane_count (Type) u64)
+(extern constructor ty_lane_count ty_lane_count)
+
 ;; Get the byte width of a given type.
 (decl pure ty_bytes (Type) u16)
 (extern constructor ty_bytes ty_bytes)
@@ -254,6 +276,18 @@
 ;; Get the type of each lane in the given type.
 (decl pure lane_type (Type) Type)
 (extern constructor lane_type lane_type)
+
+;; Get a type with the same element type, but half the number of lanes.
+(decl pure partial ty_half_lanes (Type) Type)
+(extern constructor ty_half_lanes ty_half_lanes)
+
+;; Get a type with the same number of lanes but a lane type that is half as small.
+(decl pure partial ty_half_width (Type) Type)
+(extern constructor ty_half_width ty_half_width)
+
+;; Compare two types for equality.
+(decl pure ty_equal (Type Type) bool)
+(extern constructor ty_equal ty_equal)
 
 ;;;; `cranelift_codegen::ir::MemFlags ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -339,10 +373,11 @@
 (decl ty_64 (Type) Type)
 (extern extractor ty_64 ty_64)
 
-;; A pure constructor that only matches scalar integers, and references that can
-;; fit in 64 bits.
+;; A pure constructor/extractor that only matches scalar integers, and
+;; references that can fit in 64 bits.
 (decl pure partial ty_int_ref_scalar_64 (Type) Type)
 (extern constructor ty_int_ref_scalar_64 ty_int_ref_scalar_64)
+(extern extractor ty_int_ref_scalar_64 ty_int_ref_scalar_64_extract)
 
 ;; An extractor that matches 32- and 64-bit types only.
 (decl ty_32_or_64 (Type) Type)
@@ -360,9 +395,17 @@
 (decl ty_int_ref_64 (Type) Type)
 (extern extractor ty_int_ref_64 ty_int_ref_64)
 
+;; An extractor that matches int or reference types bigger than 16 bits but at most 64 bits.
+(decl ty_int_ref_16_to_64 (Type) Type)
+(extern extractor ty_int_ref_16_to_64 ty_int_ref_16_to_64)
+
 ;; An extractor that only matches integers.
 (decl ty_int (Type) Type)
 (extern extractor ty_int ty_int)
+
+;; An extractor that only matches scalar types, float or int or ref's.
+(decl ty_scalar (Type) Type)
+(extern extractor ty_scalar ty_scalar)
 
 ;; An extractor that only matches scalar floating-point types--F32 or F64.
 (decl ty_scalar_float (Type) Type)

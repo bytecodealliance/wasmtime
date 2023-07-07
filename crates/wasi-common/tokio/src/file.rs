@@ -127,9 +127,6 @@ macro_rules! wasi_file_impl {
             async fn advise(&self, offset: u64, len: u64, advice: Advice) -> Result<(), Error> {
                 block_on_dummy_executor(move || self.0.advise(offset, len, advice))
             }
-            async fn allocate(&self, offset: u64, len: u64) -> Result<(), Error> {
-                block_on_dummy_executor(move || self.0.allocate(offset, len))
-            }
             async fn read_vectored<'a>(
                 &self,
                 bufs: &mut [io::IoSliceMut<'a>],

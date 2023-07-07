@@ -1,6 +1,5 @@
 test optimize precise-output
 set opt_level=speed
-set use_egraphs=true
 target x86_64
 
 ;; Masking the result of a comparison with 1 always results in the comparison

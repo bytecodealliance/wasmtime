@@ -1,0 +1,93 @@
+test interpret
+test run
+target aarch64
+target s390x
+target x86_64
+target x86_64 sse41
+target x86_64 sse41 has_avx
+target riscv64gc has_v
+
+
+function %iadd_swidenlow_i32x4(i32x4, i32x4) -> i64x2 {
+block0(v0: i32x4, v1: i32x4):
+    v2 = swiden_low v0
+    v3 = swiden_low v1
+    v4 = iadd v2, v3
+    return v4
+}
+; run: %iadd_swidenlow_i32x4([1 2 3 4], [-1 2 3 4]) == [0 4]
+
+function %iadd_swidenlow_i16x8(i16x8, i16x8) -> i32x4 {
+block0(v0: i16x8, v1: i16x8):
+    v2 = swiden_low v0
+    v3 = swiden_low v1
+    v4 = iadd v2, v3
+    return v4
+}
+; run: %iadd_swidenlow_i16x8([1 2 3 4 5 6 7 8], [-1 2 3 4 5 6 7 8]) == [0 4 6 8]
+
+function %iadd_swidenlow_i8x16(i8x16, i8x16) -> i16x8 {
+block0(v0: i8x16, v1: i8x16):
+    v2 = swiden_low v0
+    v3 = swiden_low v1
+    v4 = iadd v2, v3
+    return v4
+}
+; run: %iadd_swidenlow_i8x16([1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16], [-1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16]) == [0 4 6 8 10 12 14 16]
+
+function %iadd_swidenlow_splat_i32x4(i32x4, i32) -> i64x2 {
+block0(v0: i32x4, v1: i32):
+    v2 = swiden_low v0
+    v3 = sextend.i64 v1
+    v4 = splat.i64x2 v3
+    v5 = iadd v2, v4
+    return v5
+}
+; run: %iadd_swidenlow_splat_i32x4([1 2 3 4], -1) == [0 1]
+; run: %iadd_swidenlow_splat_i32x4([1 2 3 4], 10) == [11 12]
+
+function %iadd_swidenlow_splat_i16x8(i16x8, i16) -> i32x4 {
+block0(v0: i16x8, v1: i16):
+    v2 = swiden_low v0
+    v3 = sextend.i32 v1
+    v4 = splat.i32x4 v3
+    v5 = iadd v2, v4
+    return v5
+}
+; run: %iadd_swidenlow_splat_i16x8([1 2 3 4 5 6 7 8], -1) == [0 1 2 3]
+; run: %iadd_swidenlow_splat_i16x8([1 2 3 4 5 6 7 8], 10) == [11 12 13 14]
+
+function %iadd_swidenlow_splat_i8x16(i8x16, i8) -> i16x8 {
+block0(v0: i8x16, v1: i8):
+    v2 = swiden_low v0
+    v3 = sextend.i16 v1
+    v4 = splat.i16x8 v3
+    v5 = iadd v2, v4
+    return v5
+}
+; run: %iadd_swidenlow_splat_i8x16([1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16], -1) == [0 1 2 3 4 5 6 7]
+; run: %iadd_swidenlow_splat_i8x16([1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16], 10) == [11 12 13 14 15 16 17 18]
+
+function %iadd_swidenlow_lhs_i32x4(i32x4, i64x2) -> i64x2 {
+block0(v0: i32x4, v1: i64x2):
+    v2 = swiden_low v0
+    v3 = iadd v2, v1
+    return v3
+}
+; run: %iadd_swidenlow_lhs_i32x4([1 2 3 4], [-1 2]) == [0 4]
+
+function %iadd_swidenlow_lhs_i16x8(i16x8, i32x4) -> i32x4 {
+block0(v0: i16x8, v1: i32x4):
+    v2 = swiden_low v0
+    v3 = iadd v2, v1
+    return v3
+}
+; run: %iadd_swidenlow_lhs_i16x8([1 2 3 4 5 6 7 8], [-1 2 3 4]) == [0 4 6 8]
+
+function %iadd_swidenlow_lhs_i8x16(i8x16, i16x8) -> i16x8 {
+block0(v0: i8x16, v1: i16x8):
+    v2 = swiden_low v0
+    v3 = iadd v2, v1
+    return v3
+}
+; run: %iadd_swidenlow_lhs_i8x16([1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16], [-1 2 3 4 5 6 7 8]) == [0 4 6 8 10 12 14 16]

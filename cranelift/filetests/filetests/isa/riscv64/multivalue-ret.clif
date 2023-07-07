@@ -15,7 +15,7 @@ block1:
 ;   li a0,1
 ;   li a1,2
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi a0, zero, 1

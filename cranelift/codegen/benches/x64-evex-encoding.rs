@@ -14,12 +14,11 @@ mod x86 {
     fn x64_evex_encoding_benchmarks(c: &mut Criterion) {
         let mut group = c.benchmark_group("x64 EVEX encoding");
         let rax = Register::from(0);
-        let rdx = Register::from(2);
+        let rdx = 2;
 
         group.bench_function("EvexInstruction (builder pattern)", |b| {
-            let mut sink = vec![];
             b.iter(|| {
-                sink.clear();
+                let mut sink = cranelift_codegen::MachBuffer::new();
                 EvexInstruction::new()
                     .prefix(LegacyPrefixes::_66)
                     .map(OpcodeMap::_0F38)

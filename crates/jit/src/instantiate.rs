@@ -5,7 +5,7 @@
 
 use crate::code_memory::CodeMemory;
 use crate::debug::create_gdbjit_image;
-use crate::ProfilingAgent;
+use crate::profiling::ProfilingAgent;
 use anyhow::{bail, Context, Error, Result};
 use object::write::{Object, SectionId, StandardSegment, WritableBuffer};
 use object::SectionKind;
@@ -20,10 +20,36 @@ use wasmtime_environ::{
     PrimaryMap, SignatureIndex, StackMapInformation, Tunables, WasmFunctionInfo,
 };
 use wasmtime_runtime::{
-    CompiledModuleId, CompiledModuleIdAllocator, GdbJitImageRegistration, MmapVec, VMTrampoline,
+    CompiledModuleId, CompiledModuleIdAllocator, GdbJitImageRegistration, MmapVec,
 };
 
-/// Secondary in-memory results of compilation.
+/// Secondary in-memory results of function compilation.
+#[derive(Serialize, Deserialize)]
+pub struct CompiledFunctionInfo {
+    wasm_func_info: WasmFunctionInfo,
+    wasm_func_loc: FunctionLoc,
+    array_to_wasm_trampoline: Option<FunctionLoc>,
+    native_to_wasm_trampoline: Option<FunctionLoc>,
+}
+
+impl CompiledFunctionInfo {
+    /// Create a new `CompiledFunctionInfo`.
+    pub fn new(
+        wasm_func_info: WasmFunctionInfo,
+        wasm_func_loc: FunctionLoc,
+        array_to_wasm_trampoline: Option<FunctionLoc>,
+        native_to_wasm_trampoline: Option<FunctionLoc>,
+    ) -> CompiledFunctionInfo {
+        CompiledFunctionInfo {
+            wasm_func_info,
+            wasm_func_loc,
+            array_to_wasm_trampoline,
+            native_to_wasm_trampoline,
+        }
+    }
+}
+
+/// Secondary in-memory results of module compilation.
 ///
 /// This opaque structure can be optionally passed back to
 /// `CompiledModule::from_artifacts` to avoid decoding extra information there.
@@ -33,14 +59,14 @@ pub struct CompiledModuleInfo {
     module: Module,
 
     /// Metadata about each compiled function.
-    funcs: PrimaryMap<DefinedFuncIndex, (WasmFunctionInfo, FunctionLoc)>,
+    funcs: PrimaryMap<DefinedFuncIndex, CompiledFunctionInfo>,
 
     /// Sorted list, by function index, of names we have for this module.
     func_names: Vec<FunctionName>,
 
-    /// The trampolines compiled into the text section and their start/length
-    /// relative to the start of the text section.
-    pub trampolines: Vec<(SignatureIndex, FunctionLoc)>,
+    /// Metadata about wasm-to-native trampolines. Used when exposing a native
+    /// callee (e.g. `Func::wrap`) to a Wasm caller. Sorted by signature index.
+    wasm_to_native_trampolines: Vec<(SignatureIndex, FunctionLoc)>,
 
     /// General compilation metadata.
     meta: Metadata,
@@ -145,17 +171,26 @@ impl<'a> ObjectBuilder<'a> {
     /// * `funcs` - compilation metadata about functions within the translation
     ///   as well as where the functions are located in the text section.
     ///
-    /// * `trampolines` - list of all trampolines necessary for this module
-    ///   and where they're located in the text section.
+    /// * `array_to_wasm_trampolines` - list of all trampolines necessary for
+    ///   array callers (e.g. `Func::new`) calling Wasm callees. One for each
+    ///   defined function that escapes. Must be sorted by `DefinedFuncIndex`.
     ///
-    /// Returns the `CompiledModuleInfo` corresopnding to this core wasm module
+    /// * `native_to_wasm_trampolines` - list of all trampolines necessary for
+    ///   native callers (e.g. `Func::wrap`) calling Wasm callees. One for each
+    ///   defined function that escapes. Must be sorted by `DefinedFuncIndex`.
+    ///
+    /// * `wasm_to_native_trampolines` - list of all trampolines necessary for
+    ///   Wasm callers calling native callees (e.g. `Func::wrap`). One for each
+    ///   function signature in the module. Must be sorted by `SignatureIndex`.
+    ///
+    /// Returns the `CompiledModuleInfo` corresponding to this core Wasm module
     /// as a result of this append operation. This is then serialized into the
     /// final artifact by the caller.
     pub fn append(
         &mut self,
         translation: ModuleTranslation<'_>,
-        funcs: PrimaryMap<DefinedFuncIndex, (WasmFunctionInfo, FunctionLoc)>,
-        trampolines: Vec<(SignatureIndex, FunctionLoc)>,
+        funcs: PrimaryMap<DefinedFuncIndex, CompiledFunctionInfo>,
+        wasm_to_native_trampolines: Vec<(SignatureIndex, FunctionLoc)>,
     ) -> Result<CompiledModuleInfo> {
         let ModuleTranslation {
             mut module,
@@ -269,7 +304,7 @@ impl<'a> ObjectBuilder<'a> {
         Ok(CompiledModuleInfo {
             module,
             funcs,
-            trampolines,
+            wasm_to_native_trampolines,
             func_names,
             meta: Metadata {
                 native_debug_info_present: self.tunables.generate_native_debuginfo,
@@ -387,8 +422,8 @@ impl<'a> ObjectBuilder<'a> {
 /// A compiled wasm module, ready to be instantiated.
 pub struct CompiledModule {
     module: Arc<Module>,
-    funcs: PrimaryMap<DefinedFuncIndex, (WasmFunctionInfo, FunctionLoc)>,
-    trampolines: Vec<(SignatureIndex, FunctionLoc)>,
+    funcs: PrimaryMap<DefinedFuncIndex, CompiledFunctionInfo>,
+    wasm_to_native_trampolines: Vec<(SignatureIndex, FunctionLoc)>,
     meta: Metadata,
     code_memory: Arc<CodeMemory>,
     dbg_jit_registration: Option<GdbJitImageRegistration>,
@@ -423,7 +458,7 @@ impl CompiledModule {
         let mut ret = Self {
             module: Arc::new(info.module),
             funcs: info.funcs,
-            trampolines: info.trampolines,
+            wasm_to_native_trampolines: info.wasm_to_native_trampolines,
             dbg_jit_registration: None,
             code_memory,
             meta: info.meta,
@@ -436,17 +471,21 @@ impl CompiledModule {
     }
 
     fn register_debug_and_profiling(&mut self, profiler: &dyn ProfilingAgent) -> Result<()> {
-        // Register GDB JIT images; initialize profiler and load the wasm module.
         if self.meta.native_debug_info_present {
             let text = self.text();
             let bytes = create_gdbjit_image(self.mmap().to_vec(), (text.as_ptr(), text.len()))
                 .context("failed to create jit image for gdb")?;
-            profiler.module_load(self, Some(&bytes));
             let reg = GdbJitImageRegistration::register(bytes);
             self.dbg_jit_registration = Some(reg);
-        } else {
-            profiler.module_load(self, None);
         }
+        profiler.register_module(&self.code_memory, &|addr| {
+            let (idx, _) = self.func_by_text_offset(addr)?;
+            let idx = self.module.func_index(idx);
+            let name = self.func_name(idx)?;
+            let mut demangled = String::new();
+            crate::demangling::demangle_function_name(&mut demangled, name).unwrap();
+            Some(demangled)
+        });
         Ok(())
     }
 
@@ -513,23 +552,46 @@ impl CompiledModule {
     /// Returns the body of the function that `index` points to.
     #[inline]
     pub fn finished_function(&self, index: DefinedFuncIndex) -> &[u8] {
-        let (_, loc) = &self.funcs[index];
+        let loc = self.funcs[index].wasm_func_loc;
         &self.text()[loc.start as usize..][..loc.length as usize]
     }
 
-    /// Returns the per-signature trampolines for this module.
-    pub fn trampolines(&self) -> impl Iterator<Item = (SignatureIndex, VMTrampoline, usize)> + '_ {
-        let text = self.text();
-        self.trampolines.iter().map(move |(signature, loc)| {
-            (
-                *signature,
-                unsafe {
-                    let ptr = &text[loc.start as usize];
-                    std::mem::transmute::<*const u8, VMTrampoline>(ptr)
-                },
-                loc.length as usize,
-            )
-        })
+    /// Get the array-to-Wasm trampoline for the function `index` points to.
+    ///
+    /// If the function `index` points to does not escape, then `None` is
+    /// returned.
+    ///
+    /// These trampolines are used for array callers (e.g. `Func::new`)
+    /// calling Wasm callees.
+    pub fn array_to_wasm_trampoline(&self, index: DefinedFuncIndex) -> Option<&[u8]> {
+        let loc = self.funcs[index].array_to_wasm_trampoline?;
+        Some(&self.text()[loc.start as usize..][..loc.length as usize])
+    }
+
+    /// Get the native-to-Wasm trampoline for the function `index` points to.
+    ///
+    /// If the function `index` points to does not escape, then `None` is
+    /// returned.
+    ///
+    /// These trampolines are used for native callers (e.g. `Func::wrap`)
+    /// calling Wasm callees.
+    pub fn native_to_wasm_trampoline(&self, index: DefinedFuncIndex) -> Option<&[u8]> {
+        let loc = self.funcs[index].native_to_wasm_trampoline?;
+        Some(&self.text()[loc.start as usize..][..loc.length as usize])
+    }
+
+    /// Get the Wasm-to-native trampoline for the given signature.
+    ///
+    /// These trampolines are used for filling in
+    /// `VMFuncRef::wasm_call` for `Func::wrap`-style host funcrefs
+    /// that don't have access to a compiler when created.
+    pub fn wasm_to_native_trampoline(&self, signature: SignatureIndex) -> &[u8] {
+        let idx = self
+            .wasm_to_native_trampolines
+            .binary_search_by_key(&signature, |entry| entry.0)
+            .expect("should have a Wasm-to-native trampline for all signatures");
+        let (_, loc) = self.wasm_to_native_trampolines[idx];
+        &self.text()[loc.start as usize..][..loc.length as usize]
     }
 
     /// Returns the stack map information for all functions defined in this
@@ -538,9 +600,11 @@ impl CompiledModule {
     /// The iterator returned iterates over the span of the compiled function in
     /// memory with the stack maps associated with those bytes.
     pub fn stack_maps(&self) -> impl Iterator<Item = (&[u8], &[StackMapInformation])> {
-        self.finished_functions()
-            .map(|(_, f)| f)
-            .zip(self.funcs.values().map(|f| &f.0.stack_maps[..]))
+        self.finished_functions().map(|(_, f)| f).zip(
+            self.funcs
+                .values()
+                .map(|f| &f.wasm_func_info.stack_maps[..]),
+        )
     }
 
     /// Lookups a defined function by a program counter value.
@@ -550,13 +614,11 @@ impl CompiledModule {
     pub fn func_by_text_offset(&self, text_offset: usize) -> Option<(DefinedFuncIndex, u32)> {
         let text_offset = u32::try_from(text_offset).unwrap();
 
-        let index = match self
-            .funcs
-            .binary_search_values_by_key(&text_offset, |(_, loc)| {
-                debug_assert!(loc.length > 0);
-                // Return the inclusive "end" of the function
-                loc.start + loc.length - 1
-            }) {
+        let index = match self.funcs.binary_search_values_by_key(&text_offset, |e| {
+            debug_assert!(e.wasm_func_loc.length > 0);
+            // Return the inclusive "end" of the function
+            e.wasm_func_loc.start + e.wasm_func_loc.length - 1
+        }) {
             Ok(k) => {
                 // Exact match, pc is at the end of this function
                 k
@@ -569,15 +631,15 @@ impl CompiledModule {
             }
         };
 
-        let (_, loc) = self.funcs.get(index)?;
-        let start = loc.start;
-        let end = loc.start + loc.length;
+        let CompiledFunctionInfo { wasm_func_loc, .. } = self.funcs.get(index)?;
+        let start = wasm_func_loc.start;
+        let end = wasm_func_loc.start + wasm_func_loc.length;
 
         if text_offset < start || end < text_offset {
             return None;
         }
 
-        Some((index, text_offset - loc.start))
+        Some((index, text_offset - wasm_func_loc.start))
     }
 
     /// Gets the function location information for a given function index.
@@ -586,7 +648,7 @@ impl CompiledModule {
             .funcs
             .get(index)
             .expect("defined function should be present")
-            .1
+            .wasm_func_loc
     }
 
     /// Gets the function information for a given function index.
@@ -595,7 +657,7 @@ impl CompiledModule {
             .funcs
             .get(index)
             .expect("defined function should be present")
-            .0
+            .wasm_func_info
     }
 
     /// Creates a new symbolication context which can be used to further

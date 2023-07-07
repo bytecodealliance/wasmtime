@@ -1,6 +1,5 @@
 test compile precise-output
-set enable_simd
-target x86_64
+target x86_64 sse41
 
 function %uload8x8(i64) -> i16x8 {
 block0(v0: i64):
@@ -16,7 +15,7 @@ block0(v0: i64):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -41,7 +40,7 @@ block0(v0: i64):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -66,7 +65,7 @@ block0(v0: i64):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -91,7 +90,7 @@ block0(v0: i64):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -116,7 +115,7 @@ block0(v0: i64):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -141,7 +140,7 @@ block0(v0: i64):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp

@@ -25,6 +25,7 @@ impl<'a> Parse<'a> for FuelWast<'a> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn run() -> Result<()> {
     let test = std::fs::read_to_string("tests/all/fuel.wast")?;
     let buf = ParseBuffer::new(&test)?;
@@ -58,6 +59,7 @@ fn fuel_consumed(wasm: &[u8]) -> u64 {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn iloop() {
     iloop_aborts(
         r#"
@@ -128,8 +130,10 @@ fn manual_fuel() {
     let mut store = Store::new(&engine, ());
     store.add_fuel(10_000).unwrap();
     assert_eq!(store.fuel_consumed(), Some(0));
+    assert_eq!(store.fuel_remaining(), Some(10_000));
     assert_eq!(store.consume_fuel(1).unwrap(), 9_999);
     assert_eq!(store.fuel_consumed(), Some(1));
+    assert_eq!(store.fuel_remaining(), Some(9_999));
     assert!(store.consume_fuel(10_000).is_err());
     assert_eq!(store.consume_fuel(999).unwrap(), 9_000);
     assert!(store.consume_fuel(10_000).is_err());
@@ -138,9 +142,11 @@ fn manual_fuel() {
     assert_eq!(store.consume_fuel(1).unwrap(), 1);
     assert_eq!(store.consume_fuel(1).unwrap(), 0);
     assert_eq!(store.consume_fuel(0).unwrap(), 0);
+    assert_eq!(store.fuel_remaining(), Some(0));
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn host_function_consumes_all() {
     const FUEL: u64 = 10_000;
     let mut config = Config::new();
@@ -185,6 +191,7 @@ fn manual_edge_cases() {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn unconditionally_trapping_memory_accesses_save_fuel_before_trapping() {
     let mut config = Config::new();
     config.consume_fuel(true);
@@ -209,7 +216,9 @@ fn unconditionally_trapping_memory_accesses_save_fuel_before_trapping() {
     .unwrap();
 
     let mut store = Store::new(&engine, ());
-    store.add_fuel(1_000).unwrap();
+    let init_fuel = 1_000;
+    store.add_fuel(init_fuel).unwrap();
+    assert_eq!(init_fuel, store.fuel_remaining().unwrap());
 
     let instance = Instance::new(&mut store, &module, &[]).unwrap();
     let f = instance
@@ -221,5 +230,7 @@ fn unconditionally_trapping_memory_accesses_save_fuel_before_trapping() {
 
     // The `i32.add` consumed some fuel before the unconditionally trapping
     // memory access.
-    assert!(store.fuel_consumed().unwrap() > 0);
+    let consumed_fuel = store.fuel_consumed().unwrap();
+    assert!(consumed_fuel > 0);
+    assert_eq!(init_fuel, consumed_fuel + store.fuel_remaining().unwrap());
 }

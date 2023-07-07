@@ -13,7 +13,7 @@ block0(v0: i64, v1: i64):
 ;   lhi %r2, 0
 ;   lochie %r2, 1
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   clgr %r2, %r3
@@ -45,7 +45,7 @@ block2:
 ; block2:
 ;   lghi %r2, 1
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   clgr %r2, %r3
@@ -78,7 +78,7 @@ block1:
 ; block3:
 ;   lghi %r2, 1
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   clgr %r2, %r3

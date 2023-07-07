@@ -1,5 +1,5 @@
 test compile precise-output
-target x86_64
+target x86_64 ssse3
 
 function %fn1(i8x16) -> i16x8 {
 block0(v0: i8x16):
@@ -20,7 +20,7 @@ block0(v0: i8x16):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -59,7 +59,7 @@ block0(v0: i16x8):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -101,7 +101,7 @@ block0(v0: i8x16):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -145,7 +145,7 @@ block0(v0: i16x8):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp

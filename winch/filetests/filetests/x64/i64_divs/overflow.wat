@@ -9,13 +9,16 @@
 )
 ;;    0:	 55                   	push	rbp
 ;;    1:	 4889e5               	mov	rbp, rsp
-;;    4:	 48c7c1ffffffff       	mov	rcx, 0xffffffffffffffff
-;;    b:	 48b80000000000000080 	
+;;    4:	 4883ec08             	sub	rsp, 8
+;;    8:	 4c893424             	mov	qword ptr [rsp], r14
+;;    c:	 48c7c1ffffffff       	mov	rcx, 0xffffffffffffffff
+;;   13:	 48b80000000000000080 	
 ;; 				movabs	rax, 0x8000000000000000
-;;   15:	 4883f900             	cmp	rcx, 0
-;;   19:	 0f8407000000         	je	0x26
-;;   1f:	 4899                 	cqo	
-;;   21:	 48f7f9               	idiv	rcx
-;;   24:	 5d                   	pop	rbp
-;;   25:	 c3                   	ret	
-;;   26:	 0f0b                 	ud2	
+;;   1d:	 4883f900             	cmp	rcx, 0
+;;   21:	 0f840b000000         	je	0x32
+;;   27:	 4899                 	cqo	
+;;   29:	 48f7f9               	idiv	rcx
+;;   2c:	 4883c408             	add	rsp, 8
+;;   30:	 5d                   	pop	rbp
+;;   31:	 c3                   	ret	
+;;   32:	 0f0b                 	ud2	

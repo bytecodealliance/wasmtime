@@ -148,7 +148,8 @@ use crate::machinst::{
 };
 use crate::timing;
 use crate::trace;
-use cranelift_entity::{entity_impl, SecondaryMap};
+use cranelift_control::ControlPlane;
+use cranelift_entity::{entity_impl, PrimaryMap};
 use smallvec::SmallVec;
 use std::convert::TryFrom;
 use std::mem;
@@ -228,7 +229,7 @@ pub struct MachBuffer<I: VCodeInst> {
     /// aliased to A, then we cannot alias A back to B.
     label_aliases: SmallVec<[MachLabel; 16]>,
     /// Constants that must be emitted at some point.
-    pending_constants: SmallVec<[MachLabelConstant; 16]>,
+    pending_constants: SmallVec<[VCodeConstant; 16]>,
     /// Traps that must be emitted at some point.
     pending_traps: SmallVec<[MachLabelTrap; 16]>,
     /// Fixups that must be performed after all code is emitted.
@@ -261,8 +262,18 @@ pub struct MachBuffer<I: VCodeInst> {
     /// when the offset has grown past this (`labels_at_tail_off`) point.
     /// Always <= `cur_offset()`.
     labels_at_tail_off: CodeOffset,
-    /// Map used constants to their [MachLabel].
-    constant_labels: SecondaryMap<VCodeConstant, MachLabel>,
+    /// Metadata about all constants that this function has access to.
+    ///
+    /// This records the size/alignment of all constants (not the actual data)
+    /// along with the last available label generated for the constant. This map
+    /// is consulted when constants are referred to and the label assigned to a
+    /// constant may change over time as well.
+    constants: PrimaryMap<VCodeConstant, MachBufferConstant>,
+    /// All recorded usages of constants as pairs of the constant and where the
+    /// constant needs to be placed within `self.data`. Note that the same
+    /// constant may appear in this array multiple times if it was emitted
+    /// multiple times.
+    used_constants: SmallVec<[(VCodeConstant, CodeOffset); 4]>,
 }
 
 impl MachBufferFinalized<Stencil> {
@@ -280,6 +291,7 @@ impl MachBufferFinalized<Stencil> {
                 .collect(),
             stack_maps: self.stack_maps,
             unwind_info: self.unwind_info,
+            alignment: self.alignment,
         }
     }
 }
@@ -305,6 +317,8 @@ pub struct MachBufferFinalized<T: CompilePhase> {
     pub(crate) stack_maps: SmallVec<[MachStackMap; 8]>,
     /// Any unwind info at a given location.
     pub unwind_info: SmallVec<[(CodeOffset, UnwindInst); 8]>,
+    /// The requireed alignment of this buffer
+    pub alignment: u32,
 }
 
 const UNKNOWN_LABEL_OFFSET: CodeOffset = 0xffff_ffff;
@@ -380,7 +394,8 @@ impl<I: VCodeInst> MachBuffer<I> {
             latest_branches: SmallVec::new(),
             labels_at_tail: SmallVec::new(),
             labels_at_tail_off: 0,
-            constant_labels: SecondaryMap::new(),
+            constants: Default::default(),
+            used_constants: Default::default(),
         }
     }
 
@@ -391,7 +406,6 @@ impl<I: VCodeInst> MachBuffer<I> {
 
     /// Add a byte.
     pub fn put1(&mut self, value: u8) {
-        trace!("MachBuffer: put byte @ {}: {:x}", self.cur_offset(), value);
         self.data.push(value);
 
         // Post-invariant: conceptual-labels_at_tail contains a complete and
@@ -406,11 +420,6 @@ impl<I: VCodeInst> MachBuffer<I> {
 
     /// Add 2 bytes.
     pub fn put2(&mut self, value: u16) {
-        trace!(
-            "MachBuffer: put 16-bit word @ {}: {:x}",
-            self.cur_offset(),
-            value
-        );
         let bytes = value.to_le_bytes();
         self.data.extend_from_slice(&bytes[..]);
 
@@ -419,11 +428,6 @@ impl<I: VCodeInst> MachBuffer<I> {
 
     /// Add 4 bytes.
     pub fn put4(&mut self, value: u32) {
-        trace!(
-            "MachBuffer: put 32-bit word @ {}: {:x}",
-            self.cur_offset(),
-            value
-        );
         let bytes = value.to_le_bytes();
         self.data.extend_from_slice(&bytes[..]);
 
@@ -432,11 +436,6 @@ impl<I: VCodeInst> MachBuffer<I> {
 
     /// Add 8 bytes.
     pub fn put8(&mut self, value: u64) {
-        trace!(
-            "MachBuffer: put 64-bit word @ {}: {:x}",
-            self.cur_offset(),
-            value
-        );
         let bytes = value.to_le_bytes();
         self.data.extend_from_slice(&bytes[..]);
 
@@ -445,11 +444,6 @@ impl<I: VCodeInst> MachBuffer<I> {
 
     /// Add a slice of bytes.
     pub fn put_data(&mut self, data: &[u8]) {
-        trace!(
-            "MachBuffer: put data @ {}: len {}",
-            self.cur_offset(),
-            data.len()
-        );
         self.data.extend_from_slice(data);
 
         // Post-invariant: as for `put1()`.
@@ -457,7 +451,6 @@ impl<I: VCodeInst> MachBuffer<I> {
 
     /// Reserve appended space and return a mutable slice referring to it.
     pub fn get_appended_space(&mut self, len: usize) -> &mut [u8] {
-        trace!("MachBuffer: put data @ {}: len {}", self.cur_offset(), len);
         let off = self.data.len();
         let new_len = self.data.len() + len;
         self.data.resize(new_len, 0);
@@ -504,26 +497,69 @@ impl<I: VCodeInst> MachBuffer<I> {
         // Post-invariant: as for `get_label()`.
     }
 
-    /// Reserve the next N MachLabels for constants.
-    pub fn reserve_labels_for_constants(&mut self, constants: &VCodeConstants) {
-        trace!(
-            "MachBuffer: next {} labels are for constants",
-            constants.len()
-        );
-        for c in constants.keys() {
-            self.constant_labels[c] = self.get_label();
+    /// Registers metadata in this `MachBuffer` about the `constants` provided.
+    ///
+    /// This will record the size/alignment of all constants which will prepare
+    /// them for emission later on.
+    pub fn register_constants(&mut self, constants: &VCodeConstants) {
+        for (c, val) in constants.iter() {
+            let c2 = self.constants.push(MachBufferConstant {
+                upcoming_label: None,
+                align: val.alignment(),
+                size: val.as_slice().len(),
+            });
+            assert_eq!(c, c2);
         }
-
-        // Post-invariant: as for `get_label()`.
     }
 
-    /// Retrieve the reserved label for a constant.
-    pub fn get_label_for_constant(&self, constant: VCodeConstant) -> MachLabel {
-        self.constant_labels[constant]
+    /// Completes constant emission by iterating over `self.used_constants` and
+    /// filling in the "holes" with the constant values provided by `constants`.
+    ///
+    /// Returns the alignment required for this entire buffer. Alignment starts
+    /// at the ISA's minimum function alignment and can be increased due to
+    /// constant requirements.
+    fn finish_constants(&mut self, constants: &VCodeConstants) -> u32 {
+        let mut alignment = I::function_alignment().minimum;
+        for (constant, offset) in mem::take(&mut self.used_constants) {
+            let constant = constants.get(constant);
+            let data = constant.as_slice();
+            self.data[offset as usize..][..data.len()].copy_from_slice(data);
+            alignment = constant.alignment().max(alignment);
+        }
+        alignment
+    }
+
+    /// Returns a label that can be used to refer to the `constant` provided.
+    ///
+    /// This will automatically defer a new constant to be emitted for
+    /// `constant` if it has not been previously emitted. Note that this
+    /// function may return a different label for the same constant at
+    /// different points in time. The label is valid to use only from the
+    /// current location; the MachBuffer takes care to emit the same constant
+    /// multiple times if needed so the constant is always in range.
+    pub fn get_label_for_constant(&mut self, constant: VCodeConstant) -> MachLabel {
+        let MachBufferConstant {
+            align,
+            size,
+            upcoming_label,
+        } = self.constants[constant];
+        if let Some(label) = upcoming_label {
+            return label;
+        }
+
+        let label = self.get_label();
+        trace!(
+            "defer constant: eventually emit {size} bytes aligned \
+             to {align} at label {label:?}",
+        );
+        self.update_deadline(size, u32::MAX);
+        self.pending_constants.push(constant);
+        self.constants[constant].upcoming_label = Some(label);
+        label
     }
 
     /// Bind a label to the current offset. A label can only be bound once.
-    pub fn bind_label(&mut self, label: MachLabel) {
+    pub fn bind_label(&mut self, label: MachLabel, ctrl_plane: &mut ControlPlane) {
         trace!(
             "MachBuffer: bind label {:?} at offset {}",
             label,
@@ -542,7 +578,7 @@ impl<I: VCodeInst> MachBuffer<I> {
         // offset and added it to the list (which contains all labels at the
         // current offset).
 
-        self.optimize_branches();
+        self.optimize_branches(ctrl_plane);
 
         // Post-invariant: by `optimize_branches()` (see argument there).
     }
@@ -694,7 +730,7 @@ impl<I: VCodeInst> MachBuffer<I> {
         //    (end of buffer)
         self.data.truncate(b.start as usize);
         self.fixup_records.truncate(b.fixup);
-        while let Some(mut last_srcloc) = self.srclocs.last_mut() {
+        while let Some(last_srcloc) = self.srclocs.last_mut() {
             if last_srcloc.end <= b.start {
                 break;
             }
@@ -773,7 +809,11 @@ impl<I: VCodeInst> MachBuffer<I> {
         //   fixup record referring to that last branch is removed.
     }
 
-    fn optimize_branches(&mut self) {
+    fn optimize_branches(&mut self, ctrl_plane: &mut ControlPlane) {
+        if ctrl_plane.get_decision() {
+            return;
+        }
+
         self.lazily_clear_labels_at_tail();
         // Invariants valid at this point.
 
@@ -1064,30 +1104,6 @@ impl<I: VCodeInst> MachBuffer<I> {
         // preserves all semantics.
     }
 
-    /// Emit a constant at some point in the future, binding the given label to
-    /// its offset. The constant will be placed at most `max_distance` from the
-    /// current offset.
-    pub fn defer_constant(
-        &mut self,
-        label: MachLabel,
-        align: CodeOffset,
-        data: &[u8],
-        max_distance: CodeOffset,
-    ) {
-        trace!(
-            "defer_constant: eventually emit {} bytes aligned to {} at label {:?}",
-            data.len(),
-            align,
-            label
-        );
-        self.update_deadline(data.len(), max_distance);
-        self.pending_constants.push(MachLabelConstant {
-            label,
-            align,
-            data: SmallVec::from(data),
-        });
-    }
-
     /// Emit a trap at some point in the future with the specified code and
     /// stack map.
     ///
@@ -1141,13 +1157,18 @@ impl<I: VCodeInst> MachBuffer<I> {
     /// Should only be called if `island_needed()` returns true, i.e., if we
     /// actually reach a deadline. It's not necessarily a problem to do so
     /// otherwise but it may result in unnecessary work during emission.
-    pub fn emit_island(&mut self, distance: CodeOffset) {
-        self.emit_island_maybe_forced(false, distance);
+    pub fn emit_island(&mut self, distance: CodeOffset, ctrl_plane: &mut ControlPlane) {
+        self.emit_island_maybe_forced(false, distance, ctrl_plane);
     }
 
     /// Same as `emit_island`, but an internal API with a `force_veneers`
     /// argument to force all veneers to always get emitted for debugging.
-    fn emit_island_maybe_forced(&mut self, force_veneers: bool, distance: CodeOffset) {
+    fn emit_island_maybe_forced(
+        &mut self,
+        force_veneers: bool,
+        distance: CodeOffset,
+        ctrl_plane: &mut ControlPlane,
+    ) {
         // We're going to purge fixups, so no latest-branch editing can happen
         // anymore.
         self.latest_branches.clear();
@@ -1190,7 +1211,7 @@ impl<I: VCodeInst> MachBuffer<I> {
                 self.start_srcloc(loc);
             }
             self.align_to(I::LabelUse::ALIGN);
-            self.bind_label(label);
+            self.bind_label(label, ctrl_plane);
             self.add_trap(code);
             if let Some(map) = stack_map {
                 let extent = StackMapExtent::UpcomingBytes(I::TRAP_OPCODE.len() as u32);
@@ -1202,10 +1223,13 @@ impl<I: VCodeInst> MachBuffer<I> {
             }
         }
 
-        for MachLabelConstant { label, align, data } in mem::take(&mut self.pending_constants) {
+        for constant in mem::take(&mut self.pending_constants) {
+            let MachBufferConstant { align, size, .. } = self.constants[constant];
+            let label = self.constants[constant].upcoming_label.take().unwrap();
             self.align_to(align);
-            self.bind_label(label);
-            self.put_data(&data[..]);
+            self.bind_label(label, ctrl_plane);
+            self.used_constants.push((constant, self.cur_offset()));
+            self.get_appended_space(size);
         }
 
         for fixup in mem::take(&mut self.fixup_records) {
@@ -1328,7 +1352,11 @@ impl<I: VCodeInst> MachBuffer<I> {
         self.use_label_at_offset(veneer_fixup_off, label, veneer_label_use);
     }
 
-    fn finish_emission_maybe_forcing_veneers(&mut self, force_veneers: bool) {
+    fn finish_emission_maybe_forcing_veneers(
+        &mut self,
+        force_veneers: bool,
+        ctrl_plane: &mut ControlPlane,
+    ) {
         while !self.pending_constants.is_empty()
             || !self.pending_traps.is_empty()
             || !self.fixup_records.is_empty()
@@ -1336,7 +1364,7 @@ impl<I: VCodeInst> MachBuffer<I> {
             // `emit_island()` will emit any pending veneers and constants, and
             // as a side-effect, will also take care of any fixups with resolved
             // labels eagerly.
-            self.emit_island_maybe_forced(force_veneers, u32::MAX);
+            self.emit_island_maybe_forced(force_veneers, u32::MAX, ctrl_plane);
         }
 
         // Ensure that all labels have been fixed up after the last island is emitted. This is a
@@ -1346,14 +1374,20 @@ impl<I: VCodeInst> MachBuffer<I> {
     }
 
     /// Finish any deferred emissions and/or fixups.
-    pub fn finish(mut self) -> MachBufferFinalized<Stencil> {
+    pub fn finish(
+        mut self,
+        constants: &VCodeConstants,
+        ctrl_plane: &mut ControlPlane,
+    ) -> MachBufferFinalized<Stencil> {
         let _tt = timing::vcode_emit_finish();
 
         // Do any optimizations on branches at tail of buffer, as if we
         // had bound one last label.
-        self.optimize_branches();
+        self.optimize_branches(ctrl_plane);
 
-        self.finish_emission_maybe_forcing_veneers(false);
+        self.finish_emission_maybe_forcing_veneers(false, ctrl_plane);
+
+        let alignment = self.finish_constants(constants);
 
         let mut srclocs = self.srclocs;
         srclocs.sort_by_key(|entry| entry.start);
@@ -1366,6 +1400,7 @@ impl<I: VCodeInst> MachBuffer<I> {
             srclocs,
             stack_maps: self.stack_maps,
             unwind_info: self.unwind_info,
+            alignment,
         }
     }
 
@@ -1545,14 +1580,18 @@ impl<T: CompilePhase> MachBufferFinalized<T> {
     }
 }
 
-/// A constant that is deferred to the next constant-pool opportunity.
-struct MachLabelConstant {
-    /// This label will refer to the constant's offset.
-    label: MachLabel,
+/// Metadata about a constant.
+struct MachBufferConstant {
+    /// A label which has not yet been bound which can be used for this
+    /// constant.
+    ///
+    /// This is lazily created when a label is requested for a constant and is
+    /// cleared when a constant is emitted.
+    upcoming_label: Option<MachLabel>,
     /// Required alignment.
     align: CodeOffset,
-    /// This data will be emitted when able.
-    data: SmallVec<[u8; 16]>,
+    /// The byte size of this constant.
+    size: usize,
 }
 
 /// A trap that is deferred to the next time an island is emitted for either
@@ -1713,19 +1752,28 @@ impl<I: VCodeInst> MachTextSectionBuilder<I> {
 }
 
 impl<I: VCodeInst> TextSectionBuilder for MachTextSectionBuilder<I> {
-    fn append(&mut self, labeled: bool, func: &[u8], align: u32) -> u64 {
+    fn append(
+        &mut self,
+        labeled: bool,
+        func: &[u8],
+        align: u32,
+        ctrl_plane: &mut ControlPlane,
+    ) -> u64 {
         // Conditionally emit an island if it's necessary to resolve jumps
         // between functions which are too far away.
         let size = func.len() as u32;
         if self.force_veneers || self.buf.island_needed(size) {
-            self.buf.emit_island_maybe_forced(self.force_veneers, size);
+            self.buf
+                .emit_island_maybe_forced(self.force_veneers, size, ctrl_plane);
         }
 
         self.buf.align_to(align);
         let pos = self.buf.cur_offset();
         if labeled {
-            self.buf
-                .bind_label(MachLabel::from_block(BlockIndex::new(self.next_func)));
+            self.buf.bind_label(
+                MachLabel::from_block(BlockIndex::new(self.next_func)),
+                ctrl_plane,
+            );
             self.next_func += 1;
         }
         self.buf.put_data(func);
@@ -1748,13 +1796,13 @@ impl<I: VCodeInst> TextSectionBuilder for MachTextSectionBuilder<I> {
         self.force_veneers = true;
     }
 
-    fn finish(&mut self) -> Vec<u8> {
+    fn finish(&mut self, ctrl_plane: &mut ControlPlane) -> Vec<u8> {
         // Double-check all functions were pushed.
         assert_eq!(self.next_func, self.buf.label_offsets.len());
 
         // Finish up any veneers, if necessary.
         self.buf
-            .finish_emission_maybe_forcing_veneers(self.force_veneers);
+            .finish_emission_maybe_forcing_veneers(self.force_veneers, ctrl_plane);
 
         // We don't need the data any more, so return it to the caller.
         mem::take(&mut self.buf.data).into_vec()
@@ -1770,7 +1818,7 @@ mod test {
     use crate::ir::UserExternalNameRef;
     use crate::isa::aarch64::inst::xreg;
     use crate::isa::aarch64::inst::{BranchTarget, CondBrKind, EmitInfo, Inst};
-    use crate::machinst::MachInstEmit;
+    use crate::machinst::{MachInstEmit, MachInstEmitState};
     use crate::settings;
     use std::default::Default;
     use std::vec::Vec;
@@ -1786,14 +1834,15 @@ mod test {
     fn test_elide_jump_to_next() {
         let info = EmitInfo::new(settings::Flags::new(settings::builder()));
         let mut buf = MachBuffer::new();
-        let mut state = Default::default();
+        let mut state = <Inst as MachInstEmit>::State::default();
+        let constants = Default::default();
 
         buf.reserve_labels_for_blocks(2);
-        buf.bind_label(label(0));
+        buf.bind_label(label(0), state.ctrl_plane_mut());
         let inst = Inst::Jump { dest: target(1) };
         inst.emit(&[], &mut buf, &info, &mut state);
-        buf.bind_label(label(1));
-        let buf = buf.finish();
+        buf.bind_label(label(1), state.ctrl_plane_mut());
+        let buf = buf.finish(&constants, state.ctrl_plane_mut());
         assert_eq!(0, buf.total_size());
     }
 
@@ -1801,11 +1850,12 @@ mod test {
     fn test_elide_trivial_jump_blocks() {
         let info = EmitInfo::new(settings::Flags::new(settings::builder()));
         let mut buf = MachBuffer::new();
-        let mut state = Default::default();
+        let mut state = <Inst as MachInstEmit>::State::default();
+        let constants = Default::default();
 
         buf.reserve_labels_for_blocks(4);
 
-        buf.bind_label(label(0));
+        buf.bind_label(label(0), state.ctrl_plane_mut());
         let inst = Inst::CondBr {
             kind: CondBrKind::NotZero(xreg(0)),
             taken: target(1),
@@ -1813,17 +1863,17 @@ mod test {
         };
         inst.emit(&[], &mut buf, &info, &mut state);
 
-        buf.bind_label(label(1));
+        buf.bind_label(label(1), state.ctrl_plane_mut());
         let inst = Inst::Jump { dest: target(3) };
         inst.emit(&[], &mut buf, &info, &mut state);
 
-        buf.bind_label(label(2));
+        buf.bind_label(label(2), state.ctrl_plane_mut());
         let inst = Inst::Jump { dest: target(3) };
         inst.emit(&[], &mut buf, &info, &mut state);
 
-        buf.bind_label(label(3));
+        buf.bind_label(label(3), state.ctrl_plane_mut());
 
-        let buf = buf.finish();
+        let buf = buf.finish(&constants, state.ctrl_plane_mut());
         assert_eq!(0, buf.total_size());
     }
 
@@ -1831,11 +1881,12 @@ mod test {
     fn test_flip_cond() {
         let info = EmitInfo::new(settings::Flags::new(settings::builder()));
         let mut buf = MachBuffer::new();
-        let mut state = Default::default();
+        let mut state = <Inst as MachInstEmit>::State::default();
+        let constants = Default::default();
 
         buf.reserve_labels_for_blocks(4);
 
-        buf.bind_label(label(0));
+        buf.bind_label(label(0), state.ctrl_plane_mut());
         let inst = Inst::CondBr {
             kind: CondBrKind::Zero(xreg(0)),
             taken: target(1),
@@ -1843,19 +1894,19 @@ mod test {
         };
         inst.emit(&[], &mut buf, &info, &mut state);
 
-        buf.bind_label(label(1));
+        buf.bind_label(label(1), state.ctrl_plane_mut());
         let inst = Inst::Nop4;
         inst.emit(&[], &mut buf, &info, &mut state);
 
-        buf.bind_label(label(2));
+        buf.bind_label(label(2), state.ctrl_plane_mut());
         let inst = Inst::Udf {
             trap_code: TrapCode::Interrupt,
         };
         inst.emit(&[], &mut buf, &info, &mut state);
 
-        buf.bind_label(label(3));
+        buf.bind_label(label(3), state.ctrl_plane_mut());
 
-        let buf = buf.finish();
+        let buf = buf.finish(&constants, state.ctrl_plane_mut());
 
         let mut buf2 = MachBuffer::new();
         let mut state = Default::default();
@@ -1867,7 +1918,7 @@ mod test {
         let inst = Inst::Nop4;
         inst.emit(&[], &mut buf2, &info, &mut state);
 
-        let buf2 = buf2.finish();
+        let buf2 = buf2.finish(&constants, state.ctrl_plane_mut());
 
         assert_eq!(buf.data, buf2.data);
     }
@@ -1876,11 +1927,12 @@ mod test {
     fn test_island() {
         let info = EmitInfo::new(settings::Flags::new(settings::builder()));
         let mut buf = MachBuffer::new();
-        let mut state = Default::default();
+        let mut state = <Inst as MachInstEmit>::State::default();
+        let constants = Default::default();
 
         buf.reserve_labels_for_blocks(4);
 
-        buf.bind_label(label(0));
+        buf.bind_label(label(0), state.ctrl_plane_mut());
         let inst = Inst::CondBr {
             kind: CondBrKind::NotZero(xreg(0)),
             taken: target(2),
@@ -1888,24 +1940,24 @@ mod test {
         };
         inst.emit(&[], &mut buf, &info, &mut state);
 
-        buf.bind_label(label(1));
+        buf.bind_label(label(1), state.ctrl_plane_mut());
         while buf.cur_offset() < 2000000 {
             if buf.island_needed(0) {
-                buf.emit_island(0);
+                buf.emit_island(0, state.ctrl_plane_mut());
             }
             let inst = Inst::Nop4;
             inst.emit(&[], &mut buf, &info, &mut state);
         }
 
-        buf.bind_label(label(2));
+        buf.bind_label(label(2), state.ctrl_plane_mut());
         let inst = Inst::Nop4;
         inst.emit(&[], &mut buf, &info, &mut state);
 
-        buf.bind_label(label(3));
+        buf.bind_label(label(3), state.ctrl_plane_mut());
         let inst = Inst::Nop4;
         inst.emit(&[], &mut buf, &info, &mut state);
 
-        let buf = buf.finish();
+        let buf = buf.finish(&constants, state.ctrl_plane_mut());
 
         assert_eq!(2000000 + 8, buf.total_size());
 
@@ -1934,7 +1986,7 @@ mod test {
         };
         inst.emit(&[], &mut buf2, &info, &mut state);
 
-        let buf2 = buf2.finish();
+        let buf2 = buf2.finish(&constants, state.ctrl_plane_mut());
 
         assert_eq!(&buf.data[0..8], &buf2.data[..]);
     }
@@ -1943,25 +1995,26 @@ mod test {
     fn test_island_backward() {
         let info = EmitInfo::new(settings::Flags::new(settings::builder()));
         let mut buf = MachBuffer::new();
-        let mut state = Default::default();
+        let mut state = <Inst as MachInstEmit>::State::default();
+        let constants = Default::default();
 
         buf.reserve_labels_for_blocks(4);
 
-        buf.bind_label(label(0));
+        buf.bind_label(label(0), state.ctrl_plane_mut());
         let inst = Inst::Nop4;
         inst.emit(&[], &mut buf, &info, &mut state);
 
-        buf.bind_label(label(1));
+        buf.bind_label(label(1), state.ctrl_plane_mut());
         let inst = Inst::Nop4;
         inst.emit(&[], &mut buf, &info, &mut state);
 
-        buf.bind_label(label(2));
+        buf.bind_label(label(2), state.ctrl_plane_mut());
         while buf.cur_offset() < 2000000 {
             let inst = Inst::Nop4;
             inst.emit(&[], &mut buf, &info, &mut state);
         }
 
-        buf.bind_label(label(3));
+        buf.bind_label(label(3), state.ctrl_plane_mut());
         let inst = Inst::CondBr {
             kind: CondBrKind::NotZero(xreg(0)),
             taken: target(0),
@@ -1969,7 +2022,7 @@ mod test {
         };
         inst.emit(&[], &mut buf, &info, &mut state);
 
-        let buf = buf.finish();
+        let buf = buf.finish(&constants, state.ctrl_plane_mut());
 
         assert_eq!(2000000 + 12, buf.total_size());
 
@@ -1986,7 +2039,7 @@ mod test {
         };
         inst.emit(&[], &mut buf2, &info, &mut state);
 
-        let buf2 = buf2.finish();
+        let buf2 = buf2.finish(&constants, state.ctrl_plane_mut());
 
         assert_eq!(&buf.data[2000000..], &buf2.data[..]);
     }
@@ -2028,11 +2081,12 @@ mod test {
 
         let info = EmitInfo::new(settings::Flags::new(settings::builder()));
         let mut buf = MachBuffer::new();
-        let mut state = Default::default();
+        let mut state = <Inst as MachInstEmit>::State::default();
+        let constants = Default::default();
 
         buf.reserve_labels_for_blocks(8);
 
-        buf.bind_label(label(0));
+        buf.bind_label(label(0), state.ctrl_plane_mut());
         let inst = Inst::CondBr {
             kind: CondBrKind::Zero(xreg(0)),
             taken: target(1),
@@ -2040,38 +2094,41 @@ mod test {
         };
         inst.emit(&[], &mut buf, &info, &mut state);
 
-        buf.bind_label(label(1));
+        buf.bind_label(label(1), state.ctrl_plane_mut());
         let inst = Inst::Jump { dest: target(3) };
         inst.emit(&[], &mut buf, &info, &mut state);
 
-        buf.bind_label(label(2));
+        buf.bind_label(label(2), state.ctrl_plane_mut());
         let inst = Inst::Nop4;
         inst.emit(&[], &mut buf, &info, &mut state);
         inst.emit(&[], &mut buf, &info, &mut state);
         let inst = Inst::Jump { dest: target(0) };
         inst.emit(&[], &mut buf, &info, &mut state);
 
-        buf.bind_label(label(3));
+        buf.bind_label(label(3), state.ctrl_plane_mut());
         let inst = Inst::Jump { dest: target(4) };
         inst.emit(&[], &mut buf, &info, &mut state);
 
-        buf.bind_label(label(4));
+        buf.bind_label(label(4), state.ctrl_plane_mut());
         let inst = Inst::Jump { dest: target(5) };
         inst.emit(&[], &mut buf, &info, &mut state);
 
-        buf.bind_label(label(5));
+        buf.bind_label(label(5), state.ctrl_plane_mut());
         let inst = Inst::Jump { dest: target(7) };
         inst.emit(&[], &mut buf, &info, &mut state);
 
-        buf.bind_label(label(6));
+        buf.bind_label(label(6), state.ctrl_plane_mut());
         let inst = Inst::Nop4;
         inst.emit(&[], &mut buf, &info, &mut state);
 
-        buf.bind_label(label(7));
-        let inst = Inst::Ret { rets: vec![] };
+        buf.bind_label(label(7), state.ctrl_plane_mut());
+        let inst = Inst::Ret {
+            rets: vec![],
+            stack_bytes_to_pop: 0,
+        };
         inst.emit(&[], &mut buf, &info, &mut state);
 
-        let buf = buf.finish();
+        let buf = buf.finish(&constants, state.ctrl_plane_mut());
 
         let golden_data = vec![
             0xa0, 0x00, 0x00, 0xb4, // cbz x0, 0x14
@@ -2104,31 +2161,32 @@ mod test {
         //   b label0
         let info = EmitInfo::new(settings::Flags::new(settings::builder()));
         let mut buf = MachBuffer::new();
-        let mut state = Default::default();
+        let mut state = <Inst as MachInstEmit>::State::default();
+        let constants = Default::default();
 
         buf.reserve_labels_for_blocks(5);
 
-        buf.bind_label(label(0));
+        buf.bind_label(label(0), state.ctrl_plane_mut());
         let inst = Inst::Jump { dest: target(1) };
         inst.emit(&[], &mut buf, &info, &mut state);
 
-        buf.bind_label(label(1));
+        buf.bind_label(label(1), state.ctrl_plane_mut());
         let inst = Inst::Jump { dest: target(2) };
         inst.emit(&[], &mut buf, &info, &mut state);
 
-        buf.bind_label(label(2));
+        buf.bind_label(label(2), state.ctrl_plane_mut());
         let inst = Inst::Jump { dest: target(3) };
         inst.emit(&[], &mut buf, &info, &mut state);
 
-        buf.bind_label(label(3));
+        buf.bind_label(label(3), state.ctrl_plane_mut());
         let inst = Inst::Jump { dest: target(4) };
         inst.emit(&[], &mut buf, &info, &mut state);
 
-        buf.bind_label(label(4));
+        buf.bind_label(label(4), state.ctrl_plane_mut());
         let inst = Inst::Jump { dest: target(1) };
         inst.emit(&[], &mut buf, &info, &mut state);
 
-        let buf = buf.finish();
+        let buf = buf.finish(&constants, state.ctrl_plane_mut());
 
         let golden_data = vec![
             0x00, 0x00, 0x00, 0x14, // b 0
@@ -2140,10 +2198,12 @@ mod test {
     #[test]
     fn metadata_records() {
         let mut buf = MachBuffer::<Inst>::new();
+        let ctrl_plane = &mut Default::default();
+        let constants = Default::default();
 
         buf.reserve_labels_for_blocks(1);
 
-        buf.bind_label(label(0));
+        buf.bind_label(label(0), ctrl_plane);
         buf.put1(1);
         buf.add_trap(TrapCode::HeapOutOfBounds);
         buf.put1(2);
@@ -2163,7 +2223,7 @@ mod test {
         );
         buf.put1(4);
 
-        let buf = buf.finish();
+        let buf = buf.finish(&constants, ctrl_plane);
 
         assert_eq!(buf.data(), &[1, 2, 3, 4]);
         assert_eq!(

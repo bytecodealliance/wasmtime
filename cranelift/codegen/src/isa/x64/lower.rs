@@ -19,6 +19,18 @@ use target_lexicon::Triple;
 //=============================================================================
 // Helpers for instruction lowering.
 
+impl Lower<'_, Inst> {
+    #[inline]
+    pub fn temp_writable_gpr(&mut self) -> WritableGpr {
+        WritableGpr::from_writable_reg(self.alloc_tmp(types::I64).only_reg().unwrap()).unwrap()
+    }
+
+    #[inline]
+    pub fn temp_writable_xmm(&mut self) -> WritableXmm {
+        WritableXmm::from_writable_reg(self.alloc_tmp(types::F64).only_reg().unwrap()).unwrap()
+    }
+}
+
 fn is_int_or_ref_ty(ty: Type) -> bool {
     match ty {
         types::I8 | types::I16 | types::I32 | types::I64 | types::R64 => true,
@@ -150,7 +162,7 @@ fn emit_vm_call(
 
     // TODO avoid recreating signatures for every single Libcall function.
     let call_conv = CallConv::for_libcall(flags, CallConv::triple_default(triple));
-    let sig = libcall.signature(call_conv);
+    let sig = libcall.signature(call_conv, types::I64);
     let caller_conv = ctx.abi().call_conv(ctx.sigs());
 
     if !ctx.sigs().have_abi_sig_for_signature(&sig) {
@@ -159,7 +171,7 @@ fn emit_vm_call(
     }
 
     let mut abi =
-        X64Caller::from_libcall(ctx.sigs(), &sig, &extname, dist, caller_conv, flags.clone())?;
+        X64CallSite::from_libcall(ctx.sigs(), &sig, &extname, dist, caller_conv, flags.clone());
 
     abi.emit_stack_pre_adjust(ctx);
 

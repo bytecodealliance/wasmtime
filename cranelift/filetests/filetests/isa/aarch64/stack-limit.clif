@@ -10,7 +10,7 @@ block0:
 ; VCode:
 ; block0:
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ret
@@ -23,7 +23,7 @@ block0(v0: i64):
 ; VCode:
 ; block0:
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ret
@@ -40,7 +40,7 @@ block0(v0: i64):
 ; VCode:
 ; block0:
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ret
@@ -62,7 +62,7 @@ block0(v0: i64):
 ;   blr x2
 ;   ldp fp, lr, [sp], #16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
@@ -102,7 +102,7 @@ block0(v0: i64):
 ;   blr x2
 ;   ldp fp, lr, [sp], #16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
@@ -138,7 +138,7 @@ block0(v0: i64):
 ;   add sp, sp, #176
 ;   ldp fp, lr, [sp], #16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
@@ -178,7 +178,7 @@ block0(v0: i64):
 ;   add sp, sp, x16, UXTX
 ;   ldp fp, lr, [sp], #16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
@@ -225,7 +225,7 @@ block0(v0: i64):
 ;   add sp, sp, #32
 ;   ldp fp, lr, [sp], #16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
@@ -273,7 +273,7 @@ block0(v0: i64):
 ;   add sp, sp, x16, UXTX
 ;   ldp fp, lr, [sp], #16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
@@ -320,7 +320,7 @@ block0(v0: i64):
 ;   add sp, sp, #32
 ;   ldp fp, lr, [sp], #16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!

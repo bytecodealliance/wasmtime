@@ -20,9 +20,6 @@ async-trait = { workspace = true }
 wasmtime = { workspace = true }
 anyhow = { workspace = true }
 
-[badges]
-maintenance = { status = "actively-developed" }
-
 [dev-dependencies]
 wiggle-test = { path = "test-helpers" }
 proptest = "1.0.0"

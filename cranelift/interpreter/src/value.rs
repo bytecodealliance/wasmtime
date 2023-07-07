@@ -1,7 +1,6 @@
-//! The [Value] trait describes what operations can be performed on interpreter values. The
-//! interpreter usually executes using [DataValue]s so an implementation is provided here. The fact
-//! that [Value] is a trait, however, allows interpretation of Cranelift IR on other kinds of
-//! values.
+//! The [DataValueExt] trait is an extension trait for [DataValue]. It provides a lot of functions
+//! used by the rest of the interpreter.
+
 use core::convert::TryFrom;
 use core::fmt::{self, Display, Formatter};
 use cranelift_codegen::data_value::{DataValue, DataValueCastFailure};
@@ -11,11 +10,11 @@ use thiserror::Error;
 
 pub type ValueResult<T> = Result<T, ValueError>;
 
-pub trait Value: Clone + From<DataValue> {
+pub trait DataValueExt: Sized {
     // Identity.
-    fn ty(&self) -> Type;
     fn int(n: i128, ty: Type) -> ValueResult<Self>;
-    fn into_int(self) -> ValueResult<i128>;
+    fn into_int_signed(self) -> ValueResult<i128>;
+    fn into_int_unsigned(self) -> ValueResult<u128>;
     fn float(n: u64, ty: Type) -> ValueResult<Self>;
     fn into_float(self) -> ValueResult<f64>;
     fn is_float(&self) -> bool;
@@ -30,33 +29,33 @@ pub trait Value: Clone + From<DataValue> {
     fn is_negative(&self) -> ValueResult<bool>;
     fn is_zero(&self) -> ValueResult<bool>;
 
-    fn max(self, other: Self) -> ValueResult<Self>;
-    fn min(self, other: Self) -> ValueResult<Self>;
+    fn umax(self, other: Self) -> ValueResult<Self>;
+    fn smax(self, other: Self) -> ValueResult<Self>;
+    fn umin(self, other: Self) -> ValueResult<Self>;
+    fn smin(self, other: Self) -> ValueResult<Self>;
 
     // Comparison.
-    fn eq(&self, other: &Self) -> ValueResult<bool>;
-    fn gt(&self, other: &Self) -> ValueResult<bool>;
-    fn ge(&self, other: &Self) -> ValueResult<bool> {
-        Ok(self.eq(other)? || self.gt(other)?)
-    }
-    fn lt(&self, other: &Self) -> ValueResult<bool> {
-        other.gt(self)
-    }
-    fn le(&self, other: &Self) -> ValueResult<bool> {
-        Ok(other.eq(self)? || other.gt(self)?)
-    }
     fn uno(&self, other: &Self) -> ValueResult<bool>;
 
     // Arithmetic.
     fn add(self, other: Self) -> ValueResult<Self>;
     fn sub(self, other: Self) -> ValueResult<Self>;
     fn mul(self, other: Self) -> ValueResult<Self>;
-    fn div(self, other: Self) -> ValueResult<Self>;
-    fn rem(self, other: Self) -> ValueResult<Self>;
+    fn udiv(self, other: Self) -> ValueResult<Self>;
+    fn sdiv(self, other: Self) -> ValueResult<Self>;
+    fn urem(self, other: Self) -> ValueResult<Self>;
+    fn srem(self, other: Self) -> ValueResult<Self>;
     fn sqrt(self) -> ValueResult<Self>;
     fn fma(self, a: Self, b: Self) -> ValueResult<Self>;
     fn abs(self) -> ValueResult<Self>;
-    fn checked_add(self, other: Self) -> ValueResult<Option<Self>>;
+    fn uadd_checked(self, other: Self) -> ValueResult<Option<Self>>;
+    fn sadd_checked(self, other: Self) -> ValueResult<Option<Self>>;
+    fn uadd_overflow(self, other: Self) -> ValueResult<(Self, bool)>;
+    fn sadd_overflow(self, other: Self) -> ValueResult<(Self, bool)>;
+    fn usub_overflow(self, other: Self) -> ValueResult<(Self, bool)>;
+    fn ssub_overflow(self, other: Self) -> ValueResult<(Self, bool)>;
+    fn umul_overflow(self, other: Self) -> ValueResult<(Self, bool)>;
+    fn smul_overflow(self, other: Self) -> ValueResult<(Self, bool)>;
 
     // Float operations
     fn neg(self) -> ValueResult<Self>;
@@ -67,13 +66,15 @@ pub trait Value: Clone + From<DataValue> {
     fn nearest(self) -> ValueResult<Self>;
 
     // Saturating arithmetic.
-    fn add_sat(self, other: Self) -> ValueResult<Self>;
-    fn sub_sat(self, other: Self) -> ValueResult<Self>;
+    fn uadd_sat(self, other: Self) -> ValueResult<Self>;
+    fn sadd_sat(self, other: Self) -> ValueResult<Self>;
+    fn usub_sat(self, other: Self) -> ValueResult<Self>;
+    fn ssub_sat(self, other: Self) -> ValueResult<Self>;
 
     // Bitwise.
     fn shl(self, other: Self) -> ValueResult<Self>;
     fn ushr(self, other: Self) -> ValueResult<Self>;
-    fn ishr(self, other: Self) -> ValueResult<Self>;
+    fn sshr(self, other: Self) -> ValueResult<Self>;
     fn rotl(self, other: Self) -> ValueResult<Self>;
     fn rotr(self, other: Self) -> ValueResult<Self>;
     fn and(self, other: Self) -> ValueResult<Self>;
@@ -142,12 +143,6 @@ pub enum ValueConversionKind {
     /// Convert to a larger integer type, extending with zeroes; e.g. in `i8` to `i16`, `0xff`
     /// becomes `0x00ff`.
     ZeroExtend(Type),
-    /// Convert a signed integer to its unsigned value of the same size; e.g. in `i8` to `u8`,
-    /// `0xff` (`-1`) becomes `0xff` (`255`).
-    ToUnsigned,
-    /// Convert an unsigned integer to its signed value of the same size; e.g. in `u8` to `i8`,
-    /// `0xff` (`255`) becomes `0xff` (`-1`).
-    ToSigned,
     /// Convert a floating point number by rounding to the nearest possible value with ties to even.
     /// See `fdemote`, e.g.
     RoundNearestEven(Type),
@@ -188,9 +183,24 @@ macro_rules! binary_match {
             _ => unimplemented!()
         }
     };
-    ( option $op:ident($arg1:expr, $arg2:expr); [ $( $data_value_ty:ident ),* ] ) => {
+    ( $op:ident($arg1:expr, $arg2:expr); [ $( $data_value_ty:ident ),* ]; [ $( $op_type:ty ),* ] ) => {
         match ($arg1, $arg2) {
-            $( (DataValue::$data_value_ty(a), DataValue::$data_value_ty(b)) => { Ok(a.$op(*b).map(DataValue::$data_value_ty)) } )*
+            $( (DataValue::$data_value_ty(a), DataValue::$data_value_ty(b)) => { Ok(DataValue::$data_value_ty((*a as $op_type).$op(*b as $op_type) as _)) } )*
+            _ => unimplemented!()
+        }
+    };
+    ( option $op:ident($arg1:expr, $arg2:expr); [ $( $data_value_ty:ident ),* ]; [ $( $op_type:ty ),* ] ) => {
+        match ($arg1, $arg2) {
+            $( (DataValue::$data_value_ty(a), DataValue::$data_value_ty(b)) => { Ok((*a as $op_type).$op(*b as $op_type).map(|v| DataValue::$data_value_ty(v as _))) } )*
+            _ => unimplemented!()
+        }
+    };
+    ( pair $op:ident($arg1:expr, $arg2:expr); [ $( $data_value_ty:ident ),* ]; [ $( $op_type:ty ),* ] ) => {
+        match ($arg1, $arg2) {
+            $( (DataValue::$data_value_ty(a), DataValue::$data_value_ty(b)) => {
+                let (f, s) = (*a as $op_type).$op(*b as $op_type);
+                Ok((DataValue::$data_value_ty(f as _), s))
+            } )*
             _ => unimplemented!()
         }
     };
@@ -200,9 +210,15 @@ macro_rules! binary_match {
             _ => unimplemented!()
         }
     };
-    ( $op:tt($arg1:expr, $arg2:expr); [ $( $data_value_ty:ident ),* ]; rhs: $rhs:tt ) => {
+    ( $op:tt($arg1:expr, $arg2:expr); [ $( $data_value_ty:ident ),* ]; [ $( $op_type:ty ),* ] ) => {
         match ($arg1, $arg2) {
-            $( (DataValue::$data_value_ty(a), DataValue::$rhs(b)) => { Ok(DataValue::$data_value_ty(a.$op(*b))) } )*
+            $( (DataValue::$data_value_ty(a), DataValue::$data_value_ty(b)) => { Ok(DataValue::$data_value_ty(((*a as $op_type) $op (*b as $op_type)) as _)) } )*
+            _ => unimplemented!()
+        }
+    };
+    ( $op:tt($arg1:expr, $arg2:expr); [ $( $data_value_ty:ident ),* ]; [ $( $a_type:ty ),* ]; rhs: $rhs:tt,$rhs_type:ty ) => {
+        match ($arg1, $arg2) {
+            $( (DataValue::$data_value_ty(a), DataValue::$rhs(b)) => { Ok(DataValue::$data_value_ty((*a as $a_type).$op(*b as $rhs_type) as _)) } )*
             _ => unimplemented!()
         }
     };
@@ -240,11 +256,7 @@ macro_rules! bitop {
     };
 }
 
-impl Value for DataValue {
-    fn ty(&self) -> Type {
-        self.ty()
-    }
-
+impl DataValueExt for DataValue {
     fn int(n: i128, ty: Type) -> ValueResult<Self> {
         if ty.is_int() && !ty.is_vector() {
             DataValue::from_integer(n, ty).map_err(|_| ValueError::InvalidValue(ty))
@@ -253,18 +265,24 @@ impl Value for DataValue {
         }
     }
 
-    fn into_int(self) -> ValueResult<i128> {
+    fn into_int_signed(self) -> ValueResult<i128> {
         match self {
             DataValue::I8(n) => Ok(n as i128),
             DataValue::I16(n) => Ok(n as i128),
             DataValue::I32(n) => Ok(n as i128),
             DataValue::I64(n) => Ok(n as i128),
             DataValue::I128(n) => Ok(n),
-            DataValue::U8(n) => Ok(n as i128),
-            DataValue::U16(n) => Ok(n as i128),
-            DataValue::U32(n) => Ok(n as i128),
-            DataValue::U64(n) => Ok(n as i128),
-            DataValue::U128(n) => Ok(n as i128),
+            _ => Err(ValueError::InvalidType(ValueTypeClass::Integer, self.ty())),
+        }
+    }
+
+    fn into_int_unsigned(self) -> ValueResult<u128> {
+        match self {
+            DataValue::I8(n) => Ok(n as u8 as u128),
+            DataValue::I16(n) => Ok(n as u16 as u128),
+            DataValue::I32(n) => Ok(n as u32 as u128),
+            DataValue::I64(n) => Ok(n as u64 as u128),
+            DataValue::I128(n) => Ok(n as u128),
             _ => Err(ValueError::InvalidType(ValueTypeClass::Integer, self.ty())),
         }
     }
@@ -366,7 +384,7 @@ impl Value for DataValue {
             ValueConversionKind::Exact(ty) => match (self, ty) {
                 // TODO a lot to do here: from bmask to ireduce to bitcast...
                 (val, ty) if val.ty().is_int() && ty.is_int() => {
-                    DataValue::from_integer(val.into_int()?, ty)?
+                    DataValue::from_integer(val.into_int_signed()?, ty)?
                 }
                 (DataValue::I32(n), types::F32) => DataValue::F32(f32::from_bits(n as u32).into()),
                 (DataValue::I64(n), types::F64) => DataValue::F64(f64::from_bits(n as u64).into()),
@@ -385,7 +403,7 @@ impl Value for DataValue {
                 );
 
                 let mask = (1 << (ty.bytes() * 8)) - 1i128;
-                let truncated = self.into_int()? & mask;
+                let truncated = self.into_int_signed()? & mask;
                 Self::from_integer(truncated, ty)?
             }
             ValueConversionKind::ExtractUpper(ty) => {
@@ -400,78 +418,44 @@ impl Value for DataValue {
                 let mask = (1 << (ty.bytes() * 8)) - 1i128;
                 let shifted_mask = mask << shift_amt;
 
-                let extracted = (self.into_int()? & shifted_mask) >> shift_amt;
+                let extracted = (self.into_int_signed()? & shifted_mask) >> shift_amt;
                 Self::from_integer(extracted, ty)?
             }
             ValueConversionKind::SignExtend(ty) => match (self, ty) {
-                (DataValue::U8(n), types::I16) => DataValue::U16(n as u16),
-                (DataValue::U8(n), types::I32) => DataValue::U32(n as u32),
-                (DataValue::U8(n), types::I64) => DataValue::U64(n as u64),
-                (DataValue::U8(n), types::I128) => DataValue::U128(n as u128),
                 (DataValue::I8(n), types::I16) => DataValue::I16(n as i16),
                 (DataValue::I8(n), types::I32) => DataValue::I32(n as i32),
                 (DataValue::I8(n), types::I64) => DataValue::I64(n as i64),
                 (DataValue::I8(n), types::I128) => DataValue::I128(n as i128),
-                (DataValue::U16(n), types::I32) => DataValue::U32(n as u32),
-                (DataValue::U16(n), types::I64) => DataValue::U64(n as u64),
-                (DataValue::U16(n), types::I128) => DataValue::U128(n as u128),
                 (DataValue::I16(n), types::I32) => DataValue::I32(n as i32),
                 (DataValue::I16(n), types::I64) => DataValue::I64(n as i64),
                 (DataValue::I16(n), types::I128) => DataValue::I128(n as i128),
-                (DataValue::U32(n), types::I64) => DataValue::U64(n as u64),
-                (DataValue::U32(n), types::I128) => DataValue::U128(n as u128),
                 (DataValue::I32(n), types::I64) => DataValue::I64(n as i64),
                 (DataValue::I32(n), types::I128) => DataValue::I128(n as i128),
-                (DataValue::U64(n), types::I128) => DataValue::U128(n as u128),
                 (DataValue::I64(n), types::I128) => DataValue::I128(n as i128),
                 (dv, _) => unimplemented!("conversion: {} -> {:?}", dv.ty(), kind),
             },
             ValueConversionKind::ZeroExtend(ty) => match (self, ty) {
-                (DataValue::U8(n), types::I16) => DataValue::U16(n as u16),
-                (DataValue::U8(n), types::I32) => DataValue::U32(n as u32),
-                (DataValue::U8(n), types::I64) => DataValue::U64(n as u64),
-                (DataValue::U8(n), types::I128) => DataValue::U128(n as u128),
                 (DataValue::I8(n), types::I16) => DataValue::I16(n as u8 as i16),
                 (DataValue::I8(n), types::I32) => DataValue::I32(n as u8 as i32),
                 (DataValue::I8(n), types::I64) => DataValue::I64(n as u8 as i64),
                 (DataValue::I8(n), types::I128) => DataValue::I128(n as u8 as i128),
-                (DataValue::U16(n), types::I32) => DataValue::U32(n as u32),
-                (DataValue::U16(n), types::I64) => DataValue::U64(n as u64),
-                (DataValue::U16(n), types::I128) => DataValue::U128(n as u128),
                 (DataValue::I16(n), types::I32) => DataValue::I32(n as u16 as i32),
                 (DataValue::I16(n), types::I64) => DataValue::I64(n as u16 as i64),
                 (DataValue::I16(n), types::I128) => DataValue::I128(n as u16 as i128),
-                (DataValue::U32(n), types::I64) => DataValue::U64(n as u64),
-                (DataValue::U32(n), types::I128) => DataValue::U128(n as u128),
                 (DataValue::I32(n), types::I64) => DataValue::I64(n as u32 as i64),
                 (DataValue::I32(n), types::I128) => DataValue::I128(n as u32 as i128),
-                (DataValue::U64(n), types::I128) => DataValue::U128(n as u128),
                 (DataValue::I64(n), types::I128) => DataValue::I128(n as u64 as i128),
                 (from, to) if from.ty() == to => from,
                 (dv, _) => unimplemented!("conversion: {} -> {:?}", dv.ty(), kind),
-            },
-            ValueConversionKind::ToUnsigned => match self {
-                DataValue::I8(n) => DataValue::U8(n as u8),
-                DataValue::I16(n) => DataValue::U16(n as u16),
-                DataValue::I32(n) => DataValue::U32(n as u32),
-                DataValue::I64(n) => DataValue::U64(n as u64),
-                DataValue::I128(n) => DataValue::U128(n as u128),
-                _ => unimplemented!("conversion: {} -> {:?}", self.ty(), kind),
-            },
-            ValueConversionKind::ToSigned => match self {
-                DataValue::U8(n) => DataValue::I8(n as i8),
-                DataValue::U16(n) => DataValue::I16(n as i16),
-                DataValue::U32(n) => DataValue::I32(n as i32),
-                DataValue::U64(n) => DataValue::I64(n as i64),
-                DataValue::U128(n) => DataValue::I128(n as i128),
-                _ => unimplemented!("conversion: {} -> {:?}", self.ty(), kind),
             },
             ValueConversionKind::RoundNearestEven(ty) => match (self, ty) {
                 (DataValue::F64(n), types::F32) => DataValue::F32(Ieee32::from(n.as_f64() as f32)),
                 (s, _) => unimplemented!("conversion: {} -> {:?}", s.ty(), kind),
             },
             ValueConversionKind::ToBoolean => match self.ty() {
-                ty if ty.is_int() => DataValue::I8(if self.into_int()? != 0 { 1 } else { 0 }),
+                ty if ty.is_int() => {
+                    DataValue::I8(if self.into_int_signed()? != 0 { 1 } else { 0 })
+                }
                 ty => unimplemented!("conversion: {} -> {:?}", ty, kind),
             },
             ValueConversionKind::Mask(ty) => {
@@ -506,28 +490,40 @@ impl Value for DataValue {
         }
     }
 
-    fn max(self, other: Self) -> ValueResult<Self> {
-        if Value::gt(&self, &other)? {
+    fn umax(self, other: Self) -> ValueResult<Self> {
+        let lhs = self.clone().into_int_unsigned()?;
+        let rhs = other.clone().into_int_unsigned()?;
+        if lhs > rhs {
             Ok(self)
         } else {
             Ok(other)
         }
     }
 
-    fn min(self, other: Self) -> ValueResult<Self> {
-        if Value::lt(&self, &other)? {
+    fn smax(self, other: Self) -> ValueResult<Self> {
+        if self > other {
             Ok(self)
         } else {
             Ok(other)
         }
     }
 
-    fn eq(&self, other: &Self) -> ValueResult<bool> {
-        Ok(self == other)
+    fn umin(self, other: Self) -> ValueResult<Self> {
+        let lhs = self.clone().into_int_unsigned()?;
+        let rhs = other.clone().into_int_unsigned()?;
+        if lhs < rhs {
+            Ok(self)
+        } else {
+            Ok(other)
+        }
     }
 
-    fn gt(&self, other: &Self) -> ValueResult<bool> {
-        Ok(self > other)
+    fn smin(self, other: Self) -> ValueResult<Self> {
+        if self < other {
+            Ok(self)
+        } else {
+            Ok(other)
+        }
     }
 
     fn uno(&self, other: &Self) -> ValueResult<bool> {
@@ -538,7 +534,7 @@ impl Value for DataValue {
         if self.is_float() {
             binary_match!(+(self, other); [F32, F64])
         } else {
-            binary_match!(wrapping_add(&self, &other); [I8, I16, I32, I64, I128, U8, U16, U32, U64, U128])
+            binary_match!(wrapping_add(&self, &other); [I8, I16, I32, I64, I128])
         }
     }
 
@@ -558,15 +554,15 @@ impl Value for DataValue {
         }
     }
 
-    fn div(self, other: Self) -> ValueResult<Self> {
+    fn sdiv(self, other: Self) -> ValueResult<Self> {
         if self.is_float() {
             return binary_match!(/(self, other); [F32, F64]);
         }
 
-        let denominator = other.clone().into_int()?;
+        let denominator = other.clone().into_int_signed()?;
 
         // Check if we are dividing INT_MIN / -1. This causes an integer overflow trap.
-        let min = Value::int(1i128 << (self.ty().bits() - 1), self.ty())?;
+        let min = DataValueExt::int(1i128 << (self.ty().bits() - 1), self.ty())?;
         if self == min && denominator == -1 {
             return Err(ValueError::IntegerOverflow);
         }
@@ -575,14 +571,28 @@ impl Value for DataValue {
             return Err(ValueError::IntegerDivisionByZero);
         }
 
-        binary_match!(/(&self, &other); [I8, I16, I32, I64, I128, U8, U16, U32, U64, U128])
+        binary_match!(/(&self, &other); [I8, I16, I32, I64, I128])
     }
 
-    fn rem(self, other: Self) -> ValueResult<Self> {
-        let denominator = other.clone().into_int()?;
+    fn udiv(self, other: Self) -> ValueResult<Self> {
+        if self.is_float() {
+            return binary_match!(/(self, other); [F32, F64]);
+        }
+
+        let denominator = other.clone().into_int_unsigned()?;
+
+        if denominator == 0 {
+            return Err(ValueError::IntegerDivisionByZero);
+        }
+
+        binary_match!(/(&self, &other); [I8, I16, I32, I64, I128]; [u8, u16, u32, u64, u128])
+    }
+
+    fn srem(self, other: Self) -> ValueResult<Self> {
+        let denominator = other.clone().into_int_signed()?;
 
         // Check if we are dividing INT_MIN / -1. This causes an integer overflow trap.
-        let min = Value::int(1i128 << (self.ty().bits() - 1), self.ty())?;
+        let min = DataValueExt::int(1i128 << (self.ty().bits() - 1), self.ty())?;
         if self == min && denominator == -1 {
             return Err(ValueError::IntegerOverflow);
         }
@@ -591,7 +601,17 @@ impl Value for DataValue {
             return Err(ValueError::IntegerDivisionByZero);
         }
 
-        binary_match!(%(&self, &other); [I8, I16, I32, I64, I128, U8, U16, U32, U64, U128])
+        binary_match!(%(&self, &other); [I8, I16, I32, I64, I128])
+    }
+
+    fn urem(self, other: Self) -> ValueResult<Self> {
+        let denominator = other.clone().into_int_unsigned()?;
+
+        if denominator == 0 {
+            return Err(ValueError::IntegerDivisionByZero);
+        }
+
+        binary_match!(%(&self, &other); [I8, I16, I32, I64, I128]; [u8, u16, u32, u64, u128])
     }
 
     fn sqrt(self) -> ValueResult<Self> {
@@ -636,8 +656,36 @@ impl Value for DataValue {
         unary_match!(abs(&self); [F32, F64])
     }
 
-    fn checked_add(self, other: Self) -> ValueResult<Option<Self>> {
-        binary_match!(option checked_add(&self, &other); [I8, I16, I32, I64, I128, U8, U16, U32, U64, U128])
+    fn sadd_checked(self, other: Self) -> ValueResult<Option<Self>> {
+        binary_match!(option checked_add(&self, &other); [I8, I16, I32, I64, I128]; [i8, i16, i32, i64, i128])
+    }
+
+    fn uadd_checked(self, other: Self) -> ValueResult<Option<Self>> {
+        binary_match!(option checked_add(&self, &other); [I8, I16, I32, I64, I128]; [u8, u16, u32, u64, u128])
+    }
+
+    fn sadd_overflow(self, other: Self) -> ValueResult<(Self, bool)> {
+        binary_match!(pair overflowing_add(&self, &other); [I8, I16, I32, I64, I128]; [i8, i16, i32, i64, i128])
+    }
+
+    fn uadd_overflow(self, other: Self) -> ValueResult<(Self, bool)> {
+        binary_match!(pair overflowing_add(&self, &other); [I8, I16, I32, I64, I128]; [u8, u16, u32, u64, u128])
+    }
+
+    fn ssub_overflow(self, other: Self) -> ValueResult<(Self, bool)> {
+        binary_match!(pair overflowing_sub(&self, &other); [I8, I16, I32, I64, I128]; [i8, i16, i32, i64, i128])
+    }
+
+    fn usub_overflow(self, other: Self) -> ValueResult<(Self, bool)> {
+        binary_match!(pair overflowing_sub(&self, &other); [I8, I16, I32, I64, I128]; [u8, u16, u32, u64, u128])
+    }
+
+    fn smul_overflow(self, other: Self) -> ValueResult<(Self, bool)> {
+        binary_match!(pair overflowing_mul(&self, &other); [I8, I16, I32, I64, I128]; [i8, i16, i32, i64, i128])
+    }
+
+    fn umul_overflow(self, other: Self) -> ValueResult<(Self, bool)> {
+        binary_match!(pair overflowing_mul(&self, &other); [I8, I16, I32, I64, I128]; [u8, u16, u32, u64, u128])
     }
 
     fn neg(self) -> ValueResult<Self> {
@@ -664,47 +712,45 @@ impl Value for DataValue {
         unary_match!(round_ties_even(&self); [F32, F64])
     }
 
-    fn add_sat(self, other: Self) -> ValueResult<Self> {
-        binary_match!(saturating_add(self, &other); [I8, I16, I32, I64, I128, U8, U16, U32, U64, U128])
+    fn sadd_sat(self, other: Self) -> ValueResult<Self> {
+        binary_match!(saturating_add(self, &other); [I8, I16, I32, I64, I128])
     }
 
-    fn sub_sat(self, other: Self) -> ValueResult<Self> {
-        binary_match!(saturating_sub(self, &other); [I8, I16, I32, I64, I128, U8, U16, U32, U64, U128])
+    fn uadd_sat(self, other: Self) -> ValueResult<Self> {
+        binary_match!(saturating_add(&self, &other); [I8, I16, I32, I64, I128]; [u8, u16, u32, u64, u128])
+    }
+
+    fn ssub_sat(self, other: Self) -> ValueResult<Self> {
+        binary_match!(saturating_sub(self, &other); [I8, I16, I32, I64, I128])
+    }
+
+    fn usub_sat(self, other: Self) -> ValueResult<Self> {
+        binary_match!(saturating_sub(&self, &other); [I8, I16, I32, I64, I128]; [u8, u16, u32, u64, u128])
     }
 
     fn shl(self, other: Self) -> ValueResult<Self> {
-        let amt = other
-            .convert(ValueConversionKind::Exact(types::I32))?
-            .convert(ValueConversionKind::ToUnsigned)?;
-        binary_match!(wrapping_shl(&self, &amt); [I8, I16, I32, I64, I128, U8, U16, U32, U64, U128]; rhs: U32)
+        let amt = other.convert(ValueConversionKind::Exact(types::I32))?;
+        binary_match!(wrapping_shl(&self, &amt); [I8, I16, I32, I64, I128]; [i8, i16, i32, i64, i128]; rhs: I32,u32)
     }
 
     fn ushr(self, other: Self) -> ValueResult<Self> {
-        let amt = other
-            .convert(ValueConversionKind::Exact(types::I32))?
-            .convert(ValueConversionKind::ToUnsigned)?;
-        binary_match!(wrapping_shr(&self, &amt); [U8, U16, U32, U64, U128]; rhs: U32)
+        let amt = other.convert(ValueConversionKind::Exact(types::I32))?;
+        binary_match!(wrapping_shr(&self, &amt); [I8, I16, I32, I64, I128]; [u8, u16, u32, u64, u128]; rhs: I32,u32)
     }
 
-    fn ishr(self, other: Self) -> ValueResult<Self> {
-        let amt = other
-            .convert(ValueConversionKind::Exact(types::I32))?
-            .convert(ValueConversionKind::ToUnsigned)?;
-        binary_match!(wrapping_shr(&self, &amt); [I8, I16, I32, I64, I128]; rhs: U32)
+    fn sshr(self, other: Self) -> ValueResult<Self> {
+        let amt = other.convert(ValueConversionKind::Exact(types::I32))?;
+        binary_match!(wrapping_shr(&self, &amt); [I8, I16, I32, I64, I128]; [i8, i16, i32, i64, i128]; rhs: I32,u32)
     }
 
     fn rotl(self, other: Self) -> ValueResult<Self> {
-        let amt = other
-            .convert(ValueConversionKind::Exact(types::I32))?
-            .convert(ValueConversionKind::ToUnsigned)?;
-        binary_match!(rotate_left(&self, &amt); [I8, I16, I32, I64, I128, U8, U16, U32, U64, U128]; rhs: U32)
+        let amt = other.convert(ValueConversionKind::Exact(types::I32))?;
+        binary_match!(rotate_left(&self, &amt); [I8, I16, I32, I64, I128]; [i8, i16, i32, i64, i128]; rhs: I32,u32)
     }
 
     fn rotr(self, other: Self) -> ValueResult<Self> {
-        let amt = other
-            .convert(ValueConversionKind::Exact(types::I32))?
-            .convert(ValueConversionKind::ToUnsigned)?;
-        binary_match!(rotate_right(&self, &amt); [I8, I16, I32, I64, I128, U8, U16, U32, U64, U128]; rhs: U32)
+        let amt = other.convert(ValueConversionKind::Exact(types::I32))?;
+        binary_match!(rotate_right(&self, &amt); [I8, I16, I32, I64, I128]; [i8, i16, i32, i64, i128]; rhs: I32,u32)
     }
 
     fn and(self, other: Self) -> ValueResult<Self> {
@@ -740,26 +786,26 @@ impl Value for DataValue {
     }
 
     fn count_ones(self) -> ValueResult<Self> {
-        unary_match!(count_ones(&self); [I8, I16, I32, I64, I128, U8, U16, U32, U64, U128]; [i8, i16, i32, i64, i128, u8, u16, u32, u64, u128])
+        unary_match!(count_ones(&self); [I8, I16, I32, I64, I128]; [i8, i16, i32, i64, i128])
     }
 
     fn leading_ones(self) -> ValueResult<Self> {
-        unary_match!(leading_ones(&self); [I8, I16, I32, I64, I128, U8, U16, U32, U64, U128]; [i8, i16, i32, i64, i128, u8, u16, u32, u64, u128])
+        unary_match!(leading_ones(&self); [I8, I16, I32, I64, I128]; [i8, i16, i32, i64, i128])
     }
 
     fn leading_zeros(self) -> ValueResult<Self> {
-        unary_match!(leading_zeros(&self); [I8, I16, I32, I64, I128, U8, U16, U32, U64, U128]; [i8, i16, i32, i64, i128, u8, u16, u32, u64, u128])
+        unary_match!(leading_zeros(&self); [I8, I16, I32, I64, I128]; [i8, i16, i32, i64, i128])
     }
 
     fn trailing_zeros(self) -> ValueResult<Self> {
-        unary_match!(trailing_zeros(&self); [I8, I16, I32, I64, I128, U8, U16, U32, U64, U128]; [i8, i16, i32, i64, i128, u8, u16, u32, u64, u128])
+        unary_match!(trailing_zeros(&self); [I8, I16, I32, I64, I128]; [i8, i16, i32, i64, i128])
     }
 
     fn reverse_bits(self) -> ValueResult<Self> {
-        unary_match!(reverse_bits(&self); [I8, I16, I32, I64, I128, U8, U16, U32, U64, U128])
+        unary_match!(reverse_bits(&self); [I8, I16, I32, I64, I128])
     }
 
     fn swap_bytes(self) -> ValueResult<Self> {
-        unary_match!(swap_bytes(&self); [I16, I32, I64, I128, U16, U32, U64, U128])
+        unary_match!(swap_bytes(&self); [I16, I32, I64, I128])
     }
 }

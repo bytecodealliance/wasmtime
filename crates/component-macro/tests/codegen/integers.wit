@@ -1,3 +1,5 @@
+package foo:foo
+
 interface integers {
   a1: func(x: u8)
   a2: func(x: s8)
@@ -32,7 +34,7 @@ interface integers {
   pair-ret: func() -> tuple<s64, u8>
 }
 
-default world the-world {
-  import imports: self.integers
-  export exports: self.integers
+world the-world {
+  import integers
+  export integers
 }

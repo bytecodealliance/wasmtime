@@ -1,0 +1,142 @@
+test run
+target s390x
+target aarch64
+target x86_64 has_sse3 has_ssse3 has_sse41
+target x86_64 has_sse3 has_ssse3 has_sse41 has_avx
+target riscv64 has_v
+
+
+;; This tests that vconst correctly loads large offsets into the constant pool
+function %vconst_iadd_large() -> i32x4 {
+block0:
+    v0 = vconst.i32x4 [0 0 0 0]
+    v1 = vconst.i32x4 [1 1 1 1]
+    v2 = vconst.i32x4 [2 2 2 2]
+    v3 = vconst.i32x4 [3 3 3 3]
+    v4 = vconst.i32x4 [4 4 4 4]
+    v5 = vconst.i32x4 [5 5 5 5]
+    v6 = vconst.i32x4 [6 6 6 6]
+    v7 = vconst.i32x4 [7 7 7 7]
+    v8 = vconst.i32x4 [8 8 8 8]
+    v9 = vconst.i32x4 [9 9 9 9]
+    v10 = vconst.i32x4 [10 10 10 10]
+    v11 = vconst.i32x4 [11 11 11 11]
+    v12 = vconst.i32x4 [12 12 12 12]
+    v13 = vconst.i32x4 [13 13 13 13]
+    v14 = vconst.i32x4 [14 14 14 14]
+    v15 = vconst.i32x4 [15 15 15 15]
+    v16 = vconst.i32x4 [16 16 16 16]
+    v17 = vconst.i32x4 [17 17 17 17]
+    v18 = vconst.i32x4 [18 18 18 18]
+    v19 = vconst.i32x4 [19 19 19 19]
+    v20 = vconst.i32x4 [20 20 20 20]
+    v21 = vconst.i32x4 [21 21 21 21]
+    v22 = vconst.i32x4 [22 22 22 22]
+    v23 = vconst.i32x4 [23 23 23 23]
+    v24 = vconst.i32x4 [24 24 24 24]
+    v25 = vconst.i32x4 [25 25 25 25]
+    v26 = vconst.i32x4 [26 26 26 26]
+    v27 = vconst.i32x4 [27 27 27 27]
+    v28 = vconst.i32x4 [28 28 28 28]
+    v29 = vconst.i32x4 [29 29 29 29]
+    v30 = vconst.i32x4 [30 30 30 30]
+    v31 = vconst.i32x4 [31 31 31 31]
+    v32 = vconst.i32x4 [32 32 32 32]
+    v33 = vconst.i32x4 [33 33 33 33]
+    v34 = vconst.i32x4 [34 34 34 34]
+    v35 = vconst.i32x4 [35 35 35 35]
+    v36 = vconst.i32x4 [36 36 36 36]
+    v37 = vconst.i32x4 [37 37 37 37]
+    v38 = vconst.i32x4 [38 38 38 38]
+    v39 = vconst.i32x4 [39 39 39 39]
+    v40 = vconst.i32x4 [40 40 40 40]
+    v41 = vconst.i32x4 [41 41 41 41]
+    v42 = vconst.i32x4 [42 42 42 42]
+    v43 = vconst.i32x4 [43 43 43 43]
+    v44 = vconst.i32x4 [44 44 44 44]
+    v45 = vconst.i32x4 [45 45 45 45]
+    v46 = vconst.i32x4 [46 46 46 46]
+    v47 = vconst.i32x4 [47 47 47 47]
+    v48 = vconst.i32x4 [48 48 48 48]
+    v49 = vconst.i32x4 [49 49 49 49]
+    v50 = vconst.i32x4 [50 50 50 50]
+    v51 = vconst.i32x4 [51 51 51 51]
+    v52 = vconst.i32x4 [52 52 52 52]
+    v53 = vconst.i32x4 [53 53 53 53]
+    v54 = vconst.i32x4 [54 54 54 54]
+    v55 = vconst.i32x4 [55 55 55 55]
+    v56 = vconst.i32x4 [56 56 56 56]
+    v57 = vconst.i32x4 [57 57 57 57]
+    v58 = vconst.i32x4 [58 58 58 58]
+    v59 = vconst.i32x4 [59 59 59 59]
+    v60 = vconst.i32x4 [60 60 60 60]
+    v61 = vconst.i32x4 [61 61 61 61]
+    v62 = vconst.i32x4 [62 62 62 62]
+    v63 = vconst.i32x4 [63 63 63 63]
+
+    v64 = iadd v0, v1
+    v65 = iadd v64, v2
+    v66 = iadd v65, v3
+    v67 = iadd v66, v4
+    v68 = iadd v67, v5
+    v69 = iadd v68, v6
+    v70 = iadd v69, v7
+    v71 = iadd v70, v8
+    v72 = iadd v71, v9
+    v73 = iadd v72, v10
+    v74 = iadd v73, v11
+    v75 = iadd v74, v12
+    v76 = iadd v75, v13
+    v77 = iadd v76, v14
+    v78 = iadd v77, v15
+    v79 = iadd v78, v16
+    v80 = iadd v79, v17
+    v81 = iadd v80, v18
+    v82 = iadd v81, v19
+    v83 = iadd v82, v20
+    v84 = iadd v83, v21
+    v85 = iadd v84, v22
+    v86 = iadd v85, v23
+    v87 = iadd v86, v24
+    v88 = iadd v87, v25
+    v89 = iadd v88, v26
+    v90 = iadd v89, v27
+    v91 = iadd v90, v28
+    v92 = iadd v91, v29
+    v93 = iadd v92, v30
+    v94 = iadd v93, v31
+    v95 = iadd v94, v32
+    v96 = iadd v95, v33
+    v97 = iadd v96, v34
+    v98 = iadd v97, v35
+    v99 = iadd v98, v36
+    v100 = iadd v99, v37
+    v101 = iadd v100, v38
+    v102 = iadd v101, v39
+    v103 = iadd v102, v40
+    v104 = iadd v103, v41
+    v105 = iadd v104, v42
+    v106 = iadd v105, v43
+    v107 = iadd v106, v44
+    v108 = iadd v107, v45
+    v109 = iadd v108, v46
+    v110 = iadd v109, v47
+    v111 = iadd v110, v48
+    v112 = iadd v111, v49
+    v113 = iadd v112, v50
+    v114 = iadd v113, v51
+    v115 = iadd v114, v52
+    v116 = iadd v115, v53
+    v117 = iadd v116, v54
+    v118 = iadd v117, v55
+    v119 = iadd v118, v56
+    v120 = iadd v119, v57
+    v121 = iadd v120, v58
+    v122 = iadd v121, v59
+    v123 = iadd v122, v60
+    v124 = iadd v123, v61
+    v125 = iadd v124, v62
+    v126 = iadd v125, v63
+    return v126
+}
+; run: %vconst_iadd_large() == [0x7e0 0x7e0 0x7e0 0x7e0]

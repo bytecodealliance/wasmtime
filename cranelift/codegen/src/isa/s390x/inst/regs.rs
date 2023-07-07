@@ -125,6 +125,8 @@ pub fn create_machine_env(_flags: &settings::Flags) -> MachineEnv {
                 preg(vr(30)),
                 preg(vr(31)),
             ],
+            // Vector Regclass is unused
+            vec![],
         ],
         non_preferred_regs_by_class: [
             vec![
@@ -149,8 +151,11 @@ pub fn create_machine_env(_flags: &settings::Flags) -> MachineEnv {
                 preg(vr(14)),
                 preg(vr(15)),
             ],
+            // Vector Regclass is unused
+            vec![],
         ],
         fixed_stack_slots: vec![],
+        scratch_by_class: [None, None, None],
     }
 }
 
@@ -159,6 +164,7 @@ pub fn show_reg(reg: Reg) -> String {
         match rreg.class() {
             RegClass::Int => format!("%r{}", rreg.hw_enc()),
             RegClass::Float => format!("%v{}", rreg.hw_enc()),
+            RegClass::Vector => unreachable!(),
         }
     } else {
         format!("%{:?}", reg)

@@ -1,6 +1,7 @@
 test interpret
 test run
 target aarch64
+target riscv64 has_v
 ; x86_64 and s390x do not support 64-bit vectors.
 
 function %vconst_zeroes() -> i8x8 {

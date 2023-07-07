@@ -13,6 +13,7 @@ use cranelift_codegen::{
 };
 use cranelift_wasm::{
     DummyEnvironment, FuncEnvironment, FuncIndex, ModuleEnvironment, TargetEnvironment,
+    TypeConvert, TypeIndex, WasmHeapType,
 };
 
 pub struct ModuleEnv {
@@ -149,8 +150,12 @@ impl<'data> ModuleEnvironment<'data> for ModuleEnv {
         self.inner.declare_memory(memory)
     }
 
-    fn declare_global(&mut self, global: cranelift_wasm::Global) -> cranelift_wasm::WasmResult<()> {
-        self.inner.declare_global(global)
+    fn declare_global(
+        &mut self,
+        global: cranelift_wasm::Global,
+        init: cranelift_wasm::GlobalInit,
+    ) -> cranelift_wasm::WasmResult<()> {
+        self.inner.declare_global(global, init)
     }
 
     fn declare_func_export(
@@ -231,6 +236,12 @@ impl<'data> ModuleEnvironment<'data> for ModuleEnv {
     }
 }
 
+impl TypeConvert for ModuleEnv {
+    fn lookup_heap_type(&self, _index: TypeIndex) -> WasmHeapType {
+        todo!()
+    }
+}
+
 pub struct FuncEnv<'a> {
     pub inner: cranelift_wasm::DummyFuncEnvironment<'a>,
     pub config: TestConfig,
@@ -254,6 +265,12 @@ impl<'a> FuncEnv<'a> {
             next_heap: 0,
             heap_access_spectre_mitigation,
         }
+    }
+}
+
+impl TypeConvert for FuncEnv<'_> {
+    fn lookup_heap_type(&self, _index: TypeIndex) -> WasmHeapType {
+        todo!()
     }
 }
 
@@ -604,10 +621,6 @@ impl<'a> FuncEnvironment for FuncEnv<'a> {
             .translate_atomic_notify(pos, index, heap, addr, count)
     }
 
-    fn unsigned_add_overflow_condition(&self) -> ir::condcodes::IntCC {
-        self.inner.unsigned_add_overflow_condition()
-    }
-
     fn heaps(
         &self,
     ) -> &cranelift_codegen::entity::PrimaryMap<cranelift_wasm::Heap, cranelift_wasm::HeapData>
@@ -621,5 +634,19 @@ impl<'a> FuncEnvironment for FuncEnv<'a> {
 
     fn is_x86(&self) -> bool {
         self.config.target.contains("x86_64")
+    }
+
+    fn use_x86_pmaddubsw_for_dot(&self) -> bool {
+        self.config.target.contains("x86_64")
+    }
+
+    fn translate_call_ref(
+        &mut self,
+        _builder: &mut cranelift_frontend::FunctionBuilder<'_>,
+        _ty: ir::SigRef,
+        _func: ir::Value,
+        _args: &[ir::Value],
+    ) -> cranelift_wasm::WasmResult<ir::Inst> {
+        unimplemented!()
     }
 }

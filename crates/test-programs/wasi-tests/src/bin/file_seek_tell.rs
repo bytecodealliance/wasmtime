@@ -8,7 +8,7 @@ unsafe fn test_file_seek_tell(dir_fd: wasi::Fd) {
         0,
         "file",
         wasi::OFLAGS_CREAT,
-        wasi::RIGHTS_FD_READ | wasi::RIGHTS_FD_WRITE | wasi::RIGHTS_FD_SEEK | wasi::RIGHTS_FD_TELL,
+        wasi::RIGHTS_FD_READ | wasi::RIGHTS_FD_WRITE,
         0,
         0,
     )

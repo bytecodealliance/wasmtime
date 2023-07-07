@@ -1,6 +1,5 @@
 test compile precise-output
 set opt_level=speed
-set use_egraphs=true
 target x86_64
 
 ;; `atomic_rmw` is not a load, but it reports `true` to `.can_load()`. We want
@@ -22,7 +21,7 @@ function u0:1302(i64) -> i64 system_v {
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp

@@ -10,7 +10,7 @@ pub(crate) enum Address {
 }
 
 impl Address {
-    /// Create an offset
+    /// Create an offset.
     pub fn offset(base: Reg, offset: u32) -> Self {
         Self::Offset { base, offset }
     }

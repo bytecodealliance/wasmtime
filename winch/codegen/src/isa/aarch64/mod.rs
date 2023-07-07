@@ -1,14 +1,14 @@
 use self::regs::{scratch, ALL_GPR};
 use crate::{
     abi::ABI,
-    codegen::{CodeGen, CodeGenContext},
-    frame::Frame,
-    isa::{Builder, TargetIsa},
+    codegen::{CodeGen, CodeGenContext, FuncEnv},
+    frame::{DefinedLocals, Frame},
+    isa::{Builder, CallingConvention, TargetIsa},
     masm::MacroAssembler,
     regalloc::RegAlloc,
     regset::RegSet,
     stack::Stack,
-    FuncEnv,
+    TrampolineKind,
 };
 use anyhow::Result;
 use cranelift_codegen::settings::{self, Flags};
@@ -16,7 +16,8 @@ use cranelift_codegen::{isa::aarch64::settings as aarch64_settings, Final, MachB
 use cranelift_codegen::{MachTextSectionBuilder, TextSectionBuilder};
 use masm::MacroAssembler as Aarch64Masm;
 use target_lexicon::Triple;
-use wasmparser::{FuncType, FuncValidator, FunctionBody, ValidatorResources};
+use wasmparser::{FuncValidator, FunctionBody, ValidatorResources};
+use wasmtime_environ::{ModuleTranslation, WasmFuncType};
 
 mod abi;
 mod address;
@@ -83,21 +84,23 @@ impl TargetIsa for Aarch64 {
 
     fn compile_function(
         &self,
-        sig: &FuncType,
+        sig: &WasmFuncType,
         body: &FunctionBody,
-        env: &dyn FuncEnv,
-        mut validator: FuncValidator<ValidatorResources>,
+        translation: &ModuleTranslation,
+        validator: &mut FuncValidator<ValidatorResources>,
     ) -> Result<MachBufferFinalized<Final>> {
         let mut body = body.get_binary_reader();
         let mut masm = Aarch64Masm::new(self.shared_flags.clone());
         let stack = Stack::new();
-        let abi = abi::Aarch64ABI::default();
-        let abi_sig = abi.sig(sig);
-        let frame = Frame::new(&abi_sig, &mut body, &mut validator, &abi)?;
+        let abi_sig = abi::Aarch64ABI::sig(sig, &CallingConvention::Default);
+
+        let defined_locals = DefinedLocals::new(translation, &mut body, validator)?;
+        let frame = Frame::new::<abi::Aarch64ABI>(&abi_sig, &defined_locals)?;
         // TODO: Add floating point bitmask
         let regalloc = RegAlloc::new(RegSet::new(ALL_GPR, 0), scratch());
         let codegen_context = CodeGenContext::new(regalloc, stack, &frame);
-        let mut codegen = CodeGen::new(&mut masm, &abi, codegen_context, env, abi_sig);
+        let env = FuncEnv::new(self.pointer_bytes(), translation);
+        let mut codegen = CodeGen::new(&mut masm, codegen_context, env, abi_sig);
 
         codegen.emit(&mut body, validator)?;
         Ok(masm.finalize())
@@ -112,5 +115,13 @@ impl TargetIsa for Aarch64 {
     fn function_alignment(&self) -> u32 {
         // See `cranelift_codegen::isa::TargetIsa::function_alignment`.
         32
+    }
+
+    fn compile_trampoline(
+        &self,
+        _ty: &WasmFuncType,
+        _kind: TrampolineKind,
+    ) -> Result<MachBufferFinalized<Final>> {
+        todo!()
     }
 }

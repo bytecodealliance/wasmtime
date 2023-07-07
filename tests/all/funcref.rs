@@ -4,6 +4,7 @@ use std::sync::Arc;
 use wasmtime::*;
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn pass_funcref_in_and_out_of_wasm() -> anyhow::Result<()> {
     let (mut store, module) = ref_types_module(
         false,
@@ -77,6 +78,7 @@ fn pass_funcref_in_and_out_of_wasm() -> anyhow::Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn receive_null_funcref_from_wasm() -> anyhow::Result<()> {
     let (mut store, module) = ref_types_module(
         false,
@@ -108,7 +110,9 @@ fn wrong_store() -> anyhow::Result<()> {
         let mut store2 = Store::<()>::default();
 
         let set = SetOnDrop(dropped.clone());
-        let f1 = Func::wrap(&mut store1, move || drop(&set));
+        let f1 = Func::wrap(&mut store1, move || {
+            let _ = &set;
+        });
         let f2 = Func::wrap(&mut store2, move || Some(f1.clone()));
         assert!(f2.call(&mut store2, &[], &mut []).is_err());
     }
@@ -126,6 +130,7 @@ fn wrong_store() -> anyhow::Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn func_new_returns_wrong_store() -> anyhow::Result<()> {
     let dropped = Arc::new(AtomicBool::new(false));
     {
@@ -133,7 +138,9 @@ fn func_new_returns_wrong_store() -> anyhow::Result<()> {
         let mut store2 = Store::<()>::default();
 
         let set = SetOnDrop(dropped.clone());
-        let f1 = Func::wrap(&mut store1, move || drop(&set));
+        let f1 = Func::wrap(&mut store1, move || {
+            let _ = &set;
+        });
         let f2 = Func::new(
             &mut store2,
             FuncType::new(None, Some(ValType::FuncRef)),

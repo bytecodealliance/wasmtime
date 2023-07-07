@@ -1,5 +1,4 @@
 test compile
-set enable_simd
 target x86_64 skylake
 
 ;; Compile a CLIF version of the register allocation issue identified in

@@ -13,6 +13,7 @@ fn wrong_import_numbers() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn initializes_linear_memory() -> Result<()> {
     // Test for https://github.com/bytecodealliance/wasmtime/issues/2784
     let wat = r#"
@@ -33,6 +34,7 @@ fn initializes_linear_memory() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn linear_memory_limits() -> Result<()> {
     // this test will allocate 4GB of virtual memory space, and may not work in
     // situations like CI QEMU emulation where it triggers SIGKILL.

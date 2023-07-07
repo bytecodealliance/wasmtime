@@ -1,37 +1,49 @@
 test run
 target s390x
 target aarch64
-set enable_simd
 target x86_64 has_sse3 has_ssse3 has_sse41
 target x86_64 has_sse3 has_ssse3 has_sse41 has_avx
+target riscv64 has_v
 
 
-function %vconst_zeroes() -> i8 {
+function %vconst_zeroes_i8x16() -> i8x16 {
 block0:
     v0 = vconst.i8x16 0x00
-    v1 = extractlane v0, 4
-    v2 = icmp_imm eq v1, 0
-    return v2
+    return v0
 }
-; run
+; run: %vconst_zeroes_i8x16() == [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]
 
-function %vconst_ones() -> i8 {
+function %vconst_ones_i8x16() -> i8x16 {
 block0:
-    v0 = vconst.i8x16 0xffffffffffffffffffffffffffffffff
-    v1 = extractlane v0, 2
-    v2 = icmp_imm eq v1, 0xff
-    return v2
+    v0 = vconst.i8x16 0xffffffffffffffff_ffffffffffffffff
+    return v0
 }
-; run
+; run: %vconst_ones_i8x16() == [255 255 255 255 255 255 255 255 255 255 255 255 255 255 255 255]
 
-
-function %splat_i64x2() -> i8 {
+function %vconst_i8x16() -> i8x16 {
 block0:
-    v0 = iconst.i64 -1
-    v1 = splat.i64x2 v0
-    v2 = vconst.i64x2 [-1 -1]
-    v3 = icmp eq v1, v2
-    v8 = vall_true v3
-    return v8
+    v0 = vconst.i8x16 [0 31 63 95 127 159 191 255 1 2 3 4 5 6 7 8]
+    return v0
 }
-; run
+; run: %vconst_i8x16() == [0 31 63 95 127 159 191 255 1 2 3 4 5 6 7 8]
+
+function %vconst_i16x8() -> i16x8 {
+block0:
+    v0 = vconst.i16x8 [0 255 32767 65535 1 2 3 4]
+    return v0
+}
+; run: %vconst_i16x8() == [0 255 32767 65535 1 2 3 4]
+
+function %vconst_i32x4() -> i32x4 {
+block0:
+    v0 = vconst.i32x4 [0 4294967295 1 2]
+    return v0
+}
+; run: %vconst_i32x4() == [0 4294967295 1 2]
+
+function %vconst_i64x2() -> i64x2 {
+block0:
+    v0 = vconst.i64x2 [0 -1]
+    return v0
+}
+; run: %vconst_i64x2() == [0 -1]

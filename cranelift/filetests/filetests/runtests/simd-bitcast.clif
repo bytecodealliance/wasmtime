@@ -1,6 +1,5 @@
 test interpret
 test run
-set enable_simd
 target aarch64
 target x86_64
 target x86_64 has_avx
@@ -35,3 +34,19 @@ block0(v0: f64x2):
 }
 ; run: %bitcast_fi64x2([0x0.0 -NaN:0x7ffffffffffff]) == [0 18446744073709551615]
 ; run: %bitcast_fi64x2([-NaN:0x7ffffffffffff 0x0.000000000007fp-1022]) == [-1 127]
+
+function %bitcast_more_lanes_little(i64x2) -> i32x4 {
+block0(v0: i64x2):
+    v1 = bitcast.i32x4 little v0
+    return v1
+}
+; run: %bitcast_more_lanes_little(0x00000000000000000000000000000000) == 0x00000000000000000000000000000000
+; run: %bitcast_more_lanes_little(0x00000000000000ff00000000000000ff) == 0x00000000000000ff00000000000000ff
+
+function %bitcast_fewer_lanes_little(i16x8) -> i64x2 {
+block0(v0: i16x8):
+    v1 = bitcast.i64x2 little v0
+    return v1
+}
+; run: %bitcast_fewer_lanes_little(0x00000000000000000000000000000000) == 0x00000000000000000000000000000000
+; run: %bitcast_fewer_lanes_little(0x00ff0000000000000000000000000000) == 0x00ff0000000000000000000000000000

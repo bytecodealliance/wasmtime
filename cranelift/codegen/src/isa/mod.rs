@@ -47,7 +47,7 @@ use crate::dominator_tree::DominatorTree;
 pub use crate::isa::call_conv::CallConv;
 
 use crate::flowgraph;
-use crate::ir::{self, Function};
+use crate::ir::{self, Function, Type};
 #[cfg(feature = "unwind")]
 use crate::isa::unwind::systemv::RegisterMappingError;
 use crate::machinst::{CompiledCode, CompiledCodeStencil, TextSectionBuilder, UnwindInfoKind};
@@ -57,6 +57,7 @@ use crate::CodegenResult;
 use alloc::{boxed::Box, sync::Arc, vec::Vec};
 use core::fmt;
 use core::fmt::{Debug, Formatter};
+use cranelift_control::ControlPlane;
 use target_lexicon::{triple, Architecture, PointerWidth, Triple};
 
 // This module is made public here for benchmarking purposes. No guarantees are
@@ -273,6 +274,7 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
         func: &Function,
         domtree: &DominatorTree,
         want_disasm: bool,
+        ctrl_plane: &mut ControlPlane,
     ) -> CodegenResult<CompiledCodeStencil>;
 
     #[cfg(feature = "unwind")]
@@ -283,9 +285,6 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
     ) -> Result<u16, RegisterMappingError> {
         Err(RegisterMappingError::UnsupportedArchitecture)
     }
-
-    /// IntCC condition for Unsigned Addition Overflow (Carry).
-    fn unsigned_add_overflow_condition(&self) -> ir::condcodes::IntCC;
 
     /// Creates unwind information for the function.
     ///
@@ -317,8 +316,9 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
     /// of defined functions in the object file.
     fn text_section_builder(&self, num_labeled_funcs: usize) -> Box<dyn TextSectionBuilder>;
 
-    /// The function alignment required by this ISA.
-    fn function_alignment(&self) -> u32;
+    /// Returns the minimum function alignment and the preferred function
+    /// alignment, for performance, required by this ISA.
+    fn function_alignment(&self) -> FunctionAlignment;
 
     /// Create a polymorphic TargetIsa from this specific implementation.
     fn wrapped(self) -> OwnedTargetIsa
@@ -340,6 +340,35 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
     /// Currently this only returns false on x86 when some native features are
     /// not detected.
     fn has_native_fma(&self) -> bool;
+
+    /// Returns whether the CLIF `x86_blendv` instruction is implemented for
+    /// this ISA for the specified type.
+    fn has_x86_blendv_lowering(&self, ty: Type) -> bool;
+
+    /// Returns whether the CLIF `x86_pshufb` instruction is implemented for
+    /// this ISA.
+    fn has_x86_pshufb_lowering(&self) -> bool;
+
+    /// Returns whether the CLIF `x86_pmulhrsw` instruction is implemented for
+    /// this ISA.
+    fn has_x86_pmulhrsw_lowering(&self) -> bool;
+
+    /// Returns whether the CLIF `x86_pmaddubsw` instruction is implemented for
+    /// this ISA.
+    fn has_x86_pmaddubsw_lowering(&self) -> bool;
+}
+
+/// Function alignment specifications as required by an ISA, returned by
+/// [`TargetIsa::function_alignment`].
+#[derive(Copy, Clone)]
+pub struct FunctionAlignment {
+    /// The minimum alignment required by an ISA, where all functions must be
+    /// aligned to at least this amount.
+    pub minimum: u32,
+    /// A "preferred" alignment which should be used for more
+    /// performance-sensitive situations. This can involve cache-line-aligning
+    /// for example to get more of a small function into fewer cache lines.
+    pub preferred: u32,
 }
 
 /// Methods implemented for free for target ISA!

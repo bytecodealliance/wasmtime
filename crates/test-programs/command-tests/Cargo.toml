@@ -1,0 +1,18 @@
+[package]
+name = "command-tests"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+anyhow = { workspace = true }
+getrandom = "0.2.8"
+wit-bindgen = { workspace = true, default-features = true }
+
+# FIXME: building cap-std and rustix currently requires a nightly rust, so we
+# are not including it in the test suite.
+# The poll_stdin and file_dir_sync tests contain commented-out uses of these
+# crates. They should be re-enabled once these crates can build for
+# wasm32-wasi on stable rust.
+# rustix = { workspace = true }
+# cap-std = { workspace = true }

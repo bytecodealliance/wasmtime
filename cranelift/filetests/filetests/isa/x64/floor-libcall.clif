@@ -1,5 +1,5 @@
 test compile precise-output
-target x86_64 has_sse41=false
+target x86_64
 
 function %f1(f32) -> f32 {
 block0(v0: f32):
@@ -16,7 +16,7 @@ block0(v0: f32):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -43,7 +43,7 @@ block0(v0: f64):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp

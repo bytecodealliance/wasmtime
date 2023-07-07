@@ -491,10 +491,6 @@ impl ReferenceTypeIterator {
 impl Iterator for ReferenceTypeIterator {
     type Item = ReferenceType;
     fn next(&mut self) -> Option<Self::Item> {
-        if let Some(r) = self.reference_iter.next() {
-            Some(ReferenceType::from(r))
-        } else {
-            None
-        }
+        self.reference_iter.next().map(ReferenceType::from)
     }
 }

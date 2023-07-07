@@ -14,6 +14,21 @@ impl From<Error> for wasmtime_error_t {
     }
 }
 
+impl Into<Error> for wasmtime_error_t {
+    fn into(self) -> Error {
+        self.error
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn wasmtime_error_new(
+    msg: *const std::ffi::c_char,
+) -> Option<Box<wasmtime_error_t>> {
+    let msg_bytes = unsafe { std::ffi::CStr::from_ptr(msg).to_bytes() };
+    let msg_string = String::from_utf8_lossy(msg_bytes).into_owned();
+    Some(Box::new(wasmtime_error_t::from(anyhow!(msg_string))))
+}
+
 pub(crate) fn handle_result<T>(
     result: Result<T>,
     ok: impl FnOnce(T),

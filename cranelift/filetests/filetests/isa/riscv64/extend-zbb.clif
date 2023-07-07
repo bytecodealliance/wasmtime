@@ -15,7 +15,7 @@ block0(v0: i16):
 ; block0:
 ;   zext.h a0,a0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0x3b, 0x45, 0x05, 0x08
@@ -31,7 +31,7 @@ block0(v0: i8):
 ; block0:
 ;   andi a0,a0,255
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   andi a0, a0, 0xff
@@ -47,7 +47,7 @@ block0(v0: i16):
 ; block0:
 ;   zext.h a0,a0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0x3b, 0x45, 0x05, 0x08
@@ -65,7 +65,7 @@ block0(v0: i8):
 ; block0:
 ;   sext.b a0,a0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0x13, 0x15, 0x45, 0x60
@@ -81,7 +81,7 @@ block0(v0: i8):
 ; block0:
 ;   sext.b a0,a0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0x13, 0x15, 0x45, 0x60
@@ -97,7 +97,7 @@ block0(v0: i16):
 ; block0:
 ;   sext.h a0,a0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0x13, 0x15, 0x55, 0x60
@@ -113,7 +113,7 @@ block0(v0: i8):
 ; block0:
 ;   sext.b a0,a0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0x13, 0x15, 0x45, 0x60
@@ -129,8 +129,9 @@ block0(v0: i16):
 ; block0:
 ;   sext.h a0,a0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0x13, 0x15, 0x55, 0x60
 ;   ret
+

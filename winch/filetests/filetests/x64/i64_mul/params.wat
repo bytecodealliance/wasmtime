@@ -9,13 +9,14 @@
 )
 ;;    0:	 55                   	push	rbp
 ;;    1:	 4889e5               	mov	rbp, rsp
-;;    4:	 4883ec10             	sub	rsp, 0x10
-;;    8:	 48897c2408           	mov	qword ptr [rsp + 8], rdi
-;;    d:	 48893424             	mov	qword ptr [rsp], rsi
-;;   11:	 488b0424             	mov	rax, qword ptr [rsp]
-;;   15:	 488b4c2408           	mov	rcx, qword ptr [rsp + 8]
-;;   1a:	 480fafc8             	imul	rcx, rax
-;;   1e:	 4889c8               	mov	rax, rcx
-;;   21:	 4883c410             	add	rsp, 0x10
-;;   25:	 5d                   	pop	rbp
-;;   26:	 c3                   	ret	
+;;    4:	 4883ec18             	sub	rsp, 0x18
+;;    8:	 48897c2410           	mov	qword ptr [rsp + 0x10], rdi
+;;    d:	 4889742408           	mov	qword ptr [rsp + 8], rsi
+;;   12:	 4c893424             	mov	qword ptr [rsp], r14
+;;   16:	 488b442408           	mov	rax, qword ptr [rsp + 8]
+;;   1b:	 488b4c2410           	mov	rcx, qword ptr [rsp + 0x10]
+;;   20:	 480fafc8             	imul	rcx, rax
+;;   24:	 4889c8               	mov	rax, rcx
+;;   27:	 4883c418             	add	rsp, 0x18
+;;   2b:	 5d                   	pop	rbp
+;;   2c:	 c3                   	ret	

@@ -12,7 +12,7 @@ block0(v0: i8x16):
 ; block0:
 ;   abs v0.16b, v0.16b
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   abs v0.16b, v0.16b
@@ -28,7 +28,7 @@ block0(v0: i8x8):
 ; block0:
 ;   abs v0.8b, v0.8b
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   abs v0.8b, v0.8b
@@ -44,7 +44,7 @@ block0(v0: i16x8):
 ; block0:
 ;   abs v0.8h, v0.8h
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   abs v0.8h, v0.8h
@@ -60,7 +60,7 @@ block0(v0: i16x4):
 ; block0:
 ;   abs v0.4h, v0.4h
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   abs v0.4h, v0.4h
@@ -76,7 +76,7 @@ block0(v0: i32x4):
 ; block0:
 ;   abs v0.4s, v0.4s
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   abs v0.4s, v0.4s
@@ -92,7 +92,7 @@ block0(v0: i32x2):
 ; block0:
 ;   abs v0.2s, v0.2s
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   abs v0.2s, v0.2s
@@ -108,7 +108,7 @@ block0(v0: i64x2):
 ; block0:
 ;   abs v0.2d, v0.2d
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   abs v0.2d, v0.2d
@@ -126,7 +126,7 @@ block0(v0: i8):
 ;   subs wzr, w2, #0
 ;   csneg x0, x2, x2, gt
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   sxtb w2, w0
@@ -146,7 +146,7 @@ block0(v0: i16):
 ;   subs wzr, w2, #0
 ;   csneg x0, x2, x2, gt
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   sxth w2, w0
@@ -165,7 +165,7 @@ block0(v0: i32):
 ;   subs wzr, w0, #0
 ;   csneg x0, x0, x0, gt
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   cmp w0, #0
@@ -183,7 +183,7 @@ block0(v0: i64):
 ;   subs xzr, x0, #0
 ;   csneg x0, x0, x0, gt
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   cmp x0, #0

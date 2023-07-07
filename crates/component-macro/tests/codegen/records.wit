@@ -1,3 +1,5 @@
+package foo:foo
+
 interface records {
   tuple-arg: func(x: tuple<char, u32>)
   tuple-result: func() -> tuple<char, u32>
@@ -53,7 +55,7 @@ interface records {
   typedef-inout: func(e: tuple-typedef2) -> s32
 }
 
-default world the-world {
-  import imports: self.records
-  export exports: self.records
+world the-world {
+  import records
+  export records
 }

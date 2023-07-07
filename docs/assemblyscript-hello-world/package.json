@@ -1,19 +1,18 @@
 {
-  "name": "wasi-hello-world",
+  "name": "wasi-hello",
   "version": "1.0.0",
-  "description": "Hello world in Wasi with AS and as-wasi",
-  "main": "index.js",
+  "description": "WasmTime WASI Hello World in AssemblyScript",
   "scripts": {
-    "build": "asc wasi-hello-world.ts --target helloworld",
-    "wasmtime": "wasmtime ./build/wasi-hello-world.wasm"
+    "build": "asc wasi-hello.ts --target wasi-hello",
+    "start": "wasmtime ./build/wasi-hello.wasm"
   },
   "author": "Aaron Turner",
   "contributors": [
     "Jairus Tanaka (JairusSW)"
   ],
   "license": "MIT",
-  "devDependencies": {
-    "assemblyscript": "^0.20.7"
-  },
-  "dependencies": {}
+  "dependencies": {
+    "@assemblyscript/wasi-shim": "^0.1.0",
+    "assemblyscript": "^0.27.1"
+  }
 }

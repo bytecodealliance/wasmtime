@@ -9,9 +9,12 @@
 )
 ;;    0:	 55                   	push	rbp
 ;;    1:	 4889e5               	mov	rbp, rsp
-;;    4:	 b9ffffffff           	mov	ecx, 0xffffffff
-;;    9:	 b8ffffffff           	mov	eax, 0xffffffff
-;;    e:	 31d2                 	xor	edx, edx
-;;   10:	 f7f1                 	div	ecx
-;;   12:	 5d                   	pop	rbp
-;;   13:	 c3                   	ret	
+;;    4:	 4883ec08             	sub	rsp, 8
+;;    8:	 4c893424             	mov	qword ptr [rsp], r14
+;;    c:	 b9ffffffff           	mov	ecx, 0xffffffff
+;;   11:	 b8ffffffff           	mov	eax, 0xffffffff
+;;   16:	 31d2                 	xor	edx, edx
+;;   18:	 f7f1                 	div	ecx
+;;   1a:	 4883c408             	add	rsp, 8
+;;   1e:	 5d                   	pop	rbp
+;;   1f:	 c3                   	ret	

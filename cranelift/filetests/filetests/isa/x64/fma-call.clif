@@ -1,5 +1,5 @@
 test compile precise-output
-target x86_64 has_avx=false has_fma=false
+target x86_64 sse41
 
 function %fma_f32(f32, f32, f32) -> f32 {
 block0(v0: f32, v1: f32, v2: f32):
@@ -16,7 +16,7 @@ block0(v0: f32, v1: f32, v2: f32):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -43,7 +43,7 @@ block0(v0: f64, v1: f64, v2: f64):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -77,43 +77,43 @@ block0(v0: f32x4, v1: f32x4, v2: f32x4):
 ;   movdqu  %xmm0, rsp(48 + virtual offset)
 ;   movdqu  rsp(0 + virtual offset), %xmm4
 ;   pshufd  $1, %xmm4, %xmm0
-;   movdqu  rsp(16 + virtual offset), %xmm2
-;   pshufd  $1, %xmm2, %xmm1
-;   movdqu  rsp(32 + virtual offset), %xmm3
-;   pshufd  $1, %xmm3, %xmm2
+;   movdqu  rsp(16 + virtual offset), %xmm8
+;   pshufd  $1, %xmm8, %xmm1
+;   movdqu  rsp(32 + virtual offset), %xmm12
+;   pshufd  $1, %xmm12, %xmm2
 ;   load_ext_name %FmaF32+0, %r9
 ;   call    *%r9
 ;   movdqu  %xmm0, rsp(64 + virtual offset)
-;   movdqu  rsp(0 + virtual offset), %xmm14
-;   pshufd  $2, %xmm14, %xmm0
-;   movdqu  rsp(16 + virtual offset), %xmm13
-;   pshufd  $2, %xmm13, %xmm1
-;   movdqu  rsp(32 + virtual offset), %xmm15
-;   pshufd  $2, %xmm15, %xmm2
+;   movdqu  rsp(0 + virtual offset), %xmm4
+;   pshufd  $2, %xmm4, %xmm0
+;   movdqu  rsp(16 + virtual offset), %xmm14
+;   pshufd  $2, %xmm14, %xmm1
+;   movdqu  rsp(32 + virtual offset), %xmm3
+;   pshufd  $2, %xmm3, %xmm2
 ;   load_ext_name %FmaF32+0, %r10
 ;   call    *%r10
 ;   movdqu  %xmm0, rsp(80 + virtual offset)
-;   movdqu  rsp(0 + virtual offset), %xmm14
-;   pshufd  $3, %xmm14, %xmm0
+;   movdqu  rsp(0 + virtual offset), %xmm4
+;   pshufd  $3, %xmm4, %xmm0
 ;   movdqu  rsp(16 + virtual offset), %xmm1
 ;   pshufd  $3, %xmm1, %xmm1
 ;   movdqu  rsp(32 + virtual offset), %xmm2
 ;   pshufd  $3, %xmm2, %xmm2
 ;   load_ext_name %FmaF32+0, %r11
 ;   call    *%r11
-;   movdqa  %xmm0, %xmm13
 ;   movdqu  rsp(64 + virtual offset), %xmm4
+;   movdqa  %xmm0, %xmm2
 ;   movdqu  rsp(48 + virtual offset), %xmm0
 ;   insertps $16, %xmm0, %xmm4, %xmm0
-;   movdqu  rsp(80 + virtual offset), %xmm10
-;   insertps $32, %xmm0, %xmm10, %xmm0
-;   movdqa  %xmm13, %xmm1
-;   insertps $48, %xmm0, %xmm1, %xmm0
+;   movdqu  rsp(80 + virtual offset), %xmm1
+;   insertps $32, %xmm0, %xmm1, %xmm0
+;   movdqa  %xmm2, %xmm3
+;   insertps $48, %xmm0, %xmm3, %xmm0
 ;   addq    %rsp, $96, %rsp
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -131,38 +131,38 @@ block0(v0: f32x4, v1: f32x4, v2: f32x4):
 ;   movdqu %xmm0, 0x30(%rsp)
 ;   movdqu (%rsp), %xmm4
 ;   pshufd $1, %xmm4, %xmm0
-;   movdqu 0x10(%rsp), %xmm2
-;   pshufd $1, %xmm2, %xmm1
-;   movdqu 0x20(%rsp), %xmm3
-;   pshufd $1, %xmm3, %xmm2
+;   movdqu 0x10(%rsp), %xmm8
+;   pshufd $1, %xmm8, %xmm1
+;   movdqu 0x20(%rsp), %xmm12
+;   pshufd $1, %xmm12, %xmm2
 ;   movabsq $0, %r9 ; reloc_external Abs8 %FmaF32 0
 ;   callq *%r9
 ;   movdqu %xmm0, 0x40(%rsp)
-;   movdqu (%rsp), %xmm14
-;   pshufd $2, %xmm14, %xmm0
-;   movdqu 0x10(%rsp), %xmm13
-;   pshufd $2, %xmm13, %xmm1
-;   movdqu 0x20(%rsp), %xmm15
-;   pshufd $2, %xmm15, %xmm2
+;   movdqu (%rsp), %xmm4
+;   pshufd $2, %xmm4, %xmm0
+;   movdqu 0x10(%rsp), %xmm14
+;   pshufd $2, %xmm14, %xmm1
+;   movdqu 0x20(%rsp), %xmm3
+;   pshufd $2, %xmm3, %xmm2
 ;   movabsq $0, %r10 ; reloc_external Abs8 %FmaF32 0
 ;   callq *%r10
 ;   movdqu %xmm0, 0x50(%rsp)
-;   movdqu (%rsp), %xmm14
-;   pshufd $3, %xmm14, %xmm0
+;   movdqu (%rsp), %xmm4
+;   pshufd $3, %xmm4, %xmm0
 ;   movdqu 0x10(%rsp), %xmm1
 ;   pshufd $3, %xmm1, %xmm1
 ;   movdqu 0x20(%rsp), %xmm2
 ;   pshufd $3, %xmm2, %xmm2
 ;   movabsq $0, %r11 ; reloc_external Abs8 %FmaF32 0
 ;   callq *%r11
-;   movdqa %xmm0, %xmm13
 ;   movdqu 0x40(%rsp), %xmm4
+;   movdqa %xmm0, %xmm2
 ;   movdqu 0x30(%rsp), %xmm0
 ;   insertps $0x10, %xmm4, %xmm0
-;   movdqu 0x50(%rsp), %xmm10
-;   insertps $0x20, %xmm10, %xmm0
-;   movdqa %xmm13, %xmm1
-;   insertps $0x30, %xmm1, %xmm0
+;   movdqu 0x50(%rsp), %xmm1
+;   insertps $0x20, %xmm1, %xmm0
+;   movdqa %xmm2, %xmm3
+;   insertps $0x30, %xmm3, %xmm0
 ;   addq $0x60, %rsp
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -203,7 +203,7 @@ block0(v0: f64x2, v1: f64x2, v2: f64x2):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp

@@ -51,7 +51,7 @@ block5(v5: i32):
 ; block5:
 ;   add w0, w0, w5
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   hint #0x22
@@ -116,7 +116,7 @@ block2:
 ; block2:
 ;   mov x0, x8
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   hint #0x22
@@ -158,7 +158,7 @@ block0(v0: i64):
 ;   blr x3
 ;   ldp fp, lr, [sp], #16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   hint #0x22

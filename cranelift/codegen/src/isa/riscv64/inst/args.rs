@@ -3,12 +3,77 @@
 // Some variants are never constructed, but we still want them as options in the future.
 #![allow(dead_code)]
 use super::*;
-use crate::ir::condcodes::{CondCode, FloatCC};
+use crate::ir::condcodes::CondCode;
 
 use crate::isa::riscv64::inst::{reg_name, reg_to_gpr_num};
 use crate::machinst::isle::WritableReg;
 
 use std::fmt::{Display, Formatter, Result};
+
+/// A macro for defining a newtype of `Reg` that enforces some invariant about
+/// the wrapped `Reg` (such as that it is of a particular register class).
+macro_rules! newtype_of_reg {
+    (
+        $newtype_reg:ident,
+        $newtype_writable_reg:ident,
+        |$check_reg:ident| $check:expr
+    ) => {
+        /// A newtype wrapper around `Reg`.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+        pub struct $newtype_reg(Reg);
+
+        impl PartialEq<Reg> for $newtype_reg {
+            fn eq(&self, other: &Reg) -> bool {
+                self.0 == *other
+            }
+        }
+
+        impl From<$newtype_reg> for Reg {
+            fn from(r: $newtype_reg) -> Self {
+                r.0
+            }
+        }
+
+        impl $newtype_reg {
+            /// Create this newtype from the given register, or return `None` if the register
+            /// is not a valid instance of this newtype.
+            pub fn new($check_reg: Reg) -> Option<Self> {
+                if $check {
+                    Some(Self($check_reg))
+                } else {
+                    None
+                }
+            }
+
+            /// Get this newtype's underlying `Reg`.
+            pub fn to_reg(self) -> Reg {
+                self.0
+            }
+        }
+
+        // Convenience impl so that people working with this newtype can use it
+        // "just like" a plain `Reg`.
+        //
+        // NB: We cannot implement `DerefMut` because that would let people do
+        // nasty stuff like `*my_xreg.deref_mut() = some_freg`, breaking the
+        // invariants that `XReg` provides.
+        impl std::ops::Deref for $newtype_reg {
+            type Target = Reg;
+
+            fn deref(&self) -> &Reg {
+                &self.0
+            }
+        }
+
+        /// Writable Reg.
+        pub type $newtype_writable_reg = Writable<$newtype_reg>;
+    };
+}
+
+// Newtypes for registers classes.
+newtype_of_reg!(XReg, WritableXReg, |reg| reg.class() == RegClass::Int);
+newtype_of_reg!(FReg, WritableFReg, |reg| reg.class() == RegClass::Float);
+newtype_of_reg!(VReg, WritableVReg, |reg| reg.class() == RegClass::Vector);
 
 /// An addressing mode specified for a load/store operation.
 #[derive(Clone, Debug, Copy)]
@@ -35,19 +100,47 @@ pub enum AMode {
     /// clobber pushes. See the diagram in the documentation for
     /// [crate::isa::riscv64::abi](the ABI module) for more details.
     NominalSPOffset(i64, Type),
+
+    /// A reference to a constant which is placed outside of the function's
+    /// body, typically at the end.
+    Const(VCodeConstant),
+
+    /// A reference to a label.
+    Label(MachLabel),
 }
 
 impl AMode {
-    pub(crate) fn reg_offset(reg: Reg, imm: i64, ty: Type) -> AMode {
-        AMode::RegOffset(reg, imm, ty)
+    pub(crate) fn with_allocs(self, allocs: &mut AllocationConsumer<'_>) -> Self {
+        match self {
+            AMode::RegOffset(reg, offset, ty) => AMode::RegOffset(allocs.next(reg), offset, ty),
+            AMode::SPOffset(..)
+            | AMode::FPOffset(..)
+            | AMode::NominalSPOffset(..)
+            | AMode::Const(..)
+            | AMode::Label(..) => self,
+        }
     }
 
-    pub(crate) fn get_base_register(&self) -> Reg {
+    /// Returns the registers that known to the register allocator.
+    /// Keep this in sync with `with_allocs`.
+    pub(crate) fn get_allocatable_register(&self) -> Option<Reg> {
         match self {
-            &AMode::RegOffset(reg, ..) => reg,
-            &AMode::SPOffset(..) => stack_reg(),
-            &AMode::FPOffset(..) => fp_reg(),
-            &AMode::NominalSPOffset(..) => stack_reg(),
+            AMode::RegOffset(reg, ..) => Some(*reg),
+            AMode::SPOffset(..)
+            | AMode::FPOffset(..)
+            | AMode::NominalSPOffset(..)
+            | AMode::Const(..)
+            | AMode::Label(..) => None,
+        }
+    }
+
+    pub(crate) fn get_base_register(&self) -> Option<Reg> {
+        match self {
+            &AMode::RegOffset(reg, ..) => Some(reg),
+            &AMode::SPOffset(..) => Some(stack_reg()),
+            &AMode::FPOffset(..) => Some(fp_reg()),
+            &AMode::NominalSPOffset(..) => Some(stack_reg()),
+            &AMode::Const(..) | AMode::Label(..) => None,
         }
     }
 
@@ -64,27 +157,12 @@ impl AMode {
             &AMode::SPOffset(offset, _) => offset,
             &AMode::FPOffset(offset, _) => offset,
             &AMode::NominalSPOffset(offset, _) => offset,
+            &AMode::Const(_) | &AMode::Label(_) => 0,
         }
     }
 
     pub(crate) fn to_string_with_alloc(&self, allocs: &mut AllocationConsumer<'_>) -> String {
-        let reg = self.get_base_register();
-        let next = allocs.next(reg);
-        let offset = self.get_offset();
-        match self {
-            &AMode::NominalSPOffset(..) => format!("{}", self),
-            _ => format!("{}({})", offset, reg_name(next),),
-        }
-    }
-
-    pub(crate) fn to_addr(&self, allocs: &mut AllocationConsumer<'_>) -> String {
-        let reg = self.get_base_register();
-        let next = allocs.next(reg);
-        let offset = self.get_offset();
-        match self {
-            &AMode::NominalSPOffset(..) => format!("nsp{:+}", offset),
-            _ => format!("{}{:+}", reg_name(next), offset),
-        }
+        format!("{}", self.clone().with_allocs(allocs))
     }
 }
 
@@ -92,7 +170,7 @@ impl Display for AMode {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
             &AMode::RegOffset(r, offset, ..) => {
-                write!(f, "{}({:?})", offset, r)
+                write!(f, "{}({})", offset, reg_name(r))
             }
             &AMode::SPOffset(offset, ..) => {
                 write!(f, "{}(sp)", offset)
@@ -102,6 +180,12 @@ impl Display for AMode {
             }
             &AMode::FPOffset(offset, ..) => {
                 write!(f, "{}(fp)", offset)
+            }
+            &AMode::Const(addr, ..) => {
+                write!(f, "[const({})]", addr.as_u32())
+            }
+            &AMode::Label(label) => {
+                write!(f, "[label{}]", label.as_u32())
             }
         }
     }
@@ -1312,68 +1396,6 @@ impl FClassResult {
     }
 }
 
-/// Condition code for comparing floating point numbers.
-/// This condition code is used by the fcmp instruction to compare floating point values. Two IEEE floating point values relate in exactly one of four ways:
-/// UN - unordered when either value is NaN.
-/// EQ - equal numerical value.
-/// LT - x is less than y.
-/// GT - x is greater than y.
-#[derive(Clone, Copy)]
-pub struct FloatCCArgs(pub(crate) u8);
-
-impl FloatCCArgs {
-    // unorder
-    pub(crate) const UN: u8 = 1 << 0;
-    // equal
-    pub(crate) const EQ: u8 = 1 << 1;
-    // less than
-    pub(crate) const LT: u8 = 1 << 2;
-    // greater than
-    pub(crate) const GT: u8 = 1 << 3;
-    // not equal
-    pub(crate) const NE: u8 = 1 << 4;
-
-    /// mask bit for floatcc
-    pub(crate) fn from_floatcc<T: Into<FloatCC>>(t: T) -> Self {
-        let x = match t.into() {
-            FloatCC::Ordered => Self::EQ | Self::LT | Self::GT,
-            FloatCC::Unordered => Self::UN,
-            FloatCC::Equal => Self::EQ,
-            FloatCC::NotEqual => Self::NE,
-            FloatCC::OrderedNotEqual => Self::LT | Self::GT,
-            FloatCC::UnorderedOrEqual => Self::UN | Self::EQ,
-            FloatCC::LessThan => Self::LT,
-            FloatCC::LessThanOrEqual => Self::LT | Self::EQ,
-            FloatCC::GreaterThan => Self::GT,
-            FloatCC::GreaterThanOrEqual => Self::GT | Self::EQ,
-            FloatCC::UnorderedOrLessThan => Self::UN | Self::LT,
-            FloatCC::UnorderedOrLessThanOrEqual => Self::UN | Self::LT | Self::EQ,
-            FloatCC::UnorderedOrGreaterThan => Self::UN | Self::GT,
-            FloatCC::UnorderedOrGreaterThanOrEqual => Self::UN | Self::GT | Self::EQ,
-        };
-
-        Self(x)
-    }
-
-    #[inline]
-    pub(crate) fn has(&self, other: u8) -> bool {
-        (self.0 & other) == other
-    }
-
-    pub(crate) fn has_and_clear(&mut self, other: u8) -> bool {
-        if !self.has(other) {
-            return false;
-        }
-        self.clear_bits(other);
-        return true;
-    }
-
-    #[inline]
-    fn clear_bits(&mut self, c: u8) {
-        self.0 = self.0 & !c;
-    }
-}
-
 impl AtomicOP {
     #[inline]
     pub(crate) fn is_load(self) -> bool {
@@ -1639,155 +1661,6 @@ impl IntSelectOP {
     }
 }
 
-#[derive(Clone, Copy)]
-pub enum CsrAddress {
-    Fcsr = 0x3,
-    Vstart = 0x8,
-    Vxsat = 0x9,
-    Vxrm = 0xa,
-    Vcsr = 0xf,
-    Vl = 0xc20,
-    Vtype = 0xc21,
-    Vlenb = 0xc22,
-}
-
-impl std::fmt::Debug for CsrAddress {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-        write!(f, "0x{:x}", self.as_u32())
-    }
-}
-
-impl Display for CsrAddress {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-        write!(f, "0x{:x}", self.as_u32())
-    }
-}
-impl CsrAddress {
-    pub(crate) fn as_u32(self) -> u32 {
-        self as u32
-    }
-}
-
-pub(crate) struct VType {
-    vma: bool,
-    vta: bool,
-    vsew: Vsew,
-    valmul: Vlmul,
-}
-
-impl VType {
-    fn as_u32(self) -> u32 {
-        self.valmul.as_u32()
-            | self.vsew.as_u32() << 3
-            | if self.vta { 1 << 7 } else { 0 }
-            | if self.vma { 1 << 8 } else { 0 }
-    }
-
-    const fn vill_bit() -> u64 {
-        1 << 63
-    }
-}
-
-enum Vlmul {
-    vlmul_1_div_8 = 0b101,
-    vlmul_1_div_4 = 0b110,
-    vlmul_1_div_2 = 0b111,
-    vlmul_1 = 0b000,
-    vlmul_2 = 0b001,
-    vlmul_4 = 0b010,
-    vlmul_8 = 0b011,
-}
-
-impl Vlmul {
-    fn as_u32(self) -> u32 {
-        self as u32
-    }
-}
-
-enum Vsew {
-    sew_8 = 0b000,
-    sew_16 = 0b001,
-    sew_32 = 0b010,
-    sew_64 = 0b011,
-}
-
-impl Vsew {
-    fn as_u32(self) -> u32 {
-        self as u32
-    }
-}
-
-impl CsrOP {
-    pub(crate) fn op_name(self) -> &'static str {
-        match self {
-            CsrOP::Csrrw => "csrrw",
-            CsrOP::Csrrs => "csrrs",
-            CsrOP::Csrrc => "csrrc",
-            CsrOP::Csrrwi => "csrrwi",
-            CsrOP::Csrrsi => "csrrsi",
-            CsrOP::Csrrci => "csrrci",
-        }
-    }
-
-    pub(crate) const fn need_rs(self) -> bool {
-        match self {
-            CsrOP::Csrrw | CsrOP::Csrrs | CsrOP::Csrrc => true,
-            _ => false,
-        }
-    }
-    pub(crate) const fn op_code(self) -> u32 {
-        0b1110011
-    }
-
-    pub(crate) fn funct3(self) -> u32 {
-        match self {
-            CsrOP::Csrrw => 0b001,
-            CsrOP::Csrrs => 0b010,
-            CsrOP::Csrrc => 0b011,
-            CsrOP::Csrrwi => 0b101,
-            CsrOP::Csrrsi => 0b110,
-            CsrOP::Csrrci => 0b110,
-        }
-    }
-
-    pub(crate) fn rs1(self, rs: Option<Reg>, zimm: OptionUimm5) -> u32 {
-        if self.need_rs() {
-            reg_to_gpr_num(rs.unwrap())
-        } else {
-            zimm.unwrap().as_u32()
-        }
-    }
-}
-
-enum Vxrm {
-    // round-to-nearest-up (add +0.5 LSB)
-    rnu = 0b00,
-    // round-to-nearest-even
-    rne = 0b01,
-    //round-down (truncate)
-    rdn = 0b10,
-    // round-to-odd (OR bits into LSB, aka "jam")
-    rod = 0b11,
-}
-
-impl Vxrm {
-    pub(crate) fn as_u32(self) -> u32 {
-        self as u32
-    }
-}
-
-pub(crate) struct Vcsr {
-    xvrm: Vxrm,
-    // Fixed-point accrued saturation flag
-    vxsat: bool,
-}
-
-impl Vcsr {
-    pub(crate) fn as_u32(self) -> u32 {
-        return if self.vxsat { 1 } else { 0 } | self.xvrm.as_u32();
-    }
-}
-
 ///Atomic Memory ordering.
 #[derive(Copy, Clone, Debug)]
 pub enum AMO {
@@ -1834,19 +1707,7 @@ impl Inst {
         s
     }
 }
-impl Default for FenceFm {
-    fn default() -> Self {
-        Self::None
-    }
-}
-impl FenceFm {
-    pub(crate) fn as_u32(self) -> u32 {
-        match self {
-            FenceFm::None => 0,
-            FenceFm::Tso => 0b1000,
-        }
-    }
-}
+
 impl FloatRoundOP {
     pub(crate) fn op_name(self) -> &'static str {
         match self {
@@ -1947,25 +1808,5 @@ pub(crate) fn f64_cvt_to_int_bounds(signed: bool, out_bits: u8) -> (f64, f64) {
         (false, 32) => (-1., 4294967296.0),
         (false, 64) => (-1., 18446744073709551616.0),
         _ => unreachable!(),
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use super::FloatCCArgs;
-    #[test]
-
-    fn float_cc_bit_clear() {
-        let mut x = FloatCCArgs(FloatCCArgs::UN | FloatCCArgs::GT | FloatCCArgs::EQ);
-        assert!(x.has_and_clear(FloatCCArgs::UN | FloatCCArgs::GT));
-        assert!(x.has(FloatCCArgs::EQ));
-        assert!(!x.has(FloatCCArgs::UN));
-        assert!(!x.has(FloatCCArgs::GT));
-    }
-    #[test]
-    fn float_cc_bit_has() {
-        let x = FloatCCArgs(FloatCCArgs::UN | FloatCCArgs::GT | FloatCCArgs::EQ);
-        assert!(x.has(FloatCCArgs::UN | FloatCCArgs::GT));
-        assert!(!x.has(FloatCCArgs::LT));
     }
 }

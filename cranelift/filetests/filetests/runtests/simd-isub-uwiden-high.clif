@@ -1,0 +1,93 @@
+test interpret
+test run
+target aarch64
+target s390x
+target x86_64
+target x86_64 sse41
+target x86_64 sse41 has_avx
+target riscv64gc has_v
+
+
+function %isub_uwidenhigh_i32x4(i32x4, i32x4) -> i64x2 {
+block0(v0: i32x4, v1: i32x4):
+    v2 = uwiden_high v0
+    v3 = uwiden_high v1
+    v4 = isub v2, v3
+    return v4
+}
+; run: %isub_uwidenhigh_i32x4([1 2 3 4], [-1 2 -3 4]) == [0xffffffff00000006 0]
+
+function %isub_uwidenhigh_i16x8(i16x8, i16x8) -> i32x4 {
+block0(v0: i16x8, v1: i16x8):
+    v2 = uwiden_high v0
+    v3 = uwiden_high v1
+    v4 = isub v2, v3
+    return v4
+}
+; run: %isub_uwidenhigh_i16x8([1 2 3 4 5 6 7 8], [-1 2 3 4 -5 6 7 8]) == [0xffff000a 0 0 0]
+
+function %isub_uwidenhigh_i8x16(i8x16, i8x16) -> i16x8 {
+block0(v0: i8x16, v1: i8x16):
+    v2 = uwiden_high v0
+    v3 = uwiden_high v1
+    v4 = isub v2, v3
+    return v4
+}
+; run: %isub_uwidenhigh_i8x16([1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16], [-1 2 3 4 5 6 7 8 -9 10 11 12 13 14 15 16]) == [0xff12 0 0 0 0 0 0 0]
+
+function %isub_uwidenhigh_splat_i32x4(i32x4, i32) -> i64x2 {
+block0(v0: i32x4, v1: i32):
+    v2 = uwiden_high v0
+    v3 = uextend.i64 v1
+    v4 = splat.i64x2 v3
+    v5 = isub v2, v4
+    return v5
+}
+; run: %isub_uwidenhigh_splat_i32x4([1 2 3 4], -1) == [0xffffffff00000004 0xffffffff00000005]
+; run: %isub_uwidenhigh_splat_i32x4([1 2 3 4], 10) == [-7 -6]
+
+function %isub_uwidenhigh_splat_i16x8(i16x8, i16) -> i32x4 {
+block0(v0: i16x8, v1: i16):
+    v2 = uwiden_high v0
+    v3 = uextend.i32 v1
+    v4 = splat.i32x4 v3
+    v5 = isub v2, v4
+    return v5
+}
+; run: %isub_uwidenhigh_splat_i16x8([1 2 3 4 5 6 7 8], -1) == [0xffff0006 0xffff0007 0xffff0008 0xffff0009]
+; run: %isub_uwidenhigh_splat_i16x8([1 2 3 4 5 6 7 8], 10) == [-5 -4 -3 -2]
+
+function %isub_uwidenhigh_splat_i8x16(i8x16, i8) -> i16x8 {
+block0(v0: i8x16, v1: i8):
+    v2 = uwiden_high v0
+    v3 = uextend.i16 v1
+    v4 = splat.i16x8 v3
+    v5 = isub v2, v4
+    return v5
+}
+; run: %isub_uwidenhigh_splat_i8x16([1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16], -1) == [0xff0a 0xff0b 0xff0c 0xff0d 0xff0e 0xff0f 0xff10 0xff11]
+; run: %isub_uwidenhigh_splat_i8x16([1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16], 10) == [-1 0 1 2 3 4 5 6]
+
+function %isub_uwidenhigh_lhs_i32x4(i32x4, i64x2) -> i64x2 {
+block0(v0: i32x4, v1: i64x2):
+    v2 = uwiden_high v0
+    v3 = isub v1, v2
+    return v3
+}
+; run: %isub_uwidenhigh_lhs_i32x4([1 2 3 4], [-1 2]) == [-4 -2]
+
+function %isub_uwidenhigh_lhs_i16x8(i16x8, i32x4) -> i32x4 {
+block0(v0: i16x8, v1: i32x4):
+    v2 = uwiden_high v0
+    v3 = isub v1, v2
+    return v3
+}
+; run: %isub_uwidenhigh_lhs_i16x8([1 2 3 4 5 6 7 8], [-1 2 3 4]) == [-6 -4 -4 -4]
+
+function %isub_uwidenhigh_lhs_i8x16(i8x16, i16x8) -> i16x8 {
+block0(v0: i8x16, v1: i16x8):
+    v2 = uwiden_high v0
+    v3 = isub v1, v2
+    return v3
+}
+; run: %isub_uwidenhigh_lhs_i8x16([1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16], [-1 2 3 4 5 6 7 8]) == [-10 -8 -8 -8 -8 -8 -8 -8]

@@ -1,3 +1,5 @@
+package foo:foo
+
 interface multi-return {
   mra: func()
   mrb: func() -> ()
@@ -6,7 +8,7 @@ interface multi-return {
   mre: func() -> (a: u32, b: float32)
 }
 
-default world the-world {
-  import imports: self.multi-return
-  export exports: self.multi-return
+world the-world {
+  import multi-return
+  export multi-return
 }

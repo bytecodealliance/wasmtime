@@ -16,7 +16,7 @@ wasmtime-jit-debug = { workspace = true, features = ["perf_jitdump"], optional =
 wasmtime-runtime = { workspace = true }
 target-lexicon = { workspace = true }
 anyhow = { workspace = true }
-cfg-if = "1.0"
+cfg-if = { workspace = true }
 gimli = { workspace = true }
 object = { workspace = true }
 serde = { version = "1.0.94", features = ["derive"] }
@@ -26,6 +26,9 @@ rustc-demangle = "0.1.16"
 cpp_demangle = "0.3.2"
 log = { workspace = true }
 wasmtime-jit-icache-coherence = { workspace = true }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+rustix = { workspace = true, features = ['thread'] }
 
 [target.'cfg(target_os = "windows")'.dependencies.windows-sys]
 workspace = true
@@ -39,6 +42,3 @@ ittapi = { version = "0.3.3", optional = true  }
 [features]
 jitdump = ['wasmtime-jit-debug']
 vtune = ['ittapi']
-
-[badges]
-maintenance = { status = "actively-developed" }

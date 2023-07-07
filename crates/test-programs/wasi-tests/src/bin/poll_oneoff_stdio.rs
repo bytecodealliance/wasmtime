@@ -103,15 +103,17 @@ unsafe fn test_stdout_stderr_write() {
             },
         },
     };
+    let mut timed_out = false;
     while !writable.is_empty() {
+        if timed_out {
+            panic!("timed out with the following pending subs: {:?}", writable)
+        }
         let mut subs = writable_subs(&writable);
         subs.push(clock.clone());
         let out = poll_oneoff_impl(&subs).unwrap();
         for event in out {
             match event.userdata {
-                CLOCK_ID => {
-                    panic!("timed out with the following pending subs: {:?}", writable)
-                }
+                CLOCK_ID => timed_out = true,
                 ud => {
                     if let Some(_) = writable.remove(&ud) {
                         assert_eq!(event.type_, wasi::EVENTTYPE_FD_WRITE);

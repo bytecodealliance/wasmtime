@@ -24,7 +24,7 @@ block0(v0: i32):
 ;   agr %r2, %r5
 ;   lmg %r12, %r15, 256(%r15)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   stmg %r12, %r15, 0x60(%r15)

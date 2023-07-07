@@ -1,6 +1,6 @@
 [package]
 name = "cranelift-interpreter"
-version = "0.95.0"
+version = "0.99.0"
 authors = ["The Cranelift Project Developers"]
 description = "Interpret Cranelift IR"
 repository = "https://github.com/bytecodealliance/wasmtime"
@@ -23,6 +23,3 @@ libm = "0.2.4"
 [dev-dependencies]
 cranelift-frontend = { workspace = true }
 cranelift-reader = { workspace = true }
-
-[badges]
-maintenance = { status = "experimental" }

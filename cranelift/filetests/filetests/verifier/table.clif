@@ -41,6 +41,6 @@ function %table_addr_index_type(i64 vmctx, i64) {
     table0 = dynamic gv0, element_size 1, bound gv1, index_type i32
 
 block0(v0: i64, v1: i64):
-    v2 = table_addr.i64 table0, v1, +0; error: index type i64 differs from table index type i32
+    v2 = table_addr.i64 table0, v1+0; error: index type i64 differs from table index type i32
     return
 }

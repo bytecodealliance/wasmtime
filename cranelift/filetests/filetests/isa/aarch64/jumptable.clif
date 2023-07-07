@@ -47,7 +47,7 @@ block5(v5: i32):
 ; block5:
 ;   add w0, w0, w5
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   cmp w0, #3

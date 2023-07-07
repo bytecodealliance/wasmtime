@@ -7022,9 +7022,20 @@ fn test_s390x_binemit() {
         Inst::Ret {
             link: gpr(14),
             rets: vec![],
+            stack_bytes_to_pop: 0,
         },
         "07FE",
         "br %r14",
+    ));
+
+    insns.push((
+        Inst::Ret {
+            link: gpr(14),
+            rets: vec![],
+            stack_bytes_to_pop: 16,
+        },
+        "A7FB001007FE",
+        "aghi %r15, 16 ; br %r14",
     ));
 
     insns.push((Inst::Debugtrap, "0001", ".word 0x0001 # debugtrap"));
@@ -13363,6 +13374,8 @@ fn test_s390x_binemit() {
     let mut isa_flag_builder = s390x_settings::builder();
     isa_flag_builder.enable("arch13").unwrap();
     let isa_flags = s390x_settings::Flags::new(&flags, &isa_flag_builder);
+    let ctrl_plane = &mut Default::default();
+    let constants = Default::default();
 
     let emit_info = EmitInfo::new(isa_flags);
     for (insn, expected_encoding, expected_printing) in insns {
@@ -13380,16 +13393,16 @@ fn test_s390x_binemit() {
 
         // Label 0 before the instruction.
         let label0 = buffer.get_label();
-        buffer.bind_label(label0);
+        buffer.bind_label(label0, ctrl_plane);
 
         // Emit the instruction.
         insn.emit(&[], &mut buffer, &emit_info, &mut Default::default());
 
         // Label 1 after the instruction.
         let label1 = buffer.get_label();
-        buffer.bind_label(label1);
+        buffer.bind_label(label1, ctrl_plane);
 
-        let buffer = buffer.finish();
+        let buffer = buffer.finish(&constants, ctrl_plane);
         let actual_encoding = &buffer.stringify_code_bytes();
         assert_eq!(expected_encoding, actual_encoding);
     }

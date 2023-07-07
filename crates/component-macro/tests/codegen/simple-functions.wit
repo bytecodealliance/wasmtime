@@ -1,3 +1,5 @@
+package foo:foo
+
 interface simple {
   f1: func()
   f2: func(a: u32)
@@ -9,7 +11,7 @@ interface simple {
   f6: func(a: u32, b: u32, c: u32) -> tuple<u32, u32, u32>
 }
 
-default world the-world {
-  import imports: self.simple
-  export exports: self.simple
+world the-world {
+  import simple
+  export simple
 }

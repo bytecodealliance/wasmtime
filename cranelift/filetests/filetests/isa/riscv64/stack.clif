@@ -18,13 +18,13 @@ block0:
 ;   mv fp,sp
 ;   add sp,-16
 ; block0:
-;   load_addr a0,nsp+0
+;   load_addr a0,0(nominal_sp)
 ;   add sp,+16
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   add sp,+16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi sp, sp, -0x10
@@ -59,13 +59,13 @@ block0:
 ;   call %Probestack
 ;   add sp,-100016
 ; block0:
-;   load_addr a0,nsp+0
+;   load_addr a0,0(nominal_sp)
 ;   add sp,+100016
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   add sp,+16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi sp, sp, -0x10
@@ -108,14 +108,14 @@ block0:
 ;   mv fp,sp
 ;   add sp,-16
 ; block0:
-;   load_addr t1,nsp+0
+;   load_addr t1,0(nominal_sp)
 ;   ld a0,0(t1)
 ;   add sp,+16
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   add sp,+16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi sp, sp, -0x10
@@ -151,14 +151,14 @@ block0:
 ;   call %Probestack
 ;   add sp,-100016
 ; block0:
-;   load_addr t1,nsp+0
+;   load_addr t1,0(nominal_sp)
 ;   ld a0,0(t1)
 ;   add sp,+100016
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   add sp,+16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi sp, sp, -0x10
@@ -202,14 +202,14 @@ block0(v0: i64):
 ;   mv fp,sp
 ;   add sp,-16
 ; block0:
-;   load_addr t2,nsp+0
+;   load_addr t2,0(nominal_sp)
 ;   sd a0,0(t2)
 ;   add sp,+16
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   add sp,+16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi sp, sp, -0x10
@@ -245,14 +245,14 @@ block0(v0: i64):
 ;   call %Probestack
 ;   add sp,-100016
 ; block0:
-;   load_addr t2,nsp+0
+;   load_addr t2,0(nominal_sp)
 ;   sd a0,0(t2)
 ;   add sp,+100016
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
 ;   add sp,+16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi sp, sp, -0x10
@@ -448,157 +448,179 @@ block0(v0: i8):
 ;   sd s9,-72(sp)
 ;   sd s10,-80(sp)
 ;   sd s11,-88(sp)
-;   add sp,-1280
+;   add sp,-1360
 ; block0:
 ;   sd a0,1000(nominal_sp)
-;   li t3,2
-;   addi t1,t3,1
-;   sd t1,1176(nominal_sp)
-;   li t3,4
-;   addi t2,t3,3
-;   sd t2,1168(nominal_sp)
-;   li t3,6
-;   addi a1,t3,5
-;   sd a1,1160(nominal_sp)
-;   li t3,8
-;   addi a2,t3,7
-;   sd a2,1152(nominal_sp)
-;   li t3,10
-;   addi a3,t3,9
-;   sd a3,1144(nominal_sp)
-;   li t3,12
-;   addi a4,t3,11
-;   sd a4,1136(nominal_sp)
-;   li t3,14
-;   addi a5,t3,13
-;   sd a5,1128(nominal_sp)
-;   li t3,16
-;   addi a6,t3,15
-;   sd a6,1120(nominal_sp)
-;   li t3,18
-;   addi a7,t3,17
-;   sd a7,1112(nominal_sp)
-;   li t3,20
-;   addi t3,t3,19
-;   sd t3,1104(nominal_sp)
-;   li t3,22
-;   addi t4,t3,21
-;   sd t4,1096(nominal_sp)
+;   li t0,2
+;   sd t0,1008(nominal_sp)
+;   li t0,4
+;   li t1,6
+;   li t2,8
+;   li a1,10
+;   li a2,12
+;   li a3,14
+;   li a4,16
+;   li a5,18
+;   li a6,20
+;   li a7,22
 ;   li t3,24
-;   addi s6,t3,23
-;   sd s6,1088(nominal_sp)
-;   li t3,26
-;   addi s7,t3,25
-;   sd s7,1080(nominal_sp)
-;   li t3,28
-;   addi s8,t3,27
-;   sd s8,1072(nominal_sp)
-;   li t3,30
-;   addi s9,t3,29
-;   sd s9,1064(nominal_sp)
-;   li t3,32
-;   addi s10,t3,31
-;   sd s10,1056(nominal_sp)
-;   li t3,34
-;   addi s11,t3,33
-;   sd s11,1048(nominal_sp)
-;   li t3,36
-;   addi s1,t3,35
-;   sd s1,1040(nominal_sp)
-;   li t3,38
-;   addi s2,t3,37
-;   sd s2,1032(nominal_sp)
-;   li t3,30
-;   addi s3,t3,39
-;   sd s3,1024(nominal_sp)
-;   li t3,32
-;   addi s4,t3,31
-;   sd s4,1016(nominal_sp)
-;   li t3,34
-;   addi s5,t3,33
-;   sd s5,1008(nominal_sp)
-;   li t3,36
-;   addi s5,t3,35
-;   li t3,38
-;   addi a0,t3,37
-;   li t3,30
-;   addi t0,t3,39
-;   li t3,32
-;   addi t1,t3,31
-;   li t3,34
-;   addi t2,t3,33
-;   li t3,36
-;   addi a1,t3,35
-;   li t3,38
-;   addi a2,t3,37
-;   li t3,30
-;   addi a3,t3,39
-;   li t3,32
-;   addi a4,t3,31
-;   li t3,34
-;   addi a5,t3,33
-;   li t3,36
-;   addi a6,t3,35
-;   li t3,38
-;   addi a7,t3,37
-;   ld t3,1176(nominal_sp)
-;   addi t3,t3,39
-;   ld t4,1160(nominal_sp)
-;   ld s2,1168(nominal_sp)
-;   add t4,s2,t4
-;   ld s9,1144(nominal_sp)
-;   ld s7,1152(nominal_sp)
-;   add s6,s7,s9
-;   ld s3,1128(nominal_sp)
-;   ld s1,1136(nominal_sp)
-;   add s7,s1,s3
-;   ld s8,1112(nominal_sp)
-;   ld s9,1120(nominal_sp)
-;   add s8,s9,s8
-;   ld s2,1096(nominal_sp)
-;   ld s11,1104(nominal_sp)
-;   add s9,s11,s2
-;   ld s10,1080(nominal_sp)
-;   ld s11,1088(nominal_sp)
-;   add s10,s11,s10
-;   ld s1,1064(nominal_sp)
+;   li s5,26
+;   li s6,28
+;   li s7,30
+;   li s8,32
+;   li s9,34
+;   li s10,36
+;   li s11,38
+;   li s1,30
+;   li s2,32
+;   li s3,34
+;   li s4,36
+;   li a0,38
+;   li t4,30
+;   sd t4,1256(nominal_sp)
+;   li t4,32
+;   sd t4,1248(nominal_sp)
+;   li t4,34
+;   sd t4,1240(nominal_sp)
+;   li t4,36
+;   sd t4,1232(nominal_sp)
+;   li t4,38
+;   sd t4,1224(nominal_sp)
+;   li t4,30
+;   sd t4,1216(nominal_sp)
+;   li t4,32
+;   sd t4,1208(nominal_sp)
+;   li t4,34
+;   sd t4,1200(nominal_sp)
+;   li t4,36
+;   sd t4,1192(nominal_sp)
+;   li t4,38
+;   sd t4,1184(nominal_sp)
+;   ld t4,1008(nominal_sp)
+;   addi t4,t4,1
+;   sd t4,1176(nominal_sp)
+;   addi t4,t0,3
+;   sd t4,1168(nominal_sp)
+;   addi t4,t1,5
+;   sd t4,1160(nominal_sp)
+;   addi t4,t2,7
+;   sd t4,1152(nominal_sp)
+;   addi t4,a1,9
+;   sd t4,1144(nominal_sp)
+;   addi t4,a2,11
+;   sd t4,1136(nominal_sp)
+;   addi t4,a3,13
+;   sd t4,1128(nominal_sp)
+;   addi t4,a4,15
+;   sd t4,1120(nominal_sp)
+;   addi t4,a5,17
+;   sd t4,1112(nominal_sp)
+;   addi t4,a6,19
+;   sd t4,1104(nominal_sp)
+;   addi t4,a7,21
+;   sd t4,1096(nominal_sp)
+;   addi t4,t3,23
+;   sd t4,1088(nominal_sp)
+;   addi t4,s5,25
+;   sd t4,1080(nominal_sp)
+;   addi t4,s6,27
+;   sd t4,1072(nominal_sp)
+;   addi t4,s7,29
+;   sd t4,1064(nominal_sp)
+;   addi t4,s8,31
+;   sd t4,1056(nominal_sp)
+;   addi t4,s9,33
+;   sd t4,1048(nominal_sp)
+;   addi t4,s10,35
+;   sd t4,1040(nominal_sp)
+;   addi t4,s11,37
+;   sd t4,1032(nominal_sp)
+;   addi t4,s1,39
+;   sd t4,1024(nominal_sp)
+;   addi t4,s2,31
+;   sd t4,1016(nominal_sp)
+;   addi t4,s3,33
+;   sd t4,1008(nominal_sp)
+;   addi s4,s4,35
+;   addi a0,a0,37
+;   ld t4,1256(nominal_sp)
+;   addi t4,t4,39
+;   ld t3,1248(nominal_sp)
+;   addi t0,t3,31
+;   ld t1,1240(nominal_sp)
+;   addi t1,t1,33
+;   ld a1,1232(nominal_sp)
+;   addi t2,a1,35
+;   ld a4,1224(nominal_sp)
+;   addi a1,a4,37
+;   ld a7,1216(nominal_sp)
+;   addi a2,a7,39
+;   ld a3,1208(nominal_sp)
+;   addi a3,a3,31
+;   ld a4,1200(nominal_sp)
+;   addi a4,a4,33
+;   ld a5,1192(nominal_sp)
+;   addi a5,a5,35
+;   ld a6,1184(nominal_sp)
+;   addi a6,a6,37
+;   ld a7,1176(nominal_sp)
+;   addi a7,a7,39
+;   ld t3,1160(nominal_sp)
+;   ld s11,1168(nominal_sp)
+;   add t3,s11,t3
+;   ld s7,1144(nominal_sp)
+;   ld s5,1152(nominal_sp)
+;   add s5,s5,s7
+;   ld s1,1128(nominal_sp)
+;   ld s10,1136(nominal_sp)
+;   add s6,s10,s1
+;   ld s7,1112(nominal_sp)
+;   ld s8,1120(nominal_sp)
+;   add s7,s8,s7
+;   ld s11,1096(nominal_sp)
+;   ld s9,1104(nominal_sp)
+;   add s8,s9,s11
+;   ld s9,1080(nominal_sp)
+;   ld s3,1088(nominal_sp)
+;   add s9,s3,s9
+;   ld s10,1064(nominal_sp)
 ;   ld s11,1072(nominal_sp)
-;   add s11,s11,s1
-;   ld s1,1048(nominal_sp)
-;   ld s4,1056(nominal_sp)
-;   add s1,s4,s1
-;   ld s2,1032(nominal_sp)
-;   ld s3,1040(nominal_sp)
-;   add s2,s3,s2
-;   ld s4,1016(nominal_sp)
-;   ld s3,1024(nominal_sp)
+;   add s10,s11,s10
+;   ld s11,1048(nominal_sp)
+;   ld s2,1056(nominal_sp)
+;   add s11,s2,s11
+;   ld s1,1032(nominal_sp)
+;   ld s2,1040(nominal_sp)
+;   add s1,s2,s1
+;   ld s3,1016(nominal_sp)
+;   ld s2,1024(nominal_sp)
+;   add s2,s2,s3
+;   ld s3,1008(nominal_sp)
 ;   add s3,s3,s4
-;   ld s4,1008(nominal_sp)
-;   add s5,s4,s5
-;   add t0,a0,t0
-;   add t1,t1,t2
+;   add t4,a0,t4
+;   add t0,t0,t1
+;   add t1,t2,a1
+;   add t2,a2,a3
+;   add a0,a4,a5
+;   add a1,a6,a7
+;   add a2,t3,s5
+;   add a3,s6,s7
+;   add a4,s8,s9
+;   add a5,s10,s11
+;   add a6,s1,s2
+;   add t4,s3,t4
+;   add t0,t0,t1
+;   add t1,t2,a0
 ;   add t2,a1,a2
 ;   add a0,a3,a4
 ;   add a1,a5,a6
-;   add a2,a7,t3
-;   add t4,t4,s6
-;   add a3,s7,s8
-;   add a4,s9,s10
-;   add a5,s11,s1
-;   add a6,s2,s3
-;   add t0,s5,t0
-;   add t1,t1,t2
-;   add t2,a0,a1
-;   add t4,a2,t4
-;   add a0,a3,a4
-;   add a1,a5,a6
-;   add t0,t0,t1
-;   add t4,t2,t4
+;   add t4,t4,t0
+;   add t0,t1,t2
 ;   add t1,a0,a1
-;   add t4,t0,t4
+;   add t4,t4,t0
 ;   add a1,t1,t4
 ;   ld a0,1000(nominal_sp)
-;   add sp,+1280
+;   add sp,+1360
 ;   ld s1,-8(sp)
 ;   ld s2,-16(sp)
 ;   ld s3,-24(sp)
@@ -614,7 +636,7 @@ block0(v0: i8):
 ;   ld fp,0(sp)
 ;   add sp,+16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi sp, sp, -0x10
@@ -632,157 +654,179 @@ block0(v0: i8):
 ;   sd s9, -0x48(sp)
 ;   sd s10, -0x50(sp)
 ;   sd s11, -0x58(sp)
-;   addi sp, sp, -0x500
+;   addi sp, sp, -0x550
 ; block1: ; offset 0x40
 ;   sd a0, 0x3e8(sp)
-;   addi t3, zero, 2
-;   addi t1, t3, 1
-;   sd t1, 0x498(sp)
-;   addi t3, zero, 4
-;   addi t2, t3, 3
-;   sd t2, 0x490(sp)
-;   addi t3, zero, 6
-;   addi a1, t3, 5
-;   sd a1, 0x488(sp)
-;   addi t3, zero, 8
-;   addi a2, t3, 7
-;   sd a2, 0x480(sp)
-;   addi t3, zero, 0xa
-;   addi a3, t3, 9
-;   sd a3, 0x478(sp)
-;   addi t3, zero, 0xc
-;   addi a4, t3, 0xb
-;   sd a4, 0x470(sp)
-;   addi t3, zero, 0xe
-;   addi a5, t3, 0xd
-;   sd a5, 0x468(sp)
-;   addi t3, zero, 0x10
-;   addi a6, t3, 0xf
-;   sd a6, 0x460(sp)
-;   addi t3, zero, 0x12
-;   addi a7, t3, 0x11
-;   sd a7, 0x458(sp)
-;   addi t3, zero, 0x14
-;   addi t3, t3, 0x13
-;   sd t3, 0x450(sp)
-;   addi t3, zero, 0x16
-;   addi t4, t3, 0x15
-;   sd t4, 0x448(sp)
+;   addi t0, zero, 2
+;   sd t0, 0x3f0(sp)
+;   addi t0, zero, 4
+;   addi t1, zero, 6
+;   addi t2, zero, 8
+;   addi a1, zero, 0xa
+;   addi a2, zero, 0xc
+;   addi a3, zero, 0xe
+;   addi a4, zero, 0x10
+;   addi a5, zero, 0x12
+;   addi a6, zero, 0x14
+;   addi a7, zero, 0x16
 ;   addi t3, zero, 0x18
-;   addi s6, t3, 0x17
-;   sd s6, 0x440(sp)
-;   addi t3, zero, 0x1a
-;   addi s7, t3, 0x19
-;   sd s7, 0x438(sp)
-;   addi t3, zero, 0x1c
-;   addi s8, t3, 0x1b
-;   sd s8, 0x430(sp)
-;   addi t3, zero, 0x1e
-;   addi s9, t3, 0x1d
-;   sd s9, 0x428(sp)
-;   addi t3, zero, 0x20
-;   addi s10, t3, 0x1f
-;   sd s10, 0x420(sp)
-;   addi t3, zero, 0x22
-;   addi s11, t3, 0x21
-;   sd s11, 0x418(sp)
-;   addi t3, zero, 0x24
-;   addi s1, t3, 0x23
-;   sd s1, 0x410(sp)
-;   addi t3, zero, 0x26
-;   addi s2, t3, 0x25
-;   sd s2, 0x408(sp)
-;   addi t3, zero, 0x1e
-;   addi s3, t3, 0x27
-;   sd s3, 0x400(sp)
-;   addi t3, zero, 0x20
-;   addi s4, t3, 0x1f
-;   sd s4, 0x3f8(sp)
-;   addi t3, zero, 0x22
-;   addi s5, t3, 0x21
-;   sd s5, 0x3f0(sp)
-;   addi t3, zero, 0x24
-;   addi s5, t3, 0x23
-;   addi t3, zero, 0x26
-;   addi a0, t3, 0x25
-;   addi t3, zero, 0x1e
-;   addi t0, t3, 0x27
-;   addi t3, zero, 0x20
-;   addi t1, t3, 0x1f
-;   addi t3, zero, 0x22
-;   addi t2, t3, 0x21
-;   addi t3, zero, 0x24
-;   addi a1, t3, 0x23
-;   addi t3, zero, 0x26
-;   addi a2, t3, 0x25
-;   addi t3, zero, 0x1e
-;   addi a3, t3, 0x27
-;   addi t3, zero, 0x20
-;   addi a4, t3, 0x1f
-;   addi t3, zero, 0x22
-;   addi a5, t3, 0x21
-;   addi t3, zero, 0x24
-;   addi a6, t3, 0x23
-;   addi t3, zero, 0x26
-;   addi a7, t3, 0x25
-;   ld t3, 0x498(sp)
-;   addi t3, t3, 0x27
-;   ld t4, 0x488(sp)
-;   ld s2, 0x490(sp)
-;   add t4, s2, t4
-;   ld s9, 0x478(sp)
-;   ld s7, 0x480(sp)
-;   add s6, s7, s9
-;   ld s3, 0x468(sp)
-;   ld s1, 0x470(sp)
-;   add s7, s1, s3
-;   ld s8, 0x458(sp)
-;   ld s9, 0x460(sp)
-;   add s8, s9, s8
-;   ld s2, 0x448(sp)
-;   ld s11, 0x450(sp)
-;   add s9, s11, s2
-;   ld s10, 0x438(sp)
-;   ld s11, 0x440(sp)
-;   add s10, s11, s10
-;   ld s1, 0x428(sp)
+;   addi s5, zero, 0x1a
+;   addi s6, zero, 0x1c
+;   addi s7, zero, 0x1e
+;   addi s8, zero, 0x20
+;   addi s9, zero, 0x22
+;   addi s10, zero, 0x24
+;   addi s11, zero, 0x26
+;   addi s1, zero, 0x1e
+;   addi s2, zero, 0x20
+;   addi s3, zero, 0x22
+;   addi s4, zero, 0x24
+;   addi a0, zero, 0x26
+;   addi t4, zero, 0x1e
+;   sd t4, 0x4e8(sp)
+;   addi t4, zero, 0x20
+;   sd t4, 0x4e0(sp)
+;   addi t4, zero, 0x22
+;   sd t4, 0x4d8(sp)
+;   addi t4, zero, 0x24
+;   sd t4, 0x4d0(sp)
+;   addi t4, zero, 0x26
+;   sd t4, 0x4c8(sp)
+;   addi t4, zero, 0x1e
+;   sd t4, 0x4c0(sp)
+;   addi t4, zero, 0x20
+;   sd t4, 0x4b8(sp)
+;   addi t4, zero, 0x22
+;   sd t4, 0x4b0(sp)
+;   addi t4, zero, 0x24
+;   sd t4, 0x4a8(sp)
+;   addi t4, zero, 0x26
+;   sd t4, 0x4a0(sp)
+;   ld t4, 0x3f0(sp)
+;   addi t4, t4, 1
+;   sd t4, 0x498(sp)
+;   addi t4, t0, 3
+;   sd t4, 0x490(sp)
+;   addi t4, t1, 5
+;   sd t4, 0x488(sp)
+;   addi t4, t2, 7
+;   sd t4, 0x480(sp)
+;   addi t4, a1, 9
+;   sd t4, 0x478(sp)
+;   addi t4, a2, 0xb
+;   sd t4, 0x470(sp)
+;   addi t4, a3, 0xd
+;   sd t4, 0x468(sp)
+;   addi t4, a4, 0xf
+;   sd t4, 0x460(sp)
+;   addi t4, a5, 0x11
+;   sd t4, 0x458(sp)
+;   addi t4, a6, 0x13
+;   sd t4, 0x450(sp)
+;   addi t4, a7, 0x15
+;   sd t4, 0x448(sp)
+;   addi t4, t3, 0x17
+;   sd t4, 0x440(sp)
+;   addi t4, s5, 0x19
+;   sd t4, 0x438(sp)
+;   addi t4, s6, 0x1b
+;   sd t4, 0x430(sp)
+;   addi t4, s7, 0x1d
+;   sd t4, 0x428(sp)
+;   addi t4, s8, 0x1f
+;   sd t4, 0x420(sp)
+;   addi t4, s9, 0x21
+;   sd t4, 0x418(sp)
+;   addi t4, s10, 0x23
+;   sd t4, 0x410(sp)
+;   addi t4, s11, 0x25
+;   sd t4, 0x408(sp)
+;   addi t4, s1, 0x27
+;   sd t4, 0x400(sp)
+;   addi t4, s2, 0x1f
+;   sd t4, 0x3f8(sp)
+;   addi t4, s3, 0x21
+;   sd t4, 0x3f0(sp)
+;   addi s4, s4, 0x23
+;   addi a0, a0, 0x25
+;   ld t4, 0x4e8(sp)
+;   addi t4, t4, 0x27
+;   ld t3, 0x4e0(sp)
+;   addi t0, t3, 0x1f
+;   ld t1, 0x4d8(sp)
+;   addi t1, t1, 0x21
+;   ld a1, 0x4d0(sp)
+;   addi t2, a1, 0x23
+;   ld a4, 0x4c8(sp)
+;   addi a1, a4, 0x25
+;   ld a7, 0x4c0(sp)
+;   addi a2, a7, 0x27
+;   ld a3, 0x4b8(sp)
+;   addi a3, a3, 0x1f
+;   ld a4, 0x4b0(sp)
+;   addi a4, a4, 0x21
+;   ld a5, 0x4a8(sp)
+;   addi a5, a5, 0x23
+;   ld a6, 0x4a0(sp)
+;   addi a6, a6, 0x25
+;   ld a7, 0x498(sp)
+;   addi a7, a7, 0x27
+;   ld t3, 0x488(sp)
+;   ld s11, 0x490(sp)
+;   add t3, s11, t3
+;   ld s7, 0x478(sp)
+;   ld s5, 0x480(sp)
+;   add s5, s5, s7
+;   ld s1, 0x468(sp)
+;   ld s10, 0x470(sp)
+;   add s6, s10, s1
+;   ld s7, 0x458(sp)
+;   ld s8, 0x460(sp)
+;   add s7, s8, s7
+;   ld s11, 0x448(sp)
+;   ld s9, 0x450(sp)
+;   add s8, s9, s11
+;   ld s9, 0x438(sp)
+;   ld s3, 0x440(sp)
+;   add s9, s3, s9
+;   ld s10, 0x428(sp)
 ;   ld s11, 0x430(sp)
-;   add s11, s11, s1
-;   ld s1, 0x418(sp)
-;   ld s4, 0x420(sp)
-;   add s1, s4, s1
-;   ld s2, 0x408(sp)
-;   ld s3, 0x410(sp)
-;   add s2, s3, s2
-;   ld s4, 0x3f8(sp)
-;   ld s3, 0x400(sp)
+;   add s10, s11, s10
+;   ld s11, 0x418(sp)
+;   ld s2, 0x420(sp)
+;   add s11, s2, s11
+;   ld s1, 0x408(sp)
+;   ld s2, 0x410(sp)
+;   add s1, s2, s1
+;   ld s3, 0x3f8(sp)
+;   ld s2, 0x400(sp)
+;   add s2, s2, s3
+;   ld s3, 0x3f0(sp)
 ;   add s3, s3, s4
-;   ld s4, 0x3f0(sp)
-;   add s5, s4, s5
-;   add t0, a0, t0
-;   add t1, t1, t2
+;   add t4, a0, t4
+;   add t0, t0, t1
+;   add t1, t2, a1
+;   add t2, a2, a3
+;   add a0, a4, a5
+;   add a1, a6, a7
+;   add a2, t3, s5
+;   add a3, s6, s7
+;   add a4, s8, s9
+;   add a5, s10, s11
+;   add a6, s1, s2
+;   add t4, s3, t4
+;   add t0, t0, t1
+;   add t1, t2, a0
 ;   add t2, a1, a2
 ;   add a0, a3, a4
 ;   add a1, a5, a6
-;   add a2, a7, t3
-;   add t4, t4, s6
-;   add a3, s7, s8
-;   add a4, s9, s10
-;   add a5, s11, s1
-;   add a6, s2, s3
-;   add t0, s5, t0
-;   add t1, t1, t2
-;   add t2, a0, a1
-;   add t4, a2, t4
-;   add a0, a3, a4
-;   add a1, a5, a6
-;   add t0, t0, t1
-;   add t4, t2, t4
+;   add t4, t4, t0
+;   add t0, t1, t2
 ;   add t1, a0, a1
-;   add t4, t0, t4
+;   add t4, t4, t0
 ;   add a1, t1, t4
 ;   ld a0, 0x3e8(sp)
-;   addi sp, sp, 0x500
+;   addi sp, sp, 0x550
 ;   ld s1, -8(sp)
 ;   ld s2, -0x10(sp)
 ;   ld s3, -0x18(sp)
@@ -815,7 +859,7 @@ block0(v0: i128):
 ;   add sp,-16
 ; block0:
 ;   mv a2,a0
-;   load_addr a0,nsp+0
+;   load_addr a0,0(nominal_sp)
 ;   sd a2,0(a0)
 ;   sd a1,8(a0)
 ;   add sp,+16
@@ -823,7 +867,7 @@ block0(v0: i128):
 ;   ld fp,0(sp)
 ;   add sp,+16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi sp, sp, -0x10
@@ -859,7 +903,7 @@ block0(v0: i128):
 ;   add sp,-32
 ; block0:
 ;   mv a2,a0
-;   load_addr a0,nsp+32
+;   load_addr a0,32(nominal_sp)
 ;   sd a2,0(a0)
 ;   sd a1,8(a0)
 ;   add sp,+32
@@ -867,7 +911,7 @@ block0(v0: i128):
 ;   ld fp,0(sp)
 ;   add sp,+16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi sp, sp, -0x10
@@ -906,7 +950,7 @@ block0(v0: i128):
 ;   add sp,-100016
 ; block0:
 ;   mv a2,a0
-;   load_addr a0,nsp+0
+;   load_addr a0,0(nominal_sp)
 ;   sd a2,0(a0)
 ;   sd a1,8(a0)
 ;   add sp,+100016
@@ -914,7 +958,7 @@ block0(v0: i128):
 ;   ld fp,0(sp)
 ;   add sp,+16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi sp, sp, -0x10
@@ -960,7 +1004,7 @@ block0:
 ;   mv fp,sp
 ;   add sp,-16
 ; block0:
-;   load_addr t2,nsp+0
+;   load_addr t2,0(nominal_sp)
 ;   ld a0,0(t2)
 ;   ld a1,8(t2)
 ;   add sp,+16
@@ -968,7 +1012,7 @@ block0:
 ;   ld fp,0(sp)
 ;   add sp,+16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi sp, sp, -0x10
@@ -1002,7 +1046,7 @@ block0:
 ;   mv fp,sp
 ;   add sp,-32
 ; block0:
-;   load_addr t2,nsp+32
+;   load_addr t2,32(nominal_sp)
 ;   ld a0,0(t2)
 ;   ld a1,8(t2)
 ;   add sp,+32
@@ -1010,7 +1054,7 @@ block0:
 ;   ld fp,0(sp)
 ;   add sp,+16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi sp, sp, -0x10
@@ -1047,7 +1091,7 @@ block0:
 ;   call %Probestack
 ;   add sp,-100016
 ; block0:
-;   load_addr t2,nsp+0
+;   load_addr t2,0(nominal_sp)
 ;   ld a0,0(t2)
 ;   ld a1,8(t2)
 ;   add sp,+100016
@@ -1055,7 +1099,7 @@ block0:
 ;   ld fp,0(sp)
 ;   add sp,+16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addi sp, sp, -0x10

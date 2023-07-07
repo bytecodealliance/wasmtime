@@ -90,6 +90,7 @@ fn link_twice_bad() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn function_interposition() -> Result<()> {
     let mut store = Store::<()>::default();
     let mut linker = Linker::new(store.engine());
@@ -124,6 +125,7 @@ fn function_interposition() -> Result<()> {
 // Same as `function_interposition`, but the linker's name for the function
 // differs from the module's name.
 #[test]
+#[cfg_attr(miri, ignore)]
 fn function_interposition_renamed() -> Result<()> {
     let mut store = Store::<()>::default();
     let mut linker = Linker::new(store.engine());
@@ -154,6 +156,7 @@ fn function_interposition_renamed() -> Result<()> {
 // Similar to `function_interposition`, but use `Linker::instance` instead of
 // `Linker::define`.
 #[test]
+#[cfg_attr(miri, ignore)]
 fn module_interposition() -> Result<()> {
     let mut store = Store::<()>::default();
     let mut linker = Linker::new(store.engine());
@@ -185,6 +188,7 @@ fn module_interposition() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn allow_unknown_exports() -> Result<()> {
     let mut store = Store::<()>::default();
     let mut linker = Linker::new(store.engine());
@@ -203,6 +207,7 @@ fn allow_unknown_exports() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn no_leak() -> Result<()> {
     struct DropMe(Rc<Cell<bool>>);
 
@@ -231,6 +236,7 @@ fn no_leak() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn no_leak_with_imports() -> Result<()> {
     struct DropMe(Arc<AtomicUsize>);
 
@@ -245,7 +251,9 @@ fn no_leak_with_imports() -> Result<()> {
         let mut store = Store::new(&Engine::default(), DropMe(flag.clone()));
         let mut linker = Linker::new(store.engine());
         let drop_me = DropMe(flag.clone());
-        linker.func_wrap("", "", move || drop(&drop_me))?;
+        linker.func_wrap("", "", move || {
+            let _ = &drop_me;
+        })?;
         let module = Module::new(
             store.engine(),
             r#"
@@ -290,7 +298,9 @@ fn funcs_live_on_to_fight_another_day() -> Result<()> {
     let engine = Engine::default();
     let mut linker = Linker::new(&engine);
     let drop_me = DropMe(flag.clone());
-    linker.func_wrap("", "", move || drop(&drop_me))?;
+    linker.func_wrap("", "", move || {
+        let _ = &drop_me;
+    })?;
     assert_eq!(flag.load(SeqCst), 0);
 
     let get_and_call = || -> Result<()> {
@@ -354,6 +364,7 @@ fn instance_pre() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn test_trapping_unknown_import() -> Result<()> {
     const WAT: &str = r#"
     (module
@@ -392,6 +403,7 @@ fn test_trapping_unknown_import() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn test_default_value_unknown_import() -> Result<()> {
     const WAT: &str = r#"
       (module

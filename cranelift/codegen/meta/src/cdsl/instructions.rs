@@ -228,8 +228,8 @@ impl InstructionBuilder {
     }
 
     fn build(self) -> Instruction {
-        let operands_in = self.operands_in.unwrap_or_else(Vec::new);
-        let operands_out = self.operands_out.unwrap_or_else(Vec::new);
+        let operands_in = self.operands_in.unwrap_or_default();
+        let operands_out = self.operands_out.unwrap_or_default();
 
         let mut value_opnums = Vec::new();
         let mut imm_opnums = Vec::new();
@@ -375,7 +375,7 @@ fn verify_polymorphic(
             if (free_typevar.is_some() && tv == &free_typevar.unwrap())
                 || tv.singleton_type().is_some()
             {
-                match is_ctrl_typevar_candidate(tv, &operands_in, &operands_out) {
+                match is_ctrl_typevar_candidate(tv, operands_in, operands_out) {
                     Ok(_other_typevars) => {
                         return Some(PolymorphicInfo {
                             use_typevar_operand: true,
@@ -410,7 +410,7 @@ fn verify_polymorphic(
 
     // At this point, if the next unwrap() fails, it means the output type couldn't be used as a
     // controlling type variable either; panicking is the right behavior.
-    is_ctrl_typevar_candidate(tv, &operands_in, &operands_out).unwrap();
+    is_ctrl_typevar_candidate(tv, operands_in, operands_out).unwrap();
 
     Some(PolymorphicInfo {
         use_typevar_operand: false,

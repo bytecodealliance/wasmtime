@@ -58,11 +58,11 @@
 ;; block0:
 ;;   lgr %r5, %r2
 ;;   ag %r5, 0(%r3)
-;;   aghik %r4, %r5, 4096
+;;   aghik %r3, %r5, 4096
 ;;   lghi %r5, 0
 ;;   clgfi %r2, 268431359
-;;   locgrh %r4, %r5
-;;   llc %r2, 0(%r4)
+;;   locgrh %r3, %r5
+;;   llc %r2, 0(%r3)
 ;;   jg label1
 ;; block1:
 ;;   br %r14

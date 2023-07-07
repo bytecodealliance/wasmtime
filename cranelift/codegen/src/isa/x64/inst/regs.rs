@@ -195,14 +195,19 @@ pub(crate) fn create_reg_env_systemv(flags: &settings::Flags) -> MachineEnv {
                 preg(xmm14()),
                 preg(xmm15()),
             ],
+            // The Vector Regclass is unused
+            vec![],
         ],
         non_preferred_regs_by_class: [
             // Non-preferred GPRs: callee-saved in the SysV ABI.
             vec![preg(rbx()), preg(r12()), preg(r13()), preg(r14())],
             // Non-preferred XMMs: none.
             vec![],
+            // The Vector Regclass is unused
+            vec![],
         ],
         fixed_stack_slots: vec![],
+        scratch_by_class: [None, None, None],
     };
 
     debug_assert_eq!(r15(), pinned_reg());
@@ -255,6 +260,7 @@ pub fn realreg_name(reg: RealReg) -> &'static str {
             15 => "%xmm15",
             _ => panic!("Invalid PReg: {:?}", preg),
         },
+        RegClass::Vector => unreachable!(),
     }
 }
 

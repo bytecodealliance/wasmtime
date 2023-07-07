@@ -47,12 +47,12 @@
 ;; block0:
 ;;   movl    %edi, %r11d
 ;;   movq    8(%rdx), %rdi
-;;   movq    %r11, %r10
-;;   addq    %r10, 0(%rdx), %r10
+;;   movq    %r11, %r9
+;;   addq    %r9, 0(%rdx), %r9
 ;;   xorq    %rax, %rax, %rax
 ;;   cmpq    %rdi, %r11
-;;   cmovnbeq %rax, %r10, %r10
-;;   movl    %esi, 0(%r10)
+;;   cmovnbeq %rax, %r9, %r9
+;;   movl    %esi, 0(%r9)
 ;;   jmp     label1
 ;; block1:
 ;;   movq    %rbp, %rsp
@@ -67,12 +67,12 @@
 ;; block0:
 ;;   movl    %edi, %r11d
 ;;   movq    8(%rsi), %rdi
-;;   movq    %r11, %r10
-;;   addq    %r10, 0(%rsi), %r10
+;;   movq    %r11, %r9
+;;   addq    %r9, 0(%rsi), %r9
 ;;   xorq    %rsi, %rsi, %rsi
 ;;   cmpq    %rdi, %r11
-;;   cmovnbeq %rsi, %r10, %r10
-;;   movl    0(%r10), %eax
+;;   cmovnbeq %rsi, %r9, %r9
+;;   movl    0(%r9), %eax
 ;;   jmp     label1
 ;; block1:
 ;;   movq    %rbp, %rsp

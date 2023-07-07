@@ -1,11 +1,14 @@
-use crate::abi::ABI;
-use crate::codegen::{CodeGen, CodeGenContext};
-use crate::frame::Frame;
-use crate::isa::x64::masm::MacroAssembler as X64Masm;
+use crate::{
+    abi::ABI,
+    codegen::{CodeGen, CodeGenContext, FuncEnv},
+};
+
+use crate::frame::{DefinedLocals, Frame};
+use crate::isa::{x64::masm::MacroAssembler as X64Masm, CallingConvention};
 use crate::masm::MacroAssembler;
 use crate::regalloc::RegAlloc;
 use crate::stack::Stack;
-use crate::FuncEnv;
+use crate::trampoline::{Trampoline, TrampolineKind};
 use crate::{
     isa::{Builder, TargetIsa},
     regset::RegSet,
@@ -15,7 +18,8 @@ use cranelift_codegen::settings::{self, Flags};
 use cranelift_codegen::{isa::x64::settings as x64_settings, Final, MachBufferFinalized};
 use cranelift_codegen::{MachTextSectionBuilder, TextSectionBuilder};
 use target_lexicon::Triple;
-use wasmparser::{FuncType, FuncValidator, FunctionBody, ValidatorResources};
+use wasmparser::{FuncValidator, FunctionBody, ValidatorResources};
+use wasmtime_environ::{ModuleTranslation, WasmFuncType};
 
 use self::regs::ALL_GPR;
 
@@ -84,21 +88,23 @@ impl TargetIsa for X64 {
 
     fn compile_function(
         &self,
-        sig: &FuncType,
+        sig: &WasmFuncType,
         body: &FunctionBody,
-        env: &dyn FuncEnv,
-        mut validator: FuncValidator<ValidatorResources>,
+        translation: &ModuleTranslation,
+        validator: &mut FuncValidator<ValidatorResources>,
     ) -> Result<MachBufferFinalized<Final>> {
         let mut body = body.get_binary_reader();
         let mut masm = X64Masm::new(self.shared_flags.clone(), self.isa_flags.clone());
         let stack = Stack::new();
-        let abi = abi::X64ABI::default();
-        let abi_sig = abi.sig(sig);
-        let frame = Frame::new(&abi_sig, &mut body, &mut validator, &abi)?;
+        let abi_sig = abi::X64ABI::sig(sig, &CallingConvention::Default);
+
+        let defined_locals = DefinedLocals::new(translation, &mut body, validator)?;
+        let frame = Frame::new::<abi::X64ABI>(&abi_sig, &defined_locals)?;
         // TODO Add in floating point bitmask
         let regalloc = RegAlloc::new(RegSet::new(ALL_GPR, 0), regs::scratch());
         let codegen_context = CodeGenContext::new(regalloc, stack, &frame);
-        let mut codegen = CodeGen::new(&mut masm, &abi, codegen_context, env, abi_sig);
+        let env = FuncEnv::new(self.pointer_bytes(), translation);
+        let mut codegen = CodeGen::new(&mut masm, codegen_context, env, abi_sig);
 
         codegen.emit(&mut body, validator)?;
 
@@ -112,5 +118,32 @@ impl TargetIsa for X64 {
     fn function_alignment(&self) -> u32 {
         // See `cranelift_codegen`'s value of this for more information.
         16
+    }
+
+    fn compile_trampoline(
+        &self,
+        ty: &WasmFuncType,
+        kind: TrampolineKind,
+    ) -> Result<MachBufferFinalized<Final>> {
+        use TrampolineKind::*;
+
+        let mut masm = X64Masm::new(self.shared_flags.clone(), self.isa_flags.clone());
+        let call_conv = self.wasmtime_call_conv();
+
+        let mut trampoline = Trampoline::new(
+            &mut masm,
+            regs::scratch(),
+            regs::argv(),
+            &call_conv,
+            self.pointer_bytes(),
+        );
+
+        match kind {
+            ArrayToWasm(idx) => trampoline.emit_array_to_wasm(ty, idx)?,
+            NativeToWasm(idx) => trampoline.emit_native_to_wasm(ty, idx)?,
+            WasmToNative => trampoline.emit_wasm_to_native(ty)?,
+        }
+
+        Ok(masm.finalize())
     }
 }

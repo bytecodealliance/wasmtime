@@ -12,7 +12,7 @@ block0(v0: i64):
 ;   vlebrg %v2, 0(%r2), 0
 ;   vuplhb %v24, %v2
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0xe6, 0x20
@@ -33,7 +33,7 @@ block0(v0: i64):
 ;   verllh %v4, %v2, 8
 ;   vuplhh %v24, %v4
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0xe6, 0x20
@@ -55,7 +55,7 @@ block0(v0: i64):
 ;   verllg %v4, %v2, 32
 ;   vuplhf %v24, %v4
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ld %f2, 0(%r2)
@@ -74,7 +74,7 @@ block0(v0: i64):
 ;   vlebrg %v2, 0(%r2), 0
 ;   vuphb %v24, %v2
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0xe6, 0x20
@@ -95,7 +95,7 @@ block0(v0: i64):
 ;   verllh %v4, %v2, 8
 ;   vuphh %v24, %v4
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0xe6, 0x20
@@ -117,7 +117,7 @@ block0(v0: i64):
 ;   verllg %v4, %v2, 32
 ;   vuphf %v24, %v4
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ld %f2, 0(%r2)
@@ -135,7 +135,7 @@ block0(v0: i64):
 ; block0:
 ;   vlbrq %v24, 0(%r2)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0xe6, 0x80
@@ -152,7 +152,7 @@ block0(v0: i64):
 ; block0:
 ;   vlerh %v24, 0(%r2)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0xe6, 0x80
@@ -170,7 +170,7 @@ block0(v0: i64):
 ; block0:
 ;   vlerf %v24, 0(%r2)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0xe6, 0x80
@@ -188,7 +188,7 @@ block0(v0: i64):
 ; block0:
 ;   vlerg %v24, 0(%r2)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0xe6, 0x80
@@ -206,7 +206,7 @@ block0(v0: i64):
 ; block0:
 ;   vlerf %v24, 0(%r2)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0xe6, 0x80
@@ -224,7 +224,7 @@ block0(v0: i64):
 ; block0:
 ;   vlerg %v24, 0(%r2)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0xe6, 0x80
@@ -242,7 +242,7 @@ block0(v0: i8x16, v1: i64):
 ; block0:
 ;   vstbrq %v24, 0(%r2)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0xe6, 0x80
@@ -259,7 +259,7 @@ block0(v0: i16x8, v1: i64):
 ; block0:
 ;   vsterh %v24, 0(%r2)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0xe6, 0x80
@@ -277,7 +277,7 @@ block0(v0: i32x4, v1: i64):
 ; block0:
 ;   vsterf %v24, 0(%r2)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0xe6, 0x80
@@ -295,7 +295,7 @@ block0(v0: i64x2, v1: i64):
 ; block0:
 ;   vsterg %v24, 0(%r2)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0xe6, 0x80
@@ -313,7 +313,7 @@ block0(v0: f32x4, v1: i64):
 ; block0:
 ;   vsterf %v24, 0(%r2)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0xe6, 0x80
@@ -331,7 +331,7 @@ block0(v0: f64x2, v1: i64):
 ; block0:
 ;   vsterg %v24, 0(%r2)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0xe6, 0x80
@@ -350,7 +350,7 @@ block0(v0: i64):
 ;   vlebrg %v2, 0(%r2), 0
 ;   vuplhb %v24, %v2
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0xe6, 0x20
@@ -370,7 +370,7 @@ block0(v0: i64):
 ;   vlebrg %v2, 0(%r2), 0
 ;   vuplhh %v24, %v2
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0xe6, 0x20
@@ -390,7 +390,7 @@ block0(v0: i64):
 ;   vlebrg %v2, 0(%r2), 0
 ;   vuplhf %v24, %v2
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0xe6, 0x20
@@ -410,7 +410,7 @@ block0(v0: i64):
 ;   vlebrg %v2, 0(%r2), 0
 ;   vuphb %v24, %v2
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0xe6, 0x20
@@ -430,7 +430,7 @@ block0(v0: i64):
 ;   vlebrg %v2, 0(%r2), 0
 ;   vuphh %v24, %v2
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0xe6, 0x20
@@ -450,7 +450,7 @@ block0(v0: i64):
 ;   vlebrg %v2, 0(%r2), 0
 ;   vuphf %v24, %v2
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0xe6, 0x20
@@ -469,7 +469,7 @@ block0(v0: i64):
 ; block0:
 ;   vlbrq %v24, 0(%r2)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0xe6, 0x80
@@ -486,7 +486,7 @@ block0(v0: i64):
 ; block0:
 ;   vlbrq %v24, 0(%r2)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0xe6, 0x80
@@ -503,7 +503,7 @@ block0(v0: i64):
 ; block0:
 ;   vlbrq %v24, 0(%r2)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0xe6, 0x80
@@ -520,7 +520,7 @@ block0(v0: i64):
 ; block0:
 ;   vlbrq %v24, 0(%r2)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0xe6, 0x80
@@ -537,7 +537,7 @@ block0(v0: i64):
 ; block0:
 ;   vlbrq %v24, 0(%r2)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0xe6, 0x80
@@ -554,7 +554,7 @@ block0(v0: i64):
 ; block0:
 ;   vlbrq %v24, 0(%r2)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0xe6, 0x80
@@ -571,7 +571,7 @@ block0(v0: i8x16, v1: i64):
 ; block0:
 ;   vstbrq %v24, 0(%r2)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0xe6, 0x80
@@ -588,7 +588,7 @@ block0(v0: i16x8, v1: i64):
 ; block0:
 ;   vstbrq %v24, 0(%r2)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0xe6, 0x80
@@ -605,7 +605,7 @@ block0(v0: i32x4, v1: i64):
 ; block0:
 ;   vstbrq %v24, 0(%r2)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0xe6, 0x80
@@ -622,7 +622,7 @@ block0(v0: i64x2, v1: i64):
 ; block0:
 ;   vstbrq %v24, 0(%r2)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0xe6, 0x80
@@ -639,7 +639,7 @@ block0(v0: f32x4, v1: i64):
 ; block0:
 ;   vstbrq %v24, 0(%r2)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0xe6, 0x80
@@ -656,7 +656,7 @@ block0(v0: f64x2, v1: i64):
 ; block0:
 ;   vstbrq %v24, 0(%r2)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0xe6, 0x80

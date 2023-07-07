@@ -31,7 +31,7 @@ use super::{RelSourceLoc, SourceLoc, UserExternalName};
 
 /// A version marker used to ensure that serialized clif ir is never deserialized with a
 /// different version of Cranelift.
-#[derive(Copy, Clone, Debug, PartialEq, Hash)]
+#[derive(Default, Copy, Clone, Debug, PartialEq, Hash)]
 pub struct VersionMarker;
 
 #[cfg(feature = "enable-serde")]
@@ -64,7 +64,7 @@ impl<'de> Deserialize<'de> for VersionMarker {
 
 /// Function parameters used when creating this function, and that will become applied after
 /// compilation to materialize the final `CompiledCode`.
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct FunctionParameters {
     /// The first `SourceLoc` appearing in the function, serving as a base for every relative
@@ -230,7 +230,7 @@ impl FunctionStencil {
         self.global_values.push(data)
     }
 
-    /// Find the global dyn_scale value associated with given DynamicType
+    /// Find the global dyn_scale value associated with given DynamicType.
     pub fn get_dyn_scale(&self, ty: DynamicType) -> GlobalValue {
         self.dfg.dynamic_types.get(ty).unwrap().dynamic_scale
     }
@@ -351,7 +351,7 @@ impl FunctionStencil {
 
 /// Functions can be cloned, but it is not a very fast operation.
 /// The clone will have all the same entity numbers as the original.
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct Function {
     /// Name of this function.

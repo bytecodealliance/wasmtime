@@ -1615,6 +1615,14 @@ pub(crate) fn define(
 
         When this instruction compares integer vectors, it returns a vector of
         lane-wise comparisons.
+
+        When comparing scalars, the result is:
+            - `1` if the condition holds.
+            - `0` if the condition does not hold.
+
+        When comparing vectors, the result is:
+            - `-1` (i.e. all ones) in each lane where the condition holds.
+            - `0` in each lane where the condition does not hold.
         "#,
             &formats.int_compare,
         )
@@ -2005,31 +2013,6 @@ pub(crate) fn define(
 
     ig.push(
         Inst::new(
-            "iadd_cout",
-            r#"
-        Add integers with carry out.
-
-        Same as `iadd` with an additional carry output.
-
-        ```text
-            a &= x + y \pmod 2^B \\
-            c_{out} &= x+y >= 2^B
-        ```
-
-        Polymorphic over all scalar integer types, but does not support vector
-        types.
-        "#,
-            &formats.binary,
-        )
-        .operands_in(vec![Operand::new("x", iB), Operand::new("y", iB)])
-        .operands_out(vec![
-            Operand::new("a", iB),
-            Operand::new("c_out", i8).with_doc("Output carry flag"),
-        ]),
-    );
-
-    ig.push(
-        Inst::new(
             "iadd_carry",
             r#"
         Add integers with carry in and out.
@@ -2056,6 +2039,125 @@ pub(crate) fn define(
             Operand::new("c_out", i8).with_doc("Output carry flag"),
         ]),
     );
+
+    {
+        let of_out = Operand::new("of", i8).with_doc("Overflow flag");
+        ig.push(
+            Inst::new(
+                "uadd_overflow",
+                r#"
+            Add integers unsigned with overflow out.
+            ``of`` is set when the addition overflowed.
+            ```text
+                a &= x + y \pmod 2^B \\
+                of &= x+y >= 2^B
+            ```
+            Polymorphic over all scalar integer types, but does not support vector
+            types.
+            "#,
+                &formats.binary,
+            )
+            .operands_in(vec![Operand::new("x", iB), Operand::new("y", iB)])
+            .operands_out(vec![Operand::new("a", iB), of_out.clone()]),
+        );
+
+        ig.push(
+            Inst::new(
+                "sadd_overflow",
+                r#"
+            Add integers signed with overflow out.
+            ``of`` is set when the addition over- or underflowed.
+            Polymorphic over all scalar integer types, but does not support vector
+            types.
+            "#,
+                &formats.binary,
+            )
+            .operands_in(vec![Operand::new("x", iB), Operand::new("y", iB)])
+            .operands_out(vec![Operand::new("a", iB), of_out.clone()]),
+        );
+
+        ig.push(
+            Inst::new(
+                "usub_overflow",
+                r#"
+            Subtract integers unsigned with overflow out.
+            ``of`` is set when the subtraction underflowed.
+            ```text
+                a &= x - y \pmod 2^B \\
+                of &= x - y < 0
+            ```
+            Polymorphic over all scalar integer types, but does not support vector
+            types.
+            "#,
+                &formats.binary,
+            )
+            .operands_in(vec![Operand::new("x", iB), Operand::new("y", iB)])
+            .operands_out(vec![Operand::new("a", iB), of_out.clone()]),
+        );
+
+        ig.push(
+            Inst::new(
+                "ssub_overflow",
+                r#"
+            Subtract integers signed with overflow out.
+            ``of`` is set when the subtraction over- or underflowed.
+            Polymorphic over all scalar integer types, but does not support vector
+            types.
+            "#,
+                &formats.binary,
+            )
+            .operands_in(vec![Operand::new("x", iB), Operand::new("y", iB)])
+            .operands_out(vec![Operand::new("a", iB), of_out.clone()]),
+        );
+
+        {
+            let NarrowScalar = &TypeVar::new(
+                "NarrowScalar",
+                "A scalar integer type up to 64 bits",
+                TypeSetBuilder::new().ints(8..64).build(),
+            );
+
+            ig.push(
+                Inst::new(
+                    "umul_overflow",
+                    r#"
+                Multiply integers unsigned with overflow out.
+                ``of`` is set when the multiplication overflowed.
+                ```text
+                    a &= x * y \pmod 2^B \\
+                    of &= x * y > 2^B
+                ```
+                Polymorphic over all scalar integer types except i128, but does not support vector
+                types.
+                "#,
+                    &formats.binary,
+                )
+                .operands_in(vec![
+                    Operand::new("x", NarrowScalar),
+                    Operand::new("y", NarrowScalar),
+                ])
+                .operands_out(vec![Operand::new("a", NarrowScalar), of_out.clone()]),
+            );
+
+            ig.push(
+                Inst::new(
+                    "smul_overflow",
+                    r#"
+                Multiply integers signed with overflow out.
+                ``of`` is set when the multiplication over- or underflowed.
+                Polymorphic over all scalar integer types except i128, but does not support vector
+                types.
+                "#,
+                    &formats.binary,
+                )
+                .operands_in(vec![
+                    Operand::new("x", NarrowScalar),
+                    Operand::new("y", NarrowScalar),
+                ])
+                .operands_out(vec![Operand::new("a", NarrowScalar), of_out.clone()]),
+            );
+        }
+    }
 
     let i32_64 = &TypeVar::new(
         "i32_64",
@@ -2106,31 +2208,6 @@ pub(crate) fn define(
             Operand::new("b_in", i8).with_doc("Input borrow flag"),
         ])
         .operands_out(vec![Operand::new("a", iB)]),
-    );
-
-    ig.push(
-        Inst::new(
-            "isub_bout",
-            r#"
-        Subtract integers with borrow out.
-
-        Same as `isub` with an additional borrow flag output.
-
-        ```text
-            a &= x - y \pmod 2^B \\
-            b_{out} &= x < y
-        ```
-
-        Polymorphic over all scalar integer types, but does not support vector
-        types.
-        "#,
-            &formats.binary,
-        )
-        .operands_in(vec![Operand::new("x", iB), Operand::new("y", iB)])
-        .operands_out(vec![
-            Operand::new("a", iB),
-            Operand::new("b_out", i8).with_doc("Output borrow flag"),
-        ]),
     );
 
     ig.push(
@@ -2415,7 +2492,7 @@ pub(crate) fn define(
         places, shifting in zero bits to the MSB. Also called a *logical
         shift*.
 
-        The shift amount is masked to the size of the register.
+        The shift amount is masked to the size of ``x``.
 
         When shifting a B-bits integer type, this instruction computes:
 
@@ -2441,7 +2518,7 @@ pub(crate) fn define(
         places, shifting in sign bits to the MSB. Also called an *arithmetic
         shift*.
 
-        The shift amount is masked to the size of the register.
+        The shift amount is masked to the size of ``x``.
         "#,
             &formats.binary,
         )
@@ -2475,7 +2552,7 @@ pub(crate) fn define(
             r#"
         Unsigned shift right by immediate.
 
-        The shift amount is masked to the size of the register.
+        The shift amount is masked to the size of ``x``.
         "#,
             &formats.binary_imm64,
         )
@@ -2492,7 +2569,7 @@ pub(crate) fn define(
             r#"
         Signed shift right by immediate.
 
-        The shift amount is masked to the size of the register.
+        The shift amount is masked to the size of ``x``.
         "#,
             &formats.binary_imm64,
         )
@@ -2672,6 +2749,14 @@ pub(crate) fn define(
 
         When this instruction compares floating point vectors, it returns a
         vector with the results of lane-wise comparisons.
+
+        When comparing scalars, the result is:
+            - `1` if the condition holds.
+            - `0` if the condition does not hold.
+
+        When comparing vectors, the result is:
+            - `-1` (i.e. all ones) in each lane where the condition holds.
+            - `0` in each lane where the condition does not hold.
         "#,
             &formats.float_compare,
         )
@@ -3558,26 +3643,6 @@ pub(crate) fn define(
         floating point using round to nearest, ties to even.
 
         The result type must have the same number of vector lanes as the input.
-        "#,
-            &formats.unary,
-        )
-        .operands_in(vec![Operand::new("x", Int)])
-        .operands_out(vec![Operand::new("a", FloatTo)]),
-    );
-
-    ig.push(
-        Inst::new(
-            "fcvt_low_from_sint",
-            r#"
-        Converts packed signed 32-bit integers to packed double precision floating point.
-
-        Considering only the low half of the register, each lane in `x` is interpreted as a
-        signed 32-bit integer that is then converted to a double precision float. This
-        instruction differs from fcvt_from_sint in that it converts half the number of lanes
-        which are converted to occupy twice the number of bits. No rounding should be needed
-        for the resulting float.
-
-        The result type will have half the number of vector lanes as the input.
         "#,
             &formats.unary,
         )

@@ -207,7 +207,9 @@ fn libcall_function() {
         bcx.ins().return_(&[]);
     }
 
-    module.define_function(func_id, &mut ctx).unwrap();
+    module
+        .define_function_with_control_plane(func_id, &mut ctx, &mut Default::default())
+        .unwrap();
 
     module.finalize_definitions().unwrap();
 }

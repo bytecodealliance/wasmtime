@@ -99,6 +99,7 @@
 //! Examination of Deferred Reference Counting and Cycle Detection* by Quinane:
 //! <https://openresearch-repository.anu.edu.au/bitstream/1885/42030/2/hon-thesis.pdf>
 
+use crate::{Backtrace, SendSyncPtr, VMRuntimeLimits};
 use std::alloc::Layout;
 use std::any::Any;
 use std::cell::UnsafeCell;
@@ -110,8 +111,6 @@ use std::ops::Deref;
 use std::ptr::{self, NonNull};
 use std::sync::atomic::{self, AtomicUsize, Ordering};
 use wasmtime_environ::StackMap;
-
-use crate::Backtrace;
 
 /// An external reference to some opaque data.
 ///
@@ -165,17 +164,13 @@ use crate::Backtrace;
 /// ```
 #[derive(Debug)]
 #[repr(transparent)]
-pub struct VMExternRef(NonNull<VMExternData>);
+pub struct VMExternRef(SendSyncPtr<VMExternData>);
 
 impl std::fmt::Pointer for VMExternRef {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         std::fmt::Pointer::fmt(&self.0, f)
     }
 }
-
-// Data contained is always Send+Sync so these should be safe.
-unsafe impl Send for VMExternRef {}
-unsafe impl Sync for VMExternRef {}
 
 #[repr(C)]
 pub(crate) struct VMExternData {
@@ -196,7 +191,7 @@ pub(crate) struct VMExternData {
 
     /// Always points to the implicit, dynamically-sized `value` member that
     /// precedes this `VMExternData`.
-    value_ptr: NonNull<dyn Any + Send + Sync>,
+    value_ptr: SendSyncPtr<dyn Any + Send + Sync>,
 }
 
 impl Clone for VMExternRef {
@@ -224,8 +219,6 @@ impl Drop for VMExternRef {
         }
         atomic::fence(Ordering::Acquire);
 
-        // Drop our live reference to `data` before we drop it itself.
-        drop(data);
         unsafe {
             VMExternData::drop_and_dealloc(self.0);
         }
@@ -262,7 +255,7 @@ impl VMExternData {
     }
 
     /// Drop the inner value and then free this `VMExternData` heap allocation.
-    pub(crate) unsafe fn drop_and_dealloc(mut data: NonNull<VMExternData>) {
+    pub(crate) unsafe fn drop_and_dealloc(mut data: SendSyncPtr<VMExternData>) {
         log::trace!("Dropping externref data @ {:p}", data);
 
         // Note: we introduce a block scope so that we drop the live
@@ -280,13 +273,13 @@ impl VMExternData {
             };
 
             ptr::drop_in_place(data.value_ptr.as_ptr());
-            let alloc_ptr = data.value_ptr.cast::<u8>();
+            let alloc_ptr = data.value_ptr.as_ptr().cast::<u8>();
 
             (alloc_ptr, layout)
         };
 
         ptr::drop_in_place(data.as_ptr());
-        std::alloc::dealloc(alloc_ptr.as_ptr(), layout);
+        std::alloc::dealloc(alloc_ptr, layout);
     }
 
     #[inline]
@@ -337,17 +330,18 @@ impl VMExternRef {
 
             let extern_data_ptr =
                 alloc_ptr.cast::<u8>().as_ptr().add(footer_offset) as *mut VMExternData;
+
             ptr::write(
                 extern_data_ptr,
                 VMExternData {
                     ref_count: AtomicUsize::new(1),
                     // Cast from `*mut T` to `*mut dyn Any` here.
-                    value_ptr: NonNull::new_unchecked(value_ptr.as_ptr()),
+                    value_ptr: SendSyncPtr::new(NonNull::new_unchecked(value_ptr.as_ptr())),
                 },
             );
 
             log::trace!("New externref data @ {:p}", extern_data_ptr);
-            VMExternRef(NonNull::new_unchecked(extern_data_ptr))
+            VMExternRef(NonNull::new_unchecked(extern_data_ptr).into())
         }
     }
 
@@ -362,7 +356,7 @@ impl VMExternRef {
     ///  `clone_from_raw` is called.
     #[inline]
     pub fn as_raw(&self) -> *mut u8 {
-        let ptr = self.0.cast::<u8>().as_ptr();
+        let ptr = self.0.as_ptr().cast::<u8>();
         ptr
     }
 
@@ -375,7 +369,7 @@ impl VMExternRef {
     ///
     /// Use `from_raw` to recreate the `VMExternRef`.
     pub unsafe fn into_raw(self) -> *mut u8 {
-        let ptr = self.0.cast::<u8>().as_ptr();
+        let ptr = self.0.as_ptr().cast::<u8>();
         std::mem::forget(self);
         ptr
     }
@@ -390,7 +384,7 @@ impl VMExternRef {
     /// function.
     pub unsafe fn from_raw(ptr: *mut u8) -> Self {
         debug_assert!(!ptr.is_null());
-        VMExternRef(NonNull::new_unchecked(ptr).cast())
+        VMExternRef(NonNull::new_unchecked(ptr).cast().into())
     }
 
     /// Recreate a `VMExternRef` from a pointer returned from a previous call to
@@ -406,7 +400,7 @@ impl VMExternRef {
     /// so will result in use after free!
     pub unsafe fn clone_from_raw(ptr: *mut u8) -> Self {
         debug_assert!(!ptr.is_null());
-        let x = VMExternRef(NonNull::new_unchecked(ptr).cast());
+        let x = VMExternRef(NonNull::new_unchecked(ptr).cast().into());
         x.extern_data().increment_ref_count();
         x
     }
@@ -649,6 +643,7 @@ impl VMExternRefActivationsTable {
     #[inline]
     pub unsafe fn insert_with_gc(
         &mut self,
+        limits: *const VMRuntimeLimits,
         externref: VMExternRef,
         module_info_lookup: &dyn ModuleInfoLookup,
     ) {
@@ -656,17 +651,18 @@ impl VMExternRefActivationsTable {
         assert!(self.gc_okay);
 
         if let Err(externref) = self.try_insert(externref) {
-            self.gc_and_insert_slow(externref, module_info_lookup);
+            self.gc_and_insert_slow(limits, externref, module_info_lookup);
         }
     }
 
     #[inline(never)]
     unsafe fn gc_and_insert_slow(
         &mut self,
+        limits: *const VMRuntimeLimits,
         externref: VMExternRef,
         module_info_lookup: &dyn ModuleInfoLookup,
     ) {
-        gc(module_info_lookup, self);
+        gc(limits, module_info_lookup, self);
 
         // Might as well insert right into the hash set, rather than the bump
         // chunk, since we are already on a slow path and we get de-duplication
@@ -854,6 +850,7 @@ impl<T> std::ops::DerefMut for DebugOnly<T> {
 /// Additionally, you must have registered the stack maps for every Wasm module
 /// that has frames on the stack with the given `stack_maps_registry`.
 pub unsafe fn gc(
+    limits: *const VMRuntimeLimits,
     module_info_lookup: &dyn ModuleInfoLookup,
     externref_activations_table: &mut VMExternRefActivationsTable,
 ) {
@@ -894,7 +891,7 @@ pub unsafe fn gc(
     }
 
     log::trace!("begin GC trace");
-    Backtrace::trace(|frame| {
+    Backtrace::trace(limits, |frame| {
         let pc = frame.pc();
         debug_assert!(pc != 0, "we should always get a valid PC for Wasm frames");
 
@@ -994,7 +991,7 @@ mod tests {
 
         let extern_data = VMExternData {
             ref_count: AtomicUsize::new(0),
-            value_ptr: NonNull::new(s).unwrap(),
+            value_ptr: NonNull::new(s).unwrap().into(),
         };
 
         let extern_data_ptr = &extern_data as *const _;

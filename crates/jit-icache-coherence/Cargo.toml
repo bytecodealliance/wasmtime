@@ -9,7 +9,7 @@ repository = "https://github.com/bytecodealliance/wasmtime"
 edition.workspace = true
 
 [dependencies]
-cfg-if = "1.0"
+cfg-if = { workspace = true }
 
 [target.'cfg(target_os = "windows")'.dependencies.windows-sys]
 workspace = true

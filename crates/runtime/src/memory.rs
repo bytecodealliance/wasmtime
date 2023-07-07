@@ -5,11 +5,12 @@
 use crate::mmap::Mmap;
 use crate::parking_spot::ParkingSpot;
 use crate::vmcontext::VMMemoryDefinition;
-use crate::{MemoryImage, MemoryImageSlot, Store, WaitResult};
+use crate::{MemoryImage, MemoryImageSlot, SendSyncPtr, Store, WaitResult};
 use anyhow::Error;
 use anyhow::{bail, format_err, Result};
 use std::convert::TryFrom;
 use std::ops::Range;
+use std::ptr::NonNull;
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
@@ -295,8 +296,15 @@ impl RuntimeLinearMemory for MmapMemory {
             let mut new_mmap = Mmap::accessible_reserved(0, request_bytes)?;
             new_mmap.make_accessible(self.pre_guard_size, new_size)?;
 
-            new_mmap.as_mut_slice()[self.pre_guard_size..][..self.accessible]
-                .copy_from_slice(&self.mmap.as_slice()[self.pre_guard_size..][..self.accessible]);
+            // This method has an exclusive reference to `self.mmap` and just
+            // created `new_mmap` so it should be safe to acquire references
+            // into both of them and copy between them.
+            unsafe {
+                let range = self.pre_guard_size..self.pre_guard_size + self.accessible;
+                let src = self.mmap.slice(range.clone());
+                let dst = new_mmap.slice_mut(range);
+                dst.copy_from_slice(src);
+            }
 
             // Now drop the MemoryImageSlot, if any. We've lost the CoW
             // advantages by explicitly copying all data, but we have
@@ -347,7 +355,7 @@ impl RuntimeLinearMemory for MmapMemory {
     }
 
     fn wasm_accessible(&self) -> Range<usize> {
-        let base = self.mmap.as_mut_ptr() as usize + self.pre_guard_size;
+        let base = self.mmap.as_ptr() as usize + self.pre_guard_size;
         let end = base + (self.mmap.len() - self.pre_guard_size);
         base..end
     }
@@ -356,9 +364,12 @@ impl RuntimeLinearMemory for MmapMemory {
 /// A "static" memory where the lifetime of the backing memory is managed
 /// elsewhere. Currently used with the pooling allocator.
 struct StaticMemory {
-    /// The memory in the host for this wasm memory. The length of this
-    /// slice is the maximum size of the memory that can be grown to.
-    base: &'static mut [u8],
+    /// The base pointer of this static memory, wrapped up in a send/sync
+    /// wrapper.
+    base: SendSyncPtr<u8>,
+
+    /// The byte capacity of the `base` pointer.
+    capacity: usize,
 
     /// The current size, in bytes, of this memory.
     size: usize,
@@ -374,29 +385,31 @@ struct StaticMemory {
 
 impl StaticMemory {
     fn new(
-        base: &'static mut [u8],
+        base_ptr: *mut u8,
+        base_capacity: usize,
         initial_size: usize,
         maximum_size: Option<usize>,
         memory_image: MemoryImageSlot,
         memory_and_guard_size: usize,
     ) -> Result<Self> {
-        if base.len() < initial_size {
+        if base_capacity < initial_size {
             bail!(
                 "initial memory size of {} exceeds the pooling allocator's \
                  configured maximum memory size of {} bytes",
                 initial_size,
-                base.len(),
+                base_capacity,
             );
         }
 
         // Only use the part of the slice that is necessary.
-        let base = match maximum_size {
-            Some(max) if max < base.len() => &mut base[..max],
-            _ => base,
+        let base_capacity = match maximum_size {
+            Some(max) if max < base_capacity => max,
+            _ => base_capacity,
         };
 
         Ok(Self {
-            base,
+            base: SendSyncPtr::new(NonNull::new(base_ptr).unwrap()),
+            capacity: base_capacity,
             size: initial_size,
             memory_image,
             memory_and_guard_size,
@@ -410,13 +423,13 @@ impl RuntimeLinearMemory for StaticMemory {
     }
 
     fn maximum_byte_size(&self) -> Option<usize> {
-        Some(self.base.len())
+        Some(self.capacity)
     }
 
     fn grow_to(&mut self, new_byte_size: usize) -> Result<()> {
         // Never exceed the static memory size; this check should have been made
         // prior to arriving here.
-        assert!(new_byte_size <= self.base.len());
+        assert!(new_byte_size <= self.capacity);
 
         self.memory_image.set_heap_limit(new_byte_size)?;
 
@@ -427,7 +440,7 @@ impl RuntimeLinearMemory for StaticMemory {
 
     fn vmmemory(&mut self) -> VMMemoryDefinition {
         VMMemoryDefinition {
-            base: self.base.as_mut_ptr().cast(),
+            base: self.base.as_ptr(),
             current_length: self.size.into(),
         }
     }
@@ -675,14 +688,21 @@ impl Memory {
     /// Create a new static (immovable) memory instance for the specified plan.
     pub fn new_static(
         plan: &MemoryPlan,
-        base: &'static mut [u8],
+        base_ptr: *mut u8,
+        base_capacity: usize,
         memory_image: MemoryImageSlot,
         memory_and_guard_size: usize,
         store: &mut dyn Store,
     ) -> Result<Self> {
         let (minimum, maximum) = Self::limit_new(plan, Some(store))?;
-        let pooled_memory =
-            StaticMemory::new(base, minimum, maximum, memory_image, memory_and_guard_size)?;
+        let pooled_memory = StaticMemory::new(
+            base_ptr,
+            base_capacity,
+            minimum,
+            maximum,
+            memory_image,
+            memory_and_guard_size,
+        )?;
         let allocation = Box::new(pooled_memory);
         let allocation: Box<dyn RuntimeLinearMemory> = if plan.memory.shared {
             // FIXME: since the pooling allocator owns the memory allocation

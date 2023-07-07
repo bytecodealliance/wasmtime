@@ -4,12 +4,15 @@
     (func (result i64)
         (i64.const 1)
      	(i64.const 0)
-    	(i64.add)
+    	(i64.sub)
     )
 )
 ;;    0:	 55                   	push	rbp
 ;;    1:	 4889e5               	mov	rbp, rsp
-;;    4:	 48c7c001000000       	mov	rax, 1
-;;    b:	 4883c000             	add	rax, 0
-;;    f:	 5d                   	pop	rbp
-;;   10:	 c3                   	ret	
+;;    4:	 4883ec08             	sub	rsp, 8
+;;    8:	 4c893424             	mov	qword ptr [rsp], r14
+;;    c:	 48c7c001000000       	mov	rax, 1
+;;   13:	 4883e800             	sub	rax, 0
+;;   17:	 4883c408             	add	rsp, 8
+;;   1b:	 5d                   	pop	rbp
+;;   1c:	 c3                   	ret	

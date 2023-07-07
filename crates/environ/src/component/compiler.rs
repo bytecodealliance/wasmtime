@@ -1,7 +1,35 @@
 use crate::component::{Component, ComponentTypes, LowerImport, Transcoder};
 use crate::WasmFuncType;
 use anyhow::Result;
+use serde::{Deserialize, Serialize};
 use std::any::Any;
+
+/// A triple of related functions/trampolines variants with differing calling
+/// conventions: `{wasm,array,native}_call`.
+///
+/// Generic so we can use this with either the `Box<dyn Any + Send>`s that
+/// implementations of the compiler trait return or with `FunctionLoc`s inside
+/// an object file, for example.
+#[derive(Clone, Copy, Default, Serialize, Deserialize)]
+pub struct AllCallFunc<T> {
+    /// The function exposing the Wasm calling convention.
+    pub wasm_call: T,
+    /// The function exposing the array calling convention.
+    pub array_call: T,
+    /// The function exposing the native calling convention.
+    pub native_call: T,
+}
+
+impl<T> AllCallFunc<T> {
+    /// Map an `AllCallFunc<T>` into an `AllCallFunc<U>`.
+    pub fn map<U>(self, mut f: impl FnMut(T) -> U) -> AllCallFunc<U> {
+        AllCallFunc {
+            wasm_call: f(self.wasm_call),
+            array_call: f(self.array_call),
+            native_call: f(self.native_call),
+        }
+    }
+}
 
 /// Compilation support necessary for components.
 pub trait ComponentCompiler: Send + Sync {
@@ -27,14 +55,14 @@ pub trait ComponentCompiler: Send + Sync {
         component: &Component,
         lowering: &LowerImport,
         types: &ComponentTypes,
-    ) -> Result<Box<dyn Any + Send>>;
+    ) -> Result<AllCallFunc<Box<dyn Any + Send>>>;
 
     /// Creates a function which will always trap that has the `ty` specified.
     ///
     /// This will create a small trampoline whose only purpose is to generate a
     /// trap at runtime. This is used to implement the degenerate case of a
     /// `canon lift`'d function immediately being `canon lower`'d.
-    fn compile_always_trap(&self, ty: &WasmFuncType) -> Result<Box<dyn Any + Send>>;
+    fn compile_always_trap(&self, ty: &WasmFuncType) -> Result<AllCallFunc<Box<dyn Any + Send>>>;
 
     /// Compiles a trampoline to implement string transcoding from adapter
     /// modules.
@@ -52,5 +80,5 @@ pub trait ComponentCompiler: Send + Sync {
         component: &Component,
         transcoder: &Transcoder,
         types: &ComponentTypes,
-    ) -> Result<Box<dyn Any + Send>>;
+    ) -> Result<AllCallFunc<Box<dyn Any + Send>>>;
 }

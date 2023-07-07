@@ -1,0 +1,463 @@
+test compile precise-output
+target aarch64
+
+;; Test the `tail` calling convention with non-tail calls and stack arguments.
+
+function %tail_callee_stack_args(i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64) -> i64 tail {
+block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64, v8: i64, v9: i64, v10: i64, v11: i64, v12: i64, v13: i64, v14: i64, v15: i64, v16: i64, v17: i64, v18: i64, v19: i64, v20: i64, v21: i64, v22: i64, v23: i64, v24: i64, v25: i64):
+    return v25
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+; block0:
+;   ldr x9, [fp, #16]
+;   ldr x2, [fp, #24]
+;   ldp fp, lr, [sp], #16
+;   add sp, sp, #16 ; ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+; block1: ; offset 0x8
+;   ldur x9, [x29, #0x10]
+;   ldur x2, [x29, #0x18]
+;   ldp x29, x30, [sp], #0x10
+;   add sp, sp, #0x10
+;   ret
+
+function %tail_caller_stack_args() -> i64 tail {
+    fn0 = %tail_callee_stack_args(i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64) -> i64 tail
+
+block0:
+    v0 = iconst.i64 10
+    v1 = iconst.i64 15
+    v2 = iconst.i64 20
+    v3 = iconst.i64 25
+    v4 = iconst.i64 30
+    v5 = iconst.i64 35
+    v6 = iconst.i64 40
+    v7 = iconst.i64 45
+    v8 = iconst.i64 50
+    v9 = iconst.i64 55
+    v10 = iconst.i64 60
+    v11 = iconst.i64 65
+    v12 = iconst.i64 70
+    v13 = iconst.i64 75
+    v14 = iconst.i64 80
+    v15 = iconst.i64 85
+    v16 = iconst.i64 90
+    v17 = iconst.i64 95
+    v18 = iconst.i64 100
+    v19 = iconst.i64 105
+    v20 = iconst.i64 110
+    v21 = iconst.i64 115
+    v22 = iconst.i64 120
+    v23 = iconst.i64 125
+    v24 = iconst.i64 130
+    v25 = iconst.i64 135
+    v26 = call fn0(v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16, v17, v18, v19, v20, v21, v22, v23, v24, v25)
+    return v26
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+; block0:
+;   movz x2, #10
+;   movz x3, #15
+;   movz x4, #20
+;   movz x5, #25
+;   movz x6, #30
+;   movz x7, #35
+;   movz x8, #40
+;   movz x9, #45
+;   movz x10, #50
+;   movz x11, #55
+;   movz x12, #60
+;   movz x13, #65
+;   movz x14, #70
+;   movz x15, #75
+;   movz x19, #80
+;   movz x20, #85
+;   movz x21, #90
+;   movz x22, #95
+;   movz x23, #100
+;   movz x24, #105
+;   movz x25, #110
+;   movz x26, #115
+;   movz x27, #120
+;   movz x28, #125
+;   movz x0, #130
+;   movz x1, #135
+;   sub sp, sp, #16
+;   virtual_sp_offset_adjust 16
+;   str x0, [sp]
+;   str x1, [sp, #8]
+;   load_ext_name x1, TestCase(%tail_callee_stack_args)+0
+;   blr x1
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+; block1: ; offset 0x8
+;   mov x2, #0xa
+;   mov x3, #0xf
+;   mov x4, #0x14
+;   mov x5, #0x19
+;   mov x6, #0x1e
+;   mov x7, #0x23
+;   mov x8, #0x28
+;   mov x9, #0x2d
+;   mov x10, #0x32
+;   mov x11, #0x37
+;   mov x12, #0x3c
+;   mov x13, #0x41
+;   mov x14, #0x46
+;   mov x15, #0x4b
+;   mov x19, #0x50
+;   mov x20, #0x55
+;   mov x21, #0x5a
+;   mov x22, #0x5f
+;   mov x23, #0x64
+;   mov x24, #0x69
+;   mov x25, #0x6e
+;   mov x26, #0x73
+;   mov x27, #0x78
+;   mov x28, #0x7d
+;   mov x0, #0x82
+;   mov x1, #0x87
+;   sub sp, sp, #0x10
+;   stur x0, [sp]
+;   stur x1, [sp, #8]
+;   ldr x1, #0x84
+;   b #0x8c
+;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %tail_callee_stack_args 0
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   blr x1
+;   ldp x29, x30, [sp], #0x10
+;   ret
+
+;; Test the `tail` calling convention with non-tail calls and stack returns.
+
+function %tail_callee_stack_rets() -> i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64 tail {
+block0:
+    v0 = iconst.i64 10
+    v1 = iconst.i64 15
+    v2 = iconst.i64 20
+    v3 = iconst.i64 25
+    v4 = iconst.i64 30
+    v5 = iconst.i64 35
+    v6 = iconst.i64 40
+    v7 = iconst.i64 45
+    v8 = iconst.i64 50
+    v9 = iconst.i64 55
+    v10 = iconst.i64 60
+    v11 = iconst.i64 65
+    v12 = iconst.i64 70
+    v13 = iconst.i64 75
+    v14 = iconst.i64 80
+    v15 = iconst.i64 85
+    v16 = iconst.i64 90
+    v17 = iconst.i64 95
+    v18 = iconst.i64 100
+    v19 = iconst.i64 105
+    v20 = iconst.i64 110
+    v21 = iconst.i64 115
+    v22 = iconst.i64 120
+    v23 = iconst.i64 125
+    v24 = iconst.i64 130
+    v25 = iconst.i64 135
+    return v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16, v17, v18, v19, v20, v21, v22, v23, v24, v25
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   sub sp, sp, #16
+; block0:
+;   movz x2, #10
+;   str x2, [sp]
+;   movz x3, #15
+;   movz x4, #20
+;   movz x5, #25
+;   movz x6, #30
+;   movz x7, #35
+;   movz x8, #40
+;   movz x9, #45
+;   movz x10, #50
+;   movz x11, #55
+;   movz x12, #60
+;   movz x13, #65
+;   movz x14, #70
+;   movz x15, #75
+;   movz x19, #80
+;   movz x20, #85
+;   movz x21, #90
+;   movz x22, #95
+;   movz x23, #100
+;   movz x24, #105
+;   movz x25, #110
+;   movz x26, #115
+;   movz x27, #120
+;   movz x28, #125
+;   movz x1, #130
+;   movz x2, #135
+;   str x1, [x0]
+;   str x2, [x0, #8]
+;   ldr x2, [sp]
+;   add sp, sp, #16
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   sub sp, sp, #0x10
+; block1: ; offset 0xc
+;   mov x2, #0xa
+;   stur x2, [sp]
+;   mov x3, #0xf
+;   mov x4, #0x14
+;   mov x5, #0x19
+;   mov x6, #0x1e
+;   mov x7, #0x23
+;   mov x8, #0x28
+;   mov x9, #0x2d
+;   mov x10, #0x32
+;   mov x11, #0x37
+;   mov x12, #0x3c
+;   mov x13, #0x41
+;   mov x14, #0x46
+;   mov x15, #0x4b
+;   mov x19, #0x50
+;   mov x20, #0x55
+;   mov x21, #0x5a
+;   mov x22, #0x5f
+;   mov x23, #0x64
+;   mov x24, #0x69
+;   mov x25, #0x6e
+;   mov x26, #0x73
+;   mov x27, #0x78
+;   mov x28, #0x7d
+;   mov x1, #0x82
+;   mov x2, #0x87
+;   stur x1, [x0]
+;   stur x2, [x0, #8]
+;   ldur x2, [sp]
+;   add sp, sp, #0x10
+;   ldp x29, x30, [sp], #0x10
+;   ret
+
+function %tail_caller_stack_rets() -> i64 tail {
+    fn0 = %tail_callee_stack_rets() -> i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64 tail
+
+block0:
+    v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16, v17, v18, v19, v20, v21, v22, v23, v24, v25 = call fn0()
+    return v25
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+; block0:
+;   sub sp, sp, #16
+;   virtual_sp_offset_adjust 16
+;   mov x0, sp
+;   load_ext_name x1, TestCase(%tail_callee_stack_rets)+0
+;   blr x1
+;   ldr x13, [sp]
+;   ldr x2, [sp, #8]
+;   add sp, sp, #16
+;   virtual_sp_offset_adjust -16
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+; block1: ; offset 0x8
+;   sub sp, sp, #0x10
+;   mov x0, sp
+;   ldr x1, #0x18
+;   b #0x20
+;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %tail_callee_stack_rets 0
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   blr x1
+;   ldur x13, [sp]
+;   ldur x2, [sp, #8]
+;   add sp, sp, #0x10
+;   ldp x29, x30, [sp], #0x10
+;   ret
+
+;; Test the `tail` calling convention with non-tail calls and both stack
+;; arguments and stack returns.
+
+function %tail_callee_stack_args_and_rets(i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64) -> i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64 tail {
+block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64, v8: i64, v9: i64, v10: i64, v11: i64, v12: i64, v13: i64, v14: i64, v15: i64, v16: i64, v17: i64, v18: i64, v19: i64, v20: i64, v21: i64, v22: i64, v23: i64, v24: i64, v25: i64):
+    return v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16, v17, v18, v19, v20, v21, v22, v23, v24, v25
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   sub sp, sp, #16
+; block0:
+;   str x9, [sp]
+;   ldr x9, [fp, #16]
+;   ldr x1, [fp, #24]
+;   str x9, [x0]
+;   str x1, [x0, #8]
+;   ldr x9, [sp]
+;   add sp, sp, #16
+;   ldp fp, lr, [sp], #16
+;   add sp, sp, #16 ; ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   sub sp, sp, #0x10
+; block1: ; offset 0xc
+;   stur x9, [sp]
+;   ldur x9, [x29, #0x10]
+;   ldur x1, [x29, #0x18]
+;   stur x9, [x0]
+;   stur x1, [x0, #8]
+;   ldur x9, [sp]
+;   add sp, sp, #0x10
+;   ldp x29, x30, [sp], #0x10
+;   add sp, sp, #0x10
+;   ret
+
+function %tail_caller_stack_args_and_rets() -> i64 tail {
+    fn0 = %tail_callee_stack_args_and_rets(i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64) -> i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64 tail
+
+block0:
+    v0 = iconst.i64 10
+    v1 = iconst.i64 15
+    v2 = iconst.i64 20
+    v3 = iconst.i64 25
+    v4 = iconst.i64 30
+    v5 = iconst.i64 35
+    v6 = iconst.i64 40
+    v7 = iconst.i64 45
+    v8 = iconst.i64 50
+    v9 = iconst.i64 55
+    v10 = iconst.i64 60
+    v11 = iconst.i64 65
+    v12 = iconst.i64 70
+    v13 = iconst.i64 75
+    v14 = iconst.i64 80
+    v15 = iconst.i64 85
+    v16 = iconst.i64 90
+    v17 = iconst.i64 95
+    v18 = iconst.i64 100
+    v19 = iconst.i64 105
+    v20 = iconst.i64 110
+    v21 = iconst.i64 115
+    v22 = iconst.i64 120
+    v23 = iconst.i64 125
+    v24 = iconst.i64 130
+    v25 = iconst.i64 135
+    v26, v27, v28, v29, v30, v31, v32, v33, v34, v35, v36, v37, v38, v39, v40, v41, v42, v43, v44, v45, v46, v47, v48, v49, v50, v51 = call fn0(v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16, v17, v18, v19, v20, v21, v22, v23, v24, v25)
+    return v51
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+; block0:
+;   movz x2, #10
+;   movz x3, #15
+;   movz x4, #20
+;   movz x5, #25
+;   movz x6, #30
+;   movz x7, #35
+;   movz x8, #40
+;   movz x9, #45
+;   movz x10, #50
+;   movz x11, #55
+;   movz x12, #60
+;   movz x13, #65
+;   movz x14, #70
+;   movz x15, #75
+;   movz x19, #80
+;   movz x20, #85
+;   movz x21, #90
+;   movz x22, #95
+;   movz x23, #100
+;   movz x24, #105
+;   movz x25, #110
+;   movz x26, #115
+;   movz x27, #120
+;   movz x28, #125
+;   movz x0, #130
+;   movz x1, #135
+;   sub sp, sp, #32
+;   virtual_sp_offset_adjust 32
+;   str x0, [sp]
+;   str x1, [sp, #8]
+;   add x0, sp, #16
+;   load_ext_name x1, TestCase(%tail_callee_stack_args_and_rets)+0
+;   blr x1
+;   ldr x9, [sp]
+;   ldr x2, [sp, #8]
+;   add sp, sp, #16
+;   virtual_sp_offset_adjust -16
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+; block1: ; offset 0x8
+;   mov x2, #0xa
+;   mov x3, #0xf
+;   mov x4, #0x14
+;   mov x5, #0x19
+;   mov x6, #0x1e
+;   mov x7, #0x23
+;   mov x8, #0x28
+;   mov x9, #0x2d
+;   mov x10, #0x32
+;   mov x11, #0x37
+;   mov x12, #0x3c
+;   mov x13, #0x41
+;   mov x14, #0x46
+;   mov x15, #0x4b
+;   mov x19, #0x50
+;   mov x20, #0x55
+;   mov x21, #0x5a
+;   mov x22, #0x5f
+;   mov x23, #0x64
+;   mov x24, #0x69
+;   mov x25, #0x6e
+;   mov x26, #0x73
+;   mov x27, #0x78
+;   mov x28, #0x7d
+;   mov x0, #0x82
+;   mov x1, #0x87
+;   sub sp, sp, #0x20
+;   stur x0, [sp]
+;   stur x1, [sp, #8]
+;   add x0, sp, #0x10
+;   ldr x1, #0x88
+;   b #0x90
+;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %tail_callee_stack_args_and_rets 0
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   blr x1
+;   ldur x9, [sp]
+;   ldur x2, [sp, #8]
+;   add sp, sp, #0x10
+;   ldp x29, x30, [sp], #0x10
+;   ret
+

@@ -78,10 +78,10 @@
 
 use crate::linker::Definition;
 use crate::module::BareModuleInfo;
+use crate::trampoline::VMHostGlobalContext;
 use crate::{module::ModuleRegistry, Engine, Module, Trap, Val, ValRaw};
 use anyhow::{anyhow, bail, Result};
 use std::cell::UnsafeCell;
-use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::fmt;
 use std::future::Future;
@@ -95,15 +95,16 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 use wasmtime_runtime::{
     InstanceAllocationRequest, InstanceAllocator, InstanceHandle, ModuleInfo,
-    OnDemandInstanceAllocator, SignalHandler, StorePtr, VMCallerCheckedFuncRef, VMContext,
-    VMExternRef, VMExternRefActivationsTable, VMRuntimeLimits, VMSharedSignatureIndex,
-    VMTrampoline, WasmFault,
+    OnDemandInstanceAllocator, SignalHandler, StoreBox, StorePtr, VMContext, VMExternRef,
+    VMExternRefActivationsTable, VMFuncRef, VMRuntimeLimits, WasmFault,
 };
 
 mod context;
 pub use self::context::*;
 mod data;
 pub use self::data::*;
+mod func_refs;
+use func_refs::FuncRefs;
 
 /// A [`Store`] is a collection of WebAssembly instances and host-defined state.
 ///
@@ -202,7 +203,8 @@ pub struct StoreInner<T> {
 
     limiter: Option<ResourceLimiterInner<T>>,
     call_hook: Option<CallHookInner<T>>,
-    epoch_deadline_behavior: EpochDeadline<T>,
+    epoch_deadline_behavior:
+        Option<Box<dyn FnMut(StoreContextMut<T>) -> Result<UpdateDeadline> + Send + Sync>>,
     // for comments about `ManuallyDrop`, see `Store::into_data`
     data: ManuallyDrop<T>,
 }
@@ -226,6 +228,18 @@ enum CallHookInner<T> {
     Sync(Box<dyn FnMut(&mut T, CallHook) -> Result<()> + Send + Sync>),
     #[cfg(feature = "async")]
     Async(Box<dyn CallHookHandler<T> + Send + Sync>),
+}
+
+/// What to do after returning from a callback when the engine epoch reaches
+/// the deadline for a Store during execution of a function using that store.
+pub enum UpdateDeadline {
+    /// Extend the deadline by the specified number of ticks.
+    Continue(u64),
+    /// Extend the deadline by the specified number of ticks after yielding to
+    /// the async executor loop. This can only be used with an async [`Store`]
+    /// configured via [`Config::async_support`](crate::Config::async_support).
+    #[cfg(feature = "async")]
+    Yield(u64),
 }
 
 // Forward methods on `StoreOpaque` to also being on `StoreInner<T>`
@@ -278,11 +292,8 @@ pub struct StoreOpaque {
     signal_handler: Option<Box<SignalHandler<'static>>>,
     externref_activations_table: VMExternRefActivationsTable,
     modules: ModuleRegistry,
-
-    // See documentation on `StoreOpaque::lookup_trampoline` for what these
-    // fields are doing.
-    host_trampolines: HashMap<VMSharedSignatureIndex, VMTrampoline>,
-    host_func_trampolines_registered: usize,
+    func_refs: FuncRefs,
+    host_globals: Vec<StoreBox<VMHostGlobalContext>>,
 
     // Numbers of resources instantiated in this store, and their limits
     instance_count: usize,
@@ -357,7 +368,7 @@ where
     T: std::ops::DerefMut<Target = StoreOpaque>,
 {
     pub fn new(mut store: T) -> Self {
-        drop(&mut store);
+        let _ = &mut store;
         #[cfg(debug_assertions)]
         {
             let prev_okay = store.externref_activations_table.set_gc_okay(false);
@@ -423,21 +434,6 @@ enum OutOfGas {
     },
 }
 
-/// What to do when the engine epoch reaches the deadline for a Store
-/// during execution of a function using that store.
-#[derive(Default)]
-enum EpochDeadline<T> {
-    /// Return early with a trap.
-    #[default]
-    Trap,
-    /// Call a custom deadline handler.
-    Callback(Box<dyn FnMut(StoreContextMut<T>) -> Result<u64> + Send + Sync>),
-    /// Extend the deadline by the specified number of ticks after
-    /// yielding to the async executor loop.
-    #[cfg(feature = "async")]
-    YieldAndExtendDeadline { delta: u64 },
-}
-
 impl<T> Store<T> {
     /// Creates a new [`Store`] to be associated with the given [`Engine`] and
     /// `data` provided.
@@ -449,26 +445,6 @@ impl<T> Store<T> {
     /// tables created to 10,000. This can be overridden with the
     /// [`Store::limiter`] configuration method.
     pub fn new(engine: &Engine, data: T) -> Self {
-        // Wasmtime uses the callee argument to host functions to learn about
-        // the original pointer to the `Store` itself, allowing it to
-        // reconstruct a `StoreContextMut<T>`. When we initially call a `Func`,
-        // however, there's no "callee" to provide. To fix this we allocate a
-        // single "default callee" for the entire `Store`. This is then used as
-        // part of `Func::call` to guarantee that the `callee: *mut VMContext`
-        // is never null.
-        let default_callee = {
-            let module = Arc::new(wasmtime_environ::Module::default());
-            let shim = BareModuleInfo::empty(module).into_traitobj();
-            OnDemandInstanceAllocator::default()
-                .allocate(InstanceAllocationRequest {
-                    host_state: Box::new(()),
-                    imports: Default::default(),
-                    store: StorePtr::empty(),
-                    runtime_info: &shim,
-                })
-                .expect("failed to allocate default callee")
-        };
-
         let mut inner = Box::new(StoreInner {
             inner: StoreOpaque {
                 _marker: marker::PhantomPinned,
@@ -478,8 +454,8 @@ impl<T> Store<T> {
                 signal_handler: None,
                 externref_activations_table: VMExternRefActivationsTable::new(),
                 modules: ModuleRegistry::default(),
-                host_trampolines: HashMap::default(),
-                host_func_trampolines_registered: 0,
+                func_refs: FuncRefs::default(),
+                host_globals: Vec::new(),
                 instance_count: 0,
                 instance_limit: crate::DEFAULT_INSTANCE_LIMIT,
                 memory_count: 0,
@@ -494,29 +470,49 @@ impl<T> Store<T> {
                 },
                 out_of_gas_behavior: OutOfGas::Trap,
                 store_data: ManuallyDrop::new(StoreData::new()),
-                default_caller: default_callee,
+                default_caller: InstanceHandle::null(),
                 hostcall_val_storage: Vec::new(),
                 wasm_val_raw_storage: Vec::new(),
                 rooted_host_funcs: ManuallyDrop::new(Vec::new()),
             },
             limiter: None,
             call_hook: None,
-            epoch_deadline_behavior: EpochDeadline::Trap,
+            epoch_deadline_behavior: None,
             data: ManuallyDrop::new(data),
         });
 
-        // Once we've actually allocated the store itself we can configure the
-        // trait object pointer of the default callee. Note the erasure of the
-        // lifetime here into `'static`, so in general usage of this trait
-        // object must be strictly bounded to the `Store` itself, and is a
-        // variant that we have to maintain throughout Wasmtime.
-        unsafe {
-            let traitobj = std::mem::transmute::<
-                *mut (dyn wasmtime_runtime::Store + '_),
-                *mut (dyn wasmtime_runtime::Store + 'static),
-            >(&mut *inner);
-            inner.default_caller.set_store(traitobj);
-        }
+        // Wasmtime uses the callee argument to host functions to learn about
+        // the original pointer to the `Store` itself, allowing it to
+        // reconstruct a `StoreContextMut<T>`. When we initially call a `Func`,
+        // however, there's no "callee" to provide. To fix this we allocate a
+        // single "default callee" for the entire `Store`. This is then used as
+        // part of `Func::call` to guarantee that the `callee: *mut VMContext`
+        // is never null.
+        inner.default_caller = {
+            let module = Arc::new(wasmtime_environ::Module::default());
+            let shim = BareModuleInfo::empty(module).into_traitobj();
+            let mut instance = OnDemandInstanceAllocator::default()
+                .allocate(InstanceAllocationRequest {
+                    host_state: Box::new(()),
+                    imports: Default::default(),
+                    store: StorePtr::empty(),
+                    runtime_info: &shim,
+                })
+                .expect("failed to allocate default callee");
+
+            // Note the erasure of the lifetime here into `'static`, so in
+            // general usage of this trait object must be strictly bounded to
+            // the `Store` itself, and is a variant that we have to maintain
+            // throughout Wasmtime.
+            unsafe {
+                let traitobj = std::mem::transmute::<
+                    *mut (dyn wasmtime_runtime::Store + '_),
+                    *mut (dyn wasmtime_runtime::Store + 'static),
+                >(&mut *inner);
+                instance.set_store(traitobj);
+            }
+            instance
+        };
 
         Self {
             inner: ManuallyDrop::new(inner),
@@ -752,6 +748,16 @@ impl<T> Store<T> {
         self.inner.fuel_consumed()
     }
 
+    /// Returns remaining fuel in this [`Store`].
+    ///
+    /// If fuel consumption is not enabled via
+    /// [`Config::consume_fuel`](crate::Config::consume_fuel) then this
+    /// function will return `None`. Also note that fuel, if enabled, must be
+    /// originally configured via [`Store::add_fuel`].
+    pub fn fuel_remaining(&mut self) -> Option<u64> {
+        self.inner.fuel_remaining()
+    }
+
     /// Adds fuel to this [`Store`] for wasm to consume while executing.
     ///
     /// For this method to work fuel consumption must be enabled via
@@ -919,10 +925,17 @@ impl<T> Store<T> {
     /// store and the epoch deadline is reached before completion, the
     /// provided callback function is invoked.
     ///
-    /// This function should return a positive `delta`, which is used to
-    /// update the new epoch, setting it to the current epoch plus
-    /// `delta` ticks. Alternatively, the callback may return an error,
-    /// which will terminate execution.
+    /// This callback should either return an [`UpdateDeadline`], or
+    /// return an error, which will terminate execution with a trap.
+    ///
+    /// The [`UpdateDeadline`] is a positive number of ticks to
+    /// add to the epoch deadline, as well as indicating what
+    /// to do after the callback returns. If the [`Store`] is
+    /// configured with async support, then the callback may return
+    /// [`UpdateDeadline::Yield`] to yield to the async executor before
+    /// updating the epoch deadline. Alternatively, the callback may
+    /// return [`UpdateDeadline::Continue`] to update the epoch deadline
+    /// immediately.
     ///
     /// This setting is intended to allow for coarse-grained
     /// interruption, but not a deterministic deadline of a fixed,
@@ -934,7 +947,7 @@ impl<T> Store<T> {
     /// for an introduction to epoch-based interruption.
     pub fn epoch_deadline_callback(
         &mut self,
-        callback: impl FnMut(StoreContextMut<T>) -> Result<u64> + Send + Sync + 'static,
+        callback: impl FnMut(StoreContextMut<T>) -> Result<UpdateDeadline> + Send + Sync + 'static,
     ) {
         self.inner.epoch_deadline_callback(Box::new(callback));
     }
@@ -992,6 +1005,13 @@ impl<'a, T> StoreContext<'a, T> {
     pub fn fuel_consumed(&self) -> Option<u64> {
         self.0.fuel_consumed()
     }
+
+    /// Returns remaining fuel in this store.
+    ///
+    /// For more information see [`Store::fuel_remaining`]
+    pub fn fuel_remaining(&mut self) -> Option<u64> {
+        self.0.fuel_remaining()
+    }
 }
 
 impl<'a, T> StoreContextMut<'a, T> {
@@ -1026,6 +1046,13 @@ impl<'a, T> StoreContextMut<'a, T> {
     /// For more information see [`Store::fuel_consumed`].
     pub fn fuel_consumed(&self) -> Option<u64> {
         self.0.fuel_consumed()
+    }
+
+    /// Returns remaining fuel in this store.
+    ///
+    /// For more information see [`Store::fuel_remaining`]
+    pub fn fuel_remaining(&self) -> Option<u64> {
+        self.0.fuel_remaining()
     }
 
     /// Inject more fuel into this store to be consumed when executing wasm code.
@@ -1179,6 +1206,22 @@ impl StoreOpaque {
         &mut self.modules
     }
 
+    pub(crate) fn func_refs(&mut self) -> &mut FuncRefs {
+        &mut self.func_refs
+    }
+
+    pub(crate) fn fill_func_refs(&mut self) {
+        self.func_refs.fill(&mut self.modules);
+    }
+
+    pub(crate) fn push_instance_pre_func_refs(&mut self, func_refs: Arc<[VMFuncRef]>) {
+        self.func_refs.push_instance_pre_func_refs(func_refs);
+    }
+
+    pub(crate) fn host_globals(&mut self) -> &mut Vec<StoreBox<VMHostGlobalContext>> {
+        &mut self.host_globals
+    }
+
     pub unsafe fn add_instance(&mut self, handle: InstanceHandle, ondemand: bool) -> InstanceId {
         self.instances.push(StoreInstance {
             handle: handle.clone(),
@@ -1213,93 +1256,13 @@ impl StoreOpaque {
     pub fn gc(&mut self) {
         // For this crate's API, we ensure that `set_stack_canary` invariants
         // are upheld for all host-->Wasm calls.
-        unsafe { wasmtime_runtime::gc(&self.modules, &mut self.externref_activations_table) }
-    }
-
-    /// Looks up the corresponding `VMTrampoline` which can be used to enter
-    /// wasm given an anyfunc function pointer.
-    ///
-    /// This is a somewhat complicated implementation at this time, unfortnately.
-    /// Trampolines are a sort of side-channel of information which is
-    /// specifically juggled by the `wasmtime` crate in a careful fashion. The
-    /// sources for trampolines are:
-    ///
-    /// * Compiled modules - each compiled module has a trampoline for all
-    ///   signatures of functions that escape the module (e.g. exports and
-    ///   `ref.func`-able functions)
-    /// * `Func::new` - host-defined functions with a dynamic signature get an
-    ///   on-the-fly-compiled trampoline (e.g. JIT-compiled as part of the
-    ///   `Func::new` call).
-    /// * `Func::wrap` - host-defined functions where the trampoline is
-    ///   monomorphized in Rust and compiled by LLVM.
-    ///
-    /// The purpose of this function is that given some wasm function pointer we
-    /// need to find the trampoline for it. For compiled wasm modules this is
-    /// pretty easy, the code pointer of the function pointer will point us
-    /// at a wasm module which has a table of trampolines-by-type that we can
-    /// lookup.
-    ///
-    /// If this lookup fails, however, then we're trying to get the trampoline
-    /// for a wasm function pointer defined by the host. The trampoline isn't
-    /// actually stored in the wasm function pointer itself so we need
-    /// side-channels of information. To achieve this a lazy scheme is
-    /// implemented here based on the assumption that most trampoline lookups
-    /// happen for wasm-defined functions, not host-defined functions.
-    ///
-    /// The `Store` already has a list of all functions in
-    /// `self.store_data().funcs`, it's just not indexed in a nice fashion by
-    /// type index or similar. To solve this there's an internal map in each
-    /// store, `host_trampolines`, which maps from a type index to the
-    /// store-owned trampoline. The actual population of this map, however, is
-    /// deferred to this function itself.
-    ///
-    /// Most of the time we are looking up a Wasm function's trampoline when
-    /// calling this function, and we don't want to make insertion of a host
-    /// function into the store more expensive than it has to be. We could
-    /// update the `host_trampolines` whenever a host function is inserted into
-    /// the store, but this is a relatively expensive hash map insertion.
-    /// Instead the work is deferred until we actually look up that trampoline
-    /// in this method.
-    ///
-    /// This all means that if the lookup of the trampoline fails within
-    /// `self.host_trampolines` we lazily populate `self.host_trampolines` by
-    /// iterating over `self.store_data().funcs`, inserting trampolines as we
-    /// go. If we find the right trampoline then it's returned.
-    pub fn lookup_trampoline(&mut self, anyfunc: &VMCallerCheckedFuncRef) -> VMTrampoline {
-        // First try to see if the `anyfunc` belongs to any module. Each module
-        // has its own map of trampolines-per-type-index and the code pointer in
-        // the `anyfunc` will enable us to quickly find a module.
-        if let Some(trampoline) = self.modules.lookup_trampoline(anyfunc) {
-            return trampoline;
+        unsafe {
+            wasmtime_runtime::gc(
+                self.runtime_limits(),
+                &self.modules,
+                &mut self.externref_activations_table,
+            )
         }
-
-        // Next consult the list of store-local host trampolines. This is
-        // primarily populated by functions created by `Func::new` or similar
-        // creation functions, host-defined functions.
-        if let Some(trampoline) = self.host_trampolines.get(&anyfunc.type_index) {
-            return *trampoline;
-        }
-
-        // If no trampoline was found then it means that it hasn't been loaded
-        // into `host_trampolines` yet. Skip over all the ones we've looked at
-        // so far and start inserting into `self.host_trampolines`, returning
-        // the actual trampoline once found.
-        for f in self
-            .store_data
-            .funcs()
-            .skip(self.host_func_trampolines_registered)
-        {
-            self.host_func_trampolines_registered += 1;
-            self.host_trampolines.insert(f.sig_index(), f.trampoline());
-            if f.sig_index() == anyfunc.type_index {
-                return f.trampoline();
-            }
-        }
-
-        // If reached this is a bug in Wasmtime. Lookup of a trampoline should
-        // only happen for wasm functions or host functions, all of which should
-        // be indexed by the above.
-        panic!("trampoline missing")
     }
 
     /// Yields the async context, assuming that we are executing on a fiber and
@@ -1333,6 +1296,14 @@ impl StoreOpaque {
         }
         let consumed = unsafe { *self.runtime_limits.fuel_consumed.get() };
         Some(u64::try_from(self.fuel_adj + consumed).unwrap())
+    }
+
+    fn fuel_remaining(&self) -> Option<u64> {
+        if !self.engine.config().tunables.consume_fuel {
+            return None;
+        }
+        let consumed = unsafe { *self.runtime_limits.fuel_consumed.get() };
+        Some(u64::try_from(-consumed).unwrap())
     }
 
     fn out_of_fuel_trap(&mut self) {
@@ -1460,7 +1431,7 @@ impl StoreOpaque {
 
     #[inline]
     pub fn default_caller(&self) -> *mut VMContext {
-        self.default_caller.vmctx_ptr()
+        self.default_caller.vmctx()
     }
 
     pub fn traitobj(&self) -> *mut dyn wasmtime_runtime::Store {
@@ -1626,6 +1597,7 @@ impl<T> StoreContextMut<'_, T> {
                 fiber,
                 current_poll_cx,
                 engine,
+                state: Some(wasmtime_runtime::AsyncWasmCallState::new()),
             }
         };
         future.await?;
@@ -1636,6 +1608,8 @@ impl<T> StoreContextMut<'_, T> {
             fiber: wasmtime_fiber::Fiber<'a, Result<()>, (), Result<()>>,
             current_poll_cx: *mut *mut Context<'static>,
             engine: Engine,
+            // See comments in `FiberFuture::resume` for this
+            state: Option<wasmtime_runtime::AsyncWasmCallState>,
         }
 
         // This is surely the most dangerous `unsafe impl Send` in the entire
@@ -1701,6 +1675,50 @@ impl<T> StoreContextMut<'_, T> {
         // correct. That's what `unsafe` in Rust is all about, though, right?
         unsafe impl Send for FiberFuture<'_> {}
 
+        impl FiberFuture<'_> {
+            /// This is a helper function to call `resume` on the underlying
+            /// fiber while correctly managing Wasmtime's thread-local data.
+            ///
+            /// Wasmtime's implementation of traps leverages thread-local data
+            /// to get access to metadata during a signal. This thread-local
+            /// data is a linked list of "activations" where the nodes of the
+            /// linked list are stored on the stack. It would be invalid as a
+            /// result to suspend a computation with the head of the linked list
+            /// on this stack then move the stack to another thread and resume
+            /// it. That means that a different thread would point to our stack
+            /// and our thread doesn't point to our stack at all!
+            ///
+            /// Basically management of TLS is required here one way or another.
+            /// The strategy currently settled on is to manage the list of
+            /// activations created by this fiber as a unit. When a fiber
+            /// resumes the linked list is prepended to the current thread's
+            /// list. When the fiber is suspended then the fiber's list of
+            /// activations are all removed en-masse and saved within the fiber.
+            fn resume(&mut self, val: Result<()>) -> Result<Result<()>, ()> {
+                unsafe {
+                    let prev = self.state.take().unwrap().push();
+                    let restore = Restore {
+                        fiber: self,
+                        state: Some(prev),
+                    };
+                    return restore.fiber.fiber.resume(val);
+                }
+
+                struct Restore<'a, 'b> {
+                    fiber: &'a mut FiberFuture<'b>,
+                    state: Option<wasmtime_runtime::PreviousAsyncWasmCallState>,
+                }
+
+                impl Drop for Restore<'_, '_> {
+                    fn drop(&mut self) {
+                        unsafe {
+                            self.fiber.state = Some(self.state.take().unwrap().restore());
+                        }
+                    }
+                }
+            }
+        }
+
         impl Future for FiberFuture<'_> {
             type Output = Result<()>;
 
@@ -1727,13 +1745,34 @@ impl<T> StoreContextMut<'_, T> {
 
                     // After that's set up we resume execution of the fiber, which
                     // may also start the fiber for the first time. This either
-                    // returns `Ok` saying the fiber finished (yay!) or it returns
-                    // `Err` with the payload passed to `suspend`, which in our case
-                    // is `()`. If `Err` is returned that means the fiber polled a
-                    // future but it said "Pending", so we propagate that here.
-                    match self.fiber.resume(Ok(())) {
+                    // returns `Ok` saying the fiber finished (yay!) or it
+                    // returns `Err` with the payload passed to `suspend`, which
+                    // in our case is `()`.
+                    match self.resume(Ok(())) {
                         Ok(result) => Poll::Ready(result),
-                        Err(()) => Poll::Pending,
+
+                        // If `Err` is returned that means the fiber polled a
+                        // future but it said "Pending", so we propagate that
+                        // here.
+                        //
+                        // An additional safety check is performed when leaving
+                        // this function to help bolster the guarantees of
+                        // `unsafe impl Send` above. Notably this future may get
+                        // re-polled on a different thread. Wasmtime's
+                        // thread-local state points to the stack, however,
+                        // meaning that it would be incorrect to leave a pointer
+                        // in TLS when this function returns. This function
+                        // performs a runtime assert to verify that this is the
+                        // case, notably that the one TLS pointer Wasmtime uses
+                        // is not pointing anywhere within the stack. If it is
+                        // then that's a bug indicating that TLS management in
+                        // Wasmtime is incorrect.
+                        Err(()) => {
+                            if let Some(range) = self.fiber.stack().range() {
+                                wasmtime_runtime::AsyncWasmCallState::assert_current_state_not_in_range(range);
+                            }
+                            Poll::Pending
+                        }
                     }
                 }
             }
@@ -1757,13 +1796,15 @@ impl<T> StoreContextMut<'_, T> {
         impl Drop for FiberFuture<'_> {
             fn drop(&mut self) {
                 if !self.fiber.done() {
-                    let result = self.fiber.resume(Err(anyhow!("future dropped")));
+                    let result = self.resume(Err(anyhow!("future dropped")));
                     // This resumption with an error should always complete the
                     // fiber. While it's technically possible for host code to catch
                     // the trap and re-resume, we'd ideally like to signal that to
                     // callers that they shouldn't be doing that.
                     debug_assert!(result.is_ok());
                 }
+
+                self.state.take().unwrap().assert_null();
 
                 unsafe {
                     self.engine
@@ -1839,10 +1880,7 @@ impl AsyncCx {
                 Poll::Pending => {}
             }
 
-            let before = wasmtime_runtime::TlsRestore::take();
-            let res = (*suspend).suspend(());
-            before.replace();
-            res?;
+            (*suspend).suspend(())?;
         }
     }
 }
@@ -1874,19 +1912,18 @@ unsafe impl<T> wasmtime_runtime::Store for StoreInner<T> {
     ) -> Result<bool, anyhow::Error> {
         match self.limiter {
             Some(ResourceLimiterInner::Sync(ref mut limiter)) => {
-                Ok(limiter(&mut self.data).memory_growing(current, desired, maximum))
+                limiter(&mut self.data).memory_growing(current, desired, maximum)
             }
             #[cfg(feature = "async")]
             Some(ResourceLimiterInner::Async(ref mut limiter)) => unsafe {
-                Ok(self
-                    .inner
+                self.inner
                     .async_cx()
                     .expect("ResourceLimiterAsync requires async Store")
                     .block_on(
                         limiter(&mut self.data)
                             .memory_growing(current, desired, maximum)
                             .as_mut(),
-                    )?)
+                    )?
             },
             None => Ok(true),
         }
@@ -1923,17 +1960,17 @@ unsafe impl<T> wasmtime_runtime::Store for StoreInner<T> {
 
         match self.limiter {
             Some(ResourceLimiterInner::Sync(ref mut limiter)) => {
-                Ok(limiter(&mut self.data).table_growing(current, desired, maximum))
+                limiter(&mut self.data).table_growing(current, desired, maximum)
             }
             #[cfg(feature = "async")]
             Some(ResourceLimiterInner::Async(ref mut limiter)) => unsafe {
-                Ok(async_cx
+                async_cx
                     .expect("ResourceLimiterAsync requires async Store")
                     .block_on(
                         limiter(&mut self.data)
                             .table_growing(current, desired, maximum)
                             .as_mut(),
-                    )?)
+                    )?
             },
             None => Ok(true),
         }
@@ -1979,29 +2016,31 @@ unsafe impl<T> wasmtime_runtime::Store for StoreInner<T> {
     fn new_epoch(&mut self) -> Result<u64, anyhow::Error> {
         // Temporarily take the configured behavior to avoid mutably borrowing
         // multiple times.
-        let mut behavior = std::mem::take(&mut self.epoch_deadline_behavior);
+        let mut behavior = self.epoch_deadline_behavior.take();
         let delta_result = match &mut behavior {
-            EpochDeadline::Trap => Err(Trap::Interrupt.into()),
-            EpochDeadline::Callback(callback) => {
-                let delta = callback((&mut *self).as_context_mut())?;
+            None => Err(Trap::Interrupt.into()),
+            Some(callback) => callback((&mut *self).as_context_mut()).and_then(|update| {
+                let delta = match update {
+                    UpdateDeadline::Continue(delta) => delta,
+
+                    #[cfg(feature = "async")]
+                    UpdateDeadline::Yield(delta) => {
+                        assert!(
+                            self.async_support(),
+                            "cannot use `UpdateDeadline::Yield` without enabling async support in the config"
+                        );
+                        // Do the async yield. May return a trap if future was
+                        // canceled while we're yielded.
+                        self.async_yield_impl()?;
+                        delta
+                    }
+                };
+
                 // Set a new deadline and return the new epoch deadline so
                 // the Wasm code doesn't have to reload it.
                 self.set_epoch_deadline(delta);
                 Ok(self.get_epoch_deadline())
-            }
-            #[cfg(feature = "async")]
-            EpochDeadline::YieldAndExtendDeadline { delta } => {
-                let delta = *delta;
-                // Do the async yield. May return a trap if future was
-                // canceled while we're yielded.
-                self.async_yield_impl()?;
-                // Set a new deadline.
-                self.set_epoch_deadline(delta);
-
-                // Return the new epoch deadline so the Wasm code
-                // doesn't have to reload it.
-                Ok(self.get_epoch_deadline())
-            }
+            })
         };
 
         // Put back the original behavior which was replaced by `take`.
@@ -2026,14 +2065,14 @@ impl<T> StoreInner<T> {
     }
 
     fn epoch_deadline_trap(&mut self) {
-        self.epoch_deadline_behavior = EpochDeadline::Trap;
+        self.epoch_deadline_behavior = None;
     }
 
     fn epoch_deadline_callback(
         &mut self,
-        callback: Box<dyn FnMut(StoreContextMut<T>) -> Result<u64> + Send + Sync>,
+        callback: Box<dyn FnMut(StoreContextMut<T>) -> Result<UpdateDeadline> + Send + Sync>,
     ) {
-        self.epoch_deadline_behavior = EpochDeadline::Callback(callback);
+        self.epoch_deadline_behavior = Some(callback);
     }
 
     fn epoch_deadline_async_yield_and_update(&mut self, delta: u64) {
@@ -2043,9 +2082,10 @@ impl<T> StoreInner<T> {
         );
         #[cfg(feature = "async")]
         {
-            self.epoch_deadline_behavior = EpochDeadline::YieldAndExtendDeadline { delta };
+            self.epoch_deadline_behavior =
+                Some(Box::new(move |_store| Ok(UpdateDeadline::Yield(delta))));
         }
-        drop(delta); // suppress warning in non-async build
+        let _ = delta; // suppress warning in non-async build
     }
 
     fn get_epoch_deadline(&self) -> u64 {

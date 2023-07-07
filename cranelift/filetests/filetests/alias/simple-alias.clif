@@ -15,16 +15,15 @@ block0(v0: i64, v1: i32):
     v2 = global_value.i64 gv1
     v3 = load.i32 v2+8
     ;; This should reuse the load above.
-    v4 = global_value.i64 gv1
-    v5 = load.i32 v4+8
+    v5 = load.i32 v2+8
     ; check: v5 -> v3
 
     call fn0(v0)
 
     ;; The second load is redundant wrt the first, but the call above
     ;; is a barrier that prevents reusing v3 or v5.
-    v6 = load.i32 v4+8
-    v7 = load.i32 v4+8
+    v6 = load.i32 v2+8
+    v7 = load.i32 v2+8
     ; check: v7 -> v6
 
     return v3, v5, v6, v7
@@ -44,8 +43,7 @@ block0(v0: i64, v1: i32):
     store.i32 v1, v2+8
 
     ;; This load should pick up the store above.
-    v3 = global_value.i64 gv1
-    v4 = load.i32 v3+8
+    v4 = load.i32 v2+8
     ; check: v4 -> v1
 
     return v4

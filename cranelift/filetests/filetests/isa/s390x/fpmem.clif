@@ -11,7 +11,7 @@ block0(v0: i64):
 ; block0:
 ;   ld %f0, 0(%r2)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ld %f0, 0(%r2)
@@ -27,7 +27,7 @@ block0(v0: i64):
 ; block0:
 ;   le %f0, 0(%r2)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   le %f0, 0(%r2)
@@ -44,7 +44,7 @@ block0(v0: i64):
 ;   lrvg %r4, 0(%r2)
 ;   ldgr %f0, %r4
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lrvg %r4, 0(%r2)
@@ -62,7 +62,7 @@ block0(v0: i64):
 ;   lrv %r4, 0(%r2)
 ;   vlvgf %v0, %r4, 0
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lrv %r4, 0(%r2)
@@ -79,7 +79,7 @@ block0(v0: f64, v1: i64):
 ; block0:
 ;   std %f0, 0(%r2)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   std %f0, 0(%r2)
@@ -95,7 +95,7 @@ block0(v0: f32, v1: i64):
 ; block0:
 ;   ste %f0, 0(%r2)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ste %f0, 0(%r2)
@@ -112,7 +112,7 @@ block0(v0: f64, v1: i64):
 ;   lgdr %r5, %f0
 ;   strvg %r5, 0(%r2)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lgdr %r5, %f0
@@ -130,7 +130,7 @@ block0(v0: f32, v1: i64):
 ;   vlgvf %r5, %v0, 0
 ;   strv %r5, 0(%r2)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vlgvf %r5, %v0, 0

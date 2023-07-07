@@ -11,7 +11,7 @@ block0:
 ; block0:
 ;   vgbm %v24, 0
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vzero %v24
@@ -27,7 +27,7 @@ block0:
 ; block0:
 ;   vgbm %v24, 0
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vzero %v24
@@ -43,7 +43,7 @@ block0:
 ; block0:
 ;   bras %r1, 20 ; data.u128 0x3f800000400000004040000040800000 ; vl %v24, 0(%r1)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   bras %r1, 0x14
@@ -65,7 +65,7 @@ block0:
 ; block0:
 ;   bras %r1, 20 ; data.u128 0x4080000040400000400000003f800000 ; vl %v24, 0(%r1)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   bras %r1, 0x14
@@ -87,7 +87,7 @@ block0:
 ; block0:
 ;   bras %r1, 20 ; data.u128 0x3ff00000000000004000000000000000 ; vl %v24, 0(%r1)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   bras %r1, 0x14
@@ -111,7 +111,7 @@ block0:
 ; block0:
 ;   bras %r1, 20 ; data.u128 0x40000000000000003ff0000000000000 ; vl %v24, 0(%r1)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   bras %r1, 0x14
@@ -135,7 +135,7 @@ block0(v0: f32x4, v1: f32x4):
 ; block0:
 ;   vfasb %v24, %v24, %v25
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vfasb %v24, %v24, %v25
@@ -151,7 +151,7 @@ block0(v0: f64x2, v1: f64x2):
 ; block0:
 ;   vfadb %v24, %v24, %v25
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vfadb %v24, %v24, %v25
@@ -167,7 +167,7 @@ block0(v0: f32x4, v1: f32x4):
 ; block0:
 ;   vfssb %v24, %v24, %v25
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vfssb %v24, %v24, %v25
@@ -183,7 +183,7 @@ block0(v0: f64x2, v1: f64x2):
 ; block0:
 ;   vfsdb %v24, %v24, %v25
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vfsdb %v24, %v24, %v25
@@ -199,7 +199,7 @@ block0(v0: f32x4, v1: f32x4):
 ; block0:
 ;   vfmsb %v24, %v24, %v25
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vfmsb %v24, %v24, %v25
@@ -215,7 +215,7 @@ block0(v0: f64x2, v1: f64x2):
 ; block0:
 ;   vfmdb %v24, %v24, %v25
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vfmdb %v24, %v24, %v25
@@ -231,7 +231,7 @@ block0(v0: f32x4, v1: f32x4):
 ; block0:
 ;   vfdsb %v24, %v24, %v25
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vfdsb %v24, %v24, %v25
@@ -247,7 +247,7 @@ block0(v0: f64x2, v1: f64x2):
 ; block0:
 ;   vfddb %v24, %v24, %v25
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vfddb %v24, %v24, %v25
@@ -263,7 +263,7 @@ block0(v0: f32x4, v1: f32x4):
 ; block0:
 ;   vfminsb %v24, %v24, %v25, 1
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vfminsb %v24, %v24, %v25, 1
@@ -279,7 +279,7 @@ block0(v0: f64x2, v1: f64x2):
 ; block0:
 ;   vfmindb %v24, %v24, %v25, 1
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vfmindb %v24, %v24, %v25, 1
@@ -295,7 +295,7 @@ block0(v0: f32x4, v1: f32x4):
 ; block0:
 ;   vfmaxsb %v24, %v24, %v25, 1
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vfmaxsb %v24, %v24, %v25, 1
@@ -311,7 +311,7 @@ block0(v0: f64x2, v1: f64x2):
 ; block0:
 ;   vfmaxdb %v24, %v24, %v25, 1
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vfmaxdb %v24, %v24, %v25, 1
@@ -327,7 +327,7 @@ block0(v0: f32x4, v1: f32x4):
 ; block0:
 ;   vfminsb %v24, %v24, %v25, 3
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vfminsb %v24, %v24, %v25, 3
@@ -343,7 +343,7 @@ block0(v0: f64x2, v1: f64x2):
 ; block0:
 ;   vfmindb %v24, %v24, %v25, 3
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vfmindb %v24, %v24, %v25, 3
@@ -359,7 +359,7 @@ block0(v0: f32x4, v1: f32x4):
 ; block0:
 ;   vfmaxsb %v24, %v24, %v25, 3
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vfmaxsb %v24, %v24, %v25, 3
@@ -375,7 +375,7 @@ block0(v0: f64x2, v1: f64x2):
 ; block0:
 ;   vfmaxdb %v24, %v24, %v25, 3
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vfmaxdb %v24, %v24, %v25, 3
@@ -391,7 +391,7 @@ block0(v0: f32x4):
 ; block0:
 ;   vfsqsb %v24, %v24
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vfsqsb %v24, %v24
@@ -407,7 +407,7 @@ block0(v0: f64x2):
 ; block0:
 ;   vfsqdb %v24, %v24
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vfsqdb %v24, %v24
@@ -423,7 +423,7 @@ block0(v0: f32x4):
 ; block0:
 ;   vflpsb %v24, %v24
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vflpsb %v24, %v24
@@ -439,7 +439,7 @@ block0(v0: f64x2):
 ; block0:
 ;   vflpdb %v24, %v24
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vflpdb %v24, %v24
@@ -455,7 +455,7 @@ block0(v0: f32x4):
 ; block0:
 ;   vflcsb %v24, %v24
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vflcsb %v24, %v24
@@ -471,7 +471,7 @@ block0(v0: f64x2):
 ; block0:
 ;   vflcdb %v24, %v24
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vflcdb %v24, %v24
@@ -488,7 +488,7 @@ block0(v0: f32x4):
 ;   vmrhf %v2, %v24, %v24
 ;   vldeb %v24, %v2
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vmrhf %v2, %v24, %v24
@@ -506,7 +506,7 @@ block0(v0: f32x4):
 ;   vmrlf %v2, %v24, %v24
 ;   vldeb %v24, %v2
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vmrlf %v2, %v24, %v24
@@ -526,7 +526,7 @@ block0(v0: f64x2):
 ;   vgbm %v6, 0
 ;   vpkg %v24, %v4, %v6
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vledb %v2, %v24, 0, 0
@@ -548,7 +548,7 @@ block0(v0: f64x2):
 ;   vgbm %v6, 0
 ;   vpkg %v24, %v6, %v4
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vledb %v2, %v24, 0, 0
@@ -567,7 +567,7 @@ block0(v0: f32x4):
 ; block0:
 ;   vfisb %v24, %v24, 0, 6
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vfisb %v24, %v24, 0, 6
@@ -583,7 +583,7 @@ block0(v0: f64x2):
 ; block0:
 ;   vfidb %v24, %v24, 0, 6
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vfidb %v24, %v24, 0, 6
@@ -599,7 +599,7 @@ block0(v0: f32x4):
 ; block0:
 ;   vfisb %v24, %v24, 0, 7
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vfisb %v24, %v24, 0, 7
@@ -615,7 +615,7 @@ block0(v0: f64x2):
 ; block0:
 ;   vfidb %v24, %v24, 0, 7
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vfidb %v24, %v24, 0, 7
@@ -631,7 +631,7 @@ block0(v0: f32x4):
 ; block0:
 ;   vfisb %v24, %v24, 0, 5
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vfisb %v24, %v24, 0, 5
@@ -647,7 +647,7 @@ block0(v0: f64x2):
 ; block0:
 ;   vfidb %v24, %v24, 0, 5
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vfidb %v24, %v24, 0, 5
@@ -663,7 +663,7 @@ block0(v0: f32x4):
 ; block0:
 ;   vfisb %v24, %v24, 0, 4
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vfisb %v24, %v24, 0, 4
@@ -679,7 +679,7 @@ block0(v0: f64x2):
 ; block0:
 ;   vfidb %v24, %v24, 0, 4
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vfidb %v24, %v24, 0, 4
@@ -695,7 +695,7 @@ block0(v0: f32x4, v1: f32x4, v2: f32x4):
 ; block0:
 ;   vfmasb %v24, %v24, %v25, %v26
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vfmasb %v24, %v24, %v25, %v26
@@ -711,7 +711,7 @@ block0(v0: f64x2, v1: f64x2, v2: f64x2):
 ; block0:
 ;   vfmadb %v24, %v24, %v25, %v26
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vfmadb %v24, %v24, %v25, %v26
@@ -728,7 +728,7 @@ block0(v0: f32x4, v1: f32x4):
 ;   vgmf %v3, 1, 31
 ;   vsel %v24, %v24, %v25, %v3
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vgmf %v3, 1, 0x1f
@@ -746,7 +746,7 @@ block0(v0: f64x2, v1: f64x2):
 ;   vgmg %v3, 1, 63
 ;   vsel %v24, %v24, %v25, %v3
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vgmg %v3, 1, 0x3f
@@ -770,7 +770,7 @@ block0(v0: i32x4):
 ;   bras %r1, 20 ; data.u128 0x0001020308090a0b1011121318191a1b ; vl %v22, 0(%r1)
 ;   vperm %v24, %v6, %v20, %v22
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vuplhf %v2, %v24
@@ -809,7 +809,7 @@ block0(v0: i32x4):
 ;   bras %r1, 20 ; data.u128 0x0001020308090a0b1011121318191a1b ; vl %v22, 0(%r1)
 ;   vperm %v24, %v6, %v20, %v22
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vuphf %v2, %v24
@@ -841,7 +841,7 @@ block0(v0: i64x2):
 ; block0:
 ;   vcdlgb %v24, %v24, 0, 4
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vcdlgb %v24, %v24, 0, 4
@@ -857,7 +857,7 @@ block0(v0: i64x2):
 ; block0:
 ;   vcdgb %v24, %v24, 0, 4
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vcdgb %v24, %v24, 0, 4
@@ -865,38 +865,40 @@ block0(v0: i64x2):
 
 function %fcvt_low_from_sint_i32x4_f64x2_be(i32x4) -> f64x2 {
 block0(v0: i32x4):
-  v1 = fcvt_low_from_sint.f64x2 v0
-  return v1
+  v1 = swiden_low v0
+  v2 = fcvt_from_sint.f64x2 v1
+  return v2
 }
 
 ; VCode:
 ; block0:
-;   vuphf %v2, %v24
-;   vcdgb %v24, %v2, 0, 4
+;   vuphf %v3, %v24
+;   vcdgb %v24, %v3, 0, 4
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   vuphf %v2, %v24
-;   vcdgb %v24, %v2, 0, 4
+;   vuphf %v3, %v24
+;   vcdgb %v24, %v3, 0, 4
 ;   br %r14
 
 function %fcvt_low_from_sint_i32x4_f64x2_le(i32x4) -> f64x2 wasmtime_system_v {
 block0(v0: i32x4):
-  v1 = fcvt_low_from_sint.f64x2 v0
-  return v1
+  v1 = swiden_low v0
+  v2 = fcvt_from_sint.f64x2 v1
+  return v2
 }
 
 ; VCode:
 ; block0:
-;   vuplf %v2, %v24
-;   vcdgb %v24, %v2, 0, 4
+;   vuplf %v3, %v24
+;   vcdgb %v24, %v3, 0, 4
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   vuplf %v2, %v24
-;   vcdgb %v24, %v2, 0, 4
+;   vuplf %v3, %v24
+;   vcdgb %v24, %v3, 0, 4
 ;   br %r14
 
 function %fcvt_to_uint_sat_f32x4_i32x4(f32x4) -> i32x4 {
@@ -915,7 +917,7 @@ block0(v0: f32x4):
 ;   vclgdb %v20, %v18, 0, 5
 ;   vpklsg %v24, %v6, %v20
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vmrhf %v2, %v24, %v24
@@ -946,7 +948,7 @@ block0(v0: f32x4):
 ;   vfcesb %v26, %v24, %v24
 ;   vsel %v24, %v22, %v25, %v26
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vmrhf %v2, %v24, %v24
@@ -971,7 +973,7 @@ block0(v0: f64x2):
 ; block0:
 ;   vclgdb %v24, %v24, 0, 5
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vclgdb %v24, %v24, 0, 5
@@ -990,7 +992,7 @@ block0(v0: f64x2):
 ;   vfcedb %v6, %v24, %v24
 ;   vsel %v24, %v2, %v4, %v6
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vcgdb %v2, %v24, 0, 5

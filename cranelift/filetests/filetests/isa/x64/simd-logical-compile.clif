@@ -1,6 +1,5 @@
 test compile precise-output
-set enable_simd
-target x86_64
+target x86_64 sse41
 
 function %bnot_i32x4(i32x4) -> i32x4 {
 block0(v0: i32x4):
@@ -18,7 +17,7 @@ block0(v0: i32x4):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -45,7 +44,7 @@ block0(v0: i32x4):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -76,7 +75,7 @@ block0(v0: i64x2):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp

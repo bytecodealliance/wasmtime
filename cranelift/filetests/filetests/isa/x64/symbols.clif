@@ -17,13 +17,40 @@ block0:
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   movabsq $0, %rax ; reloc_external Abs8 %func0 0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %colocated_func_addr() -> i64 {
+    fn0 = colocated %func0(i64) -> i64
+
+block0:
+    v0 = func_addr.i64 fn0
+    return v0
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   load_ext_name %func0+0, %rax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   leaq (%rip), %rax ; reloc_external CallPCRel4 %func0 -4
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -44,7 +71,7 @@ block0:
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp

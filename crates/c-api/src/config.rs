@@ -82,6 +82,19 @@ pub extern "C" fn wasmtime_config_wasm_simd_set(c: &mut wasm_config_t, enable: b
 }
 
 #[no_mangle]
+pub extern "C" fn wasmtime_config_wasm_relaxed_simd_set(c: &mut wasm_config_t, enable: bool) {
+    c.config.wasm_relaxed_simd(enable);
+}
+
+#[no_mangle]
+pub extern "C" fn wasmtime_config_wasm_relaxed_simd_deterministic_set(
+    c: &mut wasm_config_t,
+    enable: bool,
+) {
+    c.config.relaxed_simd_deterministic(enable);
+}
+
+#[no_mangle]
 pub extern "C" fn wasmtime_config_wasm_bulk_memory_set(c: &mut wasm_config_t, enable: bool) {
     c.config.wasm_bulk_memory(enable);
 }
@@ -179,6 +192,11 @@ pub unsafe extern "C" fn wasmtime_config_cache_config_load(
         },
         |_cfg| {},
     )
+}
+
+#[no_mangle]
+pub extern "C" fn wasmtime_config_static_memory_forced_set(c: &mut wasm_config_t, enable: bool) {
+    c.config.static_memory_forced(enable);
 }
 
 #[no_mangle]

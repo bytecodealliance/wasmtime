@@ -1,5 +1,5 @@
 use std::{env, process};
-use wasi_tests::{open_scratch_directory, TESTCONFIG};
+use wasi_tests::open_scratch_directory;
 
 unsafe fn test_fd_advise(dir_fd: wasi::Fd) {
     // Create a file in the scratch directory.
@@ -8,12 +8,7 @@ unsafe fn test_fd_advise(dir_fd: wasi::Fd) {
         0,
         "file",
         wasi::OFLAGS_CREAT,
-        wasi::RIGHTS_FD_READ
-            | wasi::RIGHTS_FD_WRITE
-            | wasi::RIGHTS_FD_ADVISE
-            | wasi::RIGHTS_FD_FILESTAT_GET
-            | wasi::RIGHTS_FD_FILESTAT_SET_SIZE
-            | wasi::RIGHTS_FD_ALLOCATE,
+        wasi::RIGHTS_FD_READ | wasi::RIGHTS_FD_WRITE,
         0,
         0,
     )
@@ -39,14 +34,6 @@ unsafe fn test_fd_advise(dir_fd: wasi::Fd) {
     // Advise shouldnt change size
     let stat = wasi::fd_filestat_get(file_fd).expect("failed to fdstat 3");
     assert_eq!(stat.size, 100, "file size should be 100");
-
-    if TESTCONFIG.support_fd_allocate() {
-        // Use fd_allocate to expand size to 200:
-        wasi::fd_allocate(file_fd, 100, 100).expect("allocating size");
-
-        let stat = wasi::fd_filestat_get(file_fd).expect("failed to fdstat 3");
-        assert_eq!(stat.size, 200, "file size should be 200");
-    }
 
     wasi::fd_close(file_fd).expect("failed to close");
     wasi::path_unlink_file(dir_fd, "file").expect("failed to unlink");

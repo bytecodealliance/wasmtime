@@ -32,6 +32,7 @@ use crate::{isa::TargetIsa, timing};
 use crate::{trace, CompileError, Context};
 use alloc::borrow::{Cow, ToOwned as _};
 use alloc::string::ToString as _;
+use cranelift_control::ControlPlane;
 
 impl Context {
     /// Compile the function, as in `compile`, but tries to reuse compiled artifacts from former
@@ -40,6 +41,7 @@ impl Context {
         &mut self,
         isa: &dyn TargetIsa,
         cache_store: &mut dyn CacheKvStore,
+        ctrl_plane: &mut ControlPlane,
     ) -> CompileResult<(&CompiledCode, bool)> {
         let cache_key_hash = {
             let _tt = timing::try_incremental_cache();
@@ -52,7 +54,7 @@ impl Context {
                         let info = compiled_code.code_info();
 
                         if isa.flags().enable_incremental_compilation_cache_checks() {
-                            let actual_result = self.compile(isa)?;
+                            let actual_result = self.compile(isa, ctrl_plane)?;
                             assert_eq!(*actual_result, compiled_code);
                             assert_eq!(actual_result.code_info(), info);
                             // no need to set `compiled_code` here, it's set by `compile()`.
@@ -71,10 +73,12 @@ impl Context {
             cache_key_hash
         };
 
-        let stencil = self.compile_stencil(isa).map_err(|err| CompileError {
-            inner: err,
-            func: &self.func,
-        })?;
+        let stencil = self
+            .compile_stencil(isa, ctrl_plane)
+            .map_err(|err| CompileError {
+                inner: err,
+                func: &self.func,
+            })?;
 
         let stencil = {
             let _tt = timing::store_incremental_cache();

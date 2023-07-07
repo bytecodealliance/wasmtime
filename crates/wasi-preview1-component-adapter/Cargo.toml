@@ -1,0 +1,25 @@
+[package]
+name = "wasi-preview1-component-adapter"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+publish = false
+
+[dependencies]
+wasi = { version = "0.11.0", default-features = false }
+wit-bindgen = { workspace = true, default-features = false, features = ["macros"] }
+byte-array-literals = { workspace = true }
+
+[build-dependencies]
+wasm-encoder = "0.25"
+object = { version = "0.30.0", default-features = false, features = ["archive"] }
+
+[lib]
+test = false
+crate-type = ["cdylib"]
+name = "wasi_snapshot_preview1"
+
+[features]
+default = ["reactor"]
+reactor = []
+command = []

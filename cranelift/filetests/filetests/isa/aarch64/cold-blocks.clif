@@ -25,7 +25,7 @@ block2:
 ;   b label3
 ; block3:
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov w5, w0
@@ -58,7 +58,7 @@ block2 cold:
 ; block2:
 ;   movz w0, #97
 ;   b label3
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov w5, w0

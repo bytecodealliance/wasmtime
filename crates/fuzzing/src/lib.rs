@@ -7,6 +7,7 @@ pub use wasm_smith;
 pub mod generators;
 pub mod mutators;
 pub mod oracles;
+pub mod single_module_fuzzer;
 
 /// One time start up initialization for fuzzing:
 ///
@@ -21,7 +22,7 @@ pub mod oracles;
 /// `Arbitrary` implementation is not derived and does interesting things, then
 /// the `Arbitrary` implementation should call this function, since it runs
 /// before the fuzz target itself.
-pub(crate) fn init_fuzzing() {
+pub fn init_fuzzing() {
     static INIT: std::sync::Once = std::sync::Once::new();
 
     INIT.call_once(|| {

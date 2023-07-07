@@ -1,0 +1,275 @@
+test compile precise-output
+target riscv64 has_v
+
+;; Tests both ABI and Regalloc spill/reload.
+function %simd_spill(
+    i32x4, i32x4, i32x4, i32x4, i32x4, i32x4, i32x4, i32x4,
+    i32x4, i32x4, i32x4, i32x4, i32x4, i32x4, i32x4, i32x4,
+    i32x4, i32x4, i32x4, i32x4, i32x4, i32x4, i32x4, i32x4,
+    i32x4, i32x4, i32x4, i32x4, i32x4, i32x4, i32x4, i32x4,
+    ;; These cannot fit in registers.
+    i32x4, i32x4
+) ->
+    i32x4, i32x4, i32x4, i32x4, i32x4, i32x4, i32x4, i32x4,
+    i32x4, i32x4, i32x4, i32x4, i32x4, i32x4, i32x4, i32x4,
+    i32x4, i32x4, i32x4, i32x4, i32x4, i32x4, i32x4, i32x4,
+    i32x4, i32x4, i32x4, i32x4, i32x4, i32x4, i32x4, i32x4,
+    ;; These cannot fit in registers.
+    i32x4, i32x4 system_v
+{
+block0(
+    v0:i32x4, v1:i32x4, v2:i32x4, v3:i32x4, v4:i32x4, v5:i32x4, v6:i32x4, v7:i32x4,
+    v8:i32x4, v9:i32x4, v10:i32x4, v11:i32x4, v12:i32x4, v13:i32x4, v14:i32x4, v15:i32x4,
+    v16:i32x4, v17:i32x4, v18:i32x4, v19:i32x4, v20:i32x4, v21:i32x4, v22:i32x4, v23:i32x4,
+    v24:i32x4, v25:i32x4, v26:i32x4, v27:i32x4, v28:i32x4, v29:i32x4, v30:i32x4, v31:i32x4,
+    v32:i32x4, v33:i32x4
+):
+    ;; This just reverses the args
+    return v33, v32,
+           v31, v30, v29, v28, v27, v26, v25, v24,
+           v23, v22, v21, v20, v19, v18, v17, v16,
+           v15, v14, v13, v12, v11, v10, v9, v8,
+           v7, v6, v5, v4, v3, v2, v1, v0
+}
+
+; VCode:
+;   add sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   add sp,-256
+; block0:
+;   vle8.v v3,16(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v3,0(nominal_sp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v5,32(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v5,128(nominal_sp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v5,48(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v7,64(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v9,80(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v11,96(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v13,112(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v15,128(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v17,144(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v19,160(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v21,176(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v23,192(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v25,208(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v27,224(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v29,240(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v31,256(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v2,272(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v4,288(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v6,304(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v8,320(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v10,336(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v12,352(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v14,368(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v16,384(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v18,400(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v20,416(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v22,432(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v24,448(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v26,464(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v28,480(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v30,496(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v0,512(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v1,528(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v3,544(fp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v3,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v1,16(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v0,32(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v30,48(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v28,64(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v26,80(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v24,96(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v22,112(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v20,128(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v18,144(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v16,160(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v14,176(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v12,192(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v10,208(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v8,224(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v6,240(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v4,256(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v2,272(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v31,288(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v29,304(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v27,320(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v25,336(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v23,352(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v21,368(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v19,384(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v17,400(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v15,416(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v13,432(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v11,448(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v9,464(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v7,480(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v5,496(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v5,128(nominal_sp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v5,512(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vle8.v v3,0(nominal_sp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v3,528(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   add sp,+256
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   add sp,+16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   ori s0, sp, 0
+;   addi sp, sp, -0x100
+; block1: ; offset 0x14
+;   .byte 0x57, 0x70, 0x08, 0xcc
+;   addi t6, s0, 0x10
+;   .byte 0x87, 0x81, 0x0f, 0x02
+;   .byte 0xa7, 0x01, 0x01, 0x02
+;   addi t6, s0, 0x20
+;   .byte 0x87, 0x82, 0x0f, 0x02
+;   addi t6, sp, 0x80
+;   .byte 0xa7, 0x82, 0x0f, 0x02
+;   addi t6, s0, 0x30
+;   .byte 0x87, 0x82, 0x0f, 0x02
+;   addi t6, s0, 0x40
+;   .byte 0x87, 0x83, 0x0f, 0x02
+;   addi t6, s0, 0x50
+;   .byte 0x87, 0x84, 0x0f, 0x02
+;   addi t6, s0, 0x60
+;   .byte 0x87, 0x85, 0x0f, 0x02
+;   addi t6, s0, 0x70
+;   .byte 0x87, 0x86, 0x0f, 0x02
+;   addi t6, s0, 0x80
+;   .byte 0x87, 0x87, 0x0f, 0x02
+;   addi t6, s0, 0x90
+;   .byte 0x87, 0x88, 0x0f, 0x02
+;   addi t6, s0, 0xa0
+;   .byte 0x87, 0x89, 0x0f, 0x02
+;   addi t6, s0, 0xb0
+;   .byte 0x87, 0x8a, 0x0f, 0x02
+;   addi t6, s0, 0xc0
+;   .byte 0x87, 0x8b, 0x0f, 0x02
+;   addi t6, s0, 0xd0
+;   .byte 0x87, 0x8c, 0x0f, 0x02
+;   addi t6, s0, 0xe0
+;   .byte 0x87, 0x8d, 0x0f, 0x02
+;   addi t6, s0, 0xf0
+;   .byte 0x87, 0x8e, 0x0f, 0x02
+;   addi t6, s0, 0x100
+;   .byte 0x87, 0x8f, 0x0f, 0x02
+;   addi t6, s0, 0x110
+;   .byte 0x07, 0x81, 0x0f, 0x02
+;   addi t6, s0, 0x120
+;   .byte 0x07, 0x82, 0x0f, 0x02
+;   addi t6, s0, 0x130
+;   .byte 0x07, 0x83, 0x0f, 0x02
+;   addi t6, s0, 0x140
+;   .byte 0x07, 0x84, 0x0f, 0x02
+;   addi t6, s0, 0x150
+;   .byte 0x07, 0x85, 0x0f, 0x02
+;   addi t6, s0, 0x160
+;   .byte 0x07, 0x86, 0x0f, 0x02
+;   addi t6, s0, 0x170
+;   .byte 0x07, 0x87, 0x0f, 0x02
+;   addi t6, s0, 0x180
+;   .byte 0x07, 0x88, 0x0f, 0x02
+;   addi t6, s0, 0x190
+;   .byte 0x07, 0x89, 0x0f, 0x02
+;   addi t6, s0, 0x1a0
+;   .byte 0x07, 0x8a, 0x0f, 0x02
+;   addi t6, s0, 0x1b0
+;   .byte 0x07, 0x8b, 0x0f, 0x02
+;   addi t6, s0, 0x1c0
+;   .byte 0x07, 0x8c, 0x0f, 0x02
+;   addi t6, s0, 0x1d0
+;   .byte 0x07, 0x8d, 0x0f, 0x02
+;   addi t6, s0, 0x1e0
+;   .byte 0x07, 0x8e, 0x0f, 0x02
+;   addi t6, s0, 0x1f0
+;   .byte 0x07, 0x8f, 0x0f, 0x02
+;   addi t6, s0, 0x200
+;   .byte 0x07, 0x80, 0x0f, 0x02
+;   addi t6, s0, 0x210
+;   .byte 0x87, 0x80, 0x0f, 0x02
+;   addi t6, s0, 0x220
+;   .byte 0x87, 0x81, 0x0f, 0x02
+;   .byte 0xa7, 0x01, 0x05, 0x02
+;   addi t6, a0, 0x10
+;   .byte 0xa7, 0x80, 0x0f, 0x02
+;   addi t6, a0, 0x20
+;   .byte 0x27, 0x80, 0x0f, 0x02
+;   addi t6, a0, 0x30
+;   .byte 0x27, 0x8f, 0x0f, 0x02
+;   addi t6, a0, 0x40
+;   .byte 0x27, 0x8e, 0x0f, 0x02
+;   addi t6, a0, 0x50
+;   .byte 0x27, 0x8d, 0x0f, 0x02
+;   addi t6, a0, 0x60
+;   .byte 0x27, 0x8c, 0x0f, 0x02
+;   addi t6, a0, 0x70
+;   .byte 0x27, 0x8b, 0x0f, 0x02
+;   addi t6, a0, 0x80
+;   .byte 0x27, 0x8a, 0x0f, 0x02
+;   addi t6, a0, 0x90
+;   .byte 0x27, 0x89, 0x0f, 0x02
+;   addi t6, a0, 0xa0
+;   .byte 0x27, 0x88, 0x0f, 0x02
+;   addi t6, a0, 0xb0
+;   .byte 0x27, 0x87, 0x0f, 0x02
+;   addi t6, a0, 0xc0
+;   .byte 0x27, 0x86, 0x0f, 0x02
+;   addi t6, a0, 0xd0
+;   .byte 0x27, 0x85, 0x0f, 0x02
+;   addi t6, a0, 0xe0
+;   .byte 0x27, 0x84, 0x0f, 0x02
+;   addi t6, a0, 0xf0
+;   .byte 0x27, 0x83, 0x0f, 0x02
+;   addi t6, a0, 0x100
+;   .byte 0x27, 0x82, 0x0f, 0x02
+;   addi t6, a0, 0x110
+;   .byte 0x27, 0x81, 0x0f, 0x02
+;   addi t6, a0, 0x120
+;   .byte 0xa7, 0x8f, 0x0f, 0x02
+;   addi t6, a0, 0x130
+;   .byte 0xa7, 0x8e, 0x0f, 0x02
+;   addi t6, a0, 0x140
+;   .byte 0xa7, 0x8d, 0x0f, 0x02
+;   addi t6, a0, 0x150
+;   .byte 0xa7, 0x8c, 0x0f, 0x02
+;   addi t6, a0, 0x160
+;   .byte 0xa7, 0x8b, 0x0f, 0x02
+;   addi t6, a0, 0x170
+;   .byte 0xa7, 0x8a, 0x0f, 0x02
+;   addi t6, a0, 0x180
+;   .byte 0xa7, 0x89, 0x0f, 0x02
+;   addi t6, a0, 0x190
+;   .byte 0xa7, 0x88, 0x0f, 0x02
+;   addi t6, a0, 0x1a0
+;   .byte 0xa7, 0x87, 0x0f, 0x02
+;   addi t6, a0, 0x1b0
+;   .byte 0xa7, 0x86, 0x0f, 0x02
+;   addi t6, a0, 0x1c0
+;   .byte 0xa7, 0x85, 0x0f, 0x02
+;   addi t6, a0, 0x1d0
+;   .byte 0xa7, 0x84, 0x0f, 0x02
+;   addi t6, a0, 0x1e0
+;   .byte 0xa7, 0x83, 0x0f, 0x02
+;   addi t6, a0, 0x1f0
+;   .byte 0xa7, 0x82, 0x0f, 0x02
+;   addi t6, sp, 0x80
+;   .byte 0x87, 0x82, 0x0f, 0x02
+;   addi t6, a0, 0x200
+;   .byte 0xa7, 0x82, 0x0f, 0x02
+;   .byte 0x87, 0x01, 0x01, 0x02
+;   addi t6, a0, 0x210
+;   .byte 0xa7, 0x81, 0x0f, 0x02
+;   addi sp, sp, 0x100
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+

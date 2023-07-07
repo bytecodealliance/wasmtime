@@ -81,6 +81,27 @@ pub(crate) fn lower_branch(
 impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
     isle_lower_prelude_methods!();
 
+    fn gen_return_call(
+        &mut self,
+        callee_sig: SigRef,
+        callee: ExternalName,
+        distance: RelocDistance,
+        args: ValueSlice,
+    ) -> InstOutput {
+        let _ = (callee_sig, callee, distance, args);
+        todo!()
+    }
+
+    fn gen_return_call_indirect(
+        &mut self,
+        callee_sig: SigRef,
+        callee: Value,
+        args: ValueSlice,
+    ) -> InstOutput {
+        let _ = (callee_sig, callee, args);
+        todo!()
+    }
+
     #[inline]
     fn args_builder_new(&mut self) -> CallArgListBuilder {
         Cell::new(CallArgList::new())
@@ -968,7 +989,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
 /// Lane order to be used for a given calling convention.
 #[inline]
 fn lane_order_for_call_conv(call_conv: CallConv) -> LaneOrder {
-    if call_conv.extends_wasmtime() {
+    if call_conv == CallConv::WasmtimeSystemV {
         LaneOrder::LittleEndian
     } else {
         LaneOrder::BigEndian

@@ -1,26 +1,665 @@
 
 # cargo-vet audits file
 
+[[wildcard-audits.arbitrary]]
+who = "Nick Fitzgerald <fitzgen@gmail.com>"
+criteria = "safe-to-deploy"
+user-id = 696 # Nick Fitzgerald (fitzgen)
+start = "2020-01-14"
+end = "2024-04-21"
+notes = "I am an author of this crate."
+
 [[wildcard-audits.bumpalo]]
 who = "Nick Fitzgerald <fitzgen@gmail.com>"
 criteria = "safe-to-deploy"
-user-id = 696
+user-id = 696 # Nick Fitzgerald (fitzgen)
 start = "2019-03-16"
 end = "2024-03-10"
+
+[[wildcard-audits.cranelift]]
+who = "Bobby Holley <bobbyholley@gmail.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2021-10-29"
+end = "2024-06-26"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.cranelift-bforest]]
+who = "Bobby Holley <bobbyholley@gmail.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2021-10-29"
+end = "2024-06-26"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.cranelift-codegen]]
+who = "Bobby Holley <bobbyholley@gmail.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2021-10-29"
+end = "2024-06-26"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.cranelift-codegen-meta]]
+who = "Bobby Holley <bobbyholley@gmail.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2021-10-29"
+end = "2024-06-26"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.cranelift-codegen-shared]]
+who = "Bobby Holley <bobbyholley@gmail.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2021-10-29"
+end = "2024-06-26"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.cranelift-control]]
+who = "Bobby Holley <bobbyholley@gmail.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2023-05-22"
+end = "2024-06-26"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.cranelift-entity]]
+who = "Bobby Holley <bobbyholley@gmail.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2021-10-29"
+end = "2024-06-26"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.cranelift-frontend]]
+who = "Bobby Holley <bobbyholley@gmail.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2021-10-29"
+end = "2024-06-26"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.cranelift-interpreter]]
+who = "Bobby Holley <bobbyholley@gmail.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2021-10-29"
+end = "2024-06-26"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.cranelift-isle]]
+who = "Bobby Holley <bobbyholley@gmail.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2021-12-13"
+end = "2024-06-26"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.cranelift-jit]]
+who = "Bobby Holley <bobbyholley@gmail.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2021-10-29"
+end = "2024-06-26"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.cranelift-module]]
+who = "Bobby Holley <bobbyholley@gmail.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2021-10-29"
+end = "2024-06-26"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.cranelift-native]]
+who = "Bobby Holley <bobbyholley@gmail.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2021-10-29"
+end = "2024-06-26"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.cranelift-object]]
+who = "Bobby Holley <bobbyholley@gmail.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2021-10-29"
+end = "2024-06-26"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.cranelift-reader]]
+who = "Bobby Holley <bobbyholley@gmail.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2021-10-29"
+end = "2024-06-26"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.cranelift-serde]]
+who = "Bobby Holley <bobbyholley@gmail.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2021-10-29"
+end = "2024-06-26"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.cranelift-wasm]]
+who = "Bobby Holley <bobbyholley@gmail.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2021-10-29"
+end = "2024-06-26"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.derive_arbitrary]]
+who = "Nick Fitzgerald <fitzgen@gmail.com>"
+criteria = "safe-to-deploy"
+user-id = 696 # Nick Fitzgerald (fitzgen)
+start = "2020-01-14"
+end = "2024-04-27"
+notes = "I am an author of this crate"
+
+[[wildcard-audits.regalloc2]]
+who = "Chris Fallin <chris@cfallin.org>"
+criteria = "safe-to-deploy"
+user-id = 3726
+start = "2021-12-03"
+end = "2024-05-02"
+notes = "We (Bytecode Alliance) are the primary authors of regalloc2 and co-develop it with Cranelift/Wasmtime, with the same code-review, testing/fuzzing, and security standards."
+
+[[wildcard-audits.regalloc2]]
+who = "Trevor Elliott <telliott@fastly.com>"
+criteria = "safe-to-deploy"
+user-id = 187138 # Trevor Elliott (elliottt)
+start = "2022-11-29"
+end = "2024-05-02"
+notes = """
+This is a Bytecode Alliance authored crate maintained in the `regalloc2`
+repository of which I'm one of the maintainers and publishers for. I am employed
+by a member of the Bytecode Alliance and plan to continue doing so and will
+actively maintain this crate over time.
+"""
+
+[[wildcard-audits.wasi-cap-std-sync]]
+who = "Bobby Holley <bobbyholley@gmail.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2021-10-29"
+end = "2024-06-26"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.wasi-common]]
+who = "Bobby Holley <bobbyholley@gmail.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2021-10-29"
+end = "2024-06-26"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.wasi-tokio]]
+who = "Bobby Holley <bobbyholley@gmail.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2021-10-29"
+end = "2024-06-26"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.wasm-encoder]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+user-id = 1 # Alex Crichton (alexcrichton)
+start = "2020-12-11"
+end = "2024-04-14"
+notes = """
+This is a Bytecode Alliance authored crate maintained in the `wasm-tools`
+repository of which I'm one of the primary maintainers and publishers for.
+I am employed by a member of the Bytecode Alliance and plan to continue doing
+so and will actively maintain this crate over time.
+"""
+
+[[wildcard-audits.wasm-metadata]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+user-id = 1 # Alex Crichton (alexcrichton)
+start = "2020-12-11"
+end = "2024-04-14"
+notes = """
+This is a Bytecode Alliance authored crate maintained in the `wasm-tools`
+repository of which I'm one of the primary maintainers and publishers for.
+I am employed by a member of the Bytecode Alliance and plan to continue doing
+so and will actively maintain this crate over time.
+"""
 
 [[wildcard-audits.wasm-mutate]]
 who = "Nick Fitzgerald <fitzgen@gmail.com>"
 criteria = "safe-to-deploy"
-user-id = 696
+user-id = 696 # Nick Fitzgerald (fitzgen)
 start = "2022-02-17"
 end = "2024-03-10"
+
+[[wildcard-audits.wasm-mutate]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+user-id = 1 # Alex Crichton (alexcrichton)
+start = "2022-01-05"
+end = "2024-04-14"
+notes = """
+This is a Bytecode Alliance authored crate maintained in the `wasm-tools`
+repository of which I'm one of the primary maintainers and publishers for.
+I am employed by a member of the Bytecode Alliance and plan to continue doing
+so and will actively maintain this crate over time.
+"""
+
+[[wildcard-audits.wasm-smith]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+user-id = 1 # Alex Crichton (alexcrichton)
+start = "2020-09-03"
+end = "2024-04-14"
+notes = """
+This is a Bytecode Alliance authored crate maintained in the `wasm-tools`
+repository of which I'm one of the primary maintainers and publishers for.
+I am employed by a member of the Bytecode Alliance and plan to continue doing
+so and will actively maintain this crate over time.
+"""
+
+[[wildcard-audits.wasmparser]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+user-id = 1 # Alex Crichton (alexcrichton)
+start = "2020-07-13"
+end = "2024-04-14"
+notes = """
+This is a Bytecode Alliance authored crate maintained in the `wasm-tools`
+repository of which I'm one of the primary maintainers and publishers for.
+I am employed by a member of the Bytecode Alliance and plan to continue doing
+so and will actively maintain this crate over time.
+"""
 
 [[wildcard-audits.wasmprinter]]
 who = "Nick Fitzgerald <fitzgen@gmail.com>"
 criteria = "safe-to-deploy"
-user-id = 696
+user-id = 696 # Nick Fitzgerald (fitzgen)
 start = "2021-04-28"
 end = "2024-03-10"
+
+[[wildcard-audits.wasmprinter]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+user-id = 1 # Alex Crichton (alexcrichton)
+start = "2019-11-18"
+end = "2024-04-14"
+notes = """
+This is a Bytecode Alliance authored crate maintained in the `wasm-tools`
+repository of which I'm one of the primary maintainers and publishers for.
+I am employed by a member of the Bytecode Alliance and plan to continue doing
+so and will actively maintain this crate over time.
+"""
+
+[[wildcard-audits.wasmtime]]
+who = "Bobby Holley <bobbyholley@gmail.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2021-10-29"
+end = "2024-06-26"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.wasmtime-asm-macros]]
+who = "Bobby Holley <bobbyholley@gmail.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2022-08-22"
+end = "2024-06-26"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.wasmtime-cache]]
+who = "Bobby Holley <bobbyholley@gmail.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2021-10-29"
+end = "2024-06-26"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.wasmtime-cli]]
+who = "Bobby Holley <bobbyholley@gmail.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2021-10-29"
+end = "2024-06-26"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.wasmtime-cli-flags]]
+who = "Bobby Holley <bobbyholley@gmail.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2022-05-20"
+end = "2024-06-26"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.wasmtime-component-macro]]
+who = "Bobby Holley <bobbyholley@gmail.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2022-07-20"
+end = "2024-06-26"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.wasmtime-component-util]]
+who = "Bobby Holley <bobbyholley@gmail.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2022-08-22"
+end = "2024-06-26"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.wasmtime-cranelift]]
+who = "Bobby Holley <bobbyholley@gmail.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2021-10-29"
+end = "2024-06-26"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.wasmtime-cranelift-shared]]
+who = "Bobby Holley <bobbyholley@gmail.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2023-04-20"
+end = "2024-06-26"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.wasmtime-environ]]
+who = "Bobby Holley <bobbyholley@gmail.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2021-10-29"
+end = "2024-06-26"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.wasmtime-explorer]]
+who = "Bobby Holley <bobbyholley@gmail.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2023-04-20"
+end = "2024-06-26"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.wasmtime-fiber]]
+who = "Bobby Holley <bobbyholley@gmail.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2021-10-29"
+end = "2024-06-26"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.wasmtime-jit]]
+who = "Bobby Holley <bobbyholley@gmail.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2021-10-29"
+end = "2024-06-26"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.wasmtime-jit-debug]]
+who = "Bobby Holley <bobbyholley@gmail.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2022-03-07"
+end = "2024-06-26"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.wasmtime-jit-icache-coherence]]
+who = "Bobby Holley <bobbyholley@gmail.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2022-11-21"
+end = "2024-06-26"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.wasmtime-runtime]]
+who = "Bobby Holley <bobbyholley@gmail.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2021-10-29"
+end = "2024-06-26"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.wasmtime-types]]
+who = "Bobby Holley <bobbyholley@gmail.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2021-10-29"
+end = "2024-06-26"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.wasmtime-wasi]]
+who = "Bobby Holley <bobbyholley@gmail.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2021-10-29"
+end = "2024-06-26"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.wasmtime-wasi-crypto]]
+who = "Bobby Holley <bobbyholley@gmail.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2021-10-29"
+end = "2024-06-26"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.wasmtime-wasi-http]]
+who = "Bobby Holley <bobbyholley@gmail.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2023-05-22"
+end = "2024-06-26"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.wasmtime-wasi-nn]]
+who = "Bobby Holley <bobbyholley@gmail.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2021-10-29"
+end = "2024-06-26"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.wasmtime-wasi-threads]]
+who = "Bobby Holley <bobbyholley@gmail.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2023-03-20"
+end = "2024-06-26"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.wasmtime-wast]]
+who = "Bobby Holley <bobbyholley@gmail.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2021-10-29"
+end = "2024-06-26"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.wasmtime-winch]]
+who = "Bobby Holley <bobbyholley@gmail.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2022-11-21"
+end = "2024-06-26"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.wasmtime-wit-bindgen]]
+who = "Bobby Holley <bobbyholley@gmail.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2023-01-20"
+end = "2024-06-26"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.wast]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+user-id = 1 # Alex Crichton (alexcrichton)
+start = "2019-10-16"
+end = "2024-04-14"
+notes = """
+This is a Bytecode Alliance authored crate maintained in the `wasm-tools`
+repository of which I'm one of the primary maintainers and publishers for.
+I am employed by a member of the Bytecode Alliance and plan to continue doing
+so and will actively maintain this crate over time.
+"""
+
+[[wildcard-audits.wat]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+user-id = 1 # Alex Crichton (alexcrichton)
+start = "2019-10-18"
+end = "2024-04-14"
+notes = """
+This is a Bytecode Alliance authored crate maintained in the `wasm-tools`
+repository of which I'm one of the primary maintainers and publishers for.
+I am employed by a member of the Bytecode Alliance and plan to continue doing
+so and will actively maintain this crate over time.
+"""
+
+[[wildcard-audits.wiggle]]
+who = "Bobby Holley <bobbyholley@gmail.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2021-10-29"
+end = "2024-06-26"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.wiggle-generate]]
+who = "Bobby Holley <bobbyholley@gmail.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2021-10-29"
+end = "2024-06-26"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.wiggle-macro]]
+who = "Bobby Holley <bobbyholley@gmail.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2021-10-29"
+end = "2024-06-26"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.wiggle-test]]
+who = "Bobby Holley <bobbyholley@gmail.com>"
+criteria = "safe-to-deploy"
+user-id = 18162 # Pat Hickey (pchickey)
+start = "2020-03-12"
+end = "2024-06-26"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.winch-codegen]]
+who = "Bobby Holley <bobbyholley@gmail.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2022-11-21"
+end = "2024-06-26"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.wit-bindgen]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+user-id = 1 # Alex Crichton (alexcrichton)
+start = "2020-12-11"
+end = "2024-04-14"
+notes = """
+This is a Bytecode Alliance authored crate maintained in the `wit-bindgen`
+repository of which I'm one of the primary maintainers and publishers for.
+I am employed by a member of the Bytecode Alliance and plan to continue doing
+so and will actively maintain this crate over time.
+"""
+
+[[wildcard-audits.wit-bindgen-core]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+user-id = 1 # Alex Crichton (alexcrichton)
+start = "2020-12-11"
+end = "2024-04-14"
+notes = """
+This is a Bytecode Alliance authored crate maintained in the `wit-bindgen`
+repository of which I'm one of the primary maintainers and publishers for.
+I am employed by a member of the Bytecode Alliance and plan to continue doing
+so and will actively maintain this crate over time.
+"""
+
+[[wildcard-audits.wit-bindgen-rust]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+user-id = 1 # Alex Crichton (alexcrichton)
+start = "2020-12-11"
+end = "2024-04-14"
+notes = """
+This is a Bytecode Alliance authored crate maintained in the `wit-bindgen`
+repository of which I'm one of the primary maintainers and publishers for.
+I am employed by a member of the Bytecode Alliance and plan to continue doing
+so and will actively maintain this crate over time.
+"""
+
+[[wildcard-audits.wit-bindgen-rust-lib]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+user-id = 1 # Alex Crichton (alexcrichton)
+start = "2020-12-11"
+end = "2024-04-14"
+notes = """
+This is a Bytecode Alliance authored crate maintained in the `wit-bindgen`
+repository of which I'm one of the primary maintainers and publishers for.
+I am employed by a member of the Bytecode Alliance and plan to continue doing
+so and will actively maintain this crate over time.
+"""
+
+[[wildcard-audits.wit-bindgen-rust-macro]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+user-id = 1 # Alex Crichton (alexcrichton)
+start = "2020-12-11"
+end = "2024-04-14"
+notes = """
+This is a Bytecode Alliance authored crate maintained in the `wit-bindgen`
+repository of which I'm one of the primary maintainers and publishers for.
+I am employed by a member of the Bytecode Alliance and plan to continue doing
+so and will actively maintain this crate over time.
+"""
+
+[[wildcard-audits.wit-component]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+user-id = 1 # Alex Crichton (alexcrichton)
+start = "2020-12-11"
+end = "2024-04-14"
+notes = """
+This is a Bytecode Alliance authored crate maintained in the `wasm-tools`
+repository of which I'm one of the primary maintainers and publishers for.
+I am employed by a member of the Bytecode Alliance and plan to continue doing
+so and will actively maintain this crate over time.
+"""
+
+[[wildcard-audits.wit-component]]
+who = "Nick Fitzgerald <fitzgen@gmail.com>"
+criteria = "safe-to-deploy"
+user-id = 696 # Nick Fitzgerald (fitzgen)
+start = "2019-03-16"
+end = "2024-03-10"
+
+[[wildcard-audits.wit-parser]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+user-id = 1 # Alex Crichton (alexcrichton)
+start = "2019-12-02"
+end = "2024-04-14"
+notes = """
+This is a Bytecode Alliance authored crate maintained in the `wasm-tools`
+repository of which I'm one of the primary maintainers and publishers for.
+I am employed by a member of the Bytecode Alliance and plan to continue doing
+so and will actively maintain this crate over time.
+"""
 
 [[audits.addr2line]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -35,6 +674,12 @@ dependencies and refactor existing code to expose more functionality and such.
 who = "Chris Fallin <chris@cfallin.org>"
 criteria = "safe-to-deploy"
 delta = "0.7.6 -> 0.8.2"
+
+[[audits.ambient-authority]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+version = "0.0.2"
+notes = "Contains no unsafe code, no IO, no build.rs."
 
 [[audits.anes]]
 who = "Pat Hickey <phickey@fastly.com>"
@@ -52,6 +697,11 @@ nightly feature in the standard library for backtrace integration. No undue
 `unsafe` is added and nothing unsurprising for the `anyhow` crate is happening
 here.
 """
+
+[[audits.anyhow]]
+who = "Pat Hickey <phickey@fastly.com>"
+criteria = "safe-to-deploy"
+delta = "1.0.69 -> 1.0.71"
 
 [[audits.arbitrary]]
 who = "Nick Fitzgerald <fitzgen@gmail.com>"
@@ -121,6 +771,16 @@ criteria = "safe-to-run"
 version = "0.21.0"
 notes = "This crate has no dependencies, no build.rs, and contains no unsafe code."
 
+[[audits.bitflags]]
+who = "Jamey Sharp <jsharp@fastly.com>"
+criteria = "safe-to-deploy"
+delta = "2.1.0 -> 2.2.1"
+notes = """
+This version adds unsafe impls of traits from the bytemuck crate when built
+with that library enabled, but I believe the impls satisfy the documented
+safety requirements for bytemuck. The other changes are minor.
+"""
+
 [[audits.block-buffer]]
 who = "Benjamin Bouvier <public@benj.me>"
 criteria = "safe-to-deploy"
@@ -161,6 +821,12 @@ criteria = "safe-to-deploy"
 delta = "1.0.1 -> 1.0.5"
 notes = "The Bytecode Alliance is the author of this crate."
 
+[[audits.cap-fs-ext]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+delta = "1.0.5 -> 1.0.14"
+notes = "The Bytecode Alliance is the author of this crate."
+
 [[audits.cap-primitives]]
 who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
@@ -177,6 +843,12 @@ notes = "The Bytecode Alliance is the author of this crate"
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
 delta = "1.0.1 -> 1.0.5"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[audits.cap-primitives]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+delta = "1.0.5 -> 1.0.14"
 notes = "The Bytecode Alliance is the author of this crate."
 
 [[audits.cap-rand]]
@@ -191,6 +863,12 @@ criteria = "safe-to-deploy"
 version = "1.0.1"
 notes = "The Bytecode Alliance is the author of this crate"
 
+[[audits.cap-rand]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+delta = "1.0.1 -> 1.0.14"
+notes = "The Bytecode Alliance is the author of this crate."
+
 [[audits.cap-std]]
 who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
@@ -209,6 +887,12 @@ criteria = "safe-to-deploy"
 delta = "1.0.1 -> 1.0.5"
 notes = "The Bytecode Alliance is the author of this crate."
 
+[[audits.cap-std]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+delta = "1.0.5 -> 1.0.14"
+notes = "The Bytecode Alliance is the author of this crate."
+
 [[audits.cap-tempfile]]
 who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-run"
@@ -220,6 +904,12 @@ who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-run"
 version = "1.0.1"
 notes = "The Bytecode Alliance is the author of this crate"
+
+[[audits.cap-tempfile]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+delta = "1.0.1 -> 1.0.14"
+notes = "The Bytecode Alliance is the author of this crate."
 
 [[audits.cap-time-ext]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -237,6 +927,12 @@ notes = "The Bytecode Alliance is the author of this crate."
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
 delta = "1.0.1 -> 1.0.5"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[audits.cap-time-ext]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+delta = "1.0.5 -> 1.0.14"
 notes = "The Bytecode Alliance is the author of this crate."
 
 [[audits.cargo-platform]]
@@ -301,6 +997,15 @@ criteria = "safe-to-deploy"
 version = "0.2.4"
 notes = "A few tiny blocks of `unsafe` but each of them is very obviously correct."
 
+[[audits.cpufeatures]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.2.2 -> 0.2.7"
+notes = """
+This is a minor update that looks to add some more detected CPU features and
+various other minor portability fixes such as MIRI support.
+"""
+
 [[audits.criterion]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-run"
@@ -334,6 +1039,17 @@ criteria = "safe-to-deploy"
 delta = "0.4.5 -> 0.5.0"
 notes = "Just a version bump, only change to code is to remove an allow(deprecated)"
 
+[[audits.crossbeam-channel]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.5.4 -> 0.5.8"
+notes = """
+This diff does what it says on the tin for this version range, notably fixing a
+race condition, improving handling of durations, and additionally swapping out a
+spin lock with a lock from the standard library. Minor bits of `unsafe` code
+are modified but that's expected given the nature of this crate.
+"""
+
 [[audits.crypto-common]]
 who = "Benjamin Bouvier <public@benj.me>"
 criteria = "safe-to-deploy"
@@ -356,6 +1072,33 @@ who = "Benjamin Bouvier <public@benj.me>"
 criteria = "safe-to-deploy"
 delta = "0.9.0 -> 0.10.3"
 
+[[audits.ed25519]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "1.4.1 -> 1.5.3"
+notes = """
+This diff brings in a number of minor updates of which none are related to
+`unsafe` code or anything system-related like filesystems.
+"""
+
+[[audits.errno]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+version = "0.3.0"
+notes = "This crate uses libc and windows-sys APIs to get and set the raw OS error value."
+
+[[audits.errno]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+delta = "0.3.0 -> 0.3.1"
+notes = "Just a dependency version bump and a bug fix for redox"
+
+[[audits.errno-dragonfly]]
+who = "Jamey Sharp <jsharp@fastly.com>"
+criteria = "safe-to-deploy"
+version = "0.1.2"
+notes = "This should be portable to any POSIX system and seems like it should be part of the libc crate, but at any rate it's safe as is."
+
 [[audits.fd-lock]]
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
@@ -368,6 +1111,12 @@ criteria = "safe-to-deploy"
 delta = "3.0.9 -> 3.0.10"
 notes = "Just a dependency version bump"
 
+[[audits.fd-lock]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+delta = "3.0.10 -> 3.0.12"
+notes = "Just a dependency version bump"
+
 [[audits.file-per-thread-logger]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -377,6 +1126,18 @@ Contains no unsafe code but does write log files to the filesystem. Log files
 are only created when requested by the application, however, and otherwise
 only does its stated purpose.
 """
+
+[[audits.file-per-thread-logger]]
+who = "Benjamin Bouvier <public@benj.me>"
+criteria = "safe-to-deploy"
+version = "0.2.0"
+notes = "Simple version bump."
+
+[[audits.file-per-thread-logger]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+delta = "0.1.5 -> 0.1.6"
+notes = "Just a dependency version bump"
 
 [[audits.foreign-types]]
 who = "Pat Hickey <phickey@fastly.com>"
@@ -410,6 +1171,12 @@ who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
 delta = "0.18.0 -> 0.18.1"
 notes = "The Bytecode Alliance is the author of this crate."
+
+[[audits.fs-set-times]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+delta = "0.18.1 -> 0.19.1"
+notes = "Just a dependency version bump"
 
 [[audits.futures]]
 who = "Pat Hickey <phickey@fastly.com>"
@@ -445,6 +1212,17 @@ who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
 version = "0.3.27"
 
+[[audits.fxprof-processed-profile]]
+who = "Jamey Sharp <jsharp@fastly.com>"
+criteria = "safe-to-deploy"
+version = "0.6.0"
+notes = """
+No unsafe code, I/O, or powerful imports. This is a straightforward set of data
+structures representing the Firefox \"processed\" profile format, with serde
+serialization support. All logic is trivial: either unit conversion, or
+hash-consing to support de-duplication required by the format.
+"""
+
 [[audits.gimli]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -455,11 +1233,22 @@ more features, etc. Some minor `unsafe` code was added that does not appear
 incorrect. Otherwise looks like someone probably ran clippy and/or rustfmt.
 """
 
+[[audits.glob]]
+who = "Jamey Sharp <jsharp@fastly.com>"
+criteria = "safe-to-deploy"
+delta = "0.3.1 -> 0.3.0"
+
 [[audits.hashbrown]]
 who = "Chris Fallin <chris@cfallin.org>"
 criteria = "safe-to-deploy"
 delta = "0.12.3 -> 0.13.1"
 notes = "The diff looks plausible. Much of it is low-level memory-layout code and I can't be 100% certain without a deeper dive into the implementation logic, but nothing looks actively malicious."
+
+[[audits.hashbrown]]
+who = "Trevor Elliott <telliott@fastly.com>"
+criteria = "safe-to-deploy"
+delta = "0.13.1 -> 0.13.2"
+notes = "I read through the diff between v0.13.1 and v0.13.2, and verified that the changes made matched up with the changelog entries. There were very few changes between these two releases, and it was easy to verify what they did."
 
 [[audits.heck]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -528,6 +1317,12 @@ criteria = "safe-to-deploy"
 delta = "0.17.0 -> 0.17.2"
 notes = "The Bytecode Alliance is the author of this crate."
 
+[[audits.io-extras]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+delta = "0.17.2 -> 0.17.4"
+notes = "Just a dependency version bump"
+
 [[audits.io-lifetimes]]
 who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
@@ -540,6 +1335,12 @@ criteria = "safe-to-deploy"
 delta = "1.0.3 -> 1.0.5"
 notes = "The Bytecode Alliance is the author of this crate."
 
+[[audits.io-lifetimes]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+delta = "1.0.5 -> 1.0.10"
+notes = "I am the maintainer of this crate."
+
 [[audits.is-terminal]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -551,6 +1352,15 @@ who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
 version = "0.4.1"
 notes = "Contains only unsafe code for interacting with the crate's intended purpose."
+
+[[audits.is-terminal]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+version = "0.4.7"
+notes = """
+The is-terminal implementation code is now sync'd up with the prototype
+implementation in the Rust standard library.
+"""
 
 [[audits.is-terminal]]
 who = "Pat Hickey <phickey@fastly.com>"
@@ -576,6 +1386,22 @@ criteria = "safe-to-deploy"
 version = "0.2.5"
 notes = "I am the author of this crate."
 
+[[audits.libc]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+delta = "0.2.133 -> 0.2.141"
+notes = """
+I have performed a very rough survey of the changes and didn't see anything
+obviously out of place, or that looks like a silent ABI break on a platform
+Wasmtime supports. I didn't check all the new struct layouts, constants,
+function signatures, and so on for ABI conformance though.
+
+This crate is maintained by the Rust project and is a dependency of the Rust
+standard library itself. It contains tests that generate C source files to
+ensure that the ABI it describes matches the ABI described by the C header
+files in the correspond to match.
+"""
+
 [[audits.libfuzzer-sys]]
 who = "Nick Fitzgerald <fitzgen@gmail.com>"
 criteria = "safe-to-run"
@@ -598,11 +1424,31 @@ but also contains some other minor fixes as well. Everything looks A-OK and
 as expected.
 """
 
+[[audits.libm]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.2.4 -> 0.2.7"
+notes = """
+This is a minor update which has some testing affordances as well as some
+updated math algorithms.
+"""
+
 [[audits.linux-raw-sys]]
 who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
 version = "0.1.3"
 notes = "I am the author of this crate."
+
+[[audits.linux-raw-sys]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+version = "0.3.3"
+notes = "I am the author of this crate."
+
+[[audits.matchers]]
+who = "Pat Hickey <phickey@fastly.com>"
+criteria = "safe-to-deploy"
+version = "0.1.0"
 
 [[audits.memfd]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -622,6 +1468,12 @@ notes = """
 The only changes from 0.6.1 were from my own PR which updated memfd to newer
 dependencies.
 """
+
+[[audits.memfd]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+delta = "0.6.2 -> 0.6.3"
+notes = "Just a dependency version bump and documentation update"
 
 [[audits.memoffset]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -692,6 +1544,11 @@ notes = """
 I am the author of most of these changes.
 """
 
+[[audits.openvino]]
+who = "Andrew Brown <andrew.brown@intel.com>"
+criteria = "safe-to-deploy"
+delta = "0.4.2 -> 0.5.0"
+
 [[audits.openvino-finder]]
 who = "Matthew Tamayo-Rios <matthew@geekbeast.com>"
 criteria = "safe-to-deploy"
@@ -700,6 +1557,11 @@ notes = """
 Only updates to Cargo file for versioning.
 """
 
+[[audits.openvino-finder]]
+who = "Andrew Brown <andrew.brown@intel.com>"
+criteria = "safe-to-deploy"
+delta = "0.4.2 -> 0.5.0"
+
 [[audits.openvino-sys]]
 who = "Matthew Tamayo-Rios <matthew@geekbeast.com>"
 criteria = "safe-to-deploy"
@@ -707,6 +1569,11 @@ delta = "0.4.1 -> 0.4.2"
 notes = """
 Only updates to tests to use new rust functions for mut pointers.
 """
+
+[[audits.openvino-sys]]
+who = "Andrew Brown <andrew.brown@intel.com>"
+criteria = "safe-to-deploy"
+delta = "0.4.2 -> 0.5.0"
 
 [[audits.peeking_take_while]]
 who = "Nick Fitzgerald <fitzgen@gmail.com>"
@@ -735,6 +1602,20 @@ criteria = "safe-to-deploy"
 version = "0.3.25"
 notes = "This crate shells out to the pkg-config executable, but it appears to sanitize inputs reasonably."
 
+[[audits.proc-macro2]]
+who = "Pat Hickey <phickey@fastly.com>"
+criteria = "safe-to-deploy"
+delta = "1.0.51 -> 1.0.57"
+
+[[audits.proc-macro2]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "1.0.59 -> 1.0.63"
+notes = """
+This is a routine update for new nightly features and new syntax popping up on
+nightly, nothing out of the ordinary.
+"""
+
 [[audits.pulldown-cmark]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -744,6 +1625,11 @@ This crate has `unsafe` blocks and they're all related to SIMD-acceleration and
 are otherwise not doing other `unsafe` operations. Additionally the crate does
 not do anything other than markdown rendering as is expected.
 """
+
+[[audits.quote]]
+who = "Pat Hickey <phickey@fastly.com>"
+criteria = "safe-to-deploy"
+delta = "1.0.23 -> 1.0.27"
 
 [[audits.regalloc2]]
 who = "Jamey Sharp <jsharp@fastly.com>"
@@ -793,6 +1679,12 @@ criteria = "safe-to-deploy"
 delta = "0.6.0 -> 0.6.1"
 notes = "Bytecode Alliance is the author of this crate."
 
+[[audits.regalloc2]]
+who = "Trevor Elliott <telliott@fastly.com>"
+criteria = "safe-to-deploy"
+delta = "0.6.1 -> 0.7.0"
+notes = "The Bytecode Alliance is the author of this crate."
+
 [[audits.rustc-demangle]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -812,10 +1704,33 @@ version = "0.36.7"
 notes = "The Bytecode Alliance is the author of this crate."
 
 [[audits.rustix]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+version = "0.37.13"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[audits.rustix]]
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
 delta = "0.36.7 -> 0.36.8"
 notes = "The Bytecode Alliance is the author of this crate."
+
+[[audits.rustls]]
+who = "Pat Hickey <phickey@fastly.com>"
+criteria = "safe-to-deploy"
+version = "0.21.0"
+notes = "no unsafe code, ambient capabilities only used in tests"
+
+[[audits.rustls-webpki]]
+who = "Pat Hickey <phickey@fastly.com>"
+criteria = "safe-to-deploy"
+version = "0.100.1"
+
+[[audits.sct]]
+who = "Pat Hickey <phickey@fastly.com>"
+criteria = "safe-to-deploy"
+version = "0.7.0"
+notes = "no unsafe, no build, no ambient capabilities"
 
 [[audits.semver]]
 who = "Pat Hickey <phickey@fastly.com>"
@@ -835,6 +1750,16 @@ criteria = "safe-to-deploy"
 version = "0.4.6"
 notes = "provides a datastructure implemented using std's Vec. all uses of unsafe are just delegating to the underlying unsafe Vec methods."
 
+[[audits.slice-group-by]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.3.0 -> 0.3.1"
+notes = """
+This update runs `rustfmt` for the first time in awhile and additionally fixes a
+few minor issues related to Stacked Borrows and running in MIRI. No fundamental
+change to any preexisting unsafe code is happening here.
+"""
+
 [[audits.spin]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-run"
@@ -846,6 +1771,21 @@ be expected. Otherwise this crate does not unduly access ambient capabilities
 and does what it says on the tin, providing spin-based synchronization
 primitives.
 """
+
+[[audits.sptr]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "0.3.2"
+notes = """
+This crate is 90% documentation and does contain a good deal of `unsafe` code,
+but it's all doing what it says on the tin: being a stable polyfill for strict
+provenance APIs in the standard library while they're on Nightly.
+"""
+
+[[audits.syn]]
+who = "Pat Hickey <phickey@fastly.com>"
+criteria = "safe-to-deploy"
+delta = "1.0.92 -> 2.0.16"
 
 [[audits.system-interface]]
 who = "Dan Gohman <dev@sunfishcode.online>"
@@ -864,6 +1804,28 @@ who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
 delta = "0.25.0 -> 0.25.4"
 notes = "The Bytecode Alliance is the author of this crate."
+
+[[audits.system-interface]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+delta = "0.25.4 -> 0.25.6"
+notes = "Just a dependency version bump"
+
+[[audits.system-interface]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+delta = "0.25.6 -> 0.25.7"
+notes = "This is a minor bug-fix update."
+
+[[audits.tempfile]]
+who = "Pat Hickey <phickey@fastly.com>"
+criteria = "safe-to-deploy"
+delta = "3.3.0 -> 3.5.0"
+
+[[audits.test-log]]
+who = "Pat Hickey <phickey@fastly.com>"
+criteria = "safe-to-deploy"
+version = "0.2.11"
 
 [[audits.tinyvec]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -901,6 +1863,12 @@ criteria = "safe-to-deploy"
 version = "0.3.1"
 notes = "unsafety is used for smuggling std::task::Context as a raw pointer. Lifetime and type safety appears to be taken care of correctly."
 
+[[audits.tokio-rustls]]
+who = "Pat Hickey <phickey@fastly.com>"
+criteria = "safe-to-deploy"
+version = "0.24.0"
+notes = "no unsafe, no build, no ambient capabilities"
+
 [[audits.tokio-util]]
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
@@ -930,6 +1898,11 @@ notes = """
 This crate has no unsafe code and does not use `std::*`. Skimming the crate it
 does not attempt to out of the bounds of what it's already supposed to be doing.
 """
+
+[[audits.unicode-ident]]
+who = "Pat Hickey <phickey@fastly.com>"
+criteria = "safe-to-deploy"
+version = "1.0.8"
 
 [[audits.unicode-normalization]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -962,10 +1935,21 @@ criteria = "safe-to-deploy"
 version = "0.2.15"
 notes = "no build.rs, no macros, no unsafe. It reads the filesystem and makes copies of DLLs into OUT_DIR."
 
+[[audits.walkdir]]
+who = "Andrew Brown <andrew.brown@intel.com>"
+criteria = "safe-to-deploy"
+delta = "2.3.2 -> 2.3.3"
+notes = "No significant changes: minor refactoring and removes the need to use `winapi`."
+
 [[audits.want]]
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
 version = "0.3.0"
+
+[[audits.wasm-bindgen-shared]]
+who = "Pat Hickey <phickey@fastly.com>"
+criteria = "safe-to-deploy"
+delta = "0.2.83 -> 0.2.80"
 
 [[audits.wasm-coredump-builder]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -1602,107 +2586,10 @@ criteria = "safe-to-deploy"
 delta = "1.0.48 -> 1.0.49"
 notes = "The Bytecode Alliance is the author of this crate."
 
-[[audits.windows-sys]]
-who = "Dan Gohman <dev@sunfishcode.online>"
-criteria = "safe-to-deploy"
-version = "0.42.0"
-notes = "This is a Windows API bindings library maintained by Microsoft themselves."
-
-[[audits.windows-sys]]
+[[audits.webpki-roots]]
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
-delta = "0.42.0 -> 0.45.0"
-notes = "This is a Windows API bindings library maintained by Microsoft themselves."
-
-[[audits.windows-targets]]
-who = "Pat Hickey <phickey@fastly.com>"
-criteria = "safe-to-deploy"
-version = "0.42.1"
-notes = "This is a Windows API bindings library maintained by Microsoft themselves. Additionally, this particular crate is empty and just collects a bunch of dependencies, which are not exported, so I don't understand why it exists at all."
-
-[[audits.windows_aarch64_gnullvm]]
-who = "Dan Gohman <dev@sunfishcode.online>"
-criteria = "safe-to-deploy"
-version = "0.42.0"
-notes = "This is a Windows API bindings library maintained by Microsoft themselves."
-
-[[audits.windows_aarch64_gnullvm]]
-who = "Pat Hickey <phickey@fastly.com>"
-criteria = "safe-to-deploy"
-delta = "0.42.0 -> 0.42.1"
-notes = "This is a Windows API bindings library maintained by Microsoft themselves. The diff is just adding license files."
-
-[[audits.windows_aarch64_msvc]]
-who = "Dan Gohman <dev@sunfishcode.online>"
-criteria = "safe-to-deploy"
-version = "0.42.0"
-notes = "This is a Windows API bindings library maintained by Microsoft themselves."
-
-[[audits.windows_aarch64_msvc]]
-who = "Pat Hickey <phickey@fastly.com>"
-criteria = "safe-to-deploy"
-delta = "0.42.0 -> 0.42.1"
-notes = "This is a Windows API bindings library maintained by Microsoft themselves. The diff is just adding license files."
-
-[[audits.windows_i686_gnu]]
-who = "Dan Gohman <dev@sunfishcode.online>"
-criteria = "safe-to-deploy"
-version = "0.42.0"
-notes = "This is a Windows API bindings library maintained by Microsoft themselves."
-
-[[audits.windows_i686_gnu]]
-who = "Pat Hickey <phickey@fastly.com>"
-criteria = "safe-to-deploy"
-delta = "0.42.0 -> 0.42.1"
-notes = "This is a Windows API bindings library maintained by Microsoft themselves. The diff is just adding license files."
-
-[[audits.windows_i686_msvc]]
-who = "Dan Gohman <dev@sunfishcode.online>"
-criteria = "safe-to-deploy"
-version = "0.42.0"
-notes = "This is a Windows API bindings library maintained by Microsoft themselves."
-
-[[audits.windows_i686_msvc]]
-who = "Pat Hickey <phickey@fastly.com>"
-criteria = "safe-to-deploy"
-delta = "0.42.0 -> 0.42.1"
-notes = "This is a Windows API bindings library maintained by Microsoft themselves. The diff is just adding license files."
-
-[[audits.windows_x86_64_gnu]]
-who = "Dan Gohman <dev@sunfishcode.online>"
-criteria = "safe-to-deploy"
-version = "0.42.0"
-notes = "This is a Windows API bindings library maintained by Microsoft themselves."
-
-[[audits.windows_x86_64_gnu]]
-who = "Pat Hickey <phickey@fastly.com>"
-criteria = "safe-to-deploy"
-delta = "0.42.0 -> 0.42.1"
-notes = "This is a Windows API bindings library maintained by Microsoft themselves. The diff is just adding license files."
-
-[[audits.windows_x86_64_gnullvm]]
-who = "Dan Gohman <dev@sunfishcode.online>"
-criteria = "safe-to-deploy"
-version = "0.42.0"
-notes = "This is a Windows API bindings library maintained by Microsoft themselves."
-
-[[audits.windows_x86_64_gnullvm]]
-who = "Pat Hickey <phickey@fastly.com>"
-criteria = "safe-to-deploy"
-delta = "0.42.0 -> 0.42.1"
-notes = "This is a Windows API bindings library maintained by Microsoft themselves. The diff is just adding license files."
-
-[[audits.windows_x86_64_msvc]]
-who = "Dan Gohman <dev@sunfishcode.online>"
-criteria = "safe-to-deploy"
-version = "0.42.0"
-notes = "This is a Windows API bindings library maintained by Microsoft themselves."
-
-[[audits.windows_x86_64_msvc]]
-who = "Pat Hickey <phickey@fastly.com>"
-criteria = "safe-to-deploy"
-delta = "0.42.0 -> 0.42.1"
-notes = "This is a Windows API bindings library maintained by Microsoft themselves. The diff is just adding license files."
+delta = "0.22.4 -> 0.23.0"
 
 [[audits.winx]]
 who = "Dan Gohman <dev@sunfishcode.online>"
@@ -1715,6 +2602,12 @@ who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
 delta = "0.34.0 -> 0.35.0"
 notes = "Dan Gohman, a Bytecode Alliance core contributor, is the author of this crate."
+
+[[audits.winx]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+delta = "0.35.0 -> 0.35.1"
+notes = "Just a dependency version bump"
 
 [[audits.wit-parser]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -1763,3 +2656,57 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 version = "0.6.4"
 notes = "The Bytecode Alliance is the author of this crate."
+
+[[trusted.windows-sys]]
+criteria = "safe-to-deploy"
+user-id = 64539 # Kenny Kerr (kennykerr)
+start = "2021-11-15"
+end = "2024-06-17"
+
+[[trusted.windows-targets]]
+criteria = "safe-to-deploy"
+user-id = 64539 # Kenny Kerr (kennykerr)
+start = "2022-09-09"
+end = "2024-06-17"
+
+[[trusted.windows_aarch64_gnullvm]]
+criteria = "safe-to-deploy"
+user-id = 64539 # Kenny Kerr (kennykerr)
+start = "2022-09-01"
+end = "2024-06-17"
+
+[[trusted.windows_aarch64_msvc]]
+criteria = "safe-to-deploy"
+user-id = 64539 # Kenny Kerr (kennykerr)
+start = "2021-11-05"
+end = "2024-06-17"
+
+[[trusted.windows_i686_gnu]]
+criteria = "safe-to-deploy"
+user-id = 64539 # Kenny Kerr (kennykerr)
+start = "2021-10-28"
+end = "2024-06-17"
+
+[[trusted.windows_i686_msvc]]
+criteria = "safe-to-deploy"
+user-id = 64539 # Kenny Kerr (kennykerr)
+start = "2021-10-27"
+end = "2024-06-17"
+
+[[trusted.windows_x86_64_gnu]]
+criteria = "safe-to-deploy"
+user-id = 64539 # Kenny Kerr (kennykerr)
+start = "2021-10-28"
+end = "2024-06-17"
+
+[[trusted.windows_x86_64_gnullvm]]
+criteria = "safe-to-deploy"
+user-id = 64539 # Kenny Kerr (kennykerr)
+start = "2022-09-01"
+end = "2024-06-17"
+
+[[trusted.windows_x86_64_msvc]]
+criteria = "safe-to-deploy"
+user-id = 64539 # Kenny Kerr (kennykerr)
+start = "2021-10-27"
+end = "2024-06-17"

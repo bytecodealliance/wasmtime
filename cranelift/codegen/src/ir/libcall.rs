@@ -1,7 +1,7 @@
 //! Naming well-known routines in the runtime library.
 
 use crate::{
-    ir::{types, AbiParam, ExternalName, FuncRef, Function, Signature},
+    ir::{types, AbiParam, ExternalName, FuncRef, Function, Signature, Type},
     isa::CallConv,
 };
 use core::fmt;
@@ -56,6 +56,9 @@ pub enum LibCall {
     ElfTlsGetAddr,
     /// Elf __tls_get_offset
     ElfTlsGetOffset,
+
+    /// The `pshufb` on x86 when SSSE3 isn't available.
+    X86Pshufb,
     // When adding a new variant make sure to add it to `all_libcalls` too.
 }
 
@@ -88,6 +91,8 @@ impl FromStr for LibCall {
 
             "ElfTlsGetAddr" => Ok(Self::ElfTlsGetAddr),
             "ElfTlsGetOffset" => Ok(Self::ElfTlsGetOffset),
+
+            "X86Pshufb" => Ok(Self::X86Pshufb),
             _ => Err(()),
         }
     }
@@ -115,11 +120,12 @@ impl LibCall {
             Memcmp,
             ElfTlsGetAddr,
             ElfTlsGetOffset,
+            X86Pshufb,
         ]
     }
 
     /// Get a [Signature] for the function targeted by this [LibCall].
-    pub fn signature(&self, call_conv: CallConv) -> Signature {
+    pub fn signature(&self, call_conv: CallConv, pointer_type: Type) -> Signature {
         use types::*;
         let mut sig = Signature::new(call_conv);
 
@@ -140,13 +146,37 @@ impl LibCall {
                 sig.params.push(AbiParam::new(ty));
                 sig.returns.push(AbiParam::new(ty));
             }
-            LibCall::Probestack
-            | LibCall::Memcpy
-            | LibCall::Memset
-            | LibCall::Memmove
-            | LibCall::Memcmp
-            | LibCall::ElfTlsGetAddr
-            | LibCall::ElfTlsGetOffset => unimplemented!(),
+            LibCall::Memcpy | LibCall::Memmove => {
+                // void* memcpy(void *dest, const void *src, size_t count);
+                // void* memmove(void* dest, const void* src, size_t count);
+                sig.params.push(AbiParam::new(pointer_type));
+                sig.params.push(AbiParam::new(pointer_type));
+                sig.params.push(AbiParam::new(pointer_type));
+                sig.returns.push(AbiParam::new(pointer_type));
+            }
+            LibCall::Memset => {
+                // void *memset(void *dest, int ch, size_t count);
+                sig.params.push(AbiParam::new(pointer_type));
+                sig.params.push(AbiParam::new(I32));
+                sig.params.push(AbiParam::new(pointer_type));
+                sig.returns.push(AbiParam::new(pointer_type));
+            }
+            LibCall::Memcmp => {
+                // void* memcpy(void *dest, const void *src, size_t count);
+                sig.params.push(AbiParam::new(pointer_type));
+                sig.params.push(AbiParam::new(pointer_type));
+                sig.params.push(AbiParam::new(pointer_type));
+                sig.returns.push(AbiParam::new(I32))
+            }
+
+            LibCall::Probestack | LibCall::ElfTlsGetAddr | LibCall::ElfTlsGetOffset => {
+                unimplemented!()
+            }
+            LibCall::X86Pshufb => {
+                sig.params.push(AbiParam::new(I8X16));
+                sig.params.push(AbiParam::new(I8X16));
+                sig.returns.push(AbiParam::new(I8X16));
+            }
         }
 
         sig

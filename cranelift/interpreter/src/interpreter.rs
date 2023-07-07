@@ -8,11 +8,11 @@ use crate::frame::Frame;
 use crate::instruction::DfgInstructionContext;
 use crate::state::{InterpreterFunctionRef, MemoryError, State};
 use crate::step::{step, ControlFlow, StepError};
-use crate::value::{Value, ValueError};
+use crate::value::{DataValueExt, ValueError};
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::{
     ArgumentPurpose, Block, Endianness, ExternalName, FuncRef, Function, GlobalValue,
-    GlobalValueData, LibCall, MemFlags, StackSlot, TrapCode, Type, Value as ValueRef,
+    GlobalValueData, LibCall, MemFlags, StackSlot, TrapCode, Type,
 };
 use log::trace;
 use smallvec::SmallVec;
@@ -46,7 +46,7 @@ impl<'a> Interpreter<'a> {
         &mut self,
         func_name: &str,
         arguments: &[DataValue],
-    ) -> Result<ControlFlow<'a, DataValue>, InterpreterError> {
+    ) -> Result<ControlFlow<'a>, InterpreterError> {
         let index = self
             .state
             .functions
@@ -61,7 +61,7 @@ impl<'a> Interpreter<'a> {
         &mut self,
         index: FuncIndex,
         arguments: &[DataValue],
-    ) -> Result<ControlFlow<'a, DataValue>, InterpreterError> {
+    ) -> Result<ControlFlow<'a>, InterpreterError> {
         match self.state.functions.get_by_index(index) {
             None => Err(InterpreterError::UnknownFunctionIndex(index)),
             Some(func) => self.call(func, arguments),
@@ -73,7 +73,7 @@ impl<'a> Interpreter<'a> {
         &mut self,
         function: &'a Function,
         arguments: &[DataValue],
-    ) -> Result<ControlFlow<'a, DataValue>, InterpreterError> {
+    ) -> Result<ControlFlow<'a>, InterpreterError> {
         trace!("Call: {}({:?})", function.name, arguments);
         let first_block = function
             .layout
@@ -91,9 +91,9 @@ impl<'a> Interpreter<'a> {
 
     /// Interpret a [Block] in a [Function]. This drives the interpretation over sequences of
     /// instructions, which may continue in other blocks, until the function returns.
-    fn block(&mut self, block: Block) -> Result<ControlFlow<'a, DataValue>, InterpreterError> {
+    fn block(&mut self, block: Block) -> Result<ControlFlow<'a>, InterpreterError> {
         trace!("Block: {}", block);
-        let function = self.state.current_frame_mut().function;
+        let function = self.state.current_frame_mut().function();
         let layout = &function.layout;
         let mut maybe_inst = layout.first_inst(block);
         while let Some(inst) = maybe_inst {
@@ -118,17 +118,29 @@ impl<'a> Interpreter<'a> {
                     maybe_inst = layout.first_inst(block)
                 }
                 ControlFlow::Call(called_function, arguments) => {
-                    let returned_arguments =
-                        self.call(called_function, &arguments)?.unwrap_return();
-                    self.state
-                        .current_frame_mut()
-                        .set_all(function.dfg.inst_results(inst), returned_arguments);
-                    maybe_inst = layout.next_inst(inst)
+                    match self.call(called_function, &arguments)? {
+                        ControlFlow::Return(rets) => {
+                            self.state
+                                .current_frame_mut()
+                                .set_all(function.dfg.inst_results(inst), rets.to_vec());
+                            maybe_inst = layout.next_inst(inst)
+                        }
+                        ControlFlow::Trap(trap) => return Ok(ControlFlow::Trap(trap)),
+                        cf => {
+                            panic!("invalid control flow after call: {:?}", cf)
+                        }
+                    }
                 }
                 ControlFlow::ReturnCall(callee, args) => {
                     self.state.pop_frame();
-                    let rets = self.call(callee, &args)?.unwrap_return();
-                    return Ok(ControlFlow::Return(rets.into()));
+
+                    return match self.call(callee, &args)? {
+                        ControlFlow::Return(rets) => Ok(ControlFlow::Return(rets)),
+                        ControlFlow::Trap(trap) => Ok(ControlFlow::Trap(trap)),
+                        cf => {
+                            panic!("invalid control flow after return_call: {:?}", cf)
+                        }
+                    };
                 }
                 ControlFlow::Return(returned_values) => {
                     self.state.pop_frame();
@@ -180,13 +192,13 @@ pub enum InterpreterError {
     FuelExhausted,
 }
 
-pub type LibCallValues<V> = SmallVec<[V; 1]>;
-pub type LibCallHandler<V> = fn(LibCall, LibCallValues<V>) -> Result<LibCallValues<V>, TrapCode>;
+pub type LibCallValues = SmallVec<[DataValue; 1]>;
+pub type LibCallHandler = fn(LibCall, LibCallValues) -> Result<LibCallValues, TrapCode>;
 
 /// Maintains the [Interpreter]'s state, implementing the [State] trait.
 pub struct InterpreterState<'a> {
     pub functions: FunctionStore<'a>,
-    pub libcall_handler: LibCallHandler<DataValue>,
+    pub libcall_handler: LibCallHandler,
     pub frame_stack: Vec<Frame<'a>>,
     /// Number of bytes from the bottom of the stack where the current frame's stack space is
     pub frame_offset: usize,
@@ -208,7 +220,7 @@ impl Default for InterpreterState<'_> {
             frame_stack: vec![],
             frame_offset: 0,
             stack: Vec::with_capacity(1024),
-            pinned_reg: DataValue::U64(0),
+            pinned_reg: DataValue::I64(0),
             native_endianness,
         }
     }
@@ -220,9 +232,47 @@ impl<'a> InterpreterState<'a> {
     }
 
     /// Registers a libcall handler
-    pub fn with_libcall_handler(mut self, handler: LibCallHandler<DataValue>) -> Self {
+    pub fn with_libcall_handler(mut self, handler: LibCallHandler) -> Self {
         self.libcall_handler = handler;
         self
+    }
+}
+
+impl<'a> State<'a> for InterpreterState<'a> {
+    fn get_function(&self, func_ref: FuncRef) -> Option<&'a Function> {
+        self.functions
+            .get_from_func_ref(func_ref, self.frame_stack.last().unwrap().function())
+    }
+    fn get_current_function(&self) -> &'a Function {
+        self.current_frame().function()
+    }
+
+    fn get_libcall_handler(&self) -> LibCallHandler {
+        self.libcall_handler
+    }
+
+    fn push_frame(&mut self, function: &'a Function) {
+        if let Some(frame) = self.frame_stack.iter().last() {
+            self.frame_offset += frame.function().fixed_stack_size() as usize;
+        }
+
+        // Grow the stack by the space necessary for this frame
+        self.stack
+            .extend(iter::repeat(0).take(function.fixed_stack_size() as usize));
+
+        self.frame_stack.push(Frame::new(function));
+    }
+    fn pop_frame(&mut self) {
+        if let Some(frame) = self.frame_stack.pop() {
+            // Shorten the stack after exiting the frame
+            self.stack
+                .truncate(self.stack.len() - frame.function().fixed_stack_size() as usize);
+
+            // Reset frame_offset to the start of this function
+            if let Some(frame) = self.frame_stack.iter().last() {
+                self.frame_offset -= frame.function().fixed_stack_size() as usize;
+            }
+        }
     }
 
     fn current_frame_mut(&mut self) -> &mut Frame<'a> {
@@ -239,52 +289,6 @@ impl<'a> InterpreterState<'a> {
             0 => panic!("unable to retrieve the current frame because no frames were pushed"),
             _ => &self.frame_stack[num_frames - 1],
         }
-    }
-}
-
-impl<'a> State<'a, DataValue> for InterpreterState<'a> {
-    fn get_function(&self, func_ref: FuncRef) -> Option<&'a Function> {
-        self.functions
-            .get_from_func_ref(func_ref, self.frame_stack.last().unwrap().function)
-    }
-    fn get_current_function(&self) -> &'a Function {
-        self.current_frame().function
-    }
-
-    fn get_libcall_handler(&self) -> LibCallHandler<DataValue> {
-        self.libcall_handler
-    }
-
-    fn push_frame(&mut self, function: &'a Function) {
-        if let Some(frame) = self.frame_stack.iter().last() {
-            self.frame_offset += frame.function.fixed_stack_size() as usize;
-        }
-
-        // Grow the stack by the space necessary for this frame
-        self.stack
-            .extend(iter::repeat(0).take(function.fixed_stack_size() as usize));
-
-        self.frame_stack.push(Frame::new(function));
-    }
-    fn pop_frame(&mut self) {
-        if let Some(frame) = self.frame_stack.pop() {
-            // Shorten the stack after exiting the frame
-            self.stack
-                .truncate(self.stack.len() - frame.function.fixed_stack_size() as usize);
-
-            // Reset frame_offset to the start of this function
-            if let Some(frame) = self.frame_stack.iter().last() {
-                self.frame_offset -= frame.function.fixed_stack_size() as usize;
-            }
-        }
-    }
-
-    fn get_value(&self, name: ValueRef) -> Option<DataValue> {
-        Some(self.current_frame().get(name).clone()) // TODO avoid clone?
-    }
-
-    fn set_value(&mut self, name: ValueRef, value: DataValue) -> Option<DataValue> {
-        self.current_frame_mut().set(name, value)
     }
 
     fn stack_address(
@@ -538,24 +542,6 @@ impl<'a> State<'a, DataValue> for InterpreterState<'a> {
         }
     }
 
-    fn validate_address(&self, addr: &Address) -> Result<(), MemoryError> {
-        match addr.region {
-            AddressRegion::Stack => {
-                let stack_len = self.stack.len() as u64;
-
-                if addr.offset > stack_len {
-                    return Err(MemoryError::InvalidEntry {
-                        entry: addr.entry,
-                        max: self.stack.len() as u64,
-                    });
-                }
-            }
-            _ => unimplemented!(),
-        };
-
-        Ok(())
-    }
-
     fn get_pinned_reg(&self) -> DataValue {
         self.pinned_reg.clone()
     }
@@ -592,12 +578,9 @@ mod tests {
         let mut env = FunctionStore::default();
         env.add(func.name.to_string(), &func);
         let state = InterpreterState::default().with_function_store(env);
-        let result = Interpreter::new(state)
-            .call_by_name("%test", &[])
-            .unwrap()
-            .unwrap_return();
+        let result = Interpreter::new(state).call_by_name("%test", &[]).unwrap();
 
-        assert_eq!(result, vec![DataValue::I8(1)])
+        assert_eq!(result, ControlFlow::Return(smallvec![DataValue::I8(1)]));
     }
 
     // We don't have a way to check for traps with the current filetest infrastructure
@@ -614,12 +597,12 @@ mod tests {
         let mut env = FunctionStore::default();
         env.add(func.name.to_string(), &func);
         let state = InterpreterState::default().with_function_store(env);
-        let trap = Interpreter::new(state)
-            .call_by_name("%test", &[])
-            .unwrap()
-            .unwrap_trap();
+        let trap = Interpreter::new(state).call_by_name("%test", &[]).unwrap();
 
-        assert_eq!(trap, CraneliftTrap::User(TrapCode::IntegerDivisionByZero));
+        assert_eq!(
+            trap,
+            ControlFlow::Trap(CraneliftTrap::User(TrapCode::IntegerDivisionByZero))
+        );
     }
 
     #[test]
@@ -671,10 +654,9 @@ mod tests {
         let state = InterpreterState::default().with_function_store(env);
         let result = Interpreter::new(state)
             .call_by_name("%parent", &[DataValue::I32(0)])
-            .unwrap()
-            .unwrap_return();
+            .unwrap();
 
-        assert_eq!(result, vec![DataValue::I32(0)])
+        assert_eq!(result, ControlFlow::Return(smallvec![DataValue::I32(0)]));
     }
 
     #[test]
@@ -692,11 +674,9 @@ mod tests {
 
         // The default interpreter should not enable the fuel mechanism
         let state = InterpreterState::default().with_function_store(env.clone());
-        let result = Interpreter::new(state)
-            .call_by_name("%test", &[])
-            .unwrap()
-            .unwrap_return();
-        assert_eq!(result, vec![DataValue::I32(2)]);
+        let result = Interpreter::new(state).call_by_name("%test", &[]).unwrap();
+
+        assert_eq!(result, ControlFlow::Return(smallvec![DataValue::I32(2)]));
 
         // With 2 fuel, we should execute the iconst and iadd, but not the return thus giving a
         // fuel exhausted error
@@ -714,9 +694,9 @@ mod tests {
         let result = Interpreter::new(state)
             .with_fuel(Some(3))
             .call_by_name("%test", &[])
-            .unwrap()
-            .unwrap_return();
-        assert_eq!(result, vec![DataValue::I32(2)]);
+            .unwrap();
+
+        assert_eq!(result, ControlFlow::Return(smallvec![DataValue::I32(2)]));
     }
 
     // Verifies that writing to the stack on a called function does not overwrite the parents
@@ -772,10 +752,9 @@ mod tests {
                     DataValue::I64(11),
                 ],
             )
-            .unwrap()
-            .unwrap_return();
+            .unwrap();
 
-        assert_eq!(result, vec![DataValue::I64(26)])
+        assert_eq!(result, ControlFlow::Return(smallvec![DataValue::I64(26)]))
     }
 
     #[test]
@@ -796,10 +775,12 @@ mod tests {
         let state = InterpreterState::default().with_function_store(env);
         let trap = Interpreter::new(state)
             .call_by_name("%stack_write", &[])
-            .unwrap()
-            .unwrap_trap();
+            .unwrap();
 
-        assert_eq!(trap, CraneliftTrap::User(TrapCode::HeapOutOfBounds));
+        assert_eq!(
+            trap,
+            ControlFlow::Trap(CraneliftTrap::User(TrapCode::HeapOutOfBounds))
+        );
     }
 
     #[test]
@@ -820,10 +801,12 @@ mod tests {
         let state = InterpreterState::default().with_function_store(env);
         let trap = Interpreter::new(state)
             .call_by_name("%stack_write", &[])
-            .unwrap()
-            .unwrap_trap();
+            .unwrap();
 
-        assert_eq!(trap, CraneliftTrap::User(TrapCode::HeapOutOfBounds));
+        assert_eq!(
+            trap,
+            ControlFlow::Trap(CraneliftTrap::User(TrapCode::HeapOutOfBounds))
+        );
     }
 
     #[test]
@@ -843,10 +826,12 @@ mod tests {
         let state = InterpreterState::default().with_function_store(env);
         let trap = Interpreter::new(state)
             .call_by_name("%stack_load", &[])
-            .unwrap()
-            .unwrap_trap();
+            .unwrap();
 
-        assert_eq!(trap, CraneliftTrap::User(TrapCode::HeapOutOfBounds));
+        assert_eq!(
+            trap,
+            ControlFlow::Trap(CraneliftTrap::User(TrapCode::HeapOutOfBounds))
+        );
     }
 
     #[test]
@@ -866,10 +851,12 @@ mod tests {
         let state = InterpreterState::default().with_function_store(env);
         let trap = Interpreter::new(state)
             .call_by_name("%stack_load", &[])
-            .unwrap()
-            .unwrap_trap();
+            .unwrap();
 
-        assert_eq!(trap, CraneliftTrap::User(TrapCode::HeapOutOfBounds));
+        assert_eq!(
+            trap,
+            ControlFlow::Trap(CraneliftTrap::User(TrapCode::HeapOutOfBounds))
+        );
     }
 
     #[test]
@@ -892,10 +879,12 @@ mod tests {
         let state = InterpreterState::default().with_function_store(env);
         let trap = Interpreter::new(state)
             .call_by_name("%stack_load", &[])
-            .unwrap()
-            .unwrap_trap();
+            .unwrap();
 
-        assert_eq!(trap, CraneliftTrap::User(TrapCode::HeapOutOfBounds));
+        assert_eq!(
+            trap,
+            ControlFlow::Trap(CraneliftTrap::User(TrapCode::HeapOutOfBounds))
+        );
     }
 
     #[test]
@@ -918,10 +907,12 @@ mod tests {
         let state = InterpreterState::default().with_function_store(env);
         let trap = Interpreter::new(state)
             .call_by_name("%stack_store", &[])
-            .unwrap()
-            .unwrap_trap();
+            .unwrap();
 
-        assert_eq!(trap, CraneliftTrap::User(TrapCode::HeapOutOfBounds));
+        assert_eq!(
+            trap,
+            ControlFlow::Trap(CraneliftTrap::User(TrapCode::HeapOutOfBounds))
+        );
     }
 
     #[test]
@@ -938,12 +929,12 @@ mod tests {
         let mut env = FunctionStore::default();
         env.add(func.name.to_string(), &func);
         let state = InterpreterState::default().with_function_store(env);
-        let trap = Interpreter::new(state)
-            .call_by_name("%test", &[])
-            .unwrap()
-            .unwrap_trap();
+        let trap = Interpreter::new(state).call_by_name("%test", &[]).unwrap();
 
-        assert_eq!(trap, CraneliftTrap::User(TrapCode::IntegerOverflow));
+        assert_eq!(
+            trap,
+            ControlFlow::Trap(CraneliftTrap::User(TrapCode::IntegerOverflow))
+        );
     }
 
     #[test]
@@ -968,12 +959,12 @@ mod tests {
                 }])
             });
 
-        let result = Interpreter::new(state)
-            .call_by_name("%test", &[])
-            .unwrap()
-            .unwrap_return();
+        let result = Interpreter::new(state).call_by_name("%test", &[]).unwrap();
 
-        assert_eq!(result, vec![DataValue::F32(Ieee32::with_float(1.0))])
+        assert_eq!(
+            result,
+            ControlFlow::Return(smallvec![DataValue::F32(Ieee32::with_float(1.0))])
+        )
     }
 
     #[test]
@@ -993,12 +984,12 @@ mod tests {
         let mut env = FunctionStore::default();
         env.add(func.name.to_string(), &func);
         let state = InterpreterState::default().with_function_store(env);
-        let trap = Interpreter::new(state)
-            .call_by_name("%test", &[])
-            .unwrap()
-            .unwrap_trap();
+        let trap = Interpreter::new(state).call_by_name("%test", &[]).unwrap();
 
-        assert_eq!(trap, CraneliftTrap::User(TrapCode::HeapMisaligned));
+        assert_eq!(
+            trap,
+            ControlFlow::Trap(CraneliftTrap::User(TrapCode::HeapMisaligned))
+        );
     }
 
     #[test]
@@ -1019,11 +1010,55 @@ mod tests {
         let mut env = FunctionStore::default();
         env.add(func.name.to_string(), &func);
         let state = InterpreterState::default().with_function_store(env);
-        let trap = Interpreter::new(state)
-            .call_by_name("%test", &[])
-            .unwrap()
-            .unwrap_trap();
+        let trap = Interpreter::new(state).call_by_name("%test", &[]).unwrap();
 
-        assert_eq!(trap, CraneliftTrap::User(TrapCode::HeapMisaligned));
+        assert_eq!(
+            trap,
+            ControlFlow::Trap(CraneliftTrap::User(TrapCode::HeapMisaligned))
+        );
+    }
+
+    // When a trap occurs in a function called by another function, the trap was not being propagated
+    // correctly. Instead the interpterer panicked with a invalid control flow state.
+    // See this issue for more details: https://github.com/bytecodealliance/wasmtime/issues/6155
+    #[test]
+    fn trap_across_call_propagates_correctly() {
+        let code = "
+        function %u2() -> f32 system_v {
+            ss0 = explicit_slot 69
+            ss1 = explicit_slot 69
+            ss2 = explicit_slot 69
+
+        block0:
+            v0 = f32const -0x1.434342p-60
+            v1 = stack_addr.i64 ss2+24
+            store notrap aligned v0, v1
+            return v0
+        }
+
+        function %u1() -> f32 system_v {
+            sig0 = () -> f32 system_v
+            fn0 = colocated %u2 sig0
+
+        block0:
+            v57 = call fn0()
+            return v57
+        }";
+
+        let mut env = FunctionStore::default();
+
+        let funcs = parse_functions(code).unwrap();
+        for func in &funcs {
+            env.add(func.name.to_string(), func);
+        }
+
+        let state = InterpreterState::default().with_function_store(env);
+        let trap = Interpreter::new(state).call_by_name("%u1", &[]).unwrap();
+
+        // Ensure that the correct trap was propagated.
+        assert_eq!(
+            trap,
+            ControlFlow::Trap(CraneliftTrap::User(TrapCode::HeapMisaligned))
+        );
     }
 }

@@ -13,7 +13,7 @@ block0(v0: i32, v1: i32):
 ; block0:
 ;   addw a0,a0,a1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addw a0, a0, a1
@@ -30,7 +30,7 @@ block0(v0: i32, v1: i32):
 ; block0:
 ;   subw a0,a0,a1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   subw a0, a0, a1
@@ -47,7 +47,7 @@ block0(v0: i32, v1: i32):
 ; block0:
 ;   sllw a0,a0,a1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   sllw a0, a0, a1
@@ -64,7 +64,7 @@ block0(v0: i32, v1: i32):
 ; block0:
 ;   srlw a0,a0,a1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   srlw a0, a0, a1
@@ -81,7 +81,7 @@ block0(v0: i32, v1: i32):
 ; block0:
 ;   sraw a0,a0,a1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   sraw a0, a0, a1
@@ -99,7 +99,7 @@ block0(v0: i32):
 ; block0:
 ;   addiw a0,a0,-1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   addiw a0, a0, -1
@@ -117,7 +117,7 @@ block0(v0: i32):
 ; block0:
 ;   slliw a0,a0,31
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   slliw a0, a0, 0x1f
@@ -135,7 +135,7 @@ block0(v0: i32):
 ; block0:
 ;   srliw a0,a0,31
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   srliw a0, a0, 0x1f
@@ -153,12 +153,11 @@ block0(v0: i32):
 ; block0:
 ;   sraiw a0,a0,31
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   sraiw a0, a0, 0x1f
 ;   ret
-
 
 function %sext_sshr_i32_i128(i32, i128) -> i64 {
 block0(v0: i32, v1: i128):
@@ -171,7 +170,7 @@ block0(v0: i32, v1: i128):
 ; block0:
 ;   sraw a0,a0,a1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   sraw a0, a0, a1

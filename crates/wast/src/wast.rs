@@ -338,6 +338,8 @@ impl<T> WastContext<T> {
             // specifies which element is uninitialized, but our traps don't
             // shepherd that information out.
             || (expected.contains("uninitialized element 2") && actual.contains("uninitialized element"))
+            // function references call_ref
+            || (expected.contains("null function") && (actual.contains("uninitialized element") || actual.contains("null reference")))
         {
             return Ok(());
         }
@@ -488,4 +490,5 @@ fn is_matching_assert_invalid_error_message(expected: &str, actual: &str) -> boo
         // the spec test suite asserts a different error message than we print
         // for this scenario
         || (expected == "unknown global" && actual.contains("global.get of locally defined global"))
+        || (expected == "immutable global" && actual.contains("global is immutable: cannot modify it with `global.set`"))
 }

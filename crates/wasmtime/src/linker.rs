@@ -274,8 +274,8 @@ impl<T> Linker<T> {
     /// # Ok(())
     /// # }
     /// ```
-    #[cfg(compiler)]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
+    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn define_unknown_imports_as_traps(&mut self, module: &Module) -> anyhow::Result<()> {
         for import in module.imports() {
             if let Err(import_err) = self._get_by_import(&import) {
@@ -310,8 +310,8 @@ impl<T> Linker<T> {
     /// # Ok(())
     /// # }
     /// ```
-    #[cfg(compiler)]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
+    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn define_unknown_imports_as_default_values(
         &mut self,
         module: &Module,
@@ -415,8 +415,8 @@ impl<T> Linker<T> {
     /// Creates a [`Func::new`]-style function named in this linker.
     ///
     /// For more information see [`Linker::func_wrap`].
-    #[cfg(compiler)]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
+    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn func_new(
         &mut self,
         module: &str,
@@ -433,8 +433,8 @@ impl<T> Linker<T> {
     /// Creates a [`Func::new_unchecked`]-style function named in this linker.
     ///
     /// For more information see [`Linker::func_wrap`].
-    #[cfg(compiler)]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
+    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub unsafe fn func_new_unchecked(
         &mut self,
         module: &str,
@@ -753,8 +753,8 @@ impl<T> Linker<T> {
     /// # Ok(())
     /// # }
     /// ```
-    #[cfg(compiler)]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
+    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn module(
         &mut self,
         mut store: impl AsContextMut<Data = T>,
@@ -1336,15 +1336,6 @@ impl Definition {
         match self {
             Definition::Extern(e, _) => e.clone(),
             Definition::HostFunc(func) => func.to_func(store).into(),
-        }
-    }
-
-    /// Note the unsafety here is due to calling
-    /// `HostFunc::to_func_store_rooted`.
-    pub(crate) unsafe fn to_extern_store_rooted(&self, store: &mut StoreOpaque) -> Extern {
-        match self {
-            Definition::Extern(e, _) => e.clone(),
-            Definition::HostFunc(func) => func.to_func_store_rooted(store).into(),
         }
     }
 

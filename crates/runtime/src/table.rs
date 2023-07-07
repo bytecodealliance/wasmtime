@@ -2,13 +2,16 @@
 //!
 //! `Table` is to WebAssembly tables what `LinearMemory` is to WebAssembly linear memories.
 
-use crate::vmcontext::{VMCallerCheckedFuncRef, VMTableDefinition};
-use crate::{Store, VMExternRef};
+use crate::vmcontext::{VMFuncRef, VMTableDefinition};
+use crate::{SendSyncPtr, Store, VMExternRef};
 use anyhow::{bail, format_err, Error, Result};
+use sptr::Strict;
 use std::convert::{TryFrom, TryInto};
 use std::ops::Range;
-use std::ptr;
-use wasmtime_environ::{TablePlan, Trap, WasmType, FUNCREF_INIT_BIT, FUNCREF_MASK};
+use std::ptr::{self, NonNull};
+use wasmtime_environ::{
+    TablePlan, Trap, WasmHeapType, WasmRefType, FUNCREF_INIT_BIT, FUNCREF_MASK,
+};
 
 /// An element going into or coming out of a table.
 ///
@@ -16,7 +19,7 @@ use wasmtime_environ::{TablePlan, Trap, WasmType, FUNCREF_INIT_BIT, FUNCREF_MASK
 #[derive(Clone)]
 pub enum TableElement {
     /// A `funcref`.
-    FuncRef(*mut VMCallerCheckedFuncRef),
+    FuncRef(*mut VMFuncRef),
     /// An `exrernref`.
     ExternRef(Option<VMExternRef>),
     /// An uninitialized funcref value. This should never be exposed
@@ -26,13 +29,13 @@ pub enum TableElement {
     UninitFunc,
 }
 
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum TableElementType {
     Func,
     Extern,
 }
 
-// The usage of `*mut VMCallerCheckedFuncRef` is safe w.r.t. thread safety, this
+// The usage of `*mut VMFuncRef` is safe w.r.t. thread safety, this
 // just relies on thread-safety of `VMExternRef` itself.
 unsafe impl Send for TableElement where VMExternRef: Send {}
 unsafe impl Sync for TableElement where VMExternRef: Sync {}
@@ -45,13 +48,17 @@ impl TableElement {
     /// This is unsafe as it will *not* clone any externref, leaving the reference count unchanged.
     ///
     /// This should only be used if the raw pointer is no longer in use.
-    unsafe fn from_table_value(ty: TableElementType, ptr: usize) -> Self {
+    unsafe fn from_table_value(ty: TableElementType, ptr: TableValue) -> Self {
         match (ty, ptr) {
-            (TableElementType::Func, 0) => Self::UninitFunc,
-            (TableElementType::Func, ptr) => Self::FuncRef((ptr & FUNCREF_MASK) as _),
-            (TableElementType::Extern, 0) => Self::ExternRef(None),
-            (TableElementType::Extern, ptr) => {
-                Self::ExternRef(Some(VMExternRef::from_raw(ptr as *mut u8)))
+            (TableElementType::Func, None) => Self::UninitFunc,
+            (TableElementType::Func, Some(ptr)) => {
+                let ptr = ptr.as_ptr();
+                let masked = Strict::map_addr(ptr, |a| a & FUNCREF_MASK);
+                Self::FuncRef(masked.cast())
+            }
+            (TableElementType::Extern, None) => Self::ExternRef(None),
+            (TableElementType::Extern, Some(ptr)) => {
+                Self::ExternRef(Some(VMExternRef::from_raw(ptr.as_ptr())))
             }
         }
     }
@@ -61,13 +68,13 @@ impl TableElement {
     /// # Safety
     ///
     /// This is unsafe as it will clone any externref, incrementing the reference count.
-    unsafe fn clone_from_table_value(ty: TableElementType, ptr: usize) -> Self {
-        match (ty, ptr) {
-            (TableElementType::Func, 0) => Self::UninitFunc,
-            (TableElementType::Func, ptr) => Self::FuncRef((ptr & FUNCREF_MASK) as _),
-            (TableElementType::Extern, 0) => Self::ExternRef(None),
-            (TableElementType::Extern, ptr) => {
-                Self::ExternRef(Some(VMExternRef::clone_from_raw(ptr as *mut u8)))
+    unsafe fn clone_from_table_value(ty: TableElementType, ptr: TableValue) -> Self {
+        match ty {
+            // Functions have no ownership, so defer to the prior method.
+            TableElementType::Func => TableElement::from_table_value(ty, ptr),
+
+            TableElementType::Extern => {
+                Self::ExternRef(ptr.map(|p| VMExternRef::clone_from_raw(p.as_ptr())))
             }
         }
     }
@@ -81,12 +88,14 @@ impl TableElement {
     /// This is unsafe as it will consume any underlying externref into a raw pointer without modifying
     /// the reference count.
     ///
-    /// Use `from_raw` to properly drop any table elements stored as raw pointers.
-    unsafe fn into_table_value(self) -> usize {
+    unsafe fn into_table_value(self) -> TableValue {
         match self {
-            Self::UninitFunc => 0,
-            Self::FuncRef(e) => (e as usize) | FUNCREF_INIT_BIT,
-            Self::ExternRef(e) => e.map_or(0, |e| e.into_raw() as usize),
+            Self::UninitFunc => None,
+            Self::FuncRef(e) => {
+                let tagged = Strict::map_addr(e, |e| e | FUNCREF_INIT_BIT);
+                Some(NonNull::new(tagged.cast()).unwrap().into())
+            }
+            Self::ExternRef(e) => e.map(|e| NonNull::new(e.into_raw()).unwrap().into()),
         }
     }
 
@@ -101,10 +110,10 @@ impl TableElement {
     /// # Safety
     ///
     /// The same warnings as for `into_table_values()` apply.
-    pub(crate) unsafe fn into_ref_asserting_initialized(self) -> usize {
+    pub(crate) unsafe fn into_ref_asserting_initialized(self) -> *mut u8 {
         match self {
-            Self::FuncRef(e) => e as usize,
-            Self::ExternRef(e) => e.map_or(0, |e| e.into_raw() as usize),
+            Self::FuncRef(e) => e.cast(),
+            Self::ExternRef(e) => e.map_or(ptr::null_mut(), |e| e.into_raw()),
             Self::UninitFunc => panic!("Uninitialized table element value outside of table slot"),
         }
     }
@@ -119,8 +128,8 @@ impl TableElement {
     }
 }
 
-impl From<*mut VMCallerCheckedFuncRef> for TableElement {
-    fn from(f: *mut VMCallerCheckedFuncRef) -> TableElement {
+impl From<*mut VMFuncRef> for TableElement {
+    fn from(f: *mut VMFuncRef) -> TableElement {
         TableElement::FuncRef(f)
     }
 }
@@ -144,7 +153,7 @@ pub enum Table {
     Static {
         /// Where data for this table is stored. The length of this list is the
         /// maximum size of the table.
-        data: &'static mut [usize],
+        data: &'static mut [TableValue],
         /// The current size of the table.
         size: u32,
         /// The type of this table.
@@ -155,7 +164,7 @@ pub enum Table {
     Dynamic {
         /// Dynamically managed storage space for this table. The length of this
         /// vector is the current size of the table.
-        elements: Vec<usize>,
+        elements: Vec<TableValue>,
         /// The type of this table.
         ty: TableElementType,
         /// Maximum size that `elements` can grow to.
@@ -163,11 +172,13 @@ pub enum Table {
     },
 }
 
-fn wasm_to_table_type(ty: WasmType) -> Result<TableElementType> {
-    match ty {
-        WasmType::FuncRef => Ok(TableElementType::Func),
-        WasmType::ExternRef => Ok(TableElementType::Extern),
-        ty => bail!("invalid table element type {:?}", ty),
+pub type TableValue = Option<SendSyncPtr<u8>>;
+
+fn wasm_to_table_type(ty: WasmRefType) -> Result<TableElementType> {
+    match ty.heap_type {
+        WasmHeapType::Func => Ok(TableElementType::Func),
+        WasmHeapType::Extern => Ok(TableElementType::Extern),
+        WasmHeapType::TypedFunc(_) => Ok(TableElementType::Func),
     }
 }
 
@@ -175,7 +186,7 @@ impl Table {
     /// Create a new dynamic (movable) table instance for the specified table plan.
     pub fn new_dynamic(plan: &TablePlan, store: &mut dyn Store) -> Result<Self> {
         Self::limit_new(plan, store)?;
-        let elements = vec![0; plan.table.minimum as usize];
+        let elements = vec![None; plan.table.minimum as usize];
         let ty = wasm_to_table_type(plan.table.wasm_ty)?;
         let maximum = plan.table.maximum;
 
@@ -189,7 +200,7 @@ impl Table {
     /// Create a new static (immovable) table instance for the specified table plan.
     pub fn new_static(
         plan: &TablePlan,
-        data: &'static mut [usize],
+        data: &'static mut [TableValue],
         store: &mut dyn Store,
     ) -> Result<Self> {
         Self::limit_new(plan, store)?;
@@ -260,13 +271,24 @@ impl Table {
         }
     }
 
+    /// Initializes the contents of this table to the specified function
+    pub fn init_func(&mut self, init: *mut VMFuncRef) -> Result<(), Trap> {
+        assert!(self.element_type() == TableElementType::Func);
+        for slot in self.elements_mut().iter_mut() {
+            unsafe {
+                *slot = TableElement::FuncRef(init).into_table_value();
+            }
+        }
+        Ok(())
+    }
+
     /// Fill `table[dst..]` with values from `items`
     ///
     /// Returns a trap error on out-of-bounds accesses.
     pub fn init_funcs(
         &mut self,
         dst: u32,
-        items: impl ExactSizeIterator<Item = *mut VMCallerCheckedFuncRef>,
+        items: impl ExactSizeIterator<Item = *mut VMFuncRef>,
     ) -> Result<(), Trap> {
         assert!(self.element_type() == TableElementType::Func);
 
@@ -360,11 +382,11 @@ impl Table {
             Table::Static { size, data, .. } => {
                 debug_assert!(data[*size as usize..new_size as usize]
                     .iter()
-                    .all(|x| *x == 0));
+                    .all(|x| x.is_none()));
                 *size = new_size;
             }
             Table::Dynamic { elements, .. } => {
-                elements.resize(new_size as usize, 0);
+                elements.resize(new_size as usize, None);
             }
         }
 
@@ -465,21 +487,21 @@ impl Table {
         }
     }
 
-    fn elements(&self) -> &[usize] {
+    fn elements(&self) -> &[TableValue] {
         match self {
             Table::Static { data, size, .. } => &data[..*size as usize],
             Table::Dynamic { elements, .. } => &elements[..],
         }
     }
 
-    fn elements_mut(&mut self) -> &mut [usize] {
+    fn elements_mut(&mut self) -> &mut [TableValue] {
         match self {
             Table::Static { data, size, .. } => &mut data[..*size as usize],
             Table::Dynamic { elements, .. } => &mut elements[..],
         }
     }
 
-    fn set_raw(ty: TableElementType, elem: &mut usize, val: TableElement) {
+    fn set_raw(ty: TableElementType, elem: &mut TableValue, val: TableElement) {
         unsafe {
             let old = *elem;
             *elem = val.into_table_value();

@@ -1,0 +1,21 @@
+test run
+target aarch64
+target s390x
+target x86_64
+target x86_64 sse41
+target x86_64 sse42
+target x86_64 sse42 has_avx
+target riscv64 has_v
+
+function %insertlane_preserves_upper_bits(f64) -> i64 fast {
+block0(v5: f64):
+    v3 = vconst.i8x16 0x0000000000000001ffffffffffffffff
+    v6 = bitcast.f64x2 little v3
+    v7 = insertlane v6, v5, 0
+    v8 = bitcast.i64x2 little v7
+    v9 = extractlane v8, 1
+    return v9
+}
+; run: %insertlane_preserves_upper_bits(0x0.0) == 1
+; run: %insertlane_preserves_upper_bits(0x9.0) == 1
+; run: %insertlane_preserves_upper_bits(+Inf) == 1

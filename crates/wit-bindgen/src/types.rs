@@ -69,11 +69,13 @@ impl Types {
             live.add_type(resolve, ty);
         }
         for id in live.iter() {
-            let info = self.type_info.get_mut(&id).unwrap();
-            if import {
-                info.owned = true;
-            } else {
-                info.borrowed = true;
+            if resolve.types[id].name.is_some() {
+                let info = self.type_info.get_mut(&id).unwrap();
+                if import {
+                    info.owned = true;
+                } else {
+                    info.borrowed = true;
+                }
             }
         }
         let mut live = LiveTypes::default();
@@ -82,7 +84,9 @@ impl Types {
             live.add_type(resolve, ty);
         }
         for id in live.iter() {
-            self.type_info.get_mut(&id).unwrap().owned = true;
+            if resolve.types[id].name.is_some() {
+                self.type_info.get_mut(&id).unwrap().owned = true;
+            }
         }
 
         for ty in func.results.iter_types() {
@@ -95,6 +99,7 @@ impl Types {
                 _ => continue,
             };
             if let Some(Type::Id(id)) = err {
+                let id = super::resolve_type_definition_id(resolve, *id);
                 self.type_info.get_mut(&id).unwrap().error = true;
             }
         }

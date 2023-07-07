@@ -1,16 +1,14 @@
 //! Defines `ObjectModule`.
 
 use anyhow::anyhow;
+use cranelift_codegen::binemit::{Addend, CodeOffset, Reloc};
 use cranelift_codegen::entity::SecondaryMap;
 use cranelift_codegen::isa::{OwnedTargetIsa, TargetIsa};
 use cranelift_codegen::{self, ir, MachReloc};
-use cranelift_codegen::{
-    binemit::{Addend, CodeOffset, Reloc},
-    CodegenError,
-};
+use cranelift_control::ControlPlane;
 use cranelift_module::{
-    DataContext, DataDescription, DataId, FuncId, Init, Linkage, Module, ModuleCompiledFunction,
-    ModuleDeclarations, ModuleError, ModuleExtName, ModuleReloc, ModuleResult,
+    DataDescription, DataId, FuncId, Init, Linkage, Module, ModuleDeclarations, ModuleError,
+    ModuleExtName, ModuleReloc, ModuleResult,
 };
 use log::info;
 use object::write::{
@@ -20,7 +18,6 @@ use object::{
     RelocationEncoding, RelocationKind, SectionKind, SymbolFlags, SymbolKind, SymbolScope,
 };
 use std::collections::HashMap;
-use std::convert::TryInto;
 use std::mem;
 use target_lexicon::PointerWidth;
 
@@ -134,8 +131,6 @@ pub struct ObjectModule {
     libcall_names: Box<dyn Fn(ir::LibCall) -> String + Send + Sync>,
     known_symbols: HashMap<ir::KnownSymbol, SymbolId>,
     per_function_section: bool,
-    anon_func_number: u64,
-    anon_data_number: u64,
 }
 
 impl ObjectModule {
@@ -155,8 +150,6 @@ impl ObjectModule {
             libcall_names: builder.libcall_names,
             known_symbols: HashMap::new(),
             per_function_section: builder.per_function_section,
-            anon_func_number: 0,
-            anon_data_number: 0,
         }
     }
 }
@@ -218,16 +211,15 @@ impl Module for ObjectModule {
     }
 
     fn declare_anonymous_function(&mut self, signature: &ir::Signature) -> ModuleResult<FuncId> {
-        // Symbols starting with .L are completely omitted from the symbol table after linking.
-        // Using hexadecimal instead of decimal for slightly smaller symbol names and often slightly
-        // faster linking.
-        let name = format!(".Lfn{:x}", self.anon_func_number);
-        self.anon_func_number += 1;
-
         let id = self.declarations.declare_anonymous_function(signature)?;
 
         let symbol_id = self.object.add_symbol(Symbol {
-            name: name.as_bytes().to_vec(),
+            name: self
+                .declarations
+                .get_function_decl(id)
+                .linkage_name(id)
+                .into_owned()
+                .into_bytes(),
             value: 0,
             size: 0,
             kind: SymbolKind::Text,
@@ -286,12 +278,6 @@ impl Module for ObjectModule {
     }
 
     fn declare_anonymous_data(&mut self, writable: bool, tls: bool) -> ModuleResult<DataId> {
-        // Symbols starting with .L are completely omitted from the symbol table after linking.
-        // Using hexadecimal instead of decimal for slightly smaller symbol names and often slightly
-        // faster linking.
-        let name = format!(".Ldata{:x}", self.anon_data_number);
-        self.anon_data_number += 1;
-
         let id = self.declarations.declare_anonymous_data(writable, tls)?;
 
         let kind = if tls {
@@ -301,7 +287,12 @@ impl Module for ObjectModule {
         };
 
         let symbol_id = self.object.add_symbol(Symbol {
-            name: name.as_bytes().to_vec(),
+            name: self
+                .declarations
+                .get_data_decl(id)
+                .linkage_name(id)
+                .into_owned()
+                .into_bytes(),
             value: 0,
             size: 0,
             kind,
@@ -315,16 +306,17 @@ impl Module for ObjectModule {
         Ok(id)
     }
 
-    fn define_function(
+    fn define_function_with_control_plane(
         &mut self,
         func_id: FuncId,
         ctx: &mut cranelift_codegen::Context,
-    ) -> ModuleResult<ModuleCompiledFunction> {
+        ctrl_plane: &mut ControlPlane,
+    ) -> ModuleResult<()> {
         info!("defining function {}: {}", func_id, ctx.func.display());
         let mut code: Vec<u8> = Vec::new();
 
-        let res = ctx.compile_and_emit(self.isa(), &mut code)?;
-        let alignment = res.alignment as u64;
+        let res = ctx.compile_and_emit(self.isa(), &mut code, ctrl_plane)?;
+        let alignment = res.buffer.alignment as u64;
 
         self.define_function_bytes(
             func_id,
@@ -342,26 +334,25 @@ impl Module for ObjectModule {
         alignment: u64,
         bytes: &[u8],
         relocs: &[MachReloc],
-    ) -> ModuleResult<ModuleCompiledFunction> {
+    ) -> ModuleResult<()> {
         info!("defining function {} with bytes", func_id);
-        let total_size: u32 = match bytes.len().try_into() {
-            Ok(total_size) => total_size,
-            _ => Err(CodegenError::CodeTooLarge)?,
-        };
-
         let decl = self.declarations.get_function_decl(func_id);
         if !decl.linkage.is_definable() {
-            return Err(ModuleError::InvalidImportDefinition(decl.name.clone()));
+            return Err(ModuleError::InvalidImportDefinition(
+                decl.linkage_name(func_id).into_owned(),
+            ));
         }
 
         let &mut (symbol, ref mut defined) = self.functions[func_id].as_mut().unwrap();
         if *defined {
-            return Err(ModuleError::DuplicateDefinition(decl.name.clone()));
+            return Err(ModuleError::DuplicateDefinition(
+                decl.linkage_name(func_id).into_owned(),
+            ));
         }
         *defined = true;
 
         let align = alignment
-            .max(self.isa.function_alignment() as u64)
+            .max(self.isa.function_alignment().minimum.into())
             .max(self.isa.symbol_alignment());
         let (section, offset) = if self.per_function_section {
             let symbol_name = self.object.symbol(symbol).name.clone();
@@ -389,18 +380,22 @@ impl Module for ObjectModule {
             });
         }
 
-        Ok(ModuleCompiledFunction { size: total_size })
+        Ok(())
     }
 
-    fn define_data(&mut self, data_id: DataId, data_ctx: &DataContext) -> ModuleResult<()> {
+    fn define_data(&mut self, data_id: DataId, data: &DataDescription) -> ModuleResult<()> {
         let decl = self.declarations.get_data_decl(data_id);
         if !decl.linkage.is_definable() {
-            return Err(ModuleError::InvalidImportDefinition(decl.name.clone()));
+            return Err(ModuleError::InvalidImportDefinition(
+                decl.linkage_name(data_id).into_owned(),
+            ));
         }
 
         let &mut (symbol, ref mut defined) = self.data_objects[data_id].as_mut().unwrap();
         if *defined {
-            return Err(ModuleError::DuplicateDefinition(decl.name.clone()));
+            return Err(ModuleError::DuplicateDefinition(
+                decl.linkage_name(data_id).into_owned(),
+            ));
         }
         *defined = true;
 
@@ -412,15 +407,14 @@ impl Module for ObjectModule {
             data_relocs: _,
             ref custom_segment_section,
             align,
-        } = data_ctx.description();
+        } = data;
 
         let pointer_reloc = match self.isa.triple().pointer_width().unwrap() {
             PointerWidth::U16 => unimplemented!("16bit pointers"),
             PointerWidth::U32 => Reloc::Abs4,
             PointerWidth::U64 => Reloc::Abs8,
         };
-        let relocs = data_ctx
-            .description()
+        let relocs = data
             .all_relocs(pointer_reloc)
             .map(|record| self.process_reloc(&record))
             .collect::<Vec<_>>();

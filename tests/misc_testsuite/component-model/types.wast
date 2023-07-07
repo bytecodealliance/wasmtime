@@ -244,6 +244,7 @@
     (type $t99 (list $t98))
     (type $t100 (list $t99))
     (type $t101 (list $t100))
+    (export "t" (type $t101))
   )
   "type nesting is too deep")
 

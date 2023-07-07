@@ -20,6 +20,7 @@ use crate::machinst::{
 };
 use crate::{trace, CodegenResult};
 use alloc::vec::Vec;
+use cranelift_control::ControlPlane;
 use regalloc2::{MachineEnv, PRegSet};
 use smallvec::{smallvec, SmallVec};
 use std::fmt::Debug;
@@ -377,12 +378,27 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             }
         }
 
-        // Make a sret register, if one is needed.
+        // Find the sret register, if it's used.
         let mut sret_reg = None;
-        for ret in &vcode.abi().signature().returns.clone() {
+        for ret in vcode.abi().signature().returns.iter() {
             if ret.purpose == ArgumentPurpose::StructReturn {
-                assert!(sret_reg.is_none());
-                sret_reg = Some(vregs.alloc(ret.value_type)?);
+                let entry_bb = f.stencil.layout.entry_block().unwrap();
+                for (&param, sig_param) in f
+                    .dfg
+                    .block_params(entry_bb)
+                    .iter()
+                    .zip(vcode.abi().signature().params.iter())
+                {
+                    if sig_param.purpose == ArgumentPurpose::StructReturn {
+                        let regs = value_regs[param];
+                        assert!(regs.len() == 1);
+
+                        assert!(sret_reg.is_none());
+                        sret_reg = Some(regs);
+                    }
+                }
+
+                assert!(sret_reg.is_some());
             }
         }
 
@@ -576,24 +592,6 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                 {
                     self.emit(insn);
                 }
-                if self.abi().signature().params[i].purpose == ArgumentPurpose::StructReturn {
-                    assert!(regs.len() == 1);
-                    let ty = self.abi().signature().params[i].value_type;
-                    // The ABI implementation must have ensured that a StructReturn
-                    // arg is present in the return values.
-                    assert!(self
-                        .abi()
-                        .signature()
-                        .returns
-                        .iter()
-                        .position(|ret| ret.purpose == ArgumentPurpose::StructReturn)
-                        .is_some());
-                    self.emit(I::gen_move(
-                        Writable::from_reg(self.sret_reg.unwrap().regs()[0]),
-                        regs.regs()[0].to_reg(),
-                        ty,
-                    ));
-                }
             }
             if let Some(insn) = self
                 .vcode
@@ -657,7 +655,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             }
         }
 
-        let inst = self.abi().gen_ret(out_rets);
+        let inst = self.abi().gen_ret(&self.sigs(), out_rets);
         self.emit(inst);
     }
 
@@ -680,6 +678,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         &mut self,
         backend: &B,
         block: Block,
+        ctrl_plane: &mut ControlPlane,
     ) -> CodegenResult<()> {
         self.cur_scan_entry_color = Some(self.block_end_colors[block]);
         // Lowering loop:
@@ -777,6 +776,22 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 
             let loc = self.srcloc(inst);
             self.finish_ir_inst(loc);
+
+            // maybe insert random instruction
+            if ctrl_plane.get_decision() {
+                if ctrl_plane.get_decision() {
+                    let imm: u64 = ctrl_plane.get_arbitrary();
+                    let reg = self.alloc_tmp(crate::ir::types::I64).regs()[0];
+                    I::gen_imm_u64(imm, reg).map(|inst| self.emit(inst));
+                } else {
+                    let imm: f64 = ctrl_plane.get_arbitrary();
+                    let tmp = self.alloc_tmp(crate::ir::types::I64).regs()[0];
+                    let reg = self.alloc_tmp(crate::ir::types::F64).regs()[0];
+                    for inst in I::gen_imm_f64(imm, tmp, reg) {
+                        self.emit(inst);
+                    }
+                }
+            }
 
             // Emit value-label markers if needed, to later recover
             // debug mappings. This must happen before the instruction
@@ -969,7 +984,11 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     }
 
     /// Lower the function.
-    pub fn lower<B: LowerBackend<MInst = I>>(mut self, backend: &B) -> CodegenResult<VCode<I>> {
+    pub fn lower<B: LowerBackend<MInst = I>>(
+        mut self,
+        backend: &B,
+        ctrl_plane: &mut ControlPlane,
+    ) -> CodegenResult<VCode<I>> {
         trace!("about to lower function: {:?}", self.f);
 
         // Initialize the ABI object, giving it temps if requested.
@@ -1045,7 +1064,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 
             // Original block body.
             if let Some(bb) = lb.orig_block() {
-                self.lower_clif_block(backend, bb)?;
+                self.lower_clif_block(backend, bb, ctrl_plane)?;
                 self.emit_value_label_markers_for_block_args(bb);
             }
 

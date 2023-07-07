@@ -1,6 +1,5 @@
 test interpret
 test run
-set enable_simd
 target x86_64
 target x86_64 has_avx
 target s390x

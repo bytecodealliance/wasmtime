@@ -15,16 +15,20 @@ struct TestCompile {
     /// This test assertion is also automatically-update-able to allow tweaking
     /// the code generator and easily updating all affected tests.
     precise_output: bool,
+    /// Flag indicating that we expect compilation to fail, not succeed.
+    expect_fail: bool,
 }
 
 pub fn subtest(parsed: &TestCommand) -> Result<Box<dyn SubTest>> {
     assert_eq!(parsed.command, "compile");
     let mut test = TestCompile {
         precise_output: false,
+        expect_fail: false,
     };
     for option in parsed.options.iter() {
         match option {
             TestOption::Flag("precise-output") => test.precise_output = true,
+            TestOption::Flag("expect-fail") => test.expect_fail = true,
             _ => anyhow::bail!("unknown option on {}", parsed),
         }
     }
@@ -52,9 +56,16 @@ impl SubTest for TestCompile {
         // With `MachBackend`s, we need to explicitly request dissassembly results.
         comp_ctx.set_disasm(true);
 
-        let compiled_code = comp_ctx
-            .compile(isa)
-            .map_err(|e| crate::pretty_anyhow_error(&e.func, e.inner))?;
+        let compiled_code = comp_ctx.compile(isa, &mut Default::default());
+
+        let compiled_code = if self.expect_fail {
+            if compiled_code.is_ok() {
+                anyhow::bail!("Expected compilation failure but compilation succeeded");
+            }
+            return Ok(());
+        } else {
+            compiled_code.map_err(|e| crate::pretty_anyhow_error(&e.func, e.inner))?
+        };
         let total_size = compiled_code.code_info().total_size;
 
         let vcode = compiled_code.vcode.as_ref().unwrap();

@@ -125,20 +125,13 @@ the [cranelift-module](https://docs.rs/cranelift-module/) crate. It provides
 facilities for working with modules, which can contain multiple functions as
 well as data objects, and it links them together.
 
-An LLVM IR function is a graph of *basic blocks*. A Cranelift IR function is a
-graph of *extended basic blocks* that may contain internal branch instructions.
-The main difference is that an LLVM conditional branch instruction has two
-target basic blocks---a true and a false edge. A Cranelift branch instruction
-only has a single target and falls through to the next instruction when its
-condition is false. The Cranelift representation is closer to how machine code
-works; LLVM's representation is more abstract.
-
-LLVM uses
-[phi instructions](https://llvm.org/docs/LangRef.html#phi-instruction)
-in its SSA representation. Cranelift passes arguments to EBBs instead. The two
-representations are equivalent, but the EBB arguments are better suited to
-handle EBBs that may contain multiple branches to the same destination block
-with different arguments. Passing arguments to an EBB looks a lot like passing
+Both LLVM and Cranelift use a graph of *basic blocks* as their IR for functions.
+However, LLVM uses
+[phi instructions](https://llvm.org/docs/LangRef.html#phi-instruction) in its
+SSA representation while Cranelift passes arguments to BBs instead. The two
+representations are equivalent, but the BB arguments are better suited to handle
+BBs that may contain multiple branches to the same destination block with
+different arguments. Passing arguments to a BB looks a lot like passing
 arguments to a function call, and the register allocator treats them very
 similarly. Arguments are assigned to registers or stack locations.
 

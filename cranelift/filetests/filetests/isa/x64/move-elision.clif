@@ -1,5 +1,4 @@
 test compile precise-output
-set enable_simd
 target x86_64 skylake
 
 function %move_registers(i32x4) -> i8x16 {
@@ -20,7 +19,7 @@ block0(v0: i32x4):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp

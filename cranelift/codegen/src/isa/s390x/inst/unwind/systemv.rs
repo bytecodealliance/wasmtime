@@ -83,6 +83,7 @@ pub fn map_reg(reg: Reg) -> Result<Register, RegisterMappingError> {
     match reg.class() {
         RegClass::Int => Ok(GPR_MAP[reg.to_real_reg().unwrap().hw_enc() as usize]),
         RegClass::Float => Ok(VR_MAP[reg.to_real_reg().unwrap().hw_enc() as usize]),
+        RegClass::Vector => unreachable!(),
     }
 }
 
@@ -122,7 +123,9 @@ mod tests {
             Some(StackSlotData::new(StackSlotKind::ExplicitSlot, 64)),
         ));
 
-        let code = context.compile(&*isa).expect("expected compilation");
+        let code = context
+            .compile(&*isa, &mut Default::default())
+            .expect("expected compilation");
 
         let fde = match code
             .create_unwind_info(isa.as_ref())
@@ -164,7 +167,9 @@ mod tests {
             Some(StackSlotData::new(StackSlotKind::ExplicitSlot, 64)),
         ));
 
-        let code = context.compile(&*isa).expect("expected compilation");
+        let code = context
+            .compile(&*isa, &mut Default::default())
+            .expect("expected compilation");
 
         let fde = match code
             .create_unwind_info(isa.as_ref())

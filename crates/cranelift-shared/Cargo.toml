@@ -12,6 +12,7 @@ edition.workspace = true
 anyhow = { workspace = true }
 wasmtime-environ = { workspace = true }
 cranelift-codegen = { workspace = true }
+cranelift-control = { workspace = true }
 cranelift-native = { workspace = true }
 target-lexicon = { workspace = true }
 gimli = { workspace = true }

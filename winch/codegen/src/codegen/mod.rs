@@ -1,22 +1,27 @@
 use crate::{
     abi::{ABISig, ABI},
     masm::{MacroAssembler, OperandSize},
+    stack::Val,
+    CallingConvention,
 };
 use anyhow::Result;
 use call::FnCall;
-use wasmparser::{BinaryReader, FuncValidator, ValType, ValidatorResources, VisitOperator};
+use smallvec::SmallVec;
+use wasmparser::{BinaryReader, FuncValidator, Operator, ValidatorResources, VisitOperator};
+use wasmtime_environ::{FuncIndex, WasmFuncType, WasmType};
 
 mod context;
 pub(crate) use context::*;
 mod env;
 pub use env::*;
-mod call;
+pub mod call;
+mod control;
+pub(crate) use control::*;
 
 /// The code generation abstraction.
-pub(crate) struct CodeGen<'a, A, M>
+pub(crate) struct CodeGen<'a, M>
 where
     M: MacroAssembler,
-    A: ABI,
 {
     /// The ABI-specific representation of the function signature, excluding results.
     sig: ABISig,
@@ -24,34 +29,34 @@ where
     /// The code generation context.
     pub context: CodeGenContext<'a>,
 
+    /// A reference to the function compilation environment.
+    pub env: FuncEnv<'a, M::Ptr>,
+
     /// The MacroAssembler.
     pub masm: &'a mut M,
 
-    /// A reference to the function compilation environment.
-    pub env: &'a dyn env::FuncEnv,
-
-    /// A reference to the current ABI.
-    pub abi: &'a A,
+    /// Stack frames for control flow.
+    // NB The 64 is set arbitrarily, we can adjust it as
+    // we see fit.
+    pub control_frames: SmallVec<[ControlStackFrame; 64]>,
 }
 
-impl<'a, A, M> CodeGen<'a, A, M>
+impl<'a, M> CodeGen<'a, M>
 where
     M: MacroAssembler,
-    A: ABI,
 {
     pub fn new(
         masm: &'a mut M,
-        abi: &'a A,
         context: CodeGenContext<'a>,
-        env: &'a dyn FuncEnv,
+        env: FuncEnv<'a, M::Ptr>,
         sig: ABISig,
     ) -> Self {
         Self {
             sig,
             context,
             masm,
-            abi,
             env,
+            control_frames: Default::default(),
         }
     }
 
@@ -59,7 +64,7 @@ where
     pub fn emit(
         &mut self,
         body: &mut BinaryReader<'a>,
-        validator: FuncValidator<ValidatorResources>,
+        validator: &mut FuncValidator<ValidatorResources>,
     ) -> Result<()> {
         self.emit_start()
             .and_then(|_| self.emit_body(body, validator))
@@ -72,20 +77,100 @@ where
     fn emit_start(&mut self) -> Result<()> {
         self.masm.prologue();
         self.masm.reserve_stack(self.context.frame.locals_size);
+
+        // Once we have emitted the epilogue and reserved stack space for the locals, we push the
+        // base control flow block.
+        self.control_frames
+            .push(ControlStackFrame::function_body_block(
+                self.sig.result,
+                self.masm,
+                &mut self.context,
+            ));
         Ok(())
+    }
+
+    /// The following two helpers, handle else or end instructions when the
+    /// compiler has entered into an unreachable code state. These instructions
+    /// must be observed to determine if the reachability state should be
+    /// restored.
+    ///
+    /// When the compiler is in an unreachable state, all the other instructions
+    /// are not visited.
+    pub fn handle_unreachable_else(&mut self) {
+        let frame = self.control_frames.last_mut().unwrap();
+        match frame {
+            ControlStackFrame::If {
+                reachable,
+                original_sp_offset,
+                original_stack_len,
+                ..
+            } => {
+                if *reachable {
+                    // We entered an unreachable state when compiling the
+                    // if-then branch, but if the `if` was reachable at
+                    // entry, the if-else branch will be reachable.
+                    self.context.reachable = true;
+                    // Reset the stack to the original length and offset.
+                    Self::reset_stack(
+                        &mut self.context,
+                        self.masm,
+                        *original_stack_len,
+                        *original_sp_offset,
+                    );
+                    frame.bind_else(self.masm, self.context.reachable);
+                }
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    pub fn handle_unreachable_end(&mut self) {
+        let frame = self.control_frames.pop().unwrap();
+        // We just popped the outermost block.
+        let is_outermost = self.control_frames.len() == 0;
+        if frame.is_next_sequence_reachable() {
+            self.context.reachable = true;
+
+            let (value_stack_len, sp_offset) = frame.original_stack_len_and_sp_offset();
+            // Reset the stack to the original length and offset.
+            Self::reset_stack(&mut self.context, self.masm, value_stack_len, sp_offset);
+            // If the current frame is the outermost frame, which corresponds to the
+            // current function's body, only bind the exit label as we don't need to
+            // push any more values to the value stack, else perform the entire `bind_end`
+            // process, which involves pushing results to the value stack.
+            if is_outermost {
+                frame.bind_exit_label(self.masm);
+            } else {
+                frame.bind_end(self.masm, &mut self.context);
+            }
+        }
+    }
+
+    /// Helper function to reset value and stack pointer to the given length and stack pointer
+    /// offset respectively. This function is only used when restoring the code generation's
+    /// reachabiliy state when handling an unreachable `end` or `else`.
+    fn reset_stack(context: &mut CodeGenContext, masm: &mut M, stack_len: usize, sp_offset: u32) {
+        masm.reset_stack_pointer(sp_offset);
+        context.drop_last(context.stack.len() - stack_len);
     }
 
     fn emit_body(
         &mut self,
         body: &mut BinaryReader<'a>,
-        mut validator: FuncValidator<ValidatorResources>,
+        validator: &mut FuncValidator<ValidatorResources>,
     ) -> Result<()> {
         self.spill_register_arguments();
         let defined_locals_range = &self.context.frame.defined_locals_range;
-        self.masm.zero_mem_range(
-            defined_locals_range.as_range(),
-            <A as ABI>::word_bytes(),
-            &mut self.context.regalloc,
+        self.masm
+            .zero_mem_range(defined_locals_range.as_range(), &mut self.context.regalloc);
+
+        // Save the vmctx pointer to its local slot in case we need to reload it
+        // at any point.
+        let vmctx_addr = self.masm.local_address(&self.context.frame.vmctx_slot);
+        self.masm.store(
+            <M::ABI as ABI>::vmctx_reg().into(),
+            vmctx_addr,
+            OperandSize::S64,
         );
 
         while !body.eof() {
@@ -102,16 +187,47 @@ where
                 $(
                     fn $visit(&mut self $($(,$arg: $argty)*)?) -> Self::Output {
                         self.0.$visit($($($arg.clone()),*)?)?;
-                        Ok(self.1.$visit($($($arg),*)?))
+                        // Only visit operators if the compiler is in a reachable code state. If
+                        // the compiler is in an unrechable code state, most of the operators are
+                        // ignored except for If, Block, Loop, Else and End. These operators need
+                        // to be observed in order to keep the control stack frames balanced and to
+                        // determine if reachability should be restored.
+                        let visit_when_unreachable = visit_op_when_unreachable(Operator::$op $({ $($arg: $arg.clone()),* })?);
+                        if self.1.is_reachable() || visit_when_unreachable  {
+                            Ok(self.1.$visit($($($arg),*)?))
+                        } else {
+                            Ok(U::Output::default())
+                        }
                     }
                 )*
             };
         }
 
+        fn visit_op_when_unreachable(op: Operator) -> bool {
+            use Operator::*;
+            match op {
+                If { .. } | Block { .. } | Loop { .. } | Else | End => true,
+                _ => false,
+            }
+        }
+
+        /// Trait to handle reachability state.
+        trait ReachableState {
+            /// Returns true if the current state of the program is reachable.
+            fn is_reachable(&self) -> bool;
+        }
+
+        impl<'a, M: MacroAssembler> ReachableState for CodeGen<'a, M> {
+            fn is_reachable(&self) -> bool {
+                self.context.reachable
+            }
+        }
+
         impl<'a, T, U> VisitOperator<'a> for ValidateThenVisit<'_, T, U>
         where
             T: VisitOperator<'a, Output = wasmparser::Result<()>>,
-            U: VisitOperator<'a>,
+            U: VisitOperator<'a> + ReachableState,
+            U::Output: Default,
         {
             type Output = Result<U::Output>;
 
@@ -120,30 +236,73 @@ where
     }
 
     /// Emit a direct function call.
-    pub fn emit_call(&mut self, index: u32) {
+    pub fn emit_call(&mut self, index: FuncIndex) {
         let callee = self.env.callee_from_index(index);
-        if callee.import {
-            // TODO: Only locally defined functions for now.
-            unreachable!()
-        }
+        let (sig, callee_addr): (ABISig, Option<<M as MacroAssembler>::Address>) = if callee.import
+        {
+            let mut params = vec![WasmType::I64, WasmType::I64];
+            params.extend_from_slice(callee.ty.params());
+            let sig = WasmFuncType::new(params.into(), callee.ty.returns().into());
 
-        let sig = self.abi.sig(&callee.ty);
-        let fncall = FnCall::new(self.abi, &sig, &mut self.context, self.masm);
-        fncall.emit::<M, A>(self.masm, &mut self.context, index);
+            let caller_vmctx = <M::ABI as ABI>::vmctx_reg();
+            let callee_vmctx = self.context.any_gpr(self.masm);
+            let callee_vmctx_offset = self.env.vmoffsets.vmctx_vmfunction_import_vmctx(index);
+            let callee_vmctx_addr = self.masm.address_at_reg(caller_vmctx, callee_vmctx_offset);
+            // FIXME Remove harcoded operand size, this will be needed
+            // once 32-bit architectures are supported.
+            self.masm
+                .load(callee_vmctx_addr, callee_vmctx, OperandSize::S64);
+
+            let callee_body_offset = self.env.vmoffsets.vmctx_vmfunction_import_wasm_call(index);
+            let callee_addr = self.masm.address_at_reg(caller_vmctx, callee_body_offset);
+
+            // Put the callee / caller vmctx at the start of the
+            // range of the stack so that they are used as first
+            // and second arguments.
+            let stack = &mut self.context.stack;
+            let location = stack.len() - (sig.params().len() - 2);
+            stack.insert(location as usize, Val::reg(caller_vmctx));
+            stack.insert(location as usize, Val::reg(callee_vmctx));
+            (
+                <M::ABI as ABI>::sig(&sig, &CallingConvention::Default),
+                Some(callee_addr),
+            )
+        } else {
+            (
+                <M::ABI as ABI>::sig(&callee.ty, &CallingConvention::Default),
+                None,
+            )
+        };
+
+        let fncall = FnCall::new::<M>(&sig, &mut self.context, self.masm);
+        if let Some(addr) = callee_addr {
+            fncall.indirect::<M>(self.masm, &mut self.context, addr);
+        } else {
+            fncall.direct::<M>(self.masm, &mut self.context, index);
+        }
     }
 
     /// Emit the usual function end instruction sequence.
     fn emit_end(&mut self) -> Result<()> {
-        self.handle_abi_result();
+        assert!(self.context.stack.len() == 0);
         self.masm.epilogue(self.context.frame.locals_size);
         Ok(())
     }
 
+    /// Returns the control stack frame at the given depth.
+    ///
+    /// # Panics
+    /// This function panics if the given depth cannot be associated
+    /// with a control stack frame.
+    pub fn control_at(frames: &mut [ControlStackFrame], depth: u32) -> &mut ControlStackFrame {
+        let index = (frames.len() - 1)
+            .checked_sub(depth as usize)
+            .unwrap_or_else(|| panic!("expected valid control stack frame at index: {}", depth));
+
+        &mut frames[index]
+    }
+
     fn spill_register_arguments(&mut self) {
-        // TODO
-        // Revisit this once the implicit VMContext argument is introduced;
-        // when that happens the mapping between local slots and abi args
-        // is not going to be symmetric.
         self.sig
             .params
             .iter()
@@ -162,21 +321,10 @@ where
                     .expect("arg should be associated to a register");
 
                 match &ty {
-                    ValType::I32 => self.masm.store(src.into(), addr, OperandSize::S32),
-                    ValType::I64 => self.masm.store(src.into(), addr, OperandSize::S64),
+                    WasmType::I32 => self.masm.store(src.into(), addr, OperandSize::S32),
+                    WasmType::I64 => self.masm.store(src.into(), addr, OperandSize::S64),
                     _ => panic!("Unsupported type {:?}", ty),
                 }
             });
-    }
-
-    pub fn handle_abi_result(&mut self) {
-        if self.sig.result.is_void() {
-            return;
-        }
-        let named_reg = self.sig.result.result_reg();
-        let reg = self
-            .context
-            .pop_to_reg(self.masm, Some(named_reg), OperandSize::S64);
-        self.context.regalloc.free_gpr(reg);
     }
 }

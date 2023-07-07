@@ -25,7 +25,7 @@ block2:
 ;   jg label3
 ; block3:
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   chi %r2, 0
@@ -58,7 +58,7 @@ block2 cold:
 ; block2:
 ;   lhi %r2, 97
 ;   jg label3
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   chi %r2, 0

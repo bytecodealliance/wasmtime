@@ -19,13 +19,13 @@ impl std::fmt::Debug for Errors {
         }
         let diagnostics = Vec::from_iter(self.errors.iter().map(|e| {
             let message = match e {
-                Error::IoError { context, .. } => format!("{}", context),
+                Error::IoError { context, .. } => context.clone(),
                 Error::ParseError { msg, .. } => format!("parse error: {}", msg),
                 Error::TypeError { msg, .. } => format!("type error: {}", msg),
                 Error::UnreachableError { msg, .. } => format!("unreachable rule: {}", msg),
                 Error::OverlapError { msg, .. } => format!("overlap error: {}", msg),
                 Error::ShadowedError { .. } => {
-                    format!("more general higher-priority rule shadows other rules")
+                    "more general higher-priority rule shadows other rules".to_string()
                 }
             };
 

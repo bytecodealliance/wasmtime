@@ -41,22 +41,29 @@
 
 ;; function u0:0:
 ;;   unwind DefineNewFrame { offset_upward_to_caller_sp: 160, offset_downward_to_clobbers: 0 }
-;;   stmg %r14, %r15, 112(%r15)
+;;   stmg %r8, %r15, 64(%r15)
+;;   unwind SaveReg { clobber_offset: 64, reg: p8i }
+;;   unwind SaveReg { clobber_offset: 72, reg: p9i }
+;;   unwind SaveReg { clobber_offset: 80, reg: p10i }
+;;   unwind SaveReg { clobber_offset: 88, reg: p11i }
+;;   unwind SaveReg { clobber_offset: 96, reg: p12i }
+;;   unwind SaveReg { clobber_offset: 104, reg: p13i }
 ;;   unwind SaveReg { clobber_offset: 112, reg: p14i }
 ;;   unwind SaveReg { clobber_offset: 120, reg: p15i }
 ;;   unwind StackAlloc { size: 0 }
 ;; block0:
 ;;   llgfr %r2, %r2
-;;   lg %r14, 8(%r4)
-;;   lgr %r5, %r2
-;;   ag %r5, 0(%r4)
-;;   lghi %r4, 0
-;;   clgr %r2, %r14
-;;   locgrhe %r5, %r4
-;;   stc %r3, 0(%r5)
+;;   lg %r5, 8(%r4)
+;;   lgr %r8, %r4
+;;   lgr %r4, %r2
+;;   ag %r4, 0(%r8)
+;;   lghi %r14, 0
+;;   clgr %r2, %r5
+;;   locgrhe %r4, %r14
+;;   stc %r3, 0(%r4)
 ;;   jg label1
 ;; block1:
-;;   lmg %r14, %r15, 112(%r15)
+;;   lmg %r8, %r15, 64(%r15)
 ;;   br %r14
 ;;
 ;; function u0:1:
@@ -64,13 +71,13 @@
 ;;   unwind StackAlloc { size: 0 }
 ;; block0:
 ;;   llgfr %r2, %r2
-;;   lg %r4, 8(%r3)
-;;   lgr %r5, %r2
-;;   ag %r5, 0(%r3)
+;;   lg %r5, 8(%r3)
+;;   lgr %r4, %r2
+;;   ag %r4, 0(%r3)
 ;;   lghi %r3, 0
-;;   clgr %r2, %r4
-;;   locgrhe %r5, %r3
-;;   llc %r2, 0(%r5)
+;;   clgr %r2, %r5
+;;   locgrhe %r4, %r3
+;;   llc %r2, 0(%r4)
 ;;   jg label1
 ;; block1:
 ;;   br %r14

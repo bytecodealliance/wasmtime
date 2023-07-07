@@ -1,3 +1,5 @@
+#![cfg_attr(miri, allow(dead_code, unused_imports))]
+
 mod async_functions;
 mod call_hook;
 mod cli_tests;
@@ -34,6 +36,9 @@ mod traps;
 mod wait_notify;
 mod wasi_testsuite;
 mod wast;
+// Currently Winch is only supported in x86_64.
+#[cfg(all(target_arch = "x86_64"))]
+mod winch;
 
 /// A helper to compile a module in a new store with reference types enabled.
 pub(crate) fn ref_types_module(

@@ -2,7 +2,7 @@ use crate::isa::reg::Reg;
 use std::collections::VecDeque;
 
 /// Value definition to be used within the shadow stack.
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub(crate) enum Val {
     /// I32 Constant.
     I32(i32),
@@ -115,6 +115,11 @@ impl Stack {
         Self {
             inner: Default::default(),
         }
+    }
+
+    /// Insert a new value at the specified index.
+    pub fn insert(&mut self, at: usize, val: Val) {
+        self.inner.insert(at, val);
     }
 
     /// Get the length of the stack.

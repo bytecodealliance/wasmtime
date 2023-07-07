@@ -5,14 +5,12 @@ use crate::unwind::UnwindRegistration;
 use anyhow::{anyhow, bail, Context, Result};
 use object::read::{File, Object, ObjectSection};
 use object::ObjectSymbol;
-use std::mem;
 use std::mem::ManuallyDrop;
 use std::ops::Range;
 use wasmtime_environ::obj;
-use wasmtime_environ::FunctionLoc;
 use wasmtime_jit_icache_coherence as icache_coherence;
 use wasmtime_runtime::libcalls;
-use wasmtime_runtime::{MmapVec, VMTrampoline};
+use wasmtime_runtime::MmapVec;
 
 /// Management of executable memory within a `MmapVec`
 ///
@@ -198,18 +196,6 @@ impl CodeMemory {
         &self.mmap[self.trap_data.clone()]
     }
 
-    /// Returns a `VMTrampoline` function pointer for the given function in the
-    /// text section.
-    ///
-    /// # Unsafety
-    ///
-    /// This function is unsafe as there's no guarantee that the returned
-    /// function pointer is valid.
-    pub unsafe fn vmtrampoline(&self, loc: FunctionLoc) -> VMTrampoline {
-        let ptr = self.text()[loc.start as usize..][..loc.length as usize].as_ptr();
-        mem::transmute::<*const u8, VMTrampoline>(ptr)
-    }
-
     /// Publishes the internal ELF image to be ready for execution.
     ///
     /// This method can only be called once and will panic if called twice. This
@@ -298,8 +284,16 @@ impl CodeMemory {
                 obj::LibCall::TruncF64 => libcalls::relocs::truncf64 as usize,
                 obj::LibCall::FmaF32 => libcalls::relocs::fmaf32 as usize,
                 obj::LibCall::FmaF64 => libcalls::relocs::fmaf64 as usize,
+                #[cfg(target_arch = "x86_64")]
+                obj::LibCall::X86Pshufb => libcalls::relocs::x86_pshufb as usize,
+                #[cfg(not(target_arch = "x86_64"))]
+                obj::LibCall::X86Pshufb => unreachable!(),
             };
-            *self.mmap.as_mut_ptr().add(offset).cast::<usize>() = libcall;
+            self.mmap
+                .as_mut_ptr()
+                .add(offset)
+                .cast::<usize>()
+                .write_unaligned(libcall);
         }
         Ok(())
     }

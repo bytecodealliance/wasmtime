@@ -1,0 +1,25 @@
+[package]
+name = "wasmtime-wasi-http"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+repository = "https://github.com/bytecodealliance/wasmtime"
+license = "Apache-2.0 WITH LLVM-exception"
+description = "Experimental HTTP library for WebAssembly in Wasmtime"
+
+[dependencies]
+anyhow = { workspace = true }
+bytes = "1.1.0"
+hyper = { version = "1.0.0-rc.3", features = ["full"] }
+tokio = { version = "1", default-features = false, features = ["net", "rt-multi-thread", "time"] }
+http = { version = "0.2.9" }
+http-body = "1.0.0-rc.2"
+http-body-util = "0.1.0-rc.2"
+thiserror = { workspace = true }
+wasmtime = { workspace = true, features = ['component-model'] }
+
+# The `ring` crate, used to implement TLS, does not build on riscv64 or s390x
+[target.'cfg(not(any(target_arch = "riscv64", target_arch = "s390x")))'.dependencies]
+tokio-rustls = { version = "0.24.0" }
+rustls = { version = "0.21.0" }
+webpki-roots = { version = "0.23.0" }

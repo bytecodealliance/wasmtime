@@ -2,7 +2,8 @@ use crate::linker::DefinitionType;
 use crate::{signatures::SignatureCollection, Engine};
 use anyhow::{anyhow, bail, Result};
 use wasmtime_environ::{
-    EntityType, Global, Memory, ModuleTypes, SignatureIndex, Table, WasmFuncType, WasmType,
+    EntityType, Global, Memory, ModuleTypes, SignatureIndex, Table, WasmFuncType, WasmHeapType,
+    WasmRefType, WasmType,
 };
 use wasmtime_runtime::VMSharedSignatureIndex;
 
@@ -132,7 +133,14 @@ fn func_ty_mismatch(msg: &str, expected: &WasmFuncType, actual: &WasmFuncType) -
 }
 
 fn global_ty(expected: &Global, actual: &Global) -> Result<()> {
-    match_ty(expected.wasm_ty, actual.wasm_ty, "global")?;
+    // Subtyping is only sound on immutable global
+    // references. Therefore if either type is mutable we perform a
+    // strict equality check on the types.
+    if expected.mutability || actual.mutability {
+        equal_ty(expected.wasm_ty, actual.wasm_ty, "global")?;
+    } else {
+        match_ty(expected.wasm_ty, actual.wasm_ty, "global")?;
+    }
     match_bool(
         expected.mutability,
         actual.mutability,
@@ -144,7 +152,11 @@ fn global_ty(expected: &Global, actual: &Global) -> Result<()> {
 }
 
 fn table_ty(expected: &Table, actual: &Table, actual_runtime_size: Option<u32>) -> Result<()> {
-    match_ty(expected.wasm_ty, actual.wasm_ty, "table")?;
+    equal_ty(
+        WasmType::Ref(expected.wasm_ty),
+        WasmType::Ref(actual.wasm_ty),
+        "table",
+    )?;
     match_limits(
         expected.minimum.into(),
         expected.maximum.map(|i| i.into()),
@@ -180,7 +192,53 @@ fn memory_ty(expected: &Memory, actual: &Memory, actual_runtime_size: Option<u64
     Ok(())
 }
 
+fn match_heap(expected: WasmHeapType, actual: WasmHeapType, desc: &str) -> Result<()> {
+    let result = match (actual, expected) {
+        (WasmHeapType::TypedFunc(actual), WasmHeapType::TypedFunc(expected)) => {
+            // TODO(dhil): we need either canonicalised types or a context here.
+            actual == expected
+        }
+        (WasmHeapType::TypedFunc(_), WasmHeapType::Func)
+        | (WasmHeapType::Func, WasmHeapType::Func)
+        | (WasmHeapType::Extern, WasmHeapType::Extern) => true,
+        (WasmHeapType::Func, _) | (WasmHeapType::Extern, _) | (WasmHeapType::TypedFunc(_), _) => {
+            false
+        }
+    };
+    if result {
+        Ok(())
+    } else {
+        bail!(
+            "{} types incompatible: expected {0} of type `{}`, found {0} of type `{}`",
+            desc,
+            expected,
+            actual,
+        )
+    }
+}
+
+fn match_ref(expected: WasmRefType, actual: WasmRefType, desc: &str) -> Result<()> {
+    if actual.nullable == expected.nullable || expected.nullable {
+        return match_heap(expected.heap_type, actual.heap_type, desc);
+    }
+    bail!(
+        "{} types incompatible: expected {0} of type `{}`, found {0} of type `{}`",
+        desc,
+        expected,
+        actual,
+    )
+}
+
+// Checks whether actual is a subtype of expected, i.e. `actual <: expected`
+// (note the parameters are given the other way around in code).
 fn match_ty(expected: WasmType, actual: WasmType, desc: &str) -> Result<()> {
+    match (actual, expected) {
+        (WasmType::Ref(actual), WasmType::Ref(expected)) => match_ref(expected, actual, desc),
+        (actual, expected) => equal_ty(expected, actual, desc),
+    }
+}
+
+fn equal_ty(expected: WasmType, actual: WasmType, desc: &str) -> Result<()> {
     if expected == actual {
         return Ok(());
     }

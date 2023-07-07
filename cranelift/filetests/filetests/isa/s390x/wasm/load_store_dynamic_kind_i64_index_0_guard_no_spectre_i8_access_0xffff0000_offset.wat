@@ -77,8 +77,8 @@
 ;; block1:
 ;;   lgr %r4, %r2
 ;;   ag %r4, 0(%r3)
-;;   llilh %r3, 65535
-;;   llc %r2, 0(%r3,%r4)
+;;   llilh %r5, 65535
+;;   llc %r2, 0(%r5,%r4)
 ;;   jg label2
 ;; block2:
 ;;   br %r14

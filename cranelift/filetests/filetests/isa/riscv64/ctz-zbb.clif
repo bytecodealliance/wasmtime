@@ -14,7 +14,7 @@ block0(v0: i8):
 ;   ori t2,a0,256
 ;   ctzw a0,t2
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ori t2, a0, 0x100
@@ -33,7 +33,7 @@ block0(v0: i16):
 ;   or a1,a0,t2
 ;   ctzw a0,a1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lui t2, 0x10
@@ -51,7 +51,7 @@ block0(v0: i32):
 ; block0:
 ;   ctzw a0,a0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0x1b, 0x15, 0x15, 0x60
@@ -67,7 +67,7 @@ block0(v0: i64):
 ; block0:
 ;   ctz a0,a0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0x13, 0x15, 0x15, 0x60
@@ -87,7 +87,7 @@ block0(v0: i128):
 ;   add a0,a2,a4
 ;   li a1,0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   .byte 0x93, 0x95, 0x15, 0x60

@@ -11,7 +11,7 @@ block0(v0: i64x2):
 ; block0:
 ;   vpopctg %v24, %v24
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vpopctg %v24, %v24
@@ -27,7 +27,7 @@ block0(v0: i32x4):
 ; block0:
 ;   vpopctf %v24, %v24
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vpopctf %v24, %v24
@@ -43,7 +43,7 @@ block0(v0: i16x8):
 ; block0:
 ;   vpopcth %v24, %v24
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vpopcth %v24, %v24
@@ -59,7 +59,7 @@ block0(v0: i8x16):
 ; block0:
 ;   vpopctb %v24, %v24
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vpopctb %v24, %v24

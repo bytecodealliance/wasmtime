@@ -933,6 +933,7 @@ mod tests {
         assert!(cmp.requires_typevar_operand());
         assert_eq!(cmp.num_fixed_results(), 1);
         assert_eq!(cmp.num_fixed_value_arguments(), 2);
+        assert_eq!(cmp.result_type(0, types::I64), types::I8);
     }
 
     #[test]

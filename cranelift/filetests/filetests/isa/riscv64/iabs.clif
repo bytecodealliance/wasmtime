@@ -14,7 +14,7 @@ block0(v0: i8):
 ;   sub a3,zero,a1
 ;   select_reg a0,a1,a3##condition=(a1 sgt a3)
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   slli t2, a0, 0x38
@@ -39,7 +39,7 @@ block0(v0: i16):
 ;   sub a3,zero,a1
 ;   select_reg a0,a1,a3##condition=(a1 sgt a3)
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   slli t2, a0, 0x30
@@ -63,7 +63,7 @@ block0(v0: i32):
 ;   sub a1,zero,t2
 ;   select_reg a0,t2,a1##condition=(t2 sgt a1)
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   sext.w t2, a0
@@ -85,7 +85,7 @@ block0(v0: i64):
 ;   sub t2,zero,a0
 ;   select_reg a0,a0,t2##condition=(a0 sgt t2)
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   neg t2, a0

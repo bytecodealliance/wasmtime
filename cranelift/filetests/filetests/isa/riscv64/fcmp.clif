@@ -14,27 +14,23 @@ block1:
 
 ; VCode:
 ; block0:
-;   li t1,0
-;   fmv.d.x ft1,t1
-;   li a2,0
-;   fmv.d.x ft5,a2
-;   fle.d a5,ft5,ft1
-;   bne a5,zero,taken(label2),not_taken(label1)
+;   li t2,0
+;   fmv.d.x ft2,t2
+;   fle.d t2,ft2,ft2
+;   bne t2,zero,taken(label2),not_taken(label1)
 ; block1:
 ;   j label3
 ; block2:
 ;   j label3
 ; block3:
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mv t1, zero
-;   fmv.d.x ft1, t1
-;   mv a2, zero
-;   fmv.d.x ft5, a2
-;   fle.d a5, ft5, ft1
-; block1: ; offset 0x14
+;   mv t2, zero
+;   fmv.d.x ft2, t2
+;   fle.d t2, ft2, ft2
+; block1: ; offset 0xc
 ;   ret
 
 function %f1() {
@@ -49,26 +45,22 @@ block1:
 
 ; VCode:
 ; block0:
-;   li t1,0
-;   fmv.d.x ft1,t1
-;   li a2,0
-;   fmv.d.x ft5,a2
-;   fle.d a5,ft5,ft1
-;   bne a5,zero,taken(label2),not_taken(label1)
+;   li t2,0
+;   fmv.d.x ft2,t2
+;   fle.d t2,ft2,ft2
+;   bne t2,zero,taken(label2),not_taken(label1)
 ; block1:
 ;   j label3
 ; block2:
 ;   j label3
 ; block3:
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mv t1, zero
-;   fmv.d.x ft1, t1
-;   mv a2, zero
-;   fmv.d.x ft5, a2
-;   fle.d a5, ft5, ft1
-; block1: ; offset 0x14
+;   mv t2, zero
+;   fmv.d.x ft2, t2
+;   fle.d t2, ft2, ft2
+; block1: ; offset 0xc
 ;   ret
 

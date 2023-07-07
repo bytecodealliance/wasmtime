@@ -12,7 +12,7 @@ block0(v0: i64, v1: i64):
 ;   vlvgp %v4, %r4, %r3
 ;   vst %v4, 0(%r2)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vlvgp %v4, %r4, %r3
@@ -31,7 +31,7 @@ block0(v0: i128):
 ;   lgdr %r3, %f1
 ;   vlgvg %r2, %v1, 1
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vl %v1, 0(%r2)

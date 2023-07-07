@@ -28,7 +28,7 @@ macro_rules! preset {
     () => {
         vec![]
     };
-    ($($x:ident)&&*) => {
+    ($($x:tt)&&*) => {
         {
             let mut v = Vec::new();
             $(

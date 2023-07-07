@@ -43,8 +43,8 @@
 ;; block0:
 ;;   mov w9, w0
 ;;   ldr x10, [x2, #8]
-;;   movn x8, #4099
-;;   add x10, x10, x8
+;;   movn x11, #4099
+;;   add x10, x10, x11
 ;;   subs xzr, x9, x10
 ;;   b.hi label3 ; b label1
 ;; block1:
@@ -61,8 +61,8 @@
 ;; block0:
 ;;   mov w9, w0
 ;;   ldr x10, [x1, #8]
-;;   movn x8, #4099
-;;   add x10, x10, x8
+;;   movn x11, #4099
+;;   add x10, x10, x11
 ;;   subs xzr, x9, x10
 ;;   b.hi label3 ; b label1
 ;; block1:

@@ -81,7 +81,6 @@ use crate::translation_utils::{
 };
 use crate::wasm_unsupported;
 use crate::{FuncIndex, GlobalIndex, MemoryIndex, TableIndex, TypeIndex, WasmResult};
-use core::convert::TryInto;
 use core::{i32, u32};
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::immediates::Offset32;
@@ -1152,7 +1151,8 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             translate_fcmp(FloatCC::LessThanOrEqual, builder, state)
         }
         Operator::RefNull { hty } => {
-            state.push1(environ.translate_ref_null(builder.cursor(), (*hty).try_into()?)?)
+            let hty = environ.convert_heap_type(*hty);
+            state.push1(environ.translate_ref_null(builder.cursor(), hty)?)
         }
         Operator::RefIsNull => {
             let value = state.pop1();
@@ -1908,7 +1908,8 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         }
         Operator::F64x2ConvertLowI32x4S => {
             let a = pop1_with_bitcast(state, I32X4, builder);
-            state.push1(builder.ins().fcvt_low_from_sint(F64X2, a));
+            let widened_a = builder.ins().swiden_low(a);
+            state.push1(builder.ins().fcvt_from_sint(F64X2, widened_a));
         }
         Operator::F64x2ConvertLowI32x4U => {
             let a = pop1_with_bitcast(state, I32X4, builder);
@@ -2196,7 +2197,9 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::I8x16RelaxedSwizzle => {
             let (a, b) = pop2_with_bitcast(state, I8X16, builder);
             state.push1(
-                if environ.relaxed_simd_deterministic() || !environ.is_x86() {
+                if environ.relaxed_simd_deterministic()
+                    || !environ.use_x86_pshufb_for_relaxed_swizzle()
+                {
                     // Deterministic semantics match the `i8x16.swizzle`
                     // instruction which is the CLIF `swizzle`.
                     builder.ins().swizzle(a, b)
@@ -2243,12 +2246,10 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             // Note that the variable swaps here are intentional due to
             // the difference of the order of the wasm op and the clif
             // op.
-            //
-            // Additionally note that even on x86 the I16X8 type uses the
-            // `bitselect` instruction since x86 has no corresponding
-            // `blendv`-style instruction for 16-bit operands.
             state.push1(
-                if environ.relaxed_simd_deterministic() || !environ.is_x86() || ty == I16X8 {
+                if environ.relaxed_simd_deterministic()
+                    || !environ.use_x86_blendv_for_relaxed_laneselect(ty)
+                {
                     // Deterministic semantics are a `bitselect` along the lines
                     // of the wasm `v128.bitselect` instruction.
                     builder.ins().bitselect(c, a, b)
@@ -2287,7 +2288,9 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::I16x8RelaxedQ15mulrS => {
             let (a, b) = pop2_with_bitcast(state, I16X8, builder);
             state.push1(
-                if environ.relaxed_simd_deterministic() || !environ.is_x86() {
+                if environ.relaxed_simd_deterministic()
+                    || !environ.use_x86_pmulhrsw_for_relaxed_q15mul()
+                {
                     // Deterministic semantics are to match the
                     // `i16x8.q15mulr_sat_s` instruction.
                     builder.ins().sqmul_round_sat(a, b)
@@ -2299,7 +2302,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::I16x8RelaxedDotI8x16I7x16S => {
             let (a, b) = pop2_with_bitcast(state, I8X16, builder);
             state.push1(
-                if environ.relaxed_simd_deterministic() || !environ.is_x86() {
+                if environ.relaxed_simd_deterministic() || !environ.use_x86_pmaddubsw_for_dot() {
                     // Deterministic semantics are to treat both operands as
                     // signed integers and perform the dot product.
                     let alo = builder.ins().swiden_low(a);
@@ -2318,34 +2321,96 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::I32x4RelaxedDotI8x16I7x16AddS => {
             let c = pop1_with_bitcast(state, I32X4, builder);
             let (a, b) = pop2_with_bitcast(state, I8X16, builder);
-            let dot = if environ.relaxed_simd_deterministic() || !environ.is_x86() {
-                // Deterministic semantics are to treat both operands as
-                // signed integers and perform the dot product.
-                let alo = builder.ins().swiden_low(a);
-                let blo = builder.ins().swiden_low(b);
-                let lo = builder.ins().imul(alo, blo);
-                let ahi = builder.ins().swiden_high(a);
-                let bhi = builder.ins().swiden_high(b);
-                let hi = builder.ins().imul(ahi, bhi);
-                builder.ins().iadd_pairwise(lo, hi)
-            } else {
-                builder.ins().x86_pmaddubsw(a, b)
-            };
+            let dot =
+                if environ.relaxed_simd_deterministic() || !environ.use_x86_pmaddubsw_for_dot() {
+                    // Deterministic semantics are to treat both operands as
+                    // signed integers and perform the dot product.
+                    let alo = builder.ins().swiden_low(a);
+                    let blo = builder.ins().swiden_low(b);
+                    let lo = builder.ins().imul(alo, blo);
+                    let ahi = builder.ins().swiden_high(a);
+                    let bhi = builder.ins().swiden_high(b);
+                    let hi = builder.ins().imul(ahi, bhi);
+                    builder.ins().iadd_pairwise(lo, hi)
+                } else {
+                    builder.ins().x86_pmaddubsw(a, b)
+                };
             let dotlo = builder.ins().swiden_low(dot);
             let dothi = builder.ins().swiden_high(dot);
             let dot32 = builder.ins().iadd_pairwise(dotlo, dothi);
             state.push1(builder.ins().iadd(dot32, c));
         }
 
-        Operator::CallRef { .. }
-        | Operator::ReturnCallRef { .. }
-        | Operator::BrOnNull { .. }
-        | Operator::BrOnNonNull { .. }
-        | Operator::RefAsNonNull => {
+        Operator::ReturnCallRef { type_index: _ } => {
             return Err(wasm_unsupported!(
-                "proposed function-references operator {:?}",
+                "proposed tail-call operator for function references {:?}",
                 op
             ));
+        }
+        Operator::BrOnNull { relative_depth } => {
+            let r = state.pop1();
+            let (br_destination, inputs) = translate_br_if_args(*relative_depth, state);
+            let is_null = environ.translate_ref_is_null(builder.cursor(), r)?;
+            let else_block = builder.create_block();
+            canonicalise_brif(builder, is_null, br_destination, inputs, else_block, &[]);
+
+            builder.seal_block(else_block); // The only predecessor is the current block.
+            builder.switch_to_block(else_block);
+            state.push1(r);
+        }
+        Operator::BrOnNonNull { relative_depth } => {
+            // We write this a bit differently from the spec to avoid an extra
+            // block/branch and the typed accounting thereof. Instead of the
+            // spec's approach, it's described as such:
+            // Peek the value val from the stack.
+            // If val is ref.null ht, then: pop the value val from the stack.
+            // Else: Execute the instruction (br relative_depth).
+            let is_null = environ.translate_ref_is_null(builder.cursor(), state.peek1())?;
+            let (br_destination, inputs) = translate_br_if_args(*relative_depth, state);
+            let else_block = builder.create_block();
+            canonicalise_brif(builder, is_null, else_block, &[], br_destination, inputs);
+
+            // In the null case, pop the ref
+            state.pop1();
+
+            builder.seal_block(else_block); // The only predecessor is the current block.
+
+            // The rest of the translation operates on our is null case, which is
+            // currently an empty block
+            builder.switch_to_block(else_block);
+        }
+        Operator::CallRef { type_index } => {
+            // Get function signature
+            // `index` is the index of the function's signature and `table_index` is the index of
+            // the table to search the function in.
+            let (sigref, num_args) = state.get_indirect_sig(builder.func, *type_index, environ)?;
+            let callee = state.pop1();
+
+            // Bitcast any vector arguments to their default type, I8X16, before calling.
+            let args = state.peekn_mut(num_args);
+            bitcast_wasm_params(environ, sigref, args, builder);
+
+            let call =
+                environ.translate_call_ref(builder, sigref, callee, state.peekn(num_args))?;
+
+            let inst_results = builder.inst_results(call);
+            debug_assert_eq!(
+                inst_results.len(),
+                builder.func.dfg.signatures[sigref].returns.len(),
+                "translate_call_ref results should match the call signature"
+            );
+            state.popn(num_args);
+            state.pushn(inst_results);
+        }
+        Operator::RefAsNonNull => {
+            let r = state.pop1();
+            let is_null = environ.translate_ref_is_null(builder.cursor(), r)?;
+            builder.ins().trapnz(is_null, ir::TrapCode::NullReference);
+            state.push1(r);
+        }
+
+        Operator::I31New | Operator::I31GetS | Operator::I31GetU => {
+            unimplemented!("GC operators not yet implemented")
         }
     };
     Ok(())

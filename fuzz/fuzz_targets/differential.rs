@@ -5,11 +5,11 @@ use libfuzzer_sys::fuzz_target;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering::SeqCst;
 use std::sync::Once;
-use wasmtime::Trap;
+use wasmtime_fuzzing::generators::CompilerStrategy;
 use wasmtime_fuzzing::generators::{Config, DiffValue, DiffValueType, SingleInstModule};
 use wasmtime_fuzzing::oracles::diff_wasmtime::WasmtimeInstance;
 use wasmtime_fuzzing::oracles::engine::{build_allowed_env_list, parse_env_list};
-use wasmtime_fuzzing::oracles::{differential, engine, log_wasm};
+use wasmtime_fuzzing::oracles::{differential, engine, log_wasm, DiffEqResult};
 
 // Upper limit on the number of invocations for each WebAssembly function
 // executed by this fuzz target.
@@ -23,8 +23,10 @@ static SETUP: Once = Once::new();
 // - ALLOWED_ENGINES=wasmi,spec cargo +nightly fuzz run ...
 // - ALLOWED_ENGINES=-v8 cargo +nightly fuzz run ...
 // - ALLOWED_MODULES=single-inst cargo +nightly fuzz run ...
+// - FUZZ_WINCH=1 cargo +nightly fuzz run ...
 static mut ALLOWED_ENGINES: Vec<&str> = vec![];
 static mut ALLOWED_MODULES: Vec<&str> = vec![];
+static mut FUZZ_WINCH: bool = false;
 
 // Statistics about what's actually getting executed during fuzzing
 static STATS: RuntimeStats = RuntimeStats::new();
@@ -45,9 +47,16 @@ fuzz_target!(|data: &[u8]| {
             parse_env_list("ALLOWED_MODULES"),
             &["wasm-smith", "single-inst"],
         );
+
+        let fuzz_winch = match std::env::var("FUZZ_WINCH").map(|v| v == "1") {
+            Ok(v) => v,
+            _ => false,
+        };
+
         unsafe {
             ALLOWED_ENGINES = allowed_engines;
             ALLOWED_MODULES = allowed_modules;
+            FUZZ_WINCH = fuzz_winch;
         }
     });
 
@@ -60,6 +69,7 @@ fn execute_one(data: &[u8]) -> Result<()> {
     STATS.bump_attempts();
 
     let mut u = Unstructured::new(data);
+    let fuzz_winch = unsafe { FUZZ_WINCH };
 
     // Generate a Wasmtime and module configuration and update its settings
     // initially to be suitable for differential execution where the generated
@@ -67,6 +77,15 @@ fn execute_one(data: &[u8]) -> Result<()> {
     // refined below.
     let mut config: Config = u.arbitrary()?;
     config.set_differential_config();
+
+    // When fuzzing Winch, explicitly override the compiler strategy, which by
+    // default its arbitrary implementation unconditionally returns
+    // `Cranelift`.
+    // We also explicitly disable multi-value support.
+    if fuzz_winch {
+        config.wasmtime.compiler_strategy = CompilerStrategy::Winch;
+        config.module_config.config.multi_value_enabled = false;
+    }
 
     // Choose an engine that Wasmtime will be differentially executed against.
     // The chosen engine is then created, which might update `config`, and
@@ -100,6 +119,11 @@ fn execute_one(data: &[u8]) -> Result<()> {
         "single-inst" => build_single_inst_module(&mut u, &config)?,
         _ => unreachable!(),
     };
+
+    if fuzz_winch && !winch_supports_module(&wasm) {
+        return Ok(());
+    }
+
     log_wasm(&wasm);
 
     // Instantiate the generated wasm file in the chosen differential engine.
@@ -111,27 +135,15 @@ fn execute_one(data: &[u8]) -> Result<()> {
     let rhs_module = wasmtime::Module::new(rhs_store.engine(), &wasm).unwrap();
     let rhs_instance = WasmtimeInstance::new(rhs_store, rhs_module);
 
-    let (mut lhs_instance, mut rhs_instance) = match (lhs_instance, rhs_instance) {
-        // Both sides successful, continue below to invoking exports.
-        (Ok(l), Ok(r)) => (l, r),
+    let (mut lhs_instance, mut rhs_instance) =
+        match DiffEqResult::new(&*lhs, lhs_instance, rhs_instance) {
+            // Both sides successful, continue below to invoking exports.
+            DiffEqResult::Success(l, r) => (l, r),
 
-        // Both sides failed, make sure they failed for the same reason but then
-        // we're done with this fuzz test case.
-        (Err(l), Err(r)) => {
-            let err = r.downcast::<Trap>().expect("not a trap");
-            lhs.assert_error_match(&err, &l);
-            return Ok(());
-        }
-
-        // One side succeeded and one side failed, that means a bug happened!
-        (l, r) => {
-            panic!(
-                "failed to instantiate only one side: {:?} != {:?}",
-                l.err(),
-                r.err()
-            )
-        }
-    };
+            // Both sides failed, or computation has diverged. In both cases this
+            // test case is done.
+            DiffEqResult::Poisoned | DiffEqResult::Failed => return Ok(()),
+        };
 
     // Call each exported function with different sets of arguments.
     'outer: for (name, signature) in rhs_instance.exported_functions() {
@@ -262,4 +274,108 @@ impl RuntimeStats {
             _ => return,
         };
     }
+}
+
+// Returns true if the module only contains operators supported by
+// Winch. Winch's x86_64 target has broader support for Wasm operators
+// than the aarch64 target. This list assumes fuzzing on the x86_64
+// target.
+fn winch_supports_module(module: &[u8]) -> bool {
+    use wasmparser::{Operator::*, Parser, Payload};
+
+    let mut supported = true;
+    let mut parser = Parser::new(0).parse_all(module);
+
+    'main: while let Some(payload) = parser.next() {
+        match payload.unwrap() {
+            Payload::CodeSectionEntry(body) => {
+                let op_reader = body.get_operators_reader().unwrap();
+                for op in op_reader {
+                    match op.unwrap() {
+                        I32Const { .. }
+                        | I64Const { .. }
+                        | I32Add { .. }
+                        | I64Add { .. }
+                        | I32Sub { .. }
+                        | I32Mul { .. }
+                        | I32DivS { .. }
+                        | I32DivU { .. }
+                        | I64DivS { .. }
+                        | I64DivU { .. }
+                        | I64RemU { .. }
+                        | I64RemS { .. }
+                        | I32RemU { .. }
+                        | I32RemS { .. }
+                        | I64Mul { .. }
+                        | I64Sub { .. }
+                        | I32Eq { .. }
+                        | I64Eq { .. }
+                        | I32Ne { .. }
+                        | I64Ne { .. }
+                        | I32LtS { .. }
+                        | I64LtS { .. }
+                        | I32LtU { .. }
+                        | I64LtU { .. }
+                        | I32LeS { .. }
+                        | I64LeS { .. }
+                        | I32LeU { .. }
+                        | I64LeU { .. }
+                        | I32GtS { .. }
+                        | I64GtS { .. }
+                        | I32GtU { .. }
+                        | I64GtU { .. }
+                        | I32GeS { .. }
+                        | I64GeS { .. }
+                        | I32GeU { .. }
+                        | I64GeU { .. }
+                        | I32Eqz { .. }
+                        | I64Eqz { .. }
+                        | I32And { .. }
+                        | I64And { .. }
+                        | I32Or { .. }
+                        | I64Or { .. }
+                        | I32Xor { .. }
+                        | I64Xor { .. }
+                        | I32Shl { .. }
+                        | I64Shl { .. }
+                        | I32ShrS { .. }
+                        | I64ShrS { .. }
+                        | I32ShrU { .. }
+                        | I64ShrU { .. }
+                        | I32Rotl { .. }
+                        | I64Rotl { .. }
+                        | I32Rotr { .. }
+                        | I64Rotr { .. }
+                        | I32Clz { .. }
+                        | I64Clz { .. }
+                        | I32Ctz { .. }
+                        | I64Ctz { .. }
+                        | I32Popcnt { .. }
+                        | I64Popcnt { .. }
+                        | LocalGet { .. }
+                        | LocalSet { .. }
+                        | LocalTee { .. }
+                        | Call { .. }
+                        | Nop { .. }
+                        | End { .. }
+                        | If { .. }
+                        | Else { .. }
+                        | Block { .. }
+                        | Loop { .. }
+                        | Br { .. }
+                        | BrIf { .. }
+                        | Unreachable { .. }
+                        | Return { .. } => {}
+                        _ => {
+                            supported = false;
+                            break 'main;
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    supported
 }

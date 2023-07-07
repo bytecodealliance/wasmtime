@@ -1,18 +1,20 @@
 use crate::component::{MAX_FLAT_PARAMS, MAX_FLAT_RESULTS};
 use crate::{
-    EntityType, Global, GlobalInit, ModuleTypes, ModuleTypesBuilder, PrimaryMap, SignatureIndex,
+    EntityType, ModuleTypes, ModuleTypesBuilder, PrimaryMap, SignatureIndex, TypeConvert,
+    WasmHeapType,
 };
 use anyhow::{bail, Result};
 use cranelift_entity::EntityRef;
-use indexmap::IndexMap;
+use indexmap::{IndexMap, IndexSet};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::hash::Hash;
 use std::ops::Index;
-use wasmparser::{
-    ComponentAlias, ComponentOuterAliasKind, ComponentTypeDeclaration, InstanceTypeDeclaration,
-};
+use wasmparser::names::KebabString;
+use wasmparser::types;
 use wasmtime_component_util::{DiscriminantSize, FlagsSize};
+
+pub use wasmtime_types::StaticModuleIndex;
 
 /// Maximum nesting depth of a type allowed in Wasmtime.
 ///
@@ -33,6 +35,7 @@ macro_rules! indices {
             Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug,
             Serialize, Deserialize,
         )]
+        #[repr(transparent)]
         pub struct $name(u32);
         cranelift_entity::entity_impl!($name);
     )*);
@@ -116,11 +119,6 @@ indices! {
     /// Same as `ModuleUpvarIndex` but for components.
     pub struct ComponentUpvarIndex(u32);
 
-    /// Index into the global list of modules found within an entire component.
-    /// Module translations are saved on the side to get fully compiled after
-    /// the original component has finished being translated.
-    pub struct StaticModuleIndex(u32);
-
     /// Same as `StaticModuleIndex` but for components.
     pub struct StaticComponentIndex(u32);
 
@@ -175,15 +173,10 @@ indices! {
     /// Same as `RuntimeMemoryIndex` except for the `post-return` function.
     pub struct RuntimePostReturnIndex(u32);
 
-    /// Index that represents an exported module from a component since that's
-    /// currently the only use for saving the entire module state at runtime.
-    pub struct RuntimeModuleIndex(u32);
-
     /// Index into the list of transcoders identified during compilation.
     ///
-    /// This is used to index the `VMCallerCheckedFuncRef` slots reserved for
-    /// string encoders which reference linear memories defined within a
-    /// component.
+    /// This is used to index the `VMFuncRef` slots reserved for string encoders
+    /// which reference linear memories defined within a component.
     pub struct RuntimeTranscoderIndex(u32);
 }
 
@@ -310,7 +303,6 @@ where
 /// managing building up core wasm [`ModuleTypes`] as well.
 #[derive(Default)]
 pub struct ComponentTypesBuilder {
-    type_scopes: Vec<TypeScope>,
     functions: HashMap<TypeFunc, TypeFuncIndex>,
     lists: HashMap<TypeList, TypeListIndex>,
     records: HashMap<TypeRecord, TypeRecordIndex>,
@@ -329,13 +321,11 @@ pub struct ComponentTypesBuilder {
     // used at compile-time and not used at runtime, hence the location here
     // as opposed to `ComponentTypes`.
     type_info: TypeInformationCache,
-}
 
-#[derive(Default)]
-struct TypeScope {
-    core: PrimaryMap<TypeIndex, TypeDef>,
-    component: PrimaryMap<ComponentTypeIndex, TypeDef>,
-    instances: PrimaryMap<ComponentInstanceIndex, TypeComponentInstanceIndex>,
+    defined_types_cache: HashMap<types::TypeId, InterfaceType>,
+    module_types_cache: HashMap<types::TypeId, TypeModuleIndex>,
+    component_types_cache: HashMap<types::TypeId, TypeComponentIndex>,
+    instance_types_cache: HashMap<types::TypeId, TypeComponentInstanceIndex>,
 }
 
 macro_rules! intern_and_fill_flat_types {
@@ -374,404 +364,308 @@ impl ComponentTypesBuilder {
         &mut self.module_types
     }
 
-    /// Pushes a new scope when entering a new index space for types in the
-    /// component model.
-    ///
-    /// This happens when a component is recursed into or a module/instance
-    /// type is recursed into.
-    pub fn push_type_scope(&mut self) {
-        self.type_scopes.push(Default::default());
-    }
-
-    /// Adds a new `TypeDef` definition within the current component types
-    /// scope.
-    ///
-    /// Returns the `ComponentTypeIndex` associated with the type being pushed.
-    ///
-    /// # Panics
-    ///
-    /// Requires that `push_type_scope` was called previously.
-    pub fn push_component_typedef(&mut self, ty: TypeDef) -> ComponentTypeIndex {
-        debug_assert!(!matches!(ty, TypeDef::Module(_) | TypeDef::CoreFunc(_)));
-        self.type_scopes.last_mut().unwrap().component.push(ty)
-    }
-
-    /// Adds a new `TypeDef` definition within the current core types
-    /// scope.
-    ///
-    /// Returns the `TypeIndex` associated with the type being pushed. Note that
-    /// this should only be used with core-wasm-related `TypeDef` instances such
-    /// as `TypeDef::Module` and `TypeDef::CoreFunc`.
-    ///
-    /// # Panics
-    ///
-    /// Requires that `push_type_scope` was called previously.
-    pub fn push_core_typedef(&mut self, ty: TypeDef) -> TypeIndex {
-        debug_assert!(matches!(ty, TypeDef::Module(_) | TypeDef::CoreFunc(_)));
-        self.type_scopes.last_mut().unwrap().core.push(ty)
-    }
-
-    /// Looks up an "outer" type in this builder to handle outer aliases.
-    ///
-    /// The `count` parameter and `ty` are taken from the binary format itself,
-    /// and the `TypeDef` returned is what the outer type refers to.
-    ///
-    /// # Panics
-    ///
-    /// Assumes that `count` and `ty` are valid.
-    pub fn component_outer_type(&self, count: u32, ty: ComponentTypeIndex) -> TypeDef {
-        // Reverse the index and 0 means the "current scope"
-        let idx = self.type_scopes.len() - (count as usize) - 1;
-        self.type_scopes[idx].component[ty]
-    }
-
-    /// Same as `component_outer_type` but for core wasm types instead.
-    pub fn core_outer_type(&self, count: u32, ty: TypeIndex) -> TypeDef {
-        // Reverse the index and 0 means the "current scope"
-        let idx = self.type_scopes.len() - (count as usize) - 1;
-        self.type_scopes[idx].core[ty]
-    }
-
-    /// Pops a scope pushed by `push_type_scope`.
-    pub fn pop_type_scope(&mut self) {
-        self.type_scopes.pop().unwrap();
-    }
-
-    /// Translates a wasmparser `TypeComponent` into a Wasmtime `TypeDef`,
-    /// interning types along the way.
-    pub fn intern_component_type(&mut self, ty: &wasmparser::ComponentType<'_>) -> Result<TypeDef> {
-        Ok(match ty {
-            wasmparser::ComponentType::Defined(ty) => TypeDef::Interface(self.defined_type(ty)?),
-            wasmparser::ComponentType::Func(ty) => TypeDef::ComponentFunc(self.func_type(ty)),
-            wasmparser::ComponentType::Component(ty) => {
-                TypeDef::Component(self.component_type(ty)?)
-            }
-            wasmparser::ComponentType::Instance(ty) => {
-                TypeDef::ComponentInstance(self.component_instance_type(ty)?)
-            }
-        })
-    }
-
-    /// Translates a wasmparser `CoreType` into a Wasmtime `TypeDef`,
-    /// interning types along the way.
-    pub fn intern_core_type(&mut self, ty: &wasmparser::CoreType<'_>) -> Result<TypeDef> {
-        Ok(match ty {
-            wasmparser::CoreType::Func(ty) => {
-                TypeDef::CoreFunc(self.module_types.wasm_func_type(ty.clone().try_into()?))
-            }
-            wasmparser::CoreType::Module(ty) => TypeDef::Module(self.module_type(ty)?),
-        })
-    }
-
-    /// Translates a wasmparser `ComponentTypeRef` into a Wasmtime `TypeDef`.
-    pub fn component_type_ref(&self, ty: &wasmparser::ComponentTypeRef) -> TypeDef {
-        match ty {
-            wasmparser::ComponentTypeRef::Module(ty) => {
-                self.core_outer_type(0, TypeIndex::from_u32(*ty))
-            }
-            wasmparser::ComponentTypeRef::Func(ty)
-            | wasmparser::ComponentTypeRef::Type(wasmparser::TypeBounds::Eq, ty)
-            | wasmparser::ComponentTypeRef::Instance(ty)
-            | wasmparser::ComponentTypeRef::Component(ty) => {
-                self.component_outer_type(0, ComponentTypeIndex::from_u32(*ty))
-            }
-            wasmparser::ComponentTypeRef::Value(..) => {
-                unimplemented!("references to value types");
-            }
-        }
-    }
-
-    fn module_type(
+    /// Converts a wasmparser `ComponentFuncType` into Wasmtime's type
+    /// representation.
+    pub fn convert_component_func_type(
         &mut self,
-        ty: &[wasmparser::ModuleTypeDeclaration<'_>],
-    ) -> Result<TypeModuleIndex> {
-        let mut result = TypeModule::default();
-        self.push_type_scope();
-
-        for item in ty {
-            match item {
-                wasmparser::ModuleTypeDeclaration::Type(wasmparser::Type::Func(f)) => {
-                    let ty =
-                        TypeDef::CoreFunc(self.module_types.wasm_func_type(f.clone().try_into()?));
-                    self.push_core_typedef(ty);
-                }
-                wasmparser::ModuleTypeDeclaration::Export { name, ty } => {
-                    let prev = result
-                        .exports
-                        .insert(name.to_string(), self.entity_type(ty)?);
-                    assert!(prev.is_none());
-                }
-                wasmparser::ModuleTypeDeclaration::Import(import) => {
-                    let prev = result.imports.insert(
-                        (import.module.to_string(), import.name.to_string()),
-                        self.entity_type(&import.ty)?,
-                    );
-                    assert!(prev.is_none());
-                }
-                wasmparser::ModuleTypeDeclaration::OuterAlias {
-                    kind: wasmparser::OuterAliasKind::Type,
-                    count,
-                    index,
-                } => {
-                    let ty = self.core_outer_type(*count, TypeIndex::from_u32(*index));
-                    self.push_core_typedef(ty);
-                }
-            }
-        }
-
-        self.pop_type_scope();
-
-        Ok(self.component_types.modules.push(result))
-    }
-
-    fn entity_type(&self, ty: &wasmparser::TypeRef) -> Result<EntityType> {
-        Ok(match ty {
-            wasmparser::TypeRef::Func(idx) => {
-                let idx = TypeIndex::from_u32(*idx);
-                match self.core_outer_type(0, idx) {
-                    TypeDef::CoreFunc(idx) => EntityType::Function(idx),
-                    _ => unreachable!(), // not possible with valid components
-                }
-            }
-            wasmparser::TypeRef::Table(ty) => EntityType::Table(ty.clone().try_into()?),
-            wasmparser::TypeRef::Memory(ty) => EntityType::Memory(ty.clone().into()),
-            wasmparser::TypeRef::Global(ty) => {
-                EntityType::Global(Global::new(ty.clone(), GlobalInit::Import)?)
-            }
-            wasmparser::TypeRef::Tag(_) => bail!("exceptions proposal not implemented"),
-        })
-    }
-
-    fn component_type(
-        &mut self,
-        ty: &[ComponentTypeDeclaration<'_>],
-    ) -> Result<TypeComponentIndex> {
-        let mut result = TypeComponent::default();
-        self.push_type_scope();
-
-        for item in ty {
-            match item {
-                ComponentTypeDeclaration::Type(ty) => self.type_declaration_type(ty)?,
-                ComponentTypeDeclaration::CoreType(ty) => self.type_declaration_core_type(ty)?,
-                ComponentTypeDeclaration::Alias(alias) => self.type_declaration_alias(alias)?,
-                ComponentTypeDeclaration::Export { name, url, ty } => {
-                    let ty = self.type_declaration_define(ty);
-                    result
-                        .exports
-                        .insert(name.to_string(), (url.to_string(), ty));
-                }
-                ComponentTypeDeclaration::Import(import) => {
-                    let ty = self.type_declaration_define(&import.ty);
-                    result
-                        .imports
-                        .insert(import.name.to_string(), (import.url.to_string(), ty));
-                }
-            }
-        }
-
-        self.pop_type_scope();
-
-        Ok(self.component_types.components.push(result))
-    }
-
-    fn component_instance_type(
-        &mut self,
-        ty: &[InstanceTypeDeclaration<'_>],
-    ) -> Result<TypeComponentInstanceIndex> {
-        let mut result = TypeComponentInstance::default();
-        self.push_type_scope();
-
-        for item in ty {
-            match item {
-                InstanceTypeDeclaration::Type(ty) => self.type_declaration_type(ty)?,
-                InstanceTypeDeclaration::CoreType(ty) => self.type_declaration_core_type(ty)?,
-                InstanceTypeDeclaration::Alias(alias) => self.type_declaration_alias(alias)?,
-                InstanceTypeDeclaration::Export { name, url, ty } => {
-                    let ty = self.type_declaration_define(ty);
-                    result
-                        .exports
-                        .insert(name.to_string(), (url.to_string(), ty));
-                }
-            }
-        }
-
-        self.pop_type_scope();
-
-        Ok(self.component_types.component_instances.push(result))
-    }
-
-    fn type_declaration_type(&mut self, ty: &wasmparser::ComponentType<'_>) -> Result<()> {
-        let ty = self.intern_component_type(ty)?;
-        self.push_component_typedef(ty);
-        Ok(())
-    }
-
-    fn type_declaration_core_type(&mut self, ty: &wasmparser::CoreType<'_>) -> Result<()> {
-        let ty = self.intern_core_type(ty)?;
-        self.push_core_typedef(ty);
-        Ok(())
-    }
-
-    fn type_declaration_alias(&mut self, alias: &wasmparser::ComponentAlias<'_>) -> Result<()> {
-        match alias {
-            ComponentAlias::Outer {
-                kind: ComponentOuterAliasKind::CoreType,
-                count,
-                index,
-            } => {
-                let ty = self.core_outer_type(*count, TypeIndex::from_u32(*index));
-                self.push_core_typedef(ty);
-            }
-            ComponentAlias::Outer {
-                kind: ComponentOuterAliasKind::Type,
-                count,
-                index,
-            } => {
-                let ty = self.component_outer_type(*count, ComponentTypeIndex::from_u32(*index));
-                self.push_component_typedef(ty);
-            }
-            ComponentAlias::InstanceExport {
-                kind: _,
-                instance_index,
-                name,
-            } => {
-                let ty = self.type_scopes.last().unwrap().instances
-                    [ComponentInstanceIndex::from_u32(*instance_index)];
-                let (_, ty) = self.component_types[ty].exports[*name];
-                self.push_component_typedef(ty);
-            }
-            a => unreachable!("invalid alias {a:?}"),
-        }
-        Ok(())
-    }
-
-    fn type_declaration_define(&mut self, ty: &wasmparser::ComponentTypeRef) -> TypeDef {
-        let ty = self.component_type_ref(ty);
-        let scope = self.type_scopes.last_mut().unwrap();
-        match ty {
-            // If an import or an export within a component or instance type
-            // references an interface type itself then that creates a new type
-            // which is effectively an alias, so push the type information here.
-            TypeDef::Interface(_) => {
-                self.push_component_typedef(ty);
-            }
-
-            // When an import or an export references a component instance then
-            // that creates a "pseudo-instance" which type information is
-            // maintained about. This is later used during the `InstanceExport`
-            // alias within a type declaration.
-            TypeDef::ComponentInstance(ty) => {
-                scope.instances.push(ty);
-            }
-
-            // All other valid types are ignored since we don't need to maintain
-            // metadata about them here as index spaces are modified that we're
-            // not interested in.
-            _ => {}
-        }
-
-        ty
-    }
-
-    fn func_type(&mut self, ty: &wasmparser::ComponentFuncType<'_>) -> TypeFuncIndex {
+        types: types::TypesRef<'_>,
+        ty: &types::ComponentFuncType,
+    ) -> Result<TypeFuncIndex> {
+        let params = ty
+            .params
+            .iter()
+            .map(|(_name, ty)| self.valtype(types, ty))
+            .collect::<Result<_>>()?;
+        let results = ty
+            .results
+            .iter()
+            .map(|(_name, ty)| self.valtype(types, ty))
+            .collect::<Result<_>>()?;
         let ty = TypeFunc {
-            params: ty
-                .params
-                .iter()
-                .map(|(_name, ty)| self.valtype(ty))
-                .collect(),
-            results: ty
-                .results
-                .iter()
-                .map(|(_name, ty)| self.valtype(ty))
-                .collect(),
+            params: self.new_tuple_type(params),
+            results: self.new_tuple_type(results),
         };
-        self.add_func_type(ty)
+        Ok(self.add_func_type(ty))
     }
 
-    fn defined_type(&mut self, ty: &wasmparser::ComponentDefinedType<'_>) -> Result<InterfaceType> {
-        let result = match ty {
-            wasmparser::ComponentDefinedType::Primitive(ty) => ty.into(),
-            wasmparser::ComponentDefinedType::Record(e) => {
-                InterfaceType::Record(self.record_type(e))
+    /// Converts a wasmparser `ComponentEntityType` into Wasmtime's type
+    /// representation.
+    pub fn convert_component_entity_type(
+        &mut self,
+        types: types::TypesRef<'_>,
+        ty: types::ComponentEntityType,
+    ) -> Result<TypeDef> {
+        Ok(match ty {
+            types::ComponentEntityType::Module(id) => {
+                TypeDef::Module(self.convert_module(types, id)?)
             }
-            wasmparser::ComponentDefinedType::Variant(e) => {
-                InterfaceType::Variant(self.variant_type(e))
+            types::ComponentEntityType::Component(id) => {
+                TypeDef::Component(self.convert_component(types, id)?)
             }
-            wasmparser::ComponentDefinedType::List(e) => InterfaceType::List(self.list_type(e)),
-            wasmparser::ComponentDefinedType::Tuple(e) => InterfaceType::Tuple(self.tuple_type(e)),
-            wasmparser::ComponentDefinedType::Flags(e) => InterfaceType::Flags(self.flags_type(e)),
-            wasmparser::ComponentDefinedType::Enum(e) => InterfaceType::Enum(self.enum_type(e)),
-            wasmparser::ComponentDefinedType::Union(e) => InterfaceType::Union(self.union_type(e)),
-            wasmparser::ComponentDefinedType::Option(e) => {
-                InterfaceType::Option(self.option_type(e))
+            types::ComponentEntityType::Instance(id) => {
+                TypeDef::ComponentInstance(self.convert_instance(types, id)?)
             }
-            wasmparser::ComponentDefinedType::Result { ok, err } => {
-                InterfaceType::Result(self.result_type(ok, err))
+            types::ComponentEntityType::Func(id) => {
+                let id = types
+                    .type_from_id(id)
+                    .unwrap()
+                    .as_component_func_type()
+                    .unwrap();
+                let idx = self.convert_component_func_type(types, id)?;
+                TypeDef::ComponentFunc(idx)
+            }
+            types::ComponentEntityType::Type { created, .. } => {
+                match types.type_from_id(created).unwrap() {
+                    types::Type::Defined(_) => {
+                        TypeDef::Interface(self.defined_type(types, created)?)
+                    }
+                    _ => bail!("unsupported type export"),
+                }
+            }
+            types::ComponentEntityType::Value(_) => bail!("values not supported"),
+        })
+    }
+
+    /// Converts a wasmparser `Type` into Wasmtime's type representation.
+    pub fn convert_type(
+        &mut self,
+        types: types::TypesRef<'_>,
+        id: types::TypeId,
+    ) -> Result<TypeDef> {
+        Ok(match types.type_from_id(id).unwrap() {
+            types::Type::Defined(_) => TypeDef::Interface(self.defined_type(types, id)?),
+            types::Type::Module(_) => TypeDef::Module(self.convert_module(types, id)?),
+            types::Type::Component(_) => TypeDef::Component(self.convert_component(types, id)?),
+            types::Type::ComponentInstance(_) => {
+                TypeDef::ComponentInstance(self.convert_instance(types, id)?)
+            }
+            types::Type::ComponentFunc(f) => {
+                TypeDef::ComponentFunc(self.convert_component_func_type(types, f)?)
+            }
+            types::Type::Instance(_) | types::Type::Func(_) | types::Type::Array(_) => {
+                unreachable!()
+            }
+            types::Type::Resource(_) => unimplemented!(),
+        })
+    }
+
+    fn convert_component(
+        &mut self,
+        types: types::TypesRef<'_>,
+        id: types::TypeId,
+    ) -> Result<TypeComponentIndex> {
+        if let Some(ret) = self.component_types_cache.get(&id) {
+            return Ok(*ret);
+        }
+        let ty = &types.type_from_id(id).unwrap().as_component_type().unwrap();
+        let mut result = TypeComponent::default();
+        for (name, ty) in ty.imports.iter() {
+            result.imports.insert(
+                name.clone(),
+                self.convert_component_entity_type(types, *ty)?,
+            );
+        }
+        for (name, ty) in ty.exports.iter() {
+            result.exports.insert(
+                name.clone(),
+                self.convert_component_entity_type(types, *ty)?,
+            );
+        }
+        let ret = self.component_types.components.push(result);
+        self.component_types_cache.insert(id, ret);
+        Ok(ret)
+    }
+
+    fn convert_instance(
+        &mut self,
+        types: types::TypesRef<'_>,
+        id: types::TypeId,
+    ) -> Result<TypeComponentInstanceIndex> {
+        if let Some(ret) = self.instance_types_cache.get(&id) {
+            return Ok(*ret);
+        }
+        let ty = &types
+            .type_from_id(id)
+            .unwrap()
+            .as_component_instance_type()
+            .unwrap();
+        let mut result = TypeComponentInstance::default();
+        for (name, ty) in ty.exports.iter() {
+            result.exports.insert(
+                name.clone(),
+                self.convert_component_entity_type(types, *ty)?,
+            );
+        }
+        let ret = self.component_types.component_instances.push(result);
+        self.instance_types_cache.insert(id, ret);
+        Ok(ret)
+    }
+
+    fn convert_module(
+        &mut self,
+        types: types::TypesRef<'_>,
+        id: types::TypeId,
+    ) -> Result<TypeModuleIndex> {
+        if let Some(ret) = self.module_types_cache.get(&id) {
+            return Ok(*ret);
+        }
+        let ty = &types.type_from_id(id).unwrap().as_module_type().unwrap();
+        let mut result = TypeModule::default();
+        for ((module, field), ty) in ty.imports.iter() {
+            result.imports.insert(
+                (module.clone(), field.clone()),
+                self.entity_type(types, ty)?,
+            );
+        }
+        for (name, ty) in ty.exports.iter() {
+            result
+                .exports
+                .insert(name.clone(), self.entity_type(types, ty)?);
+        }
+        let ret = self.component_types.modules.push(result);
+        self.module_types_cache.insert(id, ret);
+        Ok(ret)
+    }
+
+    fn entity_type(
+        &mut self,
+        types: types::TypesRef<'_>,
+        ty: &types::EntityType,
+    ) -> Result<EntityType> {
+        Ok(match ty {
+            types::EntityType::Func(idx) => {
+                let ty = types.type_from_id(*idx).unwrap().as_func_type().unwrap();
+                let ty = self.convert_func_type(ty);
+                EntityType::Function(self.module_types_builder().wasm_func_type(ty))
+            }
+            types::EntityType::Table(ty) => EntityType::Table(self.convert_table_type(ty)),
+            types::EntityType::Memory(ty) => EntityType::Memory(ty.clone().into()),
+            types::EntityType::Global(ty) => EntityType::Global(self.convert_global_type(ty)),
+            types::EntityType::Tag(_) => bail!("exceptions proposal not implemented"),
+        })
+    }
+
+    fn defined_type(
+        &mut self,
+        types: types::TypesRef<'_>,
+        id: types::TypeId,
+    ) -> Result<InterfaceType> {
+        if let Some(ty) = self.defined_types_cache.get(&id) {
+            return Ok(*ty);
+        }
+        let ret = match types.type_from_id(id).unwrap().as_defined_type().unwrap() {
+            types::ComponentDefinedType::Primitive(ty) => ty.into(),
+            types::ComponentDefinedType::Record(e) => {
+                InterfaceType::Record(self.record_type(types, e)?)
+            }
+            types::ComponentDefinedType::Variant(e) => {
+                InterfaceType::Variant(self.variant_type(types, e)?)
+            }
+            types::ComponentDefinedType::List(e) => InterfaceType::List(self.list_type(types, e)?),
+            types::ComponentDefinedType::Tuple(e) => {
+                InterfaceType::Tuple(self.tuple_type(types, e)?)
+            }
+            types::ComponentDefinedType::Flags(e) => InterfaceType::Flags(self.flags_type(e)),
+            types::ComponentDefinedType::Enum(e) => InterfaceType::Enum(self.enum_type(e)),
+            types::ComponentDefinedType::Union(e) => {
+                InterfaceType::Union(self.union_type(types, e)?)
+            }
+            types::ComponentDefinedType::Option(e) => {
+                InterfaceType::Option(self.option_type(types, e)?)
+            }
+            types::ComponentDefinedType::Result { ok, err } => {
+                InterfaceType::Result(self.result_type(types, ok, err)?)
+            }
+            types::ComponentDefinedType::Own(_) | types::ComponentDefinedType::Borrow(_) => {
+                unimplemented!("resource types")
             }
         };
-        let info = self.type_information(&result);
+        let info = self.type_information(&ret);
         if info.depth > MAX_TYPE_DEPTH {
             bail!("type nesting is too deep");
         }
-        Ok(result)
+        self.defined_types_cache.insert(id, ret);
+        Ok(ret)
     }
 
-    fn valtype(&mut self, ty: &wasmparser::ComponentValType) -> InterfaceType {
+    fn valtype(
+        &mut self,
+        types: types::TypesRef<'_>,
+        ty: &types::ComponentValType,
+    ) -> Result<InterfaceType> {
         match ty {
-            wasmparser::ComponentValType::Primitive(p) => p.into(),
-            wasmparser::ComponentValType::Type(idx) => {
-                let idx = ComponentTypeIndex::from_u32(*idx);
-                match self.component_outer_type(0, idx) {
-                    TypeDef::Interface(ty) => ty,
-                    // this should not be possible if the module validated
-                    _ => unreachable!(),
-                }
-            }
+            types::ComponentValType::Primitive(p) => Ok(p.into()),
+            types::ComponentValType::Type(id) => self.defined_type(types, *id),
         }
     }
 
-    fn record_type(&mut self, record: &[(&str, wasmparser::ComponentValType)]) -> TypeRecordIndex {
-        let fields = record
+    fn record_type(
+        &mut self,
+        types: types::TypesRef<'_>,
+        ty: &types::RecordType,
+    ) -> Result<TypeRecordIndex> {
+        let fields = ty
+            .fields
             .iter()
-            .map(|(name, ty)| RecordField {
-                name: name.to_string(),
-                ty: self.valtype(ty),
+            .map(|(name, ty)| {
+                Ok(RecordField {
+                    name: name.to_string(),
+                    ty: self.valtype(types, ty)?,
+                })
             })
-            .collect::<Box<[_]>>();
+            .collect::<Result<Box<[_]>>>()?;
         let abi = CanonicalAbiInfo::record(
             fields
                 .iter()
                 .map(|field| self.component_types.canonical_abi(&field.ty)),
         );
-        self.add_record_type(TypeRecord { fields, abi })
+        Ok(self.add_record_type(TypeRecord { fields, abi }))
     }
 
-    fn variant_type(&mut self, cases: &[wasmparser::VariantCase<'_>]) -> TypeVariantIndex {
-        let cases = cases
+    fn variant_type(
+        &mut self,
+        types: types::TypesRef<'_>,
+        ty: &types::VariantType,
+    ) -> Result<TypeVariantIndex> {
+        let cases = ty
+            .cases
             .iter()
-            .map(|case| {
+            .map(|(name, case)| {
                 // FIXME: need to implement `refines`, not sure what that
                 // is at this time.
-                assert!(case.refines.is_none());
-                VariantCase {
-                    name: case.name.to_string(),
-                    ty: case.ty.as_ref().map(|ty| self.valtype(ty)),
+                if case.refines.is_some() {
+                    bail!("refines is not supported at this time");
                 }
+                Ok(VariantCase {
+                    name: name.to_string(),
+                    ty: match &case.ty.as_ref() {
+                        Some(ty) => Some(self.valtype(types, ty)?),
+                        None => None,
+                    },
+                })
             })
-            .collect::<Box<[_]>>();
+            .collect::<Result<Box<[_]>>>()?;
         let (info, abi) = VariantInfo::new(cases.iter().map(|c| {
             c.ty.as_ref()
                 .map(|ty| self.component_types.canonical_abi(ty))
         }));
-        self.add_variant_type(TypeVariant { cases, abi, info })
+        Ok(self.add_variant_type(TypeVariant { cases, abi, info }))
     }
 
-    fn tuple_type(&mut self, types: &[wasmparser::ComponentValType]) -> TypeTupleIndex {
-        let types = types
+    fn tuple_type(
+        &mut self,
+        types: types::TypesRef<'_>,
+        ty: &types::TupleType,
+    ) -> Result<TypeTupleIndex> {
+        let types = ty
+            .types
             .iter()
-            .map(|ty| self.valtype(ty))
-            .collect::<Box<[_]>>();
+            .map(|ty| self.valtype(types, ty))
+            .collect::<Result<Box<[_]>>>()?;
+        Ok(self.new_tuple_type(types))
+    }
+
+    fn new_tuple_type(&mut self, types: Box<[InterfaceType]>) -> TypeTupleIndex {
         let abi = CanonicalAbiInfo::record(
             types
                 .iter()
@@ -780,7 +674,7 @@ impl ComponentTypesBuilder {
         self.add_tuple_type(TypeTuple { types, abi })
     }
 
-    fn flags_type(&mut self, flags: &[&str]) -> TypeFlagsIndex {
+    fn flags_type(&mut self, flags: &IndexSet<KebabString>) -> TypeFlagsIndex {
         let flags = TypeFlags {
             names: flags.iter().map(|s| s.to_string()).collect(),
             abi: CanonicalAbiInfo::flags(flags.len()),
@@ -788,48 +682,68 @@ impl ComponentTypesBuilder {
         self.add_flags_type(flags)
     }
 
-    fn enum_type(&mut self, variants: &[&str]) -> TypeEnumIndex {
+    fn enum_type(&mut self, variants: &IndexSet<KebabString>) -> TypeEnumIndex {
         let names = variants.iter().map(|s| s.to_string()).collect::<Box<[_]>>();
         let (info, abi) = VariantInfo::new(names.iter().map(|_| None));
         self.add_enum_type(TypeEnum { names, abi, info })
     }
 
-    fn union_type(&mut self, types: &[wasmparser::ComponentValType]) -> TypeUnionIndex {
-        let types = types
+    fn union_type(
+        &mut self,
+        types: types::TypesRef<'_>,
+        ty: &types::UnionType,
+    ) -> Result<TypeUnionIndex> {
+        let types = ty
+            .types
             .iter()
-            .map(|ty| self.valtype(ty))
-            .collect::<Box<[_]>>();
+            .map(|ty| self.valtype(types, ty))
+            .collect::<Result<Box<[_]>>>()?;
         let (info, abi) = VariantInfo::new(
             types
                 .iter()
                 .map(|t| Some(self.component_types.canonical_abi(t))),
         );
-        self.add_union_type(TypeUnion { types, abi, info })
+        Ok(self.add_union_type(TypeUnion { types, abi, info }))
     }
 
-    fn option_type(&mut self, ty: &wasmparser::ComponentValType) -> TypeOptionIndex {
-        let ty = self.valtype(ty);
+    fn option_type(
+        &mut self,
+        types: types::TypesRef<'_>,
+        ty: &types::ComponentValType,
+    ) -> Result<TypeOptionIndex> {
+        let ty = self.valtype(types, ty)?;
         let (info, abi) = VariantInfo::new([None, Some(self.component_types.canonical_abi(&ty))]);
-        self.add_option_type(TypeOption { ty, abi, info })
+        Ok(self.add_option_type(TypeOption { ty, abi, info }))
     }
 
     fn result_type(
         &mut self,
-        ok: &Option<wasmparser::ComponentValType>,
-        err: &Option<wasmparser::ComponentValType>,
-    ) -> TypeResultIndex {
-        let ok = ok.as_ref().map(|ty| self.valtype(ty));
-        let err = err.as_ref().map(|ty| self.valtype(ty));
+        types: types::TypesRef<'_>,
+        ok: &Option<types::ComponentValType>,
+        err: &Option<types::ComponentValType>,
+    ) -> Result<TypeResultIndex> {
+        let ok = match ok {
+            Some(ty) => Some(self.valtype(types, ty)?),
+            None => None,
+        };
+        let err = match err {
+            Some(ty) => Some(self.valtype(types, ty)?),
+            None => None,
+        };
         let (info, abi) = VariantInfo::new([
             ok.as_ref().map(|t| self.component_types.canonical_abi(t)),
             err.as_ref().map(|t| self.component_types.canonical_abi(t)),
         ]);
-        self.add_result_type(TypeResult { ok, err, abi, info })
+        Ok(self.add_result_type(TypeResult { ok, err, abi, info }))
     }
 
-    fn list_type(&mut self, ty: &wasmparser::ComponentValType) -> TypeListIndex {
-        let element = self.valtype(ty);
-        self.add_list_type(TypeList { element })
+    fn list_type(
+        &mut self,
+        types: types::TypesRef<'_>,
+        ty: &types::ComponentValType,
+    ) -> Result<TypeListIndex> {
+        let element = self.valtype(types, ty)?;
+        Ok(self.add_list_type(TypeList { element }))
     }
 
     /// Interns a new function type within this type information.
@@ -939,6 +853,12 @@ impl ComponentTypesBuilder {
     }
 }
 
+impl TypeConvert for ComponentTypesBuilder {
+    fn lookup_heap_type(&self, _index: TypeIndex) -> WasmHeapType {
+        panic!("heap types are not supported yet")
+    }
+}
+
 // Forward the indexing impl to the internal `TypeTables`
 impl<T> Index<T> for ComponentTypesBuilder
 where
@@ -1016,9 +936,9 @@ pub struct TypeModule {
 #[derive(Serialize, Deserialize, Default)]
 pub struct TypeComponent {
     /// The named values that this component imports.
-    pub imports: IndexMap<String, (String, TypeDef)>,
+    pub imports: IndexMap<String, TypeDef>,
     /// The named values that this component exports.
-    pub exports: IndexMap<String, (String, TypeDef)>,
+    pub exports: IndexMap<String, TypeDef>,
 }
 
 /// The type of a component instance in the component model, or an instantiated
@@ -1028,17 +948,16 @@ pub struct TypeComponent {
 #[derive(Serialize, Deserialize, Default)]
 pub struct TypeComponentInstance {
     /// The list of exports that this component has along with their types.
-    pub exports: IndexMap<String, (String, TypeDef)>,
+    pub exports: IndexMap<String, TypeDef>,
 }
 
 /// A component function type in the component model.
 #[derive(Serialize, Deserialize, Clone, Hash, Eq, PartialEq, Debug)]
 pub struct TypeFunc {
-    /// The list of optionally named parameters for this function, and their
-    /// types.
-    pub params: Box<[InterfaceType]>,
-    /// The return values of this function.
-    pub results: Box<[InterfaceType]>,
+    /// Parameters to the function represented as a tuple.
+    pub params: TypeTupleIndex,
+    /// Results of the function represented as a tuple.
+    pub results: TypeTupleIndex,
 }
 
 /// All possible interface types that values can have.

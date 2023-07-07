@@ -1,0 +1,8 @@
+;; Lift a splat outside of an int-to-float conversion to try to open up
+;; optimization opportunities with scalars.
+;;
+;; NB: this is also required for correctness at this time due to #6562
+(rule (simplify (fcvt_from_uint float_vector_ty (splat _ x)))
+      (splat float_vector_ty (fcvt_from_uint (lane_type float_vector_ty) x)))
+(rule (simplify (fcvt_from_sint float_vector_ty (splat _ x)))
+      (splat float_vector_ty (fcvt_from_sint (lane_type float_vector_ty) x)))

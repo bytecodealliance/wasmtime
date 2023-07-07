@@ -1,0 +1,18 @@
+test interpret
+test run
+set enable_llvm_abi_extensions=true
+set probestack_size_log2=6
+set probestack_strategy=inline
+set enable_probestack=true
+target x86_64
+target aarch64
+target riscv64gc has_v
+
+function %a(i8, i8, i8, i8, i8, i8, i8, i8, i128) -> i128 tail {
+    ss0 = explicit_slot 321
+
+block0(v0: i8, v1: i8, v2: i8, v3: i8, v4: i8, v5: i8, v6: i8, v7: i8, v8: i128):
+    return v8
+}
+
+; run: %a(0, 1, 2, 3, 4, 5, 6, 7, 8) == 8

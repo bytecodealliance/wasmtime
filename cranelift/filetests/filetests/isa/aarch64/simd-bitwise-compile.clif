@@ -1,5 +1,4 @@
 test compile precise-output
-set enable_simd
 target aarch64
 
 function %band_f32x4(f32x4, f32x4) -> f32x4 {
@@ -12,7 +11,7 @@ block0(v0: f32x4, v1: f32x4):
 ; block0:
 ;   and v0.16b, v0.16b, v1.16b
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   and v0.16b, v0.16b, v1.16b
@@ -28,7 +27,7 @@ block0(v0: f64x2, v1: f64x2):
 ; block0:
 ;   and v0.16b, v0.16b, v1.16b
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   and v0.16b, v0.16b, v1.16b
@@ -44,7 +43,7 @@ block0(v0: i32x4, v1: i32x4):
 ; block0:
 ;   and v0.16b, v0.16b, v1.16b
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   and v0.16b, v0.16b, v1.16b
@@ -60,7 +59,7 @@ block0(v0: f32x4, v1: f32x4):
 ; block0:
 ;   orr v0.16b, v0.16b, v1.16b
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   orr v0.16b, v0.16b, v1.16b
@@ -76,7 +75,7 @@ block0(v0: f64x2, v1: f64x2):
 ; block0:
 ;   orr v0.16b, v0.16b, v1.16b
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   orr v0.16b, v0.16b, v1.16b
@@ -92,7 +91,7 @@ block0(v0: i32x4, v1: i32x4):
 ; block0:
 ;   orr v0.16b, v0.16b, v1.16b
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   orr v0.16b, v0.16b, v1.16b
@@ -108,7 +107,7 @@ block0(v0: f32x4, v1: f32x4):
 ; block0:
 ;   eor v0.16b, v0.16b, v1.16b
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   eor v0.16b, v0.16b, v1.16b
@@ -124,7 +123,7 @@ block0(v0: f64x2, v1: f64x2):
 ; block0:
 ;   eor v0.16b, v0.16b, v1.16b
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   eor v0.16b, v0.16b, v1.16b
@@ -140,7 +139,7 @@ block0(v0: i32x4, v1: i32x4):
 ; block0:
 ;   eor v0.16b, v0.16b, v1.16b
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   eor v0.16b, v0.16b, v1.16b
@@ -162,7 +161,7 @@ block0:
 ;   movi v4.16b, #0
 ;   bsl v0.16b, v0.16b, v3.16b, v4.16b
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   movi v0.16b, #0
@@ -181,7 +180,7 @@ block0(v0: i16x8, v1: i16x8, v2: i16x8):
 ; block0:
 ;   bsl v0.16b, v0.16b, v1.16b, v2.16b
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   bsl v0.16b, v1.16b, v2.16b
@@ -197,7 +196,7 @@ block0(v0: f32x4, v1: f32x4, v2: f32x4):
 ; block0:
 ;   bsl v0.16b, v0.16b, v1.16b, v2.16b
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   bsl v0.16b, v1.16b, v2.16b
@@ -213,7 +212,7 @@ block0(v0: f64x2, v1: f64x2, v2: f64x2):
 ; block0:
 ;   bsl v0.16b, v0.16b, v1.16b, v2.16b
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   bsl v0.16b, v1.16b, v2.16b
@@ -233,7 +232,7 @@ block0(v0: i32):
 ;   dup v6.16b, w3
 ;   sshl v0.16b, v5.16b, v6.16b
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ldr q5, #0x20
@@ -262,7 +261,7 @@ block0:
 ;   ldr q1, [const(0)]
 ;   ushr v0.16b, v1.16b, #1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ldr q1, #0x10
@@ -289,7 +288,7 @@ block0(v0: i32):
 ;   dup v7.16b, w5
 ;   sshl v0.16b, v6.16b, v7.16b
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ldr q6, #0x20
@@ -315,7 +314,7 @@ block0(v0: i8x16, v1: i32):
 ; block0:
 ;   sshr v0.16b, v0.16b, #3
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   sshr v0.16b, v0.16b, #3
@@ -334,7 +333,7 @@ block0(v0: i64x2, v1: i32):
 ;   dup v7.2d, x5
 ;   sshl v0.2d, v0.2d, v7.2d
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   and w3, w0, #0x3f

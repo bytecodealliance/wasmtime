@@ -13,7 +13,7 @@ block0(v0: i8):
 ;   rbit w2, w0
 ;   lsr w0, w2, #24
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   rbit w2, w0
@@ -31,7 +31,7 @@ block0(v0: i16):
 ;   rbit w2, w0
 ;   lsr w0, w2, #16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   rbit w2, w0
@@ -48,7 +48,7 @@ block0(v0: i32):
 ; block0:
 ;   rbit w0, w0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   rbit w0, w0
@@ -64,7 +64,7 @@ block0(v0: i64):
 ; block0:
 ;   rbit x0, x0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   rbit x0, x0
@@ -82,7 +82,7 @@ block0(v0: i128):
 ;   rbit x1, x0
 ;   rbit x0, x6
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mov x6, x1
@@ -102,7 +102,7 @@ block0(v0: i8):
 ;   clz w4, w2
 ;   sub w0, w4, #24
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   uxtb w2, w0
@@ -122,7 +122,7 @@ block0(v0: i16):
 ;   clz w4, w2
 ;   sub w0, w4, #16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   uxth w2, w0
@@ -140,7 +140,7 @@ block0(v0: i32):
 ; block0:
 ;   clz w0, w0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   clz w0, w0
@@ -156,7 +156,7 @@ block0(v0: i64):
 ; block0:
 ;   clz x0, x0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   clz x0, x0
@@ -176,7 +176,7 @@ block0(v0: i128):
 ;   madd x0, x5, x7, x3
 ;   movz x1, #0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   clz x3, x1
@@ -198,7 +198,7 @@ block0(v0: i8):
 ;   cls w4, w2
 ;   sub w0, w4, #24
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   sxtb w2, w0
@@ -218,7 +218,7 @@ block0(v0: i16):
 ;   cls w4, w2
 ;   sub w0, w4, #16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   sxth w2, w0
@@ -236,7 +236,7 @@ block0(v0: i32):
 ; block0:
 ;   cls w0, w0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   cls w0, w0
@@ -252,7 +252,7 @@ block0(v0: i64):
 ; block0:
 ;   cls x0, x0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   cls x0, x0
@@ -276,7 +276,7 @@ block0(v0: i128):
 ;   add x0, x14, x5
 ;   movz x1, #0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   cls x3, x0
@@ -302,7 +302,7 @@ block0(v0: i8):
 ;   orr w4, w2, #8388608
 ;   clz w0, w4
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   rbit w2, w0
@@ -322,7 +322,7 @@ block0(v0: i16):
 ;   orr w4, w2, #32768
 ;   clz w0, w4
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   rbit w2, w0
@@ -341,7 +341,7 @@ block0(v0: i32):
 ;   rbit w2, w0
 ;   clz w0, w2
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   rbit w2, w0
@@ -359,7 +359,7 @@ block0(v0: i64):
 ;   rbit x2, x0
 ;   clz x0, x2
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   rbit x2, x0
@@ -382,7 +382,7 @@ block0(v0: i128):
 ;   madd x0, x9, x11, x7
 ;   movz x1, #0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   rbit x3, x0
@@ -409,7 +409,7 @@ block0(v0: i128):
 ;   umov w0, v17.b[0]
 ;   movz x1, #0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fmov d4, x0
@@ -433,7 +433,7 @@ block0(v0: i64):
 ;   addv b6, v4.8b
 ;   umov w0, v6.b[0]
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fmov d2, x0
@@ -455,7 +455,7 @@ block0(v0: i32):
 ;   addv b6, v4.8b
 ;   umov w0, v6.b[0]
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fmov s2, w0
@@ -477,7 +477,7 @@ block0(v0: i16):
 ;   addp v6.8b, v4.8b, v4.8b
 ;   umov w0, v6.b[0]
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fmov s2, w0
@@ -498,7 +498,7 @@ block0(v0: i8):
 ;   cnt v4.8b, v2.8b
 ;   umov w0, v4.b[0]
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fmov s2, w0
@@ -515,14 +515,14 @@ block0:
 
 ; VCode:
 ; block0:
-;   movz w0, #255
-;   sxtb w0, w0
+;   movz w1, #255
+;   sxtb w0, w1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mov w0, #0xff
-;   sxtb w0, w0
+;   mov w1, #0xff
+;   sxtb w0, w1
 ;   ret
 
 function %sextend_i8() -> i32 {
@@ -534,14 +534,14 @@ block0:
 
 ; VCode:
 ; block0:
-;   movz w0, #255
-;   sxtb w0, w0
+;   movz w1, #255
+;   sxtb w0, w1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mov w0, #0xff
-;   sxtb w0, w0
+;   mov w1, #0xff
+;   sxtb w0, w1
 ;   ret
 
 function %bnot_i32(i32) -> i32 {
@@ -554,7 +554,7 @@ block0(v0: i32):
 ; block0:
 ;   orn w0, wzr, w0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mvn w0, w0
@@ -570,7 +570,7 @@ block0(v0: i64):
 ; block0:
 ;   orn x0, xzr, x0
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mvn x0, x0
@@ -588,7 +588,7 @@ block0(v0: i64):
 ; block0:
 ;   orn x0, xzr, x0, LSL 3
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mvn x0, x0, lsl #3
@@ -605,7 +605,7 @@ block0(v0: i128):
 ;   orn x0, xzr, x0
 ;   orn x1, xzr, x1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mvn x0, x0
@@ -622,7 +622,7 @@ block0(v0: i8x16):
 ; block0:
 ;   mvn v0.16b, v0.16b
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mvn v0.16b, v0.16b
@@ -638,7 +638,7 @@ block0(v0: i32, v1: i32):
 ; block0:
 ;   and w0, w0, w1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   and w0, w0, w1
@@ -654,7 +654,7 @@ block0(v0: i64, v1: i64):
 ; block0:
 ;   and x0, x0, x1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   and x0, x0, x1
@@ -671,7 +671,7 @@ block0(v0: i128, v1: i128):
 ;   and x0, x0, x2
 ;   and x1, x1, x3
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   and x0, x0, x2
@@ -688,7 +688,7 @@ block0(v0: i8x16, v1: i8x16):
 ; block0:
 ;   and v0.16b, v0.16b, v1.16b
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   and v0.16b, v0.16b, v1.16b
@@ -705,7 +705,7 @@ block0(v0: i64):
 ; block0:
 ;   and x0, x0, #3
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   and x0, x0, #3
@@ -722,7 +722,7 @@ block0(v0: i64):
 ; block0:
 ;   and x0, x0, #3
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   and x0, x0, #3
@@ -740,7 +740,7 @@ block0(v0: i64, v1: i64):
 ; block0:
 ;   and x0, x0, x1, LSL 3
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   and x0, x0, x1, lsl #3
@@ -758,7 +758,7 @@ block0(v0: i64, v1: i64):
 ; block0:
 ;   and x0, x0, x1, LSL 3
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   and x0, x0, x1, lsl #3
@@ -774,7 +774,7 @@ block0(v0: i32, v1: i32):
 ; block0:
 ;   orr w0, w0, w1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   orr w0, w0, w1
@@ -790,7 +790,7 @@ block0(v0: i64, v1: i64):
 ; block0:
 ;   orr x0, x0, x1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   orr x0, x0, x1
@@ -807,7 +807,7 @@ block0(v0: i128, v1: i128):
 ;   orr x0, x0, x2
 ;   orr x1, x1, x3
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   orr x0, x0, x2
@@ -824,7 +824,7 @@ block0(v0: i8x16, v1: i8x16):
 ; block0:
 ;   orr v0.16b, v0.16b, v1.16b
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   orr v0.16b, v0.16b, v1.16b
@@ -841,7 +841,7 @@ block0(v0: i64):
 ; block0:
 ;   orr x0, x0, #3
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   orr x0, x0, #3
@@ -858,7 +858,7 @@ block0(v0: i64):
 ; block0:
 ;   orr x0, x0, #3
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   orr x0, x0, #3
@@ -876,7 +876,7 @@ block0(v0: i64, v1: i64):
 ; block0:
 ;   orr x0, x0, x1, LSL 3
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   orr x0, x0, x1, lsl #3
@@ -894,7 +894,7 @@ block0(v0: i64, v1: i64):
 ; block0:
 ;   orr x0, x0, x1, LSL 3
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   orr x0, x0, x1, lsl #3
@@ -910,7 +910,7 @@ block0(v0: i32, v1: i32):
 ; block0:
 ;   eor w0, w0, w1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   eor w0, w0, w1
@@ -926,7 +926,7 @@ block0(v0: i64, v1: i64):
 ; block0:
 ;   eor x0, x0, x1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   eor x0, x0, x1
@@ -943,7 +943,7 @@ block0(v0: i128, v1: i128):
 ;   eor x0, x0, x2
 ;   eor x1, x1, x3
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   eor x0, x0, x2
@@ -960,7 +960,7 @@ block0(v0: i8x16, v1: i8x16):
 ; block0:
 ;   eor v0.16b, v0.16b, v1.16b
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   eor v0.16b, v0.16b, v1.16b
@@ -977,7 +977,7 @@ block0(v0: i64):
 ; block0:
 ;   eor x0, x0, #3
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   eor x0, x0, #3
@@ -994,7 +994,7 @@ block0(v0: i64):
 ; block0:
 ;   eor x0, x0, #3
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   eor x0, x0, #3
@@ -1012,7 +1012,7 @@ block0(v0: i64, v1: i64):
 ; block0:
 ;   eor x0, x0, x1, LSL 3
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   eor x0, x0, x1, lsl #3
@@ -1030,7 +1030,7 @@ block0(v0: i64, v1: i64):
 ; block0:
 ;   eor x0, x0, x1, LSL 3
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   eor x0, x0, x1, lsl #3
@@ -1046,7 +1046,7 @@ block0(v0: i32, v1: i32):
 ; block0:
 ;   bic w0, w0, w1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   bic w0, w0, w1
@@ -1062,7 +1062,7 @@ block0(v0: i64, v1: i64):
 ; block0:
 ;   bic x0, x0, x1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   bic x0, x0, x1
@@ -1079,7 +1079,7 @@ block0(v0: i128, v1: i128):
 ;   bic x0, x0, x2
 ;   bic x1, x1, x3
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   bic x0, x0, x2
@@ -1096,7 +1096,7 @@ block0(v0: i8x16, v1: i8x16):
 ; block0:
 ;   bic v0.16b, v0.16b, v1.16b
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   bic v0.16b, v0.16b, v1.16b
@@ -1113,7 +1113,7 @@ block0(v0: i64):
 ; block0:
 ;   bic x0, x0, #4
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   and x0, x0, #0xfffffffffffffffb
@@ -1131,7 +1131,7 @@ block0(v0: i64, v1: i64):
 ; block0:
 ;   bic x0, x0, x1, LSL 4
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   bic x0, x0, x1, lsl #4
@@ -1147,7 +1147,7 @@ block0(v0: i32, v1: i32):
 ; block0:
 ;   orn w0, w0, w1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   orn w0, w0, w1
@@ -1163,7 +1163,7 @@ block0(v0: i64, v1: i64):
 ; block0:
 ;   orn x0, x0, x1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   orn x0, x0, x1
@@ -1180,7 +1180,7 @@ block0(v0: i128, v1: i128):
 ;   orn x0, x0, x2
 ;   orn x1, x1, x3
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   orn x0, x0, x2
@@ -1198,7 +1198,7 @@ block0(v0: i64):
 ; block0:
 ;   orn x0, x0, #4
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   orr x0, x0, #0xfffffffffffffffb
@@ -1216,7 +1216,7 @@ block0(v0: i64, v1: i64):
 ; block0:
 ;   orn x0, x0, x1, LSL 4
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   orn x0, x0, x1, lsl #4
@@ -1232,7 +1232,7 @@ block0(v0: i32, v1: i32):
 ; block0:
 ;   eon w0, w0, w1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   eon w0, w0, w1
@@ -1248,7 +1248,7 @@ block0(v0: i64, v1: i64):
 ; block0:
 ;   eon x0, x0, x1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   eon x0, x0, x1
@@ -1265,7 +1265,7 @@ block0(v0: i128, v1: i128):
 ;   eon x0, x0, x2
 ;   eon x1, x1, x3
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   eon x0, x0, x2
@@ -1283,7 +1283,7 @@ block0(v0: i64):
 ; block0:
 ;   eon x0, x0, #4
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   eor x0, x0, #0xfffffffffffffffb
@@ -1301,7 +1301,7 @@ block0(v0: i64, v1: i64):
 ; block0:
 ;   eon x0, x0, x1, LSL 4
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   eon x0, x0, x1, lsl #4
@@ -1325,7 +1325,7 @@ block0(v0: i128, v1: i8):
 ;   csel x0, xzr, x4, ne
 ;   csel x1, x4, x14, ne
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lsl x4, x0, x2
@@ -1357,7 +1357,7 @@ block0(v0: i128, v1: i128):
 ;   csel x0, xzr, x5, ne
 ;   csel x1, x5, x15, ne
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lsl x5, x0, x2
@@ -1389,7 +1389,7 @@ block0(v0: i128, v1: i8):
 ;   csel x0, x6, x14, ne
 ;   csel x1, xzr, x6, ne
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lsr x4, x0, x2
@@ -1421,7 +1421,7 @@ block0(v0: i128, v1: i128):
 ;   csel x0, x7, x15, ne
 ;   csel x1, xzr, x7, ne
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lsr x5, x0, x2
@@ -1454,7 +1454,7 @@ block0(v0: i128, v1: i8):
 ;   csel x0, x6, x0, ne
 ;   csel x1, x14, x6, ne
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lsr x4, x0, x2
@@ -1488,7 +1488,7 @@ block0(v0: i128, v1: i128):
 ;   csel x0, x7, x1, ne
 ;   csel x1, x15, x7, ne
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   lsr x5, x0, x2
@@ -1514,7 +1514,7 @@ block0(v0: i32, v1: i32):
 ; block0:
 ;   eon w0, w0, w1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   eon w0, w0, w1
@@ -1532,7 +1532,7 @@ block0(v0: i128, v1: i128):
 ;   eon x0, x0, x2
 ;   eon x1, x1, x3
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   eon x0, x0, x2

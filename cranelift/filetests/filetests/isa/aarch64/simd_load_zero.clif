@@ -11,16 +11,16 @@ block0:
 
 ; VCode:
 ; block0:
-;   movz x1, #1
-;   movk x1, x1, #1, LSL #48
-;   fmov d0, x1
+;   movz x2, #1
+;   movk x2, x2, #1, LSL #48
+;   fmov d0, x2
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mov x1, #1
-;   movk x1, #1, lsl #48
-;   fmov d0, x1
+;   mov x2, #1
+;   movk x2, #1, lsl #48
+;   fmov d0, x2
 ;   ret
 
 function %f2() -> i32x4 {
@@ -32,14 +32,14 @@ block0:
 
 ; VCode:
 ; block0:
-;   movz w0, #42679
-;   fmov s0, w0
+;   movz w1, #42679
+;   fmov s0, w1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mov w0, #0xa6b7
-;   fmov s0, w0
+;   mov w1, #0xa6b7
+;   fmov s0, w1
 ;   ret
 
 function %f3() -> f32x4 {
@@ -51,14 +51,14 @@ block0:
 
 ; VCode:
 ; block0:
-;   fmov s0, #1
-;   fmov s0, s0
+;   fmov s1, #1
+;   fmov s0, s1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   fmov s0, #1.00000000
-;   fmov s0, s0
+;   fmov s1, #1.00000000
+;   fmov s0, s1
 ;   ret
 
 function %f4() -> f64x2 {
@@ -70,13 +70,13 @@ block0:
 
 ; VCode:
 ; block0:
-;   fmov d0, #1
-;   fmov d0, d0
+;   fmov d1, #1
+;   fmov d0, d1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   fmov d0, #1.00000000
-;   fmov d0, d0
+;   fmov d1, #1.00000000
+;   fmov d0, d1
 ;   ret
 

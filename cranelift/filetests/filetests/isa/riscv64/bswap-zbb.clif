@@ -1,0 +1,76 @@
+test compile precise-output
+set unwind_info=false
+target riscv64 has_zbb
+
+function %bswap_i16(i16) -> i16 {
+block0(v0: i16):
+    v1 = bswap v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   rev8 t2,a0
+;   srli a0,t2,48
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x93, 0x53, 0x85, 0x6b
+;   srli a0, t2, 0x30
+;   ret
+
+function %bswap_i32(i32) -> i32 {
+block0(v0: i32):
+    v1 = bswap v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   rev8 t2,a0
+;   srli a0,t2,32
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x93, 0x53, 0x85, 0x6b
+;   srli a0, t2, 0x20
+;   ret
+
+function %bswap_i64(i64) -> i64 {
+block0(v0: i64):
+    v1 = bswap v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   rev8 a0,a0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x13, 0x55, 0x85, 0x6b
+;   ret
+
+function %bswap_i128(i128) -> i128 {
+block0(v0: i128):
+    v1 = bswap v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   mv a3,a0
+;   rev8 a0,a1
+;   rev8 a1,a3
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ori a3, a0, 0
+;   .byte 0x13, 0xd5, 0x85, 0x6b
+;   .byte 0x93, 0xd5, 0x86, 0x6b
+;   ret
+

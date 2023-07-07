@@ -58,7 +58,7 @@ pub fn run(path: &Path, wat: &str) -> Result<()> {
             let mut ctx = cranelift_codegen::Context::for_function(func.clone());
             ctx.set_disasm(true);
             let code = ctx
-                .compile(isa)
+                .compile(isa, &mut Default::default())
                 .map_err(|e| crate::pretty_anyhow_error(&e.func, e.inner))?;
             writeln!(&mut actual, "function {}:", func.name).unwrap();
             writeln!(&mut actual, "{}", code.vcode.as_ref().unwrap()).unwrap();

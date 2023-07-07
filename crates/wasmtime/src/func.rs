@@ -1,18 +1,19 @@
 use crate::store::{StoreData, StoreOpaque, Stored};
 use crate::{
-    AsContext, AsContextMut, CallHook, Engine, Extern, FuncType, Instance, StoreContext,
+    AsContext, AsContextMut, CallHook, Engine, Extern, FuncType, Instance, Module, StoreContext,
     StoreContextMut, Val, ValRaw, ValType,
 };
 use anyhow::{bail, Context as _, Error, Result};
+use std::ffi::c_void;
 use std::future::Future;
 use std::mem;
 use std::panic::{self, AssertUnwindSafe};
 use std::pin::Pin;
-use std::ptr::NonNull;
+use std::ptr::{self, NonNull};
 use std::sync::Arc;
 use wasmtime_runtime::{
-    ExportFunction, InstanceHandle, VMCallerCheckedFuncRef, VMContext, VMFunctionBody,
-    VMFunctionImport, VMHostFuncContext, VMOpaqueContext, VMSharedSignatureIndex, VMTrampoline,
+    ExportFunction, SendSyncPtr, StoreBox, VMArrayCallHostFuncContext, VMContext, VMFuncRef,
+    VMFunctionImport, VMNativeCallHostFuncContext, VMOpaqueContext, VMSharedSignatureIndex,
 };
 
 /// A WebAssembly function which can be called.
@@ -181,6 +182,18 @@ pub struct Func(Stored<FuncData>);
 pub(crate) struct FuncData {
     kind: FuncKind,
 
+    // A pointer to the in-store `VMFuncRef` for this function, if
+    // any.
+    //
+    // When a function is passed to Wasm but doesn't have a Wasm-to-native
+    // trampoline, we have to patch it in. But that requires mutating the
+    // `VMFuncRef`, and this function could be shared across
+    // threads. So we instead copy and pin the `VMFuncRef` into
+    // `StoreOpaque::func_refs`, where we can safely patch the field without
+    // worrying about synchronization and we hold a pointer to it here so we can
+    // reuse it rather than re-copy if it is passed to Wasm again.
+    in_store_func_ref: Option<SendSyncPtr<VMFuncRef>>,
+
     // This is somewhat expensive to load from the `Engine` and in most
     // optimized use cases (e.g. `TypedFunc`) it's not actually needed or it's
     // only needed rarely. To handle that this is an optionally-contained field
@@ -199,10 +212,7 @@ enum FuncKind {
     /// function. The instance's `InstanceHandle` is already owned by the store
     /// and we just have some pointers into that which represent how to call the
     /// function.
-    StoreOwned {
-        trampoline: VMTrampoline,
-        export: ExportFunction,
-    },
+    StoreOwned { export: ExportFunction },
 
     /// A function is shared across possibly other stores, hence the `Arc`. This
     /// variant happens when a `Linker`-defined function is instantiated within
@@ -345,8 +355,8 @@ impl Func {
     /// documentation.
     ///
     /// [`Trap`]: crate::Trap
-    #[cfg(compiler)]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
+    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn new<T>(
         store: impl AsContextMut<Data = T>,
         ty: FuncType,
@@ -383,8 +393,8 @@ impl Func {
     /// This function is not safe because it's not known at compile time that
     /// the `func` provided correctly interprets the argument types provided to
     /// it, or that the results it produces will be of the correct type.
-    #[cfg(compiler)]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
+    #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub unsafe fn new_unchecked<T>(
         mut store: impl AsContextMut<Data = T>,
         ty: FuncType,
@@ -495,13 +505,13 @@ impl Func {
         })
     }
 
-    pub(crate) unsafe fn from_caller_checked_anyfunc(
+    pub(crate) unsafe fn from_caller_checked_func_ref(
         store: &mut StoreOpaque,
-        raw: *mut VMCallerCheckedFuncRef,
+        raw: *mut VMFuncRef,
     ) -> Option<Func> {
-        let anyfunc = NonNull::new(raw)?;
-        debug_assert!(anyfunc.as_ref().type_index != VMSharedSignatureIndex::default());
-        let export = ExportFunction { anyfunc };
+        let func_ref = NonNull::new(raw)?;
+        debug_assert!(func_ref.as_ref().type_index != VMSharedSignatureIndex::default());
+        let export = ExportFunction { func_ref };
         Some(Func::from_wasmtime_function(export, store))
     }
 
@@ -881,27 +891,32 @@ impl Func {
         &self,
         mut store: impl AsContextMut,
         params_and_returns: *mut ValRaw,
+        params_and_returns_capacity: usize,
     ) -> Result<()> {
         let mut store = store.as_context_mut();
         let data = &store.0.store_data()[self.0];
-        let anyfunc = data.export().anyfunc;
-        let trampoline = data.trampoline();
-        Self::call_unchecked_raw(&mut store, anyfunc, trampoline, params_and_returns)
+        let func_ref = data.export().func_ref;
+        Self::call_unchecked_raw(
+            &mut store,
+            func_ref,
+            params_and_returns,
+            params_and_returns_capacity,
+        )
     }
 
     pub(crate) unsafe fn call_unchecked_raw<T>(
         store: &mut StoreContextMut<'_, T>,
-        anyfunc: NonNull<VMCallerCheckedFuncRef>,
-        trampoline: VMTrampoline,
+        func_ref: NonNull<VMFuncRef>,
         params_and_returns: *mut ValRaw,
+        params_and_returns_capacity: usize,
     ) -> Result<()> {
         invoke_wasm_and_catch_traps(store, |caller| {
-            let trampoline = wasmtime_runtime::prepare_host_to_wasm_trampoline(caller, trampoline);
-            trampoline(
-                anyfunc.as_ref().vmctx,
-                caller,
-                anyfunc.as_ref().func_ptr.as_ptr(),
+            let func_ref = func_ref.as_ref();
+            (func_ref.array_call)(
+                func_ref.vmctx,
+                caller.cast::<VMOpaqueContext>(),
                 params_and_returns,
+                params_and_returns_capacity,
             )
         })
     }
@@ -916,8 +931,8 @@ impl Func {
     /// This function is not safe because `raw` is not validated at all. The
     /// caller must guarantee that `raw` is owned by the `store` provided and is
     /// valid within the `store`.
-    pub unsafe fn from_raw(mut store: impl AsContextMut, raw: usize) -> Option<Func> {
-        Func::from_caller_checked_anyfunc(store.as_context_mut().0, raw as *mut _)
+    pub unsafe fn from_raw(mut store: impl AsContextMut, raw: *mut c_void) -> Option<Func> {
+        Func::from_caller_checked_func_ref(store.as_context_mut().0, raw.cast())
     }
 
     /// Extracts the raw value of this `Func`, which is owned by `store`.
@@ -930,8 +945,10 @@ impl Func {
     /// The returned value is only valid for as long as the store is alive and
     /// this function is properly rooted within it. Additionally this function
     /// should not be liberally used since it's a very low-level knob.
-    pub unsafe fn to_raw(&self, store: impl AsContext) -> usize {
-        self.caller_checked_anyfunc(store.as_context().0).as_ptr() as usize
+    pub unsafe fn to_raw(&self, mut store: impl AsContextMut) -> *mut c_void {
+        self.caller_checked_func_ref(store.as_context_mut().0)
+            .as_ptr()
+            .cast()
     }
 
     /// Invokes this function with the `params` given, returning the results
@@ -1050,7 +1067,7 @@ impl Func {
         }
 
         unsafe {
-            self.call_unchecked(&mut *store, values_vec.as_mut_ptr())?;
+            self.call_unchecked(&mut *store, values_vec.as_mut_ptr(), values_vec_size)?;
         }
 
         for ((i, slot), val) in results.iter_mut().enumerate().zip(&values_vec) {
@@ -1063,31 +1080,71 @@ impl Func {
     }
 
     #[inline]
-    pub(crate) fn caller_checked_anyfunc(
-        &self,
-        store: &StoreOpaque,
-    ) -> NonNull<VMCallerCheckedFuncRef> {
-        store.store_data()[self.0].export().anyfunc
+    pub(crate) fn caller_checked_func_ref(&self, store: &mut StoreOpaque) -> NonNull<VMFuncRef> {
+        let func_data = &mut store.store_data_mut()[self.0];
+        if let Some(in_store) = func_data.in_store_func_ref {
+            in_store.as_non_null()
+        } else {
+            let func_ref = func_data.export().func_ref;
+            unsafe {
+                if func_ref.as_ref().wasm_call.is_none() {
+                    let func_ref = store.func_refs().push(func_ref.as_ref().clone());
+                    store.store_data_mut()[self.0].in_store_func_ref =
+                        Some(SendSyncPtr::new(func_ref));
+                    store.fill_func_refs();
+                    func_ref
+                } else {
+                    func_ref
+                }
+            }
+        }
     }
 
     pub(crate) unsafe fn from_wasmtime_function(
         export: ExportFunction,
         store: &mut StoreOpaque,
     ) -> Self {
-        let anyfunc = export.anyfunc.as_ref();
-        let trampoline = store.lookup_trampoline(&*anyfunc);
-        Func::from_func_kind(FuncKind::StoreOwned { trampoline, export }, store)
+        Func::from_func_kind(FuncKind::StoreOwned { export }, store)
     }
 
     fn from_func_kind(kind: FuncKind, store: &mut StoreOpaque) -> Self {
-        Func(store.store_data_mut().insert(FuncData { kind, ty: None }))
+        Func(store.store_data_mut().insert(FuncData {
+            kind,
+            in_store_func_ref: None,
+            ty: None,
+        }))
     }
 
-    pub(crate) fn vmimport(&self, store: &mut StoreOpaque) -> VMFunctionImport {
+    pub(crate) fn vmimport(&self, store: &mut StoreOpaque, module: &Module) -> VMFunctionImport {
         unsafe {
-            let f = self.caller_checked_anyfunc(store);
+            let f = {
+                let func_data = &mut store.store_data_mut()[self.0];
+                // If we already patched this `funcref.wasm_call` and saved a
+                // copy in the store, use the patched version. Otherwise, use
+                // the potentially un-patched version.
+                if let Some(func_ref) = func_data.in_store_func_ref {
+                    func_ref.as_non_null()
+                } else {
+                    func_data.export().func_ref
+                }
+            };
             VMFunctionImport {
-                body: f.as_ref().func_ptr,
+                wasm_call: if let Some(wasm_call) = f.as_ref().wasm_call {
+                    wasm_call
+                } else {
+                    // Assert that this is a native-call function, since those
+                    // are the only ones that could be missing a `wasm_call`
+                    // trampoline.
+                    let _ = VMNativeCallHostFuncContext::from_opaque(f.as_ref().vmctx);
+
+                    let sig = self.sig_index(store.store_data());
+                    module.runtime_info().wasm_to_native_trampoline(sig).expect(
+                        "must have a wasm-to-native trampoline for this signature if the Wasm \
+                         module is importing a function of this signature",
+                    )
+                },
+                native_call: f.as_ref().native_call,
+                array_call: f.as_ref().array_call,
                 vmctx: f.as_ref().vmctx,
             }
         }
@@ -1340,6 +1397,13 @@ fn enter_wasm<T>(store: &mut StoreContextMut<'_, T>) -> Option<usize> {
     if unsafe { *store.0.runtime_limits().stack_limit.get() } != usize::MAX
         && !store.0.async_support()
     {
+        return None;
+    }
+
+    // Ignore this stack pointer business on miri since we can't execute wasm
+    // anyway and the concept of a stack pointer on miri is a bit nebulous
+    // regardless.
+    if cfg!(miri) {
         return None;
     }
 
@@ -1674,11 +1738,10 @@ for_each_function_signature!(impl_host_abi);
 /// This trait should not be implemented by external users, it's only intended
 /// as an implementation detail of this crate.
 pub trait IntoFunc<T, Params, Results>: Send + Sync + 'static {
+    /// Convert this function into a `VM{Array,Native}CallHostFuncContext` and
+    /// internal `VMFuncRef`.
     #[doc(hidden)]
-    fn into_func(
-        self,
-        engine: &Engine,
-    ) -> (Box<VMHostFuncContext>, VMSharedSignatureIndex, VMTrampoline);
+    fn into_func(self, engine: &Engine) -> HostContext;
 }
 
 /// A structure representing the caller's context when creating a function
@@ -1703,17 +1766,18 @@ pub trait IntoFunc<T, Params, Results>: Send + Sync + 'static {
 /// recommended to use this type.
 pub struct Caller<'a, T> {
     pub(crate) store: StoreContextMut<'a, T>,
-    caller: &'a InstanceHandle,
+    caller: &'a wasmtime_runtime::Instance,
 }
 
 impl<T> Caller<'_, T> {
     unsafe fn with<R>(caller: *mut VMContext, f: impl FnOnce(Caller<'_, T>) -> R) -> R {
         assert!(!caller.is_null());
-        let instance = InstanceHandle::from_vmctx(caller);
-        let store = StoreContextMut::from_raw(instance.store());
-        f(Caller {
-            store,
-            caller: &instance,
+        wasmtime_runtime::Instance::from_vmctx(caller, |instance| {
+            let store = StoreContextMut::from_raw(instance.store());
+            f(Caller {
+                store,
+                caller: &instance,
+            })
         })
     }
 
@@ -1850,7 +1914,7 @@ macro_rules! impl_into_func {
             $($args: WasmTy,)*
             R: WasmRet,
         {
-            fn into_func(self, engine: &Engine) -> (Box<VMHostFuncContext>, VMSharedSignatureIndex, VMTrampoline) {
+            fn into_func(self, engine: &Engine) -> HostContext {
                 let f = move |_: Caller<'_, T>, $($args:$args),*| {
                     self($($args),*)
                 };
@@ -1866,17 +1930,18 @@ macro_rules! impl_into_func {
             $($args: WasmTy,)*
             R: WasmRet,
         {
-            fn into_func(self, engine: &Engine) -> (Box<VMHostFuncContext>, VMSharedSignatureIndex, VMTrampoline) {
-                /// This shim is called by Wasm code, constructs a `Caller`,
-                /// calls the wrapped host function, and returns the translated
-                /// result back to Wasm.
+            fn into_func(self, engine: &Engine) -> HostContext {
+                /// This shim is a regular, non-closure function we can stuff
+                /// inside `VMFuncRef::native_call`.
                 ///
-                /// Note that this shim's ABI must *exactly* match that expected
-                /// by Cranelift, since Cranelift is generating raw function
-                /// calls directly to this function.
-                unsafe extern "C" fn wasm_to_host_shim<T, F, $($args,)* R>(
+                /// It reads the actual callee closure out of
+                /// `VMNativeCallHostFuncContext::host_state`, forwards
+                /// arguments to that function, and finally forwards the results
+                /// back out to the caller. It also handles traps and panics
+                /// along the way.
+                unsafe extern "C" fn native_call_shim<T, F, $($args,)* R>(
                     vmctx: *mut VMOpaqueContext,
-                    caller_vmctx: *mut VMContext,
+                    caller_vmctx: *mut VMOpaqueContext,
                     $( $args: $args::Abi, )*
                     retptr: R::Retptr,
                 ) -> R::Abi
@@ -1897,8 +1962,9 @@ macro_rules! impl_into_func {
                     // destructors. As a result anything requiring a destructor
                     // should be part of this block, and the long-jmp-ing
                     // happens after the block in handling `CallResult`.
+                    let caller_vmctx = VMContext::from_opaque(caller_vmctx);
                     let result = Caller::with(caller_vmctx, |mut caller| {
-                        let vmctx = VMHostFuncContext::from_opaque(vmctx);
+                        let vmctx = VMNativeCallHostFuncContext::from_opaque(vmctx);
                         let state = (*vmctx).host_state();
 
                         // Double-check ourselves in debug mode, but we control
@@ -1964,33 +2030,26 @@ macro_rules! impl_into_func {
                 /// It reads the arguments out of the incoming `args` array,
                 /// calls the given function pointer, and then stores the result
                 /// back into the `args` array.
-                unsafe extern "C" fn host_to_wasm_trampoline<$($args,)* R>(
+                unsafe extern "C" fn array_call_trampoline<T, F, $($args,)* R>(
                     callee_vmctx: *mut VMOpaqueContext,
-                    caller_vmctx: *mut VMContext,
-                    ptr: *const VMFunctionBody,
+                    caller_vmctx: *mut VMOpaqueContext,
                     args: *mut ValRaw,
+                    _args_len: usize
                 )
                 where
+                    F: Fn(Caller<'_, T>, $( $args ),*) -> R + 'static,
                     $($args: WasmTy,)*
                     R: WasmRet,
                 {
-                    let ptr = mem::transmute::<
-                        *const VMFunctionBody,
-                        unsafe extern "C" fn(
-                            *mut VMOpaqueContext,
-                            *mut VMContext,
-                            $( $args::Abi, )*
-                            R::Retptr,
-                        ) -> R::Abi,
-                    >(ptr);
-
                     let mut _n = 0;
                     $(
+                        debug_assert!(_n < _args_len);
                         let $args = $args::abi_from_raw(args.add(_n));
                         _n += 1;
                     )*
+
                     R::wrap_trampoline(args, |retptr| {
-                        ptr(callee_vmctx, caller_vmctx, $( $args, )* retptr)
+                        native_call_shim::<T, F, $( $args, )* R>(callee_vmctx, caller_vmctx, $( $args, )* retptr)
                     });
                 }
 
@@ -2001,23 +2060,47 @@ macro_rules! impl_into_func {
 
                 let shared_signature_id = engine.signatures().register(ty.as_wasm_func_type());
 
-                let trampoline = host_to_wasm_trampoline::<$($args,)* R>;
+                let array_call = array_call_trampoline::<T, F, $($args,)* R>;
+                let native_call = NonNull::new(native_call_shim::<T, F, $($args,)* R> as *mut _).unwrap();
 
                 let ctx = unsafe {
-                    VMHostFuncContext::new(
-                        NonNull::new(wasm_to_host_shim::<T, F, $($args,)* R> as *mut _).unwrap(),
-                        shared_signature_id,
+                    VMNativeCallHostFuncContext::new(
+                        VMFuncRef {
+                            native_call,
+                            array_call,
+                            wasm_call: None,
+                            type_index: shared_signature_id,
+                            vmctx: ptr::null_mut(),
+                        },
                         Box::new(self),
                     )
                 };
 
-                (ctx, shared_signature_id, trampoline)
+                ctx.into()
             }
         }
     }
 }
 
 for_each_function_signature!(impl_into_func);
+
+#[doc(hidden)]
+pub enum HostContext {
+    Native(StoreBox<VMNativeCallHostFuncContext>),
+    Array(StoreBox<VMArrayCallHostFuncContext>),
+}
+
+impl From<StoreBox<VMNativeCallHostFuncContext>> for HostContext {
+    fn from(ctx: StoreBox<VMNativeCallHostFuncContext>) -> Self {
+        HostContext::Native(ctx)
+    }
+}
+
+impl From<StoreBox<VMArrayCallHostFuncContext>> for HostContext {
+    fn from(ctx: StoreBox<VMArrayCallHostFuncContext>) -> Self {
+        HostContext::Array(ctx)
+    }
+}
 
 /// Representation of a host-defined function.
 ///
@@ -2030,16 +2113,7 @@ for_each_function_signature!(impl_into_func);
 /// `Store<T>` itself, but that's an unsafe contract of using this for now
 /// rather than part of the struct type (to avoid `Func<T>` in the API).
 pub(crate) struct HostFunc {
-    // The host function context that is shared with our host-to-Wasm
-    // trampoline.
-    ctx: Box<VMHostFuncContext>,
-
-    // The index for this function's signature within the engine-wide shared
-    // signature registry.
-    signature: VMSharedSignatureIndex,
-
-    // Trampoline to enter this function from Rust.
-    host_to_wasm_trampoline: VMTrampoline,
+    ctx: HostContext,
 
     // Stored to unregister this function's signature with the engine when this
     // is dropped.
@@ -2048,7 +2122,7 @@ pub(crate) struct HostFunc {
 
 impl HostFunc {
     /// Analog of [`Func::new`]
-    #[cfg(compiler)]
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub fn new<T>(
         engine: &Engine,
         ty: FuncType,
@@ -2063,7 +2137,7 @@ impl HostFunc {
     }
 
     /// Analog of [`Func::new_unchecked`]
-    #[cfg(compiler)]
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub unsafe fn new_unchecked<T>(
         engine: &Engine,
         ty: FuncType,
@@ -2077,9 +2151,9 @@ impl HostFunc {
                 Ok(result)
             })
         };
-        let (ctx, signature, trampoline) = crate::trampoline::create_function(&ty, func, engine)
+        let ctx = crate::trampoline::create_array_call_function(&ty, func, engine)
             .expect("failed to create function");
-        HostFunc::_new(engine, ctx, signature, trampoline)
+        HostFunc::_new(engine, ctx.into())
     }
 
     /// Analog of [`Func::wrap`]
@@ -2087,22 +2161,15 @@ impl HostFunc {
         engine: &Engine,
         func: impl IntoFunc<T, Params, Results>,
     ) -> Self {
-        let (ctx, signature, trampoline) = func.into_func(engine);
-        HostFunc::_new(engine, ctx, signature, trampoline)
+        let ctx = func.into_func(engine);
+        HostFunc::_new(engine, ctx)
     }
 
     /// Requires that this function's signature is already registered within
     /// `Engine`. This happens automatically during the above two constructors.
-    fn _new(
-        engine: &Engine,
-        ctx: Box<VMHostFuncContext>,
-        signature: VMSharedSignatureIndex,
-        trampoline: VMTrampoline,
-    ) -> Self {
+    fn _new(engine: &Engine, ctx: HostContext) -> Self {
         HostFunc {
             ctx,
-            signature,
-            host_to_wasm_trampoline: trampoline,
             engine: engine.clone(),
         }
     }
@@ -2138,9 +2205,25 @@ impl HostFunc {
     /// The caller must arrange for the `Arc<Self>` to be "rooted" in the store
     /// provided via another means, probably by pushing to
     /// `StoreOpaque::rooted_host_funcs`.
-    pub unsafe fn to_func_store_rooted(self: &Arc<Self>, store: &mut StoreOpaque) -> Func {
+    ///
+    /// Similarly, the caller must arrange for `rooted_func_ref` to be rooted in
+    /// the same store.
+    pub unsafe fn to_func_store_rooted(
+        self: &Arc<Self>,
+        store: &mut StoreOpaque,
+        rooted_func_ref: Option<NonNull<VMFuncRef>>,
+    ) -> Func {
         self.validate_store(store);
-        Func::from_func_kind(FuncKind::RootedHost(RootedHostFunc::new(self)), store)
+
+        if rooted_func_ref.is_some() {
+            debug_assert!(self.func_ref().wasm_call.is_none());
+            debug_assert!(matches!(self.ctx, HostContext::Native(_)));
+        }
+
+        Func::from_func_kind(
+            FuncKind::RootedHost(RootedHostFunc::new(self, rooted_func_ref)),
+            store,
+        )
     }
 
     /// Same as [`HostFunc::to_func`], different ownership.
@@ -2161,12 +2244,23 @@ impl HostFunc {
     }
 
     pub(crate) fn sig_index(&self) -> VMSharedSignatureIndex {
-        self.signature
+        self.func_ref().type_index
+    }
+
+    pub(crate) fn func_ref(&self) -> &VMFuncRef {
+        match &self.ctx {
+            HostContext::Native(ctx) => unsafe { (*ctx.get()).func_ref() },
+            HostContext::Array(ctx) => unsafe { (*ctx.get()).func_ref() },
+        }
+    }
+
+    pub(crate) fn host_ctx(&self) -> &HostContext {
+        &self.ctx
     }
 
     fn export_func(&self) -> ExportFunction {
         ExportFunction {
-            anyfunc: self.ctx.wasm_to_host_trampoline(),
+            func_ref: NonNull::from(self.func_ref()),
         }
     }
 }
@@ -2174,29 +2268,19 @@ impl HostFunc {
 impl Drop for HostFunc {
     fn drop(&mut self) {
         unsafe {
-            self.engine.signatures().unregister(self.signature);
+            self.engine.signatures().unregister(self.sig_index());
         }
     }
 }
 
 impl FuncData {
     #[inline]
-    pub(crate) fn trampoline(&self) -> VMTrampoline {
-        match &self.kind {
-            FuncKind::StoreOwned { trampoline, .. } => *trampoline,
-            FuncKind::SharedHost(host) => host.host_to_wasm_trampoline,
-            FuncKind::RootedHost(host) => host.host_to_wasm_trampoline,
-            FuncKind::Host(host) => host.host_to_wasm_trampoline,
-        }
-    }
-
-    #[inline]
     fn export(&self) -> ExportFunction {
         self.kind.export()
     }
 
     pub(crate) fn sig_index(&self) -> VMSharedSignatureIndex {
-        unsafe { self.export().anyfunc.as_ref().type_index }
+        unsafe { self.export().func_ref.as_ref().type_index }
     }
 }
 
@@ -2206,7 +2290,9 @@ impl FuncKind {
         match self {
             FuncKind::StoreOwned { export, .. } => *export,
             FuncKind::SharedHost(host) => host.export_func(),
-            FuncKind::RootedHost(host) => host.export_func(),
+            FuncKind::RootedHost(rooted) => ExportFunction {
+                func_ref: NonNull::from(rooted.func_ref()),
+            },
             FuncKind::Host(host) => host.export_func(),
         }
     }
@@ -2218,8 +2304,9 @@ use self::rooted::*;
 /// `RootedHostFunc` instead of accidentally safely allowing access to its
 /// constructor.
 mod rooted {
+    use wasmtime_runtime::{SendSyncPtr, VMFuncRef};
+
     use super::HostFunc;
-    use std::ops::Deref;
     use std::ptr::NonNull;
     use std::sync::Arc;
 
@@ -2228,28 +2315,41 @@ mod rooted {
     ///
     /// For more documentation see `FuncKind::RootedHost`, `InstancePre`, and
     /// `HostFunc::to_func_store_rooted`.
-    pub(crate) struct RootedHostFunc(NonNull<HostFunc>);
-
-    // These are required due to the usage of `NonNull` but should be safe
-    // because `HostFunc` is itself send/sync.
-    unsafe impl Send for RootedHostFunc where HostFunc: Send {}
-    unsafe impl Sync for RootedHostFunc where HostFunc: Sync {}
+    pub(crate) struct RootedHostFunc {
+        func: SendSyncPtr<HostFunc>,
+        func_ref: Option<SendSyncPtr<VMFuncRef>>,
+    }
 
     impl RootedHostFunc {
         /// Note that this is `unsafe` because this wrapper type allows safe
         /// access to the pointer given at any time, including outside the
         /// window of validity of `func`, so callers must not use the return
         /// value past the lifetime of the provided `func`.
-        pub(crate) unsafe fn new(func: &Arc<HostFunc>) -> RootedHostFunc {
-            RootedHostFunc(NonNull::from(&**func))
+        ///
+        /// Similarly, callers must ensure that the given `func_ref` is valid
+        /// for the liftime of the return value.
+        pub(crate) unsafe fn new(
+            func: &Arc<HostFunc>,
+            func_ref: Option<NonNull<VMFuncRef>>,
+        ) -> RootedHostFunc {
+            RootedHostFunc {
+                func: NonNull::from(&**func).into(),
+                func_ref: func_ref.map(|p| p.into()),
+            }
         }
-    }
 
-    impl Deref for RootedHostFunc {
-        type Target = HostFunc;
+        pub(crate) fn func(&self) -> &HostFunc {
+            // Safety invariants are upheld by the `RootedHostFunc::new` caller.
+            unsafe { self.func.as_ref() }
+        }
 
-        fn deref(&self) -> &HostFunc {
-            unsafe { self.0.as_ref() }
+        pub(crate) fn func_ref(&self) -> &VMFuncRef {
+            if let Some(f) = self.func_ref {
+                // Safety invariants are upheld by the `RootedHostFunc::new` caller.
+                unsafe { f.as_ref() }
+            } else {
+                self.func().func_ref()
+            }
         }
     }
 }

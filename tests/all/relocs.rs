@@ -8,6 +8,8 @@
 //! 32-bits, and right now object files aren't supported larger than 4gb anyway
 //! so we would need a lot of other support necessary to exercise that.
 
+#![cfg(not(miri))]
+
 use anyhow::Result;
 use wasmtime::*;
 

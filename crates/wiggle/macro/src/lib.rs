@@ -130,14 +130,14 @@ use syn::parse_macro_input;
 ///
 /// impl types::UserErrorConversion for YourCtxType {
 ///     fn errno_from_your_rich_error(&mut self, e: YourRichError)
-///         -> Result<types::Errno, wiggle::wasmtime_crate::Trap>
+///         -> Result<types::Errno, wiggle::wasmtime_crate::Error>
 ///     {
 ///         println!("Rich error: {:?}", e);
 ///         match e {
 ///             YourRichError::InvalidArg{..} => Ok(types::Errno::InvalidArg),
 ///             YourRichError::Io{..} => Ok(types::Errno::Io),
 ///             YourRichError::Overflow => Ok(types::Errno::Overflow),
-///             YourRichError::Trap(s) => Err(wiggle::wasmtime_crate::Trap::new(s)),
+///             YourRichError::Trap(s) => Err(wiggle::wasmtime_crate::Error::msg(s)),
 ///         }
 ///     }
 /// }

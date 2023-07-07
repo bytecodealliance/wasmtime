@@ -97,7 +97,7 @@
 
 ;;; Rules for `extract_vector` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (extract_vector x 0))
-      (value_reg (fpu_move_128 (put_in_reg x))))
+      (value_reg (put_in_reg x)))
 
 ;;;; Rules for `swiden_high` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

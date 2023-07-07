@@ -1,8 +1,5 @@
-
-
 test compile precise-output
-set enable_simd
-target x86_64
+target x86_64 sse41
 
 function %imul_swiden_hi_i8x16(i8x16, i8x16) -> i16x8 {
 block0(v0: i8x16, v1: i8x16):
@@ -16,29 +13,29 @@ block0(v0: i8x16, v1: i8x16):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movdqa  %xmm0, %xmm3
-;   palignr $8, %xmm3, %xmm0, %xmm3
-;   pmovsxbw %xmm3, %xmm0
-;   movdqa  %xmm1, %xmm7
-;   palignr $8, %xmm7, %xmm1, %xmm7
-;   pmovsxbw %xmm7, %xmm9
-;   pmullw  %xmm0, %xmm9, %xmm0
+;   movdqa  %xmm0, %xmm6
+;   palignr $8, %xmm6, %xmm0, %xmm6
+;   pmovsxbw %xmm6, %xmm0
+;   movdqa  %xmm1, %xmm6
+;   palignr $8, %xmm6, %xmm1, %xmm6
+;   pmovsxbw %xmm6, %xmm8
+;   pmullw  %xmm0, %xmm8, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movdqa %xmm0, %xmm3
-;   palignr $8, %xmm0, %xmm3
-;   pmovsxbw %xmm3, %xmm0
-;   movdqa %xmm1, %xmm7
-;   palignr $8, %xmm1, %xmm7
-;   pmovsxbw %xmm7, %xmm9
-;   pmullw %xmm9, %xmm0
+;   movdqa %xmm0, %xmm6
+;   palignr $8, %xmm0, %xmm6
+;   pmovsxbw %xmm6, %xmm0
+;   movdqa %xmm1, %xmm6
+;   palignr $8, %xmm1, %xmm6
+;   pmovsxbw %xmm6, %xmm8
+;   pmullw %xmm8, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -65,7 +62,7 @@ block0(v0: i16x8, v1: i16x8):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -100,7 +97,7 @@ block0(v0: i32x4, v1: i32x4):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -131,7 +128,7 @@ block0(v0: i8x16, v1: i8x16):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -166,7 +163,7 @@ block0(v0: i16x8, v1: i16x8):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -201,7 +198,7 @@ block0(v0: i32x4, v1: i32x4):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -226,29 +223,29 @@ block0(v0: i8x16, v1: i8x16):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movdqa  %xmm0, %xmm3
-;   palignr $8, %xmm3, %xmm0, %xmm3
-;   pmovzxbw %xmm3, %xmm0
-;   movdqa  %xmm1, %xmm7
-;   palignr $8, %xmm7, %xmm1, %xmm7
-;   pmovzxbw %xmm7, %xmm9
-;   pmullw  %xmm0, %xmm9, %xmm0
+;   uninit  %xmm8
+;   pxor    %xmm8, %xmm8, %xmm8
+;   punpckhbw %xmm0, %xmm8, %xmm0
+;   uninit  %xmm8
+;   pxor    %xmm8, %xmm8, %xmm8
+;   movdqa  %xmm1, %xmm11
+;   punpckhbw %xmm11, %xmm8, %xmm11
+;   pmullw  %xmm0, %xmm11, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movdqa %xmm0, %xmm3
-;   palignr $8, %xmm0, %xmm3
-;   pmovzxbw %xmm3, %xmm0
-;   movdqa %xmm1, %xmm7
-;   palignr $8, %xmm1, %xmm7
-;   pmovzxbw %xmm7, %xmm9
-;   pmullw %xmm9, %xmm0
+;   pxor %xmm8, %xmm8
+;   punpckhbw %xmm8, %xmm0
+;   pxor %xmm8, %xmm8
+;   movdqa %xmm1, %xmm11
+;   punpckhbw %xmm8, %xmm11
+;   pmullw %xmm11, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -275,7 +272,7 @@ block0(v0: i16x8, v1: i16x8):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -310,7 +307,7 @@ block0(v0: i32x4, v1: i32x4):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -341,7 +338,7 @@ block0(v0: i8x16, v1: i8x16):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -376,7 +373,7 @@ block0(v0: i16x8, v1: i16x8):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -411,7 +408,7 @@ block0(v0: i32x4, v1: i32x4):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp

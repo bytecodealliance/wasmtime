@@ -19,8 +19,8 @@ path = "tests/filetests.rs"
 harness = false
 
 [dependencies]
-cfg-if = "1.0"
-cranelift-codegen = { workspace = true, features = ["disas"] }
+cfg-if = { workspace = true }
+cranelift-codegen = { workspace = true, features = ["disas", "trace-log"] }
 cranelift-entity = { workspace = true }
 cranelift-interpreter = { workspace = true }
 cranelift-reader = { workspace = true }
@@ -32,7 +32,7 @@ cranelift-module = { workspace = true }
 cranelift-object = { workspace = true }
 cranelift-jit = { workspace = true }
 cranelift = { workspace = true }
-filecheck = "0.5.0"
+filecheck = { workspace = true }
 log = { workspace = true }
 termcolor = "1.1.2"
 capstone = { workspace = true, optional = true }
@@ -42,13 +42,16 @@ pretty_env_logger = "0.4.0"
 rayon = { version = "1", optional = true }
 indicatif = "0.13.0"
 thiserror = { workspace = true }
-walkdir = "2.2"
+walkdir = { workspace = true }
 anyhow = { workspace = true }
 clap = { workspace = true }
 similar = { workspace = true }
 toml = { workspace = true }
 serde = { workspace = true }
 fxhash = "0.2.1"
+# Note that this just enables `trace-log` for `clif-util` and doesn't turn it on
+# for all of Cranelift, which would be bad.
+regalloc2 = { workspace = true, features = ["trace-log"] }
 
 [features]
 default = ["disas", "wasm", "cranelift-codegen/all-arch", "cranelift-codegen/trace-log", "souper-harvest"]

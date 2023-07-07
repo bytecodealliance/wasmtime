@@ -1,0 +1,43 @@
+test optimize
+set opt_level=speed
+target x86_64
+
+function %swiden_high_splat_i8x16(i8) -> i16x8 {
+block0(v0: i8):
+    v1 = splat.i8x16 v0
+    v2 = swiden_high v1
+    return v2
+    ; check: v3 = sextend.i16 v0
+    ; check: v4 = splat.i16x8 v3
+    ; check: return v4
+}
+
+function %swiden_low_splat_i8x16(i8) -> i16x8 {
+block0(v0: i8):
+    v1 = splat.i8x16 v0
+    v2 = swiden_low v1
+    return v2
+    ; check: v3 = sextend.i16 v0
+    ; check: v4 = splat.i16x8 v3
+    ; check: return v4
+}
+
+function %uwiden_high_splat_i8x16(i8) -> i16x8 {
+block0(v0: i8):
+    v1 = splat.i8x16 v0
+    v2 = uwiden_high v1
+    return v2
+    ; check: v3 = uextend.i16 v0
+    ; check: v4 = splat.i16x8 v3
+    ; check: return v4
+}
+
+function %uwiden_low_splat_i8x16(i8) -> i16x8 {
+block0(v0: i8):
+    v1 = splat.i8x16 v0
+    v2 = uwiden_low v1
+    return v2
+    ; check: v3 = uextend.i16 v0
+    ; check: v4 = splat.i16x8 v3
+    ; check: return v4
+}

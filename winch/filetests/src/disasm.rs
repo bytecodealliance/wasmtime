@@ -7,7 +7,7 @@ use target_lexicon::Architecture;
 use winch_codegen::TargetIsa;
 
 /// Disassemble and print a machine code buffer.
-pub fn disasm(bytes: &[u8], isa: &dyn TargetIsa) -> Result<Vec<String>> {
+pub fn disasm(bytes: &[u8], isa: &Box<dyn TargetIsa>) -> Result<Vec<String>> {
     let dis = disassembler_for(isa)?;
     let insts = dis.disasm_all(bytes, 0x0).unwrap();
 
@@ -44,7 +44,7 @@ pub fn disasm(bytes: &[u8], isa: &dyn TargetIsa) -> Result<Vec<String>> {
     Ok(disassembled_lines)
 }
 
-fn disassembler_for(isa: &dyn TargetIsa) -> Result<Capstone> {
+fn disassembler_for(isa: &Box<dyn TargetIsa>) -> Result<Capstone> {
     let disasm = match isa.triple().architecture {
         Architecture::X86_64 => Capstone::new()
             .x86()

@@ -17,7 +17,7 @@ block0:
 ; block0:
 ;   bras %r1, 12 ; data %my_global + 0 ; lg %r2, 0(%r1)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   bras %r1, 0xc
@@ -40,7 +40,7 @@ block0:
 ; block0:
 ;   larl %r2, %my_global_colo + 0
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   larl %r2, 0 ; reloc_external PCRel32Dbl %my_global_colo 2
@@ -58,7 +58,7 @@ block0:
 ; block0:
 ;   bras %r1, 12 ; data %my_func + 0 ; lg %r2, 0(%r1)
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   bras %r1, 0xc
@@ -81,7 +81,7 @@ block0:
 ; block0:
 ;   larl %r2, %my_func_colo + 0
 ;   br %r14
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   larl %r2, 0 ; reloc_external PCRel32Dbl %my_func_colo 2

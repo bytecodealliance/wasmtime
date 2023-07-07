@@ -77,11 +77,11 @@
 ;;   lgr %r2, %r4
 ;;   ag %r2, 0(%r3)
 ;;   llilh %r3, 65535
-;;   agrk %r3, %r2, %r3
-;;   lghi %r2, 0
+;;   agr %r2, %r3
+;;   lghi %r3, 0
 ;;   clgr %r4, %r5
-;;   locgrh %r3, %r2
-;;   lrv %r2, 0(%r3)
+;;   locgrh %r2, %r3
+;;   lrv %r2, 0(%r2)
 ;;   jg label1
 ;; block1:
 ;;   br %r14

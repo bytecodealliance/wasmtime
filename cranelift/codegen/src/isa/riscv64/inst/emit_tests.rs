@@ -3,26 +3,61 @@ use crate::ir::LibCall;
 use crate::isa::riscv64::inst::*;
 use crate::settings;
 use alloc::vec::Vec;
+use std::borrow::Cow;
 
 #[test]
 fn test_riscv64_binemit() {
     struct TestUnit {
         inst: Inst,
         assembly: &'static str,
-        code: u32,
+        code: TestEncoding,
+    }
+
+    struct TestEncoding(Cow<'static, str>);
+
+    impl From<&'static str> for TestEncoding {
+        fn from(value: &'static str) -> Self {
+            Self(value.into())
+        }
+    }
+
+    impl From<u32> for TestEncoding {
+        fn from(value: u32) -> Self {
+            let value = value.swap_bytes();
+            let value = format!("{value:08X}");
+            Self(value.into())
+        }
     }
 
     impl TestUnit {
-        fn new(i: Inst, ass: &'static str, code: u32) -> Self {
+        fn new(inst: Inst, assembly: &'static str, code: impl Into<TestEncoding>) -> Self {
+            let code = code.into();
             Self {
-                inst: i,
-                assembly: ass,
-                code: code,
+                inst,
+                assembly,
+                code,
             }
         }
     }
 
     let mut insns = Vec::<TestUnit>::with_capacity(500);
+
+    insns.push(TestUnit::new(
+        Inst::Ret {
+            rets: vec![],
+            stack_bytes_to_pop: 0,
+        },
+        "ret",
+        0x00008067,
+    ));
+    insns.push(TestUnit::new(
+        Inst::Ret {
+            rets: vec![],
+            stack_bytes_to_pop: 16,
+        },
+        "add sp, sp, #16 ; ret",
+        "1301010167800000",
+    ));
 
     insns.push(TestUnit::new(
         Inst::Mov {
@@ -2077,27 +2112,10 @@ fn test_riscv64_binemit() {
         let mut buffer = MachBuffer::new();
         unit.inst
             .emit(&[], &mut buffer, &emit_info, &mut Default::default());
-        let buffer = buffer.finish();
-        if buffer.data() != unit.code.to_le_bytes() {
-            {
-                let gnu = DebugRTypeInst::from_bs(&unit.code.to_le_bytes());
-                let my = DebugRTypeInst::from_bs(buffer.data());
-                println!("gnu:{:?}", gnu);
-                println!("my :{:?}", my);
-                // println!("gnu:{:b}", gnu.funct7);
-                // println!("my :{:b}", my.funct7);
-            }
+        let buffer = buffer.finish(&Default::default(), &mut Default::default());
+        let actual_encoding = buffer.stringify_code_bytes();
 
-            {
-                let gnu = DebugITypeInst::from_bs(&unit.code.to_le_bytes());
-                let my = DebugITypeInst::from_bs(buffer.data());
-                println!("gnu:{:?}", gnu);
-                println!("my :{:?}", my);
-                println!("gnu:{:b}", gnu.op_code);
-                println!("my :{:b}", my.op_code);
-            }
-            assert_eq!(buffer.data(), unit.code.to_le_bytes());
-        }
+        assert_eq!(actual_encoding, unit.code.0);
     }
 }
 
@@ -2120,9 +2138,12 @@ pub(crate) struct DebugRTypeInst {
 }
 
 impl DebugRTypeInst {
-    pub(crate) fn from_bs(x: &[u8]) -> Self {
+    pub(crate) fn from_bs(x: &[u8]) -> Option<Self> {
+        if x.len() != 4 {
+            return None;
+        }
         let a = [x[0], x[1], x[2], x[3]];
-        Self::from_u32(u32::from_le_bytes(a))
+        Some(Self::from_u32(u32::from_le_bytes(a)))
     }
 
     pub(crate) fn from_u32(x: u32) -> Self {
@@ -2304,7 +2325,7 @@ fn riscv64_worst_case_instruction_size() {
     for i in candidates {
         let mut buffer = MachBuffer::new();
         i.emit(&[], &mut buffer, &emit_info, &mut Default::default());
-        let buffer = buffer.finish();
+        let buffer = buffer.finish(&Default::default(), &mut Default::default());
         let length = buffer.data().len() as u32;
         if length > max.0 {
             let length = buffer.data().len() as u32;

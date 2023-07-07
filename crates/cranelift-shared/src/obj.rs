@@ -13,12 +13,13 @@
 //! function body, the imported wasm function do not. The trampolines symbol
 //! names have format "_trampoline_N", where N is `SignatureIndex`.
 
-use crate::{Relocation, RelocationTarget};
+use crate::{CompiledFuncEnv, CompiledFunction, RelocationTarget};
 use anyhow::Result;
 use cranelift_codegen::binemit::Reloc;
 use cranelift_codegen::ir::LibCall;
 use cranelift_codegen::isa::unwind::{systemv, UnwindInfo};
 use cranelift_codegen::TextSectionBuilder;
+use cranelift_control::ControlPlane;
 use gimli::write::{Address, EhFrame, EndianVec, FrameTable, Writer};
 use gimli::RunTimeEndian;
 use object::write::{Object, SectionId, StandardSegment, Symbol, SymbolId, SymbolSection};
@@ -59,6 +60,8 @@ pub struct ModuleTextBuilder<'a> {
     /// Note that this isn't typically used. It's only used for SSE-disabled
     /// builds without SIMD on x86_64 right now.
     libcall_symbols: HashMap<LibCall, SymbolId>,
+
+    ctrl_plane: ControlPlane,
 }
 
 impl<'a> ModuleTextBuilder<'a> {
@@ -88,6 +91,7 @@ impl<'a> ModuleTextBuilder<'a> {
             unwind_info: Default::default(),
             text,
             libcall_symbols: HashMap::default(),
+            ctrl_plane: ControlPlane::default(),
         }
     }
 
@@ -104,18 +108,15 @@ impl<'a> ModuleTextBuilder<'a> {
     pub fn append_func(
         &mut self,
         name: &str,
-        body: &[u8],
-        alignment: u32,
-        unwind_info: Option<&'a UnwindInfo>,
-        relocations: &[Relocation],
+        compiled_func: &'a CompiledFunction<impl CompiledFuncEnv>,
         resolve_reloc_target: impl Fn(FuncIndex) -> usize,
     ) -> (SymbolId, Range<u64>) {
+        let body = compiled_func.buffer.data();
+        let alignment = compiled_func.alignment;
         let body_len = body.len() as u64;
-        let off = self.text.append(
-            true,
-            &body,
-            self.compiler.function_alignment().max(alignment),
-        );
+        let off = self
+            .text
+            .append(true, &body, alignment, &mut self.ctrl_plane);
 
         let symbol_id = self.obj.add_symbol(Symbol {
             name: name.as_bytes().to_vec(),
@@ -128,11 +129,11 @@ impl<'a> ModuleTextBuilder<'a> {
             flags: SymbolFlags::None,
         });
 
-        if let Some(info) = unwind_info {
+        if let Some(info) = compiled_func.unwind_info() {
             self.unwind_info.push(off, body_len, info);
         }
 
-        for r in relocations {
+        for r in compiled_func.relocations() {
             match r.reloc_target {
                 // Relocations against user-defined functions means that this is
                 // a relocation against a module-local function, typically a
@@ -156,7 +157,7 @@ impl<'a> ModuleTextBuilder<'a> {
                     // loop could also be updated to forward the relocation to
                     // the final object file as well.
                     panic!(
-                        "unresolved relocation could not be procesed against \
+                        "unresolved relocation could not be processed against \
                          {index:?}: {r:?}"
                     );
                 }
@@ -227,7 +228,8 @@ impl<'a> ModuleTextBuilder<'a> {
         if padding == 0 {
             return;
         }
-        self.text.append(false, &vec![0; padding], 1);
+        self.text
+            .append(false, &vec![0; padding], 1, &mut self.ctrl_plane);
     }
 
     /// Indicates that the text section has been written completely and this
@@ -237,7 +239,7 @@ impl<'a> ModuleTextBuilder<'a> {
     /// necessary.
     pub fn finish(mut self) {
         // Finish up the text section now that we're done adding functions.
-        let text = self.text.finish();
+        let text = self.text.finish(&mut self.ctrl_plane);
         self.obj
             .section_mut(self.text_section)
             .set_data(text, self.compiler.page_size_align());
@@ -556,6 +558,7 @@ fn libcall_name(call: LibCall) -> &'static str {
         LibCall::TruncF64 => LC::TruncF64,
         LibCall::FmaF32 => LC::FmaF32,
         LibCall::FmaF64 => LC::FmaF64,
+        LibCall::X86Pshufb => LC::X86Pshufb,
         _ => panic!("unknown libcall to give a name to: {call:?}"),
     };
     other.symbol()

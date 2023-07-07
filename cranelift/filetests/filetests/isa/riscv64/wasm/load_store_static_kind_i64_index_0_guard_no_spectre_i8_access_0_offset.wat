@@ -39,10 +39,10 @@
 
 ;; function u0:0:
 ;; block0:
-;;   lui a4,65536
-;;   addi a4,a4,4095
-;;   ugt a7,a0,a4##ty=i64
-;;   bne a7,zero,taken(label3),not_taken(label1)
+;;   lui a5,65536
+;;   addi a5,a5,4095
+;;   ugt a5,a0,a5##ty=i64
+;;   bne a5,zero,taken(label3),not_taken(label1)
 ;; block1:
 ;;   ld a6,0(a2)
 ;;   add a6,a6,a0
@@ -55,10 +55,10 @@
 ;;
 ;; function u0:1:
 ;; block0:
-;;   lui a4,65536
-;;   addi a4,a4,4095
-;;   ugt a7,a0,a4##ty=i64
-;;   bne a7,zero,taken(label3),not_taken(label1)
+;;   lui a5,65536
+;;   addi a5,a5,4095
+;;   ugt a5,a0,a5##ty=i64
+;;   bne a5,zero,taken(label3),not_taken(label1)
 ;; block1:
 ;;   ld a6,0(a1)
 ;;   add a6,a6,a0

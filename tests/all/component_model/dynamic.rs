@@ -1,3 +1,5 @@
+#![cfg(not(miri))]
+
 use super::{make_echo_component, make_echo_component_with_params, Param, Type};
 use anyhow::Result;
 use component_test_util::FuncExt;
@@ -149,7 +151,18 @@ fn records() -> Result<()> {
     let component = Component::new(
         &engine,
         make_echo_component_with_params(
-            r#"(record (field "A" u32) (field "B" float64) (field "C" (record (field "D" bool) (field "E" u32))))"#,
+            r#"
+                (type $c' (record
+                    (field "D" bool)
+                    (field "E" u32)
+                ))
+                (export $c "c" (type $c'))
+                (type $Foo' (record
+                    (field "A" u32)
+                    (field "B" float64)
+                    (field "C" $c)
+                ))
+            "#,
             &[
                 Param(Type::I32, Some(0)),
                 Param(Type::F64, Some(8)),
@@ -237,10 +250,20 @@ fn variants() -> Result<()> {
     let engine = super::engine();
     let mut store = Store::new(&engine, ());
 
+    let fragment = r#"
+                (type $c' (record (field "D" bool) (field "E" u32)))
+                (export $c "c" (type $c'))
+                (type $Foo' (variant
+                    (case "A" u32)
+                    (case "B" float64)
+                    (case "C" $c)
+                ))
+            "#;
+
     let component = Component::new(
         &engine,
         make_echo_component_with_params(
-            r#"(variant (case "A" u32) (case "B" float64) (case "C" (record (field "D" bool) (field "E" u32))))"#,
+            fragment,
             &[
                 Param(Type::U8, Some(0)),
                 Param(Type::I64, Some(8)),
@@ -264,7 +287,7 @@ fn variants() -> Result<()> {
     let component = Component::new(
         &engine,
         make_echo_component_with_params(
-            r#"(variant (case "A" u32) (case "B" float64) (case "C" (record (field "D" bool) (field "E" u32))))"#,
+            fragment,
             &[
                 Param(Type::U8, Some(0)),
                 Param(Type::I64, Some(8)),
@@ -317,12 +340,19 @@ fn variants() -> Result<()> {
         &engine,
         make_echo_component_with_params(
             r#"
-            (record
-                (field "A" (variant
-                               (case "A" u32)
-                               (case "B" float64)
-                               (case "C" (record (field "D" bool) (field "E" u32)))))
-                (field "B" u32))"#,
+                (type $c' (record (field "D" bool) (field "E" u32)))
+                (export $c "c" (type $c'))
+                (type $a' (variant
+                    (case "A" u32)
+                    (case "B" float64)
+                    (case "C" $c)
+                ))
+                (export $a "a" (type $a'))
+                (type $Foo' (record
+                    (field "A" $a)
+                    (field "B" u32)
+                ))
+            "#,
             &[
                 Param(Type::U8, Some(0)),
                 Param(Type::I64, Some(8)),
@@ -392,28 +422,43 @@ fn everything() -> Result<()> {
         &engine,
         make_echo_component_with_params(
             r#"
-            (record
-                (field "A" u32)
-                (field "B" (enum "a" "b"))
-                (field "C" (record (field "D" bool) (field "E" u32)))
-                (field "F" (list (flags "G" "H" "I")))
-                (field "J" (variant
-                               (case "K" u32)
-                               (case "L" float64)
-                               (case "M" (record (field "N" bool) (field "O" u32)))))
-                (field "P" s8)
-                (field "Q" s16)
-                (field "R" s32)
-                (field "S" s64)
-                (field "T" float32)
-                (field "U" float64)
-                (field "V" string)
-                (field "W" char)
-                (field "Y" (tuple u32 u32))
-                (field "Z" (union u32 float64))
-                (field "AA" (option u32))
-                (field "BB" (result string (error string)))
-            )"#,
+                (type $b' (enum "a" "b"))
+                (export $b "b" (type $b'))
+                (type $c' (record (field "D" bool) (field "E" u32)))
+                (export $c "c" (type $c'))
+                (type $f' (flags "G" "H" "I"))
+                (export $f "f" (type $f'))
+                (type $m' (record (field "N" bool) (field "O" u32)))
+                (export $m "m" (type $m'))
+                (type $j' (variant
+                    (case "K" u32)
+                    (case "L" float64)
+                    (case "M" $m)
+                ))
+                (export $j "j" (type $j'))
+                (type $z' (union u32 float64))
+                (export $z "z" (type $z'))
+
+                (type $Foo' (record
+                    (field "A" u32)
+                    (field "B" $b)
+                    (field "C" $c)
+                    (field "F" (list $f))
+                    (field "J" $j)
+                    (field "P" s8)
+                    (field "Q" s16)
+                    (field "R" s32)
+                    (field "S" s64)
+                    (field "T" float32)
+                    (field "U" float64)
+                    (field "V" string)
+                    (field "W" char)
+                    (field "Y" (tuple u32 u32))
+                    (field "Z" $z)
+                    (field "AA" (option u32))
+                    (field "BB" (result string (error string)))
+                ))
+            "#,
             &[
                 Param(Type::I32, Some(0)),
                 Param(Type::U8, Some(4)),

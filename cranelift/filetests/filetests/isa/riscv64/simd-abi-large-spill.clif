@@ -1,0 +1,71 @@
+test compile precise-output
+set unwind_info=false
+target riscv64gc has_v has_zvl4096b
+
+;; This test causes a spill for v3, and exposed an issue with regalloc2
+;; where it is not correctly computing the spill size due to the
+;; large spill slot size.
+
+function u1:0() -> i16x8 system_v {
+    fn0 = colocated u2:0() -> i32 system_v
+
+block0:
+    v3 = vconst.i16x8 0x000000000000000000000000020a0402
+    v10 = call fn0()
+    return v3
+}
+
+; VCode:
+;   add sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   sd s7,-8(sp)
+;   add sp,-1040
+; block0:
+;   mv s7,a0
+;   vle16.v v3,[const(0)] #avl=8, #vtype=(e16, m1, ta, ma)
+;   vse8.v v3,0(nominal_sp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   call userextname0
+;   mv a0,s7
+;   vle8.v v3,0(nominal_sp) #avl=16, #vtype=(e8, m1, ta, ma)
+;   vse8.v v3,0(a0) #avl=16, #vtype=(e8, m1, ta, ma)
+;   add sp,+1040
+;   ld s7,-8(sp)
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   add sp,+16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   ori s0, sp, 0
+;   sd s7, -8(sp)
+;   addi sp, sp, -0x410
+; block1: ; offset 0x18
+;   ori s7, a0, 0
+;   .byte 0x57, 0x70, 0x84, 0xcc
+;   auipc t6, 0
+;   addi t6, t6, 0x40
+;   .byte 0x87, 0xd1, 0x0f, 0x02
+;   .byte 0x57, 0x70, 0x08, 0xcc
+;   .byte 0xa7, 0x01, 0x01, 0x02
+;   auipc ra, 0 ; reloc_external RiscvCall u2:0 0
+;   jalr ra
+;   ori a0, s7, 0
+;   .byte 0x87, 0x01, 0x01, 0x02
+;   .byte 0xa7, 0x01, 0x05, 0x02
+;   addi sp, sp, 0x410
+;   ld s7, -8(sp)
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+;   .byte 0x02, 0x04, 0x0a, 0x02
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   .byte 0x00, 0x00, 0x00, 0x00
+

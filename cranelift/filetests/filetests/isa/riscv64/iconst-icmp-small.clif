@@ -12,28 +12,24 @@ block0:
 
 ; VCode:
 ; block0:
-;   lui t1,14
-;   addi t1,t1,3532
-;   lui a2,14
-;   addi a2,a2,3532
-;   slli a5,t1,48
-;   srli a7,a5,48
-;   slli t4,a2,48
-;   srli t1,t4,48
-;   ne a0,a7,t1##ty=i16
+;   lui a3,14
+;   addi a3,a3,3532
+;   slli t2,a3,48
+;   srli a1,t2,48
+;   slli a3,a3,48
+;   srli a5,a3,48
+;   ne a0,a1,a5##ty=i16
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lui t1, 0xe
-;   addi t1, t1, -0x234
-;   lui a2, 0xe
-;   addi a2, a2, -0x234
-;   slli a5, t1, 0x30
-;   srli a7, a5, 0x30
-;   slli t4, a2, 0x30
-;   srli t1, t4, 0x30
-;   beq a7, t1, 0xc
+;   lui a3, 0xe
+;   addi a3, a3, -0x234
+;   slli t2, a3, 0x30
+;   srli a1, t2, 0x30
+;   slli a3, a3, 0x30
+;   srli a5, a3, 0x30
+;   beq a1, a5, 0xc
 ;   addi a0, zero, 1
 ;   j 8
 ;   mv a0, zero

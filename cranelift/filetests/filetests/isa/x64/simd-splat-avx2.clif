@@ -1,6 +1,5 @@
 test compile precise-output
-set enable_simd
-target x86_64 has_avx has_avx2
+target x86_64 sse42 has_avx has_avx2
 
 function %splat_i8(i8) -> i8x16 {
 block0(v0: i8):
@@ -17,7 +16,7 @@ block0(v0: i8):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -44,7 +43,7 @@ block0(v0: i16):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -71,7 +70,7 @@ block0(v0: i32):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -94,18 +93,18 @@ block0(v0: i64):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   vmovq   %rdi, %xmm2
-;   vmovddup %xmm2, %xmm0
+;   vpshufd $68, %xmm2, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   vmovq %rdi, %xmm2
-;   vmovddup %xmm2, %xmm0
+;   vpshufd $0x44, %xmm2, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -124,7 +123,7 @@ block0(v0: f32):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -145,17 +144,17 @@ block0(v0: f64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   vmovddup %xmm0, %xmm0
+;   vpshufd $68, %xmm0, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   vmovddup %xmm0, %xmm0
+;   vpshufd $0x44, %xmm0, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -175,7 +174,7 @@ block0(v0: i64):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -201,7 +200,7 @@ block0(v0: i64):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -227,7 +226,7 @@ block0(v0: i64):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -253,7 +252,7 @@ block0(v0: i64):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -279,7 +278,7 @@ block0(v0: i64):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp
@@ -305,7 +304,7 @@ block0(v0: i64):
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   pushq %rbp

@@ -1,9 +1,14 @@
 test run
-set enable_simd
 target aarch64
 target s390x
 target x86_64
-target x86_64 skylake
+target x86_64 ssse3
+target x86_64 sse41
+target x86_64 sse42
+target x86_64 sse42 has_avx
+target x86_64 sse42 has_avx has_avx2
+target x86_64 sse42 has_avx has_avx2 has_avx512f has_avx512vl
+target riscv64 has_v
 
 
 function %sshr_i8x16(i8x16, i32) -> i8x16 {
@@ -93,3 +98,25 @@ block0(v0: i64x2):
 ; run: %i64x2_sshr_const([0x1 0xf]) == [0 0]
 ; run: %i64x2_sshr_const([0x100000000 0]) == [1 0]
 ; run: %i64x2_sshr_const([-1 -1]) == [-1 -1]
+
+function %i64x2_sshr_const2(i64x2) -> i64x2 {
+block0(v0: i64x2):
+    v1 = iconst.i32 8
+    v2 = sshr v0, v1
+    return v2
+}
+; run: %i64x2_sshr_const2([0x1 0xf]) == [0 0]
+; run: %i64x2_sshr_const2([0x100000000 0]) == [0x1000000 0]
+; run: %i64x2_sshr_const2([-1 -1]) == [-1 -1]
+
+function %i64x2_sshr_const3(i64x2) -> i64x2 {
+block0(v0: i64x2):
+    v1 = iconst.i32 40
+    v2 = sshr v0, v1
+    return v2
+}
+; run: %i64x2_sshr_const3([0x1 0xf]) == [0 0]
+; run: %i64x2_sshr_const3([0x10000000000 0]) == [1 0]
+; run: %i64x2_sshr_const3([-1 -1]) == [-1 -1]
+; run: %i64x2_sshr_const3([0x8000000080000000 0x8000000080000000]) == [0xffffffffff800000 0xffffffffff800000]
+

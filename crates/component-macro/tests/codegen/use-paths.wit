@@ -1,3 +1,5 @@
+package foo:foo
+
 interface a {
   record foo {}
 
@@ -5,22 +7,22 @@ interface a {
 }
 
 interface b {
-  use self.a.{foo}
+  use a.{foo}
 
   a: func() -> foo
 }
 
 interface c {
-  use self.b.{foo}
+  use b.{foo}
 
   a: func() -> foo
 }
 
-default world d {
-  import a: self.a
-  import b: self.b
+world d {
+  import a
+  import b
   import d: interface {
-    use self.c.{foo}
+    use c.{foo}
 
     b: func() -> foo
   }

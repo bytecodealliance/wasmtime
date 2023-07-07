@@ -106,7 +106,7 @@ pub unsafe extern "C" fn wasm_func_new_with_env(
 ) -> Box<wasm_func_t> {
     let finalizer = crate::ForeignData { data, finalizer };
     create_function(store, ty, move |params, results| {
-        drop(&finalizer); // move entire finalizer into this closure
+        let _ = &finalizer; // move entire finalizer into this closure
         callback(finalizer.data, params, results)
     })
 }
@@ -241,7 +241,7 @@ pub(crate) unsafe fn c_callback_to_rust_fn(
 ) -> impl Fn(Caller<'_, crate::StoreData>, &[Val], &mut [Val]) -> Result<()> {
     let foreign = crate::ForeignData { data, finalizer };
     move |mut caller, params, results| {
-        drop(&foreign); // move entire foreign into this closure
+        let _ = &foreign; // move entire foreign into this closure
 
         // Convert `params/results` to `wasmtime_val_t`. Use the previous
         // storage in `hostcall_val_storage` to help avoid allocations all the
@@ -305,7 +305,7 @@ pub(crate) unsafe fn c_unchecked_callback_to_rust_fn(
 ) -> impl Fn(Caller<'_, crate::StoreData>, &mut [ValRaw]) -> Result<()> {
     let foreign = crate::ForeignData { data, finalizer };
     move |caller, values| {
-        drop(&foreign); // move entire foreign into this closure
+        let _ = &foreign; // move entire foreign into this closure
         let mut caller = wasmtime_caller_t { caller };
         match callback(foreign.data, &mut caller, values.as_mut_ptr(), values.len()) {
             None => Ok(()),
@@ -365,9 +365,10 @@ pub unsafe extern "C" fn wasmtime_func_call_unchecked(
     store: CStoreContextMut<'_>,
     func: &Func,
     args_and_results: *mut ValRaw,
+    args_and_results_len: usize,
     trap_ret: &mut *mut wasm_trap_t,
 ) -> Option<Box<wasmtime_error_t>> {
-    match func.call_unchecked(store, args_and_results) {
+    match func.call_unchecked(store, args_and_results, args_and_results_len) {
         Ok(()) => None,
         Err(trap) => store_err(trap, trap_ret),
     }
@@ -419,13 +420,16 @@ pub unsafe extern "C" fn wasmtime_caller_export_get(
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_func_from_raw(
     store: CStoreContextMut<'_>,
-    raw: usize,
+    raw: *mut c_void,
     func: &mut Func,
 ) {
     *func = Func::from_raw(store, raw).unwrap();
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn wasmtime_func_to_raw(store: CStoreContextMut<'_>, func: &Func) -> usize {
+pub unsafe extern "C" fn wasmtime_func_to_raw(
+    store: CStoreContextMut<'_>,
+    func: &Func,
+) -> *mut c_void {
     func.to_raw(store)
 }

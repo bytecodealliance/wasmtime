@@ -1,9 +1,10 @@
 test run
+test interpret
 target aarch64
 target s390x
-set enable_simd
 target x86_64 has_sse3 has_ssse3 has_sse41
 target x86_64 has_sse3 has_ssse3 has_sse41 has_avx
+target riscv64 has_v
 
 function %scalartovector_i32(i32) -> i32x4 {
 block0(v0: i32):
@@ -18,6 +19,7 @@ block0(v0: i64):
     v1 = scalar_to_vector.i64x2 v0
     return v1
 }
+; run: %scalartovector_i64(0) == [0 0]
 ; run: %scalartovector_i64(1) == [1 0]
 ; run: %scalartovector_i64(18446744073709551615) == [18446744073709551615 0]
 

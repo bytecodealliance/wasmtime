@@ -12,7 +12,7 @@ block0(v0: i8, v1: i8):
 ; block0:
 ;   add a0,a0,a1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   add a0, a0, a1
@@ -28,7 +28,7 @@ block0(v0: i16, v1: i16):
 ; block0:
 ;   add a0,a0,a1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   add a0, a0, a1
@@ -44,7 +44,7 @@ block0(v0: i32, v1: i32):
 ; block0:
 ;   add a0,a0,a1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   add a0, a0, a1
@@ -63,7 +63,7 @@ block0(v0: i32, v1: i8):
 ;   srai a3,a1,56
 ;   add a0,a0,a3
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   slli a1, a1, 0x38
@@ -83,7 +83,7 @@ block0(v0: i64, v1: i32):
 ;   sext.w a1,a1
 ;   add a0,a0,a1
 ;   ret
-; 
+;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   sext.w a1, a1

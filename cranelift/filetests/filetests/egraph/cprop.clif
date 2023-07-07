@@ -1,6 +1,5 @@
 test optimize
 set opt_level=speed
-set use_egraphs=true
 target x86_64
 
 function %f0() -> i8 {
@@ -230,4 +229,34 @@ block0:
 }
 
 ; check: v3 = iconst.i8 0
+; nextln: return v3
+
+function %ireduce_iconst() -> i8 {
+block0:
+    v1 = iconst.i16 -10
+    v2 = ireduce.i8 v1
+    return v2
+}
+
+; check: v3 = iconst.i8 246
+; nextln: return v3
+
+function %sextend_iconst() -> i32 {
+block0:
+    v1 = iconst.i16 -10
+    v2 = sextend.i32 v1
+    return v2
+}
+
+; check: v3 = iconst.i32 0xffff_fff6
+; nextln: return v3
+
+function %uextend_iconst() -> i32 {
+block0:
+    v1 = iconst.i16 0xfff6
+    v2 = uextend.i32 v1
+    return v2
+}
+
+; check: v3 = iconst.i32 0xfff6
 ; nextln: return v3

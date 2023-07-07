@@ -111,14 +111,14 @@ impl Val {
             Val::ExternRef(e) => {
                 let externref = match e {
                     Some(e) => e.to_raw(store),
-                    None => 0,
+                    None => ptr::null_mut(),
                 };
                 ValRaw::externref(externref)
             }
             Val::FuncRef(f) => {
                 let funcref = match f {
                     Some(f) => f.to_raw(store),
-                    None => 0,
+                    None => ptr::null_mut(),
                 };
                 ValRaw::funcref(funcref)
             }
@@ -195,7 +195,7 @@ impl Val {
                     bail!("cross-`Store` values are not supported in tables");
                 }
                 Ok(TableElement::FuncRef(
-                    f.caller_checked_anyfunc(store).as_ptr(),
+                    f.caller_checked_func_ref(store).as_ptr(),
                 ))
             }
             (Val::FuncRef(None), ValType::FuncRef) => Ok(TableElement::FuncRef(ptr::null_mut())),

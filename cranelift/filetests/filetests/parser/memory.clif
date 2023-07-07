@@ -49,3 +49,23 @@ block0:
     v2 = bxor v0, v1
     return v2
 }
+
+function %table_addr(i32) {
+    table0 = dynamic gv1, element_size 1, bound gv2, index_type i32
+
+block0(v0: i32):
+    v1 = table_addr.i32 table0, v0
+    v2 = table_addr.i32 table0, v0+1
+    v3 = table_addr.i32 table0, v0+0
+    return
+}
+
+; sameln: function %table_addr(i32) fast {
+; nextln:     table0 = dynamic gv1, min 0, bound gv2, element_size 1, index_type i32
+; nextln: 
+; nextln: block0(v0: i32):
+; nextln:     v1 = table_addr.i32 table0, v0
+; nextln:     v2 = table_addr.i32 table0, v0+1
+; nextln:     v3 = table_addr.i32 table0, v0
+; nextln:     return
+; nextln: }

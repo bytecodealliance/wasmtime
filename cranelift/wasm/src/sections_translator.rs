@@ -10,8 +10,8 @@
 use crate::environ::ModuleEnvironment;
 use crate::wasm_unsupported;
 use crate::{
-    DataIndex, ElemIndex, FuncIndex, Global, GlobalIndex, GlobalInit, Memory, MemoryIndex, Table,
-    TableIndex, Tag, TagIndex, TypeIndex, WasmError, WasmResult,
+    DataIndex, ElemIndex, FuncIndex, GlobalIndex, GlobalInit, Memory, MemoryIndex, TableIndex, Tag,
+    TagIndex, TypeIndex, WasmError, WasmResult,
 };
 use cranelift_entity::packed_option::ReservedValue;
 use cranelift_entity::EntityRef;
@@ -20,9 +20,9 @@ use std::vec::Vec;
 use wasmparser::{
     self, Data, DataKind, DataSectionReader, Element, ElementItems, ElementKind,
     ElementSectionReader, Export, ExportSectionReader, ExternalKind, FunctionSectionReader,
-    GlobalSectionReader, GlobalType, ImportSectionReader, MemorySectionReader, MemoryType,
-    NameSectionReader, Naming, Operator, TableSectionReader, TableType, TagSectionReader, TagType,
-    Type, TypeRef, TypeSectionReader,
+    GlobalSectionReader, ImportSectionReader, MemorySectionReader, MemoryType, NameSectionReader,
+    Naming, Operator, TableSectionReader, TagSectionReader, TagType, Type, TypeRef,
+    TypeSectionReader,
 };
 
 fn memory(ty: MemoryType) -> Memory {
@@ -42,22 +42,6 @@ fn tag(e: TagType) -> Tag {
     }
 }
 
-fn table(ty: TableType) -> WasmResult<Table> {
-    Ok(Table {
-        wasm_ty: ty.element_type.try_into()?,
-        minimum: ty.initial,
-        maximum: ty.maximum,
-    })
-}
-
-fn global(ty: GlobalType, initializer: GlobalInit) -> WasmResult<Global> {
-    Ok(Global {
-        wasm_ty: ty.content_type.try_into()?,
-        mutability: ty.mutable,
-        initializer,
-    })
-}
-
 /// Parses the Type section of the wasm module.
 pub fn parse_type_section<'a>(
     types: TypeSectionReader<'a>,
@@ -69,7 +53,11 @@ pub fn parse_type_section<'a>(
     for entry in types {
         match entry? {
             Type::Func(wasm_func_ty) => {
-                environ.declare_type_func(wasm_func_ty.clone().try_into()?)?;
+                let ty = environ.convert_func_type(&wasm_func_ty);
+                environ.declare_type_func(ty)?;
+            }
+            Type::Array(_) => {
+                unimplemented!("gc proposal");
             }
         }
     }
@@ -100,11 +88,11 @@ pub fn parse_import_section<'data>(
                 environ.declare_tag_import(tag(e), import.module, import.name)?;
             }
             TypeRef::Global(ty) => {
-                let ty = global(ty, GlobalInit::Import)?;
+                let ty = environ.convert_global_type(&ty);
                 environ.declare_global_import(ty, import.module, import.name)?;
             }
             TypeRef::Table(ty) => {
-                let ty = table(ty)?;
+                let ty = environ.convert_table_type(&ty);
                 environ.declare_table_import(ty, import.module, import.name)?;
             }
         }
@@ -143,7 +131,7 @@ pub fn parse_table_section(
     environ.reserve_tables(tables.count())?;
 
     for entry in tables {
-        let ty = table(entry?.ty)?;
+        let ty = environ.convert_table_type(&entry?.ty);
         environ.declare_table(ty)?;
     }
 
@@ -212,8 +200,8 @@ pub fn parse_global_section(
                 ));
             }
         };
-        let ty = global(ty, initializer)?;
-        environ.declare_global(ty)?;
+        let ty = environ.convert_global_type(&ty);
+        environ.declare_global(ty, initializer)?;
     }
 
     Ok(())
@@ -317,7 +305,7 @@ pub fn parse_element_section<'data>(
                     }
                 };
                 environ.declare_table_elements(
-                    TableIndex::from_u32(table_index),
+                    TableIndex::from_u32(table_index.unwrap_or(0)),
                     base,
                     offset,
                     segments,
