@@ -4,12 +4,13 @@
 //! which validates and dispatches to the corresponding
 //! machine code emitter.
 
+use crate::abi::ABI;
 use crate::codegen::CodeGen;
 use crate::codegen::ControlStackFrame;
 use crate::masm::{CmpKind, DivKind, MacroAssembler, OperandSize, RegImm, RemKind, ShiftKind};
 use crate::stack::Val;
 use wasmparser::{BlockType, VisitOperator};
-use wasmtime_environ::{FuncIndex, WasmType};
+use wasmtime_environ::{FuncIndex, GlobalIndex, WasmType};
 
 /// A macro to define unsupported WebAssembly operators.
 ///
@@ -105,6 +106,9 @@ macro_rules! def_unsupported {
     (emit BrIf $($rest:tt)*) => {};
     (emit Return $($rest:tt)*) => {};
     (emit Unreachable $($rest:tt)*) => {};
+    (emit LocalTee $($rest:tt)*) => {};
+    (emit GlobalGet $($rest:tt)*) => {};
+    (emit GlobalSet $($rest:tt)*) => {};
 
     (emit $unsupported:tt $($rest:tt)*) => {$($rest)*};
 }
@@ -493,15 +497,7 @@ where
 
     // TODO verify the case where the target local is on the stack.
     fn visit_local_set(&mut self, index: u32) {
-        let context = &mut self.context;
-        let frame = context.frame;
-        let slot = frame
-            .get_local(index)
-            .expect(&format!("vald local at slot = {}", index));
-        let size: OperandSize = slot.ty.into();
-        let src = self.context.pop_to_reg(self.masm, None, size);
-        let addr = self.masm.local_address(&slot);
-        self.masm.store(RegImm::reg(src), addr, size);
+        let src = self.context.set_local(self.masm, index);
         self.context.regalloc.free_gpr(src);
     }
 
@@ -550,6 +546,7 @@ where
     fn visit_br(&mut self, depth: u32) {
         let frame = Self::control_at(&mut self.control_frames, depth);
         self.context.pop_abi_results(frame.result(), self.masm);
+        self.context.pop_sp_for_branch(&frame, self.masm);
         self.masm.jmp(*frame.label());
         frame.set_as_target();
         self.context.reachable = false;
@@ -580,6 +577,8 @@ where
         // know that it should exist at index 0.
         let outermost = &mut self.control_frames[0];
         self.context.pop_abi_results(outermost.result(), self.masm);
+        // Ensure that the stack pointer is correctly balanced.
+        self.context.pop_sp_for_branch(&outermost, self.masm);
         // The outermost should always be a block and therefore,
         // should always have an exit label.
         self.masm.jmp(*outermost.exit_label().unwrap());
@@ -596,6 +595,33 @@ where
         // stack clean up.
         let outermost = &mut self.control_frames[0];
         outermost.set_as_target();
+    }
+
+    fn visit_local_tee(&mut self, index: u32) {
+        let src = self.context.set_local(self.masm, index);
+        self.context.stack.push(Val::reg(src));
+    }
+
+    fn visit_global_get(&mut self, global_index: u32) {
+        let index = GlobalIndex::from_u32(global_index);
+        let (ty, offset) = self.env.resolve_global_type_and_offset(index);
+        let addr = self
+            .masm
+            .address_at_reg(<M::ABI as ABI>::vmctx_reg(), offset);
+        let dst = self.context.any_gpr(self.masm);
+        self.masm.load(addr, dst, ty.into());
+        self.context.stack.push(Val::reg(dst));
+    }
+
+    fn visit_global_set(&mut self, global_index: u32) {
+        let index = GlobalIndex::from_u32(global_index);
+        let (ty, offset) = self.env.resolve_global_type_and_offset(index);
+        let addr = self
+            .masm
+            .address_at_reg(<M::ABI as ABI>::vmctx_reg(), offset);
+        let reg = self.context.pop_to_reg(self.masm, None, ty.into());
+        self.context.free_gpr(reg);
+        self.masm.store(reg.into(), addr, ty.into());
     }
 
     wasmparser::for_each_operator!(def_unsupported);

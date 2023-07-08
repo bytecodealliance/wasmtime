@@ -56,7 +56,7 @@ impl<T: WasiView> poll::Host for T {
                 }
                 PollableEntry::MonotonicClock(when, absolute) => {
                     poll.subscribe_monotonic_clock(
-                        &*self.ctx().clocks.monotonic,
+                        &*self.ctx().monotonic_clock,
                         when,
                         absolute,
                         userdata,

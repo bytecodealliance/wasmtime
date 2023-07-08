@@ -666,34 +666,9 @@ pub struct InstancePre<T> {
     /// instantiation time.
     ///
     /// This is an `Arc<[T]>` for the same reason as `items`.
-    func_refs: Arc<[PrePatchedFuncRef]>,
+    func_refs: Arc<[VMFuncRef]>,
 
     _marker: std::marker::PhantomData<fn() -> T>,
-}
-
-pub(crate) use pre_patched_func_ref::PrePatchedFuncRef;
-mod pre_patched_func_ref {
-    use super::*;
-
-    pub struct PrePatchedFuncRef(VMFuncRef);
-
-    impl PrePatchedFuncRef {
-        /// Safety: callers must arrange for the given `func_ref` to be usable
-        /// in a `Send + Sync` manner (i.e. its associated `Module` is kept
-        /// alive or `Func` is alive and supports these things) and that the
-        /// `wasm_call` field is already patched in, if necessary.
-        pub unsafe fn new(func_ref: VMFuncRef) -> PrePatchedFuncRef {
-            PrePatchedFuncRef(func_ref)
-        }
-
-        pub fn func_ref(&self) -> &VMFuncRef {
-            &self.0
-        }
-    }
-
-    // Safety: This is upheld by `PrePatchedFuncRef::new` callers.
-    unsafe impl<T> Send for InstancePre<T> {}
-    unsafe impl<T> Sync for InstancePre<T> {}
 }
 
 /// InstancePre's clone does not require T: Clone
@@ -732,12 +707,12 @@ impl<T> InstancePre<T> {
                         // `f` needs its `VMFuncRef::wasm_call`
                         // patched with a Wasm-to-native trampoline.
                         debug_assert!(matches!(f.host_ctx(), crate::HostContext::Native(_)));
-                        func_refs.push(PrePatchedFuncRef::new(VMFuncRef {
+                        func_refs.push(VMFuncRef {
                             wasm_call: module
                                 .runtime_info()
                                 .wasm_to_native_trampoline(f.sig_index()),
                             ..*f.func_ref()
-                        }));
+                        });
                     }
                 }
             }
@@ -835,7 +810,7 @@ fn pre_instantiate_raw(
     module: &Module,
     items: &Arc<[Definition]>,
     host_funcs: usize,
-    func_refs: &Arc<[PrePatchedFuncRef]>,
+    func_refs: &Arc<[VMFuncRef]>,
 ) -> Result<OwnedImports> {
     if host_funcs > 0 {
         // Any linker-defined function of the `Definition::HostFunc` variant
@@ -852,7 +827,7 @@ fn pre_instantiate_raw(
         store.push_instance_pre_func_refs(func_refs.clone());
     }
 
-    let mut func_refs = func_refs.iter().map(|f| NonNull::from(f.func_ref()));
+    let mut func_refs = func_refs.iter().map(|f| NonNull::from(f));
     let mut imports = OwnedImports::new(module);
     for import in items.iter() {
         if !import.comes_from_same_store(store) {

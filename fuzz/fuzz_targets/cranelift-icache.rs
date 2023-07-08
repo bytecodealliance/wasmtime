@@ -76,12 +76,7 @@ impl FunctionWithIsa {
             .map_err(|_| arbitrary::Error::IncorrectFormat)?;
 
         let func = gen
-            .generate_func(
-                fname,
-                isa.triple().clone(),
-                usercalls,
-                ALLOWED_LIBCALLS.to_vec(),
-            )
+            .generate_func(fname, isa.clone(), usercalls, ALLOWED_LIBCALLS.to_vec())
             .map_err(|_| arbitrary::Error::IncorrectFormat)?;
 
         Ok(FunctionWithIsa { isa, func })

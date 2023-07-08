@@ -13,6 +13,7 @@ use cranelift::codegen::ir::{
 };
 use cranelift::codegen::isa::CallConv;
 use cranelift::frontend::{FunctionBuilder, FunctionBuilderContext, Switch, Variable};
+use cranelift::prelude::isa::OwnedTargetIsa;
 use cranelift::prelude::{
     EntityRef, ExtFuncData, FloatCC, InstBuilder, IntCC, JumpTableData, MemFlags, StackSlotData,
     StackSlotKind,
@@ -68,27 +69,32 @@ fn insert_opcode(
     Ok(())
 }
 
-fn insert_call(
+fn insert_call_to_function(
     fgen: &mut FunctionGenerator,
     builder: &mut FunctionBuilder,
-    opcode: Opcode,
-    args: &[Type],
-    _rets: &[Type],
+    call_opcode: Opcode,
+    sig: &Signature,
+    sig_ref: SigRef,
+    func_ref: FuncRef,
 ) -> Result<()> {
-    assert!(matches!(opcode, Opcode::Call | Opcode::CallIndirect));
-    let (sig, sig_ref, func_ref) = fgen.u.choose(&fgen.resources.func_refs)?.clone();
-
     let actuals = fgen.generate_values_for_signature(
         builder,
         sig.params.iter().map(|abi_param| abi_param.value_type),
     )?;
 
-    let call = if opcode == Opcode::Call {
-        builder.ins().call(func_ref, &actuals)
-    } else {
-        let addr_ty = args[0];
-        let addr = builder.ins().func_addr(addr_ty, func_ref);
-        builder.ins().call_indirect(sig_ref, addr, &actuals)
+    let addr_ty = fgen.isa.pointer_type();
+    let call = match call_opcode {
+        Opcode::Call => builder.ins().call(func_ref, &actuals),
+        Opcode::ReturnCall => builder.ins().return_call(func_ref, &actuals),
+        Opcode::CallIndirect => {
+            let addr = builder.ins().func_addr(addr_ty, func_ref);
+            builder.ins().call_indirect(sig_ref, addr, &actuals)
+        }
+        Opcode::ReturnCallIndirect => {
+            let addr = builder.ins().func_addr(addr_ty, func_ref);
+            builder.ins().return_call_indirect(sig_ref, addr, &actuals)
+        }
+        _ => unreachable!(),
     };
 
     // Assign the return values to random variables
@@ -100,6 +106,19 @@ fn insert_call(
     }
 
     Ok(())
+}
+
+fn insert_call(
+    fgen: &mut FunctionGenerator,
+    builder: &mut FunctionBuilder,
+    opcode: Opcode,
+    _args: &[Type],
+    _rets: &[Type],
+) -> Result<()> {
+    assert!(matches!(opcode, Opcode::Call | Opcode::CallIndirect));
+    let (sig, sig_ref, func_ref) = fgen.u.choose(&fgen.resources.func_refs)?.clone();
+
+    insert_call_to_function(fgen, builder, opcode, &sig, sig_ref, func_ref)
 }
 
 fn insert_stack_load(
@@ -159,7 +178,7 @@ fn insert_cmp(
         // We filter out condition codes that aren't supported by the target at
         // this point after randomly choosing one, instead of randomly choosing a
         // supported one, to avoid invalidating the corpus when these get implemented.
-        let unimplemented_cc = match (fgen.target_triple.architecture, cc) {
+        let unimplemented_cc = match (fgen.isa.triple().architecture, cc) {
             // Some FloatCC's are not implemented on AArch64, see:
             // https://github.com/bytecodealliance/wasmtime/issues/4850
             (Architecture::Aarch64(_), FloatCC::OrderedNotEqual) => true,
@@ -695,8 +714,6 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                 (Opcode::Iabs, &[I128]),
                 // TODO
                 (Opcode::Bitselect, &[I128, I128, I128]),
-                // TODO
-                (Opcode::Bswap),
                 // https://github.com/bytecodealliance/wasmtime/issues/5528
                 (
                     Opcode::FcvtToUint | Opcode::FcvtToSint,
@@ -736,7 +753,12 @@ static OPCODE_SIGNATURES: Lazy<Vec<OpcodeSignature>> = Lazy::new(|| {
         .filter(|op| {
             match op {
                 // Control flow opcodes should not be generated through `generate_instructions`.
-                Opcode::BrTable | Opcode::Brif | Opcode::Jump | Opcode::Return => false,
+                Opcode::BrTable
+                | Opcode::Brif
+                | Opcode::Jump
+                | Opcode::Return
+                | Opcode::ReturnCall
+                | Opcode::ReturnCallIndirect => false,
 
                 // Constants are generated outside of `generate_instructions`
                 Opcode::Iconst => false,
@@ -814,8 +836,6 @@ static OPCODE_SIGNATURES: Lazy<Vec<OpcodeSignature>> = Lazy::new(|| {
                 (Opcode::Trapnz),
                 (Opcode::ResumableTrapnz),
                 (Opcode::CallIndirect, &[I32]),
-                (Opcode::ReturnCall),
-                (Opcode::ReturnCallIndirect),
                 (Opcode::FuncAddr),
                 (Opcode::X86Pshufb),
                 (Opcode::AvgRound),
@@ -1447,7 +1467,7 @@ where
     u: &'r mut Unstructured<'data>,
     config: &'r Config,
     resources: Resources,
-    target_triple: Triple,
+    isa: OwnedTargetIsa,
     name: UserFuncName,
     signature: Signature,
 }
@@ -1459,6 +1479,8 @@ enum BlockTerminator {
     Br(Block, Block),
     BrTable(Block, Vec<Block>),
     Switch(Type, Block, HashMap<u128, Block>),
+    TailCall(FuncRef),
+    TailCallIndirect(FuncRef),
 }
 
 #[derive(Debug, Clone)]
@@ -1468,6 +1490,8 @@ enum BlockTerminatorKind {
     Br,
     BrTable,
     Switch,
+    TailCall,
+    TailCallIndirect,
 }
 
 #[derive(Default)]
@@ -1508,6 +1532,17 @@ impl Resources {
         let partition_point = self.blocks_without_params.partition_point(|b| *b <= block);
         &self.blocks_without_params[partition_point..]
     }
+
+    /// Generates an iterator of all valid tail call targets. This includes all functions with both
+    ///  the `tail` calling convention and the same return values as the caller.
+    fn tail_call_targets<'a>(
+        &'a self,
+        caller_sig: &'a Signature,
+    ) -> impl Iterator<Item = &'a (Signature, SigRef, FuncRef)> {
+        self.func_refs.iter().filter(|(sig, _, _)| {
+            sig.call_conv == CallConv::Tail && sig.returns == caller_sig.returns
+        })
+    }
 }
 
 impl<'r, 'data> FunctionGenerator<'r, 'data>
@@ -1517,7 +1552,7 @@ where
     pub fn new(
         u: &'r mut Unstructured<'data>,
         config: &'r Config,
-        target_triple: Triple,
+        isa: OwnedTargetIsa,
         name: UserFuncName,
         signature: Signature,
         usercalls: Vec<(UserExternalName, Signature)>,
@@ -1531,7 +1566,7 @@ where
                 libcalls,
                 ..Resources::default()
             },
-            target_triple,
+            isa,
             name,
             signature,
         }
@@ -1613,7 +1648,7 @@ where
         // AArch64: https://github.com/bytecodealliance/wasmtime/issues/5483
         // RISCV: https://github.com/bytecodealliance/wasmtime/issues/5882
         let requires_aligned_atomics = matches!(
-            self.target_triple.architecture,
+            self.isa.triple().architecture,
             Architecture::Aarch64(_) | Architecture::Riscv64(_)
         );
         let aligned = if is_atomic && requires_aligned_atomics {
@@ -1784,6 +1819,23 @@ where
 
                 switch.emit(builder, switch_val, default);
             }
+            BlockTerminator::TailCall(target) | BlockTerminator::TailCallIndirect(target) => {
+                let (sig, sig_ref, func_ref) = self
+                    .resources
+                    .func_refs
+                    .iter()
+                    .find(|(_, _, f)| *f == target)
+                    .expect("Failed to find previously selected function")
+                    .clone();
+
+                let opcode = match terminator {
+                    BlockTerminator::TailCall(_) => Opcode::ReturnCall,
+                    BlockTerminator::TailCallIndirect(_) => Opcode::ReturnCallIndirect,
+                    _ => unreachable!(),
+                };
+
+                insert_call_to_function(self, builder, opcode, &sig, sig_ref, func_ref)?;
+            }
         }
 
         Ok(())
@@ -1797,7 +1849,7 @@ where
             // We filter out instructions that aren't supported by the target at this point instead
             // of building a single vector of valid instructions at the beginning of function
             // generation, to avoid invalidating the corpus when instructions are enabled/disabled.
-            if !valid_for_target(&self.target_triple, *op, &args, &rets) {
+            if !valid_for_target(&self.isa.triple(), *op, &args, &rets) {
                 return Err(arbitrary::Error::IncorrectFormat.into());
             }
 
@@ -1827,7 +1879,7 @@ where
             .iter()
             .map(|libcall| {
                 let pointer_type = Type::int_with_byte_size(
-                    self.target_triple.pointer_width().unwrap().bytes().into(),
+                    self.isa.triple().pointer_width().unwrap().bytes().into(),
                 )
                 .unwrap();
                 let signature = libcall.signature(lib_callconv, pointer_type);
@@ -1984,6 +2036,27 @@ where
                     valid_terminators.push(BlockTerminatorKind::Switch);
                 }
 
+                // Tail Calls are a block terminator, so we should insert them as any other block
+                // terminator. We should ensure that we can select at least one target before considering
+                // them as candidate instructions.
+                let has_tail_callees = self
+                    .resources
+                    .tail_call_targets(&self.signature)
+                    .next()
+                    .is_some();
+                let is_tail_caller = self.signature.call_conv == CallConv::Tail;
+                // TODO: This is currently only supported on x86
+                let supports_tail_calls = self.isa.triple().architecture == Architecture::X86_64;
+                // TODO: We currently require frame pointers for tail calls
+                let has_frame_pointers = self.isa.flags().preserve_frame_pointers();
+
+                if is_tail_caller && has_tail_callees && supports_tail_calls & has_frame_pointers {
+                    valid_terminators.extend([
+                        BlockTerminatorKind::TailCall,
+                        BlockTerminatorKind::TailCallIndirect,
+                    ]);
+                }
+
                 let terminator = self.u.choose(&valid_terminators)?;
 
                 // Choose block targets for the terminators that we picked above
@@ -2042,6 +2115,22 @@ where
 
                         BlockTerminator::Switch(_type, default_block, entries)
                     }
+                    BlockTerminatorKind::TailCall => {
+                        let targets = self
+                            .resources
+                            .tail_call_targets(&self.signature)
+                            .collect::<Vec<_>>();
+                        let (_, _, funcref) = *self.u.choose(&targets[..])?;
+                        BlockTerminator::TailCall(*funcref)
+                    }
+                    BlockTerminatorKind::TailCallIndirect => {
+                        let targets = self
+                            .resources
+                            .tail_call_targets(&self.signature)
+                            .collect::<Vec<_>>();
+                        let (_, _, funcref) = *self.u.choose(&targets[..])?;
+                        BlockTerminator::TailCallIndirect(*funcref)
+                    }
                 })
             })
             .collect::<Result<_>>()?;
@@ -2054,7 +2143,7 @@ where
 
         let mut params = Vec::with_capacity(param_count);
         for _ in 0..param_count {
-            params.push(self.u._type(self.target_triple.architecture)?);
+            params.push(self.u._type(self.isa.triple().architecture)?);
         }
         Ok(params)
     }
@@ -2074,7 +2163,7 @@ where
 
         // Create a pool of vars that are going to be used in this function
         for _ in 0..self.param(&self.config.vars_per_function)? {
-            let ty = self.u._type(self.target_triple.architecture)?;
+            let ty = self.u._type(self.isa.triple().architecture)?;
             let value = self.generate_const(builder, ty)?;
             vars.push((ty, value));
         }
@@ -2107,10 +2196,12 @@ where
 
         let mut builder = FunctionBuilder::new(&mut func, &mut fn_builder_ctx);
 
+        // Build the function references before generating the block CFG since we store
+        // function references in the CFG.
+        self.generate_funcrefs(&mut builder)?;
         self.generate_blocks(&mut builder)?;
 
         // Function preamble
-        self.generate_funcrefs(&mut builder)?;
         self.generate_stack_slots(&mut builder)?;
 
         // Main instruction generation loop

@@ -27,7 +27,7 @@ impl TryFrom<SystemTime> for Datetime {
 #[async_trait::async_trait]
 impl<T: WasiView> wall_clock::Host for T {
     async fn now(&mut self) -> anyhow::Result<Datetime> {
-        let now = self.ctx().clocks.wall.now();
+        let now = self.ctx().wall_clock.now();
         Ok(Datetime {
             seconds: now.as_secs(),
             nanoseconds: now.subsec_nanos(),
@@ -35,7 +35,7 @@ impl<T: WasiView> wall_clock::Host for T {
     }
 
     async fn resolution(&mut self) -> anyhow::Result<Datetime> {
-        let res = self.ctx().clocks.wall.resolution();
+        let res = self.ctx().wall_clock.resolution();
         Ok(Datetime {
             seconds: res.as_secs(),
             nanoseconds: res.subsec_nanos(),
@@ -46,11 +46,11 @@ impl<T: WasiView> wall_clock::Host for T {
 #[async_trait::async_trait]
 impl<T: WasiView> monotonic_clock::Host for T {
     async fn now(&mut self) -> anyhow::Result<Instant> {
-        Ok(self.ctx().clocks.monotonic.now())
+        Ok(self.ctx().monotonic_clock.now())
     }
 
     async fn resolution(&mut self) -> anyhow::Result<Instant> {
-        Ok(self.ctx().clocks.monotonic.resolution())
+        Ok(self.ctx().monotonic_clock.resolution())
     }
 
     async fn subscribe(&mut self, when: Instant, absolute: bool) -> anyhow::Result<Pollable> {

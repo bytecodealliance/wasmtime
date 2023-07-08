@@ -117,13 +117,16 @@ pub struct Fiber;
 pub struct Suspend(*mut u8);
 
 extern "C" {
+    #[wasmtime_versioned_export_macros::versioned_link]
     fn wasmtime_fiber_init(
         top_of_stack: *mut u8,
         entry: extern "C" fn(*mut u8, *mut u8),
         entry_arg0: *mut u8,
     );
+    #[wasmtime_versioned_export_macros::versioned_link]
     fn wasmtime_fiber_switch(top_of_stack: *mut u8);
     #[allow(dead_code)] // only used in inline assembly for some platforms
+    #[wasmtime_versioned_export_macros::versioned_link]
     fn wasmtime_fiber_start();
 }
 

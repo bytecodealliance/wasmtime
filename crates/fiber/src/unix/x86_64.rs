@@ -9,7 +9,7 @@ use wasmtime_asm_macros::asm_func;
 
 // fn(top_of_stack(rdi): *mut u8)
 asm_func!(
-    "wasmtime_fiber_switch",
+    wasmtime_versioned_export_macros::versioned_stringify_ident!(wasmtime_fiber_switch),
     "
         // We're switching to arbitrary code somewhere else, so pessimistically
         // assume that all callee-save register are clobbered. This means we need
@@ -49,7 +49,7 @@ asm_func!(
 // )
 #[rustfmt::skip]
 asm_func!(
-    "wasmtime_fiber_init",
+    wasmtime_versioned_export_macros::versioned_stringify_ident!(wasmtime_fiber_init),
     "
         // Here we're going to set up a stack frame as expected by
         // `wasmtime_fiber_switch`. The values we store here will get restored into
@@ -89,7 +89,7 @@ asm_func!(
 // If you're curious a decent introduction to CFI things and unwinding is at
 // https://www.imperialviolet.org/2017/01/18/cfi.html
 asm_func!(
-    "wasmtime_fiber_start",
+    wasmtime_versioned_export_macros::versioned_stringify_ident!(wasmtime_fiber_start),
     "
         // Use the `simple` directive on the startproc here which indicates that
         // some default settings for the platform are omitted, since this

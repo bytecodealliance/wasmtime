@@ -14,6 +14,7 @@ use wasmtime_environ::component::{
 };
 use wasmtime_environ::{FunctionLoc, ObjectKind, PrimaryMap, ScopeVec};
 use wasmtime_jit::{CodeMemory, CompiledModuleInfo};
+use wasmtime_runtime::component::ComponentRuntimeInfo;
 use wasmtime_runtime::{
     MmapVec, VMArrayCallFunction, VMFunctionBody, VMNativeCallFunction, VMWasmCallFunction,
 };
@@ -291,12 +292,7 @@ impl Component {
     }
 
     pub(crate) fn types(&self) -> &Arc<ComponentTypes> {
-        match self.inner.code.types() {
-            crate::code::Types::Component(types) => types,
-            // The only creator of a `Component` is itself which uses the other
-            // variant, so this shouldn't be possible.
-            crate::code::Types::Module(_) => unreachable!(),
-        }
+        self.inner.component_types()
     }
 
     pub(crate) fn signatures(&self) -> &SignatureCollection {
@@ -378,5 +374,24 @@ impl Component {
     /// [`Module`]: crate::Module
     pub fn serialize(&self) -> Result<Vec<u8>> {
         Ok(self.code_object().code_memory().mmap().to_vec())
+    }
+
+    pub(crate) fn runtime_info(&self) -> Arc<dyn ComponentRuntimeInfo> {
+        self.inner.clone()
+    }
+}
+
+impl ComponentRuntimeInfo for ComponentInner {
+    fn component(&self) -> &wasmtime_environ::component::Component {
+        &self.info.component
+    }
+
+    fn component_types(&self) -> &Arc<ComponentTypes> {
+        match self.code.types() {
+            crate::code::Types::Component(types) => types,
+            // The only creator of a `Component` is itself which uses the other
+            // variant, so this shouldn't be possible.
+            crate::code::Types::Module(_) => unreachable!(),
+        }
     }
 }

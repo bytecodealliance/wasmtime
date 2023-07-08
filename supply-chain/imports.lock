@@ -5,192 +5,384 @@
 version = "0.98.0"
 audited_as = "0.97.1"
 
+[[unpublished.cranelift]]
+version = "0.99.0"
+audited_as = "0.97.1"
+
 [[unpublished.cranelift-bforest]]
 version = "0.98.0"
+audited_as = "0.97.1"
+
+[[unpublished.cranelift-bforest]]
+version = "0.99.0"
 audited_as = "0.97.1"
 
 [[unpublished.cranelift-codegen]]
 version = "0.98.0"
 audited_as = "0.97.1"
 
+[[unpublished.cranelift-codegen]]
+version = "0.99.0"
+audited_as = "0.97.1"
+
 [[unpublished.cranelift-codegen-meta]]
 version = "0.98.0"
+audited_as = "0.97.1"
+
+[[unpublished.cranelift-codegen-meta]]
+version = "0.99.0"
 audited_as = "0.97.1"
 
 [[unpublished.cranelift-codegen-shared]]
 version = "0.98.0"
 audited_as = "0.97.1"
 
+[[unpublished.cranelift-codegen-shared]]
+version = "0.99.0"
+audited_as = "0.97.1"
+
 [[unpublished.cranelift-control]]
 version = "0.98.0"
+audited_as = "0.97.1"
+
+[[unpublished.cranelift-control]]
+version = "0.99.0"
 audited_as = "0.97.1"
 
 [[unpublished.cranelift-entity]]
 version = "0.98.0"
 audited_as = "0.97.1"
 
+[[unpublished.cranelift-entity]]
+version = "0.99.0"
+audited_as = "0.97.1"
+
 [[unpublished.cranelift-frontend]]
 version = "0.98.0"
+audited_as = "0.97.1"
+
+[[unpublished.cranelift-frontend]]
+version = "0.99.0"
 audited_as = "0.97.1"
 
 [[unpublished.cranelift-interpreter]]
 version = "0.98.0"
 audited_as = "0.97.1"
 
+[[unpublished.cranelift-interpreter]]
+version = "0.99.0"
+audited_as = "0.97.1"
+
 [[unpublished.cranelift-isle]]
 version = "0.98.0"
+audited_as = "0.97.1"
+
+[[unpublished.cranelift-isle]]
+version = "0.99.0"
 audited_as = "0.97.1"
 
 [[unpublished.cranelift-jit]]
 version = "0.98.0"
 audited_as = "0.97.1"
 
+[[unpublished.cranelift-jit]]
+version = "0.99.0"
+audited_as = "0.97.1"
+
 [[unpublished.cranelift-module]]
 version = "0.98.0"
+audited_as = "0.97.1"
+
+[[unpublished.cranelift-module]]
+version = "0.99.0"
 audited_as = "0.97.1"
 
 [[unpublished.cranelift-native]]
 version = "0.98.0"
 audited_as = "0.97.1"
 
+[[unpublished.cranelift-native]]
+version = "0.99.0"
+audited_as = "0.97.1"
+
 [[unpublished.cranelift-object]]
 version = "0.98.0"
+audited_as = "0.97.1"
+
+[[unpublished.cranelift-object]]
+version = "0.99.0"
 audited_as = "0.97.1"
 
 [[unpublished.cranelift-reader]]
 version = "0.98.0"
 audited_as = "0.97.1"
 
+[[unpublished.cranelift-reader]]
+version = "0.99.0"
+audited_as = "0.97.1"
+
 [[unpublished.cranelift-serde]]
 version = "0.98.0"
+audited_as = "0.97.1"
+
+[[unpublished.cranelift-serde]]
+version = "0.99.0"
 audited_as = "0.97.1"
 
 [[unpublished.cranelift-wasm]]
 version = "0.98.0"
 audited_as = "0.97.1"
 
+[[unpublished.cranelift-wasm]]
+version = "0.99.0"
+audited_as = "0.97.1"
+
 [[unpublished.wasi-cap-std-sync]]
 version = "11.0.0"
+audited_as = "10.0.1"
+
+[[unpublished.wasi-cap-std-sync]]
+version = "12.0.0"
 audited_as = "10.0.1"
 
 [[unpublished.wasi-common]]
 version = "11.0.0"
 audited_as = "10.0.1"
 
+[[unpublished.wasi-common]]
+version = "12.0.0"
+audited_as = "10.0.1"
+
 [[unpublished.wasi-tokio]]
 version = "11.0.0"
+audited_as = "10.0.1"
+
+[[unpublished.wasi-tokio]]
+version = "12.0.0"
 audited_as = "10.0.1"
 
 [[unpublished.wasmtime]]
 version = "11.0.0"
 audited_as = "10.0.1"
 
+[[unpublished.wasmtime]]
+version = "12.0.0"
+audited_as = "10.0.1"
+
 [[unpublished.wasmtime-asm-macros]]
 version = "11.0.0"
+audited_as = "10.0.1"
+
+[[unpublished.wasmtime-asm-macros]]
+version = "12.0.0"
 audited_as = "10.0.1"
 
 [[unpublished.wasmtime-cache]]
 version = "11.0.0"
 audited_as = "10.0.1"
 
+[[unpublished.wasmtime-cache]]
+version = "12.0.0"
+audited_as = "10.0.1"
+
 [[unpublished.wasmtime-cli]]
 version = "11.0.0"
+audited_as = "10.0.1"
+
+[[unpublished.wasmtime-cli]]
+version = "12.0.0"
 audited_as = "10.0.1"
 
 [[unpublished.wasmtime-cli-flags]]
 version = "11.0.0"
 audited_as = "10.0.1"
 
+[[unpublished.wasmtime-cli-flags]]
+version = "12.0.0"
+audited_as = "10.0.1"
+
 [[unpublished.wasmtime-component-macro]]
 version = "11.0.0"
+audited_as = "10.0.1"
+
+[[unpublished.wasmtime-component-macro]]
+version = "12.0.0"
 audited_as = "10.0.1"
 
 [[unpublished.wasmtime-component-util]]
 version = "11.0.0"
 audited_as = "10.0.1"
 
+[[unpublished.wasmtime-component-util]]
+version = "12.0.0"
+audited_as = "10.0.1"
+
 [[unpublished.wasmtime-cranelift]]
 version = "11.0.0"
+audited_as = "10.0.1"
+
+[[unpublished.wasmtime-cranelift]]
+version = "12.0.0"
 audited_as = "10.0.1"
 
 [[unpublished.wasmtime-cranelift-shared]]
 version = "11.0.0"
 audited_as = "10.0.1"
 
+[[unpublished.wasmtime-cranelift-shared]]
+version = "12.0.0"
+audited_as = "10.0.1"
+
 [[unpublished.wasmtime-environ]]
 version = "11.0.0"
+audited_as = "10.0.1"
+
+[[unpublished.wasmtime-environ]]
+version = "12.0.0"
 audited_as = "10.0.1"
 
 [[unpublished.wasmtime-explorer]]
 version = "11.0.0"
 audited_as = "10.0.1"
 
+[[unpublished.wasmtime-explorer]]
+version = "12.0.0"
+audited_as = "10.0.1"
+
 [[unpublished.wasmtime-fiber]]
 version = "11.0.0"
+audited_as = "10.0.1"
+
+[[unpublished.wasmtime-fiber]]
+version = "12.0.0"
 audited_as = "10.0.1"
 
 [[unpublished.wasmtime-jit]]
 version = "11.0.0"
 audited_as = "10.0.1"
 
+[[unpublished.wasmtime-jit]]
+version = "12.0.0"
+audited_as = "10.0.1"
+
 [[unpublished.wasmtime-jit-debug]]
 version = "11.0.0"
+audited_as = "10.0.1"
+
+[[unpublished.wasmtime-jit-debug]]
+version = "12.0.0"
 audited_as = "10.0.1"
 
 [[unpublished.wasmtime-jit-icache-coherence]]
 version = "11.0.0"
 audited_as = "10.0.1"
 
+[[unpublished.wasmtime-jit-icache-coherence]]
+version = "12.0.0"
+audited_as = "10.0.1"
+
 [[unpublished.wasmtime-runtime]]
 version = "11.0.0"
+audited_as = "10.0.1"
+
+[[unpublished.wasmtime-runtime]]
+version = "12.0.0"
 audited_as = "10.0.1"
 
 [[unpublished.wasmtime-types]]
 version = "11.0.0"
 audited_as = "10.0.1"
 
+[[unpublished.wasmtime-types]]
+version = "12.0.0"
+audited_as = "10.0.1"
+
 [[unpublished.wasmtime-wasi]]
 version = "11.0.0"
+audited_as = "10.0.1"
+
+[[unpublished.wasmtime-wasi]]
+version = "12.0.0"
 audited_as = "10.0.1"
 
 [[unpublished.wasmtime-wasi-crypto]]
 version = "11.0.0"
 audited_as = "10.0.1"
 
+[[unpublished.wasmtime-wasi-crypto]]
+version = "12.0.0"
+audited_as = "10.0.1"
+
 [[unpublished.wasmtime-wasi-http]]
 version = "11.0.0"
+audited_as = "10.0.1"
+
+[[unpublished.wasmtime-wasi-http]]
+version = "12.0.0"
 audited_as = "10.0.1"
 
 [[unpublished.wasmtime-wasi-nn]]
 version = "11.0.0"
 audited_as = "10.0.1"
 
+[[unpublished.wasmtime-wasi-nn]]
+version = "12.0.0"
+audited_as = "10.0.1"
+
 [[unpublished.wasmtime-wasi-threads]]
 version = "11.0.0"
+audited_as = "10.0.1"
+
+[[unpublished.wasmtime-wasi-threads]]
+version = "12.0.0"
 audited_as = "10.0.1"
 
 [[unpublished.wasmtime-wast]]
 version = "11.0.0"
 audited_as = "10.0.1"
 
+[[unpublished.wasmtime-wast]]
+version = "12.0.0"
+audited_as = "10.0.1"
+
 [[unpublished.wasmtime-winch]]
 version = "11.0.0"
+audited_as = "10.0.1"
+
+[[unpublished.wasmtime-winch]]
+version = "12.0.0"
 audited_as = "10.0.1"
 
 [[unpublished.wasmtime-wit-bindgen]]
 version = "11.0.0"
 audited_as = "10.0.1"
 
+[[unpublished.wasmtime-wit-bindgen]]
+version = "12.0.0"
+audited_as = "10.0.1"
+
 [[unpublished.wiggle]]
 version = "11.0.0"
+audited_as = "10.0.1"
+
+[[unpublished.wiggle]]
+version = "12.0.0"
 audited_as = "10.0.1"
 
 [[unpublished.wiggle-generate]]
 version = "11.0.0"
 audited_as = "10.0.1"
 
+[[unpublished.wiggle-generate]]
+version = "12.0.0"
+audited_as = "10.0.1"
+
 [[unpublished.wiggle-macro]]
 version = "11.0.0"
+audited_as = "10.0.1"
+
+[[unpublished.wiggle-macro]]
+version = "12.0.0"
 audited_as = "10.0.1"
 
 [[unpublished.wiggle-test]]
@@ -201,6 +393,10 @@ audited_as = "0.1.0"
 version = "0.9.0"
 audited_as = "0.8.1"
 
+[[unpublished.winch-codegen]]
+version = "0.10.0"
+audited_as = "0.8.1"
+
 [[publisher.arbitrary]]
 version = "1.3.0"
 when = "2023-03-13"
@@ -208,12 +404,40 @@ user-id = 696
 user-login = "fitzgen"
 user-name = "Nick Fitzgerald"
 
+[[publisher.async-trait]]
+version = "0.1.53"
+when = "2022-03-25"
+user-id = 3618
+user-login = "dtolnay"
+user-name = "David Tolnay"
+
 [[publisher.bumpalo]]
 version = "3.12.0"
 when = "2023-01-17"
 user-id = 696
 user-login = "fitzgen"
 user-name = "Nick Fitzgerald"
+
+[[publisher.clap]]
+version = "3.2.8"
+when = "2022-06-30"
+user-id = 6743
+user-login = "epage"
+user-name = "Ed Page"
+
+[[publisher.clap_derive]]
+version = "3.2.7"
+when = "2022-06-28"
+user-id = 6743
+user-login = "epage"
+user-name = "Ed Page"
+
+[[publisher.clap_lex]]
+version = "0.2.4"
+when = "2022-06-28"
+user-id = 6743
+user-login = "epage"
+user-name = "Ed Page"
 
 [[publisher.cranelift]]
 version = "0.97.1"
@@ -324,12 +548,138 @@ user-id = 696
 user-login = "fitzgen"
 user-name = "Nick Fitzgerald"
 
+[[publisher.indexmap]]
+version = "1.9.1"
+when = "2022-06-21"
+user-id = 539
+user-login = "cuviper"
+user-name = "Josh Stone"
+
+[[publisher.itoa]]
+version = "1.0.1"
+when = "2021-12-12"
+user-id = 3618
+user-login = "dtolnay"
+user-name = "David Tolnay"
+
+[[publisher.libc]]
+version = "0.2.132"
+when = "2022-08-16"
+user-id = 2915
+user-login = "Amanieu"
+user-name = "Amanieu d'Antras"
+
+[[publisher.libm]]
+version = "0.2.7"
+when = "2023-05-15"
+user-id = 2915
+user-login = "Amanieu"
+user-name = "Amanieu d'Antras"
+
+[[publisher.lock_api]]
+version = "0.4.7"
+when = "2022-03-30"
+user-id = 2915
+user-login = "Amanieu"
+user-name = "Amanieu d'Antras"
+
+[[publisher.parking_lot]]
+version = "0.11.2"
+when = "2021-08-27"
+user-id = 2915
+user-login = "Amanieu"
+user-name = "Amanieu d'Antras"
+
+[[publisher.parking_lot_core]]
+version = "0.8.5"
+when = "2021-08-28"
+user-id = 2915
+user-login = "Amanieu"
+user-name = "Amanieu d'Antras"
+
+[[publisher.paste]]
+version = "1.0.7"
+when = "2022-03-27"
+user-id = 3618
+user-login = "dtolnay"
+user-name = "David Tolnay"
+
 [[publisher.regalloc2]]
 version = "0.9.1"
 when = "2023-05-31"
 user-id = 187138
 user-login = "elliottt"
 user-name = "Trevor Elliott"
+
+[[publisher.ryu]]
+version = "1.0.9"
+when = "2021-12-12"
+user-id = 3618
+user-login = "dtolnay"
+user-name = "David Tolnay"
+
+[[publisher.scopeguard]]
+version = "1.1.0"
+when = "2020-02-16"
+user-id = 2915
+user-login = "Amanieu"
+user-name = "Amanieu d'Antras"
+
+[[publisher.serde]]
+version = "1.0.137"
+when = "2022-05-01"
+user-id = 3618
+user-login = "dtolnay"
+user-name = "David Tolnay"
+
+[[publisher.serde_derive]]
+version = "1.0.137"
+when = "2022-05-01"
+user-id = 3618
+user-login = "dtolnay"
+user-name = "David Tolnay"
+
+[[publisher.serde_json]]
+version = "1.0.80"
+when = "2022-04-30"
+user-id = 3618
+user-login = "dtolnay"
+user-name = "David Tolnay"
+
+[[publisher.syn]]
+version = "1.0.92"
+when = "2022-04-29"
+user-id = 3618
+user-login = "dtolnay"
+user-name = "David Tolnay"
+
+[[publisher.syn]]
+version = "2.0.16"
+when = "2023-05-14"
+user-id = 3618
+user-login = "dtolnay"
+user-name = "David Tolnay"
+
+[[publisher.thiserror]]
+version = "1.0.31"
+when = "2022-04-30"
+user-id = 3618
+user-login = "dtolnay"
+user-name = "David Tolnay"
+
+[[publisher.thiserror-impl]]
+version = "1.0.31"
+when = "2022-04-30"
+user-id = 3618
+user-login = "dtolnay"
+user-name = "David Tolnay"
+
+[[publisher.toml]]
+version = "0.5.7"
+when = "2020-10-11"
+user-id = 1
+user-login = "alexcrichton"
+user-name = "Alex Crichton"
 
 [[publisher.unicode-segmentation]]
 version = "1.10.1"
@@ -877,6 +1227,21 @@ who = "David Cook <dcook@divviup.org>"
 criteria = "safe-to-deploy"
 version = "0.9.0"
 
+[[audits.isrg.audits.libc]]
+who = "Brandon Pitman <bran@bran.land>"
+criteria = "safe-to-deploy"
+delta = "0.2.139 -> 0.2.141"
+
+[[audits.isrg.audits.once_cell]]
+who = "Brandon Pitman <bran@bran.land>"
+criteria = "safe-to-deploy"
+delta = "1.17.1 -> 1.17.2"
+
+[[audits.isrg.audits.once_cell]]
+who = "David Cook <dcook@divviup.org>"
+criteria = "safe-to-deploy"
+delta = "1.17.2 -> 1.18.0"
+
 [[audits.isrg.audits.opaque-debug]]
 who = "David Cook <dcook@divviup.org>"
 criteria = "safe-to-deploy"
@@ -1101,6 +1466,18 @@ version = "1.4.0"
 notes = "I have read over the macros, and audited the unsafe code."
 aggregated-from = "https://raw.githubusercontent.com/mozilla/cargo-vet/main/supply-chain/audits.toml"
 
+[[audits.mozilla.audits.libc]]
+who = "Mike Hommey <mh+mozilla@glandium.org>"
+criteria = "safe-to-deploy"
+delta = "0.2.132 -> 0.2.138"
+aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
+
+[[audits.mozilla.audits.libc]]
+who = "Mike Hommey <mh+mozilla@glandium.org>"
+criteria = "safe-to-deploy"
+delta = "0.2.138 -> 0.2.139"
+aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
+
 [[audits.mozilla.audits.log]]
 who = "Mike Hommey <mh+mozilla@glandium.org>"
 criteria = "safe-to-deploy"
@@ -1158,6 +1535,12 @@ criteria = "safe-to-deploy"
 delta = "1.13.1 -> 1.16.0"
 aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
 
+[[audits.mozilla.audits.once_cell]]
+who = "Mike Hommey <mh+mozilla@glandium.org>"
+criteria = "safe-to-deploy"
+delta = "1.16.0 -> 1.17.1"
+aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
+
 [[audits.mozilla.audits.proc-macro2]]
 who = "Nika Layzell <nika@thelayzells.com>"
 criteria = "safe-to-deploy"
@@ -1205,6 +1588,13 @@ who = "Mike Hommey <mh+mozilla@glandium.org>"
 criteria = "safe-to-deploy"
 delta = "1.0.49 -> 1.0.51"
 aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
+
+[[audits.mozilla.audits.proc-macro2]]
+who = "Jan-Erik Rediger <jrediger@mozilla.com>"
+criteria = "safe-to-deploy"
+delta = "1.0.57 -> 1.0.59"
+notes = "Enabled on Wasm"
+aggregated-from = "https://raw.githubusercontent.com/mozilla/glean/main/supply-chain/audits.toml"
 
 [[audits.mozilla.audits.quote]]
 who = "Nika Layzell <nika@thelayzells.com>"
@@ -1286,6 +1676,12 @@ I am the primary author of the `synstructure` crate, and its current
 maintainer. The one use of `unsafe` is unnecessary, but documented and
 harmless. It will be removed in the next version.
 """
+aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
+
+[[audits.mozilla.audits.toml]]
+who = "Bobby Holley <bobbyholley@gmail.com>"
+criteria = "safe-to-deploy"
+delta = "0.5.7 -> 0.5.9"
 aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
 
 [[audits.mozilla.audits.unicode-normalization]]

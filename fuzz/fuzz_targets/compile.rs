@@ -1,10 +1,12 @@
-//! Compile arbitrary bytes from the fuzzer as if they were Wasm. Also use
-//! `wasm-mutate` to mutate the fuzz inputs.
+//! Compile arbitrary bytes from the fuzzer as if they were Wasm, checking that
+//! compilation is deterministic.
+//!
+//! Also use `wasm-mutate` to mutate the fuzz inputs.
 
 #![no_main]
 
 use libfuzzer_sys::{fuzz_mutator, fuzz_target};
-use wasmtime::{Config, Engine, Module};
+use wasmtime::{Config, Engine, Module, Result};
 
 fn create_engine() -> Engine {
     let mut config = Config::default();
@@ -17,10 +19,24 @@ fn create_engine() -> Engine {
     Engine::new(&config).expect("Could not construct Engine")
 }
 
+fn compile_and_serialize(engine: &Engine, wasm: &[u8]) -> Result<Vec<u8>> {
+    let module = Module::new(&engine, wasm)?;
+    module.serialize()
+}
+
 fuzz_target!(|data: &[u8]| {
     let engine = create_engine();
     wasmtime_fuzzing::oracles::log_wasm(data);
-    drop(Module::new(&engine, data));
+
+    if let Ok(bytes1) = compile_and_serialize(&engine, data) {
+        let bytes2 = compile_and_serialize(&engine, data)
+            .expect("successfully compiled once, should successfully compile again");
+
+        // NB: Don't use `assert_eq!` here because it prints out the LHS and RHS
+        // to stderr on failure, which isn't helpful here since it is just a
+        // huge serialized binary.
+        assert!(bytes1 == bytes2, "Wasm compilation should be deterministic");
+    }
 });
 
 fuzz_mutator!(|data: &mut [u8], size: usize, max_size: usize, seed: u32| {

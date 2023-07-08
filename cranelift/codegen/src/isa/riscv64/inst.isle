@@ -1717,6 +1717,40 @@
   (rv_or (value_regs_get x 0) (value_regs_get y 0)))
 
 
+
+(decl gen_bswap (Type XReg) XReg)
+
+;; This is only here to make the rule below work. bswap.i8 isn't valid
+(rule 0 (gen_bswap $I8 x) x)
+
+(rule 1 (gen_bswap (ty_int_ref_16_to_64 ty) x)
+  (if-let half_ty (ty_half_width ty))
+  (if-let half_size (u64_to_imm12 (ty_bits half_ty)))
+  (let (;; This swaps the top bytes and zeroes the bottom bytes, so that
+        ;; we can or it with the bottom bytes later.
+        (swap_top XReg (gen_bswap half_ty x))
+        (top XReg (rv_slli swap_top half_size))
+
+        ;; Get the top half, swap it, and zero extend it so we can `or` it
+        ;; with the bottom half.
+        (shifted XReg (rv_srli x half_size))
+        (swap_bot XReg (gen_bswap half_ty shifted))
+        (bot XReg (zext swap_bot half_ty $I64)))
+    (rv_or top bot)))
+
+;; With `zbb` we can use `rev8` and shift the result
+(rule 2 (gen_bswap (int_fits_in_32 ty) x)
+  (if-let $true (has_zbb))
+  (if-let shift_amt (u64_to_imm12 (u64_sub 64 (ty_bits ty))))
+  (rv_srli (rv_rev8 x) shift_amt))
+
+;; With `zbb` we can use `rev8` that does this
+(rule 3 (gen_bswap $I64 x)
+  (if-let $true (has_zbb))
+  (rv_rev8 x))
+
+
+
 (decl lower_bit_reverse (Reg Type) Reg)
 
 (rule

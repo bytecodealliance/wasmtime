@@ -24,12 +24,11 @@
 
 use crate::Engine;
 use anyhow::Result;
-use std::collections::{btree_map, BTreeMap};
+use std::collections::{btree_map, BTreeMap, BTreeSet};
 use std::{any::Any, collections::HashMap};
 use wasmtime_environ::{
-    Compiler, DefinedFuncIndex, FuncIndex, FunctionBodyData, FunctionLoc, ModuleTranslation,
-    ModuleType, ModuleTypes, PrimaryMap, SignatureIndex, StaticModuleIndex, Tunables,
-    WasmFunctionInfo,
+    Compiler, DefinedFuncIndex, FuncIndex, FunctionBodyData, ModuleTranslation, ModuleType,
+    ModuleTypes, PrimaryMap, SignatureIndex, StaticModuleIndex, Tunables, WasmFunctionInfo,
 };
 use wasmtime_jit::{CompiledFunctionInfo, CompiledModuleInfo};
 
@@ -258,9 +257,7 @@ impl<'a> CompileInputs<'a> {
                 wasmtime_environ::component::GlobalInitializer::InstantiateModule(_)
                 | wasmtime_environ::component::GlobalInitializer::ExtractMemory(_)
                 | wasmtime_environ::component::GlobalInitializer::ExtractRealloc(_)
-                | wasmtime_environ::component::GlobalInitializer::ExtractPostReturn(_)
-                | wasmtime_environ::component::GlobalInitializer::SaveStaticModule(_)
-                | wasmtime_environ::component::GlobalInitializer::SaveModuleImport(_) => {
+                | wasmtime_environ::component::GlobalInitializer::ExtractPostReturn(_) => {
                     // Nothing to compile for these.
                 }
             }
@@ -588,6 +585,13 @@ impl FunctionIndices {
             .remove(&CompileKey::NATIVE_TO_WASM_TRAMPOLINE_KIND)
             .unwrap_or_default();
 
+        // NB: unlike the above maps this is not emptied out during iteration
+        // since each module may reach into different portions of this map.
+        let wasm_to_native_trampolines = self
+            .indices
+            .remove(&CompileKey::WASM_TO_NATIVE_TRAMPOLINE_KIND)
+            .unwrap_or_default();
+
         artifacts.modules = translations
             .into_iter()
             .map(|(module, translation)| {
@@ -621,16 +625,20 @@ impl FunctionIndices {
                         })
                         .collect();
 
-                let wasm_to_native_trampolines: Vec<(SignatureIndex, FunctionLoc)> = self
-                    .indices
-                    .remove(&CompileKey::WASM_TO_NATIVE_TRAMPOLINE_KIND)
-                    .into_iter()
-                    .flat_map(|x| x)
-                    .map(|(key, i)| {
-                        (
-                            SignatureIndex::from_u32(key.index),
-                            symbol_ids_and_locs[i.unwrap_function()].1,
-                        )
+                let unique_and_sorted_sigs = translation
+                    .module
+                    .types
+                    .iter()
+                    .map(|(_, ty)| match ty {
+                        ModuleType::Function(ty) => *ty,
+                    })
+                    .collect::<BTreeSet<_>>();
+                let wasm_to_native_trampolines = unique_and_sorted_sigs
+                    .iter()
+                    .map(|idx| {
+                        let key = CompileKey::wasm_to_native_trampoline(*idx);
+                        let compiled = wasm_to_native_trampolines[&key];
+                        (*idx, symbol_ids_and_locs[compiled.unwrap_function()].1)
                     })
                     .collect();
 
@@ -680,17 +688,17 @@ pub struct Artifacts {
     #[cfg(feature = "component-model")]
     pub lowerings: PrimaryMap<
         wasmtime_environ::component::LoweredIndex,
-        wasmtime_environ::component::AllCallFunc<FunctionLoc>,
+        wasmtime_environ::component::AllCallFunc<wasmtime_environ::FunctionLoc>,
     >,
     #[cfg(feature = "component-model")]
     pub always_traps: PrimaryMap<
         wasmtime_environ::component::RuntimeAlwaysTrapIndex,
-        wasmtime_environ::component::AllCallFunc<FunctionLoc>,
+        wasmtime_environ::component::AllCallFunc<wasmtime_environ::FunctionLoc>,
     >,
     #[cfg(feature = "component-model")]
     pub transcoders: PrimaryMap<
         wasmtime_environ::component::RuntimeTranscoderIndex,
-        wasmtime_environ::component::AllCallFunc<FunctionLoc>,
+        wasmtime_environ::component::AllCallFunc<wasmtime_environ::FunctionLoc>,
     >,
 }
 

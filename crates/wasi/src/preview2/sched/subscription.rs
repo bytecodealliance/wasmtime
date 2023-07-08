@@ -1,5 +1,5 @@
 use crate::preview2::{
-    clocks::WasiMonotonicClock,
+    clocks::HostMonotonicClock,
     stream::{InputStream, OutputStream},
 };
 use anyhow::Error;
@@ -61,7 +61,7 @@ impl<'a> RwSubscription<'a> {
 }
 
 pub struct MonotonicClockSubscription<'a> {
-    pub clock: &'a dyn WasiMonotonicClock,
+    pub clock: &'a dyn HostMonotonicClock,
     pub absolute_deadline: u64,
 }
 

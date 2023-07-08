@@ -148,6 +148,9 @@ audit-as-crates-io = true
 [policy.wasmtime-types]
 audit-as-crates-io = true
 
+[policy.wasmtime-versioned-export-macros]
+audit-as-crates-io = false
+
 [policy.wasmtime-wasi]
 audit-as-crates-io = true
 
@@ -218,10 +221,6 @@ criteria = "safe-to-deploy"
 version = "0.7.18"
 criteria = "safe-to-deploy"
 
-[[exemptions.async-trait]]
-version = "0.1.53"
-criteria = "safe-to-deploy"
-
 [[exemptions.autocfg]]
 version = "0.1.8"
 criteria = "safe-to-deploy"
@@ -272,18 +271,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.cipher]]
 version = "0.3.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.clap]]
-version = "3.2.8"
-criteria = "safe-to-deploy"
-
-[[exemptions.clap_derive]]
-version = "3.2.7"
-criteria = "safe-to-deploy"
-
-[[exemptions.clap_lex]]
-version = "0.2.4"
 criteria = "safe-to-deploy"
 
 [[exemptions.console]]
@@ -508,10 +495,6 @@ version = "1.0.0-rc.3"
 criteria = "safe-to-deploy"
 notes = "we are exempting tokio, hyper, and their tightly coupled dependencies by the same authors, expecting that the authors at aws will publish attestions we can import at some point soon"
 
-[[exemptions.indexmap]]
-version = "1.9.1"
-criteria = "safe-to-deploy"
-
 [[exemptions.indicatif]]
 version = "0.13.0"
 criteria = "safe-to-deploy"
@@ -528,10 +511,6 @@ criteria = "safe-to-deploy"
 version = "0.10.3"
 criteria = "safe-to-deploy"
 
-[[exemptions.itoa]]
-version = "1.0.1"
-criteria = "safe-to-deploy"
-
 [[exemptions.jobserver]]
 version = "0.1.24"
 criteria = "safe-to-deploy"
@@ -545,24 +524,12 @@ notes = "dependency of ring for wasm32 browser platform, which our project does 
 version = "0.9.6"
 criteria = "safe-to-deploy"
 
-[[exemptions.libc]]
-version = "0.2.133"
-criteria = "safe-to-deploy"
-
 [[exemptions.libloading]]
 version = "0.7.3"
 criteria = "safe-to-deploy"
 
-[[exemptions.libm]]
-version = "0.2.2"
-criteria = "safe-to-deploy"
-
 [[exemptions.listenfd]]
 version = "1.0.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.lock_api]]
-version = "0.4.7"
 criteria = "safe-to-deploy"
 
 [[exemptions.mach]]
@@ -636,18 +603,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.p256]]
 version = "0.9.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.parking_lot]]
-version = "0.11.2"
-criteria = "safe-to-deploy"
-
-[[exemptions.parking_lot_core]]
-version = "0.8.5"
-criteria = "safe-to-deploy"
-
-[[exemptions.paste]]
-version = "1.0.7"
 criteria = "safe-to-deploy"
 
 [[exemptions.pem-rfc7468]]
@@ -807,28 +762,8 @@ criteria = "safe-to-deploy"
 version = "0.3.0"
 criteria = "safe-to-deploy"
 
-[[exemptions.ryu]]
-version = "1.0.9"
-criteria = "safe-to-deploy"
-
 [[exemptions.same-file]]
 version = "1.0.6"
-criteria = "safe-to-deploy"
-
-[[exemptions.scopeguard]]
-version = "1.1.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.serde]]
-version = "1.0.137"
-criteria = "safe-to-deploy"
-
-[[exemptions.serde_derive]]
-version = "1.0.137"
-criteria = "safe-to-deploy"
-
-[[exemptions.serde_json]]
-version = "1.0.80"
 criteria = "safe-to-deploy"
 
 [[exemptions.sha2]]
@@ -891,10 +826,6 @@ criteria = "safe-to-deploy"
 version = "5.0.3"
 criteria = "safe-to-run"
 
-[[exemptions.syn]]
-version = "1.0.92"
-criteria = "safe-to-deploy"
-
 [[exemptions.target-lexicon]]
 version = "0.12.3"
 criteria = "safe-to-deploy"
@@ -915,14 +846,6 @@ criteria = "safe-to-deploy"
 version = "0.15.0"
 criteria = "safe-to-deploy"
 
-[[exemptions.thiserror]]
-version = "1.0.31"
-criteria = "safe-to-deploy"
-
-[[exemptions.thiserror-impl]]
-version = "1.0.31"
-criteria = "safe-to-deploy"
-
 [[exemptions.thread_local]]
 version = "1.1.4"
 criteria = "safe-to-run"
@@ -938,10 +861,6 @@ notes = "we are exempting tokio, hyper, and their tightly coupled dependencies b
 
 [[exemptions.tokio-macros]]
 version = "1.7.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.toml]]
-version = "0.5.9"
 criteria = "safe-to-deploy"
 
 [[exemptions.tracing]]
@@ -969,7 +888,7 @@ version = "1.0.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.v8]]
-version = "0.44.3"
+version = "0.74.1"
 criteria = "safe-to-run"
 
 [[exemptions.wait-timeout]]

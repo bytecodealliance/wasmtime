@@ -1,0 +1,20 @@
+name: 'Install the `cargo-vet` tool'
+description: 'Runs `cargo install cargo-vet`'
+
+inputs:
+  version:
+    description: 'Version to install'
+    required: false
+    default: '0.8.0'
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/cache@v3
+      with:
+        path: ${{ runner.tool_cache }}/cargo-vet
+        key: cargo-vet-bin-${{ inputs.version }}
+    - run: echo "${{ runner.tool_cache }}/cargo-vet/bin" >> $GITHUB_PATH
+      shell: bash
+    - run: cargo install --root ${{ runner.tool_cache }}/cargo-vet --version ${{ inputs.version }} cargo-vet
+      shell: bash

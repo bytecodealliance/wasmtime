@@ -6,8 +6,8 @@ use anyhow::Error;
 use cranelift_codegen::isa::TargetIsa;
 use gimli::write;
 use wasmtime_environ::DefinedFuncIndex;
-
-/// Adds internal Wasm utility types DIEs such as WebAssemblyPtr and
+use wasmtime_versioned_export_macros::versioned_stringify_ident;
+///Adds internal Wasm utility types DIEs such as WebAssemblyPtr and
 /// WasmtimeVMContext.
 ///
 /// For unwrapping Wasm pointer, the WasmtimeVMContext has the `set()` method
@@ -113,7 +113,7 @@ pub(crate) fn add_internal_types(
     //  ..  .. DW_AT_type = <vmctx_ptr_die>
     //  ..  .. DW_AT_artificial = 1
     add_tag!(vmctx_die_id, gimli::DW_TAG_subprogram => vmctx_set as vmctx_set_id {
-        gimli::DW_AT_linkage_name = write::AttributeValue::StringRef(out_strings.add("set_vmctx_memory")),
+        gimli::DW_AT_linkage_name = write::AttributeValue::StringRef(out_strings.add(versioned_stringify_ident!(set_vmctx_memory))),
         gimli::DW_AT_name = write::AttributeValue::StringRef(out_strings.add("set"))
     });
     add_tag!(vmctx_set_id, gimli::DW_TAG_formal_parameter => vmctx_set_this_param as vmctx_set_this_param_id {

@@ -679,6 +679,15 @@
     (hi_rev XReg (lower_bit_reverse (value_regs_get val 1) $I64)))
     (value_regs hi_rev lo_rev)))
 
+;;;; Rules for `bswap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(rule 1 (lower (has_type (fits_in_64 (ty_int ty)) (bswap x)))
+  (gen_bswap ty x))
+
+(rule 2 (lower (has_type $I128 (bswap x)))
+  (value_regs
+    (gen_bswap $I64 (value_regs_get x 1))
+    (gen_bswap $I64 (value_regs_get x 0))))
+
 
 ;;;; Rules for `ctz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (rule (lower (has_type (fits_in_64 ty) (ctz x)))

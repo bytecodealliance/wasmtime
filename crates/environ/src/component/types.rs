@@ -35,6 +35,7 @@ macro_rules! indices {
             Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug,
             Serialize, Deserialize,
         )]
+        #[repr(transparent)]
         pub struct $name(u32);
         cranelift_entity::entity_impl!($name);
     )*);
@@ -171,10 +172,6 @@ indices! {
 
     /// Same as `RuntimeMemoryIndex` except for the `post-return` function.
     pub struct RuntimePostReturnIndex(u32);
-
-    /// Index that represents an exported module from a component since that's
-    /// currently the only use for saving the entire module state at runtime.
-    pub struct RuntimeModuleIndex(u32);
 
     /// Index into the list of transcoders identified during compilation.
     ///
@@ -374,17 +371,19 @@ impl ComponentTypesBuilder {
         types: types::TypesRef<'_>,
         ty: &types::ComponentFuncType,
     ) -> Result<TypeFuncIndex> {
+        let params = ty
+            .params
+            .iter()
+            .map(|(_name, ty)| self.valtype(types, ty))
+            .collect::<Result<_>>()?;
+        let results = ty
+            .results
+            .iter()
+            .map(|(_name, ty)| self.valtype(types, ty))
+            .collect::<Result<_>>()?;
         let ty = TypeFunc {
-            params: ty
-                .params
-                .iter()
-                .map(|(_name, ty)| self.valtype(types, ty))
-                .collect::<Result<_>>()?,
-            results: ty
-                .results
-                .iter()
-                .map(|(_name, ty)| self.valtype(types, ty))
-                .collect::<Result<_>>()?,
+            params: self.new_tuple_type(params),
+            results: self.new_tuple_type(results),
         };
         Ok(self.add_func_type(ty))
     }
@@ -663,12 +662,16 @@ impl ComponentTypesBuilder {
             .iter()
             .map(|ty| self.valtype(types, ty))
             .collect::<Result<Box<[_]>>>()?;
+        Ok(self.new_tuple_type(types))
+    }
+
+    fn new_tuple_type(&mut self, types: Box<[InterfaceType]>) -> TypeTupleIndex {
         let abi = CanonicalAbiInfo::record(
             types
                 .iter()
                 .map(|ty| self.component_types.canonical_abi(ty)),
         );
-        Ok(self.add_tuple_type(TypeTuple { types, abi }))
+        self.add_tuple_type(TypeTuple { types, abi })
     }
 
     fn flags_type(&mut self, flags: &IndexSet<KebabString>) -> TypeFlagsIndex {
@@ -951,11 +954,10 @@ pub struct TypeComponentInstance {
 /// A component function type in the component model.
 #[derive(Serialize, Deserialize, Clone, Hash, Eq, PartialEq, Debug)]
 pub struct TypeFunc {
-    /// The list of optionally named parameters for this function, and their
-    /// types.
-    pub params: Box<[InterfaceType]>,
-    /// The return values of this function.
-    pub results: Box<[InterfaceType]>,
+    /// Parameters to the function represented as a tuple.
+    pub params: TypeTupleIndex,
+    /// Results of the function represented as a tuple.
+    pub results: TypeTupleIndex,
 }
 
 /// All possible interface types that values can have.
