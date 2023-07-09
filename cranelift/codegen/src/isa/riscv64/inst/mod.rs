@@ -55,8 +55,9 @@ pub(crate) type VecWritableReg = Vec<Writable<Reg>>;
 // Instructions (top level): definition
 
 pub use crate::isa::riscv64::lower::isle::generated_code::{
-    AluOPRRI, AluOPRRR, AtomicOP, FClassResult, FFlagsException, FloatRoundOP, FloatSelectOP,
-    FpuOPRR, FpuOPRRR, FpuOPRRRR, IntSelectOP, LoadOP, MInst as Inst, StoreOP, FRM,
+    AluOPRRI, AluOPRRR, AtomicOP, CsrImmOP, CsrRegOP, FClassResult, FFlagsException, FloatRoundOP,
+    FloatSelectOP, FpuOPRR, FpuOPRRR, FpuOPRRRR, IntSelectOP, LoadOP, MInst as Inst, StoreOP, CSR,
+    FRM,
 };
 use crate::isa::riscv64::lower::isle::generated_code::{MInst, VecAluOpRRImm5, VecAluOpRRR};
 
@@ -397,6 +398,13 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
         }
         &Inst::AluRRImm12 { rd, rs, .. } => {
             collector.reg_use(rs);
+            collector.reg_def(rd);
+        }
+        &Inst::CsrReg { rd, rs, .. } => {
+            collector.reg_use(rs);
+            collector.reg_def(rd);
+        }
+        &Inst::CsrImm { rd, .. } => {
             collector.reg_def(rd);
         }
         &Inst::Load { rd, from, .. } => {
@@ -1509,6 +1517,46 @@ impl Inst {
                     }
                     (alu_op, _, imm12) => {
                         format!("{} {},{},{}", alu_op.op_name(), rd, rs_s, imm12.as_i16())
+                    }
+                }
+            }
+            &Inst::CsrReg { op, rd, rs, csr } => {
+                let rs_s = format_reg(rs, allocs);
+                let rd_s = format_reg(rd.to_reg(), allocs);
+
+                match (op, rd, rs) {
+                    (CsrRegOP::CsrRS, _, rs) if rs == zero_reg() => {
+                        format!("csrr {rd_s},{csr}")
+                    }
+                    (CsrRegOP::CsrRW, rd, _) if rd.to_reg() == zero_reg() => {
+                        format!("csrw {csr},{rs_s}")
+                    }
+                    (CsrRegOP::CsrRC, rd, _) if rd.to_reg() == zero_reg() => {
+                        format!("csrc {csr},{rs_s}")
+                    }
+                    (CsrRegOP::CsrRS, rd, _) if rd.to_reg() == zero_reg() => {
+                        format!("csrs {csr},{rs_s}")
+                    }
+                    _ => {
+                        format!("{op} {rd_s},{csr},{rs_s}")
+                    }
+                }
+            }
+            &Inst::CsrImm { op, rd, csr, imm } => {
+                let rd_s = format_reg(rd.to_reg(), allocs);
+
+                match (op, rd) {
+                    (CsrImmOP::CsrRWI, rd) if rd.to_reg() == zero_reg() => {
+                        format!("csrwi {csr},{imm}")
+                    }
+                    (CsrImmOP::CsrRCI, rd) if rd.to_reg() == zero_reg() => {
+                        format!("csrci {csr},{imm}")
+                    }
+                    (CsrImmOP::CsrRSI, rd) if rd.to_reg() == zero_reg() => {
+                        format!("csrsi {csr},{imm}")
+                    }
+                    _ => {
+                        format!("{op} {rd_s},{csr},{imm}")
                     }
                 }
             }

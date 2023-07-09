@@ -6,7 +6,7 @@
 //! Some instructions especially in extensions have slight variations from
 //! the base RISC-V specification.
 
-use super::{Imm12, Imm5, UImm5, VType};
+use super::*;
 use crate::isa::riscv64::inst::reg_to_gpr_num;
 use crate::isa::riscv64::lower::isle::generated_code::{
     VecAluOpRImm5, VecAluOpRR, VecAluOpRRImm5, VecAluOpRRR, VecAluOpRRRImm5, VecAluOpRRRR,
@@ -53,19 +53,28 @@ pub fn encode_r_type(
     )
 }
 
-/// Encode an I-type instruction.
-///
 /// Layout:
 /// 0-------6-7-------11-12------14-15------19-20------------------31
 /// | Opcode |   rd     |  width   |   rs1    |     Offset[11:0]    |
-pub fn encode_i_type(opcode: u32, rd: WritableReg, width: u32, rs1: Reg, offset: Imm12) -> u32 {
+fn encode_i_type_bits(opcode: u32, rd: u32, funct3: u32, rs1: u32, offset: u32) -> u32 {
     let mut bits = 0;
     bits |= unsigned_field_width(opcode, 7);
-    bits |= reg_to_gpr_num(rd.to_reg()) << 7;
-    bits |= unsigned_field_width(width, 3) << 12;
-    bits |= reg_to_gpr_num(rs1) << 15;
-    bits |= unsigned_field_width(offset.as_u32(), 12) << 20;
+    bits |= unsigned_field_width(rd, 5) << 7;
+    bits |= unsigned_field_width(funct3, 3) << 12;
+    bits |= unsigned_field_width(rs1, 5) << 15;
+    bits |= unsigned_field_width(offset, 12) << 20;
     bits
+}
+
+/// Encode an I-type instruction.
+pub fn encode_i_type(opcode: u32, rd: WritableReg, width: u32, rs1: Reg, offset: Imm12) -> u32 {
+    encode_i_type_bits(
+        opcode,
+        reg_to_gpr_num(rd.to_reg()),
+        width,
+        reg_to_gpr_num(rs1),
+        offset.as_u32(),
+    )
 }
 
 /// Encode an S-type instruction.
@@ -296,4 +305,22 @@ pub fn encode_vmem_store(
     // This is pretty much the same as the load instruction, just
     // with different names on the fields.
     encode_vmem_load(opcode, vs3, width, rs1, sumop, masking, mop, nf)
+}
+
+// The CSR Reg instruction is really just an I type instruction with the CSR in
+// the immediate field.
+pub fn encode_csr_reg(op: CsrRegOP, rd: WritableReg, rs: Reg, csr: CSR) -> u32 {
+    encode_i_type(op.opcode(), rd, op.funct3(), rs, csr.bits())
+}
+
+// The CSR Imm instruction is an I type instruction with the CSR in
+// the immediate field and the value to be set in the `rs1` field.
+pub fn encode_csr_imm(op: CsrImmOP, rd: WritableReg, csr: CSR, imm: UImm5) -> u32 {
+    encode_i_type_bits(
+        op.opcode(),
+        reg_to_gpr_num(rd.to_reg()),
+        op.funct3(),
+        imm.bits(),
+        csr.bits().as_u32(),
+    )
 }

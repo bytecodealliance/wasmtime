@@ -1810,3 +1810,79 @@ pub(crate) fn f64_cvt_to_int_bounds(signed: bool, out_bits: u8) -> (f64, f64) {
         _ => unreachable!(),
     }
 }
+
+impl CsrRegOP {
+    pub(crate) fn funct3(self) -> u32 {
+        match self {
+            CsrRegOP::CsrRW => 0b001,
+            CsrRegOP::CsrRS => 0b010,
+            CsrRegOP::CsrRC => 0b011,
+        }
+    }
+
+    pub(crate) fn opcode(self) -> u32 {
+        0b1110011
+    }
+
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            CsrRegOP::CsrRW => "csrrw",
+            CsrRegOP::CsrRS => "csrrs",
+            CsrRegOP::CsrRC => "csrrc",
+        }
+    }
+}
+
+impl Display for CsrRegOP {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        write!(f, "{}", self.name())
+    }
+}
+
+impl CsrImmOP {
+    pub(crate) fn funct3(self) -> u32 {
+        match self {
+            CsrImmOP::CsrRWI => 0b101,
+            CsrImmOP::CsrRSI => 0b110,
+            CsrImmOP::CsrRCI => 0b111,
+        }
+    }
+
+    pub(crate) fn opcode(self) -> u32 {
+        0b1110011
+    }
+
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            CsrImmOP::CsrRWI => "csrrwi",
+            CsrImmOP::CsrRSI => "csrrsi",
+            CsrImmOP::CsrRCI => "csrrci",
+        }
+    }
+}
+
+impl Display for CsrImmOP {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        write!(f, "{}", self.name())
+    }
+}
+
+impl CSR {
+    pub(crate) fn bits(self) -> Imm12 {
+        Imm12::from_bits(match self {
+            CSR::Frm => 0x0002,
+        })
+    }
+
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            CSR::Frm => "frm",
+        }
+    }
+}
+
+impl Display for CSR {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        write!(f, "{}", self.name())
+    }
+}

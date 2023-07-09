@@ -59,6 +59,20 @@
       (rs Reg)
       (imm12 Imm12))
 
+    ;; A CSR Reading or Writing instruction with a register source and a register destination.
+    (CsrReg
+      (op CsrRegOP)
+      (rd WritableReg)
+      (rs Reg)
+      (csr CSR))
+
+    ;; A CSR Writing instruction with an immediate source and a register destination.
+    (CsrImm
+      (op CsrImmOP)
+      (rd WritableReg)
+      (imm UImm5)
+      (csr CSR))
+
     ;; An load
     (Load
       (rd WritableReg)
@@ -687,6 +701,30 @@
   (Bexti)
   (Binvi)
   (Bseti)
+))
+
+(type CsrRegOP (enum
+  ;; Atomic Read/Write CSR
+  (CsrRW)
+  ;; Atomic Read and Set Bits in CSR
+  (CsrRS)
+  ;; Atomic Read and Clear Bits in CSR
+  (CsrRC)
+))
+
+(type CsrImmOP (enum
+  ;; Atomic Read/Write CSR (Immediate Source)
+  (CsrRWI)
+  ;; Atomic Read and Set Bits in CSR (Immediate Source)
+  (CsrRSI)
+  ;; Atomic Read and Clear Bits in CSR (Immediate Source)
+  (CsrRCI)
+))
+
+;; Enum of the known CSR registers
+(type CSR (enum
+  ;; Floating-Point Dynamic Rounding Mode
+  (Frm)
 ))
 
 
