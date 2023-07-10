@@ -373,71 +373,80 @@ impl Compiler {
             Some(def) => def.dtor.is_some(),
             None => true,
         };
-        if has_destructor {
-            // Synthesize the following:
-            //
-            //      ...
-            //      brif should_run_destructor, run_destructor_block, return_block
-            //
-            //    run_destructor_block:
-            //      ;; test may_enter, but only if the component instances
-            //      ;; differ
-            //      flags = load.i32 vmctx+$offset
-            //      masked = band flags, $FLAG_MAY_ENTER
-            //      trapz masked, CANNOT_ENTER_CODE
-            //
-            //      rep = ushr.i64 rep, 1
-            //      rep = ireduce.i32 rep
-            //      dtor = load.ptr vmctx+$offset
-            //      func_addr = load.ptr dtor+$offset
-            //      callee_vmctx = load.ptr dtor+$offset
-            //      call_indirect func_addr, callee_vmctx, vmctx, rep
-            //      jump return_block
-            //
-            //    return_block:
-            //      return
-            //
-            // This will decode `should_run_destructor` and run the destructor
-            // funcref if one is specified for this resource. Note that not all
-            // resources have destructors, hence the null check.
-            builder.ensure_inserted_block();
-            let current_block = builder.current_block().unwrap();
-            let run_destructor_block = builder.create_block();
-            builder.insert_block_after(run_destructor_block, current_block);
-            let return_block = builder.create_block();
-            builder.insert_block_after(return_block, run_destructor_block);
+        // Synthesize the following:
+        //
+        //      ...
+        //      brif should_run_destructor, run_destructor_block, return_block
+        //
+        //    run_destructor_block:
+        //      ;; test may_enter, but only if the component instances
+        //      ;; differ
+        //      flags = load.i32 vmctx+$offset
+        //      masked = band flags, $FLAG_MAY_ENTER
+        //      trapz masked, CANNOT_ENTER_CODE
+        //
+        //      ;; ============================================================
+        //      ;; this is conditionally emitted based on whether the resource
+        //      ;; has a destructor or not, and can be statically omitted
+        //      ;; because that information is known at compile time here.
+        //      rep = ushr.i64 rep, 1
+        //      rep = ireduce.i32 rep
+        //      dtor = load.ptr vmctx+$offset
+        //      func_addr = load.ptr dtor+$offset
+        //      callee_vmctx = load.ptr dtor+$offset
+        //      call_indirect func_addr, callee_vmctx, vmctx, rep
+        //      ;; ============================================================
+        //
+        //      jump return_block
+        //
+        //    return_block:
+        //      return
+        //
+        // This will decode `should_run_destructor` and run the destructor
+        // funcref if one is specified for this resource. Note that not all
+        // resources have destructors, hence the null check.
+        builder.ensure_inserted_block();
+        let current_block = builder.current_block().unwrap();
+        let run_destructor_block = builder.create_block();
+        builder.insert_block_after(run_destructor_block, current_block);
+        let return_block = builder.create_block();
+        builder.insert_block_after(return_block, run_destructor_block);
 
-            builder.ins().brif(
-                should_run_destructor,
-                run_destructor_block,
-                &[],
-                return_block,
-                &[],
-            );
+        builder.ins().brif(
+            should_run_destructor,
+            run_destructor_block,
+            &[],
+            return_block,
+            &[],
+        );
 
-            let trusted = ir::MemFlags::trusted().with_readonly();
+        let trusted = ir::MemFlags::trusted().with_readonly();
 
-            builder.switch_to_block(run_destructor_block);
+        builder.switch_to_block(run_destructor_block);
 
-            // If this is a defined resource within the component itself then a
-            // check needs to be emitted for the `may_enter` flag. Note though
-            // that this check can be elided if the resource table resides in
-            // the same component instance that defined the resource as the
-            // component is calling itself.
-            if let Some(def) = resource_def {
-                if types[resource.resource].instance != def.instance {
-                    let flags = builder.ins().load(
-                        ir::types::I32,
-                        trusted,
-                        vmctx,
-                        i32::try_from(offsets.instance_flags(def.instance)).unwrap(),
-                    );
-                    let masked = builder.ins().band_imm(flags, i64::from(FLAG_MAY_ENTER));
-                    builder
-                        .ins()
-                        .trapz(masked, ir::TrapCode::User(CANNOT_ENTER_CODE));
-                }
+        // If this is a defined resource within the component itself then a
+        // check needs to be emitted for the `may_enter` flag. Note though
+        // that this check can be elided if the resource table resides in
+        // the same component instance that defined the resource as the
+        // component is calling itself.
+        if let Some(def) = resource_def {
+            if types[resource.resource].instance != def.instance {
+                let flags = builder.ins().load(
+                    ir::types::I32,
+                    trusted,
+                    vmctx,
+                    i32::try_from(offsets.instance_flags(def.instance)).unwrap(),
+                );
+                let masked = builder.ins().band_imm(flags, i64::from(FLAG_MAY_ENTER));
+                builder
+                    .ins()
+                    .trapz(masked, ir::TrapCode::User(CANNOT_ENTER_CODE));
             }
+        }
+
+        // Conditionally emit destructor-execution code based on whether we
+        // statically know that a destructor exists or not.
+        if has_destructor {
             let rep = builder.ins().ushr_imm(should_run_destructor, 1);
             let rep = builder.ins().ireduce(ir::types::I32, rep);
             let index = types[resource.resource].ty;
@@ -472,17 +481,13 @@ impl Compiler {
             builder
                 .ins()
                 .call_indirect(sig_ref, func_addr, &[callee_vmctx, caller_vmctx, rep]);
-            builder.ins().jump(return_block, &[]);
-            builder.seal_block(run_destructor_block);
-
-            builder.switch_to_block(return_block);
-            builder.ins().return_(&[]);
-            builder.seal_block(return_block);
-        } else {
-            // If this resource has no destructor, then after the table is
-            // updated there's nothing to do, so we can return.
-            builder.ins().return_(&[]);
         }
+        builder.ins().jump(return_block, &[]);
+        builder.seal_block(run_destructor_block);
+
+        builder.switch_to_block(return_block);
+        builder.ins().return_(&[]);
+        builder.seal_block(return_block);
 
         builder.finalize();
         Ok(Box::new(compiler.finish()?))
