@@ -849,8 +849,7 @@ impl Iterator for DataValueIterator {
             return None;
         }
 
-        let integer = self.v[self.idx].clone().into_int_signed().ok()?;
-        let dv = DataValue::from_integer(integer, self.ty.lane_type()).ok()?;
+        let dv = self.v[self.idx].clone();
         self.idx += 1;
         Some(dv)
     }
@@ -895,7 +894,7 @@ mod test {
     }
 
     fn simd_sum(dv: DataValue, ty: types::Type) -> i128 {
-        let itr = dv.iter_lanes(ty);
+        let itr = dv.iter_lanes(ty).unwrap();
 
         itr.map(|e| {
             if let Some(v) = e.into_int_signed().ok() {
