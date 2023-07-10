@@ -399,12 +399,7 @@ impl Component {
             .info
             .resource_drop_wasm_to_native_trampoline
             .as_ref()
-            .map(|i| {
-                let ptr = self.func(i);
-                unsafe {
-                    mem::transmute::<NonNull<VMFunctionBody>, NonNull<VMWasmCallFunction>>(ptr)
-                }
-            });
+            .map(|i| self.func(i).cast());
         VMFuncRef {
             wasm_call,
             ..*dtor.func_ref()
