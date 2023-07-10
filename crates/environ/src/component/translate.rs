@@ -8,7 +8,7 @@ use anyhow::{bail, Result};
 use indexmap::IndexMap;
 use std::collections::HashMap;
 use std::mem;
-use wasmparser::types::{self, ComponentEntityType, TypeId, Types};
+use wasmparser::types::{ComponentEntityType, TypeId, Types};
 use wasmparser::{Chunk, ComponentExternName, Encoding, Parser, Payload, Validator};
 
 mod adapt;
@@ -481,16 +481,8 @@ impl<'a, 'data> Translator<'a, 'data> {
                             core_func_index += 1;
                             LocalInitializer::ResourceNew(resource, ty)
                         }
-                        wasmparser::CanonicalFunction::ResourceDrop { ty } => {
-                            let ty = match ty {
-                                wasmparser::ComponentValType::Type(t) => types.component_type_at(t),
-                                wasmparser::ComponentValType::Primitive(_) => unreachable!(),
-                            };
-                            let resource = match types[ty].unwrap_defined() {
-                                types::ComponentDefinedType::Own(id)
-                                | types::ComponentDefinedType::Borrow(id) => *id,
-                                _ => unreachable!(),
-                            };
+                        wasmparser::CanonicalFunction::ResourceDrop { resource } => {
+                            let resource = types.component_type_at(resource);
                             let ty = self.core_func_signature(core_func_index);
                             core_func_index += 1;
                             LocalInitializer::ResourceDrop(resource, ty)

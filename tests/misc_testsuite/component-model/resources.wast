@@ -3,7 +3,7 @@
   (type $r (resource (rep i32)))
   (core func $rep (canon resource.rep $r))
   (core func $new (canon resource.new $r))
-  (core func $drop (canon resource.drop (own $r)))
+  (core func $drop (canon resource.drop $r))
 
   (core module $m
      (import "" "rep" (func $rep (param i32) (result i32)))
@@ -34,7 +34,7 @@
 ;; cannot call `resource.drop` on a nonexistent resource
 (component
   (type $r (resource (rep i32)))
-  (core func $drop (canon resource.drop (own $r)))
+  (core func $drop (canon resource.drop $r))
 
   (core module $m
      (import "" "drop" (func $drop (param i32)))
@@ -80,7 +80,7 @@
   (type $r (resource (rep i32)))
   (core func $rep (canon resource.rep $r))
   (core func $new (canon resource.new $r))
-  (core func $drop (canon resource.drop (own $r)))
+  (core func $drop (canon resource.drop $r))
 
   (core module $m
      (import "" "rep" (func $rep (param i32) (result i32)))
@@ -225,7 +225,7 @@
   (alias export $host "[constructor]resource1" (func $ctor))
   (alias export $host "[static]resource1.assert" (func $assert))
 
-  (core func $drop (canon resource.drop (own $r)))
+  (core func $drop (canon resource.drop $r))
   (core func $ctor (canon lower (func $ctor)))
   (core func $assert (canon lower (func $assert)))
 
@@ -344,7 +344,7 @@
   (alias export $host "resource1" (type $r))
   (alias export $host "[constructor]resource1" (func $ctor))
 
-  (core func $drop (canon resource.drop (own $r)))
+  (core func $drop (canon resource.drop $r))
   (core func $ctor (canon lower (func $ctor)))
 
   (core module $m
@@ -412,7 +412,7 @@
   ;; for index 0. The index 0 should be valid within the above component, but
   ;; it is not valid within this component
   (alias export $host "resource1" (type $r))
-  (core func $drop (canon resource.drop (own $r)))
+  (core func $drop (canon resource.drop $r))
 
   (core module $m
      (import "" "drop" (func $drop (param i32)))
@@ -458,7 +458,7 @@
   ;; for index 0. The index 0 should be valid within the above component, but
   ;; it is not valid within this component
   (alias export $i "r" (type $r))
-  (core func $drop (canon resource.drop (own $r)))
+  (core func $drop (canon resource.drop $r))
 
   (core module $m
      (import "" "drop" (func $drop (param i32)))
@@ -485,7 +485,7 @@
     (type $r (resource (rep i32)))
 
     (core func $ctor (canon resource.new $r))
-    (core func $drop (canon resource.drop (own $r)))
+    (core func $drop (canon resource.drop $r))
 
     (core module $m
       (import "" "ctor" (func $ctor (param i32) (result i32)))
@@ -545,7 +545,7 @@
     (import "[constructor]r" (func $ctor (param "r" u32) (result (own $r))))
 
     (core func $ctor (canon lower (func $ctor)))
-    (core func $drop (canon resource.drop (own $r)))
+    (core func $drop (canon resource.drop $r))
 
     (core module $m
       (import "" "ctor" (func $ctor (param i32) (result i32)))
@@ -600,8 +600,8 @@
 
   (core func $new1 (canon resource.new $r))
   (core func $new2 (canon resource.new $r))
-  (core func $drop1 (canon resource.drop (own $r)))
-  (core func $drop2 (canon resource.drop (own $r)))
+  (core func $drop1 (canon resource.drop $r))
+  (core func $drop2 (canon resource.drop $r))
 
   (core module $m
     (import "" "new1" (func $new1 (param i32) (result i32)))
@@ -643,7 +643,7 @@
 (component
   (type $r (resource (rep i32)))
 
-  (core func $drop (canon resource.drop (own $r)))
+  (core func $drop (canon resource.drop $r))
 
   (core module $m
     (import "" "drop" (func $drop (param i32)))
@@ -680,8 +680,8 @@
   (type $r1 (resource (rep i32)))
   (type $r2 (resource (rep i32) (dtor (func $i1 "dtor"))))
 
-  (core func $drop1 (canon resource.drop (own $r1)))
-  (core func $drop2 (canon resource.drop (own $r2)))
+  (core func $drop1 (canon resource.drop $r1))
+  (core func $drop2 (canon resource.drop $r2))
   (core func $new1 (canon resource.new $r1))
   (core func $new2 (canon resource.new $r2))
 
@@ -755,7 +755,7 @@
   (alias export $host "[static]resource1.last-drop" (func $last-drop))
   (alias export $host "[static]resource1.drops" (func $drops))
 
-  (core func $drop (canon resource.drop (own $r)))
+  (core func $drop (canon resource.drop $r))
   (core func $ctor (canon lower (func $ctor)))
   (core func $last-drop (canon lower (func $last-drop)))
   (core func $drops (canon lower (func $drops)))

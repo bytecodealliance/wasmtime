@@ -120,8 +120,8 @@ fn resource_any() -> Result<()> {
                 (func (export "[constructor]u") (param "x" u32) (result (own $u))
                     (canon lift (core func $u_ctor)))
 
-                (core func $t_drop (canon resource.drop (own $t)))
-                (core func $u_drop (canon resource.drop (own $u)))
+                (core func $t_drop (canon resource.drop $t))
+                (core func $u_drop (canon resource.drop $u))
 
                 (func (export "drop-t") (param "x" (own $t))
                     (canon lift (core func $t_drop)))
@@ -224,7 +224,7 @@ fn mismatch_resource_types() -> Result<()> {
                 (func (export "ctor") (param "x" u32) (result (own $t))
                     (canon lift (core func $t_ctor)))
 
-                (core func $u_dtor (canon resource.drop (own $u)))
+                (core func $u_dtor (canon resource.drop $u))
                 (func (export "dtor") (param "x" (own $u))
                     (canon lift (core func $u_dtor)))
             )
@@ -261,13 +261,13 @@ fn drop_in_different_places() -> Result<()> {
                 (func (export "ctor") (param "x" u32) (result (own $t))
                     (canon lift (core func $ctor)))
 
-                (core func $dtor (canon resource.drop (own $t)))
+                (core func $dtor (canon resource.drop $t))
                 (func (export "dtor1") (param "x" (own $t))
                     (canon lift (core func $dtor)))
 
                 (component $c
                     (import "t" (type $t (sub resource)))
-                    (core func $dtor (canon resource.drop (own $t)))
+                    (core func $dtor (canon resource.drop $t))
                     (func (export "dtor") (param "x" (own $t))
                         (canon lift (core func $dtor)))
                 )
@@ -320,7 +320,7 @@ fn drop_guest_twice() -> Result<()> {
                 (func (export "ctor") (param "x" u32) (result (own $t))
                     (canon lift (core func $ctor)))
 
-                (core func $dtor (canon resource.drop (own $t)))
+                (core func $dtor (canon resource.drop $t))
                 (func (export "dtor") (param "x" (own $t))
                     (canon lift (core func $dtor)))
             )
@@ -354,7 +354,7 @@ fn drop_host_twice() -> Result<()> {
             (component
                 (import "t" (type $t (sub resource)))
 
-                (core func $dtor (canon resource.drop (own $t)))
+                (core func $dtor (canon resource.drop $t))
                 (func (export "dtor") (param "x" (own $t))
                     (canon lift (core func $dtor)))
             )
@@ -480,7 +480,7 @@ fn dynamic_type() -> Result<()> {
                 (import "t1" (type $t1 (sub resource)))
                 (type $t2' (resource (rep i32)))
                 (export $t2 "t2" (type $t2'))
-                (core func $f (canon resource.drop (own $t2)))
+                (core func $f (canon resource.drop $t2))
 
                 (func (export "a") (param "x" (own $t1))
                     (canon lift (core func $f)))
