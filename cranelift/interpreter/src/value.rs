@@ -92,8 +92,8 @@ pub trait DataValueExt: Sized {
     fn reverse_bits(self) -> ValueResult<Self>;
     fn swap_bytes(self) -> ValueResult<Self>;
 
-    // iteraor
-    fn iter_lanes(&self, ty: Type) -> DataValueIterator;
+    // An iterator over the lanes of a SIMD type
+    fn iter_lanes(&self, ty: Type) -> ValueResult<DataValueIterator>;
 }
 
 #[derive(Error, Debug, PartialEq)]
@@ -820,7 +820,7 @@ impl DataValueExt for DataValue {
         unary_match!(swap_bytes(&self); [I16, I32, I64, I128])
     }
 
-    fn iter_lanes(&self, ty: Type) -> DataValueIterator {
+    fn iter_lanes(&self, ty: Type) -> ValueResult<DataValueIterator> {
         DataValueIterator::new(self, ty)
     }
 }
@@ -833,16 +833,10 @@ pub struct DataValueIterator {
 }
 
 impl DataValueIterator {
-    fn new(dv: &DataValue, ty: Type) -> Self {
+    fn new(dv: &DataValue, ty: Type) -> Result<Self, ValueError> {
         match extractlanes(dv, ty) {
-            Ok(v) => return Self { ty, v, idx: 0 },
-            Err(_) => {
-                return Self {
-                    ty,
-                    v: SimdVec::new(),
-                    idx: 0,
-                }
-            }
+            Ok(v) => return Ok(Self { ty, v, idx: 0 }),
+            Err(err) => return Err(err),
         }
     }
 }
