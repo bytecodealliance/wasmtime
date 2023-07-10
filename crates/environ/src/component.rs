@@ -71,7 +71,8 @@ macro_rules! foreach_transcoder {
     };
 }
 
-/// TODO
+/// Helper macro, like `foreach_transcoder`, to iterate over builtins for
+/// components unrelated to transcoding.
 #[macro_export]
 macro_rules! foreach_builtin_component_function {
     ($mac:ident) => {

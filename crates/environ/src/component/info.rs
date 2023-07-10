@@ -148,24 +148,42 @@ pub struct Component {
     /// modules.
     pub num_transcoders: u32,
 
-    /// TODO
+    /// Number of `ResourceNew` initializers in the global initializers list.
     pub num_resource_new: u32,
-    /// TODO
+
+    /// Number of `ResourceRep` initializers in the global initializers list.
     pub num_resource_rep: u32,
-    /// TODO
+
+    /// Number of `ResourceDrop` initializers in the global initializers list.
     pub num_resource_drop: u32,
-    /// TODO
+
+    /// Maximal number of tables that required at runtime for resource-related
+    /// information in this component.
     pub num_resource_tables: usize,
-    /// TODO
+
+    /// Total number of resources both imported and defined within this
+    /// component.
     pub num_resources: u32,
-    /// TODO
+
+    /// Metadata about imported resources and where they are within the runtime
+    /// imports array.
+    ///
+    /// This map is only as large as the number of imported resources.
     pub imported_resources: PrimaryMap<ResourceIndex, RuntimeImportIndex>,
-    /// TODO
+
+    /// Metadata about which component instances defined each resource within
+    /// this component.
+    ///
+    /// This is used to determine which set of instance flags are inspected when
+    /// testing reentrance.
     pub defined_resource_instances: PrimaryMap<DefinedResourceIndex, RuntimeComponentInstanceIndex>,
 }
 
 impl Component {
-    /// TODO
+    /// Attempts to convert a resource index into a defined index.
+    ///
+    /// Returns `None` if `idx` is for an imported resource in this component or
+    /// `Some` if it's a locally defined resource.
     pub fn defined_resource_index(&self, idx: ResourceIndex) -> Option<DefinedResourceIndex> {
         let idx = idx
             .as_u32()
@@ -173,7 +191,8 @@ impl Component {
         Some(DefinedResourceIndex::from_u32(idx))
     }
 
-    /// TODO
+    /// Converts a defined resource index to a component-local resource index
+    /// which includes all imports.
     pub fn resource_index(&self, idx: DefinedResourceIndex) -> ResourceIndex {
         ResourceIndex::from_u32(self.imported_resources.len() as u32 + idx.as_u32())
     }
@@ -236,13 +255,21 @@ pub enum GlobalInitializer {
     /// used to instantiate an adapter module.
     Transcoder(Transcoder),
 
-    /// TODO
+    /// Declares a new defined resource within this component.
+    ///
+    /// Contains information about the destructor, for example.
     Resource(Resource),
-    /// TODO
+
+    /// Declares a new `resource.new` intrinsic should be initialized.
+    ///
+    /// This will initialize a `VMFuncRef` within the `VMComponentContext` for
+    /// the described resource.
     ResourceNew(ResourceNew),
-    /// TODO
+
+    /// Same as `ResourceNew`, but for `resource.rep` intrinsics.
     ResourceRep(ResourceRep),
-    /// TODO
+
+    /// Same as `ResourceNew`, but for `resource.drop` intrinsics.
     ResourceDrop(ResourceDrop),
 }
 

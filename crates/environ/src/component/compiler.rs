@@ -84,7 +84,13 @@ pub trait ComponentCompiler: Send + Sync {
         types: &ComponentTypes,
     ) -> Result<AllCallFunc<Box<dyn Any + Send>>>;
 
-    /// TODO
+    /// Compiles a trampoline to use as the `resource.new` intrinsic in the
+    /// component model.
+    ///
+    /// The generated trampoline will invoke a host-defined libcall that will do
+    /// all the heavy lifting for this intrinsic, so this is primarily bridging
+    /// ABIs and inserting a `TypeResourceTableIndex` argument so the host
+    /// has the context about where this is coming from.
     fn compile_resource_new(
         &self,
         component: &Component,
@@ -92,7 +98,7 @@ pub trait ComponentCompiler: Send + Sync {
         types: &ComponentTypes,
     ) -> Result<AllCallFunc<Box<dyn Any + Send>>>;
 
-    /// TODO
+    /// Same as `compile_resource_new` except for the `resource.rep` intrinsic.
     fn compile_resource_rep(
         &self,
         component: &Component,
@@ -100,7 +106,9 @@ pub trait ComponentCompiler: Send + Sync {
         types: &ComponentTypes,
     ) -> Result<AllCallFunc<Box<dyn Any + Send>>>;
 
-    /// TODO
+    /// Similar to `compile_resource_new` but this additionally handles the
+    /// return value which may involve executing destructors and checking for
+    /// reentrance traps.
     fn compile_resource_drop(
         &self,
         component: &Component,

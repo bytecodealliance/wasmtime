@@ -109,23 +109,48 @@ pub struct ComponentDfg {
     /// version of the adapter.
     pub adapter_paritionings: PrimaryMap<AdapterId, (AdapterModuleId, EntityIndex)>,
 
-    /// TODO
+    /// Defined resources in this component sorted by index with metadata about
+    /// each resource.
+    ///
+    /// Note that each index here is a unique resource, and that may mean it was
+    /// the same component instantiated twice for example.
     pub resources: PrimaryMap<DefinedResourceIndex, Resource>,
 
-    /// TODO
+    /// Metadata about all imported resources into this component. This records
+    /// both how many imported resources there are (the size of this map) along
+    /// with what the corresponding runtime import is.
     pub imported_resources: PrimaryMap<ResourceIndex, RuntimeImportIndex>,
 
-    /// TODO
+    /// The total number of resource tables that will be used by this component,
+    /// currently the number of unique `TypeResourceTableIndex` allocations for
+    /// this component.
     pub num_resource_tables: usize,
 
+    /// An ordered list of side effects induced by instantiating this component.
+    ///
+    /// Currently all side effects are either instantiating core wasm modules or
+    /// declaring a resource. These side effects affect the dataflow processing
+    /// of this component by idnicating what order operations should be
+    /// performed during instantiation.
     pub side_effects: Vec<SideEffect>,
 }
 
-/// TODO
+/// Possible side effects that are possible with instantiating this component.
 pub enum SideEffect {
-    /// TODO
+    /// A core wasm instance was created.
+    ///
+    /// Instantiation is side-effectful due to the presence of constructs such
+    /// as traps and the core wasm `start` function which may call component
+    /// imports. Instantiation order from the original component must be done in
+    /// the same order.
     Instance(InstanceId),
-    /// TODO
+
+    /// A resource was declared in this component.
+    ///
+    /// This is a bit less side-effectful than instantiation but this serves as
+    /// the order in which resources are initialized in a component with their
+    /// destructors. Destructors are loaded from core wasm instances (or
+    /// lowerings) which are produced by prior side-effectful operations.
     Resource(DefinedResourceIndex),
 }
 
@@ -391,7 +416,8 @@ impl ComponentDfg {
         }
     }
 
-    /// TODO
+    /// Converts the provided defined index into a normal index, adding in the
+    /// number of imported resources.
     pub fn resource_index(&self, defined: DefinedResourceIndex) -> ResourceIndex {
         ResourceIndex::from_u32(defined.as_u32() + (self.imported_resources.len() as u32))
     }
@@ -407,7 +433,6 @@ struct LinearizeDfg<'a> {
     runtime_always_trap: HashMap<AlwaysTrapId, RuntimeAlwaysTrapIndex>,
     runtime_lowerings: HashMap<LowerImportId, LoweredIndex>,
     runtime_transcoders: HashMap<TranscoderId, RuntimeTranscoderIndex>,
-    // runtime_resources: HashSet<TypeResourceTableIndex>,
     runtime_resource_new: HashMap<TypeResourceTableIndex, RuntimeResourceNewIndex>,
     runtime_resource_rep: HashMap<TypeResourceTableIndex, RuntimeResourceRepIndex>,
     runtime_resource_drop: HashMap<TypeResourceTableIndex, RuntimeResourceDropIndex>,
