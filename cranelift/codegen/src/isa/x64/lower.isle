@@ -4395,6 +4395,7 @@
         (x64_vpbroadcastb (bitcast_gpr_to_xmm $I32 src)))
 (rule 3 (lower (has_type $I8X16 (splat (sinkable_load_exact addr))))
         (if-let $true (use_sse41))
+        (if-let $true (use_ssse3))
         (x64_pshufb (x64_pinsrb (xmm_uninit_value) addr 0) (xmm_zero $I8X16)))
 (rule 4 (lower (has_type $I8X16 (splat (sinkable_load_exact addr))))
         (if-let $true (use_avx2))
