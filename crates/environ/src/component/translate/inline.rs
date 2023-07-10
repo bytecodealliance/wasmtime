@@ -77,6 +77,7 @@ pub(super) fn run(
     let mut args = HashMap::with_capacity(result.exports.len());
     let mut path = Vec::new();
     types.resources_mut().set_current_instance(index);
+    let types_ref = result.types_ref();
     for init in result.initializers.iter() {
         let (name, ty) = match *init {
             LocalInitializer::Import(name, ty) => (name, ty),
@@ -86,7 +87,7 @@ pub(super) fn run(
         // TODO: comment this
         let index = inliner.result.import_types.next_key();
         types.resources_mut().register_component_entity_type(
-            result.types_ref(),
+            &types_ref,
             ty,
             &mut path,
             &mut |path| {
@@ -98,7 +99,7 @@ pub(super) fn run(
             },
         );
 
-        let ty = types.convert_component_entity_type(result.types_ref(), ty)?;
+        let ty = types.convert_component_entity_type(types_ref, ty)?;
 
         // Imports of types are not required to be specified by the host since
         // it's just for type information within the component. Note that this
@@ -412,8 +413,8 @@ impl<'a> Inliner<'a> {
                     None => {
                         match ty {
                             ComponentEntityType::Type { created, .. } => {
-                                match frame.translation.types_ref().type_from_id(*created) {
-                                    Some(wasmparser::types::Type::Resource(_)) => unreachable!(),
+                                match frame.translation.types_ref()[*created] {
+                                    wasmparser::types::Type::Resource(_) => unreachable!(),
                                     _ => {}
                                 }
                             }
@@ -426,7 +427,7 @@ impl<'a> Inliner<'a> {
 
                 let (resources, types) = types.resources_mut_and_types();
                 resources.register_component_entity_type(
-                    frame.translation.types_ref(),
+                    &frame.translation.types_ref(),
                     *ty,
                     &mut path,
                     &mut |path| arg.lookup_resource(path, types),
@@ -1114,7 +1115,7 @@ impl<'a> InlinerFrame<'a> {
         let mut path = Vec::new();
         let arg = ComponentItemDef::Instance(def);
         resources.register_component_entity_type(
-            self.translation.types_ref(),
+            &self.translation.types_ref(),
             wasmparser::types::ComponentEntityType::Instance(ty),
             &mut path,
             &mut |path| arg.lookup_resource(path, types),

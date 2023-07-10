@@ -53,10 +53,8 @@ fn compile(
 ) -> Result<()> {
     let index = translation.module.func_index(f.0);
     let types = &translation.get_types();
-    let id = types
-        .function_at(index.as_u32())
-        .expect(&format!("function type at index {:?}", index.as_u32()));
-    let sig = types.type_from_id(id).unwrap().as_func_type().unwrap();
+    let id = types.function_at(index.as_u32());
+    let sig = types[id].unwrap_func();
     let sig = translation.module.convert_func_type(sig);
     let FunctionBodyData { body, validator } = f.1;
     let mut validator = validator.into_validator(Default::default());

@@ -420,11 +420,7 @@ impl ComponentTypesBuilder {
         types: types::TypesRef<'_>,
         id: types::TypeId,
     ) -> Result<TypeFuncIndex> {
-        let ty = types
-            .type_from_id(id)
-            .unwrap()
-            .as_component_func_type()
-            .unwrap();
+        let ty = types[id].unwrap_component_func();
         let params = ty
             .params
             .iter()
@@ -462,15 +458,11 @@ impl ComponentTypesBuilder {
             types::ComponentEntityType::Func(id) => {
                 TypeDef::ComponentFunc(self.convert_component_func_type(types, id)?)
             }
-            types::ComponentEntityType::Type { created, .. } => {
-                match types.type_from_id(created).unwrap() {
-                    types::Type::Defined(_) => {
-                        TypeDef::Interface(self.defined_type(types, created)?)
-                    }
-                    types::Type::Resource(_) => TypeDef::Resource(self.resource_id(types, created)),
-                    _ => bail!("unsupported type export"),
-                }
-            }
+            types::ComponentEntityType::Type { created, .. } => match types[created] {
+                types::Type::Defined(_) => TypeDef::Interface(self.defined_type(types, created)?),
+                types::Type::Resource(_) => TypeDef::Resource(self.resource_id(types, created)),
+                _ => bail!("unsupported type export"),
+            },
             types::ComponentEntityType::Value(_) => bail!("values not supported"),
         })
     }
@@ -481,7 +473,7 @@ impl ComponentTypesBuilder {
         types: types::TypesRef<'_>,
         id: types::TypeId,
     ) -> Result<TypeDef> {
-        Ok(match types.type_from_id(id).unwrap() {
+        Ok(match types[id] {
             types::Type::Defined(_) => TypeDef::Interface(self.defined_type(types, id)?),
             types::Type::Module(_) => TypeDef::Module(self.convert_module(types, id)?),
             types::Type::Component(_) => TypeDef::Component(self.convert_component(types, id)?),
@@ -491,10 +483,7 @@ impl ComponentTypesBuilder {
             types::Type::ComponentFunc(_) => {
                 TypeDef::ComponentFunc(self.convert_component_func_type(types, id)?)
             }
-            types::Type::Instance(_)
-            | types::Type::Func(_)
-            | types::Type::Array(_)
-            | types::Type::Struct(_) => {
+            types::Type::Instance(_) | types::Type::Sub(_) => {
                 unreachable!()
             }
             types::Type::Resource(_) => TypeDef::Resource(self.resource_id(types, id)),
@@ -506,7 +495,7 @@ impl ComponentTypesBuilder {
         types: types::TypesRef<'_>,
         id: types::TypeId,
     ) -> Result<TypeComponentIndex> {
-        let ty = &types.type_from_id(id).unwrap().as_component_type().unwrap();
+        let ty = types[id].unwrap_component();
         let mut result = TypeComponent::default();
         for (name, ty) in ty.imports.iter() {
             result.imports.insert(
@@ -528,11 +517,7 @@ impl ComponentTypesBuilder {
         types: types::TypesRef<'_>,
         id: types::TypeId,
     ) -> Result<TypeComponentInstanceIndex> {
-        let ty = &types
-            .type_from_id(id)
-            .unwrap()
-            .as_component_instance_type()
-            .unwrap();
+        let ty = types[id].unwrap_component_instance();
         let mut result = TypeComponentInstance::default();
         for (name, ty) in ty.exports.iter() {
             result.exports.insert(
@@ -548,7 +533,7 @@ impl ComponentTypesBuilder {
         types: types::TypesRef<'_>,
         id: types::TypeId,
     ) -> Result<TypeModuleIndex> {
-        let ty = &types.type_from_id(id).unwrap().as_module_type().unwrap();
+        let ty = &types[id].unwrap_module();
         let mut result = TypeModule::default();
         for ((module, field), ty) in ty.imports.iter() {
             result.imports.insert(
@@ -571,7 +556,7 @@ impl ComponentTypesBuilder {
     ) -> Result<EntityType> {
         Ok(match ty {
             types::EntityType::Func(idx) => {
-                let ty = types.type_from_id(*idx).unwrap().as_func_type().unwrap();
+                let ty = types[*idx].unwrap_func();
                 let ty = self.convert_func_type(ty);
                 EntityType::Function(self.module_types_builder().wasm_func_type(ty))
             }
@@ -587,7 +572,7 @@ impl ComponentTypesBuilder {
         types: types::TypesRef<'_>,
         id: types::TypeId,
     ) -> Result<InterfaceType> {
-        let ret = match types.type_from_id(id).unwrap().as_defined_type().unwrap() {
+        let ret = match types[id].unwrap_defined() {
             types::ComponentDefinedType::Primitive(ty) => ty.into(),
             types::ComponentDefinedType::Record(e) => {
                 InterfaceType::Record(self.record_type(types, e)?)
@@ -787,10 +772,7 @@ impl ComponentTypesBuilder {
         types: types::TypesRef<'_>,
         id: types::TypeId,
     ) -> TypeResourceTableIndex {
-        let id = match types.type_from_id(id) {
-            Some(wasmparser::types::Type::Resource(id)) => *id,
-            _ => unreachable!(),
-        };
+        let id = types[id].unwrap_resource();
         self.resources.convert(id, &mut self.component_types)
     }
 

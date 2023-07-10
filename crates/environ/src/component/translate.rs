@@ -402,9 +402,7 @@ impl<'a, 'data> Translator<'a, 'data> {
                     match ty? {
                         wasmparser::ComponentType::Resource { rep, dtor } => {
                             let rep = self.types.convert_valtype(rep);
-                            let id = types
-                                .id_from_type_index(component_type_index, false)
-                                .unwrap();
+                            let id = types.component_type_at(component_type_index);
                             let dtor = dtor.map(FuncIndex::from_u32);
                             self.result
                                 .initializers
@@ -455,7 +453,7 @@ impl<'a, 'data> Translator<'a, 'data> {
                             core_func_index,
                             options,
                         } => {
-                            let ty = types.id_from_type_index(type_index, false).unwrap();
+                            let ty = types.component_type_at(type_index);
                             let func = FuncIndex::from_u32(core_func_index);
                             let options = self.canonical_options(&options);
                             LocalInitializer::Lift(ty, func, options)
@@ -464,7 +462,7 @@ impl<'a, 'data> Translator<'a, 'data> {
                             func_index,
                             options,
                         } => {
-                            let lower_ty = types.component_function_at(func_index).unwrap();
+                            let lower_ty = types.component_function_at(func_index);
                             let func = ComponentFuncIndex::from_u32(func_index);
                             let options = self.canonical_options(&options);
                             let canonical_abi = self.core_func_signature(core_func_index);
@@ -478,23 +476,19 @@ impl<'a, 'data> Translator<'a, 'data> {
                             }
                         }
                         wasmparser::CanonicalFunction::ResourceNew { resource } => {
-                            let resource = types.id_from_type_index(resource, false).unwrap();
+                            let resource = types.component_type_at(resource);
                             let ty = self.core_func_signature(core_func_index);
                             core_func_index += 1;
                             LocalInitializer::ResourceNew(resource, ty)
                         }
                         wasmparser::CanonicalFunction::ResourceDrop { ty } => {
                             let ty = match ty {
-                                wasmparser::ComponentValType::Type(t) => {
-                                    types.id_from_type_index(t, false).unwrap()
-                                }
+                                wasmparser::ComponentValType::Type(t) => types.component_type_at(t),
                                 wasmparser::ComponentValType::Primitive(_) => unreachable!(),
                             };
-                            let resource = match types.type_from_id(ty) {
-                                Some(types::Type::Defined(
-                                    types::ComponentDefinedType::Own(id)
-                                    | types::ComponentDefinedType::Borrow(id),
-                                )) => *id,
+                            let resource = match types[ty].unwrap_defined() {
+                                types::ComponentDefinedType::Own(id)
+                                | types::ComponentDefinedType::Borrow(id) => *id,
                                 _ => unreachable!(),
                             };
                             let ty = self.core_func_signature(core_func_index);
@@ -502,7 +496,7 @@ impl<'a, 'data> Translator<'a, 'data> {
                             LocalInitializer::ResourceDrop(resource, ty)
                         }
                         wasmparser::CanonicalFunction::ResourceRep { resource } => {
-                            let resource = types.id_from_type_index(resource, false).unwrap();
+                            let resource = types.component_type_at(resource);
                             let ty = self.core_func_signature(core_func_index);
                             core_func_index += 1;
                             LocalInitializer::ResourceRep(resource, ty)
@@ -581,7 +575,7 @@ impl<'a, 'data> Translator<'a, 'data> {
                             args,
                         } => {
                             let types = self.validator.types(0).unwrap();
-                            let ty = types.component_instance_at(index).unwrap();
+                            let ty = types.component_instance_at(index);
                             let index = ComponentIndex::from_u32(component_index);
                             self.instantiate_component(index, &args, ty)?
                         }
@@ -777,7 +771,7 @@ impl<'a, 'data> Translator<'a, 'data> {
             }
             wasmparser::ComponentExternalKind::Type => {
                 let types = self.validator.types(0).unwrap();
-                let ty = types.id_from_type_index(index, false).unwrap();
+                let ty = types.component_type_at(index);
                 ComponentItem::Type(ty)
             }
         })
@@ -885,8 +879,8 @@ impl<'a, 'data> Translator<'a, 'data> {
 
     fn core_func_signature(&mut self, idx: u32) -> SignatureIndex {
         let types = self.validator.types(0).unwrap();
-        let id = types.function_at(idx).unwrap();
-        let ty = types.type_from_id(id).unwrap().as_func_type().unwrap();
+        let id = types.function_at(idx);
+        let ty = types[id].unwrap_func();
         let ty = self.types.convert_func_type(ty);
         self.types.module_types_builder().wasm_func_type(ty)
     }

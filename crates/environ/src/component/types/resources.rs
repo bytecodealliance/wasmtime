@@ -36,18 +36,14 @@ impl ResourcesBuilder {
     /// TODO
     pub fn register_component_entity_type<'a>(
         &mut self,
-        types: types::TypesRef<'a>,
+        types: &'a types::TypesRef<'_>,
         ty: types::ComponentEntityType,
         path: &mut Vec<&'a str>,
         register: &mut dyn FnMut(&[&'a str]) -> ResourceIndex,
     ) {
         match ty {
             types::ComponentEntityType::Instance(id) => {
-                let ty = types
-                    .type_from_id(id)
-                    .unwrap()
-                    .as_component_instance_type()
-                    .unwrap();
+                let ty = types[id].unwrap_component_instance();
                 for (name, ty) in ty.exports.iter() {
                     path.push(name);
                     self.register_component_entity_type(types, *ty, path, register);
@@ -55,8 +51,8 @@ impl ResourcesBuilder {
                 }
             }
             types::ComponentEntityType::Type { created, .. } => {
-                let id = match types.type_from_id(created).unwrap() {
-                    types::Type::Resource(id) => *id,
+                let id = match types[created] {
+                    types::Type::Resource(id) => id,
                     _ => return,
                 };
                 self.resource_id_to_resource_index
@@ -79,10 +75,7 @@ impl ResourcesBuilder {
         id: types::TypeId,
         ty: ResourceIndex,
     ) {
-        let id = match types.type_from_id(id).unwrap() {
-            types::Type::Resource(id) => *id,
-            _ => unreachable!(),
-        };
+        let id = types[id].unwrap_resource();
         let prev = self.resource_id_to_resource_index.insert(id, ty);
         assert!(prev.is_none());
     }
