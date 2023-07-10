@@ -91,6 +91,7 @@ pub mod trampolines {
                 extern "C" {
                     #[allow(missing_docs)]
                     #[allow(improper_ctypes)]
+                    #[wasmtime_versioned_export_macros::versioned_link]
                     pub fn $name(
                         vmctx: *mut VMContext,
                         $( $pname: libcall!(@ty $param), )*
@@ -109,7 +110,7 @@ pub mod trampolines {
                 // the `sym` operator to get the symbol here, but other targets
                 // like s390x need to use outlined assembly files which requires
                 // `no_mangle`.
-                #[cfg_attr(target_arch = "s390x", no_mangle)]
+                #[cfg_attr(target_arch = "s390x", wasmtime_versioned_export_macros::versioned_export)]
                 unsafe extern "C" fn [<impl_ $name>](
                     vmctx: *mut VMContext,
                     $( $pname : libcall!(@ty $param), )*

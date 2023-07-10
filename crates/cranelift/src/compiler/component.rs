@@ -880,7 +880,6 @@ impl Compiler {
 ///
 /// Note that a macro is used here to keep this in sync with the actual
 /// transcoder functions themselves which are also defined via a macro.
-#[allow(unused_mut)]
 mod host {
     use crate::compiler::Compiler;
     use cranelift_codegen::ir::{self, AbiParam};
@@ -896,11 +895,12 @@ mod host {
             $(
                 pub(super) fn $name(compiler: &Compiler, func: &mut ir::Function) -> (ir::SigRef, u32) {
                     let pointer_type = compiler.isa.pointer_type();
-                    let mut params = vec![
+                    let params = vec![
                         $( AbiParam::new(define!(@ty pointer_type $param)) ),*
                     ];
-                    let mut returns = Vec::new();
-                    $(define!(@push_return pointer_type params returns $result);)?
+                    let returns = vec![
+                        $( AbiParam::new(define!(@ty pointer_type $result)) )?
+                    ];
                     let sig = func.import_signature(ir::Signature {
                         params,
                         returns,
@@ -915,16 +915,10 @@ mod host {
         (@ty $ptr:ident size) => ($ptr);
         (@ty $ptr:ident ptr_u8) => ($ptr);
         (@ty $ptr:ident ptr_u16) => ($ptr);
+        (@ty $ptr:ident ptr_size) => ($ptr);
         (@ty $ptr:ident u32) => (ir::types::I32);
+        (@ty $ptr:ident u64) => (ir::types::I64);
         (@ty $ptr:ident vmctx) => ($ptr);
-
-        (@push_return $ptr:ident $params:ident $returns:ident size) => ($returns.push(AbiParam::new($ptr)););
-        (@push_return $ptr:ident $params:ident $returns:ident u32) => ($returns.push(AbiParam::new(ir::types::I32)););
-        (@push_return $ptr:ident $params:ident $returns:ident u64) => ($returns.push(AbiParam::new(ir::types::I64)););
-        (@push_return $ptr:ident $params:ident $returns:ident size_pair) => ({
-            $params.push(AbiParam::new($ptr));
-            $returns.push(AbiParam::new($ptr));
-        });
     }
 
     wasmtime_environ::foreach_transcoder!(define);

@@ -26,6 +26,7 @@ macro_rules! signature {
     (@ty size_pair) => (usize);
     (@ty ptr_u8) => (*mut u8);
     (@ty ptr_u16) => (*mut u16);
+    (@ty ptr_size) => (*mut usize);
     (@ty u32) => (u32);
     (@ty u64) => (u64);
     (@ty vmctx) => (*mut VMComponentContext);
@@ -49,7 +50,6 @@ macro_rules! define_builtins {
             $(
                 $name: unsafe extern "C" fn(
                     $(signature!(@ty $param),)*
-                    $(signature!(@retptr $result),)?
                 ) $( -> signature!(@ty $result))?,
             )*
         }
@@ -90,7 +90,6 @@ macro_rules! define_transcoders {
             $(
                 $name: unsafe extern "C" fn(
                     $(signature!(@ty $param),)*
-                    $(signature!(@retptr $result),)?
                 ) $( -> signature!(@ty $result))?,
             )*
         }
@@ -123,10 +122,6 @@ mod trampolines {
             $(
                 pub unsafe extern "C" fn $name(
                     $($pname : signature!(@ty $param),)*
-                    // If a result is given then a `size_pair` results gets its
-                    // second result value passed via a return pointer here, so
-                    // optionally indicate a return pointer.
-                    $(_retptr: signature!(@retptr $result))?
                 ) $( -> signature!(@ty $result))? {
                     $(shims!(@validate_param $pname $param);)*
 
@@ -137,10 +132,10 @@ mod trampolines {
                     // Additionally assume that every function below returns a
                     // `Result` where errors turn into traps.
                     let result = std::panic::catch_unwind(|| {
-                        super::$name($($pname),*)
+                        shims!(@invoke $name() $($pname)*)
                     });
                     match result {
-                        Ok(Ok(ret)) => shims!(@convert_ret ret _retptr $($result)?),
+                        Ok(Ok(ret)) => shims!(@convert_ret ret $($pname: $param)*),
                         Ok(Err(err)) => crate::traphandlers::raise_trap(
                             crate::traphandlers::TrapReason::User {
                                 error: err,
@@ -153,15 +148,17 @@ mod trampolines {
             )*
         );
 
-        (@convert_ret $ret:ident $retptr:ident) => ($ret);
-        (@convert_ret $ret:ident $retptr:ident size) => ($ret);
-        (@convert_ret $ret:ident $retptr:ident u32) => ($ret);
-        (@convert_ret $ret:ident $retptr:ident u64) => ($ret);
-        (@convert_ret $ret:ident $retptr:ident size_pair) => ({
+        // Helper macro to convert a 2-tuple automatically when the last
+        // parameter is a `ptr_size` argument.
+        (@convert_ret $ret:ident) => ($ret);
+        (@convert_ret $ret:ident $retptr:ident: ptr_size) => ({
             let (a, b) = $ret;
             *$retptr = b;
             a
         });
+        (@convert_ret $ret:ident $name:ident: $ty:ident $($rest:tt)*) => (
+            shims!(@convert_ret $ret $($rest)*)
+        );
 
         (@validate_param $arg:ident ptr_u16) => ({
             // This should already be guaranteed by the canonical ABI and our
@@ -170,6 +167,20 @@ mod trampolines {
             assert!(($arg as usize) % 2 == 0, "unaligned 16-bit pointer");
         });
         (@validate_param $arg:ident $ty:ident) => ();
+
+        // Helper macro to invoke `$m` with all of the tokens passed except for
+        // any argument named `ret2`
+        (@invoke $m:ident ($($args:tt)*)) => (super::$m($($args)*));
+
+        // ignore `ret2`-named arguments
+        (@invoke $m:ident ($($args:tt)*) ret2 $($rest:tt)*) => (
+            shims!(@invoke $m ($($args)*) $($rest)*)
+        );
+
+        // move all other arguments into the `$args` list
+        (@invoke $m:ident ($($args:tt)*) $param:ident $($rest:tt)*) => (
+            shims!(@invoke $m ($($args)* $param,) $($rest)*)
+        );
     }
 
     wasmtime_environ::foreach_builtin_component_function!(shims);

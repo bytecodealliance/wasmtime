@@ -126,6 +126,8 @@ pub fn arbitrary_val(ty: &component::Type, input: &mut Unstructured) -> arbitrar
                     .collect::<arbitrary::Result<Box<[_]>>>()?,
             )
             .unwrap(),
+        Type::Own(_) => todo!(),
+        Type::Borrow(_) => todo!(),
     })
 }
 
