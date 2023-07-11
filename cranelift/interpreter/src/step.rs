@@ -1439,7 +1439,10 @@ pub type SimdVec<DataValue> = SmallVec<[DataValue; 4]>;
 
 /// Converts a SIMD vector value into a Rust array of [Value] for processing.
 /// If `x` is a scalar, it will be returned as a single-element array.
-pub fn extractlanes(x: &DataValue, vector_type: types::Type) -> ValueResult<SimdVec<DataValue>> {
+pub(crate) fn extractlanes(
+    x: &DataValue,
+    vector_type: types::Type,
+) -> ValueResult<SimdVec<DataValue>> {
     let lane_type = vector_type.lane_type();
     let mut lanes = SimdVec::new();
     // Wrap scalar values as a single-element vector and return.
