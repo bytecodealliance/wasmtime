@@ -1235,9 +1235,9 @@ dependencies = [
 
 [[package]]
 name = "equivalent"
-version = "1.0.0"
+version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "88bffebc5d80432c9b140ee17875ff173a8ab62faad5b257da912bd2f6c1c0a1"
+checksum = "5443807d6dff69373d433ab9ef5378ad8df50ca6298caf15de6e52e24aaf54d5"
 
 [[package]]
 name = "errno"
@@ -2862,22 +2862,22 @@ dependencies = [
 
 [[package]]
 name = "serde"
-version = "1.0.166"
+version = "1.0.171"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d01b7404f9d441d3ad40e6a636a7782c377d2abdbe4fa2440e2edcc2f4f10db8"
+checksum = "30e27d1e4fd7659406c492fd6cfaf2066ba8773de45ca75e855590f856dc34a9"
 dependencies = [
  "serde_derive",
 ]
 
 [[package]]
 name = "serde_derive"
-version = "1.0.166"
+version = "1.0.171"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5dd83d6dde2b6b2d466e14d9d1acce8816dedee94f735eac6395808b3483c6d6"
+checksum = "389894603bd18c46fa56231694f8d827779c0951a667087194cf9de94ed24682"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.23",
+ "syn 2.0.25",
 ]
 
 [[package]]
@@ -3083,9 +3083,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "2.0.23"
+version = "2.0.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "59fb7d6d8281a51045d62b8eb3a7d1ce347b76f312af50cd3dc0af39c87c1737"
+checksum = "15e3fc8c0c74267e2df136e5e5fb656a464158aa57624053375eb9c8c6e25ae2"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4025,7 +4025,7 @@ dependencies = [
  "wasmtime-wasi-nn",
  "wasmtime-wasi-threads",
  "wasmtime-wast",
- "wast 60.0.1",
+ "wast 61.0.0",
  "wat",
  "windows-sys 0.48.0",
 ]
@@ -4303,7 +4303,7 @@ version = "12.0.0"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.23",
+ "syn 2.0.25",
 ]
 
 [[package]]
@@ -4390,7 +4390,7 @@ dependencies = [
  "anyhow",
  "log",
  "wasmtime",
- "wast 60.0.1",
+ "wast 61.0.0",
 ]
 
 [[package]]
@@ -4430,6 +4430,18 @@ dependencies = [
 name = "wast"
 version = "60.0.1"
 source = "git+https://github.com/alexcrichton/wasm-tools?branch=wasmtime-resources#b0e98eeb28ed3d5328fbc94e0ef473d35acfaf8c"
+dependencies = [
+ "leb128",
+ "memchr",
+ "unicode-width",
+ "wasm-encoder 0.30.0",
+]
+
+[[package]]
+name = "wast"
+version = "61.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dc6b347851b52fd500657d301155c79e8c67595501d179cef87b6f04ebd25ac4"
 dependencies = [
  "leb128",
  "memchr",
@@ -4817,7 +4829,7 @@ checksum = "78cce32dd08007af45dbaa00e225eb73d05524096f93933d7ecba852d50d8af3"
 dependencies = [
  "anyhow",
  "proc-macro2",
- "syn 2.0.23",
+ "syn 2.0.25",
  "wit-bindgen-core",
  "wit-bindgen-rust",
  "wit-component 0.11.0",

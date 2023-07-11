@@ -473,7 +473,7 @@ impl ComponentTypesBuilder {
         types: types::TypesRef<'_>,
         id: types::TypeId,
     ) -> Result<TypeDef> {
-        Ok(match types[id] {
+        Ok(match &types[id] {
             types::Type::Defined(_) => TypeDef::Interface(self.defined_type(types, id)?),
             types::Type::Module(_) => TypeDef::Module(self.convert_module(types, id)?),
             types::Type::Component(_) => TypeDef::Component(self.convert_component(types, id)?),

@@ -1626,6 +1626,18 @@ are otherwise not doing other `unsafe` operations. Additionally the crate does
 not do anything other than markdown rendering as is expected.
 """
 
+[[audits.pulldown-cmark]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.8.0 -> 0.9.3"
+notes = """
+This is a large change to the `pulldown-cmark` crate but it tightens
+restrictions on `unsafe` code to forbid it in non-SIMD mode and additionally
+many changes look to be related to refactoring, improving, and restructuring.
+This crate is not fundamentally different from before, which was trusted, but
+looks to be receiving new assistance for maintainership as well.
+"""
+
 [[audits.quote]]
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
@@ -2681,6 +2693,18 @@ user-id = 6743 # Ed Page (epage)
 start = "2022-04-15"
 end = "2024-07-06"
 
+[[trusted.equivalent]]
+criteria = "safe-to-deploy"
+user-id = 539 # Josh Stone (cuviper)
+start = "2023-02-05"
+end = "2024-07-11"
+
+[[trusted.hashbrown]]
+criteria = "safe-to-deploy"
+user-id = 2915 # Amanieu d'Antras (Amanieu)
+start = "2019-04-02"
+end = "2024-07-11"
+
 [[trusted.indexmap]]
 criteria = "safe-to-deploy"
 user-id = 539 # Josh Stone (cuviper)
@@ -2728,6 +2752,12 @@ criteria = "safe-to-deploy"
 user-id = 3618 # David Tolnay (dtolnay)
 start = "2019-03-19"
 end = "2024-07-06"
+
+[[trusted.quote]]
+criteria = "safe-to-deploy"
+user-id = 3618 # David Tolnay (dtolnay)
+start = "2019-04-09"
+end = "2024-07-11"
 
 [[trusted.ryu]]
 criteria = "safe-to-deploy"
