@@ -496,7 +496,9 @@ impl DataValueExt for DataValue {
             DataValue::I128(f) => Ok(*f == 0),
             DataValue::F32(f) => Ok(f.is_zero()),
             DataValue::F64(f) => Ok(f.is_zero()),
-            DataValue::V64(_) | DataValue::V128(_) => Err(ValueError::InvalidType(ValueTypeClass::Float, self.ty())),
+            DataValue::V64(_) | DataValue::V128(_) => {
+                Err(ValueError::InvalidType(ValueTypeClass::Float, self.ty()))
+            }
         }
     }
 
