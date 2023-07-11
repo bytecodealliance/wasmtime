@@ -125,8 +125,6 @@ pub trait RustGenerator<'a> {
                     }
                     TypeDefKind::Type(Type::String) => true,
                     TypeDefKind::Type(_) => false,
-                    TypeDefKind::Resource => todo!(),
-                    TypeDefKind::Handle(_) => todo!(),
                     TypeDefKind::Unknown => unreachable!(),
                 }
             }
