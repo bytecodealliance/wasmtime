@@ -154,9 +154,7 @@ mod test {
         let types = &translation.get_types();
 
         let index = module.func_index(f.0);
-        let sig = types
-            .function_at(index.as_u32())
-            .expect(&format!("function type at index {:?}", index.as_u32()));
+        let sig = types[types.function_at(index.as_u32())].unwrap_func();
         let sig = translation.module.convert_func_type(&sig);
 
         let FunctionBodyData { body, validator } = f.1;

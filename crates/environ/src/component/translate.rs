@@ -422,11 +422,8 @@ impl<'a, 'data> Translator<'a, 'data> {
                             core_func_index,
                             options,
                         } => {
-                            let ty = types
-                                .type_at(type_index, false)
-                                .unwrap()
-                                .as_component_func_type()
-                                .unwrap();
+                            let ty =
+                                types[types.component_type_at(type_index)].unwrap_component_func();
                             let ty = self.types.convert_component_func_type(types, ty)?;
                             let func = FuncIndex::from_u32(core_func_index);
                             let options = self.canonical_options(&options);
@@ -438,15 +435,16 @@ impl<'a, 'data> Translator<'a, 'data> {
                             func_index,
                             options,
                         } => {
-                            let lower_ty = types.component_function_at(func_index).unwrap();
+                            let lower_ty = types.component_function_at(func_index);
+                            let lower_ty = types[lower_ty].unwrap_component_func();
                             let lower_ty =
                                 self.types.convert_component_func_type(types, lower_ty)?;
 
                             let func = ComponentFuncIndex::from_u32(func_index);
                             let options = self.canonical_options(&options);
 
-                            let canonical_abi =
-                                types.function_at(self.result.core_func_index).unwrap();
+                            let canonical_abi = types.function_at(self.result.core_func_index);
+                            let canonical_abi = types[canonical_abi].unwrap_func();
                             let canonical_abi = self.types.convert_func_type(canonical_abi);
                             let canonical_abi = self
                                 .types
@@ -731,7 +729,7 @@ impl<'a, 'data> Translator<'a, 'data> {
             }
             wasmparser::ComponentExternalKind::Type => {
                 let types = self.validator.types(0).unwrap();
-                let ty = types.id_from_type_index(index, false).unwrap();
+                let ty = types.component_type_at(index);
                 let ty = self.types.convert_type(types, ty)?;
                 ComponentItem::Type(ty)
             }

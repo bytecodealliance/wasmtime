@@ -240,6 +240,7 @@ tempfile = "3.1.0"
 filecheck = "0.5.0"
 libc = "0.2.60"
 file-per-thread-logger = "0.2.0"
+indexmap = "2.0.0"
 
 [features]
 default = [

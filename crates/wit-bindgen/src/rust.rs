@@ -117,7 +117,9 @@ pub trait RustGenerator<'a> {
                     | TypeDefKind::Flags(_)
                     | TypeDefKind::Enum(_)
                     | TypeDefKind::Tuple(_)
-                    | TypeDefKind::Union(_) => true,
+                    | TypeDefKind::Union(_)
+                    | TypeDefKind::Handle(_)
+                    | TypeDefKind::Resource => true,
                     TypeDefKind::Type(Type::Id(t)) => {
                         needs_generics(resolve, &resolve.types[*t].kind)
                     }
@@ -182,6 +184,9 @@ pub trait RustGenerator<'a> {
                 self.print_optional_ty(stream.end.as_ref(), mode);
                 self.push_str(">");
             }
+
+            TypeDefKind::Handle(_) => todo!(),
+            TypeDefKind::Resource => todo!(),
 
             TypeDefKind::Type(t) => self.print_ty(t, mode),
             TypeDefKind::Unknown => unreachable!(),
@@ -292,6 +297,8 @@ pub trait RustGenerator<'a> {
                         TypeDefKind::Variant(_) => out.push_str("Variant"),
                         TypeDefKind::Enum(_) => out.push_str("Enum"),
                         TypeDefKind::Union(_) => out.push_str("Union"),
+                        TypeDefKind::Handle(_) => todo!(),
+                        TypeDefKind::Resource => todo!(),
                         TypeDefKind::Unknown => unreachable!(),
                     },
                 }
