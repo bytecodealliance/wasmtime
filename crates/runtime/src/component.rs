@@ -673,6 +673,34 @@ impl ComponentInstance {
     }
 
     /// TODO
+    pub fn resource_lift_borrow(&mut self, ty: TypeResourceTableIndex, idx: u32) -> Result<u32> {
+        self.resource_tables.resource_lift_borrow(ty, idx)
+    }
+
+    /// TODO
+    pub fn resource_lower_borrow(&mut self, ty: TypeResourceTableIndex, rep: u32) -> Result<u32> {
+        // Implement `lower_borrow`'s special case here where if a borrow is
+        // inserted into a table owned by the instance which implemented the
+        // original resource then no borrow tracking is employed and instead the
+        // `rep` is returned "raw".
+        //
+        // This check is performed by comparing the owning instance of `ty`
+        // against the owning instance of the resource that `ty` is working
+        // with.
+        let resource = &self.component_types()[ty];
+        let component = self.component();
+        if let Some(idx) = component.defined_resource_index(resource.ty) {
+            if resource.instance == component.defined_resource_instances[idx] {
+                return Ok(rep);
+            }
+        }
+
+        // ... failing that though borrow tracking enuses and is delegated to
+        // the resource tables implementation.
+        self.resource_tables.resource_lower_borrow(ty, rep)
+    }
+
+    /// TODO
     pub fn resource_rep32(&mut self, resource: TypeResourceTableIndex, idx: u32) -> Result<u32> {
         self.resource_tables.resource_rep(resource, idx)
     }
@@ -684,6 +712,16 @@ impl ComponentInstance {
         idx: u32,
     ) -> Result<Option<u32>> {
         self.resource_tables.resource_drop(resource, idx)
+    }
+
+    /// TODO
+    pub fn enter_call(&mut self) {
+        self.resource_tables.enter_call();
+    }
+
+    /// TODO
+    pub fn exit_call(&mut self) -> Result<()> {
+        self.resource_tables.exit_call()
     }
 }
 
