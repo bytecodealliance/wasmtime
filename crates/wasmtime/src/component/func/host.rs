@@ -221,7 +221,7 @@ where
         }
     };
     let params = storage.lift_params(
-        &LiftContext::new(cx.0, &options, types, instance),
+        &mut LiftContext::new(cx.0, &options, types, instance),
         param_tys,
     )?;
 
@@ -248,7 +248,7 @@ where
         P: ComponentType + Lift,
         R: ComponentType + Lower,
     {
-        unsafe fn lift_params(&self, cx: &LiftContext<'_>, ty: InterfaceType) -> Result<P> {
+        unsafe fn lift_params(&self, cx: &mut LiftContext<'_>, ty: InterfaceType) -> Result<P> {
             match self {
                 Storage::Direct(storage) => P::lift(cx, ty, &storage.assume_init_ref().args),
                 Storage::ResultsIndirect(storage) => P::lift(cx, ty, &storage.args),
@@ -348,7 +348,7 @@ where
     let func_ty = &types[ty];
     let param_tys = &types[func_ty.params];
     let result_tys = &types[func_ty.results];
-    let cx = LiftContext::new(store.0, &options, types, instance);
+    let mut cx = LiftContext::new(store.0, &options, types, instance);
     if let Some(param_count) = param_tys.abi.flat_count(MAX_FLAT_PARAMS) {
         // NB: can use `MaybeUninit::slice_assume_init_ref` when that's stable
         let mut iter =
@@ -356,7 +356,7 @@ where
         args = param_tys
             .types
             .iter()
-            .map(|ty| Val::lift(&cx, *ty, &mut iter))
+            .map(|ty| Val::lift(&mut cx, *ty, &mut iter))
             .collect::<Result<Box<[_]>>>()?;
         ret_index = param_count;
         assert!(iter.next().is_none());
@@ -369,11 +369,8 @@ where
             .map(|ty| {
                 let abi = types.canonical_abi(ty);
                 let size = usize::try_from(abi.size32).unwrap();
-                Val::load(
-                    &cx,
-                    *ty,
-                    &cx.memory()[abi.next_field32_size(&mut offset)..][..size],
-                )
+                let memory = &cx.memory()[abi.next_field32_size(&mut offset)..][..size];
+                Val::load(&mut cx, *ty, memory)
             })
             .collect::<Result<Box<[_]>>>()?;
         ret_index = 1;

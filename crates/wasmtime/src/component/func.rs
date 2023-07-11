@@ -246,7 +246,7 @@ impl Func {
         let data = &store[self.0];
         let cx = instance
             .unwrap_or_else(|| &store[data.instance.0].as_ref().unwrap())
-            .ty(store);
+            .ty();
         let ty = &cx.types[data.ty];
 
         Params::typecheck(&InterfaceType::Tuple(ty.params), &cx)
@@ -265,7 +265,7 @@ impl Func {
         data.types[data.types[data.ty].params]
             .types
             .iter()
-            .map(|ty| Type::from(ty, &instance.ty(store.0)))
+            .map(|ty| Type::from(ty, &instance.ty()))
             .collect()
     }
 
@@ -277,7 +277,7 @@ impl Func {
         data.types[data.types[data.ty].results]
             .types
             .iter()
-            .map(|ty| Type::from(ty, &instance.ty(store.0)))
+            .map(|ty| Type::from(ty, &instance.ty()))
             .collect()
     }
 
@@ -422,7 +422,7 @@ impl Func {
             InterfaceType,
             &mut MaybeUninit<LowerParams>,
         ) -> Result<()>,
-        lift: impl FnOnce(&LiftContext<'_>, InterfaceType, &LowerReturn) -> Result<Return>,
+        lift: impl FnOnce(&mut LiftContext<'_>, InterfaceType, &LowerReturn) -> Result<Return>,
     ) -> Result<Return>
     where
         LowerParams: Copy,
@@ -516,7 +516,7 @@ impl Func {
             // later get used in post-return.
             flags.set_needs_post_return(true);
             let val = lift(
-                &LiftContext::new(store.0, &options, &types, instance_ptr),
+                &mut LiftContext::new(store.0, &options, &types, instance_ptr),
                 InterfaceType::Tuple(types[ty].results),
                 ret,
             )?;
@@ -678,7 +678,7 @@ impl Func {
     }
 
     fn load_results(
-        cx: &LiftContext<'_>,
+        cx: &mut LiftContext<'_>,
         results_ty: &TypeTuple,
         results: &mut [Val],
         src: &mut std::slice::Iter<'_, ValRaw>,

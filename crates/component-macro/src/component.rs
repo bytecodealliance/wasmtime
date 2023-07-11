@@ -422,7 +422,7 @@ impl Expander for LiftExpander {
             unsafe impl #impl_generics wasmtime::component::Lift for #name #ty_generics #where_clause {
                 #[inline]
                 fn lift(
-                    cx: &#internal::LiftContext<'_>,
+                    cx: &mut #internal::LiftContext<'_>,
                     ty: #internal::InterfaceType,
                     src: &Self::Lower,
                 ) -> #internal::anyhow::Result<Self> {
@@ -434,7 +434,7 @@ impl Expander for LiftExpander {
 
                 #[inline]
                 fn load(
-                    cx: &#internal::LiftContext<'_>,
+                    cx: &mut #internal::LiftContext<'_>,
                     ty: #internal::InterfaceType,
                     bytes: &[u8],
                 ) -> #internal::anyhow::Result<Self> {
@@ -525,7 +525,7 @@ impl Expander for LiftExpander {
             unsafe impl #impl_generics wasmtime::component::Lift for #name #ty_generics #where_clause {
                 #[inline]
                 fn lift(
-                    cx: &#internal::LiftContext<'_>,
+                    cx: &mut #internal::LiftContext<'_>,
                     ty: #internal::InterfaceType,
                     src: &Self::Lower,
                 ) -> #internal::anyhow::Result<Self> {
@@ -538,7 +538,7 @@ impl Expander for LiftExpander {
 
                 #[inline]
                 fn load(
-                    cx: &#internal::LiftContext<'_>,
+                    cx: &mut #internal::LiftContext<'_>,
                     ty: #internal::InterfaceType,
                     bytes: &[u8],
                 ) -> #internal::anyhow::Result<Self> {
@@ -1312,7 +1312,7 @@ pub fn expand_flags(flags: &Flags) -> Result<TokenStream> {
 
         unsafe impl wasmtime::component::Lift for #name {
             fn lift(
-                cx: &#internal::LiftContext<'_>,
+                cx: &mut #internal::LiftContext<'_>,
                 _ty: #internal::InterfaceType,
                 src: &Self::Lower,
             ) -> #internal::anyhow::Result<Self> {
@@ -1328,7 +1328,7 @@ pub fn expand_flags(flags: &Flags) -> Result<TokenStream> {
             }
 
             fn load(
-                cx: &#internal::LiftContext<'_>,
+                cx: &mut #internal::LiftContext<'_>,
                 _ty: #internal::InterfaceType,
                 bytes: &[u8],
             ) -> #internal::anyhow::Result<Self> {

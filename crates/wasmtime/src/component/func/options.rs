@@ -152,6 +152,11 @@ impl Options {
     pub fn string_encoding(&self) -> StringEncoding {
         self.string_encoding
     }
+
+    /// TODO
+    pub fn store_id(&self) -> StoreId {
+        self.store_id
+    }
 }
 
 /// A helper structure which is a "package" of the context used during lowering
@@ -263,6 +268,7 @@ impl<'a, T> LowerContext<'a, T> {
 
     /// TODO
     pub fn resource_lower_own(&mut self, ty: TypeResourceTableIndex, rep: u32) -> u32 {
+        // TODO: document unsafe
         unsafe { (*self.instance).resource_lower_own(ty, rep) }
     }
 
@@ -273,7 +279,8 @@ impl<'a, T> LowerContext<'a, T> {
 
     /// TODO
     pub fn instance_type(&self) -> InstanceType<'_> {
-        InstanceType::new(self.store.0, unsafe { &*self.instance })
+        // TODO: document unsafe
+        InstanceType::new(unsafe { &*self.instance })
     }
 }
 
@@ -284,15 +291,13 @@ impl<'a, T> LowerContext<'a, T> {
 /// operations (or loading from memory).
 #[doc(hidden)]
 pub struct LiftContext<'a> {
-    /// Unlike `LowerContext` lifting doesn't ever need to execute wasm, so a
-    /// full store isn't required here and only a shared reference is required.
-    pub store: &'a StoreOpaque,
-
     /// Like lowering, lifting always has options configured.
     pub options: &'a Options,
 
     /// Instance type information, like with lowering.
     pub types: &'a Arc<ComponentTypes>,
+
+    memory: Option<&'a [u8]>,
 
     instance: *mut ComponentInstance,
 }
@@ -305,13 +310,13 @@ impl<'a> LiftContext<'a> {
     ///
     /// TODO: ptr must be valid
     pub unsafe fn new(
-        store: &'a StoreOpaque,
+        store: &'a mut StoreOpaque,
         options: &'a Options,
         types: &'a Arc<ComponentTypes>,
         instance: *mut ComponentInstance,
     ) -> LiftContext<'a> {
         LiftContext {
-            store,
+            memory: options.memory.map(|_| options.memory(store)),
             options,
             types,
             instance,
@@ -326,7 +331,12 @@ impl<'a> LiftContext<'a> {
     /// This will panic if memory has not been configured for this lifting
     /// operation.
     pub fn memory(&self) -> &'a [u8] {
-        self.options.memory(self.store)
+        self.memory.unwrap()
+    }
+
+    /// TODO
+    pub fn store_id(&self) -> StoreId {
+        self.options.store_id
     }
 
     /// TODO
@@ -336,7 +346,7 @@ impl<'a> LiftContext<'a> {
 
     /// TODO
     pub fn resource_lift_own(
-        &self,
+        &mut self,
         ty: TypeResourceTableIndex,
         idx: u32,
     ) -> Result<(u32, Option<NonNull<VMFuncRef>>, Option<InstanceFlags>)> {
@@ -351,6 +361,7 @@ impl<'a> LiftContext<'a> {
 
     /// TODO
     pub fn instance_type(&self) -> InstanceType<'_> {
-        InstanceType::new(self.store, unsafe { &*self.instance })
+        // TODO: document unsafe
+        InstanceType::new(unsafe { &*self.instance })
     }
 }

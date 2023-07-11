@@ -227,8 +227,8 @@ impl InstanceData {
         self.component.types()
     }
 
-    pub fn ty(&self, store: &StoreOpaque) -> InstanceType<'_> {
-        InstanceType::new(store, self.instance())
+    pub fn ty(&self) -> InstanceType<'_> {
+        InstanceType::new(self.instance())
     }
 
     // TODO: NB: only during creation
@@ -817,9 +817,7 @@ impl<'a, 'store> ExportInstance<'a, 'store> {
     /// Same as [`Instance::get_resource`]
     pub fn resource(&mut self, name: &str) -> Option<ResourceType> {
         match self.exports.get(name)? {
-            Export::Type(TypeDef::Resource(id)) => {
-                Some(self.data.ty(self.store).resource_type(*id))
-            }
+            Export::Type(TypeDef::Resource(id)) => Some(self.data.ty().resource_type(*id)),
             Export::Type(_)
             | Export::LiftedFunction { .. }
             | Export::ModuleStatic(_)

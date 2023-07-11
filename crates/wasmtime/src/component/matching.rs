@@ -1,7 +1,6 @@
 use crate::component::func::HostFunc;
 use crate::component::linker::{Definition, NameMap, Strings};
 use crate::component::ResourceType;
-use crate::store::StoreOpaque;
 use crate::types::matching;
 use crate::Module;
 use anyhow::{anyhow, bail, Context, Result};
@@ -185,7 +184,7 @@ impl Definition {
 }
 
 impl<'a> InstanceType<'a> {
-    pub fn new(_store: &StoreOpaque, instance: &'a ComponentInstance) -> InstanceType<'a> {
+    pub fn new(instance: &'a ComponentInstance) -> InstanceType<'a> {
         InstanceType {
             types: instance.component_types(),
             resources: downcast_arc_ref(instance.resource_types()),

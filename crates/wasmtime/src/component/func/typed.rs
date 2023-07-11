@@ -1,7 +1,6 @@
 use crate::component::func::{Func, LiftContext, LowerContext, Options};
 use crate::component::matching::InstanceType;
 use crate::component::storage::{storage_as_slice, storage_as_slice_mut};
-use crate::store::StoreOpaque;
 use crate::{AsContextMut, StoreContext, StoreContextMut, ValRaw};
 use anyhow::{anyhow, bail, Context, Result};
 use std::borrow::Cow;
@@ -298,7 +297,7 @@ where
     /// This is only used when the result fits in the maximum number of stack
     /// slots.
     fn lift_stack_result(
-        cx: &LiftContext<'_>,
+        cx: &mut LiftContext<'_>,
         ty: InterfaceType,
         dst: &Return::Lower,
     ) -> Result<Return> {
@@ -308,7 +307,11 @@ where
 
     /// Lift the result of a function where the result is stored indirectly on
     /// the heap.
-    fn lift_heap_result(cx: &LiftContext<'_>, ty: InterfaceType, dst: &ValRaw) -> Result<Return> {
+    fn lift_heap_result(
+        cx: &mut LiftContext<'_>,
+        ty: InterfaceType,
+        dst: &ValRaw,
+    ) -> Result<Return> {
         assert!(Return::flatten_count() > MAX_FLAT_RESULTS);
         // FIXME: needs to read an i64 for memory64
         let ptr = usize::try_from(dst.get_u32())?;
@@ -527,7 +530,7 @@ pub unsafe trait Lift: Sized + ComponentType {
     /// Note that this has a default implementation but if `typecheck` passes
     /// for `Op::Lift` this needs to be overridden.
     #[doc(hidden)]
-    fn lift(cx: &LiftContext<'_>, ty: InterfaceType, src: &Self::Lower) -> Result<Self>;
+    fn lift(cx: &mut LiftContext<'_>, ty: InterfaceType, src: &Self::Lower) -> Result<Self>;
 
     /// Performs the "load" operation in the canonical ABI.
     ///
@@ -543,7 +546,7 @@ pub unsafe trait Lift: Sized + ComponentType {
     /// Note that this has a default implementation but if `typecheck` passes
     /// for `Op::Lift` this needs to be overridden.
     #[doc(hidden)]
-    fn load(cx: &LiftContext<'_>, ty: InterfaceType, bytes: &[u8]) -> Result<Self>;
+    fn load(cx: &mut LiftContext<'_>, ty: InterfaceType, bytes: &[u8]) -> Result<Self>;
 }
 
 // Macro to help generate "forwarding implementations" of `ComponentType` to
@@ -610,12 +613,12 @@ forward_lowers! {
 macro_rules! forward_string_lifts {
     ($($a:ty,)*) => ($(
         unsafe impl Lift for $a {
-            fn lift(cx: &LiftContext<'_>, ty: InterfaceType, src: &Self::Lower) -> Result<Self> {
-                Ok(<WasmStr as Lift>::lift(cx, ty, src)?.to_str_from_store(cx.store)?.into())
+            fn lift(cx: &mut LiftContext<'_>, ty: InterfaceType, src: &Self::Lower) -> Result<Self> {
+                Ok(<WasmStr as Lift>::lift(cx, ty, src)?.to_str_from_memory(cx.memory())?.into())
             }
 
-            fn load(cx: &LiftContext<'_>, ty: InterfaceType, bytes: &[u8]) -> Result<Self> {
-                Ok(<WasmStr as Lift>::load(cx, ty, bytes)?.to_str_from_store(cx.store)?.into())
+            fn load(cx: &mut LiftContext<'_>, ty: InterfaceType, bytes: &[u8]) -> Result<Self> {
+                Ok(<WasmStr as Lift>::load(cx, ty, bytes)?.to_str_from_memory(cx.memory())?.into())
             }
         }
     )*)
@@ -631,14 +634,14 @@ forward_string_lifts! {
 macro_rules! forward_list_lifts {
     ($($a:ty,)*) => ($(
         unsafe impl <T: Lift> Lift for $a {
-            fn lift(cx: &LiftContext<'_>, ty: InterfaceType, src: &Self::Lower) -> Result<Self> {
+            fn lift(cx: &mut LiftContext<'_>, ty: InterfaceType, src: &Self::Lower) -> Result<Self> {
                 let list = <WasmList::<T> as Lift>::lift(cx, ty, src)?;
-                (0..list.len).map(|index| list.get_from_store(cx.store, index).unwrap()).collect()
+                (0..list.len).map(|index| list.get_from_store(cx, index).unwrap()).collect()
             }
 
-            fn load(cx: &LiftContext<'_>, ty: InterfaceType, bytes: &[u8]) -> Result<Self> {
+            fn load(cx: &mut LiftContext<'_>, ty: InterfaceType, bytes: &[u8]) -> Result<Self> {
                 let list = <WasmList::<T> as Lift>::load(cx, ty, bytes)?;
-                (0..list.len).map(|index| list.get_from_store(cx.store, index).unwrap()).collect()
+                (0..list.len).map(|index| list.get_from_store(cx, index).unwrap()).collect()
             }
         }
     )*)
@@ -695,13 +698,13 @@ macro_rules! integers {
 
         unsafe impl Lift for $primitive {
             #[inline]
-            fn lift(_cx: &LiftContext<'_>, ty: InterfaceType, src: &Self::Lower) -> Result<Self> {
+            fn lift(_cx: &mut LiftContext<'_>, ty: InterfaceType, src: &Self::Lower) -> Result<Self> {
                 debug_assert!(matches!(ty, InterfaceType::$ty));
                 Ok(src.$get() as $primitive)
             }
 
             #[inline]
-            fn load(_cx: &LiftContext<'_>, ty: InterfaceType, bytes: &[u8]) -> Result<Self> {
+            fn load(_cx: &mut LiftContext<'_>, ty: InterfaceType, bytes: &[u8]) -> Result<Self> {
                 debug_assert!(matches!(ty, InterfaceType::$ty));
                 debug_assert!((bytes.as_ptr() as usize) % Self::SIZE32 == 0);
                 Ok($primitive::from_le_bytes(bytes.try_into().unwrap()))
@@ -777,13 +780,13 @@ macro_rules! floats {
 
         unsafe impl Lift for $float {
             #[inline]
-            fn lift(_cx: &LiftContext<'_>, ty: InterfaceType, src: &Self::Lower) -> Result<Self> {
+            fn lift(_cx: &mut LiftContext<'_>, ty: InterfaceType, src: &Self::Lower) -> Result<Self> {
                 debug_assert!(matches!(ty, InterfaceType::$ty));
                 Ok(canonicalize($float::from_bits(src.$get_float())))
             }
 
             #[inline]
-            fn load(_cx: &LiftContext<'_>, ty: InterfaceType, bytes: &[u8]) -> Result<Self> {
+            fn load(_cx: &mut LiftContext<'_>, ty: InterfaceType, bytes: &[u8]) -> Result<Self> {
                 debug_assert!(matches!(ty, InterfaceType::$ty));
                 debug_assert!((bytes.as_ptr() as usize) % Self::SIZE32 == 0);
                 Ok(canonicalize($float::from_le_bytes(bytes.try_into().unwrap())))
@@ -837,7 +840,7 @@ unsafe impl Lower for bool {
 
 unsafe impl Lift for bool {
     #[inline]
-    fn lift(_cx: &LiftContext<'_>, ty: InterfaceType, src: &Self::Lower) -> Result<Self> {
+    fn lift(_cx: &mut LiftContext<'_>, ty: InterfaceType, src: &Self::Lower) -> Result<Self> {
         debug_assert!(matches!(ty, InterfaceType::Bool));
         match src.get_i32() {
             0 => Ok(false),
@@ -846,7 +849,7 @@ unsafe impl Lift for bool {
     }
 
     #[inline]
-    fn load(_cx: &LiftContext<'_>, ty: InterfaceType, bytes: &[u8]) -> Result<Self> {
+    fn load(_cx: &mut LiftContext<'_>, ty: InterfaceType, bytes: &[u8]) -> Result<Self> {
         debug_assert!(matches!(ty, InterfaceType::Bool));
         match bytes[0] {
             0 => Ok(false),
@@ -895,13 +898,13 @@ unsafe impl Lower for char {
 
 unsafe impl Lift for char {
     #[inline]
-    fn lift(_cx: &LiftContext<'_>, ty: InterfaceType, src: &Self::Lower) -> Result<Self> {
+    fn lift(_cx: &mut LiftContext<'_>, ty: InterfaceType, src: &Self::Lower) -> Result<Self> {
         debug_assert!(matches!(ty, InterfaceType::Char));
         Ok(char::try_from(src.get_u32())?)
     }
 
     #[inline]
-    fn load(_cx: &LiftContext<'_>, ty: InterfaceType, bytes: &[u8]) -> Result<Self> {
+    fn load(_cx: &mut LiftContext<'_>, ty: InterfaceType, bytes: &[u8]) -> Result<Self> {
         debug_assert!(matches!(ty, InterfaceType::Char));
         debug_assert!((bytes.as_ptr() as usize) % Self::SIZE32 == 0);
         let bits = u32::from_le_bytes(bytes.try_into().unwrap());
@@ -1095,7 +1098,7 @@ pub struct WasmStr {
 }
 
 impl WasmStr {
-    fn new(ptr: usize, len: usize, cx: &LiftContext<'_>) -> Result<WasmStr> {
+    fn new(ptr: usize, len: usize, cx: &mut LiftContext<'_>) -> Result<WasmStr> {
         let byte_len = match cx.options.string_encoding() {
             StringEncoding::Utf8 => Some(len),
             StringEncoding::Utf16 => len.checked_mul(2),
@@ -1140,33 +1143,33 @@ impl WasmStr {
     // method that returns `[u16]` after validating to avoid the utf16-to-utf8
     // transcode.
     pub fn to_str<'a, T: 'a>(&self, store: impl Into<StoreContext<'a, T>>) -> Result<Cow<'a, str>> {
-        self.to_str_from_store(store.into().0)
+        let store = store.into().0;
+        let memory = self.options.memory(store);
+        self.to_str_from_memory(memory)
     }
 
-    fn to_str_from_store<'a>(&self, store: &'a StoreOpaque) -> Result<Cow<'a, str>> {
+    fn to_str_from_memory<'a>(&self, memory: &'a [u8]) -> Result<Cow<'a, str>> {
         match self.options.string_encoding() {
-            StringEncoding::Utf8 => self.decode_utf8(store),
-            StringEncoding::Utf16 => self.decode_utf16(store, self.len),
+            StringEncoding::Utf8 => self.decode_utf8(memory),
+            StringEncoding::Utf16 => self.decode_utf16(memory, self.len),
             StringEncoding::CompactUtf16 => {
                 if self.len & UTF16_TAG == 0 {
-                    self.decode_latin1(store)
+                    self.decode_latin1(memory)
                 } else {
-                    self.decode_utf16(store, self.len ^ UTF16_TAG)
+                    self.decode_utf16(memory, self.len ^ UTF16_TAG)
                 }
             }
         }
     }
 
-    fn decode_utf8<'a>(&self, store: &'a StoreOpaque) -> Result<Cow<'a, str>> {
-        let memory = self.options.memory(store);
+    fn decode_utf8<'a>(&self, memory: &'a [u8]) -> Result<Cow<'a, str>> {
         // Note that bounds-checking already happen in construction of `WasmStr`
         // so this is never expected to panic. This could theoretically be
         // unchecked indexing if we're feeling wild enough.
         Ok(str::from_utf8(&memory[self.ptr..][..self.len])?.into())
     }
 
-    fn decode_utf16<'a>(&self, store: &'a StoreOpaque, len: usize) -> Result<Cow<'a, str>> {
-        let memory = self.options.memory(store);
+    fn decode_utf16<'a>(&self, memory: &'a [u8], len: usize) -> Result<Cow<'a, str>> {
         // See notes in `decode_utf8` for why this is panicking indexing.
         let memory = &memory[self.ptr..][..len * 2];
         Ok(std::char::decode_utf16(
@@ -1178,9 +1181,8 @@ impl WasmStr {
         .into())
     }
 
-    fn decode_latin1<'a>(&self, store: &'a StoreOpaque) -> Result<Cow<'a, str>> {
+    fn decode_latin1<'a>(&self, memory: &'a [u8]) -> Result<Cow<'a, str>> {
         // See notes in `decode_utf8` for why this is panicking indexing.
-        let memory = self.options.memory(store);
         Ok(encoding_rs::mem::decode_latin1(
             &memory[self.ptr..][..self.len],
         ))
@@ -1203,7 +1205,7 @@ unsafe impl ComponentType for WasmStr {
 }
 
 unsafe impl Lift for WasmStr {
-    fn lift(cx: &LiftContext<'_>, ty: InterfaceType, src: &Self::Lower) -> Result<Self> {
+    fn lift(cx: &mut LiftContext<'_>, ty: InterfaceType, src: &Self::Lower) -> Result<Self> {
         debug_assert!(matches!(ty, InterfaceType::String));
         // FIXME: needs memory64 treatment
         let ptr = src[0].get_u32();
@@ -1212,7 +1214,7 @@ unsafe impl Lift for WasmStr {
         WasmStr::new(ptr, len, cx)
     }
 
-    fn load(cx: &LiftContext<'_>, ty: InterfaceType, bytes: &[u8]) -> Result<Self> {
+    fn load(cx: &mut LiftContext<'_>, ty: InterfaceType, bytes: &[u8]) -> Result<Self> {
         debug_assert!(matches!(ty, InterfaceType::String));
         debug_assert!((bytes.as_ptr() as usize) % (Self::ALIGN32 as usize) == 0);
         // FIXME: needs memory64 treatment
@@ -1342,7 +1344,7 @@ impl<T: Lift> WasmList<T> {
     fn new(
         ptr: usize,
         len: usize,
-        cx: &LiftContext<'_>,
+        cx: &mut LiftContext<'_>,
         elem: InterfaceType,
     ) -> Result<WasmList<T>> {
         match len
@@ -1377,21 +1379,28 @@ impl<T: Lift> WasmList<T> {
     /// Returns `None` if `index` is out of bounds. Returns `Some(Err(..))` if
     /// the value couldn't be decoded (it was invalid). Returns `Some(Ok(..))`
     /// if the value is valid.
+    ///
+    /// # Panics
+    ///
+    /// This function will panic if the string did not originally come from the
+    /// `store` specified.
     //
     // TODO: given that interface values are intended to be consumed in one go
     // should we even expose a random access iteration API? In theory all
     // consumers should be validating through the iterator.
     pub fn get(&self, mut store: impl AsContextMut, index: usize) -> Option<Result<T>> {
-        self.get_from_store(store.as_context_mut().0, index)
+        let store = store.as_context_mut().0;
+        self.options.store_id().assert_belongs_to(store.id());
+        // TODO: comment unsafety, validity of `self.instance` carried over
+        let mut cx =
+            unsafe { LiftContext::new(store, &self.options, &self.types, self.instance.as_ptr()) };
+        self.get_from_store(&mut cx, index)
     }
 
-    fn get_from_store(&self, store: &StoreOpaque, index: usize) -> Option<Result<T>> {
+    fn get_from_store(&self, cx: &mut LiftContext<'_>, index: usize) -> Option<Result<T>> {
         if index >= self.len {
             return None;
         }
-        // TODO: comment unsafety, validity of `self.instance` carried over
-        let cx =
-            unsafe { LiftContext::new(store, &self.options, &self.types, self.instance.as_ptr()) };
         // Note that this is using panicking indexing and this is expected to
         // never fail. The bounds-checking here happened during the construction
         // of the `WasmList` itself which means these should always be in-bounds
@@ -1399,7 +1408,7 @@ impl<T: Lift> WasmList<T> {
         // unchecked indexing if we're confident enough and it's actually a perf
         // issue one day.
         let bytes = &cx.memory()[self.ptr + index * T::SIZE32..][..T::SIZE32];
-        Some(T::load(&cx, self.elem, bytes))
+        Some(T::load(cx, self.elem, bytes))
     }
 
     /// Returns an iterator over the elements of this list.
@@ -1411,7 +1420,11 @@ impl<T: Lift> WasmList<T> {
         store: impl Into<StoreContextMut<'a, U>>,
     ) -> impl ExactSizeIterator<Item = Result<T>> + 'a {
         let store = store.into().0;
-        (0..self.len).map(move |i| self.get_from_store(store, i).unwrap())
+        self.options.store_id().assert_belongs_to(store.id());
+        // TODO: comment unsafety, validity of `self.instance` carried over
+        let mut cx =
+            unsafe { LiftContext::new(store, &self.options, &self.types, self.instance.as_ptr()) };
+        (0..self.len).map(move |i| self.get_from_store(&mut cx, i).unwrap())
     }
 }
 
@@ -1479,7 +1492,7 @@ unsafe impl<T: ComponentType> ComponentType for WasmList<T> {
 }
 
 unsafe impl<T: Lift> Lift for WasmList<T> {
-    fn lift(cx: &LiftContext<'_>, ty: InterfaceType, src: &Self::Lower) -> Result<Self> {
+    fn lift(cx: &mut LiftContext<'_>, ty: InterfaceType, src: &Self::Lower) -> Result<Self> {
         let elem = match ty {
             InterfaceType::List(i) => cx.types[i].element,
             _ => bad_type_info(),
@@ -1491,7 +1504,7 @@ unsafe impl<T: Lift> Lift for WasmList<T> {
         WasmList::new(ptr, len, cx, elem)
     }
 
-    fn load(cx: &LiftContext<'_>, ty: InterfaceType, bytes: &[u8]) -> Result<Self> {
+    fn load(cx: &mut LiftContext<'_>, ty: InterfaceType, bytes: &[u8]) -> Result<Self> {
         let elem = match ty {
             InterfaceType::List(i) => cx.types[i].element,
             _ => bad_type_info(),
@@ -1804,7 +1817,7 @@ unsafe impl<T> Lift for Option<T>
 where
     T: Lift,
 {
-    fn lift(cx: &LiftContext<'_>, ty: InterfaceType, src: &Self::Lower) -> Result<Self> {
+    fn lift(cx: &mut LiftContext<'_>, ty: InterfaceType, src: &Self::Lower) -> Result<Self> {
         let payload = match ty {
             InterfaceType::Option(ty) => cx.types[ty].ty,
             _ => bad_type_info(),
@@ -1816,7 +1829,7 @@ where
         })
     }
 
-    fn load(cx: &LiftContext<'_>, ty: InterfaceType, bytes: &[u8]) -> Result<Self> {
+    fn load(cx: &mut LiftContext<'_>, ty: InterfaceType, bytes: &[u8]) -> Result<Self> {
         debug_assert!((bytes.as_ptr() as usize) % (Self::ALIGN32 as usize) == 0);
         let payload_ty = match ty {
             InterfaceType::Option(ty) => cx.types[ty].ty,
@@ -2060,7 +2073,7 @@ where
     T: Lift,
     E: Lift,
 {
-    fn lift(cx: &LiftContext<'_>, ty: InterfaceType, src: &Self::Lower) -> Result<Self> {
+    fn lift(cx: &mut LiftContext<'_>, ty: InterfaceType, src: &Self::Lower) -> Result<Self> {
         let (ok, err) = match ty {
             InterfaceType::Result(ty) => {
                 let ty = &cx.types[ty];
@@ -2094,7 +2107,7 @@ where
         })
     }
 
-    fn load(cx: &LiftContext<'_>, ty: InterfaceType, bytes: &[u8]) -> Result<Self> {
+    fn load(cx: &mut LiftContext<'_>, ty: InterfaceType, bytes: &[u8]) -> Result<Self> {
         debug_assert!((bytes.as_ptr() as usize) % (Self::ALIGN32 as usize) == 0);
         let discrim = bytes[0];
         let payload = &bytes[Self::INFO.payload_offset32 as usize..];
@@ -2113,7 +2126,7 @@ where
     }
 }
 
-fn lift_option<T>(cx: &LiftContext<'_>, ty: Option<InterfaceType>, src: &T::Lower) -> Result<T>
+fn lift_option<T>(cx: &mut LiftContext<'_>, ty: Option<InterfaceType>, src: &T::Lower) -> Result<T>
 where
     T: Lift,
 {
@@ -2123,7 +2136,7 @@ where
     }
 }
 
-fn load_option<T>(cx: &LiftContext<'_>, ty: Option<InterfaceType>, bytes: &[u8]) -> Result<T>
+fn load_option<T>(cx: &mut LiftContext<'_>, ty: Option<InterfaceType>, bytes: &[u8]) -> Result<T>
 where
     T: Lift,
 {
@@ -2228,7 +2241,7 @@ macro_rules! impl_component_ty_for_tuples {
         unsafe impl<$($t,)*> Lift for ($($t,)*)
             where $($t: Lift),*
         {
-            fn lift(cx: &LiftContext<'_>, ty: InterfaceType, _src: &Self::Lower) -> Result<Self> {
+            fn lift(cx: &mut LiftContext<'_>, ty: InterfaceType, _src: &Self::Lower) -> Result<Self> {
                 let types = match ty {
                     InterfaceType::Tuple(t) => &cx.types[t].types,
                     _ => bad_type_info(),
@@ -2243,7 +2256,7 @@ macro_rules! impl_component_ty_for_tuples {
                 )*))
             }
 
-            fn load(cx: &LiftContext<'_>, ty: InterfaceType, bytes: &[u8]) -> Result<Self> {
+            fn load(cx: &mut LiftContext<'_>, ty: InterfaceType, bytes: &[u8]) -> Result<Self> {
                 debug_assert!((bytes.as_ptr() as usize) % (Self::ALIGN32 as usize) == 0);
                 let types = match ty {
                     InterfaceType::Tuple(t) => &cx.types[t].types,

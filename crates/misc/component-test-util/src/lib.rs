@@ -108,11 +108,11 @@ macro_rules! forward_impls {
         }
 
         unsafe impl Lift for $a {
-            fn lift(cx: &LiftContext<'_>, ty: InterfaceType, src: &Self::Lower) -> Result<Self> {
+            fn lift(cx: &mut LiftContext<'_>, ty: InterfaceType, src: &Self::Lower) -> Result<Self> {
                 Ok(Self(<$b as Lift>::lift(cx, ty, src)?))
             }
 
-            fn load(cx: &LiftContext<'_>, ty: InterfaceType, bytes: &[u8]) -> Result<Self> {
+            fn load(cx: &mut LiftContext<'_>, ty: InterfaceType, bytes: &[u8]) -> Result<Self> {
                 Ok(Self(<$b as Lift>::load(cx, ty, bytes)?))
             }
         }

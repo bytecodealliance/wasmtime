@@ -86,7 +86,7 @@ impl<T> Resource<T> {
         Ok(cx.resource_lower_own(resource, rep))
     }
 
-    fn lift_from_index(cx: &LiftContext<'_>, ty: InterfaceType, index: u32) -> Result<Self> {
+    fn lift_from_index(cx: &mut LiftContext<'_>, ty: InterfaceType, index: u32) -> Result<Self> {
         let resource = match ty {
             InterfaceType::Own(t) => t,
             _ => bad_type_info(),
@@ -141,12 +141,12 @@ unsafe impl<T: 'static> Lower for Resource<T> {
 }
 
 unsafe impl<T: 'static> Lift for Resource<T> {
-    fn lift(cx: &LiftContext<'_>, ty: InterfaceType, src: &Self::Lower) -> Result<Self> {
+    fn lift(cx: &mut LiftContext<'_>, ty: InterfaceType, src: &Self::Lower) -> Result<Self> {
         let index = u32::lift(cx, InterfaceType::U32, src)?;
         Resource::lift_from_index(cx, ty, index)
     }
 
-    fn load(cx: &LiftContext<'_>, ty: InterfaceType, bytes: &[u8]) -> Result<Self> {
+    fn load(cx: &mut LiftContext<'_>, ty: InterfaceType, bytes: &[u8]) -> Result<Self> {
         let index = u32::load(cx, InterfaceType::U32, bytes)?;
         Resource::lift_from_index(cx, ty, index)
     }
@@ -226,7 +226,7 @@ impl ResourceAny {
         Ok(cx.resource_lower_own(resource, rep))
     }
 
-    fn lift_from_index(cx: &LiftContext<'_>, ty: InterfaceType, index: u32) -> Result<Self> {
+    fn lift_from_index(cx: &mut LiftContext<'_>, ty: InterfaceType, index: u32) -> Result<Self> {
         let resource = match ty {
             InterfaceType::Own(t) => t,
             _ => bad_type_info(),
@@ -234,7 +234,7 @@ impl ResourceAny {
         let (rep, dtor, flags) = cx.resource_lift_own(resource, index)?;
         let ty = cx.resource_type(resource);
         Ok(ResourceAny {
-            store: cx.store.id(),
+            store: cx.store_id(),
             rep: ResourceRep::new(rep),
             ty,
             dtor: dtor.map(SendSyncPtr::new),
@@ -295,12 +295,12 @@ unsafe impl Lower for ResourceAny {
 }
 
 unsafe impl Lift for ResourceAny {
-    fn lift(cx: &LiftContext<'_>, ty: InterfaceType, src: &Self::Lower) -> Result<Self> {
+    fn lift(cx: &mut LiftContext<'_>, ty: InterfaceType, src: &Self::Lower) -> Result<Self> {
         let index = u32::lift(cx, InterfaceType::U32, src)?;
         ResourceAny::lift_from_index(cx, ty, index)
     }
 
-    fn load(cx: &LiftContext<'_>, ty: InterfaceType, bytes: &[u8]) -> Result<Self> {
+    fn load(cx: &mut LiftContext<'_>, ty: InterfaceType, bytes: &[u8]) -> Result<Self> {
         let index = u32::load(cx, InterfaceType::U32, bytes)?;
         ResourceAny::lift_from_index(cx, ty, index)
     }

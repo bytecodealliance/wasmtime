@@ -658,7 +658,7 @@ impl Val {
 
     /// Deserialize a value of this type from core Wasm stack values.
     pub(crate) fn lift(
-        cx: &LiftContext<'_>,
+        cx: &mut LiftContext<'_>,
         ty: InterfaceType,
         src: &mut std::slice::Iter<'_, ValRaw>,
     ) -> Result<Val> {
@@ -790,7 +790,7 @@ impl Val {
     }
 
     /// Deserialize a value of this type from the heap.
-    pub(crate) fn load(cx: &LiftContext<'_>, ty: InterfaceType, bytes: &[u8]) -> Result<Val> {
+    pub(crate) fn load(cx: &mut LiftContext<'_>, ty: InterfaceType, bytes: &[u8]) -> Result<Val> {
         Ok(match ty {
             InterfaceType::Bool => Val::Bool(bool::load(cx, ty, bytes)?),
             InterfaceType::S8 => Val::S8(i8::load(cx, ty, bytes)?),
@@ -1228,7 +1228,7 @@ impl GenericVariant<'_> {
     }
 }
 
-fn load_list(cx: &LiftContext<'_>, ty: TypeListIndex, ptr: usize, len: usize) -> Result<Val> {
+fn load_list(cx: &mut LiftContext<'_>, ty: TypeListIndex, ptr: usize, len: usize) -> Result<Val> {
     let elem = cx.types[ty].element;
     let abi = cx.types.canonical_abi(&elem);
     let element_size = usize::try_from(abi.size32).unwrap();
@@ -1260,7 +1260,7 @@ fn load_list(cx: &LiftContext<'_>, ty: TypeListIndex, ptr: usize, len: usize) ->
 }
 
 fn load_record(
-    cx: &LiftContext<'_>,
+    cx: &mut LiftContext<'_>,
     types: impl Iterator<Item = InterfaceType>,
     bytes: &[u8],
 ) -> Result<Box<[Val]>> {
@@ -1277,7 +1277,7 @@ fn load_record(
 }
 
 fn load_variant(
-    cx: &LiftContext<'_>,
+    cx: &mut LiftContext<'_>,
     info: &VariantInfo,
     mut types: impl ExactSizeIterator<Item = Option<InterfaceType>>,
     bytes: &[u8],
@@ -1311,7 +1311,7 @@ fn load_variant(
 }
 
 fn lift_variant(
-    cx: &LiftContext<'_>,
+    cx: &mut LiftContext<'_>,
     flatten_count: usize,
     mut types: impl ExactSizeIterator<Item = Option<InterfaceType>>,
     src: &mut std::slice::Iter<'_, ValRaw>,
