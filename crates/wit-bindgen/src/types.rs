@@ -158,6 +158,8 @@ impl Types {
                 info = self.optional_type_info(resolve, stream.element.as_ref());
                 info |= self.optional_type_info(resolve, stream.end.as_ref());
             }
+            TypeDefKind::Handle(_) => {}
+            TypeDefKind::Resource => {}
             TypeDefKind::Unknown => unreachable!(),
         }
         self.type_info.insert(ty, info);

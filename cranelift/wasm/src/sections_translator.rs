@@ -21,7 +21,7 @@ use wasmparser::{
     self, Data, DataKind, DataSectionReader, Element, ElementItems, ElementKind,
     ElementSectionReader, Export, ExportSectionReader, ExternalKind, FunctionSectionReader,
     GlobalSectionReader, ImportSectionReader, MemorySectionReader, MemoryType, NameSectionReader,
-    Naming, Operator, TableSectionReader, TagSectionReader, TagType, Type, TypeRef,
+    Naming, Operator, StructuralType, TableSectionReader, TagSectionReader, TagType, TypeRef,
     TypeSectionReader,
 };
 
@@ -51,12 +51,16 @@ pub fn parse_type_section<'a>(
     environ.reserve_types(count)?;
 
     for entry in types {
-        match entry? {
-            Type::Func(wasm_func_ty) => {
+        let entry = entry?;
+        if entry.is_final || entry.supertype_idx.is_some() {
+            unimplemented!("gc proposal");
+        }
+        match entry.structural_type {
+            StructuralType::Func(wasm_func_ty) => {
                 let ty = environ.convert_func_type(&wasm_func_ty);
                 environ.declare_type_func(ty)?;
             }
-            Type::Array(_) => {
+            StructuralType::Array(_) | StructuralType::Struct(_) => {
                 unimplemented!("gc proposal");
             }
         }

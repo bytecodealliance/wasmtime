@@ -128,15 +128,13 @@ impl Factc {
             .validate_all(&input)
             .context("failed to validate input wasm")?;
         let wasm_types = wasm_types.as_ref();
-        for i in 0.. {
-            let ty = match wasm_types.id_from_type_index(i, false) {
-                Some(ty) => ty,
-                None => break,
-            };
-            let wasm_ty = wasm_types.type_from_id(ty).unwrap();
-            let ty = match wasm_ty.as_component_func_type() {
-                Some(ty) => types.convert_component_func_type(wasm_types, ty)?,
-                None => continue,
+        for i in 0..wasm_types.component_type_count() {
+            let ty = wasm_types.component_type_at(i);
+            let ty = match &wasm_types[ty] {
+                wasmparser::types::Type::ComponentFunc(ty) => {
+                    types.convert_component_func_type(wasm_types, ty)?
+                }
+                _ => continue,
             };
             adapters.push(Adapter {
                 lift_ty: ty,
