@@ -339,7 +339,7 @@ fn drop_guest_twice() -> Result<()> {
 
     assert_eq!(
         dtor.call(&mut store, (&t,)).unwrap_err().to_string(),
-        "resource already consumed"
+        "unknown handle index 0"
     );
 
     Ok(())
@@ -369,13 +369,13 @@ fn drop_host_twice() -> Result<()> {
     let i = linker.instantiate(&mut store, &c)?;
     let dtor = i.get_typed_func::<(&Resource<MyType>,), ()>(&mut store, "dtor")?;
 
-    let t = Resource::new(100);
+    let t = Resource::new(&mut store, 100);
     dtor.call(&mut store, (&t,))?;
     dtor.post_return(&mut store)?;
 
     assert_eq!(
         dtor.call(&mut store, (&t,)).unwrap_err().to_string(),
-        "resource already consumed"
+        "unknown handle index 0"
     );
 
     Ok(())
@@ -441,7 +441,7 @@ fn manually_destroy() -> Result<()> {
     let t1_pass = i.get_typed_func::<(Resource<MyType>,), (ResourceAny,)>(&mut store, "t1-pass")?;
 
     // Host resources can be destroyed through `resource_drop`
-    let t1 = Resource::<MyType>::new(100);
+    let t1 = Resource::<MyType>::new(&mut store, 100);
     let (t1,) = t1_pass.call(&mut store, (t1,))?;
     t1_pass.post_return(&mut store)?;
     assert_eq!(store.data().drops, 0);
@@ -553,7 +553,8 @@ fn dynamic_val() -> Result<()> {
     let b = i.get_func(&mut store, "b").unwrap();
     let t2 = i.get_resource(&mut store, "t2").unwrap();
 
-    let (t1,) = a_typed.call(&mut store, (Resource::new(100),))?;
+    let t1 = Resource::new(&mut store, 100);
+    let (t1,) = a_typed.call(&mut store, (t1,))?;
     a_typed.post_return(&mut store)?;
     assert_eq!(t1.ty(), ResourceType::host::<MyType>());
 

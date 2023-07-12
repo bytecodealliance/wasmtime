@@ -6,7 +6,9 @@ use anyhow::{bail, Result};
 use std::ptr::NonNull;
 use std::sync::Arc;
 use wasmtime_environ::component::{ComponentTypes, StringEncoding, TypeResourceTableIndex};
-use wasmtime_runtime::component::{ComponentInstance, InstanceFlags};
+use wasmtime_runtime::component::{
+    CallContexts, ComponentInstance, InstanceFlags, ResourceTable, ResourceTables,
+};
 use wasmtime_runtime::{VMFuncRef, VMMemoryDefinition};
 
 /// Runtime representation of canonical ABI options in the component model.
@@ -267,15 +269,41 @@ impl<'a, T> LowerContext<'a, T> {
     }
 
     /// TODO
-    pub fn resource_lower_own(&mut self, ty: TypeResourceTableIndex, rep: u32) -> u32 {
-        // TODO: document unsafe
-        unsafe { (*self.instance).resource_lower_own(ty, rep) }
+    pub fn guest_resource_lower_own(&mut self, ty: TypeResourceTableIndex, rep: u32) -> u32 {
+        self.resource_tables().resource_lower_own(Some(ty), rep)
     }
 
     /// TODO
-    pub fn resource_lower_borrow(&mut self, ty: TypeResourceTableIndex, rep: u32) -> u32 {
-        // TODO: document unsafe
-        unsafe { (*self.instance).resource_lower_borrow(ty, rep) }
+    pub fn guest_resource_lower_borrow(&mut self, ty: TypeResourceTableIndex, rep: u32) -> u32 {
+        // Implement `lower_borrow`'s special case here where if a borrow is
+        // inserted into a table owned by the instance which implemented the
+        // original resource then no borrow tracking is employed and instead the
+        // `rep` is returned "raw".
+        //
+        // This check is performed by comparing the owning instance of `ty`
+        // against the owning instance of the resource that `ty` is working
+        // with.
+        //
+        // TODO: unsafe
+        if unsafe { (*self.instance).resource_owned_by_own_instance(ty) } {
+            return rep;
+        }
+        self.resource_tables().resource_lower_borrow(Some(ty), rep)
+    }
+
+    /// TODO
+    pub fn host_resource_lift_own(&mut self, idx: u32) -> Result<u32> {
+        self.resource_tables().resource_lift_own(None, idx)
+    }
+
+    /// TODO
+    pub fn host_resource_lift_borrow(&mut self, idx: u32) -> Result<u32> {
+        self.resource_tables().resource_lift_borrow(None, idx)
+    }
+
+    /// TODO
+    pub fn host_resource_lower_own(&mut self, rep: u32) -> u32 {
+        self.resource_tables().resource_lower_own(None, rep)
     }
 
     /// TODO
@@ -287,6 +315,16 @@ impl<'a, T> LowerContext<'a, T> {
     pub fn instance_type(&self) -> InstanceType<'_> {
         // TODO: document unsafe
         InstanceType::new(unsafe { &*self.instance })
+    }
+
+    fn resource_tables(&mut self) -> ResourceTables<'_> {
+        let (calls, host_table) = self.store.0.component_calls_and_host_table();
+        ResourceTables {
+            host_table: Some(host_table),
+            calls,
+            // TODO: document unsafe
+            tables: Some(unsafe { (*self.instance).component_resource_tables() }),
+        }
     }
 }
 
@@ -306,6 +344,10 @@ pub struct LiftContext<'a> {
     memory: Option<&'a [u8]>,
 
     instance: *mut ComponentInstance,
+
+    host_table: &'a mut ResourceTable,
+
+    calls: &'a mut CallContexts,
 }
 
 #[doc(hidden)]
@@ -321,11 +363,17 @@ impl<'a> LiftContext<'a> {
         types: &'a Arc<ComponentTypes>,
         instance: *mut ComponentInstance,
     ) -> LiftContext<'a> {
+        // TODO: document `unsafe`
+        let (calls, host_table) =
+            unsafe { (&mut *(store as *mut StoreOpaque)).component_calls_and_host_table() };
+        let memory = options.memory.map(|_| options.memory(store));
         LiftContext {
-            memory: options.memory.map(|_| options.memory(store)),
+            memory,
             options,
             types,
             instance,
+            calls,
+            host_table,
         }
     }
 
@@ -351,19 +399,33 @@ impl<'a> LiftContext<'a> {
     }
 
     /// TODO
-    pub fn resource_lift_own(
+    pub fn guest_resource_lift_own(
         &mut self,
         ty: TypeResourceTableIndex,
         idx: u32,
     ) -> Result<(u32, Option<NonNull<VMFuncRef>>, Option<InstanceFlags>)> {
-        // TODO: document unsafe
-        unsafe { (*self.instance).resource_lift_own(ty, idx) }
+        let idx = self.resource_tables().resource_lift_own(Some(ty), idx)?;
+        let (dtor, flags) = unsafe { (*self.instance).dtor_and_flags(ty) };
+        Ok((idx, dtor, flags))
     }
 
     /// TODO
-    pub fn resource_lift_borrow(&mut self, ty: TypeResourceTableIndex, idx: u32) -> Result<u32> {
-        // TODO: document unsafe
-        unsafe { (*self.instance).resource_lift_borrow(ty, idx) }
+    pub fn guest_resource_lift_borrow(
+        &mut self,
+        ty: TypeResourceTableIndex,
+        idx: u32,
+    ) -> Result<u32> {
+        self.resource_tables().resource_lift_borrow(Some(ty), idx)
+    }
+
+    /// TODO
+    pub fn host_resource_lower_own(&mut self, rep: u32) -> u32 {
+        self.resource_tables().resource_lower_own(None, rep)
+    }
+
+    /// TODO
+    pub fn host_resource_lower_borrow(&mut self, rep: u32) -> u32 {
+        self.resource_tables().resource_lower_borrow(None, rep)
     }
 
     /// TODO
@@ -375,5 +437,14 @@ impl<'a> LiftContext<'a> {
     pub fn instance_type(&self) -> InstanceType<'_> {
         // TODO: document unsafe
         InstanceType::new(unsafe { &*self.instance })
+    }
+
+    fn resource_tables(&mut self) -> ResourceTables<'_> {
+        ResourceTables {
+            host_table: Some(self.host_table),
+            calls: self.calls,
+            // TODO: document unsafe
+            tables: Some(unsafe { (*self.instance).component_resource_tables() }),
+        }
     }
 }

@@ -106,13 +106,13 @@ pub fn link_component_spectest<T>(linker: &mut component::Linker<T>) -> Result<(
         panic!("TODO: shouldn't have to specify dtor twice");
     })?;
 
-    i.func_wrap("[constructor]resource1", |_, (rep,): (u32,)| {
-        Ok((Resource::<Resource1>::new(rep),))
+    i.func_wrap("[constructor]resource1", |mut cx, (rep,): (u32,)| {
+        Ok((Resource::<Resource1>::new(&mut cx, rep),))
     })?;
     i.func_wrap(
         "[static]resource1.assert",
-        |_, (resource, rep): (Resource<Resource1>, u32)| {
-            assert_eq!(resource.rep(), rep);
+        |cx, (resource, rep): (Resource<Resource1>, u32)| {
+            assert_eq!(resource.rep(&cx)?, rep);
             Ok(())
         },
     )?;

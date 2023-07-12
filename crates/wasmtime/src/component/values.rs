@@ -595,10 +595,8 @@ impl fmt::Debug for Flags {
 /// Represents possible runtime values which a component function can either
 /// consume or produce
 ///
-/// TODO: fill in notes on Clone
-///
 /// TODO: fill in notes on PartialEq
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[allow(missing_docs)]
 pub enum Val {
     Bool(bool),
@@ -1140,43 +1138,13 @@ impl PartialEq for Val {
             (Self::Result(_), _) => false,
             (Self::Flags(l), Self::Flags(r)) => l == r,
             (Self::Flags(_), _) => false,
-            (Self::Resource(l), Self::Resource(r)) => l.partial_eq_for_val(r),
+            (Self::Resource(l), Self::Resource(r)) => l == r,
             (Self::Resource(_), _) => false,
         }
     }
 }
 
 impl Eq for Val {}
-
-impl Clone for Val {
-    fn clone(&self) -> Val {
-        match self {
-            Self::Bool(v) => Self::Bool(*v),
-            Self::U8(v) => Self::U8(*v),
-            Self::S8(v) => Self::S8(*v),
-            Self::U16(v) => Self::U16(*v),
-            Self::S16(v) => Self::S16(*v),
-            Self::U32(v) => Self::U32(*v),
-            Self::S32(v) => Self::S32(*v),
-            Self::U64(v) => Self::U64(*v),
-            Self::S64(v) => Self::S64(*v),
-            Self::Float32(v) => Self::Float32(*v),
-            Self::Float64(v) => Self::Float64(*v),
-            Self::Char(v) => Self::Char(*v),
-            Self::String(s) => Self::String(s.clone()),
-            Self::List(s) => Self::List(s.clone()),
-            Self::Record(s) => Self::Record(s.clone()),
-            Self::Tuple(s) => Self::Tuple(s.clone()),
-            Self::Variant(s) => Self::Variant(s.clone()),
-            Self::Enum(s) => Self::Enum(s.clone()),
-            Self::Union(s) => Self::Union(s.clone()),
-            Self::Flags(s) => Self::Flags(s.clone()),
-            Self::Option(s) => Self::Option(s.clone()),
-            Self::Result(s) => Self::Result(s.clone()),
-            Self::Resource(s) => Self::Resource(s.clone_for_val()),
-        }
-    }
-}
 
 struct GenericVariant<'a> {
     discriminant: u32,

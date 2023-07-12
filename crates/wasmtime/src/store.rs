@@ -338,6 +338,11 @@ pub struct StoreOpaque {
     /// Note that this is `ManuallyDrop` as it must be dropped after
     /// `store_data` above, where the function pointers are stored.
     rooted_host_funcs: ManuallyDrop<Vec<Arc<[Definition]>>>,
+
+    #[cfg(feature = "component-model")]
+    component_host_table: wasmtime_runtime::component::ResourceTable,
+    #[cfg(feature = "component-model")]
+    component_calls: wasmtime_runtime::component::CallContexts,
 }
 
 #[cfg(feature = "async")]
@@ -474,6 +479,10 @@ impl<T> Store<T> {
                 hostcall_val_storage: Vec::new(),
                 wasm_val_raw_storage: Vec::new(),
                 rooted_host_funcs: ManuallyDrop::new(Vec::new()),
+                #[cfg(feature = "component-model")]
+                component_host_table: Default::default(),
+                #[cfg(feature = "component-model")]
+                component_calls: Default::default(),
             },
             limiter: None,
             call_hook: None,
@@ -1536,6 +1545,21 @@ at https://bytecodealliance.org/security.
         );
         std::process::abort();
     }
+
+    #[cfg(feature = "component-model")]
+    pub(crate) fn host_table(&self) -> &wasmtime_runtime::component::ResourceTable {
+        &self.component_host_table
+    }
+
+    #[cfg(feature = "component-model")]
+    pub(crate) fn component_calls_and_host_table(
+        &mut self,
+    ) -> (
+        &mut wasmtime_runtime::component::CallContexts,
+        &mut wasmtime_runtime::component::ResourceTable,
+    ) {
+        (&mut self.component_calls, &mut self.component_host_table)
+    }
 }
 
 impl<T> StoreContextMut<'_, T> {
@@ -2046,6 +2070,11 @@ unsafe impl<T> wasmtime_runtime::Store for StoreInner<T> {
         // Put back the original behavior which was replaced by `take`.
         self.epoch_deadline_behavior = behavior;
         delta_result
+    }
+
+    #[cfg(feature = "component-model")]
+    fn component_calls(&mut self) -> &mut wasmtime_runtime::component::CallContexts {
+        &mut self.component_calls
     }
 }
 

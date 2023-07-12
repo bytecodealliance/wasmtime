@@ -3,13 +3,19 @@ use std::mem;
 use wasmtime_environ::component::TypeResourceTableIndex;
 use wasmtime_environ::PrimaryMap;
 
-pub struct ResourceTables {
-    tables: PrimaryMap<TypeResourceTableIndex, ResourceTable>,
-    calls: Vec<CallContext>,
+/// TODO
+pub struct ResourceTables<'a> {
+    /// TODO
+    pub tables: Option<&'a mut PrimaryMap<TypeResourceTableIndex, ResourceTable>>,
+    /// TODO
+    pub host_table: Option<&'a mut ResourceTable>,
+    /// TODO
+    pub calls: &'a mut CallContexts,
 }
 
+/// TODO
 #[derive(Default)]
-struct ResourceTable {
+pub struct ResourceTable {
     next: u32,
     slots: Vec<Slot>,
 }
@@ -20,6 +26,12 @@ enum Slot {
     Borrow { rep: u32, scope: usize },
 }
 
+/// TODO
+#[derive(Default)]
+pub struct CallContexts {
+    scopes: Vec<CallContext>,
+}
+
 #[derive(Default)]
 struct CallContext {
     lenders: Vec<Lender>,
@@ -27,38 +39,31 @@ struct CallContext {
 }
 
 #[derive(Copy, Clone)]
-pub struct Lender {
-    ty: TypeResourceTableIndex,
+struct Lender {
+    ty: Option<TypeResourceTableIndex>,
     idx: u32,
 }
 
-impl ResourceTables {
-    pub fn new(amt: usize) -> ResourceTables {
-        let mut tables = PrimaryMap::with_capacity(amt);
-        for _ in 0..amt {
-            tables.push(ResourceTable::default());
-        }
-        ResourceTables {
-            tables,
-            calls: Vec::new(),
+impl ResourceTables<'_> {
+    fn table(&mut self, ty: Option<TypeResourceTableIndex>) -> &mut ResourceTable {
+        match ty {
+            None => self.host_table.as_mut().unwrap(),
+            Some(idx) => &mut self.tables.as_mut().unwrap()[idx],
         }
     }
 
     /// Implementation of the `resource.new` canonical intrinsic.
     ///
     /// Note that this is the same as `resource_lower_own`.
-    pub fn resource_new(&mut self, ty: TypeResourceTableIndex, rep: u32) -> u32 {
-        self.tables[ty].insert(Slot::Own { rep, lend_count: 0 })
+    pub fn resource_new(&mut self, ty: Option<TypeResourceTableIndex>, rep: u32) -> u32 {
+        self.table(ty).insert(Slot::Own { rep, lend_count: 0 })
     }
 
     /// Implementation of the `resource.rep` canonical intrinsic.
     ///
     /// This one's one of the simpler ones: "just get the rep please"
-    pub fn resource_rep(&mut self, ty: TypeResourceTableIndex, idx: u32) -> Result<u32> {
-        match self.tables[ty].get_mut(idx)? {
-            Slot::Own { rep, .. } | Slot::Borrow { rep, .. } => Ok(*rep),
-            Slot::Free { .. } => unreachable!(),
-        }
+    pub fn resource_rep(&mut self, ty: Option<TypeResourceTableIndex>, idx: u32) -> Result<u32> {
+        self.table(ty).rep(idx)
     }
 
     /// Implementation of the `resource.drop` canonical intrinsic minus the
@@ -73,12 +78,16 @@ impl ResourceTables {
     /// Otherwise this will return `Some(rep)` if the destructor for `rep` needs
     /// to run. If `None` is returned then that means a `borrow` handle was
     /// removed and no destructor is necessary.
-    pub fn resource_drop(&mut self, ty: TypeResourceTableIndex, idx: u32) -> Result<Option<u32>> {
-        match self.tables[ty].remove(idx)? {
+    pub fn resource_drop(
+        &mut self,
+        ty: Option<TypeResourceTableIndex>,
+        idx: u32,
+    ) -> Result<Option<u32>> {
+        match self.table(ty).remove(idx)? {
             Slot::Own { rep, lend_count: 0 } => Ok(Some(rep)),
             Slot::Own { .. } => bail!("cannot remove owned resource while borrowed"),
             Slot::Borrow { scope, .. } => {
-                self.calls[scope].borrow_count -= 1;
+                self.calls.scopes[scope].borrow_count -= 1;
                 Ok(None)
             }
             Slot::Free { .. } => unreachable!(),
@@ -94,8 +103,8 @@ impl ResourceTables {
     /// the same as `resource_new` implementation-wise.
     ///
     /// This is an implementation of the canonical ABI `lower_own` function.
-    pub fn resource_lower_own(&mut self, ty: TypeResourceTableIndex, rep: u32) -> u32 {
-        self.tables[ty].insert(Slot::Own { rep, lend_count: 0 })
+    pub fn resource_lower_own(&mut self, ty: Option<TypeResourceTableIndex>, rep: u32) -> u32 {
+        self.table(ty).insert(Slot::Own { rep, lend_count: 0 })
     }
 
     /// Attempts to remove an "own" handle from the specified table and its
@@ -105,8 +114,12 @@ impl ResourceTables {
     /// or if the own handle has currently been "lent" as a borrow.
     ///
     /// This is an implementation of the canonical ABI `lift_own` function.
-    pub fn resource_lift_own(&mut self, ty: TypeResourceTableIndex, idx: u32) -> Result<u32> {
-        match self.tables[ty].remove(idx)? {
+    pub fn resource_lift_own(
+        &mut self,
+        ty: Option<TypeResourceTableIndex>,
+        idx: u32,
+    ) -> Result<u32> {
+        match self.table(ty).remove(idx)? {
             Slot::Own { rep, lend_count: 0 } => Ok(rep),
             Slot::Own { .. } => bail!("cannot remove owned resource while borrowed"),
             Slot::Borrow { .. } => bail!("cannot lift own resource from a borrow"),
@@ -123,17 +136,18 @@ impl ResourceTables {
     /// returns the lend operation is undone.
     ///
     /// This is an implementation of the canonical ABI `lift_borrow` function.
-    pub fn resource_lift_borrow(&mut self, ty: TypeResourceTableIndex, idx: u32) -> Result<u32> {
-        match self.tables[ty].get_mut(idx)? {
+    pub fn resource_lift_borrow(
+        &mut self,
+        ty: Option<TypeResourceTableIndex>,
+        idx: u32,
+    ) -> Result<u32> {
+        match self.table(ty).get_mut(idx)? {
             Slot::Own { rep, lend_count } => {
                 // The decrement to this count happens in `exit_call`.
                 *lend_count = lend_count.checked_add(1).unwrap();
-                self.calls
-                    .last_mut()
-                    .unwrap()
-                    .lenders
-                    .push(Lender { ty, idx });
-                Ok(*rep)
+                let rep = *rep;
+                self.register_lender(ty, idx);
+                Ok(rep)
             }
             Slot::Borrow { rep, .. } => Ok(*rep),
             Slot::Free { .. } => unreachable!(),
@@ -152,19 +166,27 @@ impl ResourceTables {
     /// function. The other half of this implementation is located on
     /// `VMComponentContext` which handles the special case of avoiding borrow
     /// tracking entirely.
-    pub fn resource_lower_borrow(&mut self, ty: TypeResourceTableIndex, rep: u32) -> u32 {
-        let scope = self.calls.len() - 1;
-        let borrow_count = &mut self.calls.last_mut().unwrap().borrow_count;
+    pub fn resource_lower_borrow(&mut self, ty: Option<TypeResourceTableIndex>, rep: u32) -> u32 {
+        let scope = self.calls.scopes.len() - 1;
+        let borrow_count = &mut self.calls.scopes.last_mut().unwrap().borrow_count;
         *borrow_count = borrow_count.checked_add(1).unwrap();
-        self.tables[ty].insert(Slot::Borrow { rep, scope })
+        self.table(ty).insert(Slot::Borrow { rep, scope })
     }
 
+    /// TODO
+    fn register_lender(&mut self, ty: Option<TypeResourceTableIndex>, idx: u32) {
+        let scope = self.calls.scopes.last_mut().unwrap();
+        scope.lenders.push(Lender { ty, idx });
+    }
+
+    /// TODO
     pub fn enter_call(&mut self) {
-        self.calls.push(CallContext::default());
+        self.calls.scopes.push(CallContext::default());
     }
 
+    /// TODO
     pub fn exit_call(&mut self) -> Result<()> {
-        let cx = self.calls.pop().unwrap();
+        let cx = self.calls.scopes.pop().unwrap();
         if cx.borrow_count > 0 {
             bail!("borrow handles still remain at the end of the call")
         }
@@ -172,7 +194,7 @@ impl ResourceTables {
             // Note the panics here which should never get triggered in theory
             // due to the dynamic tracking of borrows and such employed for
             // resources.
-            match self.tables[lender.ty].get_mut(lender.idx).unwrap() {
+            match self.table(lender.ty).get_mut(lender.idx).unwrap() {
                 Slot::Own { lend_count, .. } => {
                     *lend_count -= 1;
                 }
@@ -201,6 +223,14 @@ impl ResourceTable {
             _ => unreachable!(),
         };
         u32::try_from(ret).unwrap()
+    }
+
+    /// TODO
+    pub fn rep(&self, idx: u32) -> Result<u32> {
+        match usize::try_from(idx).ok().and_then(|i| self.slots.get(i)) {
+            None | Some(Slot::Free { .. }) => bail!("unknown handle index {idx}"),
+            Some(Slot::Own { rep, .. } | Slot::Borrow { rep, .. }) => Ok(*rep),
+        }
     }
 
     fn get_mut(&mut self, idx: u32) -> Result<&mut Slot> {

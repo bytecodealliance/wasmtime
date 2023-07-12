@@ -6,7 +6,6 @@
 //! Eventually it's intended that module-to-module calls, which would be
 //! cranelift-compiled adapters, will use this `VMComponentContext` as well.
 
-use self::resources::ResourceTables;
 use crate::{
     SendSyncPtr, Store, VMArrayCallFunction, VMFuncRef, VMGlobalDefinition, VMMemoryDefinition,
     VMNativeCallFunction, VMOpaqueContext, VMSharedSignatureIndex, VMWasmCallFunction, ValRaw,
@@ -22,12 +21,14 @@ use std::ops::Deref;
 use std::ptr::{self, NonNull};
 use std::sync::Arc;
 use wasmtime_environ::component::*;
-use wasmtime_environ::HostPtr;
+use wasmtime_environ::{HostPtr, PrimaryMap};
 
 const INVALID_PTR: usize = 0xdead_dead_beef_beef_u64 as usize;
 
 mod resources;
 mod transcode;
+
+pub use self::resources::{CallContexts, ResourceTable, ResourceTables};
 
 /// Runtime representation of a component instance and all state necessary for
 /// the instance itself.
@@ -49,7 +50,7 @@ pub struct ComponentInstance {
     runtime_info: Arc<dyn ComponentRuntimeInfo>,
 
     /// TODO
-    resource_tables: ResourceTables,
+    component_resource_tables: PrimaryMap<TypeResourceTableIndex, ResourceTable>,
 
     /// TODO:
     /// TODO: Any is bad
@@ -176,6 +177,12 @@ impl ComponentInstance {
     ) {
         assert!(alloc_size >= Self::alloc_layout(&offsets).size());
 
+        let num_tables = runtime_info.component().num_resource_tables;
+        let mut component_resource_tables = PrimaryMap::with_capacity(num_tables);
+        for _ in 0..num_tables {
+            component_resource_tables.push(ResourceTable::default());
+        }
+
         ptr::write(
             ptr.as_ptr(),
             ComponentInstance {
@@ -189,7 +196,7 @@ impl ComponentInstance {
                     )
                     .unwrap(),
                 ),
-                resource_tables: ResourceTables::new(runtime_info.component().num_resource_tables),
+                component_resource_tables,
                 runtime_info,
                 resource_types,
                 vmctx: VMComponentContext {
@@ -546,7 +553,7 @@ impl ComponentInstance {
     }
 
     /// TODO
-    pub fn resource_destructor(&mut self, idx: ResourceIndex) -> Option<NonNull<VMFuncRef>> {
+    pub fn resource_destructor(&self, idx: ResourceIndex) -> Option<NonNull<VMFuncRef>> {
         unsafe {
             let offset = self.offsets.resource_destructor(idx);
             debug_assert!(*self.vmctx_plus_offset::<usize>(offset) != INVALID_PTR);
@@ -647,62 +654,23 @@ impl ComponentInstance {
 
     /// TODO
     pub fn resource_new32(&mut self, resource: TypeResourceTableIndex, rep: u32) -> u32 {
-        self.resource_tables.resource_new(resource, rep)
+        self.resource_tables().resource_new(Some(resource), rep)
     }
 
     /// TODO
-    pub fn resource_lower_own(&mut self, ty: TypeResourceTableIndex, rep: u32) -> u32 {
-        self.resource_tables.resource_lower_own(ty, rep)
-    }
-
-    /// TODO
-    pub fn resource_lift_own(
-        &mut self,
-        ty: TypeResourceTableIndex,
-        idx: u32,
-    ) -> Result<(u32, Option<NonNull<VMFuncRef>>, Option<InstanceFlags>)> {
-        let rep = self.resource_tables.resource_lift_own(ty, idx)?;
-        let resource = self.component_types()[ty].ty;
-        let dtor = self.resource_destructor(resource);
-        let component = self.component();
-        let flags = component.defined_resource_index(resource).map(|i| {
-            let instance = component.defined_resource_instances[i];
-            self.instance_flags(instance)
-        });
-        Ok((rep, dtor, flags))
-    }
-
-    /// TODO
-    pub fn resource_lift_borrow(&mut self, ty: TypeResourceTableIndex, idx: u32) -> Result<u32> {
-        self.resource_tables.resource_lift_borrow(ty, idx)
-    }
-
-    /// TODO
-    pub fn resource_lower_borrow(&mut self, ty: TypeResourceTableIndex, rep: u32) -> u32 {
-        // Implement `lower_borrow`'s special case here where if a borrow is
-        // inserted into a table owned by the instance which implemented the
-        // original resource then no borrow tracking is employed and instead the
-        // `rep` is returned "raw".
-        //
-        // This check is performed by comparing the owning instance of `ty`
-        // against the owning instance of the resource that `ty` is working
-        // with.
+    pub fn resource_owned_by_own_instance(&self, ty: TypeResourceTableIndex) -> bool {
         let resource = &self.component_types()[ty];
         let component = self.component();
-        if let Some(idx) = component.defined_resource_index(resource.ty) {
-            if resource.instance == component.defined_resource_instances[idx] {
-                return rep;
-            }
-        }
-
-        // ... failing that though borrow tracking enuses and is delegated to
-        // the resource tables implementation.
-        self.resource_tables.resource_lower_borrow(ty, rep)
+        let idx = match component.defined_resource_index(resource.ty) {
+            Some(idx) => idx,
+            None => return false,
+        };
+        resource.instance == component.defined_resource_instances[idx]
     }
 
     /// TODO
     pub fn resource_rep32(&mut self, resource: TypeResourceTableIndex, idx: u32) -> Result<u32> {
-        self.resource_tables.resource_rep(resource, idx)
+        self.resource_tables().resource_rep(Some(resource), idx)
     }
 
     /// TODO
@@ -711,17 +679,37 @@ impl ComponentInstance {
         resource: TypeResourceTableIndex,
         idx: u32,
     ) -> Result<Option<u32>> {
-        self.resource_tables.resource_drop(resource, idx)
+        self.resource_tables().resource_drop(Some(resource), idx)
+    }
+
+    fn resource_tables(&mut self) -> ResourceTables<'_> {
+        ResourceTables {
+            host_table: None,
+            calls: unsafe { (&mut *self.store()).component_calls() },
+            tables: Some(&mut self.component_resource_tables),
+        }
     }
 
     /// TODO
-    pub fn enter_call(&mut self) {
-        self.resource_tables.enter_call();
+    pub fn component_resource_tables(
+        &mut self,
+    ) -> &mut PrimaryMap<TypeResourceTableIndex, ResourceTable> {
+        &mut self.component_resource_tables
     }
 
     /// TODO
-    pub fn exit_call(&mut self) -> Result<()> {
-        self.resource_tables.exit_call()
+    pub fn dtor_and_flags(
+        &self,
+        ty: TypeResourceTableIndex,
+    ) -> (Option<NonNull<VMFuncRef>>, Option<InstanceFlags>) {
+        let resource = self.component_types()[ty].ty;
+        let dtor = self.resource_destructor(resource);
+        let component = self.component();
+        let flags = component.defined_resource_index(resource).map(|i| {
+            let instance = component.defined_resource_instances[i];
+            self.instance_flags(instance)
+        });
+        (dtor, flags)
     }
 }
 
@@ -980,6 +968,7 @@ impl VMOpaqueContext {
 
 #[allow(missing_docs)]
 #[repr(transparent)]
+#[derive(Copy, Clone)]
 pub struct InstanceFlags(SendSyncPtr<VMGlobalDefinition>);
 
 #[allow(missing_docs)]
