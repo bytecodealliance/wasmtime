@@ -24,25 +24,6 @@ pub trait HostInputStream: Send + Sync {
     /// Important: this read must be non-blocking!
     fn read(&mut self, buf: &mut [u8]) -> Result<(u64, StreamState), Error>;
 
-    /// Vectored-I/O form of `read`. Important: this read must be
-    /// non-blocking!
-    fn read_vectored<'a>(
-        &mut self,
-        bufs: &mut [std::io::IoSliceMut<'a>],
-    ) -> Result<(u64, StreamState), Error> {
-        if bufs.len() > 0 {
-            self.read(bufs.get_mut(0).unwrap())
-        } else {
-            self.read(&mut [])
-        }
-    }
-
-    /// Test whether vectored I/O reads are known to be optimized in the
-    /// underlying implementation.
-    fn is_read_vectored(&self) -> bool {
-        false
-    }
-
     /// Read bytes from a stream and discard them. Important: this method must
     /// be non-blocking!
     fn skip(&mut self, nelem: u64) -> Result<(u64, StreamState), Error> {
@@ -74,22 +55,6 @@ pub trait HostOutputStream: Send + Sync {
     /// Write bytes. On success, returns the number of bytes written.
     /// Important: this write must be non-blocking!
     fn write(&mut self, _buf: &[u8]) -> Result<u64, Error>;
-
-    /// Vectored-I/O form of `write`. Important: this write must be
-    /// non-blocking!
-    fn write_vectored<'a>(&mut self, bufs: &[std::io::IoSlice<'a>]) -> Result<u64, Error> {
-        if bufs.len() > 0 {
-            self.write(bufs.get(0).unwrap())
-        } else {
-            Ok(0)
-        }
-    }
-
-    /// Test whether vectored I/O writes are known to be optimized in the
-    /// underlying implementation.
-    fn is_write_vectored(&self) -> bool {
-        false
-    }
 
     /// Transfer bytes directly from an input stream to an output stream.
     /// Important: this splice must be non-blocking!

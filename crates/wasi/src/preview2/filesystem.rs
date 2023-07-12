@@ -104,21 +104,6 @@ impl HostInputStream for FileInputStream {
         self.position = self.position.wrapping_add(n);
         Ok((n, end))
     }
-    fn read_vectored<'a>(
-        &mut self,
-        bufs: &mut [std::io::IoSliceMut<'a>],
-    ) -> anyhow::Result<(u64, StreamState)> {
-        use system_interface::fs::FileIoExt;
-        let (n, end) = read_result(block_in_place(|| {
-            self.file.read_vectored_at(bufs, self.position)
-        }))?;
-        self.position = self.position.wrapping_add(n);
-        Ok((n, end))
-    }
-    fn is_read_vectored(&self) -> bool {
-        use system_interface::fs::FileIoExt;
-        self.file.is_read_vectored_at()
-    }
     async fn ready(&mut self) -> anyhow::Result<()> {
         Ok(()) // Always immediately ready - file reads cannot block
     }
@@ -155,21 +140,6 @@ impl HostOutputStream for FileOutputStream {
         Ok(n)
     }
 
-    /// Vectored-I/O form of `write`.
-    fn write_vectored<'a>(&mut self, bufs: &[std::io::IoSlice<'a>]) -> anyhow::Result<u64> {
-        use system_interface::fs::FileIoExt;
-        let n = block_in_place(|| self.file.write_vectored_at(bufs, self.position))? as i64 as u64;
-        self.position = self.position.wrapping_add(n);
-        Ok(n)
-    }
-
-    /// Test whether vectored I/O writes are known to be optimized in the
-    /// underlying implementation.
-    fn is_write_vectored(&self) -> bool {
-        use system_interface::fs::FileIoExt;
-        self.file.is_write_vectored_at()
-    }
-
     async fn ready(&mut self) -> anyhow::Result<()> {
         Ok(()) // Always immediately ready - file writes cannot block
     }
@@ -190,20 +160,6 @@ impl HostOutputStream for FileAppendStream {
     fn write(&mut self, buf: &[u8]) -> anyhow::Result<u64> {
         use system_interface::fs::FileIoExt;
         Ok(block_in_place(|| self.file.append(buf))? as i64 as u64)
-    }
-
-    /// Vectored-I/O form of `write`.
-    fn write_vectored<'a>(&mut self, bufs: &[std::io::IoSlice<'a>]) -> anyhow::Result<u64> {
-        use system_interface::fs::FileIoExt;
-        let n = block_in_place(|| self.file.append_vectored(bufs))? as i64 as u64;
-        Ok(n)
-    }
-
-    /// Test whether vectored I/O writes are known to be optimized in the
-    /// underlying implementation.
-    fn is_write_vectored(&self) -> bool {
-        use system_interface::fs::FileIoExt;
-        self.file.is_write_vectored_at()
     }
 
     async fn ready(&mut self) -> anyhow::Result<()> {
