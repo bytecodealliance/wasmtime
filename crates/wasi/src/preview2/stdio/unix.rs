@@ -1,5 +1,6 @@
 use crate::preview2::{AsyncFdStream, HostInputStream, StreamState};
 use anyhow::Error;
+use bytes::Bytes;
 
 // wasmtime cant use std::sync::OnceLock yet because of a llvm regression in
 // 1.70. when 1.71 is released, we can switch to using std here.
@@ -42,14 +43,15 @@ pub fn stdin() -> Stdin {
 
 #[async_trait::async_trait]
 impl HostInputStream for Stdin {
-    fn read(&mut self, buf: &mut [u8]) -> Result<(u64, StreamState), Error> {
-        let mut r = move || Self::get_global().blocking_lock().read(buf);
-        // If we are currently in a tokio context, blocking_lock will panic unless inside a
-        // block_in_place:
-        match tokio::runtime::Handle::try_current() {
-            Ok(_) => tokio::task::block_in_place(r),
-            Err(_) => r(),
-        }
+    fn read(&mut self) -> Result<(Bytes, StreamState), Error> {
+        // let mut r = move || Self::get_global().blocking_lock().read(buf);
+        // // If we are currently in a tokio context, blocking_lock will panic unless inside a
+        // // block_in_place:
+        // match tokio::runtime::Handle::try_current() {
+        //     Ok(_) => tokio::task::block_in_place(r),
+        //     Err(_) => r(),
+        // }
+        todo!()
     }
 
     async fn ready(&mut self) -> Result<(), Error> {

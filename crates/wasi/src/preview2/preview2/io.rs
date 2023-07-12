@@ -48,19 +48,20 @@ impl<T: WasiView> streams::Host for T {
         stream: InputStream,
         len: u64,
     ) -> Result<(Vec<u8>, bool), streams::Error> {
-        let s = self.table_mut().get_input_stream_mut(stream)?;
-
-        // Len could be any `u64` value, but we don't want to
-        // allocate too much up front, so make a wild guess
-        // of an upper bound for the buffer size.
-        let buffer_len = std::cmp::min(len, 0x400000) as _;
-        let mut buffer = vec![0; buffer_len];
-
-        let (bytes_read, state) = HostInputStream::read(s.as_mut(), &mut buffer)?;
-
-        buffer.truncate(bytes_read as usize);
-
-        Ok((buffer, state.is_closed()))
+        // let s = self.table_mut().get_input_stream_mut(stream)?;
+        //
+        // // Len could be any `u64` value, but we don't want to
+        // // allocate too much up front, so make a wild guess
+        // // of an upper bound for the buffer size.
+        // let buffer_len = std::cmp::min(len, 0x400000) as _;
+        // let mut buffer = vec![0; buffer_len];
+        //
+        // let (bytes_read, state) = HostInputStream::read(s.as_mut(), &mut buffer)?;
+        //
+        // buffer.truncate(bytes_read as usize);
+        //
+        // Ok((buffer, state.is_closed()))
+        todo!()
     }
 
     async fn blocking_read(
@@ -76,11 +77,12 @@ impl<T: WasiView> streams::Host for T {
     }
 
     async fn write(&mut self, stream: OutputStream, bytes: Vec<u8>) -> Result<u64, streams::Error> {
-        let s = self.table_mut().get_output_stream_mut(stream)?;
-
-        let bytes_written: u64 = HostOutputStream::write(s.as_mut(), &bytes)?;
-
-        Ok(u64::try_from(bytes_written).unwrap())
+        // let s = self.table_mut().get_output_stream_mut(stream)?;
+        //
+        // let bytes_written: u64 = HostOutputStream::write(s.as_mut(), &bytes)?;
+        //
+        // Ok(u64::try_from(bytes_written).unwrap())
+        todo!()
     }
 
     async fn blocking_write(

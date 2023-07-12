@@ -1,5 +1,6 @@
 use crate::preview2::{Table, TableError};
 use anyhow::Error;
+use bytes::Bytes;
 use std::pin::Pin;
 use std::task::{Context, Poll, Waker};
 
@@ -22,7 +23,7 @@ pub trait HostInputStream: Send + Sync {
     /// Read bytes. On success, returns a pair holding the number of bytes
     /// read and a flag indicating whether the end of the stream was reached.
     /// Important: this read must be non-blocking!
-    fn read(&mut self, buf: &mut [u8]) -> Result<(u64, StreamState), Error>;
+    fn read(&mut self) -> Result<(Bytes, StreamState), Error>;
 
     /// Read bytes from a stream and discard them. Important: this method must
     /// be non-blocking!
@@ -32,8 +33,8 @@ pub trait HostInputStream: Send + Sync {
 
         // TODO: Optimize by reading more than one byte at a time.
         for _ in 0..nelem {
-            let (num, read_state) = self.read(&mut [0])?;
-            nread += num;
+            let (bs, read_state) = self.read()?;
+            nread += bs.len() as u64;
             if read_state.is_closed() {
                 state = read_state;
                 break;
@@ -54,7 +55,7 @@ pub trait HostInputStream: Send + Sync {
 pub trait HostOutputStream: Send + Sync {
     /// Write bytes. On success, returns the number of bytes written.
     /// Important: this write must be non-blocking!
-    fn write(&mut self, _buf: &[u8]) -> Result<u64, Error>;
+    fn write(&mut self, bytes: Bytes) -> Result<u64, Error>;
 
     /// Transfer bytes directly from an input stream to an output stream.
     /// Important: this splice must be non-blocking!
@@ -66,12 +67,10 @@ pub trait HostOutputStream: Send + Sync {
         let mut nspliced = 0;
         let mut state = StreamState::Open;
 
-        // TODO: Optimize by splicing more than one byte at a time.
         for _ in 0..nelem {
-            let mut buf = [0u8];
-            let (num, read_state) = src.read(&mut buf)?;
-            self.write(&buf)?;
-            nspliced += num;
+            let (bs, read_state) = src.read()?;
+            // TODO: handle the case where write returns less than bs.len()
+            nspliced += self.write(bs)?;
             if read_state.is_closed() {
                 state = read_state;
                 break;
@@ -84,17 +83,10 @@ pub trait HostOutputStream: Send + Sync {
     /// Repeatedly write a byte to a stream. Important: this write must be
     /// non-blocking!
     fn write_zeroes(&mut self, nelem: u64) -> Result<u64, Error> {
-        let mut nwritten = 0;
-
-        // TODO: Optimize by writing more than one byte at a time.
-        for _ in 0..nelem {
-            let num = self.write(&[0])?;
-            if num == 0 {
-                break;
-            }
-            nwritten += num;
-        }
-
+        // TODO: We could optimize this to not allocate one big zeroed buffer, and instead write
+        // repeatedly from a 'static buffer of zeros.
+        let bs = Bytes::from_iter(core::iter::repeat(0 as u8).take(nelem as usize));
+        let nwritten = self.write(bs)?;
         Ok(nwritten)
     }
 
@@ -170,42 +162,43 @@ impl<T> AsyncReadStream<T> {
 impl<T: tokio::io::AsyncRead + Send + Sync + Unpin + 'static> HostInputStream
     for AsyncReadStream<T>
 {
-    fn read(&mut self, mut dest: &mut [u8]) -> Result<(u64, StreamState), Error> {
-        use std::io::Write;
-        let l = dest.write(&self.buffer)?;
-
-        self.buffer.drain(..l);
-        if !self.buffer.is_empty() {
-            return Ok((l as u64, StreamState::Open));
-        }
-
-        if self.state.is_closed() {
-            return Ok((l as u64, StreamState::Closed));
-        }
-
-        let dest = &mut dest[l..];
-        let rest = if !dest.is_empty() {
-            let mut readbuf = tokio::io::ReadBuf::new(dest);
-
-            let noop_waker = noop_waker();
-            let mut cx: Context<'_> = Context::from_waker(&noop_waker);
-            // Make a synchronous, non-blocking call attempt to read. We are not
-            // going to poll this more than once, so the noop waker is appropriate.
-            match Pin::new(&mut self.reader).poll_read(&mut cx, &mut readbuf) {
-                Poll::Pending => {}             // Nothing was read
-                Poll::Ready(result) => result?, // Maybe an error occured
-            };
-            let bytes_read = readbuf.filled().len();
-
-            if bytes_read == 0 {
-                self.state = StreamState::Closed;
-            }
-            bytes_read
-        } else {
-            0
-        };
-
-        Ok(((l + rest) as u64, self.state))
+    fn read(&mut self) -> Result<(Bytes, StreamState), Error> {
+        // use std::io::Write;
+        // let l = dest.write(&self.buffer)?;
+        //
+        // self.buffer.drain(..l);
+        // if !self.buffer.is_empty() {
+        //     return Ok((l as u64, StreamState::Open));
+        // }
+        //
+        // if self.state.is_closed() {
+        //     return Ok((l as u64, StreamState::Closed));
+        // }
+        //
+        // let dest = &mut dest[l..];
+        // let rest = if !dest.is_empty() {
+        //     let mut readbuf = tokio::io::ReadBuf::new(dest);
+        //
+        //     let noop_waker = noop_waker();
+        //     let mut cx: Context<'_> = Context::from_waker(&noop_waker);
+        //     // Make a synchronous, non-blocking call attempt to read. We are not
+        //     // going to poll this more than once, so the noop waker is appropriate.
+        //     match Pin::new(&mut self.reader).poll_read(&mut cx, &mut readbuf) {
+        //         Poll::Pending => {}             // Nothing was read
+        //         Poll::Ready(result) => result?, // Maybe an error occured
+        //     };
+        //     let bytes_read = readbuf.filled().len();
+        //
+        //     if bytes_read == 0 {
+        //         self.state = StreamState::Closed;
+        //     }
+        //     bytes_read
+        // } else {
+        //     0
+        // };
+        //
+        // Ok(((l + rest) as u64, self.state))
+        todo!()
     }
 
     async fn ready(&mut self) -> Result<(), Error> {
@@ -254,26 +247,26 @@ impl<T> AsyncWriteStream<T> {
 impl<T: tokio::io::AsyncWrite + Send + Sync + Unpin + 'static> HostOutputStream
     for AsyncWriteStream<T>
 {
-    // I can get rid of the `async` here once the lock is no longer a tokio lock:
-    fn write(&mut self, buf: &[u8]) -> Result<u64, anyhow::Error> {
-        let mut bytes = core::mem::take(&mut self.buffer);
-        bytes.extend(buf);
-
-        let noop_waker = noop_waker();
-        let mut cx: Context<'_> = Context::from_waker(&noop_waker);
-        // Make a synchronous, non-blocking call attempt to write. We are not
-        // going to poll this more than once, so the noop waker is appropriate.
-        match Pin::new(&mut self.writer).poll_write(&mut cx, &mut bytes.as_slice()) {
-            Poll::Pending => {
-                // Nothing was written: buffer all of it below.
-            }
-            Poll::Ready(written) => {
-                // So much was written:
-                bytes.drain(..written?);
-            }
-        }
-        self.buffer = bytes;
-        Ok(buf.len() as u64)
+    fn write(&mut self, bytes: Bytes) -> Result<u64, anyhow::Error> {
+        // let mut bytes = core::mem::take(&mut self.buffer);
+        // bytes.extend(buf);
+        //
+        // let noop_waker = noop_waker();
+        // let mut cx: Context<'_> = Context::from_waker(&noop_waker);
+        // // Make a synchronous, non-blocking call attempt to write. We are not
+        // // going to poll this more than once, so the noop waker is appropriate.
+        // match Pin::new(&mut self.writer).poll_write(&mut cx, &mut bytes.as_slice()) {
+        //     Poll::Pending => {
+        //         // Nothing was written: buffer all of it below.
+        //     }
+        //     Poll::Ready(written) => {
+        //         // So much was written:
+        //         bytes.drain(..written?);
+        //     }
+        // }
+        // self.buffer = bytes;
+        // Ok(buf.len() as u64)
+        todo!()
     }
 
     async fn ready(&mut self) -> Result<(), Error> {
@@ -313,6 +306,7 @@ pub use async_fd_stream::*;
 mod async_fd_stream {
     use super::{HostInputStream, HostOutputStream, StreamState};
     use anyhow::Error;
+    use bytes::Bytes;
     use std::io::{Read, Write};
     use std::os::fd::{AsRawFd, FromRawFd, IntoRawFd};
     use tokio::io::unix::AsyncFd;
@@ -352,23 +346,24 @@ mod async_fd_stream {
 
     #[async_trait::async_trait]
     impl<T: AsRawFd + Send + Sync + Unpin + 'static> HostInputStream for AsyncFdStream<T> {
-        fn read(&mut self, dest: &mut [u8]) -> Result<(u64, StreamState), Error> {
-            // Safety: we're the only one accessing this fd, and we turn it back into a raw fd when
-            // we're done.
-            let mut file = unsafe { std::fs::File::from_raw_fd(self.fd.as_raw_fd()) };
-
-            // Ensured this is nonblocking at construction of AsyncFdStream.
-            let read_res = file.read(dest);
-
-            // Make sure that the file doesn't close the fd when it's dropped.
-            file.into_raw_fd();
-
-            let n = read_res?;
-
-            // TODO: figure out when the stream should be considered closed
-            // TODO: figure out how to handle the error conditions from the read call above
-
-            Ok((n as u64, StreamState::Open))
+        fn read(&mut self) -> Result<(Bytes, StreamState), Error> {
+            // // Safety: we're the only one accessing this fd, and we turn it back into a raw fd when
+            // // we're done.
+            // let mut file = unsafe { std::fs::File::from_raw_fd(self.fd.as_raw_fd()) };
+            //
+            // // Ensured this is nonblocking at construction of AsyncFdStream.
+            // let read_res = file.read(dest);
+            //
+            // // Make sure that the file doesn't close the fd when it's dropped.
+            // file.into_raw_fd();
+            //
+            // let n = read_res?;
+            //
+            // // TODO: figure out when the stream should be considered closed
+            // // TODO: figure out how to handle the error conditions from the read call above
+            //
+            // Ok((n as u64, StreamState::Open))
+            todo!()
         }
 
         async fn ready(&mut self) -> Result<(), Error> {
@@ -379,22 +374,23 @@ mod async_fd_stream {
 
     #[async_trait::async_trait]
     impl<T: AsRawFd + Send + Sync + Unpin + 'static> HostOutputStream for AsyncFdStream<T> {
-        fn write(&mut self, buf: &[u8]) -> Result<u64, Error> {
-            // Safety: we're the only one accessing this fd, and we turn it back into a raw fd when
-            // we're done.
-            let mut file = unsafe { std::fs::File::from_raw_fd(self.fd.as_raw_fd()) };
-
-            // Ensured this is nonblocking at construction of AsyncFdStream.
-            let write_res = file.write(buf);
-
-            // Make sure that the file doesn't close the fd when it's dropped.
-            file.into_raw_fd();
-
-            let n = write_res?;
-
-            // TODO: figure out how to handle the error conditions from the write call above
-
-            Ok(n as u64)
+        fn write(&mut self, bytes: Bytes) -> Result<u64, Error> {
+            // // Safety: we're the only one accessing this fd, and we turn it back into a raw fd when
+            // // we're done.
+            // let mut file = unsafe { std::fs::File::from_raw_fd(self.fd.as_raw_fd()) };
+            //
+            // // Ensured this is nonblocking at construction of AsyncFdStream.
+            // let write_res = file.write(buf);
+            //
+            // // Make sure that the file doesn't close the fd when it's dropped.
+            // file.into_raw_fd();
+            //
+            // let n = write_res?;
+            //
+            // // TODO: figure out how to handle the error conditions from the write call above
+            //
+            // Ok(n as u64)
+            todo!()
         }
 
         async fn ready(&mut self) -> Result<(), Error> {
@@ -412,7 +408,7 @@ mod test {
         struct DummyInputStream;
         #[async_trait::async_trait]
         impl HostInputStream for DummyInputStream {
-            fn read(&mut self, _: &mut [u8]) -> Result<(u64, StreamState), Error> {
+            fn read(&mut self) -> Result<(Bytes, StreamState), Error> {
                 unimplemented!();
             }
             async fn ready(&mut self) -> Result<(), Error> {
@@ -433,7 +429,7 @@ mod test {
         struct DummyOutputStream;
         #[async_trait::async_trait]
         impl HostOutputStream for DummyOutputStream {
-            fn write(&mut self, _: &[u8]) -> Result<u64, Error> {
+            fn write(&mut self, _: Bytes) -> Result<u64, Error> {
                 unimplemented!();
             }
             async fn ready(&mut self) -> Result<(), Error> {

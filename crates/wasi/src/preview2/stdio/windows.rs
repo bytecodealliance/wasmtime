@@ -1,5 +1,6 @@
 use crate::preview2::{HostInputStream, StreamState};
 use anyhow::{Context, Error};
+use bytes::Bytes;
 
 // wasmtime cant use std::sync::OnceLock yet because of a llvm regression in
 // 1.70. when 1.71 is released, we can switch to using std here.
@@ -60,18 +61,19 @@ pub fn stdin() -> Stdin {
 
 #[async_trait::async_trait]
 impl HostInputStream for Stdin {
-    fn read(&mut self, buf: &mut [u8]) -> Result<(u64, StreamState), Error> {
-        use std::io::Read;
-        let mut r = move || {
-            let nbytes = std::io::stdin().read(buf)?;
-            // FIXME handle eof
-            Ok((nbytes as u64, StreamState::Open))
-        };
-        // If we are currently in a tokio context, block:
-        match tokio::runtime::Handle::try_current() {
-            Ok(_) => tokio::task::block_in_place(r),
-            Err(_) => r(),
-        }
+    fn read(&mut self) -> Result<(Bytes, StreamState), Error> {
+        // use std::io::Read;
+        // let mut r = move || {
+        //     let nbytes = std::io::stdin().read(buf)?;
+        //     // FIXME handle eof
+        //     Ok((nbytes as u64, StreamState::Open))
+        // };
+        // // If we are currently in a tokio context, block:
+        // match tokio::runtime::Handle::try_current() {
+        //     Ok(_) => tokio::task::block_in_place(r),
+        //     Err(_) => r(),
+        // }
+        todo!()
     }
 
     async fn ready(&mut self) -> Result<(), Error> {

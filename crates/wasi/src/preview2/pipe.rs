@@ -9,6 +9,7 @@
 //!
 use crate::preview2::{HostInputStream, HostOutputStream, StreamState};
 use anyhow::Error;
+use bytes::Bytes;
 
 pub fn pipe(bound: usize) -> (InputPipe, OutputPipe) {
     let (writer, reader) = tokio::sync::mpsc::channel(bound);
@@ -34,35 +35,36 @@ impl InputPipe {
 
 #[async_trait::async_trait]
 impl HostInputStream for InputPipe {
-    fn read(&mut self, dest: &mut [u8]) -> Result<(u64, StreamState), Error> {
-        use tokio::sync::mpsc::error::TryRecvError;
-        let read_from_buffer = self.buffer.len().min(dest.len());
-        let buffer_dest = &mut dest[..read_from_buffer];
-        buffer_dest.copy_from_slice(&self.buffer[..read_from_buffer]);
-        // Keep remaining contents in buffer
-        self.buffer = self.buffer.split_off(read_from_buffer);
-        if read_from_buffer < dest.len() {
-            match self.channel.try_recv() {
-                Ok(msg) => {
-                    let recv_dest = &mut dest[read_from_buffer..];
-                    if msg.len() < recv_dest.len() {
-                        recv_dest[..msg.len()].copy_from_slice(&msg);
-                        Ok(((read_from_buffer + msg.len()) as u64, self.state))
-                    } else {
-                        recv_dest.copy_from_slice(&msg[..recv_dest.len()]);
-                        self.buffer.extend_from_slice(&msg[recv_dest.len()..]);
-                        Ok((dest.len() as u64, self.state))
-                    }
-                }
-                Err(TryRecvError::Empty) => Ok((read_from_buffer as u64, self.state)),
-                Err(TryRecvError::Disconnected) => {
-                    self.state = StreamState::Closed;
-                    Ok((read_from_buffer as u64, self.state))
-                }
-            }
-        } else {
-            Ok((read_from_buffer as u64, self.state))
-        }
+    fn read(&mut self) -> Result<(Bytes, StreamState), Error> {
+        // use tokio::sync::mpsc::error::TryRecvError;
+        // let read_from_buffer = self.buffer.len().min(dest.len());
+        // let buffer_dest = &mut dest[..read_from_buffer];
+        // buffer_dest.copy_from_slice(&self.buffer[..read_from_buffer]);
+        // // Keep remaining contents in buffer
+        // self.buffer = self.buffer.split_off(read_from_buffer);
+        // if read_from_buffer < dest.len() {
+        //     match self.channel.try_recv() {
+        //         Ok(msg) => {
+        //             let recv_dest = &mut dest[read_from_buffer..];
+        //             if msg.len() < recv_dest.len() {
+        //                 recv_dest[..msg.len()].copy_from_slice(&msg);
+        //                 Ok(((read_from_buffer + msg.len()) as u64, self.state))
+        //             } else {
+        //                 recv_dest.copy_from_slice(&msg[..recv_dest.len()]);
+        //                 self.buffer.extend_from_slice(&msg[recv_dest.len()..]);
+        //                 Ok((dest.len() as u64, self.state))
+        //             }
+        //         }
+        //         Err(TryRecvError::Empty) => Ok((read_from_buffer as u64, self.state)),
+        //         Err(TryRecvError::Disconnected) => {
+        //             self.state = StreamState::Closed;
+        //             Ok((read_from_buffer as u64, self.state))
+        //         }
+        //     }
+        // } else {
+        //     Ok((read_from_buffer as u64, self.state))
+        // }
+        todo!()
     }
 
     async fn ready(&mut self) -> Result<(), Error> {
@@ -129,32 +131,33 @@ impl OutputPipe {
 
 #[async_trait::async_trait]
 impl HostOutputStream for OutputPipe {
-    fn write(&mut self, buf: &[u8]) -> Result<u64, Error> {
-        use tokio::sync::mpsc::error::TrySendError;
-
-        let mut bytes = core::mem::take(&mut self.buffer);
-        bytes.extend(buf);
-        let (s, bytes) = match self.take_channel() {
-            SenderState::Writable(p) => {
-                let s = p.send(bytes);
-                (s, Vec::new())
-            }
-
-            SenderState::Channel(s) => match s.try_send(bytes) {
-                Ok(()) => (s, Vec::new()),
-                Err(TrySendError::Full(b)) => (s, b),
-                Err(TrySendError::Closed(_)) => {
-                    // TODO: we may need to communicate failure out in a way that doesn't result in
-                    // a trap.
-                    return Err(anyhow::anyhow!("pipe closed"));
-                }
-            },
-        };
-
-        self.buffer = bytes;
-        self.channel = Some(SenderState::Channel(s));
-
-        Ok(buf.len() as u64)
+    fn write(&mut self, buf: Bytes) -> Result<u64, Error> {
+        // use tokio::sync::mpsc::error::TrySendError;
+        //
+        // let mut bytes = core::mem::take(&mut self.buffer);
+        // bytes.extend(buf);
+        // let (s, bytes) = match self.take_channel() {
+        //     SenderState::Writable(p) => {
+        //         let s = p.send(bytes);
+        //         (s, Vec::new())
+        //     }
+        //
+        //     SenderState::Channel(s) => match s.try_send(bytes) {
+        //         Ok(()) => (s, Vec::new()),
+        //         Err(TrySendError::Full(b)) => (s, b),
+        //         Err(TrySendError::Closed(_)) => {
+        //             // TODO: we may need to communicate failure out in a way that doesn't result in
+        //             // a trap.
+        //             return Err(anyhow::anyhow!("pipe closed"));
+        //         }
+        //     },
+        // };
+        //
+        // self.buffer = bytes;
+        // self.channel = Some(SenderState::Channel(s));
+        //
+        // Ok(buf.len() as u64)
+        todo!()
     }
 
     async fn ready(&mut self) -> Result<(), Error> {
@@ -185,14 +188,15 @@ impl MemoryInputPipe {
 
 #[async_trait::async_trait]
 impl HostInputStream for MemoryInputPipe {
-    fn read(&mut self, dest: &mut [u8]) -> Result<(u64, StreamState), Error> {
-        let nbytes = std::io::Read::read(&mut self.buffer, dest)?;
-        let state = if self.buffer.get_ref().len() as u64 == self.buffer.position() {
-            StreamState::Closed
-        } else {
-            StreamState::Open
-        };
-        Ok((nbytes as u64, state))
+    fn read(&mut self) -> Result<(Bytes, StreamState), Error> {
+        // let nbytes = std::io::Read::read(&mut self.buffer, dest)?;
+        // let state = if self.buffer.get_ref().len() as u64 == self.buffer.position() {
+        //     StreamState::Closed
+        // } else {
+        //     StreamState::Open
+        // };
+        // Ok((nbytes as u64, state))
+        todo!()
     }
     async fn ready(&mut self) -> Result<(), Error> {
         if self.buffer.get_ref().len() as u64 > self.buffer.position() {
@@ -227,9 +231,10 @@ impl MemoryOutputPipe {
 
 #[async_trait::async_trait]
 impl HostOutputStream for MemoryOutputPipe {
-    fn write(&mut self, buf: &[u8]) -> Result<u64, anyhow::Error> {
-        self.buffer.lock().unwrap().extend(buf);
-        Ok(buf.len() as u64)
+    fn write(&mut self, buf: Bytes) -> Result<u64, anyhow::Error> {
+        // self.buffer.lock().unwrap().extend(buf);
+        // Ok(buf.len() as u64)
+        todo!()
     }
 
     async fn ready(&mut self) -> Result<(), Error> {

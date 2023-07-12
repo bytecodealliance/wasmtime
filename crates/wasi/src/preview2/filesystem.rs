@@ -2,6 +2,7 @@ use crate::preview2::{
     block_in_place, HostInputStream, HostOutputStream, StreamState, Table, TableError,
 };
 use std::sync::Arc;
+use bytes::Bytes;
 
 bitflags::bitflags! {
     pub struct FilePerms: usize {
@@ -98,11 +99,12 @@ impl FileInputStream {
 
 #[async_trait::async_trait]
 impl HostInputStream for FileInputStream {
-    fn read(&mut self, buf: &mut [u8]) -> anyhow::Result<(u64, StreamState)> {
-        use system_interface::fs::FileIoExt;
-        let (n, end) = read_result(block_in_place(|| self.file.read_at(buf, self.position)))?;
-        self.position = self.position.wrapping_add(n);
-        Ok((n, end))
+    fn read(&mut self) -> anyhow::Result<(Bytes, StreamState)> {
+        // use system_interface::fs::FileIoExt;
+        // let (n, end) = read_result(block_in_place(|| self.file.read_at(buf, self.position)))?;
+        // self.position = self.position.wrapping_add(n);
+        // Ok((n, end))
+        todo!()
     }
     async fn ready(&mut self) -> anyhow::Result<()> {
         Ok(()) // Always immediately ready - file reads cannot block
@@ -133,11 +135,12 @@ impl FileOutputStream {
 #[async_trait::async_trait]
 impl HostOutputStream for FileOutputStream {
     /// Write bytes. On success, returns the number of bytes written.
-    fn write(&mut self, buf: &[u8]) -> anyhow::Result<u64> {
-        use system_interface::fs::FileIoExt;
-        let n = block_in_place(|| self.file.write_at(buf, self.position))? as i64 as u64;
-        self.position = self.position.wrapping_add(n);
-        Ok(n)
+    fn write(&mut self, buf: Bytes) -> anyhow::Result<u64> {
+        // use system_interface::fs::FileIoExt;
+        // let n = block_in_place(|| self.file.write_at(buf, self.position))? as i64 as u64;
+        // self.position = self.position.wrapping_add(n);
+        // Ok(n)
+        todo!()
     }
 
     async fn ready(&mut self) -> anyhow::Result<()> {
@@ -157,9 +160,10 @@ impl FileAppendStream {
 #[async_trait::async_trait]
 impl HostOutputStream for FileAppendStream {
     /// Write bytes. On success, returns the number of bytes written.
-    fn write(&mut self, buf: &[u8]) -> anyhow::Result<u64> {
-        use system_interface::fs::FileIoExt;
-        Ok(block_in_place(|| self.file.append(buf))? as i64 as u64)
+    fn write(&mut self, buf: Bytes) -> anyhow::Result<u64> {
+        // use system_interface::fs::FileIoExt;
+        // Ok(block_in_place(|| self.file.append(buf))? as i64 as u64)
+        todo!()
     }
 
     async fn ready(&mut self) -> anyhow::Result<()> {
