@@ -9,7 +9,7 @@ description = "Experimental HTTP library for WebAssembly in Wasmtime"
 
 [dependencies]
 anyhow = { workspace = true }
-bytes = "1.1.0"
+bytes = { workspace = true }
 hyper = { version = "1.0.0-rc.3", features = ["full"] }
 tokio = { version = "1", default-features = false, features = ["net", "rt-multi-thread", "time"] }
 http = { version = "0.2.9" }
