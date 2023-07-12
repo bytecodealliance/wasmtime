@@ -376,7 +376,7 @@ fn mismatch(expected: &WastVal<'_>, actual: &Val) -> Result<()> {
         Val::Option(..) => "option",
         Val::Result(..) => "result",
         Val::Flags(..) => "flags",
-        Val::Own(..) => "own",
+        Val::Resource(..) => "resource",
     };
     bail!("expected `{expected}` got `{actual}`")
 }

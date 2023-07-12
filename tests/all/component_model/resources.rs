@@ -558,10 +558,10 @@ fn dynamic_val() -> Result<()> {
     assert_eq!(t1.ty(), ResourceType::host::<MyType>());
 
     let mut results = [Val::Bool(false)];
-    a.call(&mut store, &[Val::Own(t1)], &mut results)?;
+    a.call(&mut store, &[Val::Resource(t1)], &mut results)?;
     a.post_return(&mut store)?;
     match &results[0] {
-        Val::Own(resource) => {
+        Val::Resource(resource) => {
             assert_eq!(resource.ty(), ResourceType::host::<MyType>());
         }
         _ => unreachable!(),
@@ -569,7 +569,7 @@ fn dynamic_val() -> Result<()> {
 
     b.call(&mut store, &[Val::U32(200)], &mut results)?;
     match &results[0] {
-        Val::Own(resource) => {
+        Val::Resource(resource) => {
             assert_eq!(resource.ty(), t2);
         }
         _ => unreachable!(),

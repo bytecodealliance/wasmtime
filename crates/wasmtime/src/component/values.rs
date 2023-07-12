@@ -623,7 +623,7 @@ pub enum Val {
     Option(OptionVal),
     Result(ResultVal),
     Flags(Flags),
-    Own(ResourceAny),
+    Resource(ResourceAny),
 }
 
 impl Val {
@@ -652,7 +652,13 @@ impl Val {
             Val::Option(OptionVal { ty, .. }) => Type::Option(ty.clone()),
             Val::Result(ResultVal { ty, .. }) => Type::Result(ty.clone()),
             Val::Flags(Flags { ty, .. }) => Type::Flags(ty.clone()),
-            Val::Own(r) => Type::Own(r.ty()),
+            Val::Resource(r) => {
+                if r.owned() {
+                    Type::Own(r.ty())
+                } else {
+                    Type::Borrow(r.ty())
+                }
+            }
         }
     }
 
@@ -675,7 +681,9 @@ impl Val {
             InterfaceType::Float32 => Val::Float32(f32::lift(cx, ty, next(src))?),
             InterfaceType::Float64 => Val::Float64(f64::lift(cx, ty, next(src))?),
             InterfaceType::Char => Val::Char(char::lift(cx, ty, next(src))?),
-            InterfaceType::Own(_) => Val::Own(ResourceAny::lift(cx, ty, next(src))?),
+            InterfaceType::Own(_) | InterfaceType::Borrow(_) => {
+                Val::Resource(ResourceAny::lift(cx, ty, next(src))?)
+            }
             InterfaceType::String => {
                 Val::String(Box::<str>::lift(cx, ty, &[*next(src), *next(src)])?)
             }
@@ -784,8 +792,6 @@ impl Val {
                     value,
                 })
             }
-
-            InterfaceType::Borrow(i) => todo!(),
         })
     }
 
@@ -805,7 +811,9 @@ impl Val {
             InterfaceType::Float64 => Val::Float64(f64::load(cx, ty, bytes)?),
             InterfaceType::Char => Val::Char(char::load(cx, ty, bytes)?),
             InterfaceType::String => Val::String(<Box<str>>::load(cx, ty, bytes)?),
-            InterfaceType::Own(_) => Val::Own(ResourceAny::load(cx, ty, bytes)?),
+            InterfaceType::Own(_) | InterfaceType::Borrow(_) => {
+                Val::Resource(ResourceAny::load(cx, ty, bytes)?)
+            }
             InterfaceType::List(i) => {
                 // FIXME: needs memory64 treatment
                 let ptr = u32::from_le_bytes(bytes[..4].try_into().unwrap()) as usize;
@@ -897,8 +905,6 @@ impl Val {
                         .collect::<Result<_>>()?,
                 },
             }),
-
-            InterfaceType::Borrow(i) => todo!(),
         })
     }
 
@@ -922,7 +928,7 @@ impl Val {
             Val::Float32(value) => value.lower(cx, ty, next_mut(dst))?,
             Val::Float64(value) => value.lower(cx, ty, next_mut(dst))?,
             Val::Char(value) => value.lower(cx, ty, next_mut(dst))?,
-            Val::Own(value) => value.lower(cx, ty, next_mut(dst))?,
+            Val::Resource(value) => value.lower(cx, ty, next_mut(dst))?,
             Val::String(value) => {
                 let my_dst = &mut MaybeUninit::<[ValRaw; 2]>::uninit();
                 value.lower(cx, ty, my_dst)?;
@@ -997,7 +1003,7 @@ impl Val {
             Val::Float64(value) => value.store(cx, ty, offset)?,
             Val::Char(value) => value.store(cx, ty, offset)?,
             Val::String(value) => value.store(cx, ty, offset)?,
-            Val::Own(value) => value.store(cx, ty, offset)?,
+            Val::Resource(value) => value.store(cx, ty, offset)?,
             Val::List(List { values, .. }) => {
                 let ty = match ty {
                     InterfaceType::List(i) => &cx.types[i],
@@ -1134,8 +1140,8 @@ impl PartialEq for Val {
             (Self::Result(_), _) => false,
             (Self::Flags(l), Self::Flags(r)) => l == r,
             (Self::Flags(_), _) => false,
-            (Self::Own(l), Self::Own(r)) => l.partial_eq_for_val(r),
-            (Self::Own(_), _) => false,
+            (Self::Resource(l), Self::Resource(r)) => l.partial_eq_for_val(r),
+            (Self::Resource(_), _) => false,
         }
     }
 }
@@ -1167,7 +1173,7 @@ impl Clone for Val {
             Self::Flags(s) => Self::Flags(s.clone()),
             Self::Option(s) => Self::Option(s.clone()),
             Self::Result(s) => Self::Result(s.clone()),
-            Self::Own(s) => Self::Own(s.clone_for_val()),
+            Self::Resource(s) => Self::Resource(s.clone_for_val()),
         }
     }
 }
