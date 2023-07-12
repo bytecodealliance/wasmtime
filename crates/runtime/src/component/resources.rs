@@ -152,11 +152,11 @@ impl ResourceTables {
     /// function. The other half of this implementation is located on
     /// `VMComponentContext` which handles the special case of avoiding borrow
     /// tracking entirely.
-    pub fn resource_lower_borrow(&mut self, ty: TypeResourceTableIndex, rep: u32) -> Result<u32> {
+    pub fn resource_lower_borrow(&mut self, ty: TypeResourceTableIndex, rep: u32) -> u32 {
         let scope = self.calls.len() - 1;
         let borrow_count = &mut self.calls.last_mut().unwrap().borrow_count;
         *borrow_count = borrow_count.checked_add(1).unwrap();
-        Ok(self.tables[ty].insert(Slot::Borrow { rep, scope }))
+        self.tables[ty].insert(Slot::Borrow { rep, scope })
     }
 
     pub fn enter_call(&mut self) {

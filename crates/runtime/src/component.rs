@@ -678,7 +678,7 @@ impl ComponentInstance {
     }
 
     /// TODO
-    pub fn resource_lower_borrow(&mut self, ty: TypeResourceTableIndex, rep: u32) -> Result<u32> {
+    pub fn resource_lower_borrow(&mut self, ty: TypeResourceTableIndex, rep: u32) -> u32 {
         // Implement `lower_borrow`'s special case here where if a borrow is
         // inserted into a table owned by the instance which implemented the
         // original resource then no borrow tracking is employed and instead the
@@ -691,7 +691,7 @@ impl ComponentInstance {
         let component = self.component();
         if let Some(idx) = component.defined_resource_index(resource.ty) {
             if resource.instance == component.defined_resource_instances[idx] {
-                return Ok(rep);
+                return rep;
             }
         }
 

@@ -273,6 +273,12 @@ impl<'a, T> LowerContext<'a, T> {
     }
 
     /// TODO
+    pub fn resource_lower_borrow(&mut self, ty: TypeResourceTableIndex, rep: u32) -> u32 {
+        // TODO: document unsafe
+        unsafe { (*self.instance).resource_lower_borrow(ty, rep) }
+    }
+
+    /// TODO
     pub fn resource_type(&self, ty: TypeResourceTableIndex) -> ResourceType {
         self.instance_type().resource_type(ty)
     }
@@ -352,6 +358,12 @@ impl<'a> LiftContext<'a> {
     ) -> Result<(u32, Option<NonNull<VMFuncRef>>, Option<InstanceFlags>)> {
         // TODO: document unsafe
         unsafe { (*self.instance).resource_lift_own(ty, idx) }
+    }
+
+    /// TODO
+    pub fn resource_lift_borrow(&mut self, ty: TypeResourceTableIndex, idx: u32) -> Result<u32> {
+        // TODO: document unsafe
+        unsafe { (*self.instance).resource_lift_borrow(ty, idx) }
     }
 
     /// TODO
