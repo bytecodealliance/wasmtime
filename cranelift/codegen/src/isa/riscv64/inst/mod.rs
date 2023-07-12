@@ -1524,18 +1524,9 @@ impl Inst {
                 let rs_s = format_reg(rs, allocs);
                 let rd_s = format_reg(rd.to_reg(), allocs);
 
-                match (op, rd, rs) {
-                    (CsrRegOP::CsrRS, _, rs) if rs == zero_reg() => {
-                        format!("csrr {rd_s},{csr}")
-                    }
-                    (CsrRegOP::CsrRW, rd, _) if rd.to_reg() == zero_reg() => {
-                        format!("csrw {csr},{rs_s}")
-                    }
-                    (CsrRegOP::CsrRC, rd, _) if rd.to_reg() == zero_reg() => {
-                        format!("csrc {csr},{rs_s}")
-                    }
-                    (CsrRegOP::CsrRS, rd, _) if rd.to_reg() == zero_reg() => {
-                        format!("csrs {csr},{rs_s}")
+                match (op, csr, rd) {
+                    (CsrRegOP::CsrRW, CSR::Frm, rd) if rd.to_reg() == zero_reg() => {
+                        format!("fsrm {rs_s}")
                     }
                     _ => {
                         format!("{op} {rd_s},{csr},{rs_s}")
@@ -1545,15 +1536,9 @@ impl Inst {
             &Inst::CsrImm { op, rd, csr, imm } => {
                 let rd_s = format_reg(rd.to_reg(), allocs);
 
-                match (op, rd) {
-                    (CsrImmOP::CsrRWI, rd) if rd.to_reg() == zero_reg() => {
-                        format!("csrwi {csr},{imm}")
-                    }
-                    (CsrImmOP::CsrRCI, rd) if rd.to_reg() == zero_reg() => {
-                        format!("csrci {csr},{imm}")
-                    }
-                    (CsrImmOP::CsrRSI, rd) if rd.to_reg() == zero_reg() => {
-                        format!("csrsi {csr},{imm}")
+                match (op, csr, rd) {
+                    (CsrImmOP::CsrRWI, CSR::Frm, rd) if rd.to_reg() != zero_reg() => {
+                        format!("fsrmi {rd_s},{imm}")
                     }
                     _ => {
                         format!("{op} {rd_s},{csr},{imm}")

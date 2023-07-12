@@ -6,6 +6,7 @@ target x86_64 sse42
 target x86_64 sse42 has_avx
 target aarch64
 target s390x
+target riscv64 has_v
 
 function %nearest_f32x4(f32x4) -> f32x4 {
 block0(v0: f32x4):
