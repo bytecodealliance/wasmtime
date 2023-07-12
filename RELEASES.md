@@ -14,13 +14,18 @@ Unreleased.
 
 Unreleased.
 
-### Added
-
 ### Changed
 
 * The `WasiCtxBuilder` type has been refactored, and `WasiCtx` now has private
   fields.
   [#6652](https://github.com/bytecodealliance/wasmtime/pull/6652)
+
+* Wasmtime/Cranelift on x86-64 can now execute Wasm-SIMD on baseline SSE2, which
+  all x86-64 processors support (as part of the base x86-64 spec). Previously,
+  SSE4.2 extensions were required. This new work allows Wasm with SIMD
+  extensions to execute on processors produced back to 2003.
+  [#6625](https://github.com/bytecodealliance/wasmtime/pull/6625)
+
 
 ### Fixed
 
@@ -31,7 +36,7 @@ Unreleased.
 
 ### Cranelift changes
 
-* Tail call implementation has begun in cranelift
+* Tail call implementation has begun in Cranelift
   [#6641](https://github.com/bytecodealliance/wasmtime/pull/6641)
   [#6666](https://github.com/bytecodealliance/wasmtime/pull/6666)
   [#6650](https://github.com/bytecodealliance/wasmtime/pull/6650)
@@ -54,10 +59,9 @@ Unreleased.
 * Fix `AuthenticatedRet` when stack bytes are popped in the aarch64 backend
   [#6634](https://github.com/bytecodealliance/wasmtime/pull/6634)
 
-* Lower SIMD requirements to SSE2 on x64
-  [#6625](https://github.com/bytecodealliance/wasmtime/pull/6625)
-
-* The `fcvt_low_from_sint` instruction has been removed
+* The `fcvt_low_from_sint` instruction has been removed, as it its current
+  behavior can be recovered through a combination of `swiden_low` and
+  `fcvt_from_sint`
   [#6565](https://github.com/bytecodealliance/wasmtime/pull/6565)
 
 --------------------------------------------------------------------------------
