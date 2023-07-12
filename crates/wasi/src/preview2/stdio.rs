@@ -28,7 +28,7 @@ pub struct EmptyStream;
 
 #[async_trait::async_trait]
 impl HostInputStream for EmptyStream {
-    fn read(&mut self) -> Result<(Bytes, StreamState), Error> {
+    fn read(&mut self, size: usize) -> Result<(Bytes, StreamState), Error> {
         // Ok((0, StreamState::Open))
         todo!()
     }
@@ -40,7 +40,7 @@ impl HostInputStream for EmptyStream {
 
 #[async_trait::async_trait]
 impl HostOutputStream for EmptyStream {
-    fn write(&mut self, buf: Bytes) -> Result<u64, Error> {
+    fn write(&mut self, buf: Bytes) -> Result<usize, Error> {
         // Ok(buf.len() as u64)
         todo!()
     }

@@ -101,9 +101,10 @@ impl<T: WasiView> streams::Host for T {
     async fn skip(&mut self, stream: InputStream, len: u64) -> Result<(u64, bool), streams::Error> {
         let s = self.table_mut().get_input_stream_mut(stream)?;
 
-        let (bytes_skipped, end) = s.skip(len)?;
+        // TODO: the cast to usize should be fallible, use `.try_into()?`
+        let (bytes_skipped, end) = s.skip(len as usize)?;
 
-        Ok((bytes_skipped, end.is_closed()))
+        Ok((bytes_skipped as u64, end.is_closed()))
     }
 
     async fn blocking_skip(
@@ -126,9 +127,10 @@ impl<T: WasiView> streams::Host for T {
     ) -> Result<u64, streams::Error> {
         let s = self.table_mut().get_output_stream_mut(stream)?;
 
-        let bytes_written: u64 = s.write_zeroes(len)?;
+        // TODO: the cast to usize should be fallible, use `.try_into()?`
+        let bytes_written = s.write_zeroes(len as usize)?;
 
-        Ok(bytes_written)
+        Ok(bytes_written as u64)
     }
 
     async fn blocking_write_zeroes(

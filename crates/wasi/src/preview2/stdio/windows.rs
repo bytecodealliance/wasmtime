@@ -61,7 +61,7 @@ pub fn stdin() -> Stdin {
 
 #[async_trait::async_trait]
 impl HostInputStream for Stdin {
-    fn read(&mut self) -> Result<(Bytes, StreamState), Error> {
+    fn read(&mut self, size: usize) -> Result<(Bytes, StreamState), Error> {
         // use std::io::Read;
         // let mut r = move || {
         //     let nbytes = std::io::stdin().read(buf)?;

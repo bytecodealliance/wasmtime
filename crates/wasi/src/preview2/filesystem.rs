@@ -99,7 +99,7 @@ impl FileInputStream {
 
 #[async_trait::async_trait]
 impl HostInputStream for FileInputStream {
-    fn read(&mut self) -> anyhow::Result<(Bytes, StreamState)> {
+    fn read(&mut self, size: usize) -> anyhow::Result<(Bytes, StreamState)> {
         // use system_interface::fs::FileIoExt;
         // let (n, end) = read_result(block_in_place(|| self.file.read_at(buf, self.position)))?;
         // self.position = self.position.wrapping_add(n);
@@ -135,7 +135,7 @@ impl FileOutputStream {
 #[async_trait::async_trait]
 impl HostOutputStream for FileOutputStream {
     /// Write bytes. On success, returns the number of bytes written.
-    fn write(&mut self, buf: Bytes) -> anyhow::Result<u64> {
+    fn write(&mut self, buf: Bytes) -> anyhow::Result<usize> {
         // use system_interface::fs::FileIoExt;
         // let n = block_in_place(|| self.file.write_at(buf, self.position))? as i64 as u64;
         // self.position = self.position.wrapping_add(n);
@@ -160,7 +160,7 @@ impl FileAppendStream {
 #[async_trait::async_trait]
 impl HostOutputStream for FileAppendStream {
     /// Write bytes. On success, returns the number of bytes written.
-    fn write(&mut self, buf: Bytes) -> anyhow::Result<u64> {
+    fn write(&mut self, buf: Bytes) -> anyhow::Result<usize> {
         // use system_interface::fs::FileIoExt;
         // Ok(block_in_place(|| self.file.append(buf))? as i64 as u64)
         todo!()

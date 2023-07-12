@@ -35,7 +35,7 @@ impl InputPipe {
 
 #[async_trait::async_trait]
 impl HostInputStream for InputPipe {
-    fn read(&mut self) -> Result<(Bytes, StreamState), Error> {
+    fn read(&mut self, size: usize) -> Result<(Bytes, StreamState), Error> {
         // use tokio::sync::mpsc::error::TryRecvError;
         // let read_from_buffer = self.buffer.len().min(dest.len());
         // let buffer_dest = &mut dest[..read_from_buffer];
@@ -131,7 +131,7 @@ impl OutputPipe {
 
 #[async_trait::async_trait]
 impl HostOutputStream for OutputPipe {
-    fn write(&mut self, buf: Bytes) -> Result<u64, Error> {
+    fn write(&mut self, buf: Bytes) -> Result<usize, Error> {
         // use tokio::sync::mpsc::error::TrySendError;
         //
         // let mut bytes = core::mem::take(&mut self.buffer);
@@ -188,7 +188,7 @@ impl MemoryInputPipe {
 
 #[async_trait::async_trait]
 impl HostInputStream for MemoryInputPipe {
-    fn read(&mut self) -> Result<(Bytes, StreamState), Error> {
+    fn read(&mut self, size: usize) -> Result<(Bytes, StreamState), Error> {
         // let nbytes = std::io::Read::read(&mut self.buffer, dest)?;
         // let state = if self.buffer.get_ref().len() as u64 == self.buffer.position() {
         //     StreamState::Closed
@@ -231,7 +231,7 @@ impl MemoryOutputPipe {
 
 #[async_trait::async_trait]
 impl HostOutputStream for MemoryOutputPipe {
-    fn write(&mut self, buf: Bytes) -> Result<u64, anyhow::Error> {
+    fn write(&mut self, buf: Bytes) -> Result<usize, anyhow::Error> {
         // self.buffer.lock().unwrap().extend(buf);
         // Ok(buf.len() as u64)
         todo!()

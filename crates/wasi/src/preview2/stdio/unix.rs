@@ -43,7 +43,7 @@ pub fn stdin() -> Stdin {
 
 #[async_trait::async_trait]
 impl HostInputStream for Stdin {
-    fn read(&mut self) -> Result<(Bytes, StreamState), Error> {
+    fn read(&mut self, size: usize) -> Result<(Bytes, StreamState), Error> {
         // let mut r = move || Self::get_global().blocking_lock().read(buf);
         // // If we are currently in a tokio context, blocking_lock will panic unless inside a
         // // block_in_place:

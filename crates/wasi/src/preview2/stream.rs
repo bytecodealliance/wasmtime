@@ -23,22 +23,19 @@ pub trait HostInputStream: Send + Sync {
     /// Read bytes. On success, returns a pair holding the number of bytes
     /// read and a flag indicating whether the end of the stream was reached.
     /// Important: this read must be non-blocking!
-    fn read(&mut self) -> Result<(Bytes, StreamState), Error>;
+    fn read(&mut self, size: usize) -> Result<(Bytes, StreamState), Error>;
 
     /// Read bytes from a stream and discard them. Important: this method must
     /// be non-blocking!
-    fn skip(&mut self, nelem: u64) -> Result<(u64, StreamState), Error> {
+    fn skip(&mut self, nelem: usize) -> Result<(usize, StreamState), Error> {
         let mut nread = 0;
         let mut state = StreamState::Open;
 
-        // TODO: Optimize by reading more than one byte at a time.
-        for _ in 0..nelem {
-            let (bs, read_state) = self.read()?;
-            nread += bs.len() as u64;
-            if read_state.is_closed() {
-                state = read_state;
-                break;
-            }
+        let (bs, read_state) = self.read(nelem)?;
+        // TODO: handle the case where `bs.len()` is less than `nelem`
+        nread += bs.len();
+        if read_state.is_closed() {
+            state = read_state;
         }
 
         Ok((nread, state))
@@ -55,26 +52,24 @@ pub trait HostInputStream: Send + Sync {
 pub trait HostOutputStream: Send + Sync {
     /// Write bytes. On success, returns the number of bytes written.
     /// Important: this write must be non-blocking!
-    fn write(&mut self, bytes: Bytes) -> Result<u64, Error>;
+    fn write(&mut self, bytes: Bytes) -> Result<usize, Error>;
 
     /// Transfer bytes directly from an input stream to an output stream.
     /// Important: this splice must be non-blocking!
     fn splice(
         &mut self,
         src: &mut dyn HostInputStream,
-        nelem: u64,
-    ) -> Result<(u64, StreamState), Error> {
+        nelem: usize,
+    ) -> Result<(usize, StreamState), Error> {
         let mut nspliced = 0;
         let mut state = StreamState::Open;
 
-        for _ in 0..nelem {
-            let (bs, read_state) = src.read()?;
-            // TODO: handle the case where write returns less than bs.len()
-            nspliced += self.write(bs)?;
-            if read_state.is_closed() {
-                state = read_state;
-                break;
-            }
+        let (bs, read_state) = src.read(nelem)?;
+        // TODO: handle the case where write returns less than `bs.len()`
+        // TODO: handle the case where `bs.len()` is less than `nelem`
+        nspliced += self.write(bs)?;
+        if read_state.is_closed() {
+            state = read_state;
         }
 
         Ok((nspliced, state))
@@ -82,10 +77,10 @@ pub trait HostOutputStream: Send + Sync {
 
     /// Repeatedly write a byte to a stream. Important: this write must be
     /// non-blocking!
-    fn write_zeroes(&mut self, nelem: u64) -> Result<u64, Error> {
+    fn write_zeroes(&mut self, nelem: usize) -> Result<usize, Error> {
         // TODO: We could optimize this to not allocate one big zeroed buffer, and instead write
         // repeatedly from a 'static buffer of zeros.
-        let bs = Bytes::from_iter(core::iter::repeat(0 as u8).take(nelem as usize));
+        let bs = Bytes::from_iter(core::iter::repeat(0 as u8).take(nelem));
         let nwritten = self.write(bs)?;
         Ok(nwritten)
     }
@@ -162,7 +157,7 @@ impl<T> AsyncReadStream<T> {
 impl<T: tokio::io::AsyncRead + Send + Sync + Unpin + 'static> HostInputStream
     for AsyncReadStream<T>
 {
-    fn read(&mut self) -> Result<(Bytes, StreamState), Error> {
+    fn read(&mut self, size: usize) -> Result<(Bytes, StreamState), Error> {
         // use std::io::Write;
         // let l = dest.write(&self.buffer)?;
         //
@@ -247,7 +242,7 @@ impl<T> AsyncWriteStream<T> {
 impl<T: tokio::io::AsyncWrite + Send + Sync + Unpin + 'static> HostOutputStream
     for AsyncWriteStream<T>
 {
-    fn write(&mut self, bytes: Bytes) -> Result<u64, anyhow::Error> {
+    fn write(&mut self, bytes: Bytes) -> Result<usize, anyhow::Error> {
         // let mut bytes = core::mem::take(&mut self.buffer);
         // bytes.extend(buf);
         //
@@ -346,7 +341,7 @@ mod async_fd_stream {
 
     #[async_trait::async_trait]
     impl<T: AsRawFd + Send + Sync + Unpin + 'static> HostInputStream for AsyncFdStream<T> {
-        fn read(&mut self) -> Result<(Bytes, StreamState), Error> {
+        fn read(&mut self, size: usize) -> Result<(Bytes, StreamState), Error> {
             // // Safety: we're the only one accessing this fd, and we turn it back into a raw fd when
             // // we're done.
             // let mut file = unsafe { std::fs::File::from_raw_fd(self.fd.as_raw_fd()) };
@@ -374,7 +369,7 @@ mod async_fd_stream {
 
     #[async_trait::async_trait]
     impl<T: AsRawFd + Send + Sync + Unpin + 'static> HostOutputStream for AsyncFdStream<T> {
-        fn write(&mut self, bytes: Bytes) -> Result<u64, Error> {
+        fn write(&mut self, bytes: Bytes) -> Result<usize, Error> {
             // // Safety: we're the only one accessing this fd, and we turn it back into a raw fd when
             // // we're done.
             // let mut file = unsafe { std::fs::File::from_raw_fd(self.fd.as_raw_fd()) };
@@ -408,7 +403,7 @@ mod test {
         struct DummyInputStream;
         #[async_trait::async_trait]
         impl HostInputStream for DummyInputStream {
-            fn read(&mut self) -> Result<(Bytes, StreamState), Error> {
+            fn read(&mut self, size: usize) -> Result<(Bytes, StreamState), Error> {
                 unimplemented!();
             }
             async fn ready(&mut self) -> Result<(), Error> {
@@ -429,7 +424,7 @@ mod test {
         struct DummyOutputStream;
         #[async_trait::async_trait]
         impl HostOutputStream for DummyOutputStream {
-            fn write(&mut self, _: Bytes) -> Result<u64, Error> {
+            fn write(&mut self, _: Bytes) -> Result<usize, Error> {
                 unimplemented!();
             }
             async fn ready(&mut self) -> Result<(), Error> {
