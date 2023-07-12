@@ -14,9 +14,22 @@ Unreleased.
 
 Unreleased.
 
-### Added
-
 ### Changed
+
+* The WASI Preview 2 `WasiCtxBuilder` type has been refactored, and `WasiCtx` now has private
+  fields.
+  [#6652](https://github.com/bytecodealliance/wasmtime/pull/6652)
+
+* Component `bindgen!` now generates owned types by default instead of based on
+  how they're used
+  [#6648](https://github.com/bytecodealliance/wasmtime/pull/6648)
+
+* Wasmtime/Cranelift on x86-64 can now execute Wasm-SIMD on baseline SSE2, which
+  all x86-64 processors support (as part of the base x86-64 spec). Previously,
+  SSE4.2 extensions were required. This new work allows Wasm with SIMD
+  extensions to execute on processors produced back to 2003.
+  [#6625](https://github.com/bytecodealliance/wasmtime/pull/6625)
+
 
 ### Fixed
 
@@ -24,9 +37,42 @@ Unreleased.
   `preview2` feature is enabled.
   [#6615](https://github.com/bytecodealliance/wasmtime/pull/6615)
 
+
+### Cranelift changes
+
+* Tail call implementation has begun in Cranelift
+  [#6641](https://github.com/bytecodealliance/wasmtime/pull/6641)
+  [#6666](https://github.com/bytecodealliance/wasmtime/pull/6666)
+  [#6650](https://github.com/bytecodealliance/wasmtime/pull/6650)
+  [#6635](https://github.com/bytecodealliance/wasmtime/pull/6635)
+  [#6608](https://github.com/bytecodealliance/wasmtime/pull/6608)
+  [#6586](https://github.com/bytecodealliance/wasmtime/pull/6586)
+
+* Work continues on SIMD support for the riscv64 backend
+  [#6657](https://github.com/bytecodealliance/wasmtime/pull/6657)
+  [#6643](https://github.com/bytecodealliance/wasmtime/pull/6643)
+  [#6601](https://github.com/bytecodealliance/wasmtime/pull/6601)
+  [#6609](https://github.com/bytecodealliance/wasmtime/pull/6609)
+  [#6602](https://github.com/bytecodealliance/wasmtime/pull/6602)
+  [#6598](https://github.com/bytecodealliance/wasmtime/pull/6598)
+  [#6599](https://github.com/bytecodealliance/wasmtime/pull/6599)
+  [#6587](https://github.com/bytecodealliance/wasmtime/pull/6587)
+  [#6568](https://github.com/bytecodealliance/wasmtime/pull/6568)
+  [#6515](https://github.com/bytecodealliance/wasmtime/pull/6515)
+
+* Fix `AuthenticatedRet` when stack bytes are popped in the aarch64 backend
+  [#6634](https://github.com/bytecodealliance/wasmtime/pull/6634)
+
+* The `fcvt_low_from_sint` instruction has been removed, as it its current
+  behavior can be recovered through a combination of `swiden_low` and
+  `fcvt_from_sint`
+  [#6565](https://github.com/bytecodealliance/wasmtime/pull/6565)
+
 --------------------------------------------------------------------------------
 
 ## 10.0.1
+
+Released 2023-06-21
 
 ### Fixed
 
