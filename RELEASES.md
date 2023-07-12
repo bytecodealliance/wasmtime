@@ -16,7 +16,7 @@ Unreleased.
 
 ### Changed
 
-* The `WasiCtxBuilder` type has been refactored, and `WasiCtx` now has private
+* The WASI Preview 2 `WasiCtxBuilder` type has been refactored, and `WasiCtx` now has private
   fields.
   [#6652](https://github.com/bytecodealliance/wasmtime/pull/6652)
 
