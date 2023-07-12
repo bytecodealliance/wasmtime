@@ -20,6 +20,10 @@ Unreleased.
   fields.
   [#6652](https://github.com/bytecodealliance/wasmtime/pull/6652)
 
+* Component `bindgen!` now generates owned types by default instead of based on
+  how they're used
+  [#6648](https://github.com/bytecodealliance/wasmtime/pull/6648)
+
 * Wasmtime/Cranelift on x86-64 can now execute Wasm-SIMD on baseline SSE2, which
   all x86-64 processors support (as part of the base x86-64 spec). Previously,
   SSE4.2 extensions were required. This new work allows Wasm with SIMD
