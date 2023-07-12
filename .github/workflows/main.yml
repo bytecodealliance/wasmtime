@@ -734,16 +734,14 @@ jobs:
     - name: Setup Android SDK
       uses: android-actions/setup-android@v2
       if: contains('android', matrix.target)
-    - uses: actions/cache@v3
-      if: contains('android', matrix.target)
+      uses: actions/cache@v3
       with:
         path: ${{ runner.tool_cache }}/cargo-ndk
         key: cargo-ndk-bin-${{ env.CARGO_NDK_VERSION }}
-    - run: echo "${{ runner.tool_cache }}/cargo-ndk/bin" >> $GITHUB_PATH
-    - run: cargo install --root ${{ runner.tool_cache }}/cargo-ndk --version ${{ env.CARGO_NDK_VERSION }} cargo-ndk 
-
-    - if: contains('android', matrix.target)
-      run: cargo ndk -t "${{ matrix.target }}" build wasmtime --release --features all-arch
+      run: |
+        rustup target add ${{ matrix.target }}
+        echo "${{ runner.tool_cache }}/cargo-ndk/bin" >> $GITHUB_PATH
+        cargo install --root ${{ runner.tool_cache }}/cargo-ndk --version ${{ env.CARGO_NDK_VERSION }} cargo-ndk 
 
     # Build `wasmtime` and executables. Note that we include `all-arch` so our
     # release artifacts can be used to compile `.cwasm`s for other targets.
