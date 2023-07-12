@@ -742,6 +742,9 @@ jobs:
     - run: echo "${{ runner.tool_cache }}/cargo-ndk/bin" >> $GITHUB_PATH
     - run: cargo install --root ${{ runner.tool_cache }}/cargo-ndk --version ${{ env.CARGO_NDK_VERSION }} cargo-ndk 
 
+    - if: contains('android', matrix.target)
+      run: cargo ndk -t "${{ matrix.target }}" build wasmtime --release --features all-arch
+
     # Build `wasmtime` and executables. Note that we include `all-arch` so our
     # release artifacts can be used to compile `.cwasm`s for other targets.
     - run: $CENTOS cargo build --release --bin wasmtime --features all-arch
