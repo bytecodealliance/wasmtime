@@ -2,7 +2,7 @@ use crate::preview2::{
     bindings::io::streams::{self, InputStream, OutputStream, StreamError},
     bindings::poll::poll::Pollable,
     poll::PollableFuture,
-    stream::{HostInputStream, HostOutputStream, TableStreamExt},
+    stream::{HostInputStream, HostOutputStream, TableStreamExt, StreamState},
     HostPollable, TableError, TablePollableExt, WasiView,
 };
 use anyhow::anyhow;
@@ -29,6 +29,15 @@ impl From<TableError> for streams::Error {
     }
 }
 
+impl From<StreamState> for streams::StreamStatus {
+    fn from(state: StreamState) -> Self {
+        match state {
+            StreamState::Open => Self::Open,
+            StreamState::Closed => Self::Ended,
+        }
+    }
+}
+
 #[async_trait::async_trait]
 impl<T: WasiView> streams::Host for T {
     async fn drop_input_stream(&mut self, stream: InputStream) -> anyhow::Result<()> {
@@ -47,7 +56,7 @@ impl<T: WasiView> streams::Host for T {
         &mut self,
         stream: InputStream,
         len: u64,
-    ) -> Result<(Vec<u8>, bool), streams::Error> {
+    ) -> Result<(Vec<u8>, streams::StreamStatus), streams::Error> {
         // let s = self.table_mut().get_input_stream_mut(stream)?;
         //
         // // Len could be any `u64` value, but we don't want to
@@ -68,7 +77,7 @@ impl<T: WasiView> streams::Host for T {
         &mut self,
         stream: InputStream,
         len: u64,
-    ) -> Result<(Vec<u8>, bool), streams::Error> {
+    ) -> Result<(Vec<u8>, streams::StreamStatus), streams::Error> {
         self.table_mut()
             .get_input_stream_mut(stream)?
             .ready()
@@ -98,20 +107,24 @@ impl<T: WasiView> streams::Host for T {
         Ok(written)
     }
 
-    async fn skip(&mut self, stream: InputStream, len: u64) -> Result<(u64, bool), streams::Error> {
+    async fn skip(
+        &mut self,
+        stream: InputStream,
+        len: u64,
+    ) -> Result<(u64, streams::StreamStatus), streams::Error> {
         let s = self.table_mut().get_input_stream_mut(stream)?;
 
         // TODO: the cast to usize should be fallible, use `.try_into()?`
-        let (bytes_skipped, end) = s.skip(len as usize)?;
+        let (bytes_skipped, state) = s.skip(len as usize)?;
 
-        Ok((bytes_skipped as u64, end.is_closed()))
+        Ok((bytes_skipped as u64, state.into()))
     }
 
     async fn blocking_skip(
         &mut self,
         stream: InputStream,
         len: u64,
-    ) -> Result<(u64, bool), streams::Error> {
+    ) -> Result<(u64, streams::StreamStatus), streams::Error> {
         let r = self.skip(stream, len).await?;
         self.table_mut()
             .get_input_stream_mut(stream)?
@@ -263,11 +276,20 @@ impl<T: WasiView> streams::Host for T {
 
 pub mod sync {
     use crate::preview2::{
-        bindings::io::streams::Host as AsyncHost,
+        bindings::io::streams::{Host as AsyncHost, StreamStatus as AsyncStreamStatus},
         bindings::sync_io::io::streams::{self, InputStream, OutputStream},
         bindings::sync_io::poll::poll::Pollable,
         block_on, WasiView,
     };
+
+    impl From<AsyncStreamStatus> for streams::StreamStatus {
+        fn from(other: AsyncStreamStatus) -> Self {
+            match other {
+                AsyncStreamStatus::Open => Self::Open,
+                AsyncStreamStatus::Ended => Self::Ended,
+            }
+        }
+    }
 
     impl<T: WasiView> streams::Host for T {
         fn drop_input_stream(&mut self, stream: InputStream) -> anyhow::Result<()> {
@@ -282,8 +304,9 @@ pub mod sync {
             &mut self,
             stream: InputStream,
             len: u64,
-        ) -> Result<(Vec<u8>, bool), streams::Error> {
+        ) -> Result<(Vec<u8>, streams::StreamStatus), streams::Error> {
             block_on(async { AsyncHost::read(self, stream, len).await })
+                .map(|(a,b)| (a, b.into()))
                 .map_err(streams::Error::from)
         }
 
@@ -291,8 +314,9 @@ pub mod sync {
             &mut self,
             stream: InputStream,
             len: u64,
-        ) -> Result<(Vec<u8>, bool), streams::Error> {
+        ) -> Result<(Vec<u8>, streams::StreamStatus), streams::Error> {
             block_on(async { AsyncHost::blocking_read(self, stream, len).await })
+                .map(|(a,b)| (a, b.into()))
                 .map_err(streams::Error::from)
         }
 
@@ -310,8 +334,13 @@ pub mod sync {
                 .map_err(streams::Error::from)
         }
 
-        fn skip(&mut self, stream: InputStream, len: u64) -> Result<(u64, bool), streams::Error> {
+        fn skip(
+            &mut self,
+            stream: InputStream,
+            len: u64,
+        ) -> Result<(u64, streams::StreamStatus), streams::Error> {
             block_on(async { AsyncHost::skip(self, stream, len).await })
+                .map(|(a,b)| (a, b.into()))
                 .map_err(streams::Error::from)
         }
 
@@ -319,8 +348,9 @@ pub mod sync {
             &mut self,
             stream: InputStream,
             len: u64,
-        ) -> Result<(u64, bool), streams::Error> {
+        ) -> Result<(u64, streams::StreamStatus), streams::Error> {
             block_on(async { AsyncHost::blocking_skip(self, stream, len).await })
+                .map(|(a,b)| (a, b.into()))
                 .map_err(streams::Error::from)
         }
 

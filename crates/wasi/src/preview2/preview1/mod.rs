@@ -1047,7 +1047,7 @@ impl<
         iovs: &types::IovecArray<'a>,
     ) -> Result<types::Size, types::Error> {
         let desc = self.transact()?.get_descriptor(fd)?.clone();
-        let (mut buf, read, end) = match desc {
+        let (mut buf, read, state) = match desc {
             Descriptor::File(File {
                 fd,
                 blocking,
@@ -1065,7 +1065,7 @@ impl<
                         .unwrap_or_else(types::Error::trap)
                 })?;
                 let max = buf.len().try_into().unwrap_or(u64::MAX);
-                let (read, end) = if blocking {
+                let (read, state) = if blocking {
                     streams::Host::blocking_read(self, stream, max).await
                 } else {
                     streams::Host::read(self, stream, max).await
@@ -1076,24 +1076,24 @@ impl<
                 let pos = pos.checked_add(n).ok_or(types::Errno::Overflow)?;
                 position.store(pos, Ordering::Relaxed);
 
-                (buf, read, end)
+                (buf, read, state)
             }
             Descriptor::Stdin(stream) => {
                 let Some(buf) = first_non_empty_iovec(iovs)? else {
                     return Ok(0)
                 };
-                let (read, end) =
+                let (read, state) =
                     streams::Host::read(self, stream, buf.len().try_into().unwrap_or(u64::MAX))
                         .await
                         .map_err(|_| types::Errno::Io)?;
-                (buf, read, end)
+                (buf, read, state)
             }
             _ => return Err(types::Errno::Badf.into()),
         };
         if read.len() > buf.len() {
             return Err(types::Errno::Range.into());
         }
-        if !end && read.len() == 0 {
+        if state == streams::StreamStatus::Open && read.len() == 0 {
             return Err(types::Errno::Intr.into());
         }
         let (buf, _) = buf.split_at_mut(read.len());
@@ -1112,7 +1112,7 @@ impl<
         offset: types::Filesize,
     ) -> Result<types::Size, types::Error> {
         let desc = self.transact()?.get_descriptor(fd)?.clone();
-        let (mut buf, read, end) = match desc {
+        let (mut buf, read, state) = match desc {
             Descriptor::File(File { fd, blocking, .. }) if self.table().is_file(fd) => {
                 let Some(buf) = first_non_empty_iovec(iovs)? else {
                     return Ok(0)
@@ -1124,14 +1124,14 @@ impl<
                         .unwrap_or_else(types::Error::trap)
                 })?;
                 let max = buf.len().try_into().unwrap_or(u64::MAX);
-                let (read, end) = if blocking {
+                let (read, state) = if blocking {
                     streams::Host::blocking_read(self, stream, max).await
                 } else {
                     streams::Host::read(self, stream, max).await
                 }
                 .map_err(|_| types::Errno::Io)?;
 
-                (buf, read, end)
+                (buf, read, state)
             }
             Descriptor::Stdin(..) => {
                 // NOTE: legacy implementation returns SPIPE here
@@ -1142,7 +1142,7 @@ impl<
         if read.len() > buf.len() {
             return Err(types::Errno::Range.into());
         }
-        if !end && read.len() == 0 {
+        if state == streams::StreamStatus::Open && read.len() == 0 {
             return Err(types::Errno::Intr.into());
         }
         let (buf, _) = buf.split_at_mut(read.len());

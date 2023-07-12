@@ -12,6 +12,22 @@ interface streams {
     /// doesn't provide any additional information.
     record stream-error {}
 
+    /// Streams provide a sequence of data and then end; once they end, they
+    /// no longer provide any further data.
+    ///
+    /// For example, a stream reading from a file ends when the stream reaches
+    /// the end of the file. For another example, a stream reading from a
+    /// socket ends when the socket is closed.
+    enum stream-status {
+        /// The stream is open and may produce further data.
+        open,
+        /// When reading, this indicates that the stream will not produce
+        /// further data.
+        /// When writing, this indicates that the stream will no longer be read.
+        /// Further writes are still permitted.
+        ended,
+    }
+
     /// An input bytestream. In the future, this will be replaced by handle
     /// types.
     ///
@@ -31,12 +47,12 @@ interface streams {
     /// This [represents a resource](https://github.com/WebAssembly/WASI/blob/main/docs/WitInWasi.md#Resources).
     type input-stream = u32
 
-    /// Read bytes from a stream.
+    /// Perform a non-blocking read from the stream.
     ///
     /// This function returns a list of bytes containing the data that was
-    /// read, along with a bool which, when true, indicates that the end of the
-    /// stream was reached. The returned list will contain up to `len` bytes; it
-    /// may return fewer than requested, but not more.
+    /// read, along with a stream-status which, indicates whether further reads
+    /// are expected to produce data. The returned list will contain up to `len`
+    /// bytes; it may return fewer than requested, but not more.
     ///
     /// Once a stream has reached the end, subsequent calls to read or
     /// `skip` will always report end-of-stream rather than producing more
@@ -49,11 +65,17 @@ interface streams {
     /// The len here is a `u64`, but some callees may not be able to allocate
     /// a buffer as large as that would imply.
     /// FIXME: describe what happens if allocation fails.
+    ///
+    /// When the returned stream-status is open, the length of the returned
+    /// value may be less than `len`. When an empty list is returned, this
+    /// indicates that no more bytes were available from the stream at that
+    /// time. In that case the subscribe-to-input-stream pollable will indicate
+    /// when additional bytes are available for reading.
     read: func(
         this: input-stream,
         /// The maximum number of bytes to read
         len: u64
-    ) -> result<tuple<list<u8>, bool>, stream-error>
+    ) -> result<tuple<list<u8>, stream-status>, stream-error>
 
     /// Read bytes from a stream, with blocking.
     ///
@@ -63,7 +85,7 @@ interface streams {
         this: input-stream,
         /// The maximum number of bytes to read
         len: u64
-    ) -> result<tuple<list<u8>, bool>, stream-error>
+    ) -> result<tuple<list<u8>, stream-status>, stream-error>
 
     /// Skip bytes from a stream.
     ///
@@ -81,7 +103,7 @@ interface streams {
         this: input-stream,
         /// The maximum number of bytes to skip.
         len: u64,
-    ) -> result<tuple<u64, bool>, stream-error>
+    ) -> result<tuple<u64, stream-status>, stream-error>
 
     /// Skip bytes from a stream, with blocking.
     ///
@@ -91,7 +113,7 @@ interface streams {
         this: input-stream,
         /// The maximum number of bytes to skip.
         len: u64,
-    ) -> result<tuple<u64, bool>, stream-error>
+    ) -> result<tuple<u64, stream-status>, stream-error>
 
     /// Create a `pollable` which will resolve once either the specified stream
     /// has bytes available to read or the other end of the stream has been
