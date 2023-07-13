@@ -2,7 +2,7 @@ use crate::preview2::{
     bindings::io::streams::{self, InputStream, OutputStream, StreamError},
     bindings::poll::poll::Pollable,
     poll::PollableFuture,
-    stream::{HostInputStream, HostOutputStream, TableStreamExt, StreamState},
+    stream::{HostInputStream, HostOutputStream, StreamState, TableStreamExt},
     HostPollable, TableError, TablePollableExt, WasiView,
 };
 use anyhow::anyhow;
@@ -85,7 +85,11 @@ impl<T: WasiView> streams::Host for T {
         self.read(stream, len).await
     }
 
-    async fn write(&mut self, stream: OutputStream, bytes: Vec<u8>) -> Result<u64, streams::Error> {
+    async fn write(
+        &mut self,
+        stream: OutputStream,
+        bytes: Vec<u8>,
+    ) -> Result<(u64, streams::StreamStatus), streams::Error> {
         // let s = self.table_mut().get_output_stream_mut(stream)?;
         //
         // let bytes_written: u64 = HostOutputStream::write(s.as_mut(), &bytes)?;
@@ -98,7 +102,7 @@ impl<T: WasiView> streams::Host for T {
         &mut self,
         stream: OutputStream,
         bytes: Vec<u8>,
-    ) -> Result<u64, streams::Error> {
+    ) -> Result<(u64, streams::StreamStatus), streams::Error> {
         let written = self.write(stream, bytes).await?;
         self.table_mut()
             .get_output_stream_mut(stream)?
@@ -137,20 +141,21 @@ impl<T: WasiView> streams::Host for T {
         &mut self,
         stream: OutputStream,
         len: u64,
-    ) -> Result<u64, streams::Error> {
-        let s = self.table_mut().get_output_stream_mut(stream)?;
-
-        // TODO: the cast to usize should be fallible, use `.try_into()?`
-        let bytes_written = s.write_zeroes(len as usize)?;
-
-        Ok(bytes_written as u64)
+    ) -> Result<(u64, streams::StreamStatus), streams::Error> {
+        // let s = self.table_mut().get_output_stream_mut(stream)?;
+        //
+        // // TODO: the cast to usize should be fallible, use `.try_into()?`
+        // let bytes_written = s.write_zeroes(len as usize)?;
+        //
+        // Ok(bytes_written as u64)
+        todo!()
     }
 
     async fn blocking_write_zeroes(
         &mut self,
         stream: OutputStream,
         len: u64,
-    ) -> Result<u64, streams::Error> {
+    ) -> Result<(u64, streams::StreamStatus), streams::Error> {
         let r = self.write_zeroes(stream, len).await?;
         self.table_mut()
             .get_output_stream_mut(stream)?
@@ -164,7 +169,7 @@ impl<T: WasiView> streams::Host for T {
         _src: InputStream,
         _dst: OutputStream,
         _len: u64,
-    ) -> Result<(u64, bool), streams::Error> {
+    ) -> Result<(u64, streams::StreamStatus), streams::Error> {
         // TODO: We can't get two streams at the same time because they both
         // carry the exclusive lifetime of `ctx`. When [`get_many_mut`] is
         // stabilized, that could allow us to add a `get_many_stream_mut` or
@@ -193,10 +198,9 @@ impl<T: WasiView> streams::Host for T {
         _src: InputStream,
         _dst: OutputStream,
         _len: u64,
-    ) -> Result<(u64, bool), streams::Error> {
+    ) -> Result<(u64, streams::StreamStatus), streams::Error> {
         // TODO: once splice is implemented, figure out what the blocking semantics are for waiting
-        // on src and dest here. probably just delete these blocking_ funcs altogether and defer
-        // that decision to userland, though.
+        // on src and dest here.
         todo!("stream splice is not implemented")
     }
 
@@ -204,7 +208,7 @@ impl<T: WasiView> streams::Host for T {
         &mut self,
         _src: InputStream,
         _dst: OutputStream,
-    ) -> Result<u64, streams::Error> {
+    ) -> Result<(u64, streams::StreamStatus), streams::Error> {
         // TODO: We can't get two streams at the same time because they both
         // carry the exclusive lifetime of `ctx`. When [`get_many_mut`] is
         // stabilized, that could allow us to add a `get_many_stream_mut` or
@@ -306,7 +310,7 @@ pub mod sync {
             len: u64,
         ) -> Result<(Vec<u8>, streams::StreamStatus), streams::Error> {
             block_on(async { AsyncHost::read(self, stream, len).await })
-                .map(|(a,b)| (a, b.into()))
+                .map(|(a, b)| (a, b.into()))
                 .map_err(streams::Error::from)
         }
 
@@ -316,12 +320,17 @@ pub mod sync {
             len: u64,
         ) -> Result<(Vec<u8>, streams::StreamStatus), streams::Error> {
             block_on(async { AsyncHost::blocking_read(self, stream, len).await })
-                .map(|(a,b)| (a, b.into()))
+                .map(|(a, b)| (a, b.into()))
                 .map_err(streams::Error::from)
         }
 
-        fn write(&mut self, stream: OutputStream, bytes: Vec<u8>) -> Result<u64, streams::Error> {
+        fn write(
+            &mut self,
+            stream: OutputStream,
+            bytes: Vec<u8>,
+        ) -> Result<(u64, streams::StreamStatus), streams::Error> {
             block_on(async { AsyncHost::write(self, stream, bytes).await })
+                .map(|(a, b)| (a, b.into()))
                 .map_err(streams::Error::from)
         }
 
@@ -329,8 +338,9 @@ pub mod sync {
             &mut self,
             stream: OutputStream,
             bytes: Vec<u8>,
-        ) -> Result<u64, streams::Error> {
+        ) -> Result<(u64, streams::StreamStatus), streams::Error> {
             block_on(async { AsyncHost::write(self, stream, bytes).await })
+                .map(|(a, b)| (a, b.into()))
                 .map_err(streams::Error::from)
         }
 
@@ -340,7 +350,7 @@ pub mod sync {
             len: u64,
         ) -> Result<(u64, streams::StreamStatus), streams::Error> {
             block_on(async { AsyncHost::skip(self, stream, len).await })
-                .map(|(a,b)| (a, b.into()))
+                .map(|(a, b)| (a, b.into()))
                 .map_err(streams::Error::from)
         }
 
@@ -350,12 +360,17 @@ pub mod sync {
             len: u64,
         ) -> Result<(u64, streams::StreamStatus), streams::Error> {
             block_on(async { AsyncHost::blocking_skip(self, stream, len).await })
-                .map(|(a,b)| (a, b.into()))
+                .map(|(a, b)| (a, b.into()))
                 .map_err(streams::Error::from)
         }
 
-        fn write_zeroes(&mut self, stream: OutputStream, len: u64) -> Result<u64, streams::Error> {
+        fn write_zeroes(
+            &mut self,
+            stream: OutputStream,
+            len: u64,
+        ) -> Result<(u64, streams::StreamStatus), streams::Error> {
             block_on(async { AsyncHost::write_zeroes(self, stream, len).await })
+                .map(|(a, b)| (a, b.into()))
                 .map_err(streams::Error::from)
         }
 
@@ -363,8 +378,9 @@ pub mod sync {
             &mut self,
             stream: OutputStream,
             len: u64,
-        ) -> Result<u64, streams::Error> {
+        ) -> Result<(u64, streams::StreamStatus), streams::Error> {
             block_on(async { AsyncHost::blocking_write_zeroes(self, stream, len).await })
+                .map(|(a, b)| (a, b.into()))
                 .map_err(streams::Error::from)
         }
 
@@ -373,8 +389,9 @@ pub mod sync {
             src: InputStream,
             dst: OutputStream,
             len: u64,
-        ) -> Result<(u64, bool), streams::Error> {
+        ) -> Result<(u64, streams::StreamStatus), streams::Error> {
             block_on(async { AsyncHost::splice(self, src, dst, len).await })
+                .map(|(a, b)| (a, b.into()))
                 .map_err(streams::Error::from)
         }
 
@@ -383,13 +400,19 @@ pub mod sync {
             src: InputStream,
             dst: OutputStream,
             len: u64,
-        ) -> Result<(u64, bool), streams::Error> {
+        ) -> Result<(u64, streams::StreamStatus), streams::Error> {
             block_on(async { AsyncHost::blocking_splice(self, src, dst, len).await })
+                .map(|(a, b)| (a, b.into()))
                 .map_err(streams::Error::from)
         }
 
-        fn forward(&mut self, src: InputStream, dst: OutputStream) -> Result<u64, streams::Error> {
+        fn forward(
+            &mut self,
+            src: InputStream,
+            dst: OutputStream,
+        ) -> Result<(u64, streams::StreamStatus), streams::Error> {
             block_on(async { AsyncHost::forward(self, src, dst).await })
+                .map(|(a, b)| (a, b.into()))
                 .map_err(streams::Error::from)
         }
 

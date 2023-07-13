@@ -1186,7 +1186,7 @@ impl<
                     })?;
                     (stream, position)
                 };
-                let n = if blocking {
+                let (n, _stat) = if blocking {
                     streams::Host::blocking_write(self, stream, buf).await
                 } else {
                     streams::Host::write(self, stream, buf).await
@@ -1202,14 +1202,14 @@ impl<
                 let Some(buf) = first_non_empty_ciovec(ciovs)? else {
                     return Ok(0)
                 };
-                streams::Host::write(self, stream, buf)
+                let (n, _stat) = streams::Host::write(self, stream, buf)
                     .await
-                    .map_err(|_| types::Errno::Io)?
+                    .map_err(|_| types::Errno::Io)?;
+                n
             }
             _ => return Err(types::Errno::Badf.into()),
-        }
-        .try_into()
-        .or(Err(types::Errno::Overflow))?;
+        };
+        let n = n.try_into().or(Err(types::Errno::Overflow))?;
         Ok(n)
     }
 
@@ -1223,7 +1223,7 @@ impl<
         offset: types::Filesize,
     ) -> Result<types::Size, types::Error> {
         let desc = self.transact()?.get_descriptor(fd)?.clone();
-        let n = match desc {
+        let (n, _stat) = match desc {
             Descriptor::File(File { fd, blocking, .. }) if self.table().is_file(fd) => {
                 let Some(buf) = first_non_empty_ciovec(ciovs)? else {
                     return Ok(0)
@@ -1245,9 +1245,8 @@ impl<
                 return Err(types::Errno::Spipe.into());
             }
             _ => return Err(types::Errno::Badf.into()),
-        }
-        .try_into()
-        .or(Err(types::Errno::Overflow))?;
+        };
+        let n = n.try_into().or(Err(types::Errno::Overflow))?;
         Ok(n)
     }
 
