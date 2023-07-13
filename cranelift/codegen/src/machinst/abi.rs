@@ -494,10 +494,10 @@ pub trait ABIMachineSpec {
     ///   temporary as this one.
     fn get_stacklimit_reg(call_conv: isa::CallConv) -> Reg;
 
-    /// Generate a store to the given [base+offset] address.
+    /// Generate a load to the given [base+offset] address.
     fn gen_load_base_offset(into_reg: Writable<Reg>, base: Reg, offset: i32, ty: Type) -> Self::I;
 
-    /// Generate a load from the given [base+offset] address.
+    /// Generate a store from the given [base+offset] address.
     fn gen_store_base_offset(base: Reg, offset: i32, from_reg: Reg, ty: Type) -> Self::I;
 
     /// Adjust the stack pointer up or down.
