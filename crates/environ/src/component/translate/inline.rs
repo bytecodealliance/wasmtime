@@ -84,7 +84,12 @@ pub(super) fn run(
             _ => continue,
         };
 
-        // TODO: comment this
+        // Before `convert_component_entity_type` below all resource types
+        // introduced by this import need to be registered and have indexes
+        // assigned to them. Any fresh new resource type referred to by imports
+        // is a brand new introduction of a resource which needs to have a type
+        // allocated to it, so new runtime imports are injected for each
+        // resource along with updating the `imported_resources` map.
         let index = inliner.result.import_types.next_key();
         types.resources_mut().register_component_entity_type(
             &types_ref,
@@ -99,11 +104,13 @@ pub(super) fn run(
             },
         );
 
+        // With resources all taken care of it's now possible to convert this
+        // into Wasmtime's type system.
         let ty = types.convert_component_entity_type(types_ref, ty)?;
 
-        // Imports of types are not required to be specified by the host since
-        // it's just for type information within the component. Note that this
-        // doesn't cover resource imports, which are in fact significant.
+        // Imports of types that aren't resources are not required to be
+        // specified by the host since it's just for type information within
+        // the component.
         if let TypeDef::Interface(_) = ty {
             continue;
         }
@@ -206,7 +213,13 @@ struct InlinerFrame<'a> {
     component_instances: PrimaryMap<ComponentInstanceIndex, ComponentInstanceDef<'a>>,
     components: PrimaryMap<ComponentIndex, ComponentDef<'a>>,
 
-    /// TODO
+    /// The type of instance produced by completing the instantiation of this
+    /// frame.
+    ///
+    /// This is a wasmparser-relative piece of type information which is used to
+    /// register resource types after instantiation has completed.
+    ///
+    /// This is `Some` for all subcomponents and `None` for the root component.
     instance_ty: Option<TypeId>,
 }
 
@@ -329,6 +342,20 @@ struct ComponentDef<'a> {
 }
 
 impl<'a> Inliner<'a> {
+    /// Symbolically instantiates a component using the type information and
+    /// `frames` provided.
+    ///
+    /// The `types` provided is the type information for the entire component
+    /// translation process. This is a distinct output artifact separate from
+    /// the component metadata.
+    ///
+    /// The `frames` argument is storage to handle a "call stack" of components
+    /// instantiating one another. The youngest frame (last element) of the
+    /// frames list is a component that's currently having its initializers
+    /// processed. The second element of each frame is a snapshot of the
+    /// resource-related information just before the frame was translated. For
+    /// more information on this snapshotting see the documentation on
+    /// `ResourcesBuilder`.
     fn run(
         &mut self,
         types: &mut ComponentTypesBuilder,
@@ -339,8 +366,6 @@ impl<'a> Inliner<'a> {
         // initializers are processed. Currently this is modeled as an infinite
         // loop which drives the top-most iterator of the `frames` stack
         // provided as an argument to this function.
-        //
-        // TODO: comments about resources_cache
         loop {
             let (frame, _) = frames.last_mut().unwrap();
             types.resources_mut().set_current_instance(frame.instance);
@@ -405,11 +430,21 @@ impl<'a> Inliner<'a> {
             // but for sub-components this will do resolution to connect what
             // was provided as an import at the instantiation-site to what was
             // needed during the component's instantiation.
-            //
-            // TODO: update comment
             Import(name, ty) => {
                 let arg = match frame.args.get(name.as_str()) {
                     Some(arg) => arg,
+
+                    // Not all arguments need to be provided for instantiation,
+                    // namely the root component in Wasmtime doesn't require
+                    // structural type imports to be satisfied. These type
+                    // imports are relevant for bindings generators and such but
+                    // as a runtime there's not really a definition to fit in.
+                    //
+                    // If no argument was provided for `name` then it's asserted
+                    // that this is a type import and additionally it's not a
+                    // resource type import (which indeed must be provided). If
+                    // all that passes then this initializer is effectively
+                    // skipped.
                     None => {
                         match ty {
                             ComponentEntityType::Type { created, .. } => {
@@ -423,8 +458,20 @@ impl<'a> Inliner<'a> {
                         return Ok(None);
                     }
                 };
-                let mut path = Vec::new();
 
+                // Next resource types need to be handled. For example if a
+                // resource is imported into this component then it needs to be
+                // assigned a unique table to provide the isolation guarantees
+                // of resources (this component's table is shared with no
+                // others). Here `register_component_entity_type` will find
+                // imported resources and then `lookup_resource` will find the
+                // resource within `arg` as necessary to lookup the original
+                // true definition of this resource.
+                //
+                // This is what enables tracking true resource origins
+                // throughout component translation while simultaneously also
+                // tracking unique tables for each resource in each component.
+                let mut path = Vec::new();
                 let (resources, types) = types.resources_mut_and_types();
                 resources.register_component_entity_type(
                     &frame.translation.types_ref(),
@@ -432,6 +479,9 @@ impl<'a> Inliner<'a> {
                     &mut path,
                     &mut |path| arg.lookup_resource(path, types),
                 );
+
+                // And now with all the type information out of the way the
+                // `arg` definition is moved into its corresponding index space.
                 frame.push_item(arg.clone());
             }
 
@@ -445,10 +495,10 @@ impl<'a> Inliner<'a> {
                 func,
                 options,
                 canonical_abi,
-                lower_ty: a,
+                lower_ty,
             } => {
                 let lower_ty =
-                    types.convert_component_func_type(frame.translation.types_ref(), *a)?;
+                    types.convert_component_func_type(frame.translation.types_ref(), *lower_ty)?;
                 let options_lower = self.adapter_options(frame, types, options);
                 let func = match &frame.component_funcs[*func] {
                     // If this component function was originally a host import
@@ -559,6 +609,16 @@ impl<'a> Inliner<'a> {
                 });
             }
 
+            // A new resource type is being introduced, so it's recorded as a
+            // brand new resource in the final `resources` array. Additionally
+            // for now resource introductions are considered side effects to
+            // know when to register their destructors so that's recorded as
+            // well.
+            //
+            // Note that this has the effect of when a component is instantiated
+            // twice it will produce unique types for the resources from each
+            // instantiation. That's the intended runtime semantics and
+            // implementation here, however.
             Resource(ty, rep, dtor) => {
                 let idx = self.result.resources.push(dfg::Resource {
                     rep: *rep,
@@ -568,11 +628,24 @@ impl<'a> Inliner<'a> {
                 self.result
                     .side_effects
                     .push(dfg::SideEffect::Resource(idx));
+
+                // Register with type translation that all future references to
+                // `ty` will refer to `idx`.
+                //
+                // Note that this registration information is lost when this
+                // component finishes instantiation due to the snapshotting
+                // behavior in the frame processing loop above. This is also
+                // intended, though, since `ty` can't be referred to outside of
+                // this component.
                 let idx = self.result.resource_index(idx);
                 types
                     .resources_mut()
                     .register_resource(frame.translation.types_ref(), *ty, idx);
             }
+
+            // Resource-related intrinsics are generally all the same.
+            // Wasmparser type information is converted to wasmtime type
+            // information and then new entries for each intrinsic are recorded.
             ResourceNew(id, ty) => {
                 let id = types.resource_id(frame.translation.types_ref(), *id);
                 frame.funcs.push(dfg::CoreDef::ResourceNew(id, *ty));
@@ -1063,7 +1136,8 @@ impl<'a> InlinerFrame<'a> {
         })
     }
 
-    /// TODO
+    /// Pushes the component `item` definition provided into the appropriate
+    /// index space within this component.
     fn push_item(&mut self, item: ComponentItemDef<'a>) {
         match item {
             ComponentItemDef::Func(i) => {
@@ -1079,13 +1153,17 @@ impl<'a> InlinerFrame<'a> {
                 self.component_instances.push(i);
             }
 
-            // Like imports creation of types from an `alias`-ed
-            // export does not, at this time, modify what the type
-            // is or anything like that. The type structure of the
-            // component being instantiated is unchanged so types
-            // are ignored here.
+            // In short, type definitions aren't tracked here.
             //
-            // TODO: update comment
+            // The longer form explanation for this is that structural types
+            // like lists and records don't need to be tracked at all and the
+            // only significant type which needs tracking is resource types
+            // themselves. Resource types, however, are tracked within the
+            // `ResourcesBuilder` state rather than an `InlinerFrame` so they're
+            // ignored here as well. The general reason for that is that type
+            // information is everywhere and this `InlinerFrame` is not
+            // everywhere so it seemed like it would make sense to split the
+            // two.
             ComponentItemDef::Type(_ty) => {}
         }
     }
@@ -1104,7 +1182,31 @@ impl<'a> InlinerFrame<'a> {
         }
     }
 
-    // TODO: comment this method
+    /// Completes the instantiation of a subcomponent and records type
+    /// information for the instance that was produced.
+    ///
+    /// This method is invoked when an `InlinerFrame` finishes for a
+    /// subcomponent. The `def` provided represents the instance that was
+    /// produced from instantiation, and `ty` is the wasmparser-defined type of
+    /// the instance produced.
+    ///
+    /// The purpose of this method is to record type information about resources
+    /// in the instance produced. In the component model all instantiations of a
+    /// component produce fresh new types for all resources which are unequal to
+    /// all prior resources. This means that if wasmparser's `ty` type
+    /// information references a unique resource within `def` that has never
+    /// been registered before then that means it's a defined resource within
+    /// the component that was just instantiated (as opposed to an imported
+    /// resource which was reexported).
+    ///
+    /// Further type translation after this instantiation can refer to these
+    /// resource types and a mapping from those types to the wasmtime-internal
+    /// types is required, so this method builds up those mappings.
+    ///
+    /// Essentially what happens here is that the `ty` type is registered and
+    /// any new unique resources are registered so new tables can be introduced
+    /// along with origin information about the actual underlying resource type
+    /// and which component instantiated it.
     fn finish_instantiate(
         &mut self,
         def: ComponentInstanceDef<'a>,
@@ -1156,21 +1258,43 @@ impl<'a> ComponentItemDef<'a> {
         Ok(item)
     }
 
+    /// Walks the `path` within `self` to find a resource at that path.
+    ///
+    /// This method is used when resources are found within wasmparser's type
+    /// information and they need to be correlated with actual concrete
+    /// definitions from this inlining pass. The `path` here is a list of
+    /// instance export names (or empty) to walk to reach down into the final
+    /// definition which should refer to a resourc itself.
     fn lookup_resource(&self, path: &[&str], types: &ComponentTypes) -> ResourceIndex {
         let mut cur = self.clone();
+
+        // Each element of `path` represents unwrapping a layer of an instance
+        // type, so handle those here by updating `cur` iteratively.
         for element in path.iter().copied() {
             let instance = match cur {
                 ComponentItemDef::Instance(def) => def,
                 _ => unreachable!(),
             };
             cur = match instance {
+                // If this instance is a "bag of things" then this is as easy as
+                // looking up the name in the bag of names.
                 ComponentInstanceDef::Items(names) => names[element].clone(),
+
+                // If, however, this instance is an imported instance then this
+                // is a further projection within the import with one more path
+                // element. The `types` type information is used to lookup the
+                // type of `element` within the instance type, and that's used
+                // in conjunction with a one-longer `path` to produce a new item
+                // definition.
                 ComponentInstanceDef::Import(path, ty) => {
                     ComponentItemDef::from_import(path.push(element), types[ty].exports[element])
                         .unwrap()
                 }
             };
         }
+
+        // Once `path` has been iterated over it must be the case that the final
+        // item is a resource type, in which case a lookup can be performed.
         match cur {
             ComponentItemDef::Type(TypeDef::Resource(idx)) => types[idx].ty,
             _ => unreachable!(),

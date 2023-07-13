@@ -153,7 +153,7 @@ pub unsafe trait Store {
     /// completely semantically transparent. Returns the new deadline.
     fn new_epoch(&mut self) -> Result<u64, Error>;
 
-    /// TODO
+    /// Metadata required for resources for the component model.
     #[cfg(feature = "component-model")]
     fn component_calls(&mut self) -> &mut component::CallContexts;
 }

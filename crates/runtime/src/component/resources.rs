@@ -1,32 +1,102 @@
+//! Implementation of the canonical-ABI related intrinsics for resources in the
+//! component model.
+//!
+//! This module contains all the relevant gory details of the details of the
+//! component model related to lifting and lowering resources. For example
+//! intrinsics like `resource.new` will bottom out in calling this file, and
+//! this is where resource tables are actually defined and modified.
+//!
+//! The main types in this file are:
+//!
+//! * `ResourceTables` - the "here's everything" context which is required to
+//!   perform canonical ABI operations.
+//!
+//! * `ResourceTable` - an individual instance of a table of resources,
+//!   basically "just a slab" though.
+//!
+//! * `CallContexts` - store-local information about active calls and borrows
+//!   and runtime state tracking that to ensure that everything is handled
+//!   correctly.
+//!
+//! Individual operations are exposed through methods on `ResourceTables` for
+//! lifting/lowering/etc. This does mean though that some other fiddly bits
+//! about ABI details can be found in lifting/lowering thoughout Wasmtime,
+//! namely in the `Resource<T>` and `ResourceAny` types.
+
 use anyhow::{bail, Result};
 use std::mem;
 use wasmtime_environ::component::TypeResourceTableIndex;
 use wasmtime_environ::PrimaryMap;
 
-/// TODO
+/// Contextual state necessary to perform resource-related operations.
+///
+/// This state a bit odd since it has a few optional bits, but the idea is that
+/// whenever this is constructed the bits required to perform operations are
+/// always `Some`. For example:
+///
+/// * During lifting and lowering both `tables` and `host_table` are `Some`.
+/// * During wasm's own intrinsics only `tables` is `Some`.
+/// * During embedder-invoked resource destruction calls only `host_table` is
+///   `Some`.
+///
+/// This is all packaged up into one state though to make it easier to operate
+/// on and to centralize handling of the state related to resources due to how
+/// critical it is for correctness.
 pub struct ResourceTables<'a> {
-    /// TODO
+    /// Runtime state for all resources defined in a component.
+    ///
+    /// This is required whenever a `TypeResourceTableIndex` is provided as it's
+    /// the lookup where that happens. Not present during embedder-originating
+    /// operations though such as `ResourceAny::resource_drop` which won't
+    /// consult this table as it's only operating over the host table.
     pub tables: Option<&'a mut PrimaryMap<TypeResourceTableIndex, ResourceTable>>,
-    /// TODO
+
+    /// Runtime state for resources currently owned by the host.
+    ///
+    /// This is the single table used by the host stored within `Store<T>`. Host
+    /// resources will point into this and effectively have the same semantics
+    /// as-if they're in-component resources. The major distinction though is
+    /// that this is a heterogenous table instead of only containing a single
+    /// type.
     pub host_table: Option<&'a mut ResourceTable>,
-    /// TODO
+
+    /// Scope information about calls actively in use to track information such
+    /// as borrow counts.
     pub calls: &'a mut CallContexts,
 }
 
-/// TODO
+/// An individual slab of resources used for a single table within a component.
+/// Not much fancier than a general slab data structure.
 #[derive(Default)]
 pub struct ResourceTable {
+    /// Next slot to allocate, or `self.slots.len()` if they're all full.
     next: u32,
+    /// Runtime state of all slots.
     slots: Vec<Slot>,
 }
 
 enum Slot {
+    /// This slot is free and points to the next free slot, forming a linked
+    /// list of free slots.
     Free { next: u32 },
+
+    /// This slot contains an owned resource with the listed representation.
+    ///
+    /// The `lend_count` tracks how many times this has been lent out as a
+    /// `borrow` and if nonzero this can't be removed.
     Own { rep: u32, lend_count: u32 },
+
+    /// This slot contains a `borrow` resource that's connected to the `scope`
+    /// provided. The `rep` is listed and dropping this borrow will decrement
+    /// the borrow count of the `scope`.
     Borrow { rep: u32, scope: usize },
 }
 
-/// TODO
+/// State related to borrows and calls within a component.
+///
+/// This is created once per `Store` and updated and modified throughout the
+/// lifetime of the store. This primarily tracks borrow counts and what slots
+/// should be updated when calls go out of scope.
 #[derive(Default)]
 pub struct CallContexts {
     scopes: Vec<CallContext>,
@@ -146,7 +216,8 @@ impl ResourceTables<'_> {
                 // The decrement to this count happens in `exit_call`.
                 *lend_count = lend_count.checked_add(1).unwrap();
                 let rep = *rep;
-                self.register_lender(ty, idx);
+                let scope = self.calls.scopes.last_mut().unwrap();
+                scope.lenders.push(Lender { ty, idx });
                 Ok(rep)
             }
             Slot::Borrow { rep, .. } => Ok(*rep),
@@ -173,18 +244,17 @@ impl ResourceTables<'_> {
         self.table(ty).insert(Slot::Borrow { rep, scope })
     }
 
-    /// TODO
-    fn register_lender(&mut self, ty: Option<TypeResourceTableIndex>, idx: u32) {
-        let scope = self.calls.scopes.last_mut().unwrap();
-        scope.lenders.push(Lender { ty, idx });
-    }
-
-    /// TODO
+    /// Enters a new calling context, starting a fresh count of borrows and
+    /// such.
     pub fn enter_call(&mut self) {
         self.calls.scopes.push(CallContext::default());
     }
 
-    /// TODO
+    /// Exits the previously pushed calling context.
+    ///
+    /// This requires all information to be available within this
+    /// `ResourceTables` and is only called during lowering/lifting operations
+    /// at this time.
     pub fn exit_call(&mut self) -> Result<()> {
         let cx = self.calls.scopes.pop().unwrap();
         if cx.borrow_count > 0 {
@@ -225,7 +295,7 @@ impl ResourceTable {
         u32::try_from(ret).unwrap()
     }
 
-    /// TODO
+    /// Gets the representation of the `idx` specified.
     pub fn rep(&self, idx: u32) -> Result<u32> {
         match usize::try_from(idx).ok().and_then(|i| self.slots.get(i)) {
             None | Some(Slot::Free { .. }) => bail!("unknown handle index {idx}"),

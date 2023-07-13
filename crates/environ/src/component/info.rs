@@ -402,11 +402,13 @@ pub enum CoreDef {
     /// host-defined transcoding function.
     Transcoder(RuntimeTranscoderIndex),
 
-    /// TODO
+    /// This refers to a `resource.new` intrinsic described by the index
+    /// provided. These indices are created through `GlobalInitializer`
+    /// entries.
     ResourceNew(RuntimeResourceNewIndex),
-    /// TODO
+    /// Same as `ResourceNew`, but for the `resource.rep` intrinsic
     ResourceRep(RuntimeResourceRepIndex),
-    /// TODO
+    /// Same as `ResourceNew`, but for the `resource.drop` intrinsic
     ResourceDrop(RuntimeResourceDropIndex),
 }
 
@@ -578,70 +580,73 @@ impl Transcoder {
 
 pub use crate::fact::{FixedEncoding, Transcode};
 
-/// TODO
+/// Description of a new resource declared in a `GlobalInitializer::Resource`
+/// variant.
+///
+/// This will have the effect of initializing runtime state for this resource,
+/// namely the destructor is fetched and stored.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Resource {
-    /// TODO
+    /// The local index of the resource being defined.
     pub index: DefinedResourceIndex,
-    /// TODO
+    /// Core wasm representation of this resource.
     pub rep: WasmType,
-    /// TODO
+    /// Optionally-specified destructor and where it comes from.
     pub dtor: Option<CoreDef>,
-    /// TODO
+    /// Which component instance this resource logically belongs to.
     pub instance: RuntimeComponentInstanceIndex,
 }
 
-/// TODO
+/// Description of a `resource.new` intrinsic used to declare and initialize a
+/// new `VMFuncRef` which generates the core wasm function corresponding to
+/// `resource.new`.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ResourceNew {
-    /// TODO
+    /// The index of the intrinsic being created.
     pub index: RuntimeResourceNewIndex,
-    /// TODO
+    /// The resource table that this intrinsic will be modifying.
     pub resource: TypeResourceTableIndex,
-    /// TODO
+    /// The core wasm signature of the intrinsic, always `(func (param i32)
+    /// (result i32))`.
     pub signature: SignatureIndex,
 }
 
 impl ResourceNew {
-    /// TODO
+    /// Returns the compiled artifact symbol name for this intrinsic.
     pub fn symbol_name(&self) -> String {
         let resource = self.resource.as_u32();
         format!("wasm_component_resource_new{resource}")
     }
 }
 
-/// TODO
+/// Same as `ResourceNew`, but for the `resource.rep` intrinsic.
 #[derive(Debug, Serialize, Deserialize)]
+#[allow(missing_docs)]
 pub struct ResourceRep {
-    /// TODO
     pub index: RuntimeResourceRepIndex,
-    /// TODO
     pub resource: TypeResourceTableIndex,
-    /// TODO
     pub signature: SignatureIndex,
 }
 
 impl ResourceRep {
-    /// TODO
+    /// Returns the compiled artifact symbol name for this intrinsic.
     pub fn symbol_name(&self) -> String {
         let resource = self.resource.as_u32();
         format!("wasm_component_resource_rep{resource}")
     }
 }
 
-/// TODO
+/// Same as `ResourceNew`, but for the `resource.drop` intrinsic.
 #[derive(Debug, Serialize, Deserialize)]
+#[allow(missing_docs)]
 pub struct ResourceDrop {
-    /// TODO
     pub index: RuntimeResourceDropIndex,
-    /// TODO
     pub resource: TypeResourceTableIndex,
-    /// TODO
     pub signature: SignatureIndex,
 }
 
 impl ResourceDrop {
-    /// TODO
+    /// Returns the compiled artifact symbol name for this intrinsic.
     pub fn symbol_name(&self) -> String {
         let resource = self.resource.as_u32();
         format!("wasm_component_resource_drop{resource}")

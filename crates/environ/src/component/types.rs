@@ -110,16 +110,42 @@ indices! {
     pub struct TypeResultIndex(u32);
     /// Index pointing to a list type in the component model.
     pub struct TypeListIndex(u32);
-    /// TODO
+
+    /// Index pointing to a resource table within a component.
     ///
-    /// TODO: this is not a great name, it's more of a "unique ID" and there
-    /// should be a separate pass, probably the dfg pass, which keeps track of
-    /// which resources actually need tables. Only those lifted or lowered
-    /// actually need tables, not literally all resources within a component.
+    /// This is a Wasmtime-specific type index which isn't part of the component
+    /// model per-se (or at least not the binary format). This index represents
+    /// a pointer to a table of runtime information tracking state for resources
+    /// within a component. Tables are generated per-resource-per-component
+    /// meaning that if the exact same resource is imported into 4 subcomponents
+    /// then that's 5 tables: one for the defining component and one for each
+    /// subcomponent.
+    ///
+    /// All resource-related intrinsics operate on table-local indices which
+    /// indicate which table the intrinsic is modifying. Each resource table has
+    /// an origin resource type (defined by `ResourceIndex`) along with a
+    /// component instance that it's recorded for.
     pub struct TypeResourceTableIndex(u32);
-    /// TODO
+
+    /// Index pointing to a resource within a component.
+    ///
+    /// This index space covers all unique resource type definitions. For
+    /// example all unique imports come first and then all locally-defined
+    /// resources come next. Note that this does not count the number of runtime
+    /// tables required to track resources (that's `TypeResourceTableIndex`
+    /// instead). Instead this is a count of the number of unique
+    /// `(type (resource (rep ..)))` declarations within a component, plus
+    /// imports.
+    ///
+    /// This is then used for correlating various information such as
+    /// destructors, origin information, etc.
     pub struct ResourceIndex(u32);
-    /// TODO
+
+    /// Index pointing to a local resource defined within a component.
+    ///
+    /// This is similar to `FooIndex` and `DefinedFooIndex` for core wasm and
+    /// the idea here is that this is guaranteed to be a wasm-defined resource
+    /// which is connected to a component instance for example.
     pub struct DefinedResourceIndex(u32);
 
     // ========================================================================
@@ -193,11 +219,14 @@ indices! {
     /// which reference linear memories defined within a component.
     pub struct RuntimeTranscoderIndex(u32);
 
-    /// TODO
+    /// Index into the list of `resource.new` intrinsics used by a component.
+    ///
+    /// This is used to allocate space in `VMComponentContext` and record
+    /// `VMFuncRef`s corresponding to the definition of the intrinsic.
     pub struct RuntimeResourceNewIndex(u32);
-    /// TODO
+    /// Same as `RuntimeResourceNewIndex`, but for `resource.rep`
     pub struct RuntimeResourceDropIndex(u32);
-    /// TODO
+    /// Same as `RuntimeResourceNewIndex`, but for `resource.drop`
     pub struct RuntimeResourceRepIndex(u32);
 }
 
@@ -281,7 +310,14 @@ impl ComponentTypes {
         }
     }
 
-    /// TODO
+    /// Smaller helper method to find a `SignatureIndex` which corresponds to
+    /// the `resource.drop` intrinsic in components, namely a core wasm function
+    /// type which takes one `i32` argument and has no results.
+    ///
+    /// This is a bit of a hack right now as ideally this find operation
+    /// wouldn't be needed and instead the `SignatureIndex` itself would be
+    /// threaded through appropriately, but that's left for a future
+    /// refactoring. Try not to lean too hard on this method though.
     pub fn find_resource_drop_signature(&self) -> Option<SignatureIndex> {
         self.module_types
             .wasm_signatures()
@@ -398,17 +434,19 @@ impl ComponentTypesBuilder {
         &mut self.module_types
     }
 
-    /// TODO
+    /// Returns the number of resource tables allocated so far, or the maximum
+    /// `TypeResourceTableIndex`.
     pub fn num_resource_tables(&self) -> usize {
         self.component_types.resource_tables.len()
     }
 
-    /// TODO
+    /// Returns a mutable reference to the underlying `ResourcesBuilder`.
     pub fn resources_mut(&mut self) -> &mut ResourcesBuilder {
         &mut self.resources
     }
 
-    /// TODO
+    /// Work around the borrow checker to borrow two sub-fields simultaneously
+    /// externally.
     pub fn resources_mut_and_types(&mut self) -> (&mut ResourcesBuilder, &ComponentTypes) {
         (&mut self.resources, &self.component_types)
     }
@@ -607,8 +645,7 @@ impl ComponentTypesBuilder {
         Ok(ret)
     }
 
-    /// TODO
-    pub fn valtype(
+    fn valtype(
         &mut self,
         types: types::TypesRef<'_>,
         ty: &types::ComponentValType,
@@ -766,7 +803,8 @@ impl ComponentTypesBuilder {
         Ok(self.add_list_type(TypeList { element }))
     }
 
-    /// TODO
+    /// Converts a wasmparser `id`, which must point to a resource, to its
+    /// corresponding `TypeResourceTableIndex`.
     pub fn resource_id(
         &mut self,
         types: types::TypesRef<'_>,
@@ -935,7 +973,10 @@ pub enum TypeDef {
     Module(TypeModuleIndex),
     /// A core wasm function using only core wasm types.
     CoreFunc(SignatureIndex),
-    /// TODO
+    /// A resource type which operates on the specified resource table.
+    ///
+    /// Note that different resource tables may point to the same underlying
+    /// actual resource type, but that's a private detail.
     Resource(TypeResourceTableIndex),
 }
 
@@ -1507,12 +1548,16 @@ pub struct TypeResult {
     pub info: VariantInfo,
 }
 
-/// TODO
+/// Metadata about a resource table added to a component.
 #[derive(Serialize, Deserialize, Clone, Hash, Eq, PartialEq, Debug)]
 pub struct TypeResourceTable {
-    /// TODO
+    /// The original resource that this table contains.
+    ///
+    /// This is used when destroying resources within this table since this
+    /// original definition will know how to execute destructors.
     pub ty: ResourceIndex,
-    /// TODO
+
+    /// The component instance that contains this resource table.
     pub instance: RuntimeComponentInstanceIndex,
 }
 

@@ -555,7 +555,7 @@ impl Compiler<'_, '_> {
             // 2 cases to consider for each of these variants.
             InterfaceType::Option(_) | InterfaceType::Result(_) => 2,
 
-            // TODO - something nonzero, is 1 right?
+            // TODO(#6696) - something nonzero, is 1 right?
             InterfaceType::Own(_) | InterfaceType::Borrow(_) => 1,
         };
 

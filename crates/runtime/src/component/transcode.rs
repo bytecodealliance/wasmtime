@@ -8,7 +8,7 @@ use wasmtime_environ::component::TypeResourceTableIndex;
 
 const UTF16_TAG: usize = 1 << 31;
 
-#[repr(C)]
+#[repr(C)] // this is read by Cranelift code so it's layout must be as-written
 pub struct VMComponentLibcalls {
     builtins: VMComponentBuiltins,
     transcoders: VMBuiltinTranscodeArray,
@@ -35,7 +35,8 @@ macro_rules! signature {
     (@retptr $other:ident) => (());
 }
 
-/// TODO
+/// Defines a `VMComponentBuiltins` structure which contains any builtins such
+/// as resource-related intrinsics.
 macro_rules! define_builtins {
     (
         $(
@@ -60,9 +61,6 @@ macro_rules! define_builtins {
             };
         }
     };
-
-    (@ty vmctx) => (*mut VMComponentContext);
-    (@ty u32) => (u32);
 }
 
 wasmtime_environ::foreach_builtin_component_function!(define_builtins);

@@ -340,6 +340,12 @@ impl<'a> CompileInputs<'a> {
             }
         }
 
+        // If there are any resources defined within this component, the
+        // signature for `resource.drop` is mentioned somewhere, and the
+        // wasm-to-native trampoline for `resource.drop` hasn't been created yet
+        // then insert that here. This is possibly required by destruction of
+        // resources from the embedder and otherwise won't be explicitly
+        // requested through initializers above or such.
         if component.num_resources > 0 {
             if let Some(sig) = types.find_resource_drop_signature() {
                 let key = CompileKey::wasm_to_native_trampoline(sig);
@@ -580,7 +586,7 @@ pub struct FunctionIndices {
     // The index of each compiled function, bucketed by compile key kind.
     indices: BTreeMap<u32, BTreeMap<CompileKey, CompiledFunction<usize>>>,
 
-    // TODO
+    // If necessary the wasm-to-native trampoline required by `resource.drop`
     resource_drop_wasm_to_native_trampoline: Option<CompileKey>,
 }
 

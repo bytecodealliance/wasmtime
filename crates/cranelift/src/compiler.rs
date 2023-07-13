@@ -378,7 +378,6 @@ impl wasmtime_environ::Compiler for Compiler {
             caller_vmctx,
             wasmtime_environ::VMCONTEXT_MAGIC,
         );
-        // let offsets = VMOffsets::new(isa.pointer_bytes(), &translation.module);
         let ptr = isa.pointer_bytes();
         let limits = builder.ins().load(
             pointer_type,

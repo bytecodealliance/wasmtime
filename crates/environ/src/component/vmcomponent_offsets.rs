@@ -62,13 +62,13 @@ pub struct VMComponentOffsets<P> {
     pub num_always_trap: u32,
     /// Number of transcoders needed for string conversion.
     pub num_transcoders: u32,
-    /// TODO
+    /// Number of `resource.new` intrinsics within a component.
     pub num_resource_new: u32,
-    /// TODO
+    /// Number of `resource.rep` intrinsics within a component.
     pub num_resource_rep: u32,
-    /// TODO
+    /// Number of `resource.drop` intrinsics within a component.
     pub num_resource_drop: u32,
-    /// TODO
+    /// Number of resources within a component which need destructors stored.
     pub num_resources: u32,
 
     // precalculated offsets of various member fields

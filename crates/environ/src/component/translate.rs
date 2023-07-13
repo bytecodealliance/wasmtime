@@ -149,11 +149,19 @@ struct Translation<'data> {
     /// index into an index space of what's being exported.
     exports: IndexMap<&'data str, ComponentItem>,
 
-    /// TODO
+    /// Type information produced by `wasmparser` for this component.
+    ///
+    /// This type information is available after the translation of the entire
+    /// component has finished, e.g. for the `inline` pass, but beforehand this
+    /// is set to `None`.
     types: Option<Types>,
 }
 
-// TODO: comment about how this uses wasmparser type information
+// NB: the type information contained in `LocalInitializer` should always point
+// to `wasmparser`'s type information, not Wasmtime's. Component types cannot be
+// fully determined due to resources until instantiations are known which is
+// tracked during the inlining phase. This means that all type information below
+// is straight from `wasmparser`'s passes.
 #[allow(missing_docs)]
 enum LocalInitializer<'data> {
     // imports
@@ -257,7 +265,7 @@ impl<'a, 'data> Translator<'a, 'data> {
             result: Translation::default(),
             tunables,
             validator,
-            types: PreInliningComponentTypes { types },
+            types: PreInliningComponentTypes::new(types),
             parser: Parser::new(0),
             lexical_scopes: Vec::new(),
             static_components: Default::default(),
@@ -331,7 +339,7 @@ impl<'a, 'data> Translator<'a, 'data> {
         // Wasmtime to process at runtime as well (e.g. no string lookups as
         // most everything is done through indices instead).
         let mut component = inline::run(
-            self.types.types,
+            self.types.types_mut_for_inlining(),
             &self.result,
             &self.static_modules,
             &self.static_components,
@@ -362,6 +370,7 @@ impl<'a, 'data> Translator<'a, 'data> {
             }
 
             Payload::End(offset) => {
+                assert!(self.result.types.is_none());
                 self.result.types = Some(self.validator.end(offset)?);
 
                 // Exit the current lexical scope. If there is no parent (no
@@ -396,8 +405,11 @@ impl<'a, 'data> Translator<'a, 'data> {
                 let mut component_type_index =
                     self.validator.types(0).unwrap().component_type_count();
                 self.validator.component_type_section(&s)?;
-                let types = self.validator.types(0).unwrap();
 
+                // Look for resource types and if a local resource is defined
+                // then an initializer is added to define that resource type and
+                // reference its destructor.
+                let types = self.validator.types(0).unwrap();
                 for ty in s {
                     match ty? {
                         wasmparser::ComponentType::Resource { rep, dtor } => {
@@ -878,24 +890,54 @@ impl<'a, 'data> Translator<'a, 'data> {
     }
 }
 
-struct PreInliningComponentTypes<'a> {
-    types: &'a mut ComponentTypesBuilder,
-}
-
-impl PreInliningComponentTypes<'_> {
-    fn module_types_builder(&mut self) -> &mut ModuleTypesBuilder {
-        self.types.module_types_builder()
-    }
-}
-
-impl TypeConvert for PreInliningComponentTypes<'_> {
-    fn lookup_heap_type(&self, index: TypeIndex) -> WasmHeapType {
-        self.types.lookup_heap_type(index)
-    }
-}
-
 impl Translation<'_> {
     fn types_ref(&self) -> wasmparser::types::TypesRef<'_> {
         self.types.as_ref().unwrap().as_ref()
     }
 }
+
+/// A small helper module which wraps a `ComponentTypesBuilder` and attempts
+/// to disallow access to mutable access to the builder before the inlining
+/// pass.
+///
+/// Type information in this translation pass must be preserved at the
+/// wasmparser layer of abstraction rather than being lowered into Wasmtime's
+/// own type system. Only during inlining are types fully assigned because
+/// that's when resource types become available as it's known which instance
+/// defines which resource, or more concretely the same component instantiated
+/// twice will produce two unique resource types unlike one as seen by
+/// wasmparser within the component.
+mod pre_inlining {
+    use super::*;
+
+    pub struct PreInliningComponentTypes<'a> {
+        types: &'a mut ComponentTypesBuilder,
+    }
+
+    impl<'a> PreInliningComponentTypes<'a> {
+        pub fn new(types: &'a mut ComponentTypesBuilder) -> Self {
+            Self { types }
+        }
+
+        pub fn module_types_builder(&mut self) -> &mut ModuleTypesBuilder {
+            self.types.module_types_builder()
+        }
+
+        pub fn types(&self) -> &ComponentTypesBuilder {
+            self.types
+        }
+
+        // NB: this should in theory only be used for the `inline` phase of
+        // translation.
+        pub fn types_mut_for_inlining(&mut self) -> &mut ComponentTypesBuilder {
+            self.types
+        }
+    }
+
+    impl TypeConvert for PreInliningComponentTypes<'_> {
+        fn lookup_heap_type(&self, index: TypeIndex) -> WasmHeapType {
+            self.types.lookup_heap_type(index)
+        }
+    }
+}
+use pre_inlining::PreInliningComponentTypes;

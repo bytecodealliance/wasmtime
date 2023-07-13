@@ -76,13 +76,18 @@ struct CompiledComponentInfo {
     /// compiled image of this component.
     transcoders: PrimaryMap<RuntimeTranscoderIndex, AllCallFunc<FunctionLoc>>,
 
-    /// TODO
+    /// Locations of cranelift-generated `resource.new` functions are located
+    /// within the component.
     resource_new: PrimaryMap<RuntimeResourceNewIndex, AllCallFunc<FunctionLoc>>,
-    /// TODO
+
+    /// Same as `resource_new`, but for `resource.rep` intrinsics.
     resource_rep: PrimaryMap<RuntimeResourceRepIndex, AllCallFunc<FunctionLoc>>,
-    /// TODO
+
+    /// Same as `resource_new`, but for `resource.drop` intrinsics.
     resource_drop: PrimaryMap<RuntimeResourceDropIndex, AllCallFunc<FunctionLoc>>,
 
+    /// The location of the wasm-to-native trampoline for the `resource.drop`
+    /// intrinsic.
     resource_drop_wasm_to_native_trampoline: Option<FunctionLoc>,
 }
 
@@ -389,11 +394,19 @@ impl Component {
         self.inner.clone()
     }
 
+    /// Creates a new `VMFuncRef` with all fields filled out for the destructor
+    /// specified.
+    ///
+    /// The `dtor`'s own `VMFuncRef` won't have `wasm_call` filled out but this
+    /// component may have `resource_drop_wasm_to_native_trampoline` filled out
+    /// if necessary in which case it's filled in here.
     pub(crate) fn resource_drop_func_ref(&self, dtor: &crate::func::HostFunc) -> VMFuncRef {
         // Host functions never have their `wasm_call` filled in at this time.
         assert!(dtor.func_ref().wasm_call.is_none());
 
-        // TODO
+        // Note that if `resource_drop_wasm_to_native_trampoline` is not present
+        // then this can't be called by the component, so it's ok to leave it
+        // blank.
         let wasm_call = self
             .inner
             .info

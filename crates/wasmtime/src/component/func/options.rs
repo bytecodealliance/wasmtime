@@ -155,7 +155,7 @@ impl Options {
         self.string_encoding
     }
 
-    /// TODO
+    /// Returns the id of the store that this `Options` is connected to.
     pub fn store_id(&self) -> StoreId {
         self.store_id
     }
@@ -188,17 +188,22 @@ pub struct LowerContext<'a, T> {
     /// lifting/lowering process.
     pub types: &'a ComponentTypes,
 
-    /// TODO
+    /// A raw unsafe pointer to the component instance that's being lowered
+    /// into.
+    ///
+    /// This pointer is required to be owned by the `store` provided.
     instance: *mut ComponentInstance,
 }
 
 #[doc(hidden)]
 impl<'a, T> LowerContext<'a, T> {
-    /// TODO
+    /// Creates a new lowering context from the specified parameters.
     ///
     /// # Unsafety
     ///
-    /// TODO: ptr must be valid
+    /// This function is unsafe as it needs to be guaranteed by the caller that
+    /// the `instance` here is is valid within `store` and is a valid component
+    /// instance.
     pub unsafe fn new(
         store: StoreContextMut<'a, T>,
         options: &'a Options,
@@ -268,12 +273,16 @@ impl<'a, T> LowerContext<'a, T> {
             .unwrap()
     }
 
-    /// TODO
+    /// Lowers an `own` resource into the guest, converting the `rep` specified
+    /// into a guest-local index.
+    ///
+    /// The `ty` provided is which table to put this into.
     pub fn guest_resource_lower_own(&mut self, ty: TypeResourceTableIndex, rep: u32) -> u32 {
         self.resource_tables().resource_lower_own(Some(ty), rep)
     }
 
-    /// TODO
+    /// Lowers a `borrow` resource into the guest, converting the `rep` to a
+    /// guest-local index in the `ty` table specified.
     pub fn guest_resource_lower_borrow(&mut self, ty: TypeResourceTableIndex, rep: u32) -> u32 {
         // Implement `lower_borrow`'s special case here where if a borrow is
         // inserted into a table owned by the instance which implemented the
@@ -284,36 +293,36 @@ impl<'a, T> LowerContext<'a, T> {
         // against the owning instance of the resource that `ty` is working
         // with.
         //
-        // TODO: unsafe
+        // Note that the unsafety here should be valid given the contract of
+        // `LowerContext::new`.
         if unsafe { (*self.instance).resource_owned_by_own_instance(ty) } {
             return rep;
         }
         self.resource_tables().resource_lower_borrow(Some(ty), rep)
     }
 
-    /// TODO
+    /// Lifts a host-owned `own` resource at the `idx` specified into the
+    /// representation of that resource.
     pub fn host_resource_lift_own(&mut self, idx: u32) -> Result<u32> {
         self.resource_tables().resource_lift_own(None, idx)
     }
 
-    /// TODO
+    /// Lifts a host-owned `borrow` resource at the `idx` specified into the
+    /// representation of that resource.
     pub fn host_resource_lift_borrow(&mut self, idx: u32) -> Result<u32> {
         self.resource_tables().resource_lift_borrow(None, idx)
     }
 
-    /// TODO
-    pub fn host_resource_lower_own(&mut self, rep: u32) -> u32 {
-        self.resource_tables().resource_lower_own(None, rep)
-    }
-
-    /// TODO
+    /// Returns the underlying resource type for the `ty` table specified.
     pub fn resource_type(&self, ty: TypeResourceTableIndex) -> ResourceType {
         self.instance_type().resource_type(ty)
     }
 
-    /// TODO
+    /// Returns the instance type information corresponding to the instance that
+    /// this context is lowering into.
     pub fn instance_type(&self) -> InstanceType<'_> {
-        // TODO: document unsafe
+        // Note that the unsafety here should be valid given the contract of
+        // `LowerContext::new`.
         InstanceType::new(unsafe { &*self.instance })
     }
 
@@ -322,17 +331,20 @@ impl<'a, T> LowerContext<'a, T> {
         ResourceTables {
             host_table: Some(host_table),
             calls,
-            // TODO: document unsafe
+            // Note that the unsafety here should be valid given the contract of
+            // `LowerContext::new`.
             tables: Some(unsafe { (*self.instance).component_resource_tables() }),
         }
     }
 
-    /// TODO
+    /// Begins a call into the component instance, starting recording of
+    /// metadata related to resource borrowing.
     pub fn enter_call(&mut self) {
         self.resource_tables().enter_call()
     }
 
-    /// TODO
+    /// Completes a call into the component instance, validating that it's ok to
+    /// complete by ensuring the are no remaining active borrows.
     pub fn exit_call(&mut self) -> Result<()> {
         self.resource_tables().exit_call()
     }
@@ -362,11 +374,12 @@ pub struct LiftContext<'a> {
 
 #[doc(hidden)]
 impl<'a> LiftContext<'a> {
-    /// TODO
+    /// Creates a new lifting context given the provided context.
     ///
     /// # Unsafety
     ///
-    /// TODO: ptr must be valid
+    /// This is unsafe for the same reasons as `LowerContext::new` where the
+    /// validity of `instance` is required to be upheld by the caller.
     pub unsafe fn new(
         store: &'a mut StoreOpaque,
         options: &'a Options,
@@ -398,28 +411,35 @@ impl<'a> LiftContext<'a> {
         self.memory.unwrap()
     }
 
-    /// TODO
+    /// Returns an identifier for the store from which this `LiftContext` was
+    /// created.
     pub fn store_id(&self) -> StoreId {
         self.options.store_id
     }
 
-    /// TODO
+    /// Returns the component instance raw pointer that is being lifted from.
     pub fn instance_ptr(&self) -> *mut ComponentInstance {
         self.instance
     }
 
-    /// TODO
+    /// Lifts an `own` resource from the guest at the `idx` specified into its
+    /// representation.
+    ///
+    /// Additionally returns a destructor/instance flags to go along with the
+    /// representation so the host knows how to destroy this resource.
     pub fn guest_resource_lift_own(
         &mut self,
         ty: TypeResourceTableIndex,
         idx: u32,
     ) -> Result<(u32, Option<NonNull<VMFuncRef>>, Option<InstanceFlags>)> {
         let idx = self.resource_tables().resource_lift_own(Some(ty), idx)?;
+        // Note that the unsafety here should be valid given the contract of
+        // `LiftContext::new`.
         let (dtor, flags) = unsafe { (*self.instance).dtor_and_flags(ty) };
         Ok((idx, dtor, flags))
     }
 
-    /// TODO
+    /// Lifts a `borrow` resource from the guest at the `idx` specified.
     pub fn guest_resource_lift_borrow(
         &mut self,
         ty: TypeResourceTableIndex,
@@ -428,24 +448,28 @@ impl<'a> LiftContext<'a> {
         self.resource_tables().resource_lift_borrow(Some(ty), idx)
     }
 
-    /// TODO
+    /// Lowers a resource into the host-owned table, returning the index it was
+    /// inserted at.
     pub fn host_resource_lower_own(&mut self, rep: u32) -> u32 {
         self.resource_tables().resource_lower_own(None, rep)
     }
 
-    /// TODO
+    /// Lowers a resource into the host-owned table, returning the index it was
+    /// inserted at.
     pub fn host_resource_lower_borrow(&mut self, rep: u32) -> u32 {
         self.resource_tables().resource_lower_borrow(None, rep)
     }
 
-    /// TODO
+    /// Returns the underlying type of the resource table specified by `ty`.
     pub fn resource_type(&self, ty: TypeResourceTableIndex) -> ResourceType {
         self.instance_type().resource_type(ty)
     }
 
-    /// TODO
+    /// Returns instance type information for the component instance that is
+    /// being lifted from.
     pub fn instance_type(&self) -> InstanceType<'_> {
-        // TODO: document unsafe
+        // Note that the unsafety here should be valid given the contract of
+        // `LiftContext::new`.
         InstanceType::new(unsafe { &*self.instance })
     }
 
@@ -453,17 +477,18 @@ impl<'a> LiftContext<'a> {
         ResourceTables {
             host_table: Some(self.host_table),
             calls: self.calls,
-            // TODO: document unsafe
+            // Note that the unsafety here should be valid given the contract of
+            // `LiftContext::new`.
             tables: Some(unsafe { (*self.instance).component_resource_tables() }),
         }
     }
 
-    /// TODO
+    /// Same as `LowerContext::enter_call`
     pub fn enter_call(&mut self) {
         self.resource_tables().enter_call()
     }
 
-    /// TODO
+    /// Same as `LiftContext::enter_call`
     pub fn exit_call(&mut self) -> Result<()> {
         self.resource_tables().exit_call()
     }
