@@ -107,7 +107,7 @@ pub fn link_component_spectest<T>(linker: &mut component::Linker<T>) -> Result<(
     })?;
 
     i.func_wrap("[constructor]resource1", |mut cx, (rep,): (u32,)| {
-        Ok((Resource::<Resource1>::new(&mut cx, rep),))
+        Ok((Resource::<Resource1>::new_own(&mut cx, rep),))
     })?;
     i.func_wrap(
         "[static]resource1.assert",
@@ -124,5 +124,30 @@ pub fn link_component_spectest<T>(linker: &mut component::Linker<T>) -> Result<(
         let state = state.clone();
         move |_, (): ()| Ok((state.drops.load(SeqCst),))
     })?;
+    i.func_wrap(
+        "[method]resource1.simple",
+        |cx, (resource, rep): (Resource<Resource1>, u32)| {
+            assert!(!resource.owned());
+            assert_eq!(resource.rep(&cx)?, rep);
+            Ok(())
+        },
+    )?;
+
+    i.func_wrap(
+        "[method]resource1.take-borrow",
+        |_, (a, b): (Resource<Resource1>, Resource<Resource1>)| {
+            assert!(!a.owned());
+            assert!(!b.owned());
+            Ok(())
+        },
+    )?;
+    i.func_wrap(
+        "[method]resource1.take-own",
+        |_cx, (a, b): (Resource<Resource1>, Resource<Resource1>)| {
+            assert!(!a.owned());
+            assert!(b.owned());
+            Ok(())
+        },
+    )?;
     Ok(())
 }

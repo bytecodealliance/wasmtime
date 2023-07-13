@@ -63,6 +63,7 @@ pub struct Resource<T> {
     _marker: marker::PhantomData<fn() -> T>,
 }
 
+#[derive(Debug)]
 enum ResourceRepr {
     Borrow(u32),
     OwnInTable(u32),
@@ -82,11 +83,19 @@ where
     T: 'static,
 {
     /// TODO
-    pub fn new(mut store: impl AsContextMut, rep: u32) -> Resource<T> {
+    pub fn new_own(mut store: impl AsContextMut, rep: u32) -> Resource<T> {
         let store = store.as_context_mut().0;
         let idx = host_resource_tables(store).resource_lower_own(None, rep);
         Resource {
             repr: ResourceRepr::OwnInTable(idx),
+            _marker: marker::PhantomData,
+        }
+    }
+
+    /// TODO
+    pub fn new_borrow(rep: u32) -> Resource<T> {
+        Resource {
+            repr: ResourceRepr::Borrow(rep),
             _marker: marker::PhantomData,
         }
     }
@@ -225,6 +234,14 @@ unsafe impl<T: 'static> Lift for Resource<T> {
     fn load(cx: &mut LiftContext<'_>, ty: InterfaceType, bytes: &[u8]) -> Result<Self> {
         let index = u32::load(cx, InterfaceType::U32, bytes)?;
         Resource::lift_from_index(cx, ty, index)
+    }
+}
+
+impl<T> fmt::Debug for Resource<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Resource")
+            .field("repr", &self.repr)
+            .finish()
     }
 }
 

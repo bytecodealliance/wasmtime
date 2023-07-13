@@ -2464,7 +2464,7 @@ impl Compiler<'_, '_> {
             _ => panic!("expected an `Own`"),
         };
 
-        drop((src_ty, src, dst_ty, dst));
+        let _ = (src_ty, src, dst_ty, dst);
         todo!("TODO: #6696");
     }
 
@@ -2480,7 +2480,7 @@ impl Compiler<'_, '_> {
             _ => panic!("expected an `Borrow`"),
         };
 
-        drop((src_ty, src, dst_ty, dst));
+        let _ = (src_ty, src, dst_ty, dst);
         todo!("TODO: #6696");
     }
 

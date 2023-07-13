@@ -804,3 +804,155 @@
     ))
   ))
 )
+
+;; Test some bare-bones basics of borrowed resources
+(component
+  (import "host" (instance $host
+    (export $r "resource1" (type (sub resource)))
+    (export "[constructor]resource1" (func (param "r" u32) (result (own $r))))
+    (export "[method]resource1.simple" (func (param "self" (borrow $r)) (param "rep" u32)))
+    (export "[method]resource1.take-borrow" (func (param "self" (borrow $r)) (param "b" (borrow $r))))
+    (export "[method]resource1.take-own" (func (param "self" (borrow $r)) (param "b" (own $r))))
+  ))
+
+  (alias export $host "resource1" (type $r))
+  (alias export $host "[constructor]resource1" (func $ctor))
+  (alias export $host "[method]resource1.simple" (func $simple))
+  (alias export $host "[method]resource1.take-borrow" (func $take-borrow))
+  (alias export $host "[method]resource1.take-own" (func $take-own))
+
+  (core func $drop (canon resource.drop $r))
+  (core func $ctor (canon lower (func $ctor)))
+  (core func $simple (canon lower (func $simple)))
+  (core func $take-own (canon lower (func $take-own)))
+  (core func $take-borrow (canon lower (func $take-borrow)))
+
+  (core module $m
+    (import "" "drop" (func $drop (param i32)))
+    (import "" "ctor" (func $ctor (param i32) (result i32)))
+    (import "" "simple" (func $simple (param i32 i32)))
+    (import "" "take-own" (func $take-own (param i32 i32)))
+    (import "" "take-borrow" (func $take-borrow (param i32 i32)))
+
+
+    (func $start
+      (local $r1 i32)
+      (local $r2 i32)
+      (local.set $r1 (call $ctor (i32.const 100)))
+      (local.set $r2 (call $ctor (i32.const 200)))
+
+      (call $simple (local.get $r1) (i32.const 100))
+      (call $simple (local.get $r1) (i32.const 100))
+      (call $simple (local.get $r2) (i32.const 200))
+      (call $simple (local.get $r1) (i32.const 100))
+      (call $simple (local.get $r2) (i32.const 200))
+      (call $simple (local.get $r2) (i32.const 200))
+
+      (call $drop (local.get $r1))
+      (call $drop (local.get $r2))
+
+
+      (local.set $r1 (call $ctor (i32.const 200)))
+      (local.set $r2 (call $ctor (i32.const 300)))
+      (call $take-borrow (local.get $r1) (local.get $r2))
+      (call $take-borrow (local.get $r2) (local.get $r1))
+      (call $take-borrow (local.get $r1) (local.get $r1))
+      (call $take-borrow (local.get $r2) (local.get $r2))
+
+      (call $take-own (local.get $r1) (call $ctor (i32.const 400)))
+      (call $take-own (local.get $r2) (call $ctor (i32.const 500)))
+      (call $take-own (local.get $r2) (local.get $r1))
+      (call $drop (local.get $r2))
+
+      ;; table should be empty at this point, so a fresh allocation should get
+      ;; index 0
+      (if (i32.ne (call $ctor (i32.const 600)) (i32.const 0)) (unreachable))
+    )
+
+    (start $start)
+  )
+  (core instance (instantiate $m
+    (with "" (instance
+      (export "drop" (func $drop))
+      (export "ctor" (func $ctor))
+      (export "simple" (func $simple))
+      (export "take-own" (func $take-own))
+      (export "take-borrow" (func $take-borrow))
+    ))
+  ))
+)
+
+;; Cannot pass out an owned resource when it's borrowed by the same call
+(component
+  (import "host" (instance $host
+    (export $r "resource1" (type (sub resource)))
+    (export "[constructor]resource1" (func (param "r" u32) (result (own $r))))
+    (export "[method]resource1.take-own" (func (param "self" (borrow $r)) (param "b" (own $r))))
+  ))
+
+  (alias export $host "resource1" (type $r))
+  (alias export $host "[constructor]resource1" (func $ctor))
+  (alias export $host "[method]resource1.take-own" (func $take-own))
+
+  (core func $drop (canon resource.drop $r))
+  (core func $ctor (canon lower (func $ctor)))
+  (core func $take-own (canon lower (func $take-own)))
+
+  (core module $m
+    (import "" "drop" (func $drop (param i32)))
+    (import "" "ctor" (func $ctor (param i32) (result i32)))
+    (import "" "take-own" (func $take-own (param i32 i32)))
+
+
+    (func (export "f")
+      (local $r i32)
+      (local.set $r (call $ctor (i32.const 100)))
+      (call $take-own (local.get $r) (local.get $r))
+    )
+  )
+  (core instance $i (instantiate $m
+    (with "" (instance
+      (export "drop" (func $drop))
+      (export "ctor" (func $ctor))
+      (export "take-own" (func $take-own))
+    ))
+  ))
+
+  (func (export "f") (canon lift (core func $i "f")))
+)
+
+(assert_trap (invoke "f") "cannot remove owned resource while borrowed")
+
+;; Borrows must actually exist
+(component
+  (import "host" (instance $host
+    (export $r "resource1" (type (sub resource)))
+    (export "[method]resource1.simple" (func (param "self" (borrow $r)) (param "b" u32)))
+  ))
+
+  (alias export $host "resource1" (type $r))
+  (alias export $host "[method]resource1.simple" (func $simple))
+
+  (core func $drop (canon resource.drop $r))
+  (core func $simple (canon lower (func $simple)))
+
+  (core module $m
+    (import "" "drop" (func $drop (param i32)))
+    (import "" "simple" (func $simple (param i32 i32)))
+
+
+    (func (export "f")
+      (call $simple (i32.const 0) (i32.const 0))
+    )
+  )
+  (core instance $i (instantiate $m
+    (with "" (instance
+      (export "drop" (func $drop))
+      (export "simple" (func $simple))
+    ))
+  ))
+
+  (func (export "f") (canon lift (core func $i "f")))
+)
+
+(assert_trap (invoke "f") "unknown handle index 0")

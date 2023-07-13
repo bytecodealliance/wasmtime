@@ -220,19 +220,17 @@ where
             Storage::Indirect(slice_to_storage_mut(storage).assume_init_ref())
         }
     };
-    let params = storage.lift_params(
-        &mut LiftContext::new(cx.0, &options, types, instance),
-        param_tys,
-    )?;
+    let mut lift = LiftContext::new(cx.0, &options, types, instance);
+    lift.enter_call();
+    let params = storage.lift_params(&mut lift, param_tys)?;
 
     let ret = closure(cx.as_context_mut(), params)?;
     flags.set_may_leave(false);
-    storage.lower_results(
-        &mut LowerContext::new(cx, &options, types, instance),
-        result_tys,
-        ret,
-    )?;
+    let mut lower = LowerContext::new(cx, &options, types, instance);
+    storage.lower_results(&mut lower, result_tys, ret)?;
     flags.set_may_leave(true);
+
+    lower.exit_call()?;
 
     return Ok(());
 
@@ -349,6 +347,7 @@ where
     let param_tys = &types[func_ty.params];
     let result_tys = &types[func_ty.results];
     let mut cx = LiftContext::new(store.0, &options, types, instance);
+    cx.enter_call();
     if let Some(param_count) = param_tys.abi.flat_count(MAX_FLAT_PARAMS) {
         // NB: can use `MaybeUninit::slice_assume_init_ref` when that's stable
         let mut iter =
@@ -404,6 +403,8 @@ where
     }
 
     flags.set_may_leave(true);
+
+    cx.exit_call()?;
 
     return Ok(());
 }

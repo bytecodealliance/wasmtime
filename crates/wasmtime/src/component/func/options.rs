@@ -326,6 +326,16 @@ impl<'a, T> LowerContext<'a, T> {
             tables: Some(unsafe { (*self.instance).component_resource_tables() }),
         }
     }
+
+    /// TODO
+    pub fn enter_call(&mut self) {
+        self.resource_tables().enter_call()
+    }
+
+    /// TODO
+    pub fn exit_call(&mut self) -> Result<()> {
+        self.resource_tables().exit_call()
+    }
 }
 
 /// Contextual information used when lifting a type from a component into the
@@ -446,5 +456,15 @@ impl<'a> LiftContext<'a> {
             // TODO: document unsafe
             tables: Some(unsafe { (*self.instance).component_resource_tables() }),
         }
+    }
+
+    /// TODO
+    pub fn enter_call(&mut self) {
+        self.resource_tables().enter_call()
+    }
+
+    /// TODO
+    pub fn exit_call(&mut self) -> Result<()> {
+        self.resource_tables().exit_call()
     }
 }

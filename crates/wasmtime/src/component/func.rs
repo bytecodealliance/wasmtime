@@ -12,6 +12,7 @@ use wasmtime_environ::component::{
     CanonicalOptions, ComponentTypes, CoreDef, InterfaceType, RuntimeComponentInstanceIndex,
     TypeFuncIndex, TypeTuple, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
 };
+use wasmtime_runtime::component::ResourceTables;
 use wasmtime_runtime::{Export, ExportFunction};
 
 /// A helper macro to safely map `MaybeUninit<T>` to `MaybeUninit<U>` where `U`
@@ -474,8 +475,10 @@ impl Func {
             debug_assert!(flags.may_leave());
             flags.set_may_leave(false);
             let instance_ptr = instance.instance_ptr();
+            let mut cx = LowerContext::new(store.as_context_mut(), &options, &types, instance_ptr);
+            cx.enter_call();
             let result = lower(
-                &mut LowerContext::new(store.as_context_mut(), &options, &types, instance_ptr),
+                &mut cx,
                 params,
                 InterfaceType::Tuple(types[ty].params),
                 map_maybe_uninit!(space.params),
@@ -600,10 +603,11 @@ impl Func {
         let post_return = data.post_return;
         let component_instance = data.component_instance;
         let post_return_arg = data.post_return_arg.take();
-        let instance = store.0[instance.0].as_ref().unwrap().instance();
-        let mut flags = instance.instance_flags(component_instance);
+        let instance = store.0[instance.0].as_ref().unwrap().instance_ptr();
 
         unsafe {
+            let mut flags = (*instance).instance_flags(component_instance);
+
             // First assert that the instance is in a "needs post return" state.
             // This will ensure that the previous action on the instance was a
             // function call above. This flag is only set after a component
@@ -653,6 +657,14 @@ impl Func {
             // enter" flag is set to `true` again here which enables further use
             // of the component.
             flags.set_may_enter(true);
+
+            let (calls, host_table) = store.0.component_calls_and_host_table();
+            ResourceTables {
+                calls,
+                host_table: Some(host_table),
+                tables: Some((*instance).component_resource_tables()),
+            }
+            .exit_call()?;
         }
         Ok(())
     }
