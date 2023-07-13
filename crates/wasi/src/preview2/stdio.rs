@@ -40,7 +40,7 @@ impl HostInputStream for EmptyStream {
 
 #[async_trait::async_trait]
 impl HostOutputStream for EmptyStream {
-    fn write(&mut self, buf: Bytes) -> Result<usize, Error> {
+    fn write(&mut self, buf: Bytes) -> Result<(usize, StreamState), Error> {
         // Ok(buf.len() as u64)
         todo!()
     }

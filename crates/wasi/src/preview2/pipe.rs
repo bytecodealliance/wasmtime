@@ -131,7 +131,7 @@ impl OutputPipe {
 
 #[async_trait::async_trait]
 impl HostOutputStream for OutputPipe {
-    fn write(&mut self, buf: Bytes) -> Result<usize, Error> {
+    fn write(&mut self, buf: Bytes) -> Result<(usize, StreamState), Error> {
         // use tokio::sync::mpsc::error::TrySendError;
         //
         // let mut bytes = core::mem::take(&mut self.buffer);
@@ -231,7 +231,7 @@ impl MemoryOutputPipe {
 
 #[async_trait::async_trait]
 impl HostOutputStream for MemoryOutputPipe {
-    fn write(&mut self, buf: Bytes) -> Result<usize, anyhow::Error> {
+    fn write(&mut self, buf: Bytes) -> Result<(usize, StreamState), anyhow::Error> {
         // self.buffer.lock().unwrap().extend(buf);
         // Ok(buf.len() as u64)
         todo!()

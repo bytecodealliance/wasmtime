@@ -1,8 +1,8 @@
 use crate::preview2::{
     block_in_place, HostInputStream, HostOutputStream, StreamState, Table, TableError,
 };
-use std::sync::Arc;
 use bytes::Bytes;
+use std::sync::Arc;
 
 bitflags::bitflags! {
     pub struct FilePerms: usize {
@@ -135,7 +135,7 @@ impl FileOutputStream {
 #[async_trait::async_trait]
 impl HostOutputStream for FileOutputStream {
     /// Write bytes. On success, returns the number of bytes written.
-    fn write(&mut self, buf: Bytes) -> anyhow::Result<usize> {
+    fn write(&mut self, buf: Bytes) -> anyhow::Result<(usize, StreamState)> {
         // use system_interface::fs::FileIoExt;
         // let n = block_in_place(|| self.file.write_at(buf, self.position))? as i64 as u64;
         // self.position = self.position.wrapping_add(n);
@@ -160,7 +160,7 @@ impl FileAppendStream {
 #[async_trait::async_trait]
 impl HostOutputStream for FileAppendStream {
     /// Write bytes. On success, returns the number of bytes written.
-    fn write(&mut self, buf: Bytes) -> anyhow::Result<usize> {
+    fn write(&mut self, buf: Bytes) -> anyhow::Result<(usize, StreamState)> {
         // use system_interface::fs::FileIoExt;
         // Ok(block_in_place(|| self.file.append(buf))? as i64 as u64)
         todo!()

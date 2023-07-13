@@ -52,7 +52,7 @@ pub trait HostInputStream: Send + Sync {
 pub trait HostOutputStream: Send + Sync {
     /// Write bytes. On success, returns the number of bytes written.
     /// Important: this write must be non-blocking!
-    fn write(&mut self, bytes: Bytes) -> Result<usize, Error>;
+    fn write(&mut self, bytes: Bytes) -> Result<(usize, StreamState), Error>;
 
     /// Transfer bytes directly from an input stream to an output stream.
     /// Important: this splice must be non-blocking!
@@ -64,10 +64,11 @@ pub trait HostOutputStream: Send + Sync {
         let mut nspliced = 0;
         let mut state = StreamState::Open;
 
+        // TODO: handle the case where `bs.len()` is less than `nelem`
         let (bs, read_state) = src.read(nelem)?;
         // TODO: handle the case where write returns less than `bs.len()`
-        // TODO: handle the case where `bs.len()` is less than `nelem`
-        nspliced += self.write(bs)?;
+        let (nwritten, _write_state) = self.write(bs)?;
+        nspliced += nwritten;
         if read_state.is_closed() {
             state = read_state;
         }
@@ -77,12 +78,12 @@ pub trait HostOutputStream: Send + Sync {
 
     /// Repeatedly write a byte to a stream. Important: this write must be
     /// non-blocking!
-    fn write_zeroes(&mut self, nelem: usize) -> Result<usize, Error> {
+    fn write_zeroes(&mut self, nelem: usize) -> Result<(usize, StreamState), Error> {
         // TODO: We could optimize this to not allocate one big zeroed buffer, and instead write
         // repeatedly from a 'static buffer of zeros.
         let bs = Bytes::from_iter(core::iter::repeat(0 as u8).take(nelem));
-        let nwritten = self.write(bs)?;
-        Ok(nwritten)
+        let r = self.write(bs)?;
+        Ok(r)
     }
 
     /// Check for write readiness: this method blocks until the stream is
@@ -242,7 +243,7 @@ impl<T> AsyncWriteStream<T> {
 impl<T: tokio::io::AsyncWrite + Send + Sync + Unpin + 'static> HostOutputStream
     for AsyncWriteStream<T>
 {
-    fn write(&mut self, bytes: Bytes) -> Result<usize, anyhow::Error> {
+    fn write(&mut self, bytes: Bytes) -> Result<(usize, StreamState), anyhow::Error> {
         // let mut bytes = core::mem::take(&mut self.buffer);
         // bytes.extend(buf);
         //
@@ -362,14 +363,17 @@ mod async_fd_stream {
         }
 
         async fn ready(&mut self) -> Result<(), Error> {
+            /*
             let _ = self.fd.readable().await?;
             Ok(())
+            */
+            todo!()
         }
     }
 
     #[async_trait::async_trait]
     impl<T: AsRawFd + Send + Sync + Unpin + 'static> HostOutputStream for AsyncFdStream<T> {
-        fn write(&mut self, bytes: Bytes) -> Result<usize, Error> {
+        fn write(&mut self, bytes: Bytes) -> Result<(usize, StreamState), Error> {
             // // Safety: we're the only one accessing this fd, and we turn it back into a raw fd when
             // // we're done.
             // let mut file = unsafe { std::fs::File::from_raw_fd(self.fd.as_raw_fd()) };
