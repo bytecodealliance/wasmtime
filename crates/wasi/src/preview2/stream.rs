@@ -136,88 +136,87 @@ impl TableStreamExt for Table {
 }
 
 /// Provides a [`HostInputStream`] impl from a [`tokio::io::AsyncRead`] impl
-pub struct AsyncReadStream<T> {
+pub struct AsyncReadStream {
     state: StreamState,
-    buffer: Vec<u8>,
-    reader: T,
+    buffer: Option<Result<Bytes, std::io::Error>>,
+    receiver: tokio::sync::mpsc::Receiver<Result<(Bytes, StreamState), std::io::Error>>,
 }
 
-impl<T> AsyncReadStream<T> {
+impl AsyncReadStream {
     /// Create a [`AsyncReadStream`]. In order to use the [`HostInputStream`] impl
     /// provided by this struct, the argument must impl [`tokio::io::AsyncRead`].
-    pub fn new(reader: T) -> Self {
+    pub fn new<T: tokio::io::AsyncRead + Send + Sync + Unpin + 'static>(reader: T) -> Self {
+        let (sender, receiver) = tokio::sync::mpsc::channel(1);
+        tokio::spawn(async move {
+            let mut reader = reader;
+            loop {
+                use tokio::io::AsyncReadExt;
+                let mut buf = bytes::BytesMut::with_capacity(4096);
+                let sent = match reader.read_buf(&mut buf).await {
+                    Ok(nbytes) if nbytes == 0 => {
+                        sender.send(Ok((Bytes::new(), StreamState::Closed))).await
+                    }
+                    Ok(_) => sender.send(Ok((buf.freeze(), StreamState::Open))).await,
+                    Err(e) => sender.send(Err(e)).await,
+                };
+                if sent.is_err() {
+                    // no more receiver - stop trying to read
+                    break;
+                }
+            }
+        });
         AsyncReadStream {
             state: StreamState::Open,
-            buffer: Vec::new(),
-            reader,
+            buffer: None,
+            receiver,
         }
     }
 }
 
 #[async_trait::async_trait]
-impl<T: tokio::io::AsyncRead + Send + Sync + Unpin + 'static> HostInputStream
-    for AsyncReadStream<T>
-{
+impl HostInputStream for AsyncReadStream {
     fn read(&mut self, size: usize) -> Result<(Bytes, StreamState), Error> {
-        // use std::io::Write;
-        // let l = dest.write(&self.buffer)?;
-        //
-        // self.buffer.drain(..l);
-        // if !self.buffer.is_empty() {
-        //     return Ok((l as u64, StreamState::Open));
-        // }
-        //
-        // if self.state.is_closed() {
-        //     return Ok((l as u64, StreamState::Closed));
-        // }
-        //
-        // let dest = &mut dest[l..];
-        // let rest = if !dest.is_empty() {
-        //     let mut readbuf = tokio::io::ReadBuf::new(dest);
-        //
-        //     let noop_waker = noop_waker();
-        //     let mut cx: Context<'_> = Context::from_waker(&noop_waker);
-        //     // Make a synchronous, non-blocking call attempt to read. We are not
-        //     // going to poll this more than once, so the noop waker is appropriate.
-        //     match Pin::new(&mut self.reader).poll_read(&mut cx, &mut readbuf) {
-        //         Poll::Pending => {}             // Nothing was read
-        //         Poll::Ready(result) => result?, // Maybe an error occured
-        //     };
-        //     let bytes_read = readbuf.filled().len();
-        //
-        //     if bytes_read == 0 {
-        //         self.state = StreamState::Closed;
-        //     }
-        //     bytes_read
-        // } else {
-        //     0
-        // };
-        //
-        // Ok(((l + rest) as u64, self.state))
-        todo!()
+        use tokio::sync::mpsc::error::TryRecvError;
+        // FIXME: handle size argument!
+        match self.buffer.take() {
+            Some(Ok(bytes)) => return Ok((bytes, self.state)),
+            Some(Err(e)) => return Err(e.into()),
+            None => {}
+        }
+
+        match self.receiver.try_recv() {
+            Ok(Ok((bytes, state))) => {
+                if state == StreamState::Closed {
+                    self.state = state;
+                }
+                Ok((bytes, state))
+            }
+            Ok(Err(e)) => Err(e.into()),
+            Err(TryRecvError::Empty) => Ok((Bytes::new(), self.state)),
+            Err(TryRecvError::Disconnected) => Err(anyhow::anyhow!(
+                "AsyncReadStream sender died - should be impossible"
+            )),
+        }
     }
 
     async fn ready(&mut self) -> Result<(), Error> {
-        if self.state.is_closed() {
+        if self.buffer.is_some() || self.state == StreamState::Closed {
             return Ok(());
         }
-
-        let mut bytes = core::mem::take(&mut self.buffer);
-        let start = bytes.len();
-        bytes.resize(start + 1024, 0);
-        let l =
-            tokio::io::AsyncReadExt::read_buf(&mut self.reader, &mut &mut bytes[start..]).await?;
-
-        // Reading 0 bytes means either there wasn't enough space in the buffer (which we
-        // know there is because we just resized) or that the stream has closed. Thus, we
-        // know the stream has closed here.
-        if l == 0 {
-            self.state = StreamState::Closed;
+        match self.receiver.recv().await {
+            Some(Ok((bytes, state))) => {
+                if state == StreamState::Closed {
+                    self.state = state;
+                }
+                self.buffer = Some(Ok(bytes));
+            }
+            Some(Err(e)) => self.buffer = Some(Err(e)),
+            None => {
+                return Err(anyhow::anyhow!(
+                    "no more sender for an open AsyncReadStream - should be impossible"
+                ))
+            }
         }
-
-        bytes.drain(start + l..);
-        self.buffer = bytes;
-
         Ok(())
     }
 }
@@ -266,33 +265,16 @@ impl<T: tokio::io::AsyncWrite + Send + Sync + Unpin + 'static> HostOutputStream
     }
 
     async fn ready(&mut self) -> Result<(), Error> {
+        /*
         use tokio::io::AsyncWriteExt;
         let bytes = core::mem::take(&mut self.buffer);
         if !bytes.is_empty() {
             self.writer.write_all(bytes.as_slice()).await?;
         }
         Ok(())
+        */
+        todo!()
     }
-}
-
-// This implementation is basically copy-pasted out of `std` because the
-// implementation there has not yet stabilized. When the `noop_waker` feature
-// stabilizes, replace this with std::task::Waker::noop().
-fn noop_waker() -> Waker {
-    use std::task::{RawWaker, RawWakerVTable};
-    const VTABLE: RawWakerVTable = RawWakerVTable::new(
-        // Cloning just returns a new no-op raw waker
-        |_| RAW,
-        // `wake` does nothing
-        |_| {},
-        // `wake_by_ref` does nothing
-        |_| {},
-        // Dropping does nothing as we don't allocate anything
-        |_| {},
-    );
-    const RAW: RawWaker = RawWaker::new(std::ptr::null(), &VTABLE);
-
-    unsafe { Waker::from_raw(RAW) }
 }
 
 #[cfg(unix)]
@@ -393,8 +375,11 @@ mod async_fd_stream {
         }
 
         async fn ready(&mut self) -> Result<(), Error> {
+            /*
             let _ = self.fd.writable().await?;
             Ok(())
+            */
+            todo!()
         }
     }
 }
