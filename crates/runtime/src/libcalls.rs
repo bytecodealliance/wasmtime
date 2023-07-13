@@ -67,7 +67,7 @@ use std::time::{Duration, Instant};
 use wasmtime_environ::{
     DataIndex, ElemIndex, FuncIndex, GlobalIndex, MemoryIndex, TableIndex, Trap,
 };
-use crate::wasm_valgrind::Valgrind;
+// use crate::wasm_valgrind::AccessError;
 
 /// Actually public trampolines which are used by the runtime as the entrypoint
 /// for libcalls.
@@ -492,15 +492,15 @@ unsafe fn new_epoch(instance: &mut Instance) -> Result<u64> {
 
 // * is there a good way to cast a pointer to usize? or should the library be modified to take pointer
 //   arguments instead?
-unsafe fn check_malloc(instance: &mut Instance, addr: pointer, len: usize) -> Result<(), AccessError> {
-    let addr_usize;
-	instance::valgrind_state::malloc(addr_usize, len)
-}
+// unsafe fn check_malloc(instance: &mut Instance, addr: pointer, len: usize) -> Result<(), AccessError> {
+//     let addr_usize;
+// 	instance::valgrind_state::malloc(addr_usize, len)
+// }
 
-unsafe fn check_free(instance: &mut Instance, addr: pointer) -> Result<(), AccessError> {
-    let addr_usize;
-    instance::valgrind_state::free(addr_usize)
-}
+// unsafe fn check_free(instance: &mut Instance, addr: pointer) -> Result<(), AccessError> {
+//     let addr_usize;
+//     instance::valgrind_state::free(addr_usize)
+// }
 
 /// This module contains functions which are used for resolving relocations at
 /// runtime if necessary.

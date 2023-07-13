@@ -653,54 +653,54 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     // * I'm not sure if it's correct to pass instance as an argument
     //   here, as I've only seen Instance used in libcalls.rs; however,
     //   I wasn't sure how else to access the Valgrind state
-    fn handle_after_entry(&mut self, instance: &mut Instance) {
-        if "the function is malloc" {
-            instance::valgrind_state::flag = true;
-        }
-    }
+    //
+    // * when/where are these hooks actually called?
+    // fn handle_after_entry(&mut self) {
+    //     if "the function is malloc" {
+    //         // valgrind_state.flag = true;
+    //     }
+    // }
 
     // * is self.vmctx already initialized by the time this function
     //   is called? or does fn vmctx() need to be called?
     //
     // * is it correct to use builder as an argument here?
-    fn handle_before_return(&mut self, retvals: &[value], instance: &mut Instance, builder: &mut FunctionBuilder) {
-        let block = builder.func.entry_block().unwrap();
-        let args = builder.func.dfg.block_params(block, 0);
-        // * I'm still not sure how to check if the functions are malloc/free? iirc from last week's
-        //   discussion there would have to be some pretty involved changes (something about bitcasting)?
-        if "the function is malloc" {
-            builder
-                .ins()
-                .call_indirect(check_malloc_exit, &[self.vmctx, retvals[0], args[0]])
-        } else if "the function is free" {
-            builder
-                .ins()
-                .call_indirect(check_free_exit, &[self.vmctx])
-        }
-        instance::valgrind_state::flag = false;
-    }
+    // fn handle_before_return(&mut self, retvals: &[Value], builder: &mut FunctionBuilder) {
+    //     let block = builder.func.entry_block().unwrap();
+    //     let args = builder.func.dfg.block_params(block, 0);
+    //     if "the function is malloc" {
+    //         builder
+    //             .ins()
+    //             .call_indirect(check_malloc_exit, &[self.vmctx, retvals[0], args[0]]);
+    //     } else if "the function is free" {
+    //         builder
+    //             .ins()
+    //             .call_indirect(check_free_exit, &[self.vmctx]);
+    //     }
+    //     valgrind_state.flag = false;
+    // }
 
-    fn check_malloc_exit(&mut self, builder: &mut FunctionBuilder) {
-        let check_malloc_sig = self.builtin_function_signatures.check_malloc(builder.func);
-        let (vmctx, check_malloc) = self.translate_load_builtin_function_address(
-            &mut builder.cursor(),
-            BuiltinFunctionIndex::check_malloc(),
-        );
-        builder
-            .ins()
-            .call_indirect(check_malloc_sig, check_malloc, &[vmctx, pointer, usize]);
-    }
+    // fn check_malloc_exit(&mut self, builder: &mut FunctionBuilder) {
+    //     let check_malloc_sig = self.builtin_function_signatures.check_malloc(builder.func);
+    //     let (vmctx, check_malloc) = self.translate_load_builtin_function_address(
+    //         &mut builder.cursor(),
+    //         BuiltinFunctionIndex::check_malloc(),
+    //     );
+    //     builder
+    //         .ins()
+    //         .call_indirect(check_malloc_sig, check_malloc, &[vmctx, pointer, usize]);
+    // }
 
-    fn check_free_exit(&mut self, builder: &mut FunctionBuilder) {
-        let check_free_sig = self.builtin_function_signatures.check_free(builder.func);
-        let (vmctx, check_free) = self.translate_load_builtin_function_address(
-            &mut builder.cursor(),
-            BuiltinFunctionIndex::check_free(),
-        );
-        builder
-            .ins()
-            .call_indirect(check_free_sig, check_free, &[vmctx, pointer]);
-    }
+    // fn check_free_exit(&mut self, builder: &mut FunctionBuilder) {
+    //     let check_free_sig = self.builtin_function_signatures.check_free(builder.func);
+    //     let (vmctx, check_free) = self.translate_load_builtin_function_address(
+    //         &mut builder.cursor(),
+    //         BuiltinFunctionIndex::check_free(),
+    //     );
+    //     builder
+    //         .ins()
+    //         .call_indirect(check_free_sig, check_free, &[vmctx, pointer]);
+    // }
 
     fn epoch_ptr(&mut self, builder: &mut FunctionBuilder<'_>) -> ir::Value {
         let vmctx = self.vmctx(builder.func);
@@ -2227,9 +2227,9 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             self.epoch_function_entry(builder);
         }
         //
-        if self.func == "malloc" { //psuedocode
-            self.check_malloc_entry();
-        }
+        // if self.func == "malloc" { //psuedocode
+        //     self.check_malloc_entry();
+        // }
         Ok(())
     }
 

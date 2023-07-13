@@ -32,7 +32,7 @@ use wasmtime_environ::{
     GlobalInit, HostPtr, MemoryIndex, Module, PrimaryMap, SignatureIndex, TableIndex,
     TableInitialValue, Trap, VMOffsets, WasmHeapType, WasmRefType, WasmType, VMCONTEXT_MAGIC,
 };
-use crate::wasm_valgrind::Valgrind;
+// use crate::wasm_valgrind::Valgrind;
 
 mod allocator;
 
@@ -146,7 +146,7 @@ pub struct Instance {
     /// end of the struct (similar to a flexible array member).
     vmctx: VMContext,
 
-    valgrind_state: Valgrind,
+    // valgrind_state: Valgrind,
 }
 
 #[allow(clippy::cast_ptr_alignment)]
@@ -189,6 +189,8 @@ impl Instance {
                 vmctx: VMContext {
                     _marker: std::marker::PhantomPinned,
                 },
+                // valgrind_state: Valgrind::new(1024 * 640, 1024), // dummy data
+                //not sure how to access mem & stack size?
             },
         );
 

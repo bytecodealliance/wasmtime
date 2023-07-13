@@ -588,10 +588,12 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             };
             {
                 let return_args = state.peekn_mut(return_count);
+                // println!("{:?}", return_args);
+                //handle_before_return(&return_args);
+                //      curr error: handle_before_return not in scope
                 bitcast_wasm_returns(environ, return_args, builder);
                 builder.ins().return_(return_args);
             }
-            handle_before_return(return_args);
             state.popn(return_count);
             state.reachable = false;
         }
@@ -699,7 +701,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         
          // there's quite a few different types loads loads; should each of them be individually
          // wrapped in an if statement checking if the valgrind flag is on?
-         // If so, how would the Instance be accessed from here?
+         // If so, how would the Instance be accessed free
          Operator::I32Load8U { memarg } => {
             unwrap_or_return_unreachable_state!(
                 state,

@@ -23,3 +23,6 @@
 	path = tests/wasi_testsuite/wasi-common
 	url = https://github.com/WebAssembly/wasi-testsuite.git
 	branch = prod/testsuite-base
+[submodule "wasm-valgrind"]
+	path = wasm-valgrind
+	url = https://github.com/ssunkin-fastly/wasm-valgrind
