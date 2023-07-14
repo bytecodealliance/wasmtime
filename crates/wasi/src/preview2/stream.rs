@@ -145,10 +145,9 @@ pub struct AsyncReadStream {
 impl AsyncReadStream {
     /// Create a [`AsyncReadStream`]. In order to use the [`HostInputStream`] impl
     /// provided by this struct, the argument must impl [`tokio::io::AsyncRead`].
-    pub fn new<T: tokio::io::AsyncRead + Send + Sync + Unpin + 'static>(reader: T) -> Self {
+    pub fn new<T: tokio::io::AsyncRead + Send + Sync + Unpin + 'static>(mut reader: T) -> Self {
         let (sender, receiver) = tokio::sync::mpsc::channel(1);
         tokio::spawn(async move {
-            let mut reader = reader;
             loop {
                 use tokio::io::AsyncReadExt;
                 let mut buf = bytes::BytesMut::with_capacity(4096);
@@ -177,19 +176,38 @@ impl AsyncReadStream {
 impl HostInputStream for AsyncReadStream {
     fn read(&mut self, size: usize) -> Result<(Bytes, StreamState), Error> {
         use tokio::sync::mpsc::error::TryRecvError;
-        // FIXME: handle size argument!
+
         match self.buffer.take() {
-            Some(Ok(bytes)) => return Ok((bytes, self.state)),
+            Some(Ok(mut bytes)) => {
+                // TODO: de-duplicate the buffer management with the case below
+                let len = bytes.len().min(size);
+                let rest = bytes.split_off(len);
+                let return_state = if !rest.is_empty() {
+                    self.buffer = Some(Ok(rest));
+                    StreamState::Open
+                } else {
+                    self.state
+                };
+                return Ok((bytes, return_state));
+            }
             Some(Err(e)) => return Err(e.into()),
             None => {}
         }
 
-        match self.receiver.try_recv() {
-            Ok(Ok((bytes, state))) => {
-                if state == StreamState::Closed {
-                    self.state = state;
-                }
-                Ok((bytes, state))
+        match dbg!(self.receiver.try_recv()) {
+            Ok(Ok((mut bytes, state))) => {
+                self.state = state;
+
+                let len = bytes.len().min(size);
+                let rest = bytes.split_off(len);
+                let return_state = if !rest.is_empty() {
+                    self.buffer = Some(Ok(rest));
+                    StreamState::Open
+                } else {
+                    self.state
+                };
+
+                Ok((bytes, return_state))
             }
             Ok(Err(e)) => Err(e.into()),
             Err(TryRecvError::Empty) => Ok((Bytes::new(), self.state)),
@@ -221,59 +239,141 @@ impl HostInputStream for AsyncReadStream {
     }
 }
 
-/// Provides a [`HostOutputStream`] impl from a [`tokio::io::AsyncWrite`] impl
-pub struct AsyncWriteStream<T> {
-    buffer: Vec<u8>,
-    writer: T,
+enum WriteState {
+    Ready,
+    Pending,
+    Err(std::io::Error),
 }
 
-impl<T> AsyncWriteStream<T> {
+/// Provides a [`HostOutputStream`] impl from a [`tokio::io::AsyncWrite`] impl
+pub struct AsyncWriteStream {
+    state: Option<WriteState>,
+    sender: tokio::sync::mpsc::Sender<Bytes>,
+    result_receiver: tokio::sync::mpsc::Receiver<Result<StreamState, std::io::Error>>,
+}
+
+impl AsyncWriteStream {
     /// Create a [`AsyncWriteStream`]. In order to use the [`HostOutputStream`] impl
     /// provided by this struct, the argument must impl [`tokio::io::AsyncWrite`].
-    pub fn new(writer: T) -> Self {
+    pub fn new<T: tokio::io::AsyncWrite + Send + Sync + Unpin + 'static>(mut writer: T) -> Self {
+        let (sender, mut receiver) = tokio::sync::mpsc::channel::<Bytes>(1);
+        let (result_sender, result_receiver) = tokio::sync::mpsc::channel(1);
+
+        tokio::spawn(async move {
+            'outer: loop {
+                use tokio::io::AsyncWriteExt;
+                match receiver.recv().await {
+                    Some(mut bytes) => {
+                        while !bytes.is_empty() {
+                            match writer.write_buf(&mut bytes).await {
+                                Ok(0) => {
+                                    let _ = result_sender.send(Ok(StreamState::Closed)).await;
+                                    break 'outer;
+                                }
+
+                                Ok(_) => {
+                                    if bytes.is_empty() {
+                                        match result_sender.send(Ok(StreamState::Open)).await {
+                                            Ok(_) => break,
+                                            Err(_) => break 'outer,
+                                        }
+                                    }
+                                    continue;
+                                }
+
+                                Err(e) => match result_sender.send(Err(e)).await {
+                                    Ok(_) => break,
+                                    Err(_) => break 'outer,
+                                },
+                            }
+                        }
+                    }
+
+                    // The other side of the channel hung up, the task can exit now
+                    None => break 'outer,
+                }
+            }
+        });
+
         AsyncWriteStream {
-            buffer: Vec::new(),
-            writer,
+            state: Some(WriteState::Ready),
+            sender,
+            result_receiver,
         }
     }
 }
 
 #[async_trait::async_trait]
-impl<T: tokio::io::AsyncWrite + Send + Sync + Unpin + 'static> HostOutputStream
-    for AsyncWriteStream<T>
-{
+impl HostOutputStream for AsyncWriteStream {
     fn write(&mut self, bytes: Bytes) -> Result<(usize, StreamState), anyhow::Error> {
-        // let mut bytes = core::mem::take(&mut self.buffer);
-        // bytes.extend(buf);
-        //
-        // let noop_waker = noop_waker();
-        // let mut cx: Context<'_> = Context::from_waker(&noop_waker);
-        // // Make a synchronous, non-blocking call attempt to write. We are not
-        // // going to poll this more than once, so the noop waker is appropriate.
-        // match Pin::new(&mut self.writer).poll_write(&mut cx, &mut bytes.as_slice()) {
-        //     Poll::Pending => {
-        //         // Nothing was written: buffer all of it below.
-        //     }
-        //     Poll::Ready(written) => {
-        //         // So much was written:
-        //         bytes.drain(..written?);
-        //     }
-        // }
-        // self.buffer = bytes;
-        // Ok(buf.len() as u64)
-        todo!()
+        use tokio::sync::mpsc::error::{TryRecvError, TrySendError};
+
+        match self.state.take() {
+            Some(WriteState::Ready) => {}
+            Some(WriteState::Pending) => match self.result_receiver.try_recv() {
+                Ok(Ok(StreamState::Open)) => {
+                    self.state = Some(WriteState::Ready);
+                }
+
+                Ok(Ok(StreamState::Closed)) => {
+                    self.state = None;
+                    return Ok((0, StreamState::Closed));
+                }
+
+                Ok(Err(e)) => {
+                    self.state = Some(WriteState::Ready);
+                    return Err(e.into());
+                }
+
+                Err(TryRecvError::Empty) => {
+                    self.state = Some(WriteState::Pending);
+                    return Ok((0, StreamState::Open));
+                }
+
+                Err(TryRecvError::Disconnected) => {
+                    unreachable!("task shouldn't die while pending")
+                }
+            },
+            Some(WriteState::Err(e)) => {
+                self.state = Some(WriteState::Ready);
+                return Err(e.into());
+            }
+
+            None => {
+                return Ok((0, StreamState::Closed));
+            }
+        }
+
+        let len = bytes.len();
+        match self.sender.try_send(bytes) {
+            Ok(_) => Ok((len, StreamState::Open)),
+            Err(TrySendError::Full(_)) => Ok((0, StreamState::Open)),
+            Err(TrySendError::Closed(_)) => unreachable!("task shouldn't die while not closed"),
+        }
     }
 
     async fn ready(&mut self) -> Result<(), Error> {
-        /*
-        use tokio::io::AsyncWriteExt;
-        let bytes = core::mem::take(&mut self.buffer);
-        if !bytes.is_empty() {
-            self.writer.write_all(bytes.as_slice()).await?;
+        match &self.state {
+            Some(WriteState::Pending) => match self.result_receiver.recv().await {
+                Some(Ok(StreamState::Open)) => {
+                    self.state = Some(WriteState::Ready);
+                }
+
+                Some(Ok(StreamState::Closed)) => {
+                    self.state = None;
+                }
+
+                Some(Err(e)) => {
+                    self.state = Some(WriteState::Err(e));
+                }
+
+                None => unreachable!("task shouldn't die while pending"),
+            },
+
+            Some(WriteState::Ready | WriteState::Err(_)) | None => {}
         }
+
         Ok(())
-        */
-        todo!()
     }
 }
 
@@ -392,7 +492,7 @@ mod test {
         struct DummyInputStream;
         #[async_trait::async_trait]
         impl HostInputStream for DummyInputStream {
-            fn read(&mut self, size: usize) -> Result<(Bytes, StreamState), Error> {
+            fn read(&mut self, _size: usize) -> Result<(Bytes, StreamState), Error> {
                 unimplemented!();
             }
             async fn ready(&mut self) -> Result<(), Error> {
@@ -413,7 +513,7 @@ mod test {
         struct DummyOutputStream;
         #[async_trait::async_trait]
         impl HostOutputStream for DummyOutputStream {
-            fn write(&mut self, _: Bytes) -> Result<usize, Error> {
+            fn write(&mut self, _: Bytes) -> Result<(usize, StreamState), Error> {
                 unimplemented!();
             }
             async fn ready(&mut self) -> Result<(), Error> {
@@ -427,5 +527,35 @@ mod test {
         // ref back out:
         let ix = table.push_output_stream(Box::new(dummy)).unwrap();
         let _ = table.get_output_stream_mut(ix).unwrap();
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_empty_read_stream() {
+        use tokio::io::AsyncReadExt;
+        let mut buf = bytes::BytesMut::with_capacity(4096);
+        let sent = tokio::io::empty().read_buf(&mut buf).await.unwrap();
+        assert_eq!(sent, 0);
+
+        let mut reader = AsyncReadStream::new(tokio::io::empty());
+        let (bs, state) = reader.read(10).unwrap();
+        assert!(bs.is_empty());
+
+        // In a multi-threaded context, the value of state is not deterministic -- the spawned
+        // reader task may run on a different thread.
+        match state {
+            // The reader task ran before we tried to read, and noticed that the input was empty.
+            StreamState::Closed => {}
+
+            // The reader task hasn't run yet, and we need to call `ready` to turn the crank.
+            StreamState::Open => {
+                tokio::time::timeout(std::time::Duration::from_millis(10), reader.ready())
+                    .await
+                    .expect("the reader should be ready instantly")
+                    .expect("ready is ok");
+                let (bs, state) = reader.read(10).unwrap();
+                assert!(bs.is_empty());
+                assert_eq!(state, StreamState::Closed);
+            }
+        }
     }
 }

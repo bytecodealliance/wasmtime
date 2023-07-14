@@ -13,12 +13,12 @@ mod windows;
 #[cfg(windows)]
 pub use self::windows::{stdin, Stdin};
 
-pub type Stdout = AsyncWriteStream<tokio::io::Stdout>;
+pub type Stdout = AsyncWriteStream;
 
 pub fn stdout() -> Stdout {
     AsyncWriteStream::new(tokio::io::stdout())
 }
-pub type Stderr = AsyncWriteStream<tokio::io::Stderr>;
+pub type Stderr = AsyncWriteStream;
 
 pub fn stderr() -> Stderr {
     AsyncWriteStream::new(tokio::io::stderr())
