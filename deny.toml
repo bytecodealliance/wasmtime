@@ -61,10 +61,6 @@ skip-tree = [
     # it is duplicated for us.
     { name = "indexmap", depth = 2 },
 
-    # This is on and older version of `wasm-encoder` and is one we can't
-    # necessarily easily update, so let `wasm-encoder` get duplicated for now.
-    { name = "wasm-coredump-builder", depth = 2 },
-
     # The native-tls crate hasn't kept up with updates to the underlying
     # windows-sys, while the rest of the ecosystem has. This duplicated
     # dependency appears to be benign.
