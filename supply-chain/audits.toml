@@ -1520,6 +1520,12 @@ criteria = "safe-to-deploy"
 delta = "0.7.1 -> 0.8.0"
 notes = "This was a small update to the crate which has to do with Rust language features and compiler versions, no substantial changes."
 
+[[audits.memoffset]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.8.0 -> 0.9.0"
+notes = "No major changes in the crate, mostly updates to use new nightly Rust features."
+
 [[audits.memory_units]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-run"
