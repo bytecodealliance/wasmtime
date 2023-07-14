@@ -194,7 +194,7 @@ impl HostInputStream for AsyncReadStream {
             None => {}
         }
 
-        match dbg!(self.receiver.try_recv()) {
+        match self.receiver.try_recv() {
             Ok(Ok((mut bytes, state))) => {
                 self.state = state;
 
@@ -271,7 +271,6 @@ impl AsyncWriteStream {
                                     let _ = result_sender.send(Ok(StreamState::Closed)).await;
                                     break 'outer;
                                 }
-
                                 Ok(_) => {
                                     if bytes.is_empty() {
                                         match result_sender.send(Ok(StreamState::Open)).await {
@@ -281,11 +280,10 @@ impl AsyncWriteStream {
                                     }
                                     continue;
                                 }
-
-                                Err(e) => match result_sender.send(Err(e)).await {
-                                    Ok(_) => break,
-                                    Err(_) => break 'outer,
-                                },
+                                Err(e) => {
+                                    let _ = result_sender.send(Err(e)).await;
+                                    break 'outer;
+                                }
                             }
                         }
                     }
@@ -309,7 +307,7 @@ impl AsyncWriteStream {
         debug_assert!(matches!(self.state, Some(WriteState::Ready)));
 
         let len = bytes.len();
-        match dbg!(self.sender.try_send(bytes)) {
+        match self.sender.try_send(bytes) {
             Ok(_) => {
                 self.state = Some(WriteState::Pending);
                 Ok((len, StreamState::Open))
@@ -325,9 +323,10 @@ impl HostOutputStream for AsyncWriteStream {
     fn write(&mut self, bytes: Bytes) -> Result<(usize, StreamState), anyhow::Error> {
         use tokio::sync::mpsc::error::TryRecvError;
 
+        dbg!(&self.state);
         match self.state {
             Some(WriteState::Ready) => self.send(bytes),
-            Some(WriteState::Pending) => match dbg!(self.result_receiver.try_recv()) {
+            Some(WriteState::Pending) => match self.result_receiver.try_recv() {
                 Ok(Ok(StreamState::Open)) => {
                     self.state = Some(WriteState::Ready);
                     self.send(bytes)
@@ -339,7 +338,7 @@ impl HostOutputStream for AsyncWriteStream {
                 }
 
                 Ok(Err(e)) => {
-                    self.state = Some(WriteState::Ready);
+                    self.state = None;
                     Err(e.into())
                 }
 
@@ -353,8 +352,9 @@ impl HostOutputStream for AsyncWriteStream {
                 }
             },
             Some(WriteState::Err(_)) => {
-                // Move the error payload out of self.state, because errors are not Copy
-                if let Some(WriteState::Err(e)) = self.state.replace(WriteState::Ready) {
+                // Move the error payload out of self.state, because errors are not Copy,
+                // and set self.state to None, because the stream is now closed.
+                if let Some(WriteState::Err(e)) = self.state.take() {
                     Err(e.into())
                 } else {
                     unreachable!("self.state shown to be Some(Err(e)) in match clause")
@@ -658,6 +658,8 @@ mod test {
     }
 
     #[tokio::test(flavor = "multi_thread")]
+    // Test that you can write items into the stream, and they get read out in the order they were
+    // written, with the proper indications of readiness for reading:
     async fn multiple_chunks_read_stream() {
         let (r, mut w) = simplex(1024);
         let mut reader = AsyncReadStream::new(r);
@@ -809,7 +811,6 @@ mod test {
         assert_eq!(len, chunk.len());
         assert_eq!(state, StreamState::Open);
 
-        println!("second write:");
         // But I expect this to block additional writes:
         let (len, state) = writer.write(chunk.clone()).unwrap();
         assert_eq!(len, 0);
@@ -821,6 +822,149 @@ mod test {
             .expect("ready is ok");
 
         // Now additional writes will work:
+        let (len, state) = writer.write(chunk.clone()).unwrap();
+        assert_eq!(len, chunk.len());
+        assert_eq!(state, StreamState::Open);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn closed_write_stream() {
+        let (reader, writer) = simplex(1024);
+        drop(reader);
+        let mut writer = AsyncWriteStream::new(writer);
+
+        // Without checking write readiness, perform a nonblocking write: this should succeed
+        // because we will buffer up the write.
+        let chunk = Bytes::from_static(&[0; 1]);
+        let (len, state) = writer.write(chunk.clone()).unwrap();
+
+        assert_eq!(len, chunk.len());
+        assert_eq!(state, StreamState::Open);
+
+        // Check write readiness:
+        tokio::time::timeout(std::time::Duration::from_millis(10), writer.ready())
+            .await
+            .expect("the writer should be ready instantly")
+            .expect("ready is ok");
+
+        // When we drop the simplex reader, that causes the simplex writer to return BrokenPipe on
+        // its write. Now that the buffering crank has turned, our next write will give BrokenPipe.
+        let err = writer.write(chunk.clone()).err().unwrap();
+        assert_eq!(
+            err.downcast_ref::<std::io::Error>().unwrap().kind(),
+            std::io::ErrorKind::BrokenPipe
+        );
+
+        // Now that we got the error out of the writer, it should be closed - subsequent writes
+        // will not work
+        let (len, state) = writer.write(chunk.clone()).unwrap();
+        assert_eq!(len, 0);
+        assert_eq!(state, StreamState::Closed);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn multiple_chunks_write_stream() {
+        use std::ops::Deref;
+
+        let (mut reader, writer) = simplex(1024);
+        let mut writer = AsyncWriteStream::new(writer);
+
+        // Write a chunk:
+        let chunk = Bytes::from_static(&[123; 1]);
+        let (len, state) = writer.write(chunk.clone()).unwrap();
+
+        assert_eq!(len, chunk.len());
+        assert_eq!(state, StreamState::Open);
+
+        // After the write, still ready for more writing:
+        tokio::time::timeout(std::time::Duration::from_millis(10), writer.ready())
+            .await
+            .expect("the writer should be ready instantly")
+            .expect("ready is ok");
+
+        let mut read_buf = vec![0; chunk.len()];
+        let read_len = reader.read_exact(&mut read_buf).await.unwrap();
+        assert_eq!(read_len, chunk.len());
+        assert_eq!(read_buf.as_slice(), chunk.deref());
+
+        // Write a second, different chunk:
+        let chunk2 = Bytes::from_static(&[45; 1]);
+        let (len, state) = writer.write(chunk2.clone()).unwrap();
+        assert_eq!(len, chunk2.len());
+        assert_eq!(state, StreamState::Open);
+
+        // After the write, still ready for more writing:
+        tokio::time::timeout(std::time::Duration::from_millis(10), writer.ready())
+            .await
+            .expect("the writer should be ready instantly")
+            .expect("ready is ok");
+
+        let mut read2_buf = vec![0; chunk2.len()];
+        let read2_len = reader.read_exact(&mut read2_buf).await.unwrap();
+        assert_eq!(read2_len, chunk2.len());
+        assert_eq!(read2_buf.as_slice(), chunk2.deref());
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn backpressure_write_stream() {
+        // Stream can buffer up to 1k, plus one write chunk, before not
+        // accepting more input:
+        let (mut reader, writer) = simplex(1024);
+        let mut writer = AsyncWriteStream::new(writer);
+
+        // Write enough to fill the simplex buffer:
+        let chunk = Bytes::from_static(&[0; 1024]);
+        let (len, state) = writer.write(chunk.clone()).unwrap();
+
+        assert_eq!(len, chunk.len());
+        assert_eq!(state, StreamState::Open);
+
+        // turn the crank and it should be ready for writing again:
+        tokio::time::timeout(std::time::Duration::from_millis(10), writer.ready())
+            .await
+            .expect("the writer should be ready instantly")
+            .expect("ready is ok");
+
+        // Now fill the buffer between here and the writer task:
+        let (len, state) = writer.write(chunk.clone()).unwrap();
+        assert_eq!(len, chunk.len());
+        assert_eq!(state, StreamState::Open);
+
+        // Try shoving even more down there, and it shouldnt accept more input:
+        let (len, state) = writer.write(chunk.clone()).unwrap();
+        assert_eq!(len, 0);
+        assert_eq!(state, StreamState::Open);
+
+        // turn the crank and it should Not become ready for writing until we read something out.
+        tokio::time::timeout(std::time::Duration::from_millis(10), writer.ready())
+            .await
+            .err()
+            .expect("the writer should be not become ready");
+
+        // Still not ready from the .write interface either:
+        let (len, state) = writer.write(chunk.clone()).unwrap();
+        assert_eq!(len, 0);
+        assert_eq!(state, StreamState::Open);
+
+        // There is 2k in the buffer. I should be able to read all of it out:
+        let mut buf = [0; 2048];
+        reader.read_exact(&mut buf).await.unwrap();
+
+        // and no more:
+        tokio::time::timeout(std::time::Duration::from_millis(10), reader.read(&mut buf))
+            .await
+            .err()
+            .expect("nothing more buffered in the system");
+
+        // Now the backpressure should be cleared, and an additional write should be accepted.
+
+        // immediately ready for writing:
+        tokio::time::timeout(std::time::Duration::from_millis(10), writer.ready())
+            .await
+            .expect("the writer should be ready instantly")
+            .expect("ready is ok");
+
+        // and the write succeeds:
         let (len, state) = writer.write(chunk.clone()).unwrap();
         assert_eq!(len, chunk.len());
         assert_eq!(state, StreamState::Open);
