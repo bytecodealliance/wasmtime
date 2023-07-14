@@ -463,7 +463,7 @@ impl FrameInfo {
         if let Some(s) = &module.symbolize_context().ok().and_then(|c| c) {
             if let Some(offset) = instr.and_then(|i| i.file_offset()) {
                 let to_lookup = u64::from(offset) - s.code_section_offset();
-                if let Ok(mut frames) = s.addr2line().find_frames(to_lookup) {
+                if let Ok(mut frames) = s.addr2line().find_frames(to_lookup).skip_all_loads() {
                     while let Ok(Some(frame)) = frames.next() {
                         symbols.push(FrameSymbol {
                             name: frame

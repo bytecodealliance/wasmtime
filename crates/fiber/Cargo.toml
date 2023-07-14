@@ -27,4 +27,4 @@ cc = "1.0"
 wasmtime-versioned-export-macros = { workspace = true }
 
 [dev-dependencies]
-backtrace = "0.3.61"
+backtrace = "0.3.68"
