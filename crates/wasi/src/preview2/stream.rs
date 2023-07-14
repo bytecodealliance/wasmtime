@@ -487,6 +487,7 @@ mod async_fd_stream {
 #[cfg(test)]
 mod test {
     use super::*;
+    use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
     #[test]
     fn input_stream_in_table() {
         struct DummyInputStream;
@@ -530,12 +531,7 @@ mod test {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn test_empty_read_stream() {
-        use tokio::io::AsyncReadExt;
-        let mut buf = bytes::BytesMut::with_capacity(4096);
-        let sent = tokio::io::empty().read_buf(&mut buf).await.unwrap();
-        assert_eq!(sent, 0);
-
+    async fn empty_read_stream() {
         let mut reader = AsyncReadStream::new(tokio::io::empty());
         let (bs, state) = reader.read(10).unwrap();
         assert!(bs.is_empty());
@@ -546,14 +542,92 @@ mod test {
             // The reader task ran before we tried to read, and noticed that the input was empty.
             StreamState::Closed => {}
 
-            // The reader task hasn't run yet, and we need to call `ready` to turn the crank.
+            // The reader task hasn't run yet. Call `ready` to await and fill the buffer.
             StreamState::Open => {
                 tokio::time::timeout(std::time::Duration::from_millis(10), reader.ready())
                     .await
                     .expect("the reader should be ready instantly")
                     .expect("ready is ok");
-                let (bs, state) = reader.read(10).unwrap();
+                let (bs, state) = reader.read(0).unwrap();
                 assert!(bs.is_empty());
+                assert_eq!(state, StreamState::Closed);
+            }
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn infinite_read_stream() {
+        let mut reader = AsyncReadStream::new(tokio::io::repeat(0));
+
+        let (bs, state) = reader.read(10).unwrap();
+        assert_eq!(state, StreamState::Open);
+        if bs.is_empty() {
+            // Reader task hasn't run yet. Call `ready` to await and fill the buffer.
+            tokio::time::timeout(std::time::Duration::from_millis(10), reader.ready())
+                .await
+                .expect("the reader should be ready instantly")
+                .expect("ready is ok");
+            // Now a read should succeed
+            let (bs, state) = reader.read(10).unwrap();
+            assert_eq!(bs.len(), 10);
+            assert_eq!(state, StreamState::Open);
+        } else {
+            assert_eq!(bs.len(), 10);
+        }
+
+        // Subsequent reads should succeed
+        let (bs, state) = reader.read(10).unwrap();
+        assert_eq!(state, StreamState::Open);
+        assert_eq!(bs.len(), 10);
+
+        // Even 0-length reads should succeed and show its open
+        let (bs, state) = reader.read(0).unwrap();
+        assert_eq!(state, StreamState::Open);
+        assert_eq!(bs.len(), 0);
+    }
+
+    async fn finite_async_reader(contents: &[u8]) -> impl AsyncRead + Send + Sync + 'static {
+        let (mut a, b) = tokio::io::duplex(contents.len());
+        a.write_all(contents).await.unwrap();
+        let (read_half, _write_half) = tokio::io::split(b);
+        read_half
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn finite_read_stream() {
+        let mut reader = AsyncReadStream::new(finite_async_reader(&[1; 123]).await);
+
+        let (bs, state) = reader.read(123).unwrap();
+        assert_eq!(state, StreamState::Open);
+        if bs.is_empty() {
+            // Reader task hasn't run yet. Call `ready` to await and fill the buffer.
+            tokio::time::timeout(std::time::Duration::from_millis(10), reader.ready())
+                .await
+                .expect("the reader should be ready instantly")
+                .expect("ready is ok");
+            // Now a read should succeed
+            let (bs, state) = reader.read(123).unwrap();
+            assert_eq!(bs.len(), 123);
+            assert_eq!(state, StreamState::Open);
+        } else {
+            assert_eq!(bs.len(), 123);
+        }
+
+        // The AsyncRead's should be empty now, but we have a race where the reader task hasn't
+        // yet send that to the AsyncReadStream.
+        let (bs, state) = reader.read(0).unwrap();
+        assert!(bs.is_empty());
+        match state {
+            StreamState::Closed => {} // Correct!
+            StreamState::Open => {
+                // Need to await to give this side time to catch up
+                tokio::time::timeout(std::time::Duration::from_millis(10), reader.ready())
+                    .await
+                    .expect("the reader should be ready instantly")
+                    .expect("ready is ok");
+                // Now a read should show closed
+                let (bs, state) = reader.read(0).unwrap();
+                assert_eq!(bs.len(), 0);
                 assert_eq!(state, StreamState::Closed);
             }
         }
