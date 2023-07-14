@@ -239,6 +239,7 @@ impl HostInputStream for AsyncReadStream {
     }
 }
 
+#[derive(Debug)]
 enum WriteState {
     Ready,
     Pending,
@@ -301,54 +302,66 @@ impl AsyncWriteStream {
             result_receiver,
         }
     }
+
+    fn send(&mut self, bytes: Bytes) -> anyhow::Result<(usize, StreamState)> {
+        use tokio::sync::mpsc::error::TrySendError;
+
+        debug_assert!(matches!(self.state, Some(WriteState::Ready)));
+
+        let len = bytes.len();
+        match dbg!(self.sender.try_send(bytes)) {
+            Ok(_) => {
+                self.state = Some(WriteState::Pending);
+                Ok((len, StreamState::Open))
+            }
+            Err(TrySendError::Full(_)) => Ok((0, StreamState::Open)),
+            Err(TrySendError::Closed(_)) => unreachable!("task shouldn't die while not closed"),
+        }
+    }
 }
 
 #[async_trait::async_trait]
 impl HostOutputStream for AsyncWriteStream {
     fn write(&mut self, bytes: Bytes) -> Result<(usize, StreamState), anyhow::Error> {
-        use tokio::sync::mpsc::error::{TryRecvError, TrySendError};
+        use tokio::sync::mpsc::error::TryRecvError;
 
-        match self.state.take() {
-            Some(WriteState::Ready) => {}
-            Some(WriteState::Pending) => match self.result_receiver.try_recv() {
+        match self.state {
+            Some(WriteState::Ready) => self.send(bytes),
+            Some(WriteState::Pending) => match dbg!(self.result_receiver.try_recv()) {
                 Ok(Ok(StreamState::Open)) => {
                     self.state = Some(WriteState::Ready);
+                    self.send(bytes)
                 }
 
                 Ok(Ok(StreamState::Closed)) => {
                     self.state = None;
-                    return Ok((0, StreamState::Closed));
+                    Ok((0, StreamState::Closed))
                 }
 
                 Ok(Err(e)) => {
                     self.state = Some(WriteState::Ready);
-                    return Err(e.into());
+                    Err(e.into())
                 }
 
                 Err(TryRecvError::Empty) => {
                     self.state = Some(WriteState::Pending);
-                    return Ok((0, StreamState::Open));
+                    Ok((0, StreamState::Open))
                 }
 
                 Err(TryRecvError::Disconnected) => {
                     unreachable!("task shouldn't die while pending")
                 }
             },
-            Some(WriteState::Err(e)) => {
-                self.state = Some(WriteState::Ready);
-                return Err(e.into());
+            Some(WriteState::Err(_)) => {
+                // Move the error payload out of self.state, because errors are not Copy
+                if let Some(WriteState::Err(e)) = self.state.replace(WriteState::Ready) {
+                    Err(e.into())
+                } else {
+                    unreachable!("self.state shown to be Some(Err(e)) in match clause")
+                }
             }
 
-            None => {
-                return Ok((0, StreamState::Closed));
-            }
-        }
-
-        let len = bytes.len();
-        match self.sender.try_send(bytes) {
-            Ok(_) => Ok((len, StreamState::Open)),
-            Err(TrySendError::Full(_)) => Ok((0, StreamState::Open)),
-            Err(TrySendError::Closed(_)) => unreachable!("task shouldn't die while not closed"),
+            None => Ok((0, StreamState::Closed)),
         }
     }
 
@@ -728,5 +741,88 @@ mod test {
         let (bs, state) = reader.read(1).unwrap();
         assert!(bs.is_empty());
         assert_eq!(state, StreamState::Closed);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    // At the moment we are restricting AsyncReadStream from buffering more than 4k. This isn't a
+    // suitable design for all applications, and we will probably make a knob or change the
+    // behavior at some point, but this test shows the behavior as it is implemented:
+    async fn backpressure_read_stream() {
+        let (r, mut w) = simplex(16 * 1024); // Make sure this buffer isnt a bottleneck
+        let mut reader = AsyncReadStream::new(r);
+
+        let writer_task = tokio::task::spawn(async move {
+            // Write twice as much as we can buffer up in an AsyncReadStream:
+            w.write_all(&[123; 8192]).await.unwrap();
+            w
+        });
+
+        tokio::time::timeout(std::time::Duration::from_millis(10), reader.ready())
+            .await
+            .expect("the reader should be ready instantly")
+            .expect("ready is ok");
+
+        // Now we expect the reader task has sent 4k from the stream to the reader.
+        // Try to read out one bigger than the buffer available:
+        let (bs, state) = reader.read(4097).unwrap();
+        assert_eq!(bs.len(), 4096);
+        assert_eq!(state, StreamState::Open);
+
+        // Allow the crank to turn more:
+        tokio::time::timeout(std::time::Duration::from_millis(10), reader.ready())
+            .await
+            .expect("the reader should be ready instantly")
+            .expect("ready is ok");
+
+        // Again we expect the reader task has sent 4k from the stream to the reader.
+        // Try to read out one bigger than the buffer available:
+        let (bs, state) = reader.read(4097).unwrap();
+        assert_eq!(bs.len(), 4096);
+        assert_eq!(state, StreamState::Open);
+
+        // The writer task is now finished - join with it:
+        let w = tokio::time::timeout(std::time::Duration::from_millis(10), writer_task)
+            .await
+            .expect("the join should be ready instantly");
+        // And close the pipe:
+        drop(w);
+
+        // Allow the crank to turn more:
+        tokio::time::timeout(std::time::Duration::from_millis(10), reader.ready())
+            .await
+            .expect("the reader should be ready instantly")
+            .expect("ready is ok");
+
+        // Now we expect the reader to be empty, and the stream closed:
+        let (bs, state) = reader.read(4097).unwrap();
+        assert_eq!(bs.len(), 0);
+        assert_eq!(state, StreamState::Closed);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn sink_write_stream() {
+        let mut writer = AsyncWriteStream::new(tokio::io::sink());
+        let chunk = Bytes::from_static(&[0; 1024]);
+
+        // I can write whatever:
+        let (len, state) = writer.write(chunk.clone()).unwrap();
+        assert_eq!(len, chunk.len());
+        assert_eq!(state, StreamState::Open);
+
+        println!("second write:");
+        // But I expect this to block additional writes:
+        let (len, state) = writer.write(chunk.clone()).unwrap();
+        assert_eq!(len, 0);
+        assert_eq!(state, StreamState::Open);
+
+        tokio::time::timeout(std::time::Duration::from_millis(10), writer.ready())
+            .await
+            .expect("the writer should be ready instantly")
+            .expect("ready is ok");
+
+        // Now additional writes will work:
+        let (len, state) = writer.write(chunk.clone()).unwrap();
+        assert_eq!(len, chunk.len());
+        assert_eq!(state, StreamState::Open);
     }
 }
