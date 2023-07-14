@@ -163,6 +163,25 @@ interface streams {
         buf: list<u8>
     ) -> result<tuple<u64, stream-status>, stream-error>
 
+    /* FIXME: i think we need some nonsense like this, because a nonblocking
+     * write is necessarily buffering the caller's input somewhere, and
+     * the caller may need to flush (block until buffer has been emptied) any
+     * buffers we create on its behalf.
+     * however this is a whole can of worms.
+    write-with-flush: func(
+        this: output-stream,
+        /// Data to write
+        buf: list<u8>
+    ) -> result<flush-resource, stream-status>
+
+    // returns Some once ready:
+    flush-check: func(this: flush-resource) -> option<result<tuple<u64, stream-status>, stream-error>>
+    // get a pollable to check readiness:
+    subscribe-to-flush: func(this: flush-resource) -> pollable
+    // drop the resource:
+    flush-delete: func(this: flush-resource)
+    */
+
     /// Write bytes to a stream, with blocking.
     ///
     /// This is similar to `write`, except that it blocks until at least one
