@@ -586,11 +586,22 @@ mod test {
         assert_eq!(bs.len(), 0);
     }
 
-    async fn finite_async_reader(contents: &[u8]) -> impl AsyncRead + Send + Sync + 'static {
-        let (mut a, b) = tokio::io::duplex(contents.len());
-        a.write_all(contents).await.unwrap();
+    fn simplex(
+        size: usize,
+    ) -> (
+        impl AsyncRead + Send + Sync + 'static,
+        impl AsyncWrite + Send + Sync + 'static,
+    ) {
+        let (a, b) = tokio::io::duplex(size);
+        let (_read_half, write_half) = tokio::io::split(a);
         let (read_half, _write_half) = tokio::io::split(b);
-        read_half
+        (read_half, write_half)
+    }
+
+    async fn finite_async_reader(contents: &[u8]) -> impl AsyncRead + Send + Sync + 'static {
+        let (r, mut w) = simplex(contents.len());
+        w.write_all(contents).await.unwrap();
+        r
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -631,5 +642,91 @@ mod test {
                 assert_eq!(state, StreamState::Closed);
             }
         }
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn multiple_chunks_read_stream() {
+        let (r, mut w) = simplex(1024);
+        let mut reader = AsyncReadStream::new(r);
+
+        w.write_all(&[123]).await.unwrap();
+
+        let (bs, state) = reader.read(1).unwrap();
+        assert_eq!(state, StreamState::Open);
+        if bs.is_empty() {
+            // Reader task hasn't run yet. Call `ready` to await and fill the buffer.
+            tokio::time::timeout(std::time::Duration::from_millis(10), reader.ready())
+                .await
+                .expect("the reader should be ready instantly")
+                .expect("ready is ok");
+            // Now a read should succeed
+            let (bs, state) = reader.read(1).unwrap();
+            assert_eq!(*bs, [123u8]);
+            assert_eq!(state, StreamState::Open);
+        } else {
+            assert_eq!(*bs, [123u8]);
+        }
+
+        // The stream should be empty and open now:
+        let (bs, state) = reader.read(1).unwrap();
+        assert!(bs.is_empty());
+        assert_eq!(state, StreamState::Open);
+
+        // We can wait on readiness and it will time out:
+        tokio::time::timeout(std::time::Duration::from_millis(10), reader.ready())
+            .await
+            .err()
+            .expect("the reader should time out");
+
+        // Still open and empty:
+        let (bs, state) = reader.read(1).unwrap();
+        assert!(bs.is_empty());
+        assert_eq!(state, StreamState::Open);
+
+        // Put something else in the stream:
+        w.write_all(&[45]).await.unwrap();
+
+        // Wait readiness (yes we could possibly win the race and read it out faster, leaving that
+        // out of the test for simplicity)
+        tokio::time::timeout(std::time::Duration::from_millis(10), reader.ready())
+            .await
+            .expect("the reader should be ready instantly")
+            .expect("the ready is ok");
+
+        // read the something else back out:
+        let (bs, state) = reader.read(1).unwrap();
+        assert_eq!(*bs, [45u8]);
+        assert_eq!(state, StreamState::Open);
+
+        // nothing else in there:
+        let (bs, state) = reader.read(1).unwrap();
+        assert!(bs.is_empty());
+        assert_eq!(state, StreamState::Open);
+
+        // We can wait on readiness and it will time out:
+        tokio::time::timeout(std::time::Duration::from_millis(10), reader.ready())
+            .await
+            .err()
+            .expect("the reader should time out");
+
+        // nothing else in there:
+        let (bs, state) = reader.read(1).unwrap();
+        assert!(bs.is_empty());
+        assert_eq!(state, StreamState::Open);
+
+        // Now close the pipe:
+        drop(w);
+
+        // Wait readiness (yes we could possibly win the race and read it out faster, leaving that
+        // out of the test for simplicity)
+        tokio::time::timeout(std::time::Duration::from_millis(10), reader.ready())
+            .await
+            .expect("the reader should be ready instantly")
+            .expect("the ready is ok");
+
+        // empty and now closed:
+        let (bs, state) = reader.read(1).unwrap();
+        assert!(bs.is_empty());
+        assert_eq!(state, StreamState::Closed);
     }
 }
