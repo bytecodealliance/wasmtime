@@ -1115,4 +1115,86 @@ fn pass_host_borrow_to_guest() -> Result<()> {
     Ok(())
 }
 
-// TODO: resource.drop on owned resource actively borrowed
+#[test]
+fn drop_on_owned_resource() -> Result<()> {
+    let engine = super::engine();
+    let c = Component::new(
+        &engine,
+        r#"
+            (component
+                (import "t" (type $t (sub resource)))
+                (import "[constructor]t" (func $ctor (result (own $t))))
+                (import "[method]t.foo" (func $foo (param "self" (borrow $t)) (result (list u8))))
+
+                (core func $ctor (canon lower (func $ctor)))
+                (core func $drop (canon resource.drop $t))
+
+                (core module $m1
+                    (import "" "drop" (func $drop (param i32)))
+                    (memory (export "memory") 1)
+                    (global $to-drop (export "to-drop") (mut i32) (i32.const 0))
+                    (func (export "realloc") (param i32 i32 i32 i32) (result i32)
+                        (call $drop (global.get $to-drop))
+                        unreachable)
+                )
+                (core instance $i1 (instantiate $m1
+                    (with "" (instance
+                        (export "drop" (func $drop))
+                    ))
+                ))
+
+                (core func $foo (canon lower (func $foo)
+                    (memory $i1 "memory")
+                    (realloc (func $i1 "realloc"))))
+
+                (core module $m2
+                    (import "" "ctor" (func $ctor (result i32)))
+                    (import "" "foo" (func $foo (param i32 i32)))
+                    (import "i1" "to-drop" (global $to-drop (mut i32)))
+
+                    (func (export "f")
+                        (local $r i32)
+                        (local.set $r (call $ctor))
+                        (global.set $to-drop (local.get $r))
+                        (call $foo
+                            (local.get $r)
+                            (i32.const 200))
+                    )
+                )
+                (core instance $i2 (instantiate $m2
+                    (with "" (instance
+                        (export "ctor" (func $ctor))
+                        (export "foo" (func $foo))
+                    ))
+                    (with "i1" (instance $i1))
+                ))
+                (func (export "f") (canon lift (core func $i2 "f")))
+            )
+        "#,
+    )?;
+
+    struct MyType;
+
+    let mut store = Store::new(&engine, ());
+    let mut linker = Linker::new(&engine);
+    linker.root().resource::<MyType>("t", |_, _| {})?;
+    linker.root().func_wrap("[constructor]t", |mut cx, ()| {
+        Ok((Resource::<MyType>::new_own(&mut cx, 300),))
+    })?;
+    linker
+        .root()
+        .func_wrap("[method]t.foo", |_cx, (r,): (Resource<MyType>,)| {
+            assert!(!r.owned());
+            Ok((vec![2u8],))
+        })?;
+    let i = linker.instantiate(&mut store, &c)?;
+    let f = i.get_typed_func::<(), ()>(&mut store, "f")?;
+
+    let err = f.call(&mut store, ()).unwrap_err();
+    assert!(
+        format!("{err:?}").contains("cannot remove owned resource while borrowed"),
+        "bad error: {err:?}"
+    );
+
+    Ok(())
+}
