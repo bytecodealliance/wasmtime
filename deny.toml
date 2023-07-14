@@ -53,9 +53,9 @@ skip-tree = [
     # dependencies relative to Wasmtime's main dependency tree.
     { name = "witx", depth = 20 },
 
-    # This is somewhat unmaintained at this point and seems to pull in an old
-    # version of `env_logger`, so ignore it.
-    { name = "pretty_env_logger", depth = 20 },
+    # The openvino-sys crate uses an older version of `pretty_env_logger` so
+    # ignore its dependency tree for now until it updates.
+    { name = "openvino-sys", depth = 20 },
 
     # They want to publish version 2.0 to upgrade `hashbrown` so in the meantime
     # it is duplicated for us.

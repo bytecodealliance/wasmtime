@@ -837,7 +837,7 @@ dependencies = [
  "fxhash",
  "indicatif",
  "log",
- "pretty_env_logger",
+ "pretty_env_logger 0.5.0",
  "rayon",
  "regalloc2",
  "serde",
@@ -2209,7 +2209,7 @@ dependencies = [
  "libloading",
  "once_cell",
  "openvino-finder",
- "pretty_env_logger",
+ "pretty_env_logger 0.4.0",
 ]
 
 [[package]]
@@ -2416,6 +2416,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "926d36b9553851b8b0005f1275891b392ee4d2d833852c417ed025477350fb9d"
 dependencies = [
  "env_logger 0.7.1",
+ "log",
+]
+
+[[package]]
+name = "pretty_env_logger"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "865724d4dbe39d9f3dd3b52b88d859d66bcb2d6a0acfd5ea68a65fb66d4bdc1c"
+dependencies = [
+ "env_logger 0.10.0",
  "log",
 ]
 
@@ -3976,7 +3986,7 @@ dependencies = [
  "filetime",
  "log",
  "once_cell",
- "pretty_env_logger",
+ "pretty_env_logger 0.5.0",
  "rustix",
  "serde",
  "sha2 0.10.2",
@@ -4043,7 +4053,7 @@ dependencies = [
  "anyhow",
  "clap",
  "file-per-thread-logger",
- "pretty_env_logger",
+ "pretty_env_logger 0.5.0",
  "rayon",
  "wasmtime",
 ]

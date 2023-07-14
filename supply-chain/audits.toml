@@ -1602,6 +1602,12 @@ criteria = "safe-to-deploy"
 version = "0.3.25"
 notes = "This crate shells out to the pkg-config executable, but it appears to sanitize inputs reasonably."
 
+[[audits.pretty_env_logger]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.4.0 -> 0.5.0"
+notes = "This is a minor update which bumps the `env_logger` dependency and has other formatting, no major changes."
+
 [[audits.proc-macro2]]
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
