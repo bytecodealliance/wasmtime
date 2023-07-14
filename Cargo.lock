@@ -3603,7 +3603,7 @@ name = "wasi-common"
 version = "12.0.0"
 dependencies = [
  "anyhow",
- "bitflags 1.3.2",
+ "bitflags 2.2.1",
  "cap-rand",
  "cap-std",
  "io-extras",
@@ -4346,7 +4346,7 @@ version = "12.0.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "bitflags 1.3.2",
+ "bitflags 2.2.1",
  "cap-fs-ext",
  "cap-rand",
  "cap-std",
@@ -4517,7 +4517,7 @@ version = "12.0.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "bitflags 1.3.2",
+ "bitflags 2.2.1",
  "proptest",
  "thiserror",
  "tokio",

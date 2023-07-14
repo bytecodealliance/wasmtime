@@ -3,6 +3,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 bitflags::bitflags! {
+    #[derive(Copy, Clone, Debug, PartialEq, Eq)]
     pub struct FilePerms: usize {
         const READ = 0b1;
         const WRITE = 0b10;
@@ -63,6 +64,7 @@ impl TableFsExt for Table {
 }
 
 bitflags::bitflags! {
+    #[derive(Copy, Clone, Debug, PartialEq, Eq)]
     pub struct DirPerms: usize {
         const READ = 0b1;
         const MUTATE = 0b10;
