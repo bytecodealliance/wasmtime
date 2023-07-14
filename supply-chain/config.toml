@@ -903,26 +903,6 @@ criteria = "safe-to-deploy"
 version = "0.11.0+wasi-snapshot-preview1"
 criteria = "safe-to-deploy"
 
-[[exemptions.wasm-bindgen]]
-version = "0.2.80"
-criteria = "safe-to-deploy"
-notes = "dependency of ring for wasm32 browser platform, which our project does not target"
-
-[[exemptions.wasm-bindgen-backend]]
-version = "0.2.80"
-criteria = "safe-to-deploy"
-notes = "dependency of ring for wasm32 browser platform, which our project does not target"
-
-[[exemptions.wasm-bindgen-macro]]
-version = "0.2.80"
-criteria = "safe-to-deploy"
-notes = "dependency of ring for wasm32 browser platform, which our project does not target"
-
-[[exemptions.wasm-bindgen-macro-support]]
-version = "0.2.80"
-criteria = "safe-to-deploy"
-notes = "dependency of ring for wasm32 browser platform, which our project does not target"
-
 [[exemptions.web-sys]]
 version = "0.3.57"
 criteria = "safe-to-deploy"
