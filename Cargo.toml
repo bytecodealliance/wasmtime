@@ -187,14 +187,16 @@ regalloc2 = "0.9.2"
 
 # cap-std family:
 target-lexicon = { version = "0.12.3", default-features = false, features = ["std"] }
-cap-std = "1.0.12"
-cap-rand = { version = "1.0.12", features = ["small_rng"] }
-cap-fs-ext = "1.0.12"
-cap-time-ext = "1.0.0"
-fs-set-times = "0.19.0"
-system-interface = { version = "0.25.1", features = ["cap_std_impls"] }
-io-lifetimes = { version = "1.0.0", default-features = false }
-rustix = "0.37.13"
+cap-std = "2.0.0"
+cap-rand = { version = "2.0.0", features = ["small_rng"] }
+cap-fs-ext = "2.0.0"
+cap-time-ext = "2.0.0"
+cap-tempfile = "2.0.0"
+fs-set-times = "0.20.0"
+system-interface = { version = "0.26.0", features = ["cap_std_impls"] }
+io-lifetimes = { version = "2.0.2", default-features = false }
+io-extras = "0.18.0"
+rustix = "0.38.4"
 
 # wit-bindgen:
 wit-bindgen = { version = "0.7.0", default-features = false }

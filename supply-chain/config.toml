@@ -401,10 +401,6 @@ criteria = "safe-to-deploy"
 version = "0.10.1"
 criteria = "safe-to-deploy"
 
-[[exemptions.filecheck]]
-version = "0.5.0"
-criteria = "safe-to-deploy"
-
 [[exemptions.filetime]]
 version = "0.2.16"
 criteria = "safe-to-run"
@@ -821,10 +817,6 @@ criteria = "safe-to-deploy"
 [[exemptions.symbolic_expressions]]
 version = "5.0.3"
 criteria = "safe-to-run"
-
-[[exemptions.target-lexicon]]
-version = "0.12.3"
-criteria = "safe-to-deploy"
 
 [[exemptions.tempfile]]
 version = "3.3.0"

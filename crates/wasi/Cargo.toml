@@ -34,10 +34,10 @@ system-interface = { workspace = true, optional = true}
 rustix = { workspace = true, features = ["net"], optional = true}
 
 [target.'cfg(unix)'.dependencies]
-rustix = { workspace = true, features = ["fs"] }
+rustix = { workspace = true, features = ["fs", "event"] }
 
 [target.'cfg(windows)'.dependencies]
-io-extras = "0.17.1"
+io-extras = { workspace = true }
 windows-sys = { workspace = true }
 
 [features]
