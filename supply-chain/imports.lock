@@ -397,6 +397,41 @@ audited_as = "0.8.1"
 version = "0.10.0"
 audited_as = "0.8.1"
 
+[[publisher.anstream]]
+version = "0.3.2"
+when = "2023-05-01"
+user-id = 6743
+user-login = "epage"
+user-name = "Ed Page"
+
+[[publisher.anstyle]]
+version = "1.0.1"
+when = "2023-06-20"
+user-id = 6743
+user-login = "epage"
+user-name = "Ed Page"
+
+[[publisher.anstyle-parse]]
+version = "0.2.1"
+when = "2023-06-20"
+user-id = 6743
+user-login = "epage"
+user-name = "Ed Page"
+
+[[publisher.anstyle-query]]
+version = "1.0.0"
+when = "2023-04-13"
+user-id = 6743
+user-login = "epage"
+user-name = "Ed Page"
+
+[[publisher.anstyle-wincon]]
+version = "1.0.1"
+when = "2023-04-24"
+user-id = 6743
+user-login = "epage"
+user-name = "Ed Page"
+
 [[publisher.arbitrary]]
 version = "1.3.0"
 when = "2023-03-13"
@@ -425,6 +460,20 @@ user-id = 6743
 user-login = "epage"
 user-name = "Ed Page"
 
+[[publisher.clap]]
+version = "4.3.12"
+when = "2023-07-14"
+user-id = 6743
+user-login = "epage"
+user-name = "Ed Page"
+
+[[publisher.clap_builder]]
+version = "4.3.12"
+when = "2023-07-14"
+user-id = 6743
+user-login = "epage"
+user-name = "Ed Page"
+
 [[publisher.clap_derive]]
 version = "3.2.7"
 when = "2022-06-28"
@@ -432,9 +481,23 @@ user-id = 6743
 user-login = "epage"
 user-name = "Ed Page"
 
+[[publisher.clap_derive]]
+version = "4.3.12"
+when = "2023-07-14"
+user-id = 6743
+user-login = "epage"
+user-name = "Ed Page"
+
 [[publisher.clap_lex]]
 version = "0.2.4"
 when = "2022-06-28"
+user-id = 6743
+user-login = "epage"
+user-name = "Ed Page"
+
+[[publisher.clap_lex]]
+version = "0.5.0"
+when = "2023-05-19"
 user-id = 6743
 user-login = "epage"
 user-name = "Ed Page"
@@ -1277,6 +1340,12 @@ who = "Johan Andersson <opensource@embark-studios.com>"
 criteria = "safe-to-deploy"
 version = "1.0.58"
 
+[[audits.embark-studios.audits.colorchoice]]
+who = "Johan Andersson <opensource@embark-studios.com>"
+criteria = "safe-to-deploy"
+version = "1.0.0"
+notes = "No unsafe usage or ambient capabilities"
+
 [[audits.embark-studios.audits.cty]]
 who = "Johan Andersson <opensource@embark-studios.com>"
 criteria = "safe-to-deploy"
@@ -1298,6 +1367,12 @@ Builds C/asm dependency which this review has not audited in detail, but is well
 Exposes FFI types & functions generated through bindgen. No other logic.
 No ambient capabilities
 """
+
+[[audits.embark-studios.audits.utf8parse]]
+who = "Johan Andersson <opensource@embark-studios.com>"
+criteria = "safe-to-deploy"
+version = "0.2.1"
+notes = "Single unsafe usage that looks sound, no ambient capabilities"
 
 [[audits.embark-studios.audits.valuable]]
 who = "Johan Andersson <opensource@embark-studios.com>"
@@ -1366,6 +1441,11 @@ aggregated-from = "https://chromium.googlesource.com/chromiumos/third_party/rust
 who = "David Cook <dcook@divviup.org>"
 criteria = "safe-to-deploy"
 version = "0.9.0"
+
+[[audits.isrg.audits.criterion]]
+who = "Brandon Pitman <bran@bran.land>"
+criteria = "safe-to-run"
+delta = "0.4.0 -> 0.5.1"
 
 [[audits.isrg.audits.libc]]
 who = "Brandon Pitman <bran@bran.land>"

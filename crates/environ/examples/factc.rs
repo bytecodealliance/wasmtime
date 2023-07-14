@@ -55,10 +55,10 @@ struct Factc {
     #[clap(short, long)]
     text: bool,
 
-    #[clap(long, parse(try_from_str = parse_string_encoding), default_value = "utf8")]
+    #[clap(long, value_parser = parse_string_encoding, default_value = "utf8")]
     lift_str: StringEncoding,
 
-    #[clap(long, parse(try_from_str = parse_string_encoding), default_value = "utf8")]
+    #[clap(long, value_parser = parse_string_encoding, default_value = "utf8")]
     lower_str: StringEncoding,
 
     /// TODO

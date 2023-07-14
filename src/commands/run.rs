@@ -1,9 +1,11 @@
 //! The module that implements the `wasmtime run` command.
 
 use anyhow::{anyhow, bail, Context as _, Result};
+use clap::builder::{OsStringValueParser, TypedValueParser};
 use clap::Parser;
 use once_cell::sync::Lazy;
 use std::ffi::OsStr;
+use std::ffi::OsString;
 use std::fs::File;
 use std::io::Write;
 use std::path::{Component, Path, PathBuf};
@@ -37,7 +39,7 @@ use wasmtime_wasi_threads::WasiThreadsCtx;
 #[cfg(feature = "wasi-http")]
 use wasmtime_wasi_http::WasiHttp;
 
-fn parse_module(s: &OsStr) -> anyhow::Result<PathBuf> {
+fn parse_module(s: OsString) -> anyhow::Result<PathBuf> {
     // Do not accept wasmtime subcommand names as the module name
     match s.to_str() {
         Some("help") | Some("config") | Some("run") | Some("wast") | Some("compile") => {
@@ -155,7 +157,7 @@ pub struct RunCommand {
     dirs: Vec<String>,
 
     /// Pass an environment variable to the program
-    #[clap(long = "env", number_of_values = 1, value_name = "NAME=VAL", parse(try_from_str = parse_env_var))]
+    #[clap(long = "env", number_of_values = 1, value_name = "NAME=VAL", value_parser = parse_env_var)]
     vars: Vec<(String, String)>,
 
     /// The name of the function to run
@@ -163,14 +165,14 @@ pub struct RunCommand {
     invoke: Option<String>,
 
     /// Grant access to a guest directory mapped as a host directory
-    #[clap(long = "mapdir", number_of_values = 1, value_name = "GUEST_DIR::HOST_DIR", parse(try_from_str = parse_map_dirs))]
+    #[clap(long = "mapdir", number_of_values = 1, value_name = "GUEST_DIR::HOST_DIR", value_parser = parse_map_dirs)]
     map_dirs: Vec<(String, String)>,
 
     /// The path of the WebAssembly module to run
     #[clap(
         required = true,
         value_name = "MODULE",
-        parse(try_from_os_str = parse_module),
+        value_parser = OsStringValueParser::new().try_map(parse_module),
     )]
     module: PathBuf,
 
@@ -179,7 +181,7 @@ pub struct RunCommand {
         long = "preload",
         number_of_values = 1,
         value_name = "NAME=MODULE_PATH",
-        parse(try_from_str = parse_preloads)
+        value_parser = parse_preloads,
     )]
     preloads: Vec<(String, PathBuf)>,
 
@@ -187,7 +189,7 @@ pub struct RunCommand {
     #[clap(
         long = "wasm-timeout",
         value_name = "TIME",
-        parse(try_from_str = parse_dur),
+        value_parser = parse_dur,
     )]
     wasm_timeout: Option<Duration>,
 
@@ -209,7 +211,7 @@ pub struct RunCommand {
     #[clap(
         long,
         value_name = "STRATEGY",
-        parse(try_from_str = parse_profile),
+        value_parser = parse_profile,
     )]
     profile: Option<Profile>,
 
@@ -255,6 +257,7 @@ pub struct RunCommand {
     trap_on_grow_failure: bool,
 }
 
+#[derive(Clone)]
 enum Profile {
     Native(wasmtime::ProfilingStrategy),
     Guest { path: String, interval: Duration },

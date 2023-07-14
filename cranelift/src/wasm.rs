@@ -111,7 +111,7 @@ pub struct Options {
     color: ColorOpt,
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Clone)]
 enum ColorOpt {
     Auto,
     Never,

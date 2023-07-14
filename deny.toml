@@ -44,10 +44,9 @@ skip-tree = [
     # the multiple-versions errors it will introduce.
     { name = "wit-bindgen", depth = 20 },
 
-    # Criterion 0.3 is pretty old at this point and has had an upcoming 0.4 for
-    # a long time. This is a dev-dependency so we don't really mind its
-    # dependency tree, so skip it entirely.
-    { name = "criterion", depth = 20 },
+    # proptest depends on bitflags 1.x.x while other crates depend on 2.x.x so
+    # ignore its dependency tree until it updates.
+    { name = "proptest", depth = 20 },
 
     # This is maintained externally and we allow it to have duplicate
     # dependencies relative to Wasmtime's main dependency tree.

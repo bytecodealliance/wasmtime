@@ -47,15 +47,15 @@ pub struct CompileCommand {
     target: Option<String>,
 
     /// The path of the output compiled module; defaults to <MODULE>.cwasm
-    #[clap(short = 'o', long, value_name = "OUTPUT", parse(from_os_str))]
+    #[clap(short = 'o', long, value_name = "OUTPUT")]
     output: Option<PathBuf>,
 
     /// The directory path to write clif files into, one clif file per wasm function.
-    #[clap(long = "emit-clif", value_name = "PATH", parse(from_os_str))]
+    #[clap(long = "emit-clif", value_name = "PATH")]
     emit_clif: Option<PathBuf>,
 
     /// The path of the WebAssembly to compile
-    #[clap(index = 1, value_name = "MODULE", parse(from_os_str))]
+    #[clap(index = 1, value_name = "MODULE")]
     module: PathBuf,
 }
 
