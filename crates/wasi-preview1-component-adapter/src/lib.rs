@@ -1376,7 +1376,7 @@ pub unsafe extern "C" fn path_open(
     fdflags: Fdflags,
     opened_fd: *mut Fd,
 ) -> Errno {
-    drop(fs_rights_inheriting);
+    let _ = fs_rights_inheriting;
 
     let path = slice::from_raw_parts(path_ptr, path_len);
     let at_flags = at_flags_from_lookupflags(dirflags);
