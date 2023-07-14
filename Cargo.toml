@@ -182,7 +182,7 @@ byte-array-literals = { path = "crates/wasi-preview1-component-adapter/byte-arra
 
 # Bytecode Alliance maintained dependencies:
 # ---------------------------
-regalloc2 = "0.9.1"
+regalloc2 = "0.9.2"
 
 # cap-std family:
 target-lexicon = { version = "0.12.3", default-features = false, features = ["std"] }
