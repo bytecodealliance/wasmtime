@@ -107,13 +107,13 @@ pub fn link_component_spectest<T>(linker: &mut component::Linker<T>) -> Result<(
         panic!("shouldn't be destroyed");
     })?;
 
-    i.func_wrap("[constructor]resource1", |mut cx, (rep,): (u32,)| {
-        Ok((Resource::<Resource1>::new_own(&mut cx, rep),))
+    i.func_wrap("[constructor]resource1", |_cx, (rep,): (u32,)| {
+        Ok((Resource::<Resource1>::new_own(rep),))
     })?;
     i.func_wrap(
         "[static]resource1.assert",
-        |cx, (resource, rep): (Resource<Resource1>, u32)| {
-            assert_eq!(resource.rep(&cx)?, rep);
+        |_cx, (resource, rep): (Resource<Resource1>, u32)| {
+            assert_eq!(resource.rep(), rep);
             Ok(())
         },
     )?;
@@ -127,9 +127,9 @@ pub fn link_component_spectest<T>(linker: &mut component::Linker<T>) -> Result<(
     })?;
     i.func_wrap(
         "[method]resource1.simple",
-        |cx, (resource, rep): (Resource<Resource1>, u32)| {
+        |_cx, (resource, rep): (Resource<Resource1>, u32)| {
             assert!(!resource.owned());
-            assert_eq!(resource.rep(&cx)?, rep);
+            assert_eq!(resource.rep(), rep);
             Ok(())
         },
     )?;

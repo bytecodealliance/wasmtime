@@ -2,24 +2,50 @@ use crate::component::func::{bad_type_info, desc, LiftContext, LowerContext};
 use crate::component::matching::InstanceType;
 use crate::component::{ComponentType, Lift, Lower};
 use crate::store::{StoreId, StoreOpaque};
-use crate::{AsContext, AsContextMut, StoreContextMut, Trap};
+use crate::{AsContextMut, StoreContextMut, Trap};
 use anyhow::{bail, Result};
 use std::any::TypeId;
 use std::fmt;
 use std::marker;
 use std::mem::MaybeUninit;
+use std::sync::atomic::{AtomicU32, Ordering::Relaxed};
 use wasmtime_environ::component::{CanonicalAbiInfo, DefinedResourceIndex, InterfaceType};
 use wasmtime_runtime::component::{ComponentInstance, InstanceFlags, ResourceTables};
 use wasmtime_runtime::{SendSyncPtr, VMFuncRef, ValRaw};
 
-/// TODO
+/// Representation of a resource type in the component model.
+///
+/// Resources are currently always represented as 32-bit integers but they have
+/// unique types across instantiations and the host. For example instantiating
+/// the same component twice means that defined resource types in the component
+/// will all be different. Values of this type can be compared to see if
+/// resources have the same type.
+///
+/// Resource types can also be defined on the host in addition to guests. On the
+/// host resource types are tied to a `T`, an arbitrary Rust type. Two host
+/// resource types are the same if they point to the same `T`.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct ResourceType {
     kind: ResourceTypeKind,
 }
 
 impl ResourceType {
-    /// TODO
+    /// Creates a new host resource type corresponding to `T`.
+    ///
+    /// Note that `T` is a mostly a phantom type parameter here. It does not
+    /// need to reflect the actual storage of the resource `T`. For example this
+    /// is valid:
+    ///
+    /// ```rust
+    /// use wasmtime::component::ResourceType;
+    ///
+    /// struct Foo;
+    ///
+    /// let ty = ResourceType::host::<Foo>();
+    /// ```
+    ///
+    /// A resource type of type `ResourceType::host::<T>()` will match the type
+    /// of the value produced by `Resource::<T>::new_{own,borrow}`.
     pub fn host<T: 'static>() -> ResourceType {
         ResourceType {
             kind: ResourceTypeKind::Host(TypeId::of::<T>()),
@@ -53,21 +79,157 @@ enum ResourceTypeKind {
     },
 }
 
-/// TODO
+/// A host-defined resource in the component model.
 ///
-/// document lack of dtor
+/// This type can be thought of as roughly a newtype wrapper around `u32` for
+/// use as a resource with the component model. The main guarantee that the
+/// component model provides is that the `u32` is no forgeable by guests and
+/// there are guaranteed semantics about when a `u32` may be in use by the guest
+/// and when it's guaranteed no longer needed. This means that it is safe for
+/// embedders to consider the internal `u32` representation "trusted" and use it
+/// for things like table indices with infallible accessors that panic on
+/// out-of-bounds. This should only panic for embedder bugs, not because of any
+/// possible behavior in the guest.
 ///
-/// document it's both borrow and own
+/// A `Resource<T>` value dynamically represents both an `(own $t)` in the
+/// component model as well as a `(borrow $t)`. It can be inspected via
+/// [`Resource::owned`] to test whether it is an owned handle. An owned handle
+/// which is not actively borrowed can be destroyed at any time as it's
+/// guaranteed that the guest does not have access to it. A borrowed handle, on
+/// the other hand, may be accessed by the guest so it's not necessarily
+/// guaranteed to be able to be destroyed.
+///
+/// Note that the "own" and "borrow" here refer to the component model, not
+/// Rust. The semantics of Rust ownership and borrowing are slightly different
+/// than the component model's (but spiritually the same) in that more dynamic
+/// tracking is employed as part of the component model. This means that it's
+/// possible to get runtime errors when using a `Resource<T>`. For example it is
+/// an error to call [`Resource::new_borrow`] and pass that to a component
+/// function expecting `(own $t)` and this is not statically disallowed.
+///
+/// # Destruction of a resource
+///
+/// Resources in the component model are optionally defined with a destructor,
+/// but this host resource type does not specify a destructor. It is left up to
+/// the embedder to be able to determine how best to a destroy a resource when
+/// it is owned.
+///
+/// Note, though, that while [`Resource`] itself does not specify destructors
+/// it's still possible to do so via the [`Linker::resource`] definition. When a
+/// resource type is defined for a guest component a destructor can be specified
+/// which can be used to hook into resource destruction triggered by the guest.
+///
+/// This means that there are two ways that resource destruction is handled:
+///
+/// * Host resources destroyed by the guest can hook into the
+///   [`Linker::resource`] destructor closure to handle resource destruction.
+///   This could, for example, remove table entries.
+///
+/// * Host resources owned by the host itself have no automatic means of
+///   destruction. The host can make its own determination that its own resource
+///   is not lent out to the guest and at that time choose to destroy or
+///   deallocate it.
+///
+/// # Dynamic behavior of a resource
+///
+/// A host-defined [`Resource`] does not necessarily represent a static value.
+/// Its internals may change throughout its usage to track the state associated
+/// with the resource. The internal 32-bit host-defined representation never
+/// changes, however.
+///
+/// For example if there's a component model function of the form:
+///
+/// ```wasm
+/// (func (param "a" (borrow $t)) (param "b" (own $t)))
+/// ```
+///
+/// Then that can be extracted in Rust with:
+///
+/// ```rust,ignore
+/// let func = instance.get_typed_func::<(&Resource<T>, &Resource<T>), ()>(&mut store, "name")?;
+/// ```
+///
+/// Here the exact same resource can be provided as both arguments but that is
+/// not valid to do so because the same resource cannot be actively borrowed and
+/// passed by-value as the second parameter at the same time. The internal state
+/// in `Resource<T>` will track this information and provide a dynamic runtime
+/// error in this situation.
+///
+/// Mostly it's important to be aware that there is dynamic state associated
+/// with a [`Resource<T>`] to provide errors in situations that cannot be
+/// statically ruled out.
+///
+/// # Borrows and host responsibilities
+///
+/// Borrows to resources in the component model are guaranteed to be transient
+/// such that if a borrow is passed as part of a function call then when the
+/// function returns it's guaranteed that the guest no longer has access to the
+/// resource. This guarantee, however, must be manually upheld by the host when
+/// it receives its own borrow.
+///
+/// As mentioned above the [`Resource<T>`] type can represent a borrowed value
+/// in addition to an owned value. This means a guest can provide the host with
+/// a borrow, such as an argument to an imported function:
+///
+/// ```rust,ignore
+/// linker.root().func_wrap("name", |_cx, (r,): (Resource<MyType>,)| {
+///     assert!(!r.owned());
+///     // .. here `r` is a borrowed value provided by the guest and the host
+///     // shouldn't continue to access it beyond the scope of this call
+/// })?;
+/// ```
+///
+/// In this situation the host should take care to not attempt to persist the
+/// resource beyond the scope of the call. It's the host's resource so it
+/// technically can do what it wants with it but nothing is statically
+/// preventing `r` to stay pinned to the lifetime of the closure invocation.
+/// It's considered a mistake that the host performed if `r` is persisted too
+/// long and accessed at the wrong time.
+///
+/// [`Linker::resource`]: crate::component::LinkerInstance::resource
 pub struct Resource<T> {
-    repr: ResourceRepr,
+    /// The host-defined 32-bit representation of this resource.
+    rep: u32,
+
+    /// Dear rust please consider `T` used even though it's not actually used.
     _marker: marker::PhantomData<fn() -> T>,
+
+    /// Internal dynamic state tracking for this resource. This can be one of
+    /// four different states:
+    ///
+    /// * `BORROW` / `u32::MAX` - this indicates that this is a borrowed
+    ///   resource. The `rep` doesn't live in the host table and this `Resource`
+    ///   instance is transiently available. It's the host's responsibility to
+    ///   discard this resource when the borrow duration has finished.
+    ///
+    /// * `NOT_IN_TABLE` / `u32::MAX - 1` - this indicates that this is an owned
+    ///   resource not present in any store's stable. This resource is not lent
+    ///   out. It can be passed as an `(own $t)` directly into a guest's table
+    ///   or it can be passed as a borrow to a guest which will insert it into
+    ///   a host store's table for dynamic borrow tracking.
+    ///
+    /// * `TAKEN` / `u32::MAX - 2` - while the `rep` is available the resource
+    ///   has been dynamically moved into a guest and cannot be moved in again.
+    ///   This is used for example to prevent the same resource from being
+    ///   passed twice to a guest.
+    ///
+    /// * All other values - any other value indicates that the value is an
+    ///   index into a store's table of host resources. It's guaranteed that the
+    ///   table entry represents a host resource and the resource may have
+    ///   borrow tracking associated with it.
+    ///
+    /// Note that this is an `AtomicU32` but it's not intended to actually be
+    /// used in conjunction with threads as generally a `Store<T>` lives on one
+    /// thread at a time. The `AtomicU32` here is used to ensure that this type
+    /// is `Send + Sync` when captured as a reference to make async programming
+    /// more ergonomic.
+    state: AtomicU32,
 }
 
-#[derive(Debug)]
-enum ResourceRepr {
-    Borrow(u32),
-    OwnInTable(u32),
-}
+// See comments on `state` above for info about these values.
+const BORROW: u32 = u32::MAX;
+const NOT_IN_TABLE: u32 = u32::MAX - 1;
+const TAKEN: u32 = u32::MAX - 2;
 
 fn host_resource_tables(store: &mut StoreOpaque) -> ResourceTables<'_> {
     let (calls, host_table) = store.component_calls_and_host_table();
@@ -82,68 +244,109 @@ impl<T> Resource<T>
 where
     T: 'static,
 {
-    /// TODO
-    pub fn new_own(mut store: impl AsContextMut, rep: u32) -> Resource<T> {
-        let store = store.as_context_mut().0;
-        let idx = host_resource_tables(store).resource_lower_own(None, rep);
+    /// Creates a new owned resource with the `rep` specified.
+    ///
+    /// The returned value is suitable for passing to a guest as either a
+    /// `(borrow $t)` or `(own $t)`.
+    pub fn new_own(rep: u32) -> Resource<T> {
         Resource {
-            repr: ResourceRepr::OwnInTable(idx),
+            state: AtomicU32::new(NOT_IN_TABLE),
+            rep,
             _marker: marker::PhantomData,
         }
     }
 
-    /// TODO
+    /// Creates a new borrowed resource which isn't actually rooted in any
+    /// ownership.
+    ///
+    /// This can be used to pass to a guest as a borrowed resource and the
+    /// embedder will know that the `rep` won't be in use by the guest
+    /// afterwards. Exactly how the lifetime of `rep` works is up to the
+    /// embedder.
     pub fn new_borrow(rep: u32) -> Resource<T> {
         Resource {
-            repr: ResourceRepr::Borrow(rep),
+            state: AtomicU32::new(BORROW),
+            rep,
             _marker: marker::PhantomData,
         }
     }
 
-    /// TODO
-    pub fn rep(&self, store: impl AsContext) -> Result<u32> {
-        match self.repr {
-            ResourceRepr::OwnInTable(idx) => store.as_context().0.host_table().rep(idx),
-            ResourceRepr::Borrow(rep) => Ok(rep),
-        }
+    /// Returns the underlying 32-bit representation used to originally create
+    /// this resource.
+    pub fn rep(&self) -> u32 {
+        self.rep
     }
 
-    /// TODO
+    /// Returns whether this is an owned resource or not.
+    ///
+    /// Owned resources can be safely destroyed by the embedder at any time, and
+    /// borrowed resources have an owner somewhere else on the stack so can only
+    /// be accessed, not destroyed.
     pub fn owned(&self) -> bool {
-        match self.repr {
-            ResourceRepr::OwnInTable(_) => true,
-            ResourceRepr::Borrow(_) => false,
+        match self.state.load(Relaxed) {
+            BORROW => false,
+            _ => true,
         }
     }
 
     fn lower_to_index<U>(&self, cx: &mut LowerContext<'_, U>, ty: InterfaceType) -> Result<u32> {
         match ty {
             InterfaceType::Own(t) => {
-                let rep = match self.repr {
+                let rep = match self.state.load(Relaxed) {
+                    // If this is a borrow resource then this is a dynamic
+                    // error on behalf of the embedder.
+                    BORROW => {
+                        bail!("cannot lower a `borrow` resource into an `own`")
+                    }
+
+                    // If this resource does not yet live in a table then we're
+                    // dynamically transferring ownership to wasm. Record that
+                    // it's no longer present and then pass through the
+                    // representation.
+                    NOT_IN_TABLE => {
+                        let prev = self.state.swap(TAKEN, Relaxed);
+                        assert_eq!(prev, NOT_IN_TABLE);
+                        self.rep
+                    }
+
+                    // This resource has already been moved into wasm so this is
+                    // a dynamic error on behalf of the embedder.
+                    TAKEN => bail!("host resource already consumed"),
+
                     // If this resource lives in a host table then try to take
                     // it out of the table, which may fail, and on success we
                     // can move the rep into the guest table.
-                    ResourceRepr::OwnInTable(idx) => cx.host_resource_lift_own(idx)?,
-
-                    // If this is a borrow resource then this is a dynamic
-                    // error on behalf of the embedder.
-                    ResourceRepr::Borrow(_rep) => {
-                        bail!("cannot lower a `borrow` resource into an `own`")
-                    }
+                    idx => cx.host_resource_lift_own(idx)?,
                 };
                 Ok(cx.guest_resource_lower_own(t, rep))
             }
             InterfaceType::Borrow(t) => {
-                let rep = match self.repr {
-                    // Borrowing an owned resource may fail because it could
-                    // have been previously moved out. If successful this
-                    // operation will record that the resource is borrowed for
-                    // the duration of this call.
-                    ResourceRepr::OwnInTable(idx) => cx.host_resource_lift_borrow(idx)?,
+                let rep = match self.state.load(Relaxed) {
+                    // If this is already a borrowed resource, nothing else to
+                    // do and the rep is passed through.
+                    BORROW => self.rep,
 
-                    // Reborrowing host resources always succeeds and the
-                    // representation can be plucked out easily here.
-                    ResourceRepr::Borrow(rep) => rep,
+                    // If this resource is already gone, that's a dynamic error
+                    // for the embedder.
+                    TAKEN => bail!("host resource already consumed"),
+
+                    // If this resource is not currently in a table then it
+                    // needs to move into a table to participate in state
+                    // related to borrow tracking. Execute the
+                    // `host_resource_lower_own` operation here and update our
+                    // state.
+                    //
+                    // Afterwards this is the same as the `idx` case below.
+                    NOT_IN_TABLE => {
+                        let idx = cx.host_resource_lower_own(self.rep);
+                        let prev = self.state.swap(idx, Relaxed);
+                        assert_eq!(prev, NOT_IN_TABLE);
+                        cx.host_resource_lift_borrow(idx)?
+                    }
+
+                    // If this resource lives in a table then it needs to come
+                    // out of the table with borrow-tracking employed.
+                    idx => cx.host_resource_lift_borrow(idx)?,
                 };
                 Ok(cx.guest_resource_lower_borrow(t, rep))
             }
@@ -152,15 +355,18 @@ where
     }
 
     fn lift_from_index(cx: &mut LiftContext<'_>, ty: InterfaceType, index: u32) -> Result<Self> {
-        let repr = match ty {
+        let (state, rep) = match ty {
             // Ownership is being transferred from a guest to the host, so move
-            // it from the guest table into a fresh slot in the host table.
+            // it from the guest table into a new `Resource`. Note that this
+            // isn't immediately inserted into the host table and that's left
+            // for the future if it's necessary to take a borrow from this owned
+            // resource.
             InterfaceType::Own(t) => {
                 debug_assert!(cx.resource_type(t) == ResourceType::host::<T>());
                 let (rep, dtor, flags) = cx.guest_resource_lift_own(t, index)?;
                 assert!(dtor.is_some());
                 assert!(flags.is_none());
-                ResourceRepr::OwnInTable(cx.host_resource_lower_own(rep))
+                (AtomicU32::new(NOT_IN_TABLE), rep)
             }
 
             // The borrow here is lifted from the guest, but note the lack of
@@ -173,12 +379,13 @@ where
             InterfaceType::Borrow(t) => {
                 debug_assert!(cx.resource_type(t) == ResourceType::host::<T>());
                 let rep = cx.guest_resource_lift_borrow(t, index)?;
-                ResourceRepr::Borrow(rep)
+                (AtomicU32::new(BORROW), rep)
             }
             _ => bad_type_info(),
         };
         Ok(Resource {
-            repr,
+            state,
+            rep,
             _marker: marker::PhantomData,
         })
     }
@@ -239,9 +446,7 @@ unsafe impl<T: 'static> Lift for Resource<T> {
 
 impl<T> fmt::Debug for Resource<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Resource")
-            .field("repr", &self.repr)
-            .finish()
+        f.debug_struct("Resource").field("rep", &self.rep).finish()
     }
 }
 

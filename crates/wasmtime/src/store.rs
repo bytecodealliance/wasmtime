@@ -1550,11 +1550,6 @@ at https://bytecodealliance.org/security.
     }
 
     #[cfg(feature = "component-model")]
-    pub(crate) fn host_table(&self) -> &wasmtime_runtime::component::ResourceTable {
-        &self.component_host_table
-    }
-
-    #[cfg(feature = "component-model")]
     pub(crate) fn component_calls_and_host_table(
         &mut self,
     ) -> (

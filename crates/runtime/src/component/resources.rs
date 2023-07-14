@@ -295,8 +295,7 @@ impl ResourceTable {
         u32::try_from(ret).unwrap()
     }
 
-    /// Gets the representation of the `idx` specified.
-    pub fn rep(&self, idx: u32) -> Result<u32> {
+    fn rep(&self, idx: u32) -> Result<u32> {
         match usize::try_from(idx).ok().and_then(|i| self.slots.get(i)) {
             None | Some(Slot::Free { .. }) => bail!("unknown handle index {idx}"),
             Some(Slot::Own { rep, .. } | Slot::Borrow { rep, .. }) => Ok(*rep),

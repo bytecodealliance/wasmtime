@@ -369,13 +369,13 @@ fn drop_host_twice() -> Result<()> {
     let i = linker.instantiate(&mut store, &c)?;
     let dtor = i.get_typed_func::<(&Resource<MyType>,), ()>(&mut store, "dtor")?;
 
-    let t = Resource::new_own(&mut store, 100);
+    let t = Resource::new_own(100);
     dtor.call(&mut store, (&t,))?;
     dtor.post_return(&mut store)?;
 
     assert_eq!(
         dtor.call(&mut store, (&t,)).unwrap_err().to_string(),
-        "unknown handle index 0"
+        "host resource already consumed"
     );
 
     Ok(())
@@ -441,7 +441,7 @@ fn manually_destroy() -> Result<()> {
     let t1_pass = i.get_typed_func::<(Resource<MyType>,), (ResourceAny,)>(&mut store, "t1-pass")?;
 
     // Host resources can be destroyed through `resource_drop`
-    let t1 = Resource::new_own(&mut store, 100);
+    let t1 = Resource::new_own(100);
     let (t1,) = t1_pass.call(&mut store, (t1,))?;
     t1_pass.post_return(&mut store)?;
     assert_eq!(store.data().drops, 0);
@@ -553,7 +553,7 @@ fn dynamic_val() -> Result<()> {
     let b = i.get_func(&mut store, "b").unwrap();
     let t2 = i.get_resource(&mut store, "t2").unwrap();
 
-    let t1 = Resource::new_own(&mut store, 100);
+    let t1 = Resource::new_own(100);
     let (t1,) = a_typed.call(&mut store, (t1,))?;
     a_typed.post_return(&mut store)?;
     assert_eq!(t1.ty(), ResourceType::host::<MyType>());
@@ -667,7 +667,7 @@ fn active_borrows_at_end_of_call() -> Result<()> {
 
     let f = i.get_typed_func::<(&Resource<MyType>,), ()>(&mut store, "f")?;
 
-    let resource = Resource::new_own(&mut store, 1);
+    let resource = Resource::new_own(1);
     f.call(&mut store, (&resource,))?;
     let err = f.post_return(&mut store).unwrap_err();
     assert_eq!(
@@ -720,16 +720,16 @@ fn thread_through_borrow() -> Result<()> {
     linker.root().resource::<MyType>("t", |_, _| {})?;
     linker
         .root()
-        .func_wrap("f", |cx, (r,): (Resource<MyType>,)| {
+        .func_wrap("f", |_cx, (r,): (Resource<MyType>,)| {
             assert!(!r.owned());
-            assert_eq!(r.rep(&cx)?, 100);
+            assert_eq!(r.rep(), 100);
             Ok(())
         })?;
     let i = linker.instantiate(&mut store, &c)?;
 
     let f = i.get_typed_func::<(&Resource<MyType>,), ()>(&mut store, "f2")?;
 
-    let resource = Resource::new_own(&mut store, 100);
+    let resource = Resource::new_own(100);
     f.call(&mut store, (&resource,))?;
     f.post_return(&mut store)?;
     Ok(())
@@ -766,7 +766,7 @@ fn cannot_use_borrow_for_own() -> Result<()> {
 
     let f = i.get_typed_func::<(&Resource<MyType>,), (Resource<MyType>,)>(&mut store, "f")?;
 
-    let resource = Resource::new_own(&mut store, 100);
+    let resource = Resource::new_own(100);
     let err = f.call(&mut store, (&resource,)).unwrap_err();
     assert_eq!(err.to_string(), "cannot lift own resource from a borrow");
     Ok(())
@@ -814,7 +814,7 @@ fn passthrough_wrong_type() -> Result<()> {
 
     let f = i.get_typed_func::<(&Resource<MyType>,), ()>(&mut store, "f2")?;
 
-    let resource = Resource::new_own(&mut store, 100);
+    let resource = Resource::new_own(100);
     let err = f.call(&mut store, (&resource,)).unwrap_err();
     assert!(
         format!("{err:?}").contains("cannot lower a `borrow` resource into an `own`"),
@@ -851,10 +851,10 @@ fn pass_moved_resource() -> Result<()> {
 
     let f = i.get_typed_func::<(&Resource<MyType>, &Resource<MyType>), ()>(&mut store, "f")?;
 
-    let resource = Resource::new_own(&mut store, 100);
+    let resource = Resource::new_own(100);
     let err = f.call(&mut store, (&resource, &resource)).unwrap_err();
     assert!(
-        format!("{err:?}").contains("unknown handle index 0"),
+        format!("{err:?}").contains("host resource already consumed"),
         "bad error: {err:?}"
     );
     Ok(())
@@ -988,7 +988,7 @@ fn host_borrow_as_resource_any() -> Result<()> {
 
         let f = i.get_typed_func::<(&Resource<MyType>,), ()>(&mut store, "f2")?;
 
-        let resource = Resource::new_own(&mut store, 100);
+        let resource = Resource::new_own(100);
         f.call(&mut store, (&resource,))?;
     }
 
@@ -1004,7 +1004,7 @@ fn host_borrow_as_resource_any() -> Result<()> {
 
         let f = i.get_typed_func::<(&Resource<MyType>,), ()>(&mut store, "f2")?;
 
-        let resource = Resource::new_own(&mut store, 100);
+        let resource = Resource::new_own(100);
         let err = f.call(&mut store, (&resource,)).unwrap_err();
         assert!(
             format!("{err:?}").contains("borrow handles still remain at the end of the call"),
@@ -1178,8 +1178,8 @@ fn drop_on_owned_resource() -> Result<()> {
     let mut store = Store::new(&engine, ());
     let mut linker = Linker::new(&engine);
     linker.root().resource::<MyType>("t", |_, _| {})?;
-    linker.root().func_wrap("[constructor]t", |mut cx, ()| {
-        Ok((Resource::<MyType>::new_own(&mut cx, 300),))
+    linker.root().func_wrap("[constructor]t", |_cx, ()| {
+        Ok((Resource::<MyType>::new_own(300),))
     })?;
     linker
         .root()

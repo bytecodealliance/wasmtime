@@ -313,6 +313,15 @@ impl<'a, T> LowerContext<'a, T> {
         self.resource_tables().resource_lift_borrow(None, idx)
     }
 
+    /// Lowers a resource into the host-owned table, returning the index it was
+    /// inserted at.
+    ///
+    /// Note that this is a special case for `Resource<T>`. Most of the time a
+    /// host value shouldn't be lowered with a lowering context.
+    pub fn host_resource_lower_own(&mut self, rep: u32) -> u32 {
+        self.resource_tables().resource_lower_own(None, rep)
+    }
+
     /// Returns the underlying resource type for the `ty` table specified.
     pub fn resource_type(&self, ty: TypeResourceTableIndex) -> ResourceType {
         self.instance_type().resource_type(ty)
