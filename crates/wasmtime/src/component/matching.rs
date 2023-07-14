@@ -52,47 +52,50 @@ impl TypeChecker<'_> {
 
             TypeDef::Resource(i) => {
                 let i = self.types[i].ty;
-                match actual {
-                    Some(Definition::Resource(actual, _dtor)) => {
-                        match self.imported_resources.get(i) {
-                            // If `i` hasn't been pushed onto `imported_resources`
-                            // yet then that means that it's the first time a new
-                            // resource was introduced, so record the type of this
-                            // resource. It should always be the case that the next
-                            // index assigned is equal to `i` since types should be
-                            // checked in the same order they were assigned into the
-                            // `Component` type.
-                            None => {
-                                // TODO comment unwrap/get_mut
-                                let resources = Arc::get_mut(&mut self.imported_resources).unwrap();
-                                let id = resources.push(*actual);
-                                assert_eq!(id, i);
-                            }
-
-                            // If `i` has been defined, however, then that means
-                            // that this is an `(eq ..)` bounded type imported
-                            // because it's referring to a previously defined type.
-                            // In this situation it's not required to provide a type
-                            // import but if it's supplied then it must be equal. In
-                            // this situation it's supplied, so test for equality.
-                            Some(expected) => {
-                                if expected != actual {
-                                    bail!("mismatched resource types");
-                                }
-                            }
-                        }
-                        Ok(())
-                    }
+                let actual = match actual {
+                    Some(Definition::Resource(actual, _dtor)) => actual,
 
                     // If a resource is imported yet nothing was supplied then
-                    // that's only successful if the resource has itself alredy been
-                    // defined. If it's already defined then that means that this is
-                    // an `(eq ...)` import which is not required to be satisfied
-                    // via `Linker` definitions in the Wasmtime API.
-                    None if self.imported_resources.get(i).is_some() => Ok(()),
+                    // that's only successful if the resource has itself
+                    // already been defined. If it's already defined then that
+                    // means that this is an `(eq ...)` import which is not
+                    // required to be satisfied via `Linker` definitions in the
+                    // Wasmtime API.
+                    None if self.imported_resources.get(i).is_some() => return Ok(()),
 
                     _ => bail!("expected resource found {}", desc(actual)),
+                };
+
+                match self.imported_resources.get(i) {
+                    // If `i` hasn't been pushed onto `imported_resources` yet
+                    // then that means that it's the first time a new resource
+                    // was introduced, so record the type of this resource.  It
+                    // should always be the case that the next index assigned
+                    // is equal to `i` since types should be checked in the
+                    // same order they were assigned into the `Component` type.
+                    //
+                    // Note the `get_mut` here which is expected to always
+                    // succeed since `imported_resources` has not yet been
+                    // cloned.
+                    None => {
+                        let resources = Arc::get_mut(&mut self.imported_resources).unwrap();
+                        let id = resources.push(*actual);
+                        assert_eq!(id, i);
+                    }
+
+                    // If `i` has been defined, however, then that means that
+                    // this is an `(eq ..)` bounded type imported because it's
+                    // referring to a previously defined type.  In this
+                    // situation it's not required to provide a type import but
+                    // if it's supplied then it must be equal. In this situation
+                    // it's supplied, so test for equality.
+                    Some(expected) => {
+                        if expected != actual {
+                            bail!("mismatched resource types");
+                        }
+                    }
                 }
+                Ok(())
             }
 
             // not possible for valid components to import

@@ -92,8 +92,6 @@ pub fn link_component_spectest<T>(linker: &mut component::Linker<T>) -> Result<(
 
     let state = Arc::new(ResourceState::default());
 
-    // TODO: this is specifying two different destructors for `Resource1`, that
-    // seems bad.
     i.resource::<Resource1>("resource1", {
         let state = state.clone();
         move |_, rep| {
@@ -102,8 +100,11 @@ pub fn link_component_spectest<T>(linker: &mut component::Linker<T>) -> Result<(
         }
     })?;
     i.resource::<Resource2>("resource2", |_, _| {})?;
+    // Currently the embedder API requires redefining the resource destructor
+    // here despite this being the same type as before, and fixing that is left
+    // for a future refactoring.
     i.resource::<Resource1>("resource1-again", |_, _| {
-        panic!("TODO: shouldn't have to specify dtor twice");
+        panic!("shouldn't be destroyed");
     })?;
 
     i.func_wrap("[constructor]resource1", |mut cx, (rep,): (u32,)| {

@@ -339,6 +339,9 @@ pub struct StoreOpaque {
     /// `store_data` above, where the function pointers are stored.
     rooted_host_funcs: ManuallyDrop<Vec<Arc<[Definition]>>>,
 
+    /// Runtime state for components used in the handling of resources, borrow,
+    /// and calls. These also interact with the `ResourceAny` type and its
+    /// internal representation.
     #[cfg(feature = "component-model")]
     component_host_table: wasmtime_runtime::component::ResourceTable,
     #[cfg(feature = "component-model")]

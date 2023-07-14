@@ -1391,7 +1391,12 @@ impl<T: Lift> WasmList<T> {
     pub fn get(&self, mut store: impl AsContextMut, index: usize) -> Option<Result<T>> {
         let store = store.as_context_mut().0;
         self.options.store_id().assert_belongs_to(store.id());
-        // TODO: comment unsafety, validity of `self.instance` carried over
+        // This should be safe because the unsafety lies in the `self.instance`
+        // pointer passed in has previously been validated by the lifting
+        // context this was originally created within and with the check above
+        // this is guaranteed to be the same store. This means that this should
+        // be carrying over the original assertion from the original creation of
+        // the lifting context that created this type.
         let mut cx =
             unsafe { LiftContext::new(store, &self.options, &self.types, self.instance.as_ptr()) };
         self.get_from_store(&mut cx, index)
@@ -1421,7 +1426,7 @@ impl<T: Lift> WasmList<T> {
     ) -> impl ExactSizeIterator<Item = Result<T>> + 'a {
         let store = store.into().0;
         self.options.store_id().assert_belongs_to(store.id());
-        // TODO: comment unsafety, validity of `self.instance` carried over
+        // See comments about unsafety in the `get` method.
         let mut cx =
             unsafe { LiftContext::new(store, &self.options, &self.types, self.instance.as_ptr()) };
         (0..self.len).map(move |i| self.get_from_store(&mut cx, i).unwrap())

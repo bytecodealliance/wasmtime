@@ -16,6 +16,24 @@ use wasmtime_environ::PrimaryMap;
 
 pub use crate::component::resources::ResourceType;
 
+/// An owned and `'static` handle for type information in a component.
+///
+/// The components here are:
+///
+/// * `index` - a `TypeFooIndex` defined in the `wasmtime_environ` crate. This
+///   then points into the next field of...
+///
+/// * `types` - this is an allocation originally created from compilation and is
+///   stored in a compiled `Component`. This contains all types necessary and
+///   information about recursive structures and all other type information
+///   within the component. The above `index` points into this structure.
+///
+/// * `resources` - this is used to "close the loop" and represent a concrete
+///   instance type rather than an abstract component type. Instantiating a
+///   component with different resources produces different instance types but
+///   the same underlying component type, so this field serves the purpose to
+///   distinguish instance types from one another. This is runtime state created
+///   during instantiation and threaded through here.
 #[derive(Clone)]
 struct Handle<T> {
     index: T,

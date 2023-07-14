@@ -386,10 +386,16 @@ impl<'a> LiftContext<'a> {
         types: &'a Arc<ComponentTypes>,
         instance: *mut ComponentInstance,
     ) -> LiftContext<'a> {
-        // TODO: document `unsafe`
+        // From `&mut StoreOpaque` provided the goal here is to project out
+        // three different disjoint fields owned by the store: memory,
+        // `CallContexts`, and `ResourceTable`. There's no native API for that
+        // so it's hacked around a bit. This unsafe pointer cast could be fixed
+        // with more methods in more places, but it doesn't seem worth doing it
+        // at this time.
         let (calls, host_table) =
-            unsafe { (&mut *(store as *mut StoreOpaque)).component_calls_and_host_table() };
+            (&mut *(store as *mut StoreOpaque)).component_calls_and_host_table();
         let memory = options.memory.map(|_| options.memory(store));
+
         LiftContext {
             memory,
             options,

@@ -377,7 +377,25 @@ impl<T> LinkerInstance<'_, T> {
         self.insert(name, Definition::Module(module.clone()))
     }
 
-    /// TODO
+    /// Defines a new host [`ResourceType`] in this linker.
+    ///
+    /// This function is used to specify resources defined in the host. The `U`
+    /// type parameter here is the type parameter to [`Resource<U>`]. This means
+    /// that component types using this resource type will be visible in
+    /// Wasmtime as [`Resource<U>`].
+    ///
+    /// The `name` argument is the name to define the resource within this
+    /// linker.
+    ///
+    /// The `dtor` provided is a destructor that will get invoked when an owned
+    /// version of this resource is destroyed from the guest. Note that this
+    /// destructor is not called when a host-owned resource is destroyed as it's
+    /// assumed the host knows how to handle destroying its own resources.
+    ///
+    /// The `dtor` closure is provided the store state as the first argument
+    /// along with the representation of the resource that was just destroyed.
+    ///
+    /// [`Resource<T>`]: crate::component::Resource
     pub fn resource<U: 'static>(
         &mut self,
         name: &str,

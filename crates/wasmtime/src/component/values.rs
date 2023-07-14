@@ -595,7 +595,41 @@ impl fmt::Debug for Flags {
 /// Represents possible runtime values which a component function can either
 /// consume or produce
 ///
-/// TODO: fill in notes on PartialEq
+/// This is a dynamic representation of possible values in the component model.
+/// Note that this is not an efficient representation but is instead intended to
+/// be a flexible and somewhat convenient representation. The most efficient
+/// representation of component model types is to use the `bindgen!` macro to
+/// generate native Rust types with specialized liftings and lowerings.
+///
+/// This type is used in conjunction with [`Func::call`] for example if the
+/// signature of a component is not statically known ahead of time.
+///
+/// # Notes on Equality
+///
+/// This type implements both the Rust `PartialEq` and `Eq` traits. This type
+/// additionally contains values which are not necessarily easily equated,
+/// however, such as floats (`Float32` and `Float64`) and resources. Equality
+/// does require that two values have the same type, and then these cases are
+/// handled as:
+///
+/// * Floats are tested if they are "semantically the same" meaning all NaN
+///   values are equal to all other NaN values. Additionally zero values must be
+///   exactly the same, so positive zero is not equal to negative zero. The
+///   primary use case at this time is fuzzing-related equality which this is
+///   sufficient for.
+///
+/// * Resources are tested if their types and indices into the host table are
+///   equal. This does not compare the underlying representation so borrows of
+///   the same guest resource are not considered equal. This additionally
+///   doesn't go further and test for equality in the guest itself (for example
+///   two different heap allocations of `Box<u32>` can be equal if they contain
+///   the same value).
+///
+/// In general if a strict guarantee about equality is required here it's
+/// recommended to "build your own" as this equality intended for fuzzing
+/// Wasmtime may not be suitable for you.
+///
+/// [`Func::call`]: crate::component::Func::call
 #[derive(Debug, Clone)]
 #[allow(missing_docs)]
 pub enum Val {

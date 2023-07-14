@@ -122,7 +122,7 @@ impl Instance {
     /// Looks up a module by name within this [`Instance`].
     ///
     /// The `store` specified must be the store that this instance lives within
-    /// and `name` is the name of the function to lookup. If the function is
+    /// and `name` is the name of the function to lookup. If the module is
     /// found `Some` is returned otherwise `None` is returned.
     ///
     /// # Panics
@@ -135,7 +135,15 @@ impl Instance {
             .cloned()
     }
 
-    /// TODO
+    /// Looks up an exported resource type by name within this [`Instance`].
+    ///
+    /// The `store` specified must be the store that this instance lives within
+    /// and `name` is the name of the function to lookup. If the resource type
+    /// is found `Some` is returned otherwise `None` is returned.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `store` does not own this instance.
     pub fn get_resource(&self, mut store: impl AsContextMut, name: &str) -> Option<ResourceType> {
         self.exports(store.as_context_mut()).root().resource(name)
     }
@@ -231,8 +239,12 @@ impl InstanceData {
         InstanceType::new(self.instance())
     }
 
-    // TODO: NB: only during creation
-    fn resource_types_mut(&mut self) -> &mut PrimaryMap<ResourceIndex, ResourceType> {
+    // NB: This method is only intended to be called during the instantiation
+    // process because the `Arc::get_mut` here is fallible and won't generally
+    // succeed once the instance has been handed to the embedder. Before that
+    // though it should be guaranteed that the single owning reference currently
+    // lives within the `ComponentInstance` that's being built.
+    fn resource_types_mut(&mut self) -> &mut ImportedResources {
         Arc::get_mut(self.state.resource_types_mut())
             .unwrap()
             .downcast_mut()
@@ -302,6 +314,10 @@ impl<'a> Instantiator<'a> {
 
     fn run<T>(&mut self, store: &mut StoreContextMut<'_, T>) -> Result<()> {
         let env_component = self.component.env_component();
+
+        // Before all initializers are processed configure all destructors for
+        // host-defined resources. No initializer will correspond to these and
+        // it's required to happen before they're needed, so execute this first.
         for (idx, import) in env_component.imported_resources.iter() {
             let (ty, func_ref) = match &self.imports[*import] {
                 RuntimeImport::Resource {
@@ -311,9 +327,9 @@ impl<'a> Instantiator<'a> {
             };
             let i = self.data.resource_types_mut().push(ty);
             assert_eq!(i, idx);
-            // TODO: this should be `Some`
             self.data.state.set_resource_destructor(idx, Some(func_ref));
         }
+
         for initializer in env_component.initializers.iter() {
             match initializer {
                 GlobalInitializer::InstantiateModule(m) => {
