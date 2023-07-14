@@ -60,7 +60,6 @@ impl ResourceType {
         ResourceType {
             kind: ResourceTypeKind::Guest {
                 store,
-                // TODO: comment this
                 instance: instance as *const _ as usize,
                 id,
             },
@@ -73,7 +72,9 @@ enum ResourceTypeKind {
     Host(TypeId),
     Guest {
         store: StoreId,
-        // TODO: comment what this `usize` is
+        // For now this is the `*mut ComponentInstance` pointer within the store
+        // that this guest corresponds to. It's used to distinguish different
+        // instantiations of the same component within the store.
         instance: usize,
         id: DefinedResourceIndex,
     },
@@ -106,6 +107,10 @@ enum ResourceTypeKind {
 /// possible to get runtime errors when using a `Resource<T>`. For example it is
 /// an error to call [`Resource::new_borrow`] and pass that to a component
 /// function expecting `(own $t)` and this is not statically disallowed.
+///
+/// The [`Resource`] type implements both the [`Lift`] and [`Lower`] trait to be
+/// used with typed functions in the component model or as part of aggregate
+/// structures and datatypes.
 ///
 /// # Destruction of a resource
 ///
@@ -450,11 +455,28 @@ impl<T> fmt::Debug for Resource<T> {
     }
 }
 
-/// TODO
+/// Representation of a resource in the component model, either a guest-defined
+/// or a host-defined resource.
 ///
-/// document it's both borrow and own
+/// This type is similar to [`Resource`] except that it can be used to represent
+/// any resource, either host or guest. This type cannot be directly constructed
+/// and is only available if the guest returns it to the host (e.g. a function
+/// returning a guest-defined resource). This type also does not carry a static
+/// type parameter `T` for example and does not have as much information about
+/// its type. This means that it's possible to get runtime type-errors when
+/// using this type because it cannot statically prevent mismatching resource
+/// types.
 ///
-/// document dtor importance
+/// Like [`Resource`] this type represents either an `own` or a `borrow`
+/// resource internally. Unlike [`Resource`], however, a [`ResourceAny`] must
+/// always be explicitly destroyed with the [`ResourceAny::resource_drop`]
+/// method. This will update internal dynamic state tracking and invoke the
+/// WebAssembly-defined destructor for a resource, if any.
+///
+/// Note that it is required to call `resource_drop` for all instances of
+/// [`ResourceAny`]: even borrows. Both borrows and own handles have state
+/// associated with them that must be discarded by the time they're done being
+/// used.
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub struct ResourceAny {
     idx: u32,
@@ -470,17 +492,31 @@ struct OwnState {
 }
 
 impl ResourceAny {
-    /// TODO
+    /// Returns the corresponding type associated with this resource, either a
+    /// host-defined type or a guest-defined type.
+    ///
+    /// This can be compared against [`ResourceType::host`] for example to see
+    /// if it's a host-resource or against a type extracted with
+    /// [`Instance::get_resource`] to see if it's a guest-defined resource.
+    ///
+    /// [`Instance::get_resource`]: crate::component::Instance::get_resource
     pub fn ty(&self) -> ResourceType {
         self.ty
     }
 
-    /// TODO
+    /// Returns whether this is an owned resource, and if not it's a borrowed
+    /// resource.
     pub fn owned(&self) -> bool {
         self.own_state.is_some()
     }
 
-    /// TODO
+    /// Destroy this resource and release any state associated with it.
+    ///
+    /// This is required to be called (or the async version) for all instances
+    /// of [`ResourceAny`] to ensure that state associated with this resource is
+    /// properly cleaned up. For owned resources this may execute the
+    /// guest-defined destructor if applicable (or the host-defined destructor
+    /// if one was specified).
     pub fn resource_drop(self, mut store: impl AsContextMut) -> Result<()> {
         let mut store = store.as_context_mut();
         assert!(
@@ -490,7 +526,8 @@ impl ResourceAny {
         self.resource_drop_impl(&mut store.as_context_mut())
     }
 
-    /// TODO
+    /// Same as [`ResourceAny::resource_drop`] except for use with async stores
+    /// to execute the destructor asynchronously.
     pub async fn resource_drop_async<T>(self, mut store: impl AsContextMut<Data = T>) -> Result<()>
     where
         T: Send,
