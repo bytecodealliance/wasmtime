@@ -676,6 +676,12 @@ criteria = "safe-to-deploy"
 delta = "0.19.0 -> 0.20.0"
 notes = "This version brings support for split-dwarf which while it uses the filesystem is always done at the behest of the caller, so everything is as expected for this update."
 
+[[audits.adler]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "1.0.2"
+notes = "This is a small crate which forbids unsafe code and is a straightforward implementation of the adler hashing algorithm."
+
 [[audits.ahash]]
 who = "Chris Fallin <chris@cfallin.org>"
 criteria = "safe-to-deploy"
@@ -1510,6 +1516,20 @@ contains no significant changes.
 
 [[audits.miniz_oxide]]
 who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "0.7.1"
+notes = """
+This crate is a Rust implementation of zlib compression/decompression and has
+been used by default by the Rust standard library for quite some time. It's also
+a default dependency of the popular `backtrace` crate for decompressing debug
+information. This crate forbids unsafe code and does not otherwise access system
+resources. It's originally a port of the `miniz.c` library as well, and given
+its own longevity should be relatively hardened against some of the more common
+compression-related issues.
+"""
+
+[[audits.miniz_oxide]]
+who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-run"
 delta = "0.5.1 -> 0.5.3"
 notes = """
@@ -1517,6 +1537,12 @@ This looks to be a minor update to the crate to remove some `unsafe` code,
 update Rust stylistic conventions, and perhaps some clippy lints. No major
 changes.
 """
+
+[[audits.mio]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.8.6 -> 0.8.8"
+notes = "Mostly OS portability updates along with some minor bugfixes."
 
 [[audits.native-tls]]
 who = "Pat Hickey <phickey@fastly.com>"
@@ -1802,6 +1828,12 @@ few minor issues related to Stacked Borrows and running in MIRI. No fundamental
 change to any preexisting unsafe code is happening here.
 """
 
+[[audits.socket2]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.4.7 -> 0.4.9"
+notes = "Minor OS compat updates but otherwise nothing major here."
+
 [[audits.spin]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-run"
@@ -1864,6 +1896,12 @@ who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
 delta = "3.3.0 -> 3.5.0"
 
+[[audits.tempfile]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "3.5.0 -> 3.6.0"
+notes = "Dependency updates and new optimized trait implementations, but otherwise everything looks normal."
+
 [[audits.test-log]]
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
@@ -1898,6 +1936,12 @@ This looks to be a minor release primarily to fix a security-related Windows
 issue plus some reorganization around lazy initialization. Altogether nothing
 amiss here.
 """
+
+[[audits.tokio-macros]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "1.7.0 -> 2.1.0"
+notes = "A number of updates to parsed syntax and such but nothing unexpected and entirely what one would expect a Rust procedural macro to do."
 
 [[audits.tokio-native-tls]]
 who = "Pat Hickey <phickey@fastly.com>"

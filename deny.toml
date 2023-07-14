@@ -59,9 +59,4 @@ skip-tree = [
     # They want to publish version 2.0 to upgrade `hashbrown` so in the meantime
     # it is duplicated for us.
     { name = "indexmap", depth = 2 },
-
-    # The native-tls crate hasn't kept up with updates to the underlying
-    # windows-sys, while the rest of the ecosystem has. This duplicated
-    # dependency appears to be benign.
-    { name = "windows-sys", depth = 3 },
 ]
