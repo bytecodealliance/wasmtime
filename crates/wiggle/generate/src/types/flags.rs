@@ -45,11 +45,8 @@ pub(super) fn define_flags(
             type Error = wiggle::GuestError;
             #[inline]
             fn try_from(value: #repr) -> Result<Self, wiggle::GuestError> {
-                if #repr::from(!#ident::all()) & value != 0 {
-                    Err(wiggle::GuestError::InvalidFlagValue(stringify!(#ident)))
-                } else {
-                    Ok(#ident::from_bits_truncate(value))
-                }
+                #ident::from_bits(value)
+                    .ok_or(wiggle::GuestError::InvalidFlagValue(stringify!(#ident)))
             }
         }
 
