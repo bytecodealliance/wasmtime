@@ -44,29 +44,19 @@ skip-tree = [
     # the multiple-versions errors it will introduce.
     { name = "wit-bindgen", depth = 20 },
 
-    # Criterion 0.3 is pretty old at this point and has had an upcoming 0.4 for
-    # a long time. This is a dev-dependency so we don't really mind its
-    # dependency tree, so skip it entirely.
-    { name = "criterion", depth = 20 },
+    # proptest depends on bitflags 1.x.x while other crates depend on 2.x.x so
+    # ignore its dependency tree until it updates.
+    { name = "proptest", depth = 20 },
 
     # This is maintained externally and we allow it to have duplicate
     # dependencies relative to Wasmtime's main dependency tree.
     { name = "witx", depth = 20 },
 
-    # This is somewhat unmaintained at this point and seems to pull in an old
-    # version of `env_logger`, so ignore it.
-    { name = "pretty_env_logger", depth = 20 },
+    # The openvino-sys crate uses an older version of `pretty_env_logger` so
+    # ignore its dependency tree for now until it updates.
+    { name = "openvino-sys", depth = 20 },
 
     # They want to publish version 2.0 to upgrade `hashbrown` so in the meantime
     # it is duplicated for us.
     { name = "indexmap", depth = 2 },
-
-    # This is on and older version of `wasm-encoder` and is one we can't
-    # necessarily easily update, so let `wasm-encoder` get duplicated for now.
-    { name = "wasm-coredump-builder", depth = 2 },
-
-    # The native-tls crate hasn't kept up with updates to the underlying
-    # windows-sys, while the rest of the ecosystem has. This duplicated
-    # dependency appears to be benign.
-    { name = "windows-sys", depth = 3 },
 ]

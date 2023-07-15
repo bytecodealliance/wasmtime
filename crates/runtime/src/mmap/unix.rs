@@ -108,7 +108,7 @@ impl Mmap {
         let flags = if enable_branch_protection {
             #[cfg(all(target_arch = "aarch64", target_os = "linux"))]
             if std::arch::is_aarch64_feature_detected!("bti") {
-                MprotectFlags::from_bits_unchecked(flags.bits() | /* PROT_BTI */ 0x10)
+                MprotectFlags::from_bits_retain(flags.bits() | /* PROT_BTI */ 0x10)
             } else {
                 flags
             }

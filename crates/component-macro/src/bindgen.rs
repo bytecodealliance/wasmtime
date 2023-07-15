@@ -252,7 +252,7 @@ impl Parse for Opt {
             let contents;
             let _lbrace = braced!(contents in input);
             let fields: Punctuated<(String, String, String), Token![,]> =
-                contents.parse_terminated(trappable_error_field_parse)?;
+                contents.parse_terminated(trappable_error_field_parse, Token![,])?;
             Ok(Opt::TrappableErrorType(
                 fields
                     .into_iter()
@@ -273,7 +273,7 @@ impl Parse for Opt {
             let contents;
             let _lbrace = braced!(contents in input);
             let fields: Punctuated<(String, String), Token![,]> =
-                contents.parse_terminated(with_field_parse)?;
+                contents.parse_terminated(with_field_parse, Token![,])?;
             Ok(Opt::With(HashMap::from_iter(fields.into_iter())))
         } else {
             Err(l.error())

@@ -1,4 +1,4 @@
-use proc_macro2::{Literal, TokenStream, TokenTree};
+use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use std::collections::HashSet;
 use std::fmt;
@@ -6,6 +6,13 @@ use syn::parse::{Parse, ParseStream};
 use syn::punctuated::Punctuated;
 use syn::{braced, parse_quote, Data, DeriveInput, Error, Result, Token};
 use wasmtime_component_util::{DiscriminantSize, FlagsSize};
+
+mod kw {
+    syn::custom_keyword!(record);
+    syn::custom_keyword!(variant);
+    syn::custom_keyword!(flags);
+    syn::custom_keyword!(name);
+}
 
 #[derive(Debug, Copy, Clone)]
 pub enum VariantStyle {
@@ -34,102 +41,67 @@ fn find_style(input: &DeriveInput) -> Result<Style> {
     let mut style = None;
 
     for attribute in &input.attrs {
-        if attribute.path.leading_colon.is_some() || attribute.path.segments.len() != 1 {
+        if !attribute.path().is_ident("component") {
             continue;
         }
-
-        let ident = &attribute.path.segments[0].ident;
-
-        if "component" != &ident.to_string() {
-            continue;
-        }
-
-        let syntax_error = || {
-            Err(Error::new_spanned(
-                &attribute.tokens,
-                "expected `component(<style>)` syntax",
-            ))
-        };
-
-        let style_string = if let [TokenTree::Group(group)] =
-            &attribute.tokens.clone().into_iter().collect::<Vec<_>>()[..]
-        {
-            if let [TokenTree::Ident(style)] = &group.stream().into_iter().collect::<Vec<_>>()[..] {
-                style.to_string()
-            } else {
-                return syntax_error();
-            }
-        } else {
-            return syntax_error();
-        };
+        let attr_style = attribute.parse_args()?;
 
         if style.is_some() {
-            return Err(Error::new(ident.span(), "duplicate `component` attribute"));
+            return Err(Error::new_spanned(
+                attribute,
+                "duplicate `component` attribute",
+            ));
         }
-
-        style = Some(match style_string.as_ref() {
-            "record" => Style::Record,
-            "variant" => Style::Variant(VariantStyle::Variant),
-            "enum" => Style::Variant(VariantStyle::Enum),
-            "union" => Style::Variant(VariantStyle::Union),
-            "flags" => {
-                return Err(Error::new_spanned(
-                    &attribute.tokens,
-                    "`flags` not allowed here; \
-                     use `wasmtime::component::flags!` macro to define `flags` types",
-                ))
-            }
-            _ => {
-                return Err(Error::new_spanned(
-                    &attribute.tokens,
-                    "unrecognized component type keyword \
-                     (expected `record`, `variant`, `enum`, or `union`)",
-                ))
-            }
-        });
+        style = Some(attr_style);
     }
 
     style.ok_or_else(|| Error::new_spanned(input, "missing `component` attribute"))
 }
 
-fn find_rename(attributes: &[syn::Attribute]) -> Result<Option<Literal>> {
+impl Parse for Style {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let lookahead = input.lookahead1();
+        if lookahead.peek(kw::record) {
+            input.parse::<kw::record>()?;
+            Ok(Style::Record)
+        } else if lookahead.peek(kw::variant) {
+            input.parse::<kw::variant>()?;
+            Ok(Style::Variant(VariantStyle::Variant))
+        } else if lookahead.peek(Token![enum]) {
+            input.parse::<Token![enum]>()?;
+            Ok(Style::Variant(VariantStyle::Enum))
+        } else if lookahead.peek(Token![union]) {
+            input.parse::<Token![union]>()?;
+            Ok(Style::Variant(VariantStyle::Union))
+        } else if input.peek(kw::flags) {
+            Err(input.error(
+                "`flags` not allowed here; \
+                 use `wasmtime::component::flags!` macro to define `flags` types",
+            ))
+        } else {
+            Err(lookahead.error())
+        }
+    }
+}
+
+fn find_rename(attributes: &[syn::Attribute]) -> Result<Option<syn::LitStr>> {
     let mut name = None;
 
     for attribute in attributes {
-        if attribute.path.leading_colon.is_some() || attribute.path.segments.len() != 1 {
+        if !attribute.path().is_ident("component") {
             continue;
         }
-
-        let ident = &attribute.path.segments[0].ident;
-
-        if "component" != &ident.to_string() {
-            continue;
-        }
-
-        let syntax_error = || {
-            Err(Error::new_spanned(
-                &attribute.tokens,
-                "expected `component(name = <name literal>)` syntax",
-            ))
-        };
-
-        let name_literal = if let [TokenTree::Group(group)] =
-            &attribute.tokens.clone().into_iter().collect::<Vec<_>>()[..]
-        {
-            match &group.stream().into_iter().collect::<Vec<_>>()[..] {
-                [TokenTree::Ident(key), TokenTree::Punct(op), TokenTree::Literal(literal)]
-                    if "name" == &key.to_string() && '=' == op.as_char() =>
-                {
-                    literal.clone()
-                }
-                _ => return syntax_error(),
-            }
-        } else {
-            return syntax_error();
-        };
+        let name_literal = attribute.parse_args_with(|parser: ParseStream<'_>| {
+            parser.parse::<kw::name>()?;
+            parser.parse::<Token![=]>()?;
+            parser.parse::<syn::LitStr>()
+        })?;
 
         if name.is_some() {
-            return Err(Error::new(ident.span(), "duplicate field rename attribute"));
+            return Err(Error::new_spanned(
+                attribute,
+                "duplicate field rename attribute",
+            ));
         }
 
         name = Some(name_literal);
@@ -764,7 +736,8 @@ impl Expander for ComponentTypeExpander {
                          attrs, ident, ty, ..
                      }| {
                         let name = find_rename(attrs)?.unwrap_or_else(|| {
-                            Literal::string(&ident.as_ref().unwrap().to_string())
+                            let ident = ident.as_ref().unwrap();
+                            syn::LitStr::new(&ident.to_string(), ident.span())
                         });
 
                         Ok(quote!((#name, <#ty as wasmtime::component::ComponentType>::typecheck),))
@@ -802,7 +775,7 @@ impl Expander for ComponentTypeExpander {
                 ));
             }
 
-            let name = rename.unwrap_or_else(|| Literal::string(&ident.to_string()));
+            let name = rename.unwrap_or_else(|| syn::LitStr::new(&ident.to_string(), ident.span()));
 
             if let Some(ty) = ty {
                 abi_list.extend(quote!(Some(<#ty as wasmtime::component::ComponentType>::ABI),));
@@ -916,16 +889,7 @@ impl Parse for Flag {
     fn parse(input: ParseStream) -> Result<Self> {
         let attributes = syn::Attribute::parse_outer(input)?;
 
-        let rename = find_rename(&attributes)?
-            .map(|literal| {
-                let s = literal.to_string();
-
-                s.strip_prefix('"')
-                    .and_then(|s| s.strip_suffix('"'))
-                    .map(|s| s.to_owned())
-                    .ok_or_else(|| Error::new(literal.span(), "expected string literal"))
-            })
-            .transpose()?;
+        let rename = find_rename(&attributes)?.map(|literal| literal.value());
 
         input.parse::<Token![const]>()?;
         let name = input.parse::<syn::Ident>()?.to_string();
@@ -948,7 +912,7 @@ impl Parse for Flags {
         braced!(content in input);
 
         let flags = content
-            .parse_terminated::<_, Token![;]>(Flag::parse)?
+            .parse_terminated(Flag::parse, Token![;])?
             .into_iter()
             .collect();
 
@@ -1146,6 +1110,7 @@ pub fn expand_flags(flags: &Flags) -> Result<TokenStream> {
                 ident: Some(format_ident!("__inner{}", index)),
                 colon_token: None,
                 ty: ty.clone(),
+                mutability: syn::FieldMutability::None,
             })
             .collect::<Vec<_>>()
     };

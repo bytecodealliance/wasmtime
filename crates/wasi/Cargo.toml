@@ -31,13 +31,13 @@ fs-set-times = { workspace = true, optional = true }
 bitflags = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }
 system-interface = { workspace = true, optional = true}
-rustix = { workspace = true, features = ["net"], optional = true}
+rustix = { workspace = true, features = ["net", "event"], optional = true}
 
 [target.'cfg(unix)'.dependencies]
 rustix = { workspace = true, features = ["fs"] }
 
 [target.'cfg(windows)'.dependencies]
-io-extras = "0.17.1"
+io-extras = { workspace = true }
 windows-sys = { workspace = true }
 
 [features]

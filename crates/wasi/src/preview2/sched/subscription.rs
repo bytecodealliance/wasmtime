@@ -6,6 +6,7 @@ use anyhow::Error;
 use bitflags::bitflags;
 
 bitflags! {
+    #[derive(Copy, Clone, Debug, PartialEq, Eq)]
     pub struct RwEventFlags: u32 {
         const HANGUP = 0b1;
     }

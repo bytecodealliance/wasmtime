@@ -197,10 +197,6 @@ audit-as-crates-io = false
 version = "0.17.0"
 criteria = "safe-to-deploy"
 
-[[exemptions.adler]]
-version = "1.0.2"
-criteria = "safe-to-run"
-
 [[exemptions.aead]]
 version = "0.4.3"
 criteria = "safe-to-deploy"
@@ -403,10 +399,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.ff]]
 version = "0.10.1"
-criteria = "safe-to-deploy"
-
-[[exemptions.filecheck]]
-version = "0.5.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.filetime]]
@@ -826,10 +818,6 @@ criteria = "safe-to-deploy"
 version = "5.0.3"
 criteria = "safe-to-run"
 
-[[exemptions.target-lexicon]]
-version = "0.12.3"
-criteria = "safe-to-deploy"
-
 [[exemptions.tempfile]]
 version = "3.3.0"
 criteria = "safe-to-deploy"
@@ -855,7 +843,7 @@ version = "1.2.1"
 criteria = "safe-to-run"
 
 [[exemptions.tokio]]
-version = "1.26.0"
+version = "1.29.1"
 criteria = "safe-to-deploy"
 notes = "we are exempting tokio, hyper, and their tightly coupled dependencies by the same authors, expecting that the authors at aws will publish attestions we can import at some point soon"
 
@@ -906,26 +894,6 @@ criteria = "safe-to-deploy"
 [[exemptions.wasi]]
 version = "0.11.0+wasi-snapshot-preview1"
 criteria = "safe-to-deploy"
-
-[[exemptions.wasm-bindgen]]
-version = "0.2.80"
-criteria = "safe-to-deploy"
-notes = "dependency of ring for wasm32 browser platform, which our project does not target"
-
-[[exemptions.wasm-bindgen-backend]]
-version = "0.2.80"
-criteria = "safe-to-deploy"
-notes = "dependency of ring for wasm32 browser platform, which our project does not target"
-
-[[exemptions.wasm-bindgen-macro]]
-version = "0.2.80"
-criteria = "safe-to-deploy"
-notes = "dependency of ring for wasm32 browser platform, which our project does not target"
-
-[[exemptions.wasm-bindgen-macro-support]]
-version = "0.2.80"
-criteria = "safe-to-deploy"
-notes = "dependency of ring for wasm32 browser platform, which our project does not target"
 
 [[exemptions.web-sys]]
 version = "0.3.57"

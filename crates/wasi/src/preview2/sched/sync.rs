@@ -2,7 +2,7 @@ use crate::preview2::sched::{
     subscription::{RwEventFlags, RwStream},
     Poll, WasiSched,
 };
-use rustix::io::{PollFd, PollFlags};
+use rustix::event::{PollFd, PollFlags};
 use std::thread;
 use std::time::Duration;
 
@@ -96,7 +96,7 @@ pub(crate) async fn poll_oneoff<'a>(poll: &mut Poll<'a>) -> Result<(), Error> {
                 poll_fds = tracing::field::debug(&pollfds),
                 "poll"
             );
-            match rustix::io::poll(&mut pollfds, poll_timeout) {
+            match rustix::event::poll(&mut pollfds, poll_timeout) {
                 Ok(_num_ready) => {
                     ready = true;
                     break;

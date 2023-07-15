@@ -23,9 +23,9 @@ io-lifetimes = { workspace = true }
 rustix = { workspace = true, features = ["fs"] }
 
 [target.'cfg(windows)'.dependencies]
-io-extras = "0.17.0"
+io-extras = { workspace = true }
 
 [dev-dependencies]
 tempfile = "3.1.0"
 tokio = { version = "1.8.0", features = [ "macros" ] }
-cap-tempfile = "1.0.0"
+cap-tempfile = { workspace = true }

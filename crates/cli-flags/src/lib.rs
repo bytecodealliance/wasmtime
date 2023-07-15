@@ -107,11 +107,11 @@ fn init_file_per_thread_logger(prefix: &'static str) {
 #[cfg_attr(test, derive(Debug, PartialEq))]
 pub struct CommonOptions {
     /// Use specified configuration file
-    #[clap(long, parse(from_os_str), value_name = "CONFIG_PATH")]
+    #[clap(long, value_name = "CONFIG_PATH")]
     pub config: Option<PathBuf>,
 
     /// Disable logging
-    #[clap(long, conflicts_with = "log-to-files")]
+    #[clap(long, conflicts_with = "log_to_files")]
     pub disable_logging: bool,
 
     /// Log to per-thread log files instead of stderr
@@ -131,11 +131,11 @@ pub struct CommonOptions {
     pub disable_parallel_compilation: bool,
 
     /// Enable or disable WebAssembly features
-    #[clap(long, value_name = "FEATURE,FEATURE,...", parse(try_from_str = parse_wasm_features))]
+    #[clap(long, value_name = "FEATURE,FEATURE,...", value_parser = parse_wasm_features)]
     pub wasm_features: Option<WasmFeatures>,
 
     /// Enable or disable WASI modules
-    #[clap(long, value_name = "MODULE,MODULE,...", parse(try_from_str = parse_wasi_modules))]
+    #[clap(long, value_name = "MODULE,MODULE,...", value_parser = parse_wasi_modules)]
     pub wasi_modules: Option<WasiModules>,
 
     /// Generate jitdump file (supported on --features=profiling build)
@@ -148,14 +148,20 @@ pub struct CommonOptions {
     #[clap(
         long,
         value_name = "LEVEL",
-        parse(try_from_str = parse_opt_level),
+        value_parser = parse_opt_level,
         verbatim_doc_comment,
     )]
     pub opt_level: Option<wasmtime::OptLevel>,
 
     /// Set a Cranelift setting to a given value.
     /// Use `wasmtime settings` to list Cranelift settings for a target.
-    #[clap(long = "cranelift-set", value_name = "NAME=VALUE", number_of_values = 1, verbatim_doc_comment, parse(try_from_str = parse_cranelift_flag))]
+    #[clap(
+        long = "cranelift-set",
+        value_name = "NAME=VALUE",
+        number_of_values = 1,
+        verbatim_doc_comment,
+        value_parser = parse_cranelift_flag,
+    )]
     pub cranelift_set: Vec<(String, String)>,
 
     /// Enable a Cranelift boolean setting or preset.

@@ -5,6 +5,7 @@ use bitflags::bitflags;
 use cap_std::time::{Duration, Instant};
 
 bitflags! {
+    #[derive(Copy, Clone, Debug, PartialEq, Eq)]
     pub struct RwEventFlags: u32 {
         const HANGUP = 0b1;
     }

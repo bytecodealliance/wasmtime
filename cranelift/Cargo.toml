@@ -38,7 +38,7 @@ termcolor = "1.1.2"
 capstone = { workspace = true, optional = true }
 wat = { workspace = true, optional = true }
 target-lexicon = { workspace = true, features = ["std"] }
-pretty_env_logger = "0.4.0"
+pretty_env_logger = { workspace = true }
 rayon = { version = "1", optional = true }
 indicatif = "0.13.0"
 thiserror = { workspace = true }
