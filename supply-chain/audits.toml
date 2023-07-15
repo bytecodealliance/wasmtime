@@ -1071,6 +1071,18 @@ spin lock with a lock from the standard library. Minor bits of `unsafe` code
 are modified but that's expected given the nature of this crate.
 """
 
+[[audits.crossbeam-epoch]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.9.9 -> 0.9.15"
+notes = """
+In general crossbeam has quite a lot of unsafe code as it's a primitive tool for
+concurrency but this update isn't adding any extra unsafe than there already
+was and all the updates here are related to odds-and-ends maintenance. In
+other words everything is as one would expect from a minor update for this
+crate.
+"""
+
 [[audits.crypto-common]]
 who = "Benjamin Bouvier <public@benj.me>"
 criteria = "safe-to-deploy"
