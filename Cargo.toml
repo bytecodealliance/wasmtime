@@ -70,7 +70,7 @@ wasmtime-wast = { workspace = true, features = ['component-model'] }
 wasmtime-component-util = { workspace = true }
 component-macro-test = { path = "crates/misc/component-macro-test" }
 component-test-util = { workspace = true }
-bstr = "0.2.17"
+bstr = "1.6.0"
 libc = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
