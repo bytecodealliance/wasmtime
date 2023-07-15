@@ -202,7 +202,9 @@ impl HostInputStream for MemoryInputPipe {
         if self.buffer.get_ref().len() as u64 > self.buffer.position() {
             Ok(())
         } else {
-            futures_util::future::pending().await
+            // FIXME
+            //futures_util::future::pending().await
+            todo!()
         }
     }
 }

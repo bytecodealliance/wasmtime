@@ -1377,12 +1377,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "futures"
+version = "0.3.27"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "531ac96c6ff5fd7c62263c5e3c67a603af4fcaee2e1a0ae5565ba3a11e69e549"
+dependencies = [
+ "futures-channel",
+ "futures-core",
+ "futures-io",
+ "futures-sink",
+ "futures-task",
+ "futures-util",
+]
+
+[[package]]
 name = "futures-channel"
 version = "0.3.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "164713a5a0dcc3e7b4b1ed7d3b433cabc18025386f9339346e8daf15963cf7ac"
 dependencies = [
  "futures-core",
+ "futures-sink",
 ]
 
 [[package]]
@@ -1390,6 +1405,12 @@ name = "futures-core"
 version = "0.3.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "86d7a0c1aa76363dac491de0ee99faf6941128376f1cf96f07db7603b7de69dd"
+
+[[package]]
+name = "futures-io"
+version = "0.3.28"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4fff74096e71ed47f8e023204cfd0aa1289cd54ae5430a9523be060cdb849964"
 
 [[package]]
 name = "futures-sink"
@@ -1410,6 +1431,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3ef6b17e481503ec85211fed8f39d1970f128935ca1f814cd32ac4a6842e84ab"
 dependencies = [
  "futures-core",
+ "futures-sink",
  "futures-task",
  "pin-project-lite",
  "pin-utils",
@@ -4236,7 +4258,7 @@ dependencies = [
  "cap-std",
  "cap-time-ext",
  "fs-set-times",
- "futures-util",
+ "futures",
  "io-extras",
  "libc",
  "once_cell",

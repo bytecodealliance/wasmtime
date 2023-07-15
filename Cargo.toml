@@ -241,7 +241,7 @@ libc = "0.2.60"
 file-per-thread-logger = "0.2.0"
 tokio = { version = "1.26.0" }
 bytes = "1.4"
-futures-util = { version = "0.3.27", default-features = false }
+futures = { version = "0.3.27", default-features = false }
 
 [features]
 default = [

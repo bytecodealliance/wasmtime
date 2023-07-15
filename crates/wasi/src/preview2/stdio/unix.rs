@@ -1,6 +1,7 @@
-use crate::preview2::{AsyncFdStream, HostInputStream, StreamState};
+use crate::preview2::{AsyncReadStream, StreamState};
 use anyhow::Error;
 use bytes::Bytes;
+use tokio::io::unix::AsyncFd;
 
 // wasmtime cant use std::sync::OnceLock yet because of a llvm regression in
 // 1.70. when 1.71 is released, we can switch to using std here.
@@ -13,11 +14,11 @@ use tokio::sync::Mutex;
 // We need a single global instance of the AsyncFd<Stdin> because creating
 // this instance registers the process's stdin fd with epoll, which will
 // return an error if an fd is registered more than once.
-type GlobalStdin = Mutex<AsyncFdStream<std::io::Stdin>>;
+type GlobalStdin = Mutex<AsyncReadStream>;
 static STDIN: OnceLock<GlobalStdin> = OnceLock::new();
 
 fn create() -> anyhow::Result<GlobalStdin> {
-    Ok(Mutex::new(AsyncFdStream::new(std::io::stdin())?))
+    Ok(Mutex::new(AsyncReadStream::new(InnerStdin::new()?)))
 }
 
 pub struct Stdin;
@@ -42,19 +43,69 @@ pub fn stdin() -> Stdin {
 }
 
 #[async_trait::async_trait]
-impl HostInputStream for Stdin {
+impl crate::preview2::HostInputStream for Stdin {
     fn read(&mut self, size: usize) -> Result<(Bytes, StreamState), Error> {
-        // let mut r = move || Self::get_global().blocking_lock().read(buf);
-        // // If we are currently in a tokio context, blocking_lock will panic unless inside a
-        // // block_in_place:
-        // match tokio::runtime::Handle::try_current() {
-        //     Ok(_) => tokio::task::block_in_place(r),
-        //     Err(_) => r(),
-        // }
-        todo!()
+        let r = move || Self::get_global().blocking_lock().read(size);
+        // If we are currently in a tokio context, blocking_lock will panic unless inside a
+        // block_in_place:
+        match tokio::runtime::Handle::try_current() {
+            Ok(_) => tokio::task::block_in_place(r),
+            Err(_) => r(),
+        }
     }
 
     async fn ready(&mut self) -> Result<(), Error> {
         Self::get_global().lock().await.ready().await
+    }
+}
+
+struct InnerStdin {
+    inner: AsyncFd<std::io::Stdin>,
+}
+
+impl InnerStdin {
+    pub fn new() -> anyhow::Result<Self> {
+        use rustix::fs::OFlags;
+        use std::os::fd::AsRawFd;
+
+        let stdin = std::io::stdin();
+
+        let borrowed_fd = unsafe { rustix::fd::BorrowedFd::borrow_raw(stdin.as_raw_fd()) };
+        let flags = rustix::fs::fcntl_getfl(borrowed_fd)?;
+        if !flags.contains(OFlags::NONBLOCK) {
+            rustix::fs::fcntl_setfl(borrowed_fd, flags.difference(OFlags::NONBLOCK))?;
+        }
+
+        Ok(Self {
+            inner: AsyncFd::new(std::io::stdin())?,
+        })
+    }
+}
+
+use futures::ready;
+use std::io::{self, Read};
+use std::pin::Pin;
+use std::task::{Context, Poll};
+use tokio::io::{AsyncRead, ReadBuf};
+
+impl AsyncRead for InnerStdin {
+    fn poll_read(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut ReadBuf<'_>,
+    ) -> Poll<io::Result<()>> {
+        loop {
+            let mut guard = ready!(self.inner.poll_read_ready_mut(cx))?;
+
+            let unfilled = buf.initialize_unfilled();
+            match guard.try_io(|inner| inner.get_mut().read(unfilled)) {
+                Ok(Ok(len)) => {
+                    buf.advance(len);
+                    return Poll::Ready(Ok(()));
+                }
+                Ok(Err(err)) => return Poll::Ready(Err(err)),
+                Err(_would_block) => continue,
+            }
+        }
     }
 }

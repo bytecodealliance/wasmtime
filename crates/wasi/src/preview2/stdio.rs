@@ -28,13 +28,12 @@ pub struct EmptyStream;
 
 #[async_trait::async_trait]
 impl HostInputStream for EmptyStream {
-    fn read(&mut self, size: usize) -> Result<(Bytes, StreamState), Error> {
-        // Ok((0, StreamState::Open))
-        todo!()
+    fn read(&mut self, _size: usize) -> Result<(Bytes, StreamState), Error> {
+        Ok((Bytes::new(), StreamState::Open))
     }
 
     async fn ready(&mut self) -> Result<(), Error> {
-        futures_util::future::pending().await
+        futures::future::pending().await
     }
 }
 

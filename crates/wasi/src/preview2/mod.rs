@@ -36,8 +36,6 @@ pub use self::error::I32Exit;
 pub use self::filesystem::{DirPerms, FilePerms};
 pub use self::poll::{HostPollable, TablePollableExt};
 pub use self::random::{thread_rng, Deterministic};
-#[cfg(unix)]
-pub use self::stream::AsyncFdStream;
 pub use self::stream::{
     AsyncReadStream, AsyncWriteStream, HostInputStream, HostOutputStream, StreamState,
     TableStreamExt,
@@ -127,22 +125,33 @@ pub mod bindings {
     pub use self::_internal_rest::wasi::*;
 }
 
+static RUNTIME: once_cell::sync::Lazy<tokio::runtime::Runtime> = once_cell::sync::Lazy::new(|| {
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_time()
+        .enable_io()
+        .build()
+        .unwrap()
+});
+
+pub(crate) fn in_tokio<G, F: FnOnce() -> G>(f: F) -> G {
+    match tokio::runtime::Handle::try_current() {
+        Ok(_) => f(),
+        Err(_) => {
+            let _enter = RUNTIME.enter();
+            RUNTIME.block_on(async { f() })
+        }
+    }
+}
+
+// FIXME: this can maybe be written in terms of `in_tokio` but i have broken my tools with my
+// tools right now and cant trust my tests
 pub(crate) fn block_on<F: std::future::Future>(f: F) -> F::Output {
-    use tokio::runtime::{Builder, Handle, Runtime};
-    match Handle::try_current() {
+    match tokio::runtime::Handle::try_current() {
         Ok(h) => {
             let _enter = h.enter();
             h.block_on(f)
         }
         Err(_) => {
-            use once_cell::sync::Lazy;
-            static RUNTIME: Lazy<Runtime> = Lazy::new(|| {
-                Builder::new_multi_thread()
-                    .enable_time()
-                    .enable_io()
-                    .build()
-                    .unwrap()
-            });
             let _enter = RUNTIME.enter();
             RUNTIME.block_on(f)
         }
