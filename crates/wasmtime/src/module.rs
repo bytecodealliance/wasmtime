@@ -235,9 +235,11 @@ impl Module {
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     #[cfg_attr(nightlydoc, doc(cfg(any(feature = "cranelift", feature = "winch"))))]
     pub fn from_file(engine: &Engine, file: impl AsRef<Path>) -> Result<Module> {
+        let file = file.as_ref();
         match Self::new(
             engine,
-            &fs::read(&file).with_context(|| "failed to read input file")?,
+            &fs::read(file)
+                .with_context(|| format!("failed to read input file: {}", file.display()))?,
         ) {
             Ok(m) => Ok(m),
             Err(e) => {
