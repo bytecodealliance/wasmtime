@@ -1059,13 +1059,13 @@ impl<I: VCodeInst> VCode<I> {
             // Padding can get quite large during fuzzing though so place a
             // total cap on it where when a per-function threshold is exceeded
             // the padding is turned back down to zero. This avoids a small-ish
-            // test case generating a 2GB memory footprint in Cranelift for
+            // test case generating a GB+ memory footprint in Cranelift for
             // example.
             if !bb_padding.is_empty() {
                 buffer.put_data(&bb_padding);
                 buffer.align_to(I::LabelUse::ALIGN);
                 total_bb_padding += bb_padding.len();
-                if total_bb_padding > (1 << 20) {
+                if total_bb_padding > (64 << 20) {
                     bb_padding = Vec::new();
                 }
             }
