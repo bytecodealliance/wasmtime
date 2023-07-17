@@ -654,9 +654,6 @@ impl RunCommand {
     fn load_module(&self, engine: &Engine, path: &Path) -> Result<Module> {
         // Do not accept wasmtime subcommand names as the module name
         let path = match path.to_str() {
-            Some("help") | Some("config") | Some("run") | Some("wast") | Some("compile") => {
-                bail!("module name cannot be the same as a subcommand")
-            }
             #[cfg(unix)]
             Some("-") => "/dev/stdin".as_ref(),
             _ => path,

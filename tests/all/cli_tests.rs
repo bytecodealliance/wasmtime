@@ -1,8 +1,8 @@
 #![cfg(not(miri))]
 
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, Result};
 use std::fs::File;
-use std::io::{Read, Write};
+use std::io::Write;
 use std::path::Path;
 use std::process::{Command, Output, Stdio};
 use tempfile::{NamedTempFile, TempDir};
@@ -11,31 +11,11 @@ use tempfile::{NamedTempFile, TempDir};
 // If the `stdin` is `Some`, opens the file and redirects to the child's stdin.
 pub fn run_wasmtime_for_output(args: &[&str], stdin: Option<&Path>) -> Result<Output> {
     let mut cmd = get_wasmtime_command()?;
-    let stdin = stdin
-        .map(File::open)
-        .transpose()
-        .context("Cannot open a file to use as stdin")?;
-
-    if let Some(mut f) = stdin {
-        let mut buf = Vec::new();
-        f.read_to_end(&mut buf)?;
-
-        let mut child = cmd
-            .stdout(Stdio::piped())
-            .stdin(Stdio::piped())
-            .args(args)
-            .spawn()?;
-
-        let mut stdin = child.stdin.take().unwrap();
-        std::thread::spawn(move || {
-            stdin
-                .write_all(&buf)
-                .expect("failed to write module to child stdin")
-        });
-        child.wait_with_output().map_err(Into::into)
-    } else {
-        cmd.args(args).output().map_err(Into::into)
+    cmd.args(args);
+    if let Some(file) = stdin {
+        cmd.stdin(File::open(file)?);
     }
+    cmd.output().map_err(Into::into)
 }
 
 /// Get the Wasmtime CLI as a [Command].
@@ -540,11 +520,30 @@ fn run_cwasm_from_stdin() -> Result<()> {
         cwasm.to_str().unwrap(),
     ])?;
     assert_eq!(stdout, "");
+
+    // If stdin is literally the file itself then that should work
     let args: &[&str] = &["run", "--allow-precompiled", "-"];
-    let output = run_wasmtime_for_output(args, Some(&cwasm))?;
+    let output = get_wasmtime_command()?
+        .args(args)
+        .stdin(File::open(&cwasm)?)
+        .output()?;
+    assert!(output.status.success(), "a file as stdin should work");
+
+    // If stdin is a pipe, however, that should fail
+    let input = std::fs::read(&cwasm)?;
+    let mut child = get_wasmtime_command()?
+        .args(args)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()?;
+    let mut stdin = child.stdin.take().unwrap();
+    let t = std::thread::spawn(move || stdin.write_all(&input).unwrap());
+    let output = child.wait_with_output()?;
     if output.status.success() {
         bail!("wasmtime should fail loading precompiled modules from piped files, but suceeded");
     }
+    t.join().unwrap();
     Ok(())
 }
 
@@ -650,6 +649,65 @@ fn wasm_flags() -> Result<()> {
             --\n\
             -a\n\
             b\n\
+        "
+    );
+    Ok(())
+}
+
+#[test]
+fn name_same_as_builtin_command() -> Result<()> {
+    // a bare subcommand shouldn't run successfully
+    let output = get_wasmtime_command()?
+        .current_dir("tests/all/cli_tests")
+        .arg("run")
+        .output()?;
+    assert!(!output.status.success());
+
+    // a `--` prefix should let everything else get interpreted as a wasm
+    // module and arguments, even if the module has a name like `run`
+    let output = get_wasmtime_command()?
+        .current_dir("tests/all/cli_tests")
+        .arg("--")
+        .arg("run")
+        .output()?;
+    assert!(output.status.success(), "expected success got {output:#?}");
+
+    // Passing options before the subcommand should work and doesn't require
+    // `--` to disambiguate
+    let output = get_wasmtime_command()?
+        .current_dir("tests/all/cli_tests")
+        .arg("--disable-cache")
+        .arg("run")
+        .output()?;
+    assert!(output.status.success(), "expected success got {output:#?}");
+    Ok(())
+}
+
+#[test]
+fn run_just_stdin_argument() -> Result<()> {
+    let output = get_wasmtime_command()?
+        .arg("-")
+        .stdin(File::open("tests/all/cli_tests/simple.wat")?)
+        .output()?;
+    assert!(output.status.success());
+    Ok(())
+}
+
+#[test]
+fn wasm_flags_without_subcommand() -> Result<()> {
+    let output = get_wasmtime_command()?
+        .current_dir("tests/all/cli_tests/")
+        .arg("print-arguments.wat")
+        .arg("-foo")
+        .arg("bar")
+        .output()?;
+    assert!(output.status.success());
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        "\
+            print-arguments.wat\n\
+            -foo\n\
+            bar\n\
         "
     );
     Ok(())
