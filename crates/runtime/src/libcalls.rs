@@ -492,15 +492,25 @@ unsafe fn new_epoch(instance: &mut Instance) -> Result<u64> {
 
 // * is there a good way to cast a pointer to usize? or should the library be modified to take pointer
 //   arguments instead?
-// unsafe fn check_malloc(instance: &mut Instance, addr: pointer, len: usize) -> Result<(), AccessError> {
+unsafe fn check_malloc(instance: &mut Instance, addr: *const u8, len: u32) -> Result<u32> {
 //     let addr_usize;
 // 	instance::valgrind_state::malloc(addr_usize, len)
-// }
+    panic!("pretend we called valgrind_state.free()");
+    /*
+    let result: Result<(), AccessError> = panic!("pretend we called valgrind_state.free()");
+    result.to_int()
+    */
+}
 
-// unsafe fn check_free(instance: &mut Instance, addr: pointer) -> Result<(), AccessError> {
+unsafe fn check_free(instance: &mut Instance, addr: *const u8) -> Result<u32> {
 //     let addr_usize;
 //     instance::valgrind_state::free(addr_usize)
-// }
+    panic!("pretend we called valgrind_state.free()");
+    /*
+    let result: Result<(), AccessError> = panic!("pretend we called valgrind_state.free()");
+    result.to_int()
+    */
+}
 
 /// This module contains functions which are used for resolving relocations at
 /// runtime if necessary.

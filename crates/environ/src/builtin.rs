@@ -51,10 +51,11 @@ macro_rules! foreach_builtin_function {
             out_of_gas(vmctx: vmctx);
             /// Invoked when we reach a new epoch.
             new_epoch(vmctx: vmctx) -> i64;
-            // Memcheck invoked when malloc is called.
-            // check_malloc(vmctx: vmctx, addr: pointer, len: usize) -> Result<(), AccessError>;
-            // Memcheck invoked when free is called.
-            // check_free(vmctx: vmctx, addr: pointer) -> -> Result<(), AccessError>;
+            /// Memcheck invoked when malloc is called.
+            /// TODO: can we even pass a usize thing here???
+            check_malloc(vmctx: vmctx, addr: pointer, len: i32) -> i32;
+            /// Memcheck invoked when free is called.
+            check_free(vmctx: vmctx, addr: pointer) -> i32;
         }
     };
 }
