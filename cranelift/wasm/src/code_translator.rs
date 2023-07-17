@@ -589,7 +589,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             {
                 let return_args = state.peekn_mut(return_count);
                 // println!("{:?}", return_args);
-                //handle_before_return(&return_args);
+                handle_before_return(&return_args, panic!("index?"), builder);
                 //      curr error: handle_before_return not in scope
                 bitcast_wasm_returns(environ, return_args, builder);
                 builder.ins().return_(return_args);

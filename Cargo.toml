@@ -113,7 +113,8 @@ members = [
 ]
 exclude = [
   'crates/wasi-common/WASI/tools/witx-cli',
-  'docs/rust_wasi_markdown_parser'
+  'docs/rust_wasi_markdown_parser',
+  'wasm-valgrind',
 ]
 
 [workspace.package]

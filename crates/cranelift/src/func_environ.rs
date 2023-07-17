@@ -110,6 +110,8 @@ pub struct FuncEnvironment<'module_environment> {
     module: &'module_environment Module,
     types: &'module_environment ModuleTypes,
 
+    translation: &'module_environment ModuleTranslation<'module_environment>,
+
     /// Heaps implementing WebAssembly linear memories.
     heaps: PrimaryMap<Heap, HeapData>,
 
@@ -172,6 +174,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             isa,
             module: &translation.module,
             types,
+            translation,
             heaps: PrimaryMap::default(),
             vmctx: None,
             builtin_function_signatures,
@@ -665,31 +668,42 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     //   is called? or does fn vmctx() need to be called?
     //
     // * is it correct to use builder as an argument here?
-    // fn handle_before_return(&mut self, retvals: &[Value], builder: &mut FunctionBuilder) {
-    //     let block = builder.func.entry_block().unwrap();
-    //     let args = builder.func.dfg.block_params(block, 0);
-    //     if "the function is malloc" {
-    //         builder
-    //             .ins()
-    //             .call_indirect(check_malloc_exit, &[self.vmctx, retvals[0], args[0]]);
-    //     } else if "the function is free" {
-    //         builder
-    //             .ins()
-    //             .call_indirect(check_free_exit, &[self.vmctx]);
-    //     }
-    //     valgrind_state.flag = false;
-    // }
+    fn handle_before_return(&mut self, retvals: &[crate::ir::Value], func_index: FuncIndex, builder: &mut FunctionBuilder) {
+        let block = builder.func.layout.entry_block().unwrap();
+        let args = builder.func.dfg.block_params(block);
+        let func_name = self.translation.debuginfo.name_section.func_names[&func_index];
+        // there is also dlmalloc, realloc, calloc, etc; should these be checked for too?
+    
+        if func_name == "malloc" {
+            self.check_malloc_exit(builder);
+            /*
+            builder
+                 ins()
+                .call_indirect(check_malloc_exit_addr, &[self.vmctx, retvals[0], args[0]]);
+                */
+        } else if func_name == "free" {
+            /*
+             builder
+                 .ins()
+                 .call_indirect(check_free_exit, &[self.vmctx]);
+                 */
+         }
+        // TODO: signal something to valgrind state that we're in a function or somethign???
+         // valgrind_state.flag = false;
+    }
 
-    // fn check_malloc_exit(&mut self, builder: &mut FunctionBuilder) {
-    //     let check_malloc_sig = self.builtin_function_signatures.check_malloc(builder.func);
-    //     let (vmctx, check_malloc) = self.translate_load_builtin_function_address(
-    //         &mut builder.cursor(),
-    //         BuiltinFunctionIndex::check_malloc(),
-    //     );
-    //     builder
-    //         .ins()
-    //         .call_indirect(check_malloc_sig, check_malloc, &[vmctx, pointer, usize]);
-    // }
+    fn check_malloc_exit(&mut self, builder: &mut FunctionBuilder) {
+        let check_malloc_sig = self.builtin_function_signatures.check_malloc(builder.func);
+        let (vmctx, check_malloc) = self.translate_load_builtin_function_address(
+            &mut builder.cursor(),
+            BuiltinFunctionIndex::check_malloc(),
+        );
+        let pointer = panic!("we can get the pointer somehow");
+        let size = panic!("we can get the length somehow");
+        builder
+            .ins()
+            .call_indirect(check_malloc_sig, check_malloc, &[vmctx, pointer, size]);
+    }
 
     // fn check_free_exit(&mut self, builder: &mut FunctionBuilder) {
     //     let check_free_sig = self.builtin_function_signatures.check_free(builder.func);

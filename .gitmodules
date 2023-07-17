@@ -25,4 +25,4 @@
 	branch = prod/testsuite-base
 [submodule "wasm-valgrind"]
 	path = wasm-valgrind
-	url = https://github.com/ssunkin-fastly/wasm-valgrind
+	url = https://github.com/ssunkin-fastly/wasm-valgrind.git
