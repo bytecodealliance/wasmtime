@@ -450,7 +450,6 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                     let wasmparser::Element {
                         kind,
                         items,
-                        ty: _,
                         range: _,
                     } = entry?;
 
@@ -469,7 +468,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                                 elements.push(func);
                             }
                         }
-                        ElementItems::Expressions(funcs) => {
+                        ElementItems::Expressions(_ty, funcs) => {
                             elements.reserve(usize::try_from(funcs.count()).unwrap());
                             for func in funcs {
                                 let func = match func?.get_binary_reader().read_operator()? {
