@@ -10,6 +10,7 @@
   - [Profiling WebAssembly](./examples-profiling.md)
     - [Profiling with Perf](./examples-profiling-perf.md)
     - [Profiling with VTune](./examples-profiling-vtune.md)
+    - [Profiling with samply](./examples-profiling-samply.md)
     - [Cross-platform Profiling](./examples-profiling-guest.md)
   - [Embedding in Rust](./examples-rust-embed.md)
     - [Hello, world!](./examples-rust-hello-world.md)

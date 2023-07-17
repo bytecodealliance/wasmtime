@@ -1,6 +1,8 @@
 # Using `samply` on Linux/macOS
 
-One profiler supported by Wasmtime is [`samply`](https://github.com/mstange/samply) for Linux and macOS.
+One profiler supported by Wasmtime is [`samply`](https://github.com/mstange/samply) for Linux and macOS. As of 17th July 2023, the
+latest version of samply (on crates.io) is 0.11.0 which does not seem to support perfmaps. To use this, you either need a
+newer version of samply, if by the time you read this, a newer version has been released, or you can build samply from source.
 
 ## Profiling with `perfmap`
 
