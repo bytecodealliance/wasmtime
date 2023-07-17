@@ -28,13 +28,13 @@ harness = false
 
 [dependencies]
 anyhow = "1.0.38"
-cap-std = "0.24.2"
-env_logger = { version = "0.8.2", optional = true }
+cap-std = "2.0.0"
+env_logger = { version = "0.10", optional = true }
 log = "0.4.14"
 rayon = "1.5.0"
 structopt = { version = "0.3.21", optional = true }
 wasi-cap-std-sync = { workspace = true }
-wasm-encoder = "0.28.0"
+wasm-encoder = "0.30.0"
 wasmparser = "0.106.0"
 wasmtime = { workspace = true }
 wasmtime-wasi = { workspace = true }
@@ -46,17 +46,17 @@ workspace = true
 optional = true
 
 [workspace.dependencies]
-wasmprinter = "0.2.58"
-wasmtime = "9.0.0"
-wasmtime-wasi = "9.0.0"
-wasi-cap-std-sync = "9.0.0"
+wasmprinter = "0.2.60"
+wasmtime = "10.0"
+wasmtime-wasi = "10.0"
+wasi-cap-std-sync = "10.0"
 
 
 [dev-dependencies]
-criterion = "0.3.4"
-env_logger = "0.8.2"
+criterion = "0.5.1"
+env_logger = "0.10.0"
 wasmprinter = { workspace = true }
-wat = "1.0.65"
+wat = "1.0.67"
 
 [workspace]
 members = [
