@@ -9,8 +9,8 @@
 //!
 //! * They must only contain basic, raw i32/i64/f32/f64/pointer parameters that
 //!   are safe to pass across the system ABI.
-/// is the above something that should be taken into account? check_malloc 
-/// takes usize as the type for its len arg
+//! TODO(ssunkin): is the above something that should be taken into account? check_malloc takes
+//! usize as the type for its len arg
 //!
 //! * If any nested function propagates an `Err(trap)` out to the library
 //!   function frame, we need to raise it. This involves some nasty and quite
