@@ -1,7 +1,7 @@
 use anyhow::Error;
 use bytes::Bytes;
 
-use crate::preview2::{AsyncWriteStream, HostInputStream, HostOutputStream, StreamState};
+use crate::preview2::{pipe::AsyncWriteStream, HostInputStream, HostOutputStream, StreamState};
 
 #[cfg(unix)]
 mod unix;

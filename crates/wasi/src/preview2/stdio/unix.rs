@@ -1,4 +1,4 @@
-use crate::preview2::{AsyncReadStream, StreamState};
+use crate::preview2::{pipe::AsyncReadStream, StreamState};
 use anyhow::Error;
 use bytes::Bytes;
 use tokio::io::unix::AsyncFd;
