@@ -359,6 +359,63 @@ impl HostOutputStream for AsyncWriteStream {
     }
 }
 
+/// A stream that is never able to provide input. It stays open forever, but is never ready for
+/// reading.
+pub struct EmptyInputStream;
+
+#[async_trait::async_trait]
+impl HostInputStream for EmptyInputStream {
+    fn read(&mut self, _size: usize) -> Result<(Bytes, StreamState), Error> {
+        Ok((Bytes::new(), StreamState::Open))
+    }
+
+    async fn ready(&mut self) -> Result<(), Error> {
+        futures::future::pending().await
+    }
+}
+
+/// An output stream that consumes all input written to it, and is always ready.
+pub struct SinkOutputStream;
+
+#[async_trait::async_trait]
+impl HostOutputStream for SinkOutputStream {
+    fn write(&mut self, buf: Bytes) -> Result<(usize, StreamState), Error> {
+        Ok((buf.len(), StreamState::Open))
+    }
+
+    async fn ready(&mut self) -> Result<(), Error> {
+        Ok(())
+    }
+}
+
+/// A stream that is ready immediately, but will always report that it's closed.
+pub struct ClosedInputStream;
+
+#[async_trait::async_trait]
+impl HostInputStream for ClosedInputStream {
+    fn read(&mut self, _size: usize) -> Result<(Bytes, StreamState), Error> {
+        Ok((Bytes::new(), StreamState::Closed))
+    }
+
+    async fn ready(&mut self) -> Result<(), Error> {
+        Ok(())
+    }
+}
+
+/// An output stream that is always closed.
+pub struct ClosedOutputStream;
+
+#[async_trait::async_trait]
+impl HostOutputStream for ClosedOutputStream {
+    fn write(&mut self, buf: Bytes) -> Result<(usize, StreamState), Error> {
+        Ok((0, StreamState::Closed))
+    }
+
+    async fn ready(&mut self) -> Result<(), Error> {
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;

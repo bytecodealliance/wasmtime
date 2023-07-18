@@ -1,7 +1,7 @@
 use crate::preview2::{
     clocks::{self, WasiClocks},
     filesystem::{Dir, TableFsExt},
-    random, stdio,
+    pipe, random, stdio,
     stream::{HostInputStream, HostOutputStream, TableStreamExt},
     DirPerms, FilePerms, Table,
 };
@@ -33,9 +33,9 @@ impl WasiCtxBuilder {
         let insecure_random_seed =
             cap_rand::thread_rng(cap_rand::ambient_authority()).gen::<u128>();
         Self {
-            stdin: Box::new(stdio::EmptyStream),
-            stdout: Box::new(stdio::EmptyStream),
-            stderr: Box::new(stdio::EmptyStream),
+            stdin: Box::new(pipe::EmptyInputStream),
+            stdout: Box::new(pipe::SinkOutputStream),
+            stderr: Box::new(pipe::SinkOutputStream),
             env: Vec::new(),
             args: Vec::new(),
             preopens: Vec::new(),
