@@ -234,7 +234,6 @@ impl AsyncWriteStream {
                     use tokio::io::AsyncWriteExt;
                     match receiver.recv().await {
                         Some(mut bytes) => {
-                            println!("got bytes: {:?}", bytes);
                             while !bytes.is_empty() {
                                 match writer.write_buf(&mut bytes).await {
                                     Ok(0) => {
