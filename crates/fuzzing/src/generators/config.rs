@@ -218,7 +218,7 @@ impl Config {
         //   regardless of how many basic blocks there are.
         // * Here it's limited to enable this setting only when there's at most
         //   10 functions to ensure that the overhead for all functions is <1G
-        //   ish or otherwise dosn't run away.
+        //   ish or otherwise doesn't run away.
         // * The `bb_padding_log2_minus_one` setting isn't allowed to be
         //   larger than 26 as that allows for `1<<25` maximum padding size
         //   which is 32M.
