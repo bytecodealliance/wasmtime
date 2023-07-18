@@ -94,12 +94,19 @@ impl<T: WasiView> streams::Host for T {
         stream: OutputStream,
         bytes: Vec<u8>,
     ) -> Result<(u64, streams::StreamStatus), streams::Error> {
-        let written = self.write(stream, bytes).await?;
-        self.table_mut()
-            .get_output_stream_mut(stream)?
-            .ready()
-            .await?;
-        Ok(written)
+        let s = self.table_mut().get_output_stream_mut(stream)?;
+
+        let mut bytes = bytes::Bytes::from(bytes);
+        let mut nwritten: usize = 0;
+        loop {
+            s.ready().await?;
+            let (written, state) = HostOutputStream::write(s.as_mut(), bytes.clone())?;
+            let _ = bytes.split_to(written);
+            nwritten += written;
+            if bytes.is_empty() || state == StreamState::Closed {
+                return Ok((nwritten as u64, state.into()));
+            }
+        }
     }
 
     async fn skip(
