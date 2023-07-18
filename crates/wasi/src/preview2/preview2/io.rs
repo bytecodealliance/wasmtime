@@ -38,6 +38,8 @@ impl From<StreamState> for streams::StreamStatus {
     }
 }
 
+const ZEROS: &[u8] = &[0; 4 * 1024 * 1024];
+
 #[async_trait::async_trait]
 impl<T: WasiView> streams::Host for T {
     async fn drop_input_stream(&mut self, stream: InputStream) -> anyhow::Result<()> {
@@ -127,12 +129,11 @@ impl<T: WasiView> streams::Host for T {
         stream: InputStream,
         len: u64,
     ) -> Result<(u64, streams::StreamStatus), streams::Error> {
-        let r = self.skip(stream, len).await?;
         self.table_mut()
             .get_input_stream_mut(stream)?
             .ready()
             .await?;
-        Ok(r)
+        self.skip(stream, len).await
     }
 
     async fn write_zeroes(
@@ -140,13 +141,11 @@ impl<T: WasiView> streams::Host for T {
         stream: OutputStream,
         len: u64,
     ) -> Result<(u64, streams::StreamStatus), streams::Error> {
-        // let s = self.table_mut().get_output_stream_mut(stream)?;
-        //
-        // // TODO: the cast to usize should be fallible, use `.try_into()?`
-        // let bytes_written = s.write_zeroes(len as usize)?;
-        //
-        // Ok(bytes_written as u64)
-        todo!()
+        let s = self.table_mut().get_output_stream_mut(stream)?;
+        let mut bytes = bytes::Bytes::from_static(ZEROS);
+        bytes.truncate((len as usize).min(bytes.len()));
+        let (written, state) = HostOutputStream::write(s.as_mut(), bytes)?;
+        Ok((written as u64, state.into()))
     }
 
     async fn blocking_write_zeroes(
@@ -154,12 +153,18 @@ impl<T: WasiView> streams::Host for T {
         stream: OutputStream,
         len: u64,
     ) -> Result<(u64, streams::StreamStatus), streams::Error> {
-        let r = self.write_zeroes(stream, len).await?;
-        self.table_mut()
-            .get_output_stream_mut(stream)?
-            .ready()
-            .await?;
-        Ok(r)
+        let mut remaining = len as usize;
+        let s = self.table_mut().get_output_stream_mut(stream)?;
+        loop {
+            s.ready().await?;
+            let mut bytes = bytes::Bytes::from_static(ZEROS);
+            bytes.truncate(remaining.min(bytes.len()));
+            let (written, state) = HostOutputStream::write(s.as_mut(), bytes)?;
+            remaining -= written;
+            if remaining == 0 || state == StreamState::Closed {
+                return Ok((len - remaining as u64, state.into()));
+            }
+        }
     }
 
     async fn splice(
