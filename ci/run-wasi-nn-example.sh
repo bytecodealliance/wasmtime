@@ -33,7 +33,7 @@ cp target/wasm32-wasi/release/wasi-nn-example.wasm $TMP_DIR
 popd
 
 # Run the example in Wasmtime (note that the example uses `fixture` as the expected location of the model/tensor files).
-cargo run -- run --mapdir fixture::$TMP_DIR $TMP_DIR/wasi-nn-example.wasm --wasi-modules=experimental-wasi-nn
+cargo run -- run --mapdir fixture::$TMP_DIR --wasi-modules=experimental-wasi-nn $TMP_DIR/wasi-nn-example.wasm
 
 # Clean up the temporary directory only if it was not specified (users may want to keep the directory around).
 if [[ $REMOVE_TMP_DIR -eq 1 ]]; then
