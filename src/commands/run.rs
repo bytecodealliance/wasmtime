@@ -51,12 +51,12 @@ fn parse_module(s: OsString) -> anyhow::Result<PathBuf> {
     }
 }
 
-fn parse_env_var(s: &str) -> Result<(String, String)> {
-    let parts: Vec<_> = s.splitn(2, '=').collect();
-    if parts.len() != 2 {
-        bail!("must be of the form `key=value`");
-    }
-    Ok((parts[0].to_owned(), parts[1].to_owned()))
+fn parse_env_var(s: &str) -> Result<(String, Option<String>)> {
+    let mut parts = s.splitn(2, '=');
+    Ok((
+        parts.next().unwrap().to_string(),
+        parts.next().map(|s| s.to_string()),
+    ))
 }
 
 fn parse_map_dirs(s: &str) -> Result<(String, String)> {
@@ -156,9 +156,15 @@ pub struct RunCommand {
     #[clap(long = "dir", number_of_values = 1, value_name = "DIRECTORY")]
     dirs: Vec<String>,
 
-    /// Pass an environment variable to the program
-    #[clap(long = "env", number_of_values = 1, value_name = "NAME=VAL", value_parser = parse_env_var)]
-    vars: Vec<(String, String)>,
+    /// Pass an environment variable to the program.
+    ///
+    /// The `--env FOO=BAR` form will set the environment variable named `FOO`
+    /// to the value `BAR` for the guest program using WASI. The `--env FOO`
+    /// form will set the environment variable named `FOO` to the same value it
+    /// has in the calling process for the guest, or in other words it will
+    /// cause the environment variable `FOO` to be inherited.
+    #[clap(long = "env", number_of_values = 1, value_name = "NAME[=VAL]", value_parser = parse_env_var)]
+    vars: Vec<(String, Option<String>)>,
 
     /// The name of the function to run
     #[clap(long, value_name = "FUNCTION")]
@@ -689,7 +695,7 @@ fn populate_with_wasi(
     module: Module,
     preopen_dirs: Vec<(String, Dir)>,
     argv: &[String],
-    vars: &[(String, String)],
+    vars: &[(String, Option<String>)],
     wasi_modules: &WasiModules,
     listenfd: bool,
     mut tcplisten: Vec<TcpListener>,
@@ -698,7 +704,16 @@ fn populate_with_wasi(
         wasmtime_wasi::add_to_linker(linker, |host| host.wasi.as_mut().unwrap())?;
 
         let mut builder = WasiCtxBuilder::new();
-        builder = builder.inherit_stdio().args(argv)?.envs(vars)?;
+        builder = builder.inherit_stdio().args(argv)?;
+
+        for (key, value) in vars {
+            let value = match value {
+                Some(value) => value.clone(),
+                None => std::env::var(key)
+                    .map_err(|_| anyhow!("environment varialbe `{key}` not found"))?,
+            };
+            builder = builder.env(key, &value)?;
+        }
 
         let mut num_fd: usize = 3;
 
