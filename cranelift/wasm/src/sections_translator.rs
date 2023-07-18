@@ -256,7 +256,7 @@ fn read_elems(items: &ElementItems) -> WasmResult<Box<[FuncIndex]>> {
                 elems.push(FuncIndex::from_u32(func?));
             }
         }
-        ElementItems::Expressions(funcs) => {
+        ElementItems::Expressions(_ty, funcs) => {
             for func in funcs.clone() {
                 let idx = match func?.get_binary_reader().read_operator()? {
                     Operator::RefNull { .. } => FuncIndex::reserved_value(),
@@ -286,7 +286,6 @@ pub fn parse_element_section<'data>(
         let Element {
             kind,
             items,
-            ty: _,
             range: _,
         } = entry?;
         let segments = read_elems(&items)?;
