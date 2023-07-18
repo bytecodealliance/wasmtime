@@ -293,7 +293,6 @@ impl HostOutputStream for AsyncWriteStream {
     fn write(&mut self, bytes: Bytes) -> Result<(usize, StreamState), anyhow::Error> {
         use tokio::sync::mpsc::error::TryRecvError;
 
-        dbg!(&self.state);
         match self.state {
             Some(WriteState::Ready) => self.send(bytes),
             Some(WriteState::Pending) => match self.result_receiver.try_recv() {
