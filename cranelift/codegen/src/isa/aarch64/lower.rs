@@ -227,24 +227,44 @@ type AddressAddend64List = SmallVec<[Reg; 4]>;
 fn collect_address_addends(
     ctx: &mut Lower<Inst>,
     root: Value,
-) -> (AddressAddend64List, AddressAddend32List, i64) {
+    collect_shift: bool,
+) -> (
+    AddressAddend64List,
+    AddressAddend32List,
+    i64,
+    Option<(Reg, u64)>,
+) {
     let mut result32: AddressAddend32List = SmallVec::new();
     let mut result64: AddressAddend64List = SmallVec::new();
     let mut offset: i64 = 0;
+    let mut shifted: Option<(Reg, u64)> = None;
 
     let mut workqueue: SmallVec<[Value; 4]> = smallvec![root];
 
     while let Some(value) = workqueue.pop() {
         debug_assert_eq!(ty_bits(ctx.value_ty(value)), 64);
+
+        let mut fallback = false;
         if let Some((op, insn)) = maybe_value_multi(
             ctx,
             value,
-            &[
-                Opcode::Uextend,
-                Opcode::Sextend,
-                Opcode::Iadd,
-                Opcode::Iconst,
-            ],
+            if collect_shift {
+                &[
+                    Opcode::Uextend,
+                    Opcode::Sextend,
+                    Opcode::Iadd,
+                    Opcode::Ishl,
+                    Opcode::Imul,
+                    Opcode::Iconst,
+                ]
+            } else {
+                &[
+                    Opcode::Uextend,
+                    Opcode::Sextend,
+                    Opcode::Iadd,
+                    Opcode::Iconst,
+                ]
+            },
         ) {
             match op {
                 Opcode::Uextend | Opcode::Sextend if ty_bits(ctx.input_ty(insn, 0)) == 32 => {
@@ -279,6 +299,22 @@ fn collect_address_addends(
                         workqueue.push(addend);
                     }
                 }
+                Opcode::Ishl | Opcode::Imul => {
+                    assert!(shifted.is_none());
+                    let lhs = ctx.input_as_value(insn, 0);
+                    let lhs = put_value_in_reg(ctx, lhs, NarrowValueMode::None);
+                    if let Some(rhs) =
+                        maybe_input_insn(ctx, InsnInput { insn, input: 1 }, Opcode::Iconst)
+                    {
+                        let rhs = ctx.get_constant(rhs).unwrap();
+                        if op == Opcode::Ishl && rhs <= 3 {
+                            shifted = Some((lhs, rhs));
+                        } else if op == Opcode::Imul && rhs.is_power_of_two() && rhs <= 8 {
+                            shifted = Some((lhs, rhs.ilog2() as u64));
+                        }
+                    }
+                    fallback = shifted.is_none();
+                }
                 Opcode::Iconst => {
                     let value: i64 = ctx.get_constant(insn).unwrap() as i64;
                     offset += value;
@@ -286,12 +322,16 @@ fn collect_address_addends(
                 _ => panic!("Unexpected opcode from maybe_input_insn_multi"),
             }
         } else {
+            fallback = true
+        }
+
+        if fallback {
             let reg = put_value_in_reg(ctx, value, NarrowValueMode::ZeroExtend64);
             result64.push(reg);
         }
     }
 
-    (result64, result32, offset)
+    (result64, result32, offset, shifted)
 }
 
 /// Lower the address of a pair load or store.
@@ -299,7 +339,7 @@ pub(crate) fn lower_pair_address(ctx: &mut Lower<Inst>, addr: Value, offset: i32
     // Collect addends through an arbitrary tree of 32-to-64-bit sign/zero
     // extends and addition ops. We update these as we consume address
     // components, so they represent the remaining addends not yet handled.
-    let (mut addends64, mut addends32, args_offset) = collect_address_addends(ctx, addr);
+    let (mut addends64, mut addends32, args_offset, _) = collect_address_addends(ctx, addr, false);
     let offset = args_offset + (offset as i64);
 
     trace!(
@@ -359,14 +399,16 @@ pub(crate) fn lower_address(
     // Collect addends through an arbitrary tree of 32-to-64-bit sign/zero
     // extends and addition ops. We update these as we consume address
     // components, so they represent the remaining addends not yet handled.
-    let (mut addends64, mut addends32, args_offset) = collect_address_addends(ctx, addr);
+    let (mut addends64, mut addends32, args_offset, shifted) =
+        collect_address_addends(ctx, addr, true);
     let mut offset = args_offset + (offset as i64);
 
     trace!(
-        "lower_address: addends64 {:?}, addends32 {:?}, offset {}",
+        "lower_address: addends64 {:?}, addends32 {:?}, offset {}, shifted: {:?}",
         addends64,
         addends32,
-        offset
+        offset,
+        shifted
     );
 
     // First, decide what the `AMode` will be. Take one extendee and one 64-bit
@@ -439,7 +481,7 @@ pub(crate) fn lower_address(
     // temp, replace one of the registers in the AMode with the temp, and emit
     // instructions to add together the remaining components. Return immediately
     // if this is *not* the case.
-    if offset == 0 && addends32.len() == 0 && addends64.len() == 0 {
+    if offset == 0 && addends32.len() == 0 && addends64.len() == 0 && shifted.is_none() {
         return memarg;
     }
 
@@ -473,6 +515,20 @@ pub(crate) fn lower_address(
         },
         AMode::RegOffset { off, ty, .. } => AMode::RegOffset { rn: addr, off, ty },
         AMode::RegReg { rn, .. } => AMode::RegReg { rn: addr, rm: rn },
+        AMode::UnsignedOffset { uimm12, .. } if uimm12.value == 0 && shifted.is_some() => {
+            let (reg, shift) = shifted.unwrap();
+            AMode::RegScaled {
+                rn: addr,
+                rm: reg,
+                ty: match shift {
+                    0 => I8,
+                    1 => I16,
+                    2 => I32,
+                    3 => I64,
+                    _ => unreachable!(),
+                },
+            }
+        }
         AMode::UnsignedOffset { uimm12, .. } => AMode::UnsignedOffset { rn: addr, uimm12 },
         _ => unreachable!(),
     }

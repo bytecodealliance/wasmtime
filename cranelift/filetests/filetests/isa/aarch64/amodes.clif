@@ -525,3 +525,63 @@ block0(v0: i64, v1: i32):
 ;   stp x0, x1, [x5, #0x18]
 ;   ret
 
+function %s1(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = iconst.i64 3
+  v3 = ishl.i64 v1, v2
+  v4 = iadd v0, v3
+  v5 = load.i64 v4
+  return v5
+}
+
+; VCode:
+; block0:
+;   ldr x0, [x0, x1, LSL #3]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ldr x0, [x0, x1, lsl #3]
+;   ret
+
+function %s2(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = iconst.i64 8
+  v3 = imul.i64 v1, v2
+  v4 = iadd v0, v3
+  v5 = load.i64 v4
+  return v5
+}
+
+; VCode:
+; block0:
+;   ldr x0, [x0, x1, LSL #3]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ldr x0, [x0, x1, lsl #3]
+;   ret
+
+function %s3(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = iconst.i64 7
+  v3 = imul.i64 v1, v2
+  v4 = iadd v0, v3
+  v5 = load.i64 v4
+  return v5
+}
+
+; VCode:
+; block0:
+;   movz x5, #7
+;   madd x5, x1, x5, xzr
+;   ldr x0, [x0, x5]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mov x5, #7
+;   mul x5, x1, x5
+;   ldr x0, [x0, x5]
+;   ret
