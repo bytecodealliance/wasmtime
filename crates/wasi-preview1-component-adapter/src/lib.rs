@@ -1222,7 +1222,9 @@ pub unsafe extern "C" fn fd_write(
                             streams::write(wasi_stream, bytes)
                         }
                     } else {
-                        streams::write(wasi_stream, bytes)
+                        // Use blocking writes on non-file streams (stdout, stderr, as sockets
+                        // aren't currently used).
+                        streams::blocking_write(wasi_stream, bytes)
                     }
                     .map_err(|_| ERRNO_IO)?;
 
