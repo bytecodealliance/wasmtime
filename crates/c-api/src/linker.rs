@@ -103,9 +103,9 @@ pub extern "C" fn wasmtime_linker_define_wasi(
 ) -> Option<Box<wasmtime_error_t>> {
     handle_result(
         wasmtime_wasi::add_to_linker(&mut linker.linker, |cx| {
-            cx.wasi
-                .as_mut()
-                .expect("failed to define WASI on linker; did you set a WASI configuration in the store?")
+            cx.wasi.as_mut().expect(
+                "failed to define WASI on linker; did you set a WASI configuration in the store?",
+            )
         }),
         |_linker| (),
     )
