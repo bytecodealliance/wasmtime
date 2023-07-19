@@ -494,12 +494,12 @@ unsafe fn check_malloc(instance: &mut Instance, addr: u32, len: u32) -> Result<u
     //     let addr_usize;
     // 	instance::valgrind_state::malloc(addr_usize, len)
     println!("addr: {} len: {}", addr, len);
-    Ok(0)
-    //instance.valgrind_state.malloc(addr as usize, len as usize)
-    /*
-    let result: Result<(), AccessError> = panic!("pretend we called valgrind_state.free()");
-    result.to_int()
-    */
+    let result = instance.valgrind_state.malloc(addr as usize, len as usize);
+    if result.is_ok() {
+        Ok(0)
+    } else {
+        panic!("failed")
+    }
 }
 
 unsafe fn check_free(instance: &mut Instance, addr: u32) -> Result<u32> {

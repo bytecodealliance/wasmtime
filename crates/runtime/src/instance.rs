@@ -146,7 +146,7 @@ pub struct Instance {
     /// represents a dynamically-sized array that extends beyond the nominal
     /// end of the struct (similar to a flexible array member).
     vmctx: VMContext,
-    valgrind_state: Valgrind,
+    pub(crate) valgrind_state: Valgrind,
 }
 
 #[allow(clippy::cast_ptr_alignment)]
