@@ -23,6 +23,15 @@ impl File {
             perms,
         }
     }
+
+    pub(crate) async fn block<F, R>(&self, body: F) -> R
+    where
+        F: FnOnce(&cap_std::fs::File) -> R + Send + 'static,
+        R: Send + 'static,
+    {
+        let f = self.file.clone();
+        tokio::task::spawn_blocking(move || body(&f)).await.unwrap()
+    }
 }
 pub(crate) trait TableFsExt {
     fn push_file(&mut self, file: File) -> Result<u32, TableError>;
@@ -72,7 +81,7 @@ bitflags::bitflags! {
 }
 
 pub(crate) struct Dir {
-    pub dir: cap_std::fs::Dir,
+    pub dir: Arc<cap_std::fs::Dir>,
     pub perms: DirPerms,
     pub file_perms: FilePerms,
 }
@@ -80,10 +89,19 @@ pub(crate) struct Dir {
 impl Dir {
     pub fn new(dir: cap_std::fs::Dir, perms: DirPerms, file_perms: FilePerms) -> Self {
         Dir {
-            dir,
+            dir: Arc::new(dir),
             perms,
             file_perms,
         }
+    }
+
+    pub(crate) async fn block<F, R>(&self, body: F) -> R
+    where
+        F: FnOnce(&cap_std::fs::Dir) -> R + Send + 'static,
+        R: Send + 'static,
+    {
+        let d = self.dir.clone();
+        tokio::task::spawn_blocking(move || body(&d)).await.unwrap()
     }
 }
 

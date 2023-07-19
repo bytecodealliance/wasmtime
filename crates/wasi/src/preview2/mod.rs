@@ -72,7 +72,13 @@ pub mod bindings {
 
         impl From<super::filesystem::filesystem::ErrorCode> for filesystem::filesystem::ErrorCode {
             fn from(other: super::filesystem::filesystem::ErrorCode) -> Self {
+                use super::filesystem::filesystem::ErrorCode;
                 match other {
+                    ErrorCode::Access => Self::Access,
+                    ErrorCode::WouldBlock => Self::WouldBlock,
+                    ErrorCode::Already => Self::Already,
+                    ErrorCode::BadDescriptor => Self::BadDescriptor,
+                    ErrorCode::Busy => Self::Busy,
                 }
             }
         }
