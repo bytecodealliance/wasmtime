@@ -467,14 +467,17 @@ impl From<async_filesystem::DescriptorFlags> for sync_filesystem::DescriptorFlag
         if other.contains(async_filesystem::DescriptorFlags::WRITE) {
             out |= Self::WRITE;
         }
+        if other.contains(async_filesystem::DescriptorFlags::FILE_INTEGRITY_SYNC) {
+            out |= Self::FILE_INTEGRITY_SYNC;
+        }
         if other.contains(async_filesystem::DescriptorFlags::DATA_INTEGRITY_SYNC) {
             out |= Self::DATA_INTEGRITY_SYNC;
         }
         if other.contains(async_filesystem::DescriptorFlags::REQUESTED_WRITE_SYNC) {
             out |= Self::REQUESTED_WRITE_SYNC;
         }
-        if other.contains(async_filesystem::DescriptorFlags::FILE_INTEGRITY_SYNC) {
-            out |= Self::FILE_INTEGRITY_SYNC;
+        if other.contains(async_filesystem::DescriptorFlags::MUTATE_DIRECTORY) {
+            out |= Self::MUTATE_DIRECTORY;
         }
         out
     }
@@ -498,45 +501,113 @@ impl From<async_filesystem::DescriptorType> for sync_filesystem::DescriptorType 
 
 impl From<async_filesystem::DirectoryEntry> for sync_filesystem::DirectoryEntry {
     fn from(other: async_filesystem::DirectoryEntry) -> Self {
-        todo!()
+        Self {
+            inode: other.inode,
+            type_: other.type_.into(),
+            name: other.name,
+        }
     }
 }
 
 impl From<async_filesystem::DescriptorStat> for sync_filesystem::DescriptorStat {
     fn from(other: async_filesystem::DescriptorStat) -> Self {
-        todo!()
+        Self {
+            device: other.device,
+            inode: other.inode,
+            type_: other.type_.into(),
+            link_count: other.link_count,
+            size: other.size,
+            data_access_timestamp: other.data_access_timestamp,
+            data_modification_timestamp: other.data_modification_timestamp,
+            status_change_timestamp: other.status_change_timestamp,
+        }
     }
 }
 
 impl From<sync_filesystem::PathFlags> for async_filesystem::PathFlags {
     fn from(other: sync_filesystem::PathFlags) -> Self {
-        todo!()
+        let mut out = Self::empty();
+        if other.contains(sync_filesystem::PathFlags::SYMLINK_FOLLOW) {
+            out |= Self::SYMLINK_FOLLOW;
+        }
+        out
     }
 }
 
 impl From<sync_filesystem::NewTimestamp> for async_filesystem::NewTimestamp {
     fn from(other: sync_filesystem::NewTimestamp) -> Self {
-        todo!()
+        use sync_filesystem::NewTimestamp;
+        match other {
+            NewTimestamp::NoChange => Self::NoChange,
+            NewTimestamp::Now => Self::Now,
+            NewTimestamp::Timestamp(datetime) => Self::Timestamp(datetime),
+        }
     }
 }
 
 impl From<sync_filesystem::OpenFlags> for async_filesystem::OpenFlags {
     fn from(other: sync_filesystem::OpenFlags) -> Self {
-        todo!()
+        let mut out = Self::empty();
+        if other.contains(sync_filesystem::OpenFlags::CREATE) {
+            out |= Self::CREATE;
+        }
+        if other.contains(sync_filesystem::OpenFlags::DIRECTORY) {
+            out |= Self::DIRECTORY;
+        }
+        if other.contains(sync_filesystem::OpenFlags::EXCLUSIVE) {
+            out |= Self::EXCLUSIVE;
+        }
+        if other.contains(sync_filesystem::OpenFlags::TRUNCATE) {
+            out |= Self::TRUNCATE;
+        }
+        out
     }
 }
 impl From<sync_filesystem::DescriptorFlags> for async_filesystem::DescriptorFlags {
     fn from(other: sync_filesystem::DescriptorFlags) -> Self {
-        todo!()
+        let mut out = Self::empty();
+        if other.contains(sync_filesystem::DescriptorFlags::READ) {
+            out |= Self::READ;
+        }
+        if other.contains(sync_filesystem::DescriptorFlags::WRITE) {
+            out |= Self::WRITE;
+        }
+        if other.contains(sync_filesystem::DescriptorFlags::FILE_INTEGRITY_SYNC) {
+            out |= Self::FILE_INTEGRITY_SYNC;
+        }
+        if other.contains(sync_filesystem::DescriptorFlags::DATA_INTEGRITY_SYNC) {
+            out |= Self::DATA_INTEGRITY_SYNC;
+        }
+        if other.contains(sync_filesystem::DescriptorFlags::REQUESTED_WRITE_SYNC) {
+            out |= Self::REQUESTED_WRITE_SYNC;
+        }
+        if other.contains(sync_filesystem::DescriptorFlags::MUTATE_DIRECTORY) {
+            out |= Self::MUTATE_DIRECTORY;
+        }
+        out
     }
 }
 impl From<sync_filesystem::Modes> for async_filesystem::Modes {
     fn from(other: sync_filesystem::Modes) -> Self {
-        todo!()
+        let mut out = Self::empty();
+        if other.contains(sync_filesystem::Modes::READABLE) {
+            out |= Self::READABLE;
+        }
+        if other.contains(sync_filesystem::Modes::WRITABLE) {
+            out |= Self::WRITABLE;
+        }
+        if other.contains(sync_filesystem::Modes::EXECUTABLE) {
+            out |= Self::EXECUTABLE;
+        }
+        out
     }
 }
 impl From<sync_filesystem::AccessType> for async_filesystem::AccessType {
     fn from(other: sync_filesystem::AccessType) -> Self {
-        todo!()
+        use sync_filesystem::AccessType;
+        match other {
+            AccessType::Access(modes) => Self::Access(modes.into()),
+            AccessType::Exists => Self::Exists,
+        }
     }
 }
