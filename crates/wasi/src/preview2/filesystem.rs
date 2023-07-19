@@ -1,7 +1,7 @@
 use crate::preview2::{
     block_in_place, HostInputStream, HostOutputStream, StreamState, Table, TableError,
 };
-use bytes::Bytes;
+use bytes::{Bytes, BytesMut};
 use std::sync::Arc;
 
 bitflags::bitflags! {
@@ -100,11 +100,14 @@ impl FileInputStream {
 #[async_trait::async_trait]
 impl HostInputStream for FileInputStream {
     fn read(&mut self, size: usize) -> anyhow::Result<(Bytes, StreamState)> {
-        // use system_interface::fs::FileIoExt;
-        // let (n, end) = read_result(block_in_place(|| self.file.read_at(buf, self.position)))?;
-        // self.position = self.position.wrapping_add(n);
-        // Ok((n, end))
-        todo!()
+        use system_interface::fs::FileIoExt;
+        let mut buf = BytesMut::zeroed(size);
+        let (n, state) = read_result(block_in_place(|| {
+            self.file.read_at(&mut buf, self.position)
+        }))?;
+        buf.truncate(n);
+        self.position += n as u64;
+        Ok((buf.freeze(), state))
     }
     async fn ready(&mut self) -> anyhow::Result<()> {
         Ok(()) // Always immediately ready - file reads cannot block
@@ -113,11 +116,21 @@ impl HostInputStream for FileInputStream {
 
 pub(crate) fn read_result(
     r: Result<usize, std::io::Error>,
-) -> Result<(u64, StreamState), std::io::Error> {
+) -> Result<(usize, StreamState), std::io::Error> {
     match r {
         Ok(0) => Ok((0, StreamState::Closed)),
-        Ok(n) => Ok((n as u64, StreamState::Open)),
+        Ok(n) => Ok((n, StreamState::Open)),
         Err(e) if e.kind() == std::io::ErrorKind::Interrupted => Ok((0, StreamState::Open)),
+        Err(e) => Err(e),
+    }
+}
+
+pub(crate) fn write_result(
+    r: Result<usize, std::io::Error>,
+) -> Result<(usize, StreamState), std::io::Error> {
+    match r {
+        Ok(0) => Ok((0, StreamState::Closed)),
+        Ok(n) => Ok((n, StreamState::Open)),
         Err(e) => Err(e),
     }
 }
@@ -136,11 +149,10 @@ impl FileOutputStream {
 impl HostOutputStream for FileOutputStream {
     /// Write bytes. On success, returns the number of bytes written.
     fn write(&mut self, buf: Bytes) -> anyhow::Result<(usize, StreamState)> {
-        // use system_interface::fs::FileIoExt;
-        // let n = block_in_place(|| self.file.write_at(buf, self.position))? as i64 as u64;
-        // self.position = self.position.wrapping_add(n);
-        // Ok(n)
-        todo!()
+        use system_interface::fs::FileIoExt;
+        let (n, state) = write_result(block_in_place(|| self.file.write_at(&buf, self.position)))?;
+        self.position += n as u64;
+        Ok((n, state))
     }
 
     async fn ready(&mut self) -> anyhow::Result<()> {
@@ -161,9 +173,8 @@ impl FileAppendStream {
 impl HostOutputStream for FileAppendStream {
     /// Write bytes. On success, returns the number of bytes written.
     fn write(&mut self, buf: Bytes) -> anyhow::Result<(usize, StreamState)> {
-        // use system_interface::fs::FileIoExt;
-        // Ok(block_in_place(|| self.file.append(buf))? as i64 as u64)
-        todo!()
+        use system_interface::fs::FileIoExt;
+        Ok(write_result(block_in_place(|| self.file.append(&buf)))?)
     }
 
     async fn ready(&mut self) -> anyhow::Result<()> {
