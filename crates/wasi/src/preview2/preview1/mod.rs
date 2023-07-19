@@ -338,7 +338,15 @@ pub fn add_to_linker<
 // to this module.
 wiggle::from_witx!({
     witx: ["$CARGO_MANIFEST_DIR/witx/wasi_snapshot_preview1.witx"],
-    async: { wasi_snapshot_preview1::{fd_close, fd_read, fd_pread, fd_write, fd_pwrite, poll_oneoff} },
+    async: {
+        wasi_snapshot_preview1::{
+            fd_advise, fd_close, fd_datasync, fd_fdstat_get, fd_filestat_get, fd_filestat_set_size,
+            fd_filestat_set_times, fd_read, fd_pread, fd_seek, fd_sync, fd_readdir, fd_write,
+            fd_pwrite, poll_oneoff, path_create_directory, path_filestat_get,
+            path_filestat_set_times, path_link, path_open, path_readlink, path_remove_directory,
+            path_rename, path_symlink, path_unlink_file
+        }
+    },
     errors: { errno => trappable Error },
 });
 
@@ -760,7 +768,7 @@ impl<
     }
 
     #[instrument(skip(self))]
-    fn fd_advise(
+    async fn fd_advise(
         &mut self,
         fd: types::Fd,
         offset: types::Filesize,
@@ -768,11 +776,13 @@ impl<
         advice: types::Advice,
     ) -> Result<(), types::Error> {
         let fd = self.get_file_fd(fd)?;
-        self.advise(fd, offset, len, advice.into()).map_err(|e| {
-            e.try_into()
-                .context("failed to call `advise`")
-                .unwrap_or_else(types::Error::trap)
-        })
+        self.advise(fd, offset, len, advice.into())
+            .await
+            .map_err(|e| {
+                e.try_into()
+                    .context("failed to call `advise`")
+                    .unwrap_or_else(types::Error::trap)
+            })
     }
 
     /// Force the allocation of space in a file.
@@ -810,6 +820,7 @@ impl<
             }
             Descriptor::File(File { fd, .. }) | Descriptor::PreopenDirectory((fd, _)) => self
                 .drop_descriptor(fd)
+                .await
                 .context("failed to call `drop-descriptor`"),
         }
         .map_err(types::Error::trap)
@@ -818,9 +829,9 @@ impl<
     /// Synchronize the data of a file to disk.
     /// NOTE: This is similar to `fdatasync` in POSIX.
     #[instrument(skip(self))]
-    fn fd_datasync(&mut self, fd: types::Fd) -> Result<(), types::Error> {
+    async fn fd_datasync(&mut self, fd: types::Fd) -> Result<(), types::Error> {
         let fd = self.get_file_fd(fd)?;
-        self.sync_data(fd).map_err(|e| {
+        self.sync_data(fd).await.map_err(|e| {
             e.try_into()
                 .context("failed to call `sync-data`")
                 .unwrap_or_else(types::Error::trap)
@@ -830,7 +841,7 @@ impl<
     /// Get the attributes of a file descriptor.
     /// NOTE: This returns similar flags to `fsync(fd, F_GETFL)` in POSIX, as well as additional fields.
     #[instrument(skip(self))]
-    fn fd_fdstat_get(&mut self, fd: types::Fd) -> Result<types::Fdstat, types::Error> {
+    async fn fd_fdstat_get(&mut self, fd: types::Fd) -> Result<types::Fdstat, types::Error> {
         let (fd, blocking, append) = match self.transact()?.get_descriptor(fd)? {
             Descriptor::Stdin(..) => {
                 let fs_rights_base = types::Rights::FD_READ;
@@ -861,13 +872,14 @@ impl<
 
         // TODO: use `try_join!` to poll both futures async, unfortunately that is not currently
         // possible, because `bindgen` generates methods with `&mut self` receivers.
-        let flags = self.get_flags(fd).map_err(|e| {
+        let flags = self.get_flags(fd).await.map_err(|e| {
             e.try_into()
                 .context("failed to call `get-flags`")
                 .unwrap_or_else(types::Error::trap)
         })?;
         let fs_filetype = self
             .get_type(fd)
+            .await
             .map_err(|e| {
                 e.try_into()
                     .context("failed to call `get-type`")
@@ -945,7 +957,7 @@ impl<
 
     /// Return the attributes of an open file.
     #[instrument(skip(self))]
-    fn fd_filestat_get(&mut self, fd: types::Fd) -> Result<types::Filestat, types::Error> {
+    async fn fd_filestat_get(&mut self, fd: types::Fd) -> Result<types::Filestat, types::Error> {
         let desc = self.transact()?.get_descriptor(fd)?.clone();
         match desc {
             Descriptor::Stdin(..) | Descriptor::Stdout(..) | Descriptor::Stderr(..) => {
@@ -970,7 +982,7 @@ impl<
                     data_access_timestamp,
                     data_modification_timestamp,
                     status_change_timestamp,
-                } = self.stat(fd).map_err(|e| {
+                } = self.stat(fd).await.map_err(|e| {
                     e.try_into()
                         .context("failed to call `stat`")
                         .unwrap_or_else(types::Error::trap)
@@ -996,13 +1008,13 @@ impl<
     /// Adjust the size of an open file. If this increases the file's size, the extra bytes are filled with zeros.
     /// NOTE: This is similar to `ftruncate` in POSIX.
     #[instrument(skip(self))]
-    fn fd_filestat_set_size(
+    async fn fd_filestat_set_size(
         &mut self,
         fd: types::Fd,
         size: types::Filesize,
     ) -> Result<(), types::Error> {
         let fd = self.get_file_fd(fd)?;
-        self.set_size(fd, size).map_err(|e| {
+        self.set_size(fd, size).await.map_err(|e| {
             e.try_into()
                 .context("failed to call `set-size`")
                 .unwrap_or_else(types::Error::trap)
@@ -1012,7 +1024,7 @@ impl<
     /// Adjust the timestamps of an open file or directory.
     /// NOTE: This is similar to `futimens` in POSIX.
     #[instrument(skip(self))]
-    fn fd_filestat_set_times(
+    async fn fd_filestat_set_times(
         &mut self,
         fd: types::Fd,
         atim: types::Timestamp,
@@ -1031,7 +1043,7 @@ impl<
         )?;
 
         let fd = self.get_fd(fd)?;
-        self.set_times(fd, atim, mtim).map_err(|e| {
+        self.set_times(fd, atim, mtim).await.map_err(|e| {
             e.try_into()
                 .context("failed to call `set-times`")
                 .unwrap_or_else(types::Error::trap)
@@ -1059,7 +1071,7 @@ impl<
                 };
 
                 let pos = position.load(Ordering::Relaxed);
-                let stream = self.read_via_stream(fd, pos).map_err(|e| {
+                let stream = self.read_via_stream(fd, pos).await.map_err(|e| {
                     e.try_into()
                         .context("failed to call `read-via-stream`")
                         .unwrap_or_else(types::Error::trap)
@@ -1118,7 +1130,7 @@ impl<
                     return Ok(0)
                 };
 
-                let stream = self.read_via_stream(fd, offset).map_err(|e| {
+                let stream = self.read_via_stream(fd, offset).await.map_err(|e| {
                     e.try_into()
                         .context("failed to call `read-via-stream`")
                         .unwrap_or_else(types::Error::trap)
@@ -1171,7 +1183,7 @@ impl<
                     return Ok(0)
                 };
                 let (stream, pos) = if append {
-                    let stream = self.append_via_stream(fd).map_err(|e| {
+                    let stream = self.append_via_stream(fd).await.map_err(|e| {
                         e.try_into()
                             .context("failed to call `append-via-stream`")
                             .unwrap_or_else(types::Error::trap)
@@ -1179,7 +1191,7 @@ impl<
                     (stream, 0)
                 } else {
                     let position = position.load(Ordering::Relaxed);
-                    let stream = self.write_via_stream(fd, position).map_err(|e| {
+                    let stream = self.write_via_stream(fd, position).await.map_err(|e| {
                         e.try_into()
                             .context("failed to call `write-via-stream`")
                             .unwrap_or_else(types::Error::trap)
@@ -1228,7 +1240,7 @@ impl<
                 let Some(buf) = first_non_empty_ciovec(ciovs)? else {
                     return Ok(0)
                 };
-                let stream = self.write_via_stream(fd, offset).map_err(|e| {
+                let stream = self.write_via_stream(fd, offset).await.map_err(|e| {
                     e.try_into()
                         .context("failed to call `write-via-stream`")
                         .unwrap_or_else(types::Error::trap)
@@ -1292,7 +1304,7 @@ impl<
     /// Move the offset of a file descriptor.
     /// NOTE: This is similar to `lseek` in POSIX.
     #[instrument(skip(self))]
-    fn fd_seek(
+    async fn fd_seek(
         &mut self,
         fd: types::Fd,
         offset: types::Filedelta,
@@ -1310,7 +1322,7 @@ impl<
                 .checked_add_signed(offset)
                 .ok_or(types::Errno::Inval)?,
             types::Whence::End => {
-                let filesystem::DescriptorStat { size, .. } = self.stat(fd).map_err(|e| {
+                let filesystem::DescriptorStat { size, .. } = self.stat(fd).await.map_err(|e| {
                     e.try_into()
                         .context("failed to call `stat`")
                         .unwrap_or_else(types::Error::trap)
@@ -1326,9 +1338,9 @@ impl<
     /// Synchronize the data and metadata of a file to disk.
     /// NOTE: This is similar to `fsync` in POSIX.
     #[instrument(skip(self))]
-    fn fd_sync(&mut self, fd: types::Fd) -> Result<(), types::Error> {
+    async fn fd_sync(&mut self, fd: types::Fd) -> Result<(), types::Error> {
         let fd = self.get_file_fd(fd)?;
-        self.sync(fd).map_err(|e| {
+        self.sync(fd).await.map_err(|e| {
             e.try_into()
                 .context("failed to call `sync`")
                 .unwrap_or_else(types::Error::trap)
@@ -1347,7 +1359,7 @@ impl<
     }
 
     #[instrument(skip(self))]
-    fn fd_readdir<'a>(
+    async fn fd_readdir<'a>(
         &mut self,
         fd: types::Fd,
         buf: &GuestPtr<'a, u8>,
@@ -1355,14 +1367,14 @@ impl<
         cookie: types::Dircookie,
     ) -> Result<types::Size, types::Error> {
         let fd = self.get_dir_fd(fd)?;
-        let stream = self.read_directory(fd).map_err(|e| {
+        let stream = self.read_directory(fd).await.map_err(|e| {
             e.try_into()
                 .context("failed to call `read-directory`")
                 .unwrap_or_else(types::Error::trap)
         })?;
         let filesystem::DescriptorStat {
             inode: fd_inode, ..
-        } = self.stat(fd).map_err(|e| {
+        } = self.stat(fd).await.map_err(|e| {
             e.try_into()
                 .context("failed to call `stat`")
                 .unwrap_or_else(types::Error::trap)
@@ -1457,14 +1469,14 @@ impl<
     }
 
     #[instrument(skip(self))]
-    fn path_create_directory<'a>(
+    async fn path_create_directory<'a>(
         &mut self,
         dirfd: types::Fd,
         path: &GuestPtr<'a, str>,
     ) -> Result<(), types::Error> {
         let dirfd = self.get_dir_fd(dirfd)?;
         let path = read_string(path)?;
-        self.create_directory_at(dirfd, path).map_err(|e| {
+        self.create_directory_at(dirfd, path).await.map_err(|e| {
             e.try_into()
                 .context("failed to call `create-directory-at`")
                 .unwrap_or_else(types::Error::trap)
@@ -1474,7 +1486,7 @@ impl<
     /// Return the attributes of a file or directory.
     /// NOTE: This is similar to `stat` in POSIX.
     #[instrument(skip(self))]
-    fn path_filestat_get<'a>(
+    async fn path_filestat_get<'a>(
         &mut self,
         dirfd: types::Fd,
         flags: types::Lookupflags,
@@ -1491,7 +1503,7 @@ impl<
             data_access_timestamp,
             data_modification_timestamp,
             status_change_timestamp,
-        } = self.stat_at(dirfd, flags.into(), path).map_err(|e| {
+        } = self.stat_at(dirfd, flags.into(), path).await.map_err(|e| {
             e.try_into()
                 .context("failed to call `stat-at`")
                 .unwrap_or_else(types::Error::trap)
@@ -1515,7 +1527,7 @@ impl<
     /// Adjust the timestamps of a file or directory.
     /// NOTE: This is similar to `utimensat` in POSIX.
     #[instrument(skip(self))]
-    fn path_filestat_set_times<'a>(
+    async fn path_filestat_set_times<'a>(
         &mut self,
         dirfd: types::Fd,
         flags: types::Lookupflags,
@@ -1538,6 +1550,7 @@ impl<
         let dirfd = self.get_dir_fd(dirfd)?;
         let path = read_string(path)?;
         self.set_times_at(dirfd, flags.into(), path, atim, mtim)
+            .await
             .map_err(|e| {
                 e.try_into()
                     .context("failed to call `set-times-at`")
@@ -1548,7 +1561,7 @@ impl<
     /// Create a hard link.
     /// NOTE: This is similar to `linkat` in POSIX.
     #[instrument(skip(self))]
-    fn path_link<'a>(
+    async fn path_link<'a>(
         &mut self,
         src_fd: types::Fd,
         src_flags: types::Lookupflags,
@@ -1561,6 +1574,7 @@ impl<
         let src_path = read_string(src_path)?;
         let target_path = read_string(target_path)?;
         self.link_at(src_fd, src_flags.into(), src_path, target_fd, target_path)
+            .await
             .map_err(|e| {
                 e.try_into()
                     .context("failed to call `link-at`")
@@ -1571,7 +1585,7 @@ impl<
     /// Open a file or directory.
     /// NOTE: This is similar to `openat` in POSIX.
     #[instrument(skip(self))]
-    fn path_open<'a>(
+    async fn path_open<'a>(
         &mut self,
         dirfd: types::Fd,
         dirflags: types::Lookupflags,
@@ -1619,6 +1633,7 @@ impl<
                 flags,
                 filesystem::Modes::READABLE | filesystem::Modes::WRITABLE,
             )
+            .await
             .map_err(|e| {
                 e.try_into()
                     .context("failed to call `open-at`")
@@ -1636,7 +1651,7 @@ impl<
     /// Read the contents of a symbolic link.
     /// NOTE: This is similar to `readlinkat` in POSIX.
     #[instrument(skip(self))]
-    fn path_readlink<'a>(
+    async fn path_readlink<'a>(
         &mut self,
         dirfd: types::Fd,
         path: &GuestPtr<'a, str>,
@@ -1645,7 +1660,7 @@ impl<
     ) -> Result<types::Size, types::Error> {
         let dirfd = self.get_dir_fd(dirfd)?;
         let path = read_string(path)?;
-        let mut path = self.readlink_at(dirfd, path).map_err(|e| {
+        let mut path = self.readlink_at(dirfd, path).await.map_err(|e| {
             e.try_into()
                 .context("failed to call `readlink-at`")
                 .unwrap_or_else(types::Error::trap)
@@ -1660,14 +1675,14 @@ impl<
     }
 
     #[instrument(skip(self))]
-    fn path_remove_directory<'a>(
+    async fn path_remove_directory<'a>(
         &mut self,
         dirfd: types::Fd,
         path: &GuestPtr<'a, str>,
     ) -> Result<(), types::Error> {
         let dirfd = self.get_dir_fd(dirfd)?;
         let path = read_string(path)?;
-        self.remove_directory_at(dirfd, path).map_err(|e| {
+        self.remove_directory_at(dirfd, path).await.map_err(|e| {
             e.try_into()
                 .context("failed to call `remove-directory-at`")
                 .unwrap_or_else(types::Error::trap)
@@ -1677,7 +1692,7 @@ impl<
     /// Rename a file or directory.
     /// NOTE: This is similar to `renameat` in POSIX.
     #[instrument(skip(self))]
-    fn path_rename<'a>(
+    async fn path_rename<'a>(
         &mut self,
         src_fd: types::Fd,
         src_path: &GuestPtr<'a, str>,
@@ -1689,6 +1704,7 @@ impl<
         let src_path = read_string(src_path)?;
         let dest_path = read_string(dest_path)?;
         self.rename_at(src_fd, src_path, dest_fd, dest_path)
+            .await
             .map_err(|e| {
                 e.try_into()
                     .context("failed to call `rename-at`")
@@ -1697,7 +1713,7 @@ impl<
     }
 
     #[instrument(skip(self))]
-    fn path_symlink<'a>(
+    async fn path_symlink<'a>(
         &mut self,
         src_path: &GuestPtr<'a, str>,
         dirfd: types::Fd,
@@ -1706,7 +1722,7 @@ impl<
         let dirfd = self.get_dir_fd(dirfd)?;
         let src_path = read_string(src_path)?;
         let dest_path = read_string(dest_path)?;
-        self.symlink_at(dirfd, src_path, dest_path).map_err(|e| {
+        self.symlink_at(dirfd, src_path, dest_path).await.map_err(|e| {
             e.try_into()
                 .context("failed to call `symlink-at`")
                 .unwrap_or_else(types::Error::trap)
@@ -1714,14 +1730,14 @@ impl<
     }
 
     #[instrument(skip(self))]
-    fn path_unlink_file<'a>(
+    async fn path_unlink_file<'a>(
         &mut self,
         dirfd: types::Fd,
         path: &GuestPtr<'a, str>,
     ) -> Result<(), types::Error> {
         let dirfd = self.get_dir_fd(dirfd)?;
         let path = path.as_cow().map_err(|_| types::Errno::Inval)?.to_string();
-        self.unlink_file_at(dirfd, path).map_err(|e| {
+        self.unlink_file_at(dirfd, path).await.map_err(|e| {
             e.try_into()
                 .context("failed to call `unlink-file-at`")
                 .unwrap_or_else(types::Error::trap)

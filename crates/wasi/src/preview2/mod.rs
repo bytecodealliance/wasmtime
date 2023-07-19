@@ -36,10 +36,7 @@ pub use self::error::I32Exit;
 pub use self::filesystem::{DirPerms, FilePerms};
 pub use self::poll::{HostPollable, TablePollableExt};
 pub use self::random::{thread_rng, Deterministic};
-pub use self::stream::{
-    HostInputStream, HostOutputStream, StreamState,
-    TableStreamExt,
-};
+pub use self::stream::{HostInputStream, HostOutputStream, StreamState, TableStreamExt};
 pub use self::table::{Table, TableError};
 pub use cap_fs_ext::SystemTimeSpec;
 pub use cap_rand::RngCore;
@@ -52,19 +49,31 @@ pub mod bindings {
                 interfaces: "
               import wasi:poll/poll
               import wasi:io/streams
+              import wasi:filesystem/filesystem
             ",
                 tracing: true,
                 trappable_error_type: {
                     "streams"::"stream-error": Error,
+                    "filesystem"::"error-code": Error,
+                },
+                with: {
+                    "wasi:clocks/wall-clock": crate::preview2::bindings::clocks::wall_clock,
                 }
             });
         }
-        pub use self::_internal::wasi::{io, poll};
+        pub use self::_internal::wasi::{filesystem, io, poll};
 
         impl From<super::io::streams::StreamError> for io::streams::StreamError {
             fn from(_other: super::io::streams::StreamError) -> Self {
                 // There are no cases for this record.
                 Self {}
+            }
+        }
+
+        impl From<super::filesystem::filesystem::ErrorCode> for filesystem::filesystem::ErrorCode {
+            fn from(other: super::filesystem::filesystem::ErrorCode) -> Self {
+                match other {
+                }
             }
         }
 
@@ -78,21 +87,40 @@ pub mod bindings {
         }
     }
 
+    pub(crate) mod _internal_clocks {
+        wasmtime::component::bindgen!({
+        path: "wit",
+        interfaces: "
+              import wasi:clocks/wall-clock
+              import wasi:clocks/monotonic-clock
+              import wasi:clocks/timezone
+            ",
+        tracing: true,
+        });
+    }
+    pub use self::_internal_clocks::wasi::clocks;
+
     pub(crate) mod _internal_io {
         wasmtime::component::bindgen!({
             path: "wit",
             interfaces: "
               import wasi:poll/poll
               import wasi:io/streams
+              import wasi:filesystem/filesystem
             ",
             tracing: true,
             async: true,
             trappable_error_type: {
                 "streams"::"stream-error": Error,
+                "filesystem"::"error-code": Error,
+            },
+            with: {
+                "wasi:clocks/wall-clock": crate::preview2::bindings::clocks::wall_clock,
             }
         });
     }
-    pub use self::_internal_io::wasi::{io, poll};
+    pub use self::_internal_io::wasi::{filesystem, io, poll};
+
     pub(crate) mod _internal_rest {
         wasmtime::component::bindgen!({
         path: "wit",
@@ -100,7 +128,6 @@ pub mod bindings {
               import wasi:clocks/wall-clock
               import wasi:clocks/monotonic-clock
               import wasi:clocks/timezone
-              import wasi:filesystem/filesystem
               import wasi:random/random
               import wasi:random/insecure
               import wasi:random/insecure-seed
@@ -117,11 +144,14 @@ pub mod bindings {
             "streams"::"stream-error": Error,
         },
         with: {
-           "wasi:poll/poll": crate::preview2::bindings::poll::poll,
-           "wasi:io/streams": crate::preview2::bindings::io::streams
+            "wasi:clocks/wall-clock": crate::preview2::bindings::clocks::wall_clock,
+            "wasi:poll/poll": crate::preview2::bindings::poll::poll,
+            "wasi:io/streams": crate::preview2::bindings::io::streams,
+            "wasi:filesystem/filesystem": crate::preview2::bindings::filesystem::filesystem
         }
         });
     }
+
     pub use self::_internal_rest::wasi::*;
 }
 
