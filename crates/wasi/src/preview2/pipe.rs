@@ -407,7 +407,7 @@ pub struct ClosedOutputStream;
 
 #[async_trait::async_trait]
 impl HostOutputStream for ClosedOutputStream {
-    fn write(&mut self, buf: Bytes) -> Result<(usize, StreamState), Error> {
+    fn write(&mut self, _: Bytes) -> Result<(usize, StreamState), Error> {
         Ok((0, StreamState::Closed))
     }
 
