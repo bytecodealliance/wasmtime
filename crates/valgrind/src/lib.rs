@@ -10,7 +10,7 @@ pub struct Valgrind {
     mallocs: HashMap<usize, usize>, // start addr, len
     stack_pointer: usize,
     max_stack_size: usize,
-    //flag: bool,
+    pub flag: bool,
 }
 
 #[derive(Debug, PartialEq)]
@@ -39,6 +39,7 @@ impl Valgrind {
             mallocs,
             stack_pointer,
             max_stack_size,
+            flag: true,
         }
     }
     pub fn malloc(&mut self, addr: usize, len: usize) -> Result<(), AccessError> {
@@ -72,6 +73,9 @@ impl Valgrind {
         Ok(())
     }
     pub fn read(&mut self, addr: usize, len: usize) -> Result<(), AccessError> {
+        if !self.flag {
+            return Ok(());
+        }
         if !(self.is_in_bounds_stack(addr, len) || self.is_in_bounds_heap(addr, len)) {
             return Err(AccessError::OutOfBounds {
                 addr: addr,
@@ -98,6 +102,9 @@ impl Valgrind {
         Ok(())
     }
     pub fn write(&mut self, addr: usize, len: usize) -> Result<(), AccessError> {
+        if !self.flag {
+            return Ok(());
+        }
         if !(self.is_in_bounds_stack(addr, len) || self.is_in_bounds_heap(addr, len)) {
             return Err(AccessError::OutOfBounds {
                 addr: addr,
@@ -376,4 +383,12 @@ fn stack_underflow() {
         })
     );
     assert_eq!(valgrind_state.stack_pointer, 800);
+}
+
+#[test]
+fn from_test_program() {
+    let mut valgrind_state = Valgrind::new(1024 * 1024 * 128, 70864);
+
+    assert!(valgrind_state.write(70832, 1).is_ok());
+    assert!(valgrind_state.read(1138, 1).is_ok());
 }

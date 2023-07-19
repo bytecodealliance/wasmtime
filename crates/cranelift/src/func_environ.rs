@@ -2317,6 +2317,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         );
         let num_bytes = builder.ins().iconst(I32, 1);
         let offset_val = builder.ins().iconst(I64, offset as i64);
+        let addr_and_offset = builder.ins().iadd(offset_val, addr);
         builder
             .ins()
             .call_indirect(check_load_sig, check_load, &[vmctx, num_bytes, addr, offset_val]);

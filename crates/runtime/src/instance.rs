@@ -194,10 +194,12 @@ impl Instance {
                     const MiB: usize = 1024 * 1024; // 1 MiB
                     // ad-hoc testing seems to show...
                     // TODO: how do we determine this more consistently?
-                    const C_STACK_SIZE: usize = 128 * 1024;
-                    Valgrind::new(128 * MiB, C_STACK_SIZE)
+                    const C_STACK_SIZE: usize = 70863;
+                    let mut valg = Valgrind::new(128 * MiB, C_STACK_SIZE);
+                    valg.update_stack_pointer(0);
+                    valg
                 },
-                //not sure how to access mem & stack size?
+                // not sure how to access mem & stack size?
             },
         );
 

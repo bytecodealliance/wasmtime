@@ -491,11 +491,9 @@ unsafe fn new_epoch(instance: &mut Instance) -> Result<u64> {
 }
 
 unsafe fn check_malloc(instance: &mut Instance, addr: u32, len: u32) -> Result<u32> {
-    //     let addr_usize;
-    // 	instance::valgrind_state::malloc(addr_usize, len)
-    println!("instance is: {:p}", instance as *mut Instance);
     println!("addr: {} len: {}", addr, len);
     let result = instance.valgrind_state.malloc(addr as usize, len as usize);
+    instance.valgrind_state.flag = true;
     if result.is_ok() {
         Ok(0)
     } else {
@@ -504,33 +502,36 @@ unsafe fn check_malloc(instance: &mut Instance, addr: u32, len: u32) -> Result<u
 }
 
 unsafe fn check_free(instance: &mut Instance, addr: u32) -> Result<u32> {
-    //     let addr_usize;
-    //     instance::valgrind_state::free(addr_usize)
     println!("addr: {}", addr);
-    Ok(0)
-    //instance.valgrind_state.free(addr)
-    /*
-    let result: Result<(), AccessError> = panic!("pretend we called valgrind_state.free()");
-    result.to_int()
-    */
+    let result = instance.valgrind_state.free(addr as usize);
+    instance.valgrind_state.flag = true;
+    if result.is_ok() {
+        Ok(0)
+    } else {
+        panic!("failed")
+    }
 }
 
 fn check_load(instance: &mut Instance, num_bytes: u32, addr: u32, offset: u32) {
-    // println!("load addr: {}", addr + offset);
-    //call valgrind read
+    if instance.valgrind_state.read(addr as usize + offset as usize, num_bytes as usize).is_err() {
+        eprintln!("load of size {} failed at addr {}", num_bytes, addr as usize + offset as usize);
+    }
 }
 
 fn check_store(instance: &mut Instance, num_bytes: u32, addr: u32, offset: u32) {
-    // println!("store addr: {}", addr + offset);
-    // valgrind write
+    if instance.valgrind_state.write(addr as usize + offset as usize, num_bytes as usize).is_err() {
+        eprintln!("store of size {} failed at addr {}", num_bytes, addr as usize + offset as usize);
+    }
 }
 
 fn malloc_start(instance: &mut Instance) {
-    //instance.valgrind_state.flag = false;
+    println!("started malloc");
+    instance.valgrind_state.flag = false;
 }
 
 fn free_start(instance: &mut Instance) {
-    //instance.valgrind_state.flag = false;
+    println!("started free");
+    instance.valgrind_state.flag = false;
 }
 
 /// This module contains functions which are used for resolving relocations at
