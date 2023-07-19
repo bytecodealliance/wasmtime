@@ -214,7 +214,7 @@ impl Config {
         //
         // To keep this setting under control there are a few limits in place:
         //
-        // * Cranelift will generate at most 64M of padding per-function,
+        // * Cranelift will generate at most 150M of padding per-function,
         //   regardless of how many basic blocks there are.
         // * Here it's limited to enable this setting only when there's at most
         //   10 functions to ensure that the overhead for all functions is <1G
@@ -226,11 +226,11 @@ impl Config {
         // With all that combined this is intended to still be enabled,
         // although perhaps not all the time, and stress enough interesting test
         // cases in cranelift.
-        if self.module_config.config.max_funcs < 10 {
+        if self.module_config.config.max_funcs < 5 {
             unsafe {
                 cfg.cranelift_flag_set(
                     "bb_padding_log2_minus_one",
-                    &(self.wasmtime.bb_padding_log2 % 26).to_string(),
+                    &(self.wasmtime.bb_padding_log2 % 27).to_string(),
                 );
             }
         }

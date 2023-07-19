@@ -1065,7 +1065,7 @@ impl<I: VCodeInst> VCode<I> {
                 buffer.put_data(&bb_padding);
                 buffer.align_to(I::LabelUse::ALIGN);
                 total_bb_padding += bb_padding.len();
-                if total_bb_padding > (64 << 20) {
+                if total_bb_padding > (150 << 20) {
                     bb_padding = Vec::new();
                 }
             }
