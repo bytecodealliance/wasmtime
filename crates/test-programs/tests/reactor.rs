@@ -116,7 +116,7 @@ async fn reactor_tests() -> Result<()> {
     let r = reactor.call_write_strings_to(&mut store, table_ix).await?;
     assert_eq!(r, Ok(()));
 
-    assert_eq!(writepipe.contents(), b"hellogussie");
+    assert_eq!(writepipe.contents().as_ref(), b"hellogussie");
 
     // Show that the `with` invocation in the macro means we get to re-use the
     // type definitions from inside the `host` crate for these structures:

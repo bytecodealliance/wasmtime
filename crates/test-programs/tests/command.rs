@@ -173,7 +173,9 @@ async fn time() -> Result<()> {
 async fn stdin() -> Result<()> {
     let mut table = Table::new();
     let wasi = WasiCtxBuilder::new()
-        .set_stdin(MemoryInputPipe::new("So rested he by the Tumtum tree"))
+        .set_stdin(MemoryInputPipe::new(
+            "So rested he by the Tumtum tree".into(),
+        ))
         .build(&mut table)?;
 
     let (mut store, command) =
@@ -189,7 +191,9 @@ async fn stdin() -> Result<()> {
 async fn poll_stdin() -> Result<()> {
     let mut table = Table::new();
     let wasi = WasiCtxBuilder::new()
-        .set_stdin(MemoryInputPipe::new("So rested he by the Tumtum tree"))
+        .set_stdin(MemoryInputPipe::new(
+            "So rested he by the Tumtum tree".into(),
+        ))
         .build(&mut table)?;
 
     let (mut store, command) =
