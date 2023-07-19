@@ -313,51 +313,25 @@ impl ComponentInstance {
         }
     }
 
-    /// Returns the core wasm function pointer corresponding to the lowering
-    /// index specified.
+    /// Returns the core wasm `funcref` corresponding to the trampoline
+    /// specified.
     ///
     /// The returned function is suitable to pass directly to a wasm module
-    /// instantiation and the function is a cranelift-compiled trampoline.
+    /// instantiation and the function contains cranelift-compiled trampolines.
     ///
     /// This can only be called after `idx` has been initialized at runtime
     /// during the instantiation process of a component.
-    pub fn lowering_func_ref(&self, idx: LoweredIndex) -> NonNull<VMFuncRef> {
-        unsafe { self.func_ref(self.offsets.lowering_func_ref(idx)) }
-    }
-
-    /// Same as `lowering_func_ref` except for the functions that always trap.
-    pub fn always_trap_func_ref(&self, idx: RuntimeAlwaysTrapIndex) -> NonNull<VMFuncRef> {
-        unsafe { self.func_ref(self.offsets.always_trap_func_ref(idx)) }
-    }
-
-    /// Same as `lowering_func_ref` except for the transcoding functions.
-    pub fn transcoder_func_ref(&self, idx: RuntimeTranscoderIndex) -> NonNull<VMFuncRef> {
-        unsafe { self.func_ref(self.offsets.transcoder_func_ref(idx)) }
-    }
-
-    /// Same as `lowering_func_ref` except for the `resource.new` functions.
-    pub fn resource_new_func_ref(&self, idx: RuntimeResourceNewIndex) -> NonNull<VMFuncRef> {
-        unsafe { self.func_ref(self.offsets.resource_new_func_ref(idx)) }
-    }
-
-    /// Same as `lowering_func_ref` except for the `resource.rep` functions.
-    pub fn resource_rep_func_ref(&self, idx: RuntimeResourceRepIndex) -> NonNull<VMFuncRef> {
-        unsafe { self.func_ref(self.offsets.resource_rep_func_ref(idx)) }
-    }
-
-    /// Same as `lowering_func_ref` except for the `resource.drop` functions.
-    pub fn resource_drop_func_ref(&self, idx: RuntimeResourceDropIndex) -> NonNull<VMFuncRef> {
-        unsafe { self.func_ref(self.offsets.resource_drop_func_ref(idx)) }
-    }
-
-    unsafe fn func_ref(&self, offset: u32) -> NonNull<VMFuncRef> {
-        let ret = self.vmctx_plus_offset::<VMFuncRef>(offset);
-        debug_assert!(
-            mem::transmute::<Option<NonNull<VMWasmCallFunction>>, usize>((*ret).wasm_call)
-                != INVALID_PTR
-        );
-        debug_assert!((*ret).vmctx as usize != INVALID_PTR);
-        NonNull::new(ret.cast_mut()).unwrap()
+    pub fn trampoline_func_ref(&self, idx: TrampolineIndex) -> NonNull<VMFuncRef> {
+        unsafe {
+            let offset = self.offsets.trampoline_func_ref(idx);
+            let ret = self.vmctx_plus_offset::<VMFuncRef>(offset);
+            debug_assert!(
+                mem::transmute::<Option<NonNull<VMWasmCallFunction>>, usize>((*ret).wasm_call)
+                    != INVALID_PTR
+            );
+            debug_assert!((*ret).vmctx as usize != INVALID_PTR);
+            NonNull::new(ret.cast_mut()).unwrap()
+        }
     }
 
     /// Stores the runtime memory pointer at the index specified.
@@ -399,24 +373,9 @@ impl ComponentInstance {
         }
     }
 
-    /// Configures a lowered host function with all the pieces necessary.
-    ///
-    /// * `idx` - the index that's being configured
-    /// * `lowering` - the host-related closure information to get invoked when
-    ///   the lowering is called.
-    /// * `{wasm,native,array}_call` - the cranelift-compiled trampolines which will
-    ///   read the `VMComponentContext` and invoke `lowering` provided.
-    /// * `type_index` - the signature index for the core wasm type
-    ///   registered within the engine already.
-    pub fn set_lowering(
-        &mut self,
-        idx: LoweredIndex,
-        lowering: VMLowering,
-        wasm_call: NonNull<VMWasmCallFunction>,
-        native_call: NonNull<VMNativeCallFunction>,
-        array_call: VMArrayCallFunction,
-        type_index: VMSharedSignatureIndex,
-    ) {
+    /// Configures host runtime lowering information associated with imported f
+    /// functions for the `idx` specified.
+    pub fn set_lowering(&mut self, idx: LoweredIndex, lowering: VMLowering) {
         unsafe {
             debug_assert!(
                 *self.vmctx_plus_offset::<usize>(self.offsets.lowering_callee(idx)) == INVALID_PTR
@@ -425,133 +384,30 @@ impl ComponentInstance {
                 *self.vmctx_plus_offset::<usize>(self.offsets.lowering_data(idx)) == INVALID_PTR
             );
             *self.vmctx_plus_offset_mut(self.offsets.lowering(idx)) = lowering;
-            self.set_func_ref(
-                self.offsets.lowering_func_ref(idx),
-                wasm_call,
-                native_call,
-                array_call,
-                type_index,
-            );
-        }
-    }
-
-    /// Same as `set_lowering` but for the "always trap" functions.
-    pub fn set_always_trap(
-        &mut self,
-        idx: RuntimeAlwaysTrapIndex,
-        wasm_call: NonNull<VMWasmCallFunction>,
-        native_call: NonNull<VMNativeCallFunction>,
-        array_call: VMArrayCallFunction,
-        type_index: VMSharedSignatureIndex,
-    ) {
-        unsafe {
-            self.set_func_ref(
-                self.offsets.always_trap_func_ref(idx),
-                wasm_call,
-                native_call,
-                array_call,
-                type_index,
-            );
-        }
-    }
-
-    /// Same as `set_lowering` but for the transcoder functions.
-    pub fn set_transcoder(
-        &mut self,
-        idx: RuntimeTranscoderIndex,
-        wasm_call: NonNull<VMWasmCallFunction>,
-        native_call: NonNull<VMNativeCallFunction>,
-        array_call: VMArrayCallFunction,
-        type_index: VMSharedSignatureIndex,
-    ) {
-        unsafe {
-            self.set_func_ref(
-                self.offsets.transcoder_func_ref(idx),
-                wasm_call,
-                native_call,
-                array_call,
-                type_index,
-            );
-        }
-    }
-
-    /// Same as `set_lowering` but for the resource.new functions.
-    pub fn set_resource_new(
-        &mut self,
-        idx: RuntimeResourceNewIndex,
-        wasm_call: NonNull<VMWasmCallFunction>,
-        native_call: NonNull<VMNativeCallFunction>,
-        array_call: VMArrayCallFunction,
-        type_index: VMSharedSignatureIndex,
-    ) {
-        unsafe {
-            self.set_func_ref(
-                self.offsets.resource_new_func_ref(idx),
-                wasm_call,
-                native_call,
-                array_call,
-                type_index,
-            );
-        }
-    }
-
-    /// Same as `set_lowering` but for the resource.rep functions.
-    pub fn set_resource_rep(
-        &mut self,
-        idx: RuntimeResourceRepIndex,
-        wasm_call: NonNull<VMWasmCallFunction>,
-        native_call: NonNull<VMNativeCallFunction>,
-        array_call: VMArrayCallFunction,
-        type_index: VMSharedSignatureIndex,
-    ) {
-        unsafe {
-            self.set_func_ref(
-                self.offsets.resource_rep_func_ref(idx),
-                wasm_call,
-                native_call,
-                array_call,
-                type_index,
-            );
         }
     }
 
     /// Same as `set_lowering` but for the resource.drop functions.
-    pub fn set_resource_drop(
+    pub fn set_trampoline(
         &mut self,
-        idx: RuntimeResourceDropIndex,
+        idx: TrampolineIndex,
         wasm_call: NonNull<VMWasmCallFunction>,
         native_call: NonNull<VMNativeCallFunction>,
         array_call: VMArrayCallFunction,
         type_index: VMSharedSignatureIndex,
     ) {
         unsafe {
-            self.set_func_ref(
-                self.offsets.resource_drop_func_ref(idx),
-                wasm_call,
+            let offset = self.offsets.trampoline_func_ref(idx);
+            debug_assert!(*self.vmctx_plus_offset::<usize>(offset) == INVALID_PTR);
+            let vmctx = VMOpaqueContext::from_vmcomponent(self.vmctx());
+            *self.vmctx_plus_offset_mut(offset) = VMFuncRef {
+                wasm_call: Some(wasm_call),
                 native_call,
                 array_call,
                 type_index,
-            );
+                vmctx,
+            };
         }
-    }
-
-    unsafe fn set_func_ref(
-        &mut self,
-        offset: u32,
-        wasm_call: NonNull<VMWasmCallFunction>,
-        native_call: NonNull<VMNativeCallFunction>,
-        array_call: VMArrayCallFunction,
-        type_index: VMSharedSignatureIndex,
-    ) {
-        debug_assert!(*self.vmctx_plus_offset::<usize>(offset) == INVALID_PTR);
-        let vmctx = VMOpaqueContext::from_vmcomponent(self.vmctx());
-        *self.vmctx_plus_offset_mut(offset) = VMFuncRef {
-            wasm_call: Some(wasm_call),
-            native_call,
-            array_call,
-            type_index,
-            vmctx,
-        };
     }
 
     /// Configures the destructor for a resource at the `idx` specified.
@@ -607,32 +463,10 @@ impl ComponentInstance {
                 *self.vmctx_plus_offset_mut(offset) = INVALID_PTR;
                 let offset = self.offsets.lowering_data(i);
                 *self.vmctx_plus_offset_mut(offset) = INVALID_PTR;
-                let offset = self.offsets.lowering_func_ref(i);
-                *self.vmctx_plus_offset_mut(offset) = INVALID_PTR;
             }
-            for i in 0..self.offsets.num_always_trap {
-                let i = RuntimeAlwaysTrapIndex::from_u32(i);
-                let offset = self.offsets.always_trap_func_ref(i);
-                *self.vmctx_plus_offset_mut(offset) = INVALID_PTR;
-            }
-            for i in 0..self.offsets.num_transcoders {
-                let i = RuntimeTranscoderIndex::from_u32(i);
-                let offset = self.offsets.transcoder_func_ref(i);
-                *self.vmctx_plus_offset_mut(offset) = INVALID_PTR;
-            }
-            for i in 0..self.offsets.num_resource_new {
-                let i = RuntimeResourceNewIndex::from_u32(i);
-                let offset = self.offsets.resource_new_func_ref(i);
-                *self.vmctx_plus_offset_mut(offset) = INVALID_PTR;
-            }
-            for i in 0..self.offsets.num_resource_rep {
-                let i = RuntimeResourceRepIndex::from_u32(i);
-                let offset = self.offsets.resource_rep_func_ref(i);
-                *self.vmctx_plus_offset_mut(offset) = INVALID_PTR;
-            }
-            for i in 0..self.offsets.num_resource_drop {
-                let i = RuntimeResourceDropIndex::from_u32(i);
-                let offset = self.offsets.resource_drop_func_ref(i);
+            for i in 0..self.offsets.num_trampolines {
+                let i = TrampolineIndex::from_u32(i);
+                let offset = self.offsets.trampoline_func_ref(i);
                 *self.vmctx_plus_offset_mut(offset) = INVALID_PTR;
             }
             for i in 0..self.offsets.num_runtime_memories {
@@ -844,114 +678,22 @@ impl OwnedComponentInstance {
     }
 
     /// See `ComponentInstance::set_lowering`
-    pub fn set_lowering(
-        &mut self,
-        idx: LoweredIndex,
-        lowering: VMLowering,
-        wasm_call: NonNull<VMWasmCallFunction>,
-        native_call: NonNull<VMNativeCallFunction>,
-        array_call: VMArrayCallFunction,
-        type_index: VMSharedSignatureIndex,
-    ) {
-        unsafe {
-            self.instance_mut().set_lowering(
-                idx,
-                lowering,
-                wasm_call,
-                native_call,
-                array_call,
-                type_index,
-            )
-        }
-    }
-
-    /// See `ComponentInstance::set_always_trap`
-    pub fn set_always_trap(
-        &mut self,
-        idx: RuntimeAlwaysTrapIndex,
-        wasm_call: NonNull<VMWasmCallFunction>,
-        native_call: NonNull<VMNativeCallFunction>,
-        array_call: VMArrayCallFunction,
-        type_index: VMSharedSignatureIndex,
-    ) {
-        unsafe {
-            self.instance_mut()
-                .set_always_trap(idx, wasm_call, native_call, array_call, type_index)
-        }
-    }
-
-    /// See `ComponentInstance::set_transcoder`
-    pub fn set_transcoder(
-        &mut self,
-        idx: RuntimeTranscoderIndex,
-        wasm_call: NonNull<VMWasmCallFunction>,
-        native_call: NonNull<VMNativeCallFunction>,
-        array_call: VMArrayCallFunction,
-        type_index: VMSharedSignatureIndex,
-    ) {
-        unsafe {
-            self.instance_mut()
-                .set_transcoder(idx, wasm_call, native_call, array_call, type_index)
-        }
-    }
-
-    /// See `ComponentInstance::set_resource_new`
-    pub fn set_resource_new(
-        &mut self,
-        idx: RuntimeResourceNewIndex,
-        wasm_call: NonNull<VMWasmCallFunction>,
-        native_call: NonNull<VMNativeCallFunction>,
-        array_call: VMArrayCallFunction,
-        type_index: VMSharedSignatureIndex,
-    ) {
-        unsafe {
-            self.instance_mut().set_resource_new(
-                idx,
-                wasm_call,
-                native_call,
-                array_call,
-                type_index,
-            )
-        }
-    }
-
-    /// See `ComponentInstance::set_resource_rep`
-    pub fn set_resource_rep(
-        &mut self,
-        idx: RuntimeResourceRepIndex,
-        wasm_call: NonNull<VMWasmCallFunction>,
-        native_call: NonNull<VMNativeCallFunction>,
-        array_call: VMArrayCallFunction,
-        type_index: VMSharedSignatureIndex,
-    ) {
-        unsafe {
-            self.instance_mut().set_resource_rep(
-                idx,
-                wasm_call,
-                native_call,
-                array_call,
-                type_index,
-            )
-        }
+    pub fn set_lowering(&mut self, idx: LoweredIndex, lowering: VMLowering) {
+        unsafe { self.instance_mut().set_lowering(idx, lowering) }
     }
 
     /// See `ComponentInstance::set_resource_drop`
-    pub fn set_resource_drop(
+    pub fn set_trampoline(
         &mut self,
-        idx: RuntimeResourceDropIndex,
+        idx: TrampolineIndex,
         wasm_call: NonNull<VMWasmCallFunction>,
         native_call: NonNull<VMNativeCallFunction>,
         array_call: VMArrayCallFunction,
         type_index: VMSharedSignatureIndex,
     ) {
         unsafe {
-            self.instance_mut().set_resource_drop(
-                idx,
-                wasm_call,
-                native_call,
-                array_call,
-                type_index,
-            )
+            self.instance_mut()
+                .set_trampoline(idx, wasm_call, native_call, array_call, type_index)
         }
     }
 

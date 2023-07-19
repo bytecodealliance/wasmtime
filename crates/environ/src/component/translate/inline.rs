@@ -508,13 +508,15 @@ impl<'a> Inliner<'a> {
                     ComponentFuncDef::Import(path) => {
                         let import = self.runtime_import(path);
                         let options = self.canonical_options(options_lower);
-                        let index = self.result.lowerings.push_uniq(dfg::LowerImport {
-                            canonical_abi: *canonical_abi,
-                            import,
-                            options,
-                            lower_ty,
-                        });
-                        dfg::CoreDef::Lowered(index)
+                        let index = self.result.trampolines.push((
+                            *canonical_abi,
+                            dfg::Trampoline::LowerImport {
+                                import,
+                                options,
+                                lower_ty,
+                            },
+                        ));
+                        dfg::CoreDef::Trampoline(index)
                     }
 
                     // This case handles when a lifted function is later
@@ -546,8 +548,11 @@ impl<'a> Inliner<'a> {
                         options: options_lift,
                         ..
                     } if options_lift.instance == options_lower.instance => {
-                        let index = self.result.always_trap.push_uniq(*canonical_abi);
-                        dfg::CoreDef::AlwaysTrap(index)
+                        let index = self
+                            .result
+                            .trampolines
+                            .push((*canonical_abi, dfg::Trampoline::AlwaysTrap));
+                        dfg::CoreDef::Trampoline(index)
                     }
 
                     // Lowering a lifted function where the destination
@@ -583,7 +588,7 @@ impl<'a> Inliner<'a> {
                         func,
                         options: options_lift,
                     } => {
-                        let adapter_idx = self.result.adapters.push_uniq(Adapter {
+                        let adapter_idx = self.result.adapters.push(Adapter {
                             lift_ty: *lift_ty,
                             lift_options: options_lift.clone(),
                             lower_ty,
@@ -648,15 +653,27 @@ impl<'a> Inliner<'a> {
             // information and then new entries for each intrinsic are recorded.
             ResourceNew(id, ty) => {
                 let id = types.resource_id(frame.translation.types_ref(), *id);
-                frame.funcs.push(dfg::CoreDef::ResourceNew(id, *ty));
+                let index = self
+                    .result
+                    .trampolines
+                    .push((*ty, dfg::Trampoline::ResourceNew(id)));
+                frame.funcs.push(dfg::CoreDef::Trampoline(index));
             }
             ResourceRep(id, ty) => {
                 let id = types.resource_id(frame.translation.types_ref(), *id);
-                frame.funcs.push(dfg::CoreDef::ResourceRep(id, *ty));
+                let index = self
+                    .result
+                    .trampolines
+                    .push((*ty, dfg::Trampoline::ResourceRep(id)));
+                frame.funcs.push(dfg::CoreDef::Trampoline(index));
             }
             ResourceDrop(id, ty) => {
                 let id = types.resource_id(frame.translation.types_ref(), *id);
-                frame.funcs.push(dfg::CoreDef::ResourceDrop(id, *ty));
+                let index = self
+                    .result
+                    .trampolines
+                    .push((*ty, dfg::Trampoline::ResourceDrop(id)));
+                frame.funcs.push(dfg::CoreDef::Trampoline(index));
             }
 
             ModuleStatic(idx) => {
@@ -989,13 +1006,11 @@ impl<'a> Inliner<'a> {
     fn canonical_options(&mut self, options: AdapterOptions) -> dfg::CanonicalOptions {
         let memory = options
             .memory
-            .map(|export| self.result.memories.push_uniq(export));
-        let realloc = options
-            .realloc
-            .map(|def| self.result.reallocs.push_uniq(def));
+            .map(|export| self.result.memories.push(export));
+        let realloc = options.realloc.map(|def| self.result.reallocs.push(def));
         let post_return = options
             .post_return
-            .map(|def| self.result.post_returns.push_uniq(def));
+            .map(|def| self.result.post_returns.push(def));
         dfg::CanonicalOptions {
             instance: options.instance,
             string_encoding: options.string_encoding,

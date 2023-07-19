@@ -9,9 +9,7 @@ use std::path::Path;
 use std::ptr::NonNull;
 use std::sync::Arc;
 use wasmtime_environ::component::{
-    AllCallFunc, ComponentTypes, LoweredIndex, RuntimeAlwaysTrapIndex, RuntimeResourceDropIndex,
-    RuntimeResourceNewIndex, RuntimeResourceRepIndex, RuntimeTranscoderIndex, StaticModuleIndex,
-    Translator,
+    AllCallFunc, ComponentTypes, StaticModuleIndex, TrampolineIndex, Translator,
 };
 use wasmtime_environ::{FunctionLoc, ObjectKind, PrimaryMap, ScopeVec};
 use wasmtime_jit::{CodeMemory, CompiledModuleInfo};
@@ -61,30 +59,7 @@ struct CompiledComponentInfo {
     ///
     /// function pointers that end up in a `VMFuncRef` for each
     /// lowering.
-    lowerings: PrimaryMap<LoweredIndex, AllCallFunc<FunctionLoc>>,
-
-    /// Where the "always trap" functions are located within the `text` section
-    /// of `code_memory`.
-    ///
-    /// These functions are "degenerate functions" here solely to implement
-    /// functions that are `canon lift`'d then immediately `canon lower`'d. The
-    /// `u32` value here is the offset of the trap instruction from the start fo
-    /// the function.
-    always_trap: PrimaryMap<RuntimeAlwaysTrapIndex, AllCallFunc<FunctionLoc>>,
-
-    /// Where all the cranelift-generated transcode functions are located in the
-    /// compiled image of this component.
-    transcoders: PrimaryMap<RuntimeTranscoderIndex, AllCallFunc<FunctionLoc>>,
-
-    /// Locations of cranelift-generated `resource.new` functions are located
-    /// within the component.
-    resource_new: PrimaryMap<RuntimeResourceNewIndex, AllCallFunc<FunctionLoc>>,
-
-    /// Same as `resource_new`, but for `resource.rep` intrinsics.
-    resource_rep: PrimaryMap<RuntimeResourceRepIndex, AllCallFunc<FunctionLoc>>,
-
-    /// Same as `resource_new`, but for `resource.drop` intrinsics.
-    resource_drop: PrimaryMap<RuntimeResourceDropIndex, AllCallFunc<FunctionLoc>>,
+    trampolines: PrimaryMap<TrampolineIndex, AllCallFunc<FunctionLoc>>,
 
     /// The location of the wasm-to-native trampoline for the `resource.drop`
     /// intrinsic.
@@ -237,13 +212,8 @@ impl Component {
         )?;
 
         let info = CompiledComponentInfo {
-            component,
-            always_trap: compilation_artifacts.always_traps,
-            lowerings: compilation_artifacts.lowerings,
-            transcoders: compilation_artifacts.transcoders,
-            resource_new: compilation_artifacts.resource_new,
-            resource_rep: compilation_artifacts.resource_rep,
-            resource_drop: compilation_artifacts.resource_drop,
+            component: component.component,
+            trampolines: compilation_artifacts.trampolines,
             resource_drop_wasm_to_native_trampoline: compilation_artifacts
                 .resource_drop_wasm_to_native_trampoline,
         };
@@ -324,12 +294,12 @@ impl Component {
         self.inner.code.code_memory().text()
     }
 
-    fn all_call_func_ptrs(&self, func: &AllCallFunc<FunctionLoc>) -> AllCallFuncPointers {
+    pub(crate) fn trampoline_ptrs(&self, index: TrampolineIndex) -> AllCallFuncPointers {
         let AllCallFunc {
             wasm_call,
             array_call,
             native_call,
-        } = func;
+        } = &self.inner.info.trampolines[index];
         AllCallFuncPointers {
             wasm_call: self.func(wasm_call).cast(),
             array_call: unsafe {
@@ -339,33 +309,6 @@ impl Component {
             },
             native_call: self.func(native_call).cast(),
         }
-    }
-
-    pub(crate) fn lowering_ptrs(&self, index: LoweredIndex) -> AllCallFuncPointers {
-        self.all_call_func_ptrs(&self.inner.info.lowerings[index])
-    }
-
-    pub(crate) fn always_trap_ptrs(&self, index: RuntimeAlwaysTrapIndex) -> AllCallFuncPointers {
-        self.all_call_func_ptrs(&self.inner.info.always_trap[index])
-    }
-
-    pub(crate) fn transcoder_ptrs(&self, index: RuntimeTranscoderIndex) -> AllCallFuncPointers {
-        self.all_call_func_ptrs(&self.inner.info.transcoders[index])
-    }
-
-    pub(crate) fn resource_new_ptrs(&self, index: RuntimeResourceNewIndex) -> AllCallFuncPointers {
-        self.all_call_func_ptrs(&self.inner.info.resource_new[index])
-    }
-
-    pub(crate) fn resource_rep_ptrs(&self, index: RuntimeResourceRepIndex) -> AllCallFuncPointers {
-        self.all_call_func_ptrs(&self.inner.info.resource_rep[index])
-    }
-
-    pub(crate) fn resource_drop_ptrs(
-        &self,
-        index: RuntimeResourceDropIndex,
-    ) -> AllCallFuncPointers {
-        self.all_call_func_ptrs(&self.inner.info.resource_drop[index])
     }
 
     fn func(&self, loc: &FunctionLoc) -> NonNull<VMFunctionBody> {

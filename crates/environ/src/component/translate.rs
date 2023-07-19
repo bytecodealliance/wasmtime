@@ -301,7 +301,7 @@ impl<'a, 'data> Translator<'a, 'data> {
         mut self,
         component: &'data [u8],
     ) -> Result<(
-        Component,
+        ComponentTranslation,
         PrimaryMap<StaticModuleIndex, ModuleTranslation<'data>>,
     )> {
         // First up wasmparser is used to actually perform the translation and
