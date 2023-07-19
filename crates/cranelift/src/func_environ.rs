@@ -3,7 +3,7 @@ use cranelift_codegen::ir;
 use cranelift_codegen::ir::condcodes::*;
 use cranelift_codegen::ir::immediates::{Imm64, Offset32, Uimm64};
 use cranelift_codegen::ir::types::*;
-use cranelift_codegen::ir::{AbiParam, ArgumentPurpose, Function, InstBuilder, Signature};
+use cranelift_codegen::ir::{AbiParam, ArgumentPurpose, Function, InstBuilder, Signature, Value, UserFuncName};
 use cranelift_codegen::isa::{self, CallConv, TargetFrontendConfig, TargetIsa};
 use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_frontend::FunctionBuilder;
@@ -174,7 +174,6 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             isa,
             module: &translation.module,
             types,
-            translation,
             heaps: PrimaryMap::default(),
             vmctx: None,
             builtin_function_signatures,
@@ -184,6 +183,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             epoch_deadline_var: Variable::new(0),
             epoch_ptr_var: Variable::new(0),
             vmruntime_limits_ptr: Variable::new(0),
+            translation: translation,
 
             // Start with at least one fuel being consumed because even empty
             // functions should consume at least some fuel.
@@ -196,6 +196,8 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     }
 
     fn vmctx(&mut self, func: &mut Function) -> ir::GlobalValue {
+        //arbitrarily printing funcname/index from inside func_environ
+        // println!("from vmctx {:?}", self.translation.debuginfo.name_section.func_names);
         self.vmctx.unwrap_or_else(|| {
             let vmctx = func.create_global_value(ir::GlobalValueData::VMContext);
             self.vmctx = Some(vmctx);
@@ -653,68 +655,29 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         self.epoch_check(builder);
     }
 
-    // * I'm not sure if it's correct to pass instance as an argument
-    //   here, as I've only seen Instance used in libcalls.rs; however,
-    //   I wasn't sure how else to access the Valgrind state
-    //
-    // * when/where are these hooks actually called?
-    // fn handle_after_entry(&mut self) {
-    //     if "the function is malloc" {
-    //         // valgrind_state.flag = true;
-    //     }
-    // }
-
-    // * is self.vmctx already initialized by the time this function
-    //   is called? or does fn vmctx() need to be called?
-    //
-    // * is it correct to use builder as an argument here?
-    fn handle_before_return(&mut self, retvals: &[crate::ir::Value], func_index: FuncIndex, builder: &mut FunctionBuilder) {
-        let block = builder.func.layout.entry_block().unwrap();
-        let args = builder.func.dfg.block_params(block);
-        let func_name = self.translation.debuginfo.name_section.func_names[&func_index];
-        // there is also dlmalloc, realloc, calloc, etc; should these be checked for too?
-    
-        if func_name == "malloc" {
-            self.check_malloc_exit(builder);
-            /*
-            builder
-                 ins()
-                .call_indirect(check_malloc_exit_addr, &[self.vmctx, retvals[0], args[0]]);
-                */
-        } else if func_name == "free" {
-            /*
-             builder
-                 .ins()
-                 .call_indirect(check_free_exit, &[self.vmctx]);
-                 */
-         }
-        // TODO: signal something to valgrind state that we're in a function or somethign???
-         // valgrind_state.flag = false;
-    }
-
-    fn check_malloc_exit(&mut self, builder: &mut FunctionBuilder) {
+    fn check_malloc_exit(&mut self, builder: &mut FunctionBuilder, retvals: &[Value]) {
         let check_malloc_sig = self.builtin_function_signatures.check_malloc(builder.func);
         let (vmctx, check_malloc) = self.translate_load_builtin_function_address(
             &mut builder.cursor(),
             BuiltinFunctionIndex::check_malloc(),
         );
-        let pointer = panic!("we can get the pointer somehow");
-        let size = panic!("we can get the length somehow");
+        let len = builder.func.dfg.block_params(builder.func.layout.entry_block().unwrap())[2];
         builder
             .ins()
-            .call_indirect(check_malloc_sig, check_malloc, &[vmctx, pointer, size]);
+            .call_indirect(check_malloc_sig, check_malloc, &[vmctx, retvals[0], len]);
     }
 
-    // fn check_free_exit(&mut self, builder: &mut FunctionBuilder) {
-    //     let check_free_sig = self.builtin_function_signatures.check_free(builder.func);
-    //     let (vmctx, check_free) = self.translate_load_builtin_function_address(
-    //         &mut builder.cursor(),
-    //         BuiltinFunctionIndex::check_free(),
-    //     );
-    //     builder
-    //         .ins()
-    //         .call_indirect(check_free_sig, check_free, &[vmctx, pointer]);
-    // }
+    fn check_free_exit(&mut self, builder: &mut FunctionBuilder) {
+        let check_free_sig = self.builtin_function_signatures.check_free(builder.func);
+        let (vmctx, check_free) = self.translate_load_builtin_function_address(
+            &mut builder.cursor(),
+            BuiltinFunctionIndex::check_free(),
+        );
+        let ptr = builder.func.dfg.block_params(builder.func.layout.entry_block().unwrap())[2];
+        builder
+            .ins()
+            .call_indirect(check_free_sig, check_free, &[vmctx, ptr]);
+    }
 
     fn epoch_ptr(&mut self, builder: &mut FunctionBuilder<'_>) -> ir::Value {
         let vmctx = self.vmctx(builder.func);
@@ -923,6 +886,28 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
 
         builder.switch_to_block(continuation_block);
         result_param
+    }
+
+    fn check_malloc_start(&mut self, builder: &mut FunctionBuilder) {
+        let malloc_start_sig = self.builtin_function_signatures.malloc_start(builder.func);
+        let (vmctx, malloc_start) = self.translate_load_builtin_function_address(
+            &mut builder.cursor(),
+            BuiltinFunctionIndex::malloc_start(),
+        );
+        builder
+            .ins()
+            .call_indirect(malloc_start_sig, malloc_start, &[vmctx]);
+    }
+
+    fn check_free_start(&mut self, builder: &mut FunctionBuilder) {
+        let free_start_sig = self.builtin_function_signatures.free_start(builder.func);
+        let (vmctx, free_start) = self.translate_load_builtin_function_address(
+            &mut builder.cursor(),
+            BuiltinFunctionIndex::free_start(),
+        );
+        builder
+            .ins()
+            .call_indirect(free_start_sig, free_start, &[vmctx]);
     }
 }
 
@@ -2222,6 +2207,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         Ok(())
     }
 
+    //insert entry hook calls here?
     fn before_translate_function(
         &mut self,
         builder: &mut FunctionBuilder,
@@ -2240,10 +2226,22 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         if self.tunables.epoch_interruption {
             self.epoch_function_entry(builder);
         }
-        //
-        // if self.func == "malloc" { //psuedocode
-        //     self.check_malloc_entry();
-        // }
+
+        let func_index = match &builder.func.name {
+            UserFuncName::User(user) => {
+                FuncIndex::from_u32(user.index)
+            }
+            _ => {
+                unreachable!()
+            }
+        };
+        let func_name = self.translation.debuginfo.name_section.func_names[&func_index];
+        if func_name == "malloc" {
+            self.check_malloc_start(builder);
+        } else if func_name == "free" {
+            self.check_free_start(builder);
+        }
+
         Ok(())
     }
 
@@ -2284,5 +2282,56 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
 
     fn use_x86_pmaddubsw_for_dot(&self) -> bool {
         self.isa.has_x86_pmaddubsw_lowering()
+    }
+
+    fn handle_before_return(
+        &mut self,
+        retvals: &[Value],
+        builder: &mut FunctionBuilder,
+    ) {
+        let block = builder.func.layout.entry_block().unwrap();
+        let args = builder.func.dfg.block_params(block);
+        let func_index = match &builder.func.name {
+            UserFuncName::User(user) => {
+                FuncIndex::from_u32(user.index)
+            }
+            _ => {
+                unreachable!()
+            }
+        };
+        let func_name = self.translation.debuginfo.name_section.func_names[&func_index];
+        // println!("name: {}, index: {:?}", func_name, func_index);
+        if func_name == "malloc" {
+            self.check_malloc_exit(builder, retvals);
+        } else if func_name == "free" {
+            self.check_free_exit(builder);
+        }
+        // instance.valgrind_on = false;
+    }
+
+    fn before_load(&mut self, builder: &mut FunctionBuilder, addr: ir::Value, offset: u64) {
+        let check_load_sig = self.builtin_function_signatures.check_load(builder.func);
+        let (vmctx, check_load) = self.translate_load_builtin_function_address(
+            &mut builder.cursor(),
+            BuiltinFunctionIndex::check_load(),
+        );
+        let num_bytes = builder.ins().iconst(I32, 1);
+        let offset_val = builder.ins().iconst(I64, offset as i64);
+        builder
+            .ins()
+            .call_indirect(check_load_sig, check_load, &[vmctx, num_bytes, addr, offset_val]);
+    }
+
+    fn before_store(&mut self, builder: &mut FunctionBuilder, addr: ir::Value, offset: u64) {
+        let check_store_sig = self.builtin_function_signatures.check_store(builder.func);
+        let (vmctx, check_store) = self.translate_load_builtin_function_address(
+            &mut builder.cursor(),
+            BuiltinFunctionIndex::check_store(),
+        );
+        let num_bytes = builder.ins().iconst(I32, 1);
+        let offset_val = builder.ins().iconst(I64, offset as i64);
+        builder
+            .ins()
+            .call_indirect(check_store_sig, check_store, &[vmctx, num_bytes, addr, offset_val]);
     }
 }

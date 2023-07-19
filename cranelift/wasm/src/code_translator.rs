@@ -588,9 +588,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             };
             {
                 let return_args = state.peekn_mut(return_count);
-                // println!("{:?}", return_args);
-                handle_before_return(&return_args, panic!("index?"), builder);
-                //      curr error: handle_before_return not in scope
+                environ.handle_before_return(&return_args, builder);
                 bitcast_wasm_returns(environ, return_args, builder);
                 builder.ins().return_(return_args);
             }
@@ -698,11 +696,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
          * Wasm specifies an integer alignment flag but we drop it in Cranelift.
          * The memory base address is provided by the environment.
          ************************************************************************************/
-        
-         // there's quite a few different types loads loads; should each of them be individually
-         // wrapped in an if statement checking if the valgrind flag is on?
-         // If so, how would the Instance be accessed free
-         Operator::I32Load8U { memarg } => {
+        Operator::I32Load8U { memarg } => {
             unwrap_or_return_unreachable_state!(
                 state,
                 translate_load(memarg, ir::Opcode::Uload8, I32, builder, state, environ)?
@@ -2821,8 +2815,10 @@ fn translate_load<FE: FuncEnvironment + ?Sized>(
         Reachability::Unreachable => return Ok(Reachability::Unreachable),
         Reachability::Reachable((f, i, b)) => (f, i, b),
     };
-    
+
     // TODO: Add a call: wasmtime_valgrind_load_hook(vmctx, wasm_index, memarg.offset)
+
+    environ.before_load(builder, wasm_index, memarg.offset);
 
     let (load, dfg) = builder
         .ins()
@@ -2848,6 +2844,7 @@ fn translate_store<FE: FuncEnvironment + ?Sized>(
     );
 
     // TODO: add call to wasmtime_valgrind_store_hook(vmctx, wasm_index, memarg.offset)
+    environ.before_store(builder, wasm_index, memarg.offset);
     
     builder
         .ins()

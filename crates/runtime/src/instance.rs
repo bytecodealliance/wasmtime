@@ -145,7 +145,6 @@ pub struct Instance {
     /// represents a dynamically-sized array that extends beyond the nominal
     /// end of the struct (similar to a flexible array member).
     vmctx: VMContext,
-
     // valgrind_state: Valgrind,
 }
 
@@ -189,7 +188,7 @@ impl Instance {
                 vmctx: VMContext {
                     _marker: std::marker::PhantomPinned,
                 },
-                // valgrind_state: Valgrind::new(1024 * 640, 1024), // dummy data
+                // valgrind_state: Valgrind::new(memories.len(), ),
                 //not sure how to access mem & stack size?
             },
         );

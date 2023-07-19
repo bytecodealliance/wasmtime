@@ -490,26 +490,46 @@ unsafe fn new_epoch(instance: &mut Instance) -> Result<u64> {
     (*instance.store()).new_epoch()
 }
 
-// * is there a good way to cast a pointer to usize? or should the library be modified to take pointer
-//   arguments instead?
-unsafe fn check_malloc(instance: &mut Instance, addr: *const u8, len: u32) -> Result<u32> {
-//     let addr_usize;
-// 	instance::valgrind_state::malloc(addr_usize, len)
-    panic!("pretend we called valgrind_state.free()");
+unsafe fn check_malloc(instance: &mut Instance, addr: u32, len: u32) -> Result<u32> {
+    //     let addr_usize;
+    // 	instance::valgrind_state::malloc(addr_usize, len)
+    println!("addr: {} len: {}", addr, len);
+    Ok(0)
+    //instance.valgrind_state.malloc(addr as usize, len as usize)
     /*
     let result: Result<(), AccessError> = panic!("pretend we called valgrind_state.free()");
     result.to_int()
     */
 }
 
-unsafe fn check_free(instance: &mut Instance, addr: *const u8) -> Result<u32> {
-//     let addr_usize;
-//     instance::valgrind_state::free(addr_usize)
-    panic!("pretend we called valgrind_state.free()");
+unsafe fn check_free(instance: &mut Instance, addr: u32) -> Result<u32> {
+    //     let addr_usize;
+    //     instance::valgrind_state::free(addr_usize)
+    println!("addr: {}", addr);
+    Ok(0)
+    //instance.valgrind_state.free(addr)
     /*
     let result: Result<(), AccessError> = panic!("pretend we called valgrind_state.free()");
     result.to_int()
     */
+}
+
+fn check_load(instance: &mut Instance, num_bytes: u32, addr: u32, offset: u32) {
+    // println!("load addr: {}", addr + offset);
+    //call valgrind read
+}
+
+fn check_store(instance: &mut Instance, num_bytes: u32, addr: u32, offset: u32) {
+    // println!("store addr: {}", addr + offset);
+    // valgrind write
+}
+
+fn malloc_start(instance: &mut Instance) {
+    //instance.valgrind_state.flag = false;
+}
+
+fn free_start(instance: &mut Instance) {
+    //instance.valgrind_state.flag = false;
 }
 
 /// This module contains functions which are used for resolving relocations at

@@ -587,6 +587,16 @@ pub trait FuncEnvironment: TargetEnvironment {
     fn use_x86_pmaddubsw_for_dot(&self) -> bool {
         false
     }
+
+    ///
+    fn handle_before_return(&mut self, retvals: &[ir::Value], builder: &mut FunctionBuilder) {}
+
+    ///
+    // Type::bytes (?)
+    fn before_load(&mut self, builder: &mut FunctionBuilder, addr: ir::Value, offset: u64) {}
+
+    ///
+    fn before_store(&mut self, builder: &mut FunctionBuilder, addr: ir::Value, offset: u64) {}
 }
 
 /// An object satisfying the `ModuleEnvironment` trait can be passed as argument to the
