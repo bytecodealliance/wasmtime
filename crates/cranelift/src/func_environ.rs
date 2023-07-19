@@ -20,7 +20,7 @@ use wasmtime_environ::{
     BuiltinFunctionIndex, MemoryPlan, MemoryStyle, Module, ModuleTranslation, ModuleTypes, PtrSize,
     TableStyle, Tunables, TypeConvert, VMOffsets, WASM_PAGE_SIZE,
 };
-use wasmtime_environ::{FUNCREF_INIT_BIT, FUNCREF_MASK};
+use wasmtime_environ::{FUNCREF_INIT_BIT, FUNCREF_MASK}; // is this the right place to import Value from?
 
 macro_rules! declare_function_signatures {
     (

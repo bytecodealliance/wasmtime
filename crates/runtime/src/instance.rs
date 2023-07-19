@@ -15,6 +15,7 @@ use crate::{
     ExportFunction, ExportGlobal, ExportMemory, ExportTable, Imports, ModuleRuntimeInfo,
     SendSyncPtr, Store, VMFunctionBody, VMSharedSignatureIndex, WasmFault,
 };
+use wasm_valgrind::Valgrind;
 use anyhow::Error;
 use anyhow::Result;
 use sptr::Strict;
@@ -145,7 +146,7 @@ pub struct Instance {
     /// represents a dynamically-sized array that extends beyond the nominal
     /// end of the struct (similar to a flexible array member).
     vmctx: VMContext,
-    // valgrind_state: Valgrind,
+    valgrind_state: Valgrind,
 }
 
 #[allow(clippy::cast_ptr_alignment)]
@@ -188,7 +189,7 @@ impl Instance {
                 vmctx: VMContext {
                     _marker: std::marker::PhantomPinned,
                 },
-                // valgrind_state: Valgrind::new(memories.len(), ),
+                valgrind_state: Valgrind::new(1024 * 1024 * 128, 1024 * 1024),
                 //not sure how to access mem & stack size?
             },
         );

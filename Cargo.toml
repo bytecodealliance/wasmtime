@@ -101,6 +101,7 @@ members = [
   "crates/test-programs/wasi-http-tests",
   "crates/test-programs/command-tests",
   "crates/test-programs/reactor-tests",
+  "crates/valgrind",
   "crates/wasi-preview1-component-adapter",
   "crates/wasi-preview1-component-adapter/verify",
   "crates/winch",
