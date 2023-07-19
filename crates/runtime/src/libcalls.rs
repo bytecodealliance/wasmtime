@@ -493,6 +493,7 @@ unsafe fn new_epoch(instance: &mut Instance) -> Result<u64> {
 unsafe fn check_malloc(instance: &mut Instance, addr: u32, len: u32) -> Result<u32> {
     //     let addr_usize;
     // 	instance::valgrind_state::malloc(addr_usize, len)
+    println!("instance is: {:p}", instance as *mut Instance);
     println!("addr: {} len: {}", addr, len);
     let result = instance.valgrind_state.malloc(addr as usize, len as usize);
     if result.is_ok() {

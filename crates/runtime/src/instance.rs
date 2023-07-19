@@ -142,11 +142,12 @@ pub struct Instance {
     /// seems not too bad.
     vmctx_self_reference: SendSyncPtr<VMContext>,
 
+    pub(crate) valgrind_state: Valgrind,
+
     /// Additional context used by compiled wasm code. This field is last, and
     /// represents a dynamically-sized array that extends beyond the nominal
     /// end of the struct (similar to a flexible array member).
     vmctx: VMContext,
-    pub(crate) valgrind_state: Valgrind,
 }
 
 #[allow(clippy::cast_ptr_alignment)]
@@ -189,7 +190,13 @@ impl Instance {
                 vmctx: VMContext {
                     _marker: std::marker::PhantomPinned,
                 },
-                valgrind_state: Valgrind::new(1024 * 1024 * 128, 1024 * 1024),
+                valgrind_state: {
+                    const MiB: usize = 1024 * 1024; // 1 MiB
+                    // ad-hoc testing seems to show...
+                    // TODO: how do we determine this more consistently?
+                    const C_STACK_SIZE: usize = 128 * 1024;
+                    Valgrind::new(128 * MiB, C_STACK_SIZE)
+                },
                 //not sure how to access mem & stack size?
             },
         );
