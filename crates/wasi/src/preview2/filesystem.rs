@@ -13,6 +13,8 @@ bitflags::bitflags! {
 }
 
 pub(crate) struct File {
+    /// Wrapped in an Arc because the same underlying file is used for
+    /// implementing the stream types. Also needed for [`block`].
     pub file: Arc<cap_std::fs::File>,
     pub perms: FilePerms,
 }
@@ -25,7 +27,9 @@ impl File {
         }
     }
 
-    pub(crate) async fn block<F, R>(&self, body: F) -> R
+    /// Spawn a task on tokio's blocking thread for performing blocking
+    /// syscalls on the underlying [`cap_std::fs::File`].
+    pub(crate) async fn spawn_blocking<F, R>(&self, body: F) -> R
     where
         F: FnOnce(&cap_std::fs::File) -> R + Send + 'static,
         R: Send + 'static,
@@ -97,7 +101,9 @@ impl Dir {
         }
     }
 
-    pub(crate) async fn block<F, R>(&self, body: F) -> R
+    /// Spawn a task on tokio's blocking thread for performing blocking
+    /// syscalls on the underlying [`cap_std::fs::Dir`].
+    pub(crate) async fn spawn_blocking<F, R>(&self, body: F) -> R
     where
         F: FnOnce(&cap_std::fs::Dir) -> R + Send + 'static,
         R: Send + 'static,

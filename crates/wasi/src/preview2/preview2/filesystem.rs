@@ -45,7 +45,8 @@ impl<T: WasiView> filesystem::Host for T {
         };
 
         let f = self.table().get_file(fd)?;
-        f.block(move |f| f.advise(offset, len, advice)).await?;
+        f.spawn_blocking(move |f| f.advise(offset, len, advice))
+            .await?;
         Ok(())
     }
 
@@ -53,7 +54,7 @@ impl<T: WasiView> filesystem::Host for T {
         let table = self.table();
         if table.is_file(fd) {
             let f = table.get_file(fd)?;
-            match f.block(|f| f.sync_data()).await {
+            match f.spawn_blocking(|f| f.sync_data()).await {
                 Ok(()) => Ok(()),
                 // On windows, `sync_data` uses `FileFlushBuffers` which fails with
                 // `ERROR_ACCESS_DENIED` if the file is not upen for writing. Ignore
@@ -69,7 +70,7 @@ impl<T: WasiView> filesystem::Host for T {
             }
         } else if table.is_dir(fd) {
             let d = table.get_dir(fd)?;
-            d.block(|d| Ok(d.open(std::path::Component::CurDir)?.sync_data()?))
+            d.spawn_blocking(|d| Ok(d.open(std::path::Component::CurDir)?.sync_data()?))
                 .await
         } else {
             Err(ErrorCode::BadDescriptor.into())
@@ -100,7 +101,7 @@ impl<T: WasiView> filesystem::Host for T {
         let table = self.table();
         if table.is_file(fd) {
             let f = table.get_file(fd)?;
-            let flags = f.block(|f| f.get_fd_flags()).await?;
+            let flags = f.spawn_blocking(|f| f.get_fd_flags()).await?;
             let mut flags = get_from_fdflags(flags);
             if f.perms.contains(FilePerms::READ) {
                 flags |= DescriptorFlags::READ;
@@ -111,7 +112,7 @@ impl<T: WasiView> filesystem::Host for T {
             Ok(flags)
         } else if table.is_dir(fd) {
             let d = table.get_dir(fd)?;
-            let flags = d.block(|d| d.get_fd_flags()).await?;
+            let flags = d.spawn_blocking(|d| d.get_fd_flags()).await?;
             let mut flags = get_from_fdflags(flags);
             if d.perms.contains(DirPerms::READ) {
                 flags |= DescriptorFlags::READ;
@@ -133,7 +134,7 @@ impl<T: WasiView> filesystem::Host for T {
 
         if table.is_file(fd) {
             let f = table.get_file(fd)?;
-            let meta = f.block(|f| f.metadata()).await?;
+            let meta = f.spawn_blocking(|f| f.metadata()).await?;
             Ok(descriptortype_from(meta.file_type()))
         } else if table.is_dir(fd) {
             Ok(filesystem::DescriptorType::Directory)
@@ -151,7 +152,7 @@ impl<T: WasiView> filesystem::Host for T {
         if !f.perms.contains(FilePerms::WRITE) {
             Err(ErrorCode::NotPermitted)?;
         }
-        f.block(move |f| f.set_len(size)).await?;
+        f.spawn_blocking(move |f| f.set_len(size)).await?;
         Ok(())
     }
 
@@ -171,7 +172,7 @@ impl<T: WasiView> filesystem::Host for T {
             }
             let atim = systemtimespec_from(atim)?;
             let mtim = systemtimespec_from(mtim)?;
-            f.block(|f| f.set_times(atim, mtim)).await?;
+            f.spawn_blocking(|f| f.set_times(atim, mtim)).await?;
             Ok(())
         } else if table.is_dir(fd) {
             let d = table.get_dir(fd)?;
@@ -180,7 +181,7 @@ impl<T: WasiView> filesystem::Host for T {
             }
             let atim = systemtimespec_from(atim)?;
             let mtim = systemtimespec_from(mtim)?;
-            d.block(|d| d.set_times(atim, mtim)).await?;
+            d.spawn_blocking(|d| d.set_times(atim, mtim)).await?;
             Ok(())
         } else {
             Err(ErrorCode::BadDescriptor.into())
@@ -204,7 +205,7 @@ impl<T: WasiView> filesystem::Host for T {
         }
 
         let (mut buffer, r) = f
-            .block(move |f| {
+            .spawn_blocking(move |f| {
                 let mut buffer = vec![0; len.try_into().unwrap_or(usize::MAX)];
                 let r = f.read_vectored_at(&mut [IoSliceMut::new(&mut buffer)], offset);
                 (buffer, r)
@@ -238,7 +239,7 @@ impl<T: WasiView> filesystem::Host for T {
         }
 
         let bytes_written = f
-            .block(move |f| f.write_vectored_at(&[IoSlice::new(&buf)], offset))
+            .spawn_blocking(move |f| f.write_vectored_at(&[IoSlice::new(&buf)], offset))
             .await?;
 
         Ok(filesystem::Filesize::try_from(bytes_written).expect("usize fits in Filesize"))
@@ -267,7 +268,7 @@ impl<T: WasiView> filesystem::Host for T {
         }
 
         let entries = d
-            .block(|d| {
+            .spawn_blocking(|d| {
                 // Both `entries` and `full_metadata` perform syscalls, which is why they are done
                 // within this `block` call, rather than delay calculating the full metadata
                 // for entries when they're demanded later in the iterator chain.
@@ -333,7 +334,7 @@ impl<T: WasiView> filesystem::Host for T {
         let table = self.table();
         if table.is_file(fd) {
             let f = table.get_file(fd)?;
-            match f.block(|f| f.sync_all()).await {
+            match f.spawn_blocking(|f| f.sync_all()).await {
                 Ok(()) => Ok(()),
                 // On windows, `sync_data` uses `FileFlushBuffers` which fails with
                 // `ERROR_ACCESS_DENIED` if the file is not upen for writing. Ignore
@@ -349,7 +350,7 @@ impl<T: WasiView> filesystem::Host for T {
             }
         } else if table.is_dir(fd) {
             let d = table.get_dir(fd)?;
-            d.block(|d| Ok(d.open(std::path::Component::CurDir)?.sync_all()?))
+            d.spawn_blocking(|d| Ok(d.open(std::path::Component::CurDir)?.sync_all()?))
                 .await
         } else {
             Err(ErrorCode::BadDescriptor.into())
@@ -366,7 +367,7 @@ impl<T: WasiView> filesystem::Host for T {
         if !d.perms.contains(DirPerms::MUTATE) {
             return Err(ErrorCode::NotPermitted.into());
         }
-        d.block(move |d| d.create_dir(&path)).await?;
+        d.spawn_blocking(move |d| d.create_dir(&path)).await?;
         Ok(())
     }
 
@@ -378,12 +379,12 @@ impl<T: WasiView> filesystem::Host for T {
         if table.is_file(fd) {
             let f = table.get_file(fd)?;
             // No permissions check on stat: if opened, allowed to stat it
-            let meta = f.block(|f| f.metadata()).await?;
+            let meta = f.spawn_blocking(|f| f.metadata()).await?;
             Ok(descriptorstat_from(meta))
         } else if table.is_dir(fd) {
             let d = table.get_dir(fd)?;
             // No permissions check on stat: if opened, allowed to stat it
-            let meta = d.block(|d| d.dir_metadata()).await?;
+            let meta = d.spawn_blocking(|d| d.dir_metadata()).await?;
             Ok(descriptorstat_from(meta))
         } else {
             Err(ErrorCode::BadDescriptor.into())
@@ -403,9 +404,9 @@ impl<T: WasiView> filesystem::Host for T {
         }
 
         let meta = if symlink_follow(path_flags) {
-            d.block(move |d| d.metadata(&path)).await?
+            d.spawn_blocking(move |d| d.metadata(&path)).await?
         } else {
-            d.block(move |d| d.symlink_metadata(&path)).await?
+            d.spawn_blocking(move |d| d.symlink_metadata(&path)).await?
         };
         Ok(descriptorstat_from(meta))
     }
@@ -428,7 +429,7 @@ impl<T: WasiView> filesystem::Host for T {
         let atim = systemtimespec_from(atim)?;
         let mtim = systemtimespec_from(mtim)?;
         if symlink_follow(path_flags) {
-            d.block(move |d| {
+            d.spawn_blocking(move |d| {
                 d.set_times(
                     &path,
                     atim.map(cap_fs_ext::SystemTimeSpec::from_std),
@@ -437,7 +438,7 @@ impl<T: WasiView> filesystem::Host for T {
             })
             .await?;
         } else {
-            d.block(move |d| {
+            d.spawn_blocking(move |d| {
                 d.set_symlink_times(
                     &path,
                     atim.map(cap_fs_ext::SystemTimeSpec::from_std),
@@ -472,7 +473,7 @@ impl<T: WasiView> filesystem::Host for T {
         }
         let new_dir_handle = std::sync::Arc::clone(&new_dir.dir);
         old_dir
-            .block(move |d| d.hard_link(&old_path, &new_dir_handle, &new_path))
+            .spawn_blocking(move |d| d.hard_link(&old_path, &new_dir_handle, &new_path))
             .await?;
         Ok(())
     }
@@ -556,6 +557,9 @@ impl<T: WasiView> filesystem::Host for T {
             }
         }
 
+        // Represents each possible outcome from the spawn_blocking operation.
+        // This makes sure we don't have to give spawn_blocking any way to
+        // manipulate the table.
         enum OpenResult {
             Dir(cap_std::fs::Dir),
             File(cap_std::fs::File),
@@ -563,7 +567,7 @@ impl<T: WasiView> filesystem::Host for T {
         }
 
         let opened = d
-            .block::<_, std::io::Result<OpenResult>>(move |d| {
+            .spawn_blocking::<_, std::io::Result<OpenResult>>(move |d| {
                 let mut opened = d.open_with(&path, &opts)?;
                 if opened.metadata()?.is_dir() {
                     Ok(OpenResult::Dir(cap_std::fs::Dir::from_std_file(
@@ -595,7 +599,11 @@ impl<T: WasiView> filesystem::Host for T {
     async fn drop_descriptor(&mut self, fd: filesystem::Descriptor) -> anyhow::Result<()> {
         let table = self.table_mut();
 
-        // Table operations don't need to go in the background thread.
+        // The Drop will close the file/dir, but if the close syscall
+        // blocks the thread, I will face god and walk backwards into hell.
+        // tokio::fs::File just uses std::fs::File's Drop impl to close, so
+        // it doesn't appear anyone else has found this to be a problem.
+        // (Not that they could solve it without async drop...)
         if table.delete_file(fd).is_err() {
             table.delete_dir(fd)?;
         }
@@ -613,7 +621,7 @@ impl<T: WasiView> filesystem::Host for T {
         if !d.perms.contains(DirPerms::READ) {
             return Err(ErrorCode::NotPermitted.into());
         }
-        let link = d.block(move |d| d.read_link(&path)).await?;
+        let link = d.spawn_blocking(move |d| d.read_link(&path)).await?;
         Ok(link
             .into_os_string()
             .into_string()
@@ -630,7 +638,7 @@ impl<T: WasiView> filesystem::Host for T {
         if !d.perms.contains(DirPerms::MUTATE) {
             return Err(ErrorCode::NotPermitted.into());
         }
-        Ok(d.block(move |d| d.remove_dir(&path)).await?)
+        Ok(d.spawn_blocking(move |d| d.remove_dir(&path)).await?)
     }
 
     async fn rename_at(
@@ -651,7 +659,7 @@ impl<T: WasiView> filesystem::Host for T {
         }
         let new_dir_handle = std::sync::Arc::clone(&new_dir.dir);
         Ok(old_dir
-            .block(move |d| d.rename(&old_path, &new_dir_handle, &new_path))
+            .spawn_blocking(move |d| d.rename(&old_path, &new_dir_handle, &new_path))
             .await?)
     }
 
@@ -670,7 +678,8 @@ impl<T: WasiView> filesystem::Host for T {
         if !d.perms.contains(DirPerms::MUTATE) {
             return Err(ErrorCode::NotPermitted.into());
         }
-        Ok(d.block(move |d| d.symlink(&src_path, &dest_path)).await?)
+        Ok(d.spawn_blocking(move |d| d.symlink(&src_path, &dest_path))
+            .await?)
     }
 
     async fn unlink_file_at(
@@ -685,7 +694,8 @@ impl<T: WasiView> filesystem::Host for T {
         if !d.perms.contains(DirPerms::MUTATE) {
             return Err(ErrorCode::NotPermitted.into());
         }
-        Ok(d.block(move |d| d.remove_file_or_symlink(&path)).await?)
+        Ok(d.spawn_blocking(move |d| d.remove_file_or_symlink(&path))
+            .await?)
     }
 
     async fn access_at(
