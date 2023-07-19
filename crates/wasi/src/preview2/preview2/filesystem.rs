@@ -149,7 +149,7 @@ impl<T: WasiView> filesystem::Host for T {
         if !f.perms.contains(FilePerms::WRITE) {
             Err(ErrorCode::NotPermitted)?;
         }
-        f.block(|f| f.set_len(size)).await?;
+        f.block(move |f| f.set_len(size)).await?;
         Ok(())
     }
 
@@ -201,11 +201,15 @@ impl<T: WasiView> filesystem::Host for T {
             return Err(ErrorCode::NotPermitted.into());
         }
 
-        let mut buffer = vec![0; len.try_into().unwrap_or(usize::MAX)];
-        let (bytes_read, state) = crate::preview2::filesystem::read_result(
-            f.block(|f| f.read_vectored_at(&mut [IoSliceMut::new(&mut buffer)], offset))
-                .await,
-        )?;
+        let (mut buffer, r) = f
+            .block(move |f| {
+                let mut buffer = vec![0; len.try_into().unwrap_or(usize::MAX)];
+                let r = f.read_vectored_at(&mut [IoSliceMut::new(&mut buffer)], offset);
+                (buffer, r)
+            })
+            .await;
+
+        let (bytes_read, state) = crate::preview2::filesystem::read_result(r)?;
 
         buffer.truncate(
             bytes_read
@@ -232,7 +236,7 @@ impl<T: WasiView> filesystem::Host for T {
         }
 
         let bytes_written = f
-            .block(|f| f.write_vectored_at(&[IoSlice::new(&buf)], offset))
+            .block(move |f| f.write_vectored_at(&[IoSlice::new(&buf)], offset))
             .await?;
 
         Ok(filesystem::Filesize::try_from(bytes_written).expect("usize fits in Filesize"))
@@ -360,7 +364,7 @@ impl<T: WasiView> filesystem::Host for T {
         if !d.perms.contains(DirPerms::MUTATE) {
             return Err(ErrorCode::NotPermitted.into());
         }
-        d.block(|d| d.create_dir(&path)).await?;
+        d.block(move |d| d.create_dir(&path)).await?;
         Ok(())
     }
 
@@ -397,9 +401,9 @@ impl<T: WasiView> filesystem::Host for T {
         }
 
         let meta = if symlink_follow(path_flags) {
-            d.block(|d| d.metadata(&path)).await?
+            d.block(move |d| d.metadata(&path)).await?
         } else {
-            d.block(|d| d.symlink_metadata(&path)).await?
+            d.block(move |d| d.symlink_metadata(&path)).await?
         };
         Ok(descriptorstat_from(meta))
     }
@@ -422,7 +426,7 @@ impl<T: WasiView> filesystem::Host for T {
         let atim = systemtimespec_from(atim)?;
         let mtim = systemtimespec_from(mtim)?;
         if symlink_follow(path_flags) {
-            d.block(|d| {
+            d.block(move |d| {
                 d.set_times(
                     &path,
                     atim.map(cap_fs_ext::SystemTimeSpec::from_std),
@@ -431,7 +435,7 @@ impl<T: WasiView> filesystem::Host for T {
             })
             .await?;
         } else {
-            d.block(|d| {
+            d.block(move |d| {
                 d.set_symlink_times(
                     &path,
                     atim.map(cap_fs_ext::SystemTimeSpec::from_std),
@@ -464,8 +468,9 @@ impl<T: WasiView> filesystem::Host for T {
         if symlink_follow(old_path_flags) {
             return Err(ErrorCode::Invalid.into());
         }
+        let new_dir_handle = std::sync::Arc::clone(&new_dir.dir);
         old_dir
-            .block(|d| d.hard_link(&old_path, &new_dir.dir, &new_path))
+            .block(move |d| d.hard_link(&old_path, &new_dir_handle, &new_path))
             .await?;
         Ok(())
     }
@@ -556,7 +561,7 @@ impl<T: WasiView> filesystem::Host for T {
         }
 
         let opened = d
-            .block::<_, std::io::Result<OpenResult>>(|d| {
+            .block::<_, std::io::Result<OpenResult>>(move |d| {
                 let mut opened = d.open_with(&path, &opts)?;
                 if opened.metadata()?.is_dir() {
                     Ok(OpenResult::Dir(cap_std::fs::Dir::from_std_file(
@@ -606,7 +611,7 @@ impl<T: WasiView> filesystem::Host for T {
         if !d.perms.contains(DirPerms::READ) {
             return Err(ErrorCode::NotPermitted.into());
         }
-        let link = d.block(|d| d.read_link(&path)).await?;
+        let link = d.block(move |d| d.read_link(&path)).await?;
         Ok(link
             .into_os_string()
             .into_string()
@@ -623,7 +628,7 @@ impl<T: WasiView> filesystem::Host for T {
         if !d.perms.contains(DirPerms::MUTATE) {
             return Err(ErrorCode::NotPermitted.into());
         }
-        Ok(d.block(|d| d.remove_dir(&path)).await?)
+        Ok(d.block(move |d| d.remove_dir(&path)).await?)
     }
 
     async fn rename_at(
@@ -642,7 +647,10 @@ impl<T: WasiView> filesystem::Host for T {
         if !new_dir.perms.contains(DirPerms::MUTATE) {
             return Err(ErrorCode::NotPermitted.into());
         }
-        Ok(old_dir.block(|d| d.rename(&old_path, &new_dir.dir, &new_path)).await?)
+        let new_dir_handle = std::sync::Arc::clone(&new_dir.dir);
+        Ok(old_dir
+            .block(move |d| d.rename(&old_path, &new_dir_handle, &new_path))
+            .await?)
     }
 
     async fn symlink_at(
@@ -660,7 +668,7 @@ impl<T: WasiView> filesystem::Host for T {
         if !d.perms.contains(DirPerms::MUTATE) {
             return Err(ErrorCode::NotPermitted.into());
         }
-        Ok(d.block(|d| d.symlink(&src_path, &dest_path)).await?)
+        Ok(d.block(move |d| d.symlink(&src_path, &dest_path)).await?)
     }
 
     async fn unlink_file_at(
@@ -675,7 +683,7 @@ impl<T: WasiView> filesystem::Host for T {
         if !d.perms.contains(DirPerms::MUTATE) {
             return Err(ErrorCode::NotPermitted.into());
         }
-        Ok(d.block(|d| d.remove_file_or_symlink(&path)).await?)
+        Ok(d.block(move |d| d.remove_file_or_symlink(&path)).await?)
     }
 
     async fn access_at(
