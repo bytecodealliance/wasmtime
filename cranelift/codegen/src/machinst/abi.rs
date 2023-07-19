@@ -458,13 +458,18 @@ pub trait ABIMachineSpec {
     /// Generate an add-with-immediate. Note that even if this uses a scratch
     /// register, it must satisfy two requirements:
     ///
-    /// - The add-imm sequence must only clobber caller-save registers, because
-    ///   it will be placed in the prologue before the clobbered callee-save
-    ///   registers are saved.
+    /// - The add-imm sequence must only clobber caller-save registers that are
+    ///   not used for arguments, because it will be placed in the prologue
+    ///   before the clobbered callee-save registers are saved.
     ///
     /// - The add-imm sequence must work correctly when `from_reg` and/or
     ///   `into_reg` are the register returned by `get_stacklimit_reg()`.
-    fn gen_add_imm(into_reg: Writable<Reg>, from_reg: Reg, imm: u32) -> SmallInstVec<Self::I>;
+    fn gen_add_imm(
+        call_conv: isa::CallConv,
+        into_reg: Writable<Reg>,
+        from_reg: Reg,
+        imm: u32,
+    ) -> SmallInstVec<Self::I>;
 
     /// Generate a sequence that traps with a `TrapCode::StackOverflow` code if
     /// the stack pointer is less than the given limit register (assuming the
@@ -479,19 +484,20 @@ pub trait ABIMachineSpec {
     /// certain sequences generated after the register allocator has already
     /// run. This must satisfy two requirements:
     ///
-    /// - It must be a caller-save register, because it will be clobbered in the
-    ///   prologue before the clobbered callee-save registers are saved.
+    /// - It must be a caller-save register that is not used for arguments,
+    ///   because it will be clobbered in the prologue before the clobbered
+    ///   callee-save registers are saved.
     ///
     /// - It must be safe to pass as an argument and/or destination to
     ///   `gen_add_imm()`. This is relevant when an addition with a large
     ///   immediate needs its own temporary; it cannot use the same fixed
     ///   temporary as this one.
-    fn get_stacklimit_reg() -> Reg;
+    fn get_stacklimit_reg(call_conv: isa::CallConv) -> Reg;
 
-    /// Generate a store to the given [base+offset] address.
+    /// Generate a load to the given [base+offset] address.
     fn gen_load_base_offset(into_reg: Writable<Reg>, base: Reg, offset: i32, ty: Type) -> Self::I;
 
-    /// Generate a load from the given [base+offset] address.
+    /// Generate a store from the given [base+offset] address.
     fn gen_store_base_offset(base: Reg, offset: i32, from_reg: Reg, ty: Type) -> Self::I;
 
     /// Adjust the stack pointer up or down.
@@ -592,17 +598,6 @@ pub trait ABIMachineSpec {
         callee_conv: isa::CallConv,
         caller_conv: isa::CallConv,
         callee_pop_size: u32,
-    ) -> SmallVec<[Self::I; 2]>;
-
-    fn gen_return_call(
-        callee: CallDest,
-        new_stack_arg_size: u32,
-        old_stack_arg_size: u32,
-        ret_addr: Option<Reg>,
-        fp: Reg,
-        tmp: Writable<Reg>,
-        tmp2: Writable<Reg>,
-        uses: abi::CallArgList,
     ) -> SmallVec<[Self::I; 2]>;
 
     /// Generate a memcpy invocation. Used to set up struct
@@ -715,6 +710,11 @@ impl SigData {
     /// Get calling convention used.
     pub fn call_conv(&self) -> isa::CallConv {
         self.call_conv
+    }
+
+    /// The index of the stack-return-value-area argument, if any.
+    pub fn stack_ret_arg(&self) -> Option<u16> {
+        self.stack_ret_arg
     }
 }
 
@@ -1099,9 +1099,8 @@ impl<M: ABIMachineSpec> Callee<M> {
                 || call_conv == isa::CallConv::Fast
                 || call_conv == isa::CallConv::Cold
                 || call_conv.extends_windows_fastcall()
-                || call_conv == isa::CallConv::AppleAarch64
                 || call_conv == isa::CallConv::WasmtimeSystemV
-                || call_conv == isa::CallConv::WasmtimeAppleAarch64,
+                || call_conv == isa::CallConv::AppleAarch64,
             "Unsupported calling convention: {:?}",
             call_conv
         );
@@ -1251,9 +1250,14 @@ impl<M: ABIMachineSpec> Callee<M> {
         // `scratch`. If our stack size doesn't fit into an immediate this
         // means we need a second scratch register for loading the stack size
         // into a register.
-        let scratch = Writable::from_reg(M::get_stacklimit_reg());
-        insts.extend(M::gen_add_imm(scratch, stack_limit, stack_size).into_iter());
+        let scratch = Writable::from_reg(M::get_stacklimit_reg(self.call_conv));
+        insts.extend(M::gen_add_imm(self.call_conv, scratch, stack_limit, stack_size).into_iter());
         insts.extend(M::gen_stack_lower_bound_trap(scratch.to_reg()));
+    }
+
+    /// Get the register holding the return-area pointer, if any.
+    pub(crate) fn ret_area_ptr(&self) -> Option<Writable<Reg>> {
+        self.ret_area_ptr
     }
 }
 
@@ -1309,7 +1313,7 @@ fn generate_gv<M: ABIMachineSpec>(
             readonly: _,
         } => {
             let base = generate_gv::<M>(f, sigs, sig, base, insts);
-            let into_reg = Writable::from_reg(M::get_stacklimit_reg());
+            let into_reg = Writable::from_reg(M::get_stacklimit_reg(f.stencil.signature.call_conv));
             insts.push(M::gen_load_base_offset(
                 into_reg,
                 base,
@@ -2105,10 +2109,10 @@ impl<M: ABIMachineSpec> CallSite<M> {
         dist: RelocDistance,
         caller_conv: isa::CallConv,
         flags: settings::Flags,
-    ) -> CodegenResult<CallSite<M>> {
+    ) -> CallSite<M> {
         let sig = sigs.abi_sig_for_sig_ref(sig_ref);
         let clobbers = sigs.call_clobbers::<M>(sig);
-        Ok(CallSite {
+        CallSite {
             sig,
             uses: smallvec![],
             defs: smallvec![],
@@ -2118,7 +2122,7 @@ impl<M: ABIMachineSpec> CallSite<M> {
             caller_conv,
             flags,
             _mach: PhantomData,
-        })
+        }
     }
 
     /// Create a callsite ABI object for a call directly to the specified
@@ -2130,10 +2134,10 @@ impl<M: ABIMachineSpec> CallSite<M> {
         dist: RelocDistance,
         caller_conv: isa::CallConv,
         flags: settings::Flags,
-    ) -> CodegenResult<CallSite<M>> {
+    ) -> CallSite<M> {
         let sig = sigs.abi_sig_for_signature(sig);
         let clobbers = sigs.call_clobbers::<M>(sig);
-        Ok(CallSite {
+        CallSite {
             sig,
             uses: smallvec![],
             defs: smallvec![],
@@ -2143,7 +2147,7 @@ impl<M: ABIMachineSpec> CallSite<M> {
             caller_conv,
             flags,
             _mach: PhantomData,
-        })
+        }
     }
 
     /// Create a callsite ABI object for a call to a function pointer with the
@@ -2155,10 +2159,10 @@ impl<M: ABIMachineSpec> CallSite<M> {
         opcode: ir::Opcode,
         caller_conv: isa::CallConv,
         flags: settings::Flags,
-    ) -> CodegenResult<CallSite<M>> {
+    ) -> CallSite<M> {
         let sig = sigs.abi_sig_for_sig_ref(sig_ref);
         let clobbers = sigs.call_clobbers::<M>(sig);
-        Ok(CallSite {
+        CallSite {
             sig,
             uses: smallvec![],
             defs: smallvec![],
@@ -2168,7 +2172,19 @@ impl<M: ABIMachineSpec> CallSite<M> {
             caller_conv,
             flags,
             _mach: PhantomData,
-        })
+        }
+    }
+
+    pub(crate) fn sig(&self) -> Sig {
+        self.sig
+    }
+
+    pub(crate) fn dest(&self) -> &CallDest {
+        &self.dest
+    }
+
+    pub(crate) fn take_uses(self) -> CallArgList {
+        self.uses
     }
 }
 
@@ -2443,6 +2459,27 @@ impl<M: ABIMachineSpec> CallSite<M> {
         insts
     }
 
+    /// Call `gen_arg` for each non-hidden argument and emit all instructions
+    /// generated.
+    pub fn emit_args(&mut self, ctx: &mut Lower<M::I>, (inputs, off): isle::ValueSlice) {
+        let num_args = self.num_args(ctx.sigs());
+        assert_eq!(inputs.len(&ctx.dfg().value_lists) - off, num_args);
+
+        let mut arg_value_regs: SmallVec<[_; 16]> = smallvec![];
+        for i in 0..num_args {
+            let input = inputs.get(off + i, &ctx.dfg().value_lists).unwrap();
+            arg_value_regs.push(ctx.put_value_in_regs(input));
+        }
+        for (i, arg_regs) in arg_value_regs.iter().enumerate() {
+            self.emit_copy_regs_to_buffer(ctx, i, *arg_regs);
+        }
+        for (i, value_regs) in arg_value_regs.iter().enumerate() {
+            for inst in self.gen_arg(ctx, i, *value_regs) {
+                ctx.emit(inst);
+            }
+        }
+    }
+
     /// Define a return value after the call returns.
     pub fn gen_retval(
         &mut self,
@@ -2550,45 +2587,6 @@ impl<M: ABIMachineSpec> CallSite<M> {
         )
         .into_iter()
         {
-            ctx.emit(inst);
-        }
-    }
-
-    /// Emit a tail call sequence.
-    ///
-    /// The returned instruction should have a proper use-set (arg registers are
-    /// uses) according to the argument registers this function signature in
-    /// this ABI.
-    pub fn emit_return_call(
-        mut self,
-        ctx: &mut Lower<M::I>,
-        new_stack_arg_size: u32,
-        old_stack_arg_size: u32,
-        ret_addr: Option<Reg>,
-        fp: Reg,
-        tmp: Writable<Reg>,
-        tmp2: Writable<Reg>,
-    ) {
-        if let Some(i) = ctx.sigs()[self.sig].stack_ret_arg {
-            let ret_area_ptr = ctx.abi().ret_area_ptr.expect(
-                "if the tail callee has a return pointer, then the tail caller \
-                 must as well",
-            );
-            for inst in self.gen_arg(ctx, i.into(), ValueRegs::one(ret_area_ptr.to_reg())) {
-                ctx.emit(inst);
-            }
-        }
-
-        for inst in M::gen_return_call(
-            self.dest,
-            new_stack_arg_size,
-            old_stack_arg_size,
-            ret_addr,
-            fp,
-            tmp,
-            tmp2,
-            self.uses,
-        ) {
             ctx.emit(inst);
         }
     }

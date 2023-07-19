@@ -90,7 +90,7 @@ impl TestFileCompiler {
     /// [TestFileCompiler::with_host_isa]).
     pub fn new(isa: OwnedTargetIsa) -> Self {
         let mut builder = JITBuilder::with_isa(isa, cranelift_module::default_libcall_names());
-        drop(&mut builder); // require mutability on all architectures
+        let _ = &mut builder; // require mutability on all architectures
         #[cfg(target_arch = "x86_64")]
         {
             builder.symbol_lookup_fn(Box::new(|name| {

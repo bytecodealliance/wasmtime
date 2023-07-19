@@ -30,7 +30,7 @@ mod stdio;
 mod stream;
 mod table;
 
-pub use self::clocks::{WasiClocks, WasiMonotonicClock, WasiWallClock};
+pub use self::clocks::{HostMonotonicClock, HostWallClock};
 pub use self::ctx::{WasiCtx, WasiCtxBuilder, WasiView};
 pub use self::error::I32Exit;
 pub use self::filesystem::{DirPerms, FilePerms};

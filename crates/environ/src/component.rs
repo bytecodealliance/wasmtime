@@ -60,11 +60,11 @@ macro_rules! foreach_transcoder {
             latin1_to_latin1(src: ptr_u8, len: size, dst: ptr_u8);
             latin1_to_utf16(src: ptr_u8, len: size, dst: ptr_u16);
             utf8_to_utf16(src: ptr_u8, len: size, dst: ptr_u16) -> size;
-            utf16_to_utf8(src: ptr_u16, src_len: size, dst: ptr_u8, dst_len: size) -> size_pair;
-            latin1_to_utf8(src: ptr_u8, src_len: size, dst: ptr_u8, dst_len: size) -> size_pair;
+            utf16_to_utf8(src: ptr_u16, src_len: size, dst: ptr_u8, dst_len: size, ret2: ptr_size) -> size;
+            latin1_to_utf8(src: ptr_u8, src_len: size, dst: ptr_u8, dst_len: size, ret2: ptr_size) -> size;
             utf16_to_compact_probably_utf16(src: ptr_u16, len: size, dst: ptr_u16) -> size;
-            utf8_to_latin1(src: ptr_u8, len: size, dst: ptr_u8) -> size_pair;
-            utf16_to_latin1(src: ptr_u16, len: size, dst: ptr_u8) -> size_pair;
+            utf8_to_latin1(src: ptr_u8, len: size, dst: ptr_u8, ret2: ptr_size) -> size;
+            utf16_to_latin1(src: ptr_u16, len: size, dst: ptr_u8, ret2: ptr_size) -> size;
             utf8_to_compact_utf16(src: ptr_u8, src_len: size, dst: ptr_u16, dst_len: size, bytes_so_far: size) -> size;
             utf16_to_compact_utf16(src: ptr_u16, src_len: size, dst: ptr_u16, dst_len: size, bytes_so_far: size) -> size;
         }

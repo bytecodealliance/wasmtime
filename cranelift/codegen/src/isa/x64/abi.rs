@@ -11,7 +11,7 @@ use crate::{CodegenError, CodegenResult};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use args::*;
-use regalloc2::{PRegSet, VReg};
+use regalloc2::{PReg, PRegSet, VReg};
 use smallvec::{smallvec, SmallVec};
 use std::convert::TryFrom;
 
@@ -215,18 +215,14 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                         ArgsOrRets::Args => {
                             get_intreg_for_arg(&call_conv, next_gpr, next_param_idx)
                         }
-                        ArgsOrRets::Rets => {
-                            get_intreg_for_retval(&call_conv, next_gpr, next_param_idx)
-                        }
+                        ArgsOrRets::Rets => get_intreg_for_retval(&call_conv, next_gpr),
                     }
                 } else {
                     match args_or_rets {
                         ArgsOrRets::Args => {
                             get_fltreg_for_arg(&call_conv, next_vreg, next_param_idx)
                         }
-                        ArgsOrRets::Rets => {
-                            get_fltreg_for_retval(&call_conv, next_vreg, next_param_idx)
-                        }
+                        ArgsOrRets::Rets => get_fltreg_for_retval(&call_conv, next_vreg),
                     }
                 };
                 next_param_idx += 1;
@@ -242,20 +238,8 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                         extension: param.extension,
                     });
                 } else {
-                    // Compute size. For the wasmtime ABI it differs from native
-                    // ABIs in how multiple values are returned, so we take a
-                    // leaf out of arm64's book by not rounding everything up to
-                    // 8 bytes. For all ABI arguments, and other ABI returns,
-                    // though, each slot takes a minimum of 8 bytes.
-                    //
-                    // Note that in all cases 16-byte stack alignment happens
-                    // separately after all args.
                     let size = reg_ty.bits() / 8;
-                    let size = if args_or_rets == ArgsOrRets::Rets && call_conv.extends_wasmtime() {
-                        size
-                    } else {
-                        std::cmp::max(size, 8)
-                    };
+                    let size = std::cmp::max(size, 8);
                     // Align.
                     debug_assert!(size.is_power_of_two());
                     next_stack = align_to(next_stack, size);
@@ -373,7 +357,12 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         Inst::ret(rets, stack_bytes_to_pop)
     }
 
-    fn gen_add_imm(into_reg: Writable<Reg>, from_reg: Reg, imm: u32) -> SmallInstVec<Self::I> {
+    fn gen_add_imm(
+        _call_conv: isa::CallConv,
+        into_reg: Writable<Reg>,
+        from_reg: Reg,
+        imm: u32,
+    ) -> SmallInstVec<Self::I> {
         let mut ret = SmallVec::new();
         if from_reg != into_reg.to_reg() {
             ret.push(Inst::gen_move(into_reg, from_reg, I64));
@@ -403,15 +392,19 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         Inst::lea(mem, into_reg)
     }
 
-    fn get_stacklimit_reg() -> Reg {
-        debug_assert!(!is_callee_save_systemv(
-            regs::r10().to_real_reg().unwrap(),
-            false
-        ));
-
+    fn get_stacklimit_reg(call_conv: isa::CallConv) -> Reg {
         // As per comment on trait definition, we must return a caller-save
-        // register here.
-        regs::r10()
+        // register that is not used as an argument here.
+        match call_conv {
+            isa::CallConv::Tail => regs::r14(),
+            _ => {
+                debug_assert!(!is_callee_save_systemv(
+                    regs::r10().to_real_reg().unwrap(),
+                    false
+                ));
+                regs::r10()
+            }
+        }
     }
 
     fn gen_load_base_offset(into_reg: Writable<Reg>, base: Reg, offset: i32, ty: Type) -> Self::I {
@@ -720,52 +713,6 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         insts
     }
 
-    fn gen_return_call(
-        callee: CallDest,
-        new_stack_arg_size: u32,
-        old_stack_arg_size: u32,
-        ret_addr: Option<Reg>,
-        fp: Reg,
-        tmp: Writable<Reg>,
-        tmp2: Writable<Reg>,
-        uses: abi::CallArgList,
-    ) -> SmallVec<[Self::I; 2]> {
-        let ret_addr = ret_addr.map(|r| Gpr::new(r).unwrap());
-        let fp = Gpr::new(fp).unwrap();
-        let tmp = WritableGpr::from_writable_reg(tmp).unwrap();
-        let info = Box::new(ReturnCallInfo {
-            new_stack_arg_size,
-            old_stack_arg_size,
-            ret_addr,
-            fp,
-            tmp,
-            uses,
-        });
-        match callee {
-            CallDest::ExtName(callee, RelocDistance::Near) => {
-                smallvec![Inst::ReturnCallKnown { callee, info }]
-            }
-            CallDest::ExtName(callee, RelocDistance::Far) => {
-                smallvec![
-                    Inst::LoadExtName {
-                        dst: tmp2,
-                        name: Box::new(callee.clone()),
-                        offset: 0,
-                        distance: RelocDistance::Far,
-                    },
-                    Inst::ReturnCallUnknown {
-                        callee: tmp2.into(),
-                        info,
-                    }
-                ]
-            }
-            CallDest::Reg(callee) => smallvec![Inst::ReturnCallUnknown {
-                callee: callee.into(),
-                info,
-            }],
-        }
-    }
-
     fn gen_memcpy<F: FnMut(Type) -> Writable<Reg>>(
         call_conv: isa::CallConv,
         dst: Reg,
@@ -864,18 +811,18 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             // The `tail` calling convention doesn't have any callee-save
             // registers.
             CallConv::Tail => vec![],
-            CallConv::Fast | CallConv::Cold | CallConv::SystemV | CallConv::WasmtimeSystemV => regs
+            CallConv::Fast | CallConv::Cold | CallConv::SystemV => regs
                 .iter()
                 .cloned()
                 .filter(|r| is_callee_save_systemv(r.to_reg(), flags.enable_pinned_reg()))
                 .collect(),
-            CallConv::WindowsFastcall | CallConv::WasmtimeFastcall => regs
+            CallConv::WindowsFastcall => regs
                 .iter()
                 .cloned()
                 .filter(|r| is_callee_save_fastcall(r.to_reg(), flags.enable_pinned_reg()))
                 .collect(),
             CallConv::Probestack => todo!("probestack?"),
-            CallConv::AppleAarch64 | CallConv::WasmtimeAppleAarch64 => unreachable!(),
+            CallConv::WasmtimeSystemV | CallConv::AppleAarch64 => unreachable!(),
         };
         // Sort registers for deterministic code output. We can do an unstable sort because the
         // registers will be unique (there are no dups).
@@ -890,6 +837,91 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         _frame_storage_size: u32,
     ) -> bool {
         true
+    }
+}
+
+impl X64CallSite {
+    pub fn emit_return_call(mut self, ctx: &mut Lower<Inst>, args: isle::ValueSlice) {
+        // Allocate additional stack space for the new stack frame. We will
+        // build it in the newly allocated space, but then copy it over our
+        // current frame at the last moment.
+        let new_stack_arg_size = self.emit_allocate_tail_call_frame(ctx);
+        let old_stack_arg_size = ctx.abi().stack_args_size(ctx.sigs());
+
+        // Make a copy of the frame pointer, since we use it when copying down
+        // the new stack frame.
+        let fp = ctx.temp_writable_gpr();
+        let rbp = PReg::from(regs::rbp().to_real_reg().unwrap());
+        ctx.emit(Inst::MovFromPReg { src: rbp, dst: fp });
+
+        // Load the return address, because copying our new stack frame
+        // over our current stack frame might overwrite it, and we'll need to
+        // place it in the correct location after we do that copy.
+        //
+        // But we only need to actually move the return address if the size of
+        // stack arguments changes.
+        let ret_addr = if new_stack_arg_size != old_stack_arg_size {
+            let ret_addr = ctx.temp_writable_gpr();
+            ctx.emit(Inst::Mov64MR {
+                src: SyntheticAmode::Real(Amode::ImmReg {
+                    simm32: 8,
+                    base: *fp.to_reg(),
+                    flags: MemFlags::trusted(),
+                }),
+                dst: ret_addr,
+            });
+            Some(ret_addr.to_reg())
+        } else {
+            None
+        };
+
+        // Put all arguments in registers and stack slots (within that newly
+        // allocated stack space).
+        self.emit_args(ctx, args);
+        if let Some(i) = ctx.sigs()[self.sig()].stack_ret_arg() {
+            let ret_area_ptr = ctx.abi().ret_area_ptr().expect(
+                "if the tail callee has a return pointer, then the tail caller \
+                 must as well",
+            );
+            for inst in self.gen_arg(ctx, i.into(), ValueRegs::one(ret_area_ptr.to_reg())) {
+                ctx.emit(inst);
+            }
+        }
+
+        // Finally, emit the macro instruction to copy the new stack frame over
+        // our current one and do the actual tail call!
+
+        let dest = self.dest().clone();
+        let info = Box::new(ReturnCallInfo {
+            new_stack_arg_size,
+            old_stack_arg_size,
+            ret_addr,
+            fp: fp.to_reg(),
+            tmp: ctx.temp_writable_gpr(),
+            uses: self.take_uses(),
+        });
+        match dest {
+            CallDest::ExtName(callee, RelocDistance::Near) => {
+                ctx.emit(Inst::ReturnCallKnown { callee, info });
+            }
+            CallDest::ExtName(callee, RelocDistance::Far) => {
+                let tmp2 = ctx.temp_writable_gpr();
+                ctx.emit(Inst::LoadExtName {
+                    dst: tmp2.to_writable_reg(),
+                    name: Box::new(callee),
+                    offset: 0,
+                    distance: RelocDistance::Far,
+                });
+                ctx.emit(Inst::ReturnCallUnknown {
+                    callee: tmp2.to_writable_reg().into(),
+                    info,
+                });
+            }
+            CallDest::Reg(callee) => ctx.emit(Inst::ReturnCallUnknown {
+                callee: callee.into(),
+                info,
+            }),
+        }
     }
 }
 
@@ -992,11 +1024,7 @@ fn get_fltreg_for_arg(call_conv: &CallConv, idx: usize, arg_idx: usize) -> Optio
     }
 }
 
-fn get_intreg_for_retval(
-    call_conv: &CallConv,
-    intreg_idx: usize,
-    retval_idx: usize,
-) -> Option<Reg> {
+fn get_intreg_for_retval(call_conv: &CallConv, intreg_idx: usize) -> Option<Reg> {
     match call_conv {
         CallConv::Tail => match intreg_idx {
             0 => Some(regs::rax()),
@@ -1020,28 +1048,17 @@ fn get_intreg_for_retval(
             1 => Some(regs::rdx()),
             _ => None,
         },
-        CallConv::WasmtimeSystemV | CallConv::WasmtimeFastcall => {
-            if intreg_idx == 0 && retval_idx == 0 {
-                Some(regs::rax())
-            } else {
-                None
-            }
-        }
         CallConv::WindowsFastcall => match intreg_idx {
             0 => Some(regs::rax()),
             1 => Some(regs::rdx()), // The Rust ABI for i128s needs this.
             _ => None,
         },
         CallConv::Probestack => todo!(),
-        CallConv::AppleAarch64 | CallConv::WasmtimeAppleAarch64 => unreachable!(),
+        CallConv::WasmtimeSystemV | CallConv::AppleAarch64 => unreachable!(),
     }
 }
 
-fn get_fltreg_for_retval(
-    call_conv: &CallConv,
-    fltreg_idx: usize,
-    retval_idx: usize,
-) -> Option<Reg> {
+fn get_fltreg_for_retval(call_conv: &CallConv, fltreg_idx: usize) -> Option<Reg> {
     match call_conv {
         CallConv::Tail => match fltreg_idx {
             0 => Some(regs::xmm0()),
@@ -1059,19 +1076,12 @@ fn get_fltreg_for_retval(
             1 => Some(regs::xmm1()),
             _ => None,
         },
-        CallConv::WasmtimeFastcall | CallConv::WasmtimeSystemV => {
-            if fltreg_idx == 0 && retval_idx == 0 {
-                Some(regs::xmm0())
-            } else {
-                None
-            }
-        }
         CallConv::WindowsFastcall => match fltreg_idx {
             0 => Some(regs::xmm0()),
             _ => None,
         },
         CallConv::Probestack => todo!(),
-        CallConv::AppleAarch64 | CallConv::WasmtimeAppleAarch64 => unreachable!(),
+        CallConv::WasmtimeSystemV | CallConv::AppleAarch64 => unreachable!(),
     }
 }
 

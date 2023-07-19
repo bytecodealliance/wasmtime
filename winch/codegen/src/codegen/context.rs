@@ -1,5 +1,6 @@
+use super::ControlStackFrame;
 use crate::{
-    abi::ABIResult,
+    abi::{ABIResult, ABI},
     frame::Frame,
     masm::{MacroAssembler, OperandSize, RegImm},
     reg::Reg,
@@ -246,16 +247,40 @@ impl<'a> CodeGenContext<'a> {
         self.stack.inner_mut().truncate(truncate);
     }
 
-    /// Reset value and stack pointer to the given length
-    /// and stack pointer offset respectively.
-    pub fn reset_stack<M: MacroAssembler>(
+    /// Pops the stack pointer to ensure that it is correctly placed according to the expectations
+    /// of the destination branch.
+    ///
+    /// This function must be used when performing unconditional jumps, as the machine stack might
+    /// be left unbalanced at the jump site, due to register spills. In this context unbalanced
+    /// refers to possible extra space created at the jump site, which might cause invaid memory
+    /// accesses. Note that in some cases the stack pointer offset might be already less than or
+    /// equal to the original stack pointer offset registered when entering the destination control
+    /// stack frame, which effectively means that when reaching the jump site no extra space was
+    /// allocated similar to what would happen in a fall through in which we assume that the
+    /// program has allocated and deallocated the right amount of stack space.
+    ///
+    /// More generally speaking the current stack pointer will be less than the original stack
+    /// pointer offset in cases in which the top value in the value stack is a memory entry which
+    /// needs to be popped into the return location according to the ABI (a register for single
+    /// value returns and a memory slot for 1+ returns). In short, this could happen given that we
+    /// handle return values preemptively when emitting unconditional branches, and push them back
+    /// to the value stack at control flow joins.
+    pub fn pop_sp_for_branch<M: MacroAssembler>(
         &mut self,
+        destination: &ControlStackFrame,
         masm: &mut M,
-        stack_len: usize,
-        sp_offset: u32,
     ) {
-        masm.reset_stack_pointer(sp_offset);
-        self.drop_last(self.stack.len() - stack_len);
+        let (_, original_sp_offset) = destination.original_stack_len_and_sp_offset();
+        let current_sp_offset = masm.sp_offset();
+
+        assert!(
+            current_sp_offset >= original_sp_offset
+                || (current_sp_offset + <M::ABI as ABI>::word_bytes()) == original_sp_offset
+        );
+
+        if current_sp_offset > original_sp_offset {
+            masm.free_stack(current_sp_offset - original_sp_offset);
+        }
     }
 
     /// Convenience wrapper around [`Self::spill_callback`].
@@ -293,6 +318,21 @@ impl<'a> CodeGenContext<'a> {
                 self.stack.push(result_reg);
             }
         }
+    }
+
+    /// Pops the value at the stack top and assigns it to the local at the given
+    /// index, returning the register holding the source value.
+    pub fn set_local<M: MacroAssembler>(&mut self, masm: &mut M, index: u32) -> Reg {
+        let slot = self
+            .frame
+            .get_local(index)
+            .unwrap_or_else(|| panic!("valid local at slot = {}", index));
+        let size: OperandSize = slot.ty.into();
+        let src = self.pop_to_reg(masm, None, size);
+        let addr = masm.local_address(&slot);
+        masm.store(RegImm::reg(src), addr, size);
+
+        src
     }
 
     /// Spill locals and registers to memory.

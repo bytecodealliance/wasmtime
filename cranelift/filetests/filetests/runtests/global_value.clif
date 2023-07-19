@@ -1,0 +1,54 @@
+test interpret
+test run
+target x86_64
+target s390x
+target aarch64
+target riscv64
+
+
+
+function %simple(i64 vmctx) -> i64 {
+    gv0 = vmctx
+
+block0(v0: i64):
+    v1 = global_value.i64 gv0
+    return v1
+}
+; run: %simple(0) == 0
+; run: %simple(10) == 10
+
+
+
+
+;; This test sets up a more complex scenario. We build a vmctx struct
+;; and use it to call a function that loads from it.
+
+function %vm_state() -> i64 {
+    fn0 = %load_at_0_and_add(i64 vmctx) -> i64
+
+    ;; This is our vmctx struct
+    ss1 = explicit_slot 8
+
+block0:
+    ;; Store a 1 in the vmctx struct
+    v1 = iconst.i64 1
+    stack_store.i64 v1, ss1
+
+    ;; Call %load_at_0_and_add with vmctx
+    v2 = stack_addr.i64 ss1
+    v3 = call fn0(v2)
+
+    return v3
+}
+; run: %vm_state() == 2
+
+
+function %load_at_0_and_add(i64 vmctx) -> i64 {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0+0
+
+block0(v0: i64):
+    v1 = global_value.i64 gv1
+    v2 = iadd_imm.i64 v1, 1
+    return v2
+}

@@ -8,6 +8,8 @@ use cranelift_codegen::ir::immediates::{Ieee32, Ieee64};
 use cranelift_codegen::ir::{types, Type};
 use thiserror::Error;
 
+use crate::step::{extractlanes, SimdVec};
+
 pub type ValueResult<T> = Result<T, ValueError>;
 
 pub trait DataValueExt: Sized {
@@ -89,6 +91,9 @@ pub trait DataValueExt: Sized {
     fn trailing_zeros(self) -> ValueResult<Self>;
     fn reverse_bits(self) -> ValueResult<Self>;
     fn swap_bytes(self) -> ValueResult<Self>;
+
+    // An iterator over the lanes of a SIMD type
+    fn iter_lanes(&self, ty: Type) -> ValueResult<DataValueIterator>;
 }
 
 #[derive(Error, Debug, PartialEq)]
@@ -484,9 +489,16 @@ impl DataValueExt for DataValue {
 
     fn is_zero(&self) -> ValueResult<bool> {
         match self {
+            DataValue::I8(f) => Ok(*f == 0),
+            DataValue::I16(f) => Ok(*f == 0),
+            DataValue::I32(f) => Ok(*f == 0),
+            DataValue::I64(f) => Ok(*f == 0),
+            DataValue::I128(f) => Ok(*f == 0),
             DataValue::F32(f) => Ok(f.is_zero()),
             DataValue::F64(f) => Ok(f.is_zero()),
-            _ => Err(ValueError::InvalidType(ValueTypeClass::Float, self.ty())),
+            DataValue::V64(_) | DataValue::V128(_) => {
+                Err(ValueError::InvalidType(ValueTypeClass::Float, self.ty()))
+            }
         }
     }
 
@@ -807,5 +819,91 @@ impl DataValueExt for DataValue {
 
     fn swap_bytes(self) -> ValueResult<Self> {
         unary_match!(swap_bytes(&self); [I16, I32, I64, I128])
+    }
+
+    fn iter_lanes(&self, ty: Type) -> ValueResult<DataValueIterator> {
+        DataValueIterator::new(self, ty)
+    }
+}
+
+/// Iterator for DataValue's
+pub struct DataValueIterator {
+    ty: Type,
+    v: SimdVec<DataValue>,
+    idx: usize,
+}
+
+impl DataValueIterator {
+    fn new(dv: &DataValue, ty: Type) -> Result<Self, ValueError> {
+        match extractlanes(dv, ty) {
+            Ok(v) => return Ok(Self { ty, v, idx: 0 }),
+            Err(err) => return Err(err),
+        }
+    }
+}
+
+impl Iterator for DataValueIterator {
+    type Item = DataValue;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.idx >= self.ty.lane_count() as usize {
+            return None;
+        }
+
+        let dv = self.v[self.idx].clone();
+        self.idx += 1;
+        Some(dv)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_iterator_v128() {
+        let dv = DataValue::V128([99, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]);
+        assert_eq!(simd_sum(dv, types::I8X16), 219);
+    }
+
+    #[test]
+    fn test_iterator_v128_empty() {
+        let dv = DataValue::V128([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+        assert_eq!(simd_sum(dv, types::I8X16), 0);
+    }
+
+    #[test]
+    fn test_iterator_v128_ones() {
+        let dv = DataValue::V128([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]);
+        assert_eq!(simd_sum(dv, types::I8X16), 16);
+    }
+
+    #[test]
+    fn test_iterator_v64_empty() {
+        let dv = DataValue::V64([0, 0, 0, 0, 0, 0, 0, 0]);
+        assert_eq!(simd_sum(dv, types::I8X8), 0);
+    }
+    #[test]
+    fn test_iterator_v64_ones() {
+        let dv = DataValue::V64([1, 1, 1, 1, 1, 1, 1, 1]);
+        assert_eq!(simd_sum(dv, types::I8X8), 8);
+    }
+    #[test]
+    fn test_iterator_v64() {
+        let dv = DataValue::V64([10, 20, 30, 40, 50, 60, 70, 80]);
+        assert_eq!(simd_sum(dv, types::I8X8), 360);
+    }
+
+    fn simd_sum(dv: DataValue, ty: types::Type) -> i128 {
+        let itr = dv.iter_lanes(ty).unwrap();
+
+        itr.map(|e| {
+            if let Some(v) = e.into_int_signed().ok() {
+                v
+            } else {
+                0
+            }
+        })
+        .sum()
     }
 }

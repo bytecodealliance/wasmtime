@@ -42,7 +42,11 @@ typedef void *platform_jmp_buf[5]; // this is the documented size; see the docs 
 
 #endif
 
-int wasmtime_setjmp(
+#define CONCAT2(a, b) a ## b
+#define CONCAT(a, b) CONCAT2(a , b)
+#define VERSIONED_SYMBOL(a) CONCAT(a, VERSIONED_SUFFIX)
+
+int VERSIONED_SYMBOL(wasmtime_setjmp)(
     void **buf_storage,
     void (*body)(void*, void*),
     void *payload,
@@ -56,7 +60,7 @@ int wasmtime_setjmp(
   return 1;
 }
 
-void wasmtime_longjmp(void *JmpBuf) {
+void VERSIONED_SYMBOL(wasmtime_longjmp)(void *JmpBuf) {
   platform_jmp_buf *buf = (platform_jmp_buf*) JmpBuf;
   platform_longjmp(*buf, 1);
 }
@@ -99,6 +103,6 @@ struct JITDescriptor __jit_debug_descriptor = {1, 0, NULL, NULL};
 
 
 
-struct JITDescriptor* wasmtime_jit_debug_descriptor() {
+struct JITDescriptor* VERSIONED_SYMBOL(wasmtime_jit_debug_descriptor)() {
   return &__jit_debug_descriptor;
 }

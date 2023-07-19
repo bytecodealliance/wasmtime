@@ -43,7 +43,7 @@ tokio = { workspace = true, features = ["time", "sync", "io-std", "io-util", "rt
 rustix = { workspace = true, features = ["fs"], optional = true }
 
 [target.'cfg(windows)'.dependencies]
-io-extras = "0.17.1"
+io-extras = { workspace = true }
 windows-sys = { workspace = true }
 
 [features]

@@ -1,9 +1,11 @@
 //! The module that implements the `wasmtime run` command.
 
 use anyhow::{anyhow, bail, Context as _, Result};
+use clap::builder::{OsStringValueParser, TypedValueParser};
 use clap::Parser;
 use once_cell::sync::Lazy;
 use std::ffi::OsStr;
+use std::ffi::OsString;
 use std::fs::File;
 use std::io::Write;
 use std::path::{Component, Path, PathBuf};
@@ -37,7 +39,7 @@ use wasmtime_wasi_threads::WasiThreadsCtx;
 #[cfg(feature = "wasi-http")]
 use wasmtime_wasi_http::WasiHttp;
 
-fn parse_module(s: &OsStr) -> anyhow::Result<PathBuf> {
+fn parse_module(s: OsString) -> anyhow::Result<PathBuf> {
     // Do not accept wasmtime subcommand names as the module name
     match s.to_str() {
         Some("help") | Some("config") | Some("run") | Some("wast") | Some("compile") => {
@@ -49,12 +51,12 @@ fn parse_module(s: &OsStr) -> anyhow::Result<PathBuf> {
     }
 }
 
-fn parse_env_var(s: &str) -> Result<(String, String)> {
-    let parts: Vec<_> = s.splitn(2, '=').collect();
-    if parts.len() != 2 {
-        bail!("must be of the form `key=value`");
-    }
-    Ok((parts[0].to_owned(), parts[1].to_owned()))
+fn parse_env_var(s: &str) -> Result<(String, Option<String>)> {
+    let mut parts = s.splitn(2, '=');
+    Ok((
+        parts.next().unwrap().to_string(),
+        parts.next().map(|s| s.to_string()),
+    ))
 }
 
 fn parse_map_dirs(s: &str) -> Result<(String, String)> {
@@ -154,23 +156,29 @@ pub struct RunCommand {
     #[clap(long = "dir", number_of_values = 1, value_name = "DIRECTORY")]
     dirs: Vec<String>,
 
-    /// Pass an environment variable to the program
-    #[clap(long = "env", number_of_values = 1, value_name = "NAME=VAL", parse(try_from_str = parse_env_var))]
-    vars: Vec<(String, String)>,
+    /// Pass an environment variable to the program.
+    ///
+    /// The `--env FOO=BAR` form will set the environment variable named `FOO`
+    /// to the value `BAR` for the guest program using WASI. The `--env FOO`
+    /// form will set the environment variable named `FOO` to the same value it
+    /// has in the calling process for the guest, or in other words it will
+    /// cause the environment variable `FOO` to be inherited.
+    #[clap(long = "env", number_of_values = 1, value_name = "NAME[=VAL]", value_parser = parse_env_var)]
+    vars: Vec<(String, Option<String>)>,
 
     /// The name of the function to run
     #[clap(long, value_name = "FUNCTION")]
     invoke: Option<String>,
 
     /// Grant access to a guest directory mapped as a host directory
-    #[clap(long = "mapdir", number_of_values = 1, value_name = "GUEST_DIR::HOST_DIR", parse(try_from_str = parse_map_dirs))]
+    #[clap(long = "mapdir", number_of_values = 1, value_name = "GUEST_DIR::HOST_DIR", value_parser = parse_map_dirs)]
     map_dirs: Vec<(String, String)>,
 
     /// The path of the WebAssembly module to run
     #[clap(
         required = true,
         value_name = "MODULE",
-        parse(try_from_os_str = parse_module),
+        value_parser = OsStringValueParser::new().try_map(parse_module),
     )]
     module: PathBuf,
 
@@ -179,7 +187,7 @@ pub struct RunCommand {
         long = "preload",
         number_of_values = 1,
         value_name = "NAME=MODULE_PATH",
-        parse(try_from_str = parse_preloads)
+        value_parser = parse_preloads,
     )]
     preloads: Vec<(String, PathBuf)>,
 
@@ -187,7 +195,7 @@ pub struct RunCommand {
     #[clap(
         long = "wasm-timeout",
         value_name = "TIME",
-        parse(try_from_str = parse_dur),
+        value_parser = parse_dur,
     )]
     wasm_timeout: Option<Duration>,
 
@@ -209,7 +217,7 @@ pub struct RunCommand {
     #[clap(
         long,
         value_name = "STRATEGY",
-        parse(try_from_str = parse_profile),
+        value_parser = parse_profile,
     )]
     profile: Option<Profile>,
 
@@ -255,6 +263,7 @@ pub struct RunCommand {
     trap_on_grow_failure: bool,
 }
 
+#[derive(Clone)]
 enum Profile {
     Native(wasmtime::ProfilingStrategy),
     Guest { path: String, interval: Duration },
@@ -686,7 +695,7 @@ fn populate_with_wasi(
     module: Module,
     preopen_dirs: Vec<(String, Dir)>,
     argv: &[String],
-    vars: &[(String, String)],
+    vars: &[(String, Option<String>)],
     wasi_modules: &WasiModules,
     listenfd: bool,
     mut tcplisten: Vec<TcpListener>,
@@ -695,7 +704,16 @@ fn populate_with_wasi(
         wasmtime_wasi::add_to_linker(linker, |host| host.wasi.as_mut().unwrap())?;
 
         let mut builder = WasiCtxBuilder::new();
-        builder = builder.inherit_stdio().args(argv)?.envs(vars)?;
+        builder = builder.inherit_stdio().args(argv)?;
+
+        for (key, value) in vars {
+            let value = match value {
+                Some(value) => value.clone(),
+                None => std::env::var(key)
+                    .map_err(|_| anyhow!("environment varialbe `{key}` not found"))?,
+            };
+            builder = builder.env(key, &value)?;
+        }
 
         let mut num_fd: usize = 3;
 

@@ -518,7 +518,7 @@ impl BenchState {
             #[cfg(feature = "wasi-nn")]
             wasi_nn: wasmtime_wasi_nn::WasiNnCtx::new()?,
             #[cfg(feature = "wasi-crypto")]
-            wasi_crypto: wasmtime_wasi_nn::WasiCryptoCtx::new(),
+            wasi_crypto: wasmtime_wasi_crypto::WasiCryptoCtx::new(),
         };
 
         // NB: Start measuring instantiation time *after* we've created the WASI

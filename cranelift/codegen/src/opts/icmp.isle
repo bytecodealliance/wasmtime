@@ -125,11 +125,11 @@
        (eq bty x smax))
 
 ;; `band`/`bor` of 2 comparisons:
-(rule (simplify (band ty (icmp ty cc1 x y) (icmp ty cc2 x y)))
+(rule (simplify (band (fits_in_64 ty) (icmp ty cc1 x y) (icmp ty cc2 x y)))
   (if-let signed (intcc_comparable cc1 cc2))
   (compose_icmp ty (u64_and (decompose_intcc cc1) (decompose_intcc cc2)) signed x y))
 
-(rule (simplify (bor ty (icmp ty cc1 x y) (icmp ty cc2 x y)))
+(rule (simplify (bor (fits_in_64 ty) (icmp ty cc1 x y) (icmp ty cc2 x y)))
   (if-let signed (intcc_comparable cc1 cc2))
   (compose_icmp ty (u64_or (decompose_intcc cc1) (decompose_intcc cc2)) signed x y))
 

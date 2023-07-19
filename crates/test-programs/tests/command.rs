@@ -8,8 +8,8 @@ use wasmtime::{
 use wasmtime_wasi::preview2::{
     command::{add_to_linker, Command},
     pipe::MemoryInputPipe,
-    DirPerms, FilePerms, Table, WasiClocks, WasiCtx, WasiCtxBuilder, WasiMonotonicClock, WasiView,
-    WasiWallClock,
+    DirPerms, FilePerms, HostMonotonicClock, HostWallClock, Table, WasiCtx, WasiCtxBuilder,
+    WasiView,
 };
 
 lazy_static::lazy_static! {
@@ -127,7 +127,7 @@ async fn random() -> Result<()> {
 async fn time() -> Result<()> {
     struct FakeWallClock;
 
-    impl WasiWallClock for FakeWallClock {
+    impl HostWallClock for FakeWallClock {
         fn resolution(&self) -> Duration {
             Duration::from_secs(1)
         }
@@ -141,7 +141,7 @@ async fn time() -> Result<()> {
         now: Mutex<u64>,
     }
 
-    impl WasiMonotonicClock for FakeMonotonicClock {
+    impl HostMonotonicClock for FakeMonotonicClock {
         fn resolution(&self) -> u64 {
             1_000_000_000
         }
@@ -156,10 +156,8 @@ async fn time() -> Result<()> {
 
     let mut table = Table::new();
     let wasi = WasiCtxBuilder::new()
-        .set_clocks(WasiClocks {
-            wall: Box::new(FakeWallClock),
-            monotonic: Box::new(FakeMonotonicClock { now: Mutex::new(0) }),
-        })
+        .set_monotonic_clock(FakeMonotonicClock { now: Mutex::new(0) })
+        .set_wall_clock(FakeWallClock)
         .build(&mut table)?;
 
     let (mut store, command) =

@@ -2,7 +2,7 @@
 macro_rules! wasm_to_libcall_trampoline {
     ($libcall:ident ; $libcall_impl:ident) => {
         wasmtime_asm_macros::asm_func!(
-            stringify!($libcall),
+            wasmtime_versioned_export_macros::versioned_stringify_ident!($libcall),
             "
                 .cfi_startproc
                 bti c

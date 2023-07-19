@@ -1,7 +1,8 @@
 use smallvec::{smallvec, SmallVec};
 use wasmparser::BlockType;
 use wasmtime_environ::{
-    FuncIndex, ModuleTranslation, PtrSize, TypeConvert, VMOffsets, WasmFuncType, WasmType,
+    FuncIndex, GlobalIndex, ModuleTranslation, PtrSize, TypeConvert, VMOffsets, WasmFuncType,
+    WasmType,
 };
 
 /// The function environment.
@@ -28,9 +29,7 @@ impl<'a, P: PtrSize> FuncEnv<'a, P> {
     /// Resolves a function [`Callee`] from an index.
     pub fn callee_from_index(&self, idx: FuncIndex) -> Callee {
         let types = &self.translation.get_types();
-        let ty = types
-            .function_at(idx.as_u32())
-            .unwrap_or_else(|| panic!("function type at index: {}", idx.as_u32()));
+        let ty = types[types.function_at(idx.as_u32())].unwrap_func();
         let ty = self.translation.module.convert_func_type(ty);
         let import = self.translation.module.is_imported_function(idx);
 
@@ -49,6 +48,17 @@ impl<'a, P: PtrSize> FuncEnv<'a, P> {
             Type(ty) => smallvec![self.translation.module.convert_valtype(ty)],
             _ => unimplemented!("multi-value"),
         }
+    }
+
+    /// Resolves the type and offset of a global at the given index.
+    pub fn resolve_global_type_and_offset(&self, index: GlobalIndex) -> (WasmType, u32) {
+        let ty = self.translation.module.globals[index].wasm_ty;
+        let offset = match self.translation.module.defined_global_index(index) {
+            Some(defined_index) => self.vmoffsets.vmctx_vmglobal_definition(defined_index),
+            None => self.vmoffsets.vmctx_vmglobal_import_from(index),
+        };
+
+        (ty, offset)
     }
 }
 

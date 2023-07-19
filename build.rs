@@ -18,9 +18,13 @@ fn main() -> anyhow::Result<()> {
     );
     let mut out = String::new();
 
-    for strategy in &["Cranelift"] {
+    for strategy in &["Cranelift", "Winch"] {
         writeln!(out, "#[cfg(test)]")?;
         writeln!(out, "#[allow(non_snake_case)]")?;
+        if *strategy == "Winch" {
+            // We only test Winch on x86_64, for now.
+            writeln!(out, "{}", "#[cfg(all(target_arch = \"x86_64\"))]")?;
+        }
         writeln!(out, "mod {} {{", strategy)?;
 
         with_test_module(&mut out, "misc", |out| {
@@ -31,6 +35,7 @@ fn main() -> anyhow::Result<()> {
             test_directory_module(out, "tests/misc_testsuite/memory64", strategy)?;
             test_directory_module(out, "tests/misc_testsuite/component-model", strategy)?;
             test_directory_module(out, "tests/misc_testsuite/function-references", strategy)?;
+            test_directory_module(out, "tests/misc_testsuite/winch", strategy)?;
             Ok(())
         })?;
 
@@ -186,7 +191,22 @@ fn write_testsuite_tests(
 
 /// Ignore tests that aren't supported yet.
 fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
-    assert_eq!(strategy, "Cranelift");
+    assert!(strategy == "Cranelift" || strategy == "Winch");
+
+    // Ignore everything except the winch misc test suite.
+    // We ignore tests that assert for traps on windows, given
+    // that Winch doesn't encode unwind information for Windows, yet.
+    if strategy == "Winch" {
+        if testsuite != "winch" {
+            return true;
+        }
+
+        let assert_trap = ["i32", "i64"].contains(&testname);
+
+        if assert_trap && env::var("CARGO_CFG_TARGET_OS").unwrap().as_str() == "windows" {
+            return true;
+        }
+    }
 
     // This is an empty file right now which the `wast` crate doesn't parse
     if testname.contains("memory_copy1") {
@@ -224,7 +244,7 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
         }
 
         "riscv64" => {
-            if testname.contains("memory_multi") || testsuite.contains("relaxed_simd") {
+            if testsuite.contains("relaxed_simd") {
                 return true;
             }
 
@@ -233,11 +253,7 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
                 "cvt_from_uint",
                 "issue_3327_bnot_lowering",
                 "simd_conversions",
-                "simd_f32x4",
-                "simd_f32x4_pmin_pmax",
                 "simd_f32x4_rounding",
-                "simd_f64x2",
-                "simd_f64x2_pmin_pmax",
                 "simd_f64x2_rounding",
                 "simd_i32x4_trunc_sat_f32x4",
                 "simd_i32x4_trunc_sat_f64x2",

@@ -2350,17 +2350,7 @@ impl<'a> Parser<'a> {
             let arg_types = sig
                 .params
                 .iter()
-                .enumerate()
-                .filter_map(|(i, p)| {
-                    // The first argument being VMCtx indicates that this is a argument that is going
-                    // to be passed in with info about the test environment, and should not be passed
-                    // in the run params.
-                    if p.purpose == ir::ArgumentPurpose::VMContext && i == 0 {
-                        None
-                    } else {
-                        Some(p.value_type)
-                    }
-                })
+                .map(|abi| abi.value_type)
                 .collect::<Vec<_>>();
             let args = self.parse_data_value_list(&arg_types)?;
 

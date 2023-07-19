@@ -1,0 +1,307 @@
+test compile precise-output
+set unwind_info=false
+target riscv64
+
+function %bswap_i16(i16) -> i16 {
+block0(v0: i16):
+    v1 = bswap v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   slli t2,a0,8
+;   srli a1,a0,8
+;   andi a3,a1,255
+;   or a0,t2,a3
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   slli t2, a0, 8
+;   srli a1, a0, 8
+;   andi a3, a1, 0xff
+;   or a0, t2, a3
+;   ret
+
+function %bswap_i32(i32) -> i32 {
+block0(v0: i32):
+    v1 = bswap v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   slli t2,a0,8
+;   srli a1,a0,8
+;   andi a3,a1,255
+;   or a5,t2,a3
+;   slli a7,a5,16
+;   srli t4,a0,16
+;   slli t1,t4,8
+;   srli a0,t4,8
+;   andi a2,a0,255
+;   or a4,t1,a2
+;   slli a6,a4,48
+;   srli t3,a6,48
+;   or a0,a7,t3
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   slli t2, a0, 8
+;   srli a1, a0, 8
+;   andi a3, a1, 0xff
+;   or a5, t2, a3
+;   slli a7, a5, 0x10
+;   srli t4, a0, 0x10
+;   slli t1, t4, 8
+;   srli a0, t4, 8
+;   andi a2, a0, 0xff
+;   or a4, t1, a2
+;   slli a6, a4, 0x30
+;   srli t3, a6, 0x30
+;   or a0, a7, t3
+;   ret
+
+function %bswap_i64(i64) -> i64 {
+block0(v0: i64):
+    v1 = bswap v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   slli t2,a0,8
+;   srli a1,a0,8
+;   andi a3,a1,255
+;   or a5,t2,a3
+;   slli a7,a5,16
+;   srli t4,a0,16
+;   slli t1,t4,8
+;   srli a1,t4,8
+;   andi a2,a1,255
+;   or a4,t1,a2
+;   slli a6,a4,48
+;   srli t3,a6,48
+;   or t0,a7,t3
+;   slli t2,t0,32
+;   srli a1,a0,32
+;   slli a3,a1,8
+;   srli a5,a1,8
+;   andi a7,a5,255
+;   or t4,a3,a7
+;   slli t1,t4,16
+;   srli a0,a1,16
+;   slli a2,a0,8
+;   srli a4,a0,8
+;   andi a6,a4,255
+;   or t3,a2,a6
+;   slli t0,t3,48
+;   srli a0,t0,48
+;   or a1,t1,a0
+;   slli a3,a1,32
+;   srli a5,a3,32
+;   or a0,t2,a5
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   slli t2, a0, 8
+;   srli a1, a0, 8
+;   andi a3, a1, 0xff
+;   or a5, t2, a3
+;   slli a7, a5, 0x10
+;   srli t4, a0, 0x10
+;   slli t1, t4, 8
+;   srli a1, t4, 8
+;   andi a2, a1, 0xff
+;   or a4, t1, a2
+;   slli a6, a4, 0x30
+;   srli t3, a6, 0x30
+;   or t0, a7, t3
+;   slli t2, t0, 0x20
+;   srli a1, a0, 0x20
+;   slli a3, a1, 8
+;   srli a5, a1, 8
+;   andi a7, a5, 0xff
+;   or t4, a3, a7
+;   slli t1, t4, 0x10
+;   srli a0, a1, 0x10
+;   slli a2, a0, 8
+;   srli a4, a0, 8
+;   andi a6, a4, 0xff
+;   or t3, a2, a6
+;   slli t0, t3, 0x30
+;   srli a0, t0, 0x30
+;   or a1, t1, a0
+;   slli a3, a1, 0x20
+;   srli a5, a3, 0x20
+;   or a0, t2, a5
+;   ret
+
+function %bswap_i128(i128) -> i128 {
+block0(v0: i128):
+    v1 = bswap v0
+    return v1
+}
+
+; VCode:
+;   add sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   sd s11,-8(sp)
+;   add sp,-16
+; block0:
+;   slli a2,a1,8
+;   srli a3,a1,8
+;   andi a4,a3,255
+;   or a6,a2,a4
+;   slli t3,a6,16
+;   srli t0,a1,16
+;   slli t2,t0,8
+;   srli a2,t0,8
+;   andi a3,a2,255
+;   or a5,t2,a3
+;   slli a7,a5,48
+;   srli t4,a7,48
+;   or t1,t3,t4
+;   slli a2,t1,32
+;   srli a3,a1,32
+;   slli a4,a3,8
+;   srli a6,a3,8
+;   andi t3,a6,255
+;   or t0,a4,t3
+;   slli t2,t0,16
+;   srli a1,a3,16
+;   slli a3,a1,8
+;   srli a5,a1,8
+;   andi a7,a5,255
+;   or t4,a3,a7
+;   slli t1,t4,48
+;   srli a1,t1,48
+;   or a3,t2,a1
+;   slli a4,a3,32
+;   srli a6,a4,32
+;   or t3,a2,a6
+;   mv s11,t3
+;   slli t0,a0,8
+;   srli t2,a0,8
+;   andi a1,t2,255
+;   or a3,t0,a1
+;   slli a5,a3,16
+;   srli a7,a0,16
+;   slli t4,a7,8
+;   srli t1,a7,8
+;   andi a1,t1,255
+;   or a2,t4,a1
+;   slli a4,a2,48
+;   srli a6,a4,48
+;   or t3,a5,a6
+;   slli t0,t3,32
+;   srli t2,a0,32
+;   slli a1,t2,8
+;   srli a3,t2,8
+;   andi a5,a3,255
+;   or a7,a1,a5
+;   slli t4,a7,16
+;   srli t1,t2,16
+;   slli a0,t1,8
+;   srli a2,t1,8
+;   andi a4,a2,255
+;   or a6,a0,a4
+;   slli t3,a6,48
+;   srli t1,t3,48
+;   or t2,t4,t1
+;   slli a1,t2,32
+;   srli a3,a1,32
+;   or a1,t0,a3
+;   mv a0,s11
+;   add sp,+16
+;   ld s11,-8(sp)
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   add sp,+16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   ori s0, sp, 0
+;   sd s11, -8(sp)
+;   addi sp, sp, -0x10
+; block1: ; offset 0x18
+;   slli a2, a1, 8
+;   srli a3, a1, 8
+;   andi a4, a3, 0xff
+;   or a6, a2, a4
+;   slli t3, a6, 0x10
+;   srli t0, a1, 0x10
+;   slli t2, t0, 8
+;   srli a2, t0, 8
+;   andi a3, a2, 0xff
+;   or a5, t2, a3
+;   slli a7, a5, 0x30
+;   srli t4, a7, 0x30
+;   or t1, t3, t4
+;   slli a2, t1, 0x20
+;   srli a3, a1, 0x20
+;   slli a4, a3, 8
+;   srli a6, a3, 8
+;   andi t3, a6, 0xff
+;   or t0, a4, t3
+;   slli t2, t0, 0x10
+;   srli a1, a3, 0x10
+;   slli a3, a1, 8
+;   srli a5, a1, 8
+;   andi a7, a5, 0xff
+;   or t4, a3, a7
+;   slli t1, t4, 0x30
+;   srli a1, t1, 0x30
+;   or a3, t2, a1
+;   slli a4, a3, 0x20
+;   srli a6, a4, 0x20
+;   or t3, a2, a6
+;   ori s11, t3, 0
+;   slli t0, a0, 8
+;   srli t2, a0, 8
+;   andi a1, t2, 0xff
+;   or a3, t0, a1
+;   slli a5, a3, 0x10
+;   srli a7, a0, 0x10
+;   slli t4, a7, 8
+;   srli t1, a7, 8
+;   andi a1, t1, 0xff
+;   or a2, t4, a1
+;   slli a4, a2, 0x30
+;   srli a6, a4, 0x30
+;   or t3, a5, a6
+;   slli t0, t3, 0x20
+;   srli t2, a0, 0x20
+;   slli a1, t2, 8
+;   srli a3, t2, 8
+;   andi a5, a3, 0xff
+;   or a7, a1, a5
+;   slli t4, a7, 0x10
+;   srli t1, t2, 0x10
+;   slli a0, t1, 8
+;   srli a2, t1, 8
+;   andi a4, a2, 0xff
+;   or a6, a0, a4
+;   slli t3, a6, 0x30
+;   srli t1, t3, 0x30
+;   or t2, t4, t1
+;   slli a1, t2, 0x20
+;   srli a3, a1, 0x20
+;   or a1, t0, a3
+;   ori a0, s11, 0
+;   addi sp, sp, 0x10
+;   ld s11, -8(sp)
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+

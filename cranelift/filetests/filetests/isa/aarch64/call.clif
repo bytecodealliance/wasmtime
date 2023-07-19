@@ -818,29 +818,6 @@ block0(v0: i128, v1: i64):
 ;   ldp x29, x30, [sp], #0x10
 ;   ret
 
-function %f16() -> i32, i32 wasmtime_system_v {
-block0:
-    v0 = iconst.i32 0
-    v1 = iconst.i32 1
-    return v0, v1
-}
-
-; VCode:
-; block0:
-;   mov x6, x0
-;   movz w0, #0
-;   movz w3, #1
-;   str w3, [x6]
-;   ret
-;
-; Disassembled:
-; block0: ; offset 0x0
-;   mov x6, x0
-;   mov w0, #0
-;   mov w3, #1
-;   stur w3, [x6]
-;   ret
-
 function %f17(i64 sret) {
 block0(v0: i64):
     v1 = iconst.i64 42

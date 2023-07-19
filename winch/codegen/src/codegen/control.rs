@@ -44,6 +44,8 @@ pub(crate) enum ControlStackFrame {
     If {
         /// The if continuation label.
         cont: MachLabel,
+        /// The exit label of the block.
+        exit: MachLabel,
         /// The return values of the block.
         result: ABIResult,
         /// The size of the value stack at the beginning of the If.
@@ -54,8 +56,8 @@ pub(crate) enum ControlStackFrame {
         reachable: bool,
     },
     Else {
-        /// The else continuation label.
-        cont: MachLabel,
+        /// The exit label of the block.
+        exit: MachLabel,
         /// The return values of the block.
         result: ABIResult,
         /// The size of the value stack at the beginning of the Else.
@@ -103,6 +105,7 @@ impl ControlStackFrame {
         let result = <M::ABI as ABI>::result(&returns, &CallingConvention::Default);
         let mut control = Self::If {
             cont: masm.get_label(),
+            exit: masm.get_label(),
             result,
             reachable: context.reachable,
             original_stack_len: 0,
@@ -228,6 +231,7 @@ impl ControlStackFrame {
             If {
                 result,
                 original_stack_len,
+                exit,
                 ..
             } => {
                 assert!((*original_stack_len + result.len()) == context.stack.len());
@@ -236,10 +240,9 @@ impl ControlStackFrame {
                 context.pop_abi_results(&result, masm);
                 // Before binding the else branch, we emit the jump to the end
                 // label.
-                let exit_label = masm.get_label();
-                masm.jmp(exit_label);
+                masm.jmp(*exit);
                 // Bind the else branch.
-                self.bind_else(masm, Some(exit_label), context.reachable);
+                self.bind_else(masm, context.reachable);
             }
             _ => unreachable!(),
         }
@@ -247,12 +250,7 @@ impl ControlStackFrame {
 
     /// Binds the else branch label and converts `self` to
     /// [`ControlStackFrame::Else`].
-    pub fn bind_else<M: MacroAssembler>(
-        &mut self,
-        masm: &mut M,
-        exit: Option<MachLabel>,
-        reachable: bool,
-    ) {
+    pub fn bind_else<M: MacroAssembler>(&mut self, masm: &mut M, reachable: bool) {
         use ControlStackFrame::*;
         match self {
             If {
@@ -260,20 +258,15 @@ impl ControlStackFrame {
                 result,
                 original_stack_len,
                 original_sp_offset,
+                exit,
                 ..
             } => {
                 // Bind the else branch.
                 masm.bind(*cont);
 
-                let label = if let Some(cont) = exit {
-                    cont
-                } else {
-                    masm.get_label()
-                };
-
                 // Update the stack control frame with an else control frame.
                 *self = ControlStackFrame::Else {
-                    cont: label,
+                    exit: *exit,
                     original_stack_len: *original_stack_len,
                     result: *result,
                     reachable,
@@ -332,6 +325,15 @@ impl ControlStackFrame {
 
     /// Binds the exit label of the control stack frame.
     pub fn bind_exit_label<M: MacroAssembler>(&self, masm: &mut M) {
+        use ControlStackFrame::*;
+        match self {
+            // We use an explicit label to track the exit of an if block. In case there's no
+            // else, we bind the if's continuation block to make sure that any jumps from the if
+            // condition are reachable and we bind the explicit exit label as well to ensure that any
+            // branching instructions are able to correctly reach the block's end.
+            If { cont, .. } => masm.bind(*cont),
+            _ => {}
+        }
         if let Some(label) = self.exit_label() {
             masm.bind(*label);
         }
@@ -342,8 +344,7 @@ impl ControlStackFrame {
         use ControlStackFrame::*;
 
         match self {
-            If { cont, .. } | Else { cont, .. } => cont,
-            Block { exit, .. } => exit,
+            If { exit, .. } | Else { exit, .. } | Block { exit, .. } => exit,
             Loop { head, .. } => head,
         }
     }
@@ -355,8 +356,7 @@ impl ControlStackFrame {
         use ControlStackFrame::*;
 
         match self {
-            If { cont, .. } | Else { cont, .. } => Some(cont),
-            Block { exit, .. } => Some(exit),
+            If { exit, .. } | Else { exit, .. } | Block { exit, .. } => Some(exit),
             Loop { .. } => None,
         }
     }

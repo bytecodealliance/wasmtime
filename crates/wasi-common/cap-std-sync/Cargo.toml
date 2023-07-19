@@ -16,21 +16,21 @@ wasi-common = { workspace = true }
 async-trait = { workspace = true }
 anyhow = { workspace = true }
 cap-std = { workspace = true }
-cap-fs-ext = "1.0.0"
-cap-time-ext = "1.0.0"
+cap-fs-ext = { workspace = true }
+cap-time-ext = { workspace = true }
 cap-rand = { workspace = true }
-fs-set-times = "0.19.0"
-system-interface = { version = "0.25.0", features = ["cap_std_impls"] }
+fs-set-times = { workspace = true }
+system-interface = { workspace = true, features = ["cap_std_impls"] }
 tracing = { workspace = true }
 io-lifetimes = { workspace = true }
 is-terminal = "0.4.0"
 
 [target.'cfg(unix)'.dependencies]
-rustix = { workspace = true, features = ["fs"] }
+rustix = { workspace = true, features = ["fs", "event"] }
 
 [target.'cfg(windows)'.dependencies]
 once_cell = { workspace = true }
-io-extras = "0.17.0"
+io-extras = { workspace = true }
 rustix = { workspace = true, features = ["net"] }
 
 [target.'cfg(windows)'.dependencies.windows-sys]

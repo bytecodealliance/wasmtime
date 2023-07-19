@@ -32,9 +32,9 @@ pub use wasmtime_component_macro::{flags, ComponentType, Lift, Lower};
 #[doc(hidden)]
 pub mod __internal {
     pub use super::func::{
-        format_flags, lower_payload, typecheck_enum, typecheck_flags, typecheck_record,
-        typecheck_union, typecheck_variant, ComponentVariant, MaybeUninitExt, Memory, MemoryMut,
-        Options,
+        bad_type_info, format_flags, lower_payload, typecheck_enum, typecheck_flags,
+        typecheck_record, typecheck_union, typecheck_variant, ComponentVariant, LiftContext,
+        LowerContext, MaybeUninitExt, Options,
     };
     pub use crate::map_maybe_uninit;
     pub use crate::store::StoreOpaque;

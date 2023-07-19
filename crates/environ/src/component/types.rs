@@ -35,6 +35,7 @@ macro_rules! indices {
             Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug,
             Serialize, Deserialize,
         )]
+        #[repr(transparent)]
         pub struct $name(u32);
         cranelift_entity::entity_impl!($name);
     )*);
@@ -171,10 +172,6 @@ indices! {
 
     /// Same as `RuntimeMemoryIndex` except for the `post-return` function.
     pub struct RuntimePostReturnIndex(u32);
-
-    /// Index that represents an exported module from a component since that's
-    /// currently the only use for saving the entire module state at runtime.
-    pub struct RuntimeModuleIndex(u32);
 
     /// Index into the list of transcoders identified during compilation.
     ///
@@ -374,17 +371,19 @@ impl ComponentTypesBuilder {
         types: types::TypesRef<'_>,
         ty: &types::ComponentFuncType,
     ) -> Result<TypeFuncIndex> {
+        let params = ty
+            .params
+            .iter()
+            .map(|(_name, ty)| self.valtype(types, ty))
+            .collect::<Result<_>>()?;
+        let results = ty
+            .results
+            .iter()
+            .map(|(_name, ty)| self.valtype(types, ty))
+            .collect::<Result<_>>()?;
         let ty = TypeFunc {
-            params: ty
-                .params
-                .iter()
-                .map(|(_name, ty)| self.valtype(types, ty))
-                .collect::<Result<_>>()?,
-            results: ty
-                .results
-                .iter()
-                .map(|(_name, ty)| self.valtype(types, ty))
-                .collect::<Result<_>>()?,
+            params: self.new_tuple_type(params),
+            results: self.new_tuple_type(results),
         };
         Ok(self.add_func_type(ty))
     }
@@ -407,22 +406,14 @@ impl ComponentTypesBuilder {
                 TypeDef::ComponentInstance(self.convert_instance(types, id)?)
             }
             types::ComponentEntityType::Func(id) => {
-                let id = types
-                    .type_from_id(id)
-                    .unwrap()
-                    .as_component_func_type()
-                    .unwrap();
+                let id = types[id].unwrap_component_func();
                 let idx = self.convert_component_func_type(types, id)?;
                 TypeDef::ComponentFunc(idx)
             }
-            types::ComponentEntityType::Type { created, .. } => {
-                match types.type_from_id(created).unwrap() {
-                    types::Type::Defined(_) => {
-                        TypeDef::Interface(self.defined_type(types, created)?)
-                    }
-                    _ => bail!("unsupported type export"),
-                }
-            }
+            types::ComponentEntityType::Type { created, .. } => match &types[created] {
+                types::Type::Defined(_) => TypeDef::Interface(self.defined_type(types, created)?),
+                _ => bail!("unsupported type export"),
+            },
             types::ComponentEntityType::Value(_) => bail!("values not supported"),
         })
     }
@@ -433,7 +424,7 @@ impl ComponentTypesBuilder {
         types: types::TypesRef<'_>,
         id: types::TypeId,
     ) -> Result<TypeDef> {
-        Ok(match types.type_from_id(id).unwrap() {
+        Ok(match &types[id] {
             types::Type::Defined(_) => TypeDef::Interface(self.defined_type(types, id)?),
             types::Type::Module(_) => TypeDef::Module(self.convert_module(types, id)?),
             types::Type::Component(_) => TypeDef::Component(self.convert_component(types, id)?),
@@ -443,7 +434,7 @@ impl ComponentTypesBuilder {
             types::Type::ComponentFunc(f) => {
                 TypeDef::ComponentFunc(self.convert_component_func_type(types, f)?)
             }
-            types::Type::Instance(_) | types::Type::Func(_) | types::Type::Array(_) => {
+            types::Type::Instance(_) | types::Type::Sub(_) => {
                 unreachable!()
             }
             types::Type::Resource(_) => unimplemented!(),
@@ -458,7 +449,7 @@ impl ComponentTypesBuilder {
         if let Some(ret) = self.component_types_cache.get(&id) {
             return Ok(*ret);
         }
-        let ty = &types.type_from_id(id).unwrap().as_component_type().unwrap();
+        let ty = types[id].unwrap_component();
         let mut result = TypeComponent::default();
         for (name, ty) in ty.imports.iter() {
             result.imports.insert(
@@ -485,11 +476,7 @@ impl ComponentTypesBuilder {
         if let Some(ret) = self.instance_types_cache.get(&id) {
             return Ok(*ret);
         }
-        let ty = &types
-            .type_from_id(id)
-            .unwrap()
-            .as_component_instance_type()
-            .unwrap();
+        let ty = types[id].unwrap_component_instance();
         let mut result = TypeComponentInstance::default();
         for (name, ty) in ty.exports.iter() {
             result.exports.insert(
@@ -510,7 +497,7 @@ impl ComponentTypesBuilder {
         if let Some(ret) = self.module_types_cache.get(&id) {
             return Ok(*ret);
         }
-        let ty = &types.type_from_id(id).unwrap().as_module_type().unwrap();
+        let ty = types[id].unwrap_module();
         let mut result = TypeModule::default();
         for ((module, field), ty) in ty.imports.iter() {
             result.imports.insert(
@@ -535,7 +522,7 @@ impl ComponentTypesBuilder {
     ) -> Result<EntityType> {
         Ok(match ty {
             types::EntityType::Func(idx) => {
-                let ty = types.type_from_id(*idx).unwrap().as_func_type().unwrap();
+                let ty = types[*idx].unwrap_func();
                 let ty = self.convert_func_type(ty);
                 EntityType::Function(self.module_types_builder().wasm_func_type(ty))
             }
@@ -554,7 +541,7 @@ impl ComponentTypesBuilder {
         if let Some(ty) = self.defined_types_cache.get(&id) {
             return Ok(*ty);
         }
-        let ret = match types.type_from_id(id).unwrap().as_defined_type().unwrap() {
+        let ret = match types[id].unwrap_defined() {
             types::ComponentDefinedType::Primitive(ty) => ty.into(),
             types::ComponentDefinedType::Record(e) => {
                 InterfaceType::Record(self.record_type(types, e)?)
@@ -663,12 +650,16 @@ impl ComponentTypesBuilder {
             .iter()
             .map(|ty| self.valtype(types, ty))
             .collect::<Result<Box<[_]>>>()?;
+        Ok(self.new_tuple_type(types))
+    }
+
+    fn new_tuple_type(&mut self, types: Box<[InterfaceType]>) -> TypeTupleIndex {
         let abi = CanonicalAbiInfo::record(
             types
                 .iter()
                 .map(|ty| self.component_types.canonical_abi(ty)),
         );
-        Ok(self.add_tuple_type(TypeTuple { types, abi }))
+        self.add_tuple_type(TypeTuple { types, abi })
     }
 
     fn flags_type(&mut self, flags: &IndexSet<KebabString>) -> TypeFlagsIndex {
@@ -951,11 +942,10 @@ pub struct TypeComponentInstance {
 /// A component function type in the component model.
 #[derive(Serialize, Deserialize, Clone, Hash, Eq, PartialEq, Debug)]
 pub struct TypeFunc {
-    /// The list of optionally named parameters for this function, and their
-    /// types.
-    pub params: Box<[InterfaceType]>,
-    /// The return values of this function.
-    pub results: Box<[InterfaceType]>,
+    /// Parameters to the function represented as a tuple.
+    pub params: TypeTupleIndex,
+    /// Results of the function represented as a tuple.
+    pub results: TypeTupleIndex,
 }
 
 /// All possible interface types that values can have.

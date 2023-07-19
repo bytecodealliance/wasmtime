@@ -189,13 +189,9 @@ impl Stacks {
         section(&mut module, exports);
 
         let mut elems = wasm_encoder::ElementSection::new();
-        elems.declared(
-            wasm_encoder::RefType::FUNCREF,
-            wasm_encoder::Elements::Functions(
-                &(0..num_imported_funcs + u32::try_from(self.funcs.len()).unwrap())
-                    .collect::<Vec<_>>(),
-            ),
-        );
+        elems.declared(wasm_encoder::Elements::Functions(
+            &(0..num_imported_funcs + u32::try_from(self.funcs.len()).unwrap()).collect::<Vec<_>>(),
+        ));
         section(&mut module, elems);
 
         let check_fuel = |body: &mut wasm_encoder::Function| {

@@ -37,7 +37,7 @@ wat = { workspace = true, optional = true }
 serde = { version = "1.0.94", features = ["derive"] }
 serde_json = { workspace = true }
 bincode = "1.2.1"
-indexmap = "1.6"
+indexmap = { workspace = true }
 paste = "1.0.3"
 psm = "0.1.11"
 once_cell = { workspace = true }

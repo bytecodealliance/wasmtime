@@ -64,10 +64,6 @@ pub(crate) struct FnCall<'a> {
     arg_stack_space: u32,
     /// The ABI-specific signature of the callee.
     abi_sig: &'a ABISig,
-    /// The stack pointer offset prior to preparing and emitting the
-    /// call. This is tracked to assert the position of the stack
-    /// pointer after the call has finished.
-    sp_offset_at_callsite: u32,
 }
 
 impl<'a> FnCall<'a> {
@@ -91,7 +87,6 @@ impl<'a> FnCall<'a> {
         let stack = &context.stack;
         let arg_stack_space = callee_sig.stack_bytes;
         let callee_params = &callee_sig.params;
-        let sp_offset_at_callsite = masm.sp_offset();
 
         let (spilled_regs, memory_values) = match callee_params.len() {
             0 => {
@@ -136,7 +131,6 @@ impl<'a> FnCall<'a> {
             arg_stack_space,
             call_stack_space: (spilled_regs * <M::ABI as ABI>::word_bytes())
                 + (memory_values * <M::ABI as ABI>::word_bytes()),
-            sp_offset_at_callsite,
         }
     }
 
@@ -173,10 +167,6 @@ impl<'a> FnCall<'a> {
     fn post_call<M: MacroAssembler>(&self, masm: &mut M, context: &mut CodeGenContext, size: u32) {
         masm.free_stack(self.call_stack_space + size);
         context.drop_last(self.abi_sig.params.len());
-        // The stack pointer at the end of the function call
-        // cannot be less than what it was when starting the
-        // function call.
-        assert!(self.sp_offset_at_callsite >= masm.sp_offset());
         context.push_abi_results(&self.abi_sig.result, masm);
     }
 

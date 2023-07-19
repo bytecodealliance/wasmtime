@@ -4,7 +4,7 @@
 //! See `wasmtime --help` for usage.
 
 use anyhow::Result;
-use clap::{ErrorKind, Parser};
+use clap::{error::ErrorKind, Parser};
 use wasmtime_cli::commands::{
     CompileCommand, ConfigCommand, ExploreCommand, RunCommand, SettingsCommand, WastCommand,
 };
@@ -62,10 +62,16 @@ impl Wasmtime {
 fn main() -> Result<()> {
     Wasmtime::try_parse()
         .unwrap_or_else(|e| match e.kind() {
-            ErrorKind::UnrecognizedSubcommand | ErrorKind::UnknownArgument => {
+            ErrorKind::InvalidSubcommand | ErrorKind::UnknownArgument => {
                 Wasmtime::Run(RunCommand::parse())
             }
             _ => e.exit(),
         })
         .execute()
+}
+
+#[test]
+fn verify_cli() {
+    use clap::CommandFactory;
+    Wasmtime::command().debug_assert()
 }
