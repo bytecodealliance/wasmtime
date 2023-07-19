@@ -4,7 +4,7 @@ use anyhow::{bail, Result};
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
-use std::process::{Command, Output, Stdio};
+use std::process::{Command, Output};
 use tempfile::{NamedTempFile, TempDir};
 
 // Run the wasmtime CLI with the provided args and return the `Output`.
@@ -511,6 +511,8 @@ fn specify_env() -> Result<()> {
 #[cfg(unix)]
 #[test]
 fn run_cwasm_from_stdin() -> Result<()> {
+    use std::process::Stdio;
+
     let td = TempDir::new()?;
     let cwasm = td.path().join("foo.cwasm");
     let stdout = run_wasmtime(&[
