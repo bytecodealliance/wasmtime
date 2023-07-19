@@ -484,6 +484,50 @@ fn hello_wasi_snapshot0_from_stdin() -> Result<()> {
     Ok(())
 }
 
+#[test]
+fn specify_env() -> Result<()> {
+    // By default no env is inherited
+    let output = get_wasmtime_command()?
+        .args(&["run", "tests/all/cli_tests/print_env.wat"])
+        .env("THIS_WILL_NOT", "show up in the output")
+        .output()?;
+    assert!(output.status.success());
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "");
+
+    // Specify a single env var
+    let output = get_wasmtime_command()?
+        .args(&[
+            "run",
+            "--env",
+            "FOO=bar",
+            "tests/all/cli_tests/print_env.wat",
+        ])
+        .output()?;
+    assert!(output.status.success());
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "FOO=bar\n");
+
+    // Inherit a single env var
+    let output = get_wasmtime_command()?
+        .args(&["run", "--env", "FOO", "tests/all/cli_tests/print_env.wat"])
+        .env("FOO", "bar")
+        .output()?;
+    assert!(output.status.success());
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "FOO=bar\n");
+
+    // Inherit a nonexistent env var
+    let output = get_wasmtime_command()?
+        .args(&[
+            "run",
+            "--env",
+            "SURELY_THIS_ENV_VAR_DOES_NOT_EXIST_ANYWHERE_RIGHT",
+            "tests/all/cli_tests/print_env.wat",
+        ])
+        .output()?;
+    assert!(!output.status.success());
+
+    Ok(())
+}
+
 #[cfg(unix)]
 #[test]
 fn run_cwasm_from_stdin() -> Result<()> {
