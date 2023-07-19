@@ -7,6 +7,12 @@ use tokio::io::unix::AsyncFd;
 // 1.70. when 1.71 is released, we can switch to using std here.
 use once_cell::sync::OnceCell as OnceLock;
 
+// FIXME: we might be able to eliminate this, and block_in_place as well,
+// if we write ready() with an impl Future that takes and releases a std::sync::mutex
+// as part of every poll() invocation. It isnt critical that ready hold the
+// lock for the duration of the polling - using stdin from multiple contexts
+// is already bogus in terms of application functionality, we are just trying to
+// make the implementation typecheck.
 // We use a tokio Mutex because, in ready(), the mutex needs to be held
 // across an await.
 use tokio::sync::Mutex;
