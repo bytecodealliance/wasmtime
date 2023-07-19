@@ -257,6 +257,14 @@ fn fact_import_to_core_def(
     import: &fact::Import,
     ty: EntityType,
 ) -> dfg::CoreDef {
+    let mut simple_intrinsic = |trampoline: dfg::Trampoline| {
+        let signature = match ty {
+            EntityType::Function(signature) => signature,
+            _ => unreachable!(),
+        };
+        let index = dfg.trampolines.push((signature, trampoline));
+        dfg::CoreDef::Trampoline(index)
+    };
     match import {
         fact::Import::CoreDef(def) => def.clone(),
         fact::Import::Transcode {
@@ -294,6 +302,12 @@ fn fact_import_to_core_def(
             ));
             dfg::CoreDef::Trampoline(index)
         }
+        fact::Import::ResourceTransferOwn => simple_intrinsic(dfg::Trampoline::ResourceTransferOwn),
+        fact::Import::ResourceTransferBorrow => {
+            simple_intrinsic(dfg::Trampoline::ResourceTransferBorrow)
+        }
+        fact::Import::ResourceEnterCall => simple_intrinsic(dfg::Trampoline::ResourceEnterCall),
+        fact::Import::ResourceExitCall => simple_intrinsic(dfg::Trampoline::ResourceExitCall),
     }
 }
 

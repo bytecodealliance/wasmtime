@@ -48,7 +48,7 @@ pub struct ComponentDfg {
 
     /// All trampolines and their type signature which will need to get
     /// compiled by Cranelift.
-    pub trampolines: PrimaryMap<TrampolineIndex, (SignatureIndex, Trampoline)>,
+    pub trampolines: Intern<TrampolineIndex, (SignatureIndex, Trampoline)>,
 
     /// Know reallocation functions which are used by `lowerings` (e.g. will be
     /// used by the host)
@@ -238,6 +238,7 @@ impl<T> CoreExport<T> {
 }
 
 /// Same as `info::Trampoline`
+#[derive(Clone, PartialEq, Eq, Hash)]
 #[allow(missing_docs)]
 pub enum Trampoline {
     LowerImport {
@@ -256,6 +257,10 @@ pub enum Trampoline {
     ResourceNew(TypeResourceTableIndex),
     ResourceRep(TypeResourceTableIndex),
     ResourceDrop(TypeResourceTableIndex),
+    ResourceTransferOwn,
+    ResourceTransferBorrow,
+    ResourceEnterCall,
+    ResourceExitCall,
 }
 
 /// Same as `info::CanonicalOptions`
@@ -581,6 +586,10 @@ impl LinearizeDfg<'_> {
             Trampoline::ResourceNew(ty) => info::Trampoline::ResourceNew(*ty),
             Trampoline::ResourceDrop(ty) => info::Trampoline::ResourceDrop(*ty),
             Trampoline::ResourceRep(ty) => info::Trampoline::ResourceRep(*ty),
+            Trampoline::ResourceTransferOwn => info::Trampoline::ResourceTransferOwn,
+            Trampoline::ResourceTransferBorrow => info::Trampoline::ResourceTransferBorrow,
+            Trampoline::ResourceEnterCall => info::Trampoline::ResourceEnterCall,
+            Trampoline::ResourceExitCall => info::Trampoline::ResourceExitCall,
         };
         let i1 = self.trampolines.push(*signature);
         let i2 = self.trampoline_defs.push(trampoline);

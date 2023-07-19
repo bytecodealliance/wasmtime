@@ -538,3 +538,37 @@ unsafe fn resource_drop(vmctx: *mut VMComponentContext, resource: u32, idx: u32)
         })
     })
 }
+
+unsafe fn resource_transfer_own(
+    vmctx: *mut VMComponentContext,
+    src_idx: u32,
+    src_table: u32,
+    dst_table: u32,
+) -> Result<u32> {
+    let src_table = TypeResourceTableIndex::from_u32(src_table);
+    let dst_table = TypeResourceTableIndex::from_u32(dst_table);
+    ComponentInstance::from_vmctx(vmctx, |instance| {
+        instance.resource_transfer_own(src_idx, src_table, dst_table)
+    })
+}
+
+unsafe fn resource_transfer_borrow(
+    vmctx: *mut VMComponentContext,
+    src_idx: u32,
+    src_table: u32,
+    dst_table: u32,
+) -> Result<u32> {
+    let src_table = TypeResourceTableIndex::from_u32(src_table);
+    let dst_table = TypeResourceTableIndex::from_u32(dst_table);
+    ComponentInstance::from_vmctx(vmctx, |instance| {
+        instance.resource_transfer_borrow(src_idx, src_table, dst_table)
+    })
+}
+
+unsafe fn resource_enter_call(vmctx: *mut VMComponentContext) -> Result<()> {
+    ComponentInstance::from_vmctx(vmctx, |instance| Ok(instance.resource_enter_call()))
+}
+
+unsafe fn resource_exit_call(vmctx: *mut VMComponentContext) -> Result<()> {
+    ComponentInstance::from_vmctx(vmctx, |instance| instance.resource_exit_call())
+}

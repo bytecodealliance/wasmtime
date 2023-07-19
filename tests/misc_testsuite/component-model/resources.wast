@@ -956,3 +956,96 @@
 )
 
 (assert_trap (invoke "f") "unknown handle index 0")
+
+(component
+  (component $A
+    (type $t' (resource (rep i32)))
+    (export $t "t" (type $t'))
+
+    (core func $ctor (canon resource.new $t))
+    (core func $dtor (canon resource.drop $t))
+    (core func $rep (canon resource.rep $t))
+
+    (core module $m
+      (import "" "dtor" (func $dtor (param i32)))
+      (import "" "rep" (func $rep (param i32) (result i32)))
+
+      (func (export "[method]t.assert") (param i32 i32)
+        (if (i32.ne (local.get 0) (local.get 1)) (unreachable))
+      )
+      (func (export "[static]t.assert-own") (param i32 i32)
+        (if (i32.ne (call $rep (local.get 0)) (local.get 1)) (unreachable))
+        (call $dtor (local.get 0))
+      )
+    )
+    (core instance $i (instantiate $m
+      (with "" (instance
+        (export "dtor" (func $dtor))
+        (export "rep" (func $rep))
+      ))
+    ))
+    (func (export "[constructor]t") (param "x" u32) (result (own $t))
+      (canon lift (core func $ctor)))
+    (func (export "[method]t.assert") (param "self" (borrow $t)) (param "x" u32)
+      (canon lift (core func $i "[method]t.assert")))
+    (func (export "[static]t.assert-own") (param "self" (own $t)) (param "x" u32)
+      (canon lift (core func $i "[static]t.assert-own")))
+  )
+  (instance $a (instantiate $A))
+
+  (component $B
+    (import "a" (instance $i
+      (export $t "t" (type (sub resource)))
+      (export "[constructor]t" (func (param "x" u32) (result (own $t))))
+      (export "[method]t.assert" (func (param "self" (borrow $t)) (param "x" u32)))
+      (export "[static]t.assert-own" (func (param "self" (own $t)) (param "x" u32)))
+    ))
+
+    (alias export $i "t" (type $t))
+    (alias export $i "[constructor]t" (func $ctor))
+    (alias export $i "[method]t.assert" (func $assert-borrow))
+    (alias export $i "[static]t.assert-own" (func $assert-own))
+
+    (core func $ctor (canon lower (func $ctor)))
+    (core func $dtor (canon resource.drop $t))
+    (core func $assert-own (canon lower (func $assert-own)))
+    (core func $assert-borrow (canon lower (func $assert-borrow)))
+
+    (core module $m
+      (import "" "ctor" (func $ctor (param i32) (result i32)))
+      (import "" "dtor" (func $dtor (param i32)))
+      (import "" "assert-own" (func $assert-own (param i32 i32)))
+      (import "" "assert-borrow" (func $assert-borrow (param i32 i32)))
+
+      (func (export "f")
+        (local $r1 i32)
+        (local $r2 i32)
+
+        (local.set $r1 (call $ctor (i32.const 100)))
+        (local.set $r2 (call $ctor (i32.const 200)))
+
+        (if (i32.ne (local.get $r1) (i32.const 0)) (unreachable))
+        (if (i32.ne (local.get $r2) (i32.const 1)) (unreachable))
+
+        (call $assert-borrow (local.get $r2) (i32.const 200))
+        (call $assert-borrow (local.get $r1) (i32.const 100))
+
+        (call $assert-own (local.get $r2) (i32.const 200))
+        (call $dtor (local.get $r1))
+      )
+    )
+    (core instance $i (instantiate $m
+      (with "" (instance
+        (export "ctor" (func $ctor))
+        (export "dtor" (func $dtor))
+        (export "assert-own" (func $assert-own))
+        (export "assert-borrow" (func $assert-borrow))
+      ))
+    ))
+    (func (export "f") (canon lift (core func $i "f")))
+  )
+  (instance $b (instantiate $B (with "a" (instance $a))))
+  (export "f" (func $b "f"))
+)
+
+(assert_return (invoke "f"))

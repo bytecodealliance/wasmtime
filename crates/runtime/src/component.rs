@@ -585,6 +585,41 @@ impl ComponentInstance {
         });
         (dtor, flags)
     }
+
+    pub(crate) fn resource_transfer_own(
+        &mut self,
+        idx: u32,
+        src: TypeResourceTableIndex,
+        dst: TypeResourceTableIndex,
+    ) -> Result<u32> {
+        let mut tables = self.resource_tables();
+        let rep = tables.resource_lift_own(Some(src), idx)?;
+        Ok(tables.resource_lower_own(Some(dst), rep))
+    }
+
+    pub(crate) fn resource_transfer_borrow(
+        &mut self,
+        idx: u32,
+        src: TypeResourceTableIndex,
+        dst: TypeResourceTableIndex,
+    ) -> Result<u32> {
+        let dst_owns_resource = self.resource_owned_by_own_instance(dst);
+        let mut tables = self.resource_tables();
+        let rep = tables.resource_lift_borrow(Some(src), idx)?;
+        // Implement `lower_borrow`'s special case here where if a borrow is
+        if dst_owns_resource {
+            return Ok(rep);
+        }
+        Ok(tables.resource_lower_borrow(Some(dst), rep))
+    }
+
+    pub(crate) fn resource_enter_call(&mut self) {
+        self.resource_tables().enter_call()
+    }
+
+    pub(crate) fn resource_exit_call(&mut self) -> Result<()> {
+        self.resource_tables().exit_call()
+    }
 }
 
 impl VMComponentContext {
