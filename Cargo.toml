@@ -115,7 +115,6 @@ members = [
 exclude = [
   'crates/wasi-common/WASI/tools/witx-cli',
   'docs/rust_wasi_markdown_parser',
-  'wasm-valgrind',
 ]
 
 [workspace.package]
@@ -125,6 +124,7 @@ edition = "2021"
 rust-version = "1.66.0"
 
 [workspace.dependencies]
+wasm-valgrind = { path = "crates/valgrind", version = "0.1.0" }
 wasmtime = { path = "crates/wasmtime", version = "11.0.0", default-features = false }
 wasmtime-cache = { path = "crates/cache", version = "=11.0.0" }
 wasmtime-cli-flags = { path = "crates/cli-flags", version = "=11.0.0" }

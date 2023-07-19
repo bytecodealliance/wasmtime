@@ -3734,7 +3734,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "wasm_valgrind"
+name = "wasm-valgrind"
 version = "0.1.0"
 
 [[package]]
@@ -4210,6 +4210,7 @@ dependencies = [
  "rand 0.8.5",
  "rustix",
  "sptr",
+ "wasm-valgrind",
  "wasmtime-asm-macros",
  "wasmtime-environ",
  "wasmtime-fiber",
