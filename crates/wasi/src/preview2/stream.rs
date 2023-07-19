@@ -178,5 +178,4 @@ mod test {
         let ix = table.push_output_stream(Box::new(dummy)).unwrap();
         let _ = table.get_output_stream_mut(ix).unwrap();
     }
-
 }

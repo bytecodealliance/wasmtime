@@ -1722,11 +1722,13 @@ impl<
         let dirfd = self.get_dir_fd(dirfd)?;
         let src_path = read_string(src_path)?;
         let dest_path = read_string(dest_path)?;
-        self.symlink_at(dirfd, src_path, dest_path).await.map_err(|e| {
-            e.try_into()
-                .context("failed to call `symlink-at`")
-                .unwrap_or_else(types::Error::trap)
-        })
+        self.symlink_at(dirfd, src_path, dest_path)
+            .await
+            .map_err(|e| {
+                e.try_into()
+                    .context("failed to call `symlink-at`")
+                    .unwrap_or_else(types::Error::trap)
+            })
     }
 
     #[instrument(skip(self))]
