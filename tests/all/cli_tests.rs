@@ -686,6 +686,7 @@ fn name_same_as_builtin_command() -> Result<()> {
 }
 
 #[test]
+#[cfg(unix)]
 fn run_just_stdin_argument() -> Result<()> {
     let output = get_wasmtime_command()?
         .arg("-")
