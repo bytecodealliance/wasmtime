@@ -1,160 +1,51 @@
-use crate::preview2::bindings::clocks::wall_clock;
-use crate::preview2::bindings::filesystem::filesystem;
-use crate::preview2::bindings::io::streams;
-use crate::preview2::filesystem::{Dir, File, TableFsExt};
-use crate::preview2::{DirPerms, FilePerms, Table, TableError, TableStreamExt, WasiView};
+use crate::preview2::bindings::filesystem::filesystem as async_filesystem;
+use crate::preview2::bindings::sync_io::filesystem::filesystem as sync_filesystem;
+use crate::preview2::block_on;
 
-use filesystem::ErrorCode;
-
-mod sync;
-
-impl From<TableError> for filesystem::Error {
-    fn from(error: TableError) -> filesystem::Error {
-        match error {
-            TableError::Full => filesystem::Error::trap(anyhow::anyhow!(error)),
-            TableError::NotPresent | TableError::WrongType => ErrorCode::BadDescriptor.into(),
-        }
-    }
-}
-
-impl From<tokio::task::JoinError> for filesystem::Error {
-    fn from(error: tokio::task::JoinError) -> Self {
-        Self::trap(anyhow::anyhow!(error))
-    }
-}
-
-#[async_trait::async_trait]
-impl<T: WasiView> filesystem::Host for T {
-    async fn advise(
+impl<T: async_filesystem::Host> sync_filesystem::Host for T {
+    fn advise(
         &mut self,
-        fd: filesystem::Descriptor,
-        offset: filesystem::Filesize,
-        len: filesystem::Filesize,
-        advice: filesystem::Advice,
-    ) -> Result<(), filesystem::Error> {
-        use filesystem::Advice;
-        use system_interface::fs::{Advice as A, FileIoExt};
-
-        let advice = match advice {
-            Advice::Normal => A::Normal,
-            Advice::Sequential => A::Sequential,
-            Advice::Random => A::Random,
-            Advice::WillNeed => A::WillNeed,
-            Advice::DontNeed => A::DontNeed,
-            Advice::NoReuse => A::NoReuse,
-        };
-
-        let f = self.table().get_file(fd)?;
-        f.block(move |f| f.advise(offset, len, advice)).await?;
-        Ok(())
+        fd: sync_filesystem::Descriptor,
+        offset: sync_filesystem::Filesize,
+        len: sync_filesystem::Filesize,
+        advice: sync_filesystem::Advice,
+    ) -> Result<(), sync_filesystem::Error> {
+        Ok(block_on(async {
+            async_filesystem::Host::advise(self, fd, offset, len, advice.into()).await
+        })?)
     }
 
-    async fn sync_data(&mut self, fd: filesystem::Descriptor) -> Result<(), filesystem::Error> {
-        let table = self.table();
-        if table.is_file(fd) {
-            let f = table.get_file(fd)?;
-            match f.block(|f| f.sync_data()).await {
-                Ok(()) => Ok(()),
-                // On windows, `sync_data` uses `FileFlushBuffers` which fails with
-                // `ERROR_ACCESS_DENIED` if the file is not upen for writing. Ignore
-                // this error, for POSIX compatibility.
-                #[cfg(windows)]
-                Err(e)
-                    if e.raw_os_error()
-                        == Some(windows_sys::Win32::Foundation::ERROR_ACCESS_DENIED as _) =>
-                {
-                    Ok(())
-                }
-                Err(e) => Err(e.into()),
-            }
-        } else if table.is_dir(fd) {
-            let d = table.get_dir(fd)?;
-            d.block(|d| Ok(d.open(std::path::Component::CurDir)?.sync_data()?))
-                .await
-        } else {
-            Err(ErrorCode::BadDescriptor.into())
-        }
+    fn sync_data(&mut self, fd: sync_filesystem::Descriptor) -> Result<(), sync_filesystem::Error> {
+        Ok(block_on(async {
+            async_filesystem::Host::sync_data(self, fd).await
+        })?)
     }
 
-    async fn get_flags(
+    fn get_flags(
         &mut self,
-        fd: filesystem::Descriptor,
-    ) -> Result<filesystem::DescriptorFlags, filesystem::Error> {
-        use filesystem::DescriptorFlags;
-        use system_interface::fs::{FdFlags, GetSetFdFlags};
-
-        fn get_from_fdflags(flags: FdFlags) -> DescriptorFlags {
-            let mut out = DescriptorFlags::empty();
-            if flags.contains(FdFlags::DSYNC) {
-                out |= DescriptorFlags::REQUESTED_WRITE_SYNC;
-            }
-            if flags.contains(FdFlags::RSYNC) {
-                out |= DescriptorFlags::DATA_INTEGRITY_SYNC;
-            }
-            if flags.contains(FdFlags::SYNC) {
-                out |= DescriptorFlags::FILE_INTEGRITY_SYNC;
-            }
-            out
-        }
-
-        let table = self.table();
-        if table.is_file(fd) {
-            let f = table.get_file(fd)?;
-            let flags = f.block(|f| f.get_fd_flags()).await?;
-            let mut flags = get_from_fdflags(flags);
-            if f.perms.contains(FilePerms::READ) {
-                flags |= DescriptorFlags::READ;
-            }
-            if f.perms.contains(FilePerms::WRITE) {
-                flags |= DescriptorFlags::WRITE;
-            }
-            Ok(flags)
-        } else if table.is_dir(fd) {
-            let d = table.get_dir(fd)?;
-            let flags = d.block(|d| d.get_fd_flags()).await?;
-            let mut flags = get_from_fdflags(flags);
-            if d.perms.contains(DirPerms::READ) {
-                flags |= DescriptorFlags::READ;
-            }
-            if d.perms.contains(DirPerms::MUTATE) {
-                flags |= DescriptorFlags::MUTATE_DIRECTORY;
-            }
-            Ok(flags)
-        } else {
-            Err(ErrorCode::BadDescriptor.into())
-        }
+        fd: sync_filesystem::Descriptor,
+    ) -> Result<sync_filesystem::DescriptorFlags, sync_filesystem::Error> {
+        Ok(block_on(async { async_filesystem::Host::get_flags(self, fd).await })?.into())
     }
 
-    async fn get_type(
+    fn get_type(
         &mut self,
-        fd: filesystem::Descriptor,
-    ) -> Result<filesystem::DescriptorType, filesystem::Error> {
-        let table = self.table();
-
-        if table.is_file(fd) {
-            let f = table.get_file(fd)?;
-            let meta = f.block(|f| f.metadata()).await?;
-            Ok(descriptortype_from(meta.file_type()))
-        } else if table.is_dir(fd) {
-            Ok(filesystem::DescriptorType::Directory)
-        } else {
-            Err(ErrorCode::BadDescriptor.into())
-        }
+        fd: sync_filesystem::Descriptor,
+    ) -> Result<sync_filesystem::DescriptorType, sync_filesystem::Error> {
+        Ok(block_on(async { async_filesystem::Host::get_type(self, fd).await })?.into())
     }
 
-    async fn set_size(
+    fn set_size(
         &mut self,
-        fd: filesystem::Descriptor,
-        size: filesystem::Filesize,
-    ) -> Result<(), filesystem::Error> {
-        let f = self.table().get_file(fd)?;
-        if !f.perms.contains(FilePerms::WRITE) {
-            Err(ErrorCode::NotPermitted)?;
-        }
-        f.block(move |f| f.set_len(size)).await?;
-        Ok(())
+        fd: sync_filesystem::Descriptor,
+        size: sync_filesystem::Filesize,
+    ) -> Result<(), sync_filesystem::Error> {
+        Ok(block_on(async {
+            async_filesystem::Host::set_size(self, fd, size).await
+        })?)
     }
 
+    /*
     async fn set_times(
         &mut self,
         fd: filesystem::Descriptor,
@@ -815,260 +706,109 @@ impl<T: WasiView> filesystem::Host for T {
 
         Ok(index)
     }
+    */
 }
 
-#[cfg(unix)]
-fn from_raw_os_error(err: Option<i32>) -> Option<filesystem::Error> {
-    use rustix::io::Errno as RustixErrno;
-    if err.is_none() {
-        return None;
-    }
-    Some(match RustixErrno::from_raw_os_error(err.unwrap()) {
-        RustixErrno::PIPE => ErrorCode::Pipe.into(),
-        RustixErrno::PERM => ErrorCode::NotPermitted.into(),
-        RustixErrno::NOENT => ErrorCode::NoEntry.into(),
-        RustixErrno::NOMEM => ErrorCode::InsufficientMemory.into(),
-        RustixErrno::IO => ErrorCode::Io.into(),
-        RustixErrno::BADF => ErrorCode::BadDescriptor.into(),
-        RustixErrno::BUSY => ErrorCode::Busy.into(),
-        RustixErrno::ACCESS => ErrorCode::Access.into(),
-        RustixErrno::NOTDIR => ErrorCode::NotDirectory.into(),
-        RustixErrno::ISDIR => ErrorCode::IsDirectory.into(),
-        RustixErrno::INVAL => ErrorCode::Invalid.into(),
-        RustixErrno::EXIST => ErrorCode::Exist.into(),
-        RustixErrno::FBIG => ErrorCode::FileTooLarge.into(),
-        RustixErrno::NOSPC => ErrorCode::InsufficientSpace.into(),
-        RustixErrno::SPIPE => ErrorCode::InvalidSeek.into(),
-        RustixErrno::MLINK => ErrorCode::TooManyLinks.into(),
-        RustixErrno::NAMETOOLONG => ErrorCode::NameTooLong.into(),
-        RustixErrno::NOTEMPTY => ErrorCode::NotEmpty.into(),
-        RustixErrno::LOOP => ErrorCode::Loop.into(),
-        RustixErrno::OVERFLOW => ErrorCode::Overflow.into(),
-        RustixErrno::ILSEQ => ErrorCode::IllegalByteSequence.into(),
-        RustixErrno::NOTSUP => ErrorCode::Unsupported.into(),
-        RustixErrno::ALREADY => ErrorCode::Already.into(),
-        RustixErrno::INPROGRESS => ErrorCode::InProgress.into(),
-        RustixErrno::INTR => ErrorCode::Interrupted.into(),
-
-        // On some platforms.into(), these have the same value as other errno values.
-        #[allow(unreachable_patterns)]
-        RustixErrno::OPNOTSUPP => ErrorCode::Unsupported.into(),
-
-        _ => return None,
-    })
-}
-#[cfg(windows)]
-fn from_raw_os_error(raw_os_error: Option<i32>) -> Option<filesystem::Error> {
-    use windows_sys::Win32::Foundation;
-    Some(match raw_os_error.map(|code| code as u32) {
-        Some(Foundation::ERROR_FILE_NOT_FOUND) => ErrorCode::NoEntry.into(),
-        Some(Foundation::ERROR_PATH_NOT_FOUND) => ErrorCode::NoEntry.into(),
-        Some(Foundation::ERROR_ACCESS_DENIED) => ErrorCode::Access.into(),
-        Some(Foundation::ERROR_SHARING_VIOLATION) => ErrorCode::Access.into(),
-        Some(Foundation::ERROR_PRIVILEGE_NOT_HELD) => ErrorCode::NotPermitted.into(),
-        Some(Foundation::ERROR_INVALID_HANDLE) => ErrorCode::BadDescriptor.into(),
-        Some(Foundation::ERROR_INVALID_NAME) => ErrorCode::NoEntry.into(),
-        Some(Foundation::ERROR_NOT_ENOUGH_MEMORY) => ErrorCode::InsufficientMemory.into(),
-        Some(Foundation::ERROR_OUTOFMEMORY) => ErrorCode::InsufficientMemory.into(),
-        Some(Foundation::ERROR_DIR_NOT_EMPTY) => ErrorCode::NotEmpty.into(),
-        Some(Foundation::ERROR_NOT_READY) => ErrorCode::Busy.into(),
-        Some(Foundation::ERROR_BUSY) => ErrorCode::Busy.into(),
-        Some(Foundation::ERROR_NOT_SUPPORTED) => ErrorCode::Unsupported.into(),
-        Some(Foundation::ERROR_FILE_EXISTS) => ErrorCode::Exist.into(),
-        Some(Foundation::ERROR_BROKEN_PIPE) => ErrorCode::Pipe.into(),
-        Some(Foundation::ERROR_BUFFER_OVERFLOW) => ErrorCode::NameTooLong.into(),
-        Some(Foundation::ERROR_NOT_A_REPARSE_POINT) => ErrorCode::Invalid.into(),
-        Some(Foundation::ERROR_NEGATIVE_SEEK) => ErrorCode::Invalid.into(),
-        Some(Foundation::ERROR_DIRECTORY) => ErrorCode::NotDirectory.into(),
-        Some(Foundation::ERROR_ALREADY_EXISTS) => ErrorCode::Exist.into(),
-        Some(Foundation::ERROR_STOPPED_ON_SYMLINK) => ErrorCode::Loop.into(),
-        Some(Foundation::ERROR_DIRECTORY_NOT_SUPPORTED) => ErrorCode::IsDirectory.into(),
-        _ => return None,
-    })
-}
-
-impl From<std::io::Error> for filesystem::Error {
-    fn from(err: std::io::Error) -> filesystem::Error {
-        match from_raw_os_error(err.raw_os_error()) {
-            Some(errno) => errno,
-            None => match err.kind() {
-                std::io::ErrorKind::NotFound => ErrorCode::NoEntry.into(),
-                std::io::ErrorKind::PermissionDenied => ErrorCode::NotPermitted.into(),
-                std::io::ErrorKind::AlreadyExists => ErrorCode::Exist.into(),
-                std::io::ErrorKind::InvalidInput => ErrorCode::Invalid.into(),
-                _ => filesystem::Error::trap(anyhow::anyhow!(err).context("Unknown OS error")),
-            },
+impl From<async_filesystem::ErrorCode> for sync_filesystem::ErrorCode {
+    fn from(other: async_filesystem::ErrorCode) -> Self {
+        use async_filesystem::ErrorCode;
+        match other {
+            ErrorCode::Access => Self::Access,
+            ErrorCode::WouldBlock => Self::WouldBlock,
+            ErrorCode::Already => Self::Already,
+            ErrorCode::BadDescriptor => Self::BadDescriptor,
+            ErrorCode::Busy => Self::Busy,
+            ErrorCode::Deadlock => Self::Deadlock,
+            ErrorCode::Quota => Self::Quota,
+            ErrorCode::Exist => Self::Exist,
+            ErrorCode::FileTooLarge => Self::FileTooLarge,
+            ErrorCode::IllegalByteSequence => Self::IllegalByteSequence,
+            ErrorCode::InProgress => Self::InProgress,
+            ErrorCode::Interrupted => Self::Interrupted,
+            ErrorCode::Invalid => Self::Invalid,
+            ErrorCode::Io => Self::Io,
+            ErrorCode::IsDirectory => Self::IsDirectory,
+            ErrorCode::Loop => Self::Loop,
+            ErrorCode::TooManyLinks => Self::TooManyLinks,
+            ErrorCode::MessageSize => Self::MessageSize,
+            ErrorCode::NameTooLong => Self::NameTooLong,
+            ErrorCode::NoDevice => Self::NoDevice,
+            ErrorCode::NoEntry => Self::NoEntry,
+            ErrorCode::NoLock => Self::NoLock,
+            ErrorCode::InsufficientMemory => Self::InsufficientMemory,
+            ErrorCode::InsufficientSpace => Self::InsufficientSpace,
+            ErrorCode::NotDirectory => Self::NotDirectory,
+            ErrorCode::NotEmpty => Self::NotEmpty,
+            ErrorCode::NotRecoverable => Self::NotRecoverable,
+            ErrorCode::Unsupported => Self::Unsupported,
+            ErrorCode::NoTty => Self::NoTty,
+            ErrorCode::NoSuchDevice => Self::NoSuchDevice,
+            ErrorCode::Overflow => Self::Overflow,
+            ErrorCode::NotPermitted => Self::NotPermitted,
+            ErrorCode::Pipe => Self::Pipe,
+            ErrorCode::ReadOnly => Self::ReadOnly,
+            ErrorCode::InvalidSeek => Self::InvalidSeek,
+            ErrorCode::TextFileBusy => Self::TextFileBusy,
+            ErrorCode::CrossDevice => Self::CrossDevice,
         }
     }
 }
 
-impl From<cap_rand::Error> for filesystem::Error {
-    fn from(err: cap_rand::Error) -> filesystem::Error {
-        // I picked Error::Io as a 'reasonable default', FIXME dan is this ok?
-        from_raw_os_error(err.raw_os_error())
-            .unwrap_or_else(|| filesystem::Error::from(ErrorCode::Io))
+impl From<async_filesystem::Error> for sync_filesystem::Error {
+    fn from(other: async_filesystem::Error) -> Self {
+        match other.downcast() {
+            Ok(errorcode) => Self::from(sync_filesystem::ErrorCode::from(errorcode)),
+            Err(other) => Self::trap(other),
+        }
     }
 }
 
-impl From<std::num::TryFromIntError> for filesystem::Error {
-    fn from(_err: std::num::TryFromIntError) -> filesystem::Error {
-        ErrorCode::Overflow.into()
+impl From<sync_filesystem::Advice> for async_filesystem::Advice {
+    fn from(other: sync_filesystem::Advice) -> Self {
+        use sync_filesystem::Advice;
+        match other {
+            Advice::Normal => Self::Normal,
+            Advice::Sequential => Self::Sequential,
+            Advice::Random => Self::Random,
+            Advice::WillNeed => Self::WillNeed,
+            Advice::DontNeed => Self::DontNeed,
+            Advice::NoReuse => Self::NoReuse,
+        }
     }
 }
 
-fn descriptortype_from(ft: cap_std::fs::FileType) -> filesystem::DescriptorType {
-    use cap_fs_ext::FileTypeExt;
-    use filesystem::DescriptorType;
-    if ft.is_dir() {
-        DescriptorType::Directory
-    } else if ft.is_symlink() {
-        DescriptorType::SymbolicLink
-    } else if ft.is_block_device() {
-        DescriptorType::BlockDevice
-    } else if ft.is_char_device() {
-        DescriptorType::CharacterDevice
-    } else if ft.is_file() {
-        DescriptorType::RegularFile
-    } else {
-        DescriptorType::Unknown
+impl From<async_filesystem::DescriptorFlags> for sync_filesystem::DescriptorFlags {
+    fn from(other: async_filesystem::DescriptorFlags) -> Self {
+        let mut out = Self::empty();
+        if other.contains(async_filesystem::DescriptorFlags::READ) {
+            out |= Self::READ;
+        }
+        if other.contains(async_filesystem::DescriptorFlags::WRITE) {
+            out |= Self::WRITE;
+        }
+        if other.contains(async_filesystem::DescriptorFlags::DATA_INTEGRITY_SYNC) {
+            out |= Self::DATA_INTEGRITY_SYNC;
+        }
+        if other.contains(async_filesystem::DescriptorFlags::REQUESTED_WRITE_SYNC) {
+            out |= Self::REQUESTED_WRITE_SYNC;
+        }
+        if other.contains(async_filesystem::DescriptorFlags::FILE_INTEGRITY_SYNC) {
+            out |= Self::FILE_INTEGRITY_SYNC;
+        }
+        out
     }
 }
 
-fn systemtimespec_from(
-    t: filesystem::NewTimestamp,
-) -> Result<Option<fs_set_times::SystemTimeSpec>, filesystem::Error> {
-    use filesystem::NewTimestamp;
-    use fs_set_times::SystemTimeSpec;
-    match t {
-        NewTimestamp::NoChange => Ok(None),
-        NewTimestamp::Now => Ok(Some(SystemTimeSpec::SymbolicNow)),
-        NewTimestamp::Timestamp(st) => Ok(Some(SystemTimeSpec::Absolute(systemtime_from(st)?))),
-    }
-}
-
-fn systemtime_from(t: wall_clock::Datetime) -> Result<std::time::SystemTime, filesystem::Error> {
-    use std::time::{Duration, SystemTime};
-    SystemTime::UNIX_EPOCH
-        .checked_add(Duration::new(t.seconds, t.nanoseconds))
-        .ok_or_else(|| ErrorCode::Overflow.into())
-}
-
-fn datetime_from(t: std::time::SystemTime) -> wall_clock::Datetime {
-    // FIXME make this infallible or handle errors properly
-    wall_clock::Datetime::try_from(cap_std::time::SystemTime::from_std(t)).unwrap()
-}
-
-fn descriptorstat_from(meta: cap_std::fs::Metadata) -> filesystem::DescriptorStat {
-    use cap_fs_ext::MetadataExt;
-    filesystem::DescriptorStat {
-        // FIXME didn't we agree that the wit could be changed to make the device and ino fields
-        // optional?
-        device: meta.dev(),
-        inode: meta.ino(),
-        type_: descriptortype_from(meta.file_type()),
-        link_count: meta.nlink(),
-        size: meta.len(),
-        // FIXME change the wit to make these timestamps optional
-        data_access_timestamp: meta
-            .accessed()
-            .map(|t| datetime_from(t.into_std()))
-            .unwrap_or(wall_clock::Datetime {
-                seconds: 0,
-                nanoseconds: 0,
-            }),
-        data_modification_timestamp: meta
-            .modified()
-            .map(|t| datetime_from(t.into_std()))
-            .unwrap_or(wall_clock::Datetime {
-                seconds: 0,
-                nanoseconds: 0,
-            }),
-        status_change_timestamp: meta
-            .created()
-            .map(|t| datetime_from(t.into_std()))
-            .unwrap_or(wall_clock::Datetime {
-                seconds: 0,
-                nanoseconds: 0,
-            }),
-    }
-}
-
-fn symlink_follow(path_flags: filesystem::PathFlags) -> bool {
-    path_flags.contains(filesystem::PathFlags::SYMLINK_FOLLOW)
-}
-
-pub(crate) struct ReaddirIterator(
-    std::sync::Mutex<
-        Box<
-            dyn Iterator<Item = Result<filesystem::DirectoryEntry, filesystem::Error>>
-                + Send
-                + 'static,
-        >,
-    >,
-);
-
-impl ReaddirIterator {
-    fn new(
-        i: impl Iterator<Item = Result<filesystem::DirectoryEntry, filesystem::Error>> + Send + 'static,
-    ) -> Self {
-        ReaddirIterator(std::sync::Mutex::new(Box::new(i)))
-    }
-    fn next(&self) -> Result<Option<filesystem::DirectoryEntry>, filesystem::Error> {
-        self.0.lock().unwrap().next().transpose()
-    }
-}
-
-impl IntoIterator for ReaddirIterator {
-    type Item = Result<filesystem::DirectoryEntry, filesystem::Error>;
-    type IntoIter = Box<dyn Iterator<Item = Self::Item>>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.0.into_inner().unwrap()
-    }
-}
-
-pub(crate) trait TableReaddirExt {
-    fn push_readdir(&mut self, readdir: ReaddirIterator) -> Result<u32, TableError>;
-    fn delete_readdir(&mut self, fd: u32) -> Result<ReaddirIterator, TableError>;
-    fn get_readdir(&self, fd: u32) -> Result<&ReaddirIterator, TableError>;
-}
-
-impl TableReaddirExt for Table {
-    fn push_readdir(&mut self, readdir: ReaddirIterator) -> Result<u32, TableError> {
-        self.push(Box::new(readdir))
-    }
-    fn delete_readdir(&mut self, fd: u32) -> Result<ReaddirIterator, TableError> {
-        self.delete(fd)
-    }
-
-    fn get_readdir(&self, fd: u32) -> Result<&ReaddirIterator, TableError> {
-        self.get(fd)
-    }
-}
-
-fn mask_file_perms(p: FilePerms, flags: filesystem::DescriptorFlags) -> FilePerms {
-    use filesystem::DescriptorFlags;
-    let mut out = FilePerms::empty();
-    if p.contains(FilePerms::READ) && flags.contains(DescriptorFlags::READ) {
-        out |= FilePerms::READ;
-    }
-    if p.contains(FilePerms::WRITE) && flags.contains(DescriptorFlags::WRITE) {
-        out |= FilePerms::WRITE;
-    }
-    out
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-    #[test]
-    fn table_readdir_works() {
-        let mut table = Table::new();
-        let ix = table
-            .push_readdir(ReaddirIterator::new(std::iter::empty()))
-            .unwrap();
-        let _ = table.get_readdir(ix).unwrap();
-        table.delete_readdir(ix).unwrap();
-        let _ = table.get_readdir(ix).err().unwrap();
+impl From<async_filesystem::DescriptorType> for sync_filesystem::DescriptorType {
+    fn from(other: async_filesystem::DescriptorType) -> Self {
+        use async_filesystem::DescriptorType;
+        match other {
+            DescriptorType::RegularFile => Self::RegularFile,
+            DescriptorType::Directory => Self::Directory,
+            DescriptorType::BlockDevice => Self::BlockDevice,
+            DescriptorType::CharacterDevice => Self::CharacterDevice,
+            DescriptorType::Fifo => Self::Fifo,
+            DescriptorType::Socket => Self::Socket,
+        }
     }
 }

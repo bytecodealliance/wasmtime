@@ -70,51 +70,6 @@ pub mod bindings {
             }
         }
 
-        impl From<super::filesystem::filesystem::ErrorCode> for filesystem::filesystem::ErrorCode {
-            fn from(other: super::filesystem::filesystem::ErrorCode) -> Self {
-                use super::filesystem::filesystem::ErrorCode;
-                match other {
-                    ErrorCode::Access => Self::Access,
-                    ErrorCode::WouldBlock => Self::WouldBlock,
-                    ErrorCode::Already => Self::Already,
-                    ErrorCode::BadDescriptor => Self::BadDescriptor,
-                    ErrorCode::Busy => Self::Busy,
-                    ErrorCode::Deadlock => Self::Deadlock,
-                    ErrorCode::Quota => Self::Quota,
-                    ErrorCode::Exist => Self::Exist,
-                    ErrorCode::FileTooLarge => Self::FileTooLarge,
-                    ErrorCode::IllegalByteSequence => Self::IllegalByteSequence,
-                    ErrorCode::InProgress => Self::InProgress,
-                    ErrorCode::Interrupted => Self::Interrupted,
-                    ErrorCode::Invalid => Self::Invalid,
-                    ErrorCode::Io => Self::Io,
-                    ErrorCode::IsDirectory => Self::IsDirectory,
-                    ErrorCode::Loop => Self::Loop,
-                    ErrorCode::TooManyLinks => Self::TooManyLinks,
-                    ErrorCode::MessageSize => Self::MessageSize,
-                    ErrorCode::NameTooLong => Self::NameTooLong,
-                    ErrorCode::NoDevice => Self::NoDevice,
-                    ErrorCode::NoEntry => Self::NoEntry,
-                    ErrorCode::NoLock => Self::NoLock,
-                    ErrorCode::InsufficientMemory => Self::InsufficientMemory,
-                    ErrorCode::InsufficientSpace => Self::InsufficientSpace,
-                    ErrorCode::NotDirectory => Self::NotDirectory,
-                    ErrorCode::NotEmpty => Self::NotEmpty,
-                    ErrorCode::NotRecoverable => Self::NotRecoverable,
-                    ErrorCode::Unsupported => Self::Unsupported,
-                    ErrorCode::NoTty => Self::NoTty,
-                    ErrorCode::NoSuchDevice => Self::NoSuchDevice,
-                    ErrorCode::Overflow => Self::Overflow,
-                    ErrorCode::NotPermitted => Self::NotPermitted,
-                    ErrorCode::Pipe => Self::Pipe,
-                    ErrorCode::ReadOnly => Self::ReadOnly,
-                    ErrorCode::InvalidSeek => Self::InvalidSeek,
-                    ErrorCode::TextFileBusy => Self::TextFileBusy,
-                    ErrorCode::CrossDevice => Self::CrossDevice,
-                }
-            }
-        }
-
         impl From<super::io::streams::Error> for io::streams::Error {
             fn from(other: super::io::streams::Error) -> Self {
                 match other.downcast() {

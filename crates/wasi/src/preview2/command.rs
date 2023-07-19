@@ -54,7 +54,7 @@ pub mod sync {
             "streams"::"stream-error": Error,
         },
         with: {
-           "wasi:filesystem/filesystem": crate::preview2::bindings::filesystem::filesystem,
+           "wasi:filesystem/filesystem": crate::preview2::bindings::sync_io::filesystem::filesystem,
            "wasi:clocks/monotonic_clock": crate::preview2::bindings::clocks::monotonic_clock,
            "wasi:poll/poll": crate::preview2::bindings::sync_io::poll::poll,
            "wasi:io/streams": crate::preview2::bindings::sync_io::io::streams,
@@ -76,7 +76,7 @@ pub mod sync {
         crate::preview2::bindings::clocks::wall_clock::add_to_linker(l, |t| t)?;
         crate::preview2::bindings::clocks::monotonic_clock::add_to_linker(l, |t| t)?;
         crate::preview2::bindings::clocks::timezone::add_to_linker(l, |t| t)?;
-        crate::preview2::bindings::filesystem::filesystem::add_to_linker(l, |t| t)?;
+        crate::preview2::bindings::sync_io::filesystem::filesystem::add_to_linker(l, |t| t)?;
         crate::preview2::bindings::sync_io::poll::poll::add_to_linker(l, |t| t)?;
         crate::preview2::bindings::sync_io::io::streams::add_to_linker(l, |t| t)?;
         crate::preview2::bindings::random::random::add_to_linker(l, |t| t)?;
