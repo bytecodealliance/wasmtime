@@ -43,14 +43,12 @@ const ZEROS: &[u8] = &[0; 4 * 1024 * 1024];
 #[async_trait::async_trait]
 impl<T: WasiView> streams::Host for T {
     async fn drop_input_stream(&mut self, stream: InputStream) -> anyhow::Result<()> {
-        self.table_mut()
-            .delete::<Box<dyn HostInputStream>>(stream)?;
+        self.table_mut().delete_input_stream(stream)?;
         Ok(())
     }
 
     async fn drop_output_stream(&mut self, stream: OutputStream) -> anyhow::Result<()> {
-        self.table_mut()
-            .delete::<Box<dyn HostOutputStream>>(stream)?;
+        self.table_mut().delete_output_stream(stream)?;
         Ok(())
     }
 
@@ -61,7 +59,7 @@ impl<T: WasiView> streams::Host for T {
     ) -> Result<(Vec<u8>, streams::StreamStatus), streams::Error> {
         let s = self.table_mut().get_input_stream_mut(stream)?;
 
-        let (bytes, state) = HostInputStream::read(s.as_mut(), len as usize)?;
+        let (bytes, state) = HostInputStream::read(s, len as usize)?;
         debug_assert!(bytes.len() <= len as usize);
 
         Ok((bytes.into(), state.into()))
@@ -86,7 +84,7 @@ impl<T: WasiView> streams::Host for T {
     ) -> Result<(u64, streams::StreamStatus), streams::Error> {
         let s = self.table_mut().get_output_stream_mut(stream)?;
 
-        let (bytes_written, status) = HostOutputStream::write(s.as_mut(), bytes.into())?;
+        let (bytes_written, status) = HostOutputStream::write(s, bytes.into())?;
 
         Ok((u64::try_from(bytes_written).unwrap(), status.into()))
     }
@@ -102,7 +100,7 @@ impl<T: WasiView> streams::Host for T {
         let mut nwritten: usize = 0;
         loop {
             s.ready().await?;
-            let (written, state) = HostOutputStream::write(s.as_mut(), bytes.clone())?;
+            let (written, state) = HostOutputStream::write(s, bytes.clone())?;
             let _ = bytes.split_to(written);
             nwritten += written;
             if bytes.is_empty() || state == StreamState::Closed {
@@ -144,7 +142,7 @@ impl<T: WasiView> streams::Host for T {
         let s = self.table_mut().get_output_stream_mut(stream)?;
         let mut bytes = bytes::Bytes::from_static(ZEROS);
         bytes.truncate((len as usize).min(bytes.len()));
-        let (written, state) = HostOutputStream::write(s.as_mut(), bytes)?;
+        let (written, state) = HostOutputStream::write(s, bytes)?;
         Ok((written as u64, state.into()))
     }
 
@@ -159,7 +157,7 @@ impl<T: WasiView> streams::Host for T {
             s.ready().await?;
             let mut bytes = bytes::Bytes::from_static(ZEROS);
             bytes.truncate(remaining.min(bytes.len()));
-            let (written, state) = HostOutputStream::write(s.as_mut(), bytes)?;
+            let (written, state) = HostOutputStream::write(s, bytes)?;
             remaining -= written;
             if remaining == 0 || state == StreamState::Closed {
                 return Ok((len - remaining as u64, state.into()));

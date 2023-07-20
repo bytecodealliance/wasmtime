@@ -89,47 +89,92 @@ pub trait HostOutputStream: Send + Sync {
     async fn ready(&mut self) -> Result<(), Error>;
 }
 
+#[async_trait::async_trait]
+pub(crate) trait BlockingInputStream: Send + Sync {
+    async fn read(&mut self, size: usize) -> Result<(Bytes, StreamState), Error>;
+}
+
+pub(crate) enum InternalInputStream {
+    Host(Box<dyn HostInputStream>),
+    Blocking(Box<dyn BlockingInputStream>),
+}
+
+#[async_trait::async_trait]
+pub(crate) trait BlockingOutputStream: Send + Sync {
+    async fn write(&mut self, bytes: Bytes) -> Result<(usize, StreamState), Error>;
+}
+
+pub(crate) enum InternalOutputStream {
+    Host(Box<dyn HostOutputStream>),
+    Blocking(Box<dyn BlockingOutputStream>),
+}
+
 /// Extension trait for managing [`HostInputStream`]s and [`HostOutputStream`]s in the [`Table`].
 pub trait TableStreamExt {
     /// Push a [`HostInputStream`] into a [`Table`], returning the table index.
     fn push_input_stream(&mut self, istream: Box<dyn HostInputStream>) -> Result<u32, TableError>;
     /// Get a mutable reference to a [`HostInputStream`] in a [`Table`].
-    fn get_input_stream_mut(
-        &mut self,
-        fd: u32,
-    ) -> Result<&mut Box<dyn HostInputStream>, TableError>;
+    fn get_input_stream_mut(&mut self, fd: u32) -> Result<&mut dyn HostInputStream, TableError>;
+    /// Remove [`HostInputStream`] from table:
+    fn delete_input_stream(&mut self, fd: u32) -> Result<Box<dyn HostInputStream>, TableError>;
 
     /// Push a [`HostOutputStream`] into a [`Table`], returning the table index.
     fn push_output_stream(&mut self, ostream: Box<dyn HostOutputStream>)
         -> Result<u32, TableError>;
     /// Get a mutable reference to a [`HostOutputStream`] in a [`Table`].
-    fn get_output_stream_mut(
-        &mut self,
-        fd: u32,
-    ) -> Result<&mut Box<dyn HostOutputStream>, TableError>;
+    fn get_output_stream_mut(&mut self, fd: u32) -> Result<&mut dyn HostOutputStream, TableError>;
+
+    /// Remove [`HostOutputStream`] from table:
+    fn delete_output_stream(&mut self, fd: u32) -> Result<Box<dyn HostOutputStream>, TableError>;
 }
 impl TableStreamExt for Table {
     fn push_input_stream(&mut self, istream: Box<dyn HostInputStream>) -> Result<u32, TableError> {
-        self.push(Box::new(istream))
+        self.push(Box::new(InternalInputStream::Host(istream)))
     }
-    fn get_input_stream_mut(
-        &mut self,
-        fd: u32,
-    ) -> Result<&mut Box<dyn HostInputStream>, TableError> {
-        self.get_mut::<Box<dyn HostInputStream>>(fd)
+    fn get_input_stream_mut(&mut self, fd: u32) -> Result<&mut dyn HostInputStream, TableError> {
+        match self.get_mut::<InternalInputStream>(fd)? {
+            InternalInputStream::Host(ref mut h) => Ok(h.as_mut()),
+            _ => Err(TableError::WrongType),
+        }
+    }
+    fn delete_input_stream(&mut self, fd: u32) -> Result<Box<dyn HostInputStream>, TableError> {
+        let occ = self.entry(fd)?;
+        match occ.get().downcast_ref::<InternalInputStream>() {
+            Some(InternalInputStream::Host(_)) => {
+                let (_, any) = occ.remove_entry();
+                match *any.downcast().expect("downcast checked above") {
+                    InternalInputStream::Host(h) => Ok(h),
+                    _ => unreachable!("variant checked above"),
+                }
+            }
+            _ => Err(TableError::WrongType),
+        }
     }
 
     fn push_output_stream(
         &mut self,
         ostream: Box<dyn HostOutputStream>,
     ) -> Result<u32, TableError> {
-        self.push(Box::new(ostream))
+        self.push(Box::new(InternalOutputStream::Host(ostream)))
     }
-    fn get_output_stream_mut(
-        &mut self,
-        fd: u32,
-    ) -> Result<&mut Box<dyn HostOutputStream>, TableError> {
-        self.get_mut::<Box<dyn HostOutputStream>>(fd)
+    fn get_output_stream_mut(&mut self, fd: u32) -> Result<&mut dyn HostOutputStream, TableError> {
+        match self.get_mut::<InternalOutputStream>(fd)? {
+            InternalOutputStream::Host(ref mut h) => Ok(h.as_mut()),
+            _ => Err(TableError::WrongType),
+        }
+    }
+    fn delete_output_stream(&mut self, fd: u32) -> Result<Box<dyn HostOutputStream>, TableError> {
+        let occ = self.entry(fd)?;
+        match occ.get().downcast_ref::<InternalOutputStream>() {
+            Some(InternalOutputStream::Host(_)) => {
+                let (_, any) = occ.remove_entry();
+                match *any.downcast().expect("downcast checked above") {
+                    InternalOutputStream::Host(h) => Ok(h),
+                    _ => unreachable!("variant checked above"),
+                }
+            }
+            _ => Err(TableError::WrongType),
+        }
     }
 }
 
@@ -152,10 +197,22 @@ mod test {
 
         let dummy = DummyInputStream;
         let mut table = Table::new();
-        // Show that we can put an input stream in the table, and get a mut
-        // ref back out:
+        // Put it into the table:
         let ix = table.push_input_stream(Box::new(dummy)).unwrap();
+        // Get a mut ref to it:
         let _ = table.get_input_stream_mut(ix).unwrap();
+        // Fails at wrong type:
+        assert!(matches!(
+            table.get_output_stream_mut(ix),
+            Err(TableError::WrongType)
+        ));
+        // Delete it:
+        let _ = table.delete_input_stream(ix).unwrap();
+        // Now absent from table:
+        assert!(matches!(
+            table.get_input_stream_mut(ix),
+            Err(TableError::NotPresent)
+        ));
     }
 
     #[test]
@@ -173,9 +230,21 @@ mod test {
 
         let dummy = DummyOutputStream;
         let mut table = Table::new();
-        // Show that we can put an output stream in the table, and get a mut
-        // ref back out:
+        // Put it in the table:
         let ix = table.push_output_stream(Box::new(dummy)).unwrap();
+        // Get a mut ref to it:
         let _ = table.get_output_stream_mut(ix).unwrap();
+        // Fails at wrong type:
+        assert!(matches!(
+            table.get_input_stream_mut(ix),
+            Err(TableError::WrongType)
+        ));
+        // Delete it:
+        let _ = table.delete_output_stream(ix).unwrap();
+        // Now absent:
+        assert!(matches!(
+            table.get_output_stream_mut(ix),
+            Err(TableError::NotPresent)
+        ));
     }
 }

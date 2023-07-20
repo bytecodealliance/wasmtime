@@ -87,6 +87,22 @@ impl Table {
         }
     }
 
+    /// Get an [`OccupiedEntry`] corresponding to a table entry, if it exists. This allows you to
+    /// remove or replace the entry based on its contents.
+    pub fn entry(
+        &mut self,
+        key: u32,
+    ) -> Result<
+        std::collections::hash_map::OccupiedEntry<u32, Box<dyn Any + Send + Sync + 'static>>,
+        TableError,
+    > {
+        use std::collections::hash_map::Entry;
+        match self.map.entry(key) {
+            Entry::Occupied(occ) => Ok(occ),
+            Entry::Vacant(_) => Err(TableError::NotPresent),
+        }
+    }
+
     /// Remove a resource at a given index from the table.
     pub fn delete<T: Any + Sized>(&mut self, key: u32) -> Result<T, TableError> {
         // Optimistically attempt to remove the value stored under key
