@@ -63,6 +63,8 @@ macro_rules! foreach_builtin_function {
             malloc_start(vmctx: vmctx);
             ///
             free_start(vmctx: vmctx);
+            ///
+            update_stack_pointer(vmctx: vmctx, value: i32);
         }
     };
 }

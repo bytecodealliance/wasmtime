@@ -597,6 +597,9 @@ pub trait FuncEnvironment: TargetEnvironment {
 
     ///
     fn before_store(&mut self, builder: &mut FunctionBuilder, addr: ir::Value, offset: u64) {}
+
+    ///
+    fn update_global(&mut self, builder: &mut FunctionBuilder, global_index: u32, value: ir::Value) {}
 }
 
 /// An object satisfying the `ModuleEnvironment` trait can be passed as argument to the

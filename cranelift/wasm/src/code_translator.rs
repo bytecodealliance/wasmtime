@@ -208,6 +208,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                     }
                     debug_assert_eq!(ty, builder.func.dfg.value_type(val));
                     builder.ins().store(flags, val, addr, offset);
+                    environ.update_global(builder, *global_index, val);
                 }
                 GlobalVariable::Custom => {
                     let val = state.pop1();

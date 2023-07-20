@@ -194,10 +194,8 @@ impl Instance {
                     const MiB: usize = 1024 * 1024; // 1 MiB
                     // ad-hoc testing seems to show...
                     // TODO: how do we determine this more consistently?
-                    const C_STACK_SIZE: usize = 70863;
-                    let mut valg = Valgrind::new(128 * MiB, C_STACK_SIZE);
-                    valg.update_stack_pointer(0);
-                    valg
+                    // const C_STACK_SIZE: usize = 70863;
+                    Valgrind::new(128 * MiB)
                 },
                 // not sure how to access mem & stack size?
             },
@@ -1140,7 +1138,14 @@ impl Instance {
             ptr::write(to, VMGlobalDefinition::new());
 
             match *init {
-                GlobalInit::I32Const(x) => *(*to).as_i32_mut() = x,
+                GlobalInit::I32Const(x) => {
+                    let index = module.global_index(index);
+                    if index.index() == 0 {
+                        println!("stack size: {}", x);
+                        self.valgrind_state.set_stack_size(x as usize);
+                    }
+                    *(*to).as_i32_mut() = x;
+                }
                 GlobalInit::I64Const(x) => *(*to).as_i64_mut() = x,
                 GlobalInit::F32Const(x) => *(*to).as_f32_bits_mut() = x,
                 GlobalInit::F64Const(x) => *(*to).as_f64_bits_mut() = x,

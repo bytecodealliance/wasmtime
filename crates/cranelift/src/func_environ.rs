@@ -2306,7 +2306,6 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         } else if func_name == "free" {
             self.check_free_exit(builder);
         }
-        // instance.valgrind_on = false;
     }
 
     fn before_load(&mut self, builder: &mut FunctionBuilder, addr: ir::Value, offset: u64) {
@@ -2334,5 +2333,18 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         builder
             .ins()
             .call_indirect(check_store_sig, check_store, &[vmctx, num_bytes, addr, offset_val]);
+    }
+
+    fn update_global(&mut self, builder: &mut FunctionBuilder, global_index: u32, value: ir::Value) {
+        if global_index == 0 {
+            let update_stack_pointer_sig = self.builtin_function_signatures.update_stack_pointer(builder.func);
+            let (vmctx, update_stack_pointer) = self.translate_load_builtin_function_address(
+                &mut builder.cursor(),
+                BuiltinFunctionIndex::update_stack_pointer(),
+            );
+            builder
+                .ins()
+                .call_indirect(update_stack_pointer_sig, update_stack_pointer, &[vmctx, value]);
+        }
     }
 }

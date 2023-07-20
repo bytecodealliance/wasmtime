@@ -30,15 +30,14 @@ pub enum MemState {
 }
 
 impl Valgrind {
-    pub fn new(mem_size: usize, max_stack_size: usize) -> Valgrind {
+    pub fn new(mem_size: usize) -> Valgrind {
         let metadata = vec![MemState::Unallocated; mem_size];
         let mallocs = HashMap::new();
-        let stack_pointer = max_stack_size;
         Valgrind {
             metadata,
             mallocs,
-            stack_pointer,
-            max_stack_size,
+            stack_pointer: 0,
+            max_stack_size: 0,
             flag: true,
         }
     }
@@ -164,6 +163,16 @@ impl Valgrind {
         }
         self.stack_pointer = new_sp;
         Ok(())
+    }
+    pub fn memcheck_on(&mut self) {
+        self.flag = true;
+    }
+    pub fn memcheck_off(&mut self) {
+        self.flag = false;
+    }
+    pub fn set_stack_size(&mut self, stack_size: usize) {
+        self.max_stack_size = stack_size;
+        self.stack_pointer = stack_size;
     }
 }
 

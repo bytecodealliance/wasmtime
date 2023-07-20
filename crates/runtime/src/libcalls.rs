@@ -9,8 +9,6 @@
 //!
 //! * They must only contain basic, raw i32/i64/f32/f64/pointer parameters that
 //!   are safe to pass across the system ABI.
-//! TODO(ssunkin): is the above something that should be taken into account? check_malloc takes
-//! usize as the type for its len arg
 //!
 //! * If any nested function propagates an `Err(trap)` out to the library
 //!   function frame, we need to raise it. This involves some nasty and quite
@@ -493,10 +491,11 @@ unsafe fn new_epoch(instance: &mut Instance) -> Result<u64> {
 unsafe fn check_malloc(instance: &mut Instance, addr: u32, len: u32) -> Result<u32> {
     println!("addr: {} len: {}", addr, len);
     let result = instance.valgrind_state.malloc(addr as usize, len as usize);
-    instance.valgrind_state.flag = true;
+    instance.valgrind_state.memcheck_on();
     if result.is_ok() {
         Ok(0)
     } else {
+        //converting AccessError to u32?
         panic!("failed")
     }
 }
@@ -504,7 +503,7 @@ unsafe fn check_malloc(instance: &mut Instance, addr: u32, len: u32) -> Result<u
 unsafe fn check_free(instance: &mut Instance, addr: u32) -> Result<u32> {
     println!("addr: {}", addr);
     let result = instance.valgrind_state.free(addr as usize);
-    instance.valgrind_state.flag = true;
+    instance.valgrind_state.memcheck_on();
     if result.is_ok() {
         Ok(0)
     } else {
@@ -512,7 +511,9 @@ unsafe fn check_free(instance: &mut Instance, addr: u32) -> Result<u32> {
     }
 }
 
+//should be returning result? error propogation?
 fn check_load(instance: &mut Instance, num_bytes: u32, addr: u32, offset: u32) {
+    // println!("load of size {} at addr {}", num_bytes, addr as usize + offset as usize);
     if instance.valgrind_state.read(addr as usize + offset as usize, num_bytes as usize).is_err() {
         eprintln!("load of size {} failed at addr {}", num_bytes, addr as usize + offset as usize);
     }
@@ -532,6 +533,11 @@ fn malloc_start(instance: &mut Instance) {
 fn free_start(instance: &mut Instance) {
     println!("started free");
     instance.valgrind_state.flag = false;
+}
+
+fn update_stack_pointer(instance: &mut Instance, value: u32) {
+    println!("sp updated to {}", value);
+    instance.valgrind_state.update_stack_pointer(value as usize);
 }
 
 /// This module contains functions which are used for resolving relocations at
