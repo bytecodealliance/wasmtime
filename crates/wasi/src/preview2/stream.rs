@@ -1,3 +1,4 @@
+use crate::preview2::filesystem::{FileInputStream, FileOutputStream};
 use crate::preview2::{Table, TableError};
 use anyhow::Error;
 use bytes::Bytes;
@@ -89,24 +90,75 @@ pub trait HostOutputStream: Send + Sync {
     async fn ready(&mut self) -> Result<(), Error>;
 }
 
-#[async_trait::async_trait]
-pub(crate) trait BlockingInputStream: Send + Sync {
-    async fn read(&mut self, size: usize) -> Result<(Bytes, StreamState), Error>;
-}
-
 pub(crate) enum InternalInputStream {
     Host(Box<dyn HostInputStream>),
-    Blocking(Box<dyn BlockingInputStream>),
-}
-
-#[async_trait::async_trait]
-pub(crate) trait BlockingOutputStream: Send + Sync {
-    async fn write(&mut self, bytes: Bytes) -> Result<(usize, StreamState), Error>;
+    File(FileInputStream),
 }
 
 pub(crate) enum InternalOutputStream {
     Host(Box<dyn HostOutputStream>),
-    Blocking(Box<dyn BlockingOutputStream>),
+    File(FileOutputStream),
+}
+
+pub(crate) trait InternalTableStreamExt {
+    fn push_internal_input_stream(
+        &mut self,
+        istream: InternalInputStream,
+    ) -> Result<u32, TableError>;
+    fn get_internal_input_stream_mut(
+        &mut self,
+        fd: u32,
+    ) -> Result<&mut InternalInputStream, TableError>;
+    fn delete_internal_input_stream(&mut self, fd: u32) -> Result<InternalInputStream, TableError>;
+
+    fn push_internal_output_stream(
+        &mut self,
+        ostream: InternalOutputStream,
+    ) -> Result<u32, TableError>;
+    fn get_internal_output_stream_mut(
+        &mut self,
+        fd: u32,
+    ) -> Result<&mut InternalOutputStream, TableError>;
+    fn delete_internal_output_stream(
+        &mut self,
+        fd: u32,
+    ) -> Result<InternalOutputStream, TableError>;
+}
+impl InternalTableStreamExt for Table {
+    fn push_internal_input_stream(
+        &mut self,
+        istream: InternalInputStream,
+    ) -> Result<u32, TableError> {
+        self.push(Box::new(istream))
+    }
+    fn get_internal_input_stream_mut(
+        &mut self,
+        fd: u32,
+    ) -> Result<&mut InternalInputStream, TableError> {
+        self.get_mut(fd)
+    }
+    fn delete_internal_input_stream(&mut self, fd: u32) -> Result<InternalInputStream, TableError> {
+        self.delete(fd)
+    }
+
+    fn push_internal_output_stream(
+        &mut self,
+        ostream: InternalOutputStream,
+    ) -> Result<u32, TableError> {
+        self.push(Box::new(ostream))
+    }
+    fn get_internal_output_stream_mut(
+        &mut self,
+        fd: u32,
+    ) -> Result<&mut InternalOutputStream, TableError> {
+        self.get_mut(fd)
+    }
+    fn delete_internal_output_stream(
+        &mut self,
+        fd: u32,
+    ) -> Result<InternalOutputStream, TableError> {
+        self.delete(fd)
+    }
 }
 
 /// Extension trait for managing [`HostInputStream`]s and [`HostOutputStream`]s in the [`Table`].
@@ -129,10 +181,10 @@ pub trait TableStreamExt {
 }
 impl TableStreamExt for Table {
     fn push_input_stream(&mut self, istream: Box<dyn HostInputStream>) -> Result<u32, TableError> {
-        self.push(Box::new(InternalInputStream::Host(istream)))
+        self.push_internal_input_stream(InternalInputStream::Host(istream))
     }
     fn get_input_stream_mut(&mut self, fd: u32) -> Result<&mut dyn HostInputStream, TableError> {
-        match self.get_mut::<InternalInputStream>(fd)? {
+        match self.get_internal_input_stream_mut(fd)? {
             InternalInputStream::Host(ref mut h) => Ok(h.as_mut()),
             _ => Err(TableError::WrongType),
         }
@@ -155,10 +207,10 @@ impl TableStreamExt for Table {
         &mut self,
         ostream: Box<dyn HostOutputStream>,
     ) -> Result<u32, TableError> {
-        self.push(Box::new(InternalOutputStream::Host(ostream)))
+        self.push_internal_output_stream(InternalOutputStream::Host(ostream))
     }
     fn get_output_stream_mut(&mut self, fd: u32) -> Result<&mut dyn HostOutputStream, TableError> {
-        match self.get_mut::<InternalOutputStream>(fd)? {
+        match self.get_internal_output_stream_mut(fd)? {
             InternalOutputStream::Host(ref mut h) => Ok(h.as_mut()),
             _ => Err(TableError::WrongType),
         }

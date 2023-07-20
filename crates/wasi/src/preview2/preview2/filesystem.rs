@@ -2,7 +2,7 @@ use crate::preview2::bindings::clocks::wall_clock;
 use crate::preview2::bindings::filesystem::filesystem;
 use crate::preview2::bindings::io::streams;
 use crate::preview2::filesystem::{Dir, File, TableFsExt};
-use crate::preview2::{DirPerms, FilePerms, Table, TableError, TableStreamExt, WasiView};
+use crate::preview2::{DirPerms, FilePerms, Table, TableError, WasiView};
 
 use filesystem::ErrorCode;
 
@@ -762,6 +762,11 @@ impl<T: WasiView> filesystem::Host for T {
         fd: filesystem::Descriptor,
         offset: filesystem::Filesize,
     ) -> Result<streams::InputStream, filesystem::Error> {
+        use crate::preview2::{
+            filesystem::FileInputStream,
+            stream::{InternalInputStream, InternalTableStreamExt},
+        };
+
         // Trap if fd lookup fails:
         let f = self.table().get_file(fd)?;
 
@@ -772,10 +777,12 @@ impl<T: WasiView> filesystem::Host for T {
         let clone = std::sync::Arc::clone(&f.file);
 
         // Create a stream view for it.
-        let reader = crate::preview2::filesystem::FileInputStream::new(clone, offset);
+        let reader = FileInputStream::new(clone, offset);
 
         // Insert the stream view into the table. Trap if the table is full.
-        let index = self.table_mut().push_input_stream(Box::new(reader))?;
+        let index = self
+            .table_mut()
+            .push_internal_input_stream(InternalInputStream::File(reader))?;
 
         Ok(index)
     }
@@ -785,6 +792,11 @@ impl<T: WasiView> filesystem::Host for T {
         fd: filesystem::Descriptor,
         offset: filesystem::Filesize,
     ) -> Result<streams::OutputStream, filesystem::Error> {
+        use crate::preview2::{
+            filesystem::FileOutputStream,
+            stream::{InternalOutputStream, InternalTableStreamExt},
+        };
+
         // Trap if fd lookup fails:
         let f = self.table().get_file(fd)?;
 
@@ -796,10 +808,12 @@ impl<T: WasiView> filesystem::Host for T {
         let clone = std::sync::Arc::clone(&f.file);
 
         // Create a stream view for it.
-        let writer = crate::preview2::filesystem::FileOutputStream::new(clone, offset);
+        let writer = FileOutputStream::write_at(clone, offset);
 
         // Insert the stream view into the table. Trap if the table is full.
-        let index = self.table_mut().push_output_stream(Box::new(writer))?;
+        let index = self
+            .table_mut()
+            .push_internal_output_stream(InternalOutputStream::File(writer))?;
 
         Ok(index)
     }
@@ -808,6 +822,11 @@ impl<T: WasiView> filesystem::Host for T {
         &mut self,
         fd: filesystem::Descriptor,
     ) -> Result<streams::OutputStream, filesystem::Error> {
+        use crate::preview2::{
+            filesystem::FileOutputStream,
+            stream::{InternalOutputStream, InternalTableStreamExt},
+        };
+
         // Trap if fd lookup fails:
         let f = self.table().get_file(fd)?;
 
@@ -818,10 +837,12 @@ impl<T: WasiView> filesystem::Host for T {
         let clone = std::sync::Arc::clone(&f.file);
 
         // Create a stream view for it.
-        let appender = crate::preview2::filesystem::FileAppendStream::new(clone);
+        let appender = FileOutputStream::append(clone);
 
         // Insert the stream view into the table. Trap if the table is full.
-        let index = self.table_mut().push_output_stream(Box::new(appender))?;
+        let index = self
+            .table_mut()
+            .push_internal_output_stream(InternalOutputStream::File(appender))?;
 
         Ok(index)
     }

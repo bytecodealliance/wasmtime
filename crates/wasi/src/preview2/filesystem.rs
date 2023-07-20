@@ -1,6 +1,4 @@
-use crate::preview2::{
-    block_in_place, HostInputStream, HostOutputStream, StreamState, Table, TableError,
-};
+use crate::preview2::{StreamState, Table, TableError};
 use bytes::{Bytes, BytesMut};
 use std::sync::Arc;
 
@@ -121,22 +119,22 @@ impl FileInputStream {
     pub fn new(file: Arc<cap_std::fs::File>, position: u64) -> Self {
         Self { file, position }
     }
-}
 
-#[async_trait::async_trait]
-impl HostInputStream for FileInputStream {
-    fn read(&mut self, size: usize) -> anyhow::Result<(Bytes, StreamState)> {
+    pub async fn read(&mut self, size: usize) -> anyhow::Result<(Bytes, StreamState)> {
         use system_interface::fs::FileIoExt;
-        let mut buf = BytesMut::zeroed(size);
-        let (n, state) = read_result(block_in_place(|| {
-            self.file.read_at(&mut buf, self.position)
-        }))?;
+        let f = Arc::clone(&self.file);
+        let p = self.position;
+        let (r, mut buf) = tokio::task::spawn_blocking(move || {
+            let mut buf = BytesMut::zeroed(size);
+            let r = f.read_at(&mut buf, p);
+            (r, buf)
+        })
+        .await
+        .unwrap();
+        let (n, state) = read_result(r)?;
         buf.truncate(n);
         self.position += n as u64;
         Ok((buf.freeze(), state))
-    }
-    async fn ready(&mut self) -> anyhow::Result<()> {
-        Ok(()) // Always immediately ready - file reads cannot block
     }
 }
 
@@ -161,49 +159,44 @@ pub(crate) fn write_result(
     }
 }
 
+#[derive(Clone, Copy)]
+pub(crate) enum FileOutputMode {
+    Position(u64),
+    Append,
+}
+
 pub(crate) struct FileOutputStream {
     file: Arc<cap_std::fs::File>,
-    position: u64,
+    mode: FileOutputMode,
 }
 impl FileOutputStream {
-    pub fn new(file: Arc<cap_std::fs::File>, position: u64) -> Self {
-        Self { file, position }
+    pub fn write_at(file: Arc<cap_std::fs::File>, position: u64) -> Self {
+        Self {
+            file,
+            mode: FileOutputMode::Position(position),
+        }
     }
-}
-
-#[async_trait::async_trait]
-impl HostOutputStream for FileOutputStream {
+    pub fn append(file: Arc<cap_std::fs::File>) -> Self {
+        Self {
+            file,
+            mode: FileOutputMode::Append,
+        }
+    }
     /// Write bytes. On success, returns the number of bytes written.
-    fn write(&mut self, buf: Bytes) -> anyhow::Result<(usize, StreamState)> {
+    pub async fn write(&mut self, buf: Bytes) -> anyhow::Result<(usize, StreamState)> {
         use system_interface::fs::FileIoExt;
-        let (n, state) = write_result(block_in_place(|| self.file.write_at(&buf, self.position)))?;
-        self.position += n as u64;
+        let f = Arc::clone(&self.file);
+        let m = self.mode;
+        let r = tokio::task::spawn_blocking(move || match m {
+            FileOutputMode::Position(p) => f.write_at(buf.as_ref(), p),
+            FileOutputMode::Append => f.append(buf.as_ref()),
+        })
+        .await
+        .unwrap();
+        let (n, state) = write_result(r)?;
+        if let FileOutputMode::Position(ref mut position) = self.mode {
+            *position += n as u64;
+        }
         Ok((n, state))
-    }
-
-    async fn ready(&mut self) -> anyhow::Result<()> {
-        Ok(()) // Always immediately ready - file writes cannot block
-    }
-}
-
-pub(crate) struct FileAppendStream {
-    file: Arc<cap_std::fs::File>,
-}
-impl FileAppendStream {
-    pub fn new(file: Arc<cap_std::fs::File>) -> Self {
-        Self { file }
-    }
-}
-
-#[async_trait::async_trait]
-impl HostOutputStream for FileAppendStream {
-    /// Write bytes. On success, returns the number of bytes written.
-    fn write(&mut self, buf: Bytes) -> anyhow::Result<(usize, StreamState)> {
-        use system_interface::fs::FileIoExt;
-        Ok(write_result(block_in_place(|| self.file.append(&buf)))?)
-    }
-
-    async fn ready(&mut self) -> anyhow::Result<()> {
-        Ok(()) // Always immediately ready - file appends cannot block
     }
 }
