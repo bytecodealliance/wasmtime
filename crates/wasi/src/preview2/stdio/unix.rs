@@ -29,6 +29,14 @@ impl GlobalStdin {
         HostInputStream::read(&mut *self.0.lock().unwrap(), size)
     }
     fn ready<'a>(&'a self) -> impl Future<Output = Result<(), Error>> + 'a {
+        // Custom Future impl takes the std mutex in each invocation of poll.
+        // Required so we don't have to use a tokio mutex, which we can't take from
+        // inside a sync context in Self::read.
+        //
+        // Taking the lock, creating a fresh ready() future, polling it once, and
+        // then releasing the lock is acceptable here because the ready() future
+        // is only ever going to await on a single channel recv, plus some management
+        // of a state machine (for buffering).
         struct Ready<'a>(&'a GlobalStdin);
         impl<'a> Future for Ready<'a> {
             type Output = Result<(), Error>;
