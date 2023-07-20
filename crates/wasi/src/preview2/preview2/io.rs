@@ -283,12 +283,17 @@ impl<T: WasiView> streams::Host for T {
         let pollable = match self.table_mut().get_internal_input_stream_mut(stream)? {
             InternalInputStream::Host(_) => {
                 fn input_stream_ready<'a>(stream: &'a mut dyn Any) -> PollableFuture<'a> {
+                    // FIXME: This downcast and match should be guaranteed by the checks above,
+                    // however, the table element at index could be changed which would make this
+                    // panic! This is a known problem with referring to other resources in the
+                    // table which must be fixed.
                     let stream = stream
-                        .downcast_mut::<Box<dyn HostInputStream>>()
-                        // Should be impossible because we made sure this will downcast to a
-                        // HostImputStream with table check above.
-                        .expect("downcast to HostInputStream failed");
-                    stream.ready()
+                        .downcast_mut::<InternalInputStream>()
+                        .expect("downcast to InternalInputStream failed");
+                    match *stream {
+                        InternalInputStream::Host(ref mut hs) => hs.ready(),
+                        _ => unreachable!(),
+                    }
                 }
 
                 HostPollable::TableEntry {
@@ -313,12 +318,17 @@ impl<T: WasiView> streams::Host for T {
         let pollable = match self.table_mut().get_internal_output_stream_mut(stream)? {
             InternalOutputStream::Host(_) => {
                 fn output_stream_ready<'a>(stream: &'a mut dyn Any) -> PollableFuture<'a> {
+                    // FIXME: This downcast and match should be guaranteed by the checks above,
+                    // however, the table element at index could be changed which would make this
+                    // panic! This is a known problem with referring to other resources in the
+                    // table which must be fixed.
                     let stream = stream
-                        .downcast_mut::<Box<dyn HostOutputStream>>()
-                        // Should be impossible because we made sure this will downcast to a
-                        // HostOutputStream with table check above.
+                        .downcast_mut::<InternalOutputStream>()
                         .expect("downcast to HostOutputStream failed");
-                    stream.ready()
+                    match *stream {
+                        InternalOutputStream::Host(ref mut hs) => hs.ready(),
+                        _ => unreachable!(),
+                    }
                 }
 
                 HostPollable::TableEntry {

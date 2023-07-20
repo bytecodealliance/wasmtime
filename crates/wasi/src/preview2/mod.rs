@@ -180,14 +180,3 @@ pub(crate) fn block_on<F: std::future::Future>(f: F) -> F::Output {
         }
     }
 }
-
-pub(crate) fn block_in_place<F, R>(f: F) -> R
-where
-    F: FnOnce() -> R,
-{
-    if tokio::runtime::Handle::try_current().is_ok() {
-        tokio::task::block_in_place(f)
-    } else {
-        f()
-    }
-}
