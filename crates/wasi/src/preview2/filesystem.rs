@@ -136,6 +136,20 @@ impl FileInputStream {
         self.position += n as u64;
         Ok((buf.freeze(), state))
     }
+
+    pub async fn skip(&mut self, nelem: usize) -> anyhow::Result<(usize, StreamState)> {
+        let mut nread = 0;
+        let mut state = StreamState::Open;
+
+        let (bs, read_state) = self.read(nelem).await?;
+        // TODO: handle the case where `bs.len()` is less than `nelem`
+        nread += bs.len();
+        if read_state.is_closed() {
+            state = read_state;
+        }
+
+        Ok((nread, state))
+    }
 }
 
 pub(crate) fn read_result(

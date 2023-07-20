@@ -149,7 +149,10 @@ impl<T: WasiView> streams::Host for T {
 
                 Ok((bytes_skipped as u64, state.into()))
             }
-            InternalInputStream::File(_) => todo!(),
+            InternalInputStream::File(s) => {
+                let (bytes_skipped, state) = FileInputStream::skip(s, len as usize).await?;
+                Ok((bytes_skipped as u64, state.into()))
+            }
         }
     }
 
@@ -166,7 +169,10 @@ impl<T: WasiView> streams::Host for T {
 
                 Ok((bytes_skipped as u64, state.into()))
             }
-            InternalInputStream::File(_) => todo!(),
+            InternalInputStream::File(s) => {
+                let (bytes_skipped, state) = FileInputStream::skip(s, len as usize).await?;
+                Ok((bytes_skipped as u64, state.into()))
+            }
         }
     }
 
