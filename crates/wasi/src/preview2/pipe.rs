@@ -113,24 +113,22 @@ impl AsyncReadStream {
     /// provided by this struct, the argument must impl [`tokio::io::AsyncRead`].
     pub fn new<T: tokio::io::AsyncRead + Send + Sync + Unpin + 'static>(mut reader: T) -> Self {
         let (sender, receiver) = tokio::sync::mpsc::channel(1);
-        crate::preview2::in_tokio(|| {
-            tokio::spawn(async move {
-                loop {
-                    use tokio::io::AsyncReadExt;
-                    let mut buf = bytes::BytesMut::with_capacity(4096);
-                    let sent = match reader.read_buf(&mut buf).await {
-                        Ok(nbytes) if nbytes == 0 => {
-                            sender.send(Ok((Bytes::new(), StreamState::Closed))).await
-                        }
-                        Ok(_) => sender.send(Ok((buf.freeze(), StreamState::Open))).await,
-                        Err(e) => sender.send(Err(e)).await,
-                    };
-                    if sent.is_err() {
-                        // no more receiver - stop trying to read
-                        break;
+        crate::preview2::spawn(async move {
+            loop {
+                use tokio::io::AsyncReadExt;
+                let mut buf = bytes::BytesMut::with_capacity(4096);
+                let sent = match reader.read_buf(&mut buf).await {
+                    Ok(nbytes) if nbytes == 0 => {
+                        sender.send(Ok((Bytes::new(), StreamState::Closed))).await
                     }
+                    Ok(_) => sender.send(Ok((buf.freeze(), StreamState::Open))).await,
+                    Err(e) => sender.send(Err(e)).await,
+                };
+                if sent.is_err() {
+                    // no more receiver - stop trying to read
+                    break;
                 }
-            })
+            }
         });
         AsyncReadStream {
             state: StreamState::Open,
@@ -228,40 +226,38 @@ impl AsyncWriteStream {
         let (sender, mut receiver) = tokio::sync::mpsc::channel::<Bytes>(1);
         let (result_sender, result_receiver) = tokio::sync::mpsc::channel(1);
 
-        crate::preview2::in_tokio(|| {
-            tokio::spawn(async move {
-                'outer: loop {
-                    use tokio::io::AsyncWriteExt;
-                    match receiver.recv().await {
-                        Some(mut bytes) => {
-                            while !bytes.is_empty() {
-                                match writer.write_buf(&mut bytes).await {
-                                    Ok(0) => {
-                                        let _ = result_sender.send(Ok(StreamState::Closed)).await;
-                                        break 'outer;
-                                    }
-                                    Ok(_) => {
-                                        if bytes.is_empty() {
-                                            match result_sender.send(Ok(StreamState::Open)).await {
-                                                Ok(_) => break,
-                                                Err(_) => break 'outer,
-                                            }
+        crate::preview2::spawn(async move {
+            'outer: loop {
+                use tokio::io::AsyncWriteExt;
+                match receiver.recv().await {
+                    Some(mut bytes) => {
+                        while !bytes.is_empty() {
+                            match writer.write_buf(&mut bytes).await {
+                                Ok(0) => {
+                                    let _ = result_sender.send(Ok(StreamState::Closed)).await;
+                                    break 'outer;
+                                }
+                                Ok(_) => {
+                                    if bytes.is_empty() {
+                                        match result_sender.send(Ok(StreamState::Open)).await {
+                                            Ok(_) => break,
+                                            Err(_) => break 'outer,
                                         }
-                                        continue;
                                     }
-                                    Err(e) => {
-                                        let _ = result_sender.send(Err(e)).await;
-                                        break 'outer;
-                                    }
+                                    continue;
+                                }
+                                Err(e) => {
+                                    let _ = result_sender.send(Err(e)).await;
+                                    break 'outer;
                                 }
                             }
                         }
-
-                        // The other side of the channel hung up, the task can exit now
-                        None => break 'outer,
                     }
+
+                    // The other side of the channel hung up, the task can exit now
+                    None => break 'outer,
                 }
-            })
+            }
         });
 
         AsyncWriteStream {

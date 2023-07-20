@@ -156,12 +156,16 @@ static RUNTIME: once_cell::sync::Lazy<tokio::runtime::Runtime> = once_cell::sync
         .unwrap()
 });
 
-pub(crate) fn in_tokio<G, F: FnOnce() -> G>(f: F) -> G {
+pub(crate) fn spawn<F, G>(f: F) -> tokio::task::JoinHandle<G>
+where
+    F: std::future::Future<Output = G> + Send + 'static,
+    G: Send + 'static,
+{
     match tokio::runtime::Handle::try_current() {
-        Ok(_) => f(),
+        Ok(_) => tokio::task::spawn(f),
         Err(_) => {
             let _enter = RUNTIME.enter();
-            RUNTIME.block_on(async { f() })
+            tokio::task::spawn(f)
         }
     }
 }
