@@ -1,30 +1,46 @@
-use crate::preview2::{pipe::AsyncReadStream, StreamState};
+use crate::preview2::{pipe::AsyncReadStream, HostInputStream, StreamState};
 use anyhow::Error;
 use bytes::Bytes;
+use futures::ready;
+use std::future::Future;
+use std::io::{self, Read};
+use std::pin::Pin;
+use std::task::{Context, Poll};
 use tokio::io::unix::AsyncFd;
+use tokio::io::{AsyncRead, ReadBuf};
 
 // wasmtime cant use std::sync::OnceLock yet because of a llvm regression in
 // 1.70. when 1.71 is released, we can switch to using std here.
 use once_cell::sync::OnceCell as OnceLock;
 
-// FIXME: we might be able to eliminate this, and block_in_place as well,
-// if we write ready() with an impl Future that takes and releases a std::sync::mutex
-// as part of every poll() invocation. It isnt critical that ready hold the
-// lock for the duration of the polling - using stdin from multiple contexts
-// is already bogus in terms of application functionality, we are just trying to
-// make the implementation typecheck.
-// We use a tokio Mutex because, in ready(), the mutex needs to be held
-// across an await.
-use tokio::sync::Mutex;
+use std::sync::Mutex;
 
 // We need a single global instance of the AsyncFd<Stdin> because creating
 // this instance registers the process's stdin fd with epoll, which will
 // return an error if an fd is registered more than once.
-type GlobalStdin = Mutex<AsyncReadStream>;
+struct GlobalStdin(Mutex<AsyncReadStream>);
 static STDIN: OnceLock<GlobalStdin> = OnceLock::new();
 
-fn create() -> anyhow::Result<GlobalStdin> {
-    Ok(Mutex::new(AsyncReadStream::new(InnerStdin::new()?)))
+impl GlobalStdin {
+    fn new() -> anyhow::Result<Self> {
+        Ok(Self(Mutex::new(AsyncReadStream::new(InnerStdin::new()?))))
+    }
+    fn read(&self, size: usize) -> Result<(Bytes, StreamState), Error> {
+        HostInputStream::read(&mut *self.0.lock().unwrap(), size)
+    }
+    fn ready<'a>(&'a self) -> impl Future<Output = Result<(), Error>> + 'a {
+        struct Ready<'a>(&'a GlobalStdin);
+        impl<'a> Future for Ready<'a> {
+            type Output = Result<(), Error>;
+            fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
+                let mut locked = self.as_mut().0 .0.lock().unwrap();
+                let fut = locked.ready();
+                tokio::pin!(fut);
+                fut.poll(cx)
+            }
+        }
+        Ready(self)
+    }
 }
 
 pub struct Stdin;
@@ -33,11 +49,12 @@ impl Stdin {
         // Creation must be running in a tokio context to succeed.
         match tokio::runtime::Handle::try_current() {
             Ok(_) => STDIN.get_or_init(|| {
-                create().expect("creating AsyncFd for stdin in existing tokio context")
+                GlobalStdin::new().expect("creating AsyncFd for stdin in existing tokio context")
             }),
             Err(_) => STDIN.get_or_init(|| {
                 crate::preview2::block_on(async {
-                    create().expect("creating AsyncFd for stdin in internal tokio context")
+                    GlobalStdin::new()
+                        .expect("creating AsyncFd for stdin in internal tokio context")
                 })
             }),
         }
@@ -51,17 +68,11 @@ pub fn stdin() -> Stdin {
 #[async_trait::async_trait]
 impl crate::preview2::HostInputStream for Stdin {
     fn read(&mut self, size: usize) -> Result<(Bytes, StreamState), Error> {
-        let r = move || Self::get_global().blocking_lock().read(size);
-        // If we are currently in a tokio context, blocking_lock will panic unless inside a
-        // block_in_place:
-        match tokio::runtime::Handle::try_current() {
-            Ok(_) => tokio::task::block_in_place(r),
-            Err(_) => r(),
-        }
+        Self::get_global().read(size)
     }
 
     async fn ready(&mut self) -> Result<(), Error> {
-        Self::get_global().lock().await.ready().await
+        Self::get_global().ready().await
     }
 }
 
@@ -87,12 +98,6 @@ impl InnerStdin {
         })
     }
 }
-
-use futures::ready;
-use std::io::{self, Read};
-use std::pin::Pin;
-use std::task::{Context, Poll};
-use tokio::io::{AsyncRead, ReadBuf};
 
 impl AsyncRead for InnerStdin {
     fn poll_read(
