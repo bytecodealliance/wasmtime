@@ -48,11 +48,7 @@ fn create() -> Mutex<GlobalStdin> {
 pub struct Stdin;
 impl Stdin {
     fn get_global() -> &'static Mutex<GlobalStdin> {
-        // Creation must be running in a tokio context to succeed.
-        match tokio::runtime::Handle::try_current() {
-            Ok(_) => STDIN.get_or_init(|| create()),
-            Err(_) => STDIN.get_or_init(|| crate::preview2::block_on(async { create() })),
-        }
+        STDIN.get_or_init(|| create())
     }
 }
 

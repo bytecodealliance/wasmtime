@@ -170,8 +170,6 @@ where
     }
 }
 
-// FIXME: this can maybe be written in terms of `in_tokio` but i have broken my tools with my
-// tools right now and cant trust my tests
 pub(crate) fn block_on<F: std::future::Future>(f: F) -> F::Output {
     match tokio::runtime::Handle::try_current() {
         Ok(h) => {
