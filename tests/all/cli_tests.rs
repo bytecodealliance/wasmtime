@@ -540,7 +540,9 @@ fn run_cwasm_from_stdin() -> Result<()> {
         .stderr(Stdio::piped())
         .spawn()?;
     let mut stdin = child.stdin.take().unwrap();
-    let t = std::thread::spawn(move || stdin.write_all(&input).unwrap());
+    let t = std::thread::spawn(move || {
+        let _ = stdin.write_all(&input);
+    });
     let output = child.wait_with_output()?;
     if output.status.success() {
         bail!("wasmtime should fail loading precompiled modules from piped files, but suceeded");
