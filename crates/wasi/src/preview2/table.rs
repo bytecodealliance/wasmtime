@@ -87,8 +87,9 @@ impl Table {
         }
     }
 
-    /// Get an [`OccupiedEntry`] corresponding to a table entry, if it exists. This allows you to
-    /// remove or replace the entry based on its contents.
+    /// Get an [`std::collections::hash_map::OccupiedEntry`] corresponding to
+    /// a table entry, if it exists. This allows you to remove or replace the
+    /// entry based on its contents.
     pub fn entry(
         &mut self,
         key: u32,

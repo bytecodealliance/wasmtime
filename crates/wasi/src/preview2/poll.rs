@@ -27,7 +27,7 @@ pub enum HostPollable {
     /// FIXME: we currently aren't tracking the lifetime of the resource along
     /// with this entry, which means that this index could be occupied by something
     /// unrelated by the time we poll it again. This is a crash vector, because
-    /// the [MakeFuture] would panic if the type of the index has changed, and
+    /// the [`MakeFuture`] would panic if the type of the index has changed, and
     /// would yield undefined behavior otherwise. We'll likely fix this by making
     /// the parent resources of a pollable clean up their pollable entries when
     /// they are destroyed (e.g. the HostInputStream would track the pollables it
