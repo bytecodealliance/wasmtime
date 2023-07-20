@@ -60,7 +60,7 @@ impl Stdin {
                 GlobalStdin::new().expect("creating AsyncFd for stdin in existing tokio context")
             }),
             Err(_) => STDIN.get_or_init(|| {
-                crate::preview2::block_on(async {
+                crate::preview2::in_tokio(async {
                     GlobalStdin::new()
                         .expect("creating AsyncFd for stdin in internal tokio context")
                 })

@@ -141,17 +141,17 @@ pub mod sync {
     use crate::preview2::{
         bindings::poll::poll::Host as AsyncHost,
         bindings::sync_io::poll::poll::{self, Pollable},
-        block_on, WasiView,
+        in_tokio, WasiView,
     };
     use anyhow::Result;
 
     impl<T: WasiView> poll::Host for T {
         fn drop_pollable(&mut self, pollable: Pollable) -> Result<()> {
-            block_on(async { AsyncHost::drop_pollable(self, pollable).await })
+            in_tokio(async { AsyncHost::drop_pollable(self, pollable).await })
         }
 
         fn poll_oneoff(&mut self, pollables: Vec<Pollable>) -> Result<Vec<bool>> {
-            block_on(async { AsyncHost::poll_oneoff(self, pollables).await })
+            in_tokio(async { AsyncHost::poll_oneoff(self, pollables).await })
         }
     }
 }

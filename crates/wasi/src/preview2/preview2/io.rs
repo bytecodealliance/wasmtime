@@ -350,7 +350,7 @@ pub mod sync {
         bindings::io::streams::{Host as AsyncHost, StreamStatus as AsyncStreamStatus},
         bindings::sync_io::io::streams::{self, InputStream, OutputStream},
         bindings::sync_io::poll::poll::Pollable,
-        block_on, WasiView,
+        in_tokio, WasiView,
     };
 
     impl From<AsyncStreamStatus> for streams::StreamStatus {
@@ -364,11 +364,11 @@ pub mod sync {
 
     impl<T: WasiView> streams::Host for T {
         fn drop_input_stream(&mut self, stream: InputStream) -> anyhow::Result<()> {
-            block_on(async { AsyncHost::drop_input_stream(self, stream).await })
+            in_tokio(async { AsyncHost::drop_input_stream(self, stream).await })
         }
 
         fn drop_output_stream(&mut self, stream: OutputStream) -> anyhow::Result<()> {
-            block_on(async { AsyncHost::drop_output_stream(self, stream).await })
+            in_tokio(async { AsyncHost::drop_output_stream(self, stream).await })
         }
 
         fn read(
@@ -376,7 +376,7 @@ pub mod sync {
             stream: InputStream,
             len: u64,
         ) -> Result<(Vec<u8>, streams::StreamStatus), streams::Error> {
-            block_on(async { AsyncHost::read(self, stream, len).await })
+            in_tokio(async { AsyncHost::read(self, stream, len).await })
                 .map(|(a, b)| (a, b.into()))
                 .map_err(streams::Error::from)
         }
@@ -386,7 +386,7 @@ pub mod sync {
             stream: InputStream,
             len: u64,
         ) -> Result<(Vec<u8>, streams::StreamStatus), streams::Error> {
-            block_on(async { AsyncHost::blocking_read(self, stream, len).await })
+            in_tokio(async { AsyncHost::blocking_read(self, stream, len).await })
                 .map(|(a, b)| (a, b.into()))
                 .map_err(streams::Error::from)
         }
@@ -396,7 +396,7 @@ pub mod sync {
             stream: OutputStream,
             bytes: Vec<u8>,
         ) -> Result<(u64, streams::StreamStatus), streams::Error> {
-            block_on(async { AsyncHost::write(self, stream, bytes).await })
+            in_tokio(async { AsyncHost::write(self, stream, bytes).await })
                 .map(|(a, b)| (a, b.into()))
                 .map_err(streams::Error::from)
         }
@@ -406,7 +406,7 @@ pub mod sync {
             stream: OutputStream,
             bytes: Vec<u8>,
         ) -> Result<(u64, streams::StreamStatus), streams::Error> {
-            block_on(async { AsyncHost::write(self, stream, bytes).await })
+            in_tokio(async { AsyncHost::write(self, stream, bytes).await })
                 .map(|(a, b)| (a, b.into()))
                 .map_err(streams::Error::from)
         }
@@ -416,7 +416,7 @@ pub mod sync {
             stream: InputStream,
             len: u64,
         ) -> Result<(u64, streams::StreamStatus), streams::Error> {
-            block_on(async { AsyncHost::skip(self, stream, len).await })
+            in_tokio(async { AsyncHost::skip(self, stream, len).await })
                 .map(|(a, b)| (a, b.into()))
                 .map_err(streams::Error::from)
         }
@@ -426,7 +426,7 @@ pub mod sync {
             stream: InputStream,
             len: u64,
         ) -> Result<(u64, streams::StreamStatus), streams::Error> {
-            block_on(async { AsyncHost::blocking_skip(self, stream, len).await })
+            in_tokio(async { AsyncHost::blocking_skip(self, stream, len).await })
                 .map(|(a, b)| (a, b.into()))
                 .map_err(streams::Error::from)
         }
@@ -436,7 +436,7 @@ pub mod sync {
             stream: OutputStream,
             len: u64,
         ) -> Result<(u64, streams::StreamStatus), streams::Error> {
-            block_on(async { AsyncHost::write_zeroes(self, stream, len).await })
+            in_tokio(async { AsyncHost::write_zeroes(self, stream, len).await })
                 .map(|(a, b)| (a, b.into()))
                 .map_err(streams::Error::from)
         }
@@ -446,7 +446,7 @@ pub mod sync {
             stream: OutputStream,
             len: u64,
         ) -> Result<(u64, streams::StreamStatus), streams::Error> {
-            block_on(async { AsyncHost::blocking_write_zeroes(self, stream, len).await })
+            in_tokio(async { AsyncHost::blocking_write_zeroes(self, stream, len).await })
                 .map(|(a, b)| (a, b.into()))
                 .map_err(streams::Error::from)
         }
@@ -457,7 +457,7 @@ pub mod sync {
             dst: OutputStream,
             len: u64,
         ) -> Result<(u64, streams::StreamStatus), streams::Error> {
-            block_on(async { AsyncHost::splice(self, src, dst, len).await })
+            in_tokio(async { AsyncHost::splice(self, src, dst, len).await })
                 .map(|(a, b)| (a, b.into()))
                 .map_err(streams::Error::from)
         }
@@ -468,7 +468,7 @@ pub mod sync {
             dst: OutputStream,
             len: u64,
         ) -> Result<(u64, streams::StreamStatus), streams::Error> {
-            block_on(async { AsyncHost::blocking_splice(self, src, dst, len).await })
+            in_tokio(async { AsyncHost::blocking_splice(self, src, dst, len).await })
                 .map(|(a, b)| (a, b.into()))
                 .map_err(streams::Error::from)
         }
@@ -478,17 +478,17 @@ pub mod sync {
             src: InputStream,
             dst: OutputStream,
         ) -> Result<(u64, streams::StreamStatus), streams::Error> {
-            block_on(async { AsyncHost::forward(self, src, dst).await })
+            in_tokio(async { AsyncHost::forward(self, src, dst).await })
                 .map(|(a, b)| (a, b.into()))
                 .map_err(streams::Error::from)
         }
 
         fn subscribe_to_input_stream(&mut self, stream: InputStream) -> anyhow::Result<Pollable> {
-            block_on(async { AsyncHost::subscribe_to_input_stream(self, stream).await })
+            in_tokio(async { AsyncHost::subscribe_to_input_stream(self, stream).await })
         }
 
         fn subscribe_to_output_stream(&mut self, stream: OutputStream) -> anyhow::Result<Pollable> {
-            block_on(async { AsyncHost::subscribe_to_output_stream(self, stream).await })
+            in_tokio(async { AsyncHost::subscribe_to_output_stream(self, stream).await })
         }
     }
 }
