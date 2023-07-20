@@ -64,9 +64,9 @@ pub fn test_debug_dwarf_lldb() -> Result<()> {
         &[
             "--disable-cache",
             "-g",
-            "tests/all/debug/testsuite/fib-wasm.wasm",
             "--invoke",
             "fib",
+            "tests/all/debug/testsuite/fib-wasm.wasm",
             "3",
         ],
         r#"b fib
@@ -105,9 +105,9 @@ pub fn test_debug_dwarf5_lldb() -> Result<()> {
         &[
             "--disable-cache",
             "-g",
-            "tests/all/debug/testsuite/fib-wasm-dwarf5.wasm",
             "--invoke",
             "fib",
+            "tests/all/debug/testsuite/fib-wasm-dwarf5.wasm",
             "3",
         ],
         r#"b fib
