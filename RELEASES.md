@@ -2,7 +2,7 @@
 
 ## 11.0.0
 
-Unreleased.
+Released 2023-07-20.
 
 ### Changed
 
