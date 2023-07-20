@@ -1214,7 +1214,7 @@ impl<
                 let Some(buf) = first_non_empty_ciovec(ciovs)? else {
                     return Ok(0)
                 };
-                let (n, _stat) = streams::Host::write(self, stream, buf)
+                let (n, _stat) = streams::Host::blocking_write(self, stream, buf)
                     .await
                     .map_err(|_| types::Errno::Io)?;
                 n
