@@ -692,7 +692,7 @@ jobs:
     # explicitly depend on `syn` 1.x.x but it's transitively used through other
     # crates like `tracing` and we're using syntax not supported by the lower
     # bounds of those crates, so it's a bit odd there too.
-    - run: cargo update -p futures-util -p syn
+    - run: cargo update -p futures-util -p syn@1.0.67
 
     # Make sure everything works. Note that this isn't super exhaustive, but
     # it's meant to cover our bases braodly.
