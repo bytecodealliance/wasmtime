@@ -131,7 +131,7 @@ impl Factc {
         for i in 0..wasm_types.component_type_count() {
             let ty = wasm_types.component_type_at(i);
             let ty = match &wasm_types[ty] {
-                wasmparser::types::Type::ComponentFunc(ty) => {
+                wasmparser::types::Type::ComponentFunc(_) => {
                     types.convert_component_func_type(wasm_types, ty)?
                 }
                 _ => continue,

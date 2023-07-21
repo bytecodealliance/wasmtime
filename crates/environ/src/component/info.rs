@@ -47,7 +47,7 @@
 // requirements of embeddings change over time.
 
 use crate::component::*;
-use crate::{EntityIndex, PrimaryMap, SignatureIndex};
+use crate::{EntityIndex, PrimaryMap, SignatureIndex, WasmType};
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 
@@ -147,21 +147,54 @@ pub struct Component {
     /// The number of host transcoder functions needed for strings in adapter
     /// modules.
     pub num_transcoders: u32,
+
+    /// Number of `ResourceNew` initializers in the global initializers list.
+    pub num_resource_new: u32,
+
+    /// Number of `ResourceRep` initializers in the global initializers list.
+    pub num_resource_rep: u32,
+
+    /// Number of `ResourceDrop` initializers in the global initializers list.
+    pub num_resource_drop: u32,
+
+    /// Maximal number of tables that required at runtime for resource-related
+    /// information in this component.
+    pub num_resource_tables: usize,
+
+    /// Total number of resources both imported and defined within this
+    /// component.
+    pub num_resources: u32,
+
+    /// Metadata about imported resources and where they are within the runtime
+    /// imports array.
+    ///
+    /// This map is only as large as the number of imported resources.
+    pub imported_resources: PrimaryMap<ResourceIndex, RuntimeImportIndex>,
+
+    /// Metadata about which component instances defined each resource within
+    /// this component.
+    ///
+    /// This is used to determine which set of instance flags are inspected when
+    /// testing reentrance.
+    pub defined_resource_instances: PrimaryMap<DefinedResourceIndex, RuntimeComponentInstanceIndex>,
 }
 
 impl Component {
-    /// Returns the type of the specified import
-    pub fn type_of_import(&self, import: RuntimeImportIndex, types: &ComponentTypes) -> TypeDef {
-        let (index, path) = &self.imports[import];
-        let (_, mut ty) = self.import_types[*index];
-        for entry in path {
-            let instance_ty = match ty {
-                TypeDef::ComponentInstance(ty) => ty,
-                _ => unreachable!(),
-            };
-            ty = types[instance_ty].exports[entry];
-        }
-        ty
+    /// Attempts to convert a resource index into a defined index.
+    ///
+    /// Returns `None` if `idx` is for an imported resource in this component or
+    /// `Some` if it's a locally defined resource.
+    pub fn defined_resource_index(&self, idx: ResourceIndex) -> Option<DefinedResourceIndex> {
+        let idx = idx
+            .as_u32()
+            .checked_sub(self.imported_resources.len() as u32)?;
+        Some(DefinedResourceIndex::from_u32(idx))
+    }
+
+    /// Converts a defined resource index to a component-local resource index
+    /// which includes all imports.
+    pub fn resource_index(&self, idx: DefinedResourceIndex) -> ResourceIndex {
+        ResourceIndex::from_u32(self.imported_resources.len() as u32 + idx.as_u32())
     }
 }
 
@@ -221,6 +254,23 @@ pub enum GlobalInitializer {
     /// needs to be initialized for a transcoder function and this will later be
     /// used to instantiate an adapter module.
     Transcoder(Transcoder),
+
+    /// Declares a new defined resource within this component.
+    ///
+    /// Contains information about the destructor, for example.
+    Resource(Resource),
+
+    /// Declares a new `resource.new` intrinsic should be initialized.
+    ///
+    /// This will initialize a `VMFuncRef` within the `VMComponentContext` for
+    /// the described resource.
+    ResourceNew(ResourceNew),
+
+    /// Same as `ResourceNew`, but for `resource.rep` intrinsics.
+    ResourceRep(ResourceRep),
+
+    /// Same as `ResourceNew`, but for `resource.drop` intrinsics.
+    ResourceDrop(ResourceDrop),
 }
 
 /// Metadata for extraction of a memory of what's being extracted and where it's
@@ -288,6 +338,10 @@ pub struct LowerImport {
     /// It's guaranteed that this `RuntimeImportIndex` points to a function.
     pub import: RuntimeImportIndex,
 
+    /// The type of the function that is being lowered, as perceived by the
+    /// component doing the lowering.
+    pub lower_ty: TypeFuncIndex,
+
     /// The core wasm signature of the function that's being created.
     pub canonical_abi: SignatureIndex,
 
@@ -347,6 +401,15 @@ pub enum CoreDef {
     /// This refers to a cranelift-generated trampoline which calls to a
     /// host-defined transcoding function.
     Transcoder(RuntimeTranscoderIndex),
+
+    /// This refers to a `resource.new` intrinsic described by the index
+    /// provided. These indices are created through `GlobalInitializer`
+    /// entries.
+    ResourceNew(RuntimeResourceNewIndex),
+    /// Same as `ResourceNew`, but for the `resource.rep` intrinsic
+    ResourceRep(RuntimeResourceRepIndex),
+    /// Same as `ResourceNew`, but for the `resource.drop` intrinsic
+    ResourceDrop(RuntimeResourceDropIndex),
 }
 
 impl<T> From<CoreExport<T>> for CoreDef
@@ -516,3 +579,76 @@ impl Transcoder {
 }
 
 pub use crate::fact::{FixedEncoding, Transcode};
+
+/// Description of a new resource declared in a `GlobalInitializer::Resource`
+/// variant.
+///
+/// This will have the effect of initializing runtime state for this resource,
+/// namely the destructor is fetched and stored.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Resource {
+    /// The local index of the resource being defined.
+    pub index: DefinedResourceIndex,
+    /// Core wasm representation of this resource.
+    pub rep: WasmType,
+    /// Optionally-specified destructor and where it comes from.
+    pub dtor: Option<CoreDef>,
+    /// Which component instance this resource logically belongs to.
+    pub instance: RuntimeComponentInstanceIndex,
+}
+
+/// Description of a `resource.new` intrinsic used to declare and initialize a
+/// new `VMFuncRef` which generates the core wasm function corresponding to
+/// `resource.new`.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ResourceNew {
+    /// The index of the intrinsic being created.
+    pub index: RuntimeResourceNewIndex,
+    /// The resource table that this intrinsic will be modifying.
+    pub resource: TypeResourceTableIndex,
+    /// The core wasm signature of the intrinsic, always `(func (param i32)
+    /// (result i32))`.
+    pub signature: SignatureIndex,
+}
+
+impl ResourceNew {
+    /// Returns the compiled artifact symbol name for this intrinsic.
+    pub fn symbol_name(&self) -> String {
+        let resource = self.resource.as_u32();
+        format!("wasm_component_resource_new{resource}")
+    }
+}
+
+/// Same as `ResourceNew`, but for the `resource.rep` intrinsic.
+#[derive(Debug, Serialize, Deserialize)]
+#[allow(missing_docs)]
+pub struct ResourceRep {
+    pub index: RuntimeResourceRepIndex,
+    pub resource: TypeResourceTableIndex,
+    pub signature: SignatureIndex,
+}
+
+impl ResourceRep {
+    /// Returns the compiled artifact symbol name for this intrinsic.
+    pub fn symbol_name(&self) -> String {
+        let resource = self.resource.as_u32();
+        format!("wasm_component_resource_rep{resource}")
+    }
+}
+
+/// Same as `ResourceNew`, but for the `resource.drop` intrinsic.
+#[derive(Debug, Serialize, Deserialize)]
+#[allow(missing_docs)]
+pub struct ResourceDrop {
+    pub index: RuntimeResourceDropIndex,
+    pub resource: TypeResourceTableIndex,
+    pub signature: SignatureIndex,
+}
+
+impl ResourceDrop {
+    /// Returns the compiled artifact symbol name for this intrinsic.
+    pub fn symbol_name(&self) -> String {
+        let resource = self.resource.as_u32();
+        format!("wasm_component_resource_drop{resource}")
+    }
+}

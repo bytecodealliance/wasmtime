@@ -127,7 +127,6 @@ impl wasmtime_environ::Compiler for Compiler {
 
     fn compile_wasm_to_native_trampoline(
         &self,
-        _translation: &ModuleTranslation<'_>,
         wasm_func_ty: &wasmtime_environ::WasmFuncType,
     ) -> Result<Box<dyn Any + Send>, CompileError> {
         let buffer = self

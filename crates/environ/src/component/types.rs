@@ -1,7 +1,7 @@
 use crate::component::{MAX_FLAT_PARAMS, MAX_FLAT_RESULTS};
 use crate::{
     EntityType, ModuleTypes, ModuleTypesBuilder, PrimaryMap, SignatureIndex, TypeConvert,
-    WasmHeapType,
+    WasmHeapType, WasmType,
 };
 use anyhow::{bail, Result};
 use cranelift_entity::EntityRef;
@@ -15,6 +15,9 @@ use wasmparser::types;
 use wasmtime_component_util::{DiscriminantSize, FlagsSize};
 
 pub use wasmtime_types::StaticModuleIndex;
+
+mod resources;
+pub use resources::ResourcesBuilder;
 
 /// Maximum nesting depth of a type allowed in Wasmtime.
 ///
@@ -108,6 +111,43 @@ indices! {
     /// Index pointing to a list type in the component model.
     pub struct TypeListIndex(u32);
 
+    /// Index pointing to a resource table within a component.
+    ///
+    /// This is a Wasmtime-specific type index which isn't part of the component
+    /// model per-se (or at least not the binary format). This index represents
+    /// a pointer to a table of runtime information tracking state for resources
+    /// within a component. Tables are generated per-resource-per-component
+    /// meaning that if the exact same resource is imported into 4 subcomponents
+    /// then that's 5 tables: one for the defining component and one for each
+    /// subcomponent.
+    ///
+    /// All resource-related intrinsics operate on table-local indices which
+    /// indicate which table the intrinsic is modifying. Each resource table has
+    /// an origin resource type (defined by `ResourceIndex`) along with a
+    /// component instance that it's recorded for.
+    pub struct TypeResourceTableIndex(u32);
+
+    /// Index pointing to a resource within a component.
+    ///
+    /// This index space covers all unique resource type definitions. For
+    /// example all unique imports come first and then all locally-defined
+    /// resources come next. Note that this does not count the number of runtime
+    /// tables required to track resources (that's `TypeResourceTableIndex`
+    /// instead). Instead this is a count of the number of unique
+    /// `(type (resource (rep ..)))` declarations within a component, plus
+    /// imports.
+    ///
+    /// This is then used for correlating various information such as
+    /// destructors, origin information, etc.
+    pub struct ResourceIndex(u32);
+
+    /// Index pointing to a local resource defined within a component.
+    ///
+    /// This is similar to `FooIndex` and `DefinedFooIndex` for core wasm and
+    /// the idea here is that this is guaranteed to be a wasm-defined resource
+    /// which is connected to a component instance for example.
+    pub struct DefinedResourceIndex(u32);
+
     // ========================================================================
     // Index types used to identify modules and components during compilation.
 
@@ -178,6 +218,16 @@ indices! {
     /// This is used to index the `VMFuncRef` slots reserved for string encoders
     /// which reference linear memories defined within a component.
     pub struct RuntimeTranscoderIndex(u32);
+
+    /// Index into the list of `resource.new` intrinsics used by a component.
+    ///
+    /// This is used to allocate space in `VMComponentContext` and record
+    /// `VMFuncRef`s corresponding to the definition of the intrinsic.
+    pub struct RuntimeResourceNewIndex(u32);
+    /// Same as `RuntimeResourceNewIndex`, but for `resource.rep`
+    pub struct RuntimeResourceDropIndex(u32);
+    /// Same as `RuntimeResourceNewIndex`, but for `resource.drop`
+    pub struct RuntimeResourceRepIndex(u32);
 }
 
 // Reexport for convenience some core-wasm indices which are also used in the
@@ -186,14 +236,14 @@ pub use crate::{FuncIndex, GlobalIndex, MemoryIndex, TableIndex, TypeIndex};
 
 /// Equivalent of `EntityIndex` but for the component model instead of core
 /// wasm.
-#[derive(Debug, Clone, Copy, Deserialize, Serialize)]
+#[derive(Debug, Clone, Copy)]
 #[allow(missing_docs)]
 pub enum ComponentItem {
     Func(ComponentFuncIndex),
     Module(ModuleIndex),
     Component(ComponentIndex),
     ComponentInstance(ComponentInstanceIndex),
-    Type(TypeDef),
+    Type(wasmparser::types::TypeId),
 }
 
 /// Runtime information about the type information contained within a component.
@@ -216,6 +266,7 @@ pub struct ComponentTypes {
     unions: PrimaryMap<TypeUnionIndex, TypeUnion>,
     options: PrimaryMap<TypeOptionIndex, TypeOption>,
     results: PrimaryMap<TypeResultIndex, TypeResult>,
+    resource_tables: PrimaryMap<TypeResourceTableIndex, TypeResourceTable>,
 
     module_types: ModuleTypes,
 }
@@ -238,7 +289,9 @@ impl ComponentTypes {
             InterfaceType::U32
             | InterfaceType::S32
             | InterfaceType::Float32
-            | InterfaceType::Char => &CanonicalAbiInfo::SCALAR4,
+            | InterfaceType::Char
+            | InterfaceType::Own(_)
+            | InterfaceType::Borrow(_) => &CanonicalAbiInfo::SCALAR4,
 
             InterfaceType::U64 | InterfaceType::S64 | InterfaceType::Float64 => {
                 &CanonicalAbiInfo::SCALAR8
@@ -255,6 +308,25 @@ impl ComponentTypes {
             InterfaceType::Option(i) => &self[*i].abi,
             InterfaceType::Result(i) => &self[*i].abi,
         }
+    }
+
+    /// Smaller helper method to find a `SignatureIndex` which corresponds to
+    /// the `resource.drop` intrinsic in components, namely a core wasm function
+    /// type which takes one `i32` argument and has no results.
+    ///
+    /// This is a bit of a hack right now as ideally this find operation
+    /// wouldn't be needed and instead the `SignatureIndex` itself would be
+    /// threaded through appropriately, but that's left for a future
+    /// refactoring. Try not to lean too hard on this method though.
+    pub fn find_resource_drop_signature(&self) -> Option<SignatureIndex> {
+        self.module_types
+            .wasm_signatures()
+            .find(|(_, sig)| {
+                sig.params().len() == 1
+                    && sig.returns().len() == 0
+                    && sig.params()[0] == WasmType::I32
+            })
+            .map(|(i, _)| i)
     }
 }
 
@@ -283,6 +355,7 @@ impl_index! {
     impl Index<TypeOptionIndex> for ComponentTypes { TypeOption => options }
     impl Index<TypeResultIndex> for ComponentTypes { TypeResult => results }
     impl Index<TypeListIndex> for ComponentTypes { TypeList => lists }
+    impl Index<TypeResourceTableIndex> for ComponentTypes { TypeResourceTable => resource_tables }
 }
 
 // Additionally forward anything that can index `ModuleTypes` to `ModuleTypes`
@@ -322,10 +395,7 @@ pub struct ComponentTypesBuilder {
     // as opposed to `ComponentTypes`.
     type_info: TypeInformationCache,
 
-    defined_types_cache: HashMap<types::TypeId, InterfaceType>,
-    module_types_cache: HashMap<types::TypeId, TypeModuleIndex>,
-    component_types_cache: HashMap<types::TypeId, TypeComponentIndex>,
-    instance_types_cache: HashMap<types::TypeId, TypeComponentInstanceIndex>,
+    resources: ResourcesBuilder,
 }
 
 macro_rules! intern_and_fill_flat_types {
@@ -364,13 +434,31 @@ impl ComponentTypesBuilder {
         &mut self.module_types
     }
 
+    /// Returns the number of resource tables allocated so far, or the maximum
+    /// `TypeResourceTableIndex`.
+    pub fn num_resource_tables(&self) -> usize {
+        self.component_types.resource_tables.len()
+    }
+
+    /// Returns a mutable reference to the underlying `ResourcesBuilder`.
+    pub fn resources_mut(&mut self) -> &mut ResourcesBuilder {
+        &mut self.resources
+    }
+
+    /// Work around the borrow checker to borrow two sub-fields simultaneously
+    /// externally.
+    pub fn resources_mut_and_types(&mut self) -> (&mut ResourcesBuilder, &ComponentTypes) {
+        (&mut self.resources, &self.component_types)
+    }
+
     /// Converts a wasmparser `ComponentFuncType` into Wasmtime's type
     /// representation.
     pub fn convert_component_func_type(
         &mut self,
         types: types::TypesRef<'_>,
-        ty: &types::ComponentFuncType,
+        id: types::TypeId,
     ) -> Result<TypeFuncIndex> {
+        let ty = types[id].unwrap_component_func();
         let params = ty
             .params
             .iter()
@@ -406,12 +494,11 @@ impl ComponentTypesBuilder {
                 TypeDef::ComponentInstance(self.convert_instance(types, id)?)
             }
             types::ComponentEntityType::Func(id) => {
-                let id = types[id].unwrap_component_func();
-                let idx = self.convert_component_func_type(types, id)?;
-                TypeDef::ComponentFunc(idx)
+                TypeDef::ComponentFunc(self.convert_component_func_type(types, id)?)
             }
-            types::ComponentEntityType::Type { created, .. } => match &types[created] {
+            types::ComponentEntityType::Type { created, .. } => match types[created] {
                 types::Type::Defined(_) => TypeDef::Interface(self.defined_type(types, created)?),
+                types::Type::Resource(_) => TypeDef::Resource(self.resource_id(types, created)),
                 _ => bail!("unsupported type export"),
             },
             types::ComponentEntityType::Value(_) => bail!("values not supported"),
@@ -431,13 +518,13 @@ impl ComponentTypesBuilder {
             types::Type::ComponentInstance(_) => {
                 TypeDef::ComponentInstance(self.convert_instance(types, id)?)
             }
-            types::Type::ComponentFunc(f) => {
-                TypeDef::ComponentFunc(self.convert_component_func_type(types, f)?)
+            types::Type::ComponentFunc(_) => {
+                TypeDef::ComponentFunc(self.convert_component_func_type(types, id)?)
             }
             types::Type::Instance(_) | types::Type::Sub(_) => {
                 unreachable!()
             }
-            types::Type::Resource(_) => unimplemented!(),
+            types::Type::Resource(_) => TypeDef::Resource(self.resource_id(types, id)),
         })
     }
 
@@ -446,9 +533,6 @@ impl ComponentTypesBuilder {
         types: types::TypesRef<'_>,
         id: types::TypeId,
     ) -> Result<TypeComponentIndex> {
-        if let Some(ret) = self.component_types_cache.get(&id) {
-            return Ok(*ret);
-        }
         let ty = types[id].unwrap_component();
         let mut result = TypeComponent::default();
         for (name, ty) in ty.imports.iter() {
@@ -463,9 +547,7 @@ impl ComponentTypesBuilder {
                 self.convert_component_entity_type(types, *ty)?,
             );
         }
-        let ret = self.component_types.components.push(result);
-        self.component_types_cache.insert(id, ret);
-        Ok(ret)
+        Ok(self.component_types.components.push(result))
     }
 
     fn convert_instance(
@@ -473,9 +555,6 @@ impl ComponentTypesBuilder {
         types: types::TypesRef<'_>,
         id: types::TypeId,
     ) -> Result<TypeComponentInstanceIndex> {
-        if let Some(ret) = self.instance_types_cache.get(&id) {
-            return Ok(*ret);
-        }
         let ty = types[id].unwrap_component_instance();
         let mut result = TypeComponentInstance::default();
         for (name, ty) in ty.exports.iter() {
@@ -484,9 +563,7 @@ impl ComponentTypesBuilder {
                 self.convert_component_entity_type(types, *ty)?,
             );
         }
-        let ret = self.component_types.component_instances.push(result);
-        self.instance_types_cache.insert(id, ret);
-        Ok(ret)
+        Ok(self.component_types.component_instances.push(result))
     }
 
     fn convert_module(
@@ -494,10 +571,7 @@ impl ComponentTypesBuilder {
         types: types::TypesRef<'_>,
         id: types::TypeId,
     ) -> Result<TypeModuleIndex> {
-        if let Some(ret) = self.module_types_cache.get(&id) {
-            return Ok(*ret);
-        }
-        let ty = types[id].unwrap_module();
+        let ty = &types[id].unwrap_module();
         let mut result = TypeModule::default();
         for ((module, field), ty) in ty.imports.iter() {
             result.imports.insert(
@@ -510,9 +584,7 @@ impl ComponentTypesBuilder {
                 .exports
                 .insert(name.clone(), self.entity_type(types, ty)?);
         }
-        let ret = self.component_types.modules.push(result);
-        self.module_types_cache.insert(id, ret);
-        Ok(ret)
+        Ok(self.component_types.modules.push(result))
     }
 
     fn entity_type(
@@ -538,9 +610,6 @@ impl ComponentTypesBuilder {
         types: types::TypesRef<'_>,
         id: types::TypeId,
     ) -> Result<InterfaceType> {
-        if let Some(ty) = self.defined_types_cache.get(&id) {
-            return Ok(*ty);
-        }
         let ret = match types[id].unwrap_defined() {
             types::ComponentDefinedType::Primitive(ty) => ty.into(),
             types::ComponentDefinedType::Record(e) => {
@@ -564,15 +633,15 @@ impl ComponentTypesBuilder {
             types::ComponentDefinedType::Result { ok, err } => {
                 InterfaceType::Result(self.result_type(types, ok, err)?)
             }
-            types::ComponentDefinedType::Own(_) | types::ComponentDefinedType::Borrow(_) => {
-                unimplemented!("resource types")
+            types::ComponentDefinedType::Own(r) => InterfaceType::Own(self.resource_id(types, *r)),
+            types::ComponentDefinedType::Borrow(r) => {
+                InterfaceType::Borrow(self.resource_id(types, *r))
             }
         };
         let info = self.type_information(&ret);
         if info.depth > MAX_TYPE_DEPTH {
             bail!("type nesting is too deep");
         }
-        self.defined_types_cache.insert(id, ret);
         Ok(ret)
     }
 
@@ -734,6 +803,17 @@ impl ComponentTypesBuilder {
         Ok(self.add_list_type(TypeList { element }))
     }
 
+    /// Converts a wasmparser `id`, which must point to a resource, to its
+    /// corresponding `TypeResourceTableIndex`.
+    pub fn resource_id(
+        &mut self,
+        types: types::TypesRef<'_>,
+        id: types::TypeId,
+    ) -> TypeResourceTableIndex {
+        let id = types[id].unwrap_resource();
+        self.resources.convert(id, &mut self.component_types)
+    }
+
     /// Interns a new function type within this type information.
     pub fn add_func_type(&mut self, ty: TypeFunc) -> TypeFuncIndex {
         intern(&mut self.functions, &mut self.component_types.functions, ty)
@@ -807,7 +887,9 @@ impl ComponentTypesBuilder {
             | InterfaceType::S16
             | InterfaceType::U32
             | InterfaceType::S32
-            | InterfaceType::Char => {
+            | InterfaceType::Char
+            | InterfaceType::Own(_)
+            | InterfaceType::Borrow(_) => {
                 static INFO: TypeInformation = TypeInformation::primitive(FlatType::I32);
                 &INFO
             }
@@ -891,6 +973,11 @@ pub enum TypeDef {
     Module(TypeModuleIndex),
     /// A core wasm function using only core wasm types.
     CoreFunc(SignatureIndex),
+    /// A resource type which operates on the specified resource table.
+    ///
+    /// Note that different resource tables may point to the same underlying
+    /// actual resource type, but that's a private detail.
+    Resource(TypeResourceTableIndex),
 }
 
 // NB: Note that maps below are stored as an `IndexMap` now but the order
@@ -979,6 +1066,8 @@ pub enum InterfaceType {
     Union(TypeUnionIndex),
     Option(TypeOptionIndex),
     Result(TypeResultIndex),
+    Own(TypeResourceTableIndex),
+    Borrow(TypeResourceTableIndex),
 }
 
 impl From<&wasmparser::PrimitiveValType> for InterfaceType {
@@ -1457,6 +1546,19 @@ pub struct TypeResult {
     pub abi: CanonicalAbiInfo,
     /// Byte information about this variant type.
     pub info: VariantInfo,
+}
+
+/// Metadata about a resource table added to a component.
+#[derive(Serialize, Deserialize, Clone, Hash, Eq, PartialEq, Debug)]
+pub struct TypeResourceTable {
+    /// The original resource that this table contains.
+    ///
+    /// This is used when destroying resources within this table since this
+    /// original definition will know how to execute destructors.
+    pub ty: ResourceIndex,
+
+    /// The component instance that contains this resource table.
+    pub instance: RuntimeComponentInstanceIndex,
 }
 
 /// Shape of a "list" interface type.

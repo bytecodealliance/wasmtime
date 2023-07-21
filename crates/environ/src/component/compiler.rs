@@ -1,4 +1,6 @@
-use crate::component::{Component, ComponentTypes, LowerImport, Transcoder};
+use crate::component::{
+    Component, ComponentTypes, LowerImport, ResourceDrop, ResourceNew, ResourceRep, Transcoder,
+};
 use crate::WasmFuncType;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
@@ -79,6 +81,38 @@ pub trait ComponentCompiler: Send + Sync {
         &self,
         component: &Component,
         transcoder: &Transcoder,
+        types: &ComponentTypes,
+    ) -> Result<AllCallFunc<Box<dyn Any + Send>>>;
+
+    /// Compiles a trampoline to use as the `resource.new` intrinsic in the
+    /// component model.
+    ///
+    /// The generated trampoline will invoke a host-defined libcall that will do
+    /// all the heavy lifting for this intrinsic, so this is primarily bridging
+    /// ABIs and inserting a `TypeResourceTableIndex` argument so the host
+    /// has the context about where this is coming from.
+    fn compile_resource_new(
+        &self,
+        component: &Component,
+        resource: &ResourceNew,
+        types: &ComponentTypes,
+    ) -> Result<AllCallFunc<Box<dyn Any + Send>>>;
+
+    /// Same as `compile_resource_new` except for the `resource.rep` intrinsic.
+    fn compile_resource_rep(
+        &self,
+        component: &Component,
+        resource: &ResourceRep,
+        types: &ComponentTypes,
+    ) -> Result<AllCallFunc<Box<dyn Any + Send>>>;
+
+    /// Similar to `compile_resource_new` but this additionally handles the
+    /// return value which may involve executing destructors and checking for
+    /// reentrance traps.
+    fn compile_resource_drop(
+        &self,
+        component: &Component,
+        resource: &ResourceDrop,
         types: &ComponentTypes,
     ) -> Result<AllCallFunc<Box<dyn Any + Send>>>;
 }

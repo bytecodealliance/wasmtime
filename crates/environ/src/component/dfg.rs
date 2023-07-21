@@ -28,7 +28,7 @@
 //! fused adapters, what arguments make their way to core wasm modules, etc.
 
 use crate::component::*;
-use crate::{EntityIndex, EntityRef, PrimaryMap, SignatureIndex};
+use crate::{EntityIndex, EntityRef, PrimaryMap, SignatureIndex, WasmType};
 use indexmap::IndexMap;
 use std::collections::HashMap;
 use std::hash::Hash;
@@ -108,6 +108,50 @@ pub struct ComponentDfg {
     /// as the core wasm index of the export corresponding to the lowered
     /// version of the adapter.
     pub adapter_paritionings: PrimaryMap<AdapterId, (AdapterModuleId, EntityIndex)>,
+
+    /// Defined resources in this component sorted by index with metadata about
+    /// each resource.
+    ///
+    /// Note that each index here is a unique resource, and that may mean it was
+    /// the same component instantiated twice for example.
+    pub resources: PrimaryMap<DefinedResourceIndex, Resource>,
+
+    /// Metadata about all imported resources into this component. This records
+    /// both how many imported resources there are (the size of this map) along
+    /// with what the corresponding runtime import is.
+    pub imported_resources: PrimaryMap<ResourceIndex, RuntimeImportIndex>,
+
+    /// The total number of resource tables that will be used by this component,
+    /// currently the number of unique `TypeResourceTableIndex` allocations for
+    /// this component.
+    pub num_resource_tables: usize,
+
+    /// An ordered list of side effects induced by instantiating this component.
+    ///
+    /// Currently all side effects are either instantiating core wasm modules or
+    /// declaring a resource. These side effects affect the dataflow processing
+    /// of this component by idnicating what order operations should be
+    /// performed during instantiation.
+    pub side_effects: Vec<SideEffect>,
+}
+
+/// Possible side effects that are possible with instantiating this component.
+pub enum SideEffect {
+    /// A core wasm instance was created.
+    ///
+    /// Instantiation is side-effectful due to the presence of constructs such
+    /// as traps and the core wasm `start` function which may call component
+    /// imports. Instantiation order from the original component must be done in
+    /// the same order.
+    Instance(InstanceId),
+
+    /// A resource was declared in this component.
+    ///
+    /// This is a bit less side-effectful than instantiation but this serves as
+    /// the order in which resources are initialized in a component with their
+    /// destructors. Destructors are loaded from core wasm instances (or
+    /// lowerings) which are produced by prior side-effectful operations.
+    Resource(DefinedResourceIndex),
 }
 
 macro_rules! id {
@@ -165,6 +209,10 @@ pub enum CoreDef {
     InstanceFlags(RuntimeComponentInstanceIndex),
     Transcoder(TranscoderId),
 
+    ResourceNew(TypeResourceTableIndex, SignatureIndex),
+    ResourceRep(TypeResourceTableIndex, SignatureIndex),
+    ResourceDrop(TypeResourceTableIndex, SignatureIndex),
+
     /// This is a special variant not present in `info::CoreDef` which
     /// represents that this definition refers to a fused adapter function. This
     /// adapter is fully processed after the initial translation and
@@ -213,6 +261,7 @@ pub struct LowerImport {
     pub import: RuntimeImportIndex,
     pub canonical_abi: SignatureIndex,
     pub options: CanonicalOptions,
+    pub lower_ty: TypeFuncIndex,
 }
 
 /// Same as `info::CanonicalOptions`
@@ -236,6 +285,14 @@ pub struct Transcoder {
     pub to: MemoryId,
     pub to64: bool,
     pub signature: SignatureIndex,
+}
+
+/// Same as `info::Resource`
+#[allow(missing_docs)]
+pub struct Resource {
+    pub rep: WasmType,
+    pub dtor: Option<CoreDef>,
+    pub instance: RuntimeComponentInstanceIndex,
 }
 
 /// A helper structure to "intern" and deduplicate values of type `V` with an
@@ -310,17 +367,20 @@ impl ComponentDfg {
             runtime_always_trap: Default::default(),
             runtime_lowerings: Default::default(),
             runtime_transcoders: Default::default(),
+            runtime_resource_new: Default::default(),
+            runtime_resource_rep: Default::default(),
+            runtime_resource_drop: Default::default(),
         };
 
-        // First the instances are all processed for instantiation. This will,
-        // recursively, handle any arguments necessary for each instance such as
-        // instantiation of adapter modules.
-        for (id, instance) in linearize.dfg.instances.key_map.iter() {
-            linearize.instantiate(id, instance);
+        // Handle all side effects of this component in the order that they're
+        // defined. This will, for example, process all instantiations necessary
+        // of core wasm modules.
+        for item in linearize.dfg.side_effects.iter() {
+            linearize.side_effect(item);
         }
 
-        // Second the exports of the instance are handled which will likely end
-        // up creating some lowered imports, perhaps some saved modules, etc.
+        // Next the exports of the instance are handled which will likely end up
+        // creating some lowered imports, perhaps some saved modules, etc.
         let exports = self
             .exports
             .iter()
@@ -342,11 +402,24 @@ impl ComponentDfg {
             num_always_trap: linearize.runtime_always_trap.len() as u32,
             num_lowerings: linearize.runtime_lowerings.len() as u32,
             num_transcoders: linearize.runtime_transcoders.len() as u32,
+            num_resource_new: linearize.runtime_resource_new.len() as u32,
+            num_resource_rep: linearize.runtime_resource_rep.len() as u32,
+            num_resource_drop: linearize.runtime_resource_drop.len() as u32,
 
             imports: self.imports,
             import_types: self.import_types,
             num_runtime_component_instances: self.num_runtime_component_instances,
+            num_resource_tables: self.num_resource_tables,
+            num_resources: (self.resources.len() + self.imported_resources.len()) as u32,
+            imported_resources: self.imported_resources,
+            defined_resource_instances: self.resources.iter().map(|(_, r)| r.instance).collect(),
         }
+    }
+
+    /// Converts the provided defined index into a normal index, adding in the
+    /// number of imported resources.
+    pub fn resource_index(&self, defined: DefinedResourceIndex) -> ResourceIndex {
+        ResourceIndex::from_u32(defined.as_u32() + (self.imported_resources.len() as u32))
     }
 }
 
@@ -360,6 +433,9 @@ struct LinearizeDfg<'a> {
     runtime_always_trap: HashMap<AlwaysTrapId, RuntimeAlwaysTrapIndex>,
     runtime_lowerings: HashMap<LowerImportId, LoweredIndex>,
     runtime_transcoders: HashMap<TranscoderId, RuntimeTranscoderIndex>,
+    runtime_resource_new: HashMap<TypeResourceTableIndex, RuntimeResourceNewIndex>,
+    runtime_resource_rep: HashMap<TypeResourceTableIndex, RuntimeResourceRepIndex>,
+    runtime_resource_drop: HashMap<TypeResourceTableIndex, RuntimeResourceDropIndex>,
 }
 
 #[derive(Copy, Clone, Hash, Eq, PartialEq)]
@@ -369,6 +445,17 @@ enum RuntimeInstance {
 }
 
 impl LinearizeDfg<'_> {
+    fn side_effect(&mut self, effect: &SideEffect) {
+        match effect {
+            SideEffect::Instance(i) => {
+                self.instantiate(*i, &self.dfg.instances[*i]);
+            }
+            SideEffect::Resource(i) => {
+                self.resource(*i, &self.dfg.resources[*i]);
+            }
+        }
+    }
+
     fn instantiate(&mut self, instance: InstanceId, args: &Instance) {
         log::trace!("creating instance {instance:?}");
         let instantiation = match args {
@@ -396,6 +483,17 @@ impl LinearizeDfg<'_> {
             .runtime_instances
             .insert(RuntimeInstance::Normal(instance), index);
         assert!(prev.is_none());
+    }
+
+    fn resource(&mut self, index: DefinedResourceIndex, resource: &Resource) {
+        let dtor = resource.dtor.as_ref().map(|dtor| self.core_def(dtor));
+        self.initializers
+            .push(GlobalInitializer::Resource(info::Resource {
+                dtor,
+                index,
+                rep: resource.rep,
+                instance: resource.instance,
+            }));
     }
 
     fn export(&mut self, export: &Export) -> info::Export {
@@ -468,6 +566,11 @@ impl LinearizeDfg<'_> {
             CoreDef::InstanceFlags(i) => info::CoreDef::InstanceFlags(*i),
             CoreDef::Adapter(id) => info::CoreDef::Export(self.adapter(*id)),
             CoreDef::Transcoder(id) => info::CoreDef::Transcoder(self.runtime_transcoder(*id)),
+            CoreDef::ResourceNew(id, ty) => info::CoreDef::ResourceNew(self.resource_new(*id, *ty)),
+            CoreDef::ResourceRep(id, ty) => info::CoreDef::ResourceRep(self.resource_rep(*id, *ty)),
+            CoreDef::ResourceDrop(id, ty) => {
+                info::CoreDef::ResourceDrop(self.resource_drop(*id, *ty))
+            }
         }
     }
 
@@ -492,14 +595,15 @@ impl LinearizeDfg<'_> {
             |me, id| {
                 let info = &me.dfg.lowerings[id];
                 let options = me.options(&info.options);
-                (info.import, info.canonical_abi, options)
+                (info.import, info.canonical_abi, options, info.lower_ty)
             },
-            |index, (import, canonical_abi, options)| {
+            |index, (import, canonical_abi, options, lower_ty)| {
                 GlobalInitializer::LowerImport(info::LowerImport {
                     index,
                     import,
                     canonical_abi,
                     options,
+                    lower_ty,
                 })
             },
         )
@@ -528,6 +632,63 @@ impl LinearizeDfg<'_> {
                     from64,
                     to,
                     to64,
+                    signature,
+                })
+            },
+        )
+    }
+
+    fn resource_new(
+        &mut self,
+        id: TypeResourceTableIndex,
+        signature: SignatureIndex,
+    ) -> RuntimeResourceNewIndex {
+        self.intern(
+            id,
+            |me| &mut me.runtime_resource_new,
+            |_me, id| id,
+            |index, resource| {
+                GlobalInitializer::ResourceNew(info::ResourceNew {
+                    index,
+                    resource,
+                    signature,
+                })
+            },
+        )
+    }
+
+    fn resource_rep(
+        &mut self,
+        id: TypeResourceTableIndex,
+        signature: SignatureIndex,
+    ) -> RuntimeResourceRepIndex {
+        self.intern(
+            id,
+            |me| &mut me.runtime_resource_rep,
+            |_me, id| id,
+            |index, resource| {
+                GlobalInitializer::ResourceRep(info::ResourceRep {
+                    index,
+                    resource,
+                    signature,
+                })
+            },
+        )
+    }
+
+    fn resource_drop(
+        &mut self,
+        id: TypeResourceTableIndex,
+        signature: SignatureIndex,
+    ) -> RuntimeResourceDropIndex {
+        self.intern(
+            id,
+            |me| &mut me.runtime_resource_drop,
+            |_me, ty| ty,
+            |index, resource| {
+                GlobalInitializer::ResourceDrop(info::ResourceDrop {
+                    index,
+                    resource,
                     signature,
                 })
             },

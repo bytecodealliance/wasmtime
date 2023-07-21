@@ -209,7 +209,6 @@ pub trait Compiler: Send + Sync {
     /// Wasm-to-host transition (e.g. registers used for fast stack walking).
     fn compile_wasm_to_native_trampoline(
         &self,
-        translation: &ModuleTranslation<'_>,
         wasm_func_ty: &WasmFuncType,
     ) -> Result<Box<dyn Any + Send>, CompileError>;
 

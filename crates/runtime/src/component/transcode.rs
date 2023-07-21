@@ -1,10 +1,69 @@
 //! Implementation of string transcoding required by the component model.
 
+use crate::component::{ComponentInstance, VMComponentContext};
 use anyhow::{anyhow, Result};
 use std::cell::Cell;
 use std::slice;
+use wasmtime_environ::component::TypeResourceTableIndex;
 
 const UTF16_TAG: usize = 1 << 31;
+
+#[repr(C)] // this is read by Cranelift code so it's layout must be as-written
+pub struct VMComponentLibcalls {
+    builtins: VMComponentBuiltins,
+    transcoders: VMBuiltinTranscodeArray,
+}
+
+impl VMComponentLibcalls {
+    pub const INIT: VMComponentLibcalls = VMComponentLibcalls {
+        builtins: VMComponentBuiltins::INIT,
+        transcoders: VMBuiltinTranscodeArray::INIT,
+    };
+}
+
+macro_rules! signature {
+    (@ty size) => (usize);
+    (@ty size_pair) => (usize);
+    (@ty ptr_u8) => (*mut u8);
+    (@ty ptr_u16) => (*mut u16);
+    (@ty ptr_size) => (*mut usize);
+    (@ty u32) => (u32);
+    (@ty u64) => (u64);
+    (@ty vmctx) => (*mut VMComponentContext);
+
+    (@retptr size_pair) => (*mut usize);
+    (@retptr $other:ident) => (());
+}
+
+/// Defines a `VMComponentBuiltins` structure which contains any builtins such
+/// as resource-related intrinsics.
+macro_rules! define_builtins {
+    (
+        $(
+            $( #[$attr:meta] )*
+            $name:ident( $( $pname:ident: $param:ident ),* ) $( -> $result:ident )?;
+        )*
+    ) => {
+        /// An array that stores addresses of builtin functions. We translate code
+        /// to use indirect calls. This way, we don't have to patch the code.
+        #[repr(C)]
+        pub struct VMComponentBuiltins {
+            $(
+                $name: unsafe extern "C" fn(
+                    $(signature!(@ty $param),)*
+                ) $( -> signature!(@ty $result))?,
+            )*
+        }
+
+        impl VMComponentBuiltins {
+            pub const INIT: VMComponentBuiltins = VMComponentBuiltins {
+                $($name: trampolines::$name,)*
+            };
+        }
+    };
+}
+
+wasmtime_environ::foreach_builtin_component_function!(define_builtins);
 
 /// Macro to define the `VMBuiltinTranscodeArray` type which contains all of the
 /// function pointers to the actual transcoder functions. This structure is read
@@ -28,8 +87,8 @@ macro_rules! define_transcoders {
         pub struct VMBuiltinTranscodeArray {
             $(
                 $name: unsafe extern "C" fn(
-                    $(define_transcoders!(@ty $param),)*
-                ) $( -> define_transcoders!(@ty $result))?,
+                    $(signature!(@ty $param),)*
+                ) $( -> signature!(@ty $result))?,
             )*
         }
 
@@ -39,11 +98,6 @@ macro_rules! define_transcoders {
             };
         }
     };
-
-    (@ty size) => (usize);
-    (@ty ptr_u8) => (*mut u8);
-    (@ty ptr_u16) => (*mut u16);
-    (@ty ptr_size) => (*mut usize);
 }
 
 wasmtime_environ::foreach_transcoder!(define_transcoders);
@@ -54,7 +108,9 @@ wasmtime_environ::foreach_transcoder!(define_transcoders);
 /// implementation following this submodule.
 #[allow(improper_ctypes_definitions)]
 mod trampolines {
-    macro_rules! transcoders {
+    use super::VMComponentContext;
+
+    macro_rules! shims {
         (
             $(
                 $( #[$attr:meta] )*
@@ -63,9 +119,9 @@ mod trampolines {
         ) => (
             $(
                 pub unsafe extern "C" fn $name(
-                    $($pname : define_transcoders!(@ty $param),)*
-                ) $( -> define_transcoders!(@ty $result))? {
-                    $(transcoders!(@validate_param $pname $param);)*
+                    $($pname : signature!(@ty $param),)*
+                ) $( -> signature!(@ty $result))? {
+                    $(shims!(@validate_param $pname $param);)*
 
                     // Always catch panics to avoid trying to unwind from Rust
                     // into Cranelift-generated code which would lead to a Bad
@@ -74,10 +130,10 @@ mod trampolines {
                     // Additionally assume that every function below returns a
                     // `Result` where errors turn into traps.
                     let result = std::panic::catch_unwind(|| {
-                        transcoders!(@invoke $name() $($pname)*)
+                        shims!(@invoke $name() $($pname)*)
                     });
                     match result {
-                        Ok(Ok(ret)) => transcoders!(@convert_ret ret $($pname: $param)*),
+                        Ok(Ok(ret)) => shims!(@convert_ret ret $($pname: $param)*),
                         Ok(Err(err)) => crate::traphandlers::raise_trap(
                             crate::traphandlers::TrapReason::User {
                                 error: err,
@@ -99,7 +155,7 @@ mod trampolines {
             a
         });
         (@convert_ret $ret:ident $name:ident: $ty:ident $($rest:tt)*) => (
-            transcoders!(@convert_ret $ret $($rest)*)
+            shims!(@convert_ret $ret $($rest)*)
         );
 
         (@validate_param $arg:ident ptr_u16) => ({
@@ -116,16 +172,17 @@ mod trampolines {
 
         // ignore `ret2`-named arguments
         (@invoke $m:ident ($($args:tt)*) ret2 $($rest:tt)*) => (
-            transcoders!(@invoke $m ($($args)*) $($rest)*)
+            shims!(@invoke $m ($($args)*) $($rest)*)
         );
 
         // move all other arguments into the `$args` list
         (@invoke $m:ident ($($args:tt)*) $param:ident $($rest:tt)*) => (
-            transcoders!(@invoke $m ($($args)* $param,) $($rest)*)
+            shims!(@invoke $m ($($args)* $param,) $($rest)*)
         );
     }
 
-    wasmtime_environ::foreach_transcoder!(transcoders);
+    wasmtime_environ::foreach_builtin_component_function!(shims);
+    wasmtime_environ::foreach_transcoder!(shims);
 }
 
 /// This property should already be guaranteed by construction in the component
@@ -458,4 +515,26 @@ fn inflate_latin1_bytes(dst: &mut [u16], latin1_bytes_so_far: usize) -> &mut [u1
     }
 
     return rest;
+}
+
+unsafe fn resource_new32(vmctx: *mut VMComponentContext, resource: u32, rep: u32) -> Result<u32> {
+    let resource = TypeResourceTableIndex::from_u32(resource);
+    Ok(ComponentInstance::from_vmctx(vmctx, |instance| {
+        instance.resource_new32(resource, rep)
+    }))
+}
+
+unsafe fn resource_rep32(vmctx: *mut VMComponentContext, resource: u32, idx: u32) -> Result<u32> {
+    let resource = TypeResourceTableIndex::from_u32(resource);
+    ComponentInstance::from_vmctx(vmctx, |instance| instance.resource_rep32(resource, idx))
+}
+
+unsafe fn resource_drop(vmctx: *mut VMComponentContext, resource: u32, idx: u32) -> Result<u64> {
+    let resource = TypeResourceTableIndex::from_u32(resource);
+    ComponentInstance::from_vmctx(vmctx, |instance| {
+        Ok(match instance.resource_drop(resource, idx)? {
+            Some(rep) => (u64::from(rep) << 1) | 1,
+            None => 0,
+        })
+    })
 }

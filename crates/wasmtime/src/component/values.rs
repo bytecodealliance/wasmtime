@@ -1,5 +1,6 @@
 use crate::component::func::{bad_type_info, Lift, LiftContext, Lower, LowerContext};
 use crate::component::types::{self, Type};
+use crate::component::ResourceAny;
 use crate::ValRaw;
 use anyhow::{anyhow, bail, Context, Error, Result};
 use std::collections::HashMap;
@@ -591,7 +592,45 @@ impl fmt::Debug for Flags {
     }
 }
 
-/// Represents possible runtime values which a component function can either consume or produce
+/// Represents possible runtime values which a component function can either
+/// consume or produce
+///
+/// This is a dynamic representation of possible values in the component model.
+/// Note that this is not an efficient representation but is instead intended to
+/// be a flexible and somewhat convenient representation. The most efficient
+/// representation of component model types is to use the `bindgen!` macro to
+/// generate native Rust types with specialized liftings and lowerings.
+///
+/// This type is used in conjunction with [`Func::call`] for example if the
+/// signature of a component is not statically known ahead of time.
+///
+/// # Notes on Equality
+///
+/// This type implements both the Rust `PartialEq` and `Eq` traits. This type
+/// additionally contains values which are not necessarily easily equated,
+/// however, such as floats (`Float32` and `Float64`) and resources. Equality
+/// does require that two values have the same type, and then these cases are
+/// handled as:
+///
+/// * Floats are tested if they are "semantically the same" meaning all NaN
+///   values are equal to all other NaN values. Additionally zero values must be
+///   exactly the same, so positive zero is not equal to negative zero. The
+///   primary use case at this time is fuzzing-related equality which this is
+///   sufficient for.
+///
+/// * Resources are tested if their types and indices into the host table are
+///   equal. This does not compare the underlying representation so borrows of
+///   the same guest resource are not considered equal. This additionally
+///   doesn't go further and test for equality in the guest itself (for example
+///   two different heap allocations of `Box<u32>` can be equal in normal Rust
+///   if they contain the same value, but will never be considered equal when
+///   compared as `Val::Resource`s).
+///
+/// In general if a strict guarantee about equality is required here it's
+/// recommended to "build your own" as this equality intended for fuzzing
+/// Wasmtime may not be suitable for you.
+///
+/// [`Func::call`]: crate::component::Func::call
 #[derive(Debug, Clone)]
 #[allow(missing_docs)]
 pub enum Val {
@@ -617,6 +656,7 @@ pub enum Val {
     Option(OptionVal),
     Result(ResultVal),
     Flags(Flags),
+    Resource(ResourceAny),
 }
 
 impl Val {
@@ -645,12 +685,19 @@ impl Val {
             Val::Option(OptionVal { ty, .. }) => Type::Option(ty.clone()),
             Val::Result(ResultVal { ty, .. }) => Type::Result(ty.clone()),
             Val::Flags(Flags { ty, .. }) => Type::Flags(ty.clone()),
+            Val::Resource(r) => {
+                if r.owned() {
+                    Type::Own(r.ty())
+                } else {
+                    Type::Borrow(r.ty())
+                }
+            }
         }
     }
 
     /// Deserialize a value of this type from core Wasm stack values.
     pub(crate) fn lift(
-        cx: &LiftContext<'_>,
+        cx: &mut LiftContext<'_>,
         ty: InterfaceType,
         src: &mut std::slice::Iter<'_, ValRaw>,
     ) -> Result<Val> {
@@ -667,6 +714,9 @@ impl Val {
             InterfaceType::Float32 => Val::Float32(f32::lift(cx, ty, next(src))?),
             InterfaceType::Float64 => Val::Float64(f64::lift(cx, ty, next(src))?),
             InterfaceType::Char => Val::Char(char::lift(cx, ty, next(src))?),
+            InterfaceType::Own(_) | InterfaceType::Borrow(_) => {
+                Val::Resource(ResourceAny::lift(cx, ty, next(src))?)
+            }
             InterfaceType::String => {
                 Val::String(Box::<str>::lift(cx, ty, &[*next(src), *next(src)])?)
             }
@@ -677,7 +727,7 @@ impl Val {
                 load_list(cx, i, ptr, len)?
             }
             InterfaceType::Record(i) => Val::Record(Record {
-                ty: types::Record::from(i, cx.types),
+                ty: types::Record::from(i, &cx.instance_type()),
                 values: cx.types[i]
                     .fields
                     .iter()
@@ -685,7 +735,7 @@ impl Val {
                     .collect::<Result<_>>()?,
             }),
             InterfaceType::Tuple(i) => Val::Tuple(Tuple {
-                ty: types::Tuple::from(i, cx.types),
+                ty: types::Tuple::from(i, &cx.instance_type()),
                 values: cx.types[i]
                     .types
                     .iter()
@@ -701,7 +751,7 @@ impl Val {
                 )?;
 
                 Val::Variant(Variant {
-                    ty: types::Variant::from(i, cx.types),
+                    ty: types::Variant::from(i, &cx.instance_type()),
                     discriminant,
                     value,
                 })
@@ -715,7 +765,7 @@ impl Val {
                 )?;
 
                 Val::Enum(Enum {
-                    ty: types::Enum::from(i, cx.types),
+                    ty: types::Enum::from(i, &cx.instance_type()),
                     discriminant,
                 })
             }
@@ -728,7 +778,7 @@ impl Val {
                 )?;
 
                 Val::Union(Union {
-                    ty: types::Union::from(i, cx.types),
+                    ty: types::Union::from(i, &cx.instance_type()),
                     discriminant,
                     value,
                 })
@@ -742,7 +792,7 @@ impl Val {
                 )?;
 
                 Val::Option(OptionVal {
-                    ty: types::OptionType::from(i, cx.types),
+                    ty: types::OptionType::from(i, &cx.instance_type()),
                     discriminant,
                     value,
                 })
@@ -757,7 +807,7 @@ impl Val {
                 )?;
 
                 Val::Result(ResultVal {
-                    ty: types::ResultType::from(i, cx.types),
+                    ty: types::ResultType::from(i, &cx.instance_type()),
                     discriminant,
                     value,
                 })
@@ -770,7 +820,7 @@ impl Val {
                     .collect::<Result<_>>()?;
 
                 Val::Flags(Flags {
-                    ty: types::Flags::from(i, cx.types),
+                    ty: types::Flags::from(i, &cx.instance_type()),
                     count,
                     value,
                 })
@@ -779,7 +829,7 @@ impl Val {
     }
 
     /// Deserialize a value of this type from the heap.
-    pub(crate) fn load(cx: &LiftContext<'_>, ty: InterfaceType, bytes: &[u8]) -> Result<Val> {
+    pub(crate) fn load(cx: &mut LiftContext<'_>, ty: InterfaceType, bytes: &[u8]) -> Result<Val> {
         Ok(match ty {
             InterfaceType::Bool => Val::Bool(bool::load(cx, ty, bytes)?),
             InterfaceType::S8 => Val::S8(i8::load(cx, ty, bytes)?),
@@ -794,6 +844,9 @@ impl Val {
             InterfaceType::Float64 => Val::Float64(f64::load(cx, ty, bytes)?),
             InterfaceType::Char => Val::Char(char::load(cx, ty, bytes)?),
             InterfaceType::String => Val::String(<Box<str>>::load(cx, ty, bytes)?),
+            InterfaceType::Own(_) | InterfaceType::Borrow(_) => {
+                Val::Resource(ResourceAny::load(cx, ty, bytes)?)
+            }
             InterfaceType::List(i) => {
                 // FIXME: needs memory64 treatment
                 let ptr = u32::from_le_bytes(bytes[..4].try_into().unwrap()) as usize;
@@ -802,11 +855,11 @@ impl Val {
             }
 
             InterfaceType::Record(i) => Val::Record(Record {
-                ty: types::Record::from(i, cx.types),
+                ty: types::Record::from(i, &cx.instance_type()),
                 values: load_record(cx, cx.types[i].fields.iter().map(|field| field.ty), bytes)?,
             }),
             InterfaceType::Tuple(i) => Val::Tuple(Tuple {
-                ty: types::Tuple::from(i, cx.types),
+                ty: types::Tuple::from(i, &cx.instance_type()),
                 values: load_record(cx, cx.types[i].types.iter().copied(), bytes)?,
             }),
             InterfaceType::Variant(i) => {
@@ -815,7 +868,7 @@ impl Val {
                     load_variant(cx, &ty.info, ty.cases.iter().map(|case| case.ty), bytes)?;
 
                 Val::Variant(Variant {
-                    ty: types::Variant::from(i, cx.types),
+                    ty: types::Variant::from(i, &cx.instance_type()),
                     discriminant,
                     value,
                 })
@@ -826,7 +879,7 @@ impl Val {
                     load_variant(cx, &ty.info, ty.names.iter().map(|_| None), bytes)?;
 
                 Val::Enum(Enum {
-                    ty: types::Enum::from(i, cx.types),
+                    ty: types::Enum::from(i, &cx.instance_type()),
                     discriminant,
                 })
             }
@@ -836,7 +889,7 @@ impl Val {
                     load_variant(cx, &ty.info, ty.types.iter().copied().map(Some), bytes)?;
 
                 Val::Union(Union {
-                    ty: types::Union::from(i, cx.types),
+                    ty: types::Union::from(i, &cx.instance_type()),
                     discriminant,
                     value,
                 })
@@ -847,7 +900,7 @@ impl Val {
                     load_variant(cx, &ty.info, [None, Some(ty.ty)].into_iter(), bytes)?;
 
                 Val::Option(OptionVal {
-                    ty: types::OptionType::from(i, cx.types),
+                    ty: types::OptionType::from(i, &cx.instance_type()),
                     discriminant,
                     value,
                 })
@@ -858,13 +911,13 @@ impl Val {
                     load_variant(cx, &ty.info, [ty.ok, ty.err].into_iter(), bytes)?;
 
                 Val::Result(ResultVal {
-                    ty: types::ResultType::from(i, cx.types),
+                    ty: types::ResultType::from(i, &cx.instance_type()),
                     discriminant,
                     value,
                 })
             }
             InterfaceType::Flags(i) => Val::Flags(Flags {
-                ty: types::Flags::from(i, cx.types),
+                ty: types::Flags::from(i, &cx.instance_type()),
                 count: u32::try_from(cx.types[i].names.len())?,
                 value: match FlagsSize::from_count(cx.types[i].names.len()) {
                     FlagsSize::Size0 => Box::new([]),
@@ -908,6 +961,7 @@ impl Val {
             Val::Float32(value) => value.lower(cx, ty, next_mut(dst))?,
             Val::Float64(value) => value.lower(cx, ty, next_mut(dst))?,
             Val::Char(value) => value.lower(cx, ty, next_mut(dst))?,
+            Val::Resource(value) => value.lower(cx, ty, next_mut(dst))?,
             Val::String(value) => {
                 let my_dst = &mut MaybeUninit::<[ValRaw; 2]>::uninit();
                 value.lower(cx, ty, my_dst)?;
@@ -982,6 +1036,7 @@ impl Val {
             Val::Float64(value) => value.store(cx, ty, offset)?,
             Val::Char(value) => value.store(cx, ty, offset)?,
             Val::String(value) => value.store(cx, ty, offset)?,
+            Val::Resource(value) => value.store(cx, ty, offset)?,
             Val::List(List { values, .. }) => {
                 let ty = match ty {
                     InterfaceType::List(i) => &cx.types[i],
@@ -1118,6 +1173,8 @@ impl PartialEq for Val {
             (Self::Result(_), _) => false,
             (Self::Flags(l), Self::Flags(r)) => l == r,
             (Self::Flags(_), _) => false,
+            (Self::Resource(l), Self::Resource(r)) => l == r,
+            (Self::Resource(_), _) => false,
         }
     }
 }
@@ -1180,7 +1237,7 @@ impl GenericVariant<'_> {
     }
 }
 
-fn load_list(cx: &LiftContext<'_>, ty: TypeListIndex, ptr: usize, len: usize) -> Result<Val> {
+fn load_list(cx: &mut LiftContext<'_>, ty: TypeListIndex, ptr: usize, len: usize) -> Result<Val> {
     let elem = cx.types[ty].element;
     let abi = cx.types.canonical_abi(&elem);
     let element_size = usize::try_from(abi.size32).unwrap();
@@ -1198,7 +1255,7 @@ fn load_list(cx: &LiftContext<'_>, ty: TypeListIndex, ptr: usize, len: usize) ->
     }
 
     Ok(Val::List(List {
-        ty: types::List::from(ty, cx.types),
+        ty: types::List::from(ty, &cx.instance_type()),
         values: (0..len)
             .map(|index| {
                 Val::load(
@@ -1212,7 +1269,7 @@ fn load_list(cx: &LiftContext<'_>, ty: TypeListIndex, ptr: usize, len: usize) ->
 }
 
 fn load_record(
-    cx: &LiftContext<'_>,
+    cx: &mut LiftContext<'_>,
     types: impl Iterator<Item = InterfaceType>,
     bytes: &[u8],
 ) -> Result<Box<[Val]>> {
@@ -1229,7 +1286,7 @@ fn load_record(
 }
 
 fn load_variant(
-    cx: &LiftContext<'_>,
+    cx: &mut LiftContext<'_>,
     info: &VariantInfo,
     mut types: impl ExactSizeIterator<Item = Option<InterfaceType>>,
     bytes: &[u8],
@@ -1263,7 +1320,7 @@ fn load_variant(
 }
 
 fn lift_variant(
-    cx: &LiftContext<'_>,
+    cx: &mut LiftContext<'_>,
     flatten_count: usize,
     mut types: impl ExactSizeIterator<Item = Option<InterfaceType>>,
     src: &mut std::slice::Iter<'_, ValRaw>,

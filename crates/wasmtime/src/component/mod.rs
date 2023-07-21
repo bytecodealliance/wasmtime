@@ -10,6 +10,7 @@ mod func;
 mod instance;
 mod linker;
 mod matching;
+mod resources;
 mod storage;
 mod store;
 pub mod types;
@@ -20,7 +21,8 @@ pub use self::func::{
 };
 pub use self::instance::{ExportInstance, Exports, Instance, InstancePre};
 pub use self::linker::{Linker, LinkerInstance};
-pub use self::types::Type;
+pub use self::resources::{Resource, ResourceAny};
+pub use self::types::{ResourceType, Type};
 pub use self::values::{
     Enum, Flags, List, OptionVal, Record, ResultVal, Tuple, Union, Val, Variant,
 };
@@ -36,6 +38,7 @@ pub mod __internal {
         typecheck_record, typecheck_union, typecheck_variant, ComponentVariant, LiftContext,
         LowerContext, MaybeUninitExt, Options,
     };
+    pub use super::matching::InstanceType;
     pub use crate::map_maybe_uninit;
     pub use crate::store::StoreOpaque;
     pub use anyhow;

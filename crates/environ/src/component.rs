@@ -70,3 +70,21 @@ macro_rules! foreach_transcoder {
         }
     };
 }
+
+/// Helper macro, like `foreach_transcoder`, to iterate over builtins for
+/// components unrelated to transcoding.
+#[macro_export]
+macro_rules! foreach_builtin_component_function {
+    ($mac:ident) => {
+        $mac! {
+            resource_new32(vmctx: vmctx, resource: u32, rep: u32) -> u32;
+            resource_rep32(vmctx: vmctx, resource: u32, idx: u32) -> u32;
+
+            // Returns an `Option<u32>` where `None` is "no destructor needed"
+            // and `Some(val)` is "run the destructor on this rep". The option
+            // is encoded as a 64-bit integer where the low bit is Some/None
+            // and bits 1-33 are the payload.
+            resource_drop(vmctx: vmctx, resource: u32, idx: u32) -> u64;
+        }
+    };
+}

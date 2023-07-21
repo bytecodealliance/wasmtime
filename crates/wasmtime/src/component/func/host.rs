@@ -1,4 +1,5 @@
 use crate::component::func::{LiftContext, LowerContext, Options};
+use crate::component::matching::InstanceType;
 use crate::component::storage::slice_to_storage_mut;
 use crate::component::{ComponentNamedList, ComponentType, Lift, Lower, Type, Val};
 use crate::{AsContextMut, StoreContextMut, ValRaw};
@@ -19,7 +20,7 @@ use wasmtime_runtime::{VMFuncRef, VMMemoryDefinition, VMOpaqueContext};
 
 pub struct HostFunc {
     entrypoint: VMLoweringCallee,
-    typecheck: Box<dyn (Fn(TypeFuncIndex, &Arc<ComponentTypes>) -> Result<()>) + Send + Sync>,
+    typecheck: Box<dyn (Fn(TypeFuncIndex, &InstanceType<'_>) -> Result<()>) + Send + Sync>,
     func: Box<dyn Any + Send + Sync>,
 }
 
@@ -84,7 +85,7 @@ impl HostFunc {
                 let types = types.clone();
 
                 move |expected_index, expected_types| {
-                    if index == expected_index && Arc::ptr_eq(&types, expected_types) {
+                    if index == expected_index && std::ptr::eq(&*types, &**expected_types.types) {
                         Ok(())
                     } else {
                         Err(anyhow!("function type mismatch"))
@@ -95,7 +96,7 @@ impl HostFunc {
         })
     }
 
-    pub fn typecheck(&self, ty: TypeFuncIndex, types: &Arc<ComponentTypes>) -> Result<()> {
+    pub fn typecheck(&self, ty: TypeFuncIndex, types: &InstanceType<'_>) -> Result<()> {
         (self.typecheck)(ty, types)
     }
 
@@ -108,12 +109,12 @@ impl HostFunc {
     }
 }
 
-fn typecheck<P, R>(ty: TypeFuncIndex, types: &Arc<ComponentTypes>) -> Result<()>
+fn typecheck<P, R>(ty: TypeFuncIndex, types: &InstanceType<'_>) -> Result<()>
 where
     P: ComponentNamedList + Lift,
     R: ComponentNamedList + Lower,
 {
-    let ty = &types[ty];
+    let ty = &types.types[ty];
     P::typecheck(&InterfaceType::Tuple(ty.params), types)
         .context("type mismatch with parameters")?;
     R::typecheck(&InterfaceType::Tuple(ty.results), types).context("type mismatch with results")?;
@@ -219,27 +220,17 @@ where
             Storage::Indirect(slice_to_storage_mut(storage).assume_init_ref())
         }
     };
-    let params = storage.lift_params(
-        &LiftContext {
-            store: cx.0,
-            options: &options,
-            types,
-        },
-        param_tys,
-    )?;
+    let mut lift = LiftContext::new(cx.0, &options, types, instance);
+    lift.enter_call();
+    let params = storage.lift_params(&mut lift, param_tys)?;
 
     let ret = closure(cx.as_context_mut(), params)?;
     flags.set_may_leave(false);
-    storage.lower_results(
-        &mut LowerContext {
-            store: cx,
-            options: &options,
-            types,
-        },
-        result_tys,
-        ret,
-    )?;
+    let mut lower = LowerContext::new(cx, &options, types, instance);
+    storage.lower_results(&mut lower, result_tys, ret)?;
     flags.set_may_leave(true);
+
+    lower.exit_call()?;
 
     return Ok(());
 
@@ -255,7 +246,7 @@ where
         P: ComponentType + Lift,
         R: ComponentType + Lower,
     {
-        unsafe fn lift_params(&self, cx: &LiftContext<'_>, ty: InterfaceType) -> Result<P> {
+        unsafe fn lift_params(&self, cx: &mut LiftContext<'_>, ty: InterfaceType) -> Result<P> {
             match self {
                 Storage::Direct(storage) => P::lift(cx, ty, &storage.assume_init_ref().args),
                 Storage::ResultsIndirect(storage) => P::lift(cx, ty, &storage.args),
@@ -355,11 +346,8 @@ where
     let func_ty = &types[ty];
     let param_tys = &types[func_ty.params];
     let result_tys = &types[func_ty.results];
-    let cx = LiftContext {
-        store: store.0,
-        options: &options,
-        types,
-    };
+    let mut cx = LiftContext::new(store.0, &options, types, instance);
+    cx.enter_call();
     if let Some(param_count) = param_tys.abi.flat_count(MAX_FLAT_PARAMS) {
         // NB: can use `MaybeUninit::slice_assume_init_ref` when that's stable
         let mut iter =
@@ -367,7 +355,7 @@ where
         args = param_tys
             .types
             .iter()
-            .map(|ty| Val::lift(&cx, *ty, &mut iter))
+            .map(|ty| Val::lift(&mut cx, *ty, &mut iter))
             .collect::<Result<Box<[_]>>>()?;
         ret_index = param_count;
         assert!(iter.next().is_none());
@@ -380,11 +368,8 @@ where
             .map(|ty| {
                 let abi = types.canonical_abi(ty);
                 let size = usize::try_from(abi.size32).unwrap();
-                Val::load(
-                    &cx,
-                    *ty,
-                    &cx.memory()[abi.next_field32_size(&mut offset)..][..size],
-                )
+                let memory = &cx.memory()[abi.next_field32_size(&mut offset)..][..size];
+                Val::load(&mut cx, *ty, memory)
             })
             .collect::<Result<Box<[_]>>>()?;
         ret_index = 1;
@@ -396,15 +381,12 @@ where
     }
     closure(store.as_context_mut(), &args, &mut result_vals)?;
     flags.set_may_leave(false);
-    for (val, ty) in result_vals.iter().zip(result_tys.types.iter()) {
-        Type::from(ty, types).check(val)?;
-    }
 
-    let mut cx = LowerContext {
-        store,
-        options: &options,
-        types,
-    };
+    let mut cx = LowerContext::new(store, &options, types, instance);
+    let instance = cx.instance_type();
+    for (val, ty) in result_vals.iter().zip(result_tys.types.iter()) {
+        Type::from(ty, &instance).check(val)?;
+    }
     if let Some(cnt) = result_tys.abi.flat_count(MAX_FLAT_RESULTS) {
         let mut dst = storage[..cnt].iter_mut();
         for (val, ty) in result_vals.iter().zip(result_tys.types.iter()) {
@@ -421,6 +403,8 @@ where
     }
 
     flags.set_may_leave(true);
+
+    cx.exit_call()?;
 
     return Ok(());
 }

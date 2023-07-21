@@ -56,8 +56,16 @@ fn to_flag_value(v: &settings::Value) -> FlagValue {
 /// Trap code used for debug assertions we emit in our JIT code.
 const DEBUG_ASSERT_TRAP_CODE: u16 = u16::MAX;
 
-/// Code used as the user-defined trap code.
+/// A custom code with `TrapCode::User` which is used by always-trap shims which
+/// indicates that, as expected, the always-trapping function indeed did trap.
+/// This effectively provides a better error message as opposed to a bland
+/// "unreachable code reached"
 pub const ALWAYS_TRAP_CODE: u16 = 100;
+
+/// A custom code with `TrapCode::User` corresponding to being unable to reenter
+/// a component due to its reentrance limitations. This is used in component
+/// adapters to provide a more useful error message in such situations.
+pub const CANNOT_ENTER_CODE: u16 = 101;
 
 /// Converts machine traps to trap information.
 pub fn mach_trap_to_trap(trap: &MachTrap) -> Option<TrapInformation> {
@@ -77,6 +85,7 @@ pub fn mach_trap_to_trap(trap: &MachTrap) -> Option<TrapInformation> {
             ir::TrapCode::UnreachableCodeReached => Trap::UnreachableCodeReached,
             ir::TrapCode::Interrupt => Trap::Interrupt,
             ir::TrapCode::User(ALWAYS_TRAP_CODE) => Trap::AlwaysTrapAdapter,
+            ir::TrapCode::User(CANNOT_ENTER_CODE) => Trap::CannotEnterComponent,
             ir::TrapCode::NullReference => Trap::NullReference,
 
             // These do not get converted to wasmtime traps, since they
