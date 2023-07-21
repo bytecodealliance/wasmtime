@@ -110,6 +110,7 @@ impl CompileKey {
     const RESOURCE_NEW_KIND: u32 = Self::new_kind(7);
     const RESOURCE_REP_KIND: u32 = Self::new_kind(8);
     const RESOURCE_DROP_KIND: u32 = Self::new_kind(9);
+    const RESOURCE_DROP_WASM_TO_NATIVE_KIND: u32 = Self::new_kind(10);
 
     fn lowering(index: wasmtime_environ::component::LoweredIndex) -> Self {
         Self {
@@ -150,6 +151,13 @@ impl CompileKey {
         Self {
             namespace: Self::RESOURCE_DROP_KIND,
             index: index.as_u32(),
+        }
+    }
+
+    fn resource_drop_wasm_to_native_trampoline() -> Self {
+        Self {
+            namespace: Self::RESOURCE_DROP_WASM_TO_NATIVE_KIND,
+            index: 0,
         }
     }
 }
@@ -198,7 +206,6 @@ struct CompileOutput {
 pub struct CompileInputs<'a> {
     inputs: Vec<(CompileKey, CompileInput<'a>)>,
     input_keys: HashSet<CompileKey>,
-    resource_drop_wasm_to_native_trampoline: Option<CompileKey>,
 }
 
 impl<'a> CompileInputs<'a> {
@@ -340,27 +347,30 @@ impl<'a> CompileInputs<'a> {
             }
         }
 
-        // If there are any resources defined within this component, the
-        // signature for `resource.drop` is mentioned somewhere, and if the
-        // wasm-to-native trampoline for `resource.drop` hasn't been created yet
-        // then insert that here. This is possibly required by destruction of
-        // resources from the embedder and otherwise won't be explicitly
-        // requested through initializers above or such.
+        // If a host-defined resource is destroyed from wasm then a
+        // wasm-to-native trampoline will be required when creating the
+        // `VMFuncRef` for the host resource's destructor. This snippet is an
+        // overeager approximation of this where if a component has any
+        // resources and the signature of `resource.drop` is mentioned anywhere
+        // in the component then assume this situation is going to happen.
+        //
+        // To handle this a wasm-to-native trampoline for the signature is
+        // generated here. Note that this may duplicate one wasm-to-native
+        // trampoline as it may already exist for the signature elsewhere in the
+        // file. Doing this here though helps simplify this compilation process
+        // so it's an accepted overhead for now.
         if component.num_resources > 0 {
             if let Some(sig) = types.find_resource_drop_signature() {
-                let key = CompileKey::wasm_to_native_trampoline(sig);
-                ret.resource_drop_wasm_to_native_trampoline = Some(key);
-                if !ret.input_keys.contains(&key) {
-                    ret.push_input(key, move |key, _tunables, compiler| {
-                        let trampoline = compiler.compile_wasm_to_native_trampoline(&types[sig])?;
-                        Ok(CompileOutput {
-                            key,
-                            symbol: "resource_drop_trampoline".to_string(),
-                            function: CompiledFunction::Function(trampoline),
-                            info: None,
-                        })
-                    });
-                }
+                let key = CompileKey::resource_drop_wasm_to_native_trampoline();
+                ret.push_input(key, move |key, _tunables, compiler| {
+                    let trampoline = compiler.compile_wasm_to_native_trampoline(&types[sig])?;
+                    Ok(CompileOutput {
+                        key,
+                        symbol: "resource_drop_trampoline".to_string(),
+                        function: CompiledFunction::Function(trampoline),
+                        info: None,
+                    })
+                });
             }
         }
 
@@ -501,10 +511,7 @@ impl<'a> CompileInputs<'a> {
             .values()
             .all(|funcs| is_sorted_by_key(funcs, |x| x.key)));
 
-        Ok(UnlinkedCompileOutputs {
-            outputs,
-            resource_drop_wasm_to_native_trampoline: self.resource_drop_wasm_to_native_trampoline,
-        })
+        Ok(UnlinkedCompileOutputs { outputs })
     }
 }
 
@@ -512,8 +519,6 @@ impl<'a> CompileInputs<'a> {
 pub struct UnlinkedCompileOutputs {
     // A map from kind to `CompileOutput`.
     outputs: BTreeMap<u32, Vec<CompileOutput>>,
-
-    resource_drop_wasm_to_native_trampoline: Option<CompileKey>,
 }
 
 impl UnlinkedCompileOutputs {
@@ -568,8 +573,6 @@ impl UnlinkedCompileOutputs {
                 .or_default()
                 .insert(x.key, index);
         }
-        indices.resource_drop_wasm_to_native_trampoline =
-            self.resource_drop_wasm_to_native_trampoline;
         (compiled_funcs, indices)
     }
 }
@@ -585,9 +588,6 @@ pub struct FunctionIndices {
 
     // The index of each compiled function, bucketed by compile key kind.
     indices: BTreeMap<u32, BTreeMap<CompileKey, CompiledFunction<usize>>>,
-
-    // If necessary the wasm-to-native trampoline required by `resource.drop`
-    resource_drop_wasm_to_native_trampoline: Option<CompileKey>,
 }
 
 impl FunctionIndices {
@@ -805,11 +805,15 @@ impl FunctionIndices {
                 .into_iter()
                 .map(|(_id, x)| x.unwrap_all_call_func().map(|i| symbol_ids_and_locs[i].1))
                 .collect();
-            artifacts.resource_drop_wasm_to_native_trampoline =
-                self.resource_drop_wasm_to_native_trampoline.map(|i| {
-                    let func = wasm_to_native_trampolines[&i].unwrap_function();
-                    symbol_ids_and_locs[func].1
-                });
+            let map = self
+                .indices
+                .remove(&CompileKey::RESOURCE_DROP_WASM_TO_NATIVE_KIND)
+                .unwrap_or_default();
+            assert!(map.len() <= 1);
+            artifacts.resource_drop_wasm_to_native_trampoline = map
+                .into_iter()
+                .next()
+                .map(|(_id, x)| symbol_ids_and_locs[x.unwrap_function()].1);
         }
 
         debug_assert!(
