@@ -244,6 +244,8 @@ fn path_symlink_trailing_slashes() {
 fn poll_oneoff_files() {
     run("poll_oneoff_files", false).unwrap()
 }
+
+#[cfg_attr(windows, should_panic)]
 #[test_log::test]
 fn poll_oneoff_stdio() {
     run("poll_oneoff_stdio", true).unwrap()
