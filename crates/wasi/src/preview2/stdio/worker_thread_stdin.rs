@@ -53,7 +53,11 @@ impl Stdin {
 }
 
 pub fn stdin() -> Stdin {
-    Stdin
+    // This implementation still needs to be fixed, and we need better test coverage.
+    // We are deferring that work to a future PR.
+    // https://github.com/bytecodealliance/wasmtime/pull/6556#issuecomment-1646232646
+    panic!("worker-thread based stdin is not yet implemented");
+    // Stdin
 }
 
 #[async_trait::async_trait]
