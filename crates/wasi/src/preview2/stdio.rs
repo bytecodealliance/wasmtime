@@ -23,6 +23,7 @@ pub fn stderr() -> Stderr {
 
 #[cfg(all(unix, test))]
 mod test {
+    use crate::preview2::{StreamState, HostInputStream};
     use libc;
     use std::fs::File;
     use std::io::{BufRead, BufReader, Write};
@@ -79,58 +80,61 @@ mod test {
     fn test_stdin_by_forking() {
         test_child_stdin(
             |mut result_write| {
-                //   in a tokio runtime:
-                //     let stdin = super::stdin();
-                //     // Make sure the initial state is that stdin is not ready:
-                //     if timeout(stdin.ready().await).is_timeout() {
-                //        send "start\n" on result pipe.
-                //     }
-                //     loop {
-                //       match timeout(stdin.ready().await) {
-                //         Ok => {
-                //          let bytes = stdin.read();
-                //          if bytes == ending sentinel:
-                //            exit
-                //          if bytes == some other sentinel:
-                //            return and go back to the thing where we start the tokio runtime,
-                //            testing that when creating a new super::stdin() it works correctly
-                //          send "got: {bytes:?}\n" on result pipe.
-                //         }
-                //         Err => {
-                //          send "timed out\n" on result pipe.
-                //         }
-                //       }
-                //     }
-
                 tokio::runtime::Runtime::new().unwrap().block_on(async {
-                    use tokio::io::AsyncReadExt;
+                    let mut stdin = super::stdin();
 
-                    let mut stdin = tokio::io::stdin();
-
-                    let mut buf = [0u8; 1024];
-                    {
-                        let r = tokio::time::timeout(
-                            std::time::Duration::from_millis(100),
-                            stdin.read(&mut buf[..1]),
-                        )
-                        .await;
-                        assert!(r.is_err(), "stdin available too soon");
-                    }
+                    assert!(
+                        tokio::time::timeout(std::time::Duration::from_millis(100), stdin.ready())
+                            .await
+                            .is_err(),
+                        "stdin available too soon"
+                    );
 
                     writeln!(&mut result_write, "start").unwrap();
+
+                    let mut buffer = String::new();
+                    loop {
+                        println!("child: waiting for stdin to be ready");
+                        stdin.ready().await.unwrap();
+
+                        println!("child: reading input");
+                        let (bytes, status) = stdin.read(1024).unwrap();
+
+                        println!("child: {:?}, {:?}", bytes, status);
+
+                        // We can't effectively test for the case where stdin was closed.
+                        assert_eq!(status, StreamState::Open);
+
+                        buffer.push_str(std::str::from_utf8(bytes.as_ref()).unwrap());
+                        if let Some((line,rest)) = buffer.split_once('\n') {
+
+                            if line == "all done" {
+                                writeln!(&mut result_write, "done").unwrap();
+                                break;
+                            } else {
+                                writeln!(&mut result_write, "{}", line).unwrap();
+                            }
+
+                            buffer = rest.to_owned();
+                        }
+                    }
                 });
             },
             |mut stdin_write, mut result_read| {
-                //   wait to recv "start\n" on result pipe (or the child process exits)
                 let mut line = String::new();
                 result_read.read_line(&mut line).unwrap();
                 assert_eq!(line, "start\n");
 
-                //   send some bytes to child stdin.
-                //   make sure we get back "got {bytes:?}" on result pipe (or the child process exits)
-                //   sleep for a while.
-                //   make sure we get back "timed out" on result pipe (or the child process exits)
-                //   send some bytes again. and etc.
+                writeln!(&mut stdin_write, "some bytes").unwrap();
+                line.clear();
+                result_read.read_line(&mut line).unwrap();
+                assert_eq!(line, "some bytes\n");
+
+                writeln!(&mut stdin_write, "all done").unwrap();
+
+                line.clear();
+                result_read.read_line(&mut line).unwrap();
+                assert_eq!(line, "done\n");
             },
         )
     }
