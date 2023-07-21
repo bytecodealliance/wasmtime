@@ -1198,3 +1198,85 @@ fn drop_on_owned_resource() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn guest_different_host_same() -> Result<()> {
+    let engine = super::engine();
+    let c = Component::new(
+        &engine,
+        r#"
+            (component
+                (import "t1" (type $t1 (sub resource)))
+                (import "t2" (type $t2 (sub resource)))
+
+                (import "f" (func $f (param "a" (borrow $t1)) (param "b" (borrow $t2))))
+
+                (export $g1 "g1" (type $t1))
+                (export $g2 "g2" (type $t2))
+
+                (core func $f (canon lower (func $f)))
+                (core func $drop1 (canon resource.drop $t1))
+                (core func $drop2 (canon resource.drop $t2))
+
+                (core module $m
+                    (import "" "f" (func $f (param i32 i32)))
+                    (import "" "drop1" (func $drop1 (param i32)))
+                    (import "" "drop2" (func $drop2 (param i32)))
+
+                    (func (export "f") (param i32 i32)
+                        ;; separate tables both have initial index of 0
+                        (if (i32.ne (local.get 0) (i32.const 0)) (unreachable))
+                        (if (i32.ne (local.get 1) (i32.const 0)) (unreachable))
+
+                        ;; host should end up getting the same resource
+                        (call $f (local.get 0) (local.get 1))
+
+                        ;; drop our borrows
+                        (call $drop1 (local.get 0))
+                        (call $drop2 (local.get 0))
+                    )
+                )
+                (core instance $i (instantiate $m
+                    (with "" (instance
+                        (export "f" (func $f))
+                        (export "drop1" (func $drop1))
+                        (export "drop2" (func $drop2))
+                    ))
+                ))
+
+                (func (export "f2") (param "a" (borrow $g1)) (param "b" (borrow $g2))
+                    (canon lift (core func $i "f")))
+            )
+        "#,
+    )?;
+
+    struct MyType;
+
+    let mut store = Store::new(&engine, ());
+    let mut linker = Linker::new(&engine);
+    linker.root().resource::<MyType>("t1", |_, _| {})?;
+    linker.root().resource::<MyType>("t2", |_, _| {})?;
+    linker.root().func_wrap(
+        "f",
+        |_cx, (r1, r2): (Resource<MyType>, Resource<MyType>)| {
+            assert!(!r1.owned());
+            assert!(!r2.owned());
+            assert_eq!(r1.rep(), 100);
+            assert_eq!(r2.rep(), 100);
+            Ok(())
+        },
+    )?;
+    let i = linker.instantiate(&mut store, &c)?;
+    let f = i.get_typed_func::<(&Resource<MyType>, &Resource<MyType>), ()>(&mut store, "f2")?;
+
+    let t1 = i.get_resource(&mut store, "g1").unwrap();
+    let t2 = i.get_resource(&mut store, "g2").unwrap();
+    assert_eq!(t1, t2);
+    assert_eq!(t1, ResourceType::host::<MyType>());
+
+    let resource = Resource::new_own(100);
+    f.call(&mut store, (&resource, &resource))?;
+    f.post_return(&mut store)?;
+
+    Ok(())
+}
