@@ -448,6 +448,19 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
             .0)
     }
 
+    fn translate_return_call_indirect(
+        &mut self,
+        _builder: &mut FunctionBuilder,
+        _table_index: TableIndex,
+        _table: ir::Table,
+        _sig_index: TypeIndex,
+        _sig_ref: ir::SigRef,
+        _callee: ir::Value,
+        _call_args: &[ir::Value],
+    ) -> WasmResult<()> {
+        unimplemented!()
+    }
+
     fn translate_call(
         &mut self,
         mut pos: FuncCursor,

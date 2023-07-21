@@ -1761,6 +1761,29 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         self.call_function_unchecked(builder, sig_ref, callee, call_args)
     }
 
+    fn translate_return_call(
+        &mut self,
+        _pos: FuncCursor,
+        _callee_index: FuncIndex,
+        _callee: ir::FuncRef,
+        _call_args: &[ir::Value],
+    ) -> WasmResult<()> {
+        unimplemented!()
+    }
+
+    fn translate_return_call_indirect(
+        &mut self,
+        _builder: &mut FunctionBuilder,
+        _table_index: TableIndex,
+        _table: ir::Table,
+        _sig_index: TypeIndex,
+        _sig_ref: ir::SigRef,
+        _callee: ir::Value,
+        _call_args: &[ir::Value],
+    ) -> WasmResult<()> {
+        unimplemented!()
+    }
+
     fn translate_memory_grow(
         &mut self,
         mut pos: FuncCursor<'_>,
