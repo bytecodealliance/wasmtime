@@ -522,6 +522,10 @@ impl Compiler {
         })
     }
 
+    /// Loads a host function pointer for a libcall stored at the `offset`
+    /// provided in the libcalls array.
+    ///
+    /// The offset is calculated in the `host` module below.
     fn load_libcall(
         &self,
         builder: &mut FunctionBuilder<'_>,
@@ -530,17 +534,18 @@ impl Compiler {
         offset: u32,
     ) -> ir::Value {
         let pointer_type = self.isa.pointer_type();
-        // Load the host function pointer for this transcode which comes from a
-        // function pointer within the VMComponentContext's libcall array.
+        // First load the pointer to the libcalls structure which is static
+        // per-process.
         let libcalls_array = builder.ins().load(
             pointer_type,
-            MemFlags::trusted(),
+            MemFlags::trusted().with_readonly(),
             vmctx,
             i32::try_from(offsets.libcalls()).unwrap(),
         );
+        // Next load the function pointer at `offset` and return that.
         builder.ins().load(
             pointer_type,
-            MemFlags::trusted(),
+            MemFlags::trusted().with_readonly(),
             libcalls_array,
             i32::try_from(offset * u32::from(offsets.ptr.size())).unwrap(),
         )
