@@ -667,6 +667,44 @@ jobs:
       env:
         GH_TOKEN: ${{ github.token }}
 
+  # Use Cargo's `-Z minimal-versions` feature to ensure that the lower bound
+  # of our dependencies are ideally all valid.
+  check-minimal-versions:
+    needs: determine
+    if: needs.determine.outputs.run-full
+    name: Check Minimal Verisons
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: true
+    - uses: ./.github/actions/install-rust
+      with:
+        toolchain: nightly-2023-07-02
+    - run: cargo generate-lockfile -Z minimal-versions
+
+    # Update some dependencies manually which cause issues in transitive
+    # dependencies.  Having to need to do this is a bummer and is why this is
+    # still a `-Z` flag and not a stable cargo feature.
+    #
+    # Here `futures-util` is a transitive dep of HTTP things that needed a
+    # higher lower bound. The `syn` dep for example is tricky since we don't
+    # explicitly depend on `syn` 1.x.x but it's transitively used through other
+    # crates like `tracing` and we're using syntax not supported by the lower
+    # bounds of those crates, so it's a bit odd there too.
+    - run: cargo update -p futures-util -p syn
+
+    # Make sure everything works. Note that this isn't super exhaustive, but
+    # it's meant to cover our bases braodly.
+    - run: cargo check
+
+    # common logic to cancel the entire run if this job fails
+    - run: gh run cancel ${{ github.run_id }}
+      if: failure() && github.event_name != 'pull_request'
+      env:
+        GH_TOKEN: ${{ github.token }}
+
+
   # Perform release builds of `wasmtime` and `libwasmtime.so`. Builds a variety
   # of platforms and architectures and then uploads the release artifacts to
   # this workflow run's list of artifacts.
@@ -775,6 +813,7 @@ jobs:
       - determine
       - miri
       - build-preview1-component-adapter
+      - check-minimal-versions
     if: always()
     steps:
     - name: Dump needs context
