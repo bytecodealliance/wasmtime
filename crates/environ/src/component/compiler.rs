@@ -1,4 +1,5 @@
 use crate::component::{ComponentTranslation, ComponentTypes, TrampolineIndex};
+use crate::Tunables;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::any::Any;
@@ -40,6 +41,7 @@ pub trait ComponentCompiler: Send + Sync {
     /// this trait for Cranelift for more information.
     fn compile_trampoline(
         &self,
+        tunables: &Tunables,
         component: &ComponentTranslation,
         types: &ComponentTypes,
         trampoline: TrampolineIndex,

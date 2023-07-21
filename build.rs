@@ -31,6 +31,7 @@ fn main() -> anyhow::Result<()> {
             test_directory(out, "tests/misc_testsuite", strategy)?;
             test_directory_module(out, "tests/misc_testsuite/multi-memory", strategy)?;
             test_directory_module(out, "tests/misc_testsuite/simd", strategy)?;
+            test_directory_module(out, "tests/misc_testsuite/tail-call", strategy)?;
             test_directory_module(out, "tests/misc_testsuite/threads", strategy)?;
             test_directory_module(out, "tests/misc_testsuite/memory64", strategy)?;
             test_directory_module(out, "tests/misc_testsuite/component-model", strategy)?;
@@ -61,6 +62,7 @@ fn main() -> anyhow::Result<()> {
                     "tests/spec_testsuite/proposals/relaxed-simd",
                     strategy,
                 )?;
+                test_directory_module(out, "tests/spec_testsuite/proposals/tail-call", strategy)?;
             } else {
                 println!(
                     "cargo:warning=The spec testsuite is disabled. To enable, run `git submodule \
@@ -210,11 +212,6 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
 
     // This is an empty file right now which the `wast` crate doesn't parse
     if testname.contains("memory_copy1") {
-        return true;
-    }
-
-    // Tail calls are not yet implemented.
-    if testname.contains("return_call") {
         return true;
     }
 

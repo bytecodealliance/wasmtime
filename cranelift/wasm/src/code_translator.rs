@@ -624,7 +624,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             );
 
             let call = environ.translate_call(
-                builder.cursor(),
+                builder,
                 FuncIndex::from_u32(*function_index),
                 fref,
                 args,
@@ -694,7 +694,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             );
 
             environ.translate_return_call(
-                builder.cursor(),
+                builder,
                 FuncIndex::from_u32(*function_index),
                 fref,
                 args,
@@ -731,11 +731,21 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             state.popn(num_args);
             state.reachable = false;
         }
-        Operator::ReturnCallRef { type_index: _ } => {
-            return Err(wasm_unsupported!(
-                "proposed tail-call operator for function references {:?}",
-                op
-            ));
+        Operator::ReturnCallRef { type_index } => {
+            // Get function signature
+            // `index` is the index of the function's signature and `table_index` is the index of
+            // the table to search the function in.
+            let (sigref, num_args) = state.get_indirect_sig(builder.func, *type_index, environ)?;
+            let callee = state.pop1();
+
+            // Bitcast any vector arguments to their default type, I8X16, before calling.
+            let args = state.peekn_mut(num_args);
+            bitcast_wasm_params(environ, sigref, args, builder);
+
+            environ.translate_return_call_ref(builder, sigref, callee, state.peekn(num_args))?;
+
+            state.popn(num_args);
+            state.reachable = false;
         }
         /******************************* Memory management ***********************************
          * Memory management is handled by environment. It is usually translated into calls to

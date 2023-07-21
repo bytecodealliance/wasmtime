@@ -39,6 +39,7 @@ pub const SUPPORTED_WASM_FEATURES: &[(&str, &str)] = &[
         "relaxed-simd",
         "enables support for the relaxed simd proposal",
     ),
+    ("tail-call", "enables support for WebAssembly tail calls"),
     ("threads", "enables support for WebAssembly threads"),
     ("memory64", "enables support for 64-bit memories"),
     #[cfg(feature = "component-model")]
@@ -371,6 +372,7 @@ impl CommonOptions {
             bulk_memory,
             reference_types,
             multi_value,
+            tail_call,
             threads,
             multi_memory,
             memory64,
@@ -396,6 +398,9 @@ impl CommonOptions {
         }
         if let Some(enable) = multi_value {
             config.wasm_multi_value(enable);
+        }
+        if let Some(enable) = tail_call {
+            config.wasm_tail_call(enable);
         }
         if let Some(enable) = threads {
             config.wasm_threads(enable);
@@ -441,6 +446,7 @@ pub struct WasmFeatures {
     pub bulk_memory: Option<bool>,
     pub simd: Option<bool>,
     pub relaxed_simd: Option<bool>,
+    pub tail_call: Option<bool>,
     pub threads: Option<bool>,
     pub multi_memory: Option<bool>,
     pub memory64: Option<bool>,
@@ -493,6 +499,7 @@ fn parse_wasm_features(features: &str) -> Result<WasmFeatures> {
         bulk_memory: all.or(values["bulk-memory"]),
         simd: all.or(values["simd"]),
         relaxed_simd: all.or(values["relaxed-simd"]),
+        tail_call: all.or(values["tail-call"]),
         threads: all.or(values["threads"]),
         multi_memory: all.or(values["multi-memory"]),
         memory64: all.or(values["memory64"]),
@@ -611,6 +618,7 @@ mod test {
             bulk_memory,
             simd,
             relaxed_simd,
+            tail_call,
             threads,
             multi_memory,
             memory64,
@@ -621,6 +629,7 @@ mod test {
         assert_eq!(multi_value, Some(true));
         assert_eq!(bulk_memory, Some(true));
         assert_eq!(simd, Some(true));
+        assert_eq!(tail_call, Some(true));
         assert_eq!(threads, Some(true));
         assert_eq!(multi_memory, Some(true));
         assert_eq!(memory64, Some(true));
@@ -640,6 +649,7 @@ mod test {
             bulk_memory,
             simd,
             relaxed_simd,
+            tail_call,
             threads,
             multi_memory,
             memory64,
@@ -650,6 +660,7 @@ mod test {
         assert_eq!(multi_value, Some(false));
         assert_eq!(bulk_memory, Some(false));
         assert_eq!(simd, Some(false));
+        assert_eq!(tail_call, Some(false));
         assert_eq!(threads, Some(false));
         assert_eq!(multi_memory, Some(false));
         assert_eq!(memory64, Some(false));
@@ -672,6 +683,7 @@ mod test {
             bulk_memory,
             simd,
             relaxed_simd,
+            tail_call,
             threads,
             multi_memory,
             memory64,
@@ -682,6 +694,7 @@ mod test {
         assert_eq!(multi_value, None);
         assert_eq!(bulk_memory, None);
         assert_eq!(simd, Some(true));
+        assert_eq!(tail_call, None);
         assert_eq!(threads, None);
         assert_eq!(multi_memory, Some(true));
         assert_eq!(memory64, Some(true));
@@ -725,6 +738,7 @@ mod test {
     feature_test!(test_bulk_memory_feature, bulk_memory, "bulk-memory");
     feature_test!(test_simd_feature, simd, "simd");
     feature_test!(test_relaxed_simd_feature, relaxed_simd, "relaxed-simd");
+    feature_test!(test_tail_call_feature, tail_call, "tail-call");
     feature_test!(test_threads_feature, threads, "threads");
     feature_test!(test_multi_memory_feature, multi_memory, "multi-memory");
     feature_test!(test_memory64_feature, memory64, "memory64");

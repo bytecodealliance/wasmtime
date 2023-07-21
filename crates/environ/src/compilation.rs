@@ -186,6 +186,7 @@ pub trait Compiler: Send + Sync {
     fn compile_array_to_wasm_trampoline(
         &self,
         translation: &ModuleTranslation<'_>,
+        tunables: &Tunables,
         types: &ModuleTypes,
         index: DefinedFuncIndex,
     ) -> Result<Box<dyn Any + Send>, CompileError>;
@@ -198,6 +199,7 @@ pub trait Compiler: Send + Sync {
     fn compile_native_to_wasm_trampoline(
         &self,
         translation: &ModuleTranslation<'_>,
+        tunables: &Tunables,
         types: &ModuleTypes,
         index: DefinedFuncIndex,
     ) -> Result<Box<dyn Any + Send>, CompileError>;
@@ -209,6 +211,7 @@ pub trait Compiler: Send + Sync {
     /// Wasm-to-host transition (e.g. registers used for fast stack walking).
     fn compile_wasm_to_native_trampoline(
         &self,
+        tunables: &Tunables,
         wasm_func_ty: &WasmFuncType,
     ) -> Result<Box<dyn Any + Send>, CompileError>;
 
@@ -273,6 +276,7 @@ pub trait Compiler: Send + Sync {
     /// the function pointer to the host code.
     fn emit_trampolines_for_array_call_host_func(
         &self,
+        tunables: &Tunables,
         ty: &WasmFuncType,
         // Actually `host_fn: VMArrayCallFunction` but that type is not
         // available in `wasmtime-environ`.

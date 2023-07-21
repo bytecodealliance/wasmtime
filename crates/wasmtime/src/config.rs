@@ -1,6 +1,6 @@
 use crate::memory::MemoryCreator;
 use crate::trampoline::MemoryCreatorProxy;
-use anyhow::{bail, Result};
+use anyhow::{bail, ensure, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::fmt;
@@ -619,6 +619,23 @@ impl Config {
     #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
     pub fn async_stack_size(&mut self, size: usize) -> &mut Self {
         self.async_stack_size = size;
+        self
+    }
+
+    /// Configures whether the WebAssembly tail calls proposal will be enabled
+    /// for compilation or not.
+    ///
+    /// The [WebAssembly tail calls proposal] introduces the `return_call` and
+    /// `return_call_indirect` instructions. These instructions allow for Wasm
+    /// programs to implement some recursive algorithms with *O(1)* stack space
+    /// usage.
+    ///
+    /// This feature is disabled by default.
+    ///
+    /// [WebAssembly tail calls proposal]: https://github.com/WebAssembly/tail-call
+    pub fn wasm_tail_call(&mut self, enable: bool) -> &mut Self {
+        self.features.tail_call = enable;
+        self.tunables.tail_callable = enable;
         self
     }
 
@@ -1590,6 +1607,14 @@ impl Config {
             self.compiler_config
                 .flags
                 .insert("enable_probestack".into());
+        }
+
+        if self.features.tail_call {
+            ensure!(
+                target.architecture != Architecture::S390x,
+                "Tail calls are not supported on s390x yet: \
+                 https://github.com/bytecodealliance/wasmtime/issues/6530"
+            );
         }
 
         if self.native_unwind_info ||

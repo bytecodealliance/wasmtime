@@ -51,6 +51,7 @@ pub(crate) fn ref_types_module(
 
     let mut config = Config::new();
     config.wasm_reference_types(true);
+    config.wasm_tail_call(true);
     if use_epochs {
         config.epoch_interruption(true);
     }

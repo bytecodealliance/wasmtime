@@ -207,13 +207,13 @@ impl<'a> CompileInputs<'a> {
         ret.collect_inputs_in_translations(types.module_types(), module_translations);
 
         for (idx, trampoline) in component.trampolines.iter() {
-            ret.push_input(move |_tunables, compiler| {
+            ret.push_input(move |tunables, compiler| {
                 Ok(CompileOutput {
                     key: CompileKey::trampoline(idx),
                     symbol: trampoline.symbol_name(),
                     function: compiler
                         .component_compiler()
-                        .compile_trampoline(component, types, idx)?
+                        .compile_trampoline(tunables, component, types, idx)?
                         .into(),
                     info: None,
                 })
@@ -228,8 +228,9 @@ impl<'a> CompileInputs<'a> {
         // requested through initializers above or such.
         if component.component.num_resources > 0 {
             if let Some(sig) = types.find_resource_drop_signature() {
-                ret.push_input(move |_tunables, compiler| {
-                    let trampoline = compiler.compile_wasm_to_native_trampoline(&types[sig])?;
+                ret.push_input(move |tunables, compiler| {
+                    let trampoline =
+                        compiler.compile_wasm_to_native_trampoline(tunables, &types[sig])?;
                     Ok(CompileOutput {
                         key: CompileKey::resource_drop_wasm_to_native_trampoline(),
                         symbol: "resource_drop_trampoline".to_string(),
@@ -281,10 +282,11 @@ impl<'a> CompileInputs<'a> {
 
                 let func_index = translation.module.func_index(def_func_index);
                 if translation.module.functions[func_index].is_escaping() {
-                    self.push_input(move |_tunables, compiler| {
+                    self.push_input(move |tunables, compiler| {
                         let func_index = translation.module.func_index(def_func_index);
                         let trampoline = compiler.compile_array_to_wasm_trampoline(
                             translation,
+                            tunables,
                             types,
                             def_func_index,
                         )?;
@@ -300,10 +302,11 @@ impl<'a> CompileInputs<'a> {
                         })
                     });
 
-                    self.push_input(move |_tunables, compiler| {
+                    self.push_input(move |tunables, compiler| {
                         let func_index = translation.module.func_index(def_func_index);
                         let trampoline = compiler.compile_native_to_wasm_trampoline(
                             translation,
+                            tunables,
                             types,
                             def_func_index,
                         )?;
@@ -327,9 +330,10 @@ impl<'a> CompileInputs<'a> {
         }
 
         for signature in sigs {
-            self.push_input(move |_tunables, compiler| {
+            self.push_input(move |tunables, compiler| {
                 let wasm_func_ty = &types[signature];
-                let trampoline = compiler.compile_wasm_to_native_trampoline(wasm_func_ty)?;
+                let trampoline =
+                    compiler.compile_wasm_to_native_trampoline(tunables, wasm_func_ty)?;
                 Ok(CompileOutput {
                     key: CompileKey::wasm_to_native_trampoline(signature),
                     symbol: format!(
