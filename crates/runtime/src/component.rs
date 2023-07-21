@@ -335,17 +335,17 @@ impl ComponentInstance {
         unsafe { self.func_ref(self.offsets.transcoder_func_ref(idx)) }
     }
 
-    /// Same as `lowering_func_ref` except for the transcoding functions.
+    /// Same as `lowering_func_ref` except for the `resource.new` functions.
     pub fn resource_new_func_ref(&self, idx: RuntimeResourceNewIndex) -> NonNull<VMFuncRef> {
         unsafe { self.func_ref(self.offsets.resource_new_func_ref(idx)) }
     }
 
-    /// Same as `lowering_func_ref` except for the transcoding functions.
+    /// Same as `lowering_func_ref` except for the `resource.rep` functions.
     pub fn resource_rep_func_ref(&self, idx: RuntimeResourceRepIndex) -> NonNull<VMFuncRef> {
         unsafe { self.func_ref(self.offsets.resource_rep_func_ref(idx)) }
     }
 
-    /// Same as `lowering_func_ref` except for the transcoding functions.
+    /// Same as `lowering_func_ref` except for the `resource.drop` functions.
     pub fn resource_drop_func_ref(&self, idx: RuntimeResourceDropIndex) -> NonNull<VMFuncRef> {
         unsafe { self.func_ref(self.offsets.resource_drop_func_ref(idx)) }
     }

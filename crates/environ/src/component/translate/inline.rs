@@ -1268,7 +1268,7 @@ impl<'a> ComponentItemDef<'a> {
     /// information and they need to be correlated with actual concrete
     /// definitions from this inlining pass. The `path` here is a list of
     /// instance export names (or empty) to walk to reach down into the final
-    /// definition which should refer to a resourc itself.
+    /// definition which should refer to a resource itself.
     fn lookup_resource(&self, path: &[&str], types: &ComponentTypes) -> ResourceIndex {
         let mut cur = self.clone();
 

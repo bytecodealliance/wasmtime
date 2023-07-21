@@ -1,7 +1,7 @@
 //! Implementation of resource type information within Wasmtime.
 //!
 //! Resource types are one of the trickier parts of the component model. Types
-//! such as `list`, `record`, and `string` are considered "nominal" where two
+//! such as `list`, `record`, and `string` are considered "structural" where two
 //! types are considered equal if their components are equal. For example `(list
 //! $a)` and `(list $b)` are the same if `$a` and `$b` are the same. Resources,
 //! however, are not as simple.
@@ -27,30 +27,30 @@
 //! information wrong can compromise on all of these guarantees which is
 //! something Wasmtime would ideally avoid.
 //!
-//! ## Interaction with wasmparser
+//! ## Interaction with `wasmparser`
 //!
 //! The trickiness of resource types is not unique of Wasmtime and the first
-//! line of translating a component, wasmparser, already has quite a lot of
+//! line of translating a component, `wasmparser`, already has quite a lot of
 //! support for handling all the various special cases of resources. Namely
-//! wasmparser has a `ResourceId` type which can be used to test whether two
+//! `wasmparser` has a `ResourceId` type which can be used to test whether two
 //! resources are the same or unique. For example in the above scenario where a
 //! component imports two resources then within that component they'll have
 //! unique ids. Externally though the outer component will be able to see that
 //! the ids are the same.
 //!
-//! Given the subtelty here the goal is to lean on `wasmparser` as much as
+//! Given the subtlety here the goal is to lean on `wasmparser` as much as
 //! possible for this information. The thinking is "well it got things right so
 //! let's not duplicate". This is one of the motivations for plumbing
-//! wasmparser's type information throughout `LocalInitializer` structures
+//! `wasmparser`'s type information throughout `LocalInitializer` structures
 //! during translation of a component. During conversion to a
 //! `GlobalInitializer` is where everything is boiled away.
 //!
 //! ## Converting to Wasmtime
 //!
-//! The purpose of this module then is to convert wasmparser's view of
+//! The purpose of this module then is to convert `wasmparser`'s view of
 //! resources into Wasmtime's view of resources. Wasmtime's goal is to
 //! determine how many tables are required for each resource within a component
-//! and then from the on purely talk about table indices. Each component
+//! and then from then on purely talk about table indices. Each component
 //! instance will require a table per-resource and this figures that all out.
 //!
 //! The conversion process, however, is relatively tightly intertwined with type
@@ -114,7 +114,7 @@ pub struct ResourcesBuilder {
 
     /// A cache of the origin resource type behind a `ResourceId`.
     ///
-    /// Unlike `resource_id_to_table_index` this is reuqired to be eagerly
+    /// Unlike `resource_id_to_table_index` this is required to be eagerly
     /// populated before translation of a type occurs. This is populated by
     /// `register_*` methods below and is manually done during the `inline`
     /// phase. This is used to record the actual underlying type of a resource
@@ -137,7 +137,7 @@ impl ResourcesBuilder {
     /// allocated which produces a fresh `TypeResourceTableIndex` within the
     /// `types` provided.
     ///
-    /// Due to wasmparser's uniqueness of resource IDs combined with the
+    /// Due to `wasmparser`'s uniqueness of resource IDs combined with the
     /// snapshotting and restoration behavior of `ResourcesBuilder` itself this
     /// should have the net effect of the first time a resource is seen within
     /// any component it's assigned a new table, which is exactly what we want.

@@ -341,7 +341,7 @@ impl<'a> CompileInputs<'a> {
         }
 
         // If there are any resources defined within this component, the
-        // signature for `resource.drop` is mentioned somewhere, and the
+        // signature for `resource.drop` is mentioned somewhere, and if the
         // wasm-to-native trampoline for `resource.drop` hasn't been created yet
         // then insert that here. This is possibly required by destruction of
         // resources from the embedder and otherwise won't be explicitly
