@@ -1164,6 +1164,10 @@ impl<'a> InlinerFrame<'a> {
             // information is everywhere and this `InlinerFrame` is not
             // everywhere so it seemed like it would make sense to split the
             // two.
+            //
+            // Note though that this case is actually frequently hit, so it
+            // can't be `unreachable!()`. Instead callers are responsible for
+            // handling this appropriately with respect to resources.
             ComponentItemDef::Type(_ty) => {}
         }
     }
