@@ -47,11 +47,7 @@ impl HostInputStream for MemoryInputPipe {
         Ok((dest.freeze(), state))
     }
     async fn ready(&mut self) -> Result<(), Error> {
-        if !self.is_empty() {
-            Ok(())
-        } else {
-            futures::future::pending().await
-        }
+        Ok(())
     }
 }
 
