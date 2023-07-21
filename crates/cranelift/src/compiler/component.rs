@@ -459,6 +459,12 @@ impl Compiler {
                 vmctx,
                 i32::try_from(offsets.resource_destructor(index)).unwrap(),
             );
+            if cfg!(debug_assertions) {
+                builder.ins().trapz(
+                    dtor_func_ref,
+                    ir::TrapCode::User(crate::DEBUG_ASSERT_TRAP_CODE),
+                );
+            }
             let func_addr = builder.ins().load(
                 pointer_type,
                 trusted,
