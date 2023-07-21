@@ -274,7 +274,9 @@ impl AsyncWriteStream {
                 self.state = Some(WriteState::Pending);
                 Ok((len, StreamState::Open))
             }
-            Err(TrySendError::Full(_)) => Ok((0, StreamState::Open)),
+            Err(TrySendError::Full(_)) => {
+                unreachable!("task shouldnt be full when writestate is ready")
+            }
             Err(TrySendError::Closed(_)) => unreachable!("task shouldn't die while not closed"),
         }
     }
