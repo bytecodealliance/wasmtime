@@ -622,8 +622,9 @@ impl fmt::Debug for Flags {
 ///   equal. This does not compare the underlying representation so borrows of
 ///   the same guest resource are not considered equal. This additionally
 ///   doesn't go further and test for equality in the guest itself (for example
-///   two different heap allocations of `Box<u32>` can be equal if they contain
-///   the same value).
+///   two different heap allocations of `Box<u32>` can be equal in normal Rust
+///   if they contain the same value, but will never be considered equal when
+///   compared as `Val::Resource`s).
 ///
 /// In general if a strict guarantee about equality is required here it's
 /// recommended to "build your own" as this equality intended for fuzzing

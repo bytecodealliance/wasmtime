@@ -84,7 +84,7 @@ enum ResourceTypeKind {
 ///
 /// This type can be thought of as roughly a newtype wrapper around `u32` for
 /// use as a resource with the component model. The main guarantee that the
-/// component model provides is that the `u32` is no forgeable by guests and
+/// component model provides is that the `u32` is not forgeable by guests and
 /// there are guaranteed semantics about when a `u32` may be in use by the guest
 /// and when it's guaranteed no longer needed. This means that it is safe for
 /// embedders to consider the internal `u32` representation "trusted" and use it
