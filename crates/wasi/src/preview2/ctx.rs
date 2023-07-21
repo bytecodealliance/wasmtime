@@ -36,7 +36,7 @@ impl WasiCtxBuilder {
         let insecure_random_seed =
             cap_rand::thread_rng(cap_rand::ambient_authority()).gen::<u128>();
         Self {
-            stdin: Box::new(pipe::EmptyInputStream),
+            stdin: Box::new(pipe::ClosedInputStream),
             stdout: Box::new(pipe::SinkOutputStream),
             stderr: Box::new(pipe::SinkOutputStream),
             env: Vec::new(),

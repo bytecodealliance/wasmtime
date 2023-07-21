@@ -351,21 +351,6 @@ impl HostOutputStream for AsyncWriteStream {
     }
 }
 
-/// A stream that is never able to provide input. It stays open forever, but is never ready for
-/// reading.
-pub struct EmptyInputStream;
-
-#[async_trait::async_trait]
-impl HostInputStream for EmptyInputStream {
-    fn read(&mut self, _size: usize) -> Result<(Bytes, StreamState), Error> {
-        Ok((Bytes::new(), StreamState::Open))
-    }
-
-    async fn ready(&mut self) -> Result<(), Error> {
-        futures::future::pending().await
-    }
-}
-
 /// An output stream that consumes all input written to it, and is always ready.
 pub struct SinkOutputStream;
 
