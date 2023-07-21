@@ -560,10 +560,13 @@ impl Compiler {
     ) -> Vec<ir::Value> {
         let mut block0_params = builder.func.dfg.block_params(block0).to_vec();
         match abi {
+            // Wasm and native ABIs pass parameters as normal function
+            // parameters.
             Abi::Wasm | Abi::Native => block0_params,
+
+            // The array ABI passes a pointer/length as the 3rd/4th arguments
+            // and those are used to load the actual wasm parameters.
             Abi::Array => {
-                // After the host function has returned the results are loaded from
-                // `values_vec_ptr` and then returned.
                 let results = self.load_values_from_array(
                     ty.params(),
                     builder,
@@ -586,12 +589,15 @@ impl Compiler {
         abi: Abi,
     ) {
         match abi {
+            // Wasm/native ABIs return values as usual.
             Abi::Wasm | Abi::Native => {
                 builder.ins().return_(results);
             }
+
+            // The array ABI stores all results in the pointer/length passed
+            // as arguments to this function, which contractually are required
+            // to have enough space for the results.
             Abi::Array => {
-                // After the host function has returned the results are loaded from
-                // `values_vec_ptr` and then returned.
                 let block0_params = builder.func.dfg.block_params(block0);
                 self.store_values_to_array(
                     builder,
