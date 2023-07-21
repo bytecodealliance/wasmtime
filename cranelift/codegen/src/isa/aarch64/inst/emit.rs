@@ -3858,7 +3858,7 @@ fn emit_return_call_common_sequence(
     .emit(&[], sink, emit_info, state);
 
     // Copy the new stack arguments over the old stack arguments.
-    for i in (0..new_stack_arg_size / 8).rev() {
+    for i in (0..new_stack_words).rev() {
         // Load the `i`th new stack argument word from the temporary stack
         // space.
         Inst::ULoad64 {
