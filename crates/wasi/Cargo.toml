@@ -42,6 +42,9 @@ tokio = { workspace = true, features = ["time", "sync", "io-std", "io-util", "rt
 [target.'cfg(unix)'.dependencies]
 rustix = { workspace = true, features = ["fs"], optional = true }
 
+[target.'cfg(unix)'.dev-dependencies]
+libc = { workspace = true }
+
 [target.'cfg(windows)'.dependencies]
 io-extras = { workspace = true }
 windows-sys = { workspace = true }
