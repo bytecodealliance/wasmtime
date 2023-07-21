@@ -395,7 +395,7 @@ impl<T> LinkerInstance<'_, T> {
     /// The `dtor` closure is provided the store state as the first argument
     /// along with the representation of the resource that was just destroyed.
     ///
-    /// [`Resource<T>`]: crate::component::Resource
+    /// [`Resource<U>`]: crate::component::Resource
     pub fn resource<U: 'static>(
         &mut self,
         name: &str,
