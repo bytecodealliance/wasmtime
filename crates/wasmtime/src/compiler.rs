@@ -24,7 +24,7 @@
 
 use crate::Engine;
 use anyhow::Result;
-use std::collections::{btree_map, BTreeMap, BTreeSet, HashSet};
+use std::collections::{btree_map, BTreeMap, BTreeSet};
 use std::{any::Any, collections::HashMap};
 use wasmtime_environ::{
     Compiler, DefinedFuncIndex, FuncIndex, FunctionBodyData, ModuleTranslation, ModuleType,
@@ -33,7 +33,7 @@ use wasmtime_environ::{
 use wasmtime_jit::{CompiledFunctionInfo, CompiledModuleInfo};
 
 type CompileInput<'a> =
-    Box<dyn FnOnce(CompileKey, &Tunables, &dyn Compiler) -> Result<CompileOutput> + Send + 'a>;
+    Box<dyn FnOnce(&Tunables, &dyn Compiler) -> Result<CompileOutput> + Send + 'a>;
 
 /// A sortable, comparable key for a compilation output.
 ///
@@ -204,18 +204,15 @@ struct CompileOutput {
 /// The collection of things we need to compile for a Wasm module or component.
 #[derive(Default)]
 pub struct CompileInputs<'a> {
-    inputs: Vec<(CompileKey, CompileInput<'a>)>,
-    input_keys: HashSet<CompileKey>,
+    inputs: Vec<CompileInput<'a>>,
 }
 
 impl<'a> CompileInputs<'a> {
     fn push_input(
         &mut self,
-        key: CompileKey,
-        f: impl FnOnce(CompileKey, &Tunables, &dyn Compiler) -> Result<CompileOutput> + Send + 'a,
+        f: impl FnOnce(&Tunables, &dyn Compiler) -> Result<CompileOutput> + Send + 'a,
     ) {
-        assert!(self.input_keys.insert(key));
-        self.inputs.push((key, Box::new(f)));
+        self.inputs.push(Box::new(f));
     }
 
     /// Create the `CompileInputs` for a core Wasm module.
@@ -252,10 +249,9 @@ impl<'a> CompileInputs<'a> {
         for init in &component.initializers {
             match init {
                 wasmtime_environ::component::GlobalInitializer::AlwaysTrap(always_trap) => {
-                    let key = CompileKey::always_trap(always_trap.index);
-                    ret.push_input(key, move |key, _tunables, compiler| {
+                    ret.push_input(move |_tunables, compiler| {
                         Ok(CompileOutput {
-                            key,
+                            key: CompileKey::always_trap(always_trap.index),
                             symbol: always_trap.symbol_name(),
                             function: compiler
                                 .component_compiler()
@@ -266,10 +262,9 @@ impl<'a> CompileInputs<'a> {
                     });
                 }
                 wasmtime_environ::component::GlobalInitializer::Transcoder(transcoder) => {
-                    let key = CompileKey::transcoder(transcoder.index);
-                    ret.push_input(key, move |key, _tunables, compiler| {
+                    ret.push_input(move |_tunables, compiler| {
                         Ok(CompileOutput {
-                            key,
+                            key: CompileKey::transcoder(transcoder.index),
                             symbol: transcoder.symbol_name(),
                             function: compiler
                                 .component_compiler()
@@ -280,10 +275,9 @@ impl<'a> CompileInputs<'a> {
                     });
                 }
                 wasmtime_environ::component::GlobalInitializer::LowerImport(lower_import) => {
-                    let key = CompileKey::lowering(lower_import.index);
-                    ret.push_input(key, move |key, _tunables, compiler| {
+                    ret.push_input(move |_tunables, compiler| {
                         Ok(CompileOutput {
-                            key,
+                            key: CompileKey::lowering(lower_import.index),
                             symbol: lower_import.symbol_name(),
                             function: compiler
                                 .component_compiler()
@@ -295,10 +289,9 @@ impl<'a> CompileInputs<'a> {
                 }
 
                 wasmtime_environ::component::GlobalInitializer::ResourceNew(r) => {
-                    let key = CompileKey::resource_new(r.index);
-                    ret.push_input(key, move |key, _tunables, compiler| {
+                    ret.push_input(move |_tunables, compiler| {
                         Ok(CompileOutput {
-                            key,
+                            key: CompileKey::resource_new(r.index),
                             symbol: r.symbol_name(),
                             function: compiler
                                 .component_compiler()
@@ -309,10 +302,9 @@ impl<'a> CompileInputs<'a> {
                     });
                 }
                 wasmtime_environ::component::GlobalInitializer::ResourceRep(r) => {
-                    let key = CompileKey::resource_rep(r.index);
-                    ret.push_input(key, move |key, _tunables, compiler| {
+                    ret.push_input(move |_tunables, compiler| {
                         Ok(CompileOutput {
-                            key,
+                            key: CompileKey::resource_rep(r.index),
                             symbol: r.symbol_name(),
                             function: compiler
                                 .component_compiler()
@@ -323,10 +315,9 @@ impl<'a> CompileInputs<'a> {
                     });
                 }
                 wasmtime_environ::component::GlobalInitializer::ResourceDrop(r) => {
-                    let key = CompileKey::resource_drop(r.index);
-                    ret.push_input(key, move |key, _tunables, compiler| {
+                    ret.push_input(move |_tunables, compiler| {
                         Ok(CompileOutput {
-                            key,
+                            key: CompileKey::resource_drop(r.index),
                             symbol: r.symbol_name(),
                             function: compiler
                                 .component_compiler()
@@ -361,11 +352,10 @@ impl<'a> CompileInputs<'a> {
         // so it's an accepted overhead for now.
         if component.num_resources > 0 {
             if let Some(sig) = types.find_resource_drop_signature() {
-                let key = CompileKey::resource_drop_wasm_to_native_trampoline();
-                ret.push_input(key, move |key, _tunables, compiler| {
+                ret.push_input(move |_tunables, compiler| {
                     let trampoline = compiler.compile_wasm_to_native_trampoline(&types[sig])?;
                     Ok(CompileOutput {
-                        key,
+                        key: CompileKey::resource_drop_wasm_to_native_trampoline(),
                         symbol: "resource_drop_trampoline".to_string(),
                         function: CompiledFunction::Function(trampoline),
                         info: None,
@@ -392,8 +382,7 @@ impl<'a> CompileInputs<'a> {
 
         for (module, translation, functions) in translations {
             for (def_func_index, func_body) in functions {
-                let key = CompileKey::wasm_function(module, def_func_index);
-                self.push_input(key, move |key, tunables, compiler| {
+                self.push_input(move |tunables, compiler| {
                     let func_index = translation.module.func_index(def_func_index);
                     let (info, function) = compiler.compile_function(
                         translation,
@@ -403,7 +392,7 @@ impl<'a> CompileInputs<'a> {
                         types,
                     )?;
                     Ok(CompileOutput {
-                        key,
+                        key: CompileKey::wasm_function(module, def_func_index),
                         symbol: format!(
                             "wasm[{}]::function[{}]",
                             module.as_u32(),
@@ -416,8 +405,7 @@ impl<'a> CompileInputs<'a> {
 
                 let func_index = translation.module.func_index(def_func_index);
                 if translation.module.functions[func_index].is_escaping() {
-                    let key = CompileKey::array_to_wasm_trampoline(module, def_func_index);
-                    self.push_input(key, move |key, _tunables, compiler| {
+                    self.push_input(move |_tunables, compiler| {
                         let func_index = translation.module.func_index(def_func_index);
                         let trampoline = compiler.compile_array_to_wasm_trampoline(
                             translation,
@@ -425,7 +413,7 @@ impl<'a> CompileInputs<'a> {
                             def_func_index,
                         )?;
                         Ok(CompileOutput {
-                            key,
+                            key: CompileKey::array_to_wasm_trampoline(module, def_func_index),
                             symbol: format!(
                                 "wasm[{}]::array_to_wasm_trampoline[{}]",
                                 module.as_u32(),
@@ -436,8 +424,7 @@ impl<'a> CompileInputs<'a> {
                         })
                     });
 
-                    let key = CompileKey::native_to_wasm_trampoline(module, def_func_index);
-                    self.push_input(key, move |key, _tunables, compiler| {
+                    self.push_input(move |_tunables, compiler| {
                         let func_index = translation.module.func_index(def_func_index);
                         let trampoline = compiler.compile_native_to_wasm_trampoline(
                             translation,
@@ -445,7 +432,7 @@ impl<'a> CompileInputs<'a> {
                             def_func_index,
                         )?;
                         Ok(CompileOutput {
-                            key,
+                            key: CompileKey::native_to_wasm_trampoline(module, def_func_index),
                             symbol: format!(
                                 "wasm[{}]::native_to_wasm_trampoline[{}]",
                                 module.as_u32(),
@@ -464,12 +451,11 @@ impl<'a> CompileInputs<'a> {
         }
 
         for signature in sigs {
-            let key = CompileKey::wasm_to_native_trampoline(signature);
-            self.push_input(key, move |key, _tunables, compiler| {
+            self.push_input(move |_tunables, compiler| {
                 let wasm_func_ty = &types[signature];
                 let trampoline = compiler.compile_wasm_to_native_trampoline(wasm_func_ty)?;
                 Ok(CompileOutput {
-                    key,
+                    key: CompileKey::wasm_to_native_trampoline(signature),
                     symbol: format!(
                         "signatures[{}]::wasm_to_native_trampoline",
                         signature.as_u32()
@@ -488,8 +474,7 @@ impl<'a> CompileInputs<'a> {
         let compiler = engine.compiler();
 
         // Compile each individual input in parallel.
-        let raw_outputs =
-            engine.run_maybe_parallel(self.inputs, |(key, f)| f(key, tunables, compiler))?;
+        let raw_outputs = engine.run_maybe_parallel(self.inputs, |f| f(tunables, compiler))?;
 
         // Bucket the outputs by kind.
         let mut outputs: BTreeMap<u32, Vec<CompileOutput>> = BTreeMap::new();
