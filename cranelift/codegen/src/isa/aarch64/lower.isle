@@ -2268,6 +2268,14 @@
 (rule (lower (return args))
       (lower_return args))
 
+;;;; Rules for `return_call` and `return_call_indirect` ;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (return_call (func_ref_data sig_ref extname dist) args))
+      (gen_return_call sig_ref extname dist args))
+
+(rule (lower (return_call_indirect sig_ref callee args))
+      (gen_return_call_indirect sig_ref callee args))
+
 ;;;; Rules for loads ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower

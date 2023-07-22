@@ -15,7 +15,8 @@ use super::{
     VectorSize, NZCV,
 };
 use crate::ir::condcodes;
-use crate::isa::aarch64::inst::{FPULeftShiftImm, FPURightShiftImm};
+use crate::isa;
+use crate::isa::aarch64::inst::{FPULeftShiftImm, FPURightShiftImm, ReturnCallInfo};
 use crate::isa::aarch64::lower::{lower_address, lower_pair_address};
 use crate::isa::aarch64::AArch64Backend;
 use crate::machinst::valueregs;
@@ -41,6 +42,7 @@ use std::vec::Vec;
 
 type BoxCallInfo = Box<CallInfo>;
 type BoxCallIndInfo = Box<CallIndInfo>;
+type BoxReturnCallInfo = Box<ReturnCallInfo>;
 type VecMachLabel = Vec<MachLabel>;
 type BoxJTSequenceInfo = Box<JTSequenceInfo>;
 type BoxExternalName = Box<ExternalName>;
@@ -93,8 +95,24 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
         distance: RelocDistance,
         args: ValueSlice,
     ) -> InstOutput {
-        let _ = (callee_sig, callee, distance, args);
-        todo!()
+        let caller_conv = isa::CallConv::Tail;
+        debug_assert_eq!(
+            self.lower_ctx.abi().call_conv(self.lower_ctx.sigs()),
+            caller_conv,
+            "Can only do `return_call`s from within a `tail` calling convention function"
+        );
+
+        let call_site = AArch64CallSite::from_func(
+            self.lower_ctx.sigs(),
+            callee_sig,
+            &callee,
+            distance,
+            caller_conv,
+            self.backend.flags().clone(),
+        );
+        call_site.emit_return_call(self.lower_ctx, args);
+
+        InstOutput::new()
     }
 
     fn gen_return_call_indirect(
@@ -103,8 +121,26 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
         callee: Value,
         args: ValueSlice,
     ) -> InstOutput {
-        let _ = (callee_sig, callee, args);
-        todo!()
+        let caller_conv = isa::CallConv::Tail;
+        debug_assert_eq!(
+            self.lower_ctx.abi().call_conv(self.lower_ctx.sigs()),
+            caller_conv,
+            "Can only do `return_call`s from within a `tail` calling convention function"
+        );
+
+        let callee = self.put_in_reg(callee);
+
+        let call_site = AArch64CallSite::from_ptr(
+            self.lower_ctx.sigs(),
+            callee_sig,
+            callee,
+            Opcode::ReturnCallIndirect,
+            caller_conv,
+            self.backend.flags().clone(),
+        );
+        call_site.emit_return_call(self.lower_ctx, args);
+
+        InstOutput::new()
     }
 
     fn sign_return_address_disabled(&mut self) -> Option<()> {
