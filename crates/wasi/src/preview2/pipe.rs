@@ -400,6 +400,9 @@ mod test {
     use super::*;
     use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
+    // 10ms was enough for every CI platform except linux riscv64:
+    const REASONABLE_DURATION: std::time::Duration = std::time::Duration::from_millis(100);
+
     pub fn simplex(size: usize) -> (impl AsyncRead, impl AsyncWrite) {
         let (a, b) = tokio::io::duplex(size);
         let (_read_half, write_half) = tokio::io::split(a);
@@ -421,7 +424,7 @@ mod test {
 
             // The reader task hasn't run yet. Call `ready` to await and fill the buffer.
             StreamState::Open => {
-                tokio::time::timeout(std::time::Duration::from_millis(10), reader.ready())
+                tokio::time::timeout(REASONABLE_DURATION, reader.ready())
                     .await
                     .expect("the reader should be ready instantly")
                     .expect("ready is ok");
@@ -440,7 +443,7 @@ mod test {
         assert_eq!(state, StreamState::Open);
         if bs.is_empty() {
             // Reader task hasn't run yet. Call `ready` to await and fill the buffer.
-            tokio::time::timeout(std::time::Duration::from_millis(10), reader.ready())
+            tokio::time::timeout(REASONABLE_DURATION, reader.ready())
                 .await
                 .expect("the reader should be ready instantly")
                 .expect("ready is ok");
@@ -477,7 +480,7 @@ mod test {
         assert_eq!(state, StreamState::Open);
         if bs.is_empty() {
             // Reader task hasn't run yet. Call `ready` to await and fill the buffer.
-            tokio::time::timeout(std::time::Duration::from_millis(10), reader.ready())
+            tokio::time::timeout(REASONABLE_DURATION, reader.ready())
                 .await
                 .expect("the reader should be ready instantly")
                 .expect("ready is ok");
@@ -497,7 +500,7 @@ mod test {
             StreamState::Closed => {} // Correct!
             StreamState::Open => {
                 // Need to await to give this side time to catch up
-                tokio::time::timeout(std::time::Duration::from_millis(10), reader.ready())
+                tokio::time::timeout(REASONABLE_DURATION, reader.ready())
                     .await
                     .expect("the reader should be ready instantly")
                     .expect("ready is ok");
@@ -522,7 +525,7 @@ mod test {
         assert_eq!(state, StreamState::Open);
         if bs.is_empty() {
             // Reader task hasn't run yet. Call `ready` to await and fill the buffer.
-            tokio::time::timeout(std::time::Duration::from_millis(10), reader.ready())
+            tokio::time::timeout(REASONABLE_DURATION, reader.ready())
                 .await
                 .expect("the reader should be ready instantly")
                 .expect("ready is ok");
@@ -540,7 +543,7 @@ mod test {
         assert_eq!(state, StreamState::Open);
 
         // We can wait on readiness and it will time out:
-        tokio::time::timeout(std::time::Duration::from_millis(10), reader.ready())
+        tokio::time::timeout(REASONABLE_DURATION, reader.ready())
             .await
             .err()
             .expect("the reader should time out");
@@ -555,7 +558,7 @@ mod test {
 
         // Wait readiness (yes we could possibly win the race and read it out faster, leaving that
         // out of the test for simplicity)
-        tokio::time::timeout(std::time::Duration::from_millis(10), reader.ready())
+        tokio::time::timeout(REASONABLE_DURATION, reader.ready())
             .await
             .expect("the reader should be ready instantly")
             .expect("the ready is ok");
@@ -571,7 +574,7 @@ mod test {
         assert_eq!(state, StreamState::Open);
 
         // We can wait on readiness and it will time out:
-        tokio::time::timeout(std::time::Duration::from_millis(10), reader.ready())
+        tokio::time::timeout(REASONABLE_DURATION, reader.ready())
             .await
             .err()
             .expect("the reader should time out");
@@ -586,7 +589,7 @@ mod test {
 
         // Wait readiness (yes we could possibly win the race and read it out faster, leaving that
         // out of the test for simplicity)
-        tokio::time::timeout(std::time::Duration::from_millis(10), reader.ready())
+        tokio::time::timeout(REASONABLE_DURATION, reader.ready())
             .await
             .expect("the reader should be ready instantly")
             .expect("the ready is ok");
@@ -611,7 +614,7 @@ mod test {
             w
         });
 
-        tokio::time::timeout(std::time::Duration::from_millis(10), reader.ready())
+        tokio::time::timeout(REASONABLE_DURATION, reader.ready())
             .await
             .expect("the reader should be ready instantly")
             .expect("ready is ok");
@@ -623,7 +626,7 @@ mod test {
         assert_eq!(state, StreamState::Open);
 
         // Allow the crank to turn more:
-        tokio::time::timeout(std::time::Duration::from_millis(10), reader.ready())
+        tokio::time::timeout(REASONABLE_DURATION, reader.ready())
             .await
             .expect("the reader should be ready instantly")
             .expect("ready is ok");
@@ -635,14 +638,14 @@ mod test {
         assert_eq!(state, StreamState::Open);
 
         // The writer task is now finished - join with it:
-        let w = tokio::time::timeout(std::time::Duration::from_millis(10), writer_task)
+        let w = tokio::time::timeout(REASONABLE_DURATION, writer_task)
             .await
             .expect("the join should be ready instantly");
         // And close the pipe:
         drop(w);
 
         // Allow the crank to turn more:
-        tokio::time::timeout(std::time::Duration::from_millis(10), reader.ready())
+        tokio::time::timeout(REASONABLE_DURATION, reader.ready())
             .await
             .expect("the reader should be ready instantly")
             .expect("ready is ok");
@@ -668,7 +671,7 @@ mod test {
         assert_eq!(len, 0);
         assert_eq!(state, StreamState::Open);
 
-        tokio::time::timeout(std::time::Duration::from_millis(10), writer.ready())
+        tokio::time::timeout(REASONABLE_DURATION, writer.ready())
             .await
             .expect("the writer should be ready instantly")
             .expect("ready is ok");
@@ -694,7 +697,7 @@ mod test {
         assert_eq!(state, StreamState::Open);
 
         // Check write readiness:
-        tokio::time::timeout(std::time::Duration::from_millis(10), writer.ready())
+        tokio::time::timeout(REASONABLE_DURATION, writer.ready())
             .await
             .expect("the writer should be ready instantly")
             .expect("ready is ok");
@@ -729,7 +732,7 @@ mod test {
         assert_eq!(state, StreamState::Open);
 
         // After the write, still ready for more writing:
-        tokio::time::timeout(std::time::Duration::from_millis(10), writer.ready())
+        tokio::time::timeout(REASONABLE_DURATION, writer.ready())
             .await
             .expect("the writer should be ready instantly")
             .expect("ready is ok");
@@ -746,7 +749,7 @@ mod test {
         assert_eq!(state, StreamState::Open);
 
         // After the write, still ready for more writing:
-        tokio::time::timeout(std::time::Duration::from_millis(10), writer.ready())
+        tokio::time::timeout(REASONABLE_DURATION, writer.ready())
             .await
             .expect("the writer should be ready instantly")
             .expect("ready is ok");
@@ -772,7 +775,7 @@ mod test {
         assert_eq!(state, StreamState::Open);
 
         // turn the crank and it should be ready for writing again:
-        tokio::time::timeout(std::time::Duration::from_millis(10), writer.ready())
+        tokio::time::timeout(REASONABLE_DURATION, writer.ready())
             .await
             .expect("the writer should be ready instantly")
             .expect("ready is ok");
@@ -788,7 +791,7 @@ mod test {
         assert_eq!(state, StreamState::Open);
 
         // turn the crank and it should Not become ready for writing until we read something out.
-        tokio::time::timeout(std::time::Duration::from_millis(10), writer.ready())
+        tokio::time::timeout(REASONABLE_DURATION, writer.ready())
             .await
             .err()
             .expect("the writer should be not become ready");
@@ -803,7 +806,7 @@ mod test {
         reader.read_exact(&mut buf).await.unwrap();
 
         // and no more:
-        tokio::time::timeout(std::time::Duration::from_millis(10), reader.read(&mut buf))
+        tokio::time::timeout(REASONABLE_DURATION, reader.read(&mut buf))
             .await
             .err()
             .expect("nothing more buffered in the system");
@@ -811,7 +814,7 @@ mod test {
         // Now the backpressure should be cleared, and an additional write should be accepted.
 
         // immediately ready for writing:
-        tokio::time::timeout(std::time::Duration::from_millis(10), writer.ready())
+        tokio::time::timeout(REASONABLE_DURATION, writer.ready())
             .await
             .expect("the writer should be ready instantly")
             .expect("ready is ok");
