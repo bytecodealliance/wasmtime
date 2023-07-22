@@ -23,7 +23,7 @@ pub fn stderr() -> Stderr {
 
 #[cfg(all(unix, test))]
 mod test {
-    use crate::preview2::{StreamState, HostInputStream};
+    use crate::preview2::{HostInputStream, StreamState};
     use libc;
     use std::fs::File;
     use std::io::{BufRead, BufReader, Write};
@@ -76,12 +76,15 @@ mod test {
 
     // This could even be parameterized somehow to use the worker thread stdin vs the asyncfd
     // stdin.
-    #[test]
-    fn test_stdin_by_forking() {
+    fn test_stdin_by_forking<S, T>(mk_stdin: T)
+    where
+        S: HostInputStream,
+        T: FnOnce() -> S,
+    {
         test_child_stdin(
             |mut result_write| {
                 tokio::runtime::Runtime::new().unwrap().block_on(async {
-                    let mut stdin = super::stdin();
+                    let mut stdin = mk_stdin();
 
                     assert!(
                         tokio::time::timeout(std::time::Duration::from_millis(100), stdin.ready())
@@ -106,8 +109,7 @@ mod test {
                         assert_eq!(status, StreamState::Open);
 
                         buffer.push_str(std::str::from_utf8(bytes.as_ref()).unwrap());
-                        if let Some((line,rest)) = buffer.split_once('\n') {
-
+                        if let Some((line, rest)) = buffer.split_once('\n') {
                             if line == "all done" {
                                 writeln!(&mut result_write, "done").unwrap();
                                 break;
@@ -137,5 +139,17 @@ mod test {
                 assert_eq!(line, "done\n");
             },
         )
+    }
+
+    #[test]
+    fn test_async_fd_stdin() {
+        test_stdin_by_forking(super::stdin);
+    }
+
+    #[test]
+    // worker_thread_stdin is currently under development
+    #[should_panic]
+    fn test_worker_thread_stdin() {
+        test_stdin_by_forking(super::worker_thread_stdin::stdin);
     }
 }
