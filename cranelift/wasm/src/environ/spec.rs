@@ -170,6 +170,23 @@ pub trait FuncEnvironment: TargetEnvironment {
         index: FuncIndex,
     ) -> WasmResult<ir::FuncRef>;
 
+    /// Translate a `call` WebAssembly instruction at `pos`.
+    ///
+    /// Insert instructions at `pos` for a direct call to the function `callee_index`.
+    ///
+    /// The function reference `callee` was previously created by `make_direct_func()`.
+    ///
+    /// Return the call instruction whose results are the WebAssembly return values.
+    fn translate_call(
+        &mut self,
+        mut pos: FuncCursor,
+        _callee_index: FuncIndex,
+        callee: ir::FuncRef,
+        call_args: &[ir::Value],
+    ) -> WasmResult<ir::Inst> {
+        Ok(pos.ins().call(callee, call_args))
+    }
+
     /// Translate a `call_indirect` WebAssembly instruction at `pos`.
     ///
     /// Insert instructions at `pos` for an indirect call to the function `callee` in the table
@@ -191,22 +208,42 @@ pub trait FuncEnvironment: TargetEnvironment {
         call_args: &[ir::Value],
     ) -> WasmResult<ir::Inst>;
 
-    /// Translate a `call` WebAssembly instruction at `pos`.
+    /// Translate a `return_call` WebAssembly instruction at `pos`.
     ///
-    /// Insert instructions at `pos` for a direct call to the function `callee_index`.
+    /// Insert instructions at `pos` for a direct tail call to the function `callee_index`.
     ///
     /// The function reference `callee` was previously created by `make_direct_func()`.
     ///
     /// Return the call instruction whose results are the WebAssembly return values.
-    fn translate_call(
+    fn translate_return_call(
         &mut self,
         mut pos: FuncCursor,
         _callee_index: FuncIndex,
         callee: ir::FuncRef,
         call_args: &[ir::Value],
-    ) -> WasmResult<ir::Inst> {
-        Ok(pos.ins().call(callee, call_args))
+    ) -> WasmResult<()> {
+        pos.ins().return_call(callee, call_args);
+        Ok(())
     }
+
+    /// Translate a `return_call_indirect` WebAssembly instruction at `pos`.
+    ///
+    /// Insert instructions at `pos` for an indirect tail call to the function
+    /// `callee` in the table `table_index` with WebAssembly signature
+    /// `sig_index`. The `callee` value will have type `i32`.
+    ///
+    /// The signature `sig_ref` was previously created by `make_indirect_sig()`.
+    #[allow(clippy::too_many_arguments)]
+    fn translate_return_call_indirect(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        table_index: TableIndex,
+        table: ir::Table,
+        sig_index: TypeIndex,
+        sig_ref: ir::SigRef,
+        callee: ir::Value,
+        call_args: &[ir::Value],
+    ) -> WasmResult<()>;
 
     /// Translate a `call_ref` WebAssembly instruction at `pos`.
     ///
