@@ -126,19 +126,65 @@ WASMTIME_CONFIG_PROP(void, consume_fuel, bool)
 WASMTIME_CONFIG_PROP(void, epoch_interruption, bool)
 
 /**
- * \brief Configures the maximum stack size, in bytes, that JIT code can use.
+ * \brief Configures the maximum amount of stack space available, in bytes,
+ * for executing WebAssembly code.
  *
- * This setting is 2MB by default. Configuring this setting will limit the
- * amount of native stack space that JIT code can use while it is executing. If
- * you're hitting stack overflow you can try making this setting larger, or if
- * you'd like to limit wasm programs to less stack you can also configure this.
+ * WebAssembly has well-defined semantics on stack overflow. This is
+ * intended to be a knob which can help configure how much stack space
+ * wasm execution is allowed to consume. Note that the number here is not
+ * super-precise, but rather wasm will take at most "pretty close to this
+ * much" stack space.
  *
- * Note that this setting is not interpreted with 100% precision. Additionally
- * the amount of stack space that wasm takes is always relative to the first
- * invocation of wasm on the stack, so recursive calls with host frames in the
- * middle will all need to fit within this setting.
+ * If a wasm call (or series of nested wasm calls) take more stack space
+ * than the `size` specified then a stack overflow trap will be raised.
+ *
+ * Caveat: this knob only limits the stack space consumed by wasm code.
+ * More importantly, it does not ensure that this much stack space is
+ * available on the calling thread stack. Exhausting the thread stack
+ * typically leads to an **abort** of the process.
+ *
+ * Here are some examples of how that could happen:
+ *
+ * - Let's assume this option is set to 2 MiB and then a thread that has
+ *   a stack with 512 KiB left.
+ *
+ *   If wasm code consumes more than 512 KiB then the process will be aborted.
+ *
+ * - Assuming the same conditions, but this time wasm code does not consume
+ *   any stack but calls into a host function. The host function consumes
+ *   more than 512 KiB of stack space. The process will be aborted.
+ *
+ * There's another gotcha related to recursive calling into wasm: the stack
+ * space consumed by a host function is counted towards this limit. The
+ * host functions are not prevented from consuming more than this limit.
+ * However, if the host function that used more than this limit and called
+ * back into wasm, then the execution will trap immediatelly because of
+ * stack overflow.
+ *
+ * When the `async` feature is enabled, this value cannot exceed the
+ * `async_stack_size` option. Be careful not to set this value too close
+ * to `async_stack_size` as doing so may limit how much stack space
+ * is available for host functions.
+ *
+ * By default this option is 512 KiB.
  */
 WASMTIME_CONFIG_PROP(void, max_wasm_stack, size_t)
+
+/**
+ * \brief Configures the size of the stacks, in bytes, used for asynchronous
+ * execution.
+ *
+ * This setting configures the size of the stacks that are allocated for
+ * asynchronous execution. The value cannot be less than `max_wasm_stack`.
+ *
+ * The amount of stack space guaranteed for host functions is
+ * `async_stack_size - max_wasm_stack`, so take care not to set these two
+ * values close to one another; doing so may cause host functions to overflow
+ * the stack and abort the process.
+ *
+ * By default this option is 2 MiB.
+ */
+WASMTIME_CONFIG_PROP(void, async_stack_size, size_t)
 
 /**
  * \brief Configures whether the WebAssembly threading proposal is enabled.

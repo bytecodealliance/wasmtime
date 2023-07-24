@@ -33,8 +33,9 @@ cap-std = { workspace = true, optional = true }
 wasi-common = { workspace = true, optional = true }
 
 [features]
-default = ['jitdump', 'wat', 'wasi', 'cache', 'parallel-compilation']
+default = ['jitdump', 'wat', 'wasi', 'cache', 'parallel-compilation', 'async']
 jitdump = ["wasmtime/jitdump"]
 cache = ["wasmtime/cache"]
 parallel-compilation = ['wasmtime/parallel-compilation']
 wasi = ['wasi-cap-std-sync', 'wasmtime-wasi', 'cap-std', 'wasi-common']
+async = ['wasmtime/async']
