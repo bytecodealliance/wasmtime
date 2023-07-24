@@ -1,7 +1,9 @@
 use crate::preview2::{HostInputStream, StreamState};
 use anyhow::{Context, Error};
-use bytes::Bytes;
-use tokio::sync::{mpsc, oneshot};
+use bytes::{Bytes, BytesMut};
+use std::io::Read;
+use std::sync::Arc;
+use tokio::sync::watch;
 
 // wasmtime cant use std::sync::OnceLock yet because of a llvm regression in
 // 1.70. when 1.71 is released, we can switch to using std here.
@@ -13,105 +15,96 @@ use std::sync::Mutex;
 // this instance registers the process's stdin fd with epoll, which will
 // return an error if an fd is registered more than once.
 struct GlobalStdin {
-    tx: mpsc::Sender<oneshot::Sender<anyhow::Result<()>>>,
-    // FIXME use a Watch to check for readiness instead of sending a oneshot sender
+    rx: watch::Receiver<()>,
+    state: Arc<Mutex<StdinState>>,
 }
-static STDIN: OnceLock<Mutex<GlobalStdin>> = OnceLock::new();
+struct StdinState {
+    buffer: BytesMut,
+    error: Option<std::io::Error>,
+    closed: bool,
+}
 
-fn create() -> Mutex<GlobalStdin> {
-    let (tx, mut rx) = mpsc::channel::<oneshot::Sender<anyhow::Result<()>>>(1);
-    std::thread::spawn(move || {
-        use std::io::BufRead;
-        // A client is interested in stdin's readiness.
-        // Don't care about the None case - the GlobalStdin sender on the other
-        // end of this pipe will live forever, because it lives inside the OnceLock.
-        while let Some(msg) = rx.blocking_recv() {
-            // Fill buf - can we skip this if its
-            // already filled?
-            // also, this could block forever and the
-            // client could give up. in that case,
-            // another client may want to start waiting
-            let r = std::io::stdin()
-                .lock()
-                .fill_buf()
-                .map(|_| ())
-                .map_err(anyhow::Error::from);
-            // tell the client stdin is ready for reading.
-            // don't care if the client happens to have died.
-            let _ = msg.send(r);
+static STDIN: OnceLock<GlobalStdin> = OnceLock::new();
+
+fn create() -> GlobalStdin {
+    let (tx, rx) = watch::channel(());
+
+    let state = Arc::new(Mutex::new(StdinState {
+        buffer: BytesMut::new(),
+        error: None,
+        closed: false,
+    }));
+
+    let ret = GlobalStdin {
+        state: state.clone(),
+        rx,
+    };
+
+    std::thread::spawn(move || loop {
+        let mut bytes = BytesMut::zeroed(1024);
+        match std::io::stdin().lock().read(&mut bytes) {
+            Ok(nbytes) => {
+                bytes.truncate(nbytes);
+                {
+                    let mut locked = state.lock().unwrap();
+                    locked.buffer.extend_from_slice(&bytes);
+                }
+                tx.send(()).expect("at least one rx exists");
+            }
+            Err(e) => {
+                {
+                    let mut locked = state.lock().unwrap();
+                    if locked.error.is_none() {
+                        locked.error = Some(e)
+                    }
+                    locked.closed = true;
+                }
+                tx.send(()).expect("at least one rx exists");
+            }
         }
     });
-
-    Mutex::new(GlobalStdin { tx })
+    ret
 }
 
 pub struct Stdin;
 impl Stdin {
-    fn get_global() -> &'static Mutex<GlobalStdin> {
+    fn get_global() -> &'static GlobalStdin {
         STDIN.get_or_init(|| create())
     }
 }
 
 pub fn stdin() -> Stdin {
-    // This implementation still needs to be fixed, and we need better test coverage.
-    // We are deferring that work to a future PR.
-    // https://github.com/bytecodealliance/wasmtime/pull/6556#issuecomment-1646232646
-    panic!("worker-thread based stdin is not yet implemented");
-    // Stdin
+    Stdin
 }
 
 #[async_trait::async_trait]
 impl HostInputStream for Stdin {
     fn read(&mut self, size: usize) -> Result<(Bytes, StreamState), Error> {
-        use std::io::Read;
-        let mut buf = vec![0; size];
-        // FIXME: this is actually blocking. This whole implementation is likely bogus as a result
-        let nbytes = std::io::stdin().read(&mut buf)?;
-        buf.truncate(nbytes);
-        Ok((
-            buf.into(),
-            if nbytes > 0 {
-                StreamState::Open
-            } else {
-                StreamState::Closed
-            },
-        ))
+        let mut locked = Stdin::get_global().state.lock().unwrap();
+        if let Some(e) = locked.error.take() {
+            return Err(e.into());
+        }
+        let size = locked.buffer.len().min(size);
+        let bytes = locked.buffer.split_to(size);
+        let state = if locked.buffer.is_empty() && locked.closed {
+            StreamState::Closed
+        } else {
+            StreamState::Open
+        };
+        Ok((bytes.freeze(), state))
     }
 
     async fn ready(&mut self) -> Result<(), Error> {
-        use mpsc::error::TrySendError;
-        use std::future::Future;
-        use std::pin::Pin;
-        use std::task::{Context, Poll};
-
-        // Custom Future impl takes the std mutex in each invocation of poll.
-        // Required so we don't have to use a tokio mutex, which we can't take from
-        // inside a sync context in Self::read.
-        //
-        // Take the lock, attempt to
-        struct Send(Option<oneshot::Sender<anyhow::Result<()>>>);
-        impl Future for Send {
-            type Output = anyhow::Result<()>;
-            fn poll(mut self: Pin<&mut Self>, _: &mut Context) -> Poll<Self::Output> {
-                let locked = Stdin::get_global().lock().unwrap();
-                let to_send = self.as_mut().0.take().expect("to_send should be some");
-                match locked.tx.try_send(to_send) {
-                    Ok(()) => Poll::Ready(Ok(())),
-                    Err(TrySendError::Full(to_send)) => {
-                        self.as_mut().0.replace(to_send);
-                        Poll::Pending
-                    }
-                    Err(TrySendError::Closed(_)) => {
-                        Poll::Ready(Err(anyhow::anyhow!("channel to GlobalStdin closed")))
-                    }
-                }
+        let g = Stdin::get_global();
+        // Make sure we dont hold this lock across the await:
+        {
+            let locked = g.state.lock().unwrap();
+            if !locked.buffer.is_empty() || locked.error.is_some() || locked.closed {
+                return Ok(());
             }
-        }
+        };
 
-        let (result_tx, rx) = oneshot::channel::<anyhow::Result<()>>();
-        Box::pin(Send(Some(result_tx)))
-            .await
-            .context("sending message to worker thread")?;
-        rx.await.expect("channel is always alive")
+        let mut rx = g.rx.clone();
+        rx.changed().await.context("stdin sender died")
     }
 }

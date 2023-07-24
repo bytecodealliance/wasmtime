@@ -147,8 +147,6 @@ mod test {
     }
 
     #[test]
-    // worker_thread_stdin is currently under development
-    #[should_panic]
     fn test_worker_thread_stdin() {
         test_stdin_by_forking(super::worker_thread_stdin::stdin);
     }
