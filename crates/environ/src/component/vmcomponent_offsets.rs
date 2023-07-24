@@ -6,12 +6,7 @@
 //      store: *mut dyn Store,
 //      limits: *const VMRuntimeLimits,
 //      flags: [VMGlobalDefinition; component.num_runtime_component_instances],
-//      lowering_func_refs: [VMFuncRef; component.num_lowerings],
-//      always_trap_func_refs: [VMFuncRef; component.num_always_trap],
-//      transcoder_func_refs: [VMFuncRef; component.num_transcoders],
-//      resource_new_func_refs: [VMFuncRef; component.num_resource_new],
-//      resource_rep_func_refs: [VMFuncRef; component.num_resource_rep],
-//      resource_drop_func_refs: [VMFuncRef; component.num_resource_drop],
+//      trampoline_func_refs: [VMFuncRef; component.num_trampolines],
 //      lowerings: [VMLowering; component.num_lowerings],
 //      memories: [*mut VMMemoryDefinition; component.num_memories],
 //      reallocs: [*mut VMFuncRef; component.num_reallocs],
@@ -57,17 +52,8 @@ pub struct VMComponentOffsets<P> {
     /// Number of component instances internally in the component (always at
     /// least 1).
     pub num_runtime_component_instances: u32,
-    /// Number of "always trap" functions which have their
-    /// `VMFuncRef` stored inline in the `VMComponentContext`.
-    pub num_always_trap: u32,
-    /// Number of transcoders needed for string conversion.
-    pub num_transcoders: u32,
-    /// Number of `resource.new` intrinsics within a component.
-    pub num_resource_new: u32,
-    /// Number of `resource.rep` intrinsics within a component.
-    pub num_resource_rep: u32,
-    /// Number of `resource.drop` intrinsics within a component.
-    pub num_resource_drop: u32,
+    /// Number of cranelift-compiled trampolines required for this component.
+    pub num_trampolines: u32,
     /// Number of resources within a component which need destructors stored.
     pub num_resources: u32,
 
@@ -77,12 +63,7 @@ pub struct VMComponentOffsets<P> {
     store: u32,
     limits: u32,
     flags: u32,
-    lowering_func_refs: u32,
-    always_trap_func_refs: u32,
-    transcoder_func_refs: u32,
-    resource_new_func_refs: u32,
-    resource_rep_func_refs: u32,
-    resource_drop_func_refs: u32,
+    trampoline_func_refs: u32,
     lowerings: u32,
     memories: u32,
     reallocs: u32,
@@ -103,7 +84,7 @@ impl<P: PtrSize> VMComponentOffsets<P> {
     pub fn new(ptr: P, component: &Component) -> Self {
         let mut ret = Self {
             ptr,
-            num_lowerings: component.num_lowerings.try_into().unwrap(),
+            num_lowerings: component.num_lowerings,
             num_runtime_memories: component.num_runtime_memories.try_into().unwrap(),
             num_runtime_reallocs: component.num_runtime_reallocs.try_into().unwrap(),
             num_runtime_post_returns: component.num_runtime_post_returns.try_into().unwrap(),
@@ -111,23 +92,14 @@ impl<P: PtrSize> VMComponentOffsets<P> {
                 .num_runtime_component_instances
                 .try_into()
                 .unwrap(),
-            num_always_trap: component.num_always_trap,
-            num_transcoders: component.num_transcoders,
-            num_resource_new: component.num_resource_new,
-            num_resource_rep: component.num_resource_rep,
-            num_resource_drop: component.num_resource_drop,
+            num_trampolines: component.trampolines.len().try_into().unwrap(),
             num_resources: component.num_resources,
             magic: 0,
             libcalls: 0,
             store: 0,
             limits: 0,
             flags: 0,
-            lowering_func_refs: 0,
-            always_trap_func_refs: 0,
-            transcoder_func_refs: 0,
-            resource_new_func_refs: 0,
-            resource_rep_func_refs: 0,
-            resource_drop_func_refs: 0,
+            trampoline_func_refs: 0,
             lowerings: 0,
             memories: 0,
             reallocs: 0,
@@ -169,12 +141,7 @@ impl<P: PtrSize> VMComponentOffsets<P> {
             align(16),
             size(flags) = cmul(ret.num_runtime_component_instances, ret.ptr.size_of_vmglobal_definition()),
             align(u32::from(ret.ptr.size())),
-            size(lowering_func_refs) = cmul(ret.num_lowerings, ret.ptr.size_of_vm_func_ref()),
-            size(always_trap_func_refs) = cmul(ret.num_always_trap, ret.ptr.size_of_vm_func_ref()),
-            size(transcoder_func_refs) = cmul(ret.num_transcoders, ret.ptr.size_of_vm_func_ref()),
-            size(resource_new_func_refs) = cmul(ret.num_resource_new, ret.ptr.size_of_vm_func_ref()),
-            size(resource_rep_func_refs) = cmul(ret.num_resource_rep, ret.ptr.size_of_vm_func_ref()),
-            size(resource_drop_func_refs) = cmul(ret.num_resource_drop, ret.ptr.size_of_vm_func_ref()),
+            size(trampoline_func_refs) = cmul(ret.num_trampolines, ret.ptr.size_of_vm_func_ref()),
             size(lowerings) = cmul(ret.num_lowerings, ret.ptr.size() * 2),
             size(memories) = cmul(ret.num_runtime_memories, ret.ptr.size()),
             size(reallocs) = cmul(ret.num_runtime_reallocs, ret.ptr.size()),
@@ -229,82 +196,17 @@ impl<P: PtrSize> VMComponentOffsets<P> {
         self.limits
     }
 
-    /// The offset of the `lowering_func_refs` field.
+    /// The offset of the `trampoline_func_refs` field.
     #[inline]
-    pub fn lowering_func_refs(&self) -> u32 {
-        self.lowering_func_refs
+    pub fn trampoline_func_refs(&self) -> u32 {
+        self.trampoline_func_refs
     }
 
     /// The offset of `VMFuncRef` for the `index` specified.
     #[inline]
-    pub fn lowering_func_ref(&self, index: LoweredIndex) -> u32 {
-        assert!(index.as_u32() < self.num_lowerings);
-        self.lowering_func_refs() + index.as_u32() * u32::from(self.ptr.size_of_vm_func_ref())
-    }
-
-    /// The offset of the `always_trap_func_refs` field.
-    #[inline]
-    pub fn always_trap_func_refs(&self) -> u32 {
-        self.always_trap_func_refs
-    }
-
-    /// The offset of `VMFuncRef` for the `index` specified.
-    #[inline]
-    pub fn always_trap_func_ref(&self, index: RuntimeAlwaysTrapIndex) -> u32 {
-        assert!(index.as_u32() < self.num_always_trap);
-        self.always_trap_func_refs() + index.as_u32() * u32::from(self.ptr.size_of_vm_func_ref())
-    }
-
-    /// The offset of the `transcoder_func_refs` field.
-    #[inline]
-    pub fn transcoder_func_refs(&self) -> u32 {
-        self.transcoder_func_refs
-    }
-
-    /// The offset of `VMFuncRef` for the `index` specified.
-    #[inline]
-    pub fn transcoder_func_ref(&self, index: RuntimeTranscoderIndex) -> u32 {
-        assert!(index.as_u32() < self.num_transcoders);
-        self.transcoder_func_refs() + index.as_u32() * u32::from(self.ptr.size_of_vm_func_ref())
-    }
-
-    /// The offset of the `resource_new_func_refs` field.
-    #[inline]
-    pub fn resource_new_func_refs(&self) -> u32 {
-        self.resource_new_func_refs
-    }
-
-    /// The offset of `VMFuncRef` for the `index` specified.
-    #[inline]
-    pub fn resource_new_func_ref(&self, index: RuntimeResourceNewIndex) -> u32 {
-        assert!(index.as_u32() < self.num_resource_new);
-        self.resource_new_func_refs() + index.as_u32() * u32::from(self.ptr.size_of_vm_func_ref())
-    }
-
-    /// The offset of the `resource_rep_func_refs` field.
-    #[inline]
-    pub fn resource_rep_func_refs(&self) -> u32 {
-        self.resource_rep_func_refs
-    }
-
-    /// The offset of `VMFuncRef` for the `index` specified.
-    #[inline]
-    pub fn resource_rep_func_ref(&self, index: RuntimeResourceRepIndex) -> u32 {
-        assert!(index.as_u32() < self.num_resource_rep);
-        self.resource_rep_func_refs() + index.as_u32() * u32::from(self.ptr.size_of_vm_func_ref())
-    }
-
-    /// The offset of the `resource_drop_func_refs` field.
-    #[inline]
-    pub fn resource_drop_func_refs(&self) -> u32 {
-        self.resource_drop_func_refs
-    }
-
-    /// The offset of `VMFuncRef` for the `index` specified.
-    #[inline]
-    pub fn resource_drop_func_ref(&self, index: RuntimeResourceDropIndex) -> u32 {
-        assert!(index.as_u32() < self.num_resource_drop);
-        self.resource_drop_func_refs() + index.as_u32() * u32::from(self.ptr.size_of_vm_func_ref())
+    pub fn trampoline_func_ref(&self, index: TrampolineIndex) -> u32 {
+        assert!(index.as_u32() < self.num_trampolines);
+        self.trampoline_func_refs() + index.as_u32() * u32::from(self.ptr.size_of_vm_func_ref())
     }
 
     /// The offset of the `lowerings` field.

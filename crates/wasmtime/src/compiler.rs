@@ -46,7 +46,7 @@ struct CompileKey {
 }
 
 impl CompileKey {
-    const KIND_BITS: u32 = 4;
+    const KIND_BITS: u32 = 3;
     const KIND_OFFSET: u32 = 32 - Self::KIND_BITS;
     const KIND_MASK: u32 = ((1 << Self::KIND_BITS) - 1) << Self::KIND_OFFSET;
 
@@ -104,52 +104,12 @@ impl CompileKey {
 
 #[cfg(feature = "component-model")]
 impl CompileKey {
-    const LOWERING_KIND: u32 = Self::new_kind(4);
-    const ALWAYS_TRAP_KIND: u32 = Self::new_kind(5);
-    const TRANSCODER_KIND: u32 = Self::new_kind(6);
-    const RESOURCE_NEW_KIND: u32 = Self::new_kind(7);
-    const RESOURCE_REP_KIND: u32 = Self::new_kind(8);
-    const RESOURCE_DROP_KIND: u32 = Self::new_kind(9);
-    const RESOURCE_DROP_WASM_TO_NATIVE_KIND: u32 = Self::new_kind(10);
+    const TRAMPOLINE_KIND: u32 = Self::new_kind(4);
+    const RESOURCE_DROP_WASM_TO_NATIVE_KIND: u32 = Self::new_kind(5);
 
-    fn lowering(index: wasmtime_environ::component::LoweredIndex) -> Self {
+    fn trampoline(index: wasmtime_environ::component::TrampolineIndex) -> Self {
         Self {
-            namespace: Self::LOWERING_KIND,
-            index: index.as_u32(),
-        }
-    }
-
-    fn always_trap(index: wasmtime_environ::component::RuntimeAlwaysTrapIndex) -> Self {
-        Self {
-            namespace: Self::ALWAYS_TRAP_KIND,
-            index: index.as_u32(),
-        }
-    }
-
-    fn transcoder(index: wasmtime_environ::component::RuntimeTranscoderIndex) -> Self {
-        Self {
-            namespace: Self::TRANSCODER_KIND,
-            index: index.as_u32(),
-        }
-    }
-
-    fn resource_new(index: wasmtime_environ::component::RuntimeResourceNewIndex) -> Self {
-        Self {
-            namespace: Self::RESOURCE_NEW_KIND,
-            index: index.as_u32(),
-        }
-    }
-
-    fn resource_rep(index: wasmtime_environ::component::RuntimeResourceRepIndex) -> Self {
-        Self {
-            namespace: Self::RESOURCE_REP_KIND,
-            index: index.as_u32(),
-        }
-    }
-
-    fn resource_drop(index: wasmtime_environ::component::RuntimeResourceDropIndex) -> Self {
-        Self {
-            namespace: Self::RESOURCE_DROP_KIND,
+            namespace: Self::TRAMPOLINE_KIND,
             index: index.as_u32(),
         }
     }
@@ -233,7 +193,7 @@ impl<'a> CompileInputs<'a> {
     #[cfg(feature = "component-model")]
     pub fn for_component(
         types: &'a wasmtime_environ::component::ComponentTypes,
-        component: &'a wasmtime_environ::component::Component,
+        component: &'a wasmtime_environ::component::ComponentTranslation,
         module_translations: impl IntoIterator<
             Item = (
                 StaticModuleIndex,
@@ -246,111 +206,27 @@ impl<'a> CompileInputs<'a> {
 
         ret.collect_inputs_in_translations(types.module_types(), module_translations);
 
-        for init in &component.initializers {
-            match init {
-                wasmtime_environ::component::GlobalInitializer::AlwaysTrap(always_trap) => {
-                    ret.push_input(move |_tunables, compiler| {
-                        Ok(CompileOutput {
-                            key: CompileKey::always_trap(always_trap.index),
-                            symbol: always_trap.symbol_name(),
-                            function: compiler
-                                .component_compiler()
-                                .compile_always_trap(&types[always_trap.canonical_abi])?
-                                .into(),
-                            info: None,
-                        })
-                    });
-                }
-                wasmtime_environ::component::GlobalInitializer::Transcoder(transcoder) => {
-                    ret.push_input(move |_tunables, compiler| {
-                        Ok(CompileOutput {
-                            key: CompileKey::transcoder(transcoder.index),
-                            symbol: transcoder.symbol_name(),
-                            function: compiler
-                                .component_compiler()
-                                .compile_transcoder(component, transcoder, types)?
-                                .into(),
-                            info: None,
-                        })
-                    });
-                }
-                wasmtime_environ::component::GlobalInitializer::LowerImport(lower_import) => {
-                    ret.push_input(move |_tunables, compiler| {
-                        Ok(CompileOutput {
-                            key: CompileKey::lowering(lower_import.index),
-                            symbol: lower_import.symbol_name(),
-                            function: compiler
-                                .component_compiler()
-                                .compile_lowered_trampoline(component, lower_import, types)?
-                                .into(),
-                            info: None,
-                        })
-                    });
-                }
-
-                wasmtime_environ::component::GlobalInitializer::ResourceNew(r) => {
-                    ret.push_input(move |_tunables, compiler| {
-                        Ok(CompileOutput {
-                            key: CompileKey::resource_new(r.index),
-                            symbol: r.symbol_name(),
-                            function: compiler
-                                .component_compiler()
-                                .compile_resource_new(component, r, types)?
-                                .into(),
-                            info: None,
-                        })
-                    });
-                }
-                wasmtime_environ::component::GlobalInitializer::ResourceRep(r) => {
-                    ret.push_input(move |_tunables, compiler| {
-                        Ok(CompileOutput {
-                            key: CompileKey::resource_rep(r.index),
-                            symbol: r.symbol_name(),
-                            function: compiler
-                                .component_compiler()
-                                .compile_resource_rep(component, r, types)?
-                                .into(),
-                            info: None,
-                        })
-                    });
-                }
-                wasmtime_environ::component::GlobalInitializer::ResourceDrop(r) => {
-                    ret.push_input(move |_tunables, compiler| {
-                        Ok(CompileOutput {
-                            key: CompileKey::resource_drop(r.index),
-                            symbol: r.symbol_name(),
-                            function: compiler
-                                .component_compiler()
-                                .compile_resource_drop(component, r, types)?
-                                .into(),
-                            info: None,
-                        })
-                    });
-                }
-
-                wasmtime_environ::component::GlobalInitializer::Resource(_)
-                | wasmtime_environ::component::GlobalInitializer::InstantiateModule(_)
-                | wasmtime_environ::component::GlobalInitializer::ExtractMemory(_)
-                | wasmtime_environ::component::GlobalInitializer::ExtractRealloc(_)
-                | wasmtime_environ::component::GlobalInitializer::ExtractPostReturn(_) => {
-                    // Nothing to compile for these.
-                }
-            }
+        for (idx, trampoline) in component.trampolines.iter() {
+            ret.push_input(move |_tunables, compiler| {
+                Ok(CompileOutput {
+                    key: CompileKey::trampoline(idx),
+                    symbol: trampoline.symbol_name(),
+                    function: compiler
+                        .component_compiler()
+                        .compile_trampoline(component, types, idx)?
+                        .into(),
+                    info: None,
+                })
+            });
         }
 
-        // If a host-defined resource is destroyed from wasm then a
-        // wasm-to-native trampoline will be required when creating the
-        // `VMFuncRef` for the host resource's destructor. This snippet is an
-        // overeager approximation of this where if a component has any
-        // resources and the signature of `resource.drop` is mentioned anywhere
-        // in the component then assume this situation is going to happen.
-        //
-        // To handle this a wasm-to-native trampoline for the signature is
-        // generated here. Note that this may duplicate one wasm-to-native
-        // trampoline as it may already exist for the signature elsewhere in the
-        // file. Doing this here though helps simplify this compilation process
-        // so it's an accepted overhead for now.
-        if component.num_resources > 0 {
+        // If there are any resources defined within this component, the
+        // signature for `resource.drop` is mentioned somewhere, and the
+        // wasm-to-native trampoline for `resource.drop` hasn't been created yet
+        // then insert that here. This is possibly required by destruction of
+        // resources from the embedder and otherwise won't be explicitly
+        // requested through initializers above or such.
+        if component.component.num_resources > 0 {
             if let Some(sig) = types.find_resource_drop_signature() {
                 ret.push_input(move |_tunables, compiler| {
                     let trampoline = compiler.compile_wasm_to_native_trampoline(&types[sig])?;
@@ -748,44 +624,9 @@ impl FunctionIndices {
 
         #[cfg(feature = "component-model")]
         {
-            artifacts.lowerings = self
+            artifacts.trampolines = self
                 .indices
-                .remove(&CompileKey::LOWERING_KIND)
-                .unwrap_or_default()
-                .into_iter()
-                .map(|(_id, x)| x.unwrap_all_call_func().map(|i| symbol_ids_and_locs[i].1))
-                .collect();
-            artifacts.transcoders = self
-                .indices
-                .remove(&CompileKey::TRANSCODER_KIND)
-                .unwrap_or_default()
-                .into_iter()
-                .map(|(_id, x)| x.unwrap_all_call_func().map(|i| symbol_ids_and_locs[i].1))
-                .collect();
-            artifacts.always_traps = self
-                .indices
-                .remove(&CompileKey::ALWAYS_TRAP_KIND)
-                .unwrap_or_default()
-                .into_iter()
-                .map(|(_id, x)| x.unwrap_all_call_func().map(|i| symbol_ids_and_locs[i].1))
-                .collect();
-            artifacts.resource_new = self
-                .indices
-                .remove(&CompileKey::RESOURCE_NEW_KIND)
-                .unwrap_or_default()
-                .into_iter()
-                .map(|(_id, x)| x.unwrap_all_call_func().map(|i| symbol_ids_and_locs[i].1))
-                .collect();
-            artifacts.resource_rep = self
-                .indices
-                .remove(&CompileKey::RESOURCE_REP_KIND)
-                .unwrap_or_default()
-                .into_iter()
-                .map(|(_id, x)| x.unwrap_all_call_func().map(|i| symbol_ids_and_locs[i].1))
-                .collect();
-            artifacts.resource_drop = self
-                .indices
-                .remove(&CompileKey::RESOURCE_DROP_KIND)
+                .remove(&CompileKey::TRAMPOLINE_KIND)
                 .unwrap_or_default()
                 .into_iter()
                 .map(|(_id, x)| x.unwrap_all_call_func().map(|i| symbol_ids_and_locs[i].1))
@@ -816,33 +657,8 @@ impl FunctionIndices {
 pub struct Artifacts {
     pub modules: PrimaryMap<StaticModuleIndex, CompiledModuleInfo>,
     #[cfg(feature = "component-model")]
-    pub lowerings: PrimaryMap<
-        wasmtime_environ::component::LoweredIndex,
-        wasmtime_environ::component::AllCallFunc<wasmtime_environ::FunctionLoc>,
-    >,
-    #[cfg(feature = "component-model")]
-    pub always_traps: PrimaryMap<
-        wasmtime_environ::component::RuntimeAlwaysTrapIndex,
-        wasmtime_environ::component::AllCallFunc<wasmtime_environ::FunctionLoc>,
-    >,
-    #[cfg(feature = "component-model")]
-    pub transcoders: PrimaryMap<
-        wasmtime_environ::component::RuntimeTranscoderIndex,
-        wasmtime_environ::component::AllCallFunc<wasmtime_environ::FunctionLoc>,
-    >,
-    #[cfg(feature = "component-model")]
-    pub resource_new: PrimaryMap<
-        wasmtime_environ::component::RuntimeResourceNewIndex,
-        wasmtime_environ::component::AllCallFunc<wasmtime_environ::FunctionLoc>,
-    >,
-    #[cfg(feature = "component-model")]
-    pub resource_rep: PrimaryMap<
-        wasmtime_environ::component::RuntimeResourceRepIndex,
-        wasmtime_environ::component::AllCallFunc<wasmtime_environ::FunctionLoc>,
-    >,
-    #[cfg(feature = "component-model")]
-    pub resource_drop: PrimaryMap<
-        wasmtime_environ::component::RuntimeResourceDropIndex,
+    pub trampolines: PrimaryMap<
+        wasmtime_environ::component::TrampolineIndex,
         wasmtime_environ::component::AllCallFunc<wasmtime_environ::FunctionLoc>,
     >,
     #[cfg(feature = "component-model")]
@@ -855,14 +671,7 @@ impl Artifacts {
     pub fn unwrap_as_module_info(self) -> CompiledModuleInfo {
         assert_eq!(self.modules.len(), 1);
         #[cfg(feature = "component-model")]
-        {
-            assert!(self.lowerings.is_empty());
-            assert!(self.always_traps.is_empty());
-            assert!(self.transcoders.is_empty());
-            assert!(self.resource_new.is_empty());
-            assert!(self.resource_rep.is_empty());
-            assert!(self.resource_drop.is_empty());
-        }
+        assert!(self.trampolines.is_empty());
         self.modules.into_iter().next().unwrap().1
     }
 }

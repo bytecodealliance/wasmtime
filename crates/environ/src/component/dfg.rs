@@ -46,13 +46,9 @@ pub struct ComponentDfg {
     /// Same as `Component::exports`
     pub exports: IndexMap<String, Export>,
 
-    /// All known lowered host functions along with the configuration for each
-    /// lowering.
-    pub lowerings: Intern<LowerImportId, LowerImport>,
-
-    /// All known "always trapping" trampolines and the function signature they
-    /// have.
-    pub always_trap: Intern<AlwaysTrapId, SignatureIndex>,
+    /// All trampolines and their type signature which will need to get
+    /// compiled by Cranelift.
+    pub trampolines: PrimaryMap<TrampolineIndex, (SignatureIndex, Trampoline)>,
 
     /// Know reallocation functions which are used by `lowerings` (e.g. will be
     /// used by the host)
@@ -71,16 +67,13 @@ pub struct ComponentDfg {
     /// out of the inlining pass of translation.
     pub adapters: Intern<AdapterId, Adapter>,
 
-    /// Metadata about string transcoders needed by adapter modules.
-    pub transcoders: Intern<TranscoderId, Transcoder>,
-
     /// Metadata about all known core wasm instances created.
     ///
     /// This is mostly an ordered list and is not deduplicated based on contents
     /// unlike the items above. Creation of an `Instance` is side-effectful and
     /// all instances here are always required to be created. These are
     /// considered "roots" in dataflow.
-    pub instances: Intern<InstanceId, Instance>,
+    pub instances: PrimaryMap<InstanceId, Instance>,
 
     /// Number of component instances that were created during the inlining
     /// phase (this is not edited after creation).
@@ -165,14 +158,11 @@ macro_rules! id {
 
 id! {
     pub struct InstanceId(u32);
-    pub struct LowerImportId(u32);
     pub struct MemoryId(u32);
     pub struct ReallocId(u32);
     pub struct AdapterId(u32);
     pub struct PostReturnId(u32);
-    pub struct AlwaysTrapId(u32);
     pub struct AdapterModuleId(u32);
-    pub struct TranscoderId(u32);
 }
 
 /// Same as `info::InstantiateModule`
@@ -204,15 +194,8 @@ pub enum Export {
 #[allow(missing_docs)]
 pub enum CoreDef {
     Export(CoreExport<EntityIndex>),
-    Lowered(LowerImportId),
-    AlwaysTrap(AlwaysTrapId),
     InstanceFlags(RuntimeComponentInstanceIndex),
-    Transcoder(TranscoderId),
-
-    ResourceNew(TypeResourceTableIndex, SignatureIndex),
-    ResourceRep(TypeResourceTableIndex, SignatureIndex),
-    ResourceDrop(TypeResourceTableIndex, SignatureIndex),
-
+    Trampoline(TrampolineIndex),
     /// This is a special variant not present in `info::CoreDef` which
     /// represents that this definition refers to a fused adapter function. This
     /// adapter is fully processed after the initial translation and
@@ -254,14 +237,25 @@ impl<T> CoreExport<T> {
     }
 }
 
-/// Same as `info::LowerImport`
-#[derive(Hash, Eq, PartialEq, Clone)]
+/// Same as `info::Trampoline`
 #[allow(missing_docs)]
-pub struct LowerImport {
-    pub import: RuntimeImportIndex,
-    pub canonical_abi: SignatureIndex,
-    pub options: CanonicalOptions,
-    pub lower_ty: TypeFuncIndex,
+pub enum Trampoline {
+    LowerImport {
+        import: RuntimeImportIndex,
+        options: CanonicalOptions,
+        lower_ty: TypeFuncIndex,
+    },
+    Transcoder {
+        op: Transcode,
+        from: MemoryId,
+        from64: bool,
+        to: MemoryId,
+        to64: bool,
+    },
+    AlwaysTrap,
+    ResourceNew(TypeResourceTableIndex),
+    ResourceRep(TypeResourceTableIndex),
+    ResourceDrop(TypeResourceTableIndex),
 }
 
 /// Same as `info::CanonicalOptions`
@@ -273,18 +267,6 @@ pub struct CanonicalOptions {
     pub memory: Option<MemoryId>,
     pub realloc: Option<ReallocId>,
     pub post_return: Option<PostReturnId>,
-}
-
-/// Same as `info::Transcoder`
-#[derive(Clone, Hash, Eq, PartialEq)]
-#[allow(missing_docs)]
-pub struct Transcoder {
-    pub op: Transcode,
-    pub from: MemoryId,
-    pub from64: bool,
-    pub to: MemoryId,
-    pub to64: bool,
-    pub signature: SignatureIndex,
 }
 
 /// Same as `info::Resource`
@@ -309,19 +291,13 @@ impl<K, V> Intern<K, V>
 where
     K: EntityRef,
 {
-    /// Pushes a new `value` into this list without interning, assigning a new
-    /// unique key `K` to the value.
-    pub fn push(&mut self, value: V) -> K {
-        self.key_map.push(value)
-    }
-
     /// Inserts the `value` specified into this set, returning either a fresh
     /// key `K` if this value hasn't been seen before or otherwise returning the
     /// previous `K` used to represent value.
     ///
     /// Note that this should only be used for component model items where the
     /// creation of `value` is not side-effectful.
-    pub fn push_uniq(&mut self, value: V) -> K
+    pub fn push(&mut self, value: V) -> K
     where
         V: Hash + Eq + Clone,
     {
@@ -356,7 +332,7 @@ impl<K: EntityRef, V> Default for Intern<K, V> {
 impl ComponentDfg {
     /// Consumes the intermediate `ComponentDfg` to produce a final `Component`
     /// with a linear innitializer list.
-    pub fn finish(self) -> Component {
+    pub fn finish(self) -> ComponentTranslation {
         let mut linearize = LinearizeDfg {
             dfg: &self,
             initializers: Vec::new(),
@@ -364,12 +340,10 @@ impl ComponentDfg {
             runtime_post_return: Default::default(),
             runtime_reallocs: Default::default(),
             runtime_instances: Default::default(),
-            runtime_always_trap: Default::default(),
-            runtime_lowerings: Default::default(),
-            runtime_transcoders: Default::default(),
-            runtime_resource_new: Default::default(),
-            runtime_resource_rep: Default::default(),
-            runtime_resource_drop: Default::default(),
+            num_lowerings: 0,
+            trampolines: Default::default(),
+            trampoline_defs: Default::default(),
+            trampoline_map: Default::default(),
         };
 
         // Handle all side effects of this component in the order that they're
@@ -391,28 +365,30 @@ impl ComponentDfg {
         // linearization are recorded into the `Component`. The number of
         // runtime values used for each index space is used from the `linearize`
         // result.
-        Component {
-            exports,
-            initializers: linearize.initializers,
+        ComponentTranslation {
+            trampolines: linearize.trampoline_defs,
+            component: Component {
+                exports,
+                initializers: linearize.initializers,
+                trampolines: linearize.trampolines,
+                num_lowerings: linearize.num_lowerings,
 
-            num_runtime_memories: linearize.runtime_memories.len() as u32,
-            num_runtime_post_returns: linearize.runtime_post_return.len() as u32,
-            num_runtime_reallocs: linearize.runtime_reallocs.len() as u32,
-            num_runtime_instances: linearize.runtime_instances.len() as u32,
-            num_always_trap: linearize.runtime_always_trap.len() as u32,
-            num_lowerings: linearize.runtime_lowerings.len() as u32,
-            num_transcoders: linearize.runtime_transcoders.len() as u32,
-            num_resource_new: linearize.runtime_resource_new.len() as u32,
-            num_resource_rep: linearize.runtime_resource_rep.len() as u32,
-            num_resource_drop: linearize.runtime_resource_drop.len() as u32,
-
-            imports: self.imports,
-            import_types: self.import_types,
-            num_runtime_component_instances: self.num_runtime_component_instances,
-            num_resource_tables: self.num_resource_tables,
-            num_resources: (self.resources.len() + self.imported_resources.len()) as u32,
-            imported_resources: self.imported_resources,
-            defined_resource_instances: self.resources.iter().map(|(_, r)| r.instance).collect(),
+                num_runtime_memories: linearize.runtime_memories.len() as u32,
+                num_runtime_post_returns: linearize.runtime_post_return.len() as u32,
+                num_runtime_reallocs: linearize.runtime_reallocs.len() as u32,
+                num_runtime_instances: linearize.runtime_instances.len() as u32,
+                imports: self.imports,
+                import_types: self.import_types,
+                num_runtime_component_instances: self.num_runtime_component_instances,
+                num_resource_tables: self.num_resource_tables,
+                num_resources: (self.resources.len() + self.imported_resources.len()) as u32,
+                imported_resources: self.imported_resources,
+                defined_resource_instances: self
+                    .resources
+                    .iter()
+                    .map(|(_, r)| r.instance)
+                    .collect(),
+            },
         }
     }
 
@@ -426,16 +402,14 @@ impl ComponentDfg {
 struct LinearizeDfg<'a> {
     dfg: &'a ComponentDfg,
     initializers: Vec<GlobalInitializer>,
+    trampolines: PrimaryMap<TrampolineIndex, SignatureIndex>,
+    trampoline_defs: PrimaryMap<TrampolineIndex, info::Trampoline>,
+    trampoline_map: HashMap<TrampolineIndex, TrampolineIndex>,
     runtime_memories: HashMap<MemoryId, RuntimeMemoryIndex>,
     runtime_reallocs: HashMap<ReallocId, RuntimeReallocIndex>,
     runtime_post_return: HashMap<PostReturnId, RuntimePostReturnIndex>,
     runtime_instances: HashMap<RuntimeInstance, RuntimeInstanceIndex>,
-    runtime_always_trap: HashMap<AlwaysTrapId, RuntimeAlwaysTrapIndex>,
-    runtime_lowerings: HashMap<LowerImportId, LoweredIndex>,
-    runtime_transcoders: HashMap<TranscoderId, RuntimeTranscoderIndex>,
-    runtime_resource_new: HashMap<TypeResourceTableIndex, RuntimeResourceNewIndex>,
-    runtime_resource_rep: HashMap<TypeResourceTableIndex, RuntimeResourceRepIndex>,
-    runtime_resource_drop: HashMap<TypeResourceTableIndex, RuntimeResourceDropIndex>,
+    num_lowerings: u32,
 }
 
 #[derive(Copy, Clone, Hash, Eq, PartialEq)]
@@ -561,138 +535,58 @@ impl LinearizeDfg<'_> {
     fn core_def(&mut self, def: &CoreDef) -> info::CoreDef {
         match def {
             CoreDef::Export(e) => info::CoreDef::Export(self.core_export(e)),
-            CoreDef::AlwaysTrap(id) => info::CoreDef::AlwaysTrap(self.runtime_always_trap(*id)),
-            CoreDef::Lowered(id) => info::CoreDef::Lowered(self.runtime_lowering(*id)),
             CoreDef::InstanceFlags(i) => info::CoreDef::InstanceFlags(*i),
             CoreDef::Adapter(id) => info::CoreDef::Export(self.adapter(*id)),
-            CoreDef::Transcoder(id) => info::CoreDef::Transcoder(self.runtime_transcoder(*id)),
-            CoreDef::ResourceNew(id, ty) => info::CoreDef::ResourceNew(self.resource_new(*id, *ty)),
-            CoreDef::ResourceRep(id, ty) => info::CoreDef::ResourceRep(self.resource_rep(*id, *ty)),
-            CoreDef::ResourceDrop(id, ty) => {
-                info::CoreDef::ResourceDrop(self.resource_drop(*id, *ty))
-            }
+            CoreDef::Trampoline(index) => info::CoreDef::Trampoline(self.trampoline(*index)),
         }
     }
 
-    fn runtime_always_trap(&mut self, id: AlwaysTrapId) -> RuntimeAlwaysTrapIndex {
-        self.intern(
-            id,
-            |me| &mut me.runtime_always_trap,
-            |me, id| me.dfg.always_trap[id],
-            |index, canonical_abi| {
-                GlobalInitializer::AlwaysTrap(AlwaysTrap {
+    fn trampoline(&mut self, index: TrampolineIndex) -> TrampolineIndex {
+        if let Some(idx) = self.trampoline_map.get(&index) {
+            return *idx;
+        }
+        let (signature, trampoline) = &self.dfg.trampolines[index];
+        let trampoline = match trampoline {
+            Trampoline::LowerImport {
+                import,
+                options,
+                lower_ty,
+            } => {
+                let index = LoweredIndex::from_u32(self.num_lowerings);
+                self.num_lowerings += 1;
+                self.initializers.push(GlobalInitializer::LowerImport {
                     index,
-                    canonical_abi,
-                })
-            },
-        )
-    }
-
-    fn runtime_lowering(&mut self, id: LowerImportId) -> LoweredIndex {
-        self.intern(
-            id,
-            |me| &mut me.runtime_lowerings,
-            |me, id| {
-                let info = &me.dfg.lowerings[id];
-                let options = me.options(&info.options);
-                (info.import, info.canonical_abi, options, info.lower_ty)
-            },
-            |index, (import, canonical_abi, options, lower_ty)| {
-                GlobalInitializer::LowerImport(info::LowerImport {
+                    import: *import,
+                });
+                info::Trampoline::LowerImport {
                     index,
-                    import,
-                    canonical_abi,
-                    options,
-                    lower_ty,
-                })
+                    options: self.options(options),
+                    lower_ty: *lower_ty,
+                }
+            }
+            Trampoline::Transcoder {
+                op,
+                from,
+                from64,
+                to,
+                to64,
+            } => info::Trampoline::Transcoder {
+                op: *op,
+                from: self.runtime_memory(*from),
+                from64: *from64,
+                to: self.runtime_memory(*to),
+                to64: *to64,
             },
-        )
-    }
-
-    fn runtime_transcoder(&mut self, id: TranscoderId) -> RuntimeTranscoderIndex {
-        self.intern(
-            id,
-            |me| &mut me.runtime_transcoders,
-            |me, id| {
-                let info = &me.dfg.transcoders[id];
-                (
-                    info.op,
-                    me.runtime_memory(info.from),
-                    info.from64,
-                    me.runtime_memory(info.to),
-                    info.to64,
-                    info.signature,
-                )
-            },
-            |index, (op, from, from64, to, to64, signature)| {
-                GlobalInitializer::Transcoder(info::Transcoder {
-                    index,
-                    op,
-                    from,
-                    from64,
-                    to,
-                    to64,
-                    signature,
-                })
-            },
-        )
-    }
-
-    fn resource_new(
-        &mut self,
-        id: TypeResourceTableIndex,
-        signature: SignatureIndex,
-    ) -> RuntimeResourceNewIndex {
-        self.intern(
-            id,
-            |me| &mut me.runtime_resource_new,
-            |_me, id| id,
-            |index, resource| {
-                GlobalInitializer::ResourceNew(info::ResourceNew {
-                    index,
-                    resource,
-                    signature,
-                })
-            },
-        )
-    }
-
-    fn resource_rep(
-        &mut self,
-        id: TypeResourceTableIndex,
-        signature: SignatureIndex,
-    ) -> RuntimeResourceRepIndex {
-        self.intern(
-            id,
-            |me| &mut me.runtime_resource_rep,
-            |_me, id| id,
-            |index, resource| {
-                GlobalInitializer::ResourceRep(info::ResourceRep {
-                    index,
-                    resource,
-                    signature,
-                })
-            },
-        )
-    }
-
-    fn resource_drop(
-        &mut self,
-        id: TypeResourceTableIndex,
-        signature: SignatureIndex,
-    ) -> RuntimeResourceDropIndex {
-        self.intern(
-            id,
-            |me| &mut me.runtime_resource_drop,
-            |_me, ty| ty,
-            |index, resource| {
-                GlobalInitializer::ResourceDrop(info::ResourceDrop {
-                    index,
-                    resource,
-                    signature,
-                })
-            },
-        )
+            Trampoline::AlwaysTrap => info::Trampoline::AlwaysTrap,
+            Trampoline::ResourceNew(ty) => info::Trampoline::ResourceNew(*ty),
+            Trampoline::ResourceDrop(ty) => info::Trampoline::ResourceDrop(*ty),
+            Trampoline::ResourceRep(ty) => info::Trampoline::ResourceRep(*ty),
+        };
+        let i1 = self.trampolines.push(*signature);
+        let i2 = self.trampoline_defs.push(trampoline);
+        assert_eq!(i1, i2);
+        self.trampoline_map.insert(index, i1);
+        i1
     }
 
     fn core_export<T>(&mut self, export: &CoreExport<T>) -> info::CoreExport<T>

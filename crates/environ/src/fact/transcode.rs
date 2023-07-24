@@ -17,7 +17,7 @@ pub struct Transcoder {
 /// Note that each transcoding operation may have a unique signature depending
 /// on the precise operation.
 #[allow(missing_docs)]
-#[derive(Debug, Copy, Clone, Hash, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, Hash, Eq, PartialEq)]
 pub enum Transcode {
     Copy(FixedEncoding),
     Latin1ToUtf16,

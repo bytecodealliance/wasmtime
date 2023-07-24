@@ -276,19 +276,23 @@ fn fact_import_to_core_def(
                 }
             }
 
-            let from = dfg.memories.push_uniq(unwrap_memory(from));
-            let to = dfg.memories.push_uniq(unwrap_memory(to));
-            dfg::CoreDef::Transcoder(dfg.transcoders.push_uniq(dfg::Transcoder {
-                op: *op,
-                from,
-                from64: *from64,
-                to,
-                to64: *to64,
-                signature: match ty {
-                    EntityType::Function(signature) => signature,
-                    _ => unreachable!(),
+            let from = dfg.memories.push(unwrap_memory(from));
+            let to = dfg.memories.push(unwrap_memory(to));
+            let signature = match ty {
+                EntityType::Function(signature) => signature,
+                _ => unreachable!(),
+            };
+            let index = dfg.trampolines.push((
+                signature,
+                dfg::Trampoline::Transcoder {
+                    op: *op,
+                    from,
+                    from64: *from64,
+                    to,
+                    to64: *to64,
                 },
-            }))
+            ));
+            dfg::CoreDef::Trampoline(index)
         }
     }
 }
@@ -379,15 +383,7 @@ impl PartitionAdapterModules {
             }
 
             // These items can't transitively depend on an adapter
-            dfg::CoreDef::Lowered(_)
-            | dfg::CoreDef::AlwaysTrap(_)
-            | dfg::CoreDef::InstanceFlags(_)
-            | dfg::CoreDef::ResourceNew(..)
-            | dfg::CoreDef::ResourceDrop(..)
-            | dfg::CoreDef::ResourceRep(..) => {}
-
-            // should not be in the dfg yet
-            dfg::CoreDef::Transcoder(_) => unreachable!(),
+            dfg::CoreDef::Trampoline(_) | dfg::CoreDef::InstanceFlags(_) => {}
         }
     }
 

@@ -195,9 +195,6 @@ indices! {
     /// component model.
     pub struct LoweredIndex(u32);
 
-    /// Same as `LoweredIndex` but for the `CoreDef::AlwaysTrap` variant.
-    pub struct RuntimeAlwaysTrapIndex(u32);
-
     /// Index representing a linear memory extracted from a wasm instance
     /// which is stored in a `VMComponentContext`. This is used to deduplicate
     /// references to the same linear memory where it's only stored once in a
@@ -213,21 +210,13 @@ indices! {
     /// Same as `RuntimeMemoryIndex` except for the `post-return` function.
     pub struct RuntimePostReturnIndex(u32);
 
-    /// Index into the list of transcoders identified during compilation.
+    /// Index for all trampolines that are compiled in Cranelift for a
+    /// component.
     ///
-    /// This is used to index the `VMFuncRef` slots reserved for string encoders
-    /// which reference linear memories defined within a component.
-    pub struct RuntimeTranscoderIndex(u32);
-
-    /// Index into the list of `resource.new` intrinsics used by a component.
-    ///
-    /// This is used to allocate space in `VMComponentContext` and record
-    /// `VMFuncRef`s corresponding to the definition of the intrinsic.
-    pub struct RuntimeResourceNewIndex(u32);
-    /// Same as `RuntimeResourceNewIndex`, but for `resource.rep`
-    pub struct RuntimeResourceDropIndex(u32);
-    /// Same as `RuntimeResourceNewIndex`, but for `resource.drop`
-    pub struct RuntimeResourceRepIndex(u32);
+    /// This is used to point to various bits of metadata within a compiled
+    /// component and is stored in the final compilation artifact. This does not
+    /// have a direct corresponance to any wasm definition.
+    pub struct TrampolineIndex(u32);
 }
 
 // Reexport for convenience some core-wasm indices which are also used in the

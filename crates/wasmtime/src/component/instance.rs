@@ -1,4 +1,3 @@
-use super::component::AllCallFuncPointers;
 use crate::component::func::HostFunc;
 use crate::component::matching::InstanceType;
 use crate::component::{Component, ComponentNamedList, Func, Lift, Lower, ResourceType, TypedFunc};
@@ -12,12 +11,9 @@ use std::marker;
 use std::ptr::NonNull;
 use std::sync::Arc;
 use wasmtime_environ::component::*;
-use wasmtime_environ::{EntityIndex, EntityType, Global, PrimaryMap, SignatureIndex, WasmType};
+use wasmtime_environ::{EntityIndex, EntityType, Global, PrimaryMap, WasmType};
 use wasmtime_runtime::component::{ComponentInstance, OwnedComponentInstance};
-use wasmtime_runtime::{
-    VMArrayCallFunction, VMFuncRef, VMNativeCallFunction, VMSharedSignatureIndex,
-    VMWasmCallFunction,
-};
+use wasmtime_runtime::VMFuncRef;
 
 /// An instantiated component.
 ///
@@ -153,14 +149,9 @@ impl InstanceData {
     pub fn lookup_def(&self, store: &mut StoreOpaque, def: &CoreDef) -> wasmtime_runtime::Export {
         match def {
             CoreDef::Export(e) => self.lookup_export(store, e),
-            CoreDef::Lowered(idx) => {
+            CoreDef::Trampoline(idx) => {
                 wasmtime_runtime::Export::Function(wasmtime_runtime::ExportFunction {
-                    func_ref: self.state.lowering_func_ref(*idx),
-                })
-            }
-            CoreDef::AlwaysTrap(idx) => {
-                wasmtime_runtime::Export::Function(wasmtime_runtime::ExportFunction {
-                    func_ref: self.state.always_trap_func_ref(*idx),
+                    func_ref: self.state.trampoline_func_ref(*idx),
                 })
             }
             CoreDef::InstanceFlags(idx) => {
@@ -170,26 +161,6 @@ impl InstanceData {
                         wasm_ty: WasmType::I32,
                         mutability: true,
                     },
-                })
-            }
-            CoreDef::Transcoder(idx) => {
-                wasmtime_runtime::Export::Function(wasmtime_runtime::ExportFunction {
-                    func_ref: self.state.transcoder_func_ref(*idx),
-                })
-            }
-            CoreDef::ResourceNew(idx) => {
-                wasmtime_runtime::Export::Function(wasmtime_runtime::ExportFunction {
-                    func_ref: self.state.resource_new_func_ref(*idx),
-                })
-            }
-            CoreDef::ResourceRep(idx) => {
-                wasmtime_runtime::Export::Function(wasmtime_runtime::ExportFunction {
-                    func_ref: self.state.resource_rep_func_ref(*idx),
-                })
-            }
-            CoreDef::ResourceDrop(idx) => {
-                wasmtime_runtime::Export::Function(wasmtime_runtime::ExportFunction {
-                    func_ref: self.state.resource_drop_func_ref(*idx),
                 })
             }
         }
@@ -330,6 +301,26 @@ impl<'a> Instantiator<'a> {
             self.data.state.set_resource_destructor(idx, Some(func_ref));
         }
 
+        // Next configure all `VMFuncRef`s for trampolines that this component
+        // will require. These functions won't actually get used until their
+        // associated state has been initialized through the global initializers
+        // below, but the funcrefs can all be configured here.
+        for (idx, sig) in env_component.trampolines.iter() {
+            let ptrs = self.component.trampoline_ptrs(idx);
+            let signature = self
+                .component
+                .signatures()
+                .shared_signature(*sig)
+                .expect("found unregistered signature");
+            self.data.state.set_trampoline(
+                idx,
+                ptrs.wasm_call,
+                ptrs.native_call,
+                ptrs.array_call,
+                signature,
+            );
+        }
+
         for initializer in env_component.initializers.iter() {
             match initializer {
                 GlobalInitializer::InstantiateModule(m) => {
@@ -377,9 +368,13 @@ impl<'a> Instantiator<'a> {
                     self.data.instances.push(i);
                 }
 
-                GlobalInitializer::LowerImport(import) => self.lower_import(import),
-
-                GlobalInitializer::AlwaysTrap(trap) => self.always_trap(trap),
+                GlobalInitializer::LowerImport { import, index } => {
+                    let func = match &self.imports[*import] {
+                        RuntimeImport::Func(func) => func,
+                        _ => unreachable!(),
+                    };
+                    self.data.state.set_lowering(*index, func.lowering());
+                }
 
                 GlobalInitializer::ExtractMemory(mem) => self.extract_memory(store.0, mem),
 
@@ -391,92 +386,10 @@ impl<'a> Instantiator<'a> {
                     self.extract_post_return(store.0, post_return)
                 }
 
-                GlobalInitializer::Transcoder(e) => self.transcoder(e),
-
                 GlobalInitializer::Resource(r) => self.resource(store.0, r),
-                GlobalInitializer::ResourceNew(r) => self.resource_new(r),
-                GlobalInitializer::ResourceRep(r) => self.resource_rep(r),
-                GlobalInitializer::ResourceDrop(r) => self.resource_drop(r),
             }
         }
         Ok(())
-    }
-
-    fn lower_import(&mut self, import: &LowerImport) {
-        let func = match &self.imports[import.import] {
-            RuntimeImport::Func(func) => func,
-            _ => unreachable!(),
-        };
-        let AllCallFuncPointers {
-            wasm_call,
-            array_call,
-            native_call,
-        } = self.component.lowering_ptrs(import.index);
-        let type_index = self
-            .component
-            .signatures()
-            .shared_signature(import.canonical_abi)
-            .expect("found unregistered signature");
-        self.data.state.set_lowering(
-            import.index,
-            func.lowering(),
-            wasm_call,
-            native_call,
-            array_call,
-            type_index,
-        );
-    }
-
-    fn set_funcref<T: Copy>(
-        &mut self,
-        index: T,
-        signature: SignatureIndex,
-        func_ptrs: impl FnOnce(&Component, T) -> AllCallFuncPointers,
-        set_funcref: impl FnOnce(
-            &mut OwnedComponentInstance,
-            T,
-            NonNull<VMWasmCallFunction>,
-            NonNull<VMNativeCallFunction>,
-            VMArrayCallFunction,
-            VMSharedSignatureIndex,
-        ),
-    ) {
-        let AllCallFuncPointers {
-            wasm_call,
-            array_call,
-            native_call,
-        } = func_ptrs(&self.component, index);
-        let signature = self
-            .component
-            .signatures()
-            .shared_signature(signature)
-            .expect("found unregistered signature");
-        set_funcref(
-            &mut self.data.state,
-            index,
-            wasm_call,
-            native_call,
-            array_call,
-            signature,
-        )
-    }
-
-    fn always_trap(&mut self, trap: &AlwaysTrap) {
-        self.set_funcref(
-            trap.index,
-            trap.canonical_abi,
-            Component::always_trap_ptrs,
-            OwnedComponentInstance::set_always_trap,
-        )
-    }
-
-    fn transcoder(&mut self, transcoder: &Transcoder) {
-        self.set_funcref(
-            transcoder.index,
-            transcoder.signature,
-            Component::transcoder_ptrs,
-            OwnedComponentInstance::set_transcoder,
-        )
     }
 
     fn resource(&mut self, store: &mut StoreOpaque, resource: &Resource) {
@@ -496,33 +409,6 @@ impl<'a> Instantiator<'a> {
         let ty = ResourceType::guest(store.id(), &self.data.state, resource.index);
         let i = self.data.resource_types_mut().push(ty);
         debug_assert_eq!(i, index);
-    }
-
-    fn resource_new(&mut self, resource: &ResourceNew) {
-        self.set_funcref(
-            resource.index,
-            resource.signature,
-            Component::resource_new_ptrs,
-            OwnedComponentInstance::set_resource_new,
-        )
-    }
-
-    fn resource_rep(&mut self, resource: &ResourceRep) {
-        self.set_funcref(
-            resource.index,
-            resource.signature,
-            Component::resource_rep_ptrs,
-            OwnedComponentInstance::set_resource_rep,
-        )
-    }
-
-    fn resource_drop(&mut self, resource: &ResourceDrop) {
-        self.set_funcref(
-            resource.index,
-            resource.signature,
-            Component::resource_drop_ptrs,
-            OwnedComponentInstance::set_resource_drop,
-        )
     }
 
     fn extract_memory(&mut self, store: &mut StoreOpaque, memory: &ExtractMemory) {
