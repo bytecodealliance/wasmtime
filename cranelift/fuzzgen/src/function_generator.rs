@@ -1912,9 +1912,9 @@ where
                 let is_tail_caller = self.signature.call_conv == CallConv::Tail;
 
                 let supports_tail_calls = match self.isa.triple().architecture {
+                    Architecture::Aarch64(_) | Architecture::Riscv64(_) => true,
                     // TODO: x64 currently requires frame pointers for tail calls.
                     Architecture::X86_64 => self.isa.flags().preserve_frame_pointers(),
-                    Architecture::Aarch64(target_lexicon::Aarch64Architecture::Aarch64) => true,
                     // TODO: Other platforms do not support tail calls yet.
                     _ => false,
                 };

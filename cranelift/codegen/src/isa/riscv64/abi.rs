@@ -686,6 +686,45 @@ impl ABIMachineSpec for Riscv64MachineDeps {
     }
 }
 
+impl Riscv64ABICallSite {
+    pub fn emit_return_call(mut self, ctx: &mut Lower<Inst>, args: isle::ValueSlice) {
+        let (new_stack_arg_size, old_stack_arg_size) =
+            self.emit_temporary_tail_call_frame(ctx, args);
+
+        let dest = self.dest().clone();
+        let opcode = self.opcode();
+        let uses = self.take_uses();
+        let info = Box::new(ReturnCallInfo {
+            uses,
+            opcode,
+            old_stack_arg_size,
+            new_stack_arg_size,
+        });
+
+        match dest {
+            // TODO: Our riscv64 backend doesn't have relocs for direct calls,
+            // the callee is always put in a register and then the register is
+            // relocated, so we don't currently differentiate between
+            // `RelocDistance::Near` and `RelocDistance::Far`. We just always
+            // use indirect calls. We should eventually add a non-indirect
+            // `return_call` instruction and path.
+            CallDest::ExtName(name, _) => {
+                let callee = ctx.alloc_tmp(ir::types::I64).only_reg().unwrap();
+                ctx.emit(Inst::LoadExtName {
+                    rd: callee,
+                    name: Box::new(name),
+                    offset: 0,
+                });
+                ctx.emit(Inst::ReturnCallInd {
+                    callee: callee.to_reg(),
+                    info,
+                });
+            }
+            CallDest::Reg(callee) => ctx.emit(Inst::ReturnCallInd { callee, info }),
+        }
+    }
+}
+
 const CALLEE_SAVE_X_REG: [bool; 32] = [
     false, false, true, false, false, false, false, false, // 0-7
     true, true, false, false, false, false, false, false, // 8-15
