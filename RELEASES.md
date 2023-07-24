@@ -1,5 +1,17 @@
 --------------------------------------------------------------------------------
 
+## 11.0.1
+
+Released 2023-07-24.
+
+### Fixed
+
+* Update some minimum version requirements for Wasmtime's dependencies to fix
+  building Wasmtime with historical versions of these dependencies.
+  [#6758](https://github.com/bytecodealliance/wasmtime/pull/6758)
+
+--------------------------------------------------------------------------------
+
 ## 11.0.0
 
 Released 2023-07-20.
