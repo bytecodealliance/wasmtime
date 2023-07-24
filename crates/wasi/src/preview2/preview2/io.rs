@@ -412,7 +412,7 @@ pub mod sync {
             stream: OutputStream,
             bytes: Vec<u8>,
         ) -> Result<(u64, streams::StreamStatus), streams::Error> {
-            in_tokio(async { AsyncHost::write(self, stream, bytes).await })
+            in_tokio(async { AsyncHost::blocking_write(self, stream, bytes).await })
                 .map(|(a, b)| (a, b.into()))
                 .map_err(streams::Error::from)
         }
