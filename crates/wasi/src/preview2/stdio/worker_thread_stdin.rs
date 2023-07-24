@@ -11,16 +11,19 @@ use once_cell::sync::OnceCell as OnceLock;
 
 use std::sync::Mutex;
 
-// We need a single global instance of the AsyncFd<Stdin> because creating
-// this instance registers the process's stdin fd with epoll, which will
-// return an error if an fd is registered more than once.
 struct GlobalStdin {
+    // Watch receiver impls Clone, so any interested readers can make a copy and .changed().await.
     rx: watch::Receiver<()>,
+    // Worker thread and receivers share this state
     state: Arc<Mutex<StdinState>>,
 }
+
 struct StdinState {
+    // Bytes read off stdin.
     buffer: BytesMut,
+    // Error read off stdin, if any.
     error: Option<std::io::Error>,
+    // If an error has occured in the past, we consider the stream closed.
     closed: bool,
 }
 
@@ -66,8 +69,10 @@ fn create() -> GlobalStdin {
     ret
 }
 
+/// Only public interface is the [`HostInputStream`] impl.
 pub struct Stdin;
 impl Stdin {
+    // Private! Only required internally.
     fn get_global() -> &'static GlobalStdin {
         STDIN.get_or_init(|| create())
     }
