@@ -251,7 +251,6 @@ async fn poll_oneoff_files() {
     run("poll_oneoff_files", false).await.unwrap()
 }
 
-#[cfg_attr(windows, should_panic)]
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn poll_oneoff_stdio() {
     run("poll_oneoff_stdio", true).await.unwrap()
