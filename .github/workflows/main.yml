@@ -669,6 +669,29 @@ jobs:
 
   # Use Cargo's `-Z minimal-versions` feature to ensure that the lower bound
   # of our dependencies are ideally all valid.
+  #
+  # The goal of this CI check is to ensure that the version listed in Cargo.toml
+  # for wasmtime's dependencies is correct even if the minimal version is used
+  # to satisfy that version bound. This is meant to prevent situations such as:
+  #
+  # * A dependency is added at some minimal version bound.
+  # * Later the crate is updated, perhaps for some unrelated reason. The bound
+  #   written in `Cargo.toml` is not changed, however.
+  # * Afterwards a PR is updated to use a new function from the updated version.
+  #
+  # If this new function is not available in the original version used then that
+  # means that the version bound for the dependency is technically incorrect and
+  # needs to be raised to the first version that has the new functionality.
+  #
+  # Note though that `-Zminimal-versions` is an unstable feature for Cargo
+  # because it's possible for this check to fail with no way for Wasmtime itself
+  # to fix it.  For example if a transitive dependency's minimal version bounds
+  # are incorrect the build will fail due to that and there's not much we can do
+  # about that. To paper over that there's some `cargo update` commands below.
+  #
+  # In general this CI check is a test to see if it's reasonable to run this in
+  # CI. I nothing is ever caught or this ends up just causing a lot of issues
+  # then this is fine to remove.
   check-minimal-versions:
     needs: determine
     if: needs.determine.outputs.run-full
@@ -695,7 +718,7 @@ jobs:
     - run: cargo update -p futures-util -p syn@1.0.67
 
     # Make sure everything works. Note that this isn't super exhaustive, but
-    # it's meant to cover our bases braodly.
+    # it's meant to cover our bases broadly.
     - run: cargo check
 
     # common logic to cancel the entire run if this job fails
