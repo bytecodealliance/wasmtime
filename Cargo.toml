@@ -242,6 +242,9 @@ tempfile = "3.1.0"
 filecheck = "0.5.0"
 libc = "0.2.60"
 file-per-thread-logger = "0.2.0"
+tokio = { version = "1.26.0" }
+bytes = "1.4"
+futures = { version = "0.3.27", default-features = false }
 indexmap = "2.0.0"
 pretty_env_logger = "0.5.0"
 syn = "2.0.25"

@@ -1,11 +1,10 @@
+use crate::preview2::bindings::cli_base::{preopens, stderr, stdin, stdout};
+use crate::preview2::bindings::clocks::{monotonic_clock, wall_clock};
+use crate::preview2::bindings::filesystem::filesystem;
+use crate::preview2::bindings::io::streams;
 use crate::preview2::filesystem::TableFsExt;
 use crate::preview2::preview2::filesystem::TableReaddirExt;
-use crate::preview2::wasi::cli_base::{preopens, stderr, stdin, stdout};
-use crate::preview2::wasi::clocks::monotonic_clock;
-use crate::preview2::wasi::clocks::wall_clock;
-use crate::preview2::wasi::filesystem::filesystem;
-use crate::preview2::wasi::io::streams;
-use crate::preview2::{wasi, TableError, WasiView};
+use crate::preview2::{bindings, TableError, WasiView};
 use anyhow::{anyhow, bail, Context};
 use std::borrow::Borrow;
 use std::cell::Cell;
@@ -71,27 +70,23 @@ impl DerefMut for Descriptors {
 
 impl Descriptors {
     /// Initializes [Self] using `preopens`
-    async fn new(
+    fn new(
         preopens: &mut (impl preopens::Host + stdin::Host + stdout::Host + stderr::Host + ?Sized),
     ) -> Result<Self, types::Error> {
         let stdin = preopens
             .get_stdin()
-            .await
             .context("failed to call `get-stdin`")
             .map_err(types::Error::trap)?;
         let stdout = preopens
             .get_stdout()
-            .await
             .context("failed to call `get-stdout`")
             .map_err(types::Error::trap)?;
         let stderr = preopens
             .get_stderr()
-            .await
             .context("failed to call `get-stderr`")
             .map_err(types::Error::trap)?;
         let directories = preopens
             .get_directories()
-            .await
             .context("failed to call `get-directories`")
             .map_err(types::Error::trap)?;
 
@@ -272,17 +267,16 @@ impl<T: WasiPreview1View + ?Sized> Transaction<'_, T> {
     }
 }
 
-#[wiggle::async_trait]
 trait WasiPreview1ViewExt:
     WasiPreview1View + preopens::Host + stdin::Host + stdout::Host + stderr::Host
 {
     /// Lazily initializes [`WasiPreview1Adapter`] returned by [`WasiPreview1View::adapter_mut`]
     /// and returns [`Transaction`] on success
-    async fn transact(&mut self) -> Result<Transaction<'_, Self>, types::Error> {
+    fn transact(&mut self) -> Result<Transaction<'_, Self>, types::Error> {
         let descriptors = if let Some(descriptors) = self.adapter_mut().descriptors.take() {
             descriptors
         } else {
-            Descriptors::new(self).await?
+            Descriptors::new(self)?
         }
         .into();
         Ok(Transaction {
@@ -293,8 +287,8 @@ trait WasiPreview1ViewExt:
 
     /// Lazily initializes [`WasiPreview1Adapter`] returned by [`WasiPreview1View::adapter_mut`]
     /// and returns [`filesystem::Descriptor`] corresponding to `fd`
-    async fn get_fd(&mut self, fd: types::Fd) -> Result<filesystem::Descriptor, types::Error> {
-        let mut st = self.transact().await?;
+    fn get_fd(&mut self, fd: types::Fd) -> Result<filesystem::Descriptor, types::Error> {
+        let mut st = self.transact()?;
         let fd = st.get_fd(fd)?;
         Ok(fd)
     }
@@ -302,8 +296,8 @@ trait WasiPreview1ViewExt:
     /// Lazily initializes [`WasiPreview1Adapter`] returned by [`WasiPreview1View::adapter_mut`]
     /// and returns [`filesystem::Descriptor`] corresponding to `fd`
     /// if it describes a [`Descriptor::File`] of [`crate::preview2::filesystem::File`] type
-    async fn get_file_fd(&mut self, fd: types::Fd) -> Result<filesystem::Descriptor, types::Error> {
-        let mut st = self.transact().await?;
+    fn get_file_fd(&mut self, fd: types::Fd) -> Result<filesystem::Descriptor, types::Error> {
+        let mut st = self.transact()?;
         let fd = st.get_file_fd(fd)?;
         Ok(fd)
     }
@@ -312,8 +306,8 @@ trait WasiPreview1ViewExt:
     /// and returns [`filesystem::Descriptor`] corresponding to `fd`
     /// if it describes a [`Descriptor::File`] or [`Descriptor::PreopenDirectory`]
     /// of [`crate::preview2::filesystem::Dir`] type
-    async fn get_dir_fd(&mut self, fd: types::Fd) -> Result<filesystem::Descriptor, types::Error> {
-        let mut st = self.transact().await?;
+    fn get_dir_fd(&mut self, fd: types::Fd) -> Result<filesystem::Descriptor, types::Error> {
+        let mut st = self.transact()?;
         let fd = st.get_dir_fd(fd)?;
         Ok(fd)
     }
@@ -323,15 +317,15 @@ impl<T: WasiPreview1View + preopens::Host> WasiPreview1ViewExt for T {}
 
 pub fn add_to_linker<
     T: WasiPreview1View
-        + wasi::cli_base::environment::Host
-        + wasi::cli_base::exit::Host
-        + wasi::cli_base::preopens::Host
-        + wasi::filesystem::filesystem::Host
-        + wasi::poll::poll::Host
-        + wasi::random::random::Host
-        + wasi::io::streams::Host
-        + wasi::clocks::monotonic_clock::Host
-        + wasi::clocks::wall_clock::Host,
+        + bindings::cli_base::environment::Host
+        + bindings::cli_base::exit::Host
+        + bindings::cli_base::preopens::Host
+        + bindings::filesystem::filesystem::Host
+        + bindings::sync_io::poll::poll::Host
+        + bindings::random::random::Host
+        + bindings::io::streams::Host
+        + bindings::clocks::monotonic_clock::Host
+        + bindings::clocks::wall_clock::Host,
 >(
     linker: &mut wasmtime::Linker<T>,
 ) -> anyhow::Result<()> {
@@ -344,8 +338,16 @@ pub fn add_to_linker<
 // to this module.
 wiggle::from_witx!({
     witx: ["$CARGO_MANIFEST_DIR/witx/wasi_snapshot_preview1.witx"],
+    async: {
+        wasi_snapshot_preview1::{
+            fd_advise, fd_close, fd_datasync, fd_fdstat_get, fd_filestat_get, fd_filestat_set_size,
+            fd_filestat_set_times, fd_read, fd_pread, fd_seek, fd_sync, fd_readdir, fd_write,
+            fd_pwrite, poll_oneoff, path_create_directory, path_filestat_get,
+            path_filestat_set_times, path_link, path_open, path_readlink, path_remove_directory,
+            path_rename, path_symlink, path_unlink_file
+        }
+    },
     errors: { errno => trappable Error },
-    async: *,
 });
 
 impl wiggle::GuestErrorType for types::Errno {
@@ -617,31 +619,30 @@ fn first_non_empty_iovec<'a>(
         .transpose()
 }
 
+#[async_trait::async_trait]
 // Implement the WasiSnapshotPreview1 trait using only the traits that are
 // required for T, i.e., in terms of the preview 2 wit interface, and state
 // stored in the WasiPreview1Adapter struct.
-#[wiggle::async_trait]
 impl<
         T: WasiPreview1View
-            + wasi::cli_base::environment::Host
-            + wasi::cli_base::exit::Host
-            + wasi::cli_base::preopens::Host
-            + wasi::filesystem::filesystem::Host
-            + wasi::poll::poll::Host
-            + wasi::random::random::Host
-            + wasi::io::streams::Host
-            + wasi::clocks::monotonic_clock::Host
-            + wasi::clocks::wall_clock::Host,
+            + bindings::cli_base::environment::Host
+            + bindings::cli_base::exit::Host
+            + bindings::cli_base::preopens::Host
+            + bindings::filesystem::filesystem::Host
+            + bindings::sync_io::poll::poll::Host
+            + bindings::random::random::Host
+            + bindings::io::streams::Host
+            + bindings::clocks::monotonic_clock::Host
+            + bindings::clocks::wall_clock::Host,
     > wasi_snapshot_preview1::WasiSnapshotPreview1 for T
 {
     #[instrument(skip(self))]
-    async fn args_get<'b>(
+    fn args_get<'b>(
         &mut self,
         argv: &GuestPtr<'b, GuestPtr<'b, u8>>,
         argv_buf: &GuestPtr<'b, u8>,
     ) -> Result<(), types::Error> {
         self.get_arguments()
-            .await
             .context("failed to call `get-arguments`")
             .map_err(types::Error::trap)?
             .into_iter()
@@ -663,10 +664,9 @@ impl<
     }
 
     #[instrument(skip(self))]
-    async fn args_sizes_get(&mut self) -> Result<(types::Size, types::Size), types::Error> {
+    fn args_sizes_get(&mut self) -> Result<(types::Size, types::Size), types::Error> {
         let args = self
             .get_arguments()
-            .await
             .context("failed to call `get-arguments`")
             .map_err(types::Error::trap)?;
         let num = args.len().try_into().map_err(|_| types::Errno::Overflow)?;
@@ -680,13 +680,12 @@ impl<
     }
 
     #[instrument(skip(self))]
-    async fn environ_get<'b>(
+    fn environ_get<'b>(
         &mut self,
         environ: &GuestPtr<'b, GuestPtr<'b, u8>>,
         environ_buf: &GuestPtr<'b, u8>,
     ) -> Result<(), types::Error> {
         self.get_environment()
-            .await
             .context("failed to call `get-environment`")
             .map_err(types::Error::trap)?
             .into_iter()
@@ -712,10 +711,9 @@ impl<
     }
 
     #[instrument(skip(self))]
-    async fn environ_sizes_get(&mut self) -> Result<(types::Size, types::Size), types::Error> {
+    fn environ_sizes_get(&mut self) -> Result<(types::Size, types::Size), types::Error> {
         let environ = self
             .get_environment()
-            .await
             .context("failed to call `get-environment`")
             .map_err(types::Error::trap)?;
         let num = environ
@@ -732,18 +730,13 @@ impl<
     }
 
     #[instrument(skip(self))]
-    async fn clock_res_get(
-        &mut self,
-        id: types::Clockid,
-    ) -> Result<types::Timestamp, types::Error> {
+    fn clock_res_get(&mut self, id: types::Clockid) -> Result<types::Timestamp, types::Error> {
         let res = match id {
             types::Clockid::Realtime => wall_clock::Host::resolution(self)
-                .await
                 .context("failed to call `wall_clock::resolution`")
                 .map_err(types::Error::trap)?
                 .try_into()?,
             types::Clockid::Monotonic => monotonic_clock::Host::resolution(self)
-                .await
                 .context("failed to call `monotonic_clock::resolution`")
                 .map_err(types::Error::trap)?,
             types::Clockid::ProcessCputimeId | types::Clockid::ThreadCputimeId => {
@@ -754,19 +747,17 @@ impl<
     }
 
     #[instrument(skip(self))]
-    async fn clock_time_get(
+    fn clock_time_get(
         &mut self,
         id: types::Clockid,
         _precision: types::Timestamp,
     ) -> Result<types::Timestamp, types::Error> {
         let now = match id {
             types::Clockid::Realtime => wall_clock::Host::now(self)
-                .await
                 .context("failed to call `wall_clock::now`")
                 .map_err(types::Error::trap)?
                 .try_into()?,
             types::Clockid::Monotonic => monotonic_clock::Host::now(self)
-                .await
                 .context("failed to call `monotonic_clock::now`")
                 .map_err(types::Error::trap)?,
             types::Clockid::ProcessCputimeId | types::Clockid::ThreadCputimeId => {
@@ -784,7 +775,7 @@ impl<
         len: types::Filesize,
         advice: types::Advice,
     ) -> Result<(), types::Error> {
-        let fd = self.get_file_fd(fd).await?;
+        let fd = self.get_file_fd(fd)?;
         self.advise(fd, offset, len, advice.into())
             .await
             .map_err(|e| {
@@ -797,13 +788,13 @@ impl<
     /// Force the allocation of space in a file.
     /// NOTE: This is similar to `posix_fallocate` in POSIX.
     #[instrument(skip(self))]
-    async fn fd_allocate(
+    fn fd_allocate(
         &mut self,
         fd: types::Fd,
         _offset: types::Filesize,
         _len: types::Filesize,
     ) -> Result<(), types::Error> {
-        self.get_file_fd(fd).await?;
+        self.get_file_fd(fd)?;
         Err(types::Errno::Notsup.into())
     }
 
@@ -812,22 +803,21 @@ impl<
     #[instrument(skip(self))]
     async fn fd_close(&mut self, fd: types::Fd) -> Result<(), types::Error> {
         let desc = self
-            .transact()
-            .await?
+            .transact()?
             .descriptors
             .get_mut()
             .remove(fd)
             .ok_or(types::Errno::Badf)?
             .clone();
         match desc {
-            Descriptor::Stdin(stream) => self
-                .drop_input_stream(stream)
+            Descriptor::Stdin(stream) => streams::Host::drop_input_stream(self, stream)
                 .await
                 .context("failed to call `drop-input-stream`"),
-            Descriptor::Stdout(stream) | Descriptor::Stderr(stream) => self
-                .drop_output_stream(stream)
-                .await
-                .context("failed to call `drop-output-stream`"),
+            Descriptor::Stdout(stream) | Descriptor::Stderr(stream) => {
+                streams::Host::drop_output_stream(self, stream)
+                    .await
+                    .context("failed to call `drop-output-stream`")
+            }
             Descriptor::File(File { fd, .. }) | Descriptor::PreopenDirectory((fd, _)) => self
                 .drop_descriptor(fd)
                 .await
@@ -840,7 +830,7 @@ impl<
     /// NOTE: This is similar to `fdatasync` in POSIX.
     #[instrument(skip(self))]
     async fn fd_datasync(&mut self, fd: types::Fd) -> Result<(), types::Error> {
-        let fd = self.get_file_fd(fd).await?;
+        let fd = self.get_file_fd(fd)?;
         self.sync_data(fd).await.map_err(|e| {
             e.try_into()
                 .context("failed to call `sync-data`")
@@ -852,7 +842,7 @@ impl<
     /// NOTE: This returns similar flags to `fsync(fd, F_GETFL)` in POSIX, as well as additional fields.
     #[instrument(skip(self))]
     async fn fd_fdstat_get(&mut self, fd: types::Fd) -> Result<types::Fdstat, types::Error> {
-        let (fd, blocking, append) = match self.transact().await?.get_descriptor(fd)? {
+        let (fd, blocking, append) = match self.transact()?.get_descriptor(fd)? {
             Descriptor::Stdin(..) => {
                 let fs_rights_base = types::Rights::FD_READ;
                 return Ok(types::Fdstat {
@@ -931,12 +921,12 @@ impl<
     /// Adjust the flags associated with a file descriptor.
     /// NOTE: This is similar to `fcntl(fd, F_SETFL, flags)` in POSIX.
     #[instrument(skip(self))]
-    async fn fd_fdstat_set_flags(
+    fn fd_fdstat_set_flags(
         &mut self,
         fd: types::Fd,
         flags: types::Fdflags,
     ) -> Result<(), types::Error> {
-        let mut st = self.transact().await?;
+        let mut st = self.transact()?;
         let File {
             append, blocking, ..
         } = st.get_file_mut(fd)?;
@@ -955,20 +945,20 @@ impl<
 
     /// Does not do anything if `fd` corresponds to a valid descriptor and returns `[types::Errno::Badf]` error otherwise.
     #[instrument(skip(self))]
-    async fn fd_fdstat_set_rights(
+    fn fd_fdstat_set_rights(
         &mut self,
         fd: types::Fd,
         _fs_rights_base: types::Rights,
         _fs_rights_inheriting: types::Rights,
     ) -> Result<(), types::Error> {
-        self.get_fd(fd).await?;
+        self.get_fd(fd)?;
         Ok(())
     }
 
     /// Return the attributes of an open file.
     #[instrument(skip(self))]
     async fn fd_filestat_get(&mut self, fd: types::Fd) -> Result<types::Filestat, types::Error> {
-        let desc = self.transact().await?.get_descriptor(fd)?.clone();
+        let desc = self.transact()?.get_descriptor(fd)?.clone();
         match desc {
             Descriptor::Stdin(..) | Descriptor::Stdout(..) | Descriptor::Stderr(..) => {
                 Ok(types::Filestat {
@@ -1023,7 +1013,7 @@ impl<
         fd: types::Fd,
         size: types::Filesize,
     ) -> Result<(), types::Error> {
-        let fd = self.get_file_fd(fd).await?;
+        let fd = self.get_file_fd(fd)?;
         self.set_size(fd, size).await.map_err(|e| {
             e.try_into()
                 .context("failed to call `set-size`")
@@ -1052,7 +1042,7 @@ impl<
             fst_flags.contains(types::Fstflags::MTIM_NOW),
         )?;
 
-        let fd = self.get_fd(fd).await?;
+        let fd = self.get_fd(fd)?;
         self.set_times(fd, atim, mtim).await.map_err(|e| {
             e.try_into()
                 .context("failed to call `set-times`")
@@ -1068,8 +1058,8 @@ impl<
         fd: types::Fd,
         iovs: &types::IovecArray<'a>,
     ) -> Result<types::Size, types::Error> {
-        let desc = self.transact().await?.get_descriptor(fd)?.clone();
-        let (mut buf, read, end) = match desc {
+        let desc = self.transact()?.get_descriptor(fd)?.clone();
+        let (mut buf, read, state) = match desc {
             Descriptor::File(File {
                 fd,
                 blocking,
@@ -1087,36 +1077,35 @@ impl<
                         .unwrap_or_else(types::Error::trap)
                 })?;
                 let max = buf.len().try_into().unwrap_or(u64::MAX);
-                let (read, end) = if blocking {
-                    self.blocking_read(stream, max)
+                let (read, state) = if blocking {
+                    streams::Host::blocking_read(self, stream, max).await
                 } else {
-                    streams::Host::read(self, stream, max)
+                    streams::Host::read(self, stream, max).await
                 }
-                .await
                 .map_err(|_| types::Errno::Io)?;
 
                 let n = read.len().try_into().or(Err(types::Errno::Overflow))?;
                 let pos = pos.checked_add(n).ok_or(types::Errno::Overflow)?;
                 position.store(pos, Ordering::Relaxed);
 
-                (buf, read, end)
+                (buf, read, state)
             }
             Descriptor::Stdin(stream) => {
                 let Some(buf) = first_non_empty_iovec(iovs)? else {
                     return Ok(0)
                 };
-                let (read, end) =
+                let (read, state) =
                     streams::Host::read(self, stream, buf.len().try_into().unwrap_or(u64::MAX))
                         .await
                         .map_err(|_| types::Errno::Io)?;
-                (buf, read, end)
+                (buf, read, state)
             }
             _ => return Err(types::Errno::Badf.into()),
         };
         if read.len() > buf.len() {
             return Err(types::Errno::Range.into());
         }
-        if !end && read.len() == 0 {
+        if state == streams::StreamStatus::Open && read.len() == 0 {
             return Err(types::Errno::Intr.into());
         }
         let (buf, _) = buf.split_at_mut(read.len());
@@ -1134,8 +1123,8 @@ impl<
         iovs: &types::IovecArray<'a>,
         offset: types::Filesize,
     ) -> Result<types::Size, types::Error> {
-        let desc = self.transact().await?.get_descriptor(fd)?.clone();
-        let (mut buf, read, end) = match desc {
+        let desc = self.transact()?.get_descriptor(fd)?.clone();
+        let (mut buf, read, state) = match desc {
             Descriptor::File(File { fd, blocking, .. }) if self.table().is_file(fd) => {
                 let Some(buf) = first_non_empty_iovec(iovs)? else {
                     return Ok(0)
@@ -1147,15 +1136,14 @@ impl<
                         .unwrap_or_else(types::Error::trap)
                 })?;
                 let max = buf.len().try_into().unwrap_or(u64::MAX);
-                let (read, end) = if blocking {
-                    self.blocking_read(stream, max)
+                let (read, state) = if blocking {
+                    streams::Host::blocking_read(self, stream, max).await
                 } else {
-                    streams::Host::read(self, stream, max)
+                    streams::Host::read(self, stream, max).await
                 }
-                .await
                 .map_err(|_| types::Errno::Io)?;
 
-                (buf, read, end)
+                (buf, read, state)
             }
             Descriptor::Stdin(..) => {
                 // NOTE: legacy implementation returns SPIPE here
@@ -1166,7 +1154,7 @@ impl<
         if read.len() > buf.len() {
             return Err(types::Errno::Range.into());
         }
-        if !end && read.len() == 0 {
+        if state == streams::StreamStatus::Open && read.len() == 0 {
             return Err(types::Errno::Intr.into());
         }
         let (buf, _) = buf.split_at_mut(read.len());
@@ -1183,7 +1171,7 @@ impl<
         fd: types::Fd,
         ciovs: &types::CiovecArray<'a>,
     ) -> Result<types::Size, types::Error> {
-        let desc = self.transact().await?.get_descriptor(fd)?.clone();
+        let desc = self.transact()?.get_descriptor(fd)?.clone();
         let n = match desc {
             Descriptor::File(File {
                 fd,
@@ -1210,12 +1198,11 @@ impl<
                     })?;
                     (stream, position)
                 };
-                let n = if blocking {
-                    self.blocking_write(stream, buf)
+                let (n, _stat) = if blocking {
+                    streams::Host::blocking_write(self, stream, buf).await
                 } else {
-                    streams::Host::write(self, stream, buf)
+                    streams::Host::write(self, stream, buf).await
                 }
-                .await
                 .map_err(|_| types::Errno::Io)?;
                 if !append {
                     let pos = pos.checked_add(n).ok_or(types::Errno::Overflow)?;
@@ -1227,14 +1214,14 @@ impl<
                 let Some(buf) = first_non_empty_ciovec(ciovs)? else {
                     return Ok(0)
                 };
-                streams::Host::write(self, stream, buf)
+                let (n, _stat) = streams::Host::blocking_write(self, stream, buf)
                     .await
-                    .map_err(|_| types::Errno::Io)?
+                    .map_err(|_| types::Errno::Io)?;
+                n
             }
             _ => return Err(types::Errno::Badf.into()),
-        }
-        .try_into()
-        .or(Err(types::Errno::Overflow))?;
+        };
+        let n = n.try_into().or(Err(types::Errno::Overflow))?;
         Ok(n)
     }
 
@@ -1247,8 +1234,8 @@ impl<
         ciovs: &types::CiovecArray<'a>,
         offset: types::Filesize,
     ) -> Result<types::Size, types::Error> {
-        let desc = self.transact().await?.get_descriptor(fd)?.clone();
-        let n = match desc {
+        let desc = self.transact()?.get_descriptor(fd)?.clone();
+        let (n, _stat) = match desc {
             Descriptor::File(File { fd, blocking, .. }) if self.table().is_file(fd) => {
                 let Some(buf) = first_non_empty_ciovec(ciovs)? else {
                     return Ok(0)
@@ -1259,11 +1246,10 @@ impl<
                         .unwrap_or_else(types::Error::trap)
                 })?;
                 if blocking {
-                    self.blocking_write(stream, buf)
+                    streams::Host::blocking_write(self, stream, buf).await
                 } else {
-                    streams::Host::write(self, stream, buf)
+                    streams::Host::write(self, stream, buf).await
                 }
-                .await
                 .map_err(|_| types::Errno::Io)?
             }
             Descriptor::Stdout(..) | Descriptor::Stderr(..) => {
@@ -1271,16 +1257,15 @@ impl<
                 return Err(types::Errno::Spipe.into());
             }
             _ => return Err(types::Errno::Badf.into()),
-        }
-        .try_into()
-        .or(Err(types::Errno::Overflow))?;
+        };
+        let n = n.try_into().or(Err(types::Errno::Overflow))?;
         Ok(n)
     }
 
     /// Return a description of the given preopened file descriptor.
     #[instrument(skip(self))]
-    async fn fd_prestat_get(&mut self, fd: types::Fd) -> Result<types::Prestat, types::Error> {
-        if let Descriptor::PreopenDirectory((_, p)) = self.transact().await?.get_descriptor(fd)? {
+    fn fd_prestat_get(&mut self, fd: types::Fd) -> Result<types::Prestat, types::Error> {
+        if let Descriptor::PreopenDirectory((_, p)) = self.transact()?.get_descriptor(fd)? {
             let pr_name_len = p.len().try_into().or(Err(types::Errno::Overflow))?;
             return Ok(types::Prestat::Dir(types::PrestatDir { pr_name_len }));
         }
@@ -1289,14 +1274,14 @@ impl<
 
     /// Return a description of the given preopened file descriptor.
     #[instrument(skip(self))]
-    async fn fd_prestat_dir_name<'a>(
+    fn fd_prestat_dir_name<'a>(
         &mut self,
         fd: types::Fd,
         path: &GuestPtr<'a, u8>,
         path_max_len: types::Size,
     ) -> Result<(), types::Error> {
         let path_max_len = path_max_len.try_into().or(Err(types::Errno::Overflow))?;
-        if let Descriptor::PreopenDirectory((_, p)) = self.transact().await?.get_descriptor(fd)? {
+        if let Descriptor::PreopenDirectory((_, p)) = self.transact()?.get_descriptor(fd)? {
             if p.len() > path_max_len {
                 return Err(types::Errno::Nametoolong.into());
             }
@@ -1308,8 +1293,8 @@ impl<
 
     /// Atomically replace a file descriptor by renumbering another file descriptor.
     #[instrument(skip(self))]
-    async fn fd_renumber(&mut self, from: types::Fd, to: types::Fd) -> Result<(), types::Error> {
-        let mut st = self.transact().await?;
+    fn fd_renumber(&mut self, from: types::Fd, to: types::Fd) -> Result<(), types::Error> {
+        let mut st = self.transact()?;
         let descriptors = st.descriptors.get_mut();
         let desc = descriptors.remove(from).ok_or(types::Errno::Badf)?;
         descriptors.insert(to.into(), desc);
@@ -1326,7 +1311,7 @@ impl<
         whence: types::Whence,
     ) -> Result<types::Filesize, types::Error> {
         let (fd, position) = {
-            let mut st = self.transact().await?;
+            let mut st = self.transact()?;
             let File { fd, position, .. } = st.get_seekable(fd)?;
             (*fd, Arc::clone(&position))
         };
@@ -1354,7 +1339,7 @@ impl<
     /// NOTE: This is similar to `fsync` in POSIX.
     #[instrument(skip(self))]
     async fn fd_sync(&mut self, fd: types::Fd) -> Result<(), types::Error> {
-        let fd = self.get_file_fd(fd).await?;
+        let fd = self.get_file_fd(fd)?;
         self.sync(fd).await.map_err(|e| {
             e.try_into()
                 .context("failed to call `sync`")
@@ -1365,10 +1350,9 @@ impl<
     /// Return the current offset of a file descriptor.
     /// NOTE: This is similar to `lseek(fd, 0, SEEK_CUR)` in POSIX.
     #[instrument(skip(self))]
-    async fn fd_tell(&mut self, fd: types::Fd) -> Result<types::Filesize, types::Error> {
+    fn fd_tell(&mut self, fd: types::Fd) -> Result<types::Filesize, types::Error> {
         let pos = self
-            .transact()
-            .await?
+            .transact()?
             .get_seekable(fd)
             .map(|File { position, .. }| position.load(Ordering::Relaxed))?;
         Ok(pos)
@@ -1382,7 +1366,7 @@ impl<
         buf_len: types::Size,
         cookie: types::Dircookie,
     ) -> Result<types::Size, types::Error> {
-        let fd = self.get_dir_fd(fd).await?;
+        let fd = self.get_dir_fd(fd)?;
         let stream = self.read_directory(fd).await.map_err(|e| {
             e.try_into()
                 .context("failed to call `read-directory`")
@@ -1490,7 +1474,7 @@ impl<
         dirfd: types::Fd,
         path: &GuestPtr<'a, str>,
     ) -> Result<(), types::Error> {
-        let dirfd = self.get_dir_fd(dirfd).await?;
+        let dirfd = self.get_dir_fd(dirfd)?;
         let path = read_string(path)?;
         self.create_directory_at(dirfd, path).await.map_err(|e| {
             e.try_into()
@@ -1508,7 +1492,7 @@ impl<
         flags: types::Lookupflags,
         path: &GuestPtr<'a, str>,
     ) -> Result<types::Filestat, types::Error> {
-        let dirfd = self.get_dir_fd(dirfd).await?;
+        let dirfd = self.get_dir_fd(dirfd)?;
         let path = read_string(path)?;
         let filesystem::DescriptorStat {
             device: dev,
@@ -1563,7 +1547,7 @@ impl<
             fst_flags.contains(types::Fstflags::MTIM_NOW),
         )?;
 
-        let dirfd = self.get_dir_fd(dirfd).await?;
+        let dirfd = self.get_dir_fd(dirfd)?;
         let path = read_string(path)?;
         self.set_times_at(dirfd, flags.into(), path, atim, mtim)
             .await
@@ -1585,8 +1569,8 @@ impl<
         target_fd: types::Fd,
         target_path: &GuestPtr<'a, str>,
     ) -> Result<(), types::Error> {
-        let src_fd = self.get_dir_fd(src_fd).await?;
-        let target_fd = self.get_dir_fd(target_fd).await?;
+        let src_fd = self.get_dir_fd(src_fd)?;
+        let target_fd = self.get_dir_fd(target_fd)?;
         let src_path = read_string(src_path)?;
         let target_path = read_string(target_path)?;
         self.link_at(src_fd, src_flags.into(), src_path, target_fd, target_path)
@@ -1630,7 +1614,7 @@ impl<
             flags |= filesystem::DescriptorFlags::REQUESTED_WRITE_SYNC;
         }
 
-        let desc = self.transact().await?.get_descriptor(dirfd)?.clone();
+        let desc = self.transact()?.get_descriptor(dirfd)?.clone();
         let dirfd = match desc {
             Descriptor::PreopenDirectory((fd, _)) => fd,
             Descriptor::File(File { fd, .. }) if self.table().is_dir(fd) => fd,
@@ -1655,17 +1639,12 @@ impl<
                     .context("failed to call `open-at`")
                     .unwrap_or_else(types::Error::trap)
             })?;
-        let fd = self
-            .transact()
-            .await?
-            .descriptors
-            .get_mut()
-            .push_file(File {
-                fd,
-                position: Default::default(),
-                append: fdflags.contains(types::Fdflags::APPEND),
-                blocking: !fdflags.contains(types::Fdflags::NONBLOCK),
-            })?;
+        let fd = self.transact()?.descriptors.get_mut().push_file(File {
+            fd,
+            position: Default::default(),
+            append: fdflags.contains(types::Fdflags::APPEND),
+            blocking: !fdflags.contains(types::Fdflags::NONBLOCK),
+        })?;
         Ok(fd.into())
     }
 
@@ -1679,7 +1658,7 @@ impl<
         buf: &GuestPtr<'a, u8>,
         buf_len: types::Size,
     ) -> Result<types::Size, types::Error> {
-        let dirfd = self.get_dir_fd(dirfd).await?;
+        let dirfd = self.get_dir_fd(dirfd)?;
         let path = read_string(path)?;
         let mut path = self.readlink_at(dirfd, path).await.map_err(|e| {
             e.try_into()
@@ -1701,7 +1680,7 @@ impl<
         dirfd: types::Fd,
         path: &GuestPtr<'a, str>,
     ) -> Result<(), types::Error> {
-        let dirfd = self.get_dir_fd(dirfd).await?;
+        let dirfd = self.get_dir_fd(dirfd)?;
         let path = read_string(path)?;
         self.remove_directory_at(dirfd, path).await.map_err(|e| {
             e.try_into()
@@ -1720,8 +1699,8 @@ impl<
         dest_fd: types::Fd,
         dest_path: &GuestPtr<'a, str>,
     ) -> Result<(), types::Error> {
-        let src_fd = self.get_dir_fd(src_fd).await?;
-        let dest_fd = self.get_dir_fd(dest_fd).await?;
+        let src_fd = self.get_dir_fd(src_fd)?;
+        let dest_fd = self.get_dir_fd(dest_fd)?;
         let src_path = read_string(src_path)?;
         let dest_path = read_string(dest_path)?;
         self.rename_at(src_fd, src_path, dest_fd, dest_path)
@@ -1740,7 +1719,7 @@ impl<
         dirfd: types::Fd,
         dest_path: &GuestPtr<'a, str>,
     ) -> Result<(), types::Error> {
-        let dirfd = self.get_dir_fd(dirfd).await?;
+        let dirfd = self.get_dir_fd(dirfd)?;
         let src_path = read_string(src_path)?;
         let dest_path = read_string(dest_path)?;
         self.symlink_at(dirfd, src_path, dest_path)
@@ -1758,7 +1737,7 @@ impl<
         dirfd: types::Fd,
         path: &GuestPtr<'a, str>,
     ) -> Result<(), types::Error> {
-        let dirfd = self.get_dir_fd(dirfd).await?;
+        let dirfd = self.get_dir_fd(dirfd)?;
         let path = path.as_cow().map_err(|_| types::Errno::Inval)?.to_string();
         self.unlink_file_at(dirfd, path).await.map_err(|e| {
             e.try_into()
@@ -1775,41 +1754,40 @@ impl<
         events: &GuestPtr<'a, types::Event>,
         nsubscriptions: types::Size,
     ) -> Result<types::Size, types::Error> {
-        todo!()
+        todo!("preview1 poll_oneoff is not implemented")
     }
 
     #[instrument(skip(self))]
-    async fn proc_exit(&mut self, status: types::Exitcode) -> anyhow::Error {
+    fn proc_exit(&mut self, status: types::Exitcode) -> anyhow::Error {
         let status = match status {
             0 => Ok(()),
             _ => Err(()),
         };
-        match self.exit(status).await {
+        match self.exit(status) {
             Err(e) => e,
             Ok(()) => anyhow!("`exit` did not return an error"),
         }
     }
 
     #[instrument(skip(self))]
-    async fn proc_raise(&mut self, _sig: types::Signal) -> Result<(), types::Error> {
+    fn proc_raise(&mut self, _sig: types::Signal) -> Result<(), types::Error> {
         Err(types::Errno::Notsup.into())
     }
 
     #[instrument(skip(self))]
-    async fn sched_yield(&mut self) -> Result<(), types::Error> {
+    fn sched_yield(&mut self) -> Result<(), types::Error> {
         // TODO: This is not yet covered in Preview2.
         Ok(())
     }
 
     #[instrument(skip(self))]
-    async fn random_get<'a>(
+    fn random_get<'a>(
         &mut self,
         buf: &GuestPtr<'a, u8>,
         buf_len: types::Size,
     ) -> Result<(), types::Error> {
         let rand = self
             .get_random_bytes(buf_len.into())
-            .await
             .context("failed to call `get-random-bytes`")
             .map_err(types::Error::trap)?;
         write_bytes(buf, rand)?;
@@ -1818,43 +1796,39 @@ impl<
 
     #[allow(unused_variables)]
     #[instrument(skip(self))]
-    async fn sock_accept(
+    fn sock_accept(
         &mut self,
         fd: types::Fd,
         flags: types::Fdflags,
     ) -> Result<types::Fd, types::Error> {
-        todo!()
+        todo!("preview1 sock_accept is not implemented")
     }
 
     #[allow(unused_variables)]
     #[instrument(skip(self))]
-    async fn sock_recv<'a>(
+    fn sock_recv<'a>(
         &mut self,
         fd: types::Fd,
         ri_data: &types::IovecArray<'a>,
         ri_flags: types::Riflags,
     ) -> Result<(types::Size, types::Roflags), types::Error> {
-        todo!()
+        todo!("preview1 sock_recv is not implemented")
     }
 
     #[allow(unused_variables)]
     #[instrument(skip(self))]
-    async fn sock_send<'a>(
+    fn sock_send<'a>(
         &mut self,
         fd: types::Fd,
         si_data: &types::CiovecArray<'a>,
         _si_flags: types::Siflags,
     ) -> Result<types::Size, types::Error> {
-        todo!()
+        todo!("preview1 sock_send is not implemented")
     }
 
     #[allow(unused_variables)]
     #[instrument(skip(self))]
-    async fn sock_shutdown(
-        &mut self,
-        fd: types::Fd,
-        how: types::Sdflags,
-    ) -> Result<(), types::Error> {
-        todo!()
+    fn sock_shutdown(&mut self, fd: types::Fd, how: types::Sdflags) -> Result<(), types::Error> {
+        todo!("preview1 sock_shutdown is not implemented")
     }
 }

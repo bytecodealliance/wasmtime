@@ -20,7 +20,7 @@ pub enum TableError {
 /// up. Right now it is just an approximation.
 #[derive(Debug)]
 pub struct Table {
-    map: HashMap<u32, Box<dyn Any + Send + Sync>>,
+    pub(crate) map: HashMap<u32, Box<dyn Any + Send + Sync>>,
     next_key: u32,
 }
 
@@ -87,6 +87,23 @@ impl Table {
         }
     }
 
+    /// Get an [`std::collections::hash_map::OccupiedEntry`] corresponding to
+    /// a table entry, if it exists. This allows you to remove or replace the
+    /// entry based on its contents.
+    pub fn entry(
+        &mut self,
+        key: u32,
+    ) -> Result<
+        std::collections::hash_map::OccupiedEntry<u32, Box<dyn Any + Send + Sync + 'static>>,
+        TableError,
+    > {
+        use std::collections::hash_map::Entry;
+        match self.map.entry(key) {
+            Entry::Occupied(occ) => Ok(occ),
+            Entry::Vacant(_) => Err(TableError::NotPresent),
+        }
+    }
+
     /// Remove a resource at a given index from the table.
     pub fn delete<T: Any + Sized>(&mut self, key: u32) -> Result<T, TableError> {
         // Optimistically attempt to remove the value stored under key
@@ -103,5 +120,24 @@ impl Table {
                 Err(TableError::WrongType)
             }
         }
+    }
+
+    /// Zip the values of the map with mutable references to table entries corresponding to each
+    /// key. As the keys in the [HashMap] are unique, this iterator can give mutable references
+    /// with the same lifetime as the mutable reference to the [Table].
+    pub fn iter_entries<'a, T>(
+        &'a mut self,
+        map: HashMap<u32, T>,
+    ) -> impl Iterator<Item = (Result<&'a mut dyn Any, TableError>, T)> {
+        map.into_iter().map(move |(k, v)| {
+            let item = self
+                .map
+                .get_mut(&k)
+                .map(Box::as_mut)
+                // Safety: extending the lifetime of the mutable reference.
+                .map(|item| unsafe { &mut *(item as *mut dyn Any) })
+                .ok_or(TableError::NotPresent);
+            (item, v)
+        })
     }
 }

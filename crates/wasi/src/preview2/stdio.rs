@@ -1,176 +1,67 @@
-use anyhow::Error;
-use std::any::Any;
-use std::convert::TryInto;
-use std::io::{self, Read, Write};
-use system_interface::io::ReadReady;
+use crate::preview2::pipe::AsyncWriteStream;
 
-use crate::preview2::{InputStream, OutputStream};
 #[cfg(unix)]
-use cap_std::io_lifetimes::{AsFd, BorrowedFd};
-#[cfg(windows)]
-use cap_std::io_lifetimes::{AsHandle, BorrowedHandle};
-#[cfg(windows)]
-use io_extras::os::windows::{AsHandleOrSocket, BorrowedHandleOrSocket};
-
-pub struct Stdin(std::io::Stdin);
-
-pub fn stdin() -> Stdin {
-    Stdin(std::io::stdin())
-}
-
-#[async_trait::async_trait]
-impl InputStream for Stdin {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-    #[cfg(unix)]
-    fn pollable_read(&self) -> Option<rustix::fd::BorrowedFd> {
-        Some(self.0.as_fd())
-    }
-
-    #[cfg(windows)]
-    fn pollable_read(&self) -> Option<io_extras::os::windows::BorrowedHandleOrSocket> {
-        Some(self.0.as_handle_or_socket())
-    }
-
-    async fn read(&mut self, buf: &mut [u8]) -> Result<(u64, bool), Error> {
-        match Read::read(&mut self.0, buf) {
-            Ok(0) => Ok((0, true)),
-            Ok(n) => Ok((n as u64, false)),
-            Err(err) if err.kind() == io::ErrorKind::Interrupted => Ok((0, false)),
-            Err(err) => Err(err.into()),
-        }
-    }
-    async fn read_vectored<'a>(
-        &mut self,
-        bufs: &mut [io::IoSliceMut<'a>],
-    ) -> Result<(u64, bool), Error> {
-        match Read::read_vectored(&mut self.0, bufs) {
-            Ok(0) => Ok((0, true)),
-            Ok(n) => Ok((n as u64, false)),
-            Err(err) if err.kind() == io::ErrorKind::Interrupted => Ok((0, false)),
-            Err(err) => Err(err.into()),
-        }
-    }
-    #[cfg(can_vector)]
-    fn is_read_vectored(&self) {
-        Read::is_read_vectored(&mut self.0)
-    }
-
-    async fn skip(&mut self, nelem: u64) -> Result<(u64, bool), Error> {
-        let num = io::copy(&mut io::Read::take(&mut self.0, nelem), &mut io::sink())?;
-        Ok((num, num < nelem))
-    }
-
-    async fn num_ready_bytes(&self) -> Result<u64, Error> {
-        Ok(self.0.num_ready_bytes()?)
-    }
-
-    async fn readable(&self) -> Result<(), Error> {
-        Err(anyhow::anyhow!("idk"))
-    }
-}
-#[cfg(windows)]
-impl AsHandle for Stdin {
-    fn as_handle(&self) -> BorrowedHandle<'_> {
-        self.0.as_handle()
-    }
-}
-#[cfg(windows)]
-impl AsHandleOrSocket for Stdin {
-    #[inline]
-    fn as_handle_or_socket(&self) -> BorrowedHandleOrSocket {
-        self.0.as_handle_or_socket()
-    }
-}
+mod unix;
 #[cfg(unix)]
-impl AsFd for Stdin {
-    fn as_fd(&self) -> BorrowedFd<'_> {
-        self.0.as_fd()
-    }
-}
+pub use self::unix::{stdin, Stdin};
 
-macro_rules! wasi_output_stream_impl {
-    ($ty:ty, $ident:ident) => {
-        #[async_trait::async_trait]
-        impl OutputStream for $ty {
-            fn as_any(&self) -> &dyn Any {
-                self
-            }
+#[allow(dead_code)]
+mod worker_thread_stdin;
+#[cfg(windows)]
+pub use self::worker_thread_stdin::{stdin, Stdin};
 
-            #[cfg(unix)]
-            fn pollable_write(&self) -> Option<rustix::fd::BorrowedFd> {
-                Some(self.0.as_fd())
-            }
-            #[cfg(windows)]
-            fn pollable_write(&self) -> Option<io_extras::os::windows::BorrowedHandleOrSocket> {
-                Some(self.0.as_handle_or_socket())
-            }
-
-            async fn write(&mut self, buf: &[u8]) -> Result<u64, Error> {
-                let n = Write::write(&mut self.0, buf)?;
-                Ok(n.try_into()?)
-            }
-            async fn write_vectored<'a>(&mut self, bufs: &[io::IoSlice<'a>]) -> Result<u64, Error> {
-                let n = Write::write_vectored(&mut self.0, bufs)?;
-                Ok(n.try_into()?)
-            }
-            #[cfg(can_vector)]
-            fn is_write_vectored(&self) {
-                Write::is_write_vectored(&mut self.0)
-            }
-            // TODO: Optimize for stdio streams.
-            /*
-            async fn splice(
-                &mut self,
-                src: &mut dyn InputStream,
-                nelem: u64,
-            ) -> Result<u64, Error> {
-                todo!()
-            }
-            */
-
-            async fn write_zeroes(&mut self, nelem: u64) -> Result<u64, Error> {
-                let num = io::copy(&mut io::Read::take(io::repeat(0), nelem), &mut self.0)?;
-                Ok(num)
-            }
-
-            async fn writable(&self) -> Result<(), Error> {
-                Ok(())
-            }
-        }
-        #[cfg(windows)]
-        impl AsHandle for $ty {
-            fn as_handle(&self) -> BorrowedHandle<'_> {
-                self.0.as_handle()
-            }
-        }
-        #[cfg(unix)]
-        impl AsFd for $ty {
-            fn as_fd(&self) -> BorrowedFd<'_> {
-                self.0.as_fd()
-            }
-        }
-        #[cfg(windows)]
-        impl AsHandleOrSocket for $ty {
-            #[inline]
-            fn as_handle_or_socket(&self) -> BorrowedHandleOrSocket {
-                self.0.as_handle_or_socket()
-            }
-        }
-    };
-}
-
-pub struct Stdout(std::io::Stdout);
+pub type Stdout = AsyncWriteStream;
 
 pub fn stdout() -> Stdout {
-    Stdout(std::io::stdout())
+    AsyncWriteStream::new(tokio::io::stdout())
 }
-wasi_output_stream_impl!(Stdout, Stdout);
-
-pub struct Stderr(std::io::Stderr);
+pub type Stderr = AsyncWriteStream;
 
 pub fn stderr() -> Stderr {
-    Stderr(std::io::stderr())
+    AsyncWriteStream::new(tokio::io::stderr())
 }
-wasi_output_stream_impl!(Stderr, Stderr);
+
+#[cfg(all(unix, test))]
+mod test {
+    // This could even be parameterized somehow to use the worker thread stdin vs the asyncfd
+    // stdin.
+    #[test]
+    fn test_stdin_by_forking() {
+        // Make pipe for emulating stdin.
+        // Make pipe for getting results.
+        // Fork.
+        // When child:
+        //   close stdin fd.
+        //   use dup2 to turn the pipe recv end into the stdin fd.
+        //   in a tokio runtime:
+        //     let stdin = super::stdin();
+        //     // Make sure the initial state is that stdin is not ready:
+        //     if timeout(stdin.ready().await).is_timeout() {
+        //        send "start\n" on result pipe.
+        //     }
+        //     loop {
+        //       match timeout(stdin.ready().await) {
+        //         Ok => {
+        //          let bytes = stdin.read();
+        //          if bytes == ending sentinel:
+        //            exit
+        //          if bytes == some other sentinel:
+        //            return and go back to the thing where we start the tokio runtime,
+        //            testing that when creating a new super::stdin() it works correctly
+        //          send "got: {bytes:?}\n" on result pipe.
+        //         }
+        //         Err => {
+        //          send "timed out\n" on result pipe.
+        //         }
+        //       }
+        //     }
+        // When parent:
+        //   wait to recv "start\n" on result pipe (or the child process exits)
+        //   send some bytes to child stdin.
+        //   make sure we get back "got {bytes:?}" on result pipe (or the child process exits)
+        //   sleep for a while.
+        //   make sure we get back "timed out" on result pipe (or the child process exits)
+        //   send some bytes again. and etc.
+        //
+    }
+}

@@ -1,8 +1,7 @@
-use crate::preview2::{wasi::cli_base::exit, I32Exit, WasiView};
+use crate::preview2::{bindings::cli_base::exit, I32Exit, WasiView};
 
-#[async_trait::async_trait]
 impl<T: WasiView> exit::Host for T {
-    async fn exit(&mut self, status: Result<(), ()>) -> anyhow::Result<()> {
+    fn exit(&mut self, status: Result<(), ()>) -> anyhow::Result<()> {
         let status = match status {
             Ok(()) => 0,
             Err(()) => 1,

@@ -305,7 +305,7 @@ impl Descriptors {
     // Implementation of fd_renumber
     pub fn renumber(&mut self, from_fd: Fd, to_fd: Fd) -> Result<(), Errno> {
         // First, ensure from_fd is in bounds:
-        drop(self.get(from_fd)?);
+        let _ = self.get(from_fd)?;
         // Expand table until to_fd is in bounds as well:
         while self.table_len.get() as u32 <= to_fd as u32 {
             self.push_closed()?;

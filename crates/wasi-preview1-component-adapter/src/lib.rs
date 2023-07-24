@@ -839,7 +839,7 @@ pub unsafe extern "C" fn fd_read(
 
                 let read_len = u64::try_from(len).trapping_unwrap();
                 let wasi_stream = streams.get_read_stream()?;
-                let (data, end) = state
+                let (data, stream_stat) = state
                     .import_alloc
                     .with_buffer(ptr, len, || {
                         if blocking {
@@ -861,7 +861,7 @@ pub unsafe extern "C" fn fd_read(
 
                 let len = data.len();
                 forget(data);
-                if !end && len == 0 {
+                if stream_stat == crate::streams::StreamStatus::Open && len == 0 {
                     Err(ERRNO_INTR)
                 } else {
                     *nread = len;
@@ -1215,14 +1215,16 @@ pub unsafe extern "C" fn fd_write(
                 Descriptor::Streams(streams) => {
                     let wasi_stream = streams.get_write_stream()?;
 
-                    let bytes = if let StreamType::File(file) = &streams.type_ {
+                    let (bytes, _stream_stat) = if let StreamType::File(file) = &streams.type_ {
                         if file.blocking {
                             streams::blocking_write(wasi_stream, bytes)
                         } else {
                             streams::write(wasi_stream, bytes)
                         }
                     } else {
-                        streams::write(wasi_stream, bytes)
+                        // Use blocking writes on non-file streams (stdout, stderr, as sockets
+                        // aren't currently used).
+                        streams::blocking_write(wasi_stream, bytes)
                     }
                     .map_err(|_| ERRNO_IO)?;
 
@@ -1376,7 +1378,7 @@ pub unsafe extern "C" fn path_open(
     fdflags: Fdflags,
     opened_fd: *mut Fd,
 ) -> Errno {
-    drop(fs_rights_inheriting);
+    let _ = fs_rights_inheriting;
 
     let path = slice::from_raw_parts(path_ptr, path_len);
     let at_flags = at_flags_from_lookupflags(dirflags);
