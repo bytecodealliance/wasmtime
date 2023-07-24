@@ -666,10 +666,13 @@ mod test {
         assert_eq!(len, chunk.len());
         assert_eq!(state, StreamState::Open);
 
-        // But I expect this to block additional writes:
+        // It is possible for subsequent writes to be refused, but it is nondeterminstic because
+        // the worker task consuming them is in another thread:
         let (len, state) = writer.write(chunk.clone()).unwrap();
-        assert_eq!(len, 0);
         assert_eq!(state, StreamState::Open);
+        if !(len == 0 || len == chunk.len()) {
+            unreachable!()
+        }
 
         tokio::time::timeout(REASONABLE_DURATION, writer.ready())
             .await
