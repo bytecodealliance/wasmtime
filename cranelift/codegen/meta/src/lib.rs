@@ -34,10 +34,8 @@ pub fn generate(isas: &[isa::Isa], out_dir: &str, isle_dir: &str) -> Result<(), 
     )?;
     gen_types::generate("types.rs", out_dir)?;
 
-    let all_formats = shared_defs.verify_instruction_formats();
-
     gen_inst::generate(
-        all_formats,
+        &shared_defs.all_formats,
         &shared_defs.all_instructions,
         "opcodes.rs",
         "inst_builder.rs",

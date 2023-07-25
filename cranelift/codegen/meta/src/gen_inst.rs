@@ -1,5 +1,6 @@
 //! Generate instruction data (including opcodes, formats, builders, etc.).
 use std::fmt;
+use std::rc::Rc;
 
 use cranelift_codegen_shared::constant_hash;
 
@@ -17,7 +18,7 @@ use crate::unique_table::{UniqueSeqTable, UniqueTable};
 const TYPESET_LIMIT: usize = 0xff;
 
 /// Generate an instruction format enumeration.
-fn gen_formats(formats: &[&InstructionFormat], fmt: &mut Formatter) {
+fn gen_formats(formats: &[Rc<InstructionFormat>], fmt: &mut Formatter) {
     fmt.doc_comment(
         r#"
         An instruction format
@@ -65,7 +66,7 @@ fn gen_formats(formats: &[&InstructionFormat], fmt: &mut Formatter) {
 /// Every variant must contain an `opcode` field. The size of `InstructionData` should be kept at
 /// 16 bytes on 64-bit architectures. If more space is needed to represent an instruction, use a
 /// `ValueList` to store the additional information out of line.
-fn gen_instruction_data(formats: &[&InstructionFormat], fmt: &mut Formatter) {
+fn gen_instruction_data(formats: &[Rc<InstructionFormat>], fmt: &mut Formatter) {
     fmt.line("#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]");
     fmt.line(r#"#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]"#);
     fmt.line("#[allow(missing_docs)]");
@@ -104,7 +105,7 @@ fn gen_instruction_data(formats: &[&InstructionFormat], fmt: &mut Formatter) {
     fmt.line("}");
 }
 
-fn gen_arguments_method(formats: &[&InstructionFormat], fmt: &mut Formatter, is_mut: bool) {
+fn gen_arguments_method(formats: &[Rc<InstructionFormat>], fmt: &mut Formatter, is_mut: bool) {
     let (method, mut_, rslice, as_slice) = if is_mut {
         (
             "arguments_mut",
@@ -172,7 +173,7 @@ fn gen_arguments_method(formats: &[&InstructionFormat], fmt: &mut Formatter, is_
 /// - `pub fn arguments_mut(&mut self, &pool) -> &mut [Value]`
 /// - `pub fn eq(&self, &other: Self, &pool) -> bool`
 /// - `pub fn hash<H: Hasher>(&self, state: &mut H, &pool)`
-fn gen_instruction_data_impl(formats: &[&InstructionFormat], fmt: &mut Formatter) {
+fn gen_instruction_data_impl(formats: &[Rc<InstructionFormat>], fmt: &mut Formatter) {
     fmt.line("impl InstructionData {");
     fmt.indent(|fmt| {
         fmt.doc_comment("Get the opcode of this instruction.");
@@ -1221,7 +1222,7 @@ enum IsleTarget {
 }
 
 fn gen_common_isle(
-    formats: &[&InstructionFormat],
+    formats: &[Rc<InstructionFormat>],
     instructions: &AllInstructions,
     fmt: &mut Formatter,
     isle_target: IsleTarget,
@@ -1669,7 +1670,7 @@ fn gen_common_isle(
 }
 
 fn gen_opt_isle(
-    formats: &[&InstructionFormat],
+    formats: &[Rc<InstructionFormat>],
     instructions: &AllInstructions,
     fmt: &mut Formatter,
 ) {
@@ -1677,7 +1678,7 @@ fn gen_opt_isle(
 }
 
 fn gen_lower_isle(
-    formats: &[&InstructionFormat],
+    formats: &[Rc<InstructionFormat>],
     instructions: &AllInstructions,
     fmt: &mut Formatter,
 ) {
@@ -1707,7 +1708,7 @@ fn gen_isle_enum(name: &str, mut variants: Vec<&str>, fmt: &mut Formatter) {
 /// Generate a Builder trait with methods for all instructions.
 fn gen_builder(
     instructions: &AllInstructions,
-    formats: &[&InstructionFormat],
+    formats: &[Rc<InstructionFormat>],
     fmt: &mut Formatter,
 ) {
     fmt.doc_comment(
@@ -1744,7 +1745,7 @@ fn gen_builder(
 }
 
 pub(crate) fn generate(
-    formats: Vec<&InstructionFormat>,
+    formats: &[Rc<InstructionFormat>],
     all_inst: &AllInstructions,
     opcode_filename: &str,
     inst_builder_filename: &str,
