@@ -1,9 +1,7 @@
 use crate::cdsl::isa::TargetIsa;
 use crate::cdsl::settings::{SettingGroup, SettingGroupBuilder};
 
-use crate::shared::Definitions as SharedDefinitions;
-
-fn define_settings(_shared: &SettingGroup) -> SettingGroup {
+fn define_settings() -> SettingGroup {
     let mut setting = SettingGroupBuilder::new("arm64");
 
     setting.add_bool(
@@ -54,8 +52,8 @@ fn define_settings(_shared: &SettingGroup) -> SettingGroup {
     setting.build()
 }
 
-pub(crate) fn define(shared_defs: &mut SharedDefinitions) -> TargetIsa {
-    let settings = define_settings(&shared_defs.settings);
+pub(crate) fn define() -> TargetIsa {
+    let settings = define_settings();
 
     TargetIsa::new("arm64", settings)
 }

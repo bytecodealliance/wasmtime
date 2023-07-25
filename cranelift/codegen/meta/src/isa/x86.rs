@@ -1,9 +1,7 @@
 use crate::cdsl::isa::TargetIsa;
 use crate::cdsl::settings::{PredicateNode, SettingGroup, SettingGroupBuilder};
 
-use crate::shared::Definitions as SharedDefinitions;
-
-pub(crate) fn define(_shared_defs: &mut SharedDefinitions) -> TargetIsa {
+pub(crate) fn define() -> TargetIsa {
     let settings = define_settings();
 
     TargetIsa::new("x86", settings)
