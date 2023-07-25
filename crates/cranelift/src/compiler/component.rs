@@ -8,10 +8,9 @@ use cranelift_frontend::FunctionBuilder;
 use std::any::Any;
 use wasmtime_cranelift_shared::{ALWAYS_TRAP_CODE, CANNOT_ENTER_CODE};
 use wasmtime_environ::component::*;
-use wasmtime_environ::{PtrSize, SignatureIndex, Tunables, WasmType};
+use wasmtime_environ::{PtrSize, SignatureIndex, WasmType};
 
 struct TrampolineCompiler<'a> {
-    tunables: &'a Tunables,
     compiler: &'a Compiler,
     isa: &'a (dyn TargetIsa + 'static),
     builder: FunctionBuilder<'a>,
@@ -32,7 +31,6 @@ enum Abi {
 
 impl<'a> TrampolineCompiler<'a> {
     fn new(
-        tunables: &'a Tunables,
         compiler: &'a Compiler,
         func_compiler: &'a mut super::FunctionCompiler<'_>,
         component: &'a Component,
@@ -46,14 +44,13 @@ impl<'a> TrampolineCompiler<'a> {
         let func = ir::Function::with_name_signature(
             ir::UserFuncName::user(0, 0),
             match abi {
-                Abi::Wasm => crate::wasm_call_signature(isa, ty, tunables),
+                Abi::Wasm => crate::wasm_call_signature(isa, ty, &compiler.tunables),
                 Abi::Native => crate::native_call_signature(isa, ty),
                 Abi::Array => crate::array_call_signature(isa),
             },
         );
         let (builder, block0) = func_compiler.builder(func);
         TrampolineCompiler {
-            tunables,
             compiler,
             isa,
             builder,
@@ -491,8 +488,11 @@ impl<'a> TrampolineCompiler<'a> {
                 i32::from(self.offsets.ptr.vm_func_ref_vmctx()),
             );
 
-            let sig =
-                crate::wasm_call_signature(self.isa, &self.types[self.signature], self.tunables);
+            let sig = crate::wasm_call_signature(
+                self.isa,
+                &self.types[self.signature],
+                &self.compiler.tunables,
+            );
             let sig_ref = self.builder.import_signature(sig);
 
             // NB: note that the "caller" vmctx here is the caller of this
@@ -624,7 +624,6 @@ impl<'a> TrampolineCompiler<'a> {
 impl ComponentCompiler for Compiler {
     fn compile_trampoline(
         &self,
-        tunables: &Tunables,
         component: &ComponentTranslation,
         types: &ComponentTypes,
         index: TrampolineIndex,
@@ -632,7 +631,6 @@ impl ComponentCompiler for Compiler {
         let compile = |abi: Abi| -> Result<_> {
             let mut compiler = self.function_compiler();
             let mut c = TrampolineCompiler::new(
-                tunables,
                 self,
                 &mut compiler,
                 &component.component,

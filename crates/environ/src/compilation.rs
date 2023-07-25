@@ -1,10 +1,10 @@
 //! A `Compilation` contains the compiled function bodies for a WebAssembly
 //! module.
 
-use crate::obj;
+use crate::{obj, Tunables};
 use crate::{
     DefinedFuncIndex, FilePos, FuncIndex, FunctionBodyData, ModuleTranslation, ModuleTypes,
-    PrimaryMap, StackMap, Tunables, WasmError, WasmFuncType,
+    PrimaryMap, StackMap, WasmError, WasmFuncType,
 };
 use anyhow::Result;
 use object::write::{Object, SymbolId};
@@ -122,6 +122,9 @@ pub trait CompilerBuilder: Send + Sync + fmt::Debug {
     /// This will return an error if the compiler does not support incremental compilation.
     fn enable_incremental_compilation(&mut self, cache_store: Arc<dyn CacheStore>) -> Result<()>;
 
+    /// Set the tunables for this compiler.
+    fn set_tunables(&mut self, tunables: Tunables) -> Result<()>;
+
     /// Builds a new [`Compiler`] object from this configuration.
     fn build(&self) -> Result<Box<dyn Compiler>>;
 }
@@ -174,7 +177,6 @@ pub trait Compiler: Send + Sync {
         translation: &ModuleTranslation<'_>,
         index: DefinedFuncIndex,
         data: FunctionBodyData<'_>,
-        tunables: &Tunables,
         types: &ModuleTypes,
     ) -> Result<(WasmFunctionInfo, Box<dyn Any + Send>), CompileError>;
 
@@ -186,7 +188,6 @@ pub trait Compiler: Send + Sync {
     fn compile_array_to_wasm_trampoline(
         &self,
         translation: &ModuleTranslation<'_>,
-        tunables: &Tunables,
         types: &ModuleTypes,
         index: DefinedFuncIndex,
     ) -> Result<Box<dyn Any + Send>, CompileError>;
@@ -199,7 +200,6 @@ pub trait Compiler: Send + Sync {
     fn compile_native_to_wasm_trampoline(
         &self,
         translation: &ModuleTranslation<'_>,
-        tunables: &Tunables,
         types: &ModuleTypes,
         index: DefinedFuncIndex,
     ) -> Result<Box<dyn Any + Send>, CompileError>;
@@ -211,7 +211,6 @@ pub trait Compiler: Send + Sync {
     /// Wasm-to-host transition (e.g. registers used for fast stack walking).
     fn compile_wasm_to_native_trampoline(
         &self,
-        tunables: &Tunables,
         wasm_func_ty: &WasmFuncType,
     ) -> Result<Box<dyn Any + Send>, CompileError>;
 
@@ -246,7 +245,6 @@ pub trait Compiler: Send + Sync {
         &self,
         obj: &mut Object<'static>,
         funcs: &[(String, Box<dyn Any + Send>)],
-        tunables: &Tunables,
         resolve_reloc: &dyn Fn(usize, FuncIndex) -> usize,
     ) -> Result<Vec<(SymbolId, FunctionLoc)>>;
 
@@ -276,7 +274,6 @@ pub trait Compiler: Send + Sync {
     /// the function pointer to the host code.
     fn emit_trampolines_for_array_call_host_func(
         &self,
-        tunables: &Tunables,
         ty: &WasmFuncType,
         // Actually `host_fn: VMArrayCallFunction` but that type is not
         // available in `wasmtime-environ`.

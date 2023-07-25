@@ -6,7 +6,7 @@ use wasmparser::FuncValidatorAllocations;
 use wasmtime_cranelift_shared::{CompiledFunction, ModuleTextBuilder};
 use wasmtime_environ::{
     CompileError, DefinedFuncIndex, FilePos, FuncIndex, FunctionBodyData, FunctionLoc,
-    ModuleTranslation, ModuleTypes, PrimaryMap, TrapEncodingBuilder, Tunables, WasmFunctionInfo,
+    ModuleTranslation, ModuleTypes, PrimaryMap, TrapEncodingBuilder, WasmFunctionInfo,
 };
 use winch_codegen::{TargetIsa, TrampolineKind};
 
@@ -53,7 +53,6 @@ impl wasmtime_environ::Compiler for Compiler {
         translation: &ModuleTranslation<'_>,
         index: DefinedFuncIndex,
         data: FunctionBodyData<'_>,
-        _tunables: &Tunables,
         types: &ModuleTypes,
     ) -> Result<(WasmFunctionInfo, Box<dyn Any + Send>), CompileError> {
         let index = translation.module.func_index(index);
@@ -88,7 +87,6 @@ impl wasmtime_environ::Compiler for Compiler {
     fn compile_array_to_wasm_trampoline(
         &self,
         translation: &ModuleTranslation<'_>,
-        _tunables: &Tunables,
         types: &ModuleTypes,
         index: DefinedFuncIndex,
     ) -> Result<Box<dyn Any + Send>, CompileError> {
@@ -108,7 +106,6 @@ impl wasmtime_environ::Compiler for Compiler {
     fn compile_native_to_wasm_trampoline(
         &self,
         translation: &ModuleTranslation<'_>,
-        _tunables: &Tunables,
         types: &ModuleTypes,
         index: DefinedFuncIndex,
     ) -> Result<Box<dyn Any + Send>, CompileError> {
@@ -129,7 +126,6 @@ impl wasmtime_environ::Compiler for Compiler {
 
     fn compile_wasm_to_native_trampoline(
         &self,
-        _tunables: &Tunables,
         wasm_func_ty: &wasmtime_environ::WasmFuncType,
     ) -> Result<Box<dyn Any + Send>, CompileError> {
         let buffer = self
@@ -147,7 +143,6 @@ impl wasmtime_environ::Compiler for Compiler {
         &self,
         obj: &mut Object<'static>,
         funcs: &[(String, Box<dyn Any + Send>)],
-        _tunables: &Tunables,
         resolve_reloc: &dyn Fn(usize, FuncIndex) -> usize,
     ) -> Result<Vec<(SymbolId, FunctionLoc)>> {
         let mut builder =
@@ -176,7 +171,6 @@ impl wasmtime_environ::Compiler for Compiler {
 
     fn emit_trampolines_for_array_call_host_func(
         &self,
-        _tunables: &Tunables,
         ty: &wasmtime_environ::WasmFuncType,
         // Actually `host_fn: VMArrayCallFunction` but that type is not
         // available in `wasmtime-environ`.

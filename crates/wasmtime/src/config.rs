@@ -1662,6 +1662,8 @@ impl Config {
             compiler.enable_incremental_compilation(cache_store.clone())?;
         }
 
+        compiler.set_tunables(self.tunables.clone())?;
+
         Ok((self, compiler.build()?))
     }
 

@@ -89,7 +89,6 @@ where
     let (wasm_call_range, native_call_range) = engine
         .compiler()
         .emit_trampolines_for_array_call_host_func(
-            &engine.config().tunables,
             ft.as_wasm_func_type(),
             array_call_shim::<F> as usize,
             &mut obj,
