@@ -1120,10 +1120,15 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             &GlobalValueData::Symbol {
                 ref name,
                 ref offset,
+                colocated,
                 ..
             } => {
                 let offset = offset.bits();
-                let dist = gvdata.maybe_reloc_distance().unwrap();
+                let dist = if colocated {
+                    RelocDistance::Near
+                } else {
+                    RelocDistance::Far
+                };
                 Some((name, dist, offset))
             }
             _ => None,
