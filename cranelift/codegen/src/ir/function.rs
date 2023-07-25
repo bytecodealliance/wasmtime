@@ -11,7 +11,6 @@ use crate::ir::{
     StackSlots, Table, TableData, Type,
 };
 use crate::isa::CallConv;
-use crate::value_label::ValueLabelsRanges;
 use crate::write::write_function;
 use crate::HashMap;
 #[cfg(feature = "enable-serde")]
@@ -417,15 +416,7 @@ impl Function {
 
     /// Return an object that can display this function with correct ISA-specific annotations.
     pub fn display(&self) -> DisplayFunction<'_> {
-        DisplayFunction(self, Default::default())
-    }
-
-    /// Return an object that can display this function with correct ISA-specific annotations.
-    pub fn display_with<'a>(
-        &'a self,
-        annotations: DisplayFunctionAnnotations<'a>,
-    ) -> DisplayFunction<'a> {
-        DisplayFunction(self, annotations)
+        DisplayFunction(self)
     }
 
     /// Sets an absolute source location for the given instruction.
@@ -456,15 +447,8 @@ impl Function {
     }
 }
 
-/// Additional annotations for function display.
-#[derive(Default)]
-pub struct DisplayFunctionAnnotations<'a> {
-    /// Enable value labels annotations.
-    pub value_ranges: Option<&'a ValueLabelsRanges>,
-}
-
-/// Wrapper type capable of displaying a `Function` with correct ISA annotations.
-pub struct DisplayFunction<'a>(&'a Function, DisplayFunctionAnnotations<'a>);
+/// Wrapper type capable of displaying a `Function`.
+pub struct DisplayFunction<'a>(&'a Function);
 
 impl<'a> fmt::Display for DisplayFunction<'a> {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {

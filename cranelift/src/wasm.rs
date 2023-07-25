@@ -296,17 +296,7 @@ fn handle_module(options: &Options, path: &Path, name: &str, fisa: FlagsOrIsa) -
             {
                 println!("; Exported as \"{}\"", export_name);
             }
-            let value_ranges = if options.value_ranges {
-                Some(context.compiled_code().unwrap().value_labels_ranges.clone())
-            } else {
-                None
-            };
-            println!(
-                "{}",
-                context.func.display_with(DisplayFunctionAnnotations {
-                    value_ranges: value_ranges.as_ref(),
-                })
-            );
+            println!("{}", context.func.display());
             vprintln!(options.verbose, "");
         }
 
