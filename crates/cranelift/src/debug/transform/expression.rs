@@ -1,8 +1,9 @@
 use super::address_transform::AddressTransform;
 use crate::debug::ModuleMemoryOffset;
 use anyhow::{Context, Error, Result};
-use cranelift_codegen::ir::{LabelValueLoc, StackSlots, ValueLabel};
+use cranelift_codegen::ir::{StackSlots, ValueLabel};
 use cranelift_codegen::isa::TargetIsa;
+use cranelift_codegen::LabelValueLoc;
 use cranelift_codegen::ValueLabelsRanges;
 use cranelift_wasm::get_vmctx_value_label;
 use gimli::{self, write, Expression, Operation, Reader, ReaderOffset, X86_64};
@@ -1158,8 +1159,7 @@ mod tests {
     }
 
     fn create_mock_value_ranges() -> (ValueLabelsRanges, (ValueLabel, ValueLabel, ValueLabel)) {
-        use cranelift_codegen::ir::LabelValueLoc;
-        use cranelift_codegen::ValueLocRange;
+        use cranelift_codegen::{LabelValueLoc, ValueLocRange};
         use cranelift_entity::EntityRef;
         use std::collections::HashMap;
         let mut value_ranges = HashMap::new();

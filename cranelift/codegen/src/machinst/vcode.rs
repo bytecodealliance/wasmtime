@@ -20,12 +20,12 @@
 use crate::fx::FxHashMap;
 use crate::fx::FxHashSet;
 use crate::ir::RelSourceLoc;
-use crate::ir::{self, types, Constant, ConstantData, DynamicStackSlot, LabelValueLoc, ValueLabel};
+use crate::ir::{self, types, Constant, ConstantData, DynamicStackSlot, ValueLabel};
 use crate::machinst::*;
 use crate::timing;
 use crate::trace;
 use crate::CodegenError;
-use crate::ValueLocRange;
+use crate::{LabelValueLoc, ValueLocRange};
 use cranelift_control::ControlPlane;
 use regalloc2::{
     Edit, Function as RegallocFunction, InstOrEdit, InstRange, Operand, OperandKind, PRegSet,

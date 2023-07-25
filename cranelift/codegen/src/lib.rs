@@ -59,7 +59,7 @@ use hashbrown::{hash_map, HashMap, HashSet};
 use std::collections::{hash_map, HashMap, HashSet};
 
 pub use crate::context::Context;
-pub use crate::value_label::{ValueLabelsRanges, ValueLocRange};
+pub use crate::value_label::{LabelValueLoc, ValueLabelsRanges, ValueLocRange};
 pub use crate::verifier::verify_function;
 pub use crate::write::write_function;
 
