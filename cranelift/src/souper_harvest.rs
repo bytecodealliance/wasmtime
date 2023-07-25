@@ -82,7 +82,7 @@ pub fn run(options: &Options) -> Result<()> {
         .context("failed to read input file")?;
 
     let funcs = if &contents[..WASM_MAGIC.len()] == WASM_MAGIC {
-        let mut dummy_environ = DummyEnvironment::new(fisa.isa.unwrap().frontend_config(), false);
+        let mut dummy_environ = DummyEnvironment::new(fisa.isa.unwrap().frontend_config());
         cranelift_wasm::translate_module(&contents, &mut dummy_environ)
             .context("failed to translate Wasm module to clif")?;
         dummy_environ

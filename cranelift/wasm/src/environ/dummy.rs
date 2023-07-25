@@ -144,9 +144,6 @@ pub struct DummyEnvironment {
     /// Vector of wasm bytecode size for each function.
     pub func_bytecode_sizes: Vec<usize>,
 
-    /// Instructs to collect debug data during translation.
-    pub debug_info: bool,
-
     /// Name of the module from the wasm file.
     pub module_name: Option<String>,
 
@@ -160,12 +157,11 @@ pub struct DummyEnvironment {
 
 impl DummyEnvironment {
     /// Creates a new `DummyEnvironment` instance.
-    pub fn new(config: TargetFrontendConfig, debug_info: bool) -> Self {
+    pub fn new(config: TargetFrontendConfig) -> Self {
         Self {
             info: DummyModuleInfo::new(config),
             trans: FuncTranslator::new(),
             func_bytecode_sizes: Vec::new(),
-            debug_info,
             module_name: None,
             function_names: SecondaryMap::new(),
             expected_reachability: None,
@@ -904,10 +900,6 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
             let sig = func_environ.vmctx_sig(self.get_func_type(func_index));
             let mut func =
                 ir::Function::with_name_signature(UserFuncName::user(0, func_index.as_u32()), sig);
-
-            if self.debug_info {
-                func.collect_debug_info();
-            }
 
             self.trans
                 .translate_body(&mut validator, body, &mut func, &mut func_environ)?;
