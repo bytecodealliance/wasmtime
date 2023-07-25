@@ -83,54 +83,70 @@ mod test {
     {
         test_child_stdin(
             |mut result_write| {
-                let mut running = true;
-                while running {
-                    tokio::runtime::Runtime::new().unwrap().block_on(async {
-                        let mut stdin = mk_stdin();
+                tokio::runtime::Builder::new_multi_thread()
+                    .enable_all()
+                    .build()
+                    .unwrap()
+                    .block_on(async {
+                        let mut running = true;
+                        while running {
+                            println!("child: creating stdin");
+                            let mut stdin = mk_stdin();
 
-                        assert!(
-                            tokio::time::timeout(
-                                std::time::Duration::from_millis(100),
-                                stdin.ready()
-                            )
-                            .await
-                            .is_err(),
-                            "stdin available too soon"
-                        );
+                            println!("child: checking that stdin is not ready");
+                            assert!(
+                                tokio::time::timeout(
+                                    std::time::Duration::from_millis(100),
+                                    stdin.ready()
+                                )
+                                .await
+                                .is_err(),
+                                "stdin available too soon"
+                            );
 
-                        writeln!(&mut result_write, "start").unwrap();
+                            writeln!(&mut result_write, "start").unwrap();
 
-                        let mut buffer = String::new();
-                        loop {
-                            println!("child: waiting for stdin to be ready");
-                            stdin.ready().await.unwrap();
+                            println!("child: started");
 
-                            println!("child: reading input");
-                            let (bytes, status) = stdin.read(1024).unwrap();
+                            let mut buffer = String::new();
+                            loop {
+                                println!("child: waiting for stdin to be ready");
+                                stdin.ready().await.unwrap();
 
-                            println!("child: {:?}, {:?}", bytes, status);
+                                println!("child: reading input");
+                                let (bytes, status) = stdin.read(1024).unwrap();
 
-                            // We can't effectively test for the case where stdin was closed.
-                            assert_eq!(status, StreamState::Open);
+                                println!("child: {:?}, {:?}", bytes, status);
 
-                            buffer.push_str(std::str::from_utf8(bytes.as_ref()).unwrap());
-                            if let Some((line, rest)) = buffer.split_once('\n') {
-                                if line == "all done" {
-                                    writeln!(&mut result_write, "done").unwrap();
-                                    running = false;
-                                    break;
-                                } else if line == "restart" {
-                                    writeln!(&mut result_write, "restarting").unwrap();
-                                    break;
-                                } else {
-                                    writeln!(&mut result_write, "{}", line).unwrap();
+                                // We can't effectively test for the case where stdin was closed.
+                                assert_eq!(status, StreamState::Open);
+
+                                println!("sleeping");
+                                tokio::task::yield_now().await;
+                                //tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+                                println!("done sleeping");
+
+                                buffer.push_str(std::str::from_utf8(bytes.as_ref()).unwrap());
+                                if let Some((line, rest)) = buffer.split_once('\n') {
+                                    if line == "all done" {
+                                        writeln!(&mut result_write, "done").unwrap();
+                                        println!("child: exiting...");
+                                        running = false;
+                                        break;
+                                    } else if line == "restart" {
+                                        writeln!(&mut result_write, "restarting").unwrap();
+                                        println!("child: restarting...");
+
+                                        break;
+                                    } else {
+                                        writeln!(&mut result_write, "{}", line).unwrap();
+                                    }
+
+                                    buffer = rest.to_owned();
                                 }
-
-                                buffer = rest.to_owned();
                             }
                         }
                     });
-                }
             },
             |mut stdin_write, mut result_read| {
                 let mut line = String::new();
@@ -151,6 +167,7 @@ mod test {
                 result_read.read_line(&mut line).unwrap();
                 assert_eq!(line, "start\n");
 
+                println!("parent: writing `more bytes`");
                 writeln!(&mut stdin_write, "more bytes").unwrap();
                 line.clear();
                 result_read.read_line(&mut line).unwrap();

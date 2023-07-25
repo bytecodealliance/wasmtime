@@ -1,34 +1,84 @@
 use crate::preview2::{pipe::AsyncReadStream, HostInputStream, StreamState};
-use anyhow::Error;
+use anyhow::{Context as _, Error};
 use bytes::Bytes;
 use futures::ready;
 use std::future::Future;
 use std::io::{self, Read};
 use std::pin::Pin;
+use std::sync::{Arc, Mutex, OnceLock, Weak};
 use std::task::{Context, Poll};
 use tokio::io::unix::AsyncFd;
 use tokio::io::{AsyncRead, ReadBuf};
 
-// wasmtime cant use std::sync::OnceLock yet because of a llvm regression in
-// 1.70. when 1.71 is released, we can switch to using std here.
-use once_cell::sync::OnceCell as OnceLock;
-
-use std::sync::Mutex;
-
 // We need a single global instance of the AsyncFd<Stdin> because creating
 // this instance registers the process's stdin fd with epoll, which will
 // return an error if an fd is registered more than once.
-struct GlobalStdin(Mutex<AsyncReadStream>);
-static STDIN: OnceLock<GlobalStdin> = OnceLock::new();
+static STDIN: OnceLock<Mutex<GlobalStdin>> = OnceLock::new();
+
+struct GlobalStdin(Weak<Mutex<AsyncReadStream>>);
+
+pub struct Stdin(Arc<Mutex<AsyncReadStream>>);
+pub fn stdin() -> Stdin {
+    GlobalStdin::get().unwrap()
+}
 
 impl GlobalStdin {
-    fn new() -> anyhow::Result<Self> {
-        Ok(Self(Mutex::new(AsyncReadStream::new(InnerStdin::new()?))))
+    fn upgrade(&self) -> Option<Stdin> {
+        Weak::upgrade(&self.0).map(Stdin)
     }
-    fn read(&self, size: usize) -> Result<(Bytes, StreamState), Error> {
+
+    fn new() -> anyhow::Result<(Self, Stdin)> {
+        use crate::preview2::RUNTIME;
+        let inner = match tokio::runtime::Handle::try_current() {
+            Ok(_) => AsyncReadStream::new(InnerStdin::new()?),
+            Err(_) => {
+                let _enter = RUNTIME.enter();
+                RUNTIME.block_on(async {
+                    Ok::<_, anyhow::Error>(AsyncReadStream::new(InnerStdin::new()?))
+                })?
+            }
+        };
+        let strong = Arc::new(Mutex::new(inner));
+        let global = GlobalStdin(Arc::downgrade(&strong));
+        Ok((global, Stdin(strong)))
+    }
+
+    fn get() -> anyhow::Result<Stdin> {
+        match STDIN.get() {
+            None => {
+                let (global, strong) =
+                    Self::new().context("creating global stdin resource for first time")?;
+                match STDIN.set(Mutex::new(global)) {
+                    Ok(_) => Ok(strong),
+                    Err(_) => panic!("fixme: lost race?"),
+                }
+            }
+            Some(g) => {
+                let mut g = g.lock().unwrap();
+                match g.upgrade() {
+                    Some(strong) => Ok(strong),
+                    None => {
+                        // BUG: the Arc can go to zero but the AsyncFd hasnt finished dropping yet,
+                        // so this will fail sometimes because epoll hasnt yet had the fd
+                        // unregistered
+                        let (global, strong) =
+                            Self::new().context("re-creating global stdin resource")?;
+                        *g = global;
+                        Ok(strong)
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl crate::preview2::HostInputStream for Stdin {
+    fn read(&mut self, size: usize) -> Result<(Bytes, StreamState), Error> {
         HostInputStream::read(&mut *self.0.lock().unwrap(), size)
     }
-    fn ready<'a>(&'a self) -> impl Future<Output = Result<(), Error>> + 'a {
+
+    async fn ready(&mut self) -> Result<(), Error> {
         // Custom Future impl takes the std mutex in each invocation of poll.
         // Required so we don't have to use a tokio mutex, which we can't take from
         // inside a sync context in Self::read.
@@ -37,7 +87,7 @@ impl GlobalStdin {
         // then releasing the lock is acceptable here because the ready() future
         // is only ever going to await on a single channel recv, plus some management
         // of a state machine (for buffering).
-        struct Ready<'a>(&'a GlobalStdin);
+        struct Ready<'a>(&'a Stdin);
         impl<'a> Future for Ready<'a> {
             type Output = Result<(), Error>;
             fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
@@ -47,45 +97,35 @@ impl GlobalStdin {
                 fut.poll(cx)
             }
         }
-        Ready(self)
+        Ready(self).await
     }
 }
 
-pub struct Stdin;
-impl Stdin {
-    fn get_global() -> &'static GlobalStdin {
-        // Creation must be running in a tokio context to succeed.
-        match tokio::runtime::Handle::try_current() {
-            Ok(_) => STDIN.get_or_init(|| {
-                GlobalStdin::new().expect("creating AsyncFd for stdin in existing tokio context")
-            }),
-            Err(_) => STDIN.get_or_init(|| {
-                crate::preview2::in_tokio(async {
-                    GlobalStdin::new()
-                        .expect("creating AsyncFd for stdin in internal tokio context")
-                })
-            }),
-        }
+struct MyStdin(std::os::fd::RawFd);
+impl MyStdin {
+    fn new() -> Self {
+        MyStdin(libc::STDIN_FILENO)
+    }
+}
+impl std::os::fd::AsRawFd for MyStdin {
+    fn as_raw_fd(&self) -> std::os::fd::RawFd {
+        self.0
+    }
+}
+impl rustix::fd::AsFd for MyStdin {
+    fn as_fd(&self) -> rustix::fd::BorrowedFd<'_> {
+        unsafe { rustix::fd::BorrowedFd::borrow_raw(self.0) }
     }
 }
 
-pub fn stdin() -> Stdin {
-    Stdin
-}
-
-#[async_trait::async_trait]
-impl crate::preview2::HostInputStream for Stdin {
-    fn read(&mut self, size: usize) -> Result<(Bytes, StreamState), Error> {
-        Self::get_global().read(size)
-    }
-
-    async fn ready(&mut self) -> Result<(), Error> {
-        Self::get_global().ready().await
+impl Read for MyStdin {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        Ok(rustix::io::read(self, buf)?)
     }
 }
 
 struct InnerStdin {
-    inner: AsyncFd<std::io::Stdin>,
+    inner: AsyncFd<MyStdin>,
 }
 
 impl InnerStdin {
@@ -93,16 +133,16 @@ impl InnerStdin {
         use rustix::fs::OFlags;
         use std::os::fd::AsRawFd;
 
-        let stdin = std::io::stdin();
+        let stdin = MyStdin::new();
 
         let borrowed_fd = unsafe { rustix::fd::BorrowedFd::borrow_raw(stdin.as_raw_fd()) };
         let flags = rustix::fs::fcntl_getfl(borrowed_fd)?;
         if !flags.contains(OFlags::NONBLOCK) {
-            rustix::fs::fcntl_setfl(borrowed_fd, flags.difference(OFlags::NONBLOCK))?;
+            rustix::fs::fcntl_setfl(borrowed_fd, flags.union(OFlags::NONBLOCK))?;
         }
 
         Ok(Self {
-            inner: AsyncFd::new(std::io::stdin())?,
+            inner: AsyncFd::new(MyStdin::new())?,
         })
     }
 }
@@ -122,8 +162,12 @@ impl AsyncRead for InnerStdin {
                     buf.advance(len);
                     return Poll::Ready(Ok(()));
                 }
-                Ok(Err(err)) => return Poll::Ready(Err(err)),
-                Err(_would_block) => continue,
+                Ok(Err(err)) => {
+                    return Poll::Ready(Err(err));
+                }
+                Err(_would_block) => {
+                    continue;
+                }
             }
         }
     }
