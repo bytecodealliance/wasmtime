@@ -676,7 +676,6 @@ dependencies = [
  "capstone",
  "cranelift-bforest",
  "cranelift-codegen-meta",
- "cranelift-codegen-shared",
  "cranelift-control",
  "cranelift-entity",
  "cranelift-isle",
@@ -695,13 +694,6 @@ dependencies = [
 
 [[package]]
 name = "cranelift-codegen-meta"
-version = "0.99.0"
-dependencies = [
- "cranelift-codegen-shared",
-]
-
-[[package]]
-name = "cranelift-codegen-shared"
 version = "0.99.0"
 
 [[package]]

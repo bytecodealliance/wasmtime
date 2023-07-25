@@ -16,7 +16,6 @@ edition.workspace = true
 anyhow = { workspace = true, optional = true }
 bumpalo = "3"
 capstone = { workspace = true, optional = true }
-cranelift-codegen-shared = { path = "./shared", version = "0.99.0" }
 cranelift-entity = { workspace = true }
 cranelift-bforest = { workspace = true }
 cranelift-control = { workspace = true }

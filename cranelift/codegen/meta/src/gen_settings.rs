@@ -1,8 +1,7 @@
 //! Generate the ISA-specific settings.
 use std::collections::HashMap;
 
-use crate::constant_hash::generate_table;
-use cranelift_codegen_shared::constant_hash::simple_hash;
+use crate::constant_hash::{generate_table, simple_hash};
 
 use crate::cdsl::camel_case;
 use crate::cdsl::settings::{
