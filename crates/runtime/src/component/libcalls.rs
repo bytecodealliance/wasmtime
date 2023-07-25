@@ -47,7 +47,7 @@ macro_rules! define_builtins {
         /// An array that stores addresses of builtin functions. We translate code
         /// to use indirect calls. This way, we don't have to patch the code.
         #[repr(C)]
-        pub struct VMComponentBuiltins {
+        struct VMComponentBuiltins {
             $(
                 $name: unsafe extern "C" fn(
                     $(signature!(@ty $param),)*
@@ -56,7 +56,7 @@ macro_rules! define_builtins {
         }
 
         impl VMComponentBuiltins {
-            pub const INIT: VMComponentBuiltins = VMComponentBuiltins {
+            const INIT: VMComponentBuiltins = VMComponentBuiltins {
                 $($name: trampolines::$name,)*
             };
         }
@@ -84,7 +84,7 @@ macro_rules! define_transcoders {
         /// An array that stores addresses of builtin functions. We translate code
         /// to use indirect calls. This way, we don't have to patch the code.
         #[repr(C)]
-        pub struct VMBuiltinTranscodeArray {
+        struct VMBuiltinTranscodeArray {
             $(
                 $name: unsafe extern "C" fn(
                     $(signature!(@ty $param),)*
@@ -93,7 +93,7 @@ macro_rules! define_transcoders {
         }
 
         impl VMBuiltinTranscodeArray {
-            pub const INIT: VMBuiltinTranscodeArray = VMBuiltinTranscodeArray {
+            const INIT: VMBuiltinTranscodeArray = VMBuiltinTranscodeArray {
                 $($name: trampolines::$name,)*
             };
         }

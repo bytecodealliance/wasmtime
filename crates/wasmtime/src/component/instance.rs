@@ -487,14 +487,10 @@ impl<'a> Instantiator<'a> {
         // there's no guarantee that there exists a trampoline for `f` so this
         // can't fall through to the case below
         if let wasmtime_runtime::Export::Function(f) = &export {
-            match expected {
-                EntityType::Function(expected) => {
-                    let actual = unsafe { f.func_ref.as_ref().type_index };
-                    assert_eq!(module.signatures().shared_signature(expected), Some(actual));
-                    return;
-                }
-                _ => panic!("function not expected"),
-            }
+            let expected = expected.unwrap_func();
+            let actual = unsafe { f.func_ref.as_ref().type_index };
+            assert_eq!(module.signatures().shared_signature(expected), Some(actual));
+            return;
         }
 
         let val = unsafe { crate::Extern::from_wasmtime_export(export, store) };

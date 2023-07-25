@@ -101,16 +101,16 @@ impl<'a> TrampolineCompiler<'a> {
             Trampoline::ResourceRep(ty) => self.translate_resource_rep(*ty),
             Trampoline::ResourceDrop(ty) => self.translate_resource_drop(*ty),
             Trampoline::ResourceTransferOwn => {
-                self.translate_resource_simple(host::resource_transfer_own)
+                self.translate_resource_libcall(host::resource_transfer_own)
             }
             Trampoline::ResourceTransferBorrow => {
-                self.translate_resource_simple(host::resource_transfer_borrow)
+                self.translate_resource_libcall(host::resource_transfer_borrow)
             }
             Trampoline::ResourceEnterCall => {
-                self.translate_resource_simple(host::resource_enter_call)
+                self.translate_resource_libcall(host::resource_enter_call)
             }
             Trampoline::ResourceExitCall => {
-                self.translate_resource_simple(host::resource_exit_call)
+                self.translate_resource_libcall(host::resource_exit_call)
             }
         }
     }
@@ -512,7 +512,7 @@ impl<'a> TrampolineCompiler<'a> {
     ///
     /// Only intended for simple trampolines and effectively acts as a bridge
     /// from the wasm abi to host.
-    fn translate_resource_simple(
+    fn translate_resource_libcall(
         &mut self,
         get_libcall: fn(&dyn TargetIsa, &mut ir::Function) -> (ir::SigRef, u32),
     ) {
