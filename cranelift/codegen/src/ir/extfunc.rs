@@ -7,7 +7,6 @@
 
 use crate::ir::{ExternalName, SigRef, Type};
 use crate::isa::CallConv;
-use crate::machinst::RelocDistance;
 use alloc::vec::Vec;
 use core::fmt;
 use core::str::FromStr;
@@ -319,15 +318,6 @@ pub struct ExtFuncData {
 }
 
 impl ExtFuncData {
-    /// Return an estimate of the distance to the referred-to function symbol.
-    pub fn reloc_distance(&self) -> RelocDistance {
-        if self.colocated {
-            RelocDistance::Near
-        } else {
-            RelocDistance::Far
-        }
-    }
-
     /// Returns a displayable version of the `ExtFuncData`, with or without extra context to
     /// prettify the output.
     pub fn display<'a>(

@@ -322,13 +322,10 @@ mod tests {
 
         let mut trans = FuncTranslator::new();
         let flags = settings::Flags::new(settings::builder());
-        let runtime = DummyEnvironment::new(
-            isa::TargetFrontendConfig {
-                default_call_conv: isa::CallConv::Fast,
-                pointer_width: PointerWidth::U64,
-            },
-            false,
-        );
+        let runtime = DummyEnvironment::new(isa::TargetFrontendConfig {
+            default_call_conv: isa::CallConv::Fast,
+            pointer_width: PointerWidth::U64,
+        });
 
         let mut ctx = Context::new();
 
@@ -360,13 +357,10 @@ mod tests {
 
         let mut trans = FuncTranslator::new();
         let flags = settings::Flags::new(settings::builder());
-        let runtime = DummyEnvironment::new(
-            isa::TargetFrontendConfig {
-                default_call_conv: isa::CallConv::Fast,
-                pointer_width: PointerWidth::U64,
-            },
-            false,
-        );
+        let runtime = DummyEnvironment::new(isa::TargetFrontendConfig {
+            default_call_conv: isa::CallConv::Fast,
+            pointer_width: PointerWidth::U64,
+        });
 
         let mut ctx = Context::new();
 
@@ -403,13 +397,10 @@ mod tests {
 
         let mut trans = FuncTranslator::new();
         let flags = settings::Flags::new(settings::builder());
-        let runtime = DummyEnvironment::new(
-            isa::TargetFrontendConfig {
-                default_call_conv: isa::CallConv::Fast,
-                pointer_width: PointerWidth::U64,
-            },
-            false,
-        );
+        let runtime = DummyEnvironment::new(isa::TargetFrontendConfig {
+            default_call_conv: isa::CallConv::Fast,
+            pointer_width: PointerWidth::U64,
+        });
 
         let mut ctx = Context::new();
 

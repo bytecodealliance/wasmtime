@@ -24,7 +24,7 @@ pub struct ModuleEnv {
 
 impl ModuleEnv {
     pub fn new(target_isa: &dyn TargetIsa, config: TestConfig) -> Self {
-        let inner = DummyEnvironment::new(target_isa.frontend_config(), config.debug_info);
+        let inner = DummyEnvironment::new(target_isa.frontend_config());
         Self {
             inner,
             config,
@@ -63,10 +63,6 @@ impl<'data> ModuleEnvironment<'data> for ModuleEnv {
                 ir::UserFuncName::user(0, func_index.as_u32()),
                 sig,
             );
-
-            if self.inner.debug_info {
-                func.collect_debug_info();
-            }
 
             self.inner
                 .trans

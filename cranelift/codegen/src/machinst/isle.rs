@@ -306,11 +306,12 @@ macro_rules! isle_lower_prelude_methods {
         #[inline]
         fn func_ref_data(&mut self, func_ref: FuncRef) -> (SigRef, ExternalName, RelocDistance) {
             let funcdata = &self.lower_ctx.dfg().ext_funcs[func_ref];
-            (
-                funcdata.signature,
-                funcdata.name.clone(),
-                funcdata.reloc_distance(),
-            )
+            let reloc_distance = if funcdata.colocated {
+                RelocDistance::Near
+            } else {
+                RelocDistance::Far
+            };
+            (funcdata.signature, funcdata.name.clone(), reloc_distance)
         }
 
         #[inline]
