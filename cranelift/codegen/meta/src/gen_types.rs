@@ -7,7 +7,7 @@
 //! This ensures that the metaprogram and the generated program see the same
 //! type numbering.
 
-use crate::cdsl::types as cdsl_types;
+use crate::cdsl::types::{self as cdsl_types, constants};
 use crate::error;
 use crate::srcgen;
 
@@ -48,6 +48,32 @@ fn emit_dynamic_vectors(bits: u64, fmt: &mut srcgen::Formatter) {
 
 /// Emit types using the given formatter object.
 fn emit_types(fmt: &mut srcgen::Formatter) {
+    fmt.line("#[allow(dead_code)]");
+    fmt.line("mod constants {");
+    fmt.indent(|fmt| {
+        fmtln!(
+            fmt,
+            "pub const LANE_BASE: u16 = {:#X};\n",
+            constants::LANE_BASE
+        );
+        fmtln!(
+            fmt,
+            "pub const REFERENCE_BASE: u16 = {:#X};\n",
+            constants::REFERENCE_BASE
+        );
+        fmtln!(
+            fmt,
+            "pub const VECTOR_BASE: u16 = {:#X};\n",
+            constants::VECTOR_BASE
+        );
+        fmtln!(
+            fmt,
+            "pub const DYNAMIC_VECTOR_BASE: u16 = {:#X};\n",
+            constants::DYNAMIC_VECTOR_BASE
+        );
+    });
+    fmt.line("}");
+
     // Emit all of the lane types, such integers, floats, and booleans.
     for ty in cdsl_types::ValueType::all_lane_types().map(cdsl_types::ValueType::from) {
         emit_type(&ty, fmt);

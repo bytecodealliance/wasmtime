@@ -20,7 +20,6 @@
 )]
 
 pub mod constant_hash;
-pub mod constants;
 
 /// Version number of this crate.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
