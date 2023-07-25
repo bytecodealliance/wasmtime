@@ -294,6 +294,48 @@ pub enum EntityType {
     Function(SignatureIndex),
 }
 
+impl EntityType {
+    /// Assert that this entity is a global
+    pub fn unwrap_global(&self) -> &Global {
+        match self {
+            EntityType::Global(g) => g,
+            _ => panic!("not a global"),
+        }
+    }
+
+    /// Assert that this entity is a memory
+    pub fn unwrap_memory(&self) -> &Memory {
+        match self {
+            EntityType::Memory(g) => g,
+            _ => panic!("not a memory"),
+        }
+    }
+
+    /// Assert that this entity is a tag
+    pub fn unwrap_tag(&self) -> &Tag {
+        match self {
+            EntityType::Tag(g) => g,
+            _ => panic!("not a tag"),
+        }
+    }
+
+    /// Assert that this entity is a table
+    pub fn unwrap_table(&self) -> &Table {
+        match self {
+            EntityType::Table(g) => g,
+            _ => panic!("not a table"),
+        }
+    }
+
+    /// Assert that this entity is a function
+    pub fn unwrap_func(&self) -> SignatureIndex {
+        match self {
+            EntityType::Function(g) => *g,
+            _ => panic!("not a func"),
+        }
+    }
+}
+
 /// A WebAssembly global.
 ///
 /// Note that we record both the original Wasm type and the Cranelift IR type

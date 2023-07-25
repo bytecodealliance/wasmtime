@@ -25,8 +25,8 @@ use wasmtime_environ::{HostPtr, PrimaryMap};
 
 const INVALID_PTR: usize = 0xdead_dead_beef_beef_u64 as usize;
 
+mod libcalls;
 mod resources;
-mod transcode;
 
 pub use self::resources::{CallContexts, ResourceTable, ResourceTables};
 
@@ -440,8 +440,7 @@ impl ComponentInstance {
 
     unsafe fn initialize_vmctx(&mut self, store: *mut dyn Store) {
         *self.vmctx_plus_offset_mut(self.offsets.magic()) = VMCOMPONENT_MAGIC;
-        *self.vmctx_plus_offset_mut(self.offsets.libcalls()) =
-            &transcode::VMComponentLibcalls::INIT;
+        *self.vmctx_plus_offset_mut(self.offsets.libcalls()) = &libcalls::VMComponentLibcalls::INIT;
         *self.vmctx_plus_offset_mut(self.offsets.store()) = store;
         *self.vmctx_plus_offset_mut(self.offsets.limits()) = (*store).vmruntime_limits();
 
@@ -584,6 +583,48 @@ impl ComponentInstance {
             self.instance_flags(instance)
         });
         (dtor, flags)
+    }
+
+    pub(crate) fn resource_transfer_own(
+        &mut self,
+        idx: u32,
+        src: TypeResourceTableIndex,
+        dst: TypeResourceTableIndex,
+    ) -> Result<u32> {
+        let mut tables = self.resource_tables();
+        let rep = tables.resource_lift_own(Some(src), idx)?;
+        Ok(tables.resource_lower_own(Some(dst), rep))
+    }
+
+    pub(crate) fn resource_transfer_borrow(
+        &mut self,
+        idx: u32,
+        src: TypeResourceTableIndex,
+        dst: TypeResourceTableIndex,
+    ) -> Result<u32> {
+        let dst_owns_resource = self.resource_owned_by_own_instance(dst);
+        let mut tables = self.resource_tables();
+        let rep = tables.resource_lift_borrow(Some(src), idx)?;
+        // Implement `lower_borrow`'s special case here where if a borrow's
+        // resource type is owned by `dst` then the destination receives the
+        // representation directly rather than a handle to the representation.
+        //
+        // This can perhaps become a different libcall in the future to avoid
+        // this check at runtime since we know at compile time whether the
+        // destination type owns the resource, but that's left as a future
+        // refactoring if truly necessary.
+        if dst_owns_resource {
+            return Ok(rep);
+        }
+        Ok(tables.resource_lower_borrow(Some(dst), rep))
+    }
+
+    pub(crate) fn resource_enter_call(&mut self) {
+        self.resource_tables().enter_call()
+    }
+
+    pub(crate) fn resource_exit_call(&mut self) -> Result<()> {
+        self.resource_tables().exit_call()
     }
 }
 

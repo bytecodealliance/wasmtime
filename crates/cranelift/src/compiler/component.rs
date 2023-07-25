@@ -100,6 +100,18 @@ impl<'a> TrampolineCompiler<'a> {
             Trampoline::ResourceNew(ty) => self.translate_resource_new(*ty),
             Trampoline::ResourceRep(ty) => self.translate_resource_rep(*ty),
             Trampoline::ResourceDrop(ty) => self.translate_resource_drop(*ty),
+            Trampoline::ResourceTransferOwn => {
+                self.translate_resource_libcall(host::resource_transfer_own)
+            }
+            Trampoline::ResourceTransferBorrow => {
+                self.translate_resource_libcall(host::resource_transfer_borrow)
+            }
+            Trampoline::ResourceEnterCall => {
+                self.translate_resource_libcall(host::resource_enter_call)
+            }
+            Trampoline::ResourceExitCall => {
+                self.translate_resource_libcall(host::resource_exit_call)
+            }
         }
     }
 
@@ -494,6 +506,41 @@ impl<'a> TrampolineCompiler<'a> {
         self.builder.switch_to_block(return_block);
         self.builder.ins().return_(&[]);
         self.builder.seal_block(return_block);
+    }
+
+    /// Invokes a host libcall and returns the result.
+    ///
+    /// Only intended for simple trampolines and effectively acts as a bridge
+    /// from the wasm abi to host.
+    fn translate_resource_libcall(
+        &mut self,
+        get_libcall: fn(&dyn TargetIsa, &mut ir::Function) -> (ir::SigRef, u32),
+    ) {
+        match self.abi {
+            Abi::Wasm => {}
+
+            // These trampolines can only actually be called by Wasm, so
+            // let's assert that here.
+            Abi::Native | Abi::Array => {
+                self.builder
+                    .ins()
+                    .trap(ir::TrapCode::User(crate::DEBUG_ASSERT_TRAP_CODE));
+                return;
+            }
+        }
+
+        let args = self.builder.func.dfg.block_params(self.block0).to_vec();
+        let vmctx = args[0];
+        let mut host_args = vec![vmctx];
+        host_args.extend(args[2..].iter().copied());
+        let (host_sig, offset) = get_libcall(self.isa, &mut self.builder.func);
+        let host_fn = self.load_libcall(vmctx, offset);
+        let call = self
+            .builder
+            .ins()
+            .call_indirect(host_sig, host_fn, &host_args);
+        let results = self.builder.func.dfg.inst_results(call).to_vec();
+        self.builder.ins().return_(&results);
     }
 
     /// Loads a host function pointer for a libcall stored at the `offset`

@@ -533,6 +533,24 @@ pub enum Trampoline {
 
     /// Same as `ResourceNew`, but for the `resource.drop` intrinsic.
     ResourceDrop(TypeResourceTableIndex),
+
+    /// An intrinsic used by FACT-generated modules which will transfer an owned
+    /// resource from one table to another. Used in component-to-component
+    /// adapter trampolines.
+    ResourceTransferOwn,
+
+    /// Same as `ResourceTransferOwn` but for borrows.
+    ResourceTransferBorrow,
+
+    /// An intrinsic used by FACT-generated modules which indicates that a call
+    /// is being entered and resource-related metadata needs to be configured.
+    ///
+    /// Note that this is currently only invoked when borrowed resources are
+    /// detected, otherwise this is "optimized out".
+    ResourceEnterCall,
+
+    /// Same as `ResourceEnterCall` except for when exiting a call.
+    ResourceExitCall,
 }
 
 impl Trampoline {
@@ -556,6 +574,10 @@ impl Trampoline {
             ResourceNew(i) => format!("component-resource-new[{}]", i.as_u32()),
             ResourceRep(i) => format!("component-resource-rep[{}]", i.as_u32()),
             ResourceDrop(i) => format!("component-resource-drop[{}]", i.as_u32()),
+            ResourceTransferOwn => format!("component-resource-transfer-own"),
+            ResourceTransferBorrow => format!("component-resource-transfer-borrow"),
+            ResourceEnterCall => format!("component-resource-enter-call"),
+            ResourceExitCall => format!("component-resource-exit-call"),
         }
     }
 }

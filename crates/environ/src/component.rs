@@ -85,6 +85,11 @@ macro_rules! foreach_builtin_component_function {
             // is encoded as a 64-bit integer where the low bit is Some/None
             // and bits 1-33 are the payload.
             resource_drop(vmctx: vmctx, resource: u32, idx: u32) -> u64;
+
+            resource_transfer_own(vmctx: vmctx, src_idx: u32, src_table: u32, dst_table: u32) -> u32;
+            resource_transfer_borrow(vmctx: vmctx, src_idx: u32, src_table: u32, dst_table: u32) -> u32;
+            resource_enter_call(vmctx: vmctx);
+            resource_exit_call(vmctx: vmctx);
         }
     };
 }

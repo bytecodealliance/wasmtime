@@ -60,6 +60,12 @@ pub struct Module<'a> {
     /// Intern'd transcoders and what index they were assigned.
     imported_transcoders: HashMap<Transcoder, FuncIndex>,
 
+    /// Cached versions of imported trampolines for working with resources.
+    imported_resource_transfer_own: Option<FuncIndex>,
+    imported_resource_transfer_borrow: Option<FuncIndex>,
+    imported_resource_enter_call: Option<FuncIndex>,
+    imported_resource_exit_call: Option<FuncIndex>,
+
     // Current status of index spaces from the imports generated so far.
     imported_funcs: PrimaryMap<FuncIndex, Option<CoreDef>>,
     imported_memories: PrimaryMap<MemoryIndex, CoreDef>,
@@ -178,6 +184,10 @@ impl<'a> Module<'a> {
             funcs: PrimaryMap::new(),
             helper_funcs: HashMap::new(),
             helper_worklist: Vec::new(),
+            imported_resource_transfer_own: None,
+            imported_resource_transfer_borrow: None,
+            imported_resource_enter_call: None,
+            imported_resource_exit_call: None,
         }
     }
 
@@ -359,6 +369,72 @@ impl<'a> Module<'a> {
             })
     }
 
+    fn import_simple(
+        &mut self,
+        module: &str,
+        name: &str,
+        params: &[ValType],
+        results: &[ValType],
+        import: Import,
+        get: impl Fn(&mut Self) -> &mut Option<FuncIndex>,
+    ) -> FuncIndex {
+        if let Some(idx) = get(self) {
+            return *idx;
+        }
+        let ty = self.core_types.function(params, results);
+        let ty = EntityType::Function(ty);
+        self.core_imports.import(module, name, ty);
+
+        self.imports.push(import);
+        let idx = self.imported_funcs.push(None);
+        *get(self) = Some(idx);
+        idx
+    }
+
+    fn import_resource_transfer_own(&mut self) -> FuncIndex {
+        self.import_simple(
+            "resource",
+            "transfer-own",
+            &[ValType::I32, ValType::I32, ValType::I32],
+            &[ValType::I32],
+            Import::ResourceTransferOwn,
+            |me| &mut me.imported_resource_transfer_own,
+        )
+    }
+
+    fn import_resource_transfer_borrow(&mut self) -> FuncIndex {
+        self.import_simple(
+            "resource",
+            "transfer-borrow",
+            &[ValType::I32, ValType::I32, ValType::I32],
+            &[ValType::I32],
+            Import::ResourceTransferBorrow,
+            |me| &mut me.imported_resource_transfer_borrow,
+        )
+    }
+
+    fn import_resource_enter_call(&mut self) -> FuncIndex {
+        self.import_simple(
+            "resource",
+            "enter-call",
+            &[],
+            &[],
+            Import::ResourceEnterCall,
+            |me| &mut me.imported_resource_enter_call,
+        )
+    }
+
+    fn import_resource_exit_call(&mut self) -> FuncIndex {
+        self.import_simple(
+            "resource",
+            "exit-call",
+            &[],
+            &[],
+            Import::ResourceExitCall,
+            |me| &mut me.imported_resource_exit_call,
+        )
+    }
+
     fn translate_helper(&mut self, helper: Helper) -> FunctionId {
         *self.helper_funcs.entry(helper).or_insert_with(|| {
             // Generate a fresh `Function` with a unique id for what we're about to
@@ -470,6 +546,15 @@ pub enum Import {
         /// Whether or not `to` is a 64-bit memory
         to64: bool,
     },
+    /// Transfers an owned resource from one table to another.
+    ResourceTransferOwn,
+    /// Transfers a borrowed resource from one table to another.
+    ResourceTransferBorrow,
+    /// Sets up entry metadata for a borrow resources when a call starts.
+    ResourceEnterCall,
+    /// Tears down a previous entry and handles checking borrow-related
+    /// metadata.
+    ResourceExitCall,
 }
 
 impl Options {

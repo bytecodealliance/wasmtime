@@ -867,6 +867,12 @@ impl ComponentTypesBuilder {
         self.type_information(ty).flat.as_flat_types()
     }
 
+    /// Returns whether the type specified contains any borrowed resources
+    /// within it.
+    pub fn ty_contains_borrow_resource(&self, ty: &InterfaceType) -> bool {
+        self.type_information(ty).has_borrow
+    }
+
     fn type_information(&self, ty: &InterfaceType) -> &TypeInformation {
         match ty {
             InterfaceType::U8
@@ -877,9 +883,16 @@ impl ComponentTypesBuilder {
             | InterfaceType::U32
             | InterfaceType::S32
             | InterfaceType::Char
-            | InterfaceType::Own(_)
-            | InterfaceType::Borrow(_) => {
+            | InterfaceType::Own(_) => {
                 static INFO: TypeInformation = TypeInformation::primitive(FlatType::I32);
+                &INFO
+            }
+            InterfaceType::Borrow(_) => {
+                static INFO: TypeInformation = {
+                    let mut info = TypeInformation::primitive(FlatType::I32);
+                    info.has_borrow = true;
+                    info
+                };
                 &INFO
             }
             InterfaceType::U64 | InterfaceType::S64 => {
@@ -1711,6 +1724,7 @@ struct TypeInformationCache {
 struct TypeInformation {
     depth: u32,
     flat: FlatTypesStorage,
+    has_borrow: bool,
 }
 
 impl TypeInformation {
@@ -1718,6 +1732,7 @@ impl TypeInformation {
         TypeInformation {
             depth: 0,
             flat: FlatTypesStorage::new(),
+            has_borrow: false,
         }
     }
 
@@ -1747,6 +1762,7 @@ impl TypeInformation {
         self.depth = 1;
         for info in types {
             self.depth = self.depth.max(1 + info.depth);
+            self.has_borrow = self.has_borrow || info.has_borrow;
             match info.flat.as_flat_types() {
                 Some(types) => {
                     for (t32, t64) in types.memory32.iter().zip(types.memory64) {
@@ -1789,6 +1805,7 @@ impl TypeInformation {
                 None => continue,
             };
             self.depth = self.depth.max(1 + info.depth);
+            self.has_borrow = self.has_borrow || info.has_borrow;
 
             // If this variant is already unrepresentable in a flat
             // representation then this can be skipped.
@@ -1898,5 +1915,6 @@ impl TypeInformation {
         *self = TypeInformation::string();
         let info = types.type_information(&ty.element);
         self.depth += info.depth;
+        self.has_borrow = info.has_borrow;
     }
 }

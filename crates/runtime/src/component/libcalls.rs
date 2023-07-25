@@ -47,7 +47,7 @@ macro_rules! define_builtins {
         /// An array that stores addresses of builtin functions. We translate code
         /// to use indirect calls. This way, we don't have to patch the code.
         #[repr(C)]
-        pub struct VMComponentBuiltins {
+        struct VMComponentBuiltins {
             $(
                 $name: unsafe extern "C" fn(
                     $(signature!(@ty $param),)*
@@ -56,7 +56,7 @@ macro_rules! define_builtins {
         }
 
         impl VMComponentBuiltins {
-            pub const INIT: VMComponentBuiltins = VMComponentBuiltins {
+            const INIT: VMComponentBuiltins = VMComponentBuiltins {
                 $($name: trampolines::$name,)*
             };
         }
@@ -84,7 +84,7 @@ macro_rules! define_transcoders {
         /// An array that stores addresses of builtin functions. We translate code
         /// to use indirect calls. This way, we don't have to patch the code.
         #[repr(C)]
-        pub struct VMBuiltinTranscodeArray {
+        struct VMBuiltinTranscodeArray {
             $(
                 $name: unsafe extern "C" fn(
                     $(signature!(@ty $param),)*
@@ -93,7 +93,7 @@ macro_rules! define_transcoders {
         }
 
         impl VMBuiltinTranscodeArray {
-            pub const INIT: VMBuiltinTranscodeArray = VMBuiltinTranscodeArray {
+            const INIT: VMBuiltinTranscodeArray = VMBuiltinTranscodeArray {
                 $($name: trampolines::$name,)*
             };
         }
@@ -537,4 +537,38 @@ unsafe fn resource_drop(vmctx: *mut VMComponentContext, resource: u32, idx: u32)
             None => 0,
         })
     })
+}
+
+unsafe fn resource_transfer_own(
+    vmctx: *mut VMComponentContext,
+    src_idx: u32,
+    src_table: u32,
+    dst_table: u32,
+) -> Result<u32> {
+    let src_table = TypeResourceTableIndex::from_u32(src_table);
+    let dst_table = TypeResourceTableIndex::from_u32(dst_table);
+    ComponentInstance::from_vmctx(vmctx, |instance| {
+        instance.resource_transfer_own(src_idx, src_table, dst_table)
+    })
+}
+
+unsafe fn resource_transfer_borrow(
+    vmctx: *mut VMComponentContext,
+    src_idx: u32,
+    src_table: u32,
+    dst_table: u32,
+) -> Result<u32> {
+    let src_table = TypeResourceTableIndex::from_u32(src_table);
+    let dst_table = TypeResourceTableIndex::from_u32(dst_table);
+    ComponentInstance::from_vmctx(vmctx, |instance| {
+        instance.resource_transfer_borrow(src_idx, src_table, dst_table)
+    })
+}
+
+unsafe fn resource_enter_call(vmctx: *mut VMComponentContext) -> Result<()> {
+    ComponentInstance::from_vmctx(vmctx, |instance| Ok(instance.resource_enter_call()))
+}
+
+unsafe fn resource_exit_call(vmctx: *mut VMComponentContext) -> Result<()> {
+    ComponentInstance::from_vmctx(vmctx, |instance| instance.resource_exit_call())
 }
