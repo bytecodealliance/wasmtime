@@ -1,5 +1,5 @@
 use crate::cdsl::isa::TargetIsa;
-use crate::cdsl::settings::{SettingGroup, SettingGroupBuilder};
+use crate::cdsl::settings::SettingGroupBuilder;
 
 macro_rules! define_zvl_ext {
     (DEF: $settings:expr, $size:expr) => {{
@@ -25,7 +25,7 @@ macro_rules! define_zvl_ext {
     }};
 }
 
-fn define_settings() -> SettingGroup {
+pub(crate) fn define() -> TargetIsa {
     let mut setting = SettingGroupBuilder::new("riscv64");
 
     let _has_m = setting.add_bool("has_m", "has extension M?", "", false);
@@ -97,10 +97,5 @@ fn define_settings() -> SettingGroup {
     let (_, zvl32768b) = define_zvl_ext!(setting, 32768, zvl16384b);
     let (_, _zvl65536b) = define_zvl_ext!(setting, 65536, zvl32768b);
 
-    setting.build()
-}
-
-pub(crate) fn define() -> TargetIsa {
-    let settings = define_settings();
-    TargetIsa::new("riscv64", settings)
+    TargetIsa::new("riscv64", setting.build())
 }

@@ -1,7 +1,7 @@
 use crate::cdsl::isa::TargetIsa;
-use crate::cdsl::settings::{SettingGroup, SettingGroupBuilder};
+use crate::cdsl::settings::SettingGroupBuilder;
 
-fn define_settings() -> SettingGroup {
+pub(crate) fn define() -> TargetIsa {
     let mut settings = SettingGroupBuilder::new("s390x");
 
     // The baseline architecture for cranelift is z14 (arch12),
@@ -35,11 +35,5 @@ fn define_settings() -> SettingGroup {
         preset!(has_mie2 && has_vxrs_ext2),
     );
 
-    settings.build()
-}
-
-pub(crate) fn define() -> TargetIsa {
-    let settings = define_settings();
-
-    TargetIsa::new("s390x", settings)
+    TargetIsa::new("s390x", settings.build())
 }
