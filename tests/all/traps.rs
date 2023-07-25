@@ -1643,3 +1643,13 @@ fn same_module_multiple_stores() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn async_stack_size_ignored_if_disabled() -> Result<()> {
+    let mut config = Config::new();
+    config.async_support(false);
+    config.max_wasm_stack(8 << 20);
+    Engine::new(&config)?;
+
+    Ok(())
+}
