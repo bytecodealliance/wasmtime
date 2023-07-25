@@ -1498,7 +1498,7 @@ impl Config {
             bail!("feature 'threads' requires 'bulk_memory' to be enabled");
         }
         #[cfg(feature = "async")]
-        if self.max_wasm_stack > self.async_stack_size {
+        if self.async_support && self.max_wasm_stack > self.async_stack_size {
             bail!("max_wasm_stack size cannot exceed the async_stack_size");
         }
         if self.max_wasm_stack == 0 {
