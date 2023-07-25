@@ -79,48 +79,58 @@ mod test {
     fn test_stdin_by_forking<S, T>(mk_stdin: T)
     where
         S: HostInputStream,
-        T: FnOnce() -> S,
+        T: Fn() -> S,
     {
         test_child_stdin(
             |mut result_write| {
-                tokio::runtime::Runtime::new().unwrap().block_on(async {
-                    let mut stdin = mk_stdin();
+                let mut running = true;
+                while running {
+                    tokio::runtime::Runtime::new().unwrap().block_on(async {
+                        let mut stdin = mk_stdin();
 
-                    assert!(
-                        tokio::time::timeout(std::time::Duration::from_millis(100), stdin.ready())
+                        assert!(
+                            tokio::time::timeout(
+                                std::time::Duration::from_millis(100),
+                                stdin.ready()
+                            )
                             .await
                             .is_err(),
-                        "stdin available too soon"
-                    );
+                            "stdin available too soon"
+                        );
 
-                    writeln!(&mut result_write, "start").unwrap();
+                        writeln!(&mut result_write, "start").unwrap();
 
-                    let mut buffer = String::new();
-                    loop {
-                        println!("child: waiting for stdin to be ready");
-                        stdin.ready().await.unwrap();
+                        let mut buffer = String::new();
+                        loop {
+                            println!("child: waiting for stdin to be ready");
+                            stdin.ready().await.unwrap();
 
-                        println!("child: reading input");
-                        let (bytes, status) = stdin.read(1024).unwrap();
+                            println!("child: reading input");
+                            let (bytes, status) = stdin.read(1024).unwrap();
 
-                        println!("child: {:?}, {:?}", bytes, status);
+                            println!("child: {:?}, {:?}", bytes, status);
 
-                        // We can't effectively test for the case where stdin was closed.
-                        assert_eq!(status, StreamState::Open);
+                            // We can't effectively test for the case where stdin was closed.
+                            assert_eq!(status, StreamState::Open);
 
-                        buffer.push_str(std::str::from_utf8(bytes.as_ref()).unwrap());
-                        if let Some((line, rest)) = buffer.split_once('\n') {
-                            if line == "all done" {
-                                writeln!(&mut result_write, "done").unwrap();
-                                break;
-                            } else {
-                                writeln!(&mut result_write, "{}", line).unwrap();
+                            buffer.push_str(std::str::from_utf8(bytes.as_ref()).unwrap());
+                            if let Some((line, rest)) = buffer.split_once('\n') {
+                                if line == "all done" {
+                                    writeln!(&mut result_write, "done").unwrap();
+                                    running = false;
+                                    break;
+                                } else if line == "restart" {
+                                    writeln!(&mut result_write, "restarting").unwrap();
+                                    break;
+                                } else {
+                                    writeln!(&mut result_write, "{}", line).unwrap();
+                                }
+
+                                buffer = rest.to_owned();
                             }
-
-                            buffer = rest.to_owned();
                         }
-                    }
-                });
+                    });
+                }
             },
             |mut stdin_write, mut result_read| {
                 let mut line = String::new();
@@ -131,6 +141,20 @@ mod test {
                 line.clear();
                 result_read.read_line(&mut line).unwrap();
                 assert_eq!(line, "some bytes\n");
+
+                writeln!(&mut stdin_write, "restart").unwrap();
+                line.clear();
+                result_read.read_line(&mut line).unwrap();
+                assert_eq!(line, "restarting\n");
+                line.clear();
+
+                result_read.read_line(&mut line).unwrap();
+                assert_eq!(line, "start\n");
+
+                writeln!(&mut stdin_write, "more bytes").unwrap();
+                line.clear();
+                result_read.read_line(&mut line).unwrap();
+                assert_eq!(line, "more bytes\n");
 
                 writeln!(&mut stdin_write, "all done").unwrap();
 

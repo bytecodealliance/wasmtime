@@ -1,5 +1,5 @@
 use crate::preview2::{HostInputStream, StreamState};
-use anyhow::{Context, Error};
+use anyhow::Error;
 use bytes::{Bytes, BytesMut};
 use std::io::Read;
 use std::sync::Arc;
@@ -12,12 +12,16 @@ use once_cell::sync::OnceCell as OnceLock;
 use std::sync::Mutex;
 
 struct GlobalStdin {
-    // Watch receiver impls Clone, so any interested readers can make a copy and .changed().await.
-    rx: watch::Receiver<()>,
-    // Worker thread and receivers share this state
+    // Worker thread uses this to notify of new events. Ready checks use this
+    // to create a new Receiver via .subscribe(). The newly created receiver
+    // will only wait for events created after the call to subscribe().
+    tx: Arc<watch::Sender<()>>,
+    // Worker thread and receivers share this state to get bytes read off
+    // stdin, or the error/closed state.
     state: Arc<Mutex<StdinState>>,
 }
 
+#[derive(Debug)]
 struct StdinState {
     // Bytes read off stdin.
     buffer: BytesMut,
@@ -30,7 +34,8 @@ struct StdinState {
 static STDIN: OnceLock<GlobalStdin> = OnceLock::new();
 
 fn create() -> GlobalStdin {
-    let (tx, rx) = watch::channel(());
+    let (tx, _rx) = watch::channel(());
+    let tx = Arc::new(tx);
 
     let state = Arc::new(Mutex::new(StdinState {
         buffer: BytesMut::new(),
@@ -40,31 +45,30 @@ fn create() -> GlobalStdin {
 
     let ret = GlobalStdin {
         state: state.clone(),
-        rx,
+        tx: tx.clone(),
     };
 
     std::thread::spawn(move || loop {
         let mut bytes = BytesMut::zeroed(1024);
         match std::io::stdin().lock().read(&mut bytes) {
             Ok(nbytes) => {
+                // Append to the buffer:
                 bytes.truncate(nbytes);
-                {
-                    let mut locked = state.lock().unwrap();
-                    locked.buffer.extend_from_slice(&bytes);
-                }
-                tx.send(()).expect("at least one rx exists");
+                let mut locked = state.lock().unwrap();
+                locked.buffer.extend_from_slice(&bytes);
             }
             Err(e) => {
-                {
-                    let mut locked = state.lock().unwrap();
-                    if locked.error.is_none() {
-                        locked.error = Some(e)
-                    }
-                    locked.closed = true;
+                // Set the error, and mark the stream as closed:
+                let mut locked = state.lock().unwrap();
+                if locked.error.is_none() {
+                    locked.error = Some(e)
                 }
-                tx.send(()).expect("at least one rx exists");
+                locked.closed = true;
             }
         }
+        // Receivers may or may not exist - fine if they dont, new
+        // ones will be created with subscribe()
+        let _ = tx.send(());
     });
     ret
 }
@@ -85,7 +89,9 @@ pub fn stdin() -> Stdin {
 #[async_trait::async_trait]
 impl HostInputStream for Stdin {
     fn read(&mut self, size: usize) -> Result<(Bytes, StreamState), Error> {
-        let mut locked = Stdin::get_global().state.lock().unwrap();
+        let g = Stdin::get_global();
+        let mut locked = g.state.lock().unwrap();
+
         if let Some(e) = locked.error.take() {
             return Err(e.into());
         }
@@ -101,15 +107,23 @@ impl HostInputStream for Stdin {
 
     async fn ready(&mut self) -> Result<(), Error> {
         let g = Stdin::get_global();
-        // Make sure we dont hold this lock across the await:
-        {
+
+        // Block makes sure we dont hold the mutex across the await:
+        let mut rx = {
             let locked = g.state.lock().unwrap();
+            // read() will only return (empty, open) when the buffer is empty,
+            // AND there is no error AND the stream is still open:
             if !locked.buffer.is_empty() || locked.error.is_some() || locked.closed {
                 return Ok(());
             }
+            // Sender will take the mutex before updating the state of
+            // subscribe, so this ensures we will only await for any stdin
+            // events that are recorded after we drop the mutex:
+            g.tx.subscribe()
         };
 
-        let mut rx = g.rx.clone();
-        rx.changed().await.context("stdin sender died")
+        rx.changed().await.expect("impossible for sender to drop");
+
+        Ok(())
     }
 }
