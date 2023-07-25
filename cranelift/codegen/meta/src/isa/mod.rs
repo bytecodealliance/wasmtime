@@ -1,6 +1,5 @@
 //! Define supported ISAs; includes ISA-specific instructions, encodings, registers, settings, etc.
 use crate::cdsl::isa::TargetIsa;
-use crate::shared::Definitions as SharedDefinitions;
 use std::fmt;
 
 mod arm64;
@@ -55,13 +54,13 @@ impl fmt::Display for Isa {
     }
 }
 
-pub(crate) fn define(isas: &[Isa], shared_defs: &mut SharedDefinitions) -> Vec<TargetIsa> {
+pub(crate) fn define(isas: &[Isa]) -> Vec<TargetIsa> {
     isas.iter()
         .map(|isa| match isa {
-            Isa::X86 => x86::define(shared_defs),
-            Isa::Arm64 => arm64::define(shared_defs),
-            Isa::S390x => s390x::define(shared_defs),
-            Isa::Riscv64 => riscv64::define(shared_defs),
+            Isa::X86 => x86::define(),
+            Isa::Arm64 => arm64::define(),
+            Isa::S390x => s390x::define(),
+            Isa::Riscv64 => riscv64::define(),
         })
         .collect()
 }

@@ -61,10 +61,6 @@ core = []
 # context, and the `disassemble` method on `MachBufferFinalized`.
 disas = ["anyhow", "capstone"]
 
-# This enables some additional functions useful for writing tests, but which
-# can significantly increase the size of the library.
-testing_hooks = []
-
 # Enables detailed logging which can be somewhat expensive.
 trace-log = []
 
