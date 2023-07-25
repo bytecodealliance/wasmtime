@@ -1,10 +1,7 @@
-use crate::ir::{SourceLoc, ValueLabel};
+use crate::ir::ValueLabel;
 use crate::machinst::Reg;
 use crate::HashMap;
 use alloc::vec::Vec;
-use core::cmp::Ordering;
-use core::convert::From;
-use core::ops::Deref;
 
 #[cfg(feature = "enable-serde")]
 use serde::{Deserialize, Serialize};
@@ -33,37 +30,3 @@ pub enum LabelValueLoc {
 
 /// Resulting map of Value labels and their ranges/locations.
 pub type ValueLabelsRanges = HashMap<ValueLabel, Vec<ValueLocRange>>;
-
-#[derive(Eq, Clone, Copy)]
-pub struct ComparableSourceLoc(SourceLoc);
-
-impl From<SourceLoc> for ComparableSourceLoc {
-    fn from(s: SourceLoc) -> Self {
-        Self(s)
-    }
-}
-
-impl Deref for ComparableSourceLoc {
-    type Target = SourceLoc;
-    fn deref(&self) -> &SourceLoc {
-        &self.0
-    }
-}
-
-impl PartialOrd for ComparableSourceLoc {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for ComparableSourceLoc {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.0.bits().cmp(&other.0.bits())
-    }
-}
-
-impl PartialEq for ComparableSourceLoc {
-    fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0
-    }
-}
