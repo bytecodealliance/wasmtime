@@ -5,7 +5,7 @@ To get started using WASI, see [the intro document](WASI-intro.md) and
 
 For more detail on what WASI is, see [the overview](WASI-overview.md).
 
-For specifics on the API, see the [API documentation](https://github.com/WebAssembly/WASI/blob/master/phases/snapshot/docs.md).
+For specifics on the API, see the [API documentation](https://github.com/WebAssembly/WASI/blob/main/legacy/preview1/docs.md).
 Additionally, a C header file describing the WASI API is
 [here](https://github.com/WebAssembly/wasi-libc/blob/master/libc-bottom-half/headers/public/wasi/api.h).
 
