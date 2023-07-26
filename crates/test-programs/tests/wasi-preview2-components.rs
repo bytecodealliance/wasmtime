@@ -43,17 +43,15 @@ async fn run(name: &str, inherit_stdio: bool) -> Result<()> {
         if inherit_stdio {
             builder.inherit_stdio();
         } else {
-            builder
-                .set_stdout(stdout.clone())
-                .set_stderr(stderr.clone());
+            builder.stdout(stdout.clone()).stderr(stderr.clone());
         }
-        builder.set_args(&[name, "."]);
+        builder.args(&[name, "."]);
         println!("preopen: {:?}", workspace);
         let preopen_dir =
             cap_std::fs::Dir::open_ambient_dir(workspace.path(), cap_std::ambient_authority())?;
-        builder.push_preopened_dir(preopen_dir, DirPerms::all(), FilePerms::all(), ".");
+        builder.preopened_dir(preopen_dir, DirPerms::all(), FilePerms::all(), ".");
         for (var, val) in test_programs::wasi_tests_environment() {
-            builder.push_env(var, val);
+            builder.env(var, val);
         }
 
         let mut table = Table::new();
