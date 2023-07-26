@@ -14,12 +14,6 @@ impl From<TableError> for filesystem::Error {
     }
 }
 
-impl From<tokio::task::JoinError> for filesystem::Error {
-    fn from(error: tokio::task::JoinError) -> Self {
-        Self::trap(anyhow::anyhow!(error))
-    }
-}
-
 #[async_trait::async_trait]
 impl<T: WasiView> filesystem::Host for T {
     async fn advise(
