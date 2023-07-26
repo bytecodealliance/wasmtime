@@ -1,5 +1,5 @@
 use std::any::Any;
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 
 #[derive(thiserror::Error, Debug)]
 pub enum TableError {
@@ -27,10 +27,28 @@ pub struct Table {
 }
 
 #[derive(Debug)]
-pub struct TableEntry {
-    pub entry: Box<dyn Any + Send + Sync>,
-    pub parent: Option<u32>,
-    pub children: Vec<u32>,
+struct TableEntry {
+    entry: Box<dyn Any + Send + Sync>,
+    parent: Option<u32>,
+    children: BTreeSet<u32>,
+}
+
+impl TableEntry {
+    fn new(entry: Box<dyn Any + Send + Sync>, parent: Option<u32>) -> Self {
+        Self {
+            entry,
+            parent,
+            children: BTreeSet::new(),
+        }
+    }
+    fn add_child(&mut self, child: u32) {
+        debug_assert!(!self.children.contains(&child));
+        self.children.insert(child);
+    }
+    fn remove_child(&mut self, child: u32) {
+        let was_removed = self.children.remove(&child);
+        debug_assert!(was_removed);
+    }
 }
 
 pub struct OccupiedEntry<'a> {
@@ -60,17 +78,32 @@ impl Table {
             map: HashMap::new(),
             // 0, 1 and 2 are formerly (preview 1) for stdio. To prevent users from assuming these
             // indicies are still valid ways to access stdio, they are deliberately left empty.
+            // Once we have a full implementation of resources, this confusion should hopefully be
+            // impossible :)
             next_key: 3,
         }
     }
 
     /// Insert a resource at the next available index.
     pub fn push(&mut self, entry: Box<dyn Any + Send + Sync>) -> Result<u32, TableError> {
-        self.push_(TableEntry {
-            entry,
-            parent: None,
-            children: Vec::new(),
-        })
+        self.push_(TableEntry::new(entry, None))
+    }
+
+    /// Insert a resource at the next available index, and track that it has a parent resource:
+    pub fn push_child(
+        &mut self,
+        entry: Box<dyn Any + Send + Sync>,
+        parent: u32,
+    ) -> Result<u32, TableError> {
+        if !self.contains_key(parent) {
+            return Err(TableError::NotPresent);
+        }
+        let child = self.push_(TableEntry::new(entry, Some(parent)))?;
+        self.map
+            .get_mut(&parent)
+            .expect("precondition assured above")
+            .add_child(child);
+        Ok(child)
     }
 
     fn push_(&mut self, e: TableEntry) -> Result<u32, TableError> {
@@ -151,7 +184,15 @@ impl Table {
         }
         match e.entry.downcast::<T>() {
             Ok(v) => {
-                // TODO: if it has a parent, remove from parents child list
+                if let Some(parent) = e.parent {
+                    // Remove deleted resource from parent's child list.
+                    // Parent must still be present because it cant be deleted while still having
+                    // children:
+                    self.map
+                        .get_mut(&parent)
+                        .expect("missing parent")
+                        .remove_child(&key);
+                }
                 Ok(*v)
             }
             Err(entry) => {
