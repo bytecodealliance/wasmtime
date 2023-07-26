@@ -1,7 +1,0 @@
-default interface preopens {
-  use filesystem.filesystem.{descriptor}
-  use io.streams.{input-stream, output-stream}
-
-  /// Return the set of of preopened directories, and their path.
-  get-directories: func() -> list<tuple<descriptor, string>>
-}

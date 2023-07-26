@@ -1,7 +1,7 @@
 (component
   (type string)
   (type (func (param "a" string)))
-  (type $r (record (field "x" (record)) (field "y" string)))
+  (type $r (record (field "x" (result)) (field "y" string)))
   (type $u (union $r string))
   (type $e (result $u (error u32)))
   (type (result $u))

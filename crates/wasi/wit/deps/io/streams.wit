@@ -8,9 +8,15 @@ package wasi:io
 interface streams {
     use wasi:poll/poll.{pollable}
 
-    /// An error type returned from a stream operation. Currently this
-    /// doesn't provide any additional information.
-    record stream-error {}
+    /// An error type returned from a stream operation.
+    ///
+    /// TODO: need to figure out the actual contents of this error. Used to be
+    /// an empty record but that's no longer allowed. The `dummy` field is
+    /// only here to have this be a valid in the component model by being
+    /// non-empty.
+    record stream-error {
+      dummy: u32,
+    }
 
     /// Streams provide a sequence of data and then end; once they end, they
     /// no longer provide any further data.

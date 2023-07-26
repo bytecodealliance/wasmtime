@@ -1,8 +1,0 @@
-default world proxy {
-  import random: random.random
-  import insecure-random: random.insecure
-  import insecure-random-seed: random.insecure-seed
-  import console: logging.handler
-  import default-outgoing-HTTP: http.outgoing-handler
-  export HTTP: http.incoming-handler
-}
