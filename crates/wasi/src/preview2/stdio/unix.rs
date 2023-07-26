@@ -87,17 +87,19 @@ impl crate::preview2::HostInputStream for Stdin {
         // then releasing the lock is acceptable here because the ready() future
         // is only ever going to await on a single channel recv, plus some management
         // of a state machine (for buffering).
-        struct Ready<'a>(&'a Stdin);
+        struct Ready<'a> {
+            handle: &'a Stdin,
+        }
         impl<'a> Future for Ready<'a> {
             type Output = Result<(), Error>;
-            fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
-                let mut locked = self.as_mut().0 .0.lock().unwrap();
+            fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
+                let mut locked = self.handle.0.lock().unwrap();
                 let fut = locked.ready();
                 tokio::pin!(fut);
                 fut.poll(cx)
             }
         }
-        Ready(self).await
+        Ready { handle: self }.await
     }
 }
 
