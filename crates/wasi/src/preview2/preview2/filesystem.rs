@@ -9,11 +9,8 @@ use filesystem::ErrorCode;
 mod sync;
 
 impl From<TableError> for filesystem::Error {
-    fn from(error: TableError) -> filesystem::Error {
-        match error {
-            TableError::Full => filesystem::Error::trap(anyhow::anyhow!(error)),
-            TableError::NotPresent | TableError::WrongType => ErrorCode::BadDescriptor.into(),
-        }
+    fn from(error: TableError) -> Self {
+        Self::trap(error.into())
     }
 }
 

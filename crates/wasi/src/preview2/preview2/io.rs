@@ -23,13 +23,7 @@ impl From<anyhow::Error> for streams::Error {
 
 impl From<TableError> for streams::Error {
     fn from(error: TableError) -> streams::Error {
-        match error {
-            TableError::Full => streams::Error::trap(anyhow!(error)),
-            TableError::NotPresent | TableError::WrongType => {
-                // wit definition needs to define a badf-equiv variant:
-                StreamError {}.into()
-            }
-        }
+        streams::Error::trap(anyhow!(error))
     }
 }
 
