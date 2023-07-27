@@ -102,7 +102,7 @@ pub struct AsyncReadStream {
     state: StreamState,
     buffer: Option<Result<Bytes, std::io::Error>>,
     receiver: tokio::sync::mpsc::Receiver<Result<(Bytes, StreamState), std::io::Error>>,
-    join_handle: tokio::task::JoinHandle<()>,
+    pub(crate) join_handle: tokio::task::JoinHandle<()>,
 }
 
 impl AsyncReadStream {

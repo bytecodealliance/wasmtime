@@ -19,19 +19,37 @@ static STDIN: OnceLock<Stdin> = OnceLock::new();
 pub struct Stdin(Arc<Mutex<AsyncReadStream>>);
 
 pub fn stdin() -> Stdin {
-    STDIN
-        .get_or_init(|| {
-            use crate::preview2::RUNTIME;
-            let inner = match tokio::runtime::Handle::try_current() {
-                Ok(_) => AsyncReadStream::new(InnerStdin::new().unwrap()),
-                Err(_) => {
-                    let _enter = RUNTIME.enter();
-                    RUNTIME.block_on(async { AsyncReadStream::new(InnerStdin::new().unwrap()) })
-                }
-            };
-            Stdin(Arc::new(Mutex::new(inner)))
-        })
-        .clone()
+    fn init_stdin() -> AsyncReadStream {
+        use crate::preview2::RUNTIME;
+        match tokio::runtime::Handle::try_current() {
+            Ok(_) => AsyncReadStream::new(InnerStdin::new().unwrap()),
+            Err(_) => {
+                let _enter = RUNTIME.enter();
+                RUNTIME.block_on(async { AsyncReadStream::new(InnerStdin::new().unwrap()) })
+            }
+        }
+    }
+
+    let handle = STDIN
+        .get_or_init(|| Stdin(Arc::new(Mutex::new(init_stdin()))))
+        .clone();
+
+    {
+        let mut guard = handle.0.lock().unwrap();
+
+        // The backing task exited. This can happen in two cases:
+        //
+        // 1. the task crashed
+        // 2. the runtime has exited and been restarted in the same process
+        //
+        // As we can't tell the difference between these two, we assume the latter and restart the
+        // task.
+        if guard.join_handle.is_finished() {
+            *guard = init_stdin();
+        }
+    }
+
+    handle
 }
 
 #[async_trait::async_trait]
