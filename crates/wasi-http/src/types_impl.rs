@@ -127,10 +127,12 @@ impl crate::wasi::http::types::Host for WasiHttpCtx {
         let body = r.body();
         let headers = r.headers();
         if let Some(b) = body {
-            self.drop_output_stream(b).unwrap_or_else(|_| ());
+            self.table_mut()
+                .delete_output_stream(b)
+                .unwrap_or_else(|_| ());
         }
         if let Some(h) = headers {
-            self.drop_fields(h).unwrap_or_else(|_| ());
+            self.table_mut().delete_fields(h).unwrap_or_else(|_| ());
         }
 
         self.table_mut().delete_request(request).map_err(convert)?;
@@ -225,12 +227,16 @@ impl crate::wasi::http::types::Host for WasiHttpCtx {
         let headers = r.headers();
         if let Some(b) = body {
             if let Some(trailers) = self.finish_incoming_stream(b)? {
-                self.drop_fields(trailers).unwrap_or_else(|_| ());
+                self.table_mut()
+                    .delete_fields(trailers)
+                    .unwrap_or_else(|_| ());
             }
-            self.drop_input_stream(b).unwrap_or_else(|_| ());
+            self.table_mut()
+                .delete_input_stream(b)
+                .unwrap_or_else(|_| ());
         }
         if let Some(h) = headers {
-            self.drop_fields(h).unwrap_or_else(|_| ());
+            self.table_mut().delete_fields(h).unwrap_or_else(|_| ());
         }
 
         self.table_mut()
