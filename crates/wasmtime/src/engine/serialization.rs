@@ -190,6 +190,7 @@ impl Metadata {
             memory_control,
             function_references,
             gc,
+            component_model_values,
 
             // Always on; we don't currently have knobs for these.
             mutable_global: _,
@@ -201,6 +202,7 @@ impl Metadata {
         assert!(!memory_control);
         assert!(!tail_call);
         assert!(!gc);
+        assert!(!component_model_values);
 
         Metadata {
             target: engine.compiler().triple().to_string(),

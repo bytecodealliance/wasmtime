@@ -17,7 +17,7 @@ impl From<anyhow::Error> for streams::Error {
         tracing::trace!(
             "turning anyhow::Error in the streams interface into the empty error result: {error:?}"
         );
-        StreamError {}.into()
+        StreamError { dummy: 0 }.into()
     }
 }
 

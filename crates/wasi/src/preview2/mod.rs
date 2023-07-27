@@ -64,9 +64,9 @@ pub mod bindings {
         pub use self::_internal::wasi::{filesystem, io, poll};
 
         impl From<super::io::streams::StreamError> for io::streams::StreamError {
-            fn from(_other: super::io::streams::StreamError) -> Self {
-                // There are no cases for this record.
-                Self {}
+            fn from(other: super::io::streams::StreamError) -> Self {
+                let super::io::streams::StreamError { dummy } = other;
+                Self { dummy }
             }
         }
 
