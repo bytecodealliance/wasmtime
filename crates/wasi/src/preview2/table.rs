@@ -62,9 +62,8 @@ impl<'a> OccupiedEntry<'a> {
     pub fn get_mut(&mut self) -> &mut (dyn Any + Send + Sync + 'static) {
         self.table.map.get_mut(&self.index).unwrap().entry.as_mut()
     }
-    pub fn remove_entry(self) -> Box<dyn Any + Send + Sync> {
-        // FIXME: deletion logic requires ref to table itself, to delete the rest
-        todo!()
+    pub fn remove_entry(self) -> Result<Box<dyn Any + Send + Sync>, TableError> {
+        self.table.delete_entry(self.index).map(|e| e.entry)
     }
     // TODO: insert is possible to implement, but make it fail with WrongType if the repalcement
     // value downcasts to a different type than an existing one
@@ -175,28 +174,43 @@ impl Table {
         }
     }
 
-    /// Remove a resource at a given index from the table.
-    pub fn delete<T: Any + Sized>(&mut self, key: u32) -> Result<T, TableError> {
-        // Optimistically attempt to remove the value stored under key
-        let e = self.map.remove(&key).ok_or(TableError::NotPresent)?;
-        if !e.children.is_empty() {
+    fn delete_entry(&mut self, key: u32) -> Result<TableEntry, TableError> {
+        if !self
+            .map
+            .get(&key)
+            .ok_or(TableError::NotPresent)?
+            .children
+            .is_empty()
+        {
             return Err(TableError::HasChildren);
         }
+        let e = self.map.remove(&key).unwrap();
+        if let Some(parent) = e.parent {
+            // Remove deleted resource from parent's child list.
+            // Parent must still be present because it cant be deleted while still having
+            // children:
+            self.map
+                .get_mut(&parent)
+                .expect("missing parent")
+                .remove_child(key);
+        }
+        Ok(e)
+    }
+
+    /// Remove a resource at a given index from the table.
+    pub fn delete<T: Any + Sized>(&mut self, key: u32) -> Result<T, TableError> {
+        let e = self.delete_entry(key)?;
         match e.entry.downcast::<T>() {
-            Ok(v) => {
+            Ok(v) => Ok(*v),
+            Err(entry) => {
+                // Re-insert into parent list
                 if let Some(parent) = e.parent {
-                    // Remove deleted resource from parent's child list.
-                    // Parent must still be present because it cant be deleted while still having
-                    // children:
                     self.map
                         .get_mut(&parent)
-                        .expect("missing parent")
-                        .remove_child(&key);
+                        .expect("already checked parent exists")
+                        .add_child(key);
                 }
-                Ok(*v)
-            }
-            Err(entry) => {
-                // Insert the value back, since the downcast failed
+                // Insert the value back
                 self.map.insert(
                     key,
                     TableEntry {

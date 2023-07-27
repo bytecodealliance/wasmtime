@@ -23,18 +23,6 @@ pub enum HostPollable {
     /// Create a Future by calling a fn on another resource in the table. This
     /// indirection means the created Future can use a mut borrow of another
     /// resource in the Table (e.g. a stream)
-    ///
-    /// FIXME: we currently aren't tracking the lifetime of the resource along
-    /// with this entry, which means that this index could be occupied by something
-    /// unrelated by the time we poll it again. This is a crash vector, because
-    /// the [`MakeFuture`] would panic if the type of the index has changed, and
-    /// would yield undefined behavior otherwise. We'll likely fix this by making
-    /// the parent resources of a pollable clean up their pollable entries when
-    /// they are destroyed (e.g. the HostInputStream would track the pollables it
-    /// has created).
-    ///
-    /// WARNING: do not deploy this library to production until the above issue has
-    /// been fixed.
     TableEntry { index: u32, make_future: MakeFuture },
     /// Create a future by calling an owned, static closure. This is used for
     /// pollables which do not share state with another resource in the Table
@@ -50,7 +38,10 @@ pub trait TablePollableExt {
 
 impl TablePollableExt for Table {
     fn push_host_pollable(&mut self, p: HostPollable) -> Result<u32, TableError> {
-        self.push(Box::new(p))
+        match p {
+            HostPollable::TableEntry { index, .. } => self.push_child(Box::new(p), index),
+            HostPollable::Closure { .. } => self.push(Box::new(p)),
+        }
     }
     fn get_host_pollable_mut(&mut self, fd: u32) -> Result<&mut HostPollable, TableError> {
         self.get_mut::<HostPollable>(fd)

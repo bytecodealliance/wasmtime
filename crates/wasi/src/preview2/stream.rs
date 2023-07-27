@@ -193,7 +193,7 @@ impl TableStreamExt for Table {
         let occ = self.entry(fd)?;
         match occ.get().downcast_ref::<InternalInputStream>() {
             Some(InternalInputStream::Host(_)) => {
-                let any = occ.remove_entry();
+                let any = occ.remove_entry()?;
                 match *any.downcast().expect("downcast checked above") {
                     InternalInputStream::Host(h) => Ok(h),
                     _ => unreachable!("variant checked above"),
@@ -219,7 +219,7 @@ impl TableStreamExt for Table {
         let occ = self.entry(fd)?;
         match occ.get().downcast_ref::<InternalOutputStream>() {
             Some(InternalOutputStream::Host(_)) => {
-                let any = occ.remove_entry();
+                let any = occ.remove_entry()?;
                 match *any.downcast().expect("downcast checked above") {
                     InternalOutputStream::Host(h) => Ok(h),
                     _ => unreachable!("variant checked above"),
