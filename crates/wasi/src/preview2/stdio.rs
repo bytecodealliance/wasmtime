@@ -197,7 +197,6 @@ mod test {
                     assert_eq!(line, message);
                 }
 
-
                 writeln!(&mut stdin_write, "all done").unwrap();
 
                 line.clear();
