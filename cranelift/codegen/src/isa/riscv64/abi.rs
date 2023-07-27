@@ -275,7 +275,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         let mut insts = SmallInstVec::new();
         if let Some(imm12) = Imm12::maybe_from_u64(imm as u64) {
             insts.push(Inst::AluRRImm12 {
-                alu_op: AluOPRRI::Andi,
+                alu_op: AluOPRRI::Addi,
                 rd: into_reg,
                 rs: from_reg,
                 imm12,
