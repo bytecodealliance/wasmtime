@@ -1996,10 +1996,7 @@ impl MachInstEmit for Inst {
                 .emit(&[], sink, emit_info, state);
                 // trap
                 sink.bind_label(label_trap, &mut state.ctrl_plane);
-                Inst::Udf {
-                    trap_code: trap_code,
-                }
-                .emit(&[], sink, emit_info, state);
+                Inst::Udf { trap_code }.emit(&[], sink, emit_info, state);
                 sink.bind_label(label_jump_over, &mut state.ctrl_plane);
             }
             &Inst::TrapIf { test, trap_code } => {
