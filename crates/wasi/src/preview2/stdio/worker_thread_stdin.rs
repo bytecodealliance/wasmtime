@@ -51,6 +51,10 @@ fn create() -> GlobalStdin {
     std::thread::spawn(move || loop {
         let mut bytes = BytesMut::zeroed(1024);
         match std::io::stdin().lock().read(&mut bytes) {
+            // Reading `0` indicates that stdin has reached EOF, so we break
+            // the loop to allow the thread to exit.
+            Ok(0) => break,
+
             Ok(nbytes) => {
                 // Append to the buffer:
                 bytes.truncate(nbytes);
