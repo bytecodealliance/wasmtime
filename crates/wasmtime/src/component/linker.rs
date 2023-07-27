@@ -5,7 +5,7 @@ use crate::component::{
     Component, ComponentNamedList, Instance, InstancePre, Lift, Lower, ResourceType, Val,
 };
 use crate::{AsContextMut, Engine, Module, StoreContextMut};
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{anyhow, bail, Result};
 use indexmap::IndexMap;
 use std::collections::hash_map::{Entry, HashMap};
 use std::future::Future;
