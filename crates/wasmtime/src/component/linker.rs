@@ -148,8 +148,13 @@ impl<T> Linker<T> {
                 .strings
                 .lookup(name)
                 .and_then(|name| self.map.get(&name));
-            cx.definition(ty, import)
-                .with_context(|| format!("import `{name}` has the wrong type"))?;
+            match cx.definition(ty, import) {
+                Ok(_) => (),
+                Err(e) => bail!(
+                    "error while reading import `{name}` types: {}",
+                    e.to_string()
+                ),
+            }
         }
 
         // Now that all imports are known to be defined and satisfied by this
