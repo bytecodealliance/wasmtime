@@ -32,8 +32,7 @@ use wasmtime_environ::{
 };
 use wasmtime_jit::{CompiledFunctionInfo, CompiledModuleInfo};
 
-type CompileInput<'a> =
-    Box<dyn FnOnce(&Tunables, &dyn Compiler) -> Result<CompileOutput> + Send + 'a>;
+type CompileInput<'a> = Box<dyn FnOnce(&dyn Compiler) -> Result<CompileOutput> + Send + 'a>;
 
 /// A sortable, comparable key for a compilation output.
 ///
@@ -168,10 +167,7 @@ pub struct CompileInputs<'a> {
 }
 
 impl<'a> CompileInputs<'a> {
-    fn push_input(
-        &mut self,
-        f: impl FnOnce(&Tunables, &dyn Compiler) -> Result<CompileOutput> + Send + 'a,
-    ) {
+    fn push_input(&mut self, f: impl FnOnce(&dyn Compiler) -> Result<CompileOutput> + Send + 'a) {
         self.inputs.push(Box::new(f));
     }
 
@@ -207,7 +203,7 @@ impl<'a> CompileInputs<'a> {
         ret.collect_inputs_in_translations(types.module_types(), module_translations);
 
         for (idx, trampoline) in component.trampolines.iter() {
-            ret.push_input(move |_tunables, compiler| {
+            ret.push_input(move |compiler| {
                 Ok(CompileOutput {
                     key: CompileKey::trampoline(idx),
                     symbol: trampoline.symbol_name(),
@@ -228,7 +224,7 @@ impl<'a> CompileInputs<'a> {
         // requested through initializers above or such.
         if component.component.num_resources > 0 {
             if let Some(sig) = types.find_resource_drop_signature() {
-                ret.push_input(move |_tunables, compiler| {
+                ret.push_input(move |compiler| {
                     let trampoline = compiler.compile_wasm_to_native_trampoline(&types[sig])?;
                     Ok(CompileOutput {
                         key: CompileKey::resource_drop_wasm_to_native_trampoline(),
@@ -258,15 +254,10 @@ impl<'a> CompileInputs<'a> {
 
         for (module, translation, functions) in translations {
             for (def_func_index, func_body) in functions {
-                self.push_input(move |tunables, compiler| {
+                self.push_input(move |compiler| {
                     let func_index = translation.module.func_index(def_func_index);
-                    let (info, function) = compiler.compile_function(
-                        translation,
-                        def_func_index,
-                        func_body,
-                        tunables,
-                        types,
-                    )?;
+                    let (info, function) =
+                        compiler.compile_function(translation, def_func_index, func_body, types)?;
                     Ok(CompileOutput {
                         key: CompileKey::wasm_function(module, def_func_index),
                         symbol: format!(
@@ -281,7 +272,7 @@ impl<'a> CompileInputs<'a> {
 
                 let func_index = translation.module.func_index(def_func_index);
                 if translation.module.functions[func_index].is_escaping() {
-                    self.push_input(move |_tunables, compiler| {
+                    self.push_input(move |compiler| {
                         let func_index = translation.module.func_index(def_func_index);
                         let trampoline = compiler.compile_array_to_wasm_trampoline(
                             translation,
@@ -300,7 +291,7 @@ impl<'a> CompileInputs<'a> {
                         })
                     });
 
-                    self.push_input(move |_tunables, compiler| {
+                    self.push_input(move |compiler| {
                         let func_index = translation.module.func_index(def_func_index);
                         let trampoline = compiler.compile_native_to_wasm_trampoline(
                             translation,
@@ -327,7 +318,7 @@ impl<'a> CompileInputs<'a> {
         }
 
         for signature in sigs {
-            self.push_input(move |_tunables, compiler| {
+            self.push_input(move |compiler| {
                 let wasm_func_ty = &types[signature];
                 let trampoline = compiler.compile_wasm_to_native_trampoline(wasm_func_ty)?;
                 Ok(CompileOutput {
@@ -346,11 +337,10 @@ impl<'a> CompileInputs<'a> {
     /// Compile these `CompileInput`s (maybe in parallel) and return the
     /// resulting `UnlinkedCompileOutput`s.
     pub fn compile(self, engine: &Engine) -> Result<UnlinkedCompileOutputs> {
-        let tunables = &engine.config().tunables;
         let compiler = engine.compiler();
 
         // Compile each individual input in parallel.
-        let raw_outputs = engine.run_maybe_parallel(self.inputs, |f| f(tunables, compiler))?;
+        let raw_outputs = engine.run_maybe_parallel(self.inputs, |f| f(compiler))?;
 
         // Bucket the outputs by kind.
         let mut outputs: BTreeMap<u32, Vec<CompileOutput>> = BTreeMap::new();
@@ -470,7 +460,6 @@ impl FunctionIndices {
         let symbol_ids_and_locs = compiler.append_code(
             &mut obj,
             &compiled_funcs,
-            tunables,
             &|caller_index: usize, callee_index: FuncIndex| {
                 let module = self
                     .compiled_func_index_to_module

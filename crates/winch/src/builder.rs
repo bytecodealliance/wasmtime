@@ -38,6 +38,11 @@ impl CompilerBuilder for Builder {
         self.inner.settings()
     }
 
+    fn set_tunables(&mut self, tunables: wasmtime_environ::Tunables) -> Result<()> {
+        let _ = tunables;
+        Ok(())
+    }
+
     fn build(&self) -> Result<Box<dyn wasmtime_environ::Compiler>> {
         let isa = self.inner.build()?;
 

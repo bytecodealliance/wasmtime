@@ -424,6 +424,7 @@ impl Inst {
             | Inst::AdjustSp { .. }
             | Inst::Call { .. }
             | Inst::CallInd { .. }
+            | Inst::ReturnCall { .. }
             | Inst::ReturnCallInd { .. }
             | Inst::TrapIf { .. }
             | Inst::Jal { .. }
@@ -884,6 +885,32 @@ impl MachInstEmit for Inst {
                 );
             }
 
+            &Inst::ReturnCall {
+                ref callee,
+                ref info,
+            } => {
+                emit_return_call_common_sequence(
+                    &mut allocs,
+                    sink,
+                    emit_info,
+                    state,
+                    info.new_stack_arg_size,
+                    info.old_stack_arg_size,
+                    &info.uses,
+                );
+
+                sink.add_call_site(ir::Opcode::ReturnCall);
+                sink.add_reloc(Reloc::RiscvCall, &callee, 0);
+                Inst::construct_auipc_and_jalr(None, writable_spilltmp_reg(), 0)
+                    .into_iter()
+                    .for_each(|i| i.emit(&[], sink, emit_info, state));
+
+                // `emit_return_call_common_sequence` emits an island if
+                // necessary, so we can safely disable the worst-case-size check
+                // in this case.
+                start_off = sink.cur_offset();
+            }
+
             &Inst::ReturnCallInd { callee, ref info } => {
                 let callee = allocs.next(callee);
 
@@ -903,6 +930,11 @@ impl MachInstEmit for Inst {
                     offset: Imm12::zero(),
                 }
                 .emit(&[], sink, emit_info, state);
+
+                // `emit_return_call_common_sequence` emits an island if
+                // necessary, so we can safely disable the worst-case-size check
+                // in this case.
+                start_off = sink.cur_offset();
             }
 
             &Inst::Jal { dest } => {
@@ -3089,9 +3121,10 @@ fn emit_return_call_common_sequence(
 
     // We are emitting a dynamic number of instructions and might need an
     // island. We emit four instructions regardless of how many stack arguments
-    // we have, and then two instructions per word of stack argument space.
+    // we have, up to two instructions for the actual call, and then two
+    // instructions per word of stack argument space.
     let new_stack_words = new_stack_arg_size / 8;
-    let insts = 4 + 2 * new_stack_words;
+    let insts = 4 + 2 + 2 * new_stack_words;
     let space_needed = insts * u32::try_from(Inst::INSTRUCTION_SIZE).unwrap();
     if sink.island_needed(space_needed) {
         let jump_around_label = sink.get_label();

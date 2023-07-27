@@ -1781,6 +1781,9 @@ impl<I: VCodeInst> TextSectionBuilder for MachTextSectionBuilder<I> {
     }
 
     fn resolve_reloc(&mut self, offset: u64, reloc: Reloc, addend: Addend, target: usize) -> bool {
+        crate::trace!(
+            "Resolving relocation @ {offset:#x} + {addend:#x} to target {target} of kind {reloc:?}"
+        );
         let label = MachLabel::from_block(BlockIndex::new(target));
         let offset = u32::try_from(offset).unwrap();
         match I::LabelUse::from_reloc(reloc, addend) {

@@ -457,15 +457,25 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         unimplemented!()
     }
 
+    fn translate_return_call_ref(
+        &mut self,
+        _builder: &mut FunctionBuilder,
+        _sig_ref: ir::SigRef,
+        _callee: ir::Value,
+        _call_args: &[ir::Value],
+    ) -> WasmResult<()> {
+        unimplemented!()
+    }
+
     fn translate_call(
         &mut self,
-        mut pos: FuncCursor,
+        builder: &mut FunctionBuilder,
         _callee_index: FuncIndex,
         callee: ir::FuncRef,
         call_args: &[ir::Value],
     ) -> WasmResult<ir::Inst> {
         // Pass the current function's vmctx parameter on to the callee.
-        let vmctx = pos
+        let vmctx = builder
             .func
             .special_param(ir::ArgumentPurpose::VMContext)
             .expect("Missing vmctx parameter");
@@ -473,10 +483,13 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         // Build a value list for the call instruction containing the call_args and the vmctx
         // parameter.
         let mut args = ir::ValueList::default();
-        args.extend(call_args.iter().cloned(), &mut pos.func.dfg.value_lists);
-        args.push(vmctx, &mut pos.func.dfg.value_lists);
+        args.extend(call_args.iter().cloned(), &mut builder.func.dfg.value_lists);
+        args.push(vmctx, &mut builder.func.dfg.value_lists);
 
-        Ok(pos.ins().Call(ir::Opcode::Call, INVALID, callee, args).0)
+        Ok(builder
+            .ins()
+            .Call(ir::Opcode::Call, INVALID, callee, args)
+            .0)
     }
 
     fn translate_call_ref(

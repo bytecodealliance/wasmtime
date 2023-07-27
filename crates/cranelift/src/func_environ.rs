@@ -292,52 +292,6 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         (base, func_addr)
     }
 
-    /// This calls a function by reference without checking the signature. It
-    /// gets the function address, sets relevant flags, and passes the special
-    /// callee/caller vmctxs. It is used by both call_indirect (which checks the
-    /// signature) and call_ref (which doesn't).
-    fn call_function_unchecked(
-        &mut self,
-        builder: &mut FunctionBuilder,
-        sig_ref: ir::SigRef,
-        callee: ir::Value,
-        call_args: &[ir::Value],
-    ) -> WasmResult<ir::Inst> {
-        let pointer_type = self.pointer_type();
-
-        // Dereference callee pointer to get the function address.
-        let mem_flags = ir::MemFlags::trusted().with_readonly();
-        let func_addr = builder.ins().load(
-            pointer_type,
-            mem_flags,
-            callee,
-            i32::from(self.offsets.ptr.vm_func_ref_wasm_call()),
-        );
-
-        let mut real_call_args = Vec::with_capacity(call_args.len() + 2);
-        let caller_vmctx = builder
-            .func
-            .special_param(ArgumentPurpose::VMContext)
-            .unwrap();
-
-        // First append the callee vmctx address.
-        let vmctx = builder.ins().load(
-            pointer_type,
-            mem_flags,
-            callee,
-            i32::from(self.offsets.ptr.vm_func_ref_vmctx()),
-        );
-        real_call_args.push(vmctx);
-        real_call_args.push(caller_vmctx);
-
-        // Then append the regular call arguments.
-        real_call_args.extend_from_slice(call_args);
-
-        Ok(builder
-            .ins()
-            .call_indirect(sig_ref, func_addr, &real_call_args))
-    }
-
     /// Generate code to increment or decrement the given `externref`'s
     /// reference count.
     ///
@@ -857,6 +811,266 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
 
         builder.switch_to_block(continuation_block);
         result_param
+    }
+}
+
+struct Call<'a, 'func, 'module_env> {
+    builder: &'a mut FunctionBuilder<'func>,
+    env: &'a mut FuncEnvironment<'module_env>,
+    tail: bool,
+}
+
+impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
+    /// Create a new `Call` site that will do regular, non-tail calls.
+    pub fn new(
+        builder: &'a mut FunctionBuilder<'func>,
+        env: &'a mut FuncEnvironment<'module_env>,
+    ) -> Self {
+        Call {
+            builder,
+            env,
+            tail: false,
+        }
+    }
+
+    /// Create a new `Call` site that will perform tail calls.
+    pub fn new_tail(
+        builder: &'a mut FunctionBuilder<'func>,
+        env: &'a mut FuncEnvironment<'module_env>,
+    ) -> Self {
+        Call {
+            builder,
+            env,
+            tail: true,
+        }
+    }
+
+    /// Do a direct call to the given callee function.
+    pub fn direct_call(
+        mut self,
+        callee_index: FuncIndex,
+        callee: ir::FuncRef,
+        call_args: &[ir::Value],
+    ) -> WasmResult<ir::Inst> {
+        let mut real_call_args = Vec::with_capacity(call_args.len() + 2);
+        let caller_vmctx = self
+            .builder
+            .func
+            .special_param(ArgumentPurpose::VMContext)
+            .unwrap();
+
+        // Handle direct calls to locally-defined functions.
+        if !self.env.module.is_imported_function(callee_index) {
+            // First append the callee vmctx address, which is the same as the caller vmctx in
+            // this case.
+            real_call_args.push(caller_vmctx);
+
+            // Then append the caller vmctx address.
+            real_call_args.push(caller_vmctx);
+
+            // Then append the regular call arguments.
+            real_call_args.extend_from_slice(call_args);
+
+            // Finally, make the direct call!
+            return Ok(self.direct_call_inst(callee, &real_call_args));
+        }
+
+        // Handle direct calls to imported functions. We use an indirect call
+        // so that we don't have to patch the code at runtime.
+        let pointer_type = self.env.pointer_type();
+        let sig_ref = self.builder.func.dfg.ext_funcs[callee].signature;
+        let vmctx = self.env.vmctx(self.builder.func);
+        let base = self.builder.ins().global_value(pointer_type, vmctx);
+
+        let mem_flags = ir::MemFlags::trusted().with_readonly();
+
+        // Load the callee address.
+        let body_offset = i32::try_from(
+            self.env
+                .offsets
+                .vmctx_vmfunction_import_wasm_call(callee_index),
+        )
+        .unwrap();
+        let func_addr = self
+            .builder
+            .ins()
+            .load(pointer_type, mem_flags, base, body_offset);
+
+        // First append the callee vmctx address.
+        let vmctx_offset =
+            i32::try_from(self.env.offsets.vmctx_vmfunction_import_vmctx(callee_index)).unwrap();
+        let vmctx = self
+            .builder
+            .ins()
+            .load(pointer_type, mem_flags, base, vmctx_offset);
+        real_call_args.push(vmctx);
+        real_call_args.push(caller_vmctx);
+
+        // Then append the regular call arguments.
+        real_call_args.extend_from_slice(call_args);
+
+        // Finally, make the indirect call!
+        Ok(self.indirect_call_inst(sig_ref, func_addr, &real_call_args))
+    }
+
+    /// Do an indirect call through the given funcref table.
+    pub fn indirect_call(
+        mut self,
+        table_index: TableIndex,
+        table: ir::Table,
+        ty_index: TypeIndex,
+        sig_ref: ir::SigRef,
+        callee: ir::Value,
+        call_args: &[ir::Value],
+    ) -> WasmResult<ir::Inst> {
+        let pointer_type = self.env.pointer_type();
+
+        // Get the funcref pointer from the table.
+        let funcref_ptr =
+            self.env
+                .get_or_init_func_ref_table_elem(self.builder, table_index, table, callee);
+
+        // Check for whether the table element is null, and trap if so.
+        self.builder
+            .ins()
+            .trapz(funcref_ptr, ir::TrapCode::IndirectCallToNull);
+
+        // If necessary, check the signature.
+        match self.env.module.table_plans[table_index].style {
+            TableStyle::CallerChecksSignature => {
+                let sig_id_size = self.env.offsets.size_of_vmshared_signature_index();
+                let sig_id_type = Type::int(u16::from(sig_id_size) * 8).unwrap();
+                let vmctx = self.env.vmctx(self.builder.func);
+                let base = self.builder.ins().global_value(pointer_type, vmctx);
+
+                // Load the caller ID. This requires loading the `*mut
+                // VMFuncRef` base pointer from `VMContext` and then loading,
+                // based on `SignatureIndex`, the corresponding entry.
+                let mem_flags = ir::MemFlags::trusted().with_readonly();
+                let signatures = self.builder.ins().load(
+                    pointer_type,
+                    mem_flags,
+                    base,
+                    i32::try_from(self.env.offsets.vmctx_signature_ids_array()).unwrap(),
+                );
+                let sig_index = self.env.module.types[ty_index].unwrap_function();
+                let offset =
+                    i32::try_from(sig_index.as_u32().checked_mul(sig_id_type.bytes()).unwrap())
+                        .unwrap();
+                let caller_sig_id =
+                    self.builder
+                        .ins()
+                        .load(sig_id_type, mem_flags, signatures, offset);
+
+                // Load the callee ID.
+                let mem_flags = ir::MemFlags::trusted().with_readonly();
+                let callee_sig_id = self.builder.ins().load(
+                    sig_id_type,
+                    mem_flags,
+                    funcref_ptr,
+                    i32::from(self.env.offsets.ptr.vm_func_ref_type_index()),
+                );
+
+                // Check that they match.
+                let cmp = self
+                    .builder
+                    .ins()
+                    .icmp(IntCC::Equal, callee_sig_id, caller_sig_id);
+                self.builder.ins().trapz(cmp, ir::TrapCode::BadSignature);
+            }
+        }
+
+        self.unchecked_call(sig_ref, funcref_ptr, call_args)
+    }
+
+    /// Call a typed function reference.
+    pub fn call_ref(
+        mut self,
+        sig_ref: ir::SigRef,
+        callee: ir::Value,
+        args: &[ir::Value],
+    ) -> WasmResult<ir::Inst> {
+        // Check for whether the callee is null, and trap if so.
+        //
+        // FIXME: the wasm type system tracks enough information to know whether
+        // `callee` is a null reference or not. In some situations it can be
+        // statically known here that `callee` cannot be null in which case this
+        // null check can be elided. This requires feeding type information from
+        // wasmparser's validator into this function, however, which is not
+        // easily done at this time.
+        self.builder
+            .ins()
+            .trapz(callee, ir::TrapCode::NullReference);
+
+        self.unchecked_call(sig_ref, callee, args)
+    }
+
+    /// This calls a function by reference without checking the signature.
+    ///
+    /// It gets the function address, sets relevant flags, and passes the
+    /// special callee/caller vmctxs. It is used by both call_indirect (which
+    /// checks the signature) and call_ref (which doesn't).
+    fn unchecked_call(
+        &mut self,
+        sig_ref: ir::SigRef,
+        callee: ir::Value,
+        call_args: &[ir::Value],
+    ) -> WasmResult<ir::Inst> {
+        let pointer_type = self.env.pointer_type();
+
+        // Dereference callee pointer to get the function address.
+        let mem_flags = ir::MemFlags::trusted().with_readonly();
+        let func_addr = self.builder.ins().load(
+            pointer_type,
+            mem_flags,
+            callee,
+            i32::from(self.env.offsets.ptr.vm_func_ref_wasm_call()),
+        );
+
+        let mut real_call_args = Vec::with_capacity(call_args.len() + 2);
+        let caller_vmctx = self
+            .builder
+            .func
+            .special_param(ArgumentPurpose::VMContext)
+            .unwrap();
+
+        // First append the callee vmctx address.
+        let vmctx = self.builder.ins().load(
+            pointer_type,
+            mem_flags,
+            callee,
+            i32::from(self.env.offsets.ptr.vm_func_ref_vmctx()),
+        );
+        real_call_args.push(vmctx);
+        real_call_args.push(caller_vmctx);
+
+        // Then append the regular call arguments.
+        real_call_args.extend_from_slice(call_args);
+
+        Ok(self.indirect_call_inst(sig_ref, func_addr, &real_call_args))
+    }
+
+    fn direct_call_inst(&mut self, callee: ir::FuncRef, args: &[ir::Value]) -> ir::Inst {
+        if self.tail {
+            self.builder.ins().return_call(callee, args)
+        } else {
+            self.builder.ins().call(callee, args)
+        }
+    }
+
+    fn indirect_call_inst(
+        &mut self,
+        sig_ref: ir::SigRef,
+        func_addr: ir::Value,
+        args: &[ir::Value],
+    ) -> ir::Inst {
+        if self.tail {
+            self.builder
+                .ins()
+                .return_call_indirect(sig_ref, func_addr, args)
+        } else {
+            self.builder.ins().call_indirect(sig_ref, func_addr, args)
+        }
     }
 }
 
@@ -1584,7 +1798,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         index: TypeIndex,
     ) -> WasmResult<ir::SigRef> {
         let index = self.module.types[index].unwrap_function();
-        let sig = crate::wasm_call_signature(self.isa, &self.types[index]);
+        let sig = crate::wasm_call_signature(self.isa, &self.types[index], &self.tunables);
         Ok(func.import_signature(sig))
     }
 
@@ -1594,7 +1808,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         index: FuncIndex,
     ) -> WasmResult<ir::FuncRef> {
         let sig = self.module.functions[index].signature;
-        let sig = crate::wasm_call_signature(self.isa, &self.types[sig]);
+        let sig = crate::wasm_call_signature(self.isa, &self.types[sig], &self.tunables);
         let signature = func.import_signature(sig);
         let name =
             ir::ExternalName::User(func.declare_imported_user_function(ir::UserExternalName {
@@ -1633,112 +1847,24 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         callee: ir::Value,
         call_args: &[ir::Value],
     ) -> WasmResult<ir::Inst> {
-        let pointer_type = self.pointer_type();
-
-        // Get the funcref pointer from the table.
-        let funcref_ptr = self.get_or_init_func_ref_table_elem(builder, table_index, table, callee);
-
-        // Check for whether the table element is null, and trap if so.
-        builder
-            .ins()
-            .trapz(funcref_ptr, ir::TrapCode::IndirectCallToNull);
-
-        // If necessary, check the signature.
-        match self.module.table_plans[table_index].style {
-            TableStyle::CallerChecksSignature => {
-                let sig_id_size = self.offsets.size_of_vmshared_signature_index();
-                let sig_id_type = Type::int(u16::from(sig_id_size) * 8).unwrap();
-                let vmctx = self.vmctx(builder.func);
-                let base = builder.ins().global_value(pointer_type, vmctx);
-
-                // Load the caller ID. This requires loading the `*mut
-                // VMFuncRef` base pointer from `VMContext` and then loading,
-                // based on `SignatureIndex`, the corresponding entry.
-                let mem_flags = ir::MemFlags::trusted().with_readonly();
-                let signatures = builder.ins().load(
-                    pointer_type,
-                    mem_flags,
-                    base,
-                    i32::try_from(self.offsets.vmctx_signature_ids_array()).unwrap(),
-                );
-                let sig_index = self.module.types[ty_index].unwrap_function();
-                let offset =
-                    i32::try_from(sig_index.as_u32().checked_mul(sig_id_type.bytes()).unwrap())
-                        .unwrap();
-                let caller_sig_id = builder
-                    .ins()
-                    .load(sig_id_type, mem_flags, signatures, offset);
-
-                // Load the callee ID.
-                let mem_flags = ir::MemFlags::trusted().with_readonly();
-                let callee_sig_id = builder.ins().load(
-                    sig_id_type,
-                    mem_flags,
-                    funcref_ptr,
-                    i32::from(self.offsets.ptr.vm_func_ref_type_index()),
-                );
-
-                // Check that they match.
-                let cmp = builder
-                    .ins()
-                    .icmp(IntCC::Equal, callee_sig_id, caller_sig_id);
-                builder.ins().trapz(cmp, ir::TrapCode::BadSignature);
-            }
-        }
-
-        self.call_function_unchecked(builder, sig_ref, funcref_ptr, call_args)
+        Call::new(builder, self).indirect_call(
+            table_index,
+            table,
+            ty_index,
+            sig_ref,
+            callee,
+            call_args,
+        )
     }
 
     fn translate_call(
         &mut self,
-        mut pos: FuncCursor<'_>,
+        builder: &mut FunctionBuilder,
         callee_index: FuncIndex,
         callee: ir::FuncRef,
         call_args: &[ir::Value],
     ) -> WasmResult<ir::Inst> {
-        let mut real_call_args = Vec::with_capacity(call_args.len() + 2);
-        let caller_vmctx = pos.func.special_param(ArgumentPurpose::VMContext).unwrap();
-
-        // Handle direct calls to locally-defined functions.
-        if !self.module.is_imported_function(callee_index) {
-            // First append the callee vmctx address, which is the same as the caller vmctx in
-            // this case.
-            real_call_args.push(caller_vmctx);
-
-            // Then append the caller vmctx address.
-            real_call_args.push(caller_vmctx);
-
-            // Then append the regular call arguments.
-            real_call_args.extend_from_slice(call_args);
-
-            return Ok(pos.ins().call(callee, &real_call_args));
-        }
-
-        // Handle direct calls to imported functions. We use an indirect call
-        // so that we don't have to patch the code at runtime.
-        let pointer_type = self.pointer_type();
-        let sig_ref = pos.func.dfg.ext_funcs[callee].signature;
-        let vmctx = self.vmctx(&mut pos.func);
-        let base = pos.ins().global_value(pointer_type, vmctx);
-
-        let mem_flags = ir::MemFlags::trusted().with_readonly();
-
-        // Load the callee address.
-        let body_offset =
-            i32::try_from(self.offsets.vmctx_vmfunction_import_wasm_call(callee_index)).unwrap();
-        let func_addr = pos.ins().load(pointer_type, mem_flags, base, body_offset);
-
-        // First append the callee vmctx address.
-        let vmctx_offset =
-            i32::try_from(self.offsets.vmctx_vmfunction_import_vmctx(callee_index)).unwrap();
-        let vmctx = pos.ins().load(pointer_type, mem_flags, base, vmctx_offset);
-        real_call_args.push(vmctx);
-        real_call_args.push(caller_vmctx);
-
-        // Then append the regular call arguments.
-        real_call_args.extend_from_slice(call_args);
-
-        Ok(pos.ins().call_indirect(sig_ref, func_addr, &real_call_args))
+        Call::new(builder, self).direct_call(callee_index, callee, call_args)
     }
 
     fn translate_call_ref(
@@ -1748,40 +1874,50 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         callee: ir::Value,
         call_args: &[ir::Value],
     ) -> WasmResult<ir::Inst> {
-        // Check for whether the callee is null, and trap if so.
-        //
-        // FIXME: the wasm type system tracks enough information to know whether
-        // `callee` is a null reference or not. In some situations it can be
-        // statically known here that `callee` cannot be null in which case this
-        // null check can be elided. This requires feeding type information from
-        // wasmparser's validator into this function, however, which is not
-        // easily done at this time.
-        builder.ins().trapz(callee, ir::TrapCode::NullReference);
-
-        self.call_function_unchecked(builder, sig_ref, callee, call_args)
+        Call::new(builder, self).call_ref(sig_ref, callee, call_args)
     }
 
     fn translate_return_call(
         &mut self,
-        _pos: FuncCursor,
-        _callee_index: FuncIndex,
-        _callee: ir::FuncRef,
-        _call_args: &[ir::Value],
+        builder: &mut FunctionBuilder,
+        callee_index: FuncIndex,
+        callee: ir::FuncRef,
+        call_args: &[ir::Value],
     ) -> WasmResult<()> {
-        unimplemented!()
+        Call::new_tail(builder, self).direct_call(callee_index, callee, call_args)?;
+        Ok(())
     }
 
     fn translate_return_call_indirect(
         &mut self,
-        _builder: &mut FunctionBuilder,
-        _table_index: TableIndex,
-        _table: ir::Table,
-        _sig_index: TypeIndex,
-        _sig_ref: ir::SigRef,
-        _callee: ir::Value,
-        _call_args: &[ir::Value],
+        builder: &mut FunctionBuilder,
+        table_index: TableIndex,
+        table: ir::Table,
+        ty_index: TypeIndex,
+        sig_ref: ir::SigRef,
+        callee: ir::Value,
+        call_args: &[ir::Value],
     ) -> WasmResult<()> {
-        unimplemented!()
+        Call::new_tail(builder, self).indirect_call(
+            table_index,
+            table,
+            ty_index,
+            sig_ref,
+            callee,
+            call_args,
+        )?;
+        Ok(())
+    }
+
+    fn translate_return_call_ref(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        sig_ref: ir::SigRef,
+        callee: ir::Value,
+        call_args: &[ir::Value],
+    ) -> WasmResult<()> {
+        Call::new_tail(builder, self).call_ref(sig_ref, callee, call_args)?;
+        Ok(())
     }
 
     fn translate_memory_grow(

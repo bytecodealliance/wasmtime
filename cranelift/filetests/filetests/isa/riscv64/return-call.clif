@@ -69,8 +69,7 @@ block0(v0: i64):
 ;   sd fp,0(sp)
 ;   mv fp,sp
 ; block0:
-;   load_sym t2,%callee_i64+0
-;   return_call_ind t2 old_stack_arg_size:0 new_stack_arg_size:0 s1=s1
+;   return_call TestCase(%callee_i64) old_stack_arg_size:0 new_stack_arg_size:0 s1=s1
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -79,16 +78,12 @@ block0(v0: i64):
 ;   sd s0, 0(sp)
 ;   ori s0, sp, 0
 ; block1: ; offset 0x10
-;   auipc t2, 0
-;   ld t2, 0xc(t2)
-;   j 0xc
-;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %callee_i64 0
-;   .byte 0x00, 0x00, 0x00, 0x00
 ;   ld ra, 8(s0)
 ;   ld t6, 0(s0)
 ;   addi sp, s0, 0x10
 ;   ori s0, t6, 0
-;   jr t2
+;   auipc t6, 0 ; reloc_external RiscvCall %callee_i64 0
+;   jr t6
 
 ;;;; Test passing `f64`s ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

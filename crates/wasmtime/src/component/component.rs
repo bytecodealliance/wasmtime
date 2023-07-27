@@ -205,7 +205,7 @@ impl Component {
 
         let (mut object, compilation_artifacts) = function_indices.link_and_append_code(
             object,
-            tunables,
+            &engine.config().tunables,
             compiler,
             compiled_funcs,
             module_translations,

@@ -44,7 +44,7 @@ impl<'a> TrampolineCompiler<'a> {
         let func = ir::Function::with_name_signature(
             ir::UserFuncName::user(0, 0),
             match abi {
-                Abi::Wasm => crate::wasm_call_signature(isa, ty),
+                Abi::Wasm => crate::wasm_call_signature(isa, ty, &compiler.tunables),
                 Abi::Native => crate::native_call_signature(isa, ty),
                 Abi::Array => crate::array_call_signature(isa),
             },
@@ -487,8 +487,14 @@ impl<'a> TrampolineCompiler<'a> {
                 dtor_func_ref,
                 i32::from(self.offsets.ptr.vm_func_ref_vmctx()),
             );
-            let sig = crate::wasm_call_signature(self.isa, &self.types[self.signature]);
+
+            let sig = crate::wasm_call_signature(
+                self.isa,
+                &self.types[self.signature],
+                &self.compiler.tunables,
+            );
             let sig_ref = self.builder.import_signature(sig);
+
             // NB: note that the "caller" vmctx here is the caller of this
             // intrinsic itself, not the `VMComponentContext`. This effectively
             // takes ourselves out of the chain here but that's ok since the
