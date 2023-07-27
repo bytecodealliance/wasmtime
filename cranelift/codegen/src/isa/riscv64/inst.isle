@@ -98,6 +98,11 @@
     (CallInd
       (info BoxCallIndInfo))
 
+    ;; A direct return-call macro instruction.
+    (ReturnCall
+      (callee BoxExternalName)
+      (info BoxReturnCallInfo))
+
     ;; An indirect return-call macro instruction.
     (ReturnCallInd
       (callee Reg)

@@ -702,13 +702,13 @@ impl Riscv64ABICallSite {
         });
 
         match dest {
-            // TODO: Our riscv64 backend doesn't have relocs for direct calls,
-            // the callee is always put in a register and then the register is
-            // relocated, so we don't currently differentiate between
-            // `RelocDistance::Near` and `RelocDistance::Far`. We just always
-            // use indirect calls. We should eventually add a non-indirect
-            // `return_call` instruction and path.
-            CallDest::ExtName(name, _) => {
+            CallDest::ExtName(name, RelocDistance::Near) => {
+                ctx.emit(Inst::ReturnCall {
+                    callee: Box::new(name),
+                    info,
+                });
+            }
+            CallDest::ExtName(name, RelocDistance::Far) => {
                 let callee = ctx.alloc_tmp(ir::types::I64).only_reg().unwrap();
                 ctx.emit(Inst::LoadExtName {
                     rd: callee,

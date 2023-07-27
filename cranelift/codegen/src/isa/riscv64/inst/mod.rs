@@ -459,6 +459,14 @@ fn riscv64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             }
             collector.reg_clobbers(info.clobbers);
         }
+        &Inst::ReturnCall {
+            callee: _,
+            ref info,
+        } => {
+            for u in &info.uses {
+                collector.reg_fixed_use(u.vreg, u.preg);
+            }
+        }
         &Inst::ReturnCallInd { ref info, callee } => {
             collector.reg_use(callee);
             for u in &info.uses {
@@ -880,7 +888,7 @@ impl MachInst for Inst {
             &Inst::Jalr { .. } => MachTerminator::Uncond,
             &Inst::Ret { .. } => MachTerminator::Ret,
             &Inst::BrTable { .. } => MachTerminator::Indirect,
-            &Inst::ReturnCallInd { .. } => MachTerminator::RetCall,
+            &Inst::ReturnCall { .. } | &Inst::ReturnCallInd { .. } => MachTerminator::RetCall,
             _ => MachTerminator::None,
         }
     }
@@ -1601,6 +1609,21 @@ impl Inst {
             &MInst::CallInd { ref info } => {
                 let rd = format_reg(info.rn, allocs);
                 format!("callind {}", rd)
+            }
+            &MInst::ReturnCall {
+                ref callee,
+                ref info,
+            } => {
+                let mut s = format!(
+                    "return_call {callee:?} old_stack_arg_size:{} new_stack_arg_size:{}",
+                    info.old_stack_arg_size, info.new_stack_arg_size
+                );
+                for ret in &info.uses {
+                    let preg = format_reg(ret.preg, &mut empty_allocs);
+                    let vreg = format_reg(ret.vreg, allocs);
+                    write!(&mut s, " {vreg}={preg}").unwrap();
+                }
+                s
             }
             &MInst::ReturnCallInd { callee, ref info } => {
                 let callee = format_reg(callee, allocs);
