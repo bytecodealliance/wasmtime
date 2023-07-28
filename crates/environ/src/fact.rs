@@ -262,7 +262,7 @@ impl<'a> Module<'a> {
         let memory = memory.as_ref().map(|memory| {
             self.import_memory(
                 "memory",
-                "",
+                &format!("m{}", self.imported_memories.len()),
                 MemoryType {
                     minimum: 0,
                     maximum: None,
@@ -279,7 +279,12 @@ impl<'a> Module<'a> {
                 ValType::I32
             };
             let ty = self.core_types.function(&[ptr, ptr, ptr, ptr], &[ptr]);
-            self.import_func("realloc", "", ty, func.clone())
+            self.import_func(
+                "realloc",
+                &format!("f{}", self.imported_funcs.len()),
+                ty,
+                func.clone(),
+            )
         });
 
         AdapterOptions {
