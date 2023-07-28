@@ -8,7 +8,7 @@ use std::collections::HashMap;
 pub struct Valgrind {
     metadata: Vec<MemState>,
     mallocs: HashMap<usize, usize>, // start addr, len
-    stack_pointer: usize,
+    pub stack_pointer: usize,
     max_stack_size: usize,
     pub flag: bool,
 }
@@ -171,8 +171,11 @@ impl Valgrind {
         self.flag = false;
     }
     pub fn set_stack_size(&mut self, stack_size: usize) {
-        self.max_stack_size = stack_size;
+        self.max_stack_size = stack_size + 1;
+        //temporary solution to initialize the entire stack
+        //while keeping stack tracing plumbing in place
         self.stack_pointer = stack_size;
+        self.update_stack_pointer(0);
     }
 }
 

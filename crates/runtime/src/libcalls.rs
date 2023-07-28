@@ -58,6 +58,7 @@ use crate::externref::VMExternRef;
 use crate::table::{Table, TableElementType};
 use crate::vmcontext::VMFuncRef;
 use crate::{Instance, TrapReason};
+use wasm_valgrind::AccessError::{DoubleMalloc, InvalidRead, InvalidWrite, InvalidFree, OutOfBounds};
 use anyhow::Result;
 use std::mem;
 use std::ptr::{self, NonNull};
@@ -489,55 +490,90 @@ unsafe fn new_epoch(instance: &mut Instance) -> Result<u64> {
 }
 
 unsafe fn check_malloc(instance: &mut Instance, addr: u32, len: u32) -> Result<u32> {
-    println!("addr: {} len: {}", addr, len);
     let result = instance.valgrind_state.malloc(addr as usize, len as usize);
     instance.valgrind_state.memcheck_on();
-    if result.is_ok() {
-        Ok(0)
-    } else {
-        //converting AccessError to u32?
-        panic!("failed")
+    match result {
+        Ok(()) => {
+            Ok(0)
+        }
+        Err(DoubleMalloc { addr, len }) => {
+            panic!("Double malloc at addr {} of size {}", addr, len)
+        }
+        Err(OutOfBounds { addr, len }) => {
+            panic!("Malloc out of bounds at addr {} of size {}", addr, len);
+        }
+        _ => {
+            panic!("unreachable")
+        }
     }
 }
 
 unsafe fn check_free(instance: &mut Instance, addr: u32) -> Result<u32> {
-    println!("addr: {}", addr);
     let result = instance.valgrind_state.free(addr as usize);
     instance.valgrind_state.memcheck_on();
-    if result.is_ok() {
-        Ok(0)
-    } else {
-        panic!("failed")
+    match result {
+        Ok(()) => {
+            Ok(0)
+        }
+        Err(InvalidFree { addr }) => {
+            panic!("Invalid free at addr {}", addr)
+        }
+        _ => {
+            panic!("unreachable")
+        }
     }
 }
 
 //should be returning result? error propogation?
 fn check_load(instance: &mut Instance, num_bytes: u32, addr: u32, offset: u32) {
     // println!("load of size {} at addr {}", num_bytes, addr as usize + offset as usize);
-    if instance.valgrind_state.read(addr as usize + offset as usize, num_bytes as usize).is_err() {
-        eprintln!("load of size {} failed at addr {}", num_bytes, addr as usize + offset as usize);
+    // if instance.valgrind_state.read(addr as usize + offset as usize, num_bytes as usize).is_err() {
+    //     eprintln!("load of size {} failed at addr {}", num_bytes, addr as usize + offset as usize);
+    // }
+    let result = instance.valgrind_state.read(addr as usize + offset as usize, num_bytes as usize);
+    match result {
+        Ok(()) => {}
+        Err(InvalidRead { addr, len }) => {
+            panic!("Invalid load at addr {} of size {}", addr, len)
+        }
+        Err(OutOfBounds { addr, len }) => {
+            panic!("Load out of bounds at addr {} of size {}", addr, len);
+        }
+        _ => {
+            panic!("unreachable")
+        }
     }
 }
 
 fn check_store(instance: &mut Instance, num_bytes: u32, addr: u32, offset: u32) {
-    if instance.valgrind_state.write(addr as usize + offset as usize, num_bytes as usize).is_err() {
-        eprintln!("store of size {} failed at addr {}", num_bytes, addr as usize + offset as usize);
+    // if instance.valgrind_state.write(addr as usize + offset as usize, num_bytes as usize).is_err() {
+    //     eprintln!("store of size {} failed at addr {}", num_bytes, addr as usize + offset as usize);
+    // }
+    let result = instance.valgrind_state.write(addr as usize + offset as usize, num_bytes as usize);
+    match result {
+        Ok(()) => {}
+        Err(InvalidWrite { addr, len }) => {
+            panic!("Invalid store at addr {} of size {}", addr, len)
+        }
+        Err(OutOfBounds { addr, len }) => {
+            panic!("Store out of bounds at addr {} of size {}", addr, len);
+        }
+        _ => {
+            panic!("unreachable")
+        }
     }
 }
 
 fn malloc_start(instance: &mut Instance) {
-    println!("started malloc");
-    instance.valgrind_state.flag = false;
+    instance.valgrind_state.memcheck_off();
 }
 
 fn free_start(instance: &mut Instance) {
-    println!("started free");
-    instance.valgrind_state.flag = false;
+    instance.valgrind_state.memcheck_off();
 }
 
 fn update_stack_pointer(instance: &mut Instance, value: u32) {
-    println!("sp updated to {}", value);
-    instance.valgrind_state.update_stack_pointer(value as usize);
+    // instance.valgrind_state.update_stack_pointer(value as usize);
 }
 
 /// This module contains functions which are used for resolving relocations at

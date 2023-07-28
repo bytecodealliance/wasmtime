@@ -33,7 +33,6 @@ use wasmtime_environ::{
     GlobalInit, HostPtr, MemoryIndex, Module, PrimaryMap, SignatureIndex, TableIndex,
     TableInitialValue, Trap, VMOffsets, WasmHeapType, WasmRefType, WasmType, VMCONTEXT_MAGIC,
 };
-// use crate::wasm_valgrind::Valgrind;
 
 mod allocator;
 
@@ -1141,7 +1140,7 @@ impl Instance {
                 GlobalInit::I32Const(x) => {
                     let index = module.global_index(index);
                     if index.index() == 0 {
-                        println!("stack size: {}", x);
+                        // println!("stack size: {}", x);
                         self.valgrind_state.set_stack_size(x as usize);
                     }
                     *(*to).as_i32_mut() = x;

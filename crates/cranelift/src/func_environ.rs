@@ -2308,13 +2308,13 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         }
     }
 
-    fn before_load(&mut self, builder: &mut FunctionBuilder, addr: ir::Value, offset: u64) {
+    fn before_load(&mut self, builder: &mut FunctionBuilder, val_type: Type, addr: ir::Value, offset: u64) {
         let check_load_sig = self.builtin_function_signatures.check_load(builder.func);
         let (vmctx, check_load) = self.translate_load_builtin_function_address(
             &mut builder.cursor(),
             BuiltinFunctionIndex::check_load(),
         );
-        let num_bytes = builder.ins().iconst(I32, 1);
+        let num_bytes = builder.ins().iconst(I32, val_type.bytes() as i64);
         let offset_val = builder.ins().iconst(I64, offset as i64);
         let addr_and_offset = builder.ins().iadd(offset_val, addr);
         builder
@@ -2322,13 +2322,13 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             .call_indirect(check_load_sig, check_load, &[vmctx, num_bytes, addr, offset_val]);
     }
 
-    fn before_store(&mut self, builder: &mut FunctionBuilder, addr: ir::Value, offset: u64) {
+    fn before_store(&mut self, builder: &mut FunctionBuilder, val_type: Type, addr: ir::Value, offset: u64) {
         let check_store_sig = self.builtin_function_signatures.check_store(builder.func);
         let (vmctx, check_store) = self.translate_load_builtin_function_address(
             &mut builder.cursor(),
             BuiltinFunctionIndex::check_store(),
         );
-        let num_bytes = builder.ins().iconst(I32, 1);
+        let num_bytes = builder.ins().iconst(I32, val_type.bytes() as i64);
         let offset_val = builder.ins().iconst(I64, offset as i64);
         builder
             .ins()

@@ -593,10 +593,10 @@ pub trait FuncEnvironment: TargetEnvironment {
 
     ///
     // Type::bytes (?)
-    fn before_load(&mut self, builder: &mut FunctionBuilder, addr: ir::Value, offset: u64) {}
+    fn before_load(&mut self, builder: &mut FunctionBuilder, val_type: Type, addr: ir::Value, offset: u64) {}
 
     ///
-    fn before_store(&mut self, builder: &mut FunctionBuilder, addr: ir::Value, offset: u64) {}
+    fn before_store(&mut self, builder: &mut FunctionBuilder, val_type: Type, addr: ir::Value, offset: u64) {}
 
     ///
     fn update_global(&mut self, builder: &mut FunctionBuilder, global_index: u32, value: ir::Value) {}

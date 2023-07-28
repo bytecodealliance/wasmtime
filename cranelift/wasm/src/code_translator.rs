@@ -2819,7 +2819,7 @@ fn translate_load<FE: FuncEnvironment + ?Sized>(
 
     // TODO: Add a call: wasmtime_valgrind_load_hook(vmctx, wasm_index, memarg.offset)
 
-    environ.before_load(builder, wasm_index, memarg.offset);
+    environ.before_load(builder, result_ty, wasm_index, memarg.offset);
 
     let (load, dfg) = builder
         .ins()
@@ -2845,7 +2845,7 @@ fn translate_store<FE: FuncEnvironment + ?Sized>(
     );
 
     // TODO: add call to wasmtime_valgrind_store_hook(vmctx, wasm_index, memarg.offset)
-    environ.before_store(builder, wasm_index, memarg.offset);
+    environ.before_store(builder, val_ty, wasm_index, memarg.offset);
     
     builder
         .ins()
