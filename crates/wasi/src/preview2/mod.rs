@@ -150,7 +150,7 @@ pub mod bindings {
 
 pub(crate) static RUNTIME: once_cell::sync::Lazy<tokio::runtime::Runtime> =
     once_cell::sync::Lazy::new(|| {
-        tokio::runtime::Builder::new_multi_thread()
+        tokio::runtime::Builder::new_current_thread()
             .enable_time()
             .enable_io()
             .build()
