@@ -28,8 +28,11 @@ pub struct Table {
 
 #[derive(Debug)]
 struct TableEntry {
+    /// The entry in the table, as a boxed dynamically-typed object
     entry: Box<dyn Any + Send + Sync>,
+    /// The index of the parent of this entry, if it has one.
     parent: Option<u32>,
+    /// The indicies of any children of this entry.
     children: BTreeSet<u32>,
 }
 
@@ -65,9 +68,6 @@ impl<'a> OccupiedEntry<'a> {
     pub fn remove_entry(self) -> Result<Box<dyn Any + Send + Sync>, TableError> {
         self.table.delete_entry(self.index).map(|e| e.entry)
     }
-    // TODO: insert is possible to implement, but make it fail with WrongType if the repalcement
-    // value downcasts to a different type than an existing one
-    // TODO: `is` would be useful to have here, for stream.rs
 }
 
 impl Table {

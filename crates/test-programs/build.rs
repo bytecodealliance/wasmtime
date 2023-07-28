@@ -172,7 +172,7 @@ fn components_rs(
     let mut decls = String::new();
     let mut cases = String::new();
     let mut uses = String::new();
-    for target_name in targets_in_package(&meta, package, kind) {
+    for target_name in dbg!(targets_in_package(&meta, package, kind)) {
         let stem = target_name.to_snake_case();
         let file = compile_component(&stem, out_dir, adapter);
 
