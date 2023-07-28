@@ -861,7 +861,47 @@ impl<
                     fs_rights_inheriting: fs_rights_base,
                 });
             }
-            Descriptor::PreopenDirectory((fd, _)) => (*fd, false, false),
+            Descriptor::PreopenDirectory((_, _)) => {
+                // Hard-coded set or rights expected by many userlands:
+                let fs_rights_base = types::Rights::PATH_CREATE_DIRECTORY
+                    | types::Rights::PATH_CREATE_FILE
+                    | types::Rights::PATH_LINK_SOURCE
+                    | types::Rights::PATH_LINK_TARGET
+                    | types::Rights::PATH_OPEN
+                    | types::Rights::FD_READDIR
+                    | types::Rights::PATH_READLINK
+                    | types::Rights::PATH_RENAME_SOURCE
+                    | types::Rights::PATH_RENAME_TARGET
+                    | types::Rights::PATH_SYMLINK
+                    | types::Rights::PATH_REMOVE_DIRECTORY
+                    | types::Rights::PATH_UNLINK_FILE
+                    | types::Rights::PATH_FILESTAT_GET
+                    | types::Rights::PATH_FILESTAT_SET_TIMES
+                    | types::Rights::FD_FILESTAT_GET
+                    | types::Rights::FD_FILESTAT_SET_TIMES;
+
+                let fs_rights_inheriting = fs_rights_base
+                    | types::Rights::FD_DATASYNC
+                    | types::Rights::FD_READ
+                    | types::Rights::FD_SEEK
+                    | types::Rights::FD_FDSTAT_SET_FLAGS
+                    | types::Rights::FD_SYNC
+                    | types::Rights::FD_TELL
+                    | types::Rights::FD_WRITE
+                    | types::Rights::FD_ADVISE
+                    | types::Rights::FD_ALLOCATE
+                    | types::Rights::FD_FILESTAT_GET
+                    | types::Rights::FD_FILESTAT_SET_SIZE
+                    | types::Rights::FD_FILESTAT_SET_TIMES
+                    | types::Rights::POLL_FD_READWRITE;
+
+                return Ok(types::Fdstat {
+                    fs_filetype: types::Filetype::Directory,
+                    fs_flags: types::Fdflags::empty(),
+                    fs_rights_base,
+                    fs_rights_inheriting,
+                });
+            }
             Descriptor::File(File {
                 fd,
                 blocking,
