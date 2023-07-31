@@ -21,6 +21,7 @@ use wasmtime_environ::{
     TableStyle, Tunables, TypeConvert, VMOffsets, WASM_PAGE_SIZE,
 };
 use wasmtime_environ::{FUNCREF_INIT_BIT, FUNCREF_MASK}; // is this the right place to import Value from?
+use cfg_if::cfg_if;
 
 macro_rules! declare_function_signatures {
     (
@@ -655,6 +656,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         self.epoch_check(builder);
     }
 
+    #[cfg(feature = "valgrind")]
     fn check_malloc_exit(&mut self, builder: &mut FunctionBuilder, retvals: &[Value]) {
         let check_malloc_sig = self.builtin_function_signatures.check_malloc(builder.func);
         let (vmctx, check_malloc) = self.translate_load_builtin_function_address(
@@ -667,6 +669,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             .call_indirect(check_malloc_sig, check_malloc, &[vmctx, retvals[0], len]);
     }
 
+    #[cfg(feature = "valgrind")]
     fn check_free_exit(&mut self, builder: &mut FunctionBuilder) {
         let check_free_sig = self.builtin_function_signatures.check_free(builder.func);
         let (vmctx, check_free) = self.translate_load_builtin_function_address(
@@ -678,6 +681,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             .ins()
             .call_indirect(check_free_sig, check_free, &[vmctx, ptr]);
     }
+    
 
     fn epoch_ptr(&mut self, builder: &mut FunctionBuilder<'_>) -> ir::Value {
         let vmctx = self.vmctx(builder.func);
@@ -2284,67 +2288,102 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         self.isa.has_x86_pmaddubsw_lowering()
     }
 
-    fn handle_before_return(
-        &mut self,
-        retvals: &[Value],
-        builder: &mut FunctionBuilder,
-    ) {
-        let block = builder.func.layout.entry_block().unwrap();
-        let args = builder.func.dfg.block_params(block);
-        let func_index = match &builder.func.name {
-            UserFuncName::User(user) => {
-                FuncIndex::from_u32(user.index)
+    cfg_if! {
+        if #[cfg(feature = "valgrind")] {
+            fn handle_before_return(
+                &mut self,
+                retvals: &[Value],
+                builder: &mut FunctionBuilder,
+            ) {
+                let block = builder.func.layout.entry_block().unwrap();
+                let args = builder.func.dfg.block_params(block);
+                let func_index = match &builder.func.name {
+                    UserFuncName::User(user) => {
+                        FuncIndex::from_u32(user.index)
+                    }
+                    _ => {
+                        unreachable!()
+                    }
+                };
+                let func_name = self.translation.debuginfo.name_section.func_names[&func_index];
+                // println!("name: {}, index: {:?}", func_name, func_index);
+                if func_name == "malloc" {
+                    self.check_malloc_exit(builder, retvals);
+                } else if func_name == "free" {
+                    self.check_free_exit(builder);
+                }
             }
-            _ => {
-                unreachable!()
+        } else {
+            fn handle_before_return(&mut self, _retvals: &[Value], builder: &mut FunctionBuilder,
+            ) {
+                let _ = self.builtin_function_signatures.check_malloc(builder.func);
+                let _ = self.builtin_function_signatures.check_free(builder.func);
             }
-        };
-        let func_name = self.translation.debuginfo.name_section.func_names[&func_index];
-        // println!("name: {}, index: {:?}", func_name, func_index);
-        if func_name == "malloc" {
-            self.check_malloc_exit(builder, retvals);
-        } else if func_name == "free" {
-            self.check_free_exit(builder);
         }
     }
 
-    fn before_load(&mut self, builder: &mut FunctionBuilder, val_type: Type, addr: ir::Value, offset: u64) {
-        let check_load_sig = self.builtin_function_signatures.check_load(builder.func);
-        let (vmctx, check_load) = self.translate_load_builtin_function_address(
-            &mut builder.cursor(),
-            BuiltinFunctionIndex::check_load(),
-        );
-        let num_bytes = builder.ins().iconst(I32, val_type.bytes() as i64);
-        let offset_val = builder.ins().iconst(I64, offset as i64);
-        let addr_and_offset = builder.ins().iadd(offset_val, addr);
-        builder
-            .ins()
-            .call_indirect(check_load_sig, check_load, &[vmctx, num_bytes, addr, offset_val]);
+    cfg_if! {
+        if #[cfg(feature = "valgrind")] {
+            fn before_load(&mut self, builder: &mut FunctionBuilder, val_type: Type, addr: ir::Value, offset: u64) {
+                let check_load_sig = self.builtin_function_signatures.check_load(builder.func);
+                let (vmctx, check_load) = self.translate_load_builtin_function_address(
+                    &mut builder.cursor(),
+                    BuiltinFunctionIndex::check_load(),
+                );
+                let num_bytes = builder.ins().iconst(I32, val_type.bytes() as i64);
+                let offset_val = builder.ins().iconst(I64, offset as i64);
+                let addr_and_offset = builder.ins().iadd(offset_val, addr);
+                builder
+                    .ins()
+                    .call_indirect(check_load_sig, check_load, &[vmctx, num_bytes, addr, offset_val]);
+            }
+        } else {
+            fn before_load(&mut self, builder: &mut FunctionBuilder, _val_type: Type, _addr: ir::Value, _offset: u64) {
+                // aren't using check_load, avoiding warnings
+                let _ = self.builtin_function_signatures.check_load(builder.func);
+            }
+        }
     }
 
-    fn before_store(&mut self, builder: &mut FunctionBuilder, val_type: Type, addr: ir::Value, offset: u64) {
-        let check_store_sig = self.builtin_function_signatures.check_store(builder.func);
-        let (vmctx, check_store) = self.translate_load_builtin_function_address(
-            &mut builder.cursor(),
-            BuiltinFunctionIndex::check_store(),
-        );
-        let num_bytes = builder.ins().iconst(I32, val_type.bytes() as i64);
-        let offset_val = builder.ins().iconst(I64, offset as i64);
-        builder
-            .ins()
-            .call_indirect(check_store_sig, check_store, &[vmctx, num_bytes, addr, offset_val]);
+    cfg_if! {
+        if #[cfg(feature = "valgrind")] {
+            fn before_store(&mut self, builder: &mut FunctionBuilder, val_type: Type, addr: ir::Value, offset: u64) {
+                let check_store_sig = self.builtin_function_signatures.check_store(builder.func);
+                let (vmctx, check_store) = self.translate_load_builtin_function_address(
+                    &mut builder.cursor(),
+                    BuiltinFunctionIndex::check_store(),
+                );
+                let num_bytes = builder.ins().iconst(I32, val_type.bytes() as i64);
+                let offset_val = builder.ins().iconst(I64, offset as i64);
+                builder
+                    .ins()
+                    .call_indirect(check_store_sig, check_store, &[vmctx, num_bytes, addr, offset_val]);
+            }
+        } else {
+            fn before_store(&mut self, builder: &mut FunctionBuilder, _val_type: Type, _addr: ir::Value, _offset: u64) {
+                let _ = self.builtin_function_signatures.check_store(builder.func);
+            }
+        }
     }
 
-    fn update_global(&mut self, builder: &mut FunctionBuilder, global_index: u32, value: ir::Value) {
-        if global_index == 0 {
-            let update_stack_pointer_sig = self.builtin_function_signatures.update_stack_pointer(builder.func);
-            let (vmctx, update_stack_pointer) = self.translate_load_builtin_function_address(
-                &mut builder.cursor(),
-                BuiltinFunctionIndex::update_stack_pointer(),
-            );
-            builder
-                .ins()
-                .call_indirect(update_stack_pointer_sig, update_stack_pointer, &[vmctx, value]);
+    cfg_if! {
+        if #[cfg(feature = "valgrind")] {
+            fn update_global(&mut self, builder: &mut FunctionBuilder, global_index: u32, value: ir::Value) {
+                if global_index == 0 {
+                    let update_stack_pointer_sig = self.builtin_function_signatures.update_stack_pointer(builder.func);
+                    let (vmctx, update_stack_pointer) = self.translate_load_builtin_function_address(
+                        &mut builder.cursor(),
+                        BuiltinFunctionIndex::update_stack_pointer(),
+                    );
+                    builder
+                        .ins()
+                        .call_indirect(update_stack_pointer_sig, update_stack_pointer, &[vmctx, value]);
+                }
+            }
+        } else {
+            fn update_global(&mut self, builder: &mut FunctionBuilder, _global_index: u32, _value: ir::Value) {
+                let _ = self.builtin_function_signatures.update_stack_pointer(builder.func);
+            }
         }
     }
 }

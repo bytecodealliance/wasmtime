@@ -4001,6 +4001,7 @@ name = "wasmtime-cranelift"
 version = "11.0.0"
 dependencies = [
  "anyhow",
+ "cfg-if",
  "cranelift-codegen",
  "cranelift-control",
  "cranelift-entity",

@@ -587,19 +587,34 @@ cfg_if! {
     }
 }
 
-fn malloc_start(instance: &mut Instance) {
-    #[cfg(feature = "valgrind")]
-    instance.valgrind_state.memcheck_off();
+cfg_if! {
+    if #[cfg(feature = "valgrind")] {
+        fn malloc_start(instance: &mut Instance) {
+            instance.valgrind_state.memcheck_off();
+        }
+    } else {
+        fn malloc_start(_instance: &mut Instance) {}
+    }
 }
 
-fn free_start(instance: &mut Instance) {
-    #[cfg(feature = "valgrind")]
-    instance.valgrind_state.memcheck_off();
+cfg_if! {
+    if #[cfg(feature = "valgrind")] {
+        fn free_start(instance: &mut Instance) {
+            instance.valgrind_state.memcheck_off();
+        }
+    } else {
+        fn free_start(_instance: &mut Instance) {}
+    }
 }
 
-fn update_stack_pointer(instance: &mut Instance, value: u32) {
-    // #[cfg(feature = "valgrind")]
-    // instance.valgrind_state.update_stack_pointer(value as usize);
+cfg_if! {
+    if #[cfg(feature = "valgrind")] {
+        fn update_stack_pointer(instance: &mut Instance, value: u32) {
+            // instance.valgrind_state.update_stack_pointer(value as usize);
+        }
+    } else {
+        fn update_stack_pointer(_instance: &mut Instance, _value: u32) {}
+    }
 }
 
 /// This module contains functions which are used for resolving relocations at

@@ -26,8 +26,10 @@ target-lexicon = { workspace = true }
 gimli = { workspace = true }
 object = { workspace = true, features = ['write'] }
 thiserror = { workspace = true }
+cfg-if = { workspace = true }
 
 [features]
 all-arch = ["cranelift-codegen/all-arch"]
 component-model = ["wasmtime-environ/component-model"]
 incremental-cache = ["cranelift-codegen/incremental-cache"]
+valgrind = []
