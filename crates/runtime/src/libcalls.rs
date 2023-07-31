@@ -58,6 +58,7 @@ use crate::externref::VMExternRef;
 use crate::table::{Table, TableElementType};
 use crate::vmcontext::VMFuncRef;
 use crate::{Instance, TrapReason};
+#[cfg(feature = "valgrind")]
 use wasm_valgrind::AccessError::{DoubleMalloc, InvalidRead, InvalidWrite, InvalidFree, OutOfBounds};
 use anyhow::Result;
 use std::mem;
@@ -66,6 +67,7 @@ use std::time::{Duration, Instant};
 use wasmtime_environ::{
     DataIndex, ElemIndex, FuncIndex, GlobalIndex, MemoryIndex, TableIndex, Trap,
 };
+use cfg_if::cfg_if;
 // use crate::wasm_valgrind::AccessError;
 
 /// Actually public trampolines which are used by the runtime as the entrypoint
@@ -489,90 +491,114 @@ unsafe fn new_epoch(instance: &mut Instance) -> Result<u64> {
     (*instance.store()).new_epoch()
 }
 
-unsafe fn check_malloc(instance: &mut Instance, addr: u32, len: u32) -> Result<u32> {
-    let result = instance.valgrind_state.malloc(addr as usize, len as usize);
-    instance.valgrind_state.memcheck_on();
-    match result {
-        Ok(()) => {
+cfg_if! {
+    if #[cfg(feature = "valgrind")] {
+        unsafe fn check_malloc(instance: &mut Instance, addr: u32, len: u32) -> Result<u32> {
+            let result = instance.valgrind_state.malloc(addr as usize, len as usize);
+            instance.valgrind_state.memcheck_on();
+            match result {
+                Ok(()) => {
+                    Ok(0)
+                }
+                Err(DoubleMalloc { addr, len }) => {
+                    panic!("Double malloc at addr {} of size {}", addr, len)
+                }
+                Err(OutOfBounds { addr, len }) => {
+                    panic!("Malloc out of bounds at addr {} of size {}", addr, len);
+                }
+                _ => {
+                    panic!("unreachable")
+                }
+            }
+        }
+    } else {
+        unsafe fn check_malloc(_instance: &mut Instance, _addr: u32, _len: u32) -> Result<u32> {
             Ok(0)
-        }
-        Err(DoubleMalloc { addr, len }) => {
-            panic!("Double malloc at addr {} of size {}", addr, len)
-        }
-        Err(OutOfBounds { addr, len }) => {
-            panic!("Malloc out of bounds at addr {} of size {}", addr, len);
-        }
-        _ => {
-            panic!("unreachable")
         }
     }
 }
 
-unsafe fn check_free(instance: &mut Instance, addr: u32) -> Result<u32> {
-    let result = instance.valgrind_state.free(addr as usize);
-    instance.valgrind_state.memcheck_on();
-    match result {
-        Ok(()) => {
+cfg_if! {
+    if #[cfg(feature = "valgrind")] {
+        unsafe fn check_free(instance: &mut Instance, addr: u32) -> Result<u32> {
+            let result = instance.valgrind_state.free(addr as usize);
+            instance.valgrind_state.memcheck_on();
+            match result {
+                Ok(()) => {
+                    Ok(0)
+                }
+                Err(InvalidFree { addr }) => {
+                    panic!("Invalid free at addr {}", addr)
+                }
+                _ => {
+                    panic!("unreachable")
+                }
+            }
+        }
+    } else {
+        unsafe fn check_free(_instance: &mut Instance, _addr: u32) -> Result<u32> {
             Ok(0)
-        }
-        Err(InvalidFree { addr }) => {
-            panic!("Invalid free at addr {}", addr)
-        }
-        _ => {
-            panic!("unreachable")
         }
     }
 }
 
 //should be returning result? error propogation?
-fn check_load(instance: &mut Instance, num_bytes: u32, addr: u32, offset: u32) {
-    // println!("load of size {} at addr {}", num_bytes, addr as usize + offset as usize);
-    // if instance.valgrind_state.read(addr as usize + offset as usize, num_bytes as usize).is_err() {
-    //     eprintln!("load of size {} failed at addr {}", num_bytes, addr as usize + offset as usize);
-    // }
-    let result = instance.valgrind_state.read(addr as usize + offset as usize, num_bytes as usize);
-    match result {
-        Ok(()) => {}
-        Err(InvalidRead { addr, len }) => {
-            panic!("Invalid load at addr {} of size {}", addr, len)
+cfg_if! {
+    if #[cfg(feature = "valgrind")] {
+        fn check_load(instance: &mut Instance, num_bytes: u32, addr: u32, offset: u32) {
+            let result = instance.valgrind_state.read(addr as usize + offset as usize, num_bytes as usize);
+            match result {
+                Ok(()) => {}
+                Err(InvalidRead { addr, len }) => {
+                    panic!("Invalid load at addr {} of size {}", addr, len)
+                }
+                Err(OutOfBounds { addr, len }) => {
+                    panic!("Load out of bounds at addr {} of size {}", addr, len);
+                }
+                _ => {
+                    panic!("unreachable")
+                }
+            }
         }
-        Err(OutOfBounds { addr, len }) => {
-            panic!("Load out of bounds at addr {} of size {}", addr, len);
-        }
-        _ => {
-            panic!("unreachable")
-        }
+    } else {
+        fn check_load(_instance: &mut Instance, _num_bytes: u32, _addr: u32, _offset: u32) {}
     }
 }
 
-fn check_store(instance: &mut Instance, num_bytes: u32, addr: u32, offset: u32) {
-    // if instance.valgrind_state.write(addr as usize + offset as usize, num_bytes as usize).is_err() {
-    //     eprintln!("store of size {} failed at addr {}", num_bytes, addr as usize + offset as usize);
-    // }
-    let result = instance.valgrind_state.write(addr as usize + offset as usize, num_bytes as usize);
-    match result {
-        Ok(()) => {}
-        Err(InvalidWrite { addr, len }) => {
-            panic!("Invalid store at addr {} of size {}", addr, len)
+cfg_if! {
+    if #[cfg(feature = "valgrind")] {
+        fn check_store(instance: &mut Instance, num_bytes: u32, addr: u32, offset: u32) {
+            let result = instance.valgrind_state.write(addr as usize + offset as usize, num_bytes as usize);
+            match result {
+                Ok(()) => {}
+                Err(InvalidWrite { addr, len }) => {
+                    panic!("Invalid store at addr {} of size {}", addr, len)
+                }
+                Err(OutOfBounds { addr, len }) => {
+                    panic!("Store out of bounds at addr {} of size {}", addr, len);
+                }
+                _ => {
+                    panic!("unreachable")
+                }
+            }
         }
-        Err(OutOfBounds { addr, len }) => {
-            panic!("Store out of bounds at addr {} of size {}", addr, len);
-        }
-        _ => {
-            panic!("unreachable")
-        }
+    } else {
+        fn check_store(_instance: &mut Instance, _num_bytes: u32, _addr: u32, _offset: u32) {}
     }
 }
 
 fn malloc_start(instance: &mut Instance) {
+    #[cfg(feature = "valgrind")]
     instance.valgrind_state.memcheck_off();
 }
 
 fn free_start(instance: &mut Instance) {
+    #[cfg(feature = "valgrind")]
     instance.valgrind_state.memcheck_off();
 }
 
 fn update_stack_pointer(instance: &mut Instance, value: u32) {
+    // #[cfg(feature = "valgrind")]
     // instance.valgrind_state.update_stack_pointer(value as usize);
 }
 

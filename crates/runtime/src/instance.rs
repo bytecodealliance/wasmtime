@@ -15,6 +15,7 @@ use crate::{
     ExportFunction, ExportGlobal, ExportMemory, ExportTable, Imports, ModuleRuntimeInfo,
     SendSyncPtr, Store, VMFunctionBody, VMSharedSignatureIndex, WasmFault,
 };
+#[cfg(feature = "valgrind")]
 use wasm_valgrind::Valgrind;
 use anyhow::Error;
 use anyhow::Result;
@@ -141,6 +142,7 @@ pub struct Instance {
     /// seems not too bad.
     vmctx_self_reference: SendSyncPtr<VMContext>,
 
+    #[cfg(feature = "valgrind")]
     pub(crate) valgrind_state: Valgrind,
 
     /// Additional context used by compiled wasm code. This field is last, and
@@ -189,6 +191,7 @@ impl Instance {
                 vmctx: VMContext {
                     _marker: std::marker::PhantomPinned,
                 },
+                #[cfg(feature = "valgrind")]
                 valgrind_state: {
                     const MiB: usize = 1024 * 1024; // 1 MiB
                     // ad-hoc testing seems to show...
@@ -1141,6 +1144,7 @@ impl Instance {
                     let index = module.global_index(index);
                     if index.index() == 0 {
                         // println!("stack size: {}", x);
+                        #[cfg(feature = "valgrind")]
                         self.valgrind_state.set_stack_size(x as usize);
                     }
                     *(*to).as_i32_mut() = x;

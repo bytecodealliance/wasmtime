@@ -67,3 +67,5 @@ component-model = [
   "wasmtime-environ/component-model",
   "dep:encoding_rs",
 ]
+
+valgrind = []
