@@ -148,13 +148,14 @@ pub mod bindings {
     pub use self::_internal_rest::wasi::*;
 }
 
-static RUNTIME: once_cell::sync::Lazy<tokio::runtime::Runtime> = once_cell::sync::Lazy::new(|| {
-    tokio::runtime::Builder::new_multi_thread()
-        .enable_time()
-        .enable_io()
-        .build()
-        .unwrap()
-});
+pub(crate) static RUNTIME: once_cell::sync::Lazy<tokio::runtime::Runtime> =
+    once_cell::sync::Lazy::new(|| {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_time()
+            .enable_io()
+            .build()
+            .unwrap()
+    });
 
 pub(crate) fn spawn<F, G>(f: F) -> tokio::task::JoinHandle<G>
 where

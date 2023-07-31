@@ -102,6 +102,7 @@ pub struct AsyncReadStream {
     state: StreamState,
     buffer: Option<Result<Bytes, std::io::Error>>,
     receiver: tokio::sync::mpsc::Receiver<Result<(Bytes, StreamState), std::io::Error>>,
+    pub(crate) join_handle: tokio::task::JoinHandle<()>,
 }
 
 impl AsyncReadStream {
@@ -109,7 +110,7 @@ impl AsyncReadStream {
     /// provided by this struct, the argument must impl [`tokio::io::AsyncRead`].
     pub fn new<T: tokio::io::AsyncRead + Send + Sync + Unpin + 'static>(mut reader: T) -> Self {
         let (sender, receiver) = tokio::sync::mpsc::channel(1);
-        crate::preview2::spawn(async move {
+        let join_handle = crate::preview2::spawn(async move {
             loop {
                 use tokio::io::AsyncReadExt;
                 let mut buf = bytes::BytesMut::with_capacity(4096);
@@ -130,7 +131,14 @@ impl AsyncReadStream {
             state: StreamState::Open,
             buffer: None,
             receiver,
+            join_handle,
         }
+    }
+}
+
+impl Drop for AsyncReadStream {
+    fn drop(&mut self) {
+        self.join_handle.abort()
     }
 }
 
@@ -213,6 +221,7 @@ pub struct AsyncWriteStream {
     state: Option<WriteState>,
     sender: tokio::sync::mpsc::Sender<Bytes>,
     result_receiver: tokio::sync::mpsc::Receiver<Result<StreamState, std::io::Error>>,
+    join_handle: tokio::task::JoinHandle<()>,
 }
 
 impl AsyncWriteStream {
@@ -222,7 +231,7 @@ impl AsyncWriteStream {
         let (sender, mut receiver) = tokio::sync::mpsc::channel::<Bytes>(1);
         let (result_sender, result_receiver) = tokio::sync::mpsc::channel(1);
 
-        crate::preview2::spawn(async move {
+        let join_handle = crate::preview2::spawn(async move {
             'outer: loop {
                 use tokio::io::AsyncWriteExt;
                 match receiver.recv().await {
@@ -260,6 +269,7 @@ impl AsyncWriteStream {
             state: Some(WriteState::Ready),
             sender,
             result_receiver,
+            join_handle,
         }
     }
 
@@ -279,6 +289,12 @@ impl AsyncWriteStream {
             }
             Err(TrySendError::Closed(_)) => unreachable!("task shouldn't die while not closed"),
         }
+    }
+}
+
+impl Drop for AsyncWriteStream {
+    fn drop(&mut self) {
+        self.join_handle.abort()
     }
 }
 
