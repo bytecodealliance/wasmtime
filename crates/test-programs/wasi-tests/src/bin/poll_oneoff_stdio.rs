@@ -86,7 +86,7 @@ fn writable_subs(h: &HashMap<u64, wasi::Fd>) -> Vec<wasi::Subscription> {
 
 unsafe fn test_stdout_stderr_write() {
     let mut writable: HashMap<u64, wasi::Fd> =
-        vec![(1, STDOUT_FD), (2, STDERR_FD)].into_iter().collect();
+        [(1, STDOUT_FD), (2, STDERR_FD)].into_iter().collect();
 
     let clock = wasi::Subscription {
         userdata: CLOCK_ID,
