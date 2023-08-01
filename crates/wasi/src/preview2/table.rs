@@ -26,6 +26,15 @@ pub struct Table {
     next_key: u32,
 }
 
+/// This structure tracks parent and child relationships for a given table entry.
+///
+/// Parents and children are referred to by table index. We maintain the
+/// following invariants to prevent orphans and cycles:
+/// * parent can only be assigned on creating the entry.
+/// * parent, if some, must exist when creating the entry.
+/// * whenever a child is created, its index is added to children.
+/// * whenever a child is deleted, its index is removed from children.
+/// * an entry with children may not be deleted.
 #[derive(Debug)]
 struct TableEntry {
     /// The entry in the table, as a boxed dynamically-typed object
@@ -54,17 +63,27 @@ impl TableEntry {
     }
 }
 
+/// Like [`std::collections::hash_map::OccupiedEntry`], with a subset of
+/// methods available in order to uphold [`Table`] invariants.
 pub struct OccupiedEntry<'a> {
     table: &'a mut Table,
     index: u32,
 }
 impl<'a> OccupiedEntry<'a> {
+    /// Get the dynamically-typed reference to the resource.
     pub fn get(&self) -> &(dyn Any + Send + Sync + 'static) {
         self.table.map.get(&self.index).unwrap().entry.as_ref()
     }
+    /// Get the dynamically-typed mutable reference to the resource.
     pub fn get_mut(&mut self) -> &mut (dyn Any + Send + Sync + 'static) {
         self.table.map.get_mut(&self.index).unwrap().entry.as_mut()
     }
+    /// Remove the resource from the table, returning the contents of the
+    /// resource.
+    /// May fail with [`TableError::HasChildren`] if the entry has any
+    /// children, see [`Table::push_child`].
+    /// If this method fails, the [`OccupiedEntry`] is consumed, but the
+    /// resource remains in the table.
     pub fn remove_entry(self) -> Result<Box<dyn Any + Send + Sync>, TableError> {
         self.table.delete_entry(self.index).map(|e| e.entry)
     }
@@ -88,7 +107,25 @@ impl Table {
         self.push_(TableEntry::new(entry, None))
     }
 
-    /// Insert a resource at the next available index, and track that it has a parent resource:
+    /// Insert a resource at the next available index, and track that it has a
+    /// parent resource.
+    ///
+    /// The parent must exist to create a child. All children resources must
+    /// be destroyed before a parent can be destroyed - otherwise [`Table::delete`]
+    /// or [`OccupiedEntry::remove_entry`] will fail with
+    /// [`TableEntry::HasChildren`].
+    ///
+    /// Parent-child relationships are tracked inside the table to ensure that
+    /// a parent resource is not deleted while it has live children. This
+    /// allows child resources to hold "references" to a parent by table
+    /// index, to avoid needing e.g. an Arc<Mutex<Parent>> and the associated
+    /// locking overhead and design issues, such as child existence extending
+    /// lifetime of parent referent even after parent resource is destroyed,
+    /// possibility for deadlocks.
+    ///
+    /// Parent-child relationships may not be modified once created. There
+    /// is no way to observe these relationships through the [`Table`] methods
+    /// except for erroring on deletion, or the [`std::fmt::Debug`] impl.
     pub fn push_child(
         &mut self,
         entry: Box<dyn Any + Send + Sync>,
@@ -100,7 +137,7 @@ impl Table {
         let child = self.push_(TableEntry::new(entry, Some(parent)))?;
         self.map
             .get_mut(&parent)
-            .expect("precondition assured above")
+            .expect("parent existence assured above")
             .add_child(child);
         Ok(child)
     }
@@ -198,6 +235,11 @@ impl Table {
     }
 
     /// Remove a resource at a given index from the table.
+    ///
+    /// If this method fails, the resource remains in the table.
+    ///
+    /// May fail with [`TableError::HasChildren`] if the resource has any live
+    /// children.
     pub fn delete<T: Any + Sized>(&mut self, key: u32) -> Result<T, TableError> {
         let e = self.delete_entry(key)?;
         match e.entry.downcast::<T>() {
