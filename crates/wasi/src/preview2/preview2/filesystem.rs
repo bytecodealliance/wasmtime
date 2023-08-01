@@ -843,7 +843,27 @@ impl<T: WasiView> types::Host for T {
         a: types::Descriptor,
         b: types::Descriptor,
     ) -> anyhow::Result<bool> {
-        todo!()
+        async fn get_metadata(
+            table: &Table,
+            fd: types::Descriptor,
+        ) -> anyhow::Result<cap_std::fs::Metadata> {
+            if table.is_file(fd) {
+                let f = table.get_file(fd)?;
+                // No permissions check on stat: if opened, allowed to stat it
+                Ok(f.spawn_blocking(|f| f.metadata()).await?)
+            } else if table.is_dir(fd) {
+                let d = table.get_dir(fd)?;
+                // No permissions check on stat: if opened, allowed to stat it
+                Ok(d.spawn_blocking(|d| d.dir_metadata()).await?)
+            } else {
+                Err(ErrorCode::BadDescriptor.into())
+            }
+        }
+
+        let table = self.table();
+        let meta_a = get_metadata(table, a).await?;
+        let meta_b = get_metadata(table, b).await?;
+        Ok(meta_a.device() == meta_b.device() && meta_a.inode() == meta_b.inode())
     }
     async fn metadata_hash(
         &mut self,

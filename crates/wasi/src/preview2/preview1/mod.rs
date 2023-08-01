@@ -1414,7 +1414,7 @@ impl<
                         .unwrap_or_else(types::Error::trap)
                 })?;
                 let dir_metadata_hash = self
-                    .metadata_hash_at(fd, types::PathFlags::idk, name.clone())
+                    .metadata_hash_at(fd, filesystem::PathFlags::empty, name.clone())
                     .await?;
                 let d_type = type_.try_into().map_err(types::Error::trap)?;
                 let d_namlen: u32 = name.len().try_into().map_err(|_| types::Errno::Overflow)?;
