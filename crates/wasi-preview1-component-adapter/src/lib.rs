@@ -2,7 +2,7 @@
 
 use crate::bindings::wasi::cli_base::exit;
 use crate::bindings::wasi::clocks::{monotonic_clock, wall_clock};
-use crate::bindings::wasi::filesystem::filesystem;
+use crate::bindings::wasi::filesystem::types as filesystem;
 use crate::bindings::wasi::io::streams;
 use crate::bindings::wasi::poll::poll;
 use crate::bindings::wasi::random::random;
