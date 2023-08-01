@@ -113,12 +113,12 @@ impl Table {
     /// The parent must exist to create a child. All children resources must
     /// be destroyed before a parent can be destroyed - otherwise [`Table::delete`]
     /// or [`OccupiedEntry::remove_entry`] will fail with
-    /// [`TableEntry::HasChildren`].
+    /// [`TableError::HasChildren`].
     ///
     /// Parent-child relationships are tracked inside the table to ensure that
     /// a parent resource is not deleted while it has live children. This
     /// allows child resources to hold "references" to a parent by table
-    /// index, to avoid needing e.g. an Arc<Mutex<Parent>> and the associated
+    /// index, to avoid needing e.g. an `Arc<Mutex<parent>>` and the associated
     /// locking overhead and design issues, such as child existence extending
     /// lifetime of parent referent even after parent resource is destroyed,
     /// possibility for deadlocks.

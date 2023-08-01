@@ -37,7 +37,7 @@ pub use self::filesystem::{DirPerms, FilePerms};
 pub use self::poll::{ClosureFuture, HostPollable, MakeFuture, PollableFuture, TablePollableExt};
 pub use self::random::{thread_rng, Deterministic};
 pub use self::stream::{HostInputStream, HostOutputStream, StreamState, TableStreamExt};
-pub use self::table::{Table, TableError};
+pub use self::table::{OccupiedEntry, Table, TableError};
 pub use cap_fs_ext::SystemTimeSpec;
 pub use cap_rand::RngCore;
 
